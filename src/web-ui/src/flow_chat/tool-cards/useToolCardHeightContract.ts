@@ -4,7 +4,6 @@ export type ToolCardCollapseReason = 'manual' | 'auto';
 interface UseToolCardHeightContractOptions {
   toolId: string | null | undefined;
   toolName: string;
-  getCardHeight?: () => number | null;
   getAnchorElement?: () => HTMLElement | null;
 }
 
@@ -17,7 +16,6 @@ interface ApplyHeightContractOptions {
 export function useToolCardHeightContract({
   toolId,
   toolName,
-  getCardHeight,
   getAnchorElement,
 }: UseToolCardHeightContractOptions) {
   const cardRootRef = useRef<HTMLDivElement>(null);
@@ -42,9 +40,7 @@ export function useToolCardHeightContract({
     detail?: Record<string, unknown>,
   ) => {
     const measuredHeight = cardRootRef.current?.getBoundingClientRect().height ?? 0;
-    const customHeight = getCardHeight?.() ?? 0;
     const cardHeight = Math.max(
-      customHeight,
       measuredHeight,
       lastMeasuredHeightRef.current,
       previousMeasuredHeightRef.current,
@@ -60,7 +56,7 @@ export function useToolCardHeightContract({
         reason,
       },
     }));
-  }, [getAnchorElement, getCardHeight, toolId, toolName]);
+  }, [getAnchorElement, toolId, toolName]);
 
   const applyExpandedState = useCallback((
     currentExpanded: boolean,

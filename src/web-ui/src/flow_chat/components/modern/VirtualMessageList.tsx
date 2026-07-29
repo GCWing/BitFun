@@ -2475,6 +2475,11 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
       previousMeasuredHeightRef.current = snapshotMeasuredContentHeight(scroller);
       recordScrollerGeometry(scroller);
     }
+    if (coordinatorMode === 'preserving-element') {
+      viewportCoordinatorRef.current.settleElementPreservation(
+        `collapse-finalized:${reason}`,
+      );
+    }
 
     if (deferredFollowReasonRef.current) {
       const deferredReason = deferredFollowReasonRef.current;
@@ -4054,12 +4059,13 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
       );
       updateBottomReservationState(next);
       applyFooterCompensationNow(next);
-      if (scroller && stickyPinTarget) {
+      const ownsElementAnchor = viewportCoordinatorRef.current.ownsElementAnchor();
+      if (scroller && ownsElementAnchor) {
         viewportCoordinatorRef.current.restoreElementAnchor(scroller, 'stream-end-reservation-transfer');
       }
       // Footer height shrank: if we were following the bottom, re-pin in the
       // same turn to avoid a one-frame whole-pane jump that looks like a flash.
-      if (scroller && wasNearBottom && !stickyPinTarget) {
+      if (scroller && wasNearBottom && !ownsElementAnchor) {
         scroller.scrollTop = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
       }
     }
@@ -4069,6 +4075,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     clearCollapseIntentScheduling();
     clearPendingStickyPinGrowth('stream-end-reconciled');
     pendingCollapseIntentRef.current = createInactiveCollapseIntentState();
+    viewportCoordinatorRef.current.settleElementPreservation('stream-end-reconciled');
     maybeHandoffPinnedTurnToTailRef.current('stream-end');
 
   }, [

@@ -161,7 +161,18 @@ restores it after the list remeasures. While an element anchor is active, the
 coordinator also owns virtualizer compensation corrections, so independent
 scroll writers cannot fight the pinned header.
 
-There is no persistent scroll-position lock or scroll-listener lock. For an unsignaled
+Collapse anchors have an active phase while layout is changing and a retained
+phase after the collapse intent settles. Retained anchors do not expire on a
+wall-clock timer: Virtuoso can publish a delayed size compensation after the
+collapse animation and intent have finished. They keep owning virtualizer
+compensation until user navigation, tail/pin ownership transfer, session reset,
+or DOM disconnection. The retained phase stops the continuous animation-frame
+guard; observer and scroll paths still restore the anchor on demand. Active
+preservation blocks automatic tail takeover, while retained preservation allows
+the tail controller to take ownership when its normal distance and intent rules
+say that following should resume.
+
+There is no persistent raw `scrollTop` lock or scroll-listener lock. For an unsignaled
 shrink with no semantic element anchor, `restoreScrollPositionOnce()` performs
 one clamped `scrollTop` fallback using the pre-change position. It is a bounded
 last resort, not a second controller: subsequent layout changes are handled by
@@ -281,7 +292,8 @@ unless animation is explicitly disabled.
 During those transitions, the DOM may report intermediate sizes for multiple frames.
 
 The collapse intent carries a hard TTL (`expiresAtMs`, currently 1000 ms), but
-its settlement is autonomous rather than scroll-driven. Automatic collapses are
+that TTL only bounds collapse measurement and reservation settlement; it does
+not expire the semantic element anchor. Automatic collapses are
 finalized after `FLOWCHAT_COLLAPSE_DURATION_MS` plus a short settle-frame window;
 manual or otherwise unsignaled intents use the TTL timer. The scroll handler keeps only a throttled-background
 timer fallback for browsers that delay timers. While the intent is alive, the
@@ -362,8 +374,10 @@ Current producer:
 - `ExploreGroupRenderer.tsx`
 
 Most tool cards now emit these events through `useToolCardHeightContract`.
-Components that need more accurate collapse estimation can pass a custom
-`getCardHeight` function to the helper.
+The helper measures the visible `cardRootRef` and retains recent visible
+measurements so state-driven collapses still report the pre-collapse height.
+Never substitute an inner scroll container's `scrollHeight`; hidden overflow is
+not layout height removed from the FlowChat list.
 
 If a future collapsible component shows the same "header drops" or "flash on collapse" symptom, it should likely emit `flowchat:tool-card-collapse-intent` before collapsing.
 
