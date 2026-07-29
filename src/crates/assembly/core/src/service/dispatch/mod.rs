@@ -476,7 +476,7 @@ async fn adopt_target_jobs(
         bitfun_agent_runtime::session_control::validate_session_id(&entry.session_id)
             .map_err(anyhow::Error::msg)?;
         let workspace_path = entry.workspace_path.trim();
-        if workspace_path.is_empty() || !Path::new(workspace_path).is_absolute() {
+        if !target_workspace_path_is_absolute(workspace_path) {
             anyhow::bail!("dispatch target returned an invalid workspace path");
         }
         let resolved_target = match target {
@@ -548,6 +548,33 @@ async fn adopt_target_jobs(
             .await?;
     }
     Ok(())
+}
+
+/// Validate a path returned by the target without applying the controller
+/// process's host path semantics. The target may run POSIX while the controller
+/// runs Windows, or vice versa.
+fn target_workspace_path_is_absolute(path: &str) -> bool {
+    let path = path.trim();
+    if path.starts_with('/') {
+        return true;
+    }
+
+    let bytes = path.as_bytes();
+    if bytes.len() >= 3
+        && bytes[0].is_ascii_alphabetic()
+        && bytes[1] == b':'
+        && matches!(bytes[2], b'/' | b'\\')
+    {
+        return true;
+    }
+
+    let Some(unc_path) = path.strip_prefix(r"\\") else {
+        return false;
+    };
+    let mut components = unc_path
+        .split(|character| matches!(character, '\\' | '/'))
+        .filter(|component| !component.is_empty());
+    components.next().is_some() && components.next().is_some()
 }
 
 fn same_target_identity_for_store(left: &DispatchTarget, right: &DispatchTarget) -> bool {
@@ -744,6 +771,20 @@ mod tests {
         )
         .expect("record");
         assert_eq!(record.prompt_preview.chars().count(), PROMPT_PREVIEW_CHARS);
+    }
+
+    #[test]
+    fn target_workspace_paths_use_target_platform_semantics() {
+        assert!(target_workspace_path_is_absolute("/srv/app"));
+        assert!(target_workspace_path_is_absolute(r"C:\work\app"));
+        assert!(target_workspace_path_is_absolute("D:/work/app"));
+        assert!(target_workspace_path_is_absolute(r"\\server\share\app"));
+
+        assert!(!target_workspace_path_is_absolute(""));
+        assert!(!target_workspace_path_is_absolute("relative/app"));
+        assert!(!target_workspace_path_is_absolute(r"C:relative\app"));
+        assert!(!target_workspace_path_is_absolute(r"\root-relative"));
+        assert!(!target_workspace_path_is_absolute(r"\\server"));
     }
 
     #[tokio::test]
