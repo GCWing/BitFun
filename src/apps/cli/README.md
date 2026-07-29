@@ -116,6 +116,44 @@ describes that later retry; it does not mean the current command retries automat
 live probes for Network, Git, or MCP integrations that are currently represented by compatibility
 registrations.
 
+## Detached task dispatch
+
+`bitfun dispatch` is the target-side, machine-readable interface used by
+Desktop, Server Host, SSH, and encrypted account-device RPC. Requests are JSON
+on stdin and responses are one JSON value on stdout:
+
+```bash
+printf '%s' '{"workspacePath":"/srv/app"}' | bitfun dispatch probe
+printf '%s' '{"jobId":"job-123","cursor":0}' | bitfun dispatch status
+printf '%s' '{}' | bitfun dispatch list
+printf '%s' '{"jobId":"job-123"}' | bitfun dispatch cancel
+```
+
+`submit` additionally requires `protocolVersion`, `sessionId`,
+`workspacePath`, `agentType`, `prompt`, and an explicit `approvalPolicy`:
+`auto`, `reject-and-report`, or `remote`. With `remote`, `status` returns
+`pendingPermissions`; answer one with `dispatch answer`. `dispatch append`
+adds a steering message to a queued or running job. Call `probe` first and
+honor its protocol version and capability list rather than assuming that
+different BitFun releases are compatible.
+
+Jobs and their event logs live under `~/.bitfun/dispatch/jobs/`. The detached
+worker and target-side session remain authoritative after the submitting
+client disconnects. Each target workspace is serialized so two jobs do not
+modify it concurrently. Terminal jobs and managed snapshots are retained for
+30 days. Event history is bounded; `status` reports cursor resets, truncation,
+and omitted-event counts so clients never mistake a partial transcript for a
+complete one.
+
+Workspace transfer is a separate controller operation. An exact snapshot
+includes hidden and ignored regular files, excludes `.git`, rejects links and
+special files, verifies an archive and manifest digest, and publishes into the
+target-managed dispatch directory atomically. It is a one-time input snapshot,
+not live or bidirectional synchronization; target changes are not copied back
+automatically. See
+[`docs/architecture/detached-task-dispatch.md`](../../../docs/architecture/detached-task-dispatch.md)
+for the ownership and transport contract.
+
 ## Always-on account device host (daemon)
 
 Account multi-device access requires the target device to hold a live relay connection. On a

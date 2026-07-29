@@ -4667,6 +4667,83 @@ impl SSHConnectionManager {
         Ok(())
     }
 
+    /// Stream one local regular file to a remote SFTP path without buffering
+    /// the complete file in memory.
+    pub async fn sftp_write_from_file(
+        &self,
+        connection_id: &str,
+        path: &str,
+        local_path: &std::path::Path,
+        max_bytes: u64,
+    ) -> anyhow::Result<u64> {
+        let local_metadata = tokio::fs::symlink_metadata(local_path)
+            .await
+            .map_err(|error| {
+                anyhow!(
+                    "Failed to inspect local upload file '{}': {}",
+                    local_path.display(),
+                    error
+                )
+            })?;
+        if local_metadata.file_type().is_symlink() || !local_metadata.is_file() {
+            return Err(anyhow!(
+                "Local SFTP upload source is not a regular file: {}",
+                local_path.display()
+            ));
+        }
+        if local_metadata.len() > max_bytes {
+            return Err(anyhow!(
+                "Local SFTP upload source exceeds the {} byte limit",
+                max_bytes
+            ));
+        }
+
+        let path = self.resolve_sftp_path(connection_id, path).await?;
+        let sftp = self.get_sftp(connection_id).await?;
+        let mut remote = sftp
+            .create(&path)
+            .await
+            .map_err(|error| anyhow!("Failed to create remote file '{}': {}", path, error))?;
+        let mut local = tokio::fs::File::open(local_path).await.map_err(|error| {
+            anyhow!(
+                "Failed to open local upload file '{}': {}",
+                local_path.display(),
+                error
+            )
+        })?;
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let mut buffer = vec![0_u8; 256 * 1024];
+        let mut written = 0_u64;
+        loop {
+            let read = local.read(&mut buffer).await.map_err(|error| {
+                anyhow!(
+                    "Failed to read local upload file '{}': {}",
+                    local_path.display(),
+                    error
+                )
+            })?;
+            if read == 0 {
+                break;
+            }
+            written = written.saturating_add(read as u64);
+            if written > max_bytes || written > local_metadata.len() {
+                return Err(anyhow!("Local upload file changed while it was being sent"));
+            }
+            remote
+                .write_all(&buffer[..read])
+                .await
+                .map_err(|error| anyhow!("Failed to write remote file '{}': {}", path, error))?;
+        }
+        if written != local_metadata.len() {
+            return Err(anyhow!("Local upload file changed while it was being sent"));
+        }
+        remote
+            .flush()
+            .await
+            .map_err(|error| anyhow!("Failed to flush remote file '{}': {}", path, error))?;
+        Ok(written)
+    }
+
     /// Write a file via SFTP with chunked progress reporting.
     ///
     /// Writes `content` in `chunk_size`-byte chunks, invoking `on_progress`

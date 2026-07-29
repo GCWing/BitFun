@@ -3,32 +3,56 @@ use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 
 use anyhow::{anyhow, bail, Context, Result};
+use bitfun_agent_runtime::sdk::{PermissionReply, PermissionRequest};
 use serde::{Deserialize, Serialize};
 
 use super::protocol::{
-    DispatchEvent, DispatchJobListEntry, DispatchJobState, DispatchSubmitRequest,
-    DISPATCH_PROTOCOL_VERSION,
+    DispatchAppendRequest, DispatchEvent, DispatchJobListEntry, DispatchJobState,
+    DispatchSubmitRequest, DISPATCH_PROTOCOL_VERSION,
 };
 
 const JOB_RECORD_FILE: &str = "job.json";
 const STATE_FILE: &str = "state";
 const EVENTS_FILE: &str = "events.ndjson";
+const EVENTS_METADATA_FILE: &str = "events.meta.json";
 const EVENTS_LOCK_FILE: &str = ".events.lock";
 const PID_FILE: &str = "job.pid";
 const PREPARING_FILE: &str = "preparing";
 const SPAWN_LOCK_FILE: &str = ".spawn.lock";
 const WORKER_LOCK_FILE: &str = ".worker.lock";
+const PENDING_PERMISSIONS_DIR: &str = "permissions/pending";
+const PERMISSION_ANSWERS_DIR: &str = "permissions/answers";
+const RESOLVED_PERMISSIONS_DIR: &str = "permissions/resolved";
+const PENDING_MESSAGES_DIR: &str = "messages/pending";
+const CONSUMED_MESSAGES_DIR: &str = "messages/consumed";
 const DEFAULT_MAX_EVENTS_BYTES: u64 = 64 * 1024 * 1024;
 // Keep a single projected event and a complete status page comfortably below
 // the server transport's 256 KiB WebSocket frame ceiling.
 const MAX_EVENT_BYTES: usize = 96 * 1024;
 const MAX_STATUS_PAGE_BYTES: u64 = 128 * 1024;
 const MAX_STATUS_PAGE_EVENTS: usize = 512;
+const MAX_PENDING_PERMISSION_BYTES: u64 = 48 * 1024;
+const MAX_PENDING_PERMISSIONS_BYTES: u64 = 64 * 1024;
+const MAX_PENDING_PERMISSIONS: usize = 64;
+const MAX_STATE_MESSAGE_BYTES: usize = 16 * 1024;
+const TERMINAL_JOB_RETENTION_DAYS: i64 = 30;
+const RETENTION_GC_INTERVAL_SECONDS: u64 = 24 * 60 * 60;
+const RETENTION_GC_MARKER: &str = ".retention-gc";
+const RETENTION_GC_LOCK: &str = ".retention-gc.lock";
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 struct EventLogHeader {
     cursor_base: u64,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+struct EventLogMetadata {
+    #[serde(default)]
+    history_truncated: bool,
+    #[serde(default)]
+    omitted_event_count: u64,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
@@ -85,6 +109,23 @@ pub(crate) struct EventPage {
     pub(crate) cursor: u64,
     pub(crate) events: Vec<DispatchEvent>,
     pub(crate) cursor_reset: bool,
+    pub(crate) history_truncated: bool,
+    pub(crate) omitted_event_count: u64,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct StoredPermissionAnswer {
+    pub(crate) request_id: String,
+    pub(crate) reply: PermissionReply,
+    pub(crate) answered_at: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+struct StoredAppendMessage {
+    request: DispatchAppendRequest,
+    created_at: String,
 }
 
 #[derive(Clone, Debug)]
@@ -97,7 +138,11 @@ impl DispatchStore {
     pub(crate) fn open_default() -> Result<Self> {
         let path_manager = bitfun_core::infrastructure::PathManager::new()
             .map_err(|error| anyhow!("resolve BitFun storage root: {error}"))?;
-        Self::open(path_manager.bitfun_home_dir().join("dispatch"))
+        let store = Self::open(path_manager.bitfun_home_dir().join("dispatch"))?;
+        if let Err(error) = store.maybe_collect_expired_terminal_jobs() {
+            tracing::warn!("Dispatch retention cleanup failed: {error:#}");
+        }
+        Ok(store)
     }
 
     pub(crate) fn open(root: PathBuf) -> Result<Self> {
@@ -168,6 +213,10 @@ impl DispatchStore {
         atomic_write_json(&job_dir.join(STATE_FILE), &state)?;
         ensure_private_file(&job_dir.join(EVENTS_LOCK_FILE))?;
         atomic_write_event_log(&job_dir.join(EVENTS_FILE), 0, None)?;
+        atomic_write_json(
+            &job_dir.join(EVENTS_METADATA_FILE),
+            &EventLogMetadata::default(),
+        )?;
         self.append_event_unlocked(
             &job_dir,
             &DispatchEvent::approval_policy_selected(record.request.approval_policy),
@@ -258,6 +307,7 @@ impl DispatchStore {
         turn_id: Option<&str>,
         message: Option<String>,
     ) -> Result<(DispatchStateRecord, bool)> {
+        let message = message.map(|message| truncate_utf8_bytes(&message, MAX_STATE_MESSAGE_BYTES));
         let job_dir = self.existing_job_dir(job_id)?;
         let _lock = JobLock::exclusive(&job_dir.join(".lock"))?;
         let mut current = self.load_state_unlocked(&job_dir)?;
@@ -314,7 +364,7 @@ impl DispatchStore {
         let _lock = JobLock::exclusive(&job_dir.join(".lock"))?;
         let mut state = self.load_state_unlocked(&job_dir)?;
         if !state.state.is_terminal() {
-            state.last_error = Some(error.to_string());
+            state.last_error = Some(truncate_utf8_bytes(error, MAX_STATE_MESSAGE_BYTES));
             atomic_write_json(&job_dir.join(STATE_FILE), &state)?;
         }
         Ok(())
@@ -423,6 +473,8 @@ impl DispatchStore {
         set_private_file_permissions(&path)?;
         let len = file.metadata()?.len();
         let (header, data_start) = read_event_log_header(&mut file, &path)?;
+        let mut metadata = load_event_log_metadata(&job_dir.join(EVENTS_METADATA_FILE));
+        metadata.history_truncated |= header.cursor_base > 0;
         let data_len = len.saturating_sub(data_start);
         let retained_end = header.cursor_base.saturating_add(data_len);
         let (start, cursor_reset) = if cursor < header.cursor_base || cursor > retained_end {
@@ -460,7 +512,220 @@ impl DispatchStore {
                 .saturating_add(consumed as u64),
             events,
             cursor_reset,
+            history_truncated: metadata.history_truncated,
+            omitted_event_count: metadata.omitted_event_count,
         })
+    }
+
+    pub(crate) fn save_pending_permission(
+        &self,
+        job_id: &str,
+        request: &PermissionRequest,
+    ) -> Result<()> {
+        let job_dir = self.existing_job_dir(job_id)?;
+        let _lock = JobLock::exclusive(&job_dir.join(".lock"))?;
+        let state = self.load_state_unlocked(&job_dir)?;
+        if state.state.is_terminal() {
+            bail!("dispatch job is already terminal");
+        }
+        let path = mailbox_path(&job_dir, PENDING_PERMISSIONS_DIR, &request.request_id)?;
+        let encoded_bytes = serde_json::to_vec_pretty(request)
+            .context("encode dispatch permission request")?
+            .len()
+            .saturating_add(1) as u64;
+        if encoded_bytes > MAX_PENDING_PERMISSION_BYTES {
+            bail!("dispatch permission request exceeds the 48 KiB safety limit");
+        }
+        match fs::symlink_metadata(&path) {
+            Ok(_) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                let (count, bytes) = mailbox_usage(&job_dir.join(PENDING_PERMISSIONS_DIR))?;
+                if count >= MAX_PENDING_PERMISSIONS
+                    || bytes.saturating_add(encoded_bytes) > MAX_PENDING_PERMISSIONS_BYTES
+                {
+                    bail!("dispatch pending permission mailbox exceeds the status safety limit");
+                }
+            }
+            Err(error) => return Err(error.into()),
+        }
+        write_json_if_absent_or_equal(&path, request)
+    }
+
+    pub(crate) fn list_pending_permissions(&self, job_id: &str) -> Result<Vec<PermissionRequest>> {
+        let job_dir = self.existing_job_dir(job_id)?;
+        let mut requests =
+            read_json_directory::<PermissionRequest>(&job_dir.join(PENDING_PERMISSIONS_DIR))?;
+        requests.sort_by(|left, right| {
+            left.round_id
+                .cmp(&right.round_id)
+                .then_with(|| left.order.cmp(&right.order))
+                .then_with(|| left.request_id.cmp(&right.request_id))
+        });
+        Ok(requests)
+    }
+
+    /// Persist a controller answer. `true` means the answer is durably queued
+    /// or was already resolved with the same request id.
+    pub(crate) fn save_permission_answer(
+        &self,
+        job_id: &str,
+        request_id: &str,
+        reply: PermissionReply,
+    ) -> Result<bool> {
+        let job_dir = self.existing_job_dir(job_id)?;
+        let _lock = JobLock::exclusive(&job_dir.join(".lock"))?;
+        let resolved_path = mailbox_path(&job_dir, RESOLVED_PERMISSIONS_DIR, request_id)?;
+        if let Some(existing) =
+            read_optional_regular_json::<StoredPermissionAnswer>(&resolved_path)?
+        {
+            ensure_permission_answer_matches(&existing, request_id, &reply)?;
+            return Ok(true);
+        }
+        let state = self.load_state_unlocked(&job_dir)?;
+        if state.state.is_terminal() {
+            bail!("dispatch job is already terminal");
+        }
+        let pending_path = mailbox_path(&job_dir, PENDING_PERMISSIONS_DIR, request_id)?;
+        let pending = read_optional_regular_json::<PermissionRequest>(&pending_path)?
+            .ok_or_else(|| anyhow!("dispatch permission request not found: {request_id}"))?;
+        if pending.request_id != request_id {
+            bail!("dispatch permission mailbox identity mismatch");
+        }
+        let answer_path = mailbox_path(&job_dir, PERMISSION_ANSWERS_DIR, request_id)?;
+        if let Some(existing) = read_optional_regular_json::<StoredPermissionAnswer>(&answer_path)?
+        {
+            ensure_permission_answer_matches(&existing, request_id, &reply)?;
+            return Ok(true);
+        }
+        let answer = StoredPermissionAnswer {
+            request_id: request_id.to_string(),
+            reply,
+            answered_at: chrono::Utc::now().to_rfc3339(),
+        };
+        write_json_if_absent_or_equal(&answer_path, &answer)?;
+        Ok(true)
+    }
+
+    pub(crate) fn list_permission_answers(
+        &self,
+        job_id: &str,
+    ) -> Result<Vec<StoredPermissionAnswer>> {
+        let job_dir = self.existing_job_dir(job_id)?;
+        let mut answers =
+            read_json_directory::<StoredPermissionAnswer>(&job_dir.join(PERMISSION_ANSWERS_DIR))?;
+        answers.sort_by(|left, right| {
+            left.answered_at
+                .cmp(&right.answered_at)
+                .then_with(|| left.request_id.cmp(&right.request_id))
+        });
+        Ok(answers)
+    }
+
+    pub(crate) fn mark_permission_resolved(
+        &self,
+        job_id: &str,
+        answer: &StoredPermissionAnswer,
+    ) -> Result<()> {
+        let job_dir = self.existing_job_dir(job_id)?;
+        let _lock = JobLock::exclusive(&job_dir.join(".lock"))?;
+        let resolved_path = mailbox_path(&job_dir, RESOLVED_PERMISSIONS_DIR, &answer.request_id)?;
+        write_json_if_absent_or_equal(&resolved_path, answer)?;
+        remove_file_if_present(&mailbox_path(
+            &job_dir,
+            PENDING_PERMISSIONS_DIR,
+            &answer.request_id,
+        )?);
+        remove_file_if_present(&mailbox_path(
+            &job_dir,
+            PERMISSION_ANSWERS_DIR,
+            &answer.request_id,
+        )?);
+        Ok(())
+    }
+
+    pub(crate) fn clear_pending_permissions(&self, job_id: &str) {
+        let Ok(job_dir) = self.job_dir(job_id) else {
+            return;
+        };
+        for directory in [PENDING_PERMISSIONS_DIR, PERMISSION_ANSWERS_DIR] {
+            if let Err(error) = fs::remove_dir_all(job_dir.join(directory)) {
+                if error.kind() != std::io::ErrorKind::NotFound {
+                    tracing::warn!(
+                        "Failed to clear dispatch permission mailbox for {}: {error}",
+                        job_id
+                    );
+                }
+            }
+        }
+    }
+
+    pub(crate) fn enqueue_append_message(&self, request: DispatchAppendRequest) -> Result<bool> {
+        validate_id("messageId", &request.message_id)?;
+        let job_dir = self.existing_job_dir(&request.job_id)?;
+        let _lock = JobLock::exclusive(&job_dir.join(".lock"))?;
+        let consumed_path = mailbox_path(&job_dir, CONSUMED_MESSAGES_DIR, &request.message_id)?;
+        if let Some(existing) = read_optional_regular_json::<DispatchAppendRequest>(&consumed_path)?
+        {
+            if existing != request {
+                bail!("dispatch messageId is already bound to different content");
+            }
+            return Ok(true);
+        }
+        let state = self.load_state_unlocked(&job_dir)?;
+        if state.state.is_terminal() {
+            bail!("cannot append to a terminal dispatch job");
+        }
+        if !matches!(
+            state.state,
+            DispatchJobState::Queued | DispatchJobState::Running
+        ) {
+            bail!("dispatch job is not accepting appended messages");
+        }
+        let stored = StoredAppendMessage {
+            request: request.clone(),
+            created_at: chrono::Utc::now().to_rfc3339(),
+        };
+        let path = mailbox_path(&job_dir, PENDING_MESSAGES_DIR, &request.message_id)?;
+        if let Some(existing) = read_optional_regular_json::<StoredAppendMessage>(&path)? {
+            if existing.request != request {
+                bail!("dispatch messageId is already bound to different content");
+            }
+            return Ok(true);
+        }
+        write_json_if_absent_or_equal(&path, &stored)?;
+        Ok(true)
+    }
+
+    pub(crate) fn list_pending_append_messages(
+        &self,
+        job_id: &str,
+    ) -> Result<Vec<DispatchAppendRequest>> {
+        let job_dir = self.existing_job_dir(job_id)?;
+        let mut messages =
+            read_json_directory::<StoredAppendMessage>(&job_dir.join(PENDING_MESSAGES_DIR))?;
+        messages.sort_by(|left, right| {
+            left.created_at
+                .cmp(&right.created_at)
+                .then_with(|| left.request.message_id.cmp(&right.request.message_id))
+        });
+        Ok(messages.into_iter().map(|stored| stored.request).collect())
+    }
+
+    pub(crate) fn mark_append_message_consumed(
+        &self,
+        job_id: &str,
+        request: &DispatchAppendRequest,
+    ) -> Result<()> {
+        let job_dir = self.existing_job_dir(job_id)?;
+        let _lock = JobLock::exclusive(&job_dir.join(".lock"))?;
+        let consumed_path = mailbox_path(&job_dir, CONSUMED_MESSAGES_DIR, &request.message_id)?;
+        write_json_if_absent_or_equal(&consumed_path, request)?;
+        remove_file_if_present(&mailbox_path(
+            &job_dir,
+            PENDING_MESSAGES_DIR,
+            &request.message_id,
+        )?);
+        Ok(())
     }
 
     pub(crate) fn list_jobs(&self) -> Result<Vec<DispatchJobListEntry>> {
@@ -489,6 +754,9 @@ impl DispatchStore {
                 started_at: state.started_at,
                 workspace_path: job.request.workspace_path,
                 title: job.title,
+                agent_type: job.request.agent_type,
+                approval_policy: job.request.approval_policy,
+                model: job.request.model,
             });
         }
         entries.sort_by(|left, right| right.started_at.cmp(&left.started_at));
@@ -560,6 +828,181 @@ impl DispatchStore {
             .join(format!("{digest:x}.lock"))
     }
 
+    pub(crate) fn root(&self) -> &Path {
+        &self.root
+    }
+
+    pub(crate) fn workspace_upload_dir(&self, job_id: &str) -> Result<PathBuf> {
+        validate_id("jobId", job_id)?;
+        Ok(self.root.join("workspaces").join(job_id))
+    }
+
+    fn maybe_collect_expired_terminal_jobs(&self) -> Result<()> {
+        let marker = self.root.join(RETENTION_GC_MARKER);
+        if fs::metadata(&marker)
+            .and_then(|metadata| metadata.modified())
+            .ok()
+            .and_then(|modified| modified.elapsed().ok())
+            .is_some_and(|elapsed| elapsed.as_secs() < RETENTION_GC_INTERVAL_SECONDS)
+        {
+            return Ok(());
+        }
+        let _lock = JobLock::exclusive(&self.root.join(RETENTION_GC_LOCK))?;
+        if fs::metadata(&marker)
+            .and_then(|metadata| metadata.modified())
+            .ok()
+            .and_then(|modified| modified.elapsed().ok())
+            .is_some_and(|elapsed| elapsed.as_secs() < RETENTION_GC_INTERVAL_SECONDS)
+        {
+            return Ok(());
+        }
+        self.collect_expired_terminal_jobs(chrono::Utc::now())?;
+        atomic_write(&marker, chrono::Utc::now().to_rfc3339().as_bytes())
+    }
+
+    fn collect_expired_terminal_jobs(&self, now: chrono::DateTime<chrono::Utc>) -> Result<usize> {
+        let jobs_root = self.root.join("jobs");
+        let mut removed = 0;
+        for entry in fs::read_dir(&jobs_root)
+            .with_context(|| format!("read dispatch jobs {}", jobs_root.display()))?
+        {
+            let entry = entry?;
+            let Some(job_id) = entry.file_name().to_str().map(ToOwned::to_owned) else {
+                continue;
+            };
+            if validate_id("jobId", &job_id).is_err() {
+                continue;
+            }
+            let job_dir = entry.path();
+            let metadata = fs::symlink_metadata(&job_dir)?;
+            if metadata.file_type().is_symlink() || !metadata.is_dir() {
+                continue;
+            }
+            let lock = JobLock::exclusive(&job_dir.join(".lock"))?;
+            let state = match self.load_state_unlocked(&job_dir) {
+                Ok(state) => state,
+                Err(error) => {
+                    tracing::warn!(
+                        "Skipping unreadable dispatch job during retention cleanup: job_id={} error={error:#}",
+                        job_id
+                    );
+                    continue;
+                }
+            };
+            if !state.state.is_terminal() {
+                continue;
+            }
+            let Some(finished_at) = state
+                .finished_at
+                .as_deref()
+                .and_then(|value| chrono::DateTime::parse_from_rfc3339(value).ok())
+                .map(|value| value.with_timezone(&chrono::Utc))
+            else {
+                continue;
+            };
+            if now.signed_duration_since(finished_at).num_days() < TERMINAL_JOB_RETENTION_DAYS {
+                continue;
+            }
+            let tombstone = jobs_root.join(format!(
+                ".gc-{}-{}",
+                job_id,
+                uuid::Uuid::new_v4().as_simple()
+            ));
+            fs::rename(&job_dir, &tombstone).with_context(|| {
+                format!("quarantine expired dispatch job {}", job_dir.display())
+            })?;
+            drop(lock);
+            fs::remove_dir_all(&tombstone)
+                .with_context(|| format!("remove expired dispatch job {}", tombstone.display()))?;
+
+            let workspace_dir = self.root.join("workspaces").join(&job_id);
+            match fs::symlink_metadata(&workspace_dir) {
+                Ok(metadata) if !metadata.file_type().is_symlink() && metadata.is_dir() => {
+                    fs::remove_dir_all(&workspace_dir).with_context(|| {
+                        format!(
+                            "remove expired dispatch workspace {}",
+                            workspace_dir.display()
+                        )
+                    })?;
+                }
+                Ok(_) => {
+                    tracing::warn!(
+                        "Skipping unsafe expired dispatch workspace path: {}",
+                        workspace_dir.display()
+                    );
+                }
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                Err(error) => return Err(error.into()),
+            }
+            let upload_lock = self
+                .root
+                .join("workspaces")
+                .join(format!(".{job_id}.upload.lock"));
+            match fs::symlink_metadata(&upload_lock) {
+                Ok(metadata) if !metadata.file_type().is_symlink() && metadata.is_file() => {
+                    fs::remove_file(&upload_lock).with_context(|| {
+                        format!(
+                            "remove expired dispatch workspace lock {}",
+                            upload_lock.display()
+                        )
+                    })?;
+                }
+                Ok(_) => {
+                    tracing::warn!(
+                        "Skipping unsafe expired dispatch workspace lock: {}",
+                        upload_lock.display()
+                    );
+                }
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                Err(error) => return Err(error.into()),
+            }
+            removed += 1;
+        }
+        let workspaces_root = self.root.join("workspaces");
+        for entry in fs::read_dir(&workspaces_root)
+            .with_context(|| format!("read dispatch workspaces {}", workspaces_root.display()))?
+        {
+            let entry = entry?;
+            let Some(job_id) = entry.file_name().to_str().map(ToOwned::to_owned) else {
+                continue;
+            };
+            if validate_id("jobId", &job_id).is_err() || jobs_root.join(&job_id).exists() {
+                continue;
+            }
+            let workspace_dir = entry.path();
+            let metadata = fs::symlink_metadata(&workspace_dir)?;
+            if metadata.file_type().is_symlink() || !metadata.is_dir() {
+                continue;
+            }
+            let old_enough = metadata
+                .modified()
+                .ok()
+                .and_then(|modified| modified.elapsed().ok())
+                .is_some_and(|elapsed| {
+                    elapsed.as_secs() >= (TERMINAL_JOB_RETENTION_DAYS as u64) * 24 * 60 * 60
+                });
+            if !old_enough {
+                continue;
+            }
+            let tombstone = workspaces_root.join(format!(
+                ".gc-{}-{}",
+                job_id,
+                uuid::Uuid::new_v4().as_simple()
+            ));
+            fs::rename(&workspace_dir, &tombstone).with_context(|| {
+                format!(
+                    "quarantine orphaned dispatch workspace {}",
+                    workspace_dir.display()
+                )
+            })?;
+            fs::remove_dir_all(&tombstone).with_context(|| {
+                format!("remove orphaned dispatch workspace {}", tombstone.display())
+            })?;
+            removed += 1;
+        }
+        Ok(removed)
+    }
+
     fn load_state_unlocked(&self, job_dir: &Path) -> Result<DispatchStateRecord> {
         read_json(&job_dir.join(STATE_FILE))
     }
@@ -583,7 +1026,8 @@ impl DispatchStore {
             .with_context(|| format!("open dispatch events {}", path.display()))?;
         set_private_file_permissions(&path)?;
         let encoded = serde_json::to_vec(event).context("encode dispatch event")?;
-        let encoded = if encoded.len() > MAX_EVENT_BYTES {
+        let event_was_omitted = encoded.len() > MAX_EVENT_BYTES;
+        let encoded = if event_was_omitted {
             serde_json::to_vec(&DispatchEvent::oversized_event_omitted(
                 encoded.len(),
                 MAX_EVENT_BYTES,
@@ -593,6 +1037,17 @@ impl DispatchStore {
             encoded
         };
         let (header, data_start) = read_event_log_header(&mut file, &path)?;
+        let metadata_path = job_dir.join(EVENTS_METADATA_FILE);
+        let mut event_metadata = load_event_log_metadata(&metadata_path);
+        event_metadata.history_truncated |= header.cursor_base > 0;
+        if event_was_omitted {
+            // Persist the conservative completeness fact before the marker.
+            // A crash may over-count by one, but can never claim completeness
+            // after source content was dropped.
+            event_metadata.omitted_event_count =
+                event_metadata.omitted_event_count.saturating_add(1);
+            atomic_write_json(&metadata_path, &event_metadata)?;
+        }
         let physical_len = truncate_incomplete_event_tail(&mut file)?;
         let current_len = physical_len.saturating_sub(data_start);
         if current_len
@@ -601,6 +1056,8 @@ impl DispatchStore {
             > self.max_events_bytes
         {
             let cursor_base = header.cursor_base.saturating_add(current_len);
+            event_metadata.history_truncated = true;
+            atomic_write_json(&metadata_path, &event_metadata)?;
             atomic_write_event_log(&path, cursor_base, Some(&encoded))?;
             return Ok(cursor_base
                 .saturating_add(encoded.len() as u64)
@@ -683,13 +1140,25 @@ impl DispatchLease {
     }
 }
 
-struct JobLock {
+pub(super) struct JobLock {
     _file: File,
 }
 
 impl JobLock {
-    fn exclusive(path: &Path) -> Result<Self> {
+    pub(super) fn exclusive(path: &Path) -> Result<Self> {
         Self::open(path, true)
+    }
+
+    pub(super) fn try_exclusive(path: &Path) -> Result<Option<Self>> {
+        let file = OpenOptions::new()
+            .create(true)
+            .read(true)
+            .write(true)
+            .truncate(false)
+            .open(path)
+            .with_context(|| format!("open dispatch job lock {}", path.display()))?;
+        set_private_file_permissions(path)?;
+        try_lock_file_exclusive(&file).map(|acquired| acquired.then_some(Self { _file: file }))
     }
 
     fn shared(path: &Path) -> Result<Self> {
@@ -728,7 +1197,7 @@ impl FileLock {
     }
 }
 
-fn validate_id(field: &str, value: &str) -> Result<()> {
+pub(super) fn validate_id(field: &str, value: &str) -> Result<()> {
     if value.is_empty()
         || value.len() > 128
         || !value
@@ -744,13 +1213,169 @@ fn validate_id(field: &str, value: &str) -> Result<()> {
     Ok(())
 }
 
+fn mailbox_path(job_dir: &Path, directory: &str, id: &str) -> Result<PathBuf> {
+    if id.trim().is_empty() || id.len() > 1024 {
+        bail!("dispatch mailbox identity is empty or too long");
+    }
+    use sha2::{Digest, Sha256};
+    let digest = Sha256::digest(id.as_bytes());
+    Ok(job_dir.join(directory).join(format!("{digest:x}.json")))
+}
+
+fn ensure_permission_answer_matches(
+    existing: &StoredPermissionAnswer,
+    request_id: &str,
+    reply: &PermissionReply,
+) -> Result<()> {
+    if existing.request_id != request_id || existing.reply != *reply {
+        bail!("dispatch permission requestId is already bound to a different answer");
+    }
+    Ok(())
+}
+
+fn load_event_log_metadata(path: &Path) -> EventLogMetadata {
+    match read_optional_regular_json(path) {
+        Ok(Some(metadata)) => metadata,
+        Ok(None) => {
+            tracing::warn!(
+                "Dispatch event completeness metadata is missing: {}",
+                path.display()
+            );
+            EventLogMetadata {
+                history_truncated: true,
+                omitted_event_count: 0,
+            }
+        }
+        Err(error) => {
+            tracing::warn!(
+                "Dispatch event completeness metadata is unreadable: path={} error={error:#}",
+                path.display()
+            );
+            EventLogMetadata {
+                history_truncated: true,
+                omitted_event_count: 0,
+            }
+        }
+    }
+}
+
+fn read_optional_regular_json<T>(path: &Path) -> Result<Option<T>>
+where
+    T: for<'de> Deserialize<'de>,
+{
+    match fs::symlink_metadata(path) {
+        Ok(metadata) => {
+            if metadata.file_type().is_symlink() || !metadata.is_file() {
+                bail!(
+                    "dispatch mailbox path is not a regular file: {}",
+                    path.display()
+                );
+            }
+            read_json(path).map(Some)
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(error) => {
+            Err(error).with_context(|| format!("inspect dispatch mailbox {}", path.display()))
+        }
+    }
+}
+
+fn read_json_directory<T>(directory: &Path) -> Result<Vec<T>>
+where
+    T: for<'de> Deserialize<'de>,
+{
+    let entries = match fs::read_dir(directory) {
+        Ok(entries) => entries,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(error) => {
+            return Err(error)
+                .with_context(|| format!("read dispatch mailbox {}", directory.display()))
+        }
+    };
+    let mut values = Vec::new();
+    for entry in entries {
+        let entry = entry?;
+        let metadata = fs::symlink_metadata(entry.path())?;
+        if metadata.file_type().is_symlink()
+            || !metadata.is_file()
+            || entry.path().extension().and_then(|value| value.to_str()) != Some("json")
+        {
+            bail!(
+                "dispatch mailbox contains an invalid entry: {}",
+                entry.path().display()
+            );
+        }
+        values.push(read_json(&entry.path())?);
+    }
+    Ok(values)
+}
+
+fn mailbox_usage(directory: &Path) -> Result<(usize, u64)> {
+    let entries = match fs::read_dir(directory) {
+        Ok(entries) => entries,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok((0, 0)),
+        Err(error) => {
+            return Err(error)
+                .with_context(|| format!("read dispatch mailbox {}", directory.display()))
+        }
+    };
+    let mut count = 0_usize;
+    let mut bytes = 0_u64;
+    for entry in entries {
+        let entry = entry?;
+        let metadata = fs::symlink_metadata(entry.path())?;
+        if metadata.file_type().is_symlink()
+            || !metadata.is_file()
+            || entry.path().extension().and_then(|value| value.to_str()) != Some("json")
+        {
+            bail!(
+                "dispatch mailbox contains an invalid entry: {}",
+                entry.path().display()
+            );
+        }
+        count = count.saturating_add(1);
+        bytes = bytes.saturating_add(metadata.len());
+    }
+    Ok((count, bytes))
+}
+
+fn write_json_if_absent_or_equal<T>(path: &Path, value: &T) -> Result<()>
+where
+    T: for<'de> Deserialize<'de> + Serialize + PartialEq,
+{
+    if let Some(parent) = path.parent() {
+        create_private_dir(parent)?;
+    }
+    match fs::symlink_metadata(path) {
+        Ok(metadata) => {
+            if metadata.file_type().is_symlink() || !metadata.is_file() {
+                bail!(
+                    "dispatch mailbox path is not a regular file: {}",
+                    path.display()
+                );
+            }
+            let existing = read_json::<T>(path)?;
+            if existing != *value {
+                bail!("dispatch mailbox identity is already bound to different content");
+            }
+            Ok(())
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            atomic_write_json(path, value)
+        }
+        Err(error) => {
+            Err(error).with_context(|| format!("inspect dispatch mailbox {}", path.display()))
+        }
+    }
+}
+
 fn submit_intent_fingerprint(request: &DispatchSubmitRequest) -> Result<String> {
     use sha2::{Digest, Sha256};
     let encoded = serde_json::to_vec(request).context("encode dispatch submit intent")?;
     Ok(format!("{:x}", Sha256::digest(encoded)))
 }
 
-fn read_json<T: for<'de> Deserialize<'de>>(path: &Path) -> Result<T> {
+pub(super) fn read_json<T: for<'de> Deserialize<'de>>(path: &Path) -> Result<T> {
     let bytes = fs::read(path).with_context(|| format!("read {}", path.display()))?;
     serde_json::from_slice(&bytes).with_context(|| format!("decode {}", path.display()))
 }
@@ -817,7 +1442,19 @@ fn truncate_incomplete_event_tail(file: &mut File) -> Result<u64> {
     Ok(retained as u64)
 }
 
-fn atomic_write_json(path: &Path, value: &impl Serialize) -> Result<()> {
+fn truncate_utf8_bytes(value: &str, max_bytes: usize) -> String {
+    if value.len() <= max_bytes {
+        return value.to_string();
+    }
+    let suffix = "…";
+    let mut end = max_bytes.saturating_sub(suffix.len());
+    while end > 0 && !value.is_char_boundary(end) {
+        end -= 1;
+    }
+    format!("{}{}", &value[..end], suffix)
+}
+
+pub(super) fn atomic_write_json(path: &Path, value: &impl Serialize) -> Result<()> {
     let mut bytes = serde_json::to_vec_pretty(value).context("encode dispatch state")?;
     bytes.push(b'\n');
     atomic_write(path, &bytes)
@@ -866,7 +1503,7 @@ fn ensure_private_file(path: &Path) -> Result<()> {
     set_private_file_permissions(path)
 }
 
-fn create_private_dir(path: &Path) -> Result<()> {
+pub(super) fn create_private_dir(path: &Path) -> Result<()> {
     fs::create_dir_all(path).with_context(|| format!("create {}", path.display()))?;
     #[cfg(unix)]
     {
@@ -877,7 +1514,7 @@ fn create_private_dir(path: &Path) -> Result<()> {
     Ok(())
 }
 
-fn set_private_file_permissions(path: &Path) -> Result<()> {
+pub(super) fn set_private_file_permissions(path: &Path) -> Result<()> {
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
@@ -889,7 +1526,7 @@ fn set_private_file_permissions(path: &Path) -> Result<()> {
     Ok(())
 }
 
-fn sync_directory(path: &Path) -> Result<()> {
+pub(super) fn sync_directory(path: &Path) -> Result<()> {
     #[cfg(unix)]
     {
         File::open(path)
@@ -902,7 +1539,7 @@ fn sync_directory(path: &Path) -> Result<()> {
     Ok(())
 }
 
-fn remove_file_if_present(path: &Path) {
+pub(super) fn remove_file_if_present(path: &Path) {
     if let Err(error) = fs::remove_file(path) {
         if error.kind() != std::io::ErrorKind::NotFound {
             tracing::warn!("Failed to remove dispatch file {}: {error}", path.display());
@@ -955,6 +1592,8 @@ fn try_lock_file_exclusive(_file: &File) -> Result<bool> {
 mod tests {
     use super::*;
     use crate::dispatch::protocol::{DispatchApprovalPolicy, DispatchSubmitRequest};
+    use bitfun_agent_runtime::sdk::{PermissionRequestSource, PermissionRequestSourceKind};
+    use serde_json::Map;
 
     fn request(job_id: &str) -> DispatchSubmitRequest {
         DispatchSubmitRequest {
@@ -974,6 +1613,28 @@ mod tests {
         let dir = tempfile::tempdir().expect("tempdir");
         let store = DispatchStore::open(dir.path().join("dispatch")).expect("store");
         (dir, store)
+    }
+
+    fn permission_request(job_id: &str) -> PermissionRequest {
+        PermissionRequest {
+            request_id: "permission-1".to_string(),
+            round_id: "round-1".to_string(),
+            order: 0,
+            tool_call_id: Some("tool-call-1".to_string()),
+            project_path: Some("/tmp/workspace".to_string()),
+            project_id: "project-1".to_string(),
+            session_id: format!("session-{job_id}"),
+            agent_id: "agentic".to_string(),
+            action: "write".to_string(),
+            resources: vec!["src/main.rs".to_string()],
+            save_resources: Vec::new(),
+            source: PermissionRequestSource {
+                kind: PermissionRequestSourceKind::ToolCall,
+                identity: "Write".to_string(),
+            },
+            delegation: None,
+            display_metadata: Map::new(),
+        }
     }
 
     #[test]
@@ -1071,6 +1732,85 @@ mod tests {
         assert!(!changed);
         assert_eq!(still_succeeded.state, DispatchJobState::Succeeded);
         assert!(still_succeeded.last_error.is_none());
+    }
+
+    #[test]
+    fn permission_answers_are_idempotent_before_and_after_worker_consumption() {
+        let (_dir, store) = store();
+        store
+            .create_job(request("job-permission"), "Task".to_string())
+            .expect("create job");
+        let permission = permission_request("job-permission");
+        store
+            .save_pending_permission("job-permission", &permission)
+            .expect("save pending permission");
+
+        assert!(store
+            .save_permission_answer(
+                "job-permission",
+                &permission.request_id,
+                PermissionReply::Once,
+            )
+            .expect("first answer"));
+        assert!(store
+            .save_permission_answer(
+                "job-permission",
+                &permission.request_id,
+                PermissionReply::Once,
+            )
+            .expect("retry pending answer"));
+        let answer = store
+            .list_permission_answers("job-permission")
+            .expect("list answers")
+            .pop()
+            .expect("answer");
+        store
+            .mark_permission_resolved("job-permission", &answer)
+            .expect("resolve answer");
+        assert!(store
+            .save_permission_answer(
+                "job-permission",
+                &permission.request_id,
+                PermissionReply::Once,
+            )
+            .expect("retry resolved answer"));
+        assert!(store
+            .save_permission_answer(
+                "job-permission",
+                &permission.request_id,
+                PermissionReply::Always,
+            )
+            .is_err());
+    }
+
+    #[test]
+    fn appended_messages_are_idempotently_bound_to_their_content() {
+        let (_dir, store) = store();
+        store
+            .create_job(request("job-append"), "Task".to_string())
+            .expect("create job");
+        let message = DispatchAppendRequest {
+            job_id: "job-append".to_string(),
+            message_id: "message-1".to_string(),
+            content: "Continue with tests".to_string(),
+            display_content: None,
+        };
+
+        assert!(store
+            .enqueue_append_message(message.clone())
+            .expect("first append"));
+        assert!(store
+            .enqueue_append_message(message.clone())
+            .expect("retry pending append"));
+        store
+            .mark_append_message_consumed("job-append", &message)
+            .expect("consume append");
+        assert!(store
+            .enqueue_append_message(message.clone())
+            .expect("retry consumed append"));
+        let mut conflicting = message;
+        conflicting.content = "Different content".to_string();
+        assert!(store.enqueue_append_message(conflicting).is_err());
     }
 
     #[test]
@@ -1512,6 +2252,22 @@ mod tests {
     }
 
     #[test]
+    fn missing_completeness_metadata_fails_closed() {
+        let (_dir, store) = store();
+        store
+            .create_job(request("job-metadata"), "Task".to_string())
+            .expect("create job");
+        let metadata_path = store
+            .job_dir("job-metadata")
+            .expect("job directory")
+            .join(EVENTS_METADATA_FILE);
+        fs::remove_file(metadata_path).expect("remove metadata");
+
+        let page = store.read_events("job-metadata", 0).expect("read events");
+        assert!(page.history_truncated);
+    }
+
+    #[test]
     fn status_pages_cap_event_count_without_skipping_cursor_bytes() {
         let (_dir, store) = store();
         store
@@ -1587,6 +2343,46 @@ mod tests {
         );
         assert!(bitfun_home.join("dispatch/jobs").is_dir());
         assert!(bitfun_home.join("dispatch/workspaces").is_dir());
+    }
+
+    #[test]
+    fn retention_removes_only_expired_terminal_jobs_and_their_managed_workspace() {
+        let (_dir, store) = store();
+        for job_id in ["expired", "recent", "running"] {
+            store
+                .create_job(request(job_id), "Task".to_string())
+                .expect("create job");
+            create_private_dir(&store.workspace_upload_dir(job_id).expect("workspace path"))
+                .expect("create workspace");
+        }
+
+        for job_id in ["expired", "recent"] {
+            store
+                .mark_state(job_id, DispatchJobState::Succeeded, None, None)
+                .expect("mark terminal");
+        }
+        let now = chrono::Utc::now();
+        let mut expired = store.load_state("expired").expect("expired state");
+        expired.finished_at =
+            Some((now - chrono::Duration::days(TERMINAL_JOB_RETENTION_DAYS + 1)).to_rfc3339());
+        atomic_write_json(
+            &store.job_dir("expired").expect("job path").join(STATE_FILE),
+            &expired,
+        )
+        .expect("age terminal state");
+
+        assert_eq!(
+            store
+                .collect_expired_terminal_jobs(now)
+                .expect("collect expired jobs"),
+            1
+        );
+        assert!(!store.root.join("jobs/expired").exists());
+        assert!(!store.root.join("workspaces/expired").exists());
+        assert!(store.root.join("jobs/recent").exists());
+        assert!(store.root.join("workspaces/recent").exists());
+        assert!(store.root.join("jobs/running").exists());
+        assert!(store.root.join("workspaces/running").exists());
     }
 
     #[cfg(unix)]

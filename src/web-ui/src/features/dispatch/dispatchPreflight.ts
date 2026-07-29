@@ -1,6 +1,10 @@
-import type { DispatchWorkspaceProbe } from './types';
+import type {
+  DispatchApprovalPolicy,
+  DispatchJobState,
+  DispatchWorkspaceProbe,
+} from './types';
 
-export const DISPATCH_PROTOCOL_VERSION = 1;
+export const DISPATCH_PROTOCOL_VERSION = 2;
 
 export const BASE_DISPATCH_CAPABILITIES = [
   'persistent_jobs',
@@ -10,15 +14,27 @@ export const BASE_DISPATCH_CAPABILITIES = [
   'workspace_serialization',
 ] as const;
 
+export function shouldConfirmDispatchAutoApproval(
+  policy: DispatchApprovalPolicy | undefined,
+  state: DispatchJobState | undefined,
+): boolean {
+  return (
+    policy === 'auto'
+    && (state === 'submitting' || state === 'submission_unknown')
+  );
+}
+
 export function isDispatchWorkspaceReady(
   workspacePath: string,
   workspace: DispatchWorkspaceProbe | undefined,
+  probedWorkspacePath: string | undefined = workspace?.path,
 ): boolean {
   const normalizedPath = workspacePath.trim();
   return (
     normalizedPath.length > 0 &&
-    workspace?.path === normalizedPath &&
-    workspace.exists === true &&
-    workspace.isDirectory === true
+    normalizedPath === probedWorkspacePath?.trim() &&
+    workspace?.exists === true &&
+    workspace?.isDirectory === true &&
+    !!workspace?.path.trim()
   );
 }

@@ -722,6 +722,7 @@ export async function createChatSession(
         if (!approvalPolicy) {
           throw new Error('Dispatch approval policy must be selected before creating a session');
         }
+        const workspaceDelivery = config.dispatchWorkspaceDelivery ?? { kind: 'existing' as const };
         const resolvedConfig: SessionConfig = {
           ...config,
           // A dispatch projection must not inherit or resolve a controller-side
@@ -734,6 +735,7 @@ export async function createChatSession(
           dispatchTarget,
           dispatchJobId: jobId,
           dispatchApprovalPolicy: approvalPolicy,
+          dispatchWorkspaceDelivery: workspaceDelivery,
           dispatchJobState: 'submitting',
           dispatchCursor: 0,
         };
@@ -762,12 +764,17 @@ export async function createChatSession(
           title: sessionName,
           agentType,
           approvalPolicy,
+          workspaceDelivery,
           // Do not inherit the controller's model selector. An omitted target
           // model lets the probed target use its own configured default.
           model: config.dispatchModel?.trim() || undefined,
           cursor: 0,
           state: 'submitting',
           appliedEventIds: [],
+          pendingPermissions: [],
+          eventLogComplete: true,
+          historyTruncated: false,
+          omittedEventCount: 0,
           createdAt: Date.now(),
           updatedAt: Date.now(),
         });
@@ -1126,7 +1133,7 @@ export async function forkChatSession(
     throw new Error(`Session does not exist: ${sourceSessionId}`);
   }
   if (isNonLocalDispatchTarget(sourceSession.config.dispatchTarget)) {
-    throw new Error('Forking a dispatched session is not supported in phase one');
+    throw new Error('Forking a detached dispatch session is not supported');
   }
 
   const executionWorkspacePath = requireSessionWorkspacePath(

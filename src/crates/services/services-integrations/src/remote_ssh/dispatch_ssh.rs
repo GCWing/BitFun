@@ -1,8 +1,9 @@
 //! SSH transport for persistent BitFun dispatch jobs.
 //!
 //! The target-side runner is the `bitfun dispatch` CLI surface. This module is
-//! deliberately only a submit/poll transport: the remote CLI owns jobs,
-//! sessions, transcripts, process detachment, and cancellation semantics.
+//! deliberately only a controller transport: the remote CLI owns jobs,
+//! workspaces, sessions, transcripts, process detachment, supervision, and
+//! cancellation semantics.
 //!
 //! Installing the CLI is a separate, explicit operation. `probe` never installs
 //! anything; `install_cli_start` downloads an official archive locally, verifies
@@ -30,10 +31,12 @@ const INSTALL_STEM: &str = "install-cli";
 const INSTALL_DONE_MARKER: &str = "BITFUN_DISPATCH_CLI_INSTALL_DONE";
 const INSTALL_PREPARE_GRACE_SECONDS: u64 = 30;
 const COMMAND_TIMEOUT_MS: u64 = 30_000;
+const WORKSPACE_COMMIT_POLL_INTERVAL: Duration = Duration::from_millis(750);
+const WORKSPACE_COMMIT_WAIT: Duration = Duration::from_secs(15 * 60);
 const RELEASE_READ_TIMEOUT_SECONDS: u64 = 30;
 const MAX_ARCHIVE_BYTES: usize = 512 * 1024 * 1024;
-const DISPATCH_PROTOCOL_VERSION: u64 = 1;
-const REQUIRED_DISPATCH_CAPABILITIES: [&str; 7] = [
+const DISPATCH_PROTOCOL_VERSION: u64 = 2;
+const REQUIRED_DISPATCH_CAPABILITIES: [&str; 12] = [
     "persistent_jobs",
     "cursor_events",
     "detached_worker",
@@ -41,6 +44,11 @@ const REQUIRED_DISPATCH_CAPABILITIES: [&str; 7] = [
     "frontend_event_projection",
     "approval_auto",
     "approval_reject_and_report",
+    "approval_remote",
+    "append_message",
+    "event_log_completeness",
+    "workspace_snapshot_exact",
+    "workspace_snapshot_chunked",
 ];
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -188,7 +196,7 @@ fn dispatch_protocol_is_compatible(protocol: &Value) -> bool {
 /// Validate the target-side protocol immediately before submission.
 ///
 /// `approval_policy = None` is used by installation probing and requires the
-/// complete phase-one surface. Submission may validate only the selected
+/// complete dispatch surface. Submission may validate only the selected
 /// unattended approval behavior in addition to the transport invariants.
 pub fn validate_dispatch_protocol(protocol: &Value, approval_policy: Option<&str>) -> Result<()> {
     if protocol.get("protocolVersion").and_then(Value::as_u64) != Some(DISPATCH_PROTOCOL_VERSION) {
@@ -216,6 +224,14 @@ pub fn validate_dispatch_protocol(protocol: &Value, approval_policy: Option<&str
             "workspace_serialization",
             "frontend_event_projection",
             "approval_reject_and_report",
+        ],
+        Some("remote") => &[
+            "persistent_jobs",
+            "cursor_events",
+            "detached_worker",
+            "workspace_serialization",
+            "frontend_event_projection",
+            "approval_remote",
         ],
         Some(_) => return Err(anyhow!("unsupported dispatch approval policy")),
         None => &REQUIRED_DISPATCH_CAPABILITIES,
@@ -493,6 +509,173 @@ pub async fn list(
     request: &Value,
 ) -> Result<Value> {
     invoke_json(manager, connection_id, "list", request).await
+}
+
+pub async fn answer(
+    manager: &SSHConnectionManager,
+    connection_id: &str,
+    request: &Value,
+) -> Result<Value> {
+    invoke_json(manager, connection_id, "answer", request).await
+}
+
+pub async fn append(
+    manager: &SSHConnectionManager,
+    connection_id: &str,
+    request: &Value,
+) -> Result<Value> {
+    invoke_json(manager, connection_id, "append", request).await
+}
+
+/// Stage and atomically materialize a controller-created workspace snapshot.
+///
+/// The target CLI chooses the owner-only upload path. This adapter validates
+/// that the returned path stays under the target's managed dispatch root before
+/// allowing SFTP to write it.
+pub async fn upload_workspace_snapshot(
+    manager: &SSHConnectionManager,
+    connection_id: &str,
+    begin_request: &Value,
+    archive_path: &std::path::Path,
+) -> Result<Value> {
+    ensure_plain_ssh_target(manager, connection_id).await?;
+    let target = probe_remote_target(manager, connection_id).await?;
+    let cli_path = target.cli_path.as_deref().ok_or_else(|| {
+        anyhow!("BitFun CLI is not installed on the SSH target; confirm installation first")
+    })?;
+    let begin = invoke_json_at_path(
+        manager,
+        connection_id,
+        &target.home,
+        cli_path,
+        "__workspace_begin",
+        begin_request,
+    )
+    .await?;
+    if begin
+        .get("committed")
+        .and_then(Value::as_bool)
+        .unwrap_or(false)
+    {
+        return Ok(begin);
+    }
+    if begin.get("accepted").and_then(Value::as_bool) != Some(true) {
+        return Err(anyhow!(
+            "dispatch target did not accept the workspace upload"
+        ));
+    }
+    let upload_path = begin
+        .get("uploadPath")
+        .and_then(Value::as_str)
+        .ok_or_else(|| anyhow!("dispatch target returned no workspace upload path"))?;
+    validate_managed_workspace_upload_path(&target.home, upload_path)?;
+    let archive_size = begin_request
+        .pointer("/metadata/archiveSize")
+        .and_then(Value::as_u64)
+        .ok_or_else(|| anyhow!("workspace upload request has no archiveSize"))?;
+    let local_size = std::fs::symlink_metadata(archive_path)
+        .with_context(|| format!("inspect workspace snapshot {}", archive_path.display()))?
+        .len();
+    if local_size != archive_size {
+        return Err(anyhow!(
+            "workspace snapshot changed before SSH upload: expected {archive_size} bytes, found {local_size}"
+        ));
+    }
+    let retained_offset = begin
+        .get("offset")
+        .and_then(Value::as_u64)
+        .ok_or_else(|| anyhow!("dispatch target returned no workspace upload offset"))?;
+    if retained_offset > archive_size {
+        return Err(anyhow!(
+            "dispatch target returned an invalid workspace upload offset"
+        ));
+    }
+    if retained_offset < archive_size {
+        let written = manager
+            .sftp_write_from_file(connection_id, upload_path, archive_path, archive_size)
+            .await
+            .context("upload workspace snapshot over SFTP")?;
+        if written != archive_size {
+            return Err(anyhow!(
+                "workspace snapshot SFTP upload ended at {written} of {archive_size} bytes"
+            ));
+        }
+    }
+    let job_id = begin_request
+        .get("jobId")
+        .and_then(Value::as_str)
+        .ok_or_else(|| anyhow!("workspace upload request has no jobId"))?;
+    let expected_digest = begin_request
+        .pointer("/metadata/archiveSha256")
+        .and_then(Value::as_str)
+        .ok_or_else(|| anyhow!("workspace upload request has no archiveSha256"))?;
+    let deadline = tokio::time::Instant::now() + WORKSPACE_COMMIT_WAIT;
+    loop {
+        let committed = invoke_json_at_path(
+            manager,
+            connection_id,
+            &target.home,
+            cli_path,
+            "__workspace_commit",
+            &serde_json::json!({ "jobId": job_id }),
+        )
+        .await?;
+        if committed
+            .pointer("/metadata/archiveSha256")
+            .and_then(Value::as_str)
+            != Some(expected_digest)
+        {
+            return Err(anyhow!(
+                "dispatch target returned mismatched workspace snapshot metadata"
+            ));
+        }
+        if committed
+            .get("committed")
+            .and_then(Value::as_bool)
+            .unwrap_or(false)
+        {
+            if committed
+                .get("workspacePath")
+                .and_then(Value::as_str)
+                .is_none_or(|path| path.trim().is_empty())
+            {
+                return Err(anyhow!(
+                    "dispatch target committed no materialized workspace path"
+                ));
+            }
+            return Ok(committed);
+        }
+        if tokio::time::Instant::now() >= deadline {
+            return Err(anyhow!(
+                "dispatch target workspace materialization did not finish within 15 minutes"
+            ));
+        }
+        tokio::time::sleep(WORKSPACE_COMMIT_POLL_INTERVAL).await;
+    }
+}
+
+fn validate_managed_workspace_upload_path(home: &str, upload_path: &str) -> Result<()> {
+    let prefix = format!(
+        "{}/.bitfun/dispatch/workspaces/",
+        home.trim_end_matches('/')
+    );
+    let Some(relative) = upload_path.strip_prefix(&prefix) else {
+        return Err(anyhow!(
+            "dispatch target returned an upload path outside its managed workspace root"
+        ));
+    };
+    let components = relative.split('/').collect::<Vec<_>>();
+    if components.len() != 2
+        || components[0].is_empty()
+        || components[0] == "."
+        || components[0] == ".."
+        || components[1] != "workspace.tar.gz"
+    {
+        return Err(anyhow!(
+            "dispatch target returned an invalid managed workspace upload path"
+        ));
+    }
+    Ok(())
 }
 
 async fn invoke_json(
@@ -1499,7 +1682,7 @@ mod tests {
     }
 
     #[test]
-    fn release_target_accepts_phase_one_unix_architectures() {
+    fn release_target_accepts_supported_unix_architectures() {
         assert_eq!(
             release_target("Linux", "amd64").unwrap(),
             "x86_64-unknown-linux-gnu"
@@ -1572,25 +1755,25 @@ mod tests {
     fn incompatible_dispatch_protocols_require_an_upgrade() {
         let capabilities = REQUIRED_DISPATCH_CAPABILITIES;
         let compatible = serde_json::json!({
-            "protocolVersion": 1,
+            "protocolVersion": DISPATCH_PROTOCOL_VERSION,
             "capabilities": capabilities,
         });
         assert!(dispatch_protocol_is_compatible(&compatible));
 
         let old = serde_json::json!({
-            "protocolVersion": 0,
+            "protocolVersion": DISPATCH_PROTOCOL_VERSION - 1,
             "capabilities": capabilities,
         });
         assert!(!dispatch_protocol_is_compatible(&old));
 
         let missing = serde_json::json!({
-            "protocolVersion": 1,
+            "protocolVersion": DISPATCH_PROTOCOL_VERSION,
             "capabilities": ["persistent_jobs", "cursor_events"],
         });
         assert!(!dispatch_protocol_is_compatible(&missing));
 
         let reject_only = serde_json::json!({
-            "protocolVersion": 1,
+            "protocolVersion": DISPATCH_PROTOCOL_VERSION,
             "capabilities": [
                 "persistent_jobs",
                 "cursor_events",

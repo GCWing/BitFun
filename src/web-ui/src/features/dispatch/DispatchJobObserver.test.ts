@@ -61,9 +61,14 @@ function registerRunningJob(): void {
     title: 'Dispatch test',
     agentType: 'agentic',
     approvalPolicy: 'reject-and-report',
+    workspaceDelivery: { kind: 'existing' },
     cursor: 0,
     state: 'running',
     appliedEventIds: [],
+    pendingPermissions: [],
+    eventLogComplete: true,
+    historyTruncated: false,
+    omittedEventCount: 0,
     createdAt: 1,
     updatedAt: 1,
   });
@@ -100,6 +105,7 @@ function createContext() {
         session.config.dispatchJobState = snapshot.state;
         return { applied: true, cursor: snapshot.cursor };
       }),
+      markSessionUnreadCompletion: vi.fn(),
     },
     eventBatcher: {
       flushNow: vi.fn(),
@@ -228,6 +234,9 @@ function status(
     events: [],
     pendingPermissions: [],
     cursorReset: false,
+    historyTruncated: false,
+    eventLogComplete: true,
+    omittedEventCount: 0,
     ...overrides,
   };
 }
@@ -247,6 +256,10 @@ describe('DispatchJobObserver', () => {
   });
 
   afterEach(() => {
+    Object.defineProperty(document, 'visibilityState', {
+      configurable: true,
+      value: 'visible',
+    });
     stateMachineManager.clear();
     flowChatStore.setState(() => ({
       sessions: new Map(),
@@ -392,6 +405,42 @@ describe('DispatchJobObserver', () => {
 
     await vi.advanceTimersByTimeAsync(0);
     expect(mocks.status).not.toHaveBeenCalled();
+    cleanup();
+  });
+
+  it('continues polling while hidden so background notifications can observe changes', async () => {
+    registerRunningJob();
+    mocks.status.mockResolvedValue(status({ state: 'running' }));
+    Object.defineProperty(document, 'visibilityState', {
+      configurable: true,
+      value: 'hidden',
+    });
+    const cleanup = installDispatchJobObserver(createContext());
+
+    await vi.advanceTimersByTimeAsync(0);
+    expect(mocks.status).toHaveBeenCalledTimes(1);
+
+    cleanup();
+    Object.defineProperty(document, 'visibilityState', {
+      configurable: true,
+      value: 'visible',
+    });
+  });
+
+  it('does not present target cancellation as a successful completion', async () => {
+    registerRunningJob();
+    const context = createContext();
+    context.userCancelledSessionIds = new Set(['session-1']);
+    mocks.status.mockResolvedValue(status({
+      state: 'cancelled',
+      cursor: 1,
+      events: [],
+    }));
+    const cleanup = installDispatchJobObserver(context);
+
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(context.flowChatStore.markSessionUnreadCompletion).not.toHaveBeenCalled();
     cleanup();
   });
 

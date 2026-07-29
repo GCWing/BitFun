@@ -104,6 +104,8 @@ static LOCAL_ONLY_COMMANDS: &[&str] = &[
     "dispatch_status",
     "dispatch_cancel",
     "dispatch_list_jobs",
+    "dispatch_answer",
+    "dispatch_append",
     // One-click relay deploy SSHes from the controller to a user host
     "relay_deploy_preflight",
     "relay_deploy_install_docker",

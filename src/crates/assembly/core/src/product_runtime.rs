@@ -28,7 +28,7 @@ use bitfun_runtime_services::RuntimeServices;
 use bitfun_services_core::permission_store::ProjectPermissionSqliteStore;
 
 use crate::agentic::coordination::{
-    ConversationCoordinator, DialogScheduler, SessionMaintenancePermit,
+    ConversationCoordinator, DialogScheduler, DialogSteerOutcome, SessionMaintenancePermit,
 };
 use crate::agentic::core::Session;
 use crate::agentic::events::EventQueue;
@@ -510,6 +510,22 @@ impl CoreAgentRuntimeCompatibility {
             scheduler,
             persistence,
         }
+    }
+
+    /// Buffer a user steering message into a currently running turn.
+    ///
+    /// Detached dispatch and compatibility hosts use this narrow facade so
+    /// they do not reach through the public Runtime SDK into scheduler state.
+    pub async fn submit_steering(
+        &self,
+        session_id: String,
+        turn_id: String,
+        content: String,
+        display_content: Option<String>,
+    ) -> Result<DialogSteerOutcome, String> {
+        self.scheduler
+            .submit_steering(session_id, turn_id, content, display_content)
+            .await
     }
 
     /// Applies the same Core deployment owner before a product compatibility

@@ -47,6 +47,7 @@ import {
   type SlashActionId,
 } from '../utils/slashActionSelection';
 import { notificationService } from '@/shared/notification-system';
+import { isRemoteWorkspace } from '@/shared/types';
 import { useI18n } from '@/infrastructure/i18n';
 import { inputReducer, initialInputState, type InputAction } from '../reducers/inputReducer';
 import { modeReducer, initialModeState } from '../reducers/modeReducer';
@@ -130,6 +131,7 @@ import {
 } from './ChatInputWorkspaceStrip';
 import type { DispatchSelection, DispatchTarget } from '@/features/dispatch/types';
 import { isNonLocalDispatchTarget } from '@/features/dispatch/types';
+import { shouldConfirmDispatchAutoApproval } from '@/features/dispatch/dispatchPreflight';
 import { ComposerVoiceInputButton } from './voice/ComposerVoiceInputButton';
 import { useComposerVoiceInput } from './voice/useComposerVoiceInput';
 import { expandWidgetPromptReferenceTokens } from '@/tools/generative-widget/widgetPromptReference';
@@ -2032,7 +2034,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     usesDispatchTransport,
   ]);
 
-  const handleSelectDispatchSsh = useCallback(async (selection: DispatchSelection) => {
+  const handleSelectDispatchTarget = useCallback(async (selection: DispatchSelection) => {
     try {
       await FlowChatManager.getInstance().createChatSession(
         {
@@ -2040,6 +2042,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           dispatchTargetRequest: selection.request,
           dispatchTarget: selection.target,
           dispatchApprovalPolicy: selection.approvalPolicy,
+          dispatchWorkspaceDelivery: selection.workspaceDelivery,
           // Undefined is intentional: the target's probed default model wins
           // unless a future preflight selector records an explicit choice.
           dispatchModel: selection.model,
@@ -2063,23 +2066,30 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     }
     const target: DispatchTarget =
       effectiveTargetSession?.config.dispatchTarget ?? { kind: 'local' };
+    const snapshotSourceIsRemote =
+      !!effectiveTargetSession?.remoteConnectionId || isRemoteWorkspace(workspace);
     return {
       target,
+      sourceWorkspacePath:
+        !snapshotSourceIsRemote && workspacePath ? workspacePath : undefined,
       locked:
         isNonLocalDispatchTarget(target) ||
         (effectiveTargetSession?.dialogTurns.length ?? 0) > 0 ||
         !!derivedState?.isProcessing,
-      onSelectSsh: handleSelectDispatchSsh,
+      onSelectTarget: handleSelectDispatchTarget,
     };
   }, [
     derivedState?.isProcessing,
     effectiveTargetSession?.config.dispatchTarget,
     effectiveTargetSession?.dialogTurns.length,
-    handleSelectDispatchSsh,
+    effectiveTargetSession?.remoteConnectionId,
+    handleSelectDispatchTarget,
     isAcpInputSession,
     isBtwSession,
     isSubagentInputTarget,
     registration,
+    workspace,
+    workspacePath,
   ]);
 
   const handleHidePermissionModeControl = useCallback(async () => {
@@ -3891,11 +3901,16 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     let dispatchAutoConfirmed = false;
     if (
       usesDispatchTransport &&
-      effectiveTargetSession?.config.dispatchApprovalPolicy === 'auto'
+      shouldConfirmDispatchAutoApproval(
+        effectiveTargetSession?.config.dispatchApprovalPolicy,
+        effectiveTargetSession?.config.dispatchJobState,
+      )
     ) {
-      const targetLabel = effectiveTargetSession.config.dispatchTarget?.kind === 'ssh'
-        ? effectiveTargetSession.config.dispatchTarget.displayName
-        : t('chatInput.dispatch.remoteTarget');
+      const dispatchTarget = effectiveTargetSession.config.dispatchTarget;
+      const targetLabel =
+        dispatchTarget?.kind === 'ssh' || dispatchTarget?.kind === 'device'
+          ? dispatchTarget.displayName
+          : t('chatInput.dispatch.remoteTarget');
       dispatchAutoConfirmed = await confirmWarning(
         t('chatInput.dispatch.autoConfirmTitle'),
         t('chatInput.dispatch.autoConfirmMessage', { target: targetLabel }),
@@ -3985,6 +4000,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     addToHistory,
     effectiveTargetSessionId,
     effectiveTargetSession?.config.dispatchApprovalPolicy,
+    effectiveTargetSession?.config.dispatchJobState,
     effectiveTargetSession?.config.dispatchTarget,
     clearPendingLargePastes,
     expandComposerSpecialTokens,

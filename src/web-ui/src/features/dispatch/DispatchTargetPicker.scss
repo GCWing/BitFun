@@ -128,6 +128,11 @@
       outline: none;
     }
 
+    &:disabled {
+      cursor: not-allowed;
+      opacity: 0.5;
+    }
+
     &[aria-checked='true'] > svg:last-child {
       color: var(--color-accent-500);
     }

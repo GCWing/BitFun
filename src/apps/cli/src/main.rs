@@ -593,6 +593,21 @@ pub(crate) enum DispatchAction {
     Cancel,
     /// List jobs owned by this machine
     List,
+    /// Answer a permission request for a remotely supervised job
+    Answer,
+    /// Append a steering message to a queued or running job
+    Append,
+    #[command(name = "__workspace_begin", hide = true)]
+    WorkspaceBegin,
+    #[command(name = "__workspace_chunk", hide = true)]
+    WorkspaceChunk,
+    #[command(name = "__workspace_commit", hide = true)]
+    WorkspaceCommit,
+    #[command(name = "__workspace_materialize", hide = true)]
+    WorkspaceMaterialize {
+        #[arg(long)]
+        job: String,
+    },
     #[command(name = "__run", hide = true)]
     Run {
         #[arg(long)]
@@ -1799,6 +1814,21 @@ mod dispatch_command_tests {
             }) if job == "job-1"
         ));
         assert!(is_dispatch_command(&worker.command));
+        let materializer = Cli::try_parse_from([
+            "bitfun",
+            "dispatch",
+            "__workspace_materialize",
+            "--job",
+            "job-1",
+        ])
+        .expect("parse internal workspace materializer");
+        assert!(matches!(
+            materializer.command,
+            Some(Commands::Dispatch {
+                action: DispatchAction::WorkspaceMaterialize { ref job }
+            }) if job == "job-1"
+        ));
+        assert!(is_dispatch_command(&materializer.command));
         let unrelated = Cli::try_parse_from(["bitfun", "config", "show"]).expect("parse config");
         assert!(!is_dispatch_command(&unrelated.command));
 

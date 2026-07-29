@@ -81,6 +81,8 @@ static LOCAL_ONLY_COMMANDS: &[&str] = &[
     "dispatch_status",
     "dispatch_cancel",
     "dispatch_list_jobs",
+    "dispatch_answer",
+    "dispatch_append",
 ];
 
 /// Desktop IDE surfaces that CLI Peer Host does not implement.
@@ -135,6 +137,8 @@ mod tests {
             "dispatch_status",
             "dispatch_cancel",
             "dispatch_list_jobs",
+            "dispatch_answer",
+            "dispatch_append",
         ] {
             assert!(is_local_only_command(command), "{command}");
         }

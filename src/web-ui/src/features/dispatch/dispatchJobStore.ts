@@ -10,6 +10,7 @@ import type {
   DispatchReachability,
   DispatchTarget,
   DispatchTargetRequest,
+  DispatchWorkspaceDeliveryRequest,
   OutboundDispatchRecord,
 } from './types';
 import { isDispatchJobTerminal } from './types';
@@ -37,11 +38,16 @@ export interface DispatchObserverJob {
   title: string;
   agentType: string;
   approvalPolicy: DispatchApprovalPolicy;
+  workspaceDelivery: DispatchWorkspaceDeliveryRequest;
   model?: string;
   cursor: number;
   state: DispatchJobState;
   terminalDrained?: boolean;
   lastError?: string;
+  pendingPermissions: Array<Record<string, unknown>>;
+  eventLogComplete: boolean;
+  historyTruncated: boolean;
+  omittedEventCount: number;
   appliedEventIds: string[];
   createdAt: number;
   updatedAt: number;
@@ -75,6 +81,10 @@ interface DispatchJobStoreState {
       appliedEventIds?: string[];
       terminalDrained?: boolean;
       cursorReset?: boolean;
+      pendingPermissions?: Array<Record<string, unknown>>;
+      eventLogComplete?: boolean;
+      historyTruncated?: boolean;
+      omittedEventCount?: number;
     },
   ) => void;
   hasAppliedEvent: (jobId: string, eventId: string) => boolean;
@@ -159,14 +169,19 @@ export const useDispatchJobStore = create<DispatchJobStoreState>()(
             const existing = jobs[record.jobId];
             if (existing) {
               const nextState = nextJobState(existing.state, record.lastState);
-              const progressed =
-                record.lastCursor > existing.cursor ||
-                nextState !== existing.state;
+              const progressed = nextState !== existing.state;
               jobs[record.jobId] = {
                 ...existing,
                 target: record.target,
                 targetRequest: requestFromTarget(record.target),
-                cursor: Math.max(existing.cursor, record.lastCursor),
+                title: record.title || existing.title,
+                agentType: record.agentType || existing.agentType,
+                approvalPolicy: record.approvalPolicy || existing.approvalPolicy,
+                model: record.model || existing.model,
+                // `lastCursor` is controller-wide diagnostic progress. A
+                // renderer cursor is per observer and must never jump because
+                // another observer polled the same target job.
+                cursor: existing.cursor,
                 state: nextState,
                 terminalDrained: progressed ? false : existing.terminalDrained,
                 updatedAt: Math.max(existing.updatedAt, Date.parse(record.updatedAt) || 0),
@@ -179,13 +194,21 @@ export const useDispatchJobStore = create<DispatchJobStoreState>()(
               targetRequest: requestFromTarget(record.target),
               target: record.target,
               sourceWorkspacePath: fallbackSourceWorkspacePath,
-              title: record.promptPreview || record.sessionId.slice(0, 8),
-              agentType: 'agentic',
-              approvalPolicy: 'reject-and-report',
-              cursor: record.lastCursor,
+              title: record.title || record.promptPreview || record.sessionId.slice(0, 8),
+              agentType: record.agentType || 'agentic',
+              approvalPolicy: record.approvalPolicy || 'reject-and-report',
+              workspaceDelivery: { kind: 'existing' },
+              model: record.model,
+              // A newly reconstructed projection must replay its own
+              // transcript instead of inheriting another observer's cursor.
+              cursor: 0,
               state: record.lastState,
               terminalDrained: false,
               appliedEventIds: [],
+              pendingPermissions: [],
+              eventLogComplete: true,
+              historyTruncated: false,
+              omittedEventCount: 0,
               createdAt: Date.parse(record.createdAt) || Date.now(),
               updatedAt: Date.parse(record.updatedAt) || Date.now(),
             };
@@ -223,6 +246,14 @@ export const useDispatchJobStore = create<DispatchJobStoreState>()(
                 ),
                 lastError: update.lastError,
                 appliedEventIds: eventIds,
+                pendingPermissions:
+                  update.pendingPermissions ?? current.pendingPermissions ?? [],
+                eventLogComplete:
+                  update.eventLogComplete ?? current.eventLogComplete ?? true,
+                historyTruncated:
+                  update.historyTruncated ?? current.historyTruncated ?? false,
+                omittedEventCount:
+                  update.omittedEventCount ?? current.omittedEventCount ?? 0,
                 updatedAt: Date.now(),
               },
             },

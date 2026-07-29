@@ -11,6 +11,7 @@ import type {
   DispatchSubmitResponse,
   DispatchTargetOption,
   DispatchTargetRequest,
+  DispatchWorkspaceDeliveryRequest,
   OutboundDispatchRecord,
 } from './types';
 
@@ -50,6 +51,7 @@ export const dispatchApi = {
 
   async submit(request: {
     target: DispatchTargetRequest;
+    workspaceDelivery: DispatchWorkspaceDeliveryRequest;
     jobId: string;
     sessionId: string;
     agentType: string;
@@ -72,6 +74,39 @@ export const dispatchApi = {
   async cancel(jobId: string): Promise<DispatchCancelResponse> {
     return api.invoke<DispatchCancelResponse>('dispatch_cancel', {
       request: { jobId },
+    });
+  },
+
+  async answerPermission(
+    jobId: string,
+    requestId: string,
+    reply: 'once' | 'always' | 'reject',
+    feedback?: string,
+  ): Promise<{ resolved: boolean }> {
+    return api.invoke<{ resolved: boolean }>('dispatch_answer', {
+      request: {
+        jobId,
+        requestId,
+        reply,
+        ...(feedback?.trim() ? { feedback: feedback.trim() } : {}),
+      },
+    });
+  },
+
+  async append(
+    jobId: string,
+    content: string,
+    displayContent?: string,
+    messageId: string = globalThis.crypto?.randomUUID?.()
+      ?? `dispatch-message-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+  ): Promise<{ accepted: boolean; messageId: string }> {
+    return api.invoke<{ accepted: boolean; messageId: string }>('dispatch_append', {
+      request: {
+        jobId,
+        messageId,
+        content,
+        ...(displayContent?.trim() ? { displayContent } : {}),
+      },
     });
   },
 

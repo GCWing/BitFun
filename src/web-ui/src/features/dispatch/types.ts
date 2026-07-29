@@ -18,7 +18,14 @@ export type DispatchTarget =
       displayName: string;
     };
 
-export type DispatchApprovalPolicy = 'auto' | 'reject-and-report';
+export type DispatchApprovalPolicy = 'auto' | 'reject-and-report' | 'remote';
+export type DispatchWorkspaceDeliveryRequest =
+  | { kind: 'existing' }
+  | {
+      kind: 'snapshot-exact';
+      sourceWorkspacePath: string;
+      sensitiveFilesConfirmed: true;
+    };
 export type DispatchReachability = 'unknown' | 'reachable' | 'unreachable';
 export type DispatchJobState =
   | 'submitting'
@@ -30,11 +37,13 @@ export type DispatchJobState =
   | 'cancelled';
 
 export interface DispatchTargetOption {
-  kind: 'local' | 'ssh';
+  kind: 'local' | 'ssh' | 'device';
   connectionId?: string;
+  deviceId?: string;
   displayName: string;
   description?: string;
   defaultWorkspace?: string;
+  online?: boolean;
 }
 
 export interface DispatchCliRelease {
@@ -143,6 +152,9 @@ export interface DispatchStatusResponse {
   events: DispatchEvent[];
   pendingPermissions: Array<Record<string, unknown>>;
   cursorReset: boolean;
+  historyTruncated: boolean;
+  eventLogComplete: boolean;
+  omittedEventCount: number;
   lastError?: string;
 }
 
@@ -157,6 +169,9 @@ export interface DispatchJobListEntry {
   startedAt?: string;
   workspacePath: string;
   title: string;
+  agentType?: string;
+  approvalPolicy?: DispatchApprovalPolicy;
+  model?: string;
 }
 
 export interface OutboundDispatchRecord {
@@ -165,6 +180,10 @@ export interface OutboundDispatchRecord {
   sessionId: string;
   workspacePath: string;
   promptPreview: string;
+  title?: string;
+  agentType?: string;
+  approvalPolicy?: DispatchApprovalPolicy;
+  model?: string;
   lastCursor: number;
   lastState: DispatchJobState;
   createdAt: string;
@@ -172,8 +191,9 @@ export interface OutboundDispatchRecord {
 }
 
 export interface DispatchSelection {
-  request: Extract<DispatchTargetRequest, { kind: 'ssh' }>;
-  target: Extract<DispatchTarget, { kind: 'ssh' }>;
+  request: Exclude<DispatchTargetRequest, { kind: 'local' }>;
+  target: Exclude<DispatchTarget, { kind: 'local' }>;
+  workspaceDelivery: DispatchWorkspaceDeliveryRequest;
   approvalPolicy: DispatchApprovalPolicy;
   model?: string;
 }

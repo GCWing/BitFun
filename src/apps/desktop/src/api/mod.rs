@@ -18,6 +18,7 @@ pub mod custom_agent_api;
 pub mod debug_api;
 pub mod diff_api;
 pub mod dispatch_api;
+pub(crate) mod dispatch_host;
 pub mod dto;
 pub mod editor_ai_api;
 pub mod external_hooks_api;

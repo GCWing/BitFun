@@ -1,5 +1,6 @@
 use std::collections::{HashSet, VecDeque};
 use std::path::Path;
+use std::time::Duration;
 
 use anyhow::{anyhow, bail, Context, Result};
 use bitfun_agent_runtime::sdk::{
@@ -37,6 +38,7 @@ pub(crate) async fn run(job_id: String) -> Result<()> {
             Some(format!("{error:#}")),
         );
     }
+    store.clear_pending_permissions(&job_id);
     store.clear_preparing(&job_id);
     store.remove_pid_if_matches(&job_id, worker_pid);
     shutdown_mcp_servers().await;
@@ -103,6 +105,7 @@ async fn run_inner(store: &DispatchStore, job_id: &str) -> Result<()> {
     )
     .await?;
     let agent_runtime = runtime.agent_runtime().clone();
+    let compatibility = runtime.compatibility().clone();
     let mut event_rx = agent_runtime
         .subscribe_events()
         .map_err(|error| anyhow!(error.into_message()))?;
@@ -162,13 +165,15 @@ async fn run_inner(store: &DispatchStore, job_id: &str) -> Result<()> {
         .into_iter()
         .collect::<VecDeque<_>>();
     let mut handled_permissions = HashSet::new();
+    let mut mailbox_tick = tokio::time::interval(Duration::from_millis(200));
+    mailbox_tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
     let (terminal_state, terminal_error) = loop {
         if let Some(request) = initial_permissions.pop_front() {
             if permission_targets_job(&request, &job.request.session_id)
                 && handled_permissions.insert(request.request_id.clone())
             {
-                let reason = reject_permission(
+                if let Some(reason) = handle_permission(
                     store,
                     job_id,
                     &agent_runtime,
@@ -177,8 +182,10 @@ async fn run_inner(store: &DispatchStore, job_id: &str) -> Result<()> {
                     request,
                     job.request.approval_policy,
                 )
-                .await?;
-                break (DispatchJobState::Failed, Some(reason));
+                .await?
+                {
+                    break (DispatchJobState::Failed, Some(reason));
+                }
             }
             continue;
         }
@@ -243,7 +250,7 @@ async fn run_inner(store: &DispatchStore, job_id: &str) -> Result<()> {
                 {
                     continue;
                 }
-                let reason = reject_permission(
+                if let Some(reason) = handle_permission(
                     store,
                     job_id,
                     &agent_runtime,
@@ -252,8 +259,22 @@ async fn run_inner(store: &DispatchStore, job_id: &str) -> Result<()> {
                     request,
                     job.request.approval_policy,
                 )
-                .await?;
-                break (DispatchJobState::Failed, Some(reason));
+                .await?
+                {
+                    break (DispatchJobState::Failed, Some(reason));
+                }
+            }
+            _ = mailbox_tick.tick() => {
+                if let Some(outcome) = process_mailboxes(
+                    store,
+                    job_id,
+                    &agent_runtime,
+                    &compatibility,
+                    &job.request.session_id,
+                    &turn_id,
+                ).await? {
+                    break outcome;
+                }
             }
         }
     };
@@ -276,10 +297,11 @@ async fn run_inner(store: &DispatchStore, job_id: &str) -> Result<()> {
         ),
     };
     store.mark_state(job_id, terminal_state, Some(&turn_id), terminal_error)?;
+    store.clear_pending_permissions(job_id);
     Ok(())
 }
 
-async fn reject_permission(
+async fn handle_permission(
     store: &DispatchStore,
     job_id: &str,
     runtime: &bitfun_agent_runtime::sdk::AgentRuntime,
@@ -287,13 +309,22 @@ async fn reject_permission(
     turn_id: &str,
     request: PermissionRequest,
     policy: DispatchApprovalPolicy,
-) -> Result<String> {
+) -> Result<Option<String>> {
+    if policy == DispatchApprovalPolicy::Remote {
+        store.save_pending_permission(job_id, &request)?;
+        store.append_event(
+            job_id,
+            &DispatchEvent::permission_pending(&request.request_id),
+        )?;
+        return Ok(None);
+    }
     let reason = match policy {
         DispatchApprovalPolicy::RejectAndReport => REJECT_AND_REPORT_REASON.to_string(),
         DispatchApprovalPolicy::Auto => format!(
             "Dispatch Auto policy could not safely auto-approve permission request {}",
             request.request_id
         ),
+        DispatchApprovalPolicy::Remote => unreachable!("remote handled above"),
     };
     store.append_event(
         job_id,
@@ -314,7 +345,71 @@ async fn reject_permission(
         .map_err(|error| anyhow!(error.into_message()))
         .context("reject unattended dispatch permission")?;
     cancel_turn(runtime, session_id, turn_id, "dispatch_permission_rejected").await;
-    Ok(reason)
+    Ok(Some(reason))
+}
+
+async fn process_mailboxes(
+    store: &DispatchStore,
+    job_id: &str,
+    runtime: &bitfun_agent_runtime::sdk::AgentRuntime,
+    compatibility: &bitfun_core::product_runtime::CoreAgentRuntimeCompatibility,
+    session_id: &str,
+    turn_id: &str,
+) -> Result<Option<(DispatchJobState, Option<String>)>> {
+    let state = store.load_state(job_id)?;
+    if state.cancel_requested() {
+        cancel_turn(runtime, session_id, turn_id, "dispatch_cancel_requested").await;
+        return Ok(Some((
+            DispatchJobState::Cancelled,
+            Some("Dispatch worker observed a cancellation request".to_string()),
+        )));
+    }
+
+    for answer in store.list_permission_answers(job_id)? {
+        runtime
+            .respond_permission_with_source(
+                &answer.request_id,
+                answer.reply.clone(),
+                PermissionReplySource::User,
+            )
+            .await
+            .map_err(|error| anyhow!(error.into_message()))
+            .with_context(|| {
+                format!(
+                    "apply remote dispatch permission response {}",
+                    answer.request_id
+                )
+            })?;
+        store.mark_permission_resolved(job_id, &answer)?;
+        store.append_event(
+            job_id,
+            &DispatchEvent::permission_resolved(&answer.request_id),
+        )?;
+    }
+
+    for request in store.list_pending_append_messages(job_id)? {
+        compatibility
+            .submit_steering(
+                session_id.to_string(),
+                turn_id.to_string(),
+                request.content.clone(),
+                request.display_content.clone(),
+            )
+            .await
+            .map_err(anyhow::Error::msg)
+            .with_context(|| {
+                format!(
+                    "append message {} to running dispatch turn",
+                    request.message_id
+                )
+            })?;
+        store.mark_append_message_consumed(job_id, &request)?;
+        store.append_event(
+            job_id,
+            &DispatchEvent::message_appended(&request.message_id),
+        )?;
+    }
+    Ok(None)
 }
 
 async fn cancel_turn(
@@ -344,7 +439,7 @@ fn permission_targets_job(request: &PermissionRequest, session_id: &str) -> bool
 
 fn event_belongs_to_job(event: &AgenticEvent, session_id: &str, turn_id: &str) -> bool {
     if matches!(event, AgenticEvent::SubagentSessionLinked { .. }) {
-        // Phase 1 has no child-session observer or dispatch marker. Publishing
+        // Detached dispatch has no child-session observer or dispatch marker. Publishing
         // this link would create an empty local-looking child in the Web UI,
         // while every later child event is correctly outside the parent scope.
         return false;

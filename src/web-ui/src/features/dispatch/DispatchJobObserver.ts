@@ -1,5 +1,8 @@
 import { isPeerDeviceModeActive } from '@/infrastructure/peer-device/peerModeFlag';
 import { createLogger } from '@/shared/utils/logger';
+import { systemAPI } from '@/infrastructure/api/service-api/SystemAPI';
+import { i18nService } from '@/infrastructure/i18n';
+import { notificationService } from '@/shared/notification-system';
 import { agenticEventListener } from '@/flow_chat/services/AgenticEventListener';
 import type { FlowChatContext } from '@/flow_chat/services/flow-chat-manager/types';
 import { clearRuntimeStatus } from '@/flow_chat/services/flow-chat-manager/RuntimeStatusModule';
@@ -37,7 +40,7 @@ const RAW_EVENT_NAMES: Record<string, string> = {
   ImageAnalysisStarted: 'agentic://image-analysis-started',
   ImageAnalysisCompleted: 'agentic://image-analysis-completed',
   DialogTurnStarted: 'agentic://dialog-turn-started',
-  // Phase one has no child-observer ownership. Ignoring this link prevents an
+  // Detached dispatch has no child-observer ownership. Ignoring this link prevents an
   // unmarked child projection from being mistaken for a local session.
   ModelRoundStarted: 'agentic://model-round-started',
   ModelRoundCompleted: 'agentic://model-round-completed',
@@ -158,6 +161,18 @@ export function dispatchEventId(event: DispatchEvent): string {
 function ensureProjection(context: FlowChatContext, job: DispatchObserverJob): boolean {
   const existing = context.flowChatStore.getState().sessions.get(job.sessionId);
   if (existing) {
+    // The immutable target identity is selected before submit, but the target
+    // may return a canonical or managed workspace path only after preflight
+    // and snapshot materialization. Reconcile that authoritative path without
+    // creating or restoring a controller-side backend session.
+    context.flowChatStore.updateSessionDispatchTarget(job.sessionId, {
+      targetRequest: job.targetRequest,
+      target: job.target,
+      jobId: job.jobId,
+      approvalPolicy: job.approvalPolicy,
+      state: job.state,
+      cursor: job.cursor,
+    });
     return true;
   }
 
@@ -325,6 +340,11 @@ async function refreshJob(context: FlowChatContext, requestedJobId: string): Pro
   // clears a transient transport failure. It does not alter the durable job
   // state beyond the snapshot applied below.
   dispatchJobStore.getState().setTransportState(job.jobId, 'reachable');
+  // Terminal event handling and snapshot reconciliation clear this marker.
+  // Capture it first so a controller-initiated cancellation cannot be
+  // misreported as a newly completed background task.
+  const userCancelledBeforeRefresh =
+    context.userCancelledSessionIds?.has(job.sessionId) ?? false;
   for (const event of response.events) {
     const eventId = dispatchEventId(event);
     if (dispatchJobStore.getState().hasAppliedEvent(job.jobId, eventId)) {
@@ -371,13 +391,86 @@ async function refreshJob(context: FlowChatContext, requestedJobId: string): Pro
   if (!applied.applied) {
     return;
   }
+  const background =
+    typeof document !== 'undefined'
+    && (document.hidden || !document.hasFocus());
+  const knownPermissionIds = new Set(
+    (job.pendingPermissions ?? [])
+      .map(request => request.requestId)
+      .filter((requestId): requestId is string => typeof requestId === 'string'),
+  );
+  const newPermissionCount = response.pendingPermissions.filter(request => (
+    typeof request.requestId === 'string'
+    && !knownPermissionIds.has(request.requestId)
+  )).length;
   dispatchJobStore.getState().updateProgress(job.jobId, {
     cursor: response.cursor,
     state: response.state,
     lastError: response.lastError,
     cursorReset: response.cursorReset,
     terminalDrained,
+    pendingPermissions: response.pendingPermissions,
+    eventLogComplete: response.eventLogComplete,
+    historyTruncated: response.historyTruncated,
+    omittedEventCount: response.omittedEventCount,
   });
+  if (
+    job.eventLogComplete !== false
+    && response.eventLogComplete === false
+  ) {
+    notificationService.warning(
+      i18nService.t('common:dispatch.eventHistoryIncomplete'),
+      { duration: 6000 },
+    );
+  }
+  if (background && newPermissionCount > 0) {
+    void systemAPI.sendSystemNotification(
+      i18nService.t('common:dispatch.permissionTitle'),
+      i18nService.t('common:dispatch.permissionBody', {
+        task: job.title,
+        count: newPermissionCount,
+      }),
+    ).catch(error => {
+      log.warn('Failed to send dispatched permission notification', {
+        jobId: job.jobId,
+        error,
+      });
+    });
+  }
+  const becameTerminal =
+    !isDispatchJobTerminal(job.state)
+    && isDispatchJobTerminal(response.state);
+  if (
+    becameTerminal
+    && response.state !== 'cancelled'
+    && !userCancelledBeforeRefresh
+  ) {
+    const activeSessionId = context.flowChatStore.getState().activeSessionId;
+    if (activeSessionId !== job.sessionId || background) {
+      context.flowChatStore.markSessionUnreadCompletion(
+        job.sessionId,
+        response.state === 'failed' ? 'error' : 'completed',
+      );
+    }
+    if (background) {
+      const title = response.state === 'failed'
+        ? i18nService.t('common:dispatch.completionFailedTitle')
+        : i18nService.t('common:dispatch.completionTitle');
+      const body = i18nService.t('common:dispatch.completionBody', {
+        task: job.title,
+        target:
+          job.target.kind === 'ssh' || job.target.kind === 'device'
+            ? job.target.displayName
+            : i18nService.t('common:dispatch.localTarget'),
+      });
+      void systemAPI.sendSystemNotification(title, body).catch(error => {
+        log.warn('Failed to send dispatched task completion notification', {
+          jobId: job.jobId,
+          error,
+        });
+      });
+    }
+  }
   if (needsTerminalFallback) {
     const effectiveSession = context.flowChatStore
       .getState()
@@ -408,9 +501,6 @@ export function installDispatchJobObserver(context: FlowChatContext): () => void
     if (disposed || isPeerDeviceModeActive()) return;
     if (inFlight) {
       queuedJobId = requestedJobId;
-      return;
-    }
-    if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
       return;
     }
 

@@ -8,7 +8,14 @@ import {
 } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import { createLogger } from '@/shared/utils/logger';
-import { Check, Loader2, RefreshCw, ShieldAlert, ShieldCheck } from 'lucide-react';
+import {
+  Check,
+  Loader2,
+  RefreshCw,
+  ShieldAlert,
+  ShieldCheck,
+  ShieldQuestion,
+} from 'lucide-react';
 import { dispatchApi } from './dispatchApi';
 import type {
   DispatchApprovalPolicy,
@@ -16,6 +23,7 @@ import type {
   DispatchSelection,
   DispatchSshProbe,
   DispatchTargetOption,
+  DispatchWorkspaceDeliveryRequest,
 } from './types';
 import {
   BASE_DISPATCH_CAPABILITIES,
@@ -36,12 +44,14 @@ interface ActiveInstall {
 function approvalCapability(policy: DispatchApprovalPolicy | null): string | null {
   if (policy === 'auto') return 'approval_auto';
   if (policy === 'reject-and-report') return 'approval_reject_and_report';
+  if (policy === 'remote') return 'approval_remote';
   return null;
 }
 
 interface DispatchInstallDialogProps {
   open: boolean;
   target: DispatchTargetOption | null;
+  sourceWorkspacePath?: string;
   onClose: () => void;
   onReady: (selection: DispatchSelection) => void;
 }
@@ -53,13 +63,17 @@ function errorMessage(error: unknown): string {
 export const DispatchInstallDialog: React.FC<DispatchInstallDialogProps> = ({
   open,
   target,
+  sourceWorkspacePath,
   onClose,
   onReady,
 }) => {
   const { t } = useI18n('common');
   const [workspacePath, setWorkspacePath] = useState('');
   const [approvalPolicy, setApprovalPolicy] = useState<DispatchApprovalPolicy | null>(null);
+  const [deliveryKind, setDeliveryKind] = useState<'existing' | 'snapshot-exact'>('existing');
+  const [sensitiveFilesConfirmed, setSensitiveFilesConfirmed] = useState(false);
   const [probe, setProbe] = useState<DispatchSshProbe | null>(null);
+  const [probedWorkspaceInput, setProbedWorkspaceInput] = useState<string | null>(null);
   const [probing, setProbing] = useState(false);
   const [installing, setInstalling] = useState(false);
   const [installStart, setInstallStart] = useState<DispatchInstallStart | null>(null);
@@ -71,25 +85,33 @@ export const DispatchInstallDialog: React.FC<DispatchInstallDialogProps> = ({
   workspacePathRef.current = workspacePath;
 
   const connectionId = target?.connectionId?.trim() ?? '';
+  const deviceId = target?.deviceId?.trim() ?? '';
+  const targetId = target?.kind === 'device' ? deviceId : connectionId;
+  const deliveryKindRef = useRef(deliveryKind);
+  deliveryKindRef.current = deliveryKind;
 
   const runProbe = useCallback(async (pathOverride?: string) => {
-    if (!connectionId) return;
-    const path = (pathOverride ?? workspacePathRef.current).trim();
+    if (!targetId || !target || target.kind === 'local') return;
+    const path = deliveryKindRef.current === 'existing'
+      ? (pathOverride ?? workspacePathRef.current).trim()
+      : '';
     const generation = ++generationRef.current;
     setProbing(true);
     setError(null);
     try {
-      const result = await dispatchApi.probeTarget({
-        kind: 'ssh',
-        connectionId,
-        workspacePath: path,
-      });
+      const result = await dispatchApi.probeTarget(
+        target.kind === 'device'
+          ? { kind: 'device', deviceId: targetId, workspacePath: path }
+          : { kind: 'ssh', connectionId: targetId, workspacePath: path },
+      );
       if (generation === generationRef.current) {
         setProbe(result);
+        setProbedWorkspaceInput(path);
       }
     } catch (nextError) {
       if (generation === generationRef.current) {
         setProbe(null);
+        setProbedWorkspaceInput(null);
         setError(errorMessage(nextError));
       }
     } finally {
@@ -97,20 +119,23 @@ export const DispatchInstallDialog: React.FC<DispatchInstallDialogProps> = ({
         setProbing(false);
       }
     }
-  }, [connectionId]);
+  }, [target, targetId]);
 
   useEffect(() => {
-    if (!open || !connectionId) return;
+    if (!open || !targetId) return;
     const initialPath = target?.defaultWorkspace?.trim() ?? '';
     setWorkspacePath(initialPath);
     setApprovalPolicy(null);
+    setDeliveryKind('existing');
+    setSensitiveFilesConfirmed(false);
     setProbe(null);
+    setProbedWorkspaceInput(null);
     setInstallStart(null);
     setInstallOutput('');
     setInstalling(false);
     setError(null);
     void runProbe(initialPath);
-  }, [connectionId, open, runProbe, target?.defaultWorkspace]);
+  }, [open, runProbe, target?.defaultWorkspace, targetId]);
 
   const clearActiveInstall = useCallback((generation: number) => {
     if (activeInstallRef.current?.generation === generation) {
@@ -133,9 +158,14 @@ export const DispatchInstallDialog: React.FC<DispatchInstallDialogProps> = ({
   }, [cancelActiveInstall]);
 
   useEffect(() => {
-    if (!open || !connectionId) return;
+    if (!open || !targetId) return;
     return invalidateInstallLifecycle;
-  }, [connectionId, invalidateInstallLifecycle, open]);
+  }, [invalidateInstallLifecycle, open, targetId]);
+
+  useEffect(() => {
+    if (!open || !targetId) return;
+    void runProbe(deliveryKind === 'existing' ? workspacePathRef.current : '');
+  }, [deliveryKind, open, runProbe, targetId]);
 
   const pollInstallation = useCallback(async (generation: number) => {
     if (!connectionId) return;
@@ -245,6 +275,9 @@ export const DispatchInstallDialog: React.FC<DispatchInstallDialogProps> = ({
   const requiredCapabilities = [
     ...BASE_DISPATCH_CAPABILITIES,
     ...(selectedApprovalCapability ? [selectedApprovalCapability] : []),
+    ...(deliveryKind === 'snapshot-exact'
+      ? ['workspace_snapshot_exact', 'workspace_snapshot_chunked']
+      : []),
   ];
   const missingCapabilities = protocol
     ? requiredCapabilities.filter(capability => !protocol.capabilities.includes(capability))
@@ -257,25 +290,50 @@ export const DispatchInstallDialog: React.FC<DispatchInstallDialogProps> = ({
     !!protocol &&
     !probe.protocolError &&
     protocolCompatible;
-  const workspaceReady = isDispatchWorkspaceReady(workspacePath, workspace);
+  const workspaceReady = deliveryKind === 'snapshot-exact'
+    ? !!sourceWorkspacePath?.trim() && sensitiveFilesConfirmed
+    : isDispatchWorkspaceReady(workspacePath, workspace, probedWorkspaceInput ?? undefined);
   const modelReady = protocol?.modelConfigured === true;
   const ready = cliReady && workspaceReady && modelReady && approvalPolicy !== null;
 
   const confirmTarget = () => {
-    if (!target || !connectionId || !approvalPolicy || !ready) return;
-    const normalizedPath = workspacePath.trim();
+    if (
+      !target
+      || target.kind === 'local'
+      || !targetId
+      || !approvalPolicy
+      || !ready
+    ) return;
+    const normalizedPath = deliveryKind === 'existing'
+      ? workspace?.path?.trim() || workspacePath.trim()
+      : '';
+    const workspaceDelivery: DispatchWorkspaceDeliveryRequest =
+      deliveryKind === 'snapshot-exact'
+        ? {
+            kind: 'snapshot-exact',
+            sourceWorkspacePath: sourceWorkspacePath!.trim(),
+            sensitiveFilesConfirmed: true,
+          }
+        : { kind: 'existing' };
+    const request = target.kind === 'device'
+      ? {
+          kind: 'device' as const,
+          deviceId: targetId,
+          workspacePath: normalizedPath,
+        }
+      : {
+          kind: 'ssh' as const,
+          connectionId: targetId,
+          workspacePath: normalizedPath,
+        };
     onReady({
-      request: {
-        kind: 'ssh',
-        connectionId,
-        workspacePath: normalizedPath,
-      },
+      request,
       target: {
-        kind: 'ssh',
-        connectionId,
+        ...request,
         workspacePath: normalizedPath,
         displayName: target.displayName,
       },
+      workspaceDelivery,
       approvalPolicy,
     });
   };
@@ -286,8 +344,8 @@ export const DispatchInstallDialog: React.FC<DispatchInstallDialogProps> = ({
       onClose={close}
       title={t('dispatch.configureTitle', { target: target?.displayName ?? '' })}
       size="medium"
-      closeOnOverlayClick={!installing}
-      showCloseButton={!installing}
+      closeOnOverlayClick
+      showCloseButton
       testId="dispatch-install-dialog"
     >
       <div className="dispatch-install-dialog">
@@ -295,31 +353,82 @@ export const DispatchInstallDialog: React.FC<DispatchInstallDialogProps> = ({
           <Alert type="error" message={error} closable onClose={() => setError(null)} />
         ) : null}
 
-        <label className="dispatch-install-dialog__field">
-          <span>{t('dispatch.workspacePath')}</span>
-          <div className="dispatch-install-dialog__field-row">
-            <Input
-              value={workspacePath}
-              placeholder={t('dispatch.workspacePlaceholder')}
-              disabled={installing}
-              onChange={event => setWorkspacePath(event.target.value)}
-              onKeyDown={event => {
-                if (event.key === 'Enter') {
-                  void runProbe();
-                }
-              }}
-            />
-            <Button
-              variant="secondary"
-              size="small"
-              disabled={probing || installing || !connectionId}
-              onClick={() => void runProbe()}
-            >
-              {probing ? <Loader2 size={14} className="dispatch-install-dialog__spin" /> : <RefreshCw size={14} />}
-              {t('dispatch.check')}
-            </Button>
+        <fieldset className="dispatch-install-dialog__delivery" disabled={installing}>
+          <legend>{t('dispatch.deliveryTitle')}</legend>
+          <button
+            type="button"
+            role="radio"
+            aria-checked={deliveryKind === 'existing'}
+            data-selected={deliveryKind === 'existing'}
+            onClick={() => setDeliveryKind('existing')}
+          >
+            <span>
+              <strong>{t('dispatch.deliveryExisting')}</strong>
+              <small>{t('dispatch.deliveryExistingDescription')}</small>
+            </span>
+            {deliveryKind === 'existing' ? <Check size={14} /> : null}
+          </button>
+          <button
+            type="button"
+            role="radio"
+            aria-checked={deliveryKind === 'snapshot-exact'}
+            data-selected={deliveryKind === 'snapshot-exact'}
+            disabled={!sourceWorkspacePath?.trim()}
+            onClick={() => setDeliveryKind('snapshot-exact')}
+          >
+            <span>
+              <strong>{t('dispatch.deliverySnapshot')}</strong>
+              <small>
+                {sourceWorkspacePath?.trim()
+                  ? t('dispatch.deliverySnapshotDescription')
+                  : t('dispatch.deliverySnapshotUnavailable')}
+              </small>
+            </span>
+            {deliveryKind === 'snapshot-exact' ? <Check size={14} /> : null}
+          </button>
+        </fieldset>
+
+        {deliveryKind === 'existing' ? (
+          <label className="dispatch-install-dialog__field">
+            <span>{t('dispatch.workspacePath')}</span>
+            <div className="dispatch-install-dialog__field-row">
+              <Input
+                value={workspacePath}
+                placeholder={t('dispatch.workspacePlaceholder')}
+                disabled={installing}
+                onChange={event => setWorkspacePath(event.target.value)}
+                onKeyDown={event => {
+                  if (event.key === 'Enter') {
+                    void runProbe();
+                  }
+                }}
+              />
+              <Button
+                variant="secondary"
+                size="small"
+                disabled={probing || installing || !targetId}
+                onClick={() => void runProbe()}
+              >
+                {probing ? <Loader2 size={14} className="dispatch-install-dialog__spin" /> : <RefreshCw size={14} />}
+                {t('dispatch.check')}
+              </Button>
+            </div>
+          </label>
+        ) : (
+          <div className="dispatch-install-dialog__snapshot-warning">
+            <strong>{t('dispatch.snapshotSource')}</strong>
+            <code>{sourceWorkspacePath}</code>
+            <span>{t('dispatch.snapshotWarning')}</span>
+            <label>
+              <input
+                type="checkbox"
+                checked={sensitiveFilesConfirmed}
+                onChange={event => setSensitiveFilesConfirmed(event.target.checked)}
+              />
+              {t('dispatch.snapshotConfirm')}
+            </label>
           </div>
-        </label>
+        )}
 
         {probe ? (
           <div className="dispatch-install-dialog__checks">
@@ -340,7 +449,7 @@ export const DispatchInstallDialog: React.FC<DispatchInstallDialogProps> = ({
                     : t('dispatch.cliMissing')}
               </strong>
             </div>
-            {workspacePath.trim() ? (
+            {deliveryKind === 'existing' && workspacePath.trim() ? (
               <div data-state={workspaceReady ? 'ok' : 'blocked'}>
                 <span>{t('dispatch.workspaceStatus')}</span>
                 <strong>
@@ -355,7 +464,7 @@ export const DispatchInstallDialog: React.FC<DispatchInstallDialogProps> = ({
                 </strong>
               </div>
             ) : null}
-            {workspaceReady && workspace?.isGitRepository &&
+            {deliveryKind === 'existing' && workspaceReady && workspace?.isGitRepository &&
             (typeof workspace.ahead === 'number' || typeof workspace.behind === 'number') ? (
               <div data-state="ok">
                 <span>{t('dispatch.upstreamStatus')}</span>
@@ -378,7 +487,7 @@ export const DispatchInstallDialog: React.FC<DispatchInstallDialogProps> = ({
           </div>
         ) : null}
 
-        {!cliReady && probe?.release ? (
+        {target?.kind === 'ssh' && !cliReady && probe?.release ? (
           <div className="dispatch-install-dialog__install-card">
             <div>
               <strong>{t('dispatch.installRequired')}</strong>
@@ -433,6 +542,20 @@ export const DispatchInstallDialog: React.FC<DispatchInstallDialogProps> = ({
           <button
             type="button"
             role="radio"
+            aria-checked={approvalPolicy === 'remote'}
+            data-selected={approvalPolicy === 'remote'}
+            onClick={() => setApprovalPolicy('remote')}
+          >
+            <ShieldQuestion size={16} />
+            <span>
+              <strong>{t('dispatch.approvalRemote')}</strong>
+              <small>{t('dispatch.approvalRemoteDescription')}</small>
+            </span>
+            {approvalPolicy === 'remote' ? <Check size={14} /> : null}
+          </button>
+          <button
+            type="button"
+            role="radio"
             aria-checked={approvalPolicy === 'auto'}
             data-selected={approvalPolicy === 'auto'}
             onClick={() => setApprovalPolicy('auto')}
@@ -447,7 +570,7 @@ export const DispatchInstallDialog: React.FC<DispatchInstallDialogProps> = ({
         </fieldset>
 
         <div className="dispatch-install-dialog__actions">
-          <Button variant="secondary" size="small" disabled={installing} onClick={close}>
+          <Button variant="secondary" size="small" onClick={close}>
             {t('dispatch.cancel')}
           </Button>
           <Button variant="primary" size="small" disabled={!ready || installing} onClick={confirmTarget}>

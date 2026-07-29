@@ -248,6 +248,7 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     respondBatch: respondPermissionBatch,
   } = usePermissionRequests(
     activeSession?.sessionId,
+    activeSession?.config.dispatchJobId,
   );
   const visibleTurnInfo = useVisibleTurnInfo();
   const [pendingHeaderTurnId, setPendingHeaderTurnId] = useState<string | null>(null);

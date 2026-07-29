@@ -1,5 +1,23 @@
 use serde::{Deserialize, Serialize};
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+pub enum DispatchWorkspaceDeliveryRequest {
+    Existing,
+    SnapshotExact {
+        #[serde(rename = "sourceWorkspacePath")]
+        source_workspace_path: String,
+        #[serde(rename = "sensitiveFilesConfirmed")]
+        sensitive_files_confirmed: bool,
+    },
+}
+
+impl Default for DispatchWorkspaceDeliveryRequest {
+    fn default() -> Self {
+        Self::Existing
+    }
+}
+
 /// The execution location selected while a chat session is being created.
 ///
 /// Dispatch is deliberately orthogonal to `SessionExecutionTarget`: the latter
@@ -103,6 +121,23 @@ mod tests {
                 "kind": "ssh",
                 "connectionId": "server-a",
                 "workspacePath": "/srv/app"
+            })
+        );
+    }
+
+    #[test]
+    fn exact_snapshot_requires_an_explicit_source_and_confirmation_fact() {
+        let value = serde_json::to_value(DispatchWorkspaceDeliveryRequest::SnapshotExact {
+            source_workspace_path: "/work/app".to_string(),
+            sensitive_files_confirmed: true,
+        })
+        .expect("serialize delivery");
+        assert_eq!(
+            value,
+            serde_json::json!({
+                "kind": "snapshot-exact",
+                "sourceWorkspacePath": "/work/app",
+                "sensitiveFilesConfirmed": true
             })
         );
     }

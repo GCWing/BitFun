@@ -16,6 +16,8 @@ const OUTBOUND_DISPATCH_COMMANDS = [
   'dispatch_status',
   'dispatch_cancel',
   'dispatch_list_jobs',
+  'dispatch_answer',
+  'dispatch_append',
 ] as const;
 
 function read(relativePath: string): string {
@@ -65,5 +67,6 @@ describe('dispatch preflight contract', () => {
 
     expect(isDispatchWorkspaceReady(' /repo ', probe)).toBe(true);
     expect(isDispatchWorkspaceReady('/another-repo', probe)).toBe(false);
+    expect(isDispatchWorkspaceReady('~/repo', probe, '~/repo')).toBe(true);
   });
 });

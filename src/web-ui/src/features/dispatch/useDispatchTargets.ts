@@ -21,7 +21,9 @@ export function useDispatchTargets(enabled = true): {
     setError(null);
     try {
       const nextTargets = await dispatchApi.listTargets();
-      setTargets(nextTargets.filter(target => target.kind === 'local' || target.kind === 'ssh'));
+      setTargets(nextTargets.filter(
+        target => target.kind === 'local' || target.kind === 'ssh' || target.kind === 'device',
+      ));
     } catch (nextError) {
       const message = nextError instanceof Error ? nextError.message : String(nextError);
       log.warn('Failed to list dispatch targets', { error: nextError });

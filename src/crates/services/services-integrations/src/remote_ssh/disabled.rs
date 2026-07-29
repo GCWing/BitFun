@@ -507,6 +507,16 @@ impl SSHConnectionManager {
         Err(unsupported())
     }
 
+    pub async fn sftp_write_from_file(
+        &self,
+        _connection_id: &str,
+        _path: &str,
+        _local_path: &std::path::Path,
+        _max_bytes: u64,
+    ) -> anyhow::Result<u64> {
+        Err(unsupported())
+    }
+
     pub async fn sftp_mkdir(&self, _connection_id: &str, _path: &str) -> anyhow::Result<()> {
         Err(unsupported())
     }

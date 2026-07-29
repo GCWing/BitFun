@@ -7,9 +7,13 @@ use bitfun_services_integrations::remote_ssh::{
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
-use super::{DispatchTarget, DispatchTargetRequest, OutboundDispatchRecord, OutboundDispatchStore};
+use super::{
+    adopt_target_jobs, DispatchTarget, DispatchTargetRequest, DispatchWorkspaceDeliveryRequest,
+    OutboundDispatchRecord, OutboundDispatchStore,
+};
 
-const DISPATCH_PROTOCOL_VERSION: u64 = 1;
+pub(super) const DISPATCH_PROTOCOL_VERSION: u64 = 2;
+pub(super) const MAX_DISPATCH_TEXT_BYTES: usize = 32 * 1024;
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -46,6 +50,8 @@ pub struct DispatchInstallPollRequest {
 #[serde(rename_all = "camelCase")]
 pub struct DispatchSubmitRequest {
     pub target: DispatchTargetRequest,
+    #[serde(default)]
+    pub workspace_delivery: DispatchWorkspaceDeliveryRequest,
     pub job_id: String,
     pub session_id: String,
     pub agent_type: String,
@@ -71,6 +77,34 @@ pub struct DispatchJobRequest {
     pub job_id: String,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DispatchPermissionReplyKind {
+    Once,
+    Always,
+    Reject,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DispatchAnswerRequest {
+    pub job_id: String,
+    pub request_id: String,
+    pub reply: DispatchPermissionReplyKind,
+    #[serde(default)]
+    pub feedback: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DispatchAppendRequest {
+    pub job_id: String,
+    pub message_id: String,
+    pub content: String,
+    #[serde(default)]
+    pub display_content: Option<String>,
+}
+
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DispatchListJobsRequest {
@@ -84,11 +118,15 @@ pub struct DispatchTargetOption {
     pub kind: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub connection_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub device_id: Option<String>,
     pub display_name: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub default_workspace: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub online: Option<bool>,
 }
 
 pub async fn list_targets(
@@ -98,9 +136,11 @@ pub async fn list_targets(
     let mut targets = vec![DispatchTargetOption {
         kind: "local".to_string(),
         connection_id: None,
+        device_id: None,
         display_name: "Local".to_string(),
         description: None,
         default_workspace: None,
+        online: None,
     }];
     targets.extend(
         manager
@@ -110,12 +150,14 @@ pub async fn list_targets(
             .map(|connection| DispatchTargetOption {
                 kind: "ssh".to_string(),
                 connection_id: Some(connection.id),
+                device_id: None,
                 display_name: connection.name,
                 description: Some(format!(
                     "{}@{}:{}",
                     connection.username, connection.host, connection.port
                 )),
                 default_workspace: connection.default_workspace,
+                online: None,
             }),
     );
     Ok(targets)
@@ -130,7 +172,7 @@ pub async fn probe_target(
         workspace_path,
     } = request.target
     else {
-        anyhow::bail!("Phase-one dispatch probing supports SSH targets only");
+        anyhow::bail!("SSH dispatch probing requires an SSH target");
     };
     dispatch_ssh::probe(manager, &connection_id, nonempty(&workspace_path)).await
 }
@@ -161,28 +203,27 @@ pub async fn submit(
     store: &OutboundDispatchStore,
     request: DispatchSubmitRequest,
 ) -> anyhow::Result<Value> {
-    if !matches!(
-        request.approval_policy.as_str(),
-        "auto" | "reject-and-report"
-    ) {
-        anyhow::bail!(
-            "Dispatch approvalPolicy must be explicitly set to auto or reject-and-report"
-        );
-    }
-    if request.prompt.trim().is_empty() {
-        anyhow::bail!("Dispatch prompt cannot be empty");
-    }
+    validate_submit_request(&request)?;
 
     let DispatchTargetRequest::Ssh {
         connection_id,
-        workspace_path,
+        workspace_path: requested_workspace_path,
     } = &request.target
     else {
-        anyhow::bail!("Phase-one dispatch submission supports SSH targets only");
+        anyhow::bail!("SSH dispatch submission requires an SSH target");
     };
-    if connection_id.trim().is_empty() || workspace_path.trim().is_empty() {
-        anyhow::bail!("SSH dispatch requires a connectionId and workspacePath");
+    if connection_id.trim().is_empty() {
+        anyhow::bail!("SSH dispatch requires a connectionId");
     }
+    let workspace_path = resolve_ssh_workspace(
+        manager,
+        store,
+        connection_id,
+        requested_workspace_path,
+        &request.workspace_delivery,
+        &request.job_id,
+    )
+    .await?;
 
     // Re-check the executable that will receive this submission. The picker
     // probe can be stale, and headless callers can bypass the UI entirely.
@@ -200,6 +241,12 @@ pub async fn submit(
     })?;
     dispatch_ssh::validate_dispatch_protocol(protocol, Some(&request.approval_policy))?;
     validate_submission_preflight(protocol, request.model.as_deref())?;
+    let workspace_path = protocol
+        .pointer("/workspace/path")
+        .and_then(Value::as_str)
+        .filter(|path| !path.trim().is_empty())
+        .unwrap_or(workspace_path.as_str())
+        .to_string();
 
     let display_name = manager
         .get_saved_connections()
@@ -221,7 +268,13 @@ pub async fn submit(
         workspace_path.clone(),
         &request.prompt,
         "submitting",
-    )?;
+    )?
+    .with_submission_metadata(
+        request.title.clone(),
+        request.agent_type.clone(),
+        request.approval_policy.clone(),
+        request.model.clone(),
+    );
     let bound_record = store.bind_if_absent(&requested_record).await?;
     if bound_record.session_id != request.session_id
         || !same_target_identity(&bound_record.target, &requested_record.target)
@@ -274,6 +327,60 @@ pub async fn submit(
     Ok(response)
 }
 
+async fn resolve_ssh_workspace(
+    manager: &SSHConnectionManager,
+    store: &OutboundDispatchStore,
+    connection_id: &str,
+    requested_workspace_path: &str,
+    delivery: &DispatchWorkspaceDeliveryRequest,
+    job_id: &str,
+) -> anyhow::Result<String> {
+    match delivery {
+        DispatchWorkspaceDeliveryRequest::Existing => {
+            let workspace_path = requested_workspace_path.trim();
+            if workspace_path.is_empty() {
+                anyhow::bail!("existing SSH dispatch requires a workspacePath");
+            }
+            Ok(workspace_path.to_string())
+        }
+        DispatchWorkspaceDeliveryRequest::SnapshotExact {
+            source_workspace_path,
+            sensitive_files_confirmed,
+        } => {
+            if !sensitive_files_confirmed {
+                anyhow::bail!(
+                    "exact workspace snapshot requires confirmation that ignored and sensitive files may be transferred"
+                );
+            }
+            let prepared = store
+                .prepare_workspace_snapshot(job_id, source_workspace_path)
+                .await?;
+            let begin_request = json!({
+                "protocolVersion": DISPATCH_PROTOCOL_VERSION,
+                "jobId": job_id,
+                "metadata": prepared.metadata,
+            });
+            let committed = dispatch_ssh::upload_workspace_snapshot(
+                manager,
+                connection_id,
+                &begin_request,
+                &prepared.archive_path,
+            )
+            .await?;
+            committed
+                .get("workspacePath")
+                .and_then(Value::as_str)
+                .filter(|path| !path.trim().is_empty())
+                .map(ToOwned::to_owned)
+                .ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "dispatch target did not return the materialized workspace path"
+                    )
+                })
+        }
+    }
+}
+
 pub async fn status(
     manager: &SSHConnectionManager,
     store: &OutboundDispatchStore,
@@ -284,7 +391,7 @@ pub async fn status(
         .await?
         .ok_or_else(|| anyhow::anyhow!("Outbound dispatch job was not found"))?;
     let DispatchTarget::Ssh { connection_id, .. } = &record.target else {
-        anyhow::bail!("Phase-one dispatch status supports SSH targets only");
+        anyhow::bail!("SSH dispatch status requires an SSH target");
     };
     let response = dispatch_ssh::status(
         manager,
@@ -304,6 +411,9 @@ pub async fn status(
     store
         .update_progress(&record.job_id, request.cursor, state)
         .await?;
+    // A successful status proves that the target durably owns the job and its
+    // materialized snapshot. The controller no longer needs the source archive.
+    let _ = store.remove_workspace_snapshot(&record.job_id).await;
     Ok(response)
 }
 
@@ -317,7 +427,7 @@ pub async fn cancel(
         .await?
         .ok_or_else(|| anyhow::anyhow!("Outbound dispatch job was not found"))?;
     let DispatchTarget::Ssh { connection_id, .. } = &record.target else {
-        anyhow::bail!("Phase-one dispatch cancellation supports SSH targets only");
+        anyhow::bail!("SSH dispatch cancellation requires an SSH target");
     };
     let response =
         dispatch_ssh::cancel(manager, connection_id, &json!({ "jobId": request.job_id })).await?;
@@ -333,6 +443,46 @@ pub async fn cancel(
     Ok(response)
 }
 
+pub async fn answer(
+    manager: &SSHConnectionManager,
+    store: &OutboundDispatchStore,
+    request: DispatchAnswerRequest,
+) -> anyhow::Result<Value> {
+    validate_answer_request(&request)?;
+    let record = store
+        .get(&request.job_id)
+        .await?
+        .ok_or_else(|| anyhow::anyhow!("Outbound dispatch job was not found"))?;
+    let DispatchTarget::Ssh { connection_id, .. } = &record.target else {
+        anyhow::bail!("SSH dispatch permission answers require an SSH target");
+    };
+    let mut payload = json!({
+        "jobId": request.job_id,
+        "requestId": request.request_id,
+        "reply": request.reply,
+    });
+    if let Some(feedback) = request.feedback.filter(|value| !value.trim().is_empty()) {
+        payload["feedback"] = Value::String(feedback);
+    }
+    dispatch_ssh::answer(manager, connection_id, &payload).await
+}
+
+pub async fn append(
+    manager: &SSHConnectionManager,
+    store: &OutboundDispatchStore,
+    request: DispatchAppendRequest,
+) -> anyhow::Result<Value> {
+    validate_append_request(&request)?;
+    let record = store
+        .get(&request.job_id)
+        .await?
+        .ok_or_else(|| anyhow::anyhow!("Outbound dispatch job was not found"))?;
+    let DispatchTarget::Ssh { connection_id, .. } = &record.target else {
+        anyhow::bail!("SSH dispatch message append requires an SSH target");
+    };
+    dispatch_ssh::append(manager, connection_id, &serde_json::to_value(request)?).await
+}
+
 pub async fn list_jobs(
     manager: &SSHConnectionManager,
     store: &OutboundDispatchStore,
@@ -342,12 +492,89 @@ pub async fn list_jobs(
         return Ok(serde_json::to_value(store.list().await?)?);
     };
     let DispatchTargetRequest::Ssh { connection_id, .. } = target else {
-        anyhow::bail!("Phase-one dispatch listing supports SSH targets only");
+        anyhow::bail!("SSH dispatch listing requires an SSH target");
     };
-    dispatch_ssh::list(manager, &connection_id, &json!({})).await
+    let display_name = manager
+        .get_saved_connections()
+        .await
+        .into_iter()
+        .find(|connection| connection.id == connection_id)
+        .map(|connection| connection.name)
+        .unwrap_or_else(|| connection_id.clone());
+    let response = dispatch_ssh::list(manager, &connection_id, &json!({})).await?;
+    adopt_target_jobs(
+        store,
+        &DispatchTarget::Ssh {
+            connection_id,
+            workspace_path: String::new(),
+            display_name,
+        },
+        &response,
+    )
+    .await?;
+    Ok(response)
 }
 
-fn validate_submit_ack(response: &Value, job_id: &str, session_id: &str) -> anyhow::Result<()> {
+pub(super) fn validate_submit_request(request: &DispatchSubmitRequest) -> anyhow::Result<()> {
+    if !matches!(
+        request.approval_policy.as_str(),
+        "auto" | "reject-and-report" | "remote"
+    ) {
+        anyhow::bail!(
+            "Dispatch approvalPolicy must be explicitly set to auto, reject-and-report, or remote"
+        );
+    }
+    if request.job_id.trim().is_empty() || request.session_id.trim().is_empty() {
+        anyhow::bail!("Dispatch jobId and sessionId cannot be empty");
+    }
+    if request.agent_type.trim().is_empty() {
+        anyhow::bail!("Dispatch agentType cannot be empty");
+    }
+    if request.prompt.trim().is_empty() {
+        anyhow::bail!("Dispatch prompt cannot be empty");
+    }
+    if request.prompt.len() > MAX_DISPATCH_TEXT_BYTES {
+        anyhow::bail!("Dispatch prompt exceeds the 32 KiB request limit");
+    }
+    Ok(())
+}
+
+pub(super) fn validate_append_request(request: &DispatchAppendRequest) -> anyhow::Result<()> {
+    if request.message_id.trim().is_empty() || request.message_id.len() > 128 {
+        anyhow::bail!("Dispatch messageId must contain 1-128 bytes");
+    }
+    if request.content.trim().is_empty() {
+        anyhow::bail!("Dispatch appended message cannot be empty");
+    }
+    let total_bytes = request
+        .content
+        .len()
+        .saturating_add(request.display_content.as_ref().map_or(0, String::len));
+    if total_bytes > MAX_DISPATCH_TEXT_BYTES {
+        anyhow::bail!("Dispatch appended message exceeds the 32 KiB request limit");
+    }
+    Ok(())
+}
+
+pub(super) fn validate_answer_request(request: &DispatchAnswerRequest) -> anyhow::Result<()> {
+    if request.request_id.trim().is_empty() || request.request_id.len() > 512 {
+        anyhow::bail!("Dispatch permission requestId is invalid");
+    }
+    if request
+        .feedback
+        .as_ref()
+        .is_some_and(|feedback| feedback.len() > MAX_DISPATCH_TEXT_BYTES)
+    {
+        anyhow::bail!("Dispatch permission feedback exceeds the 32 KiB request limit");
+    }
+    Ok(())
+}
+
+pub(super) fn validate_submit_ack(
+    response: &Value,
+    job_id: &str,
+    session_id: &str,
+) -> anyhow::Result<()> {
     if response.get("accepted").and_then(Value::as_bool) != Some(true) {
         anyhow::bail!("Dispatch target did not accept the job");
     }
@@ -359,7 +586,7 @@ fn validate_submit_ack(response: &Value, job_id: &str, session_id: &str) -> anyh
     Ok(())
 }
 
-fn same_target_identity(left: &DispatchTarget, right: &DispatchTarget) -> bool {
+pub(super) fn same_target_identity(left: &DispatchTarget, right: &DispatchTarget) -> bool {
     match (left, right) {
         (DispatchTarget::Local, DispatchTarget::Local) => true,
         (
@@ -390,7 +617,7 @@ fn same_target_identity(left: &DispatchTarget, right: &DispatchTarget) -> bool {
     }
 }
 
-fn validate_submission_preflight(
+pub(super) fn validate_submission_preflight(
     protocol: &Value,
     requested_model: Option<&str>,
 ) -> anyhow::Result<()> {

@@ -1,8 +1,25 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { createPortal } from 'react-dom';
-import { Check, ChevronDown, Laptop, Loader2, Plus, Server } from 'lucide-react';
+import {
+  Check,
+  ChevronDown,
+  Laptop,
+  Loader2,
+  MonitorSmartphone,
+  Plus,
+  Server,
+} from 'lucide-react';
 import { Tooltip } from '@/component-library';
 import { SSHConnectionDialog } from '@/features/ssh-remote/SSHConnectionDialog';
+import { useAccountLoginState } from '@/infrastructure/account/useAccountLoginState';
 import { useI18n } from '@/infrastructure/i18n';
 import { computeFixedPopoverPosition } from '@/shared/utils/fixedPopoverViewport';
 import { DispatchInstallDialog } from './DispatchInstallDialog';
@@ -16,18 +33,24 @@ import './DispatchTargetPicker.scss';
 
 interface DispatchTargetPickerProps {
   target: DispatchTarget;
+  sourceWorkspacePath?: string;
   locked: boolean;
   disabled?: boolean;
   onSelectLocal?: () => void;
-  onSelectSsh: (selection: DispatchSelection) => void;
+  onSelectTarget: (selection: DispatchSelection) => void;
 }
+
+const RemoteConnectDialog = lazy(
+  () => import('@/app/components/RemoteConnectDialog'),
+);
 
 export const DispatchTargetPicker: React.FC<DispatchTargetPickerProps> = ({
   target,
+  sourceWorkspacePath,
   locked,
   disabled = false,
   onSelectLocal,
-  onSelectSsh,
+  onSelectTarget,
 }) => {
   const { t } = useI18n('flow-chat');
   const rootRef = useRef<HTMLDivElement>(null);
@@ -37,6 +60,8 @@ export const DispatchTargetPicker: React.FC<DispatchTargetPickerProps> = ({
   const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
   const [configureTarget, setConfigureTarget] = useState<DispatchTargetOption | null>(null);
   const [sshDialogOpen, setSshDialogOpen] = useState(false);
+  const [accountDialogOpen, setAccountDialogOpen] = useState(false);
+  const { loggedIn } = useAccountLoginState();
   const { targets, loading, error, refresh } = useDispatchTargets(open);
 
   const displayLabel = target.kind === 'local'
@@ -93,6 +118,13 @@ export const DispatchTargetPicker: React.FC<DispatchTargetPickerProps> = ({
     ),
     [targets],
   );
+  const deviceTargets = useMemo(
+    () => targets.filter(
+      (item): item is DispatchTargetOption & { kind: 'device'; deviceId: string } =>
+        item.kind === 'device' && !!item.deviceId,
+    ),
+    [targets],
+  );
 
   const menu = open ? createPortal(
     <div
@@ -128,6 +160,62 @@ export const DispatchTargetPicker: React.FC<DispatchTargetPickerProps> = ({
           </span>
           {target.kind === 'local' ? <Check size={14} aria-hidden /> : null}
         </button>
+      </div>
+
+      <div className="dispatch-target-picker__divider" role="separator" />
+      <div className="dispatch-target-picker__section">
+        <div className="dispatch-target-picker__section-title">
+          {t('chatInput.dispatch.deviceSection')}
+        </div>
+        {!loggedIn ? (
+          <button
+            type="button"
+            role="menuitem"
+            className="dispatch-target-picker__footer-action"
+            onClick={() => {
+              setOpen(false);
+              setAccountDialogOpen(true);
+            }}
+          >
+            <MonitorSmartphone size={14} aria-hidden />
+            <span>{t('chatInput.dispatch.signInDevices')}</span>
+          </button>
+        ) : null}
+        {loggedIn && !loading && deviceTargets.length === 0 ? (
+          <div className="dispatch-target-picker__status">
+            {t('chatInput.dispatch.noDeviceTargets')}
+          </div>
+        ) : null}
+        {deviceTargets.map(option => {
+          const selected = target.kind === 'device' && target.deviceId === option.deviceId;
+          const online = option.online !== false;
+          return (
+            <button
+              key={option.deviceId}
+              type="button"
+              role="menuitemradio"
+              aria-checked={selected}
+              aria-disabled={!online}
+              className="dispatch-target-picker__option"
+              disabled={!online}
+              onClick={() => {
+                setOpen(false);
+                setConfigureTarget(option);
+              }}
+            >
+              <MonitorSmartphone size={15} aria-hidden />
+              <span>
+                <strong>{option.displayName}</strong>
+                <small>
+                  {online
+                    ? t('chatInput.dispatch.deviceDescription')
+                    : t('chatInput.dispatch.deviceOffline')}
+                </small>
+              </span>
+              {selected ? <Check size={14} aria-hidden /> : null}
+            </button>
+          );
+        })}
       </div>
 
       <div className="dispatch-target-picker__divider" role="separator" />
@@ -207,7 +295,11 @@ export const DispatchTargetPicker: React.FC<DispatchTargetPickerProps> = ({
               setOpen(current => !current);
             }}
           >
-            {target.kind === 'local' ? <Laptop size={12} /> : <Server size={12} />}
+            {target.kind === 'local'
+              ? <Laptop size={12} />
+              : target.kind === 'device'
+                ? <MonitorSmartphone size={12} />
+                : <Server size={12} />}
             <span>{displayLabel}</span>
             {!locked ? (
               <ChevronDown
@@ -224,10 +316,11 @@ export const DispatchTargetPicker: React.FC<DispatchTargetPickerProps> = ({
       <DispatchInstallDialog
         open={!!configureTarget}
         target={configureTarget}
+        sourceWorkspacePath={sourceWorkspacePath}
         onClose={() => setConfigureTarget(null)}
         onReady={selection => {
           setConfigureTarget(null);
-          onSelectSsh(selection);
+          onSelectTarget(selection);
         }}
       />
 
@@ -238,6 +331,18 @@ export const DispatchTargetPicker: React.FC<DispatchTargetPickerProps> = ({
           void refresh();
         }}
       />
+      {accountDialogOpen ? (
+        <Suspense fallback={null}>
+          <RemoteConnectDialog
+            isOpen={accountDialogOpen}
+            initialGroup="account"
+            onClose={() => {
+              setAccountDialogOpen(false);
+              void refresh();
+            }}
+          />
+        </Suspense>
+      ) : null}
     </>
   );
 };

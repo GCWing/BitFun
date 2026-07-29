@@ -74,6 +74,22 @@ import {
 } from '@/features/dispatch/types';
 
 const log = createLogger('FlowChatStore');
+
+function sameDispatchTargetIdentity(
+  left: NonNullable<SessionConfig['dispatchTarget']>,
+  right: NonNullable<SessionConfig['dispatchTarget']>,
+): boolean {
+  if (left.kind !== right.kind) return false;
+  switch (left.kind) {
+    case 'ssh':
+      return right.kind === 'ssh' && left.connectionId === right.connectionId;
+    case 'device':
+      return right.kind === 'device' && left.deviceId === right.deviceId;
+    case 'local':
+      return right.kind === 'local';
+  }
+}
+
 const VALID_AGENT_TYPES = new Set([
   'agentic',
   'Multitask',
@@ -2195,7 +2211,7 @@ export class FlowChatStore {
       if (
         currentTarget &&
         currentTarget.kind !== 'local' &&
-        JSON.stringify(currentTarget) !== JSON.stringify(binding.target)
+        !sameDispatchTargetIdentity(currentTarget, binding.target)
       ) {
         log.warn('Ignoring dispatch target mutation for an existing observer session', {
           sessionId,

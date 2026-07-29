@@ -8,12 +8,13 @@ use bitfun_core::external_sources::{
     ExternalSourceOperationError, ExternalSourceOperationErrorCode, ExternalSourceOperationResult,
 };
 use bitfun_core::service::dispatch::{
-    cancel_dispatch, cancel_dispatch_cli_install, get_dispatch_status, list_dispatch_jobs,
-    list_dispatch_targets, poll_dispatch_cli_install, probe_dispatch_target,
-    start_dispatch_cli_install, submit_dispatch, DispatchConnectionRequest,
-    DispatchInstallPollRequest, DispatchInstallStartRequest, DispatchJobRequest,
-    DispatchListJobsRequest, DispatchListTargetsRequest, DispatchProbeTargetRequest,
-    DispatchStatusRequest, DispatchSubmitRequest, OutboundDispatchStore,
+    answer_dispatch, append_dispatch, cancel_dispatch, cancel_dispatch_cli_install,
+    get_dispatch_status, list_dispatch_jobs, list_dispatch_targets, poll_dispatch_cli_install,
+    probe_dispatch_target, start_dispatch_cli_install, submit_dispatch, DispatchAnswerRequest,
+    DispatchAppendRequest, DispatchConnectionRequest, DispatchInstallPollRequest,
+    DispatchInstallStartRequest, DispatchJobRequest, DispatchListJobsRequest,
+    DispatchListTargetsRequest, DispatchProbeTargetRequest, DispatchStatusRequest,
+    DispatchSubmitRequest, OutboundDispatchStore,
 };
 use serde::de::DeserializeOwned;
 
@@ -31,6 +32,8 @@ pub(crate) fn supports(method: &str) -> bool {
             | "dispatch_status"
             | "dispatch_cancel"
             | "dispatch_list_jobs"
+            | "dispatch_answer"
+            | "dispatch_append"
     )
 }
 
@@ -111,6 +114,18 @@ pub(crate) async fn dispatch(
                 .await
                 .map_err(operation_error)
         }
+        "dispatch_answer" => {
+            let request = parse_request::<DispatchAnswerRequest>(&params)?;
+            answer_dispatch(&host.ssh_manager, &store(host), request)
+                .await
+                .map_err(operation_error)
+        }
+        "dispatch_append" => {
+            let request = parse_request::<DispatchAppendRequest>(&params)?;
+            append_dispatch(&host.ssh_manager, &store(host), request)
+                .await
+                .map_err(operation_error)
+        }
         _ => Err(ExternalSourceOperationError::host_capability_unavailable(
             "Unknown detached dispatch operation",
         )),
@@ -168,6 +183,8 @@ mod tests {
             "dispatch_status",
             "dispatch_cancel",
             "dispatch_list_jobs",
+            "dispatch_answer",
+            "dispatch_append",
         ] {
             assert!(supports(method), "{method}");
         }

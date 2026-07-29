@@ -510,6 +510,8 @@ export interface SessionConfig {
   dispatchJobId?: string;
   /** Explicit unattended permission behavior selected before submission. */
   dispatchApprovalPolicy?: import('@/features/dispatch/types').DispatchApprovalPolicy;
+  /** Explicit code delivery mode selected before submission. */
+  dispatchWorkspaceDelivery?: import('@/features/dispatch/types').DispatchWorkspaceDeliveryRequest;
   /** Target model explicitly selected during preflight; omitted to use the target default. */
   dispatchModel?: string;
   /** Last target-side job state applied by the observer. */

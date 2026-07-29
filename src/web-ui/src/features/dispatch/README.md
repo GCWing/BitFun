@@ -1,6 +1,7 @@
 # Dispatch Web UI
 
-Phase one supports local execution and detached SSH dispatch only.
+The Web UI supports local execution plus detached SSH and same-account device
+dispatch.
 
 ## Invariants
 
@@ -18,16 +19,31 @@ Phase one supports local execution and detached SSH dispatch only.
    polling until an empty page confirms that the event log is fully drained.
 6. SSH CLI installation is always a separate, explicit confirmation. The UI
    displays the resolved version, URL, and SHA256 before starting it.
-7. Phase one never lists or routes to account devices. Peer Device Mode keeps
-   every dispatch command on the controller because SSH credentials live there.
-8. Unattended approval policy is explicit per job: `auto` or
-   `reject-and-report`. There is no implicit interactive mode. `auto` also
-   requires a one-shot, non-persisted confirmation immediately before submit.
+7. Account devices use encrypted request/response RPC and distinct
+   `dispatch_target_*` commands. They never attach Peer Device Mode and an
+   offline target never falls back to local execution.
+8. Approval policy is explicit per job: `auto`, `reject-and-report`, or
+   `remote`. `remote` projects pending requests into the normal permission
+   panel; `auto` requires a one-shot, non-persisted confirmation immediately
+   before submit.
 9. MiniApp and quick-input hosts do not expose the dispatch picker.
 10. Controller-side model settings never leak into an SSH dispatch. The submit
     omits `model` unless preflight recorded an explicit target model choice.
 11. Deleting or archiving a projection writes a local job tombstone so outbound
     reconciliation cannot silently reopen it.
-12. Phase one ignores `SubagentSessionLinked`. Child observer ownership is not
+12. The observer ignores `SubagentSessionLinked`. Child observer ownership is not
     implemented, so creating an unmarked child projection would violate the
     observer-only persistence and cancellation boundary.
+13. Workspace delivery is explicit. `existing` addresses a target directory;
+    `snapshot-exact` transfers one verified source snapshot, including ignored
+    and hidden regular files but excluding `.git`. It is never live or
+    bidirectional synchronization.
+14. Cursor pulls are multi-observer safe. Truncation and omitted events are
+    visible completeness facts and must not be rendered as a full transcript.
+15. The observer continues bounded polling while the window is hidden so
+    remote permission and terminal system notifications can be delivered.
+16. Controller-wide outbound progress never advances a renderer's own cursor;
+    each observer replays and commits only the events it applied.
+17. Listing jobs for an explicitly selected target adopts only outbound
+    observer routing records. It never restores the target session into the
+    controller's backend store or acquires local runtime ownership.

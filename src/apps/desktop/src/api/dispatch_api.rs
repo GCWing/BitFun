@@ -6,14 +6,19 @@
 
 use std::sync::Arc;
 
+use async_trait::async_trait;
 use bitfun_core::infrastructure::PathManager;
 use bitfun_core::service::dispatch::{
-    cancel_dispatch, cancel_dispatch_cli_install, get_dispatch_status, list_dispatch_jobs,
-    list_dispatch_targets, poll_dispatch_cli_install, probe_dispatch_target,
-    start_dispatch_cli_install, submit_dispatch, DispatchConnectionRequest,
+    answer_device_dispatch, answer_dispatch, append_device_dispatch, append_dispatch,
+    cancel_device_dispatch, cancel_dispatch, cancel_dispatch_cli_install,
+    get_device_dispatch_status, get_dispatch_status, list_device_dispatch_jobs, list_dispatch_jobs,
+    list_dispatch_targets, poll_dispatch_cli_install, probe_device_dispatch_target,
+    probe_dispatch_target, start_dispatch_cli_install, submit_device_dispatch, submit_dispatch,
+    DeviceDispatchRpc, DispatchAnswerRequest, DispatchAppendRequest, DispatchConnectionRequest,
     DispatchInstallPollRequest, DispatchInstallStartRequest, DispatchJobRequest,
     DispatchListJobsRequest, DispatchListTargetsRequest, DispatchProbeTargetRequest,
-    DispatchStatusRequest, DispatchSubmitRequest, DispatchTargetOption, OutboundDispatchStore,
+    DispatchStatusRequest, DispatchSubmitRequest, DispatchTarget, DispatchTargetOption,
+    DispatchTargetRequest, OutboundDispatchStore,
 };
 use bitfun_core::service::remote_ssh::dispatch_ssh::{
     DispatchInstallPoll, DispatchInstallStart, DispatchSshProbe,
@@ -22,6 +27,54 @@ use serde_json::Value;
 use tauri::State;
 
 use super::app_state::AppState;
+
+struct AccountDeviceDispatchRpc;
+
+#[async_trait]
+impl DeviceDispatchRpc for AccountDeviceDispatchRpc {
+    async fn invoke(&self, device_id: &str, command: &str, args: Value) -> anyhow::Result<Value> {
+        let command_json = serde_json::to_string(&serde_json::json!({
+            "cmd": "host_invoke",
+            "command": command,
+            "args": args,
+        }))?;
+        let raw = super::remote_connect_api::account_device_rpc(
+            device_id.to_string(),
+            command_json,
+            None,
+        )
+        .await
+        .map_err(anyhow::Error::msg)?;
+        decode_device_dispatch_rpc(&raw)
+    }
+}
+
+fn decode_device_dispatch_rpc(raw: &str) -> anyhow::Result<Value> {
+    let envelope: Value =
+        serde_json::from_str(raw).map_err(|error| anyhow::anyhow!("decode device RPC: {error}"))?;
+    match envelope.get("resp").and_then(Value::as_str) {
+        Some("host_invoke_result") if envelope.get("ok").and_then(Value::as_bool) == Some(true) => {
+            Ok(envelope.get("value").cloned().unwrap_or(Value::Null))
+        }
+        Some("host_invoke_result") => Err(anyhow::anyhow!(
+            "{}",
+            envelope
+                .get("error")
+                .and_then(Value::as_str)
+                .unwrap_or("Device dispatch target rejected the command")
+        )),
+        Some("error") => Err(anyhow::anyhow!(
+            "{}",
+            envelope
+                .get("message")
+                .and_then(Value::as_str)
+                .unwrap_or("Device dispatch RPC failed")
+        )),
+        _ => Err(anyhow::anyhow!(
+            "Device dispatch target returned an unexpected RPC envelope"
+        )),
+    }
+}
 
 #[tauri::command]
 pub async fn dispatch_list_targets(
@@ -32,9 +85,30 @@ pub async fn dispatch_list_targets(
         .get_ssh_manager_async()
         .await
         .map_err(|error| error.to_string())?;
-    list_dispatch_targets(&manager, request)
+    let mut targets = list_dispatch_targets(&manager, request)
         .await
-        .map_err(|error| error.to_string())
+        .map_err(|error| error.to_string())?;
+    let current_device_id = super::remote_connect_api::remote_connect_get_device_info()
+        .await
+        .ok()
+        .map(|device| device.device_id);
+    if let Ok(devices) = super::remote_connect_api::account_list_devices().await {
+        targets.extend(devices.into_iter().filter_map(|device| {
+            if current_device_id.as_deref() == Some(device.device_id.as_str()) {
+                return None;
+            }
+            Some(DispatchTargetOption {
+                kind: "device".to_string(),
+                connection_id: None,
+                device_id: Some(device.device_id),
+                display_name: device.device_name,
+                description: None,
+                default_workspace: None,
+                online: Some(device.online),
+            })
+        }));
+    }
+    Ok(targets)
 }
 
 #[tauri::command]
@@ -42,6 +116,11 @@ pub async fn dispatch_probe_target(
     state: State<'_, AppState>,
     request: DispatchProbeTargetRequest,
 ) -> Result<DispatchSshProbe, String> {
+    if matches!(&request.target, DispatchTargetRequest::Device { .. }) {
+        return probe_device_dispatch_target(&AccountDeviceDispatchRpc, request)
+            .await
+            .map_err(|error| error.to_string());
+    }
     let manager = state
         .get_ssh_manager_async()
         .await
@@ -99,6 +178,23 @@ pub async fn dispatch_submit(
     path_manager: State<'_, Arc<PathManager>>,
     request: DispatchSubmitRequest,
 ) -> Result<Value, String> {
+    if let DispatchTargetRequest::Device { device_id, .. } = &request.target {
+        let display_name = super::remote_connect_api::account_list_devices()
+            .await
+            .map_err(|error| format!("list account devices before dispatch: {error}"))?
+            .into_iter()
+            .find(|device| device.device_id == *device_id)
+            .ok_or_else(|| "Dispatch device is not registered on the current account".to_string())
+            .and_then(|device| {
+                device.online.then_some(device.device_name).ok_or_else(|| {
+                    "Dispatch device is offline; no local fallback was attempted".to_string()
+                })
+            })?;
+        let store = OutboundDispatchStore::new(path_manager.as_ref());
+        return submit_device_dispatch(&AccountDeviceDispatchRpc, &store, display_name, request)
+            .await
+            .map_err(|error| error.to_string());
+    }
     let manager = state
         .get_ssh_manager_async()
         .await
@@ -115,11 +211,23 @@ pub async fn dispatch_status(
     path_manager: State<'_, Arc<PathManager>>,
     request: DispatchStatusRequest,
 ) -> Result<Value, String> {
+    let store = OutboundDispatchStore::new(path_manager.as_ref());
+    if matches!(
+        store
+            .get(&request.job_id)
+            .await
+            .map_err(|error| error.to_string())?
+            .map(|record| record.target),
+        Some(DispatchTarget::Device { .. })
+    ) {
+        return get_device_dispatch_status(&AccountDeviceDispatchRpc, &store, request)
+            .await
+            .map_err(|error| error.to_string());
+    }
     let manager = state
         .get_ssh_manager_async()
         .await
         .map_err(|error| error.to_string())?;
-    let store = OutboundDispatchStore::new(path_manager.as_ref());
     get_dispatch_status(&manager, &store, request)
         .await
         .map_err(|error| error.to_string())
@@ -131,11 +239,23 @@ pub async fn dispatch_cancel(
     path_manager: State<'_, Arc<PathManager>>,
     request: DispatchJobRequest,
 ) -> Result<Value, String> {
+    let store = OutboundDispatchStore::new(path_manager.as_ref());
+    if matches!(
+        store
+            .get(&request.job_id)
+            .await
+            .map_err(|error| error.to_string())?
+            .map(|record| record.target),
+        Some(DispatchTarget::Device { .. })
+    ) {
+        return cancel_device_dispatch(&AccountDeviceDispatchRpc, &store, request)
+            .await
+            .map_err(|error| error.to_string());
+    }
     let manager = state
         .get_ssh_manager_async()
         .await
         .map_err(|error| error.to_string())?;
-    let store = OutboundDispatchStore::new(path_manager.as_ref());
     cancel_dispatch(&manager, &store, request)
         .await
         .map_err(|error| error.to_string())
@@ -147,6 +267,23 @@ pub async fn dispatch_list_jobs(
     path_manager: State<'_, Arc<PathManager>>,
     request: DispatchListJobsRequest,
 ) -> Result<Value, String> {
+    if let Some(DispatchTargetRequest::Device { device_id, .. }) = &request.target {
+        let display_name = super::remote_connect_api::account_list_devices()
+            .await
+            .map_err(|error| format!("list account devices before observing dispatch: {error}"))?
+            .into_iter()
+            .find(|device| device.device_id == *device_id)
+            .ok_or_else(|| "Dispatch device is not registered on the current account".to_string())
+            .and_then(|device| {
+                device.online.then_some(device.device_name).ok_or_else(|| {
+                    "Dispatch device is offline; its jobs cannot be listed".to_string()
+                })
+            })?;
+        let store = OutboundDispatchStore::new(path_manager.as_ref());
+        return list_device_dispatch_jobs(&AccountDeviceDispatchRpc, &store, display_name, request)
+            .await
+            .map_err(|error| error.to_string());
+    }
     let manager = state
         .get_ssh_manager_async()
         .await
@@ -155,4 +292,82 @@ pub async fn dispatch_list_jobs(
     list_dispatch_jobs(&manager, &store, request)
         .await
         .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn dispatch_answer(
+    state: State<'_, AppState>,
+    path_manager: State<'_, Arc<PathManager>>,
+    request: DispatchAnswerRequest,
+) -> Result<Value, String> {
+    let store = OutboundDispatchStore::new(path_manager.as_ref());
+    if matches!(
+        store
+            .get(&request.job_id)
+            .await
+            .map_err(|error| error.to_string())?
+            .map(|record| record.target),
+        Some(DispatchTarget::Device { .. })
+    ) {
+        return answer_device_dispatch(&AccountDeviceDispatchRpc, &store, request)
+            .await
+            .map_err(|error| error.to_string());
+    }
+    let manager = state
+        .get_ssh_manager_async()
+        .await
+        .map_err(|error| error.to_string())?;
+    answer_dispatch(&manager, &store, request)
+        .await
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn dispatch_append(
+    state: State<'_, AppState>,
+    path_manager: State<'_, Arc<PathManager>>,
+    request: DispatchAppendRequest,
+) -> Result<Value, String> {
+    let store = OutboundDispatchStore::new(path_manager.as_ref());
+    if matches!(
+        store
+            .get(&request.job_id)
+            .await
+            .map_err(|error| error.to_string())?
+            .map(|record| record.target),
+        Some(DispatchTarget::Device { .. })
+    ) {
+        return append_device_dispatch(&AccountDeviceDispatchRpc, &store, request)
+            .await
+            .map_err(|error| error.to_string());
+    }
+    let manager = state
+        .get_ssh_manager_async()
+        .await
+        .map_err(|error| error.to_string())?;
+    append_dispatch(&manager, &store, request)
+        .await
+        .map_err(|error| error.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::decode_device_dispatch_rpc;
+
+    #[test]
+    fn device_dispatch_requires_a_correlated_host_invoke_acknowledgement() {
+        let value = decode_device_dispatch_rpc(
+            r#"{"resp":"host_invoke_result","ok":true,"value":{"accepted":true,"jobId":"job-1","sessionId":"session-1"}}"#,
+        )
+        .expect("true acknowledgement");
+        assert_eq!(value["jobId"], "job-1");
+        assert_eq!(value["sessionId"], "session-1");
+
+        let rejected = decode_device_dispatch_rpc(
+            r#"{"resp":"host_invoke_result","ok":false,"error":"target rejected"}"#,
+        )
+        .expect_err("negative acknowledgement");
+        assert!(rejected.to_string().contains("target rejected"));
+        assert!(decode_device_dispatch_rpc(r#"{"sent":true}"#).is_err());
+    }
 }

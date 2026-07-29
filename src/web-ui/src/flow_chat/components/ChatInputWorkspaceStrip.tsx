@@ -66,9 +66,10 @@ export interface ChatInputWorkspaceStripProps {
   /** Immutable per-session dispatch destination. Hidden on embedded/mini composers. */
   dispatchControl?: {
     target: DispatchTarget;
+    sourceWorkspacePath?: string;
     locked: boolean;
     onSelectLocal?: () => void;
-    onSelectSsh: (selection: DispatchSelection) => void;
+    onSelectTarget: (selection: DispatchSelection) => void;
   };
 }
 
@@ -306,9 +307,10 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
           {dispatchControl ? (
             <DispatchTargetPicker
               target={dispatchControl.target}
+              sourceWorkspacePath={dispatchControl.sourceWorkspacePath}
               locked={dispatchControl.locked}
               onSelectLocal={dispatchControl.onSelectLocal}
-              onSelectSsh={dispatchControl.onSelectSsh}
+              onSelectTarget={dispatchControl.onSelectTarget}
             />
           ) : null}
           {showPermission ? (

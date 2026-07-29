@@ -233,6 +233,79 @@ describe('FlowChatStore dispatch observer boundaries', () => {
     resetStore();
   });
 
+  it('accepts a canonical workspace path without allowing target identity changes', () => {
+    const session = createSession({
+      workspacePath: '/source',
+      config: {
+        dispatchTargetRequest: {
+          kind: 'ssh',
+          connectionId: 'ssh-1',
+          workspacePath: '~/repo',
+        },
+        dispatchTarget: {
+          kind: 'ssh',
+          connectionId: 'ssh-1',
+          workspacePath: '~/repo',
+          displayName: 'build-host',
+        },
+        dispatchJobId: 'job-1',
+        dispatchApprovalPolicy: 'reject-and-report',
+      },
+      dialogTurns: [],
+    });
+    flowChatStore.setState(() => ({
+      sessions: new Map([[session.sessionId, session]]),
+      activeSessionId: session.sessionId,
+    }));
+
+    flowChatStore.updateSessionDispatchTarget(session.sessionId, {
+      targetRequest: {
+        kind: 'ssh',
+        connectionId: 'ssh-1',
+        workspacePath: '/home/user/repo',
+      },
+      target: {
+        kind: 'ssh',
+        connectionId: 'ssh-1',
+        workspacePath: '/home/user/repo',
+        displayName: 'renamed-host',
+      },
+      jobId: 'job-1',
+      approvalPolicy: 'reject-and-report',
+    });
+    expect(
+      flowChatStore.getState().sessions.get(session.sessionId)?.config
+        .dispatchTarget,
+    ).toMatchObject({
+      connectionId: 'ssh-1',
+      workspacePath: '/home/user/repo',
+      displayName: 'renamed-host',
+    });
+
+    flowChatStore.updateSessionDispatchTarget(session.sessionId, {
+      targetRequest: {
+        kind: 'ssh',
+        connectionId: 'ssh-2',
+        workspacePath: '/other',
+      },
+      target: {
+        kind: 'ssh',
+        connectionId: 'ssh-2',
+        workspacePath: '/other',
+        displayName: 'other-host',
+      },
+      jobId: 'job-1',
+      approvalPolicy: 'reject-and-report',
+    });
+    expect(
+      flowChatStore.getState().sessions.get(session.sessionId)?.config
+        .dispatchTarget,
+    ).toMatchObject({
+      connectionId: 'ssh-1',
+      workspacePath: '/home/user/repo',
+    });
+  });
+
   it('leaves a detached target running when its source workspace closes', async () => {
     const session = createSession({
       workspacePath: '/source',

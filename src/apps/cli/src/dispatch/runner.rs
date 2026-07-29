@@ -12,6 +12,22 @@ pub(crate) fn is_supported() -> bool {
 }
 
 pub(crate) fn spawn(store: &DispatchStore, job_id: &str) -> Result<u32> {
+    let result = spawn_detached_action("__run", job_id, "dispatch worker");
+    if result.is_err() {
+        store.clear_preparing(job_id);
+    }
+    result
+}
+
+pub(crate) fn spawn_workspace_materializer(job_id: &str) -> Result<u32> {
+    spawn_detached_action(
+        "__workspace_materialize",
+        job_id,
+        "dispatch workspace materializer",
+    )
+}
+
+fn spawn_detached_action(action: &str, job_id: &str, description: &str) -> Result<u32> {
     if !is_supported() {
         bail!("dispatch detached workers are supported only on Linux and macOS");
     }
@@ -20,7 +36,7 @@ pub(crate) fn spawn(store: &DispatchStore, job_id: &str) -> Result<u32> {
     let mut command = bitfun_services_core::process_manager::create_command(executable);
     command
         .arg("dispatch")
-        .arg("__run")
+        .arg(action)
         .arg("--job")
         .arg(job_id)
         .stdin(Stdio::null())
@@ -31,17 +47,12 @@ pub(crate) fn spawn(store: &DispatchStore, job_id: &str) -> Result<u32> {
     }
     configure_detached_process(&mut command);
 
-    let child = match command.spawn().context("start detached dispatch worker") {
-        Ok(child) => child,
-        Err(error) => {
-            store.clear_preparing(job_id);
-            return Err(error);
-        }
-    };
+    let child = command
+        .spawn()
+        .with_context(|| format!("start detached {description}"))?;
     let pid = child.id();
-    // The winning child records its own PID after acquiring the per-job worker
-    // lease. This closes the parent-crash window without letting a duplicate
-    // retry overwrite the active worker's identity.
+    // The action acquires its durable job or upload lock in the child. The
+    // parent PID is informational until that target-owned claim succeeds.
     Ok(pid)
 }
 

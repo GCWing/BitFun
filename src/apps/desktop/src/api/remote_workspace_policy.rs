@@ -365,6 +365,8 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         "dispatch_probe_target",
         RemoteWorkspacePolicy::WorkspaceAgnostic,
     ),
+    ("dispatch_answer", RemoteWorkspacePolicy::WorkspaceAgnostic),
+    ("dispatch_append", RemoteWorkspacePolicy::WorkspaceAgnostic),
     ("dispatch_status", RemoteWorkspacePolicy::WorkspaceAgnostic),
     ("dispatch_submit", RemoteWorkspacePolicy::WorkspaceAgnostic),
     (

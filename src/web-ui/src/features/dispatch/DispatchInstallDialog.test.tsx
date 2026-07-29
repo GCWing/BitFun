@@ -166,12 +166,16 @@ describe('DispatchInstallDialog installation lifecycle', () => {
     });
     expect(mocks.installCliStart).toHaveBeenCalledTimes(1);
     expect(mocks.modalLifecycleProps).toEqual({
-      closeOnOverlayClick: false,
-      showCloseButton: false,
+      closeOnOverlayClick: true,
+      showCloseButton: true,
     });
+    const snapshotButton = Array.from(container.querySelectorAll('button'))
+      .find(button => button.textContent?.includes('dispatch.deliverySnapshot'));
+    expect(snapshotButton?.disabled).toBe(true);
+    expect(snapshotButton?.textContent).toContain('dispatch.deliverySnapshotUnavailable');
     const cancelButton = Array.from(container.querySelectorAll('button'))
       .find(button => button.textContent === 'dispatch.cancel');
-    expect(cancelButton?.disabled).toBe(true);
+    expect(cancelButton?.disabled).toBe(false);
 
     await act(async () => {
       mocks.modalOnClose?.();

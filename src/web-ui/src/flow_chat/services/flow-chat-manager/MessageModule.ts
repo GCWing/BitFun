@@ -69,6 +69,17 @@ function completeSessionSend(
   retrySuccess?.();
 }
 
+interface PendingDispatchAppendRetry {
+  content: string;
+  displayContent?: string;
+  messageId: string;
+}
+
+// Keep the id stable across an ambiguous transport failure. A retry with the
+// same message can then ask the target mailbox for the same idempotent append
+// instead of injecting the steering text twice.
+const pendingDispatchAppendRetries = new Map<string, PendingDispatchAppendRetry>();
+
 function acpClientIdFromMode(mode: string | undefined): string | null {
   const value = mode?.trim();
   if (!value?.startsWith('acp:')) return null;
@@ -194,6 +205,55 @@ export async function sendMessage(
   }
   const sendAttempt = beginSessionSend(sessionId);
 
+  const appendToDispatchJob = async (jobId: string): Promise<void> => {
+    const current = pendingDispatchAppendRetries.get(sessionId);
+    const retry =
+      current?.content === message && current.displayContent === displayMessage
+        ? current
+        : {
+            content: message,
+            displayContent: displayMessage,
+            messageId:
+              globalThis.crypto?.randomUUID?.()
+              ?? `dispatch-message-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+          };
+    pendingDispatchAppendRetries.set(sessionId, retry);
+    const response = await dispatchApi.append(
+      jobId,
+      message,
+      displayMessage,
+      retry.messageId,
+    );
+    if (!response.accepted) {
+      if (pendingDispatchAppendRetries.get(sessionId)?.messageId === retry.messageId) {
+        pendingDispatchAppendRetries.delete(sessionId);
+      }
+      throw new Error('Dispatch target did not accept the appended message');
+    }
+    if (pendingDispatchAppendRetries.get(sessionId)?.messageId === retry.messageId) {
+      pendingDispatchAppendRetries.delete(sessionId);
+    }
+    requestDispatchJobRefresh(jobId);
+  };
+
+  const appendToRunningDispatch = async (): Promise<boolean> => {
+    if (
+      !isNonLocalDispatchTarget(session.config.dispatchTarget)
+      || !session.config.dispatchJobId
+      || (
+        session.config.dispatchJobState !== 'queued'
+        && session.config.dispatchJobState !== 'running'
+      )
+    ) {
+      return false;
+    }
+    if ((options?.imageContexts?.length ?? 0) > 0) {
+      throw new Error('Image attachments are not supported for detached dispatch yet');
+    }
+    await appendToDispatchJob(session.config.dispatchJobId);
+    return true;
+  };
+
   if (!options?.bypassPendingQueue) {
     const machineState = stateMachineManager.getCurrentState(sessionId);
     const sessionBusy =
@@ -202,6 +262,9 @@ export async function sendMessage(
     const hasPendingQueue = pendingQueueManager.list(sessionId).length > 0;
 
     if (sessionBusy || hasPendingQueue) {
+      if (await appendToRunningDispatch()) {
+        return;
+      }
       try {
         const item = pendingQueueManager.enqueue({
           sessionId,
@@ -284,14 +347,15 @@ export async function sendMessage(
       if (!targetRequest || targetRequest.kind === 'local' || !jobId || !approvalPolicy) {
         throw new Error('Dispatch session is missing its immutable target or approval policy');
       }
-      if (targetRequest.kind !== 'ssh') {
-        throw new Error('Phase-one dispatch supports SSH targets only');
-      }
       if ((options?.imageContexts?.length ?? 0) > 0) {
-        throw new Error('Image attachments are not supported for SSH dispatch yet');
+        throw new Error('Image attachments are not supported for detached dispatch yet');
       }
-      if (readySession.dialogTurns.length > 0) {
-        throw new Error('Phase-one dispatch sessions accept one detached task');
+      if (
+        readySession.config.dispatchJobState === 'queued'
+        || readySession.config.dispatchJobState === 'running'
+      ) {
+        await appendToDispatchJob(jobId);
+        return;
       }
       if (
         readySession.config.dispatchJobState !== 'submitting' &&
@@ -308,6 +372,8 @@ export async function sendMessage(
 
       const response = await dispatchApi.submit({
         target: targetRequest,
+        workspaceDelivery:
+          readySession.config.dispatchWorkspaceDelivery ?? { kind: 'existing' },
         jobId,
         sessionId,
         agentType: currentAgentType,

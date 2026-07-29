@@ -9,6 +9,7 @@ const mockUpdateSessionModel = vi.fn();
 const mockStartDialogTurn = vi.fn();
 const mockGetConfigs = vi.fn();
 const mockDispatchSubmit = vi.fn();
+const mockDispatchAppend = vi.fn();
 const mockDispatchProgress = vi.fn();
 const mockDispatchRefresh = vi.fn();
 const mockBindSession = vi.fn();
@@ -49,6 +50,7 @@ vi.mock('@/infrastructure/api/service-api/WorktreeAPI', () => ({
 vi.mock('@/features/dispatch/dispatchApi', () => ({
   dispatchApi: {
     submit: (...args: unknown[]) => mockDispatchSubmit(...args),
+    append: (...args: unknown[]) => mockDispatchAppend(...args),
   },
 }));
 
@@ -402,6 +404,10 @@ describe('MessageModule detached dispatch', () => {
       sessionId: 'dispatch-session',
       state: 'queued',
     });
+    mockDispatchAppend.mockResolvedValue({
+      accepted: true,
+      messageId: 'append-1',
+    });
   });
 
   function createDispatchContext(approvalPolicy: 'auto' | 'reject-and-report') {
@@ -447,7 +453,7 @@ describe('MessageModule detached dispatch', () => {
     };
   }
 
-  it('submits without controller model/title and bypasses local turn/worktree APIs', async () => {
+  it('submits with existing workspace delivery and lets the target derive model/title', async () => {
     const { context } = createDispatchContext('reject-and-report');
 
     await sendMessage(context, 'run remote checks', 'dispatch-session');
@@ -458,6 +464,7 @@ describe('MessageModule detached dispatch', () => {
         connectionId: 'ssh-1',
         workspacePath: '/target/repo',
       },
+      workspaceDelivery: { kind: 'existing' },
       jobId: 'job-1',
       sessionId: 'dispatch-session',
       agentType: 'agentic',
@@ -489,6 +496,27 @@ describe('MessageModule detached dispatch', () => {
       ),
     ).resolves.toBeUndefined();
     expect(mockDispatchSubmit).toHaveBeenCalledTimes(1);
+  });
+
+  it('reuses the append message id after an ambiguous transport failure', async () => {
+    const { context, session } = createDispatchContext('remote');
+    session.config.dispatchJobState = 'running';
+    mockDispatchAppend
+      .mockRejectedValueOnce(new Error('response lost'))
+      .mockResolvedValueOnce({ accepted: true, messageId: 'append-1' });
+
+    await expect(
+      sendMessage(context, 'continue with the checks', 'dispatch-session'),
+    ).rejects.toThrow('response lost');
+    await expect(
+      sendMessage(context, 'continue with the checks', 'dispatch-session'),
+    ).resolves.toBeUndefined();
+
+    expect(mockDispatchAppend).toHaveBeenCalledTimes(2);
+    expect(mockDispatchAppend.mock.calls[0][3]).toBeTruthy();
+    expect(mockDispatchAppend.mock.calls[1][3]).toBe(
+      mockDispatchAppend.mock.calls[0][3],
+    );
   });
 });
 

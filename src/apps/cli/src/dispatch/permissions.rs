@@ -11,6 +11,7 @@ pub(crate) const fn cli_policy(policy: DispatchApprovalPolicy) -> CliApprovalPol
     match policy {
         DispatchApprovalPolicy::Auto => CliApprovalPolicy::Auto,
         DispatchApprovalPolicy::RejectAndReport => CliApprovalPolicy::Reject,
+        DispatchApprovalPolicy::Remote => CliApprovalPolicy::DisableAuto,
     }
 }
 
@@ -49,6 +50,16 @@ mod tests {
             reject,
             approval_metadata(CliApprovalPolicy::Reject),
             "dispatch must not invent a second approval mechanism"
+        );
+
+        let remote = metadata(DispatchApprovalPolicy::Remote);
+        assert!(
+            remote.get(USER_INPUT_AVAILABLE_CONTEXT_KEY).is_none(),
+            "remote supervision keeps the shared user-input channel available"
+        );
+        assert_eq!(
+            remote.get(AUTO_APPROVE_ASK_CONTEXT_KEY),
+            Some(&Value::Bool(false))
         );
     }
 }

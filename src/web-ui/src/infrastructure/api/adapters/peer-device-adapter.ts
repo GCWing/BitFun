@@ -68,6 +68,8 @@ const LOCAL_ONLY_COMMANDS = new Set([
   'dispatch_status',
   'dispatch_cancel',
   'dispatch_list_jobs',
+  'dispatch_answer',
+  'dispatch_append',
   'remote_connect_get_device_info',
   'remote_connect_get_lan_ip',
   'remote_connect_get_lan_network_info',
