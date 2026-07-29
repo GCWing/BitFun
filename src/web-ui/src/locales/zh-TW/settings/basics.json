@@ -114,6 +114,10 @@
       "label": "包含敏感除錯資訊",
       "description": "開啟後，本機日誌可能包含使用者 Prompt、模型請求與回應 payload、工具參數、檔案路徑以及 Webview 事件 payload，用於問題排查。BitFun 不會自動上傳這些日誌檔案。"
     },
+    "flowChatDiagnostics": {
+      "label": "Flow Chat 視口診斷",
+      "description": "將詳細捲動、錨點和版面事件記錄到 flowchat.log。僅在重現 Flow Chat 穩定性問題時開啟。"
+    },
     "path": {
       "description": "本次啟動寫入日誌檔案所在的目錄。"
     },
@@ -154,6 +158,7 @@
       "saveFailed": "儲存日誌級別失敗",
       "levelUpdated": "日誌級別已更新",
       "sensitiveDiagnosticsUpdated": "敏感除錯資訊日誌偏好已更新",
+      "flowChatDiagnosticsUpdated": "Flow Chat 診斷偏好已更新",
       "refreshed": "運行時狀態已重新整理",
       "openedFolder": "日誌資料夾已開啟",
       "openFailed": "開啟日誌資料夾失敗",

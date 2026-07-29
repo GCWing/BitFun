@@ -113,7 +113,9 @@ Important details:
 - the real footer height is `MESSAGE_LIST_FOOTER_HEIGHT + totalBottomReservationPx`
 - reservation space is not real content height
 - reservations may define a `floorPx`
-- only reservation space above the floor is consumable
+- a floor prevents unrelated shrink reconciliation from dropping live scroll range
+- collapse floors still drain from measured content growth or deliberate downward
+  user navigation; pin floors drain only through the sticky-pin settlement path
 - all measurements that compare old vs new content height must use:
 
 ```ts
@@ -261,7 +263,13 @@ timer fallback for browsers that delay timers. While the intent is alive, the
 grow branch of `measureHeightChange` protects the collapse reservation, but it
 may still consume measured content growth from the sticky pin reservation.
 Once the intent settles, residual collapse space is transferred to the settled
-sticky pin in one state/DOM update and any deferred follow is replayed.
+sticky pin in one state/DOM update when the pinned item still owns the viewport.
+If a collapsing header owns the viewport, the footer is instead reduced
+atomically to the minimum range that can retain the current `scrollTop`, then
+that settled range is promoted to a protected collapse floor before the
+semantic anchor is restored. This prevents a clear-and-reacquire frame without
+retaining the full provisional estimate; later content growth can still drain
+the protected range. Any deferred follow is then replayed.
 
 ## C. Follow-Output Mode (continuous tail)
 
@@ -347,8 +355,11 @@ If a future collapsible component shows the same "header drops" or "flash on col
 - Sticky pin floors must shrink from measured content growth, not a transient
   target-element position.
 - A user gesture that exits pinned mode must release the semantic anchor and
-  clear or atomically transfer the pin reservation in the same operation; an
-  idle coordinator must never retain a live pin reservation.
+  atomically transfer the pin reservation to a protected collapse range in the
+  same operation; an idle coordinator must never retain a live pin reservation.
+- Unsignaled shrink reconciliation must not reduce a protected collapse floor;
+  only measured growth, downward navigation, bottom arrival, or an explicit
+  reservation reset may consume it.
 - Pre-collapse intent must capture the anchor before the component shrinks.
 - Compensation must not be consumed too early during active layout transitions.
 - Session changes and empty-list resets must clear compensation and anchor state.
@@ -387,6 +398,25 @@ If a future collapsible component shows the same "header drops" or "flash on col
   windows.
 
 ## If You Need To Change This Logic
+
+### Opt-in viewport diagnostics
+
+Enable `app.logging.flow_chat_diagnostics` from the logging settings only while
+reproducing a viewport stability issue. The frontend records bounded JSONL
+batches to `flowchat.log` in the current session log directory. When disabled,
+probe payloads are not evaluated and no timer, IPC request, or file is created.
+
+The diagnostic schema groups events by hypothesis:
+
+- `A`: user scroll intent, pin release, reservation transfer, and tail handoff
+- `B`: semantic anchor capture, correction, release, or unexpected reacquisition
+- `C`: content measurement, Footer compensation, and physical range changes
+- `D`: Virtuoso scroll compensation and tail-follow ownership
+- `E`: streaming tool-card collapse intent and anchor preservation
+
+Do not add message content, tool arguments, file contents, or other sensitive
+payloads to this channel. Keep all data producers lazy and guard hot-path probes
+with `flowChatDiagnostics.isEnabled()` before allocating probe objects.
 
 Use this checklist:
 

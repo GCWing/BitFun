@@ -144,6 +144,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         RemoteWorkspacePolicy::WorkspaceAgnostic,
     ),
     (
+        "append_flow_chat_diagnostics",
+        RemoteWorkspacePolicy::LocalOnly,
+    ),
+    (
         "account_token_expired",
         RemoteWorkspacePolicy::WorkspaceAgnostic,
     ),

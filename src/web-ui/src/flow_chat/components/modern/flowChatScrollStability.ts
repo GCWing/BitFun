@@ -40,6 +40,95 @@ export function transferCollapseReservationToPin(
   };
 }
 
+export function transferPinReservationToProtectedCollapse(
+  currentState: BottomReservationState,
+): BottomReservationState {
+  const transferredPx = getReservationTotalPx(currentState.pin);
+  return sanitizeBottomReservationState({
+    ...currentState,
+    collapse: {
+      ...currentState.collapse,
+      px: currentState.collapse.px + transferredPx,
+      floorPx: currentState.collapse.floorPx + transferredPx,
+    },
+    pin: {
+      kind: 'pin',
+      px: 0,
+      floorPx: 0,
+      mode: 'transient',
+      targetTurnId: null,
+    },
+  });
+}
+
+export function protectCurrentCollapseReservation(
+  currentState: BottomReservationState,
+): BottomReservationState {
+  return sanitizeBottomReservationState({
+    ...currentState,
+    collapse: {
+      ...currentState.collapse,
+      floorPx: currentState.collapse.px,
+    },
+  });
+}
+
+export function settleCollapseReservationForPreservedViewport(
+  currentState: BottomReservationState,
+  geometry: {
+    scrollTop: number;
+    scrollHeight: number;
+    clientHeight: number;
+    rangeGuardPx?: number;
+  },
+): BottomReservationState {
+  const currentTotalPx = getReservationTotalPx(currentState.collapse) +
+    getReservationTotalPx(currentState.pin);
+  const contentHeightWithoutReservation = Math.max(
+    0,
+    geometry.scrollHeight - currentTotalPx,
+  );
+  const requiredTotalPx = Math.max(
+    0,
+    geometry.scrollTop + geometry.clientHeight - contentHeightWithoutReservation +
+      sanitizeReservationPx(geometry.rangeGuardPx ?? 1),
+  );
+  const protectedTotalPx = Math.max(
+    getReservationTotalPx(currentState.pin) + currentState.collapse.floorPx,
+    requiredTotalPx,
+  );
+  const settledTotalPx = Math.min(currentTotalPx, protectedTotalPx);
+  const settledCollapsePx = Math.max(
+    0,
+    settledTotalPx - getReservationTotalPx(currentState.pin),
+  );
+
+  return sanitizeBottomReservationState({
+    ...currentState,
+    collapse: {
+      ...currentState.collapse,
+      px: settledCollapsePx,
+      floorPx: settledCollapsePx,
+    },
+  });
+}
+
+export function reconcileUnsignaledShrinkReservation(
+  currentState: BottomReservationState,
+  fallbackRequiredCollapsePx: number,
+): BottomReservationState {
+  return sanitizeBottomReservationState({
+    ...currentState,
+    collapse: {
+      ...currentState.collapse,
+      px: Math.max(
+        currentState.collapse.floorPx,
+        sanitizeReservationPx(fallbackRequiredCollapsePx),
+      ),
+    },
+  });
+}
+
 export function createInitialBottomReservationState(): BottomReservationState {
   return {
     collapse: {
@@ -116,8 +205,13 @@ export function consumeBottomReservationForContentGrowth(
   const collapseConsumablePx = preserveCollapseReservation
     ? 0
     : getReservationConsumablePx(state.collapse);
-  const collapseConsumed = Math.min(collapseConsumablePx, remaining);
-  remaining -= collapseConsumed;
+  const collapseAboveFloorConsumed = Math.min(collapseConsumablePx, remaining);
+  remaining -= collapseAboveFloorConsumed;
+  const collapseFloorConsumed = preserveCollapseReservation
+    ? 0
+    : Math.min(state.collapse.floorPx, remaining);
+  const collapseConsumed = collapseAboveFloorConsumed + collapseFloorConsumed;
+  remaining -= collapseFloorConsumed;
 
   const pinConsumablePx = getReservationConsumablePx(state.pin);
   const pinConsumed = Math.min(pinConsumablePx, remaining);
@@ -131,6 +225,7 @@ export function consumeBottomReservationForContentGrowth(
     collapse: {
       ...state.collapse,
       px: state.collapse.px - collapseConsumed,
+      floorPx: state.collapse.floorPx - collapseFloorConsumed,
     },
     pin: {
       ...state.pin,
@@ -198,8 +293,14 @@ export function shouldBypassShrinkCompensationInTailFollow(options: {
 export function shouldPreserveCollapseReservationAfterIntent(options: {
   isFollowingOutput: boolean;
   isStreamingOutput: boolean;
+  isPreservingElement: boolean;
+  hasProtectedCollapseRange: boolean;
 }): boolean {
-  return options.isFollowingOutput && options.isStreamingOutput;
+  return (
+    (options.isFollowingOutput && options.isStreamingOutput) ||
+    options.isPreservingElement ||
+    options.hasProtectedCollapseRange
+  );
 }
 
 export function resolveAutoCollapseAnchorScrollTop(options: {

@@ -1,3 +1,5 @@
+import { flowChatDiagnostics } from '@/infrastructure/diagnostics/flowChatDiagnostics';
+
 export type FlowChatViewportAnchorMode =
   | 'idle'
   | 'pinned-item'
@@ -63,10 +65,19 @@ export class FlowChatViewportCoordinator {
     );
   }
 
-  pinItem(_reason = 'unspecified'): void {
+  pinItem(reason = 'unspecified'): void {
+    const previousMode = this.mode;
     this.stopAnchorGuard();
     this.elementAnchor = null;
     this.mode = 'pinned-item';
+    if (flowChatDiagnostics.isEnabled()) {
+      flowChatDiagnostics.trace({
+        hypothesis: 'B',
+        location: 'FlowChatViewportCoordinator.pinItem',
+        message: 'Viewport coordinator entered pinned item mode',
+        data: () => ({ previousMode, reason }),
+      });
+    }
   }
 
   pinElement(element: HTMLElement | null | undefined): boolean {
@@ -76,18 +87,43 @@ export class FlowChatViewportCoordinator {
   followTail(options?: { force?: boolean }): boolean {
     this.expireElementAnchor();
     if (this.mode === 'preserving-element' && !options?.force) {
+      if (flowChatDiagnostics.isEnabled()) {
+        flowChatDiagnostics.trace({
+          hypothesis: 'B',
+          location: 'FlowChatViewportCoordinator.followTail',
+          message: 'Tail follow rejected while preserving an element',
+          data: () => ({ mode: this.mode, force: options?.force === true }),
+        });
+      }
       return false;
     }
 
+    const previousMode = this.mode;
     this.stopAnchorGuard();
     this.elementAnchor = null;
     this.mode = 'following-tail';
+    if (flowChatDiagnostics.isEnabled()) {
+      flowChatDiagnostics.trace({
+        hypothesis: 'B',
+        location: 'FlowChatViewportCoordinator.followTail',
+        message: 'Viewport coordinator entered tail follow mode',
+        data: () => ({ previousMode, force: options?.force === true }),
+      });
+    }
     return true;
   }
 
   preserveElement(element: HTMLElement | null | undefined): boolean {
     this.expireElementAnchor();
     if (!element || this.mode === 'following-tail' || this.mode === 'pinned-item') {
+      if (flowChatDiagnostics.isEnabled()) {
+        flowChatDiagnostics.trace({
+          hypothesis: 'E',
+          location: 'FlowChatViewportCoordinator.preserveElement',
+          message: 'Element preservation request rejected',
+          data: () => ({ hasElement: Boolean(element), mode: this.mode }),
+        });
+      }
       return false;
     }
 
@@ -109,6 +145,14 @@ export class FlowChatViewportCoordinator {
 
     const scroller = element.closest<HTMLElement>('[data-virtuoso-scroller="true"]');
     if (!scroller) {
+      if (flowChatDiagnostics.isEnabled()) {
+        flowChatDiagnostics.trace({
+          hypothesis: 'B',
+          location: 'FlowChatViewportCoordinator.captureElement',
+          message: 'Element anchor capture failed without a scroller',
+          data: () => ({ mode }),
+        });
+      }
       return false;
     }
 
@@ -122,6 +166,21 @@ export class FlowChatViewportCoordinator {
     };
     this.mode = mode;
     this.startAnchorGuard();
+    if (flowChatDiagnostics.isEnabled()) {
+      flowChatDiagnostics.trace({
+        hypothesis: mode === 'preserving-element' ? 'E' : 'B',
+        location: 'FlowChatViewportCoordinator.captureElement',
+        message: 'Semantic element anchor captured',
+        data: () => ({
+          mode,
+          elementConnected: element.isConnected,
+          offsetFromScrollerTop: this.elementAnchor?.offsetFromScrollerTop ?? null,
+          scrollTop: scroller.scrollTop,
+          scrollHeight: scroller.scrollHeight,
+          clientHeight: scroller.clientHeight,
+        }),
+      });
+    }
     return true;
   }
 
@@ -132,6 +191,14 @@ export class FlowChatViewportCoordinator {
       return false;
     }
     if (!anchor.element.isConnected) {
+      if (flowChatDiagnostics.isEnabled()) {
+        flowChatDiagnostics.trace({
+          hypothesis: 'B',
+          location: 'FlowChatViewportCoordinator.restoreElementAnchor',
+          message: 'Semantic anchor restore skipped for disconnected element',
+          data: () => ({ mode: this.mode, source }),
+        });
+      }
       return false;
     }
 
@@ -152,8 +219,26 @@ export class FlowChatViewportCoordinator {
       return false;
     }
 
+    const diagnosticsEnabled = flowChatDiagnostics.isEnabled();
+    const scrollTopBefore = diagnosticsEnabled ? scroller.scrollTop : null;
     applyCorrection(initialCorrection);
     let remainingCorrection = readCorrection();
+    if (diagnosticsEnabled) {
+      flowChatDiagnostics.trace({
+        hypothesis: 'B',
+        location: 'FlowChatViewportCoordinator.restoreElementAnchor',
+        message: 'Semantic anchor correction applied',
+        data: () => ({
+          mode: this.mode,
+          source,
+          initialCorrection,
+          remainingCorrection,
+          scrollTopBefore,
+          scrollTopAfter: scroller.scrollTop,
+          maxScrollTop: Math.max(0, scroller.scrollHeight - scroller.clientHeight),
+        }),
+      });
+    }
 
     if (
       remainingCorrection > ELEMENT_ANCHOR_EPSILON_PX &&
@@ -171,6 +256,22 @@ export class FlowChatViewportCoordinator {
         if (Math.abs(remainingCorrection) > ELEMENT_ANCHOR_EPSILON_PX) {
           applyCorrection(remainingCorrection);
         }
+      }
+      if (flowChatDiagnostics.isEnabled()) {
+        flowChatDiagnostics.trace({
+          hypothesis: 'C',
+          location: 'FlowChatViewportCoordinator.restoreElementAnchor',
+          message: 'Semantic anchor requested additional bottom range',
+          data: () => ({
+            mode: this.mode,
+            source,
+            rangeExtended,
+            remainingCorrection,
+            scrollTop: scroller.scrollTop,
+            scrollHeight: scroller.scrollHeight,
+            clientHeight: scroller.clientHeight,
+          }),
+        });
       }
     }
     return true;
@@ -197,10 +298,20 @@ export class FlowChatViewportCoordinator {
     return true;
   }
 
-  release(_reason = 'unspecified'): void {
+  release(reason = 'unspecified'): void {
+    const previousMode = this.mode;
+    const hadElementAnchor = Boolean(this.elementAnchor);
     this.stopAnchorGuard();
     this.elementAnchor = null;
     this.mode = 'idle';
+    if (flowChatDiagnostics.isEnabled()) {
+      flowChatDiagnostics.trace({
+        hypothesis: 'B',
+        location: 'FlowChatViewportCoordinator.release',
+        message: 'Viewport coordinator released semantic ownership',
+        data: () => ({ previousMode, hadElementAnchor, reason }),
+      });
+    }
   }
 
   private expireElementAnchor(): void {

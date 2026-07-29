@@ -1275,6 +1275,7 @@ pub async fn run() {
             get_global_config_health,
             get_runtime_logging_info,
             export_diagnostics_bundle,
+            append_flow_chat_diagnostics,
             get_runtime_capabilities,
             speech_list_models,
             speech_download_model,

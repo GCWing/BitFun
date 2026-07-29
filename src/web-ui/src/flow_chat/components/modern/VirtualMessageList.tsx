@@ -46,6 +46,7 @@ import {
 } from '../../utils/flowChatTurnScrollPolicy';
 import { flowChatStore } from '../../store/FlowChatStore';
 import { startupTrace } from '@/shared/utils/startupTrace';
+import { flowChatDiagnostics } from '@/infrastructure/diagnostics/flowChatDiagnostics';
 import {
   estimateVirtualMessageItemHeight,
   getVirtualMessageDefaultItemHeight,
@@ -71,13 +72,17 @@ import {
   createInitialBottomReservationState,
   getCanceledUnsettledStickyPinGrowthPx,
   getReservationTotalPx,
+  protectCurrentCollapseReservation,
+  reconcileUnsignaledShrinkReservation,
   resolveAutoCollapseAnchorScrollTop,
   sanitizeBottomReservationState,
+  settleCollapseReservationForPreservedViewport,
   shouldBypassShrinkCompensationInTailFollow,
   shouldPreserveCollapseReservationAfterIntent,
   shouldSuppressFollowingTailNegativeScrollBy,
   shouldSyncPhysicalBottom,
   transferCollapseReservationToPin,
+  transferPinReservationToProtectedCollapse,
   type BottomReservationState,
   type PinBottomReservation,
 } from './flowChatScrollStability';
@@ -618,6 +623,27 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
   }, [recordScrollerGeometry]);
 
   const notifyUserScrollIntent = useCallback((reason = 'user-scroll-intent') => {
+    if (flowChatDiagnostics.isEnabled()) {
+      flowChatDiagnostics.trace({
+        hypothesis: 'A',
+        location: 'VirtualMessageList.notifyUserScrollIntent',
+        message: 'User scroll intent requested viewport ownership release',
+        data: () => {
+          const scroller = scrollerElementRef.current;
+          return {
+            reason,
+            coordinatorMode: viewportCoordinatorRef.current.getMode(),
+            isFollowingOutput: isFollowingOutputRef.current,
+            isStreamingOutput: isStreamingOutputRef.current,
+            reservation: bottomReservationStateRef.current,
+            pendingCollapseIntent: pendingCollapseIntentRef.current.active,
+            scrollTop: scroller?.scrollTop ?? null,
+            scrollHeight: scroller?.scrollHeight ?? null,
+            clientHeight: scroller?.clientHeight ?? null,
+          };
+        },
+      });
+    }
     exitPinnedViewportForUserIntentRef.current(reason);
     followOutputControllerRef.current.handleUserScrollIntent();
     onUserScrollIntent?.();
@@ -757,6 +783,23 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     const previous = bottomReservationStateRef.current;
     const rawNext = typeof updater === 'function' ? updater(previous) : updater;
     const next = sanitizeBottomReservationState(rawNext);
+    if (
+      flowChatDiagnostics.isEnabled() &&
+      !areBottomReservationStatesEqual(previous, next)
+    ) {
+      flowChatDiagnostics.trace({
+        hypothesis: 'A',
+        location: 'VirtualMessageList.updateBottomReservationState',
+        message: 'Bottom reservation state changed',
+        data: () => ({
+          before: previous,
+          after: next,
+          coordinatorMode: viewportCoordinatorRef.current.getMode(),
+          isFollowingOutput: isFollowingOutputRef.current,
+          isStreamingOutput: isStreamingOutputRef.current,
+        }),
+      });
+    }
     bottomReservationStateRef.current = next;
     setBottomReservationState(prev => {
       return areBottomReservationStatesEqual(next, prev) ? prev : next;
@@ -834,6 +877,21 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     applyFooterHeightToElement(footer, compensationPx);
     void footer.offsetHeight;
     void scroller.scrollHeight;
+    if (flowChatDiagnostics.isEnabled()) {
+      flowChatDiagnostics.trace({
+        hypothesis: 'C',
+        location: 'VirtualMessageList.applyFooterCompensationNow',
+        message: 'Footer compensation applied synchronously',
+        data: () => ({
+          compensationPx,
+          renderedHeight: footer.getBoundingClientRect().height,
+          scrollTop: scroller.scrollTop,
+          scrollHeight: scroller.scrollHeight,
+          clientHeight: scroller.clientHeight,
+          coordinatorMode: viewportCoordinatorRef.current.getMode(),
+        }),
+      });
+    }
   }, [applyFooterHeightToElement, getTotalBottomCompensationPx]);
 
   const clearPendingStickyPinGrowth = useCallback((_reason: string) => {
@@ -1025,7 +1083,6 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
       collapse: {
         ...baseState.collapse,
         px: currentCollapsePx + shrinkAmount,
-        floorPx: 0,
       },
     };
     updateBottomReservationState(nextReservationState);
@@ -1120,6 +1177,30 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
       return;
     }
 
+    if (flowChatDiagnostics.isEnabled()) {
+      flowChatDiagnostics.trace({
+        hypothesis: 'C',
+        location: 'VirtualMessageList.measureHeightChange',
+        message: 'Effective content height changed',
+        data: () => ({
+          heightDelta,
+          previousMeasuredHeight,
+          effectiveScrollHeight,
+          currentScrollTop,
+          previousScrollTop,
+          scrollHeight: scroller.scrollHeight,
+          clientHeight: scroller.clientHeight,
+          reservation: bottomReservationStateRef.current,
+          coordinatorMode: viewportCoordinatorRef.current.getMode(),
+          isFollowingOutput: isFollowingOutputRef.current,
+          isStreamingOutput: isStreamingOutputRef.current,
+          collapseIntentActive: pendingCollapseIntentRef.current.active,
+          wasAtPhysicalBottom,
+          viewportGeometryChanged,
+        }),
+      });
+    }
+
     const ownsElementAnchor = viewportCoordinatorRef.current.ownsElementAnchor();
     if (shouldSyncPhysicalBottom({
       viewportGeometryChanged,
@@ -1130,6 +1211,18 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
       if (wasAtPhysicalBottom) {
         const maxScrollTop = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
         if (Math.abs(maxScrollTop - scroller.scrollTop) > COMPENSATION_EPSILON_PX) {
+          if (flowChatDiagnostics.isEnabled()) {
+            flowChatDiagnostics.trace({
+              hypothesis: 'C',
+              location: 'VirtualMessageList.measureHeightChange',
+              message: 'Content measurement synchronized the physical bottom',
+              data: () => ({
+                scrollTopBefore: scroller.scrollTop,
+                requestedScrollTop: maxScrollTop,
+                heightDelta,
+              }),
+            });
+          }
           scroller.scrollTop = maxScrollTop;
         }
       }
@@ -1191,6 +1284,14 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
       isStreamingOutput: isStreamingOutputRef.current,
       hasActiveCollapseIntent: collapseIntent.active,
     })) {
+      if (flowChatDiagnostics.isEnabled()) {
+        flowChatDiagnostics.trace({
+          hypothesis: 'D',
+          location: 'VirtualMessageList.measureHeightChange',
+          message: 'Unsignaled shrink delegated to streaming tail follow',
+          data: () => ({ heightDelta, currentScrollTop, previousScrollTop }),
+        });
+      }
       previousScrollTopRef.current = currentScrollTop;
       recordScrollerGeometry(scroller);
       return;
@@ -1237,9 +1338,17 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     const resolvedIntentCompensation = hasValidCollapseIntent
       ? collapseIntent.baseTotalCompensationPx + Math.max(0, cumulativeShrinkPx - collapseIntent.distanceFromBottomBeforeCollapse)
       : 0;
+    const reconciledUnsignaledState = hasValidCollapseIntent
+      ? null
+      : reconcileUnsignaledShrinkReservation(
+        bottomReservationStateRef.current,
+        fallbackRequiredCollapseCompensation,
+      );
     const nextTotalCompensation = hasValidCollapseIntent
       ? Math.max(currentTotalCompensation, resolvedIntentCompensation)
-      : getReservationTotalPx(bottomReservationStateRef.current.pin) + fallbackRequiredCollapseCompensation;
+      : getTotalBottomCompensationPx(
+        reconciledUnsignaledState ?? bottomReservationStateRef.current,
+      );
     if (hasValidCollapseIntent) {
       pendingCollapseIntentRef.current = {
         ...collapseIntent,
@@ -1257,14 +1366,31 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
       return;
     }
 
-    const nextReservationState: BottomReservationState = {
+    const nextReservationState: BottomReservationState = reconciledUnsignaledState ?? {
       ...bottomReservationStateRef.current,
       collapse: {
         ...bottomReservationStateRef.current.collapse,
         px: Math.max(0, nextTotalCompensation - getReservationTotalPx(bottomReservationStateRef.current.pin)),
-        floorPx: 0,
       },
     };
+    if (flowChatDiagnostics.isEnabled()) {
+      flowChatDiagnostics.trace({
+        hypothesis: hasValidCollapseIntent ? 'E' : 'C',
+        location: 'VirtualMessageList.measureHeightChange',
+        message: 'Content shrink resolved bottom compensation',
+        data: () => ({
+          heightDelta,
+          shrinkAmount,
+          distanceFromBottom,
+          hasValidCollapseIntent,
+          fallbackRequiredCollapseCompensation,
+          currentTotalCompensation,
+          nextTotalCompensation,
+          reservationBefore: bottomReservationStateRef.current,
+          reservationAfter: nextReservationState,
+        }),
+      });
+    }
     updateBottomReservationState(nextReservationState);
     if (nextTotalCompensation > COMPENSATION_EPSILON_PX) {
       const anchorTarget =
@@ -2151,14 +2277,46 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
       return false;
     }
 
+    if (flowChatDiagnostics.isEnabled()) {
+      flowChatDiagnostics.trace({
+        hypothesis: 'E',
+        location: 'VirtualMessageList.finalizeCollapseIntent',
+        message: 'Collapse intent finalization started',
+        data: () => ({
+          reason,
+          intent,
+          coordinatorMode: viewportCoordinatorRef.current.getMode(),
+          reservation: bottomReservationStateRef.current,
+          isFollowingOutput: isFollowingOutputRef.current,
+          isStreamingOutput: isStreamingOutputRef.current,
+        }),
+      });
+    }
+
     clearCollapseIntentScheduling();
     pendingCollapseIntentRef.current = createInactiveCollapseIntentState();
+    const coordinatorMode = viewportCoordinatorRef.current.getMode();
     const preserveReservation = shouldPreserveCollapseReservationAfterIntent({
       isFollowingOutput: isFollowingOutputRef.current,
       isStreamingOutput: isStreamingOutputRef.current,
+      isPreservingElement: coordinatorMode === 'preserving-element',
+      hasProtectedCollapseRange:
+        bottomReservationStateRef.current.collapse.floorPx > COMPENSATION_EPSILON_PX,
     });
+    const scroller = scrollerElementRef.current;
     const nextState = preserveReservation
-      ? bottomReservationStateRef.current
+      ? coordinatorMode === 'preserving-element'
+        ? scroller
+          ? settleCollapseReservationForPreservedViewport(
+            bottomReservationStateRef.current,
+            {
+              scrollTop: scroller.scrollTop,
+              scrollHeight: scroller.scrollHeight,
+              clientHeight: scroller.clientHeight,
+            },
+          )
+          : protectCurrentCollapseReservation(bottomReservationStateRef.current)
+        : bottomReservationStateRef.current
       : drainCollapseReservationPreservingPinnedItem(reason);
     if (nextState === null) {
       pendingCollapseIntentRef.current = intent;
@@ -2172,6 +2330,27 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
       return false;
     }
 
+    if (!areBottomReservationStatesEqual(bottomReservationStateRef.current, nextState)) {
+      updateBottomReservationState(nextState);
+      applyFooterCompensationNow(nextState);
+    }
+    if (coordinatorMode === 'preserving-element' && scroller) {
+      viewportCoordinatorRef.current.restoreElementAnchor(
+        scroller,
+        `collapse-finalized:${reason}`,
+      );
+      const restoredState = protectCurrentCollapseReservation(
+        bottomReservationStateRef.current,
+      );
+      if (!areBottomReservationStatesEqual(bottomReservationStateRef.current, restoredState)) {
+        updateBottomReservationState(restoredState);
+        applyFooterCompensationNow(restoredState);
+      }
+      previousScrollTopRef.current = scroller.scrollTop;
+      previousMeasuredHeightRef.current = snapshotMeasuredContentHeight(scroller);
+      recordScrollerGeometry(scroller);
+    }
+
     if (deferredFollowReasonRef.current) {
       const deferredReason = deferredFollowReasonRef.current;
       deferredFollowReasonRef.current = null;
@@ -2181,7 +2360,14 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
       maybeHandoffPinnedTurnToTailRef.current(`collapse-finalized:${reason}`);
     }
     return true;
-  }, [clearCollapseIntentScheduling, drainCollapseReservationPreservingPinnedItem]);
+  }, [
+    applyFooterCompensationNow,
+    clearCollapseIntentScheduling,
+    drainCollapseReservationPreservingPinnedItem,
+    recordScrollerGeometry,
+    snapshotMeasuredContentHeight,
+    updateBottomReservationState,
+  ]);
   finalizeCollapseIntentRef.current = finalizeCollapseIntent;
 
   const scheduleCollapseIntentFinalization = useCallback((
@@ -2236,19 +2422,17 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
         original: typeof el.scrollTo,
       ): typeof el.scrollTo => {
         return ((...args: unknown[]) => {
-          let requestedScrollByTop: number | null = null;
-          if (method === 'scrollBy') {
-            const firstArg = args[0];
-            if (typeof firstArg === 'number' && typeof args[1] === 'number') {
-              requestedScrollByTop = args[1];
-            } else if (
-              firstArg !== null &&
-              typeof firstArg === 'object' &&
-              'top' in firstArg &&
-              typeof firstArg.top === 'number'
-            ) {
-              requestedScrollByTop = firstArg.top;
-            }
+          let requestedTop: number | null = null;
+          const firstArg = args[0];
+          if (typeof firstArg === 'number' && typeof args[1] === 'number') {
+            requestedTop = args[1];
+          } else if (
+            firstArg !== null &&
+            typeof firstArg === 'object' &&
+            'top' in firstArg &&
+            typeof firstArg.top === 'number'
+          ) {
+            requestedTop = firstArg.top;
           }
           const previousGeometry = previousScrollerGeometryRef.current;
           const previousMaxScrollTop = previousGeometry
@@ -2268,15 +2452,40 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
             (
               method === 'scrollBy' &&
               shouldSuppressFollowingTailNegativeScrollBy({
-                requestedTop: requestedScrollByTop,
+                requestedTop,
                 isFollowingOutput: isFollowingOutputRef.current,
                 isStreamingOutput: isStreamingOutputRef.current,
                 wasAtPhysicalBottom: wasAtPhysicalBottomBeforeScrollBy,
               })
             )
           );
+          const diagnosticsEnabled = flowChatDiagnostics.isEnabled();
+          const scrollTopBefore = diagnosticsEnabled ? el.scrollTop : null;
           if (!suppressVirtualizerCompensation) {
             Reflect.apply(original, el, args);
+          }
+          if (diagnosticsEnabled) {
+            flowChatDiagnostics.trace({
+              hypothesis: 'D',
+              location: `VirtualMessageList.scroller.${method}`,
+              message: suppressVirtualizerCompensation
+                ? 'Virtualizer scroll request suppressed'
+                : 'Virtualizer scroll request applied',
+              data: () => ({
+                method,
+                requestedTop,
+                suppressVirtualizerCompensation,
+                hasSemanticAnchor,
+                wasAtPhysicalBottomBeforeScrollBy,
+                isFollowingOutput: isFollowingOutputRef.current,
+                isStreamingOutput: isStreamingOutputRef.current,
+                coordinatorMode: viewportCoordinatorRef.current.getMode(),
+                scrollTopBefore,
+                scrollTopAfter: el.scrollTop,
+                scrollHeight: el.scrollHeight,
+                clientHeight: el.clientHeight,
+              }),
+            });
           }
         }) as typeof el.scrollTo;
       };
@@ -2654,12 +2863,48 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
       const intentCheckScrollDelta = intentCheckScrollTop - intentCheckPreviousScrollTop;
       const hasRecentUserUpwardIntent = now <= userInitiatedUpwardScrollUntilMsRef.current;
       if (
+        flowChatDiagnostics.isEnabled() &&
+        Math.abs(intentCheckScrollDelta) > COMPENSATION_EPSILON_PX
+      ) {
+        flowChatDiagnostics.trace({
+          hypothesis: 'A',
+          location: 'VirtualMessageList.handleScroll',
+          message: 'Scroller position changed',
+          data: () => ({
+            scrollTop: intentCheckScrollTop,
+            previousScrollTop: intentCheckPreviousScrollTop,
+            scrollDelta: intentCheckScrollDelta,
+            scrollHeight: scrollerElement.scrollHeight,
+            clientHeight: scrollerElement.clientHeight,
+            hasRecentUserUpwardIntent,
+            scrollbarPointerInteractionActive: scrollbarPointerInteractionActiveRef.current,
+            coordinatorMode: viewportCoordinatorRef.current.getMode(),
+            reservation: bottomReservationStateRef.current,
+            isFollowingOutput: isFollowingOutputRef.current,
+            isStreamingOutput: isStreamingOutputRef.current,
+            collapseProtectionActive,
+          }),
+        });
+      }
+      if (
         intentCheckScrollDelta < -COMPENSATION_EPSILON_PX &&
         isFollowingOutputRef.current &&
         isStreamingOutputRef.current &&
         !hasRecentUserUpwardIntent &&
         !collapseProtectionActive
       ) {
+        if (flowChatDiagnostics.isEnabled()) {
+          flowChatDiagnostics.trace({
+            hypothesis: 'D',
+            location: 'VirtualMessageList.handleScroll',
+            message: 'Upward clamp delegated to the streaming follow loop',
+            data: () => ({
+              scrollTop: intentCheckScrollTop,
+              previousScrollTop: intentCheckPreviousScrollTop,
+              scrollDelta: intentCheckScrollDelta,
+            }),
+          });
+        }
         // Follow+streaming: do not inject compensation or restore old
         // scrollTop. Let the follow loop handle the scroll naturally on the
         // next animation frame. Return here to prevent the downstream follow
@@ -2710,6 +2955,18 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     scrollerElement.addEventListener('scroll', handleScroll, { passive: true });
 
     const handleWheel = (event: WheelEvent) => {
+      if (flowChatDiagnostics.isEnabled() && event.deltaY !== 0) {
+        flowChatDiagnostics.trace({
+          hypothesis: 'A',
+          location: 'VirtualMessageList.handleWheel',
+          message: 'Wheel scroll intent observed',
+          data: () => ({
+            deltaY: event.deltaY,
+            scrollTop: scrollerElement.scrollTop,
+            coordinatorMode: viewportCoordinatorRef.current.getMode(),
+          }),
+        });
+      }
       if (event.deltaY !== 0) {
         notifyUserScrollIntent();
         clearTurnPinRequest();
@@ -2737,6 +2994,14 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
       }
 
       if (Math.abs(currentY - startY) > TOUCH_SCROLL_INTENT_EXIT_THRESHOLD_PX) {
+        if (flowChatDiagnostics.isEnabled()) {
+          flowChatDiagnostics.trace({
+            hypothesis: 'A',
+            location: 'VirtualMessageList.handleTouchMove',
+            message: 'Touch scroll intent crossed the exit threshold',
+            data: () => ({ deltaY: currentY - startY, scrollTop: scrollerElement.scrollTop }),
+          });
+        }
         notifyUserScrollIntent();
         clearTurnPinRequest();
         cancelLatestEndAnchorStabilization();
@@ -2762,6 +3027,14 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
       }
 
       notifyUserScrollIntent();
+      if (flowChatDiagnostics.isEnabled()) {
+        flowChatDiagnostics.trace({
+          hypothesis: 'A',
+          location: 'VirtualMessageList.handleKeyDown',
+          message: 'Keyboard scroll intent observed',
+          data: () => ({ key: event.key, scrollTop: scrollerElement.scrollTop }),
+        });
+      }
       clearTurnPinRequest();
       cancelLatestEndAnchorStabilization();
 
@@ -2786,6 +3059,14 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
       }
 
       scrollbarPointerInteractionActiveRef.current = true;
+      if (flowChatDiagnostics.isEnabled()) {
+        flowChatDiagnostics.trace({
+          hypothesis: 'A',
+          location: 'VirtualMessageList.handlePointerDown',
+          message: 'Scrollbar pointer interaction started',
+          data: () => ({ scrollTop: scrollerElement.scrollTop }),
+        });
+      }
       notifyUserScrollIntent();
       clearTurnPinRequest();
       cancelLatestEndAnchorStabilization();
@@ -2807,6 +3088,14 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
       }
 
       clearTurnPinRequest();
+      if (flowChatDiagnostics.isEnabled()) {
+        flowChatDiagnostics.trace({
+          hypothesis: 'A',
+          location: 'VirtualMessageList.handlePointerMove',
+          message: 'Scrollbar pointer interaction moved',
+          data: () => ({ scrollTop: scrollerElement.scrollTop }),
+        });
+      }
       notifyUserScrollIntent();
       cancelLatestEndAnchorStabilization();
       staticInitialHistoryUserLeftBottomRef.current = true;
@@ -2848,6 +3137,28 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
         reason?: string | null;
       }>).detail;
       const previousIntent = pendingCollapseIntentRef.current;
+      if (flowChatDiagnostics.isEnabled()) {
+        flowChatDiagnostics.trace({
+          hypothesis: 'E',
+          location: 'VirtualMessageList.handleToolCardCollapseIntent',
+          message: 'Tool card collapse intent received',
+          data: () => ({
+            reason: detail?.reason ?? null,
+            toolName: detail?.toolName ?? null,
+            cardHeight: detail?.cardHeight ?? null,
+            hasAnchorElement: Boolean(detail?.anchorElement),
+            anchorElementConnected: detail?.anchorElement?.isConnected ?? null,
+            previousIntent,
+            coordinatorMode: viewportCoordinatorRef.current.getMode(),
+            reservation: bottomReservationStateRef.current,
+            scrollTop: scrollerElement.scrollTop,
+            scrollHeight: scrollerElement.scrollHeight,
+            clientHeight: scrollerElement.clientHeight,
+            isFollowingOutput: isFollowingOutputRef.current,
+            isStreamingOutput: isStreamingOutputRef.current,
+          }),
+        });
+      }
       // Coalesce overlapping collapses instead of finalizing the previous
       // intent. Finalizing mid-animation can briefly drop footer protection and
       // flash the pane when several cards compact in the same stream burst.
@@ -2901,13 +3212,30 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
         cumulativeShrinkPx,
       };
       pendingCollapseIntentRef.current = nextIntent;
+      if (flowChatDiagnostics.isEnabled()) {
+        flowChatDiagnostics.trace({
+          hypothesis: 'E',
+          location: 'VirtualMessageList.handleToolCardCollapseIntent',
+          message: 'Tool card collapse reservation calculated',
+          data: () => ({
+            nextIntent,
+            baseTotalCompensationPx,
+            currentTotalCompensationPx,
+            provisionalTotalCompensationPx,
+            effectiveDistanceFromBottom,
+            estimatedShrink,
+            currentScrollTop,
+            previousStableScrollTop,
+            coordinatorMode: viewportCoordinatorRef.current.getMode(),
+          }),
+        });
+      }
       if (provisionalTotalCompensationPx - baseTotalCompensationPx > COMPENSATION_EPSILON_PX) {
         const nextReservationState: BottomReservationState = {
           ...bottomReservationStateRef.current,
           collapse: {
             ...bottomReservationStateRef.current.collapse,
             px: Math.max(0, provisionalTotalCompensationPx - getReservationTotalPx(bottomReservationStateRef.current.pin)),
-            floorPx: 0,
           },
         };
         updateBottomReservationState(nextReservationState);
@@ -3407,6 +3735,24 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
       currentState.pin.mode !== 'transient'
     );
 
+    if (flowChatDiagnostics.isEnabled()) {
+      flowChatDiagnostics.trace({
+        hypothesis: 'A',
+        location: 'VirtualMessageList.clearPinReservationForUserNavigation',
+        message: 'User navigation began pin reservation release',
+        data: () => ({
+          reason,
+          preserveCurrentRange: options?.preserveCurrentRange === true,
+          hasActivePin,
+          reservationBefore: currentState,
+          coordinatorMode: viewportCoordinatorRef.current.getMode(),
+          scrollTop: scroller?.scrollTop ?? null,
+          scrollHeight: scroller?.scrollHeight ?? null,
+          clientHeight: scroller?.clientHeight ?? null,
+        }),
+      });
+    }
+
     clearTurnPinRequest();
     clearPendingStickyPinGrowth(reason);
 
@@ -3414,22 +3760,31 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
       return;
     }
 
-    const nextReservationState: BottomReservationState = {
-      ...currentState,
-      collapse: options?.preserveCurrentRange
-        ? {
-          ...currentState.collapse,
-          px: currentState.collapse.px + currentState.pin.px,
-        }
-        : currentState.collapse,
-      pin: {
-        kind: 'pin',
-        px: 0,
-        floorPx: 0,
-        mode: 'transient',
-        targetTurnId: null,
-      },
-    };
+    const nextReservationState: BottomReservationState = options?.preserveCurrentRange
+      ? transferPinReservationToProtectedCollapse(currentState)
+      : {
+        ...currentState,
+        pin: {
+          kind: 'pin',
+          px: 0,
+          floorPx: 0,
+          mode: 'transient',
+          targetTurnId: null,
+        },
+      };
+    if (flowChatDiagnostics.isEnabled()) {
+      flowChatDiagnostics.trace({
+        hypothesis: 'A',
+        location: 'VirtualMessageList.clearPinReservationForUserNavigation',
+        message: 'Pin reservation released for user navigation',
+        data: () => ({
+          reason,
+          preserveCurrentRange: options?.preserveCurrentRange === true,
+          reservationBefore: currentState,
+          reservationAfter: nextReservationState,
+        }),
+      });
+    }
     updateBottomReservationState(nextReservationState);
     applyFooterCompensationNow(nextReservationState);
 
@@ -3448,6 +3803,18 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
   ]);
 
   exitPinnedViewportForUserIntentRef.current = reason => {
+    if (flowChatDiagnostics.isEnabled()) {
+      flowChatDiagnostics.trace({
+        hypothesis: 'A',
+        location: 'VirtualMessageList.exitPinnedViewportForUserIntent',
+        message: 'User intent exited the pinned viewport',
+        data: () => ({
+          reason,
+          coordinatorModeBefore: viewportCoordinatorRef.current.getMode(),
+          reservationBefore: bottomReservationStateRef.current,
+        }),
+      });
+    }
     viewportCoordinatorRef.current.release(reason);
     clearPinReservationForUserNavigation(reason, { preserveCurrentRange: true });
   };
@@ -3903,7 +4270,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     virtualItems.length,
   ]);
 
-  const maybeHandoffPinnedTurnToTail = useCallback((_reason: string) => {
+  const maybeHandoffPinnedTurnToTail = useCallback((reason: string) => {
     const trackingState = latestTurnAutoFollowStateRef.current;
     if (
       !latestTurnId ||
@@ -3942,10 +4309,31 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
       collapseReservationPx: reservationState.collapse.px,
       hasPendingCollapseIntent,
     })) {
+      if (flowChatDiagnostics.isEnabled()) {
+        flowChatDiagnostics.trace({
+          hypothesis: 'A',
+          location: 'VirtualMessageList.maybeHandoffPinnedTurnToTail',
+          message: 'Pinned item to tail handoff remained blocked',
+          data: () => ({
+            reason,
+            reservation: reservationState,
+            hasPendingCollapseIntent,
+            coordinatorMode: viewportCoordinatorRef.current.getMode(),
+          }),
+        });
+      }
       return false;
     }
 
     if (activateArmedFollowOutput()) {
+      if (flowChatDiagnostics.isEnabled()) {
+        flowChatDiagnostics.trace({
+          hypothesis: 'A',
+          location: 'VirtualMessageList.maybeHandoffPinnedTurnToTail',
+          message: 'Pinned item handed off to tail follow',
+          data: () => ({ reason, reservation: reservationState }),
+        });
+      }
       latestTurnAutoFollowStateRef.current = {
         turnId: null,
         sawPositiveFloor: false,
@@ -3983,6 +4371,19 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
   isStreamingOutputRef.current = isStreamingOutput;
 
   useEffect(() => {
+    if (flowChatDiagnostics.isEnabled()) {
+      flowChatDiagnostics.trace({
+        hypothesis: 'D',
+        location: 'VirtualMessageList.followOutputEffect',
+        message: 'Follow output state synchronized with the viewport coordinator',
+        data: () => ({
+          isFollowingOutput,
+          isStreamingOutput,
+          coordinatorMode: viewportCoordinatorRef.current.getMode(),
+          reservation: bottomReservationStateRef.current,
+        }),
+      });
+    }
     if (isFollowingOutput) {
       viewportCoordinatorRef.current.followTail({ force: true });
       return;

@@ -108,6 +108,7 @@ export interface ModelExchangeTracingConfig {
 export interface AppLoggingConfig {
   level: BackendLogLevel;
   include_sensitive_diagnostics: boolean;
+  flow_chat_diagnostics: boolean;
   model_exchange_tracing: ModelExchangeTracingConfig;
 }
 
@@ -692,6 +693,7 @@ export interface RuntimeLoggingInfo {
   aiLogPath: string;
   flashgrepLogPath: string;
   webviewLogPath: string;
+  flowChatLogPath: string;
   previousUnexpectedExit?: UnexpectedExitInfo | null;
 }
 
