@@ -15,9 +15,8 @@ import { fileIo, fileUri } from '@kit.CoreFileKit';
 import { uniformTypeDescriptor } from '@kit.ArkData';
 import { calendarManager } from '@kit.CalendarKit';
 import { BusinessError } from '@kit.BasicServicesKit';
-import { updateManager } from '@kit.AppGalleryKit';
 import RustModule from 'libbitfun_desktop_lib.so';
-import { AppUpdater } from '../utils/AppUpdater';
+import { AppUpdater, UpdateCheckResult } from '../utils/AppUpdater';
 import { CommonUtils } from '../utils/CommonUtils';
 import { runDeveco } from '../utils/DevecoStart';
 
@@ -82,17 +81,22 @@ export default class EntryAbility extends RustAbility {
       }
     });
     RustModule.registerArktsFunction('check_app_update_ohos', async (err: Error, _arg: string): Promise<string> => {
+      hilog.info(0x0000, 'vnext', 'check_app_update_ohos invoked');
+      let result: UpdateCheckResult;
       try {
-        const checkResult = await updateManager.checkAppUpdate(this.context);
-        if (checkResult.updateAvailable === updateManager.UpdateAvailableCode.LATER_VERSION_EXIST) {
-          await updateManager.showUpdateDialog(this.context);
-          return '{"updateAvailable":true}';
-        }
-        return '{"updateAvailable":false}';
+        result = await this.appUpdater.checkUpdateWithResult(this.context);
       } catch (error) {
-        hilog.error(0x0000, 'vnext', 'check_app_update_ohos error: ' + JSON.stringify(error));
-        return '{"updateAvailable":false,"error":"' + (error.message || 'unknown error') + '"}';
+        let message: string = (error && error.message) ? error.message : 'unexpected error';
+        hilog.error(0x0000, 'vnext', 'check_app_update_ohos unexpected error: ' + JSON.stringify(error));
+        return '{"updateAvailable":false,"error":' + JSON.stringify(message) + '}';
       }
+      hilog.info(0x0000, 'vnext', 'check_app_update_ohos done: updateAvailable=' + result.updateAvailable
+        + ', errorMessage=' + result.errorMessage);
+      if (result.errorMessage.length > 0) {
+        return '{"updateAvailable":' + (result.updateAvailable ? 'true' : 'false')
+          + ',"error":' + JSON.stringify(result.errorMessage) + '}';
+      }
+      return '{"updateAvailable":' + (result.updateAvailable ? 'true' : 'false') + '}';
     });
     RustModule.registerArktsFunction('open_browser', async (err: Error, url: string): Promise<string> => {
       try {
