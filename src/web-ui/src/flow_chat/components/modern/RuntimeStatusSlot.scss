@@ -33,22 +33,10 @@
 
   &--footer &__content {
     width: 100%;
-    max-width: 1200px;
+    max-width: 900px;
     margin: 0 auto;
     padding: 0 var(--flowchat-content-inline-pad);
     box-sizing: border-box;
-  }
-
-  @media (max-width: 1400px) {
-    &--footer &__content {
-      max-width: 1000px;
-    }
-  }
-
-  @media (max-width: 1200px) {
-    &--footer &__content {
-      max-width: 900px;
-    }
   }
 
   @media (max-width: 768px) {

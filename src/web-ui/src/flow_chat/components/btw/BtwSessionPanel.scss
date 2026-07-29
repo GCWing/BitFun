@@ -143,6 +143,9 @@
   }
 
   &__runtime-status .runtime-status-slot__content {
+    width: 100%;
+    max-width: 900px;
+    margin: 0 auto;
     padding: 0 var(--flowchat-content-inline-pad);
     box-sizing: border-box;
   }
