@@ -449,7 +449,10 @@
     "switchSession": "切換會話",
     "create": "建立新會話",
     "more": "更多會話",
-    "restoreMain": "恢復主視窗"
+    "restoreMain": "恢復主視窗",
+    "inUseTitle": "會話已在其他執行個體中開啟",
+    "inUseMessage": "此會話已在另一個 BitFun 執行個體中開啟。請先在該處關閉，然後重試。",
+    "retry": "重試"
   },
   "scroll": {
     "toBottom": "回到底部",

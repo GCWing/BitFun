@@ -1225,6 +1225,25 @@ describe('SessionModule historical session coordination', () => {
     });
   });
 
+  it('does not recreate a session that another BitFun instance is writing', async () => {
+    const { context } = createContext(createSession({
+      isHistorical: false,
+      historyState: 'ready',
+      contextRestoreState: 'pending',
+      dialogTurns: [],
+    } as any));
+    agentApiMocks.ensureCoordinatorSession.mockRejectedValueOnce(
+      new Error('session_in_use: Session is already open for writing: history-1')
+    );
+
+    await expect(ensureBackendSession(context, 'history-1')).rejects.toThrow(
+      'session_in_use:',
+    );
+
+    expect(agentApiMocks.ensureCoordinatorSession).toHaveBeenCalledTimes(1);
+    expect(agentApiMocks.createSession).not.toHaveBeenCalled();
+  });
+
   it('keeps recreate fallback for empty pending context sessions', async () => {
     const { context } = createContext(createSession({
       isHistorical: false,

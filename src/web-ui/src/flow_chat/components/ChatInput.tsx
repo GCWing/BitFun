@@ -58,6 +58,11 @@ import {
   sessionComposerStore,
   type PendingLargePasteMap,
 } from '../store/sessionComposerStore';
+import {
+  failedSubmissionRecoveryTarget,
+  shouldRecordContextMutation,
+  successfulRetryCleanupTarget,
+} from './chatInputDraftRecovery';
 import { startBtwThread } from '../services/BtwThreadService';
 import { runUsageReportCommand } from '../services/usageReportService';
 import { buildImagePayload } from '../utils/imagePayload';
@@ -401,6 +406,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   // Ref so the queuedInput sync effect can read the latest value without it being a dep
   const inputValueRef = useRef('');
   const pendingLargePastesRef = useRef<PendingLargePasteMap>({});
+  const composerMutationRevisionsRef = useRef(new Map<string, number>());
+  const isRestoringSessionDraftRef = useRef(false);
+  const sessionConflictRetryBaselinesRef = useRef(new Map<string, number>());
   const reviewLaunchPendingRef = useRef(false);
   const largePasteCountersRef = useRef<Record<number, number>>({});
   const undoImageStackRef = useRef<string[]>([]);
@@ -449,6 +457,17 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const effectiveTargetSessionIdRef = useRef<string | null>(effectiveTargetSessionId);
   effectiveTargetSessionIdRef.current = effectiveTargetSessionId;
 
+  const markComposerMutation = useCallback(() => {
+    const sessionId = effectiveTargetSessionIdRef.current;
+    if (!sessionId) return;
+    const revisions = composerMutationRevisionsRef.current;
+    revisions.set(sessionId, (revisions.get(sessionId) ?? 0) + 1);
+  }, []);
+  const composerMutationRevision = useCallback(
+    (sessionId: string) => composerMutationRevisionsRef.current.get(sessionId) ?? 0,
+    [],
+  );
+
   useComposerDefaultFocus({
     editorRef: richTextInputRef,
     sessionId: effectiveTargetSessionId,
@@ -460,6 +479,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       || (action.type === 'CLEAR_VALUE' && inputValueRef.current !== '');
     if (changesValue) {
       nativePromptModeSelectionGenerationRef.current += 1;
+      markComposerMutation();
     }
     dispatchLocalInput(action);
 
@@ -475,7 +495,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       inputValueRef.current = '';
       sessionComposerStore.getState().setValue(sessionId, '');
     }
-  }, []);
+  }, [markComposerMutation]);
   const effectiveTargetSession = effectiveTargetSessionId
     ? flowChatState.sessions.get(effectiveTargetSessionId)
     : undefined;
@@ -1093,23 +1113,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     setHistoryIndex(-1);
   }, [effectiveTargetSessionId]);
   
-  const { sendMessage } = useMessageSender({
-    currentSessionId: effectiveTargetSessionId || undefined,
-    contexts,
-    onClearContexts: clearContexts,
-    onSuccess: onSendMessage,
-    currentAgentType: resolveChatInputSendAgentType({
-      isSubagentTarget: isSubagentInputTarget,
-      subagentType: effectiveTargetSession?.subagentType,
-      sessionMode: effectiveTargetSession?.mode,
-      acpTargetAgentType,
-      // Composer mode is authoritative for normal sessions (synced from session
-      // on switch, updated in applyModeChange). Subagent continuations keep the
-      // child session's own agent type instead of inheriting the parent composer.
-      composerMode: modeState.current,
-    }),
-  });
-
   const modeInfoById = useMemo(
     () => new Map(modeState.available.map(mode => [mode.id, mode])),
     [modeState.available],
@@ -1557,7 +1560,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     dispatchLocalInput({ type: 'SET_VALUE', payload: nextValue });
     inputValueRef.current = nextValue;
     pendingLargePastesRef.current = { ...nextPendingLargePastes };
-    replaceContexts(nextContexts);
+    isRestoringSessionDraftRef.current = true;
+    try {
+      replaceContexts(nextContexts);
+    } finally {
+      isRestoringSessionDraftRef.current = false;
+    }
     setHistoryIndex(-1);
     setSavedDraft('');
     setMentionState({ isActive: false, query: '', startOffset: 0 });
@@ -1576,7 +1584,15 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   }, [effectiveTargetSessionId, replaceContexts]);
 
   useEffect(() => {
+    let previousContexts = useContextStore.getState().contexts;
     const unsubscribe = useContextStore.subscribe((state) => {
+      if (shouldRecordContextMutation(
+        state.contexts !== previousContexts,
+        isRestoringSessionDraftRef.current,
+      )) {
+        markComposerMutation();
+      }
+      previousContexts = state.contexts;
       const sessionId = effectiveTargetSessionIdRef.current;
       if (sessionId) {
         sessionComposerStore.getState().setContexts(sessionId, state.contexts);
@@ -1593,21 +1609,87 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       }
       unsubscribe();
     };
-  }, []);
+  }, [markComposerMutation]);
 
   const replacePendingLargePastes = useCallback((pendingLargePastes: PendingLargePasteMap) => {
     const nextPendingLargePastes = { ...pendingLargePastes };
+    const previousPendingLargePastes = pendingLargePastesRef.current;
+    const previousKeys = Object.keys(previousPendingLargePastes);
+    const nextKeys = Object.keys(nextPendingLargePastes);
+    if (
+      previousKeys.length !== nextKeys.length ||
+      nextKeys.some(key => previousPendingLargePastes[key] !== nextPendingLargePastes[key])
+    ) {
+      markComposerMutation();
+    }
     pendingLargePastesRef.current = nextPendingLargePastes;
 
     const sessionId = effectiveTargetSessionIdRef.current;
     if (sessionId) {
       sessionComposerStore.getState().setPendingLargePastes(sessionId, nextPendingLargePastes);
     }
-  }, []);
+  }, [markComposerMutation]);
 
   const clearPendingLargePastes = useCallback(() => {
     replacePendingLargePastes({});
   }, [replacePendingLargePastes]);
+
+  const { sendMessage } = useMessageSender({
+    currentSessionId: effectiveTargetSessionId || undefined,
+    contexts,
+    onClearContexts: clearContexts,
+    onSuccess: onSendMessage,
+    onSessionConflictRetryStart: ({ sessionId }) => {
+      sessionConflictRetryBaselinesRef.current.set(
+        sessionId,
+        composerMutationRevision(sessionId),
+      );
+    },
+    onSessionConflictRetrySuccess: ({ sessionId, message, contextIds }) => {
+      const baselineRevision = sessionConflictRetryBaselinesRef.current.get(sessionId);
+      sessionConflictRetryBaselinesRef.current.delete(sessionId);
+      const isCurrentSession = effectiveTargetSessionIdRef.current === sessionId;
+      const draft = isCurrentSession
+        ? {
+            value: inputValueRef.current,
+            contexts: contextsRef.current,
+          }
+        : sessionComposerStore.getState().getDraft(sessionId);
+      const cleanupTarget = baselineRevision !== undefined
+        ? successfulRetryCleanupTarget(
+            sessionId,
+            effectiveTargetSessionIdRef.current,
+            baselineRevision,
+            composerMutationRevision(sessionId),
+            draft.value,
+            draft.contexts.map(context => context.id),
+            message,
+            contextIds,
+          )
+        : 'none';
+
+      if (cleanupTarget === 'current') {
+        clearContexts();
+        clearPendingLargePastes();
+        dispatchInput({ type: 'CLEAR_VALUE' });
+        setQueuedInput(null);
+        dispatchInput({ type: 'DEACTIVATE' });
+      } else if (cleanupTarget === 'stored') {
+        sessionComposerStore.getState().clearDraft(sessionId);
+      }
+      onSendMessage?.(message);
+    },
+    currentAgentType: resolveChatInputSendAgentType({
+      isSubagentTarget: isSubagentInputTarget,
+      subagentType: effectiveTargetSession?.subagentType,
+      sessionMode: effectiveTargetSession?.mode,
+      acpTargetAgentType,
+      // Composer mode is authoritative for normal sessions (synced from session
+      // on switch, updated in applyModeChange). Subagent continuations keep the
+      // child session's own agent type instead of inheriting the parent composer.
+      composerMode: modeState.current,
+    }),
+  });
 
   const consumedRegisteredDraftRef = useRef<{
     registrationId?: string;
@@ -3689,6 +3771,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     if (!draftTrimmed) return;
     
     const originalMessage = draftTrimmed;
+    const submissionSessionId = effectiveTargetSessionId;
     const composerPresentation = messageOverride === undefined
       ? richTextInputRef.current?.getComposerPresentation?.() ?? null
       : null;
@@ -3837,6 +3920,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     clearPendingLargePastes();
     // Clear machine queue too; otherwise the queuedInput→input sync effect puts the text back after send.
     setQueuedInput(null);
+    const clearedComposerRevision = submissionSessionId
+      ? composerMutationRevision(submissionSessionId)
+      : 0;
 
     try {
       const transport = await submitThroughChatInputRegistration(
@@ -3864,11 +3950,23 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       dispatchInput({ type: 'DEACTIVATE' });
     } catch (error) {
       log.error('Failed to send message', { error });
-      replacePendingLargePastes(originalPendingLargePastes);
-      dispatchInput({ type: 'ACTIVATE' });
-      dispatchInput({ type: 'SET_VALUE', payload: originalMessage });
-      if (derivedState?.isProcessing) {
-        setQueuedInput(originalMessage);
+      const recoveryTarget = failedSubmissionRecoveryTarget(
+        submissionSessionId,
+        effectiveTargetSessionIdRef.current,
+        clearedComposerRevision,
+        submissionSessionId ? composerMutationRevision(submissionSessionId) : 0,
+      );
+      if (recoveryTarget === 'current') {
+        replacePendingLargePastes(originalPendingLargePastes);
+        dispatchInput({ type: 'ACTIVATE' });
+        dispatchInput({ type: 'SET_VALUE', payload: originalMessage });
+        if (derivedState?.isProcessing) {
+          setQueuedInput(originalMessage);
+        }
+      } else if (recoveryTarget === 'stored' && submissionSessionId) {
+        const composer = sessionComposerStore.getState();
+        composer.setValue(submissionSessionId, originalMessage);
+        composer.setPendingLargePastes(submissionSessionId, originalPendingLargePastes);
       }
     }
   }, [
@@ -3907,6 +4005,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     resolveTypedMcpPromptCommand,
     submitExternalPromptCommandFromInput,
     usesDispatchTransport,
+    composerMutationRevision,
   ]);
   
   const getFilteredIncrementalModes = useCallback(() => {

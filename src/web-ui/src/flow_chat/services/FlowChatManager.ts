@@ -661,6 +661,8 @@ export class FlowChatManager {
       preserveTurnOnStartError?: boolean;
       /** One-shot UI confirmation for unattended auto approval. */
       dispatchAutoConfirmed?: boolean;
+      onSessionConflictRetryStart?: () => void;
+      onSessionConflictRetrySuccess?: () => void;
     }
   ): Promise<void> {
     const targetSessionId = sessionId || this.context.flowChatStore.getState().activeSessionId;

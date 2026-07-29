@@ -449,7 +449,10 @@
     "switchSession": "Switch Session",
     "create": "Create New Session",
     "more": "More Sessions",
-    "restoreMain": "Restore Main Window"
+    "restoreMain": "Restore Main Window",
+    "inUseTitle": "Session open elsewhere",
+    "inUseMessage": "This session is open in another BitFun instance. Close it there, then retry.",
+    "retry": "Retry"
   },
   "scroll": {
     "toBottom": "Back to bottom",

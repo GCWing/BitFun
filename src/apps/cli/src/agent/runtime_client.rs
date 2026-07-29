@@ -31,18 +31,20 @@ use bitfun_runtime_ports::{
 };
 
 use crate::actions::SHARED_TUI_EMBEDDED_HANDOFF;
+use crate::diagnostics::with_session_conflict_help;
 use crate::runtime::approval::{approval_metadata, CliApprovalPolicy};
 use crate::runtime::CliRuntimeContext;
 
 fn shared_restore_error(error: RuntimeIpcClientError) -> anyhow::Error {
-    if matches!(&error, RuntimeIpcClientError::Remote(remote) if remote.code == RuntimeIpcErrorCode::FrameTooLarge)
+    let error = if matches!(&error, RuntimeIpcClientError::Remote(remote) if remote.code == RuntimeIpcErrorCode::FrameTooLarge)
     {
         anyhow::anyhow!(
             "Session history is too large for Shared TUI. {SHARED_TUI_EMBEDDED_HANDOFF}."
         )
     } else {
-        error.into()
-    }
+        anyhow::Error::new(error)
+    };
+    with_session_conflict_help(error)
 }
 
 fn validated_session_summary(
@@ -413,7 +415,8 @@ impl CliAgentRuntimeClient {
                     })
                     .await
                     .map(|restored| restored.session)
-                    .map_err(|error| anyhow::anyhow!(error.into_message()))?;
+                    .map_err(anyhow::Error::new)
+                    .map_err(with_session_conflict_help)?;
                 let transcript = runtime
                     .read_session_transcript(SessionTranscriptRequest {
                         session_id: session_id.to_string(),
@@ -650,7 +653,8 @@ impl CliAgentRuntimeClient {
                 },
             )
             .await
-            .map_err(|error| anyhow::anyhow!(error.into_message()))?;
+            .map_err(anyhow::Error::new)
+            .map_err(with_session_conflict_help)?;
 
         tracing::info!("Recreated backend session with existing id: {}", session_id);
         Ok(())
@@ -677,7 +681,6 @@ impl CliAgentRuntimeClient {
             }
             Err(error) => {
                 let session_not_found = Self::is_session_not_found_error(&error);
-                let message = error.into_message();
                 if session_not_found {
                     tracing::warn!(
                         "Session is unavailable, recreating backend session: {}",
@@ -685,7 +688,7 @@ impl CliAgentRuntimeClient {
                     );
                     self.recreate_session_with_id(session_id, agent_type).await
                 } else {
-                    Err(anyhow::anyhow!(message))
+                    Err(with_session_conflict_help(anyhow::Error::new(error)))
                 }
             }
         }
@@ -718,7 +721,8 @@ impl CliAgentRuntimeClient {
                 },
             )
             .await
-            .map_err(|error| anyhow::anyhow!(error.into_message()))?;
+            .map_err(anyhow::Error::new)
+            .map_err(with_session_conflict_help)?;
 
         let id = session.session_id.clone();
         *session_id_guard = Some(id.clone());

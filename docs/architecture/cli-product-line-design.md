@@ -228,14 +228,14 @@ CLI-P1 应保证：
 | 模式 | 当前约束 |
 |---|---|
 | `text` | 最终助手文本写 stdout；进度、思考、工具状态、日志和诊断写 stderr。显式 `--output-patch -` 是用户选择的额外 stdout 内容。 |
-| `json` | stdout 只写一个结果对象，包含 `type=result`、`subtype`、`is_error`、`result`，以及已建立时的 `session_id`/`turn_id`、本 turn 累计 `usage` 和可用的 `patch`。 |
-| `stream-json` | 每行直接序列化一个现有 Agent 事件对象；不增加 `schema_version`、`sequence` 或第二套 CLI 事件分类。 |
+| `json` | stdout 只写一个结果对象，包含 `type=result`、`subtype`、`is_error`、`result`，以及已建立时的 `session_id`/`turn_id`、本 turn 累计 `usage` 和可用的 `patch`。准备 Session 时若命中跨进程单写冲突，额外返回稳定的 `error_code=session_in_use`；其他错误不猜测分类。 |
+| `stream-json` | 每行直接序列化一个现有 Agent 事件对象；不增加 `schema_version`、`sequence` 或第二套 CLI 事件分类。准备 Session 时若命中单写冲突，复用 `SystemError`，令 `error=session_in_use`、`recoverable=true`。 |
 | 最终状态 | 精确结算和 Patch 交付完成后只发布一次。优先级是：结算失败、Patch 失败、Turn 结果；前两类统一替换为 `SystemError`。一次执行最多发布一个最终事件和一条 `BITFUN_EXIT` 分类。 |
 | 事件范围 | 只输出本次 session/turn 的事件，以及与其明确关联的 subagent link/tool 事件；同 session 的其他并发 turn 不得混入。 |
 | Patch | `json` 可把 `--output-patch -` 放入最终对象；`stream-json` 要求显式文件路径。Patch 是写出显式 Patch 文件前捕获的仓库 `HEAD` 相对工作区快照，包含 staged、unstaged、untracked 及命令启动前已有改动，不包含输出 artifact 本身，也不表达改动归因。 |
 | 权限 | 非交互默认拒绝并返回权限失败；`--auto` 只改变当前提交策略，不修改持久化配置。 |
 | 人工输入 | 非交互 `exec` 不暴露 `AskUserQuestion`；调用方必须在初始输入中提供完整上下文。该事实沿 Task、SessionMessage 及其自动回复链传播，避免子 Agent 或后续 turn 等待不存在的 stdin 处理器。 |
-| 终止 | 最终事件的 `success=false` 不能映射为成功。`Ctrl+C` 只请求取消；若取消与完成/失败竞争，以实际观察结果为准。到期限仍无最终事件时发布 `SystemError` 并非零退出；只有实际取消使用 `BITFUN_EXIT: cancelled:`。当前不公开 Agent Turn 总时限参数。 |
+| 终止 | 最终事件的 `success=false` 不能映射为成功。`Ctrl+C` 只请求取消；若取消与完成/失败竞争，以实际观察结果为准。到期限仍无最终事件时发布 `SystemError` 并非零退出；只有实际取消使用 `BITFUN_EXIT: cancelled:`。`session_in_use` 同样非零退出，`recoverable` 仅表示关闭另一 writer 后可重新执行，不触发自动重试。当前不公开 Agent Turn 总时限参数。 |
 
 CLI 不提供 `--output-schema v1`。Codex/Claude 同类参数表达的是调用方提供的 JSON Schema，用于约束最终模型
 响应，不是协议版本选择；如未来支持，应复用该语义并独立设计，不能借此重定义事件对象。

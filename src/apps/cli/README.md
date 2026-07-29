@@ -93,8 +93,8 @@ This command is TUI-only and does not change the non-interactive `exec` contract
 | Format | stdout contract |
 |---|---|
 | `text` | Assistant text. Progress, tool status, logs, and diagnostics use stderr. |
-| `json` | One final result object with status and result, plus session/turn identity once established, turn-accumulated usage, and available Patch facts. |
-| `stream-json` | JSONL containing existing Agent event values; no separate CLI event schema. |
+| `json` | One final result object with status and result, plus session/turn identity once established, turn-accumulated usage, and available Patch facts. A Session writer conflict adds `error_code: "session_in_use"`. |
+| `stream-json` | JSONL containing existing Agent event values; no separate CLI event schema. A Session writer conflict reuses `SystemError` with `error: "session_in_use"` and `recoverable: true`. |
 
 Select a format with `--output-format text|json|stream-json`. When `--output-patch -` is used with
 `json`, the Patch is included in the final object. For `stream-json`, write the Patch to an explicit
@@ -107,6 +107,10 @@ attribute changes to this invocation.
 returning. Cancellation, an unsuccessful completion event,
 and a requested Patch that cannot be generated or written are error outcomes. An explicit Patch
 file is created even when the diff is empty.
+
+If another BitFun process is writing the requested Session, `exec` exits non-zero without waiting
+or taking over. Close that Session in the other instance and run the command again. `recoverable`
+describes that later retry; it does not mean the current command retries automatically.
 
 `doctor` and `health` validate product assembly and required capability registrations. They are not
 live probes for Network, Git, or MCP integrations that are currently represented by compatibility

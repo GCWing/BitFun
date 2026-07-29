@@ -24,6 +24,7 @@ use bitfun_core::service::session::{DialogTurnData, SessionMetadata, SessionStat
 use bitfun_core::service::session_usage::SessionUsageReport;
 use bitfun_core::service::token_usage::TokenUsageService;
 use bitfun_core::service::workspace::WorkspaceService;
+use bitfun_core::util::errors::BitFunError;
 use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
 
@@ -58,9 +59,20 @@ pub(crate) enum DesktopSessionApplicationError {
     Runtime(String),
     #[error("{0}")]
     RestoreBeforeRename(String),
+    #[error("session_in_use: {0}")]
+    SessionInUse(String),
 }
 
 pub(crate) type DesktopSessionApplicationResult<T> = Result<T, DesktopSessionApplicationError>;
+
+fn desktop_core_session_error(error: BitFunError) -> DesktopSessionApplicationError {
+    match error {
+        BitFunError::SessionInUse { session_id } => DesktopSessionApplicationError::SessionInUse(
+            format!("Session is already open for writing: {session_id}"),
+        ),
+        error => DesktopSessionApplicationError::Core(error.to_string()),
+    }
+}
 
 #[derive(Debug)]
 pub(crate) struct DesktopSessionViewRestore {
@@ -541,7 +553,7 @@ impl DesktopSessionApplication {
         self.compatibility
             .ensure_session_loaded_from_storage_path(&storage_path, session_id, include_internal)
             .await
-            .map_err(|error| DesktopSessionApplicationError::Core(error.to_string()))
+            .map_err(desktop_core_session_error)
     }
 
     pub(crate) async fn restore_session(
@@ -556,7 +568,7 @@ impl DesktopSessionApplication {
         self.compatibility
             .restore_session_from_storage_path(&storage_path, session_id, include_internal)
             .await
-            .map_err(|error| DesktopSessionApplicationError::Core(error.to_string()))
+            .map_err(desktop_core_session_error)
     }
 
     pub(crate) async fn restore_session_view<F>(
@@ -625,7 +637,7 @@ impl DesktopSessionApplication {
                 include_internal,
             )
             .await
-            .map_err(|error| DesktopSessionApplicationError::Core(error.to_string()))?;
+            .map_err(desktop_core_session_error)?;
         Ok(DesktopSessionWithTurnsRestore { session, turns })
     }
 }
@@ -706,6 +718,23 @@ mod tests {
     use bitfun_core::service::session::{SessionKind, SessionMemoryMode};
     use serde_json::json;
     use std::sync::Mutex;
+
+    #[test]
+    fn session_writer_conflict_keeps_a_stable_desktop_transport_code() {
+        let error =
+            desktop_core_session_error(bitfun_core::util::errors::BitFunError::SessionInUse {
+                session_id: "session-1".to_string(),
+            });
+
+        assert!(matches!(
+            error,
+            DesktopSessionApplicationError::SessionInUse(_)
+        ));
+        assert_eq!(
+            error.to_string(),
+            "session_in_use: Session is already open for writing: session-1"
+        );
+    }
 
     struct RecordingDeletePort {
         events: Arc<Mutex<Vec<&'static str>>>,

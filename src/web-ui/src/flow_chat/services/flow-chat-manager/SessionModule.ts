@@ -6,6 +6,7 @@
 import { agentAPI } from '@/infrastructure/api/service-api/AgentAPI';
 import { configAPI } from '@/infrastructure/api/service-api/ConfigAPI';
 import { sessionAPI } from '@/infrastructure/api/service-api/SessionAPI';
+import { isSessionInUseError } from '@/infrastructure/api/errors/TauriCommandError';
 import { notificationService } from '../../../shared/notification-system';
 import { createLogger } from '@/shared/utils/logger';
 import { isRemoteTraceContext, startupTrace } from '@/shared/utils/startupTrace';
@@ -1312,6 +1313,9 @@ export async function ensureBackendSession(
 
     await ensureCoordinator();
   } catch (e: any) {
+    if (isSessionInUseError(e)) {
+      throw e;
+    }
     if (!allowRecreateOnCoordinatorFailure) {
       const raw = typeof e?.message === 'string' ? e.message : String(e);
       const hint =

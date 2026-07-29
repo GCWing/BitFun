@@ -29,8 +29,45 @@ import { dispatchApi } from '@/features/dispatch/dispatchApi';
 import { dispatchJobStore } from '@/features/dispatch/dispatchJobStore';
 import { requestDispatchJobRefresh } from '@/features/dispatch/DispatchJobObserver';
 import { isNonLocalDispatchTarget } from '@/features/dispatch/types';
+import { isSessionInUseError } from '@/infrastructure/api/errors/TauriCommandError';
+import { i18nService } from '@/infrastructure/i18n';
 
 const log = createLogger('MessageModule');
+
+interface SessionConflictRetry {
+  notificationId: string;
+  active: boolean;
+  inFlight: boolean;
+}
+
+const sessionConflictRetries = new Map<string, SessionConflictRetry>();
+const latestSendBySession = new Map<string, symbol>();
+
+function clearSessionConflictRetry(sessionId: string): void {
+  const current = sessionConflictRetries.get(sessionId);
+  if (!current) return;
+  current.active = false;
+  sessionConflictRetries.delete(sessionId);
+  notificationService.dismiss(current.notificationId);
+}
+
+function beginSessionSend(sessionId: string): symbol {
+  const attempt = Symbol(sessionId);
+  latestSendBySession.set(sessionId, attempt);
+  clearSessionConflictRetry(sessionId);
+  return attempt;
+}
+
+function completeSessionSend(
+  sessionId: string,
+  attempt: symbol,
+  retrySuccess?: () => void,
+): void {
+  if (latestSendBySession.get(sessionId) !== attempt) return;
+  latestSendBySession.delete(sessionId);
+  clearSessionConflictRetry(sessionId);
+  retrySuccess?.();
+}
 
 function acpClientIdFromMode(mode: string | undefined): string | null {
   const value = mode?.trim();
@@ -146,12 +183,16 @@ export async function sendMessage(
     preserveTurnOnStartError?: boolean;
     /** One-shot UI confirmation for unattended auto approval. Never persist this flag. */
     dispatchAutoConfirmed?: boolean;
+    onSessionConflictRetryStart?: () => void;
+    onSessionConflictRetrySuccess?: () => void;
+    fromSessionConflictRetry?: boolean;
   }
 ): Promise<void> {
   const session = context.flowChatStore.getState().sessions.get(sessionId);
   if (!session) {
     throw new Error(`Session does not exist: ${sessionId}`);
   }
+  const sendAttempt = beginSessionSend(sessionId);
 
   if (!options?.bypassPendingQueue) {
     const machineState = stateMachineManager.getCurrentState(sessionId);
@@ -186,6 +227,13 @@ export async function sendMessage(
         });
         throw error;
       }
+      completeSessionSend(
+        sessionId,
+        sendAttempt,
+        options?.fromSessionConflictRetry
+          ? options.onSessionConflictRetrySuccess
+          : undefined,
+      );
       return;
     }
   }
@@ -281,6 +329,13 @@ export async function sendMessage(
       });
       context.flowChatStore.updateSessionLastSubmittedMode(sessionId, currentAgentType);
       requestDispatchJobRefresh(jobId);
+      completeSessionSend(
+        sessionId,
+        sendAttempt,
+        options?.fromSessionConflictRetry
+          ? options.onSessionConflictRetrySuccess
+          : undefined,
+      );
       return;
     }
 
@@ -454,6 +509,13 @@ export async function sendMessage(
     if (sessionStateMachine) {
       sessionStateMachine.getContext().taskId = sessionId;
     }
+    completeSessionSend(
+      sessionId,
+      sendAttempt,
+      options?.fromSessionConflictRetry
+        ? options.onSessionConflictRetrySuccess
+        : undefined,
+    );
 
   } catch (error) {
     log.error('Failed to send message', { sessionId: sessionId, error });
@@ -461,7 +523,13 @@ export async function sendMessage(
     const errorMessage = error instanceof Error ? error.message : 'Failed to send message';
     
     const currentState = stateMachineManager.getCurrentState(sessionId);
-    if (currentState === SessionExecutionState.PROCESSING) {
+    const activeDialogTurnId = stateMachineManager
+      .get(sessionId)
+      ?.getContext().currentDialogTurnId;
+    const ownsProcessingTurn =
+      createdLocalTurnId !== null &&
+      activeDialogTurnId === createdLocalTurnId;
+    if (currentState === SessionExecutionState.PROCESSING && ownsProcessingTurn) {
       await stateMachineManager.transition(sessionId, SessionExecutionEvent.ERROR_OCCURRED, {
         error: errorMessage
       });
@@ -475,10 +543,58 @@ export async function sendMessage(
     }
     
     if (!options?.preserveTurnOnStartError) {
-      notificationService.error(errorMessage, {
-        title: 'Thinking process error',
-        duration: 5000
-      });
+      if (isSessionInUseError(error)) {
+        if (latestSendBySession.get(sessionId) !== sendAttempt) {
+          throw error;
+        }
+        clearSessionConflictRetry(sessionId);
+        const retry: SessionConflictRetry = {
+          notificationId: '',
+          active: true,
+          inFlight: false,
+        };
+        retry.notificationId = notificationService.error(
+          i18nService.t('flow-chat:session.inUseMessage'), {
+          title: i18nService.t('flow-chat:session.inUseTitle'),
+          duration: 0,
+          actions: [{
+            label: i18nService.t('flow-chat:session.retry'),
+            variant: 'primary',
+            onClick: () => {
+              if (
+                !retry.active ||
+                retry.inFlight ||
+                sessionConflictRetries.get(sessionId) !== retry
+              ) {
+                return;
+              }
+              retry.inFlight = true;
+              options?.onSessionConflictRetryStart?.();
+              void sendMessage(
+                context,
+                message,
+                sessionId,
+                displayMessage,
+                agentType,
+                switchToMode,
+                { ...options, fromSessionConflictRetry: true },
+              )
+                .catch(() => undefined);
+            },
+          }],
+        });
+        sessionConflictRetries.set(sessionId, retry);
+      } else {
+        if (latestSendBySession.get(sessionId) === sendAttempt) {
+          latestSendBySession.delete(sessionId);
+          notificationService.error(errorMessage, {
+            title: 'Thinking process error',
+            duration: 5000
+          });
+        }
+      }
+    } else if (latestSendBySession.get(sessionId) === sendAttempt) {
+      latestSendBySession.delete(sessionId);
     }
     
     throw error;
