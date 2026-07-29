@@ -338,6 +338,35 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
     ("delete_session", RemoteWorkspacePolicy::LegacyUnaudited),
     ("delete_skill", RemoteWorkspacePolicy::LegacyUnaudited),
     ("delete_subagent", RemoteWorkspacePolicy::LegacyUnaudited),
+    // Detached dispatch is routed by its own immutable target and observer
+    // index, never by the currently open workspace.
+    ("dispatch_cancel", RemoteWorkspacePolicy::WorkspaceAgnostic),
+    (
+        "dispatch_install_cli_cancel",
+        RemoteWorkspacePolicy::WorkspaceAgnostic,
+    ),
+    (
+        "dispatch_install_cli_poll",
+        RemoteWorkspacePolicy::WorkspaceAgnostic,
+    ),
+    (
+        "dispatch_install_cli_start",
+        RemoteWorkspacePolicy::WorkspaceAgnostic,
+    ),
+    (
+        "dispatch_list_jobs",
+        RemoteWorkspacePolicy::WorkspaceAgnostic,
+    ),
+    (
+        "dispatch_list_targets",
+        RemoteWorkspacePolicy::WorkspaceAgnostic,
+    ),
+    (
+        "dispatch_probe_target",
+        RemoteWorkspacePolicy::WorkspaceAgnostic,
+    ),
+    ("dispatch_status", RemoteWorkspacePolicy::WorkspaceAgnostic),
+    ("dispatch_submit", RemoteWorkspacePolicy::WorkspaceAgnostic),
     (
         "dismiss_announcement",
         RemoteWorkspacePolicy::WorkspaceAgnostic,

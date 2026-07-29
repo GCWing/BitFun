@@ -1,0 +1,268 @@
+// @vitest-environment jsdom
+
+import React, { act } from 'react';
+import { createRoot, type Root } from 'react-dom/client';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { DispatchInstallDialog } from './DispatchInstallDialog';
+import type { DispatchInstallStart } from './types';
+
+globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+
+const mocks = vi.hoisted(() => ({
+  probeTarget: vi.fn(),
+  installCliStart: vi.fn(),
+  installCliPoll: vi.fn(),
+  installCliCancel: vi.fn(),
+  confirmWarning: vi.fn(),
+  modalOnClose: null as (() => void) | null,
+  modalLifecycleProps: null as {
+    closeOnOverlayClick?: boolean;
+    showCloseButton?: boolean;
+  } | null,
+}));
+
+vi.mock('./dispatchApi', () => ({
+  dispatchApi: {
+    probeTarget: mocks.probeTarget,
+    installCliStart: mocks.installCliStart,
+    installCliPoll: mocks.installCliPoll,
+    installCliCancel: mocks.installCliCancel,
+  },
+}));
+
+vi.mock('@/infrastructure/i18n', () => ({
+  useI18n: () => ({
+    t: (key: string) => key,
+  }),
+}));
+
+vi.mock('@/component-library', () => ({
+  Alert: ({ message }: { message: string }) => <div role="alert">{message}</div>,
+  Button: ({
+    children,
+    disabled,
+    onClick,
+  }: React.PropsWithChildren<{
+    disabled?: boolean;
+    onClick?: React.MouseEventHandler<HTMLButtonElement>;
+  }>) => (
+    <button type="button" disabled={disabled} onClick={onClick}>
+      {children}
+    </button>
+  ),
+  Input: ({
+    disabled,
+    onChange,
+    onKeyDown,
+    placeholder,
+    value,
+  }: {
+    disabled?: boolean;
+    onChange?: React.ChangeEventHandler<HTMLInputElement>;
+    onKeyDown?: React.KeyboardEventHandler<HTMLInputElement>;
+    placeholder?: string;
+    value?: string;
+  }) => (
+    <input
+      disabled={disabled}
+      onChange={onChange}
+      onKeyDown={onKeyDown}
+      placeholder={placeholder}
+      value={value}
+    />
+  ),
+  Modal: ({
+    children,
+    closeOnOverlayClick,
+    isOpen,
+    onClose,
+    showCloseButton,
+  }: React.PropsWithChildren<{
+    closeOnOverlayClick?: boolean;
+    isOpen: boolean;
+    onClose: () => void;
+    showCloseButton?: boolean;
+  }>) => {
+    mocks.modalOnClose = onClose;
+    mocks.modalLifecycleProps = {
+      closeOnOverlayClick,
+      showCloseButton,
+    };
+    return isOpen ? <div>{children}</div> : null;
+  },
+  confirmWarning: mocks.confirmWarning,
+}));
+
+function createDeferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((nextResolve, nextReject) => {
+    resolve = nextResolve;
+    reject = nextReject;
+  });
+  return { promise, reject, resolve };
+}
+
+describe('DispatchInstallDialog installation lifecycle', () => {
+  let container: HTMLDivElement;
+  let root: Root;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.modalOnClose = null;
+    mocks.modalLifecycleProps = null;
+    mocks.probeTarget.mockResolvedValue({
+      cliInstalled: false,
+      os: 'linux',
+      arch: 'x86_64',
+      installSupported: true,
+      release: {
+        version: '1.2.3',
+        target: 'x86_64-unknown-linux-gnu',
+        url: 'https://example.test/bitfun',
+        sha256: 'abc123',
+      },
+    });
+    mocks.confirmWarning.mockResolvedValue(true);
+    mocks.installCliCancel.mockResolvedValue(undefined);
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+  });
+
+  afterEach(() => {
+    act(() => root.unmount());
+    container.remove();
+  });
+
+  it('cancels a late installer acknowledgement after the dialog closes during start', async () => {
+    const start = createDeferred<DispatchInstallStart>();
+    mocks.installCliStart.mockReturnValue(start.promise);
+    const onClose = vi.fn();
+
+    await act(async () => {
+      root.render(
+        <DispatchInstallDialog
+          open
+          target={{
+            kind: 'ssh',
+            connectionId: 'ssh-1',
+            displayName: 'build-host',
+          }}
+          onClose={onClose}
+          onReady={vi.fn()}
+        />,
+      );
+      await Promise.resolve();
+    });
+
+    const installButton = Array.from(container.querySelectorAll('button'))
+      .find(button => button.textContent?.includes('dispatch.installConfirm'));
+    expect(installButton).toBeDefined();
+
+    await act(async () => {
+      installButton?.click();
+      await Promise.resolve();
+    });
+    expect(mocks.installCliStart).toHaveBeenCalledTimes(1);
+    expect(mocks.modalLifecycleProps).toEqual({
+      closeOnOverlayClick: false,
+      showCloseButton: false,
+    });
+    const cancelButton = Array.from(container.querySelectorAll('button'))
+      .find(button => button.textContent === 'dispatch.cancel');
+    expect(cancelButton?.disabled).toBe(true);
+
+    await act(async () => {
+      mocks.modalOnClose?.();
+      await Promise.resolve();
+    });
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(mocks.installCliCancel).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      start.resolve({
+        scriptPath: '/tmp/install-bitfun.sh',
+        version: '1.2.3',
+        target: 'x86_64-unknown-linux-gnu',
+        url: 'https://example.test/bitfun',
+        sha256: 'abc123',
+      });
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(mocks.installCliCancel).toHaveBeenCalledTimes(2);
+    expect(mocks.installCliCancel).toHaveBeenLastCalledWith('ssh-1');
+    expect(mocks.installCliPoll).not.toHaveBeenCalled();
+    expect(container.querySelector('pre')).toBeNull();
+  });
+
+  it('cancels an acknowledged installer when the parent closes the dialog during polling', async () => {
+    const poll = createDeferred<{
+      cursor: number;
+      output: string;
+      status: 'running';
+    }>();
+    mocks.installCliStart.mockResolvedValue({
+      scriptPath: '/tmp/install-bitfun.sh',
+      version: '1.2.3',
+      target: 'x86_64-unknown-linux-gnu',
+      url: 'https://example.test/bitfun',
+      sha256: 'abc123',
+    });
+    mocks.installCliPoll.mockReturnValue(poll.promise);
+    const target = {
+      kind: 'ssh' as const,
+      connectionId: 'ssh-1',
+      displayName: 'build-host',
+    };
+
+    await act(async () => {
+      root.render(
+        <DispatchInstallDialog
+          open
+          target={target}
+          onClose={vi.fn()}
+          onReady={vi.fn()}
+        />,
+      );
+      await Promise.resolve();
+    });
+
+    const installButton = Array.from(container.querySelectorAll('button'))
+      .find(button => button.textContent?.includes('dispatch.installConfirm'));
+    await act(async () => {
+      installButton?.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(mocks.installCliStart).toHaveBeenCalledTimes(1);
+    expect(mocks.installCliPoll).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      root.render(
+        <DispatchInstallDialog
+          open={false}
+          target={target}
+          onClose={vi.fn()}
+          onReady={vi.fn()}
+        />,
+      );
+      await Promise.resolve();
+    });
+    expect(mocks.installCliCancel).toHaveBeenCalledTimes(1);
+    expect(mocks.installCliCancel).toHaveBeenCalledWith('ssh-1');
+
+    await act(async () => {
+      poll.resolve({
+        cursor: 1,
+        output: 'still running',
+        status: 'running',
+      });
+      await Promise.resolve();
+    });
+    expect(mocks.installCliPoll).toHaveBeenCalledTimes(1);
+    expect(mocks.installCliCancel).toHaveBeenCalledTimes(1);
+  });
+});

@@ -6,6 +6,7 @@ mod metadata_store;
 mod migration;
 pub mod page;
 pub mod types;
+mod write_lock;
 
 pub use bitfun_core_types::SessionKind;
 pub use layout::SessionStorageLayout;
@@ -33,3 +34,4 @@ pub use migration::{
 };
 pub use page::{build_session_metadata_page, empty_session_metadata_page, SessionMetadataPage};
 pub use types::*;
+pub use write_lock::{SessionWriteLock, SessionWriteLockError};

@@ -25,6 +25,10 @@ import {
 import { pendingQueueManager } from './PendingQueueModule';
 import { sessionProjectWorkspacePath } from '../../utils/sessionWorkspace';
 import { sessionWorktreeMaterializationPlan } from '../../utils/sessionWorktree';
+import { dispatchApi } from '@/features/dispatch/dispatchApi';
+import { dispatchJobStore } from '@/features/dispatch/dispatchJobStore';
+import { requestDispatchJobRefresh } from '@/features/dispatch/DispatchJobObserver';
+import { isNonLocalDispatchTarget } from '@/features/dispatch/types';
 
 const log = createLogger('MessageModule');
 
@@ -140,6 +144,8 @@ export async function sendMessage(
     userMessageMetadata?: Record<string, unknown>;
     turnId?: string;
     preserveTurnOnStartError?: boolean;
+    /** One-shot UI confirmation for unattended auto approval. Never persist this flag. */
+    dispatchAutoConfirmed?: boolean;
   }
 ): Promise<void> {
   const session = context.flowChatStore.getState().sessions.get(sessionId);
@@ -198,6 +204,7 @@ export async function sendMessage(
     const refreshedSession = context.flowChatStore.getState().sessions.get(sessionId) ?? session;
     const currentAgentType = (agentType?.trim() || refreshedSession.mode || 'agentic').trim();
     const acpClientId = acpClientIdFromMode(currentAgentType);
+    const isDispatched = isNonLocalDispatchTarget(refreshedSession.config.dispatchTarget);
 
     if (
       !acpClientId &&
@@ -211,7 +218,7 @@ export async function sendMessage(
       throw new Error('Session history is still restoring, please retry once loading finishes');
     }
 
-    if (!acpClientId) {
+    if (!acpClientId && !isDispatched) {
       await ensureBackendSession(context, sessionId);
     }
 
@@ -221,6 +228,62 @@ export async function sendMessage(
     }
 
     const isFirstMessage = readySession.dialogTurns.length === 0 && readySession.titleStatus !== 'generated';
+
+    if (isDispatched) {
+      const targetRequest = readySession.config.dispatchTargetRequest;
+      const jobId = readySession.config.dispatchJobId;
+      const approvalPolicy = readySession.config.dispatchApprovalPolicy;
+      if (!targetRequest || targetRequest.kind === 'local' || !jobId || !approvalPolicy) {
+        throw new Error('Dispatch session is missing its immutable target or approval policy');
+      }
+      if (targetRequest.kind !== 'ssh') {
+        throw new Error('Phase-one dispatch supports SSH targets only');
+      }
+      if ((options?.imageContexts?.length ?? 0) > 0) {
+        throw new Error('Image attachments are not supported for SSH dispatch yet');
+      }
+      if (readySession.dialogTurns.length > 0) {
+        throw new Error('Phase-one dispatch sessions accept one detached task');
+      }
+      if (
+        readySession.config.dispatchJobState !== 'submitting' &&
+        readySession.config.dispatchJobState !== 'submission_unknown'
+      ) {
+        throw new Error('This detached dispatch job has already been submitted');
+      }
+      if (approvalPolicy === 'auto' && options?.dispatchAutoConfirmed !== true) {
+        throw new Error('Auto-approval dispatch requires an explicit confirmation before submit');
+      }
+      if (isFirstMessage) {
+        handleTitleGeneration(context, sessionId, message);
+      }
+
+      const response = await dispatchApi.submit({
+        target: targetRequest,
+        jobId,
+        sessionId,
+        agentType: currentAgentType,
+        prompt: message,
+        approvalPolicy,
+        model: readySession.config.dispatchModel?.trim() || undefined,
+      });
+      if (!response.accepted || response.jobId !== jobId || response.sessionId !== sessionId) {
+        throw new Error('Dispatch target returned a mismatched acknowledgement');
+      }
+      context.flowChatStore.applyDispatchSnapshot(sessionId, {
+        jobId,
+        state: response.state,
+        cursor: readySession.config.dispatchCursor ?? 0,
+        expectedCursor: readySession.config.dispatchCursor ?? 0,
+      });
+      dispatchJobStore.getState().updateProgress(jobId, {
+        state: response.state,
+      });
+      context.flowChatStore.updateSessionLastSubmittedMode(sessionId, currentAgentType);
+      requestDispatchJobRefresh(jobId);
+      return;
+    }
+
     const dialogTurnId = options?.turnId?.trim() ||
       `dialog_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     const hasImages = (options?.imageContexts?.length ?? 0) > 0;
@@ -441,6 +504,20 @@ export async function cancelSessionTask(context: FlowChatContext, requestedSessi
     if (!sessionId) {
       log.debug('No active session to cancel');
       return false;
+    }
+
+    const session = state.sessions.get(sessionId);
+    if (isNonLocalDispatchTarget(session?.config.dispatchTarget)) {
+      const jobId = session?.config.dispatchJobId;
+      if (!jobId) {
+        return false;
+      }
+      const response = await dispatchApi.cancel(jobId);
+      if (response.cancelled) {
+        context.userCancelledSessionIds.add(sessionId);
+        requestDispatchJobRefresh(jobId);
+      }
+      return response.cancelled;
     }
 
     const currentState = stateMachineManager.getCurrentState(sessionId);

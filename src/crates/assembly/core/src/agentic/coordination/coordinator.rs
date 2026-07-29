@@ -8930,6 +8930,10 @@ fn runtime_port_error_from_bitfun(error: BitFunError) -> bitfun_runtime_ports::P
             (bitfun_runtime_ports::PortErrorKind::Cancelled, message)
         }
         BitFunError::Timeout(message) => (bitfun_runtime_ports::PortErrorKind::Timeout, message),
+        BitFunError::SessionInUse { session_id } => (
+            bitfun_runtime_ports::PortErrorKind::SessionInUse,
+            format!("Session is already open for writing: {session_id}"),
+        ),
         BitFunError::NotImplemented(message) => {
             (bitfun_runtime_ports::PortErrorKind::NotAvailable, message)
         }
@@ -11778,7 +11782,7 @@ mod tests {
             .session_storage_dir();
         assert!(!session_manager
             .persistence_manager()
-            .session_storage_exists(&storage_path, &transient.session_id)
+            .session_storage_exists(&workspace_path, &transient.session_id)
             .expect("persistence probe should succeed"));
 
         let transient_child = session_manager

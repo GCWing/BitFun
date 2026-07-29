@@ -123,6 +123,8 @@ import {
   ChatInputWorkspaceStrip,
   type ChatInputPermissionMode,
 } from './ChatInputWorkspaceStrip';
+import type { DispatchSelection, DispatchTarget } from '@/features/dispatch/types';
+import { isNonLocalDispatchTarget } from '@/features/dispatch/types';
 import { ComposerVoiceInputButton } from './voice/ComposerVoiceInputButton';
 import { useComposerVoiceInput } from './voice/useComposerVoiceInput';
 import { expandWidgetPromptReferenceTokens } from '@/tools/generative-widget/widgetPromptReference';
@@ -477,6 +479,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const effectiveTargetSession = effectiveTargetSessionId
     ? flowChatState.sessions.get(effectiveTargetSessionId)
     : undefined;
+  const isDispatchInputSession = isNonLocalDispatchTarget(
+    effectiveTargetSession?.config.dispatchTarget,
+  );
+  const usesDispatchTransport = !registration && isDispatchInputSession;
   const historySessionOpenTransition = useSyncExternalStore(
     subscribeHistorySessionOpenTransition,
     getHistorySessionOpenTransitionSnapshot,
@@ -1035,7 +1041,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({
               `${s.remoteConnectionId ?? ''}|${s.remoteSshHost ?? ''}|${s.lastSubmittedMode ?? ''}|` +
               `${s.currentAcpContextUsage?.used ?? ''}|${s.currentAcpContextUsage?.size ?? ''}|` +
               `${s.currentTokenUsage?.inputTokens ?? ''}|${s.maxContextTokens ?? ''}|` +
-              `${s.needsUserAttention ? '1':'0'}|${sessionWorktreeBindingSubscriptionKey(s)}`
+              `${s.needsUserAttention ? '1':'0'}|${s.dialogTurns.length}|` +
+              `${JSON.stringify(s.config.dispatchTarget ?? null)}|` +
+              `${s.config.dispatchApprovalPolicy ?? ''}|${s.config.dispatchJobState ?? ''}|` +
+              `${sessionWorktreeBindingSubscriptionKey(s)}`
             );
           }
         }
@@ -1902,6 +1911,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const worktreeControl = useMemo(() => {
     if (!effectiveTargetSessionId || !effectiveTargetSession) return undefined;
     if (effectiveTargetSession.remoteConnectionId) return undefined;
+    if (usesDispatchTransport) return undefined;
     if (isSubagentInputTarget || isAcpTargetSession) return undefined;
 
     const locked = isSessionWorktreeBindingLocked(
@@ -1937,6 +1947,57 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     isAcpTargetSession,
     isSubagentInputTarget,
     tWorktrees,
+    usesDispatchTransport,
+  ]);
+
+  const handleSelectDispatchSsh = useCallback(async (selection: DispatchSelection) => {
+    try {
+      await FlowChatManager.getInstance().createChatSession(
+        {
+          ...flowChatSessionConfigForCurrentWorkspace(workspace),
+          dispatchTargetRequest: selection.request,
+          dispatchTarget: selection.target,
+          dispatchApprovalPolicy: selection.approvalPolicy,
+          // Undefined is intentional: the target's probed default model wins
+          // unless a future preflight selector records an explicit choice.
+          dispatchModel: selection.model,
+        },
+        effectiveSendAgentType,
+      );
+    } catch (error) {
+      log.error('Failed to create dispatched session projection', { error });
+      notificationService.error(t('chatInput.dispatch.createFailed'));
+    }
+  }, [effectiveSendAgentType, t, workspace]);
+
+  const dispatchControl = useMemo(() => {
+    if (
+      registration ||
+      isBtwSession ||
+      isSubagentInputTarget ||
+      isAcpInputSession
+    ) {
+      return undefined;
+    }
+    const target: DispatchTarget =
+      effectiveTargetSession?.config.dispatchTarget ?? { kind: 'local' };
+    return {
+      target,
+      locked:
+        isNonLocalDispatchTarget(target) ||
+        (effectiveTargetSession?.dialogTurns.length ?? 0) > 0 ||
+        !!derivedState?.isProcessing,
+      onSelectSsh: handleSelectDispatchSsh,
+    };
+  }, [
+    derivedState?.isProcessing,
+    effectiveTargetSession?.config.dispatchTarget,
+    effectiveTargetSession?.dialogTurns.length,
+    handleSelectDispatchSsh,
+    isAcpInputSession,
+    isBtwSession,
+    isSubagentInputTarget,
+    registration,
   ]);
 
   const handleHidePermissionModeControl = useCallback(async () => {
@@ -2644,7 +2705,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       setSelectedNonExternalSlashCandidateId(undefined);
     }
 
-    const localSlashCommandsEnabled = !isAcpInputSession;
+    const localSlashCommandsEnabled = !isAcpInputSession && !usesDispatchTransport;
     const trimmed = text.trim();
     const isBtwCommand = localSlashCommandsEnabled && isSlashCommand(trimmed, '/btw');
     const isCompactCommand = localSlashCommandsEnabled && isSlashCommand(trimmed, '/compact');
@@ -2722,7 +2783,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         selectedIndex: 0,
       });
     }
-  }, [contexts, derivedState, dispatchInput, externalPromptCommands, inputState.isActive, isAcpInputSession, prunePendingLargePastes, removeContext, resolveTypedMcpPromptCommand, selectedExternalPromptCandidateId, selectedNonExternalSlashCommand, setQueuedInput, slashCommandState.isActive, slashCommandState.kind]);
+  }, [contexts, derivedState, dispatchInput, externalPromptCommands, inputState.isActive, isAcpInputSession, prunePendingLargePastes, removeContext, resolveTypedMcpPromptCommand, selectedExternalPromptCandidateId, selectedNonExternalSlashCommand, setQueuedInput, slashCommandState.isActive, slashCommandState.kind, usesDispatchTransport]);
 
   const submitBtwFromInput = useCallback(async () => {
     if (!derivedState) return;
@@ -3645,7 +3706,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       : expandedMessage);
     const messageCharCount = getCharacterCount(message);
     // Voice transcripts are always message content; they must not accidentally execute local commands.
-    const localSlashCommandsEnabled = !isAcpInputSession && messageOverride === undefined;
+    const localSlashCommandsEnabled =
+      !isAcpInputSession &&
+      !usesDispatchTransport &&
+      messageOverride === undefined;
 
     if (localSlashCommandsEnabled && await submitExternalPromptCommandFromInput(
       message,
@@ -3741,6 +3805,27 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       return;
     }
 
+    let dispatchAutoConfirmed = false;
+    if (
+      usesDispatchTransport &&
+      effectiveTargetSession?.config.dispatchApprovalPolicy === 'auto'
+    ) {
+      const targetLabel = effectiveTargetSession.config.dispatchTarget?.kind === 'ssh'
+        ? effectiveTargetSession.config.dispatchTarget.displayName
+        : t('chatInput.dispatch.remoteTarget');
+      dispatchAutoConfirmed = await confirmWarning(
+        t('chatInput.dispatch.autoConfirmTitle'),
+        t('chatInput.dispatch.autoConfirmMessage', { target: targetLabel }),
+        {
+          confirmText: t('chatInput.dispatch.autoConfirmAction'),
+          cancelText: t('chatInput.dispatch.autoConfirmCancel'),
+        },
+      );
+      if (!dispatchAutoConfirmed) {
+        return;
+      }
+    }
+
     // Add to history before clearing (session-scoped)
     if (effectiveTargetSessionId) {
       addToHistory(effectiveTargetSessionId, message);
@@ -3767,6 +3852,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         () => sendMessage(message, {
           displayMessage: originalMessage,
           composerPresentation: persistedComposerPresentation,
+          dispatchAutoConfirmed,
         }),
       );
       if (transport === 'registered') {
@@ -3800,6 +3886,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     onSendMessage,
     addToHistory,
     effectiveTargetSessionId,
+    effectiveTargetSession?.config.dispatchApprovalPolicy,
+    effectiveTargetSession?.config.dispatchTarget,
     clearPendingLargePastes,
     expandComposerSpecialTokens,
     isAcpInputSession,
@@ -3818,6 +3906,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     t,
     resolveTypedMcpPromptCommand,
     submitExternalPromptCommandFromInput,
+    usesDispatchTransport,
   ]);
   
   const getFilteredIncrementalModes = useCallback(() => {
@@ -5352,7 +5441,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                 </div>
               </div>
               <div className="bitfun-chat-input__actions-right">
-                {voiceInput.phase === 'idle' ? (
+                {voiceInput.phase === 'idle' && !usesDispatchTransport ? (
                   <div className="bitfun-chat-input__model-usage-group">
                   <ModelSelector
                     currentMode={effectiveSendAgentType}
@@ -5377,21 +5466,25 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         repositoryPath={chatStripRepositoryPath}
         workspaceLabel={chatStripWorkspaceLabel}
         executionTarget={effectiveTargetSession?.config.executionTarget}
+        dispatchControl={dispatchControl}
         worktreeControl={worktreeControl}
         deferPassiveGitRefresh={deferChatStripPassiveGitRefresh}
-        permissionControl={showPermissionModeControl ? {
+        permissionControl={showPermissionModeControl && !usesDispatchTransport ? {
           mode: permissionMode,
           saving: permissionModeSaving,
           onChange: isAcpTargetSession ? undefined : handlePermissionModeChange,
           onHide: isAcpTargetSession ? undefined : handleHidePermissionModeControl,
         } : undefined}
         usageReport={
-          effectiveTargetSessionId && effectiveTargetSession
+          effectiveTargetSessionId && effectiveTargetSession && !usesDispatchTransport
             ? { visible: true, onOpen: handleToolbarUsageReport }
             : undefined
         }
         threadGoal={
-          effectiveTargetSessionId && effectiveTargetSession && !isBtwSession
+          effectiveTargetSessionId &&
+          effectiveTargetSession &&
+          !isBtwSession &&
+          !usesDispatchTransport
             ? {
                 visible: true,
                 goal: threadGoalController.goal,
@@ -5402,7 +5495,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             : undefined
         }
       />
-      {effectiveTargetSession && !isBtwSession ? (
+      {effectiveTargetSession && !isBtwSession && !usesDispatchTransport ? (
         <ThreadGoalDialogs
           controller={threadGoalController}
           disabled={!effectiveTargetSession.workspacePath}

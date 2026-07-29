@@ -40,9 +40,18 @@ impl TaskAction {
             return None;
         }
 
-        let has_agent_id = value.get("agent_id").is_some();
-        let has_subagent_type = value.get("subagent_type").is_some();
-        let has_fork_context = value.get("fork_context").is_some();
+        let has_agent_id = value
+            .get("agent_id")
+            .and_then(Value::as_str)
+            .is_some_and(|agent_id| !agent_id.trim().is_empty());
+        let has_subagent_type = value
+            .get("subagent_type")
+            .and_then(Value::as_str)
+            .is_some_and(|subagent_type| !subagent_type.trim().is_empty());
+        let has_fork_context = value
+            .get("fork_context")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
 
         if !has_agent_id && (has_subagent_type || has_fork_context) {
             return Some(Self::Spawn);
@@ -143,15 +152,16 @@ impl TaskTool {
             TaskAction::Spawn => {
                 let description = Self::required_string_for_action(input, "description", action)?;
                 let prompt = Self::required_string_for_action(input, "prompt", action)?;
-                if input.get("agent_id").is_some() {
+                if Self::optional_trimmed_string(input, "agent_id")?.is_some() {
                     return Err(BitFunError::tool(
                         "agent_id is not allowed when action is spawn".to_string(),
                     ));
                 }
+                let subagent_type = Self::optional_trimmed_string(input, "subagent_type")?;
                 let context_mode = Self::context_mode_from_input(input)?;
                 match context_mode {
                     SubagentContextMode::Fresh => {
-                        if input.get("subagent_type").is_none() {
+                        if subagent_type.is_none() {
                             return Err(BitFunError::tool(
                                 "subagent_type is required when action is spawn and fork_context is false or omitted"
                                     .to_string(),
@@ -159,7 +169,7 @@ impl TaskTool {
                         }
                     }
                     SubagentContextMode::Fork => {
-                        if input.get("subagent_type").is_some() {
+                        if subagent_type.is_some() {
                             return Err(BitFunError::tool(
                                 "subagent_type cannot be combined with fork_context=true when action is spawn; use either subagent_type for a fresh subagent or fork_context=true to inherit the current context."
                                     .to_string(),
@@ -181,7 +191,7 @@ impl TaskTool {
                     prompt,
                     context_mode,
                     target_agent_id: None,
-                    subagent_type: Self::optional_trimmed_string(input, "subagent_type")?,
+                    subagent_type,
                     model_id,
                     inherit_parent_model,
                     timeout_seconds: None,
@@ -321,7 +331,7 @@ impl TaskTool {
 
     fn optional_trimmed_string(input: &Value, field: &str) -> BitFunResult<Option<String>> {
         match input.get(field) {
-            None => Ok(None),
+            None | Some(Value::Null) => Ok(None),
             Some(value) => {
                 let value = value
                     .as_str()
@@ -341,7 +351,7 @@ impl TaskTool {
 
     fn optional_bool(input: &Value, field: &str) -> BitFunResult<Option<bool>> {
         match input.get(field) {
-            None => Ok(None),
+            None | Some(Value::Null) => Ok(None),
             Some(value) => value
                 .as_bool()
                 .map(Some)
@@ -367,7 +377,7 @@ impl TaskTool {
         action: TaskAction,
     ) -> BitFunResult<()> {
         for field in fields {
-            if input.get(field).is_some() {
+            if Self::has_effective_value(input, field) {
                 return Err(BitFunError::tool(format!(
                     "{field} is not allowed when action is {}",
                     action.as_str()
@@ -375,5 +385,16 @@ impl TaskTool {
             }
         }
         Ok(())
+    }
+
+    fn has_effective_value(input: &Value, field: &str) -> bool {
+        // Some models serialize unused fields from this action-union schema as
+        // null, an empty string, or false. Those values carry no action intent.
+        match input.get(field) {
+            None | Some(Value::Null) => false,
+            Some(Value::String(value)) => !value.trim().is_empty(),
+            Some(Value::Bool(value)) => *value,
+            Some(_) => true,
+        }
     }
 }

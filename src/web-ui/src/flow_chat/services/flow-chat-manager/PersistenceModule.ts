@@ -21,6 +21,12 @@ function isTransientSession(session: { isTransient?: boolean } | undefined): boo
   return session?.isTransient === true;
 }
 
+function isObserverOnlyDispatchSession(
+  session: { config?: { dispatchTarget?: { kind?: string } } } | undefined,
+): boolean {
+  return !!session?.config?.dispatchTarget && session.config.dispatchTarget.kind !== 'local';
+}
+
 function requireWorkspacePath(sessionId: string, workspacePath?: string): string {
   if (!workspacePath) {
     throw new Error(`Workspace path is required for session: ${sessionId}`);
@@ -277,7 +283,7 @@ async function performSaveDialogTurnToDisk(
       log.debug('Session not found, skipping save', { sessionId, turnId });
       return;
     }
-    if (isTransientSession(session)) {
+    if (isTransientSession(session) || isObserverOnlyDispatchSession(session)) {
       return;
     }
 
@@ -315,7 +321,7 @@ export async function saveAllInProgressTurns(context: FlowChatContext): Promise<
   const savePromises: Promise<void>[] = [];
   
   for (const [sessionId, session] of state.sessions.entries()) {
-    if (isTransientSession(session)) {
+    if (isTransientSession(session) || isObserverOnlyDispatchSession(session)) {
       continue;
     }
     const lastTurn = session.dialogTurns[session.dialogTurns.length - 1];
@@ -520,7 +526,7 @@ export async function updateSessionMetadata(
 
     const session = context.flowChatStore.getState().sessions.get(sessionId);
     if (!session) return;
-    if (isTransientSession(session)) return;
+    if (isTransientSession(session) || isObserverOnlyDispatchSession(session)) return;
 
     const workspacePath = requireSessionProjectWorkspacePath(session, sessionId);
 

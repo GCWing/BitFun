@@ -1026,6 +1026,7 @@ fn runtime_port_error(error: BitFunError) -> PortError {
         BitFunError::NotFound(_) => PortErrorKind::NotFound,
         BitFunError::Timeout(_) => PortErrorKind::Timeout,
         BitFunError::Cancelled(_) => PortErrorKind::Cancelled,
+        BitFunError::SessionInUse { .. } => PortErrorKind::SessionInUse,
         BitFunError::SessionCreateCleanupRequired { .. } => PortErrorKind::CleanupRequired,
         _ => PortErrorKind::Backend,
     };
@@ -1485,6 +1486,16 @@ mod tests {
         });
 
         assert_eq!(error.kind, PortErrorKind::CleanupRequired);
+        assert!(error.message.contains("session-1"), "{error}");
+    }
+
+    #[test]
+    fn session_writer_conflict_remains_typed_across_the_runtime_port() {
+        let error = runtime_port_error(BitFunError::SessionInUse {
+            session_id: "session-1".to_string(),
+        });
+
+        assert_eq!(error.kind, PortErrorKind::SessionInUse);
         assert!(error.message.contains("session-1"), "{error}");
     }
 

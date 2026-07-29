@@ -27,6 +27,9 @@ test('formal and nightly releases gate publication on Linux binaries', () => {
     assert.match(workflow, /needs:\s*\[[^\]]*linux-binaries[^\]]*\]/);
     assert.match(workflow, /bitfun-relay-server-\*\.tar\.gz/);
     assert.match(workflow, /bitfun-cli-\*\.tar\.gz/);
+    assert.match(workflow, /linux-release-assets\/\*\.tar\.gz\.sig/);
+    assert.match(workflow, /linux-release-assets\/\*\.tar\.gz\.sha256\.sig/);
+    assert.match(workflow, /\$\{cli_url\}\.sha256\.sig/);
     assert.match(workflow, /linux-binaries\.json/);
   }
 
@@ -64,4 +67,15 @@ test('release asset names carry no SemVer build metadata', () => {
   assert.match(reusable, /package-unix\.sh "\$ASSET_VERSION"/);
   assert.doesNotMatch(reusable, /package-unix\.sh "\$VERSION"/);
   assert.match(nightly, /--version "\$\{NIGHTLY_VERSION%%\+\*\}"/);
+});
+
+test('nightly publishes signed macOS CLI archives for SSH dispatch', () => {
+  const nightly = read('.github/workflows/nightly.yml');
+
+  assert.match(nightly, /Package macOS CLI for SSH dispatch/);
+  assert.match(nightly, /scripts\/cli\/package-unix\.sh "\$ASSET_VERSION" "\$TARGET"/);
+  assert.match(nightly, /steps\.macos-cli\.outputs\.archive/);
+  assert.match(nightly, /bitfun-cli-\*-apple-darwin\.tar\.gz\.sha256\.sig/);
+  assert.match(nightly, /for target in aarch64-apple-darwin x86_64-apple-darwin/);
+  assert.match(nightly, /\$\{archive\}\.sha256\.sig/);
 });

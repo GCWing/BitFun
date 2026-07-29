@@ -1,0 +1,497 @@
+use std::collections::{HashSet, VecDeque};
+use std::path::Path;
+
+use anyhow::{anyhow, bail, Context, Result};
+use bitfun_agent_runtime::sdk::{
+    AgentDialogTurnRequest, AgentSessionCreateRequest, AgentTurnCancellationRequest,
+    AgentTurnSettlementRequest, PermissionReply, PermissionReplySource, PermissionRequest,
+    PermissionRequestEvent,
+};
+use bitfun_events::{project_agentic_frontend_event, AgenticEvent};
+use bitfun_runtime_ports::{AgentSubmissionSource, DialogSubmissionPolicy, SessionExecutionTarget};
+
+use crate::{shutdown_mcp_servers, BootstrapProfile};
+
+use super::permissions::{self, REJECT_AND_REPORT_REASON};
+use super::protocol::{DispatchApprovalPolicy, DispatchEvent, DispatchJobState};
+use super::store::{DispatchStore, WorkspaceLock};
+
+const TURN_SETTLEMENT_TIMEOUT_MS: u64 = 5_000;
+
+pub(crate) async fn run(job_id: String) -> Result<()> {
+    let store = DispatchStore::open_default()?;
+    let Some(_worker_lease) = store.try_acquire_worker_lease(&job_id)? else {
+        // A retry may briefly spawn a duplicate after its controller crashes.
+        // Only the lease holder may publish a PID or execute the job.
+        return Ok(());
+    };
+    let worker_pid = std::process::id();
+    store.write_pid(&job_id, worker_pid)?;
+    store.clear_preparing(&job_id);
+    let result = run_inner(&store, &job_id).await;
+    if let Err(error) = &result {
+        let _ = store.mark_state(
+            &job_id,
+            DispatchJobState::Failed,
+            None,
+            Some(format!("{error:#}")),
+        );
+    }
+    store.clear_preparing(&job_id);
+    store.remove_pid_if_matches(&job_id, worker_pid);
+    shutdown_mcp_servers().await;
+    result
+}
+
+async fn run_inner(store: &DispatchStore, job_id: &str) -> Result<()> {
+    let job = store.load_job(job_id)?;
+    let state = store.load_state(job_id)?;
+    if state.state.is_terminal() {
+        return Ok(());
+    }
+    if state.cancel_requested() {
+        store.mark_state(
+            job_id,
+            DispatchJobState::Cancelled,
+            state.turn_id.as_deref(),
+            Some("Dispatch worker observed a cancellation request".to_string()),
+        )?;
+        return Ok(());
+    }
+    if state.turn_id.is_some() {
+        bail!(
+            "dispatch worker cannot replay an already-submitted turn after process loss; session {} remains available on the target",
+            job.request.session_id
+        );
+    }
+
+    let workspace = Path::new(&job.request.workspace_path);
+    if !workspace.is_absolute() {
+        bail!("dispatch workspacePath must be absolute");
+    }
+    if !workspace.is_dir() {
+        bail!(
+            "dispatch workspace does not exist or is not a directory: {}",
+            workspace.display()
+        );
+    }
+    super::ensure_selected_model_ready(job.request.model.as_deref()).await?;
+
+    // Every detached worker takes the same stable lock for a canonical target
+    // workspace. Waiting workers remain Queued and are visible/cancellable.
+    let lock_path = store.workspace_lock_path(&job.request.workspace_path);
+    let _workspace_lock = WorkspaceLock::acquire(&lock_path)?;
+    let state = store.load_state(job_id)?;
+    if state.state.is_terminal() {
+        return Ok(());
+    }
+    if state.cancel_requested() {
+        store.mark_state(
+            job_id,
+            DispatchJobState::Cancelled,
+            state.turn_id.as_deref(),
+            Some("Dispatch worker observed a cancellation request".to_string()),
+        )?;
+        return Ok(());
+    }
+    store.mark_state(job_id, DispatchJobState::Running, None, None)?;
+
+    let runtime = crate::initialize_core_services(
+        workspace,
+        permissions::cli_policy(job.request.approval_policy),
+        BootstrapProfile::Execution,
+    )
+    .await?;
+    let agent_runtime = runtime.agent_runtime().clone();
+    let mut event_rx = agent_runtime
+        .subscribe_events()
+        .map_err(|error| anyhow!(error.into_message()))?;
+    let mut permission_rx = agent_runtime
+        .subscribe_permission_requests()
+        .map_err(|error| anyhow!(error.into_message()))?;
+
+    let workspace_path = job.request.workspace_path.clone();
+    agent_runtime
+        .create_session_with_id(
+            job.request.session_id.clone(),
+            AgentSessionCreateRequest {
+                session_name: job.title.clone(),
+                agent_type: job.request.agent_type.clone(),
+                workspace_path: Some(workspace_path.clone()),
+                project_workspace_path: Some(workspace_path.clone()),
+                execution_target: Some(SessionExecutionTarget::local(workspace_path.clone())),
+                workspace_id: None,
+                remote_connection_id: None,
+                remote_ssh_host: None,
+                model_id: job.request.model.clone(),
+                metadata: serde_json::Map::new(),
+            },
+        )
+        .await
+        .map_err(|error| anyhow!(error.into_message()))
+        .context("create target-owned dispatch session")?;
+
+    let turn_id = uuid::Uuid::new_v4().to_string();
+    // Persist the deterministic turn id before submission. A crash after the
+    // Runtime accepts the turn must never make a replacement worker submit the
+    // prompt a second time.
+    store.record_turn_id(job_id, &turn_id)?;
+    agent_runtime
+        .submit_dialog_turn(AgentDialogTurnRequest {
+            session_id: job.request.session_id.clone(),
+            message: job.request.prompt.clone(),
+            original_message: None,
+            turn_id: Some(turn_id.clone()),
+            agent_type: job.request.agent_type.clone(),
+            workspace_path: Some(workspace_path),
+            remote_connection_id: None,
+            remote_ssh_host: None,
+            policy: DialogSubmissionPolicy::for_source(AgentSubmissionSource::Cli),
+            reply_route: None,
+            prepended_reminders: Vec::new(),
+            attachments: Vec::new(),
+            metadata: permissions::metadata(job.request.approval_policy),
+        })
+        .await
+        .map_err(|error| anyhow!(error.into_message()))
+        .context("submit dispatch dialog turn")?;
+
+    let mut initial_permissions = agent_runtime
+        .pending_permission_requests()
+        .unwrap_or_default()
+        .into_iter()
+        .collect::<VecDeque<_>>();
+    let mut handled_permissions = HashSet::new();
+
+    let (terminal_state, terminal_error) = loop {
+        if let Some(request) = initial_permissions.pop_front() {
+            if permission_targets_job(&request, &job.request.session_id)
+                && handled_permissions.insert(request.request_id.clone())
+            {
+                let reason = reject_permission(
+                    store,
+                    job_id,
+                    &agent_runtime,
+                    &job.request.session_id,
+                    &turn_id,
+                    request,
+                    job.request.approval_policy,
+                )
+                .await?;
+                break (DispatchJobState::Failed, Some(reason));
+            }
+            continue;
+        }
+
+        tokio::select! {
+            received = event_rx.recv() => {
+                let envelope = match received {
+                    Ok(envelope) => envelope,
+                    Err(tokio::sync::broadcast::error::RecvError::Lagged(skipped)) => {
+                        cancel_turn(&agent_runtime, &job.request.session_id, &turn_id, "dispatch_event_stream_lagged").await;
+                        break (
+                            DispatchJobState::Failed,
+                            Some(format!("dispatch event stream lost {skipped} events; the turn was cancelled")),
+                        );
+                    }
+                    Err(tokio::sync::broadcast::error::RecvError::Closed) => {
+                        cancel_turn(&agent_runtime, &job.request.session_id, &turn_id, "dispatch_event_stream_closed").await;
+                        break (
+                            DispatchJobState::Failed,
+                            Some("dispatch event stream closed before the turn settled".to_string()),
+                        );
+                    }
+                };
+                if !event_belongs_to_job(&envelope.event, &job.request.session_id, &turn_id) {
+                    continue;
+                }
+                let projection = project_agentic_frontend_event(envelope.event.clone())
+                    .map(|projected| (projected.event_name, projected.payload));
+                let raw = serde_json::to_value(&envelope)
+                    .context("serialize dispatch Agent event")?;
+                store.append_event(
+                    job_id,
+                    &DispatchEvent::agent_event(raw, projection),
+                )?;
+                if let Some(outcome) = terminal_outcome(&envelope.event, &turn_id) {
+                    break outcome;
+                }
+            }
+            received = permission_rx.recv() => {
+                let event = match received {
+                    Ok(event) => event,
+                    Err(tokio::sync::broadcast::error::RecvError::Lagged(skipped)) => {
+                        cancel_turn(&agent_runtime, &job.request.session_id, &turn_id, "dispatch_permission_stream_lagged").await;
+                        break (
+                            DispatchJobState::Failed,
+                            Some(format!("dispatch permission stream lost {skipped} requests; the turn was cancelled")),
+                        );
+                    }
+                    Err(tokio::sync::broadcast::error::RecvError::Closed) => {
+                        cancel_turn(&agent_runtime, &job.request.session_id, &turn_id, "dispatch_permission_stream_closed").await;
+                        break (
+                            DispatchJobState::Failed,
+                            Some("dispatch permission stream closed before the turn settled".to_string()),
+                        );
+                    }
+                };
+                let PermissionRequestEvent::Asked { request } = event else {
+                    continue;
+                };
+                if !permission_targets_job(&request, &job.request.session_id)
+                    || !handled_permissions.insert(request.request_id.clone())
+                {
+                    continue;
+                }
+                let reason = reject_permission(
+                    store,
+                    job_id,
+                    &agent_runtime,
+                    &job.request.session_id,
+                    &turn_id,
+                    request,
+                    job.request.approval_policy,
+                )
+                .await?;
+                break (DispatchJobState::Failed, Some(reason));
+            }
+        }
+    };
+
+    let settlement = agent_runtime
+        .wait_for_turn_settlement(AgentTurnSettlementRequest {
+            session_id: job.request.session_id.clone(),
+            turn_id: turn_id.clone(),
+            wait_timeout_ms: TURN_SETTLEMENT_TIMEOUT_MS,
+        })
+        .await;
+    let (terminal_state, terminal_error) = match settlement {
+        Ok(()) => (terminal_state, terminal_error),
+        Err(error) => (
+            DispatchJobState::Failed,
+            Some(format!(
+                "dispatch turn reached a terminal event but did not settle: {}",
+                error.into_message()
+            )),
+        ),
+    };
+    store.mark_state(job_id, terminal_state, Some(&turn_id), terminal_error)?;
+    Ok(())
+}
+
+async fn reject_permission(
+    store: &DispatchStore,
+    job_id: &str,
+    runtime: &bitfun_agent_runtime::sdk::AgentRuntime,
+    session_id: &str,
+    turn_id: &str,
+    request: PermissionRequest,
+    policy: DispatchApprovalPolicy,
+) -> Result<String> {
+    let reason = match policy {
+        DispatchApprovalPolicy::RejectAndReport => REJECT_AND_REPORT_REASON.to_string(),
+        DispatchApprovalPolicy::Auto => format!(
+            "Dispatch Auto policy could not safely auto-approve permission request {}",
+            request.request_id
+        ),
+    };
+    store.append_event(
+        job_id,
+        &DispatchEvent::permission_rejected(
+            serde_json::to_value(&request).context("serialize permission request")?,
+            reason.clone(),
+        ),
+    )?;
+    runtime
+        .respond_permission_with_source(
+            &request.request_id,
+            PermissionReply::Reject {
+                feedback: Some(reason.clone()),
+            },
+            PermissionReplySource::System,
+        )
+        .await
+        .map_err(|error| anyhow!(error.into_message()))
+        .context("reject unattended dispatch permission")?;
+    cancel_turn(runtime, session_id, turn_id, "dispatch_permission_rejected").await;
+    Ok(reason)
+}
+
+async fn cancel_turn(
+    runtime: &bitfun_agent_runtime::sdk::AgentRuntime,
+    session_id: &str,
+    turn_id: &str,
+    reason: &str,
+) {
+    if let Err(error) = runtime
+        .cancel_turn(AgentTurnCancellationRequest {
+            session_id: session_id.to_string(),
+            turn_id: Some(turn_id.to_string()),
+            source: Some(AgentSubmissionSource::Cli),
+            requester_session_id: None,
+            reason: Some(reason.to_string()),
+            wait_timeout_ms: None,
+        })
+        .await
+    {
+        tracing::error!("Failed to cancel dispatch turn: {}", error.into_message());
+    }
+}
+
+fn permission_targets_job(request: &PermissionRequest, session_id: &str) -> bool {
+    crate::runtime::approval::permission_request_targets_session(request, session_id)
+}
+
+fn event_belongs_to_job(event: &AgenticEvent, session_id: &str, turn_id: &str) -> bool {
+    if matches!(event, AgenticEvent::SubagentSessionLinked { .. }) {
+        // Phase 1 has no child-session observer or dispatch marker. Publishing
+        // this link would create an empty local-looking child in the Web UI,
+        // while every later child event is correctly outside the parent scope.
+        return false;
+    }
+    if event
+        .session_id()
+        .is_some_and(|event_session| event_session != session_id)
+    {
+        return false;
+    }
+    event_turn_id(event).is_none_or(|event_turn| event_turn == turn_id)
+}
+
+fn event_turn_id(event: &AgenticEvent) -> Option<&str> {
+    match event {
+        AgenticEvent::DialogTurnStarted { turn_id, .. }
+        | AgenticEvent::DialogTurnCompleted { turn_id, .. }
+        | AgenticEvent::DialogTurnCancelled { turn_id, .. }
+        | AgenticEvent::DialogTurnFailed { turn_id, .. }
+        | AgenticEvent::TokenUsageUpdated { turn_id, .. }
+        | AgenticEvent::ContextCompressionStarted { turn_id, .. }
+        | AgenticEvent::ContextCompressionCompleted { turn_id, .. }
+        | AgenticEvent::ContextCompressionFailed { turn_id, .. }
+        | AgenticEvent::ModelRoundStarted { turn_id, .. }
+        | AgenticEvent::ModelRoundCompleted { turn_id, .. }
+        | AgenticEvent::TextChunk { turn_id, .. }
+        | AgenticEvent::ThinkingChunk { turn_id, .. }
+        | AgenticEvent::ToolEvent { turn_id, .. }
+        | AgenticEvent::DeepReviewQueueStateChanged { turn_id, .. }
+        | AgenticEvent::UserSteeringInjected { turn_id, .. } => Some(turn_id),
+        _ => None,
+    }
+}
+
+fn terminal_outcome(
+    event: &AgenticEvent,
+    turn_id: &str,
+) -> Option<(DispatchJobState, Option<String>)> {
+    match event {
+        AgenticEvent::DialogTurnCompleted {
+            turn_id: event_turn,
+            success,
+            finish_reason,
+            has_final_response,
+            ..
+        } if event_turn == turn_id => {
+            if *success == Some(false) {
+                let reason = finish_reason
+                    .as_deref()
+                    .filter(|value| !value.trim().is_empty())
+                    .unwrap_or("unsuccessful_completion");
+                let detail = if *has_final_response == Some(false) {
+                    format!("Dispatch completed without a successful final response: {reason}")
+                } else {
+                    format!("Dispatch completed unsuccessfully: {reason}")
+                };
+                Some((DispatchJobState::Failed, Some(detail)))
+            } else {
+                Some((DispatchJobState::Succeeded, None))
+            }
+        }
+        AgenticEvent::DialogTurnFailed {
+            turn_id: event_turn,
+            error,
+            ..
+        } if event_turn == turn_id => Some((DispatchJobState::Failed, Some(error.clone()))),
+        AgenticEvent::DialogTurnCancelled {
+            turn_id: event_turn,
+            ..
+        } if event_turn == turn_id => Some((
+            DispatchJobState::Cancelled,
+            Some("Dispatch turn was cancelled".to_string()),
+        )),
+        AgenticEvent::SystemError { error, .. } => {
+            Some((DispatchJobState::Failed, Some(error.clone())))
+        }
+        _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn terminal_events_map_to_persistent_job_states() {
+        let completed = AgenticEvent::DialogTurnCompleted {
+            session_id: "session-1".to_string(),
+            turn_id: "turn-1".to_string(),
+            total_rounds: 1,
+            total_tools: 0,
+            duration_ms: 10,
+            partial_recovery_reason: None,
+            success: Some(true),
+            finish_reason: Some("stop".to_string()),
+            has_final_response: Some(true),
+        };
+        assert_eq!(
+            terminal_outcome(&completed, "turn-1"),
+            Some((DispatchJobState::Succeeded, None))
+        );
+
+        let failed = AgenticEvent::DialogTurnFailed {
+            session_id: "session-1".to_string(),
+            turn_id: "turn-1".to_string(),
+            error: "model failed".to_string(),
+            error_category: None,
+            error_detail: None,
+        };
+        assert_eq!(
+            terminal_outcome(&failed, "turn-1"),
+            Some((DispatchJobState::Failed, Some("model failed".to_string())))
+        );
+    }
+
+    #[test]
+    fn dispatch_does_not_publish_subagent_sessions_before_child_observers_exist() {
+        let linked = AgenticEvent::SubagentSessionLinked {
+            session_id: "child-session".to_string(),
+            subagent_dialog_turn_id: "child-turn".to_string(),
+            parent_session_id: "session-1".to_string(),
+            parent_dialog_turn_id: "turn-1".to_string(),
+            parent_tool_call_id: "tool-1".to_string(),
+            agent_type: Some("GeneralPurpose".to_string()),
+            model_id: None,
+            focused_review_display_label: None,
+        };
+        assert!(!event_belongs_to_job(&linked, "session-1", "turn-1"));
+
+        let child_chunk = AgenticEvent::TextChunk {
+            session_id: "child-session".to_string(),
+            turn_id: "child-turn".to_string(),
+            round_id: "round-1".to_string(),
+            attempt_id: None,
+            attempt_index: None,
+            text: "child output".to_string(),
+        };
+        assert!(!event_belongs_to_job(&child_chunk, "session-1", "turn-1"));
+
+        let parent_chunk = AgenticEvent::TextChunk {
+            session_id: "session-1".to_string(),
+            turn_id: "turn-1".to_string(),
+            round_id: "round-1".to_string(),
+            attempt_id: None,
+            attempt_index: None,
+            text: "parent output".to_string(),
+        };
+        assert!(event_belongs_to_job(&parent_chunk, "session-1", "turn-1"));
+    }
+}

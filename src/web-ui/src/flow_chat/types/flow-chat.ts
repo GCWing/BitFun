@@ -502,6 +502,22 @@ export interface SessionConfig {
   executionTargetRequest?: import('@/infrastructure/api/service-api/WorktreeAPI').SessionExecutionTargetRequest;
   /** Resolved target returned and persisted by the backend. */
   executionTarget?: import('@/infrastructure/api/service-api/WorktreeAPI').SessionExecutionTarget;
+  /** Requested device on which a new session will execute. */
+  dispatchTargetRequest?: import('@/features/dispatch/types').DispatchTargetRequest;
+  /** Immutable resolved target for an observer-only dispatched session. */
+  dispatchTarget?: import('@/features/dispatch/types').DispatchTarget;
+  /** Durable target-side job observed by this projection. */
+  dispatchJobId?: string;
+  /** Explicit unattended permission behavior selected before submission. */
+  dispatchApprovalPolicy?: import('@/features/dispatch/types').DispatchApprovalPolicy;
+  /** Target model explicitly selected during preflight; omitted to use the target default. */
+  dispatchModel?: string;
+  /** Last target-side job state applied by the observer. */
+  dispatchJobState?: import('@/features/dispatch/types').DispatchJobState;
+  /** Byte cursor applied successfully from the target-side event log. */
+  dispatchCursor?: number;
+  /** Last target-side job error, if any. */
+  dispatchLastError?: string;
   /**
    * Composer-only preference for an empty session. The concrete worktree is
    * materialized after the first prompt is submitted, not when the checkbox

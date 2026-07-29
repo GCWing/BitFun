@@ -17,11 +17,17 @@ use tower_http::cors::CorsLayer;
 
 mod routes;
 
+pub(crate) struct DispatchHostState {
+    path_manager: Arc<bitfun_core::infrastructure::PathManager>,
+    ssh_manager: Arc<bitfun_core::service::remote_ssh::SSHConnectionManager>,
+}
+
 /// Application state
 #[derive(Clone)]
 pub struct AppState {
     external_workspace_root: Option<PathBuf>,
     allowed_browser_origins: Arc<HashSet<String>>,
+    dispatch_host: Option<Arc<DispatchHostState>>,
 }
 
 const DEFAULT_ALLOWED_BROWSER_ORIGINS: [&str; 2] =
@@ -95,9 +101,32 @@ async fn main() -> Result<()> {
                 .map_err(|_| anyhow::anyhow!("--allowed-origin contains an invalid header value"))
         })
         .collect::<Result<Vec<_>>>()?;
+
+    // This is a narrow controller/observer capability. It deliberately does
+    // not initialize the Server Host's dormant Agent Runtime: authoritative
+    // sessions and execution stay inside the target-side `bitfun dispatch`
+    // worker.
+    let path_manager = Arc::new(bitfun_core::infrastructure::PathManager::new()?);
+    let ssh_data_dir = dirs::data_local_dir()
+        .ok_or_else(|| anyhow::anyhow!("Could not resolve the local data directory"))?
+        .join("BitFun")
+        .join("ssh");
+    let ssh_manager = Arc::new(bitfun_core::service::remote_ssh::SSHConnectionManager::new(
+        ssh_data_dir,
+    ));
+    if let Err(error) = ssh_manager.load_saved_connections().await {
+        tracing::warn!(error = %error, "Failed to load saved SSH connections");
+    }
+    if let Err(error) = ssh_manager.load_known_hosts().await {
+        tracing::warn!(error = %error, "Failed to load SSH known hosts");
+    }
     let app_state = AppState {
         external_workspace_root,
         allowed_browser_origins: Arc::new(allowed_browser_origins),
+        dispatch_host: Some(Arc::new(DispatchHostState {
+            path_manager,
+            ssh_manager,
+        })),
     };
 
     let app = Router::new()
@@ -204,6 +233,10 @@ mod tests {
         assert!(
             !main_source.contains("bootstrap::initialize"),
             "the current read-only HTTP shell must not silently start an Agent Runtime"
+        );
+        assert!(
+            main_source.contains("DispatchHostState"),
+            "the lightweight Server Host should expose dispatch without booting an Agent Runtime"
         );
     }
 }

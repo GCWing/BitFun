@@ -29,6 +29,11 @@ type SettleInterruptedDialogTurnOptions = {
   interruptionReason?: FlowToolItem['interruptionReason'];
 };
 
+export type TerminalDialogTurnStatus = Extract<
+  DialogTurn['status'],
+  'completed' | 'cancelled' | 'error'
+>;
+
 export function isTransientToolStatus(status: unknown): boolean {
   return typeof status === 'string' && TRANSIENT_TOOL_STATUSES.has(status);
 }
@@ -258,4 +263,81 @@ export function settleInterruptedDialogTurn(
   };
 
   return settledTurn;
+}
+
+/**
+ * Settle a live turn from an authoritative terminal snapshot. If a terminal
+ * agent event already settled the turn, preserve that event-owned outcome and
+ * return the original object once all nested content is stable.
+ */
+export function settleDialogTurnToTerminalStatus(
+  dialogTurn: DialogTurn,
+  requestedStatus: TerminalDialogTurnStatus,
+  settledAt: number,
+  error?: string,
+): DialogTurn {
+  const alreadyTerminal = isTerminalTurnStatus(dialogTurn.status);
+  const finalTurnStatus = alreadyTerminal ? dialogTurn.status : requestedStatus;
+  const normalizedError = error?.trim() || undefined;
+  const nextError = finalTurnStatus === 'error'
+    ? normalizedError || dialogTurn.error
+    : dialogTurn.error;
+  const stableContent = dialogTurn.modelRounds.every(round =>
+    TERMINAL_ROUND_STATUSES.has(round.status) &&
+    round.items.every(item => STABLE_ITEM_STATUSES.has(item.status)) &&
+    (round.attempts ?? []).every(attempt =>
+      attempt.status !== 'streaming' &&
+      attempt.items.every(item => STABLE_ITEM_STATUSES.has(item.status))
+    )
+  );
+
+  if (
+    alreadyTerminal &&
+    stableContent &&
+    dialogTurn.endTime !== undefined &&
+    nextError === dialogTurn.error
+  ) {
+    return dialogTurn;
+  }
+
+  const attemptStatus = finalTurnStatus === 'completed'
+    ? 'completed' as const
+    : finalTurnStatus === 'error'
+      ? 'failed' as const
+      : 'cancelled' as const;
+  const modelRounds = dialogTurn.modelRounds.map(round => {
+    const finalRoundStatus = normalizeRecoveredRoundStatus(round.status, finalTurnStatus);
+    return {
+      ...round,
+      status: finalRoundStatus,
+      isStreaming: false,
+      isComplete: true,
+      endTime: round.endTime ?? settledAt,
+      items: round.items.map(item =>
+        settleInterruptedItem(item, finalTurnStatus, settledAt),
+      ),
+      attempts: round.attempts?.map(attempt => ({
+        ...attempt,
+        status: attempt.status === 'streaming' ? attemptStatus : attempt.status,
+        items: attempt.items.map(item =>
+          settleInterruptedItem(item, finalTurnStatus, settledAt),
+        ),
+      })),
+    };
+  });
+
+  return {
+    ...dialogTurn,
+    status: finalTurnStatus,
+    success: alreadyTerminal
+      ? dialogTurn.success
+      : finalTurnStatus === 'completed'
+        ? true
+        : finalTurnStatus === 'error'
+          ? false
+          : dialogTurn.success,
+    error: nextError,
+    endTime: dialogTurn.endTime ?? settledAt,
+    modelRounds,
+  };
 }

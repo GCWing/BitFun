@@ -146,6 +146,7 @@ impl BitfunAcpRuntime {
             RuntimeError::Port(error) => match error.kind {
                 PortErrorKind::InvalidRequest => Error::invalid_params().data(error.message),
                 PortErrorKind::NotFound => Error::resource_not_found(None),
+                PortErrorKind::SessionInUse => Self::session_in_use_error(error.message),
                 _ => Self::internal_error(error.message),
             },
             other => Self::internal_error(other.into_message()),
@@ -165,8 +166,19 @@ impl BitfunAcpRuntime {
         match error {
             BitFunError::NotFound(_) => Error::resource_not_found(Some(session_id.to_string())),
             BitFunError::Validation(message) => Error::invalid_params().data(message),
+            BitFunError::SessionInUse { session_id } => Self::session_in_use_error(format!(
+                "Session is already open for writing: {session_id}"
+            )),
             other => Self::internal_error(other),
         }
+    }
+
+    fn session_in_use_error(message: String) -> Error {
+        Error::invalid_params().data(serde_json::json!({
+            "state": "session_in_use",
+            "message": message,
+            "retryable": true
+        }))
     }
 
     pub(crate) async fn lock_active_session(
@@ -276,6 +288,7 @@ impl AcpRuntime for BitfunAcpRuntime {
 mod tests {
     use agent_client_protocol::schema::ErrorCode;
     use bitfun_agent_runtime::sdk::{PortError, PortErrorKind, RuntimeError};
+    use bitfun_core::util::errors::BitFunError;
     use dashmap::DashMap;
 
     use super::{AcpSessionTransition, BitfunAcpRuntime};
@@ -300,6 +313,36 @@ mod tests {
 
         assert_eq!(error.code, ErrorCode::ResourceNotFound);
         assert_eq!(error.data, None);
+    }
+
+    #[test]
+    fn session_writer_conflict_is_actionable_at_the_protocol_boundary() {
+        let error = BitfunAcpRuntime::runtime_error(RuntimeError::Port(PortError::new(
+            PortErrorKind::SessionInUse,
+            "Session is already open for writing: session-1",
+        )));
+
+        assert_eq!(error.code, ErrorCode::InvalidParams);
+        assert_eq!(
+            error.data.as_ref().and_then(|data| data.get("state")),
+            Some(&serde_json::json!("session_in_use"))
+        );
+    }
+
+    #[test]
+    fn compatibility_restore_preserves_session_writer_conflicts() {
+        let error = BitfunAcpRuntime::session_core_error(
+            "session-1",
+            BitFunError::SessionInUse {
+                session_id: "session-1".to_string(),
+            },
+        );
+
+        assert_eq!(error.code, ErrorCode::InvalidParams);
+        assert_eq!(
+            error.data.as_ref().and_then(|data| data.get("state")),
+            Some(&serde_json::json!("session_in_use"))
+        );
     }
 
     #[test]

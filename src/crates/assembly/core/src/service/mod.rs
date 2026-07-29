@@ -12,6 +12,7 @@ pub mod canvas; // Canvas service compatibility facade
 pub mod config; // Config management
 #[cfg(feature = "product-full")]
 pub mod cron; // Scheduled jobs
+pub mod dispatch; // Outbound dispatch observer index and target contracts
 pub mod filesystem; // FileSystem management
 #[cfg(feature = "service-integrations")]
 pub mod git; // Git service

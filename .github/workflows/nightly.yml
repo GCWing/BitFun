@@ -208,6 +208,32 @@ jobs:
       - name: Build desktop app
         run: ${{ matrix.platform.build_command }}
 
+      - name: Package macOS CLI for SSH dispatch
+        if: runner.os == 'macOS'
+        id: macos-cli
+        shell: bash
+        env:
+          NIGHTLY_VERSION: ${{ needs.check-changes.outputs.nightly_version }}
+          TARGET: ${{ matrix.platform.target }}
+        run: |
+          set -euo pipefail
+          ASSET_VERSION="${NIGHTLY_VERSION%%+*}"
+          cargo build --release --target "$TARGET" -p bitfun-cli
+          bash scripts/cli/package-unix.sh "$ASSET_VERSION" "$TARGET"
+
+      - name: Sign macOS CLI archive and checksum
+        if: runner.os == 'macOS'
+        shell: bash
+        env:
+          BITFUN_SIGNING_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          BITFUN_SIGNING_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          BITFUN_SIGNING_PUBKEY: ${{ secrets.TAURI_UPDATER_PUBKEY }}
+        run: |
+          set -euo pipefail
+          bash scripts/sign-release-assets.sh \
+            "${{ steps.macos-cli.outputs.archive }}" \
+            "${{ steps.macos-cli.outputs.checksum }}"
+
       - name: Verify AppImage fcitx5 GTK module
         if: runner.os == 'Linux'
         shell: bash
@@ -224,6 +250,10 @@ jobs:
             target/release/bundle
             src/apps/desktop/target/release/bundle
             BitFun-Installer/src-tauri/target/release/bitfun-installer.exe
+            bitfun-cli-*-apple-darwin.tar.gz
+            bitfun-cli-*-apple-darwin.tar.gz.sha256
+            bitfun-cli-*-apple-darwin.tar.gz.sig
+            bitfun-cli-*-apple-darwin.tar.gz.sha256.sig
 
   linux-binaries:
     name: Linux CLI and Relay Server
@@ -343,9 +373,37 @@ jobs:
             release-assets/**/*bitfun-installer.exe
             release-assets/**/*.sig
             release-assets/minisign.pub
+            release-assets/**/bitfun-cli-*-apple-darwin.tar.gz
+            release-assets/**/bitfun-cli-*-apple-darwin.tar.gz.sha256
             linux-release-assets/bitfun-cli-*.tar.gz
             linux-release-assets/bitfun-cli-*.tar.gz.sha256
             linux-release-assets/bitfun-relay-server-*.tar.gz
             linux-release-assets/bitfun-relay-server-*.tar.gz.sha256
             linux-release-assets/*.tar.gz.sig
+            linux-release-assets/*.tar.gz.sha256.sig
             linux-release-assets/linux-binaries.json
+
+      - name: Verify published Linux CLI signatures
+        shell: bash
+        run: |
+          set -euo pipefail
+          while IFS= read -r cli_url; do
+            curl -fsSL --retry 5 --retry-delay 3 "${cli_url}.sig" -o /dev/null
+            curl -fsSL --retry 5 --retry-delay 3 "${cli_url}.sha256.sig" -o /dev/null
+          done < <(jq -r '.platforms[].cli.url' linux-release-assets/linux-binaries.json)
+
+      - name: Verify published macOS CLI assets
+        shell: bash
+        env:
+          NIGHTLY_VERSION: ${{ needs.check-changes.outputs.nightly_version }}
+        run: |
+          set -euo pipefail
+          ASSET_VERSION="${NIGHTLY_VERSION%%+*}"
+          RELEASE_ROOT="https://github.com/GCWing/BitFun/releases/download/${{ env.NIGHTLY_TAG }}"
+          for target in aarch64-apple-darwin x86_64-apple-darwin; do
+            archive="${RELEASE_ROOT}/bitfun-cli-${ASSET_VERSION}-${target}.tar.gz"
+            curl -fsSL --retry 5 --retry-delay 3 "$archive" -o /dev/null
+            curl -fsSL --retry 5 --retry-delay 3 "${archive}.sha256" -o /dev/null
+            curl -fsSL --retry 5 --retry-delay 3 "${archive}.sig" -o /dev/null
+            curl -fsSL --retry 5 --retry-delay 3 "${archive}.sha256.sig" -o /dev/null
+          done

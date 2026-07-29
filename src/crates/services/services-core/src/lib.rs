@@ -5,6 +5,7 @@
 
 pub mod diagnostics;
 pub mod diff;
+mod file_lock;
 pub mod filesystem;
 pub mod json_store;
 #[cfg(feature = "workspace-runtime")]

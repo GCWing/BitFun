@@ -72,6 +72,15 @@ static LOCAL_ONLY_COMMANDS: &[&str] = &[
     "relay_deploy_cancel",
     "relay_deploy_register",
     "relay_deploy_verify",
+    "dispatch_list_targets",
+    "dispatch_probe_target",
+    "dispatch_install_cli_start",
+    "dispatch_install_cli_poll",
+    "dispatch_install_cli_cancel",
+    "dispatch_submit",
+    "dispatch_status",
+    "dispatch_cancel",
+    "dispatch_list_jobs",
 ];
 
 /// Desktop IDE surfaces that CLI Peer Host does not implement.
@@ -108,4 +117,26 @@ pub(crate) fn is_cli_unsupported_command(command: &str) -> bool {
         "review_platform_",
     ];
     prefixes.iter().any(|prefix| command.starts_with(prefix))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_local_only_command;
+
+    #[test]
+    fn outbound_dispatch_control_plane_stays_local_only() {
+        for command in [
+            "dispatch_list_targets",
+            "dispatch_probe_target",
+            "dispatch_install_cli_start",
+            "dispatch_install_cli_poll",
+            "dispatch_install_cli_cancel",
+            "dispatch_submit",
+            "dispatch_status",
+            "dispatch_cancel",
+            "dispatch_list_jobs",
+        ] {
+            assert!(is_local_only_command(command), "{command}");
+        }
+    }
 }

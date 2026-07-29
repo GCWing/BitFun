@@ -21,6 +21,8 @@ import { Tooltip, IconButton } from '@/component-library';
 import { useGitState } from '@/tools/git/hooks/useGitState';
 import type { SessionExecutionTarget } from '@/infrastructure/api/service-api/WorktreeAPI';
 import { useI18n } from '@/infrastructure/i18n';
+import { DispatchTargetPicker } from '@/features/dispatch/DispatchTargetPicker';
+import type { DispatchSelection, DispatchTarget } from '@/features/dispatch/types';
 import './ChatInputWorkspaceStrip.scss';
 
 export interface ChatInputWorkspaceStripProps {
@@ -61,6 +63,13 @@ export interface ChatInputWorkspaceStripProps {
     locked: boolean;
     onChange: (enabled: boolean) => void;
   };
+  /** Immutable per-session dispatch destination. Hidden on embedded/mini composers. */
+  dispatchControl?: {
+    target: DispatchTarget;
+    locked: boolean;
+    onSelectLocal?: () => void;
+    onSelectSsh: (selection: DispatchSelection) => void;
+  };
 }
 
 export type ChatInputPermissionMode = 'ask' | 'auto' | 'full_access' | 'acp';
@@ -80,6 +89,7 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
   deferPassiveGitRefresh = false,
   executionTarget,
   worktreeControl,
+  dispatchControl,
 }) => {
   const { t } = useTranslation('flow-chat');
   const { t: tWorktrees } = useI18n('worktrees');
@@ -112,7 +122,8 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
   const showUsage = usageReport?.visible && !!usageReport.onOpen;
   const showGoal = threadGoal?.visible && !!threadGoal.onOpen;
   const showPermission = !!permissionControl;
-  const showRightActions = showPermission || showUsage || showGoal;
+  const showDispatch = !!dispatchControl;
+  const showRightActions = showDispatch || showPermission || showUsage || showGoal;
   const isWorktree = !!executionTarget?.worktreeId;
   const worktreeEnabled = worktreeControl?.enabled ?? isWorktree;
   const worktreeEnabledRef = useRef(worktreeEnabled);
@@ -292,6 +303,14 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
 
       {showRightActions ? (
         <div className="bitfun-chat-input-workspace-strip__actions">
+          {dispatchControl ? (
+            <DispatchTargetPicker
+              target={dispatchControl.target}
+              locked={dispatchControl.locked}
+              onSelectLocal={dispatchControl.onSelectLocal}
+              onSelectSsh={dispatchControl.onSelectSsh}
+            />
+          ) : null}
           {showPermission ? (
             <div
               ref={permissionRootRef}

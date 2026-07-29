@@ -18,6 +18,7 @@ mod chat_state;
 mod config;
 mod daemon;
 mod diagnostics;
+mod dispatch;
 mod hook_import;
 mod logging;
 mod management;
@@ -259,6 +260,12 @@ enum Commands {
     Daemon {
         #[command(subcommand)]
         action: DaemonAction,
+    },
+
+    /// Run and inspect persistent tasks owned by this machine
+    Dispatch {
+        #[command(subcommand)]
+        action: DispatchAction,
     },
 
     /// Start or inspect the Agent Client Protocol (ACP) server
@@ -572,6 +579,25 @@ enum DaemonAction {
     Uninstall,
     /// Show daemon and auto-start service status
     Status,
+}
+
+#[derive(Subcommand)]
+pub(crate) enum DispatchAction {
+    /// Report target protocol and local execution readiness
+    Probe,
+    /// Persist and start a detached dispatch job
+    Submit,
+    /// Read job state and incremental events
+    Status,
+    /// Cancel a detached dispatch job
+    Cancel,
+    /// List jobs owned by this machine
+    List,
+    #[command(name = "__run", hide = true)]
+    Run {
+        #[arg(long)]
+        job: String,
+    },
 }
 
 // ======================== System Initialization ========================
@@ -917,6 +943,10 @@ impl std::fmt::Display for ReportedCliError {
 
 impl std::error::Error for ReportedCliError {}
 
+fn is_dispatch_command(command: &Option<Commands>) -> bool {
+    matches!(command, Some(Commands::Dispatch { .. }))
+}
+
 async fn run_cli() -> Result<()> {
     let raw_args = std::env::args_os().collect::<Vec<_>>();
     let product_binary_name = option_env!("BITFUN_PRODUCT_BINARY_NAME").unwrap_or("bitfun");
@@ -961,6 +991,7 @@ async fn run_cli() -> Result<()> {
         Err(error) => return Err(error),
     };
     let is_exec_mode = matches!(cli.command, Some(Commands::Exec { .. }));
+    let is_dispatch_mode = is_dispatch_command(&cli.command);
     let is_daemon_run = matches!(
         cli.command,
         Some(Commands::Daemon {
@@ -978,7 +1009,7 @@ async fn run_cli() -> Result<()> {
         let service_log_dir =
             logging::resolve_logs_root().join(format!("shared-runtime-{}", std::process::id()));
         logging::init_file_logging_at(&service_log_dir, file_log_level);
-    } else if is_tui_mode || is_exec_mode || is_daemon_run {
+    } else if is_tui_mode || is_exec_mode || is_daemon_run || is_dispatch_mode {
         logging::init_file_logging(file_log_level);
     } else {
         tracing_subscriber::fmt()
@@ -1176,6 +1207,10 @@ async fn run_cli() -> Result<()> {
             DaemonAction::Uninstall => daemon::uninstall_service()?,
             DaemonAction::Status => daemon::print_status()?,
         },
+
+        Some(Commands::Dispatch { action }) => {
+            root_handlers::handle_dispatch_action(action).await?;
+        }
 
         Some(Commands::Acp {
             action: None | Some(AcpAction::Serve),
@@ -1735,5 +1770,45 @@ mod shared_tui_command_tests {
             .render_long_help()
             .to_string();
         assert!(!exec_help.contains("--shared"));
+    }
+}
+
+#[cfg(test)]
+mod dispatch_command_tests {
+    use super::{is_dispatch_command, Cli, Commands, DispatchAction};
+    use clap::{CommandFactory, Parser};
+
+    #[test]
+    fn dispatch_commands_parse_and_internal_worker_is_hidden() {
+        let status =
+            Cli::try_parse_from(["bitfun", "dispatch", "status"]).expect("parse dispatch status");
+        assert!(matches!(
+            status.command,
+            Some(Commands::Dispatch {
+                action: DispatchAction::Status
+            })
+        ));
+        assert!(is_dispatch_command(&status.command));
+
+        let worker = Cli::try_parse_from(["bitfun", "dispatch", "__run", "--job", "job-1"])
+            .expect("parse internal dispatch worker");
+        assert!(matches!(
+            worker.command,
+            Some(Commands::Dispatch {
+                action: DispatchAction::Run { ref job }
+            }) if job == "job-1"
+        ));
+        assert!(is_dispatch_command(&worker.command));
+        let unrelated = Cli::try_parse_from(["bitfun", "config", "show"]).expect("parse config");
+        assert!(!is_dispatch_command(&unrelated.command));
+
+        let help = Cli::command().render_long_help().to_string();
+        assert!(help.contains("dispatch"));
+        let dispatch_help = Cli::command()
+            .find_subcommand_mut("dispatch")
+            .expect("dispatch command")
+            .render_long_help()
+            .to_string();
+        assert!(!dispatch_help.contains("__run"));
     }
 }

@@ -373,6 +373,7 @@ jobs:
             linux-release-assets/bitfun-relay-server-*.tar.gz
             linux-release-assets/bitfun-relay-server-*.tar.gz.sha256
             linux-release-assets/*.tar.gz.sig
+            linux-release-assets/*.tar.gz.sha256.sig
             linux-release-assets/linux-binaries.json
           fail_on_unmatched_files: true
 
@@ -393,6 +394,10 @@ jobs:
             "https://github.com/GCWing/BitFun/releases/download/${{ needs.prepare.outputs.release_tag }}/linux-binaries.json" \
             -o linux-binaries.published.json
           test "$(jq -r '.version' linux-binaries.published.json)" = "${{ needs.prepare.outputs.version }}"
+          while IFS= read -r cli_url; do
+            curl -fsSL --retry 5 --retry-delay 3 "${cli_url}.sig" -o /dev/null
+            curl -fsSL --retry 5 --retry-delay 3 "${cli_url}.sha256.sig" -o /dev/null
+          done < <(jq -r '.platforms[].cli.url' linux-binaries.published.json)
 
       # Nudge the openbitfun.com mirror to sync now instead of on its next
       # 10-minute cron tick. Until the mirror has these bytes, CN clients have

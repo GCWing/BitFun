@@ -46,6 +46,12 @@ const stateMachineMocks = vi.hoisted(() => ({
   delete: vi.fn(),
 }));
 
+const dispatchStoreMocks = vi.hoisted(() => ({
+  registerJob: vi.fn(),
+  dismissJob: vi.fn(),
+  updateTitle: vi.fn(),
+}));
+
 vi.mock('@/infrastructure/api/service-api/AgentAPI', () => ({
   agentAPI: agentApiMocks,
 }));
@@ -95,6 +101,12 @@ vi.mock('./TextChunkModule', () => ({
 
 vi.mock('../../state-machine', () => ({
   stateMachineManager: stateMachineMocks,
+}));
+
+vi.mock('@/features/dispatch/dispatchJobStore', () => ({
+  dispatchJobStore: {
+    getState: () => dispatchStoreMocks,
+  },
 }));
 
 function createDeferred<T>() {
@@ -400,6 +412,61 @@ describe('createChatSession', () => {
       undefined,
       expect.any(Object),
     );
+  });
+
+  it('creates an observer projection without a local model or backend session', async () => {
+    configManagerMocks.getConfigs.mockRejectedValue(
+      new Error('No controller-side model is configured'),
+    );
+    const { context, flowChatStore } = createContext(createSession({
+      workspacePath: '/source/repo',
+    }));
+
+    const sessionId = await createChatSession(context, {
+      workspacePath: '/source/repo',
+      dispatchTargetRequest: {
+        kind: 'ssh',
+        connectionId: 'ssh-1',
+        workspacePath: '/target/repo',
+      },
+      dispatchTarget: {
+        kind: 'ssh',
+        connectionId: 'ssh-1',
+        workspacePath: '/target/repo',
+        displayName: 'build-host',
+      },
+      dispatchApprovalPolicy: 'reject-and-report',
+    }, 'agentic');
+
+    expect(sessionId).toEqual(expect.any(String));
+    expect(agentApiMocks.createSession).not.toHaveBeenCalled();
+    expect(flowChatStore.createSession).toHaveBeenCalledWith(
+      sessionId,
+      expect.objectContaining({
+        modelName: undefined,
+        dispatchJobId: expect.any(String),
+        dispatchApprovalPolicy: 'reject-and-report',
+        dispatchJobState: 'submitting',
+        dispatchCursor: 0,
+      }),
+      undefined,
+      expect.any(String),
+      128128,
+      'agentic',
+      '/source/repo',
+      undefined,
+      undefined,
+      expect.any(Object),
+    );
+    expect(dispatchStoreMocks.registerJob).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionId,
+        state: 'submitting',
+        approvalPolicy: 'reject-and-report',
+        model: undefined,
+      }),
+    );
+    expect(configManagerMocks.getConfigs).not.toHaveBeenCalled();
   });
 });
 
@@ -926,6 +993,34 @@ describe('SessionModule historical session coordination', () => {
     expect(flowChatStore.getState().activeSessionId).toBeNull();
     expect(processingManager.clearSessionStatus).toHaveBeenCalledWith('active-1');
     expect(persistenceMocks.cleanupSaveState).toHaveBeenCalledWith(context, 'active-1');
+  });
+
+  it('tombstones a deleted dispatch projection instead of deleting a local session', async () => {
+    const session = createSession({
+      sessionId: 'dispatch-session',
+      isHistorical: false,
+      config: {
+        dispatchTarget: {
+          kind: 'ssh',
+          connectionId: 'ssh-1',
+          workspacePath: '/target/repo',
+          displayName: 'build-host',
+        },
+        dispatchJobId: 'job-1',
+      },
+    });
+    const { context, flowChatStore } = createContext(session, {
+      activeSessionId: session.sessionId,
+    });
+
+    await deleteChatSession(context, session.sessionId);
+
+    expect(dispatchStoreMocks.dismissJob).toHaveBeenCalledWith('job-1');
+    expect(flowChatStore.removeSession).toHaveBeenCalledWith(
+      session.sessionId,
+      { nextActiveSessionId: null },
+    );
+    expect(flowChatStore.deleteSession).not.toHaveBeenCalled();
   });
 
   it('returns to the welcome state after deleting a non-empty active session', async () => {

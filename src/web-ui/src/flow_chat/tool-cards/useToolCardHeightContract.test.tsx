@@ -25,11 +25,10 @@ function Harness({ height, collapse }: { height: number; collapse: boolean }) {
 
 function CustomAnchorHarness({ collapse }: { collapse: boolean }) {
   const anchorRef = React.useRef<HTMLDivElement>(null);
-  const { dispatchCollapseIntent } = useToolCardHeightContract({
+  const { cardRootRef, dispatchCollapseIntent } = useToolCardHeightContract({
     toolId: 'thinking-a',
     toolName: 'thinking',
     getAnchorElement: () => anchorRef.current,
-    getCardHeight: () => 240,
   });
 
   useLayoutEffect(() => {
@@ -38,7 +37,36 @@ function CustomAnchorHarness({ collapse }: { collapse: boolean }) {
     }
   }, [collapse, dispatchCollapseIntent]);
 
-  return <div ref={anchorRef} data-testid="custom-anchor" />;
+  return (
+    <div ref={anchorRef} data-testid="custom-anchor">
+      <div ref={cardRootRef} data-height="240" />
+    </div>
+  );
+}
+
+function BoundedScrollableHarness({ collapse }: { collapse: boolean }) {
+  const contentRef = React.useRef<HTMLDivElement>(null);
+  const { cardRootRef, dispatchCollapseIntent } = useToolCardHeightContract({
+    toolId: 'thinking-bounded',
+    toolName: 'thinking',
+  });
+
+  useLayoutEffect(() => {
+    if (!contentRef.current) return;
+    Object.defineProperty(contentRef.current, 'scrollHeight', {
+      configurable: true,
+      value: 4_000,
+    });
+    if (collapse) {
+      dispatchCollapseIntent('auto');
+    }
+  }, [collapse, dispatchCollapseIntent]);
+
+  return (
+    <div ref={cardRootRef} data-height="320">
+      <div ref={contentRef} />
+    </div>
+  );
 }
 
 describe('useToolCardHeightContract', () => {
@@ -111,6 +139,25 @@ describe('useToolCardHeightContract', () => {
       expect(receivedDetail?.anchorElement).toBe(
         container.querySelector('[data-testid="custom-anchor"]'),
       );
+    } finally {
+      window.removeEventListener('flowchat:tool-card-collapse-intent', handleIntent);
+    }
+  });
+
+  it('reports visible card height instead of hidden scroll content height', () => {
+    let receivedDetail: Record<string, unknown> | null = null;
+    const handleIntent = (event: Event) => {
+      receivedDetail = (event as CustomEvent<Record<string, unknown>>).detail;
+    };
+    window.addEventListener('flowchat:tool-card-collapse-intent', handleIntent);
+
+    try {
+      act(() => root.render(<BoundedScrollableHarness collapse />));
+      expect(receivedDetail).toMatchObject({
+        toolId: 'thinking-bounded',
+        toolName: 'thinking',
+        cardHeight: 320,
+      });
     } finally {
       window.removeEventListener('flowchat:tool-card-collapse-intent', handleIntent);
     }

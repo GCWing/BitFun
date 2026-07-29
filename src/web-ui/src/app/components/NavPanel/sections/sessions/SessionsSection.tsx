@@ -55,6 +55,12 @@ import { notificationService } from '@/shared/notification-system';
 import { copyTextToClipboard } from '@/shared/utils/textSelection';
 import { scheduleAfterStartupPaint, scheduleAfterStartupSignal } from '@/shared/utils/startupTaskScheduling';
 import {
+  isNonLocalDispatchTarget,
+  type DispatchJobState,
+} from '@/features/dispatch/types';
+import { useDispatchJobStore } from '@/features/dispatch/dispatchJobStore';
+import { resolveDispatchNavPresentation } from '@/features/dispatch/dispatchNavPresentation';
+import {
   SESSION_METADATA_DEFERRED_FALLBACK_MS,
   SESSION_METADATA_DEFERRED_FRAME_COUNT,
   SESSION_METADATA_DEFERRED_SIGNAL,
@@ -183,6 +189,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
     flowChatStore.getState()
   );
   const backgroundSubagentActivities = useBackgroundSubagentActivityStore(state => state.activities);
+  const dispatchTransportByJobId = useDispatchJobStore(state => state.transportByJobId);
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState('');
   const [expandLevel, setExpandLevel] = useState<0 | 1 | 2>(0);
@@ -1068,7 +1075,49 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
           const parentTurnIndex = relationship.origin?.parentTurnIndex;
           const trimmedAssistant = assistantLabel?.trim() ?? '';
           const showAssistantInTooltip = trimmedAssistant.length > 0;
-          const showRichTooltip = showAssistantInTooltip || isChildSession || showBackgroundSubagentActivity;
+          const dispatchTarget = session.config.dispatchTarget;
+          const isDispatched = isNonLocalDispatchTarget(dispatchTarget);
+          const dispatchTargetLabel =
+            dispatchTarget?.kind === 'ssh' || dispatchTarget?.kind === 'device'
+              ? dispatchTarget.displayName
+              : '';
+          const dispatchState = session.config.dispatchJobState ?? 'submitting';
+          const dispatchStateLabel = {
+            submitting: t('nav.sessions.dispatchStates.submitting'),
+            submission_unknown: t('nav.sessions.dispatchStates.submission_unknown'),
+            queued: t('nav.sessions.dispatchStates.queued'),
+            running: t('nav.sessions.dispatchStates.running'),
+            succeeded: t('nav.sessions.dispatchStates.succeeded'),
+            failed: t('nav.sessions.dispatchStates.failed'),
+            cancelled: t('nav.sessions.dispatchStates.cancelled'),
+          } satisfies Record<DispatchJobState, string>;
+          const dispatchTransport = session.config.dispatchJobId
+            ? dispatchTransportByJobId[session.config.dispatchJobId]
+            : undefined;
+          const dispatchTransportError =
+            dispatchTransport?.lastTransportError?.trim()
+            || t('nav.sessions.dispatchTransportErrorFallback');
+          const dispatchPresentation = isDispatched
+            ? resolveDispatchNavPresentation({
+                targetLabel: dispatchTargetLabel,
+                state: dispatchState,
+                reachability: dispatchTransport?.reachability,
+                runningSummary: t('nav.sessions.dispatchRunningOn', {
+                  target: dispatchTargetLabel,
+                  state: dispatchStateLabel[dispatchState],
+                }),
+                unreachableLabel: t('nav.sessions.dispatchUnreachable'),
+                unreachableSummary: t('nav.sessions.dispatchUnreachableDetails', {
+                  target: dispatchTargetLabel,
+                  error: dispatchTransportError,
+                }),
+              })
+            : null;
+          const showRichTooltip =
+            showAssistantInTooltip ||
+            isChildSession ||
+            showBackgroundSubagentActivity ||
+            isDispatched;
           const tooltipContent = showRichTooltip ? (
             <div className="bitfun-nav-panel__inline-item-tooltip">
               <div className="bitfun-nav-panel__inline-item-tooltip-title">{sessionTitle}</div>
@@ -1087,6 +1136,11 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                     : t('nav.sessions.childSourceWithoutTurn', {
                         parentTitle: parentTitle || t('nav.sessions.parentSession'),
                   })}
+                </div>
+              ) : null}
+              {isDispatched ? (
+                <div className="bitfun-nav-panel__inline-item-tooltip-meta">
+                  {dispatchPresentation?.summary}
                 </div>
               ) : null}
               {showBackgroundSubagentActivity && backgroundSubagentActivity ? (
@@ -1253,6 +1307,15 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                     <span className="bitfun-nav-panel__inline-item-label">{sessionTitle}</span>
                     {isChildSession ? (
                       <span className="bitfun-nav-panel__inline-item-btw-badge">{childSessionBadge}</span>
+                    ) : null}
+                    {isDispatched ? (
+                      <span
+                        className="bitfun-nav-panel__inline-item-dispatch-badge"
+                        data-state={dispatchPresentation?.visualState}
+                        title={dispatchPresentation?.summary}
+                      >
+                        {dispatchPresentation?.badgeLabel}
+                      </span>
                     ) : null}
                     {attentionKind === 'ask_user' || attentionKind === 'tool_confirm' ? (
                       <span className="bitfun-nav-panel__inline-item-attention-badge">
