@@ -283,12 +283,20 @@ impl WorktreeService {
     }
 
     pub async fn list(request: WorktreeListRequest) -> Result<Vec<WorktreeSummary>, WorktreeError> {
+        Self::list_scoped(request, None).await
+    }
+
+    async fn list_scoped(
+        request: WorktreeListRequest,
+        managed_root: Option<&Path>,
+    ) -> Result<Vec<WorktreeSummary>, WorktreeError> {
         let context = Self::repository_context(Path::new(&request.project_workspace_path)).await?;
         let lock = repository_lock(&context.common_git_dir);
         let _guard = lock.lock().await;
         let _process_guard = Self::acquire_repository_process_lock(&context).await?;
         let mut registry = Self::load_registry(&context).await?;
-        let (summaries, changed) = Self::reconcile(&context, &mut registry).await?;
+        let (summaries, changed) =
+            Self::reconcile_scoped(&context, &mut registry, managed_root).await?;
         if changed {
             Self::save_registry(&context, &registry).await?;
         }
@@ -296,18 +304,25 @@ impl WorktreeService {
     }
 
     /// Lists local Git projects known to the workspace service together with
-    /// their non-main worktrees. Invalid and non-Git workspace records are
-    /// ignored so one stale project cannot hide the rest of the catalog.
+    /// worktrees beneath the configured BitFun worktree root. Invalid and
+    /// non-Git workspace records are ignored so one stale project cannot hide
+    /// the rest of the catalog.
     pub async fn list_projects(
         _request: WorktreeProjectListRequest,
     ) -> Result<Vec<WorktreeProjectSummary>, WorktreeError> {
+        let settings = load_settings().await;
+        let path_manager = get_path_manager_arc();
+        let managed_root = resolve_managed_root(&settings, path_manager.as_ref())?;
         let project_paths = known_project_workspace_paths().await;
         let mut projects = Vec::new();
 
         for project_path in project_paths {
-            match Self::list(WorktreeListRequest {
-                project_workspace_path: path_string(&project_path),
-            })
+            match Self::list_scoped(
+                WorktreeListRequest {
+                    project_workspace_path: path_string(&project_path),
+                },
+                Some(&managed_root),
+            )
             .await
             {
                 Ok(worktrees) => {
@@ -877,6 +892,14 @@ impl WorktreeService {
         context: &RepositoryContext,
         registry: &mut WorktreeRegistry,
     ) -> Result<(Vec<WorktreeSummary>, bool), WorktreeError> {
+        Self::reconcile_scoped(context, registry, None).await
+    }
+
+    async fn reconcile_scoped(
+        context: &RepositoryContext,
+        registry: &mut WorktreeRegistry,
+        managed_root: Option<&Path>,
+    ) -> Result<(Vec<WorktreeSummary>, bool), WorktreeError> {
         let git_worktrees = GitService::list_worktrees(&context.project_workspace_path)
             .await
             .map_err(map_git_error)?;
@@ -896,6 +919,11 @@ impl WorktreeService {
         let mut changed = false;
 
         for git_worktree in git_worktrees {
+            if managed_root.is_some_and(|root| {
+                git_worktree.is_main || !path_is_within_root(Path::new(&git_worktree.path), root)
+            }) {
+                continue;
+            }
             let lookup_path = normalized_lookup_path(Path::new(&git_worktree.path));
             let missing = git_worktree.is_prunable || !Path::new(&git_worktree.path).is_dir();
             let registered = registered_by_path.get(&lookup_path);
@@ -945,6 +973,10 @@ impl WorktreeService {
 
         for record in registry.worktrees.iter() {
             if seen_registered_ids.contains(&record.worktree_id) {
+                continue;
+            }
+            if managed_root.is_some_and(|root| !path_is_within_root(Path::new(&record.path), root))
+            {
                 continue;
             }
             let missing_info = GitWorktreeInfo {
@@ -1163,7 +1195,7 @@ impl WorktreeService {
             let Some(summary) = summaries_by_id.get(&candidate_id) else {
                 continue;
             };
-            if let Err(protected_reason) = validate_removal(summary, false) {
+            if let Err(protected_reason) = validate_automatic_removal(summary) {
                 log::debug!(
                     "Skipping automatic worktree deletion for {}: {}",
                     summary.path,
@@ -1617,6 +1649,12 @@ fn normalized_lookup_path(path: &Path) -> String {
     path_string(&path)
 }
 
+fn path_is_within_root(path: &Path, root: &Path) -> bool {
+    let normalized_path = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+    let normalized_root = std::fs::canonicalize(root).unwrap_or_else(|_| root.to_path_buf());
+    normalized_path != normalized_root && normalized_path.starts_with(normalized_root)
+}
+
 fn path_string(path: &Path) -> String {
     path.to_string_lossy().replace('\\', "/")
 }
@@ -1667,12 +1705,6 @@ fn validate_removal(summary: &WorktreeSummary, force: bool) -> Result<(), Worktr
             "The worktree is locked by Git",
         ));
     }
-    if summary.associated_session_count > 0 {
-        return Err(error(
-            WorktreeErrorCode::WorktreeBusy,
-            "The worktree has associated sessions; delete them before removing the worktree",
-        ));
-    }
     if !force && summary.dirty {
         return Err(error(
             WorktreeErrorCode::DirtyWorktree,
@@ -1692,6 +1724,16 @@ fn validate_removal(summary: &WorktreeSummary, force: bool) -> Result<(), Worktr
         ));
     }
     Ok(())
+}
+
+fn validate_automatic_removal(summary: &WorktreeSummary) -> Result<(), WorktreeError> {
+    if summary.associated_session_count > 0 {
+        return Err(error(
+            WorktreeErrorCode::WorktreeBusy,
+            "The worktree has associated sessions",
+        ));
+    }
+    validate_removal(summary, false)
 }
 
 fn map_base_ref_error(git_error: GitError, base_ref: &str) -> WorktreeError {
@@ -1748,9 +1790,9 @@ fn map_git_error(git_error: GitError) -> WorktreeError {
 mod tests {
     use super::{
         automatic_delete_candidate_ids, managed_target_path, managed_worktree_directory_name,
-        repository_id, resolve_managed_root, sanitize_worktree_project_label, validate_removal,
-        RegisteredWorktree, RepositoryContext, WorktreeOperationReceipt, WorktreeRegistry,
-        WorktreeService, AUTO_DELETE_MIN_AGE_MS,
+        path_is_within_root, repository_id, resolve_managed_root, sanitize_worktree_project_label,
+        validate_automatic_removal, validate_removal, RegisteredWorktree, RepositoryContext,
+        WorktreeOperationReceipt, WorktreeRegistry, WorktreeService, AUTO_DELETE_MIN_AGE_MS,
     };
     use crate::infrastructure::PathManager;
     use bitfun_core_types::{
@@ -1909,6 +1951,23 @@ mod tests {
     }
 
     #[test]
+    fn catalog_scope_only_accepts_descendants_of_the_configured_root() {
+        let root = tempfile::tempdir().expect("worktree root");
+        let managed = root.path().join("repository-id").join("worktree-id");
+        std::fs::create_dir_all(&managed).expect("managed worktree");
+        let sibling = root
+            .path()
+            .parent()
+            .expect("temporary root parent")
+            .join("other-worktrees")
+            .join("worktree-id");
+
+        assert!(path_is_within_root(&managed, root.path()));
+        assert!(!path_is_within_root(root.path(), root.path()));
+        assert!(!path_is_within_root(&sibling, root.path()));
+    }
+
+    #[test]
     fn safe_removal_rejects_every_protected_state() {
         let mut summary = removable_summary();
         summary.is_main = true;
@@ -1922,13 +1981,6 @@ mod tests {
         assert_eq!(
             validate_removal(&summary, true).unwrap_err().code,
             WorktreeErrorCode::WorktreeLocked
-        );
-
-        let mut summary = removable_summary();
-        summary.associated_session_count = 1;
-        assert_eq!(
-            validate_removal(&summary, true).unwrap_err().code,
-            WorktreeErrorCode::WorktreeBusy
         );
 
         let mut summary = removable_summary();
@@ -1959,6 +2011,18 @@ mod tests {
         summary.dirty = true;
         summary.has_unpublished_commits = true;
         assert!(validate_removal(&summary, true).is_ok());
+    }
+
+    #[test]
+    fn manual_removal_allows_associated_sessions_but_automatic_cleanup_does_not() {
+        let mut summary = removable_summary();
+        summary.associated_session_count = 1;
+
+        assert!(validate_removal(&summary, false).is_ok());
+        assert_eq!(
+            validate_automatic_removal(&summary).unwrap_err().code,
+            WorktreeErrorCode::WorktreeBusy
+        );
     }
 
     #[test]

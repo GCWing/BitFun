@@ -49,15 +49,15 @@
   },
   "management": {
     "title": "Workspace worktrees",
-    "description": "Local workspaces and their linked worktrees. Refresh to rescan Git and session associations.",
-    "loading": "Scanning local worktrees…",
-    "loadFailed": "Could not load the local worktree list.",
+    "description": "Worktrees inside the configured BitFun root, grouped by owning workspace.",
+    "loading": "Scanning BitFun worktrees…",
+    "loadFailed": "Could not load the BitFun worktree list.",
     "refresh": "Refresh worktrees",
     "retry": "Try again",
-    "worktreeCount": "Worktrees: {{count}}",
+    "worktreeCount": "{{count}} worktrees",
     "deleted": "Deleted {{path}}.",
     "empty": {
-      "title": "No linked worktrees",
+      "title": "No BitFun worktrees",
       "description": "Worktrees created for isolated sessions will appear here."
     },
     "lifecycle": {
@@ -74,6 +74,7 @@
     },
     "sessions": {
       "title": "Conversations",
+      "summary": "{{count}} conversations",
       "empty": "No associated conversations.",
       "status": {
         "active": "Active",
@@ -81,7 +82,6 @@
       }
     },
     "protection": {
-      "associatedSessions": "Delete all associated conversations before deleting this worktree.",
       "locked": "Unlock this worktree in Git before deleting it.",
       "missing": "The worktree directory is missing. Clean up the stale Git record manually."
     },
@@ -90,14 +90,14 @@
       "actionLabel": "Delete worktree {{path}}",
       "title": "Delete this worktree?",
       "message": "The checkout will be removed. This action cannot be undone.",
+      "messageWithSessions": "The checkout will be removed. Associated conversations stay in history, but their checkout will no longer be available.",
       "forceTitle": "Delete and discard local work?",
       "forceMessage": "This worktree contains local changes or detached commits. Deleting it will permanently discard that local work.",
-      "forceHint": "Deleting this worktree requires confirmation to discard its local work.",
+      "forceMessageWithSessions": "Local changes or detached commits will be permanently discarded. Associated conversations stay in history without their checkout.",
       "forceAction": "Delete and discard",
       "cancel": "Cancel"
     },
     "errors": {
-      "associatedSessions": "This worktree has associated conversations and cannot be deleted.",
       "locked": "This worktree is locked by Git and cannot be deleted.",
       "dirty": "This worktree still contains local changes.",
       "unpublishedCommits": "This worktree still contains unpublished detached commits.",

@@ -61,6 +61,29 @@ vi.mock('@/component-library', () => ({
   }: {
     onClick: () => void;
   }) => <button type="button" onClick={onClick}>refresh</button>,
+  IconButton: ({
+    'aria-label': ariaLabel,
+    children,
+    disabled,
+    onClick,
+    title,
+  }: {
+    'aria-label'?: string;
+    children: React.ReactNode;
+    disabled?: boolean;
+    onClick?: () => void;
+    title?: string;
+  }) => (
+    <button
+      type="button"
+      aria-label={ariaLabel}
+      disabled={disabled}
+      onClick={onClick}
+      title={title}
+    >
+      {children}
+    </button>
+  ),
   ConfirmDialog: ({
     confirmText,
     isOpen,
@@ -293,8 +316,9 @@ describe('WorktreesConfig', () => {
     });
     await flushPromises();
 
-    const deleteButton = Array.from(container.querySelectorAll('button'))
-      .find(button => button.textContent?.includes('management.delete.action'));
+    const deleteButton = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="management.delete.actionLabel"]',
+    );
     act(() => deleteButton?.click());
 
     expect(container.querySelector('[role="dialog"]')?.textContent)
@@ -315,7 +339,7 @@ describe('WorktreesConfig', () => {
     );
   });
 
-  it('disables deletion while a worktree still has associated archived sessions', async () => {
+  it('allows manual deletion while preserving associated archived sessions', async () => {
     listProjectsMock.mockResolvedValueOnce([{
       projectWorkspacePath: '/repo',
       worktrees: [worktree()],
@@ -326,10 +350,27 @@ describe('WorktreesConfig', () => {
     });
     await flushPromises();
 
-    const deleteButton = Array.from(container.querySelectorAll('button'))
-      .find(button => button.textContent?.includes('management.delete.action'));
+    const deleteButton = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="management.delete.actionLabel"]',
+    );
+    act(() => deleteButton?.click());
 
-    expect(deleteButton?.disabled).toBe(true);
-    expect(container.textContent).toContain('management.protection.associatedSessions');
+    expect(deleteButton?.disabled).toBe(false);
+    expect(container.querySelector('[role="dialog"]')?.textContent)
+      .toContain('management.delete.messageWithSessions');
+
+    const confirmButton = container.querySelector<HTMLButtonElement>('[data-testid="confirm-delete"]');
+    await act(async () => {
+      confirmButton?.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(removeMock).toHaveBeenCalledWith(
+      '/repo',
+      'wt-1',
+      expect.any(String),
+      false,
+    );
   });
 });
