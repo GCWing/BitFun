@@ -2,10 +2,6 @@
 
 .explore-region {
   position: relative;
-  box-sizing: border-box;
-  width: min(100%, 900px);
-  margin-left: auto;
-  margin-right: auto;
   overflow: hidden;
   padding: 0 var(--flowchat-content-inline-pad);
 
@@ -17,7 +13,7 @@
 // ==================== Collapsible (header + animated content) ====================
 
 .explore-region--collapsible {
-  margin: 0 auto 0.3rem;
+  margin: 0 0 0.3rem;
   font-size: var(--flowchat-font-size-sm);
   line-height: var(--flowchat-support-line-height);
 
