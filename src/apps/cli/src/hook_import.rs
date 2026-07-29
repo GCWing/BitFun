@@ -233,10 +233,12 @@ pub(crate) fn completed_import_status(
         .map(|item| item.enabled);
     match (applied, enabled) {
         (true, Some(true)) => {
-            "Imported Hooks are enabled and will apply on the next matching event."
+            "Imported Hooks are enabled. The main Hook switch still controls whether they run."
         }
         (true, Some(false)) => "Imported Hooks were updated and remain disabled.",
-        (false, Some(true)) => "The reviewed Hook import is already current and enabled.",
+        (false, Some(true)) => {
+            "The reviewed Hook import is current and enabled. The main Hook switch still controls whether it runs."
+        }
         (false, Some(false)) => "The reviewed Hook import is already current and remains disabled.",
         (_, None) => "Hook import completed; refresh the Hook list to verify its current state.",
     }
@@ -296,7 +298,7 @@ fn render_snapshot(snapshot: &ExternalHookImportSnapshotV1) -> String {
     lines.join("\n")
 }
 
-pub(crate) fn render_plan(plan: &ExternalHookImportPlanV1) -> String {
+fn render_plan_lines(plan: &ExternalHookImportPlanV1) -> Vec<String> {
     let mut lines = vec![format!(
         "Hook import {:?}: {} handler(s) from {}",
         plan.disposition,
@@ -336,11 +338,25 @@ pub(crate) fn render_plan(plan: &ExternalHookImportPlanV1) -> String {
             skipped.count
         ));
     }
+    lines
+}
+
+pub(crate) fn render_plan(plan: &ExternalHookImportPlanV1) -> String {
+    let mut lines = render_plan_lines(plan);
     lines.push(format!(
         "Plan fingerprint: {}",
         escape(&plan.plan_fingerprint)
     ));
     lines.push("Preview only until this exact fingerprint is passed with --confirm.".to_string());
+    lines.join("\n")
+}
+
+pub(crate) fn render_plan_for_tui(plan: &ExternalHookImportPlanV1) -> String {
+    let mut lines = render_plan_lines(plan);
+    lines.push(
+        "Preview only; repeat the same import/update command with --confirm after review."
+            .to_string(),
+    );
     lines.join("\n")
 }
 
@@ -367,7 +383,7 @@ mod tests {
         ExternalHookCatalogSnapshotV1, ExternalHookSource, ExternalHookSourceKind,
     };
     use bitfun_product_domains::external_hook_import::{
-        ImportedHookSourceSnapshotV1, ImportedHookSourceStateV1,
+        ExternalHookImportDispositionV1, ImportedHookSourceSnapshotV1, ImportedHookSourceStateV1,
     };
     use bitfun_product_domains::external_sources::{
         EcosystemId, ExternalSourceHealth, ExternalSourceScope,
@@ -422,5 +438,35 @@ mod tests {
             completed_import_status(&snapshot, &source, false),
             "The reviewed Hook import is already current and remains disabled."
         );
+    }
+
+    #[test]
+    fn enabled_completion_does_not_claim_the_global_hook_switch_is_on() {
+        let (source, mut snapshot) = disabled_snapshot();
+        snapshot.imports[0].enabled = true;
+
+        assert_eq!(
+            completed_import_status(&snapshot, &source, true),
+            "Imported Hooks are enabled. The main Hook switch still controls whether they run."
+        );
+    }
+
+    #[test]
+    fn tui_plan_hides_the_internal_fingerprint_and_uses_its_own_confirmation_hint() {
+        let (_, snapshot) = disabled_snapshot();
+        let plan = ExternalHookImportPlanV1 {
+            schema_version: EXTERNAL_HOOK_IMPORT_SCHEMA_V1,
+            source: snapshot.imports[0].source.clone(),
+            disposition: ExternalHookImportDispositionV1::Update,
+            behavior_version: "sha256:behavior".to_string(),
+            handlers: Vec::new(),
+            skipped: Vec::new(),
+            plan_fingerprint: "sha256:internal-plan".to_string(),
+        };
+
+        assert!(render_plan(&plan).contains("sha256:internal-plan"));
+        let rendered = render_plan_for_tui(&plan);
+        assert!(!rendered.contains("sha256:internal-plan"));
+        assert!(rendered.contains("repeat the same import/update command with --confirm"));
     }
 }

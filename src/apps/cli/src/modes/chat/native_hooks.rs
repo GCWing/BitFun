@@ -61,7 +61,7 @@ fn render_native_hook_overview(overview: &NativeHookOverview) -> String {
         }
     ));
     lines.push(format!(
-        "Project hooks: {} (app.hooks.project_hooks_enabled)",
+        "Project hook file: {} (app.hooks.project_hooks_enabled)",
         if overview.project_hooks_enabled {
             "enabled"
         } else {

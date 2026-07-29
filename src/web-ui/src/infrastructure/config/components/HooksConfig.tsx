@@ -197,7 +197,17 @@ const HooksConfig: React.FC = () => {
         setImportSnapshot(result.outcome.snapshot);
         setReviewPlan(null);
         setPlanNotice(null);
-        notifySuccess(t('imports.applied'));
+        const imported = result.outcome.snapshot.imports.find((item) => (
+          item.source.key.providerId === reviewPlan.source.key.providerId
+          && item.source.key.sourceId === reviewPlan.source.key.sourceId
+        ));
+        let message = 'imports.applied';
+        if (imported?.enabled === false) {
+          message = 'imports.appliedDisabled';
+        } else if (!config.enabled) {
+          message = 'imports.appliedMasterDisabled';
+        }
+        notifySuccess(t(message));
       }
     } catch (error) {
       if (!mountedRef.current) return;
@@ -206,7 +216,7 @@ const HooksConfig: React.FC = () => {
     } finally {
       if (mountedRef.current) setBusyKey(null);
     }
-  }, [notifyError, notifySuccess, reviewPlan, t, workspacePath]);
+  }, [config.enabled, notifyError, notifySuccess, reviewPlan, t, workspacePath]);
 
   const mutateImport = useCallback(async (
     action: ExternalHookImportMutation,
@@ -277,6 +287,10 @@ const HooksConfig: React.FC = () => {
   const corruptDiagnostics = importSnapshot?.diagnostics.filter((diagnostic) => (
     diagnostic.code.startsWith('external_hook.import_store_corrupt.')
   )) ?? [];
+  const reviewUpdatesExistingImport = reviewPlan !== null && importSnapshot?.imports.some((item) => (
+    item.source.key.providerId === reviewPlan.source.key.providerId
+    && item.source.key.sourceId === reviewPlan.source.key.sourceId
+  ));
 
   if (loading) {
     return (
@@ -517,7 +531,6 @@ const HooksConfig: React.FC = () => {
                 {t('imports.skipped', { reason: skipped.reasonCode, count: skipped.count })}
               </p>
             ))}
-            <p>{t('imports.fingerprint', { fingerprint: reviewPlan.planFingerprint })}</p>
             <Button
               variant="secondary"
               disabled={busyKey === 'apply'}
@@ -533,7 +546,7 @@ const HooksConfig: React.FC = () => {
               disabled={reviewPlan.handlers.length === 0}
               onClick={() => void applyReviewedPlan()}
             >
-              {t('imports.confirm')}
+              {t(reviewUpdatesExistingImport ? 'imports.confirmUpdate' : 'imports.confirm')}
             </Button>
           </div>
         ) : null}

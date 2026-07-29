@@ -854,7 +854,7 @@ mod tests {
 
         assert!(text.contains("Hooks (BitFun)"));
         assert!(text.contains("Hooks: enabled (app.hooks.enabled)"));
-        assert!(text.contains("Project hooks: disabled (app.hooks.project_hooks_enabled)"));
+        assert!(text.contains("Project hook file: disabled (app.hooks.project_hooks_enabled)"));
         assert!(text.contains("user [loaded; present]"));
         assert!(text.contains("project [not loaded; present]"));
         assert!(text.contains("PreToolUse"));

@@ -194,6 +194,7 @@ describe('HooksConfig imported Hook management', () => {
     const dialog = container.querySelector('[role="dialog"]')!;
     expect(dialog.textContent).toContain('python D:/managed/hooks/check.py');
     expect(dialog.textContent).toContain('unsupported_event');
+    expect(dialog.textContent).not.toContain('sha256:plan-1');
 
     const confirm = Array.from(dialog.querySelectorAll('button'))
       .find((button) => button.textContent === 'imports.confirm')!;
@@ -285,5 +286,79 @@ describe('HooksConfig imported Hook management', () => {
     expect(mutateImportMock).toHaveBeenCalledTimes(1);
     expect(getSnapshotMock).toHaveBeenCalledTimes(2);
     expect(notifyErrorMock).toHaveBeenCalledWith('imports.stateChanged');
+  });
+
+  it('keeps a disabled import disabled after review and reports the authoritative state', async () => {
+    const disabledImport = {
+      importId: 'managed-1',
+      source,
+      enabled: false,
+      behaviorVersion: 'sha256:behavior',
+      state: 'update_available',
+    };
+    const imported = { ...snapshot, imports: [disabledImport] };
+    getSnapshotMock.mockResolvedValue(imported);
+    planImportMock.mockResolvedValue({ ...plan, disposition: 'update' });
+    applyImportMock.mockResolvedValue({
+      schemaVersion: 1,
+      outcome: {
+        kind: 'applied',
+        snapshot: { ...imported, revision: 'sha256:revision-2' },
+      },
+    });
+
+    await act(async () => root.render(<HooksConfig />));
+    await flush();
+    await act(async () => {
+      Array.from(container.querySelectorAll('button'))
+        .find((button) => button.textContent === 'imports.update')!.click();
+    });
+    await flush();
+
+    const dialog = container.querySelector('[role="dialog"]')!;
+    expect(dialog.textContent).toContain('imports.confirmUpdate');
+    await act(async () => {
+      Array.from(dialog.querySelectorAll('button'))
+        .find((button) => button.textContent === 'imports.confirmUpdate')!.click();
+    });
+    await flush();
+
+    expect(notifySuccessMock).toHaveBeenCalledWith('imports.appliedDisabled');
+  });
+
+  it('does not claim an imported source will run while the master switch is off', async () => {
+    getConfigMock.mockResolvedValue({ enabled: false, project_hooks_enabled: false });
+    applyImportMock.mockResolvedValue({
+      schemaVersion: 1,
+      outcome: {
+        kind: 'applied',
+        snapshot: {
+          ...snapshot,
+          revision: 'sha256:revision-2',
+          imports: [{
+            importId: 'managed-1',
+            source,
+            enabled: true,
+            behaviorVersion: 'sha256:behavior',
+            state: 'current',
+          }],
+        },
+      },
+    });
+
+    await act(async () => root.render(<HooksConfig />));
+    await flush();
+    await act(async () => {
+      Array.from(container.querySelectorAll('button'))
+        .find((button) => button.textContent === 'imports.review')!.click();
+    });
+    await flush();
+    await act(async () => {
+      Array.from(container.querySelectorAll('button'))
+        .find((button) => button.textContent === 'imports.confirm')!.click();
+    });
+    await flush();
+
+    expect(notifySuccessMock).toHaveBeenCalledWith('imports.appliedMasterDisabled');
   });
 });

@@ -12,7 +12,7 @@
       "description": "總開關。關閉後，任何事件都不會執行 Hook。"
     },
     "projectHooks": {
-      "label": "允許專案層級 Hooks",
+      "label": "啟用專案 Hook 檔案",
       "description": "讀取工作區內的 Hook 檔案。它執行的是儲存庫中的命令，請只對你信任的儲存庫開啟。"
     }
   },
@@ -20,12 +20,12 @@
     "title": "Hook 宣告位置",
     "description": "Hook 宣告在 hooks.json 檔案中，不在本設定文件裡。兩個層級是疊加關係，使用者層優先執行。修改後無需重新啟動 BitFun。",
     "userFile": {
-      "label": "使用者 Hooks",
+      "label": "使用者 Hook 檔案",
       "description": "BitFun 使用者設定目錄下的 config/hooks.json（Linux 為 ~/.config/bitfun，macOS 為 ~/Library/Application Support/bitfun，Windows 為 %APPDATA%\\bitfun）。"
     },
     "projectFile": {
-      "label": "專案 Hooks",
-      "description": "工作區內的 .bitfun/config/hooks.json。僅在開啟「允許專案層級 Hooks」時讀取。"
+      "label": "專案 Hook 檔案",
+      "description": "工作區內的 .bitfun/config/hooks.json。僅在開啟「啟用專案 Hook 檔案」時讀取。"
     }
   },
   "imports": {
@@ -58,12 +58,14 @@
       "external": "外部相依項目"
     },
     "skipped": "已略過 {{count}} 項：{{reason}}",
-    "fingerprint": "已檢閱計畫：{{fingerprint}}",
     "cancel": "取消",
-    "confirm": "匯入並啟用",
+    "confirm": "匯入已檢閱的 Hooks",
+    "confirmUpdate": "套用已檢閱的更新",
     "stale": "來源已變更。本次未寫入，請重新檢閱更新後的計畫。",
     "applyFailed": "無法套用已檢閱的 Hook 匯入。",
     "applied": "匯入的 Hooks 將從下一個符合的事件開始啟用。",
+    "appliedDisabled": "已套用檢閱後的更新；這些匯入 Hooks 仍保持停用。",
+    "appliedMasterDisabled": "Hooks 已匯入，但只有開啟「啟用 Hooks」後才會執行。",
     "updated": "已更新匯入 Hook 的狀態。",
     "stateChanged": "匯入 Hook 的狀態已變更。請檢查重新整理後的狀態，再重新操作。",
     "updateFailed": "無法更新匯入 Hook 的狀態。",

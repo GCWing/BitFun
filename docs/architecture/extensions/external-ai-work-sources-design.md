@@ -544,8 +544,8 @@ Command；明确缺失且未被标记失败的 Command 是稳定删除。产品�
 3. 验收覆盖脱敏序列化、部分失败、首次失败与空目录区分、非法/过大输入、有界枚举、provider 身份冲突、刷新竞态、stale 结果、保留命令、
    `/help hooks`、GUI 空/错/刷新/不支持状态；Host 返回未知 v1 枚举或可执行字段时明确拒绝。
 4. Claude Code/Codex 同步 command 导入通过私有准备、精确审阅、generation fencing 和不可变本地快照进入既有
-   `AgentHookEngine`；OpenCode Hook 执行、外部 Runtime、持续监听及更复杂 handler 必须另立运行时切片，不能通过扩展
-   目录 DTO 偷渡执行语义。
+   `AgentHookEngine`；托管快照在发布、重新打开及引擎重建读取时校验同一份有界内容摘要，校验失败即停止加载。
+   OpenCode Hook 执行、外部 Runtime、持续监听及更复杂 handler 必须另立运行时切片，不能通过扩展目录 DTO 偷渡执行语义。
 
 验收至少覆盖：
 

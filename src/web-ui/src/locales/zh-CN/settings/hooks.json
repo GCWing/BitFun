@@ -12,7 +12,7 @@
       "description": "总开关。关闭后，任何事件都不会运行 Hook。"
     },
     "projectHooks": {
-      "label": "允许项目级 Hooks",
+      "label": "启用项目 Hook 文件",
       "description": "读取工作区内的 Hook 文件。它执行的是仓库中的命令，请只对你信任的仓库开启。"
     }
   },
@@ -20,12 +20,12 @@
     "title": "Hook 声明位置",
     "description": "Hook 声明在 hooks.json 文件中，不在本设置文档里。两个层级是叠加关系，用户层优先执行。修改后无需重启 BitFun。",
     "userFile": {
-      "label": "用户 Hooks",
+      "label": "用户 Hook 文件",
       "description": "BitFun 用户配置目录下的 config/hooks.json（Linux 为 ~/.config/bitfun，macOS 为 ~/Library/Application Support/bitfun，Windows 为 %APPDATA%\\bitfun）。"
     },
     "projectFile": {
-      "label": "项目 Hooks",
-      "description": "工作区内的 .bitfun/config/hooks.json。仅在开启“允许项目级 Hooks”时读取。"
+      "label": "项目 Hook 文件",
+      "description": "工作区内的 .bitfun/config/hooks.json。仅在开启“启用项目 Hook 文件”时读取。"
     }
   },
   "imports": {
@@ -58,12 +58,14 @@
       "external": "外部依赖"
     },
     "skipped": "已跳过 {{count}} 项：{{reason}}",
-    "fingerprint": "已审阅计划：{{fingerprint}}",
     "cancel": "取消",
-    "confirm": "导入并启用",
+    "confirm": "导入已审阅的 Hooks",
+    "confirmUpdate": "应用已审阅的更新",
     "stale": "来源已变化。本次没有写入，请重新审阅更新后的计划。",
     "applyFailed": "无法应用已审阅的 Hook 导入。",
     "applied": "导入的 Hooks 将从下一个匹配事件开始启用。",
+    "appliedDisabled": "已应用审阅后的更新；这些导入 Hooks 仍保持停用。",
+    "appliedMasterDisabled": "Hooks 已导入，但只有开启“启用 Hooks”后才会运行。",
     "updated": "已更新导入 Hook 的状态。",
     "stateChanged": "导入 Hook 的状态已变化。请检查刷新后的状态，再重新操作。",
     "updateFailed": "无法更新导入 Hook 的状态。",

@@ -12,7 +12,7 @@
       "description": "Master switch. When off, no hook runs for any event."
     },
     "projectHooks": {
-      "label": "Allow project hooks",
+      "label": "Enable project hook file",
       "description": "Honor the hook file inside the workspace. It executes commands from the checked-out repository, so enable this only for repositories you trust."
     }
   },
@@ -20,12 +20,12 @@
     "title": "Where hooks are declared",
     "description": "Hooks live in hooks.json files, not in this settings document. Both layers are additive, with user hooks running first. Changes are picked up without restarting BitFun.",
     "userFile": {
-      "label": "User hooks",
+      "label": "User hook file",
       "description": "config/hooks.json in your BitFun user config directory (~/.config/bitfun on Linux, ~/Library/Application Support/bitfun on macOS, %APPDATA%\\bitfun on Windows)."
     },
     "projectFile": {
-      "label": "Project hooks",
-      "description": ".bitfun/config/hooks.json inside the workspace. Only read when \"Allow project hooks\" is on."
+      "label": "Project hook file",
+      "description": ".bitfun/config/hooks.json inside the workspace. Only read when \"Enable project hook file\" is on."
     }
   },
   "imports": {
@@ -58,12 +58,14 @@
       "external": "External dependency"
     },
     "skipped": "Skipped {{count}} item(s): {{reason}}",
-    "fingerprint": "Reviewed plan: {{fingerprint}}",
     "cancel": "Cancel",
-    "confirm": "Import and enable",
+    "confirm": "Import reviewed hooks",
+    "confirmUpdate": "Apply reviewed update",
     "stale": "The source changed. Nothing was written; review this refreshed plan.",
     "applyFailed": "The reviewed hook import could not be applied.",
     "applied": "Imported hooks are enabled for the next matching event.",
+    "appliedDisabled": "The reviewed update was applied; these imported hooks remain disabled.",
+    "appliedMasterDisabled": "Imported hooks are ready but will not run until Enable hooks is turned on.",
     "updated": "Imported hook state updated.",
     "stateChanged": "Imported hook state changed. Review the refreshed state and try again.",
     "updateFailed": "Imported hook state could not be updated.",

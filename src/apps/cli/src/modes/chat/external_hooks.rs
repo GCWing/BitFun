@@ -827,7 +827,7 @@ impl ChatMode {
                 self.hook_management_snapshot = Some(snapshot);
             }
             Ok(HookManagementResult::Plan(plan)) => {
-                chat_state.add_system_message(crate::hook_import::render_plan(&plan));
+                chat_state.add_system_message(crate::hook_import::render_plan_for_tui(&plan));
                 chat_view.set_status(Some(
                     "Review complete; repeat the same import/update command with --confirm."
                         .to_string(),
