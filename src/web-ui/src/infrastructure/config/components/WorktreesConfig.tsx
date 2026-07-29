@@ -1,12 +1,20 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react';
 import {
   FolderGit2,
   GitBranch,
+  LoaderCircle,
   MessageSquareText,
   RotateCcw,
   Save,
   Trash2,
 } from 'lucide-react';
+import { openAgentCompanionSession } from '@/app/services/openAgentCompanionSession';
 import {
   Button,
   ConfigPageLoading,
@@ -18,14 +26,19 @@ import {
   NumberInput,
   Switch,
 } from '@/component-library';
+import { confirmWarning } from '@/component-library/components/ConfirmDialog/confirmService';
+import { flowChatManager } from '@/flow_chat/services/FlowChatManager';
 import { configAPI, worktreeAPI } from '@/infrastructure/api';
+import { sessionAPI } from '@/infrastructure/api/service-api/SessionAPI';
 import type {
   WorktreeCommandError,
   WorktreeProjectSummary,
+  WorktreeSessionSummary,
   WorktreeSettings,
   WorktreeSummary,
 } from '@/infrastructure/api/service-api/WorktreeAPI';
 import { useI18n } from '@/infrastructure/i18n';
+import { notificationService } from '@/shared/notification-system';
 import {
   ConfigPageContent,
   ConfigPageHeader,
@@ -37,6 +50,7 @@ import './WorktreesConfig.scss';
 
 const AUTO_DELETE_LIMIT_MIN = 1;
 const AUTO_DELETE_LIMIT_MAX = 100;
+const WORKTREE_REMOVE_ANIMATION_MS = 180;
 
 const DEFAULT_SETTINGS: WorktreeSettings = {
   rootPath: '~/.bitfun/worktrees',
@@ -49,6 +63,12 @@ const DEFAULT_SETTINGS: WorktreeSettings = {
 interface DeleteTarget {
   projectWorkspacePath: string;
   worktree: WorktreeSummary;
+}
+
+interface ScrollSnapshot {
+  anchorTop: number;
+  scrollContainer: HTMLElement;
+  scrollTop: number;
 }
 
 type PageMessage = {
@@ -103,6 +123,33 @@ function workspaceName(path: string): string {
   return parts.at(-1) ?? path;
 }
 
+function removeWorktreeFromProjects(
+  projects: WorktreeProjectSummary[],
+  projectWorkspacePath: string,
+  worktreeId: string,
+): WorktreeProjectSummary[] {
+  return projects
+    .map(project => project.projectWorkspacePath === projectWorkspacePath
+      ? {
+          ...project,
+          worktrees: project.worktrees.filter(worktree => worktree.worktreeId !== worktreeId),
+        }
+      : project)
+    .filter(project => project.worktrees.length > 0);
+}
+
+function removalAnimationDuration(): number {
+  return globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+    ? 0
+    : WORKTREE_REMOVE_ANIMATION_MS;
+}
+
+function waitFor(ms: number): Promise<void> {
+  return ms > 0
+    ? new Promise(resolve => globalThis.setTimeout(resolve, ms))
+    : Promise.resolve();
+}
+
 const WorktreesConfig: React.FC = () => {
   const { t } = useI18n('worktrees');
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
@@ -111,9 +158,18 @@ const WorktreesConfig: React.FC = () => {
   const [settingsMessage, setSettingsMessage] = useState<PageMessage | null>(null);
   const [projects, setProjects] = useState<WorktreeProjectSummary[]>([]);
   const [projectsLoading, setProjectsLoading] = useState(true);
+  const [projectsInitialized, setProjectsInitialized] = useState(false);
   const [projectsMessage, setProjectsMessage] = useState<PageMessage | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
   const [deletingWorktreeId, setDeletingWorktreeId] = useState<string | null>(null);
+  const [removingWorktreeId, setRemovingWorktreeId] = useState<string | null>(null);
+  const [openingSessionId, setOpeningSessionId] = useState<string | null>(null);
+  const [projectsLayoutRevision, setProjectsLayoutRevision] = useState(0);
+  const projectsResultsRef = useRef<HTMLDivElement>(null);
+  const projectsRequestIdRef = useRef(0);
+  const pendingScrollSnapshotRef = useRef<ScrollSnapshot | null>(null);
+  const worktreeMutationInFlightRef = useRef(false);
+  const pendingWorktreeRefreshRef = useRef(false);
 
   const loadSettings = useCallback(async () => {
     setSettingsLoading(true);
@@ -130,22 +186,74 @@ const WorktreesConfig: React.FC = () => {
     }
   }, [t]);
 
-  const loadProjects = useCallback(async () => {
-    setProjectsLoading(true);
-    setProjectsMessage(null);
-    try {
-      setProjects(await worktreeAPI.listProjects());
-    } catch {
-      setProjectsMessage({ type: 'error', text: t('management.loadFailed') });
-    } finally {
-      setProjectsLoading(false);
+  const captureScrollSnapshot = useCallback((): ScrollSnapshot | null => {
+    const anchor = projectsResultsRef.current;
+    const scrollContainer = anchor?.closest<HTMLElement>('.bitfun-config-page-layout');
+    if (!anchor || !scrollContainer) {
+      return null;
     }
-  }, [t]);
+    return {
+      anchorTop: anchor.getBoundingClientRect().top,
+      scrollContainer,
+      scrollTop: scrollContainer.scrollTop,
+    };
+  }, []);
+
+  const commitProjectsLayoutChange = useCallback((update: () => void) => {
+    pendingScrollSnapshotRef.current = captureScrollSnapshot();
+    update();
+    setProjectsLayoutRevision(current => current + 1);
+  }, [captureScrollSnapshot]);
+
+  useLayoutEffect(() => {
+    const snapshot = pendingScrollSnapshotRef.current;
+    const anchor = projectsResultsRef.current;
+    if (!snapshot || !anchor || !snapshot.scrollContainer.isConnected) {
+      pendingScrollSnapshotRef.current = null;
+      return;
+    }
+
+    const anchorDelta = anchor.getBoundingClientRect().top - snapshot.anchorTop;
+    snapshot.scrollContainer.scrollTop = snapshot.scrollTop + anchorDelta;
+    pendingScrollSnapshotRef.current = null;
+  }, [projectsLayoutRevision]);
+
+  const loadProjects = useCallback(async (): Promise<boolean> => {
+    const requestId = ++projectsRequestIdRef.current;
+    setProjectsLoading(true);
+    try {
+      const nextProjects = await worktreeAPI.listProjects();
+      if (requestId !== projectsRequestIdRef.current) {
+        return false;
+      }
+      commitProjectsLayoutChange(() => {
+        setProjects(nextProjects);
+        setProjectsMessage(null);
+        setProjectsInitialized(true);
+        setProjectsLoading(false);
+      });
+      return true;
+    } catch {
+      if (requestId !== projectsRequestIdRef.current) {
+        return false;
+      }
+      commitProjectsLayoutChange(() => {
+        setProjectsMessage({ type: 'error', text: t('management.loadFailed') });
+        setProjectsInitialized(true);
+        setProjectsLoading(false);
+      });
+      return false;
+    }
+  }, [commitProjectsLayoutChange, t]);
 
   useEffect(() => {
     void loadSettings();
     void loadProjects();
     return worktreeAPI.onChanged(() => {
+      if (worktreeMutationInFlightRef.current) {
+        pendingWorktreeRefreshRef.current = true;
+        return;
+      }
       void loadProjects();
     });
   }, [loadProjects, loadSettings]);
@@ -194,7 +302,8 @@ const WorktreesConfig: React.FC = () => {
 
     setDeleteTarget(null);
     setDeletingWorktreeId(target.worktree.worktreeId);
-    setProjectsMessage(null);
+    worktreeMutationInFlightRef.current = true;
+    pendingWorktreeRefreshRef.current = false;
     try {
       const discardLocalWork =
         target.worktree.dirty || target.worktree.hasUnpublishedCommits;
@@ -204,11 +313,22 @@ const WorktreesConfig: React.FC = () => {
         createDeleteRequestId(),
         discardLocalWork,
       );
-      await loadProjects();
-      setProjectsMessage({
-        type: 'success',
-        text: t('management.deleted', { path: target.worktree.path }),
+      setRemovingWorktreeId(target.worktree.worktreeId);
+      await waitFor(removalAnimationDuration());
+      commitProjectsLayoutChange(() => {
+        setProjects(current => removeWorktreeFromProjects(
+          current,
+          target.projectWorkspacePath,
+          target.worktree.worktreeId,
+        ));
+        setRemovingWorktreeId(null);
       });
+      notificationService.success(
+        t('management.deleted', { path: target.worktree.path }),
+        { duration: 2400 },
+      );
+      await loadProjects();
+      pendingWorktreeRefreshRef.current = false;
     } catch (error) {
       const code = (error as Partial<WorktreeCommandError> | null)?.code;
       const text = (() => {
@@ -227,14 +347,63 @@ const WorktreesConfig: React.FC = () => {
             return t('management.errors.deleteFailed');
         }
       })();
-      setProjectsMessage({
-        type: 'error',
-        text,
+      commitProjectsLayoutChange(() => {
+        setProjectsMessage({
+          type: 'error',
+          text,
+        });
       });
     } finally {
+      worktreeMutationInFlightRef.current = false;
       setDeletingWorktreeId(null);
+      setRemovingWorktreeId(null);
+      if (pendingWorktreeRefreshRef.current) {
+        pendingWorktreeRefreshRef.current = false;
+        void loadProjects();
+      }
     }
   };
+
+  const openAssociatedSession = useCallback(async (
+    projectWorkspacePath: string,
+    session: WorktreeSessionSummary,
+  ) => {
+    if (openingSessionId) return;
+
+    setOpeningSessionId(session.sessionId);
+    try {
+      if (session.archived) {
+        const shouldRestore = await confirmWarning(
+          t('management.sessions.restoreTitle'),
+          t('management.sessions.restoreMessage', { name: session.sessionName }),
+        );
+        if (!shouldRestore) {
+          return;
+        }
+        await sessionAPI.unarchiveSession(session.sessionId, projectWorkspacePath);
+        await flowChatManager.refreshWorkspaceSessions({
+          rootPath: projectWorkspacePath,
+        });
+      }
+
+      let opened = await openAgentCompanionSession(session.sessionId);
+      if (!opened) {
+        await flowChatManager.refreshWorkspaceSessions({
+          rootPath: projectWorkspacePath,
+        });
+        opened = await openAgentCompanionSession(session.sessionId);
+      }
+      if (!opened) {
+        throw new Error('Associated session was not found after refreshing the workspace');
+      }
+    } catch {
+      notificationService.error(t('management.sessions.openFailed'), {
+        duration: 3200,
+      });
+    } finally {
+      setOpeningSessionId(null);
+    }
+  }, [openingSessionId, t]);
 
   const renderSettings = () => {
     if (settingsLoading) {
@@ -378,7 +547,11 @@ const WorktreesConfig: React.FC = () => {
 
     return (
       <article
-        className="bitfun-worktrees-config__worktree"
+        className={[
+          'bitfun-worktrees-config__worktree',
+          removingWorktreeId === worktree.worktreeId
+            && 'bitfun-worktrees-config__worktree--removing',
+        ].filter(Boolean).join(' ')}
         key={worktree.worktreeId}
         data-worktree-id={worktree.worktreeId}
       >
@@ -410,8 +583,36 @@ const WorktreesConfig: React.FC = () => {
                     count: worktree.associatedSessionCount,
                   })}
                 </span>
-                <span className="bitfun-worktrees-config__session-names">
-                  {sessionNames}
+                <span className="bitfun-worktrees-config__session-links">
+                  {worktree.sessions.map(session => (
+                    <button
+                      key={session.sessionId}
+                      type="button"
+                      className="bitfun-worktrees-config__session-link"
+                      disabled={openingSessionId !== null}
+                      title={t('management.sessions.openLabel', {
+                        name: session.sessionName,
+                      })}
+                      onClick={() => void openAssociatedSession(
+                        project.projectWorkspacePath,
+                        session,
+                      )}
+                    >
+                      {openingSessionId === session.sessionId && (
+                        <LoaderCircle
+                          className="bitfun-worktrees-config__session-link-spinner"
+                          size={12}
+                          aria-hidden
+                        />
+                      )}
+                      <span>{session.sessionName}</span>
+                      {session.archived && (
+                        <span className="bitfun-worktrees-config__session-link-state">
+                          {t('management.sessions.status.archived')}
+                        </span>
+                      )}
+                    </button>
+                  ))}
                 </span>
               </div>
             )}
@@ -438,9 +639,30 @@ const WorktreesConfig: React.FC = () => {
     );
   };
 
+  const renderProjectsSkeleton = () => (
+    <div className="bitfun-worktrees-config__skeleton">
+      <span className="bitfun-sr-only" role="status">
+        {t('management.loading')}
+      </span>
+      <div className="bitfun-worktrees-config__skeleton-header" aria-hidden="true">
+        <span />
+        <span />
+      </div>
+      <div className="bitfun-worktrees-config__skeleton-list" aria-hidden="true">
+        {[0, 1, 2].map(index => (
+          <div className="bitfun-worktrees-config__skeleton-row" key={index}>
+            <span />
+            <span />
+            <span />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
   const renderProjects = () => {
-    if (projectsLoading) {
-      return <ConfigPageLoading text={t('management.loading')} />;
+    if (!projectsInitialized && projectsLoading) {
+      return renderProjectsSkeleton();
     }
     if (projects.length === 0 && !projectsMessage) {
       return (
@@ -533,7 +755,31 @@ const WorktreesConfig: React.FC = () => {
               {t('management.retry')}
             </Button>
           )}
-          {renderProjects()}
+          <div
+            ref={projectsResultsRef}
+            className={[
+              'bitfun-worktrees-config__results',
+              projectsLoading
+                && projectsInitialized
+                && 'bitfun-worktrees-config__results--refreshing',
+            ].filter(Boolean).join(' ')}
+            aria-busy={projectsLoading}
+          >
+            {projectsLoading && projectsInitialized && (
+              <>
+                <div
+                  className="bitfun-worktrees-config__refresh-progress"
+                  aria-hidden="true"
+                >
+                  <span />
+                </div>
+                <span className="bitfun-sr-only" role="status">
+                  {t('management.loading')}
+                </span>
+              </>
+            )}
+            {renderProjects()}
+          </div>
         </ConfigPageSection>
       </ConfigPageContent>
 

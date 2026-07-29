@@ -1,3 +1,54 @@
+@keyframes bitfun-worktree-results-enter {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 4px, 0);
+  }
+
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes bitfun-worktree-row-remove {
+  from {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+
+  to {
+    opacity: 0;
+    transform: translate3d(6px, 0, 0);
+  }
+}
+
+@keyframes bitfun-worktree-loading-pulse {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+
+  50% {
+    opacity: 0.82;
+  }
+}
+
+@keyframes bitfun-worktree-refresh-progress {
+  from {
+    transform: translate3d(-130%, 0, 0);
+  }
+
+  to {
+    transform: translate3d(360%, 0, 0);
+  }
+}
+
+@keyframes bitfun-worktree-session-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .bitfun-worktrees-config {
   &__actions {
     display: flex;
@@ -18,6 +69,110 @@
     display: flex;
     flex-direction: column;
     gap: var(--size-gap-6);
+    animation: bitfun-worktree-results-enter 180ms var(--easing-standard) both;
+    transition: opacity var(--motion-fast) var(--easing-standard);
+  }
+
+  &__results {
+    position: relative;
+    min-height: 176px;
+    overflow-anchor: none;
+
+    &--refreshing {
+      .bitfun-worktrees-config__projects,
+      .bitfun-worktrees-config__empty {
+        opacity: 0.7;
+      }
+    }
+  }
+
+  &__refresh-progress {
+    position: absolute;
+    z-index: 1;
+    top: -1px;
+    right: 0;
+    left: 0;
+    height: 2px;
+    overflow: hidden;
+    border-radius: var(--size-radius-sm);
+    pointer-events: none;
+
+    span {
+      display: block;
+      width: 28%;
+      height: 100%;
+      border-radius: inherit;
+      background: var(--color-accent-500);
+      opacity: 0.7;
+      animation: bitfun-worktree-refresh-progress 900ms ease-in-out infinite;
+    }
+  }
+
+  &__skeleton {
+    min-height: 176px;
+  }
+
+  &__skeleton-header {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: var(--size-gap-4);
+    padding: 0 var(--size-gap-1) var(--size-gap-2);
+
+    span {
+      display: block;
+      height: 11px;
+      border-radius: var(--size-radius-sm);
+      background: var(--element-bg-soft);
+      animation: bitfun-worktree-loading-pulse 1.2s ease-in-out infinite;
+
+      &:first-child {
+        width: min(220px, 42%);
+      }
+
+      &:last-child {
+        width: 72px;
+      }
+    }
+  }
+
+  &__skeleton-list {
+    overflow: hidden;
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--size-radius-md);
+    background: var(--element-bg-subtle);
+  }
+
+  &__skeleton-row {
+    display: grid;
+    gap: var(--size-gap-2);
+    padding: var(--size-gap-3) var(--size-gap-4);
+
+    & + & {
+      border-top: 1px solid var(--border-subtle);
+    }
+
+    span {
+      display: block;
+      height: 9px;
+      border-radius: var(--size-radius-sm);
+      background: var(--element-bg-soft);
+      animation: bitfun-worktree-loading-pulse 1.2s ease-in-out infinite;
+
+      &:first-child {
+        width: min(280px, 42%);
+      }
+
+      &:nth-child(2) {
+        width: min(620px, 78%);
+        animation-delay: 80ms;
+      }
+
+      &:last-child {
+        width: min(180px, 34%);
+        animation-delay: 160ms;
+      }
+    }
   }
 
   &__project {
@@ -85,6 +240,14 @@
 
     & + & {
       border-top: 1px solid var(--border-subtle);
+    }
+
+    &--removing {
+      pointer-events: none;
+      animation: bitfun-worktree-row-remove
+        180ms
+        cubic-bezier(0.4, 0, 1, 1)
+        both;
     }
   }
 
@@ -160,12 +323,75 @@
     }
   }
 
-  &__session-names {
+  &__session-links {
     min-width: 0;
     overflow: hidden;
-    color: var(--color-text-secondary);
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  &__session-link {
+    display: inline-flex;
+    align-items: center;
+    min-width: 0;
+    max-width: 100%;
+    padding: 0;
+    border: 0;
+    border-radius: 2px;
+    background: transparent;
+    color: var(--color-text-secondary);
+    font: inherit;
+    line-height: inherit;
+    vertical-align: bottom;
+    cursor: pointer;
+    transition:
+      color var(--motion-fast) var(--easing-standard),
+      opacity var(--motion-fast) var(--easing-standard),
+      transform var(--motion-fast) var(--easing-standard);
+
+    & + & {
+      margin-left: var(--size-gap-2);
+    }
+
+    > span:first-of-type {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    &:hover:not(:disabled) {
+      color: var(--color-text-primary);
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+
+    &:active:not(:disabled) {
+      transform: translate3d(0, 1px, 0);
+    }
+
+    &:disabled {
+      cursor: wait;
+    }
+  }
+
+  &__session-link-spinner {
+    flex-shrink: 0;
+    margin-right: var(--size-gap-1);
+    animation: bitfun-worktree-session-spin 700ms linear infinite;
+  }
+
+  &__session-link-state {
+    flex-shrink: 0;
+    margin-left: var(--size-gap-1);
+    color: var(--color-text-muted);
+
+    &::before {
+      content: '(';
+    }
+
+    &::after {
+      content: ')';
+    }
   }
 
   &__delete-control {
@@ -182,6 +408,8 @@
     border: 1px dashed var(--border-base);
     border-radius: var(--size-radius-md);
     color: var(--color-text-muted);
+    animation: bitfun-worktree-results-enter 180ms var(--easing-standard) both;
+    transition: opacity var(--motion-fast) var(--easing-standard);
 
     svg {
       flex-shrink: 0;
@@ -238,8 +466,40 @@
       gap: var(--size-gap-2);
     }
 
-    &__session-names {
-      display: none;
+    &__sessions-summary {
+      flex-wrap: wrap;
+    }
+
+    &__session-links {
+      flex-basis: 100%;
+      padding-left: 17px;
+    }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bitfun-worktrees-config {
+    &__projects,
+    &__empty,
+    &__worktree--removing,
+    &__skeleton-header span,
+    &__skeleton-row span,
+    &__session-link-spinner {
+      animation: none;
+    }
+
+    &__refresh-progress span {
+      width: 100%;
+      opacity: 0.45;
+      animation: none;
+      transform: none;
+    }
+
+    &__session-link,
+    &__empty,
+    &__projects,
+    &__worktree {
+      transition: none;
     }
   }
 }

@@ -75,6 +75,10 @@
     "sessions": {
       "title": "工作階段",
       "summary": "{{count}} 個工作階段",
+      "openLabel": "開啟工作階段 {{name}}",
+      "openFailed": "無法開啟此工作階段，請重新整理清單後再試。",
+      "restoreTitle": "恢復並開啟此工作階段？",
+      "restoreMessage": "{{name}} 已封存，是否先恢復再開啟？",
       "empty": "沒有關聯的工作階段。",
       "status": {
         "active": "進行中",

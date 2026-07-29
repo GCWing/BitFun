@@ -75,6 +75,10 @@
     "sessions": {
       "title": "Conversations",
       "summary": "{{count}} conversations",
+      "openLabel": "Open conversation {{name}}",
+      "openFailed": "Could not open this conversation. Refresh the list and try again.",
+      "restoreTitle": "Restore and open this conversation?",
+      "restoreMessage": "{{name}} is archived. Restore it before opening?",
       "empty": "No associated conversations.",
       "status": {
         "active": "Active",

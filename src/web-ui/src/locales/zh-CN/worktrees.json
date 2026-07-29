@@ -75,6 +75,10 @@
     "sessions": {
       "title": "会话",
       "summary": "{{count}} 个会话",
+      "openLabel": "打开会话 {{name}}",
+      "openFailed": "无法打开此会话，请刷新列表后重试。",
+      "restoreTitle": "恢复并打开此会话？",
+      "restoreMessage": "{{name}} 已归档，是否先恢复再打开？",
       "empty": "没有关联会话。",
       "status": {
         "active": "进行中",
