@@ -260,6 +260,10 @@ export interface EnsureAssistantBootstrapResponse {
 export interface UpdateSessionModelRequest {
   sessionId: string;
   modelName: string;
+  workspacePath?: string;
+  remoteConnectionId?: string;
+  remoteSshHost?: string;
+  includeInternal?: boolean;
 }
 
 export interface UpdateSessionTitleRequest {

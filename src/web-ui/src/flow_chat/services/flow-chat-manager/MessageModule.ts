@@ -129,6 +129,10 @@ export async function syncSessionModelSelection(
     await agentAPI.updateSessionModel({
       sessionId,
       modelName: sessionModelId,
+      workspacePath: sessionProjectWorkspacePath(session),
+      remoteConnectionId: session.remoteConnectionId,
+      remoteSshHost: session.remoteSshHost,
+      includeInternal: session.sessionKind === 'subagent',
     });
     return;
   }
@@ -154,6 +158,10 @@ export async function syncSessionModelSelection(
   await agentAPI.updateSessionModel({
     sessionId,
     modelName: desiredModelId,
+    workspacePath: sessionProjectWorkspacePath(session),
+    remoteConnectionId: session.remoteConnectionId,
+    remoteSshHost: session.remoteSshHost,
+    includeInternal: session.sessionKind === 'subagent',
   });
 
   log.info('Session model synchronized before send', {

@@ -2447,6 +2447,32 @@ impl SSHConnectionManager {
         config: SSHConnectionConfig,
         timeout_secs: u64,
     ) -> anyhow::Result<SSHConnectionResult> {
+        // Explicit connects and transparent reconnects share the same
+        // connection id. Serialize them so concurrent workspace restoration
+        // cannot publish several sessions under one id and disconnect each
+        // previous winner as the next attempt completes.
+        let connection_lock = self.reconnect_lock_for(&config.id).await;
+        let _connection_guard = connection_lock.lock().await;
+
+        // Startup may restore several workspaces that share one saved SSH
+        // profile. Once the first caller has restored a matching live
+        // connection, later callers only need to open their workspace paths.
+        if let Some(existing_result) = {
+            let guard = self.connections.read().await;
+            guard.get(&config.id).and_then(|connection| {
+                (connection.alive.load(Ordering::SeqCst)
+                    && config.connection_params_equal(&connection.config))
+                .then(|| SSHConnectionResult {
+                    success: true,
+                    connection_id: Some(config.id.clone()),
+                    error: None,
+                    server_info: connection.server_info.clone(),
+                })
+            })
+        } {
+            return Ok(existing_result);
+        }
+
         let established = self
             .establish_session_with_retries(&config, timeout_secs)
             .await?;
@@ -5350,6 +5376,64 @@ mod tests {
             std::process::id(),
             nanos
         ))
+    }
+
+    #[tokio::test]
+    async fn explicit_connect_reuses_a_matching_live_connection() {
+        let manager = SSHConnectionManager::new(test_data_dir("connect-idempotent"));
+        let config = SSHConnectionConfig {
+            id: "ssh-root@example.com".to_string(),
+            name: "example".to_string(),
+            host: "example.com".to_string(),
+            port: 22,
+            username: "root".to_string(),
+            auth: SSHAuthMethod::PrivateKey {
+                key_path: "/tmp/id_rsa".to_string(),
+                passphrase: None,
+                certificate_path: None,
+            },
+            default_workspace: Some("/srv/project".to_string()),
+            proxy_jump: None,
+            container: None,
+            options: Default::default(),
+        };
+        let alive = Arc::new(AtomicBool::new(true));
+        let server_info = ServerInfo {
+            os_type: "Linux".to_string(),
+            hostname: "example".to_string(),
+            home_dir: "/root".to_string(),
+        };
+        manager.connections.write().await.insert(
+            config.id.clone(),
+            ActiveConnection {
+                handle: None,
+                jump_handles: Vec::new(),
+                config: config.clone(),
+                effective_config: config.clone(),
+                server_info: Some(server_info.clone()),
+                sftp_session: Arc::new(tokio::sync::RwLock::new(None)),
+                server_key: None,
+                alive: alive.clone(),
+            },
+        );
+
+        let result = manager
+            .connect_with_timeout(config.clone(), 1)
+            .await
+            .unwrap();
+
+        assert!(result.success);
+        assert_eq!(result.connection_id.as_deref(), Some(config.id.as_str()));
+        assert_eq!(
+            result
+                .server_info
+                .as_ref()
+                .map(|info| info.hostname.as_str()),
+            Some(server_info.hostname.as_str())
+        );
+        let guard = manager.connections.read().await;
+        let active = guard.get(&config.id).unwrap();
+        assert!(Arc::ptr_eq(&active.alive, &alive));
     }
 
     #[test]

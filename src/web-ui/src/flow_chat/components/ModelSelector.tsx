@@ -24,6 +24,7 @@ import { FlowChatStore } from '../store/FlowChatStore';
 import { getModelMaxTokens } from '../services/flow-chat-manager/SessionModule';
 import { acpClientIdFromAgentType } from '../utils/acpSession';
 import { buildAcpFastModeValue, resolveAcpFastModeState } from '../utils/acpSessionConfig';
+import { sessionProjectWorkspacePath } from '../utils/sessionWorkspace';
 import {
   buildContextUsageTooltip,
   type ContextUsageSource,
@@ -540,10 +541,14 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
         const maxContextTokens = await getModelMaxTokens(modelId, currentMode);
         store.updateSessionMaxContextTokens(sessionId, maxContextTokens);
         const session = store.getState().sessions.get(sessionId);
-        if (!session?.isTransient) {
+        if (session && !session.isTransient) {
           await agentAPI.updateSessionModel({
             sessionId,
             modelName: modelId,
+            workspacePath: sessionProjectWorkspacePath(session),
+            remoteConnectionId: session.remoteConnectionId,
+            remoteSshHost: session.remoteSshHost,
+            includeInternal: session.sessionKind === 'subagent',
           });
         }
       };

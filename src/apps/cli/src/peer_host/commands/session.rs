@@ -460,6 +460,13 @@ pub(crate) async fn update_session_model(
     let request = request_value(args);
     let session_id = validated_session_id(request)?;
     let model_name = get_string(request, "modelName")?;
+    if request
+        .get("workspacePath")
+        .and_then(Value::as_str)
+        .is_some_and(|path| !path.trim().is_empty())
+    {
+        ensure_coordinator_session(state, args).await?;
+    }
     state
         .agent_runtime
         .update_session_model(AgentSessionModelUpdateRequest {

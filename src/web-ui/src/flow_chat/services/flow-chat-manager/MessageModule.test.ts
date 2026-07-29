@@ -537,7 +537,13 @@ describe('MessageModule model synchronization', () => {
   it('keeps an explicit auto selector when synchronizing before send', async () => {
     const session = {
       sessionId: 'session-auto',
-      config: { modelName: 'auto' },
+      config: {
+        modelName: 'auto',
+        workspacePath: '/remote/repo',
+      },
+      remoteConnectionId: 'ssh-1',
+      remoteSshHost: 'example.test',
+      sessionKind: 'subagent',
       maxContextTokens: 64000,
     };
     const updateSessionModelName = vi.fn();
@@ -557,13 +563,17 @@ describe('MessageModule model synchronization', () => {
     expect(mockUpdateSessionModel).toHaveBeenCalledWith({
       sessionId: 'session-auto',
       modelName: 'auto',
+      workspacePath: '/remote/repo',
+      remoteConnectionId: 'ssh-1',
+      remoteSshHost: 'example.test',
+      includeInternal: true,
     });
   });
 
   it('migrates a legacy session without a model to the current mode default', async () => {
     const session = {
       sessionId: 'legacy-session',
-      config: {},
+      config: { workspacePath: '/local/repo' },
       maxContextTokens: 32000,
     };
     const updateSessionModelName = vi.fn();
@@ -583,6 +593,10 @@ describe('MessageModule model synchronization', () => {
     expect(mockUpdateSessionModel).toHaveBeenCalledWith({
       sessionId: 'legacy-session',
       modelName: 'model-b',
+      workspacePath: '/local/repo',
+      remoteConnectionId: undefined,
+      remoteSshHost: undefined,
+      includeInternal: false,
     });
   });
 });
