@@ -6,6 +6,7 @@ use bitfun_services_core::runtime_ownership::{
 use tempfile::tempdir;
 
 use crate::runtime_ownership::CoreRuntimeOwnership;
+use crate::service::dispatch::{DispatchTarget, OutboundDispatchRecord, OutboundDispatchStore};
 
 #[test]
 fn embedded_owner_is_idempotent_and_keeps_one_workspace_lease() {
@@ -163,6 +164,52 @@ fn ssh_host_without_connection_id_cannot_bypass_local_ownership() {
         .expect_err("host-only facts must still protect local storage");
 
     assert_eq!(error.code(), "runtime_ownership_unavailable");
+    drop(shared);
+}
+
+#[tokio::test]
+async fn dispatch_observer_record_never_acquires_local_workspace_ownership() {
+    let ownership_root = tempdir().expect("ownership root");
+    let workspace = tempdir().expect("workspace");
+    let outbound_root = tempdir().expect("outbound root");
+    let shared = CoreRuntimeOwnership::shared_with_facts(
+        ownership_root.path().to_path_buf(),
+        "bitfun".to_string(),
+        "shared-test",
+        workspace.path(),
+    )
+    .expect("shared owner");
+    let ownership_entries_before = std::fs::read_dir(ownership_root.path())
+        .expect("read ownership root")
+        .count();
+
+    let store = OutboundDispatchStore::new_in_root_for_tests(outbound_root.path().join("outbound"));
+    let workspace_path = workspace.path().to_string_lossy().into_owned();
+    let record = OutboundDispatchRecord::new(
+        "job-remote".to_string(),
+        DispatchTarget::Ssh {
+            connection_id: "server-a".to_string(),
+            workspace_path: workspace_path.clone(),
+            display_name: "Server A".to_string(),
+        },
+        "session-remote".to_string(),
+        workspace_path,
+        "Run only on the target",
+        "queued",
+    )
+    .expect("record");
+    store
+        .bind_if_absent(&record)
+        .await
+        .expect("observer index must not contend for runtime ownership");
+
+    assert_eq!(
+        std::fs::read_dir(ownership_root.path())
+            .expect("read ownership root")
+            .count(),
+        ownership_entries_before,
+        "observer persistence must not create a local workspace lease"
+    );
     drop(shared);
 }
 

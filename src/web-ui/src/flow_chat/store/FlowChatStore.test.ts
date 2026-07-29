@@ -14,6 +14,8 @@ const apiMocks = vi.hoisted(() => ({
   restoreSessionView: vi.fn(),
   restoreSessionWithTurns: vi.fn(),
   accountFetchSessionTurns: vi.fn(),
+  cancelSession: vi.fn(),
+  cancelDispatchJob: vi.fn(),
 }));
 
 const peerModeFlagMock = vi.hoisted(() => ({ active: false }));
@@ -63,12 +65,19 @@ vi.mock('@/infrastructure/api/service-api/SessionAPI', () => ({
 
 vi.mock('@/infrastructure/api/service-api/AgentAPI', () => ({
   agentAPI: {
+    cancelSession: apiMocks.cancelSession,
     deleteSession: apiMocks.deleteSession,
     restoreSession: apiMocks.restoreSession,
     get restoreSessionView() {
       return apiMocks.restoreSessionView;
     },
     restoreSessionWithTurns: apiMocks.restoreSessionWithTurns,
+  },
+}));
+
+vi.mock('@/features/dispatch/dispatchApi', () => ({
+  dispatchApi: {
+    cancel: apiMocks.cancelDispatchJob,
   },
 }));
 
@@ -211,6 +220,141 @@ describe('FlowChatStore lazy worktree preference', () => {
       flowChatStore.getState().sessions.get(session.sessionId)?.config
         .worktreeIsolationRequested,
     ).toBeUndefined();
+  });
+});
+
+describe('FlowChatStore dispatch observer boundaries', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    apiMocks.cancelDispatchJob.mockResolvedValue({ cancelled: true });
+  });
+
+  afterEach(() => {
+    resetStore();
+  });
+
+  it('leaves a detached target running when its source workspace closes', async () => {
+    const session = createSession({
+      workspacePath: '/source',
+      config: {
+        workspaceId: 'workspace-1',
+        dispatchTarget: {
+          kind: 'ssh',
+          connectionId: 'ssh-1',
+          workspacePath: '/target',
+          displayName: 'build-host',
+        },
+        dispatchJobId: 'job-1',
+        dispatchJobState: 'running',
+      },
+      dialogTurns: [],
+    });
+    flowChatStore.setState(() => ({
+      sessions: new Map([[session.sessionId, session]]),
+      activeSessionId: session.sessionId,
+    }));
+
+    await expect(flowChatStore.cancelRunningSessionsForWorkspace({
+      id: 'workspace-1',
+      rootPath: '/source',
+      connectionId: undefined,
+      sshHost: undefined,
+    })).resolves.toEqual([]);
+
+    expect(apiMocks.cancelDispatchJob).not.toHaveBeenCalled();
+    expect(apiMocks.cancelSession).not.toHaveBeenCalled();
+  });
+
+  it('never saves a locally-cancelled observer turn into the session store', async () => {
+    const session = createSession({
+      workspacePath: '/source',
+      config: {
+        dispatchTarget: {
+          kind: 'ssh',
+          connectionId: 'ssh-1',
+          workspacePath: '/target',
+          displayName: 'build-host',
+        },
+        dispatchJobId: 'job-1',
+        dispatchJobState: 'running',
+      },
+      dialogTurns: [{
+        id: 'turn-1',
+        sessionId: 'session-1',
+        userMessage: {
+          id: 'user-1',
+          content: 'run task',
+          timestamp: 1,
+        },
+        modelRounds: [],
+        status: 'processing',
+        startTime: 1,
+      }],
+    });
+    flowChatStore.setState(() => ({
+      sessions: new Map([[session.sessionId, session]]),
+      activeSessionId: session.sessionId,
+    }));
+
+    await (flowChatStore as any).saveCancelledDialogTurn(
+      session.sessionId,
+      'turn-1',
+    );
+
+    expect(apiMocks.saveSessionTurn).not.toHaveBeenCalled();
+  });
+
+  it('keeps an existing failed terminal outcome when a stale cancelled snapshot arrives', () => {
+    const terminalTurn = {
+      id: 'turn-1',
+      sessionId: 'session-1',
+      userMessage: {
+        id: 'user-1',
+        content: 'run task',
+        timestamp: 1,
+      },
+      modelRounds: [],
+      status: 'error' as const,
+      error: 'Target execution failed',
+      startTime: 1,
+      endTime: 2,
+    };
+    const session = createSession({
+      workspacePath: '/source',
+      config: {
+        dispatchTarget: {
+          kind: 'ssh',
+          connectionId: 'ssh-1',
+          workspacePath: '/target',
+          displayName: 'build-host',
+        },
+        dispatchJobId: 'job-1',
+        dispatchJobState: 'failed',
+        dispatchCursor: 10,
+        dispatchLastError: 'Target execution failed',
+      },
+      error: 'Target execution failed',
+      dialogTurns: [terminalTurn],
+    });
+    flowChatStore.setState(() => ({
+      sessions: new Map([[session.sessionId, session]]),
+      activeSessionId: session.sessionId,
+    }));
+
+    const result = flowChatStore.applyDispatchSnapshot(session.sessionId, {
+      jobId: 'job-1',
+      state: 'cancelled',
+      cursor: 10,
+      expectedCursor: 10,
+      terminalDrained: true,
+    });
+    const appliedSession = flowChatStore.getState().sessions.get(session.sessionId)!;
+
+    expect(result).toEqual({ applied: true, cursor: 10 });
+    expect(appliedSession.config.dispatchJobState).toBe('failed');
+    expect(appliedSession.config.dispatchLastError).toBe('Target execution failed');
+    expect(appliedSession.error).toBe('Target execution failed');
+    expect(appliedSession.dialogTurns[0]).toBe(terminalTurn);
   });
 });
 

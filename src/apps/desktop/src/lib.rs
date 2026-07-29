@@ -1725,6 +1725,16 @@ pub async fn run() {
             api::ssh_api::remote_close_workspace,
             api::ssh_api::remote_remove_workspace,
             api::ssh_api::remote_get_workspace_info,
+            // Detached task dispatch (controller-side SSH transport)
+            api::dispatch_api::dispatch_list_targets,
+            api::dispatch_api::dispatch_probe_target,
+            api::dispatch_api::dispatch_install_cli_start,
+            api::dispatch_api::dispatch_install_cli_poll,
+            api::dispatch_api::dispatch_install_cli_cancel,
+            api::dispatch_api::dispatch_submit,
+            api::dispatch_api::dispatch_status,
+            api::dispatch_api::dispatch_cancel,
+            api::dispatch_api::dispatch_list_jobs,
             // Relay self-deploy API
             api::relay_deploy_api::relay_deploy_preflight,
             api::relay_deploy_api::relay_deploy_install_docker,

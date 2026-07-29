@@ -23,7 +23,7 @@ use crate::{
         emit_preflight_json_error, ExecApprovalMode, ExecMode, ExecOutputFormat, ExecSessionOptions,
     },
     ui::string_utils::truncate_str,
-    ConfigAction, ExternalAccessArg, ExternalCapabilityArg, ExternalConfigAction,
+    ConfigAction, DispatchAction, ExternalAccessArg, ExternalCapabilityArg, ExternalConfigAction,
     ExternalPolicyModeArg, ExternalPolicyScopeArg, SessionAction,
 };
 
@@ -39,6 +39,49 @@ pub(crate) struct ExecCommandArgs {
     pub output_patch: Option<String>,
     pub verify_final_changes: bool,
     pub approval_mode: ExecApprovalMode,
+}
+
+pub(crate) async fn handle_dispatch_action(action: DispatchAction) -> Result<()> {
+    let verb = match action {
+        DispatchAction::Run { job } => return crate::dispatch::run_worker(job).await,
+        DispatchAction::Probe => "probe",
+        DispatchAction::Submit => "submit",
+        DispatchAction::Status => "status",
+        DispatchAction::Cancel => "cancel",
+        DispatchAction::List => "list",
+    };
+    let result = async {
+        use std::io::{IsTerminal, Read};
+        let mut raw = String::new();
+        let mut stdin = std::io::stdin();
+        if !stdin.is_terminal() {
+            stdin
+                .read_to_string(&mut raw)
+                .context("read dispatch JSON from stdin")?;
+        }
+        let input = if raw.trim().is_empty() {
+            serde_json::json!({})
+        } else {
+            serde_json::from_str(&raw).context("decode dispatch JSON from stdin")?
+        };
+        crate::dispatch::run_dispatch_verb(verb, input).await
+    }
+    .await;
+
+    match result {
+        Ok(response) => {
+            println!("{}", serde_json::to_string(&response)?);
+            Ok(())
+        }
+        Err(error) => {
+            let response = serde_json::json!({
+                "protocolVersion": crate::dispatch::protocol::DISPATCH_PROTOCOL_VERSION,
+                "error": format!("{error:#}"),
+            });
+            println!("{}", serde_json::to_string(&response)?);
+            Err(error)
+        }
+    }
 }
 
 pub(crate) async fn handle_exec_command(config: CliConfig, args: ExecCommandArgs) -> Result<()> {

@@ -49,6 +49,8 @@ interface UseMessageSenderReturn {
     options?: {
       displayMessage?: string;
       composerPresentation?: ComposerPresentation | null;
+      /** One-shot UI confirmation for unattended auto approval. */
+      dispatchAutoConfirmed?: boolean;
     }
   ) => Promise<void>;
   /** Whether a send is in progress */
@@ -70,6 +72,8 @@ export function useMessageSender(props: UseMessageSenderProps): UseMessageSender
     options?: {
       displayMessage?: string;
       composerPresentation?: ComposerPresentation | null;
+      /** One-shot UI confirmation for unattended auto approval. */
+      dispatchAutoConfirmed?: boolean;
     }
   ) => {
     if (!message.trim()) {
@@ -183,6 +187,7 @@ export function useMessageSender(props: UseMessageSenderProps): UseMessageSender
         {
           ...(imagePayload ?? {}),
           ...(userMessageMetadata ? { userMessageMetadata } : {}),
+          ...(options?.dispatchAutoConfirmed ? { dispatchAutoConfirmed: true } : {}),
         }
       );
 

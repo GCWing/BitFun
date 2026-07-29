@@ -19,6 +19,10 @@ vi.mock('./flow-chat-manager/PeerSessionRefreshModule', () => ({
   installPeerSessionRefresh: vi.fn(() => () => {}),
 }));
 
+vi.mock('@/features/dispatch/DispatchJobObserver', () => ({
+  installDispatchJobObserver: vi.fn(() => () => {}),
+}));
+
 vi.mock('../store/FlowChatStore', () => ({
   FlowChatStore: {
     getInstance: () => storeMocks.store,

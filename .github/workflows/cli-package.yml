@@ -119,6 +119,10 @@ jobs:
       - name: Build CLI (Unix)
         if: runner.os != 'Windows'
         shell: bash
+        env:
+          # Keep the CLI self-updater and SSH installer on the same embedded
+          # minisign trust root used by the Desktop updater.
+          BITFUN_RELEASE_PUBKEY: ${{ secrets.TAURI_UPDATER_PUBKEY }}
         run: |
           set -euo pipefail
           cargo build --release \
@@ -168,6 +172,19 @@ jobs:
         run: |
           ./scripts/cli/package-windows.ps1 -Version $env:VERSION -Target $env:TARGET
 
+      - name: Sign CLI archive and checksum (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        env:
+          BITFUN_SIGNING_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          BITFUN_SIGNING_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          BITFUN_SIGNING_PUBKEY: ${{ secrets.TAURI_UPDATER_PUBKEY }}
+        run: |
+          set -euo pipefail
+          bash scripts/sign-release-assets.sh \
+            "${{ steps.stage.outputs.archive }}" \
+            "${{ steps.stage.outputs.checksum }}"
+
       - name: Upload artifact
         uses: actions/upload-artifact@v6
         with:
@@ -176,6 +193,8 @@ jobs:
           path: |
             ${{ steps.stage.outputs.archive || steps.stage-windows.outputs.archive }}
             ${{ steps.stage.outputs.checksum || steps.stage-windows.outputs.checksum }}
+            bitfun-cli-*.tar.gz.sig
+            bitfun-cli-*.tar.gz.sha256.sig
 
   # ── Aggregate and upload to GitHub Release ─────────────────────────
   upload-release-assets:
@@ -227,6 +246,8 @@ jobs:
           files: |
             cli-release-assets/bitfun-cli-*.tar.gz
             cli-release-assets/bitfun-cli-*.tar.gz.sha256
+            cli-release-assets/bitfun-cli-*.tar.gz.sig
+            cli-release-assets/bitfun-cli-*.tar.gz.sha256.sig
             cli-release-assets/bitfun-cli-*.zip
             cli-release-assets/bitfun-cli-*.zip.sha256
             cli-release-assets/SHA256SUMS

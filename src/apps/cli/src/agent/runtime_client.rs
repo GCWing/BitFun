@@ -18,9 +18,7 @@ use bitfun_agent_runtime::sdk::{
     AgentTurnCancellationRequest, AgentTurnSettlementRequest, AgentUserAnswersRequest,
     PermissionReply, PermissionRequest, PermissionRequestEventReceiver, PortError, PortErrorKind,
     RuntimeError, SessionTranscript, SessionTranscriptRequest, SessionUsageReport,
-    AUTO_APPROVE_ASK_CONTEXT_KEY,
 };
-use bitfun_agent_runtime::user_questions::USER_INPUT_AVAILABLE_CONTEXT_KEY;
 use bitfun_agent_runtime_ipc::{
     RuntimeIpcClient, RuntimeIpcClientError, RuntimeIpcClientEvent, RuntimeIpcErrorCode,
     RuntimeIpcEvent, RuntimeIpcOperation, RuntimeIpcOperationResult,
@@ -33,7 +31,7 @@ use bitfun_runtime_ports::{
 };
 
 use crate::actions::SHARED_TUI_EMBEDDED_HANDOFF;
-use crate::runtime::approval::CliApprovalPolicy;
+use crate::runtime::approval::{approval_metadata, CliApprovalPolicy};
 use crate::runtime::CliRuntimeContext;
 
 fn shared_restore_error(error: RuntimeIpcClientError) -> anyhow::Error {
@@ -62,33 +60,6 @@ fn validated_session_summary(
                 workspace_path.display()
             )
         })
-}
-
-fn cli_approval_metadata(
-    approval_policy: CliApprovalPolicy,
-) -> serde_json::Map<String, serde_json::Value> {
-    let mut metadata = serde_json::Map::new();
-    if matches!(
-        approval_policy,
-        CliApprovalPolicy::Reject | CliApprovalPolicy::Auto
-    ) {
-        metadata.insert(
-            USER_INPUT_AVAILABLE_CONTEXT_KEY.to_string(),
-            serde_json::Value::Bool(false),
-        );
-    }
-    let auto_approve_ask = match approval_policy {
-        CliApprovalPolicy::Ask => None,
-        CliApprovalPolicy::DisableAuto | CliApprovalPolicy::Reject => Some(false),
-        CliApprovalPolicy::Auto => Some(true),
-    };
-    if let Some(auto_approve_ask) = auto_approve_ask {
-        metadata.insert(
-            AUTO_APPROVE_ASK_CONTEXT_KEY.to_string(),
-            serde_json::Value::Bool(auto_approve_ask),
-        );
-    }
-    metadata
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -815,7 +786,7 @@ impl CliAgentRuntimeClient {
         }
 
         // Start the dialog turn; events arrive through the shared broadcast source.
-        let metadata = cli_approval_metadata(self.approval_policy());
+        let metadata = approval_metadata(self.approval_policy());
         let request = AgentDialogTurnRequest {
             session_id: session_id.clone(),
             message: message.clone(),
@@ -1197,17 +1168,13 @@ mod tests {
 
     use bitfun_agent_runtime::sdk::{
         PermissionDelegationContext, PermissionRequest, PermissionRequestEvent,
-        PermissionRequestSource, PermissionRequestSourceKind, AUTO_APPROVE_ASK_CONTEXT_KEY,
+        PermissionRequestSource, PermissionRequestSourceKind,
     };
-    use bitfun_agent_runtime::user_questions::USER_INPUT_AVAILABLE_CONTEXT_KEY;
     use bitfun_agent_runtime_ipc::{RuntimeIpcClientError, RuntimeIpcError, RuntimeIpcErrorCode};
 
-    use crate::runtime::approval::CliApprovalPolicy;
-
     use super::{
-        cli_approval_metadata, project_routed_permission_event, session_mode_migration_notice,
-        shared_disconnect_message, shared_restore_error, validated_session_summary,
-        CliWorkspacePaths,
+        project_routed_permission_event, session_mode_migration_notice, shared_disconnect_message,
+        shared_restore_error, validated_session_summary, CliWorkspacePaths,
     };
     use bitfun_agent_runtime_ipc::RuntimeIpcStreamInvalidationReason;
 
@@ -1272,24 +1239,6 @@ mod tests {
             .as_ref()
             .and_then(|target| target.worktree_id.as_ref())
             .is_none());
-    }
-
-    #[test]
-    fn cli_approval_metadata_keeps_auto_invocation_scoped() {
-        let auto = cli_approval_metadata(CliApprovalPolicy::Auto);
-        assert_eq!(auto[AUTO_APPROVE_ASK_CONTEXT_KEY], true);
-        assert_eq!(auto[USER_INPUT_AVAILABLE_CONTEXT_KEY], false);
-
-        let reject = cli_approval_metadata(CliApprovalPolicy::Reject);
-        assert_eq!(reject[AUTO_APPROVE_ASK_CONTEXT_KEY], false);
-
-        let ask = cli_approval_metadata(CliApprovalPolicy::Ask);
-        assert!(!ask.contains_key(AUTO_APPROVE_ASK_CONTEXT_KEY));
-        assert!(!ask.contains_key(USER_INPUT_AVAILABLE_CONTEXT_KEY));
-
-        let disabled = cli_approval_metadata(CliApprovalPolicy::DisableAuto);
-        assert_eq!(disabled[AUTO_APPROVE_ASK_CONTEXT_KEY], false);
-        assert!(!disabled.contains_key(USER_INPUT_AVAILABLE_CONTEXT_KEY));
     }
 
     #[test]

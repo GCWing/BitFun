@@ -626,6 +626,26 @@
     "processingFailed": "Processing failed"
   },
   "chatInput": {
+    "dispatch": {
+      "local": "This computer",
+      "locked": "Runs on {{target}} (fixed for this task)",
+      "current": "Run this task on {{target}}",
+      "menuLabel": "Where this task runs",
+      "sessionScope": "New task",
+      "localSection": "Local",
+      "localDescription": "Run in this BitFun app",
+      "sshSection": "SSH",
+      "loading": "Loading targets…",
+      "noSshTargets": "No saved SSH targets",
+      "sshDescription": "Run through a saved SSH connection",
+      "addSsh": "Add SSH connection…",
+      "createFailed": "Could not create the dispatched task.",
+      "remoteTarget": "the remote target",
+      "autoConfirmTitle": "Allow unattended changes?",
+      "autoConfirmMessage": "This task will run on {{target}} and automatically approve permission requests. Continue?",
+      "autoConfirmAction": "Dispatch with auto approval",
+      "autoConfirmCancel": "Cancel"
+    },
     "addBoostTooltip": "Agent modes, image, or skills",
     "permissionMode": {
       "menuLabel": "Permission mode",

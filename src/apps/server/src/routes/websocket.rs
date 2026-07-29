@@ -210,6 +210,9 @@ async fn handle_command(
     if super::external_sources::supports(method) {
         return super::external_sources::dispatch(method, params, state).await;
     }
+    if super::dispatch::supports(method) {
+        return super::dispatch::dispatch(method, params, state).await;
+    }
     match method {
         "ping" => Ok(serde_json::json!({
             "pong": true,
@@ -279,6 +282,7 @@ mod tests {
             allowed_browser_origins: std::sync::Arc::new(
                 origins.iter().map(|origin| (*origin).to_string()).collect(),
             ),
+            dispatch_host: None,
         }
     }
 

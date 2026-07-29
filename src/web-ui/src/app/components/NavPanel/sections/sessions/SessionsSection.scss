@@ -261,6 +261,39 @@
     white-space: nowrap;
   }
 
+  &__inline-item-dispatch-badge {
+    flex: 0 1 auto;
+    display: inline-flex;
+    align-items: center;
+    min-width: 0;
+    max-width: 104px;
+    height: 14px;
+    padding: 0 5px;
+    overflow: hidden;
+    border: 1px solid color-mix(in srgb, var(--color-accent-400) 38%, var(--border-subtle));
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--color-accent-400) 12%, var(--element-bg-soft));
+    color: color-mix(in srgb, var(--color-accent-400) 76%, var(--color-text-primary));
+    font-size: var(--font-size-xxs);
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+
+    &[data-state='failed'],
+    &[data-state='cancelled'],
+    &[data-state='unreachable'] {
+      border-color: var(--color-error-border);
+      background: var(--color-error-bg);
+      color: var(--color-error);
+    }
+
+    &[data-state='succeeded'] {
+      border-color: var(--color-success-border);
+      background: var(--color-success-bg);
+      color: var(--color-success);
+    }
+  }
+
   &__inline-item-review-badge {
     flex: 0 0 auto;
     display: inline-flex;

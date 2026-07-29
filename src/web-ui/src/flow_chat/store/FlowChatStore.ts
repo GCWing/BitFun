@@ -57,6 +57,7 @@ import {
   normalizeRecoveredToolStatus,
   normalizeRecoveredTurnFinishReason,
   normalizeRecoveredTurnStatus,
+  settleDialogTurnToTerminalStatus,
   settleInterruptedDialogTurn,
 } from '../utils/dialogTurnStability';
 import type { WorkspaceInfo } from '@/shared/types';
@@ -67,6 +68,10 @@ import { cleanRemoteUserInput } from '../utils/userInputText';
 import { useBackgroundSubagentActivityStore } from './backgroundSubagentActivityStore';
 import { sessionComposerStore } from './sessionComposerStore';
 import { recordHistorySessionDiagnosticEvent } from '../services/historySessionDiagnostics';
+import {
+  isDispatchJobTerminal,
+  isNonLocalDispatchTarget,
+} from '@/features/dispatch/types';
 
 const log = createLogger('FlowChatStore');
 const VALID_AGENT_TYPES = new Set([
@@ -97,6 +102,20 @@ export interface PeerSessionSnapshotRefreshResult {
   backendState: string;
   latestTurnId?: string;
   latestTurnStatus?: DialogTurn['status'];
+}
+
+export interface DispatchSnapshotApplyResult {
+  applied: boolean;
+  cursor: number;
+}
+
+function dispatchTerminalTurnStatus(
+  state: NonNullable<SessionConfig['dispatchJobState']>,
+): 'completed' | 'cancelled' | 'error' | null {
+  if (state === 'succeeded') return 'completed';
+  if (state === 'cancelled') return 'cancelled';
+  if (state === 'failed') return 'error';
+  return null;
 }
 
 export function isBackendSessionActivelyProcessing(state: unknown): boolean {
@@ -2153,6 +2172,156 @@ export class FlowChatStore {
   }
 
   /**
+   * Bind an observer-only session to its immutable dispatch target.
+   * This updates frontend state only; it must never create a local runtime
+   * session or write the normal session store.
+   */
+  public updateSessionDispatchTarget(
+    sessionId: string,
+    binding: {
+      targetRequest: NonNullable<SessionConfig['dispatchTargetRequest']>;
+      target: NonNullable<SessionConfig['dispatchTarget']>;
+      jobId: string;
+      approvalPolicy: NonNullable<SessionConfig['dispatchApprovalPolicy']>;
+      state?: NonNullable<SessionConfig['dispatchJobState']>;
+      cursor?: number;
+    },
+  ): void {
+    this.setState(prev => {
+      const session = prev.sessions.get(sessionId);
+      if (!session) return prev;
+
+      const currentTarget = session.config.dispatchTarget;
+      if (
+        currentTarget &&
+        currentTarget.kind !== 'local' &&
+        JSON.stringify(currentTarget) !== JSON.stringify(binding.target)
+      ) {
+        log.warn('Ignoring dispatch target mutation for an existing observer session', {
+          sessionId,
+          currentTarget,
+          requestedTarget: binding.target,
+        });
+        return prev;
+      }
+
+      const newSessions = new Map(prev.sessions);
+      newSessions.set(sessionId, {
+        ...session,
+        config: {
+          ...session.config,
+          dispatchTargetRequest: binding.targetRequest,
+          dispatchTarget: binding.target,
+          dispatchJobId: binding.jobId,
+          dispatchApprovalPolicy: binding.approvalPolicy,
+          dispatchJobState: binding.state ?? session.config.dispatchJobState ?? 'queued',
+          dispatchCursor: Math.max(0, binding.cursor ?? session.config.dispatchCursor ?? 0),
+        },
+        lastActiveAt: Date.now(),
+      });
+      return { ...prev, sessions: newSessions };
+    });
+  }
+
+  /**
+   * Commit a target-side status snapshot only when it still follows the cursor
+   * that was polled. The observer applies all events first, then calls this
+   * method; a stale response therefore cannot jump the durable cursor forward.
+   */
+  public applyDispatchSnapshot(
+    sessionId: string,
+    snapshot: {
+      jobId: string;
+      state: NonNullable<SessionConfig['dispatchJobState']>;
+      cursor: number;
+      lastError?: string;
+      expectedCursor?: number;
+      cursorReset?: boolean;
+      /**
+       * True only after the observer receives an empty terminal page at the
+       * same cursor. Earlier terminal pages may still have projected events.
+       */
+      terminalDrained?: boolean;
+    },
+  ): DispatchSnapshotApplyResult {
+    let result: DispatchSnapshotApplyResult = {
+      applied: false,
+      cursor: this.state.sessions.get(sessionId)?.config.dispatchCursor ?? 0,
+    };
+
+    this.setState(prev => {
+      const session = prev.sessions.get(sessionId);
+      if (
+        !session ||
+        session.config.dispatchJobId !== snapshot.jobId ||
+        !session.config.dispatchTarget ||
+        session.config.dispatchTarget.kind === 'local'
+      ) {
+        return prev;
+      }
+      const currentCursor = session.config.dispatchCursor ?? 0;
+      if (
+        (!snapshot.cursorReset && snapshot.cursor < currentCursor) ||
+        (
+          snapshot.expectedCursor !== undefined &&
+          snapshot.expectedCursor !== currentCursor
+        )
+      ) {
+        result = { applied: false, cursor: currentCursor };
+        return prev;
+      }
+
+      const effectiveState = isDispatchJobTerminal(session.config.dispatchJobState)
+        ? session.config.dispatchJobState!
+        : snapshot.state;
+      const terminal = isDispatchJobTerminal(effectiveState);
+      const settledAt = Date.now();
+      const terminalTurnStatus = snapshot.terminalDrained
+        ? dispatchTerminalTurnStatus(effectiveState)
+        : null;
+      let dialogTurns = session.dialogTurns;
+      const lastTurn = dialogTurns[dialogTurns.length - 1];
+      if (terminalTurnStatus && lastTurn) {
+        const settledTurn = settleDialogTurnToTerminalStatus(
+          lastTurn,
+          terminalTurnStatus,
+          settledAt,
+          terminalTurnStatus === 'error'
+            ? snapshot.lastError || session.error || 'Dispatched task failed'
+            : undefined,
+        );
+        if (settledTurn !== lastTurn) {
+          dialogTurns = [...dialogTurns.slice(0, -1), settledTurn];
+        }
+      }
+      const terminalError = effectiveState === 'failed'
+        ? snapshot.lastError || session.error || 'Dispatched task failed'
+        : session.error;
+      const newSessions = new Map(prev.sessions);
+      newSessions.set(sessionId, {
+        ...session,
+        dialogTurns,
+        error: terminalError,
+        lastActiveAt: settledAt,
+        lastFinishedAt: terminal
+          ? session.lastFinishedAt ?? settledAt
+          : session.lastFinishedAt,
+        config: {
+          ...session.config,
+          dispatchJobState: effectiveState,
+          dispatchCursor: snapshot.cursor,
+          dispatchLastError:
+            snapshot.lastError ?? session.config.dispatchLastError,
+        },
+      });
+      result = { applied: true, cursor: snapshot.cursor };
+      return { ...prev, sessions: newSessions };
+    });
+
+    return result;
+  }
+
+  /**
    * Record an empty session's desired isolation state without touching Git.
    * MessageModule materializes this preference only after the user submits the
    * first prompt.
@@ -2531,16 +2700,21 @@ export class FlowChatStore {
   public async cancelRunningSessionsForWorkspace(
     workspace: Pick<WorkspaceInfo, 'id' | 'rootPath' | 'connectionId' | 'sshHost'>
   ): Promise<string[]> {
-    const runningSessionIds = Array.from(this.state.sessions.values())
+    const runningSessions = Array.from(this.state.sessions.values())
       .filter(session => sessionMatchesWorkspace(session, workspace))
       .filter(session => {
+        if (isNonLocalDispatchTarget(session.config.dispatchTarget)) {
+          // Closing the source workspace must not stop a detached target job.
+          // Only the explicit task Stop action owns dispatch cancellation.
+          return false;
+        }
         const lastTurn = session.dialogTurns[session.dialogTurns.length - 1];
         return Boolean(
           lastTurn &&
           !['completed', 'cancelled', 'error'].includes(lastTurn.status)
         );
-      })
-      .map(session => session.sessionId);
+      });
+    const runningSessionIds = runningSessions.map(session => session.sessionId);
 
     if (runningSessionIds.length === 0) {
       return [];
@@ -2548,7 +2722,8 @@ export class FlowChatStore {
 
     const { agentAPI } = await import('@/infrastructure/api/service-api/AgentAPI');
     await Promise.allSettled(
-      runningSessionIds.map(async sessionId => {
+      runningSessions.map(async session => {
+        const sessionId = session.sessionId;
         try {
           await agentAPI.cancelSession(sessionId);
         } catch (error) {
@@ -3553,6 +3728,9 @@ export class FlowChatStore {
         return;
       }
       if (session.isTransient) {
+        return;
+      }
+      if (isNonLocalDispatchTarget(session.config.dispatchTarget)) {
         return;
       }
 

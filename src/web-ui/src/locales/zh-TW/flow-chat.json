@@ -626,6 +626,26 @@
     "processingFailed": "處理失敗"
   },
   "chatInput": {
+    "dispatch": {
+      "local": "本機",
+      "locked": "執行於 {{target}}（此任務不可變更）",
+      "current": "將此任務執行於 {{target}}",
+      "menuLabel": "這個任務在哪裡執行",
+      "sessionScope": "新任務",
+      "localSection": "本機",
+      "localDescription": "在目前 BitFun 應用程式中執行",
+      "sshSection": "SSH",
+      "loading": "正在載入目標…",
+      "noSshTargets": "沒有已儲存的 SSH 目標",
+      "sshDescription": "透過已儲存的 SSH 連線執行",
+      "addSsh": "新增 SSH 連線…",
+      "createFailed": "無法建立派發任務。",
+      "remoteTarget": "遠端目標",
+      "autoConfirmTitle": "允許無人值守地修改嗎？",
+      "autoConfirmMessage": "此任務將在 {{target}} 上執行，並自動核准權限要求。是否繼續？",
+      "autoConfirmAction": "自動核准並派發",
+      "autoConfirmCancel": "取消"
+    },
     "addBoostTooltip": "智能體模式、圖片或 Skill",
     "permissionMode": {
       "menuLabel": "權限模式",
