@@ -67,22 +67,26 @@ import {
 } from './flowChatSearchDom';
 import {
   areBottomReservationStatesEqual,
+  clampPinReservationPxToViewport,
   COMPENSATION_EPSILON_PX,
   consumeBottomReservationForContentGrowth,
   createInitialBottomReservationState,
   getCanceledUnsettledStickyPinGrowthPx,
   getReservationTotalPx,
+  isTurnPinRequestIdentityCurrent,
   protectCurrentCollapseReservation,
   reconcileUnsignaledShrinkReservation,
+  releasePinReservationForUserNavigation,
   resolveAutoCollapseAnchorScrollTop,
+  resolveProvisionalStickyPinReservationPx,
   sanitizeBottomReservationState,
   settleCollapseReservationForPreservedViewport,
   shouldBypassShrinkCompensationInTailFollow,
   shouldPreserveCollapseReservationAfterIntent,
+  shouldClearExpiredProvisionalStickyPin,
   shouldSuppressFollowingTailNegativeScrollBy,
   shouldSyncPhysicalBottom,
   transferCollapseReservationToPin,
-  transferPinReservationToProtectedCollapse,
   type BottomReservationState,
   type PinBottomReservation,
 } from './flowChatScrollStability';
@@ -248,6 +252,8 @@ interface ScrollerGeometrySnapshot {
 }
 
 interface PendingTurnPinState {
+  generation: number;
+  sessionId: string;
   turnId: string;
   behavior: ScrollBehavior;
   pinMode: FlowChatPinTurnToTopMode;
@@ -448,6 +454,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
   const visibleTurnMeasureFrameRef = useRef<number | null>(null);
   const pinReservationReconcileFrameRef = useRef<number | null>(null);
   const turnPinStabilizationFrameRef = useRef<number | null>(null);
+  const turnPinRequestGenerationRef = useRef(0);
   const latestEndAnchorStabilizationFrameRef = useRef<number | null>(null);
   const searchNavigationRequestIdRef = useRef(0);
   const staticInitialHistoryBottomGuardFrameRef = useRef<number | null>(null);
@@ -807,6 +814,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
   }, []);
 
   const clearTurnPinRequest = useCallback(() => {
+    turnPinRequestGenerationRef.current += 1;
     transientTurnPinStabilizationRef.current = null;
 
     if (turnPinStabilizationFrameRef.current !== null) {
@@ -1449,6 +1457,21 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
 
   const latestTurnId = userMessageItems[userMessageItems.length - 1]?.item.turnId ?? null;
   const latestUserMessageIndex = userMessageItems[userMessageItems.length - 1]?.index ?? 0;
+  const isTurnPinRequestCurrent = useCallback((request: PendingTurnPinState) => {
+    const currentSessionId = activeSessionIdRef.current;
+    const currentTargetTurnId = request.pinMode === 'sticky-latest'
+      ? latestTurnId
+      : request.turnId;
+    if (!currentSessionId || !currentTargetTurnId) {
+      return false;
+    }
+
+    return isTurnPinRequestIdentityCurrent(request, {
+      generation: turnPinRequestGenerationRef.current,
+      sessionId: currentSessionId,
+      turnId: currentTargetTurnId,
+    });
+  }, [latestTurnId]);
   const hasPendingHistoryCompletion = activeSession?.sessionId
     ? flowChatStore.hasPendingSessionHistoryCompletion(activeSession.sessionId)
     : false;
@@ -1754,9 +1777,13 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     turnId: string,
     pinMode: FlowChatPinTurnToTopMode,
     requiredTailSpacePx: number,
+    maxPinReservationPx: number,
     currentPinReservation: PinBottomReservation = bottomReservationStateRef.current.pin,
   ): PinBottomReservation => {
-    const resolvedRequiredTailSpacePx = sanitizeReservationPx(requiredTailSpacePx);
+    const resolvedRequiredTailSpacePx = clampPinReservationPxToViewport(
+      requiredTailSpacePx,
+      maxPinReservationPx,
+    );
     const nextFloorPx = pinMode === 'sticky-latest'
       ? resolvedRequiredTailSpacePx
       : 0;
@@ -1770,7 +1797,9 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
         currentPinReservation.floorPx > COMPENSATION_EPSILON_PX
       )
     );
-    const preservedPx = shouldPreserveCurrentPx ? currentPinReservation.px : 0;
+    const preservedPx = shouldPreserveCurrentPx
+      ? clampPinReservationPxToViewport(currentPinReservation.px, maxPinReservationPx)
+      : 0;
     const shouldRetainTarget = (
       pinMode === 'sticky-latest' ||
       resolvedRequiredTailSpacePx > COMPENSATION_EPSILON_PX ||
@@ -1802,7 +1831,31 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     const maxScrollTop = Math.max(0, rawMaxScrollTop);
     // When content is shorter than the viewport, the clamped max scroll range is 0
     // even though we still need to reserve the underflow gap before the target can pin.
-    const missingTailSpace = Math.max(0, desiredScrollTop - rawMaxScrollTop);
+    const rawMissingTailSpace = Math.max(0, desiredScrollTop - rawMaxScrollTop);
+    const missingTailSpace = clampPinReservationPxToViewport(
+      rawMissingTailSpace,
+      scroller.clientHeight,
+    );
+    if (
+      flowChatDiagnostics.isEnabled() &&
+      rawMissingTailSpace - missingTailSpace > COMPENSATION_EPSILON_PX
+    ) {
+      flowChatDiagnostics.trace({
+        hypothesis: 'F',
+        location: 'VirtualMessageList.resolveTurnPinMetrics',
+        message: 'Pin reservation exceeded the viewport and was clamped',
+        data: () => ({
+          turnId,
+          rawMissingTailSpace,
+          missingTailSpace,
+          clientHeight: scroller.clientHeight,
+          desiredScrollTop,
+          rawMaxScrollTop,
+          effectiveScrollHeight,
+          ignoredTailSpacePx,
+        }),
+      });
+    }
 
     return {
       targetElement,
@@ -1840,20 +1893,43 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
       return false;
     }
 
-    const requiredFloorPx = sanitizeReservationPx(resolvedMetrics.missingTailSpace);
+    const requiredFloorPx = clampPinReservationPxToViewport(
+      resolvedMetrics.missingTailSpace,
+      scroller.clientHeight,
+    );
+    const boundedCurrentPx = clampPinReservationPxToViewport(
+      pinReservation.px,
+      scroller.clientHeight,
+    );
+    const boundedCurrentFloorPx = clampPinReservationPxToViewport(
+      pinReservation.floorPx,
+      scroller.clientHeight,
+    );
+    const currentReservationExceedsViewport = (
+      pinReservation.px - boundedCurrentPx > COMPENSATION_EPSILON_PX ||
+      pinReservation.floorPx - boundedCurrentFloorPx > COMPENSATION_EPSILON_PX
+    );
     // A live target rect is transient while Virtuoso is reconciling item
     // measurements. It is safe to increase the range from that snapshot, but
     // reducing the floor can remove scroll range for a frame and strand the
     // semantic anchor at the physical bottom. Real content growth drains the
-    // floor through measureHeightChange instead.
-    if (requiredFloorPx <= pinReservation.floorPx + COMPENSATION_EPSILON_PX) {
+    // floor through measureHeightChange instead; the viewport cap is the only
+    // synchronous reduction allowed here.
+    if (
+      requiredFloorPx <= pinReservation.floorPx + COMPENSATION_EPSILON_PX &&
+      !currentReservationExceedsViewport
+    ) {
       return false;
     }
 
+    const nextFloorPx = Math.max(requiredFloorPx, boundedCurrentFloorPx);
     const nextPinReservation: PinBottomReservation = {
       ...pinReservation,
-      px: Math.max(requiredFloorPx, pinReservation.px),
-      floorPx: requiredFloorPx,
+      px: clampPinReservationPxToViewport(
+        Math.max(nextFloorPx, boundedCurrentPx),
+        scroller.clientHeight,
+      ),
+      floorPx: nextFloorPx,
     };
 
     if (
@@ -1899,6 +1975,45 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
 
     run(Math.max(1, frames));
   }, [reconcileStickyPinReservation]);
+
+  const clearExpiredProvisionalStickyPin = useCallback((request: PendingTurnPinState) => {
+    const currentState = bottomReservationStateRef.current;
+    if (!shouldClearExpiredProvisionalStickyPin({
+      requestTurnId: request.turnId,
+      requestPinMode: request.pinMode,
+      pinReservation: currentState.pin,
+      ownsElementAnchor: viewportCoordinatorRef.current.ownsElementAnchor(),
+    })) {
+      return false;
+    }
+
+    const nextState: BottomReservationState = {
+      ...currentState,
+      pin: {
+        kind: 'pin',
+        px: 0,
+        floorPx: 0,
+        mode: 'transient',
+        targetTurnId: null,
+      },
+    };
+    viewportCoordinatorRef.current.release('unresolved-turn-pin-expired');
+    updateBottomReservationState(nextState);
+    applyFooterCompensationNow(nextState);
+
+    const scroller = scrollerElementRef.current;
+    if (scroller) {
+      previousScrollTopRef.current = scroller.scrollTop;
+      previousMeasuredHeightRef.current = snapshotMeasuredContentHeight(scroller, nextState);
+      recordScrollerGeometry(scroller);
+    }
+    return true;
+  }, [
+    applyFooterCompensationNow,
+    recordScrollerGeometry,
+    snapshotMeasuredContentHeight,
+    updateBottomReservationState,
+  ]);
 
   const scrollStaticTurnToTop = useCallback((turnId: string, behavior: ScrollBehavior) => {
     const scroller = scrollerElementRef.current;
@@ -1950,6 +2065,10 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
   ]);
 
   const tryResolvePendingTurnPin = useCallback((request: PendingTurnPinState) => {
+    if (!isTurnPinRequestCurrent(request)) {
+      return false;
+    }
+
     const scroller = scrollerElementRef.current;
     const virtuoso = virtuosoRef.current;
 
@@ -1991,9 +2110,12 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
       // deferred pin to expire. Materialize it first, then let the existing live
       // geometry pass perform the exact alignment and stabilization.
       const fallbackBehavior: ScrollBehavior = 'auto';
-      const maxScrollTop = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
       const provisionalPinPx = request.pinMode === 'sticky-latest'
-        ? Math.max(maxScrollTop, currentPinReservation.px)
+        ? resolveProvisionalStickyPinReservationPx({
+          scrollHeight: scroller.scrollHeight,
+          clientHeight: scroller.clientHeight,
+          currentPinPx: currentPinReservation.px,
+        })
         : 0;
 
       if (request.pinMode === 'sticky-latest' && provisionalPinPx > COMPENSATION_EPSILON_PX) {
@@ -2038,6 +2160,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
         request.turnId,
         request.pinMode,
         resolvedMetrics.missingTailSpace,
+        scroller.clientHeight,
       ),
     };
     updateBottomReservationState(nextReservationState);
@@ -2138,6 +2261,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     buildPinReservation,
     applyFooterCompensationNow,
     getRenderedUserMessageElement,
+    isTurnPinRequestCurrent,
     recordScrollerGeometry,
     resolveTurnPinMetrics,
     schedulePinReservationReconcile,
@@ -2221,11 +2345,12 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
       return null;
     }
 
-    const nextPinReservation = stickyPinTarget && resolvedPinMetrics
+    const nextPinReservation = stickyPinTarget && resolvedPinMetrics && scroller
       ? buildPinReservation(
         stickyPinTarget,
         'sticky-latest',
         resolvedPinMetrics.missingTailSpace,
+        scroller.clientHeight,
         currentState.pin,
       )
       : currentState.pin;
@@ -3637,8 +3762,20 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
   useEffect(() => {
     if (!pendingTurnPin) return;
 
+    if (!isTurnPinRequestCurrent(pendingTurnPin)) {
+      setPendingTurnPin(prev => (
+        prev?.generation === pendingTurnPin.generation ? null : prev
+      ));
+      return;
+    }
+
     if (performance.now() > pendingTurnPin.expiresAtMs) {
       clearTurnPinRequest();
+      if (clearExpiredProvisionalStickyPin(pendingTurnPin)) {
+        followOutputControllerRef.current.scheduleFollowToLatest(
+          'unresolved-turn-pin-expired',
+        );
+      }
       return;
     }
 
@@ -3662,7 +3799,11 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
       }
 
       setPendingTurnPin(prev => {
-        if (!prev || prev.turnId !== pendingTurnPin.turnId) {
+        if (
+          !prev ||
+          prev.generation !== pendingTurnPin.generation ||
+          !isTurnPinRequestCurrent(pendingTurnPin)
+        ) {
           return prev;
         }
 
@@ -3679,7 +3820,9 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     };
   }, [
     activateTransientTurnPinStabilization,
+    clearExpiredProvisionalStickyPin,
     clearTurnPinRequest,
+    isTurnPinRequestCurrent,
     pendingTurnPin,
     scheduleTransientTurnPinStabilization,
     scheduleVisibleTurnMeasure,
@@ -3760,18 +3903,10 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
       return;
     }
 
-    const nextReservationState: BottomReservationState = options?.preserveCurrentRange
-      ? transferPinReservationToProtectedCollapse(currentState)
-      : {
-        ...currentState,
-        pin: {
-          kind: 'pin',
-          px: 0,
-          floorPx: 0,
-          mode: 'transient',
-          targetTurnId: null,
-        },
-      };
+    const nextReservationState = releasePinReservationForUserNavigation(currentState, {
+      preserveCurrentRange: options?.preserveCurrentRange === true,
+      ownsElementAnchor: viewportCoordinatorRef.current.ownsElementAnchor(),
+    });
     if (flowChatDiagnostics.isEnabled()) {
       flowChatDiagnostics.trace({
         hypothesis: 'A',
@@ -4072,13 +4207,21 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
       return 'settled';
     }
 
+    const requestSessionId = activeSessionIdRef.current;
+    if (!requestSessionId) {
+      return 'rejected';
+    }
+
     const request: PendingTurnPinState = {
+      generation: turnPinRequestGenerationRef.current + 1,
+      sessionId: requestSessionId,
       turnId,
       behavior: requestedBehavior,
       pinMode: requestedPinMode,
       expiresAtMs: performance.now() + 1500,
       attempts: 0,
     };
+    turnPinRequestGenerationRef.current = request.generation;
 
     startupTrace.markPhase('flowchat_turn_pin_request', {
       turnId,
@@ -4124,6 +4267,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     enterFollowOutput,
     exitFollowOutput,
     armFollowOutputForNewTurn,
+    resumeFollowOutputForMountedStream,
     activateArmedFollowOutput,
     cancelPendingAutoFollowArm,
     scheduleFollowToLatest,
@@ -4180,21 +4324,25 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
       return;
     }
 
-    hasPrimedMountedStreamingTurnFollowRef.current = true;
-    if (!latestTurnId || !isStreamingOutput) {
+    if (!isStreamingOutput) {
+      hasPrimedMountedStreamingTurnFollowRef.current = true;
+      return;
+    }
+    if (!latestTurnId) {
       return;
     }
 
+    previousLatestTurnIdForFollowRef.current = latestTurnId;
     latestTurnAutoFollowStateRef.current = {
-      turnId: latestTurnId,
+      turnId: null,
       sawPositiveFloor: false,
     };
-    armFollowOutputForNewTurn();
+    hasPrimedMountedStreamingTurnFollowRef.current = resumeFollowOutputForMountedStream();
   }, [
     activeSession?.sessionId,
-    armFollowOutputForNewTurn,
     isStreamingOutput,
     latestTurnId,
+    resumeFollowOutputForMountedStream,
     virtualItems.length,
   ]);
 
@@ -4227,16 +4375,17 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
         });
       }
 
-      // When switching to a streaming session, arm follow output so the
-      // viewport tracks new content as it arrives.  Without this, the
+      // When switching to a streaming session, resume tail follow so the
+      // viewport tracks new content as it arrives. Without this, the
       // Virtuoso stays at initialTopMostItemIndex (the user message),
       // and if that position is not yet rendered or measured the
       // viewport may show blank space.
       if (isStreamingOutput) {
-        // Reset the one-shot streaming prime flag so arm-follow can
-        // fire again for the new session's latest turn.
-        hasPrimedMountedStreamingTurnFollowRef.current = false;
-        armFollowOutputForNewTurn();
+        latestTurnAutoFollowStateRef.current = {
+          turnId: null,
+          sawPositiveFloor: false,
+        };
+        hasPrimedMountedStreamingTurnFollowRef.current = resumeFollowOutputForMountedStream();
       }
 
       return;
@@ -4266,6 +4415,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     cancelPendingAutoFollowArm,
     isStreamingOutput,
     latestTurnId,
+    resumeFollowOutputForMountedStream,
     toVirtuosoIndex,
     virtualItems.length,
   ]);

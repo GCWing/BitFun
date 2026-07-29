@@ -25,6 +25,23 @@ export interface BottomReservationState {
   pin: PinBottomReservation;
 }
 
+export interface TurnPinRequestIdentity {
+  generation: number;
+  sessionId: string;
+  turnId: string;
+}
+
+export function isTurnPinRequestIdentityCurrent(
+  request: TurnPinRequestIdentity,
+  current: TurnPinRequestIdentity,
+): boolean {
+  return (
+    request.generation === current.generation &&
+    request.sessionId === current.sessionId &&
+    request.turnId === current.turnId
+  );
+}
+
 export function transferCollapseReservationToPin(
   currentState: BottomReservationState,
   nextPinReservation: PinBottomReservation,
@@ -51,6 +68,34 @@ export function transferPinReservationToProtectedCollapse(
       px: currentState.collapse.px + transferredPx,
       floorPx: currentState.collapse.floorPx + transferredPx,
     },
+    pin: {
+      kind: 'pin',
+      px: 0,
+      floorPx: 0,
+      mode: 'transient',
+      targetTurnId: null,
+    },
+  });
+}
+
+export function releasePinReservationForUserNavigation(
+  currentState: BottomReservationState,
+  options: {
+    preserveCurrentRange: boolean;
+    ownsElementAnchor: boolean;
+  },
+): BottomReservationState {
+  const isProvisionalStickyPin = (
+    currentState.pin.mode === 'sticky-latest' &&
+    currentState.pin.floorPx <= COMPENSATION_EPSILON_PX &&
+    !options.ownsElementAnchor
+  );
+  if (options.preserveCurrentRange && !isProvisionalStickyPin) {
+    return transferPinReservationToProtectedCollapse(currentState);
+  }
+
+  return sanitizeBottomReservationState({
+    ...currentState,
     pin: {
       kind: 'pin',
       px: 0,
@@ -127,6 +172,51 @@ export function reconcileUnsignaledShrinkReservation(
       ),
     },
   });
+}
+
+export function clampPinReservationPxToViewport(
+  reservationPx: number,
+  clientHeight: number,
+): number {
+  return Math.min(
+    sanitizeReservationPx(reservationPx),
+    sanitizeReservationPx(clientHeight),
+  );
+}
+
+export function resolveProvisionalStickyPinReservationPx(options: {
+  scrollHeight: number;
+  clientHeight: number;
+  currentPinPx: number;
+}): number {
+  const currentPinPx = sanitizeReservationPx(options.currentPinPx);
+  const effectiveScrollHeight = Math.max(
+    0,
+    sanitizeReservationPx(options.scrollHeight) - currentPinPx,
+  );
+  const effectiveMaxScrollTop = Math.max(
+    0,
+    effectiveScrollHeight - sanitizeReservationPx(options.clientHeight),
+  );
+  return clampPinReservationPxToViewport(
+    Math.max(currentPinPx, effectiveMaxScrollTop),
+    options.clientHeight,
+  );
+}
+
+export function shouldClearExpiredProvisionalStickyPin(options: {
+  requestTurnId: string;
+  requestPinMode: FlowChatPinTurnToTopMode;
+  pinReservation: PinBottomReservation;
+  ownsElementAnchor: boolean;
+}): boolean {
+  return (
+    options.requestPinMode === 'sticky-latest' &&
+    options.pinReservation.mode === 'sticky-latest' &&
+    options.pinReservation.targetTurnId === options.requestTurnId &&
+    options.pinReservation.floorPx <= COMPENSATION_EPSILON_PX &&
+    !options.ownsElementAnchor
+  );
 }
 
 export function createInitialBottomReservationState(): BottomReservationState {

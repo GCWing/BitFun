@@ -191,6 +191,31 @@ shrink it while Virtuoso item measurements are still moving. Stream end
 performs one final atomic collapse-to-pin transfer using the settled required
 range.
 
+When a sticky target is temporarily virtualized, its provisional range must be
+computed from `scrollHeight - currentPinPx`. Reusing physical `scrollHeight`
+directly feeds the synthetic footer back into the next retry and grows the range
+on every frame. Provisional pins remain at `floorPx: 0`; if the request expires
+without capturing an element anchor, that range is removed atomically.
+
+The pin-owned portion of the footer is capped at one viewport. A rendered
+target can never require more than `clientHeight` of extra range to align its
+top inside the viewport, and one viewport is also sufficient to materialize a
+virtualized target. This cap applies to provisional and established pin ranges.
+It does not apply to collapse compensation or the total footer: a large card or
+several cumulative collapses can legitimately require more than one viewport to
+preserve the current semantic anchor.
+
+Pending pin retries carry a synchronous generation plus the owning session and
+turn. Canceling or replacing a request increments the generation before React
+state is updated, so already-queued animation frames cannot restore a canceled
+reservation. User navigation drops a provisional sticky range instead of
+transferring it into protected collapse. Established pins keep the existing
+protected-range handoff.
+
+Mounting an already-streaming session is not a new-turn event. Session entry
+resumes tail follow directly, while sticky pinning remains reserved for a new
+turn that appears in the currently mounted session.
+
 ## 4. Collapse Intent
 
 Some collapses are predictable before layout actually shrinks.
