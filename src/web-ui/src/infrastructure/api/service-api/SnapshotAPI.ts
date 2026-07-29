@@ -234,6 +234,26 @@ export class SnapshotAPI {
     }
   }
 
+  async getTurnFiles(
+    sessionId: string,
+    turnIndex: number,
+    workspacePath?: string,
+  ): Promise<string[]> {
+    try {
+      const scope = requireSessionSnapshotScope(sessionId, workspacePath);
+      const key = `get_turn_files:${snapshotScopeKey(scope)}:${sessionId}:${turnIndex}`;
+      return await this.dedupeInFlight(key, () => api.invoke('get_turn_files', {
+        request: {
+          session_id: sessionId,
+          turn_index: turnIndex,
+          ...scope,
+        },
+      }));
+    } catch (error) {
+      throw createTauriCommandError('get_turn_files', error, { sessionId, turnIndex, workspacePath });
+    }
+  }
+
   async getSessionFileDiffStats(
     sessionId: string,
     filePath: string,

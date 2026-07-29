@@ -43,6 +43,7 @@ import type { TranscriptExportScope } from '../../utils/dialogTranscriptExport';
 import { buildTranscriptExportLabels } from '../../utils/transcriptExportLabels';
 import './ModelRoundItem.scss';
 import './SubagentItems.scss';
+import { TurnFilesSummary } from './TurnFilesSummary';
 
 const log = createLogger('ModelRoundItem');
 
@@ -124,10 +125,12 @@ interface ModelRoundItemProps {
   turnId: string;
   isLastRound?: boolean;
   isTurnComplete?: boolean;
+  isLastTurn?: boolean;
   turnStartedAt?: number;
   turnEndedAt?: number;
   turnDurationMs?: number;
   turnTokenUsage?: TokenUsage;
+  turnBackendIndex?: number;
 }
 
 function sortRoundAttempts(attempts: ModelRoundAttempt[]): ModelRoundAttempt[] {
@@ -330,10 +333,12 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
     turnId,
     isLastRound = false,
     isTurnComplete = false,
+    isLastTurn = false,
     turnStartedAt,
     turnEndedAt,
     turnDurationMs,
     turnTokenUsage,
+    turnBackendIndex,
   }) => {
     const { t } = useTranslation('flow-chat');
     const { formatDate, formatNumber } = useI18n('flow-chat');
@@ -762,6 +767,13 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
             {allowTranscriptExport && <ExportImageButton turnId={turnId} />}
           </div>
         )}
+
+        {isTurnComplete && isLastRound && isLastTurn && !isVisuallyStreaming && typeof turnBackendIndex === 'number' && (
+          <TurnFilesSummary
+            sessionId={sessionId}
+            turnIndex={turnBackendIndex}
+          />
+        )}
       </div>
       </TypewriterRevealGateProvider>
     );
@@ -781,10 +793,12 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
       prev.round.historyRounds === next.round.historyRounds &&
       prev.isLastRound === next.isLastRound &&
       prev.isTurnComplete === next.isTurnComplete &&
+      prev.isLastTurn === next.isLastTurn &&
       prev.turnStartedAt === next.turnStartedAt &&
       prev.turnEndedAt === next.turnEndedAt &&
       prev.turnDurationMs === next.turnDurationMs &&
-      prev.turnTokenUsage === next.turnTokenUsage
+      prev.turnTokenUsage === next.turnTokenUsage &&
+      prev.turnBackendIndex === next.turnBackendIndex
     );
   }
 );
