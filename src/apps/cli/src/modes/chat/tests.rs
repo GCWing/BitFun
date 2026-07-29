@@ -18,10 +18,12 @@ mod tests {
         native_command_reconfirmation_is_required, native_hook_help_text,
         parse_external_agent_review_action, parse_external_control_action,
         parse_external_tool_review_action, parse_hook_management_action,
-        previous_session_mode_change_status, render_external_hook_catalog,
-        render_native_hook_overview, CommandRoute, ExternalAgentReviewAction,
+        pending_mode_change_blocks_runtime_action, previous_session_mode_change_status,
+        render_external_hook_catalog, render_native_hook_overview,
+        shared_session_change_is_blocked, CommandRoute, ExternalAgentReviewAction,
         ExternalControlUiAction, ExternalSourceConflictPreferences, ExternalToolReviewAction,
         HookManagementAction, ModeSelectionApplyOutcome, ModelSelectionApplyOutcome,
+        SHARED_TUI_CHAT_STATUS,
     };
     use crate::actions::{
         action_conflict_behavior_version, ActionHandler, ActionState, ResolvedKeymap,
@@ -1345,12 +1347,87 @@ mod tests {
     }
 
     #[test]
-    fn pending_mode_change_allows_host_commands_but_blocks_agent_submission() {
+    fn unknown_mode_update_outcome_requires_restore_before_retry() {
+        let mut current_mode = "agentic".to_string();
+        let mut state = ChatState::new(
+            "session".to_string(),
+            "Session".to_string(),
+            "agentic".to_string(),
+            Some("D:/workspace/current".to_string()),
+        );
+
+        let applied = apply_agent_mode_feedback(
+            &mut current_mode,
+            &mut state,
+            "plan",
+            ModeSelectionApplyOutcome::OutcomeUnknown("request timed out".to_string()),
+        );
+
+        assert!(!applied);
+        assert_eq!(current_mode, "agentic");
+        assert_eq!(state.agent_type, "agentic");
+        let notice = state.messages.last().expect("unknown-outcome notice");
+        let crate::chat_state::FlowItem::Text { content, .. } = &notice.flow_items[0] else {
+            panic!("unknown-outcome notice must be text");
+        };
+        assert!(content.contains("outcome is unknown"));
+        assert!(content.contains("reopen Shared TUI"));
+        assert!(content.contains("restore this session"));
+        assert!(!content.contains("was not changed"));
+    }
+
+    #[test]
+    fn pending_mode_change_routes_commands_to_their_action_guards() {
         assert!(mode_change_blocks_typed_submission(true, "continue"));
         assert!(!mode_change_blocks_typed_submission(true, "/new"));
         assert!(!mode_change_blocks_typed_submission(true, "/sessions"));
         assert!(!mode_change_blocks_typed_submission(true, "/exit"));
         assert!(!mode_change_blocks_typed_submission(false, "continue"));
+
+        assert!(pending_mode_change_blocks_runtime_action(
+            true,
+            true,
+            ActionHandler::Sessions,
+        ));
+        assert!(pending_mode_change_blocks_runtime_action(
+            true,
+            true,
+            ActionHandler::Init,
+        ));
+        assert!(!pending_mode_change_blocks_runtime_action(
+            true,
+            true,
+            ActionHandler::Exit,
+        ));
+        assert!(!pending_mode_change_blocks_runtime_action(
+            true,
+            true,
+            ActionHandler::OpenAgentSelector,
+        ));
+        assert!(!pending_mode_change_blocks_runtime_action(
+            false,
+            true,
+            ActionHandler::Sessions,
+        ));
+        assert!(!pending_mode_change_blocks_runtime_action(
+            true,
+            false,
+            ActionHandler::Sessions,
+        ));
+    }
+
+    #[test]
+    fn shared_session_change_waits_for_the_mode_update_result() {
+        assert!(shared_session_change_is_blocked(true, true));
+        assert!(!shared_session_change_is_blocked(true, false));
+        assert!(!shared_session_change_is_blocked(false, true));
+    }
+
+    #[test]
+    fn shared_chat_status_separates_mode_switching_from_agent_management() {
+        assert!(SHARED_TUI_CHAT_STATUS.contains("current Session Agent mode"));
+        assert!(SHARED_TUI_CHAT_STATUS.contains("Agent/Subagent management remain Embedded"));
+        assert!(!SHARED_TUI_CHAT_STATUS.contains("mode management remain Embedded"));
     }
 
     #[test]

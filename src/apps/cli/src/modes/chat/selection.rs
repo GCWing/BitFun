@@ -7,6 +7,7 @@ enum ModelSelectionApplyOutcome {
 
 enum ModeSelectionApplyOutcome {
     SessionUpdateFailed(String),
+    OutcomeUnknown(String),
     Applied,
 }
 
@@ -14,6 +15,7 @@ enum ModeChangePollOutcome {
     NoChange,
     Redraw,
     ExitAfterSave,
+    ExitAfterUnknownOutcome(String),
 }
 
 fn previous_session_mode_change_status(
@@ -26,6 +28,9 @@ fn previous_session_mode_change_status(
         ),
         ModeSelectionApplyOutcome::SessionUpdateFailed(error) => format!(
             "The previous session mode change to {mode_id} failed: {error}. Return to that session to retry."
+        ),
+        ModeSelectionApplyOutcome::OutcomeUnknown(error) => format!(
+            "The previous session mode change to {mode_id} has an unknown outcome: {error}. Reopen Shared TUI, restore that session, and inspect its current mode before retrying."
         ),
     }
 }
@@ -49,6 +54,17 @@ fn apply_agent_mode_feedback(
             );
             chat_state.add_system_message(format!(
                 "Agent mode was not changed: {error}. Please retry."
+            ));
+            false
+        }
+        ModeSelectionApplyOutcome::OutcomeUnknown(error) => {
+            tracing::error!(
+                "Agent mode update outcome is unknown for {}: {}",
+                selected_mode,
+                error
+            );
+            chat_state.add_system_message(format!(
+                "Agent mode update outcome is unknown: {error}. The Shared connection is closing; reopen Shared TUI, restore this session, and inspect its current mode before retrying."
             ));
             false
         }
@@ -520,9 +536,15 @@ impl ChatMode {
     ) {
         let modes = self.get_mode_agents(rt_handle);
         if modes.is_empty() {
-            chat_view.set_status(Some(
-                "Main agent modes are unavailable; agent management remains available.".to_string(),
-            ));
+            let message = if self.agent.is_shared() {
+                "Main agent modes are unavailable."
+            } else {
+                "Main agent modes are unavailable; agent management remains available."
+            };
+            chat_view.set_status(Some(message.to_string()));
+            if self.agent.is_shared() {
+                return;
+            }
         }
 
         let agent_items: Vec<AgentItem> = modes
@@ -533,12 +555,22 @@ impl ChatMode {
             })
             .collect();
 
-        chat_view.show_agent_selector(
-            agent_items,
-            Some(self.agent_type.clone()),
-            true,
-            agent_mode_switch_allowed(chat_state.is_processing, self.pending_mode_change.is_some()),
-        );
+        let allow_mode_switch =
+            agent_mode_switch_allowed(chat_state.is_processing, self.pending_mode_change.is_some());
+        if self.agent.is_shared() {
+            chat_view.show_agent_modes_only(
+                agent_items,
+                Some(self.agent_type.clone()),
+                allow_mode_switch,
+            );
+        } else {
+            chat_view.show_agent_selector(
+                agent_items,
+                Some(self.agent_type.clone()),
+                true,
+                allow_mode_switch,
+            );
+        }
     }
 
     fn handle_agent_selector_action(
@@ -626,10 +658,12 @@ impl ChatMode {
             {
                 pending.slow_notice_shown = true;
                 if !pending.exit_warning_shown {
-                    chat_view.set_status(Some(
+                    let message = if self.agent.is_shared() {
+                        "The agent mode change is still being saved. You can keep editing; changing sessions and sending wait for the result."
+                    } else {
                         "The agent mode change is still being saved. You can edit or switch sessions; sending in this session waits."
-                            .to_string(),
-                    ));
+                    };
+                    chat_view.set_status(Some(message.to_string()));
                 }
                 return ModeChangePollOutcome::Redraw;
             }
@@ -641,6 +675,9 @@ impl ChatMode {
             .expect("finished mode task should remain present");
         let outcome = match tokio::task::block_in_place(|| rt_handle.block_on(pending.handle)) {
             Ok(Ok(())) => ModeSelectionApplyOutcome::Applied,
+            Ok(Err(error)) if error.outcome_unknown() => {
+                ModeSelectionApplyOutcome::OutcomeUnknown(error.to_string())
+            }
             Ok(Err(error)) => ModeSelectionApplyOutcome::SessionUpdateFailed(error.to_string()),
             Err(error) => ModeSelectionApplyOutcome::SessionUpdateFailed(format!(
                 "mode update task failed: {error}"
@@ -661,10 +698,16 @@ impl ChatMode {
             )));
             return ModeChangePollOutcome::Redraw;
         }
+        let unknown_outcome = matches!(&outcome, ModeSelectionApplyOutcome::OutcomeUnknown(_));
         let applied =
             apply_agent_mode_feedback(&mut self.agent_type, chat_state, &pending.mode_id, outcome);
         if applied {
             chat_view.set_status(Some(format!("Agent mode set to {}", pending.mode_id)));
+        } else if unknown_outcome {
+            let message = "Agent mode update outcome is unknown. The Shared connection closed; reopen Shared TUI, restore the session, and inspect its current mode before retrying."
+                .to_string();
+            chat_view.set_status(Some(message.clone()));
+            return ModeChangePollOutcome::ExitAfterUnknownOutcome(message);
         } else {
             chat_view.set_status(Some("Agent mode change failed. Please retry.".to_string()));
         }
@@ -698,8 +741,7 @@ fn agent_mode_switch_allowed(is_processing: bool, mode_change_pending: bool) -> 
 
 fn mode_switch_unavailable_message(is_processing: bool) -> String {
     if is_processing {
-        "Agent mode cannot be changed during the current turn. Subagent and external source management remain available."
-            .to_string()
+        "Agent mode cannot be changed during the current turn.".to_string()
     } else {
         "An agent mode change is already in progress. Please wait.".to_string()
     }
@@ -707,13 +749,26 @@ fn mode_switch_unavailable_message(is_processing: bool) -> String {
 
 #[cfg(test)]
 mod usage_metadata_tests {
-    use super::{agent_mode_switch_allowed, usage_report_metadata, SessionUsageReport};
+    use super::{
+        agent_mode_switch_allowed, mode_switch_unavailable_message, usage_report_metadata,
+        SessionUsageReport,
+    };
 
     #[test]
     fn mode_switch_is_rechecked_when_an_idle_popup_outlives_turn_start() {
         assert!(agent_mode_switch_allowed(false, false));
         assert!(!agent_mode_switch_allowed(true, false));
         assert!(!agent_mode_switch_allowed(false, true));
+    }
+
+    #[test]
+    fn active_turn_message_does_not_advertise_hidden_management() {
+        let message = mode_switch_unavailable_message(true);
+
+        assert_eq!(
+            message,
+            "Agent mode cannot be changed during the current turn."
+        );
     }
 
     #[test]

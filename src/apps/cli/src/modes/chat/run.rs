@@ -111,7 +111,7 @@ impl ChatMode {
         let mut external_source_rx = None;
         if self.agent.is_shared() {
             chat_view.set_status(Some(format!(
-                "Shared TUI preview: this view controls sessions and turns; local extension, MCP, account-sync, model, and mode management remain Embedded. {SHARED_TUI_EMBEDDED_HANDOFF}"
+                "{SHARED_TUI_CHAT_STATUS} {SHARED_TUI_EMBEDDED_HANDOFF}"
             )));
         } else {
             let external_workspace = self.agent.workspace_path_buf();
@@ -251,6 +251,10 @@ impl ChatMode {
                 self.action_state(chat_state.is_processing, false),
                 &self.keymap,
             );
+            chat_view.set_agent_mode_switch_allowed(agent_mode_switch_allowed(
+                chat_state.is_processing,
+                self.pending_mode_change.is_some(),
+            ));
 
             // Keep spinner animation smooth without forcing full redraw every loop.
             // Pause spinner updates while resize is still being debounced.
@@ -276,6 +280,10 @@ impl ChatMode {
                     should_quit = true;
                     exit_reason = ChatExitReason::Quit;
                     continue;
+                }
+                ModeChangePollOutcome::ExitAfterUnknownOutcome(message) => {
+                    fatal_event_stream_error = Some(message);
+                    break;
                 }
             }
             if self.poll_external_tool_mutation(&mut chat_view) {

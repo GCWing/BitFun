@@ -42,7 +42,7 @@ flowchart TB
 | Session 写入 | BitFun Runtime 的持久化 Session 由 `SessionManager` 管理；同一存储位置中的同一 Session 同时只允许一个本机进程写入，list/view 等只读操作不受影响 |
 | 当前 HTTP Server | 只提供 health/info/WebSocket 外壳，未装配 Agent Runtime，因此不取得 workspace ownership；`bootstrap.rs` 仅保持 agent-enabled composition 的一致边界，不由当前入口启动 |
 | Shared local IPC | 未发布的本机协议已有 discovery、实例锁、严格握手、Session 控制权、有界事件流和 cleanup；唯一 consumer 是第一方交互式 TUI adapter |
-| Shared TUI | `bitfun --shared` / `bitfun chat --shared` 可列出、创建、恢复 Session，读取 transcript，提交/取消 Turn，处理 Permission 和 UserInput；默认仍是 Embedded |
+| Shared TUI | `bitfun --shared` / `bitfun chat --shared` 可列出、创建、恢复 Session，读取 transcript，切换当前 Session 的 Agent mode，提交/取消 Turn，处理 Permission 和 UserInput；默认仍是 Embedded |
 | Shared GUI/Headless/ACP/SDK Host/Remote | 未交付，也不会由 `--shared` 隐式启用；Replay、Observer、Controller transfer、Session delete/fork 同样不在当前协议中 |
 
 因此当前交付的是一条窄的、显式启用的 Shared TUI deployment，不是通用本机 Server。具体 `EventQueue` 仍由 Core 产品装配；IPC 只把当前 TUI 必需的强类型操作和事件映射到同一个 Runtime owner，没有事件重放或公开协议承诺。
@@ -196,6 +196,7 @@ sequenceDiagram
     S-->>C: initialized(health + interactive_tui)
     C->>S: create or restore Session
     S-->>C: Session control + Session facts
+    C->>S: update current Session Agent mode
     C->>S: submit/cancel Turn or answer Permission/UserInput
     S-->>C: Session-filtered authoritative events
   else invalid
@@ -203,11 +204,11 @@ sequenceDiagram
   end
 ```
 
-当前协议只覆盖第一个 TUI 纵向切片：
+当前私有协议（v3）只覆盖 TUI 已有用户旅程需要的窄操作：
 
 | 已支持 | 明确不支持 |
 |---|---|
-| Health、Session list/create、原子 restore（含 transcript 与 pending Permission） | Session delete/fork、跨 workspace attach、transcript 分页 |
+| Health、Session list/create、原子 restore（含 transcript 与 pending Permission）、当前 Session Agent mode update | Session delete/fork、跨 workspace attach、transcript 分页、模型和 Agent/Subagent 管理 |
 | Turn submit/cancel | replay、cursor、resume event stream |
 | pending/respond Permission、submit UserInput answers | observer、controller transfer、多 Session multiplex |
 | 连接断开清理、Session-filtered events | detach/observer/controller transfer、SDK callbacks、GUI/Remote/Peer/ACP/Headless wire |
@@ -223,9 +224,10 @@ sequenceDiagram
 - 未认证握手预算为 2 秒；认证后的单次操作、响应写入和断线取消预算为 120 秒，避免坏客户端长期占用连接或 Runtime handler；
 - JSON frame 使用 4-byte 长度前缀；request 在发送前执行 128 KiB 上限（覆盖 TUI 已有的 64 KiB 粘贴输入及类型化信封），response/event 在序列化时执行 8 MiB 上限。超限返回类型化错误，不能进行无界分配；超过该上限的历史 Session 暂由 Embedded TUI 打开，不在本阶段引入分页协议；
 - 未认证连接也计入有界 connection budget，单个客户端不能无限制造 server task；
-- 未知字段、未知 operation、错误身份和不兼容版本 fail closed；
-- 一个连接最多控制一个 Session、同时最多提交一个活动 Turn；一个 Session 同时只有一个 controller。create/restore 在完整结果通过大小检查后才原子切换控制权，失败时保留原 Session。活动 Turn 期间不能切换 Session。
+- 未知 frame/operation 信封字段、未知 operation、错误身份和不兼容版本 fail closed；复用的 Runtime DTO 按其既有反序列化契约处理字段；
+- 一个连接最多控制一个 Session、同时最多提交一个活动 Turn；一个 Session 同时只有一个 controller。create/restore 在完整结果通过大小检查后才原子切换控制权，失败时保留原 Session。活动 Turn 期间不能切换 Session 或 Agent mode。
 - Submit 使用调用方已有的 `turn_id` 标识不确定结果；若提交超时，返回 `outcome_unknown`、关闭连接并按该 ID 取消。断连取消只有得到确认后才释放 Session 控制权；无法确认时继续隔离该 Session，直到 Runtime 进程退出。
+- Agent mode update 复用既有 Runtime 端口和校验。它是有副作用操作；若响应超时，或 Client 在收到权威结果前丢失连接，按 `outcome_unknown` 处理并断开连接，Client 不自动重试。用户重新打开 Shared TUI、restore Session 并核对当前 mode 后，才能决定是否重试。模式目录仍是同版本第一方产品事实，不加入 IPC；Runtime 对最终更新保持权威并拒绝无效 mode。
 - Agent 事件流 lag/closed 后 fail closed；Permission lag 先从 Runtime 权威 pending 集合重建，重建失败或流关闭时取消当前 Turn 并退出。路由到父 Session 的嵌套 Permission 与 AskUserQuestion 复用现有 TUI 交互，不新增第二套 UI 状态。
 - Windows Shared Runtime 在初始化前把自身放入 kill-on-close Job；Unix 仅在应用内优雅退出路径中通过受管子进程组回收后代。Runtime 被 `SIGTERM`、`SIGKILL` 或崩溃直接终止后的 Unix 后代回收不在当前保证内。两者都只负责生命周期，不是安全沙箱。
 - 最后一个连接离开后等待 30 秒再退出；新连接会取消 idle 退出。退出只删除自己发布的 discovery；Unix 下继任 owner 会在持有实例锁后清理同一 identity 的陈旧 socket。
@@ -295,7 +297,7 @@ Session/Turn、事件恢复、Permission/UserInput、Controller、配置管理�
 |---|---|
 | 当前 consumer | 仅第一方交互式 TUI adapter；不自动包含 GUI、Headless CLI、Remote 或 SDK Host |
 | 稳定测试合同 | 本机 endpoint、initialize-first、128 KiB request / 8 MiB response-event 上限、连接上限、owner-checked cleanup、原子 Session controller 切换、单连接单活动 Turn、事件流失效后 fail closed、断连取消、30 秒空闲退出 |
-| 当前业务范围 | Session/Turn/transcript/Permission/UserInput 的 TUI 必需子集；任何新增操作都需要真实 consumer 和 owner 等价测试 |
+| 当前业务范围 | Session/Turn/transcript/Agent mode/Permission/UserInput 的 TUI 必需子集；任何新增操作都需要真实 consumer 和 owner 等价测试 |
 | 协议地位 | crate 保持 `publish = false`；这是 workspace 内私有协议，不是 Agent SDK 或远程兼容承诺 |
 
 架构守卫只允许 CLI 消费该 crate；IPC 可以复用稳定的 Event、Product Domain 与 Runtime Port DTO，但禁止依赖 Runtime 实现、SDK Host、services、Tauri 或远程网络 transport。

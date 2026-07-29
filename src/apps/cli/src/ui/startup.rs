@@ -1748,14 +1748,20 @@ impl StartupPage {
     }
 
     fn show_agent_selector(&mut self) {
-        self.push_current_popup_to_stack();
-
         let modes = self.get_mode_agents();
         if modes.is_empty() {
-            self.status = Some(
-                "Main agent modes are unavailable; agent management remains available.".to_string(),
-            );
+            let message = if self.agent.is_shared() {
+                "Main agent modes are unavailable."
+            } else {
+                "Main agent modes are unavailable; agent management remains available."
+            };
+            self.status = Some(message.to_string());
+            if self.agent.is_shared() {
+                return;
+            }
         }
+
+        self.push_current_popup_to_stack();
 
         let agent_items: Vec<AgentItem> = modes
             .into_iter()
@@ -1765,8 +1771,13 @@ impl StartupPage {
             })
             .collect();
 
-        self.agent_selector
-            .show(agent_items, Some(self.agent_type.clone()), false, true);
+        if self.agent.is_shared() {
+            self.agent_selector
+                .show_modes_only(agent_items, Some(self.agent_type.clone()), true);
+        } else {
+            self.agent_selector
+                .show(agent_items, Some(self.agent_type.clone()), false, true);
+        }
     }
 
     fn handle_agent_selector_action(&mut self, action: AgentSelectorAction) {

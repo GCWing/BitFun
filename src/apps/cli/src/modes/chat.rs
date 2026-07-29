@@ -28,7 +28,7 @@ use crate::actions::{
     removed_management_command_hint, slash_actions, ActionContext, ActionHandler, ActionSpec,
     ActionState, ResolvedKeymap, SHARED_TUI_EMBEDDED_HANDOFF, SHARED_TUI_HELP_NOTE,
 };
-use crate::agent::runtime_client::CliAgentRuntimeClient;
+use crate::agent::runtime_client::{CliAgentRuntimeClient, SessionModeUpdateError};
 use crate::chat_state::ChatState;
 use crate::config::CliConfig;
 use crate::ui::agent_selector::{AgentItem, AgentSelectorAction};
@@ -173,10 +173,11 @@ struct PendingModeChange {
     started_at: Instant,
     slow_notice_shown: bool,
     exit_warning_shown: bool,
-    handle: tokio::task::JoinHandle<anyhow::Result<()>>,
+    handle: tokio::task::JoinHandle<std::result::Result<(), SessionModeUpdateError>>,
 }
 
 const MODE_CHANGE_SLOW_NOTICE: Duration = Duration::from_secs(15);
+const SHARED_TUI_CHAT_STATUS: &str = "Shared TUI preview: this view controls sessions, turns, and the current Session Agent mode; local extension, MCP, account-sync, model, and Agent/Subagent management remain Embedded.";
 
 #[derive(Default)]
 struct NonKeyEventOutcome {

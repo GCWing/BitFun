@@ -258,6 +258,13 @@ impl RuntimeIpcRequestHandler for SharedRuntimeHandler {
                     pending_permissions,
                 })
             }
+            RuntimeIpcOperation::UpdateSessionMode { request } => {
+                self.runtime
+                    .update_session_mode(request)
+                    .await
+                    .map_err(runtime_ipc_error)?;
+                Ok(RuntimeIpcOperationResult::Unit)
+            }
             RuntimeIpcOperation::SubmitTurn { request } => {
                 let outcome = self
                     .runtime
@@ -919,6 +926,9 @@ fn runtime_ipc_error(error: RuntimeError) -> RuntimeIpcError {
         RuntimeError::Port(port_error) if port_error.kind == PortErrorKind::SessionInUse => {
             RuntimeIpcErrorCode::SessionInUse
         }
+        RuntimeError::Port(port_error) if port_error.kind == PortErrorKind::InvalidRequest => {
+            RuntimeIpcErrorCode::InvalidRequest
+        }
         _ => RuntimeIpcErrorCode::Unavailable,
     };
     RuntimeIpcError {
@@ -956,6 +966,19 @@ mod tests {
         assert_eq!(
             error.code,
             bitfun_agent_runtime_ipc::RuntimeIpcErrorCode::SessionInUse
+        );
+    }
+
+    #[test]
+    fn invalid_runtime_requests_keep_their_ipc_error_category() {
+        let error = runtime_ipc_error(RuntimeError::Port(PortError::new(
+            PortErrorKind::InvalidRequest,
+            "Unknown agent mode: missing",
+        )));
+
+        assert_eq!(
+            error.code,
+            bitfun_agent_runtime_ipc::RuntimeIpcErrorCode::InvalidRequest
         );
     }
 

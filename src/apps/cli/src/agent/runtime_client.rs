@@ -6,6 +6,7 @@
 
 use anyhow::Result;
 use std::collections::HashMap;
+use std::fmt;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 use tokio::sync::{broadcast, Mutex};
@@ -87,6 +88,58 @@ fn session_mode_migration_notice(
         previous_mode_id: previous.agent_type.clone(),
         restored_mode_id: restored.agent_type.clone(),
     })
+}
+
+#[derive(Debug)]
+pub(crate) struct SessionModeUpdateError {
+    message: String,
+    outcome_unknown: bool,
+}
+
+impl fmt::Display for SessionModeUpdateError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(&self.message)
+    }
+}
+
+impl std::error::Error for SessionModeUpdateError {}
+
+impl SessionModeUpdateError {
+    fn runtime(error: RuntimeError) -> Self {
+        Self {
+            message: error.into_message(),
+            outcome_unknown: false,
+        }
+    }
+
+    fn shared(error: RuntimeIpcClientError) -> Self {
+        let outcome_unknown = matches!(
+            &error,
+            RuntimeIpcClientError::Remote(remote)
+                if remote.code == RuntimeIpcErrorCode::OutcomeUnknown
+        ) || matches!(
+            &error,
+            RuntimeIpcClientError::Timeout
+                | RuntimeIpcClientError::Disconnected
+                | RuntimeIpcClientError::UnexpectedResponse
+                | RuntimeIpcClientError::Io(_)
+        );
+        Self {
+            message: error.to_string(),
+            outcome_unknown,
+        }
+    }
+
+    fn unexpected(error: anyhow::Error) -> Self {
+        Self {
+            message: error.to_string(),
+            outcome_unknown: true,
+        }
+    }
+
+    pub(crate) fn outcome_unknown(&self) -> bool {
+        self.outcome_unknown
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -543,14 +596,29 @@ impl CliAgentRuntimeClient {
             .map_err(|error| anyhow::anyhow!(error.into_message()))
     }
 
-    pub(crate) async fn update_session_mode(&self, session_id: &str, mode_id: &str) -> Result<()> {
-        self.embedded_runtime("changing the session mode")?
-            .update_session_mode(AgentSessionModeUpdateRequest {
-                session_id: session_id.to_string(),
-                mode_id: mode_id.to_string(),
-            })
-            .await
-            .map_err(|error| anyhow::anyhow!(error.into_message()))
+    pub(crate) async fn update_session_mode(
+        &self,
+        session_id: &str,
+        mode_id: &str,
+    ) -> std::result::Result<(), SessionModeUpdateError> {
+        let request = AgentSessionModeUpdateRequest {
+            session_id: session_id.to_string(),
+            mode_id: mode_id.to_string(),
+        };
+        match &self.backend {
+            CliAgentRuntimeBackend::Embedded(runtime) => runtime
+                .update_session_mode(request)
+                .await
+                .map_err(SessionModeUpdateError::runtime),
+            CliAgentRuntimeBackend::Shared(client) => {
+                let result = client
+                    .request(RuntimeIpcOperation::UpdateSessionMode { request })
+                    .await
+                    .map_err(SessionModeUpdateError::shared)?;
+                expect_unit(result, "update_session_mode")
+                    .map_err(SessionModeUpdateError::unexpected)
+            }
+        }
     }
 
     pub(crate) async fn branch_session_at_latest_turn(
@@ -1178,7 +1246,7 @@ mod tests {
 
     use super::{
         project_routed_permission_event, session_mode_migration_notice, shared_disconnect_message,
-        shared_restore_error, validated_session_summary, CliWorkspacePaths,
+        shared_restore_error, validated_session_summary, CliWorkspacePaths, SessionModeUpdateError,
     };
     use bitfun_agent_runtime_ipc::RuntimeIpcStreamInvalidationReason;
 
@@ -1191,6 +1259,37 @@ mod tests {
         let message = error.to_string();
         assert!(message.contains("history is too large"));
         assert!(message.contains("default Embedded `bitfun chat`"));
+    }
+
+    #[test]
+    fn shared_mode_update_preserves_unknown_outcome_as_a_typed_fact() {
+        let error =
+            SessionModeUpdateError::shared(RuntimeIpcClientError::Remote(RuntimeIpcError {
+                code: RuntimeIpcErrorCode::OutcomeUnknown,
+                message: "inspect authoritative state before retrying".to_string(),
+            }));
+
+        assert!(error.outcome_unknown());
+        assert!(error.to_string().contains("OutcomeUnknown"));
+
+        for transport_error in [
+            RuntimeIpcClientError::Timeout,
+            RuntimeIpcClientError::Disconnected,
+            RuntimeIpcClientError::UnexpectedResponse,
+        ] {
+            assert!(SessionModeUpdateError::shared(transport_error).outcome_unknown());
+        }
+        assert!(
+            SessionModeUpdateError::unexpected(anyhow::anyhow!("unexpected response shape"))
+                .outcome_unknown()
+        );
+        assert!(
+            !SessionModeUpdateError::shared(RuntimeIpcClientError::Remote(RuntimeIpcError {
+                code: RuntimeIpcErrorCode::InvalidRequest,
+                message: "unknown mode".to_string(),
+            },))
+            .outcome_unknown()
+        );
     }
 
     #[test]
@@ -1263,18 +1362,16 @@ mod tests {
     #[test]
     fn mode_updates_use_the_runtime_sdk_without_the_core_compatibility_facade() {
         let source = include_str!("runtime_client.rs").replace("\r\n", "\n");
-        let runtime_update = [
-            "self.embedded_runtime(\"changing the session mode\")?",
-            "\n            .update_session_mode",
-        ]
-        .concat();
         let compatibility_update = [
             "self.compatibility",
             "\n            .update_session_agent_type",
         ]
         .concat();
 
-        assert!(source.contains(&runtime_update));
+        assert!(source.contains("CliAgentRuntimeBackend::Embedded(runtime)"));
+        assert!(source.contains("runtime.update_session_mode(request)"));
+        assert!(source.contains("CliAgentRuntimeBackend::Shared(client)"));
+        assert!(source.contains("RuntimeIpcOperation::UpdateSessionMode { request }"));
         assert!(!source.contains(&compatibility_update));
     }
 

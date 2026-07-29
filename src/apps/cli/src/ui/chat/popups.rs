@@ -169,6 +169,17 @@ impl ChatView {
         self.popup_stack.push(PopupType::AgentSelector);
     }
 
+    pub(crate) fn show_agent_modes_only(
+        &mut self,
+        agents: Vec<AgentItem>,
+        current_agent_id: Option<String>,
+        allow_mode_switch: bool,
+    ) {
+        self.agent_selector
+            .show_modes_only(agents, current_agent_id, allow_mode_switch);
+        self.popup_stack.push(PopupType::AgentSelector);
+    }
+
     pub(crate) fn hide_agent_selector(&mut self) {
         self.agent_selector.hide();
     }
@@ -191,6 +202,10 @@ impl ChatView {
 
     pub(crate) fn agent_selector_confirm(&self) -> Option<AgentSelectorAction> {
         self.agent_selector.confirm_selection()
+    }
+
+    pub(crate) fn set_agent_mode_switch_allowed(&mut self, allowed: bool) {
+        self.agent_selector.set_mode_switch_allowed(allowed);
     }
 
     // ============ Skill selector methods ============
@@ -559,8 +574,10 @@ impl ChatView {
 #[cfg(test)]
 mod tests {
     use super::ChatView;
+    use crate::chat_state::ChatState;
     use crate::ui::agent_selector::AgentItem;
     use crate::ui::theme::Theme;
+    use ratatui::{backend::TestBackend, Terminal};
 
     #[test]
     fn opening_subagent_management_hides_the_parent_agent_selector() {
@@ -579,5 +596,42 @@ mod tests {
 
         assert!(!view.agent_selector_visible());
         assert!(view.subagent_selector_visible());
+    }
+
+    #[test]
+    fn pending_mode_update_keeps_an_open_selector_disabled() {
+        let mut view = ChatView::new(Theme::dark(), Vec::new());
+        view.show_agent_modes_only(
+            vec![AgentItem {
+                id: "agentic".to_string(),
+                description: "General purpose".to_string(),
+            }],
+            Some("agentic".to_string()),
+            true,
+        );
+
+        view.set_agent_mode_switch_allowed(false);
+
+        let state = ChatState::new(
+            "session".to_string(),
+            "Session".to_string(),
+            "agentic".to_string(),
+            Some("D:/workspace/current".to_string()),
+        );
+        let mut terminal = Terminal::new(TestBackend::new(80, 20)).expect("test terminal");
+        terminal
+            .draw(|frame| view.render(frame, &state))
+            .expect("render disabled mode selector");
+        let buffer = terminal.backend().buffer();
+        let rendered = (0..buffer.area.height)
+            .map(|y| {
+                (0..buffer.area.width)
+                    .map(|x| buffer[(x, y)].symbol())
+                    .collect::<String>()
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        assert!(rendered.contains("Please wait"), "{rendered:?}");
     }
 }
