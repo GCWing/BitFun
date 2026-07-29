@@ -130,7 +130,7 @@ async function dispatch(method, params) {
       const allow = (policy.shell && policy.shell.allow) || [];
       const cmd = (params.command || '').trim().split(/\s+/)[0];
       const base = path.basename(cmd, path.extname(cmd));
-      if (allow.length > 0 && !allow.some((a) => a.toLowerCase() === base.toLowerCase())) {
+      if (allow.length === 0 || !allow.some((a) => a.toLowerCase() === base.toLowerCase())) {
         throw new Error('Command not in allowlist');
       }
       const opts = {
@@ -152,7 +152,7 @@ async function dispatch(method, params) {
       throw new Error('Invalid URL');
     }
     const host = url.hostname;
-    if (allow.length > 0 && !allow.includes('*') && !allow.some((d) => host === d || host.endsWith('.' + d))) {
+    if (allow.length === 0 || (!allow.includes('*') && !allow.some((d) => host === d || host.endsWith('.' + d)))) {
       throw new Error('Domain not in allowlist');
     }
     const fetch = globalThis.fetch;

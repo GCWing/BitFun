@@ -35,3 +35,16 @@ pub fn compile_with_request(
     bitfun_product_domains::miniapp::compiler::compile_with_request(source, permissions, request)
         .map_err(|e| BitFunError::validation(e.to_string()))
 }
+
+pub fn compile_market_with_request(
+    source: &MiniAppSource,
+    permissions: &MiniAppPermissions,
+    request: &MiniAppCompileRequest,
+) -> BitFunResult<String> {
+    bitfun_product_domains::miniapp::compiler::compile_market_with_request(
+        source,
+        permissions,
+        request,
+    )
+    .map_err(|e| BitFunError::validation(e.to_string()))
+}

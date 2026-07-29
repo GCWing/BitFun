@@ -42,7 +42,7 @@ which = { workspace = true, optional = true }
 [features]
 default = []
 plugin-source = ["hex", "sha2"]
-miniapp = ["dirs", "sha2", "which"]
+miniapp = ["dirs", "hex", "sha2", "which"]
 function-agents = ["log"]
 external-sources = ["hex", "hmac", "sha2"]
 product-full = ["plugin-source", "miniapp", "function-agents", "external-sources"]

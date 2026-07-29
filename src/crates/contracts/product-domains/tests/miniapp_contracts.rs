@@ -844,11 +844,11 @@ fn miniapp_host_routing_preserves_existing_primitive_and_allowlist_contract() {
         [("GIT_TERMINAL_PROMPT", "0"), ("LC_ALL", "C")]
     );
 
-    assert!(command_basename_allowed(&[], "git"));
+    assert!(!command_basename_allowed(&[], "git"));
     assert!(command_basename_allowed(&["Git".to_string()], "git"));
     assert!(!command_basename_allowed(&["cargo".to_string()], "git"));
 
-    assert!(host_allowed_by_allowlist(&[], "api.example.com"));
+    assert!(!host_allowed_by_allowlist(&[], "api.example.com"));
     assert!(host_allowed_by_allowlist(
         &["*".to_string()],
         "api.example.com"
@@ -2056,6 +2056,7 @@ fn miniapp_customization_apply_helper_preserves_builtin_override_policy() {
             kind: MiniAppCustomizationOriginKind::UserCreated,
             builtin_id: None,
             builtin_version: None,
+            market: None,
         },
         local_override: false,
         last_applied_draft_id: None,
@@ -2213,6 +2214,7 @@ fn sample_miniapp_for_lifecycle(source: MiniAppSource) -> MiniApp {
         permissions: MiniAppPermissions::default(),
         ai_context: None,
         runtime: MiniAppRuntimeState::default(),
+        runtime_profile: Default::default(),
         i18n: None,
     }
 }

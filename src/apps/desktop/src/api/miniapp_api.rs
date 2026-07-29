@@ -369,13 +369,28 @@ pub async fn get_miniapp(
 
     let theme_type = request.theme.as_deref().unwrap_or("dark");
     let workspace_root = workspace_root_from_input(request.workspace_path.as_deref());
-    match state.miniapp_manager.compile_source(
-        &request.app_id,
-        &app.source,
-        &app.permissions,
-        theme_type,
-        workspace_root.as_deref(),
-    ) {
+    let compiled = if state
+        .miniapp_manager
+        .uses_market_strict_runtime(&request.app_id)
+        .await
+    {
+        state.miniapp_manager.compile_market_source(
+            &request.app_id,
+            &app.source,
+            &app.permissions,
+            theme_type,
+            workspace_root.as_deref(),
+        )
+    } else {
+        state.miniapp_manager.compile_source(
+            &request.app_id,
+            &app.source,
+            &app.permissions,
+            theme_type,
+            workspace_root.as_deref(),
+        )
+    };
+    match compiled {
         Ok(html) => app.compiled_html = html,
         Err(e) => log::warn!("get_miniapp: recompile failed, using cached: {}", e),
     }
@@ -577,6 +592,13 @@ pub async fn miniapp_worker_call(
     state: State<'_, AppState>,
     request: MiniAppWorkerCallRequest,
 ) -> Result<Value, String> {
+    if state
+        .miniapp_manager
+        .uses_market_strict_runtime(&request.app_id)
+        .await
+    {
+        return Err("Marketplace MiniApps cannot start a Node/Bun worker.".to_string());
+    }
     let pool = state
         .js_worker_pool
         .as_ref()
@@ -651,6 +673,13 @@ pub async fn miniapp_host_call(
         .get(&request.app_id)
         .await
         .map_err(|e| e.to_string())?;
+    if state
+        .miniapp_manager
+        .uses_market_strict_runtime(&request.app_id)
+        .await
+    {
+        validate_market_host_call(&request.method, &request.params)?;
+    }
     let workspace_root = workspace_root_from_input(request.workspace_path.as_deref());
     let app_data_dir = state
         .miniapp_manager
@@ -995,6 +1024,13 @@ pub async fn miniapp_draft_worker_call(
     state: State<'_, AppState>,
     request: MiniAppDraftWorkerCallRequest,
 ) -> Result<Value, String> {
+    if state
+        .miniapp_manager
+        .uses_market_strict_runtime(&request.app_id)
+        .await
+    {
+        return Err("Marketplace MiniApp drafts cannot start a Node/Bun worker.".to_string());
+    }
     let pool = state
         .js_worker_pool
         .as_ref()
@@ -1004,6 +1040,13 @@ pub async fn miniapp_draft_worker_call(
         .get_draft(&request.app_id, &request.draft_id)
         .await
         .map_err(|e| e.to_string())?;
+    if state
+        .miniapp_manager
+        .uses_market_strict_runtime(&request.app_id)
+        .await
+    {
+        validate_market_host_call(&request.method, &request.params)?;
+    }
     let workspace_root = workspace_root_from_input(request.workspace_path.as_deref());
     let policy = state
         .miniapp_manager
@@ -1056,6 +1099,62 @@ pub async fn miniapp_draft_worker_call(
     )
     .await
     .map_err(|e| e.to_string())
+}
+
+fn validate_market_host_call(method: &str, params: &Value) -> Result<(), String> {
+    if method != "shell.exec" {
+        return Ok(());
+    }
+    if params
+        .get("command")
+        .and_then(Value::as_str)
+        .is_some_and(|command| !command.trim().is_empty())
+    {
+        return Err(
+            "Marketplace MiniApps must use shell.exec args and cannot execute command strings."
+                .to_string(),
+        );
+    }
+    let args = params
+        .get("args")
+        .and_then(Value::as_array)
+        .filter(|args| !args.is_empty())
+        .ok_or_else(|| {
+            "Marketplace MiniApps must use a non-empty shell.exec args array.".to_string()
+        })?;
+    if args.iter().any(|value| value.as_str().is_none()) {
+        return Err("Marketplace shell.exec args must all be strings.".to_string());
+    }
+    let program = args[0]
+        .as_str()
+        .unwrap_or_default()
+        .rsplit(['/', '\\'])
+        .next()
+        .unwrap_or_default()
+        .trim_end_matches(".exe")
+        .to_ascii_lowercase();
+    if matches!(
+        program.as_str(),
+        "sh" | "bash"
+            | "zsh"
+            | "fish"
+            | "cmd"
+            | "powershell"
+            | "pwsh"
+            | "python"
+            | "python3"
+            | "node"
+            | "bun"
+            | "deno"
+            | "ruby"
+            | "perl"
+    ) {
+        return Err(
+            "Shells and general-purpose interpreters are forbidden for marketplace MiniApps."
+                .to_string(),
+        );
+    }
+    Ok(())
 }
 
 #[tauri::command]

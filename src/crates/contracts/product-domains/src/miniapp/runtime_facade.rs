@@ -641,6 +641,7 @@ mod tests {
             permissions: MiniAppPermissions::default(),
             ai_context: None,
             runtime: MiniAppRuntimeState::default(),
+            runtime_profile: Default::default(),
             i18n: None,
         }
     }

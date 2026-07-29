@@ -1,0 +1,189 @@
+//! BitFun MiniApp marketplace service.
+
+mod artifacts;
+mod auth;
+pub mod config;
+mod db;
+mod error;
+mod package;
+mod request_id;
+mod retention;
+mod routes;
+
+use artifacts::ArtifactStore;
+use auth::AuthService;
+use axum::extract::Request;
+use axum::http::{header, HeaderValue, StatusCode};
+use axum::middleware::Next;
+use axum::response::{IntoResponse, Redirect, Response};
+use axum::routing::get;
+use axum::Router;
+use config::MarketConfig;
+use db::Database;
+use routes::{api_router, MarketState};
+use std::sync::Arc;
+use tower_http::services::{ServeDir, ServeFile};
+
+pub use error::{MarketError, MarketResult};
+pub use package::{
+    validate_market_package, validate_min_bitfun_version, validate_screenshot,
+    ValidatedMarketPackage, ValidatedScreenshot,
+};
+
+pub async fn build_market_router(config: MarketConfig) -> anyhow::Result<Router> {
+    let db = Database::open(&config.database_path).await?;
+    let artifacts = ArtifactStore::open(config.artifact_dir.clone()).await?;
+    let cleanup = retention::cleanup_expired_submission_artifacts(&db, &artifacts).await?;
+    if cleanup.submissions_scrubbed > 0
+        || cleanup.packages_removed > 0
+        || cleanup.screenshots_removed > 0
+    {
+        tracing::info!(
+            submissions_scrubbed = cleanup.submissions_scrubbed,
+            packages_removed = cleanup.packages_removed,
+            screenshots_removed = cleanup.screenshots_removed,
+            "MiniApp market startup retention cleanup completed"
+        );
+    }
+    retention::spawn_cleanup_loop(db.clone(), artifacts.clone());
+    let auth = AuthService::new(config.clone(), db.clone())
+        .map_err(|error| anyhow::anyhow!(error.to_string()))?;
+    let state = Arc::new(MarketState {
+        config: config.clone(),
+        db,
+        artifacts,
+        auth,
+    });
+
+    let index_file = config.web_dir.join("index.html");
+    let spa = ServeDir::new(&config.web_dir)
+        .append_index_html_on_directories(true)
+        .fallback(ServeFile::new(index_file));
+
+    Ok(Router::new()
+        .route("/", get(|| async { Redirect::permanent("/miniapp/") }))
+        .nest("/miniapp/api/v1", api_router(state))
+        .nest_service("/miniapp", spa)
+        .layer(axum::middleware::from_fn(normalize_payload_too_large))
+        .layer(axum::middleware::from_fn(security_headers))
+        .layer(axum::middleware::from_fn(request_id::middleware)))
+}
+
+async fn normalize_payload_too_large(request: Request, next: Next) -> Response {
+    let response = next.run(request).await;
+    if response.status() == StatusCode::PAYLOAD_TOO_LARGE {
+        MarketError::new(
+            StatusCode::PAYLOAD_TOO_LARGE,
+            "payload_too_large",
+            "The upload exceeds the marketplace size limit.",
+        )
+        .into_response()
+    } else {
+        response
+    }
+}
+
+async fn security_headers(request: Request, next: Next) -> Response {
+    let mut response = next.run(request).await;
+    let headers = response.headers_mut();
+    headers.insert(
+        header::X_CONTENT_TYPE_OPTIONS,
+        HeaderValue::from_static("nosniff"),
+    );
+    headers.insert(
+        header::REFERRER_POLICY,
+        HeaderValue::from_static("strict-origin-when-cross-origin"),
+    );
+    headers.insert(
+        header::X_FRAME_OPTIONS,
+        HeaderValue::from_static("SAMEORIGIN"),
+    );
+    headers.insert(
+        header::CONTENT_SECURITY_POLICY,
+        HeaderValue::from_static(
+            "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; \
+             img-src 'self' data: https://avatars.githubusercontent.com; \
+             connect-src 'self'; object-src 'none'; base-uri 'self'; \
+             frame-ancestors 'self'; form-action 'self'",
+        ),
+    );
+    response
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::body::{Body, Bytes};
+    use axum::http::{Request, StatusCode};
+    use axum::routing::post;
+    use tower::ServiceExt;
+
+    #[tokio::test]
+    async fn health_route_boots_with_an_empty_database() {
+        let temp = tempfile::tempdir().unwrap();
+        let config = MarketConfig {
+            bind: "127.0.0.1:0".parse().unwrap(),
+            public_base_url: "http://localhost/miniapp".to_string(),
+            database_path: temp.path().join("market.sqlite"),
+            artifact_dir: temp.path().join("artifacts"),
+            web_dir: temp.path().join("web"),
+            github_client_id: None,
+            github_client_secret: None,
+            session_secret: "test-session-secret-at-least-24".to_string(),
+            admin_github_ids: [24753352].into_iter().collect(),
+            public_browse: true,
+        };
+        tokio::fs::create_dir_all(&config.web_dir).await.unwrap();
+        tokio::fs::write(config.web_dir.join("index.html"), "<html></html>")
+            .await
+            .unwrap();
+        let app = build_market_router(config).await.unwrap();
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/miniapp/api/v1/health")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        for uri in ["/miniapp/", "/miniapp/admin"] {
+            let response = app
+                .clone()
+                .oneshot(Request::builder().uri(uri).body(Body::empty()).unwrap())
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::OK, "{uri}");
+        }
+    }
+
+    #[tokio::test]
+    async fn body_limit_errors_use_the_versioned_error_envelope() {
+        let app = Router::new()
+            .route("/upload", post(|_: Bytes| async { StatusCode::NO_CONTENT }))
+            .layer(axum::extract::DefaultBodyLimit::max(1))
+            .layer(axum::middleware::from_fn(normalize_payload_too_large))
+            .layer(axum::middleware::from_fn(request_id::middleware));
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/upload")
+                    .body(Body::from("too large"))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::PAYLOAD_TOO_LARGE);
+        assert!(response.headers().contains_key("x-request-id"));
+        let body = axum::body::to_bytes(response.into_body(), 1024)
+            .await
+            .unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(body["error"]["code"], "payload_too_large");
+        assert!(body["error"]["requestId"].as_str().is_some());
+    }
+}

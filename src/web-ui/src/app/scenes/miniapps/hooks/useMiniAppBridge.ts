@@ -27,6 +27,7 @@ import {
   type MiniAppComposerMessageDetail,
 } from '../miniAppStore';
 import { flowChatStore } from '@/flow_chat/store/FlowChatStore';
+import { openMainSession } from '@/flow_chat/services/sessionActivation';
 import { createLogger } from '@/shared/utils/logger';
 
 interface JSONRPC {
@@ -51,6 +52,7 @@ export function useMiniAppBridge(
   iframeRef: RefObject<HTMLIFrameElement>,
   app: MiniApp,
   runScope: MiniAppRunScope,
+  strictRuntime = false,
 ) {
   const { workspacePath } = useCurrentWorkspace();
   const { theme: currentTheme } = useTheme();
@@ -73,11 +75,25 @@ export function useMiniAppBridge(
   const nodeDisabledRef = useRef(app.permissions?.node?.enabled === false);
   const systemNotificationsAllowedRef = useRef(app.permissions?.notifications?.system === true);
   const agentEnabledRef = useRef(app.permissions?.agent?.enabled === true);
+  const aiEnabledRef = useRef(app.permissions?.ai?.enabled === true);
+  const strictRuntimeRef = useRef(strictRuntime);
+  const hostPermissionsRef = useRef(app.permissions?.host);
   useLayoutEffect(() => {
     nodeDisabledRef.current = app.permissions?.node?.enabled === false;
     systemNotificationsAllowedRef.current = app.permissions?.notifications?.system === true;
     agentEnabledRef.current = app.permissions?.agent?.enabled === true;
-  }, [app.id, app.permissions?.node?.enabled, app.permissions?.notifications?.system, app.permissions?.agent?.enabled]);
+    aiEnabledRef.current = app.permissions?.ai?.enabled === true;
+    strictRuntimeRef.current = strictRuntime;
+    hostPermissionsRef.current = app.permissions?.host;
+  }, [
+    app.id,
+    app.permissions?.node?.enabled,
+    app.permissions?.notifications?.system,
+    app.permissions?.agent?.enabled,
+    app.permissions?.ai?.enabled,
+    app.permissions?.host,
+    strictRuntime,
+  ]);
 
   // Hidden agent sessions started by this iframe; used to filter the global
   // agentic:// event stream before forwarding events into the iframe.
@@ -137,6 +153,22 @@ export function useMiniAppBridge(
           const ns = innerMethod.split('.')[0];
           const isHostPrimitive = ns === 'fs' || ns === 'shell' || ns === 'os' || ns === 'net';
           const isStorage = ns === 'storage';
+
+          if (strictRuntimeRef.current && ns === 'os' && hostPermissionsRef.current?.system_info !== true) {
+            replyError(`MiniApp '${appId}' does not have host.system_info permission.`);
+            return;
+          }
+          if (strictRuntimeRef.current && ns === 'shell') {
+            const args = innerParams.args;
+            if (!Array.isArray(args) || args.length === 0 || args.some((item) => typeof item !== 'string')) {
+              replyError('Marketplace MiniApps must call shell.exec with a non-empty string args array.');
+              return;
+            }
+            if (typeof innerParams.command === 'string' && innerParams.command.trim()) {
+              replyError('Marketplace MiniApps cannot execute shell command strings.');
+              return;
+            }
+          }
 
           // For node-disabled apps, framework primitives go to the host directly
           // (no Bun/Node Worker required). Storage is served by the manager.
@@ -214,20 +246,36 @@ export function useMiniAppBridge(
           return;
         }
         if (method === 'dialog.open') {
+          if (strictRuntimeRef.current && hostPermissionsRef.current?.dialog !== true) {
+            replyError(`MiniApp '${appId}' does not have host.dialog permission.`);
+            return;
+          }
           reply(await dialogOpen(params as unknown as Parameters<typeof dialogOpen>[0]));
           return;
         }
         if (method === 'dialog.save') {
+          if (strictRuntimeRef.current && hostPermissionsRef.current?.dialog !== true) {
+            replyError(`MiniApp '${appId}' does not have host.dialog permission.`);
+            return;
+          }
           reply(await dialogSave(params as unknown as Parameters<typeof dialogSave>[0]));
           return;
         }
         if (method === 'dialog.message') {
+          if (strictRuntimeRef.current && hostPermissionsRef.current?.dialog !== true) {
+            replyError(`MiniApp '${appId}' does not have host.dialog permission.`);
+            return;
+          }
           reply(await dialogMessage(params as unknown as Parameters<typeof dialogMessage>[0]));
           return;
         }
 
         // ── AI commands ──────────────────────────────────────────────────────
         if (method === 'ai.complete') {
+          if (strictRuntimeRef.current && !aiEnabledRef.current) {
+            replyError(`MiniApp '${appId}' does not have AI permission.`);
+            return;
+          }
           const result = await miniAppAPI.aiComplete(appId, (params.prompt as string) ?? '', {
             systemPrompt: params.systemPrompt as string | undefined,
             model: params.model as string | undefined,
@@ -238,6 +286,10 @@ export function useMiniAppBridge(
           return;
         }
         if (method === 'ai.chat') {
+          if (strictRuntimeRef.current && !aiEnabledRef.current) {
+            replyError(`MiniApp '${appId}' does not have AI permission.`);
+            return;
+          }
           const result = await miniAppAPI.aiChat(
             appId,
             (params.messages as { role: 'user' | 'assistant'; content: string }[]) ?? [],
@@ -258,6 +310,10 @@ export function useMiniAppBridge(
           return;
         }
         if (method === 'ai.getModels') {
+          if (strictRuntimeRef.current && !aiEnabledRef.current) {
+            replyError(`MiniApp '${appId}' does not have AI permission.`);
+            return;
+          }
           const models = await miniAppAPI.aiListModels(appId);
           reply(models);
           return;
@@ -274,7 +330,9 @@ export function useMiniAppBridge(
               sessionId: params.sessionId as string | undefined,
               sessionName: params.sessionName as string | undefined,
               appDataWorkspace: String(params.appDataWorkspace ?? ''),
-              enableTools: params.enableTools as boolean | undefined,
+              enableTools: strictRuntimeRef.current
+                ? false
+                : params.enableTools as boolean | undefined,
               model: typeof params.model === 'string' ? params.model : undefined,
             });
             agentSessionIdsRef.current.add(result.sessionId);
@@ -317,10 +375,30 @@ export function useMiniAppBridge(
                 }
               }
             }
+            if (strictRuntimeRef.current) {
+              await openMainSession(result.sessionId);
+            }
             reply(result);
             return;
           }
           if (method === 'agent.run') {
+            const requestedSessionId =
+              typeof params.sessionId === 'string' ? params.sessionId : '';
+            if (
+              strictRuntimeRef.current
+              && (
+                !requestedSessionId
+                || !agentSessionIdsRef.current.has(requestedSessionId)
+              )
+            ) {
+              replyError(
+                'Marketplace MiniApps must call agent.ensureSession first so the host can open a visible session.',
+              );
+              return;
+            }
+            if (strictRuntimeRef.current) {
+              await openMainSession(requestedSessionId);
+            }
             const result = await miniAppAPI.agentRun(
               appId,
               (params.prompt as string) ?? '',
@@ -330,7 +408,9 @@ export function useMiniAppBridge(
                 sessionName: params.sessionName as string | undefined,
                 displayText:
                   typeof params.displayText === 'string' ? params.displayText : undefined,
-                enableTools: params.enableTools as boolean | undefined,
+                enableTools: strictRuntimeRef.current
+                  ? false
+                  : params.enableTools as boolean | undefined,
                 sessionId: params.sessionId as string | undefined,
                 appDataWorkspace: params.appDataWorkspace as string | undefined,
                 model: typeof params.model === 'string' ? params.model : undefined,
@@ -374,6 +454,10 @@ export function useMiniAppBridge(
         if (method.startsWith('chat.')) {
           if (!agentEnabledRef.current) {
             replyError(`MiniApp '${appId}' does not have agent permission (permissions.agent.enabled).`);
+            return;
+          }
+          if (strictRuntimeRef.current && hostPermissionsRef.current?.chat_composer !== true) {
+            replyError(`MiniApp '${appId}' does not have host.chat_composer permission.`);
             return;
           }
           if (method === 'chat.claimComposer') {
@@ -444,6 +528,10 @@ export function useMiniAppBridge(
 
         // ── Deck export commands ─────────────────────────────────────────────
         if (method === 'deck.renderPage') {
+          if (strictRuntimeRef.current && hostPermissionsRef.current?.deck_render !== true) {
+            replyError(`MiniApp '${appId}' does not have host.deck_render permission.`);
+            return;
+          }
           const result = await miniAppAPI.renderSlidePage(appId, {
             html: String(params.html ?? ''),
             format: String(params.format ?? 'png'),
@@ -456,17 +544,29 @@ export function useMiniAppBridge(
 
         // ── Clipboard commands ───────────────────────────────────────────────
         if (method === 'clipboard.writeText') {
+          if (strictRuntimeRef.current && hostPermissionsRef.current?.clipboard_write !== true) {
+            replyError(`MiniApp '${appId}' does not have host.clipboard_write permission.`);
+            return;
+          }
           await navigator.clipboard.writeText((params.text as string) ?? '');
           reply(null);
           return;
         }
         if (method === 'clipboard.readText') {
+          if (strictRuntimeRef.current && hostPermissionsRef.current?.clipboard_read !== true) {
+            replyError(`MiniApp '${appId}' does not have host.clipboard_read permission.`);
+            return;
+          }
           const text = await navigator.clipboard.readText();
           reply(text);
           return;
         }
 
         if (method === 'system.openExternal') {
+          if (strictRuntimeRef.current && hostPermissionsRef.current?.open_external !== true) {
+            replyError(`MiniApp '${appId}' does not have host.open_external permission.`);
+            return;
+          }
           const url = String(params.url ?? '');
           let parsed: URL;
           try {
@@ -485,6 +585,10 @@ export function useMiniAppBridge(
         }
 
         if (method === 'system.revealInFolder') {
+          if (strictRuntimeRef.current && hostPermissionsRef.current?.reveal_in_folder !== true) {
+            replyError(`MiniApp '${appId}' does not have host.reveal_in_folder permission.`);
+            return;
+          }
           // When `path` is omitted, open the system Downloads folder.
           let targetPath = String(params.path ?? '');
           if (!targetPath) {

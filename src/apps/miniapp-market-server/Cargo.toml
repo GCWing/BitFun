@@ -1,0 +1,21 @@
+[package]
+name = "bitfun-miniapp-market-server"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+description = "BitFun MiniApp marketplace HTTP server"
+
+[[bin]]
+name = "bitfun-miniapp-market-server"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = { workspace = true }
+axum = { workspace = true }
+bitfun-miniapp-market-service = { path = "../../crates/services/miniapp-market-service" }
+tokio = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+[lints]
+workspace = true

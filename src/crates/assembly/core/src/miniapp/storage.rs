@@ -199,6 +199,29 @@ impl MiniAppStorage {
             .map_err(map_storage_error)
     }
 
+    pub async fn install_market_atomic(
+        &self,
+        app: &MiniApp,
+        metadata: &MiniAppCustomizationMetadata,
+    ) -> BitFunResult<()> {
+        self.inner
+            .install_market_atomic(app, metadata)
+            .await
+            .map_err(map_storage_error)
+    }
+
+    pub async fn replace_market_atomic(
+        &self,
+        previous: &MiniApp,
+        next: &MiniApp,
+        metadata: &MiniAppCustomizationMetadata,
+    ) -> BitFunResult<()> {
+        self.inner
+            .replace_market_atomic(previous, next, metadata)
+            .await
+            .map_err(map_storage_error)
+    }
+
     pub async fn delete(&self, app_id: &str) -> BitFunResult<()> {
         self.inner.delete(app_id).await.map_err(map_storage_error)
     }

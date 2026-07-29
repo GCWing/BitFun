@@ -48,6 +48,7 @@ const MiniAppScene: React.FC<MiniAppSceneProps> = ({ appId }) => {
   const [app, setApp] = useState<MiniApp | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [strictRuntime, setStrictRuntime] = useState(false);
   const [key, setKey] = useState(0);
   const [customizeOpen, setCustomizeOpen] = useState(false);
   const [customizeNotice, setCustomizeNotice] = useState<string | null>(null);
@@ -89,6 +90,7 @@ const MiniAppScene: React.FC<MiniAppSceneProps> = ({ appId }) => {
         setApp(null);
         return;
       }
+      setStrictRuntime(loaded.runtime_profile === 'market_strict');
       setApp(loaded);
     } catch (err) {
       log.error('Failed to load app', err);
@@ -206,7 +208,11 @@ const MiniAppScene: React.FC<MiniAppSceneProps> = ({ appId }) => {
                 <Loader2 size={20} className="miniapp-scene__spinning" strokeWidth={1.5} />
               </div>
             )}
-            <MiniAppRunner key={`${app.id}-${key}`} app={app} />
+            <MiniAppRunner
+              key={`${app.id}-${key}`}
+              app={app}
+              strictRuntime={strictRuntime}
+            />
             {customizePreview && (
               <div className="miniapp-scene__preview-stage" role="region" aria-label={t('customize.previewTitle')}>
                 <div className="miniapp-scene__preview-stage-header">
@@ -228,6 +234,7 @@ const MiniAppScene: React.FC<MiniAppSceneProps> = ({ appId }) => {
                   <MiniAppDraftPreview
                     draft={customizePreview.draft}
                     previewKey={customizePreview.previewKey}
+                    strictRuntime={strictRuntime}
                   />
                 </div>
               </div>

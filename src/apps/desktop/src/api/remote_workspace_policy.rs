@@ -1066,6 +1066,67 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         RemoteWorkspacePolicy::LegacyUnaudited,
     ),
     (
+        "miniapp_market_auth_poll",
+        RemoteWorkspacePolicy::WorkspaceAgnostic,
+    ),
+    (
+        "miniapp_market_auth_start",
+        RemoteWorkspacePolicy::WorkspaceAgnostic,
+    ),
+    (
+        "miniapp_market_browse",
+        RemoteWorkspacePolicy::WorkspaceAgnostic,
+    ),
+    (
+        "miniapp_market_capture_window",
+        RemoteWorkspacePolicy::LocalOnly,
+    ),
+    (
+        "miniapp_market_get_listing",
+        RemoteWorkspacePolicy::WorkspaceAgnostic,
+    ),
+    (
+        "miniapp_market_import_package",
+        RemoteWorkspacePolicy::LocalOnly,
+    ),
+    (
+        "miniapp_market_inspect_package",
+        RemoteWorkspacePolicy::LocalOnly,
+    ),
+    ("miniapp_market_install", RemoteWorkspacePolicy::LocalOnly),
+    (
+        "miniapp_market_installed_status",
+        RemoteWorkspacePolicy::LocalOnly,
+    ),
+    (
+        "miniapp_market_list_submissions",
+        RemoteWorkspacePolicy::WorkspaceAgnostic,
+    ),
+    (
+        "miniapp_market_logout",
+        RemoteWorkspacePolicy::WorkspaceAgnostic,
+    ),
+    (
+        "miniapp_market_me",
+        RemoteWorkspacePolicy::WorkspaceAgnostic,
+    ),
+    (
+        "miniapp_market_set_favorite",
+        RemoteWorkspacePolicy::WorkspaceAgnostic,
+    ),
+    (
+        "miniapp_market_set_rating",
+        RemoteWorkspacePolicy::WorkspaceAgnostic,
+    ),
+    (
+        "miniapp_market_submit_installed",
+        RemoteWorkspacePolicy::LocalOnly,
+    ),
+    (
+        "miniapp_market_withdraw_submission",
+        RemoteWorkspacePolicy::WorkspaceAgnostic,
+    ),
+    (
         "miniapp_install_deps",
         RemoteWorkspacePolicy::LegacyUnaudited,
     ),

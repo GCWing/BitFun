@@ -23,7 +23,9 @@ dist-ssr
 # Build outputs - Rust/Tauri
 target/
 **/target/
-Cargo.lock
+# The deployable Rust services use the workspace lockfile for reproducible
+# container builds.
+!Cargo.lock
 
 # Monaco Editor - copied from node_modules
 public/monaco-editor/

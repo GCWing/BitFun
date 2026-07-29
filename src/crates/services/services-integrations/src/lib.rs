@@ -36,6 +36,9 @@ pub mod mcp;
 #[cfg(feature = "miniapp-runtime")]
 pub mod miniapp;
 
+#[cfg(feature = "miniapp-market")]
+pub mod miniapp_market;
+
 #[cfg(feature = "plugin-source")]
 pub mod plugin_source;
 
