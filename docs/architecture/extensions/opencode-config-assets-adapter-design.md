@@ -11,8 +11,9 @@
 配置字段与来源以 [OpenCode 配置文档](https://opencode.ai/docs/config/)和稳定提交中的主/TUI 配置实现为准。
 
 本文同时记录当前可用切片与后续目标。BitFun 已实现本地用户全局/项目 Prompt Command 的来源发现、
-JSON/JSONC/Markdown 解析、参数展开、运行时刷新和冲突选择，也已接入全局/项目 Subagent 声明的安全子集；
-但尚未实现本文定义的完整 OpenCode 配置来源图、全部合并语义和其他资产映射。
+JSON/JSONC/Markdown 解析、参数展开、运行时刷新和冲突选择，也已接入全局/项目 Subagent 声明的安全子集与
+本地 MCP 配置。三类 provider 复用 adapter 内部的本地路径顺序与监听根解析；但尚未实现本文定义的完整
+OpenCode 配置来源序列、全部合并语义和其他资产映射。
 
 ## 1. 目标与边界
 
@@ -61,7 +62,12 @@ R1 的“自动应用”仅包含不启动外部进程、不 import 第三方 mo
 
 ## 3. 配置层级与来源
 
-### 3.1 OpenCode 来源图
+### 3.1 OpenCode 来源顺序
+
+本节的来源顺序是解释 OpenCode 覆盖行为的概念模型，不要求实现公共 Graph DTO、缓存、Coordinator 或产品协议。
+当前生产切片只在 `opencode-adapter` 内部按需生成有序本地路径，各能力 provider 继续分别拥有解析、合并和物化；
+候选版本与原子替换仍由现有 `ExternalSourceControlPlane` 持有。只有完整配置消费方落地后，才评审是否需要更丰富的
+内部来源事实，不能为目标矩阵预建公共“来源图”基础设施。
 
 稳定版配置按“后加载覆盖前加载、非冲突字段合并”处理：
 
@@ -95,18 +101,20 @@ OpenCode 当前版本的真实合并/去重语义，不用 BitFun 常规配置�
 
 所有来源合并后再应用 `OPENCODE_PERMISSION`、旧 `tools` 到 permission 的迁移，以及关闭自动压缩/裁剪的环境覆盖。这些属于固定版本的后处理，不是新的配置来源。
 
-当前 Prompt Command 子集只实现上述本地来源：XDG 用户配置根、`OPENCODE_CONFIG`、root-first 项目配置、用户/项目
-`command(s)/`、兼容 `~/.opencode` 与 `OPENCODE_CONFIG_DIR`；`OPENCODE_DISABLE_PROJECT_CONFIG` 可整体关闭项目
-扫描。`OPENCODE_CONFIG_CONTENT`、远程、组织、系统管理员与 MDM 来源仍保留在目标来源图中，不得在产品状态中误报
-为已加载。路径按规范化来源身份去重，显式环境路径与默认路径相同时只保留 OpenCode 顺序中的最后一个阶段。
+当前 Prompt Command、Subagent 与 MCP 子集只实现上述本地来源：XDG 用户配置根、`OPENCODE_CONFIG`、root-first
+项目配置、opened-to-root 的项目 `.opencode` 目录阶段、兼容 `~/.opencode` 与最后应用的
+`OPENCODE_CONFIG_DIR`。Command/Subagent 再从对应目录读取 `command(s)/` 与 `agent(s)/mode(s)/`；
+`OPENCODE_DISABLE_PROJECT_CONFIG` 会同时关闭项目配置、项目目录资产和对应监听根。三类 provider 复用同一私有
+路径顺序和 creation-safe 监听根，`OPENCODE_CONFIG_DIR` 不替换 XDG 用户根，并在 BitFun 来源标签中保持
+`WorkspaceLocal`。`ConfigPaths.directories` 按规范化来源身份保留首次出现的位置；显式目录与 XDG、项目
+`.opencode` 或兼容目录指向同一物理路径时，在该首次位置应用显式目录的加载语义和来源标签，不把它移动到末尾。
 
-当前 MCP 子集复用同一来源解释，但只读取本地用户全局配置、`OPENCODE_CONFIG`、root-first 项目配置以及作为全局
-晚覆盖的 `OPENCODE_CONFIG_DIR`；设置该目录后不再叠加默认全局目录。`OPENCODE_CONFIG_CONTENT`、远程、组织、
-系统管理员和 MDM 来源尚未接入，不能因 MCP 候选可运行就把目标来源图标记为完整实现。
+`OPENCODE_CONFIG_CONTENT`、远程、组织、系统管理员与 MDM 来源尚未接入，不能因三类本地候选可运行就把目标来源
+序列标记为完整实现。
 
 ### 3.2 TUI 独立来源顺序
 
-`tui.json/jsonc` 不是主配置来源图的附属字段。稳定版使用独立顺序：
+`tui.json/jsonc` 不是主配置来源顺序的附属字段。稳定版使用独立顺序：
 
 ```text
 用户全局 TUI 配置
@@ -129,13 +137,14 @@ OpenCode 来源顺序决定兼容输入如何合并；BitFun 产品能力上限�
 
 ### 3.4 变化与切换
 
-每次解析生成不可变候选版本，包含来源图、有效值、未知字段、诊断、内容摘要和风险摘要。文件变化时：
+完整配置目标中，每次解析生成不可变候选版本，包含有序来源事实、有效值、未知字段、诊断、内容摘要和风险摘要。
+当前本地 Command/Subagent/MCP 切片则继续发布各自既有 provider snapshot，不新增聚合配置对象。文件变化时：
 
 1. 后台重新解析，不阻塞 TUI 或 Agent 主循环。
 2. L1 新结果完整校验后在同一次状态提交中替换；失败时保留仍合规的上一份有效结果并显示更新失败原因。
 3. L2/L3 的能力、凭据范围或执行域扩大时不激活候选；健康旧结果仍合规时继续服务，等待用户确认。
 4. 与插件执行相关的入口或依赖变化只使对应执行版本候选失效，不清空无关配置和会话。
-5. 文件观察事件先聚合并在稳定窗口后重扫来源图；稳定重扫确认删除、停用、来源撤销、权限收紧或安全策略
+5. 文件观察事件先聚合并在稳定窗口后重扫来源顺序；稳定重扫确认删除、停用、来源撤销、权限收紧或安全策略
    失效时撤下旧结果并重新计算下一来源，不能以缓存绕过。显式停用和安全撤销不等待文件稳定窗口。
 6. 暂时不可读与明确删除分开表达；只有无安全影响且可验证的上一结果可在有界宽限期内标记为“暂时过期”。
 7. 安全相关配置解析失败时不自动放宽已生效策略。
@@ -289,7 +298,7 @@ OpenCode 配置文档还包含下列不属于声明式目录资产、但会改�
 
 | 配置项 | 适配方式 | 明确边界 |
 |---|---|---|
-| 独立 TUI 配置 | 按独立来源顺序处理 `$schema/theme/keybinds/plugin/plugin_enabled/leader_timeout/attention/prompt/scroll_speed/scroll_acceleration/diff_style/mouse` | 主配置来源图和构建期 TUI 布局选择不参与其运行时优先级。 |
+| 独立 TUI 配置 | 按独立来源顺序处理 `$schema/theme/keybinds/plugin/plugin_enabled/leader_timeout/attention/prompt/scroll_speed/scroll_acceleration/diff_style/mouse` | 主配置来源顺序和构建期 TUI 布局选择不参与其运行时优先级。 |
 | `shell` | 交给实际执行域的 Terminal/Tool Runtime，保留短名称、绝对路径和平台默认发现 | 命令不存在时只使相关 shell/工具调用不可用，不阻止项目启动。 |
 | `logLevel`、`username` | 分别进入日志配置和会话展示身份 | 不改变插件权限或系统账户。 |
 | `tools` | 映射到 Tool 归属模块的模型可见性和启用状态 | 不能用“隐藏工具”代替真实权限控制，也不能启用产品未提供的工具。 |
@@ -352,4 +361,5 @@ OpenCode 配置文档还包含下列不属于声明式目录资产、但会改�
 8. References 本地/Git 来源、Skills paths/urls、旧字段迁移和所有稳定顶层键。
 9. Remote 执行域不静默回本机。
 
-完整样例集固定到 OpenCode release commit；开发分支变化只触发差异报告，不能静默改变稳定兼容行为。
+完整样例集固定到 OpenCode `v1.18.9` release commit
+`4da7bb44c84e013fa53e9c5d02ac753d1435c81a`；开发分支变化只触发差异报告，不能静默改变稳定兼容行为。

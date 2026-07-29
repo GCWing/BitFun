@@ -1,5 +1,5 @@
 use crate::{
-    command_source::{opencode_user_config_dir, strip_jsonc},
+    command_source::strip_jsonc, local_source_paths::user_config_dir,
     source_adapter::statically_discover_hook_events,
 };
 use bitfun_product_domains::external_hook_catalog::{
@@ -47,7 +47,7 @@ pub struct OpenCodeHookProviderOptions {
 impl OpenCodeHookProviderOptions {
     pub fn from_environment() -> Self {
         let home = dirs::home_dir();
-        let user_config_dir = opencode_user_config_dir(
+        let user_config_dir = user_config_dir(
             std::env::var_os("XDG_CONFIG_HOME").map(PathBuf::from),
             home.clone(),
         );
