@@ -13,13 +13,11 @@ use crate::miniapp::types::{
 use crate::product_domain_runtime::CoreProductDomainRuntime;
 use crate::util::errors::{BitFunError, BitFunResult};
 use bitfun_product_domains::miniapp::customization::{
-    MiniAppCustomizationBaseline, MiniAppCustomizationMetadata, MiniAppCustomizationOrigin,
-    MiniAppCustomizationOriginKind, MiniAppPermissionDiff,
+    MiniAppCustomizationBaseline, MiniAppCustomizationMetadata, MiniAppPermissionDiff,
 };
 use bitfun_product_domains::miniapp::draft::MiniAppDraft;
 use bitfun_product_domains::miniapp::lifecycle::{
-    apply_update_patch, build_created_app, build_worker_revision, MiniAppCreateInput,
-    MiniAppUpdatePatch,
+    build_worker_revision, MiniAppCreateInput, MiniAppUpdatePatch,
 };
 use bitfun_product_domains::miniapp::market::{InstalledMarketOrigin, MarketPackageMeta};
 use bitfun_product_domains::miniapp::ports::{
@@ -759,39 +757,10 @@ impl MiniAppManager {
         let now = Utc::now().timestamp_millis();
         let compiled_html =
             self.compile_market_source(&id, &source, &package_meta.permissions, "dark", None)?;
-        let mut app = build_created_app(
-            id.clone(),
-            MiniAppCreateInput {
-                name: package_meta.name,
-                description: package_meta.description,
-                icon: package_meta.icon,
-                category: package_meta.category,
-                tags: package_meta.tags,
-                source,
-                permissions: package_meta.permissions,
-                ai_context: None,
-            },
-            compiled_html,
-            now,
-        );
-        app.i18n = package_meta.i18n;
-        app.runtime_profile =
-            bitfun_product_domains::miniapp::types::MiniAppRuntimeProfile::MarketStrict;
-        let metadata = MiniAppCustomizationMetadata {
-            origin: MiniAppCustomizationOrigin {
-                kind: MiniAppCustomizationOriginKind::Market,
-                builtin_id: None,
-                builtin_version: None,
-                market: Some(origin),
-            },
-            local_override: false,
-            last_applied_draft_id: None,
-            available_builtin_update: None,
-            declined_builtin_updates: Vec::new(),
-            updated_at: now,
-        };
-        self.storage.install_market_atomic(&app, &metadata).await?;
-        Ok(app)
+        self.runtime_facade()
+            .install_market_app(id, package_meta, source, origin, compiled_html, now)
+            .await
+            .map_err(map_miniapp_port_error)
     }
 
     /// Import a self-contained `.bfminiapp` file without a server-attested
@@ -807,39 +776,10 @@ impl MiniAppManager {
         let now = Utc::now().timestamp_millis();
         let compiled_html =
             self.compile_market_source(&id, &source, &package_meta.permissions, "dark", None)?;
-        let mut app = build_created_app(
-            id.clone(),
-            MiniAppCreateInput {
-                name: package_meta.name,
-                description: package_meta.description,
-                icon: package_meta.icon,
-                category: package_meta.category,
-                tags: package_meta.tags,
-                source,
-                permissions: package_meta.permissions,
-                ai_context: None,
-            },
-            compiled_html,
-            now,
-        );
-        app.i18n = package_meta.i18n;
-        app.runtime_profile =
-            bitfun_product_domains::miniapp::types::MiniAppRuntimeProfile::MarketStrict;
-        let metadata = MiniAppCustomizationMetadata {
-            origin: MiniAppCustomizationOrigin {
-                kind: MiniAppCustomizationOriginKind::Imported,
-                builtin_id: None,
-                builtin_version: None,
-                market: None,
-            },
-            local_override: false,
-            last_applied_draft_id: None,
-            available_builtin_update: None,
-            declined_builtin_updates: Vec::new(),
-            updated_at: now,
-        };
-        self.storage.install_market_atomic(&app, &metadata).await?;
-        Ok(app)
+        self.runtime_facade()
+            .import_strict_package(id, package_meta, source, compiled_html, now)
+            .await
+            .map_err(map_miniapp_port_error)
     }
 
     /// Replace an installed marketplace app after a manual update decision.
@@ -853,65 +793,13 @@ impl MiniAppManager {
         origin: InstalledMarketOrigin,
     ) -> BitFunResult<MiniApp> {
         let previous = self.storage.load(app_id).await?;
-        let existing_metadata = self
-            .storage
-            .load_customization_metadata(app_id)
-            .await?
-            .ok_or_else(|| BitFunError::validation("MiniApp has no marketplace origin"))?;
-        let Some(existing_origin) = existing_metadata.origin.market.as_ref() else {
-            return Err(BitFunError::validation(
-                "Only marketplace MiniApps can be updated from the marketplace",
-            ));
-        };
-        if existing_origin.listing_id != origin.listing_id {
-            return Err(BitFunError::validation(
-                "Marketplace update does not match the installed listing",
-            ));
-        }
-        if origin.release_number <= existing_origin.release_number {
-            return Err(BitFunError::validation(
-                "Marketplace release is not newer than the installed release",
-            ));
-        }
-
         let now = Utc::now().timestamp_millis();
         let compiled_html =
             self.compile_market_source(app_id, &source, &package_meta.permissions, "dark", None)?;
-        let mut next = apply_update_patch(
-            &previous,
-            MiniAppUpdatePatch {
-                name: Some(package_meta.name),
-                description: Some(package_meta.description),
-                icon: Some(package_meta.icon),
-                category: Some(package_meta.category),
-                tags: Some(package_meta.tags),
-                source: Some(source),
-                permissions: Some(package_meta.permissions),
-                ai_context: None,
-            },
-            compiled_html,
-            now,
-        );
-        next.i18n = package_meta.i18n;
-        next.runtime_profile =
-            bitfun_product_domains::miniapp::types::MiniAppRuntimeProfile::MarketStrict;
-        let metadata = MiniAppCustomizationMetadata {
-            origin: MiniAppCustomizationOrigin {
-                kind: MiniAppCustomizationOriginKind::Market,
-                builtin_id: None,
-                builtin_version: None,
-                market: Some(origin),
-            },
-            local_override: false,
-            last_applied_draft_id: None,
-            available_builtin_update: None,
-            declined_builtin_updates: Vec::new(),
-            updated_at: now,
-        };
-        self.storage
-            .replace_market_atomic(&previous, &next, &metadata)
-            .await?;
-        Ok(next)
+        self.runtime_facade()
+            .update_market_app(previous, package_meta, source, origin, compiled_html, now)
+            .await
+            .map_err(map_miniapp_port_error)
     }
 }
 

@@ -1398,6 +1398,7 @@ dependencies = [
  "bitfun-core",
  "chrono",
  "clap",
+ "dirs 6.0.0",
  "futures-util",
  "serde",
  "serde_json",

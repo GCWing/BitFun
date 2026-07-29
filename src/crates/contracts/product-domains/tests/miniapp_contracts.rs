@@ -440,6 +440,42 @@ impl MiniAppStoragePort for StoragePortStub {
         })
     }
 
+    fn install_market_atomic(
+        &self,
+        app: MiniApp,
+        metadata: MiniAppCustomizationMetadata,
+    ) -> MiniAppPortFuture<'_, ()> {
+        let state = self.state.clone();
+        Box::pin(async move {
+            let app_id = app.id.clone();
+            let mut state = state.lock().unwrap();
+            state.current = app;
+            state.customization.insert(app_id, metadata);
+            state.save_count += 1;
+            Ok(())
+        })
+    }
+
+    fn replace_market_atomic(
+        &self,
+        previous: MiniApp,
+        next: MiniApp,
+        metadata: MiniAppCustomizationMetadata,
+    ) -> MiniAppPortFuture<'_, ()> {
+        let state = self.state.clone();
+        Box::pin(async move {
+            let app_id = next.id.clone();
+            let previous_version = previous.version;
+            let mut state = state.lock().unwrap();
+            state.versions.insert(previous_version, previous);
+            state.saved_version_numbers.push(previous_version);
+            state.current = next;
+            state.customization.insert(app_id, metadata);
+            state.save_count += 1;
+            Ok(())
+        })
+    }
+
     fn delete(&self, _app_id: String) -> MiniAppPortFuture<'_, ()> {
         Box::pin(async { Ok(()) })
     }

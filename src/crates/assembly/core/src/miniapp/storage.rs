@@ -386,6 +386,31 @@ impl MiniAppStoragePort for MiniAppStorage {
         })
     }
 
+    fn install_market_atomic(
+        &self,
+        app: MiniApp,
+        metadata: MiniAppCustomizationMetadata,
+    ) -> MiniAppPortFuture<'_, ()> {
+        Box::pin(async move {
+            MiniAppStorage::install_market_atomic(self, &app, &metadata)
+                .await
+                .map_err(map_miniapp_port_error)
+        })
+    }
+
+    fn replace_market_atomic(
+        &self,
+        previous: MiniApp,
+        next: MiniApp,
+        metadata: MiniAppCustomizationMetadata,
+    ) -> MiniAppPortFuture<'_, ()> {
+        Box::pin(async move {
+            MiniAppStorage::replace_market_atomic(self, &previous, &next, &metadata)
+                .await
+                .map_err(map_miniapp_port_error)
+        })
+    }
+
     fn delete(&self, app_id: String) -> MiniAppPortFuture<'_, ()> {
         Box::pin(async move { self.delete(&app_id).await.map_err(map_miniapp_port_error) })
     }
