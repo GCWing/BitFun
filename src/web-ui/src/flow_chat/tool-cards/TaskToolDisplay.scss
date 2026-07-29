@@ -340,7 +340,7 @@
      The generic thinking content has vertical padding; with a one-line max-height
      that can leave only padding visible and push the prompt text out of view. */
   .task-expanded-content .task-prompt-content {
-    padding: 0 var(--flowchat-card-pad-x);
+    padding: 0 var(--flowchat-card-pad-x) 0 0;
     max-height: 3.2em;
     overflow-y: auto;
   }
@@ -370,7 +370,7 @@
   .task-interruption-divider {
     height: 1px;
     background: var(--border-base);
-    margin: -2px calc(-1 * var(--tool-card-expanded-pad-x)) 0;
+    margin: -2px calc(-1 * var(--tool-card-expanded-pad-x)) 0 0;
   }
 
   .task-expanded-content .task-prompt-markdown {
@@ -610,16 +610,13 @@
       border-top: 1px solid var(--border-base);
     }
 
-    // Match `.task-expanded-content .task-prompt-content` horizontal inset.
+    // Keep projected subagent output on the task card's leading edge.
     .subagent-projection-container--expanded {
-      --task-prompt-inline-pad: calc(
-        var(--flowchat-card-expanded-pad-x) + var(--flowchat-card-pad-x)
-      );
       padding:
         8px
-        var(--task-prompt-inline-pad)
+        calc(var(--flowchat-card-expanded-pad-x) + var(--flowchat-card-pad-x))
         10px
-        var(--task-prompt-inline-pad);
+        0;
     }
 
     // Hide the header top accent line — the wrapper border already frames

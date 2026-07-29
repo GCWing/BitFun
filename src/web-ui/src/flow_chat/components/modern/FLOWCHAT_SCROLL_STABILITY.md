@@ -6,7 +6,7 @@ This document explains the scroll-stability mechanism used by `VirtualMessageLis
 
 Every rule below is compensation for content that changes size on its own. The
 cheapest way to keep the pane stable is to not generate the movement in the
-first place. Four invariants hold across the message list, and breaking any of
+first place. Five invariants hold across the message list, and breaking any of
 them reintroduces the "the chat keeps refreshing itself" report:
 
 1. **Keep a live action's projection identity stable.** A collapsible tool
@@ -37,8 +37,14 @@ them reintroduces the "the chat keeps refreshing itself" report:
    share one duration (see `flowChatCollapseMotion.ts` /
    `SmoothHeightCollapse`). Do not hard-swap `BaseToolCard` ↔ `CompactToolCard`
    for expand/collapse — that remounts the body with no height transition.
+5. **Keep the leading edge stable across collapse states.** A revealed body
+   must not add `margin-inline-start`, `padding-inline-start`, or an equivalent
+   left offset relative to its collapsed header. Expanded thinking, explore
+   rows, tool details, image previews, and subagent projections all begin on
+   their owning message/card edge. Vertical and trailing-edge spacing may
+   remain, but a leading inset reads as a horizontal jump during collapse.
 
-A fifth, related rule lives in `useTypewriter`: `replayOnMount` defaults to
+A sixth, related rule lives in `useTypewriter`: `replayOnMount` defaults to
 false, so a still-streaming block that remounts continues from its current text
 instead of resetting to an empty string and re-growing.
 

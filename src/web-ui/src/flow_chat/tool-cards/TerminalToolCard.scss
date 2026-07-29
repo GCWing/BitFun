@@ -69,7 +69,7 @@
 
 /* Footer bar: full width + background to bottom inner edge of expanded content (matches .base-tool-card-expanded padding). */
 .base-tool-card-wrapper.terminal-tool-card .terminal-result-footer {
-  margin-left: calc(-1 * var(--flowchat-card-expanded-pad-x));
+  margin-left: 0;
   margin-right: calc(-1 * var(--flowchat-card-expanded-pad-x));
   margin-bottom: calc(-1 * var(--flowchat-card-expanded-pad-y));
   padding: var(--flowchat-inline-gap) var(--flowchat-card-expanded-pad-x);

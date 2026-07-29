@@ -58,8 +58,9 @@
 
   .explore-region__content {
     position: relative;
-    // Align nested tool cards with the summary text, not the group chevron.
-    padding: 0 0 0 20px;
+    // Keep expanded rows on the same leading edge as the collapsed group.
+    // A nested inset makes auto-collapse read as a horizontal jump.
+    padding: 0;
     box-sizing: border-box;
     // Hide scrollbar track by default; only show when content actually overflows.
     overflow: hidden;

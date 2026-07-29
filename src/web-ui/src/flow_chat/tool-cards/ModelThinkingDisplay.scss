@@ -104,7 +104,12 @@
   font-family: var(--font-family-sans);
   word-break: break-word;
   color: var(--color-text-muted);
-  padding: var(--flowchat-card-expanded-pad-y) var(--flowchat-card-expanded-pad-x);
+  // Preserve vertical breathing room without shifting expanded reasoning right.
+  padding:
+    var(--flowchat-card-expanded-pad-y)
+    var(--flowchat-card-expanded-pad-x)
+    var(--flowchat-card-expanded-pad-y)
+    0;
   background: transparent;
   border: none;
   border-radius: 6px;

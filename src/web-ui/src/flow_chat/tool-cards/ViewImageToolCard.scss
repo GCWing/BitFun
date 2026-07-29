@@ -2,7 +2,7 @@
   display: flex;
   justify-content: flex-start;
   min-width: 0;
-  margin: 8px 0 0 28px;
+  margin: 8px 0 0;
 }
 
 .view-image-tool-card__preview-button {
@@ -58,10 +58,6 @@
 }
 
 @media (max-width: 640px) {
-  .view-image-tool-card__content {
-    margin-left: 24px;
-  }
-
   .view-image-tool-card__preview-button {
     width: 144px;
   }
