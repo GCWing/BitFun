@@ -353,7 +353,7 @@ describe('isChatInputActionVisibleForTarget', () => {
   });
 
   it('keeps other slash actions visible for subagent targets', () => {
-    for (const actionId of ['usage', 'compact', 'reload-skills']) {
+    for (const actionId of ['usage', 'compact', 'reload']) {
       expect(
         isChatInputActionVisibleForTarget({
           actionId,

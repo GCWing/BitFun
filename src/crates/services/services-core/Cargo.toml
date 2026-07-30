@@ -29,6 +29,7 @@ log = { workspace = true }
 fs2 = { workspace = true }
 notify = { workspace = true, optional = true }
 ignore = { workspace = true }
+globset = { workspace = true }
 sha2 = { workspace = true }
 flate2 = { workspace = true, optional = true }
 tar = { workspace = true, optional = true }

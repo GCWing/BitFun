@@ -15,8 +15,10 @@ use russh::client::{DisconnectReason, Handle, Handler, Msg};
 use russh::Sig;
 use russh_keys::key::{KeyPair, PublicKey};
 use russh_keys::PublicKeyBase64;
+use russh_sftp::client::error::Error as SftpError;
 use russh_sftp::client::fs::ReadDir;
-use russh_sftp::client::SftpSession;
+use russh_sftp::client::{RawSftpSession, SftpSession};
+use russh_sftp::protocol::{File as SftpFile, StatusCode as SftpStatusCode};
 #[cfg(feature = "ssh_config")]
 use ssh_config::SSHConfig;
 use std::collections::HashMap;
@@ -30,6 +32,54 @@ use tokio::time::{Duration, Instant};
 
 const SSH_COMMAND_WAIT_POLL_INTERVAL: Duration = Duration::from_millis(100);
 const SSH_COMMAND_INTERRUPT_DRAIN_GRACE: Duration = Duration::from_millis(500);
+const CONTAINER_ENTRY_METADATA_SCRIPT: &str = "\
+name=${item##*/}; \
+if [ -L \"$item\" ]; then kind=l; \
+elif [ -d \"$item\" ]; then kind=d; \
+elif [ -f \"$item\" ]; then kind=f; \
+else kind=o; fi; \
+if [ \"$kind\" = d ]; then size=; \
+else size=$(stat -c %s \"$item\" 2>/dev/null || stat -f %z \"$item\" 2>/dev/null || true); fi; \
+mtime=$(stat -c %Y \"$item\" 2>/dev/null || stat -f %m \"$item\" 2>/dev/null || true); \
+mode=$(stat -c %a \"$item\" 2>/dev/null || stat -f %Lp \"$item\" 2>/dev/null || true); \
+printf '%s\\0%s\\0%s\\0%s\\0%s\\0%s\\0' \"$name\" \"$item\" \"$kind\" \"$size\" \"$mtime\" \"$mode\";";
+
+fn sftp_error_may_be_stale_transport(error: &SftpError) -> bool {
+    match error {
+        SftpError::Status(status) => matches!(
+            status.status_code,
+            SftpStatusCode::NoConnection | SftpStatusCode::ConnectionLost
+        ),
+        SftpError::IO(_) | SftpError::Timeout | SftpError::UnexpectedBehavior(_) => true,
+        SftpError::Limited(_) | SftpError::UnexpectedPacket => false,
+    }
+}
+
+fn container_read_dir_script(path: &str, max_entries: Option<usize>) -> String {
+    let quoted = crate::remote_ssh::shell::quote_arg(path);
+    let entry_loop = crate::remote_ssh::shell::quote_arg(&format!(
+        "for item do [ -e \"$item\" ] || [ -L \"$item\" ] || continue; {CONTAINER_ENTRY_METADATA_SCRIPT} done"
+    ));
+    let (head_probe, producer) = match max_entries {
+        Some(max_entries) => (
+            "command -v head >/dev/null 2>&1 && head -z -n 0 </dev/null >/dev/null 2>&1 || { echo 'NUL-delimited bounded directory reads require head -z' >&2; exit 78; }; ",
+            format!(
+                "find \"$dir\" -mindepth 1 -maxdepth 1 -print0 | head -z -n {max_entries}"
+            ),
+        ),
+        None => (
+            "",
+            "find \"$dir\" -mindepth 1 -maxdepth 1 -print0".to_string(),
+        ),
+    };
+    format!(
+        "dir={quoted}; \
+         [ -d \"$dir\" ] && [ ! -L \"$dir\" ] || {{ echo 'Container directory is missing or is a symbolic link' >&2; exit 44; }}; \
+         command -v find >/dev/null 2>&1 && command -v xargs >/dev/null 2>&1 || {{ echo 'Container directory reads require find and xargs' >&2; exit 78; }}; \
+         {head_probe}\
+         {producer} | xargs -0 -n 64 sh -c {entry_loop} sh"
+    )
+}
 
 fn truncate_at_char_boundary(s: &str, max_bytes: usize) -> &str {
     if s.len() <= max_bytes {
@@ -202,13 +252,85 @@ struct ActiveConnection {
     /// Runtime target after resolving `containerAccess: auto`.
     effective_config: SSHConnectionConfig,
     server_info: Option<ServerInfo>,
-    sftp_session: Arc<tokio::sync::RwLock<Option<Arc<SftpSession>>>>,
+    sftp_session: Arc<SftpCache>,
+    bounded_sftp_session: Arc<BoundedSftpCache>,
     #[allow(dead_code)]
     server_key: Option<PublicKey>,
     /// Liveness flag; flipped to false from `SSHHandler::disconnected`.
     /// Allows `is_connected` and SFTP/exec entry points to detect a dead session
     /// without waiting for the next failed I/O.
     alive: Arc<AtomicBool>,
+}
+
+struct SftpCache {
+    session: tokio::sync::RwLock<Option<Arc<SftpSession>>>,
+    init_lock: tokio::sync::Mutex<()>,
+}
+
+impl SftpCache {
+    fn new() -> Self {
+        Self {
+            session: tokio::sync::RwLock::new(None),
+            init_lock: tokio::sync::Mutex::new(()),
+        }
+    }
+}
+
+#[derive(Clone)]
+struct SftpSessionLease {
+    session: Arc<SftpSession>,
+    cache: Arc<SftpCache>,
+}
+
+struct BoundedSftpChannel {
+    session: Arc<RawSftpSession>,
+    read_lock: tokio::sync::Mutex<()>,
+}
+
+struct BoundedSftpCache {
+    channel: tokio::sync::RwLock<Option<Arc<BoundedSftpChannel>>>,
+    init_lock: tokio::sync::Mutex<()>,
+}
+
+impl BoundedSftpCache {
+    fn new() -> Self {
+        Self {
+            channel: tokio::sync::RwLock::new(None),
+            init_lock: tokio::sync::Mutex::new(()),
+        }
+    }
+}
+
+#[derive(Clone)]
+struct BoundedSftpSession {
+    channel: Arc<BoundedSftpChannel>,
+    cache: Arc<BoundedSftpCache>,
+}
+
+struct BoundedSftpReadGuard {
+    session: Arc<RawSftpSession>,
+    armed: bool,
+}
+
+impl BoundedSftpReadGuard {
+    fn new(session: Arc<RawSftpSession>) -> Self {
+        Self {
+            session,
+            armed: true,
+        }
+    }
+
+    fn disarm(&mut self) {
+        self.armed = false;
+    }
+}
+
+impl Drop for BoundedSftpReadGuard {
+    fn drop(&mut self) {
+        if self.armed {
+            let _ = self.session.close_session();
+        }
+    }
 }
 
 struct EstablishedSession {
@@ -1393,7 +1515,7 @@ fn split_container_entry_fields<'a>(
         .next()
         .filter(|value| !value.is_empty())
         .map(|value| value.trim().to_string());
-    if name.is_empty() || path.is_empty() || !matches!(kind.as_str(), "d" | "f" | "l") {
+    if name.is_empty() || path.is_empty() || !matches!(kind.as_str(), "d" | "f" | "l" | "o") {
         anyhow::bail!("Container directory listing returned a malformed entry");
     }
     Ok((name, path, kind, size, modified, permissions))
@@ -2490,7 +2612,8 @@ impl SSHConnectionManager {
                     config,
                     effective_config: established.effective_config,
                     server_info: server_info.clone(),
-                    sftp_session: Arc::new(tokio::sync::RwLock::new(None)),
+                    sftp_session: Arc::new(SftpCache::new()),
+                    bounded_sftp_session: Arc::new(BoundedSftpCache::new()),
                     server_key: None,
                     alive: established.alive,
                 },
@@ -3327,9 +3450,8 @@ impl SSHConnectionManager {
                     // A signal death is still a resolved status. Without this the
                     // result fell through to the unknown `-1` below.
                     if exit_status.is_none() {
-                        exit_status = crate::remote_ssh::transport::ssh_exit_code_for_signal(
-                            &signal_name,
-                        );
+                        exit_status =
+                            crate::remote_ssh::transport::ssh_exit_code_for_signal(&signal_name);
                     }
                     log::debug!(
                         "Remote exec exit signal received: signal={:?}, stdout_len={}, stderr_len={}, duration_ms={}, command_preview={}",
@@ -3775,8 +3897,8 @@ impl SSHConnectionManager {
                 if let Some(si) = server_info.as_ref() {
                     conn.server_info = Some(si.clone());
                 }
-                let mut sftp_guard = conn.sftp_session.write().await;
-                *sftp_guard = None;
+                conn.sftp_session = Arc::new(SftpCache::new());
+                conn.bounded_sftp_session = Arc::new(BoundedSftpCache::new());
                 (stale_handle, stale_jump_handles)
             } else {
                 let replaced = guard.insert(
@@ -3787,7 +3909,8 @@ impl SSHConnectionManager {
                         config,
                         effective_config: established.effective_config,
                         server_info,
-                        sftp_session: Arc::new(tokio::sync::RwLock::new(None)),
+                        sftp_session: Arc::new(SftpCache::new()),
+                        bounded_sftp_session: Arc::new(BoundedSftpCache::new()),
                         server_key: None,
                         alive: established.alive,
                     },
@@ -4348,23 +4471,33 @@ impl SSHConnectionManager {
         connection_id: &str,
         path: &str,
     ) -> anyhow::Result<Vec<crate::remote_ssh::types::RemoteDirEntry>> {
+        self.container_read_dir_with_limit(connection_id, path, None)
+            .await
+    }
+
+    pub async fn container_read_dir_bounded(
+        &self,
+        connection_id: &str,
+        path: &str,
+        max_entries: usize,
+    ) -> anyhow::Result<Vec<crate::remote_ssh::types::RemoteDirEntry>> {
+        self.container_read_dir_with_limit(connection_id, path, Some(max_entries))
+            .await
+    }
+
+    async fn container_read_dir_with_limit(
+        &self,
+        connection_id: &str,
+        path: &str,
+        max_entries: Option<usize>,
+    ) -> anyhow::Result<Vec<crate::remote_ssh::types::RemoteDirEntry>> {
+        if max_entries == Some(0) {
+            return Ok(Vec::new());
+        }
         let path = self.resolve_sftp_path(connection_id, path).await?;
-        let quoted = crate::remote_ssh::shell::quote_arg(&path);
-        let script = format!(
-            "dir={quoted}; \
-             for item in \"$dir\"/.[!.]* \"$dir\"/..?* \"$dir\"/*; do \
-               [ -e \"$item\" ] || [ -L \"$item\" ] || continue; \
-               name=${{item##*/}}; \
-               if [ -d \"$item\" ]; then kind=d; size=; \
-               elif [ -L \"$item\" ]; then kind=l; size=$(wc -c < \"$item\" 2>/dev/null || true); \
-               else kind=f; size=$(wc -c < \"$item\" 2>/dev/null || true); fi; \
-               mtime=$(stat -c %Y \"$item\" 2>/dev/null || stat -f %m \"$item\" 2>/dev/null || true); \
-               mode=$(stat -c %a \"$item\" 2>/dev/null || stat -f %Lp \"$item\" 2>/dev/null || true); \
-               printf '%s\\0%s\\0%s\\0%s\\0%s\\0%s\\0' \"$name\" \"$item\" \"$kind\" \"$size\" \"$mtime\" \"$mode\"; \
-             done"
-        );
+        let script = container_read_dir_script(&path, max_entries);
         let (stdout, stderr, status) = self.execute_workspace_bytes(connection_id, &script).await?;
-        if status != 0 {
+        if status != 0 || !stderr.is_empty() {
             anyhow::bail!(
                 "Failed to list container directory '{}': {}",
                 path,
@@ -4449,13 +4582,8 @@ impl SSHConnectionManager {
         let quoted = crate::remote_ssh::shell::quote_arg(&path);
         let script = format!(
             "item={quoted}; [ -e \"$item\" ] || [ -L \"$item\" ] || exit 44; \
-             name=${{item##*/}}; \
-             if [ -d \"$item\" ]; then kind=d; size=; \
-             elif [ -L \"$item\" ]; then kind=l; size=$(wc -c < \"$item\" 2>/dev/null || true); \
-             else kind=f; size=$(wc -c < \"$item\" 2>/dev/null || true); fi; \
-             mtime=$(stat -c %Y \"$item\" 2>/dev/null || stat -f %m \"$item\" 2>/dev/null || true); \
-             mode=$(stat -c %a \"$item\" 2>/dev/null || stat -f %Lp \"$item\" 2>/dev/null || true); \
-             printf '%s\\0%s\\0%s\\0%s\\0%s\\0%s\\0' \"$name\" \"$item\" \"$kind\" \"$size\" \"$mtime\" \"$mode\""
+             {metadata_script}",
+            metadata_script = CONTAINER_ENTRY_METADATA_SCRIPT,
         );
         let (stdout, stderr, status) = self.execute_workspace_bytes(connection_id, &script).await?;
         if status == 44 {
@@ -4545,34 +4673,49 @@ impl SSHConnectionManager {
     /// browsing the remote folder picker) is recovered transparently instead
     /// of cascading into a stale cached SFTP handle that fails forever.
     pub async fn get_sftp(&self, connection_id: &str) -> anyhow::Result<Arc<SftpSession>> {
+        Ok(self.get_sftp_lease(connection_id).await?.session)
+    }
+
+    async fn get_sftp_lease(&self, connection_id: &str) -> anyhow::Result<SftpSessionLease> {
         self.ensure_alive_or_reconnect(connection_id).await?;
 
-        // First check if we have an existing SFTP session
-        {
+        // Capture the transport and cache from the same connection generation.
+        // A reconnect may replace both while channel setup awaits; publishing
+        // only into this captured cache prevents an old host's session from
+        // becoming visible through the new generation.
+        let (handle, cache): (Arc<Handle<SSHHandler>>, Arc<SftpCache>) = {
             let guard = self.connections.read().await;
-            if let Some(conn) = guard.get(connection_id) {
-                let sftp_guard = conn.sftp_session.read().await;
-                if let Some(ref sftp) = *sftp_guard {
-                    return Ok(sftp.clone());
-                }
-            }
-        }
-
-        // Get handle (clone the Arc)
-        let handle: Arc<Handle<SSHHandler>> = {
-            let guard = self.connections.read().await;
-            let conn = guard
+            let connection = guard
                 .get(connection_id)
                 .ok_or_else(|| anyhow!("Connection {} not found", connection_id))?;
-            if conn.effective_config.uses_docker_exec() {
+            if connection.effective_config.uses_docker_exec() {
                 anyhow::bail!(
                     "SFTP is unavailable for Docker container workspaces; use workspace file operations"
                 );
             }
-            conn.handle
+            let handle = connection
+                .handle
                 .clone()
-                .ok_or_else(|| anyhow!("SSH handle is unavailable for {}", connection_id))?
+                .ok_or_else(|| anyhow!("SSH handle is unavailable for {}", connection_id))?;
+            (handle, connection.sftp_session.clone())
         };
+
+        if let Some(session) = cache.session.read().await.as_ref().cloned() {
+            return Ok(SftpSessionLease {
+                session,
+                cache: cache.clone(),
+            });
+        }
+
+        // Serialize initialization within one generation so concurrent callers
+        // cannot exhaust the server's channel/session limit.
+        let _init_guard = cache.init_lock.lock().await;
+        if let Some(session) = cache.session.read().await.as_ref().cloned() {
+            return Ok(SftpSessionLease {
+                session,
+                cache: cache.clone(),
+            });
+        }
 
         // Open a channel and request SFTP subsystem
         let channel = handle
@@ -4589,17 +4732,81 @@ impl SSHConnectionManager {
             .map_err(|e| anyhow!("Failed to create SFTP session: {}", e))?;
 
         let sftp = Arc::new(sftp);
+        *cache.session.write().await = Some(sftp.clone());
 
-        // Store the SFTP session
-        {
-            let mut guard = self.connections.write().await;
-            if let Some(conn) = guard.get_mut(connection_id) {
-                let mut sftp_guard = conn.sftp_session.write().await;
-                *sftp_guard = Some(sftp.clone());
+        Ok(SftpSessionLease {
+            session: sftp,
+            cache: cache.clone(),
+        })
+    }
+
+    /// Get or create the raw SFTP session used by bounded directory reads.
+    ///
+    /// The high-level russh-sftp `read_dir` API buffers until EOF. Keeping a
+    /// separate raw session lets callers stop issuing `readdir` requests as
+    /// soon as their entry budget is satisfied.
+    async fn get_bounded_sftp(&self, connection_id: &str) -> anyhow::Result<BoundedSftpSession> {
+        self.ensure_alive_or_reconnect(connection_id).await?;
+
+        let (handle, cache): (Arc<Handle<SSHHandler>>, Arc<BoundedSftpCache>) = {
+            let guard = self.connections.read().await;
+            let connection = guard
+                .get(connection_id)
+                .ok_or_else(|| anyhow!("Connection {} not found", connection_id))?;
+            if connection.effective_config.uses_docker_exec() {
+                anyhow::bail!(
+                    "SFTP is unavailable for Docker container workspaces; use workspace file operations"
+                );
             }
+            let handle = connection
+                .handle
+                .clone()
+                .ok_or_else(|| anyhow!("SSH handle is unavailable for {}", connection_id))?;
+            (handle, connection.bounded_sftp_session.clone())
+        };
+
+        let cached_channel = cache.channel.read().await.as_ref().cloned();
+        if let Some(channel) = cached_channel {
+            return Ok(BoundedSftpSession {
+                channel,
+                cache: cache.clone(),
+            });
         }
 
-        Ok(sftp)
+        let _init_guard = cache.init_lock.lock().await;
+        let cached_channel = cache.channel.read().await.as_ref().cloned();
+        if let Some(channel) = cached_channel {
+            return Ok(BoundedSftpSession {
+                channel,
+                cache: cache.clone(),
+            });
+        }
+
+        let channel = handle
+            .channel_open_session()
+            .await
+            .map_err(|error| anyhow!("Failed to open channel for SFTP: {}", error))?;
+        channel
+            .request_subsystem(true, "sftp")
+            .await
+            .map_err(|error| anyhow!("Failed to request SFTP subsystem: {}", error))?;
+        let session = RawSftpSession::new(channel.into_stream());
+        session
+            .init()
+            .await
+            .map_err(|error| anyhow!("Failed to create bounded SFTP session: {}", error))?;
+        let channel = Arc::new(BoundedSftpChannel {
+            session: Arc::new(session),
+            read_lock: tokio::sync::Mutex::new(()),
+        });
+
+        let mut cached = cache.channel.write().await;
+        *cached = Some(channel.clone());
+        drop(cached);
+        Ok(BoundedSftpSession {
+            channel,
+            cache: cache.clone(),
+        })
     }
 
     /// Read a file via SFTP
@@ -4825,46 +5032,207 @@ impl SSHConnectionManager {
     /// network blip does not permanently break the remote folder picker.
     pub async fn sftp_read_dir(&self, connection_id: &str, path: &str) -> anyhow::Result<ReadDir> {
         let resolved = self.resolve_sftp_path(connection_id, path).await?;
-        let sftp = self.get_sftp(connection_id).await?;
-        match sftp.read_dir(&resolved).await {
+        let lease = self.get_sftp_lease(connection_id).await?;
+        match lease.session.read_dir(&resolved).await {
             Ok(entries) => Ok(entries),
             Err(first_err) => {
-                log::warn!(
-                    "SFTP read_dir '{}' failed (will retry once after refreshing session): {}",
-                    resolved,
-                    first_err
-                );
-                self.invalidate_sftp_session(connection_id).await;
-                // Force the alive flag to false so ensure_alive_or_reconnect rebuilds
-                // the underlying SSH transport too — the previous failure may indicate
-                // the channel was torn down even though the keepalive callback has not
-                // fired yet.
-                self.mark_dead(connection_id).await;
-                let sftp = self.get_sftp(connection_id).await?;
-                sftp.read_dir(&resolved)
+                let generation_is_current =
+                    self.sftp_generation_is_current(connection_id, &lease).await;
+                if generation_is_current && !sftp_error_may_be_stale_transport(&first_err) {
+                    return Err(anyhow!(
+                        "Failed to read directory '{}': {}",
+                        resolved,
+                        first_err
+                    ));
+                }
+                if generation_is_current {
+                    log::warn!(
+                        "SFTP read_dir '{}' failed (will retry once after refreshing session): {}",
+                        resolved,
+                        first_err
+                    );
+                    self.invalidate_sftp_generation(connection_id, &lease).await;
+                    // Force the alive flag to false so ensure_alive_or_reconnect rebuilds
+                    // the underlying SSH transport too — the previous failure may indicate
+                    // the channel was torn down even though the keepalive callback has not
+                    // fired yet.
+                }
+                let lease = self.get_sftp_lease(connection_id).await?;
+                lease
+                    .session
+                    .read_dir(&resolved)
                     .await
                     .map_err(|e| anyhow!("Failed to read directory '{}': {}", resolved, e))
             }
         }
     }
 
-    /// Drop the cached SFTP session for a connection so the next call opens a
-    /// fresh channel. Safe to call when no session is cached.
-    async fn invalidate_sftp_session(&self, connection_id: &str) {
-        let guard = self.connections.read().await;
-        if let Some(conn) = guard.get(connection_id) {
-            let mut sftp_guard = conn.sftp_session.write().await;
-            *sftp_guard = None;
+    /// Read at most `max_entries` directory entries without asking the SFTP
+    /// server for the remainder of the directory.
+    pub async fn sftp_read_dir_bounded(
+        &self,
+        connection_id: &str,
+        path: &str,
+        max_entries: usize,
+    ) -> anyhow::Result<Vec<SftpFile>> {
+        if max_entries == 0 {
+            return Ok(Vec::new());
+        }
+        let resolved = self.resolve_sftp_path(connection_id, path).await?;
+        let session = self.get_bounded_sftp(connection_id).await?;
+        match Self::read_bounded_sftp_entries(&session, &resolved, max_entries).await {
+            Ok(entries) => Ok(entries),
+            Err(first_error) => {
+                let generation_is_current = self
+                    .bounded_sftp_generation_is_current(connection_id, &session)
+                    .await;
+                if generation_is_current && !sftp_error_may_be_stale_transport(&first_error) {
+                    return Err(anyhow!(
+                        "Failed to read directory '{}': {}",
+                        resolved,
+                        first_error
+                    ));
+                }
+                if generation_is_current {
+                    log::warn!(
+                        "Bounded SFTP read_dir '{}' failed (will retry once after refreshing session): {}",
+                        resolved,
+                        first_error
+                    );
+                    self.invalidate_bounded_sftp_generation(connection_id, &session)
+                        .await;
+                }
+                let session = self.get_bounded_sftp(connection_id).await?;
+                Self::read_bounded_sftp_entries(&session, &resolved, max_entries)
+                    .await
+                    .map_err(|error| anyhow!("Failed to read directory '{}': {}", resolved, error))
+            }
         }
     }
 
-    /// Force the liveness flag to false. Triggers a transparent reconnect on
-    /// the next call to [`Self::ensure_alive_or_reconnect`].
-    async fn mark_dead(&self, connection_id: &str) {
-        let guard = self.connections.read().await;
-        if let Some(conn) = guard.get(connection_id) {
-            conn.alive.store(false, Ordering::SeqCst);
+    async fn read_bounded_sftp_entries(
+        bounded: &BoundedSftpSession,
+        path: &str,
+        max_entries: usize,
+    ) -> Result<Vec<SftpFile>, SftpError> {
+        let _read_lock = bounded.channel.read_lock.lock().await;
+        let session = bounded.channel.session.as_ref();
+        let mut read_guard = BoundedSftpReadGuard::new(bounded.channel.session.clone());
+        let handle = match session.opendir(path.to_string()).await {
+            Ok(handle) => handle.handle,
+            Err(error) => {
+                read_guard.disarm();
+                return Err(error);
+            }
+        };
+        let result = async {
+            let mut entries = Vec::new();
+            while entries.len() < max_entries {
+                match session.readdir(handle.as_str()).await {
+                    Ok(batch) => {
+                        if batch.files.is_empty() {
+                            break;
+                        }
+                        for entry in batch.files {
+                            if entry.filename == "." || entry.filename == ".." {
+                                continue;
+                            }
+                            entries.push(entry);
+                            if entries.len() == max_entries {
+                                break;
+                            }
+                        }
+                    }
+                    Err(SftpError::Status(status)) if status.status_code == SftpStatusCode::Eof => {
+                        break;
+                    }
+                    Err(error) => return Err(error),
+                }
+            }
+            Ok(entries)
         }
+        .await;
+        let close = session.close(handle).await;
+        match result {
+            Err(error) if close.is_ok() => {
+                read_guard.disarm();
+                Err(error)
+            }
+            Err(error) => Err(error),
+            Ok(entries) => {
+                close?;
+                read_guard.disarm();
+                Ok(entries)
+            }
+        }
+    }
+
+    async fn bounded_sftp_generation_is_current(
+        &self,
+        connection_id: &str,
+        session: &BoundedSftpSession,
+    ) -> bool {
+        self.connections
+            .read()
+            .await
+            .get(connection_id)
+            .is_some_and(|connection| Arc::ptr_eq(&connection.bounded_sftp_session, &session.cache))
+    }
+
+    async fn invalidate_bounded_sftp_generation(
+        &self,
+        connection_id: &str,
+        failed: &BoundedSftpSession,
+    ) {
+        let guard = self.connections.read().await;
+        let Some(connection) = guard.get(connection_id) else {
+            return;
+        };
+        if !Arc::ptr_eq(&connection.bounded_sftp_session, &failed.cache) {
+            return;
+        }
+
+        let mut cached = failed.cache.channel.write().await;
+        if !cached
+            .as_ref()
+            .is_some_and(|channel| Arc::ptr_eq(channel, &failed.channel))
+        {
+            return;
+        }
+        *cached = None;
+        connection.alive.store(false, Ordering::SeqCst);
+    }
+
+    async fn sftp_generation_is_current(
+        &self,
+        connection_id: &str,
+        lease: &SftpSessionLease,
+    ) -> bool {
+        self.connections
+            .read()
+            .await
+            .get(connection_id)
+            .is_some_and(|connection| Arc::ptr_eq(&connection.sftp_session, &lease.cache))
+    }
+
+    async fn invalidate_sftp_generation(&self, connection_id: &str, failed: &SftpSessionLease) {
+        let guard = self.connections.read().await;
+        let Some(connection) = guard.get(connection_id) else {
+            return;
+        };
+        if !Arc::ptr_eq(&connection.sftp_session, &failed.cache) {
+            return;
+        }
+
+        let mut cached = failed.cache.session.write().await;
+        if !cached
+            .as_ref()
+            .is_some_and(|session| Arc::ptr_eq(session, &failed.session))
+        {
+            return;
+        }
+        *cached = None;
+        connection.alive.store(false, Ordering::SeqCst);
     }
 
     /// Create directory via SFTP
@@ -4965,6 +5333,21 @@ impl SSHConnectionManager {
             .metadata(&path)
             .await
             .map_err(|e| anyhow!("Failed to stat '{}': {}", path, e))
+    }
+
+    /// Get metadata for the exact SFTP path without following its final symlink.
+    pub async fn sftp_lstat(
+        &self,
+        connection_id: &str,
+        path: &str,
+    ) -> anyhow::Result<russh_sftp::client::fs::Metadata> {
+        let path = self.resolve_sftp_path(connection_id, path).await?;
+        let sftp = self.get_sftp(connection_id).await?;
+        sftp.as_ref()
+            .symlink_metadata(&path)
+            .await
+            .map_err(anyhow::Error::new)
+            .with_context(|| format!("Failed to inspect '{}'", path))
     }
 
     // ============================================================================
@@ -5418,7 +5801,8 @@ mod tests {
                 config: config.clone(),
                 effective_config: config.clone(),
                 server_info: Some(server_info.clone()),
-                sftp_session: Arc::new(tokio::sync::RwLock::new(None)),
+                sftp_session: Arc::new(SftpCache::new()),
+                bounded_sftp_session: Arc::new(BoundedSftpCache::new()),
                 server_key: None,
                 alive: alive.clone(),
             },
@@ -5621,6 +6005,65 @@ mod tests {
         assert!(entry.is_dir);
         assert_eq!(entry.modified, Some(1_720_000_000_000));
         assert_eq!(entry.permissions.as_deref(), Some("755"));
+    }
+
+    #[test]
+    fn container_metadata_does_not_follow_symlinks_or_read_file_bodies() {
+        let symlink_check = CONTAINER_ENTRY_METADATA_SCRIPT.find("[ -L").unwrap();
+        let directory_check = CONTAINER_ENTRY_METADATA_SCRIPT.find("[ -d").unwrap();
+
+        assert!(symlink_check < directory_check);
+        assert!(CONTAINER_ENTRY_METADATA_SCRIPT.contains("[ -f"));
+        assert!(CONTAINER_ENTRY_METADATA_SCRIPT.contains("else kind=o"));
+        assert!(!CONTAINER_ENTRY_METADATA_SCRIPT.contains("wc -c"));
+        assert!(CONTAINER_ENTRY_METADATA_SCRIPT.contains("stat -c %s"));
+        assert!(CONTAINER_ENTRY_METADATA_SCRIPT.contains("stat -f %z"));
+    }
+
+    #[test]
+    fn bounded_container_directory_script_stops_the_nul_producer() {
+        let bounded = container_read_dir_script("/workspace", Some(4096));
+        let unbounded = container_read_dir_script("/workspace", None);
+
+        assert!(bounded.contains("find \"$dir\" -mindepth 1 -maxdepth 1 -print0"));
+        assert!(bounded.contains("head -z -n 4096"));
+        assert!(bounded.contains("xargs -0 -n 64"));
+        assert!(!bounded.contains("\"$dir\"/*"));
+        assert!(!unbounded.contains("head -z -n 4096"));
+    }
+
+    #[test]
+    fn container_special_files_are_not_reported_as_regular_files() {
+        let entry = parse_container_file_output("pipe\0/workspace/pipe\0o\00\01720000000\0644\0")
+            .unwrap()
+            .unwrap();
+
+        assert!(!entry.is_file);
+        assert!(!entry.is_dir);
+        assert!(!entry.is_symlink);
+    }
+
+    #[test]
+    fn only_transport_sftp_errors_trigger_a_reconnect() {
+        let status = |status_code| {
+            SftpError::Status(russh_sftp::protocol::Status {
+                id: 1,
+                status_code,
+                error_message: String::new(),
+                language_tag: String::new(),
+            })
+        };
+
+        assert!(sftp_error_may_be_stale_transport(&status(
+            SftpStatusCode::ConnectionLost
+        )));
+        assert!(sftp_error_may_be_stale_transport(&SftpError::Timeout));
+        assert!(!sftp_error_may_be_stale_transport(&status(
+            SftpStatusCode::NoSuchFile
+        )));
+        assert!(!sftp_error_may_be_stale_transport(&status(
+            SftpStatusCode::PermissionDenied
+        )));
     }
 
     #[tokio::test]

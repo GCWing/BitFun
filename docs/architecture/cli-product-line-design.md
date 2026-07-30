@@ -256,12 +256,12 @@ Headless CLI 和公开 Agent SDK 都调用同一 Agent Runtime API，但交付�
 
 | 形态 | 默认部署 | 当前 Shared 范围 |
 |---|---|---|
-| 交互式 TUI | Embedded | 显式 `--shared` 后支持 Session list/create/restore、transcript、当前 Session rename/Agent mode/model、Turn submit/cancel、Permission 和 UserInput |
+| 交互式 TUI | Embedded | 显式 `--shared` 后支持 Session list/create/restore、transcript、当前 Session rename/Agent mode/model、声明式上下文 reload、Turn submit/cancel、Permission 和 UserInput |
 | `bitfun exec` / CI | Embedded | 不接受 Shared；保持独立进程、stdout/stderr 和退出码语义 |
 | ACP / SDK Host / GUI / Remote / Peer | 各自既有部署 | 不消费 TUI IPC，也不因本开关改变生命周期 |
 
 Shared TUI 不提供 Session delete/fork、模型目录/默认值、Agent/Subagent 管理、MCP/扩展、账号同步、用量、observer、replay 或 controller transfer；对应入口给出明确的 Embedded 恢复建议，不在 Client 进程初始化第二套 Core owner。
-Shared 模式的斜杠命令、快捷键帮助和底部提示使用同一能力投影：`/rename <name>` 修改当前 Session 名称；`/agent`、Tab 和 Shift+Tab 只切换当前 Session 的 Agent mode；`/models` 只切换当前 Session 的 model。Embedded 与 Shared 的 `/help` 都从 Action Registry 展示 `/rename <name>`；在 slash menu 中选择它只预填命令并等待用户输入名称。若外部来源使用相同命令名，用户明确选择的 BitFun 命令可完成这一次参数提交，即使偏好保存失败也不会重新弹出来源选择。它们不进入管理页面，也不修改未来 Session 的默认值。其他不支持动作不显示为可执行入口。Session 切换失败保留原控制权；单个连接已有活动 Turn 时拒绝重复提交以及 Session rename/mode/model update；事件订阅失效后当前视图立即失效并要求重启 Shared TUI。
+Shared 模式的斜杠命令、快捷键帮助和底部提示使用同一能力投影：`/rename <name>` 修改当前 Session 名称；`/agent`、Tab 和 Shift+Tab 只切换当前 Session 的 Agent mode；`/models` 只切换当前 Session 的 model；`/reload [skills|instructions]` 刷新下一条消息使用的声明式上下文。Embedded 与 Shared 的 `/help` 都从 Action Registry 展示 `/rename <name>` 和 `/reload`；在 slash menu 中选择 rename 只预填命令并等待用户输入名称。若外部来源使用相同命令名，用户明确选择的 BitFun 命令可完成这一次参数提交，即使偏好保存失败也不会重新弹出来源选择。它们不进入管理页面，也不修改未来 Session 的默认值。其他不支持动作不显示为可执行入口。Session 切换失败保留原控制权；单个连接已有活动 Turn 时拒绝重复提交以及 Session rename/mode/model update，但允许 reload 只影响下一条消息；事件订阅失效后当前视图立即失效并要求重启 Shared TUI。
 
 部署差异由 CLI Runtime client 封装。Embedded 以 Rust 类型直接调用 `AgentRuntime`，不初始化 IPC 或执行 JSON 编解码；Shared 将同一业务请求映射为一个有界本机 frame，Client/Server 各自只编码一次，再交给同一 Runtime owner。多 TUI 复用一个 Runtime 进程，连接和队列保持有界，不按 TUI 数量复制 Session owner。详细的 4+1 视图、帧上限和并发边界见
 [`agent-runtime-deployment-design.md`](agent-runtime-deployment-design.md)。
@@ -535,10 +535,14 @@ Hook C0：脱敏发现 -> 精确命令预览 | 指纹确认 -> 原子发布本�
 规则文件优先复用项目已有文件，不复制出第二份内容。若不同生态规则冲突，导入报告必须展示目标文件、
 优先级和冲突段，不能自动拼接。
 
-当前 Workspace Instructions 只消费真实工作区根：本地和 Remote 共用 `WorkspaceFileSystem` 读取，
-`AGENTS.override.md` 文件存在时替代同目录 `AGENTS.md`（空文件也不回退），`CLAUDE.md` 继续作为独立来源按既有顺序追加。
-运行时尚无稳定的嵌套活动目录事实，因此不声明 root-to-cwd 级联；全局规则、Claude rules/import、OpenCode
-`instructions` glob/URL、变化监听和冲突报告也不属于当前实现。
+当前 Workspace Instructions 只消费真实工作区根，本地和 Remote 共用同一个解析器与 `WorkspaceFileSystem` 端口。
+固定顺序是：`AGENTS.override.md`（存在时替代 `AGENTS.md`，空文件也不回退）、根 `CLAUDE.md` 或
+`.claude/CLAUDE.md`、`CLAUDE.local.md`、不带 `paths` front matter 的 `.claude/rules/**/*.md`，最后是项目根与
+`.opencode` 中 `opencode.json/jsonc` 的本地 `instructions` 文件或 glob。Claude `@import` 只跟随工作区内文件，
+深度上限为 5，并对重复和循环引用去重；所有目录遍历都跳过符号链接。运行时尚无稳定的嵌套活动目录事实，因此
+不声明 root-to-cwd 级联。递归扫描跳过 VCS、依赖与构建目录，并对扫描节点、文件数量、单文件和总内容字节设置固定
+上限，避免宽 glob 阻塞本地或 Remote 工作区。Claude path-scoped rules、全局规则、OpenCode 远程 URL、变化监听和冲突
+报告也不属于当前实现。
 
 现有对 `.claude/.codex/.opencode/.agents` Skill 根的直接发现已经保留来源身份和全局/项目使用范围，并在 GUI/TUI
 展示来源和默认覆盖状态，模式配置再展示实际采用项；固定根顺序保持为 Skill Registry 的独立回归契约。
@@ -554,8 +558,12 @@ Skill Registry 还保留来源资产声明的隐式调用意图：Claude `SKILL.
 分组以及 `\$` 转义；缺失的位置参数保留原占位符，模板没有未转义占位符时才追加 `ARGUMENTS:` 段。该展开器只处理
 字符串，不执行命令、脚本或动态变量。未携带 `arguments` 的旧工具调用保持原 Skill 正文不变。
 
-这项能力不新增导入记录、来源图、后台 watcher 或第二套刷新生命周期。工作区查询继续按现有 Registry 路径扫描，用户
-缓存继续使用已有刷新入口，CLI 的 `/reload-skills` 仍是明确的手动刷新方式；运行期不承诺对所有来源做文件监听或热重载。
+这项能力不新增导入记录、来源图、后台 watcher 或第二套刷新生命周期。用户只需要一个手动入口：`/reload` 同时刷新
+Skill Registry 并失效当前 Session 的 Workspace Instructions 缓存；`/reload skills` 与 `/reload instructions` 用于只刷新
+一类内容。Desktop、Embedded CLI 与 Shared TUI 共用同一 core 协调入口，但 Skill Registry 刷新和 Session
+`UserContext` 缓存失效仍由各自既有 owner 完成。指令变更从下一条消息开始生效；运行期不承诺文件监听或当前生成中的
+消息热替换。缓存 generation 会拒绝活动 Turn 在失效之后写回的旧构建结果；旧 `/reload-skills` 输入仅作为隐藏兼容别名
+映射到 `/reload skills`，不增加第二个命令入口。
 本切片也不实现 `allowed-tools`、`context`、`fork`、`agent`、`model`、命名参数、动态 shell/runtime 变量、URL、祖先目录
 级联、插件 Runtime 或 OpenCode 复杂 Hook。后续只有在存在稳定消费方和独立安全边界时才扩展这些语义。
 

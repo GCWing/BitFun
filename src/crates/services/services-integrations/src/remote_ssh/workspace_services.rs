@@ -7,7 +7,7 @@
 use async_trait::async_trait;
 use bitfun_runtime_ports::{
     WorkspaceCommandOptions, WorkspaceCommandResult, WorkspaceDirEntry, WorkspaceFileSystem,
-    WorkspaceServices, WorkspaceShell,
+    WorkspacePathKind, WorkspaceServices, WorkspaceShell,
 };
 use std::sync::Arc;
 
@@ -40,6 +40,41 @@ impl WorkspaceFileSystem for RemoteWorkspaceFs {
         Ok(String::from_utf8_lossy(&bytes).to_string())
     }
 
+    async fn read_file_text_bounded(
+        &self,
+        path: &str,
+        max_bytes: usize,
+    ) -> anyhow::Result<Option<String>> {
+        let Some(entry) = self
+            .file_service
+            .symlink_stat(&self.connection_id, path)
+            .await?
+        else {
+            return Ok(None);
+        };
+        if !entry.is_file || entry.size.is_some_and(|size| size > max_bytes as u64) {
+            return Ok(None);
+        }
+        let mut exceeded = false;
+        let bytes = match self
+            .file_service
+            .read_file_with_progress(&self.connection_id, path, &mut |bytes_read, total_size| {
+                let over_limit = bytes_read > max_bytes as u64 || total_size > max_bytes as u64;
+                exceeded |= over_limit;
+                !over_limit
+            })
+            .await
+        {
+            Ok(bytes) => bytes,
+            Err(_) if exceeded => return Ok(None),
+            Err(error) => return Err(error),
+        };
+        if bytes.len() > max_bytes {
+            return Ok(None);
+        }
+        Ok(Some(String::from_utf8_lossy(&bytes).to_string()))
+    }
+
     async fn write_file(&self, path: &str, contents: &[u8]) -> anyhow::Result<()> {
         if let Some((parent, _)) = path
             .rsplit_once('/')
@@ -66,10 +101,48 @@ impl WorkspaceFileSystem for RemoteWorkspaceFs {
         self.file_service.is_dir(&self.connection_id, path).await
     }
 
+    async fn path_kind_no_follow(&self, path: &str) -> anyhow::Result<Option<WorkspacePathKind>> {
+        Ok(self
+            .file_service
+            .symlink_stat(&self.connection_id, path)
+            .await?
+            .map(|entry| {
+                if entry.is_symlink {
+                    WorkspacePathKind::Symlink
+                } else if entry.is_dir {
+                    WorkspacePathKind::Directory
+                } else if entry.is_file {
+                    WorkspacePathKind::File
+                } else {
+                    WorkspacePathKind::Other
+                }
+            }))
+    }
+
     async fn read_dir(&self, path: &str) -> anyhow::Result<Vec<WorkspaceDirEntry>> {
         let entries = self
             .file_service
             .read_dir(&self.connection_id, path)
+            .await?;
+        Ok(entries
+            .into_iter()
+            .map(|entry| WorkspaceDirEntry {
+                name: entry.name,
+                path: entry.path,
+                is_dir: entry.is_dir,
+                is_symlink: entry.is_symlink,
+            })
+            .collect())
+    }
+
+    async fn read_dir_bounded(
+        &self,
+        path: &str,
+        max_entries: usize,
+    ) -> anyhow::Result<Vec<WorkspaceDirEntry>> {
+        let entries = self
+            .file_service
+            .read_dir_bounded(&self.connection_id, path, max_entries)
             .await?;
         Ok(entries
             .into_iter()

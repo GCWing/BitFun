@@ -19,10 +19,11 @@ use bitfun_agent_runtime::sdk::{
 };
 use bitfun_harness::HarnessRegistry;
 use bitfun_runtime_ports::{
-    ClockPort, LocalWorkspaceSnapshotPort, LocalWorkspaceSnapshotSessionRequest,
-    LocalWorkspaceSnapshotStats, LocalWorkspaceSnapshotTurnRequest, PortError, PortErrorKind,
-    PortResult, RuntimeServiceCapability, RuntimeServicePort, SessionStoragePathRequest,
-    SessionStorePort, SessionViewRestoreTiming,
+    AgentContextReloadRequest, ClockPort, LocalWorkspaceSnapshotPort,
+    LocalWorkspaceSnapshotSessionRequest, LocalWorkspaceSnapshotStats,
+    LocalWorkspaceSnapshotTurnRequest, PortError, PortErrorKind, PortResult,
+    RuntimeServiceCapability, RuntimeServicePort, SessionStoragePathRequest, SessionStorePort,
+    SessionViewRestoreTiming,
 };
 use bitfun_runtime_services::RuntimeServices;
 use bitfun_services_core::permission_store::ProjectPermissionSqliteStore;
@@ -35,7 +36,8 @@ use crate::agentic::events::EventQueue;
 use crate::agentic::keyed_lock::KeyedAsyncLockGuard;
 use crate::agentic::persistence::session_branch::SessionBranchRequest;
 use crate::agentic::persistence::{PersistenceManager, SessionMetadataPage};
-use crate::agentic::session::CoreSessionStorePort;
+use crate::agentic::session::{CoreSessionStorePort, PromptCacheScope};
+use crate::agentic::tools::implementations::skills::SkillRegistry;
 use crate::service::session::{DialogTurnData, SessionMetadata};
 use crate::service::session_usage::{generate_session_usage_report, SessionUsageReport};
 use crate::service::snapshot::{
@@ -539,6 +541,44 @@ impl CoreAgentRuntimeCompatibility {
             request.remote_connection_id.as_deref(),
             request.remote_ssh_host.as_deref(),
         )
+    }
+
+    /// Refresh user-visible declarative context without adding a second
+    /// lifecycle owner. Skill discovery and Session prompt caching keep their
+    /// existing owners; this method only coordinates one product request.
+    pub async fn reload_session_context(
+        &self,
+        request: AgentContextReloadRequest,
+    ) -> BitFunResult<()> {
+        let session_id = request.session_id.trim();
+        validate_persisted_session_id(session_id)?;
+
+        if self
+            .coordinator
+            .get_session_manager()
+            .get_session(session_id)
+            .is_none()
+        {
+            return Err(BitFunError::NotFound(format!(
+                "Session '{session_id}' is not loaded"
+            )));
+        }
+
+        if request.target.includes_skills() {
+            SkillRegistry::global().refresh().await;
+        }
+        if request.target.includes_instructions() {
+            self.coordinator
+                .get_session_manager()
+                .invalidate_prompt_cache(
+                    session_id,
+                    PromptCacheScope::UserContext,
+                    "user_requested_instruction_reload",
+                )
+                .await;
+        }
+
+        Ok(())
     }
 
     pub async fn restore_session_from_storage_path(
@@ -1168,7 +1208,8 @@ mod tests {
     use bitfun_agent_runtime::sdk::{AgentEventSource, AgentRuntime};
     use bitfun_harness::HarnessRegistry;
     use bitfun_runtime_ports::{
-        LocalWorkspaceSnapshotSessionRequest, LocalWorkspaceSnapshotTurnRequest,
+        AgentContextReloadRequest, AgentContextReloadTarget, LocalWorkspaceSnapshotSessionRequest,
+        LocalWorkspaceSnapshotTurnRequest,
     };
     use bitfun_runtime_services::RuntimeServices;
     use uuid::Uuid;
@@ -1190,6 +1231,7 @@ mod tests {
     use crate::agentic::session::{
         compression::{CompressionConfig, ContextCompressor},
         PromptCachePolicy, SessionContextStore, SessionManager, SessionManagerConfig,
+        UserContextCacheIdentity,
     };
     use crate::agentic::tools::registry::ToolRegistry;
     use crate::agentic::tools::{ToolPipeline, ToolStateManager};
@@ -1394,7 +1436,101 @@ mod tests {
         let _ = CoreAgentRuntimeCompatibility::list_persisted_sessions;
         let _ = CoreAgentRuntimeCompatibility::load_persisted_session_turns;
         let _ = CoreAgentRuntimeCompatibility::loaded_session_snapshot;
+        let _ = CoreAgentRuntimeCompatibility::reload_session_context;
         let _ = CoreAgentRuntimeCompatibility::unload_persisted_session;
+    }
+
+    #[tokio::test]
+    async fn context_reload_invalidates_loaded_instructions_and_rejects_missing_sessions() {
+        let workspace = TestWorkspace::new();
+        let persistence = Arc::new(
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
+        );
+        let session_manager = Arc::new(SessionManager::new(
+            Arc::new(SessionContextStore::new()),
+            persistence,
+            SessionManagerConfig {
+                max_active_sessions: 4,
+                session_idle_timeout: Duration::from_secs(3600),
+                auto_save_interval: Duration::from_secs(300),
+                enable_persistence: false,
+                prompt_cache_policy: PromptCachePolicy::default(),
+            },
+        ));
+        let event_queue = Arc::new(EventQueue::new(EventQueueConfig::default()));
+        let tool_pipeline = Arc::new(ToolPipeline::new(
+            Arc::new(TokioRwLock::new(ToolRegistry::new())),
+            Arc::new(ToolStateManager::new(event_queue.clone())),
+            None,
+        ));
+        let execution_engine = Arc::new(ExecutionEngine::new(
+            Arc::new(RoundExecutor::new(
+                Arc::new(StreamProcessor::new(event_queue.clone())),
+                event_queue.clone(),
+                tool_pipeline.clone(),
+            )),
+            event_queue.clone(),
+            session_manager.clone(),
+            Arc::new(ContextCompressor::new(CompressionConfig::default())),
+            ExecutionEngineConfig::default(),
+        ));
+        let coordinator = Arc::new(ConversationCoordinator::new(
+            session_manager.clone(),
+            execution_engine,
+            tool_pipeline,
+            event_queue,
+            Arc::new(EventRouter::new()),
+            Arc::new(
+                crate::runtime_ownership::CoreRuntimeOwnership::embedded_with_facts(
+                    workspace.path().join("runtime-ownership"),
+                    "bitfun".to_string(),
+                    "test",
+                ),
+            ),
+        ));
+        let scheduler = DialogScheduler::new(coordinator.clone(), session_manager.clone());
+        let compatibility = CoreAgentRuntimeCompatibility::build(coordinator, scheduler);
+        let session_id = "context-reload-session";
+        session_manager
+            .create_session_with_id(
+                Some(session_id.to_string()),
+                "Reload test".to_string(),
+                "agentic".to_string(),
+                crate::agentic::core::SessionConfig {
+                    workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("loaded session");
+        let identity = UserContextCacheIdentity::new("workspace_instructions");
+        session_manager
+            .remember_user_context(session_id, identity.clone(), "cached context".to_string())
+            .await;
+
+        compatibility
+            .reload_session_context(AgentContextReloadRequest {
+                session_id: session_id.to_string(),
+                target: AgentContextReloadTarget::Instructions,
+            })
+            .await
+            .expect("reload loaded session");
+        assert_eq!(
+            session_manager
+                .cached_user_context(session_id, &identity)
+                .await,
+            None
+        );
+
+        let missing_id = "missing-context-reload-session";
+        let error = compatibility
+            .reload_session_context(AgentContextReloadRequest {
+                session_id: missing_id.to_string(),
+                target: AgentContextReloadTarget::Skills,
+            })
+            .await
+            .expect_err("missing session must be rejected before refreshing skills");
+        assert!(error.to_string().contains(missing_id), "{error}");
     }
 
     #[test]

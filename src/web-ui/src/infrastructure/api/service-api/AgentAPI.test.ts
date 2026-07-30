@@ -27,6 +27,21 @@ describe('AgentAPI', () => {
     });
   });
 
+  it('reloads one closed session context target through a structured request', async () => {
+    invokeMock.mockResolvedValueOnce(undefined);
+
+    await expect(agentAPI.reloadSessionContext({
+      sessionId: 'session-1',
+      target: 'instructions',
+    })).resolves.toBeUndefined();
+    expect(invokeMock).toHaveBeenCalledWith('reload_session_context', {
+      request: {
+        sessionId: 'session-1',
+        target: 'instructions',
+      },
+    });
+  });
+
   it('returns whether session cancellation was accepted for an active turn', async () => {
     invokeMock.mockResolvedValueOnce({
       cancelled: true,

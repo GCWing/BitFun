@@ -274,17 +274,56 @@ pub struct WorkspaceDirEntry {
     pub is_symlink: bool,
 }
 
+/// File type for one exact path without following its final symbolic link.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WorkspacePathKind {
+    File,
+    Directory,
+    Symlink,
+    Other,
+}
+
 /// Unified file system operations that work for both local and remote workspaces.
 #[async_trait::async_trait]
 pub trait WorkspaceFileSystem: Send + Sync {
     async fn read_file(&self, path: &str) -> anyhow::Result<Vec<u8>>;
     async fn read_file_text(&self, path: &str) -> anyhow::Result<String>;
+    /// Read UTF-8 text up to `max_bytes`. Production filesystem providers
+    /// should enforce the bound before or while transferring the file.
+    async fn read_file_text_bounded(
+        &self,
+        path: &str,
+        max_bytes: usize,
+    ) -> anyhow::Result<Option<String>> {
+        let content = self.read_file_text(path).await?;
+        Ok((content.len() <= max_bytes).then_some(content))
+    }
     async fn write_file(&self, path: &str, contents: &[u8]) -> anyhow::Result<()>;
     async fn exists(&self, path: &str) -> anyhow::Result<bool>;
     async fn is_file(&self, path: &str) -> anyhow::Result<bool>;
     async fn is_dir(&self, path: &str) -> anyhow::Result<bool>;
+    /// Inspect one exact path without following its final symbolic link.
+    /// Providers that cannot guarantee no-follow semantics must return an
+    /// error instead of falling back to link-following metadata.
+    async fn path_kind_no_follow(&self, _path: &str) -> anyhow::Result<Option<WorkspacePathKind>> {
+        Err(anyhow::anyhow!(
+            "exact no-follow path metadata is not supported by this workspace filesystem"
+        ))
+    }
     /// List immediate children (non-recursive). Symlinks may be included; callers often skip them.
     async fn read_dir(&self, path: &str) -> anyhow::Result<Vec<WorkspaceDirEntry>>;
+    /// List at most `max_entries` immediate children. Production providers
+    /// should stop local iteration or remote directory-batch requests once the
+    /// bound is met.
+    async fn read_dir_bounded(
+        &self,
+        path: &str,
+        max_entries: usize,
+    ) -> anyhow::Result<Vec<WorkspaceDirEntry>> {
+        let mut entries = self.read_dir(path).await?;
+        entries.truncate(max_entries);
+        Ok(entries)
+    }
 }
 
 /// Unified shell execution options for local and remote workspaces.
@@ -1132,6 +1171,31 @@ pub struct AgentSessionModelUpdateRequest {
 pub struct AgentSessionModeUpdateRequest {
     pub session_id: String,
     pub mode_id: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AgentContextReloadTarget {
+    All,
+    Skills,
+    Instructions,
+}
+
+impl AgentContextReloadTarget {
+    pub const fn includes_skills(self) -> bool {
+        matches!(self, Self::All | Self::Skills)
+    }
+
+    pub const fn includes_instructions(self) -> bool {
+        matches!(self, Self::All | Self::Instructions)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct AgentContextReloadRequest {
+    pub session_id: String,
+    pub target: AgentContextReloadTarget,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -2280,6 +2344,53 @@ impl SubagentContextMode {
 mod tests {
     use super::*;
     use std::sync::Mutex;
+
+    #[test]
+    fn context_reload_contract_is_closed_and_target_specific() {
+        let cases = [
+            (AgentContextReloadTarget::All, "all", true, true),
+            (AgentContextReloadTarget::Skills, "skills", true, false),
+            (
+                AgentContextReloadTarget::Instructions,
+                "instructions",
+                false,
+                true,
+            ),
+        ];
+
+        for (target, serialized_target, skills, instructions) in cases {
+            assert_eq!(target.includes_skills(), skills);
+            assert_eq!(target.includes_instructions(), instructions);
+            let request = AgentContextReloadRequest {
+                session_id: "session-1".to_string(),
+                target,
+            };
+            assert_eq!(
+                serde_json::to_value(&request).expect("serialize request"),
+                serde_json::json!({
+                    "sessionId": "session-1",
+                    "target": serialized_target,
+                })
+            );
+            assert_eq!(
+                serde_json::from_value::<AgentContextReloadRequest>(serde_json::json!({
+                    "sessionId": "session-1",
+                    "target": serialized_target,
+                }))
+                .expect("deserialize request"),
+                request
+            );
+        }
+
+        assert!(
+            serde_json::from_value::<AgentContextReloadRequest>(serde_json::json!({
+                "sessionId": "session-1",
+                "target": "all",
+                "unexpected": true,
+            }))
+            .is_err()
+        );
+    }
 
     #[derive(Default)]
     struct ArchiveOnlySessionProvider {

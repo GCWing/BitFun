@@ -6,8 +6,9 @@ use crate::{
 
 use bitfun_product_domains::tool_permissions::PermissionReply;
 use bitfun_runtime_ports::{
-    AgentDialogTurnRequest, AgentSessionModeUpdateRequest, AgentSessionModelUpdateRequest,
-    AgentSubmissionSource, DialogSubmissionPolicy,
+    AgentContextReloadRequest, AgentContextReloadTarget, AgentDialogTurnRequest,
+    AgentSessionModeUpdateRequest, AgentSessionModelUpdateRequest, AgentSubmissionSource,
+    DialogSubmissionPolicy,
 };
 use serde_json::{json, Map};
 
@@ -110,7 +111,7 @@ fn protocol_round_trips_the_reviewed_session_model_operation() {
 
 #[test]
 fn protocol_round_trips_the_current_session_rename_operation() {
-    assert_eq!(PROTOCOL_VERSION, 5);
+    assert_eq!(PROTOCOL_VERSION, 6);
 
     let operation = RuntimeIpcOperation::RenameSession {
         request: RuntimeSessionRenameRequest {
@@ -132,6 +133,27 @@ fn protocol_round_trips_the_current_session_rename_operation() {
     );
     let decoded: RuntimeIpcOperation =
         serde_json::from_value(encoded).expect("deserialize session rename");
+
+    assert_eq!(decoded, operation);
+    assert_eq!(decoded.session_id(), Some("session-1"));
+    assert!(decoded.requires_controller());
+}
+
+#[test]
+fn protocol_round_trips_context_reload_as_a_controller_operation() {
+    let operation = RuntimeIpcOperation::ReloadSessionContext {
+        request: AgentContextReloadRequest {
+            session_id: "session-1".to_string(),
+            target: AgentContextReloadTarget::Instructions,
+        },
+    };
+
+    let encoded = serde_json::to_value(&operation).expect("serialize context reload");
+    assert_eq!(encoded["operation"], "reload_session_context");
+    assert_eq!(encoded["request"]["sessionId"], "session-1");
+    assert_eq!(encoded["request"]["target"], "instructions");
+    let decoded: RuntimeIpcOperation =
+        serde_json::from_value(encoded).expect("deserialize context reload");
 
     assert_eq!(decoded, operation);
     assert_eq!(decoded.session_id(), Some("session-1"));

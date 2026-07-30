@@ -42,7 +42,7 @@ flowchart TB
 | Session 写入 | BitFun Runtime 的持久化 Session 由 `SessionManager` 管理；同一存储位置中的同一 Session 同时只允许一个本机进程写入，list/view 等只读操作不受影响 |
 | 当前 HTTP Server | 只提供 health/info/WebSocket 外壳，未装配 Agent Runtime，因此不取得 workspace ownership；`bootstrap.rs` 仅保持 agent-enabled composition 的一致边界，不由当前入口启动 |
 | Shared local IPC | 未发布的本机协议已有 discovery、实例锁、严格握手、Session 控制权、有界事件流和 cleanup；唯一 consumer 是第一方交互式 TUI adapter |
-| Shared TUI | `bitfun --shared` / `bitfun chat --shared` 可列出、创建、恢复和重命名当前 Session，读取 transcript，切换当前 Session 的 Agent mode/model，提交/取消 Turn，处理 Permission 和 UserInput；默认仍是 Embedded |
+| Shared TUI | `bitfun --shared` / `bitfun chat --shared` 可列出、创建、恢复和重命名当前 Session，读取 transcript，切换当前 Session 的 Agent mode/model，通过 `/reload [skills|instructions]` 刷新声明式上下文，提交/取消 Turn，处理 Permission 和 UserInput；默认仍是 Embedded |
 | Shared GUI/Headless/ACP/SDK Host/Remote | 未交付，也不会由 `--shared` 隐式启用；Replay、Observer、Controller transfer、Session delete/fork 同样不在当前协议中 |
 
 因此当前交付的是一条窄的、显式启用的 Shared TUI deployment，不是通用本机 Server。具体 `EventQueue` 仍由 Core 产品装配；IPC 只把当前 TUI 必需的强类型操作和事件映射到同一个 Runtime owner，没有事件重放或公开协议承诺。
@@ -196,7 +196,7 @@ sequenceDiagram
     S-->>C: initialized(health + interactive_tui)
     C->>S: create or restore Session
     S-->>C: Session control + Session facts
-    C->>S: rename or update current Session
+    C->>S: rename, update, or reload current Session context
     C->>S: submit/cancel Turn or answer Permission/UserInput
     S-->>C: Session-filtered authoritative events
   else invalid
@@ -204,11 +204,11 @@ sequenceDiagram
   end
 ```
 
-当前私有协议（v5）只覆盖 TUI 已有用户旅程需要的窄操作：
+当前私有协议（v6）只覆盖 TUI 已有用户旅程需要的窄操作：
 
 | 已支持 | 明确不支持 |
 |---|---|
-| Health、Session list/create、原子 restore（含 transcript 与 pending Permission）、当前 Session rename、Agent mode/model update | Session delete/fork、跨 workspace attach、transcript 分页、模型目录/默认值和 Agent/Subagent 管理 |
+| Health、Session list/create、原子 restore（含 transcript 与 pending Permission）、当前 Session rename、Agent mode/model update、声明式上下文 reload | Session delete/fork、跨 workspace attach、transcript 分页、模型目录/默认值和 Agent/Subagent 管理 |
 | Turn submit/cancel | replay、cursor、resume event stream |
 | pending/respond Permission、submit UserInput answers | observer、controller transfer、多 Session multiplex |
 | 连接断开清理、Session-filtered events | detach/observer/controller transfer、SDK callbacks、GUI/Remote/Peer/ACP/Headless wire |
@@ -228,6 +228,7 @@ sequenceDiagram
 - 一个连接最多控制一个 Session、同时最多提交一个活动 Turn；一个 Session 同时只有一个 controller。create/restore 在完整结果通过大小检查后才原子切换控制权，失败时保留原 Session。活动 Turn 期间不能切换 Session，也不能修改其名称、Agent mode 或 model。
 - Submit 使用调用方已有的 `turn_id` 标识不确定结果；若提交超时，返回 `outcome_unknown`、关闭连接并按该 ID 取消。断连取消只有得到确认后才释放 Session 控制权；无法确认时继续隔离该 Session，直到 Runtime 进程退出。
 - Session rename 和 Agent mode/model update 复用既有 Runtime 端口和校验，Runtime 对最终更新保持权威并拒绝无效值。它们都是有副作用操作；发送前编码或 frame 上限失败表示请求未执行，连接仍可使用。rename 写入失败时恢复旧 metadata：确认恢复后返回明确失败，无法确认时返回 `outcome_unknown`。Shared Client 在请求写入后响应超时或丢失连接时也返回 `outcome_unknown` 并断开连接。两种情况都不自动重试；用户恢复 Session 并核对当前值后再决定是否重试。模式与模型目录仍是同版本第一方产品事实，不加入 IPC。
+- 声明式上下文 reload 只失效当前 Session 的 instructions 缓存，并按目标复用 Skill Registry 刷新；它可在活动 Turn 中执行但不改写该 Turn，generation 保护保证下一条消息重建上下文。它不引入 watcher、热替换或第二套 Runtime owner。
 - Shared TUI 的模型选择器复用 Client 已有的只读产品配置来显示同版本模型目录；它只把选中的 model ID 通过 `update current Session model` 交给 Runtime。Client 不持有 Session 写入权，也不通过 IPC 管理模型目录或默认值。
 - Agent 事件流 lag/closed 后 fail closed；Permission lag 先从 Runtime 权威 pending 集合重建，重建失败或流关闭时取消当前 Turn 并退出。路由到父 Session 的嵌套 Permission 与 AskUserQuestion 复用现有 TUI 交互，不新增第二套 UI 状态。
 - Windows Shared Runtime 在初始化前把自身放入 kill-on-close Job；Unix 仅在应用内优雅退出路径中通过受管子进程组回收后代。Runtime 被 `SIGTERM`、`SIGKILL` 或崩溃直接终止后的 Unix 后代回收不在当前保证内。两者都只负责生命周期，不是安全沙箱。

@@ -231,6 +231,7 @@ impl PromptCacheScope {
 
 pub struct SessionPromptCacheStore {
     session_caches: Arc<DashMap<String, SessionPromptCache>>,
+    user_context_generations: Arc<DashMap<String, u64>>,
 }
 
 pub enum PromptCacheLookup {
@@ -249,10 +250,14 @@ impl SessionPromptCacheStore {
     pub fn new() -> Self {
         Self {
             session_caches: Arc::new(DashMap::new()),
+            user_context_generations: Arc::new(DashMap::new()),
         }
     }
 
     pub fn create_session(&self, session_id: &str) {
+        self.user_context_generations
+            .entry(session_id.to_string())
+            .or_insert(0);
         self.session_caches
             .entry(session_id.to_string())
             .or_default();
@@ -263,6 +268,9 @@ impl SessionPromptCacheStore {
     }
 
     pub fn replace_cache(&self, session_id: &str, cache: SessionPromptCache) {
+        self.user_context_generations
+            .entry(session_id.to_string())
+            .or_insert(0);
         self.session_caches.insert(session_id.to_string(), cache);
     }
 
@@ -354,7 +362,41 @@ impl SessionPromptCacheStore {
         }
     }
 
+    pub fn user_context_generation(&self, session_id: &str) -> u64 {
+        *self
+            .user_context_generations
+            .entry(session_id.to_string())
+            .or_insert(0)
+    }
+
+    pub fn set_user_context_if_generation(
+        &self,
+        session_id: &str,
+        expected_generation: u64,
+        entry: CachedUserContext,
+    ) -> bool {
+        let generation = self
+            .user_context_generations
+            .entry(session_id.to_string())
+            .or_insert(0);
+        if *generation != expected_generation {
+            return false;
+        }
+        self.set_user_context(session_id, entry);
+        true
+    }
+
     pub fn invalidate(&self, session_id: &str, scope: PromptCacheScope) -> bool {
+        let _user_context_generation = if scope.clears_user_context() {
+            let mut generation = self
+                .user_context_generations
+                .entry(session_id.to_string())
+                .or_insert(0);
+            *generation = generation.saturating_add(1);
+            Some(generation)
+        } else {
+            None
+        };
         let Some(mut cache) = self.session_caches.get_mut(session_id) else {
             return false;
         };
@@ -370,6 +412,7 @@ impl SessionPromptCacheStore {
     }
 
     pub fn delete_session(&self, session_id: &str) {
+        self.user_context_generations.remove(session_id);
         self.session_caches.remove(session_id);
     }
 }
@@ -485,5 +528,24 @@ mod tests {
         let cache = store.get_cache("session-1").expect("session cache");
         assert!(cache.system_prompt.is_none());
         assert!(cache.user_context.is_none());
+    }
+
+    #[test]
+    fn invalidation_rejects_a_stale_user_context_write_even_when_cache_is_empty() {
+        let store = SessionPromptCacheStore::new();
+        store.create_session("session-1");
+        let generation = store.user_context_generation("session-1");
+
+        assert!(!store.invalidate("session-1", PromptCacheScope::UserContext));
+        assert!(!store.set_user_context_if_generation(
+            "session-1",
+            generation,
+            CachedUserContext::new(UserContextCacheIdentity::new("workspace_context"), "stale"),
+        ));
+        assert!(store
+            .get_cache("session-1")
+            .expect("session cache")
+            .user_context
+            .is_none());
     }
 }

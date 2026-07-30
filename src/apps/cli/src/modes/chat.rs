@@ -28,6 +28,7 @@ use crate::actions::{
     removed_management_command_hint, slash_actions, ActionContext, ActionHandler, ActionSpec,
     ActionState, ResolvedKeymap, SHARED_TUI_EMBEDDED_HANDOFF, SHARED_TUI_HELP_NOTE,
 };
+use crate::agent::context_reload_client::CliContextReloadClient;
 use crate::agent::runtime_client::{CliAgentRuntimeClient, SessionUpdateError};
 use crate::chat_state::ChatState;
 use crate::config::CliConfig;
@@ -208,7 +209,7 @@ struct PendingSessionUpdate {
 }
 
 const SESSION_UPDATE_SLOW_NOTICE: Duration = Duration::from_secs(15);
-const SHARED_TUI_CHAT_STATUS: &str = "Shared TUI preview: this view controls sessions, turns, the current Session name, current Session Agent mode, and current Session model; model management remains Embedded, along with local extension, MCP, account-sync, and Agent/Subagent management.";
+const SHARED_TUI_CHAT_STATUS: &str = "Shared TUI preview: this view controls sessions, turns, the current Session name, current Session Agent mode, current Session model, and declarative context via /reload [skills|instructions]; model management remains Embedded, along with local extension, MCP, account-sync, and Agent/Subagent management.";
 
 #[derive(Default)]
 struct NonKeyEventOutcome {
@@ -233,6 +234,7 @@ pub(crate) struct ChatMode {
     agent_type: String,
     workspace: Option<String>,
     agent: Arc<CliAgentRuntimeClient>,
+    context_reload: CliContextReloadClient,
     compatibility: Option<CoreAgentRuntimeCompatibility>,
     /// User-level default resolved from shared config for this TUI run.
     auto_approve_ask_default: bool,
@@ -288,6 +290,7 @@ impl ChatMode {
         agent_type: String,
         workspace: Option<String>,
         agent: Arc<CliAgentRuntimeClient>,
+        context_reload: CliContextReloadClient,
         compatibility: Option<CoreAgentRuntimeCompatibility>,
     ) -> Self {
         let keymap = ResolvedKeymap::new(&config.shortcuts);
@@ -297,6 +300,7 @@ impl ChatMode {
             agent_type,
             workspace,
             agent,
+            context_reload,
             compatibility,
             auto_approve_ask_default: false,
             auto_approve_ask_override: None,

@@ -284,6 +284,30 @@ fn primary_cli_session_client_uses_only_the_runtime_sdk_boundary() {
 }
 
 #[test]
+fn chat_context_reload_keeps_deployment_choice_behind_a_cli_adapter() {
+    const CHAT_MODE: &str = include_str!("../src/modes/chat.rs");
+    const CHAT_CAPABILITIES: &str = include_str!("../src/modes/chat/capabilities.rs");
+    const RELOAD_CLIENT: &str = include_str!("../src/agent/context_reload_client.rs");
+
+    assert!(
+        CHAT_MODE.contains("context_reload: CliContextReloadClient"),
+        "ChatMode must submit reload through one CLI-owned deployment adapter"
+    );
+    assert!(
+        !CHAT_CAPABILITIES.contains("is_shared()")
+            && !CHAT_CAPABILITIES.contains("reload_shared_session_context")
+            && !CHAT_CAPABILITIES.contains("self.compatibility"),
+        "TUI capability code must not branch context reload by Runtime deployment"
+    );
+    assert!(
+        RELOAD_CLIENT.contains(".reload_session_context(request)")
+            && RELOAD_CLIENT
+                .contains(".request(RuntimeIpcOperation::ReloadSessionContext { request })"),
+        "the private adapter must delegate directly to the existing Embedded and Shared owners"
+    );
+}
+
+#[test]
 fn primary_cli_runtime_client_covers_interactive_permission_and_local_turn_operations() {
     const PRIMARY_CLIENT: &str = include_str!("../src/agent/runtime_client.rs");
 

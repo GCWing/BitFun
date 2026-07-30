@@ -1423,6 +1423,7 @@ dependencies = [
  "flate2",
  "fs2",
  "git2",
+ "globset",
  "ignore",
  "libc",
  "log",

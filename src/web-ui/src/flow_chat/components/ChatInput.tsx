@@ -46,6 +46,7 @@ import {
   resolveSlashActionInputValue,
   type SlashActionId,
 } from '../utils/slashActionSelection';
+import { parseReloadCommand, supportsLocalReloadContext } from '../utils/reloadCommand';
 import { notificationService } from '@/shared/notification-system';
 import { useI18n } from '@/infrastructure/i18n';
 import { inputReducer, initialInputState, type InputAction } from '../reducers/inputReducer';
@@ -520,6 +521,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   );
   const { commands: acpAgentCommands } = useAcpSlashCommands(acpSessionForInput);
   const isAcpInputSession = Boolean(acpSessionForInput);
+  const reloadContextSupported = supportsLocalReloadContext({
+    desktopRuntime: isTauriRuntime(),
+    acpSession: isAcpInputSession,
+    dispatchTransport: usesDispatchTransport,
+  });
+  const canReloadContext = reloadContextSupported && Boolean(effectiveTargetSessionId);
   const { entries: acpPlanEntries } = useAcpPlan(acpSessionForInput?.sessionId ?? null);
   const threadGoalController = useThreadGoalController(effectiveTargetSession, {
     isBtwSession,
@@ -2587,12 +2594,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         command: '/usage',
         label: t('chatInput.usageAction'),
       },
-      ...(canUseSkillsForTarget
+      ...(canReloadContext
         ? [{
             kind: 'action' as const,
-            id: 'reload-skills' as const,
-            command: '/reload-skills',
-            label: t('chatInput.reloadSkillsAction'),
+            id: 'reload' as const,
+            command: '/reload',
+            label: t('chatInput.reloadAction'),
           }]
         : []),
       ...(!derivedState?.isProcessing
@@ -2623,7 +2630,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       const cmd = i.command.slice(1).toLowerCase();
       return cmd.includes(q) || i.label.toLowerCase().includes(q);
     });
-  }, [canLaunchReview, canUseSkillsForTarget, derivedState?.isProcessing, isAcpInputSession, isBtwSession, isSubagentInputTarget, slashCommandState.query, t]);
+  }, [canLaunchReview, canReloadContext, derivedState?.isProcessing, isAcpInputSession, isBtwSession, isSubagentInputTarget, slashCommandState.query, t]);
 
   const getFilteredMcpPromptCommands = useCallback((): SlashMcpPromptItem[] => {
     if (isAcpInputSession) {
@@ -3215,10 +3222,15 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     threadGoalController,
   ]);
 
-  const submitReloadSkillsFromInput = useCallback(async () => {
+  const submitReloadFromInput = useCallback(async () => {
     const message = inputState.value.trim();
-    if (!/^\/reload-skills\s*$/i.test(message)) {
-      notificationService.warning(t('chatInput.reloadSkillsUsage'));
+    const parsed = parseReloadCommand(message);
+    if (!parsed || parsed.kind === 'invalid') {
+      notificationService.warning(t('chatInput.reloadUsage'));
+      return;
+    }
+    if (!effectiveTargetSessionId) {
+      notificationService.error(t('chatInput.reloadNoSession'));
       return;
     }
 
@@ -3227,34 +3239,36 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     setSlashCommandState({ isActive: false, kind: 'modes', query: '', selectedIndex: 0 });
 
     try {
-      // Re-fetch skill configs with forceRefresh=true. The Tauri command
-      // (skill_api.rs::get_skill_configs) calls SkillRegistry::global().refresh()
-      // before serializing the result, so this single call both refreshes
-      // the registry cache and returns the new view. Pass workspacePath so
-      // workspace-level skills (`.bitfun/skills/`, `.cursor/skills/`, etc.)
-      // are included in the count — without it, the registry falls back
-      // to user + built-in slots only and the toast would undercount.
-      const skills = await configAPI.getSkillConfigs({
-        forceRefresh: true,
-        workspacePath: sessionBoundWorkspacePath || undefined,
+      await agentAPI.reloadSessionContext({
+        sessionId: effectiveTargetSessionId,
+        target: parsed.target,
       });
+      const successMessage = parsed.target === 'all'
+        ? t('chatInput.reloadAllDone')
+        : parsed.target === 'skills'
+          ? t('chatInput.reloadSkillsDone')
+          : t('chatInput.reloadInstructionsDone');
       notificationService.success(
-        t('chatInput.reloadSkillsDone', { count: skills.length }),
+        successMessage,
         { duration: 3000 }
       );
     } catch (error) {
-      log.error('Failed to trigger /reload-skills', { error });
+      log.error('Failed to reload session context', {
+        error,
+        sessionId: effectiveTargetSessionId,
+        target: parsed.target,
+      });
       dispatchInput({ type: 'ACTIVATE' });
       dispatchInput({ type: 'SET_VALUE', payload: message });
       notificationService.error(
         error instanceof Error ? error.message : t('error.unknown'),
         {
-          title: t('chatInput.reloadSkillsFailed'),
+          title: t('chatInput.reloadFailed'),
           duration: 5000,
         }
       );
     }
-  }, [dispatchInput, inputState.value, sessionBoundWorkspacePath, setQueuedInput, t]);
+  }, [dispatchInput, effectiveTargetSessionId, inputState.value, setQueuedInput, t]);
 
   const submitReviewFromInput = useCallback(async () => {
     if (!canLaunchReview) {
@@ -3807,6 +3821,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       !isAcpInputSession &&
       !usesDispatchTransport &&
       messageOverride === undefined;
+    const parsedReload = messageOverride === undefined
+      ? parseReloadCommand(message)
+      : null;
 
     if (localSlashCommandsEnabled && await submitExternalPromptCommandFromInput(
       message,
@@ -3847,8 +3864,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       return;
     }
 
-    if (localSlashCommandsEnabled && /^\/reload-skills\s*$/i.test(message)) {
-      await submitReloadSkillsFromInput();
+    if (parsedReload && !reloadContextSupported) {
+      notificationService.warning(t('chatInput.reloadDesktopOnly'));
+      return;
+    }
+    if (parsedReload?.kind === 'reload') {
+      await submitReloadFromInput();
       return;
     }
 
@@ -3878,8 +3899,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       return;
     }
 
-    if (localSlashCommandsEnabled && isSlashCommand(message, '/reload-skills')) {
-      notificationService.warning(t('chatInput.reloadSkillsUsage'));
+    if (localSlashCommandsEnabled && parsedReload?.kind === 'invalid') {
+      notificationService.warning(t('chatInput.reloadUsage'));
       return;
     }
     
@@ -4019,7 +4040,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     submitInitFromInput,
     submitReviewFromInput,
     submitMcpPromptFromInput,
-    submitReloadSkillsFromInput,
+    submitReloadFromInput,
+    reloadContextSupported,
     confirmPromptCacheGuardIfNeeded,
     t,
     resolveTypedMcpPromptCommand,

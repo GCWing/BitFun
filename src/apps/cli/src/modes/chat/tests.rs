@@ -18,10 +18,10 @@ mod tests {
         merge_external_agent_mutation_snapshot, native_command_choice_is_active,
         native_command_reconfirmation_is_required, native_hook_help_text,
         parse_external_agent_review_action, parse_external_control_action,
-        parse_external_tool_review_action, parse_hook_management_action,
-        pending_session_update_blocks_runtime_action, previous_session_update_status,
-        render_external_hook_catalog, render_native_hook_overview, requested_session_name,
-        retain_selected_native_command_for_input, selected_command_prefill,
+        parse_external_tool_review_action, parse_hook_management_action, parse_reload_invocation,
+        parse_reload_target, pending_session_update_blocks_runtime_action,
+        previous_session_update_status, render_external_hook_catalog, render_native_hook_overview,
+        requested_session_name, retain_selected_native_command_for_input, selected_command_prefill,
         session_command_help_note, session_update_allowed, session_update_blocks_typed_submission,
         session_update_completion_should_exit, shared_session_change_is_blocked, CommandRoute,
         ExternalAgentReviewAction, ExternalControlUiAction, ExternalSourceConflictPreferences,
@@ -48,7 +48,37 @@ mod tests {
         NativeHookFileView, NativeHookHandlerView, NativeHookOverview, NativeHookRuleView,
     };
     use bitfun_product_domains::external_sources::ExternalSourceScope;
+    use bitfun_runtime_ports::AgentContextReloadTarget;
     use std::collections::{BTreeMap, BTreeSet};
+
+    #[test]
+    fn reload_command_uses_one_closed_optional_target() {
+        assert_eq!(
+            parse_reload_target("").unwrap(),
+            AgentContextReloadTarget::All
+        );
+        assert_eq!(
+            parse_reload_target(" SKILLS ").unwrap(),
+            AgentContextReloadTarget::Skills
+        );
+        assert_eq!(
+            parse_reload_target("Instructions").unwrap(),
+            AgentContextReloadTarget::Instructions
+        );
+        assert!(parse_reload_target("mcp").is_err());
+        assert!(parse_reload_target("skills instructions").is_err());
+
+        assert_eq!(
+            parse_reload_invocation("reload-skills", "")
+                .unwrap()
+                .unwrap(),
+            AgentContextReloadTarget::Skills
+        );
+        assert!(parse_reload_invocation("reload-skills", "instructions")
+            .unwrap()
+            .is_err());
+        assert!(parse_reload_invocation("other", "").is_none());
+    }
 
     fn external_command(
         name: &str,
@@ -1698,6 +1728,7 @@ mod tests {
         assert!(SHARED_TUI_CHAT_STATUS.contains("current Session Agent mode"));
         assert!(SHARED_TUI_CHAT_STATUS.contains("current Session model"));
         assert!(SHARED_TUI_CHAT_STATUS.contains("current Session name"));
+        assert!(SHARED_TUI_CHAT_STATUS.contains("/reload [skills|instructions]"));
         assert!(SHARED_TUI_CHAT_STATUS.contains("Agent/Subagent management"));
         assert!(SHARED_TUI_CHAT_STATUS.contains("model management remains Embedded"));
     }

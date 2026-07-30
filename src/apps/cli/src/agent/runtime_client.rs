@@ -1275,7 +1275,7 @@ fn project_routed_permission_event(
     }
 }
 
-fn expect_unit(result: RuntimeIpcOperationResult, operation: &str) -> Result<()> {
+pub(super) fn expect_unit(result: RuntimeIpcOperationResult, operation: &str) -> Result<()> {
     match result {
         RuntimeIpcOperationResult::Unit => Ok(()),
         _ => Err(unexpected_shared_result(operation)),

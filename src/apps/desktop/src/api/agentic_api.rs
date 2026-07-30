@@ -1687,6 +1687,18 @@ pub async fn update_session_model(
 }
 
 #[tauri::command]
+pub async fn reload_session_context(
+    runtime: State<'_, DesktopRuntimeContext>,
+    request: bitfun_runtime_ports::AgentContextReloadRequest,
+) -> Result<(), String> {
+    runtime
+        .session_application()
+        .reload_session_context(request)
+        .await
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
 pub async fn update_session_title(
     runtime: State<'_, DesktopRuntimeContext>,
     request: UpdateSessionTitleRequest,

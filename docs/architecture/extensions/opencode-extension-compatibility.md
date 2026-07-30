@@ -104,9 +104,9 @@ OpenCode，和 OpenCode 配置/插件进入 BitFun 是两个独立验收方向�
 | OpenCode 扩展项 | BitFun 差异 | 当前状态 | 目标可实现性 | 成熟度依赖（非执行顺序） | BitFun 需要完成的工作 | 细节 |
 |---|---|---|---|---|---|---|
 | 配置层级与合并 | 融合现有能力 | 部分实现：Command/Subagent/MCP 本地来源顺序 | 可完整适配 | OC-R1 | 当前三类 provider 复用私有本地路径顺序与监听根；后续按 remote、global、自定义文件、project、`.opencode`、内联和组织配置补齐有序来源并保留最终来源 | [来源与合并](opencode-config-assets-adapter-design.md#3-配置层级与来源) |
-| JSON、JSONC、环境变量、文件引用 | 转换参数 + 明确降级 | 未实现 | 可主要适配 | OC-R1 | 有效配置保持 OpenCode 解码语义；未知字段保留和非安全字段局部恢复属于 BitFun 鲁棒性增强，安全/执行字段无效时不激活受影响结果 | [解析与鲁棒性](opencode-config-assets-adapter-design.md#4-解析与鲁棒性) |
+| JSON、JSONC、环境变量、文件引用 | 转换参数 + 明确降级 | 部分实现：项目 `instructions` 的 JSON/JSONC | 可主要适配 | OC-R1 | 当前只解析项目根和 `.opencode` 配置中的本地 instruction 文件/glob；完整配置 schema、环境变量与文件变量引用仍未实现 | [解析与鲁棒性](opencode-config-assets-adapter-design.md#4-解析与鲁棒性) |
 | 独立 `tui.json/jsonc` | 融合现有能力 + 转换参数 | 未实现 | 可完整适配 | OC-R1 | 按 global、`OPENCODE_TUI_CONFIG`、project、`.opencode` 独立顺序加载，不能复用主配置优先级 | [TUI 来源](opencode-config-assets-adapter-design.md#32-tui-独立来源顺序) |
-| Rules / Instructions | 转换参数 | 未实现 | 可完整适配 | OC-R1 | R1 映射本地/已缓存内容；需要主动联网的远程 instruction 在 R2 通过归属模块保护后获取 | [声明式资产](opencode-config-assets-adapter-design.md#5-声明式资产映射) |
+| Rules / Instructions | 转换参数 | 部分实现：项目本地文件与 glob | 可完整适配 | OC-R1 | 当前由 Workspace Instructions owner 读取项目 `instructions` 的精确文件和 glob；全局、远程 URL、完整来源合并与变化监听仍未实现 | [声明式资产](opencode-config-assets-adapter-design.md#5-声明式资产映射) |
 | Agents / Modes | 融合现有能力 + 转换参数 | 部分实现：Subagent 安全子集 | 可主要适配 | OC-R1 | 已支持全局/项目 Markdown、JSON/JSONC 的 subagent/all、prompt、description、disable/hidden、精确模型与工具映射，并接入审批、冲突、更新、撤下和 fresh single-run Task；primary/mode、permission、variant/options、采样与续接明确降级 | [Agents 与 Skills](opencode-config-assets-adapter-design.md#52-agentsmodes-与-skills) |
 | Skills | 转换参数 | 部分实现：现有 Registry 发现与来源/覆盖展示 | 可完整适配 | OC-R2 | 已沿用现有根顺序发现 `.opencode` 等用户/项目 Skill，并在 GUI/TUI 展示来源、使用范围和覆盖结果；尚未复现 OpenCode 按需加载、完整配置合并及 allow/deny/ask 顺序，也未并入外部来源策略模块 | [Agents 与 Skills](opencode-config-assets-adapter-design.md#52-agentsmodes-与-skills) |
 | References | 补基础能力 + 转换参数 | 未实现 | 可主要适配 | OC-R2 | R1 解析；R2 支持本地目录和 Git repository/branch/description/hidden，异步准备并接入 `@alias` | [声明式资产](opencode-config-assets-adapter-design.md#5-声明式资产映射) |

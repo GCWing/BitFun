@@ -718,6 +718,23 @@ impl RemoteFileService {
         Err(unsupported())
     }
 
+    pub async fn read_dir_bounded(
+        &self,
+        _connection_id: &str,
+        _path: &str,
+        _max_entries: usize,
+    ) -> anyhow::Result<Vec<RemoteDirEntry>> {
+        Err(unsupported())
+    }
+
+    pub async fn symlink_stat(
+        &self,
+        _connection_id: &str,
+        _path: &str,
+    ) -> anyhow::Result<Option<RemoteFileEntry>> {
+        Err(unsupported())
+    }
+
     pub async fn build_tree(
         &self,
         _connection_id: &str,

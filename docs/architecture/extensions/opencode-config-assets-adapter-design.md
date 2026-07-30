@@ -198,7 +198,7 @@ OpenCode adapter 在来源发现、解析和审批前不 import module、不读�
 
 | 资产 | OpenCode 输入 | BitFun 归属模块 / 适配方式 | 默认行为 | 降级条件 |
 |---|---|---|---|---|
-| Rules / Instructions | 项目/全局 `AGENTS.md`、Claude fallback、`instructions` glob、本地文件、远程 URL | Workspace Instructions 归属模块保存有序来源引用 | 本地内容按 L1 合并并保留来源；主动获取远程 URL 前确认 | 远程或单文件失败只排除该来源。 |
+| Rules / Instructions | 项目/全局 `AGENTS.md`、Claude fallback、`instructions` glob、本地文件、远程 URL | Workspace Instructions 归属模块保存有序来源引用 | 当前实现项目根与 `.opencode` 配置中的本地精确文件/glob；全局与远程 URL 仍是目标 | 无效 JSONC 或 glob 只排除对应配置项；文件 I/O 失败时当前构建不缓存并在下一条消息重试。 |
 | Agents / Modes | JSON、Markdown、description、mode、prompt、model、variant、temperature、top_p、steps、deprecated `maxSteps`、deprecated `tools`、permission、disable、options、hidden、color | Agent 归属模块创建兼容定义和使用范围视图 | 当前支持 Subagent 安全子集；首次按行为、来源、模型和工具范围确认，fresh single-run 调用 | primary/mode、permission、variant/options、采样、steps 与续接保持诊断或阻断，不影响其他 Agent。 |
 | Skills | `.opencode/.claude/.agents` 项目与用户根、`SKILL.md`、`skills.paths/urls` | Skill 归属模块复用按需加载并补齐规则顺序 | 说明和索引按需加载；URL、脚本或外部依赖按 L2 确认 | URL 或可执行资源失败只降级对应 Skill。 |
 | References | `references` / 旧 `reference`，本地 path 或 Git repository/branch/description/hidden | **基础能力缺失**：先补 Workspace Reference 的异步准备与 `@alias` 消费接口 | 本地引用保留相对来源；Git 拉取按 L2 确认并保留缓存/隐藏语义 | 拉取失败不阻止项目，外部目录仍遵守工具权限。 |
@@ -216,6 +216,12 @@ OpenCode adapter 在来源发现、解析和审批前不 import module、不读�
 
 规则内容尽量原地引用，不复制成第二份文件。组合结果保留原始段落来源和顺序。OpenCode 与 BitFun 原生规则
 同时存在时，配置视图展示实际进入模型的顺序；不能把冲突文本自动改写成“合并后的真相”。
+
+当前 runtime-free 子集不建立通用配置来源图：Workspace Instructions owner 在每个 Session 首次需要 user context 时读取
+项目根 `opencode.json`、`opencode.jsonc`、`.opencode/opencode.json` 和 `.opencode/opencode.jsonc` 中的
+`instructions` 数组，只接受工作区内相对精确文件与 glob，确定性排序后追加到既有 `AGENTS`/Claude 来源之后。
+绝对路径、`~`、越出工作区的路径、符号链接和 URL 都不会加载。文件变更不启动 watcher；用户通过统一的
+`/reload instructions`（或默认 `/reload`）失效当前 Session 的 `UserContext` 缓存，下一条消息重新读取。
 
 ### 5.2 Agents、Modes 与 Skills
 

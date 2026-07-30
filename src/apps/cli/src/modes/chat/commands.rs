@@ -2,6 +2,36 @@ fn session_update_blocks_typed_submission(pending_for_current_session: bool, inp
     pending_for_current_session && !input.trim().starts_with('/')
 }
 
+fn parse_reload_target(
+    arguments: &str,
+) -> std::result::Result<bitfun_runtime_ports::AgentContextReloadTarget, &'static str> {
+    use bitfun_runtime_ports::AgentContextReloadTarget;
+
+    match arguments.trim().to_ascii_lowercase().as_str() {
+        "" => Ok(AgentContextReloadTarget::All),
+        "skills" => Ok(AgentContextReloadTarget::Skills),
+        "instructions" => Ok(AgentContextReloadTarget::Instructions),
+        _ => Err("Usage: /reload [skills|instructions]"),
+    }
+}
+
+fn parse_reload_invocation(
+    command_name: &str,
+    arguments: &str,
+) -> Option<std::result::Result<bitfun_runtime_ports::AgentContextReloadTarget, &'static str>> {
+    if command_name.eq_ignore_ascii_case("reload") {
+        return Some(parse_reload_target(arguments));
+    }
+    if command_name.eq_ignore_ascii_case("reload-skills") {
+        return Some(if arguments.trim().is_empty() {
+            Ok(bitfun_runtime_ports::AgentContextReloadTarget::Skills)
+        } else {
+            Err("Usage: /reload-skills (or /reload skills)")
+        });
+    }
+    None
+}
+
 fn pending_session_update_blocks_runtime_action(
     shared_tui: bool,
     pending_for_current_session: bool,
@@ -263,15 +293,17 @@ impl ChatMode {
         }
 
         let token = parts[0];
-        let command_name = token.trim_start_matches('/');
+        let entered_command_name = token.trim_start_matches('/');
         let arguments = command
             .get(token.len()..)
             .map(str::trim_start)
             .unwrap_or("");
+        let command_name = entered_command_name;
         let selected_native_once = consume_selected_native_command_once(
             &mut self.selected_native_command_once,
             command_name,
         );
+        let reload_invocation = parse_reload_invocation(entered_command_name, arguments);
         if command_name == "auto" {
             let action_id = match arguments.trim() {
                 "on" | "enable" => "toggle_auto_approve:on",
@@ -298,6 +330,14 @@ impl ChatMode {
         if command_name.eq_ignore_ascii_case("worktree") {
             return self.handle_worktree_command(arguments, chat_view, chat_state, rt_handle);
         }
+        if command_name.eq_ignore_ascii_case("reload-skills") {
+            return self.handle_reload_invocation(
+                reload_invocation.expect("legacy reload alias requires a parsed invocation"),
+                chat_view,
+                chat_state,
+                rt_handle,
+            );
+        }
         let builtin_alias = format!("/{command_name}");
         let builtin_action = action_for_alias(&builtin_alias, ActionContext::Chat);
         if self.agent.is_shared() {
@@ -309,6 +349,14 @@ impl ChatMode {
                         return Ok(None);
                     }
                     return self.start_session_rename(arguments, chat_view, chat_state, rt_handle);
+                }
+                if action.handler == ActionHandler::Reload {
+                    return self.handle_reload_invocation(
+                        reload_invocation.expect("reload action requires a parsed invocation"),
+                        chat_view,
+                        chat_state,
+                        rt_handle,
+                    );
                 }
                 return self.dispatch_action(action, state, chat_view, chat_state, rt_handle);
             }
@@ -434,6 +482,14 @@ impl ChatMode {
         match route {
             CommandRoute::Builtin => {
                 let action = builtin_action.expect("route requires an available built-in action");
+                if action.handler == ActionHandler::Reload {
+                    return self.handle_reload_invocation(
+                        reload_invocation.expect("reload action requires a parsed invocation"),
+                        chat_view,
+                        chat_state,
+                        rt_handle,
+                    );
+                }
                 self.dispatch_action(
                     action,
                     self.action_state(chat_state.is_processing, false),
@@ -483,6 +539,23 @@ impl ChatMode {
                 Ok(None)
             }
         }
+    }
+
+    fn handle_reload_invocation(
+        &mut self,
+        target: std::result::Result<bitfun_runtime_ports::AgentContextReloadTarget, &'static str>,
+        chat_view: &mut ChatView,
+        chat_state: &mut ChatState,
+        rt_handle: &tokio::runtime::Handle,
+    ) -> Result<Option<ChatExitReason>> {
+        match target {
+            Ok(target) => self.reload_context(target, chat_view, chat_state, rt_handle),
+            Err(usage) => {
+                chat_view.set_status(Some(usage.to_string()));
+                chat_state.add_system_message(usage.to_string());
+            }
+        }
+        Ok(None)
     }
 
     fn external_command_projection(&self, command_name: &str) -> Option<ExternalCommandProjection> {
@@ -821,8 +894,13 @@ impl ChatMode {
             ActionHandler::Skills => {
                 self.show_skill_selector(chat_view, chat_state, rt_handle);
             }
-            ActionHandler::ReloadSkills => {
-                self.reload_skills_from_disk(chat_view, chat_state, rt_handle);
+            ActionHandler::Reload => {
+                self.reload_context(
+                    bitfun_runtime_ports::AgentContextReloadTarget::All,
+                    chat_view,
+                    chat_state,
+                    rt_handle,
+                );
             }
             ActionHandler::McpServers => {
                 self.show_mcp_selector(chat_view, chat_state, rt_handle);

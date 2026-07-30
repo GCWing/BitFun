@@ -1068,7 +1068,7 @@ impl StartupPage {
             ActionHandler::NavigateBack => self.navigate_back(),
             ActionHandler::ClearConversation
             | ActionHandler::RenameSession
-            | ActionHandler::ReloadSkills
+            | ActionHandler::Reload
             | ActionHandler::Tools
             | ActionHandler::Extensions
             | ActionHandler::NativeHooks

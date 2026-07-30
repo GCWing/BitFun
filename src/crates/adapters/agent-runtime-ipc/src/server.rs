@@ -679,6 +679,7 @@ fn operation_has_side_effects(operation: &RuntimeIpcOperation) -> bool {
             | RuntimeIpcOperation::UpdateSessionMode { .. }
             | RuntimeIpcOperation::UpdateSessionModel { .. }
             | RuntimeIpcOperation::RenameSession { .. }
+            | RuntimeIpcOperation::ReloadSessionContext { .. }
             | RuntimeIpcOperation::SubmitTurn { .. }
             | RuntimeIpcOperation::CancelTurn { .. }
             | RuntimeIpcOperation::RespondPermission { .. }

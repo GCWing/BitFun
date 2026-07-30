@@ -1113,6 +1113,10 @@ impl ExecutionEngine {
                 "User context cache miss: session_id={}, scope_key={}",
                 session_id, user_context_identity.scope_key
             );
+            let cache_generation = self
+                .session_manager
+                .user_context_cache_generation(session_id)
+                .await;
             let user_context_policy = current_agent.user_context_policy();
             let (built_user_context, cacheable) = Self::build_user_context_for_cache_miss(
                 execution_context.workspace.as_ref(),
@@ -1123,13 +1127,21 @@ impl ExecutionEngine {
             .await;
             if cacheable {
                 if let Some(ref user_context) = built_user_context {
-                    self.session_manager
-                        .remember_user_context(
+                    let cached = self
+                        .session_manager
+                        .remember_user_context_if_generation(
                             session_id,
+                            cache_generation,
                             user_context_identity.clone(),
                             user_context.clone(),
                         )
                         .await;
+                    if !cached {
+                        debug!(
+                            "Skipped stale user context cache write after invalidation: session_id={}, scope_key={}",
+                            session_id, user_context_identity.scope_key
+                        );
+                    }
                 }
             } else {
                 debug!(
@@ -4416,7 +4428,7 @@ mod tests {
     use crate::service::config::types::AIModelConfig;
     use crate::service::remote_ssh::workspace_state::workspace_session_identity;
     use crate::util::types::ToolDefinition;
-    use bitfun_runtime_ports::{WorkspaceDirEntry, WorkspaceFileSystem};
+    use bitfun_runtime_ports::{WorkspaceDirEntry, WorkspaceFileSystem, WorkspacePathKind};
     use serde_json::json;
     use sha2::{Digest, Sha256};
     use std::collections::HashMap;
@@ -4482,6 +4494,22 @@ mod tests {
 
         async fn is_dir(&self, _path: &str) -> anyhow::Result<bool> {
             Ok(false)
+        }
+
+        async fn path_kind_no_follow(
+            &self,
+            path: &str,
+        ) -> anyhow::Result<Option<WorkspacePathKind>> {
+            self.record();
+            if path.ends_with("AGENTS.override.md")
+                && self.fail_next_probe.swap(false, Ordering::SeqCst)
+            {
+                anyhow::bail!("temporary workspace connection failure")
+            }
+            Ok(
+                (path.ends_with("AGENTS.md") && !path.ends_with("AGENTS.override.md"))
+                    .then_some(WorkspacePathKind::File),
+            )
         }
 
         async fn read_dir(&self, _path: &str) -> anyhow::Result<Vec<WorkspaceDirEntry>> {

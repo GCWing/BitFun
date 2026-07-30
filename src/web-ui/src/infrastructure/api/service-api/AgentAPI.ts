@@ -266,6 +266,13 @@ export interface UpdateSessionModelRequest {
   includeInternal?: boolean;
 }
 
+export type AgentContextReloadTarget = 'all' | 'skills' | 'instructions';
+
+export interface AgentContextReloadRequest {
+  sessionId: string;
+  target: AgentContextReloadTarget;
+}
+
 export interface UpdateSessionTitleRequest {
   sessionId: string;
   title: string;
@@ -881,6 +888,16 @@ export class AgentAPI {
       await api.invoke<void>('update_session_model', { request });
     } catch (error) {
       throw createTauriCommandError('update_session_model', error, request);
+    }
+  }
+
+  async reloadSessionContext(
+    request: AgentContextReloadRequest,
+  ): Promise<void> {
+    try {
+      await api.invoke<void>('reload_session_context', { request });
+    } catch (error) {
+      throw createTauriCommandError('reload_session_context', error, request);
     }
   }
 

@@ -11,6 +11,7 @@ use bitfun_agent_runtime_ipc::{
     RuntimeIpcRequestHandler, RuntimeIpcServer, RuntimeIpcServerConfig,
     RuntimeIpcStreamInvalidationReason, RuntimeSessionRenameRequest, PROTOCOL_VERSION,
 };
+use bitfun_core::product_runtime::CoreAgentRuntimeCompatibility;
 use bitfun_core::runtime_ownership::CoreRuntimeOwnership;
 use bitfun_events::{AgenticEvent, ToolEventData};
 use bitfun_services_core::runtime_ownership::RuntimeDeployment;
@@ -33,6 +34,7 @@ type SessionEventSenders = Mutex<HashMap<String, broadcast::Sender<RuntimeIpcEve
 
 pub(crate) struct SharedRuntimeHandler {
     runtime: AgentRuntime,
+    compatibility: CoreAgentRuntimeCompatibility,
     workspace: PathBuf,
     events: Arc<SessionEventSenders>,
     question_sessions: Arc<Mutex<HashMap<String, String>>>,
@@ -41,7 +43,11 @@ pub(crate) struct SharedRuntimeHandler {
 }
 
 impl SharedRuntimeHandler {
-    pub(crate) fn build(runtime: AgentRuntime, workspace: &Path) -> Result<Self> {
+    pub(crate) fn build(
+        runtime: AgentRuntime,
+        compatibility: CoreAgentRuntimeCompatibility,
+        workspace: &Path,
+    ) -> Result<Self> {
         let mut agent_events = runtime
             .subscribe_events()
             .map_err(runtime_error_message)
@@ -178,6 +184,7 @@ impl SharedRuntimeHandler {
 
         Ok(Self {
             runtime,
+            compatibility,
             workspace: dunce::canonicalize(workspace)
                 .context("canonicalize Shared Runtime workspace")?,
             events,
@@ -273,10 +280,14 @@ impl RuntimeIpcRequestHandler for SharedRuntimeHandler {
                 Ok(RuntimeIpcOperationResult::Unit)
             }
             RuntimeIpcOperation::RenameSession { request } => {
-                self.runtime
-                    .rename_session(owned_session_rename_request(&self.workspace, request))
+                rename_owned_session(&self.runtime, &self.workspace, request).await?;
+                Ok(RuntimeIpcOperationResult::Unit)
+            }
+            RuntimeIpcOperation::ReloadSessionContext { request } => {
+                self.compatibility
+                    .reload_session_context(request)
                     .await
-                    .map_err(runtime_ipc_error)?;
+                    .map_err(core_ipc_error)?;
                 Ok(RuntimeIpcOperationResult::Unit)
             }
             RuntimeIpcOperation::SubmitTurn { request } => {
@@ -398,6 +409,17 @@ fn owned_session_rename_request(
         remote_connection_id: None,
         remote_ssh_host: None,
     }
+}
+
+async fn rename_owned_session(
+    runtime: &AgentRuntime,
+    workspace: &Path,
+    request: RuntimeSessionRenameRequest,
+) -> std::result::Result<(), RuntimeIpcError> {
+    runtime
+        .rename_session(owned_session_rename_request(workspace, request))
+        .await
+        .map_err(runtime_ipc_error)
 }
 
 fn subscribe_session_events(
@@ -663,6 +685,7 @@ pub(crate) async fn run_service(workspace: PathBuf, expected_identity: String) -
     .await?;
     let handler = Arc::new(SharedRuntimeHandler::build(
         runtime.agent_runtime().clone(),
+        runtime.compatibility().clone(),
         &workspace,
     )?);
     let server = RuntimeIpcServer::bind_with_handler(
@@ -967,14 +990,31 @@ fn runtime_ipc_error(error: RuntimeError) -> RuntimeIpcError {
     }
 }
 
+fn core_ipc_error(error: bitfun_core::util::errors::BitFunError) -> RuntimeIpcError {
+    let code = match &error {
+        bitfun_core::util::errors::BitFunError::Validation(_)
+        | bitfun_core::util::errors::BitFunError::NotFound(_) => {
+            RuntimeIpcErrorCode::InvalidRequest
+        }
+        bitfun_core::util::errors::BitFunError::SessionInUse { .. } => {
+            RuntimeIpcErrorCode::SessionInUse
+        }
+        _ => RuntimeIpcErrorCode::Unavailable,
+    };
+    RuntimeIpcError {
+        code,
+        message: error.to_string(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
         await_permission_route, connect_existing, index_user_question, invalidate_event_stream,
         owned_session_rename_request, permission_event_session, permission_targets_session,
-        project_subagent_link_route, project_user_question_route, publish_event, route_agent_event,
-        runtime_ipc_error, subscribe_session_events, SessionEventSenders, SharedRuntimeHandler,
-        EVENT_BUFFER,
+        project_subagent_link_route, project_user_question_route, publish_event,
+        rename_owned_session, route_agent_event, runtime_ipc_error, subscribe_session_events,
+        SessionEventSenders, EVENT_BUFFER,
     };
     use bitfun_agent_runtime::sdk::{
         AgentRuntimeBuilder, AgentSessionCreateRequest, AgentSessionCreateResult,
@@ -985,10 +1025,7 @@ mod tests {
         PermissionRequest, PermissionRequestEvent, PermissionRequestSource,
         PermissionRequestSourceKind, PortError, PortErrorKind, PortResult, RuntimeError,
     };
-    use bitfun_agent_runtime_ipc::{
-        RuntimeIpcErrorCode, RuntimeIpcOperation, RuntimeIpcOperationResult,
-        RuntimeIpcRequestHandler, RuntimeSessionRenameRequest,
-    };
+    use bitfun_agent_runtime_ipc::{RuntimeIpcErrorCode, RuntimeSessionRenameRequest};
     use bitfun_events::{AgenticEvent, ToolEventData, ToolEventIdentity};
     use std::collections::HashMap;
     use std::sync::{Arc, Mutex};
@@ -1134,26 +1171,17 @@ mod tests {
             .await
             .expect("embedded rename");
 
-        let (event_stream_available, _) = watch::channel(true);
-        let handler = SharedRuntimeHandler {
-            runtime,
-            workspace: canonical_workspace,
-            events: Arc::new(Mutex::new(HashMap::new())),
-            question_sessions: Arc::new(Mutex::new(HashMap::new())),
-            subagent_routes: Arc::new(Mutex::new(HashMap::new())),
-            event_stream_available,
-        };
-        let result = handler
-            .execute(RuntimeIpcOperation::RenameSession {
-                request: RuntimeSessionRenameRequest {
-                    session_id: "session-1".to_string(),
-                    session_name: "Auth refactor".to_string(),
-                },
-            })
-            .await
-            .expect("shared rename");
+        rename_owned_session(
+            &runtime,
+            &canonical_workspace,
+            RuntimeSessionRenameRequest {
+                session_id: "session-1".to_string(),
+                session_name: "Auth refactor".to_string(),
+            },
+        )
+        .await
+        .expect("shared rename");
 
-        assert_eq!(result, RuntimeIpcOperationResult::Unit);
         assert_eq!(
             port.rename_requests.lock().unwrap().as_slice(),
             &[expected.clone(), expected]

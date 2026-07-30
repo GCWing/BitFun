@@ -10,6 +10,7 @@ pub mod dispatch_workspace;
 mod file_lock;
 pub mod filesystem;
 pub mod json_store;
+pub mod jsonc;
 #[cfg(feature = "workspace-runtime")]
 pub mod local_runtime_ports;
 #[cfg(feature = "lsp")]

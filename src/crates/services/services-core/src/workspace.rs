@@ -7,10 +7,11 @@
 use async_trait::async_trait;
 use bitfun_runtime_ports::{
     WorkspaceCommandOptions, WorkspaceCommandResult, WorkspaceDirEntry, WorkspaceFileSystem,
-    WorkspaceServices, WorkspaceShell,
+    WorkspacePathKind, WorkspaceServices, WorkspaceShell,
 };
 use std::path::Path;
 use std::sync::Arc;
+use tokio::io::AsyncReadExt;
 
 /// Local filesystem implementation of [`WorkspaceFileSystem`].
 pub struct LocalWorkspaceFs;
@@ -23,6 +24,27 @@ impl WorkspaceFileSystem for LocalWorkspaceFs {
 
     async fn read_file_text(&self, path: &str) -> anyhow::Result<String> {
         Ok(tokio::fs::read_to_string(path).await?)
+    }
+
+    async fn read_file_text_bounded(
+        &self,
+        path: &str,
+        max_bytes: usize,
+    ) -> anyhow::Result<Option<String>> {
+        let metadata = tokio::fs::metadata(path).await?;
+        if metadata.len() > max_bytes as u64 {
+            return Ok(None);
+        }
+        let mut bytes = Vec::with_capacity(metadata.len() as usize);
+        tokio::fs::File::open(path)
+            .await?
+            .take(max_bytes as u64 + 1)
+            .read_to_end(&mut bytes)
+            .await?;
+        if bytes.len() > max_bytes {
+            return Ok(None);
+        }
+        Ok(Some(String::from_utf8(bytes)?))
     }
 
     async fn write_file(&self, path: &str, contents: &[u8]) -> anyhow::Result<()> {
@@ -50,10 +72,41 @@ impl WorkspaceFileSystem for LocalWorkspaceFs {
         }
     }
 
+    async fn path_kind_no_follow(&self, path: &str) -> anyhow::Result<Option<WorkspacePathKind>> {
+        let metadata = match tokio::fs::symlink_metadata(path).await {
+            Ok(metadata) => metadata,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+            Err(error) => return Err(error.into()),
+        };
+        let file_type = metadata.file_type();
+        Ok(Some(if file_type.is_symlink() {
+            WorkspacePathKind::Symlink
+        } else if file_type.is_dir() {
+            WorkspacePathKind::Directory
+        } else if file_type.is_file() {
+            WorkspacePathKind::File
+        } else {
+            WorkspacePathKind::Other
+        }))
+    }
+
     async fn read_dir(&self, path: &str) -> anyhow::Result<Vec<WorkspaceDirEntry>> {
+        self.read_dir_bounded(path, usize::MAX).await
+    }
+
+    async fn read_dir_bounded(
+        &self,
+        path: &str,
+        max_entries: usize,
+    ) -> anyhow::Result<Vec<WorkspaceDirEntry>> {
         let mut entries = Vec::new();
+        let mut scanned_entries = 0usize;
         let mut read_dir = tokio::fs::read_dir(path).await?;
-        while let Ok(Some(entry)) = read_dir.next_entry().await {
+        while scanned_entries < max_entries {
+            let Ok(Some(entry)) = read_dir.next_entry().await else {
+                break;
+            };
+            scanned_entries += 1;
             let path = entry.path();
             let metadata = tokio::fs::symlink_metadata(&path).await?;
             if metadata.file_type().is_symlink() {

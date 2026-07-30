@@ -1121,6 +1121,7 @@ pub async fn run() {
             hide_main_window_after_close_request,
             api::agentic_api::create_session,
             api::agentic_api::update_session_model,
+            api::agentic_api::reload_session_context,
             api::agentic_api::update_session_title,
             api::agentic_api::ensure_coordinator_session,
             api::agentic_api::start_dialog_turn,

@@ -1,9 +1,9 @@
 use bitfun_product_domains::tool_permissions::{PermissionReply, PermissionRequest};
 use bitfun_runtime_ports::{
-    AgentDialogTurnRequest, AgentSessionCreateRequest, AgentSessionCreateResult,
-    AgentSessionListRequest, AgentSessionModeUpdateRequest, AgentSessionModelUpdateRequest,
-    AgentSessionSummary, AgentTurnCancellationRequest, AgentTurnCancellationResult,
-    SessionTranscript,
+    AgentContextReloadRequest, AgentDialogTurnRequest, AgentSessionCreateRequest,
+    AgentSessionCreateResult, AgentSessionListRequest, AgentSessionModeUpdateRequest,
+    AgentSessionModelUpdateRequest, AgentSessionSummary, AgentTurnCancellationRequest,
+    AgentTurnCancellationResult, SessionTranscript,
 };
 use serde::{Deserialize, Serialize};
 
@@ -56,6 +56,9 @@ pub enum RuntimeIpcOperation {
     RenameSession {
         request: RuntimeSessionRenameRequest,
     },
+    ReloadSessionContext {
+        request: AgentContextReloadRequest,
+    },
     SubmitTurn {
         request: AgentDialogTurnRequest,
     },
@@ -82,6 +85,7 @@ impl RuntimeIpcOperation {
             Self::UpdateSessionMode { request } => Some(&request.session_id),
             Self::UpdateSessionModel { request } => Some(&request.session_id),
             Self::RenameSession { request } => Some(&request.session_id),
+            Self::ReloadSessionContext { request } => Some(&request.session_id),
             Self::SubmitTurn { request } => Some(&request.session_id),
             Self::CancelTurn { request } => Some(&request.session_id),
             Self::PendingPermissions { session_id }
@@ -97,6 +101,7 @@ impl RuntimeIpcOperation {
             Self::UpdateSessionMode { .. }
                 | Self::UpdateSessionModel { .. }
                 | Self::RenameSession { .. }
+                | Self::ReloadSessionContext { .. }
                 | Self::SubmitTurn { .. }
                 | Self::CancelTurn { .. }
                 | Self::PendingPermissions { .. }

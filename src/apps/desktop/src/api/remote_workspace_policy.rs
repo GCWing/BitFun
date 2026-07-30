@@ -1321,6 +1321,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         "reload_global_config",
         RemoteWorkspacePolicy::LegacyUnaudited,
     ),
+    (
+        "reload_session_context",
+        RemoteWorkspacePolicy::RemoteRouted,
+    ),
     ("reload_subagents", RemoteWorkspacePolicy::LegacyUnaudited),
     // One-click self-hosted relay (SSH to user host). WorkspaceAgnostic: uses
     // an SSH connection id, not the open project workspace. See

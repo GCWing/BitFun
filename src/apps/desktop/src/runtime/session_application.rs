@@ -26,6 +26,7 @@ use bitfun_core::service::session_usage::SessionUsageReport;
 use bitfun_core::service::token_usage::TokenUsageService;
 use bitfun_core::service::workspace::WorkspaceService;
 use bitfun_core::util::errors::BitFunError;
+use bitfun_runtime_ports::AgentContextReloadRequest;
 use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
 
@@ -251,6 +252,16 @@ impl DesktopSessionApplication {
 
     pub(crate) fn agent_runtime(&self) -> &AgentRuntime {
         &self.agent_runtime
+    }
+
+    pub(crate) async fn reload_session_context(
+        &self,
+        request: AgentContextReloadRequest,
+    ) -> DesktopSessionApplicationResult<()> {
+        self.compatibility
+            .reload_session_context(request)
+            .await
+            .map_err(|error| DesktopSessionApplicationError::Core(error.to_string()))
     }
 
     async fn resolved_scope(

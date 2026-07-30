@@ -8,36 +8,41 @@ impl ChatMode {
         chat_view.show_skill_menu();
     }
 
-    /// Re-scan skill directories from disk and rebuild the registry cache.
-    ///
-    /// Mirrors Claude Code 2.1.152 `/reload-skills`. Safe to call at any
-    /// time — does not require `is_processing` to be false because the
-    /// registry swap is atomic and a held `SkillInfo` reference is not
-    /// kept across the call.
-    fn reload_skills_from_disk(
+    fn reload_context(
         &self,
+        target: bitfun_runtime_ports::AgentContextReloadTarget,
         chat_view: &mut ChatView,
         chat_state: &mut ChatState,
         rt_handle: &tokio::runtime::Handle,
     ) {
-        let registry = SkillRegistry::global();
-        let workspace = self.agent.workspace_path_buf();
-        let outcome = tokio::task::block_in_place(|| {
-            // refresh() is the global re-scan entry point; the workspace
-            // arg of refresh_for_workspace is currently a no-op upstream,
-            // so we call refresh() directly and re-resolve the workspace
-            // count afterwards.
-            rt_handle.block_on(async {
-                registry.refresh().await;
-                registry
-                    .get_resolved_skills_for_workspace(Some(workspace.as_path()), None)
-                    .await
-            })
-        });
+        use bitfun_runtime_ports::{AgentContextReloadRequest, AgentContextReloadTarget};
 
-        let count = outcome.len();
-        chat_state.add_system_message(format!("Reloaded {} skill(s) from disk.", count));
-        chat_view.set_status(Some(format!("Skills reloaded ({} available)", count)));
+        let request = AgentContextReloadRequest {
+            session_id: chat_state.core_session_id.clone(),
+            target,
+        };
+        let outcome =
+            tokio::task::block_in_place(|| rt_handle.block_on(self.context_reload.reload(request)));
+
+        match outcome {
+            Ok(_) => {
+                let message = match target {
+                    AgentContextReloadTarget::All => {
+                        "Reloaded skills. Instructions will be reread for the next message."
+                    }
+                    AgentContextReloadTarget::Skills => "Reloaded skills.",
+                    AgentContextReloadTarget::Instructions => {
+                        "Instructions will be reread for the next message."
+                    }
+                };
+                chat_state.add_system_message(message.to_string());
+                chat_view.set_status(Some(message.to_string()));
+            }
+            Err(error) => {
+                chat_state.add_system_message(format!("Could not reload context: {error}"));
+                chat_view.set_status(Some("Context reload failed".to_string()));
+            }
+        }
     }
 
     fn show_available_skill_list(

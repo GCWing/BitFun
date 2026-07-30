@@ -41,6 +41,7 @@ use clap::{CommandFactory, FromArgMatches, Parser, Subcommand, ValueEnum};
 use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::{Arc, OnceLock};
 
+use agent::context_reload_client::CliContextReloadClient;
 use agent::runtime_client::CliAgentRuntimeClient;
 use config::CliConfig;
 use hook_import::HookAction;
@@ -855,17 +856,23 @@ async fn run_interactive(
             .await?,
         )
     };
-    let agent = if let Some(runtime) = &runtime {
-        Arc::new(CliAgentRuntimeClient::new(
-            runtime.as_ref(),
-            Some(workspace_path.clone()),
-        ))
+    let (agent, context_reload) = if let Some(runtime) = &runtime {
+        (
+            Arc::new(CliAgentRuntimeClient::new(
+                runtime.as_ref(),
+                Some(workspace_path.clone()),
+            )),
+            CliContextReloadClient::embedded(runtime.compatibility().clone()),
+        )
     } else {
         let client = shared_runtime::connect_or_start(&workspace_path).await?;
-        Arc::new(CliAgentRuntimeClient::new_shared(
-            client,
-            Some(workspace_path.clone()),
-        ))
+        (
+            Arc::new(CliAgentRuntimeClient::new_shared(
+                client.clone(),
+                Some(workspace_path.clone()),
+            )),
+            CliContextReloadClient::shared(client),
+        )
     };
     let compatibility = runtime
         .as_ref()
@@ -924,7 +931,14 @@ async fn run_interactive(
     // Use the current project workspace selected at process start.
     let workspace = startup_page.workspace();
     let config = startup_page.config().clone();
-    let mut chat_mode = ChatMode::new(config, agent_type, workspace, agent, compatibility);
+    let mut chat_mode = ChatMode::new(
+        config,
+        agent_type,
+        workspace,
+        agent,
+        context_reload,
+        compatibility,
+    );
     if let Some(session_id) = restore_session_id {
         chat_mode = chat_mode.with_restore_session(session_id);
     }
@@ -1327,6 +1341,8 @@ async fn run_interactive_with_session(
         runtime.as_ref(),
         Some(workspace_path),
     ));
+    let compatibility = runtime.compatibility().clone();
+    let context_reload = CliContextReloadClient::embedded(compatibility.clone());
     let sessions = agent.list_sessions().await?;
     let agent_type = sessions
         .iter()
@@ -1344,7 +1360,8 @@ async fn run_interactive_with_session(
         agent_type,
         workspace,
         agent,
-        Some(runtime.compatibility().clone()),
+        context_reload,
+        Some(compatibility),
     )
     .with_restore_session(session_id);
     let run_result = chat_mode.run(Some(terminal));

@@ -224,6 +224,7 @@ pub struct SessionManager {
     /// Sub-components
     context_store: Arc<SessionContextStore>,
     prompt_cache_store: Arc<SessionPromptCacheStore>,
+    prompt_cache_operation_locks: KeyedAsyncLock,
     token_anchor_store: Arc<TokenAnchorStore>,
     turn_skill_agent_snapshot_store: Arc<TurnSkillAgentSnapshotStore>,
     skill_agent_baseline_override_snapshot_store: Arc<DashMap<String, TurnSkillAgentSnapshot>>,
@@ -1523,6 +1524,10 @@ impl SessionManager {
         if self.prompt_cache_store.has_session(session_id) {
             return;
         }
+        let _operation_guard = self.prompt_cache_operation_locks.lock(session_id).await;
+        if self.prompt_cache_store.has_session(session_id) {
+            return;
+        }
 
         let cache = if self.should_persist_session_id(session_id) {
             match self.effective_session_storage_path(session_id).await {
@@ -1608,6 +1613,7 @@ impl SessionManager {
             );
             return;
         };
+        let _operation_guard = self.prompt_cache_operation_locks.lock(session_id).await;
 
         let cache = self
             .prompt_cache_store
@@ -1784,6 +1790,7 @@ impl SessionManager {
             session_write_locks: Arc::new(DashMap::new()),
             context_store,
             prompt_cache_store: Arc::new(SessionPromptCacheStore::new()),
+            prompt_cache_operation_locks: KeyedAsyncLock::default(),
             token_anchor_store: Arc::new(TokenAnchorStore::new()),
             turn_skill_agent_snapshot_store: Arc::new(TurnSkillAgentSnapshotStore::new()),
             skill_agent_baseline_override_snapshot_store: Arc::new(DashMap::new()),
@@ -1992,6 +1999,7 @@ impl SessionManager {
         let session_write_locks = self.session_write_locks.clone();
         let context_store = self.context_store.clone();
         let prompt_cache_store = self.prompt_cache_store.clone();
+        let prompt_cache_operation_locks = self.prompt_cache_operation_locks.clone();
         let token_anchor_store = self.token_anchor_store.clone();
         let turn_skill_agent_snapshot_store = self.turn_skill_agent_snapshot_store.clone();
         let skill_agent_baseline_override_snapshot_store =
@@ -2024,6 +2032,7 @@ impl SessionManager {
                 session_write_locks,
                 context_store,
                 prompt_cache_store,
+                prompt_cache_operation_locks,
                 token_anchor_store,
                 turn_skill_agent_snapshot_store,
                 skill_agent_baseline_override_snapshot_store,
@@ -2361,6 +2370,31 @@ impl SessionManager {
             .set_user_context(session_id, CachedUserContext::new(identity, user_context));
         self.persist_prompt_cache_best_effort(session_id, "user_context_cached")
             .await;
+    }
+
+    pub async fn user_context_cache_generation(&self, session_id: &str) -> u64 {
+        self.ensure_prompt_cache_loaded(session_id).await;
+        self.prompt_cache_store.user_context_generation(session_id)
+    }
+
+    pub async fn remember_user_context_if_generation(
+        &self,
+        session_id: &str,
+        generation: u64,
+        identity: UserContextCacheIdentity,
+        user_context: String,
+    ) -> bool {
+        self.ensure_prompt_cache_loaded(session_id).await;
+        let stored = self.prompt_cache_store.set_user_context_if_generation(
+            session_id,
+            generation,
+            CachedUserContext::new(identity, user_context),
+        );
+        if stored {
+            self.persist_prompt_cache_best_effort(session_id, "user_context_cached")
+                .await;
+        }
+        stored
     }
 
     pub async fn clone_prompt_cache(
@@ -11641,6 +11675,88 @@ mod tests {
                 .load_prompt_cache(workspace.path(), &session.session_id)
                 .await
                 .expect("prompt cache load should succeed"),
+            None
+        );
+    }
+
+    #[tokio::test]
+    async fn prompt_cache_invalidation_waits_for_an_inflight_lazy_restore() {
+        let workspace = TestWorkspace::new();
+        let persistence_manager =
+            Arc::new(PersistenceManager::new(workspace.path_manager()).expect("persistence"));
+        let manager = Arc::new(test_manager(persistence_manager.clone()));
+        let session = manager
+            .create_session(
+                "Prompt cache".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("session should be created");
+        let identity = UserContextCacheIdentity::new(
+            "workspace_context|workspace_instructions|project_layout",
+        );
+
+        manager
+            .remember_user_context(
+                &session.session_id,
+                identity.clone(),
+                "persisted user context".to_string(),
+            )
+            .await;
+        manager
+            .prompt_cache_store
+            .delete_session(&session.session_id);
+
+        let operation_guard = manager
+            .prompt_cache_operation_locks
+            .lock(&session.session_id)
+            .await;
+        let lookup_manager = manager.clone();
+        let lookup_session_id = session.session_id.clone();
+        let lookup_identity = identity.clone();
+        let lookup = tokio::spawn(async move {
+            lookup_manager
+                .cached_user_context(&lookup_session_id, &lookup_identity)
+                .await
+        });
+        tokio::task::yield_now().await;
+        let invalidate_manager = manager.clone();
+        let invalidate_session_id = session.session_id.clone();
+        let invalidate = tokio::spawn(async move {
+            invalidate_manager
+                .invalidate_prompt_cache(
+                    &invalidate_session_id,
+                    PromptCacheScope::UserContext,
+                    "test",
+                )
+                .await;
+        });
+        tokio::task::yield_now().await;
+        drop(operation_guard);
+
+        assert_eq!(
+            lookup.await.expect("lookup task should complete"),
+            Some("persisted user context".to_string())
+        );
+        invalidate.await.expect("invalidation task should complete");
+        assert_eq!(
+            persistence_manager
+                .load_prompt_cache(workspace.path(), &session.session_id)
+                .await
+                .expect("prompt cache load should succeed"),
+            None
+        );
+        manager
+            .prompt_cache_store
+            .delete_session(&session.session_id);
+        assert_eq!(
+            manager
+                .cached_user_context(&session.session_id, &identity)
+                .await,
             None
         );
     }

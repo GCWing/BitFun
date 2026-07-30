@@ -77,7 +77,7 @@ pub(crate) enum ActionHandler {
     Sessions,
     RenameSession,
     Skills,
-    ReloadSkills,
+    Reload,
     McpServers,
     Tools,
     Extensions,
@@ -115,7 +115,7 @@ pub(crate) enum ActionHandler {
 pub(crate) const SHARED_TUI_EMBEDDED_HANDOFF: &str =
     "Exit all Shared TUI clients, wait up to 30 seconds for their Runtime to stop, then use default Embedded `bitfun chat`";
 pub(crate) const SHARED_TUI_HELP_NOTE: &str =
-    "Shared TUI: start with `bitfun chat --shared`. Multiple TUI processes reuse one workspace Runtime, while each TUI controls at most one Session and each Session has one controller. Use `/rename <name>` to rename the current Session, `/agent`, Tab, or Shift+Tab to change its Agent mode, and `/models` to change its model. Model configuration, Agent/Subagent management, MCP, extension, account-sync, usage, and other management remain Embedded. Exit all Shared TUI clients and wait up to 30 seconds before returning to default Embedded `bitfun chat`.";
+    "Shared TUI: start with `bitfun chat --shared`. Multiple TUI processes reuse one workspace Runtime, while each TUI controls at most one Session and each Session has one controller. Use `/rename <name>` to rename the current Session, `/agent`, Tab, or Shift+Tab to change its Agent mode, `/models` to change its model, and `/reload [skills|instructions]` to refresh declarative context for the next message. Model configuration, Agent/Subagent management, MCP, extension, account-sync, usage, and other management remain Embedded. Exit all Shared TUI clients and wait up to 30 seconds before returning to default Embedded `bitfun chat`.";
 
 impl ActionHandler {
     pub(crate) const fn available_in_shared_tui(self, context: ActionContext) -> bool {
@@ -135,6 +135,7 @@ impl ActionHandler {
                     | Self::OpenAgentSelector
                     | Self::SwitchAgent
                     | Self::SwitchAgentReverse
+                    | Self::Reload
                     | Self::Exit
                     | Self::OpenPalette
                     | Self::SubmitInput
@@ -404,13 +405,13 @@ static ACTION_SPECS: &[ActionSpec] = &[
         slash_on_startup: true,
     },
     ActionSpec {
-        id: "reload_skills",
-        name: "Reload skills",
-        aliases: &["/reload-skills"],
-        description: "Re-scan skill directories without restarting",
+        id: "reload",
+        name: "Reload context",
+        aliases: &["/reload"],
+        description: "Reload skills and instructions; optionally choose one target",
         contexts: CHAT,
         availability: ActionAvailability::Always,
-        handler: ActionHandler::ReloadSkills,
+        handler: ActionHandler::Reload,
         default_bindings: &[],
         fallback_bindings: &[],
         shortcut_field: None,
@@ -1838,6 +1839,7 @@ mod tests {
         assert!(SHARED_TUI_HELP_NOTE.contains("one Session"));
         assert!(SHARED_TUI_HELP_NOTE.contains("`/models`"));
         assert!(SHARED_TUI_HELP_NOTE.contains("`/rename <name>`"));
+        assert!(SHARED_TUI_HELP_NOTE.contains("`/reload [skills|instructions]`"));
         assert!(SHARED_TUI_HELP_NOTE.contains("Agent/Subagent management"));
         assert!(SHARED_TUI_HELP_NOTE.contains("remain Embedded"));
     }
@@ -1881,6 +1883,14 @@ mod tests {
         assert!(slash_ids.contains(&"select_model"));
         assert!(palette_ids.contains(&"select_model"));
         assert!(slash_ids.contains(&"rename_session"));
+        assert!(slash_ids.contains(&"reload"));
+        assert!(!slash_ids.contains(&"reload_skills"));
+
+        let reload =
+            action_for_alias("/reload", ActionContext::Chat).expect("unified reload action");
+        assert_eq!(reload.id, "reload");
+        assert!(reload.available(state));
+        assert!(action_for_alias("/reload-skills", ActionContext::Chat).is_none());
 
         let help = ResolvedKeymap::new(&ShortcutsConfig::default()).help_text(state);
         assert!(help.contains("Switch Agent"));
