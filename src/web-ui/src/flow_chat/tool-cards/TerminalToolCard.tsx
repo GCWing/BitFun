@@ -23,6 +23,7 @@ import { DotMatrixLoader, IconButton } from '../../component-library';
 import { LazyTerminalOutputRenderer } from '@/tools/terminal/components/LazyTerminalOutputRenderer';
 import { createLogger } from '@/shared/utils/logger';
 import { useToolCardHeightContract, type ToolCardCollapseReason } from './useToolCardHeightContract';
+import { useToolCardCompletionGracePeriod } from './useToolCardCompletionGracePeriod';
 import { getTerminalViewState, type TerminalViewState } from './terminalToolCardState';
 import { ToolTimeoutIndicator } from './ToolTimeoutIndicator';
 import { ToolCardCopyAction, ToolCardHeaderActions } from './ToolCardHeaderActions';
@@ -67,12 +68,13 @@ function getInitialTerminalExpandedState(status: string): boolean {
 function getAutoExpandedStateForTerminalStatus(
   status: string,
   isLastItem: boolean | undefined,
+  keepTailPreview: boolean,
 ): boolean | null {
   if (isCollapsedTerminalStatus(status)) {
     // A card that was already mounted while live keeps its compact output
-    // visible at the tail. It collapses when a newer conversation item takes
-    // over, so completion itself never looks like the card blinked away.
-    return isLastItem === true ? null : false;
+    // visible briefly at the tail. It collapses when a newer conversation
+    // item takes over or when the completion preview grace period expires.
+    return isLastItem === true && keepTailPreview ? null : false;
   }
 
   if (status === 'pending_confirmation') {
@@ -291,6 +293,16 @@ export const TerminalToolCard: React.FC<TerminalToolCardProps> = ({
     toolId,
     toolName: toolItem.toolName,
   });
+  const {
+    begin: beginCompletionPreview,
+    isActive: isCompletionPreviewActive,
+  } = useToolCardCompletionGracePeriod({
+    eligible:
+      isCollapsedTerminalStatus(status) &&
+      isLastItem === true &&
+      isExpanded &&
+      !userToggledRef.current,
+  });
   const applyTerminalExpandedState = useCallback((
     nextExpanded: boolean,
     options?: { reason?: ToolCardCollapseReason },
@@ -325,11 +337,18 @@ export const TerminalToolCard: React.FC<TerminalToolCardProps> = ({
       return;
     }
 
-    const nextExpanded = getAutoExpandedStateForTerminalStatus(status, isLastItem);
+    const keepTailPreview = isCollapsedTerminalStatus(status) && beginCompletionPreview();
+    const nextExpanded = getAutoExpandedStateForTerminalStatus(status, isLastItem, keepTailPreview);
     if (nextExpanded !== null) {
       applyTerminalExpandedState(nextExpanded, { reason: 'auto' });
     }
-  }, [applyTerminalExpandedState, isLastItem, status]);
+  }, [
+    applyTerminalExpandedState,
+    beginCompletionPreview,
+    isCompletionPreviewActive,
+    isLastItem,
+    status,
+  ]);
 
   const updateCommandTruncation = useCallback(() => {
     const element = commandRef.current;

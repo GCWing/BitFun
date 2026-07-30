@@ -12,6 +12,7 @@ import { ToolCommandPreview } from './ToolCommandPreview';
 import { ToolTimeoutIndicator } from './ToolTimeoutIndicator';
 import { DotMatrixLoader } from '../../component-library';
 import { useToolCardHeightContract, type ToolCardCollapseReason } from './useToolCardHeightContract';
+import { useToolCardCompletionGracePeriod } from './useToolCardCompletionGracePeriod';
 import { formatSessionViewPreviewText } from '../utils/sessionViewPreview';
 import './ExecProcessToolCard.scss';
 
@@ -56,9 +57,10 @@ function getInitialExpandedState(status: string): boolean {
 function getAutoExpandedStateForStatus(
   status: string,
   isLastItem: boolean | undefined,
+  keepTailPreview: boolean,
 ): boolean | null {
   if (isCollapsedStatus(status)) {
-    return isLastItem === true ? null : false;
+    return isLastItem === true && keepTailPreview ? null : false;
   }
 
   if (status === 'preparing' || status === 'streaming' || status === 'running' || status === 'receiving') {
@@ -196,6 +198,16 @@ export const ExecProcessToolCardView: React.FC<ExecProcessToolCardViewProps> = (
     toolId,
     toolName: toolItem.toolName,
   });
+  const {
+    begin: beginCompletionPreview,
+    isActive: isCompletionPreviewActive,
+  } = useToolCardCompletionGracePeriod({
+    eligible:
+      isCollapsedStatus(status) &&
+      isLastItem === true &&
+      isExpanded &&
+      !userToggledRef.current,
+  });
 
   const applyExecExpandedState = useCallback((
     nextExpanded: boolean,
@@ -221,11 +233,18 @@ export const ExecProcessToolCardView: React.FC<ExecProcessToolCardViewProps> = (
       return;
     }
 
-    const nextExpanded = getAutoExpandedStateForStatus(status, isLastItem);
+    const keepTailPreview = isCollapsedStatus(status) && beginCompletionPreview();
+    const nextExpanded = getAutoExpandedStateForStatus(status, isLastItem, keepTailPreview);
     if (nextExpanded !== null) {
       applyExecExpandedState(nextExpanded, { reason: 'auto' });
     }
-  }, [applyExecExpandedState, isLastItem, status]);
+  }, [
+    applyExecExpandedState,
+    beginCompletionPreview,
+    isCompletionPreviewActive,
+    isLastItem,
+    status,
+  ]);
 
   const compactSettledPreview =
     isExpanded &&

@@ -43,6 +43,7 @@ import { diffLines } from 'diff';
 import { createLogger } from '@/shared/utils/logger';
 import { CompactToolCard, CompactToolCardHeader } from './CompactToolCard';
 import { useToolCardHeightContract } from './useToolCardHeightContract';
+import { useToolCardCompletionGracePeriod } from './useToolCardCompletionGracePeriod';
 import { useTypewriter } from '../hooks/useTypewriter';
 import { useReportTypewriterReveal } from '../hooks/typewriterRevealGateContext';
 import { hasNonFileUriScheme } from '@/shared/utils/pathUtils';
@@ -136,7 +137,6 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
   
   const hasInitializedCompletionEffectRef = useRef(false);
   const previousCompletionEndTimeRef = useRef<number | null>(toolItem.endTime ?? null);
-  const previousExpansionStatusRef = useRef(status);
   const previousFailureStatusRef = useRef(status);
   const userToggledContentRef = useRef(false);
   const {
@@ -298,6 +298,18 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
   }, [status, toolItem.toolName, writeContentCharCount]);
   
   const isFailed = status === 'error' || (toolResult && 'success' in toolResult && !toolResult.success);
+  const {
+    begin: beginCompletionPreview,
+    isActive: isCompletionPreviewActive,
+  } = useToolCardCompletionGracePeriod({
+    eligible:
+      status === 'completed' &&
+      !isFailed &&
+      isLastItem === true &&
+      isContentExpanded &&
+      !userToggledContentRef.current,
+    isRevealing: writeTypewriter.isRevealing || editTypewriter.isRevealing,
+  });
   const rawErrorMessage = (() => {
     if (toolResult && 'error' in toolResult) {
       return toolResult.error;
@@ -411,19 +423,16 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
   }, [error, clearError, currentFilePath]);
 
   useLayoutEffect(() => {
-    const previousStatus = previousExpansionStatusRef.current;
-    previousExpansionStatusRef.current = status;
-
     if (userToggledContentRef.current) {
       return;
     }
 
     if (status === 'completed' && !isFailed) {
       if (isLastItem === true && isContentExpanded) {
-        if (previousStatus !== 'completed') {
+        if (beginCompletionPreview()) {
           setRetainLiveCompletionPreview(true);
+          return;
         }
-        return;
       }
 
       setRetainLiveCompletionPreview(false);
@@ -435,6 +444,8 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
     applyContentExpandedState(true, 'auto');
   }, [
     applyContentExpandedState,
+    beginCompletionPreview,
+    isCompletionPreviewActive,
     isContentExpanded,
     isFailed,
     isLastItem,
