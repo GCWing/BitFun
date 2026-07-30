@@ -35,23 +35,22 @@ impl Tool for SwitchCwdTool {
     }
 
     async fn description(&self) -> BitFunResult<String> {
-        Ok(r#"Switch the session project context directory for Harmony project actions.
+        Ok(r#"Switch the session project directory for HarmonyOS tools (build_project, start_app, hdc_log, check_arkts_files, check_cpp_files).
 
-Use this tool before running `devecocli build` / `devecocli run --skip-build`.
-These tools only work correctly when the context directory is a valid project path.
-If the current context directory is already the ArkTS project root, do not switch again.
-When the `deveco-create-project` skill creates a full project under the current path,
-you must switch to that generated project directory before running build or run commands.
-Accepts absolute paths and relative paths (resolved from the current workspace directory).
+Only use this tool when the HarmonyOS project directory is DIFFERENT from the current workspace root. For example, when the `deveco-create-project` skill creates a project in a subdirectory like `./MyApp`, call this tool with `project_path` pointing to that subdirectory.
 
-After a successful switch, syntax-check MCP (`deveco-mcp`) is warmed in the background; large projects may take tens of seconds.
-Subsequent `check_arkts_files`, `check_cpp_files`, and `devecocli` build/run commands use the new path.
+Do NOT call this tool if:
+- The workspace root already contains `build-profile.json5` / `AppScope/app.json5` — the tools already use the workspace root as the project directory by default.
+- You are not sure whether a switch is needed — check first with `Glob` for `build-profile.json5` in the workspace root.
 
-For project-creation requests, you MUST first load the `deveco-create-project` skill instead of using this tool to jump to an existing directory."#.to_string())
+Parameter:
+- project_path (required, string): absolute or relative path to the HarmonyOS project root directory. Relative paths are resolved from the current workspace directory.
+
+After a successful switch, all HarmonyOS tools use the new path until the session ends."#.to_string())
     }
 
     fn short_description(&self) -> String {
-        "Switch the session project context directory for Harmony project actions.".to_string()
+        "Switch project directory — only when project is NOT the workspace root.".to_string()
     }
 
     fn input_schema(&self) -> Value {
