@@ -751,15 +751,22 @@ mod tests {
             .write_pid("job-no-match", std::process::id())
             .expect("record test pid");
 
-        let error = cancel_in_store(
+        let terminate_called = std::cell::Cell::new(false);
+        let error = cancel_in_store_with_process_checks(
             &store,
             DispatchCancelRequest {
                 job_id: "job-no-match".to_string(),
             },
-            runner::terminate_worker,
+            |_pid| true,
+            |_pid, _job_id| false,
+            |_pid, _job_id| {
+                terminate_called.set(true);
+                Ok(true)
+            },
         )
         .expect_err("an unrelated live process must not be treated as cancelled");
         assert!(error.to_string().contains("no longer matches"));
+        assert!(!terminate_called.get());
         let state = store.load_state("job-no-match").expect("state");
         assert_eq!(state.state, DispatchJobState::Failed);
         assert!(state.cancel_requested());

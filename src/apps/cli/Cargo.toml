@@ -81,6 +81,7 @@ tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 flate2 = { workspace = true }
 futures-util = { workspace = true }
+fs2 = { workspace = true }
 base64 = { workspace = true }
 minisign-verify = "0.2"
 reqwest = { workspace = true }

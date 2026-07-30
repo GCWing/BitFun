@@ -878,7 +878,9 @@ impl DispatchStore {
             if metadata.file_type().is_symlink() || !metadata.is_dir() {
                 continue;
             }
-            let lock = JobLock::exclusive(&job_dir.join(".lock"))?;
+            let Some(lock) = JobLock::try_exclusive(&job_dir.join(".lock"))? else {
+                continue;
+            };
             let state = match self.load_state_unlocked(&job_dir) {
                 Ok(state) => state,
                 Err(error) => {
@@ -908,10 +910,33 @@ impl DispatchStore {
                 job_id,
                 uuid::Uuid::new_v4().as_simple()
             ));
-            fs::rename(&job_dir, &tombstone).with_context(|| {
-                format!("quarantine expired dispatch job {}", job_dir.display())
-            })?;
+
+            // Windows cannot rename a directory while a child lock file is
+            // open. Terminal states are irreversible, so release that handle
+            // immediately before the atomic quarantine rename. A concurrent
+            // opener makes the rename fail and the job is retried later.
+            #[cfg(windows)]
             drop(lock);
+            let rename_result = fs::rename(&job_dir, &tombstone);
+            #[cfg(not(windows))]
+            drop(lock);
+            match rename_result {
+                Ok(()) => {}
+                Err(error) if retryable_retention_rename_error(&error) => {
+                    tracing::debug!(
+                        job_id = %job_id,
+                        error_kind = ?error.kind(),
+                        raw_os_error = ?error.raw_os_error(),
+                        "Deferring dispatch retention cleanup for busy job"
+                    );
+                    continue;
+                }
+                Err(error) => {
+                    return Err(error).with_context(|| {
+                        format!("quarantine expired dispatch job {}", job_dir.display())
+                    });
+                }
+            }
             fs::remove_dir_all(&tombstone)
                 .with_context(|| format!("remove expired dispatch job {}", tombstone.display()))?;
 
@@ -1020,8 +1045,8 @@ impl DispatchStore {
         let _lock = FileLock::exclusive(&lock_file)?;
         let path = job_dir.join(EVENTS_FILE);
         let mut file = OpenOptions::new()
-            .append(true)
             .read(true)
+            .write(true)
             .open(&path)
             .with_context(|| format!("open dispatch events {}", path.display()))?;
         set_private_file_permissions(&path)?;
@@ -1049,6 +1074,7 @@ impl DispatchStore {
             atomic_write_json(&metadata_path, &event_metadata)?;
         }
         let physical_len = truncate_incomplete_event_tail(&mut file)?;
+        file.seek(SeekFrom::Start(physical_len))?;
         let current_len = physical_len.saturating_sub(data_start);
         if current_len
             .saturating_add(encoded.len() as u64)
@@ -1547,45 +1573,27 @@ pub(super) fn remove_file_if_present(path: &Path) {
     }
 }
 
-#[cfg(unix)]
 fn lock_file(file: &File, exclusive: bool) -> Result<()> {
-    use std::os::fd::AsRawFd;
-    let operation = if exclusive {
-        libc::LOCK_EX
+    let result = if exclusive {
+        fs2::FileExt::lock_exclusive(file)
     } else {
-        libc::LOCK_SH
+        fs2::FileExt::lock_shared(file)
     };
-    // SAFETY: flock only operates on this live file descriptor.
-    if unsafe { libc::flock(file.as_raw_fd(), operation) } == 0 {
-        Ok(())
-    } else {
-        Err(std::io::Error::last_os_error()).context("lock dispatch file")
-    }
+    result.context("lock dispatch file")
 }
 
-#[cfg(unix)]
 fn try_lock_file_exclusive(file: &File) -> Result<bool> {
-    use std::os::fd::AsRawFd;
-    // SAFETY: flock only operates on this live file descriptor.
-    if unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) } == 0 {
-        return Ok(true);
-    }
-    let error = std::io::Error::last_os_error();
-    if error.kind() == std::io::ErrorKind::WouldBlock {
-        Ok(false)
-    } else {
-        Err(error).context("try lock dispatch file")
+    match fs2::FileExt::try_lock_exclusive(file) {
+        Ok(()) => Ok(true),
+        Err(error) if error.raw_os_error() == fs2::lock_contended_error().raw_os_error() => {
+            Ok(false)
+        }
+        Err(error) => Err(error).context("try lock dispatch file"),
     }
 }
 
-#[cfg(not(unix))]
-fn lock_file(_file: &File, _exclusive: bool) -> Result<()> {
-    Ok(())
-}
-
-#[cfg(not(unix))]
-fn try_lock_file_exclusive(_file: &File) -> Result<bool> {
-    Ok(true)
+fn retryable_retention_rename_error(error: &std::io::Error) -> bool {
+    cfg!(windows) && error.kind() == std::io::ErrorKind::PermissionDenied
 }
 
 #[cfg(test)]
@@ -1682,6 +1690,7 @@ mod tests {
         file.write_all(br#"{"type":"jobState","timestamp":"partial""#)
             .expect("write partial line");
         file.sync_all().expect("sync partial line");
+        drop(file);
 
         let page = store
             .read_events("job-2", initial.cursor)
@@ -2383,6 +2392,88 @@ mod tests {
         assert!(store.root.join("workspaces/recent").exists());
         assert!(store.root.join("jobs/running").exists());
         assert!(store.root.join("workspaces/running").exists());
+    }
+
+    #[test]
+    fn retention_skips_contended_job_without_blocking_and_retries_later() {
+        let (_dir, store) = store();
+        store
+            .create_job(request("contended"), "Task".to_string())
+            .expect("create job");
+        store
+            .mark_state("contended", DispatchJobState::Succeeded, None, None)
+            .expect("mark terminal");
+        let now = chrono::Utc::now();
+        let mut expired = store.load_state("contended").expect("expired state");
+        expired.finished_at =
+            Some((now - chrono::Duration::days(TERMINAL_JOB_RETENTION_DAYS + 1)).to_rfc3339());
+        let job_dir = store.job_dir("contended").expect("job path");
+        atomic_write_json(&job_dir.join(STATE_FILE), &expired).expect("age terminal state");
+
+        let lock = JobLock::exclusive(&job_dir.join(".lock")).expect("hold job lock");
+        let collecting_store = store.clone();
+        let (sender, receiver) = std::sync::mpsc::channel();
+        let collector = std::thread::spawn(move || {
+            let result = collecting_store.collect_expired_terminal_jobs(now);
+            sender.send(result).expect("send retention result");
+        });
+        let while_contended = receiver.recv_timeout(std::time::Duration::from_secs(1));
+        drop(lock);
+        collector.join().expect("join retention collector");
+
+        assert_eq!(
+            while_contended
+                .expect("retention must not block on a busy job")
+                .expect("skip contended job"),
+            0
+        );
+        assert!(job_dir.exists());
+        assert_eq!(
+            store
+                .collect_expired_terminal_jobs(now)
+                .expect("retry expired job"),
+            1
+        );
+        assert!(!job_dir.exists());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn retention_retries_after_windows_sharing_violation() {
+        let (_dir, store) = store();
+        store
+            .create_job(request("sharing-violation"), "Task".to_string())
+            .expect("create job");
+        store
+            .mark_state("sharing-violation", DispatchJobState::Succeeded, None, None)
+            .expect("mark terminal");
+        let now = chrono::Utc::now();
+        let mut expired = store
+            .load_state("sharing-violation")
+            .expect("expired state");
+        expired.finished_at =
+            Some((now - chrono::Duration::days(TERMINAL_JOB_RETENTION_DAYS + 1)).to_rfc3339());
+        let job_dir = store.job_dir("sharing-violation").expect("job path");
+        let state_path = job_dir.join(STATE_FILE);
+        atomic_write_json(&state_path, &expired).expect("age terminal state");
+
+        let open_state = File::open(&state_path).expect("hold state file open");
+        assert_eq!(
+            store
+                .collect_expired_terminal_jobs(now)
+                .expect("sharing violation must defer cleanup"),
+            0
+        );
+        assert!(job_dir.exists());
+
+        drop(open_state);
+        assert_eq!(
+            store
+                .collect_expired_terminal_jobs(now)
+                .expect("retry expired job"),
+            1
+        );
+        assert!(!job_dir.exists());
     }
 
     #[cfg(unix)]

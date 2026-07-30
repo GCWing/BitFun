@@ -909,6 +909,7 @@ dependencies = [
  "dirs 6.0.0",
  "dunce",
  "flate2",
+ "fs2",
  "futures-util",
  "hex",
  "libc",
