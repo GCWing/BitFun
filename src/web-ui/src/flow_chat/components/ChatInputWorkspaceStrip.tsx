@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import {
   Activity,
   Check,
+  Download,
   EyeOff,
   GitBranch,
   Shield,
@@ -22,6 +23,7 @@ import { useGitState } from '@/tools/git/hooks/useGitState';
 import type { SessionExecutionTarget } from '@/infrastructure/api/service-api/WorktreeAPI';
 import { useI18n } from '@/infrastructure/i18n';
 import { DispatchTargetPicker } from '@/features/dispatch/DispatchTargetPicker';
+import { DispatchResultDialog } from '@/features/dispatch/DispatchResultDialog';
 import type { DispatchSelection, DispatchTarget } from '@/features/dispatch/types';
 import './ChatInputWorkspaceStrip.scss';
 
@@ -70,6 +72,12 @@ export interface ChatInputWorkspaceStripProps {
     locked: boolean;
     onSelectLocal?: () => void;
     onSelectTarget: (selection: DispatchSelection) => void;
+    /**
+     * Set once a snapshot-delivered job has finished, so its results can be
+     * reviewed. Absent for local, non-snapshot, or still-running sessions —
+     * there is nothing to pull in those cases.
+     */
+    completedSnapshotJobId?: string;
   };
 }
 
@@ -94,8 +102,10 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
 }) => {
   const { t } = useTranslation('flow-chat');
   const { t: tWorktrees } = useI18n('worktrees');
+  const { t: tCommon } = useI18n('common');
   const permissionRootRef = useRef<HTMLDivElement>(null);
   const [permissionMenuOpen, setPermissionMenuOpen] = useState(false);
+  const [resultDialogOpen, setResultDialogOpen] = useState(false);
   const trimmedPath = repositoryPath.trim();
   const label = workspaceLabel.trim();
 
@@ -312,6 +322,30 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
               onSelectLocal={dispatchControl.onSelectLocal}
               onSelectTarget={dispatchControl.onSelectTarget}
             />
+          ) : null}
+          {dispatchControl?.completedSnapshotJobId ? (
+            <>
+              <Tooltip content={tCommon('dispatch.resultTitle')} placement="top">
+                <button
+                  type="button"
+                  className="bitfun-chat-input-workspace-strip__dispatch-result"
+                  onClick={() => setResultDialogOpen(true)}
+                  data-testid="dispatch-result-trigger"
+                >
+                  <Download size={11} strokeWidth={2} aria-hidden />
+                  <span>{tCommon('dispatch.resultApply')}</span>
+                </button>
+              </Tooltip>
+              <DispatchResultDialog
+                open={resultDialogOpen}
+                jobId={dispatchControl.completedSnapshotJobId}
+                workspacePath={dispatchControl.sourceWorkspacePath ?? ''}
+                targetLabel={dispatchControl.target.kind !== 'local'
+                  ? dispatchControl.target.displayName
+                  : undefined}
+                onClose={() => setResultDialogOpen(false)}
+              />
+            </>
           ) : null}
           {showPermission ? (
             <div

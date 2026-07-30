@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use bitfun_agent_runtime::sdk::{PermissionReply, PermissionRequest};
-use bitfun_services_core::dispatch_workspace::WorkspaceSnapshotMetadata;
+use bitfun_services_core::dispatch_workspace::{WorkspaceResultSummary, WorkspaceSnapshotMetadata};
 
 pub(crate) const DISPATCH_PROTOCOL_VERSION: u32 = 2;
 pub(crate) const MAX_DISPATCH_TEXT_BYTES: usize = 32 * 1024;
@@ -184,6 +184,26 @@ pub(crate) struct DispatchWorkspaceCommitResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) workspace_path: Option<String>,
     pub(crate) metadata: WorkspaceSnapshotMetadata,
+}
+
+/// Ask the target to diff its terminal tree against the delivered snapshot.
+///
+/// Read-only on the target: it builds a bundle and reports what changed. The
+/// controller decides whether to fetch it, and applying it locally is a
+/// separate step the user confirms.
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct DispatchWorkspaceResultRequest {
+    pub(crate) job_id: String,
+}
+
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct DispatchWorkspaceResultResponse {
+    /// Absolute path of the bundle on the target, for the controller to fetch.
+    pub(crate) bundle_path: String,
+    pub(crate) workspace_path: String,
+    pub(crate) summary: WorkspaceResultSummary,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq)]

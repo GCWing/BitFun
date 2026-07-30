@@ -87,6 +87,51 @@ export interface DispatchSshProbe {
   protocolError?: string;
   release?: DispatchCliRelease;
   protocol?: DispatchProtocolProbe;
+  /** Set when no published binary can run on this target, with the reason. */
+  prebuiltIncompatible?: string;
+  /** Offered as the way forward when a prebuilt install cannot work. */
+  sourceBuild?: DispatchSourceBuild;
+}
+
+/** What a finished snapshot job changed, plus where the bundle was staged. */
+export interface DispatchResultBundle {
+  bundlePath: string;
+  localBundlePath: string;
+  workspacePath: string;
+  summary: DispatchResultSummary;
+}
+
+export interface DispatchResultSummary {
+  added: string[];
+  modified: string[];
+  deleted: string[];
+  /** Snapshot digest per changed path, used to detect local divergence. */
+  baselineSha256: Record<string, string>;
+  archiveSize: number;
+  archiveSha256: string;
+}
+
+export type DispatchResultConflictReason = 'locallyModified' | 'locallyMissing';
+
+export interface DispatchResultConflict {
+  path: string;
+  reason: DispatchResultConflictReason;
+}
+
+export interface DispatchResultApplyOutcome {
+  written: string[];
+  removed: string[];
+  conflicts: DispatchResultConflict[];
+  /** True when nothing was touched because conflicts were found. */
+  aborted: boolean;
+}
+
+export interface DispatchSourceBuild {
+  supported: boolean;
+  /** What the user must install or free up first. Empty when supported. */
+  blockers: string[];
+  cargoVersion?: string;
+  gitRef: string;
 }
 
 export interface DispatchInstallStart {

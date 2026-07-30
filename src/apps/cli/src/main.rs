@@ -604,6 +604,8 @@ pub(crate) enum DispatchAction {
     WorkspaceChunk,
     #[command(name = "__workspace_commit", hide = true)]
     WorkspaceCommit,
+    #[command(name = "__workspace_result", hide = true)]
+    WorkspaceResult,
     #[command(name = "__workspace_materialize", hide = true)]
     WorkspaceMaterialize {
         #[arg(long)]

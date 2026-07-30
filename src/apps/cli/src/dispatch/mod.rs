@@ -19,6 +19,7 @@ use protocol::{
     DispatchListRequest, DispatchProbeRequest, DispatchProbeResponse, DispatchStatusRequest,
     DispatchStatusResponse, DispatchSubmitRequest, DispatchSubmitResponse,
     DispatchWorkspaceBeginRequest, DispatchWorkspaceChunkRequest, DispatchWorkspaceCommitRequest,
+    DispatchWorkspaceResultRequest,
     DispatchWorkspaceProbe, DISPATCH_PROTOCOL_VERSION, MAX_DISPATCH_TEXT_BYTES,
 };
 use store::{CreateJobOutcome, DispatchStateRecord, DispatchStore};
@@ -71,6 +72,10 @@ pub(crate) async fn run_dispatch_verb(
             DispatchWorkspaceCommitRequest,
         >(input)?)?)
         .context("encode workspace commit response"),
+        "workspace-result" => serde_json::to_value(workspace::result(parse::<
+            DispatchWorkspaceResultRequest,
+        >(input)?)?)
+        .context("encode workspace result response"),
         _ => bail!("unsupported dispatch verb: {verb}"),
     }
 }
@@ -102,6 +107,9 @@ async fn probe(request: DispatchProbeRequest) -> Result<DispatchProbeResponse> {
         "event_log_completeness".to_string(),
         "workspace_snapshot_exact".to_string(),
         "workspace_snapshot_chunked".to_string(),
+        // Optional on purpose: controllers must feature-detect this rather than
+        // require it, so an older target stays usable for everything else.
+        "workspace_result_bundle".to_string(),
     ];
     if runner::is_supported() {
         capabilities.push("detached_worker".to_string());

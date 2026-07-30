@@ -5,16 +5,17 @@ use std::path::{Path, PathBuf};
 use anyhow::{bail, Context, Result};
 use base64::Engine as _;
 use bitfun_services_core::dispatch_workspace::{
-    extract_workspace_snapshot, WorkspaceSnapshotMetadata, MAX_SNAPSHOT_ARCHIVE_BYTES,
-    MAX_SNAPSHOT_DIRECTORIES, MAX_SNAPSHOT_FILES, MAX_SNAPSHOT_UNCOMPRESSED_BYTES,
-    WORKSPACE_SNAPSHOT_FORMAT_VERSION,
+    create_workspace_result_bundle, extract_workspace_snapshot, WorkspaceSnapshotManifest,
+    WorkspaceSnapshotMetadata, MAX_SNAPSHOT_ARCHIVE_BYTES, MAX_SNAPSHOT_DIRECTORIES,
+    MAX_SNAPSHOT_FILES, MAX_SNAPSHOT_UNCOMPRESSED_BYTES, WORKSPACE_SNAPSHOT_FORMAT_VERSION,
 };
 use serde::{Deserialize, Serialize};
 
 use super::protocol::{
     DispatchWorkspaceBeginRequest, DispatchWorkspaceBeginResponse, DispatchWorkspaceChunkRequest,
     DispatchWorkspaceChunkResponse, DispatchWorkspaceCommitRequest,
-    DispatchWorkspaceCommitResponse, DISPATCH_PROTOCOL_VERSION,
+    DispatchWorkspaceCommitResponse, DispatchWorkspaceResultRequest,
+    DispatchWorkspaceResultResponse, DISPATCH_PROTOCOL_VERSION,
 };
 use super::store::{
     atomic_write_json, create_private_dir, read_json, remove_file_if_present,
@@ -24,6 +25,10 @@ use super::store::{
 const UPLOAD_RECORD_FILE: &str = "upload.json";
 const UPLOAD_ARCHIVE_FILE: &str = "workspace.tar.gz";
 const CURRENT_WORKSPACE_DIR: &str = "current";
+/// The delivered snapshot's manifest, kept as the baseline a result diff is
+/// computed against.
+const BASELINE_MANIFEST_FILE: &str = "baseline-manifest.json";
+const RESULT_BUNDLE_FILE: &str = "result.tar.gz";
 const MAX_CHUNK_BYTES: usize = 256 * 1024;
 const MAX_CHUNK_BASE64_BYTES: usize = 384 * 1024;
 const MAX_MATERIALIZATION_ERROR_BYTES: usize = 16 * 1024;
@@ -297,6 +302,45 @@ pub(crate) fn commit(
     Ok(pending_commit_response(&record))
 }
 
+/// Diff the terminal workspace against the snapshot it was given and package
+/// what changed.
+///
+/// Only valid for snapshot-delivered jobs: a job that ran against a directory
+/// the user already had has no baseline to diff against, and BitFun never took
+/// ownership of that directory.
+pub(crate) fn result(
+    request: DispatchWorkspaceResultRequest,
+) -> Result<DispatchWorkspaceResultResponse> {
+    let store = DispatchStore::open_default()?;
+    let upload_dir = store.workspace_upload_dir(&request.job_id)?;
+    let lock_path = workspace_upload_lock_path(&store, &request.job_id);
+    let _lock = JobLock::exclusive(&lock_path)?;
+
+    let record: WorkspaceUploadRecord = read_json(&upload_dir.join(UPLOAD_RECORD_FILE))
+        .context("this job did not receive a workspace snapshot")?;
+    ensure_upload_identity(&record, &request.job_id)?;
+    if record.state != WorkspaceUploadState::Committed {
+        bail!("workspace snapshot is not committed yet");
+    }
+    let baseline: WorkspaceSnapshotManifest =
+        read_json(&upload_dir.join(BASELINE_MANIFEST_FILE)).context(
+            "this job predates result bundles; its baseline manifest was not recorded",
+        )?;
+
+    let current = upload_dir.join(CURRENT_WORKSPACE_DIR);
+    if !is_real_directory(&current) {
+        bail!("managed dispatch workspace is missing");
+    }
+    let bundle_path = upload_dir.join(RESULT_BUNDLE_FILE);
+    let summary = create_workspace_result_bundle(&current, &baseline, &bundle_path)?;
+    set_private_file_permissions(&bundle_path)?;
+    Ok(DispatchWorkspaceResultResponse {
+        bundle_path: bundle_path.to_string_lossy().to_string(),
+        workspace_path: current.to_string_lossy().to_string(),
+        summary,
+    })
+}
+
 /// Detached target-side materialization. The short `workspace-commit` RPC
 /// starts this process and subsequent commit calls poll the durable record, so
 /// extraction is not bounded by an SSH or Relay request timeout.
@@ -329,7 +373,14 @@ fn materialize_in_store(store: &DispatchStore, job_id: &str) -> Result<()> {
         let archive_path = upload_dir.join(UPLOAD_ARCHIVE_FILE);
         validate_complete_archive(&archive_path, &record.metadata)?;
         let staging = upload_dir.join(format!(".staging-{}", uuid::Uuid::new_v4().as_simple()));
-        extract_workspace_snapshot(&archive_path, &staging, &record.metadata)?;
+        let manifest = extract_workspace_snapshot(&archive_path, &staging, &record.metadata)?;
+        // Persist S0 as the baseline for a later result diff. The controller
+        // deletes its own copy of the archive as soon as the job is durably
+        // owned here, so this is the only surviving record of what was sent —
+        // and its per-file digests are what make a diff possible for workspaces
+        // that are not git repositories.
+        atomic_write_json(&upload_dir.join(BASELINE_MANIFEST_FILE), &manifest)
+            .context("persist dispatch workspace baseline manifest")?;
         fs::rename(&staging, &current).with_context(|| {
             format!(
                 "publish dispatch workspace {} -> {}",

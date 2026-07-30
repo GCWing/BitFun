@@ -32,10 +32,23 @@ const INSTALL_STEM: &str = "install-cli";
 const INSTALL_DONE_MARKER: &str = "BITFUN_DISPATCH_CLI_INSTALL_DONE";
 const INSTALL_PREPARE_GRACE_SECONDS: u64 = 30;
 const COMMAND_TIMEOUT_MS: u64 = 30_000;
+/// A release archive is tens of megabytes and the target's uplink is unknown,
+/// so this is far longer than an ordinary setup command.
+const TARGET_DOWNLOAD_TIMEOUT_MS: u64 = 10 * 60 * 1000;
 const WORKSPACE_COMMIT_POLL_INTERVAL: Duration = Duration::from_millis(750);
 const WORKSPACE_COMMIT_WAIT: Duration = Duration::from_secs(15 * 60);
 const RELEASE_READ_TIMEOUT_SECONDS: u64 = 30;
 const MAX_ARCHIVE_BYTES: usize = 512 * 1024 * 1024;
+/// A result bundle carries only changed files, so it is bounded well below a
+/// full workspace snapshot.
+const MAX_RESULT_BUNDLE_BYTES: u64 = 1024 * 1024 * 1024;
+/// Oldest glibc the published Linux binaries run against. Kept in step with
+/// `scripts/ci/check-glibc-floor.sh`, which enforces it at release time.
+const GLIBC_FLOOR: &str = "2.35";
+/// A release build of the workspace needs roughly this much scratch space.
+/// Same figure the relay source build uses.
+const SOURCE_BUILD_FREE_KB: u64 = 6 * 1024 * 1024;
+const REPO_GIT_URL: &str = "https://github.com/GCWing/BitFun.git";
 const DISPATCH_PROTOCOL_VERSION: u64 = 2;
 const REQUIRED_DISPATCH_CAPABILITIES: [&str; 12] = [
     "persistent_jobs",
@@ -73,6 +86,11 @@ pub struct DispatchSshProbe {
     pub protocol_error: Option<String>,
     pub release: Option<DispatchCliRelease>,
     pub protocol: Option<Value>,
+    /// Present only when the published binaries cannot run here, so the UI can
+    /// explain why instead of offering an install that would fail the same way.
+    pub prebuilt_incompatible: Option<String>,
+    /// Offered as the way forward when a prebuilt install cannot work.
+    pub source_build: Option<DispatchSourceBuild>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -109,7 +127,41 @@ struct RemoteTarget {
     arch: String,
     home: String,
     cli_path: Option<String>,
+    /// Version string of the installed CLI, when one is present and runnable.
+    cli_version: Option<String>,
     tar_available: bool,
+    /// Fetcher the target can use to pull the release itself, if any.
+    downloader: Option<RemoteDownloader>,
+    /// Command the target can use to check a SHA256 digest, if any.
+    digest_tool: Option<RemoteDigestTool>,
+    /// C library family on Linux targets; `None` off Linux or when unknown.
+    libc: Option<RemoteLibc>,
+    /// glibc version, when the target reported one.
+    libc_version: Option<String>,
+    cargo_version: Option<String>,
+    git_available: bool,
+    cc_available: bool,
+    free_kb: Option<u64>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RemoteLibc {
+    Glibc,
+    Musl,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RemoteDownloader {
+    Curl,
+    Wget,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RemoteDigestTool {
+    /// GNU coreutils, present on Linux.
+    Sha256Sum,
+    /// Perl-based, what macOS ships instead.
+    Shasum,
 }
 
 #[derive(Debug)]
@@ -119,6 +171,14 @@ struct ResolvedRelease {
     checksum_url: String,
     checksum_signature_url: String,
     archive_signature_url: String,
+    /// Whether `public.sha256` came from a minisign signature this machine
+    /// verified, rather than from an unauthenticated sidecar.
+    ///
+    /// The target has no minisign and no trust root, so letting it fetch the
+    /// archive itself is only safe when the digest we hand it is provably the
+    /// publisher's. Without that proof the archive's own signature is the only
+    /// protection, and only this machine can check it.
+    checksum_signature_verified: bool,
 }
 
 /// Probe the remote OS/architecture and, when present, the target CLI dispatch
@@ -160,15 +220,40 @@ pub async fn probe(
         || !protocol
             .as_ref()
             .is_some_and(dispatch_protocol_is_compatible);
+    // A platform mismatch is decided before any network work: no release exists
+    // that would install successfully, so resolving one only hides the reason.
+    let incompatibility = needs_install.then(|| prebuilt_incompatibility(&target)).flatten();
     let (release, install_error) = if needs_install {
-        if !target.tar_available {
+        if let Some(incompatibility) = &incompatibility {
+            (None, Some(incompatibility.describe()))
+        } else if !target.tar_available {
             (
                 None,
                 Some("remote target has no tar executable; install tar and retry".to_string()),
             )
         } else {
             match resolve_release(&target.os, &target.arch).await {
-                Ok(release) => (Some(release.public), None),
+                Ok(release) => match already_at_release_version(&target, &release) {
+                    // Reinstalling a release the target already runs cannot add
+                    // a protocol it does not implement. Offering the install
+                    // anyway traps the user in a loop of successful installs
+                    // that never clear the incompatibility.
+                    //
+                    // Carry the probe's own error: a release that genuinely
+                    // predates dispatch and a target that failed to answer for
+                    // some other reason look identical from here, and only the
+                    // underlying message tells them apart.
+                    Some(version) => {
+                        let detail = protocol_error.as_deref().unwrap_or("no dispatch protocol");
+                        (
+                            None,
+                            Some(format!(
+                                "target already runs BitFun CLI {version}, which did not answer the dispatch protocol ({detail}); reinstalling the same release cannot change this"
+                            )),
+                        )
+                    }
+                    None => (Some(release.public), None),
+                },
                 Err(error) => (None, Some(error.to_string())),
             }
         }
@@ -176,6 +261,13 @@ pub async fn probe(
         (None, None)
     };
     let install_supported = release.is_some();
+    // Offer the source build whenever the target needs a CLI but no prebuilt
+    // install can deliver one — an unsupported platform, a libc floor, a
+    // missing tar, an unreachable release, or a release that does not carry
+    // dispatch. Gating this on platform incompatibility alone left the last
+    // case with a warning and no way forward.
+    let source_build =
+        (needs_install && release.is_none()).then(|| source_build_availability(&target));
 
     Ok(DispatchSshProbe {
         cli_installed: target.cli_path.is_some(),
@@ -187,7 +279,141 @@ pub async fn probe(
         protocol_error,
         release,
         protocol,
+        prebuilt_incompatible: incompatibility.as_ref().map(PrebuiltIncompatibility::describe),
+        source_build,
     })
+}
+
+/// Why the published binaries cannot run on this target.
+///
+/// Kept structured rather than a flat string so the UI can say what is actually
+/// wrong — and, when a source build could fix it, offer that instead of leaving
+/// the user with an unexplained failure.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum PrebuiltIncompatibility {
+    UnsupportedPlatform { os: String, arch: String },
+    MuslLibc,
+    GlibcTooOld { found: String },
+}
+
+impl PrebuiltIncompatibility {
+    fn describe(&self) -> String {
+        match self {
+            Self::UnsupportedPlatform { os, arch } => format!(
+                "BitFun publishes no CLI binary for {os} {arch}"
+            ),
+            Self::MuslLibc => format!(
+                "target uses musl libc; published binaries are linked against glibc {GLIBC_FLOOR} or newer"
+            ),
+            Self::GlibcTooOld { found } => format!(
+                "target has glibc {found}; published binaries require {GLIBC_FLOOR} or newer"
+            ),
+        }
+    }
+}
+
+/// Whether a source build could produce a working CLI on this target.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DispatchSourceBuild {
+    /// Whether a build could start right now.
+    pub supported: bool,
+    /// What the user must install or free up first, when it cannot.
+    pub blockers: Vec<String>,
+    pub cargo_version: Option<String>,
+    /// The git ref that would be built.
+    pub git_ref: String,
+}
+
+/// Detect an incompatibility that no amount of reinstalling can fix.
+fn prebuilt_incompatibility(target: &RemoteTarget) -> Option<PrebuiltIncompatibility> {
+    if release_target(&target.os, &target.arch).is_err() {
+        return Some(PrebuiltIncompatibility::UnsupportedPlatform {
+            os: target.os.clone(),
+            arch: target.arch.clone(),
+        });
+    }
+    // Only Linux binaries carry a libc requirement; macOS builds do not.
+    if !target.os.trim().eq_ignore_ascii_case("Linux") {
+        return None;
+    }
+    match target.libc {
+        Some(RemoteLibc::Musl) => Some(PrebuiltIncompatibility::MuslLibc),
+        Some(RemoteLibc::Glibc) => {
+            let found = target.libc_version.as_deref()?;
+            (compare_versions(found, GLIBC_FLOOR) == std::cmp::Ordering::Less).then(|| {
+                PrebuiltIncompatibility::GlibcTooOld {
+                    found: found.to_string(),
+                }
+            })
+        }
+        None => None,
+    }
+}
+
+/// Numeric dotted-version comparison. `2.9` must order below `2.35`, which a
+/// lexicographic comparison would get backwards.
+fn compare_versions(left: &str, right: &str) -> std::cmp::Ordering {
+    let parse = |value: &str| {
+        value
+            .split('.')
+            .map(|part| part.trim().parse::<u64>().unwrap_or(0))
+            .collect::<Vec<_>>()
+    };
+    let (left, right) = (parse(left), parse(right));
+    for index in 0..left.len().max(right.len()) {
+        let ordering = left
+            .get(index)
+            .copied()
+            .unwrap_or(0)
+            .cmp(&right.get(index).copied().unwrap_or(0));
+        if ordering != std::cmp::Ordering::Equal {
+            return ordering;
+        }
+    }
+    std::cmp::Ordering::Equal
+}
+
+fn source_build_availability(target: &RemoteTarget) -> DispatchSourceBuild {
+    let mut blockers = Vec::new();
+    if target.cargo_version.is_none() {
+        blockers.push(
+            "no cargo on the target; install a Rust toolchain (https://rustup.rs) and retry"
+                .to_string(),
+        );
+    }
+    if !target.git_available {
+        blockers.push("no git on the target".to_string());
+    }
+    if !target.cc_available {
+        blockers.push("no C compiler on the target (install build-essential or equivalent)".to_string());
+    }
+    if let Some(free_kb) = target.free_kb {
+        if free_kb < SOURCE_BUILD_FREE_KB {
+            blockers.push(format!(
+                "needs about {} GB free under $HOME, found {} GB",
+                SOURCE_BUILD_FREE_KB / 1024 / 1024,
+                free_kb / 1024 / 1024
+            ));
+        }
+    }
+    DispatchSourceBuild {
+        supported: blockers.is_empty(),
+        blockers,
+        cargo_version: target.cargo_version.clone(),
+        git_ref: release_tag_for_version(RELEASE_VERSION),
+    }
+}
+
+/// The version the target already runs, when it matches the release we would
+/// install and therefore makes installing pointless.
+///
+/// A CLI that answered `--version` with the exact release version is a working
+/// binary, so the incompatibility is a missing feature in that release rather
+/// than a damaged install.
+fn already_at_release_version(target: &RemoteTarget, release: &ResolvedRelease) -> Option<String> {
+    let installed = target.cli_version.as_deref()?;
+    (installed == release.public.version).then(|| installed.to_string())
 }
 
 fn dispatch_protocol_is_compatible(protocol: &Value) -> bool {
@@ -274,7 +500,6 @@ pub async fn install_cli_start(
     }
     let release = resolve_release(&target.os, &target.arch).await?;
     ensure_confirmed_release(&release.public, expected_release)?;
-    let archive = download_verified_archive(&release).await?;
 
     // Stop an earlier attempt before replacing any of its staged files. A
     // cancellation transport error is not safe to ignore: the old installer
@@ -287,11 +512,6 @@ pub async fn install_cli_start(
     let archive_path = format!("{dir}/{}", release.filename);
     let body_path = format!("{dir}/{INSTALL_STEM}-body.sh");
     let script_path = format!("{dir}/{INSTALL_STEM}.sh");
-    let log_path = format!("{dir}/{INSTALL_STEM}.log");
-    let pid_path = format!("{dir}/{INSTALL_STEM}.pid");
-    let driver_pid_path = format!("{dir}/{INSTALL_STEM}.driver.pid");
-    let prepare_path = format!("{dir}/{INSTALL_STEM}.preparing");
-    let exit_path = format!("{dir}/{INSTALL_STEM}.exit");
     let install_token = format!("bitfun-install-{}", uuid::Uuid::new_v4().as_simple());
 
     exec_ok(
@@ -306,22 +526,220 @@ pub async fn install_cli_start(
     )
     .await?;
 
+    // Prefer letting the target pull the release straight from the publisher:
+    // the controller's uplink is usually the slowest hop, and pushing tens of
+    // megabytes through it is the worst available topology. Fall back to the
+    // push path whenever that is not safely possible.
+    let archive_source = match target_download_blocker(&target, &release) {
+        Some(reason) => ArchiveSource::ControllerPush { reason },
+        None => match download_archive_on_target(
+            manager,
+            connection_id,
+            &target,
+            &release,
+            &archive_path,
+        )
+        .await
+        {
+            Ok(()) => ArchiveSource::TargetDownload,
+            Err(error) => ArchiveSource::ControllerPush {
+                reason: bounded_detail(&error.to_string()),
+            },
+        },
+    };
+
     let body = to_unix_script(&install_body_script(
         &dir,
         &archive_path,
         &release.public.version,
+        &archive_source,
     ));
     let driver = to_unix_script(&install_driver_script(&dir, &body_path, &install_token));
+    if let ArchiveSource::ControllerPush { reason } = &archive_source {
+        log::info!("BitFun CLI dispatch install is pushing the archive over SFTP: {reason}");
+        let archive = download_verified_archive(&release).await?;
+        manager
+            .sftp_write(connection_id, &archive_path, &archive)
+            .await
+            .context("stage verified BitFun CLI archive")?;
+    }
+    stage_and_launch_installer(
+        manager,
+        connection_id,
+        &dir,
+        Some(&archive_path),
+        &body_path,
+        &script_path,
+        &body,
+        &driver,
+        &install_token,
+    )
+    .await?;
+
+    Ok(DispatchInstallStart {
+        script_path,
+        version: release.public.version,
+        target: release.public.target,
+        url: release.public.url,
+        sha256: release.public.sha256,
+    })
+}
+
+/// How the verified archive reached the target.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum ArchiveSource {
+    /// The target fetched the release itself and checked it against a digest
+    /// this machine proved with the publisher's signature.
+    TargetDownload,
+    /// This machine downloaded, fully verified, and pushed the bytes over SFTP.
+    /// Carries why the target could not fetch it, for the install log.
+    ControllerPush { reason: String },
+}
+
+/// Why this target cannot safely fetch the release itself, if it cannot.
+///
+/// The signature rule is the load-bearing one. A target has no minisign and no
+/// trust root, so it can only check a plain SHA256. That is sound when the
+/// digest is provably the publisher's, which is exactly what a verified
+/// `.sha256.sig` gives us. When that signature is absent the digest is
+/// unauthenticated, and the archive's own signature — checkable only here —
+/// becomes the sole protection, so the bytes must flow through this machine.
+fn target_download_blocker(target: &RemoteTarget, release: &ResolvedRelease) -> Option<String> {
+    if !release.checksum_signature_verified {
+        return Some("release checksum sidecar is unsigned".to_string());
+    }
+    if target.downloader.is_none() {
+        return Some("target has neither curl nor wget".to_string());
+    }
+    if target.digest_tool.is_none() {
+        return Some("target cannot verify a SHA256 digest".to_string());
+    }
+    None
+}
+
+/// Have the target fetch and digest-check the release into `archive_path`.
+///
+/// Synchronous on purpose: it replaces the SFTP upload, which was synchronous
+/// too, so a dropped session is no worse than before and the detached installer
+/// below still only ever sees a fully verified archive already on disk.
+async fn download_archive_on_target(
+    manager: &SSHConnectionManager,
+    connection_id: &str,
+    target: &RemoteTarget,
+    release: &ResolvedRelease,
+    archive_path: &str,
+) -> Result<()> {
+    let downloader = target
+        .downloader
+        .context("target download requires curl or wget")?;
+    let digest_tool = target
+        .digest_tool
+        .context("target download requires a SHA256 checker")?;
+    let script = target_download_script(
+        downloader,
+        digest_tool,
+        archive_path,
+        &release.public.url,
+        &release.public.sha256,
+    );
+    let result = manager
+        .execute_command_with_options(
+            connection_id,
+            &script,
+            SSHCommandOptions {
+                timeout_ms: Some(TARGET_DOWNLOAD_TIMEOUT_MS),
+                cancellation_token: None,
+            },
+        )
+        .await?;
+    ensure_command_completed(&result, "download BitFun CLI release on the target")?;
+    if result.exit_code != 0 {
+        return Err(remote_command_error(
+            "download BitFun CLI release on the target",
+            result.exit_code,
+            &result.stdout,
+            &result.stderr,
+        ));
+    }
+    Ok(())
+}
+
+fn target_download_script(
+    downloader: RemoteDownloader,
+    digest_tool: RemoteDigestTool,
+    archive_path: &str,
+    url: &str,
+    sha256: &str,
+) -> String {
+    // Download to a scratch name and only publish it once the digest matches,
+    // so a truncated or tampered body can never be handed to the installer.
+    let fetch = match downloader {
+        RemoteDownloader::Curl => format!(
+            "curl -fsSL --retry 3 --retry-delay 1 --max-time {timeout} --max-filesize {max} -o \"$PART\" {url}",
+            timeout = TARGET_DOWNLOAD_TIMEOUT_MS / 1000,
+            max = MAX_ARCHIVE_BYTES,
+            url = shell_quote_posix(url),
+        ),
+        // wget has no --max-filesize; the size ceiling is enforced below.
+        RemoteDownloader::Wget => format!(
+            "wget -q --tries=3 --timeout={timeout} -O \"$PART\" {url}",
+            timeout = TARGET_DOWNLOAD_TIMEOUT_MS / 1000,
+            url = shell_quote_posix(url),
+        ),
+    };
+    let verify = match digest_tool {
+        RemoteDigestTool::Sha256Sum => "sha256sum -c -",
+        RemoteDigestTool::Shasum => "shasum -a 256 -c -",
+    };
+    format!(
+        r#"set -eu
+umask 077
+ARCHIVE={archive}
+PART="$ARCHIVE.part"
+EXPECTED={sha}
+MAX={max}
+rm -f "$PART"
+cleanup() {{ rm -f "$PART"; }}
+trap cleanup EXIT
+{fetch}
+SIZE=$(wc -c <"$PART" | tr -d '[:space:]')
+if [ "$SIZE" -gt "$MAX" ]; then
+  echo "ERROR: downloaded archive is larger than $MAX bytes" >&2
+  exit 1
+fi
+printf '%s  %s\n' "$EXPECTED" "$PART" | {verify}
+mv -f "$PART" "$ARCHIVE"
+chmod 600 "$ARCHIVE"
+trap - EXIT
+"#,
+        archive = shell_quote_posix(archive_path),
+        sha = shell_quote_posix(sha256),
+        max = MAX_ARCHIVE_BYTES,
+    )
+}
+
+/// Stage the installer scripts and launch the detached body.
+///
+/// Shared by the release and source-build paths so both get the same token
+/// handshake, log truncation, and channel-leak-free launch.
+#[allow(clippy::too_many_arguments)]
+async fn stage_and_launch_installer(
+    manager: &SSHConnectionManager,
+    connection_id: &str,
+    dir: &str,
+    archive_path: Option<&str>,
+    body_path: &str,
+    script_path: &str,
+    body: &str,
+    driver: &str,
+    install_token: &str,
+) -> Result<()> {
     manager
-        .sftp_write(connection_id, &archive_path, &archive)
-        .await
-        .context("stage verified BitFun CLI archive")?;
-    manager
-        .sftp_write(connection_id, &body_path, body.as_bytes())
+        .sftp_write(connection_id, body_path, body.as_bytes())
         .await
         .context("stage BitFun CLI install body")?;
     manager
-        .sftp_write(connection_id, &script_path, driver.as_bytes())
+        .sftp_write(connection_id, script_path, driver.as_bytes())
         .await
         .context("stage BitFun CLI install driver")?;
 
@@ -329,15 +747,15 @@ pub async fn install_cli_start(
         manager,
         connection_id,
         &stage_install_command(
-            &archive_path,
-            &body_path,
-            &script_path,
-            &log_path,
-            &pid_path,
-            &driver_pid_path,
-            &prepare_path,
-            &exit_path,
-            &install_token,
+            archive_path,
+            body_path,
+            script_path,
+            &format!("{dir}/{INSTALL_STEM}.log"),
+            &format!("{dir}/{INSTALL_STEM}.pid"),
+            &format!("{dir}/{INSTALL_STEM}.driver.pid"),
+            &format!("{dir}/{INSTALL_STEM}.preparing"),
+            &format!("{dir}/{INSTALL_STEM}.exit"),
+            install_token,
         ),
     )
     .await?;
@@ -350,8 +768,8 @@ pub async fn install_cli_start(
             connection_id,
             &format!(
                 "bash {} {}",
-                shell_quote_posix(&script_path),
-                shell_quote_posix(&install_token)
+                shell_quote_posix(script_path),
+                shell_quote_posix(install_token)
             ),
             100,
             30,
@@ -368,13 +786,79 @@ pub async fn install_cli_start(
         let mut channel = channel;
         while channel.wait().await.is_some() {}
     });
+    Ok(())
+}
+
+/// Build and install the CLI from source on the target.
+///
+/// The way forward when no published binary can run there. Shares the install
+/// driver, log, and poll/cancel machinery with the release path, so progress
+/// reporting and cancellation behave identically.
+pub async fn install_cli_source_start(
+    manager: &SSHConnectionManager,
+    connection_id: &str,
+) -> Result<DispatchInstallStart> {
+    ensure_plain_ssh_target(manager, connection_id).await?;
+    let target = probe_remote_target(manager, connection_id).await?;
+    let availability = source_build_availability(&target);
+    if !availability.supported {
+        return Err(anyhow!(
+            "target cannot build BitFun from source: {}",
+            availability.blockers.join("; ")
+        ));
+    }
+
+    install_cli_cancel(manager, connection_id)
+        .await
+        .context("stop an earlier BitFun CLI installation")?;
+
+    let dir = format!("{}/{}", target.home, INSTALL_STATE_DIR);
+    let body_path = format!("{dir}/{INSTALL_STEM}-body.sh");
+    let script_path = format!("{dir}/{INSTALL_STEM}.sh");
+    let install_token = format!("bitfun-install-{}", uuid::Uuid::new_v4().as_simple());
+    let version = RELEASE_VERSION
+        .split('+')
+        .next()
+        .unwrap_or(RELEASE_VERSION)
+        .to_string();
+
+    exec_ok(
+        manager,
+        connection_id,
+        &format!(
+            "mkdir -p {dir} && chmod 700 {root} {dispatch} {dir}",
+            root = shell_quote_posix(&format!("{}/.bitfun", target.home)),
+            dispatch = shell_quote_posix(&format!("{}/.bitfun/dispatch", target.home)),
+            dir = shell_quote_posix(&dir),
+        ),
+    )
+    .await?;
+
+    let body = to_unix_script(&source_build_body_script(
+        &dir,
+        &version,
+        &availability.git_ref,
+    ));
+    let driver = to_unix_script(&install_driver_script(&dir, &body_path, &install_token));
+    stage_and_launch_installer(
+        manager,
+        connection_id,
+        &dir,
+        None,
+        &body_path,
+        &script_path,
+        &body,
+        &driver,
+        &install_token,
+    )
+    .await?;
 
     Ok(DispatchInstallStart {
         script_path,
-        version: release.public.version,
-        target: release.public.target,
-        url: release.public.url,
-        sha256: release.public.sha256,
+        version,
+        target: format!("{} {}", target.os, target.arch),
+        url: REPO_GIT_URL.to_string(),
+        sha256: String::new(),
     })
 }
 
@@ -709,6 +1193,84 @@ pub async fn append(
     invoke_json(manager, connection_id, "append", request).await
 }
 
+/// Ask the target what a finished job changed, and fetch the bundle.
+///
+/// Downloads only; nothing is written into the user's workspace here. Applying
+/// the bundle is a separate operation the user confirms after seeing the diff,
+/// because the local tree may have moved on since the snapshot was taken.
+pub async fn pull_result(
+    manager: &SSHConnectionManager,
+    connection_id: &str,
+    job_id: &str,
+    destination: &std::path::Path,
+) -> Result<Value> {
+    ensure_plain_ssh_target(manager, connection_id).await?;
+    let target = probe_remote_target(manager, connection_id).await?;
+    let cli_path = target.cli_path.as_deref().ok_or_else(|| {
+        anyhow!("BitFun CLI is not installed on the SSH target; confirm installation first")
+    })?;
+    let response = invoke_json_at_path(
+        manager,
+        connection_id,
+        &target.home,
+        cli_path,
+        // The target CLI exposes workspace data-plane verbs under reserved
+        // names, matching `__workspace_begin` and `__workspace_commit` above.
+        "__workspace_result",
+        &serde_json::json!({ "jobId": job_id }),
+    )
+    .await?;
+
+    let bundle_path = response
+        .get("bundlePath")
+        .and_then(Value::as_str)
+        .ok_or_else(|| anyhow!("dispatch target returned no result bundle path"))?;
+    // The path comes from the target, so bound it to the managed job directory
+    // before reading it, exactly as the upload path is bounded.
+    validate_managed_result_path(&target.home, job_id, bundle_path)?;
+
+    let bytes = manager
+        .sftp_read(connection_id, bundle_path)
+        .await
+        .context("download dispatch result bundle")?;
+    if bytes.len() as u64 > MAX_RESULT_BUNDLE_BYTES {
+        return Err(anyhow!(
+            "dispatch result bundle exceeds the {} MB safety limit",
+            MAX_RESULT_BUNDLE_BYTES / (1024 * 1024)
+        ));
+    }
+    if let Some(parent) = destination.parent() {
+        std::fs::create_dir_all(parent)
+            .with_context(|| format!("create result staging {}", parent.display()))?;
+    }
+    std::fs::write(destination, &bytes)
+        .with_context(|| format!("store result bundle {}", destination.display()))?;
+
+    let mut response = response;
+    if let Some(object) = response.as_object_mut() {
+        object.insert(
+            "localBundlePath".to_string(),
+            Value::String(destination.to_string_lossy().to_string()),
+        );
+    }
+    Ok(response)
+}
+
+/// A result bundle may only be read from the managed directory of the job it
+/// belongs to.
+fn validate_managed_result_path(home: &str, job_id: &str, bundle_path: &str) -> Result<()> {
+    let expected = format!(
+        "{}/.bitfun/dispatch/workspaces/{job_id}/result.tar.gz",
+        home.trim_end_matches('/')
+    );
+    if bundle_path != expected {
+        return Err(anyhow!(
+            "dispatch target returned an unexpected result bundle path"
+        ));
+    }
+    Ok(())
+}
+
 /// Stage and atomically materialize a controller-created workspace snapshot.
 ///
 /// The target CLI chooses the owner-only upload path. This adapter validates
@@ -1037,12 +1599,39 @@ async fn probe_remote_target(
         return Err(anyhow!("could not resolve remote $HOME"));
     }
     let cli_path = get("cli");
+    // `bitfun --version` prints "bitfun <semver>"; keep only the version.
+    let cli_version = get("cliversion")
+        .split_whitespace()
+        .next_back()
+        .unwrap_or_default()
+        .to_string();
     Ok(RemoteTarget {
         os: get("os"),
         arch: get("arch"),
         home,
         cli_path: (!cli_path.is_empty()).then_some(cli_path),
+        cli_version: (!cli_version.is_empty()).then_some(cli_version),
         tar_available: get("tar") == "1",
+        downloader: match get("downloader").as_str() {
+            "curl" => Some(RemoteDownloader::Curl),
+            "wget" => Some(RemoteDownloader::Wget),
+            _ => None,
+        },
+        digest_tool: match get("digest").as_str() {
+            "sha256sum" => Some(RemoteDigestTool::Sha256Sum),
+            "shasum" => Some(RemoteDigestTool::Shasum),
+            _ => None,
+        },
+        libc: match get("libc").as_str() {
+            "glibc" => Some(RemoteLibc::Glibc),
+            "musl" => Some(RemoteLibc::Musl),
+            _ => None,
+        },
+        libc_version: (!get("libcversion").is_empty()).then(|| get("libcversion")),
+        cargo_version: (!get("cargo").is_empty()).then(|| get("cargo")),
+        git_available: get("git") == "1",
+        cc_available: get("cc") == "1",
+        free_kb: get("freekb").parse().ok(),
     })
 }
 
@@ -1053,12 +1642,39 @@ printf 'os=%s\n' "$(uname -s 2>/dev/null || true)"
 printf 'arch=%s\n' "$(uname -m 2>/dev/null || true)"
 printf 'home=%s\n' "$HOME"
 if command -v tar >/dev/null 2>&1; then printf 'tar=1\n'; else printf 'tar=0\n'; fi
+if command -v curl >/dev/null 2>&1; then printf 'downloader=curl\n'
+elif command -v wget >/dev/null 2>&1; then printf 'downloader=wget\n'
+else printf 'downloader=\n'; fi
+if command -v sha256sum >/dev/null 2>&1; then printf 'digest=sha256sum\n'
+elif command -v shasum >/dev/null 2>&1; then printf 'digest=shasum\n'
+else printf 'digest=\n'; fi
 if [ -x "$HOME/.local/bin/bitfun" ]; then
   BITFUN_BIN="$HOME/.local/bin/bitfun"
 else
   BITFUN_BIN="$(command -v bitfun 2>/dev/null || true)"
 fi
 printf 'cli=%s\n' "$BITFUN_BIN"
+if [ -n "$BITFUN_BIN" ]; then
+  printf 'cliversion=%s\n' "$("$BITFUN_BIN" --version 2>/dev/null || true)"
+fi
+if [ "$(uname -s 2>/dev/null || true)" = "Linux" ]; then
+  if ls /lib/ld-musl-* >/dev/null 2>&1 || ldd --version 2>&1 | head -n1 | grep -qi musl; then
+    printf 'libc=musl\n'
+  else
+    printf 'libc=glibc\n'
+    printf 'libcversion=%s\n' "$(getconf GNU_LIBC_VERSION 2>/dev/null | awk '{print $NF}' || true)"
+  fi
+fi
+if command -v cargo >/dev/null 2>&1; then
+  printf 'cargo=%s\n' "$(cargo --version 2>/dev/null | awk '{print $2}' || true)"
+fi
+if command -v git >/dev/null 2>&1; then printf 'git=1\n'; else printf 'git=0\n'; fi
+if command -v cc >/dev/null 2>&1 || command -v gcc >/dev/null 2>&1; then
+  printf 'cc=1\n'
+else
+  printf 'cc=0\n'
+fi
+printf 'freekb=%s\n' "$(df -Pk "$HOME" 2>/dev/null | awk 'NR==2 {print $4}' || true)"
 "#
 }
 
@@ -1074,14 +1690,18 @@ async fn resolve_release(os: &str, arch: &str) -> Result<ResolvedRelease> {
     let archive_signature_url = format!("{url}.sig");
     let client = release_http_client()?;
     let checksum = fetch_required_text(&client, &checksum_url).await?;
-    let sha256 = match fetch_optional_text(&client, &checksum_signature_url).await? {
-        Some(signature) => verify_signed_checksum(&checksum, &signature, pubkey, &filename)?,
-        // Releases published before the CLI checksum sidecars were signed have
-        // no `.sha256.sig`. The digest shown for consent is then provisional;
-        // install still verifies the archive's own minisign signature before
-        // staging anything, so a tampered sidecar can only fail the install.
-        None => parse_sha256(&checksum, &filename)?,
-    };
+    let (sha256, checksum_signature_verified) =
+        match fetch_optional_text(&client, &checksum_signature_url).await? {
+            Some(signature) => (
+                verify_signed_checksum(&checksum, &signature, pubkey, &filename)?,
+                true,
+            ),
+            // Releases published before the CLI checksum sidecars were signed have
+            // no `.sha256.sig`. The digest shown for consent is then provisional;
+            // install still verifies the archive's own minisign signature before
+            // staging anything, so a tampered sidecar can only fail the install.
+            None => (parse_sha256(&checksum, &filename)?, false),
+        };
 
     Ok(ResolvedRelease {
         public: DispatchCliRelease {
@@ -1094,6 +1714,7 @@ async fn resolve_release(os: &str, arch: &str) -> Result<ResolvedRelease> {
         checksum_url,
         checksum_signature_url,
         archive_signature_url,
+        checksum_signature_verified,
     })
 }
 
@@ -1217,13 +1838,16 @@ fn extend_bounded_archive(archive: &mut Vec<u8>, chunk: &[u8], limit: usize) -> 
     Ok(())
 }
 
-fn install_body_script(dir: &str, archive_path: &str, expected_version: &str) -> String {
+/// Everything both install paths share: state paths, staging layout, rollback,
+/// and the exit trap. A source build and a release archive differ only in how
+/// they produce `$PRIMARY` and `$LEGACY`; keeping one copy of the dangerous part
+/// means the atomic-replace and rollback semantics cannot drift between them.
+fn install_preamble_fragment(dir: &str, expected_version: &str) -> String {
     format!(
         r#"#!/bin/bash
 set -euo pipefail
 umask 077
 D={dir}
-ARCHIVE={archive}
 EXPECTED_VERSION={version}
 TOKEN="${{1:-}}"
 PIDF="$D/{INSTALL_STEM}.pid"
@@ -1231,8 +1855,15 @@ EXITF="$D/{INSTALL_STEM}.exit"
 TMP="$D/unpack.$$"
 PRIMARY_TARGET="$HOME/.local/bin/bitfun"
 LEGACY_TARGET="$HOME/.local/bin/bitfun-cli"
-PRIMARY_NEW="$HOME/.local/bin/.bitfun-dispatch-new-$$"
-LEGACY_NEW="$HOME/.local/bin/.bitfun-cli-dispatch-new-$$"
+# Stage under real filenames in a private directory on the same filesystem as
+# the targets. `bitfun-cli` is a shim that resolves the real binary as its own
+# sibling, so it can only be smoke-tested next to a file actually named
+# `bitfun`. Renaming either binary while staging breaks that lookup on any host
+# without an existing install. Same filesystem keeps the commit below an
+# atomic rename.
+STAGE="$HOME/.local/bin/.bitfun-dispatch-stage-$$"
+PRIMARY_NEW="$STAGE/bitfun"
+LEGACY_NEW="$STAGE/bitfun-cli"
 PRIMARY_BACKUP="$D/previous-bitfun.$$"
 LEGACY_BACKUP="$D/previous-bitfun-cli.$$"
 HAD_PRIMARY=0
@@ -1256,7 +1887,7 @@ finish() {{
   code=$?
   trap - EXIT HUP INT TERM
   if [ "$code" -ne 0 ] && [ "$COMMITTED" != "1" ]; then rollback_install; fi
-  rm -f "$PRIMARY_NEW" "$LEGACY_NEW"
+  rm -rf "$STAGE"
   if [ "$COMMITTED" = "1" ]; then rm -f "$PRIMARY_BACKUP" "$LEGACY_BACKUP"; fi
   rm -rf "$TMP"
   printf '%s\n' "$code" >"$EXITF"
@@ -1267,24 +1898,20 @@ finish() {{
 trap finish EXIT
 trap 'exit 130' HUP INT TERM
 rm -f "$EXITF"
-mkdir -p "$TMP" "$HOME/.local/bin" "$HOME/.bitfun"
-chmod 700 "$HOME/.bitfun"
-tar -xzf "$ARCHIVE" -C "$TMP"
-PRIMARY=""
-LEGACY=""
-for candidate in "$TMP"/*/bitfun; do
-  [ -f "$candidate" ] || continue
-  [ -z "$PRIMARY" ] || {{ echo "ERROR: archive contains multiple bitfun binaries" >&2; exit 1; }}
-  PRIMARY="$candidate"
-done
-for candidate in "$TMP"/*/bitfun-cli; do
-  [ -f "$candidate" ] || continue
-  [ -z "$LEGACY" ] || {{ echo "ERROR: archive contains multiple bitfun-cli binaries" >&2; exit 1; }}
-  LEGACY="$candidate"
-done
-[ -n "$PRIMARY" ] || {{ echo "ERROR: archive contains no bitfun binary" >&2; exit 1; }}
-[ -n "$LEGACY" ] || {{ echo "ERROR: archive contains no bitfun-cli binary" >&2; exit 1; }}
-cp "$PRIMARY" "$PRIMARY_NEW"
+mkdir -p "$TMP" "$STAGE" "$HOME/.local/bin" "$HOME/.bitfun"
+chmod 700 "$HOME/.bitfun" "$STAGE"
+"#,
+        dir = shell_quote_posix(dir),
+        version = shell_quote_posix(expected_version),
+    )
+}
+
+/// Stage, smoke-test, and atomically commit `$PRIMARY` and `$LEGACY`.
+///
+/// `post_commit` runs once the swap has succeeded, for path-specific cleanup.
+fn install_commit_fragment(post_commit: &str) -> String {
+    format!(
+        r#"cp "$PRIMARY" "$PRIMARY_NEW"
 cp "$LEGACY" "$LEGACY_NEW"
 chmod 755 "$PRIMARY_NEW" "$LEGACY_NEW"
 staged="$("$PRIMARY_NEW" --version 2>/dev/null || true)"
@@ -1292,8 +1919,20 @@ case "$staged" in
   *"$EXPECTED_VERSION"*) ;;
   *) echo "ERROR: staged CLI version did not match $EXPECTED_VERSION: $staged" >&2; exit 1 ;;
 esac
-"$LEGACY_NEW" --version >/dev/null 2>&1 \
-  || {{ echo "ERROR: staged bitfun-cli companion did not run" >&2; exit 1; }}
+# Keep stderr: the loader message ("GLIBC_2.xx not found", "cannot execute
+# binary file") is the only actionable part of this failure.
+if ! staged_companion="$("$LEGACY_NEW" --version 2>&1 >/dev/null)"; then
+  echo "ERROR: staged bitfun-cli companion did not run: $staged_companion" >&2
+  exit 1
+fi
+# This installer exists only to serve dispatch, so a build without the
+# subcommand is a failed install, not a successful one. Checking here — before
+# anything is replaced — turns "install succeeded but the target is still
+# reported incompatible" into one honest error at the point of cause.
+if ! staged_dispatch="$("$PRIMARY_NEW" dispatch --help 2>&1 >/dev/null)"; then
+  echo "ERROR: this BitFun build does not provide dispatch support: $staged_dispatch" >&2
+  exit 1
+fi
 if [ -e "$PRIMARY_TARGET" ]; then
   mv -f "$PRIMARY_TARGET" "$PRIMARY_BACKUP"
   HAD_PRIMARY=1
@@ -1311,16 +1950,99 @@ case "$installed" in
   *"$EXPECTED_VERSION"*) ;;
   *) echo "ERROR: installed CLI version did not match $EXPECTED_VERSION: $installed" >&2; exit 1 ;;
 esac
-"$LEGACY_TARGET" --version >/dev/null 2>&1 \
-  || {{ echo "ERROR: installed bitfun-cli companion did not run" >&2; exit 1; }}
+if ! installed_companion="$("$LEGACY_TARGET" --version 2>&1 >/dev/null)"; then
+  echo "ERROR: installed bitfun-cli companion did not run: $installed_companion" >&2
+  exit 1
+fi
 COMMITTED=1
-rm -f "$ARCHIVE"
+{post_commit}
 echo "Installed $installed at $HOME/.local/bin/bitfun"
 echo {INSTALL_DONE_MARKER}
+"#
+    )
+}
+
+fn install_body_script(
+    dir: &str,
+    archive_path: &str,
+    expected_version: &str,
+    archive_source: &ArchiveSource,
+) -> String {
+    // Surfaced in the install output so the topology actually used is visible
+    // rather than guessed at.
+    let source_note = match archive_source {
+        ArchiveSource::TargetDownload => {
+            "Archive downloaded on the target and verified against the signed checksum.".to_string()
+        }
+        ArchiveSource::ControllerPush { reason } => {
+            format!("Archive uploaded from this device ({reason}).")
+        }
+    };
+    let extract = format!(
+        r#"ARCHIVE={archive}
+echo {source_note}
+tar -xzf "$ARCHIVE" -C "$TMP"
+PRIMARY=""
+LEGACY=""
+for candidate in "$TMP"/*/bitfun; do
+  [ -f "$candidate" ] || continue
+  [ -z "$PRIMARY" ] || {{ echo "ERROR: archive contains multiple bitfun binaries" >&2; exit 1; }}
+  PRIMARY="$candidate"
+done
+for candidate in "$TMP"/*/bitfun-cli; do
+  [ -f "$candidate" ] || continue
+  [ -z "$LEGACY" ] || {{ echo "ERROR: archive contains multiple bitfun-cli binaries" >&2; exit 1; }}
+  LEGACY="$candidate"
+done
+[ -n "$PRIMARY" ] || {{ echo "ERROR: archive contains no bitfun binary" >&2; exit 1; }}
+[ -n "$LEGACY" ] || {{ echo "ERROR: archive contains no bitfun-cli binary" >&2; exit 1; }}
 "#,
-        dir = shell_quote_posix(dir),
         archive = shell_quote_posix(archive_path),
-        version = shell_quote_posix(expected_version),
+        source_note = shell_quote_posix(&source_note),
+    );
+    format!(
+        "{preamble}{extract}{commit}",
+        preamble = install_preamble_fragment(dir, expected_version),
+        commit = install_commit_fragment(r#"rm -f "$ARCHIVE""#),
+    )
+}
+
+/// Build the CLI from source on the target, for hosts no published binary fits.
+///
+/// Deliberately does not install a Rust toolchain: fetching and running an
+/// installer script on someone's server is a bigger decision than this flow
+/// should make silently. A missing toolchain is reported as a blocker instead.
+fn source_build_body_script(dir: &str, expected_version: &str, git_ref: &str) -> String {
+    let build = format!(
+        r#"SRC="$D/source"
+GIT_REF={git_ref}
+echo "Building BitFun CLI {git_ref_plain} from source on the target. This can take a while."
+FREE_KB="$(df -Pk "$HOME" 2>/dev/null | awk 'NR==2 {{print $4}}' || echo 0)"
+if [ "${{FREE_KB:-0}}" -lt {free_kb} ]; then
+  echo "ERROR: source build needs about {free_gb} GB free under $HOME, found $((FREE_KB / 1024 / 1024)) GB" >&2
+  exit 1
+fi
+rm -rf "$SRC"
+git clone --depth 1 --branch "$GIT_REF" {repo} "$SRC"
+echo ">>> cargo build --release (bitfun, bitfun-cli)"
+( cd "$SRC" && cargo build --release --locked -p bitfun-cli --bin bitfun --bin bitfun-cli )
+PRIMARY="$SRC/target/release/bitfun"
+LEGACY="$SRC/target/release/bitfun-cli"
+[ -f "$PRIMARY" ] || {{ echo "ERROR: source build produced no bitfun binary" >&2; exit 1; }}
+[ -f "$LEGACY" ] || {{ echo "ERROR: source build produced no bitfun-cli binary" >&2; exit 1; }}
+"#,
+        git_ref = shell_quote_posix(git_ref),
+        git_ref_plain = git_ref,
+        repo = shell_quote_posix(REPO_GIT_URL),
+        free_kb = SOURCE_BUILD_FREE_KB,
+        free_gb = SOURCE_BUILD_FREE_KB / 1024 / 1024,
+    );
+    format!(
+        "{preamble}{build}{commit}",
+        preamble = install_preamble_fragment(dir, expected_version),
+        // The checkout is many gigabytes; leaving it behind would silently fill
+        // the target's home directory after a few installs.
+        commit = install_commit_fragment(r#"rm -rf "$SRC""#),
     )
 }
 
@@ -1380,7 +2102,8 @@ exit 0
 
 #[allow(clippy::too_many_arguments)]
 fn stage_install_command(
-    archive_path: &str,
+    // Absent for a source build, which has no archive to protect.
+    archive_path: Option<&str>,
     body_path: &str,
     script_path: &str,
     log_path: &str,
@@ -1390,13 +2113,14 @@ fn stage_install_command(
     exit_path: &str,
     install_token: &str,
 ) -> String {
+    let archive = archive_path
+        .map(|path| format!("chmod 600 {} && ", shell_quote_posix(path)))
+        .unwrap_or_default();
     format!(
-        "chmod 600 {archive} \
-         && chmod 700 {body} {script} \
+        "{archive}chmod 700 {body} {script} \
          && rm -f {pid} {driver_pid} {exit} \
          && : > {log} && chmod 600 {log} \
          && printf '%s\\n' {token} > {prepare} && chmod 600 {prepare}",
-        archive = shell_quote_posix(archive_path),
         body = shell_quote_posix(body_path),
         script = shell_quote_posix(script_path),
         pid = shell_quote_posix(pid_path),
@@ -1669,13 +2393,19 @@ mod tests {
             "/home/user/.bitfun/dispatch/install",
             "/home/user/.bitfun/dispatch/install/archive.tar.gz",
             "1.2.3",
+            &ArchiveSource::TargetDownload,
         );
         let driver = install_driver_script(
             "/home/user/.bitfun/dispatch/install",
             "/home/user/.bitfun/dispatch/install/install-cli-body.sh",
             "bitfun-install-test-token",
         );
-        for (name, script) in [("body", body), ("driver", driver)] {
+        let source = source_build_body_script(
+            "/home/user/.bitfun/dispatch/install",
+            "1.2.3",
+            "v1.2.3",
+        );
+        for (name, script) in [("body", body), ("driver", driver), ("source", source)] {
             let script = to_unix_script(&script);
             assert!(!script.contains('\r'), "{name} must be LF-only");
             assert!(
@@ -1686,6 +2416,565 @@ mod tests {
         }
     }
 
+    fn test_release(checksum_signature_verified: bool) -> ResolvedRelease {
+        ResolvedRelease {
+            public: DispatchCliRelease {
+                version: "1.2.3".to_string(),
+                target: "x86_64-unknown-linux-gnu".to_string(),
+                url: "https://example.invalid/bitfun-cli.tar.gz".to_string(),
+                sha256: "a".repeat(64),
+            },
+            filename: "bitfun-cli.tar.gz".to_string(),
+            checksum_url: "https://example.invalid/bitfun-cli.tar.gz.sha256".to_string(),
+            checksum_signature_url: "https://example.invalid/bitfun-cli.tar.gz.sha256.sig"
+                .to_string(),
+            archive_signature_url: "https://example.invalid/bitfun-cli.tar.gz.sig".to_string(),
+            checksum_signature_verified,
+        }
+    }
+
+    fn test_target(
+        downloader: Option<RemoteDownloader>,
+        digest_tool: Option<RemoteDigestTool>,
+    ) -> RemoteTarget {
+        RemoteTarget {
+            os: "Linux".to_string(),
+            arch: "x86_64".to_string(),
+            home: "/home/user".to_string(),
+            cli_path: None,
+            cli_version: None,
+            tar_available: true,
+            downloader,
+            digest_tool,
+            libc: Some(RemoteLibc::Glibc),
+            libc_version: Some("2.39".to_string()),
+            cargo_version: None,
+            git_available: true,
+            cc_available: true,
+            free_kb: Some(SOURCE_BUILD_FREE_KB * 2),
+        }
+    }
+
+    #[test]
+    fn a_result_bundle_is_only_read_from_its_own_managed_directory() {
+        // The path is chosen by the target, so a compromised or buggy one must
+        // not be able to point this at an arbitrary file to exfiltrate.
+        assert!(validate_managed_result_path(
+            "/home/user",
+            "job-1",
+            "/home/user/.bitfun/dispatch/workspaces/job-1/result.tar.gz"
+        )
+        .is_ok());
+        for hostile in [
+            "/home/user/.ssh/id_ed25519",
+            "/home/user/.bitfun/dispatch/workspaces/job-2/result.tar.gz",
+            "/home/user/.bitfun/dispatch/workspaces/job-1/../../../.ssh/id_ed25519",
+            "/home/user/.bitfun/dispatch/workspaces/job-1/current/secret",
+        ] {
+            assert!(
+                validate_managed_result_path("/home/user", "job-1", hostile).is_err(),
+                "must reject {hostile}"
+            );
+        }
+    }
+
+    #[test]
+    fn glibc_versions_compare_numerically_not_lexicographically() {
+        use std::cmp::Ordering;
+        // The reason this needs its own function: as strings, "2.9" sorts above
+        // "2.35", which would call a too-old host compatible.
+        assert_eq!(compare_versions("2.9", "2.35"), Ordering::Less);
+        assert_eq!(compare_versions("2.35", "2.35"), Ordering::Equal);
+        assert_eq!(compare_versions("2.39", "2.35"), Ordering::Greater);
+        assert_eq!(compare_versions("3.0", "2.35"), Ordering::Greater);
+        assert_eq!(compare_versions("2.35.1", "2.35"), Ordering::Greater);
+    }
+
+    #[test]
+    fn incompatible_targets_are_named_precisely() {
+        let mut target = test_target(
+            Some(RemoteDownloader::Curl),
+            Some(RemoteDigestTool::Sha256Sum),
+        );
+
+        assert!(
+            prebuilt_incompatibility(&target).is_none(),
+            "a supported glibc host has no incompatibility"
+        );
+
+        target.libc = Some(RemoteLibc::Musl);
+        assert_eq!(
+            prebuilt_incompatibility(&target),
+            Some(PrebuiltIncompatibility::MuslLibc)
+        );
+
+        target.libc = Some(RemoteLibc::Glibc);
+        target.libc_version = Some("2.31".to_string());
+        assert_eq!(
+            prebuilt_incompatibility(&target),
+            Some(PrebuiltIncompatibility::GlibcTooOld {
+                found: "2.31".to_string()
+            })
+        );
+
+        target.libc_version = Some("2.39".to_string());
+        target.arch = "riscv64".to_string();
+        assert!(matches!(
+            prebuilt_incompatibility(&target),
+            Some(PrebuiltIncompatibility::UnsupportedPlatform { .. })
+        ));
+
+        // macOS binaries carry no libc floor, so a musl reading must not leak in.
+        let mut mac = test_target(None, None);
+        mac.os = "Darwin".to_string();
+        mac.arch = "arm64".to_string();
+        mac.libc = Some(RemoteLibc::Musl);
+        assert!(prebuilt_incompatibility(&mac).is_none());
+    }
+
+    #[test]
+    fn source_build_reports_every_missing_prerequisite() {
+        let mut target = test_target(None, None);
+        target.cargo_version = None;
+        target.git_available = false;
+        target.cc_available = false;
+        target.free_kb = Some(1024);
+
+        let availability = source_build_availability(&target);
+        assert!(!availability.supported);
+        assert_eq!(
+            availability.blockers.len(),
+            4,
+            "every prerequisite must be listed at once, not one per retry: {:?}",
+            availability.blockers
+        );
+        assert!(
+            availability.blockers.iter().any(|b| b.contains("rustup.rs")),
+            "a missing toolchain must say where to get one"
+        );
+
+        target.cargo_version = Some("1.90.0".to_string());
+        target.git_available = true;
+        target.cc_available = true;
+        target.free_kb = Some(SOURCE_BUILD_FREE_KB * 2);
+        let availability = source_build_availability(&target);
+        assert!(availability.supported, "{:?}", availability.blockers);
+        assert!(availability.git_ref.starts_with('v') || availability.git_ref == "nightly");
+    }
+
+    #[test]
+    fn both_install_paths_share_one_staging_and_commit_implementation() {
+        let release = install_body_script(
+            "/home/user/.bitfun/dispatch/install",
+            "/home/user/.bitfun/dispatch/install/archive.tar.gz",
+            "1.2.3",
+            &ArchiveSource::TargetDownload,
+        );
+        let source = source_build_body_script("/home/user/.bitfun/dispatch/install", "1.2.3", "v1.2.3");
+        // The atomic-replace and rollback semantics must not be able to drift
+        // between the two paths.
+        let commit = install_commit_fragment(r#"rm -f "$ARCHIVE""#);
+        let shared = commit
+            .lines()
+            .find(|line| line.contains("mv -f \"$PRIMARY_NEW\""))
+            .expect("commit fragment swaps the primary");
+        for (name, script) in [("release", &release), ("source", &source)] {
+            assert!(script.contains(shared), "{name} must use the shared commit");
+            assert!(
+                script.contains(r#"PRIMARY_NEW="$STAGE/bitfun""#),
+                "{name} must stage under real filenames"
+            );
+            assert!(
+                script.contains("rollback_install"),
+                "{name} must keep rollback"
+            );
+        }
+        assert!(
+            source.contains("cargo build --release --locked"),
+            "source build must be reproducible"
+        );
+        assert!(
+            !source.contains("rustup") && !source.contains("sudo"),
+            "source build must not install a toolchain or escalate"
+        );
+        assert!(
+            source.contains(r#"rm -rf "$SRC""#),
+            "the checkout must be cleaned up after a successful build"
+        );
+    }
+
+    #[test]
+    fn reinstalling_the_version_already_present_is_not_offered() {
+        let release = test_release(true);
+        let mut target = test_target(
+            Some(RemoteDownloader::Curl),
+            Some(RemoteDigestTool::Sha256Sum),
+        );
+
+        target.cli_version = Some("1.2.3".to_string());
+        assert_eq!(
+            already_at_release_version(&target, &release).as_deref(),
+            Some("1.2.3"),
+            "an install that cannot change anything must not be offered"
+        );
+
+        target.cli_version = Some("1.2.2".to_string());
+        assert!(
+            already_at_release_version(&target, &release).is_none(),
+            "an older target must still be offered the upgrade"
+        );
+
+        target.cli_version = None;
+        assert!(
+            already_at_release_version(&target, &release).is_none(),
+            "a target with no runnable CLI must still be offered the install"
+        );
+    }
+
+    #[test]
+    fn an_unsigned_checksum_never_lets_the_target_fetch_the_release() {
+        // The target can only check a plain digest. If that digest is not
+        // provably the publisher's, the archive's own signature is the only
+        // protection and only this machine can verify it.
+        let capable = test_target(
+            Some(RemoteDownloader::Curl),
+            Some(RemoteDigestTool::Sha256Sum),
+        );
+        let blocker = target_download_blocker(&capable, &test_release(false));
+        assert_eq!(
+            blocker.as_deref(),
+            Some("release checksum sidecar is unsigned"),
+            "an unsigned sidecar must force the archive through this machine"
+        );
+        assert!(
+            target_download_blocker(&capable, &test_release(true)).is_none(),
+            "a signed sidecar on a capable target should download remotely"
+        );
+    }
+
+    #[test]
+    fn a_target_missing_its_tools_falls_back_to_the_push_path() {
+        let signed = test_release(true);
+        assert!(
+            target_download_blocker(&test_target(None, Some(RemoteDigestTool::Sha256Sum)), &signed)
+                .is_some(),
+            "no curl or wget must fall back"
+        );
+        assert!(
+            target_download_blocker(&test_target(Some(RemoteDownloader::Wget), None), &signed)
+                .is_some(),
+            "no digest checker must fall back"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn target_download_publishes_the_archive_only_when_the_digest_matches() {
+        let available = |tool: &str| {
+            std::process::Command::new(tool)
+                .arg("--version")
+                .output()
+                .map(|out| out.status.success())
+                .unwrap_or(false)
+        };
+        let Some((digest_command, digest_tool)) = [
+            ("sha256sum", RemoteDigestTool::Sha256Sum),
+            ("shasum -a 256", RemoteDigestTool::Shasum),
+        ]
+        .into_iter()
+        .find(|(command, _)| available(command.split_whitespace().next().unwrap_or(command)))
+        else {
+            return; // no digest tool on this host
+        };
+        if !available("curl") {
+            return; // no curl on this host
+        }
+
+        let temp = tempfile::tempdir().expect("temp dir");
+        let source = temp.path().join("release.tar.gz");
+        std::fs::write(&source, b"pretend release bytes").expect("write source");
+        // Derive the expected digest with the same tool the script will use,
+        // so this test needs no hashing dependency of its own.
+        let digest_output = std::process::Command::new("bash")
+            .args([
+                "-c",
+                &format!("{digest_command} {}", shell_quote_posix(&source.to_string_lossy())),
+            ])
+            .output()
+            .expect("compute digest");
+        assert!(digest_output.status.success(), "digest tool failed");
+        let digest = String::from_utf8_lossy(&digest_output.stdout)
+            .split_whitespace()
+            .next()
+            .expect("digest value")
+            .to_string();
+        let url = format!("file://{}", source.display());
+        let archive = temp.path().join("staged.tar.gz");
+
+        let run = |sha: &str| {
+            let script = target_download_script(
+                RemoteDownloader::Curl,
+                digest_tool,
+                &archive.to_string_lossy(),
+                &url,
+                sha,
+            );
+            std::process::Command::new("bash")
+                .args(["-c", &script])
+                .output()
+                .expect("run target download script")
+        };
+
+        let tampered = run(&"b".repeat(64));
+        assert!(
+            !tampered.status.success(),
+            "a digest mismatch must fail the download"
+        );
+        assert!(
+            !archive.exists(),
+            "a mismatched download must never be published to the installer"
+        );
+
+        let matched = run(&digest);
+        assert!(
+            matched.status.success(),
+            "a matching digest must succeed:\n{}",
+            String::from_utf8_lossy(&matched.stderr)
+        );
+        assert_eq!(
+            std::fs::read(&archive).expect("read staged archive"),
+            b"pretend release bytes",
+            "the verified bytes must be published unchanged"
+        );
+    }
+
+    #[test]
+    fn install_body_stages_binaries_under_their_real_names() {
+        let body = install_body_script(
+            "/home/user/.bitfun/dispatch/install",
+            "/home/user/.bitfun/dispatch/install/archive.tar.gz",
+            "1.2.3",
+            &ArchiveSource::TargetDownload,
+        );
+        // `bitfun-cli` resolves the real binary as its own sibling, so both must
+        // be staged under their real filenames or the pre-commit smoke test can
+        // never pass on a host that has no `bitfun` installed yet.
+        assert!(
+            body.contains(r#"PRIMARY_NEW="$STAGE/bitfun""#),
+            "primary must stage as a file literally named bitfun"
+        );
+        assert!(
+            body.contains(r#"LEGACY_NEW="$STAGE/bitfun-cli""#),
+            "companion must stage beside its sibling under its real name"
+        );
+        assert!(
+            !body.contains("dispatch-new-$$"),
+            "staging must not rename the binaries"
+        );
+        // The loader error is the only actionable part of a companion failure.
+        for check in ["$staged_companion", "$installed_companion"] {
+            assert!(
+                body.contains(check),
+                "companion failure must report captured stderr ({check})"
+            );
+        }
+    }
+
+    /// Mirrors a real `bitfun`: answers `--version` and has a `dispatch`
+    /// subcommand.
+    const DISPATCH_CAPABLE_PRIMARY: &str = "#!/bin/bash\n\
+         if [ \"${1:-}\" = dispatch ]; then exit 0; fi\n\
+         echo \"bitfun 1.2.3\"\n";
+
+    /// Mirrors a release that predates dispatch: the binary is healthy and
+    /// reports the right version, but clap rejects the subcommand.
+    const DISPATCH_LESS_PRIMARY: &str = "#!/bin/bash\n\
+         if [ \"${1:-}\" = dispatch ]; then\n\
+         echo \"error: unrecognized subcommand 'dispatch'\" >&2\n\
+         exit 2\n\
+         fi\n\
+         echo \"bitfun 1.2.3\"\n";
+
+    const SIBLING_RESOLVING_COMPANION: &str = "#!/bin/bash\n\
+         echo 'Warning: `bitfun-cli` is deprecated; use `bitfun` instead.' >&2\n\
+         here=\"$(cd \"$(dirname \"$0\")\" && pwd)\"\n\
+         if [ ! -f \"$here/bitfun\" ]; then\n\
+         echo \"Error: incomplete installation: $here/bitfun is missing\" >&2\n\
+         exit 1\n\
+         fi\n\
+         exec \"$here/bitfun\" \"$@\"\n";
+
+    #[cfg(unix)]
+    #[test]
+    fn a_build_without_dispatch_fails_the_install_instead_of_looking_healthy() {
+        // The scenario that motivated this check: a release whose binary runs
+        // and reports the expected version, but carries no dispatch support.
+        // Without the guard the install "succeeds" and the target is then
+        // reported incompatible, inviting an endless reinstall loop.
+        let (output, temp) = run_install_body_fixture(DISPATCH_LESS_PRIMARY);
+        let home = temp.path();
+        assert!(
+            !output.status.success(),
+            "an install that cannot serve dispatch must fail"
+        );
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(
+            stderr.contains("does not provide dispatch support"),
+            "the failure must name the cause: {stderr}"
+        );
+        assert!(
+            stderr.contains("unrecognized subcommand"),
+            "the underlying message must survive: {stderr}"
+        );
+        assert!(
+            !home.join(".local/bin/bitfun").exists(),
+            "nothing may be published when the build cannot serve dispatch"
+        );
+    }
+
+    #[cfg(unix)]
+    fn run_install_body_fixture(
+        primary: &str,
+    ) -> (std::process::Output, tempfile::TempDir) {
+        use std::os::unix::fs::PermissionsExt;
+
+        let temp = tempfile::tempdir().expect("temp dir");
+        let home = temp.path().to_path_buf();
+        let install_dir = home.join(INSTALL_STATE_DIR);
+        std::fs::create_dir_all(&install_dir).expect("install dir");
+        let pkg = temp.path().join("pkg/bitfun-cli-1.2.3-test");
+        std::fs::create_dir_all(&pkg).expect("package dir");
+        std::fs::write(pkg.join("bitfun"), primary).expect("write primary");
+        std::fs::write(pkg.join("bitfun-cli"), SIBLING_RESOLVING_COMPANION).expect("write companion");
+        for name in ["bitfun", "bitfun-cli"] {
+            std::fs::set_permissions(pkg.join(name), std::fs::Permissions::from_mode(0o755))
+                .expect("chmod package binary");
+        }
+        let archive = install_dir.join("archive.tar.gz");
+        assert!(std::process::Command::new("tar")
+            .arg("-czf")
+            .arg(&archive)
+            .arg("-C")
+            .arg(temp.path().join("pkg"))
+            .arg("bitfun-cli-1.2.3-test")
+            .status()
+            .expect("run tar")
+            .success());
+        std::fs::write(
+            install_dir.join(format!("{INSTALL_STEM}.pid")),
+            "1\ntest-token\n",
+        )
+        .expect("write pid marker");
+        let script = to_unix_script(&install_body_script(
+            &install_dir.to_string_lossy(),
+            &archive.to_string_lossy(),
+            "1.2.3",
+            &ArchiveSource::TargetDownload,
+        ));
+        let output = std::process::Command::new("bash")
+            .args(["-c", &script, "install-body", "test-token"])
+            .env("HOME", &home)
+            .output()
+            .expect("run install body");
+        (output, temp)
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn install_body_installs_a_sibling_resolving_companion_onto_a_bare_host() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let temp = tempfile::tempdir().expect("temp dir");
+        let home = temp.path();
+        let install_dir = home.join(INSTALL_STATE_DIR);
+        std::fs::create_dir_all(&install_dir).expect("install dir");
+
+        // Stand-ins for the shipped binaries. The companion mirrors the real
+        // shim in src/apps/cli/src/bin/bitfun_cli_compat.rs: it locates `bitfun`
+        // as its own sibling and fails loudly when that sibling is absent.
+        let pkg = temp.path().join("pkg/bitfun-cli-1.2.3-test");
+        std::fs::create_dir_all(&pkg).expect("package dir");
+        std::fs::write(pkg.join("bitfun"), DISPATCH_CAPABLE_PRIMARY).expect("write primary");
+        std::fs::write(
+            pkg.join("bitfun-cli"),
+            "#!/bin/bash\n\
+             echo 'Warning: `bitfun-cli` is deprecated; use `bitfun` instead.' >&2\n\
+             here=\"$(cd \"$(dirname \"$0\")\" && pwd)\"\n\
+             if [ ! -f \"$here/bitfun\" ]; then\n\
+             echo \"Error: incomplete installation: $here/bitfun is missing\" >&2\n\
+             exit 1\n\
+             fi\n\
+             exec \"$here/bitfun\" \"$@\"\n",
+        )
+        .expect("write companion");
+        for name in ["bitfun", "bitfun-cli"] {
+            std::fs::set_permissions(pkg.join(name), std::fs::Permissions::from_mode(0o755))
+                .expect("chmod package binary");
+        }
+
+        let archive = install_dir.join("archive.tar.gz");
+        let packed = std::process::Command::new("tar")
+            .arg("-czf")
+            .arg(&archive)
+            .arg("-C")
+            .arg(temp.path().join("pkg"))
+            .arg("bitfun-cli-1.2.3-test")
+            .status()
+            .expect("run tar");
+        assert!(packed.success(), "packaging the fixture archive failed");
+
+        // The driver normally publishes this before spawning the body; the body's
+        // exit trap reads line 2 to decide whether the marker is still its own.
+        std::fs::write(
+            install_dir.join(format!("{INSTALL_STEM}.pid")),
+            "1\ntest-token\n",
+        )
+        .expect("write pid marker");
+
+        let script = to_unix_script(&install_body_script(
+            &install_dir.to_string_lossy(),
+            &archive.to_string_lossy(),
+            "1.2.3",
+            &ArchiveSource::TargetDownload,
+        ));
+        let output = std::process::Command::new("bash")
+            .args(["-c", &script, "install-body", "test-token"])
+            .env("HOME", home)
+            .output()
+            .expect("run install body");
+
+        assert!(
+            output.status.success(),
+            "install must succeed on a host with no pre-existing bitfun:\nstdout: {}\nstderr: {}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert!(
+            String::from_utf8_lossy(&output.stdout).contains(INSTALL_DONE_MARKER),
+            "install must report completion"
+        );
+
+        // Both entrypoints must work, and the staging directory must be gone.
+        for name in ["bitfun", "bitfun-cli"] {
+            let installed = home.join(".local/bin").join(name);
+            let run = std::process::Command::new(&installed)
+                .arg("--version")
+                .output()
+                .expect("run installed binary");
+            assert!(run.status.success(), "{name} must run after install");
+            assert!(
+                String::from_utf8_lossy(&run.stdout).contains("bitfun 1.2.3"),
+                "{name} must resolve to the installed primary"
+            );
+        }
+        let leftovers = std::fs::read_dir(home.join(".local/bin"))
+            .expect("read bin dir")
+            .filter_map(Result::ok)
+            .filter(|entry| entry.file_name().to_string_lossy().starts_with('.'))
+            .count();
+        assert_eq!(leftovers, 0, "staging directory must be cleaned up");
+    }
+
     #[cfg(unix)]
     #[test]
     fn generated_install_scripts_parse_as_bash() {
@@ -1694,11 +2983,27 @@ mod tests {
                 "/home/user/.bitfun/dispatch/install",
                 "/home/user/.bitfun/dispatch/install/archive.tar.gz",
                 "1.2.3",
+                &ArchiveSource::TargetDownload,
             ),
             install_driver_script(
                 "/home/user/.bitfun/dispatch/install",
                 "/home/user/.bitfun/dispatch/install/install-cli-body.sh",
                 "bitfun-install-test-token",
+            ),
+            source_build_body_script("/home/user/.bitfun/dispatch/install", "1.2.3", "v1.2.3"),
+            target_download_script(
+                RemoteDownloader::Curl,
+                RemoteDigestTool::Sha256Sum,
+                "/home/user/.bitfun/dispatch/install/archive.tar.gz",
+                "https://example.invalid/archive.tar.gz",
+                &"a".repeat(64),
+            ),
+            target_download_script(
+                RemoteDownloader::Wget,
+                RemoteDigestTool::Shasum,
+                "/home/user/.bitfun/dispatch/install/archive.tar.gz",
+                "https://example.invalid/archive.tar.gz",
+                &"a".repeat(64),
             ),
             install_poll_script(17),
             install_cancel_script(),

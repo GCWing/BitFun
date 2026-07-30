@@ -2079,6 +2079,17 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     }
     const target: DispatchTarget =
       effectiveTargetSession?.config.dispatchTarget ?? { kind: 'local' };
+    // Results only exist for a snapshot-delivered job that has finished: an
+    // "existing directory" job never took a snapshot to diff against, and a
+    // running one has no terminal tree yet.
+    const jobId = effectiveTargetSession?.config.dispatchJobId;
+    const jobState = effectiveTargetSession?.config.dispatchJobState;
+    const completedSnapshotJobId =
+      effectiveTargetSession?.config.dispatchWorkspaceDelivery?.kind === 'snapshot-exact' &&
+      (jobState === 'succeeded' || jobState === 'failed') &&
+      jobId
+        ? jobId
+        : undefined;
     return {
       target,
       sourceWorkspacePath: workspacePath || undefined,
@@ -2087,10 +2098,14 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         (effectiveTargetSession?.dialogTurns.length ?? 0) > 0 ||
         !!derivedState?.isProcessing,
       onSelectTarget: handleSelectDispatchTarget,
+      completedSnapshotJobId,
     };
   }, [
     derivedState?.isProcessing,
+    effectiveTargetSession?.config.dispatchJobId,
+    effectiveTargetSession?.config.dispatchJobState,
     effectiveTargetSession?.config.dispatchTarget,
+    effectiveTargetSession?.config.dispatchWorkspaceDelivery?.kind,
     effectiveTargetSession?.dialogTurns.length,
     handleSelectDispatchTarget,
     isAcpInputSession,

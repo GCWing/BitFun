@@ -6,6 +6,8 @@ import type {
   DispatchInstallPoll,
   DispatchInstallStart,
   DispatchJobListEntry,
+  DispatchResultApplyOutcome,
+  DispatchResultBundle,
   DispatchSshProbe,
   DispatchStatusResponse,
   DispatchSubmitResponse,
@@ -37,6 +39,13 @@ export const dispatchApi = {
     });
   },
 
+  /** Build the CLI from source on the target, for hosts no binary fits. */
+  async installCliSourceStart(connectionId: string): Promise<DispatchInstallStart> {
+    return api.invoke<DispatchInstallStart>('dispatch_install_cli_source_start', {
+      request: { connectionId },
+    });
+  },
+
   async installCliPoll(connectionId: string, cursor: number): Promise<DispatchInstallPoll> {
     return api.invoke<DispatchInstallPoll>('dispatch_install_cli_poll', {
       request: { connectionId, cursor },
@@ -46,6 +55,35 @@ export const dispatchApi = {
   async installCliCancel(connectionId: string): Promise<void> {
     return api.invoke<void>('dispatch_install_cli_cancel', {
       request: { connectionId },
+    });
+  },
+
+  /**
+   * Download what a finished snapshot job changed on its target.
+   *
+   * Fetch and report only: the bundle lands in the controller's staging area
+   * and nothing reaches the local workspace until the user reviews the diff
+   * and explicitly applies it.
+   */
+  async pullResult(jobId: string): Promise<DispatchResultBundle> {
+    return api.invoke<DispatchResultBundle>('dispatch_pull_result', {
+      request: { jobId },
+    });
+  },
+
+  /**
+   * Apply a pulled bundle to a local workspace.
+   *
+   * Aborts without writing when a path changed on both sides, unless
+   * `overwriteConflicts` says to take the target's version.
+   */
+  async applyResult(
+    jobId: string,
+    workspacePath: string,
+    overwriteConflicts: boolean,
+  ): Promise<DispatchResultApplyOutcome> {
+    return api.invoke<DispatchResultApplyOutcome>('dispatch_apply_result', {
+      request: { jobId, workspacePath, overwriteConflicts },
     });
   },
 

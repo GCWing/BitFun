@@ -18,15 +18,25 @@ use tokio::fs;
 
 use crate::infrastructure::PathManager;
 
+/// Result-bundle shapes the desktop layer returns to the renderer.
+#[cfg(feature = "ssh-remote")]
+pub use bitfun_services_core::dispatch_workspace::{
+    WorkspaceResultApplyOutcome, WorkspaceResultConflict, WorkspaceResultConflictReason,
+    WorkspaceResultSummary,
+};
 #[cfg(feature = "ssh-remote")]
 pub use controller::{
     answer as answer_dispatch, append as append_dispatch, cancel as cancel_dispatch,
     install_cli_cancel as cancel_dispatch_cli_install,
-    install_cli_poll as poll_dispatch_cli_install, install_cli_start as start_dispatch_cli_install,
+    install_cli_poll as poll_dispatch_cli_install,
+    install_cli_source_start as start_dispatch_cli_source_build,
+    install_cli_start as start_dispatch_cli_install,
     list_jobs as list_dispatch_jobs, list_targets as list_dispatch_targets,
-    probe_target as probe_dispatch_target, status as get_dispatch_status,
+    apply_result as apply_dispatch_result, probe_target as probe_dispatch_target,
+    pull_result as pull_dispatch_result,
+    status as get_dispatch_status,
     submit as submit_dispatch, sync_model_config as sync_dispatch_model_config,
-    DispatchAnswerRequest, DispatchAppendRequest,
+    DispatchAnswerRequest, DispatchApplyResultRequest, DispatchAppendRequest,
     DispatchConnectionRequest, DispatchInstallPollRequest, DispatchInstallStartRequest,
     DispatchJobRequest, DispatchListJobsRequest, DispatchListTargetsRequest,
     DispatchPermissionReplyKind, DispatchProbeTargetRequest, DispatchStatusRequest,

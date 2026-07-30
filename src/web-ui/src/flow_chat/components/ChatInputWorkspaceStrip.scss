@@ -73,6 +73,46 @@
     flex: none;
   }
 
+  // Appears only when a finished snapshot job has results waiting, so it is
+  // given accent treatment rather than the muted default of the other controls.
+  &__dispatch-result {
+    box-sizing: border-box;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    height: 18px;
+    max-width: 140px;
+    padding: 0 5px;
+    border: 1px solid color-mix(in srgb, var(--color-accent-500) 45%, transparent);
+    border-radius: $size-radius-sm;
+    background: color-mix(in srgb, var(--color-accent-500) 14%, transparent);
+    color: var(--color-accent-500);
+    font: inherit;
+    font-size: var(--flowchat-font-size-xxs);
+    line-height: 1;
+    cursor: pointer;
+    transition:
+      background-color $motion-fast $easing-standard,
+      border-color $motion-fast $easing-standard;
+
+    &:hover {
+      border-color: var(--color-accent-500);
+      background: color-mix(in srgb, var(--color-accent-500) 22%, transparent);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--color-accent-500);
+      outline-offset: 1px;
+    }
+
+    > span {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+  }
+
   &__permission-trigger {
     box-sizing: border-box;
     display: inline-flex;

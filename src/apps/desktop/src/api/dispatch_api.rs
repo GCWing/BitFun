@@ -10,10 +10,12 @@ use async_trait::async_trait;
 use bitfun_core::infrastructure::PathManager;
 use bitfun_core::service::dispatch::{
     answer_device_dispatch, answer_dispatch, append_device_dispatch, append_dispatch,
+    apply_dispatch_result, DispatchApplyResultRequest, WorkspaceResultApplyOutcome,
     cancel_device_dispatch, cancel_dispatch, cancel_dispatch_cli_install,
     get_device_dispatch_status, get_dispatch_status, list_device_dispatch_jobs, list_dispatch_jobs,
     list_dispatch_targets, poll_dispatch_cli_install, probe_device_dispatch_target,
-    probe_dispatch_target, start_dispatch_cli_install, submit_device_dispatch, submit_dispatch,
+    probe_dispatch_target, pull_dispatch_result, start_dispatch_cli_install,
+    start_dispatch_cli_source_build, submit_device_dispatch, submit_dispatch,
     sync_dispatch_model_config,
     DeviceDispatchRpc, DispatchAnswerRequest, DispatchAppendRequest, DispatchConnectionRequest,
     DispatchInstallPollRequest, DispatchInstallStartRequest, DispatchJobRequest,
@@ -145,6 +147,22 @@ pub async fn dispatch_install_cli_start(
         .map_err(|error| error.to_string())
 }
 
+/// Build the CLI from source on the target. Offered when no published binary
+/// can run there.
+#[tauri::command]
+pub async fn dispatch_install_cli_source_start(
+    state: State<'_, AppState>,
+    request: DispatchConnectionRequest,
+) -> Result<DispatchInstallStart, String> {
+    let manager = state
+        .get_ssh_manager_async()
+        .await
+        .map_err(|error| error.to_string())?;
+    start_dispatch_cli_source_build(&manager, request)
+        .await
+        .map_err(|error| error.to_string())
+}
+
 #[tauri::command]
 pub async fn dispatch_install_cli_poll(
     state: State<'_, AppState>,
@@ -244,6 +262,41 @@ pub async fn dispatch_status(
         .await
         .map_err(|error| error.to_string())?;
     get_dispatch_status(&manager, &store, request)
+        .await
+        .map_err(|error| error.to_string())
+}
+
+/// Download what a finished snapshot job changed on its target.
+///
+/// Fetch and report only — the caller shows the diff and the user decides
+/// whether any of it reaches their workspace.
+#[tauri::command]
+pub async fn dispatch_pull_result(
+    state: State<'_, AppState>,
+    path_manager: State<'_, Arc<PathManager>>,
+    request: DispatchJobRequest,
+) -> Result<Value, String> {
+    let store = OutboundDispatchStore::new(path_manager.as_ref());
+    let manager = state
+        .get_ssh_manager_async()
+        .await
+        .map_err(|error| error.to_string())?;
+    pull_dispatch_result(&manager, &store, request)
+        .await
+        .map_err(|error| error.to_string())
+}
+
+/// Apply a pulled result bundle to a local workspace.
+///
+/// Aborts without writing when a path changed on both sides, unless the user
+/// explicitly chose to take the target's version.
+#[tauri::command]
+pub async fn dispatch_apply_result(
+    path_manager: State<'_, Arc<PathManager>>,
+    request: DispatchApplyResultRequest,
+) -> Result<WorkspaceResultApplyOutcome, String> {
+    let store = OutboundDispatchStore::new(path_manager.as_ref());
+    apply_dispatch_result(&store, request)
         .await
         .map_err(|error| error.to_string())
 }

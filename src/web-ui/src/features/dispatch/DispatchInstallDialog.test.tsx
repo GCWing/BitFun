@@ -11,6 +11,7 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 const mocks = vi.hoisted(() => ({
   probeTarget: vi.fn(),
   installCliStart: vi.fn(),
+  installCliSourceStart: vi.fn(),
   installCliPoll: vi.fn(),
   installCliCancel: vi.fn(),
   syncModelConfig: vi.fn(),
@@ -26,6 +27,7 @@ vi.mock('./dispatchApi', () => ({
   dispatchApi: {
     probeTarget: mocks.probeTarget,
     installCliStart: mocks.installCliStart,
+    installCliSourceStart: mocks.installCliSourceStart,
     installCliPoll: mocks.installCliPoll,
     installCliCancel: mocks.installCliCancel,
     syncModelConfig: mocks.syncModelConfig,
@@ -202,6 +204,106 @@ describe('DispatchInstallDialog installation lifecycle', () => {
     expect(mocks.installCliCancel).toHaveBeenLastCalledWith('ssh-1');
     expect(mocks.installCliPoll).not.toHaveBeenCalled();
     expect(container.querySelector('pre')).toBeNull();
+  });
+
+  it('offers a source build only when the target can actually run one', async () => {
+    // A target no published binary fits: the release install is not offered,
+    // and the source build is gated on its prerequisites rather than failing
+    // partway through.
+    mocks.probeTarget.mockResolvedValue({
+      cliInstalled: false,
+      os: 'linux',
+      arch: 'x86_64',
+      installSupported: false,
+      prebuiltIncompatible: 'target uses musl libc',
+      sourceBuild: {
+        supported: false,
+        blockers: ['no cargo on the target'],
+        gitRef: 'v1.2.3',
+      },
+    });
+
+    await act(async () => {
+      root.render(
+        <DispatchInstallDialog
+          open
+          target={{ kind: 'ssh', connectionId: 'ssh-1', displayName: 'alpine-host' }}
+          onClose={vi.fn()}
+          onReady={vi.fn()}
+        />,
+      );
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toContain('target uses musl libc');
+    expect(container.textContent).toContain('no cargo on the target');
+    const buttons = () => Array.from(container.querySelectorAll('button'));
+    expect(
+      buttons().find(button => button.textContent?.includes('dispatch.installConfirm')),
+      'a prebuilt install that cannot work must not be offered',
+    ).toBeUndefined();
+    const blocked = buttons()
+      .find(button => button.textContent?.includes('dispatch.sourceBuildConfirm'));
+    expect(blocked?.disabled).toBe(true);
+
+    // Same target once a toolchain is present.
+    mocks.probeTarget.mockResolvedValue({
+      cliInstalled: false,
+      os: 'linux',
+      arch: 'x86_64',
+      installSupported: false,
+      prebuiltIncompatible: 'target uses musl libc',
+      sourceBuild: { supported: true, blockers: [], gitRef: 'v1.2.3', cargoVersion: '1.90.0' },
+    });
+    mocks.installCliSourceStart.mockResolvedValue({
+      scriptPath: '/tmp/install-bitfun.sh',
+      version: '1.2.3',
+      target: 'linux x86_64',
+      url: 'https://github.com/GCWing/BitFun.git',
+      sha256: '',
+    });
+    mocks.installCliPoll.mockResolvedValue({ cursor: 0, output: '', status: 'running' });
+
+    const checkButton = Array.from(container.querySelectorAll('button'))
+      .find(button => button.textContent?.includes('dispatch.check'));
+    await act(async () => {
+      checkButton?.click();
+      await Promise.resolve();
+    });
+
+    const ready = Array.from(container.querySelectorAll('button'))
+      .find(button => button.textContent?.includes('dispatch.sourceBuildConfirm'));
+    expect(ready?.disabled).toBe(false);
+    await act(async () => {
+      ready?.click();
+      await Promise.resolve();
+    });
+    expect(mocks.confirmWarning).toHaveBeenCalled();
+    expect(mocks.installCliSourceStart).toHaveBeenCalledWith('ssh-1');
+  });
+
+  it('names where snapshot results stay, since nothing is synced back', async () => {
+    await act(async () => {
+      root.render(
+        <DispatchInstallDialog
+          open
+          target={{ kind: 'ssh', connectionId: 'ssh-1', displayName: 'build-host' }}
+          sourceWorkspacePath="/home/me/project"
+          onClose={vi.fn()}
+          onReady={vi.fn()}
+        />,
+      );
+      await Promise.resolve();
+    });
+
+    const snapshot = Array.from(container.querySelectorAll('button'))
+      .find(button => button.textContent?.includes('dispatch.deliverySnapshot'));
+    await act(async () => {
+      snapshot?.click();
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toContain('dispatch.snapshotResultLocationHint');
   });
 
   it('cancels an acknowledged installer when the parent closes the dialog during polling', async () => {

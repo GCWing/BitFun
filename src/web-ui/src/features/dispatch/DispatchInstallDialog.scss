@@ -1,16 +1,105 @@
 @use '../../component-library/styles/tokens' as *;
 
+// Three deliberate type steps, so "section" reads louder than "item" and
+// "item" reads louder than "explanation":
+//   title   18px/600  — the dialog's own heading
+//   section 13px/600  — section headings
+//   body    13px/400  — values and labels
+//   support 12px      — descriptions under a title
+// Nothing uses 10px; at that size the descriptions were unreadable and every
+// level looked the same.
 .dispatch-install-dialog {
   display: flex;
+  min-height: 0;
+  max-height: min(78vh, 720px);
   flex-direction: column;
-  gap: $size-gap-3;
-  padding: $size-gap-3;
   color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+
+  &__header {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: $size-gap-4 $size-gap-4 $size-gap-3;
+  }
+
+  &__title {
+    margin: 0;
+    color: var(--color-text-primary);
+    font-size: 18px;
+    font-weight: 600;
+    line-height: 1.3;
+  }
+
+  &__subtitle {
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-xs);
+  }
+
+  // The one scrolling region. Keeps the footer reachable once the install card
+  // and the output console are both open, which used to push it off-screen.
+  &__body {
+    display: flex;
+    min-height: 0;
+    flex: 1;
+    flex-direction: column;
+    gap: $size-gap-3;
+    padding: 0 $size-gap-4 $size-gap-4;
+    overflow-y: auto;
+
+    // The body is a height-constrained column flex container, so its children
+    // would otherwise shrink below their content instead of scrolling.
+    > * {
+      flex-shrink: 0;
+    }
+  }
+
+  &__section {
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--border-subtle);
+    border-radius: $size-radius-base;
+    // Lets the header fill bleed to the card edge.
+    overflow: hidden;
+  }
+
+  &__section-header {
+    display: flex;
+    min-height: 38px;
+    align-items: center;
+    justify-content: space-between;
+    gap: $size-gap-2;
+    padding: $size-gap-2 $size-gap-3;
+    border-bottom: 1px solid var(--border-subtle);
+    background: var(--element-bg-subtle);
+  }
+
+  &__section-title {
+    margin: 0;
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+  }
+
+  &__section-body {
+    display: flex;
+    flex-direction: column;
+    gap: $size-gap-2;
+    padding: $size-gap-3;
+  }
+
+  &__hint {
+    color: var(--color-text-muted);
+    font-size: var(--font-size-xs);
+    line-height: 1.45;
+  }
 
   &__field {
     display: flex;
     flex-direction: column;
     gap: $size-gap-1;
+  }
+
+  &__field-label {
     color: var(--color-text-secondary);
     font-size: var(--font-size-xs);
     font-weight: 600;
@@ -23,68 +112,80 @@
     align-items: center;
   }
 
-  &__delivery {
+  // Selectable option cards, shared by delivery mode and approval policy.
+  // Single column: three across a 560px modal left ~165px per card, which is
+  // not enough for a title plus a two-line description.
+  &__options {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr;
     gap: $size-gap-2;
     min-width: 0;
     margin: 0;
-    padding: $size-gap-2;
-    border: 1px solid var(--border-subtle);
-    border-radius: $size-radius-base;
+    padding: 0;
+    border: 0;
+  }
 
-    legend {
-      padding: 0 $size-gap-1;
-      font-size: var(--font-size-xs);
+  &__option {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: start;
+    gap: $size-gap-2;
+    min-width: 0;
+    padding: $size-gap-2 $size-gap-3;
+    border: 1px solid var(--border-subtle);
+    border-radius: $size-radius-sm;
+    background: transparent;
+    color: var(--color-text-primary);
+    text-align: left;
+    cursor: pointer;
+
+    &:hover:not(:disabled),
+    &:focus-visible,
+    &[data-selected='true'] {
+      border-color: var(--color-accent-500);
+      background: color-mix(in srgb, var(--color-accent-500) 9%, transparent);
+      outline: none;
+    }
+
+    &:disabled {
+      cursor: not-allowed;
+      opacity: 0.55;
+    }
+
+    // Icon column is optional; delivery cards have no icon.
+    > svg:first-child {
+      margin-top: 1px;
+      color: var(--color-text-muted);
+    }
+
+    > span {
+      display: flex;
+      min-width: 0;
+      flex-direction: column;
+      gap: 2px;
+      // Fill the icon column when this card has no icon.
+      grid-column: 2 / 3;
+    }
+
+    &[data-selected='true'] > svg:first-child {
+      color: var(--color-accent-500);
+    }
+
+    strong {
+      font-size: var(--font-size-sm);
       font-weight: 600;
     }
 
-    > button {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) auto;
-      gap: $size-gap-2;
-      min-width: 0;
-      padding: $size-gap-2;
-      border: 1px solid var(--border-subtle);
-      border-radius: $size-radius-sm;
-      background: transparent;
-      color: var(--color-text-primary);
-      text-align: left;
-      cursor: pointer;
-
-      &:hover:not(:disabled),
-      &:focus-visible,
-      &[data-selected='true'] {
-        border-color: var(--color-accent-500);
-        background: color-mix(in srgb, var(--color-accent-500) 9%, transparent);
-        outline: none;
-      }
-
-      &:disabled {
-        cursor: not-allowed;
-        opacity: 0.55;
-      }
-
-      > span {
-        display: flex;
-        min-width: 0;
-        flex-direction: column;
-        gap: 2px;
-      }
-
-      strong {
-        font-size: var(--font-size-xs);
-      }
-
-      small {
-        color: var(--color-text-muted);
-        font-size: var(--font-size-xxs);
-        line-height: 1.35;
-      }
+    small {
+      color: var(--color-text-muted);
+      font-size: var(--font-size-xs);
+      line-height: 1.4;
     }
   }
 
-  &__snapshot-warning {
+  // Consent gate. Warning colour is reserved for this — it is the only place
+  // the user is accepting a risk rather than triggering an action.
+  &__consent {
     display: flex;
     flex-direction: column;
     gap: $size-gap-2;
@@ -97,6 +198,7 @@
     code {
       overflow-wrap: anywhere;
       color: var(--color-text-secondary);
+      font-family: var(--font-family-mono);
     }
 
     > span {
@@ -116,20 +218,21 @@
 
   &__checks {
     display: grid;
-    gap: $size-gap-1;
+    gap: 0;
 
     > div {
       display: grid;
-      grid-template-columns: minmax(96px, auto) minmax(0, 1fr);
+      grid-template-columns: minmax(104px, auto) minmax(0, 1fr);
       gap: $size-gap-2;
-      padding: $size-gap-2;
-      border: 1px solid var(--border-subtle);
-      border-radius: $size-radius-sm;
-      background: var(--element-bg-soft);
-      font-size: var(--font-size-xs);
+      padding: $size-gap-2 0;
+
+      + div {
+        border-top: 1px solid var(--border-subtle);
+      }
 
       > span {
         color: var(--color-text-muted);
+        font-size: var(--font-size-xs);
       }
 
       > strong {
@@ -148,38 +251,25 @@
     }
   }
 
-  &__install-card {
+  // Neutral action panel. Deliberately not warning-coloured: this is something
+  // to do, not something to accept.
+  &__action-panel {
     display: flex;
     flex-direction: column;
     align-items: flex-start;
     gap: $size-gap-2;
-    padding: $size-gap-3;
-    border: 1px solid var(--color-warning-border);
-    border-radius: $size-radius-base;
-    background: var(--color-warning-bg);
-
-    > div:first-child {
-      display: flex;
-      flex-direction: column;
-      gap: $size-gap-1;
-
-      > span {
-        color: var(--color-text-secondary);
-        font-size: var(--font-size-xs);
-      }
-    }
 
     dl {
       display: grid;
       gap: $size-gap-1;
       width: 100%;
       margin: 0;
-      font-size: var(--font-size-xxs);
+      font-size: var(--font-size-xs);
     }
 
     dl > div {
       display: grid;
-      grid-template-columns: 78px minmax(0, 1fr);
+      grid-template-columns: 84px minmax(0, 1fr);
       gap: $size-gap-2;
     }
 
@@ -195,9 +285,17 @@
     }
   }
 
+  &__blockers {
+    margin: 0;
+    padding-left: 18px;
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-xs);
+    line-height: 1.5;
+  }
+
   &__output {
     box-sizing: border-box;
-    max-height: 140px;
+    max-height: 180px;
     margin: 0;
     padding: $size-gap-2;
     overflow: auto;
@@ -205,94 +303,22 @@
     border-radius: $size-radius-sm;
     background: var(--color-bg-secondary);
     color: var(--color-text-secondary);
-    font: var(--font-size-xxs)/1.45 var(--font-family-mono);
+    font: var(--font-size-xs)/1.5 var(--font-family-mono);
     white-space: pre-wrap;
   }
 
-  &__approval {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: $size-gap-2;
-    min-width: 0;
-    margin: 0;
-    padding: $size-gap-2;
-    border: 1px solid var(--border-subtle);
-    border-radius: $size-radius-base;
-
-    legend {
-      padding: 0 $size-gap-1;
-      font-size: var(--font-size-xs);
-      font-weight: 600;
-    }
-
-    > .dispatch-install-dialog__approval-hint {
-      grid-column: 1 / -1;
-      color: var(--color-text-muted);
-      font-size: var(--font-size-xxs);
-    }
-
-    > button {
-      display: grid;
-      grid-template-columns: auto minmax(0, 1fr) auto;
-      align-items: start;
-      gap: $size-gap-2;
-      min-width: 0;
-      padding: $size-gap-2;
-      border: 1px solid var(--border-subtle);
-      border-radius: $size-radius-sm;
-      background: transparent;
-      color: var(--color-text-primary);
-      text-align: left;
-      cursor: pointer;
-
-      &:hover,
-      &:focus-visible,
-      &[data-selected='true'] {
-        border-color: var(--color-accent-500);
-        background: color-mix(in srgb, var(--color-accent-500) 9%, transparent);
-        outline: none;
-      }
-
-      > span {
-        display: flex;
-        min-width: 0;
-        flex-direction: column;
-        gap: 2px;
-      }
-
-      strong {
-        font-size: var(--font-size-xs);
-        font-weight: 600;
-      }
-
-      small {
-        color: var(--color-text-muted);
-        font-size: var(--font-size-xxs);
-        line-height: 1.35;
-      }
-    }
-  }
-
+  // Pinned so the primary action never scrolls away.
   &__actions {
     display: flex;
     justify-content: flex-end;
     gap: $size-gap-2;
+    padding: $size-gap-3 $size-gap-4;
+    border-top: 1px solid var(--border-subtle);
+    background: var(--color-bg-primary);
   }
 
   &__spin {
     animation: dispatch-install-spin 1s linear infinite;
-  }
-}
-
-@media (max-width: 620px) {
-  .dispatch-install-dialog {
-    &__approval {
-      grid-template-columns: 1fr;
-    }
-
-    &__delivery {
-      grid-template-columns: 1fr;
-    }
   }
 }
 

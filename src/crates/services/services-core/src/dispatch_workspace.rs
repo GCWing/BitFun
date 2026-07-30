@@ -3,7 +3,7 @@
 //! A snapshot is a one-shot input boundary. It deliberately does not contain
 //! Git metadata and never follows links outside the selected workspace.
 
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, Read, Write};
 use std::path::{Component, Path};
@@ -25,6 +25,7 @@ pub const MAX_SNAPSHOT_UNCOMPRESSED_BYTES: u64 = 2 * 1024 * 1024 * 1024;
 pub const MAX_SNAPSHOT_ARCHIVE_BYTES: u64 = 1024 * 1024 * 1024;
 const MAX_MANIFEST_BYTES: u64 = 16 * 1024 * 1024;
 const MANIFEST_ARCHIVE_PATH: &str = ".bitfun-dispatch/manifest.json";
+const RESULT_SUMMARY_ARCHIVE_PATH: &str = ".bitfun-dispatch/result.json";
 const WORKSPACE_ARCHIVE_ROOT: &str = "workspace";
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -68,6 +69,336 @@ pub struct WorkspaceSnapshotMetadata {
     pub file_count: u64,
     pub directory_count: u64,
     pub uncompressed_bytes: u64,
+}
+
+/// What the target changed, relative to the snapshot it was given.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct WorkspaceResultSummary {
+    pub added: Vec<String>,
+    pub modified: Vec<String>,
+    pub deleted: Vec<String>,
+    /// Snapshot digest of every path the target changed or removed.
+    ///
+    /// Carried so the controller can tell a clean apply from one that would
+    /// discard local edits: if the local file still matches this, the target's
+    /// change is the only one; if it does not, both sides moved.
+    #[serde(default)]
+    pub baseline_sha256: BTreeMap<String, String>,
+    pub archive_size: u64,
+    pub archive_sha256: String,
+}
+
+impl WorkspaceResultSummary {
+    pub fn is_empty(&self) -> bool {
+        self.added.is_empty() && self.modified.is_empty() && self.deleted.is_empty()
+    }
+}
+
+/// Diff the terminal target tree against the delivered snapshot and package
+/// only what changed.
+///
+/// Content-addressed rather than git-based: the baseline manifest already
+/// carries a SHA-256 per file, so this works for workspaces that are not
+/// repositories — which is most of the reason snapshot mode exists.
+///
+/// Produces the bundle only; applying it locally stays a separate, explicitly
+/// confirmed step.
+pub fn create_workspace_result_bundle(
+    workspace: &Path,
+    baseline: &WorkspaceSnapshotManifest,
+    archive_path: &Path,
+) -> Result<WorkspaceResultSummary> {
+    let workspace = workspace
+        .canonicalize()
+        .with_context(|| format!("resolve dispatch workspace {}", workspace.display()))?;
+    let baseline_files: BTreeMap<&str, &WorkspaceSnapshotEntry> = baseline
+        .entries
+        .iter()
+        .filter(|entry| entry.kind == WorkspaceSnapshotEntryKind::File)
+        .map(|entry| (entry.path.as_str(), entry))
+        .collect();
+
+    let archive_file = File::create(archive_path)
+        .with_context(|| format!("create result bundle {}", archive_path.display()))?;
+    let encoder = GzEncoder::new(archive_file, Compression::default());
+    let mut archive = Builder::new(encoder);
+    archive.mode(tar::HeaderMode::Deterministic);
+
+    let mut walk = WalkBuilder::new(&workspace);
+    walk.hidden(false)
+        .ignore(false)
+        .git_ignore(false)
+        .git_global(false)
+        .git_exclude(false)
+        .parents(false)
+        .follow_links(false)
+        .sort_by_file_path(|left, right| left.cmp(right));
+    let filter_root = workspace.clone();
+    walk.filter_entry(move |entry| {
+        entry.path() == filter_root || entry.file_name().to_str() != Some(".git")
+    });
+
+    let mut summary = WorkspaceResultSummary::default();
+    let mut seen = BTreeSet::new();
+    let mut file_count = 0_u64;
+    let mut changed_bytes = 0_u64;
+    for walked in walk.build() {
+        let walked = walked.context("walk dispatch workspace for result bundle")?;
+        let path = walked.path();
+        if path == workspace {
+            continue;
+        }
+        let relative = path
+            .strip_prefix(&workspace)
+            .with_context(|| format!("resolve result path {}", path.display()))?;
+        let relative_wire = portable_relative_path(relative)?;
+        let metadata = fs::symlink_metadata(path)
+            .with_context(|| format!("inspect result entry {}", path.display()))?;
+        // Same rule as packaging: an unsupported entry fails the whole
+        // operation rather than yielding a bundle that silently omits it.
+        if metadata.file_type().is_symlink() {
+            bail!("dispatch result contains a symlink: {relative_wire}");
+        }
+        if metadata.is_dir() {
+            continue;
+        }
+        if !metadata.is_file() {
+            bail!("dispatch result contains an unsupported entry: {relative_wire}");
+        }
+        seen.insert(relative_wire.clone());
+        file_count += 1;
+        if file_count > MAX_SNAPSHOT_FILES {
+            bail!("dispatch result exceeds the {MAX_SNAPSHOT_FILES} file limit");
+        }
+        if metadata.len() > MAX_SNAPSHOT_FILE_BYTES {
+            bail!("dispatch result file exceeds the size limit: {relative_wire}");
+        }
+
+        let digest = sha256_file(path)?;
+        let existing = baseline_files.get(relative_wire.as_str());
+        let unchanged = existing
+            .and_then(|entry| entry.sha256.as_deref())
+            .is_some_and(|baseline_digest| baseline_digest.eq_ignore_ascii_case(&digest));
+        if unchanged {
+            continue;
+        }
+
+        changed_bytes = changed_bytes.saturating_add(metadata.len());
+        if changed_bytes > MAX_SNAPSHOT_UNCOMPRESSED_BYTES {
+            bail!("dispatch result exceeds the uncompressed size limit");
+        }
+        let executable = is_executable(&metadata);
+        append_file(&mut archive, path, &relative_wire, &metadata, executable)?;
+        if let Some(entry) = existing {
+            if let Some(baseline_digest) = entry.sha256.as_deref() {
+                summary
+                    .baseline_sha256
+                    .insert(relative_wire.clone(), baseline_digest.to_string());
+            }
+            summary.modified.push(relative_wire);
+        } else {
+            summary.added.push(relative_wire);
+        }
+    }
+
+    for (path, entry) in &baseline_files {
+        if seen.contains(*path) {
+            continue;
+        }
+        summary.deleted.push((*path).to_string());
+        if let Some(baseline_digest) = entry.sha256.as_deref() {
+            summary
+                .baseline_sha256
+                .insert((*path).to_string(), baseline_digest.to_string());
+        }
+    }
+
+    let summary_bytes = serde_json::to_vec(&WorkspaceResultSummary {
+        archive_sha256: String::new(),
+        archive_size: 0,
+        ..summary.clone()
+    })
+    .context("encode dispatch result summary")?;
+    append_bytes(&mut archive, RESULT_SUMMARY_ARCHIVE_PATH, &summary_bytes, false)?;
+
+    archive
+        .into_inner()
+        .context("finalize dispatch result bundle")?
+        .finish()
+        .context("compress dispatch result bundle")?
+        .sync_all()
+        .context("flush dispatch result bundle")?;
+
+    let archive_metadata = fs::metadata(archive_path)
+        .with_context(|| format!("inspect result bundle {}", archive_path.display()))?;
+    summary.archive_size = archive_metadata.len();
+    if summary.archive_size > MAX_SNAPSHOT_ARCHIVE_BYTES {
+        bail!("dispatch result bundle exceeds the archive size limit");
+    }
+    summary.archive_sha256 = sha256_file(archive_path)?;
+    Ok(summary)
+}
+
+/// A local path both sides changed since the snapshot was taken.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct WorkspaceResultConflict {
+    pub path: String,
+    /// Why the local file no longer matches the snapshot.
+    pub reason: WorkspaceResultConflictReason,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum WorkspaceResultConflictReason {
+    /// Edited locally after the snapshot, and edited on the target too.
+    LocallyModified,
+    /// Deleted locally, but the target changed it.
+    LocallyMissing,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkspaceResultApplyOutcome {
+    pub written: Vec<String>,
+    pub removed: Vec<String>,
+    pub conflicts: Vec<WorkspaceResultConflict>,
+    /// True when nothing was touched because conflicts were found.
+    pub aborted: bool,
+}
+
+/// Report which paths a result bundle would overwrite that also changed locally.
+///
+/// The controller and the target diverged independently after `S0`, so this is
+/// the difference between "apply the target's work" and "silently discard mine".
+pub fn inspect_workspace_result_conflicts(
+    workspace: &Path,
+    summary: &WorkspaceResultSummary,
+) -> Result<Vec<WorkspaceResultConflict>> {
+    let workspace = workspace
+        .canonicalize()
+        .with_context(|| format!("resolve workspace {}", workspace.display()))?;
+    let mut conflicts = Vec::new();
+    for (path, baseline_digest) in &summary.baseline_sha256 {
+        let local = resolve_workspace_child(&workspace, path)?;
+        match fs::symlink_metadata(&local) {
+            Ok(metadata) if metadata.is_file() => {
+                if !sha256_file(&local)?.eq_ignore_ascii_case(baseline_digest) {
+                    conflicts.push(WorkspaceResultConflict {
+                        path: path.clone(),
+                        reason: WorkspaceResultConflictReason::LocallyModified,
+                    });
+                }
+            }
+            // A path the snapshot contained that is now gone or is no longer a
+            // regular file: applying would resurrect or clobber it.
+            Ok(_) | Err(_) => conflicts.push(WorkspaceResultConflict {
+                path: path.clone(),
+                reason: WorkspaceResultConflictReason::LocallyMissing,
+            }),
+        }
+    }
+    Ok(conflicts)
+}
+
+/// Apply a verified result bundle to a local workspace.
+///
+/// Refuses to touch anything when a conflict is found unless `overwrite` is
+/// set, so the default outcome of a surprise is nothing rather than a
+/// half-merged tree.
+pub fn apply_workspace_result_bundle(
+    bundle_path: &Path,
+    workspace: &Path,
+    summary: &WorkspaceResultSummary,
+    overwrite: bool,
+) -> Result<WorkspaceResultApplyOutcome> {
+    let actual = sha256_file(bundle_path)?;
+    if !actual.eq_ignore_ascii_case(&summary.archive_sha256) {
+        bail!("dispatch result bundle does not match the reported digest");
+    }
+    let conflicts = inspect_workspace_result_conflicts(workspace, summary)?;
+    if !conflicts.is_empty() && !overwrite {
+        return Ok(WorkspaceResultApplyOutcome {
+            conflicts,
+            aborted: true,
+            ..Default::default()
+        });
+    }
+    let workspace = workspace
+        .canonicalize()
+        .with_context(|| format!("resolve workspace {}", workspace.display()))?;
+
+    let expected: BTreeSet<&str> = summary
+        .added
+        .iter()
+        .chain(summary.modified.iter())
+        .map(String::as_str)
+        .collect();
+    let file = File::open(bundle_path)
+        .with_context(|| format!("open result bundle {}", bundle_path.display()))?;
+    let mut archive = Archive::new(GzDecoder::new(file));
+    let mut outcome = WorkspaceResultApplyOutcome {
+        conflicts,
+        ..Default::default()
+    };
+    for entry in archive.entries().context("read result bundle")? {
+        let mut entry = entry.context("read result bundle entry")?;
+        let entry_path = entry.path().context("read result bundle entry path")?;
+        let Ok(relative) = entry_path.strip_prefix(WORKSPACE_ARCHIVE_ROOT) else {
+            continue; // the bundle's own metadata
+        };
+        let relative_wire = portable_relative_path(relative)?;
+        if !expected.contains(relative_wire.as_str()) {
+            bail!("dispatch result bundle contains an unreported path: {relative_wire}");
+        }
+        if entry.header().entry_type() != EntryType::Regular {
+            bail!("dispatch result bundle contains a non-regular entry: {relative_wire}");
+        }
+        let destination = resolve_workspace_child(&workspace, &relative_wire)?;
+        if let Some(parent) = destination.parent() {
+            fs::create_dir_all(parent)
+                .with_context(|| format!("create {}", parent.display()))?;
+        }
+        let mut bytes = Vec::new();
+        entry
+            .read_to_end(&mut bytes)
+            .with_context(|| format!("read {relative_wire} from result bundle"))?;
+        fs::write(&destination, &bytes)
+            .with_context(|| format!("write {}", destination.display()))?;
+        outcome.written.push(relative_wire);
+    }
+
+    for path in &summary.deleted {
+        let destination = resolve_workspace_child(&workspace, path)?;
+        match fs::symlink_metadata(&destination) {
+            Ok(metadata) if metadata.is_file() => {
+                fs::remove_file(&destination)
+                    .with_context(|| format!("remove {}", destination.display()))?;
+                outcome.removed.push(path.clone());
+            }
+            // Already gone locally: the desired end state, nothing to do.
+            _ => {}
+        }
+    }
+    Ok(outcome)
+}
+
+/// Join a manifest-relative path under the workspace, refusing anything that
+/// would land outside it.
+fn resolve_workspace_child(workspace: &Path, relative_wire: &str) -> Result<std::path::PathBuf> {
+    if relative_wire.is_empty() {
+        bail!("dispatch result path is empty");
+    }
+    let mut resolved = workspace.to_path_buf();
+    for part in relative_wire.split('/') {
+        if part.is_empty() || part == "." || part == ".." {
+            bail!("dispatch result path is not workspace-relative: {relative_wire}");
+        }
+        resolved.push(part);
+    }
+    ensure_path_below(workspace, &resolved)?;
+    Ok(resolved)
 }
 
 /// Package every regular workspace file, including hidden and ignored files.
@@ -827,6 +1158,211 @@ mod tests {
         assert!(!destination.join(".git").exists());
         assert!(manifest.includes_ignored_files);
         assert!(manifest.excludes_git_metadata);
+    }
+
+    #[test]
+    fn result_bundle_reports_adds_edits_and_deletes_without_git() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let source = temp.path().join("source");
+        fs::create_dir_all(source.join("nested")).expect("nested");
+        fs::write(source.join("keep.txt"), b"unchanged").expect("keep");
+        fs::write(source.join("edit.txt"), b"before").expect("edit");
+        fs::write(source.join("gone.txt"), b"remove me").expect("gone");
+        fs::write(source.join("nested/deep.txt"), b"deep").expect("deep");
+        let archive = temp.path().join("snapshot.tar.gz");
+        let metadata = create_exact_workspace_snapshot(&source, &archive).expect("snapshot");
+        let target = temp.path().join("current");
+        let baseline = extract_workspace_snapshot(&archive, &target, &metadata).expect("extract");
+
+        // Stand in for what the agent did on the target.
+        fs::write(target.join("edit.txt"), b"after").expect("modify");
+        fs::remove_file(target.join("gone.txt")).expect("delete");
+        fs::write(target.join("new.txt"), b"created").expect("add");
+        // A rewrite with identical bytes must not count as a change.
+        fs::write(target.join("keep.txt"), b"unchanged").expect("rewrite");
+
+        let bundle = temp.path().join("result.tar.gz");
+        let summary =
+            create_workspace_result_bundle(&target, &baseline, &bundle).expect("result bundle");
+
+        assert_eq!(summary.added, vec!["new.txt".to_string()]);
+        assert_eq!(summary.modified, vec!["edit.txt".to_string()]);
+        assert_eq!(summary.deleted, vec!["gone.txt".to_string()]);
+        assert!(!summary.is_empty());
+        assert_eq!(summary.archive_sha256.len(), 64);
+        assert!(summary.archive_size > 0);
+
+        // Only changed content travels back; untouched files are not resent.
+        let listed = list_archive_paths(&bundle);
+        assert!(listed.contains(&"new.txt".to_string()));
+        assert!(listed.contains(&"edit.txt".to_string()));
+        assert!(
+            !listed.contains(&"keep.txt".to_string()),
+            "unchanged files must not be included: {listed:?}"
+        );
+        assert!(!listed.contains(&"nested/deep.txt".to_string()));
+    }
+
+    #[test]
+    fn an_untouched_workspace_produces_an_empty_result() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let source = temp.path().join("source");
+        fs::create_dir_all(&source).expect("source");
+        fs::write(source.join("a.txt"), b"a").expect("a");
+        let archive = temp.path().join("snapshot.tar.gz");
+        let metadata = create_exact_workspace_snapshot(&source, &archive).expect("snapshot");
+        let target = temp.path().join("current");
+        let baseline = extract_workspace_snapshot(&archive, &target, &metadata).expect("extract");
+
+        let bundle = temp.path().join("result.tar.gz");
+        let summary =
+            create_workspace_result_bundle(&target, &baseline, &bundle).expect("result bundle");
+        assert!(
+            summary.is_empty(),
+            "a job that changed nothing must not report changes: {summary:?}"
+        );
+    }
+
+    /// Snapshot a workspace, mutate the "target" copy, and bundle the result.
+    fn snapshot_and_diff(
+        temp: &Path,
+        seed: &[(&str, &[u8])],
+        mutate: impl FnOnce(&Path),
+    ) -> (WorkspaceResultSummary, std::path::PathBuf, std::path::PathBuf) {
+        let source = temp.join("source");
+        fs::create_dir_all(&source).expect("source");
+        for (name, bytes) in seed {
+            fs::write(source.join(name), bytes).expect("seed file");
+        }
+        let archive = temp.join("snapshot.tar.gz");
+        let metadata = create_exact_workspace_snapshot(&source, &archive).expect("snapshot");
+        let target = temp.join("current");
+        let baseline = extract_workspace_snapshot(&archive, &target, &metadata).expect("extract");
+        mutate(&target);
+        let bundle = temp.join("result.tar.gz");
+        let summary =
+            create_workspace_result_bundle(&target, &baseline, &bundle).expect("bundle");
+        // A second extraction stands in for the controller's own copy of S0.
+        let local = temp.join("local");
+        extract_workspace_snapshot(&archive, &local, &metadata).expect("extract local");
+        (summary, bundle, local)
+    }
+
+    #[test]
+    fn applying_a_result_writes_adds_and_edits_and_removes_deletions() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let (summary, bundle, local) = snapshot_and_diff(
+            temp.path(),
+            &[("keep.txt", b"same"), ("edit.txt", b"before"), ("gone.txt", b"bye")],
+            |target| {
+                fs::write(target.join("edit.txt"), b"after").expect("edit");
+                fs::remove_file(target.join("gone.txt")).expect("delete");
+                fs::write(target.join("new.txt"), b"created").expect("add");
+            },
+        );
+
+        let outcome = apply_workspace_result_bundle(&bundle, &local, &summary, false)
+            .expect("apply");
+        assert!(!outcome.aborted, "an untouched local tree has no conflicts");
+        assert!(outcome.conflicts.is_empty());
+        assert_eq!(fs::read(local.join("edit.txt")).expect("edit"), b"after");
+        assert_eq!(fs::read(local.join("new.txt")).expect("new"), b"created");
+        assert!(!local.join("gone.txt").exists(), "deletions must be applied");
+        assert_eq!(
+            fs::read(local.join("keep.txt")).expect("keep"),
+            b"same",
+            "untouched files must be left alone"
+        );
+    }
+
+    #[test]
+    fn a_locally_edited_file_blocks_the_apply_instead_of_being_overwritten() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let (summary, bundle, local) = snapshot_and_diff(
+            temp.path(),
+            &[("shared.txt", b"before")],
+            |target| {
+                fs::write(target.join("shared.txt"), b"target edit").expect("edit");
+            },
+        );
+        // The user kept working locally while the job ran.
+        fs::write(local.join("shared.txt"), b"my local work").expect("local edit");
+
+        let outcome = apply_workspace_result_bundle(&bundle, &local, &summary, false)
+            .expect("apply");
+        assert!(outcome.aborted, "a conflict must stop the apply");
+        assert_eq!(
+            outcome.conflicts,
+            vec![WorkspaceResultConflict {
+                path: "shared.txt".to_string(),
+                reason: WorkspaceResultConflictReason::LocallyModified,
+            }]
+        );
+        assert!(outcome.written.is_empty() && outcome.removed.is_empty());
+        assert_eq!(
+            fs::read(local.join("shared.txt")).expect("local"),
+            b"my local work",
+            "nothing may be written when the apply aborts"
+        );
+
+        // The user can still choose the target's version explicitly.
+        let forced =
+            apply_workspace_result_bundle(&bundle, &local, &summary, true).expect("forced apply");
+        assert!(!forced.aborted);
+        assert_eq!(fs::read(local.join("shared.txt")).expect("local"), b"target edit");
+    }
+
+    #[test]
+    fn a_tampered_bundle_is_rejected_before_anything_is_written() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let (summary, bundle, local) = snapshot_and_diff(
+            temp.path(),
+            &[("a.txt", b"before")],
+            |target| {
+                fs::write(target.join("a.txt"), b"after").expect("edit");
+            },
+        );
+        fs::write(&bundle, b"not the bundle you verified").expect("tamper");
+
+        let error = apply_workspace_result_bundle(&bundle, &local, &summary, false)
+            .expect_err("a tampered bundle must be refused");
+        assert!(
+            error.to_string().contains("does not match the reported digest"),
+            "{error}"
+        );
+        assert_eq!(fs::read(local.join("a.txt")).expect("local"), b"before");
+    }
+
+    #[test]
+    fn result_paths_cannot_escape_the_workspace() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let workspace = temp.path().join("ws");
+        fs::create_dir_all(&workspace).expect("workspace");
+        for hostile in ["../outside", "a/../../outside", "/etc/passwd", ""] {
+            assert!(
+                resolve_workspace_child(&workspace, hostile).is_err(),
+                "must reject {hostile:?}"
+            );
+        }
+        assert!(resolve_workspace_child(&workspace, "nested/ok.txt").is_ok());
+    }
+
+    fn list_archive_paths(archive_path: &Path) -> Vec<String> {
+        let file = File::open(archive_path).expect("open bundle");
+        let mut archive = Archive::new(GzDecoder::new(file));
+        archive
+            .entries()
+            .expect("entries")
+            .map(|entry| {
+                let entry = entry.expect("entry");
+                entry
+                    .path()
+                    .expect("path")
+                    .strip_prefix(WORKSPACE_ARCHIVE_ROOT)
+                    .map(|path| path.to_string_lossy().to_string())
+                    .unwrap_or_default()
+            })
+            .collect()
     }
 
     #[test]
