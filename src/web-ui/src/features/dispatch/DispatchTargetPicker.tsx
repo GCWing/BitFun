@@ -1,13 +1,11 @@
 import React, {
   lazy,
   Suspense,
-  useCallback,
   useEffect,
   useMemo,
   useRef,
   useState,
 } from 'react';
-import { createPortal } from 'react-dom';
 import {
   Check,
   ChevronDown,
@@ -21,7 +19,6 @@ import { Tooltip } from '@/component-library';
 import { SSHConnectionDialog } from '@/features/ssh-remote/SSHConnectionDialog';
 import { useAccountLoginState } from '@/infrastructure/account/useAccountLoginState';
 import { useI18n } from '@/infrastructure/i18n';
-import { computeFixedPopoverPosition } from '@/shared/utils/fixedPopoverViewport';
 import { DispatchInstallDialog } from './DispatchInstallDialog';
 import type {
   DispatchSelection,
@@ -54,10 +51,7 @@ export const DispatchTargetPicker: React.FC<DispatchTargetPickerProps> = ({
 }) => {
   const { t } = useI18n('flow-chat');
   const rootRef = useRef<HTMLDivElement>(null);
-  const triggerRef = useRef<HTMLButtonElement>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
-  const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
   const [configureTarget, setConfigureTarget] = useState<DispatchTargetOption | null>(null);
   const [sshDialogOpen, setSshDialogOpen] = useState(false);
   const [accountDialogOpen, setAccountDialogOpen] = useState(false);
@@ -71,32 +65,10 @@ export const DispatchTargetPicker: React.FC<DispatchTargetPickerProps> = ({
     ? t('chatInput.dispatch.locked', { target: displayLabel })
     : t('chatInput.dispatch.current', { target: displayLabel });
 
-  const updatePosition = useCallback(() => {
-    const rect = triggerRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    const width = menuRef.current?.offsetWidth ?? 300;
-    const height = menuRef.current?.offsetHeight ?? 340;
-    setMenuPosition(computeFixedPopoverPosition(rect, width, height, 7, 8));
-  }, []);
-
-  useEffect(() => {
-    if (!open) return;
-    updatePosition();
-    const frame = requestAnimationFrame(updatePosition);
-    window.addEventListener('resize', updatePosition);
-    window.addEventListener('scroll', updatePosition, true);
-    return () => {
-      cancelAnimationFrame(frame);
-      window.removeEventListener('resize', updatePosition);
-      window.removeEventListener('scroll', updatePosition, true);
-    };
-  }, [open, updatePosition]);
-
   useEffect(() => {
     if (!open) return;
     const handlePointerDown = (event: PointerEvent) => {
-      const node = event.target as Node;
-      if (!rootRef.current?.contains(node) && !menuRef.current?.contains(node)) {
+      if (!rootRef.current?.contains(event.target as Node)) {
         setOpen(false);
       }
     };
@@ -126,13 +98,11 @@ export const DispatchTargetPicker: React.FC<DispatchTargetPickerProps> = ({
     [targets],
   );
 
-  const menu = open ? createPortal(
+  const menu = open ? (
     <div
-      ref={menuRef}
       className="dispatch-target-picker__menu"
       role="menu"
       aria-label={t('chatInput.dispatch.menuLabel')}
-      style={{ top: menuPosition.top, left: menuPosition.left }}
       data-testid="dispatch-target-menu"
     >
       <div className="dispatch-target-picker__header">
@@ -272,8 +242,7 @@ export const DispatchTargetPicker: React.FC<DispatchTargetPickerProps> = ({
         <Plus size={14} aria-hidden />
         <span>{t('chatInput.dispatch.addSsh')}</span>
       </button>
-    </div>,
-    document.body,
+    </div>
   ) : null;
 
   return (
@@ -281,7 +250,6 @@ export const DispatchTargetPicker: React.FC<DispatchTargetPickerProps> = ({
       <div ref={rootRef} className="dispatch-target-picker">
         <Tooltip content={tooltip} placement="top">
           <button
-            ref={triggerRef}
             type="button"
             className="dispatch-target-picker__trigger"
             aria-haspopup="menu"

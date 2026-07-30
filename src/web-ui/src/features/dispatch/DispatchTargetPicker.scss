@@ -1,6 +1,7 @@
 @use '../../component-library/styles/tokens' as *;
 
 .dispatch-target-picker {
+  position: relative;
   display: inline-flex;
   min-width: 0;
   align-items: center;
@@ -54,8 +55,10 @@
   }
 
   &__menu {
-    position: fixed;
-    z-index: 1200;
+    position: absolute;
+    right: 0;
+    bottom: calc(100% + 7px);
+    z-index: 10;
     box-sizing: border-box;
     display: flex;
     width: min(300px, calc(100vw - 24px));
@@ -63,7 +66,8 @@
     flex-direction: column;
     gap: 4px;
     padding: 6px;
-    overflow: auto;
+    overflow-x: hidden;
+    overflow-y: auto;
     border: 1px solid var(--border-subtle);
     border-radius: $size-radius-base;
     background: var(--color-bg-elevated);
