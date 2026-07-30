@@ -1,0 +1,261 @@
+/**
+ * Turn files summary styles (BEM).
+ * Compact per-turn file change badge shown in the model round footer.
+ */
+
+@use '../../../component-library/styles/tokens.scss' as *;
+
+.turn-files-summary {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  margin-top: var(--flowchat-inline-gap);
+  padding: 0 var(--flowchat-content-inline-pad);
+  min-height: 0;
+
+  &__button {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 28px;
+    padding: 0 12px;
+    margin: 10px 0;
+    background: var(--element-bg-soft);
+    border: 1px solid var(--border-subtle);
+    border-radius: $size-radius-base;
+    font-size: var(--flowchat-font-size-sm);
+    line-height: 1;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    transition: all $motion-fast $easing-standard;
+    white-space: nowrap;
+
+    span,
+    svg {
+      cursor: inherit;
+    }
+
+    &:hover:not(:disabled) {
+      background: var(--element-bg-base);
+      color: var(--color-text-primary);
+      border-color: var(--border-medium);
+    }
+
+    &:active:not(:disabled) {
+      background: var(--element-bg-base);
+      transform: scale(0.98);
+    }
+
+    &:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+  }
+
+  &__icon {
+    flex-shrink: 0;
+    color: var(--color-text-muted);
+  }
+
+  &__count {
+    font-weight: $font-weight-medium;
+    color: var(--color-text-primary);
+  }
+
+  &__stats {
+    font-weight: $font-weight-medium;
+    font-family: 'SF Mono', 'Monaco', 'Cascadia Code', monospace;
+    font-size: inherit;
+    line-height: inherit;
+
+    &--add {
+      color: var(--color-success);
+    }
+
+    &--del {
+      color: var(--color-error);
+    }
+  }
+
+  &__arrow {
+    flex-shrink: 0;
+    display: block;
+    color: var(--color-text-muted);
+    width: 12px;
+    height: 12px;
+    transition: transform $motion-fast $easing-standard;
+  }
+
+  // Expanded state
+  &--expanded {
+    .turn-files-summary__arrow {
+      transform: rotate(180deg);
+    }
+  }
+
+  // ==================== Popover ====================
+  &__popover {
+    position: absolute;
+    bottom: calc(100% + 4px);
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 100;
+    min-width: 260px;
+    max-width: 380px;
+    background: color-mix(in srgb, var(--color-bg-elevated) 98%, transparent);
+    backdrop-filter: blur(20px) saturate(1.3);
+    -webkit-backdrop-filter: blur(20px) saturate(1.3);
+    border: 1px solid var(--border-subtle);
+    border-radius: $size-radius-base;
+    box-shadow: 0 4px 16px var(--color-overlay-black-30);
+    animation: turn-files-summary-popover-in 0.2s $easing-standard;
+
+    @keyframes turn-files-summary-popover-in {
+      from {
+        opacity: 0;
+        transform: translateX(-50%) translateY(4px);
+      }
+      to {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+      }
+    }
+  }
+
+  &__popover-summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: $size-gap-2;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border-subtle);
+    font-size: var(--flowchat-font-size-xs);
+    line-height: var(--flowchat-compact-line-height);
+    color: var(--color-text-secondary);
+  }
+
+  &__popover-summary-count {
+    min-width: 0;
+    font-weight: $font-weight-medium;
+    color: var(--color-text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  &__popover-summary-stats {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+    font-family: 'SF Mono', 'Monaco', 'Cascadia Code', monospace;
+  }
+
+  // ==================== File list ====================
+  &__list {
+    max-height: 280px;
+    overflow-y: auto;
+    padding: 4px 6px 6px;
+
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-subtle) transparent;
+
+    &::-webkit-scrollbar {
+      width: 4px;
+    }
+
+    &::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    &::-webkit-scrollbar-thumb {
+      background-color: var(--border-subtle);
+      border-radius: 2px;
+
+      &:hover {
+        background-color: var(--border-medium);
+      }
+    }
+  }
+
+  // ==================== File item ====================
+  &__file-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 6px;
+    border-radius: $size-radius-base;
+    font-size: var(--flowchat-font-size-sm);
+    line-height: var(--flowchat-compact-line-height);
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    transition: all $motion-fast $easing-standard;
+
+    &:hover {
+      background: var(--element-bg-soft);
+      color: var(--color-text-primary);
+    }
+
+    &--error {
+      cursor: default;
+      color: var(--color-error);
+
+      &:hover {
+        background: transparent;
+      }
+    }
+  }
+
+  &__file-icon {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+
+    .icon-write {
+      color: var(--color-success);
+    }
+
+    .icon-edit {
+      color: var(--color-warning);
+    }
+
+    .icon-delete {
+      color: var(--color-error);
+    }
+  }
+
+  &__file-name {
+    min-width: 0;
+    flex: 1 1 auto;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__file-stats {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+    font-family: 'SF Mono', 'Monaco', 'Cascadia Code', monospace;
+    font-size: var(--flowchat-font-size-xs);
+  }
+
+  &__file-stat {
+    &--add {
+      color: var(--color-success);
+    }
+
+    &--del {
+      color: var(--color-error);
+    }
+  }
+
+  &__file-error {
+    flex-shrink: 0;
+    font-size: var(--flowchat-font-size-xs);
+    color: var(--color-error);
+  }
+}

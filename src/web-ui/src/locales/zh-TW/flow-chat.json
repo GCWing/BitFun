@@ -1311,6 +1311,11 @@
     "reviewSource": "審核",
     "deepReviewSource": "嚴格審核"
   },
+  "turnFilesSummary": {
+    "filesCount": "{{count}} 個檔案",
+    "expandCue": "展開列表",
+    "clickToViewDiff": "點擊查看 Diff"
+  },
   "snapshotSystem": {
     "errors": {
       "refreshSessionFailed": "重新整理會話狀態失敗",

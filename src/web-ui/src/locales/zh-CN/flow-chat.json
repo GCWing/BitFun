@@ -1311,6 +1311,11 @@
     "reviewSource": "审核",
     "deepReviewSource": "严格审核"
   },
+  "turnFilesSummary": {
+    "filesCount": "{{count}} 个文件",
+    "expandCue": "展开列表",
+    "clickToViewDiff": "点击查看 Diff"
+  },
   "snapshotSystem": {
     "errors": {
       "refreshSessionFailed": "刷新会话状态失败",

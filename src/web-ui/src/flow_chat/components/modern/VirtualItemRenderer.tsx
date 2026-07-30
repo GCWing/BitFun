@@ -51,10 +51,12 @@ export const VirtualItemRenderer = React.memo<VirtualItemRendererProps>(
               turnId={item.turnId} 
               isLastRound={item.isLastRound}
               isTurnComplete={item.isTurnComplete}
+              isLastTurn={item.isLastTurn}
               turnStartedAt={item.turnStartedAt}
               turnEndedAt={item.turnEndedAt}
               turnDurationMs={item.turnDurationMs}
               turnTokenUsage={item.turnTokenUsage}
+              turnBackendIndex={item.turnBackendIndex}
             />
           );
         

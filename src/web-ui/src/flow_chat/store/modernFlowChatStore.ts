@@ -69,10 +69,12 @@ export type VirtualItem =
       turnId: string;
       isLastRound: boolean;
       isTurnComplete: boolean;
+      isLastTurn: boolean;
       turnStartedAt?: number;
       turnEndedAt?: number;
       turnDurationMs?: number;
       turnTokenUsage?: TokenUsage;
+      turnBackendIndex?: number;
     }
   | { type: 'explore-group'; data: ExploreGroupData; turnId: string }
   | { type: 'turn-completion-notice'; data: TurnCompletionNotice; turnId: string }
@@ -294,6 +296,7 @@ export function sessionToVirtualItems(session: Session | null): VirtualItem[] {
 
   session.dialogTurns.forEach((turn, turnIndex) => {
     const hasNewerDialogTurn = turnIndex < session.dialogTurns.length - 1;
+    const isLastTurn = !hasNewerDialogTurn;
     const cachedItems = cachedTurnItems.get(turn);
     if (
       cachedItems &&
@@ -476,12 +479,14 @@ export function sessionToVirtualItems(session: Session | null): VirtualItem[] {
             turnId: turn.id,
             isLastRound: roundIndex === rounds.length - 1,
             isTurnComplete,
+            isLastTurn,
             turnStartedAt: turn.startTime,
             turnEndedAt: turn.endTime,
             turnDurationMs: typeof turn.endTime === 'number'
               ? Math.max(0, turn.endTime - turn.startTime)
               : undefined,
             turnTokenUsage: turn.tokenUsage,
+            turnBackendIndex: turn.backendTurnIndex,
           });
           roundIndex++;
         }

@@ -1311,6 +1311,11 @@
     "reviewSource": "Review",
     "deepReviewSource": "$t(shared:features.deepReview)"
   },
+  "turnFilesSummary": {
+    "filesCount": "{{count}} files",
+    "expandCue": "Expand list",
+    "clickToViewDiff": "Click to view diff"
+  },
   "snapshotSystem": {
     "errors": {
       "refreshSessionFailed": "Failed to refresh session state",
