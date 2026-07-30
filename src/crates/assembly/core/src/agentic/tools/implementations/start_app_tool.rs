@@ -95,21 +95,21 @@ Example:
 
         let resolved = resolve_start_app_device(hvd, context).await?;
         match resolved {
-            DeviceResolution::List { output, device_count, emulator_count } => {
+            DeviceResolution::List { output, device_count } => {
                 Ok(vec![ToolResult::Result {
                     data: json!({
                         "tool": "start_app", "action": "list",
-                        "deviceCount": device_count, "emulatorCount": emulator_count,
+                        "deviceCount": device_count,
                     }),
                     result_for_assistant: Some(output),
                     image_attachments: None,
                 }])
             }
-            DeviceResolution::Ready { device, started_emulator, preface } => {
+            DeviceResolution::Ready { device } => {
                 let module_target = format!("{}@{}", module, target);
                 let argv = vec!["run", "--skip-build", "--device", device.as_str(), "--module", module_target.as_str(), "--ability", ability];
                 let out = run_devecocli(&argv, context, DevecocliOptions::default()).await?;
-                let combined = [preface.as_str(), out.stdout.as_str(), out.stderr.as_str()]
+                let combined = [out.stdout.as_str(), out.stderr.as_str()]
                     .iter().filter(|s| !s.is_empty()).copied().collect::<Vec<_>>().join("\n");
                 if out.exit_code != 0 {
                     return Err(BitFunError::tool(format!(
@@ -119,7 +119,7 @@ Example:
                 Ok(vec![ToolResult::Result {
                     data: json!({
                         "tool": "start_app", "action": "run", "exitCode": out.exit_code,
-                        "cwd": out.cwd, "device": device, "startedEmulator": started_emulator,
+                        "cwd": out.cwd, "device": device,
                         "module": module, "target": target, "ability": ability,
                     }),
                     result_for_assistant: Some(if combined.is_empty() {
