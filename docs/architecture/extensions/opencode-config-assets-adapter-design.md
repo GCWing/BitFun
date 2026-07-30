@@ -200,9 +200,9 @@ OpenCode adapter 在来源发现、解析和审批前不 import module、不读�
 |---|---|---|---|---|
 | Rules / Instructions | 项目/全局 `AGENTS.md`、Claude fallback、`instructions` glob、本地文件、远程 URL | Workspace Instructions 归属模块保存有序来源引用 | 当前实现项目根与 `.opencode` 配置中的本地精确文件/glob；全局与远程 URL 仍是目标 | 无效 JSONC 或 glob 只排除对应配置项；文件 I/O 失败时当前构建不缓存并在下一条消息重试。 |
 | Agents / Modes | JSON、Markdown、description、mode、prompt、model、variant、temperature、top_p、steps、deprecated `maxSteps`、deprecated `tools`、permission、disable、options、hidden、color | Agent 归属模块创建兼容定义和使用范围视图 | 当前支持 Subagent 安全子集；首次按行为、来源、模型和工具范围确认，fresh single-run 调用 | primary/mode、permission、variant/options、采样、steps 与续接保持诊断或阻断，不影响其他 Agent。 |
-| Skills | `.opencode/.claude/.agents` 项目与用户根、`SKILL.md`、`skills.paths/urls` | Skill 归属模块复用按需加载并补齐规则顺序 | 说明和索引按需加载；URL、脚本或外部依赖按 L2 确认 | URL 或可执行资源失败只降级对应 Skill。 |
+| Skills | `.opencode/.claude/.agents` 项目与用户根、`SKILL.md`、`skills.paths/urls` | OpenCode adapter 只由 `bitfun-core/external_sources` 组合并投影有序本地配置根；Skill 归属模块负责有界递归、解析、覆盖与按需加载 | 标准根及 V1 `skills.paths`/当前本地字符串数组可用；项目配置限项目根，用户配置限项目根或用户目录；配置根最多 64 个、每根 512 个 Skill、单文件 256 KiB、可选策略 64 KiB，实际加载再次执行有界非链接读取；配置根在同 scope 覆盖标准 OpenCode 根，但不重排更早的 BitFun/Claude/Codex/Cursor 来源 | URL、下载/缓存、脚本与外部依赖不加载；无效根不影响标准 Skill。 |
 | References | `references` / 旧 `reference`，本地 path 或 Git repository/branch/description/hidden | **基础能力缺失**：先补 Workspace Reference 的异步准备与 `@alias` 消费接口 | 本地引用保留相对来源；Git 拉取按 L2 确认并保留缓存/隐藏语义 | 拉取失败不阻止项目，外部目录仍遵守工具权限。 |
-| Commands | JSON/JSONC、Markdown、`$ARGUMENTS`、位置参数、`@file`、`!shell`、agent/model/variant/subtask | Prompt Command 专属契约；OpenCode adapter 保留发现、覆盖、解析和参数展开语义，交互式 TUI（ChatMode）只消费中立定义与展开结果 | 当前支持 prompt-only 模板，用户显式选择或输入即确认本次发送；未接通的文件、shell、agent/model/variant/subtask 标为部分受限且不做部分执行 | 已知命令文件无效只回退该命令；稳定删除撤下新调用；目录枚举未知时回退对应目录来源，不能把未知当空目录。 |
+| Commands | JSON/JSONC、Markdown、`$ARGUMENTS`、位置参数、`@file`、`!shell`、agent/model/variant/subtask | Prompt Command 专属契约；adapter 提取静态文件引用，Product Assembly 经共享本地文本服务完成有界装配 | prompt-only 与静态 workspace 相对 UTF-8 `@file` 可发送；动态/绝对/越界文件、shell、agent/model/variant/subtask 整体受限 | 任一文件失败则本次调用原子失败；最多 8 文件、单文件 64 KiB、文件总量 128 KiB、最终命令 1 MiB。 |
 | MCP | local 的 command/environment/cwd/timeout，remote 的 URL/headers/oauth/timeout，Agent 选择 | MCP 归属模块创建兼容配置视图 | 当前支持 local stdio 和 HTTPS remote 的静态发现、首次/行为变化审批、冲突选择与 workspace 隔离的运行期接纳；C0a 快照导入只复制无 env/cwd 的 local command/args 或无 header/query/fragment 的 HTTPS remote，并保持 disabled | `{env:NAME}` 当前只允许用于运行期兼容来源的 environment/Header 值，不进入 C0a 快照；SSE、OpenCode OAuth client 配置、完整 timeout/Agent 范围与 Remote 执行域保持明确不支持；凭据或网络失败只影响单个 Server。 |
 | LSP | command、extensions、env、initialization | LSP 归属模块注册兼容实例 | 首次确认外部进程和使用范围后按文件类型启动 | 自定义 Server 缺少 extensions 或启动失败时只禁用该项。 |
 | Formatters | command、environment、extensions、`$FILE` | **基础能力缺失**：先补文件写入后的 Formatter 执行消费点，再做格式转换 | 首次确认命令后执行匹配 Formatter | 超时后标记未格式化，文件写入结果保留。 |
@@ -258,12 +258,28 @@ OpenCode 会话内核、permission DSL 或 package plugin。Desktop/TUI 摘要�
 正文，静态 system prompt 也不因该适配而改写。来源 `description` 只进入审批和管理界面；已批准 Agent
 进入现有 `<available_agents>` 动态视图时使用 BitFun 生成的稳定摘要，避免只改目录文案就绕过行为重批并改变模型上下文。
 
+OpenCode 本地配置 Skill 根不是新的外部资产生命周期。Adapter 按已实现的本地配置来源顺序累加每份有效文档中的
+V1 `skills.paths` 和当前 `skills: string[]`；字段类型错误只拒绝该文档的 Skill 根贡献，不影响同文档 Command 等其他能力。
+`skills.urls` 与 HTTP(S) 项不获取；相对路径只从当前本地 workspace 解析，项目配置根必须留在项目内，用户配置根必须
+留在项目或当前用户目录内，远程 workspace 的相对根不回退到本机解释。
+
+`bitfun-core/external_sources` 是唯一构造 adapter 并投影本地根事实的组合边界，Skill Registry 不 import 生态 adapter，继续
+拥有递归发现、解析、覆盖、模式开关与实际加载。配置项最多保留 64 个；每根扫描深度 16、最多访问 4096 个条目和
+2048 个目录、接纳 512 个 `SKILL.md`，单个 Skill 限制 256 KiB，可选 `agents/openai.yaml` 限制 64 KiB。扫描和实际加载都
+拒绝符号链接/reparse point；加载时重新校验规范化根及其稳定 source slot，防止目录整体替换改变已发现来源身份。同 scope
+内配置根位于标准 OpenCode 根之前，较后的不同配置根覆盖同名 Skill，但不重排更早的 BitFun/Claude/Codex/Cursor 来源。
+
 ### 5.3 Commands
 
-当前 Prompt Command 子集只展开 `$ARGUMENTS` 与 `$1`、`$2` 等位置参数。OpenCode adapter 负责参数拆分、替换顺序和未使用参数追加，
-Prompt Command 归属模块只接收最终可发送文本；产品 core 不按生态 ID 解释模板。包含 `@file`、`!shell`、
-`{env:...}`、`{file:...}`、agent/model/variant/subtask 的命令仍进入目录，但整体标为“部分受限”，不能解析凭据或
-删除不支持的部分后继续发送。
+当前 Prompt Command 子集展开 `$ARGUMENTS` 与 `$1`、`$2` 等位置参数，并支持模板中可静态确认的 workspace 相对 UTF-8
+`@file`。OpenCode adapter 只从原模板提取引用，不扫描用户参数；Product Assembly 在 stale/冲突校验后通过共享本地文本服务
+原子读取并追加内容。动态占位、绝对/`~`/URL/越界路径仍进入目录但整体受限。包含 `!shell`、`{env:...}`、`{file:...}`、
+agent/model/variant/subtask 的命令同样保持受限，不能删除不支持的部分后继续发送。
+
+每次调用最多接纳 8 个不同文件，单文件 64 KiB、文件总量 128 KiB、最终命令 1 MiB。共享服务对每级路径执行
+workspace 规范化包含校验并拒绝符号链接/reparse point；任一引用缺失、越界、超限或不是 UTF-8 时整次调用失败，不返回
+部分装配结果。Adapter 在分配参数展开结果前先执行保守上界检查，Product Assembly 再按实际最终长度复核。规范化后再打开
+仍存在同一用户并发替换文件的本地 TOCTOU 窗口；读取始终受大小限制，且不会因此放宽到任意宿主机绝对路径。
 
 Markdown front matter 的 `description`、`agent`、`model`、`variant`、`subtask` 按当前 OpenCode schema 校验；
 已知字段类型错误使该命令不可用，不能当作缺省值继续执行。初次 YAML 解析失败时，adapter 按 OpenCode 当前规则将
@@ -274,7 +290,7 @@ provider 的模板正文总量限制为 8 MiB；超过限制进入明确诊断�
 正文不进入 IPC。执行前以来源限定命令 ID 和命令内容版本校验当前菜单项；若文件在菜单展示后更新，旧菜单项必须返回
 stale selection 并等待重新选择，不能直接执行刚刷新的新内容。
 
-后续阶段接通文件引用和 shell 输出时仍按 OpenCode 顺序展开。`!shell` 必须进入脚本执行域，不另建绕过可靠性控制
+后续阶段接通 shell 输出时仍按 OpenCode 顺序展开。`!shell` 必须进入脚本执行域，不另建绕过可靠性控制
 的同步 shell 路径；展开有期限、取消和输出大小限制，大输出保存后只把引用交给命令模板。
 
 OpenCode 生态内部仍按其规则覆盖同名内置命令，但跨独立 provider 或与 BitFun 本地命令同名时不得静默覆盖。

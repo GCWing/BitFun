@@ -274,11 +274,11 @@ OpenCode Subagent 属于 L2：adapter 只读取声明，不执行外部代码；
 
 | 能力 | OpenCode | Claude Code | Codex | 当前边界 |
 |---|---|---|---|---|
-| Prompt Command | JSON/JSONC、Markdown 的 prompt-only 安全子集 | legacy `commands/**/*.md` 的 prompt-only 安全子集；Skills 仍由 Skill 归属模块处理 | 没有稳定、独立于 Skills 的声明式 Command 来源，因此不伪造 provider | `$ARGUMENTS`/位置参数可展开；shell、文件动态引用、指定 Agent/模型等未接通语义整体受限，不做部分执行。 |
+| Prompt Command | JSON/JSONC、Markdown 的 prompt-only 与静态本地文本文件子集 | legacy `commands/**/*.md` 的同一静态本地文本文件子集；Skills 仍由 Skill 归属模块处理 | 没有稳定、独立于 Skills 的声明式 Command 来源，因此不伪造 provider | `$ARGUMENTS`/位置参数及模板内 workspace 相对 UTF-8 `@file` 可展开；shell、动态/绝对/越界文件、指定 Agent/模型等整体受限。 |
 | Subagent | 用户/项目声明的安全子集 | 用户/项目 `agents/**/*.md` 的安全子集 | 用户/项目 `[agents]`、角色文件与安全配置层子集 | prompt、描述、精确模型和可表达工具请求进入既有归属模块；权限、私有 MCP/Hook、推理/并发等没有对应实现的字段会阻止激活。 |
 | MCP | 用户/显式目录/项目配置的安全子集 | user/project/local 原生层的安全子集 | 用户与项目 `config.toml` 原生层的安全子集 | 支持可表达的 stdio 与 HTTPS Streamable HTTP；发现不启动 Server，首次激活继续经 BitFun MCP 审批。OAuth、remote executor、per-tool policy 等不完整语义明确降级。 |
 | Standalone Tool | 已有单文件 JavaScript 子集 | 无稳定的 runtime-free standalone Tool 来源 | 无稳定的 runtime-free standalone Tool 来源 | TypeScript、package/plugin Tool 与动态工具注册依赖独立 Plugin Host，不在声明式 adapter 中猜测。 |
-| Skill | 由现有 Skill 加载模块发现 `.opencode` 等标准根 | 由现有 Skill 加载模块发现 `.claude` 标准根；目录名是调用身份，描述可回退正文首段，`when_to_use` 合入索引，声明参数可做纯文本命名展开 | 由现有 Skill 加载模块发现 `.codex`、`.agents` 标准根；`.codex` 缺少 `name` 时回退目录名 | Skill 的加载、覆盖、模式开关与执行仍由同一个 Skill 模块负责，不复制进外部来源管理模块；未接通的运行时字段整体拒绝。 |
+| Skill | 由现有 Skill 加载模块发现 `.opencode` 标准根及 OpenCode 本地配置根 | 由现有 Skill 加载模块发现 `.claude` 标准根；目录名是调用身份，描述可回退正文首段，`when_to_use` 合入索引，声明参数可做纯文本命名展开 | 由现有 Skill 加载模块发现 `.codex`、`.agents` 标准根；`.codex` 缺少 `name` 时回退目录名 | OpenCode V1 `skills.paths`/当前本地字符串数组只经 `bitfun-core/external_sources` 组合边界投影根目录，递归、加载、覆盖、模式开关与执行仍由同一个 Skill 模块负责；URL 不加载。 |
 | Hook | 静态目录 | 脱敏目录；同步 command 子集可审阅导入 | 脱敏目录；同步 command 子集可审阅导入 | 仅复制到私有原生快照并由 `AgentHookEngine` 执行；OpenCode、非 command、异步、未知或依赖未观察激活语义的 handler 不导入。 |
 
 生态原生语义由各 adapter 以契约测试固定，不抽象成全局优先级：
@@ -286,7 +286,7 @@ OpenCode Subagent 属于 L2：adapter 只读取声明，不执行外部代码；
 - Claude legacy Command 扫描用户与项目 `.claude/commands/**/*.md`，保留 `frontend/component` 到
   `/frontend:component` 的原生命名空间；同层重名无效，遵循 Claude Code 当前“personal 覆盖 project”的 Skill/legacy Command
   规则，同名 Skill 仅通过有界名称索引遮蔽 Command。
-  只展开 `$ARGUMENTS`、`$ARGUMENTS[N]` 和 `$N` 纯文本参数；shell、文件引用和改变 Agent、模型、工具或 Hook 的字段整体阻止激活。
+  展开 `$ARGUMENTS`、`$ARGUMENTS[N]` 和 `$N` 纯文本参数，并允许原模板中的静态 workspace 相对 `@file`；shell、动态/绝对/越界文件引用和改变 Agent、模型、工具或 Hook 的字段整体阻止激活。
 - Skill Registry 继续拥有所有根的发现、覆盖、显式加载与刷新，只用既有稳定 source slot 在内部选择格式方言，不向用户
   暴露主选择器，也不按路径字符串临时猜测。`.claude` Skill 的调用名固定为目录名；`description` 缺失时取正文首个
   非空段落，并与可选 `when_to_use` 合并为最多 1536 个 Unicode 字符的模型索引说明。`arguments` 可为以空白分隔的名称
@@ -480,8 +480,8 @@ Command；明确缺失且未被标记失败的 Command 是稳定删除。产品�
 2. 发现 OpenCode 当前支持的用户全局和项目 Command 来源，建立来源限定身份、生态内覆盖关系和聚合清单；
    OpenCode 自身定义的项目/用户优先级仍由 adapter 解释，跨 provider 或与 BitFun 本地 Command 的同名冲突进入待选择状态。
 3. 支持 `$ARGUMENTS` 与位置参数的 prompt-only 命令在用户显式选择或输入时展开并提交；发现本身不向会话发送内容。
-4. 含 `!shell`、`@file`、`{env:...}`、`{file:...}`、`agent`、`model`、`variant` 或 `subtask` 等未接通语义的命令标记为“部分受限”，不做
-   静默忽略后的部分执行。
+4. 模板内静态 workspace 相对 `@file` 经有界 UTF-8 读取后原子装配；含 `!shell`、动态/绝对/越界文件引用、`{env:...}`、
+   `{file:...}`、`agent`、`model`、`variant` 或 `subtask` 等未接通语义的命令标记为“部分受限”，不做静默忽略后的部分执行。
 5. Desktop 提供统一来源状态、刷新、按执行域抑制/恢复和冲突候选选择；首次 provider 扫描完成前显示中性检查状态，
    不把暂时空目录误报为最终空结果；已经选择且内容摘要未变化的冲突退出待处理区。交互式 TUI（ChatMode）使用同一目录列出和执行
    Command；跨 provider 候选由现有命令菜单按来源、使用范围和兼容状态展示，并通过内部稳定 candidate ID 选择，同次选择也解析本地同名冲突。发现或确认不阻塞

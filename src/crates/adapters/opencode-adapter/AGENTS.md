@@ -4,7 +4,8 @@
 
 The current crate owns the static OpenCode source preview used by the existing
 managed-package path, the OpenCode-specific implementations of command,
-standalone-tool, subagent, and MCP provider contracts, and runtime-free mapping
+standalone-tool, subagent, and MCP provider contracts, the bounded projection of
+configured local Skill roots, and runtime-free mapping
 of caller-normalized tool Hook descriptors. It preserves OpenCode source
 discovery, precedence, formats, argument expansion, and versioned compatibility semantics.
 Shared source catalog, lifecycle coordination, file-watch implementation,
@@ -16,8 +17,9 @@ Product-source boundary:
 - The current `load_opencode_package_adapter` entry remains static-preview only
   until OC-R1/OC-R2 replace its production role. Do not extend this P0 entry into
   another managed OpenCode package format.
-- Standard OpenCode Command, standalone Tool, and Subagent config and directories
-  are current read-only live sources. Full plugin directories and package specs
+- Standard OpenCode Command, standalone Tool, Subagent, and configured local
+  Skill paths are current read-only live sources. Configured Skill URLs remain
+  unsupported and must never be fetched. Full plugin directories and package specs
   remain target work rather than executable production sources. Source files need
   no BitFun import. Low-risk declarative results follow the
   user's auto-apply/ask preference; executable sources require a source, plugin,
@@ -86,7 +88,10 @@ Product-source boundary:
   diagnostics, while event payload types must not be treated as Hook properties.
   The adapter must not load handlers, dispatch Hooks, or imply executable support.
 - The reviewed product assembly entrypoint selects and constructs the compiled
-  OpenCode adapter/provider and injects it into PluginRuntimeClient. It does not
+  OpenCode adapter/provider. External-source providers and configured Skill-root
+  facts are projected through `bitfun-core/external_sources`; managed-package
+  bindings are injected into PluginRuntimeClient. Product consumers do not
+  import the adapter directly. The composition layer does not
   discover dynamic sources, prepare dependencies, or import plugin modules.
 - Product Assembly may consume this crate only from reviewed composition modules
   such as `bitfun-core/plugin_runtime` or `bitfun-core/external_sources`; boundary
