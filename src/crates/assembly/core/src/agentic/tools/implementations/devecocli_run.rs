@@ -39,9 +39,15 @@ impl Default for DevecocliOptions {
 }
 
 pub(crate) fn resolve_harmony_cwd(context: &ToolUseContext) -> String {
+    // 1. Check session CWD (set by switch_cwd tool)
+    if let Some(cwd) = super::session_cwd::get_session_cwd(context.session_id.as_deref()) {
+        return cwd;
+    }
+    // 2. Fall back to workspace root
     if let Some(root) = context.workspace_root() {
         return root.to_string_lossy().to_string();
     }
+    // 3. Fall back to process cwd
     std::env::current_dir()
         .map(|p| p.to_string_lossy().to_string())
         .unwrap_or_else(|_| ".".to_string())
