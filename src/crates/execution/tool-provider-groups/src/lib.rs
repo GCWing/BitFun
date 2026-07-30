@@ -200,6 +200,9 @@ const PRODUCT_TOOL_PROVIDER_GROUP_PLAN: &[ToolProviderGroupPlan] = &[
             "check_arkts_files",
             "check_cpp_files",
             "switch_cwd",
+            "verify_ui",
+            "get_ui_verification_log",
+            "save_ui_screenshot",
         ],
     },
 ];
@@ -424,6 +427,9 @@ mod tests {
                 "check_arkts_files",
                 "check_cpp_files",
                 "switch_cwd",
+                "verify_ui",
+                "get_ui_verification_log",
+                "save_ui_screenshot",
             ]
         );
     }

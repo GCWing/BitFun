@@ -78,6 +78,9 @@ impl StaticToolProviderFactory<dyn Tool> for ProductConcreteToolFactory {
             "start_app" => Some(Arc::new(StartAppTool::new())),
             "hdc_log" => Some(Arc::new(HdcLogTool::new())),
             "arkts_knowledge_search" => Some(Arc::new(ArktsKnowledgeSearchTool::new())),
+            "verify_ui" => Some(Arc::new(VerifyUiTool::new())),
+            "get_ui_verification_log" => Some(Arc::new(GetUiVerificationLogTool::new())),
+            "save_ui_screenshot" => Some(Arc::new(SaveUiScreenshotTool::new())),
             _ => None,
         }
     }
