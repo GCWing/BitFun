@@ -321,6 +321,53 @@ describe('UserMessageItem steering tag', () => {
     expect(container.querySelector('.user-message-item__rollback-btn')).not.toBeNull();
   });
 
+  it('disables file-consistent rollback and message editing for remote workspaces', () => {
+    activeSessionRef.current = {
+      sessionId: 'remote-session',
+      sessionKind: 'normal',
+      remoteConnectionId: 'ssh:user@example.com:22',
+      remoteSshHost: 'example.com',
+      config: {},
+      dialogTurns: [
+        {
+          id: 'turn-1',
+          status: 'completed',
+        },
+      ],
+    };
+
+    act(() => {
+      root.render(
+        <FlowChatContext.Provider
+          value={{
+            sessionId: 'remote-session',
+            allowUserMessageRollback: true,
+            allowUserMessageEdit: true,
+          }}
+        >
+          <UserMessageItem
+            message={{
+              id: 'user-remote-1',
+              content: 'remote session question',
+              timestamp: 1000,
+            }}
+            turnId="turn-1"
+          />
+        </FlowChatContext.Provider>,
+      );
+    });
+
+    const rollbackButton = container.querySelector<HTMLButtonElement>(
+      '.user-message-item__rollback-btn',
+    );
+    const editButton = container.querySelector<HTMLButtonElement>('.user-message-item__edit-btn');
+
+    expect(rollbackButton?.disabled).toBe(true);
+    expect(rollbackButton?.title).toContain('message.rollbackDisabledRemote');
+    expect(editButton?.disabled).toBe(true);
+    expect(editButton?.title).toContain('message.editDisabledRemote');
+  });
+
   it('hides the edit button when the panel context disables user message editing', () => {
     activeSessionRef.current = {
       sessionId: 'btw-session',

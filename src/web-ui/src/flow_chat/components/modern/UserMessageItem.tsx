@@ -32,6 +32,7 @@ import { SessionUsageReportCard } from '../usage/SessionUsageReportCard';
 import type { SessionUsagePanelTab } from '../usage/sessionUsagePanelTypes';
 import { coerceSessionUsageReport } from '../usage/usageReportUtils';
 import { resolveSessionRelationship } from '../../utils/sessionMetadata';
+import { isRemoteWorkspaceSession } from '../../utils/sessionWorkspace';
 import {
   composerPresentationToAccessibleText,
   composerPresentationContexts,
@@ -139,6 +140,7 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
     const isFailed = dialogTurn?.status === 'error';
     const resolvedSessionId = sessionId ?? currentSession?.sessionId;
     const historyActionsBlockedByPartialRestore = currentSession?.isPartial === true;
+    const isRemoteSession = isRemoteWorkspaceSession(currentSession ?? undefined, null);
     const isSystemTriggered = Boolean(
       message?.metadata?.triggerSource && message.metadata.triggerSource !== 'desktop_ui',
     );
@@ -148,6 +150,7 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
       !!resolvedSessionId &&
       turnIndex >= 0 &&
       !historyActionsBlockedByPartialRestore &&
+      !isRemoteSession &&
       !isRollingBack &&
       !isEditSubmitting;
     const canEditBase =
@@ -155,20 +158,28 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
       !!resolvedSessionId &&
       turnIndex >= 0 &&
       !historyActionsBlockedByPartialRestore &&
+      !isRemoteSession &&
       !isThreadGoalSystemMessage &&
       !isSystemTriggered &&
       !steeringStatus;
     const canEdit = canEditBase && !isEditSubmitting && !isRollingBack;
     const canShowEditAction = allowUserMessageEdit && !isFailed && !isThreadGoalSystemMessage;
-    const editDisabledReason = isSystemTriggered
-      ? t('message.cannotEdit')
-      : steeringStatus
+    const editDisabledReason = isRemoteSession
+      ? t('message.editDisabledRemote')
+      : isSystemTriggered
         ? t('message.cannotEdit')
-        : historyActionsBlockedByPartialRestore
-          ? t('message.editDisabledHistoryNotReady')
-        : !resolvedSessionId || turnIndex < 0
-          ? t('message.editDisabledHistoryNotReady')
-          : t('message.cannotEdit');
+        : steeringStatus
+          ? t('message.cannotEdit')
+          : historyActionsBlockedByPartialRestore
+            ? t('message.editDisabledHistoryNotReady')
+            : !resolvedSessionId || turnIndex < 0
+              ? t('message.editDisabledHistoryNotReady')
+              : t('message.cannotEdit');
+    const rollbackTooltip = canRollback
+      ? t('message.rollbackTo', { index: turnIndex + 1 })
+      : isRemoteSession
+        ? t('message.rollbackDisabledRemote')
+        : t('message.cannotRollback');
     const steeringTag = steeringStatus === 'pending'
       ? {
           className: 'user-message-item__steering-tag--pending',
@@ -582,11 +593,12 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
                   </button>
                 </Tooltip>
               ) : canShowRollbackAction && !steeringStatus ? (
-                <Tooltip content={canRollback ? t('message.rollbackTo', { index: turnIndex + 1 }) : t('message.cannotRollback')}>
+                <Tooltip content={rollbackTooltip}>
                   <button
                     className="user-message-item__rollback-btn"
                     onClick={handleRollback}
                     disabled={!canRollback}
+                    title={rollbackTooltip}
                   >
                     {isRollingBack ? (
                       <Loader2 size={14} className="user-message-item__rollback-spinner" />

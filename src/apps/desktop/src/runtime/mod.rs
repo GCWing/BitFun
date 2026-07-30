@@ -184,7 +184,7 @@ mod tests {
             .find("pub async fn rollback_to_turn")
             .expect("rollback command must exist")..];
         let remote_guard = rollback_source
-            .find("ensure_local_snapshot_mutation_path")
+            .find("ensure_complete_rollback_supported")
             .expect("remote rollback guard must remain host-owned");
         let cancellation = rollback_source
             .find("cancel_active_turn_for_session")

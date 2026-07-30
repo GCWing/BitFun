@@ -34,6 +34,21 @@ pub(super) async fn require_local_snapshot_workspace(
     Ok(())
 }
 
+async fn require_complete_rollback_workspace(
+    request: &Value,
+    workspace_path: &str,
+) -> Result<(), String> {
+    let is_remote = optional_string(request, "remoteConnectionId").is_some()
+        || optional_string(request, "remoteSshHost").is_some()
+        || is_remote_path(workspace_path).await;
+    if is_remote {
+        return Err(format!(
+            "Complete rollback is not supported for remote workspaces because remote file snapshots are not recorded. No workspace files or session messages were changed: {workspace_path}"
+        ));
+    }
+    Ok(())
+}
+
 pub(super) fn snapshot_compatibility_error(error: PortError) -> String {
     if error.kind == PortErrorKind::InvalidRequest {
         error.message
@@ -166,7 +181,7 @@ pub(crate) async fn rollback_to_turn(state: &PeerHostState, args: &Value) -> Res
     let delete_turns = optional_bool(request, "deleteTurns").unwrap_or(false);
 
     bitfun_agent_runtime::session_control::validate_session_id(&session_id)?;
-    require_local_snapshot_workspace(request, &workspace_path).await?;
+    require_complete_rollback_workspace(request, &workspace_path).await?;
     let workspace = PathBuf::from(&workspace_path);
     let scope = ensure_session_workspace_runtime_ownership(state, request)?;
     let session_storage_path = resolved_session_storage_scope(state, scope).await?;
@@ -305,8 +320,9 @@ mod tests {
 
     use super::{
         history_rollback_partial_failure, local_snapshot_session_files,
-        local_snapshot_session_stats, require_local_snapshot_workspace, rollback_device_events,
-        rollback_local_workspace_files, snapshot_compatibility_error,
+        local_snapshot_session_stats, require_complete_rollback_workspace,
+        require_local_snapshot_workspace, rollback_device_events, rollback_local_workspace_files,
+        snapshot_compatibility_error,
     };
 
     #[derive(Default)]
@@ -374,12 +390,23 @@ mod tests {
             );
         }
 
+        let rollback_error = require_complete_rollback_workspace(
+            &json!({ "remoteConnectionId": "remote-1" }),
+            "/root/repos",
+        )
+        .await
+        .expect_err("complete remote rollback must report missing snapshot coverage");
+        assert_eq!(
+            rollback_error,
+            "Complete rollback is not supported for remote workspaces because remote file snapshots are not recorded. No workspace files or session messages were changed: /root/repos"
+        );
+
         let source = include_str!("snapshot.rs");
         let rollback_source = &source[source
             .find("pub(crate) async fn rollback_to_turn")
             .expect("rollback handler must exist")..];
         let remote_guard = rollback_source
-            .find("require_local_snapshot_workspace(request, &workspace_path).await?")
+            .find("require_complete_rollback_workspace(request, &workspace_path).await?")
             .expect("rollback must have an explicit remote guard");
         let maintenance = rollback_source
             .find("begin_session_maintenance")

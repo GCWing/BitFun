@@ -1547,8 +1547,8 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         RemoteWorkspacePolicy::WorkspaceAgnostic,
     ),
     ("rollback_miniapp", RemoteWorkspacePolicy::LegacyUnaudited),
-    ("rollback_session", RemoteWorkspacePolicy::LegacyUnaudited),
-    ("rollback_to_turn", RemoteWorkspacePolicy::LegacyUnaudited),
+    ("rollback_session", RemoteWorkspacePolicy::RemoteUnsupported),
+    ("rollback_to_turn", RemoteWorkspacePolicy::RemoteUnsupported),
     ("run_init_agents_md", RemoteWorkspacePolicy::LegacyUnaudited),
     ("run_system_command", RemoteWorkspacePolicy::LegacyUnaudited),
     (
@@ -2026,6 +2026,17 @@ mod tests {
     }
 
     #[test]
+    fn complete_rollback_commands_explicitly_reject_remote_workspaces() {
+        for command in ["rollback_session", "rollback_to_turn"] {
+            assert_eq!(
+                remote_workspace_policy(command),
+                Some(RemoteWorkspacePolicy::RemoteUnsupported),
+                "{command} must not offer message-only rollback without remote file snapshots"
+            );
+        }
+    }
+
+    #[test]
     fn external_source_control_web_command_is_registered() {
         const COMMAND: &str = "get_external_source_control_snapshot";
         let web_api = include_str!(
@@ -2364,8 +2375,6 @@ mod tests {
         "restore_session_view",
         "restore_session_with_turns",
         "rollback_miniapp",
-        "rollback_session",
-        "rollback_to_turn",
         "run_init_agents_md",
         "run_system_command",
         "save_acp_json_config",

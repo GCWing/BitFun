@@ -458,6 +458,18 @@ async fn ensure_local_snapshot_mutation_path(
     Ok(())
 }
 
+async fn ensure_complete_rollback_supported(
+    workspace_path: &str,
+    remote_scope: &SnapshotRemoteScope,
+) -> Result<(), String> {
+    if remote_scope.declares_remote() || is_remote_path(workspace_path).await {
+        return Err(format!(
+            "Complete rollback is not supported for remote workspaces because remote file snapshots are not recorded. No workspace files or session messages were changed: {workspace_path}"
+        ));
+    }
+    Ok(())
+}
+
 async fn snapshot_manager_for_view(
     workspace_path: &str,
     remote_scope: &SnapshotRemoteScope,
@@ -528,8 +540,7 @@ pub async fn rollback_session(
     runtime: State<'_, DesktopRuntimeContext>,
     request: RollbackSessionRequest,
 ) -> Result<Vec<String>, String> {
-    // Remote workspaces have no local snapshots — nothing to roll back
-    ensure_local_snapshot_mutation_path(&request.workspace_path, &request.remote_scope).await?;
+    ensure_complete_rollback_supported(&request.workspace_path, &request.remote_scope).await?;
     ensure_local_runtime_ownership(runtime.inner(), &request.workspace_path).await?;
 
     let manager =
@@ -563,8 +574,7 @@ pub async fn rollback_to_turn(
     runtime: State<'_, DesktopRuntimeContext>,
     request: RollbackTurnRequest,
 ) -> Result<Vec<String>, String> {
-    // Remote workspaces have no local snapshots — nothing to roll back
-    ensure_local_snapshot_mutation_path(&request.workspace_path, &request.remote_scope).await?;
+    ensure_complete_rollback_supported(&request.workspace_path, &request.remote_scope).await?;
     ensure_local_runtime_ownership(runtime.inner(), &request.workspace_path).await?;
     let workspace_path = resolve_workspace_dir(&request.workspace_path).await?;
 
@@ -1285,10 +1295,10 @@ mod tests {
     };
 
     use super::{
-        ensure_local_snapshot_mutation_path, get_snapshot_manager_for_workspace,
-        local_snapshot_command_error, local_snapshot_session_files, local_snapshot_session_stats,
-        rollback_local_workspace_files, snapshot_manager_for_view, RollbackTurnRequest,
-        SnapshotRemoteScope,
+        ensure_complete_rollback_supported, ensure_local_snapshot_mutation_path,
+        get_snapshot_manager_for_workspace, local_snapshot_command_error,
+        local_snapshot_session_files, local_snapshot_session_stats, rollback_local_workspace_files,
+        snapshot_manager_for_view, RollbackTurnRequest, SnapshotRemoteScope,
     };
 
     #[test]
@@ -1355,6 +1365,23 @@ mod tests {
         assert!(get_snapshot_manager_for_workspace(workspace.path()).is_none());
     }
 
+    #[tokio::test]
+    async fn remote_complete_rollback_reports_missing_file_snapshot_coverage() {
+        let scope = SnapshotRemoteScope {
+            remote_connection_id: Some("connection-1".to_string()),
+            remote_ssh_host: Some("example.com".to_string()),
+        };
+
+        let error = ensure_complete_rollback_supported("/root/repos", &scope)
+            .await
+            .expect_err("remote rollback must fail before changing files or history");
+
+        assert_eq!(
+            error,
+            "Complete rollback is not supported for remote workspaces because remote file snapshots are not recorded. No workspace files or session messages were changed: /root/repos"
+        );
+    }
+
     #[test]
     fn rollback_commands_reject_remote_workspaces_before_local_side_effects() {
         let source = include_str!("snapshot_service.rs");
@@ -1375,8 +1402,8 @@ mod tests {
 
         let assert_remote_guard_precedes = |body: &str, side_effect: &str| {
             let guard = body
-                .find("ensure_local_snapshot_mutation_path")
-                .expect("remote mutation guard remains present");
+                .find("ensure_complete_rollback_supported")
+                .expect("complete rollback guard remains present");
             let effect = body
                 .find(side_effect)
                 .unwrap_or_else(|| panic!("expected side effect remains present: {side_effect}"));
