@@ -482,7 +482,7 @@
     gap: 5px;
     min-width: 0;
     max-width: 100%;
-    padding: 0 6px 0 5px;
+    padding: 0 5px 0 6px;
     border-radius: 999px;
     background: color-mix(in srgb, var(--element-bg-medium) 62%, transparent);
     color: var(--color-text-secondary);
@@ -505,7 +505,9 @@
   }
 
   &__workspace-item-remote-name {
+    flex: 0 1 auto;
     min-width: 0;
+    max-width: 160px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;

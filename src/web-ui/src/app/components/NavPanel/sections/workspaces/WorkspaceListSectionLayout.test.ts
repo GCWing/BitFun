@@ -10,6 +10,13 @@ function readWorkspaceListStylesheet(): string {
   return stylesheet.replace(/\r\n/g, '\n');
 }
 
+function readWorkspaceItemSource(): string {
+  return readFileSync(
+    fileURLToPath(new URL('./WorkspaceItem.tsx', import.meta.url)),
+    'utf8',
+  ).replace(/\r\n/g, '\n');
+}
+
 function extractBlock(stylesheet: string, selector: string): string {
   const escapedSelector = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const match = stylesheet.match(new RegExp(`${escapedSelector}\\s*\\{(?<body>[\\s\\S]*?)\\n\\s*\\}`));
@@ -89,5 +96,25 @@ describe('WorkspaceListSection layout styles', () => {
       expect(block).toContain('width: 20px;');
       expect(block).toContain('height: 20px;');
     }
+  });
+
+  it('keeps remote connection metadata inside the sidebar with the status dot on the right', () => {
+    const stylesheet = readWorkspaceListStylesheet();
+    const remoteName = extractBlock(stylesheet, '&__workspace-item-remote-name');
+
+    expect(remoteName).toContain('flex: 0 1 auto;');
+    expect(remoteName).toContain('max-width: 160px;');
+    expect(remoteName).toContain('overflow: hidden;');
+    expect(remoteName).toContain('text-overflow: ellipsis;');
+
+    const source = readWorkspaceItemSource();
+    const remoteMetaStart = source.indexOf('data-testid="nav-workspace-remote-meta"');
+    const remoteMetaEnd = source.indexOf('</Tooltip>', remoteMetaStart);
+    const remoteMetaMarkup = source.slice(remoteMetaStart, remoteMetaEnd);
+
+    expect(remoteMetaStart).toBeGreaterThanOrEqual(0);
+    expect(remoteMetaEnd).toBeGreaterThan(remoteMetaStart);
+    expect(remoteMetaMarkup.indexOf('workspace-item-remote-name'))
+      .toBeLessThan(remoteMetaMarkup.indexOf('workspace-item-status-dot'));
   });
 });

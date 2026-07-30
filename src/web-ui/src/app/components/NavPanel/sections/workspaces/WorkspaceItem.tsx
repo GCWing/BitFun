@@ -1202,10 +1202,6 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
                     data-testid="nav-workspace-remote-meta"
                     data-remote-status={remoteMeta.status}
                   >
-                    <span
-                      className={`bitfun-nav-panel__workspace-item-status-dot is-${remoteMeta.status}`}
-                      aria-hidden="true"
-                    />
                     <span className="bitfun-nav-panel__workspace-item-remote-name">
                       {remoteMeta.connectionLabel}
                     </span>
@@ -1214,6 +1210,10 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
                         {remoteMeta.statusLabel}
                       </span>
                     ) : null}
+                    <span
+                      className={`bitfun-nav-panel__workspace-item-status-dot is-${remoteMeta.status}`}
+                      aria-hidden="true"
+                    />
                   </span>
                 </Tooltip>
               </div>
