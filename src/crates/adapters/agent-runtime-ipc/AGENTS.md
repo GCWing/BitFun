@@ -1,43 +1,41 @@
 [中文](AGENTS-CN.md) | **English**
 
-# Agent Runtime IPC
+# Agent Runtime IPC Migration
 
 Scope: `src/crates/adapters/agent-runtime-ipc`.
 
-This non-published crate is the private local protocol used by the first-party Shared TUI adapter.
-It provides discovery, one-instance locking, bounded framing, authenticated initialization, a closed interactive operation set,
-session controller leases, event delivery, connection bounds, and cleanup. It is not a public SDK, remote protocol, service layer, or Runtime owner.
+This crate is the legacy private Shared TUI protocol. It is migration-only and
+is not a target architecture boundary. The final architecture uses one App
+Server wire for interactive TUI, Desktop, Electron, VS Code, and Web across
+per-client and Shared deployments. Read
+[`docs/architecture/app-server-architecture-design.md`](../../../../docs/architecture/app-server-architecture-design.md)
+and
+[`docs/architecture/agent-runtime-deployment-design.md`](../../../../docs/architecture/agent-runtime-deployment-design.md).
 
-## Pre-integration contract
+## Migration Rules
 
-- Only consumer: the first-party interactive TUI adapter in `src/apps/cli`.
-  GUI, Remote, Peer, ACP, Headless CLI, and SDK Host are not implied consumers.
-- Stable test contract: platform-local endpoint, strict initialize-first handshake, separate handshake/request deadlines,
-  128 KiB request and 8 MiB response/event limits, bounded connections, one controller per Session, one active Turn per connection,
-  disconnect cancellation, sticky event-stream invalidation, 30-second idle exit, and owner-checked discovery cleanup.
-- Integration check: the consumer must reuse existing Agent Runtime owners and
-  prove Embedded/Shared behavior equivalence without depending on SDK Host.
+- Do not add operations, consumers, public exports, transports, or product
+  capabilities to this protocol.
+- Preserve current behavior only for compatibility and regression fixes while
+  the App Server vertical slice is incomplete.
+- Promote controller leases, authentication, frame bounds, disconnect
+  cancellation, event invalidation, `outcome_unknown`, and cleanup into App
+  Server conformance tests before removing their old implementations.
+- Move only genuinely protocol-neutral Named Pipe/UDS, discovery, framing, or
+  budget primitives into the App Server transport adapter. Do not carry the
+  TUI-specific operation envelope or handler upward.
+- Interactive TUI must migrate to `AppServerClient`: default TUI uses a
+  per-client managed App Server and `--shared` connects a Shared App Server.
+- Remove this crate, or reduce it to an App Server-internal transport
+  implementation with no independent wire semantics, once the old consumer is
+  gone.
 
-## Boundaries
+## Temporary Safety Contract
 
-- Export only the exact workspace-private API needed by the CLI adapter. Do not
-  publish this crate or expose its wire as an SDK contract.
-- The closed operation budget is Health, Session list/create/restore (including transcript), current-Session rename and Agent mode/model update,
-  Turn submit/cancel, pending/respond Permission, and UserInput answers. Disconnect cleanup is internal lifecycle, not a detach operation.
-  Model catalogs and defaults remain product configuration outside this wire. Do not add delete, fork, replay, observer,
-  controller transfer, Tool/MCP/Hook management, or other product configuration incidentally.
-- Stable Event, Product Domain, and Runtime Port DTOs may be reused. Do not
-  depend on `bitfun-core`, Agent Runtime implementations, SDK Host, services,
-  Tauri, terminal, tool runtime, or remote transports.
-- Use only Windows Named Pipes or Unix Domain Sockets. Do not add TCP, HTTP,
-  WebSocket, browser access, or remote fallback.
-- Treat this as same-user local isolation, not a sandbox. Product composition
-  must supply a user-private runtime directory.
-- Embedded callers must continue to invoke the typed Agent Runtime directly and
-  must not initialize this transport. Shared outgoing request, response, and
-  event frames are encoded once before write; strict decoding, unknown-field
-  rejection, frame limits, bounded queues, and backpressure must not be weakened
-  for throughput.
+Until deletion, do not weaken strict initialize-first authentication, request
+and event size limits, bounded connections/queues, one Controller per Session,
+disconnect cancellation, sticky event-stream invalidation, idle cleanup, or
+owner-checked discovery cleanup.
 
 ## Verification
 
