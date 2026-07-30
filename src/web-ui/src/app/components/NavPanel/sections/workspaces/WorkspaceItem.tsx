@@ -1,6 +1,6 @@
 import React, { lazy, Suspense, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
-import { Folder, FolderOpen, MoreHorizontal, FolderSearch, Plus, ChevronDown, Trash2, RotateCcw, Copy, FileText, Bot, Link2, ListChecks, Loader2, Clock3, ShieldCheck, Pencil } from 'lucide-react';
+import { Folder, FolderOpen, MoreHorizontal, FolderSearch, Plus, ChevronDown, Trash2, RotateCcw, Copy, FileText, Bot, Link2, ListChecks, Loader2, Clock3, ShieldCheck, Pencil, Server } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { DotMatrixArrowRightIcon } from './DotMatrixArrowRightIcon';
 import { Button, ConfirmDialog, InputDialog, Modal, Tooltip } from '@/component-library';
@@ -201,6 +201,35 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
   const remoteConnStatus = workspace.connectionId && sshContext
     ? sshContext.workspaceStatuses[workspace.connectionId]
     : undefined;
+
+  const remoteMeta = useMemo(() => {
+    if (!workspaceIsRemote) {
+      return null;
+    }
+
+    const status = remoteConnStatus ?? 'unknown';
+    const statusLabel = t(`nav.workspaces.remote.status.${status}`, {
+      defaultValue: t('nav.workspaces.remote.status.unknown'),
+    });
+    const connectionLabel = workspace.connectionName?.trim() || workspace.sshHost?.trim() || '';
+
+    return {
+      status,
+      statusLabel,
+      connectionLabel,
+      /** A green dot already reads as "fine"; spell out only the states that need attention. */
+      showStatusText: status !== 'connected',
+      tooltip: t('nav.workspaces.remote.tooltip', {
+        connection: connectionLabel,
+        host: workspace.sshHost?.trim() || connectionLabel,
+        status: statusLabel,
+      }),
+      ariaLabel: t('nav.workspaces.remote.ariaLabel', {
+        connection: connectionLabel,
+        status: statusLabel,
+      }),
+    };
+  }, [remoteConnStatus, t, workspace.connectionName, workspace.sshHost, workspaceIsRemote]);
 
   const searchIndexIndicator = useMemo(() => {
     if (!canShowSearchIndex) {
@@ -1016,6 +1045,8 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
                 <span className="bitfun-nav-panel__workspace-item-active-icon">
                   <DotMatrixArrowRightIcon size={14} />
                 </span>
+              ) : workspaceIsRemote ? (
+                <Server size={14} />
               ) : (
                 <FolderOpen size={14} />
               )}
@@ -1026,7 +1057,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
           </span>
         </button>
         <div className="bitfun-nav-panel__workspace-item-name-cluster">
-          <div className="bitfun-nav-panel__workspace-item-name-stack">
+          <div className={`bitfun-nav-panel__workspace-item-name-stack${remoteMeta ? ' is-remote' : ''}`}>
             <div className="bitfun-nav-panel__workspace-item-name-row">
               <Tooltip content={workspace.rootPath} placement="right" followCursor>
                 <button
@@ -1161,14 +1192,31 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
                 </>
               )}
             </div>
-            {isRemoteWorkspace(workspace) && (
-              <span className="bitfun-nav-panel__workspace-item-subtitle">
-                <span
-                  className={`bitfun-nav-panel__workspace-item-status-dot is-${remoteConnStatus ?? 'unknown'}`}
-                  aria-label={remoteConnStatus ?? 'unknown'}
-                />
-                <span>{workspace.connectionName}</span>
-              </span>
+            {remoteMeta && (
+              <div className="bitfun-nav-panel__workspace-item-subtitle">
+                <Tooltip content={remoteMeta.tooltip} placement="right" followCursor>
+                  <span
+                    className={`bitfun-nav-panel__workspace-item-remote is-${remoteMeta.status}`}
+                    role="img"
+                    aria-label={remoteMeta.ariaLabel}
+                    data-testid="nav-workspace-remote-meta"
+                    data-remote-status={remoteMeta.status}
+                  >
+                    <span
+                      className={`bitfun-nav-panel__workspace-item-status-dot is-${remoteMeta.status}`}
+                      aria-hidden="true"
+                    />
+                    <span className="bitfun-nav-panel__workspace-item-remote-name">
+                      {remoteMeta.connectionLabel}
+                    </span>
+                    {remoteMeta.showStatusText ? (
+                      <span className="bitfun-nav-panel__workspace-item-remote-status">
+                        {remoteMeta.statusLabel}
+                      </span>
+                    ) : null}
+                  </span>
+                </Tooltip>
+              </div>
             )}
           </div>
         </div>

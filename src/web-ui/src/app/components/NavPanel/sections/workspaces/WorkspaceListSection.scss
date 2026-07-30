@@ -258,11 +258,29 @@
     display: flex;
     flex-direction: column;
     align-items: stretch;
+    justify-content: center;
     gap: 1px;
     flex: 1 1 0;
     min-width: 0;
     max-width: 100%;
     padding: 0 4px;
+    /** Row actions appear on hover and widen the reserved gutter — glide instead of snapping. */
+    transition: padding-right $motion-fast $easing-standard;
+
+    /**
+     * Remote rows carry a second metadata line. Collapse the single-line 30px
+     * title block so both lines read as one centred unit at the same row rhythm
+     * as local workspaces instead of a top-heavy title with an orphaned subtitle.
+     */
+    &.is-remote {
+      gap: 1px;
+      padding-top: 2px;
+      padding-bottom: 2px;
+
+      .bitfun-nav-panel__workspace-item-name-btn {
+        min-height: 17px;
+      }
+    }
   }
 
   &__workspace-item-name-row {
@@ -448,26 +466,65 @@
   }
 
   &__workspace-item-subtitle {
-    display: inline-flex;
+    display: flex;
     align-items: center;
-    gap: 4px;
     min-width: 0;
     max-width: 100%;
-    color: var(--color-text-muted);
+  }
+
+  /**
+   * Remote connection chip. Shares the branch-pill language so remote metadata
+   * reads as a deliberate part of the row rather than a stray second line.
+   */
+  &__workspace-item-remote {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    min-width: 0;
+    max-width: 100%;
+    padding: 0 6px 0 5px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--element-bg-medium) 62%, transparent);
+    color: var(--color-text-secondary);
     font-size: var(--font-size-xxs);
-    line-height: 1.2;
-    opacity: 0.75;
+    line-height: 1.6;
+    cursor: default;
+    transition: background $motion-fast $easing-standard,
+                color $motion-fast $easing-standard;
 
-    svg {
-      flex-shrink: 0;
-      color: var(--color-success);
+    &.is-error,
+    &.is-disconnected {
+      background: color-mix(in srgb, var(--color-error) 14%, transparent);
+      color: var(--color-error);
     }
 
-    span {
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
+    &.is-connecting {
+      background: color-mix(in srgb, var(--color-warning) 14%, transparent);
+      color: var(--color-warning);
     }
+  }
+
+  &__workspace-item-remote-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__workspace-item-remote-status {
+    flex-shrink: 0;
+    white-space: nowrap;
+    opacity: 0.85;
+
+    &::before {
+      content: '·';
+      margin-right: 4px;
+      opacity: 0.6;
+    }
+  }
+
+  &__workspace-item:not(.is-active) &__workspace-item-remote {
+    opacity: 0.8;
   }
 
   &__workspace-item-status-dot {
@@ -475,19 +532,15 @@
     width: 6px;
     height: 6px;
     border-radius: 50%;
+    background: var(--color-text-muted);
 
     &.is-connected {
       background: var(--color-success);
     }
 
-    &.is-unknown,
     &.is-error,
     &.is-disconnected {
       background: var(--color-error);
-    }
-
-    &.is-unknown {
-      background: var(--color-text-muted);
     }
 
     &.is-connecting {

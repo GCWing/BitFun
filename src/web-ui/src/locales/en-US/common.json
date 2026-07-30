@@ -386,6 +386,17 @@
         "projects": "Projects",
         "assistants": "Personal Assistants"
       },
+      "remote": {
+        "tooltip": "Remote workspace · {{connection}} ({{host}})\nConnection: {{status}}",
+        "ariaLabel": "Remote connection {{connection}}, {{status}}",
+        "status": {
+          "connected": "Connected",
+          "connecting": "Connecting",
+          "disconnected": "Disconnected",
+          "error": "Connection error",
+          "unknown": "Status unknown"
+        }
+      },
       "actions": {
         "more": "More actions",
         "newSession": "New session",

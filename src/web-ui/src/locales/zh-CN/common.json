@@ -386,6 +386,17 @@
         "projects": "普通工作区",
         "assistants": "个人助理"
       },
+      "remote": {
+        "tooltip": "远程工作区 · {{connection}}（{{host}}）\n连接状态：{{status}}",
+        "ariaLabel": "远程连接 {{connection}}，{{status}}",
+        "status": {
+          "connected": "已连接",
+          "connecting": "连接中",
+          "disconnected": "已断开",
+          "error": "连接异常",
+          "unknown": "状态未知"
+        }
+      },
       "actions": {
         "more": "更多操作",
         "newSession": "新建会话",
