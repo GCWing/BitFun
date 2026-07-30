@@ -1,52 +1,8 @@
 /**
  * Terminal output renderer based on xterm.js (read-only).
  * Uses TerminalActionManager to avoid per-instance EventBus listeners.
- *
- * Raw PTY output may contain absolute cursor-position sequences (ESC[row;colH)
- * that assume existing content on screen.  When replayed in a fresh xterm.js
- * these sequences leave blank rows at the top.  We strip them before writing
- * so content flows sequentially; colors and relative movements are preserved.
  */
-
-/**
- * Normalize absolute cursor-position sequences for fresh-context rendering.
- *
- * ESC[row;colH (CUP) and ESC[row;colf (HVP) reposition the cursor to an
- * absolute screen coordinate.  In a live terminal the rows above that
- * coordinate already contain shell prompts and prior output, so no blank space
- * appears.  In a fresh xterm.js context those rows are empty, producing a
- * large blank area before the first line of real content.
- *
- * We replace each such sequence with CR+LF so the two sections it separates
- * stay on different lines (plain deletion would cause them to run together),
- * while avoiding the blank-row artifact from coordinate-based positioning.
- *
- * Colors, bold, relative cursor movements and all other sequences are left
- * untouched.
- */
-function normalizeAbsoluteCursorPositions(content: string): string {
-  // Matches ESC [ <optional digits> ; <optional digits> H|f
-  // e.g. ESC[14;35H  ESC[18;1H  ESC[5;1H  ESC[H  ESC[;1H
-  // eslint-disable-next-line no-control-regex -- ESC sequences are intentional terminal control codes.
-  return content.replace(/\x1b\[\d*;?\d*[Hf]/g, '\r\n');
-}
-
-function trimTrailingLineBreaksBeforeAnsiTail(content: string): string {
-  // A final newline moves the xterm cursor to an extra blank row, which can
-  // push useful content into scrollback in compact read-only previews. Preserve
-  // trailing CSI state-reset sequences such as ESC[?25h while dropping only the
-  // blank line break before them.
-  // eslint-disable-next-line no-control-regex -- ESC sequences are intentional terminal control codes.
-  return content.replace(/(?:\r\n|\r|\n)+((?:\x1b\[[0-?]*[ -/]*[@-~])*)$/g, '$1');
-}
-
-function prepareReadOnlyTerminalOutput(content: string): string {
-  return trimTrailingLineBreaksBeforeAnsiTail(
-    normalizeAbsoluteCursorPositions(content),
-  );
-}
-
-import { forwardRef, memo, useCallback, useEffect, useId, useImperativeHandle, useRef, useState } from 'react';
+import { forwardRef, memo, useCallback, useEffect, useId, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react';
 import { Terminal as XTerm } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { registerTerminalActions, unregisterTerminalActions } from '../services/TerminalActionManager';
@@ -56,11 +12,16 @@ import {
   getXtermFontWeights,
   DEFAULT_XTERM_MINIMUM_CONTRAST_RATIO,
 } from '../utils';
+import {
+  calculateTerminalOutputHeight,
+  getEstimatedTerminalOutputRowHeight,
+  prepareReadOnlyTerminalOutput,
+  TERMINAL_OUTPUT_FONT_FAMILY,
+  TERMINAL_OUTPUT_FONT_SIZE,
+  TERMINAL_OUTPUT_LINE_HEIGHT,
+  type TerminalOutputFallbackModel,
+} from './terminalOutputPresentation';
 import '@xterm/xterm/css/xterm.css';
-
-const OUTPUT_FONT_SIZE = 12;
-const OUTPUT_LINE_HEIGHT = 1.4;
-const FALLBACK_OUTPUT_ROW_HEIGHT = Math.ceil(OUTPUT_FONT_SIZE * OUTPUT_LINE_HEIGHT);
 
 export interface TerminalOutputRendererProps {
   /** Output content to render. */
@@ -75,6 +36,8 @@ export interface TerminalOutputRendererProps {
   maxHeight?: number;
   /** Maximum visible terminal rows. Takes precedence over maxHeight. */
   maxRows?: number;
+  /** Plain-text preview retained until xterm has rendered its first content frame. */
+  initialFallback?: TerminalOutputFallbackModel;
 }
 
 export interface TerminalOutputRendererHandle {
@@ -117,9 +80,10 @@ const TerminalOutputRendererComponent = forwardRef<TerminalOutputRendererHandle,
   content,
   className = '',
   terminalId: propTerminalId,
-  minHeight = FALLBACK_OUTPUT_ROW_HEIGHT,
+  minHeight = getEstimatedTerminalOutputRowHeight(),
   maxHeight = 300,
   maxRows,
+  initialFallback,
 }, ref) => {
   const autoId = useId();
   const terminalId = propTerminalId || `terminal-output-${autoId}`;
@@ -128,50 +92,28 @@ const TerminalOutputRendererComponent = forwardRef<TerminalOutputRendererHandle,
   const fitAddonRef = useRef<FitAddon | null>(null);
   const resizeObserverRef = useRef<ResizeObserver | null>(null);
   const lastRenderedContentRef = useRef<string>('');
-  const [rowHeight, setRowHeight] = useState(FALLBACK_OUTPUT_ROW_HEIGHT);
+  const revealInitialFallbackOnRenderRef = useRef(false);
+  const initialRenderReadyRef = useRef(initialFallback == null);
+  const [rowHeight, setRowHeight] = useState(getEstimatedTerminalOutputRowHeight);
   const [hasScrollableBuffer, setHasScrollableBuffer] = useState(false);
+  const [isInitialRenderReady, setIsInitialRenderReady] = useState(initialFallback == null);
   const preparedContent = prepareReadOnlyTerminalOutput(content);
 
   useImperativeHandle(ref, () => ({
     getVisibleText: () => getTerminalVisibleText(terminalRef.current),
   }), []);
 
-  const heightForRows = useCallback((rows: number): number => {
-    return Math.ceil(Math.max(rowHeight, rows * rowHeight));
-  }, [rowHeight]);
-
-  const alignHeightToRows = useCallback((height: number, mode: 'floor' | 'ceil'): number => {
-    const rows = mode === 'ceil'
-      ? Math.ceil(height / rowHeight)
-      : Math.floor(height / rowHeight);
-    return heightForRows(Math.max(1, rows));
-  }, [heightForRows, rowHeight]);
-
-  // Estimate height from content, keeping the container aligned to full xterm rows.
-  const calculateHeight = useCallback((text: string): number => {
-    const effectiveMinHeight = alignHeightToRows(minHeight, 'ceil');
-    const effectiveMaxHeight = maxRows != null
-      ? heightForRows(maxRows)
-      : alignHeightToRows(maxHeight, 'floor');
-    const boundedMaxHeight = Math.max(effectiveMinHeight, effectiveMaxHeight);
-
-    if (!text) return Math.min(effectiveMinHeight, boundedMaxHeight);
-
-    const lines = text.split(/\r\n|\r|\n/);
-    const visibleRows = maxRows != null
-      ? Math.min(lines.length, maxRows)
-      : lines.length;
-    const estimatedHeight = heightForRows(Math.max(1, visibleRows));
-    
-    return Math.min(Math.max(estimatedHeight, effectiveMinHeight), boundedMaxHeight);
-  }, [alignHeightToRows, heightForRows, maxHeight, maxRows, minHeight]);
-
-  const height = calculateHeight(preparedContent);
+  const height = calculateTerminalOutputHeight(preparedContent, {
+    rowHeight,
+    minHeight,
+    maxHeight,
+    maxRows,
+  });
   const updateScrollableBufferState = useCallback(() => {
     setHasScrollableBuffer(hasScrollableTerminalBuffer(terminalRef.current));
   }, []);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!containerRef.current) return;
 
     const currentTheme = themeService.getCurrentTheme();
@@ -181,11 +123,11 @@ const TerminalOutputRendererComponent = forwardRef<TerminalOutputRendererHandle,
       cursorBlink: false,
       cursorStyle: 'bar',
       cursorInactiveStyle: 'none',
-      fontSize: 12,
-      fontFamily: "'Fira Code', 'Noto Sans SC', Consolas, 'Courier New', monospace",
+      fontSize: TERMINAL_OUTPUT_FONT_SIZE,
+      fontFamily: TERMINAL_OUTPUT_FONT_FAMILY,
       fontWeight: fontWeights.fontWeight,
       fontWeightBold: fontWeights.fontWeightBold,
-      lineHeight: 1.4,
+      lineHeight: TERMINAL_OUTPUT_LINE_HEIGHT,
       minimumContrastRatio: DEFAULT_XTERM_MINIMUM_CONTRAST_RATIO,
       scrollback: 5000,
       convertEol: true,
@@ -202,27 +144,33 @@ const TerminalOutputRendererComponent = forwardRef<TerminalOutputRendererHandle,
 
     terminalRef.current = terminal;
     fitAddonRef.current = fitAddon;
-
-    requestAnimationFrame(() => {
-      try {
-        const nextRowHeight = terminal.dimensions?.css.cell.height;
-        if (typeof nextRowHeight === 'number' && nextRowHeight > 0) {
-          setRowHeight(nextRowHeight);
-        }
-        fitAddon.fit();
-        updateScrollableBufferState();
-      } catch {
-        // Ignore fit errors.
+    const renderDisposable = terminal.onRender(() => {
+      if (!revealInitialFallbackOnRenderRef.current || initialRenderReadyRef.current) {
+        return;
       }
+
+      revealInitialFallbackOnRenderRef.current = false;
+      initialRenderReadyRef.current = true;
+      setIsInitialRenderReady(true);
     });
+
+    try {
+      const nextRowHeight = terminal.dimensions?.css.cell.height;
+      if (typeof nextRowHeight === 'number' && nextRowHeight > 0) {
+        setRowHeight(nextRowHeight);
+      }
+      fitAddon.fit();
+      updateScrollableBufferState();
+    } catch {
+      // Ignore fit errors.
+    }
 
     const resizeObserver = new ResizeObserver(() => {
       requestAnimationFrame(() => {
         try {
-          const nextRowHeight = terminal.dimensions?.css.cell.height;
-          if (typeof nextRowHeight === 'number' && nextRowHeight > 0) {
-            setRowHeight(nextRowHeight);
-          }
+          // The observed cell height depends on this container's current
+          // rounded height. Writing it back here feeds xterm's fit result into
+          // React's height calculation, which can oscillate between rows.
           fitAddon.fit();
           updateScrollableBufferState();
         } catch {
@@ -234,6 +182,7 @@ const TerminalOutputRendererComponent = forwardRef<TerminalOutputRendererHandle,
     resizeObserverRef.current = resizeObserver;
 
     return () => {
+      renderDisposable.dispose();
       resizeObserver.disconnect();
       terminal.dispose();
       terminalRef.current = null;
@@ -288,16 +237,28 @@ const TerminalOutputRendererComponent = forwardRef<TerminalOutputRendererHandle,
     
     // Compare the normalized read-only text for incremental detection so the
     // height estimate and xterm buffer receive the same content.
+    const revealInitialFallbackAfterRender = () => {
+      if (initialRenderReadyRef.current) {
+        return;
+      }
+
+      revealInitialFallbackOnRenderRef.current = true;
+      terminal.refresh(0, Math.max(0, terminal.rows - 1));
+    };
+
     if (preparedContent.startsWith(lastRenderedContent) && lastRenderedContent.length > 0) {
       const newPart = preparedContent.slice(lastRenderedContent.length);
       if (newPart) {
-        terminal.write(newPart);
+        terminal.write(newPart, revealInitialFallbackAfterRender);
       }
     } else {
       terminal.clear();
       terminal.reset();
       if (preparedContent) {
-        terminal.write(preparedContent);
+        terminal.write(preparedContent, revealInitialFallbackAfterRender);
+      } else if (!initialRenderReadyRef.current) {
+        initialRenderReadyRef.current = true;
+        setIsInitialRenderReady(true);
       }
     }
     updateScrollableBufferState();
@@ -315,8 +276,7 @@ const TerminalOutputRendererComponent = forwardRef<TerminalOutputRendererHandle,
   }, [preparedContent, updateScrollableBufferState]);
 
   return (
-    <div 
-      ref={containerRef}
+    <div
       className={`terminal-output-renderer ${className} ${hasScrollableBuffer ? 'terminal-output-renderer--scrollable' : 'terminal-output-renderer--no-scroll'}`}
       data-terminal-id={terminalId}
       data-readonly="true"
@@ -324,8 +284,34 @@ const TerminalOutputRendererComponent = forwardRef<TerminalOutputRendererHandle,
         height: `${height}px`,
         width: '100%',
         overflow: 'hidden',
+        position: 'relative',
       }}
-    />
+    >
+      <div
+        ref={containerRef}
+        className="terminal-output-renderer__xterm-host"
+        aria-hidden={!isInitialRenderReady}
+        style={{
+          height: '100%',
+          width: '100%',
+          opacity: isInitialRenderReady ? 1 : 0,
+        }}
+      />
+      {!isInitialRenderReady && initialFallback && (
+        <pre
+          className="terminal-output-pre terminal-output-renderer__initial-fallback"
+          style={{
+            position: 'absolute',
+            inset: 0,
+            height: '100%',
+            maxHeight: '100%',
+            overflow: 'hidden',
+          }}
+        >
+          {initialFallback.content}
+        </pre>
+      )}
+    </div>
   );
 });
 
