@@ -289,9 +289,9 @@ pub fn build_log_targets(config: &LogConfig) -> Vec<Target> {
     targets
 }
 
-pub fn build_log_plugin<R: Runtime>(log_targets: Vec<Target>) -> TauriPlugin<R> {
+pub fn build_log_plugin<R: Runtime>(log_targets: Vec<Target>, initial_level: log::LevelFilter) -> TauriPlugin<R> {
     tauri_plugin_log::Builder::new()
-        .level(log::LevelFilter::Trace)
+        .level(initial_level)
         .level_for("ignore", log::LevelFilter::Off)
         .level_for("ignore::walk", log::LevelFilter::Off)
         .level_for("globset", log::LevelFilter::Off)

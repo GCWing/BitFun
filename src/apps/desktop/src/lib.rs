@@ -363,7 +363,6 @@ pub async fn _run() {
     let mut startup_timings = TimingCollector::default();
     let in_debug = cfg!(debug_assertions) || std::env::var("DEBUG").unwrap_or_default() == "1";
     let log_config = logging::LogConfig::new(in_debug);
-    let log_targets = logging::build_log_targets(&log_config);
     let session_log_dir = log_config.session_log_dir.clone();
     crash_diagnostics::initialize_run_state(session_log_dir.clone(), &startup_trace_id);
     setup_panic_hook();
@@ -382,6 +381,16 @@ pub async fn _run() {
     }
     startup_timings.record_elapsed("initialize_global_config", step_started);
     startup_trace.record_elapsed_step("native_pre_tauri", "initialize_global_config", step_started);
+
+    let step_started = Instant::now();
+    let startup_log_level = resolve_runtime_log_level(log_config.level).await;
+    log::set_max_level(startup_log_level);
+    let log_targets = logging::build_log_targets(&log_config);
+    startup_trace.record_elapsed_step(
+        "native_pre_tauri",
+        "resolve_runtime_log_level",
+        step_started,
+    );
 
     // Initialize global I18nService so bot/remote-connect language is always in sync.
     {
@@ -510,7 +519,7 @@ pub async fn _run() {
     let mut builder = tauri::Builder::default();
 
     let app = builder
-        .plugin(logging::build_log_plugin(log_targets))
+        .plugin(logging::build_log_plugin(log_targets, startup_log_level))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_fs::init())
         .manage(app_state)
