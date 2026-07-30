@@ -1066,14 +1066,14 @@ impl StartupPage {
             }
             ActionHandler::ClosePopups => self.close_all_popups(),
             ActionHandler::NavigateBack => self.navigate_back(),
-            ActionHandler::ClearConversation
-            | ActionHandler::RenameSession
+            ActionHandler::RenameSession
             | ActionHandler::Reload
             | ActionHandler::Tools
             | ActionHandler::Extensions
             | ActionHandler::NativeHooks
             | ActionHandler::ExternalHooks
-            | ActionHandler::History
+            | ActionHandler::Status
+            | ActionHandler::CompactSession
             | ActionHandler::ToggleAutoApprove
             | ActionHandler::ToggleWorktree
             | ActionHandler::Interrupt

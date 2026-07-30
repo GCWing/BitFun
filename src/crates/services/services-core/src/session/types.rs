@@ -494,6 +494,10 @@ impl DialogTurnKind {
     pub fn is_model_visible(self) -> bool {
         matches!(self, Self::UserDialog)
     }
+
+    pub fn is_transcript_visible(self) -> bool {
+        matches!(self, Self::UserDialog | Self::ManualCompaction)
+    }
 }
 
 /// User message data
@@ -1159,6 +1163,9 @@ mod tests {
     #[test]
     fn manual_compaction_turn_is_model_invisible() {
         assert!(!DialogTurnKind::ManualCompaction.is_model_visible());
+        assert!(DialogTurnKind::ManualCompaction.is_transcript_visible());
+        assert!(DialogTurnKind::UserDialog.is_transcript_visible());
+        assert!(!DialogTurnKind::LocalCommand.is_transcript_visible());
     }
 
     #[test]

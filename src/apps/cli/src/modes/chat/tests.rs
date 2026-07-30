@@ -7,7 +7,8 @@ mod tests {
         apply_model_selection_feedback, apply_session_model_migration,
         apply_session_rename_feedback, begin_slash_menu_selection, builtin_arguments_route,
         builtin_command_reconfirmation, clear_selected_native_command_prefill,
-        cli_native_prompt_command_descriptors, command_route, consume_selected_native_command_once,
+        cli_native_prompt_command_descriptors, command_route, compact_arguments_error,
+        consume_selected_native_command_once, context_compression_tool_event,
         extension_command_help_request, external_agent_attention, external_agent_diagnostic_lines,
         external_agent_pending_notice_key, external_agent_result_is_stale,
         external_agent_review_text, external_command_projections, external_control_review_text,
@@ -20,8 +21,9 @@ mod tests {
         parse_external_agent_review_action, parse_external_control_action,
         parse_external_tool_review_action, parse_hook_management_action, parse_reload_invocation,
         parse_reload_target, pending_session_operation_blocks_runtime_action,
-        previous_session_update_status, render_external_hook_catalog, render_native_hook_overview,
-        requested_session_name, retain_selected_native_command_for_input, selected_command_prefill,
+        previous_session_update_status, primary_model_usage_for_active_turn,
+        render_external_hook_catalog, render_native_hook_overview, requested_session_name,
+        retain_selected_native_command_for_input, selected_command_prefill,
         session_command_help_note, session_delete_allowed, session_delete_feedback,
         session_update_allowed, session_update_blocks_typed_submission,
         session_update_completion_should_exit, shared_session_change_is_blocked, CommandRoute,
@@ -48,6 +50,7 @@ mod tests {
     use bitfun_core::native_hooks::{
         NativeHookFileView, NativeHookHandlerView, NativeHookOverview, NativeHookRuleView,
     };
+    use bitfun_events::{AgenticEvent, ToolEventData};
     use bitfun_product_domains::external_sources::ExternalSourceScope;
     use bitfun_runtime_ports::AgentContextReloadTarget;
     use std::collections::{BTreeMap, BTreeSet};
@@ -1165,6 +1168,30 @@ mod tests {
     }
 
     #[test]
+    fn compact_rejects_arguments_only_after_the_builtin_route_wins() {
+        assert_eq!(
+            compact_arguments_error(
+                CommandRoute::Builtin,
+                ActionHandler::CompactSession,
+                "unexpected"
+            ),
+            Some("Usage: /compact")
+        );
+        assert_eq!(
+            compact_arguments_error(CommandRoute::Builtin, ActionHandler::CompactSession, "   "),
+            None
+        );
+        assert_eq!(
+            compact_arguments_error(
+                CommandRoute::External,
+                ActionHandler::CompactSession,
+                "unexpected"
+            ),
+            None
+        );
+    }
+
+    #[test]
     fn native_choice_is_reused_when_multiple_external_candidates_remain_unresolved() {
         let selected_native = "bitfun.cli:help";
         let first = external_command("help", Some(selected_native));
@@ -1281,6 +1308,174 @@ mod tests {
         ));
         assert_eq!(state.current_turn_id(), None);
         assert!(!state.is_processing);
+    }
+
+    #[test]
+    fn primary_model_usage_projection_rejects_other_sessions_turns_and_subagents() {
+        let mut state = ChatState::new(
+            "session".to_string(),
+            "Session".to_string(),
+            "agentic".to_string(),
+            Some("D:/workspace/current".to_string()),
+        );
+        state.handle_turn_started("turn", "hello");
+
+        let event =
+            |session_id: &str, turn_id: &str, is_subagent: bool| AgenticEvent::TokenUsageUpdated {
+                session_id: session_id.to_string(),
+                turn_id: turn_id.to_string(),
+                model_config_id: "model-config".to_string(),
+                effective_model_name: "example-model".to_string(),
+                input_tokens: 80_000,
+                output_tokens: Some(2_000),
+                total_tokens: 82_000,
+                max_context_tokens: Some(128_000),
+                is_subagent,
+                cached_tokens: Some(10_000),
+                token_details: None,
+            };
+
+        let usage = primary_model_usage_for_active_turn(&event("session", "turn", false), &state)
+            .expect("matching primary-model event");
+        assert_eq!(usage.total_tokens, 82_000);
+        assert_eq!(usage.effective_model_name, "example-model");
+
+        assert!(primary_model_usage_for_active_turn(
+            &event("other-session", "turn", false),
+            &state
+        )
+        .is_none());
+        assert!(primary_model_usage_for_active_turn(
+            &event("session", "other-turn", false),
+            &state
+        )
+        .is_none());
+        assert!(
+            primary_model_usage_for_active_turn(&event("session", "turn", true), &state).is_none()
+        );
+    }
+
+    #[test]
+    fn context_compression_projection_is_scoped_to_the_active_session_turn() {
+        let mut state = ChatState::new(
+            "session".to_string(),
+            "Session".to_string(),
+            "agentic".to_string(),
+            Some("D:/workspace/current".to_string()),
+        );
+        state.handle_turn_started("turn", "/compact");
+
+        let started = AgenticEvent::ContextCompressionStarted {
+            session_id: "session".to_string(),
+            turn_id: "turn".to_string(),
+            compression_id: "compression".to_string(),
+            trigger: "manual".to_string(),
+            tokens_before: 80_000,
+            context_window: 128_000,
+        };
+        let projected =
+            context_compression_tool_event(&started, &state).expect("active compression event");
+        match projected {
+            ToolEventData::Started {
+                identity, params, ..
+            } => {
+                assert_eq!(identity.tool_id, "compression");
+                assert_eq!(identity.effective_name(), "ContextCompression");
+                assert_eq!(params["trigger"], "manual");
+                assert_eq!(params["tokens_before"], 80_000);
+            }
+            _ => panic!("expected started tool event"),
+        }
+
+        let other_turn = AgenticEvent::ContextCompressionStarted {
+            session_id: "session".to_string(),
+            turn_id: "other-turn".to_string(),
+            compression_id: "other-compression".to_string(),
+            trigger: "manual".to_string(),
+            tokens_before: 80_000,
+            context_window: 128_000,
+        };
+        assert!(context_compression_tool_event(&other_turn, &state).is_none());
+
+        let other_session = AgenticEvent::ContextCompressionStarted {
+            session_id: "other-session".to_string(),
+            turn_id: "turn".to_string(),
+            compression_id: "other-compression".to_string(),
+            trigger: "manual".to_string(),
+            tokens_before: 80_000,
+            context_window: 128_000,
+        };
+        assert!(context_compression_tool_event(&other_session, &state).is_none());
+    }
+
+    #[test]
+    fn context_compression_completion_projects_the_persisted_tool_shape() {
+        let mut state = ChatState::new(
+            "session".to_string(),
+            "Session".to_string(),
+            "agentic".to_string(),
+            Some("D:/workspace/current".to_string()),
+        );
+        state.handle_turn_started("turn", "/compact");
+        let completed = AgenticEvent::ContextCompressionCompleted {
+            session_id: "session".to_string(),
+            turn_id: "turn".to_string(),
+            compression_id: "compression".to_string(),
+            compression_count: 2,
+            tokens_before: 80_000,
+            tokens_after: 20_000,
+            compression_ratio: 0.25,
+            duration_ms: 42,
+            has_summary: true,
+            summary_source: "model".to_string(),
+            applied: true,
+        };
+
+        match context_compression_tool_event(&completed, &state)
+            .expect("active compression completion")
+        {
+            ToolEventData::Completed {
+                identity,
+                result,
+                duration_ms,
+                ..
+            } => {
+                assert_eq!(identity.tool_id, "compression");
+                assert_eq!(result["tokens_before"], 80_000);
+                assert_eq!(result["tokens_after"], 20_000);
+                assert_eq!(result["applied"], true);
+                assert_eq!(result["summary_source"], "model");
+                assert_eq!(duration_ms, 42);
+            }
+            _ => panic!("expected completed tool event"),
+        }
+    }
+
+    #[test]
+    fn context_compression_failure_projects_the_existing_tool_error_shape() {
+        let mut state = ChatState::new(
+            "session".to_string(),
+            "Session".to_string(),
+            "agentic".to_string(),
+            Some("D:/workspace/current".to_string()),
+        );
+        state.handle_turn_started("turn", "/compact");
+        let failed = AgenticEvent::ContextCompressionFailed {
+            session_id: "session".to_string(),
+            turn_id: "turn".to_string(),
+            compression_id: "compression".to_string(),
+            error: "summary request failed".to_string(),
+        };
+
+        match context_compression_tool_event(&failed, &state).expect("active compression failure") {
+            ToolEventData::Failed {
+                identity, error, ..
+            } => {
+                assert_eq!(identity.tool_id, "compression");
+                assert_eq!(error, "summary request failed");
+            }
+            _ => panic!("expected failed tool event"),
+        }
     }
 
     #[test]

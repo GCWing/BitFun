@@ -8,9 +8,9 @@ use crate::{
 use async_trait::async_trait;
 use bitfun_events::{AgenticEvent, AgenticEventEnvelope, AgenticEventPriority};
 use bitfun_runtime_ports::{
-    AgentDialogTurnRequest, AgentSessionCreateRequest, AgentSessionCreateResult,
-    AgentSessionModeUpdateRequest, AgentSessionModelUpdateRequest, AgentSessionSummary,
-    AgentSubmissionSource, DialogSubmissionPolicy, SessionTranscript,
+    AgentDialogTurnRequest, AgentSessionCompactionRequest, AgentSessionCreateRequest,
+    AgentSessionCreateResult, AgentSessionModeUpdateRequest, AgentSessionModelUpdateRequest,
+    AgentSessionSummary, AgentSubmissionSource, DialogSubmissionPolicy, SessionTranscript,
 };
 use serde_json::Map;
 use std::path::Path;
@@ -210,6 +210,12 @@ impl RuntimeIpcRequestHandler for FakeHandler {
                 Ok(RuntimeIpcOperationResult::TurnAccepted {
                     session_id: request.session_id,
                     turn_id: request.turn_id.expect("test turn id"),
+                })
+            }
+            RuntimeIpcOperation::CompactSession { request } => {
+                Ok(RuntimeIpcOperationResult::TurnAccepted {
+                    session_id: request.session_id,
+                    turn_id: request.turn_id,
                 })
             }
             RuntimeIpcOperation::CancelTurn { request } => {
@@ -513,6 +519,15 @@ fn submit_operation(workspace: &Path, session_id: &str, turn_id: &str) -> Runtim
     }
 }
 
+fn compact_operation(session_id: &str, turn_id: &str) -> RuntimeIpcOperation {
+    RuntimeIpcOperation::CompactSession {
+        request: AgentSessionCompactionRequest {
+            session_id: session_id.to_string(),
+            turn_id: turn_id.to_string(),
+        },
+    }
+}
+
 fn update_mode_operation(session_id: &str, mode_id: &str) -> RuntimeIpcOperation {
     RuntimeIpcOperation::UpdateSessionMode {
         request: AgentSessionModeUpdateRequest {
@@ -741,6 +756,55 @@ async fn one_connection_rejects_a_second_turn_until_the_first_finishes() {
             )
         });
         submitted == 1 && cancelled_first
+    })
+    .await;
+    server.finish().await;
+}
+
+#[tokio::test]
+async fn manual_compaction_owns_the_supplied_turn_until_disconnect_cancels_it() {
+    let handler = Arc::new(FakeHandler::default());
+    let server = TestServer::start(server_config(), handler.clone()).await;
+    let mut client = server.connect("compact-controller").await;
+    expect_response(
+        &mut client,
+        2,
+        restore_operation(server.workspace.path(), "session-a"),
+    )
+    .await;
+    expect_response(
+        &mut client,
+        3,
+        compact_operation("session-a", "turn-compact-a"),
+    )
+    .await;
+    expect_error(
+        &mut client,
+        4,
+        compact_operation("session-a", "turn-compact-b"),
+        RuntimeIpcErrorCode::SessionInUse,
+    )
+    .await;
+
+    drop(client);
+    wait_for_calls(&handler, |calls| {
+        let compacted = calls.iter().any(|call| {
+            matches!(
+                call,
+                RuntimeIpcOperation::CompactSession { request }
+                    if request.session_id == "session-a"
+                        && request.turn_id == "turn-compact-a"
+            )
+        });
+        let cancelled = calls.iter().any(|call| {
+            matches!(
+                call,
+                RuntimeIpcOperation::CancelTurn { request }
+                    if request.session_id == "session-a"
+                        && request.turn_id.as_deref() == Some("turn-compact-a")
+            )
+        });
+        compacted && cancelled
     })
     .await;
     server.finish().await;

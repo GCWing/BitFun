@@ -1173,6 +1173,24 @@ pub struct AgentSessionModeUpdateRequest {
     pub mode_id: String,
 }
 
+/// Starts one audited manual context-compaction maintenance turn.
+///
+/// The caller supplies the exact turn identity so process adapters can register
+/// cancellation ownership before the side effect is admitted.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct AgentSessionCompactionRequest {
+    pub session_id: String,
+    pub turn_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct AgentSessionCompactionResult {
+    pub session_id: String,
+    pub turn_id: String,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AgentContextReloadTarget {
@@ -2027,6 +2045,14 @@ pub trait AgentSessionModelPort: Send + Sync {
 #[async_trait::async_trait]
 pub trait AgentSessionModePort: Send + Sync {
     async fn update_session_mode(&self, request: AgentSessionModeUpdateRequest) -> PortResult<()>;
+}
+
+#[async_trait::async_trait]
+pub trait AgentSessionCompactionPort: Send + Sync {
+    async fn start_session_compaction(
+        &self,
+        request: AgentSessionCompactionRequest,
+    ) -> PortResult<AgentSessionCompactionResult>;
 }
 
 #[async_trait::async_trait]

@@ -24,6 +24,7 @@ use crate::agentic::events::{
 };
 use crate::agentic::execution::{
     ContextCompactionOutcome, ExecutionContext, ExecutionEngine, ExecutionResult,
+    ManualCompactionCommitGate,
 };
 use crate::agentic::fork_agent::ForkAgentContextSnapshot;
 use crate::agentic::goal_mode::{
@@ -60,7 +61,8 @@ use crate::service::config::{
 };
 use crate::service::remote_ssh::normalize_remote_workspace_path;
 use crate::service::session::{
-    SessionMemoryMode, SessionRelationship, SessionRelationshipKind, SessionStatus,
+    DialogTurnData, SessionMemoryMode, SessionRelationship, SessionRelationshipKind, SessionStatus,
+    ToolItemIdentityExt,
 };
 use crate::service::workspace::{
     get_global_workspace_service, WorkspaceActivityMode, WorkspaceCreateOptions, WorkspaceInfo,
@@ -91,7 +93,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::sync::OnceLock;
-use tokio::sync::{mpsc, watch, OwnedSemaphorePermit, RwLock, Semaphore};
+use tokio::sync::{mpsc, oneshot, watch, OwnedSemaphorePermit, RwLock, Semaphore};
 use tokio::time::{sleep, Duration, Instant};
 use tokio_util::sync::CancellationToken;
 
@@ -664,9 +666,31 @@ struct SessionExecutionLease {
     active_counter: Arc<AtomicUsize>,
 }
 
+struct ManualCompactionTask {
+    turn_id: String,
+    completion: oneshot::Receiver<BitFunResult<()>>,
+}
+
+struct ManualCompactionControlGuard {
+    execution_engine: Arc<ExecutionEngine>,
+    controls: Arc<DashMap<String, Arc<ManualCompactionCommitGate>>>,
+    turn_id: String,
+}
+
 impl Drop for SessionExecutionLease {
     fn drop(&mut self) {
         self.active_counter.fetch_sub(1, Ordering::SeqCst);
+    }
+}
+
+impl Drop for ManualCompactionControlGuard {
+    fn drop(&mut self) {
+        self.controls.remove(&self.turn_id);
+        let execution_engine = Arc::clone(&self.execution_engine);
+        let turn_id = self.turn_id.clone();
+        tokio::spawn(async move {
+            execution_engine.cleanup_cancel_token(&turn_id).await;
+        });
     }
 }
 
@@ -924,6 +948,9 @@ pub struct ConversationCoordinator {
     /// active through persistence finalization, not merely until session state
     /// changes to Idle.
     turn_settlements: Arc<TurnSettlementTracker>,
+    /// Manual-compaction turns need an atomic planning/cancel/commit decision
+    /// before the normal cancellation path may expose the Session as idle.
+    manual_compaction_controls: Arc<DashMap<String, Arc<ManualCompactionCommitGate>>>,
     thread_goal_runtime: Arc<ThreadGoalRuntime>,
     terminal_port: OnceLock<Arc<dyn TerminalPort>>,
     remote_exec_port: OnceLock<Arc<dyn RemoteExecPort>>,
@@ -1556,7 +1583,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                     id: compression_id,
                 },
                 tool_result: Some(ToolResultData {
-                    result: serde_json::Value::Null,
+                    result: serde_json::json!({ "error": error }),
                     success: false,
                     result_for_assistant: None,
                     image_attachments: None,
@@ -1654,6 +1681,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             round_injection_source: OnceLock::new(),
             active_turns_per_session: Arc::new(DashMap::new()),
             turn_settlements: Arc::new(TurnSettlementTracker::default()),
+            manual_compaction_controls: Arc::new(DashMap::new()),
             thread_goal_runtime: Arc::new(ThreadGoalRuntime::new()),
             terminal_port: OnceLock::new(),
             remote_exec_port: OnceLock::new(),
@@ -3587,14 +3615,25 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         Ok(plan)
     }
 
-    /// Compact the active session context as a persisted maintenance turn.
-    pub async fn compact_session_manually(&self, session_id: String) -> BitFunResult<()> {
-        let session = self
+    async fn start_manual_compaction_task(
+        &self,
+        session_id: String,
+        requested_turn_id: Option<String>,
+    ) -> BitFunResult<ManualCompactionTask> {
+        bitfun_core_types::validate_session_id(&session_id).map_err(BitFunError::Validation)?;
+        if requested_turn_id
+            .as_deref()
+            .is_some_and(|turn_id| turn_id.trim().is_empty())
+        {
+            return Err(BitFunError::Validation(
+                "Manual compaction turn_id must not be empty".to_string(),
+            ));
+        }
+        let initial_session = self
             .session_manager
             .get_session(&session_id)
             .ok_or_else(|| BitFunError::NotFound(format!("Session not found: {}", session_id)))?;
-
-        match &session.state {
+        match &initial_session.state {
             SessionState::Idle => {}
             SessionState::Processing {
                 current_turn_id,
@@ -3617,34 +3656,50 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             .session_manager
             .get_context_messages(&session_id)
             .await?;
-        let needs_restore = if context_messages.is_empty() {
-            true
-        } else {
-            context_messages.len() == 1 && !session.dialog_turn_ids.is_empty()
-        };
-
-        if needs_restore {
-            let restore_path = self.restore_path_for_existing_session(&session_id).await?;
-            self.session_manager
-                .restore_session_from_storage_path(&restore_path, &session_id)
-                .await?;
+        if context_messages.is_empty() && !initial_session.dialog_turn_ids.is_empty() {
+            return Err(BitFunError::Validation(format!(
+                "Session context is not loaded; restore the session before manual compaction: {session_id}"
+            )));
         }
 
-        let context_messages = self
-            .session_manager
-            .get_context_messages(&session_id)
-            .await?;
-        let turn_index = self.session_manager.get_turn_count(&session_id);
         let user_message_metadata = Some(Self::manual_compaction_metadata());
         let turn_id = self
             .session_manager
             .start_maintenance_turn(
                 &session_id,
                 MANUAL_COMPACTION_COMMAND.to_string(),
-                None,
+                requested_turn_id,
                 user_message_metadata.clone(),
             )
             .await?;
+        // Once the maintenance turn owns Processing, competing dialog turns
+        // can no longer mutate context. Capture the authoritative context only
+        // after that atomic admission so a just-completed turn cannot be lost.
+        let context_messages = self
+            .session_manager
+            .get_context_messages(&session_id)
+            .await?;
+        let session = self
+            .session_manager
+            .get_session(&session_id)
+            .ok_or_else(|| BitFunError::NotFound(format!("Session not found: {}", session_id)))?;
+        let turn_index = session.dialog_turn_ids.len().saturating_sub(1);
+
+        let execution_lease = self.register_session_execution(&session_id);
+        let settlement = self
+            .turn_settlements
+            .register_accepted(session_id.clone(), turn_id.clone());
+        let cancellation_token = CancellationToken::new();
+        self.execution_engine
+            .register_cancel_token(&turn_id, cancellation_token.clone());
+        let commit_gate = Arc::new(ManualCompactionCommitGate::planning());
+        self.manual_compaction_controls
+            .insert(turn_id.clone(), Arc::clone(&commit_gate));
+        let control_guard = ManualCompactionControlGuard {
+            execution_engine: Arc::clone(&self.execution_engine),
+            controls: Arc::clone(&self.manual_compaction_controls),
+            turn_id: turn_id.clone(),
+        };
 
         self.emit_event(AgenticEvent::DialogTurnStarted {
             session_id: session_id.clone(),
@@ -3656,6 +3711,139 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         })
         .await;
 
+        let session_manager = Arc::clone(&self.session_manager);
+        let execution_engine = Arc::clone(&self.execution_engine);
+        let event_queue = Arc::clone(&self.event_queue);
+        let terminal_port = self.terminal_port();
+        let remote_exec_port = self.remote_exec_port();
+        let session_id_for_task = session_id.clone();
+        let turn_id_for_task = turn_id.clone();
+        let (completion_tx, completion) = oneshot::channel();
+
+        tokio::spawn(async move {
+            let _execution_lease = execution_lease;
+            let _settlement = settlement;
+            let _control_guard = control_guard;
+            let result = Self::execute_manual_compaction_task(
+                session_manager,
+                execution_engine,
+                event_queue,
+                session,
+                context_messages,
+                session_id_for_task,
+                turn_id_for_task,
+                turn_index,
+                terminal_port,
+                remote_exec_port,
+                cancellation_token,
+                commit_gate,
+            )
+            .await;
+            let _ = completion_tx.send(result);
+        });
+
+        Ok(ManualCompactionTask {
+            turn_id,
+            completion,
+        })
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    async fn finalize_manual_compaction_success(
+        session_manager: &SessionManager,
+        event_queue: &EventQueue,
+        session_id: &str,
+        turn_id: &str,
+        outcome: &ContextCompactionOutcome,
+        context_window: usize,
+    ) -> BitFunResult<()> {
+        let model_round =
+            Self::build_manual_compaction_round_completed(turn_id, outcome, context_window);
+        let turn_persistence = session_manager
+            .complete_maintenance_turn(
+                session_id,
+                turn_id,
+                vec![model_round.clone()],
+                outcome.duration_ms,
+            )
+            .await;
+        let idle_persistence = session_manager
+            .update_session_state_for_turn_if_processing(session_id, turn_id, SessionState::Idle)
+            .await;
+
+        let finalization_error = match (turn_persistence, idle_persistence) {
+            (Ok(()), Ok(true)) => None,
+            (Ok(()), Ok(false)) => Some(BitFunError::Session(format!(
+                "Manual compaction was applied, but turn ownership changed before finalization: session_id={session_id}, turn_id={turn_id}"
+            ))),
+            (Err(turn_error), Ok(_)) => Some(BitFunError::Session(format!(
+                "Manual compaction was applied, but the completed turn could not be persisted: {turn_error}"
+            ))),
+            (Ok(()), Err(state_error)) => Some(BitFunError::Session(format!(
+                "Manual compaction was applied, but the idle session state could not be persisted: {state_error}"
+            ))),
+            (Err(turn_error), Err(state_error)) => Some(BitFunError::Session(format!(
+                "Manual compaction was applied, but turn and idle-state persistence failed: turn_error={turn_error}; state_error={state_error}"
+            ))),
+        };
+
+        if let Some(error) = finalization_error {
+            // Preserve the applied tool payload if a transient storage failure
+            // allows this best-effort retry to succeed. The turn itself remains
+            // failed because its terminal durability was not guaranteed.
+            let _ = session_manager
+                .fail_maintenance_turn(session_id, turn_id, error.to_string(), vec![model_round])
+                .await;
+            let _ = event_queue
+                .enqueue(
+                    AgenticEvent::DialogTurnFailed {
+                        session_id: session_id.to_string(),
+                        turn_id: turn_id.to_string(),
+                        error: error.to_string(),
+                        error_category: Some(error.error_category()),
+                        error_detail: Some(error.error_detail()),
+                    },
+                    Some(EventPriority::High),
+                )
+                .await;
+            return Err(error);
+        }
+
+        let _ = event_queue
+            .enqueue(
+                AgenticEvent::DialogTurnCompleted {
+                    session_id: session_id.to_string(),
+                    turn_id: turn_id.to_string(),
+                    total_rounds: 1,
+                    total_tools: 1,
+                    duration_ms: outcome.duration_ms,
+                    partial_recovery_reason: None,
+                    success: Some(true),
+                    finish_reason: Some("complete".to_string()),
+                    has_final_response: Some(true),
+                },
+                Some(EventPriority::Normal),
+            )
+            .await;
+
+        Ok(())
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    async fn execute_manual_compaction_task(
+        session_manager: Arc<SessionManager>,
+        execution_engine: Arc<ExecutionEngine>,
+        event_queue: Arc<EventQueue>,
+        session: Session,
+        context_messages: Vec<Message>,
+        session_id: String,
+        turn_id: String,
+        turn_index: usize,
+        terminal_port: Option<Arc<dyn TerminalPort>>,
+        remote_exec_port: Option<Arc<dyn RemoteExecPort>>,
+        cancellation_token: CancellationToken,
+        commit_gate: Arc<ManualCompactionCommitGate>,
+    ) -> BitFunResult<()> {
         let manual_workspace = Self::build_workspace_binding(&session.config).await;
         let manual_workspace_services = Self::build_workspace_services(&manual_workspace).await;
         let manual_execution_context = ExecutionContext {
@@ -3671,8 +3859,8 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             delegation_policy: DelegationPolicy::top_level(),
             runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
             workspace_services: manual_workspace_services,
-            terminal_port: self.terminal_port(),
-            remote_exec_port: self.remote_exec_port(),
+            terminal_port,
+            remote_exec_port,
             round_injection: None,
             emit_lifecycle_events: true,
             recover_partial_on_cancel: false,
@@ -3695,61 +3883,62 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             Some(mcw) => mcw.min(session_max_tokens),
             None => session_max_tokens,
         };
-        match self
-            .execution_engine
+        let compression_id = format!("compression_{}", uuid::Uuid::new_v4());
+        match execution_engine
             .compact_session_context(
                 session_id.clone(),
                 turn_id.clone(),
+                compression_id.clone(),
                 manual_execution_context,
                 context_messages,
                 "manual",
+                cancellation_token,
+                commit_gate,
             )
             .await
         {
             Ok(outcome) => {
-                let model_round = Self::build_manual_compaction_round_completed(
+                Self::finalize_manual_compaction_success(
+                    session_manager.as_ref(),
+                    event_queue.as_ref(),
+                    &session_id,
                     &turn_id,
                     &outcome,
                     context_window,
-                );
-                self.session_manager
-                    .complete_maintenance_turn(
-                        &session_id,
-                        &turn_id,
-                        vec![model_round],
-                        outcome.duration_ms,
-                    )
-                    .await?;
-                self.session_manager
-                    .update_session_state(&session_id, SessionState::Idle)
-                    .await?;
-
-                self.emit_event(AgenticEvent::DialogTurnCompleted {
-                    session_id,
-                    turn_id,
-                    total_rounds: 1,
-                    total_tools: 1,
-                    duration_ms: outcome.duration_ms,
-                    partial_recovery_reason: None,
-                    success: Some(true),
-                    finish_reason: Some("complete".to_string()),
-                    has_final_response: Some(true),
-                })
-                .await;
-
-                Ok(())
+                )
+                .await
             }
-            Err(err) => {
+            Err(err @ BitFunError::Cancelled(_)) => {
                 let error_text = err.to_string();
-                let compression_id = format!("compression_{}", uuid::Uuid::new_v4());
                 let model_round = Self::build_manual_compaction_round_failed(
                     &turn_id,
-                    compression_id,
+                    compression_id.clone(),
                     &error_text,
                     context_window,
                 );
-                let _ = self
-                    .session_manager
+                let _ = session_manager
+                    .fail_maintenance_turn(&session_id, &turn_id, error_text, vec![model_round])
+                    .await;
+                Self::persist_cancelled_dialog_turn(
+                    event_queue.as_ref(),
+                    session_manager.as_ref(),
+                    None,
+                    &session_id,
+                    &turn_id,
+                    true,
+                )
+                .await;
+                Err(err)
+            }
+            Err(err) => {
+                let error_text = err.to_string();
+                let model_round = Self::build_manual_compaction_round_failed(
+                    &turn_id,
+                    compression_id.clone(),
+                    &error_text,
+                    context_window,
+                );
+                let _ = session_manager
                     .fail_maintenance_turn(
                         &session_id,
                         &turn_id,
@@ -3757,21 +3946,41 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                         vec![model_round],
                     )
                     .await;
-                let _ = self
-                    .session_manager
-                    .update_session_state(&session_id, SessionState::Idle)
+                let _ = session_manager
+                    .update_session_state_for_turn_if_processing(
+                        &session_id,
+                        &turn_id,
+                        SessionState::Idle,
+                    )
                     .await;
-                self.emit_event(AgenticEvent::DialogTurnFailed {
-                    session_id,
-                    turn_id,
-                    error: error_text.clone(),
-                    error_category: Some(err.error_category()),
-                    error_detail: Some(err.error_detail()),
-                })
-                .await;
+                let _ = event_queue
+                    .enqueue(
+                        AgenticEvent::DialogTurnFailed {
+                            session_id,
+                            turn_id,
+                            error: error_text.clone(),
+                            error_category: Some(err.error_category()),
+                            error_detail: Some(err.error_detail()),
+                        },
+                        Some(EventPriority::Normal),
+                    )
+                    .await;
                 Err(err)
             }
         }
+    }
+
+    /// Compact the active session context through the same owned maintenance
+    /// task used by Agent Runtime callers, then await its terminal result for
+    /// the existing Desktop compatibility API.
+    pub async fn compact_session_manually(&self, session_id: String) -> BitFunResult<()> {
+        let task = self.start_manual_compaction_task(session_id, None).await?;
+        task.completion.await.map_err(|_| {
+            BitFunError::Service(format!(
+                "Manual compaction task ended without a terminal result: {}",
+                task.turn_id
+            ))
+        })?
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -4874,6 +5083,16 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             "Received cancel request: dialog_turn_id={}, session_id={}",
             dialog_turn_id, session_id
         );
+
+        if let Some(control) = self.manual_compaction_controls.get(dialog_turn_id) {
+            if !control.try_cancel() && control.commit_started() {
+                info!(
+                    "Ignoring late manual compaction cancellation after commit began: session_id={}, dialog_turn_id={}",
+                    session_id, dialog_turn_id
+                );
+                return Ok(());
+            }
+        }
 
         abort_thread_goal_continuation_for_session(session_id);
 
@@ -8891,6 +9110,178 @@ fn runtime_session_time_ms(time: std::time::SystemTime) -> u64 {
         .unwrap_or_default()
 }
 
+fn runtime_transcript_message_from_message(
+    message: Message,
+) -> bitfun_runtime_ports::TranscriptMessage {
+    let role = match message.role {
+        crate::agentic::core::MessageRole::User => "user",
+        crate::agentic::core::MessageRole::Assistant => "assistant",
+        crate::agentic::core::MessageRole::Tool => "tool",
+        crate::agentic::core::MessageRole::System => "system",
+    }
+    .to_string();
+
+    let content = match message.content {
+        MessageContent::Text(text) => bitfun_runtime_ports::TranscriptContent::Text(text),
+        MessageContent::Multimodal { text, images } => {
+            bitfun_runtime_ports::TranscriptContent::Multimodal {
+                text,
+                image_count: images.len(),
+            }
+        }
+        MessageContent::ToolResult {
+            tool_id,
+            tool_name,
+            effective_tool_name,
+            result,
+            is_error,
+            ..
+        } => bitfun_runtime_ports::TranscriptContent::ToolResult {
+            tool_id,
+            tool_name,
+            effective_tool_name,
+            result,
+            is_error,
+        },
+        MessageContent::Mixed {
+            reasoning_content,
+            text,
+            tool_calls,
+        } => bitfun_runtime_ports::TranscriptContent::Mixed {
+            reasoning_content,
+            text,
+            tool_calls: tool_calls
+                .into_iter()
+                .map(|tool_call| bitfun_runtime_ports::TranscriptToolCall {
+                    tool_id: tool_call.tool_id,
+                    tool_name: tool_call.tool_name,
+                    arguments: tool_call.arguments,
+                })
+                .collect(),
+        },
+    };
+
+    bitfun_runtime_ports::TranscriptMessage {
+        id: Some(message.id),
+        role,
+        turn_id: message.metadata.turn_id,
+        timestamp_ms: Some(runtime_session_time_ms(message.timestamp)),
+        content,
+    }
+}
+
+fn runtime_transcript_messages_from_turns(
+    turns: &[DialogTurnData],
+    requested_turn_id: Option<&str>,
+) -> Vec<bitfun_runtime_ports::TranscriptMessage> {
+    let mut messages = Vec::new();
+    for turn in turns.iter().filter(|turn| {
+        turn.kind.is_transcript_visible()
+            && requested_turn_id.is_none_or(|turn_id| turn.turn_id == turn_id)
+    }) {
+        let image_count = turn
+            .user_message
+            .metadata
+            .as_ref()
+            .and_then(|metadata| metadata.get("images"))
+            .and_then(serde_json::Value::as_array)
+            .map_or(0, Vec::len);
+        messages.push(bitfun_runtime_ports::TranscriptMessage {
+            id: Some(turn.user_message.id.clone()),
+            role: "user".to_string(),
+            turn_id: Some(turn.turn_id.clone()),
+            timestamp_ms: Some(turn.user_message.timestamp),
+            content: if image_count == 0 {
+                bitfun_runtime_ports::TranscriptContent::Text(turn.user_message.content.clone())
+            } else {
+                bitfun_runtime_ports::TranscriptContent::Multimodal {
+                    text: turn.user_message.content.clone(),
+                    image_count,
+                }
+            },
+        });
+
+        for (round_index, round) in turn.model_rounds.iter().enumerate() {
+            let mut text = round
+                .text_items
+                .iter()
+                .map(|item| item.content.clone())
+                .filter(|text| !text.trim().is_empty())
+                .collect::<Vec<_>>()
+                .join("\n\n");
+            if turn.status == crate::service::session::TurnStatus::Error
+                && round_index + 1 == turn.model_rounds.len()
+            {
+                if let Some(error) = turn.error.as_deref() {
+                    if !text.is_empty() {
+                        text.push_str("\n\n");
+                    }
+                    text.push_str(&format!("[Error: {error}]"));
+                }
+            }
+            let reasoning_content = round
+                .thinking_items
+                .iter()
+                .map(|item| item.content.clone())
+                .filter(|text| !text.trim().is_empty())
+                .collect::<Vec<_>>()
+                .join("\n\n");
+            let tool_calls = round
+                .tool_items
+                .iter()
+                .map(|item| bitfun_runtime_ports::TranscriptToolCall {
+                    tool_id: item.tool_call.id.clone(),
+                    tool_name: item.effective_name().to_string(),
+                    arguments: item.effective_input().clone(),
+                })
+                .collect::<Vec<_>>();
+            if !text.is_empty() || !reasoning_content.is_empty() || !tool_calls.is_empty() {
+                messages.push(bitfun_runtime_ports::TranscriptMessage {
+                    id: Some(round.id.clone()),
+                    role: "assistant".to_string(),
+                    turn_id: Some(turn.turn_id.clone()),
+                    timestamp_ms: Some(round.timestamp),
+                    content: bitfun_runtime_ports::TranscriptContent::Mixed {
+                        reasoning_content: (!reasoning_content.is_empty())
+                            .then_some(reasoning_content),
+                        text,
+                        tool_calls,
+                    },
+                });
+            }
+
+            for item in &round.tool_items {
+                let Some(tool_result) = item.tool_result.as_ref() else {
+                    continue;
+                };
+                let effective_name = item.effective_name();
+                let result = if tool_result.success || !tool_result.result.is_null() {
+                    tool_result.result.clone()
+                } else {
+                    serde_json::json!({
+                        "error": tool_result.error.as_deref().unwrap_or("Tool execution failed")
+                    })
+                };
+                messages.push(bitfun_runtime_ports::TranscriptMessage {
+                    id: Some(format!("{}-result", item.id)),
+                    role: "tool".to_string(),
+                    turn_id: Some(turn.turn_id.clone()),
+                    timestamp_ms: item.end_time.or(Some(item.start_time)),
+                    content: bitfun_runtime_ports::TranscriptContent::ToolResult {
+                        tool_id: item.tool_call.id.clone(),
+                        tool_name: item.tool_name.clone(),
+                        effective_tool_name: (effective_name != item.tool_name)
+                            .then(|| effective_name.to_string()),
+                        result,
+                        is_error: !tool_result.success,
+                    },
+                });
+            }
+        }
+    }
+    messages
+}
+
 fn runtime_session_summary(session: SessionSummary) -> bitfun_runtime_ports::AgentSessionSummary {
     bitfun_runtime_ports::AgentSessionSummary {
         session_id: session.session_id,
@@ -9351,6 +9742,26 @@ impl bitfun_runtime_ports::AgentThreadGoalManagementPort for ConversationCoordin
 }
 
 #[async_trait::async_trait]
+impl bitfun_runtime_ports::AgentSessionCompactionPort for ConversationCoordinator {
+    async fn start_session_compaction(
+        &self,
+        request: bitfun_runtime_ports::AgentSessionCompactionRequest,
+    ) -> bitfun_runtime_ports::PortResult<bitfun_runtime_ports::AgentSessionCompactionResult> {
+        let session_id = request.session_id;
+        let task = self
+            .start_manual_compaction_task(session_id.clone(), Some(request.turn_id))
+            .await
+            .map_err(runtime_port_error_preserving_message)?;
+        let turn_id = task.turn_id.clone();
+        drop(task.completion);
+        Ok(bitfun_runtime_ports::AgentSessionCompactionResult {
+            session_id,
+            turn_id,
+        })
+    }
+}
+
+#[async_trait::async_trait]
 impl bitfun_runtime_ports::AgentTurnCancellationPort for ConversationCoordinator {
     async fn cancel_turn(
         &self,
@@ -9447,77 +9858,27 @@ impl bitfun_runtime_ports::SessionTranscriptReader for ConversationCoordinator {
         &self,
         request: bitfun_runtime_ports::SessionTranscriptRequest,
     ) -> bitfun_runtime_ports::PortResult<bitfun_runtime_ports::SessionTranscript> {
-        let messages = self
-            .get_messages(&request.session_id)
+        let messages = match self
+            .session_manager
+            .load_persisted_transcript_turns(&request.session_id)
             .await
-            .map_err(runtime_port_error_preserving_message)?;
-
-        let messages = messages
-            .into_iter()
-            .filter(|message| match request.turn_id.as_ref() {
-                Some(turn_id) => message.metadata.turn_id.as_ref() == Some(turn_id),
-                None => true,
-            })
-            .map(|message| {
-                let role = match message.role {
-                    crate::agentic::core::MessageRole::User => "user",
-                    crate::agentic::core::MessageRole::Assistant => "assistant",
-                    crate::agentic::core::MessageRole::Tool => "tool",
-                    crate::agentic::core::MessageRole::System => "system",
-                }
-                .to_string();
-
-                let content = match message.content {
-                    MessageContent::Text(text) => {
-                        bitfun_runtime_ports::TranscriptContent::Text(text)
-                    }
-                    MessageContent::Multimodal { text, images } => {
-                        bitfun_runtime_ports::TranscriptContent::Multimodal {
-                            text,
-                            image_count: images.len(),
-                        }
-                    }
-                    MessageContent::ToolResult {
-                        tool_id,
-                        tool_name,
-                        effective_tool_name,
-                        result,
-                        is_error,
-                        ..
-                    } => bitfun_runtime_ports::TranscriptContent::ToolResult {
-                        tool_id,
-                        tool_name,
-                        effective_tool_name,
-                        result,
-                        is_error,
-                    },
-                    MessageContent::Mixed {
-                        reasoning_content,
-                        text,
-                        tool_calls,
-                    } => bitfun_runtime_ports::TranscriptContent::Mixed {
-                        reasoning_content,
-                        text,
-                        tool_calls: tool_calls
-                            .into_iter()
-                            .map(|tool_call| bitfun_runtime_ports::TranscriptToolCall {
-                                tool_id: tool_call.tool_id,
-                                tool_name: tool_call.tool_name,
-                                arguments: tool_call.arguments,
-                            })
-                            .collect(),
-                    },
-                };
-
-                bitfun_runtime_ports::TranscriptMessage {
-                    id: Some(message.id),
-                    role,
-                    turn_id: message.metadata.turn_id,
-                    timestamp_ms: Some(runtime_session_time_ms(message.timestamp)),
-                    content,
-                }
-            })
-            .collect();
+            .map_err(runtime_port_error_preserving_message)?
+        {
+            Some(turns) => {
+                runtime_transcript_messages_from_turns(&turns, request.turn_id.as_deref())
+            }
+            None => self
+                .get_messages(&request.session_id)
+                .await
+                .map_err(runtime_port_error_preserving_message)?
+                .into_iter()
+                .filter(|message| match request.turn_id.as_ref() {
+                    Some(turn_id) => message.metadata.turn_id.as_ref() == Some(turn_id),
+                    None => true,
+                })
+                .map(runtime_transcript_message_from_message)
+                .collect(),
+        };
 
         Ok(bitfun_runtime_ports::SessionTranscript {
             session_id: request.session_id,
@@ -9632,10 +9993,11 @@ mod tests {
         normalize_subagent_max_concurrency, resolve_agent_session_create_created_by,
         resolve_agent_submission_turn_id, resolve_subagent_model_selection,
         runtime_port_error_preserving_message, runtime_session_summary,
-        runtime_tool_restrictions_for_session_lifetime, session_storage_workspace_locator,
-        turn_review_manifest_for_agent, BackgroundSubagentWaitMode, ConversationCoordinator,
-        SessionMemoryMode, SessionReferenceLocator, SessionRelationshipKind,
-        SubagentExecutionRequest, TEST_AGENT_MODEL_DEFAULTS,
+        runtime_tool_restrictions_for_session_lifetime, runtime_transcript_messages_from_turns,
+        session_storage_workspace_locator, turn_review_manifest_for_agent,
+        BackgroundSubagentWaitMode, ContextCompactionOutcome, ConversationCoordinator,
+        ManualCompactionCommitGate, SessionMemoryMode, SessionReferenceLocator,
+        SessionRelationshipKind, SubagentExecutionRequest, TEST_AGENT_MODEL_DEFAULTS,
     };
     use crate::agentic::coordination::coordination_store::{
         BackgroundTaskRegistration, RegisteredBackgroundTask,
@@ -9643,8 +10005,9 @@ mod tests {
     use crate::agentic::core::{
         InternalReminderKind, Message, MessageContent, MessageRole, MessageSemanticKind,
         SessionConfig, SessionContinuationPolicy, SessionKind, SessionModelBindingPolicy,
+        SessionState,
     };
-    use crate::agentic::events::{EventQueue, EventQueueConfig, EventRouter};
+    use crate::agentic::events::{AgenticEvent, EventQueue, EventQueueConfig, EventRouter};
     use crate::agentic::execution::{
         ExecutionEngine, ExecutionEngineConfig, RoundExecutor, StreamProcessor,
     };
@@ -9684,7 +10047,9 @@ mod tests {
     use crate::runtime_ownership::CoreRuntimeOwnership;
     use crate::service::config::{AgentModelDefaultsConfig, SubagentModelSelection};
     use crate::service::remote_ssh::workspace_state::init_remote_workspace_manager;
-    use crate::service::session::{SessionMetadata, SessionStatus};
+    use crate::service::session::{
+        DialogTurnData, DialogTurnKind, SessionMetadata, SessionStatus, TurnStatus, UserMessageData,
+    };
     use crate::service::workspace::WorkspaceKind;
     use bitfun_agent_runtime::permission::AUTO_APPROVE_ASK_CONTEXT_KEY;
     use bitfun_core_types::{
@@ -9702,6 +10067,232 @@ mod tests {
     use std::sync::Arc;
     use std::time::Duration;
     use tokio_util::sync::CancellationToken;
+
+    #[test]
+    fn manual_compaction_cancellation_wins_before_commit() {
+        let gate = ManualCompactionCommitGate::planning();
+
+        assert!(gate.try_cancel());
+        assert!(!gate.try_begin_commit());
+    }
+
+    #[test]
+    fn manual_compaction_commit_rejects_late_cancellation() {
+        let gate = ManualCompactionCommitGate::planning();
+
+        assert!(gate.try_begin_commit());
+        assert!(!gate.try_cancel());
+    }
+
+    #[test]
+    fn manual_compaction_transcript_restores_user_and_tool_payload() {
+        let outcome = ContextCompactionOutcome {
+            compression_id: "compression-1".to_string(),
+            compression_count: 2,
+            tokens_before: 80_000,
+            tokens_after: 20_000,
+            compression_ratio: 0.25,
+            duration_ms: 42,
+            has_summary: true,
+            summary_source: "model".to_string(),
+            applied: true,
+        };
+        let mut turn = DialogTurnData::new_with_kind(
+            DialogTurnKind::ManualCompaction,
+            "compact-turn".to_string(),
+            1,
+            "session".to_string(),
+            None,
+            UserMessageData {
+                id: "compact-user".to_string(),
+                content: "/compact".to_string(),
+                timestamp: 10,
+                metadata: Some(ConversationCoordinator::manual_compaction_metadata()),
+            },
+        );
+        turn.model_rounds = vec![
+            ConversationCoordinator::build_manual_compaction_round_completed(
+                &turn.turn_id,
+                &outcome,
+                128_000,
+            ),
+        ];
+        turn.status = TurnStatus::Completed;
+
+        let transcript = runtime_transcript_messages_from_turns(&[turn.clone()], None);
+
+        assert_eq!(transcript.len(), 3);
+        assert_eq!(transcript[0].role, "user");
+        assert_eq!(transcript[0].turn_id.as_deref(), Some("compact-turn"));
+        match &transcript[1].content {
+            bitfun_runtime_ports::TranscriptContent::Mixed { tool_calls, .. } => {
+                assert_eq!(tool_calls.len(), 1);
+                assert_eq!(tool_calls[0].tool_id, "compression-1");
+                assert_eq!(tool_calls[0].tool_name, "ContextCompression");
+            }
+            other => panic!("expected restored tool call, got {other:?}"),
+        }
+        match &transcript[2].content {
+            bitfun_runtime_ports::TranscriptContent::ToolResult {
+                tool_id,
+                result,
+                is_error,
+                ..
+            } => {
+                assert_eq!(tool_id, "compression-1");
+                assert_eq!(result["applied"], true);
+                assert!(!is_error);
+            }
+            other => panic!("expected restored tool result, got {other:?}"),
+        }
+
+        turn.status = TurnStatus::Error;
+        turn.error =
+            Some("Manual compaction was applied, but terminal persistence failed".to_string());
+        let failed_transcript = runtime_transcript_messages_from_turns(&[turn.clone()], None);
+        match &failed_transcript[1].content {
+            bitfun_runtime_ports::TranscriptContent::Mixed { text, .. } => {
+                assert_eq!(
+                    text,
+                    "[Error: Manual compaction was applied, but terminal persistence failed]"
+                );
+            }
+            other => panic!("expected restored failure text, got {other:?}"),
+        }
+
+        turn.status = TurnStatus::Cancelled;
+        let cancelled_transcript = runtime_transcript_messages_from_turns(&[turn], None);
+        match &cancelled_transcript[1].content {
+            bitfun_runtime_ports::TranscriptContent::Mixed { text, .. } => {
+                assert!(
+                    text.is_empty(),
+                    "cancelled turns must not restore their internal failure marker"
+                );
+            }
+            other => panic!("expected restored cancelled tool call, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn manual_compaction_failure_round_preserves_runtime_identity_and_error() {
+        let round = ConversationCoordinator::build_manual_compaction_round_failed(
+            "compact-turn",
+            "compression-runtime".to_string(),
+            "summary request failed",
+            128_000,
+        );
+
+        assert_eq!(round.tool_items.len(), 1);
+        let tool = &round.tool_items[0];
+        assert_eq!(tool.id, "compression-runtime");
+        assert_eq!(tool.tool_call.id, "compression-runtime");
+        let result = tool.tool_result.as_ref().expect("failure result");
+        assert!(!result.success);
+        assert_eq!(result.result["error"], "summary request failed");
+        assert_eq!(result.error.as_deref(), Some("summary request failed"));
+    }
+
+    #[tokio::test]
+    async fn applied_manual_compaction_emits_failed_terminal_when_turn_persistence_fails() {
+        let root = tempfile::tempdir().expect("test root");
+        let workspace = root.path().join("workspace");
+        std::fs::create_dir_all(&workspace).expect("workspace should exist");
+        let path_manager = Arc::new(PathManager::with_user_root_for_tests(
+            root.path().join("user-root"),
+        ));
+        let persistence =
+            Arc::new(PersistenceManager::new(path_manager.clone()).expect("persistence manager"));
+        let session_manager = SessionManager::new(
+            Arc::new(SessionContextStore::new()),
+            persistence,
+            SessionManagerConfig {
+                max_active_sessions: 8,
+                session_idle_timeout: Duration::from_secs(3600),
+                auto_save_interval: Duration::from_secs(300),
+                enable_persistence: true,
+                prompt_cache_policy: PromptCachePolicy::default(),
+            },
+        );
+        let session = session_manager
+            .create_session(
+                "Persistence failure".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.to_string_lossy().into_owned()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("session should create");
+        let turn_id = session_manager
+            .start_maintenance_turn(
+                &session.session_id,
+                "/compact".to_string(),
+                Some("compact-turn".to_string()),
+                Some(ConversationCoordinator::manual_compaction_metadata()),
+            )
+            .await
+            .expect("maintenance turn should start");
+
+        let turns_dir = path_manager
+            .project_sessions_dir(&workspace)
+            .join(&session.session_id)
+            .join("turns");
+        std::fs::remove_dir_all(&turns_dir).expect("turn directory should be removable");
+        std::fs::write(&turns_dir, b"block turn persistence")
+            .expect("turn path should become a file");
+
+        let event_queue = EventQueue::new(EventQueueConfig::default());
+        let result = ConversationCoordinator::finalize_manual_compaction_success(
+            &session_manager,
+            &event_queue,
+            &session.session_id,
+            &turn_id,
+            &ContextCompactionOutcome {
+                compression_id: "compression-1".to_string(),
+                compression_count: 1,
+                tokens_before: 80_000,
+                tokens_after: 20_000,
+                compression_ratio: 0.25,
+                duration_ms: 42,
+                has_summary: true,
+                summary_source: "model".to_string(),
+                applied: true,
+            },
+            128_000,
+        )
+        .await;
+
+        assert!(result.is_err());
+        assert!(matches!(
+            session_manager
+                .get_session(&session.session_id)
+                .expect("session should remain available")
+                .state,
+            SessionState::Idle
+        ));
+        let events = event_queue.dequeue_batch(10).await;
+        let terminal_events = events
+            .iter()
+            .filter(|envelope| {
+                matches!(
+                    envelope.event,
+                    AgenticEvent::DialogTurnCompleted { .. }
+                        | AgenticEvent::DialogTurnFailed { .. }
+                        | AgenticEvent::DialogTurnCancelled { .. }
+                )
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(terminal_events.len(), 1);
+        assert!(matches!(
+            terminal_events[0].event,
+            AgenticEvent::DialogTurnFailed {
+                ref turn_id,
+                ref error,
+                ..
+            } if turn_id == "compact-turn" && error.contains("was applied")
+        ));
+    }
 
     #[test]
     fn worktree_execution_root_is_a_legacy_alias_for_project_storage() {

@@ -61,7 +61,8 @@ pub use bitfun_runtime_ports::{
     AgentBackgroundResultRequest, AgentDialogTurnPort, AgentDialogTurnRequest,
     AgentInputAttachment, AgentLifecycleDeliveryPort, AgentLocalCommandTurnPort,
     AgentLocalCommandTurnRecordRequest, AgentSessionArchiveRequest,
-    AgentSessionArchiveStateRequest, AgentSessionClosePort, AgentSessionCreateRequest,
+    AgentSessionArchiveStateRequest, AgentSessionClosePort, AgentSessionCompactionPort,
+    AgentSessionCompactionRequest, AgentSessionCompactionResult, AgentSessionCreateRequest,
     AgentSessionCreateResult, AgentSessionDeleteRequest, AgentSessionForkAtTurnRequest,
     AgentSessionForkPort, AgentSessionForkRequest, AgentSessionForkResult, AgentSessionListRequest,
     AgentSessionManagementPort, AgentSessionModePort, AgentSessionModeUpdateRequest,
@@ -139,6 +140,14 @@ impl AgentRuntimeBuilder {
 
     pub fn with_session_mode_port(mut self, port: Arc<dyn AgentSessionModePort>) -> Self {
         self.inner = self.inner.with_session_mode_port(port);
+        self
+    }
+
+    pub fn with_session_compaction_port(
+        mut self,
+        port: Arc<dyn AgentSessionCompactionPort>,
+    ) -> Self {
+        self.inner = self.inner.with_session_compaction_port(port);
         self
     }
 
@@ -459,6 +468,13 @@ impl AgentRuntime {
         request: AgentSessionModeUpdateRequest,
     ) -> Result<(), RuntimeError> {
         self.inner.update_session_mode(request).await
+    }
+
+    pub async fn start_session_compaction(
+        &self,
+        request: AgentSessionCompactionRequest,
+    ) -> Result<AgentSessionCompactionResult, RuntimeError> {
+        self.inner.start_session_compaction(request).await
     }
 
     pub async fn fork_session(

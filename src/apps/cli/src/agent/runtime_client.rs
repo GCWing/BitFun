@@ -13,13 +13,13 @@ use tokio::sync::{broadcast, Mutex};
 
 use bitfun_agent_runtime::sdk::{
     AgentDialogTurnRequest, AgentEventReceiver, AgentLocalCommandTurnRecordRequest, AgentRuntime,
-    AgentSessionCreateRequest, AgentSessionDeleteRequest, AgentSessionForkRequest,
-    AgentSessionForkResult, AgentSessionListRequest, AgentSessionModeUpdateRequest,
-    AgentSessionModelUpdateRequest, AgentSessionRenameRequest, AgentSessionRestoreRequest,
-    AgentSessionUsageRequest, AgentTurnCancellationRequest, AgentTurnSettlementRequest,
-    AgentUserAnswersRequest, PermissionReply, PermissionRequest, PermissionRequestEventReceiver,
-    PortError, PortErrorKind, RuntimeError, SessionTranscript, SessionTranscriptRequest,
-    SessionUsageReport,
+    AgentSessionCompactionRequest, AgentSessionCreateRequest, AgentSessionDeleteRequest,
+    AgentSessionForkRequest, AgentSessionForkResult, AgentSessionListRequest,
+    AgentSessionModeUpdateRequest, AgentSessionModelUpdateRequest, AgentSessionRenameRequest,
+    AgentSessionRestoreRequest, AgentSessionUsageRequest, AgentTurnCancellationRequest,
+    AgentTurnSettlementRequest, AgentUserAnswersRequest, PermissionReply, PermissionRequest,
+    PermissionRequestEventReceiver, PortError, PortErrorKind, RuntimeError, SessionTranscript,
+    SessionTranscriptRequest, SessionUsageReport,
 };
 use bitfun_agent_runtime_ipc::{
     RuntimeIpcClient, RuntimeIpcClientError, RuntimeIpcClientEvent, RuntimeIpcErrorCode,
@@ -939,6 +939,49 @@ impl CliAgentRuntimeClient {
         Ok(id)
     }
 
+    pub(crate) async fn start_session_compaction(&self, session_id: &str) -> Result<String> {
+        let turn_id = uuid::Uuid::new_v4().to_string();
+        let request = AgentSessionCompactionRequest {
+            session_id: session_id.to_string(),
+            turn_id: turn_id.clone(),
+        };
+        *self.current_turn_id.lock().await = Some(turn_id.clone());
+
+        let submission: Result<String> = async {
+            match &self.backend {
+                CliAgentRuntimeBackend::Embedded(runtime) => {
+                    let accepted = runtime
+                        .start_session_compaction(request)
+                        .await
+                        .map_err(|error| anyhow::anyhow!(error.into_message()))?;
+                    if accepted.session_id != session_id || accepted.turn_id != turn_id {
+                        return Err(anyhow::anyhow!(
+                            "Runtime accepted manual compaction with an unexpected identity"
+                        ));
+                    }
+                    Ok(accepted.turn_id)
+                }
+                CliAgentRuntimeBackend::Shared(client) => match client
+                    .request(RuntimeIpcOperation::CompactSession { request })
+                    .await?
+                {
+                    RuntimeIpcOperationResult::TurnAccepted {
+                        session_id: accepted_session,
+                        turn_id: accepted_turn,
+                    } if accepted_session == session_id && accepted_turn == turn_id => {
+                        Ok(accepted_turn)
+                    }
+                    _ => return Err(unexpected_shared_result("compact_session")),
+                },
+            }
+        }
+        .await;
+        if submission.is_err() {
+            *self.current_turn_id.lock().await = None;
+        }
+        submission
+    }
+
     pub(crate) async fn send_message(&self, message: String, agent_type: &str) -> Result<String> {
         let session_id = self.ensure_session(agent_type).await?;
         tracing::info!("Sending message to session {}: {}", session_id, message);
@@ -1489,6 +1532,25 @@ mod tests {
         assert!(rename.contains("RuntimeIpcOperation::RenameSession"));
         assert!(!rename.contains("serde_json::to_value"));
         assert!(!rename.contains("serde_json::from_value"));
+    }
+
+    #[test]
+    fn session_compaction_uses_direct_runtime_or_private_shared_ipc() {
+        let source = include_str!("runtime_client.rs").replace("\r\n", "\n");
+        let compact = source
+            .split_once("pub(crate) async fn start_session_compaction(")
+            .expect("compaction method")
+            .1
+            .split_once("pub(crate) async fn send_message(")
+            .expect("compaction method boundary")
+            .0;
+
+        assert!(compact.contains("CliAgentRuntimeBackend::Embedded(runtime)"));
+        assert!(compact.contains(".start_session_compaction(request)"));
+        assert!(compact.contains("RuntimeIpcOperation::CompactSession { request }"));
+        assert!(compact.contains("RuntimeIpcOperationResult::TurnAccepted"));
+        assert!(!compact.contains("serde_json::to_value"));
+        assert!(!compact.contains("serde_json::from_value"));
     }
 
     #[test]

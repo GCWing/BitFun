@@ -7,7 +7,7 @@
 
 use bitfun_agent_runtime::sdk::{
     AgentEventSource, AgentInteractionResponsePort, AgentRuntime, AgentRuntimeBuilder,
-    AgentSessionForkPort, AgentSessionModePort, AgentSessionModelPort,
+    AgentSessionCompactionPort, AgentSessionForkPort, AgentSessionModePort, AgentSessionModelPort,
     AgentSessionModelUpdateRequest, AgentSessionRestorePort, AgentSessionUsagePort,
     AgentTurnSettlementPort, RuntimeError,
 };
@@ -411,6 +411,7 @@ fn core_agent_runtime_builder(
     session_management: Arc<dyn AgentSessionManagementPort>,
     session_mode: Arc<dyn AgentSessionModePort>,
     session_model: Arc<dyn AgentSessionModelPort>,
+    session_compaction: Arc<dyn AgentSessionCompactionPort>,
     session_restore: Arc<dyn AgentSessionRestorePort>,
     local_command_turn: Arc<dyn AgentLocalCommandTurnPort>,
     transcript_reader: Arc<dyn bitfun_runtime_ports::SessionTranscriptReader>,
@@ -425,6 +426,7 @@ fn core_agent_runtime_builder(
         .with_session_management_port(session_management)
         .with_session_mode_port(session_mode)
         .with_session_model_port(session_model)
+        .with_session_compaction_port(session_compaction)
         .with_session_restore_port(session_restore)
         .with_local_command_turn_port(local_command_turn)
         .with_session_transcript_reader(transcript_reader)
@@ -944,12 +946,14 @@ impl CoreServiceAgentRuntime {
             coordinator.clone();
         let thread_goal_management: Arc<dyn AgentThreadGoalManagementPort> = coordinator.clone();
         let cancellation: Arc<dyn AgentTurnCancellationPort> = coordinator.clone();
+        let session_compaction: Arc<dyn AgentSessionCompactionPort> = coordinator.clone();
         let interaction_response: Arc<dyn AgentInteractionResponsePort> = coordinator;
         core_agent_runtime_builder(
             submission,
             session_management,
             session_mode,
             session_model,
+            session_compaction,
             session_restore,
             local_command_turn,
             transcript_reader,
@@ -977,6 +981,7 @@ impl CoreServiceAgentRuntime {
             coordinator.clone();
         let thread_goal_management: Arc<dyn AgentThreadGoalManagementPort> = coordinator.clone();
         let cancellation: Arc<dyn AgentTurnCancellationPort> = coordinator.clone();
+        let session_compaction: Arc<dyn AgentSessionCompactionPort> = coordinator.clone();
         let interaction_response: Arc<dyn AgentInteractionResponsePort> = coordinator;
         let dialog_turn: Arc<dyn AgentDialogTurnPort> = scheduler.clone();
         let lifecycle_delivery: Arc<dyn AgentLifecycleDeliveryPort> = scheduler;
@@ -985,6 +990,7 @@ impl CoreServiceAgentRuntime {
             session_management,
             session_mode,
             session_model,
+            session_compaction,
             session_restore,
             local_command_turn,
             transcript_reader,
@@ -1014,6 +1020,7 @@ impl CoreServiceAgentRuntime {
             coordinator.clone();
         let thread_goal_management: Arc<dyn AgentThreadGoalManagementPort> = coordinator.clone();
         let cancellation: Arc<dyn AgentTurnCancellationPort> = coordinator.clone();
+        let session_compaction: Arc<dyn AgentSessionCompactionPort> = coordinator.clone();
         let interaction_response: Arc<dyn AgentInteractionResponsePort> = coordinator;
         let lifecycle_delivery: Arc<dyn AgentLifecycleDeliveryPort> = scheduler;
         core_agent_runtime_builder(
@@ -1021,6 +1028,7 @@ impl CoreServiceAgentRuntime {
             session_management,
             session_mode,
             session_model,
+            session_compaction,
             session_restore,
             local_command_turn,
             transcript_reader,
@@ -1045,6 +1053,7 @@ impl CoreServiceAgentRuntime {
         let session_management =
             scheduled_session_management_port(coordinator.clone(), scheduler.clone());
         let session_model: Arc<dyn AgentSessionModelPort> = coordinator.clone();
+        let session_compaction: Arc<dyn AgentSessionCompactionPort> = coordinator.clone();
         let interaction_response: Arc<dyn AgentInteractionResponsePort> = coordinator;
         let dialog_turn: Arc<dyn AgentDialogTurnPort> = scheduler.clone();
         let cancellation: Arc<dyn AgentTurnCancellationPort> = scheduler;
@@ -1053,6 +1062,7 @@ impl CoreServiceAgentRuntime {
             .with_submission_port(submission)
             .with_session_management_port(session_management)
             .with_session_model_port(session_model)
+            .with_session_compaction_port(session_compaction)
             .with_dialog_turn_port(dialog_turn)
             .with_cancellation_port(cancellation)
             .with_interaction_response_port(interaction_response)
@@ -1079,6 +1089,7 @@ impl CoreServiceAgentRuntime {
         let transcript_reader: Arc<dyn bitfun_runtime_ports::SessionTranscriptReader> =
             coordinator.clone();
         let thread_goal_management: Arc<dyn AgentThreadGoalManagementPort> = coordinator.clone();
+        let session_compaction: Arc<dyn AgentSessionCompactionPort> = coordinator.clone();
         let interaction_response: Arc<dyn AgentInteractionResponsePort> = coordinator;
         let cancellation: Arc<dyn AgentTurnCancellationPort> = scheduler.clone();
         let dialog_turn: Arc<dyn AgentDialogTurnPort> = scheduler.clone();
@@ -1088,6 +1099,7 @@ impl CoreServiceAgentRuntime {
             session_management,
             session_mode,
             session_model,
+            session_compaction,
             session_restore,
             local_command_turn,
             transcript_reader,
@@ -1193,6 +1205,7 @@ impl CoreServiceAgentRuntime {
         let transcript_reader: Arc<dyn bitfun_runtime_ports::SessionTranscriptReader> =
             coordinator.clone();
         let thread_goal_management: Arc<dyn AgentThreadGoalManagementPort> = coordinator.clone();
+        let session_compaction: Arc<dyn AgentSessionCompactionPort> = coordinator.clone();
         let interaction_response: Arc<dyn AgentInteractionResponsePort> = coordinator;
         let cancellation: Arc<dyn AgentTurnCancellationPort> = scheduler.clone();
         let lifecycle_delivery: Arc<dyn AgentLifecycleDeliveryPort> = scheduler;
@@ -1202,6 +1215,7 @@ impl CoreServiceAgentRuntime {
             session_management,
             session_mode,
             session_model,
+            session_compaction,
             session_restore,
             local_command_turn,
             transcript_reader,
@@ -1920,6 +1934,7 @@ mod tests {
         where
             T: AgentSubmissionPort
                 + AgentInteractionResponsePort
+                + AgentSessionCompactionPort
                 + AgentSessionManagementPort
                 + AgentThreadGoalManagementPort
                 + AgentTurnCancellationPort

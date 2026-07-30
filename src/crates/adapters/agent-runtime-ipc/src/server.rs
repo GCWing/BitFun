@@ -463,6 +463,11 @@ async fn run_initialized_connection(
                         *active_turn_id = Some(turn_id.clone());
                         Some(turn_id)
                     }
+                    RuntimeIpcOperation::CompactSession { request } => {
+                        let turn_id = request.turn_id.clone();
+                        *active_turn_id = Some(turn_id.clone());
+                        Some(turn_id)
+                    }
                     _ => None,
                 };
                 let side_effecting = rules.side_effecting;
@@ -581,7 +586,7 @@ async fn run_initialized_connection(
                             config.request_timeout,
                             Some(request_id),
                             RuntimeIpcErrorCode::Internal,
-                            "runtime returned a different turn id than the submitted operation",
+                            "runtime returned a different turn id than the accepted turn operation",
                         )
                         .await?;
                         return Err(RuntimeIpcServerError::Disconnected);

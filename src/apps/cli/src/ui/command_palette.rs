@@ -42,6 +42,7 @@ pub(crate) enum PaletteAction {
 const DEFAULT_ITEM_ORDER: &[&str] = &[
     "new_session",
     "sessions",
+    "compact_session",
     "usage",
     "toggle_auto_approve",
     "toggle_worktree",
@@ -57,6 +58,7 @@ const DEFAULT_ITEM_ORDER: &[&str] = &[
     "hooks_external",
     "login",
     "logout",
+    "status",
     "help",
     "exit",
 ];

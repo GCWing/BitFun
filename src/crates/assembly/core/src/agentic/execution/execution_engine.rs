@@ -58,6 +58,7 @@ use log::{debug, error, info, trace, warn};
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
+use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
 use tool_runtime::context::PrimaryModelFacts;
@@ -90,6 +91,59 @@ pub struct ContextCompactionOutcome {
     pub has_summary: bool,
     pub summary_source: String,
     pub applied: bool,
+}
+
+const MANUAL_COMPACTION_PLANNING: u8 = 0;
+const MANUAL_COMPACTION_CANCELLED: u8 = 1;
+const MANUAL_COMPACTION_COMMITTING: u8 = 2;
+
+/// Arbitrates the only race that matters for manual compaction: cancellation
+/// may win while the model is planning, but context commit must be atomic once
+/// it begins.
+#[derive(Debug)]
+pub(crate) struct ManualCompactionCommitGate {
+    state: AtomicU8,
+}
+
+impl ManualCompactionCommitGate {
+    pub(crate) fn planning() -> Self {
+        Self {
+            state: AtomicU8::new(MANUAL_COMPACTION_PLANNING),
+        }
+    }
+
+    pub(crate) fn try_cancel(&self) -> bool {
+        self.state
+            .compare_exchange(
+                MANUAL_COMPACTION_PLANNING,
+                MANUAL_COMPACTION_CANCELLED,
+                Ordering::AcqRel,
+                Ordering::Acquire,
+            )
+            .is_ok()
+    }
+
+    pub(crate) fn try_begin_commit(&self) -> bool {
+        self.state
+            .compare_exchange(
+                MANUAL_COMPACTION_PLANNING,
+                MANUAL_COMPACTION_COMMITTING,
+                Ordering::AcqRel,
+                Ordering::Acquire,
+            )
+            .is_ok()
+    }
+
+    pub(crate) fn commit_started(&self) -> bool {
+        self.state.load(Ordering::Acquire) == MANUAL_COMPACTION_COMMITTING
+    }
+}
+
+fn manual_compaction_terminal_error(error: BitFunError) -> BitFunError {
+    match error {
+        error @ BitFunError::Cancelled(_) => error,
+        error => BitFunError::Session(error.to_string()),
+    }
 }
 
 struct CompressionRuntimeScaffold {
@@ -2417,6 +2471,7 @@ impl ExecutionEngine {
                         duration_ms,
                         has_summary: compression_result.has_model_summary,
                         summary_source: summary_source.to_string(),
+                        applied: true,
                     },
                     EventPriority::Normal,
                 )
@@ -2457,20 +2512,22 @@ impl ExecutionEngine {
     /// Compact the current session context outside the normal dialog execution loop.
     /// Always emits compression started/completed/failed events for the provided turn.
     #[allow(clippy::too_many_arguments)]
-    pub async fn compact_session_context(
+    pub(crate) async fn compact_session_context(
         &self,
         session_id: String,
         dialog_turn_id: String,
+        compression_id: String,
         context: ExecutionContext,
         messages: Vec<Message>,
         trigger: &str,
+        cancellation_token: CancellationToken,
+        commit_gate: Arc<ManualCompactionCommitGate>,
     ) -> BitFunResult<ContextCompactionOutcome> {
         let mut session = self
             .session_manager
             .get_session(&session_id)
             .ok_or_else(|| BitFunError::NotFound(format!("Session not found: {}", session_id)))?;
         let start_time = std::time::Instant::now();
-        let compression_id = format!("compression_{}", uuid::Uuid::new_v4());
         let scaffold = self
             .resolve_compression_runtime_scaffold(&session, &context)
             .await?;
@@ -2534,8 +2591,12 @@ impl ExecutionEngine {
             scaffold.ai_client.as_ref(),
         )
         .await;
-        let planned_result = self
-            .build_planned_compression_result(
+        let planned_result = tokio::select! {
+            biased;
+            _ = cancellation_token.cancelled() => {
+                Err(BitFunError::Cancelled("Manual context compaction cancelled".to_string()))
+            }
+            result = self.build_planned_compression_result(
                 &session_id,
                 &dialog_turn_id,
                 &runtime_messages,
@@ -2547,8 +2608,15 @@ impl ExecutionEngine {
                 scaffold.primary_supports_image_understanding,
                 context.workspace.as_ref(),
                 trace_config,
-            )
-            .await;
+            ) => result,
+        };
+        let planned_result = match planned_result {
+            Ok(result) if commit_gate.try_begin_commit() => Ok(result),
+            Ok(_) => Err(BitFunError::Cancelled(
+                "Manual context compaction cancelled".to_string(),
+            )),
+            Err(error) => Err(error),
+        };
         match planned_result {
             Ok(Some(mut compression_result)) => {
                 let boundary_turn_index = self
@@ -2668,6 +2736,7 @@ impl ExecutionEngine {
                         } else {
                             "local_fallback".to_string()
                         },
+                        applied: true,
                     },
                     EventPriority::Normal,
                 )
@@ -2724,6 +2793,7 @@ impl ExecutionEngine {
                         duration_ms,
                         has_summary: false,
                         summary_source: "none".to_string(),
+                        applied: false,
                     },
                     EventPriority::Normal,
                 )
@@ -2752,7 +2822,7 @@ impl ExecutionEngine {
                 )
                 .await;
 
-                Err(BitFunError::Session(err.to_string()))
+                Err(manual_compaction_terminal_error(err))
             }
         }
     }
@@ -4416,7 +4486,10 @@ impl ExecutionEngine {
 
 #[cfg(test)]
 mod tests {
-    use super::{ContextHealthSnapshot, ExecutionEngine, TurnPromptScaffold};
+    use super::{
+        manual_compaction_terminal_error, ContextHealthSnapshot, ExecutionEngine,
+        TurnPromptScaffold,
+    };
     use crate::agentic::agents::{
         PrependedPromptReminders, PromptBuilderContext, UserContextPolicy,
     };
@@ -4435,6 +4508,15 @@ mod tests {
     use std::path::PathBuf;
     use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
     use std::sync::Arc;
+
+    #[test]
+    fn manual_compaction_preserves_cancellation_as_a_terminal_cancellation() {
+        let error = manual_compaction_terminal_error(crate::BitFunError::Cancelled(
+            "cancelled by user".to_string(),
+        ));
+
+        assert!(matches!(error, crate::BitFunError::Cancelled(_)));
+    }
 
     #[derive(Clone)]
     struct InstructionWorkspaceFs {

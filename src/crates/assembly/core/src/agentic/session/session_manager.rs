@@ -5577,6 +5577,25 @@ impl SessionManager {
         let session = self
             .get_session(session_id)
             .ok_or_else(|| BitFunError::NotFound(format!("Session not found: {}", session_id)))?;
+        match &session.state {
+            SessionState::Idle => {}
+            SessionState::Processing {
+                current_turn_id,
+                phase,
+            } => {
+                return Err(BitFunError::Validation(format!(
+                    "Session is still processing: current_turn_id={}, phase={:?}",
+                    current_turn_id, phase
+                )));
+            }
+            SessionState::Error { .. } if kind == DialogTurnKind::UserDialog => {}
+            SessionState::Error { error, .. } => {
+                return Err(BitFunError::Validation(format!(
+                    "Session must be idle before starting a turn: {}",
+                    error
+                )));
+            }
+        }
         let workspace_path = self
             .effective_storage_path_for_config(&session.config)
             .await
@@ -5589,6 +5608,15 @@ impl SessionManager {
 
         let turn_index = session.dialog_turn_ids.len();
         let turn_id = new_turn_id(turn_id);
+        if session
+            .dialog_turn_ids
+            .iter()
+            .any(|existing| existing == &turn_id)
+        {
+            return Err(BitFunError::Validation(format!(
+                "Dialog turn already exists: {turn_id}"
+            )));
+        }
 
         if let Some(mut session) = self.sessions.get_mut(session_id) {
             session.dialog_turn_ids.push(turn_id.clone());
@@ -6463,6 +6491,7 @@ impl SessionManager {
             .as_millis() as u64;
         turn.model_rounds = model_rounds;
         turn.status = TurnStatus::Error;
+        turn.error = Some(error.clone());
         turn.duration_ms = Some(completion_timestamp.saturating_sub(turn.start_time));
         turn.end_time = Some(completion_timestamp);
 
@@ -6505,6 +6534,27 @@ impl SessionManager {
         }
 
         Ok(self.context_store.get_context_messages(session_id))
+    }
+
+    /// Load canonical persisted turns for a user-facing transcript.
+    ///
+    /// This is intentionally separate from `get_messages`: runtime context
+    /// reconstruction excludes model-invisible maintenance turns, while a
+    /// transcript must be able to project those turns for the UI.
+    pub(crate) async fn load_persisted_transcript_turns(
+        &self,
+        session_id: &str,
+    ) -> BitFunResult<Option<Vec<DialogTurnData>>> {
+        if !self.config.enable_persistence {
+            return Ok(None);
+        }
+        let Some(workspace_path) = self.effective_session_storage_path(session_id).await else {
+            return Ok(None);
+        };
+        self.persistence_manager
+            .load_session_turns(&workspace_path, session_id)
+            .await
+            .map(Some)
     }
 
     /// Get a paginated best-effort message view for the session.
@@ -9875,6 +9925,167 @@ mod tests {
             .await
             .expect("runtime context should remain readable");
         assert_eq!(runtime_context.len(), seeded_messages.len());
+    }
+
+    #[tokio::test]
+    async fn dialog_and_maintenance_turn_admission_is_atomic() {
+        let workspace = TestWorkspace::new();
+        let persistence_manager =
+            Arc::new(PersistenceManager::new(workspace.path_manager()).expect("persistence"));
+        let manager = test_manager(persistence_manager);
+        let session = manager
+            .create_session(
+                "Atomic admission".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("session should create");
+
+        let dialog = manager.start_dialog_turn(
+            &session.session_id,
+            "agentic".to_string(),
+            "new user input".to_string(),
+            Some("dialog-turn".to_string()),
+            None,
+            None,
+        );
+        let maintenance = manager.start_maintenance_turn(
+            &session.session_id,
+            "/compact".to_string(),
+            Some("compact-turn".to_string()),
+            None,
+        );
+        let (dialog_result, maintenance_result) = tokio::join!(dialog, maintenance);
+
+        assert_eq!(
+            usize::from(dialog_result.is_ok()) + usize::from(maintenance_result.is_ok()),
+            1,
+            "only one competing turn may acquire an idle session"
+        );
+        let active = manager
+            .get_session(&session.session_id)
+            .expect("session should remain available");
+        assert_eq!(active.dialog_turn_ids.len(), 1);
+        let accepted_turn = dialog_result
+            .ok()
+            .or_else(|| maintenance_result.ok())
+            .expect("one turn should be admitted");
+        assert!(matches!(
+            active.state,
+            SessionState::Processing {
+                ref current_turn_id,
+                ..
+            } if current_turn_id == &accepted_turn
+        ));
+    }
+
+    #[tokio::test]
+    async fn user_dialog_retry_is_allowed_from_error_but_maintenance_is_not() {
+        let workspace = TestWorkspace::new();
+        let persistence_manager =
+            Arc::new(PersistenceManager::new(workspace.path_manager()).expect("persistence"));
+        let manager = test_manager(persistence_manager);
+        let session = manager
+            .create_session(
+                "Retry admission".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("session should create");
+        {
+            let mut active = manager
+                .sessions
+                .get_mut(&session.session_id)
+                .expect("session should remain available");
+            active.state = SessionState::Error {
+                error: "retryable failure".to_string(),
+                recoverable: true,
+            };
+        }
+
+        let maintenance = manager
+            .start_maintenance_turn(
+                &session.session_id,
+                "/compact".to_string(),
+                Some("compact-turn".to_string()),
+                None,
+            )
+            .await;
+        assert!(
+            maintenance.is_err(),
+            "maintenance work must remain idle-only"
+        );
+
+        let retry_turn = manager
+            .start_dialog_turn(
+                &session.session_id,
+                "agentic".to_string(),
+                "retry after failure".to_string(),
+                Some("retry-turn".to_string()),
+                None,
+                None,
+            )
+            .await
+            .expect("ordinary dialog should preserve error-state retry semantics");
+        assert_eq!(retry_turn, "retry-turn");
+    }
+
+    #[tokio::test]
+    async fn maintenance_failure_persists_its_terminal_error() {
+        let workspace = TestWorkspace::new();
+        let persistence_manager =
+            Arc::new(PersistenceManager::new(workspace.path_manager()).expect("persistence"));
+        let manager = test_manager(persistence_manager);
+        let session = manager
+            .create_session(
+                "Failed maintenance".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("session should create");
+        let turn_id = manager
+            .start_maintenance_turn(
+                &session.session_id,
+                "/compact".to_string(),
+                Some("compact-turn".to_string()),
+                None,
+            )
+            .await
+            .expect("maintenance turn should start");
+
+        manager
+            .fail_maintenance_turn(
+                &session.session_id,
+                &turn_id,
+                "terminal persistence failed".to_string(),
+                Vec::new(),
+            )
+            .await
+            .expect("maintenance failure should persist");
+
+        let turns = manager
+            .load_persisted_transcript_turns(&session.session_id)
+            .await
+            .expect("turns should load")
+            .expect("persistence should be enabled");
+        assert_eq!(turns.len(), 1);
+        assert_eq!(turns[0].status, TurnStatus::Error);
+        assert_eq!(
+            turns[0].error.as_deref(),
+            Some("terminal persistence failed")
+        );
     }
 
     #[tokio::test]

@@ -310,6 +310,7 @@ pub fn project_agentic_frontend_event(event: AgenticEvent) -> Option<AgenticFron
             duration_ms,
             has_summary,
             summary_source,
+            applied,
         } => Some(AgenticFrontendEvent::new(
             "agentic://context-compression-completed",
             json!({
@@ -323,6 +324,7 @@ pub fn project_agentic_frontend_event(event: AgenticEvent) -> Option<AgenticFron
                 "durationMs": duration_ms,
                 "hasSummary": has_summary,
                 "summarySource": summary_source,
+                "applied": applied,
             }),
         )),
         AgenticEvent::ContextCompressionFailed {
@@ -521,6 +523,26 @@ mod tests {
         assert_eq!(projected.event_name, "agentic://text-chunk");
         assert_eq!(projected.payload["contentType"], "thinking");
         assert_eq!(projected.payload["isThinkingEnd"], true);
+    }
+
+    #[test]
+    fn context_compression_completion_projects_applied_state() {
+        let projected = project_agentic_frontend_event(AgenticEvent::ContextCompressionCompleted {
+            session_id: "session-1".to_string(),
+            turn_id: "turn-1".to_string(),
+            compression_id: "compression-1".to_string(),
+            compression_count: 1,
+            tokens_before: 100,
+            tokens_after: 100,
+            compression_ratio: 1.0,
+            duration_ms: 5,
+            has_summary: false,
+            summary_source: "none".to_string(),
+            applied: false,
+        })
+        .expect("projected");
+
+        assert_eq!(projected.payload["applied"], false);
     }
 
     #[test]

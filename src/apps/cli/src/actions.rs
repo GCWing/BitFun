@@ -66,7 +66,6 @@ const CHAT_ACTION_STATES: &[ActionState] = &[
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ActionHandler {
     Help,
-    ClearConversation,
     OpenAgentSelector,
     SwitchAgent,
     SwitchAgentReverse,
@@ -85,7 +84,8 @@ pub(crate) enum ActionHandler {
     ExternalHooks,
     AcpHelp,
     Init,
-    History,
+    Status,
+    CompactSession,
     Usage,
     ToggleAutoApprove,
     ToggleWorktree,
@@ -115,7 +115,7 @@ pub(crate) enum ActionHandler {
 pub(crate) const SHARED_TUI_EMBEDDED_HANDOFF: &str =
     "Exit all Shared TUI clients, wait up to 30 seconds for their Runtime to stop, then use default Embedded `bitfun chat`";
 pub(crate) const SHARED_TUI_HELP_NOTE: &str =
-    "Shared TUI: start with `bitfun chat --shared`. Multiple TUI processes reuse one workspace Runtime, while each TUI controls at most one Session and each Session has one controller. Use `/sessions` and Ctrl+D to delete an idle, non-current Session; use `/rename <name>` to rename the current Session, `/agent`, Tab, or Shift+Tab to change its Agent mode, `/models` to change its model, and `/reload [skills|instructions]` to refresh declarative context for the next message. Model configuration, Agent/Subagent management, MCP, extension, account-sync, usage, and other management remain Embedded. Exit all Shared TUI clients and wait up to 30 seconds before returning to default Embedded `bitfun chat`.";
+    "Shared TUI: start with `bitfun chat --shared`. Multiple TUI processes reuse one workspace Runtime, while each TUI controls at most one Session and each Session has one controller. Use `/sessions` and Ctrl+D to delete an idle, non-current Session; use `/rename <name>` to rename the current Session, `/compact` to compact its context, `/agent`, Tab, or Shift+Tab to change its Agent mode, `/models` to change its model, and `/reload [skills|instructions]` to refresh declarative context for the next message. Model configuration, Agent/Subagent management, MCP, extension, account-sync, usage, and other management remain Embedded. Exit all Shared TUI clients and wait up to 30 seconds before returning to default Embedded `bitfun chat`.";
 
 impl ActionHandler {
     pub(crate) const fn available_in_shared_tui(self, context: ActionContext) -> bool {
@@ -123,14 +123,14 @@ impl ActionHandler {
             || matches!(
                 self,
                 Self::Help
-                    | Self::ClearConversation
                     | Self::SelectTheme
                     | Self::NewSession
                     | Self::Sessions
                     | Self::RenameSession
                     | Self::AcpHelp
                     | Self::Init
-                    | Self::History
+                    | Self::Status
+                    | Self::CompactSession
                     | Self::ToggleAutoApprove
                     | Self::OpenAgentSelector
                     | Self::SwitchAgent
@@ -240,21 +240,6 @@ static ACTION_SPECS: &[ActionSpec] = &[
         slash_on_startup: true,
     },
     ActionSpec {
-        id: "clear_conversation",
-        name: "Clear conversation",
-        aliases: &["/clear"],
-        description: "Clear conversation",
-        contexts: CHAT,
-        availability: ActionAvailability::Always,
-        handler: ActionHandler::ClearConversation,
-        default_bindings: &[],
-        fallback_bindings: &[],
-        shortcut_field: None,
-        palette: None,
-        shortcut_label: None,
-        slash_on_startup: false,
-    },
-    ActionSpec {
         id: "switch_agent",
         name: "Agent",
         aliases: &["/agent", "/agents"],
@@ -347,8 +332,8 @@ static ACTION_SPECS: &[ActionSpec] = &[
     ActionSpec {
         id: "new_session",
         name: "New session",
-        aliases: &["/new"],
-        description: "Start a new conversation",
+        aliases: &["/new", "/clear"],
+        description: "Start a fresh conversation session",
         contexts: BOTH,
         availability: ActionAvailability::Idle,
         handler: ActionHandler::NewSession,
@@ -362,7 +347,7 @@ static ACTION_SPECS: &[ActionSpec] = &[
     ActionSpec {
         id: "sessions",
         name: "Sessions",
-        aliases: &["/sessions"],
+        aliases: &["/sessions", "/resume", "/continue", "/history"],
         description: "Browse and switch sessions",
         contexts: BOTH,
         availability: ActionAvailability::Idle,
@@ -525,17 +510,32 @@ static ACTION_SPECS: &[ActionSpec] = &[
         slash_on_startup: true,
     },
     ActionSpec {
-        id: "history",
-        name: "History",
-        aliases: &["/history"],
-        description: "Show history",
+        id: "status",
+        name: "View status",
+        aliases: &["/status"],
+        description: "Show current session and runtime status",
         contexts: CHAT,
         availability: ActionAvailability::Always,
-        handler: ActionHandler::History,
+        handler: ActionHandler::Status,
         default_bindings: &[],
         fallback_bindings: &[],
         shortcut_field: None,
-        palette: None,
+        palette: palette("System", false),
+        shortcut_label: None,
+        slash_on_startup: false,
+    },
+    ActionSpec {
+        id: "compact_session",
+        name: "Compact context",
+        aliases: &["/compact", "/summarize"],
+        description: "Compact the current session context",
+        contexts: CHAT,
+        availability: ActionAvailability::Idle,
+        handler: ActionHandler::CompactSession,
+        default_bindings: &[],
+        fallback_bindings: &[],
+        shortcut_field: None,
+        palette: palette("Session", false),
         shortcut_label: None,
         slash_on_startup: false,
     },
@@ -1874,6 +1874,69 @@ mod tests {
         assert!(action.available(ActionState::chat(false, false).for_shared_tui()));
         assert!(!action.available(ActionState::chat(true, false)));
         assert!(action_by_id("rename_session", ActionContext::Startup).is_none());
+    }
+
+    #[test]
+    fn compact_uses_opencode_commands_without_an_invented_shortcut() {
+        let action = action_by_id("compact_session", ActionContext::Chat)
+            .expect("current session compaction action");
+
+        assert_eq!(action.aliases, &["/compact", "/summarize"]);
+        assert_eq!(action.handler, ActionHandler::CompactSession);
+        assert_eq!(action.availability, ActionAvailability::Idle);
+        assert!(action.default_bindings.is_empty());
+        assert!(action.fallback_bindings.is_empty());
+        assert!(action.shortcut_field.is_none());
+        assert!(action.available(ActionState::chat(false, false).for_shared_tui()));
+        assert!(!action.available(ActionState::chat(true, false).for_shared_tui()));
+        assert!(action_for_alias("/compress", ActionContext::Chat).is_none());
+    }
+
+    #[test]
+    fn status_is_a_shared_chat_action() {
+        let action = action_for_alias("/status", ActionContext::Chat)
+            .expect("current session status action");
+
+        assert_eq!(action.id, "status");
+        assert!(action.available(ActionState::chat(false, false)));
+        assert!(action.available(ActionState::chat(true, false)));
+        assert!(action.available(ActionState::chat(false, false).for_shared_tui()));
+        assert!(action_by_id("status", ActionContext::Startup).is_none());
+    }
+
+    #[test]
+    fn session_browser_uses_opencode_aliases_and_keeps_history_compatible() {
+        let sessions =
+            action_for_alias("/sessions", ActionContext::Chat).expect("session browser action");
+        let resume = action_for_alias("/resume", ActionContext::Chat)
+            .expect("OpenCode-compatible resume alias");
+        let continue_session = action_for_alias("/continue", ActionContext::Chat)
+            .expect("OpenCode-compatible continue alias");
+        let history = action_for_alias("/history", ActionContext::Chat)
+            .expect("existing history compatibility alias");
+
+        assert_eq!(resume.id, sessions.id);
+        assert_eq!(continue_session.id, sessions.id);
+        assert_eq!(history.id, sessions.id);
+        assert_eq!(history.handler, ActionHandler::Sessions);
+        assert_eq!(history.availability, ActionAvailability::Idle);
+    }
+
+    #[test]
+    fn clear_alias_matches_opencode_new_session_semantics() {
+        let new_session =
+            action_for_alias("/new", ActionContext::Chat).expect("new session action");
+        let clear = action_for_alias("/clear", ActionContext::Chat)
+            .expect("OpenCode-compatible clear alias");
+
+        assert_eq!(clear.id, new_session.id);
+        assert_eq!(clear.handler, ActionHandler::NewSession);
+        assert_eq!(clear.availability, ActionAvailability::Idle);
+        assert!(clear.description.contains("fresh conversation"));
+        assert!(clear.available(ActionState::chat(false, false)));
+        assert!(clear.available(ActionState::chat(false, false).for_shared_tui()));
+        assert!(!clear.available(ActionState::chat(true, false)));
+        assert!(action_for_alias("/clear-screen", ActionContext::Chat).is_none());
     }
 
     #[test]

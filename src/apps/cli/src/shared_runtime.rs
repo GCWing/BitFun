@@ -294,6 +294,15 @@ impl RuntimeIpcRequestHandler for SharedRuntimeHandler {
                     .map_err(core_ipc_error)?;
                 Ok(RuntimeIpcOperationResult::Unit)
             }
+            RuntimeIpcOperation::CompactSession { request } => self
+                .runtime
+                .start_session_compaction(request)
+                .await
+                .map(|result| RuntimeIpcOperationResult::TurnAccepted {
+                    session_id: result.session_id,
+                    turn_id: result.turn_id,
+                })
+                .map_err(runtime_ipc_error),
             RuntimeIpcOperation::SubmitTurn { request } => {
                 let outcome = self
                     .runtime

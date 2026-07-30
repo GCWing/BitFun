@@ -1,9 +1,9 @@
 use bitfun_product_domains::tool_permissions::{PermissionReply, PermissionRequest};
 use bitfun_runtime_ports::{
-    AgentContextReloadRequest, AgentDialogTurnRequest, AgentSessionCreateRequest,
-    AgentSessionCreateResult, AgentSessionListRequest, AgentSessionModeUpdateRequest,
-    AgentSessionModelUpdateRequest, AgentSessionSummary, AgentTurnCancellationRequest,
-    AgentTurnCancellationResult, SessionTranscript,
+    AgentContextReloadRequest, AgentDialogTurnRequest, AgentSessionCompactionRequest,
+    AgentSessionCreateRequest, AgentSessionCreateResult, AgentSessionListRequest,
+    AgentSessionModeUpdateRequest, AgentSessionModelUpdateRequest, AgentSessionSummary,
+    AgentTurnCancellationRequest, AgentTurnCancellationResult, SessionTranscript,
 };
 use serde::{Deserialize, Serialize};
 
@@ -62,6 +62,9 @@ pub enum RuntimeIpcOperation {
     ReloadSessionContext {
         request: AgentContextReloadRequest,
     },
+    CompactSession {
+        request: AgentSessionCompactionRequest,
+    },
     SubmitTurn {
         request: AgentDialogTurnRequest,
     },
@@ -90,6 +93,7 @@ impl RuntimeIpcOperation {
             Self::UpdateSessionModel { request } => Some(&request.session_id),
             Self::RenameSession { request } => Some(&request.session_id),
             Self::ReloadSessionContext { request } => Some(&request.session_id),
+            Self::CompactSession { request } => Some(&request.session_id),
             Self::SubmitTurn { request } => Some(&request.session_id),
             Self::CancelTurn { request } => Some(&request.session_id),
             Self::PendingPermissions { session_id }
@@ -118,6 +122,7 @@ impl RuntimeIpcOperation {
             Self::UpdateSessionMode { .. }
             | Self::UpdateSessionModel { .. }
             | Self::RenameSession { .. }
+            | Self::CompactSession { .. }
             | Self::SubmitTurn { .. } => {
                 RuntimeIpcOperationRules::new(CurrentController, true, false, true)
             }

@@ -1,3 +1,133 @@
+fn primary_model_usage_for_active_turn(
+    event: &AgenticEvent,
+    chat_state: &ChatState,
+) -> Option<ModelTokenUsageSnapshot> {
+    let AgenticEvent::TokenUsageUpdated {
+        session_id,
+        turn_id,
+        model_config_id,
+        effective_model_name,
+        input_tokens,
+        output_tokens,
+        total_tokens,
+        max_context_tokens,
+        is_subagent,
+        cached_tokens,
+        ..
+    } = event
+    else {
+        return None;
+    };
+    if *is_subagent
+        || session_id != &chat_state.core_session_id
+        || chat_state.current_turn_id() != Some(turn_id.as_str())
+    {
+        return None;
+    }
+
+    Some(ModelTokenUsageSnapshot {
+        model_config_id: model_config_id.clone(),
+        effective_model_name: effective_model_name.clone(),
+        input_tokens: *input_tokens,
+        output_tokens: *output_tokens,
+        total_tokens: *total_tokens,
+        max_context_tokens: *max_context_tokens,
+        cached_tokens: *cached_tokens,
+    })
+}
+
+fn context_compression_tool_event(
+    event: &AgenticEvent,
+    chat_state: &ChatState,
+) -> Option<ToolEventData> {
+    let (session_id, turn_id) = match event {
+        AgenticEvent::ContextCompressionStarted {
+            session_id,
+            turn_id,
+            ..
+        }
+        | AgenticEvent::ContextCompressionCompleted {
+            session_id,
+            turn_id,
+            ..
+        }
+        | AgenticEvent::ContextCompressionFailed {
+            session_id,
+            turn_id,
+            ..
+        } => (session_id, turn_id),
+        _ => return None,
+    };
+    if session_id != &chat_state.core_session_id
+        || chat_state.current_turn_id() != Some(turn_id.as_str())
+    {
+        return None;
+    }
+
+    match event {
+        AgenticEvent::ContextCompressionStarted {
+            compression_id,
+            trigger,
+            tokens_before,
+            context_window,
+            ..
+        } => Some(ToolEventData::Started {
+            identity: ToolEventIdentity::direct(compression_id, "ContextCompression"),
+            params: serde_json::json!({
+                "trigger": trigger,
+                "tokens_before": tokens_before,
+                "context_window": context_window,
+            }),
+            timeout_seconds: None,
+        }),
+        AgenticEvent::ContextCompressionCompleted {
+            compression_id,
+            compression_count,
+            tokens_before,
+            tokens_after,
+            compression_ratio,
+            duration_ms,
+            has_summary,
+            summary_source,
+            applied,
+            ..
+        } => Some(ToolEventData::Completed {
+            identity: ToolEventIdentity::direct(compression_id, "ContextCompression"),
+            result: serde_json::json!({
+                "compression_count": compression_count,
+                "tokens_before": tokens_before,
+                "tokens_after": tokens_after,
+                "compression_ratio": compression_ratio,
+                "duration": duration_ms,
+                "applied": applied,
+                "has_summary": has_summary,
+                "summary_source": summary_source,
+            }),
+            result_for_assistant: None,
+            image_attachments: None,
+            duration_ms: *duration_ms,
+            queue_wait_ms: None,
+            preflight_ms: None,
+            confirmation_wait_ms: None,
+            execution_ms: Some(*duration_ms),
+        }),
+        AgenticEvent::ContextCompressionFailed {
+            compression_id,
+            error,
+            ..
+        } => Some(ToolEventData::Failed {
+            identity: ToolEventIdentity::direct(compression_id, "ContextCompression"),
+            error: error.clone(),
+            duration_ms: None,
+            queue_wait_ms: None,
+            preflight_ms: None,
+            confirmation_wait_ms: None,
+            execution_ms: None,
+        }),
+        _ => None,
+    }
+}
+
 impl ChatMode {
     pub(crate) fn run(
         &mut self,
@@ -641,6 +771,20 @@ impl ChatMode {
                         needs_redraw = true;
                     }
 
+                    AgenticEvent::ContextCompressionStarted { .. }
+                    | AgenticEvent::ContextCompressionCompleted { .. }
+                    | AgenticEvent::ContextCompressionFailed { .. } => {
+                        if let Some(tool_event) = context_compression_tool_event(event, &chat_state)
+                        {
+                            if matches!(event, AgenticEvent::ContextCompressionStarted { .. }) {
+                                chat_view.set_status(Some("Compacting context...".to_string()));
+                            }
+                            chat_state.handle_tool_event(&tool_event);
+                            chat_view.invalidate_lines_cache();
+                            needs_redraw = true;
+                        }
+                    }
+
                     AgenticEvent::DialogTurnCompleted {
                         turn_id,
                         total_rounds,
@@ -698,13 +842,10 @@ impl ChatMode {
                         }
                     }
 
-                    AgenticEvent::TokenUsageUpdated {
-                        turn_id,
-                        total_tokens,
-                        ..
-                    } => {
-                        if chat_state.current_turn_id() == Some(turn_id.as_str()) {
-                            chat_state.handle_token_usage(*total_tokens);
+                    AgenticEvent::TokenUsageUpdated { .. } => {
+                        if let Some(usage) = primary_model_usage_for_active_turn(event, &chat_state)
+                        {
+                            chat_state.handle_primary_model_usage(usage);
                             needs_redraw = true;
                         }
                     }

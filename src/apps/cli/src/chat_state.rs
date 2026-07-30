@@ -291,7 +291,21 @@ pub(crate) struct ChatMetadata {
     pub message_count: usize,
     pub tool_calls: usize,
     pub total_rounds: usize,
+}
+
+/// Facts from the latest primary-model request observed by this TUI.
+///
+/// This is intentionally not a cumulative session-usage aggregate. The
+/// authoritative cumulative report remains owned by the runtime `/usage` path.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ModelTokenUsageSnapshot {
+    pub model_config_id: String,
+    pub effective_model_name: String,
+    pub input_tokens: usize,
+    pub output_tokens: Option<usize>,
     pub total_tokens: usize,
+    pub max_context_tokens: Option<usize>,
+    pub cached_tokens: Option<usize>,
 }
 
 // ============ ChatState ============
@@ -328,6 +342,8 @@ pub(crate) struct ChatState {
     pub messages: Vec<ChatMessage>,
     /// Session statistics
     pub metadata: ChatMetadata,
+    /// Latest primary-model request observed by this TUI, if any.
+    pub last_primary_model_usage: Option<ModelTokenUsageSnapshot>,
 
     // -- Streaming state (transient, not persisted) --
     /// Current turn ID being processed
@@ -386,6 +402,7 @@ impl ChatState {
             auto_approve_ask: false,
             messages: Vec::new(),
             metadata: ChatMetadata::default(),
+            last_primary_model_usage: None,
             current_turn_id: None,
             current_flow_items: Vec::new(),
             tool_index: HashMap::new(),
@@ -1146,12 +1163,12 @@ impl ChatState {
         self.question_prompt = None;
     }
 
-    /// Handle token usage update
-    pub(crate) fn handle_token_usage(&mut self, total_tokens: usize) {
-        self.metadata.total_tokens = total_tokens;
+    /// Record the latest primary-model request observed by this TUI.
+    pub(crate) fn handle_primary_model_usage(&mut self, usage: ModelTokenUsageSnapshot) {
+        self.last_primary_model_usage = Some(usage);
     }
 
-    /// Add a system message (for commands like /help, /clear, etc.)
+    /// Add a system message for commands that intentionally enter the transcript.
     pub(crate) fn add_system_message(&mut self, content: String) {
         self.messages.push(ChatMessage {
             id: uuid::Uuid::new_v4().to_string(),
@@ -1179,11 +1196,6 @@ impl ChatState {
             is_streaming: false,
             version: 0,
         });
-    }
-
-    /// Clear all messages (for /clear command)
-    pub(crate) fn clear_messages(&mut self) {
-        self.messages.clear();
     }
 
     /// Get the current turn ID (if processing)
@@ -1375,7 +1387,7 @@ fn truncate_string(s: &str, max_len: usize) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{ChatState, FlowItem, ToolDisplayStatus};
+    use super::{ChatState, FlowItem, ModelTokenUsageSnapshot, ToolDisplayStatus};
     use bitfun_agent_runtime::sdk::{
         PermissionDelegationContext, PermissionRequest, PermissionRequestSource,
         PermissionRequestSourceKind, SessionTranscript, TranscriptContent, TranscriptMessage,
@@ -1447,6 +1459,31 @@ mod tests {
 
         state.metadata.message_count = 1;
         assert!(state.has_conversation_history());
+    }
+
+    #[test]
+    fn latest_primary_model_usage_keeps_round_facts_without_claiming_a_session_total() {
+        let mut state = ChatState::new(
+            "session-1".to_string(),
+            "Session".to_string(),
+            "agentic".to_string(),
+            Some("/tmp/project".to_string()),
+        );
+        let usage = ModelTokenUsageSnapshot {
+            model_config_id: "model-config-1".to_string(),
+            effective_model_name: "example-model".to_string(),
+            input_tokens: 80_000,
+            output_tokens: Some(2_000),
+            total_tokens: 82_000,
+            max_context_tokens: Some(128_000),
+            cached_tokens: Some(10_000),
+        };
+
+        state.handle_primary_model_usage(usage.clone());
+
+        assert_eq!(state.last_primary_model_usage.as_ref(), Some(&usage));
+        assert_eq!(state.metadata.message_count, 0);
+        assert_eq!(state.metadata.tool_calls, 0);
     }
 
     #[test]

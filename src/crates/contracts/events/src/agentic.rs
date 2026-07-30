@@ -4,6 +4,10 @@ use bitfun_core_types::{SessionExecutionTarget, ToolImageAttachment};
 use serde::{Deserialize, Serialize};
 use std::time::SystemTime;
 
+fn context_compression_applied_by_default() -> bool {
+    true
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum AgenticEventPriority {
     Critical = 0, // Immediately send (error, cancellation)
@@ -224,6 +228,8 @@ pub enum AgenticEvent {
         duration_ms: u64,
         has_summary: bool,
         summary_source: String,
+        #[serde(default = "context_compression_applied_by_default")]
+        applied: bool,
     },
 
     ContextCompressionFailed {
@@ -763,6 +769,29 @@ mod tests {
             }
             _ => panic!("unexpected event"),
         }
+    }
+
+    #[test]
+    fn legacy_context_compression_completion_defaults_to_applied() {
+        let event: AgenticEvent = serde_json::from_value(json!({
+            "type": "ContextCompressionCompleted",
+            "session_id": "session-1",
+            "turn_id": "turn-1",
+            "compression_id": "compression-1",
+            "compression_count": 1,
+            "tokens_before": 100,
+            "tokens_after": 20,
+            "compression_ratio": 0.2,
+            "duration_ms": 5,
+            "has_summary": true,
+            "summary_source": "model"
+        }))
+        .expect("legacy completion event");
+
+        assert!(matches!(
+            event,
+            AgenticEvent::ContextCompressionCompleted { applied: true, .. }
+        ));
     }
 
     #[test]
