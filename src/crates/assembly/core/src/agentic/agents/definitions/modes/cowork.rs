@@ -54,6 +54,7 @@ impl CoworkMode {
                 "WebFetch".to_string(),
                 "ControlHub".to_string(),
                 "InitMiniApp".to_string(),
+                "PublishMiniApp".to_string(),
             ],
         }
     }

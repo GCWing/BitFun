@@ -1,0 +1,416 @@
+//! PublishMiniApp tool — submit an installed MiniApp to the MiniApp market
+//! for human review, deriving the listing metadata from the app manifest.
+
+use crate::agentic::tools::framework::{PermissionIntent, Tool, ToolResult, ToolUseContext};
+use crate::infrastructure::events::{emit_global_event, BackendEvent};
+use crate::miniapp::try_get_global_miniapp_manager;
+use crate::util::errors::{BitFunError, BitFunResult};
+use async_trait::async_trait;
+use bitfun_product_domains::miniapp::market::{
+    MarketLicense, MarketSubmissionDraftRequest, MARKET_CATEGORIES, MARKET_MAX_SCREENSHOTS,
+};
+use bitfun_services_integrations::miniapp_market::{
+    map_local_category_to_market, resolve_release_target, submit_installed_app,
+    suggest_market_slug, DesktopAuthPollRequest, MarketClient, ReleaseTarget,
+};
+use serde_json::{json, Value};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
+
+const DEFAULT_MIN_BITFUN_VERSION: &str = "0.1.0";
+const DEFAULT_LICENSE: &str = "MIT";
+
+pub struct PublishMiniAppTool;
+
+impl PublishMiniAppTool {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Default for PublishMiniAppTool {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[async_trait]
+impl Tool for PublishMiniAppTool {
+    fn name(&self) -> &str {
+        "PublishMiniApp"
+    }
+
+    async fn description(&self) -> BitFunResult<String> {
+        Ok(r#"Submit an installed MiniApp to the BitFun MiniApp market for human review.
+
+Listing metadata (name, description, icon, category, tags) is derived from the app's manifest; the marketplace slug and release number are derived automatically from the user's submission history. Provide 1-5 screenshot file paths (PNG/JPEG/WebP, each <= 5 MiB) — ask the user for screenshots, or have them use 市场 → 我的投稿 → 截取当前画面 to capture one.
+
+If the user is not signed in to the market, the tool returns a GitHub authorization link. Show the link to the user, wait for them to authorize in the browser, then call this tool again with the same arguments.
+
+Publishing is an outward-facing action: only call this when the user explicitly asks to publish/submit the app to the market."#
+            .to_string())
+    }
+
+    fn short_description(&self) -> String {
+        "Submit an installed MiniApp to the market for review.".to_string()
+    }
+
+    fn input_schema(&self) -> Value {
+        json!({
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["app_id", "screenshot_paths"],
+            "properties": {
+                "app_id": {
+                    "type": "string",
+                    "description": "Installed MiniApp id (returned by InitMiniApp, or the directory name under the miniapps data root)"
+                },
+                "screenshot_paths": {
+                    "type": "array",
+                    "items": { "type": "string" },
+                    "minItems": 1,
+                    "maxItems": 5,
+                    "description": "1-5 absolute paths to PNG/JPEG/WebP screenshots of the running app, each <= 5 MiB"
+                },
+                "changelog": {
+                    "type": "string",
+                    "description": "What changed in this release. Defaults to a generic note."
+                },
+                "slug": {
+                    "type": "string",
+                    "description": "Marketplace slug override (3-63 lowercase letters, digits, hyphens). Immutable after first publish. Defaults to a slug derived from the app name."
+                },
+                "description": {
+                    "type": "string",
+                    "description": "Public listing description override (1-500 chars). Defaults to the manifest description."
+                },
+                "category": {
+                    "type": "string",
+                    "description": "Market category override: developer, productivity, data, creative, education, utilities, entertainment, other. Defaults to a mapping of the manifest category."
+                }
+            }
+        })
+    }
+
+    fn is_readonly(&self) -> bool {
+        false
+    }
+
+    fn permission_intents(
+        &self,
+        input: &Value,
+        _context: &ToolUseContext,
+    ) -> BitFunResult<Vec<PermissionIntent>> {
+        let app_id = input
+            .get("app_id")
+            .and_then(Value::as_str)
+            .unwrap_or("unknown")
+            .trim();
+        Ok(vec![PermissionIntent::new(
+            "custom_tool",
+            vec![format!("miniapp:PublishMiniApp:{app_id}")],
+        )])
+    }
+
+    async fn call_impl(
+        &self,
+        input: &Value,
+        _context: &ToolUseContext,
+    ) -> BitFunResult<Vec<ToolResult>> {
+        let manager = try_get_global_miniapp_manager()
+            .ok_or_else(|| BitFunError::tool("MiniAppManager not initialized".to_string()))?;
+
+        let app_id = input
+            .get("app_id")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| BitFunError::validation("Missing required field: app_id"))?;
+        let screenshot_paths: Vec<String> = input
+            .get("screenshot_paths")
+            .and_then(Value::as_array)
+            .map(|items| {
+                items
+                    .iter()
+                    .filter_map(Value::as_str)
+                    .map(str::to_string)
+                    .collect()
+            })
+            .unwrap_or_default();
+        if screenshot_paths.is_empty() || screenshot_paths.len() > MARKET_MAX_SCREENSHOTS {
+            return Err(BitFunError::validation(
+                "screenshot_paths must contain 1-5 image paths (PNG/JPEG/WebP). Ask the user for screenshots of the running app, or have them capture one via 市场 → 我的投稿 → 截取当前画面.",
+            ));
+        }
+        for path in &screenshot_paths {
+            if tokio::fs::metadata(path).await.is_err() {
+                return Err(BitFunError::validation(format!(
+                    "Screenshot not found: {path}"
+                )));
+            }
+        }
+
+        let app = manager
+            .get(app_id)
+            .await
+            .map_err(|e| BitFunError::tool(format!("Installed MiniApp not found: {e}")))?;
+
+        let mut client = MarketClient::from_environment()
+            .await
+            .map_err(|e| BitFunError::tool(format!("MiniApp market unavailable: {e}")))?;
+
+        // Not signed in: hand the GitHub authorization link to the user and
+        // keep polling in the background so their browser approval lands in
+        // the shared credential vault before the next tool call.
+        let me = client
+            .me()
+            .await
+            .map_err(|e| BitFunError::tool(format!("MiniApp market sign-in check failed: {e}")))?;
+        let Some(me) = me else {
+            let start = client
+                .start_desktop_auth()
+                .await
+                .map_err(|e| BitFunError::tool(format!("Could not start GitHub sign-in: {e}")))?;
+            let authorization_url = start.authorization_url.clone();
+            let poll_request = DesktopAuthPollRequest {
+                transaction_id: start.transaction_id.clone(),
+                transaction_secret: start.transaction_secret.clone(),
+            };
+            let interval = Duration::from_secs(start.poll_interval_seconds.max(1) as u64);
+            let expires_at = start.expires_at;
+            tokio::spawn(async move {
+                loop {
+                    if unix_now() >= expires_at {
+                        break;
+                    }
+                    tokio::time::sleep(interval).await;
+                    match client.poll_desktop_auth(&poll_request).await {
+                        Ok(response) if response.status == "authorized" => break,
+                        Ok(response) if response.status == "expired" => break,
+                        Ok(_) => continue,
+                        Err(_) => break,
+                    }
+                }
+            });
+            let message = format!(
+                "The user is not signed in to the MiniApp market. Show this GitHub authorization link to the user and ask them to open it in a browser: {authorization_url}\nBitFun keeps polling in the background; after the user finishes authorizing, call PublishMiniApp again with the same arguments to continue publishing."
+            );
+            return Ok(vec![ToolResult::Result {
+                data: json!({
+                    "status": "sign_in_required",
+                    "authorization_url": authorization_url,
+                    "expires_at": expires_at,
+                }),
+                result_for_assistant: Some(message),
+                image_attachments: None,
+            }]);
+        };
+
+        // Derive the public listing metadata from the manifest, with explicit
+        // overrides taking precedence.
+        let description = input
+            .get("description")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(str::to_string)
+            .unwrap_or_else(|| app.description.trim().to_string());
+        if description.is_empty() {
+            return Err(BitFunError::validation(
+                "The app has no description. Update meta.json's description (or pass the description parameter) before publishing.",
+            ));
+        }
+        let category = match input
+            .get("category")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+        {
+            Some(value) if MARKET_CATEGORIES.contains(&value) => value.to_string(),
+            Some(value) => {
+                return Err(BitFunError::validation(format!(
+                    "Unknown market category '{value}'. Use one of: {}.",
+                    MARKET_CATEGORIES.join(", ")
+                )))
+            }
+            None => map_local_category_to_market(&app.category),
+        };
+        let slug = input
+            .get("slug")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(str::to_string)
+            .unwrap_or_else(|| suggest_market_slug(&app.name, &app.id));
+
+        let submissions = client
+            .list_submissions()
+            .await
+            .map_err(|e| BitFunError::tool(format!("Could not load submission history: {e}")))?;
+        let (listing_id, release_number) = match resolve_release_target(&submissions, &slug) {
+            ReleaseTarget::NewListing => (None, 1),
+            ReleaseTarget::ExistingListing {
+                listing_id,
+                next_release,
+            } => (Some(listing_id), next_release),
+            ReleaseTarget::PendingReview {
+                submission_id,
+                release_number,
+            } => {
+                let message = format!(
+                    "'{slug}' v{release_number} is already under review (submission {submission_id}). Wait for the review to finish, or withdraw it in 市场 → 我的投稿 before publishing a new release."
+                );
+                return Ok(vec![ToolResult::Result {
+                    data: json!({
+                        "status": "pending_review",
+                        "slug": slug,
+                        "submission_id": submission_id,
+                        "release_number": release_number,
+                    }),
+                    result_for_assistant: Some(message),
+                    image_attachments: None,
+                }]);
+            }
+        };
+
+        let changelog = input
+            .get("changelog")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(str::to_string)
+            .unwrap_or_else(|| {
+                if release_number > 1 {
+                    "General updates and improvements.".to_string()
+                } else {
+                    "Initial release.".to_string()
+                }
+            });
+
+        let mut tags: Vec<String> = app
+            .tags
+            .iter()
+            .map(|tag| tag.trim().to_string())
+            .filter(|tag| !tag.is_empty() && tag.chars().count() <= 32)
+            .collect();
+        tags.truncate(10);
+
+        let draft = MarketSubmissionDraftRequest {
+            listing_id,
+            slug: slug.clone(),
+            release_number,
+            name: app.name.trim().to_string(),
+            description,
+            icon: app.icon.clone(),
+            category,
+            tags,
+            min_bitfun_version: DEFAULT_MIN_BITFUN_VERSION.to_string(),
+            changelog,
+            license: MarketLicense {
+                spdx_expression: Some(DEFAULT_LICENSE.to_string()),
+                custom_url: None,
+            },
+            repository_url: None,
+        };
+
+        // Mirror upload progress onto the same event the submissions view
+        // already listens to, so an open UI shows the agent-driven upload.
+        let (progress_tx, mut progress_rx) =
+            tokio::sync::mpsc::unbounded_channel::<(Option<String>, &'static str, u32, u32)>();
+        let forwarder = tokio::spawn(async move {
+            while let Some((submission_id, phase, completed, total)) = progress_rx.recv().await {
+                let _ = emit_global_event(BackendEvent::Custom {
+                    event_name: "miniapp-market-upload-progress".to_string(),
+                    payload: json!({
+                        "submissionId": submission_id,
+                        "phase": phase,
+                        "completed": completed,
+                        "total": total,
+                    }),
+                })
+                .await;
+            }
+        });
+        let mut progress = |submission_id: Option<&str>, phase: &'static str, completed, total| {
+            let _ = progress_tx.send((submission_id.map(str::to_string), phase, completed, total));
+        };
+        let result =
+            submit_installed_app(&mut client, &app, &draft, &screenshot_paths, &mut progress).await;
+        drop(progress_tx);
+        let _ = forwarder.await;
+        let submission = result.map_err(|error| {
+            let hint = match error.code.as_str() {
+                "slug_taken" => " Pass a different `slug` parameter and retry.",
+                "authentication_required" => " Call PublishMiniApp again to start GitHub sign-in.",
+                "invalid_release_number" => {
+                    " Retry once; the release number is derived from the latest submission history."
+                }
+                _ => "",
+            };
+            BitFunError::tool(format!(
+                "Publishing failed ({}): {}{hint}",
+                error.code, error
+            ))
+        })?;
+
+        let message = format!(
+            "MiniApp '{}' submitted for review as '{}' v{} (signed in as {}). The user can track review status in 市场 → 我的投稿; published versions stay downloadable while the review runs.",
+            submission.name, submission.slug, submission.release_number, me.user.login
+        );
+        Ok(vec![ToolResult::Result {
+            data: json!({
+                "status": "submitted",
+                "submission_id": submission.submission_id,
+                "slug": submission.slug,
+                "release_number": submission.release_number,
+                "name": submission.name,
+                "category": submission.category,
+            }),
+            result_for_assistant: Some(message),
+            image_attachments: None,
+        }])
+    }
+}
+
+fn unix_now() -> i64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|value| value.as_secs() as i64)
+        .unwrap_or(0)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::PublishMiniAppTool;
+    use crate::agentic::tools::framework::{Tool, ToolExposure, ToolUseContext};
+    use serde_json::json;
+
+    #[test]
+    fn publish_miniapp_stays_expanded_for_assistant_use() {
+        let tool = PublishMiniAppTool::new();
+        assert_eq!(tool.default_exposure(), ToolExposure::Direct);
+    }
+
+    #[test]
+    fn publish_miniapp_emits_stable_permission_identity() {
+        let tool = PublishMiniAppTool::new();
+        let context = ToolUseContext::for_tool_listing(None, None);
+        let intents = tool
+            .permission_intents(&json!({ "app_id": "abc-123" }), &context)
+            .expect("permission intent");
+
+        assert_eq!(intents.len(), 1);
+        assert_eq!(intents[0].action, "custom_tool");
+        assert_eq!(
+            intents[0].resources,
+            ["miniapp:PublishMiniApp:abc-123".to_string()]
+        );
+    }
+
+    #[test]
+    fn publish_miniapp_schema_requires_app_and_screenshots() {
+        let tool = PublishMiniAppTool::new();
+        let schema = tool.input_schema();
+        assert_eq!(schema["required"], json!(["app_id", "screenshot_paths"]));
+        assert_eq!(schema["additionalProperties"], json!(false));
+    }
+}

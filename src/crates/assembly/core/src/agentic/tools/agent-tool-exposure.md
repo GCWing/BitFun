@@ -43,7 +43,8 @@ Notes:
 | `GetMCPPrompt` | Deferred | None | - |
 | `GenerativeUI` | Deferred | None | - |
 | `Git` | Deferred | `ReviewFixer`, `ReviewWorker`, `ReviewJudge` | Direct |
-| `InitMiniApp` | Deferred | None | - |
+| `InitMiniApp` | Direct | None | - |
+| `PublishMiniApp` | Direct | None | - |
 | `ControlHub` | Deferred | `ComputerUse` | Direct |
 | `ComputerUse` | Deferred | `ComputerUse` | Direct |
 | `Playbook` | Deferred | None | - |

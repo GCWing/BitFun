@@ -3,6 +3,7 @@
 mod client;
 mod credentials;
 mod package;
+mod submit;
 
 pub use client::{
     DesktopAuthPollRequest, DesktopAuthPollResponse, DesktopAuthStart, FavoriteAggregate,
@@ -15,4 +16,8 @@ pub use credentials::{
 };
 pub use package::{
     build_market_package, validate_market_package, MarketPackageError, ValidatedMarketPackage,
+};
+pub use submit::{
+    map_local_category_to_market, read_screenshot_file, resolve_release_target,
+    submit_installed_app, suggest_market_slug, ReleaseTarget, SubmitProgress,
 };

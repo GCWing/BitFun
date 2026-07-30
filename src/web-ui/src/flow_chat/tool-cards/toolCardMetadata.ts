@@ -321,6 +321,16 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     displayMode: 'standard',
     primaryColor: UI_EXCEPTION_ACCENTS.miniApp
   },
+  'PublishMiniApp': {
+    toolName: 'PublishMiniApp',
+    displayName: 'Publish Mini App',
+    icon: 'APP',
+    requiresConfirmation: false,
+    resultDisplayType: 'detailed',
+    description: 'Submit a Mini App to the market for review',
+    displayMode: 'standard',
+    primaryColor: UI_EXCEPTION_ACCENTS.miniApp
+  },
   'PageDeploy': {
     toolName: 'PageDeploy',
     displayName: 'Deploy Page',

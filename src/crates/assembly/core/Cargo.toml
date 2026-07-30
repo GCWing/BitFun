@@ -208,6 +208,7 @@ product-domains = [
     "plugin-source",
     "bitfun-services-integrations/function-agents",
     "bitfun-services-integrations/miniapp-runtime",
+    "bitfun-services-integrations/miniapp-market",
     "bitfun-product-domains/product-full",
 ]
 canvas-runtime = [

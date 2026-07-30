@@ -14,7 +14,7 @@ use bitfun_product_domains::miniapp::market::{
     MarketSubmission, MarketSubmissionDraftRequest,
 };
 use bitfun_services_integrations::miniapp_market::{
-    build_market_package, validate_market_package, DesktopAuthPollRequest, DesktopAuthPollResponse,
+    submit_installed_app, validate_market_package, DesktopAuthPollRequest, DesktopAuthPollResponse,
     DesktopAuthStart, FavoriteAggregate, MarketBrowseRequest, MarketClient, MarketMe,
     RatingAggregate, ValidatedMarketPackage,
 };
@@ -517,63 +517,26 @@ pub async fn miniapp_market_submit_installed(
     state: State<'_, AppState>,
     request: MarketSubmitInstalledRequest,
 ) -> Result<MarketSubmission, String> {
-    if request.screenshot_paths.is_empty() || request.screenshot_paths.len() > 5 {
-        return Err("Choose between 1 and 5 screenshots.".to_string());
-    }
     let installed = state
         .miniapp_manager
         .get(&request.app_id)
         .await
         .map_err(|error| error.to_string())?;
-    // The reviewed listing metadata is part of the immutable submission
-    // snapshot. Build the package from the selected app's source and
-    // permissions, but use the values the author entered in the submission
-    // form so the package and review record cannot disagree.
-    let mut package_app = installed.clone();
-    package_app.name = request.draft.name.clone();
-    package_app.description = request.draft.description.clone();
-    package_app.icon = request.draft.icon.clone();
-    package_app.category = request.draft.category.clone();
-    package_app.tags = request.draft.tags.clone();
-    let package = build_market_package(&package_app).map_err(|error| error.to_string())?;
-    emit_upload_progress(&app, None, "validating", 1, 1);
-
     let mut client = MarketClient::from_environment()
         .await
         .map_err(market_error)?;
-    let submission = client
-        .create_submission(&request.draft)
-        .await
-        .map_err(market_error)?;
-    let submission_id = submission.submission_id.clone();
-    emit_upload_progress(&app, Some(&submission_id), "package", 0, 1);
-    client
-        .upload_submission_package(&submission_id, package)
-        .await
-        .map_err(market_error)?;
-    emit_upload_progress(&app, Some(&submission_id), "package", 1, 1);
-
-    let screenshot_total = request.screenshot_paths.len() as u32;
-    for (position, path) in request.screenshot_paths.iter().enumerate() {
-        let path = PathBuf::from(path);
-        let (media_type, bytes) = read_screenshot(&path).await?;
-        client
-            .upload_submission_screenshot(&submission_id, position as u32, media_type, bytes)
-            .await
-            .map_err(market_error)?;
-        emit_upload_progress(
-            &app,
-            Some(&submission_id),
-            "screenshots",
-            position as u32 + 1,
-            screenshot_total,
-        );
-    }
-    let submission = client
-        .submit_submission(&submission_id)
-        .await
-        .map_err(market_error)?;
-    emit_upload_progress(&app, Some(&submission_id), "submitted", 1, 1);
+    let mut progress = |submission_id: Option<&str>, phase: &'static str, completed, total| {
+        emit_upload_progress(&app, submission_id, phase, completed, total);
+    };
+    let submission = submit_installed_app(
+        &mut client,
+        &installed,
+        &request.draft,
+        &request.screenshot_paths,
+        &mut progress,
+    )
+    .await
+    .map_err(market_error)?;
     remove_owned_capture_files(&app, &request.screenshot_paths).await;
     Ok(submission)
 }
@@ -695,33 +658,6 @@ fn validate_minimum_bitfun_version(minimum: &str) -> Result<(), String> {
         ));
     }
     Ok(())
-}
-
-async fn read_screenshot(path: &Path) -> Result<(&'static str, Vec<u8>), String> {
-    let metadata = tokio::fs::metadata(path)
-        .await
-        .map_err(|error| format!("Could not read screenshot metadata: {error}"))?;
-    if !metadata.is_file()
-        || metadata.len() > bitfun_product_domains::miniapp::market::MARKET_MAX_SCREENSHOT_BYTES
-    {
-        return Err("Each screenshot must be a file no larger than 5 MiB.".to_string());
-    }
-    let media_type = match path
-        .extension()
-        .and_then(|extension| extension.to_str())
-        .unwrap_or_default()
-        .to_ascii_lowercase()
-        .as_str()
-    {
-        "png" => "image/png",
-        "jpg" | "jpeg" => "image/jpeg",
-        "webp" => "image/webp",
-        _ => return Err("Screenshots must be PNG, JPEG, or WebP.".to_string()),
-    };
-    let bytes = tokio::fs::read(path)
-        .await
-        .map_err(|error| format!("Could not read screenshot: {error}"))?;
-    Ok((media_type, bytes))
 }
 
 fn emit_upload_progress(

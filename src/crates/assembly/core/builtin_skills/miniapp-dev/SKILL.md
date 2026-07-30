@@ -249,3 +249,17 @@ await app.fs.readFile(...)
 - i18n 至少覆盖 `zh-CN` / `en-US`
 - light/dark 没有明显样式问题
 - 没有遗留 “TODO / 占位 / Lorem ipsum”
+
+## 发布到市场
+
+用户明确要求把 MiniApp 发布/上架到市场时，用 `PublishMiniApp` 工具：
+
+- 传 `app_id` 和 1–5 张截图路径（PNG/JPEG/WebP，单张 ≤ 5 MiB）。
+  没有截图时先向用户要，或请用户在「市场 → 我的投稿」用「截取当前画面」生成。
+- 名称、描述、图标、分类、标签自动取自 `meta.json`；slug 和版本号自动推导。
+  发布前确认 `meta.json` 的 `description` 非空、权限是最小集
+  （市场会拒绝 `node.enabled=true`、宽泛 fs scope 等）。
+- 未登录时工具会返回 GitHub 授权链接：把链接给用户，等用户完成授权后
+  用相同参数再调用一次即可继续。
+- 提交后进入人工审核；用户可在「市场 → 我的投稿」查看状态。
+- 这是对外动作：只在用户明确要求发布时调用，不要主动发布。
