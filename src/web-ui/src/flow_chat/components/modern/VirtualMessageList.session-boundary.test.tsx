@@ -19,11 +19,12 @@ import {
   reconcileUnsignaledShrinkReservation,
   releasePinReservationForUserNavigation,
   resolveAutoCollapseAnchorScrollTop,
+  resolveCollapseIntentSettlementStrategy,
   resolveProvisionalStickyPinReservationPx,
+  resolveStickyPinGrowthSettlementStrategy,
   settleRetainedCollapseReservationForAnchor,
-  settleCollapseReservationForPreservedViewport,
+  settleCollapseReservationForViewport,
   shouldBypassShrinkCompensationInTailFollow,
-  shouldPreserveCollapseReservationAfterIntent,
   shouldClearExpiredProvisionalStickyPin,
   shouldSyncPhysicalBottom,
   shouldSuppressFollowingTailNegativeScrollBy,
@@ -439,7 +440,7 @@ describe('VirtualMessageList session boundary', () => {
 
   it('transfers collapse space to a sticky pin in one reservation state', () => {
     const currentState = {
-      collapse: { kind: 'collapse' as const, px: 1_583, floorPx: 0 },
+      collapse: { kind: 'collapse' as const, px: 1_583, floorPx: 181 },
       pin: {
         kind: 'pin' as const,
         px: 0,
@@ -450,8 +451,8 @@ describe('VirtualMessageList session boundary', () => {
     };
     const nextPin = {
       ...currentState.pin,
-      px: 378,
-      floorPx: 378,
+      px: 559,
+      floorPx: 559,
     };
 
     expect(transferCollapseReservationToPin(currentState, nextPin)).toEqual({
@@ -603,7 +604,7 @@ describe('VirtualMessageList session boundary', () => {
   });
 
   it('protects a settled element range from later unsignaled shrink reconciliation', () => {
-    const settledState = settleCollapseReservationForPreservedViewport({
+    const settledState = settleCollapseReservationForViewport({
       collapse: { kind: 'collapse', px: 1_022, floorPx: 670 },
       pin: {
         kind: 'pin',
@@ -622,6 +623,23 @@ describe('VirtualMessageList session boundary', () => {
       px: 702,
       floorPx: 702,
     });
+
+    const settledPinnedRange = settleCollapseReservationForViewport({
+      collapse: { kind: 'collapse', px: 152.7, floorPx: 67.7 },
+      pin: {
+        kind: 'pin',
+        px: 674.6,
+        floorPx: 674.6,
+        mode: 'sticky-latest',
+        targetTurnId: 'turn-a',
+      },
+    }, {
+      scrollTop: 5_122,
+      scrollHeight: 6_235,
+      clientHeight: 1_027,
+    });
+    expect(settledPinnedRange.collapse.px).toBeCloseTo(67.7, 1);
+    expect(settledPinnedRange.collapse.floorPx).toBeCloseTo(67.7, 1);
 
     const protectedState = protectCurrentCollapseReservation({
       collapse: { kind: 'collapse', px: 784, floorPx: 670 },
@@ -858,7 +876,77 @@ describe('VirtualMessageList session boundary', () => {
     })).toBe(0);
   });
 
-  it('lets known streaming collapses reconcile while preserving their reservation', () => {
+  it('settles sticky pin growth as soon as it exhausts the remaining pin floor', () => {
+    expect(resolveStickyPinGrowthSettlementStrategy({
+      pendingGrowthPx: 0,
+      pinFloorPx: 11.77,
+      hasActiveCollapseIntent: false,
+    })).toBe('none');
+    expect(resolveStickyPinGrowthSettlementStrategy({
+      pendingGrowthPx: 10,
+      pinFloorPx: 11.77,
+      hasActiveCollapseIntent: false,
+    })).toBe('wait-for-quiet');
+    expect(resolveStickyPinGrowthSettlementStrategy({
+      pendingGrowthPx: 126,
+      pinFloorPx: 11.77,
+      hasActiveCollapseIntent: true,
+    })).toBe('wait-for-collapse');
+    expect(resolveStickyPinGrowthSettlementStrategy({
+      pendingGrowthPx: 126,
+      pinFloorPx: 11.77,
+      hasActiveCollapseIntent: false,
+    })).toBe('settle-now');
+  });
+
+  it('selects an explicit settlement strategy for each collapse viewport owner', () => {
+    const stickyReservation = {
+      collapse: { kind: 'collapse' as const, px: 152.7, floorPx: 67.7 },
+      pin: {
+        kind: 'pin' as const,
+        px: 674.6,
+        floorPx: 674.6,
+        mode: 'sticky-latest' as const,
+        targetTurnId: 'turn-a',
+      },
+    };
+
+    expect(resolveCollapseIntentSettlementStrategy({
+      coordinatorMode: 'pinned-item',
+      isFollowingOutput: false,
+      isStreamingOutput: true,
+      reservation: stickyReservation,
+    })).toBe('reconcile-sticky-pin');
+    expect(resolveCollapseIntentSettlementStrategy({
+      coordinatorMode: 'following-tail',
+      isFollowingOutput: true,
+      isStreamingOutput: true,
+      reservation: stickyReservation,
+    })).toBe('retain-following-tail');
+    expect(resolveCollapseIntentSettlementStrategy({
+      coordinatorMode: 'preserving-element',
+      isFollowingOutput: false,
+      isStreamingOutput: true,
+      reservation: stickyReservation,
+    })).toBe('settle-preserved-element');
+    expect(resolveCollapseIntentSettlementStrategy({
+      coordinatorMode: 'idle',
+      isFollowingOutput: false,
+      isStreamingOutput: true,
+      reservation: stickyReservation,
+    })).toBe('settle-protected-viewport');
+    expect(resolveCollapseIntentSettlementStrategy({
+      coordinatorMode: 'idle',
+      isFollowingOutput: false,
+      isStreamingOutput: true,
+      reservation: {
+        ...stickyReservation,
+        collapse: { ...stickyReservation.collapse, floorPx: 0 },
+      },
+    })).toBe('drain');
+  });
+
+  it('lets known streaming collapses reconcile without bypassing active intents', () => {
     expect(shouldBypassShrinkCompensationInTailFollow({
       isFollowingOutput: true,
       isStreamingOutput: true,
@@ -869,30 +957,6 @@ describe('VirtualMessageList session boundary', () => {
       isStreamingOutput: true,
       hasActiveCollapseIntent: true,
     })).toBe(false);
-    expect(shouldPreserveCollapseReservationAfterIntent({
-      isFollowingOutput: true,
-      isStreamingOutput: true,
-      isPreservingElement: false,
-      hasProtectedCollapseRange: false,
-    })).toBe(true);
-    expect(shouldPreserveCollapseReservationAfterIntent({
-      isFollowingOutput: false,
-      isStreamingOutput: true,
-      isPreservingElement: false,
-      hasProtectedCollapseRange: false,
-    })).toBe(false);
-    expect(shouldPreserveCollapseReservationAfterIntent({
-      isFollowingOutput: false,
-      isStreamingOutput: true,
-      isPreservingElement: true,
-      hasProtectedCollapseRange: false,
-    })).toBe(true);
-    expect(shouldPreserveCollapseReservationAfterIntent({
-      isFollowingOutput: false,
-      isStreamingOutput: true,
-      isPreservingElement: false,
-      hasProtectedCollapseRange: true,
-    })).toBe(true);
   });
 
   it('recovers the last stable scroll position when an auto collapse arrives after clamp', () => {

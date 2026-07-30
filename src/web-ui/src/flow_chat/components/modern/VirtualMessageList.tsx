@@ -75,12 +75,13 @@ import {
   reconcileUnsignaledShrinkReservation,
   releasePinReservationForUserNavigation,
   resolveAutoCollapseAnchorScrollTop,
+  resolveCollapseIntentSettlementStrategy,
   resolveProvisionalStickyPinReservationPx,
+  resolveStickyPinGrowthSettlementStrategy,
   sanitizeBottomReservationState,
-  settleCollapseReservationForPreservedViewport,
+  settleCollapseReservationForViewport,
   settleRetainedCollapseReservationForAnchor,
   shouldBypassShrinkCompensationInTailFollow,
-  shouldPreserveCollapseReservationAfterIntent,
   shouldClearExpiredProvisionalStickyPin,
   shouldSuppressFollowingTailNegativeScrollBy,
   shouldSyncPhysicalBottom,
@@ -1237,6 +1238,51 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
   ]);
   settlePendingStickyPinGrowthRef.current = settlePendingStickyPinGrowth;
 
+  const reconcilePendingStickyPinGrowthSettlement = useCallback((
+    reason: string,
+    options?: { preserveExistingQuietTimer?: boolean },
+  ) => {
+    const pending = pendingStickyPinGrowthRef.current;
+    const strategy = resolveStickyPinGrowthSettlementStrategy({
+      pendingGrowthPx: pending.amountPx,
+      pinFloorPx: bottomReservationStateRef.current.pin.floorPx,
+      hasActiveCollapseIntent: pendingCollapseIntentRef.current.active,
+    });
+
+    if (strategy === 'none') {
+      clearPendingStickyPinGrowth(`${reason}:nothing-pending`);
+      return;
+    }
+    if (strategy === 'settle-now') {
+      if (stickyPinGrowthSettleTimerRef.current !== null) {
+        window.clearTimeout(stickyPinGrowthSettleTimerRef.current);
+        stickyPinGrowthSettleTimerRef.current = null;
+      }
+      settlePendingStickyPinGrowthRef.current(`${reason}:threshold-reached`);
+      return;
+    }
+    if (strategy === 'wait-for-collapse') {
+      if (stickyPinGrowthSettleTimerRef.current !== null) {
+        window.clearTimeout(stickyPinGrowthSettleTimerRef.current);
+        stickyPinGrowthSettleTimerRef.current = null;
+      }
+      return;
+    }
+    if (
+      options?.preserveExistingQuietTimer &&
+      stickyPinGrowthSettleTimerRef.current !== null
+    ) {
+      return;
+    }
+
+    if (stickyPinGrowthSettleTimerRef.current !== null) {
+      window.clearTimeout(stickyPinGrowthSettleTimerRef.current);
+    }
+    stickyPinGrowthSettleTimerRef.current = window.setTimeout(() => {
+      settlePendingStickyPinGrowthRef.current('settle-timeout');
+    }, STICKY_PIN_GROWTH_SETTLE_MS);
+  }, [clearPendingStickyPinGrowth]);
+
   const queuePendingStickyPinGrowth = useCallback((targetTurnId: string, amountPx: number) => {
     const sanitizedAmountPx = sanitizeReservationPx(amountPx);
     if (sanitizedAmountPx <= COMPENSATION_EPSILON_PX) {
@@ -1254,13 +1300,8 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
         amountPx: sanitizedAmountPx,
       };
     pendingStickyPinGrowthRef.current = nextPending;
-    if (stickyPinGrowthSettleTimerRef.current !== null) {
-      window.clearTimeout(stickyPinGrowthSettleTimerRef.current);
-    }
-    stickyPinGrowthSettleTimerRef.current = window.setTimeout(() => {
-      settlePendingStickyPinGrowthRef.current('settle-timeout');
-    }, STICKY_PIN_GROWTH_SETTLE_MS);
-  }, []);
+    reconcilePendingStickyPinGrowthSettlement('growth-queued');
+  }, [reconcilePendingStickyPinGrowthSettlement]);
 
   useEffect(() => () => {
     if (stickyPinGrowthSettleTimerRef.current !== null) {
@@ -1541,16 +1582,18 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
         getTotalBottomCompensationPx(nextReservationState),
       );
       const unsettledGrowthPx = Math.max(0, heightDelta - immediatelyConsumedPx);
+      applyFooterCompensationNow(nextReservationState);
+      viewportCoordinatorRef.current.restoreElementAnchor(scroller, 'measure-grow');
+      previousScrollTopRef.current = scroller.scrollTop;
+      recordScrollerGeometry(scroller);
       if (canSettleStickyPinGrowth && pinReservation.targetTurnId) {
+        // Queue after applying the measured state. Threshold settlement may
+        // synchronously shrink the Footer and hand ownership to tail-follow.
         queuePendingStickyPinGrowth(
           pinReservation.targetTurnId,
           Math.min(unsettledGrowthPx, nextReservationState.pin.floorPx),
         );
       }
-      applyFooterCompensationNow(nextReservationState);
-      viewportCoordinatorRef.current.restoreElementAnchor(scroller, 'measure-grow');
-      previousScrollTopRef.current = scroller.scrollTop;
-      recordScrollerGeometry(scroller);
       return;
     }
 
@@ -2694,6 +2737,15 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
       return false;
     }
 
+    const coordinatorMode = viewportCoordinatorRef.current.getMode();
+    const reservationBeforeSettlement = bottomReservationStateRef.current;
+    const settlementStrategy = resolveCollapseIntentSettlementStrategy({
+      coordinatorMode,
+      isFollowingOutput: isFollowingOutputRef.current,
+      isStreamingOutput: isStreamingOutputRef.current,
+      reservation: reservationBeforeSettlement,
+    });
+
     if (flowChatDiagnostics.isEnabled()) {
       flowChatDiagnostics.trace({
         hypothesis: 'E',
@@ -2702,8 +2754,9 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
         data: () => ({
           reason,
           intent,
-          coordinatorMode: viewportCoordinatorRef.current.getMode(),
-          reservation: bottomReservationStateRef.current,
+          coordinatorMode,
+          settlementStrategy,
+          reservation: reservationBeforeSettlement,
           isFollowingOutput: isFollowingOutputRef.current,
           isStreamingOutput: isStreamingOutputRef.current,
         }),
@@ -2712,15 +2765,8 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
 
     clearCollapseIntentScheduling();
     pendingCollapseIntentRef.current = createInactiveCollapseIntentState();
-    const coordinatorMode = viewportCoordinatorRef.current.getMode();
-    const shouldRetainForQuietSettlement = (
-      isFollowingOutputRef.current &&
-      (coordinatorMode === 'following-tail' || coordinatorMode === 'pinned-item')
-    );
-    if (shouldRetainForQuietSettlement) {
+    if (settlementStrategy === 'retain-following-tail') {
       retainCollapseRangeForQuietSettlement(intent, reason);
-    }
-    if (coordinatorMode === 'following-tail' && isFollowingOutputRef.current) {
       if (deferredFollowReasonRef.current) {
         const deferredReason = deferredFollowReasonRef.current;
         deferredFollowReasonRef.current = null;
@@ -2731,28 +2777,26 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
       return true;
     }
 
-    const preserveReservation = shouldPreserveCollapseReservationAfterIntent({
-      isFollowingOutput: isFollowingOutputRef.current,
-      isStreamingOutput: isStreamingOutputRef.current,
-      isPreservingElement: coordinatorMode === 'preserving-element',
-      hasProtectedCollapseRange:
-        bottomReservationStateRef.current.collapse.floorPx > COMPENSATION_EPSILON_PX,
-    });
     const scroller = scrollerElementRef.current;
-    const nextState = preserveReservation
-      ? coordinatorMode === 'preserving-element'
-        ? scroller
-          ? settleCollapseReservationForPreservedViewport(
-            bottomReservationStateRef.current,
-            {
-              scrollTop: scroller.scrollTop,
-              scrollHeight: scroller.scrollHeight,
-              clientHeight: scroller.clientHeight,
-            },
-          )
-          : protectCurrentCollapseReservation(bottomReservationStateRef.current)
-        : bottomReservationStateRef.current
-      : drainCollapseReservationPreservingPinnedItem(reason);
+    const nextState = (() => {
+      switch (settlementStrategy) {
+        case 'reconcile-sticky-pin':
+        case 'drain':
+          return drainCollapseReservationPreservingPinnedItem(reason);
+        case 'settle-preserved-element':
+        case 'settle-protected-viewport':
+          return scroller
+            ? settleCollapseReservationForViewport(
+              bottomReservationStateRef.current,
+              {
+                scrollTop: scroller.scrollTop,
+                scrollHeight: scroller.scrollHeight,
+                clientHeight: scroller.clientHeight,
+              },
+            )
+            : protectCurrentCollapseReservation(bottomReservationStateRef.current);
+      }
+    })();
     if (nextState === null) {
       pendingCollapseIntentRef.current = intent;
       collapseIntentFinalizeTimerRef.current = window.setTimeout(() => {
@@ -2768,6 +2812,20 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     if (!areBottomReservationStatesEqual(bottomReservationStateRef.current, nextState)) {
       updateBottomReservationState(nextState);
       applyFooterCompensationNow(nextState);
+    }
+    if (flowChatDiagnostics.isEnabled()) {
+      flowChatDiagnostics.trace({
+        hypothesis: 'A',
+        location: 'VirtualMessageList.finalizeCollapseIntent',
+        message: 'Collapse intent reservation settlement completed',
+        data: () => ({
+          reason,
+          settlementStrategy,
+          coordinatorMode,
+          reservationBefore: reservationBeforeSettlement,
+          reservationAfter: bottomReservationStateRef.current,
+        }),
+      });
     }
     if (coordinatorMode === 'preserving-element' && scroller) {
       viewportCoordinatorRef.current.restoreElementAnchor(
@@ -2791,6 +2849,11 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
       );
     }
 
+    reconcilePendingStickyPinGrowthSettlement(
+      `collapse-finalized:${reason}`,
+      { preserveExistingQuietTimer: true },
+    );
+
     if (deferredFollowReasonRef.current) {
       const deferredReason = deferredFollowReasonRef.current;
       deferredFollowReasonRef.current = null;
@@ -2804,6 +2867,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     applyFooterCompensationNow,
     clearCollapseIntentScheduling,
     drainCollapseReservationPreservingPinnedItem,
+    reconcilePendingStickyPinGrowthSettlement,
     recordScrollerGeometry,
     retainCollapseRangeForQuietSettlement,
     snapshotMeasuredContentHeight,

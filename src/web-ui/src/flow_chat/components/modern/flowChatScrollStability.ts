@@ -1,4 +1,5 @@
 import type { FlowChatPinTurnToTopMode } from '../../events/flowchatNavigation';
+import type { FlowChatViewportAnchorMode } from './FlowChatViewportCoordinator';
 
 export const COMPENSATION_EPSILON_PX = 0.5;
 
@@ -118,7 +119,7 @@ export function protectCurrentCollapseReservation(
   });
 }
 
-export function settleCollapseReservationForPreservedViewport(
+export function settleCollapseReservationForViewport(
   currentState: BottomReservationState,
   geometry: {
     scrollTop: number;
@@ -464,6 +465,35 @@ export function getCanceledUnsettledStickyPinGrowthPx(options: {
   );
 }
 
+export type StickyPinGrowthSettlementStrategy =
+  | 'none'
+  | 'wait-for-quiet'
+  | 'wait-for-collapse'
+  | 'settle-now';
+
+export function resolveStickyPinGrowthSettlementStrategy(options: {
+  pendingGrowthPx: number;
+  pinFloorPx: number;
+  hasActiveCollapseIntent: boolean;
+}): StickyPinGrowthSettlementStrategy {
+  const pendingGrowthPx = sanitizeReservationPx(options.pendingGrowthPx);
+  const pinFloorPx = sanitizeReservationPx(options.pinFloorPx);
+  if (
+    pendingGrowthPx <= COMPENSATION_EPSILON_PX ||
+    pinFloorPx <= COMPENSATION_EPSILON_PX
+  ) {
+    return 'none';
+  }
+
+  if (pendingGrowthPx + COMPENSATION_EPSILON_PX < pinFloorPx) {
+    return 'wait-for-quiet';
+  }
+
+  return options.hasActiveCollapseIntent
+    ? 'wait-for-collapse'
+    : 'settle-now';
+}
+
 export function shouldBypassShrinkCompensationInTailFollow(options: {
   isFollowingOutput: boolean;
   isStreamingOutput: boolean;
@@ -476,17 +506,41 @@ export function shouldBypassShrinkCompensationInTailFollow(options: {
   );
 }
 
-export function shouldPreserveCollapseReservationAfterIntent(options: {
+export type CollapseIntentSettlementStrategy =
+  | 'reconcile-sticky-pin'
+  | 'retain-following-tail'
+  | 'settle-preserved-element'
+  | 'settle-protected-viewport'
+  | 'drain';
+
+export function resolveCollapseIntentSettlementStrategy(options: {
+  coordinatorMode: FlowChatViewportAnchorMode;
   isFollowingOutput: boolean;
   isStreamingOutput: boolean;
-  isPreservingElement: boolean;
-  hasProtectedCollapseRange: boolean;
-}): boolean {
-  return (
-    (options.isFollowingOutput && options.isStreamingOutput) ||
-    options.isPreservingElement ||
-    options.hasProtectedCollapseRange
+  reservation: BottomReservationState;
+}): CollapseIntentSettlementStrategy {
+  const ownsStickyPin = (
+    options.coordinatorMode === 'pinned-item' &&
+    options.reservation.pin.mode === 'sticky-latest' &&
+    Boolean(options.reservation.pin.targetTurnId)
   );
+  if (ownsStickyPin) {
+    return 'reconcile-sticky-pin';
+  }
+  if (
+    options.coordinatorMode === 'following-tail' &&
+    options.isFollowingOutput &&
+    options.isStreamingOutput
+  ) {
+    return 'retain-following-tail';
+  }
+  if (options.coordinatorMode === 'preserving-element') {
+    return 'settle-preserved-element';
+  }
+  if (options.reservation.collapse.floorPx > COMPENSATION_EPSILON_PX) {
+    return 'settle-protected-viewport';
+  }
+  return 'drain';
 }
 
 export function resolveAutoCollapseAnchorScrollTop(options: {
