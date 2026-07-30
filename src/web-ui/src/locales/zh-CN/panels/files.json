@@ -109,7 +109,11 @@
     }
   },
   "validation": {
-    "invalidFilename": "文件名包含非法字符"
+    "invalidFilename": "文件名包含非法字符",
+    "emptyName": "请输入名称",
+    "duplicateName": "名为 \"{{name}}\" 的文件或文件夹已存在",
+    "reservedName": "该名称是系统保留名",
+    "nameTooLong": "名称过长"
   },
   "transfer": {
     "downloading": "正在下载",

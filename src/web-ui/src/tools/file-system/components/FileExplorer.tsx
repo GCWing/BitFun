@@ -171,6 +171,7 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
   onNewFolder,
   onRefresh,
   hideToolbar = false,
+  isRemoteWorkspace = false,
 }) => {
   const { t } = useI18n('tools');
   const [internalExpandedFolders, setInternalExpandedFolders] = useState<Set<string>>(new Set());
@@ -500,6 +501,7 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
           onRename={onRename}
           onCancelRename={onCancelRename}
           renderNodeContent={renderNodeContent}
+          isRemoteWorkspace={isRemoteWorkspace}
         />
       ) : (
         <FileTree
@@ -515,6 +517,7 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
           onRename={onRename}
           onCancelRename={onCancelRename}
           workspacePath={workspacePath}
+          isRemoteWorkspace={isRemoteWorkspace}
         />
       )}
     </div>
