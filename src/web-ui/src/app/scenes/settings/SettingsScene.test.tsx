@@ -78,6 +78,20 @@ describe('SettingsScene lazy tab routing', () => {
     vi.useRealTimers();
   });
 
+  /**
+   * The scene holds its very first paint until the active tab's lazy chunk and
+   * i18n namespaces are in memory, so a cold entry cannot flash a skeleton and a
+   * frame of raw i18n keys. Both land off a macrotask, past what act() flushes.
+   */
+  async function waitForPanelContent(testId: string) {
+    for (let attempt = 0; attempt < 50; attempt += 1) {
+      if (container.querySelector(`[data-testid="${testId}"]`)) return;
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+    }
+  }
+
   async function renderActiveTab(
     tab: 'mcp-tools' | 'acp-agents' | 'external-sources' | 'voice-input'
   ) {
@@ -85,6 +99,7 @@ describe('SettingsScene lazy tab routing', () => {
     await act(async () => {
       root.render(<SettingsScene />);
     });
+    await waitForPanelContent(`${tab}-config`);
   }
 
   it('renders the lazy MCP tools config tab', async () => {
@@ -115,7 +130,9 @@ describe('SettingsScene lazy tab routing', () => {
     await act(async () => {
       root.render(<SettingsScene />);
     });
+    await waitForPanelContent('basics-config');
 
+    /** Only the cold first paint waits for resources; later switches are synchronous. */
     await act(async () => {
       useSettingsStore.setState({ activeTab: 'appearance' });
       await Promise.resolve();

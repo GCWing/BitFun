@@ -12,6 +12,7 @@
  */
 
 import React, {
+  startTransition,
   useCallback,
   useEffect,
   useMemo,
@@ -185,8 +186,13 @@ function useSettingsNav() {
       const requestId = ++activationRequestRef.current;
       const commit = () => {
         if (activationRequestRef.current !== requestId) return;
-        setActiveTab(tab);
-        clearSearch();
+        // A cached lazy panel still suspends for one promise microtask on its
+        // first mount; inside a transition React keeps the painted panel until
+        // the new one is ready instead of committing the skeleton fallback.
+        startTransition(() => {
+          setActiveTab(tab);
+          clearSearch();
+        });
       };
       void preloadSettingsTabContent(tab).then(commit, commit);
     },
@@ -197,9 +203,10 @@ function useSettingsNav() {
     (tab: ConfigTab) => {
       const requestId = ++activationRequestRef.current;
       const commit = () => {
-        if (activationRequestRef.current === requestId) {
+        if (activationRequestRef.current !== requestId) return;
+        startTransition(() => {
           setActiveTab(tab);
-        }
+        });
       };
       void preloadSettingsTabContent(tab).then(commit, commit);
     },

@@ -1,3 +1,8 @@
+@keyframes bitfun-config-page-loading-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
 .bitfun-config-page-loading {
   min-height: 200px;
   display: flex;
@@ -5,6 +10,15 @@
   justify-content: center;
   color: var(--color-text-muted);
   font-size: var(--font-size-sm);
+  /* Mounts only after a grace period (see ConfigPageLoading), so ease it in
+     rather than popping a block of text into an otherwise settled page. */
+  animation: bitfun-config-page-loading-in 140ms cubic-bezier(0.23, 1, 0.32, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bitfun-config-page-loading {
+    animation: none;
+  }
 }
 
 .bitfun-config-page-message {

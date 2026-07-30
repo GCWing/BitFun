@@ -301,6 +301,12 @@ describe('ExternalSourcesConfig', () => {
       '.bitfun-config-page-layout.bitfun-external-sources-config',
     );
     expect(page?.querySelector('.bitfun-config-page-header__title')?.textContent).toBe('title');
+
+    /**
+     * ConfigPageLoading waits out a grace period before admitting it is loading, so
+     * reads served from the ConfigManager cache never flash a placeholder.
+     */
+    await act(async () => vi.advanceTimersByTimeAsync(260));
     expect(page?.querySelector(
       '.bitfun-config-page-content .bitfun-config-page-loading',
     )?.textContent).toBe('loading');

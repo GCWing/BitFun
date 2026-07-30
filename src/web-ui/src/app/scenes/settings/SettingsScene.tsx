@@ -9,6 +9,7 @@
 import React, {
   Suspense,
   useEffect,
+  useState,
 } from 'react';
 import { useSettingsStore } from './settingsStore';
 import type { ConfigTab } from './settingsConfig';
@@ -30,6 +31,8 @@ import {
   SessionPersonalizationConfig,
   VoiceInputConfig,
   WorktreesConfig,
+  isSettingsTabContentReady,
+  preloadSettingsTabContent,
 } from './settingsContentRegistry';
 import './SettingsScene.scss';
 
@@ -81,7 +84,33 @@ const SettingsScene: React.FC = () => {
     }
   }, [activeTab, setActiveTab]);
 
-  const Content = resolveSettingsContent(resolvedTab);
+  /**
+   * Cold entries into the scene (first open after launch, deep links) mount a
+   * panel whose chunk and i18n namespaces are still in flight, which paints the
+   * skeleton and then a frame of raw i18n keys. Hold the first paint until those
+   * resources land — an empty content area for a few ms reads as instant, a
+   * three-stage flash does not. SettingsNav preloads before it flips the active
+   * tab, so tab switches are never gated here.
+   */
+  const [firstPaintReady, setFirstPaintReady] = useState(() =>
+    isSettingsTabContentReady(resolvedTab)
+  );
+
+  useEffect(() => {
+    if (firstPaintReady) return;
+
+    let cancelled = false;
+    const commit = () => {
+      if (!cancelled) setFirstPaintReady(true);
+    };
+    void preloadSettingsTabContent(resolvedTab).then(commit, commit);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [firstPaintReady, resolvedTab]);
+
+  const Content = firstPaintReady ? resolveSettingsContent(resolvedTab) : null;
 
   return (
     <div className="bitfun-settings-scene" data-testid="settings-scene" data-settings-tab={resolvedTab}>

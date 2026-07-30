@@ -1,5 +1,6 @@
 import { lazy } from 'react';
 import type { ConfigTab } from './settingsConfig';
+import { preloadSettingsTabI18n } from './settingsTabI18n';
 
 const loadAIModelConfig = () => import('../../../infrastructure/config/components/AIModelConfig');
 const loadMcpToolsConfig = () => import('../../../infrastructure/config/components/McpToolsConfig');
@@ -64,6 +65,29 @@ const SETTINGS_CONTENT_LOADERS: Partial<Record<ConfigTab, () => Promise<unknown>
   keyboard: loadKeyboardShortcutsTab,
 };
 
+/**
+ * Tabs whose chunk *and* i18n namespaces are already in memory. Rendering such a
+ * tab is a plain synchronous mount: no Suspense fallback, no frame of raw i18n keys.
+ */
+const readyTabs = new Set<ConfigTab>();
+
+export function isSettingsTabContentReady(tab: ConfigTab): boolean {
+  return readyTabs.has(tab);
+}
+
+/**
+ * Warm everything a tab needs to paint in a single frame: its lazy panel chunk
+ * (with the CSS Vite ships alongside it) and its i18n namespaces. Callers await
+ * this before switching tabs so the panel appears fully rendered instead of
+ * stepping through skeleton → untranslated keys → content.
+ */
 export async function preloadSettingsTabContent(tab: ConfigTab): Promise<void> {
-  await SETTINGS_CONTENT_LOADERS[tab]?.();
+  if (readyTabs.has(tab)) return;
+
+  await Promise.all([
+    SETTINGS_CONTENT_LOADERS[tab]?.(),
+    preloadSettingsTabI18n(tab),
+  ]);
+
+  readyTabs.add(tab);
 }
