@@ -22,10 +22,11 @@ session controller leases, event delivery, connection bounds, and cleanup. It is
 
 - Export only the exact workspace-private API needed by the CLI adapter. Do not
   publish this crate or expose its wire as an SDK contract.
-- The closed operation budget is Health, Session list/create/restore (including transcript), current-Session rename and Agent mode/model update,
-  declarative context reload, Turn submit/cancel, pending/respond Permission, and UserInput answers. Context reload may run during an active
-  Turn, does not rewrite that Turn, and guards the cache so the next message reads invalidated instructions. Disconnect cleanup is internal lifecycle, not a detach operation.
-  Model catalogs and defaults remain product configuration outside this wire. Do not add delete, fork, replay, observer,
+- The closed operation budget is Health, Session list/create/restore/delete (including transcript on restore), current-Session rename and Agent mode/model update,
+  declarative context reload, Turn submit/cancel, pending/respond Permission, and UserInput answers. Delete is limited to an idle Session not controlled by any client.
+  Context reload may run during an active Turn, does not rewrite that Turn, and guards the cache so the next message reads invalidated instructions.
+  Disconnect cleanup is internal lifecycle, not a detach operation.
+  Model catalogs and defaults remain product configuration outside this wire. Do not add archive, fork, replay, observer,
   controller transfer, Tool/MCP/Hook management, or other product configuration incidentally.
 - Stable Event, Product Domain, and Runtime Port DTOs may be reused. Do not
   depend on `bitfun-core`, Agent Runtime implementations, SDK Host, services,

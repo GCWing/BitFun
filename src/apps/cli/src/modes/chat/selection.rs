@@ -29,6 +29,27 @@ fn previous_session_update_status(
     }
 }
 
+fn session_delete_feedback(
+    session_name: &str,
+    outcome: &SessionUpdateApplyOutcome,
+) -> (bool, String) {
+    match outcome {
+        SessionUpdateApplyOutcome::Applied => {
+            (true, format!("Session deleted: {session_name}"))
+        }
+        SessionUpdateApplyOutcome::SessionUpdateFailed(error) => (
+            false,
+            format!("Failed to delete session {session_name}: {error}"),
+        ),
+        SessionUpdateApplyOutcome::OutcomeUnknown(error) => (
+            false,
+            format!(
+                "Session deletion for {session_name} has an unknown outcome: {error}. This TUI is closing; reopen it and inspect /sessions before retrying."
+            ),
+        ),
+    }
+}
+
 fn session_update_completion_should_exit(exit_requested: bool, applied: bool) -> bool {
     exit_requested && applied
 }
@@ -396,7 +417,7 @@ impl ChatMode {
     ) {
         if !session_update_allowed(
             chat_state.is_processing,
-            self.pending_session_update.is_some(),
+            self.pending_session_operation.is_some(),
         ) {
             chat_view.set_status(Some(session_update_unavailable_message(
                 "Agent mode",
@@ -562,7 +583,7 @@ impl ChatMode {
         }
         if !session_update_allowed(
             chat_state.is_processing,
-            self.pending_session_update.is_some(),
+            self.pending_session_operation.is_some(),
         ) {
             chat_view.set_status(Some(session_update_unavailable_message(
                 "Model",
@@ -582,9 +603,9 @@ impl ChatMode {
                 .update_session_model(&task_session_id, &task_model_id)
                 .await
         });
-        self.pending_session_update = Some(PendingSessionUpdate {
+        self.pending_session_operation = Some(PendingSessionOperation {
             session_id,
-            kind: PendingSessionUpdateKind::Model {
+            kind: PendingSessionOperationKind::Model {
                 model_id: selected_id,
                 display_name: selected_display_name,
             },
@@ -625,7 +646,7 @@ impl ChatMode {
 
         let allow_mode_switch = session_update_allowed(
             chat_state.is_processing,
-            self.pending_session_update.is_some(),
+            self.pending_session_operation.is_some(),
         );
         if self.agent.is_shared() {
             chat_view.show_agent_modes_only(
@@ -654,7 +675,7 @@ impl ChatMode {
             AgentSelectorAction::SwitchMode(selected) => {
                 if !session_update_allowed(
                     chat_state.is_processing,
-                    self.pending_session_update.is_some(),
+                    self.pending_session_operation.is_some(),
                 ) {
                     chat_view.set_status(Some(session_update_unavailable_message(
                         "Agent mode",
@@ -687,9 +708,9 @@ impl ChatMode {
             return;
         }
 
-        if self.pending_session_update.is_some() {
+        if self.pending_session_operation.is_some() {
             chat_view.set_status(Some(
-                "A current session update is already in progress. Please wait.".to_string(),
+                "A Session operation is already in progress. Please wait.".to_string(),
             ));
             return;
         }
@@ -705,9 +726,9 @@ impl ChatMode {
                 .update_session_mode(&task_session_id, &task_mode_id)
                 .await
         });
-        self.pending_session_update = Some(PendingSessionUpdate {
+        self.pending_session_operation = Some(PendingSessionOperation {
             session_id,
-            kind: PendingSessionUpdateKind::Mode { mode_id },
+            kind: PendingSessionOperationKind::Mode { mode_id },
             started_at: Instant::now(),
             slow_notice_shown: false,
             exit_warning_shown: false,
@@ -715,25 +736,25 @@ impl ChatMode {
         });
     }
 
-    fn poll_session_update_completion(
+    fn poll_session_operation_completion(
         &mut self,
         chat_view: &mut ChatView,
         chat_state: &mut ChatState,
         rt_handle: &tokio::runtime::Handle,
     ) -> SessionUpdatePollOutcome {
-        let Some(pending) = self.pending_session_update.as_mut() else {
+        let Some(pending) = self.pending_session_operation.as_mut() else {
             return SessionUpdatePollOutcome::NoChange;
         };
         if !pending.handle.is_finished() {
             if !pending.slow_notice_shown
-                && pending.started_at.elapsed() >= SESSION_UPDATE_SLOW_NOTICE
+                && pending.started_at.elapsed() >= SESSION_OPERATION_SLOW_NOTICE
             {
                 pending.slow_notice_shown = true;
                 if !pending.exit_warning_shown {
                     let message = if self.agent.is_shared() {
-                        "The current session update is still being saved. You can keep editing; changing sessions and sending wait for the result."
+                        "The Session operation is still running. You can keep editing; changing sessions and sending wait for the result."
                     } else {
-                        "The current session update is still being saved. You can edit or switch sessions; sending in this session waits."
+                        "The Session operation is still running. You can edit or switch sessions; sending in the affected Session waits."
                     };
                     chat_view.set_status(Some(message.to_string()));
                 }
@@ -742,9 +763,9 @@ impl ChatMode {
             return SessionUpdatePollOutcome::NoChange;
         }
         let pending = self
-            .pending_session_update
+            .pending_session_operation
             .take()
-            .expect("finished session update should remain present");
+            .expect("finished session operation should remain present");
         let outcome = match tokio::task::block_in_place(|| rt_handle.block_on(pending.handle)) {
             Ok(Ok(())) => SessionUpdateApplyOutcome::Applied,
             Ok(Err(error)) if error.outcome_unknown() => {
@@ -752,10 +773,34 @@ impl ChatMode {
             }
             Ok(Err(error)) => SessionUpdateApplyOutcome::SessionUpdateFailed(error.to_string()),
             Err(error) => SessionUpdateApplyOutcome::SessionUpdateFailed(format!(
-                "session update task failed: {error}"
+                "session operation task failed: {error}"
             )),
         };
         let unknown_outcome = matches!(&outcome, SessionUpdateApplyOutcome::OutcomeUnknown(_));
+        if let PendingSessionOperationKind::Delete { session_name } = &pending.kind {
+            let (remove_item, status) = session_delete_feedback(session_name, &outcome);
+            if remove_item {
+                chat_view.session_selector_remove_item(&pending.session_id);
+                tracing::info!("Deleted session: {}", pending.session_id);
+            } else {
+                tracing::error!(
+                    session_id = %pending.session_id,
+                    outcome = if unknown_outcome { "unknown" } else { "failed" },
+                    "Session deletion was not confirmed"
+                );
+            }
+            chat_view.set_status(Some(status.clone()));
+            if unknown_outcome {
+                return SessionUpdatePollOutcome::ExitAfterUnknownOutcome(status);
+            }
+            chat_view.reshow_session_selector();
+            return if session_update_completion_should_exit(pending.exit_warning_shown, remove_item)
+            {
+                SessionUpdatePollOutcome::ExitAfterSave
+            } else {
+                SessionUpdatePollOutcome::Redraw
+            };
+        }
         if chat_state.core_session_id != pending.session_id {
             if let SessionUpdateApplyOutcome::SessionUpdateFailed(error) = &outcome {
                 tracing::error!(
@@ -778,15 +823,18 @@ impl ChatMode {
             return SessionUpdatePollOutcome::Redraw;
         }
         let applied = match &pending.kind {
-            PendingSessionUpdateKind::Mode { mode_id } => {
+            PendingSessionOperationKind::Mode { mode_id } => {
                 apply_agent_mode_feedback(&mut self.agent_type, chat_state, mode_id, outcome)
             }
-            PendingSessionUpdateKind::Model {
+            PendingSessionOperationKind::Model {
                 model_id,
                 display_name,
             } => apply_model_selection_feedback(chat_state, display_name, model_id, outcome),
-            PendingSessionUpdateKind::Rename { session_name } => {
+            PendingSessionOperationKind::Rename { session_name } => {
                 apply_session_rename_feedback(chat_state, session_name, outcome)
+            }
+            PendingSessionOperationKind::Delete { .. } => {
+                unreachable!("session deletion is handled before current-session feedback")
             }
         };
         if applied {
@@ -813,7 +861,7 @@ impl ChatMode {
         if applied
             && matches!(
                 &pending.kind,
-                PendingSessionUpdateKind::Mode { mode_id } if mode_id == "HarmonyOSDev"
+                PendingSessionOperationKind::Mode { mode_id } if mode_id == "HarmonyOSDev"
             )
         {
             let deveco_home = std::env::var("DEVECO_HOME").ok();
@@ -846,7 +894,7 @@ fn session_update_unavailable_message(setting_name: &str, is_processing: bool) -
     if is_processing {
         format!("{setting_name} cannot be changed during the current turn.")
     } else {
-        "A current session update is already in progress. Please wait.".to_string()
+        "A Session operation is already in progress. Please wait.".to_string()
     }
 }
 

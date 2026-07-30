@@ -4858,6 +4858,7 @@ export function runManifestParserSelfTest({
       'ManageAgents',
     ].every((name) => runtimeIpcOperationPattern.test(`    ${name},`)) ||
     runtimeIpcOperationPattern.test('    Health,') ||
+    runtimeIpcOperationPattern.test('    DeleteSession {') ||
     runtimeIpcOperationPattern.test('    RenameSession {') ||
     runtimeIpcOperationPattern.test('    UpdateSessionMode {') ||
     runtimeIpcOperationPattern.test('    UpdateSessionModel {') ||

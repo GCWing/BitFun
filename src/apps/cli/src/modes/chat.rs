@@ -29,7 +29,7 @@ use crate::actions::{
     ActionState, ResolvedKeymap, SHARED_TUI_EMBEDDED_HANDOFF, SHARED_TUI_HELP_NOTE,
 };
 use crate::agent::context_reload_client::CliContextReloadClient;
-use crate::agent::runtime_client::{CliAgentRuntimeClient, SessionUpdateError};
+use crate::agent::runtime_client::{CliAgentRuntimeClient, SessionOperationError};
 use crate::chat_state::ChatState;
 use crate::config::CliConfig;
 use crate::ui::agent_selector::{AgentItem, AgentSelectorAction};
@@ -168,7 +168,7 @@ enum PendingMcpTask {
     },
 }
 
-enum PendingSessionUpdateKind {
+enum PendingSessionOperationKind {
     Mode {
         mode_id: String,
     },
@@ -179,14 +179,18 @@ enum PendingSessionUpdateKind {
     Rename {
         session_name: String,
     },
+    Delete {
+        session_name: String,
+    },
 }
 
-impl PendingSessionUpdateKind {
+impl PendingSessionOperationKind {
     fn name(&self) -> &'static str {
         match self {
             Self::Mode { .. } => "agent mode",
             Self::Model { .. } => "model",
             Self::Rename { .. } => "name",
+            Self::Delete { .. } => "deletion",
         }
     }
 
@@ -195,21 +199,22 @@ impl PendingSessionUpdateKind {
             Self::Mode { mode_id } => mode_id,
             Self::Model { model_id, .. } => model_id,
             Self::Rename { session_name } => session_name,
+            Self::Delete { session_name } => session_name,
         }
     }
 }
 
-struct PendingSessionUpdate {
+struct PendingSessionOperation {
     session_id: String,
-    kind: PendingSessionUpdateKind,
+    kind: PendingSessionOperationKind,
     started_at: Instant,
     slow_notice_shown: bool,
     exit_warning_shown: bool,
-    handle: tokio::task::JoinHandle<std::result::Result<(), SessionUpdateError>>,
+    handle: tokio::task::JoinHandle<std::result::Result<(), SessionOperationError>>,
 }
 
-const SESSION_UPDATE_SLOW_NOTICE: Duration = Duration::from_secs(15);
-const SHARED_TUI_CHAT_STATUS: &str = "Shared TUI preview: this view controls sessions, turns, the current Session name, current Session Agent mode, current Session model, and declarative context via /reload [skills|instructions]; model management remains Embedded, along with local extension, MCP, account-sync, and Agent/Subagent management.";
+const SESSION_OPERATION_SLOW_NOTICE: Duration = Duration::from_secs(15);
+const SHARED_TUI_CHAT_STATUS: &str = "Shared TUI preview: this view controls sessions, including deleting an idle Session, turns, the current Session name, current Session Agent mode, current Session model, and declarative context via /reload [skills|instructions]; model management remains Embedded, along with local extension, MCP, account-sync, and Agent/Subagent management.";
 
 #[derive(Default)]
 struct NonKeyEventOutcome {
@@ -248,9 +253,9 @@ pub(crate) struct ChatMode {
     pending_mcp_op: Option<PendingMcpOp>,
     /// Running MCP tasks (non-blocking, polled in main loop)
     pending_mcp_tasks: Vec<PendingMcpTask>,
-    /// One durable current-Session update in flight. The event loop remains responsive
-    /// while the runtime owner writes session metadata.
-    pending_session_update: Option<PendingSessionUpdate>,
+    /// One Session operation in flight. The event loop remains responsive while
+    /// the Runtime owner updates or deletes Session state.
+    pending_session_operation: Option<PendingSessionOperation>,
     /// One explicit native slash-menu choice waiting for its parameterized submission.
     selected_native_command_once: Option<String>,
     external_source_snapshot: Option<ExternalSourceCatalogSnapshot>,
@@ -308,7 +313,7 @@ impl ChatMode {
             initial_prompt: None,
             pending_mcp_op: None,
             pending_mcp_tasks: Vec::new(),
-            pending_session_update: None,
+            pending_session_operation: None,
             selected_native_command_once: None,
             external_source_snapshot: None,
             external_source_conflict_choices: BTreeMap::new(),

@@ -32,7 +32,7 @@ fn parse_reload_invocation(
     None
 }
 
-fn pending_session_update_blocks_runtime_action(
+fn pending_session_operation_blocks_runtime_action(
     shared_tui: bool,
     pending_for_current_session: bool,
     handler: ActionHandler,
@@ -825,16 +825,16 @@ impl ChatMode {
             return Ok(None);
         }
         let pending_for_current_session = self
-            .pending_session_update
+            .pending_session_operation
             .as_ref()
             .is_some_and(|pending| pending.session_id == chat_state.core_session_id);
-        if pending_session_update_blocks_runtime_action(
+        if pending_session_operation_blocks_runtime_action(
             self.agent.is_shared(),
             pending_for_current_session,
             action.handler,
         ) {
             chat_view.set_status(Some(format!(
-                "Waiting for the current session update to finish before using {}.",
+                "Waiting for the pending Session operation to finish before using {}.",
                 action.name
             )));
             return Ok(None);
@@ -1040,9 +1040,9 @@ impl ChatMode {
             chat_view.set_status(Some("Usage: /rename <name>".to_string()));
             return Ok(None);
         };
-        if self.pending_session_update.is_some() {
+        if self.pending_session_operation.is_some() {
             chat_view.set_status(Some(
-                "A current session update is already in progress. Please wait.".to_string(),
+                "A Session operation is already in progress. Please wait.".to_string(),
             ));
             return Ok(None);
         }
@@ -1063,9 +1063,9 @@ impl ChatMode {
                 .rename_session(&task_session_id, &task_session_name)
                 .await
         });
-        self.pending_session_update = Some(PendingSessionUpdate {
+        self.pending_session_operation = Some(PendingSessionOperation {
             session_id,
-            kind: PendingSessionUpdateKind::Rename { session_name },
+            kind: PendingSessionOperationKind::Rename { session_name },
             started_at: Instant::now(),
             slow_notice_shown: false,
             exit_warning_shown: false,
@@ -1095,12 +1095,12 @@ impl ChatMode {
             self.selected_native_command_once = None;
         }
         let pending_for_current_session = self
-            .pending_session_update
+            .pending_session_operation
             .as_ref()
             .is_some_and(|pending| pending.session_id == chat_state.core_session_id);
         if session_update_blocks_typed_submission(pending_for_current_session, trimmed) {
             chat_view.set_status(Some(
-                "Waiting for the current session update to finish before sending.".to_string(),
+                "Waiting for the pending Session operation to finish before sending.".to_string(),
             ));
             return Ok(None);
         }

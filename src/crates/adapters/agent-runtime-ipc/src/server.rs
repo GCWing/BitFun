@@ -1,3 +1,4 @@
+use crate::operation::RuntimeIpcSessionRequirement;
 use crate::{
     read_frame, serialize_frame_with_limit, write_frame_with_limit,
     write_serialized_frame_with_limit, DiscoveryRecord, DiscoveryStore, InitializeResult,
@@ -411,35 +412,23 @@ async fn run_initialized_connection(
                     continue;
                 }
 
-                if active_turn_id.is_some()
-                    && matches!(
-                        operation,
-                        RuntimeIpcOperation::SubmitTurn { .. }
-                            | RuntimeIpcOperation::RestoreSession { .. }
-                            | RuntimeIpcOperation::CreateSession { .. }
-                            | RuntimeIpcOperation::UpdateSessionMode { .. }
-                            | RuntimeIpcOperation::UpdateSessionModel { .. }
-                            | RuntimeIpcOperation::RenameSession { .. }
-                    )
-                {
+                let rules = operation.rules();
+                if active_turn_id.is_some() && rules.requires_idle {
                     send_error(
                         stream,
                         config.request_timeout,
                         Some(request_id),
                         RuntimeIpcErrorCode::SessionInUse,
-                        "finish or cancel the active turn before changing the controlled session, name, agent mode, or model",
+                        "finish or cancel the active turn before starting this session operation",
                     )
                     .await?;
                     continue;
                 }
 
                 // Serialize attachment so a newly visible Session cannot be claimed
-                // before its generated ID returns to the creating connection.
-                let _attachment_guard = if matches!(
-                    operation,
-                    RuntimeIpcOperation::CreateSession { .. }
-                        | RuntimeIpcOperation::RestoreSession { .. }
-                ) {
+                // before its generated ID returns to the creating connection, or
+                // deleted while another connection is attaching it.
+                let _attachment_guard = if rules.serializes_session_selection {
                     Some(config.attachment_gate.lock().await)
                 } else {
                     None
@@ -476,7 +465,7 @@ async fn run_initialized_connection(
                     }
                     _ => None,
                 };
-                let side_effecting = operation_has_side_effects(&operation);
+                let side_effecting = rules.side_effecting;
                 let result =
                     tokio::time::timeout(config.request_timeout, handler.execute(operation)).await;
                 let result = match result {
@@ -671,42 +660,27 @@ async fn wait_until_unavailable(availability: Option<&mut watch::Receiver<bool>>
     }
 }
 
-fn operation_has_side_effects(operation: &RuntimeIpcOperation) -> bool {
-    matches!(
-        operation,
-        RuntimeIpcOperation::CreateSession { .. }
-            | RuntimeIpcOperation::RestoreSession { .. }
-            | RuntimeIpcOperation::UpdateSessionMode { .. }
-            | RuntimeIpcOperation::UpdateSessionModel { .. }
-            | RuntimeIpcOperation::RenameSession { .. }
-            | RuntimeIpcOperation::ReloadSessionContext { .. }
-            | RuntimeIpcOperation::SubmitTurn { .. }
-            | RuntimeIpcOperation::CancelTurn { .. }
-            | RuntimeIpcOperation::RespondPermission { .. }
-            | RuntimeIpcOperation::SubmitUserAnswers { .. }
-    )
-}
-
 fn prepare_operation(
     config: &ConnectionConfig,
     connection_id: &str,
     operation: &RuntimeIpcOperation,
 ) -> Result<LeaseTransition, RuntimeIpcError> {
-    if matches!(operation, RuntimeIpcOperation::CreateSession { .. }) {
-        return Ok(LeaseTransition::Unchanged);
-    }
-
-    if let RuntimeIpcOperation::RestoreSession { request } = operation {
-        return config.leases.switch(connection_id, &request.session_id);
-    }
-
-    if operation.requires_controller() {
-        config.leases.validate(
+    let session_id = operation.session_id();
+    match operation.rules().session_requirement {
+        RuntimeIpcSessionRequirement::None => {}
+        RuntimeIpcSessionRequirement::CurrentController => config.leases.validate(
             connection_id,
-            operation
-                .session_id()
-                .expect("controller operations are session scoped"),
-        )?;
+            session_id.expect("controller operations are session scoped"),
+        )?,
+        RuntimeIpcSessionRequirement::AttachExisting => {
+            return config.leases.switch(
+                connection_id,
+                session_id.expect("attachment operations are session scoped"),
+            );
+        }
+        RuntimeIpcSessionRequirement::UncontrolledTarget => config.leases.validate_uncontrolled(
+            session_id.expect("uncontrolled-target operations are session scoped"),
+        )?,
     }
     Ok(LeaseTransition::Unchanged)
 }

@@ -112,6 +112,20 @@ impl RuntimeSessionLeases {
         }
     }
 
+    pub(crate) fn validate_uncontrolled(&self, session_id: &str) -> Result<(), RuntimeIpcError> {
+        let state = self
+            .state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if state.by_session.contains_key(session_id) {
+            return Err(error(
+                RuntimeIpcErrorCode::SessionInUse,
+                "session already has an active Shared TUI controller",
+            ));
+        }
+        Ok(())
+    }
+
     pub(crate) fn release_connection(&self, connection_id: &str) -> Option<String> {
         let mut state = self
             .state

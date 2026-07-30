@@ -254,7 +254,7 @@ impl ChatMode {
             );
             chat_view.set_agent_mode_switch_allowed(session_update_allowed(
                 chat_state.is_processing,
-                self.pending_session_update.is_some(),
+                self.pending_session_operation.is_some(),
             ));
 
             // Keep spinner animation smooth without forcing full redraw every loop.
@@ -274,7 +274,11 @@ impl ChatMode {
             if self.poll_mcp_task_completion(&mut chat_view, &mut chat_state, &rt_handle) {
                 needs_redraw = true;
             }
-            match self.poll_session_update_completion(&mut chat_view, &mut chat_state, &rt_handle) {
+            match self.poll_session_operation_completion(
+                &mut chat_view,
+                &mut chat_state,
+                &rt_handle,
+            ) {
                 SessionUpdatePollOutcome::NoChange => {}
                 SessionUpdatePollOutcome::Redraw => needs_redraw = true,
                 SessionUpdatePollOutcome::ExitAfterSave => {
