@@ -198,6 +198,48 @@ pub async fn install_cli_cancel(
     dispatch_ssh::install_cli_cancel(manager, request.connection_id.trim()).await
 }
 
+/// Copy this controller's model configuration (catalog, credentials, and
+/// default-model selections) onto the SSH target so its CLI can resolve a
+/// ready model. Explicit, credential-bearing operation: the UI must confirm
+/// before calling it, mirroring CLI installation.
+pub async fn sync_model_config(
+    manager: &SSHConnectionManager,
+    request: DispatchConnectionRequest,
+) -> anyhow::Result<()> {
+    crate::service::config::initialize_global_config()
+        .await
+        .map_err(|error| anyhow::anyhow!("initialize controller configuration: {error}"))?;
+    let config_service = crate::service::config::get_global_config_service()
+        .await
+        .map_err(|error| anyhow::anyhow!("read controller configuration: {error}"))?;
+    let config: crate::service::config::GlobalConfig = config_service
+        .get_config(None)
+        .await
+        .map_err(|error| anyhow::anyhow!("load controller configuration: {error}"))?;
+    if !config.ai.models.iter().any(|model| model.enabled) {
+        anyhow::bail!("no enabled AI model is configured on this device to sync");
+    }
+    let ai = serde_json::to_value(&config.ai)
+        .map_err(|error| anyhow::anyhow!("encode controller model configuration: {error}"))?;
+    let mut payload = serde_json::Map::new();
+    for key in [
+        "models",
+        "default_models",
+        "agent_model_defaults",
+        "func_agent_models",
+    ] {
+        if let Some(value) = ai.get(key) {
+            payload.insert(key.to_string(), value.clone());
+        }
+    }
+    dispatch_ssh::sync_model_config(
+        manager,
+        request.connection_id.trim(),
+        &Value::Object(payload),
+    )
+    .await
+}
+
 pub async fn submit(
     manager: &SSHConnectionManager,
     store: &OutboundDispatchStore,

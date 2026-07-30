@@ -10,7 +10,8 @@ use bitfun_core::external_sources::{
 use bitfun_core::service::dispatch::{
     answer_dispatch, append_dispatch, cancel_dispatch, cancel_dispatch_cli_install,
     get_dispatch_status, list_dispatch_jobs, list_dispatch_targets, poll_dispatch_cli_install,
-    probe_dispatch_target, start_dispatch_cli_install, submit_dispatch, DispatchAnswerRequest,
+    probe_dispatch_target, start_dispatch_cli_install, submit_dispatch,
+    sync_dispatch_model_config, DispatchAnswerRequest,
     DispatchAppendRequest, DispatchConnectionRequest, DispatchInstallPollRequest,
     DispatchInstallStartRequest, DispatchJobRequest, DispatchListJobsRequest,
     DispatchListTargetsRequest, DispatchProbeTargetRequest, DispatchStatusRequest,
@@ -28,6 +29,7 @@ pub(crate) fn supports(method: &str) -> bool {
             | "dispatch_install_cli_start"
             | "dispatch_install_cli_poll"
             | "dispatch_install_cli_cancel"
+            | "dispatch_sync_model_config"
             | "dispatch_submit"
             | "dispatch_status"
             | "dispatch_cancel"
@@ -86,6 +88,13 @@ pub(crate) async fn dispatch(
         "dispatch_install_cli_cancel" => {
             let request = parse_request::<DispatchConnectionRequest>(&params)?;
             cancel_dispatch_cli_install(&host.ssh_manager, request)
+                .await
+                .map_err(operation_error)?;
+            Ok(serde_json::Value::Null)
+        }
+        "dispatch_sync_model_config" => {
+            let request = parse_request::<DispatchConnectionRequest>(&params)?;
+            sync_dispatch_model_config(&host.ssh_manager, request)
                 .await
                 .map_err(operation_error)?;
             Ok(serde_json::Value::Null)
@@ -179,6 +188,7 @@ mod tests {
             "dispatch_install_cli_start",
             "dispatch_install_cli_poll",
             "dispatch_install_cli_cancel",
+            "dispatch_sync_model_config",
             "dispatch_submit",
             "dispatch_status",
             "dispatch_cancel",

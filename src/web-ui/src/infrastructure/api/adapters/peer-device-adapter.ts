@@ -64,6 +64,7 @@ const LOCAL_ONLY_COMMANDS = new Set([
   'dispatch_install_cli_start',
   'dispatch_install_cli_poll',
   'dispatch_install_cli_cancel',
+  'dispatch_sync_model_config',
   'dispatch_submit',
   'dispatch_status',
   'dispatch_cancel',

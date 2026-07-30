@@ -14,6 +14,7 @@ use bitfun_core::service::dispatch::{
     get_device_dispatch_status, get_dispatch_status, list_device_dispatch_jobs, list_dispatch_jobs,
     list_dispatch_targets, poll_dispatch_cli_install, probe_device_dispatch_target,
     probe_dispatch_target, start_dispatch_cli_install, submit_device_dispatch, submit_dispatch,
+    sync_dispatch_model_config,
     DeviceDispatchRpc, DispatchAnswerRequest, DispatchAppendRequest, DispatchConnectionRequest,
     DispatchInstallPollRequest, DispatchInstallStartRequest, DispatchJobRequest,
     DispatchListJobsRequest, DispatchListTargetsRequest, DispatchProbeTargetRequest,
@@ -168,6 +169,20 @@ pub async fn dispatch_install_cli_cancel(
         .await
         .map_err(|error| error.to_string())?;
     cancel_dispatch_cli_install(&manager, request)
+        .await
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn dispatch_sync_model_config(
+    state: State<'_, AppState>,
+    request: DispatchConnectionRequest,
+) -> Result<(), String> {
+    let manager = state
+        .get_ssh_manager_async()
+        .await
+        .map_err(|error| error.to_string())?;
+    sync_dispatch_model_config(&manager, request)
         .await
         .map_err(|error| error.to_string())
 }

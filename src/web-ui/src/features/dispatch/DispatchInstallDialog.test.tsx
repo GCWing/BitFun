@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   installCliStart: vi.fn(),
   installCliPoll: vi.fn(),
   installCliCancel: vi.fn(),
+  syncModelConfig: vi.fn(),
   confirmWarning: vi.fn(),
   modalOnClose: null as (() => void) | null,
   modalLifecycleProps: null as {
@@ -27,6 +28,7 @@ vi.mock('./dispatchApi', () => ({
     installCliStart: mocks.installCliStart,
     installCliPoll: mocks.installCliPoll,
     installCliCancel: mocks.installCliCancel,
+    syncModelConfig: mocks.syncModelConfig,
   },
 }));
 
@@ -268,5 +270,143 @@ describe('DispatchInstallDialog installation lifecycle', () => {
     });
     expect(mocks.installCliPoll).toHaveBeenCalledTimes(1);
     expect(mocks.installCliCancel).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('DispatchInstallDialog model configuration sync', () => {
+  let container: HTMLDivElement;
+  let root: Root;
+  let modelConfigured: boolean;
+
+  const target = {
+    kind: 'ssh' as const,
+    connectionId: 'ssh-1',
+    displayName: 'build-host',
+  };
+
+  function probeResult() {
+    return {
+      cliInstalled: true,
+      os: 'linux',
+      arch: 'x86_64',
+      installSupported: true,
+      protocol: {
+        protocolVersion: 2,
+        cliVersion: '1.2.3',
+        os: 'linux',
+        arch: 'x86_64',
+        capabilities: [
+          'persistent_jobs',
+          'cursor_events',
+          'detached_worker',
+          'frontend_event_projection',
+          'workspace_serialization',
+        ],
+        modelConfigured,
+        availableModels: modelConfigured ? ['claude'] : [],
+        defaultModel: modelConfigured ? 'claude' : undefined,
+      },
+    };
+  }
+
+  function syncButton() {
+    return Array.from(container.querySelectorAll('button'))
+      .find(button => button.textContent?.includes('dispatch.syncModelConfirm'));
+  }
+
+  async function mount() {
+    await act(async () => {
+      root.render(
+        <DispatchInstallDialog
+          open
+          target={target}
+          onClose={vi.fn()}
+          onReady={vi.fn()}
+        />,
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    modelConfigured = false;
+    mocks.modalOnClose = null;
+    mocks.probeTarget.mockImplementation(async () => probeResult());
+    mocks.confirmWarning.mockResolvedValue(true);
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+  });
+
+  afterEach(() => {
+    act(() => root.unmount());
+    container.remove();
+  });
+
+  it('offers the sync only while the target CLI answers without a usable model', async () => {
+    await mount();
+    expect(syncButton()).toBeDefined();
+
+    mocks.syncModelConfig.mockImplementation(async () => {
+      modelConfigured = true;
+    });
+    const probesBeforeSync = mocks.probeTarget.mock.calls.length;
+
+    await act(async () => {
+      syncButton()?.click();
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(mocks.confirmWarning).toHaveBeenCalledTimes(1);
+    expect(mocks.syncModelConfig).toHaveBeenCalledWith('ssh-1');
+    // The sync re-probes so the model check reflects the target, not the write.
+    expect(mocks.probeTarget.mock.calls.length).toBeGreaterThan(probesBeforeSync);
+    expect(syncButton()).toBeUndefined();
+  });
+
+  it('does not write the credential-bearing config when the confirmation is declined', async () => {
+    await mount();
+    mocks.confirmWarning.mockResolvedValue(false);
+
+    await act(async () => {
+      syncButton()?.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(mocks.syncModelConfig).not.toHaveBeenCalled();
+    expect(syncButton()).toBeDefined();
+  });
+
+  it('discards a late sync acknowledgement after the dialog closes', async () => {
+    const sync = createDeferred<void>();
+    mocks.syncModelConfig.mockReturnValue(sync.promise);
+    await mount();
+
+    await act(async () => {
+      syncButton()?.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(mocks.syncModelConfig).toHaveBeenCalledTimes(1);
+    const probesBeforeClose = mocks.probeTarget.mock.calls.length;
+
+    await act(async () => {
+      mocks.modalOnClose?.();
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      modelConfigured = true;
+      sync.resolve(undefined);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(mocks.probeTarget.mock.calls.length).toBe(probesBeforeClose);
   });
 });

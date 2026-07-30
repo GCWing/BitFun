@@ -822,14 +822,22 @@ async fn download_text(client: &Client, url: &str) -> Result<String> {
 /// Ed25519 (minisign) public key for official release archives, injected at
 /// build time from the same `TAURI_UPDATER_PUBKEY` the Desktop updater trusts.
 ///
-/// Absent in local and fork builds; those fall back to checksum-only, which is
-/// why `signature_required` gates on it rather than assuming.
+/// Forks that publish their own releases override this with their own key.
 const RELEASE_PUBKEY: Option<&str> = option_env!("BITFUN_RELEASE_PUBKEY");
 
-/// The trust root this binary was built with, if any. `Some` means an official
-/// release build, and signature verification is then mandatory.
+/// The official BitFun release public key (minisign key ID `50F47CBE6CC0A376`),
+/// base64-wrapped the way Tauri wraps `minisign.pub`. Public data — each
+/// release ships it as the `minisign.pub` asset — and the update source above
+/// is pinned to the official repository, so local and fork builds verifying
+/// against it is strictly stronger than their old checksum-only fallback.
+const OFFICIAL_RELEASE_PUBKEY: &str = "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDUwRjQ3Q0JFNkNDMEEzNzYKUldSMm84QnN2bnowVU9CYzNOb1RWVzA2d2RpR003cExQM0xwaUw0QTNTcDRueGtCc1dsSlJUeG4K";
+
+/// The trust root for release archives. Always present, so signature
+/// verification is mandatory on every update path.
 fn release_pubkey() -> Option<&'static str> {
-    RELEASE_PUBKEY.filter(|key| !key.trim().is_empty())
+    RELEASE_PUBKEY
+        .filter(|key| !key.trim().is_empty())
+        .or(Some(OFFICIAL_RELEASE_PUBKEY))
 }
 
 /// Verify a Tauri-format `.sig` (base64 of a minisign signature file) over the

@@ -49,6 +49,12 @@ export const dispatchApi = {
     });
   },
 
+  async syncModelConfig(connectionId: string): Promise<void> {
+    return api.invoke<void>('dispatch_sync_model_config', {
+      request: { connectionId },
+    });
+  },
+
   async submit(request: {
     target: DispatchTargetRequest;
     workspaceDelivery: DispatchWorkspaceDeliveryRequest;

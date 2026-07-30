@@ -1802,7 +1802,7 @@ mod tests {
         install_docker_body_script, interactive_driver_script, parse_preflight,
         prepare_helpers_bash, release_binary_deploy_bash, release_tag_for_version,
         split_poll_stdout, stage_scripts_command, sync_source_bash, to_unix_script,
-        verified_checksum_exports, verified_release_checksums, verify_minisign, DockerAccessMode,
+        verified_checksum_exports, verify_minisign, DockerAccessMode,
         RelayTaskStatus, RELAY_MIRROR_SH, RELAY_RELEASE_DOWNLOAD_SH, RELEASE_PUBKEY,
     };
 
@@ -2254,12 +2254,13 @@ sh -c "$(bitfun_shell_join printf '%s\n' 'a b' "it's" '{{{{.State.Running}}}}' '
         assert!(script.contains("BITFUN_EXPECTED_SHA256_AARCH64_UNKNOWN_LINUX_GNU"));
     }
 
-    /// Without a trust root there is nothing to verify against, so no hash may
-    /// be asserted to the remote.
-    #[tokio::test]
-    async fn unsigned_builds_supply_no_checksums() {
+    /// The official key is embedded as the default trust root, so even keyless
+    /// development builds can verify published checksums before asserting a
+    /// hash to the remote.
+    #[test]
+    fn builds_always_carry_a_release_trust_root() {
         assert!(RELEASE_PUBKEY.is_none() || RELEASE_PUBKEY == Some(""));
-        assert!(verified_release_checksums("v0.0.0").await.is_empty());
+        assert!(super::release_pubkey().is_some());
     }
 
     #[cfg(unix)]

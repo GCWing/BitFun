@@ -7,8 +7,9 @@
 //!
 //! Installing the CLI is a separate, explicit operation. `probe` never installs
 //! anything; `install_cli_start` downloads an official archive locally, verifies
-//! both its signed SHA256 sidecar and archive minisign signature, then stages it
-//! under the SSH user's home before starting an owner-only installer.
+//! its SHA256 sidecar (signed, when the release ships `.sha256.sig`) and the
+//! mandatory archive minisign signature, then stages it under the SSH user's
+//! home before starting an owner-only installer.
 
 use anyhow::{anyhow, Context, Result};
 use serde::{Deserialize, Serialize};
@@ -17,7 +18,7 @@ use std::time::Duration;
 
 use super::manager::SSHConnectionManager;
 use super::release_verify::{
-    release_tag_for_version, require_release_pubkey, verify_minisign, verify_sha256,
+    parse_sha256, release_tag_for_version, require_release_pubkey, verify_minisign, verify_sha256,
     verify_signed_checksum,
 };
 use super::remote_git::shell_quote_posix;
@@ -479,6 +480,187 @@ pub async fn install_cli_cancel(manager: &SSHConnectionManager, connection_id: &
     Ok(())
 }
 
+/// Keys of the `ai` config section that make up "model configuration": the
+/// model catalog (credentials included) plus every default-selection table the
+/// target consults when resolving a ready model.
+const MODEL_CONFIG_KEYS: [&str; 4] = [
+    "models",
+    "default_models",
+    "agent_model_defaults",
+    "func_agent_models",
+];
+
+/// Write the controller's model configuration into the target's global config
+/// so `bitfun dispatch probe` can report a ready model.
+///
+/// `ai_model_config` is the snake_case `ai` slice restricted to
+/// [`MODEL_CONFIG_KEYS`], exactly as `app.json` stores it. Everything else in
+/// an existing target `app.json` is preserved; a target file that exists but
+/// cannot be read or parsed aborts the sync instead of being overwritten. The
+/// write is atomic (temp file + rename) and owner-only, because model entries
+/// carry API credentials.
+pub async fn sync_model_config(
+    manager: &SSHConnectionManager,
+    connection_id: &str,
+    ai_model_config: &Value,
+) -> Result<()> {
+    let payload = validate_model_config_payload(ai_model_config)?;
+    ensure_plain_ssh_target(manager, connection_id).await?;
+
+    let locate = exec_lines(manager, connection_id, locate_target_config_script()).await?;
+    let get = |key: &str| {
+        locate
+            .lines()
+            .find_map(|line| {
+                line.strip_prefix(key)
+                    .and_then(|rest| rest.strip_prefix('='))
+            })
+            .unwrap_or("")
+            .trim()
+            .to_string()
+    };
+    if get("os") == "unsupported" {
+        return Err(anyhow!(
+            "model configuration sync supports only Linux and macOS SSH targets"
+        ));
+    }
+    let config_dir = get("dir");
+    if config_dir.is_empty() {
+        return Err(anyhow!("could not resolve the target BitFun config directory"));
+    }
+    let config_path = format!("{config_dir}/app.json");
+
+    let existing = if get("config") == "1" {
+        let bytes = manager
+            .sftp_read(connection_id, &config_path)
+            .await
+            .context("read existing target app.json; refusing to overwrite it blindly")?;
+        Some(String::from_utf8(bytes).context("target app.json is not UTF-8")?)
+    } else {
+        None
+    };
+    let merged = merge_model_config(existing.as_deref(), payload)?;
+
+    exec_ok(
+        manager,
+        connection_id,
+        &format!(
+            "mkdir -p {dir} && chmod 700 \"$(dirname {dir})\" {dir}",
+            dir = shell_quote_posix(&config_dir),
+        ),
+    )
+    .await?;
+    let staging_path = format!("{config_path}.bitfun-sync.tmp");
+    manager
+        .sftp_write(connection_id, &staging_path, merged.as_bytes())
+        .await
+        .context("stage merged target app.json")?;
+    exec_ok(
+        manager,
+        connection_id,
+        &format!(
+            "chmod 600 {staged} && mv -f {staged} {config}",
+            staged = shell_quote_posix(&staging_path),
+            config = shell_quote_posix(&config_path),
+        ),
+    )
+    .await
+}
+
+fn validate_model_config_payload(
+    ai_model_config: &Value,
+) -> Result<&serde_json::Map<String, Value>> {
+    let payload = ai_model_config
+        .as_object()
+        .ok_or_else(|| anyhow!("model configuration payload must be a JSON object"))?;
+    if let Some(unexpected) = payload
+        .keys()
+        .find(|key| !MODEL_CONFIG_KEYS.contains(&key.as_str()))
+    {
+        return Err(anyhow!(
+            "model configuration payload has unexpected key '{unexpected}'"
+        ));
+    }
+    if payload
+        .get("models")
+        .and_then(Value::as_array).is_none_or(|models| models.is_empty())
+    {
+        return Err(anyhow!(
+            "the controller has no configured AI models to sync"
+        ));
+    }
+    Ok(payload)
+}
+
+/// Graft the model-configuration keys onto an existing target config document,
+/// leaving every other setting untouched.
+fn merge_model_config(
+    existing: Option<&str>,
+    payload: &serde_json::Map<String, Value>,
+) -> Result<String> {
+    let mut root = match existing.map(str::trim).filter(|text| !text.is_empty()) {
+        Some(text) => serde_json::from_str::<Value>(text)
+            .context("target app.json exists but is not valid JSON; refusing to overwrite it")?,
+        None => Value::Object(serde_json::Map::new()),
+    };
+    let root_map = root
+        .as_object_mut()
+        .ok_or_else(|| anyhow!("target app.json is not a JSON object; refusing to overwrite it"))?;
+    let ai = root_map
+        .entry("ai")
+        .or_insert_with(|| Value::Object(serde_json::Map::new()));
+    let ai_map = ai.as_object_mut().ok_or_else(|| {
+        anyhow!("target app.json has a non-object `ai` section; refusing to overwrite it")
+    })?;
+    for (key, value) in payload {
+        ai_map.insert(key.clone(), value.clone());
+    }
+    serde_json::to_string_pretty(&root).context("encode merged target app.json")
+}
+
+/// Where the target CLI reads its global config from, mirroring the
+/// `dirs::config_dir()` resolution inside the CLI itself.
+fn locate_target_config_script() -> &'static str {
+    r#"
+LC_ALL=C
+case "$(uname -s 2>/dev/null)" in
+  Darwin) CONFIG_DIR="$HOME/Library/Application Support/bitfun/config" ;;
+  Linux) CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/bitfun/config" ;;
+  *) printf 'os=unsupported\n'; exit 0 ;;
+esac
+printf 'os=supported\n'
+printf 'dir=%s\n' "$CONFIG_DIR"
+if [ -f "$CONFIG_DIR/app.json" ]; then printf 'config=1\n'; else printf 'config=0\n'; fi
+"#
+}
+
+async fn exec_lines(
+    manager: &SSHConnectionManager,
+    connection_id: &str,
+    script: &str,
+) -> Result<String> {
+    let result = manager
+        .execute_command_with_options(
+            connection_id,
+            script,
+            SSHCommandOptions {
+                timeout_ms: Some(COMMAND_TIMEOUT_MS),
+                cancellation_token: None,
+            },
+        )
+        .await?;
+    ensure_command_completed(&result, "inspect SSH dispatch target")?;
+    if result.exit_code != 0 {
+        return Err(remote_command_error(
+            "inspect SSH dispatch target",
+            result.exit_code,
+            &result.stdout,
+            &result.stderr,
+        ));
+    }
+    Ok(result.stdout)
+}
+
 pub async fn submit(
     manager: &SSHConnectionManager,
     connection_id: &str,
@@ -892,8 +1074,14 @@ async fn resolve_release(os: &str, arch: &str) -> Result<ResolvedRelease> {
     let archive_signature_url = format!("{url}.sig");
     let client = release_http_client()?;
     let checksum = fetch_required_text(&client, &checksum_url).await?;
-    let signature = fetch_required_text(&client, &checksum_signature_url).await?;
-    let sha256 = verify_signed_checksum(&checksum, &signature, pubkey, &filename)?;
+    let sha256 = match fetch_optional_text(&client, &checksum_signature_url).await? {
+        Some(signature) => verify_signed_checksum(&checksum, &signature, pubkey, &filename)?,
+        // Releases published before the CLI checksum sidecars were signed have
+        // no `.sha256.sig`. The digest shown for consent is then provisional;
+        // install still verifies the archive's own minisign signature before
+        // staging anything, so a tampered sidecar can only fail the install.
+        None => parse_sha256(&checksum, &filename)?,
+    };
 
     Ok(ResolvedRelease {
         public: DispatchCliRelease {
@@ -945,6 +1133,27 @@ async fn fetch_required_text(client: &reqwest::Client, url: &str) -> Result<Stri
         .with_context(|| format!("read {url}"))
 }
 
+/// Fetch a release sidecar that older releases legitimately do not have.
+/// Only a definite 404 maps to `None`; any other failure stays an error so a
+/// flaky network cannot silently downgrade verification.
+async fn fetch_optional_text(client: &reqwest::Client, url: &str) -> Result<Option<String>> {
+    let response = client
+        .get(url)
+        .send()
+        .await
+        .with_context(|| format!("request {url}"))?;
+    if response.status() == reqwest::StatusCode::NOT_FOUND {
+        return Ok(None);
+    }
+    let text = response
+        .error_for_status()
+        .with_context(|| format!("download {url}"))?
+        .text()
+        .await
+        .with_context(|| format!("read {url}"))?;
+    Ok(Some(text))
+}
+
 async fn download_verified_archive(release: &ResolvedRelease) -> Result<Vec<u8>> {
     let pubkey = require_release_pubkey()?;
     let client = release_http_client()?;
@@ -952,9 +1161,14 @@ async fn download_verified_archive(release: &ResolvedRelease) -> Result<Vec<u8>>
     // Re-fetch and verify the signed sidecar at install time instead of trusting
     // a possibly stale preflight result.
     let checksum = fetch_required_text(&client, &release.checksum_url).await?;
-    let checksum_signature = fetch_required_text(&client, &release.checksum_signature_url).await?;
-    let expected =
-        verify_signed_checksum(&checksum, &checksum_signature, pubkey, &release.filename)?;
+    let expected = match fetch_optional_text(&client, &release.checksum_signature_url).await? {
+        Some(signature) => {
+            verify_signed_checksum(&checksum, &signature, pubkey, &release.filename)?
+        }
+        // No `.sha256.sig` on this release: the confirmed digest and the
+        // mandatory archive minisign check below carry the verification.
+        None => parse_sha256(&checksum, &release.filename)?,
+    };
     if !expected.eq_ignore_ascii_case(&release.public.sha256) {
         return Err(anyhow!(
             "release checksum changed after preflight; refusing to install"
@@ -1734,6 +1948,47 @@ mod tests {
             vec![1, 2, 3, 4],
             "the over-limit chunk must never be buffered"
         );
+    }
+
+    #[test]
+    fn model_config_sync_merges_only_the_ai_keys() {
+        let payload = serde_json::json!({
+            "models": [{"id": "m1", "enabled": true}],
+            "default_models": {"primary": "m1"},
+        });
+        let payload = validate_model_config_payload(&payload).expect("valid payload");
+
+        // Fresh target: a minimal document containing only the ai section.
+        let fresh: Value =
+            serde_json::from_str(&merge_model_config(None, payload).unwrap()).unwrap();
+        assert_eq!(fresh["ai"]["models"][0]["id"], "m1");
+
+        // Existing target: everything outside the synced keys is preserved.
+        let existing = r#"{
+            "editor": {"font_size": 11},
+            "ai": {"models": [], "max_rounds": 7}
+        }"#;
+        let merged: Value =
+            serde_json::from_str(&merge_model_config(Some(existing), payload).unwrap()).unwrap();
+        assert_eq!(merged["editor"]["font_size"], 11);
+        assert_eq!(merged["ai"]["max_rounds"], 7);
+        assert_eq!(merged["ai"]["models"][0]["id"], "m1");
+        assert_eq!(merged["ai"]["default_models"]["primary"], "m1");
+
+        // A corrupt target config aborts instead of being replaced.
+        assert!(merge_model_config(Some("not json"), payload).is_err());
+        assert!(merge_model_config(Some("[]"), payload).is_err());
+    }
+
+    #[test]
+    fn model_config_payload_rejects_unknown_keys_and_empty_catalogs() {
+        assert!(validate_model_config_payload(&serde_json::json!({
+            "models": [{"id": "m1"}],
+            "tool_permissions": {}
+        }))
+        .is_err());
+        assert!(validate_model_config_payload(&serde_json::json!({ "models": [] })).is_err());
+        assert!(validate_model_config_payload(&serde_json::json!("models")).is_err());
     }
 
     #[test]

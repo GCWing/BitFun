@@ -10,12 +10,23 @@ use sha2::{Digest, Sha256};
 /// Ed25519 (minisign) public key injected into official builds from the same
 /// `TAURI_UPDATER_PUBKEY` used by the Desktop and CLI updaters.
 ///
-/// Fork and development builds normally have no key. Callers that install
-/// executable code must use [`require_release_pubkey`] and fail closed.
+/// Forks that publish their own releases set this at build time to their own
+/// key. When absent, [`OFFICIAL_RELEASE_PUBKEY`] applies.
 pub(crate) const RELEASE_PUBKEY: Option<&str> = option_env!("BITFUN_RELEASE_PUBKEY");
 
+/// The official BitFun release public key (minisign key ID `50F47CBE6CC0A376`),
+/// base64-wrapped the way Tauri wraps `minisign.pub`. This is public data —
+/// every release publishes it as the `minisign.pub` asset — so compiling it in
+/// lets development builds verify and install official releases instead of
+/// failing closed with no trust root. Downloads still come only from the
+/// pinned official repository, so trusting the matching official key here does
+/// not widen what a build will execute.
+pub(crate) const OFFICIAL_RELEASE_PUBKEY: &str = "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDUwRjQ3Q0JFNkNDMEEzNzYKUldSMm84QnN2bnowVU9CYzNOb1RWVzA2d2RpR003cExQM0xwaUw0QTNTcDRueGtCc1dsSlJUeG4K";
+
 pub(crate) fn release_pubkey() -> Option<&'static str> {
-    RELEASE_PUBKEY.filter(|key| !key.trim().is_empty())
+    RELEASE_PUBKEY
+        .filter(|key| !key.trim().is_empty())
+        .or(Some(OFFICIAL_RELEASE_PUBKEY))
 }
 
 pub(crate) fn require_release_pubkey() -> Result<&'static str> {
@@ -100,6 +111,18 @@ mod tests {
     const FIXTURE_PUBKEY: &str = "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXkgRTNFMDg3NENFQzFDMjJDMwpSV1RESWh6c1RJZmc0MXcyR3dpZWkwek5ES2FMWW05ZFFWcEVXTlEvVWxweXQybWJTMkpFMVUyTQo=";
     const FIXTURE_SIGNATURE: &str = "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIG1pbmlzaWduIHNlY3JldCBrZXkKUlVUREloenNUSWZnNDBMTitwb25aT3RCVy9VYmJtNWhkR1poM0lCb3IwUDBKaVZmZmM1cFJaNlZSNUpaSzNUUm1yWWpYMXFLQ2svWTdZUDhHdkRZT3YvanVoZlpnZmhyWEFRPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg0OTUxOTM1CWZpbGU6YXJjaGl2ZS50YXIuZ3oJaGFzaGVkCjhWL21EUVAwZGdlZXVNU1lxWlpsOWdFSGUwOTJQTk9yRG1BMUV6ZHNQOUlEYkcyT1dneTFsQ1puUDBJaFIwQnJpMFBCeENRcUdDR2dpb0l0UGtSMUN3PT0K";
     const FIXTURE_DATA: &[u8] = b"hello-bitfun\n";
+
+    #[test]
+    fn embedded_trust_root_is_always_available_and_well_formed() {
+        use base64::Engine as _;
+
+        let pubkey = require_release_pubkey().expect("every build carries a trust root");
+        let decoded = base64::engine::general_purpose::STANDARD
+            .decode(pubkey.trim().as_bytes())
+            .expect("trust root is base64");
+        let text = String::from_utf8(decoded).expect("trust root decodes as UTF-8");
+        minisign_verify::PublicKey::decode(&text).expect("trust root is a minisign public key");
+    }
 
     #[test]
     fn minisign_wire_format_accepts_authentic_data_and_rejects_tampering() {

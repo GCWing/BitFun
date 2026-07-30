@@ -76,6 +76,7 @@ export const DispatchInstallDialog: React.FC<DispatchInstallDialogProps> = ({
   const [probedWorkspaceInput, setProbedWorkspaceInput] = useState<string | null>(null);
   const [probing, setProbing] = useState(false);
   const [installing, setInstalling] = useState(false);
+  const [syncingModel, setSyncingModel] = useState(false);
   const [installStart, setInstallStart] = useState<DispatchInstallStart | null>(null);
   const [installOutput, setInstallOutput] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -133,6 +134,7 @@ export const DispatchInstallDialog: React.FC<DispatchInstallDialogProps> = ({
     setInstallStart(null);
     setInstallOutput('');
     setInstalling(false);
+    setSyncingModel(false);
     setError(null);
     void runProbe(initialPath);
   }, [open, runProbe, target?.defaultWorkspace, targetId]);
@@ -263,9 +265,39 @@ export const DispatchInstallDialog: React.FC<DispatchInstallDialogProps> = ({
     }
   }, [clearActiveInstall, connectionId, pollInstallation, probe?.release, t]);
 
+  const syncModelConfiguration = useCallback(async () => {
+    if (!connectionId) return;
+    const generation = generationRef.current;
+    const confirmed = await confirmWarning(
+      t('dispatch.syncModelConfirmTitle'),
+      t('dispatch.syncModelConfirmMessage'),
+      {
+        confirmText: t('dispatch.syncModelConfirm'),
+        cancelText: t('dispatch.cancel'),
+      },
+    );
+    if (!confirmed || generation !== generationRef.current) return;
+    setSyncingModel(true);
+    setError(null);
+    try {
+      await dispatchApi.syncModelConfig(connectionId);
+    } catch (nextError) {
+      if (generation === generationRef.current) {
+        setSyncingModel(false);
+        setError(errorMessage(nextError));
+      }
+      return;
+    }
+    if (generation !== generationRef.current) return;
+    // runProbe advances the generation, so leave the syncing state first.
+    setSyncingModel(false);
+    await runProbe();
+  }, [connectionId, runProbe, t]);
+
   const close = useCallback(() => {
     invalidateInstallLifecycle();
     setInstalling(false);
+    setSyncingModel(false);
     onClose();
   }, [invalidateInstallLifecycle, onClose]);
 
@@ -512,6 +544,24 @@ export const DispatchInstallDialog: React.FC<DispatchInstallDialogProps> = ({
 
         {probe?.installError ? (
           <Alert type="warning" message={probe.installError} />
+        ) : null}
+
+        {target?.kind === 'ssh' && probe?.protocol && !modelReady ? (
+          <div className="dispatch-install-dialog__install-card">
+            <div>
+              <strong>{t('dispatch.syncModelRequired')}</strong>
+              <span>{t('dispatch.syncModelDescription')}</span>
+            </div>
+            <Button
+              variant="primary"
+              size="small"
+              disabled={installing || syncingModel || probing}
+              onClick={() => void syncModelConfiguration()}
+            >
+              {syncingModel ? <Loader2 size={14} className="dispatch-install-dialog__spin" /> : null}
+              {syncingModel ? t('dispatch.syncingModel') : t('dispatch.syncModelConfirm')}
+            </Button>
+          </div>
         ) : null}
 
         {installStart || installOutput ? (

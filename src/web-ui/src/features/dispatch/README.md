@@ -47,3 +47,8 @@ dispatch.
 17. Listing jobs for an explicitly selected target adopts only outbound
     observer routing records. It never restores the target session into the
     controller's backend store or acquires local runtime ownership.
+18. Model configuration sync is a separate, explicit, credential-bearing
+    operation with its own confirmation. It merges only the `ai` model keys
+    into the target's `app.json`, preserves every other target setting, aborts
+    rather than overwrite an unreadable or unparseable target config, and
+    writes owner-only via a temp-file rename.
