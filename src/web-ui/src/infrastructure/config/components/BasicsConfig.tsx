@@ -338,7 +338,6 @@ function BasicsLoggingSection() {
   const { t } = useTranslation('settings/basics');
   const [configLevel, setConfigLevel] = useState<BackendLogLevel>('info');
   const [includeSensitiveDiagnostics, setIncludeSensitiveDiagnostics] = useState(true);
-  const [flowChatDiagnostics, setFlowChatDiagnostics] = useState(false);
   const [runtimeInfo, setRuntimeInfo] = useState<RuntimeLoggingInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -367,16 +366,14 @@ function BasicsLoggingSection() {
     try {
       setLoading(true);
 
-      const [savedLevel, savedIncludeSensitiveDiagnostics, savedFlowChatDiagnostics, info] = await Promise.all([
+      const [savedLevel, savedIncludeSensitiveDiagnostics, info] = await Promise.all([
         configManager.getConfig<BackendLogLevel>('app.logging.level'),
         configManager.getConfig<boolean>('app.logging.include_sensitive_diagnostics'),
-        configManager.getConfig<boolean>('app.logging.flow_chat_diagnostics'),
         configAPI.getRuntimeLoggingInfo(),
       ]);
 
       setConfigLevel(savedLevel || info.effectiveLevel || 'info');
       setIncludeSensitiveDiagnostics(savedIncludeSensitiveDiagnostics ?? true);
-      setFlowChatDiagnostics(savedFlowChatDiagnostics ?? false);
       setRuntimeInfo(info);
     } catch (error) {
       log.error('Failed to load logging config', error);
@@ -434,27 +431,6 @@ function BasicsLoggingSection() {
       }
     },
     [includeSensitiveDiagnostics, showMessage, t]
-  );
-
-  const handleFlowChatDiagnosticsChange = useCallback(
-    async (checked: boolean) => {
-      const previousValue = flowChatDiagnostics;
-      setFlowChatDiagnostics(checked);
-      setSaving(true);
-
-      try {
-        await configManager.setConfig('app.logging.flow_chat_diagnostics', checked);
-        configManager.clearCache();
-        showMessage('success', t('logging.messages.flowChatDiagnosticsUpdated'));
-      } catch (error) {
-        setFlowChatDiagnostics(previousValue);
-        log.error('Failed to update Flow Chat diagnostics preference', { checked, error });
-        showMessage('error', t('logging.messages.saveFailed'));
-      } finally {
-        setSaving(false);
-      }
-    },
-    [flowChatDiagnostics, showMessage, t]
   );
 
   const handleOpenFolder = useCallback(async () => {
@@ -541,19 +517,6 @@ function BasicsLoggingSection() {
               checked={includeSensitiveDiagnostics}
               onChange={(e) => {
                 void handleSensitiveDiagnosticsChange(e.target.checked);
-              }}
-              disabled={saving}
-            />
-          </ConfigPageRow>
-          <ConfigPageRow
-            label={t('logging.flowChatDiagnostics.label')}
-            description={t('logging.flowChatDiagnostics.description')}
-            align="center"
-          >
-            <Switch
-              checked={flowChatDiagnostics}
-              onChange={(e) => {
-                void handleFlowChatDiagnosticsChange(e.target.checked);
               }}
               disabled={saving}
             />
