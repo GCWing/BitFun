@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>LoopX Console</title>
+  <title>Issue Autofix</title>
 </head>
 <body>
   <div class="app-shell">
@@ -18,15 +18,30 @@
           </svg>
         </div>
         <div class="brand-copy">
-          <h1 id="app-title">LoopX 控制台</h1>
+          <h1 id="app-title">Issue 自动修复</h1>
           <p class="brand-meta">
-            <span id="runtime-version">LoopX</span>
+            <span id="tracked-source">GitHub Issues</span>
             <span class="dot" aria-hidden="true"></span>
-            <span id="updated-at">--</span>
+            <span id="runtime-version">LoopX</span>
           </p>
         </div>
       </div>
+
       <div class="toolbar">
+        <details id="goal-switcher" class="goal-switcher">
+          <summary>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"></path></svg>
+            <span id="other-goals-label">其他目标</span>
+            <span id="goal-count" class="section-count">0</span>
+          </summary>
+          <div class="goal-menu">
+            <div class="goal-menu-header">
+              <strong id="goals-heading">LoopX 目标</strong>
+              <span id="updated-at">--</span>
+            </div>
+            <div id="goals-list" class="goal-list" aria-live="polite"></div>
+          </div>
+        </details>
         <span class="toolbar-status"><span id="runtime-dot" class="status-dot"></span><span id="runtime-status">--</span></span>
         <button id="refresh-button" class="icon-button" type="button" title="Refresh" aria-label="Refresh">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -37,128 +52,148 @@
     </header>
 
     <div id="notice" class="notice" hidden>
-      <div id="notice-text"></div>
+      <div id="notice-text" class="notice-message"></div>
       <button id="notice-retry" type="button" class="text-button">Retry</button>
     </div>
-
-    <section class="summary-strip" aria-label="LoopX summary">
-      <div class="metric">
-        <span id="metric-goals" class="metric-value">--</span>
-        <span id="metric-goals-label" class="metric-label">Goals</span>
-      </div>
-      <div class="metric">
-        <span id="metric-progress" class="metric-value">--</span>
-        <span id="metric-progress-label" class="metric-label">Progress</span>
-      </div>
-      <div class="metric metric--attention">
-        <span id="metric-gates" class="metric-value">--</span>
-        <span id="metric-gates-label" class="metric-label">Gates</span>
-      </div>
-      <div class="metric metric--ready">
-        <span id="metric-runnable" class="metric-value">--</span>
-        <span id="metric-runnable-label" class="metric-label">Runnable</span>
-      </div>
-      <div class="metric">
-        <span id="metric-waiting" class="metric-value">--</span>
-        <span id="metric-waiting-label" class="metric-label">Waiting</span>
-      </div>
-    </section>
 
     <section id="workspace-band" class="workspace-band">
       <div class="workspace-main">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6.5h7l2 2h9v9H3z"></path></svg>
         <div class="workspace-copy">
-          <span id="workspace-kicker" class="workspace-kicker">Current workspace</span>
+          <span id="workspace-kicker" class="workspace-kicker">执行工作区</span>
           <strong id="workspace-name" class="workspace-name">--</strong>
           <span id="workspace-path" class="workspace-path">--</span>
         </div>
       </div>
       <div class="workspace-action">
         <span id="workspace-state" class="workspace-state">--</span>
-        <button id="new-goal-button" type="button" class="primary-button" hidden>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
-          <span id="new-goal-label">New goal</span>
+        <button id="new-goal-button" type="button" class="secondary-button compact-button" hidden>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"></path><circle cx="12" cy="12" r="4"></circle></svg>
+          <span id="new-goal-label">配置自动修复</span>
         </button>
       </div>
     </section>
 
+    <section class="summary-strip" aria-label="Issue automation summary">
+      <div class="metric metric--monitor">
+        <span id="metric-monitor" class="metric-value metric-value--text">--</span>
+        <span id="metric-monitor-label" class="metric-label">自动推进</span>
+      </div>
+      <div class="metric">
+        <span id="metric-queue" class="metric-value">--</span>
+        <span id="metric-queue-label" class="metric-label">Issue 队列</span>
+      </div>
+      <div class="metric">
+        <span id="metric-progress" class="metric-value">--</span>
+        <span id="metric-progress-label" class="metric-label">最近交付</span>
+      </div>
+      <div class="metric metric--attention">
+        <span id="metric-gates" class="metric-value">--</span>
+        <span id="metric-gates-label" class="metric-label">需要确认</span>
+      </div>
+    </section>
+
+    <section class="pipeline" aria-labelledby="pipeline-heading">
+      <div class="pipeline-heading">
+        <h2 id="pipeline-heading">Issue 交付流水线</h2>
+        <span id="pipeline-summary">--</span>
+      </div>
+      <div class="pipeline-stages">
+        <div id="pipeline-monitor" class="pipeline-stage"><span class="stage-index">1</span><span id="pipeline-monitor-label">监控</span></div>
+        <div id="pipeline-triage" class="pipeline-stage"><span class="stage-index">2</span><span id="pipeline-triage-label">筛选</span></div>
+        <div id="pipeline-fix" class="pipeline-stage"><span class="stage-index">3</span><span id="pipeline-fix-label">修复</span></div>
+        <div id="pipeline-validate" class="pipeline-stage"><span class="stage-index">4</span><span id="pipeline-validate-label">验证</span></div>
+        <div id="pipeline-pr" class="pipeline-stage"><span class="stage-index">5</span><span id="pipeline-pr-label">PR</span></div>
+      </div>
+    </section>
+
     <main class="console-grid">
-      <section class="goals-pane" aria-labelledby="goals-heading">
+      <section class="queue-pane" aria-labelledby="todo-heading">
         <div class="pane-header">
           <div class="section-heading">
-            <h2 id="goals-heading">Goals</h2>
-            <span id="goal-count" class="section-count">0</span>
-          </div>
-          <div id="goal-filters" class="segments" role="group" aria-label="Goal filters">
-            <button type="button" data-filter="all" class="segment-button active">All</button>
-            <button type="button" data-filter="action" class="segment-button">Action</button>
-            <button type="button" data-filter="waiting" class="segment-button">Waiting</button>
+            <div>
+              <h2 id="todo-heading">Issue 队列</h2>
+              <p id="queue-source" class="section-subtitle">--</p>
+            </div>
+            <span id="todo-count" class="count-badge">0</span>
           </div>
         </div>
-        <div id="goals-list" class="goal-list" aria-live="polite"></div>
+        <div id="todo-section" class="queue-section">
+          <div id="todo-list" class="issue-list"></div>
+        </div>
+        <section id="gate-section" class="gate-section" hidden>
+          <div class="section-heading">
+            <h3 id="gate-heading">需要确认</h3>
+            <span id="gate-count" class="count-badge">0</span>
+          </div>
+          <div id="gate-list" class="detail-list"></div>
+        </section>
       </section>
 
       <section class="detail-pane" aria-labelledby="detail-heading">
         <div id="detail-empty" class="empty-state">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M12 5l7 7-7 7"></path></svg>
-          <strong id="empty-title">Select a goal</strong>
-          <span id="empty-copy">Inspect its current route and next safe action.</span>
+          <strong id="empty-title">导入当前 Open Issues</strong>
+          <span id="empty-copy">--</span>
+          <button id="empty-configure-button" type="button" class="primary-button">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"></path><circle cx="12" cy="12" r="4"></circle></svg>
+            <span id="empty-configure-label">导入当前 Issues</span>
+          </button>
         </div>
+
         <div id="detail-content" hidden>
           <div class="detail-header">
             <div class="detail-heading">
-              <h2 id="detail-heading">--</h2>
-              <div class="detail-meta"><span id="detail-current" class="detail-status" hidden>Current</span><span id="detail-repo">--</span></div>
+              <div class="detail-title-row">
+                <h2 id="detail-heading">--</h2>
+                <span id="detail-current" class="detail-status" hidden>当前</span>
+              </div>
+              <div class="detail-meta"><span id="detail-repo">--</span></div>
             </div>
-            <div class="detail-action"><button id="continue-button" type="button" class="primary-button" hidden>
+            <div class="detail-action">
+              <button id="delete-goal-button" type="button" class="icon-button danger-button" hidden aria-label="Delete goal" title="Delete goal">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5"></path></svg>
+              </button>
+              <button id="heartbeat-button" type="button" class="secondary-button" hidden>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h4l2-6 4 12 2-6h6"></path></svg>
+                <span id="heartbeat-label">修复调度</span>
+              </button>
+              <button id="continue-button" type="button" class="primary-button" hidden>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg>
-                <span id="continue-label">Continue</span>
-              </button></div>
+                <span id="continue-label">立即推进</span>
+              </button>
+            </div>
           </div>
 
           <div class="detail-facts">
-            <div><span id="status-label">Status</span><strong id="detail-status">--</strong></div>
-            <div><span id="waiting-label">Waiting on</span><strong id="detail-waiting">--</strong></div>
-            <div><span id="adapter-label">Adapter</span><strong id="detail-adapter">--</strong></div>
+            <div><span id="mode-label">模式</span><strong id="detail-mode">--</strong></div>
+            <div><span id="status-label">状态</span><strong id="detail-status">--</strong></div>
+            <div><span id="waiting-label">等待对象</span><strong id="detail-waiting">--</strong></div>
+            <div><span id="heartbeat-status-label">下次推进</span><strong id="detail-heartbeat">--</strong></div>
           </div>
 
           <section class="detail-section next-action-section">
             <div class="section-heading">
-              <h3 id="next-action-heading">Next safe action</h3>
+              <h3 id="next-action-heading">当前执行</h3>
+              <span id="adapter-label" class="adapter-label">--</span>
             </div>
             <p id="next-action-text">--</p>
           </section>
 
-          <section id="gate-section" class="detail-section" hidden>
+          <section id="progress-section" class="detail-section progress-section" hidden>
             <div class="section-heading">
-              <h3 id="gate-heading">User gate</h3>
-              <span id="gate-count" class="count-badge">0</span>
-            </div>
-            <div id="gate-list" class="detail-list"></div>
-          </section>
-
-          <section id="todo-section" class="detail-section" hidden>
-            <div class="section-heading">
-              <h3 id="todo-heading">Visible work</h3>
-              <span id="todo-count" class="count-badge">0</span>
-            </div>
-            <div id="todo-list" class="detail-list"></div>
-          </section>
-
-          <section class="detail-section">
-            <div class="section-heading">
-              <h3 id="handoff-heading">Agent handoff</h3>
-              <button id="reload-detail-button" type="button" class="text-button">Reload</button>
-            </div>
-            <div id="handoff-content" class="handoff-content">--</div>
-          </section>
-
-          <section id="progress-section" class="detail-section" hidden>
-            <div class="section-heading">
-              <h3 id="progress-heading">Recent progress</h3>
+              <h3 id="progress-heading">最近交付</h3>
             </div>
             <div id="progress-list" class="timeline"></div>
           </section>
+
+          <details class="diagnostics" open>
+            <summary>
+              <span id="handoff-heading">执行详情</span>
+              <button id="reload-detail-button" type="button" class="text-button">重新加载</button>
+            </summary>
+            <div id="handoff-content" class="handoff-content">--</div>
+          </details>
         </div>
       </section>
     </main>
@@ -167,20 +202,66 @@
   <dialog id="new-goal-dialog" class="modal">
     <form id="new-goal-form" method="dialog">
       <div class="modal-header section-heading">
-        <h2 id="dialog-title">Start a LoopX goal</h2>
+        <h2 id="dialog-title">导入当前 Issues</h2>
         <button id="dialog-close" class="icon-button" type="button" aria-label="Close" title="Close">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg>
         </button>
       </div>
-      <div class="modal-body">
-        <label for="goal-text" id="goal-text-label">Goal</label>
-        <textarea id="goal-text" rows="5" maxlength="2000" required></textarea>
-        <div id="dialog-workspace" class="workspace-path">--</div>
+      <div class="modal-body setup-form">
+        <label for="issue-source" id="issue-source-label">GitHub Issues（首次导入）</label>
+        <input id="issue-source" type="url" placeholder="https://github.com/owner/repo/issues" required />
+        <p id="issue-scope-note" class="modal-note">之后新增的 Issue 不会加入；修复和临时文件都不得改动当前目录。</p>
+
+        <div class="form-row">
+          <label for="issue-cadence" id="issue-cadence-label">Agent 自动推进间隔</label>
+          <select id="issue-cadence">
+            <option id="cadence-30m" value="1800000">每 30 分钟（高频）</option>
+            <option id="cadence-1h" value="3600000" selected>每小时（推荐）</option>
+            <option id="cadence-6h" value="21600000">每 6 小时（低频）</option>
+            <option id="cadence-1d" value="86400000">每天</option>
+          </select>
+        </div>
+
+        <label class="check-control" for="issue-pr-delivery">
+          <input id="issue-pr-delivery" type="checkbox" checked />
+          <span id="issue-pr-delivery-label">修复后推送 fork 并创建 PR</span>
+        </label>
+
+        <label for="goal-text" id="goal-text-label">处理规则（可选）</label>
+        <textarea id="goal-text" rows="4" maxlength="1200"></textarea>
+
+        <div class="target-workspace">
+          <span id="dialog-workspace-label">执行工作区</span>
+          <strong id="dialog-workspace">--</strong>
+        </div>
       </div>
       <div class="modal-actions">
-        <button id="dialog-cancel" class="secondary-button" type="button">Cancel</button>
+        <button id="dialog-cancel" class="secondary-button" type="button">取消</button>
         <button id="dialog-submit" class="primary-button" type="submit">
-          <span id="dialog-submit-label">Start in Agent</span>
+          <span id="dialog-submit-label">交给 Agent 导入</span>
+        </button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="delete-goal-dialog" class="modal compact-modal" aria-describedby="delete-dialog-copy">
+    <form id="delete-goal-form" method="dialog">
+      <div class="modal-header section-heading">
+        <h2 id="delete-dialog-title">删除 LoopX 目标</h2>
+        <button id="delete-dialog-close" class="icon-button" type="button" aria-label="Close" title="Close">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg>
+        </button>
+      </div>
+      <div class="modal-body delete-dialog-body">
+        <p id="delete-dialog-copy">这会断开该目标与对应项目的连接。</p>
+        <code id="delete-dialog-goal">--</code>
+        <span id="delete-dialog-repo" class="workspace-path">--</span>
+        <p id="delete-dialog-archive" class="modal-note">LoopX 会先备份注册表，并归档该项目中的目标状态。</p>
+      </div>
+      <div class="modal-actions">
+        <button id="delete-dialog-cancel" class="secondary-button" type="button">取消</button>
+        <button id="delete-dialog-submit" class="danger-action-button" type="submit">
+          <span id="delete-dialog-submit-label">确认删除</span>
         </button>
       </div>
     </form>

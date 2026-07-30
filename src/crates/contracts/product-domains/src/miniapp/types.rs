@@ -53,6 +53,8 @@ pub struct MiniAppPermissions {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub agent: Option<AgentPermissions>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub cron: Option<CronPermissions>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub notifications: Option<NotificationPermissions>,
 }
 
@@ -125,6 +127,20 @@ pub struct AgentPermissions {
     /// Maximum number of agent runs per minute (per app). 0 / absent = unlimited.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub rate_limit_per_minute: Option<u32>,
+}
+
+/// Scheduled-job (cron) permissions for MiniApps.
+///
+/// Grants the MiniApp the ability to create, list, and delete host scheduled
+/// jobs through the host cron bridge, so an agentic MiniApp can wire its own
+/// recurring heartbeat (e.g. a LoopX goal driven by the host CronService)
+/// without leaving the iframe. Gated by manifest `permissions.cron.enabled`;
+/// enforced host-side by reusing the existing cron Tauri commands.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CronPermissions {
+    /// Whether scheduled-job access is enabled for this MiniApp.
+    #[serde(default)]
+    pub enabled: bool,
 }
 
 /// Host notification permissions for MiniApps.

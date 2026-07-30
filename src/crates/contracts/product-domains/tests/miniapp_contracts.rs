@@ -587,6 +587,7 @@ fn builtin_loopx_console_has_complete_resources_and_minimal_permissions() {
     assert_eq!(meta["permissions"]["net"]["allow"], serde_json::json!([]));
     assert_eq!(meta["permissions"]["node"]["enabled"], false);
     assert_eq!(meta["permissions"]["agent"]["enabled"], true);
+    assert_eq!(meta["permissions"]["cron"]["enabled"], true);
     assert!(meta["permissions"].get("fs").is_none());
 }
 
@@ -612,11 +613,46 @@ fn builtin_loopx_console_keeps_loopx_on_read_only_control_plane_paths() {
     assert!(source.contains("schema_version !== 'global_manager_command_response_v0'"));
     assert!(source.contains("window.app.appDataDir"));
     assert!(source.contains("window.app.agent.run"));
-    assert!(source.contains("window.app.chat.claimComposer"));
     assert!(source.contains("window.app.chat.focusSession"));
+    assert!(source.contains("void window.app.chat.focusSession(result.sessionId).catch(() => {});"));
+    assert!(!source.contains("await window.app.chat.focusSession(result.sessionId);"));
+    assert!(!source.contains("window.app.chat.claimComposer"));
+    assert!(source.contains("window.app.cron.listJobs"));
+    assert!(source.contains("window.app.cron.createJob"));
+    assert!(source.contains("window.app.cron.deleteJob"));
+    assert!(source.contains("'heartbeat-prompt', '--goal-id', goal.id"));
+    assert!(source.contains("typeof value?.task_body !== 'string'"));
+    assert!(source.contains("payload: { text: taskBody }"));
+    assert!(source.contains("const DEFAULT_CADENCE_MS = 60 * 60 * 1000;"));
+    assert!(source.contains("value=\"3600000\" selected"));
+    assert!(source.contains("id=\"empty-configure-button\""));
+    assert!(source.contains("id=\"issue-scope-note\""));
+    assert!(source.contains("window.app.workspace.info().catch(() => state.workspace)"));
+    assert!(source.contains("normalizePath(goal.repo) !== normalizePath(state.workspace.path)"));
+    assert!(source.contains("Freeze that exact set as the goal's immutable intake scope"));
+    assert!(source.contains("LoopX-native successor todo/recommended action"));
+    assert!(source.contains("loopx issue-fix workflow-plan --url <concrete-issue-url>"));
+    assert!(source.contains("loopx issue-fix feasibility ... --goal-id <created-goal-id>"));
+    assert!(source.contains("Do not run workflow-plan or feasibility for every URL in this setup turn"));
+    assert!(source.contains("already recorded in this goal's immutable initial scope"));
+    assert!(source.contains(
+        "leave both tracked and untracked contents of the registered checkout unchanged"
+    ));
+    assert!(source.contains("Do not write snapshots, command packs, status output"));
+    assert!(!source.contains("For each recorded URL"));
+    assert!(!source.contains("materialize every concrete URL as LoopX-native triage/feasibility work"));
+    assert!(
+        !source.contains("Maintain a durable queue for newly opened, closed, and updated issues")
+    );
+    assert!(!source.contains("Continuously monitor ${issueUrl}"));
     assert!(!source_lower.contains("acp"));
     assert!(!source_lower.contains("serve-status"));
-    assert!(!source_lower.contains("--execute"));
+    // The only direct LoopX write is user-confirmed goal deletion. Goal work
+    // runs through Agent and recurring execution through the host Cron bridge.
+    assert_eq!(source_lower.matches("--execute").count(), 1);
+    assert!(source.contains("'uninstall-project', '--goal-id', goal.id,"));
+    assert!(source.contains("'--archive-state', '--remove-empty-registry', '--execute']"));
+    assert!(source.contains("schema_version !== 'loopx_project_uninstall_v0'"));
 }
 
 #[test]

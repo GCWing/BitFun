@@ -5,7 +5,7 @@ use serde_json;
 
 /// Build the Runtime Adapter script (JS) to inject into the iframe.
 /// Exposes window.app with call(), fs.*, shell.*, net.*, os.*, storage.*, dialog.*,
-/// ai.*, agent.*, deck.*, chat.*, workspace.*, clipboard.*, lifecycle, events.
+/// ai.*, agent.*, cron.*, deck.*, chat.*, workspace.*, clipboard.*, lifecycle, events.
 pub fn build_bridge_script(
     app_id: &str,
     app_data_dir: &str,
@@ -130,6 +130,17 @@ pub fn build_bridge_script(
       cancelStaleRuns: () => _rpc('agent.cancelStaleRuns', {{}}),
       onEvent:        (fn) => app.on('agent:event', fn),
       offEvent:       (fn) => app.off('agent:event', fn),
+    }},
+
+    // Cron namespace — create/list/delete host scheduled jobs so an agentic
+    // MiniApp can wire its own recurring heartbeat (e.g. a LoopX goal driven
+    // by the host CronService) without leaving the iframe. Requires manifest
+    // permissions.cron.enabled = true; enforced host-side. The host reuses the
+    // existing cron Tauri commands; this bridge only routes the call.
+    cron: {{
+      createJob: (request) => _rpc('cron.createJob', request || {{}}),
+      listJobs:  (opts) => _rpc('cron.listJobs', opts || {{}}),
+      deleteJob: (jobId) => _rpc('cron.deleteJob', {{ jobId }}),
     }},
 
     // Deck namespace — renders one slide HTML page in a hidden host WebView

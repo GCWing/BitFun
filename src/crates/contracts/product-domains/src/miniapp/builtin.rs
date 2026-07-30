@@ -151,7 +151,7 @@ pub const BUILTIN_APPS: &[BuiltinMiniAppBundle] = &[
     },
     BuiltinMiniAppBundle {
         id: "builtin-loopx-console",
-        version: 1,
+        version: 6,
         meta_json: include_str!("builtin/assets/loopx-console/meta.json"),
         html: include_str!("builtin/assets/loopx-console/index.html"),
         css: include_str!("builtin/assets/loopx-console/style.css"),
@@ -377,6 +377,7 @@ mod tests {
                 "builtin-daily-divination",
                 "builtin-regex-playground",
                 "builtin-coding-selfie",
+                "builtin-loopx-console",
                 "builtin-ppt-live",
             ]
         );

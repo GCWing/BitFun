@@ -1,16 +1,17 @@
 {
   "id": "builtin-loopx-console",
-  "name": "LoopX 控制台",
-  "description": "查看 LoopX 全局目标、待办与 gate，并在当前工作区发起或继续有边界的 Agent 执行。",
+  "name": "Issue 自动修复",
+  "description": "首次导入当前仓库已有的 Open Issues，并通过 LoopX 原生流程完成筛选、修复、验证和 PR 交付。",
   "icon": "Route",
   "category": "developer",
   "tags": [
     "LoopX",
-    "目标",
+    "GitHub Issues",
+    "自动修复",
     "Agent",
     "内置"
   ],
-  "version": 1,
+  "version": 6,
   "created_at": 0,
   "updated_at": 0,
   "permissions": {
@@ -28,25 +29,28 @@
     "agent": {
       "enabled": true,
       "rate_limit_per_minute": 6
+    },
+    "cron": {
+      "enabled": true
     }
   },
   "ai_context": null,
   "i18n": {
     "locales": {
       "zh-CN": {
-        "name": "LoopX 控制台",
-        "description": "查看 LoopX 全局目标、待办与 gate，并在当前工作区发起或继续有边界的 Agent 执行。",
-        "tags": ["LoopX", "目标", "Agent", "内置"]
+        "name": "Issue 自动修复",
+        "description": "首次导入当前仓库已有的 Open Issues，并通过 LoopX 原生流程完成筛选、修复、验证和 PR 交付。",
+        "tags": ["LoopX", "GitHub Issues", "自动修复", "Agent", "内置"]
       },
       "en-US": {
-        "name": "LoopX Console",
-        "description": "Inspect global LoopX goals, work and gates, then start or continue a bounded Agent run in the current workspace.",
-        "tags": ["LoopX", "goals", "Agent", "built-in"]
+        "name": "Issue Autofix",
+        "description": "Import the repository's currently open GitHub Issues once and use LoopX's native flow to triage, fix, validate, and deliver pull requests.",
+        "tags": ["LoopX", "GitHub Issues", "autofix", "Agent", "built-in"]
       },
       "zh-TW": {
-        "name": "LoopX 控制台",
-        "description": "查看 LoopX 全局目標、待辦與 gate，並在目前工作區發起或繼續有邊界的 Agent 執行。",
-        "tags": ["LoopX", "目標", "Agent", "內置"]
+        "name": "Issue 自動修復",
+        "description": "首次匯入目前倉庫已有的 Open Issues，並透過 LoopX 原生流程完成篩選、修復、驗證和 PR 交付。",
+        "tags": ["LoopX", "GitHub Issues", "自動修復", "Agent", "內置"]
       }
     }
   }

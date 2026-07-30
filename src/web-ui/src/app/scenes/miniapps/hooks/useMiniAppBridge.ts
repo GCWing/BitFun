@@ -22,6 +22,11 @@ import type { MiniAppRunScope } from '../customization/miniAppCustomizationTypes
 import { systemAPI } from '@/infrastructure/api/service-api/SystemAPI';
 import { workspaceAPI } from '@/infrastructure/api';
 import {
+  cronAPI,
+  type CreateCronJobRequest,
+  type ListCronJobsRequest,
+} from '@/infrastructure/api';
+import {
   useMiniAppStore,
   MINIAPP_COMPOSER_MESSAGE_EVENT,
   MINIAPP_COMPOSER_DRAFT_EVENT,
@@ -29,6 +34,7 @@ import {
   type MiniAppComposerMessageDetail,
 } from '../miniAppStore';
 import { flowChatStore } from '@/flow_chat/store/FlowChatStore';
+import { useSceneStore } from '@/app/stores/sceneStore';
 import { createLogger } from '@/shared/utils/logger';
 
 interface JSONRPC {
@@ -79,11 +85,13 @@ export function useMiniAppBridge(
   const nodeDisabledRef = useRef(app.permissions?.node?.enabled === false);
   const systemNotificationsAllowedRef = useRef(app.permissions?.notifications?.system === true);
   const agentEnabledRef = useRef(app.permissions?.agent?.enabled === true);
+  const cronEnabledRef = useRef(app.permissions?.cron?.enabled === true);
   useLayoutEffect(() => {
     nodeDisabledRef.current = app.permissions?.node?.enabled === false;
     systemNotificationsAllowedRef.current = app.permissions?.notifications?.system === true;
     agentEnabledRef.current = app.permissions?.agent?.enabled === true;
-  }, [app.id, app.permissions?.node?.enabled, app.permissions?.notifications?.system, app.permissions?.agent?.enabled]);
+    cronEnabledRef.current = app.permissions?.cron?.enabled === true;
+  }, [app.id, app.permissions?.node?.enabled, app.permissions?.notifications?.system, app.permissions?.agent?.enabled, app.permissions?.cron?.enabled]);
 
   // Hidden agent sessions started by this iframe; used to filter the global
   // agentic:// event stream before forwarding events into the iframe.
@@ -377,6 +385,36 @@ export function useMiniAppBridge(
           return;
         }
 
+        // ── Scheduled-jobs (cron) commands ─────────────────────────────────
+        // Gated on cron permission: an agentic MiniApp may wire its own
+        // recurring heartbeat (e.g. a LoopX goal driven by the host CronService)
+        // by reusing the existing cron Tauri commands. This bridge only routes
+        // the call; the host owns scheduling, state, and authority.
+        if (method.startsWith('cron.')) {
+          if (!cronEnabledRef.current) {
+            replyError(`MiniApp '${appId}' does not have cron permission (permissions.cron.enabled).`);
+            return;
+          }
+          if (method === 'cron.createJob') {
+            const request = params as unknown as CreateCronJobRequest;
+            const result = await cronAPI.createJob(request);
+            reply(result);
+            return;
+          }
+          if (method === 'cron.listJobs') {
+            const result = await cronAPI.listJobs((params as ListCronJobsRequest) ?? {});
+            reply(result);
+            return;
+          }
+          if (method === 'cron.deleteJob') {
+            const result = await cronAPI.deleteJob(String(params.jobId ?? ''));
+            reply(result);
+            return;
+          }
+          replyError(`Unknown cron method: ${method}`);
+          return;
+        }
+
         // ── Floating bubble chat commands ────────────────────────────────────
         // Gated on agent permission: the composer claim exists so agentic
         // MiniApps can reuse the bubble as their input surface, and
@@ -433,18 +471,23 @@ export function useMiniAppBridge(
               return;
             }
             const claim = useMiniAppStore.getState().composerClaims[appId];
-            if (claim?.token !== composerTokenRef.current) {
-              replyError('chat.focusSession: this MiniApp does not hold the bubble composer.');
-              return;
+            if (claim?.token === composerTokenRef.current) {
+              // Has a valid composer claim — bind the validated session to this
+              // runner's bubble. FloatingMiniChat owns the temporary global-store
+              // switch while its panel is open, then restores the user's normal
+              // session on close.
+              useMiniAppStore.getState().setComposerSession(
+                appId,
+                composerTokenRef.current,
+                sessionId,
+              );
+            } else {
+              // No composer claim — route the agent session to the main session
+              // scene instead of the floating bubble. This covers MiniApps that
+              // drive agent.run from their own UI without claiming the composer.
+              flowChatStore.switchSession(sessionId);
+              useSceneStore.getState().openScene('session');
             }
-            // Bind the validated session to this runner's composer claim.
-            // FloatingMiniChat owns the temporary global-store switch while its
-            // panel is open, then restores the user's normal session on close.
-            useMiniAppStore.getState().setComposerSession(
-              appId,
-              composerTokenRef.current,
-              sessionId,
-            );
             reply(null);
             return;
           }

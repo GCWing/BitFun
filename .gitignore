@@ -84,3 +84,9 @@ external/
 /.bitfun/search/flashgrep-index/
 .agents/
 /.flashgrep-index-engine/
+
+# LoopX / agent control-plane state (project-local; never commit)
+.loopx/
+.codex/
+.opencode/
+.local/

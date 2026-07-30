@@ -38,6 +38,7 @@ export interface MiniAppPermissions {
     enabled?: boolean;
     rate_limit_per_minute?: number;
   };
+  cron?: { enabled?: boolean };
   notifications?: { system?: boolean };
 }
 
