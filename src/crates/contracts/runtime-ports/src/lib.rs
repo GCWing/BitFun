@@ -76,6 +76,7 @@ pub enum PortErrorKind {
     Timeout,
     SessionInUse,
     CleanupRequired,
+    OutcomeUnknown,
     Backend,
 }
 

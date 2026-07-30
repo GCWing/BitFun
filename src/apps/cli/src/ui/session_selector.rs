@@ -45,10 +45,6 @@ pub(super) struct SessionSelectorState {
     current_session_id: Option<String>,
     can_delete: bool,
     last_area: Option<Rect>,
-    /// Inline rename state
-    rename_editing: bool,
-    rename_buffer: String,
-    rename_cursor: usize,
 }
 
 impl SessionSelectorState {
@@ -60,9 +56,6 @@ impl SessionSelectorState {
             current_session_id: None,
             can_delete: false,
             last_area: None,
-            rename_editing: false,
-            rename_buffer: String::new(),
-            rename_cursor: 0,
         }
     }
 
@@ -87,14 +80,12 @@ impl SessionSelectorState {
         self.can_delete = can_delete;
         self.list_state.select(Some(initial_idx));
         self.visible = true;
-        self.rename_editing = false;
     }
 
     pub(super) fn hide(&mut self) {
         self.visible = false;
         // Note: we don't clear items here to support back navigation
         self.last_area = None;
-        self.rename_editing = false;
     }
 
     /// Reshow the session selector (for back navigation)
@@ -133,11 +124,6 @@ impl SessionSelectorState {
             return SessionAction::None;
         }
 
-        // ── Rename editing mode ──
-        if self.rename_editing {
-            return self.handle_rename_key(key);
-        }
-
         // ── Normal navigation mode ──
         match (key.code, key.modifiers) {
             (KeyCode::Up, _) => {
@@ -170,54 +156,6 @@ impl SessionSelectorState {
                 } else {
                     SessionAction::None
                 }
-            }
-            _ => SessionAction::None,
-        }
-    }
-
-    /// Handle keys while in rename editing mode.
-    /// This path is unreachable while rename is disabled, but keeps stale state harmless.
-    fn handle_rename_key(&mut self, key: KeyEvent) -> SessionAction {
-        match key.code {
-            KeyCode::Enter => {
-                self.rename_editing = false;
-                SessionAction::None
-            }
-            KeyCode::Esc => {
-                self.rename_editing = false;
-                SessionAction::None
-            }
-            KeyCode::Char(c) => {
-                let byte_pos = self.char_to_byte(&self.rename_buffer, self.rename_cursor);
-                self.rename_buffer.insert(byte_pos, c);
-                self.rename_cursor += 1;
-                SessionAction::None
-            }
-            KeyCode::Backspace => {
-                if self.rename_cursor > 0 {
-                    self.rename_cursor -= 1;
-                    let byte_pos = self.char_to_byte(&self.rename_buffer, self.rename_cursor);
-                    let next = self.char_to_byte(&self.rename_buffer, self.rename_cursor + 1);
-                    self.rename_buffer.replace_range(byte_pos..next, "");
-                }
-                SessionAction::None
-            }
-            KeyCode::Left => {
-                self.rename_cursor = self.rename_cursor.saturating_sub(1);
-                SessionAction::None
-            }
-            KeyCode::Right => {
-                let max = self.rename_buffer.chars().count();
-                self.rename_cursor = (self.rename_cursor + 1).min(max);
-                SessionAction::None
-            }
-            KeyCode::Home => {
-                self.rename_cursor = 0;
-                SessionAction::None
-            }
-            KeyCode::End => {
-                self.rename_cursor = self.rename_buffer.chars().count();
-                SessionAction::None
             }
             _ => SessionAction::None,
         }
@@ -267,13 +205,10 @@ impl SessionSelectorState {
         };
         self.last_area = Some(popup_area);
 
-        let selected_idx = self.list_state.selected();
-
         let list_items: Vec<ListItem> = self
             .items
             .iter()
-            .enumerate()
-            .map(|(i, session)| {
+            .map(|session| {
                 let is_current = self
                     .current_session_id
                     .as_ref()
@@ -285,19 +220,6 @@ impl SessionSelectorState {
                 } else {
                     theme.style(StyleKind::Muted)
                 };
-
-                // If this row is being renamed, show the edit buffer
-                if self.rename_editing && selected_idx == Some(i) {
-                    let edit_style = Style::default()
-                        .fg(Color::Yellow)
-                        .add_modifier(Modifier::BOLD);
-                    let line = Line::from(vec![
-                        Span::styled(marker, marker_style),
-                        Span::styled(&self.rename_buffer, edit_style),
-                        Span::styled("_", Style::default().fg(Color::Yellow)),
-                    ]);
-                    return ListItem::new(line);
-                }
 
                 let name_style = theme.style(StyleKind::Primary).add_modifier(Modifier::BOLD);
                 let time_style = theme.style(StyleKind::Muted);
@@ -356,9 +278,7 @@ impl SessionSelectorState {
                 width: popup_area.width,
                 height: 1,
             };
-            let hint_text = if self.rename_editing {
-                " Enter: Save  Esc: Cancel "
-            } else if self.can_delete {
+            let hint_text = if self.can_delete {
                 " Up/Down: Navigate  Enter: Switch  Ctrl+D: Delete  Esc: Close "
             } else {
                 " Up/Down: Navigate  Enter: Switch  Esc: Close "
@@ -373,7 +293,7 @@ impl SessionSelectorState {
 
     /// Handle mouse events
     pub(super) fn handle_mouse_event(&mut self, mouse: &MouseEvent) -> SessionAction {
-        if !self.visible || self.rename_editing {
+        if !self.visible {
             return SessionAction::None;
         }
 
@@ -442,12 +362,5 @@ impl SessionSelectorState {
         }
 
         Some(index)
-    }
-
-    fn char_to_byte(&self, s: &str, char_pos: usize) -> usize {
-        s.char_indices()
-            .nth(char_pos)
-            .map(|(i, _)| i)
-            .unwrap_or(s.len())
     }
 }

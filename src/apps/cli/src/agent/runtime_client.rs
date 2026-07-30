@@ -15,15 +15,17 @@ use bitfun_agent_runtime::sdk::{
     AgentDialogTurnRequest, AgentEventReceiver, AgentLocalCommandTurnRecordRequest, AgentRuntime,
     AgentSessionCreateRequest, AgentSessionDeleteRequest, AgentSessionForkRequest,
     AgentSessionForkResult, AgentSessionListRequest, AgentSessionModeUpdateRequest,
-    AgentSessionModelUpdateRequest, AgentSessionRestoreRequest, AgentSessionUsageRequest,
-    AgentTurnCancellationRequest, AgentTurnSettlementRequest, AgentUserAnswersRequest,
-    PermissionReply, PermissionRequest, PermissionRequestEventReceiver, PortError, PortErrorKind,
-    RuntimeError, SessionTranscript, SessionTranscriptRequest, SessionUsageReport,
+    AgentSessionModelUpdateRequest, AgentSessionRenameRequest, AgentSessionRestoreRequest,
+    AgentSessionUsageRequest, AgentTurnCancellationRequest, AgentTurnSettlementRequest,
+    AgentUserAnswersRequest, PermissionReply, PermissionRequest, PermissionRequestEventReceiver,
+    PortError, PortErrorKind, RuntimeError, SessionTranscript, SessionTranscriptRequest,
+    SessionUsageReport,
 };
 use bitfun_agent_runtime_ipc::{
     RuntimeIpcClient, RuntimeIpcClientError, RuntimeIpcClientEvent, RuntimeIpcErrorCode,
     RuntimeIpcEvent, RuntimeIpcOperation, RuntimeIpcOperationResult,
-    RuntimeIpcStreamInvalidationReason, RuntimeSessionRestoreRequest, RuntimeUserAnswersRequest,
+    RuntimeIpcStreamInvalidationReason, RuntimeSessionRenameRequest, RuntimeSessionRestoreRequest,
+    RuntimeUserAnswersRequest,
 };
 use bitfun_events::{AgenticEvent, AgenticEventEnvelope};
 use bitfun_runtime_ports::{
@@ -135,9 +137,14 @@ impl std::error::Error for SessionUpdateError {}
 
 impl SessionUpdateError {
     fn runtime(error: RuntimeError) -> Self {
+        let outcome_unknown = matches!(
+            &error,
+            RuntimeError::Port(port_error)
+                if port_error.kind == PortErrorKind::OutcomeUnknown
+        );
         Self {
             message: error.into_message(),
-            outcome_unknown: false,
+            outcome_unknown,
         }
     }
 
@@ -631,6 +638,40 @@ impl CliAgentRuntimeClient {
                     .await
                     .map_err(SessionUpdateError::shared)?;
                 expect_unit(result, "update_session_model").map_err(SessionUpdateError::unexpected)
+            }
+        }
+    }
+
+    pub(crate) async fn rename_session(
+        &self,
+        session_id: &str,
+        session_name: &str,
+    ) -> std::result::Result<(), SessionUpdateError> {
+        match &self.backend {
+            CliAgentRuntimeBackend::Embedded(runtime) => {
+                let request = AgentSessionRenameRequest {
+                    workspace_path: self.project_workspace_path_string(),
+                    session_id: session_id.to_string(),
+                    session_name: session_name.to_string(),
+                    remote_connection_id: None,
+                    remote_ssh_host: None,
+                };
+                runtime
+                    .rename_session(request)
+                    .await
+                    .map_err(SessionUpdateError::runtime)
+            }
+            CliAgentRuntimeBackend::Shared(client) => {
+                let result = client
+                    .request(RuntimeIpcOperation::RenameSession {
+                        request: RuntimeSessionRenameRequest {
+                            session_id: session_id.to_string(),
+                            session_name: session_name.to_string(),
+                        },
+                    })
+                    .await
+                    .map_err(SessionUpdateError::shared)?;
+                expect_unit(result, "rename_session").map_err(SessionUpdateError::unexpected)
             }
         }
     }
@@ -1278,7 +1319,8 @@ mod tests {
 
     use bitfun_agent_runtime::sdk::{
         PermissionDelegationContext, PermissionRequest, PermissionRequestEvent,
-        PermissionRequestSource, PermissionRequestSourceKind,
+        PermissionRequestSource, PermissionRequestSourceKind, PortError, PortErrorKind,
+        RuntimeError,
     };
     use bitfun_agent_runtime_ipc::{RuntimeIpcClientError, RuntimeIpcError, RuntimeIpcErrorCode};
 
@@ -1328,6 +1370,25 @@ mod tests {
             },))
             .outcome_unknown()
         );
+        assert!(
+            !SessionUpdateError::shared(RuntimeIpcClientError::RequestEncoding(
+                bitfun_agent_runtime_ipc::RuntimeIpcIoError::FrameTooLarge {
+                    size: 129,
+                    max_bytes: 128,
+                },
+            ))
+            .outcome_unknown()
+        );
+    }
+
+    #[test]
+    fn embedded_runtime_unknown_outcome_is_preserved() {
+        let error = SessionUpdateError::runtime(RuntimeError::Port(PortError::new(
+            PortErrorKind::OutcomeUnknown,
+            "inspect authoritative state",
+        )));
+
+        assert!(error.outcome_unknown());
     }
 
     #[test]
@@ -1393,6 +1454,25 @@ mod tests {
         assert!(source.contains("CliAgentRuntimeBackend::Shared(client)"));
         assert!(source.contains("RuntimeIpcOperation::UpdateSessionModel { request }"));
         assert!(!source.contains(&compatibility_update));
+    }
+
+    #[test]
+    fn session_rename_uses_direct_runtime_or_private_shared_ipc() {
+        let source = include_str!("runtime_client.rs").replace("\r\n", "\n");
+        let rename = source
+            .split_once("pub(crate) async fn rename_session(")
+            .expect("rename method")
+            .1
+            .split_once("pub(crate) async fn update_session_mode(")
+            .expect("rename method boundary")
+            .0;
+
+        assert!(source.contains("pub(crate) async fn rename_session("));
+        assert!(rename.contains("CliAgentRuntimeBackend::Embedded(runtime)"));
+        assert!(rename.contains(".rename_session(request)"));
+        assert!(rename.contains("RuntimeIpcOperation::RenameSession"));
+        assert!(!rename.contains("serde_json::to_value"));
+        assert!(!rename.contains("serde_json::from_value"));
     }
 
     #[test]

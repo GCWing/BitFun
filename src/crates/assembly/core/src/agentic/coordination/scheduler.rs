@@ -138,6 +138,9 @@ impl SchedulerSubmitError {
                 PortErrorKind::SessionInUse,
                 format!("Session is already open for writing: {session_id}"),
             ),
+            Self::Core(BitFunError::OutcomeUnknown(message)) => {
+                PortError::new(PortErrorKind::OutcomeUnknown, message)
+            }
             Self::Core(BitFunError::NotImplemented(message)) => {
                 PortError::new(PortErrorKind::NotAvailable, message)
             }

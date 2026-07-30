@@ -256,12 +256,15 @@ Headless CLI 和公开 Agent SDK 都调用同一 Agent Runtime API，但交付�
 
 | 形态 | 默认部署 | 当前 Shared 范围 |
 |---|---|---|
-| 交互式 TUI | Embedded | 显式 `--shared` 后支持 Session list/create/restore、transcript、当前 Session Agent mode/model、Turn submit/cancel、Permission 和 UserInput |
+| 交互式 TUI | Embedded | 显式 `--shared` 后支持 Session list/create/restore、transcript、当前 Session rename/Agent mode/model、Turn submit/cancel、Permission 和 UserInput |
 | `bitfun exec` / CI | Embedded | 不接受 Shared；保持独立进程、stdout/stderr 和退出码语义 |
 | ACP / SDK Host / GUI / Remote / Peer | 各自既有部署 | 不消费 TUI IPC，也不因本开关改变生命周期 |
 
 Shared TUI 不提供 Session delete/fork、模型目录/默认值、Agent/Subagent 管理、MCP/扩展、账号同步、用量、observer、replay 或 controller transfer；对应入口给出明确的 Embedded 恢复建议，不在 Client 进程初始化第二套 Core owner。
-Shared 模式的命令面板、快捷键帮助和底部提示使用同一能力投影：`/agent`、Tab 和 Shift+Tab 只切换当前 Session 的 Agent mode，`/models` 只切换当前 Session 的 model，二者都不进入管理页面或修改未来 Session 的默认值；其他不支持动作不显示为可执行入口。Session 切换失败保留原控制权，单个连接已有活动 Turn 时拒绝重复提交和 Session mode/model update；事件订阅失效后当前视图立即失效并要求重启 Shared TUI。
+Shared 模式的斜杠命令、快捷键帮助和底部提示使用同一能力投影：`/rename <name>` 修改当前 Session 名称；`/agent`、Tab 和 Shift+Tab 只切换当前 Session 的 Agent mode；`/models` 只切换当前 Session 的 model。Embedded 与 Shared 的 `/help` 都从 Action Registry 展示 `/rename <name>`；在 slash menu 中选择它只预填命令并等待用户输入名称。若外部来源使用相同命令名，用户明确选择的 BitFun 命令可完成这一次参数提交，即使偏好保存失败也不会重新弹出来源选择。它们不进入管理页面，也不修改未来 Session 的默认值。其他不支持动作不显示为可执行入口。Session 切换失败保留原控制权；单个连接已有活动 Turn 时拒绝重复提交以及 Session rename/mode/model update；事件订阅失效后当前视图立即失效并要求重启 Shared TUI。
+
+部署差异由 CLI Runtime client 封装。Embedded 以 Rust 类型直接调用 `AgentRuntime`，不初始化 IPC 或执行 JSON 编解码；Shared 将同一业务请求映射为一个有界本机 frame，Client/Server 各自只编码一次，再交给同一 Runtime owner。多 TUI 复用一个 Runtime 进程，连接和队列保持有界，不按 TUI 数量复制 Session owner。详细的 4+1 视图、帧上限和并发边界见
+[`agent-runtime-deployment-design.md`](agent-runtime-deployment-design.md)。
 
 #### 管理与诊断
 
@@ -298,6 +301,8 @@ TUI renderer、实验性接口和完整外部 Server 协议按总矩阵明确降
 | 层/模块 | 负责 | 不负责 |
 |---|---|---|
 | `src/apps/cli` | Clap 入口、TUI 状态/渲染、终端事件、入口本地设置、命令展示与结构化输出 | 会话状态机、工具执行、权限裁决、插件内部 ABI、品牌能力真值 |
+| CLI Runtime client | 屏蔽 Embedded/Shared 部署差异，将 CLI 的类型化调用映射到进程内 Runtime 或私有本机 IPC | 实现 Session 业务规则、暴露公开 SDK 或在两种部署中复制行为 |
+| `adapters/agent-runtime-ipc` | Shared TUI 的私有本机 transport、严格握手、frame 上限、连接控制和封闭 operation 映射 | 服务 Embedded、公开协议、Remote transport 或 Runtime 业务 owner |
 | `assembly/product-capabilities` | Delivery Profile、Product Capability 计划、静态 eligibility、服务需求和组装计划 | 品牌资源读取、动态可用性、用户配置、UI 状态、具体服务创建 |
 | 产品构建期校验 | 校验产品定义、品牌资源、TUI 布局选择和内置扩展版本，输出产品组装结果 | 创建运行时服务、实现终端行为或保存用户配置 |
 | Product Assembly | 读取产品组装结果中本次 CLI 需要的字段，选择能力/服务/扩展，构建 Runtime Parts | 读取原始品牌资源、实现 Agent/Tool/插件适配器/终端行为或运行构建脚本 |
@@ -333,6 +338,8 @@ CLI/TUI 的会话创建、列出、删除、恢复和历史转录读取通过 Ru
 由 Desktop 和 Peer Host 分别转换为现有协议；Desktop 保留既有远程空结果，Peer Host 返回明确不支持错误，远程请求都不进入本地实现。快照记录、持久化、事件、历史截断与维护编排仍在原归属模块。
 账户同步、富历史及其他未覆盖操作继续使用经过审查的 Core compatibility 方法，直到各自具备明确 owner、稳定 DTO、远程语义和行为等价测试。
 这是一条垂直链路迁移，不是删除整个兼容接口或新建 CLI 专用服务层。
+
+交互式命令 `/rename <name>` 复用已有 Session rename owner。Runtime 只写名称相关 metadata，再发布内存名称；写入失败时先恢复旧 metadata，无法确认恢复结果则返回 `outcome_unknown`。Shared 请求写入后的超时或断连也返回 `outcome_unknown`。两种情况都要求恢复 Session 后检查，不自动重试可能已经生效的写操作；发送前编码失败或请求过大则明确未执行并保留连接。Session 选择器不保留第二套内联重命名状态。
 
 Runtime Configuration Service 当前由 `bitfun-core/service/config` 负责。在经评审的 port/provider
 迁移完成前，CLI 和生态适配器不得另建写入器；adapter 只做 discover/parse/normalize，配置服务才能

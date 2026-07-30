@@ -182,6 +182,7 @@
       "modeCowork": "Cowork",
       "noSessions": "No sessions",
       "rename": "Rename",
+      "renameOutcomeUnknown": "The rename result is uncertain. Refresh or reopen the session list, then check the current title before retrying.",
       "copySessionId": "Copy ID",
       "copySessionIdSuccess": "Session ID copied",
       "copySessionIdFailed": "Failed to copy session ID",

@@ -182,6 +182,7 @@
       "modeCowork": "Cowork",
       "noSessions": "暫無會話",
       "rename": "重新命名",
+      "renameOutcomeUnknown": "重新命名結果尚不確定。請重新整理或重新開啟工作階段清單，確認目前名稱後再重試。",
       "copySessionId": "複製 ID",
       "copySessionIdSuccess": "已複製會話 ID",
       "copySessionIdFailed": "複製會話 ID 失敗",

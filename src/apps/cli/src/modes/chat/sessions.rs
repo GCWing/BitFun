@@ -41,6 +41,7 @@ impl ChatMode {
         self.workspace = chat_state.workspace.clone();
         self.refresh_workspace_git_status(chat_state, rt_handle);
         self.auto_approve_ask_override = None;
+        clear_selected_native_command_prefill(&mut self.selected_native_command_once, chat_view);
         chat_state.auto_approve_ask = self.auto_approve_ask_default;
         self.agent
             .set_approval_policy(crate::runtime::approval::CliApprovalPolicy::Ask);
@@ -92,6 +93,7 @@ impl ChatMode {
         self.workspace = chat_state.workspace.clone();
         self.refresh_workspace_git_status(chat_state, rt_handle);
         self.auto_approve_ask_override = None;
+        clear_selected_native_command_prefill(&mut self.selected_native_command_once, chat_view);
         chat_state.auto_approve_ask = self.auto_approve_ask_default;
         self.agent
             .set_approval_policy(crate::runtime::approval::CliApprovalPolicy::Ask);

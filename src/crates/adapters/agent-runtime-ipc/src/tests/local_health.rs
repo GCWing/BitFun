@@ -1,8 +1,9 @@
 use crate::{
     read_frame, write_frame, DiscoveryStore, InitializeRequest, RuntimeInstanceIdentity,
     RuntimeIpcClient, RuntimeIpcClientError, RuntimeIpcErrorCode, RuntimeIpcFrame,
-    RuntimeIpcOperation, RuntimeIpcServer, RuntimeIpcServerConfig, RuntimeIpcTransportError,
-    MAX_REQUEST_FRAME_BYTES, PROTOCOL_VERSION,
+    RuntimeIpcIoError, RuntimeIpcOperation, RuntimeIpcServer, RuntimeIpcServerConfig,
+    RuntimeIpcTransportError, RuntimeSessionRenameRequest, MAX_REQUEST_FRAME_BYTES,
+    PROTOCOL_VERSION,
 };
 use std::time::Duration;
 use tempfile::tempdir;
@@ -66,6 +67,53 @@ async fn authenticated_client_can_read_health_and_idle_server_cleans_discovery()
         .expect("server task joins")
         .expect("server exits cleanly");
     assert_eq!(store.read().expect("read cleaned discovery"), None);
+}
+
+#[tokio::test]
+async fn oversized_request_is_rejected_before_send_without_closing_the_connection() {
+    let runtime_root = tempdir().expect("runtime root");
+    let workspace = tempdir().expect("workspace");
+    let identity = runtime_identity(workspace.path());
+    let server = RuntimeIpcServer::bind(runtime_root.path(), identity, server_config())
+        .await
+        .expect("bind server");
+    let discovery = server.discovery_record().clone();
+    let server_task = tokio::spawn(server.serve());
+    let client = RuntimeIpcClient::connect(
+        runtime_root.path(),
+        &discovery,
+        "oversized-request-test",
+        "0.1.0",
+        Duration::from_secs(2),
+        Duration::from_secs(2),
+    )
+    .await
+    .expect("initialize client");
+
+    let error = client
+        .request(RuntimeIpcOperation::RenameSession {
+            request: RuntimeSessionRenameRequest {
+                session_id: "session-1".to_string(),
+                session_name: "x".repeat(MAX_REQUEST_FRAME_BYTES),
+            },
+        })
+        .await
+        .expect_err("oversized request must fail before transport write");
+    assert!(matches!(
+        error,
+        RuntimeIpcClientError::RequestEncoding(RuntimeIpcIoError::FrameTooLarge { .. })
+    ));
+    client
+        .health()
+        .await
+        .expect("pre-send rejection must leave the connection usable");
+
+    drop(client);
+    tokio::time::timeout(Duration::from_secs(2), server_task)
+        .await
+        .expect("server exits after idle timeout")
+        .expect("server task joins")
+        .expect("server exits cleanly");
 }
 
 #[tokio::test]

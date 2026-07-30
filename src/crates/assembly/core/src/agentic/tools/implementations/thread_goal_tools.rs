@@ -57,6 +57,9 @@ fn thread_goal_port_error(port_error: PortError) -> BitFunError {
         PortErrorKind::NotAvailable => {
             user_facing_thread_goal_error(BitFunError::NotImplemented(port_error.message))
         }
+        PortErrorKind::OutcomeUnknown => {
+            user_facing_thread_goal_error(BitFunError::OutcomeUnknown(port_error.message))
+        }
         PortErrorKind::PermissionDenied
         | PortErrorKind::SessionInUse
         | PortErrorKind::CleanupRequired

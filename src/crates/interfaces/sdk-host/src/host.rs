@@ -2161,6 +2161,7 @@ fn runtime_error_facts(error: &RuntimeError) -> (ErrorCode, bool, Option<Recover
                 false,
                 Some(RecoveryAction::RestartHost),
             ),
+            PortErrorKind::OutcomeUnknown => (ErrorCode::ActionRequired, false, None),
             PortErrorKind::Backend => {
                 (ErrorCode::Internal, true, Some(RecoveryAction::RestartHost))
             }
@@ -2193,6 +2194,7 @@ fn runtime_error_kind(error: &RuntimeError) -> &'static str {
             PortErrorKind::Timeout => "timeout",
             PortErrorKind::SessionInUse => "session_in_use",
             PortErrorKind::CleanupRequired => "cleanup_required",
+            PortErrorKind::OutcomeUnknown => "outcome_unknown",
             PortErrorKind::Backend => "backend",
         },
         RuntimeError::MissingDialogTurnPort
@@ -2212,7 +2214,7 @@ fn runtime_error_kind(error: &RuntimeError) -> &'static str {
 }
 
 #[cfg(test)]
-mod session_conflict_tests {
+mod runtime_error_tests {
     use super::{runtime_error_facts, runtime_error_kind};
     use crate::protocol::{ErrorCode, RecoveryAction};
     use bitfun_agent_runtime::sdk::{PortError, PortErrorKind, RuntimeError};
@@ -2229,5 +2231,19 @@ mod session_conflict_tests {
             (ErrorCode::ActionRequired, true, Some(RecoveryAction::Retry))
         );
         assert_eq!(runtime_error_kind(&error), "session_in_use");
+    }
+
+    #[test]
+    fn unknown_outcome_requires_an_authoritative_read_before_retry() {
+        let error = RuntimeError::Port(PortError::new(
+            PortErrorKind::OutcomeUnknown,
+            "inspect authoritative state",
+        ));
+
+        assert_eq!(
+            runtime_error_facts(&error),
+            (ErrorCode::ActionRequired, false, None)
+        );
+        assert_eq!(runtime_error_kind(&error), "outcome_unknown");
     }
 }

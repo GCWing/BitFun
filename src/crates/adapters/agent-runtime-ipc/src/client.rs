@@ -1,12 +1,13 @@
 use crate::{
-    read_frame_strict_with_limit, serialize_frame_with_limit, write_frame, DiscoveryRecord,
-    HealthResult, InitializeRequest, LocalIpcEndpoint, RuntimeIpcCapabilities, RuntimeIpcError,
-    RuntimeIpcFrame, RuntimeIpcFrameReader, RuntimeIpcIoError, RuntimeIpcOperation,
-    RuntimeIpcOperationResult, RuntimeIpcTransportError, MAX_REQUEST_FRAME_BYTES,
-    MAX_RESPONSE_FRAME_BYTES, PROTOCOL_VERSION,
+    read_frame_strict_with_limit, serialize_frame_with_limit, write_frame,
+    write_serialized_frame_with_limit, DiscoveryRecord, HealthResult, InitializeRequest,
+    LocalIpcEndpoint, RuntimeIpcCapabilities, RuntimeIpcError, RuntimeIpcFrame,
+    RuntimeIpcFrameReader, RuntimeIpcIoError, RuntimeIpcOperation, RuntimeIpcOperationResult,
+    RuntimeIpcTransportError, MAX_REQUEST_FRAME_BYTES, MAX_RESPONSE_FRAME_BYTES, PROTOCOL_VERSION,
 };
 use std::fmt;
 use std::path::Path;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::{broadcast, mpsc, oneshot, watch, Mutex, OwnedMutexGuard};
@@ -26,13 +27,15 @@ pub struct RuntimeIpcClient {
     instance_identity: String,
     request_timeout: Duration,
     request_gate: Arc<Mutex<()>>,
+    next_request_id: Arc<AtomicU64>,
     events: broadcast::Sender<RuntimeIpcClientEvent>,
     capabilities: RuntimeIpcCapabilities,
     disconnect: watch::Sender<bool>,
 }
 
 struct ClientCommand {
-    operation: RuntimeIpcOperation,
+    request_id: u64,
+    frame_bytes: Vec<u8>,
     response: oneshot::Sender<PendingResponse>,
     deadline: tokio::time::Instant,
     _request_gate: OwnedMutexGuard<()>,
@@ -41,7 +44,6 @@ struct ClientCommand {
 enum PendingResponse {
     Result(RuntimeIpcOperationResult),
     Remote(RuntimeIpcError),
-    RequestIdExhausted,
     Timeout,
     Io(RuntimeIpcIoError),
     Disconnected,
@@ -140,6 +142,7 @@ impl RuntimeIpcClient {
             instance_identity: discovery.instance_identity.as_str().to_string(),
             request_timeout,
             request_gate: Arc::new(Mutex::new(())),
+            next_request_id: Arc::new(AtomicU64::new(2)),
             events,
             capabilities,
             disconnect,
@@ -159,19 +162,27 @@ impl RuntimeIpcClient {
         operation: RuntimeIpcOperation,
     ) -> Result<RuntimeIpcOperationResult, RuntimeIpcClientError> {
         let request_gate = self.request_gate.clone().lock_owned().await;
-        serialize_frame_with_limit(
+        let request_id = self
+            .next_request_id
+            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |value| {
+                value.checked_add(1)
+            })
+            .map_err(|_| RuntimeIpcClientError::RequestIdExhausted)?;
+        let frame_bytes = serialize_frame_with_limit(
             &RuntimeIpcFrame::Request {
-                request_id: u64::MAX,
-                operation: operation.clone(),
+                request_id,
+                operation,
             },
             MAX_REQUEST_FRAME_BYTES,
-        )?;
+        )
+        .map_err(RuntimeIpcClientError::RequestEncoding)?;
         let deadline = tokio::time::Instant::now() + self.request_timeout;
         let (sender, receiver) = oneshot::channel();
         match tokio::time::timeout_at(
             deadline,
             self.commands.send(ClientCommand {
-                operation,
+                request_id,
+                frame_bytes,
                 response: sender,
                 deadline,
                 _request_gate: request_gate,
@@ -198,7 +209,6 @@ impl RuntimeIpcClient {
         match response {
             PendingResponse::Result(result) => Ok(result),
             PendingResponse::Remote(error) => Err(RuntimeIpcClientError::Remote(error)),
-            PendingResponse::RequestIdExhausted => Err(RuntimeIpcClientError::RequestIdExhausted),
             PendingResponse::Timeout => Err(RuntimeIpcClientError::Timeout),
             PendingResponse::Io(error) => Err(RuntimeIpcClientError::Io(error)),
             PendingResponse::Disconnected => Err(RuntimeIpcClientError::Disconnected),
@@ -225,7 +235,6 @@ async fn run_connection(
     events: broadcast::Sender<RuntimeIpcClientEvent>,
     mut disconnect: watch::Receiver<bool>,
 ) {
-    let mut next_request_id = 2u64;
     let mut pending = std::collections::HashMap::new();
     let mut frames = RuntimeIpcFrameReader::new(MAX_RESPONSE_FRAME_BYTES);
     loop {
@@ -240,21 +249,19 @@ async fn run_connection(
                 let Some(command) = command else {
                     break;
                 };
-                let Some(incremented) = next_request_id.checked_add(1) else {
-                    let _ = command.response.send(PendingResponse::RequestIdExhausted);
-                    break;
-                };
-                let request_id = next_request_id;
-                next_request_id = incremented;
+                let request_id = command.request_id;
                 if tokio::time::Instant::now() >= command.deadline {
                     let _ = command.response.send(PendingResponse::Timeout);
                     continue;
                 }
-                let frame = RuntimeIpcFrame::Request {
-                    request_id,
-                    operation: command.operation,
-                };
-                match tokio::time::timeout_at(command.deadline, write_frame(&mut stream, &frame)).await {
+                match tokio::time::timeout_at(
+                    command.deadline,
+                    write_serialized_frame_with_limit(
+                        &mut stream,
+                        &command.frame_bytes,
+                        MAX_REQUEST_FRAME_BYTES,
+                    ),
+                ).await {
                     Err(_) => {
                         let _ = command.response.send(PendingResponse::Timeout);
                         break;
@@ -334,6 +341,8 @@ pub enum RuntimeIpcClientError {
     UnexpectedResponse,
     #[error("runtime IPC request identifiers are exhausted")]
     RequestIdExhausted,
+    #[error("runtime IPC request could not be encoded")]
+    RequestEncoding(#[source] RuntimeIpcIoError),
     #[error("runtime IPC timeouts must be greater than zero")]
     InvalidTimeout,
     #[error("runtime IPC request was rejected: {0:?}")]

@@ -24,12 +24,29 @@ where
     W: AsyncWrite + Unpin,
 {
     let bytes = serialize_frame_with_limit(frame, max_bytes)?;
+    write_serialized_frame_with_limit(writer, &bytes, max_bytes).await
+}
+
+pub(crate) async fn write_serialized_frame_with_limit<W>(
+    writer: &mut W,
+    bytes: &[u8],
+    max_bytes: usize,
+) -> Result<(), RuntimeIpcIoError>
+where
+    W: AsyncWrite + Unpin,
+{
+    if bytes.len() > max_bytes {
+        return Err(RuntimeIpcIoError::FrameTooLarge {
+            size: bytes.len(),
+            max_bytes,
+        });
+    }
     writer
         .write_u32(bytes.len() as u32)
         .await
         .map_err(RuntimeIpcIoError::Io)?;
     writer
-        .write_all(&bytes)
+        .write_all(bytes)
         .await
         .map_err(RuntimeIpcIoError::Io)?;
     writer.flush().await.map_err(RuntimeIpcIoError::Io)

@@ -1,15 +1,15 @@
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use bitfun_agent_runtime::sdk::{
-    AgentRuntime, AgentSessionRestoreRequest, AgentUserAnswersRequest, DialogSubmitOutcome,
-    PermissionRequest, PermissionRequestEvent, PortErrorKind, RuntimeError,
+    AgentRuntime, AgentSessionRenameRequest, AgentSessionRestoreRequest, AgentUserAnswersRequest,
+    DialogSubmitOutcome, PermissionRequest, PermissionRequestEvent, PortErrorKind, RuntimeError,
     SessionTranscriptRequest,
 };
 use bitfun_agent_runtime_ipc::{
     DiscoveryStore, RuntimeInstanceIdentity, RuntimeIpcClient, RuntimeIpcError,
     RuntimeIpcErrorCode, RuntimeIpcEvent, RuntimeIpcOperation, RuntimeIpcOperationResult,
     RuntimeIpcRequestHandler, RuntimeIpcServer, RuntimeIpcServerConfig,
-    RuntimeIpcStreamInvalidationReason, PROTOCOL_VERSION,
+    RuntimeIpcStreamInvalidationReason, RuntimeSessionRenameRequest, PROTOCOL_VERSION,
 };
 use bitfun_core::runtime_ownership::CoreRuntimeOwnership;
 use bitfun_events::{AgenticEvent, ToolEventData};
@@ -272,6 +272,13 @@ impl RuntimeIpcRequestHandler for SharedRuntimeHandler {
                     .map_err(runtime_ipc_error)?;
                 Ok(RuntimeIpcOperationResult::Unit)
             }
+            RuntimeIpcOperation::RenameSession { request } => {
+                self.runtime
+                    .rename_session(owned_session_rename_request(&self.workspace, request))
+                    .await
+                    .map_err(runtime_ipc_error)?;
+                Ok(RuntimeIpcOperationResult::Unit)
+            }
             RuntimeIpcOperation::SubmitTurn { request } => {
                 let outcome = self
                     .runtime
@@ -377,6 +384,19 @@ impl RuntimeIpcRequestHandler for SharedRuntimeHandler {
         session_id: &str,
     ) -> std::result::Result<broadcast::Receiver<RuntimeIpcEvent>, RuntimeIpcError> {
         subscribe_session_events(&self.events, &self.event_stream_available, session_id)
+    }
+}
+
+fn owned_session_rename_request(
+    workspace: &Path,
+    request: RuntimeSessionRenameRequest,
+) -> AgentSessionRenameRequest {
+    AgentSessionRenameRequest {
+        workspace_path: workspace.to_string_lossy().to_string(),
+        session_id: request.session_id,
+        session_name: request.session_name,
+        remote_connection_id: None,
+        remote_ssh_host: None,
     }
 }
 
@@ -936,6 +956,9 @@ fn runtime_ipc_error(error: RuntimeError) -> RuntimeIpcError {
         RuntimeError::Port(port_error) if port_error.kind == PortErrorKind::InvalidRequest => {
             RuntimeIpcErrorCode::InvalidRequest
         }
+        RuntimeError::Port(port_error) if port_error.kind == PortErrorKind::OutcomeUnknown => {
+            RuntimeIpcErrorCode::OutcomeUnknown
+        }
         _ => RuntimeIpcErrorCode::Unavailable,
     };
     RuntimeIpcError {
@@ -948,20 +971,91 @@ fn runtime_ipc_error(error: RuntimeError) -> RuntimeIpcError {
 mod tests {
     use super::{
         await_permission_route, connect_existing, index_user_question, invalidate_event_stream,
-        permission_event_session, permission_targets_session, project_subagent_link_route,
-        project_user_question_route, publish_event, route_agent_event, runtime_ipc_error,
-        subscribe_session_events, SessionEventSenders, EVENT_BUFFER,
+        owned_session_rename_request, permission_event_session, permission_targets_session,
+        project_subagent_link_route, project_user_question_route, publish_event, route_agent_event,
+        runtime_ipc_error, subscribe_session_events, SessionEventSenders, SharedRuntimeHandler,
+        EVENT_BUFFER,
     };
     use bitfun_agent_runtime::sdk::{
-        PermissionDelegationContext, PermissionReplySource, PermissionRequest,
-        PermissionRequestEvent, PermissionRequestSource, PermissionRequestSourceKind, PortError,
-        PortErrorKind, RuntimeError,
+        AgentRuntimeBuilder, AgentSessionCreateRequest, AgentSessionCreateResult,
+        AgentSessionDeleteRequest, AgentSessionListRequest, AgentSessionManagementPort,
+        AgentSessionRenameRequest, AgentSessionSummary, AgentSessionWorkspaceBinding,
+        AgentSessionWorkspaceRequest, AgentSubmissionPort, AgentSubmissionRequest,
+        AgentSubmissionResult, PermissionDelegationContext, PermissionReplySource,
+        PermissionRequest, PermissionRequestEvent, PermissionRequestSource,
+        PermissionRequestSourceKind, PortError, PortErrorKind, PortResult, RuntimeError,
+    };
+    use bitfun_agent_runtime_ipc::{
+        RuntimeIpcErrorCode, RuntimeIpcOperation, RuntimeIpcOperationResult,
+        RuntimeIpcRequestHandler, RuntimeSessionRenameRequest,
     };
     use bitfun_events::{AgenticEvent, ToolEventData, ToolEventIdentity};
     use std::collections::HashMap;
     use std::sync::{Arc, Mutex};
     use std::time::Duration;
     use tokio::sync::{watch, Notify};
+
+    #[derive(Default)]
+    struct RecordingSessionPort {
+        rename_requests: Mutex<Vec<AgentSessionRenameRequest>>,
+    }
+
+    #[async_trait::async_trait]
+    impl AgentSubmissionPort for RecordingSessionPort {
+        async fn create_session(
+            &self,
+            request: AgentSessionCreateRequest,
+        ) -> PortResult<AgentSessionCreateResult> {
+            Ok(AgentSessionCreateResult::new(
+                "session-1",
+                request.session_name,
+                request.agent_type,
+            ))
+        }
+
+        async fn submit_message(
+            &self,
+            request: AgentSubmissionRequest,
+        ) -> PortResult<AgentSubmissionResult> {
+            Ok(AgentSubmissionResult {
+                turn_id: request.turn_id.unwrap_or_else(|| "turn-1".to_string()),
+                accepted: true,
+            })
+        }
+
+        async fn resolve_session_agent_type(
+            &self,
+            _session_id: &str,
+        ) -> PortResult<Option<String>> {
+            Ok(Some("agentic".to_string()))
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl AgentSessionManagementPort for RecordingSessionPort {
+        async fn list_sessions(
+            &self,
+            _request: AgentSessionListRequest,
+        ) -> PortResult<Vec<AgentSessionSummary>> {
+            Ok(Vec::new())
+        }
+
+        async fn delete_session(&self, _request: AgentSessionDeleteRequest) -> PortResult<()> {
+            Ok(())
+        }
+
+        async fn rename_session(&self, request: AgentSessionRenameRequest) -> PortResult<()> {
+            self.rename_requests.lock().unwrap().push(request);
+            Ok(())
+        }
+
+        async fn resolve_session_workspace_binding(
+            &self,
+            _request: AgentSessionWorkspaceRequest,
+        ) -> PortResult<Option<AgentSessionWorkspaceBinding>> {
+            Ok(None)
+        }
+    }
 
     #[test]
     fn session_writer_conflict_reuses_the_existing_ipc_error() {
@@ -986,6 +1080,83 @@ mod tests {
         assert_eq!(
             error.code,
             bitfun_agent_runtime_ipc::RuntimeIpcErrorCode::InvalidRequest
+        );
+    }
+
+    #[test]
+    fn unknown_runtime_outcomes_keep_their_ipc_error_category() {
+        let error = runtime_ipc_error(RuntimeError::Port(PortError::new(
+            PortErrorKind::OutcomeUnknown,
+            "inspect authoritative state",
+        )));
+
+        assert_eq!(error.code, RuntimeIpcErrorCode::OutcomeUnknown);
+    }
+
+    #[test]
+    fn shared_rename_uses_the_server_workspace_and_no_remote_identity() {
+        let request = owned_session_rename_request(
+            std::path::Path::new("D:/workspace/project"),
+            RuntimeSessionRenameRequest {
+                session_id: "session-1".to_string(),
+                session_name: "Auth refactor".to_string(),
+            },
+        );
+
+        assert_eq!(request.workspace_path, "D:/workspace/project");
+        assert_eq!(request.session_id, "session-1");
+        assert_eq!(request.session_name, "Auth refactor");
+        assert!(request.remote_connection_id.is_none());
+        assert!(request.remote_ssh_host.is_none());
+    }
+
+    #[tokio::test]
+    async fn embedded_and_shared_rename_reach_the_same_runtime_owner() {
+        let workspace = tempfile::tempdir().expect("workspace");
+        let canonical_workspace = dunce::canonicalize(workspace.path()).expect("workspace path");
+        let workspace_path = canonical_workspace.to_string_lossy().to_string();
+        let port = Arc::new(RecordingSessionPort::default());
+        let runtime = AgentRuntimeBuilder::new()
+            .with_submission_port(port.clone())
+            .with_session_management_port(port.clone())
+            .build()
+            .expect("runtime");
+        let expected = AgentSessionRenameRequest {
+            workspace_path: workspace_path.clone(),
+            session_id: "session-1".to_string(),
+            session_name: "Auth refactor".to_string(),
+            remote_connection_id: None,
+            remote_ssh_host: None,
+        };
+
+        runtime
+            .rename_session(expected.clone())
+            .await
+            .expect("embedded rename");
+
+        let (event_stream_available, _) = watch::channel(true);
+        let handler = SharedRuntimeHandler {
+            runtime,
+            workspace: canonical_workspace,
+            events: Arc::new(Mutex::new(HashMap::new())),
+            question_sessions: Arc::new(Mutex::new(HashMap::new())),
+            subagent_routes: Arc::new(Mutex::new(HashMap::new())),
+            event_stream_available,
+        };
+        let result = handler
+            .execute(RuntimeIpcOperation::RenameSession {
+                request: RuntimeSessionRenameRequest {
+                    session_id: "session-1".to_string(),
+                    session_name: "Auth refactor".to_string(),
+                },
+            })
+            .await
+            .expect("shared rename");
+
+        assert_eq!(result, RuntimeIpcOperationResult::Unit);
+        assert_eq!(
+            port.rename_requests.lock().unwrap().as_slice(),
+            &[expected.clone(), expected]
         );
     }
 

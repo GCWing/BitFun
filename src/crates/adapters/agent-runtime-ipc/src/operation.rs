@@ -14,6 +14,13 @@ pub struct RuntimeSessionRestoreRequest {
     pub session_id: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RuntimeSessionRenameRequest {
+    pub session_id: String,
+    pub session_name: String,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct RuntimeUserAnswersRequest {
@@ -46,6 +53,9 @@ pub enum RuntimeIpcOperation {
     UpdateSessionModel {
         request: AgentSessionModelUpdateRequest,
     },
+    RenameSession {
+        request: RuntimeSessionRenameRequest,
+    },
     SubmitTurn {
         request: AgentDialogTurnRequest,
     },
@@ -71,6 +81,7 @@ impl RuntimeIpcOperation {
             Self::RestoreSession { request } => Some(&request.session_id),
             Self::UpdateSessionMode { request } => Some(&request.session_id),
             Self::UpdateSessionModel { request } => Some(&request.session_id),
+            Self::RenameSession { request } => Some(&request.session_id),
             Self::SubmitTurn { request } => Some(&request.session_id),
             Self::CancelTurn { request } => Some(&request.session_id),
             Self::PendingPermissions { session_id }
@@ -85,6 +96,7 @@ impl RuntimeIpcOperation {
             self,
             Self::UpdateSessionMode { .. }
                 | Self::UpdateSessionModel { .. }
+                | Self::RenameSession { .. }
                 | Self::SubmitTurn { .. }
                 | Self::CancelTurn { .. }
                 | Self::PendingPermissions { .. }

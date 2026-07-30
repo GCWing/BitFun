@@ -6,7 +6,7 @@ export const forbiddenContentRules = [
     reason: 'agent-runtime-ipc operation scope is frozen to the reviewed Shared TUI slice',
     patterns: [
       {
-        regex: /^\s+(?!(?:Health|ListSessions|CreateSession|RestoreSession|UpdateSessionMode|UpdateSessionModel|SubmitTurn|CancelTurn|PendingPermissions|RespondPermission|SubmitUserAnswers|Unit|Sessions|SessionCreated|SessionRestored|TurnAccepted|TurnCancelled|Self|AgentDialogTurnRequest|AgentSessionCreateRequest|AgentSessionCreateResult|AgentSessionListRequest|AgentSessionModeUpdateRequest|AgentSessionModelUpdateRequest|AgentSessionSummary|AgentTurnCancellationRequest|AgentTurnCancellationResult|SessionTranscript)\b)[A-Z][A-Za-z0-9_]*\b/,
+        regex: /^\s+(?!(?:Health|ListSessions|CreateSession|RestoreSession|RenameSession|UpdateSessionMode|UpdateSessionModel|SubmitTurn|CancelTurn|PendingPermissions|RespondPermission|SubmitUserAnswers|Unit|Sessions|SessionCreated|SessionRestored|TurnAccepted|TurnCancelled|Self|AgentDialogTurnRequest|AgentSessionCreateRequest|AgentSessionCreateResult|AgentSessionListRequest|AgentSessionModeUpdateRequest|AgentSessionModelUpdateRequest|AgentSessionSummary|AgentTurnCancellationRequest|AgentTurnCancellationResult|SessionTranscript)\b)[A-Z][A-Za-z0-9_]*\b/,
         message:
           'agent-runtime-ipc may not add replay, observer, controller-transfer, deletion, fork, or other operations beyond the reviewed Shared TUI slice',
       },

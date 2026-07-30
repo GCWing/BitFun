@@ -75,6 +75,7 @@ pub(crate) enum ActionHandler {
     AddModel,
     NewSession,
     Sessions,
+    RenameSession,
     Skills,
     ReloadSkills,
     McpServers,
@@ -114,7 +115,7 @@ pub(crate) enum ActionHandler {
 pub(crate) const SHARED_TUI_EMBEDDED_HANDOFF: &str =
     "Exit all Shared TUI clients, wait up to 30 seconds for their Runtime to stop, then use default Embedded `bitfun chat`";
 pub(crate) const SHARED_TUI_HELP_NOTE: &str =
-    "Shared TUI: start with `bitfun chat --shared`. Multiple TUI processes reuse one workspace Runtime, while each TUI controls at most one Session and each Session has one controller. Use `/agent`, Tab, or Shift+Tab to change the current Session Agent mode, and `/models` to change its model. Model configuration, Agent/Subagent management, MCP, extension, account-sync, usage, and other management remain Embedded. Exit all Shared TUI clients and wait up to 30 seconds before returning to default Embedded `bitfun chat`.";
+    "Shared TUI: start with `bitfun chat --shared`. Multiple TUI processes reuse one workspace Runtime, while each TUI controls at most one Session and each Session has one controller. Use `/rename <name>` to rename the current Session, `/agent`, Tab, or Shift+Tab to change its Agent mode, and `/models` to change its model. Model configuration, Agent/Subagent management, MCP, extension, account-sync, usage, and other management remain Embedded. Exit all Shared TUI clients and wait up to 30 seconds before returning to default Embedded `bitfun chat`.";
 
 impl ActionHandler {
     pub(crate) const fn available_in_shared_tui(self, context: ActionContext) -> bool {
@@ -126,6 +127,7 @@ impl ActionHandler {
                     | Self::SelectTheme
                     | Self::NewSession
                     | Self::Sessions
+                    | Self::RenameSession
                     | Self::AcpHelp
                     | Self::Init
                     | Self::History
@@ -370,6 +372,21 @@ static ACTION_SPECS: &[ActionSpec] = &[
         palette: palette("Session", false),
         shortcut_label: None,
         slash_on_startup: true,
+    },
+    ActionSpec {
+        id: "rename_session",
+        name: "Rename session",
+        aliases: &["/rename"],
+        description: "Rename the current session: /rename <name>",
+        contexts: CHAT,
+        availability: ActionAvailability::Idle,
+        handler: ActionHandler::RenameSession,
+        default_bindings: &[],
+        fallback_bindings: &[],
+        shortcut_field: None,
+        palette: None,
+        shortcut_label: None,
+        slash_on_startup: false,
     },
     ActionSpec {
         id: "skills",
@@ -1795,6 +1812,7 @@ mod tests {
             ActionHandler::SwitchAgent,
             ActionHandler::SwitchAgentReverse,
             ActionHandler::SelectModel,
+            ActionHandler::RenameSession,
         ] {
             assert!(
                 action.available_in_shared_tui(ActionContext::Chat),
@@ -1819,8 +1837,24 @@ mod tests {
         assert!(SHARED_TUI_HELP_NOTE.contains("bitfun chat --shared"));
         assert!(SHARED_TUI_HELP_NOTE.contains("one Session"));
         assert!(SHARED_TUI_HELP_NOTE.contains("`/models`"));
+        assert!(SHARED_TUI_HELP_NOTE.contains("`/rename <name>`"));
         assert!(SHARED_TUI_HELP_NOTE.contains("Agent/Subagent management"));
         assert!(SHARED_TUI_HELP_NOTE.contains("remain Embedded"));
+    }
+
+    #[test]
+    fn rename_is_an_idle_current_session_chat_action() {
+        let action = action_by_id("rename_session", ActionContext::Chat)
+            .expect("current session rename action");
+
+        assert_eq!(action.aliases, &["/rename"]);
+        assert_eq!(action.handler, ActionHandler::RenameSession);
+        assert_eq!(action.availability, ActionAvailability::Idle);
+        assert!(action.description.contains("/rename <name>"));
+        assert!(action.available(ActionState::chat(false, false)));
+        assert!(action.available(ActionState::chat(false, false).for_shared_tui()));
+        assert!(!action.available(ActionState::chat(true, false)));
+        assert!(action_by_id("rename_session", ActionContext::Startup).is_none());
     }
 
     #[test]
@@ -1846,6 +1880,7 @@ mod tests {
         assert!(palette_ids.contains(&"switch_agent"));
         assert!(slash_ids.contains(&"select_model"));
         assert!(palette_ids.contains(&"select_model"));
+        assert!(slash_ids.contains(&"rename_session"));
 
         let help = ResolvedKeymap::new(&ShortcutsConfig::default()).help_text(state);
         assert!(help.contains("Switch Agent"));

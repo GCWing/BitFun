@@ -350,6 +350,8 @@ pub struct PersistenceManager {
     fail_next_session_state_write: std::sync::Mutex<Option<String>>,
     #[cfg(test)]
     fail_next_session_metadata_write: std::sync::Mutex<Option<String>>,
+    #[cfg(test)]
+    fail_next_session_metadata_rollback: std::sync::Mutex<Option<String>>,
 }
 
 impl PersistenceManager {
@@ -361,6 +363,8 @@ impl PersistenceManager {
             fail_next_session_state_write: std::sync::Mutex::new(None),
             #[cfg(test)]
             fail_next_session_metadata_write: std::sync::Mutex::new(None),
+            #[cfg(test)]
+            fail_next_session_metadata_rollback: std::sync::Mutex::new(None),
         })
     }
 
@@ -391,6 +395,14 @@ impl PersistenceManager {
             .fail_next_session_metadata_write
             .lock()
             .expect("session metadata fault lock") = Some(session_id.to_string());
+    }
+
+    #[cfg(test)]
+    pub(crate) fn fail_next_session_metadata_rollback_for_test(&self, session_id: &str) {
+        *self
+            .fail_next_session_metadata_rollback
+            .lock()
+            .expect("session metadata rollback fault lock") = Some(session_id.to_string());
     }
 
     /// Resolve the on-disk sessions directory for `workspace_path`.
@@ -1148,6 +1160,95 @@ impl PersistenceManager {
                 session_id
             )))
         }
+    }
+
+    pub async fn update_session_title_metadata(
+        &self,
+        workspace_path: &Path,
+        session_id: &str,
+        session_name: &str,
+        last_active_at: u64,
+    ) -> BitFunResult<()> {
+        Self::validate_session_id(session_id)?;
+        let _session_write = self.lock_session_write_operation(workspace_path, session_id)?;
+        self.ensure_runtime_for_write(workspace_path).await?;
+        let persistence_lock = self
+            .get_session_persistence_lock(workspace_path, session_id)
+            .await;
+        let _persistence_guard = persistence_lock.lock().await;
+        let original = self
+            .load_session_metadata(workspace_path, session_id)
+            .await?
+            .ok_or_else(|| {
+                BitFunError::NotFound(format!("Session metadata not found: {session_id}"))
+            })?;
+        let mut updated = original.clone();
+        updated.session_name = session_name.to_string();
+        updated.last_active_at = last_active_at;
+
+        let Err(write_error) = self
+            .save_session_metadata_locked(workspace_path, &updated)
+            .await
+        else {
+            return Ok(());
+        };
+        if self
+            .load_session_metadata(workspace_path, session_id)
+            .await
+            .is_ok_and(|metadata| {
+                metadata.is_some_and(|metadata| {
+                    metadata.session_name == original.session_name
+                        && metadata.last_active_at == original.last_active_at
+                })
+            })
+        {
+            return Err(write_error);
+        }
+
+        #[cfg(test)]
+        let skip_rollback = {
+            let mut fault = self
+                .fail_next_session_metadata_rollback
+                .lock()
+                .expect("session metadata rollback fault lock");
+            if fault.as_deref() == Some(session_id) {
+                *fault = None;
+                true
+            } else {
+                false
+            }
+        };
+        #[cfg(not(test))]
+        let skip_rollback = false;
+
+        let rollback_error = if skip_rollback {
+            Some(BitFunError::io(
+                "Injected session metadata rollback failure",
+            ))
+        } else {
+            self.save_session_metadata_locked(workspace_path, &original)
+                .await
+                .err()
+        };
+        if self
+            .load_session_metadata(workspace_path, session_id)
+            .await
+            .is_ok_and(|metadata| {
+                metadata.is_some_and(|metadata| {
+                    metadata.session_name == original.session_name
+                        && metadata.last_active_at == original.last_active_at
+                })
+            })
+        {
+            return Err(write_error);
+        }
+
+        Err(BitFunError::OutcomeUnknown(format!(
+            "Session title persistence failed and rollback did not restore the previous metadata: session_id={session_id}, error={write_error}, rollback_error={}",
+            rollback_error
+                .map(|error| error.to_string())
+                .unwrap_or_else(|| "none".to_string())
+        )))
     }
 
     pub async fn update_session_metadata_if_present(

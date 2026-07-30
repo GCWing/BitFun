@@ -71,7 +71,8 @@ BitFun 同时面向桌面 GUI、TUI/CLI、Web、ACP、Server、Remote、SDK 和�
 
 4+1 视图分别描述系统职责、代码组织、运行协作、部署边界和关键场景，避免把逻辑模块、crate、进程和调用链混在同一张图中。分类沿用 [Kruchten 4+1](https://www3.software.ibm.com/ibmdl/pub/software/rational/web/whitepapers/2003/Pbk4p1.pdf)，图的层级、动态协作和部署节点表达参考 [C4](https://c4model.com/diagrams) 以及 arc42 的 [Building Block](https://docs.arc42.org/section-5/)、[Runtime](https://docs.arc42.org/section-6/) 和 [Deployment](https://docs.arc42.org/section-7/) 视图；这些方法只提供视角和表达规则，不替代 BitFun 的真实 owner 与代码边界。
 
-Level 0 展示系统级主要边界和依赖方向；Level 1 再按 Level 0 的模块或范围展开。每张图必须能独立说明范围和图例，关系使用明确方向或协议，逻辑模块、crate、运行任务和部署实例不要求一一对应。
+Level 0 展示系统级主要边界和依赖方向；Level 1 再按 Level 0 的模块或范围展开。每张图必须能独立说明范围和图例，关系使用明确方向或协议，逻辑模块、crate、运行任务和部署实例不要求一一对应。Agent Runtime 的 Embedded/Shared 逻辑、开发、进程、物理和场景视图集中在
+[`agent-runtime-deployment-design.md`](agent-runtime-deployment-design.md)，本文件不重复其连接和性能细节。
 
 ### 2.1 Logical View · Level 0
 
@@ -528,6 +529,8 @@ flowchart LR
   API --> Runtime["共享 Runtime"]
   Assembly["产品组装"] -. "选择" .-> Runtime
 ```
+
+入口 adapter 消费同一 Runtime API，部署选择不能进入业务 owner：Embedded 使用进程内强类型调用；Shared 或 SDK Host 才在各自私有 adapter 中执行 transport 封装。GUI、TUI、Headless CLI、ACP 和 SDK 不共享 wire、renderer 或生命周期，也不得为了统一接口而让默认 Embedded 路径承担序列化成本。
 
 ### 4.2 插件调用
 

@@ -53,6 +53,7 @@ import type { TranscriptExportScope } from '@/flow_chat/utils/dialogTranscriptEx
 import { confirmWarning } from '@/component-library/components/ConfirmDialog/confirmService';
 import { notificationService } from '@/shared/notification-system';
 import { copyTextToClipboard } from '@/shared/utils/textSelection';
+import { isOutcomeUnknownError } from '@/infrastructure/api/errors/TauriCommandError';
 import { scheduleAfterStartupPaint, scheduleAfterStartupSignal } from '@/shared/utils/startupTaskScheduling';
 import {
   isNonLocalDispatchTarget,
@@ -983,12 +984,23 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
       try {
         await flowChatManager.renameChatSessionTitle(editingSessionId, trimmed);
       } catch (err) {
-        log.error('Failed to update session title', err);
+        log.error('Failed to update session title', { sessionId: editingSessionId, error: err });
+        if (isOutcomeUnknownError(err)) {
+          notificationService.warning(t('nav.sessions.renameOutcomeUnknown'), { duration: 6000 });
+          try {
+            await flowChatManager.reloadSessionTitle(editingSessionId);
+          } catch (refreshError) {
+            log.error('Failed to reload the session title after an unknown rename outcome', {
+              sessionId: editingSessionId,
+              error: refreshError,
+            });
+          }
+        }
       }
     }
     setEditingSessionId(null);
     setEditingTitle('');
-  }, [editingSessionId, editingTitle]);
+  }, [editingSessionId, editingTitle, t]);
 
   const handleCancelEdit = useCallback(() => {
     setEditingSessionId(null);

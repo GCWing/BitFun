@@ -101,16 +101,16 @@ export function isTauriCommandError(error: any): error is TauriCommandError {
 }
 
 const SESSION_IN_USE_PREFIX = 'session_in_use:';
+const OUTCOME_UNKNOWN_PREFIX = 'outcome_unknown:';
 
-/** Recognizes the stable Desktop/Peer error code without parsing localized prose. */
-export function isSessionInUseError(error: unknown): boolean {
+function hasStableErrorPrefix(error: unknown, prefix: string): boolean {
   const pending: unknown[] = [error];
   const seen = new Set<object>();
 
   for (let inspected = 0; pending.length > 0 && inspected < 12; inspected += 1) {
     const current = pending.shift();
     if (typeof current === 'string') {
-      if (current.trimStart().startsWith(SESSION_IN_USE_PREFIX)) return true;
+      if (current.trimStart().startsWith(prefix)) return true;
       continue;
     }
     if (!current || typeof current !== 'object' || seen.has(current)) continue;
@@ -131,4 +131,14 @@ export function isSessionInUseError(error: unknown): boolean {
   }
 
   return false;
+}
+
+/** Recognizes the stable Desktop/Peer error code without parsing localized prose. */
+export function isSessionInUseError(error: unknown): boolean {
+  return hasStableErrorPrefix(error, SESSION_IN_USE_PREFIX);
+}
+
+/** Identifies a mutation that must be read back before the user retries it. */
+export function isOutcomeUnknownError(error: unknown): boolean {
+  return hasStableErrorPrefix(error, OUTCOME_UNKNOWN_PREFIX);
 }

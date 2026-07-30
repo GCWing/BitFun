@@ -6,6 +6,7 @@ import {
   ensureBackendSession,
   hydrateSessionHistoryForDetail,
   preloadHistoricalSessionForOpen,
+  reloadSessionTitle,
   retryCreateBackendSession,
   resolveAgentTypeForSessionCreation,
   SESSION_ACTIVITY_TOUCH_DELAY_MS,
@@ -34,6 +35,7 @@ const configManagerMocks = vi.hoisted(() => ({
 
 const sessionApiMocks = vi.hoisted(() => ({
   archiveSession: vi.fn(),
+  loadSessionMetadata: vi.fn(),
 }));
 
 const persistenceMocks = vi.hoisted(() => ({
@@ -467,6 +469,44 @@ describe('createChatSession', () => {
       }),
     );
     expect(configManagerMocks.getConfigs).not.toHaveBeenCalled();
+  });
+});
+
+describe('reloadSessionTitle', () => {
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('replaces only the existing title from authoritative remote metadata', async () => {
+    const dialogTurns = [{ id: 'turn-1' }] as Session['dialogTurns'];
+    const session = createSession({
+      title: 'Stale title',
+      dialogTurns,
+      workspacePath: '/remote/worktree',
+      projectWorkspacePath: '/remote/project',
+      remoteConnectionId: 'connection-1',
+      remoteSshHost: 'ssh.example.test',
+    });
+    const { context, flowChatStore } = createContext(session);
+    sessionApiMocks.loadSessionMetadata.mockResolvedValue({
+      sessionId: session.sessionId,
+      sessionName: 'Authoritative title',
+      turnCount: 1,
+      customMetadata: null,
+    });
+
+    await reloadSessionTitle(context, session.sessionId);
+
+    expect(sessionApiMocks.loadSessionMetadata).toHaveBeenCalledWith(
+      session.sessionId,
+      '/remote/project',
+      'connection-1',
+      'ssh.example.test',
+    );
+    const updated = flowChatStore.getState().sessions.get(session.sessionId);
+    expect(updated?.title).toBe('Authoritative title');
+    expect(updated?.dialogTurns).toBe(dialogTurns);
+    expect(updated?.workspacePath).toBe('/remote/worktree');
   });
 });
 

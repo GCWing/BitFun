@@ -15,10 +15,11 @@
 ## 边界
 
 - 只导出 CLI adapter 实际使用的 workspace-private API，且 crate 不得发布，也不得把 wire 作为 SDK 合同。
-- 封闭 operation 范围为 Health、Session list/create/restore（restore 结果包含 transcript）、当前 Session 的 Agent mode/model update、Turn submit/cancel、pending/respond Permission 和 UserInput answers。断连 cleanup 属于内部生命周期，不是 detach operation。模型目录和默认值仍是 wire 之外的产品配置；禁止顺带加入 delete、fork、replay、observer、controller transfer、Tool/MCP/Hook 管理或其他产品配置。
+- 封闭 operation 范围为 Health、Session list/create/restore（restore 结果包含 transcript）、当前 Session rename 和 Agent mode/model update、Turn submit/cancel、pending/respond Permission 和 UserInput answers。断连 cleanup 属于内部生命周期，不是 detach operation。模型目录和默认值仍是 wire 之外的产品配置；禁止顺带加入 delete、fork、replay、observer、controller transfer、Tool/MCP/Hook 管理或其他产品配置。
 - 可以复用稳定 Event、Product Domain 和 Runtime Port DTO。禁止依赖 `bitfun-core`、Agent Runtime 实现、SDK Host、services、Tauri、terminal、tool runtime 或远程 transport。
 - 只使用 Windows Named Pipe 或 Unix Domain Socket；禁止 TCP、HTTP、WebSocket、浏览器访问或远程 fallback。
 - 这是本机同用户隔离，不是沙箱。未来产品 composition 必须提供当前用户私有 runtime 目录。
+- Embedded 调用方必须继续以强类型直接调用 Agent Runtime，不能初始化本 transport。Shared 的 request、response 和 event frame 在写出前只编码一次；不能为了吞吐量削弱严格解码、未知字段拒绝、frame 上限、有界队列和背压。
 
 ## 验证
 

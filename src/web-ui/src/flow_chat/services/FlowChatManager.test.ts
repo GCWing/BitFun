@@ -76,6 +76,7 @@ vi.mock('./flow-chat-manager', () => ({
   deleteChatSession: vi.fn(),
   archiveChatSession: vi.fn(),
   renameChatSessionTitle: vi.fn(),
+  reloadSessionTitle: vi.fn(),
   forkChatSession: vi.fn(),
   cleanupSaveState: vi.fn(),
   cleanupSessionBuffers: vi.fn(),

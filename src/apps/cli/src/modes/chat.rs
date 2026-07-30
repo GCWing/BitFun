@@ -175,6 +175,9 @@ enum PendingSessionUpdateKind {
         model_id: String,
         display_name: String,
     },
+    Rename {
+        session_name: String,
+    },
 }
 
 impl PendingSessionUpdateKind {
@@ -182,6 +185,7 @@ impl PendingSessionUpdateKind {
         match self {
             Self::Mode { .. } => "agent mode",
             Self::Model { .. } => "model",
+            Self::Rename { .. } => "name",
         }
     }
 
@@ -189,6 +193,7 @@ impl PendingSessionUpdateKind {
         match self {
             Self::Mode { mode_id } => mode_id,
             Self::Model { model_id, .. } => model_id,
+            Self::Rename { session_name } => session_name,
         }
     }
 }
@@ -203,7 +208,7 @@ struct PendingSessionUpdate {
 }
 
 const SESSION_UPDATE_SLOW_NOTICE: Duration = Duration::from_secs(15);
-const SHARED_TUI_CHAT_STATUS: &str = "Shared TUI preview: this view controls sessions, turns, the current Session Agent mode, and the current Session model; model management remains Embedded, along with local extension, MCP, account-sync, and Agent/Subagent management.";
+const SHARED_TUI_CHAT_STATUS: &str = "Shared TUI preview: this view controls sessions, turns, the current Session name, current Session Agent mode, and current Session model; model management remains Embedded, along with local extension, MCP, account-sync, and Agent/Subagent management.";
 
 #[derive(Default)]
 struct NonKeyEventOutcome {
@@ -244,6 +249,8 @@ pub(crate) struct ChatMode {
     /// One durable current-Session update in flight. The event loop remains responsive
     /// while the runtime owner writes session metadata.
     pending_session_update: Option<PendingSessionUpdate>,
+    /// One explicit native slash-menu choice waiting for its parameterized submission.
+    selected_native_command_once: Option<String>,
     external_source_snapshot: Option<ExternalSourceCatalogSnapshot>,
     external_source_conflict_choices: BTreeMap<String, String>,
     external_source_conflict_lineage_current_keys: BTreeMap<String, String>,
@@ -298,6 +305,7 @@ impl ChatMode {
             pending_mcp_op: None,
             pending_mcp_tasks: Vec::new(),
             pending_session_update: None,
+            selected_native_command_once: None,
             external_source_snapshot: None,
             external_source_conflict_choices: BTreeMap::new(),
             external_source_conflict_lineage_current_keys: BTreeMap::new(),

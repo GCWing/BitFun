@@ -1,6 +1,7 @@
 use crate::{
     serialize_frame_with_limit, InitializeRequest, RuntimeIpcFrame, RuntimeIpcOperation,
-    RuntimeUserAnswersRequest, MAX_REQUEST_FRAME_BYTES, PROTOCOL_VERSION,
+    RuntimeSessionRenameRequest, RuntimeUserAnswersRequest, MAX_REQUEST_FRAME_BYTES,
+    PROTOCOL_VERSION,
 };
 
 use bitfun_product_domains::tool_permissions::PermissionReply;
@@ -101,6 +102,36 @@ fn protocol_round_trips_the_reviewed_session_model_operation() {
     assert_eq!(encoded["request"]["modelId"], "provider/model");
     let decoded: RuntimeIpcOperation =
         serde_json::from_value(encoded).expect("deserialize model update");
+
+    assert_eq!(decoded, operation);
+    assert_eq!(decoded.session_id(), Some("session-1"));
+    assert!(decoded.requires_controller());
+}
+
+#[test]
+fn protocol_round_trips_the_current_session_rename_operation() {
+    assert_eq!(PROTOCOL_VERSION, 5);
+
+    let operation = RuntimeIpcOperation::RenameSession {
+        request: RuntimeSessionRenameRequest {
+            session_id: "session-1".to_string(),
+            session_name: "Auth refactor".to_string(),
+        },
+    };
+
+    let encoded = serde_json::to_value(&operation).expect("serialize session rename");
+    assert_eq!(
+        encoded,
+        json!({
+            "operation": "rename_session",
+            "request": {
+                "sessionId": "session-1",
+                "sessionName": "Auth refactor"
+            }
+        })
+    );
+    let decoded: RuntimeIpcOperation =
+        serde_json::from_value(encoded).expect("deserialize session rename");
 
     assert_eq!(decoded, operation);
     assert_eq!(decoded.session_id(), Some("session-1"));

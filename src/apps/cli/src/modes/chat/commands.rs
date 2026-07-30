@@ -9,7 +9,15 @@ fn pending_session_update_blocks_runtime_action(
 ) -> bool {
     shared_tui
         && pending_for_current_session
-        && matches!(handler, ActionHandler::Sessions | ActionHandler::Init)
+        && matches!(
+            handler,
+            ActionHandler::Sessions | ActionHandler::RenameSession | ActionHandler::Init
+        )
+}
+
+fn requested_session_name(arguments: &str) -> Option<String> {
+    let session_name = arguments.trim();
+    (!session_name.is_empty()).then(|| session_name.to_string())
 }
 
 fn native_command_choice_is_active(
@@ -36,7 +44,72 @@ fn native_command_reconfirmation_is_required(
         && !current_native_choice_is_active
 }
 
+fn builtin_arguments_route(route: CommandRoute, handler: ActionHandler) -> bool {
+    route == CommandRoute::Builtin && handler == ActionHandler::RenameSession
+}
+
+fn selected_command_prefill(handler: ActionHandler) -> Option<&'static str> {
+    match handler {
+        ActionHandler::RenameSession => Some("/rename "),
+        _ => None,
+    }
+}
+
+fn begin_slash_menu_selection(
+    selected_command: &mut Option<String>,
+    selected_command_name: Option<&str>,
+) {
+    if selected_command_name.is_some() {
+        *selected_command = None;
+    }
+}
+
+fn consume_selected_native_command_once(
+    selected_command: &mut Option<String>,
+    command_name: &str,
+) -> bool {
+    selected_command
+        .take()
+        .is_some_and(|selected| selected.eq_ignore_ascii_case(command_name))
+}
+
+fn retain_selected_native_command_for_input(selected_command: &mut Option<String>, input: &str) {
+    let still_selected = selected_command.as_deref().is_some_and(|selected| {
+        input
+            .trim_start()
+            .split_whitespace()
+            .next()
+            .map(|token| token.trim_start_matches('/'))
+            .is_some_and(|command| command.eq_ignore_ascii_case(selected))
+    });
+    if !still_selected {
+        *selected_command = None;
+    }
+}
+
+fn clear_selected_native_command_prefill(
+    selected_command: &mut Option<String>,
+    chat_view: &mut ChatView,
+) {
+    if selected_command.take().is_some() {
+        chat_view.clear_input();
+    }
+}
+
+fn session_command_help_note() -> String {
+    let rename = action_for_alias("/rename", ActionContext::Chat)
+        .expect("current session rename action must remain registered");
+    format!("Session Commands\n  {}", rename.description)
+}
+
 impl ChatMode {
+    fn sync_selected_native_command(&mut self, chat_view: &ChatView) {
+        retain_selected_native_command_for_input(
+            &mut self.selected_native_command_once,
+            chat_view.input_text(),
+        );
+    }
+
     /// Handle command palette action
     fn handle_palette_action(
         &mut self,
@@ -62,6 +135,10 @@ impl ChatMode {
         chat_state: &mut ChatState,
         rt_handle: &tokio::runtime::Handle,
     ) -> Result<Option<ChatExitReason>> {
+        begin_slash_menu_selection(
+            &mut self.selected_native_command_once,
+            selected_command_name,
+        );
         if action_id == "toggle_auto_approve" || action_id.starts_with("toggle_auto_approve:") {
             let action = action_by_id("toggle_auto_approve", ActionContext::Chat)
                 .expect("Auto mode action must remain registered");
@@ -155,6 +232,14 @@ impl ChatMode {
                 );
             }
         }
+        if let Some(selected_command_name) = selected_command_name {
+            if let Some(prefill) = selected_command_prefill(action.handler) {
+                self.selected_native_command_once =
+                    Some(selected_command_name.to_ascii_lowercase());
+                chat_view.set_input(prefill);
+                return Ok(None);
+            }
+        }
         self.dispatch_action(
             action,
             self.action_state(chat_state.is_processing, false),
@@ -183,6 +268,10 @@ impl ChatMode {
             .get(token.len()..)
             .map(str::trim_start)
             .unwrap_or("");
+        let selected_native_once = consume_selected_native_command_once(
+            &mut self.selected_native_command_once,
+            command_name,
+        );
         if command_name == "auto" {
             let action_id = match arguments.trim() {
                 "on" | "enable" => "toggle_auto_approve:on",
@@ -213,13 +302,15 @@ impl ChatMode {
         let builtin_action = action_for_alias(&builtin_alias, ActionContext::Chat);
         if self.agent.is_shared() {
             if let Some(action) = builtin_action {
-                return self.dispatch_action(
-                    action,
-                    self.action_state(chat_state.is_processing, false),
-                    chat_view,
-                    chat_state,
-                    rt_handle,
-                );
+                let state = self.action_state(chat_state.is_processing, false);
+                if builtin_arguments_route(CommandRoute::Builtin, action.handler) {
+                    if !action.available(state) {
+                        chat_view.set_status(Some(action.unavailable_message(state)));
+                        return Ok(None);
+                    }
+                    return self.start_session_rename(arguments, chat_view, chat_state, rt_handle);
+                }
+                return self.dispatch_action(action, state, chat_view, chat_state, rt_handle);
             }
             chat_state.add_system_message(format!(
                 "External prompt command /{command_name} is unavailable in Shared TUI preview. {SHARED_TUI_EMBEDDED_HANDOFF}."
@@ -258,14 +349,30 @@ impl ChatMode {
                 .is_some_and(|reconfirmation| !reconfirmation.confirmed),
             native_choice_is_active,
         );
-        let route = command_route(
-            builtin_action.is_some(),
-            external.as_ref(),
-            self.external_source_snapshot
-                .as_ref()
-                .is_some_and(|snapshot| snapshot.discovery_pending),
-            builtin_reconfirmation_required,
-        );
+        let route = if selected_native_once
+            && builtin_action.is_some_and(|action| action.handler == ActionHandler::RenameSession)
+        {
+            CommandRoute::Builtin
+        } else {
+            command_route(
+                builtin_action.is_some(),
+                external.as_ref(),
+                self.external_source_snapshot
+                    .as_ref()
+                    .is_some_and(|snapshot| snapshot.discovery_pending),
+                builtin_reconfirmation_required,
+            )
+        };
+        if let Some(action) = builtin_action {
+            if builtin_arguments_route(route, action.handler) {
+                let state = self.action_state(chat_state.is_processing, false);
+                if !action.available(state) {
+                    chat_view.set_status(Some(action.unavailable_message(state)));
+                    return Ok(None);
+                }
+                return self.start_session_rename(arguments, chat_view, chat_state, rt_handle);
+            }
+        }
         if route == CommandRoute::Builtin {
             if let Some(help) = extension_command_help_request(command_name, arguments) {
                 chat_state.add_system_message(help);
@@ -662,6 +769,8 @@ impl ChatMode {
         match action.handler {
             ActionHandler::Help => {
                 let mut help = self.keymap.help_text(state);
+                help.push_str("\n\n");
+                help.push_str(&session_command_help_note());
                 if self.agent.is_shared() {
                     help.push_str("\n\n");
                     help.push_str(SHARED_TUI_HELP_NOTE);
@@ -705,6 +814,9 @@ impl ChatMode {
             }
             ActionHandler::Sessions => {
                 self.show_session_selector(chat_view, chat_state, rt_handle);
+            }
+            ActionHandler::RenameSession => {
+                return self.start_session_rename("", chat_view, chat_state, rt_handle);
             }
             ActionHandler::Skills => {
                 self.show_skill_selector(chat_view, chat_state, rt_handle);
@@ -778,7 +890,10 @@ impl ChatMode {
             }
             ActionHandler::ClosePopups => self.close_all_popups(chat_view),
             ActionHandler::NavigateBack => self.navigate_back(chat_view),
-            ActionHandler::InsertNewline => chat_view.handle_newline(),
+            ActionHandler::InsertNewline => {
+                chat_view.handle_newline();
+                self.sync_selected_native_command(chat_view);
+            }
             ActionHandler::Paste => self.paste_clipboard(chat_view),
             ActionHandler::ToggleFocusedTool => {
                 chat_view.toggle_focused_tool_expand(chat_state);
@@ -794,6 +909,7 @@ impl ChatMode {
                     chat_view.command_menu_up();
                 } else {
                     chat_view.history_prev();
+                    self.selected_native_command_once = None;
                 }
             }
             ActionHandler::HistoryNext => {
@@ -801,6 +917,7 @@ impl ChatMode {
                     chat_view.command_menu_down();
                 } else {
                     chat_view.history_next();
+                    self.selected_native_command_once = None;
                 }
             }
             ActionHandler::JumpTop => {
@@ -812,7 +929,10 @@ impl ChatMode {
                 chat_view.scroll_to_bottom();
                 chat_view.set_status(Some("Jumped to conversation bottom".to_string()));
             }
-            ActionHandler::ClearInput => chat_view.clear_input(),
+            ActionHandler::ClearInput => {
+                chat_view.clear_input();
+                self.selected_native_command_once = None;
+            }
             ActionHandler::ToggleBrowse => {
                 chat_view.toggle_browse_mode();
                 let status = if chat_view.browse_mode {
@@ -828,6 +948,51 @@ impl ChatMode {
             }
             ActionHandler::ScrollDown => chat_view.scroll_down(10),
         }
+        Ok(None)
+    }
+
+    fn start_session_rename(
+        &mut self,
+        arguments: &str,
+        chat_view: &mut ChatView,
+        chat_state: &mut ChatState,
+        rt_handle: &tokio::runtime::Handle,
+    ) -> Result<Option<ChatExitReason>> {
+        let Some(session_name) = requested_session_name(arguments) else {
+            chat_view.set_status(Some("Usage: /rename <name>".to_string()));
+            return Ok(None);
+        };
+        if self.pending_session_update.is_some() {
+            chat_view.set_status(Some(
+                "A current session update is already in progress. Please wait.".to_string(),
+            ));
+            return Ok(None);
+        }
+        if session_name == chat_state.session_name {
+            chat_view.set_status(Some(
+                "The current session already uses that name.".to_string(),
+            ));
+            return Ok(None);
+        }
+
+        let session_id = chat_state.core_session_id.clone();
+        let task_session_id = session_id.clone();
+        let task_session_name = session_name.clone();
+        let agent = self.agent.clone();
+        chat_view.set_status(Some("Renaming current session...".to_string()));
+        let handle = rt_handle.spawn(async move {
+            agent
+                .rename_session(&task_session_id, &task_session_name)
+                .await
+        });
+        self.pending_session_update = Some(PendingSessionUpdate {
+            session_id,
+            kind: PendingSessionUpdateKind::Rename { session_name },
+            started_at: Instant::now(),
+            slow_notice_shown: false,
+            exit_warning_shown: false,
+            handle,
+        });
         Ok(None)
     }
 
@@ -848,6 +1013,9 @@ impl ChatMode {
         }
 
         let trimmed = chat_view.input_text().trim();
+        if !trimmed.starts_with('/') {
+            self.selected_native_command_once = None;
+        }
         let pending_for_current_session = self
             .pending_session_update
             .as_ref()
@@ -908,9 +1076,10 @@ impl ChatMode {
         }
     }
 
-    fn paste_clipboard(&self, chat_view: &mut ChatView) {
+    fn paste_clipboard(&mut self, chat_view: &mut ChatView) {
         if let Ok(text) = Clipboard::new().and_then(|mut clipboard| clipboard.get_text()) {
             chat_view.insert_paste(&text);
+            self.sync_selected_native_command(chat_view);
         }
     }
 }

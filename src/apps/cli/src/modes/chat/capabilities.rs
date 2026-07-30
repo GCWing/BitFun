@@ -110,7 +110,7 @@ impl ChatMode {
     }
 
     fn handle_skill_selector_action(
-        &self,
+        &mut self,
         action: SkillSelectorAction,
         chat_view: &mut ChatView,
         chat_state: &mut ChatState,
@@ -135,8 +135,9 @@ impl ChatMode {
     }
 
     /// Apply skill selection: fill input box with execution command
-    fn apply_skill_selection(&self, selected: &SkillItem, chat_view: &mut ChatView) {
+    fn apply_skill_selection(&mut self, selected: &SkillItem, chat_view: &mut ChatView) {
         chat_view.set_input(&selected.invocation_text());
+        self.selected_native_command_once = None;
     }
 
     fn set_skill_enabled(
@@ -352,11 +353,12 @@ impl ChatMode {
     }
 
     /// Apply subagent selection: fill input box with launch command
-    fn apply_subagent_selection(&self, selected: &SubagentItem, chat_view: &mut ChatView) {
+    fn apply_subagent_selection(&mut self, selected: &SubagentItem, chat_view: &mut ChatView) {
         chat_view.set_input(&format!(
             "Launch subagent {} to finish task: ",
             selected.name
         ));
+        self.selected_native_command_once = None;
     }
 
     fn set_subagent_enabled(

@@ -1710,13 +1710,20 @@ pub async fn update_session_title(
         .session_application()
         .rename_session(scope, session_id.to_string(), request.title)
         .await
-        .map_err(|error| match error {
-            DesktopSessionApplicationError::Validation(message) => message,
-            DesktopSessionApplicationError::RestoreBeforeRename(message) => {
-                format!("Failed to restore session before renaming: {message}")
-            }
-            error => format!("Failed to update session title: {error}"),
-        })
+        .map_err(desktop_update_session_title_error)
+}
+
+fn desktop_update_session_title_error(error: DesktopSessionApplicationError) -> String {
+    match error {
+        DesktopSessionApplicationError::Validation(message) => message,
+        DesktopSessionApplicationError::RestoreBeforeRename(message) => {
+            format!("Failed to restore session before renaming: {message}")
+        }
+        DesktopSessionApplicationError::OutcomeUnknown(message) => {
+            format!("outcome_unknown: {message}")
+        }
+        error => format!("Failed to update session title: {error}"),
+    }
 }
 
 /// Load the session into the coordinator process when it exists on disk but is not in memory.
@@ -3220,6 +3227,16 @@ mod tests {
     };
     use bitfun_product_domains::tool_permissions::{PermissionEffect, PermissionRule};
     use serde_json::json;
+
+    #[test]
+    fn unknown_title_outcomes_reach_the_frontend_with_a_stable_code() {
+        assert_eq!(
+            desktop_update_session_title_error(DesktopSessionApplicationError::OutcomeUnknown(
+                "inspect authoritative state".to_string(),
+            ),),
+            "outcome_unknown: inspect authoritative state"
+        );
+    }
 
     #[test]
     fn project_permission_rule_revisions_distinguish_missing_and_present_files() {

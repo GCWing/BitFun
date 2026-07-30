@@ -534,6 +534,9 @@ impl AgentSessionManagementPort for ScheduledSessionManagementPort {
                     crate::util::errors::BitFunError::SessionInUse { .. } => {
                         bitfun_runtime_ports::PortErrorKind::SessionInUse
                     }
+                    crate::util::errors::BitFunError::OutcomeUnknown(_) => {
+                        bitfun_runtime_ports::PortErrorKind::OutcomeUnknown
+                    }
                     _ => bitfun_runtime_ports::PortErrorKind::Backend,
                 };
                 bitfun_runtime_ports::PortError::new(kind, error.to_string())
@@ -655,6 +658,9 @@ fn map_session_close_error(
         }
         crate::util::errors::BitFunError::SessionInUse { .. } => {
             bitfun_runtime_ports::PortErrorKind::SessionInUse
+        }
+        crate::util::errors::BitFunError::OutcomeUnknown(_) => {
+            bitfun_runtime_ports::PortErrorKind::OutcomeUnknown
         }
         _ => bitfun_runtime_ports::PortErrorKind::Backend,
     };

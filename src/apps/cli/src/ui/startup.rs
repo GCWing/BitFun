@@ -1067,6 +1067,7 @@ impl StartupPage {
             ActionHandler::ClosePopups => self.close_all_popups(),
             ActionHandler::NavigateBack => self.navigate_back(),
             ActionHandler::ClearConversation
+            | ActionHandler::RenameSession
             | ActionHandler::ReloadSkills
             | ActionHandler::Tools
             | ActionHandler::Extensions

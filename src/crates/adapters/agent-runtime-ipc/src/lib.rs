@@ -18,15 +18,15 @@ pub use discovery::{
 pub use framing::RuntimeIpcIoError;
 pub(crate) use framing::{
     read_frame, read_frame_strict_with_limit, serialize_frame_with_limit, write_frame,
-    write_frame_with_limit, RuntimeIpcFrameReader, MAX_REQUEST_FRAME_BYTES,
-    MAX_RESPONSE_FRAME_BYTES,
+    write_frame_with_limit, write_serialized_frame_with_limit, RuntimeIpcFrameReader,
+    MAX_REQUEST_FRAME_BYTES, MAX_RESPONSE_FRAME_BYTES,
 };
 pub use handler::RuntimeIpcRequestHandler;
 pub use ipc::RuntimeIpcTransportError;
 pub(crate) use ipc::{LocalIpcEndpoint, LocalIpcListener, LocalIpcStream};
 pub use operation::{
-    RuntimeIpcOperation, RuntimeIpcOperationResult, RuntimeSessionRestoreRequest,
-    RuntimeUserAnswersRequest,
+    RuntimeIpcOperation, RuntimeIpcOperationResult, RuntimeSessionRenameRequest,
+    RuntimeSessionRestoreRequest, RuntimeUserAnswersRequest,
 };
 pub use protocol::{
     HealthResult, InitializeRequest, InitializeResult, RuntimeIpcCapabilities, RuntimeIpcError,

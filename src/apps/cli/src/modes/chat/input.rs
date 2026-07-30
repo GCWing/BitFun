@@ -352,6 +352,7 @@ impl ChatMode {
         match (key.code, key.modifiers) {
             (KeyCode::Backspace, _) => {
                 chat_view.handle_backspace();
+                self.sync_selected_native_command(chat_view);
             }
 
             (KeyCode::Left, _) => {
@@ -380,6 +381,7 @@ impl ChatMode {
                 if !c.is_control() && c != '\u{0}' =>
             {
                 chat_view.handle_char(c);
+                self.sync_selected_native_command(chat_view);
             }
 
             _ => {}
@@ -623,6 +625,7 @@ impl ChatMode {
                     && !context.this.any_popup_visible(context.chat_view)
                 {
                     context.chat_view.insert_paste(&text);
+                    context.this.sync_selected_native_command(context.chat_view);
                 }
                 outcome.request_redraw = true;
             }

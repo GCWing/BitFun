@@ -24,7 +24,7 @@ fn previous_session_update_status(
             "The previous session {setting_name} change to {selected_id} failed: {error}. Return to that session to retry."
         ),
         SessionUpdateApplyOutcome::OutcomeUnknown(error) => format!(
-            "The previous session {setting_name} change to {selected_id} has an unknown outcome: {error}. Reopen Shared TUI, restore that session, and inspect its current {setting_name} before retrying."
+            "The previous session {setting_name} change to {selected_id} has an unknown outcome: {error}. This TUI is closing; reopen it, restore that session, and inspect its current {setting_name} before retrying."
         ),
     }
 }
@@ -58,7 +58,7 @@ fn apply_agent_mode_feedback(
                 error
             );
             chat_state.add_system_message(format!(
-                "Agent mode update outcome is unknown: {error}. The Shared connection is closing; reopen Shared TUI, restore this session, and inspect its current mode before retrying."
+                "Agent mode update outcome is unknown: {error}. This TUI is closing; reopen it, restore this session, and inspect its current mode before retrying."
             ));
             false
         }
@@ -112,7 +112,7 @@ fn apply_model_selection_feedback(
                 error
             );
             chat_state.add_system_message(format!(
-                "Model update outcome is unknown: {error}. The Shared connection is closing; reopen Shared TUI, restore this session, and inspect its current model before retrying."
+                "Model update outcome is unknown: {error}. This TUI is closing; reopen it, restore this session, and inspect its current model before retrying."
             ));
             false
         }
@@ -124,6 +124,34 @@ fn apply_model_selection_feedback(
                 selected_display_name,
                 selected_id
             );
+            true
+        }
+    }
+}
+
+fn apply_session_rename_feedback(
+    chat_state: &mut ChatState,
+    session_name: &str,
+    outcome: SessionUpdateApplyOutcome,
+) -> bool {
+    match outcome {
+        SessionUpdateApplyOutcome::SessionUpdateFailed(error) => {
+            tracing::error!("Failed to rename the current session: {}", error);
+            chat_state.add_system_message(format!(
+                "Current session name was not changed: {error}. Please retry."
+            ));
+            false
+        }
+        SessionUpdateApplyOutcome::OutcomeUnknown(error) => {
+            tracing::error!("Session rename outcome is unknown: {}", error);
+            chat_state.add_system_message(format!(
+                "Session rename outcome is unknown: {error}. This TUI is closing; reopen it, restore this session, and inspect its current name before retrying."
+            ));
+            false
+        }
+        SessionUpdateApplyOutcome::Applied => {
+            chat_state.session_name = session_name.to_string();
+            tracing::info!("Current session renamed");
             true
         }
     }
@@ -483,11 +511,10 @@ impl ChatMode {
                     config_service.get_ai_models().await.ok()?;
                 let global_config: bitfun_core::service::config::GlobalConfig =
                     config_service.get_config(None).await.ok()?;
-                let current_model_id =
-                    crate::model_selection::resolve_session_model_display_id(
-                        &global_config.ai,
-                        chat_state.current_model_id.as_deref(),
-                    );
+                let current_model_id = crate::model_selection::resolve_session_model_display_id(
+                    &global_config.ai,
+                    chat_state.current_model_id.as_deref(),
+                );
 
                 // Convert to ModelItem list (only enabled models)
                 let model_items: Vec<ModelItem> = models
@@ -728,6 +755,7 @@ impl ChatMode {
                 "session update task failed: {error}"
             )),
         };
+        let unknown_outcome = matches!(&outcome, SessionUpdateApplyOutcome::OutcomeUnknown(_));
         if chat_state.core_session_id != pending.session_id {
             if let SessionUpdateApplyOutcome::SessionUpdateFailed(error) = &outcome {
                 tracing::error!(
@@ -738,14 +766,17 @@ impl ChatMode {
                     error
                 );
             }
-            chat_view.set_status(Some(previous_session_update_status(
+            let status = previous_session_update_status(
                 pending.kind.name(),
                 pending.kind.selected_id(),
                 &outcome,
-            )));
+            );
+            chat_view.set_status(Some(status.clone()));
+            if unknown_outcome {
+                return SessionUpdatePollOutcome::ExitAfterUnknownOutcome(status);
+            }
             return SessionUpdatePollOutcome::Redraw;
         }
-        let unknown_outcome = matches!(&outcome, SessionUpdateApplyOutcome::OutcomeUnknown(_));
         let applied = match &pending.kind {
             PendingSessionUpdateKind::Mode { mode_id } => {
                 apply_agent_mode_feedback(&mut self.agent_type, chat_state, mode_id, outcome)
@@ -754,6 +785,9 @@ impl ChatMode {
                 model_id,
                 display_name,
             } => apply_model_selection_feedback(chat_state, display_name, model_id, outcome),
+            PendingSessionUpdateKind::Rename { session_name } => {
+                apply_session_rename_feedback(chat_state, session_name, outcome)
+            }
         };
         if applied {
             chat_view.set_status(Some(format!(
@@ -763,7 +797,7 @@ impl ChatMode {
             )));
         } else if unknown_outcome {
             let message = format!(
-                "Current session {} update outcome is unknown. The Shared connection closed; reopen Shared TUI, restore the session, and inspect its current {} before retrying.",
+                "Current session {} update outcome is unknown. This TUI is closing; reopen it, restore the session, and inspect its current {} before retrying.",
                 pending.kind.name(),
                 pending.kind.name()
             );

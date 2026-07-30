@@ -1044,6 +1044,7 @@ fn runtime_port_error(error: BitFunError) -> PortError {
         BitFunError::Cancelled(_) => PortErrorKind::Cancelled,
         BitFunError::SessionInUse { .. } => PortErrorKind::SessionInUse,
         BitFunError::SessionCreateCleanupRequired { .. } => PortErrorKind::CleanupRequired,
+        BitFunError::OutcomeUnknown(_) => PortErrorKind::OutcomeUnknown,
         _ => PortErrorKind::Backend,
     };
     PortError::new(kind, error.to_string())

@@ -3228,18 +3228,15 @@ impl SessionManager {
         normalized_title: String,
     ) -> BitFunResult<()> {
         let workspace_path = self.effective_session_storage_path(session_id).await;
-
-        {
-            let Some(mut session) = self.sessions.get_mut(session_id) else {
-                return Err(BitFunError::NotFound(format!(
-                    "Session not found: {}",
-                    session_id
-                )));
-            };
-            session.session_name = normalized_title.clone();
-            session.updated_at = SystemTime::now();
-            session.last_activity_at = SystemTime::now();
-        }
+        let mut updated_session = self
+            .sessions
+            .get(session_id)
+            .map(|session| session.clone())
+            .ok_or_else(|| BitFunError::NotFound(format!("Session not found: {session_id}")))?;
+        let now = SystemTime::now();
+        updated_session.session_name = normalized_title.clone();
+        updated_session.updated_at = now;
+        updated_session.last_activity_at = now;
 
         if self.should_persist_session_id(session_id) {
             let Some(workspace_path) = workspace_path.as_ref() else {
@@ -3248,21 +3245,28 @@ impl SessionManager {
                     session_id
                 )));
             };
-            // Clone the session data out of the DashMap guard before awaiting I/O.
-            let session_snapshot = {
-                let Some(session) = self.sessions.get(session_id) else {
-                    return Err(BitFunError::NotFound(format!(
-                        "Session not found: {}",
-                        session_id
-                    )));
-                };
-                session.clone()
-            };
-            // Ref guard released -- DashMap shard lock is free.
+            let last_active_at = now
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_millis() as u64;
             self.persistence_manager
-                .save_session(workspace_path, &session_snapshot)
+                .update_session_title_metadata(
+                    workspace_path,
+                    session_id,
+                    &updated_session.session_name,
+                    last_active_at,
+                )
                 .await?;
         }
+
+        let Some(mut session) = self.sessions.get_mut(session_id) else {
+            return Err(BitFunError::NotFound(format!(
+                "Session not found: {session_id}"
+            )));
+        };
+        session.session_name = updated_session.session_name;
+        session.updated_at = now;
+        session.last_activity_at = now;
 
         info!(
             "Session title updated: session_id={}, title={}",
@@ -6966,6 +6970,7 @@ mod tests {
         SessionRelationship, SessionRelationshipKind, ToolCallData, ToolItemData, ToolResultData,
         TurnStatus, UserMessageData,
     };
+    use crate::util::errors::BitFunError;
     use bitfun_core_types::SessionExecutionTarget;
     use bitfun_runtime_ports::SessionStoragePathRequest;
     use dashmap::{try_result::TryResult, DashMap};
@@ -8235,6 +8240,161 @@ mod tests {
             .expect_err("deleted session title update must fail");
         assert!(error.to_string().contains("not found"));
         assert!(!sessions_dir.join(&session_id).exists());
+    }
+
+    #[tokio::test]
+    async fn failed_title_persistence_does_not_publish_the_new_name_in_memory() {
+        let workspace = TestWorkspace::new();
+        let persistence_manager = Arc::new(
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
+        );
+        let manager = test_manager(persistence_manager);
+        let session = manager
+            .create_session(
+                "Original".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("session should create");
+
+        manager
+            .sessions
+            .get_mut(&session.session_id)
+            .expect("loaded session")
+            .config
+            .workspace_path = None;
+
+        manager
+            .update_session_title(&session.session_id, "Not persisted")
+            .await
+            .expect_err("missing persistence path must reject the title update");
+
+        let loaded = manager
+            .get_session(&session.session_id)
+            .expect("session must remain loaded");
+        assert_eq!(loaded.session_name, "Original");
+    }
+
+    #[tokio::test]
+    async fn session_title_update_does_not_rewrite_the_runtime_state_file() {
+        let workspace = TestWorkspace::new();
+        let persistence_manager = Arc::new(
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
+        );
+        let manager = test_manager(persistence_manager.clone());
+        let session = manager
+            .create_session(
+                "Original".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.path().to_string_lossy().into_owned()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("session should create");
+        persistence_manager.fail_next_session_state_write_for_test(&session.session_id);
+
+        manager
+            .update_session_title(&session.session_id, "Renamed")
+            .await
+            .expect("title update must not rewrite runtime state");
+        manager.evict_loaded_session_for_test(&session.session_id);
+
+        let restored = manager
+            .restore_session(workspace.path(), &session.session_id)
+            .await
+            .expect("metadata-only title update should remain restorable");
+        assert_eq!(restored.session_name, "Renamed");
+    }
+
+    #[tokio::test]
+    async fn failed_title_index_update_rolls_back_persisted_metadata() {
+        let workspace = TestWorkspace::new();
+        let persistence_manager = Arc::new(
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
+        );
+        let manager = test_manager(persistence_manager.clone());
+        let session = manager
+            .create_session(
+                "Original".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.path().to_string_lossy().into_owned()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("session should create");
+        let sessions_dir = persistence_manager
+            .path_manager()
+            .project_sessions_dir(workspace.path());
+        let index_path = sessions_dir.join("index.json");
+        std::fs::remove_file(&index_path).expect("replace index file");
+        std::fs::create_dir(&index_path).expect("create invalid index directory");
+
+        manager
+            .update_session_title(&session.session_id, "Renamed")
+            .await
+            .expect_err("index failure must reject the title update");
+
+        assert_eq!(
+            manager
+                .get_session(&session.session_id)
+                .expect("session remains loaded")
+                .session_name,
+            "Original"
+        );
+        let metadata = persistence_manager
+            .load_session_metadata(&sessions_dir, &session.session_id)
+            .await
+            .expect("metadata should remain readable")
+            .expect("metadata should exist");
+        assert_eq!(metadata.session_name, "Original");
+    }
+
+    #[tokio::test]
+    async fn failed_title_rollback_reports_an_unknown_outcome() {
+        let workspace = TestWorkspace::new();
+        let persistence_manager = Arc::new(
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
+        );
+        let manager = test_manager(persistence_manager.clone());
+        let session = manager
+            .create_session(
+                "Original".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.path().to_string_lossy().into_owned()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("session should create");
+        let sessions_dir = persistence_manager
+            .path_manager()
+            .project_sessions_dir(workspace.path());
+        let index_path = sessions_dir.join("index.json");
+        std::fs::remove_file(&index_path).expect("replace index file");
+        std::fs::create_dir(&index_path).expect("create invalid index directory");
+        persistence_manager.fail_next_session_metadata_rollback_for_test(&session.session_id);
+
+        let error = manager
+            .update_session_title(&session.session_id, "Renamed")
+            .await
+            .expect_err("failed rollback must not report a definite failure");
+
+        assert!(matches!(error, BitFunError::OutcomeUnknown(_)));
+        let metadata = persistence_manager
+            .load_session_metadata(&sessions_dir, &session.session_id)
+            .await
+            .expect("metadata should remain readable")
+            .expect("metadata should exist");
+        assert_eq!(metadata.session_name, "Renamed");
     }
 
     #[tokio::test]

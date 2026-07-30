@@ -38,6 +38,7 @@ export {
   deleteChatSession,
   archiveChatSession,
   renameChatSessionTitle,
+  reloadSessionTitle,
   forkChatSession,
 } from './SessionModule';
 

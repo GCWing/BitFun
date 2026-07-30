@@ -5,7 +5,9 @@ mod tests {
     use super::{
         action_opens_extension_management, agent_event_stream_failure, apply_agent_mode_feedback,
         apply_model_selection_feedback, apply_session_model_migration,
-        builtin_command_reconfirmation, cli_native_prompt_command_descriptors, command_route,
+        apply_session_rename_feedback, begin_slash_menu_selection, builtin_arguments_route,
+        builtin_command_reconfirmation, clear_selected_native_command_prefill,
+        cli_native_prompt_command_descriptors, command_route, consume_selected_native_command_once,
         extension_command_help_request, external_agent_attention, external_agent_diagnostic_lines,
         external_agent_pending_notice_key, external_agent_result_is_stale,
         external_agent_review_text, external_command_projections, external_control_review_text,
@@ -18,18 +20,22 @@ mod tests {
         parse_external_agent_review_action, parse_external_control_action,
         parse_external_tool_review_action, parse_hook_management_action,
         pending_session_update_blocks_runtime_action, previous_session_update_status,
-        render_external_hook_catalog, render_native_hook_overview, session_update_allowed,
-        session_update_blocks_typed_submission, session_update_completion_should_exit,
-        shared_session_change_is_blocked, CommandRoute, ExternalAgentReviewAction,
-        ExternalControlUiAction, ExternalSourceConflictPreferences, ExternalToolReviewAction,
-        HookManagementAction, SessionUpdateApplyOutcome, SHARED_TUI_CHAT_STATUS,
+        render_external_hook_catalog, render_native_hook_overview, requested_session_name,
+        retain_selected_native_command_for_input, selected_command_prefill,
+        session_command_help_note, session_update_allowed, session_update_blocks_typed_submission,
+        session_update_completion_should_exit, shared_session_change_is_blocked, CommandRoute,
+        ExternalAgentReviewAction, ExternalControlUiAction, ExternalSourceConflictPreferences,
+        ExternalToolReviewAction, HookManagementAction, SessionUpdateApplyOutcome,
+        SHARED_TUI_CHAT_STATUS,
     };
     use crate::actions::{
         action_conflict_behavior_version, ActionHandler, ActionState, ResolvedKeymap,
     };
     use crate::chat_state::ChatState;
     use crate::config::ShortcutsConfig;
+    use crate::ui::chat::ChatView;
     use crate::ui::command_menu::{ExternalCommandProjection, NativeCommandCollisionProjection};
+    use crate::ui::theme::Theme;
     use bitfun_core::external_hooks::ExternalHookCatalogSnapshotV1;
     use bitfun_core::external_sources::{
         native_prompt_command_conflict_key, ExternalSourceAssetKind, ExternalSourceCatalogSnapshot,
@@ -1109,6 +1115,25 @@ mod tests {
     }
 
     #[test]
+    fn rename_arguments_run_only_after_the_builtin_collision_route_wins() {
+        let action =
+            crate::actions::action_for_alias("/rename", crate::actions::ActionContext::Chat)
+                .expect("rename action");
+
+        assert!(builtin_arguments_route(
+            CommandRoute::Builtin,
+            action.handler,
+        ));
+        for route in [
+            CommandRoute::External,
+            CommandRoute::AskForCollisionChoice,
+            CommandRoute::WaitForDiscovery,
+        ] {
+            assert!(!builtin_arguments_route(route, action.handler));
+        }
+    }
+
+    #[test]
     fn native_choice_is_reused_when_multiple_external_candidates_remain_unresolved() {
         let selected_native = "bitfun.cli:help";
         let first = external_command("help", Some(selected_native));
@@ -1449,6 +1474,19 @@ mod tests {
     }
 
     #[test]
+    fn previous_session_unknown_outcome_requires_a_reload() {
+        let status = previous_session_update_status(
+            "name",
+            "Renamed",
+            &SessionUpdateApplyOutcome::OutcomeUnknown("rollback was not confirmed".to_string()),
+        );
+
+        assert!(status.contains("This TUI is closing"));
+        assert!(status.contains("restore that session"));
+        assert!(!status.contains("Shared TUI"));
+    }
+
+    #[test]
     fn unknown_mode_update_outcome_requires_restore_before_retry() {
         let mut current_mode = "agentic".to_string();
         let mut state = ChatState::new(
@@ -1473,9 +1511,50 @@ mod tests {
             panic!("unknown-outcome notice must be text");
         };
         assert!(content.contains("outcome is unknown"));
-        assert!(content.contains("reopen Shared TUI"));
+        assert!(content.contains("This TUI is closing"));
         assert!(content.contains("restore this session"));
         assert!(!content.contains("was not changed"));
+    }
+
+    #[test]
+    fn rename_arguments_are_trimmed_and_empty_names_show_usage() {
+        assert_eq!(
+            requested_session_name("  Auth refactor  ").as_deref(),
+            Some("Auth refactor")
+        );
+        assert!(requested_session_name("").is_none());
+        assert!(requested_session_name("   ").is_none());
+    }
+
+    #[test]
+    fn session_name_changes_only_after_runtime_confirmation() {
+        let mut state = ChatState::new(
+            "session".to_string(),
+            "Original".to_string(),
+            "agentic".to_string(),
+            Some("D:/workspace/current".to_string()),
+        );
+
+        assert!(!apply_session_rename_feedback(
+            &mut state,
+            "Rejected",
+            SessionUpdateApplyOutcome::SessionUpdateFailed("storage failed".to_string()),
+        ));
+        assert_eq!(state.session_name, "Original");
+
+        assert!(!apply_session_rename_feedback(
+            &mut state,
+            "Unknown",
+            SessionUpdateApplyOutcome::OutcomeUnknown("request timed out".to_string()),
+        ));
+        assert_eq!(state.session_name, "Original");
+
+        assert!(apply_session_rename_feedback(
+            &mut state,
+            "Auth refactor",
+            SessionUpdateApplyOutcome::Applied,
+        ));
+        assert_eq!(state.session_name, "Auth refactor");
     }
 
     #[test]
@@ -1495,6 +1574,11 @@ mod tests {
             true,
             true,
             ActionHandler::Init,
+        ));
+        assert!(pending_session_update_blocks_runtime_action(
+            true,
+            true,
+            ActionHandler::RenameSession,
         ));
         assert!(!pending_session_update_blocks_runtime_action(
             true,
@@ -1519,6 +1603,90 @@ mod tests {
     }
 
     #[test]
+    fn parameterized_slash_selection_prefills_the_native_command() {
+        assert_eq!(
+            selected_command_prefill(ActionHandler::RenameSession),
+            Some("/rename ")
+        );
+        assert_eq!(selected_command_prefill(ActionHandler::Sessions), None);
+    }
+
+    #[test]
+    fn explicit_native_selection_is_consumed_by_one_matching_submission() {
+        let mut selected = Some("rename".to_string());
+        assert!(consume_selected_native_command_once(
+            &mut selected,
+            "rename"
+        ));
+        assert!(selected.is_none());
+        assert!(!consume_selected_native_command_once(
+            &mut selected,
+            "rename"
+        ));
+
+        let mut different = Some("rename".to_string());
+        assert!(!consume_selected_native_command_once(
+            &mut different,
+            "help"
+        ));
+        assert!(different.is_none());
+    }
+
+    #[test]
+    fn selected_native_command_choice_is_cleared_when_prefill_is_edited_away() {
+        let mut selected = Some("rename".to_string());
+
+        retain_selected_native_command_for_input(&mut selected, "/rename Auth refactor");
+        assert_eq!(selected.as_deref(), Some("rename"));
+
+        retain_selected_native_command_for_input(&mut selected, "/renam Auth refactor");
+        assert!(selected.is_none());
+    }
+
+    #[test]
+    fn selected_native_command_prefill_is_cleared_without_discarding_normal_drafts() {
+        let mut view = ChatView::new(Theme::dark(), Vec::new());
+        view.set_input("/rename Release notes");
+        let mut selected = Some("rename".to_string());
+
+        clear_selected_native_command_prefill(&mut selected, &mut view);
+
+        assert!(selected.is_none());
+        assert!(view.input_text().is_empty());
+
+        view.set_input("Keep this normal draft");
+        clear_selected_native_command_prefill(&mut selected, &mut view);
+        assert_eq!(view.input_text(), "Keep this normal draft");
+    }
+
+    #[test]
+    fn every_new_slash_menu_selection_clears_the_pending_native_choice() {
+        let mut selected = Some("rename".to_string());
+        begin_slash_menu_selection(&mut selected, Some("external-command"));
+        assert_eq!(selected, None);
+
+        selected = Some("rename".to_string());
+        begin_slash_menu_selection(&mut selected, Some("auto"));
+        assert_eq!(selected, None);
+
+        selected = Some("rename".to_string());
+        begin_slash_menu_selection(&mut selected, None);
+        assert_eq!(selected.as_deref(), Some("rename"));
+    }
+
+    #[test]
+    fn session_command_help_comes_from_the_action_registry() {
+        let help = session_command_help_note();
+        let rename =
+            crate::actions::action_for_alias("/rename", crate::actions::ActionContext::Chat)
+                .expect("rename action");
+
+        assert!(help.contains("Session Commands"));
+        assert!(help.contains(rename.description));
+        assert!(help.contains("/rename <name>"));
+    }
+
+    #[test]
     fn shared_session_change_waits_for_the_current_session_update_result() {
         assert!(shared_session_change_is_blocked(true, true));
         assert!(!shared_session_change_is_blocked(true, false));
@@ -1529,6 +1697,7 @@ mod tests {
     fn shared_chat_status_separates_session_selection_from_management() {
         assert!(SHARED_TUI_CHAT_STATUS.contains("current Session Agent mode"));
         assert!(SHARED_TUI_CHAT_STATUS.contains("current Session model"));
+        assert!(SHARED_TUI_CHAT_STATUS.contains("current Session name"));
         assert!(SHARED_TUI_CHAT_STATUS.contains("Agent/Subagent management"));
         assert!(SHARED_TUI_CHAT_STATUS.contains("model management remains Embedded"));
     }

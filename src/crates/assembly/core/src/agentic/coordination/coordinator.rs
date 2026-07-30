@@ -8934,6 +8934,9 @@ fn runtime_port_error_from_bitfun(error: BitFunError) -> bitfun_runtime_ports::P
             bitfun_runtime_ports::PortErrorKind::SessionInUse,
             format!("Session is already open for writing: {session_id}"),
         ),
+        BitFunError::OutcomeUnknown(message) => {
+            (bitfun_runtime_ports::PortErrorKind::OutcomeUnknown, message)
+        }
         BitFunError::NotImplemented(message) => {
             (bitfun_runtime_ports::PortErrorKind::NotAvailable, message)
         }

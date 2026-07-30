@@ -28,6 +28,7 @@ import { cleanupSessionBuffers } from './TextChunkModule';
 import {
   createTextSessionTitleDescriptor,
   createDefaultSessionTitleDescriptor,
+  deriveSessionTitleStateFromMetadata,
   getNextDefaultSessionTitleCount,
   resolveSessionTitle,
 } from '../../utils/sessionTitle';
@@ -1121,6 +1122,36 @@ export async function renameChatSessionTitle(
 
   await context.flowChatStore.updateSessionTitle(sessionId, updatedTitle, 'generated');
   return updatedTitle;
+}
+
+export async function reloadSessionTitle(
+  context: FlowChatContext,
+  sessionId: string,
+): Promise<void> {
+  const session = context.flowChatStore.getState().sessions.get(sessionId);
+  if (!session) return;
+
+  const metadata = await sessionAPI.loadSessionMetadata(
+    sessionId,
+    requireSessionProjectWorkspacePath(session, sessionId),
+    session.remoteConnectionId,
+    session.remoteSshHost,
+  );
+  if (!metadata) return;
+
+  const titleState = deriveSessionTitleStateFromMetadata(metadata);
+  context.flowChatStore.setState(previous => {
+    const current = previous.sessions.get(sessionId);
+    if (!current) return previous;
+
+    const sessions = new Map(previous.sessions);
+    sessions.set(sessionId, {
+      ...current,
+      ...titleState,
+      titleStatus: 'generated',
+    });
+    return { ...previous, sessions };
+  });
 }
 
 export async function forkChatSession(

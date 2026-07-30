@@ -8,6 +8,7 @@ use bitfun_agent_runtime_ipc::{RuntimeIpcClientError, RuntimeIpcErrorCode};
 pub(crate) const EXIT_LINE_PREFIX: &str = "BITFUN_EXIT: ";
 pub(crate) const DETAIL_MAX_LEN: usize = 500;
 pub(crate) const SESSION_IN_USE_ERROR_CODE: &str = "session_in_use";
+pub(crate) const OUTCOME_UNKNOWN_ERROR_CODE: &str = "outcome_unknown";
 pub(crate) const SESSION_IN_USE_USER_MESSAGE: &str =
     "This session is open in another BitFun instance. Close it there and retry.";
 

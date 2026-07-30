@@ -17,7 +17,7 @@ use bitfun_runtime_ports::{
     SessionStoragePathRequest,
 };
 
-use crate::diagnostics::SESSION_IN_USE_ERROR_CODE;
+use crate::diagnostics::{OUTCOME_UNKNOWN_ERROR_CODE, SESSION_IN_USE_ERROR_CODE};
 use crate::peer_host::args::{get_string, optional_bool, optional_string, request_value};
 use crate::peer_host::state::PeerHostState;
 
@@ -129,6 +129,9 @@ fn peer_runtime_session_error(operation: &str, error: RuntimeError) -> String {
     match error {
         RuntimeError::Port(port_error) if port_error.kind == PortErrorKind::SessionInUse => {
             format!("{SESSION_IN_USE_ERROR_CODE}: {}", port_error.message)
+        }
+        RuntimeError::Port(port_error) if port_error.kind == PortErrorKind::OutcomeUnknown => {
+            format!("{OUTCOME_UNKNOWN_ERROR_CODE}: {}", port_error.message)
         }
         error => format!("{operation}: {}", error.into_message()),
     }
@@ -380,7 +383,7 @@ pub(crate) async fn rename_session(state: &PeerHostState, args: &Value) -> Resul
             remote_ssh_host: storage_request.remote_ssh_host,
         })
         .await
-        .map_err(|error| format!("Failed to rename session: {}", error.into_message()))?;
+        .map_err(|error| peer_runtime_session_error("Failed to rename session", error))?;
     Ok(Value::Null)
 }
 
@@ -647,6 +650,19 @@ mod tests {
             error,
             "Failed to restore session: agent session restore port is not registered"
         );
+    }
+
+    #[test]
+    fn peer_rename_unknown_outcomes_keep_the_stable_transport_code() {
+        let error = peer_runtime_session_error(
+            "Failed to rename session",
+            RuntimeError::Port(PortError::new(
+                PortErrorKind::OutcomeUnknown,
+                "inspect authoritative state",
+            )),
+        );
+
+        assert_eq!(error, "outcome_unknown: inspect authoritative state");
     }
 
     #[test]

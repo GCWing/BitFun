@@ -22,7 +22,7 @@ session controller leases, event delivery, connection bounds, and cleanup. It is
 
 - Export only the exact workspace-private API needed by the CLI adapter. Do not
   publish this crate or expose its wire as an SDK contract.
-- The closed operation budget is Health, Session list/create/restore (including transcript), current-Session Agent mode/model update,
+- The closed operation budget is Health, Session list/create/restore (including transcript), current-Session rename and Agent mode/model update,
   Turn submit/cancel, pending/respond Permission, and UserInput answers. Disconnect cleanup is internal lifecycle, not a detach operation.
   Model catalogs and defaults remain product configuration outside this wire. Do not add delete, fork, replay, observer,
   controller transfer, Tool/MCP/Hook management, or other product configuration incidentally.
@@ -33,6 +33,11 @@ session controller leases, event delivery, connection bounds, and cleanup. It is
   WebSocket, browser access, or remote fallback.
 - Treat this as same-user local isolation, not a sandbox. Product composition
   must supply a user-private runtime directory.
+- Embedded callers must continue to invoke the typed Agent Runtime directly and
+  must not initialize this transport. Shared outgoing request, response, and
+  event frames are encoded once before write; strict decoding, unknown-field
+  rejection, frame limits, bounded queues, and backpressure must not be weakened
+  for throughput.
 
 ## Verification
 

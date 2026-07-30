@@ -39,6 +39,9 @@ pub enum BitFunError {
     #[error("Session is already open for writing: {session_id}")]
     SessionInUse { session_id: String },
 
+    #[error("Operation outcome is unknown: {0}")]
+    OutcomeUnknown(String),
+
     #[error(
         "Session creation persistence failed and rollback did not complete: session_id={session_id}, error={error}, cleanup_error={cleanup_error}"
     )]

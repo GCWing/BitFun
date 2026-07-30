@@ -2,7 +2,8 @@ use crate::{
     read_frame, write_frame, InitializeRequest, LocalIpcStream, RuntimeInstanceIdentity,
     RuntimeIpcClient, RuntimeIpcClientError, RuntimeIpcError, RuntimeIpcErrorCode, RuntimeIpcEvent,
     RuntimeIpcFrame, RuntimeIpcOperation, RuntimeIpcOperationResult, RuntimeIpcRequestHandler,
-    RuntimeIpcServer, RuntimeIpcServerConfig, RuntimeSessionRestoreRequest, PROTOCOL_VERSION,
+    RuntimeIpcServer, RuntimeIpcServerConfig, RuntimeSessionRenameRequest,
+    RuntimeSessionRestoreRequest, PROTOCOL_VERSION,
 };
 use async_trait::async_trait;
 use bitfun_events::{AgenticEvent, AgenticEventEnvelope, AgenticEventPriority};
@@ -84,6 +85,7 @@ struct FakeHandler {
     delay: Option<Duration>,
     mode_delay: Option<Duration>,
     model_delay: Option<Duration>,
+    rename_delay: Option<Duration>,
     submit_delay: Option<Duration>,
     settle_cancel: bool,
     events: broadcast::Sender<RuntimeIpcEvent>,
@@ -106,6 +108,7 @@ impl Default for FakeHandler {
             delay: None,
             mode_delay: None,
             model_delay: None,
+            rename_delay: None,
             submit_delay: None,
             settle_cancel: true,
             events,
@@ -183,6 +186,11 @@ impl RuntimeIpcRequestHandler for FakeHandler {
         }
         if matches!(operation, RuntimeIpcOperation::UpdateSessionModel { .. }) {
             if let Some(delay) = self.model_delay {
+                tokio::time::sleep(delay).await;
+            }
+        }
+        if matches!(operation, RuntimeIpcOperation::RenameSession { .. }) {
+            if let Some(delay) = self.rename_delay {
                 tokio::time::sleep(delay).await;
             }
         }
@@ -512,6 +520,15 @@ fn update_model_operation(session_id: &str, model_id: &str) -> RuntimeIpcOperati
         request: AgentSessionModelUpdateRequest {
             session_id: session_id.to_string(),
             model_id: model_id.to_string(),
+        },
+    }
+}
+
+fn rename_operation(session_id: &str, session_name: &str) -> RuntimeIpcOperation {
+    RuntimeIpcOperation::RenameSession {
+        request: RuntimeSessionRenameRequest {
+            session_id: session_id.to_string(),
+            session_name: session_name.to_string(),
         },
     }
 }
@@ -894,6 +911,103 @@ async fn timed_out_model_update_reports_unknown_outcome_and_closes_the_connectio
 
     assert!(read_frame(&mut first).await.is_err());
     let mut second = server.connect("model-timeout-successor").await;
+    expect_response(
+        &mut second,
+        2,
+        restore_operation(server.workspace.path(), "session-a"),
+    )
+    .await;
+    drop(first);
+    drop(second);
+    server.finish().await;
+}
+
+#[tokio::test]
+async fn rename_requires_the_controlled_idle_session() {
+    let handler = Arc::new(FakeHandler::default());
+    let server = TestServer::start(server_config(), handler.clone()).await;
+    let mut client = server.connect("rename-controller").await;
+
+    expect_error(
+        &mut client,
+        2,
+        rename_operation("session-a", "Auth refactor"),
+        RuntimeIpcErrorCode::ControllerRequired,
+    )
+    .await;
+    expect_response(
+        &mut client,
+        3,
+        restore_operation(server.workspace.path(), "session-a"),
+    )
+    .await;
+    expect_error(
+        &mut client,
+        4,
+        rename_operation("session-b", "Other work"),
+        RuntimeIpcErrorCode::SessionMismatch,
+    )
+    .await;
+    expect_response(
+        &mut client,
+        5,
+        rename_operation("session-a", "Auth refactor"),
+    )
+    .await;
+    expect_response(
+        &mut client,
+        6,
+        submit_operation(server.workspace.path(), "session-a", "turn-a"),
+    )
+    .await;
+    expect_error(
+        &mut client,
+        7,
+        rename_operation("session-a", "Blocked during turn"),
+        RuntimeIpcErrorCode::SessionInUse,
+    )
+    .await;
+
+    let calls = handler.calls.lock().expect("calls");
+    assert_eq!(
+        calls
+            .iter()
+            .filter(|operation| matches!(operation, RuntimeIpcOperation::RenameSession { .. }))
+            .count(),
+        1,
+        "only the controlled idle-session rename reaches the Runtime handler"
+    );
+    drop(calls);
+    drop(client);
+    server.finish().await;
+}
+
+#[tokio::test]
+async fn timed_out_rename_reports_unknown_outcome_and_closes_the_connection() {
+    let handler = Arc::new(FakeHandler {
+        rename_delay: Some(Duration::from_millis(100)),
+        ..FakeHandler::default()
+    });
+    let mut config = server_config();
+    config.request_timeout = Duration::from_millis(20);
+    let server = TestServer::start(config, handler).await;
+    let mut first = server.connect("rename-timeout").await;
+    expect_response(
+        &mut first,
+        2,
+        restore_operation(server.workspace.path(), "session-a"),
+    )
+    .await;
+    expect_error(
+        &mut first,
+        3,
+        rename_operation("session-a", "Outcome unknown"),
+        RuntimeIpcErrorCode::OutcomeUnknown,
+    )
+    .await;
+
+    assert!(read_frame(&mut first).await.is_err());
+    let mut second = server.connect("rename-timeout-successor").await;
     expect_response(
         &mut second,
         2,
