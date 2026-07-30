@@ -101,6 +101,11 @@ pnpm run desktop:build:nsis:fast      # Windows 安装器，release-fast profile
 
 ## 全局规则
 
+### 流程产物
+
+- 不要新增或更新 `docs/superpowers/**` 下的文件。临时计划、设计和实现过程文档仅保留在本地；
+  需要长期维护的架构或功能事实应合并到对应的已有文档，用户使用说明应放到所属应用的 README。
+
 ### 国际化
 
 - Locale id、alias、fallback 和各形态默认语言统一由

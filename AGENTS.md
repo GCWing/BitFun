@@ -106,6 +106,13 @@ type error and a bundling error can surface in either order; both are prefixed
 
 ## Global rules
 
+### Process artifacts
+
+- Do not add or update files under `docs/superpowers/**`. Keep temporary
+  planning, design, and implementation-process artifacts local. Move durable
+  architecture or feature facts into the existing document for that area, and
+  put user-facing guidance in the owning app README.
+
 ### Internationalization
 
 - Locale ids, aliases, fallback rules, and surface defaults are owned by

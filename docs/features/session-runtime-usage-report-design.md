@@ -218,7 +218,8 @@ It also provides summary aggregation by model and session.
 ### Existing CLI surfaces
 
 - CLI chat mode already recognizes slash commands.
-- `/history` already shows basic session statistics.
+- `/sessions` opens the session browser; `/resume`, `/continue`, and `/history` are aliases.
+- `/status` shows current runtime facts and the latest primary-model request observed by the TUI.
 - CLI session messages and tool cards already persist tool call count and tool duration.
 
 ## Original Gaps and Current Implementation Status
@@ -277,7 +278,8 @@ Risk if skipped:
 Missing:
 
 - CLI `AgentEvent` does not currently surface token usage, model round timing, or context compression as first-class events.
-- CLI `/history` is basic and not equivalent to `/usage`.
+- CLI `/status` reports the latest observed request rather than cumulative session usage; `/history`
+  is an alias for the session browser and is not a usage-report entrypoint.
 
 Required change:
 
@@ -1206,7 +1208,7 @@ Steps:
 Functional guardrails:
 
 - Do not make `/usage` asynchronous model work.
-- Do not replace `/history`; `/history` can remain the lightweight legacy command until a separate cleanup.
+- Do not overload `/sessions` or its aliases with usage-report behavior.
 - Do not require Desktop-only state for CLI reports.
 - Do not make the CLI command depend on a Tauri API or Desktop workspace state.
 - Do not print sensitive raw tool details that Desktop would redact.
@@ -1224,7 +1226,8 @@ Verification:
 
 - CLI `/help` includes `/usage`.
 - `/usage` output appears in chat without a model request.
-- Existing `/history`, `/clear`, and normal message send behavior still work.
+- Existing `/sessions` aliases, `/new` and `/clear` fresh-session behavior, and normal message send
+  behavior still work.
 - CLI output redacts the same sensitive detail categories as Desktop P0.
 
 ### Task 6: Desktop `/usage` command and local Markdown insertion
