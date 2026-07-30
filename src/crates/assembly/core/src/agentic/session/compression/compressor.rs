@@ -7,13 +7,13 @@ use super::fallback::{
     CompressionSummaryArtifact,
 };
 use crate::agentic::core::{
-    render_system_reminder, CompressedMessage, CompressedMessageRole, CompressedTodoSnapshot,
-    CompressionContract, CompressionEntry, CompressionPayload, Message, MessageContent,
-    MessageHelper, MessageRole, MessageSemanticKind,
+    render_system_reminder, CompressionContract, CompressionEntry, CompressionPayload,
+    InternalReminderKind, Message, MessageContent, MessageHelper, MessageRole, MessageSemanticKind,
 };
 use crate::service::session::TranscriptLineRange;
 use crate::util::errors::BitFunResult;
 use log::{debug, trace};
+use std::borrow::Cow;
 
 /// Context compressor configuration
 #[derive(Debug, Clone)]
@@ -38,7 +38,7 @@ impl Default for CompressionConfig {
 }
 
 #[derive(Debug, Clone)]
-pub struct TurnWithTokens {
+struct TurnWithTokens {
     messages: Vec<Message>,
 }
 
@@ -55,29 +55,23 @@ pub struct CompressionResult {
 }
 
 #[derive(Debug, Clone)]
-pub struct AutoCompressionPlan {
+pub struct CompressionPlan {
     pub summary_request_messages: Vec<Message>,
     pub summary_messages: Vec<Message>,
-    pub recent_anchor_messages: Vec<Message>,
+    pub retained_user_messages: Vec<Message>,
     pub recent_tail_messages: Vec<Message>,
+    pub retained_user_token_budget: usize,
+    pub retained_user_tokens: usize,
     pub recent_target_tokens: usize,
     pub recent_tail_tokens: usize,
-    pub recent_anchor_tokens: usize,
     pub cutoff_message_index: usize,
-    pub can_shorten_summary_prefix: bool,
-    pub last_turn_complete: bool,
+    pub next_recent_target_tokens: Option<usize>,
 }
 
 #[derive(Debug, Clone, Copy)]
 struct AtomicMessageUnit {
     start: usize,
     tokens: usize,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CompressionMode {
-    Auto,
-    Manual,
 }
 
 /// Stateless context compression service.
@@ -88,98 +82,38 @@ pub struct ContextCompressor {
 impl ContextCompressor {
     pub const DEFAULT_RECENT_CONTEXT_TOKENS: usize = 10_000;
     pub const RECENT_CONTEXT_RETRY_STEP_TOKENS: usize = 10_000;
-    const AUTO_COMPRESSION_CONTINUATION_REMINDER: &'static str =
-        "The conversation context above was automatically compacted while work was still in progress. Re-establish the current working state from this summary and the latest available evidence, then continue working on the user's most recent request. Do not stop merely because compaction occurred, and do not ask the user to repeat information already captured here. If a required detail is missing and a pre-compaction transcript is available above, inspect the relevant part of that transcript before proceeding.";
-    const RECENT_CONTEXT_BOUNDARY_REMINDER: &'static str =
-        "The user message above started the current turn. Some intermediate assistant and tool exchanges from this turn were compacted into the preceding summary and are not repeated below. Continue from the retained recent context without repeating completed work.";
+    const MAX_RETAINED_USER_TOKENS: usize = 20_000;
+    const COMPRESSION_CONTINUATION_REMINDER: &'static str =
+        "This conversation was compacted. Re-establish the working state from the retained user messages, summary, and recent context. Continue any unfinished work; otherwise use this context for the user's next request. Do not ask the user to repeat information already retained here. If a required detail is missing and a pre-compaction transcript is available, inspect the relevant part before proceeding.";
 
     pub fn new(config: CompressionConfig) -> Self {
         Self { config }
     }
 
-    fn collect_conversation_turns(
-        &self,
-        session_id: &str,
-        mut messages: Vec<Message>,
-    ) -> BitFunResult<Vec<TurnWithTokens>> {
-        debug!(
-            "Collecting conversation turns for compression: session_id={}",
-            session_id
-        );
-
-        let message_start = {
-            let mut start_idx = messages.len();
-            for (idx, msg) in messages.iter().enumerate() {
-                if msg.role != MessageRole::System {
-                    start_idx = idx;
-                    break;
-                }
-            }
-            start_idx
-        };
-        let all_messages = messages.split_off(message_start);
-
-        if all_messages.is_empty() {
-            debug!(
-                "Session context is empty, no compression candidates: session_id={}",
-                session_id
-            );
-            return Ok(Vec::new());
-        }
-
-        let mut turns_messages = MessageHelper::group_messages_by_turns(all_messages);
-        let turns_count = turns_messages.len();
-        let turns_tokens: Vec<usize> = turns_messages
-            .iter_mut()
-            .map(|turn| turn.iter_mut().map(|m| m.get_tokens()).sum::<usize>())
-            .collect();
-        let turns_msg_num: Vec<usize> = turns_messages.iter().map(|turn| turn.len()).collect();
-        debug!(
-            "Session has {} turn(s), messages per turn: {:?}, tokens per turn: {:?}",
-            turns_count, turns_msg_num, turns_tokens
-        );
-
-        Ok(turns_messages
-            .into_iter()
-            .map(TurnWithTokens::new)
-            .collect())
-    }
-
-    /// Collect all non-system conversation turns for an automatic compression pass.
-    pub fn collect_turns_for_auto_compression(
-        &self,
-        session_id: &str,
-        messages: Vec<Message>,
-    ) -> BitFunResult<Vec<TurnWithTokens>> {
-        debug!(
-            "Starting session context compression analysis: session_id={}",
-            session_id
-        );
-
-        let turns = self.collect_conversation_turns(session_id, messages)?;
-        if turns.is_empty() {
-            return Ok(Vec::new());
-        }
-
-        Ok(turns)
-    }
-
-    /// Collect all non-system conversation turns for a full manual compaction pass.
-    pub fn collect_all_turns_for_manual_compaction(
-        &self,
-        session_id: &str,
-        messages: Vec<Message>,
-    ) -> BitFunResult<Vec<TurnWithTokens>> {
-        self.collect_conversation_turns(session_id, messages)
-    }
-
-    pub fn plan_auto_compression(
+    pub fn plan_compression(
         &self,
         session_id: &str,
         runtime_messages: &[Message],
+        context_window: usize,
         recent_target_tokens: usize,
-        previous_cutoff: Option<usize>,
-    ) -> BitFunResult<Option<AutoCompressionPlan>> {
+    ) -> BitFunResult<Option<CompressionPlan>> {
+        let runtime_messages = if runtime_messages.iter().any(|message| {
+            message.internal_reminder_kind() == Some(InternalReminderKind::CompressionContinuation)
+        }) {
+            Cow::Owned(
+                runtime_messages
+                    .iter()
+                    .filter(|message| {
+                        message.internal_reminder_kind()
+                            != Some(InternalReminderKind::CompressionContinuation)
+                    })
+                    .cloned()
+                    .collect(),
+            )
+        } else {
+            Cow::Borrowed(runtime_messages)
+        };
+        let runtime_messages = runtime_messages.as_ref();
         let system_message_count = runtime_messages
             .iter()
             .take_while(|message| message.role == MessageRole::System)
@@ -205,28 +139,19 @@ impl ContextCompressor {
         };
         let mut cutoff = conversation.len();
         let mut accumulated_tokens = 0usize;
+        let mut next_recent_target_tokens = None;
 
         for unit in units.iter().rev() {
-            if accumulated_tokens >= recent_target_tokens {
-                break;
-            }
             if unit.start < minimum_cutoff {
                 break;
             }
-            cutoff = unit.start;
-            accumulated_tokens = accumulated_tokens.saturating_add(unit.tokens);
-        }
-
-        if let Some(previous_cutoff) = previous_cutoff {
-            if cutoff >= previous_cutoff {
-                if let Some(earlier_unit) = units
-                    .iter()
-                    .rev()
-                    .find(|unit| unit.start < previous_cutoff && unit.start >= minimum_cutoff)
-                {
-                    cutoff = earlier_unit.start;
-                }
+            let next_tokens = accumulated_tokens.saturating_add(unit.tokens);
+            if next_tokens > recent_target_tokens {
+                next_recent_target_tokens = Some(next_tokens);
+                break;
             }
+            cutoff = unit.start;
+            accumulated_tokens = next_tokens;
         }
 
         let summary_messages = conversation[..cutoff].to_vec();
@@ -246,79 +171,34 @@ impl ContextCompressor {
         let mut summary_request_messages = runtime_messages[..system_message_count].to_vec();
         summary_request_messages.extend(summary_messages.clone());
 
-        let last_user_index = conversation
-            .iter()
-            .rposition(Message::is_actual_user_message);
-        let last_turn_complete = last_user_index.is_some_and(|index| cutoff <= index);
-        let mut recent_anchor_messages = Vec::new();
-
-        if let Some(last_user_index) = last_user_index.filter(|_| !last_turn_complete) {
-            let user_message = conversation[last_user_index].clone();
-            let latest_todo = Self::latest_todo_snapshot_with_source(
-                &conversation[last_user_index..],
-                last_user_index,
-            );
-            let missing_todo = latest_todo
-                .filter(|(source_index, _)| *source_index < cutoff)
-                .map(|(_, snapshot)| snapshot);
-            let mut reminder_text = Self::RECENT_CONTEXT_BOUNDARY_REMINDER.to_string();
-            if let Some(todo) = missing_todo.as_ref() {
-                reminder_text
-                    .push_str("\n\nLatest task list before the retained recent context:\n");
-                reminder_text.push_str(&Self::render_todo_snapshot(todo));
-            }
-
-            let turn_id = user_message.metadata.turn_id.clone();
-            recent_anchor_messages.push(user_message);
-            let mut reminder = Message::internal_reminder(
-                crate::agentic::core::InternalReminderKind::RecentContextBoundary,
-                reminder_text,
-            );
-            reminder.metadata.turn_id = turn_id.clone();
-            if let Some(todo) = missing_todo {
-                reminder = reminder.with_compression_payload(CompressionPayload {
-                    entries: vec![CompressionEntry::Turn {
-                        turn_id,
-                        messages: Vec::new(),
-                        todo: Some(todo),
-                    }],
-                });
-            }
-            recent_anchor_messages.push(reminder);
-        }
-
-        let recent_anchor_tokens = recent_anchor_messages
-            .iter()
-            .map(|message| message.estimate_tokens_with_reasoning(true))
-            .sum();
-        let can_shorten_summary_prefix = units
-            .iter()
-            .any(|unit| unit.start < cutoff && unit.start >= minimum_cutoff);
-
+        let retained_user_token_budget = (context_window / 10).min(Self::MAX_RETAINED_USER_TOKENS);
+        let (retained_user_messages, retained_user_tokens) =
+            Self::retain_historical_user_messages(&summary_messages, retained_user_token_budget);
         debug!(
-            "Automatic compression plan: session_id={}, recent_target_tokens={}, recent_tail_tokens={}, recent_anchor_tokens={}, cutoff_message_index={}, summary_messages={}, recent_tail_messages={}, last_turn_complete={}, can_shorten_summary_prefix={}",
+            "Compression plan: session_id={}, retained_user_token_budget={}, retained_user_tokens={}, retained_user_messages={}, recent_target_tokens={}, recent_tail_tokens={}, cutoff_message_index={}, summary_messages={}, recent_tail_messages={}, next_recent_target_tokens={:?}",
             session_id,
+            retained_user_token_budget,
+            retained_user_tokens,
+            retained_user_messages.len(),
             recent_target_tokens,
             recent_tail_tokens,
-            recent_anchor_tokens,
             cutoff,
             summary_messages.len(),
             recent_tail_messages.len(),
-            last_turn_complete,
-            can_shorten_summary_prefix
+            next_recent_target_tokens
         );
 
-        Ok(Some(AutoCompressionPlan {
+        Ok(Some(CompressionPlan {
             summary_request_messages,
             summary_messages,
-            recent_anchor_messages,
+            retained_user_messages,
             recent_tail_messages,
+            retained_user_token_budget,
+            retained_user_tokens,
             recent_target_tokens,
             recent_tail_tokens,
-            recent_anchor_tokens,
             cutoff_message_index: cutoff,
-            can_shorten_summary_prefix,
-            last_turn_complete,
+            next_recent_target_tokens,
         }))
     }
 
@@ -344,143 +224,63 @@ impl ContextCompressor {
         units
     }
 
-    fn latest_todo_snapshot_with_source(
-        messages: &[Message],
-        base_index: usize,
-    ) -> Option<(usize, CompressedTodoSnapshot)> {
-        messages
+    fn retain_historical_user_messages(
+        summary_messages: &[Message],
+        token_budget: usize,
+    ) -> (Vec<Message>, usize) {
+        let mut retained = Vec::new();
+        let mut retained_tokens = 0usize;
+
+        for message in summary_messages
             .iter()
-            .enumerate()
             .rev()
-            .find_map(|(index, message)| {
-                MessageHelper::get_last_todo_snapshot(std::slice::from_ref(message))
-                    .map(|snapshot| (base_index + index, snapshot))
-            })
-    }
-
-    pub fn compress_turns(
-        &self,
-        session_id: &str,
-        context_window: usize,
-        turns: Vec<TurnWithTokens>,
-        mode: CompressionMode,
-        model_summary: Option<String>,
-    ) -> BitFunResult<CompressionResult> {
-        self.compress_turns_with_contract(
-            session_id,
-            context_window,
-            turns,
-            mode,
-            None,
-            model_summary,
-        )
-    }
-
-    pub fn compress_turns_with_contract(
-        &self,
-        session_id: &str,
-        context_window: usize,
-        turns: Vec<TurnWithTokens>,
-        mode: CompressionMode,
-        contract: Option<CompressionContract>,
-        model_summary: Option<String>,
-    ) -> BitFunResult<CompressionResult> {
-        self.compress_turns_internal(
-            session_id,
-            context_window,
-            turns,
-            mode,
-            contract,
-            model_summary,
-            matches!(mode, CompressionMode::Auto),
-        )
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    fn compress_turns_internal(
-        &self,
-        session_id: &str,
-        context_window: usize,
-        turns: Vec<TurnWithTokens>,
-        mode: CompressionMode,
-        contract: Option<CompressionContract>,
-        model_summary: Option<String>,
-        append_live_boundary_context: bool,
-    ) -> BitFunResult<CompressionResult> {
-        if turns.is_empty() {
-            debug!("No turns need compression: session_id={}", session_id);
-            return Ok(CompressionResult {
-                messages: Vec::new(),
-                has_model_summary: false,
-            });
+            .filter(|message| message.is_actual_user_message())
+        {
+            let message_tokens = message.estimate_tokens_with_reasoning(true);
+            if retained_tokens.saturating_add(message_tokens) > token_budget {
+                break;
+            }
+            retained_tokens += message_tokens;
+            retained.push(message.clone());
         }
 
-        let Some(last_turn_messages) = turns.last().map(|turn| &turn.messages) else {
-            debug!(
-                "No turns available after collection, skipping compression: session_id={}",
-                session_id
-            );
-            return Ok(CompressionResult {
-                messages: Vec::new(),
-                has_model_summary: false,
-            });
-        };
-        let last_user_message = last_turn_messages
-            .iter()
-            .find(|message| message.is_actual_user_message())
-            .cloned();
-        let last_todo = MessageHelper::get_last_todo_snapshot(last_turn_messages);
-        trace!("Last user message: {:?}", last_user_message);
-        trace!("Last todo: {:?}", last_todo);
-        let mut summary_artifact = match model_summary {
-            Some(summary) => self.build_model_summary_artifact(summary, contract),
-            None => self.build_fallback_summary_artifact(turns, context_window, contract),
-        };
-        if append_live_boundary_context {
-            self.append_live_boundary_context(
-                &mut summary_artifact,
-                last_user_message.as_ref(),
-                last_todo.as_ref(),
-            );
-        }
-        trace!("Compression summary artifact generated");
-        let has_model_summary = summary_artifact.used_model_summary;
-        let compressed_messages = self.create_summary_messages(summary_artifact, mode);
-
-        debug!(
-            "Compression completed: session_id={}, compressed_messages={}",
-            session_id,
-            compressed_messages.len()
-        );
-
-        Ok(CompressionResult {
-            messages: compressed_messages,
-            has_model_summary,
-        })
+        retained.reverse();
+        (retained, retained_tokens)
     }
 
-    pub fn compress_auto_plan_with_contract(
+    pub fn compress_plan_with_contract(
         &self,
         session_id: &str,
         context_window: usize,
-        plan: AutoCompressionPlan,
+        plan: CompressionPlan,
         contract: Option<CompressionContract>,
         model_summary: Option<String>,
     ) -> BitFunResult<CompressionResult> {
         let turns = MessageHelper::group_messages_by_turns(plan.summary_messages);
         let turns = turns.into_iter().map(TurnWithTokens::new).collect();
-        let mut result = self.compress_turns_internal(
+        let summary_artifact = match model_summary {
+            Some(summary) => self.build_model_summary_artifact(summary, contract),
+            None => self.build_fallback_summary_artifact(turns, context_window, contract),
+        };
+        let has_model_summary = summary_artifact.used_model_summary;
+        let summary_message = self.create_summary_message(summary_artifact);
+        let mut messages = plan.retained_user_messages;
+        messages.push(summary_message);
+        messages.extend(plan.recent_tail_messages);
+        messages.push(Message::internal_reminder(
+            InternalReminderKind::CompressionContinuation,
+            Self::COMPRESSION_CONTINUATION_REMINDER,
+        ));
+
+        debug!(
+            "Compression completed: session_id={}, compressed_messages={}",
             session_id,
-            context_window,
-            turns,
-            CompressionMode::Auto,
-            contract,
-            model_summary,
-            false,
-        )?;
-        result.messages.extend(plan.recent_anchor_messages);
-        result.messages.extend(plan.recent_tail_messages);
-        Ok(result)
+            messages.len()
+        );
+        Ok(CompressionResult {
+            messages,
+            has_model_summary,
+        })
     }
 
     pub fn append_transcript_reference(
@@ -489,176 +289,52 @@ impl ContextCompressor {
         transcript_uri: &str,
         transcript_index_range: &TranscriptLineRange,
     ) -> bool {
-        let has_model_summary = result.has_model_summary;
-        let summary_is_inline = result.messages.first().is_some_and(|message| {
-            message.role == MessageRole::User
-                && message.metadata.semantic_kind == Some(MessageSemanticKind::CompressionSummary)
-        });
-        let old_boundary = render_system_reminder(&Self::render_boundary_marker_text(
-            has_model_summary,
-            summary_is_inline,
-            None,
-        ));
-        let new_boundary = render_system_reminder(&Self::render_boundary_marker_text(
-            has_model_summary,
-            summary_is_inline,
-            Some((transcript_uri, transcript_index_range)),
-        ));
-
-        let Some(boundary) = result.messages.iter_mut().find(|message| {
-            matches!(
-                message.metadata.semantic_kind,
-                Some(MessageSemanticKind::CompressionBoundaryMarker)
-                    | Some(MessageSemanticKind::CompressionSummary)
-            ) && matches!(&message.content, MessageContent::Text(text) if text.starts_with(&old_boundary))
+        let Some(summary) = result.messages.iter_mut().find(|message| {
+            message.metadata.semantic_kind == Some(MessageSemanticKind::CompressionSummary)
         }) else {
             return false;
         };
-        let MessageContent::Text(text) = &mut boundary.content else {
+        let MessageContent::Text(text) = &mut summary.content else {
             return false;
         };
-        text.replace_range(..old_boundary.len(), &new_boundary);
-        boundary.metadata.tokens = None;
+        let Some(reminder_end) = text.rfind("\n</system_reminder>") else {
+            return false;
+        };
+        let transcript_text =
+            Self::render_transcript_reference_text(transcript_uri, transcript_index_range);
+        text.insert_str(reminder_end, &format!("\n\n{transcript_text}"));
+        summary.metadata.tokens = None;
         true
     }
 
-    fn create_summary_messages(
-        &self,
-        summary_artifact: CompressionSummaryArtifact,
-        mode: CompressionMode,
-    ) -> Vec<Message> {
-        let boundary_text = render_system_reminder(&Self::render_boundary_marker_text(
-            summary_artifact.used_model_summary,
-            matches!(mode, CompressionMode::Auto),
-            None,
-        ));
-
-        match mode {
-            CompressionMode::Manual => vec![
-                Message::user(boundary_text)
-                    .with_semantic_kind(MessageSemanticKind::CompressionBoundaryMarker),
-                Message::assistant(summary_artifact.summary_text)
-                    .with_semantic_kind(MessageSemanticKind::CompressionSummary)
-                    .with_compression_payload(summary_artifact.payload),
-            ],
-            CompressionMode::Auto => {
-                let continuation_reminder =
-                    render_system_reminder(Self::AUTO_COMPRESSION_CONTINUATION_REMINDER);
-                let content = format!(
-                    "{}\n\n{}\n\n{}",
-                    boundary_text, summary_artifact.summary_text, continuation_reminder
-                );
-                vec![Message::user(content)
-                    .with_semantic_kind(MessageSemanticKind::CompressionSummary)
-                    .with_compression_payload(summary_artifact.payload)]
-            }
-        }
-    }
-
-    fn append_live_boundary_context(
-        &self,
-        summary_artifact: &mut CompressionSummaryArtifact,
-        last_user_message: Option<&Message>,
-        todo_snapshot: Option<&CompressedTodoSnapshot>,
-    ) {
-        let mut additions = Vec::new();
-        let mut payload_messages = Vec::new();
-
-        if let Some(last_user_text) =
-            last_user_message.and_then(Self::render_boundary_user_message_text)
-        {
-            additions.push(format!(
-                "Most recent user message before this summary:\n{}",
-                last_user_text
-            ));
-            payload_messages.push(CompressedMessage {
-                role: CompressedMessageRole::User,
-                text: Some(last_user_text),
-                tool_calls: Vec::new(),
-            });
-        }
-
-        let todo_text = todo_snapshot
-            .map(Self::render_todo_snapshot)
-            .unwrap_or_default();
-        if !todo_text.is_empty() {
-            additions.push(format!(
-                "Most recent task list snapshot before this summary:\n{}",
-                todo_text
-            ));
-        }
-
-        if additions.is_empty() {
-            return;
-        }
-
-        summary_artifact.summary_text = format!(
+    fn create_summary_message(&self, summary_artifact: CompressionSummaryArtifact) -> Message {
+        let boundary_text = Self::render_boundary_marker_text(summary_artifact.used_model_summary);
+        let content = render_system_reminder(&format!(
             "{}\n\n{}",
-            summary_artifact.summary_text.trim_end(),
-            additions.join("\n\n")
-        );
-        summary_artifact
-            .payload
-            .entries
-            .push(CompressionEntry::Turn {
-                turn_id: None,
-                messages: payload_messages,
-                todo: todo_snapshot.cloned(),
-            });
+            boundary_text, summary_artifact.summary_text
+        ));
+        Message::user(content)
+            .with_semantic_kind(MessageSemanticKind::CompressionSummary)
+            .with_compression_payload(summary_artifact.payload)
     }
 
-    fn render_boundary_user_message_text(message: &Message) -> Option<String> {
-        let text = match &message.content {
-            MessageContent::Text(text) => text.trim(),
-            MessageContent::Multimodal { text, .. } => text.trim(),
-            _ => return None,
-        };
-
-        (!text.is_empty()).then(|| text.to_string())
-    }
-
-    fn render_todo_snapshot(todo_snapshot: &CompressedTodoSnapshot) -> String {
-        if todo_snapshot.todos.is_empty() {
-            return todo_snapshot.summary.clone().unwrap_or_default();
-        }
-
-        let mut lines: Vec<String> = todo_snapshot
-            .todos
-            .iter()
-            .map(|todo| format!("- [{}] {}", todo.status, todo.content))
-            .collect();
-
-        if let Some(summary) = &todo_snapshot.summary {
-            if !summary.trim().is_empty() {
-                lines.push(format!("Task list note: {}", summary.trim()));
-            }
-        }
-
-        lines.join("\n")
-    }
-
-    fn render_boundary_marker_text(
-        used_model_summary: bool,
-        summary_is_inline: bool,
-        transcript: Option<(&str, &TranscriptLineRange)>,
-    ) -> String {
-        let mut msg = if summary_is_inline {
-            "The earlier conversation has been summarized below. Use the summary as prior context."
-                .to_string()
-        } else {
-            "The earlier conversation is summarized in the next assistant message. Use it as prior context."
-                .to_string()
-        };
+    fn render_boundary_marker_text(used_model_summary: bool) -> String {
+        let mut msg = "Some earlier user messages were retained verbatim, and the remaining earlier conversation has been summarized below. Use both as prior context."
+            .to_string();
         if !used_model_summary {
             msg.push_str(" This is a partial reconstructed record. Message text, tool arguments, task lists, and tool results may be truncated or omitted.");
         }
-        if let Some((transcript_uri, index_range)) = transcript {
-            msg.push_str(&format!(
-                "\n\nThe complete conversation history from before compression is available at:\n{}\nThe transcript index is at lines {}-{}. Inspect this file if historical details are needed. The file may be large. Recommended ways to access it: 1. Read the index first, then inspect the relevant line ranges. 2. Use Grep to search for the needed content.",
-                transcript_uri, index_range.start_line, index_range.end_line
-            ));
-        }
         msg
+    }
+
+    fn render_transcript_reference_text(
+        transcript_uri: &str,
+        index_range: &TranscriptLineRange,
+    ) -> String {
+        format!(
+            "The complete conversation history from before compression is available at:\n{}\nThe transcript index is at lines {}-{}. Inspect this file if historical details are needed. The file may be large. Recommended ways to access it: 1. Read the index first, then inspect the relevant line ranges. 2. Use Grep to search for the needed content.",
+            transcript_uri, index_range.start_line, index_range.end_line
+        )
     }
 
     fn build_model_summary_artifact(
@@ -677,12 +353,15 @@ impl ContextCompressor {
                 },
             );
             format!(
-                "{}\n\nSummary of the earlier conversation:\n{}",
+                "{}\n\nSummary of the earlier conversation:\n<summary>\n{}\n</summary>",
                 contract.render_for_model(),
                 summary
             )
         } else {
-            format!("Summary of the earlier conversation:\n{}", summary)
+            format!(
+                "Summary of the earlier conversation:\n<summary>\n{}\n</summary>",
+                summary
+            )
         };
 
         CompressionSummaryArtifact {
@@ -720,160 +399,40 @@ impl ContextCompressor {
     }
 
     pub(crate) fn normalize_model_summary_output(raw: &str) -> Option<String> {
-        let trimmed = raw.trim();
-        if trimmed.is_empty() {
-            return None;
-        }
-
-        if let Some(summary) = extract_tag_content(trimmed, "summary") {
-            let summary = summary.trim();
-            if !summary.is_empty() {
-                return Some(summary.to_string());
-            }
-        }
-
-        if trimmed.contains("<analysis>") {
-            return None;
-        }
-
-        Some(trimmed.to_string())
+        let summary = raw.trim();
+        (!summary.is_empty()).then(|| summary.to_string())
     }
 
     pub(crate) fn build_compact_prompt(&self) -> String {
         String::from(
-            r#"Your current task is to create a detailed summary of the conversation so far, paying close attention to the user's explicit requests and your previous actions.
-This summary should be thorough in capturing technical details, code patterns, and architectural decisions that would be essential for continuing development work without losing context.
+            r#"You are performing a CONTEXT CHECKPOINT COMPACTION. Create a handoff summary for another LLM that will resume the task.
 
-CRITICAL: Respond with TEXT ONLY. Do NOT call any tools.
+Include:
+- Current progress and key decisions made
+- Important context, constraints, or user preferences
+- What remains to be done (clear next steps)
+- Any critical data, examples, or references needed to continue
 
-- Do NOT use Read, Bash, Grep, Glob, Edit, Write, or ANY other tool.
-- You already have all the context you need in the conversation above.
-- Tool calls will be REJECTED and will waste your only turn — you will fail the task.
-- Your entire response must be plain text inside a single <summary> block.
+Be concise, structured, and focused on helping the next LLM seamlessly continue the work.
 
-Output exactly one <summary>...</summary> block containing all retained context.
-Important: only the content inside <summary> will be kept as compressed history, so include every required detail there.
+Note: Preserve durable, task-specific state, but do not reproduce information that can be obtained again from its source:
+- Do not paste large file contents, long code blocks, command output, logs, tool results, or other bulky source material. Record the file path or source reference, plus a one-sentence description of its purpose or relevant contents. Include only a small exact snippet when it is essential and cannot be reliably reconstructed.
+- Do not copy Skill instructions or other reloadable guidance. Record the Skill name, why it is relevant, and that the next LLM should reload it when needed.
 
-Before you answer, carefully review the conversation chronologically and make sure the final <summary> captures:
-- The user's explicit requests and intents
-- Your approach to addressing the user's requests
-- Key decisions, technical concepts, and code patterns
-- Specific details like file names, function signatures, file edits, and important code snippets where they materially matter
-- Errors that you ran into and how you fixed them
-- Specific user feedback, especially when the user asked for a different approach or corrected direction
-
-Your summary should include the following sections:
-
-1. Primary Request and Intent: Capture all of the user's explicit requests and intents in detail
-2. Key Technical Concepts: List all important technical concepts, technologies, and frameworks discussed.
-3. Files and Code Sections: Enumerate specific files and code sections examined, modified, or created. Pay special attention to the most recent messages and include full code snippets where applicable and include a summary of why this file read or edit is important.
-4. Errors and fixes: List all errors that you ran into, and how you fixed them. Pay special attention to specific user feedback that you received, especially if the user told you to do something differently.
-5. Problem Solving: Document problems solved and any ongoing troubleshooting efforts.
-6. All user messages: List ALL user messages that are not tool results. These are critical for understanding the users' feedback and changing intent.
-7. Pending Tasks: Outline any pending tasks that you have explicitly been asked to work on.
-8. Current Work: Describe in detail precisely what was being worked on immediately before this summary request, paying special attention to the most recent messages from both user and assistant. Include file names and code snippets where applicable.
-9. Optional Next Step: List the next step that you will take that is related to the most recent work you were doing. IMPORTANT: ensure that this step is DIRECTLY in line with the user's most recent explicit requests, and the task you were working on immediately before this summary request. If your last task was concluded, then only list next steps if they are explicitly in line with the users request. Do not start on tangential requests or really old requests that were already completed without confirming with the user first. If there is a next step, include direct quotes from the most recent conversation showing exactly what task you were working on and where you left off. This should be verbatim to ensure there's no drift in task interpretation.
-
-Here's an example of how your output should be structured:
-
-<example>
-<summary>
-1. Primary Request and Intent:
-   [Detailed description]
-
-2. Key Technical Concepts:
-   - [Concept 1]
-   - [Concept 2]
-   - [...]
-
-3. Files and Code Sections:
-   - [File Name 1]
-      - [Summary of why this file is important]
-      - [Summary of the changes made to this file, if any]
-      - [Important Code Snippet]
-   - [File Name 2]
-      - [Important Code Snippet]
-   - [...]
-
-4. Errors and fixes:
-    - [Detailed description of error 1]:
-      - [How you fixed the error]
-      - [User feedback on the error if any]
-    - [...]
-
-5. Problem Solving:
-   [Description of solved problems and ongoing troubleshooting]
-
-6. All user messages:
-    - [Detailed non tool use user message]
-    - [...]
-
-7. Pending Tasks:
-   - [Task 1]
-   - [Task 2]
-   - [...]
-
-8. Current Work:
-   [Precise description of current work]
-
-9. Optional Next Step:
-   [Optional Next step to take]
-
-</summary>
-</example>
-
-Please provide your summary based on the conversation so far, following this structure and ensuring precision and thoroughness in your response.
-REMINDER: Do NOT call any tools. Respond with plain text only inside a single <summary> block. Tool calls will be rejected and you will fail the task.
+IMPORTANT: This is a summary-only turn. Do not call tools or perform additional work. Respond with the handoff summary as plain text. Any tool call will be rejected and you will fail the task.
 "#,
         )
     }
 }
 
-fn extract_tag_content<'a>(text: &'a str, tag: &str) -> Option<&'a str> {
-    let open = format!("<{tag}>");
-    let close = format!("</{tag}>");
-    let start = text.find(&open)?;
-    let after_open = &text[start + open.len()..];
-    let end = after_open.find(&close)?;
-    Some(&after_open[..end])
-}
-
 #[cfg(test)]
 mod tests {
-    use super::{CompressionMode, ContextCompressor, TurnWithTokens};
+    use super::ContextCompressor;
     use crate::agentic::core::{
         render_system_reminder, CompressionEntry, CompressionPayload, InternalReminderKind,
         Message, MessageContent, MessageSemanticKind, ToolCall, ToolResult,
     };
     use crate::service::session::TranscriptLineRange;
-
-    fn make_turn(messages: Vec<Message>) -> TurnWithTokens {
-        TurnWithTokens::new(messages)
-    }
-
-    fn todo_turn() -> TurnWithTokens {
-        make_turn(vec![
-            Message::user("Continue the refactor".to_string()),
-            Message::assistant_with_tools(
-                "Planning next steps".to_string(),
-                vec![crate::agentic::core::ToolCall {
-                    tool_id: "todo_1".to_string(),
-                    tool_name: "TodoWrite".to_string(),
-                    arguments: serde_json::json!({
-                        "todos": [
-                            {"content": "Update compressor", "status": "in_progress"},
-                            {"content": "Add regression tests", "status": "pending"}
-                        ]
-                    }),
-                    raw_arguments: None,
-                    is_error: false,
-                    parse_error: None,
-                    recovered_from_truncation: false,
-                    repair_kind: Default::default(),
-                }],
-            ),
-        ])
-    }
 
     fn todo_call() -> ToolCall {
         ToolCall {
@@ -907,72 +466,65 @@ mod tests {
     }
 
     #[test]
-    fn recent_context_keeps_complete_last_turn_without_duplicate_anchors() {
+    fn recent_context_keeps_the_exact_suffix_that_fits_the_budget() {
         let compressor = ContextCompressor::new(Default::default());
+        let current_user = Message::user("Current request".to_string());
+        let current_assistant = Message::assistant("Current answer".to_string());
+        let recent_target = current_user.estimate_tokens_with_reasoning(true)
+            + current_assistant.estimate_tokens_with_reasoning(true);
         let messages = vec![
             Message::system("system".to_string()),
             Message::user("Older request".repeat(200)),
             Message::assistant("Older answer".repeat(200)),
-            Message::user("Current request".to_string()),
-            Message::assistant("Current answer".to_string()),
+            current_user.clone(),
+            current_assistant.clone(),
         ];
 
         let plan = compressor
-            .plan_auto_compression("session", &messages, 1_000, None)
+            .plan_compression("session", &messages, 128_000, recent_target)
             .expect("planning succeeds")
             .expect("plan exists");
 
-        assert!(plan.last_turn_complete);
-        assert!(plan.recent_anchor_messages.is_empty());
-        assert!(plan
-            .recent_tail_messages
-            .iter()
-            .any(|message| message.is_actual_user_message()));
+        assert_eq!(plan.recent_tail_tokens, recent_target);
+        assert_eq!(plan.recent_tail_messages.len(), 2);
+        assert_eq!(plan.recent_tail_messages[0].id, current_user.id);
+        assert_eq!(plan.recent_tail_messages[1].id, current_assistant.id);
     }
 
     #[test]
-    fn partial_last_turn_restores_user_and_missing_todo() {
+    fn cutoff_can_split_a_turn_without_adding_an_anchor_or_boundary_reminder() {
         let compressor = ContextCompressor::new(Default::default());
         let current_user = Message::user("Continue the current task".to_string())
             .with_turn_id("turn-current".to_string());
-        let retained_assistant = Message::assistant("Latest evidence".repeat(100))
+        let retained_assistant = Message::assistant("Latest evidence".to_string())
             .with_turn_id("turn-current".to_string());
+        let recent_target = retained_assistant.estimate_tokens_with_reasoning(true);
         let messages = vec![
             Message::system("system".to_string()),
             Message::user("Older request".to_string()),
             Message::assistant("Older answer".to_string()),
             current_user.clone(),
-            Message::assistant_with_tools("Planning".to_string(), vec![todo_call()])
-                .with_turn_id("turn-current".to_string()),
-            todo_result().with_turn_id("turn-current".to_string()),
             retained_assistant.clone(),
         ];
 
         let plan = compressor
-            .plan_auto_compression("session", &messages, 1, None)
+            .plan_compression("session", &messages, 128_000, recent_target)
             .expect("planning succeeds")
             .expect("plan exists");
 
-        assert!(!plan.last_turn_complete);
-        assert_eq!(plan.recent_anchor_messages.len(), 2);
-        assert_eq!(plan.recent_anchor_messages[0].id, current_user.id);
-        assert_eq!(
-            plan.recent_anchor_messages[1].internal_reminder_kind(),
-            Some(InternalReminderKind::RecentContextBoundary)
-        );
-        assert!(matches!(
-            plan.recent_anchor_messages[1]
-                .metadata
-                .compression_payload
-                .as_ref()
-                .and_then(|payload| payload.entries.first()),
-            Some(CompressionEntry::Turn { todo: Some(todo), .. })
-                if todo.todos.len() == 2
-        ));
+        assert_eq!(plan.recent_tail_messages.len(), 1);
         assert_eq!(plan.recent_tail_messages[0].id, retained_assistant.id);
+        assert!(plan
+            .retained_user_messages
+            .iter()
+            .any(|message| message.id == current_user.id));
+        assert!(plan
+            .summary_messages
+            .iter()
+            .any(|message| message.id == current_user.id));
 
-        let mut result = compressor
-            .compress_auto_plan_with_contract(
+        let result = compressor
+            .compress_plan_with_contract(
                 "session",
                 128_000,
                 plan,
@@ -980,25 +532,23 @@ mod tests {
                 Some("Earlier work summary".to_string()),
             )
             .expect("compression succeeds");
-        assert_eq!(result.messages.len(), 4);
-        let MessageContent::Text(summary) = &result.messages[0].content else {
+        assert_eq!(result.messages.len(), 5);
+        assert_eq!(result.messages[0].content.to_string(), "Older request");
+        assert_eq!(result.messages[1].id, current_user.id);
+        let MessageContent::Text(summary) = &result.messages[2].content else {
             panic!("expected summary text");
         };
         assert!(!summary.contains("Most recent user message before this summary"));
-        assert_eq!(result.messages[1].id, current_user.id);
+        assert!(!summary.contains("Most recent task list snapshot before this summary"));
         assert_eq!(result.messages[3].id, retained_assistant.id);
-        assert!(compressor.append_transcript_reference(
-            &mut result,
-            "bitfun://current-session/artifacts/compression-transcripts/3-recent.txt",
-            &TranscriptLineRange {
-                start_line: 1,
-                end_line: 20,
-            },
-        ));
-        let MessageContent::Text(summary) = &result.messages[0].content else {
-            panic!("expected summary text");
-        };
-        assert!(summary.contains("3-recent.txt"));
+        assert_eq!(
+            result.messages[4].internal_reminder_kind(),
+            Some(InternalReminderKind::CompressionContinuation)
+        );
+        assert_eq!(
+            result.messages[4].content.to_string(),
+            render_system_reminder(ContextCompressor::COMPRESSION_CONTINUATION_REMINDER)
+        );
     }
 
     #[test]
@@ -1015,17 +565,24 @@ mod tests {
             result.clone(),
         ];
 
-        let plan = compressor
-            .plan_auto_compression("session", &messages, 1, None)
+        let atomic_tokens = assistant.estimate_tokens_with_reasoning(true)
+            + result.estimate_tokens_with_reasoning(true);
+        let too_small = compressor
+            .plan_compression("session", &messages, 128_000, atomic_tokens - 1)
+            .expect("planning succeeds")
+            .expect("plan exists");
+        let exact = compressor
+            .plan_compression("session", &messages, 128_000, atomic_tokens)
             .expect("planning succeeds")
             .expect("plan exists");
 
-        assert_eq!(plan.recent_tail_messages[0].id, assistant.id);
-        assert_eq!(plan.recent_tail_messages[1].id, result.id);
+        assert!(too_small.recent_tail_messages.is_empty());
+        assert_eq!(exact.recent_tail_messages[0].id, assistant.id);
+        assert_eq!(exact.recent_tail_messages[1].id, result.id);
     }
 
     #[test]
-    fn overflow_retry_forces_cutoff_to_move_across_large_atomic_units() {
+    fn increasing_the_budget_to_the_next_atomic_unit_moves_the_cutoff() {
         let compressor = ContextCompressor::new(Default::default());
         let messages = vec![
             Message::system("system".to_string()),
@@ -1036,162 +593,231 @@ mod tests {
         ];
 
         let first = compressor
-            .plan_auto_compression("session", &messages, 1, None)
+            .plan_compression("session", &messages, 128_000, 1)
             .expect("planning succeeds")
             .expect("first plan exists");
+        let next_target = first
+            .next_recent_target_tokens
+            .expect("another atomic unit can be retained");
         let second = compressor
-            .plan_auto_compression("session", &messages, 2, Some(first.cutoff_message_index))
+            .plan_compression("session", &messages, 128_000, next_target)
             .expect("planning succeeds")
             .expect("second plan exists");
 
+        assert!(first.recent_tail_messages.is_empty());
         assert!(second.cutoff_message_index < first.cutoff_message_index);
         assert!(second.summary_messages.len() < first.summary_messages.len());
         assert!(second.recent_tail_messages.len() > first.recent_tail_messages.len());
     }
 
     #[test]
-    fn manual_compression_creates_closed_compression_turn() {
+    fn compression_orders_retained_users_before_summary_and_recent_context() {
         let compressor = ContextCompressor::new(Default::default());
-        let result = compressor
-            .compress_turns(
+        let user1 = Message::user("user1".to_string());
+        let user2 = Message::user("user2".to_string());
+        let user3 = Message::user("user3".to_string());
+        let assistant3 = Message::assistant("assistant3".to_string());
+        let recent_target = user3.estimate_tokens_with_reasoning(true)
+            + assistant3.estimate_tokens_with_reasoning(true);
+        let messages = vec![
+            Message::system("system".to_string()),
+            user1.clone(),
+            Message::assistant("assistant1".to_string()),
+            user2.clone(),
+            Message::assistant("assistant2".to_string()),
+            user3.clone(),
+            assistant3.clone(),
+        ];
+        let plan = compressor
+            .plan_compression("session", &messages, 128_000, recent_target)
+            .expect("planning succeeds")
+            .expect("plan exists");
+        let mut result = compressor
+            .compress_plan_with_contract(
                 "session",
-                8000,
-                vec![todo_turn()],
-                CompressionMode::Manual,
+                128_000,
+                plan,
                 None,
-            )
-            .expect("compression succeeds");
-
-        assert_eq!(result.messages.len(), 2);
-        assert_eq!(
-            result.messages[0].metadata.semantic_kind,
-            Some(MessageSemanticKind::CompressionBoundaryMarker)
-        );
-        assert_eq!(
-            result.messages[1].metadata.semantic_kind,
-            Some(MessageSemanticKind::CompressionSummary)
-        );
-
-        let boundary_text = match &result.messages[0].content {
-            crate::agentic::core::MessageContent::Text(text) => text,
-            _ => panic!("expected boundary marker text"),
-        };
-        assert!(boundary_text.contains("partial reconstructed record"));
-
-        let summary_text = match &result.messages[1].content {
-            crate::agentic::core::MessageContent::Text(text) => text,
-            _ => panic!("expected assistant text summary"),
-        };
-        assert!(summary_text.contains("Continue the refactor"));
-    }
-
-    #[test]
-    fn compression_boundary_can_append_plain_text_transcript_reference() {
-        let compressor = ContextCompressor::new(Default::default());
-        let mut result = compressor
-            .compress_turns(
-                "session",
-                8000,
-                vec![todo_turn()],
-                CompressionMode::Manual,
-                Some("Model summary".to_string()),
-            )
-            .expect("compression succeeds");
-        let uri = "bitfun://current-session/artifacts/compression-transcripts/12-a3f9.txt";
-        let index_range = TranscriptLineRange {
-            start_line: 1,
-            end_line: 14,
-        };
-
-        assert!(compressor.append_transcript_reference(&mut result, uri, &index_range));
-        let boundary_text = match &result.messages[0].content {
-            crate::agentic::core::MessageContent::Text(text) => text,
-            _ => panic!("expected boundary marker text"),
-        };
-        assert!(boundary_text.contains(uri));
-        assert!(boundary_text.contains("complete conversation history from before compression"));
-        assert!(boundary_text.contains("transcript index is at lines 1-14"));
-        assert!(boundary_text.contains("Recommended ways to access it"));
-        assert!(boundary_text.contains("1. Read the index first"));
-        assert!(boundary_text.contains("2. Use Grep"));
-        assert!(boundary_text.ends_with("\n</system_reminder>"));
-
-        let summary_text = match &result.messages[1].content {
-            crate::agentic::core::MessageContent::Text(text) => text,
-            _ => panic!("expected assistant text summary"),
-        };
-        assert!(!summary_text.contains(uri));
-        assert_eq!(
-            result.messages[0].metadata.semantic_kind,
-            Some(MessageSemanticKind::CompressionBoundaryMarker)
-        );
-    }
-
-    #[test]
-    fn auto_compression_merges_summary_and_continuation_into_one_user_message() {
-        let compressor = ContextCompressor::new(Default::default());
-        let result = compressor
-            .compress_turns(
-                "session",
-                8000,
-                vec![todo_turn()],
-                CompressionMode::Auto,
                 Some("Model summary".to_string()),
             )
             .expect("compression succeeds");
 
-        assert_eq!(result.messages.len(), 1);
+        assert_eq!(result.messages.len(), 6);
+        assert_eq!(result.messages[0].id, user1.id);
+        assert_eq!(result.messages[1].id, user2.id);
         assert_eq!(
-            result.messages[0].role,
-            crate::agentic::core::MessageRole::User
-        );
-        assert_eq!(
-            result.messages[0].metadata.semantic_kind,
+            result.messages[2].metadata.semantic_kind,
             Some(MessageSemanticKind::CompressionSummary)
         );
-        let summary_text = match &result.messages[0].content {
-            crate::agentic::core::MessageContent::Text(text) => text,
-            _ => panic!("expected merged user text summary"),
+        assert_eq!(result.messages[3].id, user3.id);
+        assert_eq!(result.messages[4].id, assistant3.id);
+        assert_eq!(
+            result.messages[5].internal_reminder_kind(),
+            Some(InternalReminderKind::CompressionContinuation)
+        );
+        let MessageContent::Text(summary_text) = &result.messages[2].content else {
+            panic!("expected summary text");
         };
-        assert!(summary_text.contains("earlier conversation has been summarized below"));
+        assert!(summary_text.starts_with("<system_reminder>\n"));
+        assert!(summary_text.ends_with("\n</system_reminder>"));
+        assert_eq!(summary_text.matches("<system_reminder>").count(), 1);
+        assert_eq!(summary_text.matches("</system_reminder>").count(), 1);
+        assert!(summary_text.contains(
+            "Summary of the earlier conversation:\n<summary>\nModel summary\n</summary>"
+        ));
         assert!(summary_text.contains("Model summary"));
-        assert!(summary_text.contains("Most recent user message before this summary"));
-        assert!(summary_text.contains("Continue the refactor"));
-        assert!(summary_text.contains("Most recent task list snapshot before this summary"));
-        assert!(summary_text.ends_with(&render_system_reminder(
-            ContextCompressor::AUTO_COMPRESSION_CONTINUATION_REMINDER
-        )));
-        assert!(summary_text.contains("continue working on the user's most recent request"));
-    }
+        assert!(!summary_text.contains("Most recent user message before this summary"));
+        assert!(!summary_text.contains("Most recent task list snapshot before this summary"));
+        assert!(!summary_text.contains(ContextCompressor::COMPRESSION_CONTINUATION_REMINDER));
+        assert_eq!(
+            result.messages[5].content.to_string(),
+            render_system_reminder(ContextCompressor::COMPRESSION_CONTINUATION_REMINDER)
+        );
 
-    #[test]
-    fn auto_compression_transcript_reference_preserves_final_continuation_reminder() {
-        let compressor = ContextCompressor::new(Default::default());
-        let mut result = compressor
-            .compress_turns(
-                "session",
-                8000,
-                vec![todo_turn()],
-                CompressionMode::Auto,
-                Some("Model summary".to_string()),
-            )
-            .expect("compression succeeds");
         let uri = "bitfun://current-session/artifacts/compression-transcripts/12-a3f9.txt";
         let index_range = TranscriptLineRange {
             start_line: 1,
             end_line: 14,
         };
-
         assert!(compressor.append_transcript_reference(&mut result, uri, &index_range));
-        let summary_text = match &result.messages[0].content {
-            crate::agentic::core::MessageContent::Text(text) => text,
-            _ => panic!("expected merged user text summary"),
+        let MessageContent::Text(summary_text) = &result.messages[2].content else {
+            panic!("expected summary text");
         };
         assert!(summary_text.contains(uri));
-        assert!(summary_text.contains("Model summary"));
-        assert!(summary_text.ends_with(&render_system_reminder(
-            ContextCompressor::AUTO_COMPRESSION_CONTINUATION_REMINDER
-        )));
+        let summary_end = summary_text.find("</summary>").expect("summary tag exists");
+        let transcript_start = summary_text
+            .find("The complete conversation history")
+            .expect("transcript reference exists");
+        assert!(summary_end < transcript_start);
+        assert!(summary_text.ends_with("\n</system_reminder>"));
+        assert!(!summary_text.contains(ContextCompressor::COMPRESSION_CONTINUATION_REMINDER));
+        assert_eq!(
+            result.messages[5].content.to_string(),
+            render_system_reminder(ContextCompressor::COMPRESSION_CONTINUATION_REMINDER)
+        );
+    }
+
+    #[test]
+    fn recompression_replaces_the_previous_continuation_reminder() {
+        let compressor = ContextCompressor::new(Default::default());
+        let old_reminder = Message::internal_reminder(
+            InternalReminderKind::CompressionContinuation,
+            "old continuation",
+        );
+        let messages = vec![
+            Message::system("system".to_string()),
+            Message::user("older request".to_string()),
+            Message::assistant("older answer".to_string()),
+            old_reminder.clone(),
+            Message::user("new request".to_string()),
+            Message::assistant("new answer".to_string()),
+        ];
+
+        let plan = compressor
+            .plan_compression("session", &messages, 128_000, 1)
+            .expect("planning succeeds")
+            .expect("plan exists");
+
+        assert!(!plan
+            .summary_request_messages
+            .iter()
+            .any(|message| message.id == old_reminder.id));
+        assert!(!plan
+            .recent_tail_messages
+            .iter()
+            .any(|message| message.id == old_reminder.id));
+
+        let result = compressor
+            .compress_plan_with_contract(
+                "session",
+                128_000,
+                plan,
+                None,
+                Some("updated summary".to_string()),
+            )
+            .expect("compression succeeds");
+
+        assert_eq!(
+            result
+                .messages
+                .iter()
+                .filter(|message| {
+                    message.internal_reminder_kind()
+                        == Some(InternalReminderKind::CompressionContinuation)
+                })
+                .count(),
+            1
+        );
+    }
+
+    #[test]
+    fn retained_user_messages_use_only_the_token_budget_without_a_count_limit() {
+        let messages: Vec<Message> = (0..25)
+            .map(|index| Message::user(format!("user-{index}")))
+            .collect();
+        let total_tokens = messages
+            .iter()
+            .map(|message| message.estimate_tokens_with_reasoning(true))
+            .sum();
+
+        let (retained, retained_tokens) =
+            ContextCompressor::retain_historical_user_messages(&messages, total_tokens);
+
+        assert_eq!(retained.len(), 25);
+        assert_eq!(retained_tokens, total_tokens);
+    }
+
+    #[test]
+    fn retained_user_token_budget_is_ten_percent_capped_at_twenty_thousand() {
+        let compressor = ContextCompressor::new(Default::default());
+        let messages = vec![
+            Message::system("system".to_string()),
+            Message::user("older request".to_string()),
+            Message::assistant("older answer".to_string()),
+            Message::user("current request".to_string()),
+            Message::assistant("current answer".to_string()),
+        ];
+
+        let smaller = compressor
+            .plan_compression("session", &messages, 50_000, 1)
+            .expect("planning succeeds")
+            .expect("plan exists");
+        let larger = compressor
+            .plan_compression("session", &messages, 200_000, 1)
+            .expect("planning succeeds")
+            .expect("plan exists");
+
+        assert_eq!(smaller.retained_user_token_budget, 5_000);
+        assert_eq!(larger.retained_user_token_budget, 20_000);
+    }
+
+    #[test]
+    fn retained_user_messages_drop_the_older_prefix_when_the_next_message_does_not_fit() {
+        let oldest = Message::user("oldest".to_string());
+        let too_large = Message::user("large".repeat(500));
+        let newest = Message::user("newest".to_string());
+        let budget = newest.estimate_tokens_with_reasoning(true);
+
+        let (retained, retained_tokens) = ContextCompressor::retain_historical_user_messages(
+            &[oldest, too_large, newest.clone()],
+            budget,
+        );
+
+        assert_eq!(retained.len(), 1);
+        assert_eq!(retained[0].id, newest.id);
+        assert_eq!(retained_tokens, budget);
+    }
+
+    #[test]
+    fn retained_user_messages_are_empty_when_the_newest_candidate_exceeds_the_budget() {
+        let older = Message::user("older".to_string());
+        let newest = Message::user("newest".repeat(500));
+
+        let (retained, retained_tokens) =
+            ContextCompressor::retain_historical_user_messages(&[older, newest], 1);
+
+        assert!(retained.is_empty());
+        assert_eq!(retained_tokens, 0);
     }
 
     #[test]
@@ -1223,14 +849,25 @@ mod tests {
     }
 
     #[test]
-    fn merged_auto_compression_payload_remains_atomic_on_recompression() {
+    fn merged_compression_payload_remains_atomic_on_recompression() {
         let compressor = ContextCompressor::new(Default::default());
+        let messages = vec![
+            Message::system("system".to_string()),
+            Message::user("Continue the refactor".to_string()),
+            Message::assistant("Work in progress".to_string()),
+            Message::user("Keep recent context".to_string()),
+            Message::assistant("Recent evidence".to_string()),
+        ];
+        let plan = compressor
+            .plan_compression("session", &messages, 8_000, 1)
+            .expect("planning succeeds")
+            .expect("plan exists");
         let compressed = compressor
-            .compress_turns(
+            .compress_plan_with_contract(
                 "session",
-                8000,
-                vec![todo_turn()],
-                CompressionMode::Auto,
+                8_000,
+                plan,
+                None,
                 Some("Model summary".to_string()),
             )
             .expect("compression succeeds");
@@ -1247,100 +884,27 @@ mod tests {
                 },
             );
 
-        assert!(matches!(
-            &summary_artifact.payload.entries[0],
-            CompressionEntry::ModelSummary { text } if text == "Model summary"
-        ));
-        assert!(summary_artifact.payload.entries.iter().any(|entry| matches!(
-            entry,
-            CompressionEntry::Turn { messages, todo, .. }
-                if messages.iter().any(|message| message.text.as_deref() == Some("Continue the refactor"))
-                    && todo.is_some()
-        )));
+        assert!(summary_artifact
+            .payload
+            .entries
+            .iter()
+            .any(|entry| matches!(
+                entry,
+                CompressionEntry::ModelSummary { text } if text == "Model summary"
+            )));
     }
 
     #[test]
-    fn model_summary_prompt_does_not_inline_compaction_contract() {
-        let compressor = ContextCompressor::new(Default::default());
+    fn model_summary_output_trims_plain_text() {
+        let normalized = ContextCompressor::normalize_model_summary_output("  Plain summary\n");
 
-        let prompt = compressor.build_compact_prompt();
-
-        assert!(!prompt.contains("authoritative factual context"));
-        assert!(!prompt.contains("src/lib.rs"));
-        assert!(!prompt.contains("cargo test"));
+        assert_eq!(normalized.as_deref(), Some("Plain summary"));
     }
 
     #[test]
-    fn model_summary_prompt_requires_summary_only() {
-        let compressor = ContextCompressor::new(Default::default());
-
-        let prompt = compressor.build_compact_prompt();
-
-        assert!(prompt.contains("single <summary> block"));
-        assert!(!prompt.contains("<analysis> block followed by a <summary> block"));
-    }
-
-    #[test]
-    fn model_summary_output_uses_summary_tag_body_only() {
-        let normalized = ContextCompressor::normalize_model_summary_output(
-            "<analysis>\ninternal reasoning\n</analysis>\n<summary>\nFinal summary\n</summary>",
-        );
-
-        assert_eq!(normalized.as_deref(), Some("Final summary"));
-    }
-
-    #[test]
-    fn model_summary_output_without_tags_keeps_plain_text() {
-        let normalized =
-            ContextCompressor::normalize_model_summary_output("Plain summary without tags");
-
-        assert_eq!(normalized.as_deref(), Some("Plain summary without tags"));
-    }
-
-    #[test]
-    fn model_summary_output_with_analysis_but_no_summary_is_rejected() {
-        let normalized = ContextCompressor::normalize_model_summary_output(
-            "<analysis>\ninternal reasoning\n</analysis>",
-        );
+    fn empty_model_summary_output_is_rejected() {
+        let normalized = ContextCompressor::normalize_model_summary_output(" \n\t ");
 
         assert_eq!(normalized, None);
-    }
-
-    #[test]
-    fn auto_turn_collection_keeps_single_active_turn() {
-        let compressor = ContextCompressor::new(Default::default());
-        let messages = vec![
-            Message::system("system".to_string()),
-            Message::user("First request".to_string()),
-            Message::assistant("First reply".to_string()),
-        ];
-
-        let turns = compressor
-            .collect_turns_for_auto_compression("session", messages)
-            .expect("collection succeeds");
-
-        assert_eq!(turns.len(), 1);
-    }
-
-    #[test]
-    fn manual_compaction_turn_collection_includes_all_non_system_turns() {
-        let compressor = ContextCompressor::new(Default::default());
-        let messages = vec![
-            Message::system("system".to_string()),
-            Message::user("First request".to_string()),
-            Message::assistant("First reply".to_string()),
-            Message::user("Second request".to_string()),
-            Message::assistant("Second reply".to_string()),
-        ];
-
-        let manual_turns = compressor
-            .collect_all_turns_for_manual_compaction("session", messages.clone())
-            .expect("manual collection succeeds");
-        let passive_turns = compressor
-            .collect_turns_for_auto_compression("session", messages)
-            .expect("passive collection succeeds");
-
-        assert_eq!(manual_turns.len(), 2);
-        assert_eq!(manual_turns.len(), passive_turns.len());
     }
 }

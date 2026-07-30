@@ -25,8 +25,7 @@ use crate::agentic::image_analysis::{
 };
 use crate::agentic::round_preempt::RoundInjectionKind;
 use crate::agentic::session::{
-    CompressionMode, ContextCompressor, SessionManager, TokenAnchor, TokenAnchorInput,
-    UserContextCacheIdentity,
+    ContextCompressor, SessionManager, TokenAnchor, TokenAnchorInput, UserContextCacheIdentity,
 };
 use crate::agentic::skill_agent_snapshot::build_skill_agent_tool_listing_sections_from_snapshot;
 use crate::agentic::tools::implementations::{SkillTool, TaskTool};
@@ -1876,11 +1875,125 @@ impl ExecutionEngine {
         let summary =
             ContextCompressor::normalize_model_summary_output(&raw_summary).ok_or_else(|| {
                 BitFunError::AIClient(
-                    "Model-based compression returned <analysis> without a usable <summary>"
-                        .to_string(),
+                    "Model-based compression returned an empty summary".to_string(),
                 )
             })?;
         Ok(Some(summary))
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    async fn build_planned_compression_result(
+        &self,
+        session_id: &str,
+        dialog_turn_id: &str,
+        runtime_messages: &[Message],
+        context_window: usize,
+        compression_contract: Option<crate::agentic::core::CompressionContract>,
+        ai_client: Arc<crate::infrastructure::ai::AIClient>,
+        tool_definitions: &Option<Vec<ToolDefinition>>,
+        prepended_prompt_reminders: &PrependedPromptReminders,
+        primary_supports_image_understanding: bool,
+        workspace: Option<&WorkspaceBinding>,
+        trace_config: Option<ModelExchangeTraceConfig>,
+    ) -> BitFunResult<Option<crate::agentic::session::CompressionResult>> {
+        let max_initial_recent = context_window.saturating_div(2).max(1);
+        let mut recent_target =
+            ContextCompressor::DEFAULT_RECENT_CONTEXT_TOKENS.min(max_initial_recent);
+        let mut selected_plan = None;
+        let mut model_summary = None;
+
+        for attempt in 0..Self::MAX_COMPRESSION_OVERFLOW_ATTEMPTS {
+            let Some(plan) = self.context_compressor.plan_compression(
+                session_id,
+                runtime_messages,
+                context_window,
+                recent_target,
+            )?
+            else {
+                break;
+            };
+            info!(
+                "Compression context plan: session_id={}, turn_id={}, attempt={}/{}, retained_user_token_budget={}, retained_user_tokens={}, retained_user_messages={}, recent_target_tokens={}, recent_tail_tokens={}, cutoff_message_index={}, summary_messages={}, recent_tail_messages={}",
+                session_id,
+                dialog_turn_id,
+                attempt + 1,
+                Self::MAX_COMPRESSION_OVERFLOW_ATTEMPTS,
+                plan.retained_user_token_budget,
+                plan.retained_user_tokens,
+                plan.retained_user_messages.len(),
+                plan.recent_target_tokens,
+                plan.recent_tail_tokens,
+                plan.cutoff_message_index,
+                plan.summary_messages.len(),
+                plan.recent_tail_messages.len()
+            );
+
+            let summary_result = self
+                .generate_compression_model_summary(CompressionModelSummaryInput {
+                    ai_client: ai_client.clone(),
+                    runtime_messages: &plan.summary_request_messages,
+                    dialog_turn_id,
+                    workspace,
+                    tool_definitions,
+                    prepended_prompt_reminders,
+                    primary_supports_image_understanding,
+                    trace_config: trace_config.clone(),
+                })
+                .await;
+
+            match summary_result {
+                Ok(summary) => {
+                    selected_plan = Some(plan);
+                    model_summary = summary;
+                    break;
+                }
+                Err(err) if err.is_recoverable_context_overflow() => {
+                    warn!(
+                        "Compression request exceeded provider context: session_id={}, turn_id={}, attempt={}/{}, recent_target_tokens={}, cutoff_message_index={}, next_recent_target_tokens={:?}, error={}",
+                        session_id,
+                        dialog_turn_id,
+                        attempt + 1,
+                        Self::MAX_COMPRESSION_OVERFLOW_ATTEMPTS,
+                        plan.recent_target_tokens,
+                        plan.cutoff_message_index,
+                        plan.next_recent_target_tokens,
+                        err
+                    );
+                    let can_retry = attempt + 1 < Self::MAX_COMPRESSION_OVERFLOW_ATTEMPTS
+                        && plan.next_recent_target_tokens.is_some();
+                    let next_recent_target = plan.next_recent_target_tokens;
+                    selected_plan = Some(plan);
+                    if can_retry {
+                        recent_target = recent_target
+                            .saturating_add(ContextCompressor::RECENT_CONTEXT_RETRY_STEP_TOKENS)
+                            .max(next_recent_target.expect("retry target checked above"));
+                        continue;
+                    }
+                    break;
+                }
+                Err(err) => {
+                    warn!(
+                        "Model-based compression failed, falling back to structured local compression: {}",
+                        err
+                    );
+                    selected_plan = Some(plan);
+                    break;
+                }
+            }
+        }
+
+        let Some(selected_plan) = selected_plan else {
+            return Ok(None);
+        };
+        self.context_compressor
+            .compress_plan_with_contract(
+                session_id,
+                context_window,
+                selected_plan,
+                compression_contract,
+                model_summary,
+            )
+            .map(Some)
     }
 
     async fn resolve_compression_runtime_scaffold(
@@ -2160,104 +2273,23 @@ impl ExecutionEngine {
             ai_client.as_ref(),
         )
         .await;
-        let max_initial_recent = context_window.saturating_div(2).max(1);
-        let mut recent_target =
-            ContextCompressor::DEFAULT_RECENT_CONTEXT_TOKENS.min(max_initial_recent);
-        let mut previous_cutoff = None;
-        let mut selected_plan = None;
-        let mut model_summary = None;
-
-        for attempt in 0..Self::MAX_COMPRESSION_OVERFLOW_ATTEMPTS {
-            let Some(plan) = self.context_compressor.plan_auto_compression(
-                session_id,
-                &runtime_messages,
-                recent_target,
-                previous_cutoff,
-            )?
-            else {
-                break;
-            };
-            info!(
-                "Compression context plan: session_id={}, turn_id={}, trigger={}, attempt={}/{}, recent_target_tokens={}, recent_tail_tokens={}, recent_anchor_tokens={}, cutoff_message_index={}, summary_messages={}, recent_tail_messages={}, last_turn_complete={}",
+        let planned_result = self
+            .build_planned_compression_result(
                 session_id,
                 dialog_turn_id,
-                trigger,
-                attempt + 1,
-                Self::MAX_COMPRESSION_OVERFLOW_ATTEMPTS,
-                plan.recent_target_tokens,
-                plan.recent_tail_tokens,
-                plan.recent_anchor_tokens,
-                plan.cutoff_message_index,
-                plan.summary_messages.len(),
-                plan.recent_tail_messages.len(),
-                plan.last_turn_complete
-            );
-
-            let summary_result = self
-                .generate_compression_model_summary(CompressionModelSummaryInput {
-                    ai_client: ai_client.clone(),
-                    runtime_messages: &plan.summary_request_messages,
-                    dialog_turn_id,
-                    workspace,
-                    tool_definitions,
-                    prepended_prompt_reminders,
-                    primary_supports_image_understanding,
-                    trace_config: trace_config.clone(),
-                })
-                .await;
-
-            match summary_result {
-                Ok(summary) => {
-                    selected_plan = Some(plan);
-                    model_summary = summary;
-                    break;
-                }
-                Err(err) if err.is_recoverable_context_overflow() => {
-                    warn!(
-                        "Compression request exceeded provider context: session_id={}, turn_id={}, trigger={}, attempt={}/{}, recent_target_tokens={}, cutoff_message_index={}, can_shorten_summary_prefix={}, error={}",
-                        session_id,
-                        dialog_turn_id,
-                        trigger,
-                        attempt + 1,
-                        Self::MAX_COMPRESSION_OVERFLOW_ATTEMPTS,
-                        plan.recent_target_tokens,
-                        plan.cutoff_message_index,
-                        plan.can_shorten_summary_prefix,
-                        err
-                    );
-                    let can_retry = attempt + 1 < Self::MAX_COMPRESSION_OVERFLOW_ATTEMPTS
-                        && plan.can_shorten_summary_prefix;
-                    previous_cutoff = Some(plan.cutoff_message_index);
-                    selected_plan = Some(plan);
-                    if can_retry {
-                        recent_target = recent_target
-                            .saturating_add(ContextCompressor::RECENT_CONTEXT_RETRY_STEP_TOKENS);
-                        continue;
-                    }
-                    break;
-                }
-                Err(err) => {
-                    warn!(
-                        "Model-based compression failed, falling back to structured local compression: {}",
-                        err
-                    );
-                    selected_plan = Some(plan);
-                    break;
-                }
-            }
-        }
-
-        let Some(selected_plan) = selected_plan else {
-            return Ok(None);
-        };
-        match self.context_compressor.compress_auto_plan_with_contract(
-            session_id,
-            context_window,
-            selected_plan,
-            compression_contract,
-            model_summary,
-        ) {
-            Ok(mut compression_result) => {
+                &runtime_messages,
+                context_window,
+                compression_contract,
+                ai_client,
+                tool_definitions,
+                prepended_prompt_reminders,
+                primary_supports_image_understanding,
+                workspace,
+                trace_config,
+            )
+            .await;
+        match planned_result {
+            Ok(Some(mut compression_result)) => {
                 let boundary_turn_index = self
                     .session_manager
                     .get_turn_count(session_id)
@@ -2403,6 +2435,7 @@ impl ExecutionEngine {
 
                 Ok(Some((compressed_tokens, new_messages)))
             }
+            Ok(None) => Ok(None),
             Err(e) => {
                 // Emit compression failed event
                 self.emit_event(
@@ -2481,65 +2514,6 @@ impl ExecutionEngine {
         )
         .await;
 
-        let turns = self
-            .context_compressor
-            .collect_all_turns_for_manual_compaction(&session_id, messages.clone())?;
-
-        if turns.is_empty() {
-            let duration_ms = elapsed_ms_u64(start_time);
-            let tokens_after = before_pressure.total_tokens;
-            let compression_ratio = if before_pressure.total_tokens == 0 {
-                1.0
-            } else {
-                (tokens_after as f64) / (before_pressure.total_tokens as f64)
-            };
-            info!(
-                "Manual compression skipped: session_id={}, turn_id={}, reason=no_eligible_turns, total_tokens={}, system_tokens={}, tool_tokens={}, prepended_reminder_tokens={}, conversation_tokens={}, context_window={}, input_limit={}, output_reserve={}, safety_reserve={}, usage={:.3}, duration_ms={}",
-                session_id,
-                dialog_turn_id,
-                before_pressure.total_tokens,
-                before_pressure.system_tokens,
-                before_pressure.tool_tokens,
-                before_pressure.prepended_reminder_tokens,
-                before_pressure.conversation_tokens,
-                before_pressure.context_window,
-                before_pressure.input_limit,
-                before_pressure.output_reserve_tokens,
-                before_pressure.safety_reserve_tokens,
-                before_pressure.usage_ratio,
-                duration_ms
-            );
-
-            self.emit_event(
-                AgenticEvent::ContextCompressionCompleted {
-                    session_id: session_id.to_string(),
-                    turn_id: dialog_turn_id.to_string(),
-                    compression_id: compression_id.clone(),
-                    compression_count: session.compression_state.compression_count,
-                    tokens_before: before_pressure.total_tokens,
-                    tokens_after,
-                    compression_ratio,
-                    duration_ms,
-                    has_summary: false,
-                    summary_source: "none".to_string(),
-                },
-                EventPriority::Normal,
-            )
-            .await;
-
-            return Ok(ContextCompactionOutcome {
-                compression_id,
-                compression_count: session.compression_state.compression_count,
-                tokens_before: before_pressure.total_tokens,
-                tokens_after,
-                compression_ratio,
-                duration_ms,
-                has_summary: false,
-                summary_source: "none".to_string(),
-                applied: false,
-            });
-        }
-
         let compression_contract = self
             .session_manager
             .compression_contract_for_session(&session_id, scaffold.compression_contract_limit);
@@ -2560,37 +2534,23 @@ impl ExecutionEngine {
             scaffold.ai_client.as_ref(),
         )
         .await;
-        let model_summary = match self
-            .generate_compression_model_summary(CompressionModelSummaryInput {
-                ai_client: scaffold.ai_client.clone(),
-                runtime_messages: &runtime_messages,
-                dialog_turn_id: &dialog_turn_id,
-                workspace: context.workspace.as_ref(),
-                tool_definitions: &scaffold.tool_definitions,
-                prepended_prompt_reminders: &scaffold.prepended_prompt_reminders,
-                primary_supports_image_understanding: scaffold.primary_supports_image_understanding,
+        let planned_result = self
+            .build_planned_compression_result(
+                &session_id,
+                &dialog_turn_id,
+                &runtime_messages,
+                context_window,
+                compression_contract,
+                scaffold.ai_client.clone(),
+                &scaffold.tool_definitions,
+                &scaffold.prepended_prompt_reminders,
+                scaffold.primary_supports_image_understanding,
+                context.workspace.as_ref(),
                 trace_config,
-            })
-            .await
-        {
-            Ok(summary) => summary,
-            Err(err) => {
-                warn!(
-                    "Model-based manual compaction failed, falling back to structured local compression: {}",
-                    err
-                );
-                None
-            }
-        };
-        match self.context_compressor.compress_turns_with_contract(
-            &session_id,
-            context_window,
-            turns,
-            CompressionMode::Manual,
-            compression_contract,
-            model_summary,
-        ) {
-            Ok(mut compression_result) => {
+            )
+            .await;
+        match planned_result {
+            Ok(Some(mut compression_result)) => {
                 let boundary_turn_index = self
                     .session_manager
                     .get_turn_count(&session_id)
@@ -2738,6 +2698,46 @@ impl ExecutionEngine {
                         "local_fallback".to_string()
                     },
                     applied: true,
+                })
+            }
+            Ok(None) => {
+                let duration_ms = elapsed_ms_u64(start_time);
+                let tokens_after = before_pressure.total_tokens;
+                let compression_ratio = if before_pressure.total_tokens == 0 {
+                    1.0
+                } else {
+                    (tokens_after as f64) / (before_pressure.total_tokens as f64)
+                };
+                info!(
+                    "Manual compression skipped: session_id={}, turn_id={}, reason=no_eligible_prefix, total_tokens={}, duration_ms={}",
+                    session_id, dialog_turn_id, before_pressure.total_tokens, duration_ms
+                );
+                self.emit_event(
+                    AgenticEvent::ContextCompressionCompleted {
+                        session_id: session_id.to_string(),
+                        turn_id: dialog_turn_id.to_string(),
+                        compression_id: compression_id.clone(),
+                        compression_count: session.compression_state.compression_count,
+                        tokens_before: before_pressure.total_tokens,
+                        tokens_after,
+                        compression_ratio,
+                        duration_ms,
+                        has_summary: false,
+                        summary_source: "none".to_string(),
+                    },
+                    EventPriority::Normal,
+                )
+                .await;
+                Ok(ContextCompactionOutcome {
+                    compression_id,
+                    compression_count: session.compression_state.compression_count,
+                    tokens_before: before_pressure.total_tokens,
+                    tokens_after,
+                    compression_ratio,
+                    duration_ms,
+                    has_summary: false,
+                    summary_source: "none".to_string(),
+                    applied: false,
                 })
             }
             Err(err) => {

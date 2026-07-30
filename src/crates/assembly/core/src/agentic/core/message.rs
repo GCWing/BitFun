@@ -110,8 +110,8 @@ pub enum InternalReminderKind {
     InterruptedContinue,
     ThinkingOnlyRescue,
     FinalizeCacheAnchor,
-    /// Marks a retained suffix whose earlier exchanges in the same turn were compacted.
-    RecentContextBoundary,
+    /// Re-establishes execution after compaction; replaced by the next compaction.
+    CompressionContinuation,
     /// A Stop hook blocked the end of a turn and asked the agent to continue.
     StopHookBlock,
     /// Model-visible context contributed by a SessionStart or
@@ -147,6 +147,7 @@ impl InternalReminderKind {
                 | Self::InterruptedContinue
                 | Self::ThinkingOnlyRescue
                 | Self::FinalizeCacheAnchor
+                | Self::CompressionContinuation
                 // Mid-turn scaffolding: the Stop hook's feedback matters only
                 // while the reopened turn is still running. HookContext is
                 // deliberately absent — it carries real context a hook asked
