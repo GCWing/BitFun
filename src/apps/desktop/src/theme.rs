@@ -1,5 +1,6 @@
 //! Theme System
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{OnceLock, RwLock};
 use std::time::Instant;
 
@@ -8,7 +9,7 @@ use bitfun_core::service::config::types::GlobalConfig;
 use dark_light::Mode;
 use log::{debug, error, warn};
 use tauri::webview::PageLoadEvent;
-use tauri::{Manager, WebviewUrl};
+use tauri::{Manager, Url, WebviewUrl};
 
 use crate::startup_trace::DesktopStartupTrace;
 
@@ -24,6 +25,29 @@ static AGENT_COMPANION_WINDOW_LAST_POSITION: OnceLock<RwLock<Option<tauri::Logic
 static STARTUP_THEME_BOOTSTRAP_MANIFEST: OnceLock<StartupThemeBootstrapManifest> = OnceLock::new();
 
 const STARTUP_THEME_BOOTSTRAP_JSON: &str = include_str!("generated/startup_theme_bootstrap.json");
+
+struct MainWebviewNavigationPolicy {
+    first_page_navigation: AtomicBool,
+}
+
+impl MainWebviewNavigationPolicy {
+    fn new() -> Self {
+        Self {
+            first_page_navigation: AtomicBool::new(true),
+        }
+    }
+
+    fn should_allow(&self, url: &Url) -> bool {
+        // Wry invokes the same callback for top-level and iframe navigations on
+        // macOS, but it does not expose the target frame here. MiniApps use
+        // parent-created Blob documents, while srcdoc/empty iframe documents
+        // use the two local about: targets below. Allowing only these local
+        // document URLs keeps network and app reloads behind the one-shot gate.
+        let is_embedded_document = url.scheme() == "blob"
+            || (url.scheme() == "about" && matches!(url.path(), "blank" | "srcdoc"));
+        is_embedded_document || self.first_page_navigation.swap(false, Ordering::SeqCst)
+    }
+}
 
 fn agent_companion_window_ops() -> &'static tokio::sync::Mutex<()> {
     AGENT_COMPANION_WINDOW_OPS.get_or_init(|| tokio::sync::Mutex::new(()))
@@ -507,13 +531,10 @@ pub fn create_main_window(
     // Keep HTML5 drag-and-drop working inside the webview for desktop UI drag targets.
     builder = builder.disable_drag_drop_handler();
 
-    // Block webview reloads: allow only the first navigation (initial load),
-    // cancel all subsequent navigations (F5 / Ctrl+R / location.reload()).
-    // The app uses state-driven routing, not browser navigation, so there are
-    // no legitimate full-page navigations after the initial load.
-    let first_navigation = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
-    builder = builder
-        .on_navigation(move |_| first_navigation.swap(false, std::sync::atomic::Ordering::SeqCst));
+    // Block top-level webview reloads after the initial page while allowing the
+    // local iframe documents used by sandboxed MiniApps.
+    let navigation_policy = MainWebviewNavigationPolicy::new();
+    builder = builder.on_navigation(move |url| navigation_policy.should_allow(url));
 
     #[cfg(target_os = "macos")]
     {
@@ -926,4 +947,49 @@ pub async fn show_main_window(app: tauri::AppHandle) -> Result<(), String> {
         total_started_at.elapsed().as_millis()
     );
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::MainWebviewNavigationPolicy;
+    use tauri::Url;
+
+    fn url(value: &str) -> Url {
+        value.parse().expect("test URL should be valid")
+    }
+
+    #[test]
+    fn main_webview_navigation_allows_only_the_first_page_navigation() {
+        let policy = MainWebviewNavigationPolicy::new();
+
+        assert!(policy.should_allow(&url("http://localhost:1422/")));
+        assert!(!policy.should_allow(&url("http://localhost:1422/")));
+        assert!(!policy.should_allow(&url("https://example.com/")));
+        assert!(!policy.should_allow(&url("data:text/html,blocked")));
+    }
+
+    #[test]
+    fn main_webview_navigation_allows_local_iframe_documents_without_consuming_initial_page() {
+        let policy = MainWebviewNavigationPolicy::new();
+
+        assert!(policy.should_allow(&url(
+            "blob:http://localhost:1422/65b60dd8-a501-47c2-b7fd-aa99af720dc6"
+        )));
+        assert!(policy.should_allow(&url("about:blank")));
+        assert!(policy.should_allow(&url("about:srcdoc")));
+        assert!(policy.should_allow(&url("tauri://localhost/index.html")));
+        assert!(!policy.should_allow(&url("tauri://localhost/index.html")));
+    }
+
+    #[test]
+    fn main_webview_navigation_keeps_iframe_documents_available_after_initial_page() {
+        let policy = MainWebviewNavigationPolicy::new();
+
+        assert!(policy.should_allow(&url("tauri://localhost/index.html")));
+        assert!(policy.should_allow(&url(
+            "blob:tauri://localhost/f5445ef0-5b0b-42b0-9540-276a0012ae56"
+        )));
+        assert!(policy.should_allow(&url("about:blank")));
+        assert!(!policy.should_allow(&url("tauri://localhost/index.html")));
+    }
 }

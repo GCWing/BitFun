@@ -7,7 +7,7 @@
  * clipboard.* → Host navigator.clipboard.
  * Also handles bitfun/request-theme and pushes theme changes to the iframe.
  */
-import { useLayoutEffect, useRef, useEffect, RefObject } from 'react';
+import { useLayoutEffect, useRef, useEffect, useState, RefObject } from 'react';
 import { miniAppAPI } from '@/infrastructure/api/service-api/MiniAppAPI';
 import { open as dialogOpen, save as dialogSave, message as dialogMessage } from '@tauri-apps/plugin-dialog';
 import type { MiniApp } from '@/infrastructure/api/service-api/MiniAppAPI';
@@ -26,6 +26,8 @@ import {
   normalizeMiniAppBubbleCustomization,
   type MiniAppComposerMessageDetail,
 } from '../miniAppStore';
+import { useSceneStore } from '@/app/stores/sceneStore';
+import { shouldOpenMiniAppAgentRunInMainScene } from './miniAppAgentVisibility';
 import { flowChatStore } from '@/flow_chat/store/FlowChatStore';
 import { openMainSession } from '@/flow_chat/services/sessionActivation';
 import { createLogger } from '@/shared/utils/logger';
@@ -54,6 +56,7 @@ export function useMiniAppBridge(
   runScope: MiniAppRunScope,
   strictRuntime = false,
 ) {
+  const [bridgeReady, setBridgeReady] = useState(false);
   const { workspacePath } = useCurrentWorkspace();
   const { theme: currentTheme } = useTheme();
   const { currentLanguage } = useI18n('scenes/miniapp');
@@ -375,9 +378,6 @@ export function useMiniAppBridge(
                 }
               }
             }
-            if (strictRuntimeRef.current) {
-              await openMainSession(result.sessionId);
-            }
             reply(result);
             return;
           }
@@ -392,11 +392,17 @@ export function useMiniAppBridge(
               )
             ) {
               replyError(
-                'Marketplace MiniApps must call agent.ensureSession first so the host can open a visible session.',
+                'Marketplace MiniApps must call agent.ensureSession first so the host can expose a visible session.',
               );
               return;
             }
-            if (strictRuntimeRef.current) {
+            if (shouldOpenMiniAppAgentRunInMainScene(
+              strictRuntimeRef.current,
+              useMiniAppStore.getState().composerClaims[appId],
+              composerTokenRef.current,
+              requestedSessionId,
+              useSceneStore.getState().activeTabId === `miniapp:${appId}`,
+            )) {
               await openMainSession(requestedSessionId);
             }
             const result = await miniAppAPI.agentRun(
@@ -623,29 +629,32 @@ export function useMiniAppBridge(
       }
     };
     window.addEventListener('message', handler);
+    setBridgeReady(true);
     return () => {
       window.removeEventListener('message', handler);
     };
   }, [iframeRef]);
 
   useEffect(() => {
+    if (!bridgeReady) return;
     const payload = buildMiniAppThemeVars(currentTheme);
     if (!payload || !iframeRef.current?.contentWindow) return;
     iframeRef.current.contentWindow.postMessage(
       { type: 'bitfun:event', event: 'themeChange', payload },
       '*',
     );
-  }, [currentTheme, iframeRef]);
+  }, [bridgeReady, currentTheme, iframeRef]);
 
   // Push locale changes to the iframe so MiniApps can re-render their UI strings
   // without reloading. MiniApps subscribe via `app.on('localeChange', fn)`.
   useEffect(() => {
+    if (!bridgeReady) return;
     if (!iframeRef.current?.contentWindow) return;
     iframeRef.current.contentWindow.postMessage(
       { type: 'bitfun:event', event: 'localeChange', payload: { locale: currentLanguage } },
       '*',
     );
-  }, [currentLanguage, iframeRef]);
+  }, [bridgeReady, currentLanguage, iframeRef]);
 
   // Forward submissions from the shared floating ChatInput into the iframe as
   // `chat:userMessage` (consumed via app.chat.onUserMessage). The MiniApp gets
@@ -798,4 +807,6 @@ export function useMiniAppBridge(
       unlisten();
     };
   }, [app.id, iframeRef]);
+
+  return bridgeReady;
 }
