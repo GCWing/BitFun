@@ -569,6 +569,7 @@
     }
   },
   "workspaceStrip": {
+    "branchTooltip": "Click to switch or create branch",
     "branchTooltipUnavailable": "Not a git repository or no current branch"
   },
   "context": {

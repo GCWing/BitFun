@@ -38,6 +38,11 @@ vi.mock('@/tools/git/hooks/useGitState', () => ({
   useGitState: mocks.useGitState,
 }));
 
+vi.mock('@/app/components/NavPanel/components/BranchQuickSwitch', () => ({
+  BranchQuickSwitch: ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) =>
+    isOpen ? <div data-testid="branch-quick-switch-mock" onClick={onClose} /> : null,
+}));
+
 describe('ChatInputWorkspaceStrip git refresh behavior', () => {
   let container: HTMLDivElement;
   let root: Root;
@@ -315,5 +320,57 @@ describe('ChatInputWorkspaceStrip git refresh behavior', () => {
     });
 
     expect(container.querySelector('[data-testid="chat-input-worktree-toggle"]')).toBeNull();
+  });
+
+  it('opens branch switch panel when branch chip is clicked', async () => {
+    await act(async () => {
+      root.render(
+        <ChatInputWorkspaceStrip
+          repositoryPath="D:/workspace/BitFun"
+          workspaceLabel="BitFun"
+        />
+      );
+    });
+
+    const branchChip = container.querySelector<HTMLElement>('[data-testid="chat-input-branch-chip"]');
+    expect(branchChip).not.toBeNull();
+    expect(branchChip?.getAttribute('role')).toBe('button');
+    expect(branchChip?.tabIndex).toBe(0);
+    expect(container.querySelector('[data-testid="branch-quick-switch-mock"]')).toBeNull();
+
+    await act(async () => {
+      branchChip?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(document.querySelector('[data-testid="branch-quick-switch-mock"]')).not.toBeNull();
+
+    await act(async () => {
+      document
+        .querySelector<HTMLElement>('[data-testid="branch-quick-switch-mock"]')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(document.querySelector('[data-testid="branch-quick-switch-mock"]')).toBeNull();
+  });
+
+  it('does not expose branch click when repository is unavailable', async () => {
+    mocks.useGitState.mockReturnValue({
+      currentBranch: '',
+      isRepository: false,
+    });
+
+    await act(async () => {
+      root.render(
+        <ChatInputWorkspaceStrip
+          repositoryPath="D:/workspace/BitFun"
+          workspaceLabel="BitFun"
+        />
+      );
+    });
+
+    const branchChip = container.querySelector<HTMLElement>('[data-testid="chat-input-branch-chip"]');
+    expect(branchChip?.getAttribute('role')).toBeNull();
+    expect(branchChip?.tabIndex).toBe(-1);
+    expect(container.querySelector('[data-testid="branch-quick-switch-mock"]')).toBeNull();
   });
 });

@@ -569,6 +569,7 @@
     }
   },
   "workspaceStrip": {
+    "branchTooltip": "點擊切換或建立分支",
     "branchTooltipUnavailable": "非 Git 存放庫或目前無分支"
   },
   "context": {

@@ -1,11 +1,12 @@
 /**
  * Branch quick switch overlay.
- * Shown when clicking the branch badge in NavPanel Git item.
- * Supports search and checkout.
+ * Shown when clicking the branch badge in NavPanel Git item
+ * or the branch chip in ChatInputWorkspaceStrip.
+ * Supports search, checkout, and creating new branches.
  */
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { GitBranch, Check, Loader2 } from 'lucide-react';
+import { GitBranch, Check, Loader2, Plus } from 'lucide-react';
 import { type GitBranch as GitBranchType } from '../../../../infrastructure/api/service-api/GitAPI';
 import { useI18n } from '@/infrastructure/i18n';
 import { gitService, gitEventService } from '../../../../tools/git/services';
@@ -23,6 +24,7 @@ export interface BranchQuickSwitchProps {
   currentBranch: string;
   anchorRef: React.RefObject<HTMLElement>;
   onSwitchSuccess?: (branchName: string) => void;
+  onCreateSuccess?: (branchName: string) => void;
 }
 
 export const BranchQuickSwitch: React.FC<BranchQuickSwitchProps> = ({
@@ -31,7 +33,8 @@ export const BranchQuickSwitch: React.FC<BranchQuickSwitchProps> = ({
   repositoryPath,
   currentBranch,
   anchorRef,
-  onSwitchSuccess
+  onSwitchSuccess,
+  onCreateSuccess
 }) => {
   const { t } = useI18n('panels/git');
   const [branches, setBranches] = useState<GitBranchType[]>([]);
@@ -39,6 +42,8 @@ export const BranchQuickSwitch: React.FC<BranchQuickSwitchProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [isSwitching, setIsSwitching] = useState(false);
   const [switchingBranch, setSwitchingBranch] = useState<string | null>(null);
+  const [isCreating, setIsCreating] = useState(false);
+  const [creatingBranch, setCreatingBranch] = useState<string | null>(null);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [position, setPosition] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
 
@@ -157,10 +162,19 @@ export const BranchQuickSwitch: React.FC<BranchQuickSwitchProps> = ({
     });
   }, [branches, searchTerm]);
 
-  useEffect(() => { setSelectedIndex(0); }, [filteredBranches.length]);
+  const canCreateNewBranch = useMemo(() => {
+    const trimmed = searchTerm.trim();
+    if (!trimmed) return false;
+    return !branches.some(b => b.name.toLowerCase() === trimmed.toLowerCase());
+  }, [branches, searchTerm]);
+
+  const branchStartIndex = canCreateNewBranch ? 1 : 0;
+  const totalItems = filteredBranches.length + (canCreateNewBranch ? 1 : 0);
+
+  useEffect(() => { setSelectedIndex(0); }, [filteredBranches.length, canCreateNewBranch]);
 
   const handleSwitchBranch = useCallback(async (branchName: string) => {
-    if (branchName === currentBranch || isSwitching) return;
+    if (branchName === currentBranch || isSwitching || isCreating) return;
     setIsSwitching(true);
     setSwitchingBranch(branchName);
     try {
@@ -192,14 +206,49 @@ export const BranchQuickSwitch: React.FC<BranchQuickSwitchProps> = ({
       setIsSwitching(false);
       setSwitchingBranch(null);
     }
-  }, [repositoryPath, currentBranch, isSwitching, onSwitchSuccess, onClose, t]);
+  }, [repositoryPath, currentBranch, isSwitching, isCreating, onSwitchSuccess, onClose, t]);
+
+  const handleCreateBranch = useCallback(async (branchName: string) => {
+    if (isCreating || isSwitching) return;
+    const trimmed = branchName.trim();
+    if (!trimmed) return;
+    setIsCreating(true);
+    setCreatingBranch(trimmed);
+    try {
+      const result = await gitService.createBranch(repositoryPath, trimmed, currentBranch || undefined);
+      if (result.success) {
+        notificationService.success(
+          t('quickSwitch.notifications.switchSuccess', { branch: trimmed }),
+          { duration: 3000 }
+        );
+        gitEventService.emit('branch:changed', {
+          repositoryPath,
+          branch: { name: trimmed, current: true, remote: false, ahead: 0, behind: 0 },
+          timestamp: new Date(),
+        });
+        onCreateSuccess?.(trimmed);
+        onClose();
+      } else {
+        const errorMessage = result.error
+          ? t('quickSwitch.errors.switchFailedWithMessage', { error: result.error })
+          : t('quickSwitch.errors.createFailed');
+        notificationService.error(errorMessage, { title: t('quickSwitch.errors.title'), duration: 5000 });
+      }
+    } catch (error) {
+      log.error('Failed to create branch', error);
+      notificationService.error(t('quickSwitch.errors.unexpected'), { duration: 5000 });
+    } finally {
+      setIsCreating(false);
+      setCreatingBranch(null);
+    }
+  }, [repositoryPath, currentBranch, isCreating, isSwitching, onCreateSuccess, onClose, t]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (filteredBranches.length === 0) return;
+    if (totalItems === 0) return;
     switch (e.key) {
       case 'ArrowDown':
         e.preventDefault();
-        setSelectedIndex(prev => prev < filteredBranches.length - 1 ? prev + 1 : prev);
+        setSelectedIndex(prev => prev < totalItems - 1 ? prev + 1 : prev);
         break;
       case 'ArrowUp':
         e.preventDefault();
@@ -207,20 +256,25 @@ export const BranchQuickSwitch: React.FC<BranchQuickSwitchProps> = ({
         break;
       case 'Enter': {
         e.preventDefault();
-        const sel = filteredBranches[selectedIndex];
-        if (sel && !sel.current) handleSwitchBranch(sel.name);
+        if (canCreateNewBranch && selectedIndex === 0) {
+          handleCreateBranch(searchTerm.trim());
+        } else {
+          const branchIndex = selectedIndex - branchStartIndex;
+          const sel = filteredBranches[branchIndex];
+          if (sel && !sel.current) handleSwitchBranch(sel.name);
+        }
         break;
       }
     }
-  }, [filteredBranches, selectedIndex, handleSwitchBranch]);
+  }, [totalItems, canCreateNewBranch, selectedIndex, branchStartIndex, searchTerm, filteredBranches, handleSwitchBranch, handleCreateBranch]);
 
   useEffect(() => {
-    if (listRef.current && filteredBranches.length > 0) {
+    if (listRef.current && totalItems > 0) {
       const items = listRef.current.querySelectorAll('.branch-quick-switch__item');
       const selectedItem = items[selectedIndex] as HTMLElement;
       if (selectedItem) selectedItem.scrollIntoView({ block: 'nearest' });
     }
-  }, [selectedIndex, filteredBranches.length]);
+  }, [selectedIndex, totalItems]);
 
   if (!isOpen) return null;
 
@@ -247,29 +301,52 @@ export const BranchQuickSwitch: React.FC<BranchQuickSwitchProps> = ({
             <Loader2 size={16} className="branch-quick-switch__spinner" />
             <span>{t('quickSwitch.loading')}</span>
           </div>
-        ) : filteredBranches.length === 0 ? (
+        ) : totalItems === 0 ? (
           <div className="branch-quick-switch__empty">
             {searchTerm ? t('empty.noMatchingBranches') : t('empty.noBranches')}
           </div>
         ) : (
-          filteredBranches.map((branch, index) => (
-            <div
-              key={branch.name}
-              className={[
-                'branch-quick-switch__item',
-                branch.current && 'branch-quick-switch__item--current',
-                index === selectedIndex && 'branch-quick-switch__item--selected',
-                switchingBranch === branch.name && 'branch-quick-switch__item--switching',
-              ].filter(Boolean).join(' ')}
-              onClick={() => handleSwitchBranch(branch.name)}
-              onMouseEnter={() => setSelectedIndex(index)}
-            >
-              <GitBranch size={14} className="branch-quick-switch__item-icon" />
-              <span className="branch-quick-switch__item-name">{branch.name}</span>
-              {branch.current && <Check size={14} className="branch-quick-switch__item-check" />}
-              {switchingBranch === branch.name && <Loader2 size={14} className="branch-quick-switch__spinner" />}
-            </div>
-          ))
+          <>
+            {canCreateNewBranch && (
+              <div
+                className={[
+                  'branch-quick-switch__item',
+                  'branch-quick-switch__item--create',
+                  selectedIndex === 0 && 'branch-quick-switch__item--selected',
+                  creatingBranch === searchTerm.trim() && 'branch-quick-switch__item--switching',
+                ].filter(Boolean).join(' ')}
+                onClick={() => handleCreateBranch(searchTerm.trim())}
+                onMouseEnter={() => setSelectedIndex(0)}
+              >
+                <Plus size={14} className="branch-quick-switch__item-icon branch-quick-switch__item-icon--create" />
+                <span className="branch-quick-switch__item-name">
+                  {t('quickSwitch.createBranchLabel')} <strong>{searchTerm.trim()}</strong>
+                </span>
+                {creatingBranch === searchTerm.trim() && <Loader2 size={14} className="branch-quick-switch__spinner" />}
+              </div>
+            )}
+            {filteredBranches.map((branch, index) => {
+              const itemIndex = index + branchStartIndex;
+              return (
+                <div
+                  key={branch.name}
+                  className={[
+                    'branch-quick-switch__item',
+                    branch.current && 'branch-quick-switch__item--current',
+                    itemIndex === selectedIndex && 'branch-quick-switch__item--selected',
+                    switchingBranch === branch.name && 'branch-quick-switch__item--switching',
+                  ].filter(Boolean).join(' ')}
+                  onClick={() => handleSwitchBranch(branch.name)}
+                  onMouseEnter={() => setSelectedIndex(itemIndex)}
+                >
+                  <GitBranch size={14} className="branch-quick-switch__item-icon" />
+                  <span className="branch-quick-switch__item-name">{branch.name}</span>
+                  {branch.current && <Check size={14} className="branch-quick-switch__item-check" />}
+                  {switchingBranch === branch.name && <Loader2 size={14} className="branch-quick-switch__spinner" />}
+                </div>
+              );
+            })}
+          </>
         )}
       </div>
     </div>

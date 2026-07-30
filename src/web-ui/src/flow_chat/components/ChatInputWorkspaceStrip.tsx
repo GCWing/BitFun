@@ -3,6 +3,7 @@
  */
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import {
   Activity,
@@ -21,6 +22,7 @@ import { Tooltip, IconButton } from '@/component-library';
 import { useGitState } from '@/tools/git/hooks/useGitState';
 import type { SessionExecutionTarget } from '@/infrastructure/api/service-api/WorktreeAPI';
 import { useI18n } from '@/infrastructure/i18n';
+import { BranchQuickSwitch } from '@/app/components/NavPanel/components/BranchQuickSwitch';
 import { DispatchTargetPicker } from '@/features/dispatch/DispatchTargetPicker';
 import type { DispatchSelection, DispatchTarget } from '@/features/dispatch/types';
 import './ChatInputWorkspaceStrip.scss';
@@ -96,6 +98,8 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
   const { t: tWorktrees } = useI18n('worktrees');
   const permissionRootRef = useRef<HTMLDivElement>(null);
   const [permissionMenuOpen, setPermissionMenuOpen] = useState(false);
+  const branchChipRef = useRef<HTMLSpanElement>(null);
+  const [branchPanelOpen, setBranchPanelOpen] = useState(false);
   const trimmedPath = repositoryPath.trim();
   const label = workspaceLabel.trim();
 
@@ -172,12 +176,14 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
     };
   }, [permissionMenuOpen]);
 
+  const isBranchClickable = isRepository && !!currentBranch?.trim();
+
   const branchTooltipContent = useMemo(
     () =>
-      isRepository && currentBranch?.trim()
-        ? currentBranch.trim()
+      isBranchClickable
+        ? t('workspaceStrip.branchTooltip')
         : t('workspaceStrip.branchTooltipUnavailable'),
-    [currentBranch, isRepository, t],
+    [isBranchClickable, t],
   );
 
   if (!label && !showRightActions) {
@@ -250,7 +256,30 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
             {' / '}
           </span>
           <Tooltip content={branchTooltipContent} placement="top">
-            <span className="bitfun-chat-input-workspace-strip__chip bitfun-chat-input-workspace-strip__chip--branch">
+            <span
+              ref={branchChipRef}
+              className={[
+                'bitfun-chat-input-workspace-strip__chip',
+                'bitfun-chat-input-workspace-strip__chip--branch',
+                isBranchClickable && 'bitfun-chat-input-workspace-strip__chip--branch-clickable',
+              ]
+                .filter(Boolean)
+                .join(' ')}
+              role={isBranchClickable ? 'button' : undefined}
+              tabIndex={isBranchClickable ? 0 : undefined}
+              data-testid="chat-input-branch-chip"
+              onClick={isBranchClickable ? () => setBranchPanelOpen(true) : undefined}
+              onKeyDown={
+                isBranchClickable
+                  ? (e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        setBranchPanelOpen(true);
+                      }
+                    }
+                  : undefined
+              }
+            >
               <GitBranch
                 className="bitfun-chat-input-workspace-strip__branch-icon"
                 size={11}
@@ -446,6 +475,19 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
           ) : null}
         </div>
       ) : null}
+
+      {isBranchClickable && branchPanelOpen && createPortal(
+        <BranchQuickSwitch
+          isOpen={branchPanelOpen}
+          onClose={() => setBranchPanelOpen(false)}
+          repositoryPath={trimmedPath}
+          currentBranch={branchLabel}
+          anchorRef={branchChipRef as React.RefObject<HTMLElement>}
+          onSwitchSuccess={() => setBranchPanelOpen(false)}
+          onCreateSuccess={() => setBranchPanelOpen(false)}
+        />,
+        document.body
+      )}
     </div>
   );
 };
