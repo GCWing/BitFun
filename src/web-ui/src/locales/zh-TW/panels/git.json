@@ -188,8 +188,9 @@
     "current": "目前"
   },
   "quickSwitch": {
-    "searchPlaceholder": "搜尋分支...",
+    "searchPlaceholder": "搜尋或建立分支...",
     "loading": "載入中...",
+    "createBranchLabel": "建立分支",
     "notifications": {
       "switchSuccess": "已切換到分支 {{branch}}"
     },
@@ -199,7 +200,8 @@
       "switchFailedWithMessage": "Failed to switch branch: {{error}}",
       "localChanges": "Please commit or stash local changes first",
       "indexConflict": "Please resolve the current index conflicts first",
-      "unexpected": "Unexpected error while switching branches"
+      "unexpected": "Unexpected error while switching branches",
+      "createFailed": "建立分支失敗"
     }
   },
   "branchSelect": {
