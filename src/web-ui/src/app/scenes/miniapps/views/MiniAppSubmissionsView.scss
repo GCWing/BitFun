@@ -1,12 +1,38 @@
 @use '../../../../component-library/styles/tokens' as *;
 
+// One typographic scale for the whole submission workspace, borrowed from the
+// gallery/form primitives so nothing in here invents its own size:
+//   section title  13px / 600 / primary    — .gallery-zone__title
+//   section hint   12px / 400 / muted      — .gallery-zone__subtitle
+//   field label    13px / 500 / secondary  — .bitfun-input-label
+//   field value    13px / 400 / primary    — .select__value
+//   inline hint    12px / 400 / muted      — .bitfun-input-hint
 .miniapp-submissions {
+  // Label-to-control distance, shared by Input, Select and the textarea fields.
+  --submissions-label-gap: 6px;
+
   // Match GalleryLayout's $content-max / $gutter so switching tabs inside the
   // MiniApp scene doesn't shift content horizontally.
   &__workspace,
   &__remote-warning {
     width: min(100%, 1360px);
     margin-inline: auto;
+  }
+
+  // The shared Input renders its value at 14px while Select renders 13px; pin
+  // both to 13px so every control in the form reads at the same size.
+  .bitfun-input-container {
+    font-size: var(--font-size-sm);
+  }
+
+  .select__label {
+    margin-bottom: var(--submissions-label-gap);
+  }
+
+  // Select's trigger is shrink-to-fit by default; stretch it so the dropdown
+  // lines up with the inputs above and below it.
+  .select__trigger {
+    width: 100%;
   }
 
   &__loading {
@@ -23,20 +49,27 @@
     padding: 0 clamp(28px, 4vw, 64px) $size-gap-3;
     color: var(--color-warning);
     font-size: var(--font-size-sm);
+
+    svg {
+      flex: 0 0 auto;
+    }
   }
 
   &__workspace {
     display: grid;
-    grid-template-columns: minmax(0, 1.25fr) minmax(310px, 0.75fr);
+    // Cap the form at a readable measure instead of letting single-line inputs
+    // stretch the full 1360px, and keep the history pinned to the right edge.
+    grid-template-columns: minmax(0, 620px) minmax(280px, 380px);
+    justify-content: space-between;
     gap: $size-gap-5;
-    padding: $size-gap-2 clamp(28px, 4vw, 64px) 56px;
+    padding: $size-gap-3 clamp(28px, 4vw, 64px) 56px;
   }
 
   &__form,
   &__history {
     align-content: start;
     display: grid;
-    gap: $size-gap-3;
+    gap: $size-gap-4;
   }
 
   &__history {
@@ -45,15 +78,8 @@
   }
 
   &__section-heading {
-    display: flex;
-    align-items: flex-start;
-    gap: $size-gap-2;
-    margin-bottom: $size-gap-1;
-
-    svg {
-      margin-top: 2px;
-      color: var(--color-text-muted);
-    }
+    display: grid;
+    gap: 3px;
 
     h3,
     p {
@@ -61,14 +87,23 @@
     }
 
     h3 {
-      font-size: var(--font-size-base);
+      display: flex;
+      align-items: center;
+      gap: $size-gap-2;
+      color: var(--color-text-primary);
+      font-size: var(--font-size-sm);
+      font-weight: $font-weight-semibold;
+
+      svg {
+        flex: 0 0 auto;
+        color: var(--color-text-muted);
+      }
     }
 
     p {
-      margin-top: 3px;
-      color: var(--color-text-secondary);
-      font-size: var(--font-size-sm);
-      line-height: 1.45;
+      color: var(--color-text-muted);
+      font-size: var(--font-size-xs);
+      line-height: $line-height-relaxed;
     }
   }
 
@@ -80,58 +115,87 @@
 
   &__field {
     display: grid;
-    gap: $size-gap-1;
+    gap: var(--submissions-label-gap);
 
     > span {
-      color: var(--color-text-primary);
+      color: var(--color-text-secondary);
       font-size: var(--font-size-sm);
-      font-weight: 500;
+      font-weight: $font-weight-medium;
+      letter-spacing: 0.2px;
     }
 
     textarea {
       width: 100%;
       min-height: 92px;
-      padding: 9px 10px;
-      border: 1px solid var(--border-subtle);
-      border-radius: $size-radius-base;
+      // Same box as .bitfun-input-container so the caret lines up with the
+      // single-line fields above it.
+      padding: 8px 12px;
+      border: 1px solid var(--border-base);
+      border-radius: $size-radius-sm;
       outline: none;
-      background: var(--element-bg-soft);
+      background: transparent;
       color: var(--color-text-primary);
-      line-height: 1.5;
+      font-family: inherit;
+      font-size: var(--font-size-sm);
+      line-height: $line-height-base;
       resize: vertical;
+      transition:
+        border-color $motion-fast ease,
+        box-shadow $motion-fast ease;
+
+      &::placeholder {
+        color: color-mix(in srgb, var(--color-text-muted) 40%, var(--color-bg-primary));
+      }
+
+      &:hover:not(:disabled) {
+        border-color: var(--border-strong);
+      }
 
       &:focus {
         border-color: var(--color-accent-500);
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent-500) 14%, transparent);
       }
 
       &:disabled {
-        cursor: not-allowed;
-        opacity: 0.55;
+        cursor: default;
+        opacity: var(--opacity-disabled);
       }
     }
   }
 
   &__screenshots {
     display: flex;
-    align-items: center;
+    align-items: flex-end;
     justify-content: space-between;
     gap: $size-gap-3;
-    padding-top: $size-gap-2;
+    padding-top: $size-gap-3;
     border-top: 1px solid var(--border-subtle);
+  }
 
-    > div {
-      display: grid;
-      gap: 3px;
+  &__screenshots-copy {
+    display: grid;
+    gap: 3px;
+    min-width: 0;
 
-      > span {
-        font-size: var(--font-size-sm);
-        font-weight: 500;
-      }
-
-      small {
-        color: var(--color-text-muted);
-      }
+    span {
+      color: var(--color-text-secondary);
+      font-size: var(--font-size-sm);
+      font-weight: $font-weight-medium;
+      letter-spacing: 0.2px;
     }
+
+    small {
+      color: var(--color-text-muted);
+      font-size: var(--font-size-xs);
+      line-height: $line-height-relaxed;
+    }
+  }
+
+  &__screenshots-actions {
+    display: flex;
+    align-items: center;
+    flex: 0 0 auto;
+    gap: $size-gap-2;
   }
 
   &__files {
@@ -142,12 +206,16 @@
       display: grid;
       grid-template-columns: auto minmax(0, 1fr) auto;
       align-items: center;
-      gap: 8px;
-      padding: 7px 9px;
-      border-radius: $size-radius-base;
+      gap: $size-gap-2;
+      padding: 7px 10px;
+      border-radius: $size-radius-sm;
       background: var(--element-bg-soft);
       color: var(--color-text-secondary);
       font-size: var(--font-size-sm);
+
+      svg {
+        color: var(--color-text-muted);
+      }
 
       span {
         overflow: hidden;
@@ -159,9 +227,9 @@
         display: grid;
         padding: 3px;
         border: 0;
-        border-radius: $size-radius-base;
+        border-radius: $size-radius-sm;
         background: transparent;
-        color: inherit;
+        color: var(--color-text-muted);
         cursor: pointer;
         place-items: center;
 
@@ -176,13 +244,13 @@
   &__advanced-toggle {
     display: flex;
     align-items: center;
-    gap: $size-gap-1;
+    gap: $size-gap-2;
     padding: 0;
     border: 0;
     background: transparent;
     color: var(--color-text-secondary);
     font-size: var(--font-size-sm);
-    font-weight: 500;
+    font-weight: $font-weight-medium;
     cursor: pointer;
     justify-self: start;
     max-width: 100%;
@@ -193,12 +261,14 @@
 
     svg {
       flex: 0 0 auto;
+      color: var(--color-text-muted);
     }
 
     small {
       overflow: hidden;
       color: var(--color-text-muted);
-      font-weight: 400;
+      font-size: var(--font-size-xs);
+      font-weight: $font-weight-normal;
       text-overflow: ellipsis;
       white-space: nowrap;
     }
@@ -207,22 +277,28 @@
   &__advanced {
     display: grid;
     gap: $size-gap-3;
-    padding-left: $size-gap-3;
-    border-left: 2px solid var(--border-subtle);
+    padding-left: $size-gap-4;
+    border-left: 1px solid var(--border-subtle);
   }
 
   &__progress {
     display: grid;
     gap: 7px;
     padding: 10px 12px;
-    border-radius: $size-radius-base;
+    border-radius: $size-radius-sm;
     background: var(--element-bg-soft);
 
-    div {
+    > div {
       display: flex;
       justify-content: space-between;
       color: var(--color-text-secondary);
-      font-size: var(--font-size-sm);
+      font-size: var(--font-size-xs);
+    }
+
+    strong {
+      color: var(--color-text-primary);
+      font-weight: $font-weight-medium;
+      font-variant-numeric: tabular-nums;
     }
 
     progress {
@@ -239,49 +315,49 @@
     article {
       display: grid;
       gap: $size-gap-2;
-      padding: 14px 0;
+      padding: $size-gap-3 0;
       border-bottom: 1px solid var(--border-subtle);
+    }
+  }
 
-      > div:first-child {
-        display: flex;
-        align-items: center;
-        gap: $size-gap-2;
+  &__list-head {
+    display: flex;
+    align-items: center;
+    gap: $size-gap-2;
 
-        > div {
-          display: grid;
-          min-width: 0;
-          gap: 3px;
-        }
+    > div {
+      display: grid;
+      min-width: 0;
+      gap: 2px;
+    }
 
-        strong,
-        small {
-          overflow: hidden;
-          text-overflow: ellipsis;
-          white-space: nowrap;
-        }
+    strong,
+    small {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
 
-        small {
-          color: var(--color-text-muted);
-        }
-      }
+    strong {
+      color: var(--color-text-primary);
+      font-size: var(--font-size-sm);
+      font-weight: $font-weight-semibold;
+    }
 
-      > p {
-        margin: 0;
-        color: var(--color-warning);
-        font-size: var(--font-size-sm);
-        line-height: 1.45;
-      }
+    small {
+      color: var(--color-text-muted);
+      font-size: var(--font-size-xs);
     }
   }
 
   &__app-icon {
     display: grid;
-    width: 34px;
-    height: 34px;
+    width: 32px;
+    height: 32px;
     flex: 0 0 auto;
-    border: 1px solid var(--border-subtle);
-    border-radius: $size-radius-base;
+    border-radius: $size-radius-sm;
     background: var(--element-bg-soft);
+    color: var(--color-text-primary);
     place-items: center;
   }
 
@@ -289,6 +365,14 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
+    gap: $size-gap-2;
+  }
+
+  &__rejection {
+    margin: 0;
+    color: var(--color-warning);
+    font-size: var(--font-size-xs);
+    line-height: $line-height-relaxed;
   }
 
   &__history-empty {
@@ -303,7 +387,7 @@
 @media (max-width: 860px) {
   .miniapp-submissions {
     &__workspace {
-      grid-template-columns: 1fr;
+      grid-template-columns: minmax(0, 1fr);
     }
 
     &__history {

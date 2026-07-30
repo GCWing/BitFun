@@ -7,6 +7,7 @@ import {
   ChevronRight,
   FileImage,
   Github,
+  History,
   Loader2,
   PackageOpen,
   RefreshCw,
@@ -32,6 +33,7 @@ import { useNotification } from '@/shared/notification-system';
 import { createLogger } from '@/shared/utils/logger';
 import { useSceneManager } from '@/app/hooks/useSceneManager';
 import type { SceneTabId } from '@/app/components/SceneBar/types';
+import { renderMiniAppIcon } from '../utils/miniAppIcons';
 import './MiniAppSubmissionsView.scss';
 
 const log = createLogger('MiniAppSubmissionsView');
@@ -309,26 +311,24 @@ const MiniAppSubmissionsView: React.FC = () => {
 
       <div className="miniapp-submissions__workspace">
         <form className="miniapp-submissions__form" onSubmit={(event) => void submit(event)}>
-          <div className="miniapp-submissions__section-heading">
-            <PackageOpen size={18} />
-            <div>
-              <h3>{t('market.submissions.newTitle')}</h3>
-              <p>{t('market.submissions.newHint')}</p>
-            </div>
-          </div>
+          <header className="miniapp-submissions__section-heading">
+            <h3>
+              <PackageOpen size={14} />
+              {t('market.submissions.newTitle')}
+            </h3>
+            <p>{t('market.submissions.newHint')}</p>
+          </header>
 
-          <label className="miniapp-submissions__field">
-            <span>{t('market.submissions.app')}</span>
-            <Select
-              value={selectedAppId}
-              onChange={(value) => {
-                const app = apps.find((item) => item.id === value);
-                if (app) selectApp(app);
-              }}
-              disabled={busy || localActionsDisabled}
-              options={apps.map((app) => ({ value: app.id, label: app.name }))}
-            />
-          </label>
+          <Select
+            label={t('market.submissions.app')}
+            value={selectedAppId}
+            onChange={(value) => {
+              const app = apps.find((item) => item.id === value);
+              if (app) selectApp(app);
+            }}
+            disabled={busy || localActionsDisabled}
+            options={apps.map((app) => ({ value: app.id, label: app.name }))}
+          />
 
           <Input
             label={t('market.submissions.name')}
@@ -351,30 +351,32 @@ const MiniAppSubmissionsView: React.FC = () => {
           </label>
 
           <div className="miniapp-submissions__screenshots">
-            <div>
+            <div className="miniapp-submissions__screenshots-copy">
               <span>{t('market.submissions.screenshots')}</span>
               <small>{t('market.submissions.screenshotHint')}</small>
             </div>
-            <Button
-              type="button"
-              size="small"
-              variant="secondary"
-              disabled={busy || localActionsDisabled}
-              onClick={() => void chooseScreenshots()}
-            >
-              <Camera size={14} />
-              {t('market.submissions.choose')}
-            </Button>
-            <Button
-              type="button"
-              size="small"
-              variant="secondary"
-              disabled={busy || localActionsDisabled || !selectedApp}
-              onClick={() => void captureCurrentApp()}
-            >
-              <Camera size={14} />
-              {t('market.submissions.capture')}
-            </Button>
+            <div className="miniapp-submissions__screenshots-actions">
+              <Button
+                type="button"
+                size="small"
+                variant="secondary"
+                disabled={busy || localActionsDisabled}
+                onClick={() => void chooseScreenshots()}
+              >
+                <FileImage size={14} />
+                {t('market.submissions.choose')}
+              </Button>
+              <Button
+                type="button"
+                size="small"
+                variant="secondary"
+                disabled={busy || localActionsDisabled || !selectedApp}
+                onClick={() => void captureCurrentApp()}
+              >
+                <Camera size={14} />
+                {t('market.submissions.capture')}
+              </Button>
+            </div>
           </div>
           {screenshotPaths.length ? (
             <div className="miniapp-submissions__files">
@@ -445,18 +447,16 @@ const MiniAppSubmissionsView: React.FC = () => {
               </div>
 
               <div className="miniapp-submissions__form-grid">
-                <label className="miniapp-submissions__field">
-                  <span>{t('market.submissions.category')}</span>
-                  <Select
-                    value={draft.category}
-                    disabled={busy}
-                    onChange={(value) => setDraft({ ...draft, category: String(value) })}
-                    options={MARKET_CATEGORIES.map((value) => ({
-                      value,
-                      label: marketCategoryLabel(value, t),
-                    }))}
-                  />
-                </label>
+                <Select
+                  label={t('market.submissions.category')}
+                  value={draft.category}
+                  disabled={busy}
+                  onChange={(value) => setDraft({ ...draft, category: String(value) })}
+                  options={MARKET_CATEGORIES.map((value) => ({
+                    value,
+                    label: marketCategoryLabel(value, t),
+                  }))}
+                />
                 <Input
                   label={t('market.submissions.minVersion')}
                   value={draft.minBitfunVersion}
@@ -547,19 +547,21 @@ const MiniAppSubmissionsView: React.FC = () => {
         </form>
 
         <section className="miniapp-submissions__history">
-          <div className="miniapp-submissions__section-heading">
-            <RefreshCw size={18} />
-            <div>
-              <h3>{t('market.submissions.history')}</h3>
-              <p>{t('market.submissions.historyHint')}</p>
-            </div>
-          </div>
+          <header className="miniapp-submissions__section-heading">
+            <h3>
+              <History size={14} />
+              {t('market.submissions.history')}
+            </h3>
+            <p>{t('market.submissions.historyHint')}</p>
+          </header>
           {submissions.length ? (
             <div className="miniapp-submissions__list">
               {submissions.map((submission) => (
                 <article key={submission.submissionId}>
-                  <div>
-                    <span className="miniapp-submissions__app-icon">{submission.icon}</span>
+                  <div className="miniapp-submissions__list-head">
+                    <span className="miniapp-submissions__app-icon">
+                      {renderMiniAppIcon(submission.icon || 'box', 16)}
+                    </span>
                     <div>
                       <strong>{submission.name}</strong>
                       <small>{submission.slug} · v{submission.releaseNumber}</small>
@@ -581,7 +583,7 @@ const MiniAppSubmissionsView: React.FC = () => {
                     ) : null}
                   </div>
                   {submission.rejectionReason ? (
-                    <p>{t('market.submissions.rejection', {
+                    <p className="miniapp-submissions__rejection">{t('market.submissions.rejection', {
                       reason: submission.rejectionReason,
                     })}</p>
                   ) : null}

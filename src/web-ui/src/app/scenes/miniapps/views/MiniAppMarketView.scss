@@ -86,7 +86,9 @@
 
     strong {
       overflow: hidden;
+      color: var(--color-text-primary);
       font-size: var(--font-size-base);
+      font-weight: $font-weight-semibold;
       text-overflow: ellipsis;
       white-space: nowrap;
     }
@@ -142,15 +144,18 @@
       margin: 0;
     }
 
+    // Same scale as the submission workspace: 13px/600 titles over 13px body.
     h4 {
+      color: var(--color-text-primary);
       font-size: var(--font-size-sm);
+      font-weight: $font-weight-semibold;
     }
 
     p,
     li {
       color: var(--color-text-secondary);
       font-size: var(--font-size-sm);
-      line-height: 1.55;
+      line-height: $line-height-relaxed;
     }
   }
 
