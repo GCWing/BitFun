@@ -34,6 +34,30 @@ you intentionally use `pnpm run desktop:dev:raw`. In that case, run
 `scripts/ci/setup-openssl-windows.ps1`, or set `OPENSSL_DIR` to a pre-built x64
 OpenSSL directory and set `OPENSSL_STATIC=1`.
 
+#### Build Prerequisites Check
+
+When `cargo check --workspace`, `cargo check -p bitfun-desktop`, or pnpm build
+commands fail with confusing errors (e.g., "resource path doesn't exist" or
+sherpa-onnx download failures), run the preflight check to identify missing
+prerequisites and get actionable fix commands:
+
+```bash
+pnpm run check:build-prereqs           # check only
+pnpm run check:build-prereqs -- --fix  # attempt to fix missing prerequisites
+```
+
+The check detects:
+
+- Missing `node_modules` (fix: `pnpm install`)
+- Missing `src/mobile-web/dist` (fix: `pnpm run prepare:mobile-web` — the
+  bitfun-desktop Tauri build script references this directory as a resource,
+  so `cargo check -p bitfun-desktop` and `cargo check --workspace` fail
+  without it)
+- Missing sherpa-onnx prebuilt libs (the sherpa-onnx-sys build script
+  downloads from GitHub at build time; if the download fails on poor
+  connectivity, set `SHERPA_ONNX_LIB_DIR` to the prebuilt lib directory
+  under `target/sherpa-onnx-prebuilt/` to use the local copy)
+
 ### Install dependencies
 
 ```bash

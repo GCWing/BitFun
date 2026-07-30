@@ -291,6 +291,7 @@ change directly affects build, packaging, or CI cannot protect the path.
 | Installer frontend or i18n runtime without packaging changes | `pnpm --dir BitFun-Installer run type-check` |
 | Installer Tauri/Rust changes | `cargo check --manifest-path BitFun-Installer/src-tauri/Cargo.toml` |
 | Installer packaging, payload, install/uninstall flow, or native bundling | `pnpm run installer:build` |
+| Build scripts or prerequisite changes | `pnpm run check:build-prereqs`, plus `node --test scripts/check-build-prereqs.test.mjs` when the check logic changed |
 
 ## Agent-doc priority
 

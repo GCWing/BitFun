@@ -36,6 +36,7 @@
     "theme:color-audit:test": "node --test scripts/audit-theme-colors.test.mjs scripts/audit-cli-theme-colors.test.mjs",
     "theme:visual-contract": "node scripts/validate-theme-visual-contract.mjs",
     "check:repo-hygiene": "node scripts/check-repo-hygiene.mjs",
+    "check:build-prereqs": "node scripts/check-build-prereqs.mjs",
     "check:core-boundaries": "node scripts/check-core-boundaries.mjs",
     "check:core-boundaries:test": "node --test scripts/check-core-boundaries.test.mjs",
     "check:github-config": "pnpm --dir src/web-ui exec node ../../scripts/check-github-config.mjs && node --test scripts/check-github-config.test.mjs",
