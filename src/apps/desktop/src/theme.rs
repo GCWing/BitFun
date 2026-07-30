@@ -163,11 +163,14 @@ const MAX_BOOTSTRAP_WORKSPACE_STATE_JSON_BYTES: usize = 64 * 1024;
 
 impl Default for ThemeConfig {
     fn default() -> Self {
-        let default_light_theme_id = Self::startup_theme_bootstrap_manifest()
-            .default_light_theme_id
+        // Default to the dark theme: the app ships a dark-first appearance, so the
+        // native splash window and the webview bootstrap both open dark before the
+        // persisted user selection (if any) is read back.
+        let default_dark_theme_id = Self::startup_theme_bootstrap_manifest()
+            .default_dark_theme_id
             .as_str();
-        let mut theme = Self::get_builtin_theme(default_light_theme_id)
-            .expect("startup theme bootstrap manifest must include the default light theme");
+        let mut theme = Self::get_builtin_theme(default_dark_theme_id)
+            .expect("startup theme bootstrap manifest must include the default dark theme");
         theme.selection_id = None;
         theme
     }
@@ -254,7 +257,7 @@ impl ThemeConfig {
             .themes
             .as_ref()
             .map(|t| t.current.as_str())
-            .unwrap_or("bitfun-light");
+            .unwrap_or("bitfun-dark");
 
         let resolved_id = Self::resolve_builtin_theme_id(theme_id);
 
@@ -277,9 +280,18 @@ impl ThemeConfig {
     }
 
     /// Maps config `themes.current` to a built-in id for splash / window chrome.
-    /// `system` follows OS light/dark (aligned with web-ui `getSystemPreferredDefaultThemeId`).
+    ///
+    /// `system` follows OS light/dark: here we default to the dark builtin so the
+    /// native splash window opens dark (the app's default appearance) while the
+    /// web-ui runtime resolves the real system preference via `prefers-color-scheme`.
+    /// Any concrete builtin id is returned as-is so its own palette drives the splash.
     fn resolve_builtin_theme_id(theme_id: &str) -> &str {
-        "system"
+        if theme_id == "system" {
+            return Self::startup_theme_bootstrap_manifest()
+                .default_dark_theme_id
+                .as_str();
+        }
+        theme_id
     }
 
     fn startup_messages_json(locale: &str) -> String {

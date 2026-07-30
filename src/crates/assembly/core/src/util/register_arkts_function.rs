@@ -1,3 +1,4 @@
+use crate::infrastructure::events::{emit_global_event, BackendEvent};
 use lazy_static::lazy_static;
 use napi_derive_ohos::napi;
 use napi_ohos::bindgen_prelude::Promise;
@@ -5,6 +6,7 @@ use napi_ohos::threadsafe_function::ThreadsafeFunction;
 use parking_lot::RwLock;
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::OnceLock;
 lazy_static! {
     pub static ref JS_THREADSAFE_FUNCTION: RwLock<HashMap<String, Arc<ThreadsafeFunction<String, Promise<String>>>>> =
         Default::default();
@@ -17,6 +19,60 @@ pub fn register_arkts_function(
     JS_THREADSAFE_FUNCTION
         .write()
         .insert(function_name, Arc::new(callback));
+}
+
+/// The OHOS-side event name the web-ui listens for to follow live system color
+/// mode changes. Defined here so rust and the web-ui reference the same string.
+pub const SYSTEM_COLOR_SCHEME_CHANGED_EVENT: &str = "bitfun:system-color-scheme-changed";
+
+/// Dedicated single-threaded tokio runtime for `notify_system_color_mode`. The
+/// `#[napi]` callback runs on a HarmonyOS thread that has no tokio runtime in
+/// context, so we cannot rely on `Handle::try_current()` captured at host init
+/// (the Tauri `.setup` closure is not guaranteed to run on a tokio-driven thread
+/// on OHOS — unlike desktop, which is why the earlier capture-from-setup design
+/// silently left this `None` and dropped every color-mode change). Instead we
+/// lazily build a runtime here, mirroring the proven pattern in
+/// `get_app_config_bool` (`system_api.rs`): `OnceLock<Runtime>` + `get_or_init`.
+static SYSTEM_COLOR_MODE_RUNTIME: OnceLock<tokio::runtime::Runtime> = OnceLock::new();
+
+/// Lazily creates (on first call) the runtime used to drive
+/// `emit_global_event` from the napi callback. Keeping a persistent runtime
+/// (rather than building one per call) avoids re-creating the reactor and
+/// thread on every system color-mode change.
+fn system_color_mode_runtime() -> &'static tokio::runtime::Runtime {
+    SYSTEM_COLOR_MODE_RUNTIME.get_or_init(|| {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("failed to build system color mode runtime")
+    })
+}
+
+/// Called from ArkTS (`NativeModule.notifySystemColorMode`) when the HarmonyOS
+/// system color mode changes (via `EntryAbility.onConfigurationUpdate`) or on a
+/// cold-start best-effort initial report. Forwards the color mode
+/// (`"light"` | `"dark"`) to the web-ui through the global event system, which
+/// re-resolves the "follow system" theme without polling. Runs the emit to
+/// completion on the dedicated runtime (blocking the HarmonyOS callback thread
+/// briefly, same as `get_app_config_bool`); `emit_global_event` is a fast
+/// channel send, so the blocking is negligible.
+#[napi]
+pub fn notify_system_color_mode(mode: String) {
+    let normalized = match mode.as_str() {
+        "light" | "dark" => mode,
+        _ => return,
+    };
+    system_color_mode_runtime().block_on(async move {
+        let payload = serde_json::json!({ "scheme": normalized });
+        if let Err(error) = emit_global_event(BackendEvent::Custom {
+            event_name: SYSTEM_COLOR_SCHEME_CHANGED_EVENT.to_string(),
+            payload,
+        })
+        .await
+        {
+            log::warn!("Failed to emit system color mode change: {error}");
+        }
+    });
 }
 
 pub async fn open_dialog_file(options: &str) -> Result<String, String> {
