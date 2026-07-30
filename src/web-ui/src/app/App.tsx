@@ -727,7 +727,7 @@ function App() {
       try {
         const { configAPI, workspaceAPI } = await import('@/infrastructure/api');
         const runtimeInfo = await configAPI.getRuntimeLoggingInfo();
-        if (cancelled || !runtimeInfo.previousUnexpectedExit?.notifyOnStartup) {
+        if (cancelled || !runtimeInfo.previousUnexpectedExit?.detected) {
           return;
         }
         const recoveryKey = `bitfun:unexpected-exit-notice:${runtimeInfo.previousUnexpectedExit.sessionLogDir || 'unknown'}`;
