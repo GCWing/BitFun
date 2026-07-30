@@ -335,8 +335,15 @@ cumulative provisional whitespace. Any deferred follow is then replayed.
 ## C. Follow-Output Mode (continuous tail)
 
 When the viewport is in follow-output mode and the latest turn is still
-streaming, the user's intent is "keep the tail visible". The continuous
-RAF loop re-pins `scrollTop` toward the bottom every frame.
+streaming, the user's intent is "keep the tail visible". Text layout grows in
+discrete line-height steps even when characters are revealed smoothly, so the
+continuous RAF loop eases `scrollTop` toward the bottom with a retargetable
+exponential step. It does not restart native smooth scrolling or snap by a
+whole line on observer notifications.
+
+Content `scrollHeight` growth is not a viewport resize. Physical-bottom
+synchronization is reserved for an actual `clientHeight` change; live content
+growth is owned by the continuous follow loop.
 
 Collapses interact with follow mode in three mutually exclusive ways:
 

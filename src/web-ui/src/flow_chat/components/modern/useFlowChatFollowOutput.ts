@@ -12,6 +12,46 @@ const AUTO_FOLLOW_BOTTOM_THRESHOLD_PX = 24;
 const USER_SCROLL_DIRECTION_EPSILON_PX = 0.5;
 const USER_SCROLL_INTENT_WINDOW_MS = 450;
 const USER_SCROLL_INTENT_PROGRAMMATIC_GRACE_MS = 80;
+const CONTINUOUS_FOLLOW_TIME_CONSTANT_MS = 55;
+const CONTINUOUS_FOLLOW_MIN_STEP_PX = 0.75;
+const CONTINUOUS_FOLLOW_MAX_STEP_PX = 32;
+const CONTINUOUS_FOLLOW_SNAP_THRESHOLD_PX = 0.5;
+const CONTINUOUS_FOLLOW_MAX_FRAME_DELTA_MS = 34;
+
+/**
+ * Move toward a newly-grown tail without snapping by a whole text line.
+ *
+ * Streaming prose only changes layout when a line wraps, so the physical
+ * bottom advances in line-height-sized steps even though characters arrive
+ * smoothly. This exponential step is retargetable on every animation frame:
+ * a later wrap extends the same motion instead of restarting a browser-native
+ * smooth scroll.
+ */
+export function computeContinuousFollowStep(
+  distancePx: number,
+  frameDeltaMs: number,
+): number {
+  const distance = Number.isFinite(distancePx) ? Math.max(0, distancePx) : 0;
+  if (distance <= CONTINUOUS_FOLLOW_SNAP_THRESHOLD_PX) {
+    return distance;
+  }
+
+  const deltaMs = Number.isFinite(frameDeltaMs)
+    ? Math.min(CONTINUOUS_FOLLOW_MAX_FRAME_DELTA_MS, Math.max(0, frameDeltaMs))
+    : 0;
+  const easedStep = distance * (
+    1 - Math.exp(-deltaMs / CONTINUOUS_FOLLOW_TIME_CONSTANT_MS)
+  );
+  const step = Math.min(
+    distance,
+    CONTINUOUS_FOLLOW_MAX_STEP_PX,
+    Math.max(CONTINUOUS_FOLLOW_MIN_STEP_PX, easedStep),
+  );
+
+  return distance - step <= CONTINUOUS_FOLLOW_SNAP_THRESHOLD_PX
+    ? distance
+    : step;
+}
 
 export type FollowOutputEnterReason = 'jump-to-latest' | 'auto-follow';
 export type FollowOutputExitReason =
@@ -83,13 +123,14 @@ export function useFlowChatFollowOutput({
   const [isFollowingOutput, setIsFollowingOutput] = useState(false);
 
   const isFollowingOutputRef = useRef(isFollowingOutput);
-  const followFrameRef = useRef<number | null>(null);
   const programmaticScrollUntilMsRef = useRef(0);
   const explicitUserScrollIntentUntilMsRef = useRef(0);
   const lastObservedScrollTopRef = useRef(0);
   const previousSessionIdRef = useRef<string | undefined>(activeSessionId);
   const armedAutoFollowTurnIdRef = useRef<string | null>(null);
   const continuousFollowFrameRef = useRef<number | null>(null);
+  const lastContinuousFollowFrameMsRef = useRef<number | null>(null);
+  const prefersReducedMotionRef = useRef(false);
   const isStreamingRef = useRef(isStreaming);
   const performAutoFollowScrollRef = useRef(performAutoFollowScroll);
   const onContinuousFollowFrameRef = useRef(onContinuousFollowFrame);
@@ -109,12 +150,8 @@ export function useFlowChatFollowOutput({
       cancelAnimationFrame(continuousFollowFrameRef.current);
       continuousFollowFrameRef.current = null;
     }
-  }, []);
-
-  const cancelScheduledFollow = useCallback(() => {
-    if (followFrameRef.current !== null) {
-      cancelAnimationFrame(followFrameRef.current);
-      followFrameRef.current = null;
+    if (!nextValue) {
+      lastContinuousFollowFrameMsRef.current = null;
     }
   }, []);
 
@@ -123,6 +160,7 @@ export function useFlowChatFollowOutput({
       cancelAnimationFrame(continuousFollowFrameRef.current);
       continuousFollowFrameRef.current = null;
     }
+    lastContinuousFollowFrameMsRef.current = null;
   }, []);
 
   /**
@@ -130,12 +168,12 @@ export function useFlowChatFollowOutput({
    *
    * Why this exists:
    *  - Streaming text + auto-collapsing tool cards generate dense bursts of
-   *    DOM mutations and CSS transitions. Event-driven follow (via observers)
-   *    is gated by `shouldSuspendAutoFollow` during transitions, which makes
-   *    the viewport visibly stall and then jump after the transition ends.
+   *    DOM mutations and CSS transitions.
+   *  - Text layout still grows one whole line at a time. Snapping to the new
+   *    bottom on each wrap makes otherwise-smooth typewriter output shake.
    *  - This loop runs every animation frame while follow + streaming is
-   *    active, pushing scrollTop toward the latest token regardless of any
-   *    intermediate layout shrink. The result is a smooth, continuous tail.
+   *    active and eases scrollTop toward the latest tail. New growth retargets
+   *    the in-flight motion without restarting it.
    *
    * Safety:
    *  - Programmatic scrolls inside this loop bump
@@ -144,15 +182,17 @@ export function useFlowChatFollowOutput({
    *  - The loop bails out as soon as follow is exited, streaming ends, the
    *    scroller disappears, or the viewport is already pinned to the bottom.
    */
-  const runContinuousFollowFrame = useCallback(() => {
+  const runContinuousFollowFrame = useCallback((nowMs: number) => {
     continuousFollowFrameRef.current = null;
 
     if (!isFollowingOutputRef.current || !isStreamingRef.current) {
+      lastContinuousFollowFrameMsRef.current = null;
       return;
     }
 
     const scroller = scrollerRef.current;
     if (!scroller) {
+      lastContinuousFollowFrameMsRef.current = null;
       return;
     }
 
@@ -167,10 +207,22 @@ export function useFlowChatFollowOutput({
     const isSuspended = shouldSuspendAutoFollowRef.current?.() === true;
     const measuredDistance = getAutoFollowDistanceFromBottomRef.current?.(scroller)
       ?? getDistanceFromBottom(scroller);
-    if (!isSuspended && measuredDistance > AUTO_FOLLOW_BOTTOM_THRESHOLD_PX) {
-      programmaticScrollUntilMsRef.current = performance.now() + PROGRAMMATIC_SCROLL_GUARD_MS;
+    const previousFrameMs = lastContinuousFollowFrameMsRef.current;
+    const frameDeltaMs = previousFrameMs === null
+      ? 1000 / 60
+      : nowMs - previousFrameMs;
+    lastContinuousFollowFrameMsRef.current = nowMs;
+
+    if (!isSuspended && measuredDistance > CONTINUOUS_FOLLOW_SNAP_THRESHOLD_PX) {
+      programmaticScrollUntilMsRef.current = nowMs + PROGRAMMATIC_SCROLL_GUARD_MS;
       explicitUserScrollIntentUntilMsRef.current = 0;
-      performAutoFollowScrollRef.current();
+
+      if (prefersReducedMotionRef.current) {
+        performAutoFollowScrollRef.current();
+      } else {
+        const step = computeContinuousFollowStep(measuredDistance, frameDeltaMs);
+        scroller.scrollTop += step;
+      }
       lastObservedScrollTopRef.current = scroller.scrollTop;
     }
 
@@ -212,7 +264,6 @@ export function useFlowChatFollowOutput({
 
   const enterFollowOutput = useCallback((reason: FollowOutputEnterReason) => {
     cancelPendingAutoFollowArm();
-    cancelScheduledFollow();
     explicitUserScrollIntentUntilMsRef.current = 0;
     setFollowingOutput(true);
     const followAction = reason === 'jump-to-latest'
@@ -221,7 +272,6 @@ export function useFlowChatFollowOutput({
     runProgrammaticScroll(followAction);
   }, [
     cancelPendingAutoFollowArm,
-    cancelScheduledFollow,
     performAutoFollowScroll,
     performUserFollowScroll,
     runProgrammaticScroll,
@@ -230,14 +280,13 @@ export function useFlowChatFollowOutput({
 
   const exitFollowOutput = useCallback((_reason: FollowOutputExitReason) => {
     cancelPendingAutoFollowArm();
-    cancelScheduledFollow();
     explicitUserScrollIntentUntilMsRef.current = 0;
     setFollowingOutput(false);
     const scroller = scrollerRef.current;
     if (scroller) {
       lastObservedScrollTopRef.current = scroller.scrollTop;
     }
-  }, [cancelPendingAutoFollowArm, cancelScheduledFollow, scrollerRef, setFollowingOutput]);
+  }, [cancelPendingAutoFollowArm, scrollerRef, setFollowingOutput]);
 
   const armFollowOutputForNewTurn = useCallback(() => {
     if (!latestTurnId) {
@@ -246,12 +295,10 @@ export function useFlowChatFollowOutput({
     }
 
     armedAutoFollowTurnIdRef.current = latestTurnId;
-    cancelScheduledFollow();
     setFollowingOutput(false);
     runProgrammaticScroll(performLatestTurnStickyPin);
   }, [
     cancelPendingAutoFollowArm,
-    cancelScheduledFollow,
     latestTurnId,
     performLatestTurnStickyPin,
     runProgrammaticScroll,
@@ -282,13 +329,11 @@ export function useFlowChatFollowOutput({
     }
 
     cancelPendingAutoFollowArm();
-    cancelScheduledFollow();
     setFollowingOutput(true);
     runProgrammaticScroll(performAutoFollowScroll);
     return true;
   }, [
     cancelPendingAutoFollowArm,
-    cancelScheduledFollow,
     latestTurnId,
     performAutoFollowScroll,
     runProgrammaticScroll,
@@ -335,42 +380,17 @@ export function useFlowChatFollowOutput({
   const scheduleFollowToLatest = useCallback((_reason: string) => {
     if (
       !isFollowingOutputRef.current ||
-      !isStreaming ||
-      virtualItemCount === 0 ||
-      shouldSuspendAutoFollow?.() === true
+      !isStreamingRef.current ||
+      virtualItemCount === 0
     ) {
       return;
     }
 
-    if (followFrameRef.current !== null) {
-      return;
-    }
-
-    followFrameRef.current = requestAnimationFrame(() => {
-      followFrameRef.current = null;
-
-      if (!isFollowingOutputRef.current || !isStreaming || virtualItemCount === 0) {
-        return;
-      }
-
-      if (shouldSuspendAutoFollow?.() === true) {
-        return;
-      }
-
-      const scroller = scrollerRef.current;
-      if (!scroller) {
-        return;
-      }
-
-      const rawDistanceFromBottom = getDistanceFromBottom(scroller);
-      const distanceFromBottom = getAutoFollowDistanceFromBottom?.(scroller) ?? rawDistanceFromBottom;
-      if (distanceFromBottom <= AUTO_FOLLOW_BOTTOM_THRESHOLD_PX) {
-        return;
-      }
-
-      runProgrammaticScroll(performAutoFollowScroll);
-    });
-  }, [getAutoFollowDistanceFromBottom, isStreaming, performAutoFollowScroll, runProgrammaticScroll, scrollerRef, shouldSuspendAutoFollow, virtualItemCount]);
+    // Observer notifications only ensure that the continuous, retargetable
+    // loop is awake. They must not start a separate native smooth scroll or
+    // snap directly to the bottom; either would recreate the per-line jump.
+    startContinuousFollowLoop();
+  }, [startContinuousFollowLoop, virtualItemCount]);
 
   const handleScroll = useCallback(() => {
     const scroller = scrollerRef.current;
@@ -439,7 +459,6 @@ export function useFlowChatFollowOutput({
 
     previousSessionIdRef.current = activeSessionId;
     cancelPendingAutoFollowArm();
-    cancelScheduledFollow();
     explicitUserScrollIntentUntilMsRef.current = 0;
     const nextFollowState = Boolean(activeSessionId && virtualItemCount === 0);
 
@@ -452,7 +471,6 @@ export function useFlowChatFollowOutput({
   }, [
     activeSessionId,
     cancelPendingAutoFollowArm,
-    cancelScheduledFollow,
     latestTurnId,
     setFollowingOutput,
     virtualItemCount,
@@ -480,11 +498,23 @@ export function useFlowChatFollowOutput({
   }, [startContinuousFollowLoop]);
 
   useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+      return;
+    }
+    const media = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const syncPreference = () => {
+      prefersReducedMotionRef.current = media.matches;
+    };
+    syncPreference();
+    media.addEventListener?.('change', syncPreference);
+    return () => media.removeEventListener?.('change', syncPreference);
+  }, []);
+
+  useEffect(() => {
     return () => {
-      cancelScheduledFollow();
       stopContinuousFollowLoop();
     };
-  }, [cancelScheduledFollow, stopContinuousFollowLoop]);
+  }, [stopContinuousFollowLoop]);
 
   return {
     isFollowingOutput,
