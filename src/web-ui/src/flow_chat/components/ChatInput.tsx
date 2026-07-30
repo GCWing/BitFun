@@ -47,7 +47,6 @@ import {
   type SlashActionId,
 } from '../utils/slashActionSelection';
 import { notificationService } from '@/shared/notification-system';
-import { isRemoteWorkspace } from '@/shared/types';
 import { useI18n } from '@/infrastructure/i18n';
 import { inputReducer, initialInputState, type InputAction } from '../reducers/inputReducer';
 import { modeReducer, initialModeState } from '../reducers/modeReducer';
@@ -91,6 +90,7 @@ import {
   isSessionWorktreeBindingLocked,
   sessionWorktreeBindingSubscriptionKey,
 } from '../utils/sessionWorktree';
+import { isRemoteWorkspaceSession } from '../utils/sessionWorkspace';
 import { isTauriRuntime } from '@/infrastructure/runtime';
 import { Tooltip, IconButton, confirmDanger, confirmWarning } from '@/component-library';
 import { PendingQueuePanel } from './PendingQueuePanel';
@@ -1993,9 +1993,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({
    * Checking worktree isolation only arms the empty session. The first prompt
    * materializes the worktree after it has visibly been submitted.
    */
+  const remoteWorkspaceSession =
+    isRemoteWorkspaceSession(effectiveTargetSession, workspace);
+
   const worktreeControl = useMemo(() => {
     if (!effectiveTargetSessionId || !effectiveTargetSession) return undefined;
-    if (effectiveTargetSession.remoteConnectionId) return undefined;
+    if (remoteWorkspaceSession) return undefined;
     if (usesDispatchTransport) return undefined;
     if (isSubagentInputTarget || isAcpTargetSession) return undefined;
 
@@ -2031,6 +2034,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     derivedState?.isProcessing,
     isAcpTargetSession,
     isSubagentInputTarget,
+    remoteWorkspaceSession,
     tWorktrees,
     usesDispatchTransport,
   ]);
@@ -2061,18 +2065,16 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       registration ||
       isBtwSession ||
       isSubagentInputTarget ||
-      isAcpInputSession
+      isAcpInputSession ||
+      remoteWorkspaceSession
     ) {
       return undefined;
     }
     const target: DispatchTarget =
       effectiveTargetSession?.config.dispatchTarget ?? { kind: 'local' };
-    const snapshotSourceIsRemote =
-      !!effectiveTargetSession?.remoteConnectionId || isRemoteWorkspace(workspace);
     return {
       target,
-      sourceWorkspacePath:
-        !snapshotSourceIsRemote && workspacePath ? workspacePath : undefined,
+      sourceWorkspacePath: workspacePath || undefined,
       locked:
         isNonLocalDispatchTarget(target) ||
         (effectiveTargetSession?.dialogTurns.length ?? 0) > 0 ||
@@ -2083,13 +2085,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     derivedState?.isProcessing,
     effectiveTargetSession?.config.dispatchTarget,
     effectiveTargetSession?.dialogTurns.length,
-    effectiveTargetSession?.remoteConnectionId,
     handleSelectDispatchTarget,
     isAcpInputSession,
     isBtwSession,
     isSubagentInputTarget,
     registration,
-    workspace,
+    remoteWorkspaceSession,
     workspacePath,
   ]);
 

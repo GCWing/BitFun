@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import { WorkspaceKind, type WorkspaceInfo } from '@/shared/types';
 import type { Session } from '../types/flow-chat';
 import {
+  isRemoteWorkspaceSession,
   requireSessionProjectWorkspacePath,
   sessionExecutionWorkspacePath,
   sessionProjectWorkspacePath,
@@ -18,6 +20,27 @@ function session(
 }
 
 describe('sessionWorkspace', () => {
+  it('identifies remote workspace sessions from either session or workspace metadata', () => {
+    const localWorkspace = {
+      workspaceKind: WorkspaceKind.Normal,
+    } as WorkspaceInfo;
+    const remoteWorkspace = {
+      workspaceKind: WorkspaceKind.Remote,
+    } as WorkspaceInfo;
+
+    expect(isRemoteWorkspaceSession(undefined, localWorkspace)).toBe(false);
+    expect(
+      isRemoteWorkspaceSession({ remoteConnectionId: 'remote-1' }, localWorkspace),
+    ).toBe(true);
+    expect(
+      isRemoteWorkspaceSession(
+        { config: { remoteConnectionId: 'remote-2' } },
+        localWorkspace,
+      ),
+    ).toBe(true);
+    expect(isRemoteWorkspaceSession(undefined, remoteWorkspace)).toBe(true);
+  });
+
   it('keeps execution and project roots distinct for a worktree session', () => {
     const worktreeSession = session({
       workspacePath: '/worktrees/wt-1',
