@@ -337,7 +337,34 @@ $_indent-width: 8px;
     .bitfun-input-prefix {
       color: color-mix(in srgb, var(--color-accent-500) 85%, transparent);
     }
+
+    // 校验失败时给输入框加红框。Input.scss 的 --error 红框被 wrapper 的
+    // `border: none` 覆盖，这里在 wrapper 上下文里补回。
+    &.bitfun-input-wrapper--error .bitfun-input-container {
+      border: none !important;
+      box-shadow:
+        0 0 0 1px var(--color-error),
+        0 2px 8px color-mix(in srgb, var(--color-error) 18%, transparent);
+    }
   }
+}
+
+// 重命名校验报错浮层（portal 挂到 body，避免被树容器 overflow 裁剪）。
+.bitfun-file-explorer__rename-error {
+  position: fixed;
+  z-index: 10000;
+  max-width: 280px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: var(--color-overlay-black-80, rgba(0, 0, 0, 0.8));
+  color: var(--color-static-white, #fff);
+  font-size: var(--font-size-xs);
+  line-height: 1.4;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  pointer-events: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .bitfun-file-explorer__compressed-path {

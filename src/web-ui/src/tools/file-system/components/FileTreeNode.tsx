@@ -7,6 +7,10 @@ import { getPathDepth } from './fileTreeDepth';
 interface ExtendedFileTreeNodeProps extends FileTreeNodeProps {
   selectedFile?: string;
   expandedFolders?: Set<string>;
+  /** 重命名时用于重名检测的同级名称列表（已排除当前节点原名）。 */
+  renameSiblings?: string[];
+  /** 当前是否为远程工作区，传入重命名校验上下文。 */
+  isRemoteWorkspace?: boolean;
 }
 
 export const FileTreeNode: React.FC<ExtendedFileTreeNodeProps> = ({
@@ -25,7 +29,9 @@ export const FileTreeNode: React.FC<ExtendedFileTreeNodeProps> = ({
   onRename,
   onCancelRename,
   renderContent,
-  renderActions
+  renderActions,
+  renameSiblings,
+  isRemoteWorkspace = false,
 }) => {
   const indentDepth = getPathDepth(node.path, workspacePath);
 
@@ -45,6 +51,8 @@ export const FileTreeNode: React.FC<ExtendedFileTreeNodeProps> = ({
         onToggleExpand={() => onToggleExpand?.(node.path)}
         renderContent={renderContent}
         renderActions={renderActions}
+        renameSiblings={renameSiblings}
+        isRemoteWorkspace={isRemoteWorkspace}
       />
 
       {node.isDirectory && isExpanded && (
@@ -69,6 +77,8 @@ export const FileTreeNode: React.FC<ExtendedFileTreeNodeProps> = ({
               onCancelRename={onCancelRename}
               renderContent={renderContent}
               renderActions={renderActions}
+              renameSiblings={(node.children ?? []).filter(c => c.path !== child.path).map(c => c.name)}
+              isRemoteWorkspace={isRemoteWorkspace}
             />
           ))}
         </div>

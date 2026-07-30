@@ -5,7 +5,12 @@ import { lazyCompressFileTree, shouldCompressPaths, CompressedNode } from '../ut
 import { useI18n } from '@/infrastructure/i18n';
 import { expandedFoldersContains } from '@/shared/utils/pathUtils';
 
-export const FileTree: React.FC<FileTreeProps> = ({
+interface FileTreeWithRemoteProps extends FileTreeProps {
+  /** 当前是否为远程工作区，传入重命名校验上下文。 */
+  isRemoteWorkspace?: boolean;
+}
+
+export const FileTree: React.FC<FileTreeWithRemoteProps> = ({
   nodes,
   selectedFile,
   expandedFolders: externalExpandedFolders,
@@ -19,11 +24,12 @@ export const FileTree: React.FC<FileTreeProps> = ({
   renderNodeActions,
   renamingPath,
   onRename,
-  onCancelRename
+  onCancelRename,
+  isRemoteWorkspace = false,
 }) => {
   const { t } = useI18n('tools');
   const [internalExpandedFolders, setInternalExpandedFolders] = useState<Set<string>>(new Set());
-  
+
   const expandedFolders = externalExpandedFolders || internalExpandedFolders;
 
   const handleNodeExpand = useCallback((path: string) => {
@@ -50,8 +56,14 @@ export const FileTree: React.FC<FileTreeProps> = ({
     return lazyCompressFileTree(nodes, expandedFolders);
   }, [nodes, expandedFolders]);
 
+  // 顶层节点之间互为同级（用于重命名重名检测）。
+  const topSiblingNames = useMemo(
+    () => processedNodes.map((n) => n.name),
+    [processedNodes],
+  );
+
   const renderNodes = (nodeList: CompressedNode[], currentLevel: number = level) => {
-    return nodeList.map(node => (
+    return nodeList.map((node) => (
       <FileTreeNode
         key={node.path}
         node={node}
@@ -69,12 +81,14 @@ export const FileTree: React.FC<FileTreeProps> = ({
         renderContent={renderNodeContent}
         renderActions={renderNodeActions}
         workspacePath={workspacePath}
+        renameSiblings={topSiblingNames.filter((n) => n !== node.name)}
+        isRemoteWorkspace={isRemoteWorkspace}
       />
     ));
   };
 
   return (
-    <div 
+    <div
       className={`bitfun-file-explorer__tree ${className}`}
       tabIndex={0}
     >
