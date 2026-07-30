@@ -77,7 +77,8 @@ flowchart TD
 
 workspace、session、插件和贡献数量都不是默认进程键。一个 Plugin Host 可以承载多个来源、多个
 workspace 的逻辑实例和多个 session 的调用；这些身份必须随请求显式传递，进程内状态仍按生态的真实语义分区。
-因此 Shared Agent Runtime 中多个 GUI/TUI/Remote Client 不会各自创建 Plugin Host；一次性 Embedded CLI、私有 SDK Host 和
+因此同一 `client_kind` 的 Shared Agent Runtime 中多个 Client 不会各自创建 Plugin Host；不同 GUI/TUI/Remote
+形态不连接同一个 Shared App Server。一次性 Direct Runtime CLI、私有 SDK Host 和
 目标机器 Runtime 则各自只管理自己的子进程树，不跨 Rust 进程或 execution domain 共享模块实例。
 
 容量压力本身不直接创建进程。只有测量证明单进程队列不足，并且待拆调用同时满足“无共享模块状态、无顺序 Hook

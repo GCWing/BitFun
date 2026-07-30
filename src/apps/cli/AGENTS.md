@@ -3,7 +3,9 @@
 Scope: this guide applies to `src/apps/cli`.
 
 Read [`docs/architecture/cli-product-line-design.md`](../../../docs/architecture/cli-product-line-design.md),
-[`docs/architecture/product-architecture.md`](../../../docs/architecture/product-architecture.md), and
+[`docs/architecture/product-architecture.md`](../../../docs/architecture/product-architecture.md),
+[`docs/architecture/app-server-architecture-design.md`](../../../docs/architecture/app-server-architecture-design.md),
+[`docs/architecture/agent-runtime-deployment-design.md`](../../../docs/architecture/agent-runtime-deployment-design.md), and
 [`docs/architecture/product-customization-blueprint.md`](../../../docs/architecture/product-customization-blueprint.md)
 before product-definition, TUI layout, branding, packaging, runtime, or plugin architecture changes.
 
@@ -18,6 +20,15 @@ before product-definition, TUI layout, branding, packaging, runtime, or plugin a
   Desktop+CLI share one `device_id`; last AuthConnect wins.
 - Shared session, turn, task, tool, permission, context, checkpoint, Subagent,
   Harness, MCP, plugin, and capability facts belong to their runtime owners.
+- Interactive TUI is a Rich Client and must use `AppServerClient` in the target
+  architecture. Embedded and `--shared` deployments use one App Server wire;
+  the Embedded server is exclusive to one TUI client, and the Shared server is
+  TUI-only. Do not add operations or consumers to the legacy
+  `agent-runtime-ipc` protocol.
+- Headless CLI/CI remains Direct Runtime by default and must keep its stdout/stderr,
+  exit-code, startup, and lifecycle contract separate from interactive TUI. It
+  is not an App Server client; `--shared` remains interactive-TUI-only unless a
+  separate reviewed non-interactive contract is implemented.
 - Existing `bitfun-core/product-full` compatibility paths may remain during a
   reviewed migration. Do not add new concrete managers, global mutable services,
   or CLI-only copies of shared product behavior.

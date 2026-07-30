@@ -9,8 +9,9 @@ CLI Agent 体验边界见 [`cli-product-line-design.md`](cli-product-line-design
 多宿主 adapter 的状态、权限、并发和兼容边界见
 [`capability-runtime-integration-design.md`](extensions/capability-runtime-integration-design.md)；公开 BitFun Agent SDK 的
 用户心智、SDK Host、Headless CLI/ACP/Server 关系、竞品基线和能力发布门槛见
-[`agent-sdk-product-architecture.md`](agent-sdk-product-architecture.md)；第一方 GUI/TUI/Remote 多实例、Headless CLI Embedded、
-Shared Agent Runtime 与 Plugin Host 的进程关系见
+[`agent-sdk-product-architecture.md`](agent-sdk-product-architecture.md)；第一方 Rich Client（包括交互式 TUI）的统一协议见
+[`app-server-architecture-design.md`](app-server-architecture-design.md)；Embedded/Shared App Server、Headless Direct Runtime、
+Remote 与 Plugin Host 的进程关系见
 [`agent-runtime-deployment-design.md`](agent-runtime-deployment-design.md)。
 
 本文中的接口片段只说明依赖方向和职责，不自动构成当前 API 或实施承诺。当前接口名称、字段和消费方以代码为准；
@@ -744,8 +745,10 @@ Core 的 Network、Git 和 MCP Catalog 当前仍含兼容 marker，因此该诊�
 但完整持久化历史回放、模型/模式目录与提供方配置和 MCP 仍走单一 Core 兼容接口；会话模型/模式写入通过 Agent Runtime API 回到同一 Core 归属模块。ACP stdio、连接和协议转换仍在
 `interfaces/acp`。Desktop 复用同一 Core owner 构造一个窄口径 Rust Runtime SDK，主界面的轮次提交/取消、工具确认/拒绝和
 用户问题回答与会话模型更新已通过 Rust Runtime SDK；会话 CRUD/恢复视图、MCP、MiniApp、Cron、远程连接、Tauri 窗口与平台资源
-仍保留在 Desktop/Core 兼容入口。Server 仅提供健康检查、信息与 ping 路由。未接入入口的 profile、枚举分支和
-单元测试仍不能证明对应产品形态可用。
+仍保留在 Desktop/Core 兼容入口。Server 提供健康检查、信息与 ping，以及不启动 Agent Runtime 的窄
+detached-dispatch controller/observer 路由；该 loopback WebSocket 控制面会使用已保存的 SSH connection
+执行 install、submit、cancel、answer、append 等可变操作，不等于完整 Server profile 或独立产品组装。
+未接入入口的 profile、枚举分支和单元测试仍不能证明对应产品形态可用。
 
 Desktop 与 CLI Peer Host 还各自注入同一个 Core-backed `LocalWorkspaceSnapshotPort` 契约。它是两个本地宿主之间的内部 owner 边界，
 不是公开 Agent SDK、Agent Runtime API 的通用能力、完整 Desktop profile、跨宿主远程能力或通用 checkpoint/rewind API。Core 继续持有 `SnapshotManager`、工具拦截、

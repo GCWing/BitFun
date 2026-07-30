@@ -23,7 +23,7 @@
 |---|---|---|
 | 产品能力组装 | `DeliveryProfile`、`ProductAssembler`、能力计划、服务可用性和测试已存在 | 这些是可测试的 assembly facts，不代表产品入口已接入 |
 | CLI / Desktop / ACP | 三者仍按需启用 `bitfun-core/product-full`；CLI 与 ACP 已分别提交对应 `DeliveryProfile` 并消费 Runtime Parts/SDK，Desktop 主交互已消费由现有 owner 构造的窄口径 SDK 接口 | 三个入口均复用单一 Core owner；完整 Desktop profile 和剩余兼容操作仍需逐项迁移 |
-| Server | 当前生产路由只形成 health/info/ping 基线 | 没有插件状态或独立产品组装完整流程 |
+| Server | 当前生产路由包含 health/info/ping，以及 loopback WebSocket 上不启动 Agent Runtime 的 SSH-backed detached-dispatch controller/observer 操作 | 已有窄可变控制面，但没有完整 Server profile、插件状态或独立产品组装流程 |
 | Server / Remote / Web / Mobile Web / SDK profile | 当前为空计划、未接入入口或仅有 preview 测试 | 不得据枚举值宣称产品能力已交付 |
 | Agent Runtime SDK | 已有无 `bitfun-core` 依赖的 v2 preview 接口和 smoke test | 发布边界仍需真实嵌入方证明 |
 | 插件运行时 | 现有路径只覆盖 BitFun 原生包和 OpenCode custom tool 静态名称预览 | 不能据通用消息结构或静态候选扩张稳定 ABI |
@@ -95,7 +95,9 @@ CLI-P0 整体退出条件尚未满足；真实供应商审批流、OS 级终端�
 
 ### 4.4 最后晋级 Server、Remote 与 SDK
 
-- Server 先从现有 health/info/ping 基线选择一个真实 API 消费方，不预建完整产品 surface。
+- Server 后续切片从现有 health/info/ping 与窄 detached-dispatch 控制面选择真实产品 API 消费方；不得把该
+  loopback、无连接认证的 SSH-backed WebSocket envelope 当作完整产品 surface、网络 App Server 或远程入口；
+  网络暴露不形成 Hosted 第三部署形态。
 - Remote 必须在实际工作区执行域完成能力协商，不以本地 provider 代替。
 - SDK 只有在外部或仓库内独立嵌入方无需 `bitfun-core/product-full` 即可完成最小 session/turn/event 流程后，才从 preview 晋级。
 - 空 capability plan、disabled stub 和单元测试用于保护降级，不构成产品完成证据。

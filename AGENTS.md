@@ -26,7 +26,7 @@ Keep crate dependencies inside each layer to the smallest set needed.
 |---|---|---|---|---|---|
 | 1 | Interfaces and entrypoints | `src/apps/*`, `src/web-ui`, `src/mobile-web`, `BitFun-Installer`, `tests/e2e`, `src/crates/interfaces` | Product hosts, commands, UI entrypoints, protocol interfaces, and cross-surface tests | desktop, CLI, server, relay, Web UI, mobile web, installer, E2E, `acp`, `sdk-host` | nearest local `AGENTS.md`; [interfaces](src/crates/interfaces/AGENTS.md) |
 | 2 | Product assembly | `src/crates/assembly` | Compatibility exports, product capability selection, product-full wiring, adapter/service registration, and ecosystem-neutral source coordination | `core`, `external-sources`, `product-capabilities` | [AGENTS.md](src/crates/assembly/AGENTS.md) |
-| 3 | Adapters | `src/crates/adapters` | AI/transport/WebDriver protocol adapters, external AI work source adapters (OpenCode/Claude Code/Codex), and external-provider translation | `agent-runtime-ipc`, `ai-adapters`, `opencode-adapter`, `claude-code-adapter`, `codex-adapter`, `static-hook-support`, `transport`, `webdriver` | [AGENTS.md](src/crates/adapters/AGENTS.md) |
+| 3 | Adapters | `src/crates/adapters` | AI/transport/WebDriver protocol adapters, external AI work source adapters (OpenCode/Claude Code/Codex), and external-provider translation | `agent-runtime-ipc` (migration-only), `ai-adapters`, `opencode-adapter`, `claude-code-adapter`, `codex-adapter`, `static-hook-support`, `transport`, `webdriver` | [AGENTS.md](src/crates/adapters/AGENTS.md) |
 | 4 | Services | `src/crates/services` | Reusable OS, filesystem, terminal, MCP, remote, git, watch, process, LSP plugin registry, session persistence primitives, MiniApp runtime IO, and network implementations | `services-core`, `services-integrations`, `miniapp-market-service`, `relay-service`, `page-function-runtime`, `terminal` | [AGENTS.md](src/crates/services/AGENTS.md) |
 | 5 | Execution primitives | `src/crates/execution` | Portable agent, harness, stream, DeepReview policy/report, plugin runtime client, typed-service, tool-contract, tool-group, and tool-execution building blocks | `agent-runtime`, `agent-stream`, `tool-contracts`, `harness`, `plugin-runtime-client`, `runtime-services`, `tool-provider-groups`, `tool-execution`, `tool-call-jsonrepair` | [AGENTS.md](src/crates/execution/AGENTS.md) |
 | 6 | Stable contracts and product domains | `src/crates/contracts` | Shared DTOs, event shapes, runtime ports, LSP protocol/plugin DTOs, and product domain contracts/policies | `core-types`, `events`, `runtime-ports`, `product-domains` | [AGENTS.md](src/crates/contracts/AGENTS.md) |
@@ -203,8 +203,9 @@ details in the nearest module `AGENTS.md`.
 Repository-level decomposition rules:
 
 - Do not confuse DTO/contract extraction with runtime owner migration.
-- Product surfaces may diverge; share stable facts or ports, not UI, protocol,
-  lifecycle, or platform implementation.
+- Product surfaces may diverge; share stable facts or ports. Share a protocol
+  only inside an explicitly versioned product family such as Rich Client App
+  Server consumers, and never share UI, lifecycle, or platform implementation.
 - Moving runtime ownership requires a reviewed port/provider design, old-path
   compatibility, behavior equivalence tests, and explicit confirmation when a
   behavior boundary could change.
@@ -212,9 +213,25 @@ Repository-level decomposition rules:
 For Agent Runtime deployment, multi-GUI/TUI/Remote instances, shared Session
 control, or process-topology changes, also read
 [`docs/architecture/agent-runtime-deployment-design.md`](docs/architecture/agent-runtime-deployment-design.md).
-Do not key Rust Runtime or Node/Bun Plugin Host processes by client, workspace,
-session, or plugin by default; use the responsible state module, execution and
-security conditions, and measured capacity.
+App Server has only Embedded (one client to one server) and Shared (multiple
+clients of one `client_kind` to one server) deployments. Do not key Shared Rust
+Runtime or Node/Bun Plugin Host processes by window, workspace, session, or
+plugin by default; use the responsible state module, `client_kind`, execution
+and security conditions, and measured capacity.
+
+For Rich Client/backend separation, Desktop-to-Electron replacement, VS Code
+Extension integration, App Server schema/transport, or first-party GUI process
+topology, also read
+[`docs/architecture/app-server-architecture-design.md`](docs/architecture/app-server-architecture-design.md).
+Rich Clients, including interactive TUI, share one App Server wire across
+Embedded and Shared deployments, while domain contracts remain with their
+Runtime/capability owners. An Embedded server accepts exactly one client; a
+Shared server accepts multiple clients of one fixed `client_kind`, so TUI,
+Tauri Desktop, Electron Desktop, VS Code, and Web never connect to the same
+instance. `client_kind` identifies the concrete host form, not a broad UI
+category. Network, tenant, and operational constraints do not create a Hosted
+third deployment. Headless CLI, ACP, and SDK Host keep separate protocol and
+lifecycle boundaries; do not retain a second Shared TUI wire or handler.
 
 ### CLI product-line guardrails
 
