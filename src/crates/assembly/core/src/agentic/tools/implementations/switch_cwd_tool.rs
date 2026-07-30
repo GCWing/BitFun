@@ -159,6 +159,13 @@ After a successful switch, all HarmonyOS tools use the new path until the sessio
         // Check if the directory is a HarmonyOS application root
         let is_harmony = is_harmony_application_root(&resolved);
 
+        // Persist the session CWD so that build_project / start_app / hdc_log
+        // use this directory instead of the workspace root.
+        super::session_cwd::set_session_cwd(
+            context.session_id.as_deref().unwrap_or(""),
+            &resolved_str,
+        );
+
         let message = if is_harmony {
             format!("Session directory updated to {}.", resolved_str)
         } else {

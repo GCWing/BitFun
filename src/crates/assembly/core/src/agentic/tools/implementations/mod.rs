@@ -45,6 +45,7 @@ pub mod page_publish_tool;
 pub mod playbook_tool;
 pub mod review_platform_tool;
 pub mod save_ui_screenshot_tool;
+pub mod session_cwd;
 pub mod session_control_tool;
 pub mod session_history_tool;
 pub mod session_message_tool;
