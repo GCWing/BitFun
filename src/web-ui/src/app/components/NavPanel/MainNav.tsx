@@ -29,6 +29,7 @@ import { useMyAgentStore } from '../../scenes/my-agent/myAgentStore';
 import { useMiniAppCatalogSync } from '../../scenes/miniapps/hooks/useMiniAppCatalogSync';
 import { flowChatManager } from '@/flow_chat/services/FlowChatManager';
 import { resolveAgentTypeForSessionCreation } from '@/flow_chat/services/flow-chat-manager';
+import { openMainSession } from '@/flow_chat/services/sessionActivation';
 import { workspaceManager } from '@/infrastructure/services/business/workspaceManager';
 import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
 import { createLogger } from '@/shared/utils/logger';
@@ -37,6 +38,7 @@ import { WorkspaceKind, isRemoteWorkspace } from '@/shared/types';
 import {
   findReusableEmptySessionId,
   flowChatSessionConfigForWorkspace,
+  pickPrimaryAssistantWorkspace,
   pickWorkspaceForProjectChatSession,
 } from '@/app/utils/projectSessionWorkspace';
 import { getRecentWorkspaceLineParts } from '@/shared/utils/recentWorkspaceDisplay';
@@ -172,10 +174,13 @@ const MainNav: React.FC<MainNavProps> = ({
   const setSessionMode = useSessionModeStore(s => s.setMode);
   const isAssistantWorkspaceActive = currentWorkspace?.workspaceKind === WorkspaceKind.Assistant;
 
-  const defaultAssistantWorkspace = useMemo(
-    () => assistantWorkspacesList.find(w => !w.assistantId) ?? assistantWorkspacesList[0] ?? null,
+  const primaryAssistantWorkspace = useMemo(
+    () => pickPrimaryAssistantWorkspace(assistantWorkspacesList),
     [assistantWorkspacesList]
   );
+
+  const defaultAssistantWorkspace =
+    primaryAssistantWorkspace ?? assistantWorkspacesList[0] ?? null;
 
   const toggleNavSearch = useCallback(() => {
     setSearchOpen((v) => !v);
@@ -250,6 +255,30 @@ const MainNav: React.FC<MainNavProps> = ({
     setSessionMode('cowork');
     void handleCreateProjectSession('Cowork');
   }, [handleCreateProjectSession, setSessionMode]);
+
+  const handleCreatePrimaryAssistantSession = useCallback(async () => {
+    if (!primaryAssistantWorkspace) {
+      notificationService.warning(t('nav.workspaces.createSessionFailed'), { duration: 4000 });
+      return;
+    }
+
+    try {
+      const sessionId = await flowChatManager.createChatSession(
+        flowChatSessionConfigForWorkspace(primaryAssistantWorkspace),
+        'Claw'
+      );
+      await openMainSession(sessionId, {
+        workspaceId: primaryAssistantWorkspace.id,
+        activateWorkspace: setActiveWorkspace,
+      });
+    } catch (error) {
+      log.error('Failed to create primary assistant session', { error });
+      notificationService.error(
+        error instanceof Error ? error.message : t('nav.workspaces.createSessionFailed'),
+        { duration: 4000 }
+      );
+    }
+  }, [primaryAssistantWorkspace, setActiveWorkspace, t]);
 
   const handleOpenProject = useCallback(async () => {
     try {
@@ -455,6 +484,7 @@ const MainNav: React.FC<MainNavProps> = ({
 
   const createCodeTooltip = t('nav.sessions.newCodeSession');
   const createCoworkTooltip = t('nav.sessions.newCoworkSession');
+  const createAssistantSessionTooltip = t('nav.sessions.newPrimaryAssistantSession');
   const assistantTooltip = t('nav.items.persona');
   const addWorkspaceTooltip = t('nav.tooltips.addWorkspace');
   const isAssistantActive = activeTabId === 'assistant';
@@ -618,6 +648,19 @@ const MainNav: React.FC<MainNavProps> = ({
             collapsible
             isOpen={expandedSections.has('assistant-sessions')}
             onToggle={() => toggleSection('assistant-sessions')}
+            actions={
+              <Tooltip content={createAssistantSessionTooltip} placement="right" followCursor>
+                <button
+                  type="button"
+                  className="bitfun-nav-panel__section-action"
+                  aria-label={createAssistantSessionTooltip}
+                  onClick={() => { void handleCreatePrimaryAssistantSession(); }}
+                  data-testid="nav-primary-assistant-session-add-btn"
+                >
+                  <Plus size={13} />
+                </button>
+              </Tooltip>
+            }
           />
           <div className={`bitfun-nav-panel__collapsible${expandedSections.has('assistant-sessions') ? '' : ' is-collapsed'}`}>
             <div className="bitfun-nav-panel__collapsible-inner">

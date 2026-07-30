@@ -178,6 +178,7 @@
       "newCoworkSession": "新增 Cowork 會話",
       "newExternalAgentSessionShort": "{{agentName}} 會話",
       "newClawSession": "新增 Claw 會話",
+      "newPrimaryAssistantSession": "新增主助理會話",
       "modeCode": "Code",
       "modeCowork": "Cowork",
       "noSessions": "暫無會話",
