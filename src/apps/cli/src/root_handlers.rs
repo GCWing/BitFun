@@ -60,6 +60,7 @@ pub(crate) async fn handle_dispatch_action(action: DispatchAction) -> Result<()>
         DispatchAction::WorkspaceChunk => "workspace-chunk",
         DispatchAction::WorkspaceCommit => "workspace-commit",
         DispatchAction::WorkspaceResult => "workspace-result",
+        DispatchAction::WorkspaceResultChunk => "workspace-result-chunk",
     };
     let result = async {
         use std::io::{IsTerminal, Read};

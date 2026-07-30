@@ -3,7 +3,10 @@ use std::path::Path;
 use anyhow::{anyhow, Context};
 use async_trait::async_trait;
 use base64::Engine as _;
-use bitfun_services_integrations::remote_ssh::dispatch_ssh::{self, DispatchSshProbe};
+use bitfun_services_core::dispatch_workspace::sha256_bytes;
+use bitfun_services_integrations::remote_ssh::dispatch_ssh::{
+    self, harden_result_directory, DispatchSshProbe,
+};
 use serde_json::{json, Value};
 use tokio::io::{AsyncReadExt, AsyncSeekExt};
 
@@ -20,6 +23,9 @@ use super::{
 };
 
 const DEVICE_WORKSPACE_CHUNK_BYTES: usize = 256 * 1024;
+/// A result bundle carries only changed files, and the device transport
+/// reassembles it in memory, so it is bounded well below a full snapshot.
+const MAX_DEVICE_RESULT_BUNDLE_BYTES: u64 = 256 * 1024 * 1024;
 const DEVICE_WORKSPACE_COMMIT_POLL_INTERVAL: std::time::Duration =
     std::time::Duration::from_millis(750);
 const DEVICE_WORKSPACE_COMMIT_WAIT: std::time::Duration = std::time::Duration::from_secs(15 * 60);
@@ -357,6 +363,109 @@ async fn resolve_device_workspace(
     }
 }
 
+/// Pull a finished job's result bundle back from an account device.
+///
+/// The device transport carries JSON only, so the bundle streams back in
+/// base64 chunks — the mirror of `upload_device_workspace`. The digest the
+/// target reported is verified over the reassembled bytes before anything is
+/// staged, so a truncated or altered stream cannot reach the apply step.
+pub async fn pull_device_result(
+    rpc: &dyn DeviceDispatchRpc,
+    store: &OutboundDispatchStore,
+    request: DispatchJobRequest,
+) -> anyhow::Result<Value> {
+    let destination = super::controller::result_bundle_path(store, &request.job_id);
+    let destination = destination.as_path();
+    let record = store
+        .get(&request.job_id)
+        .await?
+        .ok_or_else(|| anyhow!("Outbound dispatch job was not found"))?;
+    let DispatchTarget::Device { device_id, .. } = &record.target else {
+        anyhow::bail!("Device dispatch result pull requires a device target");
+    };
+
+    let response = rpc
+        .invoke(
+            device_id,
+            "dispatch_target_workspace_result",
+            json!({ "jobId": request.job_id }),
+        )
+        .await?;
+    let summary = response
+        .get("summary")
+        .ok_or_else(|| anyhow!("Device dispatch target returned no result summary"))?;
+    let expected_size = summary
+        .get("archiveSize")
+        .and_then(Value::as_u64)
+        .ok_or_else(|| anyhow!("Device dispatch target returned no result bundle size"))?;
+    let expected_digest = summary
+        .get("archiveSha256")
+        .and_then(Value::as_str)
+        .ok_or_else(|| anyhow!("Device dispatch target returned no result bundle digest"))?
+        .to_string();
+    if expected_size > MAX_DEVICE_RESULT_BUNDLE_BYTES {
+        anyhow::bail!(
+            "Device dispatch result bundle exceeds the {} MB safety limit",
+            MAX_DEVICE_RESULT_BUNDLE_BYTES / (1024 * 1024)
+        );
+    }
+
+    let mut bytes = Vec::with_capacity(expected_size as usize);
+    while (bytes.len() as u64) < expected_size {
+        let chunk = rpc
+            .invoke(
+                device_id,
+                "dispatch_target_workspace_result_chunk",
+                json!({
+                    "jobId": request.job_id,
+                    "offset": bytes.len() as u64,
+                    "length": DEVICE_WORKSPACE_CHUNK_BYTES as u64,
+                }),
+            )
+            .await?;
+        let encoded = chunk
+            .get("dataBase64")
+            .and_then(Value::as_str)
+            .ok_or_else(|| anyhow!("Device dispatch target returned no result chunk data"))?;
+        let decoded = base64::engine::general_purpose::STANDARD
+            .decode(encoded)
+            .context("decode dispatch result chunk")?;
+        if decoded.is_empty() {
+            anyhow::bail!(
+                "Device dispatch result bundle ended at {} of {expected_size} bytes",
+                bytes.len()
+            );
+        }
+        bytes.extend_from_slice(&decoded);
+        if bytes.len() as u64 > expected_size {
+            anyhow::bail!("Device dispatch target returned more result bytes than it declared");
+        }
+    }
+
+    let actual_digest = sha256_bytes(&bytes);
+    if !actual_digest.eq_ignore_ascii_case(&expected_digest) {
+        anyhow::bail!("Device dispatch result bundle does not match the reported digest");
+    }
+
+    if let Some(parent) = destination.parent() {
+        std::fs::create_dir_all(parent)
+            .with_context(|| format!("create result staging {}", parent.display()))?;
+        harden_result_directory(parent)?;
+    }
+    dispatch_ssh::write_private_file(destination, &bytes)?;
+
+    let mut response = response;
+    if let Some(object) = response.as_object_mut() {
+        object.insert(
+            "localBundlePath".to_string(),
+            Value::String(destination.to_string_lossy().to_string()),
+        );
+    }
+    // Same durable summary the SSH path records, so applying is transport-blind.
+    super::controller::record_result_summary(store, &request.job_id, &response)?;
+    Ok(response)
+}
+
 async fn upload_device_workspace(
     rpc: &dyn DeviceDispatchRpc,
     device_id: &str,
@@ -483,6 +592,9 @@ async fn load_device_record(
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use std::sync::Mutex;
+
     #[test]
     fn target_command_names_are_separate_from_outbound_commands() {
         for command in [
@@ -496,9 +608,145 @@ mod tests {
             "dispatch_target_workspace_begin",
             "dispatch_target_workspace_chunk",
             "dispatch_target_workspace_commit",
+            "dispatch_target_workspace_result",
+            "dispatch_target_workspace_result_chunk",
         ] {
             assert!(command.starts_with("dispatch_target_"));
             assert_ne!(command, "dispatch_submit");
         }
+    }
+
+    /// Serves a fixed bundle back in chunks, like a real device would.
+    struct BundleRpc {
+        bundle: Vec<u8>,
+        declared_digest: String,
+        calls: Mutex<Vec<String>>,
+    }
+
+    #[async_trait]
+    impl DeviceDispatchRpc for BundleRpc {
+        async fn invoke(
+            &self,
+            _device_id: &str,
+            command: &str,
+            args: Value,
+        ) -> anyhow::Result<Value> {
+            self.calls.lock().unwrap().push(command.to_string());
+            match command {
+                "dispatch_target_workspace_result" => Ok(json!({
+                    "bundlePath": "/home/u/.bitfun/dispatch/workspaces/job-1/result.tar.gz",
+                    "workspacePath": "/home/u/.bitfun/dispatch/workspaces/job-1/current",
+                    "summary": {
+                        "added": ["new.txt"],
+                        "modified": [],
+                        "deleted": [],
+                        "baselineSha256": {},
+                        "archiveSize": self.bundle.len() as u64,
+                        "archiveSha256": self.declared_digest,
+                    }
+                })),
+                "dispatch_target_workspace_result_chunk" => {
+                    let offset = args.get("offset").and_then(Value::as_u64).unwrap() as usize;
+                    let length = args.get("length").and_then(Value::as_u64).unwrap() as usize;
+                    let end = (offset + length).min(self.bundle.len());
+                    Ok(json!({
+                        "offset": end as u64,
+                        "dataBase64": base64::engine::general_purpose::STANDARD
+                            .encode(&self.bundle[offset..end]),
+                        "eof": end >= self.bundle.len(),
+                    }))
+                }
+                other => anyhow::bail!("unexpected command {other}"),
+            }
+        }
+    }
+
+    async fn device_store(root: &Path) -> OutboundDispatchStore {
+        let store = OutboundDispatchStore::new_in_root_for_tests(root.to_path_buf());
+        let record = OutboundDispatchRecord::new(
+            "job-1".to_string(),
+            DispatchTarget::Device {
+                device_id: "device-a".to_string(),
+                workspace_path: "/w".to_string(),
+                display_name: "Phone".to_string(),
+            },
+            "session-1".to_string(),
+            "/w".to_string(),
+            "prompt",
+            "succeeded",
+        )
+        .expect("record");
+        store.bind_if_absent(&record).await.expect("bind");
+        store
+    }
+
+    #[tokio::test]
+    async fn a_device_streams_its_result_bundle_back_and_it_is_verified() {
+        let temp = tempfile::tempdir().expect("temp");
+        let store = device_store(temp.path()).await;
+        // Larger than one chunk, so the loop is genuinely exercised.
+        let bundle = vec![7_u8; DEVICE_WORKSPACE_CHUNK_BYTES + 1234];
+        let rpc = BundleRpc {
+            declared_digest: sha256_bytes(&bundle),
+            bundle: bundle.clone(),
+            calls: Mutex::new(Vec::new()),
+        };
+
+        let response = pull_device_result(
+            &rpc,
+            &store,
+            DispatchJobRequest {
+                job_id: "job-1".to_string(),
+            },
+        )
+        .await
+        .expect("pull");
+
+        let staged = response
+            .get("localBundlePath")
+            .and_then(Value::as_str)
+            .expect("staged path");
+        assert_eq!(std::fs::read(staged).expect("read staged"), bundle);
+        let chunk_calls = rpc
+            .calls
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|c| c.as_str() == "dispatch_target_workspace_result_chunk")
+            .count();
+        assert!(chunk_calls >= 2, "a multi-chunk bundle must loop");
+        // The summary must be recorded for the apply step, as on the SSH path.
+        assert!(temp.path().join(".results/job-1.json").is_file());
+    }
+
+    #[tokio::test]
+    async fn a_tampered_device_stream_never_reaches_the_apply_step() {
+        let temp = tempfile::tempdir().expect("temp");
+        let store = device_store(temp.path()).await;
+        let bundle = vec![3_u8; 4096];
+        let rpc = BundleRpc {
+            // Declares a digest the streamed bytes do not match.
+            declared_digest: sha256_bytes(b"something else entirely"),
+            bundle,
+            calls: Mutex::new(Vec::new()),
+        };
+
+        let error = pull_device_result(
+            &rpc,
+            &store,
+            DispatchJobRequest {
+                job_id: "job-1".to_string(),
+            },
+        )
+        .await
+        .expect_err("a digest mismatch must fail the pull");
+        assert!(
+            error.to_string().contains("does not match the reported digest"),
+            "{error}"
+        );
+        assert!(
+            !temp.path().join(".results/job-1.tar.gz").exists(),
+            "nothing may be staged when the stream does not verify"
+        );
     }
 }

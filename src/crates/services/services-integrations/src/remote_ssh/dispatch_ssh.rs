@@ -1209,6 +1209,23 @@ pub async fn pull_result(
     let cli_path = target.cli_path.as_deref().ok_or_else(|| {
         anyhow!("BitFun CLI is not installed on the SSH target; confirm installation first")
     })?;
+
+    // Returning results is an optional capability, so a target that predates it
+    // is a normal situation rather than a fault. Ask before invoking the verb:
+    // otherwise the only signal is clap's `unrecognized subcommand`, which says
+    // nothing about what the user should do.
+    let protocol = invoke_json_at_path(
+        manager,
+        connection_id,
+        &target.home,
+        cli_path,
+        "probe",
+        &serde_json::json!({}),
+    )
+    .await
+    .context("probe the dispatch target before pulling results")?;
+    ensure_result_bundle_capability(&protocol)?;
+
     let response = invoke_json_at_path(
         manager,
         connection_id,
@@ -1239,12 +1256,15 @@ pub async fn pull_result(
             MAX_RESULT_BUNDLE_BYTES / (1024 * 1024)
         ));
     }
+    // The bundle carries the user's source, including the ignored files the
+    // snapshot deliberately shipped. The outbound root is already owner-only,
+    // but harden this level too rather than relying on a parent one layer up.
     if let Some(parent) = destination.parent() {
         std::fs::create_dir_all(parent)
             .with_context(|| format!("create result staging {}", parent.display()))?;
+        harden_result_directory(parent)?;
     }
-    std::fs::write(destination, &bytes)
-        .with_context(|| format!("store result bundle {}", destination.display()))?;
+    write_private_file(destination, &bytes)?;
 
     let mut response = response;
     if let Some(object) = response.as_object_mut() {
@@ -1254,6 +1274,58 @@ pub async fn pull_result(
         );
     }
     Ok(response)
+}
+
+pub fn harden_result_directory(path: &std::path::Path) -> Result<()> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o700))
+            .with_context(|| format!("restrict result staging {}", path.display()))?;
+    }
+    #[cfg(not(unix))]
+    let _ = path;
+    Ok(())
+}
+
+/// Create owner-only before writing, so the contents are never briefly governed
+/// by the process umask.
+pub fn write_private_file(path: &std::path::Path, bytes: &[u8]) -> Result<()> {
+    let mut options = std::fs::OpenOptions::new();
+    options.write(true).create(true).truncate(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    let mut file = options
+        .open(path)
+        .with_context(|| format!("create {}", path.display()))?;
+    std::io::Write::write_all(&mut file, bytes)
+        .with_context(|| format!("write {}", path.display()))?;
+    Ok(())
+}
+
+/// Optional capability: a target without it still runs jobs, it just cannot
+/// hand their results back. Deliberately absent from
+/// `REQUIRED_DISPATCH_CAPABILITIES` so an older CLI stays fully usable.
+pub const WORKSPACE_RESULT_CAPABILITY: &str = "workspace_result_bundle";
+
+fn ensure_result_bundle_capability(protocol: &Value) -> Result<()> {
+    let advertises = protocol
+        .get("capabilities")
+        .and_then(Value::as_array)
+        .is_some_and(|capabilities| {
+            capabilities
+                .iter()
+                .any(|capability| capability.as_str() == Some(WORKSPACE_RESULT_CAPABILITY))
+        });
+    if !advertises {
+        return Err(anyhow!(
+            "this target's BitFun CLI cannot return job results; update it to a release that supports {WORKSPACE_RESULT_CAPABILITY}"
+        ));
+    }
+    Ok(())
 }
 
 /// A result bundle may only be read from the managed directory of the job it
@@ -2453,6 +2525,75 @@ mod tests {
             cc_available: true,
             free_kb: Some(SOURCE_BUILD_FREE_KB * 2),
         }
+    }
+
+    #[test]
+    fn a_target_without_the_result_capability_is_told_what_to_do() {
+        // Optional capability: the failure must name the fix, not surface
+        // clap's "unrecognized subcommand" from the verb invocation.
+        let without = serde_json::json!({
+            "capabilities": ["persistent_jobs", "cursor_events"]
+        });
+        let error = ensure_result_bundle_capability(&without)
+            .expect_err("a target that cannot return results must say so");
+        assert!(
+            error.to_string().contains("cannot return job results"),
+            "{error}"
+        );
+
+        let with = serde_json::json!({
+            "capabilities": ["persistent_jobs", WORKSPACE_RESULT_CAPABILITY]
+        });
+        assert!(ensure_result_bundle_capability(&with).is_ok());
+
+        // A malformed probe must fail closed rather than assume support.
+        assert!(ensure_result_bundle_capability(&serde_json::json!({})).is_err());
+    }
+
+    #[test]
+    fn the_optional_result_capability_is_never_required_for_ordinary_dispatch() {
+        // Requiring it would make every older target unusable for jobs it can
+        // still run perfectly well.
+        assert!(
+            !REQUIRED_DISPATCH_CAPABILITIES.contains(&WORKSPACE_RESULT_CAPABILITY),
+            "returning results must stay optional"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn staged_result_bundles_are_owner_only() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let temp = tempfile::tempdir().expect("temp dir");
+        let staging = temp.path().join(".results");
+        std::fs::create_dir_all(&staging).expect("staging");
+        // Simulate a permissive umask having created it.
+        std::fs::set_permissions(&staging, std::fs::Permissions::from_mode(0o755))
+            .expect("loosen");
+        harden_result_directory(&staging).expect("harden");
+        assert_eq!(
+            std::fs::metadata(&staging).expect("stat").permissions().mode() & 0o777,
+            0o700,
+            "the staging directory holds user source and must not be world-readable"
+        );
+
+        let bundle = staging.join("job-1.tar.gz");
+        write_private_file(&bundle, b"bundle bytes").expect("write");
+        assert_eq!(
+            std::fs::metadata(&bundle).expect("stat").permissions().mode() & 0o777,
+            0o600,
+            "the bundle itself must be owner-only"
+        );
+        assert_eq!(std::fs::read(&bundle).expect("read"), b"bundle bytes");
+
+        // Rewriting must not widen the mode or leave a stale tail.
+        write_private_file(&bundle, b"short").expect("rewrite");
+        assert_eq!(
+            std::fs::metadata(&bundle).expect("stat").permissions().mode() & 0o777,
+            0o600
+        );
+        assert_eq!(std::fs::read(&bundle).expect("read"), b"short");
     }
 
     #[test]

@@ -19,7 +19,7 @@ use protocol::{
     DispatchListRequest, DispatchProbeRequest, DispatchProbeResponse, DispatchStatusRequest,
     DispatchStatusResponse, DispatchSubmitRequest, DispatchSubmitResponse,
     DispatchWorkspaceBeginRequest, DispatchWorkspaceChunkRequest, DispatchWorkspaceCommitRequest,
-    DispatchWorkspaceResultRequest,
+    DispatchWorkspaceResultChunkRequest, DispatchWorkspaceResultRequest,
     DispatchWorkspaceProbe, DISPATCH_PROTOCOL_VERSION, MAX_DISPATCH_TEXT_BYTES,
 };
 use store::{CreateJobOutcome, DispatchStateRecord, DispatchStore};
@@ -76,6 +76,10 @@ pub(crate) async fn run_dispatch_verb(
             DispatchWorkspaceResultRequest,
         >(input)?)?)
         .context("encode workspace result response"),
+        "workspace-result-chunk" => serde_json::to_value(workspace::result_chunk(parse::<
+            DispatchWorkspaceResultChunkRequest,
+        >(input)?)?)
+        .context("encode workspace result chunk response"),
         _ => bail!("unsupported dispatch verb: {verb}"),
     }
 }

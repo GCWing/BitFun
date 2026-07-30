@@ -42,6 +42,8 @@ fn target_cli_verb(command: &str) -> Option<&'static str> {
         "dispatch_target_workspace_begin" => Some("__workspace_begin"),
         "dispatch_target_workspace_chunk" => Some("__workspace_chunk"),
         "dispatch_target_workspace_commit" => Some("__workspace_commit"),
+        "dispatch_target_workspace_result" => Some("__workspace_result"),
+        "dispatch_target_workspace_result_chunk" => Some("__workspace_result_chunk"),
         _ => None,
     }
 }

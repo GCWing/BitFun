@@ -1013,7 +1013,8 @@ fn valid_sha256(value: &str) -> bool {
     value.len() == 64 && value.bytes().all(|byte| byte.is_ascii_hexdigit())
 }
 
-fn sha256_bytes(bytes: &[u8]) -> String {
+/// Digest of an in-memory buffer, the counterpart of [`sha256_file`].
+pub fn sha256_bytes(bytes: &[u8]) -> String {
     format!("{:x}", Sha256::digest(bytes))
 }
 

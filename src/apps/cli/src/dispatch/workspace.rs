@@ -14,7 +14,8 @@ use serde::{Deserialize, Serialize};
 use super::protocol::{
     DispatchWorkspaceBeginRequest, DispatchWorkspaceBeginResponse, DispatchWorkspaceChunkRequest,
     DispatchWorkspaceChunkResponse, DispatchWorkspaceCommitRequest,
-    DispatchWorkspaceCommitResponse, DispatchWorkspaceResultRequest,
+    DispatchWorkspaceCommitResponse, DispatchWorkspaceResultChunkRequest,
+    DispatchWorkspaceResultChunkResponse, DispatchWorkspaceResultRequest,
     DispatchWorkspaceResultResponse, DISPATCH_PROTOCOL_VERSION,
 };
 use super::store::{
@@ -338,6 +339,39 @@ pub(crate) fn result(
         bundle_path: bundle_path.to_string_lossy().to_string(),
         workspace_path: current.to_string_lossy().to_string(),
         summary,
+    })
+}
+
+/// Stream back a slice of the bundle `result` already produced.
+///
+/// Read-only and bounded: it never rebuilds the bundle, so the digest the
+/// controller verified stays the digest it receives.
+pub(crate) fn result_chunk(
+    request: DispatchWorkspaceResultChunkRequest,
+) -> Result<DispatchWorkspaceResultChunkResponse> {
+    if request.length == 0 || request.length > MAX_CHUNK_BYTES as u64 {
+        bail!("workspace result chunk length must be between 1 and {MAX_CHUNK_BYTES} bytes");
+    }
+    let store = DispatchStore::open_default()?;
+    let upload_dir = store.workspace_upload_dir(&request.job_id)?;
+    let bundle_path = upload_dir.join(RESULT_BUNDLE_FILE);
+    let mut file = fs::File::open(&bundle_path)
+        .context("build the dispatch result bundle before reading it")?;
+    let size = file.metadata()?.len();
+    if request.offset > size {
+        bail!("workspace result chunk offset is past the end of the bundle");
+    }
+    file.seek(SeekFrom::Start(request.offset))?;
+    let remaining = size - request.offset;
+    let take = request.length.min(remaining) as usize;
+    let mut buffer = vec![0_u8; take];
+    file.read_exact(&mut buffer)
+        .context("read dispatch result bundle")?;
+    let next_offset = request.offset + take as u64;
+    Ok(DispatchWorkspaceResultChunkResponse {
+        offset: next_offset,
+        data_base64: base64::engine::general_purpose::STANDARD.encode(&buffer),
+        eof: next_offset >= size,
     })
 }
 

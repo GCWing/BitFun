@@ -499,28 +499,49 @@ pub async fn pull_result(
         .await?
         .ok_or_else(|| anyhow::anyhow!("Outbound dispatch job was not found"))?;
     let DispatchTarget::Ssh { connection_id, .. } = &record.target else {
-        anyhow::bail!("Pulling dispatch results requires an SSH target");
+        anyhow::bail!("SSH dispatch result pull requires an SSH target");
     };
     let destination = result_bundle_path(store, &request.job_id);
     let response =
         dispatch_ssh::pull_result(manager, connection_id, &request.job_id, &destination).await?;
-    // Persist the summary next to the bundle so applying reads both from disk.
-    // The digests that decide whether a local file may be overwritten must come
-    // from the verified pull, not from whatever the caller hands back later.
-    if let Some(summary) = response.get("summary") {
-        let summary_path = result_summary_path(store, &request.job_id);
-        std::fs::write(&summary_path, serde_json::to_vec(summary)?)
-            .with_context(|| format!("record result summary {}", summary_path.display()))?;
-    }
+    record_result_summary(store, &request.job_id, &response)?;
     Ok(response)
 }
 
-fn result_bundle_path(store: &OutboundDispatchStore, job_id: &str) -> std::path::PathBuf {
-    store.root().join(".results").join(format!("{job_id}.tar.gz"))
+/// Persist the summary next to the bundle so applying reads both from disk.
+///
+/// The digests that decide whether a local file may be overwritten must come
+/// from the verified pull, not from whatever the caller hands back later.
+pub(super) fn record_result_summary(
+    store: &OutboundDispatchStore,
+    job_id: &str,
+    response: &Value,
+) -> anyhow::Result<()> {
+    if let Some(summary) = response.get("summary") {
+        // Owner-only like the bundle beside it: this records which paths of the
+        // user's workspace changed.
+        let summary_path = result_summary_path(store, job_id);
+        dispatch_ssh::write_private_file(&summary_path, &serde_json::to_vec(summary)?)
+            .with_context(|| format!("record result summary {}", summary_path.display()))?;
+    }
+    Ok(())
+}
+
+pub(super) fn result_bundle_path(
+    store: &OutboundDispatchStore,
+    job_id: &str,
+) -> std::path::PathBuf {
+    store
+        .root()
+        .join(super::OUTBOUND_RESULTS_DIR)
+        .join(format!("{job_id}.tar.gz"))
 }
 
 fn result_summary_path(store: &OutboundDispatchStore, job_id: &str) -> std::path::PathBuf {
-    store.root().join(".results").join(format!("{job_id}.json"))
+    store
+        .root()
+        .join(super::OUTBOUND_RESULTS_DIR)
+        .join(format!("{job_id}.json"))
 }
 
 /// Apply a pulled result bundle to a local workspace.

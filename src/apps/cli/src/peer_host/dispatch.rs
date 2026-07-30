@@ -131,6 +131,8 @@ fn dispatch_target_verb(command: &str) -> Option<&'static str> {
         "dispatch_target_workspace_begin" => Some("workspace-begin"),
         "dispatch_target_workspace_chunk" => Some("workspace-chunk"),
         "dispatch_target_workspace_commit" => Some("workspace-commit"),
+        "dispatch_target_workspace_result" => Some("workspace-result"),
+        "dispatch_target_workspace_result_chunk" => Some("workspace-result-chunk"),
         _ => None,
     }
 }

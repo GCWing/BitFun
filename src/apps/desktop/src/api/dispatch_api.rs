@@ -14,7 +14,8 @@ use bitfun_core::service::dispatch::{
     cancel_device_dispatch, cancel_dispatch, cancel_dispatch_cli_install,
     get_device_dispatch_status, get_dispatch_status, list_device_dispatch_jobs, list_dispatch_jobs,
     list_dispatch_targets, poll_dispatch_cli_install, probe_device_dispatch_target,
-    probe_dispatch_target, pull_dispatch_result, start_dispatch_cli_install,
+    probe_dispatch_target, pull_device_dispatch_result, pull_dispatch_result,
+    start_dispatch_cli_install,
     start_dispatch_cli_source_build, submit_device_dispatch, submit_dispatch,
     sync_dispatch_model_config,
     DeviceDispatchRpc, DispatchAnswerRequest, DispatchAppendRequest, DispatchConnectionRequest,
@@ -277,6 +278,20 @@ pub async fn dispatch_pull_result(
     request: DispatchJobRequest,
 ) -> Result<Value, String> {
     let store = OutboundDispatchStore::new(path_manager.as_ref());
+    // Both transports stage the bundle and its summary identically, so the
+    // apply step below is transport-blind.
+    if matches!(
+        store
+            .get(&request.job_id)
+            .await
+            .map_err(|error| error.to_string())?
+            .map(|record| record.target),
+        Some(DispatchTarget::Device { .. })
+    ) {
+        return pull_device_dispatch_result(&AccountDeviceDispatchRpc, &store, request)
+            .await
+            .map_err(|error| error.to_string());
+    }
     let manager = state
         .get_ssh_manager_async()
         .await
