@@ -75,6 +75,16 @@ impl SkillRegistry {
         }
     }
 
+    fn parse_skill_markdown(
+        path: String,
+        content: &str,
+        location: SkillLocation,
+        with_content: bool,
+        source_slot: &str,
+    ) -> Result<SkillData, bitfun_agent_runtime::skills::SkillParseError> {
+        SkillData::from_markdown_for_source_slot(path, content, location, with_content, source_slot)
+    }
+
     pub fn global() -> &'static Self {
         SKILL_REGISTRY.get_or_init(Self::new)
     }
@@ -309,11 +319,12 @@ impl SkillRegistry {
             }
 
             match fs::read_to_string(&skill_md_path).await {
-                Ok(content) => match SkillData::from_markdown(
+                Ok(content) => match Self::parse_skill_markdown(
                     path.to_string_lossy().to_string(),
                     &content,
                     entry.level,
                     false,
+                    entry.slot,
                 ) {
                     Ok(mut skill_data) => {
                         Self::apply_local_openai_policy(&mut skill_data, &path).await;
@@ -402,11 +413,12 @@ impl SkillRegistry {
                 }
 
                 match fs.read_file_text(&skill_md_path).await {
-                    Ok(content) => match SkillData::from_markdown(
+                    Ok(content) => match Self::parse_skill_markdown(
                         item.path.clone(),
                         &content,
                         SkillLocation::Project,
                         false,
+                        entry.slot,
                     ) {
                         Ok(mut skill_data) => {
                             Self::apply_remote_openai_policy(&mut skill_data, fs, &item.path).await;
@@ -807,8 +819,14 @@ impl SkillRegistry {
             .await
             .map_err(|error| BitFunError::tool(format!("Failed to read skill file: {}", error)))?;
 
-        let mut data = SkillData::from_markdown(info.path.clone(), &content, info.level, true)
-            .map_err(|error| BitFunError::tool(error.to_string()))?;
+        let mut data = Self::parse_skill_markdown(
+            info.path.clone(),
+            &content,
+            info.level,
+            true,
+            &info.source_slot,
+        )
+        .map_err(|error| BitFunError::tool(error.to_string()))?;
         data.key = info.key;
         data.source_slot = info.source_slot;
         data.dir_name = info.dir_name;
@@ -843,8 +861,14 @@ impl SkillRegistry {
             .await
             .map_err(|error| BitFunError::tool(format!("Failed to read skill file: {}", error)))?;
 
-        let mut data = SkillData::from_markdown(info.path.clone(), &content, info.level, true)
-            .map_err(|error| BitFunError::tool(error.to_string()))?;
+        let mut data = Self::parse_skill_markdown(
+            info.path.clone(),
+            &content,
+            info.level,
+            true,
+            &info.source_slot,
+        )
+        .map_err(|error| BitFunError::tool(error.to_string()))?;
         data.key = info.key;
         data.source_slot = info.source_slot;
         data.dir_name = info.dir_name;
@@ -868,8 +892,14 @@ impl SkillRegistry {
             .await?;
 
         let content = Self::read_skill_md_for_remote_merge(&info, fs).await?;
-        let mut data = SkillData::from_markdown(info.path.clone(), &content, info.level, true)
-            .map_err(|error| BitFunError::tool(error.to_string()))?;
+        let mut data = Self::parse_skill_markdown(
+            info.path.clone(),
+            &content,
+            info.level,
+            true,
+            &info.source_slot,
+        )
+        .map_err(|error| BitFunError::tool(error.to_string()))?;
         data.key = info.key;
         data.source_slot = info.source_slot;
         data.dir_name = info.dir_name;
@@ -901,8 +931,14 @@ impl SkillRegistry {
             })?;
 
         let content = Self::read_skill_md_for_remote_merge(&info, fs).await?;
-        let mut data = SkillData::from_markdown(info.path.clone(), &content, info.level, true)
-            .map_err(|error| BitFunError::tool(error.to_string()))?;
+        let mut data = Self::parse_skill_markdown(
+            info.path.clone(),
+            &content,
+            info.level,
+            true,
+            &info.source_slot,
+        )
+        .map_err(|error| BitFunError::tool(error.to_string()))?;
         data.key = info.key;
         data.source_slot = info.source_slot;
         data.dir_name = info.dir_name;

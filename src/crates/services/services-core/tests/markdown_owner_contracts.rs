@@ -1,4 +1,7 @@
-use bitfun_services_core::markdown::{expand_prompt_template_arguments, FrontMatterMarkdown};
+use bitfun_services_core::markdown::{
+    expand_prompt_template_arguments, expand_prompt_template_arguments_with_names,
+    FrontMatterMarkdown,
+};
 use std::fs;
 
 #[test]
@@ -82,5 +85,49 @@ fn prompt_arguments_preserve_backslashes_before_non_placeholders() {
             "alpha",
         ),
         "Keep \\$HOME, \\$ARGUMENTS[foo], and \\${CLAUDE_SESSION_ID}\n\nARGUMENTS: alpha"
+    );
+}
+
+#[test]
+fn prompt_arguments_expand_declared_names_from_the_existing_argument_list() {
+    assert_eq!(
+        expand_prompt_template_arguments_with_names(
+            "Deploy $service to $environment; positional $0 / $1.",
+            "api \"staging west\"",
+            &["service".to_string(), "environment".to_string()],
+        ),
+        "Deploy api to staging west; positional api / staging west."
+    );
+}
+
+#[test]
+fn prompt_arguments_expand_missing_names_to_empty_and_preserve_unknown_names() {
+    assert_eq!(
+        expand_prompt_template_arguments_with_names(
+            "Known: <$target>; missing: <$focus>; unknown: <$owner>.",
+            "src/lib.rs",
+            &["target".to_string(), "focus".to_string()],
+        ),
+        "Known: <src/lib.rs>; missing: <>; unknown: <$owner>."
+    );
+}
+
+#[test]
+fn prompt_arguments_preserve_escaped_declared_names() {
+    assert_eq!(
+        expand_prompt_template_arguments_with_names(
+            r"Use $target and show \$target; keep \\$target expandable.",
+            "src/lib.rs",
+            &["target".to_string()],
+        ),
+        r"Use src/lib.rs and show $target; keep \\src/lib.rs expandable."
+    );
+}
+
+#[test]
+fn existing_prompt_argument_api_remains_compatible_without_declared_names() {
+    assert_eq!(
+        expand_prompt_template_arguments("Keep $target and use $0", "alpha"),
+        "Keep $target and use alpha"
     );
 }

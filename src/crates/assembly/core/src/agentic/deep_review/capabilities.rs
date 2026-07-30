@@ -335,8 +335,14 @@ async fn load_discovered_review_skill(
             .await
             .map_err(|error| BitFunError::tool(format!("Failed to read review skill: {error}")))?
     };
-    let mut data = SkillData::from_markdown(info.path.clone(), &markdown, info.level, true)
-        .map_err(|error| BitFunError::tool(error.to_string()))?;
+    let mut data = SkillData::from_markdown_for_source_slot(
+        info.path.clone(),
+        &markdown,
+        info.level,
+        true,
+        &info.source_slot,
+    )
+    .map_err(|error| BitFunError::tool(error.to_string()))?;
     data.key = info.key.clone();
     data.source_slot = info.source_slot.clone();
     data.dir_name = info.dir_name.clone();
@@ -513,6 +519,30 @@ mod tests {
         assert!(rendered.contains("Testing"));
         assert!(rendered.len() < 800);
         assert!(!rendered.contains("full guidance"));
+    }
+
+    #[tokio::test]
+    async fn catalog_loads_claude_review_skill_with_source_semantics() {
+        let temp = tempfile::tempdir().expect("temporary workspace");
+        let skill_dir = temp
+            .path()
+            .join(".claude")
+            .join("skills")
+            .join("code-review-claude");
+        std::fs::create_dir_all(&skill_dir).expect("skill directory");
+        std::fs::write(
+            skill_dir.join("SKILL.md"),
+            "---\narguments: target\n---\nReview $target for Claude compatibility.\n",
+        )
+        .expect("skill markdown");
+        let context = local_tool_context(temp.path().to_path_buf());
+
+        let descriptor = review_capability_catalog(&context)
+            .await
+            .into_iter()
+            .find(|descriptor| descriptor.key().contains("code-review-claude"));
+
+        assert!(descriptor.is_some());
     }
 
     #[tokio::test]

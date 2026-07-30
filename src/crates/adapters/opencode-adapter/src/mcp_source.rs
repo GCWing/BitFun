@@ -841,7 +841,7 @@ fn prepare_import_projection(
             url,
             headers,
             oauth_enabled,
-        } if headers.is_empty() && oauth_enabled && import_safe_https_url(&url) => {
+        } if headers.is_empty() && oauth_enabled => {
             PreparedExternalMcpImportTransport::Remote { url }
         }
         _ => {
@@ -1037,17 +1037,6 @@ fn sanitized_https_url(value: &str) -> Result<String, String> {
     Ok(url.to_string())
 }
 
-fn import_safe_https_url(value: &str) -> bool {
-    url::Url::parse(value).is_ok_and(|url| {
-        url.scheme() == "https"
-            && url.host_str().is_some()
-            && url.username().is_empty()
-            && url.password().is_none()
-            && url.query().is_none()
-            && url.fragment().is_none()
-    })
-}
-
 struct ConfigLayer {
     path: PathBuf,
     scope: ExternalSourceScope,
@@ -1066,32 +1055,28 @@ fn parse_config_layer(
     path: &Path,
 ) -> ParsedConfigLayer {
     match read_bounded_text(path, MAX_CONFIG_FILE_BYTES) {
-        Ok(BoundedTextRead::TooLarge) => {
-            ParsedConfigLayer {
-                servers: BTreeMap::new(),
-                diagnostics: vec![ExternalSourceDiagnostic::error(
-                    "opencode.mcp.config_too_large",
-                    "OpenCode config exceeds the 1 MiB compatibility limit",
-                    None,
-                )
-                .with_asset_kind(ExternalSourceAssetKind::Mcp)],
-                content_version: "too-large".to_string(),
-                fatal: true,
-            }
-        }
-        Ok(BoundedTextRead::InvalidUtf8) => {
-            ParsedConfigLayer {
-                servers: BTreeMap::new(),
-                diagnostics: vec![ExternalSourceDiagnostic::error(
-                    "opencode.mcp.config_invalid_utf8",
-                    "OpenCode config is not valid UTF-8",
-                    None,
-                )
-                .with_asset_kind(ExternalSourceAssetKind::Mcp)],
-                content_version: "invalid-utf8".to_string(),
-                fatal: true,
-            }
-        }
+        Ok(BoundedTextRead::TooLarge) => ParsedConfigLayer {
+            servers: BTreeMap::new(),
+            diagnostics: vec![ExternalSourceDiagnostic::error(
+                "opencode.mcp.config_too_large",
+                "OpenCode config exceeds the 1 MiB compatibility limit",
+                None,
+            )
+            .with_asset_kind(ExternalSourceAssetKind::Mcp)],
+            content_version: "too-large".to_string(),
+            fatal: true,
+        },
+        Ok(BoundedTextRead::InvalidUtf8) => ParsedConfigLayer {
+            servers: BTreeMap::new(),
+            diagnostics: vec![ExternalSourceDiagnostic::error(
+                "opencode.mcp.config_invalid_utf8",
+                "OpenCode config is not valid UTF-8",
+                None,
+            )
+            .with_asset_kind(ExternalSourceAssetKind::Mcp)],
+            content_version: "invalid-utf8".to_string(),
+            fatal: true,
+        },
         Ok(BoundedTextRead::Content(content)) => {
             let content_version = content_version(revision_key, path, content.as_bytes());
             let value = match serde_json::from_str::<Value>(&strip_jsonc(&content)) {
@@ -1137,19 +1122,17 @@ fn parse_config_layer(
                 fatal: false,
             }
         }
-        Err(error) => {
-            ParsedConfigLayer {
-                servers: BTreeMap::new(),
-                diagnostics: vec![ExternalSourceDiagnostic::error(
-                    "opencode.mcp.config_unreadable",
-                    format!("Failed to read OpenCode MCP config: {error}"),
-                    None,
-                )
-                .with_asset_kind(ExternalSourceAssetKind::Mcp)],
-                content_version: "unreadable".to_string(),
-                fatal: true,
-            }
-        }
+        Err(error) => ParsedConfigLayer {
+            servers: BTreeMap::new(),
+            diagnostics: vec![ExternalSourceDiagnostic::error(
+                "opencode.mcp.config_unreadable",
+                format!("Failed to read OpenCode MCP config: {error}"),
+                None,
+            )
+            .with_asset_kind(ExternalSourceAssetKind::Mcp)],
+            content_version: "unreadable".to_string(),
+            fatal: true,
+        },
     }
 }
 

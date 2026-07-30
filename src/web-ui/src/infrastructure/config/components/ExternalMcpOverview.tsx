@@ -134,6 +134,9 @@ const ExternalMcpOverview: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [loadFailed, setLoadFailed] = useState(false);
   const [importPlan, setImportPlan] = useState<ExternalMcpImportPlanV1 | null>(null);
+  const [selectedImportCandidateIds, setSelectedImportCandidateIds] = useState<Set<string>>(
+    () => new Set(),
+  );
   const [importBusy, setImportBusy] = useState(false);
   const [importNotice, setImportNotice] = useState<'applied' | 'stale' | 'empty' | 'failed' | null>(null);
   const snapshot = snapshotState?.scope === requestScope ? snapshotState.snapshot : null;
@@ -175,6 +178,7 @@ const ExternalMcpOverview: React.FC = () => {
   useEffect(() => {
     importRequestIdRef.current += 1;
     setImportPlan(null);
+    setSelectedImportCandidateIds(new Set());
     setImportNotice(null);
     setImportBusy(false);
   }, [requestScope]);
@@ -228,6 +232,9 @@ const ExternalMcpOverview: React.FC = () => {
     return scopeRank(leftSource?.record.scope) - scopeRank(rightSource?.record.scope)
       || left.definition.name.localeCompare(right.definition.name);
   }), [snapshot?.mcpServers, sourceByKey]);
+  const mcpEntryByCandidateId = useMemo(() => new Map(
+    (snapshot?.mcpServers ?? []).map((entry) => [entry.candidateId, entry]),
+  ), [snapshot?.mcpServers]);
 
   const hostReadOnly = snapshot !== null
     && !snapshot.hostCapabilities.canMutatePolicy
@@ -239,6 +246,9 @@ const ExternalMcpOverview: React.FC = () => {
   ));
   const eligibleImportItems = (importPlan?.items ?? []).filter((item) => (
     item.disposition === 'eligible' || item.disposition === 'automatic_rename'
+  ));
+  const selectedImportItems = eligibleImportItems.filter((item) => (
+    selectedImportCandidateIds.has(item.candidateId)
   ));
 
   const previewImport = async () => {
@@ -253,6 +263,13 @@ const ExternalMcpOverview: React.FC = () => {
         item.disposition === 'eligible' || item.disposition === 'automatic_rename'
       ));
       setImportPlan(hasEligible ? plan : null);
+      setSelectedImportCandidateIds(new Set(
+        plan.items
+          .filter((item) => (
+            item.disposition === 'eligible' || item.disposition === 'automatic_rename'
+          ))
+          .map((item) => item.candidateId),
+      ));
       if (!hasEligible) setImportNotice('empty');
     } catch (error) {
       if (requestId !== importRequestIdRef.current) return;
@@ -264,7 +281,7 @@ const ExternalMcpOverview: React.FC = () => {
   };
 
   const applyImport = async () => {
-    if (!importSupported || !importPlan || eligibleImportItems.length === 0) return;
+    if (!importSupported || !importPlan || selectedImportItems.length === 0) return;
     const requestId = ++importRequestIdRef.current;
     setImportBusy(true);
     setImportNotice(null);
@@ -272,14 +289,26 @@ const ExternalMcpOverview: React.FC = () => {
       const result = await externalSourcesAPI.applyMcpImport(
         workspacePath || undefined,
         importPlan,
-        eligibleImportItems.map((item) => ({ candidateId: item.candidateId })),
+        selectedImportItems.map((item) => ({ candidateId: item.candidateId })),
       );
       if (requestId !== importRequestIdRef.current) return;
       if (result.outcome.status === 'stale') {
-        setImportPlan(result.outcome.refreshedPlan);
+        const refreshedPlan = result.outcome.refreshedPlan;
+        const refreshedEligibleIds = new Set(
+          refreshedPlan.items
+            .filter((item) => (
+              item.disposition === 'eligible' || item.disposition === 'automatic_rename'
+            ))
+            .map((item) => item.candidateId),
+        );
+        setSelectedImportCandidateIds((current) => new Set(
+          [...current].filter((candidateId) => refreshedEligibleIds.has(candidateId)),
+        ));
+        setImportPlan(refreshedPlan);
         setImportNotice('stale');
       } else {
         setImportPlan(null);
+        setSelectedImportCandidateIds(new Set());
         setImportNotice('applied');
       }
     } catch (error) {
@@ -289,6 +318,22 @@ const ExternalMcpOverview: React.FC = () => {
     } finally {
       if (requestId === importRequestIdRef.current) setImportBusy(false);
     }
+  };
+
+  const cancelImport = () => {
+    setImportPlan(null);
+    setSelectedImportCandidateIds(new Set());
+    setImportNotice(null);
+  };
+
+  const toggleImportCandidate = (candidateId: string) => {
+    if (importBusy) return;
+    setSelectedImportCandidateIds((current) => {
+      const next = new Set(current);
+      if (next.has(candidateId)) next.delete(candidateId);
+      else next.add(candidateId);
+      return next;
+    });
   };
 
   const scopeLabel = (scope: ExternalSourceScope | undefined): string => {
@@ -434,24 +479,56 @@ const ExternalMcpOverview: React.FC = () => {
       {entries.length > 0 && !hostReadOnly && importSupported ? (
         <div className="bitfun-mcp-tools__import" data-testid="external-mcp-import">
           {importPlan ? (
-            <>
-              <p>{t('external.import.confirm', { count: eligibleImportItems.length })}</p>
-              <ul>
-                {eligibleImportItems.map((item) => (
-                  <li key={item.candidateId}>
-                    {item.displayName} → {item.proposedNativeId}
-                  </li>
-                ))}
+            <div className="bitfun-mcp-tools__import-plan">
+              <p>{t('external.import.confirm', { count: selectedImportItems.length })}</p>
+              <ul className="bitfun-mcp-tools__import-list">
+                {eligibleImportItems.map((item) => {
+                  const catalogEntry = mcpEntryByCandidateId.get(item.candidateId);
+                  const source = catalogEntry ? sourceByKey.get(sourceKey(
+                    catalogEntry.definition.id.source.providerId,
+                    catalogEntry.definition.id.source.sourceId,
+                  )) : undefined;
+                  const ecosystemLabel = source
+                    ? ecosystemLabels.get(source.record.ecosystemId) ?? source.record.ecosystemId
+                    : catalogEntry?.definition.id.source.providerId ?? t('external.unknown');
+                  const candidateScopeLabel = scopeLabel(source?.record.scope);
+                  return (
+                    <li key={item.candidateId}>
+                      <label className="bitfun-mcp-tools__import-option">
+                        <input
+                          type="checkbox"
+                          checked={selectedImportCandidateIds.has(item.candidateId)}
+                          disabled={importBusy}
+                          onChange={() => toggleImportCandidate(item.candidateId)}
+                          aria-label={`${item.displayName}, ${ecosystemLabel}, ${candidateScopeLabel}`}
+                        />
+                        <span className="bitfun-mcp-tools__import-option-content">
+                          <span>
+                            {item.displayName} → {item.proposedNativeId}
+                          </span>
+                          <span className="bitfun-mcp-tools__import-option-meta">
+                            <span className="bitfun-collection-item__badge bitfun-mcp-tools__external-source-badge">
+                              {ecosystemLabel}
+                            </span>
+                            <span className="bitfun-collection-item__badge">
+                              {candidateScopeLabel}
+                            </span>
+                          </span>
+                        </span>
+                      </label>
+                    </li>
+                  );
+                })}
               </ul>
               <div className="bitfun-mcp-tools__import-actions">
-                <button type="button" disabled={importBusy || eligibleImportItems.length === 0} onClick={() => void applyImport()}>
+                <button type="button" disabled={importBusy || selectedImportItems.length === 0} onClick={() => void applyImport()}>
                   {t('external.import.apply')}
                 </button>
-                <button type="button" disabled={importBusy} onClick={() => setImportPlan(null)}>
+                <button type="button" disabled={importBusy} onClick={cancelImport}>
                   {t('external.import.cancel')}
                 </button>
               </div>
-            </>
+            </div>
           ) : (
             <button type="button" disabled={importBusy} onClick={() => void previewImport()}>
               {t('external.import.preview')}

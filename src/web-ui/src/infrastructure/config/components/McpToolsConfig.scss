@@ -219,3 +219,38 @@
   display: flex;
   gap: 8px;
 }
+
+.bitfun-mcp-tools__import-plan {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: $size-gap-2;
+  min-width: 0;
+}
+
+.bitfun-mcp-tools__import-list {
+  padding: 0;
+  list-style: none;
+}
+
+.bitfun-mcp-tools__import-option {
+  display: flex;
+  align-items: flex-start;
+  gap: $size-gap-2;
+  padding: $size-gap-1 0;
+  cursor: pointer;
+}
+
+.bitfun-mcp-tools__import-option-content {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: $size-gap-1;
+  min-width: 0;
+}
+
+.bitfun-mcp-tools__import-option-meta {
+  display: flex;
+  gap: $size-gap-1;
+  flex-wrap: wrap;
+}

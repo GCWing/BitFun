@@ -894,9 +894,7 @@ fn prepare_import_projection(
         } if environment.is_empty() && working_directory.is_none() => {
             PreparedExternalMcpImportTransport::Local { command, args }
         }
-        PreparedTransportTemplate::Remote { url, headers }
-            if headers.is_empty() && import_safe_https_url(&url) =>
-        {
+        PreparedTransportTemplate::Remote { url, headers } if headers.is_empty() => {
             PreparedExternalMcpImportTransport::Remote { url }
         }
         _ => {
@@ -1041,17 +1039,6 @@ fn sanitized_https_origin(value: &str) -> Result<String, String> {
     url.set_query(None);
     url.set_fragment(None);
     Ok(url.to_string())
-}
-
-fn import_safe_https_url(value: &str) -> bool {
-    url::Url::parse(value).is_ok_and(|url| {
-        url.scheme() == "https"
-            && url.host_str().is_some()
-            && url.username().is_empty()
-            && url.password().is_none()
-            && url.query().is_none()
-            && url.fragment().is_none()
-    })
 }
 
 fn provider_error(suffix: &str, message: &str, transient: bool) -> ExternalSourceProviderError {

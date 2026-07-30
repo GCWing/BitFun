@@ -13,6 +13,16 @@ static PROMPT_ARGUMENT_REGEX: LazyLock<regex::Regex> = LazyLock::new(|| {
 
 /// Expands Claude-compatible prompt arguments without executing dynamic content.
 pub fn expand_prompt_template_arguments(template: &str, arguments: &str) -> String {
+    expand_prompt_template_arguments_with_names(template, arguments, &[])
+}
+
+/// Expands positional and explicitly declared named prompt arguments without
+/// executing dynamic content.
+pub fn expand_prompt_template_arguments_with_names(
+    template: &str,
+    arguments: &str,
+    argument_names: &[String],
+) -> String {
     let arguments_by_position = PROMPT_ARGUMENT_REGEX
         .find_iter(arguments)
         .map(|item| {
@@ -39,7 +49,7 @@ pub fn expand_prompt_template_arguments(template: &str, arguments: &str) -> Stri
             continue;
         }
         if remaining.starts_with(r"\$") {
-            if let Some(length) = prompt_placeholder_length(&remaining[1..]) {
+            if let Some(length) = prompt_placeholder_length(&remaining[1..], argument_names) {
                 expanded.push_str(&remaining[1..length + 1]);
                 cursor += length + 1;
             } else {
@@ -64,6 +74,14 @@ pub fn expand_prompt_template_arguments(template: &str, arguments: &str) -> Stri
             cursor += length;
             continue;
         }
+        if let Some((length, position)) = named_placeholder(remaining, argument_names) {
+            used_placeholder = true;
+            if let Some(argument) = arguments_by_position.get(position) {
+                expanded.push_str(argument);
+            }
+            cursor += length;
+            continue;
+        }
 
         let character = remaining
             .chars()
@@ -80,10 +98,11 @@ pub fn expand_prompt_template_arguments(template: &str, arguments: &str) -> Stri
     expanded.trim().to_string()
 }
 
-fn prompt_placeholder_length(value: &str) -> Option<usize> {
+fn prompt_placeholder_length(value: &str, argument_names: &[String]) -> Option<usize> {
     positional_placeholder(value)
         .map(|(length, _)| length)
         .or_else(|| full_arguments_placeholder_length(value))
+        .or_else(|| named_placeholder(value, argument_names).map(|(length, _)| length))
 }
 
 fn full_arguments_placeholder_length(value: &str) -> Option<usize> {
@@ -112,6 +131,26 @@ fn positional_placeholder(value: &str) -> Option<(usize, Option<usize>)> {
         return None;
     }
     Some((length + 1, indexed[..length].parse::<usize>().ok()))
+}
+
+fn named_placeholder(value: &str, argument_names: &[String]) -> Option<(usize, usize)> {
+    let value = value.strip_prefix('$')?;
+    argument_names
+        .iter()
+        .enumerate()
+        .filter(|(_, name)| value.starts_with(name.as_str()))
+        .filter(|(_, name)| {
+            value[name.len()..]
+                .bytes()
+                .next()
+                .is_none_or(|byte| !is_argument_name_byte(byte))
+        })
+        .max_by_key(|(_, name)| name.len())
+        .map(|(position, name)| (name.len() + 1, position))
+}
+
+fn is_argument_name_byte(byte: u8) -> bool {
+    byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-')
 }
 
 /// Parses and writes Markdown files with YAML front matter.

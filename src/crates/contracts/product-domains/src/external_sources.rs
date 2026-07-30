@@ -876,6 +876,20 @@ impl PreparedExternalMcpImportServer {
             }
             PreparedExternalMcpImportTransport::Remote { url } => {
                 validate_text(url, "prepared MCP import URL")?;
+                let parsed = url::Url::parse(url).map_err(|_| {
+                    ExternalSourceContractError::InvalidIdentifier("prepared MCP import URL")
+                })?;
+                if parsed.scheme() != "https"
+                    || parsed.host_str().is_none()
+                    || !parsed.username().is_empty()
+                    || parsed.password().is_some()
+                    || parsed.query().is_some()
+                    || parsed.fragment().is_some()
+                {
+                    return Err(ExternalSourceContractError::InvalidIdentifier(
+                        "prepared MCP import URL",
+                    ));
+                }
             }
         }
         Ok(())

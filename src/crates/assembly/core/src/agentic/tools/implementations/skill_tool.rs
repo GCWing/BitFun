@@ -8,7 +8,7 @@ use crate::agentic::tools::framework::{
 };
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
-use bitfun_services_core::markdown::expand_prompt_template_arguments;
+use bitfun_services_core::markdown::expand_prompt_template_arguments_with_names;
 use log::debug;
 use serde_json::{json, Value};
 
@@ -300,7 +300,11 @@ impl Tool for SkillTool {
         };
 
         if let Some(arguments) = input.get("arguments").and_then(Value::as_str) {
-            skill_data.content = expand_prompt_template_arguments(&skill_data.content, arguments);
+            skill_data.content = expand_prompt_template_arguments_with_names(
+                &skill_data.content,
+                arguments,
+                &skill_data.argument_names,
+            );
         }
         let location_str = skill_data.location.as_str();
         let result_for_assistant = render_loaded_skill_for_assistant(&skill_data, use_stable_key);
@@ -424,6 +428,56 @@ Use the remote project skill.
         }
     }
 
+    struct ClaudeRemoteFs;
+
+    #[async_trait]
+    impl WorkspaceFileSystem for ClaudeRemoteFs {
+        async fn read_file(&self, path: &str) -> anyhow::Result<Vec<u8>> {
+            Ok(self.read_file_text(path).await?.into_bytes())
+        }
+
+        async fn read_file_text(&self, path: &str) -> anyhow::Result<String> {
+            if path == "/remote/project/.claude/skills/remote-review/SKILL.md" {
+                return Ok(
+                    "---\ndescription: Review a remote target.\narguments: target focus\n---\n\nReview $target for $focus.\n"
+                        .to_string(),
+                );
+            }
+            anyhow::bail!("not found: {}", path)
+        }
+
+        async fn write_file(&self, _path: &str, _contents: &[u8]) -> anyhow::Result<()> {
+            Ok(())
+        }
+
+        async fn exists(&self, path: &str) -> anyhow::Result<bool> {
+            Ok(self.is_dir(path).await? || self.is_file(path).await?)
+        }
+
+        async fn is_file(&self, path: &str) -> anyhow::Result<bool> {
+            Ok(path == "/remote/project/.claude/skills/remote-review/SKILL.md")
+        }
+
+        async fn is_dir(&self, path: &str) -> anyhow::Result<bool> {
+            Ok(matches!(
+                path,
+                "/remote/project/.claude/skills" | "/remote/project/.claude/skills/remote-review"
+            ))
+        }
+
+        async fn read_dir(&self, path: &str) -> anyhow::Result<Vec<WorkspaceDirEntry>> {
+            if path == "/remote/project/.claude/skills" {
+                return Ok(vec![WorkspaceDirEntry {
+                    name: "remote-review".to_string(),
+                    path: "/remote/project/.claude/skills/remote-review".to_string(),
+                    is_dir: true,
+                    is_symlink: false,
+                }]);
+            }
+            Ok(vec![])
+        }
+    }
+
     fn local_context(root: PathBuf) -> crate::agentic::tools::framework::ToolUseContext {
         crate::agentic::tools::framework::ToolUseContext {
             tool_call_id: None,
@@ -485,6 +539,64 @@ Use the remote project skill.
             .as_deref()
             .unwrap_or_default()
             .contains(expected));
+    }
+
+    #[tokio::test]
+    async fn local_claude_skill_uses_source_semantics_for_discovery_load_and_arguments() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let skill_dir = temp.path().join(".claude/skills/deploy-service");
+        fs::create_dir_all(&skill_dir).expect("skill directory");
+        fs::write(
+            skill_dir.join("SKILL.md"),
+            "---\ndescription: Deploy a service.\narguments: service environment\n---\n\nDeploy $service to $environment.\n",
+        )
+        .expect("skill markdown");
+        let context = local_context(temp.path().to_path_buf());
+
+        let visible = SkillRegistry::global()
+            .get_resolved_skills_for_workspace(Some(temp.path()), None)
+            .await;
+        assert!(visible
+            .iter()
+            .any(|skill| { skill.name == "deploy-service" && skill.source_slot == "claude" }));
+
+        let results = SkillTool::new()
+            .call_impl(
+                &json!({
+                    "command": "deploy-service",
+                    "arguments": "api staging"
+                }),
+                &context,
+            )
+            .await
+            .expect("Claude skill should load with the discovery dialect");
+        let ToolResult::Result { data, .. } = &results[0] else {
+            panic!("expected result payload");
+        };
+        assert_eq!(data["content"], "Deploy api to staging.");
+    }
+
+    #[tokio::test]
+    async fn remote_claude_skill_uses_the_same_dialect_for_discovery_and_load() {
+        let registry = SkillRegistry::global();
+        let visible = registry
+            .get_resolved_skills_for_remote_workspace(&ClaudeRemoteFs, "/remote/project", None)
+            .await;
+        assert!(visible
+            .iter()
+            .any(|skill| { skill.name == "remote-review" && skill.source_slot == "claude" }));
+
+        let loaded = registry
+            .find_and_load_skill_for_remote_workspace(
+                "remote-review",
+                &ClaudeRemoteFs,
+                "/remote/project",
+                None,
+            )
+            .await
+            .expect("remote Claude skill should load with the discovery dialect");
+        assert_eq!(loaded.name, "remote-review");
+        assert_eq!(loaded.argument_names, ["target", "focus"]);
     }
 
     #[tokio::test]

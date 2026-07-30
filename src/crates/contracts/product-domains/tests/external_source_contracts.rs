@@ -85,6 +85,37 @@ fn external_mcp_import_contract_keeps_private_values_out_of_debug_and_requests()
     assert!(!encoded.contains("argument"));
 }
 
+#[test]
+fn external_mcp_import_contract_rejects_urls_that_cannot_be_copied_losslessly() {
+    let prepared = |url: &str| PreparedExternalMcpImportServer {
+        id: SourceQualifiedMcpServerId::new(
+            SourceKey::new("codex.mcp", "user-config").unwrap(),
+            "docs",
+        )
+        .unwrap(),
+        behavior_version: "sha256:behavior-v1".to_string(),
+        transport: PreparedExternalMcpImportTransport::Remote {
+            url: url.to_string(),
+        },
+    };
+
+    prepared("https://docs.example.test/mcp")
+        .validate()
+        .unwrap();
+    for url in [
+        "http://docs.example.test/mcp",
+        "https://user@docs.example.test/mcp",
+        "https://user:secret@docs.example.test/mcp",
+        "https://docs.example.test/mcp?token=secret",
+        "https://docs.example.test/mcp#private",
+    ] {
+        assert!(
+            prepared(url).validate().is_err(),
+            "unexpectedly safe: {url}"
+        );
+    }
+}
+
 fn source(provider_id: &str, ecosystem_id: &str, source_id: &str) -> ExternalSourceRecord {
     ExternalSourceRecord {
         key: SourceKey::new(provider_id, source_id).expect("valid source key"),

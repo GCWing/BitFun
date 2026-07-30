@@ -494,10 +494,10 @@ Configuration 只能覆盖产品定义明确允许的默认值；用户插件只
 Plugin/Tool、可执行 Skill/Command、MCP/LSP/Formatter、远程 Reference 等 L2/L3 内容在 OC-R2 完成归属模块保护
 前只发现和展示；完成后仍须在首次启用或能力扩大时确认。它们无需先迁移；
 显式导入用于用户希望取得 BitFun 独立管理快照的场景。当前只落地两个经过评审的窄切片：Desktop 与
-`bitfun mcp import` 可以预览 OpenCode / Claude Code 中语义等价的 MCP 安全声明，只有显式 `--apply` 才原子写入现有
+`bitfun mcp import` 可以预览 OpenCode、Claude Code 与 Codex 中语义等价的 MCP 安全声明，只有显式 `--apply` 才原子写入现有
 BitFun MCP 配置；`bitfun hooks` 和统一 `/hooks` 可预览 Claude Code / Codex 中受支持的同步 command Hook，并用精确
 计划指纹确认后复制到现有原生 Hook 层。两者都不写回来源文件，也不表示通用 Canonical Config 导入已进入 CLI-P1。
-MCP 的 Codex 投影、凭据、header、env、cwd、通用导入记录和 undo 均未实现；Hook 的 OpenCode、非 command 或依赖
+MCP 的凭据、header、env、cwd、通用导入记录和 undo 均未实现；Hook 的 OpenCode、非 command 或依赖
 外部 Runtime 的 handler 仍只静态展示。其他资产在 CLI-P0 仍截止到 Dry-run，只有各自经过评审的 apply 切片才能写入：
 
 ```text
@@ -511,6 +511,13 @@ Hook C0：脱敏发现 -> 精确命令预览 | 指纹确认 -> 原子发布本�
 统一来源与插件状态入口。MCP 快照入口固定为 `bitfun mcp import`，Hook 快照入口固定为 `bitfun hooks`；其他资产的命令名在有真实调用方时再固定。非交互命令只有在当前操作实际依赖待确认资产时才
 返回类型化 `action-required`；无关待办只进入结构化状态或 `stderr` 摘要，不等待不可见输入，也不自动批准。
 当前只能静态预览的 custom tool 名称只显示“已发现，未执行”。
+
+Codex MCP 快照沿用同一 `bitfun mcp import` 心智：local stdio 只在没有 environment 且无需 effective working directory
+时接纳；显式 cwd 或当前 workspace 形成的隐式 cwd 都返回“需要设置”，避免导入后改用 BitFun 进程目录。remote 只接纳无
+userinfo/query/fragment/header/bearer 和额外 OAuth 语义的纯 HTTPS URL；其他字段返回“需要设置”或“不支持”，不做降级
+复制。导入结果仍为 disabled、`autoStart: false`。Desktop 在已有导入卡内默认选中全部 eligible 项并允许逐项取消；
+plan stale 后只保留旧选择与新 eligible 项的交集，新候选不自动选中。CLI 保持默认全量和重复 `--candidate` 缩小集合，
+仅在展示名重复时附带既有 candidate ID 消歧，不新增生态专用命令。
 
 导入预览只使用四种用户可读结论：可直接使用、需要转换、会发生功能降级、输入无效。每项同时说明是原地
 引用、写入 BitFun 配置、继续保持外部来源还是不支持；不得用“已映射”推导为已写入、已信任或已启用。
@@ -545,7 +552,8 @@ Hook C0：脱敏发现 -> 精确命令预览 | 指纹确认 -> 原子发布本�
 报告也不属于当前实现。
 
 现有对 `.claude/.codex/.opencode/.agents` Skill 根的直接发现已经保留来源身份和全局/项目使用范围，并在 GUI/TUI
-展示来源和默认覆盖状态，模式配置再展示实际采用项；固定根顺序保持为 Skill Registry 的独立回归契约。
+展示来源和默认覆盖状态，模式配置再展示实际采用项；固定根顺序保持为 Skill Registry 的独立回归契约。Registry 仅按
+既有 source slot 在内部选择来源方言，不向用户增加主选择器，也不让本地与 Remote 分支各自猜测路径。
 Skill Registry 还保留来源资产声明的隐式调用意图：Claude `SKILL.md` 的 `disable-model-invocation: true` 与 Codex
 `agents/openai.yaml` 的 `policy.allow_implicit_invocation: false` 都会让 Skill 不进入模型自动目录，但不影响 `/skills`、
 模式配置和显式加载。Claude `user-invocable: false` 与上述模型调用策略相互独立：它只让 Skill 不进入 Web/CLI 的用户
@@ -558,13 +566,20 @@ Skill Registry 还保留来源资产声明的隐式调用意图：Claude `SKILL.
 分组以及 `\$` 转义；缺失的位置参数保留原占位符，模板没有未转义占位符时才追加 `ARGUMENTS:` 段。该展开器只处理
 字符串，不执行命令、脚本或动态变量。未携带 `arguments` 的旧工具调用保持原 Skill 正文不变。
 
+Claude Skill 使用目录名作为稳定调用身份；frontmatter `description` 可缺省并回退正文首个非空段落，可选
+`when_to_use` 只能与已有描述合并，合并后限制为 1536 个 Unicode 字符。`arguments` 可声明为空白分隔字符串或字符串列表，并按顺序把
+`$name` 绑定到同一个调用参数列表；缺失命名参数展开为空，位置参数兼容规则不变。Codex Skill 在缺少 `name` 时回退
+目录名，但仍要求 `description`。`.agents/.opencode/.bitfun/.cursor` 继续使用原有严格语义。Claude `allowed-tools` 不授予
+预批准；`context`/`fork`、`agent`、`model`、`effort`、`hooks`、`paths`、`shell`、`runtime` 及动态 shell/runtime 变量等未接通行为会
+整体拒绝加载，而不是静默忽略后部分执行。
+
 这项能力不新增导入记录、来源图、后台 watcher 或第二套刷新生命周期。用户只需要一个手动入口：`/reload` 同时刷新
 Skill Registry 并失效当前 Session 的 Workspace Instructions 缓存；`/reload skills` 与 `/reload instructions` 用于只刷新
 一类内容。Desktop、Embedded CLI 与 Shared TUI 共用同一 core 协调入口，但 Skill Registry 刷新和 Session
 `UserContext` 缓存失效仍由各自既有 owner 完成。指令变更从下一条消息开始生效；运行期不承诺文件监听或当前生成中的
 消息热替换。缓存 generation 会拒绝活动 Turn 在失效之后写回的旧构建结果；旧 `/reload-skills` 输入仅作为隐藏兼容别名
 映射到 `/reload skills`，不增加第二个命令入口。
-本切片也不实现 `allowed-tools`、`context`、`fork`、`agent`、`model`、命名参数、动态 shell/runtime 变量、URL、祖先目录
+本切片也不实现 `allowed-tools` 的权限预批准、`context`、`fork`、`agent`、`model`、动态 shell/runtime 变量、URL、祖先目录
 级联、插件 Runtime 或 OpenCode 复杂 Hook。后续只有在存在稳定消费方和独立安全边界时才扩展这些语义。
 
 Skill 说明和索引可按 L1 处理，脚本、URL 和外部依赖按 L2 确认；显式导入仍不得复制凭据值。MCP 启用状态按

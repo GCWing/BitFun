@@ -5,6 +5,7 @@ use bitfun_product_domains::external_sources::{
     EXTERNAL_MCP_IMPORT_SCHEMA_V1,
 };
 use clap::ValueEnum;
+use std::collections::BTreeMap;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 pub(crate) enum McpImportOutputFormat {
@@ -117,10 +118,27 @@ fn render_plan(plan: &ExternalMcpImportPlanV1) -> String {
         "{} external MCP server(s) can be imported:",
         eligible.len()
     )];
+    let display_name_counts = eligible.iter().fold(BTreeMap::new(), |mut counts, item| {
+        *counts.entry(item.display_name.as_str()).or_insert(0usize) += 1;
+        counts
+    });
     for item in eligible {
+        let display_name = crate::plugin_diagnostics::escape_terminal_text(&item.display_name);
+        let display_name = if display_name_counts
+            .get(item.display_name.as_str())
+            .is_some_and(|count| *count > 1)
+        {
+            format!(
+                "{} [{}]",
+                display_name,
+                crate::plugin_diagnostics::escape_terminal_text(&item.candidate_id)
+            )
+        } else {
+            display_name
+        };
         lines.push(format!(
             "- {} -> {}",
-            crate::plugin_diagnostics::escape_terminal_text(&item.display_name),
+            display_name,
             crate::plugin_diagnostics::escape_terminal_text(
                 item.proposed_native_id.as_deref().unwrap_or("unavailable")
             )
@@ -146,4 +164,63 @@ fn operation_error(
     error: bitfun_product_domains::external_sources::ExternalSourceOperationError,
 ) -> anyhow::Error {
     anyhow!("{}: {}", error.code.as_str(), error.detail)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bitfun_product_domains::external_sources::{
+        ExternalMcpImportPlanItemV1, ExternalMcpTransportKind,
+    };
+
+    fn item(
+        candidate_id: &str,
+        display_name: &str,
+        native_id: &str,
+    ) -> ExternalMcpImportPlanItemV1 {
+        ExternalMcpImportPlanItemV1 {
+            candidate_id: candidate_id.to_string(),
+            display_name: display_name.to_string(),
+            transport: ExternalMcpTransportKind::LocalStdio,
+            proposed_native_id: Some(native_id.to_string()),
+            disposition: ExternalMcpImportDispositionV1::Eligible,
+            reason_code: None,
+        }
+    }
+
+    #[test]
+    fn render_plan_adds_candidate_ids_only_for_duplicate_display_names() {
+        let plan = ExternalMcpImportPlanV1 {
+            schema_version: EXTERNAL_MCP_IMPORT_SCHEMA_V1,
+            plan_fingerprint: "plan".to_string(),
+            items: vec![
+                item("opencode::user::docs", "Docs", "docs"),
+                item("codex::project::docs", "Docs", "docs-codex"),
+                item("claude::user::search", "Search", "search"),
+            ],
+        };
+
+        let rendered = render_plan(&plan);
+
+        assert!(rendered.contains("- Docs [opencode::user::docs] -> docs"));
+        assert!(rendered.contains("- Docs [codex::project::docs] -> docs-codex"));
+        assert!(rendered.contains("- Search -> search"));
+        assert!(!rendered.contains("Search [claude::user::search]"));
+    }
+
+    #[test]
+    fn render_plan_ignores_ineligible_duplicate_names_when_deciding_labels() {
+        let mut ineligible = item("old::docs", "Docs", "docs-old");
+        ineligible.disposition = ExternalMcpImportDispositionV1::AlreadyImported;
+        let plan = ExternalMcpImportPlanV1 {
+            schema_version: EXTERNAL_MCP_IMPORT_SCHEMA_V1,
+            plan_fingerprint: "plan".to_string(),
+            items: vec![item("codex::docs", "Docs", "docs"), ineligible],
+        };
+
+        let rendered = render_plan(&plan);
+
+        assert!(rendered.contains("- Docs -> docs"));
+        assert!(!rendered.contains("Docs [codex::docs]"));
+    }
 }

@@ -20,7 +20,7 @@ bitfun sessions list
 bitfun usage
 bitfun doctor
 bitfun health
-bitfun mcp import                       # preview safe OpenCode / Claude Code MCP declarations
+bitfun mcp import                       # preview safe OpenCode / Claude Code / Codex MCP declarations
 bitfun mcp import --apply               # copy eligible declarations as disabled native entries
 bitfun mcp import --apply --candidate <candidate-id>  # repeat to select a subset
 bitfun mcp import --apply --candidate <candidate-id> --native-id <native-id>
@@ -30,11 +30,11 @@ bitfun update --check                   # report only; do not install
 ```
 
 `bitfun mcp import` is an explicit snapshot operation, not continuous sync. It
-does not copy credentials, headers, environment values, or working directories,
-and Codex MCP import is not supported in the current slice. Apply revalidates the
-preview and never overwrites an existing native entry; imported entries remain
-disabled until reviewed and enabled through the existing MCP manager. Use
-`--format json` for the versioned machine-readable plan or result.
+does not copy credentials, headers, environment values, or explicit working
+directories. Apply revalidates the preview and never overwrites an existing
+native entry; imported entries remain disabled until reviewed and enabled
+through the existing MCP manager. Use `--format json` for the versioned
+machine-readable plan or result.
 
 Official Linux archive installations check for updates before interactive TUI
 startup at most once every six hours. That check only fetches the release

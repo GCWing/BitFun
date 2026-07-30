@@ -8,9 +8,10 @@ use bitfun_agent_runtime::skills::{
     resolve_default_hidden_builtin_for_explicit_invocation, resolve_skill_default_enabled_for_mode,
     resolve_skill_state_for_mode, resolve_user_config_skill_root, resolve_visible_skills,
     sort_skills, ExplicitSkillInvocationResolution, ModeSkillStateReason, SkillCandidate,
-    SkillData, SkillInfo, SkillLocation, UserModeSkillOverrides, BITFUN_SYSTEM_SKILL_DIR,
-    BITFUN_SYSTEM_SKILL_SLOT, BITFUN_USER_SKILL_SLOT, PROJECT_SKILL_KEY_PREFIX,
-    PROJECT_SKILL_ROOTS, USER_CONFIG_SKILL_ROOTS, USER_HOME_SKILL_ROOTS, USER_SKILL_KEY_PREFIX,
+    SkillData, SkillInfo, SkillLocation, SkillParseError, UserModeSkillOverrides,
+    BITFUN_SYSTEM_SKILL_DIR, BITFUN_SYSTEM_SKILL_SLOT, BITFUN_USER_SKILL_SLOT,
+    PROJECT_SKILL_KEY_PREFIX, PROJECT_SKILL_ROOTS, USER_CONFIG_SKILL_ROOTS, USER_HOME_SKILL_ROOTS,
+    USER_SKILL_KEY_PREFIX,
 };
 
 fn builtin_skill(dir_name: &str) -> SkillInfo {
@@ -53,6 +54,207 @@ fn custom_user_skill(dir_name: &str) -> SkillInfo {
         allow_user_invocation: true,
         argument_hint: None,
     }
+}
+
+#[test]
+fn skill_source_dialect_is_derived_from_the_stable_source_slot() {
+    let markdown = "---\ndescription: Directory fallback.\n---\n\nBody.\n";
+    for source_slot in ["claude", "home.claude", "codex", "home.codex"] {
+        let parsed = SkillData::from_markdown_for_source_slot(
+            "/workspace/root/slot-fallback".to_string(),
+            markdown,
+            SkillLocation::Project,
+            false,
+            source_slot,
+        )
+        .unwrap_or_else(|error| panic!("unexpected dialect for {source_slot}: {error}"));
+        assert_eq!(parsed.name, "slot-fallback");
+    }
+    for source_slot in ["bitfun", "cursor", "opencode", "agents"] {
+        assert!(SkillData::from_markdown_for_source_slot(
+            "/workspace/root/strict".to_string(),
+            markdown,
+            SkillLocation::Project,
+            false,
+            source_slot,
+        )
+        .is_err());
+    }
+}
+
+#[test]
+fn claude_skill_uses_directory_identity_and_static_metadata_fallbacks() {
+    let markdown = r#"---
+name: ignored-display-name
+when_to_use: Use for focused security reviews.
+arguments:
+  - target
+  - focus
+allowed-tools: Read, Grep
+---
+
+Review a change without modifying it.
+
+Additional workflow details.
+"#;
+
+    let data = SkillData::from_markdown_for_source_slot(
+        "/workspace/.claude/skills/security-review".to_string(),
+        markdown,
+        SkillLocation::Project,
+        true,
+        "claude",
+    )
+    .expect("supported Claude skill should parse");
+
+    assert_eq!(data.name, "security-review");
+    assert!(data
+        .description
+        .starts_with("Review a change without modifying it."));
+    assert!(data
+        .description
+        .contains("Use for focused security reviews."));
+    assert!(data.description.chars().count() <= 1536);
+    assert_eq!(data.argument_names, ["target", "focus"]);
+    assert!(data.content.contains("Additional workflow details."));
+}
+
+#[test]
+fn claude_skill_accepts_whitespace_argument_names_and_explicit_description() {
+    let markdown = r#"---
+description: Deploy a selected service.
+arguments: service environment
+---
+
+Deploy $service to $environment.
+"#;
+
+    let data = SkillData::from_markdown_for_source_slot(
+        "/workspace/.claude/skills/deploy".to_string(),
+        markdown,
+        SkillLocation::Project,
+        true,
+        "claude",
+    )
+    .expect("Claude string arguments should parse");
+
+    assert_eq!(data.name, "deploy");
+    assert_eq!(data.description, "Deploy a selected service.");
+    assert_eq!(data.argument_names, ["service", "environment"]);
+}
+
+#[test]
+fn claude_when_to_use_cannot_replace_a_missing_description() {
+    let error = SkillData::from_markdown_for_source_slot(
+        "/workspace/.claude/skills/empty".to_string(),
+        "---\nwhen_to_use: Use for empty inputs.\n---\n",
+        SkillLocation::Project,
+        false,
+        "claude",
+    )
+    .expect_err("when_to_use only supplements a description");
+
+    assert_eq!(error, SkillParseError::MissingField("description"));
+}
+
+#[test]
+fn claude_skill_rejects_unavailable_runtime_semantics() {
+    for field in [
+        "context: fork",
+        "agent: Explore",
+        "model: opus",
+        "effort: high",
+        "hooks: {}",
+        "paths: src/**",
+        "shell: bash",
+        "runtime: node",
+        "background: true",
+        "disallowed-tools: Write",
+    ] {
+        let markdown =
+            format!("---\ndescription: Unsupported behavior.\n{field}\n---\n\nDo work.\n");
+        let error = SkillData::from_markdown_for_source_slot(
+            "/workspace/.claude/skills/unsafe".to_string(),
+            &markdown,
+            SkillLocation::Project,
+            true,
+            "claude",
+        )
+        .expect_err("unsupported Claude behavior must fail closed");
+        assert!(matches!(error, SkillParseError::InvalidFormat(_)));
+    }
+
+    for body in [
+        "Use ${CLAUDE_SESSION_ID}.",
+        "Use ${CLAUDE_EFFORT}.",
+        "Read ${CLAUDE_SKILL_DIR}/data.",
+        "Run !`git status` before continuing.",
+    ] {
+        let markdown = format!("---\ndescription: Dynamic behavior.\n---\n\n{body}\n");
+        assert!(SkillData::from_markdown_for_source_slot(
+            "/workspace/.claude/skills/dynamic".to_string(),
+            &markdown,
+            SkillLocation::Project,
+            true,
+            "claude",
+        )
+        .is_err());
+    }
+}
+
+#[test]
+fn claude_skill_validates_argument_names_without_a_generic_schema() {
+    for arguments in [
+        "arguments: target target",
+        "arguments: target/path",
+        "arguments:\n  - target\n  - 42",
+    ] {
+        let markdown = format!("---\ndescription: Invalid arguments.\n{arguments}\n---\n\nBody.\n");
+        assert!(SkillData::from_markdown_for_source_slot(
+            "/workspace/.claude/skills/invalid-arguments".to_string(),
+            &markdown,
+            SkillLocation::Project,
+            false,
+            "claude",
+        )
+        .is_err());
+    }
+}
+
+#[test]
+fn codex_skill_falls_back_to_directory_name_but_keeps_description_required() {
+    let data = SkillData::from_markdown_for_source_slot(
+        "/workspace/.codex/skills/review".to_string(),
+        "---\ndescription: Review a change.\n---\n\nReview carefully.\n",
+        SkillLocation::Project,
+        true,
+        "codex",
+    )
+    .expect("Codex skill should use its directory name");
+    assert_eq!(data.name, "review");
+    assert_eq!(data.description, "Review a change.");
+
+    let missing_description = SkillData::from_markdown_for_source_slot(
+        "/workspace/.codex/skills/review".to_string(),
+        "---\nname: review\n---\n\nReview carefully.\n",
+        SkillLocation::Project,
+        false,
+        "codex",
+    )
+    .expect_err("Codex description remains required");
+    assert_eq!(
+        missing_description,
+        SkillParseError::MissingField("description")
+    );
+
+    let strict = SkillData::from_markdown(
+        "/workspace/.agents/skills/review".to_string(),
+        "---\ndescription: Review a change.\n---\n\nReview carefully.\n",
+        SkillLocation::Project,
+        false,
+    )
+    .expect_err("Agent Skills roots keep strict name requirements");
+    assert_eq!(strict, SkillParseError::MissingField("name"));
 }
 
 fn project_skill(dir_name: &str) -> SkillInfo {
