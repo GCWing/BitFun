@@ -100,8 +100,11 @@ describe('WorkspaceListSection layout styles', () => {
 
   it('keeps remote connection metadata inside the sidebar with the status dot on the right', () => {
     const stylesheet = readWorkspaceListStylesheet();
+    const remoteChip = extractBlock(stylesheet, '&__workspace-item-remote');
     const remoteName = extractBlock(stylesheet, '&__workspace-item-remote-name');
 
+    expect(remoteChip).toContain('margin-left: -6px;');
+    expect(remoteChip).toContain('padding: 0 5px 0 6px;');
     expect(remoteName).toContain('flex: 0 1 auto;');
     expect(remoteName).toContain('max-width: 160px;');
     expect(remoteName).toContain('overflow: hidden;');
