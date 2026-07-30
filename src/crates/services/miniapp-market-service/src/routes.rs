@@ -10,7 +10,7 @@ use axum::body::{Body, Bytes};
 use axum::extract::{DefaultBodyLimit, Path, Query, State};
 use axum::http::{header, HeaderMap, HeaderValue, StatusCode};
 use axum::response::{IntoResponse, Redirect, Response};
-use axum::routing::{get, post, put};
+use axum::routing::{any, get, post, put};
 use axum::{Json, Router};
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine;
@@ -195,8 +195,16 @@ pub(crate) fn api_router(state: Arc<MarketState>) -> Router {
             "/admin/listings/{listing_id}/unpublish",
             post(unpublish_listing),
         )
+        // Unmatched API paths must return the versioned JSON error envelope.
+        // A nested fallback would lose to the outer SPA catch-all, so this has
+        // to be an explicit wildcard route that outranks `/miniapp/{*rest}`.
+        .route("/{*rest}", any(api_not_found))
         .layer(DefaultBodyLimit::max(21 * 1024 * 1024))
         .with_state(state)
+}
+
+async fn api_not_found() -> MarketError {
+    MarketError::not_found("Unknown API route.")
 }
 
 async fn health(State(state): State<Arc<MarketState>>) -> impl IntoResponse {

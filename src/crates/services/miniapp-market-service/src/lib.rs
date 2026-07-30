@@ -158,6 +158,24 @@ mod tests {
                 .unwrap();
             assert_eq!(response.status(), StatusCode::OK, "{uri}");
         }
+
+        // Unknown API paths must not fall through to the SPA's index.html.
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/miniapp/api/v1/auth/github/login")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+        let body = axum::body::to_bytes(response.into_body(), 1024)
+            .await
+            .unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(body["error"]["code"], "not_found");
     }
 
     #[tokio::test]

@@ -374,9 +374,40 @@ docker compose -f deploy/miniapp-market/docker-compose.yml \
   up -d --no-build --force-recreate miniapp-market"
 ```
 
+### GitHub OAuth 配置
+
 GitHub OAuth App callback 必须精确为：
 
 `https://market.openbitfun.com/miniapp/api/v1/auth/github/callback`
+
+创建或复用 OAuth App 时的实操要点：
+
+- OAuth App 在 GitHub → Settings → Developer settings → OAuth Apps 下创建，
+  没有对应的管理 API，只能人工在网页操作。创建表单支持 URL 预填：
+  `https://github.com/settings/applications/new?oauth_application[name]=...&oauth_application[url]=...&oauth_application[callback_url]=...`
+- Client Secret 只在生成那一刻显示一次，之后无法再查看。已有 App 拿不回旧
+  secret 时，直接在原 App 上 "Generate a new client secret"，不需要新建 App。
+- 凭据按上文流程用受控编辑器写入 `market.env`，然后 recreate 容器。不要把
+  secret 以命令行参数形式传给脚本——它会进入 shell history 和进程列表。
+
+配置生效的只读验证：
+
+```bash
+curl -fsS https://market.openbitfun.com/miniapp/api/v1/health
+# 预期包含 "githubAuthConfigured":true
+
+curl -s -o /dev/null -w "%{http_code} %{redirect_url}\n" \
+  https://market.openbitfun.com/miniapp/api/v1/auth/github/start
+# 预期 307，跳转 github.com/login/oauth/authorize，
+# 且 client_id、redirect_uri 与注册的 App 一致
+```
+
+排错提示：浏览器登录入口是 `/auth/github/start`，不存在 `/auth/github/login`
+这类路径。旧版本中未匹配的 `/miniapp/api/v1/*` 路径会落到 SPA 返回
+200 + HTML，容易误判成"接口存在但行为异常"；新版本已改为返回标准
+404 JSON 错误信封。
+
+### 初次开放市场
 
 初次开放市场时保持 `MARKET_PUBLIC_BROWSE=false`，先由管理员 GitHub ID
 `24753352` 登录、上传并批准样例，再用全新桌面客户端验证安装和手动更新。
