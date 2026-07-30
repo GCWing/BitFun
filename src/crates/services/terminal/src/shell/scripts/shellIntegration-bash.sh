@@ -12,26 +12,29 @@ TERMINAL_SHELL_INTEGRATION=1
 # Run relevant rc/profile only if shell integration has been injected
 # NOTE: If user config contains 'exec', 'exit', or 'return', shell integration
 # will fail and the application will report a timeout error.
-if [ "$TERMINAL_INJECTION" == "1" ]; then
-	if [ -z "$TERMINAL_SHELL_LOGIN" ]; then
-		# Non-login shell: source .bashrc
-		[ -r ~/.bashrc ] && . ~/.bashrc
-	else
-		# Login shell: imitate -l because --init-file doesn't support it
-		# Source /etc/profile first (system-wide)
-		[ -r /etc/profile ] && . /etc/profile
-		# Then source the first user profile that exists
-		if [ -r ~/.bash_profile ]; then
-			. ~/.bash_profile
-		elif [ -r ~/.bash_login ]; then
-			. ~/.bash_login
-		elif [ -r ~/.profile ]; then
-			. ~/.profile
+	if [ "$TERMINAL_INJECTION" == "1" ]; then
+		if [ -z "$TERMINAL_SHELL_LOGIN" ]; then
+			# Non-login shell: source .bashrc
+			[ -r ~/.bashrc ] && . ~/.bashrc
+		else
+			# Login shell: imitate -l because --init-file doesn't support it
+			# Source /etc/profile first (system-wide)
+			[ -r /etc/profile ] && . /etc/profile
+			# Then source the first user profile that exists
+			if [ -r ~/.bash_profile ]; then
+				. ~/.bash_profile
+			elif [ -r ~/.bash_login ]; then
+				. ~/.bash_login
+			elif [ -r ~/.profile ]; then
+				. ~/.profile
+			fi
+			# --init-file replaces ~/.bashrc, so source it explicitly so user
+			# env (aliases, exports, PATH) always loads for login shells too.
+			[ -r ~/.bashrc ] && . ~/.bashrc
+			builtin unset TERMINAL_SHELL_LOGIN
 		fi
-		builtin unset TERMINAL_SHELL_LOGIN
+		builtin unset TERMINAL_INJECTION
 	fi
-	builtin unset TERMINAL_INJECTION
-fi
 
 # If we reach here, user config didn't interrupt us
 # Continue with shell integration setup
