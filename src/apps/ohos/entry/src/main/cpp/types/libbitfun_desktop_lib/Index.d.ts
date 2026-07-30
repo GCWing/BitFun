@@ -2,3 +2,4 @@ export declare function registerArktsFunction(funcName: string, callback: ((err:
 export declare function setBuildResult(msg: string): void;
 export declare function ohosMarkCleanShutdown(): void;
 export declare function getAppConfigBool(path: string): boolean;
+export declare function notifySystemColorMode(mode: string): void;

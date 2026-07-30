@@ -1,7 +1,7 @@
 import { JSDOM } from 'jsdom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { configAPI } from '@/infrastructure/api';
+import { configAPI, workspaceAPI } from '@/infrastructure/api';
 import { bitfunDarkTheme, bitfunLightTheme } from '../presets';
 import {
   PLUGIN_THEME_COLOR_KEYS,
@@ -9,6 +9,12 @@ import {
 } from '../pluginThemeProjection';
 import { SYSTEM_THEME_ID, type ThemeConfig } from '../types';
 import { ThemeService } from './ThemeService';
+
+// Hoisted so the ApiClient mock below can reference the same listen mock that
+// tests use to capture / fire the native "system color scheme changed" event.
+const mocks = vi.hoisted(() => ({
+  listen: vi.fn().mockReturnValue(() => undefined),
+}));
 
 function expectThemeError(
   result: ReturnType<ThemeService['validateTheme']>,
@@ -86,6 +92,13 @@ vi.mock('@/infrastructure/api', () => ({
     getConfig: vi.fn(),
     setConfig: vi.fn().mockResolvedValue(undefined),
   },
+  workspaceAPI: {
+    setThemeMode: vi.fn().mockResolvedValue('light'),
+  },
+}));
+
+vi.mock('@/infrastructure/api/service-api/ApiClient', () => ({
+  api: { listen: mocks.listen },
 }));
 
 vi.mock('../integrations/MonacoThemeSync', () => ({
@@ -126,6 +139,8 @@ describe('ThemeService runtime theme tokens', () => {
     delete bootstrapGlobals.__BITFUN_BOOTSTRAP_THEME_SELECTION__;
     vi.mocked(configAPI.getConfig).mockResolvedValue(undefined);
     vi.mocked(configAPI.setConfig).mockResolvedValue(undefined);
+    vi.mocked(workspaceAPI.setThemeMode).mockResolvedValue('light');
+    mocks.listen.mockReturnValue(() => undefined);
   });
 
   afterEach(() => {
@@ -234,6 +249,63 @@ describe('ThemeService runtime theme tokens', () => {
     expect(rootStyle.getPropertyValue('--color-overlay-white-12')).toBe('rgba(255, 255, 255, 0.12)');
     expect(rootStyle.getPropertyValue('--color-overlay-black-12')).toBe('rgba(0, 0, 0, 0.12)');
     expect(rootStyle.getPropertyValue('--color-overlay-black-30')).toBe('rgba(0, 0, 0, 0.3)');
+  });
+
+  it('resolves "follow system" from the native shell color mode, not stale prefers-color-scheme', async () => {
+    // Pretend the OS is in dark mode even though the matchMedia stub reports
+    // light (matches: false). The native shell return value must win, because the
+    // OHOS webview does not update prefers-color-scheme live.
+    vi.mocked(workspaceAPI.setThemeMode).mockResolvedValue('dark');
+    const service = new ThemeService();
+
+    await service.applyTheme(SYSTEM_THEME_ID);
+
+    // Resolved theme follows the native-reported dark mode.
+    expect(service.getResolvedThemeId()).toBe('bitfun-dark');
+    expect(service.getCurrentThemeId()).toBe(SYSTEM_THEME_ID);
+    expect(document.documentElement.style.getPropertyValue('--color-bg-primary'))
+      .toBe(bitfunDarkTheme.colors.background.primary);
+    // The system branch releases the native override (setThemeMode('system')) and
+    // skips the redundant shell call inside applyResolvedTheme.
+    expect(workspaceAPI.setThemeMode).toHaveBeenCalledTimes(1);
+    expect(workspaceAPI.setThemeMode).toHaveBeenCalledWith('system');
+  });
+
+  it('falls back to prefers-color-scheme when the native shell returns no color mode', async () => {
+    vi.mocked(workspaceAPI.setThemeMode).mockResolvedValue('');
+    const service = new ThemeService();
+
+    await service.applyTheme(SYSTEM_THEME_ID);
+
+    // matchMedia reports light (matches: false) → bitfun-light.
+    expect(service.getResolvedThemeId()).toBe('bitfun-light');
+  });
+
+  it('re-resolves "follow system" when the native shell emits a color-mode event', async () => {
+    // Start in light (native returns light).
+    vi.mocked(workspaceAPI.setThemeMode).mockResolvedValue('light');
+    const service = new ThemeService();
+    await service.applyTheme(SYSTEM_THEME_ID);
+    expect(service.getResolvedThemeId()).toBe('bitfun-light');
+
+    // The native shell registered a listener via api.listen — capture it.
+    expect(mocks.listen).toHaveBeenCalledWith(
+      'bitfun:system-color-scheme-changed',
+      expect.any(Function),
+    );
+    const calls = mocks.listen.mock.calls;
+    const [, listener] = calls[calls.length - 1] as [string, (p: { scheme?: string }) => void];
+
+    // OS switches to dark. After re-resolve, setThemeMode is NOT called again
+    // (the shell already knows the mode; applyResolvedTheme uses skipShell).
+    listener({ scheme: 'dark' });
+    // applyResolvedTheme is async (hooks/emit/monaco); flush the microtask chain.
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    expect(service.getResolvedThemeId()).toBe('bitfun-dark');
+    expect(document.documentElement.style.getPropertyValue('--color-bg-primary'))
+      .toBe(bitfunDarkTheme.colors.background.primary);
+    expect(workspaceAPI.setThemeMode).toHaveBeenCalledTimes(1);
   });
 
   it('initializes from bootstrap theme selection without reading or writing themes.current', async () => {
