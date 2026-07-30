@@ -39,6 +39,7 @@ const RenameInput: React.FC<RenameInputProps> = ({ node, siblings, isRemote, onR
   const [error, setError] = useState<string | null>(null);
   const submittedRef = React.useRef(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const wrapperRef = useRef<HTMLDivElement>(null);
   const [errorPos, setErrorPos] = useState<{ top: number; left: number } | null>(null);
 
   // 聚焦并选中名称主体（文件去掉扩展名，目录全选）。
@@ -72,7 +73,7 @@ const RenameInput: React.FC<RenameInputProps> = ({ node, siblings, isRemote, onR
     setError(validate(nextValue));
   };
 
-  const commitRename = (nextValue: string) => {
+  const commitRename = (nextValue: string, source: 'enter' | 'blur' = 'enter') => {
     if (submittedRef.current) {
       return;
     }
@@ -86,9 +87,16 @@ const RenameInput: React.FC<RenameInputProps> = ({ node, siblings, isRemote, onR
       return;
     }
 
-    // 有校验错误：阻断提交，保持输入框与聚焦（VSCode 行为）。
+    // 有校验错误：
+    // - 按 Enter：阻断提交，保持输入框与聚焦并提示（VSCode 行为），让用户继续修正。
+    // - 失焦（点击别处）：不再阻断，直接取消重命名并清除错误，避免卡死。
     const errorMsg = validate(nextValue);
     if (errorMsg) {
+      if (source === 'blur') {
+        submittedRef.current = true;
+        onCancel?.();
+        return;
+      }
       setError(errorMsg);
       inputRef.current?.focus();
       return;
@@ -114,8 +122,13 @@ const RenameInput: React.FC<RenameInputProps> = ({ node, siblings, isRemote, onR
     }
   };
 
-  const handleBlur = () => {
-    commitRename(value);
+  const handleBlur = (event: React.FocusEvent<HTMLInputElement>) => {
+    // 焦点若移到输入框容器内部（如点击 prefix 图标等），视为未离开，不处理。
+    const next = event.relatedTarget as Node | null;
+    if (next && wrapperRef.current?.contains(next)) {
+      return;
+    }
+    commitRename(value, 'blur');
   };
 
   // 计算报错气泡位置：默认输入框下方，下方空间不足则翻到上方。
@@ -161,7 +174,7 @@ const RenameInput: React.FC<RenameInputProps> = ({ node, siblings, isRemote, onR
 
   return (
     <>
-      <div className="bitfun-file-explorer__rename-input-wrapper" onClick={(event) => event.stopPropagation()}>
+      <div ref={wrapperRef} className="bitfun-file-explorer__rename-input-wrapper" onClick={(event) => event.stopPropagation()}>
         <Input
           ref={inputRef}
           type="text"
