@@ -41,15 +41,18 @@ export interface FileExplorerProps {
   renamingPath?: string | null;
   onRename?: (oldPath: string, newName: string) => void;
   onCancelRename?: () => void;
-  
+
   workspacePath?: string;
-  
+
   onNewFile?: (data: { parentPath: string }) => void;
   onNewFolder?: (data: { parentPath: string }) => void;
   onRefresh?: () => void;
 
   /** When true, the floating toolbar is not rendered (e.g. actions live in a parent header). */
   hideToolbar?: boolean;
+
+  /** 当前是否为远程工作区，传入重命名校验上下文（决定非法字符集与 Windows 保留名校验）。 */
+  isRemoteWorkspace?: boolean;
 }
 
 /** Zero-arg handlers for toolbar buttons when the UI is rendered outside FileExplorer. */
