@@ -13,7 +13,7 @@ use bitfun_core::service::remote_ssh::workspace_state::{
     get_remote_workspace_manager, init_remote_workspace_manager,
 };
 use bitfun_core::service::runtime::RuntimeManager;
-use bitfun_core::service::config::load_terminal_env_vars;
+use bitfun_core::service::config::{load_terminal_default_shell, load_terminal_env_vars};
 use bitfun_core::service::terminal::TerminalEvent;
 use bitfun_core::service::terminal::{
     AcknowledgeRequest as CoreAcknowledgeRequest, CloseSessionRequest as CoreCloseSessionRequest,
@@ -80,6 +80,13 @@ impl TerminalState {
                     }
                 }
             }
+
+            // Seed the default shell preference from the user's terminal
+            // configuration so new terminals and agent sessions honor the
+            // "Default Terminal" setting. Live updates after this point are
+            // applied via `SessionManager::update_default_shell` in the
+            // terminal config provider's `on_config_changed` handler.
+            config.default_shell = load_terminal_default_shell().await;
 
             let api = TerminalApi::new(config).await;
             *api_guard = Some(api);
