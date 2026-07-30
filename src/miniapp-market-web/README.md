@@ -82,6 +82,11 @@ MARKET_DEV_API=http://127.0.0.1:19710 pnpm run dev:miniapp-market
 `MARKET_WEB_SUBMISSIONS_ENABLED=true`；生产保持 `false`。桌面客户端使用
 Bearer token 投稿，不受这个网页开关影响。
 
+`src/api.ts` 和 `SubmitPage` 暂时保留未来可能重新启用的 Web 投稿实现；它们存在
+不代表生产能力已开放。所有入口必须只根据后端 `/config` 返回的
+`webSubmissionsEnabled` 显示，配置加载失败时按关闭处理。不要增加仅由前端常量、
+URL 参数或本地存储绕过的开关。
+
 ## 修改后的最小验证
 
 在仓库根目录运行：

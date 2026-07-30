@@ -55,6 +55,23 @@
   拒绝 Web Cookie 会话；Desktop Bearer 投稿、投稿历史读取和 Web 管理员审核
   保持可用。UI 隐藏不是这一边界的替代品。
 
+## 当前投稿入口与鉴权矩阵
+
+生产默认 `MARKET_WEB_SUBMISSIONS_ENABLED=false`。该开关只控制普通用户的投稿
+写入，不控制目录、评分收藏、只读投稿历史或管理员审核：
+
+| 请求面 | Web Cookie | Desktop Bearer | 开关关闭时 |
+| --- | --- | --- | --- |
+| 公开目录、详情、下载 | 可选登录 | 可选登录 | 不变 |
+| 评分与收藏 | 登录并校验 CSRF | 登录 | 不变 |
+| `GET /submissions`、`GET /submissions/{id}` | 登录 | 登录 | 保持可读 |
+| `POST /submissions`、包/截图 PUT/DELETE、submit、withdraw | 登录并校验 CSRF | 登录 | Web 在读取 body 前返回 `403 web_submissions_disabled`；Desktop 保持可写 |
+| `/admin/*` 审核和下架 | 管理员登录并校验 CSRF | 管理员登录 | 不受该开关影响 |
+
+匿名或无效凭据的投稿写请求仍先返回 `401 unauthorized`。未来重新开放 Web 投稿时，
+必须显式设置环境变量、recreate 容器，并重新验证 CSRF、上传大小、恶意包拒绝和
+所有投稿状态转换；不得仅修改前端显示条件。
+
 ## 本地验证
 
 在仓库根目录运行：

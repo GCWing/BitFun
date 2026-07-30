@@ -278,6 +278,8 @@ curl -fsS https://market.openbitfun.com/miniapp/ >/dev/null
 投稿写请求由后端拒绝，网页仅保留“我的投稿”历史；BitFun Desktop 的 Bearer
 投稿和 Web 管理员审核继续可用。未来重新开放网页投稿时，必须先完成对应安全
 回归，再显式修改 root-only `market.env` 并仅 recreate 市场容器。
+环境变量缺失时后端也默认关闭，但生产 `market.env` 应显式保留
+`MARKET_WEB_SUBMISSIONS_ENABLED=false`，避免后续运维人员误判当前策略。
 
 再用浏览器人工检查：
 
