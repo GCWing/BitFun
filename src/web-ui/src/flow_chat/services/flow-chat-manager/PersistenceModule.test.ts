@@ -7,15 +7,23 @@ import {
   saveDialogTurnToDisk,
 } from './PersistenceModule';
 
-const saveSessionTurn = vi.fn();
-const saveSessionMetadata = vi.fn();
-const loadSessionMetadata = vi.fn();
+// Vitest hoists `vi.mock` factories above ordinary module-scope declarations,
+// so a plain `const` referenced inside the factory is still in its temporal
+// dead zone when the factory runs. `vi.hoisted` hoists the value itself to
+// the same point, ahead of `vi.mock`, so the factory can see it.
+const { mockSaveSessionTurn, mockSaveSessionMetadata, mockLoadSessionMetadata } = vi.hoisted(
+  () => ({
+    mockSaveSessionTurn: vi.fn(),
+    mockSaveSessionMetadata: vi.fn(),
+    mockLoadSessionMetadata: vi.fn(),
+  })
+);
 
 vi.mock('@/infrastructure/api/service-api/SessionAPI', () => ({
   sessionAPI: {
-    saveSessionTurn,
-    saveSessionMetadata,
-    loadSessionMetadata,
+    saveSessionTurn: mockSaveSessionTurn,
+    saveSessionMetadata: mockSaveSessionMetadata,
+    loadSessionMetadata: mockLoadSessionMetadata,
   },
 }));
 
@@ -84,9 +92,9 @@ async function flushMicrotasks(): Promise<void> {
 describe('PersistenceModule', () => {
   beforeEach(() => {
     vi.useFakeTimers();
-    saveSessionTurn.mockResolvedValue(undefined);
-    saveSessionMetadata.mockResolvedValue(undefined);
-    loadSessionMetadata.mockResolvedValue(null);
+    mockSaveSessionTurn.mockResolvedValue(undefined);
+    mockSaveSessionMetadata.mockResolvedValue(undefined);
+    mockLoadSessionMetadata.mockResolvedValue(null);
   });
 
   afterEach(() => {
@@ -273,14 +281,14 @@ describe('PersistenceModule', () => {
     immediateSaveDialogTurn(context, SESSION_ID, TURN_ID);
 
     await flushMicrotasks();
-    expect(saveSessionTurn).not.toHaveBeenCalled();
+    expect(mockSaveSessionTurn).not.toHaveBeenCalled();
 
     await vi.advanceTimersByTimeAsync(499);
-    expect(saveSessionTurn).not.toHaveBeenCalled();
+    expect(mockSaveSessionTurn).not.toHaveBeenCalled();
 
     await vi.advanceTimersByTimeAsync(1);
     await flushMicrotasks();
-    expect(saveSessionTurn).toHaveBeenCalledTimes(1);
+    expect(mockSaveSessionTurn).toHaveBeenCalledTimes(1);
   });
 
   it('checkpoints continuous streamed output without waiting for a quiet period', async () => {
@@ -291,16 +299,16 @@ describe('PersistenceModule', () => {
     await vi.advanceTimersByTimeAsync(1000);
     debouncedSaveDialogTurn(context, SESSION_ID, TURN_ID, 2000);
     await vi.advanceTimersByTimeAsync(999);
-    expect(saveSessionTurn).not.toHaveBeenCalled();
+    expect(mockSaveSessionTurn).not.toHaveBeenCalled();
 
     await vi.advanceTimersByTimeAsync(1);
     await flushMicrotasks();
-    expect(saveSessionTurn).toHaveBeenCalledTimes(1);
+    expect(mockSaveSessionTurn).toHaveBeenCalledTimes(1);
 
     debouncedSaveDialogTurn(context, SESSION_ID, TURN_ID, 2000);
     await vi.advanceTimersByTimeAsync(2000);
     await flushMicrotasks();
-    expect(saveSessionTurn).toHaveBeenCalledTimes(2);
+    expect(mockSaveSessionTurn).toHaveBeenCalledTimes(2);
   });
 
   it('flushes terminal turn saves immediately', async () => {
@@ -311,7 +319,7 @@ describe('PersistenceModule', () => {
     await vi.advanceTimersByTimeAsync(0);
     await flushMicrotasks();
 
-    expect(saveSessionTurn).toHaveBeenCalledTimes(1);
+    expect(mockSaveSessionTurn).toHaveBeenCalledTimes(1);
     expect(context.saveDebouncers.size).toBe(0);
   });
 
@@ -325,11 +333,11 @@ describe('PersistenceModule', () => {
     await saveDialogTurnToDisk(context, SESSION_ID, TURN_ID);
     await flushMicrotasks();
 
-    expect(saveSessionTurn).toHaveBeenCalledTimes(1);
+    expect(mockSaveSessionTurn).toHaveBeenCalledTimes(1);
     expect(context.saveDebouncers.size).toBe(0);
 
     await vi.advanceTimersByTimeAsync(500);
     await flushMicrotasks();
-    expect(saveSessionTurn).toHaveBeenCalledTimes(1);
+    expect(mockSaveSessionTurn).toHaveBeenCalledTimes(1);
   });
 });
