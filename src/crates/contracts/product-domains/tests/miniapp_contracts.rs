@@ -38,8 +38,8 @@ use bitfun_product_domains::miniapp::lifecycle::{
     apply_import_runtime_state, apply_recompile_result, apply_sync_from_fs_result,
     apply_update_patch, build_created_app, build_deps_revision, build_runtime_state,
     build_source_revision, build_worker_revision, clear_worker_restart_required_state,
-    ensure_runtime_state, mark_deps_installed_state, prepare_draft_app, prepare_rollback_app,
-    workspace_dir_string, MiniAppCreateInput, MiniAppUpdatePatch,
+    ensure_runtime_state, mark_deps_installed_state, miniapp_content_hash, prepare_draft_app,
+    prepare_rollback_app, workspace_dir_string, MiniAppCreateInput, MiniAppUpdatePatch,
 };
 use bitfun_product_domains::miniapp::permission_policy::resolve_policy;
 use bitfun_product_domains::miniapp::ports::{
@@ -1214,6 +1214,63 @@ fn miniapp_lifecycle_manager_state_helpers_preserve_core_transitions() {
     assert!(imported.runtime.worker_restart_required);
     assert_eq!(imported.runtime.source_revision, "src:4:4000");
     assert_eq!(imported.runtime.deps_revision, "lodash@^4.17.21");
+}
+
+#[test]
+fn miniapp_content_hash_ignores_runtime_artifacts_and_tracks_product_content() {
+    let mut app = sample_miniapp_for_lifecycle(MiniAppSource {
+        css: "body { color: black; }".to_string(),
+        ..MiniAppSource::default()
+    });
+    let initial_hash = miniapp_content_hash(&app);
+
+    app.version += 1;
+    app.updated_at += 1000;
+    app.compiled_html = "<html>different runtime artifact</html>".to_string();
+    app.runtime.source_revision = "src:99:9999".to_string();
+    assert_eq!(miniapp_content_hash(&app), initial_hash);
+
+    app.source.css = "body { color: red; }".to_string();
+    assert_ne!(miniapp_content_hash(&app), initial_hash);
+}
+
+#[test]
+fn miniapp_sync_and_draft_apply_do_not_create_versions_for_unchanged_content() {
+    let mut current = sample_miniapp_for_lifecycle(MiniAppSource {
+        css: "body { color: black; }".to_string(),
+        ..MiniAppSource::default()
+    });
+    ensure_runtime_state(&mut current);
+
+    let synced = apply_sync_from_fs_result(
+        &current,
+        current.source.clone(),
+        "<html>recompiled</html>".to_string(),
+        5000,
+    );
+    assert_eq!(synced.version, current.version);
+    assert_eq!(synced.updated_at, current.updated_at);
+    assert_eq!(
+        synced.runtime.source_revision,
+        current.runtime.source_revision
+    );
+    assert_eq!(synced.runtime.content_hash, current.runtime.content_hash);
+    assert_eq!(synced.compiled_html, "<html>recompiled</html>");
+
+    let applied = apply_draft_to_active(
+        &current,
+        current.clone(),
+        "<html>draft recompiled</html>".to_string(),
+        6000,
+    );
+    assert_eq!(applied.version, current.version);
+    assert_eq!(applied.updated_at, current.updated_at);
+    assert_eq!(
+        applied.runtime.source_revision,
+        current.runtime.source_revision
+    );
+    assert_eq!(applied.runtime.content_hash, current.runtime.content_hash);
+    assert_eq!(applied.compiled_html, "<html>draft recompiled</html>");
 }
 
 #[test]

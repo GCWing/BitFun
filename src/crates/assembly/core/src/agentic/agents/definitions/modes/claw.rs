@@ -43,6 +43,7 @@ impl ClawMode {
                 // agent/tool instead of being surfaced as a ControlHub domain.
                 "ControlHub".to_string(),
                 "InitMiniApp".to_string(),
+                "FinalizeMiniApp".to_string(),
                 "PublishMiniApp".to_string(),
                 "PageDeploy".to_string(),
                 "PagePublish".to_string(),
@@ -96,9 +97,10 @@ mod tests {
     use bitfun_agent_runtime::prompt::UserContextSection;
 
     #[test]
-    fn claw_mode_includes_init_miniapp_in_default_tools() {
+    fn claw_mode_includes_miniapp_lifecycle_tools_in_defaults() {
         let tools = ClawMode::new().default_tools();
         assert!(tools.contains(&"InitMiniApp".to_string()));
+        assert!(tools.contains(&"FinalizeMiniApp".to_string()));
         assert!(tools.contains(&"ListModels".to_string()));
     }
 

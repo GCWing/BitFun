@@ -130,6 +130,7 @@ pub fn shared_coding_mode_tools() -> Vec<String> {
         "ReviewPlatform".to_string(),
         "ControlHub".to_string(),
         "InitMiniApp".to_string(),
+        "FinalizeMiniApp".to_string(),
         "PublishMiniApp".to_string(),
         "PageDeploy".to_string(),
         "PagePublish".to_string(),

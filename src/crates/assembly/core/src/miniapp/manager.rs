@@ -154,6 +154,14 @@ impl MiniAppManager {
             .map_err(map_miniapp_port_error)
     }
 
+    /// Get persisted metadata without normalizing runtime state.
+    ///
+    /// Agent-side finalization uses this raw baseline before source files are
+    /// synchronized, so legacy/runtime repair cannot hide a direct file edit.
+    pub async fn get_meta(&self, app_id: &str) -> BitFunResult<MiniAppMeta> {
+        self.storage.load_meta(app_id).await
+    }
+
     /// Create a new MiniApp (generates id, sets created_at/updated_at, compiles).
     #[allow(clippy::too_many_arguments)]
     pub async fn create(
@@ -1077,6 +1085,21 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn sync_from_fs_recompiles_without_versioning_unchanged_content() {
+        let manager = test_manager();
+        let app = create_sample_app(&manager).await;
+
+        let synced = manager.sync_from_fs(&app.id, "dark", None).await.unwrap();
+
+        assert_eq!(synced.version, app.version);
+        assert_eq!(synced.updated_at, app.updated_at);
+        assert_eq!(synced.runtime.source_revision, app.runtime.source_revision);
+        assert_eq!(synced.runtime.content_hash, app.runtime.content_hash);
+        assert!(!synced.compiled_html.is_empty());
+        assert!(manager.list_versions(&app.id).await.unwrap().is_empty());
+    }
+
+    #[tokio::test]
     async fn import_from_path_preserves_fallback_files_recompile_and_runtime_state() {
         let manager = test_manager();
         let import_root = std::env::temp_dir().join(format!(
@@ -1209,7 +1232,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn apply_draft_does_not_require_manifest_metadata() {
+    async fn unchanged_draft_apply_does_not_require_manifest_or_create_a_version() {
         let manager = test_manager();
         let app = create_sample_app(&manager).await;
         let draft = manager.create_draft(&app.id, "dark", None).await.unwrap();
@@ -1223,9 +1246,9 @@ mod tests {
             .await
             .unwrap();
 
-        assert_eq!(applied.version, app.version + 1);
+        assert_eq!(applied.version, app.version);
         assert_eq!(applied.source.css, app.source.css);
-        assert_eq!(manager.list_versions(&app.id).await.unwrap(), vec![1]);
+        assert!(manager.list_versions(&app.id).await.unwrap().is_empty());
     }
 
     #[tokio::test]

@@ -18,8 +18,8 @@ use crate::miniapp::lifecycle::{
     apply_draft_permission_update_result, apply_draft_source_sync_result, apply_draft_to_active,
     apply_import_runtime_state, apply_recompile_result, apply_sync_from_fs_result,
     apply_update_patch, build_created_app, clear_worker_restart_required_state,
-    ensure_runtime_state, mark_deps_installed_state, prepare_draft_app, prepare_rollback_app,
-    MiniAppCreateInput, MiniAppUpdatePatch,
+    ensure_runtime_state, mark_deps_installed_state, miniapp_content_hash, prepare_draft_app,
+    prepare_rollback_app, MiniAppCreateInput, MiniAppUpdatePatch,
 };
 use crate::miniapp::market::{InstalledMarketOrigin, MarketPackageMeta};
 use crate::miniapp::ports::{
@@ -198,6 +198,7 @@ impl<'a> MiniAppRuntimeFacade<'a> {
         );
         next.i18n = i18n;
         next.runtime_profile = MiniAppRuntimeProfile::MarketStrict;
+        next.runtime.content_hash = miniapp_content_hash(&next);
         let metadata =
             strict_package_metadata(MiniAppCustomizationOriginKind::Market, Some(origin), now);
 
@@ -244,6 +245,7 @@ impl<'a> MiniAppRuntimeFacade<'a> {
         );
         app.i18n = i18n;
         app.runtime_profile = MiniAppRuntimeProfile::MarketStrict;
+        app.runtime.content_hash = miniapp_content_hash(&app);
         let metadata = strict_package_metadata(origin_kind, market_origin, now);
 
         self.storage
@@ -355,9 +357,11 @@ impl<'a> MiniAppRuntimeFacade<'a> {
     ) -> MiniAppPortResult<MiniApp> {
         let app_id = current.id.clone();
         let app = apply_draft_to_active(&current, draft_app, compiled_html, now);
-        self.storage
-            .save_version(app_id.clone(), current.version, current)
-            .await?;
+        if app.version != current.version {
+            self.storage
+                .save_version(app_id.clone(), current.version, current)
+                .await?;
+        }
         self.storage.save(app.clone()).await?;
         self.record_draft_applied(app_id, draft_id, baseline, now)
             .await?;
@@ -510,9 +514,11 @@ impl<'a> MiniAppRuntimeFacade<'a> {
         now: i64,
     ) -> MiniAppPortResult<MiniApp> {
         let app = apply_sync_from_fs_result(&previous, source, compiled_html, now);
-        self.storage
-            .save_version(app_id, previous.version, previous)
-            .await?;
+        if app.version != previous.version {
+            self.storage
+                .save_version(app_id, previous.version, previous)
+                .await?;
+        }
         self.storage.save(app.clone()).await?;
         Ok(app)
     }

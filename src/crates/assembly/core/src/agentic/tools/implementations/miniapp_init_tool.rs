@@ -69,7 +69,7 @@ Input: name, description, icon, category. The tool creates the app directory and
 - manifest (meta.json), source/index.html, source/style.css, source/ui.js, source/worker.js,
   package.json, storage.json.
 
-Returns app_id and the app root directory. Use the root directory and file names above with Read/Write/Edit to implement the app. The MiniApp uses window.app (app.fs, app.call, app.dialog, etc.) — see miniapp-dev skill for API reference."#
+Returns app_id and the app root directory. Use the root directory and file names above with Read/Write/Edit to implement the app, then call FinalizeMiniApp with the returned app_id. FinalizeMiniApp recompiles the edited files, persists the new content revision, and refreshes already-open runtimes. The MiniApp uses window.app (app.fs, app.call, app.dialog, etc.) — see miniapp-dev skill for API reference."#
             .to_string())
     }
 
@@ -214,7 +214,7 @@ Returns app_id and the app root directory. Use the root directory and file names
         .await;
 
         let result_text = format!(
-            "MiniApp '{}' skeleton created. app_id: {}. Root directory: {}. Use Read/Write/Edit tools with files under this root, then open in Toolbox to run.",
+            "MiniApp '{}' skeleton created. app_id: {}. Root directory: {}. Use Read/Write/Edit tools with files under this root, then call FinalizeMiniApp with this app_id before opening it.",
             app.name, app.id, app_dir_str
         );
 

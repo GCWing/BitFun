@@ -156,6 +156,7 @@ export interface AgentCancelStaleRunsResult {
 
 export interface MiniAppRuntimeState {
   source_revision: string;
+  content_hash: string;
   deps_revision: string;
   deps_dirty: boolean;
   worker_restart_required: boolean;

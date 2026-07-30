@@ -199,6 +199,11 @@ pub struct MiniAppAiContext {
 pub struct MiniAppRuntimeState {
     /// Revision used for UI / source lifecycle changes.
     pub source_revision: String,
+    /// Stable hash of the persisted MiniApp content, excluding version/runtime metadata.
+    ///
+    /// Direct file edits leave this value unchanged until the MiniApp is finalized,
+    /// which lets the lifecycle distinguish a real content update from a recompile.
+    pub content_hash: String,
     /// Revision derived from npm dependencies.
     pub deps_revision: String,
     /// Dependencies changed and need install before reliable worker startup.

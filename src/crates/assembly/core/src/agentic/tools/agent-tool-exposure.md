@@ -44,6 +44,7 @@ Notes:
 | `GenerativeUI` | Deferred | None | - |
 | `Git` | Deferred | `ReviewFixer`, `ReviewWorker`, `ReviewJudge` | Direct |
 | `InitMiniApp` | Direct | None | - |
+| `FinalizeMiniApp` | Direct | None | - |
 | `PublishMiniApp` | Direct | None | - |
 | `ControlHub` | Deferred | `ComputerUse` | Direct |
 | `ComputerUse` | Deferred | `ComputerUse` | Direct |

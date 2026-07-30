@@ -6,6 +6,7 @@ use crate::miniapp::types::{
     MiniApp, MiniAppAiContext, MiniAppMeta, MiniAppPermissions, MiniAppRuntimeState, MiniAppSource,
 };
 use serde_json::{json, Value};
+use sha2::{Digest, Sha256};
 
 #[derive(Debug, Clone)]
 pub struct MiniAppCreateInput {
@@ -45,6 +46,46 @@ pub fn build_source_revision(version: u32, updated_at: i64) -> String {
     format!("src:{version}:{updated_at}")
 }
 
+fn canonical_json(value: Value) -> Value {
+    match value {
+        Value::Array(items) => Value::Array(items.into_iter().map(canonical_json).collect()),
+        Value::Object(map) => {
+            let mut entries = map.into_iter().collect::<Vec<_>>();
+            entries.sort_by(|left, right| left.0.cmp(&right.0));
+            let mut canonical = serde_json::Map::new();
+            for (key, value) in entries {
+                canonical.insert(key, canonical_json(value));
+            }
+            Value::Object(canonical)
+        }
+        value => value,
+    }
+}
+
+/// Hash the user-controlled MiniApp content while excluding lifecycle counters,
+/// compiled output, and runtime state.
+pub fn miniapp_content_hash(app: &MiniApp) -> String {
+    let payload = canonical_json(json!({
+        "name": &app.name,
+        "description": &app.description,
+        "icon": &app.icon,
+        "category": &app.category,
+        "tags": &app.tags,
+        "source": &app.source,
+        "permissions": &app.permissions,
+        "aiContext": &app.ai_context,
+        "runtimeProfile": app.runtime_profile,
+        "i18n": &app.i18n,
+    }));
+    let encoded = serde_json::to_vec(&payload)
+        .expect("MiniApp content consists only of serializable domain fields");
+    format!("sha256:{}", hex::encode(Sha256::digest(encoded)))
+}
+
+fn refresh_content_hash(app: &mut MiniApp) {
+    app.runtime.content_hash = miniapp_content_hash(app);
+}
+
 pub fn build_deps_revision(source: &MiniAppSource) -> String {
     let mut deps: Vec<String> = source
         .npm_dependencies
@@ -64,6 +105,7 @@ pub fn build_runtime_state(
 ) -> MiniAppRuntimeState {
     MiniAppRuntimeState {
         source_revision: build_source_revision(version, updated_at),
+        content_hash: String::new(),
         deps_revision: build_deps_revision(source),
         deps_dirty,
         worker_restart_required,
@@ -86,7 +128,7 @@ pub fn build_created_app(
         true,
     );
 
-    MiniApp {
+    let mut app = MiniApp {
         id,
         name: input.name,
         description: input.description,
@@ -103,7 +145,9 @@ pub fn build_created_app(
         runtime,
         runtime_profile: Default::default(),
         i18n: None,
-    }
+    };
+    refresh_content_hash(&mut app);
+    app
 }
 
 pub fn apply_update_patch(
@@ -157,6 +201,7 @@ pub fn apply_update_patch(
     }
     app.runtime.ui_recompile_required = false;
     ensure_runtime_state(&mut app);
+    refresh_content_hash(&mut app);
     app
 }
 
@@ -164,6 +209,7 @@ pub fn prepare_draft_app(mut app: MiniApp, compiled_html: String, now: i64) -> M
     app.updated_at = now;
     app.compiled_html = compiled_html;
     ensure_runtime_state(&mut app);
+    refresh_content_hash(&mut app);
     app
 }
 
@@ -181,6 +227,7 @@ pub fn apply_draft_source_sync_result(
         !app.source.npm_dependencies.is_empty(),
         true,
     );
+    refresh_content_hash(&mut app);
     app
 }
 
@@ -200,6 +247,7 @@ pub fn apply_draft_permission_update_result(
         !app.source.npm_dependencies.is_empty(),
         true,
     );
+    refresh_content_hash(&mut app);
     app
 }
 
@@ -209,6 +257,16 @@ pub fn apply_draft_to_active(
     compiled_html: String,
     now: i64,
 ) -> MiniApp {
+    let current_hash = miniapp_content_hash(current);
+    let draft_hash = miniapp_content_hash(&draft);
+    if current_hash == draft_hash {
+        let mut app = current.clone();
+        app.compiled_html = compiled_html;
+        ensure_runtime_state(&mut app);
+        refresh_content_hash(&mut app);
+        return app;
+    }
+
     let mut app = current.clone();
     app.name = draft.name;
     app.description = draft.description;
@@ -229,6 +287,7 @@ pub fn apply_draft_to_active(
         !app.source.npm_dependencies.is_empty(),
         true,
     );
+    refresh_content_hash(&mut app);
     app
 }
 
@@ -236,6 +295,10 @@ pub fn ensure_runtime_state(app: &mut MiniApp) -> bool {
     let mut changed = false;
     if app.runtime.source_revision.is_empty() {
         app.runtime.source_revision = build_source_revision(app.version, app.updated_at);
+        changed = true;
+    }
+    if app.runtime.content_hash.is_empty() {
+        refresh_content_hash(app);
         changed = true;
     }
     let deps_revision = build_deps_revision(&app.source);
@@ -271,6 +334,7 @@ pub fn prepare_rollback_app(current: &MiniApp, mut target: MiniApp, now: i64) ->
         !target.source.npm_dependencies.is_empty(),
         true,
     );
+    refresh_content_hash(&mut target);
     target
 }
 
@@ -289,16 +353,25 @@ pub fn apply_sync_from_fs_result(
 ) -> MiniApp {
     let mut app = previous.clone();
     app.source = source;
-    app.version += 1;
-    app.updated_at = now;
     app.compiled_html = compiled_html;
-    app.runtime = build_runtime_state(
-        app.version,
-        app.updated_at,
-        &app.source,
-        !app.source.npm_dependencies.is_empty(),
-        true,
-    );
+    let content_hash = miniapp_content_hash(&app);
+    let content_changed =
+        previous.runtime.content_hash.is_empty() || previous.runtime.content_hash != content_hash;
+    if content_changed {
+        app.version += 1;
+        app.updated_at = now;
+        app.runtime = build_runtime_state(
+            app.version,
+            app.updated_at,
+            &app.source,
+            !app.source.npm_dependencies.is_empty(),
+            true,
+        );
+    } else {
+        ensure_runtime_state(&mut app);
+        app.runtime.ui_recompile_required = false;
+    }
+    app.runtime.content_hash = content_hash;
     app
 }
 
@@ -310,6 +383,7 @@ pub fn apply_import_runtime_state(app: &mut MiniApp) {
         !app.source.npm_dependencies.is_empty(),
         true,
     );
+    refresh_content_hash(app);
 }
 
 pub fn prepare_imported_meta(meta: &mut MiniAppMeta, id: &str, now: i64) {
@@ -371,6 +445,7 @@ pub fn miniapp_runtime_event_payload(app: &MiniApp, reason: &str) -> Value {
         "reason": reason,
         "runtime": {
             "sourceRevision": app.runtime.source_revision,
+            "contentHash": app.runtime.content_hash,
             "depsRevision": app.runtime.deps_revision,
             "depsDirty": app.runtime.deps_dirty,
             "workerRestartRequired": app.runtime.worker_restart_required,
@@ -444,6 +519,7 @@ mod tests {
                 "reason": "create",
                 "runtime": {
                     "sourceRevision": "src:1:123",
+                    "contentHash": app.runtime.content_hash.clone(),
                     "depsRevision": "",
                     "depsDirty": false,
                     "workerRestartRequired": true,

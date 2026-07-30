@@ -321,6 +321,16 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     displayMode: 'standard',
     primaryColor: UI_EXCEPTION_ACCENTS.miniApp
   },
+  'FinalizeMiniApp': {
+    toolName: 'FinalizeMiniApp',
+    displayName: 'Finalize Mini App',
+    icon: 'APP',
+    requiresConfirmation: false,
+    resultDisplayType: 'detailed',
+    description: 'Compile Mini App edits and refresh open runtimes',
+    displayMode: 'standard',
+    primaryColor: UI_EXCEPTION_ACCENTS.miniApp
+  },
   'PublishMiniApp': {
     toolName: 'PublishMiniApp',
     displayName: 'Publish Mini App',

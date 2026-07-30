@@ -54,6 +54,7 @@ impl CoworkMode {
                 "WebFetch".to_string(),
                 "ControlHub".to_string(),
                 "InitMiniApp".to_string(),
+                "FinalizeMiniApp".to_string(),
                 "PublishMiniApp".to_string(),
             ],
         }
@@ -108,9 +109,10 @@ mod tests {
     use crate::agentic::agents::Agent;
 
     #[test]
-    fn cowork_mode_includes_init_miniapp_in_default_tools() {
+    fn cowork_mode_includes_miniapp_lifecycle_tools_in_defaults() {
         let tools = CoworkMode::new().default_tools();
         assert!(tools.contains(&"InitMiniApp".to_string()));
+        assert!(tools.contains(&"FinalizeMiniApp".to_string()));
         assert!(tools.contains(&"ListModels".to_string()));
     }
 }

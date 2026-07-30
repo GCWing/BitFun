@@ -67,6 +67,7 @@ impl StaticToolProviderFactory<dyn Tool> for ProductConcreteToolFactory {
             "Worktree" => Some(Arc::new(WorktreeTool::new())),
             "ReviewPlatform" => Some(Arc::new(ReviewPlatformTool::new())),
             "InitMiniApp" => Some(Arc::new(InitMiniAppTool::new())),
+            "FinalizeMiniApp" => Some(Arc::new(FinalizeMiniAppTool::new())),
             "PublishMiniApp" => Some(Arc::new(PublishMiniAppTool::new())),
             "PageDeploy" => Some(Arc::new(PageDeployTool::new())),
             "PagePublish" => Some(Arc::new(PagePublishTool::new())),

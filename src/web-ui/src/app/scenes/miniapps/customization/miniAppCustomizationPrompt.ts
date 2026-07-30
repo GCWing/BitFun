@@ -13,6 +13,7 @@ export function buildMiniAppCustomizationPrompt(params: {
     '',
     'Edit only files under the draft root.',
     'Do not edit the active app directory.',
+    'Do not call InitMiniApp or FinalizeMiniApp for this draft; the customization host owns draft sync and apply.',
     'Do not add permissions unless the user request truly needs them.',
     'If new fs, shell, net, node, npm, or ai permissions are needed, explain why before changing them.',
     'After editing source files, tell the user to refresh the draft preview before applying.',

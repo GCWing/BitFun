@@ -14,6 +14,7 @@ describe('buildMiniAppCustomizationPrompt', () => {
     expect(prompt).toContain('Draft root: C:/Users/me/AppData/Roaming/BitFun/miniapps/.drafts/builtin-gomoku/draft-1');
     expect(prompt).toContain('Edit only files under the draft root.');
     expect(prompt).toContain('Do not edit the active app directory.');
+    expect(prompt).toContain('Do not call InitMiniApp or FinalizeMiniApp for this draft;');
     expect(prompt).toContain('Make the board lighter');
   });
 });

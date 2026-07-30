@@ -1,6 +1,7 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { AlertTriangle, Check, Eye, EyeOff, Loader2, RefreshCw, Send, Trash2, X } from 'lucide-react';
 import { Button, IconButton } from '@/component-library';
+import { flowChatStore } from '@/flow_chat/store/FlowChatStore';
 import type { MiniApp, MiniAppCustomizationMetadata, MiniAppDraft } from '@/infrastructure/api/service-api/MiniAppAPI';
 import { miniAppAPI } from '@/infrastructure/api/service-api/MiniAppAPI';
 import { useI18n } from '@/infrastructure/i18n';
@@ -12,6 +13,7 @@ import { requiresPermissionConfirmation } from './miniAppCustomizationRisk';
 import { getNextMiniAppPreviewOpenState } from './miniAppCustomizationPreview';
 import {
   cleanupMiniAppCustomizationSession,
+  isMiniAppCustomizationSessionRunning,
   launchMiniAppCustomizationSession,
 } from './miniAppCustomizationSession';
 import type { MiniAppCustomizationState } from './miniAppCustomizationTypes';
@@ -76,9 +78,30 @@ export const MiniAppCustomizePanel: React.FC<MiniAppCustomizePanelProps> = ({
   const [dismissingBuiltinUpdate, setDismissingBuiltinUpdate] = useState(false);
   const [customizationMetadata, setCustomizationMetadata] = useState<MiniAppCustomizationMetadata | null>(null);
   const theme = themeType ?? 'dark';
+  const subscribeToFlowChat = useCallback(
+    (onStoreChange: () => void) => flowChatStore.subscribe(() => onStoreChange()),
+    [],
+  );
+  const getEditorRunningSnapshot = useCallback(
+    () => isMiniAppCustomizationSessionRunning(
+      state.customizationSessionId
+        ? flowChatStore.getState().sessions.get(state.customizationSessionId)
+        : null,
+    ),
+    [state.customizationSessionId],
+  );
+  const editorRunning = useSyncExternalStore(
+    subscribeToFlowChat,
+    getEditorRunningSnapshot,
+    () => false,
+  );
 
   const trimmedRequest = userRequest.trim();
-  const busy = state.stage === 'drafting' || state.stage === 'applying' || discarding || refreshing;
+  const busy = state.stage === 'drafting'
+    || state.stage === 'applying'
+    || editorRunning
+    || discarding
+    || refreshing;
   const hasPreview = state.draft !== null;
   const builtinUpdateNotice = useMemo(
     () => getMiniAppBuiltinUpdateNotice(customizationMetadata),
@@ -167,7 +190,7 @@ export const MiniAppCustomizePanel: React.FC<MiniAppCustomizePanelProps> = ({
       const draft = state.draft ?? await miniAppAPI.createDraft(app.id, theme, workspacePath);
       setState((prev) => ({
         ...prev,
-        stage: 'preview',
+        stage: 'drafting',
         draft,
         permissionDiff: null,
         error: null,
