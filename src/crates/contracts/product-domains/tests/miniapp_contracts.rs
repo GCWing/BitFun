@@ -6,7 +6,7 @@ use bitfun_product_domains::miniapp::builtin::{
     builtin_content_hash, builtin_source_files, legacy_builtin_version_marker_content,
     parse_builtin_install_marker, preserved_builtin_created_at, resolve_builtin_seed_action,
     resolve_builtin_seed_check, serialize_builtin_install_marker, should_seed_builtin_app,
-    BuiltinInstallMarker, BuiltinMiniAppBundle, BuiltinSeedAction, BuiltinSeedCheck,
+    BuiltinInstallMarker, BuiltinMiniAppBundle, BuiltinSeedAction, BuiltinSeedCheck, BUILTIN_APPS,
     BUILTIN_INSTALL_MARKER, BUILTIN_PLACEHOLDER_COMPILED_HTML, LEGACY_BUILTIN_VERSION_MARKER,
 };
 use bitfun_product_domains::miniapp::compiler::compile;
@@ -594,6 +594,68 @@ fn miniapp_bridge_exposes_topic_session_lifecycle() {
 }
 
 #[test]
+fn miniapp_bridge_exposes_read_only_workspace_info() {
+    let bridge = build_bridge_script("app-1", "/tmp/app", "/tmp/workspace", "dark", "win32");
+
+    assert!(bridge.contains("workspace:"));
+    assert!(bridge.contains("workspace.info"));
+}
+
+#[test]
+fn builtin_loopx_console_has_complete_resources_and_minimal_permissions() {
+    let app = BUILTIN_APPS
+        .iter()
+        .find(|app| app.id == "builtin-loopx-console")
+        .expect("LoopX console should be registered as a built-in MiniApp");
+    let meta: serde_json::Value =
+        serde_json::from_str(app.meta_json).expect("LoopX console metadata should be valid JSON");
+
+    assert!(!app.html.trim().is_empty());
+    assert!(!app.css.trim().is_empty());
+    assert!(!app.ui_js.trim().is_empty());
+    assert!(!app.worker_js.trim().is_empty());
+    assert_eq!(app.esm_dependencies_json, "[]");
+    assert_eq!(meta["id"], "builtin-loopx-console");
+    assert_eq!(
+        meta["permissions"]["shell"]["allow"],
+        serde_json::json!(["loopx"])
+    );
+    assert_eq!(meta["permissions"]["net"]["allow"], serde_json::json!([]));
+    assert_eq!(meta["permissions"]["node"]["enabled"], false);
+    assert_eq!(meta["permissions"]["agent"]["enabled"], true);
+    assert!(meta["permissions"].get("fs").is_none());
+}
+
+#[test]
+fn builtin_loopx_console_keeps_loopx_on_read_only_control_plane_paths() {
+    let app = BUILTIN_APPS
+        .iter()
+        .find(|app| app.id == "builtin-loopx-console")
+        .expect("LoopX console should be registered as a built-in MiniApp");
+    let source = format!(
+        "{}\n{}\n{}\n{}",
+        app.html, app.css, app.ui_js, app.worker_js
+    );
+    let source_lower = source.to_lowercase();
+
+    assert!(source.contains("['--version']"));
+    assert!(source.contains("['--format', 'json', 'registry']"));
+    assert!(source.contains("'global-summary', '--time-range', '24h', '--limit', '8'"));
+    assert!(
+        source.contains("'review-packet', '--goal-id', goalId, '--handoff-only', '--limit', '5'")
+    );
+    assert!(source.contains("schema_version !== '0.1'"));
+    assert!(source.contains("schema_version !== 'global_manager_command_response_v0'"));
+    assert!(source.contains("window.app.appDataDir"));
+    assert!(source.contains("window.app.agent.run"));
+    assert!(source.contains("window.app.chat.claimComposer"));
+    assert!(source.contains("window.app.chat.focusSession"));
+    assert!(!source_lower.contains("acp"));
+    assert!(!source_lower.contains("serve-status"));
+    assert!(!source_lower.contains("--execute"));
+}
+
+#[test]
 fn miniapp_permission_policy_preserves_scope_resolution() {
     let permissions = MiniAppPermissions {
         fs: Some(FsPermissions {
@@ -877,7 +939,12 @@ fn miniapp_host_routing_preserves_existing_primitive_and_allowlist_contract() {
     assert_eq!(shell_exec_timeout_ms(Some(8_000)), 8_000);
     assert_eq!(
         shell_exec_default_env(),
-        [("GIT_TERMINAL_PROMPT", "0"), ("LC_ALL", "C")]
+        [
+            ("GIT_TERMINAL_PROMPT", "0"),
+            ("LC_ALL", "C"),
+            ("PYTHONUTF8", "1"),
+            ("PYTHONIOENCODING", "utf-8")
+        ]
     );
 
     assert!(!command_basename_allowed(&[], "git"));

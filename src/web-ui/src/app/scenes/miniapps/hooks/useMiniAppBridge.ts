@@ -4,6 +4,7 @@
  * ai.* → Host AI client, agent.* → Host agent bridge (hidden subagent runs),
  * deck.renderPage → hidden host WebView slide rasterization (export),
  * chat.* → floating session bubble composer claims and session focus,
+ * workspace.info → the host's existing read-only workspace context,
  * clipboard.* → Host navigator.clipboard.
  * Also handles bitfun/request-theme and pushes theme changes to the iframe.
  */
@@ -14,6 +15,7 @@ import type { MiniApp } from '@/infrastructure/api/service-api/MiniAppAPI';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
 import { useTheme } from '@/infrastructure/theme/hooks/useTheme';
 import { buildMiniAppThemeVars } from '../utils/buildMiniAppThemeVars';
+import { buildMiniAppWorkspaceInfo } from '../utils/buildMiniAppWorkspaceInfo';
 import { api } from '@/infrastructure/api/service-api/ApiClient';
 import { useI18n } from '@/infrastructure/i18n';
 import type { MiniAppRunScope } from '../customization/miniAppCustomizationTypes';
@@ -54,13 +56,17 @@ export function useMiniAppBridge(
   runScope: MiniAppRunScope,
   strictRuntime = false,
 ) {
-  const { workspacePath } = useCurrentWorkspace();
+  const { workspace, workspaceName, workspacePath } = useCurrentWorkspace();
   const { theme: currentTheme } = useTheme();
   const { currentLanguage } = useI18n('scenes/miniapp');
   const themeRef = useRef(currentTheme);
   themeRef.current = currentTheme;
   const workspacePathRef = useRef(workspacePath);
   workspacePathRef.current = workspacePath;
+  const workspaceInfoRef = useRef(
+    buildMiniAppWorkspaceInfo(workspace, workspaceName, workspacePath),
+  );
+  workspaceInfoRef.current = buildMiniAppWorkspaceInfo(workspace, workspaceName, workspacePath);
   const localeRef = useRef(currentLanguage);
   localeRef.current = currentLanguage;
 
@@ -147,6 +153,10 @@ export function useMiniAppBridge(
       }
 
       try {
+        if (method === 'workspace.info') {
+          reply(workspaceInfoRef.current);
+          return;
+        }
         if (method === 'worker.call') {
           const innerMethod = (params.method as string) ?? '';
           const innerParams = (params.params as Record<string, unknown>) ?? {};

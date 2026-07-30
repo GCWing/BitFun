@@ -1,0 +1,53 @@
+{
+  "id": "builtin-loopx-console",
+  "name": "LoopX 控制台",
+  "description": "查看 LoopX 全局目标、待办与 gate，并在当前工作区发起或继续有边界的 Agent 执行。",
+  "icon": "Route",
+  "category": "developer",
+  "tags": [
+    "LoopX",
+    "目标",
+    "Agent",
+    "内置"
+  ],
+  "version": 1,
+  "created_at": 0,
+  "updated_at": 0,
+  "permissions": {
+    "shell": {
+      "allow": [
+        "loopx"
+      ]
+    },
+    "net": {
+      "allow": []
+    },
+    "node": {
+      "enabled": false
+    },
+    "agent": {
+      "enabled": true,
+      "rate_limit_per_minute": 6
+    }
+  },
+  "ai_context": null,
+  "i18n": {
+    "locales": {
+      "zh-CN": {
+        "name": "LoopX 控制台",
+        "description": "查看 LoopX 全局目标、待办与 gate，并在当前工作区发起或继续有边界的 Agent 执行。",
+        "tags": ["LoopX", "目标", "Agent", "内置"]
+      },
+      "en-US": {
+        "name": "LoopX Console",
+        "description": "Inspect global LoopX goals, work and gates, then start or continue a bounded Agent run in the current workspace.",
+        "tags": ["LoopX", "goals", "Agent", "built-in"]
+      },
+      "zh-TW": {
+        "name": "LoopX 控制台",
+        "description": "查看 LoopX 全局目標、待辦與 gate，並在目前工作區發起或繼續有邊界的 Agent 執行。",
+        "tags": ["LoopX", "目標", "Agent", "內置"]
+      }
+    }
+  }
+}
