@@ -173,6 +173,44 @@
     }
   }
 
+  &__advanced-toggle {
+    display: flex;
+    align-items: center;
+    gap: $size-gap-1;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+    cursor: pointer;
+    justify-self: start;
+    max-width: 100%;
+
+    &:hover {
+      color: var(--color-text-primary);
+    }
+
+    svg {
+      flex: 0 0 auto;
+    }
+
+    small {
+      overflow: hidden;
+      color: var(--color-text-muted);
+      font-weight: 400;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+  }
+
+  &__advanced {
+    display: grid;
+    gap: $size-gap-3;
+    padding-left: $size-gap-3;
+    border-left: 2px solid var(--border-subtle);
+  }
+
   &__progress {
     display: grid;
     gap: 7px;
