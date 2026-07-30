@@ -1456,7 +1456,7 @@ impl StartupPage {
 
         match result {
             Some((models, current_id)) if !models.is_empty() => {
-                self.model_selector.show(models, current_id);
+                self.model_selector.show(models, current_id, true, false);
             }
             _ => {
                 self.status = Some("No available models found.".to_string());

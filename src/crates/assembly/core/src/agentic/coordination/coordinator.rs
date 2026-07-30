@@ -8896,7 +8896,7 @@ fn runtime_session_summary(session: SessionSummary) -> bitfun_runtime_ports::Age
         session_id: session.session_id,
         session_name: session.session_name,
         agent_type: session.agent_type,
-        model_id: None,
+        model_id: session.model_id,
         last_user_dialog_agent_type: session.last_user_dialog_agent_type,
         last_submitted_agent_type: session.last_submitted_agent_type,
         turn_count: session.turn_count,
@@ -9628,11 +9628,11 @@ mod tests {
         logical_subagent_type_or_runtime, merge_prepended_messages_for_turn,
         normalize_subagent_max_concurrency, resolve_agent_session_create_created_by,
         resolve_agent_submission_turn_id, resolve_subagent_model_selection,
-        runtime_port_error_preserving_message, runtime_tool_restrictions_for_session_lifetime,
-        session_storage_workspace_locator, turn_review_manifest_for_agent,
-        BackgroundSubagentWaitMode, ConversationCoordinator, SessionMemoryMode,
-        SessionReferenceLocator, SessionRelationshipKind, SubagentExecutionRequest,
-        TEST_AGENT_MODEL_DEFAULTS,
+        runtime_port_error_preserving_message, runtime_session_summary,
+        runtime_tool_restrictions_for_session_lifetime, session_storage_workspace_locator,
+        turn_review_manifest_for_agent, BackgroundSubagentWaitMode, ConversationCoordinator,
+        SessionMemoryMode, SessionReferenceLocator, SessionRelationshipKind,
+        SubagentExecutionRequest, TEST_AGENT_MODEL_DEFAULTS,
     };
     use crate::agentic::coordination::coordination_store::{
         BackgroundTaskRegistration, RegisteredBackgroundTask,
@@ -9658,6 +9658,26 @@ mod tests {
     use crate::agentic::tools::{ToolPipeline, ToolStateManager};
     use crate::agentic::TurnSkillAgentSnapshot;
     use crate::infrastructure::PathManager;
+
+    #[test]
+    fn runtime_session_list_preserves_the_runtime_owned_model_selector() {
+        let summary = runtime_session_summary(bitfun_agent_runtime::session::SessionSummary {
+            session_id: "session".to_string(),
+            session_name: "Session".to_string(),
+            agent_type: "agentic".to_string(),
+            model_id: Some("fast".to_string()),
+            last_user_dialog_agent_type: None,
+            last_submitted_agent_type: None,
+            created_by: None,
+            kind: SessionKind::Standard,
+            turn_count: 0,
+            created_at: std::time::UNIX_EPOCH,
+            last_activity_at: std::time::UNIX_EPOCH,
+            state: bitfun_agent_runtime::session_state::SessionState::Idle,
+        });
+
+        assert_eq!(summary.model_id.as_deref(), Some("fast"));
+    }
     use crate::runtime_ownership::CoreRuntimeOwnership;
     use crate::service::config::{AgentModelDefaultsConfig, SubagentModelSelection};
     use crate::service::remote_ssh::workspace_state::init_remote_workspace_manager;

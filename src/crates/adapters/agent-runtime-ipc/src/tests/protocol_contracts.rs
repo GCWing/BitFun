@@ -5,8 +5,8 @@ use crate::{
 
 use bitfun_product_domains::tool_permissions::PermissionReply;
 use bitfun_runtime_ports::{
-    AgentDialogTurnRequest, AgentSessionModeUpdateRequest, AgentSubmissionSource,
-    DialogSubmissionPolicy,
+    AgentDialogTurnRequest, AgentSessionModeUpdateRequest, AgentSessionModelUpdateRequest,
+    AgentSubmissionSource, DialogSubmissionPolicy,
 };
 use serde_json::{json, Map};
 
@@ -80,6 +80,27 @@ fn protocol_round_trips_the_reviewed_session_mode_operation() {
     assert_eq!(encoded["request"]["modeId"], "ask");
     let decoded: RuntimeIpcOperation =
         serde_json::from_value(encoded).expect("deserialize mode update");
+
+    assert_eq!(decoded, operation);
+    assert_eq!(decoded.session_id(), Some("session-1"));
+    assert!(decoded.requires_controller());
+}
+
+#[test]
+fn protocol_round_trips_the_reviewed_session_model_operation() {
+    let operation = RuntimeIpcOperation::UpdateSessionModel {
+        request: AgentSessionModelUpdateRequest {
+            session_id: "session-1".to_string(),
+            model_id: "provider/model".to_string(),
+        },
+    };
+
+    let encoded = serde_json::to_value(&operation).expect("serialize model update");
+    assert_eq!(encoded["operation"], "update_session_model");
+    assert_eq!(encoded["request"]["sessionId"], "session-1");
+    assert_eq!(encoded["request"]["modelId"], "provider/model");
+    let decoded: RuntimeIpcOperation =
+        serde_json::from_value(encoded).expect("deserialize model update");
 
     assert_eq!(decoded, operation);
     assert_eq!(decoded.session_id(), Some("session-1"));

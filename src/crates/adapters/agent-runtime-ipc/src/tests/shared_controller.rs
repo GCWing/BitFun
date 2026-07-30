@@ -8,8 +8,8 @@ use async_trait::async_trait;
 use bitfun_events::{AgenticEvent, AgenticEventEnvelope, AgenticEventPriority};
 use bitfun_runtime_ports::{
     AgentDialogTurnRequest, AgentSessionCreateRequest, AgentSessionCreateResult,
-    AgentSessionModeUpdateRequest, AgentSessionSummary, AgentSubmissionSource,
-    DialogSubmissionPolicy, SessionTranscript,
+    AgentSessionModeUpdateRequest, AgentSessionModelUpdateRequest, AgentSessionSummary,
+    AgentSubmissionSource, DialogSubmissionPolicy, SessionTranscript,
 };
 use serde_json::Map;
 use std::path::Path;
@@ -83,6 +83,7 @@ struct FakeHandler {
     calls: Mutex<Vec<RuntimeIpcOperation>>,
     delay: Option<Duration>,
     mode_delay: Option<Duration>,
+    model_delay: Option<Duration>,
     submit_delay: Option<Duration>,
     settle_cancel: bool,
     events: broadcast::Sender<RuntimeIpcEvent>,
@@ -104,6 +105,7 @@ impl Default for FakeHandler {
             calls: Mutex::new(Vec::new()),
             delay: None,
             mode_delay: None,
+            model_delay: None,
             submit_delay: None,
             settle_cancel: true,
             events,
@@ -176,6 +178,11 @@ impl RuntimeIpcRequestHandler for FakeHandler {
         }
         if matches!(operation, RuntimeIpcOperation::UpdateSessionMode { .. }) {
             if let Some(delay) = self.mode_delay {
+                tokio::time::sleep(delay).await;
+            }
+        }
+        if matches!(operation, RuntimeIpcOperation::UpdateSessionModel { .. }) {
+            if let Some(delay) = self.model_delay {
                 tokio::time::sleep(delay).await;
             }
         }
@@ -500,6 +507,15 @@ fn update_mode_operation(session_id: &str, mode_id: &str) -> RuntimeIpcOperation
     }
 }
 
+fn update_model_operation(session_id: &str, model_id: &str) -> RuntimeIpcOperation {
+    RuntimeIpcOperation::UpdateSessionModel {
+        request: AgentSessionModelUpdateRequest {
+            session_id: session_id.to_string(),
+            model_id: model_id.to_string(),
+        },
+    }
+}
+
 fn server_config() -> RuntimeIpcServerConfig {
     RuntimeIpcServerConfig {
         server_version: "shared-controller-test".to_string(),
@@ -781,6 +797,103 @@ async fn timed_out_mode_update_reports_unknown_outcome_and_closes_the_connection
 
     assert!(read_frame(&mut first).await.is_err());
     let mut second = server.connect("mode-timeout-successor").await;
+    expect_response(
+        &mut second,
+        2,
+        restore_operation(server.workspace.path(), "session-a"),
+    )
+    .await;
+    drop(first);
+    drop(second);
+    server.finish().await;
+}
+
+#[tokio::test]
+async fn model_update_requires_the_controlled_idle_session() {
+    let handler = Arc::new(FakeHandler::default());
+    let server = TestServer::start(server_config(), handler.clone()).await;
+    let mut client = server.connect("model-controller").await;
+
+    expect_error(
+        &mut client,
+        2,
+        update_model_operation("session-a", "provider/model-a"),
+        RuntimeIpcErrorCode::ControllerRequired,
+    )
+    .await;
+    expect_response(
+        &mut client,
+        3,
+        restore_operation(server.workspace.path(), "session-a"),
+    )
+    .await;
+    expect_error(
+        &mut client,
+        4,
+        update_model_operation("session-b", "provider/model-a"),
+        RuntimeIpcErrorCode::SessionMismatch,
+    )
+    .await;
+    expect_response(
+        &mut client,
+        5,
+        update_model_operation("session-a", "provider/model-a"),
+    )
+    .await;
+    expect_response(
+        &mut client,
+        6,
+        submit_operation(server.workspace.path(), "session-a", "turn-a"),
+    )
+    .await;
+    expect_error(
+        &mut client,
+        7,
+        update_model_operation("session-a", "provider/model-b"),
+        RuntimeIpcErrorCode::SessionInUse,
+    )
+    .await;
+
+    let calls = handler.calls.lock().expect("calls");
+    assert_eq!(
+        calls
+            .iter()
+            .filter(|operation| matches!(operation, RuntimeIpcOperation::UpdateSessionModel { .. }))
+            .count(),
+        1,
+        "only the controlled idle-session update reaches the Runtime handler"
+    );
+    drop(calls);
+    drop(client);
+    server.finish().await;
+}
+
+#[tokio::test]
+async fn timed_out_model_update_reports_unknown_outcome_and_closes_the_connection() {
+    let handler = Arc::new(FakeHandler {
+        model_delay: Some(Duration::from_millis(100)),
+        ..FakeHandler::default()
+    });
+    let mut config = server_config();
+    config.request_timeout = Duration::from_millis(20);
+    let server = TestServer::start(config, handler).await;
+    let mut first = server.connect("model-timeout").await;
+    expect_response(
+        &mut first,
+        2,
+        restore_operation(server.workspace.path(), "session-a"),
+    )
+    .await;
+    expect_error(
+        &mut first,
+        3,
+        update_model_operation("session-a", "provider/model-a"),
+        RuntimeIpcErrorCode::OutcomeUnknown,
+    )
+    .await;
+
+    assert!(read_frame(&mut first).await.is_err());
+    let mut second = server.connect("model-timeout-successor").await;
     expect_response(
         &mut second,
         2,

@@ -3500,30 +3500,53 @@ impl SessionManager {
         // a late model update.
         let _mutation_guard = self.acquire_session_mutation(session_id).await?;
 
-        if let Some(mut session) = self.sessions.get_mut(session_id) {
-            session.config.model_id = Some(model_id.to_string());
-            if let Some(ai_config) = ai_config.as_ref() {
-                resolved_context_window =
-                    Self::sync_session_context_window_from_ai_config(&mut session, ai_config);
+        let original_session = self
+            .sessions
+            .get(session_id)
+            .map(|session| session.clone())
+            .ok_or_else(|| BitFunError::NotFound(format!("Session not found: {}", session_id)))?;
+        let mut updated_session = original_session.clone();
+        updated_session.config.model_id = Some(model_id.to_string());
+        if let Some(ai_config) = ai_config.as_ref() {
+            resolved_context_window =
+                Self::sync_session_context_window_from_ai_config(&mut updated_session, ai_config);
+        }
+        let now = SystemTime::now();
+        updated_session.updated_at = now;
+        updated_session.last_activity_at = now;
+
+        if self.should_persist_session_id(session_id) {
+            let effective_path = self.effective_session_storage_path(session_id).await;
+            if let Some(workspace_path) = effective_path {
+                if let Err(error) = self
+                    .persistence_manager
+                    .save_session(&workspace_path, &updated_session)
+                    .await
+                {
+                    if let Err(rollback_error) = self
+                        .persistence_manager
+                        .save_session(&workspace_path, &original_session)
+                        .await
+                    {
+                        return Err(BitFunError::session(format!(
+                            "Session model persistence failed and rollback did not complete: session_id={session_id}, error={error}, rollback_error={rollback_error}"
+                        )));
+                    }
+                    return Err(error);
+                }
             }
-            session.updated_at = SystemTime::now();
-            session.last_activity_at = SystemTime::now();
+        }
+
+        if let Some(mut session) = self.sessions.get_mut(session_id) {
+            session.config.model_id = updated_session.config.model_id;
+            session.config.max_context_tokens = updated_session.config.max_context_tokens;
+            session.updated_at = now;
+            session.last_activity_at = now;
         } else {
             return Err(BitFunError::NotFound(format!(
                 "Session not found: {}",
                 session_id
             )));
-        }
-
-        if self.should_persist_session_id(session_id) {
-            let effective_path = self.effective_session_storage_path(session_id).await;
-            let session_snapshot = self.sessions.get(session_id).map(|s| s.clone());
-            // Ref guard released -- DashMap shard lock is free.
-            if let (Some(workspace_path), Some(session)) = (effective_path, session_snapshot) {
-                self.persistence_manager
-                    .save_session(&workspace_path, &session)
-                    .await?;
-            }
         }
 
         debug!(
@@ -5241,6 +5264,7 @@ impl SessionManager {
                         session_id: session.session_id.clone(),
                         session_name: session.session_name.clone(),
                         agent_type: session.agent_type.clone(),
+                        model_id: session.config.model_id.clone(),
                         last_user_dialog_agent_type: session.last_user_dialog_agent_type.clone(),
                         last_submitted_agent_type: session.last_submitted_agent_type.clone(),
                         created_by: session.created_by.clone(),
@@ -7894,6 +7918,49 @@ mod tests {
             .await
             .expect("session should restore from persistence");
         assert_eq!(restored.config.model_id.as_deref(), Some("auto"));
+    }
+
+    #[tokio::test]
+    async fn failed_session_model_update_preserves_runtime_and_persisted_selector() {
+        let workspace = TestWorkspace::new();
+        let persistence_manager = Arc::new(
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
+        );
+        let manager = test_manager(persistence_manager.clone());
+        let session = manager
+            .create_session(
+                "Failed model update".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.path().to_string_lossy().into_owned()),
+                    model_id: Some("primary".to_string()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("session should create");
+        persistence_manager.fail_next_session_state_write_for_test(&session.session_id);
+
+        manager
+            .update_session_model_id(&session.session_id, "fast")
+            .await
+            .expect_err("failed persistence must reject the model update");
+        assert_eq!(
+            manager
+                .get_session(&session.session_id)
+                .expect("session remains loaded")
+                .config
+                .model_id
+                .as_deref(),
+            Some("primary")
+        );
+
+        manager.evict_loaded_session_for_test(&session.session_id);
+        let restored = manager
+            .restore_session(workspace.path(), &session.session_id)
+            .await
+            .expect("failed update should restore the previous model");
+        assert_eq!(restored.config.model_id.as_deref(), Some("primary"));
     }
 
     #[tokio::test]

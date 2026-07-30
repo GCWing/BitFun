@@ -205,7 +205,7 @@ flowchart TB
 一次性 Headless CLI 继续 Embedded；公开 SDK 默认连接私有 SDK Host。Shared Agent Runtime process 和 SDK Host 都是 Rust 产品进程，
 与运行第三方 JS/TS 的 Node/Bun Plugin Host 不同；三者不能共享名称或业务归属。
 
-当前代码已经交付显式启用的 Shared TUI 最小切片，包含本机 IPC、身份、握手、Session/Turn、Permission/UserInput、
+当前代码已经交付显式启用的 Shared TUI 最小切片，包含本机 IPC、身份、握手、Session/Turn、当前 Session 的 Agent mode/model、Permission/UserInput、
 ownership 和生命周期治理；GUI、Headless CLI、ACP、SDK Host、Server/Remote 仍没有 Shared consumer。该图中的多入口逻辑复用是
 当前事实，除 Shared TUI 外的跨进程 Shared deployment 仍是目标架构。
 

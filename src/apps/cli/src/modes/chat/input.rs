@@ -1,5 +1,5 @@
-fn shared_session_change_is_blocked(is_shared: bool, mode_change_pending: bool) -> bool {
-    is_shared && mode_change_pending
+fn shared_session_change_is_blocked(is_shared: bool, session_update_pending: bool) -> bool {
+    is_shared && session_update_pending
 }
 
 impl ChatMode {
@@ -127,7 +127,7 @@ impl ChatMode {
                         self.apply_model_selection(&selected, chat_view, chat_state, rt_handle);
                     }
                 }
-                KeyCode::Char('e') => {
+                KeyCode::Char('e') if chat_view.model_selector_allows_edit() => {
                     if let Some(selected) = chat_view.model_selector_confirm() {
                         chat_view.hide_model_selector();
                         self.edit_model(&selected, chat_view, rt_handle);
@@ -404,16 +404,17 @@ impl ChatMode {
             ChatExitReason::SwitchSession(_) | ChatExitReason::NewSession
         ) && shared_session_change_is_blocked(
             this.agent.is_shared(),
-            this.pending_mode_change.is_some(),
+            this.pending_session_update.is_some(),
         ) {
             chat_view.set_status(Some(
-                "Wait for the agent mode change to finish before changing sessions.".to_string(),
+                "Wait for the current session update to finish before changing sessions."
+                    .to_string(),
             ));
             return;
         }
         match reason {
             ChatExitReason::SwitchSession(new_session_id) => {
-                if let Some(pending) = this.pending_mode_change.as_mut() {
+                if let Some(pending) = this.pending_session_update.as_mut() {
                     pending.exit_warning_shown = false;
                 }
                 match this.switch_to_session(
@@ -431,7 +432,7 @@ impl ChatMode {
                 }
             }
             ChatExitReason::NewSession => {
-                if let Some(pending) = this.pending_mode_change.as_mut() {
+                if let Some(pending) = this.pending_session_update.as_mut() {
                     pending.exit_warning_shown = false;
                 }
                 match this.create_new_session(session_id, chat_state, chat_view, rt_handle) {
@@ -444,11 +445,11 @@ impl ChatMode {
                 }
             }
             ChatExitReason::Quit => {
-                if let Some(pending) = this.pending_mode_change.as_mut() {
+                if let Some(pending) = this.pending_session_update.as_mut() {
                     if !pending.exit_warning_shown {
                         pending.exit_warning_shown = true;
                         chat_view.set_status(Some(
-                            "Exit requested. Waiting for the agent mode change to finish; exit again to leave now. This mode change may not be saved, and the next restore will use the last successfully persisted mode."
+                            "Exit requested. Waiting for the current session update to finish; exit again to leave now. The update may not be saved, and the next restore will use the last successfully persisted session state."
                                 .to_string(),
                         ));
                         return;

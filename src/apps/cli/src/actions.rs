@@ -114,44 +114,45 @@ pub(crate) enum ActionHandler {
 pub(crate) const SHARED_TUI_EMBEDDED_HANDOFF: &str =
     "Exit all Shared TUI clients, wait up to 30 seconds for their Runtime to stop, then use default Embedded `bitfun chat`";
 pub(crate) const SHARED_TUI_HELP_NOTE: &str =
-    "Shared TUI: start with `bitfun chat --shared`. Multiple TUI processes reuse one workspace Runtime, while each TUI controls at most one Session and each Session has one controller. Agent mode switching is available with `/agent`, Tab, and Shift+Tab. Model selection, Agent/Subagent management, MCP, extension, account-sync, usage, and other management remain Embedded. Exit all Shared TUI clients and wait up to 30 seconds before returning to default Embedded `bitfun chat`.";
+    "Shared TUI: start with `bitfun chat --shared`. Multiple TUI processes reuse one workspace Runtime, while each TUI controls at most one Session and each Session has one controller. Use `/agent`, Tab, or Shift+Tab to change the current Session Agent mode, and `/models` to change its model. Model configuration, Agent/Subagent management, MCP, extension, account-sync, usage, and other management remain Embedded. Exit all Shared TUI clients and wait up to 30 seconds before returning to default Embedded `bitfun chat`.";
 
 impl ActionHandler {
-    pub(crate) const fn available_in_shared_tui_preview(self) -> bool {
-        matches!(
-            self,
-            Self::Help
-                | Self::ClearConversation
-                | Self::SelectTheme
-                | Self::NewSession
-                | Self::Sessions
-                | Self::AcpHelp
-                | Self::Init
-                | Self::History
-                | Self::ToggleAutoApprove
-                | Self::OpenAgentSelector
-                | Self::SwitchAgent
-                | Self::SwitchAgentReverse
-                | Self::Exit
-                | Self::OpenPalette
-                | Self::SubmitInput
-                | Self::Interrupt
-                | Self::ClosePopups
-                | Self::NavigateBack
-                | Self::InsertNewline
-                | Self::Paste
-                | Self::ToggleFocusedTool
-                | Self::PreviousTool
-                | Self::NextTool
-                | Self::HistoryPrevious
-                | Self::HistoryNext
-                | Self::JumpTop
-                | Self::JumpBottom
-                | Self::ClearInput
-                | Self::ToggleBrowse
-                | Self::ScrollUp
-                | Self::ScrollDown
-        )
+    pub(crate) const fn available_in_shared_tui(self, context: ActionContext) -> bool {
+        (matches!(self, Self::SelectModel) && matches!(context, ActionContext::Chat))
+            || matches!(
+                self,
+                Self::Help
+                    | Self::ClearConversation
+                    | Self::SelectTheme
+                    | Self::NewSession
+                    | Self::Sessions
+                    | Self::AcpHelp
+                    | Self::Init
+                    | Self::History
+                    | Self::ToggleAutoApprove
+                    | Self::OpenAgentSelector
+                    | Self::SwitchAgent
+                    | Self::SwitchAgentReverse
+                    | Self::Exit
+                    | Self::OpenPalette
+                    | Self::SubmitInput
+                    | Self::Interrupt
+                    | Self::ClosePopups
+                    | Self::NavigateBack
+                    | Self::InsertNewline
+                    | Self::Paste
+                    | Self::ToggleFocusedTool
+                    | Self::PreviousTool
+                    | Self::NextTool
+                    | Self::HistoryPrevious
+                    | Self::HistoryNext
+                    | Self::JumpTop
+                    | Self::JumpBottom
+                    | Self::ClearInput
+                    | Self::ToggleBrowse
+                    | Self::ScrollUp
+                    | Self::ScrollDown
+            )
     }
 }
 
@@ -299,9 +300,9 @@ static ACTION_SPECS: &[ActionSpec] = &[
         id: "select_model",
         name: "Select model",
         aliases: &["/models"],
-        description: "Select AI model for all modes",
+        description: "Select model",
         contexts: BOTH,
-        availability: ActionAvailability::Always,
+        availability: ActionAvailability::Idle,
         handler: ActionHandler::SelectModel,
         default_bindings: &[],
         fallback_bindings: &[],
@@ -891,7 +892,7 @@ impl ActionSpec {
         if !self.supports_context(state.context) {
             return false;
         }
-        if state.shared_tui && !self.handler.available_in_shared_tui_preview() {
+        if state.shared_tui && !self.handler.available_in_shared_tui(state.context) {
             return false;
         }
         match self.availability {
@@ -903,15 +904,20 @@ impl ActionSpec {
     }
 
     fn description(&self, state: ActionState) -> &'static str {
-        if state.shared_tui && self.handler == ActionHandler::OpenAgentSelector {
-            "Choose an Agent mode"
-        } else {
-            self.description
+        match (self.handler, state.context) {
+            (ActionHandler::OpenAgentSelector, _) if state.shared_tui => "Choose an Agent mode",
+            (ActionHandler::SelectModel, ActionContext::Chat) => {
+                "Select model for the current session"
+            }
+            (ActionHandler::SelectModel, ActionContext::Startup) => {
+                "Select default model for future sessions"
+            }
+            _ => self.description,
         }
     }
 
     pub(crate) fn unavailable_message(&self, state: ActionState) -> String {
-        if state.shared_tui && !self.handler.available_in_shared_tui_preview() {
+        if state.shared_tui && !self.handler.available_in_shared_tui(state.context) {
             return format!(
                 "{} is unavailable in Shared TUI preview. {}",
                 self.name, SHARED_TUI_EMBEDDED_HANDOFF
@@ -1195,7 +1201,7 @@ impl ResolvedBinding {
         if !self.spec.supports_context(state.context) {
             return false;
         }
-        if state.shared_tui && !self.spec.handler.available_in_shared_tui_preview() {
+        if state.shared_tui && !self.spec.handler.available_in_shared_tui(state.context) {
             return false;
         }
         if state.popup_open
@@ -1781,18 +1787,21 @@ mod tests {
     use super::*;
 
     #[test]
-    fn shared_tui_supports_mode_switching_without_embedded_management() {
-        assert!(ActionHandler::Sessions.available_in_shared_tui_preview());
-        assert!(ActionHandler::Interrupt.available_in_shared_tui_preview());
+    fn shared_tui_supports_current_session_model_selection_without_model_management() {
+        assert!(ActionHandler::Sessions.available_in_shared_tui(ActionContext::Chat));
+        assert!(ActionHandler::Interrupt.available_in_shared_tui(ActionContext::Chat));
         for action in [
             ActionHandler::OpenAgentSelector,
             ActionHandler::SwitchAgent,
             ActionHandler::SwitchAgentReverse,
+            ActionHandler::SelectModel,
         ] {
-            assert!(action.available_in_shared_tui_preview(), "{action:?}");
+            assert!(
+                action.available_in_shared_tui(ActionContext::Chat),
+                "{action:?}"
+            );
         }
         for action in [
-            ActionHandler::SelectModel,
             ActionHandler::McpServers,
             ActionHandler::Tools,
             ActionHandler::Extensions,
@@ -1801,11 +1810,15 @@ mod tests {
             ActionHandler::Login,
             ActionHandler::Usage,
         ] {
-            assert!(!action.available_in_shared_tui_preview(), "{action:?}");
+            assert!(
+                !action.available_in_shared_tui(ActionContext::Chat),
+                "{action:?}"
+            );
         }
+        assert!(!ActionHandler::SelectModel.available_in_shared_tui(ActionContext::Startup));
         assert!(SHARED_TUI_HELP_NOTE.contains("bitfun chat --shared"));
         assert!(SHARED_TUI_HELP_NOTE.contains("one Session"));
-        assert!(SHARED_TUI_HELP_NOTE.contains("`/agent`, Tab, and Shift+Tab"));
+        assert!(SHARED_TUI_HELP_NOTE.contains("`/models`"));
         assert!(SHARED_TUI_HELP_NOTE.contains("Agent/Subagent management"));
         assert!(SHARED_TUI_HELP_NOTE.contains("remain Embedded"));
     }
@@ -1822,14 +1835,7 @@ mod tests {
             .map(|action| action.id)
             .collect::<Vec<_>>();
 
-        for unavailable in [
-            "select_model",
-            "skills",
-            "mcp_servers",
-            "extensions",
-            "hooks",
-            "usage",
-        ] {
+        for unavailable in ["skills", "mcp_servers", "extensions", "hooks", "usage"] {
             assert!(!slash_ids.contains(&unavailable), "{unavailable}");
             assert!(!palette_ids.contains(&unavailable), "{unavailable}");
         }
@@ -1838,9 +1844,39 @@ mod tests {
         }
         assert!(slash_ids.contains(&"switch_agent"));
         assert!(palette_ids.contains(&"switch_agent"));
+        assert!(slash_ids.contains(&"select_model"));
+        assert!(palette_ids.contains(&"select_model"));
 
         let help = ResolvedKeymap::new(&ShortcutsConfig::default()).help_text(state);
         assert!(help.contains("Switch Agent"));
+        let model_action = slash_actions(state)
+            .into_iter()
+            .find(|action| action.id == "select_model")
+            .expect("shared chat model action");
+        assert_eq!(
+            model_action.description,
+            "Select model for the current session"
+        );
+
+        let startup_state = ActionState::startup(false).for_shared_tui();
+        assert!(!slash_actions(startup_state)
+            .iter()
+            .any(|action| action.id == "select_model"));
+    }
+
+    #[test]
+    fn model_action_describes_session_scope_in_chat_and_default_scope_at_startup() {
+        let model = action_by_id("select_model", ActionContext::Chat).expect("model action");
+
+        assert_eq!(
+            model.description(ActionState::chat(false, false)),
+            "Select model for the current session"
+        );
+        assert_eq!(
+            model.description(ActionState::startup(false)),
+            "Select default model for future sessions"
+        );
+        assert!(!model.available(ActionState::chat(true, false)));
     }
 
     fn resolve_id(

@@ -66,45 +66,74 @@ fn validated_session_summary(
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct SessionModeMigrationNotice {
-    pub(crate) previous_mode_id: String,
-    pub(crate) restored_mode_id: String,
+pub(crate) enum SessionMigrationNotice {
+    Mode {
+        previous_id: String,
+        restored_id: String,
+    },
+    Model {
+        previous_id: String,
+        restored_id: String,
+    },
 }
 
-impl SessionModeMigrationNotice {
+impl SessionMigrationNotice {
     pub(crate) fn user_message(&self) -> String {
+        let (setting, previous_id, restored_id) = match self {
+            Self::Mode {
+                previous_id,
+                restored_id,
+            } => ("mode", previous_id, restored_id),
+            Self::Model {
+                previous_id,
+                restored_id,
+            } => ("model", previous_id, restored_id),
+        };
         format!(
-            "Session mode \"{}\" is unavailable. This session was restored with \"{}\". Review the mode before continuing.",
-            self.previous_mode_id, self.restored_mode_id
+            "Session {setting} \"{previous_id}\" is unavailable. This session was restored with \"{restored_id}\". Review the {setting} before continuing."
         )
     }
 }
 
-fn session_mode_migration_notice(
+fn session_migration_notices(
     previous: &AgentSessionSummary,
     restored: &AgentSessionSummary,
-) -> Option<SessionModeMigrationNotice> {
-    (previous.agent_type != restored.agent_type).then(|| SessionModeMigrationNotice {
-        previous_mode_id: previous.agent_type.clone(),
-        restored_mode_id: restored.agent_type.clone(),
-    })
+) -> Vec<SessionMigrationNotice> {
+    let mut notices = Vec::with_capacity(2);
+    if previous.agent_type != restored.agent_type {
+        notices.push(SessionMigrationNotice::Mode {
+            previous_id: previous.agent_type.clone(),
+            restored_id: restored.agent_type.clone(),
+        });
+    }
+    if let (Some(previous_id), Some(restored_id)) =
+        (previous.model_id.as_ref(), restored.model_id.as_ref())
+    {
+        if previous_id != restored_id {
+            notices.push(SessionMigrationNotice::Model {
+                previous_id: previous_id.clone(),
+                restored_id: restored_id.clone(),
+            });
+        }
+    }
+    notices
 }
 
 #[derive(Debug)]
-pub(crate) struct SessionModeUpdateError {
+pub(crate) struct SessionUpdateError {
     message: String,
     outcome_unknown: bool,
 }
 
-impl fmt::Display for SessionModeUpdateError {
+impl fmt::Display for SessionUpdateError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str(&self.message)
     }
 }
 
-impl std::error::Error for SessionModeUpdateError {}
+impl std::error::Error for SessionUpdateError {}
 
-impl SessionModeUpdateError {
+impl SessionUpdateError {
     fn runtime(error: RuntimeError) -> Self {
         Self {
             message: error.into_message(),
@@ -446,7 +475,7 @@ impl CliAgentRuntimeClient {
     ) -> Result<(
         AgentSessionSummary,
         AgentSessionWorkspaceBinding,
-        Option<SessionModeMigrationNotice>,
+        Vec<SessionMigrationNotice>,
         SessionTranscript,
     )> {
         tracing::info!("Restoring session: {}", session_id);
@@ -529,8 +558,8 @@ impl CliAgentRuntimeClient {
             );
         }
 
-        let migration_notice = session_mode_migration_notice(&previous_summary, &restored);
-        Ok((restored, binding, migration_notice, transcript))
+        let migration_notices = session_migration_notices(&previous_summary, &restored);
+        Ok((restored, binding, migration_notices, transcript))
     }
 
     async fn resolve_session_workspace_binding(
@@ -586,21 +615,31 @@ impl CliAgentRuntimeClient {
         &self,
         session_id: &str,
         model_id: &str,
-    ) -> Result<()> {
-        self.embedded_runtime("changing the session model")?
-            .update_session_model(AgentSessionModelUpdateRequest {
-                session_id: session_id.to_string(),
-                model_id: model_id.to_string(),
-            })
-            .await
-            .map_err(|error| anyhow::anyhow!(error.into_message()))
+    ) -> std::result::Result<(), SessionUpdateError> {
+        let request = AgentSessionModelUpdateRequest {
+            session_id: session_id.to_string(),
+            model_id: model_id.to_string(),
+        };
+        match &self.backend {
+            CliAgentRuntimeBackend::Embedded(runtime) => runtime
+                .update_session_model(request)
+                .await
+                .map_err(SessionUpdateError::runtime),
+            CliAgentRuntimeBackend::Shared(client) => {
+                let result = client
+                    .request(RuntimeIpcOperation::UpdateSessionModel { request })
+                    .await
+                    .map_err(SessionUpdateError::shared)?;
+                expect_unit(result, "update_session_model").map_err(SessionUpdateError::unexpected)
+            }
+        }
     }
 
     pub(crate) async fn update_session_mode(
         &self,
         session_id: &str,
         mode_id: &str,
-    ) -> std::result::Result<(), SessionModeUpdateError> {
+    ) -> std::result::Result<(), SessionUpdateError> {
         let request = AgentSessionModeUpdateRequest {
             session_id: session_id.to_string(),
             mode_id: mode_id.to_string(),
@@ -609,14 +648,13 @@ impl CliAgentRuntimeClient {
             CliAgentRuntimeBackend::Embedded(runtime) => runtime
                 .update_session_mode(request)
                 .await
-                .map_err(SessionModeUpdateError::runtime),
+                .map_err(SessionUpdateError::runtime),
             CliAgentRuntimeBackend::Shared(client) => {
                 let result = client
                     .request(RuntimeIpcOperation::UpdateSessionMode { request })
                     .await
-                    .map_err(SessionModeUpdateError::shared)?;
-                expect_unit(result, "update_session_mode")
-                    .map_err(SessionModeUpdateError::unexpected)
+                    .map_err(SessionUpdateError::shared)?;
+                expect_unit(result, "update_session_mode").map_err(SessionUpdateError::unexpected)
             }
         }
     }
@@ -1245,8 +1283,9 @@ mod tests {
     use bitfun_agent_runtime_ipc::{RuntimeIpcClientError, RuntimeIpcError, RuntimeIpcErrorCode};
 
     use super::{
-        project_routed_permission_event, session_mode_migration_notice, shared_disconnect_message,
-        shared_restore_error, validated_session_summary, CliWorkspacePaths, SessionModeUpdateError,
+        project_routed_permission_event, session_migration_notices, shared_disconnect_message,
+        shared_restore_error, validated_session_summary, CliWorkspacePaths, SessionMigrationNotice,
+        SessionUpdateError,
     };
     use bitfun_agent_runtime_ipc::RuntimeIpcStreamInvalidationReason;
 
@@ -1262,12 +1301,11 @@ mod tests {
     }
 
     #[test]
-    fn shared_mode_update_preserves_unknown_outcome_as_a_typed_fact() {
-        let error =
-            SessionModeUpdateError::shared(RuntimeIpcClientError::Remote(RuntimeIpcError {
-                code: RuntimeIpcErrorCode::OutcomeUnknown,
-                message: "inspect authoritative state before retrying".to_string(),
-            }));
+    fn shared_session_update_preserves_unknown_outcome_as_a_typed_fact() {
+        let error = SessionUpdateError::shared(RuntimeIpcClientError::Remote(RuntimeIpcError {
+            code: RuntimeIpcErrorCode::OutcomeUnknown,
+            message: "inspect authoritative state before retrying".to_string(),
+        }));
 
         assert!(error.outcome_unknown());
         assert!(error.to_string().contains("OutcomeUnknown"));
@@ -1277,14 +1315,14 @@ mod tests {
             RuntimeIpcClientError::Disconnected,
             RuntimeIpcClientError::UnexpectedResponse,
         ] {
-            assert!(SessionModeUpdateError::shared(transport_error).outcome_unknown());
+            assert!(SessionUpdateError::shared(transport_error).outcome_unknown());
         }
         assert!(
-            SessionModeUpdateError::unexpected(anyhow::anyhow!("unexpected response shape"))
+            SessionUpdateError::unexpected(anyhow::anyhow!("unexpected response shape"))
                 .outcome_unknown()
         );
         assert!(
-            !SessionModeUpdateError::shared(RuntimeIpcClientError::Remote(RuntimeIpcError {
+            !SessionUpdateError::shared(RuntimeIpcClientError::Remote(RuntimeIpcError {
                 code: RuntimeIpcErrorCode::InvalidRequest,
                 message: "unknown mode".to_string(),
             },))
@@ -1347,15 +1385,13 @@ mod tests {
     #[test]
     fn model_updates_use_the_runtime_sdk_without_the_core_compatibility_facade() {
         let source = include_str!("runtime_client.rs").replace("\r\n", "\n");
-        let runtime_update = [
-            "self.embedded_runtime(\"changing the session model\")?",
-            "\n            .update_session_model",
-        ]
-        .concat();
         let compatibility_update =
             ["self.compatibility", "\n            .update_session_model"].concat();
 
-        assert!(source.contains(&runtime_update));
+        assert!(source.contains("CliAgentRuntimeBackend::Embedded(runtime)"));
+        assert!(source.contains("runtime.update_session_model(request)"));
+        assert!(source.contains("CliAgentRuntimeBackend::Shared(client)"));
+        assert!(source.contains("RuntimeIpcOperation::UpdateSessionModel { request }"));
         assert!(!source.contains(&compatibility_update));
     }
 
@@ -1439,18 +1475,45 @@ mod tests {
         };
         let restored = session_summary("mode-migration");
 
-        let notice = session_mode_migration_notice(&previous, &restored)
-            .expect("changed mode should be reported to the TUI");
+        let notices = session_migration_notices(&previous, &restored);
 
-        assert_eq!(notice.previous_mode_id, "removed-mode");
-        assert_eq!(notice.restored_mode_id, "agentic");
+        assert_eq!(
+            notices,
+            vec![SessionMigrationNotice::Mode {
+                previous_id: "removed-mode".to_string(),
+                restored_id: "agentic".to_string(),
+            }]
+        );
     }
 
     #[test]
-    fn restore_does_not_report_a_notice_when_the_mode_is_unchanged() {
+    fn restore_reports_a_cli_local_notice_when_core_migrates_the_model() {
+        let previous = AgentSessionSummary {
+            model_id: Some("removed-model".to_string()),
+            ..session_summary("model-migration")
+        };
+        let restored = AgentSessionSummary {
+            model_id: Some("auto".to_string()),
+            ..session_summary("model-migration")
+        };
+
+        let notices = session_migration_notices(&previous, &restored);
+
+        assert_eq!(
+            notices,
+            vec![SessionMigrationNotice::Model {
+                previous_id: "removed-model".to_string(),
+                restored_id: "auto".to_string(),
+            }]
+        );
+        assert!(notices[0].user_message().contains("unavailable"));
+    }
+
+    #[test]
+    fn restore_does_not_report_notices_when_session_settings_are_unchanged() {
         let summary = session_summary("unchanged-mode");
 
-        assert!(session_mode_migration_notice(&summary, &summary).is_none());
+        assert!(session_migration_notices(&summary, &summary).is_empty());
     }
 
     #[test]

@@ -43,7 +43,7 @@ impl ChatMode {
             })
         });
 
-        let (mut session_id, mut chat_state, mode_migration_notice) =
+        let (mut session_id, mut chat_state, migration_notices) =
             if let Some(ref restore_id) = self.restore_session_id {
                 // Restore existing session
                 tracing::info!("Restoring session: {}", restore_id);
@@ -53,7 +53,7 @@ impl ChatMode {
                 tokio::task::block_in_place(|| {
                     rt_handle.block_on(async {
                         // Restore session in core (loads metadata, messages, managers)
-                        let (summary, workspace_binding, migration_notice, transcript) =
+                        let (summary, workspace_binding, migration_notices, transcript) =
                             agent.restore_session_in_current_workspace(&rid).await?;
                         let effective_workspace = Some(workspace_binding.workspace_path.clone());
 
@@ -64,6 +64,7 @@ impl ChatMode {
                             effective_workspace,
                             &transcript,
                         );
+                        state.current_model_id = summary.model_id;
                         state.apply_workspace_binding(workspace_binding);
 
                         tracing::info!(
@@ -72,7 +73,7 @@ impl ChatMode {
                             transcript.messages.len()
                         );
 
-                        Ok::<_, anyhow::Error>((rid, state, migration_notice))
+                        Ok::<_, anyhow::Error>((rid, state, migration_notices))
                     })
                 })?
             } else {
@@ -95,7 +96,7 @@ impl ChatMode {
                     Some(workspace_binding.workspace_path.clone()),
                 );
                 state.apply_workspace_binding(workspace_binding);
-                (session_id, state, None)
+                (session_id, state, Vec::new())
             };
         chat_state.set_worktree_control_available(!self.agent.is_shared());
         self.auto_approve_ask_override = None;
@@ -199,16 +200,16 @@ impl ChatMode {
             }
         }
 
-        if let Some(notice) = &mode_migration_notice {
+        for notice in &migration_notices {
             chat_state.add_system_message(notice.user_message());
         }
 
         // Send initial prompt if provided (from startup page input)
         if let Some(prompt) = self.initial_prompt.take() {
-            if mode_migration_notice.is_some() {
+            if !migration_notices.is_empty() {
                 chat_view.text_input.set_text(&prompt);
                 chat_view.set_status(Some(
-                    "The restored session uses a fallback mode. Review it, then send the preserved input explicitly."
+                    "The restored session uses fallback settings. Review them, then send the preserved input explicitly."
                         .to_string(),
                 ));
             } else if prompt.starts_with('/') {
@@ -251,9 +252,9 @@ impl ChatMode {
                 self.action_state(chat_state.is_processing, false),
                 &self.keymap,
             );
-            chat_view.set_agent_mode_switch_allowed(agent_mode_switch_allowed(
+            chat_view.set_agent_mode_switch_allowed(session_update_allowed(
                 chat_state.is_processing,
-                self.pending_mode_change.is_some(),
+                self.pending_session_update.is_some(),
             ));
 
             // Keep spinner animation smooth without forcing full redraw every loop.
@@ -273,15 +274,15 @@ impl ChatMode {
             if self.poll_mcp_task_completion(&mut chat_view, &mut chat_state, &rt_handle) {
                 needs_redraw = true;
             }
-            match self.poll_mode_change_completion(&mut chat_view, &mut chat_state, &rt_handle) {
-                ModeChangePollOutcome::NoChange => {}
-                ModeChangePollOutcome::Redraw => needs_redraw = true,
-                ModeChangePollOutcome::ExitAfterSave => {
+            match self.poll_session_update_completion(&mut chat_view, &mut chat_state, &rt_handle) {
+                SessionUpdatePollOutcome::NoChange => {}
+                SessionUpdatePollOutcome::Redraw => needs_redraw = true,
+                SessionUpdatePollOutcome::ExitAfterSave => {
                     should_quit = true;
                     exit_reason = ChatExitReason::Quit;
                     continue;
                 }
-                ModeChangePollOutcome::ExitAfterUnknownOutcome(message) => {
+                SessionUpdatePollOutcome::ExitAfterUnknownOutcome(message) => {
                     fatal_event_stream_error = Some(message);
                     break;
                 }
@@ -700,6 +701,26 @@ impl ChatMode {
                     } => {
                         if chat_state.current_turn_id() == Some(turn_id.as_str()) {
                             chat_state.handle_token_usage(*total_tokens);
+                            needs_redraw = true;
+                        }
+                    }
+
+                    AgenticEvent::SessionModelAutoMigrated {
+                        session_id,
+                        previous_model_id,
+                        new_model_id,
+                        reason,
+                        ..
+                    } => {
+                        if apply_session_model_migration(
+                            &mut chat_state,
+                            session_id,
+                            previous_model_id,
+                            new_model_id,
+                            reason,
+                        ) {
+                            self.load_current_model_name(&mut chat_state, &rt_handle);
+                            chat_view.invalidate_lines_cache();
                             needs_redraw = true;
                         }
                     }

@@ -1,8 +1,8 @@
-fn mode_change_blocks_typed_submission(pending_for_current_session: bool, input: &str) -> bool {
+fn session_update_blocks_typed_submission(pending_for_current_session: bool, input: &str) -> bool {
     pending_for_current_session && !input.trim().starts_with('/')
 }
 
-fn pending_mode_change_blocks_runtime_action(
+fn pending_session_update_blocks_runtime_action(
     shared_tui: bool,
     pending_for_current_session: bool,
     handler: ActionHandler,
@@ -645,16 +645,16 @@ impl ChatMode {
             return Ok(None);
         }
         let pending_for_current_session = self
-            .pending_mode_change
+            .pending_session_update
             .as_ref()
             .is_some_and(|pending| pending.session_id == chat_state.core_session_id);
-        if pending_mode_change_blocks_runtime_action(
+        if pending_session_update_blocks_runtime_action(
             self.agent.is_shared(),
             pending_for_current_session,
             action.handler,
         ) {
             chat_view.set_status(Some(format!(
-                "Waiting for the agent mode change to finish before using {}.",
+                "Waiting for the current session update to finish before using {}.",
                 action.name
             )));
             return Ok(None);
@@ -849,12 +849,12 @@ impl ChatMode {
 
         let trimmed = chat_view.input_text().trim();
         let pending_for_current_session = self
-            .pending_mode_change
+            .pending_session_update
             .as_ref()
             .is_some_and(|pending| pending.session_id == chat_state.core_session_id);
-        if mode_change_blocks_typed_submission(pending_for_current_session, trimmed) {
+        if session_update_blocks_typed_submission(pending_for_current_session, trimmed) {
             chat_view.set_status(Some(
-                "Waiting for the agent mode change to finish before sending.".to_string(),
+                "Waiting for the current session update to finish before sending.".to_string(),
             ));
             return Ok(None);
         }

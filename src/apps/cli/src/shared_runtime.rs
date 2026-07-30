@@ -265,6 +265,13 @@ impl RuntimeIpcRequestHandler for SharedRuntimeHandler {
                     .map_err(runtime_ipc_error)?;
                 Ok(RuntimeIpcOperationResult::Unit)
             }
+            RuntimeIpcOperation::UpdateSessionModel { request } => {
+                self.runtime
+                    .update_session_model(request)
+                    .await
+                    .map_err(runtime_ipc_error)?;
+                Ok(RuntimeIpcOperationResult::Unit)
+            }
             RuntimeIpcOperation::SubmitTurn { request } => {
                 let outcome = self
                     .runtime

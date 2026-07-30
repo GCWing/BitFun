@@ -351,6 +351,12 @@ fn interactive_tui_agent_operations_stay_behind_cli_runtime_client() {
             && SHARED_RUNTIME.contains(".update_session_mode(request)"),
         "Shared Agent mode updates must reuse the Runtime port through the private IPC adapter"
     );
+    assert!(
+        RUNTIME_CLIENT.contains("RuntimeIpcOperation::UpdateSessionModel { request }")
+            && SHARED_RUNTIME.contains("RuntimeIpcOperation::UpdateSessionModel { request }")
+            && SHARED_RUNTIME.contains(".update_session_model(request)"),
+        "Shared model updates must reuse the Runtime port through the private IPC adapter"
+    );
     let shared_command_path = CHAT_COMMANDS
         .split_once("fn handle_command(")
         .expect("handle_command")

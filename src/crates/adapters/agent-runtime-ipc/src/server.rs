@@ -414,6 +414,7 @@ async fn run_initialized_connection(
                             | RuntimeIpcOperation::RestoreSession { .. }
                             | RuntimeIpcOperation::CreateSession { .. }
                             | RuntimeIpcOperation::UpdateSessionMode { .. }
+                            | RuntimeIpcOperation::UpdateSessionModel { .. }
                     )
                 {
                     send_error(
@@ -670,6 +671,7 @@ fn operation_has_side_effects(operation: &RuntimeIpcOperation) -> bool {
         RuntimeIpcOperation::CreateSession { .. }
             | RuntimeIpcOperation::RestoreSession { .. }
             | RuntimeIpcOperation::UpdateSessionMode { .. }
+            | RuntimeIpcOperation::UpdateSessionModel { .. }
             | RuntimeIpcOperation::SubmitTurn { .. }
             | RuntimeIpcOperation::CancelTurn { .. }
             | RuntimeIpcOperation::RespondPermission { .. }

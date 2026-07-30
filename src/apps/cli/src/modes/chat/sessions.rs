@@ -11,10 +11,10 @@ impl ChatMode {
         let agent = self.agent.clone();
         let sid = new_session_id.to_string();
 
-        let (new_state, restored_agent_type, migration_notice) =
+        let (new_state, restored_agent_type, migration_notices) =
             tokio::task::block_in_place(|| {
                 rt_handle.block_on(async {
-                    let (session_summary, workspace_binding, migration_notice, transcript) =
+                    let (session_summary, workspace_binding, migration_notices, transcript) =
                         agent.restore_session_in_current_workspace(&sid).await?;
                     let restored_agent_type = session_summary.agent_type.clone();
                     let effective_workspace = Some(workspace_binding.workspace_path.clone());
@@ -26,9 +26,10 @@ impl ChatMode {
                         effective_workspace,
                         &transcript,
                     );
+                    state.current_model_id = session_summary.model_id;
                     state.apply_workspace_binding(workspace_binding);
 
-                    Ok::<_, anyhow::Error>((state, restored_agent_type, migration_notice))
+                    Ok::<_, anyhow::Error>((state, restored_agent_type, migration_notices))
                 })
             })?;
 
@@ -47,7 +48,7 @@ impl ChatMode {
         // Reload model name
         self.load_current_model_name(chat_state, rt_handle);
 
-        if let Some(notice) = migration_notice {
+        for notice in migration_notices {
             chat_state.add_system_message(notice.user_message());
         }
 
@@ -116,12 +117,12 @@ impl ChatMode {
         rt_handle: &tokio::runtime::Handle,
     ) {
         if self
-            .pending_mode_change
+            .pending_session_update
             .as_ref()
             .is_some_and(|pending| pending.session_id == chat_state.core_session_id)
         {
             chat_view.set_status(Some(
-                "Waiting for the agent mode change to finish before sending.".to_string(),
+                "Waiting for the current session update to finish before sending.".to_string(),
             ));
             return;
         }

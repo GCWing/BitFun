@@ -4,26 +4,25 @@ mod tests {
 
     use super::{
         action_opens_extension_management, agent_event_stream_failure, apply_agent_mode_feedback,
-        apply_model_selection_feedback, builtin_command_reconfirmation,
-        cli_native_prompt_command_descriptors, command_route, extension_command_help_request,
-        external_agent_attention, external_agent_diagnostic_lines,
+        apply_model_selection_feedback, apply_session_model_migration,
+        builtin_command_reconfirmation, cli_native_prompt_command_descriptors, command_route,
+        extension_command_help_request, external_agent_attention, external_agent_diagnostic_lines,
         external_agent_pending_notice_key, external_agent_result_is_stale,
         external_agent_review_text, external_command_projections, external_control_review_text,
         external_hook_help_text, external_integration_policy_lines,
         external_operation_error_status, external_tool_mutation_result_label,
         external_tool_pending_notice_key, external_tool_result_is_stale, external_tool_review_text,
         external_tool_run_location_label, mark_active_turn_failed,
-        merge_external_agent_mutation_snapshot, mode_change_blocks_typed_submission,
-        mode_change_completion_should_exit, native_command_choice_is_active,
+        merge_external_agent_mutation_snapshot, native_command_choice_is_active,
         native_command_reconfirmation_is_required, native_hook_help_text,
         parse_external_agent_review_action, parse_external_control_action,
         parse_external_tool_review_action, parse_hook_management_action,
-        pending_mode_change_blocks_runtime_action, previous_session_mode_change_status,
-        render_external_hook_catalog, render_native_hook_overview,
+        pending_session_update_blocks_runtime_action, previous_session_update_status,
+        render_external_hook_catalog, render_native_hook_overview, session_update_allowed,
+        session_update_blocks_typed_submission, session_update_completion_should_exit,
         shared_session_change_is_blocked, CommandRoute, ExternalAgentReviewAction,
         ExternalControlUiAction, ExternalSourceConflictPreferences, ExternalToolReviewAction,
-        HookManagementAction, ModeSelectionApplyOutcome, ModelSelectionApplyOutcome,
-        SHARED_TUI_CHAT_STATUS,
+        HookManagementAction, SessionUpdateApplyOutcome, SHARED_TUI_CHAT_STATUS,
     };
     use crate::actions::{
         action_conflict_behavior_version, ActionHandler, ActionState, ResolvedKeymap,
@@ -1229,31 +1228,103 @@ mod tests {
     }
 
     #[test]
-    fn model_selection_keeps_the_applied_session_model_when_default_persistence_fails() {
+    fn model_selection_commits_only_the_current_session_state_after_runtime_success() {
         let mut state = ChatState::new(
             "session".to_string(),
             "Session".to_string(),
             "agentic".to_string(),
             Some("D:/workspace/current".to_string()),
         );
+        state.current_model_id = Some("old-model-id".to_string());
         state.current_model_name = "Old model".to_string();
 
         apply_model_selection_feedback(
             &mut state,
             "New model / Provider",
             "new-model-id",
-            ModelSelectionApplyOutcome::Applied {
-                default_persist_error: Some("config storage unavailable".to_string()),
-            },
+            SessionUpdateApplyOutcome::Applied,
         );
 
+        assert_eq!(state.current_model_id.as_deref(), Some("new-model-id"));
         assert_eq!(state.current_model_name, "New model / Provider");
-        let notice = state.messages.last().expect("partial-success notice");
+        assert!(state.messages.is_empty());
+    }
+
+    #[test]
+    fn runtime_model_migration_replaces_the_visible_session_model_and_explains_why() {
+        let mut state = ChatState::new(
+            "session".to_string(),
+            "Session".to_string(),
+            "agentic".to_string(),
+            Some("D:/workspace/current".to_string()),
+        );
+        state.current_model_id = Some("removed-model".to_string());
+        state.current_model_name = "Removed model".to_string();
+
+        assert!(apply_session_model_migration(
+            &mut state,
+            "session",
+            "removed-model",
+            "replacement-model",
+            "model_deleted",
+        ));
+
+        assert_eq!(state.current_model_id.as_deref(), Some("replacement-model"));
+        assert_eq!(state.current_model_name, "replacement-model");
+        let notice = state.messages.last().expect("migration notice");
         let crate::chat_state::FlowItem::Text { content, .. } = &notice.flow_items[0] else {
-            panic!("partial-success notice must be text");
+            panic!("migration notice must be text");
         };
-        assert!(content.contains("current session"));
-        assert!(content.contains("future sessions"));
+        assert!(content.contains("removed-model"));
+        assert!(content.contains("replacement-model"));
+        assert!(content.contains("model_deleted"));
+    }
+
+    #[test]
+    fn runtime_model_migration_ignores_another_session() {
+        let mut state = ChatState::new(
+            "current-session".to_string(),
+            "Session".to_string(),
+            "agentic".to_string(),
+            Some("D:/workspace/current".to_string()),
+        );
+        state.current_model_id = Some("removed-model".to_string());
+        state.current_model_name = "Removed model".to_string();
+
+        assert!(!apply_session_model_migration(
+            &mut state,
+            "other-session",
+            "removed-model",
+            "replacement-model",
+            "model_deleted",
+        ));
+        assert_eq!(state.current_model_id.as_deref(), Some("removed-model"));
+        assert!(state.messages.is_empty());
+    }
+
+    #[test]
+    fn runtime_model_migration_ignores_a_stale_previous_selector() {
+        let mut state = ChatState::new(
+            "session".to_string(),
+            "Session".to_string(),
+            "agentic".to_string(),
+            Some("D:/workspace/current".to_string()),
+        );
+        state.current_model_id = Some("newer-explicit-model".to_string());
+        state.current_model_name = "Newer explicit model".to_string();
+
+        assert!(!apply_session_model_migration(
+            &mut state,
+            "session",
+            "removed-model",
+            "auto",
+            "model_deleted",
+        ));
+        assert_eq!(
+            state.current_model_id.as_deref(),
+            Some("newer-explicit-model")
+        );
+        assert!(state.messages.is_empty());
     }
 
     #[test]
@@ -1264,15 +1335,17 @@ mod tests {
             "agentic".to_string(),
             Some("D:/workspace/current".to_string()),
         );
+        state.current_model_id = Some("old-model-id".to_string());
         state.current_model_name = "Old model".to_string();
 
         apply_model_selection_feedback(
             &mut state,
             "New model / Provider",
             "new-model-id",
-            ModelSelectionApplyOutcome::SessionUpdateFailed("session unavailable".to_string()),
+            SessionUpdateApplyOutcome::SessionUpdateFailed("session unavailable".to_string()),
         );
 
+        assert_eq!(state.current_model_id.as_deref(), Some("old-model-id"));
         assert_eq!(state.current_model_name, "Old model");
         let notice = state.messages.last().expect("failure notice");
         let crate::chat_state::FlowItem::Text { content, .. } = &notice.flow_items[0] else {
@@ -1280,6 +1353,34 @@ mod tests {
         };
         assert!(content.contains("was not changed"));
         assert!(content.contains("retry"));
+    }
+
+    #[test]
+    fn unknown_model_update_outcome_requires_restore_before_retry() {
+        let mut state = ChatState::new(
+            "session".to_string(),
+            "Session".to_string(),
+            "agentic".to_string(),
+            Some("D:/workspace/current".to_string()),
+        );
+        state.current_model_id = Some("old-model-id".to_string());
+        state.current_model_name = "Old model".to_string();
+
+        apply_model_selection_feedback(
+            &mut state,
+            "New model / Provider",
+            "new-model-id",
+            SessionUpdateApplyOutcome::OutcomeUnknown("request timed out".to_string()),
+        );
+
+        assert_eq!(state.current_model_id.as_deref(), Some("old-model-id"));
+        assert_eq!(state.current_model_name, "Old model");
+        let notice = state.messages.last().expect("unknown-outcome notice");
+        let crate::chat_state::FlowItem::Text { content, .. } = &notice.flow_items[0] else {
+            panic!("unknown-outcome notice must be text");
+        };
+        assert!(content.contains("outcome is unknown"));
+        assert!(content.contains("restore this session"));
     }
 
     #[test]
@@ -1296,7 +1397,7 @@ mod tests {
             &mut current_mode,
             &mut state,
             "plan",
-            ModeSelectionApplyOutcome::Applied,
+            SessionUpdateApplyOutcome::Applied,
         );
 
         assert!(applied);
@@ -1318,7 +1419,7 @@ mod tests {
             &mut current_mode,
             &mut state,
             "plan",
-            ModeSelectionApplyOutcome::SessionUpdateFailed(
+            SessionUpdateApplyOutcome::SessionUpdateFailed(
                 "session storage unavailable".to_string(),
             ),
         );
@@ -1335,10 +1436,11 @@ mod tests {
     }
 
     #[test]
-    fn previous_session_mode_failure_is_not_reported_as_a_success() {
-        let status = previous_session_mode_change_status(
+    fn previous_session_update_failure_is_not_reported_as_a_success() {
+        let status = previous_session_update_status(
+            "mode",
             "Plan",
-            &ModeSelectionApplyOutcome::SessionUpdateFailed("storage unavailable".to_string()),
+            &SessionUpdateApplyOutcome::SessionUpdateFailed("storage unavailable".to_string()),
         );
 
         assert!(status.contains("failed"));
@@ -1360,7 +1462,7 @@ mod tests {
             &mut current_mode,
             &mut state,
             "plan",
-            ModeSelectionApplyOutcome::OutcomeUnknown("request timed out".to_string()),
+            SessionUpdateApplyOutcome::OutcomeUnknown("request timed out".to_string()),
         );
 
         assert!(!applied);
@@ -1377,39 +1479,39 @@ mod tests {
     }
 
     #[test]
-    fn pending_mode_change_routes_commands_to_their_action_guards() {
-        assert!(mode_change_blocks_typed_submission(true, "continue"));
-        assert!(!mode_change_blocks_typed_submission(true, "/new"));
-        assert!(!mode_change_blocks_typed_submission(true, "/sessions"));
-        assert!(!mode_change_blocks_typed_submission(true, "/exit"));
-        assert!(!mode_change_blocks_typed_submission(false, "continue"));
+    fn pending_session_update_routes_commands_to_their_action_guards() {
+        assert!(session_update_blocks_typed_submission(true, "continue"));
+        assert!(!session_update_blocks_typed_submission(true, "/new"));
+        assert!(!session_update_blocks_typed_submission(true, "/sessions"));
+        assert!(!session_update_blocks_typed_submission(true, "/exit"));
+        assert!(!session_update_blocks_typed_submission(false, "continue"));
 
-        assert!(pending_mode_change_blocks_runtime_action(
+        assert!(pending_session_update_blocks_runtime_action(
             true,
             true,
             ActionHandler::Sessions,
         ));
-        assert!(pending_mode_change_blocks_runtime_action(
+        assert!(pending_session_update_blocks_runtime_action(
             true,
             true,
             ActionHandler::Init,
         ));
-        assert!(!pending_mode_change_blocks_runtime_action(
+        assert!(!pending_session_update_blocks_runtime_action(
             true,
             true,
             ActionHandler::Exit,
         ));
-        assert!(!pending_mode_change_blocks_runtime_action(
+        assert!(!pending_session_update_blocks_runtime_action(
             true,
             true,
             ActionHandler::OpenAgentSelector,
         ));
-        assert!(!pending_mode_change_blocks_runtime_action(
+        assert!(!pending_session_update_blocks_runtime_action(
             false,
             true,
             ActionHandler::Sessions,
         ));
-        assert!(!pending_mode_change_blocks_runtime_action(
+        assert!(!pending_session_update_blocks_runtime_action(
             true,
             false,
             ActionHandler::Sessions,
@@ -1417,24 +1519,32 @@ mod tests {
     }
 
     #[test]
-    fn shared_session_change_waits_for_the_mode_update_result() {
+    fn shared_session_change_waits_for_the_current_session_update_result() {
         assert!(shared_session_change_is_blocked(true, true));
         assert!(!shared_session_change_is_blocked(true, false));
         assert!(!shared_session_change_is_blocked(false, true));
     }
 
     #[test]
-    fn shared_chat_status_separates_mode_switching_from_agent_management() {
+    fn shared_chat_status_separates_session_selection_from_management() {
         assert!(SHARED_TUI_CHAT_STATUS.contains("current Session Agent mode"));
-        assert!(SHARED_TUI_CHAT_STATUS.contains("Agent/Subagent management remain Embedded"));
-        assert!(!SHARED_TUI_CHAT_STATUS.contains("mode management remain Embedded"));
+        assert!(SHARED_TUI_CHAT_STATUS.contains("current Session model"));
+        assert!(SHARED_TUI_CHAT_STATUS.contains("Agent/Subagent management"));
+        assert!(SHARED_TUI_CHAT_STATUS.contains("model management remains Embedded"));
     }
 
     #[test]
-    fn failed_mode_save_cancels_automatic_exit() {
-        assert!(mode_change_completion_should_exit(true, true));
-        assert!(!mode_change_completion_should_exit(true, false));
-        assert!(!mode_change_completion_should_exit(false, true));
+    fn failed_session_update_cancels_automatic_exit() {
+        assert!(session_update_completion_should_exit(true, true));
+        assert!(!session_update_completion_should_exit(true, false));
+        assert!(!session_update_completion_should_exit(false, true));
+    }
+
+    #[test]
+    fn session_updates_require_an_idle_session_and_one_pending_operation() {
+        assert!(session_update_allowed(false, false));
+        assert!(!session_update_allowed(true, false));
+        assert!(!session_update_allowed(false, true));
     }
 
     #[test]

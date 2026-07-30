@@ -83,8 +83,15 @@ impl ChatView {
         &mut self,
         models: Vec<ModelItem>,
         current_model_id: Option<String>,
+        allow_edit: bool,
+        current_session_selection: bool,
     ) {
-        self.model_selector.show(models, current_model_id);
+        self.model_selector.show(
+            models,
+            current_model_id,
+            allow_edit,
+            current_session_selection,
+        );
         self.popup_stack.push(PopupType::ModelSelector);
     }
 
@@ -110,6 +117,10 @@ impl ChatView {
 
     pub(crate) fn model_selector_confirm(&self) -> Option<ModelItem> {
         self.model_selector.confirm_selection()
+    }
+
+    pub(crate) fn model_selector_allows_edit(&self) -> bool {
+        self.model_selector.allows_edit()
     }
 
     // ============ Theme selector methods ============

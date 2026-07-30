@@ -2197,6 +2197,7 @@ impl PersistenceManager {
                 session_id: metadata.session_id,
                 session_name: metadata.session_name,
                 agent_type: metadata.agent_type,
+                model_id: (!metadata.model_name.trim().is_empty()).then_some(metadata.model_name),
                 last_user_dialog_agent_type: metadata.last_user_dialog_agent_type,
                 last_submitted_agent_type: metadata.last_submitted_agent_type,
                 created_by: metadata.created_by,
@@ -3277,6 +3278,35 @@ mod tests {
             .expect_err("path-like session id must be rejected");
 
         assert!(error.to_string().contains("session_id"), "{error}");
+    }
+
+    #[tokio::test]
+    async fn session_list_preserves_the_persisted_model_selector() {
+        let workspace = TestWorkspace::new();
+        let manager =
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager");
+        let session = Session::new_with_id(
+            format!("model-summary-{}", Uuid::new_v4()),
+            "Model summary".to_string(),
+            "agentic".to_string(),
+            SessionConfig {
+                workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                model_id: Some("fast".to_string()),
+                ..Default::default()
+            },
+        );
+
+        manager
+            .save_session(workspace.path(), &session)
+            .await
+            .expect("session should persist");
+        let sessions = manager
+            .list_sessions(workspace.path())
+            .await
+            .expect("session list should load");
+
+        assert_eq!(sessions.len(), 1);
+        assert_eq!(sessions[0].model_id.as_deref(), Some("fast"));
     }
 
     #[tokio::test]

@@ -28,7 +28,7 @@ use crate::actions::{
     removed_management_command_hint, slash_actions, ActionContext, ActionHandler, ActionSpec,
     ActionState, ResolvedKeymap, SHARED_TUI_EMBEDDED_HANDOFF, SHARED_TUI_HELP_NOTE,
 };
-use crate::agent::runtime_client::{CliAgentRuntimeClient, SessionModeUpdateError};
+use crate::agent::runtime_client::{CliAgentRuntimeClient, SessionUpdateError};
 use crate::chat_state::ChatState;
 use crate::config::CliConfig;
 use crate::ui::agent_selector::{AgentItem, AgentSelectorAction};
@@ -167,17 +167,43 @@ enum PendingMcpTask {
     },
 }
 
-struct PendingModeChange {
+enum PendingSessionUpdateKind {
+    Mode {
+        mode_id: String,
+    },
+    Model {
+        model_id: String,
+        display_name: String,
+    },
+}
+
+impl PendingSessionUpdateKind {
+    fn name(&self) -> &'static str {
+        match self {
+            Self::Mode { .. } => "agent mode",
+            Self::Model { .. } => "model",
+        }
+    }
+
+    fn selected_id(&self) -> &str {
+        match self {
+            Self::Mode { mode_id } => mode_id,
+            Self::Model { model_id, .. } => model_id,
+        }
+    }
+}
+
+struct PendingSessionUpdate {
     session_id: String,
-    mode_id: String,
+    kind: PendingSessionUpdateKind,
     started_at: Instant,
     slow_notice_shown: bool,
     exit_warning_shown: bool,
-    handle: tokio::task::JoinHandle<std::result::Result<(), SessionModeUpdateError>>,
+    handle: tokio::task::JoinHandle<std::result::Result<(), SessionUpdateError>>,
 }
 
-const MODE_CHANGE_SLOW_NOTICE: Duration = Duration::from_secs(15);
-const SHARED_TUI_CHAT_STATUS: &str = "Shared TUI preview: this view controls sessions, turns, and the current Session Agent mode; local extension, MCP, account-sync, model, and Agent/Subagent management remain Embedded.";
+const SESSION_UPDATE_SLOW_NOTICE: Duration = Duration::from_secs(15);
+const SHARED_TUI_CHAT_STATUS: &str = "Shared TUI preview: this view controls sessions, turns, the current Session Agent mode, and the current Session model; model management remains Embedded, along with local extension, MCP, account-sync, and Agent/Subagent management.";
 
 #[derive(Default)]
 struct NonKeyEventOutcome {
@@ -215,9 +241,9 @@ pub(crate) struct ChatMode {
     pending_mcp_op: Option<PendingMcpOp>,
     /// Running MCP tasks (non-blocking, polled in main loop)
     pending_mcp_tasks: Vec<PendingMcpTask>,
-    /// One durable mode update in flight. The event loop remains responsive
+    /// One durable current-Session update in flight. The event loop remains responsive
     /// while the runtime owner writes session metadata.
-    pending_mode_change: Option<PendingModeChange>,
+    pending_session_update: Option<PendingSessionUpdate>,
     external_source_snapshot: Option<ExternalSourceCatalogSnapshot>,
     external_source_conflict_choices: BTreeMap<String, String>,
     external_source_conflict_lineage_current_keys: BTreeMap<String, String>,
@@ -271,7 +297,7 @@ impl ChatMode {
             initial_prompt: None,
             pending_mcp_op: None,
             pending_mcp_tasks: Vec::new(),
-            pending_mode_change: None,
+            pending_session_update: None,
             external_source_snapshot: None,
             external_source_conflict_choices: BTreeMap::new(),
             external_source_conflict_lineage_current_keys: BTreeMap::new(),

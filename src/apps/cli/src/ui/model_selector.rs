@@ -29,6 +29,10 @@ pub(super) struct ModelSelectorState {
     visible: bool,
     /// Currently active model ID (for highlighting)
     current_model_id: Option<String>,
+    /// Embedded startup may open model management; current-Session selection may not.
+    allow_edit: bool,
+    /// Selection changes the active Session rather than the future default.
+    current_session_selection: bool,
     last_area: Option<Rect>,
 }
 
@@ -39,12 +43,20 @@ impl ModelSelectorState {
             list_state: ListState::default(),
             visible: false,
             current_model_id: None,
+            allow_edit: false,
+            current_session_selection: true,
             last_area: None,
         }
     }
 
     /// Show the model selector with given model list
-    pub(super) fn show(&mut self, models: Vec<ModelItem>, current_model_id: Option<String>) {
+    pub(super) fn show(
+        &mut self,
+        models: Vec<ModelItem>,
+        current_model_id: Option<String>,
+        allow_edit: bool,
+        current_session_selection: bool,
+    ) {
         if models.is_empty() {
             return;
         }
@@ -57,6 +69,8 @@ impl ModelSelectorState {
 
         self.items = models;
         self.current_model_id = current_model_id;
+        self.allow_edit = allow_edit;
+        self.current_session_selection = current_session_selection;
         self.list_state.select(Some(initial_idx));
         self.visible = true;
     }
@@ -77,6 +91,18 @@ impl ModelSelectorState {
 
     pub(super) fn is_visible(&self) -> bool {
         self.visible
+    }
+
+    pub(super) fn allows_edit(&self) -> bool {
+        self.allow_edit
+    }
+
+    pub(super) fn scope_hint(&self) -> &'static str {
+        if self.current_session_selection {
+            "Applies to the current session only"
+        } else {
+            "Default for future sessions"
+        }
     }
 
     pub(super) fn move_up(&mut self) {
@@ -166,11 +192,16 @@ impl ModelSelectorState {
             })
             .collect();
 
+        let title = if self.allow_edit {
+            " Select Model (↑↓ Navigate, Enter Select, e Edit, Esc Cancel) "
+        } else {
+            " Select Model (↑↓ Navigate, Enter Select, Esc Cancel) "
+        };
         let block = Block::default()
             .borders(Borders::ALL)
             .border_style(theme.style(StyleKind::Primary))
             .style(Style::default().bg(theme.background))
-            .title(" Select Model (↑↓ Navigate, Enter Select, e Edit, Esc Cancel) ");
+            .title(title);
 
         let list = List::new(list_items)
             .block(block)
@@ -195,7 +226,7 @@ impl ModelSelectorState {
         };
         if hint_area.height > 0 {
             let hint = Paragraph::new(Line::from(vec![Span::styled(
-                " Selecting a model will apply to all modes ",
+                format!(" {} ", self.scope_hint()),
                 theme.style(StyleKind::Info),
             )]))
             .alignment(Alignment::Center);
@@ -275,5 +306,46 @@ impl ModelSelectorState {
         }
 
         Some(index)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{ModelItem, ModelSelectorState};
+
+    fn model() -> ModelItem {
+        ModelItem {
+            id: "model-1".to_string(),
+            name: "Provider".to_string(),
+            provider: "provider".to_string(),
+            model_name: "Model 1".to_string(),
+        }
+    }
+
+    #[test]
+    fn current_session_picker_does_not_advertise_model_management() {
+        let mut state = ModelSelectorState::new();
+        state.show(vec![model()], Some("model-1".to_string()), false, true);
+
+        assert!(!state.allows_edit());
+        assert_eq!(state.scope_hint(), "Applies to the current session only");
+    }
+
+    #[test]
+    fn startup_picker_keeps_embedded_model_management_and_default_scope() {
+        let mut state = ModelSelectorState::new();
+        state.show(vec![model()], Some("model-1".to_string()), true, false);
+
+        assert!(state.allows_edit());
+        assert_eq!(state.scope_hint(), "Default for future sessions");
+    }
+
+    #[test]
+    fn embedded_chat_picker_can_edit_without_changing_the_selection_scope() {
+        let mut state = ModelSelectorState::new();
+        state.show(vec![model()], Some("model-1".to_string()), true, true);
+
+        assert!(state.allows_edit());
+        assert_eq!(state.scope_hint(), "Applies to the current session only");
     }
 }

@@ -4854,11 +4854,12 @@ export function runManifestParserSelfTest({
       'ReplayEvents',
       'ReadTranscript',
       'DetachSession',
-      'UpdateSessionModel',
+      'ManageModels',
       'ManageAgents',
     ].every((name) => runtimeIpcOperationPattern.test(`    ${name},`)) ||
     runtimeIpcOperationPattern.test('    Health,') ||
     runtimeIpcOperationPattern.test('    UpdateSessionMode {') ||
+    runtimeIpcOperationPattern.test('    UpdateSessionModel {') ||
     runtimeIpcOperationPattern.test('    SubmitTurn {')
   ) {
     throw new Error('agent-runtime-ipc operation guard must preserve the Shared TUI operation budget');

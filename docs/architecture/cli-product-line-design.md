@@ -256,12 +256,12 @@ Headless CLI 和公开 Agent SDK 都调用同一 Agent Runtime API，但交付�
 
 | 形态 | 默认部署 | 当前 Shared 范围 |
 |---|---|---|
-| 交互式 TUI | Embedded | 显式 `--shared` 后支持 Session list/create/restore、transcript、当前 Session Agent mode、Turn submit/cancel、Permission 和 UserInput |
+| 交互式 TUI | Embedded | 显式 `--shared` 后支持 Session list/create/restore、transcript、当前 Session Agent mode/model、Turn submit/cancel、Permission 和 UserInput |
 | `bitfun exec` / CI | Embedded | 不接受 Shared；保持独立进程、stdout/stderr 和退出码语义 |
 | ACP / SDK Host / GUI / Remote / Peer | 各自既有部署 | 不消费 TUI IPC，也不因本开关改变生命周期 |
 
-Shared TUI 不提供 Session delete/fork、模型、Agent/Subagent 管理、MCP/扩展、账号同步、用量、observer、replay 或 controller transfer；对应入口给出明确的 Embedded 恢复建议，不在 Client 进程初始化第二套 Core owner。
-Shared 模式的命令面板、快捷键帮助和底部提示使用同一能力投影：`/agent`、Tab 和 Shift+Tab 只切换当前 Session 的 Agent mode，不进入管理页面；其他不支持动作不显示为可执行入口。Session 切换失败保留原控制权，单个连接已有活动 Turn 时拒绝重复提交和 mode update；事件订阅失效后当前视图立即失效并要求重启 Shared TUI。
+Shared TUI 不提供 Session delete/fork、模型目录/默认值、Agent/Subagent 管理、MCP/扩展、账号同步、用量、observer、replay 或 controller transfer；对应入口给出明确的 Embedded 恢复建议，不在 Client 进程初始化第二套 Core owner。
+Shared 模式的命令面板、快捷键帮助和底部提示使用同一能力投影：`/agent`、Tab 和 Shift+Tab 只切换当前 Session 的 Agent mode，`/models` 只切换当前 Session 的 model，二者都不进入管理页面或修改未来 Session 的默认值；其他不支持动作不显示为可执行入口。Session 切换失败保留原控制权，单个连接已有活动 Turn 时拒绝重复提交和 Session mode/model update；事件订阅失效后当前视图立即失效并要求重启 Shared TUI。
 
 #### 管理与诊断
 

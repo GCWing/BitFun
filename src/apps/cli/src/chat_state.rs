@@ -318,7 +318,9 @@ pub(crate) struct ChatState {
     /// Empty-session preference. The actual worktree is created only after the
     /// user submits the first prompt.
     worktree_isolation_requested: Option<bool>,
-    /// Current model display name (shown in shortcuts bar)
+    /// Current Session model identity reported by the Runtime owner.
+    pub current_model_id: Option<String>,
+    /// Current model display name (shown in shortcuts bar).
     pub current_model_name: String,
     /// Effective Auto mode for permission results that evaluate to Ask.
     pub auto_approve_ask: bool,
@@ -379,6 +381,7 @@ impl ChatState {
             is_git_repository: false,
             worktree_control_available: true,
             worktree_isolation_requested: None,
+            current_model_id: None,
             current_model_name: String::new(),
             auto_approve_ask: false,
             messages: Vec::new(),
