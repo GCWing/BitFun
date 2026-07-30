@@ -400,7 +400,7 @@ impl DialogScheduler {
         });
 
         let scheduler_for_handler = Arc::clone(&scheduler);
-        tokio::spawn(async move {
+         tauri::async_runtime::spawn(async move {
             scheduler_for_handler.run_outcome_handler(outcome_rx).await;
         });
 
@@ -1374,7 +1374,7 @@ impl DialogScheduler {
                 }
                 QueuedTurnExecution::HiddenSubagent(execution) => {
                     let coordinator = self.coordinator.clone();
-                    tokio::spawn(async move {
+                     tauri::async_runtime::spawn(async move {
                         coordinator
                             .cleanup_prepared_hidden_subagent_session_if_unsubmitted(
                                 &execution.request,
@@ -1601,7 +1601,7 @@ impl DialogScheduler {
             // This path can run while the caller holds the session operation
             // permit. Never await the bounded outcome channel here: its
             // receiver may be waiting for the same permit.
-            tokio::spawn(async move {
+             tauri::async_runtime::spawn(async move {
                 let _ = outcome_tx
                     .send((
                         session_id_owned,
@@ -1622,7 +1622,7 @@ impl DialogScheduler {
         let queue_cancel_token_for_bridge = queue_cancel_token.clone();
         let execution_cancel_token_for_bridge = execution_cancel_token.clone();
         let cancel_bridge_handle = match parent_cancel_token {
-            Some(parent_cancel_token) => tokio::spawn(async move {
+            Some(parent_cancel_token) =>  tauri::async_runtime::spawn(async move {
                 tokio::select! {
                     _ = parent_cancel_token.cancelled() => {
                         execution_cancel_token_for_bridge.cancel();
@@ -1632,7 +1632,7 @@ impl DialogScheduler {
                     }
                 }
             }),
-            None => tokio::spawn(async move {
+            None =>  tauri::async_runtime::spawn(async move {
                 queue_cancel_token_for_bridge.cancelled().await;
                 execution_cancel_token_for_bridge.cancel();
             }),
@@ -1658,7 +1658,7 @@ impl DialogScheduler {
         self.active_internal_turns
             .insert(session_id.to_string(), ActiveInternalTurn::HiddenSubagent);
 
-        tokio::spawn(async move {
+         tauri::async_runtime::spawn(async move {
             let outcome = coordinator
                 .execute_prepared_hidden_subagent(
                     request,
