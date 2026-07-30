@@ -16,11 +16,68 @@ use std::process::Stdio;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::task::{Context as TaskContext, Poll};
+use std::time::Duration;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, DuplexStream, ReadBuf};
 use tokio::sync::{mpsc, watch};
 use tokio_util::sync::CancellationToken;
 
 const WORKSPACE_STDIO_BUFFER_SIZE: usize = 256 * 1024;
+
+/// How long to keep an SSH channel open after `SSH_MSG_CHANNEL_EOF` while the
+/// exit status is still missing.
+///
+/// EOF only says the peer will send no more data. RFC 4254 §6.10 leaves the
+/// ordering of the `exit-status` request free, and OpenSSH in practice flushes
+/// EOF from its channel loop before it reaps the child and reports the status.
+/// Closing on EOF therefore threw away the exit code of nearly every
+/// short-lived command. Waiting for `SSH_MSG_CHANNEL_CLOSE` costs nothing in
+/// the normal case because it follows immediately; the grace only bounds
+/// servers that go quiet without closing.
+pub(crate) const SSH_EXIT_STATUS_AFTER_EOF_GRACE: Duration = Duration::from_secs(5);
+
+/// Map an SSH `exit-signal` to the conventional `128 + signal` wait status.
+///
+/// Returns `None` for signals with no portable number so callers can report an
+/// unknown status instead of inventing a misleading exit code.
+#[cfg(feature = "remote-ssh-concrete")]
+pub(crate) fn ssh_exit_code_for_signal(signal: &Sig) -> Option<i32> {
+    let number = match signal {
+        Sig::HUP => 1,
+        Sig::INT => 2,
+        Sig::QUIT => 3,
+        Sig::ILL => 4,
+        Sig::ABRT => 6,
+        Sig::FPE => 8,
+        Sig::KILL => 9,
+        Sig::SEGV => 11,
+        Sig::PIPE => 13,
+        Sig::ALRM => 14,
+        Sig::TERM => 15,
+        Sig::USR1 => 10,
+        Sig::Custom(_) => return None,
+    };
+    Some(128 + number)
+}
+
+/// Map a locally waited child status to an exit code.
+///
+/// `ExitStatus::code()` is `None` when a process dies from a signal, which is
+/// exactly how interrupt and kill end a supervised workspace command. Report
+/// the conventional `128 + signal` status for those instead of losing it.
+fn local_process_exit_code(status: std::process::ExitStatus) -> Option<i32> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::ExitStatusExt;
+
+        status
+            .code()
+            .or_else(|| status.signal().map(|signal| 128 + signal))
+    }
+    #[cfg(not(unix))]
+    {
+        status.code()
+    }
+}
 
 pub type WorkspaceReader = Pin<Box<dyn AsyncRead + Send>>;
 pub type WorkspaceWriter = Pin<Box<dyn AsyncWrite + Send>>;
@@ -342,8 +399,17 @@ async fn run_ssh_channel(mut channel: Channel<Msg>, mut pipes: WorkspacePipeOwne
     let mut stdin_buffer = vec![0u8; 16 * 1024];
     let mut stdin_closed = false;
     let mut exit_code = None;
+    // Set once the peer sends EOF while the exit status is still missing, so a
+    // server that never follows up cannot hold the channel open forever.
+    let mut exit_status_deadline: Option<tokio::time::Instant> = None;
 
     loop {
+        let wait_budget = exit_status_deadline
+            .map(|deadline| deadline.saturating_duration_since(tokio::time::Instant::now()));
+        if wait_budget.is_some_and(|budget| budget.is_zero()) {
+            break;
+        }
+
         tokio::select! {
             biased;
 
@@ -389,16 +455,37 @@ async fn run_ssh_channel(mut channel: Channel<Msg>, mut pipes: WorkspacePipeOwne
                     }
                     Some(ChannelMsg::ExitStatus { exit_status }) => {
                         exit_code = Some(exit_status as i32);
+                        // EOF already arrived, so the status was the last thing
+                        // worth waiting for. Do not linger for CHANNEL_CLOSE.
+                        if exit_status_deadline.is_some() {
+                            break;
+                        }
                     }
-                    Some(ChannelMsg::ExitSignal { signal_name, .. }) => {
-                        exit_code = Some(match signal_name {
-                            Sig::INT => 130,
-                            Sig::KILL => 137,
-                            Sig::TERM => 143,
-                            _ => -1,
-                        });
+                    Some(ChannelMsg::ExitSignal { ref signal_name, .. }) => {
+                        // A server sends either exit-status or exit-signal. Keep
+                        // whichever arrived first rather than letting an
+                        // unmappable signal erase a known code.
+                        if exit_code.is_none() {
+                            exit_code = ssh_exit_code_for_signal(signal_name);
+                        }
+                        if exit_status_deadline.is_some() && exit_code.is_some() {
+                            break;
+                        }
                     }
-                    Some(ChannelMsg::Eof) | Some(ChannelMsg::Close) | None => break,
+                    // EOF is not the end of the channel: the exit status is
+                    // still allowed to follow, and OpenSSH usually sends it
+                    // afterwards. Keep draining until CLOSE, or until the grace
+                    // window expires, so the status is not silently dropped.
+                    Some(ChannelMsg::Eof) => {
+                        if exit_code.is_some() {
+                            break;
+                        }
+                        exit_status_deadline
+                            .get_or_insert_with(|| {
+                                tokio::time::Instant::now() + SSH_EXIT_STATUS_AFTER_EOF_GRACE
+                            });
+                    }
+                    Some(ChannelMsg::Close) | None => break,
                     Some(_) => {}
                 }
             }
@@ -407,6 +494,10 @@ async fn run_ssh_channel(mut channel: Channel<Msg>, mut pipes: WorkspacePipeOwne
                 let _ = channel.signal(Sig::KILL).await;
                 let _ = channel.close().await;
                 exit_code.get_or_insert(137);
+                break;
+            }
+
+            _ = tokio::time::sleep(wait_budget.unwrap_or_default()), if wait_budget.is_some() => {
                 break;
             }
         }
@@ -446,8 +537,11 @@ async fn run_local_process(
     let exit_code = loop {
         tokio::select! {
             status = child.wait() => {
-                break status.ok().and_then(|status| status.code());
+                break status.ok().and_then(local_process_exit_code);
             }
+            // We are the ones ending the process here, so a signal death says
+            // nothing the caller does not already know. Prefer a status the
+            // child chose for itself and otherwise report the requested intent.
             signal = pipes.control_rx.recv() => {
                 let fallback = match signal {
                     Some(WorkspaceProcessSignal::Interrupt) => 130,
@@ -472,9 +566,241 @@ async fn run_local_process(
         .send(Some(WorkspaceProcessExit { exit_code }));
 }
 
+/// In-process SSH server that lets the channel-owner loop be tested against the
+/// message orderings real servers use, without needing a live host.
+#[cfg(test)]
+mod ssh_channel_tests {
+    use super::*;
+    use russh::server::{Auth, Msg as ServerMsg, Server as _, Session};
+    use russh::{Channel as RusshChannel, ChannelId, CryptoVec};
+    use std::net::SocketAddr;
+    use tokio::net::TcpListener;
+
+    /// What the fake server sends once the client asks it to run something.
+    #[derive(Clone, Copy, PartialEq, Eq)]
+    enum ExitReport {
+        /// EOF first, exit status afterwards — what OpenSSH does for a
+        /// short-lived command, because its channel loop flushes EOF before it
+        /// reaps the child and reports the status.
+        EofBeforeExitStatus,
+        /// Exit status first, then EOF.
+        ExitStatusBeforeEof,
+        /// EOF, then a signal death, then close.
+        EofBeforeExitSignal,
+        /// EOF and close with no status at all.
+        NoStatus,
+    }
+
+    #[derive(Clone)]
+    struct TestServer {
+        report: ExitReport,
+    }
+
+    impl russh::server::Server for TestServer {
+        type Handler = Self;
+
+        fn new_client(&mut self, _peer: Option<SocketAddr>) -> Self {
+            self.clone()
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl russh::server::Handler for TestServer {
+        type Error = russh::Error;
+
+        async fn auth_none(&mut self, _user: &str) -> Result<Auth, Self::Error> {
+            Ok(Auth::Accept)
+        }
+
+        async fn auth_password(
+            &mut self,
+            _user: &str,
+            _password: &str,
+        ) -> Result<Auth, Self::Error> {
+            Ok(Auth::Accept)
+        }
+
+        async fn channel_open_session(
+            &mut self,
+            _channel: RusshChannel<ServerMsg>,
+            _session: &mut Session,
+        ) -> Result<bool, Self::Error> {
+            Ok(true)
+        }
+
+        async fn exec_request(
+            &mut self,
+            channel: ChannelId,
+            _data: &[u8],
+            session: &mut Session,
+        ) -> Result<(), Self::Error> {
+            let handle = session.handle();
+            let report = self.report;
+            tokio::spawn(async move {
+                let _ = handle
+                    .data(channel, CryptoVec::from_slice(b"workspace output\n"))
+                    .await;
+                let settle = || tokio::time::sleep(Duration::from_millis(30));
+                match report {
+                    ExitReport::EofBeforeExitStatus => {
+                        let _ = handle.eof(channel).await;
+                        settle().await;
+                        let _ = handle.exit_status_request(channel, 7).await;
+                        let _ = handle.close(channel).await;
+                    }
+                    ExitReport::ExitStatusBeforeEof => {
+                        let _ = handle.exit_status_request(channel, 7).await;
+                        settle().await;
+                        let _ = handle.eof(channel).await;
+                        let _ = handle.close(channel).await;
+                    }
+                    ExitReport::EofBeforeExitSignal => {
+                        let _ = handle.eof(channel).await;
+                        settle().await;
+                        let _ = handle
+                            .exit_signal_request(channel, russh::Sig::TERM, false, String::new(), String::new())
+                            .await;
+                        let _ = handle.close(channel).await;
+                    }
+                    ExitReport::NoStatus => {
+                        let _ = handle.eof(channel).await;
+                        let _ = handle.close(channel).await;
+                    }
+                }
+            });
+            Ok(())
+        }
+    }
+
+    struct TestClient;
+
+    #[async_trait::async_trait]
+    impl russh::client::Handler for TestClient {
+        type Error = russh::Error;
+
+        async fn check_server_key(
+            &mut self,
+            _key: &russh_keys::key::PublicKey,
+        ) -> Result<bool, Self::Error> {
+            Ok(true)
+        }
+    }
+
+    async fn workspace_exit_for(report: ExitReport) -> WorkspaceProcessExit {
+        let listener = TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("test SSH listener should bind");
+        let address = listener
+            .local_addr()
+            .expect("test SSH listener should report its address");
+        let server_config = Arc::new(russh::server::Config {
+            keys: vec![
+                russh_keys::key::KeyPair::generate_ed25519().expect("test host key should generate"),
+            ],
+            ..Default::default()
+        });
+        tokio::spawn(async move {
+            let mut server = TestServer { report };
+            let _ = server.run_on_socket(server_config, &listener).await;
+        });
+
+        let client_config = Arc::new(russh::client::Config::default());
+        let mut handle = russh::client::connect(client_config, address, TestClient)
+            .await
+            .expect("test client should connect");
+        assert!(
+            handle
+                .authenticate_password("tester", "tester")
+                .await
+                .expect("test authentication should complete"),
+            "test server should accept the password"
+        );
+        let channel = handle
+            .channel_open_session()
+            .await
+            .expect("test channel should open");
+        channel
+            .exec(true, "df -h")
+            .await
+            .expect("test exec should start");
+
+        let transport = WorkspaceStdio::from_ssh_channel(channel);
+        let (_stdin, mut stdout, _stderr, _control, completion) = transport.into_parts();
+        let mut stdout_bytes = Vec::new();
+        let _ = stdout.read_to_end(&mut stdout_bytes).await;
+        assert_eq!(stdout_bytes, b"workspace output\n");
+
+        tokio::time::timeout(Duration::from_secs(20), completion.wait())
+            .await
+            .expect("channel owner should report completion")
+    }
+
+    #[tokio::test]
+    async fn exit_status_sent_after_eof_is_still_reported() {
+        let exit = workspace_exit_for(ExitReport::EofBeforeExitStatus).await;
+
+        assert_eq!(
+            exit.exit_code,
+            Some(7),
+            "EOF does not end an SSH channel; the exit status may follow it"
+        );
+    }
+
+    #[tokio::test]
+    async fn exit_status_sent_before_eof_is_reported() {
+        let exit = workspace_exit_for(ExitReport::ExitStatusBeforeEof).await;
+
+        assert_eq!(exit.exit_code, Some(7));
+    }
+
+    #[tokio::test]
+    async fn exit_signal_sent_after_eof_maps_to_a_conventional_status() {
+        let exit = workspace_exit_for(ExitReport::EofBeforeExitSignal).await;
+
+        assert_eq!(exit.exit_code, Some(143));
+    }
+
+    #[tokio::test]
+    async fn missing_exit_status_stays_unknown() {
+        let exit = workspace_exit_for(ExitReport::NoStatus).await;
+
+        assert_eq!(
+            exit.exit_code, None,
+            "an unreported status must not be turned into a synthetic failure code"
+        );
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn ssh_exit_signals_map_to_conventional_wait_statuses() {
+        assert_eq!(ssh_exit_code_for_signal(&Sig::INT), Some(130));
+        assert_eq!(ssh_exit_code_for_signal(&Sig::KILL), Some(137));
+        assert_eq!(ssh_exit_code_for_signal(&Sig::TERM), Some(143));
+        assert_eq!(
+            ssh_exit_code_for_signal(&Sig::Custom("WEIRD".to_string())),
+            None,
+            "an unmappable signal must stay unknown rather than become -1"
+        );
+    }
+
+    #[tokio::test]
+    #[cfg(unix)]
+    async fn local_process_signal_death_reports_a_conventional_status() {
+        let transport =
+            WorkspaceStdio::spawn_local_process("sh", &["-lc".to_string(), "kill -TERM $$".to_string()])
+                .unwrap();
+        let (_stdin, _stdout, _stderr, _control, completion) = transport.into_parts();
+
+        let exit = tokio::time::timeout(Duration::from_secs(5), completion.wait())
+            .await
+            .expect("signal death should complete the supervised process");
+
+        assert_eq!(exit.exit_code, Some(143));
+    }
 
     #[tokio::test]
     #[cfg(unix)]

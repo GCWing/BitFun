@@ -3324,6 +3324,13 @@ impl SSHConnectionManager {
                 }
                 Some(russh::ChannelMsg::ExitSignal { signal_name, .. }) => {
                     interrupted = interrupted || matches!(signal_name, Sig::INT | Sig::TERM);
+                    // A signal death is still a resolved status. Without this the
+                    // result fell through to the unknown `-1` below.
+                    if exit_status.is_none() {
+                        exit_status = crate::remote_ssh::transport::ssh_exit_code_for_signal(
+                            &signal_name,
+                        );
+                    }
                     log::debug!(
                         "Remote exec exit signal received: signal={:?}, stdout_len={}, stderr_len={}, duration_ms={}, command_preview={}",
                         signal_name,

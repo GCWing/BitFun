@@ -1233,7 +1233,7 @@ async fn spawn_pipe_process(request: &ExecCommandRequest) -> TerminalResult<Exec
     let (child_exit_tx, mut child_exit_rx) = mpsc::channel::<Option<i32>>(1);
     #[cfg(unix)]
     tokio::spawn(async move {
-        let code = child.wait().await.ok().and_then(|status| status.code());
+        let code = child.wait().await.ok().and_then(local_pipe_exit_code);
         let _ = child_exit_tx.send(code).await;
     });
     #[cfg(unix)]
@@ -1242,6 +1242,14 @@ async fn spawn_pipe_process(request: &ExecCommandRequest) -> TerminalResult<Exec
         let mut child_exited = false;
         let mut remaining_readers = reader_tasks.len();
         let mut control_state: Option<LocalPipeControlState> = None;
+        // `request_control` takes the terminator, so the control sender is
+        // dropped as soon as the first interrupt or kill is queued. Once that
+        // happens `recv()` resolves to `None` instantly and forever, so the
+        // branch has to be disarmed: leaving it armed starves the reader-done
+        // branch, the loop never reaches its exit condition, and the session is
+        // left open with no exit code (while re-signalling a dead process group
+        // in a hot loop).
+        let mut control_closed = false;
 
         loop {
             if let Some(state) = control_state {
@@ -1269,11 +1277,13 @@ async fn spawn_pipe_process(request: &ExecCommandRequest) -> TerminalResult<Exec
                     child_exited = true;
                 }
 
-                action = control_rx.recv() => {
-                    control_state = request_unix_pipe_control(
-                        pipe_pgid,
-                        action.unwrap_or(ExecControlAction::Kill),
-                    );
+                action = control_rx.recv(), if !control_closed => {
+                    match action {
+                        Some(action) => {
+                            control_state = request_unix_pipe_control(pipe_pgid, action);
+                        }
+                        None => control_closed = true,
+                    }
                 }
 
                 done = reader_done_rx.recv(), if remaining_readers > 0 => {
@@ -1330,6 +1340,19 @@ async fn spawn_pipe_process(request: &ExecCommandRequest) -> TerminalResult<Exec
         #[cfg(windows)]
         pipe_job: Some(Arc::clone(&pipe_job)),
     })
+}
+
+/// Map a waited child status to an exit code the model can act on.
+///
+/// `ExitStatus::code()` is `None` when a process dies from a signal, which is
+/// how every interrupt and kill ends a pipe-backed command. Reporting the
+/// conventional `128 + signal` status keeps that case distinguishable from
+/// "status unknown" and matches what a shell would report for the same death.
+#[cfg(unix)]
+fn local_pipe_exit_code(status: std::process::ExitStatus) -> Option<i32> {
+    use std::os::unix::process::ExitStatusExt;
+
+    status.code().or_else(|| status.signal().map(|s| 128 + s))
 }
 
 #[cfg(unix)]
@@ -1747,6 +1770,32 @@ mod tests {
         assert_eq!(response.exit_code, Some(0));
         assert!(response.session_id.is_none());
         assert!(response.output.contains("bitfun_exec_test"));
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn pipe_exec_reports_signal_death_as_a_conventional_status() {
+        let manager = ExecProcessManager::default();
+        let response = manager
+            .exec_command(ExecCommandRequest {
+                argv: shell_argv("kill -TERM $$"),
+                cwd: std::env::current_dir().expect("current dir"),
+                env: HashMap::new(),
+                tty: false,
+                yield_time_ms: Some(5_000),
+                max_output_chars: Some(10_000),
+                lifecycle_tx: None,
+                output_capture_tx: None,
+            })
+            .await
+            .expect("exec command should run");
+
+        assert!(response.session_id.is_none());
+        assert_eq!(
+            response.exit_code,
+            Some(143),
+            "a signal death is a known status, not an unknown one"
+        );
     }
 
     #[tokio::test]

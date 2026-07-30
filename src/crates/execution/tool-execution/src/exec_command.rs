@@ -940,6 +940,12 @@ fn completion_status_lines(data: &Value) -> Vec<String> {
         status_lines.push(format!(
             "Process is still running. session_id: {session_id}"
         ));
+    } else if completion_status == Some("exited") {
+        // The process finished but the transport never reported a status. Say so
+        // instead of leaving the caller with "Process status unavailable", and
+        // never invent a code — an invented failure reads as a real one.
+        status_lines
+            .push("Process exited, but no exit code was reported by the transport.".to_string());
     }
 
     status_lines
@@ -1019,6 +1025,33 @@ mod tests {
         assert!(rendered.contains("Process is still running. session_id: 7"));
         assert!(rendered.contains("programs may block-buffer pipe output"));
         assert!(rendered.contains("<output>\n\n</output>"));
+    }
+
+    #[test]
+    fn command_response_says_an_exited_process_had_no_reported_exit_code() {
+        let data = json!({
+            "wall_time_seconds": 0.1,
+            "output": "workspace output\n",
+            "tty": false,
+            "session_id": null,
+            "exit_code": null,
+            "completion": {
+                "status": "exited",
+                "source": "process"
+            }
+        });
+
+        let rendered = render_exec_command_response_for_assistant(&data);
+
+        assert!(rendered.contains("Process exited, but no exit code was reported"));
+        assert!(
+            !rendered.contains("Process status unavailable."),
+            "a completed process is not an unknown state"
+        );
+        assert!(
+            !rendered.contains("code -1"),
+            "an unknown status must never be rendered as a failing exit code"
+        );
     }
 
     #[test]
