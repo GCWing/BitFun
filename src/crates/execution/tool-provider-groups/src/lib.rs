@@ -136,9 +136,6 @@ const PRODUCT_TOOL_PROVIDER_GROUP_PLAN: &[ToolProviderGroupPlan] = &[
             "ExecControl",
             "GetTime",
             "ListModels",
-            "check_arkts_files",
-            "check_cpp_files",
-            "switch_cwd",
         ],
     },
     ToolProviderGroupPlan {
@@ -200,6 +197,9 @@ const PRODUCT_TOOL_PROVIDER_GROUP_PLAN: &[ToolProviderGroupPlan] = &[
             "start_app",
             "hdc_log",
             "arkts_knowledge_search",
+            "check_arkts_files",
+            "check_cpp_files",
+            "switch_cwd",
         ],
     },
 ];
@@ -380,9 +380,6 @@ mod tests {
                 "ExecControl",
                 "GetTime",
                 "ListModels",
-                "check_arkts_files",
-                "check_cpp_files",
-                "switch_cwd",
                 "Task",
                 "AgentWait",
                 "LaunchReviewAgent",
@@ -424,6 +421,9 @@ mod tests {
                 "start_app",
                 "hdc_log",
                 "arkts_knowledge_search",
+                "check_arkts_files",
+                "check_cpp_files",
+                "switch_cwd",
             ]
         );
     }

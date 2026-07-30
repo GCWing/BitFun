@@ -511,9 +511,6 @@ mod tests {
             "ExecControl",
             "GetTime",
             "ListModels",
-            "check_arkts_files",
-            "check_cpp_files",
-            "switch_cwd",
             "Task",
             "AgentWait",
             "LaunchReviewAgent",
@@ -551,6 +548,9 @@ mod tests {
             "start_app",
             "hdc_log",
             "arkts_knowledge_search",
+            "check_arkts_files",
+            "check_cpp_files",
+            "switch_cwd",
         ];
 
         assert_eq!(
@@ -753,8 +753,6 @@ mod tests {
                 "Grep",
                 "GetTime",
                 "ListModels",
-                "check_arkts_files",
-                "check_cpp_files",
                 "Skill",
                 "AskUserQuestion",
                 "TodoWrite",
@@ -774,6 +772,8 @@ mod tests {
                 "Playbook",
                 "hdc_log",
                 "arkts_knowledge_search",
+                "check_arkts_files",
+                "check_cpp_files",
             ],
             "readonly tool manifest must stay stable before moving registry ownership"
         );
