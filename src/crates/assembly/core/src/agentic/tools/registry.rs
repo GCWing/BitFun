@@ -551,6 +551,9 @@ mod tests {
             "check_arkts_files",
             "check_cpp_files",
             "switch_cwd",
+            "verify_ui",
+            "get_ui_verification_log",
+            "save_ui_screenshot",
         ];
 
         assert_eq!(
@@ -774,6 +777,7 @@ mod tests {
                 "arkts_knowledge_search",
                 "check_arkts_files",
                 "check_cpp_files",
+                "get_ui_verification_log",
             ],
             "readonly tool manifest must stay stable before moving registry ownership"
         );
