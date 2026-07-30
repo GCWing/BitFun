@@ -9,27 +9,35 @@ cheapest way to keep the pane stable is to not generate the movement in the
 first place. Five invariants hold across the message list, and breaking any of
 them reintroduces the "the chat keeps refreshing itself" report:
 
-1. **Keep a live action's projection identity stable.** A collapsible tool
-   belongs to its trailing `explore-group` from the first active render through
-   completion. Do not render it as a standalone `model-round` while active and
-   move it into a group when it settles; that swaps the Virtuoso key, unmounts
-   the card, and looks like a flash. Likewise, never hide the old location with
-   `display: none` as a handoff mechanism.
+1. **Keep a live action's top-level projection identity stable.** A rendered
+   `ModelRound` remains one `model-round` virtual item, and an explore-only
+   round remains one `explore-group` virtual item with a stable key. Within a
+   `ModelRound`, an active collapsible tool is intentionally kept as a critical
+   item; after it settles it may join the surrounding explore grouping. That
+   inner grouping transition must not split the round into multiple virtual
+   items or replace the item/round keys, which would unmount the card and look
+   like a flash. Likewise, never hide the old location with `display: none` as
+   a handoff mechanism.
 2. **No mount-triggered animation on anything the list renders.** The list is
    virtualized: an item that scrolls out of view unmounts and remounts, so a
    `fadeIn` / `slideInUp` keyed off mount replays on every pass. Same for an
    animation keyed off `--streaming` → `--complete`: it replays when the
    typewriter drains. `getModelRoundItemClassName` deliberately has no `--enter`
    modifier, and `.user-message-item` deliberately has no enter animation.
-3. **No wall-clock input to projection or grouping.** `sessionToVirtualItems`
-   and `buildModelRoundItemGroups` are pure functions of the session data. A
-   time-dependent classification needs a timer to re-run it, and that timer
-   restructures and remounts cards seconds after the data settled. There is no
-   "transient window" for recently-completed tools any more.
-4. **Do not compact the live tail merely because its status completed.** A
-   terminal, process, file, task, question, or thinking card that was visible
-   while running keeps a compact result preview until newer content supersedes
-   it. When superseded, automatic expand/collapse **may animate** for
+3. **Keep wall-clock state out of projection and grouping.**
+   `sessionToVirtualItems` and `buildModelRoundItemGroups` remain pure
+   functions of session data. A timer must not reclassify a round, change a
+   `VirtualItem` key, or create a recently-completed projection. The card layer
+   does have a bounded completion-preview timer (documented below), but it only
+   changes local expanded state after the card is already rendered; it does not
+   restructure the virtual list.
+4. **Do not compact a live tail in the same completion commit.** The execution
+   and file-operation cards use a short completion-preview grace period while
+   they remain the expanded tail. A newer item still collapses them immediately;
+   if no newer item arrives, they compact after the grace period. Task,
+   question, thinking, and explore-group components retain their own
+   status/last-item policies and are not implicitly covered by this timer. When
+   an automatic collapse starts, it **may animate** for
    `FLOWCHAT_COLLAPSE_DURATION_MS` (300ms) as long as
    `flowchat:tool-card-collapse-intent` stays active for that full window plus
    settle frames. Instant collapse is reserved for `prefers-reduced-motion` or
@@ -279,6 +287,29 @@ fixed-height slot inside their local scroll surface.
 
 If the list waits until `ResizeObserver` sees the shrink, the browser may already have clamped `scrollTop`.
 
+### Completion-preview grace period
+
+`useToolCardCompletionGracePeriod.ts` provides the bounded tail-preview window
+used by `ExecProcessToolCardView`, `TerminalToolCard`, and
+`FileOperationToolCard`. Its default is
+`TOOL_CARD_COMPLETION_PREVIEW_GRACE_MS = 800`.
+
+The timer starts only when a card that was expanded during execution is still
+the last rendered item and has not been manually toggled. A newer item, user
+interaction, unmount, or loss of tail ownership cancels the pending preview.
+For ExecProcess/Terminal cards this covers terminal completion, cancellation,
+errors, and rejections. For successful Write/Edit cards, the timer starts after
+the typewriter reveal finishes so the completed content is not truncated. The
+timer does not change `isLastItem`; an empty next round can still leave the
+previous card as the rendered tail, but the grace period bounds that wait. The
+timer expiry calls the existing height-contract collapse path, so footer
+pre-compensation and semantic-anchor handling remain the same as for a
+successor-driven collapse.
+
+This is deliberately separate from the VirtualMessageList collapse-intent TTL
+and settlement timers: the former controls when a card may compact, while the
+latter protects the viewport while its height changes.
+
 ## Runtime Flow
 
 ## A. Known Tool Card Collapse
@@ -439,7 +470,8 @@ If you remove `overflow-anchor: none`, the browser may apply its own anchor corr
 
 Current producer:
 
-- `useToolCardHeightContract.ts`
+- `useToolCardHeightContract.ts` (used by most tool cards, including
+  `ExecProcessToolCardView`, `FileOperationToolCard`, and `TerminalToolCard`)
 - `ModelThinkingDisplay.tsx`
 - `ExploreGroupRenderer.tsx`
 
@@ -540,9 +572,11 @@ with `flowChatDiagnostics.isEnabled()` before allocating probe objects.
 
 Use this checklist:
 
-1. Verify the live tail stays expanded when a conversation ends with an action.
+1. Verify a just-completed ExecCommand/Write tail keeps its preview during the
+   short grace period, then compacts if no follow-on item arrives.
 2. Verify manual collapse of a completed `Write` / `Edit` tool card.
-3. Verify automatic compaction only after newer content supersedes the action.
+3. Verify a newer item still causes immediate automatic compaction before the
+   grace period expires.
 4. Verify repeated expand/collapse near the bottom.
 5. Verify thinking / explore / other collapsible sections still schedule measurements correctly.
 6. Verify there is no visible "drop then snap back" flash.
@@ -554,6 +588,8 @@ Use this checklist:
 - `src/web-ui/src/flow_chat/components/modern/FlowChatViewportCoordinator.ts`
 - `src/web-ui/src/flow_chat/components/modern/VirtualMessageList.scss`
 - `src/web-ui/src/flow_chat/tool-cards/useToolCardHeightContract.ts`
+- `src/web-ui/src/flow_chat/tool-cards/useToolCardCompletionGracePeriod.ts`
+- `src/web-ui/src/flow_chat/tool-cards/ExecProcessToolCardView.tsx`
 - `src/web-ui/src/flow_chat/tool-cards/FileOperationToolCard.tsx`
 - `src/web-ui/src/flow_chat/tool-cards/ModelThinkingDisplay.tsx`
 - `src/web-ui/src/flow_chat/tool-cards/TerminalToolCard.tsx`
