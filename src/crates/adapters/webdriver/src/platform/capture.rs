@@ -42,6 +42,10 @@ mod imp {
     ) -> Result<String, WebDriverErrorResponse> {
         let (tx, rx) = oneshot::channel();
 
+        // SAFETY: Tauri runs this callback on the main thread with a live
+        // platform webview, so the pointer is valid for the call and
+        // `MainThreadMarker::new_unchecked` states a fact the runtime upholds.
+        // On macOS that webview is always WKWebView-backed, making the cast sound.
         let result = webview.with_webview(move |platform_webview| unsafe {
             let wk_webview: &WKWebView = &*platform_webview.inner().cast();
             let mtm = MainThreadMarker::new_unchecked();
@@ -116,6 +120,10 @@ mod imp {
         })?;
 
         let (tx, rx) = oneshot::channel();
+        // SAFETY: Tauri runs this callback on the main thread with a live
+        // platform webview, so the pointer is valid for the call and
+        // `MainThreadMarker::new_unchecked` states a fact the runtime upholds.
+        // On macOS that webview is always WKWebView-backed, making the cast sound.
         let result = webview.with_webview(move |platform_webview| unsafe {
             let wk_webview: &WKWebView = &*platform_webview.inner().cast();
             let mtm = MainThreadMarker::new_unchecked();
@@ -184,6 +192,8 @@ mod imp {
 
         let empty_dict: objc2::rc::Retained<NSDictionary<NSBitmapImageRepPropertyKey, AnyObject>> =
             NSDictionary::new();
+        // SAFETY: `bitmap_rep` and `empty_dict` are live `Retained` handles for
+        // the whole call; the method only reads them and returns a new object.
         let png_data = unsafe {
             bitmap_rep.representationUsingType_properties(NSBitmapImageFileType::PNG, &empty_dict)
         }
@@ -226,6 +236,10 @@ mod imp {
     ) -> Result<String, WebDriverErrorResponse> {
         let (tx, rx) = oneshot::channel();
 
+        // SAFETY: Tauri runs this callback on the main thread with a live
+        // platform webview, so the pointer is valid for the call and
+        // `MainThreadMarker::new_unchecked` states a fact the runtime upholds.
+        // On macOS that webview is always WKWebView-backed, making the cast sound.
         let result = webview.with_webview(move |platform_webview| unsafe {
             let webview2 = match platform_webview.controller().CoreWebView2() {
                 Ok(webview2) => webview2,
@@ -293,6 +307,10 @@ mod imp {
         let margin_left = options.margin_left;
         let margin_right = options.margin_right;
 
+        // SAFETY: Tauri runs this callback on the main thread with a live
+        // platform webview, so the pointer is valid for the call and
+        // `MainThreadMarker::new_unchecked` states a fact the runtime upholds.
+        // On macOS that webview is always WKWebView-backed, making the cast sound.
         let result = webview.with_webview(move |platform_webview| unsafe {
             let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
 

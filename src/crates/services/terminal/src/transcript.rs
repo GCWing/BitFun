@@ -226,8 +226,7 @@ impl TranscriptRecorder {
         operation: impl FnOnce(&mut TranscriptStore) -> io::Result<T>,
     ) -> io::Result<T> {
         let mut store = self.inner.lock().map_err(|_| {
-            io::Error::new(
-                io::ErrorKind::Other,
+            io::Error::other(
                 "terminal transcript recorder lock is poisoned",
             )
         })?;
@@ -685,8 +684,7 @@ impl TranscriptStore {
         });
         let index = TranscriptIndex { sessions };
         let serialized = serde_json::to_vec_pretty(&index).map_err(|error| {
-            io::Error::new(
-                io::ErrorKind::Other,
+            io::Error::other(
                 format!("serialize terminal transcript index: {error}"),
             )
         })?;

@@ -189,7 +189,7 @@ mod macos_clipboard {
 
     pub(super) fn get_clipboard_files() -> Result<Vec<String>, String> {
         let output = Command::new("osascript")
-            .args(&[
+            .args([
                 "-e",
                 r#"
                 set theFiles to {}

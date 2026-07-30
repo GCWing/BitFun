@@ -670,9 +670,12 @@ mod tests {
     const STALE_LOGIN_CHILD_OUTCOME_ENV: &str = "BITFUN_SUBAUTH_CAS_CHILD_OUTCOME";
 
     /// Serializes tests that rely on the process-global store path override.
-    fn test_lock() -> &'static Mutex<()> {
-        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-        LOCK.get_or_init(|| Mutex::new(()))
+    /// Serializes these tests against the shared on-disk store. Async-aware so
+    /// the guard may be held across the awaits each test performs, matching how
+    /// `store_lock` above already guards the real store.
+    fn test_lock() -> &'static tokio::sync::Mutex<()> {
+        static LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+        &LOCK
     }
 
     fn temp_store_path() -> std::path::PathBuf {
@@ -707,9 +710,7 @@ mod tests {
 
     #[tokio::test]
     async fn store_roundtrip_in_temp_dir() {
-        let _guard = test_lock()
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let _guard = test_lock().lock().await;
         store::set_store_path_for_test(temp_store_path());
         let mut store = store::Store::new();
         store.insert(
@@ -758,9 +759,7 @@ mod tests {
 
     #[tokio::test]
     async fn legacy_plaintext_store_is_migrated_and_scrubbed() {
-        let _guard = test_lock()
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let _guard = test_lock().lock().await;
         let path = temp_store_path();
         store::set_store_path_for_test(path.clone());
         let legacy = serde_json::json!({
@@ -786,9 +785,7 @@ mod tests {
 
     #[tokio::test]
     async fn legacy_migration_retries_after_temporary_vault_unavailability() {
-        let _guard = test_lock()
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let _guard = test_lock().lock().await;
         let path = temp_store_path();
         store::set_store_path_for_test(path.clone());
         let legacy = serde_json::json!({
@@ -824,9 +821,7 @@ mod tests {
 
     #[tokio::test]
     async fn partial_chunk_write_is_durably_cleaned_after_retry() {
-        let _guard = test_lock()
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let _guard = test_lock().lock().await;
         store::set_store_path_for_test(temp_store_path());
         store::set_test_vault_write_failure_after(Some(1));
         store::set_test_vault_delete_failure(true);
@@ -861,9 +856,7 @@ mod tests {
 
     #[tokio::test]
     async fn windows_post_commit_backup_cleanup_failure_does_not_fail_commit() {
-        let _guard = test_lock()
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let _guard = test_lock().lock().await;
         let path = temp_store_path();
         let tmp = path.with_extension("tmp-one");
         let backup = path.with_extension("bak");
@@ -889,9 +882,7 @@ mod tests {
 
     #[tokio::test]
     async fn concurrent_provider_upserts_preserve_both_metadata_entries() {
-        let _guard = test_lock()
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let _guard = test_lock().lock().await;
         let path = temp_store_path();
         store::set_store_path_for_test(path.clone());
 
@@ -931,9 +922,7 @@ mod tests {
 
     #[tokio::test]
     async fn logout_tombstone_wins_over_a_refresh_paused_after_load() {
-        let _guard = test_lock()
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let _guard = test_lock().lock().await;
         let path = temp_store_path();
         store::set_store_path_for_test(path.clone());
         store::upsert(
@@ -1047,9 +1036,7 @@ mod tests {
 
     #[tokio::test]
     async fn logout_of_an_absent_provider_invalidates_a_cross_process_login() {
-        let _guard = test_lock()
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let _guard = test_lock().lock().await;
         let path = temp_store_path();
         store::set_store_path_for_test(path.clone());
         let parent = path.parent().unwrap();
@@ -1098,9 +1085,7 @@ mod tests {
 
     #[tokio::test]
     async fn v2_metadata_without_revision_map_remains_conditionally_writable() {
-        let _guard = test_lock()
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let _guard = test_lock().lock().await;
         let path = temp_store_path();
         store::set_store_path_for_test(path.clone());
         std::fs::write(
@@ -1133,9 +1118,7 @@ mod tests {
 
     #[tokio::test]
     async fn repeated_upsert_replaces_existing_metadata_file() {
-        let _guard = test_lock()
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let _guard = test_lock().lock().await;
         let path = temp_store_path();
         store::set_store_path_for_test(path.clone());
 
@@ -1188,9 +1171,7 @@ mod tests {
 
     #[tokio::test]
     async fn long_tokens_are_split_below_the_windows_vault_limit() {
-        let _guard = test_lock()
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let _guard = test_lock().lock().await;
         let path = temp_store_path();
         store::set_store_path_for_test(path.clone());
         let refresh = "r".repeat(5_000);
@@ -1232,9 +1213,7 @@ mod tests {
 
     #[tokio::test]
     async fn unavailable_vault_is_retryable_not_missing_credential() {
-        let _guard = test_lock()
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let _guard = test_lock().lock().await;
         store::set_store_path_for_test(temp_store_path());
         store::upsert(
             "opencode",
@@ -1248,7 +1227,7 @@ mod tests {
 
         store::set_test_vault_unavailable(true);
         let state = store::load_with_state().await.unwrap();
-        assert!(state.credentials.get("opencode").is_none());
+        assert!(!state.credentials.contains_key("opencode"));
         assert!(!state.requires_reauthentication.contains("opencode"));
         assert!(state.vault_unavailable.contains("opencode"));
         let error = store::load_entry("opencode").await.unwrap_err();
@@ -1261,9 +1240,7 @@ mod tests {
 
     #[tokio::test]
     async fn logout_clears_stored_credential() {
-        let _guard = test_lock()
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let _guard = test_lock().lock().await;
         store::set_store_path_for_test(temp_store_path());
         let mut store = store::Store::new();
         store.insert(
@@ -1277,14 +1254,12 @@ mod tests {
 
         logout(SubscriptionProvider::Opencode).await.unwrap();
         let loaded = store::load().await.unwrap();
-        assert!(loaded.get("opencode").is_none());
+        assert!(!loaded.contains_key("opencode"));
     }
 
     #[tokio::test]
     async fn failed_logout_metadata_commit_preserves_usable_credential() {
-        let _guard = test_lock()
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let _guard = test_lock().lock().await;
         store::set_store_path_for_test(temp_store_path());
         store::upsert(
             "opencode",
@@ -1312,9 +1287,7 @@ mod tests {
 
     #[tokio::test]
     async fn failed_logout_vault_delete_is_reported_and_retried() {
-        let _guard = test_lock()
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let _guard = test_lock().lock().await;
         store::set_store_path_for_test(temp_store_path());
         store::upsert(
             "opencode",
@@ -1349,9 +1322,7 @@ mod tests {
 
     #[tokio::test]
     async fn finalize_ignores_superseded_session() {
-        let _guard = test_lock()
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let _guard = test_lock().lock().await;
         let provider = SubscriptionProvider::Codex;
         let stale_generation = next_generation();
         let stale_session_id = test_session_id();
@@ -1475,9 +1446,7 @@ mod tests {
 
     #[tokio::test]
     async fn cancel_command_waits_for_the_commit_boundary() {
-        let _guard = test_lock()
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let _guard = test_lock().lock().await;
         let provider = SubscriptionProvider::Opencode;
         let store_guard = store_lock(provider).lock().await;
         let cancel = CancellationToken::new();
@@ -1520,9 +1489,7 @@ mod tests {
 
     #[tokio::test]
     async fn duplicate_cancel_waits_for_the_same_commit_boundary() {
-        let _guard = test_lock()
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let _guard = test_lock().lock().await;
         let provider = SubscriptionProvider::Antigravity;
         let store_guard = store_lock(provider).lock().await;
         let cancel = CancellationToken::new();
@@ -1571,9 +1538,7 @@ mod tests {
 
     #[tokio::test]
     async fn stale_cancel_does_not_cancel_replacement_session() {
-        let _guard = test_lock()
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let _guard = test_lock().lock().await;
         let provider = SubscriptionProvider::Opencode;
         let stale_session_id = test_session_id();
         let current_session_id = test_session_id();
@@ -1606,9 +1571,7 @@ mod tests {
 
     #[tokio::test]
     async fn cancel_does_not_rewrite_authorized_terminal_state() {
-        let _guard = test_lock()
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let _guard = test_lock().lock().await;
         let provider = SubscriptionProvider::Codex;
         let session_id = test_session_id();
         let cancel = CancellationToken::new();
@@ -1639,9 +1602,9 @@ mod tests {
 
     #[test]
     fn final_state_update_rechecks_generation_after_async_work() {
-        let _guard = test_lock()
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        // Plain `#[test]`, so there is no ambient runtime for `blocking_lock` to
+        // stall; it still serializes against the async tests above.
+        let _guard = test_lock().blocking_lock();
         let provider = SubscriptionProvider::Codex;
         let old_generation = next_generation();
         let new_generation = next_generation();

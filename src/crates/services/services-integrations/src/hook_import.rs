@@ -554,8 +554,8 @@ async fn publish_bundle(
     write: &HookImportWrite,
     content_digest: &str,
 ) -> Result<BundlePublication, HookImportStoreError> {
-    if tokio::fs::symlink_metadata(final_path).await.is_ok() {
-        if validate_bundle_content(root, final_path, content_digest)
+    if tokio::fs::symlink_metadata(final_path).await.is_ok()
+        && validate_bundle_content(root, final_path, content_digest)
             .await
             .is_ok()
         {
@@ -566,7 +566,6 @@ async fn publish_bundle(
                 changed: false,
             });
         }
-    }
     let staging = root
         .join(".staging")
         .join(format!("import-{}", uuid::Uuid::new_v4()));

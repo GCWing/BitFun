@@ -168,7 +168,7 @@ struct HostInvokeBridgeRequest {
 }
 
 pub fn is_local_only_command(command: &str) -> bool {
-    LOCAL_ONLY_COMMANDS.iter().any(|denied| *denied == command)
+    LOCAL_ONLY_COMMANDS.contains(&command)
 }
 
 /// Register a controller device id to receive peer UI events.

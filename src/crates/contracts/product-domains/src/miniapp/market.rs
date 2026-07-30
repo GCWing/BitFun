@@ -49,17 +49,14 @@ impl MarketSubmissionStatus {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub enum MarketSort {
+    #[default]
     Newest,
     Downloads,
     Rating,
 }
 
-impl Default for MarketSort {
-    fn default() -> Self {
-        Self::Newest
-    }
-}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

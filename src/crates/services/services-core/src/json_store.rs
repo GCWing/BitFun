@@ -342,10 +342,14 @@ impl JsonFileStore {
             .unwrap_or_else(|| "data.json".to_string());
         let lock_path = path.with_file_name(format!("{file_name}.lock"));
         tokio::task::spawn_blocking(move || {
+            // The lock file carries no payload; it exists only to hold the
+            // advisory `flock`. Never truncate it — another process may already
+            // be holding the lock on this same inode.
             let file = OpenOptions::new()
                 .create(true)
                 .read(true)
                 .write(true)
+                .truncate(false)
                 .open(&lock_path)
                 .map_err(|source| JsonFileStoreError::CrossProcessLock {
                     path: lock_path.clone(),

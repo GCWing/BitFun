@@ -75,7 +75,7 @@ pub async fn computer_use_open_system_settings(
             .arg(url)
             .status()
             .map_err(|e| e.to_string())?;
-        return Ok(());
+        Ok(())
     }
     #[cfg(target_os = "windows")]
     {

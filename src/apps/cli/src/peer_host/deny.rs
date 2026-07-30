@@ -100,11 +100,11 @@ static CLI_UNSUPPORTED_EXACT: &[&str] = &[
 ];
 
 pub(crate) fn is_local_only_command(command: &str) -> bool {
-    LOCAL_ONLY_COMMANDS.iter().any(|denied| *denied == command)
+    LOCAL_ONLY_COMMANDS.contains(&command)
 }
 
 pub(crate) fn is_cli_unsupported_command(command: &str) -> bool {
-    if CLI_UNSUPPORTED_EXACT.iter().any(|c| *c == command) {
+    if CLI_UNSUPPORTED_EXACT.contains(&command) {
         return true;
     }
     let prefixes = [

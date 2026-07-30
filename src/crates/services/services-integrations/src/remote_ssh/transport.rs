@@ -534,26 +534,26 @@ async fn run_local_process(
     let stdout_task = tokio::spawn(copy_to_duplex(child_stdout, pipes.stdout));
     let stderr_task = tokio::spawn(copy_to_duplex(child_stderr, pipes.stderr));
 
-    let exit_code = loop {
-        tokio::select! {
-            status = child.wait() => {
-                break status.ok().and_then(local_process_exit_code);
-            }
-            // We are the ones ending the process here, so a signal death says
-            // nothing the caller does not already know. Prefer a status the
-            // child chose for itself and otherwise report the requested intent.
-            signal = pipes.control_rx.recv() => {
-                let fallback = match signal {
-                    Some(WorkspaceProcessSignal::Interrupt) => 130,
-                    Some(WorkspaceProcessSignal::Kill) | None => 137,
-                };
-                let _ = child.start_kill();
-                break child.wait().await.ok().and_then(|status| status.code()).or(Some(fallback));
-            }
-            _ = pipes.cancellation.cancelled() => {
-                let _ = child.start_kill();
-                break child.wait().await.ok().and_then(|status| status.code()).or(Some(137));
-            }
+    // Whichever arm wins settles the exit code; none of them can resume
+    // waiting, so this is a single-shot select rather than a loop.
+    let exit_code = tokio::select! {
+        status = child.wait() => {
+            status.ok().and_then(local_process_exit_code)
+        }
+        // We are the ones ending the process here, so a signal death says
+        // nothing the caller does not already know. Prefer a status the
+        // child chose for itself and otherwise report the requested intent.
+        signal = pipes.control_rx.recv() => {
+            let fallback = match signal {
+                Some(WorkspaceProcessSignal::Interrupt) => 130,
+                Some(WorkspaceProcessSignal::Kill) | None => 137,
+            };
+            let _ = child.start_kill();
+            child.wait().await.ok().and_then(|status| status.code()).or(Some(fallback))
+        }
+        _ = pipes.cancellation.cancelled() => {
+            let _ = child.start_kill();
+            child.wait().await.ok().and_then(|status| status.code()).or(Some(137))
         }
     };
 

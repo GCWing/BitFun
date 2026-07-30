@@ -660,7 +660,7 @@ async fn fanout_peer_device_event_once(queued: QueuedPeerDeviceEvent) {
         };
         let correlation_id = uuid::Uuid::new_v4().to_string();
         if let Err(error) = relay_client
-            .send_device_message(&target, &correlation_id, &encrypted_data, &nonce)
+            .send_device_message(target, &correlation_id, &encrypted_data, &nonce)
             .await
         {
             tracing::debug!("Peer event fanout to {target} failed: {error}");

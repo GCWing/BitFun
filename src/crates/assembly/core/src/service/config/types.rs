@@ -602,8 +602,10 @@ pub struct DefaultModelsConfig {
 /// model named `inherit` can never be interpreted as a control value.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(tag = "kind", rename_all = "snake_case")]
+#[derive(Default)]
 pub enum SubagentModelSelection {
     Fixed { model_id: String },
+    #[default]
     Inherit,
 }
 
@@ -622,11 +624,6 @@ impl SubagentModelSelection {
     }
 }
 
-impl Default for SubagentModelSelection {
-    fn default() -> Self {
-        Self::Inherit
-    }
-}
 
 /// Model defaults for subagents created through user-visible delegation.
 #[derive(Debug, Clone, Serialize, Deserialize)]

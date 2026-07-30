@@ -279,6 +279,14 @@ async fn dispatch_inner(
     public_snapshot(snapshot)
 }
 
+fn control_request(
+    request: &Value,
+) -> ExternalSourceOperationResult<ExternalSourceControlRequestV1> {
+    serde_json::from_value(request.clone()).map_err(|_| {
+        ExternalSourceOperationError::invalid_request("Invalid external source control request")
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -338,12 +346,4 @@ mod tests {
             ExternalSourceControlActionV1::SetSafeMode { enabled: true }
         ));
     }
-}
-
-fn control_request(
-    request: &Value,
-) -> ExternalSourceOperationResult<ExternalSourceControlRequestV1> {
-    serde_json::from_value(request.clone()).map_err(|_| {
-        ExternalSourceOperationError::invalid_request("Invalid external source control request")
-    })
 }

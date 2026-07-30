@@ -2053,7 +2053,7 @@ impl WorkspaceExternalSourceService {
             &catalog,
             self.execution_domain_id.clone(),
             safe_mode,
-            host_capabilities.clone(),
+            host_capabilities,
         );
         let mut public = ExternalSourcePublicSnapshot::from(catalog);
         public.host_capabilities = host_capabilities;
@@ -3274,7 +3274,6 @@ fn sanitize_external_snapshot_locations(
             .unwrap_or(ExternalSourceScope::WorkspaceLocal);
         remember_location(scope, directory);
     }
-    drop(remember_location);
     replacements.sort_by(|left, right| right.0.len().cmp(&left.0.len()));
     let sanitize_message = |message: &mut String| {
         for (raw, safe) in &replacements {
@@ -3396,7 +3395,7 @@ fn write_canonical_json(value: &serde_json::Value, output: &mut Vec<u8>) -> serd
         serde_json::Value::Object(values) => {
             output.push(b'{');
             let mut entries = values.iter().collect::<Vec<_>>();
-            entries.sort_by(|(left, _), (right, _)| left.cmp(right));
+            entries.sort_by_key(|(left, _)| *left);
             for (index, (key, value)) in entries.into_iter().enumerate() {
                 if index > 0 {
                     output.push(b',');
@@ -4740,7 +4739,7 @@ fn project_native_prompt_command_conflicts(
     for command in native_commands {
         command
             .validate()
-            .map_err(|error| invalid_operation_error(&error.to_string()))?;
+            .map_err(|error| invalid_operation_error(error.to_string()))?;
     }
     let command_names = native_commands
         .iter()
@@ -4787,14 +4786,11 @@ fn project_native_prompt_command_conflicts(
                 .collect::<Vec<_>>()
         };
         let Some((_, _, source)) = external.first() else {
-            reconfirmations.extend(native.iter().filter_map(|command| {
-                conflicted_candidate_ids
-                    .contains(&command.candidate_id)
-                    .then(|| NativePromptCommandReconfirmationProjection {
+            reconfirmations.extend(native.iter().filter(|&command| conflicted_candidate_ids
+                    .contains(&command.candidate_id)).map(|command| NativePromptCommandReconfirmationProjection {
                         command_name: command_name.clone(),
                         native_candidate_id: command.candidate_id.clone(),
-                    })
-            }));
+                    }));
             continue;
         };
         let execution_domain = snapshot

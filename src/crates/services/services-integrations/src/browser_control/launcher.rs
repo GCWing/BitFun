@@ -603,7 +603,7 @@ impl BrowserLauncher {
                 return Ok(());
             }
             let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(anyhow!("Failed to quit {}: {}", kind, stderr.trim()));
+            Err(anyhow!("Failed to quit {}: {}", kind, stderr.trim()))
         }
 
         #[cfg(target_os = "windows")]

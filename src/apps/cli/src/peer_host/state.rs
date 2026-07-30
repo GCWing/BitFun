@@ -1069,6 +1069,20 @@ fn spawn_turn_cancellation(
     });
 }
 
+static PEER_HOST_STATE: OnceLock<PeerHostState> = OnceLock::new();
+
+pub(crate) fn set_peer_host_state(state: PeerHostState) -> Result<(), PeerHostState> {
+    PEER_HOST_STATE.set(state)
+}
+
+pub(crate) fn try_peer_host_state() -> Option<&'static PeerHostState> {
+    PEER_HOST_STATE.get()
+}
+
+pub(crate) fn peer_host_state() -> Result<&'static PeerHostState, String> {
+    try_peer_host_state().ok_or_else(|| "CLI peer host is not initialized".to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use std::collections::HashSet;
@@ -1830,18 +1844,4 @@ mod tests {
         tracker.drain_peer_turns();
         assert!(tracker.register_root(root).is_err());
     }
-}
-
-static PEER_HOST_STATE: OnceLock<PeerHostState> = OnceLock::new();
-
-pub(crate) fn set_peer_host_state(state: PeerHostState) -> Result<(), PeerHostState> {
-    PEER_HOST_STATE.set(state)
-}
-
-pub(crate) fn try_peer_host_state() -> Option<&'static PeerHostState> {
-    PEER_HOST_STATE.get()
-}
-
-pub(crate) fn peer_host_state() -> Result<&'static PeerHostState, String> {
-    try_peer_host_state().ok_or_else(|| "CLI peer host is not initialized".to_string())
 }

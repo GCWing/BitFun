@@ -540,6 +540,19 @@ fn redact_sensitive_value(message: &str, sensitive_value: Option<&str>) -> Strin
         .unwrap_or_else(|| message.to_string())
 }
 
+#[cfg(not(windows))]
+fn safe_process_environment_keys() -> &'static [&'static str] {
+    &[
+        "PATH", "HOME", "TMPDIR", "LANG", "LC_ALL", "LC_CTYPE", "SHELL",
+    ]
+}
+
+impl Drop for MCPServerProcess {
+    fn drop(&mut self) {
+        self.child.take();
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{redact_sensitive_value, safe_process_environment_keys};
@@ -560,18 +573,5 @@ mod tests {
 
         assert!(!redacted.contains("secret"));
         assert!(redacted.contains("<redacted-url>"));
-    }
-}
-
-#[cfg(not(windows))]
-fn safe_process_environment_keys() -> &'static [&'static str] {
-    &[
-        "PATH", "HOME", "TMPDIR", "LANG", "LC_ALL", "LC_CTYPE", "SHELL",
-    ]
-}
-
-impl Drop for MCPServerProcess {
-    fn drop(&mut self) {
-        self.child.take();
     }
 }

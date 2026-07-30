@@ -603,7 +603,7 @@ fn lockout_until(attempts: i64, now: i64) -> i64 {
     if attempts < 5 {
         return 0;
     }
-    let level = (attempts - 4).min(4) as i64;
+    let level = (attempts - 4).min(4);
     let secs = match level {
         1 => 60,
         2 => 300,

@@ -395,7 +395,7 @@ async fn non_utf8_runtime_root_supports_discovery_bind_and_health() {
     let discovery = server.discovery_record().clone();
     let server_task = tokio::spawn(server.serve());
 
-    let mut client = RuntimeIpcClient::connect(
+    let client = RuntimeIpcClient::connect(
         &runtime_root,
         &discovery,
         "non-utf8-test",

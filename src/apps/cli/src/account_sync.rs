@@ -54,7 +54,7 @@ pub(crate) fn start_settings_sync_loop() {
         on_settings_pushed: Some(Arc::new(|| {
             crate::peer_host::notify_controllers_settings_changed();
         })),
-        on_token_expired: Some(Arc::new(|| crate::account::mark_token_expired())),
+        on_token_expired: Some(Arc::new(crate::account::mark_token_expired)),
         ..Default::default()
     };
     settings_sync::start_settings_sync_engine(hooks);
@@ -96,18 +96,15 @@ pub(crate) async fn push_settings_after_local_change() {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Default)]
 pub(crate) enum SyncStatus {
+    #[default]
     Idle,
     Syncing,
     Done,
     Failed,
 }
 
-impl Default for SyncStatus {
-    fn default() -> Self {
-        Self::Idle
-    }
-}
 
 #[derive(Debug, Clone)]
 pub(crate) struct SyncProgress {

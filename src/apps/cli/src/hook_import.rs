@@ -9,7 +9,6 @@ use bitfun_product_domains::external_sources::{
 };
 use clap::{Subcommand, ValueEnum};
 use serde::Serialize;
-use std::path::PathBuf;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 pub(crate) enum HookImportOutputFormat {
@@ -78,7 +77,7 @@ pub(crate) enum HookAction {
 }
 
 pub(crate) async fn run(action: Option<HookAction>) -> Result<()> {
-    let workspace = std::env::current_dir().ok().map(PathBuf::from);
+    let workspace = std::env::current_dir().ok();
     match action.unwrap_or(HookAction::List {
         refresh: false,
         format: HookImportOutputFormat::Text,

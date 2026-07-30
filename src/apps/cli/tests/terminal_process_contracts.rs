@@ -302,7 +302,7 @@ fn strict_stream_json_events(output: &str) -> Vec<serde_json::Value> {
             if !is_protocol_candidate {
                 return None;
             }
-            let value = serde_json::from_str::<serde_json::Value>(&line).unwrap_or_else(|error| {
+            let value = serde_json::from_str::<serde_json::Value>(line).unwrap_or_else(|error| {
                 panic!("invalid stream-json PTY line {line:?}: {error}\nfull output:\n{output}")
             });
             assert!(

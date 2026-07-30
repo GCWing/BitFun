@@ -540,7 +540,7 @@ fn validate_remote_name_for_local_download(name: &str) -> Result<(), String> {
 fn local_download_name_key(name: &str) -> String {
     #[cfg(any(windows, target_os = "macos"))]
     {
-        name.trim_end_matches(|character| character == '.' || character == ' ')
+        name.trim_end_matches(['.', ' '])
             .to_lowercase()
     }
     #[cfg(not(any(windows, target_os = "macos")))]

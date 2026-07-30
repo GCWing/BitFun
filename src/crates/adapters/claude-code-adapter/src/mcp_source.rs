@@ -130,7 +130,7 @@ impl ClaudeCodeMcpProvider {
             let key = source_key(&layer);
             let allowed_root = layer.path.parent().unwrap_or(Path::new("."));
             let resolved_path = resolve_bounded_regular_file(&layer.path, allowed_root)
-                .map_err(|error| bounded_file_error(error))?;
+                .map_err(bounded_file_error)?;
             let document = documents
                 .entry(resolved_path.clone())
                 .or_insert_with(|| parse_document(&resolved_path))

@@ -774,16 +774,18 @@ async fn mode_update_requires_the_controlled_idle_session() {
     )
     .await;
 
-    let calls = handler.calls.lock().expect("calls");
-    assert_eq!(
+    // Scoped so the guard is provably released before the awaits below.
+    let updates = {
+        let calls = handler.calls.lock().expect("calls");
         calls
             .iter()
             .filter(|operation| matches!(operation, RuntimeIpcOperation::UpdateSessionMode { .. }))
-            .count(),
-        1,
+            .count()
+    };
+    assert_eq!(
+        updates, 1,
         "only the controlled idle-session update reaches the Runtime handler"
     );
-    drop(calls);
     drop(client);
     server.finish().await;
 }
@@ -871,16 +873,18 @@ async fn model_update_requires_the_controlled_idle_session() {
     )
     .await;
 
-    let calls = handler.calls.lock().expect("calls");
-    assert_eq!(
+    // Scoped so the guard is provably released before the awaits below.
+    let updates = {
+        let calls = handler.calls.lock().expect("calls");
         calls
             .iter()
             .filter(|operation| matches!(operation, RuntimeIpcOperation::UpdateSessionModel { .. }))
-            .count(),
-        1,
+            .count()
+    };
+    assert_eq!(
+        updates, 1,
         "only the controlled idle-session update reaches the Runtime handler"
     );
-    drop(calls);
     drop(client);
     server.finish().await;
 }

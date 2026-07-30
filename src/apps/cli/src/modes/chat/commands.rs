@@ -710,7 +710,7 @@ impl ChatMode {
             .and_then(|command| command.native_collision.as_ref())
             .map(|collision| collision.conflict_key.as_str());
         let expected_preference_revision = native_conflict_key
-            .and_then(|_| self.external_source_snapshot.as_ref())
+            .and(self.external_source_snapshot.as_ref())
             .map(|snapshot| snapshot.preference_revision);
         let expanded = tokio::task::block_in_place(|| {
             rt_handle.block_on(expand_external_prompt_command(

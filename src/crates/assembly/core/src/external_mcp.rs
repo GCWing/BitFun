@@ -255,19 +255,12 @@ pub(super) fn prepared_mcp_config(
     Ok(config)
 }
 
+#[derive(Default)]
 struct CandidateGroup<'a> {
     native: Vec<&'a NativeMcpCandidate>,
     external: Vec<&'a ExternalMcpServerDefinition>,
 }
 
-impl<'a> Default for CandidateGroup<'a> {
-    fn default() -> Self {
-        Self {
-            native: Vec::new(),
-            external: Vec::new(),
-        }
-    }
-}
 
 /// Produces the source-neutral product decision for external MCP candidates.
 /// This function is pure: no provider preparation, process launch, credential
@@ -323,7 +316,7 @@ pub(super) fn reconcile_external_mcp_catalog(
             .sort_by(|left, right| left.candidate_id.cmp(&right.candidate_id));
         group
             .external
-            .sort_by(|left, right| left.candidate_id().cmp(&right.candidate_id()));
+            .sort_by_key(|left| left.candidate_id());
         let active_external = group
             .external
             .iter()

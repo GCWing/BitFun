@@ -1148,7 +1148,7 @@ impl RemoteConnectService {
             // loop closing after reconnect must not disconnect the new room.
             let _room_effect = room_lifecycle.lock().await;
             let mut owner = active_room_owner.write().await;
-            if clear_room_owner_if_current(&mut *owner, &room_owner) {
+            if clear_room_owner_if_current(&mut owner, &room_owner) {
                 drop(owner);
                 *relay_arc.write().await = None;
                 pairing_arc.write().await.disconnect().await;

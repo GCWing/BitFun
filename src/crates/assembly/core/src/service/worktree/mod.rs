@@ -1272,7 +1272,7 @@ async fn known_project_workspace_paths() -> Vec<PathBuf> {
     }
 
     let mut paths = projects.into_values().collect::<Vec<_>>();
-    paths.sort_by(|left, right| path_string(left).cmp(&path_string(right)));
+    paths.sort_by_key(|left| path_string(left));
     paths
 }
 

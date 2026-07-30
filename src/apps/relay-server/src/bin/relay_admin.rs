@@ -90,7 +90,7 @@ async fn main() -> Result<()> {
             if users.is_empty() {
                 println!("No accounts found.");
             } else {
-                println!("{:<24} {:<38} {}", "USERNAME", "USER_ID", "CREATED");
+                println!("{:<24} {:<38} CREATED", "USERNAME", "USER_ID");
                 println!("{}", "-".repeat(80));
                 for (username, user_id, created) in users {
                     let dt = chrono::DateTime::from_timestamp(created, 0)

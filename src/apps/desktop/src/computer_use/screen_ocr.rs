@@ -439,7 +439,7 @@ mod macos {
         text_query: &str,
         obs: &VNRecognizedTextObservation,
     ) -> Option<OcrTextMatch> {
-        let candidates = obs.topCandidates(TOP_CANDIDATES_MAX as usize);
+        let candidates = obs.topCandidates(TOP_CANDIDATES_MAX);
         let n = candidates.len();
         let q_norm = normalize_for_match(text_query);
 

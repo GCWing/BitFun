@@ -1003,9 +1003,8 @@ impl ExternalToolRuntimeManager {
         reason: &str,
     ) -> bool {
         let mut loaded = self.loaded.lock().await;
-        if !loaded
-            .get(runtime_target_id)
-            .is_some_and(|target| target.load_generation == load_generation)
+        if loaded
+            .get(runtime_target_id).is_none_or(|target| target.load_generation != load_generation)
         {
             return false;
         }
@@ -2080,6 +2079,27 @@ fn tool_diagnostic(
     }
 }
 
+pub(super) fn merge_tool_state(
+    mut snapshot: bitfun_product_domains::external_sources::ExternalSourceCatalogSnapshot,
+    tool_snapshot: &ExternalToolCoordinatorSnapshot,
+    state: ExternalToolProductState,
+) -> bitfun_product_domains::external_sources::ExternalSourceCatalogSnapshot {
+    snapshot.generation = snapshot.generation.max(tool_snapshot.generation);
+    snapshot.discovery_pending |= tool_snapshot.discovery_pending;
+    snapshot.sources.extend(tool_snapshot.sources.clone());
+    snapshot
+        .sources
+        .sort_by(|left, right| left.stable_key.cmp(&right.stable_key));
+    snapshot.tools = state.tools;
+    snapshot.tool_approval_requests = state.approval_requests;
+    snapshot.tool_conflicts = state.conflicts;
+    snapshot
+        .diagnostics
+        .extend(tool_snapshot.diagnostics.clone());
+    snapshot.diagnostics.extend(state.diagnostics);
+    snapshot
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2670,25 +2690,4 @@ mod tests {
         );
         assert!(manager.lost_targets.lock().await.is_empty());
     }
-}
-
-pub(super) fn merge_tool_state(
-    mut snapshot: bitfun_product_domains::external_sources::ExternalSourceCatalogSnapshot,
-    tool_snapshot: &ExternalToolCoordinatorSnapshot,
-    state: ExternalToolProductState,
-) -> bitfun_product_domains::external_sources::ExternalSourceCatalogSnapshot {
-    snapshot.generation = snapshot.generation.max(tool_snapshot.generation);
-    snapshot.discovery_pending |= tool_snapshot.discovery_pending;
-    snapshot.sources.extend(tool_snapshot.sources.clone());
-    snapshot
-        .sources
-        .sort_by(|left, right| left.stable_key.cmp(&right.stable_key));
-    snapshot.tools = state.tools;
-    snapshot.tool_approval_requests = state.approval_requests;
-    snapshot.tool_conflicts = state.conflicts;
-    snapshot
-        .diagnostics
-        .extend(tool_snapshot.diagnostics.clone());
-    snapshot.diagnostics.extend(state.diagnostics);
-    snapshot
 }

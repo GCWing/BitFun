@@ -309,7 +309,7 @@ async fn install_artifacts_into_staging(
         }
     }
 
-    let payload_dir = find_payload_dir(&staging, &manifest.required_files).await?;
+    let payload_dir = find_payload_dir(staging, &manifest.required_files).await?;
     if final_dir.exists() {
         fs::remove_dir_all(&final_dir).await?;
     }
@@ -323,7 +323,7 @@ async fn install_artifacts_into_staging(
         }
     }
 
-    store.write_install_record(manifest, &final_dir).await?;
+    store.write_install_record(manifest, final_dir).await?;
     Ok(())
 }
 

@@ -572,7 +572,7 @@ fn target_workspace_path_is_absolute(path: &str) -> bool {
         return false;
     };
     let mut components = unc_path
-        .split(|character| matches!(character, '\\' | '/'))
+        .split(['\\', '/'])
         .filter(|component| !component.is_empty());
     components.next().is_some() && components.next().is_some()
 }

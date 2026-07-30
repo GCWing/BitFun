@@ -2,7 +2,9 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "kebab-case")]
+#[derive(Default)]
 pub enum DispatchWorkspaceDeliveryRequest {
+    #[default]
     Existing,
     SnapshotExact {
         #[serde(rename = "sourceWorkspacePath")]
@@ -12,11 +14,6 @@ pub enum DispatchWorkspaceDeliveryRequest {
     },
 }
 
-impl Default for DispatchWorkspaceDeliveryRequest {
-    fn default() -> Self {
-        Self::Existing
-    }
-}
 
 /// The execution location selected while a chat session is being created.
 ///
@@ -25,7 +22,9 @@ impl Default for DispatchWorkspaceDeliveryRequest {
 /// owned by another BitFun process.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "lowercase")]
+#[derive(Default)]
 pub enum DispatchTargetRequest {
+    #[default]
     Local,
     Ssh {
         #[serde(rename = "connectionId")]
@@ -41,11 +40,6 @@ pub enum DispatchTargetRequest {
     },
 }
 
-impl Default for DispatchTargetRequest {
-    fn default() -> Self {
-        Self::Local
-    }
-}
 
 impl DispatchTargetRequest {
     pub fn is_local(&self) -> bool {

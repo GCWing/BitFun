@@ -1066,7 +1066,7 @@ fn parse_config_layer(
 ) -> ParsedConfigLayer {
     match read_bounded_text(path, MAX_CONFIG_FILE_BYTES) {
         Ok(BoundedTextRead::TooLarge) => {
-            return ParsedConfigLayer {
+            ParsedConfigLayer {
                 servers: BTreeMap::new(),
                 diagnostics: vec![ExternalSourceDiagnostic::error(
                     "opencode.mcp.config_too_large",
@@ -1076,10 +1076,10 @@ fn parse_config_layer(
                 .with_asset_kind(ExternalSourceAssetKind::Mcp)],
                 content_version: "too-large".to_string(),
                 fatal: true,
-            };
+            }
         }
         Ok(BoundedTextRead::InvalidUtf8) => {
-            return ParsedConfigLayer {
+            ParsedConfigLayer {
                 servers: BTreeMap::new(),
                 diagnostics: vec![ExternalSourceDiagnostic::error(
                     "opencode.mcp.config_invalid_utf8",
@@ -1089,7 +1089,7 @@ fn parse_config_layer(
                 .with_asset_kind(ExternalSourceAssetKind::Mcp)],
                 content_version: "invalid-utf8".to_string(),
                 fatal: true,
-            };
+            }
         }
         Ok(BoundedTextRead::Content(content)) => {
             let content_version = content_version(revision_key, path, content.as_bytes());
@@ -1129,15 +1129,15 @@ fn parse_config_layer(
                     };
                 }
             };
-            return ParsedConfigLayer {
+            ParsedConfigLayer {
                 servers,
                 diagnostics: Vec::new(),
                 content_version,
                 fatal: false,
-            };
+            }
         }
         Err(error) => {
-            return ParsedConfigLayer {
+            ParsedConfigLayer {
                 servers: BTreeMap::new(),
                 diagnostics: vec![ExternalSourceDiagnostic::error(
                     "opencode.mcp.config_unreadable",
@@ -1147,7 +1147,7 @@ fn parse_config_layer(
                 .with_asset_kind(ExternalSourceAssetKind::Mcp)],
                 content_version: "unreadable".to_string(),
                 fatal: true,
-            };
+            }
         }
     }
 }

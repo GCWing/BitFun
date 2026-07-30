@@ -2608,6 +2608,8 @@ fn open_directory_no_follow(path: &Path) -> io::Result<std::fs::File> {
 
     let path = std::ffi::CString::new(path.as_os_str().as_bytes())
         .map_err(|_| io::Error::new(ErrorKind::InvalidInput, "path contains NUL"))?;
+    // SAFETY: `path` is a NUL-terminated CString that outlives this call, and
+    // the flags are a valid `open` flag set.
     let fd = unsafe {
         libc::open(
             path.as_ptr(),
@@ -2617,6 +2619,8 @@ fn open_directory_no_follow(path: &Path) -> io::Result<std::fs::File> {
     if fd < 0 {
         return Err(io::Error::last_os_error());
     }
+    // SAFETY: `open` just returned this descriptor and the error case returned
+    // above, so it is open, valid, and owned by nothing else.
     Ok(unsafe { std::fs::File::from_raw_fd(fd) })
 }
 
@@ -2627,6 +2631,9 @@ fn openat_directory(directory: &std::fs::File, name: &OsStr) -> io::Result<std::
 
     let name = std::ffi::CString::new(name.as_bytes())
         .map_err(|_| io::Error::new(ErrorKind::InvalidInput, "path contains NUL"))?;
+    // SAFETY: `directory` is a live `File` borrowed for this call, so its
+    // descriptor stays open; `name` is a NUL-terminated CString outliving the
+    // call, and the flags are a valid `openat` flag set.
     let fd = unsafe {
         libc::openat(
             directory.as_raw_fd(),
@@ -2637,6 +2644,8 @@ fn openat_directory(directory: &std::fs::File, name: &OsStr) -> io::Result<std::
     if fd < 0 {
         return Err(io::Error::last_os_error());
     }
+    // SAFETY: `openat` just returned this descriptor and the error case
+    // returned above, so it is open, valid, and owned by nothing else.
     Ok(unsafe { std::fs::File::from_raw_fd(fd) })
 }
 
@@ -2664,6 +2673,9 @@ fn openat_regular_file(base: &std::fs::File, relative_path: &Path) -> io::Result
     }
     let file_name = std::ffi::CString::new(file_name.as_bytes())
         .map_err(|_| io::Error::new(ErrorKind::InvalidInput, "path contains NUL"))?;
+    // SAFETY: `directory` is a live `File` held for this call, so its
+    // descriptor stays open; `file_name` is a NUL-terminated CString outliving
+    // the call, and the flags are a valid `openat` flag set.
     let fd = unsafe {
         libc::openat(
             directory.as_raw_fd(),
@@ -2674,6 +2686,8 @@ fn openat_regular_file(base: &std::fs::File, relative_path: &Path) -> io::Result
     if fd < 0 {
         return Err(io::Error::last_os_error());
     }
+    // SAFETY: `openat` just returned this descriptor and the error case
+    // returned above, so it is open, valid, and owned by nothing else.
     let file = unsafe { std::fs::File::from_raw_fd(fd) };
     if !file.metadata()?.is_file() {
         return Err(io::Error::new(
@@ -3140,7 +3154,7 @@ fn declared_parent_metadata_issue_code(kind: ErrorKind) -> PluginSourceIssueCode
 mod tests {
     use super::{
         build_snapshot, charge_scanned_read, declared_parent_metadata_issue_code,
-        map_activation_store_error, map_load_store_error, native_path_identity,
+        map_activation_store_error, map_load_store_error,
         persist_trust_bytes_with_parent_sync, read_bounded_reader, read_scanned_file,
         replace_file_atomically, trust_file_identity, trust_store_issue_code, workspace_scope,
         ManagedPluginSourceError, ManagedPluginSourceService, OperationScanBudget,

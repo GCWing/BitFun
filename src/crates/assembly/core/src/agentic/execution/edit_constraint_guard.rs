@@ -788,7 +788,7 @@ fn append_jsonl(path: &Path, event: &Value) -> Result<(), String> {
     let mut file = OpenOptions::new()
         .create(true)
         .append(true)
-        .open(&path)
+        .open(path)
         .map_err(|error| format!("failed to open telemetry stream: {error}"))?;
     serde_json::to_writer(&mut file, event)
         .and_then(|_| file.write_all(b"\n").map_err(serde_json::Error::io))
@@ -894,14 +894,14 @@ pub fn check(
         && !edit_constraint_telemetry_enabled()
         && state
             .as_ref()
-            .map_or(true, |state| !state.has_enforceable_constraints())
+            .is_none_or(|state| !state.has_enforceable_constraints())
     {
         return None;
     }
     if !force_requested
         && state
             .as_ref()
-            .map_or(true, |state| !state.has_enforceable_constraints())
+            .is_none_or(|state| !state.has_enforceable_constraints())
     {
         if edit_constraint_telemetry_enabled() {
             decision_result(
@@ -1047,7 +1047,7 @@ pub async fn check_write(
     if !force_requested
         && state
             .as_ref()
-            .map_or(true, |state| !state.tracks_agent_created_test_paths())
+            .is_none_or(|state| !state.tracks_agent_created_test_paths())
     {
         return check(context, tool_name, operation, file_path, false);
     }
@@ -1104,14 +1104,14 @@ pub fn check_edit(
         && !edit_constraint_telemetry_enabled()
         && state
             .as_ref()
-            .map_or(true, |state| !state.has_enforceable_constraints())
+            .is_none_or(|state| !state.has_enforceable_constraints())
     {
         return None;
     }
     if !force_requested
         && state
             .as_ref()
-            .map_or(true, |state| !state.tracks_agent_created_test_paths())
+            .is_none_or(|state| !state.tracks_agent_created_test_paths())
     {
         return check(context, tool_name, operation, file_path, false);
     }

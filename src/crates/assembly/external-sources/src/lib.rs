@@ -650,7 +650,7 @@ impl ExternalSourceCoordinator {
         let mut commands = Vec::new();
         let mut command_conflicts = Vec::new();
         for (command_name, mut candidates) in command_candidates_by_name {
-            candidates.sort_by(|left, right| left.id.stable_key().cmp(&right.id.stable_key()));
+            candidates.sort_by_key(|left| left.id.stable_key());
             let requires_reconfirmation = candidates.len() == 1
                 && self
                     .conflicted_candidate_ids

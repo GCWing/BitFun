@@ -3555,7 +3555,7 @@ pub async fn account_delegate_to_paired(correlation_id: String) -> Result<String
         "resp": "delegate_identity",
         "token": delegated.token,
         "user_id": delegated.user_id,
-        "master_key": B64.encode(&session.master_key),
+        "master_key": B64.encode(session.master_key),
         "device_id": device_id,
     });
     let identity_str =
@@ -4420,7 +4420,11 @@ async fn pull_and_reconcile(account_generation: u64) {
 mod sync_state_tests {
     use super::*;
 
-    static ACCOUNT_CONTEXT_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    /// Serializes these tests against the process-global account context.
+    /// Async-aware so the guard may be held across each test's awaits; the
+    /// plain `#[test]` cases take it with `blocking_lock`, which cannot stall
+    /// because they run without an ambient runtime.
+    static ACCOUNT_CONTEXT_TEST_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
     #[test]
     fn relay_url_normalization_removes_all_trailing_slashes() {
@@ -4472,9 +4476,7 @@ mod sync_state_tests {
 
     #[test]
     fn background_sync_is_fail_closed_while_login_choice_is_pending() {
-        let _test_guard = ACCOUNT_CONTEXT_TEST_LOCK
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let _test_guard = ACCOUNT_CONTEXT_TEST_LOCK.blocking_lock();
         set_pending_login_id(Some("pending-a".to_string()));
         assert!(!background_account_sync_is_allowed());
         set_pending_login_id(None);
@@ -4516,9 +4518,7 @@ mod sync_state_tests {
 
     #[tokio::test(flavor = "current_thread")]
     async fn account_transition_cancels_an_in_flight_auto_sync_future() {
-        let _test_guard = ACCOUNT_CONTEXT_TEST_LOCK
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let _test_guard = ACCOUNT_CONTEXT_TEST_LOCK.lock().await;
         let operation_id = u64::MAX - 41;
         ACTIVE_ACCOUNT_AUTO_SYNC_OPERATION_ID.store(operation_id, Ordering::Release);
         let waiter = tokio::spawn(async move {
@@ -4537,9 +4537,7 @@ mod sync_state_tests {
 
     #[tokio::test(flavor = "current_thread")]
     async fn external_account_reads_are_hidden_during_transition() {
-        let _test_guard = ACCOUNT_CONTEXT_TEST_LOCK
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let _test_guard = ACCOUNT_CONTEXT_TEST_LOCK.lock().await;
         *get_account_context().write().await = Some(AccountContextState {
             session: AccountSession {
                 token: "token-a".to_string(),
@@ -4560,9 +4558,7 @@ mod sync_state_tests {
 
     #[tokio::test(flavor = "current_thread")]
     async fn login_event_probe_sees_context_before_transition_mutex_is_released() {
-        let _test_guard = ACCOUNT_CONTEXT_TEST_LOCK
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let _test_guard = ACCOUNT_CONTEXT_TEST_LOCK.lock().await;
         let transition_guard = ACCOUNT_CONTEXT_TRANSITION_LOCK.lock().await;
         let transition = AccountContextTransitionPermit::begin();
         let mut guard = AccountContextTransitionGuard {
@@ -4582,9 +4578,7 @@ mod sync_state_tests {
 
     #[tokio::test(flavor = "current_thread")]
     async fn stale_pending_login_id_cannot_finalize_or_cancel_replacement() {
-        let _test_guard = ACCOUNT_CONTEXT_TEST_LOCK
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let _test_guard = ACCOUNT_CONTEXT_TEST_LOCK.lock().await;
         *get_account_context().write().await = Some(AccountContextState {
             session: AccountSession {
                 token: "token-b".to_string(),
@@ -4613,9 +4607,7 @@ mod sync_state_tests {
 
     #[tokio::test(flavor = "current_thread")]
     async fn finalize_retry_after_commit_is_idempotent_only_for_the_same_account_owner() {
-        let _test_guard = ACCOUNT_CONTEXT_TEST_LOCK
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let _test_guard = ACCOUNT_CONTEXT_TEST_LOCK.lock().await;
         *get_account_context().write().await = Some(AccountContextState {
             session: AccountSession {
                 token: "token-a".to_string(),
@@ -4643,9 +4635,7 @@ mod sync_state_tests {
 
     #[test]
     fn stale_routing_owner_cannot_clear_or_update_replacement() {
-        let _test_guard = ACCOUNT_CONTEXT_TEST_LOCK
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let _test_guard = ACCOUNT_CONTEXT_TEST_LOCK.blocking_lock();
         clear_device_routing_state();
         let owner_a = DeviceRoutingOwner {
             account_generation: 10,
@@ -4686,9 +4676,7 @@ mod sync_state_tests {
 
     #[test]
     fn routing_presence_is_bound_to_account_generation_and_token() {
-        let _test_guard = ACCOUNT_CONTEXT_TEST_LOCK
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let _test_guard = ACCOUNT_CONTEXT_TEST_LOCK.blocking_lock();
         clear_device_routing_state();
         let owner = DeviceRoutingOwner {
             account_generation: 20,

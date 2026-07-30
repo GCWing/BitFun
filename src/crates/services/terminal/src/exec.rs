@@ -1357,6 +1357,9 @@ fn local_pipe_exit_code(status: std::process::ExitStatus) -> Option<i32> {
 
 #[cfg(unix)]
 fn configure_pipe_process_group(command: &mut Command) {
+    // SAFETY: `pre_exec` runs between fork and exec, where only async-signal-safe
+    // work is allowed. The closure calls nothing but `setsid`/`setpgid` and reads
+    // `errno`; it allocates nothing and touches no shared state.
     unsafe {
         command.pre_exec(|| {
             if libc::setsid() == -1 {
@@ -1512,6 +1515,9 @@ fn request_unix_pipe_control(
 
 #[cfg(unix)]
 fn signal_pipe_process_group_id(pgid: libc::pid_t, signal: libc::c_int) {
+    // SAFETY: `killpg` is a plain syscall with no memory-safety contract. A
+    // stale or already-reaped group id fails with ESRCH, which is ignored here
+    // because a group that is already gone needs no signal.
     unsafe {
         libc::killpg(pgid, signal);
     }
@@ -1707,7 +1713,7 @@ mod tests {
     use crate::shell::{ShellDetector, ShellType};
     use encoding_rs::GBK;
     use std::collections::HashMap;
-    use std::path::PathBuf;
+    
     use std::sync::Arc;
 
     #[cfg(windows)]

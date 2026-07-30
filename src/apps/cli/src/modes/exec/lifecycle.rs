@@ -996,7 +996,7 @@ impl ExecMode {
                 Err(error) => (Vec::new(), Err(error)),
             };
             for envelope in buffered_events {
-                let _ = self
+                self
                     .project_exec_nonterminal_event(
                         &envelope,
                         &session_id,

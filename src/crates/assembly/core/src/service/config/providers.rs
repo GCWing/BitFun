@@ -160,32 +160,6 @@ impl ConfigProvider for AIConfigProvider {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[tokio::test]
-    async fn rejects_a_model_context_window_smaller_than_32k() {
-        let mut config = AIConfig::default();
-        config.models.push(AIModelConfig {
-            name: "Test model".to_string(),
-            provider: "openai".to_string(),
-            context_window: Some(MIN_MODEL_CONTEXT_WINDOW_TOKENS - 1),
-            ..AIModelConfig::default()
-        });
-        let value = serde_json::to_value(config).expect("AI config should serialize");
-
-        let error = AIConfigProvider
-            .validate_config(&value)
-            .await
-            .expect_err("small context windows must be rejected");
-
-        assert!(error
-            .to_string()
-            .contains("context_window must be at least 32000"));
-    }
-}
-
 /// Theme system configuration provider (new, supports theme management).
 pub struct ThemesConfigProvider;
 
@@ -607,5 +581,31 @@ impl ConfigProviderRegistry {
 impl Default for ConfigProviderRegistry {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn rejects_a_model_context_window_smaller_than_32k() {
+        let mut config = AIConfig::default();
+        config.models.push(AIModelConfig {
+            name: "Test model".to_string(),
+            provider: "openai".to_string(),
+            context_window: Some(MIN_MODEL_CONTEXT_WINDOW_TOKENS - 1),
+            ..AIModelConfig::default()
+        });
+        let value = serde_json::to_value(config).expect("AI config should serialize");
+
+        let error = AIConfigProvider
+            .validate_config(&value)
+            .await
+            .expect_err("small context windows must be rejected");
+
+        assert!(error
+            .to_string()
+            .contains("context_window must be at least 32000"));
     }
 }

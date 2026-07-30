@@ -152,7 +152,7 @@ impl DesktopSessionScopeResolver {
                 .is_some_and(|registered| {
                     requested_remote_ssh_host
                         .as_deref()
-                        .map_or(true, |requested| requested.eq_ignore_ascii_case(registered))
+                        .is_none_or(|requested| requested.eq_ignore_ascii_case(registered))
                 });
         let mut saved_remote_ssh_host = None;
         if requested_remote_ssh_host.is_none() && registered_remote_ssh_host.is_none() {
@@ -717,7 +717,7 @@ fn merge_ui_owned_session_metadata(
                 custom.insert(key.to_string(), value.clone());
             }
         }
-        current.custom_metadata = (!custom.is_empty()).then(|| serde_json::Value::Object(custom));
+        current.custom_metadata = (!custom.is_empty()).then_some(serde_json::Value::Object(custom));
     }
 }
 

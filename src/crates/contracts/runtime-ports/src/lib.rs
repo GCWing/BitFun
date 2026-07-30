@@ -2345,13 +2345,15 @@ mod tests {
         AgentSessionManagementPort::set_session_archived(&provider, archive_state_request(true))
             .await
             .expect("archive=true should delegate to the legacy provider");
-        let requests = provider.archived_requests.lock().unwrap();
-        assert_eq!(requests.len(), 1);
-        assert_eq!(requests[0].workspace_path, "/workspace/project");
-        assert_eq!(requests[0].session_id, "session_1");
-        assert_eq!(requests[0].remote_connection_id.as_deref(), Some("conn-1"));
-        assert_eq!(requests[0].remote_ssh_host.as_deref(), Some("host-1"));
-        drop(requests);
+        // Scoped so the guard is provably released before the await below.
+        {
+            let requests = provider.archived_requests.lock().unwrap();
+            assert_eq!(requests.len(), 1);
+            assert_eq!(requests[0].workspace_path, "/workspace/project");
+            assert_eq!(requests[0].session_id, "session_1");
+            assert_eq!(requests[0].remote_connection_id.as_deref(), Some("conn-1"));
+            assert_eq!(requests[0].remote_ssh_host.as_deref(), Some("host-1"));
+        }
 
         let error = AgentSessionManagementPort::set_session_archived(
             &provider,

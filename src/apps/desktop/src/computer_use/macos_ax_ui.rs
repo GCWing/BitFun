@@ -317,7 +317,7 @@ impl CandidateMatch {
         let area = self.bounds_width * self.bounds_height;
         if area > 0.0 && area < 50000.0 {
             score += 100; // Small interactive element
-        } else if area >= 50000.0 && area < 200000.0 {
+        } else if (50000.0..200000.0).contains(&area) {
             score += 50; // Medium element
         }
         // Very large elements (>200000 area) get no bonus -- likely containers
@@ -338,7 +338,7 @@ impl CandidateMatch {
         }
 
         // Prefer elements with a non-empty title (more likely to be interactive)
-        if self.title.as_ref().map_or(false, |t| !t.is_empty()) {
+        if self.title.as_ref().is_some_and(|t| !t.is_empty()) {
             score += 20;
         }
 
@@ -398,16 +398,14 @@ impl CandidateMatch {
                     [&self.title, &self.value, &self.description, &self.help];
                 let mut exact = false;
                 let mut substring = false;
-                for f in fields {
-                    if let Some(s) = f {
-                        let sl = s.trim().to_lowercase();
-                        if sl == n {
-                            exact = true;
-                            break;
-                        }
-                        if sl.contains(&n) {
-                            substring = true;
-                        }
+                for s in fields.into_iter().flatten() {
+                    let sl = s.trim().to_lowercase();
+                    if sl == n {
+                        exact = true;
+                        break;
+                    }
+                    if sl.contains(&n) {
+                        substring = true;
                     }
                 }
                 if exact {
@@ -528,7 +526,7 @@ unsafe fn is_ax_hidden(elem: AXUIElementRef) -> bool {
         };
         // AXHidden is a CFBoolean
         let hidden =
-            val as *const c_void == core_foundation::boolean::kCFBooleanTrue as *const c_void;
+            std::ptr::eq(val, core_foundation::boolean::kCFBooleanTrue as *const c_void);
         ax_release(val);
         hidden
     }

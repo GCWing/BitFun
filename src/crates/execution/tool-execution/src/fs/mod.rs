@@ -34,7 +34,7 @@ pub fn path_has_multiple_hard_links(path: &std::path::Path) -> std::io::Result<b
     #[cfg(unix)]
     {
         use std::os::unix::fs::MetadataExt;
-        return Ok(metadata.nlink() > 1);
+        Ok(metadata.nlink() > 1)
     }
 
     #[cfg(windows)]

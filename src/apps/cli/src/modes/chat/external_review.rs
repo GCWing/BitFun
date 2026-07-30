@@ -682,13 +682,10 @@ fn external_tool_pending_notice_key(snapshot: &ExternalSourceCatalogSnapshot) ->
                 .map(|conflict| format!("conflict:{}", conflict.conflict_key)),
         )
         .collect::<Vec<_>>();
-    decisions.extend(snapshot.diagnostics.iter().filter_map(|diagnostic| {
-        matches!(
+    decisions.extend(snapshot.diagnostics.iter().filter(|&diagnostic| matches!(
             diagnostic.severity,
             ExternalSourceDiagnosticSeverity::Warning | ExternalSourceDiagnosticSeverity::Error
-        )
-        .then(|| {
-            format!(
+        )).map(|diagnostic| format!(
                 "diagnostic:{:?}:{}:{}:{}",
                 diagnostic.severity,
                 diagnostic.code,
@@ -698,9 +695,7 @@ fn external_tool_pending_notice_key(snapshot: &ExternalSourceCatalogSnapshot) ->
                     .as_ref()
                     .map(|source| source.stable_key())
                     .unwrap_or_default()
-            )
-        })
-    }));
+            )));
     if decisions.is_empty() {
         return None;
     }

@@ -5,7 +5,6 @@ use bitfun_product_domains::external_sources::{
     EXTERNAL_MCP_IMPORT_SCHEMA_V1,
 };
 use clap::ValueEnum;
-use std::path::PathBuf;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 pub(crate) enum McpImportOutputFormat {
@@ -21,7 +20,7 @@ pub(crate) struct McpImportCommand {
 }
 
 pub(crate) async fn execute(command: McpImportCommand) -> Result<()> {
-    let workspace = std::env::current_dir().ok().map(PathBuf::from);
+    let workspace = std::env::current_dir().ok();
     let plan = bitfun_core::external_mcp_import::plan_external_mcp_import(workspace.clone())
         .await
         .map_err(operation_error)?;

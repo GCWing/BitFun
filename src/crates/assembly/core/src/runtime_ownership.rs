@@ -114,9 +114,8 @@ impl CoreRuntimeOwnership {
             &key,
             RuntimeDeployment::Shared,
         )
-        .map_err(|error| {
-            log_acquisition_failure(entrypoint, RuntimeDeployment::Shared, &key, &error);
-            error
+        .inspect_err(|error| {
+            log_acquisition_failure(entrypoint, RuntimeDeployment::Shared, &key, error);
         })?;
         log_acquired(entrypoint, RuntimeDeployment::Shared, &key);
         Ok(Self {
@@ -190,14 +189,13 @@ impl CoreRuntimeOwnership {
                     &key,
                     RuntimeDeployment::Embedded,
                 )
-                .map_err(|error| {
+                .inspect_err(|error| {
                     log_acquisition_failure(
                         self.entrypoint,
                         RuntimeDeployment::Embedded,
                         &key,
-                        &error,
+                        error,
                     );
-                    error
                 })?;
                 log_acquired(self.entrypoint, RuntimeDeployment::Embedded, &key);
                 leases.insert(key, lease);
@@ -350,7 +348,7 @@ fn remote_scope_matches(
         && requested
             .ssh_host
             .as_ref()
-            .map_or(true, |host| known.ssh_host.as_ref() == Some(host))
+            .is_none_or(|host| known.ssh_host.as_ref() == Some(host))
 }
 
 fn product_identity() -> &'static str {

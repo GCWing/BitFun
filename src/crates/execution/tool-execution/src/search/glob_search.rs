@@ -179,8 +179,8 @@ fn create_command(program: &str) -> Command {
 
 #[cfg(not(windows))]
 fn create_command(program: &str) -> Command {
-    let command = Command::new(program);
-    command
+    
+    Command::new(program)
 }
 
 fn build_fallback_matcher(relative_pattern: &str) -> Result<GlobMatcher, String> {

@@ -117,7 +117,7 @@ pub fn provision(_username: &str, password: &str) -> Result<ProvisionedAccount> 
     let wrapped_master_key = format!(
         "{}.{}",
         BASE64.encode(&wrapped_ct),
-        BASE64.encode(&nonce_bytes)
+        BASE64.encode(nonce_bytes)
     );
 
     // 3. Derive the server-verifiable password hash (separate salt).
