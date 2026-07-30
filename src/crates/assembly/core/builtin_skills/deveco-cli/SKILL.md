@@ -1,14 +1,14 @@
 ---
 name: deveco-cli
 description: >-
-  **MUST** use 'devecocli' for HarmonyOS apps (scaffold, build, run, debug, devices, emulators, logs, docs, 鸿蒙开发文档, skills). **REQUIRED** and **MANDATORY** if workspace has build-profile.json5 or oh-package.json5, or user mentions HarmonyOS, 鸿蒙, DevEco, ArkTS, ArkUI, docs, 鸿蒙文档, 知识, 搜索, or skills.
+  **MUST** use 'devecocli' for HarmonyOS apps (scaffold, build, run, debug, devices, logs, docs, 鸿蒙开发文档, skills). **REQUIRED** and **MANDATORY** if workspace has build-profile.json5 or oh-package.json5, or user mentions HarmonyOS, 鸿蒙, DevEco, ArkTS, ArkUI, docs, 鸿蒙文档, 知识, 搜索, or skills.
 ---
 
 # DevEco CLI
 
-`devecocli` wraps DevEco Studio's `hvigor`, `ohpm`, `hdc`, emulator toolchain, and HarmonyOS-skills installer. **Prefer `devecocli` over invoking underlying tools directly.**
+`devecocli` wraps DevEco Studio's `hvigor`, `ohpm`, `hdc` toolchain, and HarmonyOS-skills installer. **Prefer `devecocli` over invoking underlying tools directly.**
 
-Available commands: `build`, `run`, `update`, `device`, `emulator`, `skills`, `log`, `create`, `init`, `serve`, `docs`.
+Available commands: `build`, `run`, `update`, `device`, `skills`, `log`, `create`, `init`, `serve`, `docs`.
 
 **Sandbox Rule**: Commands tagged `[Outside sandbox]` must be run outside the sandbox.
 
@@ -31,17 +31,6 @@ Compile and package project/modules. (Defaults: `--product default`, `--build-mo
 | Whole product bundle (.app) | `devecocli build --product <name>` |
 | Clean build outputs | `devecocli build clean` |
 
-### `devecocli emulator`
-Manage local emulator instances and system images.
-- `list`: Show instances (status, serial, device type).
-- `start <names...>`: Start instances. Quote names with spaces. (See Troubleshooting if blocked).
-- `stop <names...>`: Stop by name or serial (`127.0.0.1:<port>`).
-- `create <name>` (Req: `--device-type`, `--os-version`): Create instance. Optional: `--force`.
-- `delete <name>`: Delete instance.
-- `image list`: List downloaded images. Opts: `--device-type <type>`, `--all`, `--format <table|json>`.
-- `image download` / `image remove` (Req: `--device-type`, `--os-version`): Download/remove image. (Takes 30+ min, set long timeout).
-*Device types*: `phone`, `foldable`, `widefold`, `triplefold`, `tablet`, `2in1`, `2in1 foldable`, `wearable`, `tv`.
-
 ### `devecocli docs`
 Search/read local HarmonyOS docs.
 - `search <keywords...>`: Match any keyword. Opts: `--catalog <name>`, `--format <default|json>`, `--limit <n>`.
@@ -49,7 +38,7 @@ Search/read local HarmonyOS docs.
 - `catalog`: List available catalogs.
 
 ### `devecocli device`
-- `list`: Show active real devices and running emulators.
+- `list`: Show active real devices.
 - `view`: Detailed info. Req `-t <name|serial>` on multi-device hosts.
 
 ### `devecocli run` `[Outside sandbox]`
@@ -69,6 +58,60 @@ Fetch hilog or crash logs. Req `--device <name|serial>` on multi-device hosts.
 - `--from <start>` / `--to <end>`: Relative offsets (`30s`, `5m`).
 - `--tail <num>` / `--follow`: Keep last N lines / stream real-time (no `--to`).
 *Ex*: `devecocli log --crash --bundle-name com.example.app`, `devecocli log --level E --from 5m --tail 200`
+
+## Fallback: hdc when devecocli device list finds no devices
+
+When `start_app` or `hdc_log` reports no devices found (from `devecocli device list`), try `hdc` directly via `ExecCommand` to discover and use devices. Do NOT hardcode paths — discover them at runtime.
+
+### Discover devices
+```
+hdc list targets
+```
+If `hdc` is not in PATH, check if the user has DevEco SDK installed and ask where `hdc` is located.
+
+### If hdc also finds no devices
+Prompt the user to connect via wireless debugging:
+1. Ask the user to open **系统设置 → 系统 → 开发者选项 → 无线调试** on the HarmonyOS device.
+2. Ask the user for the **IP 地址和端口号** shown on that screen (e.g. `192.168.1.100:5555`).
+3. Connect using:
+   ```
+   hdc tconn <ip:port>
+   ```
+4. Verify the device appears:
+   ```
+   hdc list targets
+   ```
+
+### If a device is found via hdc but not via devecocli
+Deploy and launch the app directly with `hdc`:
+
+1. **Find the HAP** — search build outputs:
+   ```
+   find . -name "*.hap" -path "*/outputs/*"
+   ```
+   Pick the one matching the target module/product/build-mode. If multiple, choose the most recently built one.
+
+2. **Read bundleName and ability** from project config:
+   - bundleName: `AppScope/app.json5` → `app.bundleName`
+   - ability name: `module.json5` (in the entry module) → `module.abilities[0].name`
+   Use `Read` tool or `cat` via `ExecCommand` to inspect these files.
+
+3. **Install** the HAP:
+   ```
+   hdc install "<hap_path_from_step_1>"
+   ```
+   - Signing key changed: `hdc shell bm uninstall -n <bundleName>` first.
+   - Already installed: `hdc install -r "<hap_path>"`.
+
+4. **Launch** the ability:
+   ```
+   hdc shell aa start -a <ability_from_step_2> -b <bundleName_from_step_2>
+   ```
+
+5. **Verify** the app is running:
+   ```
+   hdc shell ps -ef | grep <bundleName>
+   ```
 
 ## 2. Setup
 
@@ -96,8 +139,8 @@ Manage HarmonyOS skills in AI agents/projects.
 
 ## Recipes
 
-- **Fresh checkout to emulator**:
-  `devecocli build` -> `devecocli emulator list` -> `devecocli emulator start "Name"` -> `devecocli run`
+- **Build and run on connected device**:
+  `devecocli build` -> `devecocli run`
 - **Diagnose crash**:
   `devecocli log --crash --bundle-name <bundle>`
 - **Release build**:
@@ -107,10 +150,6 @@ Manage HarmonyOS skills in AI agents/projects.
 
 - **"Product / Build mode `<x>` not found"**: Check `build-profile.json5`.
 - **"Multiple entry modules" / "No entry module"**: Pass `--modules` (build) or `--module` (run).
-- **"No active devices" / "Multiple devices connected"**: Connect/start emulator. Pass `-t <serial>` (device view) or `--device <name|serial>` (run/log).
+- **"No active devices" / "Multiple devices connected"**: Connect a device with debugging enabled. Pass `-t <serial>` (device view) or `--device <name|serial>` (run/log). If `devecocli device list` shows nothing, try `hdc list targets` (see Fallback section above).
 - **`error:install sign info inconsistent`**: Signing key changed. Run `devecocli run --uninstall`.
 - **`skills add` agent not found**: Valid: `codebuddy`, `cursor`, `opencode`, `qoder`, `trae-cn`.
-- **`emulator start` / `image download` blocked on agreement**: User MUST run `devecocli emulator license accept` in interactive TTY. Agents cannot do this. Do not retry until accepted.
-- **`image download` failure / timeout**: Do NOT auto-retry. Give the command to the user to run manually in their terminal.
-- **`emulator create` timeout**: Treat as user-action step. Ask user to open DevEco Studio -> Device Manager. Check `emulator list` after user confirms. Do NOT auto-retry or edit SDK files.
-- **`image list` duplicate OS rows**: `phone`/`foldable`/`widefold`/`triplefold` share the same image. Download/remove ONCE per OS version.
