@@ -76,6 +76,7 @@ import {
   releasePinReservationForUserNavigation,
   resolveAutoCollapseAnchorScrollTop,
   resolveCollapseIntentSettlementStrategy,
+  resolveFollowingTailShrinkClampRecovery,
   resolveProvisionalStickyPinReservationPx,
   resolveStickyPinGrowthSettlementStrategy,
   sanitizeBottomReservationState,
@@ -485,6 +486,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
   const retainedCollapseSettleFrameRef = useRef<number | null>(null);
   const retainedCollapseReleaseTimerRef = useRef<number | null>(null);
   const retainedCollapseSettleGenerationRef = useRef(0);
+  const retainedCollapseGeometryGenerationRef = useRef(0);
   const pendingStickyPinGrowthRef = useRef<{
     targetTurnId: string | null;
     amountPx: number;
@@ -495,6 +497,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
   const stickyPinGrowthSettleTimerRef = useRef<number | null>(null);
   const settlePendingStickyPinGrowthRef = useRef<(reason: string) => void>(() => {});
   const maybeHandoffPinnedTurnToTailRef = useRef<(reason: string) => boolean>(() => false);
+  const preparePinnedTurnFollowHandoffRef = useRef<() => void>(() => {});
   const finalizeCollapseIntentRef = useRef<(
     reason: string,
     options?: { expectedExpiresAtMs?: number; suppressHandoff?: boolean },
@@ -555,6 +558,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
 
   const clearRetainedCollapseSettlement = useCallback(() => {
     retainedCollapseSettleGenerationRef.current += 1;
+    retainedCollapseGeometryGenerationRef.current = 0;
     if (retainedCollapseSettleTimerRef.current !== null) {
       window.clearTimeout(retainedCollapseSettleTimerRef.current);
       retainedCollapseSettleTimerRef.current = null;
@@ -707,11 +711,17 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
 
     const maxScrollTop = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
     const ownsElementAnchor = viewportCoordinatorRef.current.ownsElementAnchor();
+    const isFollowingTail = (
+      isFollowingOutputRef.current &&
+      isStreamingOutputRef.current &&
+      viewportCoordinatorRef.current.getMode() === 'following-tail'
+    );
     const willWrite = shouldSyncPhysicalBottom({
       viewportGeometryChanged,
       collapseProtectionActive: pendingCollapseIntentRef.current.active,
       wasAtPhysicalBottom,
       ownsElementAnchor,
+      isFollowingTail,
     }) && Math.abs(maxScrollTop - scroller.scrollTop) > COMPENSATION_EPSILON_PX;
     if (ownsElementAnchor) {
       viewportCoordinatorRef.current.restoreElementAnchor(scroller, 'viewport-resize');
@@ -1015,29 +1025,39 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     preserveCollapseAnchorScrollTop(scroller, targetScrollTop, `quiet-settle:${reason}`);
 
     const releaseGeneration = retainedCollapseSettleGenerationRef.current;
-    retainedCollapseReleaseTimerRef.current = window.setTimeout(() => {
-      retainedCollapseReleaseTimerRef.current = null;
-      if (releaseGeneration !== retainedCollapseSettleGenerationRef.current) {
-        return;
-      }
-      retainedCollapseAnchorRef.current = null;
-      if (flowChatDiagnostics.isEnabled()) {
-        flowChatDiagnostics.trace({
-          hypothesis: 'F',
-          location: 'VirtualMessageList.releaseSettledCollapseAnchor',
-          message: 'Settled collapse anchor released after layout remained quiet',
-          data: () => ({
-            reason,
-            retainedAnchor,
-            reservation: bottomReservationStateRef.current,
-            scrollTop: scroller.scrollTop,
-            scrollHeight: scroller.scrollHeight,
-            clientHeight: scroller.clientHeight,
-            coordinatorMode: viewportCoordinatorRef.current.getMode(),
-          }),
-        });
-      }
-    }, RETAINED_COLLAPSE_RELEASE_QUIET_MS);
+    retainedCollapseGeometryGenerationRef.current += 1;
+    const scheduleReleaseWhenQuiet = (geometryGeneration: number) => {
+      retainedCollapseReleaseTimerRef.current = window.setTimeout(() => {
+        retainedCollapseReleaseTimerRef.current = null;
+        if (releaseGeneration !== retainedCollapseSettleGenerationRef.current) {
+          return;
+        }
+        const currentGeometryGeneration = retainedCollapseGeometryGenerationRef.current;
+        if (currentGeometryGeneration !== geometryGeneration) {
+          scheduleReleaseWhenQuiet(currentGeometryGeneration);
+          return;
+        }
+        retainedCollapseAnchorRef.current = null;
+        retainedCollapseGeometryGenerationRef.current = 0;
+        if (flowChatDiagnostics.isEnabled()) {
+          flowChatDiagnostics.trace({
+            hypothesis: 'F',
+            location: 'VirtualMessageList.releaseSettledCollapseAnchor',
+            message: 'Settled collapse anchor released after layout remained quiet',
+            data: () => ({
+              reason,
+              retainedAnchor,
+              reservation: bottomReservationStateRef.current,
+              scrollTop: scroller.scrollTop,
+              scrollHeight: scroller.scrollHeight,
+              clientHeight: scroller.clientHeight,
+              coordinatorMode: viewportCoordinatorRef.current.getMode(),
+            }),
+          });
+        }
+      }, RETAINED_COLLAPSE_RELEASE_QUIET_MS);
+    };
+    scheduleReleaseWhenQuiet(retainedCollapseGeometryGenerationRef.current);
 
     if (flowChatDiagnostics.isEnabled()) {
       flowChatDiagnostics.trace({
@@ -1077,6 +1097,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     }
 
     clearRetainedCollapseSettlement();
+    retainedCollapseGeometryGenerationRef.current += 1;
     const generation = retainedCollapseSettleGenerationRef.current;
     retainedCollapseSettleTimerRef.current = window.setTimeout(() => {
       retainedCollapseSettleTimerRef.current = null;
@@ -1488,6 +1509,10 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
       return;
     }
 
+    if (retainedCollapseAnchorRef.current !== null) {
+      retainedCollapseGeometryGenerationRef.current += 1;
+    }
+
     if (
       heightDelta < -COMPENSATION_EPSILON_PX &&
       retainedCollapseAnchorRef.current !== null &&
@@ -1522,6 +1547,11 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     }
 
     const ownsElementAnchor = viewportCoordinatorRef.current.ownsElementAnchor();
+    const isFollowingTail = (
+      isFollowingOutputRef.current &&
+      isStreamingOutputRef.current &&
+      viewportCoordinatorRef.current.getMode() === 'following-tail'
+    );
     const hasCollapseAnchorProtection = (
       pendingCollapseIntentRef.current.active ||
       retainedCollapseAnchorRef.current !== null
@@ -1531,6 +1561,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
       collapseProtectionActive: hasCollapseAnchorProtection,
       wasAtPhysicalBottom,
       ownsElementAnchor,
+      isFollowingTail,
     })) {
       if (wasAtPhysicalBottom) {
         const maxScrollTop = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
@@ -1820,13 +1851,6 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
   useEffect(() => {
     setStaticAnchorWindowTurnId(null);
   }, [activeSession?.sessionId]);
-  const latestTurnAutoFollowStateRef = useRef<{
-    turnId: string | null;
-    sawPositiveFloor: boolean;
-  }>({
-    turnId: latestTurnId,
-    sawPositiveFloor: false,
-  });
   const hasPrimedMountedStreamingTurnFollowRef = useRef(false);
   const previousLatestTurnIdForFollowRef = useRef<string | null>(latestTurnId);
   const previousSessionIdForFollowRef = useRef<string | undefined>(activeSession?.sessionId);
@@ -3416,6 +3440,82 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
         }
         return;
       }
+      const isFollowingTailShrinkClampCandidate = (
+        intentCheckScrollDelta < -COMPENSATION_EPSILON_PX &&
+        isFollowingOutputRef.current &&
+        isStreamingOutputRef.current &&
+        !hasRecentUserUpwardIntent &&
+        !scrollbarPointerInteractionActiveRef.current &&
+        !collapseProtectionActive
+      );
+      const previousScrollerGeometry = isFollowingTailShrinkClampCandidate
+        ? previousScrollerGeometryRef.current
+        : null;
+      const previousShrinkClampGeometry = previousScrollerGeometry
+        ? {
+          ...previousScrollerGeometry,
+          scrollTop: intentCheckPreviousScrollTop,
+        }
+        : null;
+      const currentScrollerGeometry: ScrollerGeometrySnapshot | null = (
+        isFollowingTailShrinkClampCandidate && previousShrinkClampGeometry
+      )
+        ? {
+          scrollTop: intentCheckScrollTop,
+          scrollHeight: scrollerElement.scrollHeight,
+          clientHeight: scrollerElement.clientHeight,
+        }
+        : null;
+      const followingTailShrinkClampRecovery = currentScrollerGeometry
+        ? resolveFollowingTailShrinkClampRecovery({
+          previousGeometry: previousShrinkClampGeometry,
+          currentGeometry: currentScrollerGeometry,
+          isFollowingOutput: isFollowingOutputRef.current,
+          isStreamingOutput: isStreamingOutputRef.current,
+          hasRecentUserUpwardIntent,
+          scrollbarPointerInteractionActive: scrollbarPointerInteractionActiveRef.current,
+          collapseProtectionActive,
+        })
+        : null;
+      if (followingTailShrinkClampRecovery) {
+        retainedCollapseAnchorRef.current = {
+          anchorScrollTop: followingTailShrinkClampRecovery.targetScrollTop,
+          toolId: null,
+          toolName: 'late-shrink-clamp',
+        };
+        preserveCollapseAnchorScrollTop(
+          scrollerElement,
+          followingTailShrinkClampRecovery.targetScrollTop,
+          'scroll-following-tail-late-shrink-clamp',
+        );
+        scheduleRetainedCollapseSettlement('following-tail-late-shrink-clamp');
+        if (flowChatDiagnostics.isEnabled()) {
+          flowChatDiagnostics.trace({
+            hypothesis: 'G',
+            location: 'VirtualMessageList.handleScroll',
+            message: 'Following-tail shrink clamp recovered as a viewport transaction',
+            data: () => ({
+              recovery: followingTailShrinkClampRecovery,
+              previousGeometry: previousScrollerGeometry,
+              currentGeometry: currentScrollerGeometry,
+              reservation: bottomReservationStateRef.current,
+              scrollTopAfter: scrollerElement.scrollTop,
+            }),
+          });
+        }
+        return;
+      }
+      if (
+        retainedCollapseAnchorRef.current &&
+        intentCheckScrollDelta > COMPENSATION_EPSILON_PX &&
+        !hasRecentUserUpwardIntent &&
+        !scrollbarPointerInteractionActiveRef.current
+      ) {
+        retainedCollapseAnchorRef.current.anchorScrollTop = Math.max(
+          retainedCollapseAnchorRef.current.anchorScrollTop,
+          intentCheckScrollTop,
+        );
+      }
       if (
         intentCheckScrollDelta < -COMPENSATION_EPSILON_PX &&
         isFollowingOutputRef.current &&
@@ -4668,6 +4768,9 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
       }
 
       retainedCollapseAnchorRef.current = null;
+      if (requestedPinMode === 'sticky-latest' && turnId === latestTurnId) {
+        preparePinnedTurnFollowHandoffRef.current();
+      }
       viewportCoordinatorRef.current.pinItem();
 
       pendingStaticTurnPinRef.current = {
@@ -4692,6 +4795,9 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     }
 
     retainedCollapseAnchorRef.current = null;
+    if (requestedPinMode === 'sticky-latest' && turnId === latestTurnId) {
+      preparePinnedTurnFollowHandoffRef.current();
+    }
     viewportCoordinatorRef.current.pinItem();
 
     if (targetItem.index === 0 && requestedPinMode === 'transient') {
@@ -4743,6 +4849,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     activeSession?.dialogTurns,
     activateTransientTurnPinStabilization,
     clearTurnPinRequest,
+    latestTurnId,
     scheduleTransientTurnPinStabilization,
     scheduleVisibleTurnMeasure,
     scrollStaticTurnToTop,
@@ -4762,6 +4869,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     isFollowingOutput,
     enterFollowOutput,
     exitFollowOutput,
+    preparePinnedTurnFollowHandoff,
     armFollowOutputForNewTurn,
     resumeFollowOutputForMountedStream,
     activateArmedFollowOutput,
@@ -4789,13 +4897,16 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
         return;
       }
       retainedCollapseAnchorRef.current = null;
-      viewportCoordinatorRef.current.pinItem();
       requestTurnPinToTop(latestTurnId, {
         behavior: 'auto',
         pinMode: 'sticky-latest',
       });
     },
     shouldSuspendAutoFollow,
+    canAnimateTailFollow: () => (
+      viewportCoordinatorRef.current.getMode() === 'following-tail' &&
+      !viewportCoordinatorRef.current.ownsElementAnchor()
+    ),
     // Subtract the bottom-reservation footer so the follow controller treats
     // synthetic footer space as "already at the bottom". Without this, the
     // post-collapse footer (kept around to preserve the upper anchor) would be
@@ -4806,15 +4917,16 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     // the loop and the deferred-follow path stay quiet while the grow-branch in
     // `measureHeightChange` consumes the footer organically as streaming tokens
     // refill the bottom space.
-    getAutoFollowDistanceFromBottom: (scroller) => {
+    getAutoFollowTargetScrollTop: (scroller) => {
       const compensationPx = getTotalBottomCompensationPx();
       return Math.max(
         0,
-        scroller.scrollHeight - scroller.clientHeight - scroller.scrollTop - compensationPx,
+        scroller.scrollHeight - scroller.clientHeight - compensationPx,
       );
     },
     onContinuousFollowFrame: undefined,
   });
+  preparePinnedTurnFollowHandoffRef.current = preparePinnedTurnFollowHandoff;
 
   useEffect(() => {
     if (hasPrimedMountedStreamingTurnFollowRef.current) {
@@ -4830,10 +4942,6 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     }
 
     previousLatestTurnIdForFollowRef.current = latestTurnId;
-    latestTurnAutoFollowStateRef.current = {
-      turnId: null,
-      sawPositiveFloor: false,
-    };
     hasPrimedMountedStreamingTurnFollowRef.current = resumeFollowOutputForMountedStream();
   }, [
     activeSession?.sessionId,
@@ -4848,11 +4956,6 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     if (previousSessionId !== activeSession?.sessionId) {
       previousSessionIdForFollowRef.current = activeSession?.sessionId;
       previousLatestTurnIdForFollowRef.current = latestTurnId;
-      latestTurnAutoFollowStateRef.current = {
-        turnId: latestTurnId,
-        sawPositiveFloor: false,
-      };
-
       const hasUnread = activeSession?.hasUnreadCompletion;
       const isFinished = !isStreamingOutput;
       if (hasUnread && isFinished && virtuosoRef.current && virtualItems.length > 0) {
@@ -4878,10 +4981,6 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
       // and if that position is not yet rendered or measured the
       // viewport may show blank space.
       if (isStreamingOutput) {
-        latestTurnAutoFollowStateRef.current = {
-          turnId: null,
-          sawPositiveFloor: false,
-        };
         hasPrimedMountedStreamingTurnFollowRef.current = resumeFollowOutputForMountedStream();
       }
 
@@ -4894,10 +4993,6 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     }
 
     previousLatestTurnIdForFollowRef.current = latestTurnId;
-    latestTurnAutoFollowStateRef.current = {
-      turnId: latestTurnId,
-      sawPositiveFloor: false,
-    };
 
     if (!latestTurnId) {
       cancelPendingAutoFollowArm();
@@ -4918,12 +5013,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
   ]);
 
   const maybeHandoffPinnedTurnToTail = useCallback((reason: string) => {
-    const trackingState = latestTurnAutoFollowStateRef.current;
-    if (
-      !latestTurnId ||
-      trackingState.turnId !== latestTurnId ||
-      isFollowingOutput
-    ) {
+    if (!latestTurnId || isFollowingOutput) {
       return false;
     }
 
@@ -4943,18 +5033,25 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
       return false;
     }
 
-    if (reservationState.pin.floorPx > COMPENSATION_EPSILON_PX) {
-      trackingState.sawPositiveFloor = true;
-    }
-
     const collapseIntent = pendingCollapseIntentRef.current;
     const hasPendingCollapseIntent = (
       collapseIntent.active
     );
+    const pendingStickyPinGrowthPx = pendingStickyPinGrowthRef.current.amountPx;
+    const scroller = scrollerElementRef.current;
+    const viewport = scroller
+      ? {
+        scrollTop: scroller.scrollTop,
+        clientHeight: scroller.clientHeight,
+        naturalContentHeight: snapshotMeasuredContentHeight(scroller, reservationState),
+      }
+      : null;
     if (!canHandoffPinnedItemToTail({
       pinReservationPx: reservationState.pin.px,
       collapseReservationPx: reservationState.collapse.px,
+      pendingStickyPinGrowthPx,
       hasPendingCollapseIntent,
+      viewport,
     })) {
       if (flowChatDiagnostics.isEnabled()) {
         flowChatDiagnostics.trace({
@@ -4964,7 +5061,9 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
           data: () => ({
             reason,
             reservation: reservationState,
+            pendingStickyPinGrowthPx,
             hasPendingCollapseIntent,
+            viewport,
             coordinatorMode: viewportCoordinatorRef.current.getMode(),
           }),
         });
@@ -4978,13 +5077,14 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
           hypothesis: 'A',
           location: 'VirtualMessageList.maybeHandoffPinnedTurnToTail',
           message: 'Pinned item handed off to tail follow',
-          data: () => ({ reason, reservation: reservationState }),
+          data: () => ({
+            reason,
+            reservation: reservationState,
+            pendingStickyPinGrowthPx,
+            viewport,
+          }),
         });
       }
-      latestTurnAutoFollowStateRef.current = {
-        turnId: null,
-        sawPositiveFloor: false,
-      };
       return true;
     }
     return false;
@@ -4994,6 +5094,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     latestTurnId,
     pendingTurnPin?.pinMode,
     pendingTurnPin?.turnId,
+    snapshotMeasuredContentHeight,
   ]);
   maybeHandoffPinnedTurnToTailRef.current = maybeHandoffPinnedTurnToTail;
 
@@ -5031,14 +5132,44 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
         }),
       });
     }
+    const coordinatorMode = viewportCoordinatorRef.current.getMode();
+    if (isFollowingOutput && coordinatorMode === 'pinned-item') {
+      const pinReservation = bottomReservationStateRef.current.pin;
+      const isPendingLatestStickyPin = (
+        pendingTurnPin?.pinMode === 'sticky-latest' &&
+        pendingTurnPin.turnId === latestTurnId
+      );
+      if (
+        (
+          pinReservation.mode === 'sticky-latest' &&
+          pinReservation.targetTurnId === latestTurnId
+        ) || isPendingLatestStickyPin
+      ) {
+        // React effects may still carry the previous render's follow value
+        // after a synchronous sticky-pin request. Repair the logical state
+        // without dropping the armed handoff.
+        preparePinnedTurnFollowHandoff();
+      } else {
+        exitFollowOutput('pin-turn-to-top');
+      }
+      return;
+    }
     if (isFollowingOutput) {
       viewportCoordinatorRef.current.followTail({ force: true });
       return;
     }
-    if (viewportCoordinatorRef.current.getMode() === 'following-tail') {
+    if (coordinatorMode === 'following-tail') {
       viewportCoordinatorRef.current.release('follow-ended');
     }
-  }, [isFollowingOutput, isStreamingOutput]);
+  }, [
+    exitFollowOutput,
+    isFollowingOutput,
+    isStreamingOutput,
+    latestTurnId,
+    pendingTurnPin?.pinMode,
+    pendingTurnPin?.turnId,
+    preparePinnedTurnFollowHandoff,
+  ]);
 
   // When entering follow-output during streaming, end any active protection
   // window but keep its reservation. Once the intent is inactive, real content

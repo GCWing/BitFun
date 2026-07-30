@@ -2,6 +2,7 @@ import type { FlowChatPinTurnToTopMode } from '../../events/flowchatNavigation';
 import type { FlowChatViewportAnchorMode } from './FlowChatViewportCoordinator';
 
 export const COMPENSATION_EPSILON_PX = 0.5;
+const FOLLOWING_TAIL_SHRINK_CLAMP_TOLERANCE_PX = 2;
 
 type BottomReservationKind = 'collapse' | 'pin';
 
@@ -427,12 +428,14 @@ export function shouldSyncPhysicalBottom(options: {
   collapseProtectionActive: boolean;
   wasAtPhysicalBottom: boolean;
   ownsElementAnchor: boolean;
+  isFollowingTail: boolean;
 }): boolean {
   return (
     options.viewportGeometryChanged &&
     !options.collapseProtectionActive &&
     options.wasAtPhysicalBottom &&
-    !options.ownsElementAnchor
+    !options.ownsElementAnchor &&
+    !options.isFollowingTail
   );
 }
 
@@ -449,6 +452,86 @@ export function shouldSuppressFollowingTailNegativeScrollBy(options: {
     options.isStreamingOutput &&
     options.wasAtPhysicalBottom
   );
+}
+
+export interface FollowingTailShrinkClampRecovery {
+  targetScrollTop: number;
+  rangeShrinkPx: number;
+  scrollClampPx: number;
+}
+
+/** Distinguishes a browser range clamp from user or programmatic upward scrolling. */
+export function resolveFollowingTailShrinkClampRecovery(options: {
+  previousGeometry: {
+    scrollTop: number;
+    scrollHeight: number;
+    clientHeight: number;
+  } | null;
+  currentGeometry: {
+    scrollTop: number;
+    scrollHeight: number;
+    clientHeight: number;
+  };
+  isFollowingOutput: boolean;
+  isStreamingOutput: boolean;
+  hasRecentUserUpwardIntent: boolean;
+  scrollbarPointerInteractionActive: boolean;
+  collapseProtectionActive: boolean;
+}): FollowingTailShrinkClampRecovery | null {
+  if (
+    !options.previousGeometry ||
+    !options.isFollowingOutput ||
+    !options.isStreamingOutput ||
+    options.hasRecentUserUpwardIntent ||
+    options.scrollbarPointerInteractionActive ||
+    options.collapseProtectionActive
+  ) {
+    return null;
+  }
+
+  const previous = options.previousGeometry;
+  const current = options.currentGeometry;
+  const values = [
+    previous.scrollTop,
+    previous.scrollHeight,
+    previous.clientHeight,
+    current.scrollTop,
+    current.scrollHeight,
+    current.clientHeight,
+  ];
+  if (values.some(value => !Number.isFinite(value))) {
+    return null;
+  }
+
+  if (
+    Math.abs(previous.clientHeight - current.clientHeight) >
+      FOLLOWING_TAIL_SHRINK_CLAMP_TOLERANCE_PX
+  ) {
+    return null;
+  }
+
+  const previousMaxScrollTop = Math.max(0, previous.scrollHeight - previous.clientHeight);
+  const currentMaxScrollTop = Math.max(0, current.scrollHeight - current.clientHeight);
+  const rangeShrinkPx = previousMaxScrollTop - currentMaxScrollTop;
+  const scrollClampPx = previous.scrollTop - current.scrollTop;
+  if (
+    rangeShrinkPx <= COMPENSATION_EPSILON_PX ||
+    scrollClampPx <= COMPENSATION_EPSILON_PX ||
+    Math.abs(previousMaxScrollTop - previous.scrollTop) >
+      FOLLOWING_TAIL_SHRINK_CLAMP_TOLERANCE_PX ||
+    Math.abs(currentMaxScrollTop - current.scrollTop) >
+      FOLLOWING_TAIL_SHRINK_CLAMP_TOLERANCE_PX ||
+    Math.abs(rangeShrinkPx - scrollClampPx) >
+      FOLLOWING_TAIL_SHRINK_CLAMP_TOLERANCE_PX
+  ) {
+    return null;
+  }
+
+  return {
+    targetScrollTop: previous.scrollTop,
+    rangeShrinkPx,
+    scrollClampPx,
+  };
 }
 
 export function getCanceledUnsettledStickyPinGrowthPx(options: {

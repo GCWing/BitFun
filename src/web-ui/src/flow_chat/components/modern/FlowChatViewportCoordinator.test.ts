@@ -37,26 +37,68 @@ afterEach(() => {
 });
 
 describe('FlowChatViewportCoordinator', () => {
-  it('hands off to tail follow only after every reservation is drained', () => {
+  it('hands off after the pin drains or natural content reaches the viewport tail', () => {
     expect(canHandoffPinnedItemToTail({
       pinReservationPx: 1029,
       collapseReservationPx: 0,
+      pendingStickyPinGrowthPx: 0,
       hasPendingCollapseIntent: false,
+      viewport: {
+        scrollTop: 900,
+        clientHeight: 1000,
+        naturalContentHeight: 1899,
+      },
     })).toBe(false);
     expect(canHandoffPinnedItemToTail({
-      pinReservationPx: 0,
+      pinReservationPx: 1029,
+      collapseReservationPx: 0,
+      pendingStickyPinGrowthPx: 0,
+      hasPendingCollapseIntent: false,
+      viewport: {
+        scrollTop: 900,
+        clientHeight: 1000,
+        naturalContentHeight: 1900,
+      },
+    })).toBe(true);
+    expect(canHandoffPinnedItemToTail({
+      pinReservationPx: 1029,
       collapseReservationPx: 200,
+      pendingStickyPinGrowthPx: 0,
       hasPendingCollapseIntent: false,
+      viewport: {
+        scrollTop: 900,
+        clientHeight: 1000,
+        naturalContentHeight: 2000,
+      },
     })).toBe(false);
     expect(canHandoffPinnedItemToTail({
-      pinReservationPx: 0,
+      pinReservationPx: 1029,
       collapseReservationPx: 0,
+      pendingStickyPinGrowthPx: 20,
+      hasPendingCollapseIntent: false,
+      viewport: {
+        scrollTop: 900,
+        clientHeight: 1000,
+        naturalContentHeight: 2000,
+      },
+    })).toBe(false);
+    expect(canHandoffPinnedItemToTail({
+      pinReservationPx: 1029,
+      collapseReservationPx: 0,
+      pendingStickyPinGrowthPx: 0,
       hasPendingCollapseIntent: true,
+      viewport: {
+        scrollTop: 900,
+        clientHeight: 1000,
+        naturalContentHeight: 2000,
+      },
     })).toBe(false);
     expect(canHandoffPinnedItemToTail({
       pinReservationPx: 0,
       collapseReservationPx: 0,
+      pendingStickyPinGrowthPx: 0,
       hasPendingCollapseIntent: false,
+      viewport: null,
     })).toBe(true);
   });
 

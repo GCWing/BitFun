@@ -161,6 +161,19 @@ restores it after the list remeasures. While an element anchor is active, the
 coordinator also owns virtualizer compensation corrections, so independent
 scroll writers cannot fight the pinned header.
 
+The logical `isFollowingOutput` flag follows the same ownership rule: it is
+only true while the coordinator owns `following-tail`. A `sticky-latest` pin
+clears the flag and arms its turn for handoff. Once collapse protection and
+unsettled pin growth have drained, the handoff re-enters tail follow when
+either the pin reservation is empty or the natural content tail (excluding
+Footer reservations) reaches the viewport bottom. The latter condition avoids
+making real content grow through stale synthetic pin space before follow can
+start. This prevents a stale React render from allowing follow effects to
+overwrite a pinned header.
+The armed turn identity is owned only by `useFlowChatFollowOutput`; the list
+must not mirror it in a second ref because session resume and pin preparation
+can otherwise update the two identities in different commits.
+
 Collapse anchors have three phases: active while CSS layout is changing,
 retained-provisional while delayed virtualizer measurements may still arrive,
 and settled-grace after the provisional estimate has been reconciled to current
@@ -193,10 +206,13 @@ source of truth because integer `scrollHeight` can overstate the browser's
 subpixel scroll limit.
 
 Physical-bottom synchronization must yield whenever the coordinator owns an
-element anchor. A sticky pin intentionally sits at the physical bottom created
-by its reservation; treating that geometry as tail-follow causes every content
-growth measurement to push the pinned header upward before the coordinator can
-restore it.
+element anchor. It also yields while streaming `following-tail` owns the
+viewport, because the single tail loop is the writer for content-growth motion.
+A sticky pin intentionally sits at the physical bottom created by its
+reservation; treating that geometry as tail-follow causes every content growth
+measurement to push the pinned header upward before the coordinator can restore
+it. Pinned, anchored, and non-streaming paths keep the normal physical-bottom
+synchronization behavior.
 
 Sticky pin floors are not reduced from a transient target rect. Positive
 effective content growth first enters a short settlement ledger (currently
@@ -335,15 +351,27 @@ cumulative provisional whitespace. Any deferred follow is then replayed.
 ## C. Follow-Output Mode (continuous tail)
 
 When the viewport is in follow-output mode and the latest turn is still
-streaming, the user's intent is "keep the tail visible". The continuous
-RAF loop re-pins `scrollTop` toward the bottom every frame.
+streaming, the user's intent is "keep the tail visible". After the viewport
+coordinator has entered `following-tail`, one RAF loop eases `scrollTop` toward
+the effective bottom. Follow events only wake this loop; they do not launch
+additional scroll writers. The target subtracts the current Footer
+reservation, and large gaps snap directly to the target instead of leaving the
+user visibly behind the output.
+
+The loop is dormant while `pinned-item`, `preserving-element`, or a collapse
+transaction owns the viewport. It never clears reservations or calls
+`followTail()` from inside the animation frame. This keeps the semantic
+handoff and Virtuoso compensation paths authoritative while allowing small
+line-height growth to move over several frames. Explicit "jump to latest"
+navigation keeps its native smooth scroll; the RAF loop waits for that motion
+to settle before writing.
 
 Collapses interact with follow mode in three mutually exclusive ways:
 
 1. **Known collapse while follow + streaming is active:** the intent applies
    synchronous Footer pre-compensation before the card shrinks. The active
    intent allows shrink reconciliation even though tail follow is running.
-   When the CSS window ends, the transaction becomes a retained-provisional
+    When the CSS window ends, the transaction becomes a retained-provisional
    collapse anchor instead of shrinking the Footer from a signed net-height
    estimate. Virtuoso
    can publish the matching item measurement after the CSS transition and after
@@ -351,16 +379,25 @@ Collapses interact with follow mode in three mutually exclusive ways:
    viewport by exactly the removed pixels.
    The retained transaction records the latest safe follow position. After a
    negative-layout quiet window, it replaces both the provisional `px` and stale
-   `floorPx` with the minimum geometrically required Footer range. If a later
+   `floorPx` with the minimum geometrically required Footer range. The final
+   release uses one timer plus a geometry generation: any effective height
+   change invalidates that timer's snapshot, and the timer performs one more
+   quiet check instead of every token allocating new timer work. If a later
    measurement clamps below that position, the scroll handler synchronously
    extends the range and restores it before paint. Real content growth and
    downward follow movement consume the range one-for-one. User intent, a new
    pin, session reset, or a final quiet grace releases the retained anchor.
    Stream end restarts the same settlement path;
    it does not preserve the provisional full-card estimate indefinitely.
-2. **Unsignaled shrink while follow + streaming is active:** there is no
-   semantic collapse transaction to preserve, so the RAF loop re-pins to the
-   new bottom on the next frame.
+2. **Unsignaled shrink while follow + streaming is active:** a strict physical
+   clamp signature (the previous and current geometries are both at their
+   physical bottoms, the range shrink matches the negative `scrollTop` delta,
+   viewport height is stable, and there is no user intent) starts a
+   `late-shrink` viewport transaction. The scroll handler extends the Footer and
+   restores the pre-clamp position synchronously, covering virtualizer size
+   commits that arrive after the originating collapse transaction was released.
+   Other unsignaled shrinks remain owned by the tail loop; it follows only
+   downward toward the new effective bottom on the next frame.
    A negative `scrollBy` issued by Virtuoso after a virtualized height
    reduction is also suppressed when the previous geometry was already at the
    physical bottom. That compensation would move the viewport away from the
@@ -371,7 +408,9 @@ Collapses interact with follow mode in three mutually exclusive ways:
    deferred until the intent's TTL lapses.
 
 The loop is cancelled as soon as follow exits (user upward scroll,
-session change, streaming ends, or an explicit navigation).
+session change, or streaming end). Explicit "jump to latest" navigation pauses
+the writer while its native smooth scroll completes, then resumes the same
+single tail loop.
 
 ## Why `overflow-anchor: none` Must Stay
 

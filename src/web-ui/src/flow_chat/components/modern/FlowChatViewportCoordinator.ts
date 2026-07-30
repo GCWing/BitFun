@@ -32,12 +32,40 @@ const ELEMENT_ANCHOR_RANGE_GUARD_PX = 1;
 export function canHandoffPinnedItemToTail(options: {
   pinReservationPx: number;
   collapseReservationPx: number;
+  pendingStickyPinGrowthPx: number;
   hasPendingCollapseIntent: boolean;
+  viewport: {
+    scrollTop: number;
+    clientHeight: number;
+    naturalContentHeight: number;
+  } | null;
 }): boolean {
+  if (
+    options.collapseReservationPx > ELEMENT_ANCHOR_EPSILON_PX ||
+    options.pendingStickyPinGrowthPx > ELEMENT_ANCHOR_EPSILON_PX ||
+    options.hasPendingCollapseIntent
+  ) {
+    return false;
+  }
+
+  if (options.pinReservationPx <= ELEMENT_ANCHOR_EPSILON_PX) {
+    return true;
+  }
+
+  const viewport = options.viewport;
+  if (
+    !viewport ||
+    !Number.isFinite(viewport.scrollTop) ||
+    !Number.isFinite(viewport.clientHeight) ||
+    !Number.isFinite(viewport.naturalContentHeight) ||
+    viewport.clientHeight <= ELEMENT_ANCHOR_EPSILON_PX
+  ) {
+    return false;
+  }
+
   return (
-    options.pinReservationPx <= ELEMENT_ANCHOR_EPSILON_PX &&
-    options.collapseReservationPx <= ELEMENT_ANCHOR_EPSILON_PX &&
-    !options.hasPendingCollapseIntent
+    viewport.naturalContentHeight + ELEMENT_ANCHOR_EPSILON_PX >=
+    viewport.scrollTop + viewport.clientHeight
   );
 }
 
