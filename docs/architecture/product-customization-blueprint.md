@@ -115,6 +115,13 @@ flowchart LR
 3. 计算实际包含的产品能力，验证依赖、互斥项和平台要求。
 4. GUI 或 TUI 交付只解析自己对应的布局选择；无界面交付不接收界面配置。
 5. 解析内置扩展的固定版本、内容摘要、必要性和不可用时的产品行为。
+
+目标 App Server 是独立后端交付形态。它只消费后端所需的产品身份、数据命名空间、release channel、能力上限、
+默认策略引用和内置扩展事实，不消费 GUI/TUI 布局。Desktop、Electron、VS Code、Web 和 TUI Host 的布局选择仍由各自
+构建/宿主校验；连接 Shared App Server 时，这些 Client 不能把自身布局或 Delivery Profile 注入 Server 组装。
+
+Shared discovery 只允许产品身份、数据命名空间、用户/组织安全域、release channel、协议兼容范围和 execution
+domain 相容的 Client 复用实例。不同品牌或数据隔离域必须启动不同实例，不能依靠运行时切换品牌、数据根或产品策略。
 6. 输出产品组装结果，供打包、签名和运行时启动使用。
 
 交付形态与目标平台保持互不影响。HarmonyOS PC 原生 TUI 仍是 `CLI` 交付，不把 HAP 或手机 Remote App 写入 CLI

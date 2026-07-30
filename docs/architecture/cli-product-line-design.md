@@ -11,8 +11,9 @@ CLI/TUI 的目标、问题和风险规约见 [`platform-portability-design.md`](
 CLI 产品入口、配置兼容、TUI 布局消费和 CLI Agent 体验，不重复定义这些文档中的通用契约或内部 ABI。公开
 BitFun Agent SDK 与 Headless CLI 的产品选择、能力一致性和 SDK Host 边界见
 [`agent-sdk-product-architecture.md`](agent-sdk-product-architecture.md)；多个 GUI/TUI/Remote/CLI 实例并存时，交互式 TUI
-连接 Shared Agent Runtime、一次性 CLI 保留 Embedded 的部署边界见
-[`agent-runtime-deployment-design.md`](agent-runtime-deployment-design.md)。
+经 App Server 使用 Per-Client/Shared、一次性 CLI 保留 Embedded 的部署边界见
+[`agent-runtime-deployment-design.md`](agent-runtime-deployment-design.md)；统一 Rich Client wire 见
+[`app-server-architecture-design.md`](app-server-architecture-design.md)。
 OpenCode 的完整扩展矩阵、配置资产、插件执行和 TUI Plugin 映射分别见
 [`opencode-extension-compatibility.md`](extensions/opencode-extension-compatibility.md)、
 [`opencode-config-assets-adapter-design.md`](extensions/opencode-config-assets-adapter-design.md)、
@@ -252,18 +253,25 @@ Headless CLI 和公开 Agent SDK 都调用同一 Agent Runtime API，但交付�
 - 两者的能力对照、共同 fixture 和等价门槛以
   [Agent SDK 产品与宿主架构第 9 节](agent-sdk-product-architecture.md#9-headless-cli-与-agent-sdk)为唯一事实源。
 
-交互式 TUI 另有一个显式部署选项：`bitfun --shared` 或 `bitfun chat --shared`。它通过 CLI 私有本机 IPC adapter 连接同一 Agent Runtime，不经过 SDK Host，也不改变 Headless CLI 或公开 SDK 的协议。当前范围如下：
+交互式 TUI 是 Rich Client App Server consumer，不经过 SDK Host。默认连接 Per-Client Managed App Server；
+`bitfun --shared` 或 `bitfun chat --shared` 连接 Shared App Server。两种部署使用相同 schema、typed client、handler、
+错误和事件，只改变 instance discovery、连接和生命周期；Headless CLI 与公开 SDK 的协议不变。
 
-| 形态 | 默认部署 | 当前 Shared 范围 |
+| 形态 | 默认部署 | 可选部署 |
 |---|---|---|
-| 交互式 TUI | Embedded | 显式 `--shared` 后支持 Session list/create/restore、transcript、当前 Session rename/Agent mode/model、Turn submit/cancel、Permission 和 UserInput |
-| `bitfun exec` / CI | Embedded | 不接受 Shared；保持独立进程、stdout/stderr 和退出码语义 |
-| ACP / SDK Host / GUI / Remote / Peer | 各自既有部署 | 不消费 TUI IPC，也不因本开关改变生命周期 |
+| 交互式 TUI | Per-Client Managed App Server | 显式 `--shared` 后连接 Shared App Server，可与 GUI/IDE 使用同一 Runtime |
+| `bitfun exec` / CI | Embedded | 只有显式控制 Shared Session 时才作为 App Server client；普通执行保持独立进程、stdout/stderr 和退出码语义 |
+| GUI / VS Code | Per-Client Managed App Server | 可连接同一 Shared App Server |
+| ACP / SDK Host / Remote / Peer | 各自既有部署 | 不因 TUI 开关改变协议或生命周期 |
 
-Shared TUI 不提供 Session delete/fork、模型目录/默认值、Agent/Subagent 管理、MCP/扩展、账号同步、用量、observer、replay 或 controller transfer；对应入口给出明确的 Embedded 恢复建议，不在 Client 进程初始化第二套 Core owner。
-Shared 模式的斜杠命令、快捷键帮助和底部提示使用同一能力投影：`/rename <name>` 修改当前 Session 名称；`/agent`、Tab 和 Shift+Tab 只切换当前 Session 的 Agent mode；`/models` 只切换当前 Session 的 model。Embedded 与 Shared 的 `/help` 都从 Action Registry 展示 `/rename <name>`；在 slash menu 中选择它只预填命令并等待用户输入名称。若外部来源使用相同命令名，用户明确选择的 BitFun 命令可完成这一次参数提交，即使偏好保存失败也不会重新弹出来源选择。它们不进入管理页面，也不修改未来 Session 的默认值。其他不支持动作不显示为可执行入口。Session 切换失败保留原控制权；单个连接已有活动 Turn 时拒绝重复提交以及 Session rename/mode/model update；事件订阅失效后当前视图立即失效并要求重启 Shared TUI。
+交互式 TUI 的可用操作由统一 App Server capability negotiation 和产品能力决定，不建立 TUI-only operation budget。
+斜杠命令、快捷键帮助和底部提示消费同一 capability projection；不支持动作不显示为可执行入口。Session
+切换失败保留原控制权；同一 Controller 已有活动 Turn 时按 Runtime 策略拒绝或排队冲突更新；事件流失效后使用
+App Server snapshot/cursor 恢复，无法恢复时明确使当前视图失效。
 
-部署差异由 CLI Runtime client 封装。Embedded 以 Rust 类型直接调用 `AgentRuntime`，不初始化 IPC 或执行 JSON 编解码；Shared 将同一业务请求映射为一个有界本机 frame，Client/Server 各自只编码一次，再交给同一 Runtime owner。多 TUI 复用一个 Runtime 进程，连接和队列保持有界，不按 TUI 数量复制 Session owner。详细的 4+1 视图、帧上限和并发边界见
+交互式 TUI 的部署差异由 AppServerClient 封装；Per-Client 与 Shared 都执行同一 JSON-RPC contract。Headless
+Embedded 以 Rust 类型直接调用 `AgentRuntime`。多 TUI/GUI/IDE 可以复用一个 Shared App Server，连接和队列保持
+有界，不按 Client 数量复制 Session owner。详细的进程、并发和恢复边界见
 [`agent-runtime-deployment-design.md`](agent-runtime-deployment-design.md)。
 
 #### 管理与诊断
@@ -301,8 +309,9 @@ TUI renderer、实验性接口和完整外部 Server 协议按总矩阵明确降
 | 层/模块 | 负责 | 不负责 |
 |---|---|---|
 | `src/apps/cli` | Clap 入口、TUI 状态/渲染、终端事件、入口本地设置、命令展示与结构化输出 | 会话状态机、工具执行、权限裁决、插件内部 ABI、品牌能力真值 |
-| CLI Runtime client | 屏蔽 Embedded/Shared 部署差异，将 CLI 的类型化调用映射到进程内 Runtime 或私有本机 IPC | 实现 Session 业务规则、暴露公开 SDK 或在两种部署中复制行为 |
-| `adapters/agent-runtime-ipc` | Shared TUI 的私有本机 transport、严格握手、frame 上限、连接控制和封闭 operation 映射 | 服务 Embedded、公开协议、Remote transport 或 Runtime 业务 owner |
+| AppServerClient | 为交互式 TUI 屏蔽 Per-Client/Shared 部署差异，消费统一 schema、事件、错误和 capability | 实现 Session 业务规则、依赖 SDK Host 或分叉 TUI-only wire |
+| Headless Runtime client | 为 `exec`/CI 提供 Embedded Runtime API，并可显式 attach Shared App Server | 改变 stdout/exit contract、默认启动后台进程或复制 Rich Client handler |
+| `adapters/app-server-transport` | App Server 的本机/stdio/WebSocket transport、严格握手、frame 上限和连接控制 | Runtime 业务 owner、TUI-only operation 或公开 SDK API |
 | `assembly/product-capabilities` | Delivery Profile、Product Capability 计划、静态 eligibility、服务需求和组装计划 | 品牌资源读取、动态可用性、用户配置、UI 状态、具体服务创建 |
 | 产品构建期校验 | 校验产品定义、品牌资源、TUI 布局选择和内置扩展版本，输出产品组装结果 | 创建运行时服务、实现终端行为或保存用户配置 |
 | Product Assembly | 读取产品组装结果中本次 CLI 需要的字段，选择能力/服务/扩展，构建 Runtime Parts | 读取原始品牌资源、实现 Agent/Tool/插件适配器/终端行为或运行构建脚本 |
@@ -321,16 +330,18 @@ flowchart LR
   Choice -->|"already owned"| Reject["typed occupied error"]
 
   TUI["bitfun chat"] --> Deploy{"deployment"}
-  Deploy -->|"default"| EmbeddedTui["Embedded"]
-  Deploy -->|"--shared"| SharedTui["private local IPC"]
-  SharedTui --> Runtime["one Shared Runtime owner"]
+  Deploy -->|"default"| Managed["Per-Client App Server"]
+  Deploy -->|"--shared"| Shared["Shared App Server"]
+  Managed --> Runtime1["Agent Runtime owner"]
+  Shared --> Runtime2["one Shared Runtime owner"]
 ```
 
 Embedded 只意味着 Runtime 与 CLI 同进程，不意味着绕过持久化单写规则。新 Session 取得自己的写入权；恢复既有 Session 时，
-CLI 必须先取得该 Session 的写入权。如果 Shared Agent Runtime 或另一个 `exec` 已持有，Headless CLI 返回明确的
-“Session 已占用”；它不会自动切换部署。只有用户显式选择 `--shared` 的交互式 TUI 才连接 Shared Runtime，且同一 Session 同时只有一个 controller。
+CLI 必须先取得该 Session 的写入权。如果 Shared App Server 或另一个 `exec` 已持有，Headless CLI 返回明确的
+“Session 已占用”；它不会自动切换部署。交互式 TUI 始终使用 App Server，`--shared` 只选择 Shared instance；
+同一 Session 同时只有一个 controller，但可以有多个 observer。
 
-CLI/TUI 的会话创建、列出、删除、恢复和历史转录读取通过 Rust Runtime SDK 的类型化端口完成；TUI 只把
+Headless CLI 的会话操作通过 Rust Runtime SDK 的类型化端口完成；交互式 TUI 通过 AppServerClient 消费同一领域事实，并只把
 `SessionTranscript` 转换为本地渲染状态，不再消费 Core `Message`。Peer Host 的对话提交、精确取消、基础会话控制、thread-goal 查询、会话模型更新和
 工具确认/拒绝通过 Agent Runtime API 回到 Core owner；本地会话分支通过显式本地范围的内部端口完成，携带远程身份的请求返回类型化
 `NotAvailable`，本轮不扩展远程分支。TUI 用量卡片通过固定语义的完成态本地命令轮次端口持久化，不暴露通用 transcript writer。

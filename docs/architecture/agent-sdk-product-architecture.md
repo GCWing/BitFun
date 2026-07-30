@@ -7,7 +7,9 @@
 [`cli-product-line-design.md`](cli-product-line-design.md) 定义；扩展能力导入和宿主适配由
 [`capability-runtime-integration-design.md`](extensions/capability-runtime-integration-design.md) 定义；多个第一方界面与 SDK/CLI
 并存时的 Runtime 部署、共享和进程隔离由
-[`agent-runtime-deployment-design.md`](agent-runtime-deployment-design.md) 定义。
+[`agent-runtime-deployment-design.md`](agent-runtime-deployment-design.md) 定义；Tauri、Electron、VS Code Extension、Web 等
+第一方 Rich Client 的统一协议由
+[`app-server-architecture-design.md`](app-server-architecture-design.md) 定义。
 
 本文只记录长期产品心智、架构边界和发布门槛。当前代码中的
 `agent-runtime::sdk` 是供 BitFun 内部入口和受控 Rust 嵌入使用的低层 Rust Runtime SDK；
@@ -21,7 +23,7 @@ BitFun 不选择“复制 Claude”“复制 OpenCode”或“复制 Codex”中
 | 问题 | 采用的成熟做法 | BitFun 决策 |
 |---|---|---|
 | 用户如何运行 Agent | Claude Agent SDK 的 Agent、Session、消息流、Tool、MCP、Permission、Hook 心智 | 公开 API 使用行业常见 Agent 概念，不暴露内部端口、协议和 Product Assembly |
-| 如何让多个产品入口共享能力 | OpenCode 的 Server/Core 多客户端模式，Codex App Server 的 rich-client 边界 | 所有入口调用同一 Agent Runtime API；入口是同级 adapter，不相互依赖 |
+| 如何让多个产品入口共享能力 | OpenCode 的 Server/Core 多客户端模式，Codex App Server 的 rich-client 边界 | 所有入口调用同一 Agent Runtime API；GUI/Web/交互式 TUI 共享 App Server wire，SDK/ACP/Headless CLI 保持同级独立 adapter |
 | SDK 如何保持简洁 | Codex SDK 的精选 Thread/Turn 用例，而不是全量管理 API | 公开 SDK 只提供 Agent 应用所需的高层用例，不直接镜像内部或 Server 全部路由 |
 | 本地 Runtime 如何交付 | Claude/Copilot SDK 管理匹配原生 runtime，Codex App Server 的握手与 schema 纪律 | SDK 默认管理匹配的本地 `bitfun-sdk-host`；用户不需要安装 CLI |
 | 多语言如何一致 | Copilot SDK 的单协议、多语言包、协议版本范围和 codegen drift check | Python/TypeScript 是同一 SDK 的语言绑定，共用一个 Host 协议和一致性套件 |
@@ -30,7 +32,7 @@ BitFun 不选择“复制 Claude”“复制 OpenCode”或“复制 Codex”中
 一句话定义：
 
 > BitFun Agent SDK 是同一 BitFun Agent Runtime 面向应用开发者的公开开发接口；它不是新的 Runtime，
-> 不是 CLI/Server 的别名，也不是 GUI/TUI 的底层依赖。
+> 不是 CLI/Server/App Server 的别名，也不是 GUI/TUI 的底层依赖。
 
 最终只向普通用户和外部开发者呈现三种产品选择：
 
@@ -61,7 +63,7 @@ Codex 代码基线为
 | Runtime 交付 | Python/TS 包携带原生 Claude Code binary | SDK 可启动 PATH 中的 Server，也可连接已有 Server | TS SDK 包装 CLI JSONL；App Server 提供更完整协议 | SDK 通过 JSON-RPC 管理 CLI server；部分语言包携带 CLI | 安装 SDK 后应得到匹配 Host，但 CLI 与 SDK Host 不能混为一个产品 |
 | 能力深度 | 内置 Tool、MCP、Hook、权限、Subagent、Skill、Plugin、Session、用量 | Project/Session/File/TUI/MCP/Provider 等广泛 Server API | SDK 精简；App Server 有审批、动态工具、事件、配置和稳定/实验分层 | Session、工具、Hook、权限、事件等经协议开放 | GA 能力下限参考 Claude，协议纪律参考 Codex/Copilot |
 | 生态发展 | 官方 Python/TS SDK 和完整能力文档；生态围绕 Claude Code 配置与插件 | 开源 Core/Server、Provider/Plugin 生态及 TUI/Web/Desktop/IDE 多客户端 | 开源 Runtime/App Server 快速演进；TS SDK 走 CLI JSONL，Python SDK 绑定匹配 Runtime/App Server | 六种语言包、统一协议和各语言 registry | 首版聚焦 Python/TS，但合同从第一天按可增加语言设计；不把某一语言实现当规范 |
-| 多客户端/UI | SDK 示例为主，官方不提供通用 UI SDK | TUI/Web/Desktop/IDE 共享 Server；SDK 可控制 TUI | App、CLI、SDK 分层；App Server 面向 rich client | 面向各语言应用，无统一组件层 | BitFun 第一方界面直接用 Runtime API，外部 UI 经开发者后端使用 SDK |
+| 多客户端/UI | SDK 示例为主，官方不提供通用 UI SDK | TUI/Web/Desktop/IDE 共享 Server；SDK 可控制 TUI | App、CLI、SDK 分层；App Server 面向 rich client | 面向各语言应用，无统一组件层 | BitFun Rich Client 经 App Server、其他第一方入口经各自 adapter 使用 Runtime API；外部 UI 经开发者后端使用 SDK |
 | 多语言 | Python/TypeScript，部分能力存在语言时差 | 官方主要 JS/TS，OpenAPI 可生成其他客户端 | TS 与 Python 当前底层形态不同 | TS/Python/Go/.NET/Java/Rust，共用协议版本 | 不能让 Python/TS 各写一套 transport 和行为 |
 | 可定制程度 | callback、Tool、Hook、MCP、Agent/Skill/Plugin 配置 | Server 全资源控制和插件生态，最开放 | 精选 SDK 较克制，App Server 更底层 | 多语言自定义 Tool/Hook | 公开 API 保持精选；高级资源管理通过明确 capability 增量开放 |
 | 发布渠道 | npm、PyPI，包内携带 binary | npm SDK；Server 由 OpenCode 安装提供 | npm SDK、PyPI SDK/Runtime、Codex CLI | npm、PyPI、NuGet、Go module、Maven、crates.io | 语言包走原生 registry；Host 版本必须与 SDK 可验证匹配 |
@@ -161,6 +163,7 @@ flowchart TB
 | 层次 | 使用者 | 状态与职责 |
 |---|---|---|
 | Agent Runtime API | BitFun 各产品 adapter | 唯一 Agent loop 与应用用例边界；不是语言包 |
+| Rich Client App Server | Tauri/Electron/VS Code/Web | 第一方交互界面的版本化 wire；不是公开 Agent SDK |
 | Rust Runtime SDK | BitFun 内部入口、受控 Rust 嵌入 | 当前 preview；不等于公开产品 |
 | BitFun Agent SDK | Python/TypeScript 应用开发者 | 一个公开产品、多个语言绑定；尚未交付 |
 
@@ -172,12 +175,12 @@ Python SDK、TypeScript SDK、managed Host 和连接预启动 Host 不是四种 
 
 ```mermaid
 flowchart TB
-  GUI["GUI / TUI"] --> UIA["UI adapter"]
+  GUI["Tauri / Electron / VS Code / Web / Interactive TUI"] --> App["Rich Client App Server"]
   CLI["bitfun exec"] --> CLIA["CLI adapter"]
   SDK["Agent SDK"] --> SDKA["SDK Host"]
   ACP["ACP"] --> ACPA["ACP adapter"]
   Server["Server / Remote"] --> RemoteA["Server / Remote adapter"]
-  UIA --> API["Runtime API"]
+  App --> API["Runtime API"]
   CLIA --> API
   SDKA --> API
   ACPA --> API["Runtime API"]
@@ -191,23 +194,25 @@ flowchart TB
 
 ### 4.2 互操作入口
 
-上图中的 ACP、Server/Remote 和 SDK Host 都是同级 adapter；虚线只表示第一方进程装配 ownership，不表示某个入口依赖另一个入口。
+上图中的 App Server、Headless CLI、ACP、Server/Remote 和 SDK Host 都是 Runtime API 之上的同级 adapter；虚线只表示第一方进程
+装配 ownership，不表示 SDK Host 或 ACP 依赖 App Server。
 
 上图固定四条架构结论：
 
-- GUI/TUI/CLI 同样使用 Query、MCP、Permission 和 Hook，但它们直接经过各自 adapter 调用共享 Runtime API，
-  不依赖 Python/TypeScript SDK，也不依赖 SDK Host。
+- Tauri/Electron/VS Code/Web/交互式 TUI 等 Rich Client 经 App Server 调用共享 Runtime API；Headless CLI 经过自己的
+  Embedded adapter。它们都不依赖 Python/TypeScript SDK，也不依赖 SDK Host。
 - SDK Host 是跨进程/跨语言 adapter，不拥有 Session、Tool、MCP、Permission、Hook 或 Event 状态。
-- 各入口共享业务事实和 owner，不共享 renderer、命令行参数、wire protocol 或平台生命周期。
+- Rich Client 的 Per-Client Managed 与 Shared deployment 共用 App Server wire；SDK Host 和 ACP 保持各自 wire，Headless CLI
+  默认直接 Embedded。所有入口共享业务事实和 owner，不共享 renderer、命令行参数或平台生命周期。
 - 增加 SDK 不得让 CLI、GUI/TUI 或 Server 的底层依赖变深；它只增加一个同级入口。
 
-该图表达逻辑依赖，不要求所有入口位于同一进程。目标部署中，GUI/TUI/本机 Remote 可以连接第一方 Shared Agent Runtime；
-一次性 Headless CLI 继续 Embedded；公开 SDK 默认连接私有 SDK Host。Shared Agent Runtime process 和 SDK Host 都是 Rust 产品进程，
-与运行第三方 JS/TS 的 Node/Bun Plugin Host 不同；三者不能共享名称或业务归属。
+该图表达逻辑依赖，不要求所有入口位于同一进程。目标部署中，Rich Client Host 管理或连接匹配的 App Server process；
+交互式 TUI 的 `--shared` 与 GUI/IDE Shared 使用同一 App Server schema/handler，不存在独立 Shared TUI server。一次性 Headless
+CLI 继续 Embedded，公开 SDK 默认连接私有 SDK Host。App Server process 和 SDK Host 都是 Rust 产品进程，但合同和生命周期不同；它们与运行
+第三方 JS/TS 的 Node/Bun Plugin Host 也不能共享名称或业务归属。
 
-当前代码已经交付显式启用的 Shared TUI 最小切片，包含本机 IPC、身份、握手、Session/Turn、当前 Session 的 name/Agent mode/model、Permission/UserInput、
-ownership 和生命周期治理；GUI、Headless CLI、ACP、SDK Host、Server/Remote 仍没有 Shared consumer。该图中的多入口逻辑复用是
-当前事实，除 Shared TUI 外的跨进程 Shared deployment 仍是目标架构。
+当前 Shared TUI IPC 的身份、握手、Session/Turn、Permission/UserInput、ownership 和生命周期实现只作为 App Server
+Shared conformance 的迁移证据；最终由统一 App Server 替代并删除独立 wire/server。
 
 ### 4.3 各形态能做什么
 
@@ -233,7 +238,7 @@ flowchart LR
   API --> Runtime["Single Agent Runtime and owners"]
 ```
 
-本图只放大 SDK 特有的跨进程路径；GUI/TUI、CLI、ACP 和 Server 的同级 adapter 关系以第 4 节产品视图为准，
+本图只放大 SDK 特有的跨进程路径；App Server、Headless CLI、ACP 和 Server 的同级 adapter 关系以第 4 节产品视图为准，
 不在这里再次折叠或定义。
 
 依赖约束：
@@ -241,7 +246,8 @@ flowchart LR
 | 组件 | 必须 | 禁止 |
 |---|---|---|
 | `bitfun` CLI | 依赖共享 Runtime/Application 能力 | 依赖 SDK Host app、SDK protocol 或公开语言包 |
-| GUI/TUI | 依赖共享应用用例和各自平台 adapter | 经公开 SDK 绕行 Runtime；共享 renderer/protocol |
+| Rich Client GUI | 依赖 App Server typed client 和各自可信 Host | 经公开 SDK 绕行 Runtime；把平台对象或 App Server token 交给 renderer |
+| Interactive TUI | 依赖 App Server typed client 和 CLI/TUI Host | 禁止经公开 SDK/SDK Host 绕行 Runtime；禁止另建 Shared TUI wire |
 | `bitfun-sdk-host` | 独立组装入口，选择 SDK profile | 依赖 CLI crate；成为第二个 Server 或 Runtime |
 | SDK Host adapter | 协议、能力协商、连接/Query 资源清理责任和 DTO 转换 | stdin/stdout 入口、Agent 业务状态、Tool/MCP 注册表 |
 | Python/TypeScript SDK | 管理或连接匹配 Host，提供一致公开 API | 要求用户安装 `bitfun` CLI；暴露内部 wire DTO |
@@ -472,9 +478,10 @@ CLI 和 SDK 共享能力事实，但不是上下层关系：
 因此：
 
 - CLI 不默认依赖 SDK Host，也不通过 SDK package 运行。
-- CLI、ACP、Desktop 与 SDK Host 只共享 Core ownership 和 Runtime 行为 owner；共享这些内部 owner 不构成产品依赖，也不新增第二种 SDK。
-- 一次性 `bitfun exec` 默认使用 Embedded Runtime；只有恢复或控制 Shared Agent Runtime 中的共享 Session 时，才使用第一方
-  client adapter attach，且不经过 SDK Host。
+- Headless CLI、ACP、App Server/Desktop/TUI 与 SDK Host 只共享 Core ownership 和 Runtime 行为 owner；共享这些内部 owner 不构成产品依赖，
+  也不新增第二种 SDK。SDK Host 不依赖 App Server schema 或 handler。
+- 一次性 `bitfun exec` 默认使用 Embedded Runtime；只有恢复或控制 Shared App Server 中的共享 Session 时，才使用 App Server
+  client attach，且不经过 SDK Host。
 - SDK 不解析 CLI `stream-json` 作为正式双向协议。
 - 普通脚本/CI 不需要为了“架构统一”改写成 SDK；复杂生产自动化才选择 SDK。
 - 两者使用共同的行为样例验证相同配置、权限和 Tool 结果，但 flags、事件格式和传输方式可以不同。
@@ -651,7 +658,7 @@ GA 必须同时满足：
 - TypeScript 和 Python 至少各有一个仓库外真实消费者，并通过同一 conformance suite。
 - SDK/Host 安装、升级、版本不匹配、崩溃、取消和完整进程树回收通过 Windows/macOS/Linux 验证。
 - Session resume/fork、structured output、usage、Tool/MCP/Permission/Hook/UserInput callback 有端到端样例。
-- CLI 与 SDK 共同 fixture 证明业务事实一致，但 CLI 仍不依赖 SDK Host。
+- Headless CLI、App Server 与 SDK 共同 fixture 证明业务事实一致，但 Headless CLI 和交互式 TUI 都不依赖 SDK Host。
 - schema drift、stable/experimental、capability negotiation、错误码和兼容矩阵进入发布门禁。
 - API 参考、快速开始、迁移说明、安全模型和外部 UI 参考架构完整。
 
@@ -660,7 +667,7 @@ GA 必须同时满足：
 - 不提供 Claude Agent SDK 的 import-compatible 或 source-compatible 替换包。
 - 不发布多个互不兼容的“本地 SDK”“远程 SDK”“UI SDK”。
 - 不让 CLI、GUI/TUI、ACP 或 Server 依赖公开 Python/TypeScript SDK 或 SDK Host。
-- 不把 `stream-json`、ACP 或 HTTP Server 全量路由冒充正式 Agent SDK。
+- 不把 App Server typed client 称为公开 Agent SDK，也不把 `stream-json`、ACP、App Server 或 HTTP Server 全量路由冒充正式 Agent SDK。
 - 不发布 BitFun 第一方 React UI 作为稳定 SDK ABI。
 - 不把 OpenCode/Claude/Codex 原始插件对象、Hook payload 或配置类型带入 Runtime 公共合同。
 - 不在没有真实消费者、owner 和失败语义时建立通用工作流、HookBus、远程 SDK transport 或公共 Capability SDK。

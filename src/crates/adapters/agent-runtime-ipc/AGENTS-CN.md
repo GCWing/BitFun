@@ -1,25 +1,34 @@
 **中文** | [English](AGENTS.md)
 
-# Agent Runtime IPC
+# Agent Runtime IPC 迁移指南
 
 范围：`src/crates/adapters/agent-runtime-ipc`。
 
-该 crate 不发布，是第一方 Shared TUI adapter 使用的私有本机协议。它提供 discovery、单实例锁、有界 framing、认证初始化、封闭的交互操作集、Session controller lease、事件传递、连接上限和 cleanup；它不是公开 SDK、远程协议、service layer 或 Runtime owner。
+该 crate 是旧 Shared TUI 私有协议，只用于迁移，不是目标架构边界。最终架构中，交互式
+TUI、Desktop、Electron、VS Code 与 Web 的 Per-Client/Shared 部署统一使用 App Server
+wire。修改前阅读
+[`docs/architecture/app-server-architecture-design.md`](../../../../docs/architecture/app-server-architecture-design.md)
+和
+[`docs/architecture/agent-runtime-deployment-design.md`](../../../../docs/architecture/agent-runtime-deployment-design.md)。
 
-## 预集成约束
+## 迁移规则
 
-- 唯一 consumer 是 `src/apps/cli` 中的第一方交互式 TUI adapter；不自动包含 GUI、Remote、Peer、ACP、Headless CLI 或 SDK Host。
-- 稳定测试合同包括本机 endpoint、严格 initialize-first、分离的握手/请求 deadline、128 KiB 请求与 8 MiB 响应/事件上限、有界连接、每个 Session 一个 controller、断线取消、30 秒空闲退出和 owner-checked discovery cleanup。
-- consumer 必须复用既有 Agent Runtime owners，并证明 Embedded/Shared 行为等价，不能依赖 SDK Host。
+- 禁止向旧协议新增 operation、consumer、公开导出、transport 或产品能力。
+- App Server 纵向切片完成前，只允许为兼容和回归修复保持当前行为。
+- 删除旧实现前，将 controller lease、认证、frame 上限、断连取消、事件失效、
+  `outcome_unknown` 和 cleanup 提升为 App Server conformance tests。
+- 只有真正与协议无关的 Named Pipe/UDS、discovery、framing 或 budget 原语可以迁入 App
+  Server transport adapter；不得上移 TUI-specific operation envelope 或 handler。
+- 交互式 TUI 必须迁移到 `AppServerClient`：默认连接 Per-Client Managed App Server，
+  `--shared` 连接 Shared App Server。
+- 旧 consumer 删除后，删除本 crate；或将其缩减为 App Server 内部 transport 实现，不再
+  拥有独立 wire 语义。
 
-## 边界
+## 临时安全合同
 
-- 只导出 CLI adapter 实际使用的 workspace-private API，且 crate 不得发布，也不得把 wire 作为 SDK 合同。
-- 封闭 operation 范围为 Health、Session list/create/restore（restore 结果包含 transcript）、当前 Session rename 和 Agent mode/model update、Turn submit/cancel、pending/respond Permission 和 UserInput answers。断连 cleanup 属于内部生命周期，不是 detach operation。模型目录和默认值仍是 wire 之外的产品配置；禁止顺带加入 delete、fork、replay、observer、controller transfer、Tool/MCP/Hook 管理或其他产品配置。
-- 可以复用稳定 Event、Product Domain 和 Runtime Port DTO。禁止依赖 `bitfun-core`、Agent Runtime 实现、SDK Host、services、Tauri、terminal、tool runtime 或远程 transport。
-- 只使用 Windows Named Pipe 或 Unix Domain Socket；禁止 TCP、HTTP、WebSocket、浏览器访问或远程 fallback。
-- 这是本机同用户隔离，不是沙箱。未来产品 composition 必须提供当前用户私有 runtime 目录。
-- Embedded 调用方必须继续以强类型直接调用 Agent Runtime，不能初始化本 transport。Shared 的 request、response 和 event frame 在写出前只编码一次；不能为了吞吐量削弱严格解码、未知字段拒绝、frame 上限、有界队列和背压。
+删除前不得削弱 initialize-first 认证、request/event 大小上限、有界连接与队列、每
+Session 一个 Controller、断连取消、事件流粘性失效、idle cleanup 和 owner-checked
+discovery cleanup。
 
 ## 验证
 

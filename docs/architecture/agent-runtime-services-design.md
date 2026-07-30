@@ -9,8 +9,9 @@ CLI Agent 体验边界见 [`cli-product-line-design.md`](cli-product-line-design
 多宿主 adapter 的状态、权限、并发和兼容边界见
 [`capability-runtime-integration-design.md`](extensions/capability-runtime-integration-design.md)；公开 BitFun Agent SDK 的
 用户心智、SDK Host、Headless CLI/ACP/Server 关系、竞品基线和能力发布门槛见
-[`agent-sdk-product-architecture.md`](agent-sdk-product-architecture.md)；第一方 GUI/TUI/Remote 多实例、Headless CLI Embedded、
-Shared Agent Runtime 与 Plugin Host 的进程关系见
+[`agent-sdk-product-architecture.md`](agent-sdk-product-architecture.md)；第一方 Rich Client（包括交互式 TUI）的统一协议见
+[`app-server-architecture-design.md`](app-server-architecture-design.md)；Per-Client Managed/Shared/Hosted、Headless CLI
+Embedded、Remote 与 Plugin Host 的进程关系见
 [`agent-runtime-deployment-design.md`](agent-runtime-deployment-design.md)。
 
 本文中的接口片段只说明依赖方向和职责，不自动构成当前 API 或实施承诺。当前接口名称、字段和消费方以代码为准；
