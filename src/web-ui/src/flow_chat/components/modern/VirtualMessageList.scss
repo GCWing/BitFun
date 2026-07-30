@@ -14,10 +14,8 @@
 
   /*
    * FlowChat collapse contract: revealing a body may change height, never its
-   * leading edge. Owner styles also keep their offsets at zero; this selector
-   * is the surface-level guard for FlowChat's collapsible projection roots.
-   * It stays explicit so ordinary card-internal padding (for example question
-   * options) remains untouched.
+   * outer leading edge. Internal card padding belongs to each projection
+   * owner, so text keeps breathing room without shifting the card itself.
    */
   .explore-region__content,
   .thinking-content,
@@ -28,7 +26,6 @@
   .subagent-items-container,
   .subagent-projection-container--expanded {
     margin-inline-start: 0;
-    padding-inline-start: 0;
   }
   
   

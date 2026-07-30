@@ -13,7 +13,7 @@
 }
 
 .base-tool-card-wrapper.miniapp-tool-display .miniapp-result-footer {
-  margin-left: 0;
+  margin-left: calc(-1 * var(--flowchat-card-expanded-pad-x));
   margin-right: calc(-1 * var(--flowchat-card-expanded-pad-x));
   margin-bottom: calc(-1 * var(--flowchat-card-expanded-pad-y));
   padding: var(--flowchat-card-expanded-pad-y) var(--flowchat-card-expanded-pad-x);

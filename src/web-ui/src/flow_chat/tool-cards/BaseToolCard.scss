@@ -218,12 +218,12 @@
 
 /* ========== Expanded content area ========== */
 .base-tool-card-expanded {
-  /* Full-bleed dividers in children use these (header pad-x is 0; do not conflate). */
+  /* Full-bleed dividers in children use these shared body insets. */
   padding:
     var(--flowchat-card-expanded-pad-y)
     var(--tool-card-expanded-pad-x)
     var(--flowchat-card-expanded-pad-y)
-    0;
+    var(--tool-card-expanded-pad-x);
   background: transparent;
   position: relative;
   opacity: 1;
@@ -238,7 +238,7 @@
     var(--flowchat-card-expanded-pad-y)
     var(--flowchat-card-expanded-pad-x)
     var(--flowchat-card-expanded-pad-y)
-    0;
+    var(--flowchat-card-expanded-pad-x);
   margin-left: 0;
   background: none !important;
   border: none !important;

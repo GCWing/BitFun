@@ -13,7 +13,7 @@
 
 .subagent-projection-container--expanded {
   max-height: min(48vh, 640px);
-  padding: 8px 0 10px;
+  padding: var(--flowchat-card-expanded-pad-y) var(--flowchat-card-expanded-pad-x);
 }
 
 .subagent-projection-container--collapsed {

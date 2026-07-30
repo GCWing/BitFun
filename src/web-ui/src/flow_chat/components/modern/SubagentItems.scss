@@ -27,9 +27,9 @@
 
 // Subagent container for items under the same parent task.
 .subagent-items-container {
-  // Do not offset projected content past the task icon rail: expansion and
-  // collapse must keep the same leading edge.
-  padding: 10px 10px 10px 0;
+  // Keep projected output clear of every card edge while the outer container
+  // stays aligned with the task header.
+  padding: var(--flowchat-card-expanded-pad-y) var(--flowchat-card-expanded-pad-x);
 
   // Continue the task card border on left/right/bottom; top border is hidden.
   background: var(--color-bg-scene);

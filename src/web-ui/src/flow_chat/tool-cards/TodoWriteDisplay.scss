@@ -154,11 +154,7 @@
 
   /* Expanded body — align list with card edges */
   .todo-expanded-body {
-    margin:
-      calc(var(--flowchat-card-expanded-pad-y) * -1)
-      calc(var(--tool-card-expanded-pad-x) * -1)
-      calc(var(--flowchat-card-expanded-pad-y) * -1)
-      0;
+    margin: calc(var(--flowchat-card-expanded-pad-y) * -1) calc(var(--tool-card-expanded-pad-x) * -1);
   }
   .todo-full-list {
     background: transparent;
