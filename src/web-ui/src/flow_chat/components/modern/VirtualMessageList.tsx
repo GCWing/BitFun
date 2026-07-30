@@ -687,10 +687,11 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
       return false;
     }
 
-    const viewportSizeChanged =
+    const viewportGeometryChanged =
+      Math.abs(scroller.scrollHeight - previousGeometry.scrollHeight) > COMPENSATION_EPSILON_PX ||
       Math.abs(scroller.clientHeight - previousGeometry.clientHeight) > COMPENSATION_EPSILON_PX;
     if (
-      !viewportSizeChanged ||
+      !viewportGeometryChanged ||
       pendingCollapseIntentRef.current.active ||
       retainedCollapseAnchorRef.current !== null
     ) {
@@ -707,7 +708,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     const maxScrollTop = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
     const ownsElementAnchor = viewportCoordinatorRef.current.ownsElementAnchor();
     const willWrite = shouldSyncPhysicalBottom({
-      viewportSizeChanged,
+      viewportGeometryChanged,
       collapseProtectionActive: pendingCollapseIntentRef.current.active,
       wasAtPhysicalBottom,
       ownsElementAnchor,
@@ -1452,9 +1453,12 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     const currentScrollTop = scroller.scrollTop;
     const previousScrollTop = previousScrollTopRef.current;
     const previousScrollerGeometry = previousScrollerGeometryRef.current;
-    const viewportSizeChanged = Boolean(
+    const viewportGeometryChanged = Boolean(
       previousScrollerGeometry &&
-      Math.abs(scroller.clientHeight - previousScrollerGeometry.clientHeight) > COMPENSATION_EPSILON_PX
+      (
+        Math.abs(scroller.scrollHeight - previousScrollerGeometry.scrollHeight) > COMPENSATION_EPSILON_PX ||
+        Math.abs(scroller.clientHeight - previousScrollerGeometry.clientHeight) > COMPENSATION_EPSILON_PX
+      )
     );
     const wasAtPhysicalBottom = Boolean(
       previousScrollerGeometry &&
@@ -1512,7 +1516,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
           collapseIntentActive: pendingCollapseIntentRef.current.active,
           retainedCollapseAnchor: retainedCollapseAnchorRef.current,
           wasAtPhysicalBottom,
-          viewportSizeChanged,
+          viewportGeometryChanged,
         }),
       });
     }
@@ -1523,7 +1527,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
       retainedCollapseAnchorRef.current !== null
     );
     if (shouldSyncPhysicalBottom({
-      viewportSizeChanged,
+      viewportGeometryChanged,
       collapseProtectionActive: hasCollapseAnchorProtection,
       wasAtPhysicalBottom,
       ownsElementAnchor,

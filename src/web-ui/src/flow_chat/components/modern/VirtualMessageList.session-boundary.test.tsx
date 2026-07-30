@@ -818,26 +818,17 @@ describe('VirtualMessageList session boundary', () => {
 
   it('does not let physical-bottom follow compete with a semantic element anchor', () => {
     expect(shouldSyncPhysicalBottom({
-      viewportSizeChanged: true,
+      viewportGeometryChanged: true,
       collapseProtectionActive: false,
       wasAtPhysicalBottom: true,
       ownsElementAnchor: true,
     })).toBe(false);
     expect(shouldSyncPhysicalBottom({
-      viewportSizeChanged: true,
+      viewportGeometryChanged: true,
       collapseProtectionActive: false,
       wasAtPhysicalBottom: true,
       ownsElementAnchor: false,
     })).toBe(true);
-  });
-
-  it('does not treat streamed content growth as a viewport resize', () => {
-    expect(shouldSyncPhysicalBottom({
-      viewportSizeChanged: false,
-      collapseProtectionActive: false,
-      wasAtPhysicalBottom: true,
-      ownsElementAnchor: false,
-    })).toBe(false);
   });
 
   it('suppresses only negative virtualizer compensation while following the streaming tail', () => {

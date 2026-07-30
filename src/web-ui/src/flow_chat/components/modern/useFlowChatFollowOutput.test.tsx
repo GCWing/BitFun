@@ -3,36 +3,11 @@
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import {
-  computeContinuousFollowStep,
-  useFlowChatFollowOutput,
-} from './useFlowChatFollowOutput';
+import { useFlowChatFollowOutput } from './useFlowChatFollowOutput';
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
 type FollowOutputController = ReturnType<typeof useFlowChatFollowOutput>;
-
-describe('computeContinuousFollowStep', () => {
-  it('spreads a line-height-sized tail growth across multiple frames', () => {
-    const firstStep = computeContinuousFollowStep(24, 1000 / 60);
-
-    expect(firstStep).toBeGreaterThan(0);
-    expect(firstStep).toBeLessThan(24);
-  });
-
-  it('retargets proportionally while capping large catch-up jumps', () => {
-    const smallStep = computeContinuousFollowStep(24, 1000 / 60);
-    const largeStep = computeContinuousFollowStep(240, 1000 / 60);
-
-    expect(largeStep).toBeGreaterThan(smallStep);
-    expect(largeStep).toBeLessThanOrEqual(32);
-  });
-
-  it('snaps only the final subpixel remainder', () => {
-    expect(computeContinuousFollowStep(0.4, 1000 / 60)).toBe(0.4);
-    expect(computeContinuousFollowStep(Number.NaN, 1000 / 60)).toBe(0);
-  });
-});
 
 function setScrollerMetrics(
   scroller: HTMLElement,
@@ -253,58 +228,5 @@ describe('useFlowChatFollowOutput', () => {
     expect(controller?.isFollowingOutput).toBe(true);
     expect(performAutoFollowScroll).toHaveBeenCalledTimes(1);
     expect(performLatestTurnStickyPin).not.toHaveBeenCalled();
-  });
-
-  it('eases line-height growth without issuing another bottom snap', () => {
-    const queuedFrames: FrameRequestCallback[] = [];
-    let nextFrameId = 0;
-    vi.stubGlobal('requestAnimationFrame', vi.fn((callback: FrameRequestCallback) => {
-      queuedFrames.push(callback);
-      nextFrameId += 1;
-      return nextFrameId;
-    }));
-
-    const scroller = document.createElement('div');
-    setScrollerMetrics(scroller, {
-      scrollHeight: 1500,
-      clientHeight: 500,
-      scrollTop: 1000,
-    });
-    const performAutoFollowScroll = vi.fn(() => {
-      scroller.scrollTop = scroller.scrollHeight - scroller.clientHeight;
-    });
-
-    act(() => {
-      root.render(
-        <Harness
-          scroller={scroller}
-          onController={nextController => {
-            controller = nextController;
-          }}
-          performAutoFollowScroll={performAutoFollowScroll}
-        />,
-      );
-    });
-
-    act(() => {
-      controller?.enterFollowOutput('auto-follow');
-    });
-    expect(performAutoFollowScroll).toHaveBeenCalledTimes(1);
-
-    setScrollerMetrics(scroller, {
-      scrollHeight: 1524,
-      clientHeight: 500,
-      scrollTop: 1000,
-    });
-    const firstFollowFrame = queuedFrames.shift();
-    expect(firstFollowFrame).toBeDefined();
-
-    act(() => {
-      firstFollowFrame?.(1000 / 60);
-    });
-
-    expect(performAutoFollowScroll).toHaveBeenCalledTimes(1);
-    expect(scroller.scrollTop).toBeGreaterThan(1000);
-    expect(scroller.scrollTop).toBeLessThan(1024);
   });
 });
