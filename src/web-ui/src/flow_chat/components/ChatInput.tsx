@@ -146,6 +146,7 @@ import {
 import {
   appendSkillPromptReferenceToken,
   createSkillPromptReferenceToken,
+  isSkillAvailableForUserInvocation,
   isSlashAddressableSkillName,
   replaceLeadingSlashCommandWithSkillToken,
 } from '../utils/skillPromptReference';
@@ -1036,9 +1037,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const setChatInputActive = useChatInputState(state => state.setActive);
   const setChatInputExpanded = useChatInputState(state => state.setExpanded);
   const setChatInputHeight = useChatInputState(state => state.setInputHeight);
-  const runtimeResolvedSkills = useMemo(
-    // Only surface skills that this mode will actually resolve at runtime.
-    () => resolvedModeSkills.filter(skill => skill.selectedForRuntime),
+  const userInvocableSkills = useMemo(
+    // Management keeps the full catalog; invocation surfaces apply both runtime and author visibility.
+    () => resolvedModeSkills.filter(isSkillAvailableForUserInvocation),
     [resolvedModeSkills]
   );
 
@@ -2674,7 +2675,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
     const q = (slashCommandState.query || '').trim().toLowerCase();
     const seenNames = new Set<string>();
-    return runtimeResolvedSkills
+    return userInvocableSkills
       .filter(skill => {
         const normalizedName = skill.name.trim();
         const normalizedNameKey = normalizedName.toLowerCase();
@@ -2698,7 +2699,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         kind: 'skill' as const,
         id: skill.key,
         command: `/${skill.name}`,
-        label: skill.description || skill.name,
+        label: [skill.argumentHint?.trim(), skill.description || skill.name]
+          .filter(Boolean)
+          .join(' — '),
         skillName: skill.name,
       }))
       .sort((a, b) => {
@@ -2708,7 +2711,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         const bExact = bName === q ? 0 : bName.startsWith(q) ? 1 : 2;
         return aExact - bExact || aName.localeCompare(bName);
       });
-  }, [canUseSkillsForTarget, runtimeResolvedSkills, slashCommandState.query]);
+  }, [canUseSkillsForTarget, slashCommandState.query, userInvocableSkills]);
 
   const resolveTypedMcpPromptCommand = useCallback((text: string): SlashMcpPromptItem | null => {
     const trimmed = text.trim();
@@ -5519,11 +5522,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                                     <Loader2 size={14} className="bitfun-chat-input__boost-submenu-spinner" aria-hidden />
                                     <span>{t('chatInput.boostSkillsLoading')}</span>
                                   </div>
-                                ) : runtimeResolvedSkills.length === 0 ? (
+                                ) : userInvocableSkills.length === 0 ? (
                                   <div className="bitfun-chat-input__boost-submenu-empty">{t('chatInput.boostSkillsEmpty')}</div>
                                 ) : (
                                   <div className="bitfun-chat-input__boost-submenu-list">
-                                    {runtimeResolvedSkills.map(skill => (
+                                    {userInvocableSkills.map(skill => (
                                       <div
                                         key={skill.key}
                                         role="button"
@@ -5537,7 +5540,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                                         onKeyDown={e => e.key === 'Enter' && insertSkillIntoInput(skill.name)}
                                       >
                                         <Sparkles size={12} className="bitfun-chat-input__boost-submenu-item-icon" aria-hidden />
-                                        <span className="bitfun-chat-input__boost-submenu-item-name">{skill.name}</span>
+                                        <span className="bitfun-chat-input__boost-submenu-item-name">
+                                          {[skill.name, skill.argumentHint?.trim()].filter(Boolean).join(' ')}
+                                        </span>
                                       </div>
                                     ))}
                                   </div>

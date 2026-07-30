@@ -6,6 +6,114 @@ static FRONT_MATTER_REGEX: LazyLock<regex::Regex> = LazyLock::new(|| {
     regex::Regex::new(r"(?s)^---\r?\n(.*?)\r?\n---").expect("front matter regex pattern is valid")
 });
 
+static PROMPT_ARGUMENT_REGEX: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(r#"(?:\[Image\s+\d+\]|"[^"]*"|'[^']*'|[^\s"']+)"#)
+        .expect("prompt argument regex pattern is valid")
+});
+
+/// Expands Claude-compatible prompt arguments without executing dynamic content.
+pub fn expand_prompt_template_arguments(template: &str, arguments: &str) -> String {
+    let arguments_by_position = PROMPT_ARGUMENT_REGEX
+        .find_iter(arguments)
+        .map(|item| {
+            let value = item.as_str();
+            if value.len() >= 2
+                && ((value.starts_with('"') && value.ends_with('"'))
+                    || (value.starts_with('\'') && value.ends_with('\'')))
+            {
+                value[1..value.len() - 1].to_string()
+            } else {
+                value.to_string()
+            }
+        })
+        .collect::<Vec<_>>();
+
+    let mut expanded = String::with_capacity(template.len() + arguments.len());
+    let mut cursor = 0;
+    let mut used_placeholder = false;
+    while cursor < template.len() {
+        let remaining = &template[cursor..];
+        if remaining.starts_with(r"\\$") {
+            expanded.push_str(r"\\");
+            cursor += 2;
+            continue;
+        }
+        if remaining.starts_with(r"\$") {
+            if let Some(length) = prompt_placeholder_length(&remaining[1..]) {
+                expanded.push_str(&remaining[1..length + 1]);
+                cursor += length + 1;
+            } else {
+                expanded.push('\\');
+                cursor += 1;
+            }
+            continue;
+        }
+        if let Some((length, position)) = positional_placeholder(remaining) {
+            used_placeholder = true;
+            if let Some(argument) = position.and_then(|index| arguments_by_position.get(index)) {
+                expanded.push_str(argument);
+            } else {
+                expanded.push_str(&remaining[..length]);
+            }
+            cursor += length;
+            continue;
+        }
+        if let Some(length) = full_arguments_placeholder_length(remaining) {
+            used_placeholder = true;
+            expanded.push_str(arguments);
+            cursor += length;
+            continue;
+        }
+
+        let character = remaining
+            .chars()
+            .next()
+            .expect("cursor is inside the template");
+        expanded.push(character);
+        cursor += character.len_utf8();
+    }
+
+    if !used_placeholder && !arguments.trim().is_empty() {
+        expanded.push_str("\n\nARGUMENTS: ");
+        expanded.push_str(arguments);
+    }
+    expanded.trim().to_string()
+}
+
+fn prompt_placeholder_length(value: &str) -> Option<usize> {
+    positional_placeholder(value)
+        .map(|(length, _)| length)
+        .or_else(|| full_arguments_placeholder_length(value))
+}
+
+fn full_arguments_placeholder_length(value: &str) -> Option<usize> {
+    let remaining = value.strip_prefix("$ARGUMENTS")?;
+    (!remaining.starts_with('[')).then_some("$ARGUMENTS".len())
+}
+
+fn positional_placeholder(value: &str) -> Option<(usize, Option<usize>)> {
+    if let Some(indexed) = value.strip_prefix("$ARGUMENTS[") {
+        let closing_bracket = indexed.find(']')?;
+        let index = &indexed[..closing_bracket];
+        if !index.is_empty() && index.bytes().all(|byte| byte.is_ascii_digit()) {
+            return Some((
+                "$ARGUMENTS[".len() + closing_bracket + 1,
+                index.parse::<usize>().ok(),
+            ));
+        }
+    }
+
+    let indexed = value.strip_prefix('$')?;
+    let length = indexed
+        .bytes()
+        .take_while(|byte| byte.is_ascii_digit())
+        .count();
+    if length == 0 {
+        return None;
+    }
+    Some((length + 1, indexed[..length].parse::<usize>().ok()))
+}
+
 /// Parses and writes Markdown files with YAML front matter.
 pub struct FrontMatterMarkdown;
 

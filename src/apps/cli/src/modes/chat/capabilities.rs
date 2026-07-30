@@ -52,14 +52,17 @@ impl ChatMode {
             rt_handle.block_on(async {
                 let registry = SkillRegistry::global();
                 registry
-                    .get_resolved_skills_for_workspace(Some(workspace.as_path()), Some(&agent_type))
+                    .get_user_invocable_skills_for_workspace(
+                        Some(workspace.as_path()),
+                        Some(&agent_type),
+                    )
                     .await
             })
         });
 
         if skills.is_empty() {
             chat_state.add_system_message(format!(
-                "No enabled skills found for agent mode '{}'. Add skills in .bitfun/skills/, .cursor/skills/, or ~/.cursor/skills/, or enable built-in skills for this mode.",
+                "No user-invocable skills found for agent mode '{}'. Add or enable a skill, then check its user-invocable metadata.",
                 self.agent_type
             ));
             return;
@@ -133,7 +136,7 @@ impl ChatMode {
 
     /// Apply skill selection: fill input box with execution command
     fn apply_skill_selection(&self, selected: &SkillItem, chat_view: &mut ChatView) {
-        chat_view.set_input(&format!("Execute the {} skill.", selected.name));
+        chat_view.set_input(&selected.invocation_text());
     }
 
     fn set_skill_enabled(
@@ -211,6 +214,7 @@ impl ChatMode {
             default_enabled: true,
             is_shadowed: info.is_shadowed,
             shadowed_by_key: info.shadowed_by_key,
+            argument_hint: info.argument_hint,
         }
     }
 
@@ -227,6 +231,7 @@ impl ChatMode {
             default_enabled: info.default_enabled,
             is_shadowed: info.skill.is_shadowed,
             shadowed_by_key: info.skill.shadowed_by_key,
+            argument_hint: info.skill.argument_hint,
         }
     }
 

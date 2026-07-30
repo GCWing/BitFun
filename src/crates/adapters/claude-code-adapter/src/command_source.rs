@@ -5,7 +5,7 @@ use bitfun_product_domains::external_sources::{
     PromptCommandDefinition, PromptCommandProviderIdentity, PromptCommandProviderSnapshot,
     PromptCommandSourceProvider, SourceKey, SourceQualifiedCommandId,
 };
-use bitfun_services_core::markdown::FrontMatterMarkdown;
+use bitfun_services_core::markdown::{expand_prompt_template_arguments, FrontMatterMarkdown};
 use bitfun_static_hook_support::{
     collect_bounded_regular_files, read_bounded_text, BoundedDirectoryWalkError,
     BoundedDirectoryWalkLimits, BoundedTextRead,
@@ -230,7 +230,7 @@ impl PromptCommandSourceProvider for ClaudeCodeCommandProvider {
         }
         match &command.availability {
             PromptCommandAvailability::Available => Ok(ExpandedPromptCommand {
-                content: expand_template(&command.template, arguments),
+                content: expand_prompt_template_arguments(&command.template, arguments),
             }),
             PromptCommandAvailability::Restricted { reason, .. }
             | PromptCommandAvailability::Invalid { reason } => {
@@ -684,55 +684,6 @@ fn command_definition(
         )
     })?;
     Ok(definition)
-}
-
-fn expand_template(template: &str, arguments: &str) -> String {
-    let args = argument_regex()
-        .find_iter(arguments)
-        .map(|item| {
-            let value = item.as_str();
-            if value.len() >= 2
-                && ((value.starts_with('"') && value.ends_with('"'))
-                    || (value.starts_with('\'') && value.ends_with('\'')))
-            {
-                value[1..value.len() - 1].to_string()
-            } else {
-                value.to_string()
-            }
-        })
-        .collect::<Vec<_>>();
-    let with_positions =
-        placeholder_regex().replace_all(template, |capture: &regex::Captures<'_>| {
-            let position = capture
-                .get(1)
-                .or_else(|| capture.get(2))
-                .and_then(|value| value.as_str().parse::<usize>().ok())
-                .unwrap_or(usize::MAX);
-            args.get(position).cloned().unwrap_or_default()
-        });
-    let uses_arguments = template.contains("$ARGUMENTS");
-    let uses_positions = placeholder_regex().is_match(template);
-    let mut expanded = with_positions.replace("$ARGUMENTS", arguments);
-    if !uses_arguments && !uses_positions && !arguments.trim().is_empty() {
-        expanded.push_str("\n\nARGUMENTS: ");
-        expanded.push_str(arguments);
-    }
-    expanded.trim().to_string()
-}
-
-fn argument_regex() -> &'static Regex {
-    static REGEX: OnceLock<Regex> = OnceLock::new();
-    REGEX.get_or_init(|| {
-        Regex::new(r#"(?:\[Image\s+\d+\]|"[^"]*"|'[^']*'|[^\s"']+)"#)
-            .expect("static Claude Code argument regex compiles")
-    })
-}
-
-fn placeholder_regex() -> &'static Regex {
-    static REGEX: OnceLock<Regex> = OnceLock::new();
-    REGEX.get_or_init(|| {
-        Regex::new(r"\$(?:ARGUMENTS\[(\d+)\]|(\d+))").expect("static placeholder regex compiles")
-    })
 }
 
 fn shell_regex() -> &'static Regex {

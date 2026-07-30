@@ -3,8 +3,8 @@ use std::path::PathBuf;
 
 use bitfun_agent_runtime::skills::{
     annotate_shadowed_skills, build_mode_skill_infos, builtin_skill_group_key,
-    filter_candidates_for_mode, filter_implicitly_invocable_skills, is_skill_globally_enabled,
-    render_loaded_skill_for_assistant, resolve_builtin_default_enabled,
+    filter_candidates_for_mode, filter_implicitly_invocable_skills, filter_user_invocable_skills,
+    is_skill_globally_enabled, render_loaded_skill_for_assistant, resolve_builtin_default_enabled,
     resolve_default_hidden_builtin_for_explicit_invocation, resolve_skill_default_enabled_for_mode,
     resolve_skill_state_for_mode, resolve_user_config_skill_root, resolve_visible_skills,
     sort_skills, ExplicitSkillInvocationResolution, ModeSkillStateReason, SkillCandidate,
@@ -29,6 +29,8 @@ fn builtin_skill(dir_name: &str) -> SkillInfo {
         is_shadowed: false,
         shadowed_by_key: None,
         allow_implicit_invocation: true,
+        allow_user_invocation: true,
+        argument_hint: None,
     }
 }
 
@@ -48,6 +50,8 @@ fn custom_user_skill(dir_name: &str) -> SkillInfo {
         is_shadowed: false,
         shadowed_by_key: None,
         allow_implicit_invocation: true,
+        allow_user_invocation: true,
+        argument_hint: None,
     }
 }
 
@@ -67,6 +71,8 @@ fn project_skill(dir_name: &str) -> SkillInfo {
         is_shadowed: false,
         shadowed_by_key: None,
         allow_implicit_invocation: true,
+        allow_user_invocation: true,
+        argument_hint: None,
     }
 }
 
@@ -179,11 +185,15 @@ fn skill_source_identity_is_serialized_without_changing_slot_identity() {
     let mut info = project_skill("pdf");
     info.source_id = "bitfun".to_string();
     info.source_label = "BitFun".to_string();
+    info.allow_user_invocation = false;
+    info.argument_hint = Some("[file]".to_string());
 
     let value = serde_json::to_value(info).expect("skill info should serialize");
     assert_eq!(value["sourceSlot"], "bitfun");
     assert_eq!(value["sourceId"], "bitfun");
     assert_eq!(value["sourceLabel"], "BitFun");
+    assert_eq!(value["allowUserInvocation"], false);
+    assert_eq!(value["argumentHint"], "[file]");
 }
 
 #[test]
@@ -321,6 +331,79 @@ Run the deployment workflow.
     .expect("valid Claude skill markdown should parse");
 
     assert!(!data.allow_implicit_invocation);
+}
+
+#[test]
+fn claude_user_invocation_metadata_is_independent_from_model_invocation() {
+    let markdown = r#"---
+name: deploy
+description: Deploy the current project.
+user-invocable: false
+disable-model-invocation: false
+argument-hint: "[environment] [version]"
+---
+
+Run the deployment workflow.
+"#;
+
+    let data = SkillData::from_markdown(
+        "/workspace/.claude/skills/deploy".to_string(),
+        markdown,
+        SkillLocation::Project,
+        false,
+    )
+    .expect("valid Claude skill invocation metadata should parse");
+
+    assert!(!data.allow_user_invocation);
+    assert!(data.allow_implicit_invocation);
+    assert_eq!(
+        data.argument_hint.as_deref(),
+        Some("[environment] [version]")
+    );
+}
+
+#[test]
+fn user_invocation_metadata_defaults_to_visible_without_an_argument_hint() {
+    let data = SkillData::from_markdown(
+        "/workspace/.agents/skills/review".to_string(),
+        "---\nname: review\ndescription: Review the current project.\n---\n\nReview it.\n",
+        SkillLocation::Project,
+        false,
+    )
+    .expect("skill metadata defaults should parse");
+
+    assert!(data.allow_user_invocation);
+    assert_eq!(data.argument_hint, None);
+}
+
+#[test]
+fn invalid_user_invocation_metadata_is_rejected() {
+    for (field, value) in [("user-invocable", "[]"), ("argument-hint", "42")] {
+        let markdown = format!(
+            "---\nname: review\ndescription: Review the current project.\n{field}: {value}\n---\n\nReview it.\n"
+        );
+        let error = SkillData::from_markdown(
+            "/workspace/.agents/skills/review".to_string(),
+            &markdown,
+            SkillLocation::Project,
+            false,
+        )
+        .expect_err("invalid invocation metadata should fail closed");
+
+        assert!(error.to_string().contains(field), "field={field}");
+    }
+}
+
+#[test]
+fn user_invocation_filter_keeps_only_picker_entries() {
+    let visible = project_skill("review");
+    let mut model_only = project_skill("background-check");
+    model_only.allow_user_invocation = false;
+
+    let filtered = filter_user_invocable_skills(vec![model_only, visible]);
+
+    assert_eq!(filtered.len(), 1);
+    assert_eq!(filtered[0].name, "review");
 }
 
 #[test]

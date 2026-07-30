@@ -46,6 +46,8 @@ impl SkillCandidate {
                 is_shadowed: false,
                 shadowed_by_key: None,
                 allow_implicit_invocation: data.allow_implicit_invocation,
+                allow_user_invocation: data.allow_user_invocation,
+                argument_hint: data.argument_hint,
             },
             priority,
         }
@@ -146,6 +148,13 @@ pub fn filter_implicitly_invocable_skills(skills: Vec<SkillInfo>) -> Vec<SkillIn
     skills
         .into_iter()
         .filter(|skill| skill.allow_implicit_invocation)
+        .collect()
+}
+
+pub fn filter_user_invocable_skills(skills: Vec<SkillInfo>) -> Vec<SkillInfo> {
+    skills
+        .into_iter()
+        .filter(|skill| skill.allow_user_invocation)
         .collect()
 }
 
@@ -330,6 +339,8 @@ mod tests {
                 is_shadowed: false,
                 shadowed_by_key: None,
                 allow_implicit_invocation: true,
+                allow_user_invocation: true,
+                argument_hint: None,
             },
             priority: 0,
         }

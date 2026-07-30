@@ -1923,14 +1923,17 @@ impl StartupPage {
             tokio::runtime::Handle::current().block_on(async {
                 let registry = SkillRegistry::global();
                 registry
-                    .get_resolved_skills_for_workspace(Some(workspace.as_path()), Some(&agent_type))
+                    .get_user_invocable_skills_for_workspace(
+                        Some(workspace.as_path()),
+                        Some(&agent_type),
+                    )
                     .await
             })
         });
 
         if skills.is_empty() {
             self.status = Some(format!(
-                "No enabled skills found for agent mode '{}'.",
+                "No user-invocable skills found for agent mode '{}'.",
                 self.agent_type
             ));
             return;
@@ -1978,7 +1981,7 @@ impl StartupPage {
             SkillSelectorAction::ConfigureSkills => self.show_skill_config_selector(),
             SkillSelectorAction::Execute(selected) => {
                 self.skill_selector.hide();
-                self.set_input(&format!("Execute the {} skill.", selected.name));
+                self.set_input(&selected.invocation_text());
             }
             SkillSelectorAction::Toggle(selected) => {
                 self.set_skill_enabled(&selected, !selected.enabled);
@@ -2053,6 +2056,7 @@ impl StartupPage {
             default_enabled: true,
             is_shadowed: info.is_shadowed,
             shadowed_by_key: info.shadowed_by_key,
+            argument_hint: info.argument_hint,
         }
     }
 
@@ -2069,6 +2073,7 @@ impl StartupPage {
             default_enabled: info.default_enabled,
             is_shadowed: info.skill.is_shadowed,
             shadowed_by_key: info.skill.shadowed_by_key,
+            argument_hint: info.skill.argument_hint,
         }
     }
 

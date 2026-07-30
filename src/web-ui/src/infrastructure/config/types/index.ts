@@ -354,6 +354,10 @@ export interface SkillInfo {
   isShadowed?: boolean;
   /** Key of the skill that shadows this one (if any). */
   shadowedByKey?: string | null;
+  /** False when the skill should stay out of user-facing invocation pickers. */
+  allowUserInvocation?: boolean;
+  /** Optional usage hint displayed by invocation pickers. */
+  argumentHint?: string | null;
 }
 
 export interface ModeSkillInfo extends SkillInfo {

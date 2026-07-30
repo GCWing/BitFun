@@ -31,9 +31,14 @@ pub(crate) struct SkillItem {
     pub default_enabled: bool,
     pub is_shadowed: bool,
     pub shadowed_by_key: Option<String>,
+    pub argument_hint: Option<String>,
 }
 
 impl SkillItem {
+    pub(crate) fn invocation_text(&self) -> String {
+        format!("[${}] ", self.name)
+    }
+
     fn display_source_label(&self) -> &str {
         let label = self.source_label.trim();
         if !label.is_empty() {
@@ -476,6 +481,15 @@ impl SkillSelectorState {
             ));
         }
         spans.push(Span::styled(skill.name.clone(), name_style));
+        if let Some(argument_hint) = skill
+            .argument_hint
+            .as_deref()
+            .map(str::trim)
+            .filter(|hint| !hint.is_empty())
+        {
+            spans.push(Span::raw(" "));
+            spans.push(Span::styled(argument_hint.to_string(), desc_style));
+        }
         if !status.is_empty() {
             spans.push(Span::styled(status, theme.style(StyleKind::Muted)));
         }
@@ -532,7 +546,16 @@ mod tests {
             default_enabled: true,
             is_shadowed: false,
             shadowed_by_key: None,
+            argument_hint: None,
         }
+    }
+
+    #[test]
+    fn skill_invocation_text_uses_the_shared_inline_token_without_inserting_the_hint() {
+        let mut skill = skill_item("project::bitfun::pdf", "BitFun");
+        skill.argument_hint = Some("[file] [focus]".to_string());
+
+        assert_eq!(skill.invocation_text(), "[$pdf] ");
     }
 
     #[test]

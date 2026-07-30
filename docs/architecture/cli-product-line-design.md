@@ -516,7 +516,8 @@ Hook C0：脱敏发现 -> 精确命令预览 | 指纹确认 -> 原子发布本�
 仍等于导入值的字段；用户后续修改、来源变化或部分重新导入造成冲突时，逐字段选择“保留 BitFun / 重新导入
 外部 / 手工处理”，不得整批覆盖。
 
-下表描述目标覆盖范围；当前能力仅限上文列出的 MCP C0a 与 Hook C0，不能由本表推导出其他资产已经实现。
+下表描述目标覆盖范围；显式配置导入能力仍仅限上文列出的 MCP C0a 与 Hook C0。Skill 的原地发现与调用使用下文所述
+的既有 Skill Registry 路径，不属于显式配置导入，也不能由本表推导出其他资产已经实现。
 
 | 来源 | 目标可导入 | 目标不导入 |
 |---|---|---|
@@ -536,7 +537,21 @@ Hook C0：脱敏发现 -> 精确命令预览 | 指纹确认 -> 原子发布本�
 展示来源和默认覆盖状态，模式配置再展示实际采用项；固定根顺序保持为 Skill Registry 的独立回归契约。
 Skill Registry 还保留来源资产声明的隐式调用意图：Claude `SKILL.md` 的 `disable-model-invocation: true` 与 Codex
 `agents/openai.yaml` 的 `policy.allow_implicit_invocation: false` 都会让 Skill 不进入模型自动目录，但不影响 `/skills`、
-模式配置和显式加载。BitFun 不继承来源产品的全局启停策略，也未实现 URL/额外根和自动变化监听。
+模式配置和显式加载。Claude `user-invocable: false` 与上述模型调用策略相互独立：它只让 Skill 不进入 Web/CLI 的用户
+调用选择器，不从管理目录删除，也不改变模型目录或现有启停状态。缺省时 Skill 可由用户调用；`argument-hint` 只作为
+选择器提示显示，不自动写入输入框。Web 与 CLI/TUI 选择 Skill 后统一生成 `[$skill-name]` 引用，用户可以直接在后面继续
+输入参数，不需要先导入、复制或学习第二种启用流程。
+
+显式调用仍由现有 `SkillTool` 和 Skill Registry 加载实际优先级赢家，本地与 Remote 分支沿用同一加载语义。工具的可选
+`arguments` 字段使用共享的静态模板展开：支持原始 `$ARGUMENTS`、从零开始的 `$ARGUMENTS[N]` 和 `$N`、单/双引号
+分组以及 `\$` 转义；缺失的位置参数保留原占位符，模板没有未转义占位符时才追加 `ARGUMENTS:` 段。该展开器只处理
+字符串，不执行命令、脚本或动态变量。未携带 `arguments` 的旧工具调用保持原 Skill 正文不变。
+
+这项能力不新增导入记录、来源图、后台 watcher 或第二套刷新生命周期。工作区查询继续按现有 Registry 路径扫描，用户
+缓存继续使用已有刷新入口，CLI 的 `/reload-skills` 仍是明确的手动刷新方式；运行期不承诺对所有来源做文件监听或热重载。
+本切片也不实现 `allowed-tools`、`context`、`fork`、`agent`、`model`、命名参数、动态 shell/runtime 变量、URL、祖先目录
+级联、插件 Runtime 或 OpenCode 复杂 Hook。后续只有在存在稳定消费方和独立安全边界时才扩展这些语义。
+
 Skill 说明和索引可按 L1 处理，脚本、URL 和外部依赖按 L2 确认；显式导入仍不得复制凭据值。MCP 启用状态按
 OpenCode 来源解释，首次连接、策略限制和凭据缺失分别显示。
 

@@ -32,6 +32,8 @@ mod tests {
             is_shadowed: false,
             shadowed_by_key: None,
             allow_implicit_invocation: true,
+            allow_user_invocation: true,
+            argument_hint: None,
         }
     }
 
@@ -51,6 +53,8 @@ mod tests {
             is_shadowed: false,
             shadowed_by_key: None,
             allow_implicit_invocation: true,
+            allow_user_invocation: true,
+            argument_hint: None,
         }
     }
 
