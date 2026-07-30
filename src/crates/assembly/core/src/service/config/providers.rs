@@ -346,6 +346,19 @@ impl ConfigProvider for TerminalConfigProvider {
                 "Terminal config changed: shell={}, font_size={}",
                 terminal_config.default_shell, terminal_config.font_size
             );
+
+            // Propagate the live default shell preference to the running
+            // SessionManager so newly created terminals and agent sessions
+            // honor the updated "Default Terminal" setting without an app
+            // restart. Empty string maps to `None` (platform auto-detect).
+            let new_shell = if terminal_config.default_shell.trim().is_empty() {
+                None
+            } else {
+                Some(terminal_config.default_shell.clone())
+            };
+            if let Some(manager) = crate::service::terminal::session::get_session_manager() {
+                manager.update_default_shell(new_shell).await;
+            }
         }
         Ok(())
     }

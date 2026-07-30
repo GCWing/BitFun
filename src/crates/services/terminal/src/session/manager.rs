@@ -156,8 +156,14 @@ async fn get_post_command_terminal_state(
 
 /// Session manager for terminal sessions
 pub struct SessionManager {
-    /// Configuration
+    /// Immutable configuration baseline (set at construction time).
     config: TerminalConfig,
+
+    /// Live default shell preference, kept separate from the immutable
+    /// `config` baseline so config change propagation can update it without
+    /// rebuilding the manager or restarting the app. `None` means
+    /// "auto-detect".
+    default_shell: Arc<RwLock<Option<String>>>,
 
     /// Active sessions
     sessions: Arc<RwLock<HashMap<String, TerminalSession>>>,
@@ -192,7 +198,11 @@ pub struct SessionManager {
 
 impl SessionManager {
     /// Create a new session manager
-    pub fn new(config: TerminalConfig) -> Self {
+    pub fn new(mut config: TerminalConfig) -> Self {
+        // Move `default_shell` out of the immutable config into a live RwLock so
+        // config change propagation can update it without rebuilding the manager.
+        let default_shell = Arc::new(RwLock::new(config.default_shell.take()));
+
         // Initialize scripts manager and ensure scripts are up-to-date
         let scripts_manager = ScriptsManager::new(config.shell_integration.scripts_dir.clone());
         if let Err(e) = scripts_manager.ensure_scripts() {
@@ -208,6 +218,7 @@ impl SessionManager {
 
         let manager = Self {
             config,
+            default_shell,
             sessions: Arc::new(RwLock::new(HashMap::new())),
             pty_service,
             event_emitter,
@@ -232,6 +243,20 @@ impl SessionManager {
     /// and terminal sessions.
     pub fn binding(&self) -> Arc<super::TerminalSessionBinding> {
         self.binding.clone()
+    }
+
+    /// Update the live default shell preference without rebuilding the manager.
+    ///
+    /// Called by config change propagation so subsequent `create_session` calls
+    /// honor the user's latest `terminal.default_shell` setting. Pass `None`
+    /// (or an empty string) to restore platform auto-detection.
+    pub async fn update_default_shell(&self, shell: Option<String>) {
+        let normalized = shell.filter(|s| !s.trim().is_empty());
+        let mut guard = self.default_shell.write().await;
+        if guard.as_deref() != normalized.as_deref() {
+            debug!("Terminal default shell preference updated: {:?}", normalized);
+            *guard = normalized;
+        }
     }
 
     /// Start forwarding PTY service events to terminal events
@@ -638,8 +663,8 @@ impl SessionManager {
         }
 
         let configured_default = if requested_shell_type.is_none() && shell_from_id.is_none() {
-            self.config
-                .default_shell
+            let preference = self.default_shell.read().await;
+            preference
                 .as_deref()
                 .and_then(ShellDetector::resolve_configured_shell)
         } else {
