@@ -11,6 +11,22 @@ static PROMPT_ARGUMENT_REGEX: LazyLock<regex::Regex> = LazyLock::new(|| {
         .expect("prompt argument regex pattern is valid")
 });
 
+/// Returns a conservative upper bound for prompt argument expansion without
+/// allocating the expanded string. Each `$` may begin at most one placeholder;
+/// the fallback arguments section is included even when a placeholder exists.
+pub fn prompt_template_expansion_upper_bound(template: &str, arguments: &str) -> Option<usize> {
+    let placeholder_bound = template
+        .bytes()
+        .filter(|byte| *byte == b'$')
+        .count()
+        .checked_mul(arguments.len())?;
+    template
+        .len()
+        .checked_add(placeholder_bound)?
+        .checked_add(arguments.len())?
+        .checked_add("\n\nARGUMENTS: ".len())
+}
+
 /// Expands Claude-compatible prompt arguments without executing dynamic content.
 pub fn expand_prompt_template_arguments(template: &str, arguments: &str) -> String {
     expand_prompt_template_arguments_with_names(template, arguments, &[])

@@ -1505,6 +1505,14 @@ pub struct ExpandedPromptCommand {
     pub content: String,
 }
 
+/// Provider-prepared command content plus the narrow set of local workspace
+/// files that Product Assembly must resolve before sending the final prompt.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PromptCommandExpansion {
+    pub content: String,
+    pub workspace_file_references: Vec<String>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PromptCommandProviderIdentity {
@@ -1684,7 +1692,7 @@ pub trait PromptCommandSourceProvider: Send + Sync {
         &self,
         command: &PromptCommandDefinition,
         arguments: &str,
-    ) -> Result<ExpandedPromptCommand, ExternalSourceProviderError>;
+    ) -> Result<PromptCommandExpansion, ExternalSourceProviderError>;
 
     /// Resolves same-ecosystem overlays after product suppression is applied.
     /// The full snapshot is supplied so a provider can preserve native source

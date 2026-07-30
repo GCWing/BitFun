@@ -1,9 +1,9 @@
 use bitfun_external_sources::ExternalSourceCoordinator;
 use bitfun_product_domains::external_sources::{
-    EcosystemId, ExecutionDomainId, ExpandedPromptCommand, ExternalSourceContext,
-    ExternalSourceHealth, ExternalSourceLifecycleState, ExternalSourceProviderError,
-    ExternalSourceRecord, ExternalSourceScope, ExternalWatchRoot, PromptCommandAvailability,
-    PromptCommandDefinition, PromptCommandProviderIdentity, PromptCommandProviderSnapshot,
+    EcosystemId, ExecutionDomainId, ExternalSourceContext, ExternalSourceHealth,
+    ExternalSourceLifecycleState, ExternalSourceProviderError, ExternalSourceRecord,
+    ExternalSourceScope, ExternalWatchRoot, PromptCommandAvailability, PromptCommandDefinition,
+    PromptCommandExpansion, PromptCommandProviderIdentity, PromptCommandProviderSnapshot,
     PromptCommandSourceProvider, SourceKey, SourceQualifiedCommandId,
 };
 use std::path::PathBuf;
@@ -113,9 +113,10 @@ impl PromptCommandSourceProvider for FakeProvider {
         &self,
         command: &PromptCommandDefinition,
         arguments: &str,
-    ) -> Result<ExpandedPromptCommand, ExternalSourceProviderError> {
-        Ok(ExpandedPromptCommand {
+    ) -> Result<PromptCommandExpansion, ExternalSourceProviderError> {
+        Ok(PromptCommandExpansion {
             content: command.template.replace("$ARGUMENTS", arguments),
+            workspace_file_references: vec!["src/lib.rs".to_string()],
         })
     }
 
@@ -394,6 +395,7 @@ fn suppression_survives_refresh_and_expansion_dispatches_by_provider_identity() 
         .expand_command("review", "this change")
         .expect("expand active command");
     assert_eq!(expanded.content, "first: this change");
+    assert_eq!(expanded.workspace_file_references, ["src/lib.rs"]);
 
     coordinator
         .set_source_enabled(&second_key, true)

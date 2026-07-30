@@ -351,8 +351,10 @@ fn unsupported_expansion_features_restrict_the_whole_command() {
         fixture.user_config.join("opencode.json"),
         r#"{
           "command": {
-            "shell": {"template":"Run !`git status`"},
-            "file": {"template":"Review @src/main.rs"},
+            "shell": {"template":"Run !`git status` and review @src/main.rs"},
+            "file": {"template":"Review @src/main.rs, @src/main.rs, and @docs/guide.md with $ARGUMENTS"},
+            "dynamic-file": {"template":"Review @src/$1.rs"},
+            "unsafe-file": {"template":"Review @/etc/passwd"},
             "config-var": {"template":"Review {env:HOME}"},
             "agent": {"template":"Delegate this", "agent":"explore"},
             "subtask": {"template":"Delegate this", "subtask":true}
@@ -366,7 +368,14 @@ fn unsupported_expansion_features_restrict_the_whole_command() {
         .sources
         .iter()
         .any(|source| source.health == ExternalSourceHealth::Partial));
-    for name in ["shell", "file", "config-var", "agent", "subtask"] {
+    for name in [
+        "shell",
+        "dynamic-file",
+        "unsafe-file",
+        "config-var",
+        "agent",
+        "subtask",
+    ] {
         let command = snapshot
             .commands
             .iter()
@@ -378,6 +387,53 @@ fn unsupported_expansion_features_restrict_the_whole_command() {
         ));
         assert!(provider.expand(command, "").is_err());
     }
+    let dynamic_file = snapshot
+        .commands
+        .iter()
+        .find(|command| command.name == "dynamic-file")
+        .unwrap();
+    let PromptCommandAvailability::Restricted {
+        required_capabilities,
+        ..
+    } = &dynamic_file.availability
+    else {
+        panic!("dynamic file references must be restricted")
+    };
+    assert!(required_capabilities.contains(&"command.file_reference.dynamic".to_string()));
+    let unsafe_file = snapshot
+        .commands
+        .iter()
+        .find(|command| command.name == "unsafe-file")
+        .unwrap();
+    let PromptCommandAvailability::Restricted {
+        required_capabilities,
+        ..
+    } = &unsafe_file.availability
+    else {
+        panic!("unsafe file references must be restricted")
+    };
+    assert!(required_capabilities.contains(&"command.file_reference.unsafe_path".to_string()));
+
+    let file_command = snapshot
+        .commands
+        .iter()
+        .find(|command| command.name == "file")
+        .unwrap();
+    assert!(matches!(
+        file_command.availability,
+        PromptCommandAvailability::Available
+    ));
+    let expansion = provider
+        .expand(file_command, "@arguments/are-not-files.md")
+        .unwrap();
+    assert_eq!(
+        expansion.workspace_file_references,
+        ["src/main.rs", "docs/guide.md"]
+    );
+    assert_eq!(
+        expansion.content,
+        "Review @src/main.rs, @src/main.rs, and @docs/guide.md with @arguments/are-not-files.md"
+    );
 }
 
 #[test]
@@ -509,6 +565,26 @@ fn expands_arguments_and_positions_using_the_frozen_opencode_semantics() {
 }
 
 #[test]
+fn rejects_argument_expansion_before_repeated_placeholders_can_overallocate() {
+    let fixture = Fixture::new();
+    write(
+        fixture.user_config.join("commands/large.md"),
+        &"$ARGUMENTS".repeat(1024),
+    );
+    let provider = fixture.provider();
+    let snapshot = provider.discover(&fixture.context()).unwrap();
+    let command = snapshot
+        .commands
+        .iter()
+        .find(|command| command.name == "large")
+        .unwrap();
+
+    let error = provider.expand(command, &"x".repeat(2048)).unwrap_err();
+
+    assert_eq!(error.code, "opencode.command.expansion_too_large");
+}
+
+#[test]
 fn deleting_the_winning_file_reveals_the_next_opencode_source() {
     let fixture = Fixture::new();
     let global = fixture.user_config.join("commands/review.md");
@@ -582,6 +658,22 @@ fn semantically_invalid_known_command_is_marked_unavailable() {
         .unavailable_command_ids
         .iter()
         .any(|command_id| command_id.local_id.as_str() == "review"));
+}
+
+#[test]
+fn malformed_skills_field_does_not_hide_other_valid_command_contributions() {
+    let fixture = Fixture::new();
+    write(
+        fixture.user_config.join("opencode.json"),
+        r#"{"skills":["valid",42],"command":{"review":{"template":"review this"}}}"#,
+    );
+
+    let snapshot = fixture.provider().discover(&fixture.context()).unwrap();
+
+    assert!(snapshot
+        .commands
+        .iter()
+        .any(|command| command.id.local_id.as_str() == "review"));
 }
 
 #[test]

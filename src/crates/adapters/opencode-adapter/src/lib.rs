@@ -12,6 +12,7 @@ mod hook_contributions;
 mod hook_source;
 mod local_source_paths;
 mod mcp_source;
+mod skill_source;
 mod source_adapter;
 mod tool_source;
 
@@ -19,5 +20,8 @@ pub use agent_source::{OpenCodeSubagentProvider, OpenCodeSubagentProviderOptions
 pub use command_source::{OpenCodeCommandProvider, OpenCodeCommandProviderOptions};
 pub use hook_source::{OpenCodeHookProvider, OpenCodeHookProviderOptions};
 pub use mcp_source::{OpenCodeMcpProvider, OpenCodeMcpProviderOptions};
+pub use skill_source::{
+    OpenCodeConfiguredSkillRoot, OpenCodeSkillRootProvider, OpenCodeSkillRootProviderOptions,
+};
 pub use source_adapter::load_opencode_package_adapter;
 pub use tool_source::{OpenCodeToolProvider, OpenCodeToolProviderOptions};

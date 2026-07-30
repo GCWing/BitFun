@@ -9,6 +9,10 @@ use super::mode_overrides::{
 };
 use super::types::{ModeSkillInfo, SkillData, SkillInfo, SkillLocation};
 use crate::agentic::workspace::WorkspaceFileSystem;
+#[cfg(feature = "product-full")]
+use crate::external_sources::{
+    opencode_configured_skill_roots, LocalConfiguredSkillRootContribution,
+};
 use crate::infrastructure::get_path_manager_arc;
 use crate::util::errors::{BitFunError, BitFunResult};
 use bitfun_agent_runtime::skills::{
@@ -22,12 +26,32 @@ use bitfun_agent_runtime::skills::{
     BITFUN_USER_SKILL_SLOT, PROJECT_SKILL_KEY_PREFIX, PROJECT_SKILL_ROOTS, USER_CONFIG_SKILL_ROOTS,
     USER_HOME_SKILL_ROOTS, USER_SKILL_KEY_PREFIX,
 };
+#[cfg(feature = "product-full")]
+use bitfun_services_core::bounded_fs::{collect_bounded_regular_files, BoundedDirectoryWalkLimits};
+#[cfg(feature = "product-full")]
+use bitfun_services_core::bounded_fs::{is_symlink_or_reparse, read_bounded_text, BoundedTextRead};
+#[cfg(feature = "product-full")]
+use bitfun_services_core::workspace_text::read_workspace_relative_text_bounded;
 use log::{debug, error, warn};
+#[cfg(feature = "product-full")]
+use sha2::{Digest, Sha256};
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 use tokio::fs;
 use tokio::sync::RwLock;
+
+#[cfg(feature = "product-full")]
+const MAX_OPENCODE_CONFIGURED_SKILL_ROOTS: usize = 64;
+#[cfg(feature = "product-full")]
+const MAX_OPENCODE_CONFIGURED_SKILLS_PER_ROOT: usize = 512;
+#[cfg(feature = "product-full")]
+const MAX_OPENCODE_CONFIGURED_SKILL_BYTES: usize = 256 * 1024;
+#[cfg(feature = "product-full")]
+const MAX_OPENCODE_CONFIGURED_POLICY_BYTES: usize = 64 * 1024;
+#[cfg(feature = "product-full")]
+const OPENCODE_CONFIGURED_PRIORITY_BAND: usize =
+    MAX_OPENCODE_CONFIGURED_SKILL_ROOTS * MAX_OPENCODE_CONFIGURED_SKILLS_PER_ROOT;
 
 /// Global Skill registry instance
 static SKILL_REGISTRY: OnceLock<SkillRegistry> = OnceLock::new();
@@ -60,6 +84,51 @@ fn sort_remote_dir_entries(entries: &mut [crate::agentic::workspace::WorkspaceDi
             .then_with(|| a.name.cmp(&b.name))
             .then_with(|| a.path.cmp(&b.path))
     });
+}
+
+#[cfg(feature = "product-full")]
+fn configured_opencode_source_slot(skill_dir: &Path) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(skill_dir.to_string_lossy().as_bytes());
+    let digest = hex::encode(hasher.finalize());
+    format!("config.opencode.{}", &digest[..16])
+}
+
+#[cfg(feature = "product-full")]
+fn canonical_candidate_path(candidate: &SkillCandidate) -> PathBuf {
+    dunce::canonicalize(&candidate.info.path)
+        .unwrap_or_else(|_| PathBuf::from(&candidate.info.path))
+}
+
+#[cfg(feature = "product-full")]
+fn is_configured_opencode_source_slot(source_slot: &str) -> bool {
+    source_slot.starts_with("config.opencode.")
+}
+
+#[cfg(feature = "product-full")]
+fn validate_configured_opencode_skill_root(
+    skill_dir: &Path,
+    expected_source_slot: &str,
+) -> Result<PathBuf, String> {
+    if !skill_dir.is_absolute() {
+        return Err("configured OpenCode skill root must be absolute".to_string());
+    }
+    let metadata = std::fs::symlink_metadata(skill_dir)
+        .map_err(|error| format!("failed to inspect configured OpenCode skill root: {error}"))?;
+    if is_symlink_or_reparse(&metadata) {
+        return Err(
+            "configured OpenCode skill root must not be a symlink or reparse point".to_string(),
+        );
+    }
+    if !metadata.is_dir() {
+        return Err("configured OpenCode skill root must be a directory".to_string());
+    }
+    let canonical = dunce::canonicalize(skill_dir)
+        .map_err(|error| format!("failed to resolve configured OpenCode skill root: {error}"))?;
+    if configured_opencode_source_slot(&canonical) != expected_source_slot {
+        return Err("configured OpenCode skill root identity changed after discovery".to_string());
+    }
+    Ok(canonical)
 }
 
 /// Skill registry
@@ -131,6 +200,77 @@ impl SkillRegistry {
                 error
             );
         }
+    }
+
+    #[cfg(feature = "product-full")]
+    async fn apply_configured_opencode_policy(
+        skill_data: &mut SkillData,
+        skill_dir: &Path,
+        source_slot: &str,
+    ) {
+        let skill_dir = match validate_configured_opencode_skill_root(skill_dir, source_slot) {
+            Ok(skill_dir) => skill_dir,
+            Err(error) => {
+                warn!(
+                    "Ignoring configured OpenCode skill policy under {}: {}",
+                    skill_dir.display(),
+                    error
+                );
+                return;
+            }
+        };
+        let content = match read_workspace_relative_text_bounded(
+            &skill_dir,
+            "agents/openai.yaml",
+            MAX_OPENCODE_CONFIGURED_POLICY_BYTES,
+        )
+        .await
+        {
+            Ok(file) => file.content,
+            Err(bitfun_services_core::workspace_text::WorkspaceTextReadError::NotFound) => return,
+            Err(error) => {
+                warn!(
+                    "Ignoring configured OpenCode skill policy under {}: {}",
+                    skill_dir.display(),
+                    error
+                );
+                return;
+            }
+        };
+
+        if let Err(error) = skill_data.apply_openai_yaml_policy(&content) {
+            warn!(
+                "Ignoring invalid configured OpenCode skill policy under {}: {}",
+                skill_dir.display(),
+                error
+            );
+        }
+    }
+
+    async fn read_local_skill_markdown(info: &SkillInfo) -> BitFunResult<String> {
+        #[cfg(feature = "product-full")]
+        if is_configured_opencode_source_slot(&info.source_slot) {
+            let skill_dir =
+                validate_configured_opencode_skill_root(Path::new(&info.path), &info.source_slot)
+                    .map_err(BitFunError::tool)?;
+            return read_workspace_relative_text_bounded(
+                &skill_dir,
+                "SKILL.md",
+                MAX_OPENCODE_CONFIGURED_SKILL_BYTES,
+            )
+            .await
+            .map(|file| file.content)
+            .map_err(|error| {
+                BitFunError::tool(format!(
+                    "Failed to read configured OpenCode skill file: {error}"
+                ))
+            });
+        }
+
+        let skill_md_path = PathBuf::from(&info.path).join("SKILL.md");
+        fs::read_to_string(&skill_md_path)
+            .await
+            .map_err(|error| BitFunError::tool(format!("Failed to read skill file: {}", error)))
     }
 
     async fn apply_remote_openai_policy(
@@ -364,12 +504,275 @@ impl SkillRegistry {
             debug!("Failed to install built-in skills: {}", error);
         }
 
+        let entries = Self::get_possible_paths_for_workspace(workspace_root);
         let mut skills = Vec::new();
-        for entry in Self::get_possible_paths_for_workspace(workspace_root) {
+        for entry in entries {
             let mut part = Self::scan_skills_in_dir(&entry).await;
             skills.append(&mut part);
         }
+        #[cfg(feature = "product-full")]
+        {
+            let existing_paths = skills
+                .iter()
+                .map(canonical_candidate_path)
+                .collect::<HashSet<_>>();
+            let roots = opencode_configured_skill_roots(workspace_root);
+            let mut configured = Self::scan_configured_opencode_candidates(roots).await;
+            configured
+                .retain(|candidate| !existing_paths.contains(&canonical_candidate_path(candidate)));
+            skills = Self::merge_configured_opencode_candidates(
+                skills,
+                configured,
+                workspace_root.is_some(),
+            );
+        }
         skills
+    }
+
+    #[cfg(feature = "product-full")]
+    fn merge_configured_opencode_candidates(
+        mut standard: Vec<SkillCandidate>,
+        mut configured: Vec<SkillCandidate>,
+        has_workspace: bool,
+    ) -> Vec<SkillCandidate> {
+        if configured.is_empty() {
+            return standard;
+        }
+
+        let has_project = configured
+            .iter()
+            .any(|candidate| candidate.info.level == SkillLocation::Project);
+        let has_user = configured
+            .iter()
+            .any(|candidate| candidate.info.level == SkillLocation::User);
+        let project_anchor = PROJECT_SKILL_ROOTS
+            .iter()
+            .position(|root| root.source_id == "opencode")
+            .expect("OpenCode project Skill root is registered");
+        let user_anchor = has_workspace
+            .then_some(PROJECT_SKILL_ROOTS.len())
+            .unwrap_or_default()
+            .saturating_add(
+                USER_HOME_SKILL_ROOTS
+                    .iter()
+                    .position(|root| root.source_id == "opencode")
+                    .expect("OpenCode user Skill root is registered"),
+            );
+
+        for candidate in &mut standard {
+            let original_priority = candidate.priority;
+            let project_shift = (has_project && original_priority >= project_anchor)
+                .then_some(OPENCODE_CONFIGURED_PRIORITY_BAND)
+                .unwrap_or_default();
+            let user_shift = (has_user && original_priority >= user_anchor)
+                .then_some(OPENCODE_CONFIGURED_PRIORITY_BAND)
+                .unwrap_or_default();
+            candidate.priority = original_priority
+                .saturating_add(project_shift)
+                .saturating_add(user_shift);
+        }
+        for candidate in &mut configured {
+            let anchor = match candidate.info.level {
+                SkillLocation::Project => project_anchor,
+                SkillLocation::User => user_anchor.saturating_add(
+                    has_project
+                        .then_some(OPENCODE_CONFIGURED_PRIORITY_BAND)
+                        .unwrap_or_default(),
+                ),
+            };
+            candidate.priority = candidate.priority.saturating_add(anchor);
+        }
+        standard.extend(configured);
+        standard
+    }
+
+    #[cfg(feature = "product-full")]
+    async fn scan_configured_opencode_candidates(
+        roots: Vec<LocalConfiguredSkillRootContribution>,
+    ) -> Vec<SkillCandidate> {
+        let mut roots = roots;
+        roots.sort_by_key(|root| root.precedence);
+        let roots = roots
+            .into_iter()
+            .rev()
+            .take(MAX_OPENCODE_CONFIGURED_SKILL_ROOTS)
+            .collect::<Vec<_>>()
+            .into_iter()
+            .rev()
+            .collect::<Vec<_>>();
+        let project_root_count = roots
+            .iter()
+            .filter(|root| {
+                matches!(
+                    root.scope,
+                    bitfun_product_domains::external_sources::ExternalSourceScope::Project
+                        | bitfun_product_domains::external_sources::ExternalSourceScope::WorkspaceLocal
+                )
+            })
+            .count();
+        let user_root_count = roots
+            .iter()
+            .filter(|root| {
+                root.scope
+                    == bitfun_product_domains::external_sources::ExternalSourceScope::UserGlobal
+            })
+            .count();
+        let mut project_root_index = 0usize;
+        let mut user_root_index = 0usize;
+        let mut candidates = Vec::new();
+
+        for root in roots {
+            let root_path = root.path.clone();
+            let files = match tokio::task::spawn_blocking(move || {
+                collect_bounded_regular_files(
+                    &root_path,
+                    BoundedDirectoryWalkLimits {
+                        max_depth: 16,
+                        max_entries: 4096,
+                        max_directories: 2048,
+                        max_files: MAX_OPENCODE_CONFIGURED_SKILLS_PER_ROOT,
+                    },
+                    |path| path.file_name().and_then(|name| name.to_str()) == Some("SKILL.md"),
+                )
+            })
+            .await
+            {
+                Ok(Ok(files)) => files,
+                Ok(Err(error)) => {
+                    warn!(
+                        "Skipping configured OpenCode skill root {}: {}",
+                        root.path.display(),
+                        error
+                    );
+                    continue;
+                }
+                Err(error) => {
+                    warn!(
+                        "Configured OpenCode skill scan failed for {}: {}",
+                        root.path.display(),
+                        error
+                    );
+                    continue;
+                }
+            };
+            let file_count = files.len();
+            for (file_index, skill_md_path) in files.into_iter().enumerate() {
+                let Some(skill_dir) = skill_md_path.parent() else {
+                    continue;
+                };
+                let Some(dir_name) = normalize_local_skill_dir_name(skill_dir) else {
+                    continue;
+                };
+                let canonical_skill_dir =
+                    dunce::canonicalize(skill_dir).unwrap_or_else(|_| skill_dir.to_path_buf());
+                let source_slot = configured_opencode_source_slot(&canonical_skill_dir);
+                let read_path = skill_md_path.clone();
+                let content = match tokio::task::spawn_blocking(move || {
+                    read_bounded_text(&read_path, MAX_OPENCODE_CONFIGURED_SKILL_BYTES)
+                })
+                .await
+                {
+                    Ok(Ok(BoundedTextRead::Content(content))) => content,
+                    Ok(Ok(BoundedTextRead::TooLarge)) => {
+                        warn!(
+                            "Skipping configured OpenCode skill file above the {} byte limit: {}",
+                            MAX_OPENCODE_CONFIGURED_SKILL_BYTES,
+                            skill_md_path.display()
+                        );
+                        continue;
+                    }
+                    Ok(Ok(BoundedTextRead::InvalidUtf8)) => {
+                        warn!(
+                            "Skipping configured OpenCode skill file that is not valid UTF-8: {}",
+                            skill_md_path.display()
+                        );
+                        continue;
+                    }
+                    Ok(Err(error)) => {
+                        debug!("Failed to read {}: {}", skill_md_path.display(), error);
+                        continue;
+                    }
+                    Err(error) => {
+                        warn!(
+                            "Configured OpenCode skill read failed for {}: {}",
+                            skill_md_path.display(),
+                            error
+                        );
+                        continue;
+                    }
+                };
+                let location = match root.scope {
+                    bitfun_product_domains::external_sources::ExternalSourceScope::UserGlobal => {
+                        SkillLocation::User
+                    }
+                    bitfun_product_domains::external_sources::ExternalSourceScope::Project
+                    | bitfun_product_domains::external_sources::ExternalSourceScope::WorkspaceLocal => {
+                        SkillLocation::Project
+                    }
+                    _ => continue,
+                };
+                let (scope_root_count, scope_root_index) = match location {
+                    SkillLocation::Project => (project_root_count, project_root_index),
+                    SkillLocation::User => (user_root_count, user_root_index),
+                };
+                let mut skill_data = match Self::parse_skill_markdown(
+                    canonical_skill_dir.to_string_lossy().to_string(),
+                    &content,
+                    location,
+                    false,
+                    &source_slot,
+                ) {
+                    Ok(skill_data) => skill_data,
+                    Err(error) => {
+                        error!(
+                            "Failed to parse configured OpenCode SKILL.md in {}: {}",
+                            canonical_skill_dir.display(),
+                            error
+                        );
+                        continue;
+                    }
+                };
+                Self::apply_configured_opencode_policy(
+                    &mut skill_data,
+                    &canonical_skill_dir,
+                    &source_slot,
+                )
+                .await;
+                skill_data.dir_name = dir_name;
+                let root_rank = scope_root_count.saturating_sub(scope_root_index + 1);
+                let file_rank = file_count.saturating_sub(file_index + 1);
+                let priority = root_rank
+                    .saturating_mul(MAX_OPENCODE_CONFIGURED_SKILLS_PER_ROOT)
+                    .saturating_add(file_rank);
+                let key_prefix = match location {
+                    SkillLocation::User => USER_SKILL_KEY_PREFIX,
+                    SkillLocation::Project => PROJECT_SKILL_KEY_PREFIX,
+                };
+                candidates.push(SkillCandidate::from_data(
+                    skill_data,
+                    &source_slot,
+                    "opencode",
+                    "OpenCode",
+                    key_prefix,
+                    priority,
+                    false,
+                ));
+            }
+            match root.scope {
+                bitfun_product_domains::external_sources::ExternalSourceScope::UserGlobal => {
+                    user_root_index = user_root_index.saturating_add(1);
+                }
+                bitfun_product_domains::external_sources::ExternalSourceScope::Project
+                | bitfun_product_domains::external_sources::ExternalSourceScope::WorkspaceLocal => {
+                    project_root_index = project_root_index.saturating_add(1);
+                }
+                _ => {}
+            }
+        }
+        candidates.sort_by_key(|candidate| candidate.priority);
+        let mut seen_paths = HashSet::new();
+        candidates.retain(|candidate| seen_paths.insert(candidate.info.path.clone()));
+        sort_skill_candidates_by_dir(candidates)
     }
 
     async fn scan_remote_project_skills(
@@ -814,10 +1217,7 @@ impl SkillRegistry {
             )
             .await?;
 
-        let skill_md_path = PathBuf::from(&info.path).join("SKILL.md");
-        let content = fs::read_to_string(&skill_md_path)
-            .await
-            .map_err(|error| BitFunError::tool(format!("Failed to read skill file: {}", error)))?;
+        let content = Self::read_local_skill_markdown(&info).await?;
 
         let mut data = Self::parse_skill_markdown(
             info.path.clone(),
@@ -856,10 +1256,7 @@ impl SkillRegistry {
                 ))
             })?;
 
-        let skill_md_path = PathBuf::from(&info.path).join("SKILL.md");
-        let content = fs::read_to_string(&skill_md_path)
-            .await
-            .map_err(|error| BitFunError::tool(format!("Failed to read skill file: {}", error)))?;
+        let content = Self::read_local_skill_markdown(&info).await?;
 
         let mut data = Self::parse_skill_markdown(
             info.path.clone(),
@@ -975,12 +1372,7 @@ impl SkillRegistry {
         remote_fs: &dyn WorkspaceFileSystem,
     ) -> BitFunResult<String> {
         match info.level {
-            SkillLocation::User => {
-                let skill_md_path = PathBuf::from(&info.path).join("SKILL.md");
-                fs::read_to_string(&skill_md_path).await.map_err(|error| {
-                    BitFunError::tool(format!("Failed to read skill file: {}", error))
-                })
-            }
+            SkillLocation::User => Self::read_local_skill_markdown(info).await,
             SkillLocation::Project => {
                 let skill_md_path = format!("{}/SKILL.md", info.path.trim_end_matches('/'));
                 remote_fs
@@ -991,5 +1383,339 @@ impl SkillRegistry {
                     })
             }
         }
+    }
+}
+
+#[cfg(all(test, feature = "product-full"))]
+mod opencode_configured_skill_tests {
+    use super::{SkillRegistry, SkillRootEntry};
+    use crate::external_sources::LocalConfiguredSkillRootContribution;
+    use bitfun_agent_runtime::skills::{resolve_visible_skills, SkillLocation};
+    use bitfun_product_domains::external_sources::ExternalSourceScope;
+    use std::fs;
+    use std::path::{Path, PathBuf};
+
+    fn write(path: impl AsRef<Path>, content: &str) {
+        let path = path.as_ref();
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(path, content).unwrap();
+    }
+
+    fn skill(name: &str) -> String {
+        format!("---\nname: {name}\ndescription: {name} skill\n---\nRun {name}.\n")
+    }
+
+    fn configured_root(
+        path: PathBuf,
+        scope: ExternalSourceScope,
+        precedence: usize,
+    ) -> LocalConfiguredSkillRootContribution {
+        LocalConfiguredSkillRootContribution {
+            path: dunce::canonicalize(path).unwrap(),
+            scope,
+            precedence,
+        }
+    }
+
+    #[tokio::test]
+    async fn configured_roots_are_recursive_and_nested_same_named_dirs_keep_unique_keys() {
+        let temp = tempfile::tempdir().unwrap();
+        let project = temp.path().join("project");
+        fs::create_dir_all(project.join(".git")).unwrap();
+        write(
+            project.join("custom-skills/a/foo/SKILL.md"),
+            &skill("first"),
+        );
+        write(
+            project.join("custom-skills/b/foo/SKILL.md"),
+            &skill("second"),
+        );
+        let roots = vec![configured_root(
+            project.join("custom-skills"),
+            ExternalSourceScope::Project,
+            0,
+        )];
+
+        let candidates = SkillRegistry::scan_configured_opencode_candidates(roots).await;
+
+        assert_eq!(candidates.len(), 2);
+        assert_ne!(candidates[0].info.key, candidates[1].info.key);
+        assert_ne!(
+            candidates[0].info.source_slot,
+            candidates[1].info.source_slot
+        );
+        assert!(candidates
+            .iter()
+            .all(|candidate| candidate.info.source_slot.starts_with("config.opencode.")));
+    }
+
+    #[tokio::test]
+    async fn later_configured_root_overrides_standard_opencode_skill() {
+        let temp = tempfile::tempdir().unwrap();
+        let home = temp.path().join("home");
+        let project = temp.path().join("project");
+        fs::create_dir_all(project.join(".git")).unwrap();
+        write(home.join("first-skills/review/SKILL.md"), &skill("review"));
+        write(
+            project.join("later-skills/review/SKILL.md"),
+            &skill("review"),
+        );
+        write(
+            project.join(".opencode/skills/review/SKILL.md"),
+            &skill("review"),
+        );
+        let roots = vec![
+            configured_root(
+                home.join("first-skills"),
+                ExternalSourceScope::UserGlobal,
+                0,
+            ),
+            configured_root(
+                project.join("later-skills"),
+                ExternalSourceScope::Project,
+                1,
+            ),
+        ];
+
+        let standard = SkillRegistry::scan_skills_in_dir(&SkillRootEntry {
+            path: project.join(".opencode/skills"),
+            level: SkillLocation::Project,
+            slot: "opencode",
+            source_id: "opencode",
+            source_label: "OpenCode",
+            priority: super::PROJECT_SKILL_ROOTS
+                .iter()
+                .position(|root| root.source_id == "opencode")
+                .unwrap(),
+            is_builtin: false,
+        })
+        .await;
+        let configured = SkillRegistry::scan_configured_opencode_candidates(roots).await;
+        let candidates =
+            SkillRegistry::merge_configured_opencode_candidates(standard, configured, true);
+        let resolved = resolve_visible_skills(candidates);
+
+        assert_eq!(resolved.len(), 1);
+        assert!(resolved[0].path.contains("later-skills"));
+    }
+
+    #[tokio::test]
+    async fn configured_opencode_roots_do_not_reorder_earlier_standard_ecosystems() {
+        let temp = tempfile::tempdir().unwrap();
+        let project = temp.path().join("project");
+        write(
+            project.join(".bitfun/skills/review/SKILL.md"),
+            &skill("review"),
+        );
+        write(project.join("custom/review/SKILL.md"), &skill("review"));
+        let standard = SkillRegistry::scan_skills_in_dir(&SkillRootEntry {
+            path: project.join(".bitfun/skills"),
+            level: SkillLocation::Project,
+            slot: "bitfun",
+            source_id: "bitfun",
+            source_label: "BitFun",
+            priority: 0,
+            is_builtin: false,
+        })
+        .await;
+        let configured = SkillRegistry::scan_configured_opencode_candidates(vec![configured_root(
+            project.join("custom"),
+            ExternalSourceScope::Project,
+            0,
+        )])
+        .await;
+
+        let resolved = resolve_visible_skills(SkillRegistry::merge_configured_opencode_candidates(
+            standard, configured, true,
+        ));
+
+        assert_eq!(resolved.len(), 1);
+        assert!(resolved[0].path.contains(".bitfun"));
+    }
+
+    #[tokio::test]
+    async fn project_configured_band_does_not_shift_user_ecosystem_order_twice() {
+        let temp = tempfile::tempdir().unwrap();
+        let home = temp.path().join("home");
+        let project = temp.path().join("project");
+        write(
+            home.join(".claude/skills/review/SKILL.md"),
+            &skill("review"),
+        );
+        write(home.join("configured/review/SKILL.md"), &skill("review"));
+        write(project.join("configured/other/SKILL.md"), &skill("other"));
+        let standard = SkillRegistry::scan_skills_in_dir(&SkillRootEntry {
+            path: home.join(".claude/skills"),
+            level: SkillLocation::User,
+            slot: "home.claude",
+            source_id: "claude-code",
+            source_label: "Claude Code",
+            priority: super::PROJECT_SKILL_ROOTS.len(),
+            is_builtin: false,
+        })
+        .await;
+        let configured = SkillRegistry::scan_configured_opencode_candidates(vec![
+            configured_root(home.join("configured"), ExternalSourceScope::UserGlobal, 0),
+            configured_root(project.join("configured"), ExternalSourceScope::Project, 1),
+        ])
+        .await;
+
+        let resolved = resolve_visible_skills(SkillRegistry::merge_configured_opencode_candidates(
+            standard, configured, true,
+        ));
+        let review = resolved
+            .iter()
+            .find(|skill| skill.name == "review")
+            .unwrap();
+
+        assert!(review.path.contains(".claude"));
+    }
+
+    #[tokio::test]
+    async fn overlapping_configured_roots_publish_each_canonical_skill_once() {
+        let temp = tempfile::tempdir().unwrap();
+        let project = temp.path().join("project");
+        fs::create_dir_all(project.join(".git")).unwrap();
+        write(
+            project.join("skills/nested/review/SKILL.md"),
+            &skill("review"),
+        );
+        let roots = vec![
+            configured_root(project.join("skills"), ExternalSourceScope::Project, 0),
+            configured_root(
+                project.join("skills/nested"),
+                ExternalSourceScope::Project,
+                1,
+            ),
+        ];
+
+        let candidates = SkillRegistry::scan_configured_opencode_candidates(roots).await;
+
+        assert_eq!(candidates.len(), 1);
+        assert_eq!(candidates[0].info.name, "review");
+    }
+
+    #[tokio::test]
+    async fn oversized_configured_skill_does_not_hide_other_valid_skills() {
+        let temp = tempfile::tempdir().unwrap();
+        let project = temp.path().join("project");
+        fs::create_dir_all(project.join(".git")).unwrap();
+        write(project.join("skills/valid/SKILL.md"), &skill("valid"));
+        write(
+            project.join("skills/oversized/SKILL.md"),
+            &"x".repeat(super::MAX_OPENCODE_CONFIGURED_SKILL_BYTES + 1),
+        );
+        let roots = vec![configured_root(
+            project.join("skills"),
+            ExternalSourceScope::Project,
+            0,
+        )];
+
+        let candidates = SkillRegistry::scan_configured_opencode_candidates(roots).await;
+
+        assert_eq!(candidates.len(), 1);
+        assert_eq!(candidates[0].info.name, "valid");
+    }
+
+    #[tokio::test]
+    async fn configured_skill_load_rechecks_the_bounded_file_contract() {
+        let temp = tempfile::tempdir().unwrap();
+        let project = temp.path().join("project");
+        let skill_path = project.join("skills/review/SKILL.md");
+        write(&skill_path, &skill("review"));
+        let candidates = SkillRegistry::scan_configured_opencode_candidates(vec![configured_root(
+            project.join("skills"),
+            ExternalSourceScope::Project,
+            0,
+        )])
+        .await;
+        assert_eq!(candidates.len(), 1);
+        fs::write(
+            &skill_path,
+            "x".repeat(super::MAX_OPENCODE_CONFIGURED_SKILL_BYTES + 1),
+        )
+        .unwrap();
+
+        let error = SkillRegistry::read_local_skill_markdown(&candidates[0].info)
+            .await
+            .unwrap_err();
+
+        assert!(error.to_string().contains("262144 byte limit"));
+    }
+
+    #[tokio::test]
+    async fn configured_skill_load_rejects_a_replaced_root_link() {
+        let temp = tempfile::tempdir().unwrap();
+        let project = temp.path().join("project");
+        let skill_dir = project.join("skills/review");
+        write(skill_dir.join("SKILL.md"), &skill("review"));
+        let candidates = SkillRegistry::scan_configured_opencode_candidates(vec![configured_root(
+            project.join("skills"),
+            ExternalSourceScope::Project,
+            0,
+        )])
+        .await;
+        assert_eq!(candidates.len(), 1);
+        let moved = temp.path().join("moved-review");
+        fs::rename(&skill_dir, &moved).unwrap();
+        if !create_dir_symlink(&moved, &skill_dir) {
+            return;
+        }
+
+        let error = SkillRegistry::read_local_skill_markdown(&candidates[0].info)
+            .await
+            .unwrap_err();
+
+        assert!(error.to_string().contains("must not be a symlink"));
+    }
+
+    #[tokio::test]
+    async fn configured_skill_policy_is_bounded_and_does_not_follow_directory_links() {
+        let temp = tempfile::tempdir().unwrap();
+        let project = temp.path().join("project");
+        let skill_dir = project.join("skills/review");
+        write(skill_dir.join("SKILL.md"), &skill("review"));
+        write(
+            skill_dir.join("agents/openai.yaml"),
+            &format!(
+                "policy:\n  allow_implicit_invocation: false\n{}",
+                " ".repeat(super::MAX_OPENCODE_CONFIGURED_POLICY_BYTES)
+            ),
+        );
+        let roots = vec![configured_root(
+            project.join("skills"),
+            ExternalSourceScope::Project,
+            0,
+        )];
+
+        let oversized = SkillRegistry::scan_configured_opencode_candidates(roots.clone()).await;
+
+        assert_eq!(oversized.len(), 1);
+        assert!(oversized[0].info.allow_implicit_invocation);
+
+        fs::remove_dir_all(skill_dir.join("agents")).unwrap();
+        let outside = temp.path().join("outside-agents");
+        write(
+            outside.join("openai.yaml"),
+            "policy:\n  allow_implicit_invocation: false\n",
+        );
+        if !create_dir_symlink(&outside, &skill_dir.join("agents")) {
+            return;
+        }
+
+        let linked = SkillRegistry::scan_configured_opencode_candidates(roots).await;
+
+        assert_eq!(linked.len(), 1);
+        assert!(linked[0].info.allow_implicit_invocation);
+    }
+
+    #[cfg(unix)]
+    fn create_dir_symlink(target: &Path, link: &Path) -> bool {
+        std::os::unix::fs::symlink(target, link).is_ok()
+    }
+
+    #[cfg(windows)]
+    fn create_dir_symlink(target: &Path, link: &Path) -> bool {
+        std::os::windows::fs::symlink_dir(target, link).is_ok()
     }
 }

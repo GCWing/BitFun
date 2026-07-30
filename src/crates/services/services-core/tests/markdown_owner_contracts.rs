@@ -1,6 +1,6 @@
 use bitfun_services_core::markdown::{
     expand_prompt_template_arguments, expand_prompt_template_arguments_with_names,
-    FrontMatterMarkdown,
+    prompt_template_expansion_upper_bound, FrontMatterMarkdown,
 };
 use std::fs;
 
@@ -34,6 +34,14 @@ fn prompt_arguments_expand_full_and_zero_based_quoted_positions() {
         expanded,
         "Full: alpha \"two words\" 'three words'\nFirst: alpha\nSecond: two words\nThird: three words"
     );
+}
+
+#[test]
+fn prompt_expansion_upper_bound_is_checked_without_rendering_the_result() {
+    let template = "$ARGUMENTS".repeat(1024);
+    let bound = prompt_template_expansion_upper_bound(&template, &"x".repeat(2048)).unwrap();
+
+    assert!(bound > 1024 * 1024);
 }
 
 #[test]

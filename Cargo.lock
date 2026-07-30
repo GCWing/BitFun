@@ -1526,6 +1526,7 @@ name = "bitfun-static-hook-support"
 version = "0.2.14"
 dependencies = [
  "bitfun-product-domains",
+ "bitfun-services-core",
  "hex",
  "serde_json",
  "sha2",

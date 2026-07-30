@@ -185,11 +185,75 @@ fn dynamic_and_behavioral_commands_are_visible_but_restricted() {
         panic!("dynamic Claude command must be restricted")
     };
     assert!(required_capabilities.contains(&"command.shell".to_string()));
-    assert!(required_capabilities.contains(&"command.file_reference".to_string()));
+    assert!(!required_capabilities.contains(&"command.file_reference".to_string()));
     assert!(required_capabilities.contains(&"command.model".to_string()));
     assert!(required_capabilities.contains(&"command.allowed_tools".to_string()));
     assert!(required_capabilities.contains(&"command.dynamic_variable".to_string()));
     assert!(provider.expand(command, "now").is_err());
+}
+
+#[test]
+fn literal_file_references_are_prepared_without_scanning_arguments() {
+    let fixture = Fixture::new();
+    write(
+        fixture.user_claude.join("commands/review.md"),
+        "Review @src/lib.rs, @src/lib.rs, and @docs/guide.md for $ARGUMENTS",
+    );
+
+    let provider = fixture.provider();
+    let snapshot = provider.discover(&fixture.context()).unwrap();
+    let command = &snapshot.commands[0];
+    assert!(matches!(
+        command.availability,
+        PromptCommandAvailability::Available
+    ));
+
+    let expansion = provider
+        .expand(command, "@arguments/are-not-files.md")
+        .unwrap();
+    assert_eq!(
+        expansion.workspace_file_references,
+        ["src/lib.rs", "docs/guide.md"]
+    );
+    assert_eq!(
+        expansion.content,
+        "Review @src/lib.rs, @src/lib.rs, and @docs/guide.md for @arguments/are-not-files.md"
+    );
+}
+
+#[test]
+fn dynamic_and_unsafe_file_references_are_visible_but_restricted() {
+    let fixture = Fixture::new();
+    write(
+        fixture.user_claude.join("commands/dynamic.md"),
+        "Review @src/$1.rs",
+    );
+    write(
+        fixture.user_claude.join("commands/unsafe.md"),
+        "Review @/etc/passwd",
+    );
+
+    let provider = fixture.provider();
+    let snapshot = provider.discover(&fixture.context()).unwrap();
+    for (name, capability) in [
+        ("dynamic", "command.file_reference.dynamic"),
+        ("unsafe", "command.file_reference.unsafe_path"),
+    ] {
+        let command = snapshot
+            .commands
+            .iter()
+            .find(|command| command.name == name)
+            .unwrap();
+        let PromptCommandAvailability::Restricted {
+            required_capabilities,
+            ..
+        } = &command.availability
+        else {
+            panic!("{name} file reference must be restricted")
+        };
+        assert!(required_capabilities.contains(&capability.to_string()));
+        assert!(provider.expand(command, "").is_err());
+    }
 }
 
 #[test]
@@ -219,6 +283,26 @@ fn safe_arguments_expand_and_description_only_changes_keep_behavior_version() {
     let updated = provider.discover(&fixture.context()).unwrap();
     assert_eq!(updated.commands[0].content_version, version);
     assert_eq!(updated.commands[0].description, "Updated description");
+}
+
+#[test]
+fn rejects_argument_expansion_before_repeated_placeholders_can_overallocate() {
+    let fixture = Fixture::new();
+    write(
+        fixture.user_claude.join("commands/large.md"),
+        &"$ARGUMENTS".repeat(1024),
+    );
+    let provider = fixture.provider();
+    let snapshot = provider.discover(&fixture.context()).unwrap();
+    let command = snapshot
+        .commands
+        .iter()
+        .find(|command| command.name == "large")
+        .unwrap();
+
+    let error = provider.expand(command, &"x".repeat(2048)).unwrap_err();
+
+    assert_eq!(error.code, "claude.command.expansion_too_large");
 }
 
 #[test]

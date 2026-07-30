@@ -27,9 +27,10 @@ use bitfun_product_domains::external_sources::{
     ExternalToolStaticStatus, ExternalWatchRoot, NativePromptCommandDescriptor,
     PreparedExternalMcpImportServer, PreparedExternalMcpImportTransport, PreparedExternalMcpServer,
     PreparedExternalMcpTransport, PromptCommandAvailability, PromptCommandCatalogEntry,
-    PromptCommandDefinition, PromptCommandProviderIdentity, PromptCommandProviderSnapshot,
-    PromptCommandSourceProvider, SecretValue, SourceKey, SourceQualifiedCommandId,
-    SourceQualifiedMcpServerId, SourceQualifiedToolId, SourceQualifiedToolTargetId,
+    PromptCommandDefinition, PromptCommandExpansion, PromptCommandProviderIdentity,
+    PromptCommandProviderSnapshot, PromptCommandSourceProvider, SecretValue, SourceKey,
+    SourceQualifiedCommandId, SourceQualifiedMcpServerId, SourceQualifiedToolId,
+    SourceQualifiedToolTargetId,
 };
 use bitfun_product_domains::external_subagents::{
     external_subagent_approval_key, external_subagent_candidate_id, external_subagent_conflict_key,
@@ -282,9 +283,10 @@ impl PromptCommandSourceProvider for FakeProvider {
         &self,
         command: &PromptCommandDefinition,
         arguments: &str,
-    ) -> Result<ExpandedPromptCommand, ExternalSourceProviderError> {
-        Ok(ExpandedPromptCommand {
+    ) -> Result<PromptCommandExpansion, ExternalSourceProviderError> {
+        Ok(PromptCommandExpansion {
             content: command.template.replace("$ARGUMENTS", arguments),
+            workspace_file_references: vec!["src/lib.rs".to_string()],
         })
     }
 
@@ -308,6 +310,19 @@ fn capability_provider_contract_does_not_require_core_or_an_ecosystem_enum() {
     let snapshot = provider.discover(&context()).expect("discover fake source");
     assert_eq!(snapshot.provider.ecosystem_id.as_str(), "fake.ecosystem");
     assert_eq!(provider.watch_roots(&context()).len(), 1);
+    let expansion = provider
+        .expand(&snapshot.commands[0], "change")
+        .expect("prepare fake command expansion");
+    assert_eq!(expansion.content, "fake-provider: change");
+    assert_eq!(expansion.workspace_file_references, ["src/lib.rs"]);
+
+    let final_result = ExpandedPromptCommand {
+        content: expansion.content,
+    };
+    assert_eq!(
+        serde_json::to_value(final_result).unwrap(),
+        serde_json::json!({"content": "fake-provider: change"})
+    );
 }
 
 #[test]

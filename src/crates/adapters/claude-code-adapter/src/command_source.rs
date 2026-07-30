@@ -1,11 +1,14 @@
 use bitfun_product_domains::external_sources::{
-    EcosystemId, ExpandedPromptCommand, ExternalSourceAssetKind, ExternalSourceContext,
-    ExternalSourceDiagnostic, ExternalSourceHealth, ExternalSourceProviderError,
-    ExternalSourceRecord, ExternalSourceScope, ExternalWatchRoot, PromptCommandAvailability,
-    PromptCommandDefinition, PromptCommandProviderIdentity, PromptCommandProviderSnapshot,
-    PromptCommandSourceProvider, SourceKey, SourceQualifiedCommandId,
+    EcosystemId, ExternalSourceAssetKind, ExternalSourceContext, ExternalSourceDiagnostic,
+    ExternalSourceHealth, ExternalSourceProviderError, ExternalSourceRecord, ExternalSourceScope,
+    ExternalWatchRoot, PromptCommandAvailability, PromptCommandDefinition, PromptCommandExpansion,
+    PromptCommandProviderIdentity, PromptCommandProviderSnapshot, PromptCommandSourceProvider,
+    SourceKey, SourceQualifiedCommandId,
 };
-use bitfun_services_core::markdown::{expand_prompt_template_arguments, FrontMatterMarkdown};
+use bitfun_services_core::markdown::{
+    expand_prompt_template_arguments, prompt_template_expansion_upper_bound, FrontMatterMarkdown,
+};
+use bitfun_services_core::workspace_text::normalize_workspace_relative_path;
 use bitfun_static_hook_support::{
     collect_bounded_regular_files, read_bounded_text, BoundedDirectoryWalkError,
     BoundedDirectoryWalkLimits, BoundedTextRead,
@@ -22,6 +25,7 @@ const ECOSYSTEM_ID: &str = "claude-code";
 const MAX_COMMAND_FILES: usize = 2048;
 const MAX_COMMAND_FILE_BYTES: usize = 256 * 1024;
 const MAX_TOTAL_TEMPLATE_BYTES: usize = 8 * 1024 * 1024;
+const MAX_EXPANDED_COMMAND_BYTES: usize = 1024 * 1024;
 
 #[derive(Debug, Clone)]
 pub struct ClaudeCodeCommandProviderOptions {
@@ -220,7 +224,7 @@ impl PromptCommandSourceProvider for ClaudeCodeCommandProvider {
         &self,
         command: &PromptCommandDefinition,
         arguments: &str,
-    ) -> Result<ExpandedPromptCommand, ExternalSourceProviderError> {
+    ) -> Result<PromptCommandExpansion, ExternalSourceProviderError> {
         if command.id.source.provider_id.as_str() != PROVIDER_ID {
             return Err(ExternalSourceProviderError::new(
                 "claude.command.identity_mismatch",
@@ -229,9 +233,21 @@ impl PromptCommandSourceProvider for ClaudeCodeCommandProvider {
             ));
         }
         match &command.availability {
-            PromptCommandAvailability::Available => Ok(ExpandedPromptCommand {
-                content: expand_prompt_template_arguments(&command.template, arguments),
-            }),
+            PromptCommandAvailability::Available => {
+                if prompt_template_expansion_upper_bound(&command.template, arguments)
+                    .is_none_or(|size| size > MAX_EXPANDED_COMMAND_BYTES)
+                {
+                    return Err(ExternalSourceProviderError::new(
+                        "claude.command.expansion_too_large",
+                        "expanded command would exceed the 1048576 byte limit",
+                        false,
+                    ));
+                }
+                Ok(PromptCommandExpansion {
+                    content: expand_prompt_template_arguments(&command.template, arguments),
+                    workspace_file_references: literal_file_references(&command.template),
+                })
+            }
             PromptCommandAvailability::Restricted { reason, .. }
             | PromptCommandAvailability::Invalid { reason } => {
                 Err(ExternalSourceProviderError::new(
@@ -627,12 +643,10 @@ fn command_definition(
     if shell_regex().is_match(&input.template) {
         required_capabilities.push("command.shell".to_string());
     }
-    if file_regex().is_match(&input.template) {
-        required_capabilities.push("command.file_reference".to_string());
-    }
     if dynamic_variable_regex().is_match(&input.template) {
         required_capabilities.push("command.dynamic_variable".to_string());
     }
+    required_capabilities.extend(file_reference_capabilities(&input.template));
     for field in input.unsupported_fields {
         let capability = match field.as_str() {
             "model" => "command.model".to_string(),
@@ -697,6 +711,36 @@ fn file_regex() -> &'static Regex {
         Regex::new(r"(?:^|[^\w`])@(\.?[^\s`,.]*(?:\.[^\s`,.]+)*)")
             .expect("static file regex compiles")
     })
+}
+
+fn literal_file_references(template: &str) -> Vec<String> {
+    let mut seen = BTreeSet::new();
+    file_regex()
+        .captures_iter(template)
+        .filter_map(|capture| capture.get(1).map(|value| value.as_str()))
+        .filter(|path| !is_dynamic_file_reference(path))
+        .filter_map(|path| normalize_workspace_relative_path(path).ok())
+        .filter(|path| seen.insert(path.clone()))
+        .collect()
+}
+
+fn file_reference_capabilities(template: &str) -> Vec<String> {
+    let mut capabilities = Vec::new();
+    for path in file_regex()
+        .captures_iter(template)
+        .filter_map(|capture| capture.get(1).map(|value| value.as_str()))
+    {
+        if is_dynamic_file_reference(path) {
+            capabilities.push("command.file_reference.dynamic".to_string());
+        } else if normalize_workspace_relative_path(path).is_err() {
+            capabilities.push("command.file_reference.unsafe_path".to_string());
+        }
+    }
+    capabilities
+}
+
+fn is_dynamic_file_reference(path: &str) -> bool {
+    path.contains('$') || path.contains('{') || path.contains('}')
 }
 
 fn dynamic_variable_regex() -> &'static Regex {

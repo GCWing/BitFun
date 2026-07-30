@@ -3,6 +3,7 @@
 //! This crate owns platform-agnostic service building blocks that can be
 //! tested without compiling the full BitFun product runtime.
 
+pub mod bounded_fs;
 pub mod diagnostics;
 pub mod diff;
 #[cfg(feature = "dispatch-workspace")]
@@ -33,3 +34,4 @@ pub mod token_usage;
 #[cfg(feature = "workspace-runtime")]
 pub mod workspace;
 pub mod workspace_instructions;
+pub mod workspace_text;

@@ -4,14 +4,15 @@ use crate::local_source_paths::{
     LocalConfigDirectoryKind,
 };
 use bitfun_product_domains::external_sources::{
-    EcosystemId, ExpandedPromptCommand, ExternalSourceAssetKind, ExternalSourceContext,
-    ExternalSourceDiagnostic, ExternalSourceHealth, ExternalSourceProviderError,
-    ExternalSourceRecord, ExternalSourceScope, ExternalWatchRoot, PromptCommandAvailability,
-    PromptCommandDefinition, PromptCommandProviderIdentity, PromptCommandProviderSnapshot,
-    PromptCommandSourceProvider, SourceKey, SourceQualifiedCommandId,
+    EcosystemId, ExternalSourceAssetKind, ExternalSourceContext, ExternalSourceDiagnostic,
+    ExternalSourceHealth, ExternalSourceProviderError, ExternalSourceRecord, ExternalSourceScope,
+    ExternalWatchRoot, PromptCommandAvailability, PromptCommandDefinition, PromptCommandExpansion,
+    PromptCommandProviderIdentity, PromptCommandProviderSnapshot, PromptCommandSourceProvider,
+    SourceKey, SourceQualifiedCommandId,
 };
 pub(crate) use bitfun_services_core::jsonc::strip_jsonc;
-use bitfun_services_core::markdown::FrontMatterMarkdown;
+use bitfun_services_core::markdown::{prompt_template_expansion_upper_bound, FrontMatterMarkdown};
+use bitfun_services_core::workspace_text::normalize_workspace_relative_path;
 use bitfun_static_hook_support::{
     collect_bounded_regular_files, read_bounded_text, BoundedDirectoryWalkError,
     BoundedDirectoryWalkLimits, BoundedTextRead,
@@ -30,6 +31,7 @@ const MAX_COMMAND_FILES: usize = 2048;
 const MAX_COMMAND_FILE_BYTES: usize = 256 * 1024;
 const MAX_COMMAND_TEMPLATE_BYTES: usize = 8 * 1024 * 1024;
 const MAX_CONFIG_FILE_BYTES: usize = 1024 * 1024;
+const MAX_EXPANDED_COMMAND_BYTES: usize = 1024 * 1024;
 
 #[derive(Debug, Clone)]
 pub struct OpenCodeCommandProviderOptions {
@@ -73,7 +75,7 @@ impl OpenCodeCommandProvider {
         Self { options }
     }
 
-    fn discover_layers(&self, context: &ExternalSourceContext) -> Vec<SourceLayer> {
+    fn discover_layers(&self, workspace_root: Option<&Path>) -> Vec<SourceLayer> {
         let mut layers = Vec::new();
         // Phase 1: global JSON configuration.
         push_config_file_layer(
@@ -99,7 +101,7 @@ impl OpenCodeCommandProvider {
         }
         // Phase 3: project JSON configuration, root first.
         if self.options.project_config_enabled {
-            if let Some(workspace_root) = &context.workspace_root {
+            if let Some(workspace_root) = workspace_root {
                 let project_root = find_project_root(workspace_root);
                 for directory in project_config_directories(&project_root, workspace_root) {
                     push_config_directory_layers(
@@ -114,9 +116,7 @@ impl OpenCodeCommandProvider {
         // Phase 4: ConfigPaths.directories. OpenCode keeps the first physical
         // directory when an environment path aliases an earlier entry.
         let project_directories = if self.options.project_config_enabled {
-            context
-                .workspace_root
-                .as_ref()
+            workspace_root
                 .map(|workspace_root| {
                     project_asset_directories(&find_project_root(workspace_root), workspace_root)
                 })
@@ -161,6 +161,22 @@ impl OpenCodeCommandProvider {
         }
         deduplicate_layers_keep_last(layers)
     }
+
+    pub(crate) fn config_file_layers(
+        &self,
+        workspace_root: Option<&Path>,
+    ) -> Vec<OpenCodeConfigFileLayer> {
+        self.discover_layers(workspace_root)
+            .into_iter()
+            .filter_map(|layer| match layer.kind {
+                SourceLayerKind::ConfigFile(path) => Some(OpenCodeConfigFileLayer {
+                    path,
+                    scope: layer.scope,
+                }),
+                SourceLayerKind::CommandDirectory(_) => None,
+            })
+            .collect()
+    }
 }
 
 impl Default for OpenCodeCommandProvider {
@@ -197,7 +213,7 @@ impl PromptCommandSourceProvider for OpenCodeCommandProvider {
         let mut unavailable_command_ids = Vec::new();
         let mut provider_template_bytes = 0usize;
 
-        for layer in self.discover_layers(context) {
+        for layer in self.discover_layers(context.workspace_root.as_deref()) {
             let parsed = match &layer.kind {
                 SourceLayerKind::ConfigFile(path) => parse_config_file(path),
                 SourceLayerKind::CommandDirectory(path) => parse_command_directory(path),
@@ -309,7 +325,7 @@ impl PromptCommandSourceProvider for OpenCodeCommandProvider {
         &self,
         command: &PromptCommandDefinition,
         arguments: &str,
-    ) -> Result<ExpandedPromptCommand, ExternalSourceProviderError> {
+    ) -> Result<PromptCommandExpansion, ExternalSourceProviderError> {
         if command.id.source.provider_id.as_str() != PROVIDER_ID {
             return Err(ExternalSourceProviderError::new(
                 "opencode.command.identity_mismatch",
@@ -318,9 +334,21 @@ impl PromptCommandSourceProvider for OpenCodeCommandProvider {
             ));
         }
         match &command.availability {
-            PromptCommandAvailability::Available => Ok(ExpandedPromptCommand {
-                content: expand_template(&command.template, arguments),
-            }),
+            PromptCommandAvailability::Available => {
+                if prompt_template_expansion_upper_bound(&command.template, arguments)
+                    .is_none_or(|size| size > MAX_EXPANDED_COMMAND_BYTES)
+                {
+                    return Err(ExternalSourceProviderError::new(
+                        "opencode.command.expansion_too_large",
+                        "expanded command would exceed the 1048576 byte limit",
+                        false,
+                    ));
+                }
+                Ok(PromptCommandExpansion {
+                    content: expand_template(&command.template, arguments),
+                    workspace_file_references: literal_file_references(&command.template),
+                })
+            }
             PromptCommandAvailability::Restricted { reason, .. }
             | PromptCommandAvailability::Invalid { reason } => {
                 Err(ExternalSourceProviderError::new(
@@ -403,6 +431,12 @@ struct SourceLayer {
     scope: ExternalSourceScope,
     display_name: String,
     source_kind: &'static str,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct OpenCodeConfigFileLayer {
+    pub(crate) path: PathBuf,
+    pub(crate) scope: ExternalSourceScope,
 }
 
 #[derive(Debug)]
@@ -872,9 +906,6 @@ fn command_definition(
     if shell_regex().is_match(&input.template) {
         required_capabilities.push("command.shell".to_string());
     }
-    if file_regex().is_match(&input.template) {
-        required_capabilities.push("command.file_reference".to_string());
-    }
     if input.agent.is_some() {
         required_capabilities.push("command.agent".to_string());
     }
@@ -890,6 +921,9 @@ fn command_definition(
     if config_variable_regex().is_match(&input.template) {
         required_capabilities.push("command.config_variable".to_string());
     }
+    required_capabilities.extend(file_reference_capabilities(&input.template));
+    required_capabilities.sort();
+    required_capabilities.dedup();
     let availability = if required_capabilities.is_empty() {
         PromptCommandAvailability::Available
     } else {
@@ -1030,6 +1064,36 @@ fn file_regex() -> &'static Regex {
         Regex::new(r"(?:^|[^\w`])@(\.?[^\s`,.]*(?:\.[^\s`,.]+)*)")
             .expect("static file reference regex must compile")
     })
+}
+
+fn literal_file_references(template: &str) -> Vec<String> {
+    let mut seen = BTreeSet::new();
+    file_regex()
+        .captures_iter(template)
+        .filter_map(|capture| capture.get(1).map(|value| value.as_str()))
+        .filter(|path| !is_dynamic_file_reference(path))
+        .filter_map(|path| normalize_workspace_relative_path(path).ok())
+        .filter(|path| seen.insert(path.clone()))
+        .collect()
+}
+
+fn file_reference_capabilities(template: &str) -> Vec<String> {
+    let mut capabilities = Vec::new();
+    for path in file_regex()
+        .captures_iter(template)
+        .filter_map(|capture| capture.get(1).map(|value| value.as_str()))
+    {
+        if is_dynamic_file_reference(path) {
+            capabilities.push("command.file_reference.dynamic".to_string());
+        } else if normalize_workspace_relative_path(path).is_err() {
+            capabilities.push("command.file_reference.unsafe_path".to_string());
+        }
+    }
+    capabilities
+}
+
+fn is_dynamic_file_reference(path: &str) -> bool {
+    path.contains('$') || path.contains('{') || path.contains('}')
 }
 
 fn config_variable_regex() -> &'static Regex {

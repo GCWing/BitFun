@@ -62,11 +62,13 @@ use bitfun_external_sources::{
     ExternalToolDiscoveryResult,
 };
 use bitfun_opencode_adapter::{
-    OpenCodeCommandProvider, OpenCodeMcpProvider, OpenCodeSubagentProvider, OpenCodeToolProvider,
+    OpenCodeCommandProvider, OpenCodeMcpProvider, OpenCodeSkillRootProvider,
+    OpenCodeSubagentProvider, OpenCodeToolProvider,
 };
 #[cfg(test)]
 use bitfun_opencode_adapter::{
-    OpenCodeCommandProviderOptions, OpenCodeMcpProviderOptions, OpenCodeSubagentProviderOptions,
+    OpenCodeCommandProviderOptions, OpenCodeMcpProviderOptions, OpenCodeSkillRootProviderOptions,
+    OpenCodeSubagentProviderOptions,
 };
 use bitfun_product_domains::external_integration_policy::{
     external_integration_policy_snapshot, incompatible_external_integration_policy_snapshot,
@@ -76,11 +78,12 @@ use bitfun_product_domains::external_integration_policy::{
 };
 use bitfun_product_domains::external_sources::{
     ExecutionDomainId, ExternalMcpRevisionKey, ExternalMcpSourceProvider, ExternalMcpStaticStatus,
-    ExternalSourceContext, ExternalSourceScope, ExternalToolSourceProvider,
+    ExternalSourceContext, ExternalSourceScope, ExternalToolSourceProvider, PromptCommandExpansion,
     PromptCommandSourceProvider,
 };
 use bitfun_product_domains::external_subagents::ExternalSubagentSourceProvider;
 use bitfun_services_core::json_store::JsonFileStore;
+use bitfun_services_core::workspace_text::read_workspace_relative_text_bounded;
 use bitfun_services_integrations::file_watch::{FileWatchService, FileWatcherConfig};
 use dashmap::{mapref::entry::Entry, DashMap};
 use futures::future::join_all;
@@ -104,6 +107,126 @@ pub const EXTERNAL_CAPABILITY_TOOL: &str = "tool";
 pub const EXTERNAL_CAPABILITY_SUBAGENT: &str = "subagent";
 pub const EXTERNAL_CAPABILITY_MCP: &str = "mcp";
 const EXTERNAL_ADAPTER_CONTRACT_MAJOR: u32 = 1;
+const MAX_PROMPT_COMMAND_FILE_REFERENCES: usize = 8;
+const MAX_PROMPT_COMMAND_FILE_BYTES: usize = 64 * 1024;
+const MAX_PROMPT_COMMAND_TOTAL_FILE_BYTES: usize = 128 * 1024;
+const MAX_EXPANDED_PROMPT_COMMAND_BYTES: usize = 1024 * 1024;
+
+#[derive(Debug, Clone)]
+pub(crate) struct LocalConfiguredSkillRootContribution {
+    pub path: PathBuf,
+    pub scope: ExternalSourceScope,
+    pub precedence: usize,
+}
+
+pub(crate) fn opencode_configured_skill_roots(
+    workspace_root: Option<&Path>,
+) -> Vec<LocalConfiguredSkillRootContribution> {
+    opencode_configured_skill_roots_with_provider(
+        workspace_root,
+        &OpenCodeSkillRootProvider::default(),
+    )
+}
+
+fn opencode_configured_skill_roots_with_provider(
+    workspace_root: Option<&Path>,
+    provider: &OpenCodeSkillRootProvider,
+) -> Vec<LocalConfiguredSkillRootContribution> {
+    provider
+        .discover(workspace_root)
+        .into_iter()
+        .map(|root| LocalConfiguredSkillRootContribution {
+            path: root.path,
+            scope: root.scope,
+            precedence: root.precedence,
+        })
+        .collect()
+}
+
+async fn finalize_prompt_command_expansion(
+    workspace_root: Option<&Path>,
+    expansion: PromptCommandExpansion,
+) -> Result<ExpandedPromptCommand, String> {
+    if expansion.content.len() > MAX_EXPANDED_PROMPT_COMMAND_BYTES {
+        return Err(format!(
+            "expanded external prompt command exceeds the {MAX_EXPANDED_PROMPT_COMMAND_BYTES} byte limit"
+        ));
+    }
+    if expansion.workspace_file_references.is_empty() {
+        return Ok(ExpandedPromptCommand {
+            content: expansion.content,
+        });
+    }
+
+    let workspace_root = workspace_root.ok_or_else(|| {
+        "external prompt command file reference expansion requires a local workspace".to_string()
+    })?;
+    let mut seen = BTreeSet::new();
+    let references = expansion
+        .workspace_file_references
+        .into_iter()
+        .filter(|reference| seen.insert(reference.clone()))
+        .collect::<Vec<_>>();
+    if references.len() > MAX_PROMPT_COMMAND_FILE_REFERENCES {
+        return Err(format!(
+            "external prompt commands may reference at most {MAX_PROMPT_COMMAND_FILE_REFERENCES} workspace files"
+        ));
+    }
+
+    let mut total_file_bytes = 0usize;
+    let mut files = Vec::with_capacity(references.len());
+    for reference in references {
+        let file = read_workspace_relative_text_bounded(
+            workspace_root,
+            &reference,
+            MAX_PROMPT_COMMAND_FILE_BYTES,
+        )
+        .await
+        .map_err(|error| {
+            format!("failed to read referenced workspace file '{reference}': {error}")
+        })?;
+        total_file_bytes = total_file_bytes
+            .checked_add(file.byte_len)
+            .ok_or_else(|| "referenced workspace files exceed the total byte limit".to_string())?;
+        if total_file_bytes > MAX_PROMPT_COMMAND_TOTAL_FILE_BYTES {
+            return Err(format!(
+                "referenced workspace files exceed the {MAX_PROMPT_COMMAND_TOTAL_FILE_BYTES} byte total limit"
+            ));
+        }
+        files.push(file);
+    }
+
+    let mut content = expansion.content;
+    content.push_str("\n\n## Referenced workspace files");
+    for file in files {
+        let fence = markdown_code_fence(&file.content);
+        content.push_str("\n\n### `");
+        content.push_str(&file.relative_path);
+        content.push_str("`\n\n");
+        content.push_str(&fence);
+        content.push_str("text\n");
+        content.push_str(&file.content);
+        if !file.content.ends_with('\n') {
+            content.push('\n');
+        }
+        content.push_str(&fence);
+    }
+    if content.len() > MAX_EXPANDED_PROMPT_COMMAND_BYTES {
+        return Err(format!(
+            "expanded external prompt command exceeds the {MAX_EXPANDED_PROMPT_COMMAND_BYTES} byte limit"
+        ));
+    }
+    Ok(ExpandedPromptCommand { content })
+}
+
+fn markdown_code_fence(content: &str) -> String {
+    let longest_run = content
+        .split(|character| character != '`')
+        .map(str::len)
+        .max()
+        .unwrap_or_default();
+    "`".repeat(longest_run.saturating_add(1).max(3))
+}
 
 fn external_capability_descriptor(
     capability_id: &str,
@@ -2780,7 +2903,7 @@ impl WorkspaceExternalSourceService {
         let arguments = arguments.to_string();
         let expected_candidate_id = expected_candidate_id.map(str::to_string);
         let expected_content_version = expected_content_version.map(str::to_string);
-        tokio::task::spawn_blocking(move || {
+        let expansion = tokio::task::spawn_blocking(move || {
             lock_coordinator(&coordinator)
                 .expand_command_guarded(
                     &name,
@@ -2791,7 +2914,8 @@ impl WorkspaceExternalSourceService {
                 .map_err(|error| error.to_string())
         })
         .await
-        .map_err(|error| format!("external command expansion task failed: {error}"))?
+        .map_err(|error| format!("external command expansion task failed: {error}"))??;
+        finalize_prompt_command_expansion(self.workspace_root.as_deref(), expansion).await
     }
 
     async fn start_watching(self: &Arc<Self>) {
@@ -4786,11 +4910,15 @@ fn project_native_prompt_command_conflicts(
                 .collect::<Vec<_>>()
         };
         let Some((_, _, source)) = external.first() else {
-            reconfirmations.extend(native.iter().filter(|&command| conflicted_candidate_ids
-                    .contains(&command.candidate_id)).map(|command| NativePromptCommandReconfirmationProjection {
+            reconfirmations.extend(
+                native
+                    .iter()
+                    .filter(|&command| conflicted_candidate_ids.contains(&command.candidate_id))
+                    .map(|command| NativePromptCommandReconfirmationProjection {
                         command_name: command_name.clone(),
                         native_candidate_id: command.candidate_id.clone(),
-                    }));
+                    }),
+            );
             continue;
         };
         let execution_domain = snapshot
@@ -6385,9 +6513,10 @@ mod tests {
             &self,
             command: &PromptCommandDefinition,
             _arguments: &str,
-        ) -> Result<ExpandedPromptCommand, ExternalSourceProviderError> {
-            Ok(ExpandedPromptCommand {
+        ) -> Result<PromptCommandExpansion, ExternalSourceProviderError> {
+            Ok(PromptCommandExpansion {
                 content: command.template.clone(),
+                workspace_file_references: Vec::new(),
             })
         }
 
@@ -6463,6 +6592,188 @@ mod tests {
             tool_decision_gate_acquired: tokio::sync::Notify::new(),
             subagent_expiry_schedule: AtomicU64::new(0),
         })
+    }
+
+    #[test]
+    fn composition_projects_opencode_configured_skill_roots_without_leaking_adapter_types() {
+        let temp = tempfile::tempdir().unwrap();
+        let home = temp.path().join("home");
+        let user_config = home.join(".config/opencode");
+        let project = temp.path().join("project");
+        std::fs::create_dir_all(project.join(".git")).unwrap();
+        std::fs::create_dir_all(project.join("shared-skills")).unwrap();
+        std::fs::create_dir_all(&user_config).unwrap();
+        std::fs::write(
+            project.join("opencode.json"),
+            r#"{"skills":["shared-skills"]}"#,
+        )
+        .unwrap();
+        let provider = OpenCodeSkillRootProvider::new(OpenCodeSkillRootProviderOptions {
+            command: OpenCodeCommandProviderOptions {
+                user_config_dir: user_config,
+                legacy_user_config_dir: Some(home.join(".opencode")),
+                explicit_config_file: None,
+                explicit_config_dir: None,
+                project_config_enabled: true,
+            },
+            home_dir: Some(home),
+        });
+
+        let roots = opencode_configured_skill_roots_with_provider(Some(&project), &provider);
+
+        assert_eq!(roots.len(), 1);
+        assert_eq!(
+            roots[0].path,
+            dunce::canonicalize(project.join("shared-skills")).unwrap()
+        );
+        assert_eq!(roots[0].scope, ExternalSourceScope::Project);
+    }
+
+    #[tokio::test]
+    async fn finalizes_prompt_command_files_without_changing_plain_commands() {
+        let workspace = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(workspace.path().join("src")).unwrap();
+        std::fs::write(
+            workspace.path().join("src/lib.rs"),
+            "pub fn answer() -> u8 { 42 }\n``` embedded",
+        )
+        .unwrap();
+        std::fs::write(workspace.path().join("README.md"), "Read me").unwrap();
+
+        let plain = finalize_prompt_command_expansion(
+            None,
+            PromptCommandExpansion {
+                content: "plain prompt".to_string(),
+                workspace_file_references: Vec::new(),
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(plain.content, "plain prompt");
+
+        let expanded = finalize_prompt_command_expansion(
+            Some(workspace.path()),
+            PromptCommandExpansion {
+                content: "Review @src/lib.rs and @README.md".to_string(),
+                workspace_file_references: vec![
+                    "src/lib.rs".to_string(),
+                    "README.md".to_string(),
+                    "src/lib.rs".to_string(),
+                ],
+            },
+        )
+        .await
+        .unwrap();
+
+        assert!(expanded
+            .content
+            .starts_with("Review @src/lib.rs and @README.md"));
+        assert_eq!(expanded.content.matches("### `src/lib.rs`").count(), 1);
+        assert_eq!(expanded.content.matches("### `README.md`").count(), 1);
+        assert!(expanded.content.contains("````text\npub fn answer()"));
+        assert!(expanded.content.contains("\n````"));
+    }
+
+    #[tokio::test]
+    async fn prompt_command_file_limits_and_failures_are_atomic() {
+        let workspace = tempfile::tempdir().unwrap();
+        std::fs::write(
+            workspace.path().join("large.txt"),
+            vec![b'x'; MAX_PROMPT_COMMAND_FILE_BYTES + 1],
+        )
+        .unwrap();
+        for index in 0..=MAX_PROMPT_COMMAND_FILE_REFERENCES {
+            std::fs::write(workspace.path().join(format!("{index}.txt")), "x").unwrap();
+        }
+        for index in 0..3 {
+            std::fs::write(
+                workspace.path().join(format!("total-{index}.txt")),
+                vec![b'x'; 48 * 1024],
+            )
+            .unwrap();
+        }
+
+        let without_workspace = finalize_prompt_command_expansion(
+            None,
+            PromptCommandExpansion {
+                content: "prompt".to_string(),
+                workspace_file_references: vec!["0.txt".to_string()],
+            },
+        )
+        .await
+        .unwrap_err();
+        assert!(without_workspace.contains("requires a local workspace"));
+
+        let too_many = finalize_prompt_command_expansion(
+            Some(workspace.path()),
+            PromptCommandExpansion {
+                content: "prompt".to_string(),
+                workspace_file_references: (0..=MAX_PROMPT_COMMAND_FILE_REFERENCES)
+                    .map(|index| format!("{index}.txt"))
+                    .collect(),
+            },
+        )
+        .await
+        .unwrap_err();
+        assert!(too_many.contains("at most 8"));
+
+        let oversized = finalize_prompt_command_expansion(
+            Some(workspace.path()),
+            PromptCommandExpansion {
+                content: "prompt".to_string(),
+                workspace_file_references: vec!["large.txt".to_string()],
+            },
+        )
+        .await
+        .unwrap_err();
+        assert!(oversized.contains("65536 byte limit"));
+
+        let total_oversized = finalize_prompt_command_expansion(
+            Some(workspace.path()),
+            PromptCommandExpansion {
+                content: "prompt".to_string(),
+                workspace_file_references: (0..3)
+                    .map(|index| format!("total-{index}.txt"))
+                    .collect(),
+            },
+        )
+        .await
+        .unwrap_err();
+        assert!(total_oversized.contains("131072 byte total limit"));
+
+        let final_oversized = finalize_prompt_command_expansion(
+            Some(workspace.path()),
+            PromptCommandExpansion {
+                content: "x".repeat(MAX_EXPANDED_PROMPT_COMMAND_BYTES),
+                workspace_file_references: vec!["0.txt".to_string()],
+            },
+        )
+        .await
+        .unwrap_err();
+        assert!(final_oversized.contains("1048576 byte limit"));
+
+        let plain_oversized = finalize_prompt_command_expansion(
+            None,
+            PromptCommandExpansion {
+                content: "x".repeat(MAX_EXPANDED_PROMPT_COMMAND_BYTES + 1),
+                workspace_file_references: Vec::new(),
+            },
+        )
+        .await
+        .unwrap_err();
+        assert!(plain_oversized.contains("1048576 byte limit"));
+
+        let one_bad_file = finalize_prompt_command_expansion(
+            Some(workspace.path()),
+            PromptCommandExpansion {
+                content: "must not be returned partially".to_string(),
+                workspace_file_references: vec!["0.txt".to_string(), "missing.txt".to_string()],
+            },
+        )
+        .await
+        .unwrap_err();
+        assert!(one_bad_file.contains("missing.txt"));
+        assert!(!one_bad_file.contains("must not be returned partially"));
     }
 
     #[test]

@@ -212,6 +212,18 @@ export const opencodeAdapterPublicApiEntries = [
     'OpenCode command adapter fixture tests and explicit environment injection',
   ),
   opencodeAdapterEntry(
+    'OpenCodeConfiguredSkillRoot',
+    'bitfun-core external source composition root and OpenCode configured Skill fixtures',
+  ),
+  opencodeAdapterEntry(
+    'OpenCodeSkillRootProvider',
+    'bitfun-core external source composition root and OpenCode configured Skill fixtures',
+  ),
+  opencodeAdapterEntry(
+    'OpenCodeSkillRootProviderOptions',
+    'OpenCode configured Skill fixture tests and explicit environment injection',
+  ),
+  opencodeAdapterEntry(
     'OpenCodeToolProvider',
     'bitfun-core external source composition root and OpenCode standalone-tool adapter tests',
   ),
@@ -584,6 +596,7 @@ export const externalSourceContractPublicApiEntries = [
   'PromptCommandAvailability',
   'PromptCommandDefinition',
   'ExpandedPromptCommand',
+  'PromptCommandExpansion',
   'PromptCommandProviderIdentity',
   'PromptCommandProviderSnapshot',
   'ExternalSourceContext',
