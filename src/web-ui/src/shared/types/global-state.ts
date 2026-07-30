@@ -11,6 +11,7 @@ import type {
   WorkspaceInfo as APIWorkspaceInfo,
 } from '@/infrastructure/api/service-api/GlobalAPI';
 import { createLogger } from '../utils/logger';
+import { normalizePath } from '../utils/pathUtils';
 
 const logger = createLogger('GlobalStateAPI');
 
@@ -149,6 +150,27 @@ export function isRemoteWorkspace(workspace: WorkspaceInfo | null | undefined): 
 
 export function isLinkedWorktreeWorkspace(workspace: WorkspaceInfo | null | undefined): boolean {
   return Boolean(workspace?.worktree && !workspace.worktree.isMain);
+}
+
+/** MiniApp storage root shared by every platform: `<userRoot>/data/miniapps/`. */
+const MINIAPP_DATA_PATH_SEGMENT = '/data/miniapps/';
+
+/**
+ * MiniApp agent runs work inside directories the MiniApp owns under the app data
+ * dir (`<userRoot>/data/miniapps/<appId>/...`, drafts included). They are MiniApp
+ * storage rather than user projects, so they never belong in workspace history.
+ */
+export function isMiniAppWorkspace(workspace: WorkspaceInfo | null | undefined): boolean {
+  const rootPath = workspace?.rootPath;
+  if (!rootPath) {
+    return false;
+  }
+  return normalizePath(rootPath).includes(MINIAPP_DATA_PATH_SEGMENT);
+}
+
+/** Temporary or app-owned workspaces that must not pollute the recent list. */
+function isExcludedFromRecentWorkspaces(workspace: WorkspaceInfo): boolean {
+  return isLinkedWorktreeWorkspace(workspace) || isMiniAppWorkspace(workspace);
 }
 
 
@@ -393,7 +415,9 @@ function mapApplicationState(state: APIApplicationState): ApplicationState {
 function mapWorkspaceStartupStateSnapshot(
   snapshot: APIWorkspaceStartupStateSnapshot
 ): WorkspaceStartupState {
-  const recentWorkspaces = snapshot.recentWorkspaces.map(mapWorkspaceInfo);
+  const recentWorkspaces = snapshot.recentWorkspaces
+    .map(mapWorkspaceInfo)
+    .filter(ws => !isExcludedFromRecentWorkspaces(ws));
   return {
     cleanupRemovedCount: snapshot.cleanupRemovedCount,
     currentWorkspace: snapshot.currentWorkspace ? mapWorkspaceInfo(snapshot.currentWorkspace) : null,
@@ -565,7 +589,9 @@ export function createGlobalStateAPI(): GlobalStateAPI {
     },
 
     async getRecentWorkspaces(): Promise<WorkspaceInfo[]> {
-      const workspaces = (await globalAPI.getRecentWorkspaces()).map(mapWorkspaceInfo);
+      const workspaces = (await globalAPI.getRecentWorkspaces())
+        .map(mapWorkspaceInfo)
+        .filter(ws => !isExcludedFromRecentWorkspaces(ws));
       logger.debug('getRecentWorkspaces returned', summarizeWorkspacesForLog(workspaces));
       return workspaces;
     },

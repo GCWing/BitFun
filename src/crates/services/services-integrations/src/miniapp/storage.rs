@@ -6,9 +6,10 @@ use bitfun_product_domains::miniapp::ports::{
 };
 use bitfun_product_domains::miniapp::storage::{
     build_package_json, parse_npm_dependencies, MiniAppImportBundleWriteRequest,
-    MiniAppImportLayout, MiniAppStorageLayout, COMPILED_HTML, DRAFTS_CLEANUP_MARKER,
-    DRAFTS_CLEANUP_PREFIX, DRAFTS_DIR, DRAFT_JSON, ESM_DEPS_JSON, INDEX_HTML, META_JSON,
-    PACKAGE_JSON, REQUIRED_SOURCE_FILES, STORAGE_JSON, STYLE_CSS, UI_JS, WORKER_JS,
+    MiniAppImportLayout, MiniAppStorageLayout, COMPILED_HTML, CUSTOMIZATION_JSON,
+    DRAFTS_CLEANUP_MARKER, DRAFTS_CLEANUP_PREFIX, DRAFTS_DIR, DRAFT_JSON, ESM_DEPS_JSON,
+    INDEX_HTML, META_JSON, PACKAGE_JSON, REQUIRED_SOURCE_FILES, STORAGE_JSON, STYLE_CSS, UI_JS,
+    VERSIONS_DIR, WORKER_JS,
 };
 use bitfun_product_domains::miniapp::types::{MiniApp, MiniAppMeta, MiniAppSource, NpmDep};
 use serde_json;
@@ -361,6 +362,7 @@ impl MiniAppStorage {
             permissions: meta.permissions,
             ai_context: meta.ai_context,
             runtime: meta.runtime,
+            runtime_profile: meta.runtime_profile,
             i18n: meta.i18n,
         })
     }
@@ -460,6 +462,133 @@ impl MiniAppStorage {
     pub async fn save(&self, app: &MiniApp) -> MiniAppStorageResult<()> {
         self.save_app_files(&self.app_dir(&app.id), &self.source_dir(&app.id), app)
             .await
+    }
+
+    /// Atomically install a validated marketplace app and its trusted origin
+    /// metadata. The active app directory is never visible until every source
+    /// file and the strict compiled document have been written successfully.
+    pub async fn install_market_atomic(
+        &self,
+        app: &MiniApp,
+        metadata: &MiniAppCustomizationMetadata,
+    ) -> MiniAppStorageResult<()> {
+        tokio::fs::create_dir_all(&self.miniapps_dir)
+            .await
+            .map_err(|error| MiniAppStorageError::io(error.to_string()))?;
+        let target = self.app_dir(&app.id);
+        if target.exists() {
+            return Err(MiniAppStorageError::validation(format!(
+                "MiniApp already exists: {}",
+                app.id
+            )));
+        }
+        let staging = self
+            .miniapps_dir
+            .join(format!(".market-install-{}", uuid::Uuid::new_v4()));
+        let staging_source = staging.join("source");
+        let result = async {
+            self.save_app_files(&staging, &staging_source, app).await?;
+            write_customization_to_path(staging.join(CUSTOMIZATION_JSON), metadata).await?;
+            tokio::fs::rename(&staging, &target).await.map_err(|error| {
+                MiniAppStorageError::io(format!(
+                    "Failed to commit marketplace MiniApp {}: {error}",
+                    app.id
+                ))
+            })
+        }
+        .await;
+        if result.is_err() && staging.exists() {
+            let _ = tokio::fs::remove_dir_all(&staging).await;
+        }
+        result
+    }
+
+    /// Atomically replace a marketplace app while preserving app storage and
+    /// local version history. The old directory remains a rollback target until
+    /// the new directory is in place.
+    pub async fn replace_market_atomic(
+        &self,
+        previous: &MiniApp,
+        next: &MiniApp,
+        metadata: &MiniAppCustomizationMetadata,
+    ) -> MiniAppStorageResult<()> {
+        let target = self.app_dir(&previous.id);
+        if !target.is_dir() || previous.id != next.id {
+            return Err(MiniAppStorageError::validation(
+                "Marketplace update target is invalid.",
+            ));
+        }
+        let staging = self
+            .miniapps_dir
+            .join(format!(".market-update-{}", uuid::Uuid::new_v4()));
+        let backup = self
+            .miniapps_dir
+            .join(format!(".market-rollback-{}", uuid::Uuid::new_v4()));
+        let staging_source = staging.join("source");
+
+        let prepare = async {
+            self.save_app_files(&staging, &staging_source, next).await?;
+            let old_storage = target.join(STORAGE_JSON);
+            if old_storage.is_file() {
+                tokio::fs::copy(&old_storage, staging.join(STORAGE_JSON))
+                    .await
+                    .map_err(|error| {
+                        MiniAppStorageError::io(format!(
+                            "Failed to preserve MiniApp storage: {error}"
+                        ))
+                    })?;
+            }
+            let old_versions = target.join(VERSIONS_DIR);
+            let new_versions = staging.join(VERSIONS_DIR);
+            if old_versions.is_dir() {
+                copy_directory_tree(&old_versions, &new_versions).await?;
+            } else {
+                tokio::fs::create_dir_all(&new_versions)
+                    .await
+                    .map_err(|error| MiniAppStorageError::io(error.to_string()))?;
+            }
+            let snapshot =
+                serde_json::to_string_pretty(previous).map_err(MiniAppStorageError::parse)?;
+            tokio::fs::write(
+                new_versions.join(format!("v{}.json", previous.version)),
+                snapshot,
+            )
+            .await
+            .map_err(|error| {
+                MiniAppStorageError::io(format!(
+                    "Failed to snapshot the previous MiniApp version: {error}"
+                ))
+            })?;
+            write_customization_to_path(staging.join(CUSTOMIZATION_JSON), metadata).await
+        }
+        .await;
+        if let Err(error) = prepare {
+            if staging.exists() {
+                let _ = tokio::fs::remove_dir_all(&staging).await;
+            }
+            return Err(error);
+        }
+
+        tokio::fs::rename(&target, &backup).await.map_err(|error| {
+            MiniAppStorageError::io(format!(
+                "Failed to prepare marketplace update rollback: {error}"
+            ))
+        })?;
+        if let Err(error) = tokio::fs::rename(&staging, &target).await {
+            let _ = tokio::fs::rename(&backup, &target).await;
+            let _ = tokio::fs::remove_dir_all(&staging).await;
+            return Err(MiniAppStorageError::io(format!(
+                "Failed to commit marketplace update; the previous version was restored: {error}"
+            )));
+        }
+        if let Err(error) = tokio::fs::remove_dir_all(&backup).await {
+            log::warn!(
+                "remove completed marketplace update rollback directory {} failed: {}",
+                backup.display(),
+                error
+            );
+        }
+        Ok(())
     }
 
     async fn save_app_files(
@@ -617,6 +746,7 @@ impl MiniAppStorage {
             permissions: meta.permissions,
             ai_context: meta.ai_context,
             runtime: meta.runtime,
+            runtime_profile: meta.runtime_profile,
             i18n: meta.i18n,
         })
     }
@@ -948,6 +1078,55 @@ impl MiniAppStorage {
     }
 }
 
+async fn write_customization_to_path(
+    path: PathBuf,
+    metadata: &MiniAppCustomizationMetadata,
+) -> MiniAppStorageResult<()> {
+    let json = serde_json::to_string_pretty(metadata).map_err(MiniAppStorageError::parse)?;
+    tokio::fs::write(path, json)
+        .await
+        .map_err(|error| MiniAppStorageError::io(error.to_string()))
+}
+
+async fn copy_directory_tree(source: &Path, target: &Path) -> MiniAppStorageResult<()> {
+    tokio::fs::create_dir_all(target)
+        .await
+        .map_err(|error| MiniAppStorageError::io(error.to_string()))?;
+    let mut pending = vec![(source.to_path_buf(), target.to_path_buf())];
+    while let Some((from_dir, to_dir)) = pending.pop() {
+        let mut entries = tokio::fs::read_dir(&from_dir)
+            .await
+            .map_err(|error| MiniAppStorageError::io(error.to_string()))?;
+        while let Some(entry) = entries
+            .next_entry()
+            .await
+            .map_err(|error| MiniAppStorageError::io(error.to_string()))?
+        {
+            let file_type = entry
+                .file_type()
+                .await
+                .map_err(|error| MiniAppStorageError::io(error.to_string()))?;
+            let destination = to_dir.join(entry.file_name());
+            if file_type.is_symlink() {
+                return Err(MiniAppStorageError::validation(
+                    "MiniApp version history cannot contain symbolic links.",
+                ));
+            }
+            if file_type.is_dir() {
+                tokio::fs::create_dir_all(&destination)
+                    .await
+                    .map_err(|error| MiniAppStorageError::io(error.to_string()))?;
+                pending.push((entry.path(), destination));
+            } else if file_type.is_file() {
+                tokio::fs::copy(entry.path(), destination)
+                    .await
+                    .map_err(|error| MiniAppStorageError::io(error.to_string()))?;
+            }
+        }
+    }
+    Ok(())
+}
+
 impl MiniAppStoragePort for MiniAppStorage {
     fn list_app_ids(&self) -> MiniAppPortFuture<'_, Vec<String>> {
         Box::pin(async move { self.list_app_ids().await.map_err(map_miniapp_port_error) })
@@ -1076,6 +1255,31 @@ impl MiniAppStoragePort for MiniAppStorage {
         })
     }
 
+    fn install_market_atomic(
+        &self,
+        app: MiniApp,
+        metadata: MiniAppCustomizationMetadata,
+    ) -> MiniAppPortFuture<'_, ()> {
+        Box::pin(async move {
+            MiniAppStorage::install_market_atomic(self, &app, &metadata)
+                .await
+                .map_err(map_miniapp_port_error)
+        })
+    }
+
+    fn replace_market_atomic(
+        &self,
+        previous: MiniApp,
+        next: MiniApp,
+        metadata: MiniAppCustomizationMetadata,
+    ) -> MiniAppPortFuture<'_, ()> {
+        Box::pin(async move {
+            MiniAppStorage::replace_market_atomic(self, &previous, &next, &metadata)
+                .await
+                .map_err(map_miniapp_port_error)
+        })
+    }
+
     fn delete(&self, app_id: String) -> MiniAppPortFuture<'_, ()> {
         Box::pin(async move { self.delete(&app_id).await.map_err(map_miniapp_port_error) })
     }
@@ -1114,6 +1318,7 @@ mod tests {
     use bitfun_product_domains::miniapp::customization::{
         MiniAppCustomizationMetadata, MiniAppCustomizationOrigin, MiniAppCustomizationOriginKind,
     };
+    use bitfun_product_domains::miniapp::market::InstalledMarketOrigin;
     use std::fs;
     use std::path::{Path, PathBuf};
 
@@ -1492,6 +1697,7 @@ mod tests {
                 kind: MiniAppCustomizationOriginKind::Builtin,
                 builtin_id: Some("builtin-demo".to_string()),
                 builtin_version: Some(3),
+                market: None,
             },
             local_override: true,
             last_applied_draft_id: Some("draft_one".to_string()),
@@ -1512,6 +1718,105 @@ mod tests {
                 .unwrap(),
             Some(metadata)
         );
+    }
+
+    #[tokio::test]
+    async fn marketplace_update_preserves_storage_and_snapshots_previous_version() {
+        let root = TestTempDir::new("bitfun-miniapp-market-atomic");
+        let miniapps_dir = root.path().join("miniapps");
+        let storage = MiniAppStorage::new(miniapps_dir);
+        let mut previous = sample_app("market-demo");
+        previous.source.npm_dependencies.clear();
+        previous.source.worker_js.clear();
+        previous.runtime_profile =
+            bitfun_product_domains::miniapp::types::MiniAppRuntimeProfile::MarketStrict;
+        let initial_metadata = market_metadata(1, "release-one");
+
+        storage
+            .install_market_atomic(&previous, &initial_metadata)
+            .await
+            .unwrap();
+        storage
+            .save_app_storage("market-demo", "answer", serde_json::json!(42))
+            .await
+            .unwrap();
+
+        let mut next = previous.clone();
+        next.version = 2;
+        next.source.ui_js = "document.body.dataset.version = '2';".to_string();
+        let next_metadata = market_metadata(2, "release-two");
+        storage
+            .replace_market_atomic(&previous, &next, &next_metadata)
+            .await
+            .unwrap();
+
+        let loaded = storage.load("market-demo").await.unwrap();
+        assert_eq!(loaded.version, 2);
+        assert_eq!(
+            storage
+                .load_app_storage("market-demo")
+                .await
+                .unwrap()
+                .get("answer"),
+            Some(&serde_json::json!(42))
+        );
+        assert_eq!(storage.list_versions("market-demo").await.unwrap(), vec![1]);
+        assert_eq!(
+            storage
+                .load_customization_metadata("market-demo")
+                .await
+                .unwrap(),
+            Some(next_metadata)
+        );
+        assert!(storage
+            .list_app_ids()
+            .await
+            .unwrap()
+            .iter()
+            .all(|id| !id.starts_with(".market-")));
+    }
+
+    #[tokio::test]
+    async fn rejected_marketplace_update_leaves_active_app_unchanged() {
+        let root = TestTempDir::new("bitfun-miniapp-market-reject");
+        let miniapps_dir = root.path().join("miniapps");
+        let storage = MiniAppStorage::new(miniapps_dir);
+        let previous = sample_app("market-demo");
+        storage
+            .install_market_atomic(&previous, &market_metadata(1, "release-one"))
+            .await
+            .unwrap();
+        let mut mismatched = previous.clone();
+        mismatched.id = "different-app".to_string();
+
+        storage
+            .replace_market_atomic(&previous, &mismatched, &market_metadata(2, "release-two"))
+            .await
+            .unwrap_err();
+
+        assert_eq!(storage.load("market-demo").await.unwrap().version, 1);
+        assert!(!storage.app_dir("different-app").exists());
+    }
+
+    fn market_metadata(release_number: u32, release_id: &str) -> MiniAppCustomizationMetadata {
+        MiniAppCustomizationMetadata {
+            origin: MiniAppCustomizationOrigin {
+                kind: MiniAppCustomizationOriginKind::Market,
+                builtin_id: None,
+                builtin_version: None,
+                market: Some(InstalledMarketOrigin {
+                    listing_id: "listing-one".to_string(),
+                    release_id: release_id.to_string(),
+                    release_number,
+                    package_sha256: format!("{release_number:064x}"),
+                }),
+            },
+            local_override: false,
+            last_applied_draft_id: None,
+            available_builtin_update: None,
+            declined_builtin_updates: Vec::new(),
+            updated_at: i64::from(release_number),
+        }
     }
 
     fn sample_app(id: &str) -> MiniApp {
@@ -1540,6 +1845,7 @@ mod tests {
             permissions: Default::default(),
             ai_context: None,
             runtime: Default::default(),
+            runtime_profile: Default::default(),
             i18n: None,
         }
     }

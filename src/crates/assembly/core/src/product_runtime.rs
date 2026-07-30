@@ -28,7 +28,7 @@ use bitfun_runtime_services::RuntimeServices;
 use bitfun_services_core::permission_store::ProjectPermissionSqliteStore;
 
 use crate::agentic::coordination::{
-    ConversationCoordinator, DialogScheduler, SessionMaintenancePermit,
+    ConversationCoordinator, DialogScheduler, DialogSteerOutcome, SessionMaintenancePermit,
 };
 use crate::agentic::core::Session;
 use crate::agentic::events::EventQueue;
@@ -510,6 +510,22 @@ impl CoreAgentRuntimeCompatibility {
             scheduler,
             persistence,
         }
+    }
+
+    /// Buffer a user steering message into a currently running turn.
+    ///
+    /// Detached dispatch and compatibility hosts use this narrow facade so
+    /// they do not reach through the public Runtime SDK into scheduler state.
+    pub async fn submit_steering(
+        &self,
+        session_id: String,
+        turn_id: String,
+        content: String,
+        display_content: Option<String>,
+    ) -> Result<DialogSteerOutcome, String> {
+        self.scheduler
+            .submit_steering(session_id, turn_id, content, display_content)
+            .await
     }
 
     /// Applies the same Core deployment owner before a product compatibility
@@ -1026,6 +1042,7 @@ fn runtime_port_error(error: BitFunError) -> PortError {
         BitFunError::NotFound(_) => PortErrorKind::NotFound,
         BitFunError::Timeout(_) => PortErrorKind::Timeout,
         BitFunError::Cancelled(_) => PortErrorKind::Cancelled,
+        BitFunError::SessionInUse { .. } => PortErrorKind::SessionInUse,
         BitFunError::SessionCreateCleanupRequired { .. } => PortErrorKind::CleanupRequired,
         _ => PortErrorKind::Backend,
     };
@@ -1485,6 +1502,16 @@ mod tests {
         });
 
         assert_eq!(error.kind, PortErrorKind::CleanupRequired);
+        assert!(error.message.contains("session-1"), "{error}");
+    }
+
+    #[test]
+    fn session_writer_conflict_remains_typed_across_the_runtime_port() {
+        let error = runtime_port_error(BitFunError::SessionInUse {
+            session_id: "session-1".to_string(),
+        });
+
+        assert_eq!(error.kind, PortErrorKind::SessionInUse);
         assert!(error.message.contains("session-1"), "{error}");
     }
 

@@ -1,3 +1,7 @@
+fn shared_session_change_is_blocked(is_shared: bool, mode_change_pending: bool) -> bool {
+    is_shared && mode_change_pending
+}
+
 impl ChatMode {
     fn handle_key_event(
         &mut self,
@@ -395,6 +399,18 @@ impl ChatMode {
             should_quit,
             exit_reason,
         } = context;
+        if matches!(
+            &reason,
+            ChatExitReason::SwitchSession(_) | ChatExitReason::NewSession
+        ) && shared_session_change_is_blocked(
+            this.agent.is_shared(),
+            this.pending_mode_change.is_some(),
+        ) {
+            chat_view.set_status(Some(
+                "Wait for the agent mode change to finish before changing sessions.".to_string(),
+            ));
+            return;
+        }
         match reason {
             ChatExitReason::SwitchSession(new_session_id) => {
                 if let Some(pending) = this.pending_mode_change.as_mut() {

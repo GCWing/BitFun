@@ -228,14 +228,14 @@ CLI-P1 应保证：
 | 模式 | 当前约束 |
 |---|---|
 | `text` | 最终助手文本写 stdout；进度、思考、工具状态、日志和诊断写 stderr。显式 `--output-patch -` 是用户选择的额外 stdout 内容。 |
-| `json` | stdout 只写一个结果对象，包含 `type=result`、`subtype`、`is_error`、`result`，以及已建立时的 `session_id`/`turn_id`、本 turn 累计 `usage` 和可用的 `patch`。 |
-| `stream-json` | 每行直接序列化一个现有 Agent 事件对象；不增加 `schema_version`、`sequence` 或第二套 CLI 事件分类。 |
+| `json` | stdout 只写一个结果对象，包含 `type=result`、`subtype`、`is_error`、`result`，以及已建立时的 `session_id`/`turn_id`、本 turn 累计 `usage` 和可用的 `patch`。准备 Session 时若命中跨进程单写冲突，额外返回稳定的 `error_code=session_in_use`；其他错误不猜测分类。 |
+| `stream-json` | 每行直接序列化一个现有 Agent 事件对象；不增加 `schema_version`、`sequence` 或第二套 CLI 事件分类。准备 Session 时若命中单写冲突，复用 `SystemError`，令 `error=session_in_use`、`recoverable=true`。 |
 | 最终状态 | 精确结算和 Patch 交付完成后只发布一次。优先级是：结算失败、Patch 失败、Turn 结果；前两类统一替换为 `SystemError`。一次执行最多发布一个最终事件和一条 `BITFUN_EXIT` 分类。 |
 | 事件范围 | 只输出本次 session/turn 的事件，以及与其明确关联的 subagent link/tool 事件；同 session 的其他并发 turn 不得混入。 |
 | Patch | `json` 可把 `--output-patch -` 放入最终对象；`stream-json` 要求显式文件路径。Patch 是写出显式 Patch 文件前捕获的仓库 `HEAD` 相对工作区快照，包含 staged、unstaged、untracked 及命令启动前已有改动，不包含输出 artifact 本身，也不表达改动归因。 |
 | 权限 | 非交互默认拒绝并返回权限失败；`--auto` 只改变当前提交策略，不修改持久化配置。 |
 | 人工输入 | 非交互 `exec` 不暴露 `AskUserQuestion`；调用方必须在初始输入中提供完整上下文。该事实沿 Task、SessionMessage 及其自动回复链传播，避免子 Agent 或后续 turn 等待不存在的 stdin 处理器。 |
-| 终止 | 最终事件的 `success=false` 不能映射为成功。`Ctrl+C` 只请求取消；若取消与完成/失败竞争，以实际观察结果为准。到期限仍无最终事件时发布 `SystemError` 并非零退出；只有实际取消使用 `BITFUN_EXIT: cancelled:`。当前不公开 Agent Turn 总时限参数。 |
+| 终止 | 最终事件的 `success=false` 不能映射为成功。`Ctrl+C` 只请求取消；若取消与完成/失败竞争，以实际观察结果为准。到期限仍无最终事件时发布 `SystemError` 并非零退出；只有实际取消使用 `BITFUN_EXIT: cancelled:`。`session_in_use` 同样非零退出，`recoverable` 仅表示关闭另一 writer 后可重新执行，不触发自动重试。当前不公开 Agent Turn 总时限参数。 |
 
 CLI 不提供 `--output-schema v1`。Codex/Claude 同类参数表达的是调用方提供的 JSON Schema，用于约束最终模型
 响应，不是协议版本选择；如未来支持，应复用该语义并独立设计，不能借此重定义事件对象。
@@ -256,12 +256,12 @@ Headless CLI 和公开 Agent SDK 都调用同一 Agent Runtime API，但交付�
 
 | 形态 | 默认部署 | 当前 Shared 范围 |
 |---|---|---|
-| 交互式 TUI | Embedded | 显式 `--shared` 后支持 Session list/create/restore、transcript、Turn submit/cancel、Permission 和 UserInput |
+| 交互式 TUI | Embedded | 显式 `--shared` 后支持 Session list/create/restore、transcript、当前 Session Agent mode、Turn submit/cancel、Permission 和 UserInput |
 | `bitfun exec` / CI | Embedded | 不接受 Shared；保持独立进程、stdout/stderr 和退出码语义 |
 | ACP / SDK Host / GUI / Remote / Peer | 各自既有部署 | 不消费 TUI IPC，也不因本开关改变生命周期 |
 
-Shared TUI 首版不提供 Session delete/fork、模式/模型、MCP/扩展、账号同步、用量、observer、replay 或 controller transfer；对应入口给出明确的 Embedded 恢复建议，不在 Client 进程初始化第二套 Core owner。
-Shared 模式的命令面板、快捷键帮助和底部提示使用同一能力投影：不支持的管理动作不显示为可执行入口。Session 切换失败保留原控制权，单个连接已有活动 Turn 时拒绝重复提交；事件订阅失效后当前视图立即失效并要求重启 Shared TUI。
+Shared TUI 不提供 Session delete/fork、模型、Agent/Subagent 管理、MCP/扩展、账号同步、用量、observer、replay 或 controller transfer；对应入口给出明确的 Embedded 恢复建议，不在 Client 进程初始化第二套 Core owner。
+Shared 模式的命令面板、快捷键帮助和底部提示使用同一能力投影：`/agent`、Tab 和 Shift+Tab 只切换当前 Session 的 Agent mode，不进入管理页面；其他不支持动作不显示为可执行入口。Session 切换失败保留原控制权，单个连接已有活动 Turn 时拒绝重复提交和 mode update；事件订阅失效后当前视图立即失效并要求重启 Shared TUI。
 
 #### 管理与诊断
 
@@ -516,7 +516,8 @@ Hook C0：脱敏发现 -> 精确命令预览 | 指纹确认 -> 原子发布本�
 仍等于导入值的字段；用户后续修改、来源变化或部分重新导入造成冲突时，逐字段选择“保留 BitFun / 重新导入
 外部 / 手工处理”，不得整批覆盖。
 
-下表描述目标覆盖范围；当前能力仅限上文列出的 MCP C0a 与 Hook C0，不能由本表推导出其他资产已经实现。
+下表描述目标覆盖范围；显式配置导入能力仍仅限上文列出的 MCP C0a 与 Hook C0。Skill 的原地发现与调用使用下文所述
+的既有 Skill Registry 路径，不属于显式配置导入，也不能由本表推导出其他资产已经实现。
 
 | 来源 | 目标可导入 | 目标不导入 |
 |---|---|---|
@@ -536,7 +537,21 @@ Hook C0：脱敏发现 -> 精确命令预览 | 指纹确认 -> 原子发布本�
 展示来源和默认覆盖状态，模式配置再展示实际采用项；固定根顺序保持为 Skill Registry 的独立回归契约。
 Skill Registry 还保留来源资产声明的隐式调用意图：Claude `SKILL.md` 的 `disable-model-invocation: true` 与 Codex
 `agents/openai.yaml` 的 `policy.allow_implicit_invocation: false` 都会让 Skill 不进入模型自动目录，但不影响 `/skills`、
-模式配置和显式加载。BitFun 不继承来源产品的全局启停策略，也未实现 URL/额外根和自动变化监听。
+模式配置和显式加载。Claude `user-invocable: false` 与上述模型调用策略相互独立：它只让 Skill 不进入 Web/CLI 的用户
+调用选择器，不从管理目录删除，也不改变模型目录或现有启停状态。缺省时 Skill 可由用户调用；`argument-hint` 只作为
+选择器提示显示，不自动写入输入框。Web 与 CLI/TUI 选择 Skill 后统一生成 `[$skill-name]` 引用，用户可以直接在后面继续
+输入参数，不需要先导入、复制或学习第二种启用流程。
+
+显式调用仍由现有 `SkillTool` 和 Skill Registry 加载实际优先级赢家，本地与 Remote 分支沿用同一加载语义。工具的可选
+`arguments` 字段使用共享的静态模板展开：支持原始 `$ARGUMENTS`、从零开始的 `$ARGUMENTS[N]` 和 `$N`、单/双引号
+分组以及 `\$` 转义；缺失的位置参数保留原占位符，模板没有未转义占位符时才追加 `ARGUMENTS:` 段。该展开器只处理
+字符串，不执行命令、脚本或动态变量。未携带 `arguments` 的旧工具调用保持原 Skill 正文不变。
+
+这项能力不新增导入记录、来源图、后台 watcher 或第二套刷新生命周期。工作区查询继续按现有 Registry 路径扫描，用户
+缓存继续使用已有刷新入口，CLI 的 `/reload-skills` 仍是明确的手动刷新方式；运行期不承诺对所有来源做文件监听或热重载。
+本切片也不实现 `allowed-tools`、`context`、`fork`、`agent`、`model`、命名参数、动态 shell/runtime 变量、URL、祖先目录
+级联、插件 Runtime 或 OpenCode 复杂 Hook。后续只有在存在稳定消费方和独立安全边界时才扩展这些语义。
+
 Skill 说明和索引可按 L1 处理，脚本、URL 和外部依赖按 L2 确认；显式导入仍不得复制凭据值。MCP 启用状态按
 OpenCode 来源解释，首次连接、策略限制和凭据缺失分别显示。
 

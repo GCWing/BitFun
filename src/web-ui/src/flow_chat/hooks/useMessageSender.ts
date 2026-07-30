@@ -40,6 +40,18 @@ interface UseMessageSenderProps {
   onExitTemplateMode?: () => void;
   /** Selected agent type (mode) */
   currentAgentType?: string;
+  /** Reconcile the composer after an explicit session-conflict retry succeeds. */
+  onSessionConflictRetrySuccess?: (submission: {
+    sessionId: string;
+    message: string;
+    contextIds: string[];
+  }) => void;
+  /** Capture composer state when the user explicitly starts a conflict retry. */
+  onSessionConflictRetryStart?: (submission: {
+    sessionId: string;
+    message: string;
+    contextIds: string[];
+  }) => void;
 }
 
 interface UseMessageSenderReturn {
@@ -49,6 +61,8 @@ interface UseMessageSenderReturn {
     options?: {
       displayMessage?: string;
       composerPresentation?: ComposerPresentation | null;
+      /** One-shot UI confirmation for unattended auto approval. */
+      dispatchAutoConfirmed?: boolean;
     }
   ) => Promise<void>;
   /** Whether a send is in progress */
@@ -63,6 +77,8 @@ export function useMessageSender(props: UseMessageSenderProps): UseMessageSender
     onSuccess,
     onExitTemplateMode,
     currentAgentType,
+    onSessionConflictRetryStart,
+    onSessionConflictRetrySuccess,
   } = props;
 
   const sendMessage = useCallback(async (
@@ -70,6 +86,8 @@ export function useMessageSender(props: UseMessageSenderProps): UseMessageSender
     options?: {
       displayMessage?: string;
       composerPresentation?: ComposerPresentation | null;
+      /** One-shot UI confirmation for unattended auto approval. */
+      dispatchAutoConfirmed?: boolean;
     }
   ) => {
     if (!message.trim()) {
@@ -183,6 +201,21 @@ export function useMessageSender(props: UseMessageSenderProps): UseMessageSender
         {
           ...(imagePayload ?? {}),
           ...(userMessageMetadata ? { userMessageMetadata } : {}),
+          ...(options?.dispatchAutoConfirmed ? { dispatchAutoConfirmed: true } : {}),
+          onSessionConflictRetryStart: () => {
+            onSessionConflictRetryStart?.({
+              sessionId: sessionId!,
+              message: displayMessage,
+              contextIds: contexts.map(context => context.id),
+            });
+          },
+          onSessionConflictRetrySuccess: () => {
+            onSessionConflictRetrySuccess?.({
+              sessionId: sessionId!,
+              message: displayMessage,
+              contextIds: contexts.map(context => context.id),
+            });
+          },
         }
       );
 
@@ -206,7 +239,16 @@ export function useMessageSender(props: UseMessageSenderProps): UseMessageSender
       });
       throw error;
     }
-  }, [currentSessionId, contexts, onClearContexts, onSuccess, onExitTemplateMode, currentAgentType]);
+  }, [
+    currentSessionId,
+    contexts,
+    onClearContexts,
+    onSuccess,
+    onExitTemplateMode,
+    currentAgentType,
+    onSessionConflictRetryStart,
+    onSessionConflictRetrySuccess,
+  ]);
 
   return {
     sendMessage,

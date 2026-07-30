@@ -6,10 +6,12 @@ import {
   setIncludeSensitiveDiagnostics,
 } from '@/shared/utils/logger';
 import type { BackendLogLevel } from '../types';
+import { setFlowChatDiagnosticsEnabled } from '@/infrastructure/diagnostics/flowChatDiagnostics';
 
 const log = createLogger('FrontendLogLevelSync');
 const LOGGING_LEVEL_PATH = 'app.logging.level';
 const LOGGING_INCLUDE_SENSITIVE_PATH = 'app.logging.include_sensitive_diagnostics';
+const FLOW_CHAT_DIAGNOSTICS_PATH = 'app.logging.flow_chat_diagnostics';
 
 let initialSettingsLoaded = false;
 let configWatcherInstalled = false;
@@ -17,6 +19,7 @@ let configWatcherInstalled = false;
 interface InitialLoggingSettings {
   level?: string;
   includeSensitiveDiagnostics: boolean;
+  flowChatDiagnostics: boolean;
 }
 
 function toFrontendLogLevel(level: string | null | undefined): LogLevel | null {
@@ -82,6 +85,7 @@ async function resolveInitialLoggingSettings(): Promise<InitialLoggingSettings> 
     configAPI.getConfigs([
       LOGGING_LEVEL_PATH,
       LOGGING_INCLUDE_SENSITIVE_PATH,
+      FLOW_CHAT_DIAGNOSTICS_PATH,
     ]),
     configAPI.getRuntimeLoggingInfo(),
   ]);
@@ -99,6 +103,7 @@ async function resolveInitialLoggingSettings(): Promise<InitialLoggingSettings> 
         typeof configs[LOGGING_INCLUDE_SENSITIVE_PATH] === 'boolean'
           ? configs[LOGGING_INCLUDE_SENSITIVE_PATH]
           : true,
+      flowChatDiagnostics: configs[FLOW_CHAT_DIAGNOSTICS_PATH] === true,
     };
   }
 
@@ -111,6 +116,7 @@ async function resolveInitialLoggingSettings(): Promise<InitialLoggingSettings> 
           typeof configs[LOGGING_INCLUDE_SENSITIVE_PATH] === 'boolean'
             ? configs[LOGGING_INCLUDE_SENSITIVE_PATH]
             : true,
+        flowChatDiagnostics: configs[FLOW_CHAT_DIAGNOSTICS_PATH] === true,
       };
     }
   }
@@ -120,6 +126,7 @@ async function resolveInitialLoggingSettings(): Promise<InitialLoggingSettings> 
       typeof configs[LOGGING_INCLUDE_SENSITIVE_PATH] === 'boolean'
         ? configs[LOGGING_INCLUDE_SENSITIVE_PATH]
         : true,
+    flowChatDiagnostics: configs[FLOW_CHAT_DIAGNOSTICS_PATH] === true,
   };
 }
 
@@ -134,6 +141,7 @@ export async function initializeFrontendLogLevelSync(): Promise<void> {
     const initialSettings = await resolveInitialLoggingSettings();
     applyFrontendLogLevel(initialSettings.level, 'startup');
     setIncludeSensitiveDiagnostics(initialSettings.includeSensitiveDiagnostics);
+    setFlowChatDiagnosticsEnabled(initialSettings.flowChatDiagnostics);
   } catch (error) {
     log.error('Failed to initialize frontend log level sync', error);
   }
@@ -156,6 +164,11 @@ export async function installFrontendLogLevelConfigWatcher(): Promise<void> {
 
       if (path === LOGGING_INCLUDE_SENSITIVE_PATH) {
         setIncludeSensitiveDiagnostics(typeof newValue === 'boolean' ? newValue : true);
+        return;
+      }
+
+      if (path === FLOW_CHAT_DIAGNOSTICS_PATH) {
+        setFlowChatDiagnosticsEnabled(newValue === true);
       }
     });
   } catch (error) {

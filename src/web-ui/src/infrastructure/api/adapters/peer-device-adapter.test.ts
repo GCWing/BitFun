@@ -5,6 +5,7 @@ import {
   PEER_READ_REQUEST_TIMEOUT_MS,
   PEER_RETRY_BASE_DELAY_MS,
   PeerDeviceTransportAdapter,
+  PeerProductCommandError,
   isPeerLocalOnlyCommand,
   isPeerRetryableIdempotentMutation,
   isPeerRetryableReadCommand,
@@ -276,6 +277,23 @@ describe('PeerDeviceTransportAdapter queue', () => {
       expect.any(String),
       PEER_MUTATION_REQUEST_TIMEOUT_MS,
     );
+  });
+
+  it('preserves a session conflict returned by the Peer Host without replaying it', async () => {
+    const deviceRpc = vi.fn().mockResolvedValue(JSON.stringify({
+      resp: 'host_invoke_result',
+      ok: false,
+      error: 'session_in_use: Session is already open for writing: session-1',
+    }));
+    const adapter = new PeerDeviceTransportAdapter('peer-1', deviceRpc);
+
+    await expect(adapter.request('ensure_coordinator_session', {
+      request: { sessionId: 'session-1', workspacePath: '/repo' },
+    })).rejects.toEqual(expect.objectContaining<Partial<PeerProductCommandError>>({
+      name: 'PeerProductCommandError',
+      message: 'session_in_use: Session is already open for writing: session-1',
+    }));
+    expect(deviceRpc).toHaveBeenCalledTimes(1);
   });
 
   it('recovers an idempotent dialog submission after a transient Relay failure', async () => {

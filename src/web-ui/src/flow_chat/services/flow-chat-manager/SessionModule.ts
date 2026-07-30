@@ -6,6 +6,7 @@
 import { agentAPI } from '@/infrastructure/api/service-api/AgentAPI';
 import { configAPI } from '@/infrastructure/api/service-api/ConfigAPI';
 import { sessionAPI } from '@/infrastructure/api/service-api/SessionAPI';
+import { isSessionInUseError } from '@/infrastructure/api/errors/TauriCommandError';
 import { notificationService } from '../../../shared/notification-system';
 import { createLogger } from '@/shared/utils/logger';
 import { isRemoteTraceContext, startupTrace } from '@/shared/utils/startupTrace';
@@ -48,9 +49,15 @@ import {
   requireSessionProjectWorkspacePath,
   sessionProjectWorkspacePath,
 } from '../../utils/sessionWorkspace';
+import {
+  isNonLocalDispatchTarget,
+  type DispatchTarget,
+} from '@/features/dispatch/types';
+import { dispatchJobStore } from '@/features/dispatch/dispatchJobStore';
 
 const log = createLogger('SessionModule');
 const pendingSessionCreations = new Map<string, Promise<string>>();
+const DISPATCH_OBSERVER_MAX_CONTEXT_TOKENS = 128128;
 
 const getHydrationLocationKey = (
   location: SessionHistoryHydrationLocation | undefined,
@@ -663,6 +670,7 @@ export async function createChatSession(
       workspaceCreationKey,
       agentType,
       config.executionTargetRequest ?? { kind: 'local' },
+      config.dispatchTargetRequest ?? { kind: 'local' },
     ]);
 
     const pendingCreation = pendingSessionCreations.get(creationKey);
@@ -690,9 +698,91 @@ export async function createChatSession(
       );
       const sessionName = titleDescriptor.text;
 
+      if (isNonLocalDispatchTarget(config.dispatchTargetRequest)) {
+        const dispatchTarget: DispatchTarget = config.dispatchTarget
+          ?? (
+            config.dispatchTargetRequest.kind === 'ssh'
+              ? {
+                  ...config.dispatchTargetRequest,
+                  displayName: config.dispatchTargetRequest.connectionId,
+                }
+              : {
+                  ...config.dispatchTargetRequest,
+                  displayName: config.dispatchTargetRequest.deviceId,
+                }
+          );
+        const sessionId =
+          globalThis.crypto?.randomUUID?.()
+          ?? `dispatch-session-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        const jobId =
+          config.dispatchJobId?.trim()
+          || `dispatch-${globalThis.crypto?.randomUUID?.()
+            ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`}`;
+        const approvalPolicy = config.dispatchApprovalPolicy;
+        if (!approvalPolicy) {
+          throw new Error('Dispatch approval policy must be selected before creating a session');
+        }
+        const workspaceDelivery = config.dispatchWorkspaceDelivery ?? { kind: 'existing' as const };
+        const resolvedConfig: SessionConfig = {
+          ...config,
+          // A dispatch projection must not inherit or resolve a controller-side
+          // provider. The target selection, when explicit, lives in dispatchModel.
+          modelName: undefined,
+          workspaceId: workspace?.id ?? config.workspaceId,
+          workspacePath,
+          projectWorkspacePath,
+          dispatchTargetRequest: config.dispatchTargetRequest,
+          dispatchTarget,
+          dispatchJobId: jobId,
+          dispatchApprovalPolicy: approvalPolicy,
+          dispatchWorkspaceDelivery: workspaceDelivery,
+          dispatchJobState: 'submitting',
+          dispatchCursor: 0,
+        };
+
+        // This is an observer projection only. In particular, do not call
+        // agentAPI.createSession: the target CLI owns the durable session.
+        context.flowChatStore.createSession(
+          sessionId,
+          resolvedConfig,
+          undefined,
+          sessionName,
+          DISPATCH_OBSERVER_MAX_CONTEXT_TOKENS,
+          agentType,
+          workspacePath,
+          remoteConnectionId,
+          remoteSshHost,
+          titleDescriptor,
+        );
+        dispatchJobStore.getState().registerJob({
+          jobId,
+          sessionId,
+          targetRequest: config.dispatchTargetRequest,
+          target: dispatchTarget,
+          sourceWorkspacePath: workspacePath,
+          sourceWorkspaceId: resolvedConfig.workspaceId,
+          title: sessionName,
+          agentType,
+          approvalPolicy,
+          workspaceDelivery,
+          // Do not inherit the controller's model selector. An omitted target
+          // model lets the probed target use its own configured default.
+          model: config.dispatchModel?.trim() || undefined,
+          cursor: 0,
+          state: 'submitting',
+          appliedEventIds: [],
+          pendingPermissions: [],
+          eventLogComplete: true,
+          historyTruncated: false,
+          omittedEventCount: 0,
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        });
+        return sessionId;
+      }
+
       const sessionModelName = await resolveModelForSessionCreation(config.modelName);
       const maxContextTokens = await getModelMaxTokens(sessionModelName, agentType);
-
       const mergedConfig: SessionConfig = {
         ...config,
         modelName: sessionModelName,
@@ -793,6 +883,9 @@ export async function switchChatSession(
     });
 
     const touchActiveSessionInBackground = () => {
+      if (isNonLocalDispatchTarget(session?.config.dispatchTarget)) {
+        return;
+      }
       scheduleSessionActivityTouch(() => {
         const latestState = context.flowChatStore.getState();
         const latestSession = latestState.sessions.get(sessionId);
@@ -896,6 +989,22 @@ export async function deleteChatSession(
       stateBeforeDelete.activeSessionId
       && removedSessionIdSet.has(stateBeforeDelete.activeSessionId)
     );
+    const session = stateBeforeDelete.sessions.get(sessionId);
+    if (isNonLocalDispatchTarget(session?.config.dispatchTarget)) {
+      if (session?.config.dispatchJobId) {
+        dispatchJobStore.getState().dismissJob(session.config.dispatchJobId);
+      }
+      context.flowChatStore.removeSession(
+        sessionId,
+        removedActiveSession ? { nextActiveSessionId: null } : undefined,
+      );
+      removedSessionIds.forEach(id => {
+        context.processingManager.clearSessionStatus(id);
+        cleanupSaveState(context, id);
+        cleanupSessionBuffers(context, id);
+      });
+      return;
+    }
     await context.flowChatStore.deleteSession(
       sessionId,
       removedActiveSession ? { nextActiveSessionId: null } : undefined,
@@ -931,6 +1040,22 @@ export async function archiveChatSession(
       stateBeforeArchive.activeSessionId
       && removedSessionIdSet.has(stateBeforeArchive.activeSessionId)
     );
+
+    if (isNonLocalDispatchTarget(session.config.dispatchTarget)) {
+      if (session.config.dispatchJobId) {
+        dispatchJobStore.getState().dismissJob(session.config.dispatchJobId);
+      }
+      context.flowChatStore.removeSession(
+        sessionId,
+        removedActiveSession ? { nextActiveSessionId: null } : undefined,
+      );
+      removedSessionIds.forEach(id => {
+        context.processingManager.clearSessionStatus(id);
+        cleanupSaveState(context, id);
+        cleanupSessionBuffers(context, id);
+      });
+      return;
+    }
 
     await sessionAPI.archiveSession(
       sessionId,
@@ -978,6 +1103,13 @@ export async function renameChatSessionTitle(
     await context.flowChatStore.updateSessionTitle(sessionId, trimmedTitle, 'generated');
     return trimmedTitle;
   }
+  if (isNonLocalDispatchTarget(session.config.dispatchTarget)) {
+    await context.flowChatStore.updateSessionTitle(sessionId, trimmedTitle, 'generated');
+    if (session.config.dispatchJobId) {
+      dispatchJobStore.getState().updateTitle(session.config.dispatchJobId, trimmedTitle);
+    }
+    return trimmedTitle;
+  }
 
   const updatedTitle = await agentAPI.updateSessionTitle({
     sessionId,
@@ -999,6 +1131,9 @@ export async function forkChatSession(
   const sourceSession = context.flowChatStore.getState().sessions.get(sourceSessionId);
   if (!sourceSession) {
     throw new Error(`Session does not exist: ${sourceSessionId}`);
+  }
+  if (isNonLocalDispatchTarget(sourceSession.config.dispatchTarget)) {
+    throw new Error('Forking a detached dispatch session is not supported');
   }
 
   const executionWorkspacePath = requireSessionWorkspacePath(
@@ -1068,6 +1203,9 @@ export async function ensureBackendSession(
     throw new Error(`Session does not exist: ${sessionId}`);
   }
   if (session.isTransient) {
+    return;
+  }
+  if (isNonLocalDispatchTarget(session.config.dispatchTarget)) {
     return;
   }
 
@@ -1182,6 +1320,9 @@ export async function ensureBackendSession(
 
     await ensureCoordinator();
   } catch (e: any) {
+    if (isSessionInUseError(e)) {
+      throw e;
+    }
     if (!allowRecreateOnCoordinatorFailure) {
       const raw = typeof e?.message === 'string' ? e.message : String(e);
       const hint =

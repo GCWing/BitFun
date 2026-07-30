@@ -2,7 +2,7 @@ import React, { Suspense, lazy, useMemo, useEffect } from 'react';
 import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import { WorkspaceKind } from '@/shared/types';
-import { ProcessingIndicator } from '@/flow_chat/components/modern/ProcessingIndicator';
+import { DotMatrixLoader } from '@/component-library';
 import { useMyAgentStore } from '../my-agent/myAgentStore';
 import './AssistantScene.scss';
 
@@ -78,7 +78,7 @@ const AssistantScene: React.FC<AssistantSceneProps> = ({ workspacePath }) => {
             aria-busy="true"
             aria-label={t('loading.scenes')}
           >
-            <ProcessingIndicator visible />
+            <DotMatrixLoader size="medium" />
           </div>
         )}
       >

@@ -46,6 +46,7 @@ export const IconButton = React.forwardRef<HTMLButtonElement, IconButtonProps>((
       className={classNames}
       disabled={disabled || isLoading}
       {...props}
+      aria-busy={isLoading || props['aria-busy'] || undefined}
     >
       {children}
     </button>

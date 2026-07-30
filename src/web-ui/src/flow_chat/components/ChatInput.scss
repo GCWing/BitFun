@@ -343,9 +343,7 @@
   display: flex;
   flex-direction: column;
   transform: translateY(0);
-  transition:
-    max-width 0.28s cubic-bezier(0.4, 0, 0.2, 1),
-    transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: transform 160ms cubic-bezier(0.23, 1, 0.32, 1);
 
   // ─── Single-line capsule mode ─────────────────────────────────────────────
   &--capsule {
@@ -541,7 +539,7 @@
       box-shadow: none;
       backdrop-filter: blur(10px);
       -webkit-backdrop-filter: blur(10px);
-      transition: all 0.25s ease;
+      transition: none;
 
       &:hover {
         background: var(--color-bg-tertiary);
@@ -563,7 +561,7 @@
     .bitfun-chat-input__actions,
     .bitfun-chat-input__recommendations {
       opacity: 0.25;
-      transition: opacity 0.25s ease;
+      transition: opacity 160ms cubic-bezier(0.23, 1, 0.32, 1);
     }
 
     &:hover,
@@ -623,28 +621,19 @@
     flex-direction: column;
     gap: 0;
     pointer-events: auto;
-    border: 1px solid var(--color-overlay-white-12);
-    border-radius: calc(var(--flowchat-card-radius) + 4px);
+    border: 1px solid var(--border-base);
+    border-radius: calc(var(--flowchat-card-radius) + 3px);
     padding: var(--flowchat-card-expanded-pad-x) var(--flowchat-card-expanded-pad-y) 0;
     background: var(--color-bg-scene);
     backdrop-filter: blur(16px) saturate(1.2);
     -webkit-backdrop-filter: blur(16px) saturate(1.2);
-    // `max-height` must never animate: the box height is `auto`, so an
-    // interpolating `max-height` clamps the border box below its own content
-    // while `overflow` stays visible (popovers need it) — the text and the
-    // action row then paint *outside* the rounded border for the length of the
-    // transition. Only `min-height` is animated: it can never fall below the
-    // content, so it smooths the collapse without ever clipping the card.
-    transition:
-      border-radius 0.32s cubic-bezier(0.4, 0, 0.2, 1),
-      padding 0.32s cubic-bezier(0.4, 0, 0.2, 1),
-      min-height 0.32s cubic-bezier(0.4, 0, 0.2, 1),
-      box-shadow 0.32s cubic-bezier(0.4, 0, 0.2, 1),
-      border-color 0.32s cubic-bezier(0.4, 0, 0.2, 1);
+    // The composer changes shape as the user types. Keep this high-frequency
+    // keyboard path immediate instead of tweening layout properties.
+    transition: none;
     box-shadow: 
-      0 8px 24px rgba(var(--color-static-black-rgb), 0.35),
-      inset 0 1px 0 var(--color-overlay-white-08),
-      inset 0 -1px 0 var(--color-overlay-white-04);
+      0 10px 28px rgba(var(--color-static-black-rgb), 0.24),
+      0 2px 8px var(--color-overlay-black-12),
+      inset 0 1px 0 var(--color-overlay-white-08);
     cursor: default;
     
     &::before {
@@ -662,7 +651,7 @@
       backdrop-filter: blur(8px);
       -webkit-backdrop-filter: blur(8px);
       box-shadow:
-        0 8px 24px rgba(var(--color-static-black-rgb), 0.18),
+        0 8px 22px rgba(var(--color-static-black-rgb), 0.16),
         inset 0 1px 0 var(--color-overlay-white-08);
 
       &:hover {
@@ -671,7 +660,7 @@
         backdrop-filter: blur(12px);
         -webkit-backdrop-filter: blur(12px);
         box-shadow:
-          0 12px 30px rgba(var(--color-static-black-rgb), 0.24),
+          0 10px 26px rgba(var(--color-static-black-rgb), 0.2),
           inset 0 1px 0 var(--color-overlay-white-08);
       }
 
@@ -716,11 +705,9 @@
     }
     
     &:focus-within {
-      border-color: var(--border-base);
-      box-shadow: 
-        0 12px 32px rgba(var(--color-static-black-rgb), 0.45),
-        inset 0 1px 0 var(--color-overlay-white-12),
-        inset 0 -1px 0 var(--color-overlay-white-04);
+      box-shadow:
+        0 12px 30px rgba(var(--color-static-black-rgb), 0.28),
+        inset 0 1px 0 var(--color-overlay-white-12);
     }
     
     & > * {
@@ -761,9 +748,18 @@
     font-weight: 400;
     border-radius: 5px;
     cursor: pointer;
-    transition: color 0.15s ease, background 0.15s ease;
+    transition: transform 120ms cubic-bezier(0.23, 1, 0.32, 1);
     white-space: nowrap;
     outline: none;
+
+    &:focus-visible {
+      box-shadow: inset 0 0 0 1px var(--border-accent);
+      color: var(--color-text-primary);
+    }
+
+    &:active:not(:disabled) {
+      transform: scale(0.97);
+    }
 
     &:hover:not(#{&}--active) {
       color: var(--color-text-secondary);
@@ -862,7 +858,9 @@
     box-shadow: 0 1px 3px rgba(var(--color-static-black-rgb), 0.35);
     opacity: 0;
     transform: scale(0.85);
-    transition: opacity 0.15s ease, transform 0.15s ease, background 0.15s ease;
+    transition:
+      opacity 140ms ease,
+      transform 120ms cubic-bezier(0.23, 1, 0.32, 1);
 
     &:hover {
       background: var(--element-bg-hover);
@@ -887,7 +885,9 @@
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition:
+      opacity 140ms ease,
+      transform 120ms cubic-bezier(0.23, 1, 0.32, 1);
     padding: 0;
     opacity: 0.3;
     
@@ -902,7 +902,13 @@
     }
     
     &:active {
-      transform: scale(0.95);
+      transform: scale(0.97);
+    }
+
+    &:focus-visible {
+      opacity: 1;
+      outline: 2px solid var(--border-accent);
+      outline-offset: 1px;
     }
   }
 
@@ -982,11 +988,17 @@
     color: inherit;
     cursor: pointer;
     opacity: 0.9;
-    transition: opacity 0.15s ease, background 0.15s ease;
+    transition:
+      opacity 140ms ease,
+      transform 120ms cubic-bezier(0.23, 1, 0.32, 1);
 
     &:hover {
       opacity: 1;
       background: color-mix(in srgb, currentColor 14%, transparent);
+    }
+
+    &:active {
+      transform: scale(0.97);
     }
   }
 
@@ -1026,11 +1038,20 @@
     cursor: pointer;
     user-select: none;
     border-radius: 4px;
-    transition: background 0.15s ease, color 0.15s ease;
+    transition: transform 120ms cubic-bezier(0.23, 1, 0.32, 1);
 
     &:hover {
       background: var(--element-bg-medium);
       color: var(--color-text-primary);
+    }
+
+    &:active {
+      transform: scale(0.985);
+    }
+
+    &:focus-visible {
+      outline: none;
+      box-shadow: inset 0 0 0 1px var(--border-accent);
     }
   }
 
@@ -1043,7 +1064,7 @@
   &__boost-submenu-host {
     position: relative;
     border-radius: 4px;
-    transition: background 0.15s ease;
+    transition: none;
 
     &:hover {
       background: var(--element-bg-medium);
@@ -1071,7 +1092,7 @@
     color: var(--color-text-secondary);
     cursor: pointer;
     user-select: none;
-    transition: color 0.15s ease;
+    transition: none;
   }
 
   &__boost-submenu-trigger-main {
@@ -1131,7 +1152,7 @@
     flex-direction: column;
     background: var(--color-bg-elevated);
     border: 1px solid var(--border-subtle);
-    border-radius: 8px;
+    border-radius: 10px;
     box-shadow:
       0 8px 32px rgba(var(--color-static-black-rgb), 0.35),
       0 4px 16px var(--color-overlay-black-20),
@@ -1140,7 +1161,20 @@
     backdrop-filter: blur(20px) saturate(1.2);
     -webkit-backdrop-filter: blur(20px) saturate(1.2);
     overflow: hidden;
-    animation: mentionPickerSlideUp 0.16s cubic-bezier(0.34, 1.56, 0.64, 1);
+    transform-origin: left top;
+    animation: mentionPickerSlideUp 180ms cubic-bezier(0.23, 1, 0.32, 1);
+  }
+
+  &__boost-submenu-shell--left &__boost-submenu-panel {
+    transform-origin: right top;
+  }
+
+  &__boost-submenu-shell--up &__boost-submenu-panel {
+    transform-origin: left bottom;
+  }
+
+  &__boost-submenu-shell--left#{&}__boost-submenu-shell--up &__boost-submenu-panel {
+    transform-origin: right bottom;
   }
 
   &__boost-submenu-loading,
@@ -1189,11 +1223,20 @@
     color: var(--color-text-primary);
     cursor: pointer;
     user-select: none;
-    transition: background 0.15s ease, color 0.15s ease;
+    transition: transform 120ms cubic-bezier(0.23, 1, 0.32, 1);
 
     &:hover {
       background: var(--element-bg-medium);
       color: var(--color-text-primary);
+    }
+
+    &:active {
+      transform: scale(0.985);
+    }
+
+    &:focus-visible {
+      outline: none;
+      box-shadow: inset 0 0 0 1px var(--border-accent);
     }
   }
 
@@ -1224,18 +1267,22 @@
     cursor: pointer;
     text-align: center;
     user-select: none;
-    transition: background 0.15s ease, color 0.15s ease;
+    transition: transform 120ms cubic-bezier(0.23, 1, 0.32, 1);
 
     &:hover {
       background: var(--element-bg-medium);
       color: color-mix(in srgb, var(--color-accent-500) 94%, var(--color-text-primary));
+    }
+
+    &:active {
+      transform: scale(0.985);
     }
   }
 
   @keyframes mentionPickerSlideUp {
     from {
       opacity: 0;
-      transform: translateY(8px) scale(0.98);
+      transform: translateY(4px) scale(0.98);
     }
     to {
       opacity: 1;
@@ -1261,7 +1308,7 @@
     min-width: 200px;
     background: var(--color-bg-elevated);
     border: 1px solid var(--color-overlay-white-12);
-    border-radius: 6px;
+    border-radius: 10px;
     overflow: hidden;
     backdrop-filter: blur(20px) saturate(1.2);
     -webkit-backdrop-filter: blur(20px) saturate(1.2);
@@ -1270,7 +1317,8 @@
       0 0 1px var(--color-overlay-white-12),
       inset 0 1px 0 var(--color-overlay-white-08);
     z-index: $z-dropdown;
-    animation: mode-dropdown-fade-in 0.15s ease-out;
+    transform-origin: left bottom;
+    animation: mode-dropdown-fade-in 180ms cubic-bezier(0.23, 1, 0.32, 1);
 
     &--agent-boost {
       min-width: 228px;
@@ -1285,7 +1333,7 @@
     font-size: var(--flowchat-font-size-2xs);
     color: var(--color-text-secondary);
     cursor: pointer;
-    transition: all 0.15s ease;
+    transition: transform 120ms cubic-bezier(0.23, 1, 0.32, 1);
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -1294,6 +1342,16 @@
     &:hover:not(&--disabled) {
       background: var(--color-overlay-white-04);
       color: var(--color-text-primary);
+    }
+
+    &:focus-visible:not(&--disabled) {
+      outline: none;
+      background: var(--element-bg-soft);
+      box-shadow: inset 0 0 0 1px var(--border-accent);
+    }
+
+    &:active:not(&--disabled) {
+      transform: scale(0.985);
     }
 
     &:hover:not(&--disabled),
@@ -1366,7 +1424,7 @@
     font-size: var(--flowchat-font-size-2xs);
     color: var(--color-text-secondary);
     cursor: pointer;
-    transition: all 0.15s ease;
+    transition: transform 120ms cubic-bezier(0.23, 1, 0.32, 1);
     display: flex;
     align-items: center;
     gap: var(--flowchat-inline-gap);
@@ -1374,6 +1432,10 @@
     &:hover {
       background: var(--color-overlay-white-04);
       color: var(--color-text-primary);
+    }
+
+    &:active {
+      transform: scale(0.985);
     }
     
     &--expanded {
@@ -1522,7 +1584,7 @@
     max-height: 280px;
     background: var(--color-bg-elevated);
     border: 1px solid var(--border-subtle);
-    border-radius: 6px;
+    border-radius: 10px;
     overflow: hidden;
     backdrop-filter: blur(20px) saturate(1.2);
     -webkit-backdrop-filter: blur(20px) saturate(1.2);
@@ -1531,7 +1593,8 @@
       0 0 1px var(--color-overlay-white-12),
       inset 0 1px 0 var(--color-overlay-white-08);
     z-index: $z-dropdown;
-    animation: mode-dropdown-fade-in 0.15s ease-out;
+    // Slash commands are opened by typing, so their keyboard path is instant.
+    animation: none;
   }
   
   &__slash-command-header {
@@ -1607,7 +1670,7 @@
     gap: var(--flowchat-control-gap);
     padding: var(--flowchat-inline-gap) var(--flowchat-card-expanded-pad-x);
     cursor: pointer;
-    transition: all 0.15s ease;
+    transition: transform 120ms cubic-bezier(0.23, 1, 0.32, 1);
     min-width: 0;
     
     &:hover {
@@ -1616,6 +1679,10 @@
     
     &--selected {
       background: var(--element-bg-medium);
+    }
+
+    &:active {
+      transform: scale(0.99);
     }
     
     &--active {
@@ -1774,12 +1841,8 @@
     justify-content: center;
     cursor: pointer;
     transition:
-      transform 0.18s ease,
-      filter 0.18s ease,
-      box-shadow 0.18s ease,
-      border-color 0.18s ease,
-      background 0.18s ease,
-      color 0.18s ease;
+      transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
+      opacity 120ms ease;
     flex-shrink: 0;
     
     &:not(:disabled) {
@@ -1819,7 +1882,7 @@
     }
     
     &:active:not(:disabled) {
-      transform: scale(0.96);
+      transform: scale(0.97);
       filter: none;
       box-shadow:
         0 0 0 1px var(--color-overlay-black-40),
@@ -1907,11 +1970,8 @@
     align-items: center;
     justify-content: center;
     transition:
-      transform 0.18s ease,
-      filter 0.18s ease,
-      box-shadow 0.18s ease,
-      background 0.18s ease,
-      border-color 0.18s ease;
+      transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
+      opacity 120ms ease;
     background: rgba(var(--private-chat-input-send-surface-rgb), 0.96);
     border: 1px solid transparent;
     box-shadow: none;
@@ -2058,14 +2118,10 @@
 @keyframes bitfun-breathing-pulse {
   0%, 100% {
     transform: scale(1);
-    box-shadow: 0 0 12px color-mix(in srgb, var(--color-warning) 50%, transparent);
     opacity: 1;
   }
   50% {
     transform: scale(1.15);
-    box-shadow:
-      0 0 20px color-mix(in srgb, var(--color-warning) 80%, transparent),
-      0 0 30px color-mix(in srgb, var(--color-warning) 40%, transparent);
     opacity: 0.9;
   }
 }
@@ -2073,13 +2129,9 @@
 @keyframes bitfun-breathing-pulse-fast {
   0%, 100% {
     transform: scale(1);
-    box-shadow: 0 0 12px color-mix(in srgb, var(--color-warning) 60%, transparent);
   }
   50% {
     transform: scale(1.2);
-    box-shadow:
-      0 0 24px color-mix(in srgb, var(--color-warning) 90%, transparent),
-      0 0 40px color-mix(in srgb, var(--color-warning) 50%, transparent);
   }
 }
 
@@ -2125,5 +2177,38 @@
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@media (hover: none), (pointer: coarse) {
+  .bitfun-chat-input__send-button:hover:not(:disabled),
+  .bitfun-chat-input__send-button--breathing:hover .bitfun-chat-input__breathing-circle,
+  .bitfun-chat-input__voice-pill-action:not(:disabled):hover,
+  .bitfun-chat-input__voice-pill-send:not(:disabled):hover {
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bitfun-chat-input,
+  .bitfun-chat-input__input-area,
+  .bitfun-chat-input__actions,
+  .bitfun-chat-input__recommendations,
+  .bitfun-chat-input__action-button,
+  .bitfun-chat-input__send-button,
+  .bitfun-chat-input__breathing-circle,
+  .bitfun-chat-input__mode-option,
+  .bitfun-chat-input__mode-default-button,
+  .bitfun-chat-input__slash-command-item,
+  .bitfun-chat-input__boost-submenu-shell,
+  .bitfun-chat-input__boost-submenu-chevron {
+    transition-duration: 0ms;
+  }
+
+  .bitfun-chat-input__mode-dropdown,
+  .bitfun-chat-input__boost-submenu-panel,
+  .bitfun-chat-input__loading-spinner,
+  .bitfun-chat-input__boost-submenu-spinner {
+    animation: none;
   }
 }

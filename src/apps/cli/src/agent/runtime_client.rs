@@ -6,6 +6,7 @@
 
 use anyhow::Result;
 use std::collections::HashMap;
+use std::fmt;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 use tokio::sync::{broadcast, Mutex};
@@ -18,9 +19,7 @@ use bitfun_agent_runtime::sdk::{
     AgentTurnCancellationRequest, AgentTurnSettlementRequest, AgentUserAnswersRequest,
     PermissionReply, PermissionRequest, PermissionRequestEventReceiver, PortError, PortErrorKind,
     RuntimeError, SessionTranscript, SessionTranscriptRequest, SessionUsageReport,
-    AUTO_APPROVE_ASK_CONTEXT_KEY,
 };
-use bitfun_agent_runtime::user_questions::USER_INPUT_AVAILABLE_CONTEXT_KEY;
 use bitfun_agent_runtime_ipc::{
     RuntimeIpcClient, RuntimeIpcClientError, RuntimeIpcClientEvent, RuntimeIpcErrorCode,
     RuntimeIpcEvent, RuntimeIpcOperation, RuntimeIpcOperationResult,
@@ -33,18 +32,20 @@ use bitfun_runtime_ports::{
 };
 
 use crate::actions::SHARED_TUI_EMBEDDED_HANDOFF;
-use crate::runtime::approval::CliApprovalPolicy;
+use crate::diagnostics::with_session_conflict_help;
+use crate::runtime::approval::{approval_metadata, CliApprovalPolicy};
 use crate::runtime::CliRuntimeContext;
 
 fn shared_restore_error(error: RuntimeIpcClientError) -> anyhow::Error {
-    if matches!(&error, RuntimeIpcClientError::Remote(remote) if remote.code == RuntimeIpcErrorCode::FrameTooLarge)
+    let error = if matches!(&error, RuntimeIpcClientError::Remote(remote) if remote.code == RuntimeIpcErrorCode::FrameTooLarge)
     {
         anyhow::anyhow!(
             "Session history is too large for Shared TUI. {SHARED_TUI_EMBEDDED_HANDOFF}."
         )
     } else {
-        error.into()
-    }
+        anyhow::Error::new(error)
+    };
+    with_session_conflict_help(error)
 }
 
 fn validated_session_summary(
@@ -62,33 +63,6 @@ fn validated_session_summary(
                 workspace_path.display()
             )
         })
-}
-
-fn cli_approval_metadata(
-    approval_policy: CliApprovalPolicy,
-) -> serde_json::Map<String, serde_json::Value> {
-    let mut metadata = serde_json::Map::new();
-    if matches!(
-        approval_policy,
-        CliApprovalPolicy::Reject | CliApprovalPolicy::Auto
-    ) {
-        metadata.insert(
-            USER_INPUT_AVAILABLE_CONTEXT_KEY.to_string(),
-            serde_json::Value::Bool(false),
-        );
-    }
-    let auto_approve_ask = match approval_policy {
-        CliApprovalPolicy::Ask => None,
-        CliApprovalPolicy::DisableAuto | CliApprovalPolicy::Reject => Some(false),
-        CliApprovalPolicy::Auto => Some(true),
-    };
-    if let Some(auto_approve_ask) = auto_approve_ask {
-        metadata.insert(
-            AUTO_APPROVE_ASK_CONTEXT_KEY.to_string(),
-            serde_json::Value::Bool(auto_approve_ask),
-        );
-    }
-    metadata
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -114,6 +88,58 @@ fn session_mode_migration_notice(
         previous_mode_id: previous.agent_type.clone(),
         restored_mode_id: restored.agent_type.clone(),
     })
+}
+
+#[derive(Debug)]
+pub(crate) struct SessionModeUpdateError {
+    message: String,
+    outcome_unknown: bool,
+}
+
+impl fmt::Display for SessionModeUpdateError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(&self.message)
+    }
+}
+
+impl std::error::Error for SessionModeUpdateError {}
+
+impl SessionModeUpdateError {
+    fn runtime(error: RuntimeError) -> Self {
+        Self {
+            message: error.into_message(),
+            outcome_unknown: false,
+        }
+    }
+
+    fn shared(error: RuntimeIpcClientError) -> Self {
+        let outcome_unknown = matches!(
+            &error,
+            RuntimeIpcClientError::Remote(remote)
+                if remote.code == RuntimeIpcErrorCode::OutcomeUnknown
+        ) || matches!(
+            &error,
+            RuntimeIpcClientError::Timeout
+                | RuntimeIpcClientError::Disconnected
+                | RuntimeIpcClientError::UnexpectedResponse
+                | RuntimeIpcClientError::Io(_)
+        );
+        Self {
+            message: error.to_string(),
+            outcome_unknown,
+        }
+    }
+
+    fn unexpected(error: anyhow::Error) -> Self {
+        Self {
+            message: error.to_string(),
+            outcome_unknown: true,
+        }
+    }
+
+    pub(crate) fn outcome_unknown(&self) -> bool {
+        self.outcome_unknown
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -442,7 +468,8 @@ impl CliAgentRuntimeClient {
                     })
                     .await
                     .map(|restored| restored.session)
-                    .map_err(|error| anyhow::anyhow!(error.into_message()))?;
+                    .map_err(anyhow::Error::new)
+                    .map_err(with_session_conflict_help)?;
                 let transcript = runtime
                     .read_session_transcript(SessionTranscriptRequest {
                         session_id: session_id.to_string(),
@@ -569,14 +596,29 @@ impl CliAgentRuntimeClient {
             .map_err(|error| anyhow::anyhow!(error.into_message()))
     }
 
-    pub(crate) async fn update_session_mode(&self, session_id: &str, mode_id: &str) -> Result<()> {
-        self.embedded_runtime("changing the session mode")?
-            .update_session_mode(AgentSessionModeUpdateRequest {
-                session_id: session_id.to_string(),
-                mode_id: mode_id.to_string(),
-            })
-            .await
-            .map_err(|error| anyhow::anyhow!(error.into_message()))
+    pub(crate) async fn update_session_mode(
+        &self,
+        session_id: &str,
+        mode_id: &str,
+    ) -> std::result::Result<(), SessionModeUpdateError> {
+        let request = AgentSessionModeUpdateRequest {
+            session_id: session_id.to_string(),
+            mode_id: mode_id.to_string(),
+        };
+        match &self.backend {
+            CliAgentRuntimeBackend::Embedded(runtime) => runtime
+                .update_session_mode(request)
+                .await
+                .map_err(SessionModeUpdateError::runtime),
+            CliAgentRuntimeBackend::Shared(client) => {
+                let result = client
+                    .request(RuntimeIpcOperation::UpdateSessionMode { request })
+                    .await
+                    .map_err(SessionModeUpdateError::shared)?;
+                expect_unit(result, "update_session_mode")
+                    .map_err(SessionModeUpdateError::unexpected)
+            }
+        }
     }
 
     pub(crate) async fn branch_session_at_latest_turn(
@@ -679,7 +721,8 @@ impl CliAgentRuntimeClient {
                 },
             )
             .await
-            .map_err(|error| anyhow::anyhow!(error.into_message()))?;
+            .map_err(anyhow::Error::new)
+            .map_err(with_session_conflict_help)?;
 
         tracing::info!("Recreated backend session with existing id: {}", session_id);
         Ok(())
@@ -706,7 +749,6 @@ impl CliAgentRuntimeClient {
             }
             Err(error) => {
                 let session_not_found = Self::is_session_not_found_error(&error);
-                let message = error.into_message();
                 if session_not_found {
                     tracing::warn!(
                         "Session is unavailable, recreating backend session: {}",
@@ -714,7 +756,7 @@ impl CliAgentRuntimeClient {
                     );
                     self.recreate_session_with_id(session_id, agent_type).await
                 } else {
-                    Err(anyhow::anyhow!(message))
+                    Err(with_session_conflict_help(anyhow::Error::new(error)))
                 }
             }
         }
@@ -747,7 +789,8 @@ impl CliAgentRuntimeClient {
                 },
             )
             .await
-            .map_err(|error| anyhow::anyhow!(error.into_message()))?;
+            .map_err(anyhow::Error::new)
+            .map_err(with_session_conflict_help)?;
 
         let id = session.session_id.clone();
         *session_id_guard = Some(id.clone());
@@ -815,7 +858,7 @@ impl CliAgentRuntimeClient {
         }
 
         // Start the dialog turn; events arrive through the shared broadcast source.
-        let metadata = cli_approval_metadata(self.approval_policy());
+        let metadata = approval_metadata(self.approval_policy());
         let request = AgentDialogTurnRequest {
             session_id: session_id.clone(),
             message: message.clone(),
@@ -1197,17 +1240,13 @@ mod tests {
 
     use bitfun_agent_runtime::sdk::{
         PermissionDelegationContext, PermissionRequest, PermissionRequestEvent,
-        PermissionRequestSource, PermissionRequestSourceKind, AUTO_APPROVE_ASK_CONTEXT_KEY,
+        PermissionRequestSource, PermissionRequestSourceKind,
     };
-    use bitfun_agent_runtime::user_questions::USER_INPUT_AVAILABLE_CONTEXT_KEY;
     use bitfun_agent_runtime_ipc::{RuntimeIpcClientError, RuntimeIpcError, RuntimeIpcErrorCode};
 
-    use crate::runtime::approval::CliApprovalPolicy;
-
     use super::{
-        cli_approval_metadata, project_routed_permission_event, session_mode_migration_notice,
-        shared_disconnect_message, shared_restore_error, validated_session_summary,
-        CliWorkspacePaths,
+        project_routed_permission_event, session_mode_migration_notice, shared_disconnect_message,
+        shared_restore_error, validated_session_summary, CliWorkspacePaths, SessionModeUpdateError,
     };
     use bitfun_agent_runtime_ipc::RuntimeIpcStreamInvalidationReason;
 
@@ -1220,6 +1259,37 @@ mod tests {
         let message = error.to_string();
         assert!(message.contains("history is too large"));
         assert!(message.contains("default Embedded `bitfun chat`"));
+    }
+
+    #[test]
+    fn shared_mode_update_preserves_unknown_outcome_as_a_typed_fact() {
+        let error =
+            SessionModeUpdateError::shared(RuntimeIpcClientError::Remote(RuntimeIpcError {
+                code: RuntimeIpcErrorCode::OutcomeUnknown,
+                message: "inspect authoritative state before retrying".to_string(),
+            }));
+
+        assert!(error.outcome_unknown());
+        assert!(error.to_string().contains("OutcomeUnknown"));
+
+        for transport_error in [
+            RuntimeIpcClientError::Timeout,
+            RuntimeIpcClientError::Disconnected,
+            RuntimeIpcClientError::UnexpectedResponse,
+        ] {
+            assert!(SessionModeUpdateError::shared(transport_error).outcome_unknown());
+        }
+        assert!(
+            SessionModeUpdateError::unexpected(anyhow::anyhow!("unexpected response shape"))
+                .outcome_unknown()
+        );
+        assert!(
+            !SessionModeUpdateError::shared(RuntimeIpcClientError::Remote(RuntimeIpcError {
+                code: RuntimeIpcErrorCode::InvalidRequest,
+                message: "unknown mode".to_string(),
+            },))
+            .outcome_unknown()
+        );
     }
 
     #[test]
@@ -1275,24 +1345,6 @@ mod tests {
     }
 
     #[test]
-    fn cli_approval_metadata_keeps_auto_invocation_scoped() {
-        let auto = cli_approval_metadata(CliApprovalPolicy::Auto);
-        assert_eq!(auto[AUTO_APPROVE_ASK_CONTEXT_KEY], true);
-        assert_eq!(auto[USER_INPUT_AVAILABLE_CONTEXT_KEY], false);
-
-        let reject = cli_approval_metadata(CliApprovalPolicy::Reject);
-        assert_eq!(reject[AUTO_APPROVE_ASK_CONTEXT_KEY], false);
-
-        let ask = cli_approval_metadata(CliApprovalPolicy::Ask);
-        assert!(!ask.contains_key(AUTO_APPROVE_ASK_CONTEXT_KEY));
-        assert!(!ask.contains_key(USER_INPUT_AVAILABLE_CONTEXT_KEY));
-
-        let disabled = cli_approval_metadata(CliApprovalPolicy::DisableAuto);
-        assert_eq!(disabled[AUTO_APPROVE_ASK_CONTEXT_KEY], false);
-        assert!(!disabled.contains_key(USER_INPUT_AVAILABLE_CONTEXT_KEY));
-    }
-
-    #[test]
     fn model_updates_use_the_runtime_sdk_without_the_core_compatibility_facade() {
         let source = include_str!("runtime_client.rs").replace("\r\n", "\n");
         let runtime_update = [
@@ -1310,18 +1362,16 @@ mod tests {
     #[test]
     fn mode_updates_use_the_runtime_sdk_without_the_core_compatibility_facade() {
         let source = include_str!("runtime_client.rs").replace("\r\n", "\n");
-        let runtime_update = [
-            "self.embedded_runtime(\"changing the session mode\")?",
-            "\n            .update_session_mode",
-        ]
-        .concat();
         let compatibility_update = [
             "self.compatibility",
             "\n            .update_session_agent_type",
         ]
         .concat();
 
-        assert!(source.contains(&runtime_update));
+        assert!(source.contains("CliAgentRuntimeBackend::Embedded(runtime)"));
+        assert!(source.contains("runtime.update_session_mode(request)"));
+        assert!(source.contains("CliAgentRuntimeBackend::Shared(client)"));
+        assert!(source.contains("RuntimeIpcOperation::UpdateSessionMode { request }"));
         assert!(!source.contains(&compatibility_update));
     }
 

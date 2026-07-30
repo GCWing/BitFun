@@ -9,19 +9,19 @@
   justify-content: center;
   width: 100%;
   height: 100%;
-  padding: var(--size-gap-8) var(--size-gap-6);
+  padding: clamp(var(--size-gap-6), 6vh, var(--size-gap-10)) var(--size-gap-6);
   box-sizing: border-box;
   overflow-y: auto;
   overscroll-behavior: contain;
-  animation: wp-fadeIn 0.35s ease-out;
+  animation: wp-fadeIn 220ms cubic-bezier(0.23, 1, 0.32, 1);
 }
 
 .welcome-panel__content {
   display: flex;
   flex-direction: column;
-  gap: var(--size-gap-6);
+  gap: var(--size-gap-5);
   width: 100%;
-  max-width: 520px;
+  max-width: 640px;
 }
 
 /* ── Greeting ── */
@@ -35,7 +35,7 @@
 .welcome-panel__greeting-inner {
   display: flex;
   flex-direction: row;
-  align-items: flex-end;
+  align-items: center;
   gap: var(--size-gap-4);
 }
 
@@ -51,7 +51,7 @@
 .welcome-panel__panda {
   position: relative;
   flex-shrink: 0;
-  width: 88px;
+  width: 72px;
   user-select: none;
   image-rendering: pixelated;
   cursor: default;
@@ -87,16 +87,17 @@
 .welcome-panel__heading {
   margin: 0;
   font-size: calc(var(--flowchat-font-size-3xl) + 4px);
-  font-weight: 700;
+  font-weight: 650;
   color: var(--color-text-primary);
   line-height: var(--flowchat-compact-line-height);
   letter-spacing: -0.02em;
 }
 
 .welcome-panel__tagline {
-  margin: 6px 0 0;
-  font-size: var(--flowchat-font-size-lg);
-  color: var(--color-text-muted);
+  margin: 4px 0 0;
+  max-width: 52ch;
+  font-size: var(--flowchat-font-size-base);
+  color: var(--color-text-secondary);
   line-height: var(--flowchat-support-line-height);
 }
 
@@ -104,7 +105,7 @@
 
 .welcome-panel__divider {
   height: 1px;
-  background: var(--border-subtle);
+  background: linear-gradient(90deg, var(--border-base), transparent 82%);
 }
 
 /* ── Narrative ── */
@@ -115,7 +116,7 @@
 
 .welcome-panel__narrative-text {
   margin: 0;
-  font-size: var(--flowchat-font-size-lg);
+  font-size: var(--flowchat-font-size-base);
   line-height: var(--flowchat-text-line-height);
   color: var(--color-text-muted);
 }
@@ -137,7 +138,8 @@
   display: inline-flex;
   align-items: center;
   gap: 0.18rem;
-  padding: 0 5px;
+  min-height: 24px;
+  padding: 0 6px;
   margin: 0 1px;
   background: none;
   border: none;
@@ -149,7 +151,7 @@
   line-height: inherit;
   cursor: default;
   vertical-align: baseline;
-  transition: background 0.15s;
+  transition: transform 120ms cubic-bezier(0.23, 1, 0.32, 1);
 }
 
 .welcome-panel__inline-btn--interactive {
@@ -158,6 +160,15 @@
 
 .welcome-panel__inline-btn--interactive:hover:not(:disabled) {
   background: var(--element-bg-subtle);
+}
+
+.welcome-panel__inline-btn:focus-visible {
+  outline: 2px solid var(--border-accent);
+  outline-offset: 1px;
+}
+
+.welcome-panel__inline-btn:active:not(:disabled) {
+  transform: scale(0.97);
 }
 
 .welcome-panel__inline-btn--active {
@@ -232,10 +243,14 @@
   max-width: 300px;
   background: var(--color-bg-elevated);
   border: 1px solid var(--border-base);
-  border-radius: calc(var(--flowchat-card-radius) + 2px);
-  box-shadow: 0 8px 24px var(--color-overlay-black-15);
+  border-radius: calc(var(--flowchat-card-radius) + 3px);
+  box-shadow:
+    0 14px 34px var(--color-overlay-black-20),
+    0 2px 8px var(--color-overlay-black-12),
+    inset 0 1px 0 var(--color-overlay-white-08);
   overflow: hidden;
-  animation: wp-dropdownIn 0.15s ease-out;
+  transform-origin: left top;
+  animation: wp-dropdownIn 180ms cubic-bezier(0.23, 1, 0.32, 1);
 }
 
 .welcome-panel__dropdown-current {
@@ -272,12 +287,23 @@
   font-size: var(--flowchat-font-size-sm);
   text-align: left;
   cursor: pointer;
-  transition: background 0.12s, color 0.12s;
+  transition: transform 120ms cubic-bezier(0.23, 1, 0.32, 1);
 }
 
 .welcome-panel__dropdown-item:hover {
   background: var(--element-bg-soft);
   color: var(--color-text-primary);
+}
+
+.welcome-panel__dropdown-item:focus-visible {
+  outline: none;
+  background: var(--element-bg-soft);
+  box-shadow: inset 0 0 0 1px var(--border-accent);
+  color: var(--color-text-primary);
+}
+
+.welcome-panel__dropdown-item:active:not(:disabled) {
+  transform: scale(0.985);
 }
 
 .welcome-panel__dropdown-item:disabled {
@@ -316,7 +342,7 @@
 }
 
 @keyframes wp-dropdownIn {
-  from { opacity: 0; transform: translateY(-4px); }
+  from { opacity: 0; transform: translateY(-4px) scale(0.98); }
   to   { opacity: 1; transform: translateY(0); }
 }
 
@@ -338,7 +364,14 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .welcome-panel {
+  .welcome-panel,
+  .welcome-panel__dropdown {
     animation: none;
+  }
+
+  .welcome-panel__inline-btn,
+  .welcome-panel__dropdown-item,
+  .welcome-panel__inline-chevron {
+    transition-duration: 0ms;
   }
 }

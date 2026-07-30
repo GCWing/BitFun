@@ -97,6 +97,68 @@ describe('FlowChatViewportCoordinator', () => {
     expect(coordinator.getMode()).toBe('following-tail');
   });
 
+  it('retains a settled card anchor without a wall-clock expiry', () => {
+    const scroller = document.createElement('div');
+    scroller.dataset.virtuosoScroller = 'true';
+    const card = document.createElement('div');
+    scroller.append(card);
+    document.body.append(scroller);
+    setScrollerGeometry(scroller, 900);
+    setRect(scroller, 0);
+    setRect(card, 120);
+
+    const now = vi.spyOn(performance, 'now').mockReturnValue(1_000);
+    const coordinator = new FlowChatViewportCoordinator();
+    expect(coordinator.preserveElement(card)).toBe(true);
+    expect(coordinator.settleElementPreservation('test-settled')).toBe(true);
+
+    now.mockReturnValue(60_000);
+    expect(coordinator.ownsElementAnchor()).toBe(true);
+    expect(coordinator.getMode()).toBe('preserving-element');
+
+    setRect(card, 80);
+    expect(coordinator.restoreElementAnchor(scroller, 'test-delayed-layout')).toBe(true);
+    expect(scroller.scrollTop).toBe(860);
+  });
+
+  it('allows automatic tail follow to take ownership from a retained anchor', () => {
+    const scroller = document.createElement('div');
+    scroller.dataset.virtuosoScroller = 'true';
+    const card = document.createElement('div');
+    scroller.append(card);
+    document.body.append(scroller);
+    setScrollerGeometry(scroller, 900);
+    setRect(scroller, 0);
+    setRect(card, 120);
+
+    const coordinator = new FlowChatViewportCoordinator();
+    coordinator.preserveElement(card);
+    coordinator.settleElementPreservation('test-settled');
+
+    expect(coordinator.followTail()).toBe(true);
+    expect(coordinator.getMode()).toBe('following-tail');
+    expect(coordinator.ownsElementAnchor()).toBe(false);
+  });
+
+  it('releases a retained anchor when its DOM element disconnects', () => {
+    const scroller = document.createElement('div');
+    scroller.dataset.virtuosoScroller = 'true';
+    const card = document.createElement('div');
+    scroller.append(card);
+    document.body.append(scroller);
+    setScrollerGeometry(scroller, 900);
+    setRect(scroller, 0);
+    setRect(card, 120);
+
+    const coordinator = new FlowChatViewportCoordinator();
+    coordinator.preserveElement(card);
+    coordinator.settleElementPreservation('test-settled');
+    card.remove();
+
+    expect(coordinator.ownsElementAnchor()).toBe(false);
+    expect(coordinator.getMode()).toBe('idle');
+  });
+
   it('keeps a pinned item anchored until follow mode takes ownership', () => {
     const scroller = document.createElement('div');
     scroller.dataset.virtuosoScroller = 'true';
@@ -288,5 +350,90 @@ describe('FlowChatViewportCoordinator', () => {
     (scheduledFrame as FrameRequestCallback)(0);
     expect(scroller.scrollTop).toBe(800);
     coordinator.release('test-cleanup');
+  });
+
+  it('coalesces scheduled anchor restores into the existing frame using the latest request', () => {
+    let scheduledFrame: FrameRequestCallback | null = null;
+    const requestFrame = vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+      scheduledFrame = callback;
+      return 1;
+    });
+    vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => {});
+
+    const scroller = document.createElement('div');
+    scroller.dataset.virtuosoScroller = 'true';
+    const pinnedItem = document.createElement('div');
+    scroller.append(pinnedItem);
+    document.body.append(scroller);
+    setScrollerGeometry(scroller, 700);
+    setRect(scroller, 0);
+    setRect(pinnedItem, 57);
+
+    const coordinator = new FlowChatViewportCoordinator();
+    coordinator.pinElement(pinnedItem);
+    const restoreAnchor = vi.spyOn(coordinator, 'restoreElementAnchor');
+    setRect(pinnedItem, 87);
+
+    expect(coordinator.scheduleElementAnchorRestore(scroller, 'scroll-handler:first')).toBe(true);
+    expect(coordinator.scheduleElementAnchorRestore(scroller, 'scroll-handler:latest')).toBe(true);
+    expect(requestFrame).toHaveBeenCalledTimes(1);
+
+    expect(scheduledFrame).not.toBeNull();
+    (scheduledFrame as FrameRequestCallback)(0);
+    expect(restoreAnchor).toHaveBeenCalledTimes(1);
+    expect(restoreAnchor).toHaveBeenCalledWith(scroller, 'scroll-handler:latest');
+    expect(scroller.scrollTop).toBe(730);
+    coordinator.release('test-cleanup');
+  });
+
+  it('cancels a scheduled anchor restore when semantic ownership is released', () => {
+    let scheduledFrame: FrameRequestCallback | null = null;
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+      scheduledFrame = callback;
+      return 17;
+    });
+    const cancelFrame = vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => {});
+
+    const scroller = document.createElement('div');
+    scroller.dataset.virtuosoScroller = 'true';
+    const pinnedItem = document.createElement('div');
+    scroller.append(pinnedItem);
+    document.body.append(scroller);
+    setScrollerGeometry(scroller, 700);
+    setRect(scroller, 0);
+    setRect(pinnedItem, 57);
+
+    const coordinator = new FlowChatViewportCoordinator();
+    coordinator.pinElement(pinnedItem);
+    const restoreAnchor = vi.spyOn(coordinator, 'restoreElementAnchor');
+    coordinator.scheduleElementAnchorRestore(scroller, 'scroll-handler');
+    coordinator.release('stream-end-pinned-item');
+
+    expect(cancelFrame).toHaveBeenCalledWith(17);
+    expect(scheduledFrame).not.toBeNull();
+    (scheduledFrame as FrameRequestCallback)(0);
+    expect(restoreAnchor).not.toHaveBeenCalled();
+    expect(coordinator.getMode()).toBe('idle');
+  });
+
+  it('stops the animation-frame guard after element preservation settles', () => {
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation(() => 17);
+    const cancelFrame = vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => {});
+
+    const scroller = document.createElement('div');
+    scroller.dataset.virtuosoScroller = 'true';
+    const card = document.createElement('div');
+    scroller.append(card);
+    document.body.append(scroller);
+    setScrollerGeometry(scroller, 900);
+    setRect(scroller, 0);
+    setRect(card, 120);
+
+    const coordinator = new FlowChatViewportCoordinator();
+    coordinator.preserveElement(card);
+    coordinator.settleElementPreservation('test-settled');
+
+    expect(cancelFrame).toHaveBeenCalledWith(17);
+    expect(coordinator.ownsElementAnchor()).toBe(true);
   });
 });

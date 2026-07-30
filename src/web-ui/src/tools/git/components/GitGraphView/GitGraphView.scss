@@ -121,7 +121,10 @@
     border-radius: 4px;
     color: var(--color-text-secondary);
     cursor: pointer;
-    transition: all 0.15s ease;
+    transition:
+      transform 140ms cubic-bezier(0.23, 1, 0.32, 1),
+      background-color 140ms ease,
+      color 140ms ease;
 
     &:hover:not(:disabled) {
       background: var(--element-bg-hover);
@@ -385,4 +388,3 @@
     transform: scaleY(1);
   }
 }
-

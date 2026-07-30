@@ -36,6 +36,18 @@ libsqlite3-sys = { version = "0.30", features = ["bundled"] }
 argon2 = "0.5"
 aes-gcm = "0.10"
 bitfun-page-function-runtime = { path = "../page-function-runtime" }
+# Two SQLite drivers here is deliberate, not drift. They own disjoint databases:
+#
+#   sqlx     -> async access to the relay's own control-plane schema (`db.rs`),
+#               using trusted first-party SQL.
+#   rusqlite -> per-page user databases (`page_data.rs`), which execute *untrusted*
+#               SQL from Page Functions. That path needs sqlite3_set_authorizer,
+#               sqlite3_limit, and a progress handler to sandbox it (statement
+#               allow-listing, value/row caps, wall-clock interruption). sqlx
+#               exposes none of these, so it cannot host this workload.
+#
+# Keep them separate. The direct `libsqlite3-sys` dependency selects its bundled
+# feature, while Cargo resolves one compatible instance shared by both drivers.
 rusqlite = { version = "0.32", features = ["bundled", "hooks", "limits"] }
 
 [dev-dependencies]

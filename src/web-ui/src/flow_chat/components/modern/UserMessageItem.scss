@@ -5,17 +5,26 @@
 @use '../../../component-library/styles/tokens.scss' as tokens;
 
 .user-message-item {
-  padding: 0.32rem 0.75rem;
-  background: color-mix(in srgb, var(--element-bg-medium) 86%, var(--color-bg-scene));
-  border: 1px solid color-mix(in srgb, var(--border-subtle) 38%, transparent);
-  border-radius: var(--flowchat-card-radius);
+  box-sizing: border-box;
+  /*
+   * Fills the reading column instead of hugging its text: the bubble shares the
+   * exact leading and trailing edge as the tool-call bars and body text below
+   * it, so a turn reads as one column rather than a right-floating chat bubble.
+   */
+  width: auto;
+  padding: 0.46rem 0.68rem;
+  background: color-mix(in srgb, var(--element-bg-medium) 90%, var(--color-bg-scene));
+  border: 1px solid color-mix(in srgb, var(--border-base) 72%, transparent);
+  border-radius: calc(var(--flowchat-card-radius) + 2px);
   margin:
     0.06rem
     var(--flowchat-content-inline-pad)
     var(--flowchat-turn-gap)
     var(--flowchat-content-inline-pad);
-  box-shadow: 0 1px 0 color-mix(in srgb, var(--color-static-white) 4%, transparent) inset;
-  transition: background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+  box-shadow:
+    0 1px 0 color-mix(in srgb, var(--color-static-white) 5%, transparent) inset,
+    0 2px 8px var(--color-overlay-black-08);
+  transition: opacity 140ms ease;
   /*
    * No enter animation: the message list is virtualized, so a mount-triggered
    * slide-in replays every time a turn scrolls back into view and reads as the
@@ -40,6 +49,15 @@
       opacity: 0.35;
     }
   }
+
+  &:focus-within {
+    border-color: color-mix(in srgb, var(--border-accent) 68%, var(--border-base));
+
+    .user-message-item__copy-btn,
+    .user-message-item__rollback-btn {
+      opacity: 1;
+    }
+  }
   
   // Responsive: reduce margins on smaller screens.
   @media (max-width: 768px) {
@@ -58,7 +76,7 @@
 
 .user-message-item__main {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: var(--flowchat-inline-gap);
 }
 
@@ -115,7 +133,7 @@
   min-width: 0; /* Ensures the content can shrink properly. */
   max-height: 4.75em; /* Collapsed: up to 3 compact lines. */
   user-select: text;
-  transition: all 0.2s ease;
+  transition: none;
 }
 
 .user-message-item__reference {
@@ -267,7 +285,9 @@
   border-radius: var(--size-radius-sm);
   color: var(--color-text-secondary);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition:
+    opacity 140ms ease,
+    transform 120ms cubic-bezier(0.23, 1, 0.32, 1);
   opacity: 0;
   flex-shrink: 0;
   align-self: center;
@@ -281,7 +301,13 @@
   }
   
   &:active:not(:disabled) {
-    transform: scale(0.95);
+    transform: scale(0.97);
+  }
+
+  &:focus-visible {
+    opacity: 1;
+    outline: 2px solid var(--border-accent);
+    outline-offset: 1px;
   }
 
   &:disabled {
@@ -348,6 +374,7 @@
 
   &:focus-within {
     border-color: var(--color-accent-500);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-accent-500) 14%, transparent);
   }
 }
 
@@ -370,7 +397,7 @@
   background: transparent;
   color: var(--color-text-secondary);
   cursor: pointer;
-  transition: color 0.15s ease, background 0.15s ease, transform 0.15s ease;
+  transition: transform 120ms cubic-bezier(0.23, 1, 0.32, 1);
 
   &:hover:not(:disabled) {
     color: var(--color-text-primary);
@@ -378,7 +405,12 @@
   }
 
   &:active:not(:disabled) {
-    transform: scale(0.95);
+    transform: scale(0.97);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--border-accent);
+    outline-offset: 1px;
   }
 
   &:disabled {
@@ -414,7 +446,9 @@
   border-radius: var(--size-radius-sm);
   color: var(--color-text-secondary);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition:
+    opacity 140ms ease,
+    transform 120ms cubic-bezier(0.23, 1, 0.32, 1);
   opacity: 0;
   flex-shrink: 0;
   align-self: center;
@@ -428,7 +462,13 @@
   }
 
   &:active:not(:disabled) {
-    transform: scale(0.95);
+    transform: scale(0.97);
+  }
+
+  &:focus-visible {
+    opacity: 1;
+    outline: 2px solid var(--border-accent);
+    outline-offset: 1px;
   }
 
   &:disabled {
@@ -461,18 +501,21 @@
 .user-message-item__images {
   display: flex;
   flex-wrap: wrap;
-  gap: 5px;
-  margin-top: 4px;
+  gap: 6px;
+  margin-top: 6px;
 }
 
 .user-message-item__image-thumb {
-  width: 120px;
-  height: 120px;
-  border-radius: 6px;
+  /* Attachment-sized, not a hero image: the text stays the primary content. */
+  width: 72px;
+  height: 72px;
+  border-radius: 5px;
   overflow: hidden;
   cursor: pointer;
   border: 1px solid var(--border-base);
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  transition:
+    transform 140ms cubic-bezier(0.23, 1, 0.32, 1),
+    opacity 140ms ease;
 
   &:hover {
     transform: scale(1.03);
@@ -496,7 +539,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  animation: lightboxFadeIn 0.2s ease;
+  animation: lightboxFadeIn 180ms cubic-bezier(0.23, 1, 0.32, 1);
 
   img {
     max-width: 90vw;
@@ -521,10 +564,19 @@
   justify-content: center;
   color: var(--color-static-white);
   cursor: pointer;
-  transition: background 0.15s ease;
+  transition: transform 120ms cubic-bezier(0.23, 1, 0.32, 1);
 
   &:hover {
     background: rgba(var(--color-static-white-rgb), 0.3);
+  }
+
+  &:active {
+    transform: scale(0.97);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--color-static-white);
+    outline-offset: 2px;
   }
 }
 
@@ -541,5 +593,21 @@
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .user-message-item,
+  .user-message-item__copy-btn,
+  .user-message-item__edit-btn,
+  .user-message-item__rollback-btn,
+  .user-message-edit-composer__icon-button,
+  .user-message-item__image-thumb,
+  .user-message-item__lightbox-close {
+    transition-duration: 0ms;
+  }
+
+  .user-message-item__lightbox {
+    animation: none;
   }
 }

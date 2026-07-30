@@ -47,12 +47,13 @@ export const Switch = forwardRef<HTMLInputElement, SwitchProps>(
       <label className={containerClass}>
         <div className="bitfun-switch__wrapper">
           <input
+            {...props}
             ref={ref}
             type="checkbox"
             className="bitfun-switch__input"
             disabled={isDisabled}
             checked={checked}
-            {...props}
+            aria-busy={loading || props['aria-busy'] || undefined}
           />
           <span className={switchClass}>
             {(checkedText || uncheckedText) && (
@@ -62,7 +63,7 @@ export const Switch = forwardRef<HTMLInputElement, SwitchProps>(
             )}
             <span className="bitfun-switch__thumb">
               {loading && (
-                <svg className="bitfun-switch__loading" viewBox="0 0 16 16">
+                <svg className="bitfun-switch__loading" viewBox="0 0 16 16" aria-hidden="true">
                   <circle
                     cx="8"
                     cy="8"

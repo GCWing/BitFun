@@ -55,6 +55,7 @@ interface UseFlowChatFollowOutputResult {
   enterFollowOutput: (reason: FollowOutputEnterReason) => void;
   exitFollowOutput: (reason: FollowOutputExitReason) => void;
   armFollowOutputForNewTurn: () => void;
+  resumeFollowOutputForMountedStream: () => boolean;
   activateArmedFollowOutput: () => boolean;
   cancelPendingAutoFollowArm: () => void;
   scheduleFollowToLatest: (reason: string) => void;
@@ -256,6 +257,15 @@ export function useFlowChatFollowOutput({
     runProgrammaticScroll,
     setFollowingOutput,
   ]);
+
+  const resumeFollowOutputForMountedStream = useCallback(() => {
+    if (!latestTurnId || !isStreaming || virtualItemCount === 0) {
+      return false;
+    }
+
+    enterFollowOutput('auto-follow');
+    return true;
+  }, [enterFollowOutput, isStreaming, latestTurnId, virtualItemCount]);
 
   const activateArmedFollowOutput = useCallback(() => {
     const armedTurnId = armedAutoFollowTurnIdRef.current;
@@ -481,6 +491,7 @@ export function useFlowChatFollowOutput({
     enterFollowOutput,
     exitFollowOutput,
     armFollowOutputForNewTurn,
+    resumeFollowOutputForMountedStream,
     activateArmedFollowOutput,
     cancelPendingAutoFollowArm,
     scheduleFollowToLatest,

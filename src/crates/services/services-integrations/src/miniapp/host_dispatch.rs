@@ -36,6 +36,7 @@ use bitfun_product_domains::miniapp::permission_policy::{
 use bitfun_product_domains::miniapp::types::MiniAppPermissions;
 use serde_json::{json, Value};
 use std::fmt;
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
@@ -491,7 +492,6 @@ async fn dispatch_net(
     }
     let parsed = reqwest::Url::parse(url)
         .map_err(|e| MiniAppHostDispatchError::parse(format!("invalid url: {}", e)))?;
-    let host = parsed.host_str().unwrap_or("").to_string();
 
     let allow: Vec<String> = policy
         .get("net")
@@ -503,48 +503,219 @@ async fn dispatch_net(
                 .collect()
         })
         .unwrap_or_default();
-    if !host_allowed_by_allowlist(&allow, &host) {
-        return Err(deny(format!("Domain not in allowlist: {}", host)));
-    }
-
-    let method = params
-        .get("method")
-        .and_then(|v| v.as_str())
-        .unwrap_or("GET");
-    let client = reqwest::Client::new();
-    let req_method = reqwest::Method::from_bytes(method.as_bytes()).unwrap_or(reqwest::Method::GET);
-    let mut req = client.request(req_method, url);
-    if let Some(headers) = params.get("headers").and_then(|v| v.as_object()) {
-        for (k, v) in headers {
+    let mut method = reqwest::Method::from_bytes(
+        params
+            .get("method")
+            .and_then(|v| v.as_str())
+            .unwrap_or("GET")
+            .as_bytes(),
+    )
+    .map_err(|error| MiniAppHostDispatchError::parse(format!("invalid method: {error}")))?;
+    let mut request_headers = reqwest::header::HeaderMap::new();
+    if let Some(header_values) = params.get("headers").and_then(|v| v.as_object()) {
+        for (k, v) in header_values {
             if let Some(vs) = v.as_str() {
-                req = req.header(k, vs);
+                let name =
+                    reqwest::header::HeaderName::from_bytes(k.as_bytes()).map_err(|error| {
+                        MiniAppHostDispatchError::parse(format!("invalid header name: {error}"))
+                    })?;
+                if matches!(
+                    name,
+                    reqwest::header::HOST
+                        | reqwest::header::CONTENT_LENGTH
+                        | reqwest::header::TRANSFER_ENCODING
+                ) {
+                    return Err(deny(format!("Header is controlled by the host: {name}")));
+                }
+                let value = reqwest::header::HeaderValue::from_str(vs).map_err(|error| {
+                    MiniAppHostDispatchError::parse(format!("invalid header value: {error}"))
+                })?;
+                request_headers.insert(name, value);
             }
         }
     }
-    if let Some(body) = params.get("body").and_then(|v| v.as_str()) {
-        req = req.body(body.to_string());
+    let original_host = parsed.host_str().unwrap_or_default().to_string();
+    let body = params
+        .get("body")
+        .and_then(|v| v.as_str())
+        .map(str::to_string);
+    let mut current_url = parsed;
+
+    for redirect_count in 0..=5 {
+        validate_network_target(&current_url, &allow).await?;
+        let host = current_url
+            .host_str()
+            .ok_or_else(|| MiniAppHostDispatchError::parse("URL has no host"))?;
+        let pinned_address = resolve_public_address(&current_url).await?;
+        let client = reqwest::Client::builder()
+            .redirect(reqwest::redirect::Policy::none())
+            .resolve(host, pinned_address)
+            .build()
+            .map_err(|error| {
+                MiniAppHostDispatchError::service(format!("net.fetch client: {error}"))
+            })?;
+        let mut request = client.request(method.clone(), current_url.clone());
+        let crossed_origin = host != original_host;
+        for (name, value) in &request_headers {
+            if crossed_origin
+                && matches!(
+                    name,
+                    &reqwest::header::AUTHORIZATION
+                        | &reqwest::header::COOKIE
+                        | &reqwest::header::PROXY_AUTHORIZATION
+                )
+            {
+                continue;
+            }
+            request = request.header(name, value);
+        }
+        if let Some(body) = body.as_ref() {
+            request = request.body(body.clone());
+        }
+        let mut response = request
+            .send()
+            .await
+            .map_err(|error| MiniAppHostDispatchError::service(format!("net.fetch: {error}")))?;
+
+        if response.status().is_redirection() {
+            if redirect_count == 5 {
+                return Err(deny("net.fetch exceeded the redirect limit"));
+            }
+            let location = response
+                .headers()
+                .get(reqwest::header::LOCATION)
+                .and_then(|value| value.to_str().ok())
+                .ok_or_else(|| deny("Redirect response is missing a valid Location header"))?;
+            current_url = current_url
+                .join(location)
+                .map_err(|error| deny(format!("Invalid redirect URL: {error}")))?;
+            if matches!(
+                response.status(),
+                reqwest::StatusCode::SEE_OTHER
+                    | reqwest::StatusCode::MOVED_PERMANENTLY
+                    | reqwest::StatusCode::FOUND
+            ) && method != reqwest::Method::GET
+                && method != reqwest::Method::HEAD
+            {
+                method = reqwest::Method::GET;
+            }
+            continue;
+        }
+
+        const MAX_RESPONSE_BYTES: usize = 16 * 1024 * 1024;
+        if response
+            .content_length()
+            .is_some_and(|length| length > MAX_RESPONSE_BYTES as u64)
+        {
+            return Err(deny("net.fetch response exceeds 16 MiB"));
+        }
+        let status = response.status().as_u16();
+        let mut headers_out = serde_json::Map::new();
+        for (name, value) in response.headers() {
+            if let Ok(value) = value.to_str() {
+                headers_out.insert(name.as_str().to_string(), Value::String(value.to_string()));
+            }
+        }
+        let mut bytes = Vec::new();
+        while let Some(chunk) = response.chunk().await.map_err(|error| {
+            MiniAppHostDispatchError::service(format!("net.fetch read: {error}"))
+        })? {
+            if bytes.len().saturating_add(chunk.len()) > MAX_RESPONSE_BYTES {
+                return Err(deny("net.fetch response exceeds 16 MiB"));
+            }
+            bytes.extend_from_slice(&chunk);
+        }
+        return Ok(json!({
+            "status": status,
+            "headers": Value::Object(headers_out),
+            "body": String::from_utf8_lossy(&bytes),
+        }));
     }
 
-    let res = req
-        .send()
-        .await
-        .map_err(|e| MiniAppHostDispatchError::service(format!("net.fetch: {}", e)))?;
-    let status = res.status().as_u16();
-    let mut headers_out = serde_json::Map::new();
-    for (k, v) in res.headers() {
-        if let Ok(vs) = v.to_str() {
-            headers_out.insert(k.as_str().to_string(), Value::String(vs.to_string()));
-        }
+    Err(deny("net.fetch redirect handling failed"))
+}
+
+async fn validate_network_target(
+    url: &reqwest::Url,
+    allow: &[String],
+) -> MiniAppHostDispatchResult<()> {
+    if !matches!(url.scheme(), "http" | "https") {
+        return Err(deny("Only http(s) URLs are allowed"));
     }
-    let body = res
-        .text()
+    if !url.username().is_empty() || url.password().is_some() {
+        return Err(deny("Credentials in network URLs are forbidden"));
+    }
+    let host = url
+        .host_str()
+        .ok_or_else(|| MiniAppHostDispatchError::parse("URL has no host"))?;
+    if !host_allowed_by_allowlist(allow, host) {
+        return Err(deny(format!("Domain not in allowlist: {host}")));
+    }
+    Ok(())
+}
+
+async fn resolve_public_address(url: &reqwest::Url) -> MiniAppHostDispatchResult<SocketAddr> {
+    let host = url
+        .host_str()
+        .ok_or_else(|| MiniAppHostDispatchError::parse("URL has no host"))?;
+    let port = url
+        .port_or_known_default()
+        .ok_or_else(|| MiniAppHostDispatchError::parse("URL has no port"))?;
+    let mut addresses = tokio::net::lookup_host((host, port))
         .await
-        .map_err(|e| MiniAppHostDispatchError::service(format!("net.fetch read: {}", e)))?;
-    Ok(json!({
-        "status": status,
-        "headers": Value::Object(headers_out),
-        "body": body,
-    }))
+        .map_err(|error| {
+            MiniAppHostDispatchError::service(format!("net.fetch DNS lookup: {error}"))
+        })?;
+    let mut public = None;
+    let mut resolved_any = false;
+    for address in addresses.by_ref() {
+        resolved_any = true;
+        if is_private_network_address(address.ip()) {
+            return Err(deny(format!(
+                "Network target resolves to a private or local address: {}",
+                address.ip()
+            )));
+        }
+        public.get_or_insert(address);
+    }
+    if !resolved_any {
+        return Err(MiniAppHostDispatchError::service(
+            "net.fetch DNS lookup returned no addresses",
+        ));
+    }
+    public.ok_or_else(|| deny("Network target has no public address"))
+}
+
+fn is_private_network_address(address: IpAddr) -> bool {
+    match address {
+        IpAddr::V4(address) => is_private_ipv4(address),
+        IpAddr::V6(address) => is_private_ipv6(address),
+    }
+}
+
+fn is_private_ipv4(address: Ipv4Addr) -> bool {
+    let [a, b, _, _] = address.octets();
+    address.is_private()
+        || address.is_loopback()
+        || address.is_link_local()
+        || address.is_unspecified()
+        || address.is_multicast()
+        || address == Ipv4Addr::BROADCAST
+        || a == 0
+        || (a == 100 && (64..=127).contains(&b))
+        || (a == 192 && b == 0)
+        || (a == 198 && (b == 18 || b == 19))
+        || a >= 240
+}
+
+fn is_private_ipv6(address: Ipv6Addr) -> bool {
+    let segments = address.segments();
+    address.is_loopback()
+        || address.is_unspecified()
+        || address.is_multicast()
+        || (segments[0] & 0xfe00) == 0xfc00
+        || (segments[0] & 0xffc0) == 0xfe80
+        || address.to_ipv4_mapped().is_some_and(is_private_ipv4)
 }
 
 #[cfg(test)]
@@ -560,6 +731,43 @@ mod tests {
         );
         assert_eq!(command_basename_for_allowlist("git.exe"), "git");
         assert_eq!(command_basename_for_allowlist("/usr/bin/git"), "git");
+    }
+
+    #[tokio::test]
+    async fn network_validation_denies_empty_allowlists_and_url_credentials() {
+        let public = reqwest::Url::parse("https://example.com/data").unwrap();
+        assert!(validate_network_target(&public, &[]).await.is_err());
+        let credentialed = reqwest::Url::parse("https://user:secret@example.com/data").unwrap();
+        assert!(
+            validate_network_target(&credentialed, &["example.com".to_string()])
+                .await
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn ssrf_filter_blocks_local_private_link_local_and_mapped_addresses() {
+        for address in [
+            "127.0.0.1",
+            "10.0.0.1",
+            "100.64.0.1",
+            "169.254.169.254",
+            "192.168.1.1",
+            "224.0.0.1",
+            "::1",
+            "fe80::1",
+            "fc00::1",
+            "::ffff:127.0.0.1",
+        ] {
+            assert!(
+                is_private_network_address(address.parse().unwrap()),
+                "{address} should be denied"
+            );
+        }
+        assert!(!is_private_network_address("1.1.1.1".parse().unwrap()));
+        assert!(!is_private_network_address(
+            "2606:4700:4700::1111".parse().unwrap()
+        ));
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

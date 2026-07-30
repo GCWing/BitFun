@@ -3,7 +3,7 @@ use super::*;
 impl TaskTool {
     pub(super) fn context_mode_from_input(input: &Value) -> BitFunResult<SubagentContextMode> {
         match input.get("fork_context") {
-            None => Ok(SubagentContextMode::Fresh),
+            None | Some(Value::Null) => Ok(SubagentContextMode::Fresh),
             Some(value) => {
                 let fork_context = value.as_bool().ok_or_else(|| {
                     BitFunError::tool("fork_context must be a boolean".to_string())

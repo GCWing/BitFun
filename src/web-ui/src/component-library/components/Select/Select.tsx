@@ -55,6 +55,7 @@ export interface SelectProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 
   dropdownTestId?: string;
   triggerAriaLabel?: string;
   triggerAriaLabelledBy?: string;
+  triggerAriaDescribedBy?: string;
 }
 
 export const Select: React.FC<SelectProps> = ({
@@ -88,12 +89,14 @@ export const Select: React.FC<SelectProps> = ({
   dropdownTestId,
   triggerAriaLabel,
   triggerAriaLabelledBy,
+  triggerAriaDescribedBy,
   ...rootProps
 }) => {
   const { t } = useI18n('components');
   const baseId = React.useId();
   const labelId = `${baseId}-label`;
   const listboxId = `${baseId}-listbox`;
+  const errorId = `${baseId}-error`;
   
   // Resolve i18n default values
   const resolvedPlaceholder = placeholder ?? t('select.placeholder');
@@ -402,7 +405,7 @@ export const Select: React.FC<SelectProps> = ({
   useEffect(() => {
     if (highlightedIndex >= 0 && dropdownRef.current && isKeyboardNavigation.current) {
       const highlightedElement = document.getElementById(`${listboxId}-option-${highlightedIndex}`);
-      highlightedElement?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      highlightedElement?.scrollIntoView({ block: 'nearest' });
       isKeyboardNavigation.current = false;
     }
   }, [highlightedIndex, listboxId]);
@@ -443,15 +446,17 @@ export const Select: React.FC<SelectProps> = ({
             <span key={opt.value} className="select__tag">
               {opt.icon && <span className="select__tag-icon">{opt.icon}</span>}
               <span className="select__tag-label">{opt.label}</span>
-              <span 
+              <button
+                type="button"
                 className="select__tag-remove"
                 onClick={(e) => {
                   e.stopPropagation();
                   handleSelect(opt);
                 }}
+                aria-label={opt.label}
               >
                 ×
-              </span>
+              </button>
             </span>
           ))}
           {remaining > 0 && (
@@ -540,8 +545,11 @@ export const Select: React.FC<SelectProps> = ({
           ? `${listboxId}-option-${highlightedIndex}`
           : undefined}
         aria-disabled={disabled}
+        aria-busy={loading || undefined}
+        aria-invalid={error || undefined}
         aria-label={triggerAriaLabel}
         aria-labelledby={triggerAriaLabelledBy ?? (label ? labelId : undefined)}
+        aria-describedby={error && errorMessage ? errorId : triggerAriaDescribedBy}
         data-testid={triggerTestId}
       >
         {renderSelectedValue()}
@@ -553,7 +561,14 @@ export const Select: React.FC<SelectProps> = ({
             </span>
           )}
           {clearable && !loading && (multiple ? (selectedValue as any[]).length > 0 : selectedValue) && (
-            <span className="select__clear" onClick={handleClear}>×</span>
+            <button
+              type="button"
+              className="select__clear"
+              onClick={handleClear}
+              aria-label={t('search.clear')}
+            >
+              ×
+            </button>
           )}
           <span className={`select__arrow ${isOpen ? 'select__arrow--open' : ''}`}>
             <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
@@ -569,6 +584,8 @@ export const Select: React.FC<SelectProps> = ({
           className={`select__dropdown select__dropdown--${resolvedPlacement}`}
           ref={dropdownRef}
           role="listbox"
+          aria-multiselectable={multiple || undefined}
+          aria-busy={loading || undefined}
           data-testid={dropdownTestId}
         >
           {searchable && (
@@ -616,7 +633,8 @@ export const Select: React.FC<SelectProps> = ({
                 }}
               />
               {searchQuery && (
-                <span
+                <button
+                  type="button"
                   className="select__search-clear"
                   onClick={(e) => {
                     e.stopPropagation();
@@ -624,15 +642,21 @@ export const Select: React.FC<SelectProps> = ({
                     setHighlightedIndex(-1);
                     searchInputRef.current?.focus();
                   }}
+                  aria-label={t('search.clear')}
                 >
                   ×
-                </span>
+                </button>
               )}
             </div>
           )}
           
           {multiple && showSelectAll && filteredOptions.length > 0 && (
-            <div className="select__select-all" onClick={handleSelectAll}>
+            <div
+              className="select__select-all"
+              onClick={handleSelectAll}
+              role="option"
+              aria-selected={filteredOptions.filter(opt => !opt.disabled).every(opt => isSelected(opt.value))}
+            >
               <span className={`select__checkbox ${
                 filteredOptions.filter(opt => !opt.disabled).every(opt => isSelected(opt.value))
                   ? 'select__checkbox--checked' : ''
@@ -708,7 +732,7 @@ export const Select: React.FC<SelectProps> = ({
       )}
       
       {error && errorMessage && (
-        <div className="select__error-message">{errorMessage}</div>
+        <div id={errorId} className="select__error-message" role="alert">{errorMessage}</div>
       )}
     </div>
   );

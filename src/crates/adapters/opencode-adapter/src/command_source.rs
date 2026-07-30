@@ -1,3 +1,8 @@
+use crate::local_source_paths::{
+    find_project_root, local_watch_roots, ordered_local_config_directories,
+    project_asset_directories, project_config_directories, user_config_dir,
+    LocalConfigDirectoryKind,
+};
 use bitfun_product_domains::external_sources::{
     EcosystemId, ExpandedPromptCommand, ExternalSourceAssetKind, ExternalSourceContext,
     ExternalSourceDiagnostic, ExternalSourceHealth, ExternalSourceProviderError,
@@ -37,7 +42,7 @@ pub struct OpenCodeCommandProviderOptions {
 impl OpenCodeCommandProviderOptions {
     pub fn from_environment() -> Self {
         let home = dirs::home_dir();
-        let user_config_dir = opencode_user_config_dir(
+        let user_config_dir = user_config_dir(
             std::env::var_os("XDG_CONFIG_HOME").map(PathBuf::from),
             home.clone(),
         );
@@ -95,7 +100,7 @@ impl OpenCodeCommandProvider {
         if self.options.project_config_enabled {
             if let Some(workspace_root) = &context.workspace_root {
                 let project_root = find_project_root(workspace_root);
-                for directory in directories_between(&project_root, workspace_root) {
+                for directory in project_config_directories(&project_root, workspace_root) {
                     push_config_directory_layers(
                         &mut layers,
                         &directory,
@@ -105,50 +110,53 @@ impl OpenCodeCommandProvider {
                 }
             }
         }
-        // Phase 4: global command directories.
-        push_command_directory_layer(
-            &mut layers,
+        // Phase 4: ConfigPaths.directories. OpenCode keeps the first physical
+        // directory when an environment path aliases an earlier entry.
+        let project_directories = if self.options.project_config_enabled {
+            context
+                .workspace_root
+                .as_ref()
+                .map(|workspace_root| {
+                    project_asset_directories(&find_project_root(workspace_root), workspace_root)
+                })
+                .unwrap_or_default()
+        } else {
+            Vec::new()
+        };
+        for directory in ordered_local_config_directories(
             &self.options.user_config_dir,
-            ExternalSourceScope::UserGlobal,
-            "OpenCode user command directory",
-        );
-        // Phase 5: project .opencode directories, nearest first. Since later
-        // values win, the outer project directory wins a same-name tie.
-        if self.options.project_config_enabled {
-            if let Some(workspace_root) = &context.workspace_root {
-                let project_root = find_project_root(workspace_root);
-                for directory in directories_between(&project_root, workspace_root)
-                    .into_iter()
-                    .rev()
-                {
+            self.options.legacy_user_config_dir.as_deref(),
+            self.options.explicit_config_dir.as_deref(),
+            &project_directories,
+        ) {
+            match directory.kind {
+                LocalConfigDirectoryKind::User => push_command_directory_layer(
+                    &mut layers,
+                    &directory.path,
+                    directory.scope,
+                    "OpenCode user command directory",
+                ),
+                LocalConfigDirectoryKind::Project => {
                     push_directory_layers(
                         &mut layers,
-                        &directory.join(".opencode"),
-                        ExternalSourceScope::Project,
+                        &directory.path,
+                        directory.scope,
                         "OpenCode project command directory",
                     );
                 }
-            }
-        }
-        // Phase 6: ~/.opencode compatibility directory.
-        if let Some(legacy) = &self.options.legacy_user_config_dir {
-            if legacy != &self.options.user_config_dir {
-                push_directory_layers(
+                LocalConfigDirectoryKind::Legacy => push_directory_layers(
                     &mut layers,
-                    legacy,
-                    ExternalSourceScope::UserGlobal,
+                    &directory.path,
+                    directory.scope,
                     "OpenCode legacy user configuration",
-                );
+                ),
+                LocalConfigDirectoryKind::Explicit => push_directory_layers(
+                    &mut layers,
+                    &directory.path,
+                    directory.scope,
+                    "OpenCode OPENCODE_CONFIG_DIR",
+                ),
             }
-        }
-        // Phase 7: OPENCODE_CONFIG_DIR.
-        if let Some(directory) = &self.options.explicit_config_dir {
-            push_directory_layers(
-                &mut layers,
-                directory,
-                ExternalSourceScope::WorkspaceLocal,
-                "OpenCode OPENCODE_CONFIG_DIR",
-            );
         }
         deduplicate_layers_keep_last(layers)
     }
@@ -366,32 +374,24 @@ impl PromptCommandSourceProvider for OpenCodeCommandProvider {
     }
 
     fn watch_roots(&self, context: &ExternalSourceContext) -> Vec<ExternalWatchRoot> {
-        let mut roots = BTreeMap::new();
-        add_directory_watch_roots(&mut roots, &self.options.user_config_dir);
-        if let Some(path) = &self.options.legacy_user_config_dir {
-            add_directory_watch_roots(&mut roots, path);
-        }
-        if let Some(path) = &self.options.explicit_config_file {
-            if let Some(parent) = path.parent() {
-                add_nearest_existing_watch_root(&mut roots, parent);
-            }
-        }
-        if let Some(path) = &self.options.explicit_config_dir {
-            add_directory_watch_roots(&mut roots, path);
-        }
-        if self.options.project_config_enabled {
-            if let Some(workspace_root) = &context.workspace_root {
-                let project_root = find_project_root(workspace_root);
-                for directory in directories_between(&project_root, workspace_root) {
-                    add_watch_root(&mut roots, directory.clone(), false);
-                    add_directory_watch_roots(&mut roots, &directory.join(".opencode"));
-                }
-            }
-        }
-        roots
-            .into_iter()
-            .map(|(path, recursive)| ExternalWatchRoot { path, recursive })
-            .collect()
+        let project_directories = if self.options.project_config_enabled {
+            context
+                .workspace_root
+                .as_ref()
+                .map(|workspace_root| {
+                    project_config_directories(&find_project_root(workspace_root), workspace_root)
+                })
+                .unwrap_or_default()
+        } else {
+            Vec::new()
+        };
+        local_watch_roots(
+            &self.options.user_config_dir,
+            self.options.legacy_user_config_dir.as_deref(),
+            self.options.explicit_config_file.as_deref(),
+            self.options.explicit_config_dir.as_deref(),
+            &project_directories,
+        )
     }
 }
 
@@ -958,16 +958,6 @@ fn command_content_version(name: &str, input: &OpenCodeCommandInput) -> String {
     format!("sha256:{}", hex::encode(hasher.finalize()))
 }
 
-pub(crate) fn opencode_user_config_dir(
-    xdg_config_home: Option<PathBuf>,
-    home: Option<PathBuf>,
-) -> PathBuf {
-    xdg_config_home
-        .or_else(|| home.map(|home| home.join(".config")))
-        .unwrap_or_else(|| PathBuf::from(".config"))
-        .join("opencode")
-}
-
 fn environment_truthy(key: &str) -> bool {
     std::env::var(key)
         .ok()
@@ -1163,87 +1153,4 @@ fn content_version<'a>(entries: impl IntoIterator<Item = (&'a Path, &'a [u8])>) 
         hasher.update([0]);
     }
     format!("sha256:{}", hex::encode(hasher.finalize()))
-}
-
-fn find_project_root(start: &Path) -> PathBuf {
-    let start = if start.is_file() {
-        start.parent().unwrap_or(start)
-    } else {
-        start
-    };
-    start
-        .ancestors()
-        .find(|path| path.join(".git").exists())
-        .unwrap_or(start)
-        .to_path_buf()
-}
-
-fn directories_between(root: &Path, opened: &Path) -> Vec<PathBuf> {
-    let opened = if opened.is_file() {
-        opened.parent().unwrap_or(opened)
-    } else {
-        opened
-    };
-    let mut directories = opened
-        .ancestors()
-        .take_while(|path| path.starts_with(root))
-        .map(Path::to_path_buf)
-        .collect::<Vec<_>>();
-    directories.reverse();
-    directories
-}
-
-fn nearest_existing_path(mut path: PathBuf) -> Option<PathBuf> {
-    loop {
-        if path.exists() {
-            return Some(path);
-        }
-        if !path.pop() {
-            return None;
-        }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::opencode_user_config_dir;
-    use std::path::PathBuf;
-
-    #[test]
-    fn default_config_root_uses_xdg_semantics_on_every_platform() {
-        assert_eq!(
-            opencode_user_config_dir(None, Some(PathBuf::from("home"))),
-            PathBuf::from("home/.config/opencode")
-        );
-        assert_eq!(
-            opencode_user_config_dir(
-                Some(PathBuf::from("custom-config")),
-                Some(PathBuf::from("home"))
-            ),
-            PathBuf::from("custom-config/opencode")
-        );
-    }
-}
-
-fn add_watch_root(roots: &mut BTreeMap<PathBuf, bool>, path: PathBuf, recursive: bool) {
-    roots
-        .entry(path)
-        .and_modify(|existing| *existing |= recursive)
-        .or_insert(recursive);
-}
-
-fn add_nearest_existing_watch_root(roots: &mut BTreeMap<PathBuf, bool>, path: &Path) {
-    if let Some(path) = nearest_existing_path(path.to_path_buf()) {
-        add_watch_root(roots, path, false);
-    }
-}
-
-fn add_directory_watch_roots(roots: &mut BTreeMap<PathBuf, bool>, directory: &Path) {
-    if let Some(parent) = directory.parent() {
-        add_nearest_existing_watch_root(roots, parent);
-    }
-    // Keep the desired root even before it exists. The host watches its nearest
-    // existing parent non-recursively, then promotes this root to a recursive
-    // watch after a creation event and a successful rescan.
-    add_watch_root(roots, directory.to_path_buf(), true);
 }

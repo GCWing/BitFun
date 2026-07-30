@@ -27,6 +27,9 @@ use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
 use super::manager::SSHConnectionManager;
+use super::release_verify::{release_pubkey, release_tag_for_version, verify_signed_checksum};
+#[cfg(test)]
+use super::release_verify::{verify_minisign, RELEASE_PUBKEY};
 use super::remote_git::shell_quote_posix;
 
 /// Default public relay port, matching `src/apps/relay-server/docker-compose.yml`.
@@ -72,10 +75,6 @@ const STALL_WINDOW_SECONDS: u64 = 30;
 /// target dir and Docker layers). Checked before the build rather than
 /// discovered as an opaque compiler failure part-way through.
 const SOURCE_BUILD_FREE_KB: u64 = 6 * 1024 * 1024;
-/// Trust root for published relay archives, injected at build time from the
-/// same `TAURI_UPDATER_PUBKEY` the Desktop updater uses. Absent in local and
-/// fork builds, which then fall back to the cross-origin checksum.
-const RELEASE_PUBKEY: Option<&str> = option_env!("BITFUN_RELEASE_PUBKEY");
 /// Targets a published relay archive exists for.
 const RELEASE_TARGETS: [&str; 2] = ["x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu"];
 /// Canonical China-mirror helper (shared with `src/apps/relay-server/deploy.sh`).
@@ -101,14 +100,6 @@ const TASK_DONE_MARKER: &str = "RELAY_TASK_DONE";
 /// before the task counts as dead. Covers PTY startup and the shell prompt; an
 /// alive driver (an open sudo password prompt, say) is never bounded by this.
 const PREPARE_GRACE_SECONDS: u64 = 90;
-
-fn release_tag_for_version(version: &str) -> String {
-    if version.contains("-nightly.") {
-        "nightly".to_string()
-    } else {
-        format!("v{}", version.split('+').next().unwrap_or(version))
-    }
-}
 
 /// Long-running remote operations that run detached and are polled.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -527,9 +518,7 @@ pub async fn start_task(
 fn strip_cr_command(path: &str) -> String {
     let src = shell_quote_posix(path);
     let tmp = shell_quote_posix(&format!("{path}.lf"));
-    format!(
-        "{{ tr -d '\\r' < {src} > {tmp} && mv {tmp} {src}; }} || {{ rm -f {tmp}; false; }}"
-    )
+    format!("{{ tr -d '\\r' < {src} > {tmp} && mv {tmp} {src}; }} || {{ rm -f {tmp}; false; }}")
 }
 
 /// Prepare uploaded scripts for the PTY: normalize line endings, make them
@@ -1647,9 +1636,11 @@ export BITFUN_STALL_SECONDS="{stall_seconds}"
 ///
 /// Best effort by design — an empty map simply leaves the remote on the
 /// cross-origin checksum path.
-async fn verified_release_checksums(release_tag: &str) -> std::collections::HashMap<String, String> {
+async fn verified_release_checksums(
+    release_tag: &str,
+) -> std::collections::HashMap<String, String> {
     let mut verified = std::collections::HashMap::new();
-    let Some(pubkey) = RELEASE_PUBKEY.filter(|key| !key.trim().is_empty()) else {
+    let Some(pubkey) = release_pubkey() else {
         return verified;
     };
     let Ok(client) = reqwest::Client::builder()
@@ -1661,26 +1652,28 @@ async fn verified_release_checksums(release_tag: &str) -> std::collections::Hash
     };
 
     for target in RELEASE_TARGETS {
-        let checksum_url =
-            format!("{RELEASE_BASE}/download/{release_tag}/bitfun-relay-server-{target}.tar.gz.sha256");
+        let checksum_url = format!(
+            "{RELEASE_BASE}/download/{release_tag}/bitfun-relay-server-{target}.tar.gz.sha256"
+        );
         let Some(checksum) = fetch_text(&client, &checksum_url).await else {
             continue;
         };
         let Some(signature) = fetch_text(&client, &format!("{checksum_url}.sig")).await else {
             continue;
         };
-        if let Err(error) = verify_minisign(checksum.as_bytes(), &signature, pubkey) {
-            log::warn!("Relay checksum signature for {target} did not verify: {error}");
-            continue;
-        }
-        let Some(hash) = checksum
-            .split_whitespace()
-            .next()
-            .filter(|value| value.len() == 64 && value.chars().all(|c| c.is_ascii_hexdigit()))
-        else {
-            continue;
+        let hash = match verify_signed_checksum(
+            &checksum,
+            &signature,
+            pubkey,
+            &format!("bitfun-relay-server-{target}.tar.gz"),
+        ) {
+            Ok(hash) => hash,
+            Err(error) => {
+                log::warn!("Relay checksum signature for {target} did not verify: {error}");
+                continue;
+            }
         };
-        verified.insert(target.to_string(), hash.to_ascii_lowercase());
+        verified.insert(target.to_string(), hash);
     }
     verified
 }
@@ -1696,25 +1689,6 @@ async fn fetch_text(client: &reqwest::Client, url: &str) -> Option<String> {
         .text()
         .await
         .ok()
-}
-
-/// Verify a Tauri-format `.sig` (base64 of a minisign signature file) over
-/// `data`, using the base64-wrapped public key.
-fn verify_minisign(data: &[u8], signature_b64: &str, pubkey_b64: &str) -> Result<()> {
-    use base64::Engine as _;
-    let decode = |value: &str, what: &str| -> Result<String> {
-        let bytes = base64::engine::general_purpose::STANDARD
-            .decode(value.trim().as_bytes())
-            .map_err(|error| anyhow!("decode {what}: {error}"))?;
-        String::from_utf8(bytes).map_err(|error| anyhow!("decode {what} as UTF-8: {error}"))
-    };
-    let public_key = minisign_verify::PublicKey::decode(&decode(pubkey_b64, "public key")?)
-        .map_err(|error| anyhow!("invalid release public key: {error}"))?;
-    let signature = minisign_verify::Signature::decode(&decode(signature_b64, "signature")?)
-        .map_err(|error| anyhow!("invalid release signature: {error}"))?;
-    public_key
-        .verify(data, &signature, false)
-        .map_err(|error| anyhow!("signature does not match: {error}"))
 }
 
 /// Shell assignments exporting the verified hashes the remote script consumes.
@@ -1828,9 +1802,8 @@ mod tests {
         install_docker_body_script, interactive_driver_script, parse_preflight,
         prepare_helpers_bash, release_binary_deploy_bash, release_tag_for_version,
         split_poll_stdout, stage_scripts_command, sync_source_bash, to_unix_script,
-        verified_checksum_exports,
-        verified_release_checksums, verify_minisign, DockerAccessMode, RelayTaskStatus,
-        RELAY_MIRROR_SH, RELAY_RELEASE_DOWNLOAD_SH, RELEASE_PUBKEY,
+        verified_checksum_exports, verified_release_checksums, verify_minisign, DockerAccessMode,
+        RelayTaskStatus, RELAY_MIRROR_SH, RELAY_RELEASE_DOWNLOAD_SH, RELEASE_PUBKEY,
     };
 
     #[test]
@@ -1938,7 +1911,11 @@ mod tests {
                 "{path} must be LF-only on the host"
             );
             let mode = std::fs::metadata(path).expect("stat").permissions().mode();
-            assert_eq!(mode & 0o777, 0o700, "{path} must stay owner-only executable");
+            assert_eq!(
+                mode & 0o777,
+                0o700,
+                "{path} must stay owner-only executable"
+            );
         }
         // The rewrite must not leave its scratch file behind.
         assert!(!std::path::Path::new(&format!("{script_path}.lf")).exists());
@@ -1948,7 +1925,10 @@ mod tests {
             !command.contains('\r'),
             "the CR strip must not depend on a raw CR surviving transport"
         );
-        assert!(!std::path::Path::new(&pid_path).exists(), "stale pid cleared");
+        assert!(
+            !std::path::Path::new(&pid_path).exists(),
+            "stale pid cleared"
+        );
         assert!(
             !std::path::Path::new(&driver_pid_path).exists(),
             "stale driver pid cleared"
@@ -1972,7 +1952,10 @@ mod tests {
         );
 
         for (name, script) in [
-            ("deploy driver", interactive_driver_script("deploy", "deploy")),
+            (
+                "deploy driver",
+                interactive_driver_script("deploy", "deploy"),
+            ),
             (
                 "install driver",
                 interactive_driver_script("install-docker", "install"),

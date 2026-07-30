@@ -1,8 +1,8 @@
 use bitfun_product_domains::tool_permissions::{PermissionReply, PermissionRequest};
 use bitfun_runtime_ports::{
     AgentDialogTurnRequest, AgentSessionCreateRequest, AgentSessionCreateResult,
-    AgentSessionListRequest, AgentSessionSummary, AgentTurnCancellationRequest,
-    AgentTurnCancellationResult, SessionTranscript,
+    AgentSessionListRequest, AgentSessionModeUpdateRequest, AgentSessionSummary,
+    AgentTurnCancellationRequest, AgentTurnCancellationResult, SessionTranscript,
 };
 use serde::{Deserialize, Serialize};
 
@@ -39,6 +39,9 @@ pub enum RuntimeIpcOperation {
     RestoreSession {
         request: RuntimeSessionRestoreRequest,
     },
+    UpdateSessionMode {
+        request: AgentSessionModeUpdateRequest,
+    },
     SubmitTurn {
         request: AgentDialogTurnRequest,
     },
@@ -62,6 +65,7 @@ impl RuntimeIpcOperation {
     pub fn session_id(&self) -> Option<&str> {
         match self {
             Self::RestoreSession { request } => Some(&request.session_id),
+            Self::UpdateSessionMode { request } => Some(&request.session_id),
             Self::SubmitTurn { request } => Some(&request.session_id),
             Self::CancelTurn { request } => Some(&request.session_id),
             Self::PendingPermissions { session_id }
@@ -74,7 +78,8 @@ impl RuntimeIpcOperation {
     pub fn requires_controller(&self) -> bool {
         matches!(
             self,
-            Self::SubmitTurn { .. }
+            Self::UpdateSessionMode { .. }
+                | Self::SubmitTurn { .. }
                 | Self::CancelTurn { .. }
                 | Self::PendingPermissions { .. }
                 | Self::RespondPermission { .. }

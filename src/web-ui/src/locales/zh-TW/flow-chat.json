@@ -449,7 +449,10 @@
     "switchSession": "切換會話",
     "create": "建立新會話",
     "more": "更多會話",
-    "restoreMain": "恢復主視窗"
+    "restoreMain": "恢復主視窗",
+    "inUseTitle": "會話已在其他執行個體中開啟",
+    "inUseMessage": "此會話已在另一個 BitFun 執行個體中開啟。請先在該處關閉，然後重試。",
+    "retry": "重試"
   },
   "scroll": {
     "toBottom": "回到底部",
@@ -627,6 +630,31 @@
     "processingFailed": "處理失敗"
   },
   "chatInput": {
+    "dispatch": {
+      "local": "本機",
+      "locked": "執行於 {{target}}（此任務不可變更）",
+      "current": "將此任務執行於 {{target}}",
+      "menuLabel": "這個任務在哪裡執行",
+      "sessionScope": "新任務",
+      "localSection": "本機",
+      "localDescription": "在目前 BitFun 應用程式中執行",
+      "sshSection": "SSH",
+      "loading": "正在載入目標…",
+      "noSshTargets": "沒有已儲存的 SSH 目標",
+      "sshDescription": "透過已儲存的 SSH 連線執行",
+      "addSsh": "新增 SSH 連線…",
+      "deviceSection": "帳號裝置",
+      "signInDevices": "登入以使用其他裝置…",
+      "noDeviceTargets": "沒有其他帳號裝置",
+      "deviceDescription": "透過端對端加密的帳號 Relay RPC 執行",
+      "deviceOffline": "離線",
+      "createFailed": "無法建立派發任務。",
+      "remoteTarget": "遠端目標",
+      "autoConfirmTitle": "允許無人值守地修改嗎？",
+      "autoConfirmMessage": "此任務將在 {{target}} 上執行，並自動核准權限要求。是否繼續？",
+      "autoConfirmAction": "自動核准並派發",
+      "autoConfirmCancel": "取消"
+    },
     "addBoostTooltip": "智能體模式、圖片或 Skill",
     "permissionMode": {
       "menuLabel": "權限模式",

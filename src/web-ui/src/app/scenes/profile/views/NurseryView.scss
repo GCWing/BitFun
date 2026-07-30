@@ -569,7 +569,11 @@ $nursery-gallery-gutter: clamp(24px, 4vw, 56px);
     cursor: pointer;
     color: var(--color-text-muted);
     border-radius: $size-radius-sm;
-    transition: all $motion-fast $easing-standard;
+    transition:
+      transform $motion-fast $easing-standard,
+      background-color $motion-fast $easing-standard,
+      border-color $motion-fast $easing-standard,
+      color $motion-fast $easing-standard;
 
     &:hover {
       color: var(--color-text-secondary);
@@ -716,7 +720,11 @@ $nursery-gallery-gutter: clamp(24px, 4vw, 56px);
     cursor: pointer;
     color: var(--color-text-muted);
     border-radius: $size-radius-sm;
-    transition: all $motion-fast $easing-standard;
+    transition:
+      transform $motion-fast $easing-standard,
+      background-color $motion-fast $easing-standard,
+      border-color $motion-fast $easing-standard,
+      color $motion-fast $easing-standard;
 
     &:hover {
       color: var(--color-text-secondary);

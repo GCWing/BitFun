@@ -57,6 +57,10 @@ export const SETTINGS_TAB_SEARCH_CONTENT: Record<ConfigTab, readonly SettingsTab
     { ns: 'worktrees', key: 'settings.rootPath.label' },
     { ns: 'worktrees', key: 'settings.branchPrefix.label' },
     { ns: 'worktrees', key: 'settings.copyChanges.label' },
+    { ns: 'worktrees', key: 'settings.autoDelete.label' },
+    { ns: 'worktrees', key: 'settings.autoDeleteLimit.label' },
+    { ns: 'worktrees', key: 'management.title' },
+    { ns: 'worktrees', key: 'management.description' },
   ],
 
   'archived-sessions': [

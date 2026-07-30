@@ -76,11 +76,6 @@ export const ExploreGroupRenderer: React.FC<ExploreGroupRendererProps> = React.m
   } = useToolCardHeightContract({
     toolId: groupId,
     toolName: 'explore-group',
-    getCardHeight: () => (
-      containerRef.current?.scrollHeight
-      ?? containerRef.current?.getBoundingClientRect().height
-      ?? null
-    ),
   });
   
   const hasExplicitState = exploreGroupStates?.has(groupId) ?? false;

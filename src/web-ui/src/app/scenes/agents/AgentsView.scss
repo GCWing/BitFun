@@ -46,7 +46,10 @@
     border: 1px solid var(--border-subtle);
     border-radius: $size-radius-sm;
     cursor: pointer;
-    transition: all $motion-fast $easing-standard;
+    transition:
+      transform $motion-fast $easing-standard,
+      background-color $motion-fast $easing-standard,
+      color $motion-fast $easing-standard;
 
     &:hover {
       color: var(--color-text-primary);
@@ -169,7 +172,11 @@
     border: 1px solid var(--border-subtle);
     border-radius: $size-radius-base;
     cursor: pointer;
-    transition: all $motion-fast $easing-standard;
+    transition:
+      transform $motion-fast $easing-standard,
+      background-color $motion-fast $easing-standard,
+      border-color $motion-fast $easing-standard,
+      color $motion-fast $easing-standard;
     text-align: left;
     font-family: $font-family-sans;
 
@@ -241,7 +248,11 @@
     color: var(--color-text-muted);
     font-size: var(--font-size-xs);
     cursor: pointer;
-    transition: all $motion-fast $easing-standard;
+    transition:
+      transform $motion-fast $easing-standard,
+      background-color $motion-fast $easing-standard,
+      border-color $motion-fast $easing-standard,
+      color $motion-fast $easing-standard;
     font-family: $font-family-sans;
 
     &:hover {

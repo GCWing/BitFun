@@ -1,6 +1,7 @@
 /**
- * WelcomeScene styles.
- * Session card hover effects mirror btn-action / btn-action-ai from component library.
+ * WelcomeScene is a focused project launcher, not a marketing page. The
+ * greeting establishes context; recent workspaces and primary actions live in
+ * one precise surface with predictable row geometry.
  */
 
 @use '../../../component-library/styles/tokens.scss' as *;
@@ -10,59 +11,61 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 100%;
   width: 100%;
+  height: 100%;
+  padding: clamp(#{$size-gap-6}, 6vh, #{$size-gap-12}) $size-gap-8;
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: $size-gap-8 $size-gap-6;
-  animation: welcome-fade-in 0.35s $easing-decelerate;
+  background: var(--color-bg-scene);
+  animation: welcome-scene-reveal 180ms cubic-bezier(0.23, 1, 0.32, 1) both;
 
   &__content {
     display: flex;
     flex-direction: column;
-    gap: $size-gap-8;
-    max-width: 560px;
-    width: 100%;
+    gap: $size-gap-6;
+    width: min(100%, 680px);
+    margin: auto;
   }
 
   &__greeting {
     display: flex;
     flex-direction: column;
-    align-items: center;
-    text-align: center;
-    gap: $size-gap-3;
+    align-items: flex-start;
+    gap: $size-gap-2;
+    text-align: left;
   }
 
   &__title {
     margin: 0;
-    font-size: var(--font-size-2xl);
-    line-height: $line-height-tight;
-    letter-spacing: -0.02em;
     color: var(--color-text-primary);
+    font-size: clamp(var(--font-size-2xl), 3vw, 32px);
     font-weight: $font-weight-semibold;
+    line-height: 1.08;
+    letter-spacing: -0.025em;
   }
 
   &__greeting-label {
-    font-size: var(--font-size-lg);
-    line-height: 1.5;
-    color: var(--color-text-primary);
+    max-width: 560px;
     margin: 0;
-    max-width: 420px;
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-base);
+    line-height: 1.55;
   }
-
-  // ── Divider ──────────────────────────────────────────
 
   &__divider {
-    height: 1px;
-    background: var(--border-subtle);
+    display: none;
   }
-
-  // ── Switch workspace section ─────────────────────────
 
   &__switch {
     display: flex;
     flex-direction: column;
-    gap: $size-gap-3;
+    overflow: hidden;
+    border: 1px solid var(--border-subtle);
+    border-radius: $size-radius-lg;
+    background: color-mix(in srgb, var(--color-bg-secondary) 54%, var(--color-bg-scene));
+    box-shadow:
+      0 1px 0 color-mix(in srgb, var(--color-static-white) 4%, transparent) inset,
+      0 12px 30px -20px var(--color-overlay-black-30);
   }
 
   &__switch-header {
@@ -70,42 +73,57 @@
     align-items: center;
     justify-content: space-between;
     gap: $size-gap-3;
+    min-height: 46px;
+    padding: $size-gap-2 $size-gap-3;
+    border-bottom: 1px solid var(--border-subtle);
   }
 
   &__section-label {
     display: flex;
     align-items: center;
-    gap: $size-gap-1;
-    font-size: var(--font-size-sm);
-    color: var(--color-text-muted);
-    font-weight: $font-weight-medium;
+    gap: 6px;
+    min-width: 0;
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-xs);
+    font-weight: $font-weight-semibold;
+    letter-spacing: 0.045em;
     text-transform: uppercase;
-    letter-spacing: 0.05em;
+
+    svg {
+      flex-shrink: 0;
+      color: var(--color-text-muted);
+    }
   }
 
   &__switch-actions {
     display: flex;
     align-items: center;
-    gap: $size-gap-1;
+    gap: 2px;
+    flex-shrink: 0;
   }
 
   &__link-btn {
-    display: flex;
+    display: inline-flex;
     align-items: center;
-    gap: 4px;
-    padding: 4px $size-gap-2;
+    gap: 6px;
+    min-height: 28px;
+    padding: 0 $size-gap-2;
     border: none;
     border-radius: $size-radius-sm;
     background: transparent;
     color: var(--color-text-muted);
-    font-size: var(--font-size-sm);
+    font: inherit;
+    font-size: var(--font-size-xs);
+    white-space: nowrap;
     cursor: pointer;
-    transition: background $motion-fast $easing-standard,
-                color $motion-fast $easing-standard;
+    transition:
+      transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
+      background 120ms ease,
+      color 120ms ease;
 
-    &:hover:not(:disabled) {
-      background: var(--element-bg-soft);
-      color: var(--color-text-secondary);
+    &:active:not(:disabled) {
+      transform: scale(0.97);
+      background: var(--element-bg-medium);
     }
 
     &:disabled {
@@ -113,50 +131,25 @@
       cursor: default;
     }
 
-    svg { flex-shrink: 0; }
+    svg {
+      flex-shrink: 0;
+    }
   }
-
-  // ── Recent list ──────────────────────────────────────
 
   &__recent-list {
     display: flex;
     flex-direction: column;
-    gap: 1px;
+    gap: 2px;
+    padding: $size-gap-2;
   }
 
   &__recent-row {
     display: flex;
     align-items: stretch;
-    border-radius: $size-radius-sm;
+    min-height: 38px;
     overflow: hidden;
-    transition: background $motion-fast $easing-standard;
-
-    &:hover {
-      background: var(--element-bg-soft);
-
-      .welcome-scene__recent-item {
-        color: var(--color-text-primary);
-
-        svg { color: var(--color-text-secondary); }
-      }
-
-      .welcome-scene__recent-time-btn__label {
-        opacity: 0;
-      }
-
-      .welcome-scene__recent-time-btn__icon {
-        opacity: 1;
-        color: var(--color-text-secondary);
-      }
-    }
-
-    &:hover .welcome-scene__recent-time-btn:hover {
-      background: var(--element-bg-subtle);
-
-      .welcome-scene__recent-time-btn__icon svg {
-        transform: scale(1.12);
-      }
-    }
+    border-radius: $size-radius-base;
+    transition: background 120ms ease;
   }
 
   &__recent-item {
@@ -165,44 +158,54 @@
     gap: $size-gap-2;
     flex: 1;
     min-width: 0;
-    padding: $size-gap-1 + 2px $size-gap-2;
+    padding: 0 $size-gap-2;
     border: none;
     background: transparent;
     color: var(--color-text-secondary);
-    font-size: var(--font-size-base);
-    cursor: pointer;
+    font: inherit;
+    font-size: var(--font-size-sm);
     text-align: left;
-    transition: color $motion-fast $easing-standard;
+    cursor: pointer;
+    transition:
+      transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
+      color 120ms ease;
 
     svg {
       flex-shrink: 0;
       color: var(--color-text-muted);
-      transition: color $motion-fast $easing-standard;
+      transition: color 120ms ease;
+    }
+
+    &:active {
+      transform: scale(0.99);
     }
   }
 
   &__recent-time-btn {
     position: relative;
-    flex-shrink: 0;
     align-self: stretch;
-    min-width: 5.25rem;
+    flex-shrink: 0;
+    min-width: 5.5rem;
     margin: 0;
-    padding: 0 $size-gap-2 0 $size-gap-1;
+    padding: 0 $size-gap-2;
     border: none;
+    border-radius: $size-radius-sm;
     background: transparent;
     color: var(--color-text-muted);
-    font-size: var(--font-size-sm);
+    font: inherit;
+    font-size: var(--font-size-xs);
     cursor: pointer;
-    transition: color $motion-fast $easing-standard,
-                background $motion-fast $easing-standard;
+    transition:
+      transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
+      background 120ms ease,
+      color 120ms ease;
 
     &__label {
       display: flex;
       align-items: center;
       justify-content: flex-end;
       min-height: 100%;
-      padding-right: 1px;
-      transition: opacity $motion-fast $easing-standard;
+      transition: opacity 100ms ease;
     }
 
     &__icon {
@@ -215,21 +218,19 @@
       opacity: 0;
       color: var(--color-text-muted);
       pointer-events: none;
-      transition: opacity $motion-fast $easing-standard,
-                  color $motion-fast $easing-standard;
+      transition:
+        opacity 100ms ease,
+        color 100ms ease;
+    }
 
-      svg {
-        display: block;
-        transform-origin: center right;
-        transition: transform $motion-fast $easing-standard;
-      }
+    &:active {
+      transform: scale(0.96);
     }
 
     &:focus-visible {
-      color: var(--color-text-primary);
+      z-index: 1;
       outline: 2px solid var(--color-accent-500);
       outline-offset: -2px;
-      z-index: 1;
     }
 
     &:focus-visible &__label {
@@ -238,83 +239,141 @@
 
     &:focus-visible &__icon {
       opacity: 1;
-      color: var(--color-text-secondary);
+      color: var(--color-text-primary);
     }
   }
 
   &__recent-name {
-    flex: 1;
     display: inline-flex;
     align-items: baseline;
     gap: 0;
+    flex: 1;
+    min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    min-width: 0;
   }
 
   &__recent-host {
     flex-shrink: 0;
     max-width: 40%;
     overflow: hidden;
-    text-overflow: ellipsis;
     color: var(--color-text-muted);
-    font-size: var(--font-size-sm);
+    font-size: var(--font-size-xs);
+    text-overflow: ellipsis;
   }
 
   &__recent-host-sep {
     flex-shrink: 0;
-    color: var(--color-text-muted);
-    opacity: 0.6;
-    font-size: var(--font-size-sm);
+    color: var(--color-text-disabled);
+    font-size: var(--font-size-xs);
   }
 
   &__no-recent {
-    font-size: var(--font-size-xs);
-    color: var(--color-text-muted);
+    min-height: 72px;
     margin: 0;
-    padding: $size-gap-1 $size-gap-2;
+    padding: $size-gap-4;
+    color: var(--color-text-muted);
+    font-size: var(--font-size-sm);
   }
-
 }
 
-// ── Animations ────────────────────────────────────────
+@media (hover: hover) and (pointer: fine) {
+  .welcome-scene__link-btn:hover:not(:disabled) {
+    background: var(--element-bg-soft);
+    color: var(--color-text-primary);
+  }
 
-@keyframes welcome-fade-in {
+  .welcome-scene__recent-row:hover {
+    background: var(--element-bg-soft);
+
+    .welcome-scene__recent-item {
+      color: var(--color-text-primary);
+
+      svg {
+        color: var(--color-text-secondary);
+      }
+    }
+
+    .welcome-scene__recent-time-btn__label {
+      opacity: 0;
+    }
+
+    .welcome-scene__recent-time-btn__icon {
+      opacity: 1;
+      color: var(--color-text-secondary);
+    }
+  }
+
+  .welcome-scene__recent-time-btn:hover {
+    background: var(--element-bg-medium);
+    color: var(--color-text-primary);
+  }
+}
+
+:root[data-theme-type='light'] .welcome-scene__switch {
+  border-color: var(--border-medium);
+  box-shadow:
+    0 1px 0 color-mix(in srgb, var(--color-static-white) 46%, transparent) inset,
+    0 14px 32px -24px var(--color-overlay-black-30);
+}
+
+@keyframes welcome-scene-reveal {
   from {
     opacity: 0;
-    transform: translateY(10px);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
   }
 }
 
-// ── Responsive ────────────────────────────────────────
-
-@media (max-width: 480px) {
+@media (max-width: 620px) {
   .welcome-scene {
-    padding: $size-gap-5 $size-gap-4;
+    align-items: flex-start;
+    padding: $size-gap-6 $size-gap-4;
+
+    &__content {
+      gap: $size-gap-5;
+    }
+
+    &__switch-header {
+      align-items: flex-start;
+      flex-direction: column;
+      padding-block: $size-gap-3;
+    }
+
+    &__switch-actions {
+      width: 100%;
+    }
+
+    &__link-btn {
+      justify-content: center;
+      flex: 1;
+    }
+  }
+}
+
+@media (max-width: 420px) {
+  .welcome-scene__link-btn {
+    span {
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .welcome-scene {
     animation: none;
-
-    &__recent-item,
-    &__recent-time-btn,
-    &__link-btn {
-      transition: none;
-    }
-
-    &__recent-time-btn__icon svg {
-      transition: none;
-    }
   }
 
-  .welcome-scene__recent-row:hover .welcome-scene__recent-time-btn:hover .welcome-scene__recent-time-btn__icon svg {
+  .welcome-scene__link-btn,
+  .welcome-scene__recent-row,
+  .welcome-scene__recent-item,
+  .welcome-scene__recent-time-btn,
+  .welcome-scene__recent-time-btn__label,
+  .welcome-scene__recent-time-btn__icon {
+    transition: none;
     transform: none;
   }
 }

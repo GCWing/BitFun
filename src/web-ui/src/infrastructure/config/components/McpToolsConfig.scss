@@ -1,25 +1,15 @@
 @use '../../../component-library/styles/tokens' as *;
 
 .bitfun-mcp-tools {
-  .bitfun-config-page-section__body {
-    border: 0;
-    border-radius: 0;
-    background: transparent;
-  }
+  // Server rows, empty states and the JSON editor all sit inside the shared
+  // section card (see ConfigPageLayout) — no page-level chrome overrides here,
+  // so this page reads like every other settings page.
 
-  .bitfun-config-page-row {
-    padding: $size-gap-3 0;
-  }
-
-  .bitfun-collection-empty {
-    justify-content: flex-start;
-    padding: $size-gap-2 0;
-    font-size: var(--font-size-xs);
-  }
   // ─── JSON editor (MCP) ─────────────────────────────────────────────────────
   &__json-editor {
-    padding: $size-gap-3 0;
-    border-bottom: 1px solid var(--border-subtle);
+    // Replaces the server list inside the section card, so it carries the same
+    // gutter a `.bitfun-config-page-row` would.
+    padding: $size-gap-4;
     display: flex;
     flex-direction: column;
     gap: $size-gap-3;
@@ -205,7 +195,8 @@
   justify-content: space-between;
   gap: 12px;
   padding: 10px 12px;
-  margin-bottom: 8px;
+  /* Inset callout: keeps the import prompt clear of the section card border. */
+  margin: $size-gap-3 $size-gap-4;
   border: 1px solid var(--border-subtle);
   border-radius: 8px;
 

@@ -7,7 +7,6 @@ import { createLogger } from '@/shared/utils/logger';
 import type { FlowChatContext, DialogTurn } from './types';
 import { buildSessionMetadata } from '../../utils/sessionMetadata';
 import { settleInterruptedDialogTurn } from '../../utils/dialogTurnStability';
-import { isRuntimeStatusItem } from './RuntimeStatusModule';
 import {
   DEFERRED_TOOL_GATEWAY_NAME,
   effectiveToolInvocation,
@@ -19,6 +18,12 @@ const COALESCED_IMMEDIATE_SAVE_DELAY_MS = 500;
 
 function isTransientSession(session: { isTransient?: boolean } | undefined): boolean {
   return session?.isTransient === true;
+}
+
+function isObserverOnlyDispatchSession(
+  session: { config?: { dispatchTarget?: { kind?: string } } } | undefined,
+): boolean {
+  return !!session?.config?.dispatchTarget && session.config.dispatchTarget.kind !== 'local';
 }
 
 function requireWorkspacePath(sessionId: string, workspacePath?: string): string {
@@ -88,7 +93,7 @@ export function calculateTurnHash(dialogTurn: DialogTurn): string {
     lastRoundData: dialogTurn.modelRounds[dialogTurn.modelRounds.length - 1]
       ? {
           ...dialogTurn.modelRounds[dialogTurn.modelRounds.length - 1],
-          items: dialogTurn.modelRounds[dialogTurn.modelRounds.length - 1].items.filter(item => !isRuntimeStatusItem(item)),
+          items: dialogTurn.modelRounds[dialogTurn.modelRounds.length - 1].items,
         }
       : null,
     error: dialogTurn.error,
@@ -277,7 +282,7 @@ async function performSaveDialogTurnToDisk(
       log.debug('Session not found, skipping save', { sessionId, turnId });
       return;
     }
-    if (isTransientSession(session)) {
+    if (isTransientSession(session) || isObserverOnlyDispatchSession(session)) {
       return;
     }
 
@@ -315,7 +320,7 @@ export async function saveAllInProgressTurns(context: FlowChatContext): Promise<
   const savePromises: Promise<void>[] = [];
   
   for (const [sessionId, session] of state.sessions.entries()) {
-    if (isTransientSession(session)) {
+    if (isTransientSession(session) || isObserverOnlyDispatchSession(session)) {
       continue;
     }
     const lastTurn = session.dialogTurns[session.dialogTurns.length - 1];
@@ -410,7 +415,7 @@ export function convertDialogTurnToBackendFormat(dialogTurn: DialogTurn, turnInd
         renderHints: round.renderHints,
         textItems: round.items
           .map((item, index) => ({ item, index }))
-          .filter(({ item }) => item.type === 'text' && !isRuntimeStatusItem(item))
+          .filter(({ item }) => item.type === 'text')
           .map(({ item, index }) => {
             return {
               id: item.id,
@@ -520,7 +525,7 @@ export async function updateSessionMetadata(
 
     const session = context.flowChatStore.getState().sessions.get(sessionId);
     if (!session) return;
-    if (isTransientSession(session)) return;
+    if (isTransientSession(session) || isObserverOnlyDispatchSession(session)) return;
 
     const workspacePath = requireSessionProjectWorkspacePath(session, sessionId);
 

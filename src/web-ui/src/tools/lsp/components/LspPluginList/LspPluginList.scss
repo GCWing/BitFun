@@ -270,7 +270,10 @@
     font-size: var(--font-size-xs);
     font-family: $font-family-mono;
     color: var(--color-text-primary);
-    transition: all $motion-fast $easing-standard;
+    transition:
+      transform $motion-fast $easing-standard,
+      background-color $motion-fast $easing-standard,
+      color $motion-fast $easing-standard;
 
     &:hover {
       background: var(--element-bg-medium);

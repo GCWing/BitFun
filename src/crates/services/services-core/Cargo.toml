@@ -30,6 +30,8 @@ fs2 = { workspace = true }
 notify = { workspace = true, optional = true }
 ignore = { workspace = true }
 sha2 = { workspace = true }
+flate2 = { workspace = true, optional = true }
+tar = { workspace = true, optional = true }
 which = { workspace = true }
 similar = { workspace = true }
 regex = { workspace = true }
@@ -58,6 +60,7 @@ markdown = ["dep:serde_yaml"]
 workspace-runtime = ["dep:anyhow", "dep:async-trait", "dep:bitfun-runtime-ports", "dep:dunce"]
 runtime-ownership = ["dep:dunce"]
 permission = ["dep:async-trait", "dep:bitfun-runtime-ports", "dep:rusqlite", "bitfun-runtime-ports/permission"]
+dispatch-workspace = ["dep:anyhow", "dep:flate2", "dep:tar"]
 
 [dev-dependencies]
 filetime = { workspace = true }
@@ -74,6 +77,9 @@ required-features = ["lsp"]
 [[test]]
 name = "runtime_ownership_contracts"
 required-features = ["runtime-ownership"]
+
+[[test]]
+name = "session_write_lock_contracts"
 
 [lints]
 workspace = true

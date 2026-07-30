@@ -25,23 +25,20 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 6px;
-    padding: tokens.$size-gap-2 tokens.$size-gap-3;
+    padding: 0;
     font-size: var(--font-size-sm);
     font-weight: tokens.$font-weight-medium;
     color: var(--color-text-secondary);
     cursor: pointer;
-    transition: all tokens.$motion-base tokens.$easing-standard;
+    transition:
+      background-color var(--motion-fast) ease,
+      border-color var(--motion-fast) ease,
+      color var(--motion-fast) ease;
     user-select: none;
     position: relative;
     background: transparent;
     border: none;
     white-space: nowrap;
-
-    &:hover:not(&--disabled):not(&--active) {
-      color: var(--color-text-primary);
-      background: var(--element-bg-subtle);
-    }
 
     &--active {
       color: var(--color-accent-500);
@@ -50,6 +47,27 @@
     &--disabled {
       opacity: tokens.$opacity-disabled;
       cursor: default;
+    }
+
+    &-button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      min-width: 0;
+      padding: tokens.$size-gap-2 tokens.$size-gap-3;
+      border: 0;
+      border-radius: inherit;
+      background: transparent;
+      color: inherit;
+      font: inherit;
+      cursor: inherit;
+      outline: none;
+
+      &:focus-visible {
+        outline: 2px solid color-mix(in srgb, var(--color-accent-500) 50%, transparent);
+        outline-offset: -2px;
+      }
     }
 
     &-icon {
@@ -76,15 +94,28 @@
       width: 16px;
       height: 16px;
       margin-left: 4px;
-      border-radius: 3px;
+      padding: 0;
+      border: 0;
+      border-radius: var(--size-radius-sm);
+      background: transparent;
+      color: inherit;
       font-size: 18px;
       line-height: 1;
-      transition: all 0.2s;
+      cursor: pointer;
+      transform: scale(1);
+      transition:
+        background-color var(--motion-fast) ease,
+        color var(--motion-fast) ease,
+        transform var(--motion-fast) var(--easing-standard);
       opacity: 1;
 
-      &:hover {
-        background: color-mix(in srgb, var(--color-error) 20%, transparent);
-        color: var(--color-error);
+      &:active {
+        transform: scale(0.97);
+      }
+
+      &:focus-visible {
+        outline: 2px solid color-mix(in srgb, var(--color-accent-500) 50%, transparent);
+        outline-offset: 1px;
       }
     }
   }
@@ -96,6 +127,10 @@
   &--stretch {
     .bitfun-tabs__tab {
       flex: 1;
+
+      &-button {
+        flex: 1;
+      }
     }
   }
 
@@ -121,11 +156,6 @@
         overflow: hidden;
       }
 
-      &:hover .bitfun-tabs__tab-close {
-        opacity: 1;
-        width: 16px;
-        margin-left: 4px;
-      }
     }
   }
 
@@ -159,16 +189,16 @@
         overflow: hidden;
       }
 
-      &:hover:not(&--disabled):not(&--active) {
-        background: var(--element-bg-medium);
-      }
     }
   }
 
   &--pill {
     .bitfun-tabs__tab {
-      border-radius: 20px;
-      padding: 6px 16px;
+      border-radius: tokens.$size-radius-full;
+
+      &-button {
+        padding: 6px 16px;
+      }
 
       &--active {
         background: linear-gradient(135deg,
@@ -182,15 +212,21 @@
 
   &--small {
     .bitfun-tabs__tab {
-      padding: 6px 12px;
       font-size: 12px;
+
+      &-button {
+        padding: 6px 12px;
+      }
     }
   }
 
   &--large {
     .bitfun-tabs__tab {
-      padding: 10px 20px;
       font-size: 16px;
+
+      &-button {
+        padding: 10px 20px;
+      }
     }
   }
 
@@ -271,4 +307,33 @@
 
 .bitfun-tab-pane {
   width: 100%;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .bitfun-tabs__tab:not(.bitfun-tabs__tab--disabled):not(.bitfun-tabs__tab--active):hover {
+    color: var(--color-text-primary);
+    background: var(--element-bg-subtle);
+  }
+
+  .bitfun-tabs--card
+    .bitfun-tabs__tab:not(.bitfun-tabs__tab--disabled):not(.bitfun-tabs__tab--active):hover {
+    background: var(--element-bg-medium);
+  }
+
+  .bitfun-tabs--line .bitfun-tabs__tab:hover .bitfun-tabs__tab-close {
+    opacity: 1;
+    width: 16px;
+    margin-left: 4px;
+  }
+
+  .bitfun-tabs__tab-close:hover {
+    background: color-mix(in srgb, var(--color-error) 20%, transparent);
+    color: var(--color-error);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bitfun-tabs__tab-close:active {
+    transform: none;
+  }
 }

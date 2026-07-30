@@ -12,11 +12,16 @@
   position: relative;
 
   background: var(--v-card-bg-default);
-  border: none;
+  border: 1px solid var(--border-subtle);
   border-radius: var(--size-radius-base);
   color: var(--color-text-secondary);
 
-  transition: all var(--motion-base) var(--easing-standard);
+  transform: translateY(0) scale(1);
+  transition:
+    background-color var(--motion-fast) ease,
+    border-color var(--motion-fast) ease,
+    box-shadow var(--motion-fast) ease,
+    transform var(--motion-fast) var(--easing-standard);
 
 
   &--default {
@@ -29,6 +34,7 @@
 
   &--subtle {
     background: transparent;
+    border-color: transparent;
   }
 
   &--accent {
@@ -51,28 +57,9 @@
   &--interactive {
     cursor: pointer;
 
-    &:hover {
-      background: var(--v-card-bg-hover);
-    }
-
     &:active {
       background: var(--v-card-bg-active);
-    }
-
-    &.v-card--accent:hover {
-      background: var(--v-card-bg-accent-hover);
-    }
-
-    &.v-card--purple:hover {
-      background: var(--v-card-bg-purple-hover);
-    }
-
-    &.v-card--elevated:hover {
-      background: var(--v-card-bg-active);
-    }
-
-    &.v-card--subtle:hover {
-      background: var(--v-card-bg-default);
+      transform: scale(0.985);
     }
   }
 
@@ -109,6 +96,45 @@
 
   &--full-width {
     width: 100%;
+  }
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .v-card--interactive:hover {
+    background: var(--v-card-bg-hover);
+    border-color: var(--border-base);
+    box-shadow: var(--shadow-sm);
+    transform: translateY(-1px);
+
+    &.v-card--accent {
+      background: var(--v-card-bg-accent-hover);
+    }
+
+    &.v-card--purple {
+      background: var(--v-card-bg-purple-hover);
+    }
+
+    &.v-card--elevated {
+      background: var(--v-card-bg-active);
+    }
+
+    &.v-card--subtle {
+      background: var(--v-card-bg-default);
+    }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .v-card--interactive {
+    transition:
+      background-color var(--motion-fast) ease,
+      border-color var(--motion-fast) ease,
+      box-shadow var(--motion-fast) ease;
+
+    &:active,
+    &:hover {
+      transform: none;
+    }
   }
 }
 

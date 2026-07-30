@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 /// ESM dependency for Import Map (browser UI).
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EsmDep {
     pub name: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -38,7 +38,7 @@ pub struct MiniAppSource {
 }
 
 /// Permissions manifest (resolved to policy for JS Worker).
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MiniAppPermissions {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub fs: Option<FsPermissions>,
@@ -54,9 +54,11 @@ pub struct MiniAppPermissions {
     pub agent: Option<AgentPermissions>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub notifications: Option<NotificationPermissions>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub host: Option<HostPermissions>,
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FsPermissions {
     /// Path scopes: "{appdata}", "{workspace}", "{home}", or absolute paths.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -65,14 +67,14 @@ pub struct FsPermissions {
     pub write: Option<Vec<String>>,
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ShellPermissions {
     /// Command allowlist (e.g. ["git", "ffmpeg"]). Empty = all forbidden.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub allow: Option<Vec<String>>,
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct NetPermissions {
     /// Domain allowlist. "*" = all.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -80,7 +82,7 @@ pub struct NetPermissions {
 }
 
 /// Node.js Worker permissions (memory, timeout).
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct NodePermissions {
     #[serde(default = "default_node_enabled")]
     pub enabled: bool,
@@ -95,7 +97,7 @@ fn default_node_enabled() -> bool {
 }
 
 /// AI permissions — controls access to the host application's AI client.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AiPermissions {
     /// Whether AI access is enabled for this MiniApp.
     #[serde(default)]
@@ -134,12 +136,34 @@ pub struct NotificationPermissions {
     pub system: bool,
 }
 
+/// Trusted-host UI capabilities. Marketplace MiniApps default-deny every
+/// capability in this group when the field is absent.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HostPermissions {
+    #[serde(default)]
+    pub dialog: bool,
+    #[serde(default)]
+    pub clipboard_read: bool,
+    #[serde(default)]
+    pub clipboard_write: bool,
+    #[serde(default)]
+    pub open_external: bool,
+    #[serde(default)]
+    pub reveal_in_folder: bool,
+    #[serde(default)]
+    pub deck_render: bool,
+    #[serde(default)]
+    pub chat_composer: bool,
+    #[serde(default)]
+    pub system_info: bool,
+}
+
 /// Per-locale overrides for user-facing strings (gallery name / description / tags).
 ///
 /// Lives optionally in `meta.json` as `i18n.locales[<locale-id>]`. Whichever fields are
 /// present override the top-level `name`/`description`/`tags`; missing fields fall back
 /// to the top-level value (which itself acts as the default / fallback locale).
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MiniAppLocaleStrings {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
@@ -153,7 +177,7 @@ pub struct MiniAppLocaleStrings {
 ///
 /// Map key is a locale id (e.g. `"zh-CN"`, `"en-US"`). The frontend picks the best
 /// match using `currentLanguage → "en-US" → "zh-CN" → top-level name/description`.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MiniAppI18n {
     #[serde(default)]
     pub locales: HashMap<String, MiniAppLocaleStrings>,
@@ -185,6 +209,14 @@ pub struct MiniAppRuntimeState {
     pub ui_recompile_required: bool,
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum MiniAppRuntimeProfile {
+    #[default]
+    Compatibility,
+    MarketStrict,
+}
+
 /// Full MiniApp entity (in-memory / API).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MiniApp {
@@ -212,6 +244,9 @@ pub struct MiniApp {
     #[serde(default)]
     pub runtime: MiniAppRuntimeState,
 
+    #[serde(default)]
+    pub runtime_profile: MiniAppRuntimeProfile,
+
     /// Optional per-locale overrides for `name` / `description` / `tags`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub i18n: Option<MiniAppI18n>,
@@ -236,6 +271,8 @@ pub struct MiniAppMeta {
     pub ai_context: Option<MiniAppAiContext>,
     #[serde(default)]
     pub runtime: MiniAppRuntimeState,
+    #[serde(default)]
+    pub runtime_profile: MiniAppRuntimeProfile,
     /// Optional per-locale overrides for `name` / `description` / `tags`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub i18n: Option<MiniAppI18n>,
@@ -256,6 +293,7 @@ impl From<&MiniApp> for MiniAppMeta {
             permissions: app.permissions.clone(),
             ai_context: app.ai_context.clone(),
             runtime: app.runtime.clone(),
+            runtime_profile: app.runtime_profile,
             i18n: app.i18n.clone(),
         }
     }

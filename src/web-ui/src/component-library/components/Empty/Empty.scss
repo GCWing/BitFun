@@ -7,13 +7,13 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 40px 20px;
+  gap: var(--size-gap-4);
+  padding: var(--size-gap-10) var(--size-gap-5);
   text-align: center;
+  animation: bitfun-empty-fade-in calc(var(--motion-fast) + 70ms) var(--easing-standard);
 
   &__image {
-    margin-bottom: 16px;
     opacity: 0.8;
-    animation: bitfun-empty-fade-in 0.5s ease-out;
 
     svg {
       display: block;
@@ -21,24 +21,31 @@
   }
 
   &__description {
-    font-size: 14px;
-    color: var(--color-overlay-white-60);
-    margin-bottom: 16px;
-    animation: bitfun-empty-fade-in 0.5s ease-out 0.1s both;
-  }
-
-  &__footer {
-    animation: bitfun-empty-fade-in 0.5s ease-out 0.2s both;
+    max-width: 36ch;
+    font-size: var(--font-size-sm);
+    line-height: var(--line-height-base);
+    color: var(--color-text-muted);
   }
 }
 
 @keyframes bitfun-empty-fade-in {
   from {
     opacity: 0;
-    transform: translateY(10px);
+    transform: translateY(4px);
   }
   to {
     opacity: 1;
     transform: translateY(0);
   }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bitfun-empty {
+    animation: bitfun-empty-fade-only var(--motion-fast) ease;
+  }
+}
+
+@keyframes bitfun-empty-fade-only {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }

@@ -12,7 +12,7 @@
   outline: none !important;
   color: var(--color-text-primary);
   font-size: var(--flowchat-font-size-base);
-  line-height: $line-height-base;
+  line-height: var(--flowchat-text-line-height);
   padding: 0;
   vertical-align: top;
   min-height: 24px;
@@ -24,6 +24,7 @@
   word-break: break-word;
   cursor: text;
   box-shadow: none !important;
+  caret-color: var(--color-accent-500);
 
   // Hide scrollbars while keeping scroll functionality
   scrollbar-width: none; // Firefox
@@ -85,7 +86,9 @@
   user-select: text;
   vertical-align: middle;
   line-height: var(--flowchat-support-line-height);
-  transition: all 0.2s ease;
+  transition:
+    transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
+    opacity 120ms ease;
   white-space: nowrap;
   
   &:hover {
@@ -104,10 +107,16 @@
     }
   }
   
-  &:focus {
+  &:focus,
+  &:focus-visible {
     outline: none;
     background: color-mix(in srgb, var(--color-accent-500) 18%, transparent);
     border-color: color-mix(in srgb, var(--color-accent-500) 60%, transparent);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-accent-500) 18%, transparent);
+  }
+
+  &:active {
+    transform: scale(0.98);
   }
 }
 
@@ -141,7 +150,9 @@
   user-select: none;
   vertical-align: middle;
   line-height: var(--flowchat-support-line-height);
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transition:
+    transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
+    opacity 120ms ease;
   
   &:hover {
     background: color-mix(in srgb, var(--color-accent-500) 18%, transparent);
@@ -290,7 +301,9 @@
   line-height: 1;
   cursor: pointer;
   border-radius: 50%;
-  transition: all 0.2s ease;
+  transition:
+    transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
+    opacity 120ms ease;
   
   &:hover {
     background: var(--color-overlay-white-20);
@@ -298,6 +311,20 @@
   }
   
   &:active {
-    transform: scale(0.85);
+    transform: scale(0.97);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--border-accent);
+    outline-offset: 1px;
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rich-text-placeholder,
+  .rich-text-tag-pill,
+  .rich-text-tag-pill__remove {
+    transition-duration: 0ms;
   }
 }

@@ -66,10 +66,11 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(({
       className={classNames}
       disabled={disabled || isLoading}
       {...props}
+      aria-busy={isLoading || props['aria-busy'] || undefined}
     >
       {isLoading ? (
         <>
-          <span className="btn-loading-icon"></span>
+          <span className="btn-loading-icon" aria-hidden="true"></span>
           <span className="btn-loading-text">Loading...</span>
         </>
       ) : (

@@ -1,8 +1,9 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import {
   Box,
   FolderPlus,
   LayoutGrid,
+  PackagePlus,
   Play,
   Sparkles,
   Square,
@@ -14,6 +15,10 @@ import { useSceneManager } from '@/app/hooks/useSceneManager';
 import MiniAppCard from '../components/MiniAppCard';
 import type { MiniAppMeta } from '@/infrastructure/api/service-api/MiniAppAPI';
 import { miniAppAPI } from '@/infrastructure/api/service-api/MiniAppAPI';
+import {
+  miniAppMarketAPI,
+  type MarketPackageInspection,
+} from '@/infrastructure/api/service-api/MiniAppMarketAPI';
 import { createLogger } from '@/shared/utils/logger';
 import { Search, ConfirmDialog, Button, Badge } from '@/component-library';
 import {
@@ -32,6 +37,7 @@ import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext'
 import { useMiniAppStore } from '../miniAppStore';
 import { useI18n } from '@/infrastructure/i18n';
 import { useGallerySceneAutoRefresh } from '@/app/hooks/useGallerySceneAutoRefresh';
+import { useNotification } from '@/shared/notification-system';
 import './MiniAppGalleryView.scss';
 
 const log = createLogger('MiniAppGalleryView');
@@ -46,6 +52,7 @@ const MiniAppGalleryView: React.FC = () => {
   const setRunningWorkerIds = useMiniAppStore((state) => state.setRunningWorkerIds);
   const markWorkerStopped = useMiniAppStore((state) => state.markWorkerStopped);
   const { workspacePath } = useCurrentWorkspace();
+  const notification = useNotification();
   const { openScene, activateScene, closeScene, openTabs } = useSceneManager();
   const { t, currentLanguage } = useI18n('scenes/miniapp');
 
@@ -53,6 +60,10 @@ const MiniAppGalleryView: React.FC = () => {
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [selectedApp, setSelectedApp] = useState<MiniAppMeta | null>(null);
+  const [pendingPackage, setPendingPackage] = useState<{
+    path: string;
+    inspection: MarketPackageInspection;
+  } | null>(null);
 
   const openTabIds = useMemo(() => new Set(openTabs.map((tab) => tab.id)), [openTabs]);
   const runningIdSet = useMemo(() => new Set(runningWorkerIds), [runningWorkerIds]);
@@ -188,6 +199,72 @@ const MiniAppGalleryView: React.FC = () => {
     }
   };
 
+  const preparePackageImport = useCallback(async (path: string) => {
+    if (!path.toLowerCase().endsWith('.bfminiapp')) return;
+    try {
+      const inspection = await miniAppMarketAPI.inspectPackage(path);
+      setPendingPackage({ path, inspection });
+    } catch (error) {
+      log.error('Inspect MiniApp package failed', error);
+      notification.error(t('market.import.invalid', { error: String(error) }));
+    }
+  }, [notification, t]);
+
+  const handleAddPackage = async () => {
+    const selected = await open({
+      directory: false,
+      multiple: false,
+      title: t('market.import.choose'),
+      filters: [{ name: t('market.import.packageFile'), extensions: ['bfminiapp'] }],
+    });
+    const path = Array.isArray(selected) ? selected[0] : selected;
+    if (path) await preparePackageImport(path);
+  };
+
+  useEffect(() => {
+    let stop: (() => void) | undefined;
+    let cancelled = false;
+    void import('@tauri-apps/api/webview')
+      .then(({ getCurrentWebview }) =>
+        getCurrentWebview().onDragDropEvent((event) => {
+          if (cancelled || event.payload.type !== 'drop') return;
+          const packagePath = event.payload.paths.find((path) =>
+            path.toLowerCase().endsWith('.bfminiapp'),
+          );
+          if (packagePath) void preparePackageImport(packagePath);
+        }))
+      .then((unlisten) => {
+        if (cancelled) {
+          unlisten();
+        } else {
+          stop = unlisten;
+        }
+      })
+      .catch((error) => log.warn('MiniApp package drag-and-drop unavailable', error));
+    return () => {
+      cancelled = true;
+      stop?.();
+    };
+  }, [preparePackageImport]);
+
+  const handlePackageImportConfirm = async () => {
+    if (!pendingPackage) return;
+    const selected = pendingPackage;
+    setPendingPackage(null);
+    setLoading(true);
+    try {
+      const app = await miniAppMarketAPI.importPackage(selected.path, true);
+      setApps([app, ...apps]);
+      notification.success(t('market.import.imported', { name: app.name }));
+      handleOpenApp(app.id);
+    } catch (error) {
+      log.error('Import MiniApp package failed', error);
+      notification.error(t('market.import.failed', { error: String(error) }));
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const renderGrid = () => {
     if (loading && apps.length === 0) {
       return <GallerySkeleton count={8} cardHeight={152} />;
@@ -242,6 +319,15 @@ const MiniAppGalleryView: React.FC = () => {
               title={t('importFromFolder')}
             >
               <FolderPlus size={15} />
+            </button>
+            <button
+              type="button"
+              className="gallery-action-btn"
+              onClick={() => void handleAddPackage()}
+              disabled={loading}
+              title={t('market.import.action')}
+            >
+              <PackagePlus size={15} />
             </button>
           </>
         )}
@@ -358,6 +444,26 @@ const MiniAppGalleryView: React.FC = () => {
         type="warning"
         confirmDanger
         confirmText={t('confirmDelete.confirm')}
+        cancelText={t('confirmDelete.cancel')}
+      />
+
+      <ConfirmDialog
+        isOpen={pendingPackage !== null}
+        onClose={() => setPendingPackage(null)}
+        onConfirm={() => void handlePackageImportConfirm()}
+        title={t('market.import.confirmTitle', {
+          name: pendingPackage?.inspection.name ?? '',
+        })}
+        message={t('market.import.confirmMessage', {
+          description: pendingPackage?.inspection.description ?? '',
+          permissions: [
+            ...(pendingPackage?.inspection.permissionDiff.added ?? []),
+            ...(pendingPackage?.inspection.permissionDiff.expanded ?? []),
+          ].join(', ') || t('market.detail.noPermissions'),
+          sha256: pendingPackage?.inspection.packageSha256 ?? '',
+        })}
+        type="warning"
+        confirmText={t('market.import.confirm')}
         cancelText={t('confirmDelete.cancel')}
       />
     </GalleryLayout>

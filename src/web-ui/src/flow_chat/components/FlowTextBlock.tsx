@@ -5,9 +5,7 @@
  */
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { useTranslation } from 'react-i18next';
 import { MarkdownRenderer } from '@/component-library';
-import { DotMatrixLoader } from '@/component-library';
 import type { MarkdownTraceContext } from '@/component-library';
 import type { FlowTextItem } from '../types/flow-chat';
 import { useFlowChatContext } from './modern/FlowChatContext';
@@ -33,34 +31,6 @@ interface FlowTextBlockProps {
   testId?: string;
   testAttributes?: Record<`data-${string}`, string | number | boolean | undefined>;
 }
-
-const RuntimeStatusBlock: React.FC<Pick<FlowTextBlockProps, 'textItem' | 'className' | 'testId' | 'testAttributes'>> = ({
-  textItem,
-  className = '',
-  testId,
-  testAttributes,
-}) => {
-  const { t } = useTranslation('flow-chat/processing-hints');
-  const rawHints = t('items', { returnObjects: true });
-  const hints = Array.isArray(rawHints)
-    ? rawHints.filter((item): item is string => typeof item === 'string')
-    : [];
-  const hintIndex = hints.length > 0
-    ? Math.abs(textItem.id.split('').reduce((acc, ch) => acc + ch.charCodeAt(0), 0)) % hints.length
-    : 0;
-  const hint = hints[hintIndex] ?? '';
-
-  return (
-    <div
-      className={`flow-text-block flow-text-block--runtime-status ${className}`}
-      data-testid={testId}
-      {...testAttributes}
-    >
-      <DotMatrixLoader size="small" className="flow-text-block__runtime-status-icon" />
-      {hint && <span className="flow-text-block__runtime-status-text">{hint}</span>}
-    </div>
-  );
-};
 
 /**
  * Use React.memo to avoid unnecessary re-renders.
@@ -168,17 +138,6 @@ export const FlowTextBlock = React.memo<FlowTextBlockProps>(({
   // typewriter is still revealing leftover characters.
   const isActivelyStreaming = (isStreaming && isContentGrowing) || isRevealing;
   const markdownTraceContext = isStartupRenderTraceEnabled() ? traceContext : undefined;
-
-  if (textItem.runtimeStatus) {
-    return (
-      <RuntimeStatusBlock
-        textItem={textItem}
-        className={className}
-        testId={testId}
-        testAttributes={testAttributes}
-      />
-    );
-  }
 
   return (
     <div

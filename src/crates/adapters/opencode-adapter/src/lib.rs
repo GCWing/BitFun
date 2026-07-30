@@ -10,6 +10,7 @@ mod agent_source;
 mod command_source;
 mod hook_contributions;
 mod hook_source;
+mod local_source_paths;
 mod mcp_source;
 mod source_adapter;
 mod tool_source;

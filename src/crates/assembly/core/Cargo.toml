@@ -96,6 +96,7 @@ bitfun-tool-packs = { path = "../../execution/tool-provider-groups", default-fea
 
 # Core service owner crate
 bitfun-services-core = { path = "../../services/services-core", default-features = false, features = [
+    "dispatch-workspace",
     "lsp",
     "markdown",
     "permission",
@@ -148,9 +149,6 @@ bitfun-plugin-runtime-client = { path = "../../execution/plugin-runtime-client",
 
 # Transport layer dependency
 bitfun-transport = { path = "../../adapters/transport" }
-
-# Tauri dependency (optional, enabled only when needed)
-tauri = { workspace = true, optional = true }
 
 # Non-Windows: vendored OpenSSL for libgit2 (no system install).
 [target.'cfg(not(windows))'.dependencies]
@@ -232,7 +230,9 @@ service-integrations = [
     "bitfun-services-integrations/product-full",
 ]
 tool-packs = ["dep:bitfun-tool-packs", "bitfun-tool-packs/product-full", "dep:image"]
-tauri-support = ["tauri"]  # Optional tauri support
+# Deprecated compatibility feature. Tauri integration is desktop-owned now;
+# keep the public feature name as a no-op for downstream manifests.
+tauri-support = []
 ssh-remote = [
     "bitfun-services-integrations/remote-ssh-concrete",
     "russh",

@@ -111,6 +111,17 @@ pub trait MiniAppStoragePort: Send + Sync {
         app_id: String,
         metadata: MiniAppCustomizationMetadata,
     ) -> MiniAppPortFuture<'_, ()>;
+    fn install_market_atomic(
+        &self,
+        app: MiniApp,
+        metadata: MiniAppCustomizationMetadata,
+    ) -> MiniAppPortFuture<'_, ()>;
+    fn replace_market_atomic(
+        &self,
+        previous: MiniApp,
+        next: MiniApp,
+        metadata: MiniAppCustomizationMetadata,
+    ) -> MiniAppPortFuture<'_, ()>;
     fn delete(&self, app_id: String) -> MiniAppPortFuture<'_, ()>;
     fn list_versions(&self, app_id: String) -> MiniAppPortFuture<'_, Vec<u32>>;
     fn load_version(&self, app_id: String, version: u32) -> MiniAppPortFuture<'_, MiniApp>;

@@ -1,0 +1,201 @@
+# Detached task dispatch
+
+Detached dispatch lets one BitFun process submit work to another BitFun process
+without making the submitting process part of the execution topology. The
+submitter can disconnect or exit after the target has durably acknowledged the
+job.
+
+This document defines the product boundary, workspace delivery contract, and
+transport invariants. It complements
+[`remote-workspace-transport.md`](remote-workspace-transport.md) and
+[`peer-device-mode.md`](peer-device-mode.md); neither of those features is a
+dispatch data plane.
+
+## Ownership model
+
+There are three roles:
+
+- The **controller** selects a target, prepares an optional workspace snapshot,
+  submits a job, and observes it by cursor.
+- The **target host** owns the job, worker process, local session, workspace
+  lease, event log, permission mailbox, and terminal state.
+- A **transport adapter** moves the same narrow JSON protocol over SSH or an
+  end-to-end encrypted account-device RPC.
+
+The controller is never a runtime or filesystem proxy for a non-local job. It
+stores only an outbound observer record under
+`~/.bitfun/dispatch/outbound/`; it must not create the target session in the
+controller's normal session store. A target session is an ordinary local
+session on the target and can be resumed there.
+
+The Relay is an opaque router. Device requests, workspace chunks, and responses
+are encrypted with the account master key before the Relay receives them. Relay
+storage is not used for workspace contents.
+
+## Workspace delivery
+
+`workspacePath` in a submit request identifies a directory on the target. It
+does not imply that similarly named directories on two machines are related.
+Dispatch therefore supports two explicit delivery modes.
+
+### Existing target directory
+
+`existing` uses a directory that already exists on the target. Probe returns its
+canonical path and Git facts before submit. BitFun never clones, fetches,
+checks out, stashes, or rewrites that directory as part of dispatch.
+
+### One-shot exact snapshot
+
+`snapshot-exact` captures the controller workspace at submit time and materializes it
+below:
+
+```text
+~/.bitfun/dispatch/workspaces/<jobId>/current/
+```
+
+The snapshot includes regular files and empty directories, including hidden and
+ignored files, because the mode promises the workspace's current contents
+rather than a Git checkout. The controller must show that this can include
+`.env`, local credentials, build output, and other ignored data and require
+explicit confirmation.
+
+The following entries are not silently copied:
+
+- every entry named `.git`, because worktree pointers, nested object stores,
+  hooks, and credentials are repository metadata rather than workspace input;
+- symbolic links, to avoid following data outside the selected root or creating
+  target-dependent aliases;
+- sockets, devices, FIFOs, and other special files;
+- paths that cannot be represented as portable UTF-8 relative paths.
+
+Encountering any unsupported entry fails packaging and names the entry. A
+successful manifest therefore describes every delivered entry; there is no
+best-effort omission.
+
+The archive and manifest are bounded by explicit file-count, per-file, and total
+byte limits: 100,000 files, 100,000 directories, 256 MiB per file, 2 GiB
+uncompressed, and 1 GiB compressed. The controller computes a SHA-256 digest
+and sends immutable upload metadata. The target writes to an owner-only staging
+file, rejects offset mismatches, verifies size and digest, validates every
+archive path and entry type, extracts into a new staging directory, and
+atomically publishes `current`. Materialization runs as a detached target
+process; `workspace-commit` starts or polls it, so a single SSH or Relay RPC
+timeout cannot kill a large extraction. A repeated begin/chunk/commit for the
+same job and digest is idempotent; a different digest for the same job is a
+conflict.
+
+Packaging is one deterministic traversal, not an operating-system filesystem
+snapshot. A file that changes size or modification time while it is read makes
+the package fail, but coordinated edits across multiple files can still span
+the traversal interval. Callers that require an application-consistent source
+must quiesce the source or select a filesystem snapshot as the source path.
+
+SSH transports the archive with SFTP after `workspace-begin`. Account-device
+RPC uses bounded base64 chunks inside the existing end-to-end encrypted
+`HostInvoke` envelope. Neither transport puts source bytes in command-line
+arguments, process listings, logs, or the outbound observer record.
+
+## Synchronization semantics
+
+A snapshot is an immutable input boundary, not a live shared folder:
+
+1. The controller captures version `S0`.
+2. The target verifies and publishes `S0`.
+3. The target becomes authoritative for all writes during the job.
+4. Observers pull target events, permissions, and terminal state by cursor.
+
+The controller does not mirror local edits made after `S0`, and target writes
+are not merged automatically into a possibly changed controller workspace.
+Continuous bidirectional synchronization would require conflict detection,
+delete semantics, editor coordination, and a controller that remains online,
+which contradicts detached execution.
+
+Returning code is a separate, explicit result operation. A future result bundle
+may expose an artifact or patch derived from `S0` and the terminal target tree;
+applying it must remain a user-confirmed local operation. Until that operation
+exists, the UI states that snapshot results remain on the target and shows the
+managed target path.
+
+## Protocol
+
+The target CLI owns the transport-independent protocol and durable store.
+Public job verbs are:
+
+| Verb | Purpose |
+| --- | --- |
+| `probe` | Negotiate version/capabilities and inspect an optional target path. |
+| `submit` | Durably create an idempotent job and detach its worker. |
+| `status` | Read target state, event pages, completeness facts, and pending permissions. |
+| `cancel` | Persist cancellation intent and stop the authenticated worker process group. |
+| `list` | List durable target jobs. |
+| `answer` | Resolve one persisted permission request for `remote` approval policy. |
+| `append` | Queue an idempotent steering message for the active turn. |
+
+Workspace upload uses the internal `workspace-begin`, `workspace-chunk`, and
+`workspace-commit` verbs. They are target data-plane operations and are not
+normal product or Peer Device Mode commands.
+
+Account-device transport wraps target verbs in names reserved for detached
+dispatch, such as `dispatch_target_submit`. They are handled before the
+attach-shaped Peer Host bridge and never acquire an attached-controller lease.
+Conversely, controller-side commands such as `dispatch_submit` remain
+local-only in every Peer Device Mode deny table. Disconnecting the last Peer
+controller must not cancel or hide a detached dispatch job.
+
+An account target must have a compatible `bitfun dispatch` runner. A CLI daemon
+already satisfies this. The Desktop account host delegates to an installed
+`bitfun` binary (including a package-manager symlink); if none is available,
+probe reports the missing runner and submission remains disabled rather than
+falling back to local execution.
+
+## Event and observer contract
+
+The target event log is append-only within a retained window. A status response
+reports:
+
+- the next byte cursor;
+- whether the requested cursor was reset;
+- whether older history was truncated;
+- how many oversized events were replaced by visible omission markers;
+- whether the returned transcript can be considered complete.
+
+Rotation and oversized events must never be represented as a complete
+transcript. Multiple controllers may observe the same job because cursors are
+per observer and the target has no controller lease. Explicitly listing jobs
+for a selected target adopts observer-only routing records on that controller;
+it does not copy sessions or acquire workspace/runtime ownership.
+
+Target and outbound records are retained for 30 days after terminal state.
+Garbage collection never removes queued or running jobs. Removing a terminal
+snapshot also removes only the managed directory bound to that job; an
+arbitrary user-supplied target directory is never a cleanup target.
+
+## Approval and supervision
+
+Every submit requires an explicit policy:
+
+- `auto` uses the shared Runtime auto-approval metadata.
+- `reject-and-report` fails closed when confirmation is required.
+- `remote` disables inherited auto-approval while keeping user input
+  available. The worker persists the safe presentation DTO, status exposes it,
+  and `answer` records a user-sourced reply before execution resumes.
+
+Permission responses and appended messages are target-owned mailboxes. They are
+idempotent across controller retries and do not depend on the controller that
+originally submitted the job.
+
+## Failure rules
+
+- A missing or offline target fails submit; the Relay does not queue jobs.
+- A lost submit response leaves `submission_unknown`; status or an idempotent
+  retry reconciles the target's durable truth.
+- A live PID that no longer matches the exact worker command is never signaled
+  and settles the job failed instead of leaving an orphaned non-terminal job.
+- A target restart after the Runtime accepted a turn does not replay the prompt,
+  because replay could duplicate tool side effects. The native target session
+  remains available for manual resume.
+- Prompt and event pages remain below the smallest host transport envelope.
+- Workspace digest, archive traversal, unsupported entry, or size failures
+  happen before job submission and leave no executable target workspace.
+  Detached materialization failures are persisted and returned by later commit
+  polls instead of being hidden in a discarded child-process stderr stream.

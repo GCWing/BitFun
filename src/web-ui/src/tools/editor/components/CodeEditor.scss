@@ -99,7 +99,11 @@ $_editor-padding-desktop: 32px;
     font-size: var(--font-size-xs);
     font-family: $font-family-mono;
     cursor: pointer;
-    transition: all $motion-base $easing-standard;
+    transition:
+      transform $motion-fast $easing-standard,
+      background-color $motion-fast $easing-standard,
+      border-color $motion-fast $easing-standard,
+      color $motion-fast $easing-standard;
     
     &:hover {
       color: var(--color-text-secondary);

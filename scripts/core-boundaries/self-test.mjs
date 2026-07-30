@@ -4850,10 +4850,15 @@ export function runManifestParserSelfTest({
   const runtimeIpcOperationPattern = runtimeIpcOperationRule?.patterns[0]?.regex;
   if (
     !runtimeIpcOperationPattern ||
-    !['ReplayEvents', 'ReadTranscript', 'DetachSession'].every((name) =>
-      runtimeIpcOperationPattern.test(`    ${name},`),
-    ) ||
+    ![
+      'ReplayEvents',
+      'ReadTranscript',
+      'DetachSession',
+      'UpdateSessionModel',
+      'ManageAgents',
+    ].every((name) => runtimeIpcOperationPattern.test(`    ${name},`)) ||
     runtimeIpcOperationPattern.test('    Health,') ||
+    runtimeIpcOperationPattern.test('    UpdateSessionMode {') ||
     runtimeIpcOperationPattern.test('    SubmitTurn {')
   ) {
     throw new Error('agent-runtime-ipc operation guard must preserve the Shared TUI operation budget');

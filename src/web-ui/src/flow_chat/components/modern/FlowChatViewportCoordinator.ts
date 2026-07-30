@@ -1,3 +1,5 @@
+import { flowChatDiagnostics } from '@/infrastructure/diagnostics/flowChatDiagnostics';
+
 export type FlowChatViewportAnchorMode =
   | 'idle'
   | 'pinned-item'
@@ -16,10 +18,14 @@ type ElementAnchor = {
   element: HTMLElement;
   scroller: HTMLElement;
   offsetFromScrollerTop: number;
-  expiresAtMs: number | null;
+  preservationPhase: 'active' | 'retained' | null;
 };
 
-const ELEMENT_ANCHOR_TTL_MS = 1000;
+type PendingElementAnchorRestore = {
+  scroller: HTMLElement;
+  source: string;
+};
+
 const ELEMENT_ANCHOR_EPSILON_PX = 0.5;
 const ELEMENT_ANCHOR_RANGE_GUARD_PX = 1;
 
@@ -35,15 +41,12 @@ export function canHandoffPinnedItemToTail(options: {
   );
 }
 
-function nowMs(): number {
-  return typeof performance === 'undefined' ? Date.now() : performance.now();
-}
-
 /** Owns anchor priority independently from the virtualizer implementation. */
 export class FlowChatViewportCoordinator {
   private mode: FlowChatViewportAnchorMode = 'idle';
   private elementAnchor: ElementAnchor | null = null;
   private anchorGuardFrame: number | null = null;
+  private pendingElementAnchorRestore: PendingElementAnchorRestore | null = null;
   private rangeHost: FlowChatViewportRangeHost | null = null;
 
   setRangeHost(host: FlowChatViewportRangeHost | null): void {
@@ -51,57 +54,119 @@ export class FlowChatViewportCoordinator {
   }
 
   getMode(): FlowChatViewportAnchorMode {
-    this.expireElementAnchor();
+    this.validateElementAnchor('get-mode');
     return this.mode;
   }
 
   ownsElementAnchor(): boolean {
-    this.expireElementAnchor();
+    this.validateElementAnchor('owns-element-anchor');
     return Boolean(
       this.elementAnchor &&
       (this.mode === 'pinned-item' || this.mode === 'preserving-element'),
     );
   }
 
-  pinItem(_reason = 'unspecified'): void {
-    this.stopAnchorGuard();
+  pinItem(reason = 'unspecified'): void {
+    const previousMode = this.mode;
+    this.cancelElementAnchorRestoreWork();
     this.elementAnchor = null;
     this.mode = 'pinned-item';
+    if (flowChatDiagnostics.isEnabled()) {
+      flowChatDiagnostics.trace({
+        hypothesis: 'B',
+        location: 'FlowChatViewportCoordinator.pinItem',
+        message: 'Viewport coordinator entered pinned item mode',
+        data: () => ({ previousMode, reason }),
+      });
+    }
   }
 
   pinElement(element: HTMLElement | null | undefined): boolean {
-    return this.captureElement(element, 'pinned-item', null);
+    return this.captureElement(element, 'pinned-item');
   }
 
   followTail(options?: { force?: boolean }): boolean {
-    this.expireElementAnchor();
-    if (this.mode === 'preserving-element' && !options?.force) {
+    this.validateElementAnchor('follow-tail');
+    const hasActiveElementPreservation = (
+      this.mode === 'preserving-element' &&
+      this.elementAnchor?.preservationPhase === 'active'
+    );
+    if (hasActiveElementPreservation && !options?.force) {
+      if (flowChatDiagnostics.isEnabled()) {
+        flowChatDiagnostics.trace({
+          hypothesis: 'B',
+          location: 'FlowChatViewportCoordinator.followTail',
+          message: 'Tail follow rejected during active element preservation',
+          data: () => ({
+            mode: this.mode,
+            preservationPhase: this.elementAnchor?.preservationPhase ?? null,
+            force: options?.force === true,
+          }),
+        });
+      }
       return false;
     }
 
-    this.stopAnchorGuard();
+    const previousMode = this.mode;
+    this.cancelElementAnchorRestoreWork();
     this.elementAnchor = null;
     this.mode = 'following-tail';
+    if (flowChatDiagnostics.isEnabled()) {
+      flowChatDiagnostics.trace({
+        hypothesis: 'B',
+        location: 'FlowChatViewportCoordinator.followTail',
+        message: 'Viewport coordinator entered tail follow mode',
+        data: () => ({ previousMode, force: options?.force === true }),
+      });
+    }
     return true;
   }
 
   preserveElement(element: HTMLElement | null | undefined): boolean {
-    this.expireElementAnchor();
+    this.validateElementAnchor('preserve-element');
     if (!element || this.mode === 'following-tail' || this.mode === 'pinned-item') {
+      if (flowChatDiagnostics.isEnabled()) {
+        flowChatDiagnostics.trace({
+          hypothesis: 'E',
+          location: 'FlowChatViewportCoordinator.preserveElement',
+          message: 'Element preservation request rejected',
+          data: () => ({ hasElement: Boolean(element), mode: this.mode }),
+        });
+      }
       return false;
     }
 
     return this.captureElement(
       element,
       'preserving-element',
-      nowMs() + ELEMENT_ANCHOR_TTL_MS,
     );
+  }
+
+  settleElementPreservation(source = 'unspecified'): boolean {
+    this.validateElementAnchor('settle-element-preservation');
+    const anchor = this.elementAnchor;
+    if (!anchor || this.mode !== 'preserving-element') {
+      return false;
+    }
+
+    const previousPhase = anchor.preservationPhase;
+    anchor.preservationPhase = 'retained';
+    this.stopAnchorGuard();
+    this.startAnchorGuard();
+    if (flowChatDiagnostics.isEnabled()) {
+      flowChatDiagnostics.trace({
+        hypothesis: 'E',
+        location: 'FlowChatViewportCoordinator.settleElementPreservation',
+        message: 'Element preservation retained after layout settlement',
+        data: () => ({ previousPhase, source }),
+      });
+    }
+    return true;
   }
 
   private captureElement(
     element: HTMLElement | null | undefined,
     mode: 'pinned-item' | 'preserving-element',
-    expiresAtMs: number | null,
   ): boolean {
     if (!element) {
       return false;
@@ -109,29 +174,51 @@ export class FlowChatViewportCoordinator {
 
     const scroller = element.closest<HTMLElement>('[data-virtuoso-scroller="true"]');
     if (!scroller) {
+      if (flowChatDiagnostics.isEnabled()) {
+        flowChatDiagnostics.trace({
+          hypothesis: 'B',
+          location: 'FlowChatViewportCoordinator.captureElement',
+          message: 'Element anchor capture failed without a scroller',
+          data: () => ({ mode }),
+        });
+      }
       return false;
     }
 
     const elementRect = element.getBoundingClientRect();
     const scrollerRect = scroller.getBoundingClientRect();
+    this.cancelElementAnchorRestoreWork();
     this.elementAnchor = {
       element,
       scroller,
       offsetFromScrollerTop: elementRect.top - scrollerRect.top,
-      expiresAtMs,
+      preservationPhase: mode === 'preserving-element' ? 'active' : null,
     };
     this.mode = mode;
     this.startAnchorGuard();
+    if (flowChatDiagnostics.isEnabled()) {
+      flowChatDiagnostics.trace({
+        hypothesis: mode === 'preserving-element' ? 'E' : 'B',
+        location: 'FlowChatViewportCoordinator.captureElement',
+        message: 'Semantic element anchor captured',
+        data: () => ({
+          mode,
+          preservationPhase: this.elementAnchor?.preservationPhase ?? null,
+          elementConnected: element.isConnected,
+          offsetFromScrollerTop: this.elementAnchor?.offsetFromScrollerTop ?? null,
+          scrollTop: scroller.scrollTop,
+          scrollHeight: scroller.scrollHeight,
+          clientHeight: scroller.clientHeight,
+        }),
+      });
+    }
     return true;
   }
 
   restoreElementAnchor(scroller: HTMLElement, source = 'external'): boolean {
-    this.expireElementAnchor();
+    this.validateElementAnchor(`restore:${source}`);
     const anchor = this.elementAnchor;
     if (!anchor || (this.mode !== 'preserving-element' && this.mode !== 'pinned-item')) {
-      return false;
-    }
-    if (!anchor.element.isConnected) {
       return false;
     }
 
@@ -152,8 +239,26 @@ export class FlowChatViewportCoordinator {
       return false;
     }
 
+    const diagnosticsEnabled = flowChatDiagnostics.isEnabled();
+    const scrollTopBefore = diagnosticsEnabled ? scroller.scrollTop : null;
     applyCorrection(initialCorrection);
     let remainingCorrection = readCorrection();
+    if (diagnosticsEnabled) {
+      flowChatDiagnostics.trace({
+        hypothesis: 'B',
+        location: 'FlowChatViewportCoordinator.restoreElementAnchor',
+        message: 'Semantic anchor correction applied',
+        data: () => ({
+          mode: this.mode,
+          source,
+          initialCorrection,
+          remainingCorrection,
+          scrollTopBefore,
+          scrollTopAfter: scroller.scrollTop,
+          maxScrollTop: Math.max(0, scroller.scrollHeight - scroller.clientHeight),
+        }),
+      });
+    }
 
     if (
       remainingCorrection > ELEMENT_ANCHOR_EPSILON_PX &&
@@ -172,7 +277,42 @@ export class FlowChatViewportCoordinator {
           applyCorrection(remainingCorrection);
         }
       }
+      if (flowChatDiagnostics.isEnabled()) {
+        flowChatDiagnostics.trace({
+          hypothesis: 'C',
+          location: 'FlowChatViewportCoordinator.restoreElementAnchor',
+          message: 'Semantic anchor requested additional bottom range',
+          data: () => ({
+            mode: this.mode,
+            source,
+            rangeExtended,
+            remainingCorrection,
+            scrollTop: scroller.scrollTop,
+            scrollHeight: scroller.scrollHeight,
+            clientHeight: scroller.clientHeight,
+          }),
+        });
+      }
     }
+    return true;
+  }
+
+  scheduleElementAnchorRestore(scroller: HTMLElement, source = 'external'): boolean {
+    this.validateElementAnchor(`schedule-restore:${source}`);
+    if (
+      !this.elementAnchor ||
+      (this.mode !== 'preserving-element' && this.mode !== 'pinned-item')
+    ) {
+      return false;
+    }
+
+    this.pendingElementAnchorRestore = { scroller, source };
+    if (typeof requestAnimationFrame === 'undefined') {
+      this.pendingElementAnchorRestore = null;
+      return this.restoreElementAnchor(scroller, source);
+    }
+
+    this.startAnchorGuard();
     return true;
   }
 
@@ -197,28 +337,43 @@ export class FlowChatViewportCoordinator {
     return true;
   }
 
-  release(_reason = 'unspecified'): void {
-    this.stopAnchorGuard();
+  release(reason = 'unspecified'): void {
+    const previousMode = this.mode;
+    const hadElementAnchor = Boolean(this.elementAnchor);
+    const previousPreservationPhase = this.elementAnchor?.preservationPhase ?? null;
+    this.cancelElementAnchorRestoreWork();
     this.elementAnchor = null;
     this.mode = 'idle';
+    if (flowChatDiagnostics.isEnabled()) {
+      flowChatDiagnostics.trace({
+        hypothesis: 'B',
+        location: 'FlowChatViewportCoordinator.release',
+        message: 'Viewport coordinator released semantic ownership',
+        data: () => ({ previousMode, previousPreservationPhase, hadElementAnchor, reason }),
+      });
+    }
   }
 
-  private expireElementAnchor(): void {
-    if (
-      this.elementAnchor?.expiresAtMs !== null &&
-      this.elementAnchor?.expiresAtMs !== undefined &&
-      this.elementAnchor.expiresAtMs < nowMs()
-    ) {
-      this.elementAnchor = null;
-      this.stopAnchorGuard();
-      if (this.mode === 'preserving-element') {
-        this.mode = 'idle';
-      }
+  private validateElementAnchor(source: string): void {
+    const anchor = this.elementAnchor;
+    if (anchor && (!anchor.element.isConnected || !anchor.scroller.isConnected)) {
+      this.release(`element-anchor-disconnected:${source}`);
     }
   }
 
   private startAnchorGuard(): void {
-    if (this.anchorGuardFrame !== null || typeof requestAnimationFrame === 'undefined') {
+    const shouldContinuouslyGuard = (
+      this.mode === 'pinned-item' ||
+      (
+        this.mode === 'preserving-element' &&
+        this.elementAnchor?.preservationPhase === 'active'
+      )
+    );
+    if (
+      this.anchorGuardFrame !== null ||
+      typeof requestAnimationFrame === 'undefined' ||
+      (!shouldContinuouslyGuard && !this.pendingElementAnchorRestore)
+    ) {
       return;
     }
     this.anchorGuardFrame = requestAnimationFrame(this.runAnchorGuardFrame);
@@ -233,19 +388,33 @@ export class FlowChatViewportCoordinator {
     this.anchorGuardFrame = null;
   }
 
+  private cancelElementAnchorRestoreWork(): void {
+    this.pendingElementAnchorRestore = null;
+    this.stopAnchorGuard();
+  }
+
   private runAnchorGuardFrame = (): void => {
     this.anchorGuardFrame = null;
-    this.expireElementAnchor();
+    this.validateElementAnchor('anchor-guard');
     const anchor = this.elementAnchor;
     if (
       !anchor ||
       (this.mode !== 'pinned-item' && this.mode !== 'preserving-element') ||
-      !anchor.scroller.isConnected
+      (
+        this.mode === 'preserving-element' &&
+        anchor.preservationPhase === 'retained' &&
+        !this.pendingElementAnchorRestore
+      )
     ) {
       return;
     }
 
-    this.restoreElementAnchor(anchor.scroller, 'anchor-guard');
+    const pendingRestore = this.pendingElementAnchorRestore;
+    this.pendingElementAnchorRestore = null;
+    this.restoreElementAnchor(
+      pendingRestore?.scroller ?? anchor.scroller,
+      pendingRestore?.source ?? 'anchor-guard',
+    );
     this.startAnchorGuard();
   };
 }

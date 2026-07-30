@@ -62,6 +62,7 @@ export interface AgenticEventCallbacks {
 export class AgenticEventListener {
   private unlistenFunctions: UnlistenFn[] = [];
   private isListening = false;
+  private callbacks: AgenticEventCallbacks | null = null;
 
   async startListening(callbacks: AgenticEventCallbacks): Promise<void> {
     if (this.isListening) {
@@ -72,6 +73,7 @@ export class AgenticEventListener {
     logger.info('Starting Agentic event listener');
 
     try {
+      this.callbacks = callbacks;
       if (callbacks.onSessionCreated) {
         const unlisten = agentAPI.onSessionCreated((event) => {
           logger.debug('Session created:', event);
@@ -287,6 +289,114 @@ export class AgenticEventListener {
     }
   }
 
+  /**
+   * Feed a durable event obtained through another transport into the same
+   * handlers as live `agentic://*` events. Dispatch observers use this instead
+   * of creating a second transcript reducer.
+   *
+   * `false` means the normal listener is not ready; callers must retain their
+   * cursor and retry rather than dropping the event.
+   */
+  dispatchExternal(eventName: string, payload: Record<string, unknown>): boolean {
+    const callbacks = this.callbacks;
+    if (!callbacks) {
+      return false;
+    }
+
+    switch (eventName) {
+      case 'agentic://session-created':
+        callbacks.onSessionCreated?.(payload as AgenticEvent);
+        break;
+      case 'agentic://session-deleted':
+        callbacks.onSessionDeleted?.(payload as AgenticEvent);
+        break;
+      case 'agentic://session-state-changed':
+        callbacks.onSessionStateChanged?.(payload as AgenticEvent);
+        break;
+      case 'agentic://image-analysis-started':
+        callbacks.onImageAnalysisStarted?.(payload as unknown as ImageAnalysisEvent);
+        break;
+      case 'agentic://image-analysis-completed':
+        callbacks.onImageAnalysisCompleted?.(payload as unknown as ImageAnalysisEvent);
+        break;
+      case 'agentic://dialog-turn-started':
+        callbacks.onDialogTurnStarted?.(payload as AgenticEvent);
+        break;
+      case 'agentic://model-round-started':
+        callbacks.onModelRoundStarted?.(payload as unknown as ModelRoundStartedEvent);
+        break;
+      case 'agentic://model-round-completed':
+        callbacks.onModelRoundCompleted?.(payload as unknown as ModelRoundCompletedEvent);
+        break;
+      case 'agentic://model-round-attempt-superseded':
+        callbacks.onModelRoundAttemptSuperseded?.(
+          payload as unknown as ModelRoundAttemptSupersededEvent,
+        );
+        break;
+      case 'agentic://text-chunk':
+        callbacks.onTextChunk?.(payload as unknown as TextChunkEvent);
+        break;
+      case 'agentic://tool-event':
+        callbacks.onToolEvent?.(payload as unknown as ToolEvent);
+        break;
+      case 'agentic://subagent-session-linked':
+        callbacks.onSubagentSessionLinked?.(payload as unknown as SubagentSessionLinkedEvent);
+        break;
+      case 'agentic://deep-review-queue-state-changed':
+        callbacks.onDeepReviewQueueStateChanged?.(
+          payload as unknown as DeepReviewQueueStateChangedEvent,
+        );
+        break;
+      case 'agentic://dialog-turn-completed':
+        callbacks.onDialogTurnCompleted?.(payload as AgenticEvent);
+        break;
+      case 'agentic://dialog-turn-failed':
+        callbacks.onDialogTurnFailed?.(payload as AgenticEvent);
+        break;
+      case 'agentic://dialog-turn-cancelled':
+        callbacks.onDialogTurnCancelled?.(payload as AgenticEvent);
+        break;
+      case 'agentic://token-usage-updated':
+        callbacks.onTokenUsageUpdated?.(payload as AgenticEvent);
+        break;
+      case 'agentic://acp-context-usage-updated':
+        callbacks.onAcpContextUsageUpdated?.(payload as unknown as AcpContextUsageUpdatedEvent);
+        break;
+      case 'agentic://context-compression-started':
+        callbacks.onContextCompressionStarted?.(payload as AgenticEvent);
+        break;
+      case 'agentic://context-compression-completed':
+        callbacks.onContextCompressionCompleted?.(payload as AgenticEvent);
+        break;
+      case 'agentic://context-compression-failed':
+        callbacks.onContextCompressionFailed?.(payload as AgenticEvent);
+        break;
+      case 'agentic://thread-goal-updated':
+        callbacks.onThreadGoalUpdated?.(
+          payload as { sessionId: string; goal?: Record<string, unknown> | null },
+        );
+        break;
+      case 'agentic://open-built-in-browser':
+        callbacks.onOpenBuiltInBrowser?.(payload as unknown as OpenBuiltInBrowserEvent);
+        break;
+      case 'session_title_generated':
+        callbacks.onSessionTitleGenerated?.(payload as unknown as SessionTitleGeneratedEvent);
+        break;
+      case 'agentic://session-model-auto-migrated':
+        callbacks.onSessionModelAutoMigrated?.(
+          payload as unknown as SessionModelAutoMigratedEvent,
+        );
+        break;
+      case 'agentic://user-steering-injected':
+        callbacks.onUserSteeringInjected?.(payload as unknown as UserSteeringInjectedEvent);
+        break;
+      default:
+        logger.debug('Ignoring unsupported external agentic event', { eventName });
+        break;
+    }
+    return true;
+  }
+
   async stopListening(): Promise<void> {
     if (!this.isListening) {
       return;
@@ -304,6 +414,7 @@ export class AgenticEventListener {
 
     this.unlistenFunctions = [];
     this.isListening = false;
+    this.callbacks = null;
     logger.info('Stopped all event listeners');
   }
 

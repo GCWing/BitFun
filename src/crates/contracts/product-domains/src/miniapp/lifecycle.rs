@@ -101,6 +101,7 @@ pub fn build_created_app(
         permissions: input.permissions,
         ai_context: input.ai_context,
         runtime,
+        runtime_profile: Default::default(),
         i18n: None,
     }
 }
@@ -401,6 +402,7 @@ mod tests {
             permissions: crate::miniapp::types::MiniAppPermissions::default(),
             ai_context: None,
             runtime: Default::default(),
+            runtime_profile: Default::default(),
             i18n: None,
         };
 

@@ -13,9 +13,9 @@ pub mod remote_terminal;
 pub mod types;
 pub mod workspace_state;
 
-#[cfg(feature = "ssh-remote")]
-pub use bitfun_services_integrations::remote_ssh::relay_deploy;
 pub use bitfun_services_integrations::remote_ssh::{build_remote_git_command, shell_quote_posix};
+#[cfg(feature = "ssh-remote")]
+pub use bitfun_services_integrations::remote_ssh::{dispatch_ssh, relay_deploy};
 #[cfg(not(feature = "ssh-remote"))]
 pub use bitfun_services_integrations::remote_ssh::{
     get_global_remote_exec_process_manager, KnownHostEntry, PTYSession, PortForward,

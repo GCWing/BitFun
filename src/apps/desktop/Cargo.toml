@@ -24,7 +24,7 @@ bitfun-relay-service = { path = "../../crates/services/relay-service" }
 bitfun-agent-runtime = { path = "../../crates/execution/agent-runtime" }
 bitfun-runtime-ports = { path = "../../crates/contracts/runtime-ports" }
 bitfun-product-domains = { path = "../../crates/contracts/product-domains", default-features = false }
-bitfun-services-integrations = { path = "../../crates/services/services-integrations", default-features = false, features = ["canvas-runtime", "speech"] }
+bitfun-services-integrations = { path = "../../crates/services/services-integrations", default-features = false, features = ["canvas-runtime", "miniapp-market", "speech"] }
 bitfun-core-types = { path = "../../crates/contracts/core-types" }
 bitfun-agent-tools = { path = "../../crates/execution/tool-contracts" }
 bitfun-transport = { path = "../../crates/adapters/transport", features = ["tauri-adapter"] }
@@ -45,8 +45,7 @@ tauri-plugin-global-shortcut = { workspace = true }
 tauri-plugin-single-instance = { workspace = true }
 tauri-plugin-window-state = { workspace = true }
 keepawake = { workspace = true }
-# Keep Tauri's transitive time resolution on the known-good release in CI,
-# where the root Cargo.lock is intentionally ignored.
+# Keep Tauri's transitive time resolution on the known-good release.
 time = { workspace = true }
 brotli-decompressor = { workspace = true }
 alloc-no-stdlib = { workspace = true }
@@ -68,6 +67,7 @@ similar = { workspace = true }
 ignore = { workspace = true }
 urlencoding = { workspace = true }
 reqwest = { workspace = true }
+semver = { workspace = true }
 zip = { workspace = true }
 tar = { workspace = true }
 flate2 = { workspace = true }
@@ -84,6 +84,7 @@ screenshots = { workspace = true }
 enigo = { workspace = true }
 image = { workspace = true }
 resvg = { workspace = true }
+tempfile = { workspace = true }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 bitflags = { workspace = true }
@@ -138,9 +139,6 @@ devtools = ["tauri/devtools", "bitfun-webdriver/embedded"]
 [target.'cfg(target_os = "linux")'.dependencies]
 atspi = { workspace = true }
 leptess = { workspace = true }
-
-[dev-dependencies]
-tempfile = { workspace = true }
 
 [lints]
 workspace = true

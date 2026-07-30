@@ -39,6 +39,16 @@ export interface MiniAppPermissions {
     rate_limit_per_minute?: number;
   };
   notifications?: { system?: boolean };
+  host?: {
+    dialog?: boolean;
+    clipboard_read?: boolean;
+    clipboard_write?: boolean;
+    open_external?: boolean;
+    reveal_in_folder?: boolean;
+    deck_render?: boolean;
+    chat_composer?: boolean;
+    system_info?: boolean;
+  };
 }
 
 // ─── AI Types ─────────────────────────────────────────────────────────────────
@@ -152,6 +162,8 @@ export interface MiniAppRuntimeState {
   ui_recompile_required: boolean;
 }
 
+export type MiniAppRuntimeProfile = 'compatibility' | 'market_strict';
+
 export interface MiniAppLocaleStrings {
   name?: string;
   description?: string;
@@ -175,6 +187,7 @@ export interface MiniAppMeta {
   updated_at: number;
   permissions: MiniAppPermissions;
   runtime?: MiniAppRuntimeState;
+  runtime_profile?: MiniAppRuntimeProfile;
   /** Optional per-locale overrides for `name` / `description` / `tags`. */
   i18n?: MiniAppI18n;
 }
@@ -250,9 +263,15 @@ export interface MiniAppPermissionDiff {
 
 export interface MiniAppCustomizationMetadata {
   origin: {
-    kind: 'builtin' | 'imported' | 'user_created';
+    kind: 'builtin' | 'imported' | 'user_created' | 'market';
     builtin_id?: string;
     builtin_version?: number;
+    market?: {
+      listingId: string;
+      releaseId: string;
+      releaseNumber: number;
+      packageSha256: string;
+    };
   };
   local_override: boolean;
   last_applied_draft_id?: string;

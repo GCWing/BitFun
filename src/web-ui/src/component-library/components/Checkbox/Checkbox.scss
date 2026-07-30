@@ -51,7 +51,11 @@
     background: transparent;
     border: 1px solid var(--border-subtle);
     border-radius: tokens.$size-radius-sm;
-    transition: all 0.2s ease;
+    transform: scale(1);
+    transition:
+      background-color var(--motion-fast) ease,
+      border-color var(--motion-fast) ease,
+      transform var(--motion-fast) var(--easing-standard);
     pointer-events: none;
   }
 
@@ -60,8 +64,11 @@
     height: 11px;
     color: var(--color-static-white);
     opacity: 0;
-    transform: scale(0.5);
-    transition: all 0.2s ease;
+    transform: scale(0.92);
+    transition:
+      opacity var(--motion-fast) ease,
+      transform var(--motion-fast) var(--easing-standard),
+      color var(--motion-fast) ease;
   }
 
   &__content {
@@ -111,24 +118,8 @@
     outline-offset: 2px;
   }
 
-  &:hover:not(&--disabled) &__box {
-    border-color: var(--border-base);
-    background: var(--element-bg-subtle);
-  }
-
-  &:hover:not(&--disabled) &__input:checked + &__box,
-  &:hover:not(&--disabled) &__input:indeterminate + &__box {
-    background: color-mix(in srgb, var(--color-accent-500) 15%, transparent);
-    border-color: var(--color-accent-400);
-  }
-
-  &:hover:not(&--disabled) &__input:checked + &__box &__icon,
-  &:hover:not(&--disabled) &__input:indeterminate + &__box &__icon {
-    color: var(--color-accent-400);
-  }
-
   &__input:active:not(:disabled) + &__box {
-    transform: scale(0.95);
+    transform: scale(0.97);
   }
 
   &--error &__box {
@@ -196,5 +187,37 @@
     .bitfun-checkbox__description {
       font-size: var(--font-size-xs);
     }
+  }
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .bitfun-checkbox:not(.bitfun-checkbox--disabled):hover {
+    .bitfun-checkbox__box {
+      border-color: var(--border-base);
+      background: var(--element-bg-subtle);
+    }
+
+    .bitfun-checkbox__input:checked + .bitfun-checkbox__box,
+    .bitfun-checkbox__input:indeterminate + .bitfun-checkbox__box {
+      background: color-mix(in srgb, var(--color-accent-500) 15%, transparent);
+      border-color: var(--color-accent-400);
+    }
+
+    .bitfun-checkbox__input:checked + .bitfun-checkbox__box .bitfun-checkbox__icon,
+    .bitfun-checkbox__input:indeterminate + .bitfun-checkbox__box .bitfun-checkbox__icon {
+      color: var(--color-accent-400);
+    }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bitfun-checkbox__box {
+    transition:
+      background-color var(--motion-fast) ease,
+      border-color var(--motion-fast) ease;
+  }
+
+  .bitfun-checkbox__input:active:not(:disabled) + .bitfun-checkbox__box {
+    transform: none;
   }
 }

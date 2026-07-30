@@ -98,6 +98,7 @@ export const CoworkExampleCards: React.FC<CoworkExampleCardsProps> = ({
       const title = t(`coworkExamples.items.${example.id}.title`);
       const description = t(`coworkExamples.items.${example.id}.description`);
       const prompt = t(`coworkExamples.items.${example.id}.prompt`);
+      const handleSelect = () => onSelectPrompt(prompt);
 
       return (
         <Card
@@ -105,7 +106,14 @@ export const CoworkExampleCards: React.FC<CoworkExampleCardsProps> = ({
           className="bitfun-cowork-example-cards__card"
           variant="subtle"
           interactive
-          onClick={() => onSelectPrompt(prompt)}
+          role="button"
+          tabIndex={0}
+          onClick={handleSelect}
+          onKeyDown={(event) => {
+            if (event.key !== 'Enter' && event.key !== ' ') return;
+            event.preventDefault();
+            handleSelect();
+          }}
         >
           <div className="bitfun-cowork-example-cards__card-header">
             <div className="bitfun-cowork-example-cards__card-icon">

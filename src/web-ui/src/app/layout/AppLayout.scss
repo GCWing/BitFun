@@ -1,7 +1,8 @@
 /**
- * BitFun main layout styles (SCSS).
- * Token-driven application shell with a consistent dark background.
- * Follows BEM naming and design tokens.
+ * BitFun desktop shell.
+ *
+ * The root stays visually quiet and lets the scene viewport carry elevation.
+ * Frequent workspace and panel changes deliberately avoid entrance motion.
  */
 
 @use '../../component-library/styles/tokens.scss' as *;
@@ -31,24 +32,18 @@ html, body {
 
 // ==================== Main layout container ====================
 .bitfun-app-layout {
+  position: relative;
   display: flex;
   flex-direction: column;
-  height: 100vh;
   width: 100vw;
-  overflow: hidden;
-  
-  // Use theme background
-  background: var(--color-bg-primary);
-  
-  color: var(--color-text-primary);
-  font-family: $font-family-sans;
-  position: relative;
-
-  // Ensure layout stability
+  height: 100vh;
   min-height: 100vh;
   max-height: 100vh;
+  overflow: hidden;
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  font-family: $font-family-sans;
 
-  // Font rendering
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
@@ -57,12 +52,10 @@ html, body {
     outline: none;
   }
 
-  // All children
   * {
     box-sizing: border-box;
   }
 
-  // Focus management
   *:focus-visible {
     outline: 2px solid var(--color-accent-500);
     outline-offset: 2px;
@@ -74,18 +67,10 @@ html, body {
     background: var(--color-bg-primary);
   }
   
-  // ==================== Transitioning ====================
-  &--transitioning {
-    // Styles during transition
-    .bitfun-app-main-workspace {
-      // Content transition handled by child components
-    }
-  }
-
   // ==================== Modifier - loading ====================
   &--loading {
     pointer-events: none;
-    opacity: 0.9;
+    opacity: 0.92;
   }
 
   // ==================== Modifier - error ====================
@@ -112,35 +97,38 @@ html, body {
 
 // ==================== Main content area (full height, no TitleBar) ====================
 .bitfun-app-main-workspace {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  margin-top: 0;
-  width: 100%;
-  overflow: hidden;
   position: relative;
-  background: var(--color-bg-scene);
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  width: 100%;
+  margin-top: 0;
+  overflow: hidden;
+  background: var(--color-bg-primary);
 }
 
 .bitfun-window-mode-hint {
   position: fixed;
-  top: calc(env(safe-area-inset-top, 0px) + #{$size-gap-3});
+  top: calc(env(safe-area-inset-top, 0px) + #{$size-gap-2});
   left: 50%;
   z-index: $z-notification;
   display: inline-flex;
   align-items: center;
   gap: $size-gap-2;
   max-width: min(560px, calc(100vw - 32px));
-  min-height: 34px;
-  padding: $size-gap-1 $size-gap-3;
+  min-height: 36px;
+  padding: $size-gap-1 $size-gap-2 $size-gap-1 $size-gap-3;
   border: 1px solid var(--border-subtle);
-  border-radius: $size-radius-base;
-  background: color-mix(in srgb, var(--color-bg-elevated) 90%, transparent);
-  box-shadow: 0 12px 28px var(--color-overlay-black-30);
+  border-radius: $size-radius-lg;
+  background: color-mix(in srgb, var(--color-bg-elevated) 94%, transparent);
+  box-shadow:
+    0 1px 0 color-mix(in srgb, var(--color-static-white) 5%, transparent) inset,
+    0 12px 32px var(--color-overlay-black-30);
   color: var(--color-text-primary);
   pointer-events: none;
   transform: translateX(-50%);
-  animation: bitfun-window-mode-hint-in $motion-base $easing-decelerate both;
   backdrop-filter: blur(12px);
 
   &__title {
@@ -160,17 +148,6 @@ html, body {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-  }
-}
-
-@keyframes bitfun-window-mode-hint-in {
-  from {
-    opacity: 0;
-    transform: translateX(-50%) translateY(-8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(-50%) translateY(0);
   }
 }
 
@@ -196,14 +173,14 @@ html, body {
 // ==================== Dark theme tweaks ====================
 @media (prefers-color-scheme: dark) {
   .bitfun-app-layout {
-    background: var(--color-bg-scene);
+    background: var(--color-bg-primary);
   }
 }
 
 // ==================== High-contrast mode ====================
 @media (prefers-contrast: high) {
   .bitfun-app-layout {
-    background: var(--color-bg-scene);
+    background: var(--color-bg-primary);
   }
 }
 
@@ -214,32 +191,4 @@ html, body {
     animation: none;
   }
 
-  .bitfun-window-mode-hint {
-    animation: none;
-  }
-}
-
-// ==================== Animations ====================
-@keyframes shimmer {
-  0%, 100% {
-    transform: translateX(-100%);
-  }
-  50% {
-    transform: translateX(100%);
-  }
-}
-
-// Startup sweep glow: icy blue band from left to right, no delay.
-@keyframes header-sweep-glow {
-  0% {
-    transform: translateX(-100%);
-    opacity: 1;
-  }
-  95% {
-    opacity: 1;
-  }
-  100% {
-    transform: translateX(300%);
-    opacity: 0;
-  }
 }

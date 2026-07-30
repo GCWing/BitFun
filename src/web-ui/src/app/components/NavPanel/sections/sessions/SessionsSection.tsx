@@ -55,6 +55,12 @@ import { notificationService } from '@/shared/notification-system';
 import { copyTextToClipboard } from '@/shared/utils/textSelection';
 import { scheduleAfterStartupPaint, scheduleAfterStartupSignal } from '@/shared/utils/startupTaskScheduling';
 import {
+  isNonLocalDispatchTarget,
+  type DispatchJobState,
+} from '@/features/dispatch/types';
+import { useDispatchJobStore } from '@/features/dispatch/dispatchJobStore';
+import { resolveDispatchNavPresentation } from '@/features/dispatch/dispatchNavPresentation';
+import {
   SESSION_METADATA_DEFERRED_FALLBACK_MS,
   SESSION_METADATA_DEFERRED_FRAME_COUNT,
   SESSION_METADATA_DEFERRED_SIGNAL,
@@ -91,6 +97,13 @@ const resolveSessionModeType = (session: Session): SessionMode => {
 
 const getTitle = (session: Session): string =>
   resolveSessionTitle(session, (key, options) => i18nService.t(key, options));
+
+const dispatchFilterKey = (session: Session): string => {
+  const target = session.config.dispatchTarget;
+  if (target?.kind === 'ssh') return `ssh:${target.connectionId}`;
+  if (target?.kind === 'device') return `device:${target.deviceId}`;
+  return 'local';
+};
 
 const countTopLevelSessionsInScope = (
   sessions: Iterable<Session>,
@@ -183,9 +196,11 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
     flowChatStore.getState()
   );
   const backgroundSubagentActivities = useBackgroundSubagentActivityStore(state => state.activities);
+  const dispatchTransportByJobId = useDispatchJobStore(state => state.transportByJobId);
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState('');
   const [expandLevel, setExpandLevel] = useState<0 | 1 | 2>(0);
+  const [dispatchTargetFilter, setDispatchTargetFilter] = useState('all');
   // Level-2 ("show all") renders in pages of 200 rows so a huge session
   // history cannot mount thousands of un-virtualized rows at once.
   const [level2DisplayCount, setLevel2DisplayCount] = useState(SESSIONS_LEVEL_2_PAGE);
@@ -254,11 +269,18 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
         const latestTurn = session.dialogTurns[session.dialogTurns.length - 1];
         const trackedTurn = resolveTrackedTurn(session);
         const hasAskUser = hasPendingAskUserQuestion(trackedTurn);
+        const dispatchTarget = session.config.dispatchTarget;
+        const dispatchTargetSnapshot = dispatchTarget?.kind === 'ssh'
+          ? `ssh:${dispatchTarget.connectionId}:${dispatchTarget.workspacePath}:${dispatchTarget.displayName}`
+          : dispatchTarget?.kind === 'device'
+            ? `device:${dispatchTarget.deviceId}:${dispatchTarget.workspacePath}:${dispatchTarget.displayName}`
+            : 'local';
         parts.push(
           `${session.sessionId}|${session.isTransient ? '1':'0'}|${session.sessionKind}|` +
           `${session.parentSessionId ?? ''}|${session.parentToolCallId ?? ''}|${session.subagentType ?? ''}|` +
           `${session.workspacePath ?? ''}|${session.mode ?? ''}|${session.needsUserAttention ? '1':'0'}|` +
-          `${session.hasUnreadCompletion ? '1':'0'}|${latestTurn?.status ?? ''}|${hasAskUser ? '1':'0'}|${trackedTurn?.id ?? ''}|${session.title ?? ''}`
+          `${session.hasUnreadCompletion ? '1':'0'}|${latestTurn?.status ?? ''}|${hasAskUser ? '1':'0'}|${trackedTurn?.id ?? ''}|` +
+          `${session.title ?? ''}|${dispatchTargetSnapshot}|${session.config.dispatchJobState ?? ''}`
         );
       }
       return parts.join(';');
@@ -573,7 +595,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
     [flowChatState.sessions, workspacePath, remoteConnectionId, remoteSshHost]
   );
 
-  const { topLevelSessions, childrenByParent } = useMemo(() => {
+  const { topLevelSessions: allTopLevelSessions, childrenByParent } = useMemo(() => {
     const childMap = new Map<string, Session[]>();
     const parents: Session[] = [];
 
@@ -600,6 +622,40 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
     };
   }, [sessions]);
 
+  const dispatchTargetFilterOptions = useMemo(() => {
+    const options = new Map<string, string>();
+    for (const session of allTopLevelSessions) {
+      const key = dispatchFilterKey(session);
+      if (key === 'local') {
+        options.set(key, t('nav.sessions.filterLocal'));
+        continue;
+      }
+      const target = session.config.dispatchTarget;
+      if (target?.kind === 'ssh' || target?.kind === 'device') {
+        options.set(key, target.displayName);
+      }
+    }
+    return Array.from(options.entries()).map(([value, label]) => ({ value, label }));
+  }, [allTopLevelSessions, t]);
+
+  useEffect(() => {
+    if (
+      dispatchTargetFilter !== 'all'
+      && !dispatchTargetFilterOptions.some(option => option.value === dispatchTargetFilter)
+    ) {
+      setDispatchTargetFilter('all');
+    }
+  }, [dispatchTargetFilter, dispatchTargetFilterOptions]);
+
+  const topLevelSessions = useMemo(
+    () => dispatchTargetFilter === 'all'
+      ? allTopLevelSessions
+      : allTopLevelSessions.filter(
+          session => dispatchFilterKey(session) === dispatchTargetFilter,
+        ),
+    [allTopLevelSessions, dispatchTargetFilter],
+  );
+
   const sessionDisplayLimit = useMemo(() => {
     const total = topLevelSessions.length;
     if (expandLevel === 2) return Math.min(total, level2DisplayCount);
@@ -608,13 +664,17 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
     return SESSIONS_LEVEL_0;
   }, [topLevelSessions.length, expandLevel, level2DisplayCount]);
 
-  const totalTopLevelSessionCount = getEffectiveTopLevelSessionCount(
-    metadataPageState.totalTopLevelCount,
-    metadataPageState.syncedTopLevelCount,
-    topLevelSessions.length,
-    metadataPageState.isLoading
-  );
-  const hasMoreUnloadedSessions = topLevelSessions.length < totalTopLevelSessionCount;
+  const totalTopLevelSessionCount = dispatchTargetFilter === 'all'
+    ? getEffectiveTopLevelSessionCount(
+        metadataPageState.totalTopLevelCount,
+        metadataPageState.syncedTopLevelCount,
+        allTopLevelSessions.length,
+        metadataPageState.isLoading,
+      )
+    : topLevelSessions.length;
+  const hasMoreUnloadedSessions =
+    dispatchTargetFilter === 'all'
+    && allTopLevelSessions.length < totalTopLevelSessionCount;
   const expandToggleState = getSessionExpandToggleState(totalTopLevelSessionCount, expandLevel);
 
   useEffect(() => {
@@ -624,7 +684,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
       metadataPageState.isLoading ||
       metadataPageState.totalTopLevelCount === null ||
       metadataPageState.syncedTopLevelCount === null ||
-      topLevelSessions.length === metadataPageState.syncedTopLevelCount
+      allTopLevelSessions.length === metadataPageState.syncedTopLevelCount
     ) {
       return;
     }
@@ -636,7 +696,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
     metadataPageState.isLoading,
     metadataPageState.syncedTopLevelCount,
     metadataPageState.totalTopLevelCount,
-    topLevelSessions.length,
+    allTopLevelSessions.length,
     workspacePath,
   ]);
 
@@ -1000,7 +1060,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
     totalTopLevelSessionCount,
   ]);
 
-  if (topLevelSessions.length === 0) {
+  if (allTopLevelSessions.length === 0) {
     if (metadataPageState.isLoading) {
       return (
         <div className="bitfun-nav-panel__inline-list">
@@ -1031,6 +1091,28 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
 
   return (
     <div className="bitfun-nav-panel__inline-list">
+      {dispatchTargetFilterOptions.length > 1 ? (
+        <label className="bitfun-nav-panel__session-target-filter">
+          <span>{t('nav.sessions.filterLabel')}</span>
+          <select
+            value={dispatchTargetFilter}
+            onChange={event => {
+              setDispatchTargetFilter(event.target.value);
+              setExpandLevel(0);
+            }}
+          >
+            <option value="all">{t('nav.sessions.filterAll')}</option>
+            {dispatchTargetFilterOptions.map(option => (
+              <option key={option.value} value={option.value}>{option.label}</option>
+            ))}
+          </select>
+        </label>
+      ) : null}
+      {topLevelSessions.length === 0 ? (
+        <div className="bitfun-nav-panel__inline-empty">
+          {t('nav.sessions.noSessionsForTarget')}
+        </div>
+      ) : null}
       {visibleItems.map(({ session, level }) => {
           const isEditing = editingSessionId === session.sessionId;
           const relationship = resolveSessionRelationship(session);
@@ -1068,7 +1150,49 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
           const parentTurnIndex = relationship.origin?.parentTurnIndex;
           const trimmedAssistant = assistantLabel?.trim() ?? '';
           const showAssistantInTooltip = trimmedAssistant.length > 0;
-          const showRichTooltip = showAssistantInTooltip || isChildSession || showBackgroundSubagentActivity;
+          const dispatchTarget = session.config.dispatchTarget;
+          const isDispatched = isNonLocalDispatchTarget(dispatchTarget);
+          const dispatchTargetLabel =
+            dispatchTarget?.kind === 'ssh' || dispatchTarget?.kind === 'device'
+              ? dispatchTarget.displayName
+              : '';
+          const dispatchState = session.config.dispatchJobState ?? 'submitting';
+          const dispatchStateLabel = {
+            submitting: t('nav.sessions.dispatchStates.submitting'),
+            submission_unknown: t('nav.sessions.dispatchStates.submission_unknown'),
+            queued: t('nav.sessions.dispatchStates.queued'),
+            running: t('nav.sessions.dispatchStates.running'),
+            succeeded: t('nav.sessions.dispatchStates.succeeded'),
+            failed: t('nav.sessions.dispatchStates.failed'),
+            cancelled: t('nav.sessions.dispatchStates.cancelled'),
+          } satisfies Record<DispatchJobState, string>;
+          const dispatchTransport = session.config.dispatchJobId
+            ? dispatchTransportByJobId[session.config.dispatchJobId]
+            : undefined;
+          const dispatchTransportError =
+            dispatchTransport?.lastTransportError?.trim()
+            || t('nav.sessions.dispatchTransportErrorFallback');
+          const dispatchPresentation = isDispatched
+            ? resolveDispatchNavPresentation({
+                targetLabel: dispatchTargetLabel,
+                state: dispatchState,
+                reachability: dispatchTransport?.reachability,
+                runningSummary: t('nav.sessions.dispatchRunningOn', {
+                  target: dispatchTargetLabel,
+                  state: dispatchStateLabel[dispatchState],
+                }),
+                unreachableLabel: t('nav.sessions.dispatchUnreachable'),
+                unreachableSummary: t('nav.sessions.dispatchUnreachableDetails', {
+                  target: dispatchTargetLabel,
+                  error: dispatchTransportError,
+                }),
+              })
+            : null;
+          const showRichTooltip =
+            showAssistantInTooltip ||
+            isChildSession ||
+            showBackgroundSubagentActivity ||
+            isDispatched;
           const tooltipContent = showRichTooltip ? (
             <div className="bitfun-nav-panel__inline-item-tooltip">
               <div className="bitfun-nav-panel__inline-item-tooltip-title">{sessionTitle}</div>
@@ -1087,6 +1211,11 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                     : t('nav.sessions.childSourceWithoutTurn', {
                         parentTitle: parentTitle || t('nav.sessions.parentSession'),
                   })}
+                </div>
+              ) : null}
+              {isDispatched ? (
+                <div className="bitfun-nav-panel__inline-item-tooltip-meta">
+                  {dispatchPresentation?.summary}
                 </div>
               ) : null}
               {showBackgroundSubagentActivity && backgroundSubagentActivity ? (
@@ -1253,6 +1382,15 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                     <span className="bitfun-nav-panel__inline-item-label">{sessionTitle}</span>
                     {isChildSession ? (
                       <span className="bitfun-nav-panel__inline-item-btw-badge">{childSessionBadge}</span>
+                    ) : null}
+                    {isDispatched ? (
+                      <span
+                        className="bitfun-nav-panel__inline-item-dispatch-badge"
+                        data-state={dispatchPresentation?.visualState}
+                        title={dispatchPresentation?.summary}
+                      >
+                        {dispatchPresentation?.badgeLabel}
+                      </span>
                     ) : null}
                     {attentionKind === 'ask_user' || attentionKind === 'tool_confirm' ? (
                       <span className="bitfun-nav-panel__inline-item-attention-badge">

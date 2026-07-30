@@ -11,16 +11,22 @@ import type { MiniAppRunScope } from '../customization/miniAppCustomizationTypes
 interface MiniAppRunnerProps {
   app: MiniApp;
   runScope?: MiniAppRunScope;
+  strictRuntime?: boolean;
 }
 
-const MiniAppRunner: React.FC<MiniAppRunnerProps> = ({ app, runScope }) => {
+const MiniAppRunner: React.FC<MiniAppRunnerProps> = ({ app, runScope, strictRuntime = false }) => {
   const iframeRef = useRef<HTMLIFrameElement>(null);
-  useMiniAppBridge(iframeRef, app, runScope ?? { kind: 'active', appId: app.id });
+  useMiniAppBridge(
+    iframeRef,
+    app,
+    runScope ?? { kind: 'active', appId: app.id },
+    strictRuntime,
+  );
 
   const writeCompiledHtml = useCallback(() => {
     const iframe = iframeRef.current;
     const html = app.compiled_html?.trim();
-    if (!iframe || !html) {
+    if (strictRuntime || !iframe || !html) {
       return false;
     }
 
@@ -33,11 +39,11 @@ const MiniAppRunner: React.FC<MiniAppRunnerProps> = ({ app, runScope }) => {
     doc.write(html);
     doc.close();
     return true;
-  }, [app.compiled_html]);
+  }, [app.compiled_html, strictRuntime]);
 
   useEffect(() => {
     const iframe = iframeRef.current;
-    if (!iframe) {
+    if (strictRuntime || !iframe) {
       return undefined;
     }
 
@@ -62,7 +68,23 @@ const MiniAppRunner: React.FC<MiniAppRunnerProps> = ({ app, runScope }) => {
     return () => {
       iframe.removeEventListener('load', handleLoad);
     };
-  }, [app.id, app.compiled_html, writeCompiledHtml]);
+  }, [app.id, app.compiled_html, strictRuntime, writeCompiledHtml]);
+
+  if (strictRuntime) {
+    return (
+      <iframe
+        ref={iframeRef}
+        srcDoc={app.compiled_html}
+        data-app-id={app.id}
+        data-run-scope={runScope?.kind ?? 'active'}
+        data-runtime-profile="market-strict"
+        sandbox="allow-scripts"
+        referrerPolicy="no-referrer"
+        style={{ flex: '1 1 auto', width: '100%', minHeight: 0, border: 'none', display: 'block' }}
+        title={app.name}
+      />
+    );
+  }
 
   return (
     <iframe

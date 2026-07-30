@@ -1,3 +1,5 @@
+@use '../../../component-library/styles/tokens' as *;
+
 .miniapp-gallery-scene {
   display: flex;
   flex-direction: column;
@@ -7,4 +9,57 @@
   min-height: 0;
   height: 100%;
   overflow: hidden;
+
+  &__tabs {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 3px;
+    min-height: 42px;
+    padding: 6px clamp(24px, 4vw, 56px);
+    border-bottom: 1px solid var(--border-subtle);
+    background: var(--color-bg-primary);
+
+    button {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      min-height: 30px;
+      padding: 5px 10px;
+      border: 1px solid transparent;
+      border-radius: $size-radius-base;
+      background: transparent;
+      color: var(--color-text-secondary);
+      font-size: var(--font-size-sm);
+      cursor: pointer;
+
+      &:hover {
+        background: var(--element-bg-soft);
+        color: var(--color-text-primary);
+      }
+
+      &:active {
+        transform: translateY(1px);
+      }
+
+      &.is-active {
+        border-color: var(--border-subtle);
+        background: var(--element-bg-medium);
+        color: var(--color-text-primary);
+        font-weight: 500;
+      }
+    }
+  }
+}
+
+@media (max-width: 560px) {
+  .miniapp-gallery-scene__tabs {
+    justify-content: stretch;
+    padding-inline: 12px;
+
+    button {
+      justify-content: center;
+      flex: 1;
+    }
+  }
 }

@@ -76,11 +76,13 @@ impl SessionExecutionTarget {
 
 /// User-level defaults for worktrees created by session isolation.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(default, rename_all = "camelCase")]
 pub struct WorktreeSettings {
     pub root_path: String,
     pub branch_prefix: String,
     pub copy_local_changes: bool,
+    pub auto_delete_enabled: bool,
+    pub auto_delete_limit: usize,
 }
 
 impl Default for WorktreeSettings {
@@ -89,6 +91,8 @@ impl Default for WorktreeSettings {
             root_path: "~/.bitfun/worktrees".to_string(),
             branch_prefix: "bitfun/".to_string(),
             copy_local_changes: false,
+            auto_delete_enabled: true,
+            auto_delete_limit: 15,
         }
     }
 }
@@ -208,11 +212,29 @@ mod tests {
     }
 
     #[test]
-    fn worktree_defaults_are_safe_and_opt_in() {
+    fn worktree_defaults_include_managed_cleanup_policy() {
         let defaults = WorktreeSettings::default();
         assert_eq!(defaults.root_path, "~/.bitfun/worktrees");
         assert_eq!(defaults.branch_prefix, "bitfun/");
         assert!(!defaults.copy_local_changes);
+        assert!(defaults.auto_delete_enabled);
+        assert_eq!(defaults.auto_delete_limit, 15);
+    }
+
+    #[test]
+    fn legacy_worktree_settings_receive_auto_delete_defaults() {
+        let settings: WorktreeSettings = serde_json::from_value(serde_json::json!({
+            "rootPath": "/custom/worktrees",
+            "branchPrefix": "custom/",
+            "copyLocalChanges": true
+        }))
+        .expect("legacy settings should deserialize");
+
+        assert_eq!(settings.root_path, "/custom/worktrees");
+        assert_eq!(settings.branch_prefix, "custom/");
+        assert!(settings.copy_local_changes);
+        assert!(settings.auto_delete_enabled);
+        assert_eq!(settings.auto_delete_limit, 15);
     }
 
     #[test]

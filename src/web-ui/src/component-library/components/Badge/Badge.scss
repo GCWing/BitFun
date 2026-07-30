@@ -13,8 +13,8 @@
   border-radius: tokens.$badge-border-radius;
   font-size: var(--font-size-xs);
   font-weight: tokens.$badge-font-weight;
-  line-height: 1;
-  border: none;
+  line-height: 1.25;
+  border: 1px solid transparent;
   white-space: nowrap;
   flex-shrink: 0;
 

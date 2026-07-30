@@ -8,7 +8,7 @@
  * - Supports 'auto' | 'primary' | 'fast' | specific model IDs
  */
 
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useId, useRef, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { Brain, ChevronDown, Check, Zap } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -24,6 +24,7 @@ import { FlowChatStore } from '../store/FlowChatStore';
 import { getModelMaxTokens } from '../services/flow-chat-manager/SessionModule';
 import { acpClientIdFromAgentType } from '../utils/acpSession';
 import { buildAcpFastModeValue, resolveAcpFastModeState } from '../utils/acpSessionConfig';
+import { sessionProjectWorkspacePath } from '../utils/sessionWorkspace';
 import {
   buildContextUsageTooltip,
   type ContextUsageSource,
@@ -179,12 +180,15 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
   const [modeModel, setModeModel] = useState('auto');
   const [acpOptions, setAcpOptions] = useState<AcpSessionOptions | null>(null);
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [keyboardNavigationOpen, setKeyboardNavigationOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const acpRestoreToastShownRef = useRef<string | null>(null);
   const acpOptionsRef = useRef<AcpSessionOptions | null>(null);
 
   const dropdownRef = useRef<HTMLDivElement>(null);
   const portalDropdownRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuId = useId();
 
   useEffect(() => {
     onLoadingChange?.(loading);
@@ -537,10 +541,14 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
         const maxContextTokens = await getModelMaxTokens(modelId, currentMode);
         store.updateSessionMaxContextTokens(sessionId, maxContextTokens);
         const session = store.getState().sessions.get(sessionId);
-        if (!session?.isTransient) {
+        if (session && !session.isTransient) {
           await agentAPI.updateSessionModel({
             sessionId,
             modelName: modelId,
+            workspacePath: sessionProjectWorkspacePath(session),
+            remoteConnectionId: session.remoteConnectionId,
+            remoteSshHost: session.remoteSshHost,
+            includeInternal: session.sessionKind === 'subagent',
           });
         }
       };
@@ -610,6 +618,71 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     loading,
     sessionId,
   ]);
+
+  const handleTriggerKeyDown = useCallback((event: React.KeyboardEvent<HTMLButtonElement>) => {
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      setKeyboardNavigationOpen(true);
+      setDropdownOpen(true);
+      if (isAcpSession) {
+        void loadAcpOptions();
+      }
+      return;
+    }
+
+    if (event.key === 'Escape' && dropdownOpen) {
+      event.preventDefault();
+      setDropdownOpen(false);
+      setKeyboardNavigationOpen(false);
+    }
+  }, [dropdownOpen, isAcpSession, loadAcpOptions]);
+
+  const handleDropdownKeyDown = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      setDropdownOpen(false);
+      setKeyboardNavigationOpen(false);
+      triggerRef.current?.focus();
+      return;
+    }
+
+    if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) {
+      return;
+    }
+
+    const items = Array.from(
+      event.currentTarget.querySelectorAll<HTMLButtonElement>(
+        'button[role="menuitemradio"]:not(:disabled)',
+      ),
+    );
+    if (items.length === 0) return;
+
+    event.preventDefault();
+    const activeIndex = items.indexOf(document.activeElement as HTMLButtonElement);
+    let nextIndex = activeIndex;
+    if (event.key === 'Home') nextIndex = 0;
+    if (event.key === 'End') nextIndex = items.length - 1;
+    if (event.key === 'ArrowDown') nextIndex = activeIndex < 0 ? 0 : (activeIndex + 1) % items.length;
+    if (event.key === 'ArrowUp') nextIndex = activeIndex < 0 ? items.length - 1 : (activeIndex - 1 + items.length) % items.length;
+    items[nextIndex]?.focus();
+  }, []);
+
+  useEffect(() => {
+    if (!dropdownOpen || !keyboardNavigationOpen) return;
+
+    const frameId = window.requestAnimationFrame(() => {
+      const menu = portalDropdownRef.current;
+      const selectedItem = menu?.querySelector<HTMLButtonElement>(
+        'button[role="menuitemradio"][aria-checked="true"]',
+      );
+      const firstItem = menu?.querySelector<HTMLButtonElement>(
+        'button[role="menuitemradio"]:not(:disabled)',
+      );
+      (selectedItem ?? firstItem)?.focus();
+    });
+
+    return () => window.cancelAnimationFrame(frameId);
+  }, [dropdownOpen, keyboardNavigationOpen]);
   
   const tokenPercentage = useMemo(() => {
     if (!maxTokens || maxTokens <= 0 || !currentTokens) return 0;
@@ -649,13 +722,20 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
       >
         <Tooltip content={acpTooltip}>
           <button
+            ref={triggerRef}
             data-testid="chat-model-selector-btn"
             className={`bitfun-model-selector__trigger ${dropdownOpen ? 'bitfun-model-selector__trigger--open' : ''}`}
-            onClick={() => {
+            type="button"
+            aria-haspopup="menu"
+            aria-expanded={dropdownOpen}
+            aria-controls={dropdownOpen ? menuId : undefined}
+            onKeyDown={handleTriggerKeyDown}
+            onClick={(event) => {
               const nextOpen = !dropdownOpen;
+              setKeyboardNavigationOpen(nextOpen && event.detail === 0);
               setDropdownOpen(nextOpen);
               if (nextOpen) {
-                loadAcpOptions();
+                void loadAcpOptions();
               }
             }}
             disabled={loading}
@@ -677,10 +757,16 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
 
         {dropdownOpen && createPortal(
           <div
+            id={menuId}
             className="bitfun-model-selector__dropdown"
             ref={portalDropdownRef}
             style={dropdownStyle}
             data-testid="chat-model-selector-menu"
+            data-keyboard-open={keyboardNavigationOpen ? 'true' : 'false'}
+            data-placement={dropdownPlacement}
+            role="menu"
+            aria-label="ACP model"
+            onKeyDown={handleDropdownKeyDown}
           >
             <div className="bitfun-model-selector__dropdown-header">
               <span>ACP model</span>
@@ -695,7 +781,10 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
 
                 return (
                   <Tooltip key={model.id} content={model.id} placement="right">
-                    <div
+                    <button
+                      type="button"
+                      role="menuitemradio"
+                      aria-checked={isSelected}
                       data-testid="chat-model-selector-option"
                       data-model-id={model.id}
                       data-model-name={model.modelName}
@@ -711,7 +800,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                       {isSelected && (
                         <Check size={14} className="bitfun-model-selector__option-check" />
                       )}
-                    </div>
+                    </button>
                   </Tooltip>
                 );
               })}
@@ -770,9 +859,19 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     >
       <Tooltip content={tooltipContent}>
         <button
+          ref={triggerRef}
           data-testid="chat-model-selector-btn"
           className={`bitfun-model-selector__trigger ${dropdownOpen ? 'bitfun-model-selector__trigger--open' : ''}`}
-          onClick={() => setDropdownOpen(!dropdownOpen)}
+          type="button"
+          aria-haspopup="menu"
+          aria-expanded={dropdownOpen}
+          aria-controls={dropdownOpen ? menuId : undefined}
+          onKeyDown={handleTriggerKeyDown}
+          onClick={(event) => {
+            const nextOpen = !dropdownOpen;
+            setKeyboardNavigationOpen(nextOpen && event.detail === 0);
+            setDropdownOpen(nextOpen);
+          }}
           disabled={loading}
         >
           <span className="bitfun-model-selector__name">
@@ -797,17 +896,26 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
 
       {dropdownOpen && createPortal(
         <div
+          id={menuId}
           className="bitfun-model-selector__dropdown"
           ref={portalDropdownRef}
           style={dropdownStyle}
           data-testid="chat-model-selector-menu"
+          data-keyboard-open={keyboardNavigationOpen ? 'true' : 'false'}
+          data-placement={dropdownPlacement}
+          role="menu"
+          aria-label={t('modelSelector.modelSelection')}
+          onKeyDown={handleDropdownKeyDown}
         >
           <div className="bitfun-model-selector__dropdown-header">
             <span>{t('modelSelector.modelSelection')}</span>
           </div>
 
           <Tooltip content={t('modelSelector.autoModelDesc')} placement="right">
-            <div
+            <button
+              type="button"
+              role="menuitemradio"
+              aria-checked={currentModelId === 'auto'}
               data-testid="chat-model-selector-option"
               data-model-id="auto"
               data-model-name="auto"
@@ -821,7 +929,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
               {currentModelId === 'auto' && (
                 <Check size={14} className="bitfun-model-selector__option-check" />
               )}
-            </div>
+            </button>
           </Tooltip>
 
           {(() => {
@@ -834,7 +942,10 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
               : t('modelSelector.autoModelDesc');
             return (
               <Tooltip content={primaryTooltip} placement="right">
-                <div
+                <button
+                  type="button"
+                  role="menuitemradio"
+                  aria-checked={currentModelId === 'primary'}
                   data-testid="chat-model-selector-option"
                   data-model-id="primary"
                   data-model-name={primaryModel?.model_name || 'primary'}
@@ -848,7 +959,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                   {currentModelId === 'primary' && (
                     <Check size={14} className="bitfun-model-selector__option-check" />
                   )}
-                </div>
+                </button>
               </Tooltip>
             );
           })()}
@@ -863,7 +974,10 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
               : t('modelSelector.autoModelDesc');
             return (
               <Tooltip content={fastTooltip} placement="right">
-                <div
+                <button
+                  type="button"
+                  role="menuitemradio"
+                  aria-checked={currentModelId === 'fast'}
                   data-testid="chat-model-selector-option"
                   data-model-id="fast"
                   data-model-name={fastModel?.model_name || 'fast'}
@@ -877,7 +991,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                   {currentModelId === 'fast' && (
                     <Check size={14} className="bitfun-model-selector__option-check" />
                   )}
-                </div>
+                </button>
               </Tooltip>
             );
           })()}
@@ -890,7 +1004,10 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
 
               return (
                 <Tooltip key={model.id} content={buildModelMetaText(model)} placement="right">
-                  <div
+                  <button
+                    type="button"
+                    role="menuitemradio"
+                    aria-checked={isSelected}
                     data-testid="chat-model-selector-option"
                     data-model-id={model.id}
                     data-model-name={model.modelName}
@@ -909,7 +1026,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                     {isSelected && (
                       <Check size={14} className="bitfun-model-selector__option-check" />
                     )}
-                  </div>
+                  </button>
                 </Tooltip>
               );
             })}

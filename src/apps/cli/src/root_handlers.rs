@@ -23,9 +23,11 @@ use crate::{
         emit_preflight_json_error, ExecApprovalMode, ExecMode, ExecOutputFormat, ExecSessionOptions,
     },
     ui::string_utils::truncate_str,
-    ConfigAction, ExternalAccessArg, ExternalCapabilityArg, ExternalConfigAction,
+    ConfigAction, DispatchAction, ExternalAccessArg, ExternalCapabilityArg, ExternalConfigAction,
     ExternalPolicyModeArg, ExternalPolicyScopeArg, SessionAction,
 };
+
+const MAX_DISPATCH_STDIN_BYTES: u64 = 2 * 1024 * 1024;
 
 pub(crate) struct ExecCommandArgs {
     pub message: Option<String>,
@@ -39,6 +41,61 @@ pub(crate) struct ExecCommandArgs {
     pub output_patch: Option<String>,
     pub verify_final_changes: bool,
     pub approval_mode: ExecApprovalMode,
+}
+
+pub(crate) async fn handle_dispatch_action(action: DispatchAction) -> Result<()> {
+    let verb = match action {
+        DispatchAction::Run { job } => return crate::dispatch::run_worker(job).await,
+        DispatchAction::WorkspaceMaterialize { job } => {
+            return crate::dispatch::run_workspace_materializer(job)
+        }
+        DispatchAction::Probe => "probe",
+        DispatchAction::Submit => "submit",
+        DispatchAction::Status => "status",
+        DispatchAction::Cancel => "cancel",
+        DispatchAction::List => "list",
+        DispatchAction::Answer => "answer",
+        DispatchAction::Append => "append",
+        DispatchAction::WorkspaceBegin => "workspace-begin",
+        DispatchAction::WorkspaceChunk => "workspace-chunk",
+        DispatchAction::WorkspaceCommit => "workspace-commit",
+    };
+    let result = async {
+        use std::io::{IsTerminal, Read};
+        let mut raw = String::new();
+        let stdin = std::io::stdin();
+        if !stdin.is_terminal() {
+            stdin
+                .take(MAX_DISPATCH_STDIN_BYTES + 1)
+                .read_to_string(&mut raw)
+                .context("read dispatch JSON from stdin")?;
+            if raw.len() as u64 > MAX_DISPATCH_STDIN_BYTES {
+                anyhow::bail!("dispatch JSON input exceeds the 2 MiB safety limit");
+            }
+        }
+        let input = if raw.trim().is_empty() {
+            serde_json::json!({})
+        } else {
+            serde_json::from_str(&raw).context("decode dispatch JSON from stdin")?
+        };
+        crate::dispatch::run_dispatch_verb(verb, input).await
+    }
+    .await;
+
+    match result {
+        Ok(response) => {
+            println!("{}", serde_json::to_string(&response)?);
+            Ok(())
+        }
+        Err(error) => {
+            let response = serde_json::json!({
+                "protocolVersion": crate::dispatch::protocol::DISPATCH_PROTOCOL_VERSION,
+                "error": format!("{error:#}"),
+            });
+            println!("{}", serde_json::to_string(&response)?);
+            Err(error)
+        }
+    }
 }
 
 pub(crate) async fn handle_exec_command(config: CliConfig, args: ExecCommandArgs) -> Result<()> {

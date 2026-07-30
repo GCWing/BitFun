@@ -21,7 +21,7 @@ import type { SceneTabId } from '../components/SceneBar/types';
 import { useSceneManager } from '../hooks/useSceneManager';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import { useDialogCompletionNotify } from '../hooks/useDialogCompletionNotify';
-import { ProcessingIndicator } from '@/flow_chat/components/modern/ProcessingIndicator';
+import { DotMatrixLoader } from '@/component-library';
 import SettingsScene from './settings/SettingsScene';
 import AssistantScene from './assistant/AssistantScene';
 import SessionScene from './session/SessionScene';
@@ -195,7 +195,7 @@ const SceneViewport: React.FC<SceneViewportProps> = ({ workspacePath, isEntering
                       aria-busy="true"
                       aria-label={t('loading.scenes')}
                     >
-                      <ProcessingIndicator visible />
+                      <DotMatrixLoader size="medium" />
                     </div>
                   ) : null
                 }

@@ -36,6 +36,78 @@
     "copyChanges": {
       "label": "Copy local changes by default",
       "description": "Off by default. Copies uncommitted project changes into the new worktree, preserving staging."
+    },
+    "autoDelete": {
+      "label": "Automatically delete old worktrees",
+      "description": "After creating a worktree, BitFun removes the oldest managed worktrees beyond the workspace limit when they are safe to delete."
+    },
+    "autoDeleteLimit": {
+      "label": "Auto-delete limit",
+      "description": "Managed worktrees to keep per workspace. Worktrees with associated conversations, local changes, unpublished commits, or Git locks are always kept.",
+      "invalid": "Enter a number from {{min}} to {{max}}."
+    }
+  },
+  "management": {
+    "title": "Workspace worktrees",
+    "description": "Worktrees inside the configured BitFun root, grouped by owning workspace.",
+    "loading": "Scanning BitFun worktrees…",
+    "loadFailed": "Could not load the BitFun worktree list.",
+    "refresh": "Refresh worktrees",
+    "retry": "Try again",
+    "worktreeCount": "{{count}} worktrees",
+    "deleted": "Deleted {{path}}.",
+    "empty": {
+      "title": "No BitFun worktrees",
+      "description": "Worktrees created for isolated sessions will appear here."
+    },
+    "lifecycle": {
+      "managed": "Managed",
+      "permanent": "Kept permanently",
+      "external": "External"
+    },
+    "state": {
+      "dirty": "Local changes",
+      "unpublishedCommits": "Unpublished commits",
+      "locked": "Git locked",
+      "missing": "Directory missing",
+      "activeSessions": "Unarchived sessions: {{count}}"
+    },
+    "sessions": {
+      "title": "Conversations",
+      "summary": "{{count}} conversations",
+      "openLabel": "Open conversation {{name}}",
+      "openFailed": "Could not open this conversation. Refresh the list and try again.",
+      "restoreTitle": "Restore and open this conversation?",
+      "restoreMessage": "{{name}} is archived. Restore it before opening?",
+      "empty": "No associated conversations.",
+      "status": {
+        "active": "Active",
+        "archived": "Archived"
+      }
+    },
+    "protection": {
+      "locked": "Unlock this worktree in Git before deleting it.",
+      "missing": "The worktree directory is missing. Clean up the stale Git record manually."
+    },
+    "delete": {
+      "action": "Delete",
+      "actionLabel": "Delete worktree {{path}}",
+      "title": "Delete this worktree?",
+      "message": "The checkout will be removed. This action cannot be undone.",
+      "messageWithSessions": "The checkout will be removed. Associated conversations stay in history, but their checkout will no longer be available.",
+      "forceTitle": "Delete and discard local work?",
+      "forceMessage": "This worktree contains local changes or detached commits. Deleting it will permanently discard that local work.",
+      "forceMessageWithSessions": "Local changes or detached commits will be permanently discarded. Associated conversations stay in history without their checkout.",
+      "forceAction": "Delete and discard",
+      "cancel": "Cancel"
+    },
+    "errors": {
+      "locked": "This worktree is locked by Git and cannot be deleted.",
+      "dirty": "This worktree still contains local changes.",
+      "unpublishedCommits": "This worktree still contains unpublished detached commits.",
+      "notFound": "This worktree no longer exists. Refresh the list and try again.",
+      "remoteUnsupported": "Remote SSH worktrees are not supported yet.",
+      "deleteFailed": "Could not delete the worktree."
     }
   }
 }

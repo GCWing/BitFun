@@ -4,7 +4,10 @@ use crate::{
 };
 
 use bitfun_product_domains::tool_permissions::PermissionReply;
-use bitfun_runtime_ports::{AgentDialogTurnRequest, AgentSubmissionSource, DialogSubmissionPolicy};
+use bitfun_runtime_ports::{
+    AgentDialogTurnRequest, AgentSessionModeUpdateRequest, AgentSubmissionSource,
+    DialogSubmissionPolicy,
+};
 use serde_json::{json, Map};
 
 #[test]
@@ -60,6 +63,41 @@ fn protocol_round_trips_reviewed_permission_and_user_input_operations() {
             serde_json::from_value(encoded).expect("deserialize operation");
         assert_eq!(decoded, operation);
     }
+}
+
+#[test]
+fn protocol_round_trips_the_reviewed_session_mode_operation() {
+    let operation = RuntimeIpcOperation::UpdateSessionMode {
+        request: AgentSessionModeUpdateRequest {
+            session_id: "session-1".to_string(),
+            mode_id: "ask".to_string(),
+        },
+    };
+
+    let encoded = serde_json::to_value(&operation).expect("serialize mode update");
+    assert_eq!(encoded["operation"], "update_session_mode");
+    assert_eq!(encoded["request"]["sessionId"], "session-1");
+    assert_eq!(encoded["request"]["modeId"], "ask");
+    let decoded: RuntimeIpcOperation =
+        serde_json::from_value(encoded).expect("deserialize mode update");
+
+    assert_eq!(decoded, operation);
+    assert_eq!(decoded.session_id(), Some("session-1"));
+    assert!(decoded.requires_controller());
+}
+
+#[test]
+fn session_mode_operation_rejects_unknown_envelope_fields() {
+    let unknown_field = json!({
+        "operation": "update_session_mode",
+        "request": {
+            "sessionId": "session-1",
+            "modeId": "ask"
+        },
+        "metadata": {}
+    });
+
+    assert!(serde_json::from_value::<RuntimeIpcOperation>(unknown_field).is_err());
 }
 
 #[test]

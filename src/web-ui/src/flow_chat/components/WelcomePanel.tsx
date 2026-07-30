@@ -37,6 +37,7 @@ export const WelcomePanel: React.FC<WelcomePanelProps> = ({
   const [workspaceDropdownOpen, setWorkspaceDropdownOpen] = useState(false);
   const [isSelectingWorkspace, setIsSelectingWorkspace] = useState(false);
   const workspaceDropdownRef = useRef<HTMLDivElement>(null);
+  const workspaceTriggerRef = useRef<HTMLButtonElement>(null);
 
   const { switchLeftPanelTab } = useApp();
   const {
@@ -143,13 +144,23 @@ export const WelcomePanel: React.FC<WelcomePanelProps> = ({
 
   useEffect(() => {
     if (!workspaceDropdownOpen) return;
-    const handler = (e: MouseEvent) => {
+    const handlePointerDown = (e: MouseEvent) => {
       if (workspaceDropdownRef.current && !workspaceDropdownRef.current.contains(e.target as Node)) {
         setWorkspaceDropdownOpen(false);
       }
     };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      e.preventDefault();
+      setWorkspaceDropdownOpen(false);
+      workspaceTriggerRef.current?.focus();
+    };
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
   }, [workspaceDropdownOpen]);
 
   const handleSwitchWorkspace = useCallback(async (ws: WorkspaceInfo) => {
@@ -234,11 +245,14 @@ export const WelcomePanel: React.FC<WelcomePanelProps> = ({
                   <span className="welcome-panel__context-row">
                     <span className="welcome-panel__workspace-anchor" ref={workspaceDropdownRef}>
                       <button
+                        ref={workspaceTriggerRef}
                         type="button"
                         className={`welcome-panel__inline-btn welcome-panel__inline-btn--interactive${workspaceDropdownOpen ? ' welcome-panel__inline-btn--active' : ''}`}
                         onClick={() => setWorkspaceDropdownOpen(v => !v)}
                         disabled={isSelectingWorkspace}
                         title={currentWorkspace?.rootPath}
+                        aria-haspopup="menu"
+                        aria-expanded={workspaceDropdownOpen}
                       >
                         <FolderOpen size={13} className="welcome-panel__inline-icon" />
                         {currentWorkspace?.name || t('shared:features.workspace')}
@@ -248,9 +262,10 @@ export const WelcomePanel: React.FC<WelcomePanelProps> = ({
                         />
                       </button>
                       {workspaceDropdownOpen && (
-                        <div className="welcome-panel__dropdown">
+                        <div className="welcome-panel__dropdown" role="menu">
                           <button
                             type="button"
+                            role="menuitem"
                             className="welcome-panel__dropdown-item welcome-panel__dropdown-item--accent"
                             onClick={() => { void handleCreateWorkspace(); }}
                           >
@@ -272,6 +287,7 @@ export const WelcomePanel: React.FC<WelcomePanelProps> = ({
                                 <button
                                   key={ws.id}
                                   type="button"
+                                  role="menuitem"
                                   className="welcome-panel__dropdown-item"
                                   onClick={() => { void handleSwitchWorkspace(ws); }}
                                   title={ws.rootPath}

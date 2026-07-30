@@ -11,6 +11,25 @@
   background: transparent; // Transparent background for glass effect.
   overflow: hidden; /* Prevent overflow. */
   overflow-x: hidden; /* Explicitly disable horizontal scrolling. */
+
+  /*
+   * FlowChat collapse contract: revealing a body may change height, never its
+   * leading edge. Owner styles also keep their offsets at zero; this selector
+   * is the surface-level guard for FlowChat's collapsible projection roots.
+   * It stays explicit so ordinary card-internal padding (for example question
+   * options) remains untouched.
+   */
+  .explore-region__content,
+  .thinking-content,
+  .base-tool-card-expanded,
+  .base-tool-card-error,
+  .compact-tool-card-expanded,
+  .view-image-tool-card__content,
+  .subagent-items-container,
+  .subagent-projection-container--expanded {
+    margin-inline-start: 0;
+    padding-inline-start: 0;
+  }
   
   
   // Ensure the Virtuoso container has correct sizing.

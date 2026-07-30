@@ -1,8 +1,8 @@
 //! MiniApp compiler — assemble source (html/css/ui_js) + import map + runtime bridge.
 
 use crate::miniapp::bridge_builder::{
-    build_bridge_script, build_csp_content, build_import_map, build_miniapp_default_theme_css,
-    scroll_boundary_script,
+    build_bridge_script, build_csp_content, build_import_map, build_market_csp_content,
+    build_miniapp_default_theme_css, scroll_boundary_script,
 };
 use crate::miniapp::lifecycle::workspace_dir_string;
 use crate::miniapp::types::{MiniAppPermissions, MiniAppSource};
@@ -65,6 +65,29 @@ pub fn compile(
     workspace_dir: &str,
     theme: &str,
 ) -> MiniAppCompileResult<String> {
+    compile_internal(
+        source,
+        permissions,
+        app_id,
+        app_data_dir,
+        workspace_dir,
+        theme,
+        false,
+    )
+}
+
+fn compile_internal(
+    source: &MiniAppSource,
+    permissions: &MiniAppPermissions,
+    app_id: &str,
+    app_data_dir: &str,
+    workspace_dir: &str,
+    theme: &str,
+    market_strict: bool,
+) -> MiniAppCompileResult<String> {
+    if market_strict {
+        validate_market_runtime_source(source, permissions)?;
+    }
     let platform = if cfg!(target_os = "windows") {
         "win32"
     } else if cfg!(target_os = "macos") {
@@ -74,7 +97,11 @@ pub fn compile(
     };
 
     let bridge = build_bridge_script(app_id, app_data_dir, workspace_dir, theme, platform);
-    let csp = build_csp_content(permissions);
+    let csp = if market_strict {
+        build_market_csp_content().to_string()
+    } else {
+        build_csp_content(permissions)
+    };
     let csp_tag = format!(
         "<meta http-equiv=\"Content-Security-Policy\" content=\"{}\">",
         csp.replace('"', "&quot;")
@@ -135,6 +162,56 @@ pub fn compile_with_request(
         &request.workspace_dir,
         &request.theme,
     )
+}
+
+/// Compile a reviewed marketplace package using the strict runtime profile.
+pub fn compile_market_with_request(
+    source: &MiniAppSource,
+    permissions: &MiniAppPermissions,
+    request: &MiniAppCompileRequest,
+) -> MiniAppCompileResult<String> {
+    compile_internal(
+        source,
+        permissions,
+        &request.app_id,
+        &request.app_data_dir,
+        &request.workspace_dir,
+        &request.theme,
+        true,
+    )
+}
+
+fn validate_market_runtime_source(
+    source: &MiniAppSource,
+    permissions: &MiniAppPermissions,
+) -> MiniAppCompileResult<()> {
+    if permissions.node.as_ref().is_none_or(|node| node.enabled) {
+        return Err(MiniAppCompileError::validation(
+            "marketplace MiniApps must explicitly disable Node",
+        ));
+    }
+    if !source.esm_dependencies.is_empty() || !source.npm_dependencies.is_empty() {
+        return Err(MiniAppCompileError::validation(
+            "marketplace MiniApps cannot declare ESM or npm dependencies",
+        ));
+    }
+    let compact_worker = source
+        .worker_js
+        .lines()
+        .filter(|line| !line.trim_start().starts_with("//"))
+        .collect::<String>()
+        .replace(char::is_whitespace, "");
+    if !compact_worker.is_empty()
+        && !matches!(
+            compact_worker.as_str(),
+            "module.exports={};" | "module.exports={}" | "export{};" | "export{}"
+        )
+    {
+        return Err(MiniAppCompileError::validation(
+            "marketplace MiniApps cannot run worker code",
+        ));
+    }
+    Ok(())
 }
 
 /// Place content just before </body>. If no </body> found, append before </html> or at end.
@@ -314,5 +391,38 @@ mod tests {
 
         let compiled = compile_with_request(&source, &permissions, &request).unwrap();
         assert_eq!(compiled.matches("data-theme-type=\"dark\"").count(), 1);
+    }
+
+    #[test]
+    fn market_compile_uses_strict_csp_and_rejects_dependencies() {
+        let mut source = MiniAppSource {
+            html: "<!DOCTYPE html><html><head></head><body></body></html>".to_string(),
+            css: String::new(),
+            ui_js: "window.ready = true;".to_string(),
+            esm_dependencies: vec![],
+            worker_js: String::new(),
+            npm_dependencies: vec![],
+        };
+        let permissions = MiniAppPermissions {
+            node: Some(crate::miniapp::types::NodePermissions {
+                enabled: false,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let request = MiniAppCompileRequest::from_paths("market-app", "/tmp/app", None, "dark");
+
+        let compiled = compile_market_with_request(&source, &permissions, &request).unwrap();
+        assert!(compiled.contains("connect-src 'none'"));
+        assert!(compiled.contains("frame-src 'none'"));
+        assert!(!compiled.contains("'unsafe-eval'"));
+        assert!(!compiled.contains("script-src 'self'"));
+
+        source.esm_dependencies.push(crate::miniapp::types::EsmDep {
+            name: "react".to_string(),
+            version: None,
+            url: None,
+        });
+        assert!(compile_market_with_request(&source, &permissions, &request).is_err());
     }
 }

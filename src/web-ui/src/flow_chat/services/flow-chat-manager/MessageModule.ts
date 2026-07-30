@@ -25,8 +25,60 @@ import {
 import { pendingQueueManager } from './PendingQueueModule';
 import { sessionProjectWorkspacePath } from '../../utils/sessionWorkspace';
 import { sessionWorktreeMaterializationPlan } from '../../utils/sessionWorktree';
+import { dispatchApi } from '@/features/dispatch/dispatchApi';
+import { dispatchJobStore } from '@/features/dispatch/dispatchJobStore';
+import { requestDispatchJobRefresh } from '@/features/dispatch/DispatchJobObserver';
+import { isNonLocalDispatchTarget } from '@/features/dispatch/types';
+import { isSessionInUseError } from '@/infrastructure/api/errors/TauriCommandError';
+import { i18nService } from '@/infrastructure/i18n';
 
 const log = createLogger('MessageModule');
+
+interface SessionConflictRetry {
+  notificationId: string;
+  active: boolean;
+  inFlight: boolean;
+}
+
+const sessionConflictRetries = new Map<string, SessionConflictRetry>();
+const latestSendBySession = new Map<string, symbol>();
+
+function clearSessionConflictRetry(sessionId: string): void {
+  const current = sessionConflictRetries.get(sessionId);
+  if (!current) return;
+  current.active = false;
+  sessionConflictRetries.delete(sessionId);
+  notificationService.dismiss(current.notificationId);
+}
+
+function beginSessionSend(sessionId: string): symbol {
+  const attempt = Symbol(sessionId);
+  latestSendBySession.set(sessionId, attempt);
+  clearSessionConflictRetry(sessionId);
+  return attempt;
+}
+
+function completeSessionSend(
+  sessionId: string,
+  attempt: symbol,
+  retrySuccess?: () => void,
+): void {
+  if (latestSendBySession.get(sessionId) !== attempt) return;
+  latestSendBySession.delete(sessionId);
+  clearSessionConflictRetry(sessionId);
+  retrySuccess?.();
+}
+
+interface PendingDispatchAppendRetry {
+  content: string;
+  displayContent?: string;
+  messageId: string;
+}
+
+// Keep the id stable across an ambiguous transport failure. A retry with the
+// same message can then ask the target mailbox for the same idempotent append
+// instead of injecting the steering text twice.
+const pendingDispatchAppendRetries = new Map<string, PendingDispatchAppendRetry>();
 
 function acpClientIdFromMode(mode: string | undefined): string | null {
   const value = mode?.trim();
@@ -77,6 +129,10 @@ export async function syncSessionModelSelection(
     await agentAPI.updateSessionModel({
       sessionId,
       modelName: sessionModelId,
+      workspacePath: sessionProjectWorkspacePath(session),
+      remoteConnectionId: session.remoteConnectionId,
+      remoteSshHost: session.remoteSshHost,
+      includeInternal: session.sessionKind === 'subagent',
     });
     return;
   }
@@ -102,6 +158,10 @@ export async function syncSessionModelSelection(
   await agentAPI.updateSessionModel({
     sessionId,
     modelName: desiredModelId,
+    workspacePath: sessionProjectWorkspacePath(session),
+    remoteConnectionId: session.remoteConnectionId,
+    remoteSshHost: session.remoteSshHost,
+    includeInternal: session.sessionKind === 'subagent',
   });
 
   log.info('Session model synchronized before send', {
@@ -140,12 +200,67 @@ export async function sendMessage(
     userMessageMetadata?: Record<string, unknown>;
     turnId?: string;
     preserveTurnOnStartError?: boolean;
+    /** One-shot UI confirmation for unattended auto approval. Never persist this flag. */
+    dispatchAutoConfirmed?: boolean;
+    onSessionConflictRetryStart?: () => void;
+    onSessionConflictRetrySuccess?: () => void;
+    fromSessionConflictRetry?: boolean;
   }
 ): Promise<void> {
   const session = context.flowChatStore.getState().sessions.get(sessionId);
   if (!session) {
     throw new Error(`Session does not exist: ${sessionId}`);
   }
+  const sendAttempt = beginSessionSend(sessionId);
+
+  const appendToDispatchJob = async (jobId: string): Promise<void> => {
+    const current = pendingDispatchAppendRetries.get(sessionId);
+    const retry =
+      current?.content === message && current.displayContent === displayMessage
+        ? current
+        : {
+            content: message,
+            displayContent: displayMessage,
+            messageId:
+              globalThis.crypto?.randomUUID?.()
+              ?? `dispatch-message-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+          };
+    pendingDispatchAppendRetries.set(sessionId, retry);
+    const response = await dispatchApi.append(
+      jobId,
+      message,
+      displayMessage,
+      retry.messageId,
+    );
+    if (!response.accepted) {
+      if (pendingDispatchAppendRetries.get(sessionId)?.messageId === retry.messageId) {
+        pendingDispatchAppendRetries.delete(sessionId);
+      }
+      throw new Error('Dispatch target did not accept the appended message');
+    }
+    if (pendingDispatchAppendRetries.get(sessionId)?.messageId === retry.messageId) {
+      pendingDispatchAppendRetries.delete(sessionId);
+    }
+    requestDispatchJobRefresh(jobId);
+  };
+
+  const appendToRunningDispatch = async (): Promise<boolean> => {
+    if (
+      !isNonLocalDispatchTarget(session.config.dispatchTarget)
+      || !session.config.dispatchJobId
+      || (
+        session.config.dispatchJobState !== 'queued'
+        && session.config.dispatchJobState !== 'running'
+      )
+    ) {
+      return false;
+    }
+    if ((options?.imageContexts?.length ?? 0) > 0) {
+      throw new Error('Image attachments are not supported for detached dispatch yet');
+    }
+    await appendToDispatchJob(session.config.dispatchJobId);
+    return true;
+  };
 
   if (!options?.bypassPendingQueue) {
     const machineState = stateMachineManager.getCurrentState(sessionId);
@@ -155,6 +270,9 @@ export async function sendMessage(
     const hasPendingQueue = pendingQueueManager.list(sessionId).length > 0;
 
     if (sessionBusy || hasPendingQueue) {
+      if (await appendToRunningDispatch()) {
+        return;
+      }
       try {
         const item = pendingQueueManager.enqueue({
           sessionId,
@@ -180,6 +298,13 @@ export async function sendMessage(
         });
         throw error;
       }
+      completeSessionSend(
+        sessionId,
+        sendAttempt,
+        options?.fromSessionConflictRetry
+          ? options.onSessionConflictRetrySuccess
+          : undefined,
+      );
       return;
     }
   }
@@ -198,6 +323,7 @@ export async function sendMessage(
     const refreshedSession = context.flowChatStore.getState().sessions.get(sessionId) ?? session;
     const currentAgentType = (agentType?.trim() || refreshedSession.mode || 'agentic').trim();
     const acpClientId = acpClientIdFromMode(currentAgentType);
+    const isDispatched = isNonLocalDispatchTarget(refreshedSession.config.dispatchTarget);
 
     if (
       !acpClientId &&
@@ -211,7 +337,7 @@ export async function sendMessage(
       throw new Error('Session history is still restoring, please retry once loading finishes');
     }
 
-    if (!acpClientId) {
+    if (!acpClientId && !isDispatched) {
       await ensureBackendSession(context, sessionId);
     }
 
@@ -221,6 +347,72 @@ export async function sendMessage(
     }
 
     const isFirstMessage = readySession.dialogTurns.length === 0 && readySession.titleStatus !== 'generated';
+
+    if (isDispatched) {
+      const targetRequest = readySession.config.dispatchTargetRequest;
+      const jobId = readySession.config.dispatchJobId;
+      const approvalPolicy = readySession.config.dispatchApprovalPolicy;
+      if (!targetRequest || targetRequest.kind === 'local' || !jobId || !approvalPolicy) {
+        throw new Error('Dispatch session is missing its immutable target or approval policy');
+      }
+      if ((options?.imageContexts?.length ?? 0) > 0) {
+        throw new Error('Image attachments are not supported for detached dispatch yet');
+      }
+      if (
+        readySession.config.dispatchJobState === 'queued'
+        || readySession.config.dispatchJobState === 'running'
+      ) {
+        await appendToDispatchJob(jobId);
+        return;
+      }
+      if (
+        readySession.config.dispatchJobState !== 'submitting' &&
+        readySession.config.dispatchJobState !== 'submission_unknown'
+      ) {
+        throw new Error('This detached dispatch job has already been submitted');
+      }
+      if (approvalPolicy === 'auto' && options?.dispatchAutoConfirmed !== true) {
+        throw new Error('Auto-approval dispatch requires an explicit confirmation before submit');
+      }
+      if (isFirstMessage) {
+        handleTitleGeneration(context, sessionId, message);
+      }
+
+      const response = await dispatchApi.submit({
+        target: targetRequest,
+        workspaceDelivery:
+          readySession.config.dispatchWorkspaceDelivery ?? { kind: 'existing' },
+        jobId,
+        sessionId,
+        agentType: currentAgentType,
+        prompt: message,
+        approvalPolicy,
+        model: readySession.config.dispatchModel?.trim() || undefined,
+      });
+      if (!response.accepted || response.jobId !== jobId || response.sessionId !== sessionId) {
+        throw new Error('Dispatch target returned a mismatched acknowledgement');
+      }
+      context.flowChatStore.applyDispatchSnapshot(sessionId, {
+        jobId,
+        state: response.state,
+        cursor: readySession.config.dispatchCursor ?? 0,
+        expectedCursor: readySession.config.dispatchCursor ?? 0,
+      });
+      dispatchJobStore.getState().updateProgress(jobId, {
+        state: response.state,
+      });
+      context.flowChatStore.updateSessionLastSubmittedMode(sessionId, currentAgentType);
+      requestDispatchJobRefresh(jobId);
+      completeSessionSend(
+        sessionId,
+        sendAttempt,
+        options?.fromSessionConflictRetry
+          ? options.onSessionConflictRetrySuccess
+          : undefined,
+      );
+      return;
+    }
+
     const dialogTurnId = options?.turnId?.trim() ||
       `dialog_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     const hasImages = (options?.imageContexts?.length ?? 0) > 0;
@@ -391,6 +583,13 @@ export async function sendMessage(
     if (sessionStateMachine) {
       sessionStateMachine.getContext().taskId = sessionId;
     }
+    completeSessionSend(
+      sessionId,
+      sendAttempt,
+      options?.fromSessionConflictRetry
+        ? options.onSessionConflictRetrySuccess
+        : undefined,
+    );
 
   } catch (error) {
     log.error('Failed to send message', { sessionId: sessionId, error });
@@ -398,7 +597,13 @@ export async function sendMessage(
     const errorMessage = error instanceof Error ? error.message : 'Failed to send message';
     
     const currentState = stateMachineManager.getCurrentState(sessionId);
-    if (currentState === SessionExecutionState.PROCESSING) {
+    const activeDialogTurnId = stateMachineManager
+      .get(sessionId)
+      ?.getContext().currentDialogTurnId;
+    const ownsProcessingTurn =
+      createdLocalTurnId !== null &&
+      activeDialogTurnId === createdLocalTurnId;
+    if (currentState === SessionExecutionState.PROCESSING && ownsProcessingTurn) {
       await stateMachineManager.transition(sessionId, SessionExecutionEvent.ERROR_OCCURRED, {
         error: errorMessage
       });
@@ -412,10 +617,58 @@ export async function sendMessage(
     }
     
     if (!options?.preserveTurnOnStartError) {
-      notificationService.error(errorMessage, {
-        title: 'Thinking process error',
-        duration: 5000
-      });
+      if (isSessionInUseError(error)) {
+        if (latestSendBySession.get(sessionId) !== sendAttempt) {
+          throw error;
+        }
+        clearSessionConflictRetry(sessionId);
+        const retry: SessionConflictRetry = {
+          notificationId: '',
+          active: true,
+          inFlight: false,
+        };
+        retry.notificationId = notificationService.error(
+          i18nService.t('flow-chat:session.inUseMessage'), {
+          title: i18nService.t('flow-chat:session.inUseTitle'),
+          duration: 0,
+          actions: [{
+            label: i18nService.t('flow-chat:session.retry'),
+            variant: 'primary',
+            onClick: () => {
+              if (
+                !retry.active ||
+                retry.inFlight ||
+                sessionConflictRetries.get(sessionId) !== retry
+              ) {
+                return;
+              }
+              retry.inFlight = true;
+              options?.onSessionConflictRetryStart?.();
+              void sendMessage(
+                context,
+                message,
+                sessionId,
+                displayMessage,
+                agentType,
+                switchToMode,
+                { ...options, fromSessionConflictRetry: true },
+              )
+                .catch(() => undefined);
+            },
+          }],
+        });
+        sessionConflictRetries.set(sessionId, retry);
+      } else {
+        if (latestSendBySession.get(sessionId) === sendAttempt) {
+          latestSendBySession.delete(sessionId);
+          notificationService.error(errorMessage, {
+            title: 'Thinking process error',
+            duration: 5000
+          });
+        }
+      }
+    } else if (latestSendBySession.get(sessionId) === sendAttempt) {
+      latestSendBySession.delete(sessionId);
     }
     
     throw error;
@@ -441,6 +694,20 @@ export async function cancelSessionTask(context: FlowChatContext, requestedSessi
     if (!sessionId) {
       log.debug('No active session to cancel');
       return false;
+    }
+
+    const session = state.sessions.get(sessionId);
+    if (isNonLocalDispatchTarget(session?.config.dispatchTarget)) {
+      const jobId = session?.config.dispatchJobId;
+      if (!jobId) {
+        return false;
+      }
+      const response = await dispatchApi.cancel(jobId);
+      if (response.cancelled) {
+        context.userCancelledSessionIds.add(sessionId);
+        requestDispatchJobRefresh(jobId);
+      }
+      return response.cancelled;
     }
 
     const currentState = stateMachineManager.getCurrentState(sessionId);

@@ -85,7 +85,11 @@
   padding: 7px 16px;
   font-size: 12px;
   cursor: pointer;
-  transition: all $motion-fast $easing-standard;
+  transition:
+    transform $motion-fast $easing-standard,
+    background-color $motion-fast $easing-standard,
+    border-color $motion-fast $easing-standard,
+    color $motion-fast $easing-standard;
 }
 
 .bitfun-remote-disclaimer__btn--secondary {

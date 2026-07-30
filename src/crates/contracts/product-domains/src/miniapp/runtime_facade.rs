@@ -8,7 +8,8 @@ use crate::miniapp::customization::{
     apply_draft_customization_metadata, decline_builtin_update_metadata,
     declined_builtin_update_needs_local_snapshot, is_current_declined_builtin_update,
     mark_builtin_update_available_metadata, MiniAppCustomizationBaseline,
-    MiniAppCustomizationLocalSnapshot, MiniAppCustomizationMetadata,
+    MiniAppCustomizationLocalSnapshot, MiniAppCustomizationMetadata, MiniAppCustomizationOrigin,
+    MiniAppCustomizationOriginKind,
 };
 use crate::miniapp::draft::{
     build_draft_manifest, build_draft_response, MiniAppDraft, MiniAppDraftManifest,
@@ -20,6 +21,7 @@ use crate::miniapp::lifecycle::{
     ensure_runtime_state, mark_deps_installed_state, prepare_draft_app, prepare_rollback_app,
     MiniAppCreateInput, MiniAppUpdatePatch,
 };
+use crate::miniapp::market::{InstalledMarketOrigin, MarketPackageMeta};
 use crate::miniapp::ports::{
     MiniAppCompilePort, MiniAppImportFromPathRequest, MiniAppImportPort, MiniAppPortError,
     MiniAppPortErrorKind, MiniAppPortResult, MiniAppStoragePort,
@@ -27,7 +29,7 @@ use crate::miniapp::ports::{
 use crate::miniapp::storage::{
     build_import_bundle_plan, MiniAppImportBundlePlanError, MiniAppImportBundleWriteRequest,
 };
-use crate::miniapp::types::{MiniApp, MiniAppMeta, MiniAppSource};
+use crate::miniapp::types::{MiniApp, MiniAppMeta, MiniAppRuntimeProfile, MiniAppSource};
 
 /// Storage-backed facade for MiniApp runtime-state lifecycle transitions.
 pub struct MiniAppRuntimeFacade<'a> {
@@ -87,6 +89,166 @@ impl<'a> MiniAppRuntimeFacade<'a> {
             .save_version(app_id, previous_app.version, previous_app)
             .await?;
         self.storage.save(app.clone()).await?;
+        Ok(app)
+    }
+
+    pub async fn install_market_app(
+        &self,
+        id: String,
+        package_meta: MarketPackageMeta,
+        source: MiniAppSource,
+        origin: InstalledMarketOrigin,
+        compiled_html: String,
+        now: i64,
+    ) -> MiniAppPortResult<MiniApp> {
+        self.install_strict_package(
+            id,
+            package_meta,
+            source,
+            MiniAppCustomizationOriginKind::Market,
+            Some(origin),
+            compiled_html,
+            now,
+        )
+        .await
+    }
+
+    pub async fn import_strict_package(
+        &self,
+        id: String,
+        package_meta: MarketPackageMeta,
+        source: MiniAppSource,
+        compiled_html: String,
+        now: i64,
+    ) -> MiniAppPortResult<MiniApp> {
+        self.install_strict_package(
+            id,
+            package_meta,
+            source,
+            MiniAppCustomizationOriginKind::Imported,
+            None,
+            compiled_html,
+            now,
+        )
+        .await
+    }
+
+    pub async fn update_market_app(
+        &self,
+        previous: MiniApp,
+        package_meta: MarketPackageMeta,
+        source: MiniAppSource,
+        origin: InstalledMarketOrigin,
+        compiled_html: String,
+        now: i64,
+    ) -> MiniAppPortResult<MiniApp> {
+        let existing_metadata = self
+            .storage
+            .load_customization_metadata(previous.id.clone())
+            .await?
+            .ok_or_else(|| {
+                MiniAppPortError::new(
+                    MiniAppPortErrorKind::InvalidInput,
+                    "MiniApp has no marketplace origin",
+                )
+            })?;
+        let Some(existing_origin) = existing_metadata.origin.market else {
+            return Err(MiniAppPortError::new(
+                MiniAppPortErrorKind::InvalidInput,
+                "Only marketplace MiniApps can be updated from the marketplace",
+            ));
+        };
+        if existing_origin.listing_id != origin.listing_id {
+            return Err(MiniAppPortError::new(
+                MiniAppPortErrorKind::InvalidInput,
+                "Marketplace update does not match the installed listing",
+            ));
+        }
+        if origin.release_number <= existing_origin.release_number {
+            return Err(MiniAppPortError::new(
+                MiniAppPortErrorKind::InvalidInput,
+                "Marketplace release is not newer than the installed release",
+            ));
+        }
+
+        let MarketPackageMeta {
+            name,
+            description,
+            icon,
+            category,
+            tags,
+            version: _,
+            permissions,
+            i18n,
+        } = package_meta;
+        let mut next = apply_update_patch(
+            &previous,
+            MiniAppUpdatePatch {
+                name: Some(name),
+                description: Some(description),
+                icon: Some(icon),
+                category: Some(category),
+                tags: Some(tags),
+                source: Some(source),
+                permissions: Some(permissions),
+                ai_context: None,
+            },
+            compiled_html,
+            now,
+        );
+        next.i18n = i18n;
+        next.runtime_profile = MiniAppRuntimeProfile::MarketStrict;
+        let metadata =
+            strict_package_metadata(MiniAppCustomizationOriginKind::Market, Some(origin), now);
+
+        self.storage
+            .replace_market_atomic(previous, next.clone(), metadata)
+            .await?;
+        Ok(next)
+    }
+
+    async fn install_strict_package(
+        &self,
+        id: String,
+        package_meta: MarketPackageMeta,
+        source: MiniAppSource,
+        origin_kind: MiniAppCustomizationOriginKind,
+        market_origin: Option<InstalledMarketOrigin>,
+        compiled_html: String,
+        now: i64,
+    ) -> MiniAppPortResult<MiniApp> {
+        let MarketPackageMeta {
+            name,
+            description,
+            icon,
+            category,
+            tags,
+            version: _,
+            permissions,
+            i18n,
+        } = package_meta;
+        let mut app = build_created_app(
+            id,
+            MiniAppCreateInput {
+                name,
+                description,
+                icon,
+                category,
+                tags,
+                source,
+                permissions,
+                ai_context: None,
+            },
+            compiled_html,
+            now,
+        );
+        app.i18n = i18n;
+        app.runtime_profile = MiniAppRuntimeProfile::MarketStrict;
+        let metadata = strict_package_metadata(origin_kind, market_origin, now);
+
+        self.storage
+            .install_market_atomic(app.clone(), metadata)
+            .await?;
         Ok(app)
     }
 
@@ -484,6 +646,26 @@ impl<'a> MiniAppRuntimeFacade<'a> {
     }
 }
 
+fn strict_package_metadata(
+    kind: MiniAppCustomizationOriginKind,
+    market: Option<InstalledMarketOrigin>,
+    now: i64,
+) -> MiniAppCustomizationMetadata {
+    MiniAppCustomizationMetadata {
+        origin: MiniAppCustomizationOrigin {
+            kind,
+            builtin_id: None,
+            builtin_version: None,
+            market,
+        },
+        local_override: false,
+        last_applied_draft_id: None,
+        available_builtin_update: None,
+        declined_builtin_updates: Vec::new(),
+        updated_at: now,
+    }
+}
+
 fn map_import_bundle_plan_error(error: MiniAppImportBundlePlanError) -> MiniAppPortError {
     match error {
         MiniAppImportBundlePlanError::InvalidMeta(source) => MiniAppPortError::new(
@@ -512,12 +694,15 @@ fn manifest_from_draft(draft: &MiniAppDraft) -> MiniAppDraftManifest {
 mod tests {
     use super::*;
     use crate::miniapp::ports::MiniAppPortFuture;
-    use crate::miniapp::types::{MiniAppPermissions, MiniAppRuntimeState};
+    use crate::miniapp::types::{MiniAppPermissions, MiniAppRuntimeProfile, MiniAppRuntimeState};
     use std::sync::{Arc, Mutex};
 
     #[derive(Default)]
     struct MemoryStorage {
         saved: Arc<Mutex<Vec<MiniApp>>>,
+        customization_metadata: Arc<Mutex<Option<MiniAppCustomizationMetadata>>>,
+        market_installs: Arc<Mutex<Vec<(MiniApp, MiniAppCustomizationMetadata)>>>,
+        market_replacements: Arc<Mutex<Vec<(MiniApp, MiniApp, MiniAppCustomizationMetadata)>>>,
     }
 
     impl MiniAppStoragePort for MemoryStorage {
@@ -601,7 +786,8 @@ mod tests {
             &self,
             _app_id: String,
         ) -> MiniAppPortFuture<'_, Option<MiniAppCustomizationMetadata>> {
-            Box::pin(async { unreachable!("not needed for import runtime-state facade test") })
+            let customization_metadata = self.customization_metadata.clone();
+            Box::pin(async move { Ok(customization_metadata.lock().unwrap().clone()) })
         }
 
         fn save_customization_metadata(
@@ -610,6 +796,34 @@ mod tests {
             _metadata: MiniAppCustomizationMetadata,
         ) -> MiniAppPortFuture<'_, ()> {
             Box::pin(async { unreachable!("not needed for import runtime-state facade test") })
+        }
+
+        fn install_market_atomic(
+            &self,
+            app: MiniApp,
+            metadata: MiniAppCustomizationMetadata,
+        ) -> MiniAppPortFuture<'_, ()> {
+            let market_installs = self.market_installs.clone();
+            Box::pin(async move {
+                market_installs.lock().unwrap().push((app, metadata));
+                Ok(())
+            })
+        }
+
+        fn replace_market_atomic(
+            &self,
+            previous: MiniApp,
+            next: MiniApp,
+            metadata: MiniAppCustomizationMetadata,
+        ) -> MiniAppPortFuture<'_, ()> {
+            let market_replacements = self.market_replacements.clone();
+            Box::pin(async move {
+                market_replacements
+                    .lock()
+                    .unwrap()
+                    .push((previous, next, metadata));
+                Ok(())
+            })
         }
 
         fn delete(&self, _app_id: String) -> MiniAppPortFuture<'_, ()> {
@@ -641,6 +855,7 @@ mod tests {
             permissions: MiniAppPermissions::default(),
             ai_context: None,
             runtime: MiniAppRuntimeState::default(),
+            runtime_profile: Default::default(),
             i18n: None,
         }
     }
@@ -666,6 +881,126 @@ mod tests {
             app.runtime.source_revision
         );
         assert_eq!(saved[0].runtime.deps_revision, app.runtime.deps_revision);
+    }
+
+    #[test]
+    fn market_install_facade_builds_strict_app_and_commits_atomically() {
+        let storage = MemoryStorage::default();
+        let market_installs = storage.market_installs.clone();
+        let saved = storage.saved.clone();
+        let facade = MiniAppRuntimeFacade::new(&storage);
+        let origin = market_origin(3);
+
+        let app = block_on(facade.install_market_app(
+            "local-market-app".to_string(),
+            market_package_meta(42),
+            MiniAppSource::default(),
+            origin.clone(),
+            "<html>strict</html>".to_string(),
+            123,
+        ))
+        .unwrap();
+
+        assert_eq!(app.id, "local-market-app");
+        assert_eq!(app.version, 1);
+        assert_eq!(app.runtime_profile, MiniAppRuntimeProfile::MarketStrict);
+        assert_eq!(app.compiled_html, "<html>strict</html>");
+        assert!(saved.lock().unwrap().is_empty());
+
+        let installs = market_installs.lock().unwrap();
+        assert_eq!(installs.len(), 1);
+        assert_eq!(installs[0].0.id, app.id);
+        assert_eq!(
+            installs[0].1.origin.kind,
+            MiniAppCustomizationOriginKind::Market
+        );
+        assert_eq!(installs[0].1.origin.market.as_ref(), Some(&origin));
+    }
+
+    #[test]
+    fn market_update_facade_validates_origin_and_commits_replacement_atomically() {
+        let storage = MemoryStorage::default();
+        let previous = imported_app();
+        let installed_origin = market_origin(3);
+        *storage.customization_metadata.lock().unwrap() = Some(strict_package_metadata(
+            MiniAppCustomizationOriginKind::Market,
+            Some(installed_origin),
+            100,
+        ));
+        let replacements = storage.market_replacements.clone();
+        let facade = MiniAppRuntimeFacade::new(&storage);
+        let next_origin = market_origin(4);
+
+        let next = block_on(facade.update_market_app(
+            previous.clone(),
+            market_package_meta(99),
+            MiniAppSource::default(),
+            next_origin.clone(),
+            "<html>updated</html>".to_string(),
+            456,
+        ))
+        .unwrap();
+
+        assert_eq!(next.version, previous.version + 1);
+        assert_eq!(next.runtime_profile, MiniAppRuntimeProfile::MarketStrict);
+        assert_eq!(next.compiled_html, "<html>updated</html>");
+
+        let replacements = replacements.lock().unwrap();
+        assert_eq!(replacements.len(), 1);
+        assert_eq!(replacements[0].0.version, previous.version);
+        assert_eq!(replacements[0].1.version, next.version);
+        assert_eq!(replacements[0].2.origin.market.as_ref(), Some(&next_origin));
+    }
+
+    #[test]
+    fn market_update_facade_rejects_non_newer_release_without_replacing_storage() {
+        let storage = MemoryStorage::default();
+        *storage.customization_metadata.lock().unwrap() = Some(strict_package_metadata(
+            MiniAppCustomizationOriginKind::Market,
+            Some(market_origin(3)),
+            100,
+        ));
+        let replacements = storage.market_replacements.clone();
+        let facade = MiniAppRuntimeFacade::new(&storage);
+
+        let error = block_on(facade.update_market_app(
+            imported_app(),
+            market_package_meta(99),
+            MiniAppSource::default(),
+            market_origin(3),
+            "<html>stale</html>".to_string(),
+            456,
+        ))
+        .unwrap_err();
+
+        assert_eq!(error.kind, MiniAppPortErrorKind::InvalidInput);
+        assert_eq!(
+            error.message,
+            "Marketplace release is not newer than the installed release"
+        );
+        assert!(replacements.lock().unwrap().is_empty());
+    }
+
+    fn market_package_meta(version: u32) -> MarketPackageMeta {
+        MarketPackageMeta {
+            name: "Market App".to_string(),
+            description: "A reviewed app".to_string(),
+            icon: "box".to_string(),
+            category: "utility".to_string(),
+            tags: vec!["reviewed".to_string()],
+            version,
+            permissions: MiniAppPermissions::default(),
+            i18n: None,
+        }
+    }
+
+    fn market_origin(release_number: u32) -> InstalledMarketOrigin {
+        InstalledMarketOrigin {
+            listing_id: "listing-one".to_string(),
+            release_id: format!("release-{release_number}"),
+            release_number,
+            package_sha256: format!("sha-{release_number}"),
+        }
     }
 
     fn block_on<T>(future: impl std::future::Future<Output = T>) -> T {

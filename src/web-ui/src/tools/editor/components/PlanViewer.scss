@@ -48,7 +48,11 @@
         border: 1px solid var(--border-base);
         border-radius: 6px;
         cursor: pointer;
-        transition: all 0.15s ease;
+        transition:
+          transform 140ms cubic-bezier(0.23, 1, 0.32, 1),
+          background-color 140ms ease,
+          border-color 140ms ease,
+          color 140ms ease;
 
         &:hover {
           background: var(--element-bg-hover);
@@ -96,7 +100,9 @@
         color: var(--color-text-muted);
         border-radius: 4px;
         background: var(--color-overlay-white-04);
-        transition: all 0.15s ease;
+        transition:
+          background-color 140ms ease,
+          color 140ms ease;
 
         svg {
           transition: transform 0.15s ease;
@@ -165,7 +171,11 @@
         border: 1px solid transparent;
         border-radius: 4px;
         cursor: pointer;
-        transition: all 0.15s ease;
+        transition:
+          transform 140ms cubic-bezier(0.23, 1, 0.32, 1),
+          background-color 140ms ease,
+          border-color 140ms ease,
+          color 140ms ease;
 
         &:hover {
           color: var(--color-text-primary);
@@ -200,7 +210,11 @@
     border: none;
     border-radius: 4px;
     cursor: pointer;
-    transition: all 0.15s ease;
+    transition:
+      transform 140ms cubic-bezier(0.23, 1, 0.32, 1),
+      background-color 140ms ease,
+      color 140ms ease,
+      box-shadow 140ms ease;
     box-shadow: 0 1px 2px var(--color-overlay-black-12);
 
     &:hover:not(:disabled) {
@@ -268,7 +282,11 @@
         border: 1px solid transparent;
         border-radius: 4px;
         cursor: pointer;
-        transition: all 0.15s ease;
+        transition:
+          transform 140ms cubic-bezier(0.23, 1, 0.32, 1),
+          background-color 140ms ease,
+          border-color 140ms ease,
+          color 140ms ease;
 
         &:hover {
           color: var(--color-text-primary);
@@ -395,7 +413,11 @@
         background: transparent;
         color: var(--color-text-muted);
         cursor: pointer;
-        transition: all 0.15s ease;
+        transition:
+          transform 140ms cubic-bezier(0.23, 1, 0.32, 1),
+          background-color 140ms ease,
+          border-color 140ms ease,
+          color 140ms ease;
 
         &:hover {
           color: var(--color-error);
@@ -489,4 +511,3 @@
 .animate-spin {
   animation: spin 1s linear infinite;
 }
-

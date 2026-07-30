@@ -7,6 +7,7 @@ import type {
   PermissionRequestEvent,
   PermissionRequest,
 } from '@/infrastructure/api/service-api/AgentAPI';
+import { dispatchJobStore } from '@/features/dispatch/dispatchJobStore';
 import { usePermissionRequests } from './usePermissionRequests';
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
@@ -18,6 +19,10 @@ const agentApiMock = vi.hoisted(() => ({
   listPendingPermissionRequests: vi.fn(() => Promise.resolve([] as PermissionRequest[])),
   respondPermission: vi.fn(() => Promise.resolve()),
   respondPermissionBatch: vi.fn(() => Promise.resolve([] as string[])),
+}));
+const dispatchApiMock = vi.hoisted(() => ({
+  answerPermission: vi.fn(() => Promise.resolve({ resolved: true })),
+  requestRefresh: vi.fn(),
 }));
 
 vi.mock('@/infrastructure/api/service-api/AgentAPI', () => ({
@@ -31,6 +36,14 @@ vi.mock('@/infrastructure/api/service-api/AgentAPI', () => ({
     respondPermission: agentApiMock.respondPermission,
     respondPermissionBatch: agentApiMock.respondPermissionBatch,
   },
+}));
+vi.mock('@/features/dispatch/dispatchApi', () => ({
+  dispatchApi: {
+    answerPermission: dispatchApiMock.answerPermission,
+  },
+}));
+vi.mock('@/features/dispatch/DispatchJobObserver', () => ({
+  requestDispatchJobRefresh: dispatchApiMock.requestRefresh,
 }));
 
 type PermissionController = ReturnType<typeof usePermissionRequests>;
@@ -64,12 +77,14 @@ function request(
 
 function Harness({
   sessionId,
+  dispatchJobId,
   onController,
 }: {
   sessionId?: string;
+  dispatchJobId?: string;
   onController: (controller: PermissionController) => void;
 }) {
-  const controller = usePermissionRequests(sessionId);
+  const controller = usePermissionRequests(sessionId, dispatchJobId);
   onController(controller);
   return <div data-request-count={controller.requests.length} />;
 }
@@ -78,9 +93,16 @@ async function renderHarness(
   root: Root,
   sessionId: string | undefined,
   onController: (controller: PermissionController) => void,
+  dispatchJobId?: string,
 ) {
   await act(async () => {
-    root.render(<Harness sessionId={sessionId} onController={onController} />);
+    root.render(
+      <Harness
+        sessionId={sessionId}
+        dispatchJobId={dispatchJobId}
+        onController={onController}
+      />,
+    );
     await Promise.resolve();
   });
 }
@@ -109,6 +131,10 @@ describe('usePermissionRequests', () => {
     agentApiMock.respondPermission.mockResolvedValue(undefined);
     agentApiMock.respondPermissionBatch.mockReset();
     agentApiMock.respondPermissionBatch.mockResolvedValue([]);
+    dispatchApiMock.answerPermission.mockReset();
+    dispatchApiMock.answerPermission.mockResolvedValue({ resolved: true });
+    dispatchApiMock.requestRefresh.mockReset();
+    dispatchJobStore.getState().clear();
   });
 
   afterEach(() => {
@@ -231,5 +257,52 @@ describe('usePermissionRequests', () => {
     });
 
     expect(controller?.requests.map((item) => item.requestId)).toEqual(['first']);
+  });
+
+  it('answers every request in the active remote dispatch batch', async () => {
+    const first = request('first', 'session-1');
+    const second = { ...request('second', 'session-1'), order: 1 };
+    const later = { ...request('later', 'session-1'), roundId: 'later-round' };
+    dispatchJobStore.getState().registerJob({
+      jobId: 'job-1',
+      sessionId: 'session-1',
+      targetRequest: {
+        kind: 'ssh',
+        connectionId: 'ssh-1',
+        workspacePath: '/repo',
+      },
+      target: {
+        kind: 'ssh',
+        connectionId: 'ssh-1',
+        workspacePath: '/repo',
+        displayName: 'build-host',
+      },
+      title: 'Remote task',
+      agentType: 'agentic',
+      approvalPolicy: 'remote',
+      workspaceDelivery: { kind: 'existing' },
+      cursor: 0,
+      state: 'running',
+      appliedEventIds: [],
+      pendingPermissions: [first, second, later] as unknown as Array<Record<string, unknown>>,
+      eventLogComplete: true,
+      historyTruncated: false,
+      omittedEventCount: 0,
+      createdAt: 1,
+      updatedAt: 1,
+    });
+    await renderHarness(root, 'session-1', (next) => {
+      controller = next;
+    }, 'job-1');
+
+    await act(async () => {
+      await controller?.respondBatch('first', 'once');
+    });
+
+    expect(dispatchApiMock.answerPermission.mock.calls).toEqual([
+      ['job-1', 'first', 'once', undefined],
+      ['job-1', 'second', 'once', undefined],
+    ]);
+    expect(dispatchApiMock.requestRefresh).toHaveBeenCalledWith('job-1');
   });
 });

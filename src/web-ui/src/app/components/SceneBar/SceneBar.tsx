@@ -1,5 +1,5 @@
 /**
- * SceneBar — horizontal scene-level tab bar (32px).
+ * SceneBar — horizontal scene-level tab bar (38px).
  *
  * Delegates state to useSceneManager.
  * AI Agent tab shows the current session title as a subtitle.

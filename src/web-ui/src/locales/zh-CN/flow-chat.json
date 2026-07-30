@@ -449,7 +449,10 @@
     "switchSession": "切换会话",
     "create": "创建新会话",
     "more": "更多会话",
-    "restoreMain": "恢复主窗口"
+    "restoreMain": "恢复主窗口",
+    "inUseTitle": "会话已在其他实例中打开",
+    "inUseMessage": "该会话已在另一个 BitFun 实例中打开。请先在那里关闭，然后重试。",
+    "retry": "重试"
   },
   "scroll": {
     "toBottom": "回到底部",
@@ -627,6 +630,31 @@
     "processingFailed": "处理失败"
   },
   "chatInput": {
+    "dispatch": {
+      "local": "本机",
+      "locked": "运行在 {{target}}（此任务不可更改）",
+      "current": "将此任务运行在 {{target}}",
+      "menuLabel": "这个任务在哪运行",
+      "sessionScope": "新任务",
+      "localSection": "本机",
+      "localDescription": "在当前 BitFun 应用中运行",
+      "sshSection": "SSH",
+      "loading": "正在加载目标…",
+      "noSshTargets": "没有已保存的 SSH 目标",
+      "sshDescription": "通过已保存的 SSH 连接运行",
+      "addSsh": "添加 SSH 连接…",
+      "deviceSection": "账号设备",
+      "signInDevices": "登录以使用其他设备…",
+      "noDeviceTargets": "没有其他账号设备",
+      "deviceDescription": "通过端到端加密的账号 Relay RPC 运行",
+      "deviceOffline": "离线",
+      "createFailed": "无法创建派发任务。",
+      "remoteTarget": "远程目标",
+      "autoConfirmTitle": "允许无人值守地修改吗？",
+      "autoConfirmMessage": "此任务将在 {{target}} 上运行，并自动批准权限请求。是否继续？",
+      "autoConfirmAction": "自动批准并派发",
+      "autoConfirmCancel": "取消"
+    },
     "addBoostTooltip": "智能体模式、图片或 Skill",
     "permissionMode": {
       "menuLabel": "权限模式",

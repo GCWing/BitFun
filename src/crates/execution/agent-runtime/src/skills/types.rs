@@ -55,6 +55,10 @@ pub struct SkillInfo {
     pub shadowed_by_key: Option<String>,
     #[serde(default = "default_allow_implicit_invocation", skip_serializing)]
     pub allow_implicit_invocation: bool,
+    #[serde(default = "default_allow_user_invocation")]
+    pub allow_user_invocation: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub argument_hint: Option<String>,
 }
 
 impl SkillInfo {
@@ -102,9 +106,15 @@ pub struct SkillData {
     pub source_slot: String,
     pub dir_name: String,
     pub allow_implicit_invocation: bool,
+    pub allow_user_invocation: bool,
+    pub argument_hint: Option<String>,
 }
 
 fn default_allow_implicit_invocation() -> bool {
+    true
+}
+
+fn default_allow_user_invocation() -> bool {
     true
 }
 
@@ -139,6 +149,19 @@ fn optional_claude_bool(
     parsed
         .map(Some)
         .ok_or_else(|| SkillParseError::InvalidFormat(format!("Field '{field}' must be a boolean")))
+}
+
+fn optional_string(
+    metadata: &Value,
+    field: &'static str,
+) -> Result<Option<String>, SkillParseError> {
+    let Some(value) = metadata.get(field) else {
+        return Ok(None);
+    };
+    value
+        .as_str()
+        .map(|value| Some(value.to_string()))
+        .ok_or_else(|| SkillParseError::InvalidFormat(format!("Field '{field}' must be a string")))
 }
 
 fn parse_front_matter_markdown(content: &str) -> Result<(Value, String), SkillParseError> {
@@ -190,6 +213,9 @@ impl SkillData {
 
         let allow_implicit_invocation =
             !optional_claude_bool(&metadata, "disable-model-invocation")?.unwrap_or(false);
+        let allow_user_invocation =
+            optional_claude_bool(&metadata, "user-invocable")?.unwrap_or(true);
+        let argument_hint = optional_string(&metadata, "argument-hint")?;
 
         let skill_content = if with_content { body } else { String::new() };
         let dir_name = Path::new(&path)
@@ -208,6 +234,8 @@ impl SkillData {
             source_slot: String::new(),
             dir_name,
             allow_implicit_invocation,
+            allow_user_invocation,
+            argument_hint,
         })
     }
 

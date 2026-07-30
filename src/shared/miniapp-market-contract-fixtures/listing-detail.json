@@ -1,0 +1,84 @@
+{
+  "listingId": "listing-fixture-1",
+  "slug": "regex-playground",
+  "name": "Regex Playground",
+  "description": "Test expressions against local text.",
+  "icon": ".*",
+  "category": "developer",
+  "tags": ["regex", "developer"],
+  "owner": {
+    "githubId": 24753352,
+    "login": "bobleer",
+    "avatarUrl": "https://avatars.githubusercontent.com/u/24753352"
+  },
+  "latestRelease": 2,
+  "minBitfunVersion": "0.2.14",
+  "permissions": {
+    "node": {
+      "enabled": false
+    },
+    "host": {
+      "dialog": false,
+      "clipboard_read": true,
+      "clipboard_write": false,
+      "open_external": false,
+      "reveal_in_folder": false,
+      "deck_render": false,
+      "chat_composer": false,
+      "system_info": false
+    }
+  },
+  "screenshotUrls": [
+    "/miniapp/api/v1/artifacts/screenshots/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  ],
+  "ratingAverage": 4.5,
+  "ratingCount": 2,
+  "favoriteCount": 3,
+  "downloadCount": 10,
+  "publishedAt": 1785196800,
+  "isFavorited": true,
+  "myRating": 5,
+  "changelog": "Adds named capture highlighting.",
+  "license": {
+    "spdxExpression": "MIT"
+  },
+  "repositoryUrl": "https://github.com/openbitfun/regex-playground",
+  "releases": [
+    {
+      "releaseId": "release-fixture-2",
+      "listingId": "listing-fixture-1",
+      "releaseNumber": 2,
+      "minBitfunVersion": "0.2.14",
+      "changelog": "Adds named capture highlighting.",
+      "packageSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "packageSize": 4096,
+      "reviewBundleHash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "permissions": {
+        "node": {
+          "enabled": false
+        },
+        "host": {
+          "dialog": false,
+          "clipboard_read": true,
+          "clipboard_write": false,
+          "open_external": false,
+          "reveal_in_folder": false,
+          "deck_render": false,
+          "chat_composer": false,
+          "system_info": false
+        }
+      },
+      "publishedAt": 1785196800,
+      "yanked": false
+    }
+  ],
+  "i18n": {
+    "locales": {
+      "zh-CN": {
+        "name": "正则游乐场",
+        "description": "在本地文本上测试表达式。",
+        "tags": ["正则", "开发"]
+      }
+    }
+  }
+}

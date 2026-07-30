@@ -11,17 +11,17 @@
   width: 100%;
   max-width: 560px;
   box-sizing: border-box;
-  padding-top: $size-gap-16;
+  padding-top: $size-gap-8;
 
   &__icon {
     flex-shrink: 0;
-    width: 48px;
-    height: 48px;
+    width: 40px;
+    height: 40px;
     margin: 0 auto $size-gap-4;
     display: flex;
     align-items: center;
     justify-content: center;
-    border-radius: 50%;
+    border-radius: $size-radius-full;
 
     svg {
       flex-shrink: 0;
@@ -52,11 +52,11 @@
     flex: 1;
     min-width: 0;
     margin: 0;
-    padding: 0 $size-gap-6 $size-gap-4;
+    padding: 0 $size-gap-6 $size-gap-5;
   }
 
   &__title {
-    font-size: var(--font-size-lg);
+    font-size: var(--font-size-xl);
     font-weight: $font-weight-semibold;
     line-height: 1.35;
     letter-spacing: 0;
@@ -161,7 +161,7 @@
     gap: $size-gap-2;
     justify-content: flex-end;
     align-items: center;
-    padding: $size-gap-4 $size-gap-6 $size-gap-5;
+    padding: $size-gap-4 $size-gap-6;
     border-top: 1px solid var(--border-base);
 
     .btn {

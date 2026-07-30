@@ -94,6 +94,18 @@ static LOCAL_ONLY_COMMANDS: &[&str] = &[
     // This-machine computer-use / OS permission prompts
     "computer_use_request_permissions",
     "computer_use_open_system_settings",
+    // Detached dispatch uses controller-owned SSH credentials and observers.
+    "dispatch_list_targets",
+    "dispatch_probe_target",
+    "dispatch_install_cli_start",
+    "dispatch_install_cli_poll",
+    "dispatch_install_cli_cancel",
+    "dispatch_submit",
+    "dispatch_status",
+    "dispatch_cancel",
+    "dispatch_list_jobs",
+    "dispatch_answer",
+    "dispatch_append",
     // One-click relay deploy SSHes from the controller to a user host
     "relay_deploy_preflight",
     "relay_deploy_install_docker",

@@ -3,10 +3,13 @@
 use bitfun_core::infrastructure::get_path_manager_arc;
 use chrono::Local;
 use serde::Serialize;
+use serde_json::Value;
+use std::fs::{self, OpenOptions};
+use std::io::Write;
 use std::path::PathBuf;
 use std::sync::{
     atomic::{AtomicU8, Ordering},
-    OnceLock,
+    Mutex, OnceLock,
 };
 use std::thread;
 use tauri::{plugin::TauriPlugin, Runtime};
@@ -15,9 +18,15 @@ use tauri_plugin_log::{fern, RotationStrategy, Target, TargetKind, TimezoneStrat
 const SESSION_DIR_PATTERN: &str = r"^\d{8}T\d{6}$";
 const MAX_LOG_SESSIONS: usize = 10;
 const FLASHGREP_LOG_TARGET_PREFIX: &str = "flashgrep";
+const FLOW_CHAT_LOG_FILE_NAME: &str = "flowchat.log";
+const FLOW_CHAT_LOG_MAX_FILE_SIZE: u64 = 10 * 1024 * 1024;
+const FLOW_CHAT_LOG_MAX_BATCH_ENTRIES: usize = 256;
+const FLOW_CHAT_LOG_MAX_BATCH_BYTES: usize = 1024 * 1024;
+const FLOW_CHAT_LOG_MAX_ENTRY_BYTES: usize = 32 * 1024;
 static SESSION_LOG_DIR: OnceLock<PathBuf> = OnceLock::new();
 // Default to Debug in early development for easier diagnostics
 static CURRENT_LOG_LEVEL: AtomicU8 = AtomicU8::new(level_filter_to_u8(log::LevelFilter::Debug));
+static FLOW_CHAT_DIAGNOSTICS_WRITE_LOCK: Mutex<()> = Mutex::new(());
 
 fn get_thread_id() -> u64 {
     let thread_id = thread::current().id();
@@ -152,6 +161,12 @@ pub fn session_log_dir() -> Option<PathBuf> {
     SESSION_LOG_DIR.get().cloned()
 }
 
+pub fn flow_chat_log_path() -> PathBuf {
+    session_log_dir()
+        .unwrap_or_else(resolve_logs_root)
+        .join(FLOW_CHAT_LOG_FILE_NAME)
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RuntimeLoggingInfo {
@@ -161,6 +176,7 @@ pub struct RuntimeLoggingInfo {
     pub ai_log_path: String,
     pub flashgrep_log_path: String,
     pub webview_log_path: String,
+    pub flow_chat_log_path: String,
     pub previous_unexpected_exit: Option<crate::crash_diagnostics::UnexpectedExitInfo>,
 }
 
@@ -181,8 +197,108 @@ pub fn get_runtime_logging_info() -> RuntimeLoggingInfo {
             .join("webview.log")
             .to_string_lossy()
             .to_string(),
+        flow_chat_log_path: session_dir
+            .join(FLOW_CHAT_LOG_FILE_NAME)
+            .to_string_lossy()
+            .to_string(),
         previous_unexpected_exit: crate::crash_diagnostics::previous_unexpected_exit(),
     }
+}
+
+fn rotated_flow_chat_log_path(path: &std::path::Path, index: usize) -> PathBuf {
+    PathBuf::from(format!("{}.{}", path.to_string_lossy(), index))
+}
+
+fn rotate_flow_chat_log_if_needed(
+    path: &std::path::Path,
+    incoming_bytes: usize,
+    max_file_size: u64,
+) -> Result<(), String> {
+    let current_size = fs::metadata(path)
+        .map(|metadata| metadata.len())
+        .unwrap_or(0);
+    if current_size + incoming_bytes as u64 <= max_file_size {
+        return Ok(());
+    }
+
+    let first_backup = rotated_flow_chat_log_path(path, 1);
+    let second_backup = rotated_flow_chat_log_path(path, 2);
+    if second_backup.exists() {
+        fs::remove_file(&second_backup)
+            .map_err(|error| format!("Failed to remove old Flow Chat log backup: {}", error))?;
+    }
+    if first_backup.exists() {
+        fs::rename(&first_backup, &second_backup)
+            .map_err(|error| format!("Failed to rotate Flow Chat log backup: {}", error))?;
+    }
+    if path.exists() {
+        fs::rename(path, &first_backup)
+            .map_err(|error| format!("Failed to rotate Flow Chat log: {}", error))?;
+    }
+    Ok(())
+}
+
+fn serialize_flow_chat_diagnostics(entries: &[Value]) -> Result<Vec<u8>, String> {
+    if entries.is_empty() {
+        return Ok(Vec::new());
+    }
+    if entries.len() > FLOW_CHAT_LOG_MAX_BATCH_ENTRIES {
+        return Err(format!(
+            "Flow Chat diagnostics batch exceeds {} entries",
+            FLOW_CHAT_LOG_MAX_BATCH_ENTRIES
+        ));
+    }
+
+    let mut output = Vec::new();
+    for entry in entries {
+        if !entry.is_object() {
+            return Err("Flow Chat diagnostics entries must be JSON objects".to_string());
+        }
+        let serialized = serde_json::to_vec(entry)
+            .map_err(|error| format!("Failed to serialize Flow Chat diagnostic: {}", error))?;
+        if serialized.len() > FLOW_CHAT_LOG_MAX_ENTRY_BYTES {
+            return Err(format!(
+                "Flow Chat diagnostic entry exceeds {} bytes",
+                FLOW_CHAT_LOG_MAX_ENTRY_BYTES
+            ));
+        }
+        if output.len() + serialized.len() + 1 > FLOW_CHAT_LOG_MAX_BATCH_BYTES {
+            return Err(format!(
+                "Flow Chat diagnostics batch exceeds {} bytes",
+                FLOW_CHAT_LOG_MAX_BATCH_BYTES
+            ));
+        }
+        output.extend_from_slice(&serialized);
+        output.push(b'\n');
+    }
+    Ok(output)
+}
+
+pub fn append_flow_chat_diagnostics(entries: &[Value]) -> Result<usize, String> {
+    if entries.is_empty() {
+        return Ok(0);
+    }
+
+    let output = serialize_flow_chat_diagnostics(entries)?;
+    let _guard = FLOW_CHAT_DIAGNOSTICS_WRITE_LOCK
+        .lock()
+        .map_err(|_| "Flow Chat diagnostics writer lock is poisoned".to_string())?;
+    let path = flow_chat_log_path();
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)
+            .map_err(|error| format!("Failed to create Flow Chat log directory: {}", error))?;
+    }
+    rotate_flow_chat_log_if_needed(&path, output.len(), FLOW_CHAT_LOG_MAX_FILE_SIZE)?;
+    let mut file = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&path)
+        .map_err(|error| format!("Failed to open Flow Chat log: {}", error))?;
+    file.write_all(&output)
+        .map_err(|error| format!("Failed to write Flow Chat log: {}", error))?;
+    file.flush()
+        .map_err(|error| format!("Failed to flush Flow Chat log: {}", error))?;
+    Ok(entries.len())
 }
 
 fn is_flashgrep_target(target: &str) -> bool {
@@ -430,4 +546,40 @@ pub fn spawn_log_cleanup_task() {
     tokio::spawn(async {
         cleanup_old_log_sessions().await;
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn serializes_flow_chat_diagnostics_as_bounded_json_lines() {
+        let entries = vec![
+            serde_json::json!({"sequence": 1, "message": "first"}),
+            serde_json::json!({"sequence": 2, "message": "second"}),
+        ];
+
+        let serialized = serialize_flow_chat_diagnostics(&entries).expect("serialize entries");
+        let text = String::from_utf8(serialized).expect("valid UTF-8");
+
+        assert_eq!(text.lines().count(), 2);
+        assert!(text.contains("\"sequence\":1"));
+        assert!(text.ends_with('\n'));
+        assert!(serialize_flow_chat_diagnostics(&[serde_json::json!("invalid")]).is_err());
+    }
+
+    #[test]
+    fn rotates_flow_chat_log_before_the_next_batch_exceeds_the_limit() {
+        let temp_dir = tempfile::tempdir().expect("create temp dir");
+        let path = temp_dir.path().join(FLOW_CHAT_LOG_FILE_NAME);
+        fs::write(&path, b"12345678").expect("write active log");
+
+        rotate_flow_chat_log_if_needed(&path, 4, 10).expect("rotate log");
+
+        assert!(!path.exists());
+        assert_eq!(
+            fs::read(rotated_flow_chat_log_path(&path, 1)).expect("read backup"),
+            b"12345678"
+        );
+    }
 }

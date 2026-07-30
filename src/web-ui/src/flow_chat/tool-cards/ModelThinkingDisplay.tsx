@@ -31,7 +31,6 @@ export const ModelThinkingDisplay: React.FC<ModelThinkingDisplayProps> = ({
 }) => {
   const { t } = useTranslation('flow-chat');
   const { content, isStreaming, status } = thinkingItem;
-  const wrapperRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const shouldFollowTailRef = useRef(true);
   const tailFollowPauseVersionRef = useRef(0);
@@ -48,15 +47,9 @@ export const ModelThinkingDisplay: React.FC<ModelThinkingDisplayProps> = ({
 
   const [isExpanded, setIsExpanded] = useState(shouldDefaultExpanded);
   const userToggledRef = useRef(false);
-  const { applyExpandedState } = useToolCardHeightContract({
+  const { cardRootRef, applyExpandedState } = useToolCardHeightContract({
     toolId: thinkingItem.id,
     toolName: 'thinking',
-    getAnchorElement: () => wrapperRef.current,
-    getCardHeight: () => {
-      const contentScrollHeight = contentRef.current?.scrollHeight ?? null;
-      const wrapperHeight = wrapperRef.current?.getBoundingClientRect().height ?? null;
-      return contentScrollHeight ?? wrapperHeight;
-    },
   });
 
   useLayoutEffect(() => {
@@ -245,7 +238,7 @@ export const ModelThinkingDisplay: React.FC<ModelThinkingDisplayProps> = ({
 
   return (
     <div
-      ref={wrapperRef}
+      ref={cardRootRef}
       data-testid="chat-thinking-panel"
       data-tool-card-id={thinkingItem.id}
       data-status={status}

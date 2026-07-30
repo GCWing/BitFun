@@ -349,7 +349,13 @@ const NavSearchDialog: React.FC<NavSearchDialogProps> = ({ open, onClose }) => {
 
   const dialog = (
     <div className="bitfun-nav-search-dialog__overlay" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="bitfun-nav-search-dialog__card" ref={cardRef}>
+      <div
+        className="bitfun-nav-search-dialog__card"
+        ref={cardRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={t('nav.search.triggerTooltip')}
+      >
         <div className="bitfun-nav-search-dialog__input-row">
           <Search
             ref={inputRef}

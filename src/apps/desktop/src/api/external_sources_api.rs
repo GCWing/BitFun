@@ -211,17 +211,17 @@ pub(super) async fn require_local_workspace(
     let Some(workspace_path) = workspace_path else {
         return Ok(None);
     };
-    let path = Path::new(workspace_path);
-    if !path.is_absolute() {
-        return Err(ExternalSourceOperationError::invalid_request(
-            "External AI application sources require an absolute workspace path",
-        ));
-    }
     if is_remote_path(workspace_path).await {
         return Err(ExternalSourceOperationError::new(
             ExternalSourceOperationErrorCode::HostUnavailable,
             "The remote workspace is not running the external compatibility service",
             true,
+        ));
+    }
+    let path = Path::new(workspace_path);
+    if !path.is_absolute() {
+        return Err(ExternalSourceOperationError::invalid_request(
+            "External AI application sources require an absolute workspace path",
         ));
     }
     Ok(Some(path))

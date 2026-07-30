@@ -77,7 +77,7 @@
 }
 
 .flow-tool-card-note {
-  margin-left: 1.5rem;
+  margin-left: 0;
   color: var(--color-text-secondary);
   font-size: 0.82em;
   line-height: var(--flowchat-support-line-height);
@@ -298,8 +298,8 @@
 .compact-tool-card-expanded {
   position: relative;
   margin-top: 8px;
-  margin-left: 1rem;
-  padding: 12px;
+  margin-left: 0;
+  padding: 12px 12px 12px 0;
   background: var(--color-bg-primary);
   border: 1px solid var(--border-base);
   border-radius: 6px;

@@ -166,7 +166,12 @@
     font-size: 12px;
     font-weight: 500;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition:
+      transform 150ms cubic-bezier(0.23, 1, 0.32, 1),
+      background-color 150ms ease,
+      border-color 150ms ease,
+      color 150ms ease,
+      box-shadow 150ms ease;
     
     svg {
       width: 14px;
@@ -202,7 +207,11 @@
       border: 1px solid var(--border-subtle);
       border-radius: 8px;
       color: var(--color-text-primary);
-      transition: all 0.2s ease;
+      transition:
+        transform 150ms cubic-bezier(0.23, 1, 0.32, 1),
+        background-color 150ms ease,
+        border-color 150ms ease,
+        color 150ms ease;
       
       &::placeholder {
         color: var(--color-text-muted);
@@ -347,7 +356,12 @@
     font-weight: 500;
     border-radius: 6px;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition:
+      transform 150ms cubic-bezier(0.23, 1, 0.32, 1),
+      background-color 150ms ease,
+      border-color 150ms ease,
+      color 150ms ease,
+      box-shadow 150ms ease;
     
     &--cancel {
       background: transparent;

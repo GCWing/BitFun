@@ -13,8 +13,8 @@ use crate::infrastructure::get_path_manager_arc;
 use crate::util::errors::{BitFunError, BitFunResult};
 use bitfun_agent_runtime::skills::{
     annotate_shadowed_skills, build_mode_skill_infos, filter_candidates_for_mode,
-    filter_implicitly_invocable_skills, is_skill_globally_enabled, normalize_local_skill_dir_name,
-    normalize_remote_skill_dir_name, normalize_skill_keys,
+    filter_implicitly_invocable_skills, filter_user_invocable_skills, is_skill_globally_enabled,
+    normalize_local_skill_dir_name, normalize_remote_skill_dir_name, normalize_skill_keys,
     resolve_default_hidden_builtin_for_explicit_invocation, resolve_user_config_skill_root,
     resolve_visible_skills, sort_skill_candidates_by_dir, sort_skills,
     ExplicitSkillInvocationResolution, SkillCandidate, BITFUN_SKILL_SOURCE_ID,
@@ -665,6 +665,17 @@ impl SkillRegistry {
         agent_type: Option<&str>,
     ) -> Vec<SkillInfo> {
         filter_implicitly_invocable_skills(
+            self.get_resolved_skills_for_workspace(workspace_root, agent_type)
+                .await,
+        )
+    }
+
+    pub async fn get_user_invocable_skills_for_workspace(
+        &self,
+        workspace_root: Option<&Path>,
+        agent_type: Option<&str>,
+    ) -> Vec<SkillInfo> {
+        filter_user_invocable_skills(
             self.get_resolved_skills_for_workspace(workspace_root, agent_type)
                 .await,
         )

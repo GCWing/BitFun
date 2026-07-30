@@ -220,6 +220,14 @@ fn is_idempotent_review_create(request: &CreateSessionRequest) -> bool {
 pub struct UpdateSessionModelRequest {
     pub session_id: String,
     pub model_name: String,
+    #[serde(default)]
+    pub workspace_path: Option<String>,
+    #[serde(default)]
+    pub remote_connection_id: Option<String>,
+    #[serde(default)]
+    pub remote_ssh_host: Option<String>,
+    #[serde(default)]
+    pub include_internal: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -1644,10 +1652,34 @@ pub async fn update_session_model(
     runtime: State<'_, DesktopRuntimeContext>,
     request: UpdateSessionModelRequest,
 ) -> Result<(), String> {
+    let session_id = request.session_id.trim().to_string();
+    if session_id.is_empty() {
+        return Err("session_id is required".to_string());
+    }
+    if let Some(workspace_path) = request
+        .workspace_path
+        .as_deref()
+        .map(str::trim)
+        .filter(|path| !path.is_empty())
+    {
+        runtime
+            .session_application()
+            .ensure_session_loaded(
+                desktop_session_scope(
+                    workspace_path.to_string(),
+                    request.remote_connection_id,
+                    request.remote_ssh_host,
+                ),
+                &session_id,
+                request.include_internal,
+            )
+            .await
+            .map_err(|error| format!("Failed to restore session before model update: {error}"))?;
+    }
     runtime
         .agent_runtime()
         .update_session_model(AgentSessionModelUpdateRequest {
-            session_id: request.session_id,
+            session_id,
             model_id: request.model_name,
         })
         .await

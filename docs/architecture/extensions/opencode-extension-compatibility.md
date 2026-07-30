@@ -19,18 +19,18 @@
 
 ## 1. 基线与判断方法
 
-本次清单刷新于 2026-07-21：
+本次清单刷新于 2026-07-30：
 
-- 最新稳定版为 [`v1.18.4`](https://github.com/anomalyco/opencode/releases/tag/v1.18.4)，提交为 [`49c69c5ed3ccf706b61b3febb43c8aaff7f8325e`](https://github.com/anomalyco/opencode/commit/49c69c5ed3ccf706b61b3febb43c8aaff7f8325e)。
-- 开发分支前瞻检查记录为提交 [`849c2598abc7d2b40261e74b5826bc74ffc78308`](https://github.com/anomalyco/opencode/commit/849c2598abc7d2b40261e74b5826bc74ffc78308)。该值会持续变化，只用于发现差异，不计入稳定兼容承诺。
-- `v2` 前瞻分支检查记录为提交 [`44b6938b2ad2895bdd89d5d5cf753fb01ca8e3dd`](https://github.com/anomalyco/opencode/commit/44b6938b2ad2895bdd89d5d5cf753fb01ca8e3dd)：仓库仍以 Bun 作为 package manager、开发和默认编译路径，同时提供 Node 26 SEA 并行构建与 Node 启动器。它不是“已经完全切换 Node”的稳定承诺。
+- 最新稳定版为 [`v1.18.9`](https://github.com/anomalyco/opencode/releases/tag/v1.18.9)，提交为 [`4da7bb44c84e013fa53e9c5d02ac753d1435c81a`](https://github.com/anomalyco/opencode/commit/4da7bb44c84e013fa53e9c5d02ac753d1435c81a)。
+- 开发分支前瞻检查记录为提交 [`7565e03536d19e850f9996c407f9bf5e932b5f7a`](https://github.com/anomalyco/opencode/commit/7565e03536d19e850f9996c407f9bf5e932b5f7a)。该值会持续变化，只用于发现差异，不计入稳定兼容承诺。
+- `v2` 前瞻分支检查记录为提交 [`247f14f9556c31ee532cb4a79a83283e753adc62`](https://github.com/anomalyco/opencode/commit/247f14f9556c31ee532cb4a79a83283e753adc62)：仓库仍以 Bun 作为 package manager、开发和默认编译路径，同时提供 Node 26 SEA 并行构建与 Node 启动器。它不是“已经完全切换 Node”的稳定承诺。
 - 配置、插件、工具、Agent、Skill、Command、Rule、MCP、LSP、Formatter、Theme、Keybind、开发工具包、Server 和 ACP 以 [OpenCode 官方文档](https://opencode.ai/docs/) 为准。
-- 稳定服务插件接口以 [`packages/plugin/src/index.ts`](https://github.com/anomalyco/opencode/blob/49c69c5ed3ccf706b61b3febb43c8aaff7f8325e/packages/plugin/src/index.ts) 为准；
-- custom tool 接口以 [`packages/plugin/src/tool.ts`](https://github.com/anomalyco/opencode/blob/49c69c5ed3ccf706b61b3febb43c8aaff7f8325e/packages/plugin/src/tool.ts) 为准；
-- 终端插件接口以 [`packages/plugin/src/tui.ts`](https://github.com/anomalyco/opencode/blob/49c69c5ed3ccf706b61b3febb43c8aaff7f8325e/packages/plugin/src/tui.ts) 为准；
-- 终端插件行为说明以 [`tui-plugins.md`](https://github.com/anomalyco/opencode/blob/49c69c5ed3ccf706b61b3febb43c8aaff7f8325e/packages/opencode/specs/tui-plugins.md) 为准。
+- 稳定服务插件接口以 [`packages/plugin/src/index.ts`](https://github.com/anomalyco/opencode/blob/4da7bb44c84e013fa53e9c5d02ac753d1435c81a/packages/plugin/src/index.ts) 为准；
+- custom tool 接口以 [`packages/plugin/src/tool.ts`](https://github.com/anomalyco/opencode/blob/4da7bb44c84e013fa53e9c5d02ac753d1435c81a/packages/plugin/src/tool.ts) 为准；
+- 终端插件接口以 [`packages/plugin/src/tui.ts`](https://github.com/anomalyco/opencode/blob/4da7bb44c84e013fa53e9c5d02ac753d1435c81a/packages/plugin/src/tui.ts) 为准；
+- 终端插件行为说明以 [`tui-plugins.md`](https://github.com/anomalyco/opencode/blob/4da7bb44c84e013fa53e9c5d02ac753d1435c81a/packages/opencode/specs/tui-plugins.md) 为准。
 
-稳定兼容只固定 `v1.18.4` 的公开文档、接口源码和样例；开发及 `v2` 提交仅用于发现未来差异，不进入当前承诺。升级时必须
+稳定兼容只固定 `v1.18.9` 的公开文档、接口源码和样例；开发及 `v2` 提交仅用于发现未来差异，不进入当前承诺。升级时必须
 重新比较实际消费的文件和行为，不能沿用本次结论。
 
 ### 1.1 差异类型
@@ -103,7 +103,7 @@ OpenCode，和 OpenCode 配置/插件进入 BitFun 是两个独立验收方向�
 
 | OpenCode 扩展项 | BitFun 差异 | 当前状态 | 目标可实现性 | 成熟度依赖（非执行顺序） | BitFun 需要完成的工作 | 细节 |
 |---|---|---|---|---|---|---|
-| 配置层级与合并 | 融合现有能力 | 未实现 | 可完整适配 | OC-R1 | 按 remote、global、自定义文件、project、`.opencode`、内联和组织配置构造来源图并保留最终来源 | [来源与合并](opencode-config-assets-adapter-design.md#3-配置层级与来源) |
+| 配置层级与合并 | 融合现有能力 | 部分实现：Command/Subagent/MCP 本地来源顺序 | 可完整适配 | OC-R1 | 当前三类 provider 复用私有本地路径顺序与监听根；后续按 remote、global、自定义文件、project、`.opencode`、内联和组织配置补齐有序来源并保留最终来源 | [来源与合并](opencode-config-assets-adapter-design.md#3-配置层级与来源) |
 | JSON、JSONC、环境变量、文件引用 | 转换参数 + 明确降级 | 未实现 | 可主要适配 | OC-R1 | 有效配置保持 OpenCode 解码语义；未知字段保留和非安全字段局部恢复属于 BitFun 鲁棒性增强，安全/执行字段无效时不激活受影响结果 | [解析与鲁棒性](opencode-config-assets-adapter-design.md#4-解析与鲁棒性) |
 | 独立 `tui.json/jsonc` | 融合现有能力 + 转换参数 | 未实现 | 可完整适配 | OC-R1 | 按 global、`OPENCODE_TUI_CONFIG`、project、`.opencode` 独立顺序加载，不能复用主配置优先级 | [TUI 来源](opencode-config-assets-adapter-design.md#32-tui-独立来源顺序) |
 | Rules / Instructions | 转换参数 | 未实现 | 可完整适配 | OC-R1 | R1 映射本地/已缓存内容；需要主动联网的远程 instruction 在 R2 通过归属模块保护后获取 | [声明式资产](opencode-config-assets-adapter-design.md#5-声明式资产映射) |
@@ -122,7 +122,7 @@ OpenCode，和 OpenCode 配置/插件进入 BitFun 是两个独立验收方向�
 | `server` | 明确降级 | 未实现 | 明确降级 | OC-R4-P | 只供显式外部协议兼容服务使用，不改变普通 BitFun 启动方式 | [其他稳定配置](opencode-config-assets-adapter-design.md#55-其他稳定配置项) |
 | `autoupdate` | 明确降级 | 不适用 | 明确降级 | 不安排 | 不控制 BitFun 产品更新；保留来源并显示“不适用于 BitFun 更新” | [其他稳定配置](opencode-config-assets-adapter-design.md#55-其他稳定配置项) |
 
-本类整体风险是来源优先级错误、相似能力语义不一致和远程执行域错配。控制点集中在来源图、字段级诊断、归属模块校验和官方配置样例，不在每个配置项内重复设计。
+本类整体风险是来源优先级错误、相似能力语义不一致和远程执行域错配。控制点集中在有序来源事实、字段级诊断、归属模块校验和官方配置样例，不在每个配置项内重复设计，也不为概念完整性新增公共 Graph 对象。
 
 ### 3.2 工具与服务插件
 
@@ -133,7 +133,7 @@ OpenCode，和 OpenCode 配置/插件进入 BitFun 是两个独立验收方向�
 | 插件 `tool` map | 补基础能力 + 补扩展接口 | 未实现 | 可完整适配 | OC-R2 | 运行插件工厂，按同一双表示注册真实工具，并接到 Tool 归属模块 | [工具加载](opencode-plugin-runtime-adapter-design.md#5-工具与插件加载) |
 | 项目与用户目录插件 | 补基础能力 | 未实现 | 可完整适配 | OC-R2 | 直接发现本地 JS/TS 模块，不要求 BitFun 专用清单；来源、插件身份和执行域确认后，在旧 Host 停止后由新 Host 加载 | [服务插件](opencode-plugin-runtime-adapter-design.md#52-服务插件) |
 | 配置中的软件包插件 | 补基础能力 | 未实现 | 可完整适配 | OC-R2 | 确认来源、插件身份和执行域后，用 npm 配置、Arborist、package-lock 和 `ignoreScripts: true` 准备依赖，再由与固定插件样例匹配的 Node/Bun 脚本执行后端加载 | [服务插件](opencode-plugin-runtime-adapter-design.md#52-服务插件) |
-| 全局插件加载 | 补基础能力 | 未实现 | 可完整适配 | OC-R2 | 自动发现全局配置和 ConfigPaths 全局目录，并按完整来源图生成 `plugin_origins`；首次可执行启用按来源、插件身份和执行域确认，决定只提示一次且可按项目覆盖 | [服务插件](opencode-plugin-runtime-adapter-design.md#52-服务插件) |
+| 全局插件加载 | 补基础能力 | 未实现 | 可完整适配 | OC-R2 | 自动发现全局配置和 ConfigPaths 全局目录，并按完整来源顺序生成 `plugin_origins`；首次可执行启用按来源、插件身份和执行域确认，决定只提示一次且可按项目覆盖 | [服务插件](opencode-plugin-runtime-adapter-design.md#52-服务插件) |
 | `package.json`、入口与依赖 | 补基础能力 | 未实现 | 可主要适配 | OC-R2 | 复现 server 入口、入口回退、`engines.opencode`、npm 配置和锁文件；原生模块失败只影响对应插件 | [来源与执行版本](opencode-plugin-runtime-adapter-design.md#4-来源与执行版本) |
 | 内置/MCP/外部同名工具；后续 pure/重复插件顺序 | 融合现有能力 | standalone Tool 显式选择已实现 | 可完整适配 | OC-R2 | 当前按候选身份与内容版本记忆选择且不静默覆盖；package plugin 阶段再复现 internal-first、pure、来源顺序和去重 | [注册与覆盖](opencode-plugin-runtime-adapter-design.md#53-注册与覆盖) |
 | `project` / `directory` / `worktree` | 直接桥接 | standalone Tool 已传 `directory/worktree/sessionID`；完整 `project` 未实现 | 可完整适配 | OC-R2 | 当前 `directory` 为打开的 workspace、`worktree` 为 Git 根并传递真实 session；完整插件 `project` 和 Remote 在 OC-R5 前保持 `unsupported` | [插件兼容接口](opencode-plugin-runtime-adapter-design.md#7-opencode-插件兼容接口) |
@@ -232,14 +232,14 @@ OpenCode 发布新稳定版时按以下顺序升级：
 
 ### 4.2 首次加载与全局插件
 
-- 启动时按[完整来源图](opencode-config-assets-adapter-design.md#31-opencode-来源图)生成 `plugin_origins`，并包含
+- 启动时按[完整来源顺序](opencode-config-assets-adapter-design.md#31-opencode-来源顺序)生成 `plugin_origins`，并包含
   ConfigPaths 中各配置/插件目录；目录自动发现只适用于服务插件，TUI 插件必须出现在合并后的
   `tui.json/jsonc` `plugin` 列表。发现本身不授予执行资格。
 - 当前能够安全消费的非执行内容按用户的“自动应用低风险内容 / 先询问”偏好处理。默认自动应用并显示一次
   可撤销摘要；当前支持范围内的 JS standalone Tool 在确认前显示“已发现，静态预览，未执行”，范围外 Tool
   显示稳定不支持原因，不能进入 worker。
 - 可执行插件、Tool、Hook 和 TUI 插件的来源级加载偏好按“来源限定身份 + 插件身份 + 入口类型 + 执行域 + 更新策略”确认；
-  activation/import 再按有效来源图、工作目录、实际 OS 用户、文件/网络/进程权限、凭据和能力摘要重新检查。workspace
+  activation/import 再按有效来源顺序、工作目录、实际 OS 用户、文件/网络/进程权限、凭据和能力摘要重新检查。workspace
   只在配置或插件实例确有独立状态时限定该状态，不拥有 runtime 或 Plugin Host。确认是非阻塞待办；同一有效
   摘要下的依赖准备、Host 启动和贡献注册不再逐层重复询问。
 - 当前内置/MCP 候选内容摘要基于 Tool Catalog 已公开的身份、描述和 schema；若实现行为变化但这些摘要完全不变，当前 standalone Tool 端到端能力
@@ -317,7 +317,7 @@ Node 进程永久累积；这不是 package-plugin 的 workspace-scoped runtime 
 
 | 大类 | 整体风险 | 主要控制点 |
 |---|---|---|
-| 配置与声明式资产 | 来源优先级错误、字段语义错配、远程路径误用 | 来源图、字段级诊断、版本化样例、实际执行域解析 |
+| 配置与声明式资产 | 来源优先级错误、字段语义错配、远程路径误用 | 有序来源事实、字段级诊断、版本化样例、实际执行域解析 |
 | 工具与服务插件 | 任意代码副作用、依赖失败、顺序不一致、进程与系统资源失控 | import 前策略、安全启动、独立进程树、平台资源预算、固定运行时、顺序测试、期限、取消、有界队列、可验证的旧版本 |
 | 稳定 Hook | 把变换误作通知、非法结果污染业务状态 | 类型化调用、顺序执行、每步结构检查、归属模块终检 |
 | 终端插件 | 组件运行时不等价、焦点/模式锁死、终端恢复失败 | 宿主操作与渲染分离、安全降级页、强制清理和终端恢复测试 |

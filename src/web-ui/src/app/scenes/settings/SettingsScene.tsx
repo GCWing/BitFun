@@ -9,8 +9,6 @@
 import React, {
   Suspense,
   useEffect,
-  useLayoutEffect,
-  useRef,
   useState,
 } from 'react';
 import { useSettingsStore } from './settingsStore';
@@ -33,11 +31,10 @@ import {
   SessionPersonalizationConfig,
   VoiceInputConfig,
   WorktreesConfig,
+  isSettingsTabContentReady,
+  preloadSettingsTabContent,
 } from './settingsContentRegistry';
 import './SettingsScene.scss';
-
-// Keep in sync with settings-content-exit in SettingsScene.scss.
-const SETTINGS_CONTENT_EXIT_DURATION_MS = 180;
 
 function SettingsSceneLoading() {
   return (
@@ -79,8 +76,6 @@ const SettingsScene: React.FC = () => {
 
   const resolvedTab: ConfigTab =
     (activeTab as string) === 'session-config' ? 'session-personalization' : activeTab;
-  const [outgoingTab, setOutgoingTab] = useState<ConfigTab | null>(null);
-  const previousTabRef = useRef<ConfigTab>(resolvedTab);
 
   useEffect(() => {
     /** Legacy merged session settings tab removed in favor of two panels. */
@@ -89,59 +84,50 @@ const SettingsScene: React.FC = () => {
     }
   }, [activeTab, setActiveTab]);
 
-  // Derive the previous tab during render so React keeps its keyed subtree
-  // mounted in the same commit that introduces the incoming page.
-  const renderedOutgoingTab = previousTabRef.current !== resolvedTab
-    ? previousTabRef.current
-    : outgoingTab;
+  /**
+   * Cold entries into the scene (first open after launch, deep links) mount a
+   * panel whose chunk and i18n namespaces are still in flight, which paints the
+   * skeleton and then a frame of raw i18n keys. Hold the first paint until those
+   * resources land — an empty content area for a few ms reads as instant, a
+   * three-stage flash does not. SettingsNav preloads before it flips the active
+   * tab, so tab switches are never gated here.
+   */
+  const [firstPaintReady, setFirstPaintReady] = useState(() =>
+    isSettingsTabContentReady(resolvedTab)
+  );
 
-  useLayoutEffect(() => {
-    const previousTab = previousTabRef.current;
-    previousTabRef.current = resolvedTab;
-    if (previousTab === resolvedTab) return;
+  useEffect(() => {
+    if (firstPaintReady) return;
 
-    setOutgoingTab(previousTab);
-    const exitTimer = window.setTimeout(() => {
-      setOutgoingTab(current => current === previousTab ? null : current);
-    }, SETTINGS_CONTENT_EXIT_DURATION_MS);
+    let cancelled = false;
+    const commit = () => {
+      if (!cancelled) setFirstPaintReady(true);
+    };
+    void preloadSettingsTabContent(resolvedTab).then(commit, commit);
 
-    return () => window.clearTimeout(exitTimer);
-  }, [resolvedTab]);
+    return () => {
+      cancelled = true;
+    };
+  }, [firstPaintReady, resolvedTab]);
 
-  const renderedTabs: ConfigTab[] = [resolvedTab];
-  if (renderedOutgoingTab && renderedOutgoingTab !== resolvedTab) {
-    renderedTabs.push(renderedOutgoingTab);
-  }
+  const Content = firstPaintReady ? resolveSettingsContent(resolvedTab) : null;
 
   return (
     <div className="bitfun-settings-scene" data-testid="settings-scene" data-settings-tab={resolvedTab}>
       <div className="bitfun-settings-scene__content-stack">
-        {renderedTabs.map(tab => {
-          const Content = resolveSettingsContent(tab);
-          if (!Content) return null;
-
-          const isActive = tab === resolvedTab;
-          const isOutgoing = !isActive && tab === renderedOutgoingTab;
-          return (
-            <div
-              key={tab}
-              className={[
-                'bitfun-settings-scene__content-wrapper',
-                isActive && 'bitfun-settings-scene__content-wrapper--active',
-                isActive && renderedOutgoingTab && 'bitfun-settings-scene__content-wrapper--entering',
-                isOutgoing && 'bitfun-settings-scene__content-wrapper--outgoing',
-              ].filter(Boolean).join(' ')}
-              aria-hidden={!isActive}
-              data-testid="settings-scene-content"
-              data-settings-panel={tab}
-              data-settings-panel-active={isActive ? 'true' : 'false'}
-            >
-              <Suspense fallback={isActive ? <SettingsSceneLoading /> : null}>
-                <Content />
-              </Suspense>
-            </div>
-          );
-        })}
+        {Content ? (
+          <div
+            key={resolvedTab}
+            className="bitfun-settings-scene__content-wrapper"
+            data-testid="settings-scene-content"
+            data-settings-panel={resolvedTab}
+            data-settings-panel-active="true"
+          >
+            <Suspense fallback={<SettingsSceneLoading />}>
+              <Content />
+            </Suspense>
+          </div>
+        ) : null}
       </div>
     </div>
   );

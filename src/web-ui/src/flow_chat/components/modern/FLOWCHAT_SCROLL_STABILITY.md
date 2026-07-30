@@ -6,7 +6,7 @@ This document explains the scroll-stability mechanism used by `VirtualMessageLis
 
 Every rule below is compensation for content that changes size on its own. The
 cheapest way to keep the pane stable is to not generate the movement in the
-first place. Four invariants hold across the message list, and breaking any of
+first place. Five invariants hold across the message list, and breaking any of
 them reintroduces the "the chat keeps refreshing itself" report:
 
 1. **Keep a live action's projection identity stable.** A collapsible tool
@@ -37,8 +37,14 @@ them reintroduces the "the chat keeps refreshing itself" report:
    share one duration (see `flowChatCollapseMotion.ts` /
    `SmoothHeightCollapse`). Do not hard-swap `BaseToolCard` ↔ `CompactToolCard`
    for expand/collapse — that remounts the body with no height transition.
+5. **Keep the leading edge stable across collapse states.** A revealed body
+   must not add `margin-inline-start`, `padding-inline-start`, or an equivalent
+   left offset relative to its collapsed header. Expanded thinking, explore
+   rows, tool details, image previews, and subagent projections all begin on
+   their owning message/card edge. Vertical and trailing-edge spacing may
+   remain, but a leading inset reads as a horizontal jump during collapse.
 
-A fifth, related rule lives in `useTypewriter`: `replayOnMount` defaults to
+A sixth, related rule lives in `useTypewriter`: `replayOnMount` defaults to
 false, so a still-streaming block that remounts continues from its current text
 instead of resetting to an empty string and re-growing.
 
@@ -107,7 +113,9 @@ Important details:
 - the real footer height is `MESSAGE_LIST_FOOTER_HEIGHT + totalBottomReservationPx`
 - reservation space is not real content height
 - reservations may define a `floorPx`
-- only reservation space above the floor is consumable
+- a floor prevents unrelated shrink reconciliation from dropping live scroll range
+- collapse floors still drain from measured content growth or deliberate downward
+  user navigation; pin floors drain only through the sticky-pin settlement path
 - all measurements that compare old vs new content height must use:
 
 ```ts
@@ -153,7 +161,24 @@ restores it after the list remeasures. While an element anchor is active, the
 coordinator also owns virtualizer compensation corrections, so independent
 scroll writers cannot fight the pinned header.
 
-There is no persistent scroll-position lock or scroll-listener lock. For an unsignaled
+Collapse anchors have three phases: active while CSS layout is changing,
+retained-provisional while delayed virtualizer measurements may still arrive,
+and settled-grace after the provisional estimate has been reconciled to current
+DOM geometry. A short negative-layout quiet window ends the provisional phase.
+The Footer is then reduced atomically to the minimum physical range needed by
+the captured `scrollTop`; an anchor at `scrollTop === 0` needs no overflow range.
+The semantic anchor remains retained through one final grace window, so a late
+Virtuoso shrink can extend the range and restart settlement without exposing a
+clamped frame. User navigation, a new pin, session reset, DOM disconnection, or
+a quiet grace with no further correction releases it. Scroll
+events enqueue semantic-element restores into the coordinator's single pending
+animation frame. A transaction-owned non-user clamp may additionally extend its
+physical range and restore the captured raw position synchronously before paint.
+Active preservation blocks automatic tail takeover, while retained preservation
+allows the tail controller to take ownership when its normal distance and intent
+rules say that following should resume.
+
+There is no persistent raw `scrollTop` lock or scroll-listener lock. For an unsignaled
 shrink with no semantic element anchor, `restoreScrollPositionOnce()` performs
 one clamped `scrollTop` fallback using the pre-change position. It is a bounded
 last resort, not a second controller: subsequent layout changes are handled by
@@ -179,9 +204,37 @@ effective content growth first enters a short settlement ledger (currently
 negative height correction cancels matching unsettled growth; a known collapse
 does not. Stable growth then consumes the pin floor in one synchronous Footer
 update. Live pin reconciliation may increase a floor immediately, but cannot
-shrink it while Virtuoso item measurements are still moving. Stream end
-performs one final atomic collapse-to-pin transfer using the settled required
-range.
+shrink it while Virtuoso item measurements are still moving. Stream end performs
+one final pin measurement when the target is available, transfers all remaining
+pin range into protected collapse space, and releases `pinned-item` ownership in
+the same transaction. A temporarily virtualized target must not block this
+release: the existing physical range is retained until a later explicit drain.
+Pending pin retries and growth settlement are canceled at that boundary.
+
+When a sticky target is temporarily virtualized, its provisional range must be
+computed from `scrollHeight - currentPinPx`. Reusing physical `scrollHeight`
+directly feeds the synthetic footer back into the next retry and grows the range
+on every frame. Provisional pins remain at `floorPx: 0`; if the request expires
+without capturing an element anchor, that range is removed atomically.
+
+The pin-owned portion of the footer is capped at one viewport. A rendered
+target can never require more than `clientHeight` of extra range to align its
+top inside the viewport, and one viewport is also sufficient to materialize a
+virtualized target. This cap applies to provisional and established pin ranges.
+It does not apply to collapse compensation or the total footer: a large card or
+several cumulative collapses can legitimately require more than one viewport to
+preserve the current semantic anchor.
+
+Pending pin retries carry a synchronous generation plus the owning session and
+turn. Canceling or replacing a request increments the generation before React
+state is updated, so already-queued animation frames cannot restore a canceled
+reservation. User navigation drops a provisional sticky range instead of
+transferring it into protected collapse. Established pins keep the existing
+protected-range handoff.
+
+Mounting an already-streaming session is not a new-turn event. Session entry
+resumes tail follow directly, while sticky pinning remains reserved for a new
+turn that appears in the currently mounted session.
 
 ## 4. Collapse Intent
 
@@ -197,6 +250,12 @@ shrinks. `VirtualMessageList` uses that event to:
 - apply provisional compensation immediately
 
 This pre-compensation is what avoids the flash.
+
+Runtime status is transient session UI state, not a `FlowItem`. The always-mounted
+`RuntimeStatusSlot` occupies the first 24px of the existing Footer spacer and
+switches only `visibility`; showing, hiding, and clearing it never change list
+height or enter collapse reconciliation. Subagent projections use the same
+fixed-height slot inside their local scroll surface.
 
 If the list waits until `ResizeObserver` sees the shrink, the browser may already have clamped `scrollTop`.
 
@@ -248,14 +307,23 @@ unless animation is explicitly disabled.
 During those transitions, the DOM may report intermediate sizes for multiple frames.
 
 The collapse intent carries a hard TTL (`expiresAtMs`, currently 1000 ms), but
-its settlement is autonomous rather than scroll-driven. Automatic collapses are
+that TTL only bounds collapse measurement and reservation settlement; it does
+not expire the semantic element anchor. Automatic collapses are
 finalized after `FLOWCHAT_COLLAPSE_DURATION_MS` plus a short settle-frame window;
 manual or otherwise unsignaled intents use the TTL timer. The scroll handler keeps only a throttled-background
 timer fallback for browsers that delay timers. While the intent is alive, the
 grow branch of `measureHeightChange` protects the collapse reservation, but it
 may still consume measured content growth from the sticky pin reservation.
-Once the intent settles, residual collapse space is transferred to the settled
-sticky pin in one state/DOM update and any deferred follow is replayed.
+Once the intent settles, residual collapse space enters retained-provisional
+settlement even when the sticky pinned item still owns the viewport. This is
+required for first-turn `scrollTop === 0`: provisional full-card estimates must
+not accumulate merely to fill an otherwise short viewport.
+If a collapsing header owns the viewport, the footer is instead reduced
+atomically to the minimum range that can retain the current `scrollTop`, then
+that settled range is promoted to a protected collapse floor before the
+semantic anchor is restored. This prevents a clear-and-reacquire frame without
+retaining the full provisional estimate; later content growth can still drain
+the protected range. Any deferred follow is then replayed.
 
 ## C. Follow-Output Mode (continuous tail)
 
@@ -268,14 +336,21 @@ Collapses interact with follow mode in three mutually exclusive ways:
 1. **Known collapse while follow + streaming is active:** the intent applies
    synchronous Footer pre-compensation before the card shrinks. The active
    intent allows shrink reconciliation even though tail follow is running.
-   When the short protection window ends, the collapse reservation remains
-   consumable by real streaming growth instead of being removed immediately;
-   stream end performs the final exact reconciliation. This keeps the card
-   header stable without giving up tail-follow ownership.
-   If React/Virtuoso has already clamped `scrollTop` before a data-driven auto
-   intent reaches the list's layout handler, the handler extends the collapse
-   reservation as needed and restores the last stable follow position before
-   paint. Manual collapses and non-follow viewports do not use this fallback.
+   When the CSS window ends, the transaction becomes a retained-provisional
+   collapse anchor instead of shrinking the Footer from a signed net-height
+   estimate. Virtuoso
+   can publish the matching item measurement after the CSS transition and after
+   stream end; reducing synthetic range before that measurement clamps the
+   viewport by exactly the removed pixels.
+   The retained transaction records the latest safe follow position. After a
+   negative-layout quiet window, it replaces both the provisional `px` and stale
+   `floorPx` with the minimum geometrically required Footer range. If a later
+   measurement clamps below that position, the scroll handler synchronously
+   extends the range and restores it before paint. Real content growth and
+   downward follow movement consume the range one-for-one. User intent, a new
+   pin, session reset, or a final quiet grace releases the retained anchor.
+   Stream end restarts the same settlement path;
+   it does not preserve the provisional full-card estimate indefinitely.
 2. **Unsignaled shrink while follow + streaming is active:** there is no
    semantic collapse transaction to preserve, so the RAF loop re-pins to the
    new bottom on the next frame.
@@ -323,8 +398,10 @@ Current producer:
 - `ExploreGroupRenderer.tsx`
 
 Most tool cards now emit these events through `useToolCardHeightContract`.
-Components that need more accurate collapse estimation can pass a custom
-`getCardHeight` function to the helper.
+The helper measures the visible `cardRootRef` and retains recent visible
+measurements so state-driven collapses still report the pre-collapse height.
+Never substitute an inner scroll container's `scrollHeight`; hidden overflow is
+not layout height removed from the FlowChat list.
 
 If a future collapsible component shows the same "header drops" or "flash on collapse" symptom, it should likely emit `flowchat:tool-card-collapse-intent` before collapsing.
 
@@ -341,8 +418,22 @@ If a future collapsible component shows the same "header drops" or "flash on col
 - Sticky pin floors must shrink from measured content growth, not a transient
   target-element position.
 - A user gesture that exits pinned mode must release the semantic anchor and
-  clear or atomically transfer the pin reservation in the same operation; an
-  idle coordinator must never retain a live pin reservation.
+  atomically transfer the pin reservation to a protected collapse range in the
+  same operation; an idle coordinator must never retain a live pin reservation.
+- Stream end or cancellation must perform that same protected-range transfer
+  before releasing `pinned-item`, even when the pinned DOM target is unavailable.
+- Scroll-handler anchor corrections must be coalesced through the coordinator's
+  animation-frame restore queue; they must not write `scrollTop` synchronously.
+- A retained collapse transaction may synchronously restore only a non-user
+  downward clamp. It is transaction-scoped, advances with downward tail follow,
+  and must release on user intent; it is not a general `scrollTop` lock.
+- Following-tail collapse finalization must never reduce Footer range directly
+  from a signed net-height estimate. It may reduce the retained estimate only
+  after the negative-layout quiet window, using current DOM geometry while the
+  anchor remains protected through the final grace.
+- Unsignaled shrink reconciliation must not reduce a protected collapse floor;
+  only measured growth, downward navigation, bottom arrival, or an explicit
+  reservation reset may consume it.
 - Pre-collapse intent must capture the anchor before the component shrinks.
 - Compensation must not be consumed too early during active layout transitions.
 - Session changes and empty-list resets must clear compensation and anchor state.
@@ -381,6 +472,25 @@ If a future collapsible component shows the same "header drops" or "flash on col
   windows.
 
 ## If You Need To Change This Logic
+
+### Opt-in viewport diagnostics
+
+Enable `app.logging.flow_chat_diagnostics` from the logging settings only while
+reproducing a viewport stability issue. The frontend records bounded JSONL
+batches to `flowchat.log` in the current session log directory. When disabled,
+probe payloads are not evaluated and no timer, IPC request, or file is created.
+
+The diagnostic schema groups events by hypothesis:
+
+- `A`: user scroll intent, pin release, reservation transfer, and tail handoff
+- `B`: semantic anchor capture, correction, release, or unexpected reacquisition
+- `C`: content measurement, Footer compensation, and physical range changes
+- `D`: Virtuoso scroll compensation and tail-follow ownership
+- `E`: streaming tool-card collapse intent and anchor preservation
+
+Do not add message content, tool arguments, file contents, or other sensitive
+payloads to this channel. Keep all data producers lazy and guard hot-path probes
+with `flowChatDiagnostics.isEnabled()` before allocating probe objects.
 
 Use this checklist:
 

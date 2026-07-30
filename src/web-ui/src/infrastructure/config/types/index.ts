@@ -108,6 +108,7 @@ export interface ModelExchangeTracingConfig {
 export interface AppLoggingConfig {
   level: BackendLogLevel;
   include_sensitive_diagnostics: boolean;
+  flow_chat_diagnostics: boolean;
   model_exchange_tracing: ModelExchangeTracingConfig;
 }
 
@@ -353,6 +354,10 @@ export interface SkillInfo {
   isShadowed?: boolean;
   /** Key of the skill that shadows this one (if any). */
   shadowedByKey?: string | null;
+  /** False when the skill should stay out of user-facing invocation pickers. */
+  allowUserInvocation?: boolean;
+  /** Optional usage hint displayed by invocation pickers. */
+  argumentHint?: string | null;
 }
 
 export interface ModeSkillInfo extends SkillInfo {
@@ -692,6 +697,7 @@ export interface RuntimeLoggingInfo {
   aiLogPath: string;
   flashgrepLogPath: string;
   webviewLogPath: string;
+  flowChatLogPath: string;
   previousUnexpectedExit?: UnexpectedExitInfo | null;
 }
 

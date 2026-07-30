@@ -13,7 +13,11 @@
   -webkit-backdrop-filter: $blur-base;
   box-shadow: none;
   overflow: hidden;
-  transition: all $motion-base $easing-standard;
+  transition:
+    transform $motion-fast $easing-standard,
+    background-color $motion-fast $easing-standard,
+    border-color $motion-fast $easing-standard,
+    opacity $motion-fast $easing-standard;
   font-family: $font-family-sans;
   position: relative;
 
@@ -61,7 +65,11 @@
   border-radius: 0;
   color: var(--color-text-secondary);
   cursor: pointer;
-  transition: all $motion-fast $easing-standard;
+  transition:
+    transform $motion-fast $easing-standard,
+    background-color $motion-fast $easing-standard,
+    border-color $motion-fast $easing-standard,
+    color $motion-fast $easing-standard;
 
   &:hover {
     background: var(--element-bg-base);

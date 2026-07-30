@@ -5,11 +5,11 @@
   justify-content: flex-start;
   gap: 6px;
   margin: 0 0 var(--flowchat-card-gap);
-  padding: 7px var(--tool-card-expanded-pad-x);
-  border: 1px solid var(--color-warning);
-  border-radius: var(--flowchat-card-radius);
-  background: color-mix(in srgb, var(--color-warning) 7%, var(--color-bg-scene));
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-warning) 12%, transparent);
+  padding: 8px var(--tool-card-expanded-pad-x);
+  border: 1px solid color-mix(in srgb, var(--color-warning) 42%, var(--border-base));
+  border-radius: calc(var(--flowchat-card-radius) + 1px);
+  background: color-mix(in srgb, var(--color-warning) 6%, var(--color-bg-scene));
+  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--color-warning) 72%, transparent);
   box-sizing: border-box;
 }
 
@@ -83,13 +83,13 @@
   min-width: 0;
   height: 28px;
   padding: 0 8px;
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--border-base);
   border-radius: 6px;
   background: var(--color-bg-primary);
   color: var(--color-text-primary);
   font-size: var(--flowchat-font-size-sm);
   outline: none;
-  box-shadow: none;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-warning) 12%, transparent);
 }
 
 .tool-approval-bar__instruction-submit {
@@ -102,10 +102,24 @@
   color: var(--color-error);
   font-size: var(--flowchat-font-size-sm);
   cursor: pointer;
+  transition: transform 120ms cubic-bezier(0.23, 1, 0.32, 1);
 }
 
 .tool-approval-bar__instruction-submit:hover {
   background: color-mix(in srgb, var(--color-error) 16%, transparent);
+}
+
+.tool-approval-bar__instruction-submit:active:not(:disabled),
+.tool-approval-bar__icon-button:active:not(:disabled),
+.tool-approval-bar__auto-execute-button:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.tool-approval-bar__instruction-submit:focus-visible,
+.tool-approval-bar__icon-button:focus-visible,
+.tool-approval-bar__auto-execute-button:focus-visible {
+  outline: 2px solid var(--border-accent);
+  outline-offset: 1px;
 }
 
 @media (max-width: 640px) {
@@ -118,5 +132,13 @@
   .tool-approval-bar__actions,
   .tool-approval-bar__permission-actions {
     justify-content: flex-start;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tool-approval-bar__instruction-submit,
+  .tool-approval-bar__icon-button,
+  .tool-approval-bar__auto-execute-button {
+    transition-duration: 0ms;
   }
 }

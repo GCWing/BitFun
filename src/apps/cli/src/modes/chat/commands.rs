@@ -2,6 +2,16 @@ fn mode_change_blocks_typed_submission(pending_for_current_session: bool, input:
     pending_for_current_session && !input.trim().starts_with('/')
 }
 
+fn pending_mode_change_blocks_runtime_action(
+    shared_tui: bool,
+    pending_for_current_session: bool,
+    handler: ActionHandler,
+) -> bool {
+    shared_tui
+        && pending_for_current_session
+        && matches!(handler, ActionHandler::Sessions | ActionHandler::Init)
+}
+
 fn native_command_choice_is_active(
     resolved: Option<&ExternalCommandProjection>,
     unresolved: &[ExternalCommandProjection],
@@ -632,6 +642,21 @@ impl ChatMode {
     ) -> Result<Option<ChatExitReason>> {
         if !action.available(state) {
             chat_view.set_status(Some(action.unavailable_message(state)));
+            return Ok(None);
+        }
+        let pending_for_current_session = self
+            .pending_mode_change
+            .as_ref()
+            .is_some_and(|pending| pending.session_id == chat_state.core_session_id);
+        if pending_mode_change_blocks_runtime_action(
+            self.agent.is_shared(),
+            pending_for_current_session,
+            action.handler,
+        ) {
+            chat_view.set_status(Some(format!(
+                "Waiting for the agent mode change to finish before using {}.",
+                action.name
+            )));
             return Ok(None);
         }
         match action.handler {

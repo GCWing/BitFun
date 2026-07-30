@@ -24,10 +24,12 @@ function Harness({
   scroller,
   onController,
   performAutoFollowScroll,
+  performLatestTurnStickyPin = vi.fn(),
 }: {
   scroller: HTMLElement;
   onController: (controller: FollowOutputController) => void;
   performAutoFollowScroll: () => void;
+  performLatestTurnStickyPin?: () => void;
 }) {
   const scrollerRef = React.useRef<HTMLElement | null>(scroller);
   scrollerRef.current = scroller;
@@ -40,7 +42,7 @@ function Harness({
     scrollerRef,
     performUserFollowScroll: vi.fn(),
     performAutoFollowScroll,
-    performLatestTurnStickyPin: vi.fn(),
+    performLatestTurnStickyPin,
   });
 
   onController(controller);
@@ -190,5 +192,41 @@ describe('useFlowChatFollowOutput', () => {
 
     expect(activated).toBe(false);
     expect(controller?.isFollowingOutput).toBe(false);
+  });
+
+  it('resumes a mounted streaming session at the tail without replaying sticky pin', () => {
+    const scroller = document.createElement('div');
+    setScrollerMetrics(scroller, {
+      scrollHeight: 1500,
+      clientHeight: 500,
+      scrollTop: 0,
+    });
+    const performAutoFollowScroll = vi.fn(() => {
+      scroller.scrollTop = 1000;
+    });
+    const performLatestTurnStickyPin = vi.fn();
+
+    act(() => {
+      root.render(
+        <Harness
+          scroller={scroller}
+          onController={nextController => {
+            controller = nextController;
+          }}
+          performAutoFollowScroll={performAutoFollowScroll}
+          performLatestTurnStickyPin={performLatestTurnStickyPin}
+        />,
+      );
+    });
+
+    let resumed = false;
+    act(() => {
+      resumed = controller?.resumeFollowOutputForMountedStream() ?? false;
+    });
+
+    expect(resumed).toBe(true);
+    expect(controller?.isFollowingOutput).toBe(true);
+    expect(performAutoFollowScroll).toHaveBeenCalledTimes(1);
+    expect(performLatestTurnStickyPin).not.toHaveBeenCalled();
   });
 });

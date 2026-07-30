@@ -114,7 +114,7 @@ pub(crate) enum ActionHandler {
 pub(crate) const SHARED_TUI_EMBEDDED_HANDOFF: &str =
     "Exit all Shared TUI clients, wait up to 30 seconds for their Runtime to stop, then use default Embedded `bitfun chat`";
 pub(crate) const SHARED_TUI_HELP_NOTE: &str =
-    "Shared TUI: start with `bitfun chat --shared`. Multiple TUI processes reuse one workspace Runtime, while each TUI controls at most one Session and each Session has one controller. Session/turn interaction is available; model, agent, MCP, extension, account-sync, usage, and other management remain Embedded. Exit all Shared TUI clients and wait up to 30 seconds before returning to default Embedded `bitfun chat`.";
+    "Shared TUI: start with `bitfun chat --shared`. Multiple TUI processes reuse one workspace Runtime, while each TUI controls at most one Session and each Session has one controller. Agent mode switching is available with `/agent`, Tab, and Shift+Tab. Model selection, Agent/Subagent management, MCP, extension, account-sync, usage, and other management remain Embedded. Exit all Shared TUI clients and wait up to 30 seconds before returning to default Embedded `bitfun chat`.";
 
 impl ActionHandler {
     pub(crate) const fn available_in_shared_tui_preview(self) -> bool {
@@ -129,6 +129,9 @@ impl ActionHandler {
                 | Self::Init
                 | Self::History
                 | Self::ToggleAutoApprove
+                | Self::OpenAgentSelector
+                | Self::SwitchAgent
+                | Self::SwitchAgentReverse
                 | Self::Exit
                 | Self::OpenPalette
                 | Self::SubmitInput
@@ -899,6 +902,14 @@ impl ActionSpec {
         }
     }
 
+    fn description(&self, state: ActionState) -> &'static str {
+        if state.shared_tui && self.handler == ActionHandler::OpenAgentSelector {
+            "Choose an Agent mode"
+        } else {
+            self.description
+        }
+    }
+
     pub(crate) fn unavailable_message(&self, state: ActionState) -> String {
         if state.shared_tui && !self.handler.available_in_shared_tui_preview() {
             return format!(
@@ -992,7 +1003,7 @@ pub(crate) fn slash_actions(state: ActionState) -> Vec<ActionProjection> {
             spec.aliases.iter().map(|alias| ActionProjection {
                 id: spec.id,
                 name: alias,
-                description: spec.description,
+                description: spec.description(state),
                 palette_group: None,
                 suggested: false,
             })
@@ -1008,7 +1019,7 @@ pub(crate) fn palette_actions(state: ActionState) -> Vec<ActionProjection> {
             spec.available(state).then_some(ActionProjection {
                 id: spec.id,
                 name: spec.name,
-                description: spec.description,
+                description: spec.description(state),
                 palette_group: Some(palette.group),
                 suggested: palette.suggested,
             })
@@ -1770,12 +1781,18 @@ mod tests {
     use super::*;
 
     #[test]
-    fn shared_tui_preview_keeps_management_outside_the_first_slice() {
+    fn shared_tui_supports_mode_switching_without_embedded_management() {
         assert!(ActionHandler::Sessions.available_in_shared_tui_preview());
         assert!(ActionHandler::Interrupt.available_in_shared_tui_preview());
         for action in [
-            ActionHandler::SelectModel,
             ActionHandler::OpenAgentSelector,
+            ActionHandler::SwitchAgent,
+            ActionHandler::SwitchAgentReverse,
+        ] {
+            assert!(action.available_in_shared_tui_preview(), "{action:?}");
+        }
+        for action in [
+            ActionHandler::SelectModel,
             ActionHandler::McpServers,
             ActionHandler::Tools,
             ActionHandler::Extensions,
@@ -1788,6 +1805,8 @@ mod tests {
         }
         assert!(SHARED_TUI_HELP_NOTE.contains("bitfun chat --shared"));
         assert!(SHARED_TUI_HELP_NOTE.contains("one Session"));
+        assert!(SHARED_TUI_HELP_NOTE.contains("`/agent`, Tab, and Shift+Tab"));
+        assert!(SHARED_TUI_HELP_NOTE.contains("Agent/Subagent management"));
         assert!(SHARED_TUI_HELP_NOTE.contains("remain Embedded"));
     }
 
@@ -1804,7 +1823,6 @@ mod tests {
             .collect::<Vec<_>>();
 
         for unavailable in [
-            "switch_agent",
             "select_model",
             "skills",
             "mcp_servers",
@@ -1818,9 +1836,11 @@ mod tests {
         for available in ["new_session", "sessions", "theme", "help", "exit"] {
             assert!(palette_ids.contains(&available), "{available}");
         }
+        assert!(slash_ids.contains(&"switch_agent"));
+        assert!(palette_ids.contains(&"switch_agent"));
 
         let help = ResolvedKeymap::new(&ShortcutsConfig::default()).help_text(state);
-        assert!(!help.contains("Switch Agent"));
+        assert!(help.contains("Switch Agent"));
     }
 
     fn resolve_id(
@@ -1876,9 +1896,17 @@ mod tests {
             resolve_id(
                 &keymap,
                 KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE),
-                ActionState::chat(false, false),
+                ActionState::chat(false, false).for_shared_tui(),
             ),
             Some("cycle_agent")
+        );
+        assert_eq!(
+            resolve_id(
+                &keymap,
+                KeyEvent::new(KeyCode::BackTab, KeyModifiers::SHIFT),
+                ActionState::chat(false, false).for_shared_tui(),
+            ),
+            Some("switch_agent_reverse")
         );
     }
 
@@ -1926,6 +1954,25 @@ mod tests {
                 .unwrap()
                 .contains("Start a session")
         );
+    }
+
+    #[test]
+    fn agent_action_description_matches_each_tui_shape() {
+        let embedded = ActionState::chat(false, false);
+        let shared = embedded.for_shared_tui();
+
+        for (projections, expected) in [
+            (slash_actions(embedded), "Switch modes and manage agents"),
+            (palette_actions(embedded), "Switch modes and manage agents"),
+            (slash_actions(shared), "Choose an Agent mode"),
+            (palette_actions(shared), "Choose an Agent mode"),
+        ] {
+            let agent = projections
+                .iter()
+                .find(|action| action.id == "switch_agent")
+                .expect("Agent action projection");
+            assert_eq!(agent.description, expected);
+        }
     }
 
     #[test]

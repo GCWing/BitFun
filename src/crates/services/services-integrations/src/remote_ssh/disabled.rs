@@ -17,6 +17,129 @@ fn unsupported() -> anyhow::Error {
     anyhow::anyhow!("Remote SSH support is disabled; enable the `ssh-remote` feature")
 }
 
+/// Disabled mirror of the concrete SSH dispatch transport.
+///
+/// Keeping the DTOs and function signatures available lets lightweight builds
+/// compile shared command adapters while every runtime operation still fails
+/// explicitly.
+pub mod dispatch_ssh {
+    use super::{unsupported, SSHConnectionManager};
+    use serde::{Deserialize, Serialize};
+    use serde_json::Value;
+
+    #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    pub struct DispatchCliRelease {
+        pub version: String,
+        pub target: String,
+        pub url: String,
+        pub sha256: String,
+    }
+
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    pub struct DispatchSshProbe {
+        pub cli_installed: bool,
+        pub cli_path: Option<String>,
+        pub os: String,
+        pub arch: String,
+        pub install_supported: bool,
+        pub install_error: Option<String>,
+        pub protocol_error: Option<String>,
+        pub release: Option<DispatchCliRelease>,
+        pub protocol: Option<Value>,
+    }
+
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    pub struct DispatchInstallStart {
+        pub script_path: String,
+        pub version: String,
+        pub target: String,
+        pub url: String,
+        pub sha256: String,
+    }
+
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+    #[serde(rename_all = "snake_case")]
+    pub enum DispatchInstallStatus {
+        Running,
+        Succeeded,
+        Failed,
+    }
+
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    pub struct DispatchInstallPoll {
+        pub cursor: u64,
+        pub output: String,
+        pub status: DispatchInstallStatus,
+    }
+
+    pub async fn probe(
+        _manager: &SSHConnectionManager,
+        _connection_id: &str,
+        _workspace_path: Option<&str>,
+    ) -> anyhow::Result<DispatchSshProbe> {
+        Err(unsupported())
+    }
+
+    pub async fn install_cli_start(
+        _manager: &SSHConnectionManager,
+        _connection_id: &str,
+        _expected_release: &DispatchCliRelease,
+    ) -> anyhow::Result<DispatchInstallStart> {
+        Err(unsupported())
+    }
+
+    pub async fn install_cli_poll(
+        _manager: &SSHConnectionManager,
+        _connection_id: &str,
+        _cursor: u64,
+    ) -> anyhow::Result<DispatchInstallPoll> {
+        Err(unsupported())
+    }
+
+    pub async fn install_cli_cancel(
+        _manager: &SSHConnectionManager,
+        _connection_id: &str,
+    ) -> anyhow::Result<()> {
+        Err(unsupported())
+    }
+
+    pub async fn submit(
+        _manager: &SSHConnectionManager,
+        _connection_id: &str,
+        _request: &Value,
+    ) -> anyhow::Result<Value> {
+        Err(unsupported())
+    }
+
+    pub async fn status(
+        _manager: &SSHConnectionManager,
+        _connection_id: &str,
+        _request: &Value,
+    ) -> anyhow::Result<Value> {
+        Err(unsupported())
+    }
+
+    pub async fn cancel(
+        _manager: &SSHConnectionManager,
+        _connection_id: &str,
+        _request: &Value,
+    ) -> anyhow::Result<Value> {
+        Err(unsupported())
+    }
+
+    pub async fn list(
+        _manager: &SSHConnectionManager,
+        _connection_id: &str,
+        _request: &Value,
+    ) -> anyhow::Result<Value> {
+        Err(unsupported())
+    }
+}
+
 static GLOBAL_REMOTE_EXEC_MANAGER: OnceLock<Arc<RemoteExecProcessManager>> = OnceLock::new();
 
 pub fn get_global_remote_exec_process_manager() -> Arc<RemoteExecProcessManager> {
@@ -381,6 +504,16 @@ impl SSHConnectionManager {
         _path: &str,
         _content: &[u8],
     ) -> anyhow::Result<()> {
+        Err(unsupported())
+    }
+
+    pub async fn sftp_write_from_file(
+        &self,
+        _connection_id: &str,
+        _path: &str,
+        _local_path: &std::path::Path,
+        _max_bytes: u64,
+    ) -> anyhow::Result<u64> {
         Err(unsupported())
     }
 

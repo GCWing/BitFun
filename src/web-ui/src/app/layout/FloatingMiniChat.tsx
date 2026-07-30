@@ -44,7 +44,7 @@ type PanelPhase = 'closed' | 'opening' | 'open';
 
 /** Fallback for a transitionend that never arrives (reduced motion, interrupted
  *  transition). Must stay >= $fmc-open-duration in FloatingMiniChat.scss. */
-const PANEL_OPEN_SETTLE_MS = 600;
+const PANEL_OPEN_SETTLE_MS = 280;
 
 export const FloatingMiniChat: React.FC = () => {
   const { t, i18n } = useTranslation('flow-chat');

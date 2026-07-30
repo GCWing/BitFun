@@ -2608,7 +2608,7 @@ pub async fn account_connect_devices() -> Result<Vec<OnlineDeviceInfo>, String> 
                                     session_id,
                                     content,
                                     agent_type,
-                                    workspace_path: _,
+                                    workspace_path,
                                 }) => {
                                     let Some(_routing_effect) =
                                         lock_current_device_routing(&event_owner).await
@@ -2630,7 +2630,17 @@ pub async fn account_connect_devices() -> Result<Vec<OnlineDeviceInfo>, String> 
                                         let policy = DialogSubmissionPolicy::for_source(
                                             DialogTriggerSource::RemoteRelay,
                                         );
-                                        let wp = resolve_local_workspace_path();
+                                        let wp = match resolve_requested_local_workspace_path(
+                                            workspace_path.as_deref(),
+                                        ) {
+                                            Ok(path) => path,
+                                            Err(error) => {
+                                                log::warn!(
+                                                    "ExecuteOnDevice rejected invalid workspace: {error}"
+                                                );
+                                                continue;
+                                            }
+                                        };
                                         let agent =
                                             agent_type.unwrap_or_else(|| "agentic".to_string());
                                         if let Err(e) = scheduler
@@ -4206,20 +4216,28 @@ async fn export_and_upload_session(
     Ok(Some(hash))
 }
 
-/// Resolve the local workspace path for task execution. Returns the first
-/// project directory found under ~/.bitfun/projects/, or "/" as fallback.
-fn resolve_local_workspace_path() -> String {
-    let home = dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from("/"));
-    let projects = home.join(".bitfun").join("projects");
-    if let Ok(entries) = std::fs::read_dir(&projects) {
-        for entry in entries.flatten() {
-            if entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
-                // Return the workspace slug dir path as a string
-                return entry.path().to_string_lossy().to_string();
-            }
-        }
+/// The legacy one-way execution command is path-addressed. It must never
+/// silently choose an unrelated local project when the sender omitted or
+/// mistyped the target path.
+fn resolve_requested_local_workspace_path(workspace_path: Option<&str>) -> Result<String, String> {
+    let requested = workspace_path
+        .map(str::trim)
+        .filter(|path| !path.is_empty())
+        .ok_or_else(|| "workspace_path is required".to_string())?;
+    let path = std::path::PathBuf::from(requested);
+    if !path.is_absolute() {
+        return Err("workspace_path must be absolute".to_string());
     }
-    "/".to_string()
+    let canonical = path
+        .canonicalize()
+        .map_err(|error| format!("resolve workspace_path: {error}"))?;
+    if !canonical.is_dir() {
+        return Err("workspace_path is not a directory".to_string());
+    }
+    canonical
+        .to_str()
+        .map(ToOwned::to_owned)
+        .ok_or_else(|| "workspace_path is not valid UTF-8".to_string())
 }
 
 /// Execute a RemoteCommand locally (for RPC requests from other devices).
@@ -4231,6 +4249,19 @@ async fn execute_local_remote_command(
 
     match cmd {
         RemoteCommand::HostInvoke { command, args } => {
+            // Detached jobs are independent of Peer controller attachment.
+            // Route their distinct target command family directly to the
+            // durable dispatch runner before the generic webview bridge.
+            if crate::api::dispatch_host::is_target_command(command) {
+                let result = crate::api::dispatch_host::dispatch(command, args.clone()).await;
+                let (ok, value, error) = match result {
+                    Ok(value) => (true, Some(value), None),
+                    Err(error) => (false, None, Some(format!("{error:#}"))),
+                };
+                return serde_json::to_value(RemoteResponse::HostInvokeResult { ok, value, error })
+                    .map_err(|e| anyhow::anyhow!("serialize response: {e}"));
+            }
+
             // Control-plane peer attach/detach/ping can run without webview bridge.
             if command == "peer_control_attach" {
                 let controller_id = args

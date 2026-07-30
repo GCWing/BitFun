@@ -15,7 +15,7 @@
   height: 72px;
 
   opacity: 0;
-  transition: opacity 0.25s ease;
+  transition: opacity 140ms ease;
 
   // ========== Visible state ==========
   &--visible {
@@ -48,7 +48,7 @@
     align-items: center;
     justify-content: center;
 
-    transition: transform 0.15s ease;
+    transition: transform 140ms cubic-bezier(0.23, 1, 0.32, 1);
   }
 
   // ========== Circle arrow button ==========
@@ -56,16 +56,19 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 28px;
-    height: 28px;
+    width: 30px;
+    height: 30px;
     border-radius: 50%;
-    border: 1.5px solid var(--border-base);
-    background: var(--color-bg-scene);
-    color: var(--color-text-muted);
+    border: 1px solid var(--border-medium);
+    background: color-mix(in srgb, var(--color-bg-elevated) 92%, transparent);
+    color: var(--color-text-secondary);
+    box-shadow: 0 6px 16px var(--color-overlay-black-15);
     cursor: pointer;
     padding: 0;
 
-    transition: border-color 0.2s ease, color 0.2s ease, transform 0.15s ease;
+    transition:
+      transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
+      opacity 120ms ease;
 
     &:hover {
       border-color: var(--border-medium);
@@ -74,14 +77,23 @@
     }
 
     &:active {
-      transform: translateY(-2px);
+      transform: scale(0.97);
     }
 
     &:focus-visible {
-      outline: none;
-      border-color: var(--border-strong);
+      outline: 2px solid var(--border-accent);
+      outline-offset: 2px;
+      border-color: var(--border-medium);
       color: var(--color-text-primary);
     }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scroll-to-turn-header-trigger,
+  .scroll-to-turn-header-trigger__content,
+  .scroll-to-turn-header-trigger__btn {
+    transition-duration: 0ms;
   }
 }
 

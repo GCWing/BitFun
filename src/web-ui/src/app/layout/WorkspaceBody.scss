@@ -1,134 +1,113 @@
 /**
- * WorkspaceBody styles.
- *
- * Root:       flex-row
- *   .nav-area   (240px, flex-column) ← NavBar + NavPanel
- *   .scene-area (flex:1, flex-column) ← SceneBar + SceneViewport
+ * WorkspaceBody is the desktop workbench: quiet chrome on the left, the
+ * elevated scene surface on the right. Panel visibility is intentionally
+ * immediate because it is commonly toggled from the keyboard.
  */
 
 @use '../../component-library/styles/tokens.scss' as *;
 
 $_nav-width: 240px;
-$_nav-collapsed-width: 80px;
-
-// ── Root: left-right split ───────────────────────────────
+$_nav-collapsed-width: 76px;
+$_workbench-gap: 6px;
 
 .bitfun-workspace-body {
   --nav-width: #{$_nav-width};
 
-  display: flex;
-  flex-direction: row;
-  flex: 1;
-  height: 100%;
-  max-height: 100%;
-  overflow: hidden;
   position: relative;
   isolation: isolate;
+  display: flex;
+  flex: 1;
+  flex-direction: row;
+  gap: $_workbench-gap;
+  width: 100%;
+  height: 100%;
+  max-height: 100%;
+  padding: 0 $_workbench-gap $_workbench-gap;
+  overflow: hidden;
   background: var(--color-bg-primary);
   color: var(--color-text-primary);
-  padding: 0 $size-gap-2 $size-gap-2 $size-gap-2;
-  gap: $size-gap-2;
 }
 
-// ── Left column: NavBar on top, NavPanel below ───────────
-
 .bitfun-workspace-body__nav-area {
-  display: flex;
-  flex-direction: column;
-  width: var(--nav-width);
-  flex-shrink: 0;
-  height: 100%;
-  overflow: visible;
   position: relative;
   z-index: 3;
-  transition: width $motion-base $easing-standard;
+  display: flex;
+  flex: 0 0 var(--nav-width);
+  flex-direction: column;
+  width: var(--nav-width);
+  min-width: 0;
+  height: 100%;
+  overflow: visible;
 
   &.is-collapsed {
+    flex-basis: 0;
     width: 0;
     overflow: hidden;
     pointer-events: none;
   }
 }
 
-.bitfun-is-resizing-nav .bitfun-workspace-body__nav-area {
-  transition: none;
-}
-
-.bitfun-workspace-body.is-entering .bitfun-workspace-body__nav-area:not(.is-collapsed) {
-  animation: wb-nav-slide-in 560ms cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-
-.bitfun-workspace-body.is-exiting .bitfun-workspace-body__nav-area:not(.is-collapsed) {
-  animation: wb-nav-slide-out 520ms cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-
 .bitfun-workspace-body__collapsed-nav {
   position: absolute;
   top: 0;
-  left: $size-gap-2;
+  left: $_workbench-gap;
   z-index: $z-dropdown;
   width: $_nav-collapsed-width;
-  height: 40px;
+  height: 38px;
 }
-
-// ── Nav divider ────────────────────────────────────────
 
 .bitfun-workspace-body__nav-divider {
   position: absolute;
   top: 0;
-  left: calc(#{$size-gap-2} + var(--nav-width));
-  width: 8px;
-  height: 100%;
-  cursor: ew-resize;
+  bottom: $_workbench-gap;
+  left: calc(#{$_workbench-gap} + var(--nav-width));
   z-index: 10;
+  width: $_workbench-gap;
+  cursor: ew-resize;
   background: transparent;
 
   &::after {
     content: '';
     position: absolute;
-    top: 0;
-    bottom: 0;
-    left: 50%;
+    inset: 38px auto 0 50%;
     width: 1px;
     border-radius: $size-radius-full;
-    background: var(--color-accent-500);
+    background: var(--border-subtle);
     opacity: 0;
     transform: translateX(-50%);
-    transition: opacity $motion-fast $easing-standard;
+    transition: opacity 120ms cubic-bezier(0.23, 1, 0.32, 1);
     pointer-events: none;
   }
+}
 
-  &:hover::after {
-    opacity: 0.55;
+@media (hover: hover) and (pointer: fine) {
+  .bitfun-workspace-body__nav-divider:hover::after {
+    opacity: 1;
+    background: color-mix(in srgb, var(--color-accent-500) 58%, var(--border-subtle));
   }
 }
 
-// Active resizing state — keep line visible while dragging
 .bitfun-is-resizing-nav .bitfun-workspace-body__nav-divider::after {
+  width: 2px;
   opacity: 1;
-  width: 3px;
   background: var(--color-accent-500);
-  box-shadow: 0 0 10px color-mix(in srgb, var(--color-accent-500) 50%, transparent);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--color-accent-500) 36%, transparent);
 }
 
-// ── Right column: rounded scene card (SceneBar + SceneViewport) ───
-
 .bitfun-workspace-body__scene-area {
+  position: relative;
+  z-index: 1;
   display: flex;
-  flex-direction: column;
   flex: 1;
+  flex-direction: column;
+  gap: 0;
   min-width: 0;
   height: 100%;
   overflow: hidden;
-  position: relative;
-  z-index: 1;
   background: transparent;
-  gap: 0;
-  transition: opacity $motion-fast $easing-standard;
 }
 
-// When nav is collapsed, the floating collapsed-nav (80px wide) overlays
-// the top-left area. Offset SceneBar content to avoid visual clipping/occlusion.
+// The compact toolbar remains reachable when the navigation panel is hidden.
 .bitfun-workspace-body__nav-area.is-collapsed + .bitfun-workspace-body__scene-area {
   .bitfun-scene-bar {
     padding-left: calc(#{$_nav-collapsed-width} + #{$size-gap-1});
@@ -136,7 +115,7 @@ $_nav-collapsed-width: 80px;
 }
 
 .bitfun-app-layout--macos .bitfun-workspace-body__collapsed-nav {
-  left: calc(#{$size-gap-2} + 72px);
+  left: calc(#{$_workbench-gap} + 72px);
 }
 
 .bitfun-app-layout--macos .bitfun-workspace-body__nav-area.is-collapsed + .bitfun-workspace-body__scene-area {
@@ -145,8 +124,6 @@ $_nav-collapsed-width: 80px;
   }
 }
 
-// When the left nav is collapsed, the hidden nav area still mounts a NavBar.
-// Suppress its macOS fixed logo button to avoid duplicate icons.
 .bitfun-workspace-body__nav-area.is-collapsed .bitfun-nav-bar--macos .bitfun-nav-bar__logo-menu {
   display: none;
 }
@@ -160,24 +137,8 @@ $_nav-collapsed-width: 80px;
   cursor: ew-resize !important;
 }
 
-@keyframes wb-nav-slide-in {
-  from {
-    width: 0;
-    opacity: 0;
-  }
-  to {
-    width: var(--nav-width);
-    opacity: 1;
-  }
-}
-
-@keyframes wb-nav-slide-out {
-  from {
-    width: var(--nav-width);
-    opacity: 1;
-  }
-  to {
-    width: 0;
-    opacity: 0;
+@media (prefers-reduced-motion: reduce) {
+  .bitfun-workspace-body__nav-divider::after {
+    transition: none;
   }
 }

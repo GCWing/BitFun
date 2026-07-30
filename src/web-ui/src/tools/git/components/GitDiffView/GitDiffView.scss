@@ -63,7 +63,10 @@ $opacity-high: 0.8 !default;
     font-family: $font-family-sans;
     font-weight: $font-weight-medium;
     cursor: pointer;
-    transition: all $motion-base $easing-standard;
+    transition:
+      transform $motion-fast $easing-standard,
+      background-color $motion-fast $easing-standard,
+      color $motion-fast $easing-standard;
 
     &:hover {
       background: var(--element-bg-base);
@@ -112,7 +115,11 @@ $opacity-high: 0.8 !default;
     color: var(--color-text-secondary);
     font-size: var(--font-size-xs);
     cursor: pointer;
-    transition: all $motion-base $easing-standard;
+    transition:
+      transform $motion-fast $easing-standard,
+      background-color $motion-fast $easing-standard,
+      border-color $motion-fast $easing-standard,
+      color $motion-fast $easing-standard;
 
     &:hover {
       background: var(--element-bg-medium);
@@ -183,7 +190,9 @@ $opacity-high: 0.8 !default;
     background: var(--color-bg-primary);
     border-radius: $size-radius-base;
     overflow: hidden;
-    transition: all $motion-base $easing-standard;
+    transition:
+      background-color $motion-fast $easing-standard,
+      border-color $motion-fast $easing-standard;
   }
 
   &__file-header {
@@ -194,7 +203,7 @@ $opacity-high: 0.8 !default;
     background: var(--element-bg-subtle);
     cursor: pointer;
     user-select: none;
-    transition: all $motion-base $easing-standard;
+    transition: background-color $motion-fast $easing-standard;
 
     &:hover {
       background: var(--element-bg-base);
@@ -464,7 +473,10 @@ $opacity-high: 0.8 !default;
     font-size: var(--font-size-sm);
     line-height: 1.6;
     resize: vertical;
-    transition: all $motion-base $easing-standard;
+    transition:
+      background-color $motion-fast $easing-standard,
+      border-color $motion-fast $easing-standard,
+      box-shadow $motion-fast $easing-standard;
 
     &:focus {
       outline: none;

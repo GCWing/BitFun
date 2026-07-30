@@ -326,6 +326,17 @@ pub fn build_csp_content(permissions: &MiniAppPermissions) -> String {
     )
 }
 
+/// CSP for reviewed marketplace MiniApps.
+///
+/// Marketplace code is immutable after review and may only reach the network
+/// through the trusted `app.net.fetch` host bridge. Inline code is required
+/// because the compiler assembles the reviewed package into a single `srcdoc`
+/// document, but remote scripts, eval, frames, workers and direct connections
+/// are all denied.
+pub fn build_market_csp_content() -> &'static str {
+    "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'none'; img-src data: blob:; font-src data:; media-src 'none'; frame-src 'none'; child-src 'none'; worker-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none';"
+}
+
 /// Scroll boundary script (reuse same logic as MCP App).
 pub fn scroll_boundary_script() -> &'static str {
     r#"<script>(()=>{const s=(e)=>{for(let n=e.target;n;n=n.parentNode){if(!(n instanceof Element))continue;if(n===document.documentElement||n===document.body)continue;const o=window.getComputedStyle(n).overflowY;if(o==='hidden'||o==='visible')continue;if(e.deltaY<0&&n.scrollTop>0)return false;if(e.deltaY>0&&n.scrollTop+n.clientHeight<n.scrollHeight)return false;}return true};window.addEventListener('wheel',e=>{if(!e.defaultPrevented&&s(e))window.parent.postMessage({jsonrpc:'2.0',method:'bitfun/sandbox-wheel',params:{deltaX:e.deltaX,deltaY:e.deltaY,deltaZ:e.deltaZ,deltaMode:e.deltaMode}},'*')},{passive:true});})();</script>"#

@@ -8,15 +8,27 @@ import {
   VirtualMessageList,
   type VirtualMessageListRef,
 } from './VirtualMessageList';
+import { FlowChatViewportCoordinator } from './FlowChatViewportCoordinator';
 import {
+  clampPinReservationPxToViewport,
   consumeBottomReservationForContentGrowth,
+  ensureCollapseReservationForScrollTop,
   getCanceledUnsettledStickyPinGrowthPx,
+  isTurnPinRequestIdentityCurrent,
+  protectCurrentCollapseReservation,
+  reconcileUnsignaledShrinkReservation,
+  releasePinReservationForUserNavigation,
   resolveAutoCollapseAnchorScrollTop,
+  resolveProvisionalStickyPinReservationPx,
+  settleRetainedCollapseReservationForAnchor,
+  settleCollapseReservationForPreservedViewport,
   shouldBypassShrinkCompensationInTailFollow,
   shouldPreserveCollapseReservationAfterIntent,
+  shouldClearExpiredProvisionalStickyPin,
   shouldSyncPhysicalBottom,
   shouldSuppressFollowingTailNegativeScrollBy,
   transferCollapseReservationToPin,
+  transferPinReservationToProtectedCollapse,
 } from './flowChatScrollStability';
 import { activeSessionHistoryProjectionHandoff } from './historyProjectionHandoff';
 import type { Session } from '../../types/flow-chat';
@@ -32,6 +44,7 @@ const stateMocks = vi.hoisted(() => ({
 }));
 const virtuosoMocks = vi.hoisted(() => ({
   renderedRange: null as { start: number; end: number } | null,
+  scrollerScrollTo: vi.fn(),
   scrollToIndex: vi.fn(),
 }));
 const flowStoreMocks = vi.hoisted(() => ({
@@ -46,8 +59,23 @@ const inputStateMocks = vi.hoisted(() => ({
   isExpanded: false,
   inputHeight: 0,
 }));
+const flowDiagnosticsMocks = vi.hoisted(() => ({
+  enabled: false,
+  trace: vi.fn(),
+}));
+
+vi.mock('@/infrastructure/diagnostics/flowChatDiagnostics', () => ({
+  flowChatDiagnostics: {
+    isEnabled: () => flowDiagnosticsMocks.enabled,
+    trace: flowDiagnosticsMocks.trace,
+  },
+}));
 
 vi.mock('react-i18next', () => ({
+  initReactI18next: {
+    type: '3rdParty',
+    init: vi.fn(),
+  },
   useTranslation: () => ({
     t: (key: string) => {
       const translations: Record<string, string> = {
@@ -79,6 +107,19 @@ vi.mock('react-virtuoso', () => ({
     React.useLayoutEffect(() => {
       if (!scrollerRef.current) {
         return;
+      }
+
+      if (typeof scrollerRef.current.scrollTo !== 'function') {
+        Object.defineProperty(scrollerRef.current, 'scrollTo', {
+          configurable: true,
+          writable: true,
+          value: (options?: ScrollToOptions) => {
+            virtuosoMocks.scrollerScrollTo(options);
+            if (typeof options?.top === 'number') {
+              scrollerRef.current!.scrollTop = options.top;
+            }
+          },
+        });
       }
 
       props.scrollerRef?.(scrollerRef.current);
@@ -200,15 +241,6 @@ vi.mock('../../hooks/useVisibleTaskInfo', () => ({
 
 vi.mock('../StickyTaskIndicator', () => ({
   StickyTaskIndicator: () => null,
-}));
-
-vi.mock('./ProcessingIndicator', () => ({
-  ProcessingIndicator: () => null,
-}));
-
-vi.mock('./processingIndicatorVisibility', () => ({
-  shouldReserveProcessingIndicatorSpace: () => false,
-  shouldShowProcessingIndicator: () => false,
 }));
 
 vi.mock('./ScrollAnchor', () => ({
@@ -357,6 +389,7 @@ describe('VirtualMessageList session boundary', () => {
     stateMocks.visibleTurnInfo = null;
     stateMocks.setVisibleTurnInfo.mockReset();
     virtuosoMocks.renderedRange = null;
+    virtuosoMocks.scrollerScrollTo.mockReset();
     virtuosoMocks.scrollToIndex.mockReset();
     flowStoreMocks.hasPendingSessionHistoryCompletion.mockReset();
     flowStoreMocks.hasPendingSessionHistoryCompletion.mockReturnValue(false);
@@ -370,6 +403,8 @@ describe('VirtualMessageList session boundary', () => {
     inputStateMocks.isActive = false;
     inputStateMocks.isExpanded = false;
     inputStateMocks.inputHeight = 0;
+    flowDiagnosticsMocks.enabled = false;
+    flowDiagnosticsMocks.trace.mockReset();
   });
 
   afterEach(() => {
@@ -425,6 +460,302 @@ describe('VirtualMessageList session boundary', () => {
     });
   });
 
+  it('transfers a released pin into a protected viewport range', () => {
+    const currentState = {
+      collapse: { kind: 'collapse' as const, px: 12, floorPx: 4 },
+      pin: {
+        kind: 'pin' as const,
+        px: 100,
+        floorPx: 100,
+        mode: 'sticky-latest' as const,
+        targetTurnId: 'turn-a',
+      },
+    };
+
+    expect(transferPinReservationToProtectedCollapse(currentState)).toEqual({
+      collapse: { kind: 'collapse', px: 112, floorPx: 104 },
+      pin: {
+        kind: 'pin',
+        px: 0,
+        floorPx: 0,
+        mode: 'transient',
+        targetTurnId: null,
+      },
+    });
+  });
+
+  it('invalidates pending turn pin work by generation, session, and target', () => {
+    const request = {
+      generation: 7,
+      sessionId: 'session-a',
+      turnId: 'turn-a',
+    };
+
+    expect(isTurnPinRequestIdentityCurrent(request, request)).toBe(true);
+    expect(isTurnPinRequestIdentityCurrent(request, {
+      ...request,
+      generation: 8,
+    })).toBe(false);
+    expect(isTurnPinRequestIdentityCurrent(request, {
+      ...request,
+      sessionId: 'session-b',
+    })).toBe(false);
+    expect(isTurnPinRequestIdentityCurrent(request, {
+      ...request,
+      turnId: 'turn-b',
+    })).toBe(false);
+  });
+
+  it('drops a provisional sticky pin on user intent without protecting its range', () => {
+    const currentState = {
+      collapse: { kind: 'collapse' as const, px: 12, floorPx: 4 },
+      pin: {
+        kind: 'pin' as const,
+        px: 3_780,
+        floorPx: 0,
+        mode: 'sticky-latest' as const,
+        targetTurnId: 'turn-a',
+      },
+    };
+
+    expect(releasePinReservationForUserNavigation(currentState, {
+      preserveCurrentRange: true,
+      ownsElementAnchor: false,
+    })).toEqual({
+      collapse: currentState.collapse,
+      pin: {
+        kind: 'pin',
+        px: 0,
+        floorPx: 0,
+        mode: 'transient',
+        targetTurnId: null,
+      },
+    });
+  });
+
+  it('protects an established sticky pin range when user intent exits it', () => {
+    const currentState = {
+      collapse: { kind: 'collapse' as const, px: 12, floorPx: 4 },
+      pin: {
+        kind: 'pin' as const,
+        px: 100,
+        floorPx: 100,
+        mode: 'sticky-latest' as const,
+        targetTurnId: 'turn-a',
+      },
+    };
+
+    expect(releasePinReservationForUserNavigation(currentState, {
+      preserveCurrentRange: true,
+      ownsElementAnchor: true,
+    })).toEqual(transferPinReservationToProtectedCollapse(currentState));
+  });
+
+  it('keeps unresolved sticky pin fallback reservation idempotent and viewport-bounded', () => {
+    expect(resolveProvisionalStickyPinReservationPx({
+      scrollHeight: 3_803,
+      clientHeight: 1_023,
+      currentPinPx: 0,
+    })).toBe(1_023);
+    expect(resolveProvisionalStickyPinReservationPx({
+      scrollHeight: 4_826,
+      clientHeight: 1_023,
+      currentPinPx: 1_023,
+    })).toBe(1_023);
+    expect(resolveProvisionalStickyPinReservationPx({
+      scrollHeight: 6_583,
+      clientHeight: 1_023,
+      currentPinPx: 5_560,
+    })).toBe(1_023);
+
+    expect(clampPinReservationPxToViewport(640, 1_023)).toBe(640);
+    expect(clampPinReservationPxToViewport(2_780, 1_023)).toBe(1_023);
+  });
+
+  it('clears only expired provisional sticky pins without an element anchor', () => {
+    const pinReservation = {
+      kind: 'pin' as const,
+      px: 2_780,
+      floorPx: 0,
+      mode: 'sticky-latest' as const,
+      targetTurnId: 'turn-a',
+    };
+    const baseOptions = {
+      requestTurnId: 'turn-a',
+      requestPinMode: 'sticky-latest' as const,
+      pinReservation,
+      ownsElementAnchor: false,
+    };
+
+    expect(shouldClearExpiredProvisionalStickyPin(baseOptions)).toBe(true);
+    expect(shouldClearExpiredProvisionalStickyPin({
+      ...baseOptions,
+      ownsElementAnchor: true,
+    })).toBe(false);
+    expect(shouldClearExpiredProvisionalStickyPin({
+      ...baseOptions,
+      pinReservation: { ...pinReservation, floorPx: 200 },
+    })).toBe(false);
+    expect(shouldClearExpiredProvisionalStickyPin({
+      ...baseOptions,
+      requestTurnId: 'turn-b',
+    })).toBe(false);
+  });
+
+  it('protects a settled element range from later unsignaled shrink reconciliation', () => {
+    const settledState = settleCollapseReservationForPreservedViewport({
+      collapse: { kind: 'collapse', px: 1_022, floorPx: 670 },
+      pin: {
+        kind: 'pin',
+        px: 0,
+        floorPx: 0,
+        mode: 'transient',
+        targetTurnId: null,
+      },
+    }, {
+      scrollTop: 686,
+      scrollHeight: 2_030,
+      clientHeight: 1_023,
+    });
+    expect(settledState.collapse).toEqual({
+      kind: 'collapse',
+      px: 702,
+      floorPx: 702,
+    });
+
+    const protectedState = protectCurrentCollapseReservation({
+      collapse: { kind: 'collapse', px: 784, floorPx: 670 },
+      pin: {
+        kind: 'pin',
+        px: 0,
+        floorPx: 0,
+        mode: 'transient',
+        targetTurnId: null,
+      },
+    });
+
+    expect(protectedState.collapse).toEqual({
+      kind: 'collapse',
+      px: 784,
+      floorPx: 784,
+    });
+    expect(reconcileUnsignaledShrinkReservation(protectedState, 2).collapse).toEqual({
+      kind: 'collapse',
+      px: 784,
+      floorPx: 784,
+    });
+    expect(reconcileUnsignaledShrinkReservation({
+      ...protectedState,
+      collapse: { kind: 'collapse', px: 784, floorPx: 0 },
+    }, 2).collapse).toEqual({
+      kind: 'collapse',
+      px: 2,
+      floorPx: 0,
+    });
+  });
+
+  it('extends and protects collapse range needed to restore a captured scroll position', () => {
+    const currentState = {
+      collapse: { kind: 'collapse' as const, px: 111.5, floorPx: 0 },
+      pin: {
+        kind: 'pin' as const,
+        px: 0,
+        floorPx: 0,
+        mode: 'transient' as const,
+        targetTurnId: null,
+      },
+    };
+
+    const ensured = ensureCollapseReservationForScrollTop(currentState, {
+      targetScrollTop: 933.33,
+      scrollHeight: 1_897,
+      clientHeight: 1_023,
+    });
+
+    expect(ensured.collapse.px).toBeCloseTo(171.83, 2);
+    expect(ensured.collapse.floorPx).toBeCloseTo(171.83, 2);
+  });
+
+  it('does not synchronously shrink surplus collapse range while retaining an anchor', () => {
+    const retained = ensureCollapseReservationForScrollTop({
+      collapse: { kind: 'collapse', px: 205.85, floorPx: 0 },
+      pin: {
+        kind: 'pin',
+        px: 0,
+        floorPx: 0,
+        mode: 'transient',
+        targetTurnId: null,
+      },
+    }, {
+      targetScrollTop: 1_003.33,
+      scrollHeight: 2_242,
+      clientHeight: 1_023,
+    });
+
+    expect(retained).toEqual({
+      collapse: { kind: 'collapse', px: 205.85, floorPx: 0 },
+      pin: {
+        kind: 'pin',
+        px: 0,
+        floorPx: 0,
+        mode: 'transient',
+        targetTurnId: null,
+      },
+    });
+  });
+
+  it('does not reserve a viewport merely to keep scrollTop zero reachable', () => {
+    const retained = ensureCollapseReservationForScrollTop({
+      collapse: { kind: 'collapse', px: 559.49, floorPx: 559.49 },
+      pin: {
+        kind: 'pin',
+        px: 0,
+        floorPx: 0,
+        mode: 'transient',
+        targetTurnId: null,
+      },
+    }, {
+      targetScrollTop: 0,
+      scrollHeight: 1_023,
+      clientHeight: 1_023,
+    });
+
+    expect(retained.collapse).toEqual({
+      kind: 'collapse',
+      px: 559.49,
+      floorPx: 559.49,
+    });
+    expect(settleRetainedCollapseReservationForAnchor(retained, {
+      targetScrollTop: 0,
+      scrollHeight: 1_023,
+      clientHeight: 1_023,
+    }).collapse).toEqual({
+      kind: 'collapse',
+      px: 0,
+      floorPx: 0,
+    });
+  });
+
+  it('settles retained collapse estimates to the physical range required by the anchor', () => {
+    const settled = settleRetainedCollapseReservationForAnchor({
+      collapse: { kind: 'collapse', px: 1_669.04813, floorPx: 559.48962 },
+      pin: {
+        kind: 'pin',
+        px: 0,
+        floorPx: 0,
+        mode: 'transient',
+        targetTurnId: null,
+      },
+    }, {
+      targetScrollTop: 662,
+      scrollHeight: 3_354,
+      clientHeight: 1_023,
+    });
+
+    expect(settled.collapse.px).toBeCloseTo(1.04813, 4);
+    expect(settled.collapse.floorPx).toBeCloseTo(1.04813, 4);
+  });
+
   it('drains a sticky pin floor only from measured content growth', () => {
     const currentState = {
       collapse: { kind: 'collapse' as const, px: 20, floorPx: 0 },
@@ -456,6 +787,14 @@ describe('VirtualMessageList session boundary', () => {
         px: 65,
         floorPx: 65,
       },
+    });
+
+    expect(consumeBottomReservationForContentGrowth({
+      ...currentState,
+      collapse: { kind: 'collapse', px: 30, floorPx: 20 },
+    }, 25, false)).toEqual({
+      collapse: { kind: 'collapse', px: 5, floorPx: 5 },
+      pin: currentState.pin,
     });
   });
 
@@ -533,11 +872,27 @@ describe('VirtualMessageList session boundary', () => {
     expect(shouldPreserveCollapseReservationAfterIntent({
       isFollowingOutput: true,
       isStreamingOutput: true,
+      isPreservingElement: false,
+      hasProtectedCollapseRange: false,
     })).toBe(true);
     expect(shouldPreserveCollapseReservationAfterIntent({
       isFollowingOutput: false,
       isStreamingOutput: true,
+      isPreservingElement: false,
+      hasProtectedCollapseRange: false,
     })).toBe(false);
+    expect(shouldPreserveCollapseReservationAfterIntent({
+      isFollowingOutput: false,
+      isStreamingOutput: true,
+      isPreservingElement: true,
+      hasProtectedCollapseRange: false,
+    })).toBe(true);
+    expect(shouldPreserveCollapseReservationAfterIntent({
+      isFollowingOutput: false,
+      isStreamingOutput: true,
+      isPreservingElement: false,
+      hasProtectedCollapseRange: true,
+    })).toBe(true);
   });
 
   it('recovers the last stable scroll position when an auto collapse arrives after clamp', () => {
@@ -582,6 +937,249 @@ describe('VirtualMessageList session boundary', () => {
     });
 
     expect(container.querySelector('[data-testid="scroll-to-latest"]')?.getAttribute('data-visible')).toBe('false');
+  });
+
+  it('resumes tail follow when a mounted streaming session receives its initial items', () => {
+    const session = createSession('session-a', 'turn-a');
+    session.dialogTurns[0].status = 'processing';
+    session.dialogTurns[0].modelRounds = [{
+      id: 'round-turn-a',
+      status: 'streaming',
+      isStreaming: true,
+      items: [],
+      startTime: 1,
+    } as typeof session.dialogTurns[number]['modelRounds'][number]];
+    stateMocks.activeSession = session;
+    stateMocks.virtualItems = [];
+
+    act(() => {
+      root.render(<VirtualMessageList />);
+    });
+    virtuosoMocks.scrollerScrollTo.mockClear();
+
+    stateMocks.virtualItems = [createItem('turn-a'), createModelItem('turn-a')];
+    act(() => {
+      root.render(<VirtualMessageList />);
+    });
+
+    expect(virtuosoMocks.scrollerScrollTo).toHaveBeenCalledWith(expect.objectContaining({
+      behavior: 'auto',
+    }));
+  });
+
+  it('restores a following-tail collapse anchor when delayed measurement clamps scrollTop', () => {
+    const session = createSession('session-a', 'turn-a');
+    session.dialogTurns[0].status = 'processing';
+    session.dialogTurns[0].modelRounds = [{
+      id: 'round-turn-a',
+      status: 'streaming',
+      isStreaming: true,
+      items: [],
+      startTime: 1,
+    } as typeof session.dialogTurns[number]['modelRounds'][number]];
+    stateMocks.activeSession = session;
+    stateMocks.virtualItems = [createItem('turn-a'), createModelItem('turn-a')];
+
+    act(() => {
+      root.render(<VirtualMessageList />);
+    });
+
+    const scroller = container.querySelector<HTMLElement>('[data-virtuoso-scroller="true"]');
+    const footer = container.querySelector<HTMLElement>('.message-list-footer');
+    const anchor = container.querySelector<HTMLElement>('[data-turn-id="turn-a"]');
+    expect(scroller).not.toBeNull();
+    expect(footer).not.toBeNull();
+    expect(anchor).not.toBeNull();
+    if (!scroller || !footer || !anchor) {
+      return;
+    }
+
+    let contentHeight = 2_076;
+    Object.defineProperties(scroller, {
+      clientHeight: { configurable: true, value: 1_000 },
+      scrollHeight: {
+        configurable: true,
+        get: () => contentHeight + (Number.parseFloat(footer.style.height) || 0),
+      },
+      scrollTop: { configurable: true, writable: true, value: 1_100 },
+    });
+    const footerHeightBeforeCollapse = Number.parseFloat(footer.style.height);
+    act(() => {
+      scroller.dispatchEvent(new Event('scroll', { bubbles: true }));
+    });
+
+    act(() => {
+      window.dispatchEvent(new CustomEvent('flowchat:tool-card-collapse-intent', {
+        detail: {
+          toolId: 'tool-a',
+          toolName: 'Write',
+          cardHeight: 200,
+          anchorElement: anchor,
+          reason: 'auto',
+        },
+      }));
+    });
+    expect(Number.parseFloat(footer.style.height)).toBeCloseTo(
+      footerHeightBeforeCollapse + 100,
+      2,
+    );
+
+    contentHeight -= 250;
+    scroller.scrollTop = 1_050;
+    act(() => {
+      scroller.dispatchEvent(new Event('scroll', { bubbles: true }));
+    });
+
+    expect(scroller.scrollTop).toBe(1_100);
+    expect(Number.parseFloat(footer.style.height)).toBeCloseTo(
+      footerHeightBeforeCollapse + 151,
+      2,
+    );
+  });
+
+  it('retains following-tail collapse protection after the animation finalizer', () => {
+    flowDiagnosticsMocks.enabled = true;
+    const session = createSession('session-a', 'turn-a');
+    session.dialogTurns[0].status = 'processing';
+    session.dialogTurns[0].modelRounds = [{
+      id: 'round-turn-a',
+      status: 'streaming',
+      isStreaming: true,
+      items: [],
+      startTime: 1,
+    } as typeof session.dialogTurns[number]['modelRounds'][number]];
+    stateMocks.activeSession = session;
+    stateMocks.virtualItems = [createItem('turn-a'), createModelItem('turn-a')];
+
+    act(() => {
+      root.render(<VirtualMessageList />);
+    });
+
+    const scroller = container.querySelector<HTMLElement>('[data-virtuoso-scroller="true"]');
+    const footer = container.querySelector<HTMLElement>('.message-list-footer');
+    const anchor = container.querySelector<HTMLElement>('[data-turn-id="turn-a"]');
+    expect(scroller).not.toBeNull();
+    expect(footer).not.toBeNull();
+    expect(anchor).not.toBeNull();
+    if (!scroller || !footer || !anchor) {
+      return;
+    }
+
+    let contentHeight = 2_076;
+    Object.defineProperties(scroller, {
+      clientHeight: { configurable: true, value: 1_000 },
+      scrollHeight: {
+        configurable: true,
+        get: () => contentHeight + (Number.parseFloat(footer.style.height) || 0),
+      },
+      scrollTop: { configurable: true, writable: true, value: 1_100 },
+    });
+    const footerHeightBeforeCollapse = Number.parseFloat(footer.style.height);
+    act(() => {
+      scroller.dispatchEvent(new Event('scroll', { bubbles: true }));
+    });
+
+    vi.useFakeTimers();
+    try {
+      act(() => {
+        window.dispatchEvent(new CustomEvent('flowchat:tool-card-collapse-intent', {
+          detail: {
+            toolId: 'tool-a',
+            toolName: 'Write',
+            cardHeight: 200,
+            anchorElement: anchor,
+            reason: 'auto',
+          },
+        }));
+      });
+      expect(Number.parseFloat(footer.style.height)).toBeCloseTo(
+        footerHeightBeforeCollapse + 100,
+        2,
+      );
+
+      rafCallbacks = [];
+      act(() => {
+        vi.advanceTimersByTime(300);
+      });
+      for (let frame = 0; frame < 4; frame += 1) {
+        flushAnimationFrame();
+      }
+      const provisionalFooterHeight = Number.parseFloat(footer.style.height);
+      expect(provisionalFooterHeight).toBeCloseTo(
+        footerHeightBeforeCollapse + 100,
+        2,
+      );
+      const findRetainTrace = () => flowDiagnosticsMocks.trace.mock.calls.find(([event]) => (
+        event.location === 'VirtualMessageList.retainCollapseRangeForQuietSettlement'
+      ));
+      if (!findRetainTrace()) {
+        act(() => {
+          vi.advanceTimersByTime(1_000);
+        });
+      }
+      expect(findRetainTrace()).toBeDefined();
+
+      act(() => {
+        vi.advanceTimersByTime(120);
+      });
+      for (let frame = 0; frame < 4; frame += 1) {
+        flushAnimationFrame();
+      }
+      const settledFooterHeight = Number.parseFloat(footer.style.height);
+      const settleTrace = flowDiagnosticsMocks.trace.mock.calls.find(([event]) => (
+        event.location === 'VirtualMessageList.settleRetainedCollapseRange'
+      ));
+      expect(settleTrace).toBeDefined();
+      expect(settledFooterHeight).toBeLessThan(provisionalFooterHeight);
+      expect(scroller.scrollTop).toBe(1_100);
+
+      stateMocks.activeSession = {
+        ...session,
+        dialogTurns: session.dialogTurns.map(turn => ({
+          ...turn,
+          status: 'completed',
+          modelRounds: turn.modelRounds.map(round => ({
+            ...round,
+            status: 'completed',
+            isStreaming: false,
+          })),
+        })),
+      };
+      act(() => {
+        root.render(<VirtualMessageList />);
+      });
+      expect(Number.parseFloat(footer.style.height)).toBeCloseTo(settledFooterHeight, 2);
+
+      contentHeight -= 250;
+      scroller.scrollTop = 1_050;
+      act(() => {
+        scroller.dispatchEvent(new Event('scroll', { bubbles: true }));
+      });
+
+      expect(scroller.scrollTop).toBe(1_100);
+      expect(Number.parseFloat(footer.style.height)).toBeGreaterThan(settledFooterHeight);
+
+      act(() => {
+        vi.advanceTimersByTime(120);
+      });
+      for (let frame = 0; frame < 4; frame += 1) {
+        flushAnimationFrame();
+      }
+      const wasSettledAnchorReleased = () => flowDiagnosticsMocks.trace.mock.calls.some(([event]) => (
+        event.location === 'VirtualMessageList.releaseSettledCollapseAnchor'
+      ));
+      for (let attempt = 0; attempt < 3 && !wasSettledAnchorReleased(); attempt += 1) {
+        act(() => {
+          vi.runOnlyPendingTimers();
+        });
+        for (let frame = 0; frame < 4; frame += 1) {
+          flushAnimationFrame();
+        }
+      }
+      expect(wasSettledAnchorReleased()).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('keeps static initial history position when background updates arrive after an upward scroll', () => {
@@ -723,6 +1321,183 @@ describe('VirtualMessageList session boundary', () => {
     expect(scroller.scrollTop).toBe(4_443);
     expect(target.getBoundingClientRect().top).toBe(57);
     expect(virtuosoMocks.scrollToIndex).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not let a canceled pending sticky pin RAF restore provisional footer space', () => {
+    const listRef = React.createRef<VirtualMessageListRef>();
+    const turnIds = Array.from(
+      { length: 24 },
+      (_, index) => `turn-${String(index + 1).padStart(2, '0')}`,
+    );
+    const latestTurnId = turnIds[turnIds.length - 1];
+    const session = createSessionWithTurns('session-a', turnIds);
+    const latestTurn = session.dialogTurns[session.dialogTurns.length - 1];
+    latestTurn.status = 'processing';
+    latestTurn.modelRounds = [{
+      id: `round-${latestTurnId}`,
+      status: 'streaming',
+      isStreaming: true,
+      items: [],
+      startTime: 1,
+    } as typeof latestTurn.modelRounds[number]];
+    stateMocks.activeSession = session;
+    stateMocks.virtualItems = turnIds.flatMap(turnId => [
+      createItem(turnId),
+      createModelItem(turnId),
+    ]);
+    virtuosoMocks.renderedRange = { start: 0, end: 4 };
+
+    act(() => {
+      root.render(<VirtualMessageList ref={listRef} />);
+    });
+
+    const scroller = container.querySelector<HTMLElement>('[data-virtuoso-scroller="true"]');
+    const footer = container.querySelector<HTMLElement>('.message-list-footer');
+    expect(scroller).not.toBeNull();
+    expect(footer).not.toBeNull();
+    if (!scroller || !footer) {
+      return;
+    }
+
+    setScrollerGeometry(scroller, {
+      scrollHeight: 5_000,
+      clientHeight: 1_000,
+      scrollTop: 0,
+    });
+    const baselineFooterHeight = Number.parseFloat(footer.style.height);
+
+    let status: ReturnType<VirtualMessageListRef['pinTurnToTopWithStatus']> = 'rejected';
+    act(() => {
+      status = listRef.current?.pinTurnToTopWithStatus(latestTurnId, {
+        behavior: 'auto',
+        pinMode: 'sticky-latest',
+      }) ?? 'rejected';
+    });
+    expect(status).toBe('pending');
+    expect(Number.parseFloat(footer.style.height)).toBeGreaterThan(baselineFooterHeight);
+    expect(Number.parseFloat(footer.style.height) - baselineFooterHeight)
+      .toBeLessThanOrEqual(scroller.clientHeight);
+
+    const target = container.querySelector<HTMLElement>(
+      `[data-turn-id="${latestTurnId}"][data-item-type="user-message"]`,
+    );
+    expect(target).not.toBeNull();
+    if (!target) {
+      return;
+    }
+    vi.spyOn(scroller, 'getBoundingClientRect').mockReturnValue(createRect({
+      top: 0,
+      bottom: 1_000,
+      height: 1_000,
+    }));
+    vi.spyOn(target, 'getBoundingClientRect').mockReturnValue(createRect({
+      top: 4_500,
+      bottom: 4_540,
+      height: 40,
+    }));
+
+    act(() => {
+      scroller.dispatchEvent(new WheelEvent('wheel', {
+        deltaY: -120,
+        bubbles: true,
+      }));
+    });
+    expect(Number.parseFloat(footer.style.height)).toBe(baselineFooterHeight);
+
+    flushAnimationFrame();
+    expect(Number.parseFloat(footer.style.height)).toBe(baselineFooterHeight);
+  });
+
+  it('releases a settled sticky pin at stream end even when its target is no longer rendered', () => {
+    const listRef = React.createRef<VirtualMessageListRef>();
+    const session = createSessionWithTurns('session-a', ['turn-a', 'turn-b']);
+    const latestTurn = session.dialogTurns[session.dialogTurns.length - 1];
+    latestTurn.status = 'processing';
+    latestTurn.modelRounds = [{
+      id: 'round-turn-b',
+      status: 'streaming',
+      isStreaming: true,
+      items: [],
+      startTime: 1,
+    } as typeof latestTurn.modelRounds[number]];
+    stateMocks.activeSession = session;
+    stateMocks.virtualItems = ['turn-a', 'turn-b'].flatMap(turnId => [
+      createItem(turnId),
+      createModelItem(turnId),
+    ]);
+
+    act(() => {
+      root.render(<VirtualMessageList ref={listRef} />);
+    });
+
+    const scroller = container.querySelector<HTMLElement>('[data-virtuoso-scroller="true"]');
+    const footer = container.querySelector<HTMLElement>('.message-list-footer');
+    const target = container.querySelector<HTMLElement>(
+      '[data-turn-id="turn-b"][data-item-type="user-message"]',
+    );
+    expect(scroller).not.toBeNull();
+    expect(footer).not.toBeNull();
+    expect(target).not.toBeNull();
+    if (!scroller || !footer || !target) {
+      return;
+    }
+
+    Object.defineProperties(scroller, {
+      clientHeight: { configurable: true, value: 1_000 },
+      scrollHeight: {
+        configurable: true,
+        get: () => 1_200 + (Number.parseFloat(footer.style.height) || 0),
+      },
+      scrollTop: { configurable: true, writable: true, value: 200 },
+    });
+    vi.spyOn(scroller, 'getBoundingClientRect').mockReturnValue(createRect({
+      top: 0,
+      bottom: 1_000,
+      height: 1_000,
+    }));
+    const targetDocumentTop = 700;
+    vi.spyOn(target, 'getBoundingClientRect').mockImplementation(() => {
+      const top = targetDocumentTop - scroller.scrollTop;
+      return createRect({ top, bottom: top + 40, height: 40 });
+    });
+
+    let status: ReturnType<VirtualMessageListRef['pinTurnToTopWithStatus']> = 'rejected';
+    act(() => {
+      status = listRef.current?.pinTurnToTopWithStatus('turn-b', {
+        behavior: 'auto',
+        pinMode: 'sticky-latest',
+      }) ?? 'rejected';
+    });
+    expect(status).toBe('settled');
+    expect(scroller.scrollTop).toBe(643);
+    const footerHeightBeforeStreamEnd = Number.parseFloat(footer.style.height);
+    expect(footerHeightBeforeStreamEnd).toBe(443);
+
+    const release = vi.spyOn(FlowChatViewportCoordinator.prototype, 'release');
+    virtuosoMocks.renderedRange = { start: 0, end: 2 };
+    stateMocks.activeSession = {
+      ...session,
+      dialogTurns: session.dialogTurns.map(turn => turn.id === latestTurn.id
+        ? {
+          ...turn,
+          status: 'completed',
+          modelRounds: turn.modelRounds.map(round => ({
+            ...round,
+            status: 'completed',
+            isStreaming: false,
+          })),
+        }
+        : turn),
+    };
+    act(() => {
+      root.render(<VirtualMessageList ref={listRef} />);
+    });
+
+    expect(container.querySelector(
+      '[data-turn-id="turn-b"][data-item-type="user-message"]',
+    )).toBeNull();
+    expect(release).toHaveBeenCalledWith('stream-end-pinned-item');
+    expect(Number.parseFloat(footer.style.height)).toBe(footerHeightBeforeStreamEnd);
   });
 
   it('centers the exact text range when navigating to a search match', () => {

@@ -17,12 +17,19 @@
   font-size: var(--font-size-xs);
   flex-shrink: 0;
   position: relative;
-  transition: color $motion-fast $easing-standard,
-              background $motion-fast $easing-standard;
+  transition:
+    transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
+    color 120ms ease,
+    background 120ms ease;
 
   &:hover {
     color: var(--color-text-primary);
     background: var(--element-bg-soft);
+  }
+
+  &:active {
+    transform: scale(0.94);
+    background: var(--element-bg-medium);
   }
 
   svg {
@@ -92,5 +99,6 @@
   }
   .bitfun-notification-btn {
     transition: none;
+    transform: none;
   }
 }

@@ -64,6 +64,10 @@ use bitfun_external_sources::{
 use bitfun_opencode_adapter::{
     OpenCodeCommandProvider, OpenCodeMcpProvider, OpenCodeSubagentProvider, OpenCodeToolProvider,
 };
+#[cfg(test)]
+use bitfun_opencode_adapter::{
+    OpenCodeCommandProviderOptions, OpenCodeMcpProviderOptions, OpenCodeSubagentProviderOptions,
+};
 use bitfun_product_domains::external_integration_policy::{
     external_integration_policy_snapshot, incompatible_external_integration_policy_snapshot,
     ExternalIntegrationCapabilityDescriptor, ExternalIntegrationEcosystemDescriptor,
@@ -5722,6 +5726,9 @@ impl ExternalSourceSubscription {
         self.receiver.try_recv()
     }
 }
+
+#[cfg(test)]
+mod opencode_local_source_order_tests;
 
 #[cfg(test)]
 mod tests {

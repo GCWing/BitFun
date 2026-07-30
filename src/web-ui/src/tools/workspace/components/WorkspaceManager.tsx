@@ -106,6 +106,15 @@ const WorkspaceManager: React.FC<WorkspaceManagerProps> = ({
     }
   };
 
+  const handleWorkspaceCardKeyDown = (
+    event: React.KeyboardEvent<HTMLDivElement>,
+    workspace: WorkspaceInfo
+  ) => {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    event.preventDefault();
+    void handleWorkspaceSelect(workspace);
+  };
+
   const handleCloseWorkspace = async () => {
     try {
       await closeWorkspace();
@@ -254,7 +263,11 @@ const WorkspaceManager: React.FC<WorkspaceManagerProps> = ({
                 <div
                   key={workspace.id}
                   className="workspace-card recent"
-                  onClick={() => handleWorkspaceSelect(workspace)}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={getWorkspaceDisplayName(workspace)}
+                  onClick={() => void handleWorkspaceSelect(workspace)}
+                  onKeyDown={(event) => handleWorkspaceCardKeyDown(event, workspace)}
                 >
                   <div className="workspace-header">
                     <div className="workspace-icon">
@@ -306,7 +319,11 @@ const WorkspaceManager: React.FC<WorkspaceManagerProps> = ({
                 <div
                   key={workspace.id}
                   className="workspace-card recent"
-                  onClick={() => handleWorkspaceSelect(workspace)}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={getWorkspaceDisplayName(workspace)}
+                  onClick={() => void handleWorkspaceSelect(workspace)}
+                  onKeyDown={(event) => handleWorkspaceCardKeyDown(event, workspace)}
                 >
                   <div className="workspace-header">
                     <div className="workspace-icon">

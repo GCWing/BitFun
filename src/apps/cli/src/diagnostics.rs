@@ -2,8 +2,14 @@
 
 use std::path::Path;
 
+use bitfun_agent_runtime::sdk::{PortErrorKind, RuntimeError};
+use bitfun_agent_runtime_ipc::{RuntimeIpcClientError, RuntimeIpcErrorCode};
+
 pub(crate) const EXIT_LINE_PREFIX: &str = "BITFUN_EXIT: ";
 pub(crate) const DETAIL_MAX_LEN: usize = 500;
+pub(crate) const SESSION_IN_USE_ERROR_CODE: &str = "session_in_use";
+pub(crate) const SESSION_IN_USE_USER_MESSAGE: &str =
+    "This session is open in another BitFun instance. Close it there and retry.";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ExitKind {
@@ -64,6 +70,36 @@ pub(crate) fn format_exit_line(kind: ExitKind, detail: &str) -> String {
     )
 }
 
+pub(crate) fn cli_error_code(error: &anyhow::Error) -> Option<&'static str> {
+    let session_in_use = error.chain().any(|cause| {
+        matches!(
+            cause.downcast_ref::<RuntimeError>(),
+            Some(RuntimeError::Port(port_error))
+                if port_error.kind == PortErrorKind::SessionInUse
+        ) || matches!(
+            cause.downcast_ref::<RuntimeIpcClientError>(),
+            Some(RuntimeIpcClientError::Remote(remote))
+                if remote.code == RuntimeIpcErrorCode::SessionInUse
+        )
+    });
+    session_in_use.then_some(SESSION_IN_USE_ERROR_CODE)
+}
+
+pub(crate) fn user_facing_error_message(error: &anyhow::Error) -> String {
+    match cli_error_code(error) {
+        Some(SESSION_IN_USE_ERROR_CODE) => SESSION_IN_USE_USER_MESSAGE.to_string(),
+        _ => error.to_string(),
+    }
+}
+
+pub(crate) fn with_session_conflict_help(error: anyhow::Error) -> anyhow::Error {
+    if cli_error_code(&error).is_some() {
+        error.context(SESSION_IN_USE_USER_MESSAGE)
+    } else {
+        error
+    }
+}
+
 pub(crate) fn emit_exit_diagnostic(kind: ExitKind, detail: &str, ctx: &ExitContext<'_>) {
     eprintln!("{}", format_exit_line(kind, detail));
     tracing::error!(
@@ -80,6 +116,8 @@ pub(crate) fn emit_exit_diagnostic(kind: ExitKind, detail: &str, ctx: &ExitConte
 #[cfg(test)]
 mod tests {
     use super::*;
+    use bitfun_agent_runtime::sdk::{PortError, PortErrorKind, RuntimeError};
+    use bitfun_agent_runtime_ipc::{RuntimeIpcClientError, RuntimeIpcError, RuntimeIpcErrorCode};
 
     #[test]
     fn format_exit_line_uses_stable_prefix_and_kind() {
@@ -102,5 +140,41 @@ mod tests {
         let sanitized = sanitize_exit_detail(&detail);
         assert!(sanitized.ends_with("..."));
         assert!(sanitized.chars().count() <= DETAIL_MAX_LEN + 3);
+    }
+
+    #[test]
+    fn embedded_session_conflict_keeps_a_stable_code_and_actionable_message() {
+        let error = anyhow::Error::new(RuntimeError::Port(PortError::new(
+            PortErrorKind::SessionInUse,
+            "Session is already open for writing: session-1",
+        )));
+
+        assert_eq!(cli_error_code(&error), Some(SESSION_IN_USE_ERROR_CODE));
+        assert_eq!(
+            user_facing_error_message(&error),
+            SESSION_IN_USE_USER_MESSAGE
+        );
+    }
+
+    #[test]
+    fn shared_session_conflict_uses_the_same_cli_projection() {
+        let error = anyhow::Error::new(RuntimeIpcClientError::Remote(RuntimeIpcError {
+            code: RuntimeIpcErrorCode::SessionInUse,
+            message: "Session is already open for writing: session-1".to_string(),
+        }));
+
+        assert_eq!(cli_error_code(&error), Some(SESSION_IN_USE_ERROR_CODE));
+        assert_eq!(
+            user_facing_error_message(&error),
+            SESSION_IN_USE_USER_MESSAGE
+        );
+    }
+
+    #[test]
+    fn unrelated_errors_keep_their_original_message() {
+        let error = anyhow::anyhow!("provider unavailable");
+
+        assert_eq!(cli_error_code(&error), None);
+        assert_eq!(user_facing_error_message(&error), "provider unavailable");
     }
 }

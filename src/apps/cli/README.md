@@ -93,8 +93,8 @@ This command is TUI-only and does not change the non-interactive `exec` contract
 | Format | stdout contract |
 |---|---|
 | `text` | Assistant text. Progress, tool status, logs, and diagnostics use stderr. |
-| `json` | One final result object with status and result, plus session/turn identity once established, turn-accumulated usage, and available Patch facts. |
-| `stream-json` | JSONL containing existing Agent event values; no separate CLI event schema. |
+| `json` | One final result object with status and result, plus session/turn identity once established, turn-accumulated usage, and available Patch facts. A Session writer conflict adds `error_code: "session_in_use"`. |
+| `stream-json` | JSONL containing existing Agent event values; no separate CLI event schema. A Session writer conflict reuses `SystemError` with `error: "session_in_use"` and `recoverable: true`. |
 
 Select a format with `--output-format text|json|stream-json`. When `--output-patch -` is used with
 `json`, the Patch is included in the final object. For `stream-json`, write the Patch to an explicit
@@ -108,9 +108,51 @@ returning. Cancellation, an unsuccessful completion event,
 and a requested Patch that cannot be generated or written are error outcomes. An explicit Patch
 file is created even when the diff is empty.
 
+If another BitFun process is writing the requested Session, `exec` exits non-zero without waiting
+or taking over. Close that Session in the other instance and run the command again. `recoverable`
+describes that later retry; it does not mean the current command retries automatically.
+
 `doctor` and `health` validate product assembly and required capability registrations. They are not
 live probes for Network, Git, or MCP integrations that are currently represented by compatibility
 registrations.
+
+## Detached task dispatch
+
+`bitfun dispatch` is the target-side, machine-readable interface used by
+Desktop, Server Host, SSH, and encrypted account-device RPC. Requests are JSON
+on stdin and responses are one JSON value on stdout:
+
+```bash
+printf '%s' '{"workspacePath":"/srv/app"}' | bitfun dispatch probe
+printf '%s' '{"jobId":"job-123","cursor":0}' | bitfun dispatch status
+printf '%s' '{}' | bitfun dispatch list
+printf '%s' '{"jobId":"job-123"}' | bitfun dispatch cancel
+```
+
+`submit` additionally requires `protocolVersion`, `sessionId`,
+`workspacePath`, `agentType`, `prompt`, and an explicit `approvalPolicy`:
+`auto`, `reject-and-report`, or `remote`. With `remote`, `status` returns
+`pendingPermissions`; answer one with `dispatch answer`. `dispatch append`
+adds a steering message to a queued or running job. Call `probe` first and
+honor its protocol version and capability list rather than assuming that
+different BitFun releases are compatible.
+
+Jobs and their event logs live under `~/.bitfun/dispatch/jobs/`. The detached
+worker and target-side session remain authoritative after the submitting
+client disconnects. Each target workspace is serialized so two jobs do not
+modify it concurrently. Terminal jobs and managed snapshots are retained for
+30 days. Event history is bounded; `status` reports cursor resets, truncation,
+and omitted-event counts so clients never mistake a partial transcript for a
+complete one.
+
+Workspace transfer is a separate controller operation. An exact snapshot
+includes hidden and ignored regular files, excludes `.git`, rejects links and
+special files, verifies an archive and manifest digest, and publishes into the
+target-managed dispatch directory atomically. It is a one-time input snapshot,
+not live or bidirectional synchronization; target changes are not copied back
+automatically. See
+[`docs/architecture/detached-task-dispatch.md`](../../../docs/architecture/detached-task-dispatch.md)
+for the ownership and transport contract.
 
 ## Always-on account device host (daemon)
 

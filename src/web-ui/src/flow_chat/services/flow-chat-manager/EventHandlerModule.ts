@@ -1774,7 +1774,7 @@ function handleToolEvent(
     return;
   }
 
-  clearRuntimeStatus(context, sessionId, turnId);
+  clearRuntimeStatus(context, sessionId, turnId, { roundId });
   touchPendingTurnCompletion(context, sessionId, turnId);
   
   const eventData: ToolEventData = {

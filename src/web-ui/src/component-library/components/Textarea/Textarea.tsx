@@ -1,4 +1,4 @@
-import React, { forwardRef, useRef, useImperativeHandle, useCallback } from 'react';
+import React, { forwardRef, useRef, useImperativeHandle, useCallback, useId } from 'react';
 import './Textarea.scss';
 
 export interface TextareaProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
@@ -32,6 +32,9 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
     },
     ref
   ) => {
+    const generatedId = useId();
+    const textareaId = props.id ?? `${generatedId}-textarea`;
+    const supportId = `${generatedId}-support`;
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const [charCount, setCharCount] = React.useState(0);
 
@@ -71,34 +74,39 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
     return (
       <div className={containerClass}>
         {label && (
-          <label className="bitfun-textarea__label">
+          <label className="bitfun-textarea__label" htmlFor={textareaId}>
             {label}
             {props.required && <span className="bitfun-textarea__required">*</span>}
           </label>
         )}
         <div className="bitfun-textarea__wrapper">
           <textarea
+            {...props}
             ref={textareaRef}
+            id={textareaId}
             className="bitfun-textarea__field"
             value={value}
             onChange={handleChange}
             maxLength={maxLength}
+            aria-invalid={error || undefined}
+            aria-describedby={(error && errorMessage) || (!error && hint) || showCount
+              ? supportId
+              : props['aria-describedby']}
             style={style}
-            {...props}
           />
         </div>
         {(hint || errorMessage || showCount) && (
-          <div className="bitfun-textarea__footer">
+          <div className="bitfun-textarea__footer" id={supportId}>
             <div className="bitfun-textarea__hint-wrapper">
               {error && errorMessage && (
-                <span className="bitfun-textarea__error-message">{errorMessage}</span>
+                <span className="bitfun-textarea__error-message" role="alert">{errorMessage}</span>
               )}
               {!error && hint && (
                 <span className="bitfun-textarea__hint">{hint}</span>
               )}
             </div>
             {showCount && (
-              <span className="bitfun-textarea__count">
+              <span className="bitfun-textarea__count" aria-live="polite">
                 {charCount}{maxLength && ` / ${maxLength}`}
               </span>
             )}

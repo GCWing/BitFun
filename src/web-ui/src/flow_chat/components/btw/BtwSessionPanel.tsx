@@ -4,11 +4,7 @@ import path from 'path-browserify';
 import {CornerUpLeft, Link2, Loader2, Square, Sparkles} from 'lucide-react';
 import {FlowChatContext, FlowChatVolatileContext} from '../modern/FlowChatContext';
 import {VirtualItemRenderer} from '../modern/VirtualItemRenderer';
-import {ProcessingIndicator} from '../modern/ProcessingIndicator';
-import {
-  shouldReserveProcessingIndicatorSpace,
-  shouldShowProcessingIndicator,
-} from '../modern/processingIndicatorVisibility';
+import {RuntimeStatusSlot} from '../modern/RuntimeStatusSlot';
 import {useExploreGroupState} from '../modern/useExploreGroupState';
 import {ScrollToBottomButton} from '@/flow_chat';
 import {flowChatStore} from '../../store/FlowChatStore';
@@ -372,52 +368,7 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
   }), [exploreGroupStates]);
 
   const lastDialogTurn = childSession?.dialogTurns[childSession.dialogTurns.length - 1];
-  const lastModelRound = lastDialogTurn?.modelRounds[lastDialogTurn.modelRounds.length - 1];
-  const lastItem = lastModelRound?.items[lastModelRound.items.length - 1];
-  const lastItemContent = lastItem && 'content' in lastItem ? String((lastItem as any).content || '') : '';
   const isTurnProcessing = isActiveReviewTurnStatus(lastDialogTurn?.status);
-  const [isContentGrowing, setIsContentGrowing] = useState(true);
-  const lastContentRef = useRef(lastItemContent);
-  const contentTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    if (lastItemContent !== lastContentRef.current) {
-      lastContentRef.current = lastItemContent;
-      setIsContentGrowing(true);
-      if (contentTimeoutRef.current) clearTimeout(contentTimeoutRef.current);
-      contentTimeoutRef.current = setTimeout(() => {
-        setIsContentGrowing(false);
-      }, 500);
-    }
-
-    return () => {
-      if (contentTimeoutRef.current) {
-        clearTimeout(contentTimeoutRef.current);
-      }
-    };
-  }, [lastItemContent]);
-
-  useEffect(() => {
-    if (!isTurnProcessing) {
-      setIsContentGrowing(false);
-    }
-  }, [isTurnProcessing]);
-
-  const showProcessingIndicator = useMemo(() => {
-    return shouldShowProcessingIndicator({
-      isTurnProcessing,
-      lastItem,
-      isContentGrowing,
-    });
-  }, [isTurnProcessing, lastItem, isContentGrowing]);
-
-  const reserveProcessingIndicatorSpace = useMemo(() => {
-    return shouldReserveProcessingIndicatorSpace({
-      isTurnProcessing,
-      lastItem,
-      isContentGrowing,
-    });
-  }, [isTurnProcessing, lastItem, isContentGrowing]);
 
   const canStopReviewSession =
     (viewKind === 'review-check' || childKind === 'review' || childKind === 'deep_review') &&
@@ -1100,20 +1051,18 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
               <div className="btw-session-panel__empty-state">{t('session.empty')}</div>
             ) : null
           ) : (
-            <>
-              {virtualItems.map((item, index) => (
-                <VirtualItemRenderer
-                  key={`${item.turnId}-${item.type}-${index}`}
-                  item={item}
-                  index={index}
-                />
-              ))}
-              <ProcessingIndicator
-                visible={showProcessingIndicator}
-                reserveSpace={reserveProcessingIndicatorSpace}
+            virtualItems.map((item, index) => (
+              <VirtualItemRenderer
+                key={`${item.turnId}-${item.type}-${index}`}
+                item={item}
+                index={index}
               />
-            </>
+            ))
           )}
+          <RuntimeStatusSlot
+            sessionId={childSessionId}
+            className="btw-session-panel__runtime-status"
+          />
         </div>
         <ScrollToBottomButton
           visible={showScrollToBottom}

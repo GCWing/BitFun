@@ -37,9 +37,12 @@
     min-width: 140px;
     background: transparent;
     border: 1px solid var(--border-base);
-    border-radius: $size-radius-sm;
+    border-radius: $size-radius-base;
     cursor: pointer;
-    transition: all $motion-base $easing-standard;
+    transition:
+      transform $motion-fast $easing-standard,
+      background-color $motion-fast $easing-standard,
+      border-color $motion-fast $easing-standard;
     
     &:hover:not(:disabled):not(&--active) {
       background: var(--element-bg-subtle);
@@ -47,8 +50,12 @@
     }
     
     &--active {
-      background: transparent;
+      background: var(--color-accent-100);
       border-color: var(--color-accent-500);
+    }
+
+    &:active:not(:disabled) {
+      transform: scale(0.985);
     }
     
     &:disabled {
@@ -144,9 +151,13 @@
   padding: $size-gap-2;
   background: transparent;
   border: 1px solid var(--border-base);
-  border-radius: $size-radius-sm;
+  border-radius: $size-radius-lg;
   cursor: pointer;
-  transition: all $motion-base $easing-standard;
+  transition:
+    transform $motion-fast $easing-standard,
+    background-color $motion-fast $easing-standard,
+    border-color $motion-fast $easing-standard,
+    box-shadow $motion-fast $easing-standard;
   overflow: hidden;
   
   &:hover:not(&--disabled):not(&--active) {
@@ -155,8 +166,13 @@
   }
   
   &--active {
-    background: transparent;
+    background: var(--color-accent-100);
     border-color: var(--color-accent-500);
+    box-shadow: inset 0 1px 0 var(--color-overlay-white-08);
+  }
+
+  &:active:not(&--disabled) {
+    transform: scale(0.985);
   }
   
   &--disabled {
@@ -278,7 +294,15 @@
     border-radius: $size-radius-sm;
     color: var(--color-text-secondary);
     cursor: pointer;
-    transition: all $motion-base $easing-standard;
+    transition:
+      transform $motion-fast $easing-standard,
+      background-color $motion-fast $easing-standard,
+      border-color $motion-fast $easing-standard,
+      color $motion-fast $easing-standard;
+
+    &:active {
+      transform: scale(0.97);
+    }
     
     svg {
       width: 12px;

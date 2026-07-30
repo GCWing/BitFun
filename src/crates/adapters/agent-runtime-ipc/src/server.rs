@@ -413,6 +413,7 @@ async fn run_initialized_connection(
                         RuntimeIpcOperation::SubmitTurn { .. }
                             | RuntimeIpcOperation::RestoreSession { .. }
                             | RuntimeIpcOperation::CreateSession { .. }
+                            | RuntimeIpcOperation::UpdateSessionMode { .. }
                     )
                 {
                     send_error(
@@ -420,7 +421,7 @@ async fn run_initialized_connection(
                         config.request_timeout,
                         Some(request_id),
                         RuntimeIpcErrorCode::SessionInUse,
-                        "finish or cancel the active turn before changing the controlled session",
+                        "finish or cancel the active turn before changing the controlled session or its agent mode",
                     )
                     .await?;
                     continue;
@@ -668,6 +669,7 @@ fn operation_has_side_effects(operation: &RuntimeIpcOperation) -> bool {
         operation,
         RuntimeIpcOperation::CreateSession { .. }
             | RuntimeIpcOperation::RestoreSession { .. }
+            | RuntimeIpcOperation::UpdateSessionMode { .. }
             | RuntimeIpcOperation::SubmitTurn { .. }
             | RuntimeIpcOperation::CancelTurn { .. }
             | RuntimeIpcOperation::RespondPermission { .. }

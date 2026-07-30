@@ -35,6 +35,16 @@ describe('WorktreeAPI', () => {
     });
   });
 
+  it('lists the local workspace worktree catalog through a structured request', async () => {
+    invokeMock.mockResolvedValue([]);
+
+    await api.listProjects();
+
+    expect(invokeMock).toHaveBeenCalledWith('worktree_list_projects', {
+      request: {},
+    });
+  });
+
   it('preserves stable structured error codes', async () => {
     const transportError = Object.assign(new Error('command failed'), {
       data: {

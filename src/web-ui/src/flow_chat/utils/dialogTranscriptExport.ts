@@ -140,8 +140,7 @@ function collectRuntimeRound(round: ModelRound): TranscriptExportRound {
     if (item.type === 'text') {
       const textItem = item as FlowTextItem;
       const content = normalizeText(textItem.content);
-      // Transient runtime status lines are presentation-only.
-      if (content && !textItem.runtimeStatus) {
+      if (content) {
         items.push({ kind: 'text', content });
       }
       return;

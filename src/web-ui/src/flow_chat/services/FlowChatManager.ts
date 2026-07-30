@@ -57,6 +57,7 @@ import {
 } from './flow-chat-manager';
 import { ensureBackendSession } from './flow-chat-manager/SessionModule';
 import { installPeerSessionRefresh } from './flow-chat-manager/PeerSessionRefreshModule';
+import { installDispatchJobObserver } from '@/features/dispatch/DispatchJobObserver';
 
 const log = createLogger('FlowChatManager');
 
@@ -70,6 +71,7 @@ export class FlowChatManager {
   private initializationRequests = new Map<string, Promise<boolean>>();
   private latestInitializationRequestKey: string | null = null;
   private peerSessionRefreshCleanup: (() => void) | null = null;
+  private dispatchJobObserverCleanup: (() => void) | null = null;
   private disposed = false;
 
   private constructor() {
@@ -99,6 +101,7 @@ export class FlowChatManager {
     this.agentService = AgentService.getInstance();
     installPendingQueueDrainListener(this.context);
     this.peerSessionRefreshCleanup = installPeerSessionRefresh(this.context);
+    this.dispatchJobObserverCleanup = installDispatchJobObserver(this.context);
   }
 
   /** Public hook used by the queue panel "send now" fallback to drain head item. */
@@ -427,6 +430,8 @@ export class FlowChatManager {
     this.cleanupEventListeners();
     this.peerSessionRefreshCleanup?.();
     this.peerSessionRefreshCleanup = null;
+    this.dispatchJobObserverCleanup?.();
+    this.dispatchJobObserverCleanup = null;
     this.context.eventBatcher.destroy();
   }
 
@@ -654,6 +659,10 @@ export class FlowChatManager {
       userMessageMetadata?: Record<string, unknown>;
       turnId?: string;
       preserveTurnOnStartError?: boolean;
+      /** One-shot UI confirmation for unattended auto approval. */
+      dispatchAutoConfirmed?: boolean;
+      onSessionConflictRetryStart?: () => void;
+      onSessionConflictRetrySuccess?: () => void;
     }
   ): Promise<void> {
     const targetSessionId = sessionId || this.context.flowChatStore.getState().activeSessionId;

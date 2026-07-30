@@ -242,6 +242,26 @@ fn arguments_without_a_placeholder_use_claude_codes_arguments_section() {
 }
 
 #[test]
+fn missing_and_escaped_argument_placeholders_remain_literal() {
+    let fixture = Fixture::new();
+    write(
+        fixture.user_claude.join("commands/literal.md"),
+        r"Use $0, keep $ARGUMENTS[3], and show \$ARGUMENTS plus \$1",
+    );
+
+    let provider = fixture.provider();
+    let snapshot = provider.discover(&fixture.context()).unwrap();
+
+    assert_eq!(
+        provider
+            .expand(&snapshot.commands[0], "alpha beta")
+            .unwrap()
+            .content,
+        "Use alpha, keep $ARGUMENTS[3], and show $ARGUMENTS plus $1"
+    );
+}
+
+#[test]
 fn case_insensitive_duplicate_in_one_layer_is_invalid_and_deterministic() {
     let fixture = Fixture::new();
     write(fixture.user_claude.join("commands/Review.md"), "First");

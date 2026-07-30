@@ -36,6 +36,78 @@
     "copyChanges": {
       "label": "默认复制本地改动",
       "description": "默认关闭；开启后会把项目中未提交的改动复制到新 worktree，并保留暂存状态。"
+    },
+    "autoDelete": {
+      "label": "自动删除旧 Worktree",
+      "description": "新建 worktree 后，如果工作区超过保留数量，BitFun 会删除最旧且可安全清理的托管 worktree。"
+    },
+    "autoDeleteLimit": {
+      "label": "自动删除上限",
+      "description": "每个工作区保留的托管 worktree 数量。包含关联会话、本地改动、未发布提交或 Git 锁的 worktree 始终会被保留。",
+      "invalid": "请输入 {{min}} 到 {{max}} 之间的数字。"
+    }
+  },
+  "management": {
+    "title": "工作区 Worktrees",
+    "description": "仅显示 BitFun Worktree 根目录内的 worktree，并按所属工作区分组。",
+    "loading": "正在扫描 BitFun Worktree…",
+    "loadFailed": "无法加载 BitFun Worktree 列表。",
+    "refresh": "刷新 Worktree",
+    "retry": "重试",
+    "worktreeCount": "{{count}} 个 Worktree",
+    "deleted": "已删除 {{path}}。",
+    "empty": {
+      "title": "暂无 BitFun Worktree",
+      "description": "为隔离会话创建的 worktree 会显示在这里。"
+    },
+    "lifecycle": {
+      "managed": "托管",
+      "permanent": "永久保留",
+      "external": "外部"
+    },
+    "state": {
+      "dirty": "有本地改动",
+      "unpublishedCommits": "有未发布提交",
+      "locked": "Git 已锁定",
+      "missing": "目录缺失",
+      "activeSessions": "未归档会话：{{count}}"
+    },
+    "sessions": {
+      "title": "会话",
+      "summary": "{{count}} 个会话",
+      "openLabel": "打开会话 {{name}}",
+      "openFailed": "无法打开此会话，请刷新列表后重试。",
+      "restoreTitle": "恢复并打开此会话？",
+      "restoreMessage": "{{name}} 已归档，是否先恢复再打开？",
+      "empty": "没有关联会话。",
+      "status": {
+        "active": "进行中",
+        "archived": "已归档"
+      }
+    },
+    "protection": {
+      "locked": "请先在 Git 中解锁此 worktree，再执行删除。",
+      "missing": "Worktree 目录已缺失，请手动清理过期的 Git 记录。"
+    },
+    "delete": {
+      "action": "删除",
+      "actionLabel": "删除 Worktree {{path}}",
+      "title": "删除此 Worktree？",
+      "message": "当前检出目录将被删除，此操作无法撤销。",
+      "messageWithSessions": "当前检出目录将被删除。关联会话会保留在历史记录中，但无法再使用此检出目录。",
+      "forceTitle": "删除并丢弃本地工作？",
+      "forceMessage": "此 worktree 包含本地改动或游离提交。删除后，这些本地工作将永久丢失。",
+      "forceMessageWithSessions": "本地改动或游离提交将永久丢失。关联会话会保留在历史记录中，但不再拥有对应的检出目录。",
+      "forceAction": "删除并丢弃",
+      "cancel": "取消"
+    },
+    "errors": {
+      "locked": "此 worktree 已被 Git 锁定，无法删除。",
+      "dirty": "此 worktree 仍包含本地改动。",
+      "unpublishedCommits": "此 worktree 仍包含未发布的游离提交。",
+      "notFound": "此 worktree 已不存在，请刷新列表后重试。",
+      "remoteUnsupported": "暂不支持远程 SSH Worktree。",
+      "deleteFailed": "无法删除 Worktree。"
     }
   }
 }

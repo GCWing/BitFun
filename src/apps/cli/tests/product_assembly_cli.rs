@@ -345,6 +345,12 @@ fn interactive_tui_agent_operations_stay_behind_cli_runtime_client() {
             && !CHAT_MODE.contains("RuntimeIpcClient"),
         "Shared IPC must remain behind CliAgentRuntimeClient instead of leaking into TUI controllers"
     );
+    assert!(
+        RUNTIME_CLIENT.contains("RuntimeIpcOperation::UpdateSessionMode { request }")
+            && SHARED_RUNTIME.contains("RuntimeIpcOperation::UpdateSessionMode { request }")
+            && SHARED_RUNTIME.contains(".update_session_mode(request)"),
+        "Shared Agent mode updates must reuse the Runtime port through the private IPC adapter"
+    );
     let shared_command_path = CHAT_COMMANDS
         .split_once("fn handle_command(")
         .expect("handle_command")

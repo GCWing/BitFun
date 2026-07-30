@@ -11,6 +11,7 @@
   backdrop-filter: tokens.$blur-base;
   -webkit-backdrop-filter: tokens.$blur-base;
   position: relative;
+  box-shadow: tokens.$shadow-xs;
 
   &--success {
     border-color: var(--color-success-border);
@@ -121,11 +122,32 @@
     color: var(--color-text-muted);
     cursor: pointer;
     border-radius: tokens.$size-radius-sm;
-    transition: all tokens.$motion-base tokens.$easing-standard;
+    transform: scale(1);
+    transition:
+      background-color var(--motion-fast) ease,
+      color var(--motion-fast) ease,
+      transform var(--motion-fast) var(--easing-standard);
 
-    &:hover {
-      background: var(--element-bg-medium);
-      color: var(--color-text-primary);
+    &:active {
+      transform: scale(0.97);
     }
+
+    &:focus-visible {
+      outline: 2px solid color-mix(in srgb, var(--color-accent-500) 50%, transparent);
+      outline-offset: 1px;
+    }
+  }
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .alert__close:hover {
+    background: var(--element-bg-medium);
+    color: var(--color-text-primary);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .alert__close:active {
+    transform: none;
   }
 }

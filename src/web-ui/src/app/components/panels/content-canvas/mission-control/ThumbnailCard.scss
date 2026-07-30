@@ -14,7 +14,11 @@
   border-radius: 6px;
   overflow: hidden;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition:
+    transform 150ms cubic-bezier(0.23, 1, 0.32, 1),
+    background-color 150ms ease,
+    border-color 150ms ease,
+    box-shadow 150ms ease;
 
   // Switch to solid border on hover
   &:hover {
@@ -126,7 +130,11 @@
     color: var(--color-text-muted);
     cursor: pointer;
     border-radius: 3px;
-    transition: all 0.1s ease;
+    transition:
+      transform 100ms cubic-bezier(0.23, 1, 0.32, 1),
+      background-color 100ms ease,
+      color 100ms ease,
+      opacity 100ms ease;
 
     &:hover {
       background: var(--element-bg-base);
