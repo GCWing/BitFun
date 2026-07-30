@@ -6034,9 +6034,11 @@ mod tests {
 
     #[test]
     fn container_special_files_are_not_reported_as_regular_files() {
-        let entry = parse_container_file_output("pipe\0/workspace/pipe\0o\00\01720000000\0644\0")
-            .unwrap()
-            .unwrap();
+        let entry = parse_container_file_output(
+            "pipe\x00/workspace/pipe\x00o\x000\x001720000000\x00644\x00",
+        )
+        .unwrap()
+        .unwrap();
 
         assert!(!entry.is_file);
         assert!(!entry.is_dir);
