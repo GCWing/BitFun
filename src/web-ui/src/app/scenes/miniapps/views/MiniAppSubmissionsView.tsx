@@ -11,7 +11,7 @@ import {
   Send,
   X,
 } from 'lucide-react';
-import { Badge, Button, Input } from '@/component-library';
+import { Badge, Button, Input, Select } from '@/component-library';
 import { GalleryEmpty, GalleryLayout, GalleryPageHeader } from '@/app/components';
 import { useI18n } from '@/infrastructure/i18n';
 import { systemAPI } from '@/infrastructure/api/service-api/SystemAPI';
@@ -312,16 +312,15 @@ const MiniAppSubmissionsView: React.FC = () => {
 
           <label className="miniapp-submissions__field">
             <span>{t('market.submissions.app')}</span>
-            <select
+            <Select
               value={selectedAppId}
-              onChange={(event) => {
-                const app = apps.find((item) => item.id === event.target.value);
+              onChange={(value) => {
+                const app = apps.find((item) => item.id === value);
                 if (app) selectApp(app);
               }}
               disabled={busy || localActionsDisabled}
-            >
-              {apps.map((app) => <option key={app.id} value={app.id}>{app.name}</option>)}
-            </select>
+              options={apps.map((app) => ({ value: app.id, label: app.name }))}
+            />
           </label>
 
           <div className="miniapp-submissions__form-grid">
@@ -371,17 +370,15 @@ const MiniAppSubmissionsView: React.FC = () => {
           <div className="miniapp-submissions__form-grid">
             <label className="miniapp-submissions__field">
               <span>{t('market.submissions.category')}</span>
-              <select
+              <Select
                 value={draft.category}
                 disabled={busy}
-                onChange={(event) => setDraft({ ...draft, category: event.target.value })}
-              >
-                {MARKET_CATEGORIES.map((value) => (
-                  <option key={value} value={value}>
-                    {marketCategoryLabel(value, t)}
-                  </option>
-                ))}
-              </select>
+                onChange={(value) => setDraft({ ...draft, category: String(value) })}
+                options={MARKET_CATEGORIES.map((value) => ({
+                  value,
+                  label: marketCategoryLabel(value, t),
+                }))}
+              />
             </label>
             <Input
               label={t('market.submissions.minVersion')}

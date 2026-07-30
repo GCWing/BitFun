@@ -1,13 +1,6 @@
 @use '../../../../component-library/styles/tokens' as *;
 
 .miniapp-market-native {
-  .gallery-page-header,
-  &__controls,
-  &__catalog {
-    width: min(100%, 1240px);
-    margin-inline: auto;
-  }
-
   &__header-actions {
     display: flex;
     align-items: center;
@@ -24,63 +17,10 @@
     gap: $size-gap-1;
     color: var(--color-text-secondary);
     font-size: var(--font-size-sm);
-
-    img {
-      width: 24px;
-      height: 24px;
-      border-radius: $size-radius-full;
-    }
   }
 
-  &__controls {
-    display: flex;
-    justify-content: space-between;
-    gap: $size-gap-3;
-    padding: $size-gap-3 clamp(24px, 4vw, 56px) $size-gap-2;
-
-    select {
-      min-width: 130px;
-      height: 32px;
-      padding-inline: $size-gap-2;
-      border: 1px solid var(--border-subtle);
-      border-radius: $size-radius-base;
-      background: var(--element-bg-medium);
-      color: var(--color-text-primary);
-    }
-  }
-
-  &__categories {
-    display: flex;
-    flex-wrap: wrap;
-    gap: $size-gap-1;
-
-    button {
-      border: 1px solid transparent;
-      border-radius: $size-radius-full;
-      padding: 5px 10px;
-      background: transparent;
-      color: var(--color-text-secondary);
-      cursor: pointer;
-
-      &:hover {
-        background: var(--element-bg-soft);
-        color: var(--color-text-primary);
-      }
-
-      &.is-active {
-        border-color: var(--border-base);
-        background: var(--element-bg-medium);
-        color: var(--color-text-primary);
-      }
-    }
-  }
-
-  &__catalog {
-    padding: $size-gap-2 clamp(24px, 4vw, 56px) 48px;
-  }
-
-  &__grid {
-    --gallery-grid-min: 285px;
+  &__sort {
+    min-width: 132px;
   }
 
   &__load-more {
@@ -100,12 +40,20 @@
   color: inherit;
   text-align: left;
   cursor: pointer;
-  transition: transform 160ms ease, border-color 160ms ease, background 160ms ease;
+  transition:
+    transform $motion-fast $easing-standard,
+    border-color $motion-fast $easing-standard,
+    background $motion-fast $easing-standard;
 
   &:hover {
     transform: translateY(-2px);
     border-color: var(--border-base);
     background: var(--element-bg-soft);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--color-accent-500);
+    outline-offset: 2px;
   }
 
   &__visual {
@@ -115,7 +63,6 @@
     overflow: hidden;
     border-bottom: 1px solid var(--border-subtle);
     background: var(--color-bg-tertiary);
-    font-size: 34px;
 
     img {
       width: 100%;
@@ -124,10 +71,18 @@
     }
   }
 
+  &__fallback {
+    display: grid;
+    place-items: center;
+    width: 100%;
+    height: 100%;
+    color: var(--color-text-primary);
+  }
+
   &__body {
     display: grid;
-    gap: 8px;
-    padding: 14px 15px 15px;
+    gap: $size-gap-2;
+    padding: $size-gap-3;
 
     strong {
       overflow: hidden;
@@ -138,7 +93,7 @@
 
     p {
       display: -webkit-box;
-      min-height: 38px;
+      min-height: 2.9em;
       margin: 0;
       overflow: hidden;
       color: var(--color-text-secondary);
@@ -162,13 +117,13 @@
   }
 
   &__stats {
-    gap: 13px;
-    padding-top: 3px;
+    gap: $size-gap-3;
+    padding-top: $size-gap-1;
 
     span {
       display: inline-flex;
       align-items: center;
-      gap: 4px;
+      gap: $size-gap-1;
     }
   }
 }
@@ -229,7 +184,7 @@
   &__rating {
     display: flex;
     align-items: center;
-    gap: 4px;
+    gap: $size-gap-1;
 
     button {
       display: grid;
@@ -250,13 +205,13 @@
 
   &__releases {
     display: grid;
-    gap: 6px;
+    gap: $size-gap-2;
 
     > div {
       display: grid;
       grid-template-columns: 72px 1fr auto;
       align-items: center;
-      padding: 8px 10px;
+      padding: $size-gap-2 $size-gap-3;
       border: 1px solid var(--border-subtle);
       border-radius: $size-radius-base;
       color: var(--color-text-secondary);
@@ -265,20 +220,13 @@
   }
 }
 
-@media (max-width: 760px) {
-  .miniapp-market-native {
-    &__header-actions,
-    &__controls {
-      width: 100%;
-      align-items: stretch;
-      flex-direction: column;
-    }
+@media (max-width: 720px) {
+  .miniapp-market-native__header-actions {
+    width: 100%;
+    align-items: stretch;
+    flex-direction: column;
 
-    &__header-actions > :first-child {
-      width: 100%;
-    }
-
-    &__controls select {
+    > :first-child {
       width: 100%;
     }
   }

@@ -38,6 +38,8 @@
   "market": {
     "title": "MiniApp Market",
     "subtitle": "Browse human-reviewed mini apps that run in BitFun's strict sandbox.",
+    "catalog": "Catalog",
+    "sortLabel": "Sort by",
     "search": "Search the market…",
     "signIn": "Sign in with GitHub",
     "empty": "No reviewed MiniApps have been published yet.",

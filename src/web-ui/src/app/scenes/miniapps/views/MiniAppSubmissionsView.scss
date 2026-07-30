@@ -1,10 +1,11 @@
 @use '../../../../component-library/styles/tokens' as *;
 
 .miniapp-submissions {
-  .gallery-page-header,
+  // Match GalleryLayout's $content-max / $gutter so switching tabs inside the
+  // MiniApp scene doesn't shift content horizontally.
   &__workspace,
   &__remote-warning {
-    width: min(100%, 1180px);
+    width: min(100%, 1360px);
     margin-inline: auto;
   }
 
@@ -19,7 +20,7 @@
     display: flex;
     align-items: center;
     gap: $size-gap-2;
-    padding: 0 clamp(24px, 4vw, 56px) $size-gap-3;
+    padding: 0 clamp(28px, 4vw, 64px) $size-gap-3;
     color: var(--color-warning);
     font-size: var(--font-size-sm);
   }
@@ -28,7 +29,7 @@
     display: grid;
     grid-template-columns: minmax(0, 1.25fr) minmax(310px, 0.75fr);
     gap: $size-gap-5;
-    padding: $size-gap-2 clamp(24px, 4vw, 56px) 56px;
+    padding: $size-gap-2 clamp(28px, 4vw, 64px) 56px;
   }
 
   &__form,
@@ -87,14 +88,17 @@
       font-weight: 500;
     }
 
-    select,
     textarea {
       width: 100%;
+      min-height: 92px;
+      padding: 9px 10px;
       border: 1px solid var(--border-subtle);
       border-radius: $size-radius-base;
       outline: none;
       background: var(--element-bg-soft);
       color: var(--color-text-primary);
+      line-height: 1.5;
+      resize: vertical;
 
       &:focus {
         border-color: var(--color-accent-500);
@@ -104,18 +108,6 @@
         cursor: not-allowed;
         opacity: 0.55;
       }
-    }
-
-    select {
-      height: 36px;
-      padding-inline: 10px;
-    }
-
-    textarea {
-      min-height: 92px;
-      resize: vertical;
-      padding: 9px 10px;
-      line-height: 1.5;
     }
   }
 

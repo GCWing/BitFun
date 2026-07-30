@@ -38,6 +38,8 @@
   "market": {
     "title": "MiniApp 市場",
     "subtitle": "瀏覽經人工審核、可在嚴格沙箱中執行的小應用。",
+    "catalog": "應用目錄",
+    "sortLabel": "排序方式",
     "search": "搜尋市場…",
     "signIn": "使用 GitHub 登入",
     "empty": "暫時沒有已發佈的小應用。",

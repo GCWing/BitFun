@@ -12,10 +12,13 @@ import {
   Star,
 } from 'lucide-react';
 import {
+  Avatar,
   Badge,
   Button,
   ConfirmDialog,
   Search,
+  Select,
+  type SelectOption,
 } from '@/component-library';
 import {
   GalleryDetailModal,
@@ -24,6 +27,7 @@ import {
   GalleryLayout,
   GalleryPageHeader,
   GallerySkeleton,
+  GalleryZone,
 } from '@/app/components';
 import { useSceneManager } from '@/app/hooks/useSceneManager';
 import type { SceneTabId } from '@/app/components/SceneBar/types';
@@ -42,6 +46,7 @@ import {
 } from '@/infrastructure/api/service-api/MiniAppMarketAPI';
 import { createLogger } from '@/shared/utils/logger';
 import { useNotification } from '@/shared/notification-system';
+import { getMiniAppIconGradient, renderMiniAppIcon } from '../utils/miniAppIcons';
 import { pickLocalizedString } from '../utils/pickLocalizedString';
 import './MiniAppMarketView.scss';
 
@@ -268,6 +273,11 @@ const MiniAppMarketView: React.FC = () => {
   const detailDescription = detail
     ? pickLocalizedString(detail, currentLanguage, 'description')
     : '';
+  const sortOptions = useMemo<SelectOption[]>(() => [
+    { value: 'newest', label: t('market.sort.newest') },
+    { value: 'downloads', label: t('market.sort.downloads') },
+    { value: 'rating', label: t('market.sort.rating') },
+  ], [t]);
 
   return (
     <GalleryLayout className="miniapp-market-native">
@@ -284,7 +294,7 @@ const MiniAppMarketView: React.FC = () => {
             />
             {me ? (
               <div className="miniapp-market-native__identity">
-                <img src={me.user.avatarUrl} alt="" />
+                <Avatar size={22} src={me.user.avatarUrl} alt={me.user.login} />
                 <span>@{me.user.login}</span>
               </div>
             ) : (
@@ -297,96 +307,110 @@ const MiniAppMarketView: React.FC = () => {
         )}
       />
 
-      <div className="miniapp-market-native__controls">
-        <div className="miniapp-market-native__categories">
-          {CATEGORIES.map((value) => (
-            <button
-              key={value}
-              type="button"
-              className={value === category ? 'is-active' : undefined}
-              onClick={() => setCategory(value)}
-            >
-              {categoryLabel(value, t)}
-            </button>
-          ))}
-        </div>
-        <select value={sort} onChange={(event) => setSort(event.target.value as MarketSort)}>
-          <option value="newest">{t('market.sort.newest')}</option>
-          <option value="downloads">{t('market.sort.downloads')}</option>
-          <option value="rating">{t('market.sort.rating')}</option>
-        </select>
-      </div>
-
-      <div className="miniapp-market-native__catalog">
-        {loading ? <GallerySkeleton count={8} cardHeight={280} /> : null}
-        {!loading && error ? (
-          <GalleryEmpty
-            icon={<AlertTriangle size={34} />}
-            isError
-            message={t('market.messages.catalogFailed', { error })}
-            action={(
-              <Button size="small" variant="secondary" onClick={() => void loadCatalog(false)}>
-                <RefreshCw size={14} />
-                {t('scene.retry')}
-              </Button>
-            )}
-          />
-        ) : null}
-        {!loading && !error && items.length === 0 ? (
-          <GalleryEmpty icon={<PackageCheck size={34} />} message={t('market.empty')} />
-        ) : null}
-        {!loading && items.length > 0 ? (
-          <>
-            <GalleryGrid minCardWidth={285} className="miniapp-market-native__grid">
-              {items.map((item) => {
-                const name = pickLocalizedString(item, currentLanguage, 'name');
-                const description = pickLocalizedString(item, currentLanguage, 'description');
-                return (
-                  <button
-                    key={item.listingId}
-                    type="button"
-                    className="miniapp-market-card"
-                    onClick={() => void openDetail(item)}
-                  >
-                    <div className="miniapp-market-card__visual">
-                      {item.screenshotUrls[0] ? (
-                        <img src={item.screenshotUrls[0]} alt="" loading="lazy" />
-                      ) : (
-                        <span>{item.icon || '◫'}</span>
-                      )}
-                    </div>
-                    <div className="miniapp-market-card__body">
-                      <div className="miniapp-market-card__eyebrow">
-                        <span>{categoryLabel(item.category, t)}</span>
-                        <span>v{item.latestRelease}</span>
-                      </div>
-                      <strong>{name}</strong>
-                      <p>{description}</p>
-                      <div className="miniapp-market-card__stats">
-                        <span><Star size={12} /> {item.ratingAverage.toFixed(1)}</span>
-                        <span><Download size={12} /> {formatNumber(item.downloadCount)}</span>
-                        <span><Heart size={12} /> {formatNumber(item.favoriteCount)}</span>
-                      </div>
-                    </div>
-                  </button>
-                );
-              })}
-            </GalleryGrid>
-            {nextCursor ? (
-              <div className="miniapp-market-native__load-more">
-                <Button
-                  size="small"
-                  variant="secondary"
-                  disabled={loadingMore}
-                  onClick={() => void loadCatalog(true)}
-                >
-                  {loadingMore ? <Loader2 size={14} className="gallery-spinning" /> : null}
-                  {t('market.loadMore')}
+      <div className="gallery-zones">
+        <GalleryZone
+          title={t('market.catalog')}
+          tools={(
+            <Select
+              className="miniapp-market-native__sort"
+              size="small"
+              options={sortOptions}
+              value={sort}
+              onChange={(value) => setSort(value as MarketSort)}
+              triggerAriaLabel={t('market.sortLabel')}
+            />
+          )}
+        >
+          <div className="gallery-chip-row">
+            {CATEGORIES.map((value) => (
+              <button
+                key={value}
+                type="button"
+                className={[
+                  'gallery-cat-chip',
+                  value === category && 'gallery-cat-chip--active',
+                ].filter(Boolean).join(' ')}
+                onClick={() => setCategory(value)}
+              >
+                {categoryLabel(value, t)}
+              </button>
+            ))}
+          </div>
+          {loading ? <GallerySkeleton count={8} cardHeight={280} /> : null}
+          {!loading && error ? (
+            <GalleryEmpty
+              icon={<AlertTriangle size={34} />}
+              isError
+              message={t('market.messages.catalogFailed', { error })}
+              action={(
+                <Button size="small" variant="secondary" onClick={() => void loadCatalog(false)}>
+                  <RefreshCw size={14} />
+                  {t('scene.retry')}
                 </Button>
-              </div>
-            ) : null}
-          </>
-        ) : null}
+              )}
+            />
+          ) : null}
+          {!loading && !error && items.length === 0 ? (
+            <GalleryEmpty icon={<PackageCheck size={34} />} message={t('market.empty')} />
+          ) : null}
+          {!loading && items.length > 0 ? (
+            <>
+              <GalleryGrid minCardWidth={285}>
+                {items.map((item) => {
+                  const name = pickLocalizedString(item, currentLanguage, 'name');
+                  const description = pickLocalizedString(item, currentLanguage, 'description');
+                  return (
+                    <button
+                      key={item.listingId}
+                      type="button"
+                      className="miniapp-market-card"
+                      onClick={() => void openDetail(item)}
+                    >
+                      <div className="miniapp-market-card__visual">
+                        {item.screenshotUrls[0] ? (
+                          <img src={item.screenshotUrls[0]} alt="" loading="lazy" />
+                        ) : (
+                          <span
+                            className="miniapp-market-card__fallback"
+                            style={{ background: getMiniAppIconGradient(item.icon || 'box') }}
+                          >
+                            {renderMiniAppIcon(item.icon || 'box', 30)}
+                          </span>
+                        )}
+                      </div>
+                      <div className="miniapp-market-card__body">
+                        <div className="miniapp-market-card__eyebrow">
+                          <span>{categoryLabel(item.category, t)}</span>
+                          <span>v{item.latestRelease}</span>
+                        </div>
+                        <strong>{name}</strong>
+                        <p>{description}</p>
+                        <div className="miniapp-market-card__stats">
+                          <span><Star size={12} /> {item.ratingAverage.toFixed(1)}</span>
+                          <span><Download size={12} /> {formatNumber(item.downloadCount)}</span>
+                          <span><Heart size={12} /> {formatNumber(item.favoriteCount)}</span>
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </GalleryGrid>
+              {nextCursor ? (
+                <div className="miniapp-market-native__load-more">
+                  <Button
+                    size="small"
+                    variant="secondary"
+                    disabled={loadingMore}
+                    onClick={() => void loadCatalog(true)}
+                  >
+                    {loadingMore ? <Loader2 size={14} className="gallery-spinning" /> : null}
+                    {t('market.loadMore')}
+                  </Button>
+                </div>
+              ) : null}
+            </>
+          ) : null}
+        </GalleryZone>
       </div>
 
       <GalleryDetailModal
@@ -395,7 +419,10 @@ const MiniAppMarketView: React.FC = () => {
           setDetail(undefined);
           setInstalled(null);
         }}
-        icon={detailLoading ? <Loader2 size={22} className="gallery-spinning" /> : <span>{detail?.icon || '◫'}</span>}
+        icon={detailLoading
+          ? <Loader2 size={22} className="gallery-spinning" />
+          : renderMiniAppIcon(detail?.icon || 'box', 24)}
+        iconGradient={detail ? getMiniAppIconGradient(detail.icon || 'box') : undefined}
         title={detailName || t('market.detail.loading')}
         badges={detail ? (
           <>

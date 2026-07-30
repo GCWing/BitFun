@@ -1,5 +1,9 @@
 @use '../../../component-library/styles/tokens' as *;
 
+// Gutter aligned with GalleryLayout ($gutter) so the tab strip lines up
+// with the page header content of every tab pane.
+$scene-gutter: clamp(28px, 4vw, 64px);
+
 .miniapp-gallery-scene {
   display: flex;
   flex-direction: column;
@@ -10,56 +14,36 @@
   height: 100%;
   overflow: hidden;
 
+  // Layout glue: make the component-library Tabs fill the scene so each
+  // pane's GalleryLayout keeps its own internal scroll.
   &__tabs {
-    display: flex;
-    flex: 0 0 auto;
-    align-items: center;
-    gap: 3px;
-    min-height: 42px;
-    padding: 6px clamp(24px, 4vw, 56px);
-    border-bottom: 1px solid var(--border-subtle);
-    background: var(--color-bg-primary);
+    flex: 1 1 auto;
+    min-height: 0;
 
-    button {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      min-height: 30px;
-      padding: 5px 10px;
-      border: 1px solid transparent;
-      border-radius: $size-radius-base;
-      background: transparent;
-      color: var(--color-text-secondary);
-      font-size: var(--font-size-sm);
-      cursor: pointer;
+    > .bitfun-tabs__nav {
+      flex: 0 0 auto;
+      padding: $size-gap-1 $scene-gutter 0;
+      background: var(--color-bg-primary);
+      border-bottom-color: var(--border-subtle);
+    }
 
-      &:hover {
-        background: var(--element-bg-soft);
-        color: var(--color-text-primary);
-      }
+    > .bitfun-tabs__content {
+      display: flex;
+      flex: 1 1 auto;
+      min-height: 0;
+    }
 
-      &:active {
-        transform: translateY(1px);
-      }
-
-      &.is-active {
-        border-color: var(--border-subtle);
-        background: var(--element-bg-medium);
-        color: var(--color-text-primary);
-        font-weight: 500;
-      }
+    .bitfun-tab-pane {
+      display: flex;
+      flex: 1 1 auto;
+      min-width: 0;
+      min-height: 0;
     }
   }
 }
 
 @media (max-width: 560px) {
-  .miniapp-gallery-scene__tabs {
-    justify-content: stretch;
-    padding-inline: 12px;
-
-    button {
-      justify-content: center;
-      flex: 1;
-    }
+  .miniapp-gallery-scene__tabs > .bitfun-tabs__nav {
+    padding-inline: $size-gap-3;
   }
 }

@@ -4,6 +4,7 @@
  */
 import React, { Suspense, lazy, useState } from 'react';
 import { Download, Store, UploadCloud } from 'lucide-react';
+import { Tabs, TabPane } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import './MiniAppGalleryScene.scss';
 
@@ -19,40 +20,41 @@ const MiniAppGalleryScene: React.FC = () => {
 
   return (
     <div className="miniapp-gallery-scene">
-      <nav className="miniapp-gallery-scene__tabs" aria-label={t('market.tabs.label')}>
-        <button
-          type="button"
-          className={activeTab === 'installed' ? 'is-active' : undefined}
-          aria-current={activeTab === 'installed' ? 'page' : undefined}
-          onClick={() => setActiveTab('installed')}
+      <Tabs
+        className="miniapp-gallery-scene__tabs"
+        type="line"
+        size="small"
+        activeKey={activeTab}
+        onChange={(key) => setActiveTab(key as MiniAppGalleryTab)}
+      >
+        <TabPane
+          tabKey="installed"
+          icon={<Download size={14} />}
+          label={t('market.tabs.installed')}
         >
-          <Download size={14} />
-          {t('market.tabs.installed')}
-        </button>
-        <button
-          type="button"
-          className={activeTab === 'market' ? 'is-active' : undefined}
-          aria-current={activeTab === 'market' ? 'page' : undefined}
-          onClick={() => setActiveTab('market')}
+          <Suspense fallback={null}>
+            <MiniAppGalleryView />
+          </Suspense>
+        </TabPane>
+        <TabPane
+          tabKey="market"
+          icon={<Store size={14} />}
+          label={t('market.tabs.market')}
         >
-          <Store size={14} />
-          {t('market.tabs.market')}
-        </button>
-        <button
-          type="button"
-          className={activeTab === 'submissions' ? 'is-active' : undefined}
-          aria-current={activeTab === 'submissions' ? 'page' : undefined}
-          onClick={() => setActiveTab('submissions')}
+          <Suspense fallback={null}>
+            <MiniAppMarketView />
+          </Suspense>
+        </TabPane>
+        <TabPane
+          tabKey="submissions"
+          icon={<UploadCloud size={14} />}
+          label={t('market.tabs.submissions')}
         >
-          <UploadCloud size={14} />
-          {t('market.tabs.submissions')}
-        </button>
-      </nav>
-      <Suspense fallback={null}>
-        {activeTab === 'installed' ? <MiniAppGalleryView /> : null}
-        {activeTab === 'market' ? <MiniAppMarketView /> : null}
-        {activeTab === 'submissions' ? <MiniAppSubmissionsView /> : null}
-      </Suspense>
+          <Suspense fallback={null}>
+            <MiniAppSubmissionsView />
+          </Suspense>
+        </TabPane>
+      </Tabs>
     </div>
   );
 };
