@@ -51,6 +51,9 @@
 - GitHub token 只用于读取公开 `{id,login,avatar_url}`，随后丢弃，不能下发给
   Web 或桌面客户端。
 - 管理员身份每次请求按 GitHub 数字 ID 计算，不能依赖客户端声明。
+- `MARKET_WEB_SUBMISSIONS_ENABLED=false` 时，所有投稿写路由会在读取请求体前
+  拒绝 Web Cookie 会话；Desktop Bearer 投稿、投稿历史读取和 Web 管理员审核
+  保持可用。UI 隐藏不是这一边界的替代品。
 
 ## 本地验证
 

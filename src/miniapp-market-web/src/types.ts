@@ -142,6 +142,7 @@ export interface Me {
 export interface MarketConfig {
   githubAuthConfigured: boolean;
   publicBrowse: boolean;
+  webSubmissionsEnabled: boolean;
   categories: string[];
 }
 

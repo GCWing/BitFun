@@ -132,6 +132,7 @@ mod tests {
             session_secret: "test-session-secret-at-least-24".to_string(),
             admin_github_ids: [24753352].into_iter().collect(),
             public_browse: true,
+            web_submissions_enabled: false,
         };
         tokio::fs::create_dir_all(&config.web_dir).await.unwrap();
         tokio::fs::write(config.web_dir.join("index.html"), "<html></html>")

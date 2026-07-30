@@ -16,6 +16,7 @@ pub struct MarketConfig {
     pub session_secret: String,
     pub admin_github_ids: HashSet<i64>,
     pub public_browse: bool,
+    pub web_submissions_enabled: bool,
 }
 
 impl MarketConfig {
@@ -57,6 +58,9 @@ impl MarketConfig {
         let public_browse = env::var("MARKET_PUBLIC_BROWSE")
             .map(|value| matches!(value.as_str(), "1" | "true" | "TRUE" | "yes"))
             .unwrap_or(true);
+        let web_submissions_enabled = env::var("MARKET_WEB_SUBMISSIONS_ENABLED")
+            .map(|value| matches!(value.as_str(), "1" | "true" | "TRUE" | "yes"))
+            .unwrap_or(false);
 
         Ok(Self {
             bind,
@@ -69,6 +73,7 @@ impl MarketConfig {
             session_secret,
             admin_github_ids,
             public_browse,
+            web_submissions_enabled,
         })
     }
 

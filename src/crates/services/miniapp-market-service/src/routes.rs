@@ -1,14 +1,16 @@
 use crate::artifacts::ArtifactStore;
 use crate::auth::{
     AuthService, CompletedOAuth, DesktopAuthPollRequest, RefreshTokenRequest, RequestAuth,
+    RequestAuthKind,
 };
 use crate::config::MarketConfig;
 use crate::db::{AuthenticatedUser, Database};
 use crate::error::{MarketError, MarketResult};
 use crate::package::{validate_market_package, validate_min_bitfun_version, validate_screenshot};
 use axum::body::{Body, Bytes};
-use axum::extract::{DefaultBodyLimit, Path, Query, State};
-use axum::http::{header, HeaderMap, HeaderValue, StatusCode};
+use axum::extract::{DefaultBodyLimit, Path, Query, Request, State};
+use axum::http::{header, HeaderMap, HeaderValue, Method, StatusCode};
+use axum::middleware::Next;
 use axum::response::{IntoResponse, Redirect, Response};
 use axum::routing::{any, get, post, put};
 use axum::{Json, Router};
@@ -99,6 +101,7 @@ struct ModerationReason {
 struct MarketConfigResponse {
     github_auth_configured: bool,
     public_browse: bool,
+    web_submissions_enabled: bool,
     categories: &'static [&'static str],
 }
 
@@ -135,6 +138,7 @@ struct AdminSubmissionDetail {
 }
 
 pub(crate) fn api_router(state: Arc<MarketState>) -> Router {
+    let submission_policy_state = state.clone();
     Router::new()
         .route("/health", get(health))
         .route("/config", get(config))
@@ -200,11 +204,44 @@ pub(crate) fn api_router(state: Arc<MarketState>) -> Router {
         // to be an explicit wildcard route that outranks `/miniapp/{*rest}`.
         .route("/{*rest}", any(api_not_found))
         .layer(DefaultBodyLimit::max(21 * 1024 * 1024))
+        .layer(axum::middleware::from_fn_with_state(
+            submission_policy_state,
+            enforce_submission_write_policy,
+        ))
         .with_state(state)
 }
 
 async fn api_not_found() -> MarketError {
     MarketError::not_found("Unknown API route.")
+}
+
+async fn enforce_submission_write_policy(
+    State(state): State<Arc<MarketState>>,
+    request: Request,
+    next: Next,
+) -> MarketResult<Response> {
+    if is_submission_write_request(request.method(), request.uri().path()) {
+        // Authenticate before Axum reads a JSON/package/screenshot body. This keeps the
+        // disabled Web surface from becoming an unauthenticated upload sink.
+        require_submission_write_auth(&state, request.headers()).await?;
+    }
+    Ok(next.run(request).await)
+}
+
+fn is_submission_write_request(method: &Method, path: &str) -> bool {
+    let path = path
+        .strip_prefix("/miniapp/api/v1")
+        .unwrap_or(path)
+        .trim_matches('/');
+    let segments = path.split('/').collect::<Vec<_>>();
+    matches!(
+        (method.as_str(), segments.as_slice()),
+        ("POST", ["submissions"])
+            | ("DELETE", ["submissions", _])
+            | ("PUT", ["submissions", _, "package"])
+            | ("POST", ["submissions", _, "submit"])
+            | ("PUT" | "DELETE", ["submissions", _, "screenshots", _])
+    )
 }
 
 async fn health(State(state): State<Arc<MarketState>>) -> impl IntoResponse {
@@ -230,6 +267,7 @@ async fn config(State(state): State<Arc<MarketState>>) -> Json<MarketConfigRespo
     Json(MarketConfigResponse {
         github_auth_configured: state.config.github_configured(),
         public_browse: state.config.public_browse,
+        web_submissions_enabled: state.config.web_submissions_enabled,
         categories: MARKET_CATEGORIES,
     })
 }
@@ -515,7 +553,7 @@ async fn create_submission(
     headers: HeaderMap,
     Json(request): Json<MarketSubmissionDraftRequest>,
 ) -> MarketResult<Json<MarketSubmission>> {
-    let auth = require_write_auth(&state, &headers).await?;
+    let auth = require_submission_write_auth(&state, &headers).await?;
     validate_submission_request(&request)?;
     let listing_id = validate_listing_ownership_and_release(
         &state,
@@ -575,7 +613,7 @@ async fn upload_submission_package(
     Path(submission_id): Path<String>,
     body: Bytes,
 ) -> MarketResult<Json<MarketSubmission>> {
-    let auth = require_write_auth(&state, &headers).await?;
+    let auth = require_submission_write_auth(&state, &headers).await?;
     let submission = submission_by_id(&state, &submission_id, auth.user.internal_id, false).await?;
     if submission.status != MarketSubmissionStatus::Draft {
         return Err(MarketError::conflict(
@@ -618,7 +656,7 @@ async fn upload_submission_screenshot(
     Path((submission_id, position)): Path<(String, u32)>,
     body: Bytes,
 ) -> MarketResult<Json<MarketSubmission>> {
-    let auth = require_write_auth(&state, &headers).await?;
+    let auth = require_submission_write_auth(&state, &headers).await?;
     if position as usize >= MARKET_MAX_SCREENSHOTS {
         return Err(MarketError::bad_request(
             "invalid_screenshot_position",
@@ -667,7 +705,7 @@ async fn delete_submission_screenshot(
     headers: HeaderMap,
     Path((submission_id, position)): Path<(String, u32)>,
 ) -> MarketResult<StatusCode> {
-    let auth = require_write_auth(&state, &headers).await?;
+    let auth = require_submission_write_auth(&state, &headers).await?;
     let submission = submission_by_id(&state, &submission_id, auth.user.internal_id, false).await?;
     if submission.status != MarketSubmissionStatus::Draft {
         return Err(MarketError::conflict(
@@ -689,7 +727,7 @@ async fn submit_submission(
     headers: HeaderMap,
     Path(submission_id): Path<String>,
 ) -> MarketResult<Json<MarketSubmission>> {
-    let auth = require_write_auth(&state, &headers).await?;
+    let auth = require_submission_write_auth(&state, &headers).await?;
     let submission = submission_by_id(&state, &submission_id, auth.user.internal_id, false).await?;
     if submission.status != MarketSubmissionStatus::Draft {
         return Err(MarketError::conflict(
@@ -745,7 +783,7 @@ async fn withdraw_submission(
     headers: HeaderMap,
     Path(submission_id): Path<String>,
 ) -> MarketResult<Json<MarketSubmission>> {
-    let auth = require_write_auth(&state, &headers).await?;
+    let auth = require_submission_write_auth(&state, &headers).await?;
     let now = Utc::now().timestamp();
     let updated = sqlx::query(
         "UPDATE submissions SET status = 'withdrawn', updated_at = ?
@@ -1716,6 +1754,22 @@ async fn require_write_auth(state: &MarketState, headers: &HeaderMap) -> MarketR
     Ok(auth)
 }
 
+async fn require_submission_write_auth(
+    state: &MarketState,
+    headers: &HeaderMap,
+) -> MarketResult<RequestAuth> {
+    let auth = state.auth.require_auth(headers).await?;
+    if !state.config.web_submissions_enabled && matches!(&auth.kind, RequestAuthKind::Web { .. }) {
+        return Err(MarketError::new(
+            StatusCode::FORBIDDEN,
+            "web_submissions_disabled",
+            "Web submissions are disabled. Use BitFun Desktop to submit MiniApps.",
+        ));
+    }
+    state.auth.require_csrf(headers, &auth)?;
+    Ok(auth)
+}
+
 async fn require_admin(state: &MarketState, headers: &HeaderMap) -> MarketResult<RequestAuth> {
     let auth = state.auth.require_auth(headers).await?;
     if !state.auth.is_admin(&auth.user) {
@@ -2059,6 +2113,7 @@ mod tests {
             session_secret: "test-session-secret-at-least-24".to_string(),
             admin_github_ids: HashSet::from([24753352]),
             public_browse: true,
+            web_submissions_enabled: false,
         };
         let db = Database::open(&config.database_path).await.unwrap();
         let artifacts = ArtifactStore::open(config.artifact_dir.clone())
@@ -2213,5 +2268,129 @@ mod tests {
         .await
         .unwrap();
         assert_eq!(audit_count, 2);
+    }
+
+    #[test]
+    fn submission_write_policy_excludes_reads_and_admin_review_routes() {
+        assert!(is_submission_write_request(&Method::POST, "/submissions"));
+        assert!(is_submission_write_request(
+            &Method::PUT,
+            "/submissions/submission-id/package"
+        ));
+        assert!(is_submission_write_request(
+            &Method::DELETE,
+            "/miniapp/api/v1/submissions/submission-id/screenshots/0"
+        ));
+        assert!(!is_submission_write_request(&Method::GET, "/submissions"));
+        assert!(!is_submission_write_request(
+            &Method::POST,
+            "/admin/submissions/submission-id/decision"
+        ));
+        assert!(!is_submission_write_request(
+            &Method::PUT,
+            "/listings/example/favorite"
+        ));
+    }
+
+    #[tokio::test]
+    async fn disabled_web_submission_writes_are_rejected_before_body_parsing() {
+        use tower::ServiceExt;
+
+        let temporary = tempfile::tempdir().unwrap();
+        let config = MarketConfig {
+            bind: "127.0.0.1:0".parse().unwrap(),
+            public_base_url: "https://market.openbitfun.com/miniapp".to_string(),
+            database_path: temporary.path().join("market.sqlite"),
+            artifact_dir: temporary.path().join("artifacts"),
+            web_dir: temporary.path().join("web"),
+            github_client_id: Some("client-id".to_string()),
+            github_client_secret: Some("client-secret".to_string()),
+            session_secret: "test-session-secret-at-least-24".to_string(),
+            admin_github_ids: HashSet::from([24753352]),
+            public_browse: true,
+            web_submissions_enabled: false,
+        };
+        let db = Database::open(&config.database_path).await.unwrap();
+        let artifacts = ArtifactStore::open(config.artifact_dir.clone())
+            .await
+            .unwrap();
+        let auth = AuthService::new(config.clone(), db.clone()).unwrap();
+        let user = db
+            .upsert_github_user(
+                24753352,
+                "bobleer",
+                "https://avatars.githubusercontent.com/u/24753352",
+            )
+            .await
+            .unwrap();
+        db.create_web_session(
+            user.internal_id,
+            "web-session-token",
+            "csrf-token",
+            (Utc::now() + chrono::Duration::hours(1)).timestamp(),
+        )
+        .await
+        .unwrap();
+        db.create_api_token(
+            user.internal_id,
+            "desktop-access-token",
+            "access",
+            "desktop-token-family",
+            (Utc::now() + chrono::Duration::hours(1)).timestamp(),
+        )
+        .await
+        .unwrap();
+        let state = Arc::new(MarketState {
+            config,
+            db,
+            artifacts,
+            auth,
+        });
+        let app = api_router(state.clone());
+        let cookie = "bitfun_market_session=web-session-token; bitfun_market_csrf=csrf-token";
+
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method(Method::POST)
+                    .uri("/submissions")
+                    .header(header::COOKIE, cookie)
+                    .header("x-csrf-token", "csrf-token")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from("not valid json"))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+        let body = axum::body::to_bytes(response.into_body(), 8 * 1024)
+            .await
+            .unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(body["error"]["code"], "web_submissions_disabled");
+
+        let history = app
+            .oneshot(
+                Request::builder()
+                    .method(Method::GET)
+                    .uri("/submissions")
+                    .header(header::COOKIE, cookie)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(history.status(), StatusCode::OK);
+
+        let mut desktop_headers = HeaderMap::new();
+        desktop_headers.insert(
+            header::AUTHORIZATION,
+            HeaderValue::from_static("Bearer desktop-access-token"),
+        );
+        let desktop_auth = require_submission_write_auth(&state, &desktop_headers)
+            .await
+            .unwrap();
+        assert!(matches!(desktop_auth.kind, RequestAuthKind::Bearer { .. }));
     }
 }

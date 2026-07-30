@@ -41,6 +41,12 @@ const messages = {
     submitted: 'Submitted for review.',
     mySubmissions: 'My submissions',
     noSubmissions: 'You have not submitted a MiniApp yet.',
+    webSubmissionDisabledTitle: 'Web submissions are temporarily unavailable',
+    webSubmissionDisabledBody:
+      'Web uploads and submission actions are currently disabled. Your existing submission history remains available.',
+    submitWithDesktop: 'Submit from BitFun Desktop',
+    desktopSubmissionHint:
+      'To publish a MiniApp or a new release, use the MiniApp Market in the BitFun Desktop client.',
     reviewQueue: 'Human review queue',
     approve: 'Approve and publish',
     reject: 'Reject',
@@ -178,6 +184,11 @@ const messages = {
     submitted: '已提交审核。',
     mySubmissions: '我的投稿',
     noSubmissions: '你还没有投稿。',
+    webSubmissionDisabledTitle: '网页投稿暂未开放',
+    webSubmissionDisabledBody: '网页端的上传和投稿操作目前已关闭，已有投稿记录仍可继续查看。',
+    submitWithDesktop: '请在 BitFun Desktop 中投稿',
+    desktopSubmissionHint:
+      '如需发布 MiniApp 或提交新版本，请前往 BitFun Desktop 客户端中的 MiniApp 市场操作。',
     reviewQueue: '人工审核队列',
     approve: '批准并发布',
     reject: '驳回',
@@ -314,6 +325,11 @@ const messages = {
     submitted: '已提交審核。',
     mySubmissions: '我的投稿',
     noSubmissions: '你還沒有投稿。',
+    webSubmissionDisabledTitle: '網頁投稿暫未開放',
+    webSubmissionDisabledBody: '網頁端的上傳和投稿操作目前已關閉，既有投稿記錄仍可繼續查看。',
+    submitWithDesktop: '請在 BitFun Desktop 中投稿',
+    desktopSubmissionHint:
+      '如需發布 MiniApp 或提交新版本，請前往 BitFun Desktop 客戶端中的 MiniApp 市場操作。',
     reviewQueue: '人工審核佇列',
     approve: '核准並發布',
     reject: '駁回',

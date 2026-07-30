@@ -24,12 +24,15 @@
    `.env` 写进源码、日志、截图或提交记录。
 7. 未完成本文件中的最小验证、没有明确 Git commit，或生产健康检查未通过
    时，不得声称已经发布。
+8. `webSubmissionsEnabled=false` 时网页投稿必须是只读模式：隐藏新建、上传、
+   提交新版本和撤回操作，只保留“我的投稿”历史。不要仅靠隐藏按钮保护接口；
+   后端还会按认证来源拒绝 Web Cookie 投稿写请求。
 
 ## 源码地图
 
 | 位置 | 作用 |
 | --- | --- |
-| `src/App.tsx` | 目录、详情、投稿、我的投稿和管理员审核页面 |
+| `src/App.tsx` | 目录、详情、受开关控制的投稿、只读“我的投稿”和管理员审核页面 |
 | `src/api.ts` | `/miniapp/api/v1` 客户端、CSRF、登录和下载 URL |
 | `src/types.ts` | 网页使用的 API DTO |
 | `src/i18n.ts` | `zh-CN`、`zh-TW`、`en-US` 文案与 fallback |
@@ -75,6 +78,10 @@ MARKET_DEV_API=http://127.0.0.1:19710 pnpm run dev:miniapp-market
 本地未配置 GitHub OAuth 时，浏览和无登录页面仍可开发，登录按钮会处于不可
 用状态。不要为了本地调试复制生产 secret。
 
+网页投稿默认关闭。只有在本地专门验证网页投稿旧流程时，才给本地 Rust 服务设置
+`MARKET_WEB_SUBMISSIONS_ENABLED=true`；生产保持 `false`。桌面客户端使用
+Bearer token 投稿，不受这个网页开关影响。
+
 ## 修改后的最小验证
 
 在仓库根目录运行：
@@ -104,7 +111,9 @@ pnpm run theme:color-audit:all
 - `/miniapp/apps/<slug>` 详情可打开；
 - 三种语言可切换，窄屏和宽屏没有明显溢出；
 - API 失败会显示可理解的错误，不在控制台泄露凭据；
-- 登录、投稿或审核相关改动使用测试账号走完对应流程。
+- 网页投稿关闭时看不到投稿/更新/撤回按钮，直接访问 `/miniapp/submit` 会提示
+  改用 BitFun Desktop，“我的投稿”仍可查看；
+- 登录、桌面投稿或审核相关改动使用测试账号走完对应流程。
 
 ## API 类型变更
 

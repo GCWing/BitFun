@@ -947,6 +947,13 @@ main {
   line-height: 1.6;
 }
 
+.empty-state-hint {
+  max-width: 520px;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
 .empty-state-icon,
 .gate-icon,
 .loading-mark {
@@ -1536,6 +1543,11 @@ main {
 .safety-note span {
   color: var(--text-secondary);
   line-height: 1.5;
+}
+
+.desktop-submission-notice {
+  max-width: 720px;
+  margin-bottom: 24px;
 }
 
 .submit-button {

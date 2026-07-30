@@ -634,6 +634,7 @@ mod tests {
             session_secret: "test-session-secret-at-least-24".to_string(),
             admin_github_ids: HashSet::from([24753352]),
             public_browse: false,
+            web_submissions_enabled: false,
         }
     }
 

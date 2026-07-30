@@ -86,6 +86,7 @@ function App() {
   const { theme, toggleTheme } = useTheme();
   const [route, setRoute] = useState<RouteState>(currentRoute);
   const [config, setConfig] = useState<MarketConfig>();
+  const [configResolved, setConfigResolved] = useState(false);
   const [me, setMe] = useState<Me>();
   const [authResolved, setAuthResolved] = useState(false);
 
@@ -109,7 +110,11 @@ function App() {
   }, []);
 
   useEffect(() => {
-    void marketApi.config().then(setConfig).catch(() => undefined);
+    void marketApi
+      .config()
+      .then(setConfig)
+      .catch(() => undefined)
+      .finally(() => setConfigResolved(true));
     void refreshIdentity();
   }, [refreshIdentity]);
 
@@ -117,6 +122,8 @@ function App() {
     if (route.path === '/submit') {
       return (
         <SubmitPage
+          enabled={config?.webSubmissionsEnabled === true}
+          configResolved={configResolved}
           me={me}
           authResolved={authResolved}
           query={route.query}
@@ -126,7 +133,14 @@ function App() {
       );
     }
     if (route.path === '/submissions') {
-      return <SubmissionsPage me={me} authResolved={authResolved} t={t} />;
+      return (
+        <SubmissionsPage
+          webSubmissionsEnabled={config?.webSubmissionsEnabled === true}
+          me={me}
+          authResolved={authResolved}
+          t={t}
+        />
+      );
     }
     if (route.path === '/admin') {
       return <AdminPage me={me} authResolved={authResolved} t={t} />;
@@ -136,7 +150,15 @@ function App() {
     }
     const detailMatch = route.path.match(/^\/apps\/([a-z0-9-]+)$/);
     if (detailMatch) {
-      return <DetailPage slug={detailMatch[1]} me={me} locale={locale} t={t} />;
+      return (
+        <DetailPage
+          slug={detailMatch[1]}
+          webSubmissionsEnabled={config?.webSubmissionsEnabled === true}
+          me={me}
+          locale={locale}
+          t={t}
+        />
+      );
     }
     return <CatalogPage config={config} me={me} locale={locale} t={t} />;
   })();
@@ -250,13 +272,15 @@ function Header({
           >
             {t('discover')}
           </button>
-          <button
-            className={routeIsActive('/submit') ? 'active' : undefined}
-            aria-current={routeIsActive('/submit') ? 'page' : undefined}
-            onClick={() => navigate('/submit')}
-          >
-            {t('submit')}
-          </button>
+          {config?.webSubmissionsEnabled && (
+            <button
+              className={routeIsActive('/submit') ? 'active' : undefined}
+              aria-current={routeIsActive('/submit') ? 'page' : undefined}
+              onClick={() => navigate('/submit')}
+            >
+              {t('submit')}
+            </button>
+          )}
           {me && (
             <button
               className={routeIsActive('/submissions') ? 'active' : undefined}
@@ -515,10 +539,14 @@ function CatalogPage({
                 <Tray weight="duotone" aria-hidden="true" />
               </span>
               <p>{t('empty')}</p>
-              <button className="button button-secondary" onClick={() => navigate('/submit')}>
-                <UploadSimple aria-hidden="true" />
-                {t('submit')}
-              </button>
+              {config?.webSubmissionsEnabled ? (
+                <button className="button button-secondary" onClick={() => navigate('/submit')}>
+                  <UploadSimple aria-hidden="true" />
+                  {t('submit')}
+                </button>
+              ) : (
+                <span className="empty-state-hint">{t('desktopSubmissionHint')}</span>
+              )}
             </div>
           )}
           {loading && items.length === 0 &&
@@ -632,11 +660,13 @@ function AppCardSkeleton() {
 
 function DetailPage({
   slug,
+  webSubmissionsEnabled,
   me,
   locale,
   t,
 }: {
   slug: string;
+  webSubmissionsEnabled: boolean;
   me?: Me;
   locale: Locale;
   t: (key: MessageKey) => string;
@@ -715,7 +745,7 @@ function DetailPage({
               <Heart weight={app.isFavorited ? 'fill' : 'regular'} aria-hidden="true" />
               {app.isFavorited ? t('favorited') : t('favorite')}
             </button>
-            {owner && (
+            {owner && webSubmissionsEnabled && (
               <button
                 className="button button-secondary"
                 onClick={() =>
@@ -863,12 +893,16 @@ function DetailPage({
 }
 
 function SubmitPage({
+  enabled,
+  configResolved,
   me,
   authResolved,
   query,
   t,
   onSubmitted,
 }: {
+  enabled: boolean;
+  configResolved: boolean;
   me?: Me;
   authResolved: boolean;
   query: URLSearchParams;
@@ -882,6 +916,8 @@ function SubmitPage({
   const initialSlug = query.get('slug') || '';
   const initialRelease = Number(query.get('release') || 1);
 
+  if (!configResolved) return <PageLoading t={t} />;
+  if (!enabled) return <WebSubmissionDisabledPage t={t} />;
   if (!authResolved) return <PageLoading t={t} />;
   if (!me) {
     return (
@@ -1049,10 +1085,12 @@ function SubmitPage({
 }
 
 function SubmissionsPage({
+  webSubmissionsEnabled,
   me,
   authResolved,
   t,
 }: {
+  webSubmissionsEnabled: boolean;
   me?: Me;
   authResolved: boolean;
   t: (key: MessageKey) => string;
@@ -1066,18 +1104,6 @@ function SubmissionsPage({
       .then((page) => setItems(page.items))
       .catch((caught) => setError(caught));
   }, [me]);
-  const withdraw = async (submissionId: string) => {
-    try {
-      await marketApi.withdrawSubmission(submissionId);
-      setItems((current) =>
-        current.map((item) =>
-          item.submissionId === submissionId ? { ...item, status: 'withdrawn' } : item,
-        ),
-      );
-    } catch (caught) {
-      setError(caught);
-    }
-  };
   if (!authResolved) return <PageLoading t={t} />;
   if (!me) return <AuthGate t={t} returnTo="/miniapp/submissions" />;
   return (
@@ -1089,6 +1115,7 @@ function SubmissionsPage({
         </span>
         <h1>{t('mySubmissions')}</h1>
       </div>
+      {!webSubmissionsEnabled && <DesktopSubmissionNotice t={t} />}
       {error != null && <Notice tone="error">{errorMessage(error, t)}</Notice>}
       <div className="submission-list">
         {items.map((item) => (
@@ -1097,8 +1124,25 @@ function SubmissionsPage({
             item={item}
             t={t}
             action={
-              item.status === 'draft' || item.status === 'submitted' ? (
-                <button className="text-action danger-action" onClick={() => void withdraw(item.submissionId)}>
+              webSubmissionsEnabled
+              && (item.status === 'draft' || item.status === 'submitted') ? (
+                <button
+                  className="text-action danger-action"
+                  onClick={async () => {
+                    try {
+                      await marketApi.withdrawSubmission(item.submissionId);
+                      setItems((current) =>
+                        current.map((submission) =>
+                          submission.submissionId === item.submissionId
+                            ? { ...submission, status: 'withdrawn' }
+                            : submission,
+                        ),
+                      );
+                    } catch (caught) {
+                      setError(caught);
+                    }
+                  }}
+                >
                   {t('withdraw')}
                 </button>
               ) : undefined
@@ -1111,14 +1155,44 @@ function SubmissionsPage({
               <Tray weight="duotone" aria-hidden="true" />
             </span>
             <p>{t('noSubmissions')}</p>
-            <button className="button button-secondary" onClick={() => navigate('/submit')}>
-              <UploadSimple aria-hidden="true" />
-              {t('submit')}
-            </button>
+            {webSubmissionsEnabled && (
+              <button className="button button-secondary" onClick={() => navigate('/submit')}>
+                <UploadSimple aria-hidden="true" />
+                {t('submit')}
+              </button>
+            )}
           </div>
         )}
       </div>
     </main>
+  );
+}
+
+function WebSubmissionDisabledPage({ t }: { t: (key: MessageKey) => string }) {
+  return (
+    <main className="form-page">
+      <div className="page-intro">
+        <span className="page-kicker">
+          <CubeFocus aria-hidden="true" />
+          {t('publisherWorkspace')}
+        </span>
+        <h1>{t('webSubmissionDisabledTitle')}</h1>
+        <p>{t('webSubmissionDisabledBody')}</p>
+      </div>
+      <DesktopSubmissionNotice t={t} />
+    </main>
+  );
+}
+
+function DesktopSubmissionNotice({ t }: { t: (key: MessageKey) => string }) {
+  return (
+    <div className="safety-note desktop-submission-notice" role="note">
+      <CubeFocus weight="duotone" aria-hidden="true" />
+      <div>
+        <strong>{t('submitWithDesktop')}</strong>
+        <span>{t('desktopSubmissionHint')}</span>
+      </div>
+    </div>
   );
 }
 

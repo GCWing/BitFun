@@ -274,10 +274,17 @@ curl -fsS https://market.openbitfun.com/miniapp/api/v1/config
 curl -fsS https://market.openbitfun.com/miniapp/ >/dev/null
 ```
 
+生产 `/config` 应返回 `"webSubmissionsEnabled":false`。此开关关闭时，Web
+投稿写请求由后端拒绝，网页仅保留“我的投稿”历史；BitFun Desktop 的 Bearer
+投稿和 Web 管理员审核继续可用。未来重新开放网页投稿时，必须先完成对应安全
+回归，再显式修改 root-only `market.env` 并仅 recreate 市场容器。
+
 再用浏览器人工检查：
 
 - `/miniapp/` 能加载，刷新子页面不会 404；
 - `MARKET_PUBLIC_BROWSE=false` 时匿名目录按预期关闭；
+- `MARKET_WEB_SUBMISSIONS_ENABLED=false` 时投稿/更新/撤回按钮不可见，直接访问
+  `/miniapp/submit` 提示改用 BitFun Desktop，“我的投稿”仍可读取；
 - OAuth 已配置时，GitHub 登录 callback 正常；
 - 与本次改动有关的浏览、下载、投稿、审核、安装或更新流程正常；
 - Relay、New API 和官网仍可用，且它们的容器/vhost 没被重启或改写。
