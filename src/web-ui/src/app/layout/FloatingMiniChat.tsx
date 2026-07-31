@@ -61,6 +61,8 @@ export const FloatingMiniChat: React.FC = () => {
     text: string;
   } | null>(null);
   const composerPrefillIdRef = useRef(0);
+  /** True while a press that may legitimately close the panel is in flight. */
+  const backdropArmedRef = useRef(false);
   const isOpen = phase !== 'closed';
   const panelRef = useRef<HTMLDivElement>(null);
   const previousHostSessionRef = useRef<{
@@ -366,11 +368,24 @@ export const FloatingMiniChat: React.FC = () => {
           still smaller than its final rect, so a click aimed at the panel would
           land here and close what the user just opened. Rendering it (without
           the close handler) throughout keeps those clicks from reaching the
-          scene underneath. */}
+          scene underneath.
+
+          Closing happens on click, NOT on mousedown: closing on mousedown
+          unmounts the backdrop in the middle of the press gesture, and pulling
+          the hit target of an in-flight gesture out from over a cross-document
+          iframe (a MiniApp) leaves the webview routing subsequent mousemoves
+          against the stale layer — the iframe loses hover and eats an extra
+          click until the next mousedown re-hit-tests. Arming on mousedown
+          preserves the opening-phase protection above: a press that began
+          while the panel was still scaling up never closes it. */}
       {isOpen && (
         <div
           className="bitfun-fmc__backdrop"
-          onMouseDown={phase === 'open' ? handleClose : undefined}
+          onMouseDown={() => { backdropArmedRef.current = phase === 'open'; }}
+          onClick={() => {
+            if (backdropArmedRef.current) handleClose();
+            backdropArmedRef.current = false;
+          }}
         />
       )}
 
