@@ -7,7 +7,7 @@ consumer 完成 package plugin 的最小可验证闭环。本文是
 [`../product-architecture.md`](../product-architecture.md) 约束；发生冲突时以上位设计为准。
 
 本文同时区分目标设计和当前实现。当前 BitFun 尚未集成 Bun Host；冻结的 ext-host 协议也还不能安全表达本文要求的
-不可变 npm target，因此不能把设计目标写成已交付能力。
+防篡改 prepared npm target，因此不能把设计目标写成已交付能力。
 
 协议事实以公开 ext-host 仓库的 `PROTOCOL.md`、`src/protocol.ts` 和生成的 `protocol.schema.json` 为准（见 §6）。
 Rust fixture 必须与冻结提交保持 wire-level 一致，不能仅按本文示例实现近似协议。
@@ -27,7 +27,7 @@ flowchart LR
   Host["Bun Plugin Host"]
 
   Source -->|"已批准来源"| Prepare
-  Prepare -->|"不可变 prepared target + attestation"| Source
+  Prepare -->|"防篡改 prepared target + attestation"| Source
   Source -->|"当前 activation authority"| Capability
   Capability -->|"真实 consumer 调用"| Client
   Client --> Adapter
@@ -74,7 +74,7 @@ Assembly 只选择实现；来源协调器在后台准备 target，各能力 own
 services 和 adapter 不依赖 Assembly；`PluginRuntimeClient` 不依赖具体 OpenCode adapter 或 services；Session owner 不直接
 引用 ext-host、TCP、进程句柄或 contribution registration。
 
-## 2. 安全边界：不可变 package target
+## 2. 安全边界：防篡改 prepared target
 
 ### 2.1 两阶段批准与准备
 
@@ -98,7 +98,7 @@ sequenceDiagram
   Prepare-->>Source: prepared target + materialization digest
   Source->>User: 展示入口、锁文件、完整依赖闭包和最终摘要
   User->>Source: 批准该 materialization digest
-  Source-->>Caps: activation authority for immutable target
+  Source-->>Caps: activation authority for tamper-evident target
   Caps->>Client: activate/调用已批准 target
   Client->>Host: instance.open(prepared local target)
   Host-->>Client: candidate contributions
@@ -114,11 +114,18 @@ sequenceDiagram
 4. attestation 至少包含规范来源身份、精确入口、lockfile 摘要、每个物化文件的相对路径/类型/摘要、完整依赖图、
    registry integrity、运行时及 adapter 版本、解析/安装选项和目标平台。
 5. 用户确认的是最终 `materialization_digest`，不是 manifest 摘要、裸 spec 或可变缓存目录。
-6. 确认后把结果提升到只读、内容寻址的 target。Host 只能读取该 target；不得获得准备服务的可写 cache、npm 配置或安装锁。
+6. 确认后把结果提升到内容寻址、原子 staging 的 target，并以 generation fence 保护。Host 只能读取该 target；不得获得准备服务的可写 cache、npm 配置或安装锁。这是 tamper-evident，不是 OS 强制不可变只读。
 7. 物化结果、authority、当前执行域/用户、凭据和策略范围在 open 前复核；任一不匹配都 fail closed。
 
-如果目标平台不能向 Host 提供不可变或 OS 强制只读的 prepared target，P0 在该平台返回明确不支持，不能退回可写 cache。
-独立进程仍不是完整安全沙箱：获批代码按当前执行域的真实 OS 权限运行，文件、网络和子进程残余风险必须在确认界面展示。
+`materialization_digest` 的跨语言规范固定见 §2.5a。Rust、Bun 和任何准备服务不得各自选择 JSON 序列化器、路径处理或
+Unicode 处理方式；未通过同一组 golden vectors 的实现不能参与 approval、pre-import revalidation 或 generation fencing。
+
+普通 Unix `chmod` 只读或同 owner 的 Windows ACL 并不能阻止同用户重新取得写权限、替换文件、rename/link 或修改延迟 import 的依赖；ProcessTreeChild 只回收进程树，不是文件系统 sandbox。因此 P0 把 target 诚实降级为 **tamper-evident**，不称为 immutable 或 OS-enforced read-only。P0 采用 canonical attestation、原子 staging、pre-import revalidation 和 generation fencing 尽量缩小确认到执行的窗口，并必须如实展示两类残余风险：
+
+- 确认后到 import 前仍可被同用户替换的文件或依赖；
+- import 后动态加载的延迟依赖（不在确认时闭包内）。
+
+独立进程也不是完整安全沙箱：获批代码按当前执行域的真实 OS 权限运行，文件、网络和子进程残余风险必须在确认界面展示。若后续引入独立 principal、受限 token、只读 mount/image 或受约束 loader，可再把保证升级为 OS-enforced；在此之前不得使用该名称。
 
 ### 2.2 `instance.open` 不得解析 npm
 
@@ -164,9 +171,55 @@ Host。仅在下一次 RPC 前检查 authority 不足以终止 timer、后台任
 package plugin 必须在工作区真实 execution domain 中完成准备、保存 prepared target 并运行 Host：
 
 - Remote RuntimeServices 可用时，依赖准备、Host、working directory、网络、凭据和进程树都位于远端；
-- 远端能力缺失或断线时显示 `RemotePluginRuntimeUnavailable`，不在本机补偿执行；
+- 远端能力缺失或断线时显示 `RemotePluginRuntimeUnavailable`，**明确拒绝且不回退本机**；P0 只验证该 fail-closed 行为，不要求真实远端纵向执行；
+- full package plugin Remote 在对应阶段（OC-R5）完成前不要求真实远端 Host fixture；
 - 本地界面只代理状态和调用，不把远端路径当成本地路径；
 - execution domain 或远端身份变化会使旧 authority 和 prepared target handle 失效。
+
+### 2.5 Tamper-evident target 合同
+
+prepared target 的不可变/OS 强制只读保证在当前三平台（Windows/macOS/Linux）下无法按统一退出条件兑现，因此 P0 不承诺该保证，只承诺以下防篡改合同，并在确认界面与协议 fixture 中如实标注：
+
+- **canonical attestation**：`materialization_digest` 覆盖规范来源、精确入口、lockfile、完整依赖图、每个物化文件的相对路径/类型/摘要、registry integrity、runtime/adapter 版本、解析/安装选项和目标平台；
+- **原子 staging**：target 写入内容寻址的独立 staging 目录，写入完成前不可被 Host open，写入后内容寻址摘要参与 authority；
+- **pre-import revalidation**：`instance.open` 前在 services 侧重新计算并比对 target 摘要与 authority，任一不一致 fail closed，不发布贡献；
+- **generation fencing**：target 绑定 Host/connection generation；generation 变化后旧 target handle 失效，必须重新复核；
+- **残余风险明示**：确认到 import 之间的替换竞态、import 后的延迟动态依赖不在确认闭包内，二者均作为残余风险写入确认界面与退出条件，不得隐藏为已解决问题。
+
+该合同只证明"确认时的内容摘要与 import 前的摘要一致"，不证明"import 后代码不会被同用户替换或延迟加载未确认代码"。在缺乏独立 OS 主体前，这是 P0 能兑现的最高保证。
+
+### 2.5a `materialization_digest` 跨语言规范
+
+为避免 Rust 与 Bun 对同一 target 产生不同摘要，`materialization_digest` 固定为
+`sha256("bitfun.materialization.v1\\0" || canonical_bytes)`，输出为小写 ASCII 十六进制的 64 个字符，并以
+`sha256:` 前缀包装为 wire value。`canonical_bytes` 是 RFC 8785 JCS（UTF-8、无 BOM、无空格、对象 key 按 Unicode
+code point 排序、数字使用 JCS/ECMAScript 可互操作表示）的 JSON 字节；不得使用实现语言默认 serializer，也不得用
+CBOR 替代。协议对象不得出现 NaN、Infinity、负零、重复 key 或未定义字段。
+
+摘要输入的顶层对象固定为 `schema`、`source`、`entrypoint`、`lockfile`、`dependencyGraph`、`files`、`runtime`、
+`installOptions` 和 `platform`。字段缺失与空值不同：必需字段缺失是 invalid；允许为空的集合统一编码为 `[]`，允许为空的
+字符串统一编码为 `""`，不得用 `null`、省略字段或不同 sentinel 表示同一事实。未来新增字段必须升级 schema/domain，不能让
+v1 静默忽略。
+
+路径及链接规则固定如下：
+
+1. 所有 target 内路径使用相对路径、`/` 分隔符、UTF-8 NFC；不得包含空段、`.`、`..`、驱动器号、UNC 前缀或 NUL。Windows
+   输入先按 ordinal invariant lower-case 规范化驱动器字母，分隔符转 `/`；文件名其余大小写保持原样，不做平台相关 case-fold。
+   路径比较和排序按规范化后的 UTF-8 字节序，不按本地 locale。
+2. 每个路径必须从 target root 解析并逐段验证。symlink、Windows reparse point、junction、hard link、设备文件、FIFO、
+   socket 和其他非普通文件均拒绝；目录项按路径排序，空目录显式记录 `type: "directory"`。
+3. `files` 按 canonical path 升序排列；普通文件记录 `path`、`type: "file"`、字节长度和 SHA-256；目录记录 `path` 和
+   `type: "directory"`。依赖图节点按 canonical package identity（name、version、registry integrity）排序，边按
+   `(from, to, kind)` 排序，不能依赖 lockfile 或 Arborist 的遍历顺序。
+4. registry integrity、文件摘要和所有哈希均使用 SHA-256 的 lowercase hex 编码；不存在的可选 integrity 编码为 `""`，但
+   P0 校验仍拒绝缺少必须 integrity 的依赖。`entrypoint` 先转换为 target-root 相对路径，再按同一路径规则编码；禁止用绝对
+   路径、file URL 或本机 cache 路径参与摘要。
+5. `source`、`runtime`、`installOptions` 和 `platform` 的枚举/字符串值按协议 UTF-8 原样编码；Unicode 只在路径上执行 NFC，
+   其他已定义字符串不做隐式 trim、case-fold 或 locale normalization。布尔值、整数和字符串类型不得互换。
+
+该算法是安全合同，不是实现建议。实现前必须提交 Rust/Bun 共用的 golden vector 文件，至少覆盖 Windows drive/separator/case、
+NFC/NFD 文件名、空集合与空字符串、依赖图乱序、重复/缺失字段、symlink/reparse point、目录逃逸、二进制文件、入口规范化和
+哈希结果；每个 vector 同时包含 canonical JSON、digest 和预期 accept/reject。§6.2 快照必须保存 vectors 及生成校验摘要。
 
 ## 3. 生命周期与故障域
 
@@ -203,12 +256,17 @@ contribution，也不持有 Host lease。Host 是否仍被事件订阅、后台�
 四类生命周期事件按以下规则处理：
 
 - **Session 关闭**：只取消该 Session 的在途调用并清理调用上下文，不关闭 Host，也不移除其他 Session 可见的贡献；
-- **Workspace 关闭**：停用并移除只属于该 workspace 的逻辑 plugin instances；不默认关闭共享 Host；
+- **Workspace 关闭**：只撤销该 workspace 的逻辑 instances、subscriptions 和 workspace-scoped recovery work，并发布新的
+  generation-bound usage snapshot。不得用 logical instance 数量直接决定 Host 是否重启；由唯一 runtime/services owner 根据
+  snapshot 中的 instance、contribution/subscription、background task、in-flight invocation、external client 和 recovery
+  operation 判断 Host 是否仍被使用。只有 snapshot 已证明没有任何使用者，且 `instance.close` 后仍无法证明 module/后台任务已卸载时，
+  才按 §3.4 安全重启共享 Host，再用仍获批的 target 组重 hydrate；
 - **插件停用或更新**：更新逻辑实例和贡献；若无法在现有进程内可靠卸载旧模块，则按 §3.4 安全重启共享 Host；
 - **后端退出**：关闭共享 Host，等待 EOF 与主进程退出，并回收完整受管进程树。
 
 ### 3.2 后台启动与 target 隔离
 
+Host 启动是 **activation-driven、后台、single-flight** 的：首个仍获批且需要执行的 target activation 触发一次后台 single-flight Host acquire；Session 创建/恢复既不触发也不等待 Host spawn、handshake 或 registration。该顺序是必需的，因为 Hook、订阅、Auth 和 Provider 可能在任何 Tool 调用前就要求 import。
 来源协调器在准备/激活后后台维护每个 logical target 的状态：
 
 ```text
@@ -247,7 +305,7 @@ services 的启动 future 必须在统一 startup deadline 内同时等待以下
 3. services 请求 graceful shutdown，并等待响应、TCP EOF、主进程退出和受管后代回收；
 4. 旧进程树未确认停止前不得加载新代码；
 5. 能力 owner 按旧 contribution generation 撤下贡献；
-6. services 使用仍然合规的 immutable targets 启动新 Host；
+6. services 使用仍然合规的 tamper-evident targets 启动新 Host；
 7. adapter 校验候选，能力 owner 原子发布新的 contribution generation；
 8. Client 恢复接受调用。
 
@@ -256,8 +314,10 @@ services 的启动 future 必须在统一 startup deadline 内同时等待以下
 
 ### 3.5 正常退出和进程树
 
-首个完整 package-plugin 实现不做通用 idle reclaim。只要仍有 active plugin instance、事件订阅、后台任务、在途调用或
-其他 Client，兼容 Host 保持运行。RuntimeServices 退出时停止新调用、取消可取消请求、有界等待、逆序 dispose、关闭连接，
+首个完整 package-plugin 实现不做通用 idle reclaim。由唯一 runtime/services owner 维护 generation-bound usage snapshot；只要
+snapshot 仍有 active plugin instance、contribution/subscription、background task、in-flight invocation、external client 或
+recovery operation，兼容 Host 保持运行。Workspace 关闭只撤销自身实例，不能根据实例数量重启共享 Host。RuntimeServices 退出时停止新调用、
+取消可取消请求、有界等待、逆序 dispose、关闭连接，
 并回收完整进程树。
 
 Windows 使用 `ProcessTreeChild` 在 suspended child 恢复前附加 kill-on-close Job Object；附加失败必须 fail closed。
@@ -271,8 +331,36 @@ Host generation 丢失时：
 - services 一次性报告该物理故障并结算绑定该连接的所有 pending request；
 - 能力 owner 撤下受影响 contribution，不能让每个插件分别消耗一份进程级重启预算；
 - 未知结果的有副作用调用返回 `OutcomeUnknown`，不自动重放；
-- 只在来源、authority、prepared target 和 RuntimeServices 仍有效时，按有界预算重载整组插件；
+- 只在来源、authority、prepared target 和 RuntimeServices 仍有效时，按有界预算重载整组插件；重载所需的获批 target graph、固定加载顺序、每个 logical instance 的 project/workspace context 与 capability envelope 由来源 owner 提供（见 §3.7 rehydration 数据来源），services 不发明第二份获批状态；
 - 超出预算后保持 Degraded，Session 和其他非插件能力继续可用。
+
+### 3.7 Rehydration 合同与持久化矩阵
+
+崩溃恢复不是异常分支，而是 lifecycle 设计本身。以下合同必须写到实现者可唯一执行的程度：
+
+**启动**：首个仍获批且需要执行的 target activation 触发后台 single-flight Host acquire；Session 创建/恢复不启动也不等待 Host。
+
+**逻辑实例关闭**：`instance.close` 只是 best-effort 请求。当某 Host 上最后一个 logical instance 关闭且无法证明 module/后台任务已终止时，必须安全重启整个共享 Host 并重 hydrate 剩余获批 target 组，不能假设 `instance.close` 已卸载任意 JS module。
+
+**崩溃后 rehydration 数据来源**：由对应 **来源 owner** 提供当前获批 target graph、固定加载顺序、每个 logical instance 的 project/workspace context 与 capability envelope。services 不发明第二份获批状态。
+
+**Ready 前置条件**：只有 contribution、订阅和后台 callback 在新 generation 上重建完成后才进入 Ready。旧 pending 调用只 settle、不重放；有副作用调用不重放，返回 `OutcomeUnknown`。
+
+**运行时基数**：一个 RuntimeServices composition 对应一个 executable adapter binding、一个 PluginRuntimeClient 可靠性 owner、一个 services supervisor，默认一个共享 Host。只有 execution domain、OS 用户、runtime 或安全范围不兼容的执行键才新增另一个 Host。禁止每个 target 各自创建 client/supervisor 形成多套队列、fault 和 recovery owner。
+
+**持久化矩阵**（三类状态，必须显式区分，不能混用；当前 authority 不能作为持久化产品事实）：
+
+| 状态类别 | 内容 | 跨 Host generation | 跨 RuntimeServices/应用重启 |
+|---|---|---|---|
+| 持久产品事实 | 用户批准事实、获批来源/`materialization_digest`、批准时的 capability envelope、desired target graph 和加载顺序 | 保留（由现有 owner 持有） | 保留；重启后只作为重新验证输入 |
+| 运行时重新生成的 authority | 当前 execution domain、OS 用户、平台、runtime/adapter、凭据、策略和 capability envelope 的绑定，新的 authority epoch | 当前 generation 变化时重新生成 | 不恢复；应用重启后必须重新验证上述绑定并生成新 epoch |
+| Rust 进程内可靠性/诊断状态 | idempotency result、fault、restart budget、target checkpoint | 可在同一 RuntimeServices 进程内跨 generation 保留 | 默认清空，除非现有持久 owner 另行声明 |
+| generation-local Host/module/IPC/gateway 状态 | Host 内存、module instance、connection/generation-bound 凭据、connection token、generation-bound handle | 不保留（随 generation 丢弃） | 不保留 |
+
+应用重启后，来源 owner 必须用持久批准事实和 desired target graph 重新准备/验证 target，再检查执行域、用户、runtime、策略、凭据和
+capability envelope；任一不匹配都不得恢复。不得恢复 connection token、generation-bound handle 或当前 authority。若该矩阵缺失，风险包括：
+Workspace 关闭后插件代码仍运行；应用重启恢复已失效 authority；崩溃后按旧内容、错误顺序或错误 workspace context 恢复；每个 target 各自创建
+client/supervisor 形成多套队列与 fault owner；Host 重启清空成功 idempotency 结果后重放有副作用调用；每个插件分别消耗重启预算形成重启风暴。
 
 ## 4. IPC 调用可靠性
 
@@ -281,8 +369,18 @@ Host generation 丢失时：
 冻结协议使用 loopback TCP、4-byte big-endian 长度前缀和 JSON-RPC 2.0。实现必须限制单帧大小、解码深度、队列条目、
 总在途字节和 stream 分片；解析错误关闭连接。握手至少校验一次性 token、协议版本、Host build identity 和所需 capability。
 
-连接成功后生成不可复用的 `connection_generation`。每个 pending request、stream、execution 和 notification 都绑定该 generation；
+连接成功后生成不可复用的 `connection_generation`。每个 pending request、stream、execution、notification、prepared target 和
+authority epoch 都绑定该 generation；
 重连后收到的旧消息只记有界诊断，不提交状态。
+
+握手 capability 使用 versioned registry，而不是任意字符串集合。每项 capability 使用 `<namespace>/<name>@<major>` 标识，
+并由双方声明 `supported`、`required` 和语义版本；registry 本身有 schema version、protocol profile 和安全语义版本。BitFun
+P0 registry 至少包含 `prepared_target/v1`、`materialization_digest/v1`、`invocation_terminal/v1`、`outcome_unknown/v1`、
+`liveness_oob/v1`、`post_import_gate/v1`、`gateway_disabled/v1`、`generation_fencing/v1` 和 `authority_epoch/v1`。缺少必需
+capability、namespace/major 不兼容、或 build identity 声称支持但 registry 语义校验失败时必须 fail closed，关闭连接并回收
+child；不能以 protocol version 或 build identity 单独推断安全能力存在。Host 不得把缺失的 `invocation_terminal` 伪装成普通
+Cancelled，不得在缺少 `liveness_oob` 时声称 stall recovery，不得在缺少 `prepared_target` 时接收裸 spec，也不得在缺少
+`gateway_disabled` 时启动 gateway。升级/回滚 fixture 必须验证旧 Host 在这些 capability 缺失时拒绝或回滚，而不是误报 Ready。
 
 ### 4.2 Instance 生命周期
 
@@ -291,6 +389,12 @@ Host generation 丢失时：
 
 `host.instance.close` 是 best-effort 的逻辑清理提示，不是任意模块已经卸载或子进程已退出的证明。停用、更新和 authority
 撤销遵循 §3.4 的 Host 安全重启。
+
+真实 Tool/Hook/Auth/Provider 集合只有插件 import 后才能完整知道，但 import 本身已可能执行顶层代码、创建 timer、后台任务、网络连接或子进程。因此 **post-import contribution expansion 是独立安全闸门**，不能与 pre-import 权限校验合并。内部状态仍可投影为 `AwaitingApproval`，但必须携带以下不可省略字段：`reason: initial_activation | post_import_expansion`、`observed_contribution_digest`、`imported_generation`、旧 `authority_epoch`、贡献 diff 和 side-effect risk。
+
+当发现贡献超出 capability envelope 后，adapter **不发布**新增贡献，立即废弃旧 generation 和旧 authority epoch，按 §3.4 停止并确认整个共享 Host 进程树退出，再回退到 §3.2 状态机的 `AwaitingApproval` 展示实际差异。`initial_activation` 表示从未 import 的普通审批；`post_import_expansion` 表示已经 import 且可能产生副作用，不能把它当作普通初始审批、不能复用旧 authority 或旧 generation，也不能仅由能力 owner 拒绝注册来终止代码。
+
+批准扩权后必须重新准备/校验同一 target，生成新的 authority epoch 和 Host generation，再重新 import；批准本身不追认已发生的副作用。拒绝时不得恢复包含该 target 的旧 Host，不能恢复该 target 的旧贡献；只能在完整停机确认后恢复不包含该 target 且仍合规的插件组。共享 Host 中其他插件按整 Host 重启合同处理，不能继续依赖可能仍在运行的旧 generation。这一分支必须进入真实纵向 fixture。
 
 `host.shutdown` 成功后 Rust 继续等待 TCP EOF 和 child exit；deadline 后关闭 socket 并终止受管进程树。重复 shutdown、
 EOF 先到和 child 已退出按同一 generation 幂等结算。
@@ -314,13 +418,22 @@ EOF 先到和 child 已退出按同一 generation 幂等结算。
 
 ### 4.4 Tool 取消
 
+冻结实现的 `host.tool.cancel` 只是调用 `AbortController.abort()` 后立即返回 `{ cancelled: true }`。AbortSignal 是合作式信号，插件可忽略，handler 也可能永不 settle；因此该响应最多证明 **signal 已送达**，不证明 invocation 已结束。UI/审计若据此显示普通 Cancelled，会掩盖插件仍在写文件/联网/创建子进程/修改共享内存状态的 OutcomeUnknown 事实。首个真实 Tool 闭环已包含取消，不可延期。协议必须区分以下终态，只有可证明终态时才返回普通 Cancelled：
+
+| cancel 响应/事件 | 语义 | Client 结算 | Host 处置 |
+|---|---|---|---|
+| `signal_delivered` | 信号已送达，但 invocation 未证明终止 | `OutcomeUnknown` | 继续有界等待；超期则 poison/recycle 整个 generation |
+| `invocation_terminal` | invocation 已证明终止（正常结束、抛错或确认取消） | 普通 `Cancelled`/`TimedOut`/错误 | 正常回收 pending entry |
+| `not_found` | 无此 execution（已完成、从未存在或已过期） | 按当前事实结算 | 不改变 generation |
+| `connection_lost` / 无响应 | 连接失活或 cancel 期限到期 | `OutcomeUnknown` | poison/recycle 整个 Host generation |
+
 Tool timeout 或 cancellation token 触发时不能只删除 Rust pending entry：
 
 1. Client 把原调用标记为 cancelling，拒绝其普通完成结果提交；
 2. 在仍匹配的 connection generation 上发送 `host.tool.cancel { instanceID, executionID }`；
-3. 有界等待取消确认或原调用终止；
-4. 成功确认后以 Cancelled/TimedOut 结算，并丢弃以后迟到消息；
-5. Host 不确认、连接失活或取消期限到期时，把该 Host generation 标记为 poisoned，停止新调用并执行 §3.4 回收；
+3. 有界等待 **invocation 终止证明**（`invocation_terminal`），而非仅 `signal_delivered`；
+4. 收到 `invocation_terminal` 后以 Cancelled/TimedOut 结算，并丢弃以后迟到消息；
+5. 只收到 `signal_delivered`、Host 不确认、连接失活或取消期限到期时，把该 Host generation 标记为 poisoned，停止新调用并执行 §3.4 回收；
 6. 受影响调用返回 `OutcomeUnknown` 或更精确的 typed fault，不自动重放。
 
 共享 Host 被 poison 时，其承载的其他 logical instances 也会短暂不可用。这是共享进程的明确故障域，不能伪装成只回收某个
@@ -342,7 +455,7 @@ Host -> BitFun 的 `backend.*` 方法只能调用现有 owner 的窄接口：
 | 方法 | 边界 |
 |---|---|
 | `backend.handshake` | token、版本、capability 和 build identity 校验 |
-| `backend.http.request` | per-instance gateway 转发；按当前 authority 和网络策略复核 |
+| `backend.http.request` | **P0 禁用**：per-instance gateway 在能力认证协议（§4.7a）固定前为 disabled/unsupported，Host 不得通过该入口转发请求 |
 | `backend.auth.get` | 每次读取凭据 owner 的当前值，不在 Host 持久缓存 |
 | `backend.tool.ask` | 转发给 Permission/Tool owner；Host 不决定权限 |
 | `backend.tool.metadata` | 接收并校验候选 metadata，不直接提交产品状态 |
@@ -352,6 +465,20 @@ Host -> BitFun 的 `backend.*` 方法只能调用现有 owner 的窄接口：
 反向调用同样绑定 instance、connection generation、authority 和有界队列。Host 不能通过 backend facade 获得任意 service
 locator，也不能把 instance id 当作充分授权。
 
+### 4.7a Per-instance HTTP gateway authority
+
+冻结 Host 在 loopback 随机端口创建 gateway，没有 token、Authorization header 或不可预测 capability path；请求进入后会自动继承闭包中的合法 instanceID，因此 Rust 再按 instanceID 检查 authority 也无法识别真实 caller。本机其他进程或共享 Host 中的其他插件可枚举端口、借用目标 instance 身份访问 backend，或在认证前发送大 body、创建 stream 制造队列压力，形成越权与跨 instance 资源消耗攻击。因此 per-instance HTTP gateway 不是普通 HTTP 功能细节，而是 **authority 边界**。
+
+P0 **当前协议事实是禁用**该入口：Host 不得在 loopback 创建 per-instance HTTP gateway 监听器，`backend.http.request` 在能力认证协议固定前返回 typed unsupported（见 §4.6），不能把未认证 gateway 留作兼容路径。这属于协议退出条件，不是可由实现者自行开启的选项。
+
+若后续 OC-R 阶段恢复 gateway，必须在读取 body、创建 stream 之前验证与 `instanceID + connection_generation` 绑定的高熵 capability，并覆盖以下 fixture：
+
+- 无 token、错误 token、跨 instance token、旧 generation 重放 token 均被拒绝；
+- 认证前的大 body / stream 创建不消耗队列配额；
+- gateway 拒绝时只返回有界诊断，不泄漏 instance 存在性。
+
+在上述能力实现并 fixture 化、并由公开协议提交固定前，protocol 必须保持 gateway 为 **disabled/unsupported**，并删除"per-instance gateway 转发"这一当前无法兑现的保证。
+
 ### 4.7 错误分类
 
 Rust 必须按 JSON-RPC code、`data.kind`、call kind 和 connection generation 联合分类。至少区分：
@@ -360,9 +487,23 @@ Rust 必须按 JSON-RPC code、`data.kind`、call kind 和 connection generation
 - overloaded：调用级 typed failure；
 - plugin initialization failure：回滚该插件候选，其他插件可继续；
 - call failure：只结算该调用；
-- cancellation unconfirmed / protocol corruption / event-loop stall：poison Host generation；
+- cancellation unconfirmed / protocol corruption：poison Host generation；
+- event-loop stall：**必须由独立于插件主事件队列的 supervisor liveness/control channel 检测**（见 §4.8），否则该状态不可产生，poison 保证不可声称；
 - process exit：结算整条连接并按进程级预算恢复；
 - authority/materialization mismatch：安全拒绝，不计作普通插件 crash。
+
+### 4.8 Event-loop stall 检测
+
+同步死循环或长期阻塞可能发生在没有在途业务请求时：Bun 进程仍存活、socket 仍连接，但处理业务 RPC 的 event loop 已失去进展。若健康检查走同一业务队列，它会一起被阻塞，系统会无限保持错误的 Ready 状态——既不触发 poison/recovery，也无法撤下已暴露的贡献，共享 Host 中其他正常插件也会一起永久不可用。
+
+上位 `plugin-runtime-design.md` 已禁止依赖可能被同步插件代码阻塞的业务消息队列来检查心跳与进程存活，因此 out-of-band liveness 不是 BitFun 新增保证，而是 P0 必须落地的既有上位约束。协议要求如下（均为当前协议事实，非可选或延期项）：
+
+- **独立传输的 supervisor liveness/control channel**：Rust supervisor 维护一条与业务 JSON-RPC socket 独立的 liveness 通道（独立文件描述符/管道或独立消息类，由 Rust 端在单独任务上 drain）。liveness tick 由 Host 主事件循环上的 `setInterval`/`queueMicrotask` 发出并携带单调递增的 progress 计数；主循环被同步代码阻塞时该 tick 不会发出，这正是 stall 的可观测信号。liveness 通道不得复用业务 RPC 队列。
+- **progress generation + liveness deadline**：每个 tick 绑定当前 `connection_generation` 与单调 progress 计数；Rust 记录 last-seen 计数与 liveness deadline。在 generation 内无新 progress 超过 deadline 即判定该 generation stall，与是否有在途业务调用无关。
+- **stall 回收条件**：判定 stall 后 poison 当前 generation、撤下其贡献、按 §3.4 回收进程树，受影响调用返回 `OutcomeUnknown`，不自动重放。
+- **真实进程 fixture**：必须覆盖"无在途业务请求时的后台同步死循环"（liveness 专属场景）与"有在途业务请求时的同步死循环"（call deadline 与 liveness 联合场景）两条路径，证明前者不依赖任何业务调用即可被回收。
+
+`event-loop stall` 因此是 §4.7 错误分类中一个**当前可产生**的状态：当且仅当 §4.8 supervisor 在 liveness deadline 内未观察到绑定当前 generation 的 progress 推进时产生，并触发上述回收。在上述通道、deadline、progress generation 与 fixture 实现并通过前，stall 恢复保证不得声称已兑现，但协议不得删除该保证或将其降级为 unsupported——它是上位约束的直接落地，不是 BitFun 可选择退出的能力。
 
 ## 5. 仓库集成点
 
@@ -425,12 +566,13 @@ Tool/Hook owner 以 contribution generation 原子发布/撤下贡献。Session 
 P0 只交付以下纵向闭环：
 
 ```text
-approved immutable package target
+approved tamper-evident package target
   -> external dependency preparation + attestation
   -> final materialization approval
   -> unique Runtime/Services chain
   -> one real Tool or stable Hook consumer
   -> cancellable, recyclable, fixture-verified Host call
+  -> out-of-band liveness supervisor (stall detection) and disabled gateway
 ```
 
 Client、Auth、Provider、Workspace 和其他 Hook 只有在该闭环通过跨语言 fixture、故障注入和 owner 测试后再扩展。
@@ -445,7 +587,11 @@ Client、Auth、Provider、Workspace 和其他 Hook 只有在该闭环通过跨�
 - 生成 schema：`protocol.schema.json`
 - 当前审计提交：[`e084c921b68c1b3588a1c18409a5b85aa906b3a7`](https://github.com/ztpublic/opencode-ext-host/commit/e084c921b68c1b3588a1c18409a5b85aa906b3a7)
 - 当前 package：`@opencode-ai/extension-host@0.1.0`
-- 当前兼容目标：`@opencode-ai/plugin@1.17.18`
+- 冻结 ext-host 旧审计依赖：`@opencode-ai/plugin@1.17.18`（冻结 ext-host 审计提交所用，**非当前稳定兼容目标**）
+- 当前稳定兼容 fixture 对齐：`@opencode-ai/plugin@v1.18.9`，版本、commit 和公开接口的唯一来源是
+  [`opencode-extension-compatibility.md` §1](opencode-extension-compatibility.md#1-基线与判断方法)；本文不得另行声明
+  `v1.18.4` 或其他稳定兼容版本。上位适配文档中的 `v1.18.4` 引用必须在实现前同步更新或明确标为历史审计参考，不能作为
+  本文 fixture 或实现目标。
 
 该提交仍允许 Host 解析/安装 npm spec，因此只可作为当前审计基线，不能原样作为 BitFun P0 的安全协议。实现前必须先把
 §2.2 prepared target tagged union、拒绝 legacy spec 的 BitFun profile、取消确认语义和对应 fixture 固定到新的公开提交。
@@ -457,9 +603,11 @@ Client、Auth、Provider、Workspace 和其他 Hook 只有在该闭环通过跨�
 - `PROTOCOL.md` 快照；
 - 生成的 `protocol.schema.json`；
 - Rust/Bun 共用的 request、response、cancel、late-result 和 malformed fixtures；
+- Rust/Bun 共用的 `materialization_digest` canonical JSON/golden vectors，以及 prepared target、authority revalidation、
+  post-import gate、usage snapshot 和 capability negotiation fixtures；
 - 上游 commit、package version、生成命令和校验摘要。
 
-快照目录当前不存在，因此这是实现前置条件，不是已完成事实。schema、Host、Rust codec 和本文必须在同一变更中升级。
+快照目录当前不存在，因此这是实现前置条件，不是已完成事实。schema、Host、Rust codec、canonical digest vectors 和本文必须在同一变更中升级。
 
 ### 6.3 许可证与供应链
 
@@ -480,6 +628,8 @@ Client、Auth、Provider、Workspace 和其他 Hook 只有在该闭环通过跨�
 - 裸 package name、`@latest`、tag、range、registry URL、相对路径和 UI DTO 无法到达 Host open；
 - package version 或任一传递依赖在最终确认前变化会产生不同 digest；确认后变化 fail closed；
 - lockfile、入口、完整依赖图、每个文件摘要、runtime/adapter/install options 都参与 attestation；
+- `materialization_digest` 按 §2.5a 的 JCS、路径/link、排序、Unicode、空值、SHA-256 和 domain-separation 规范计算；Rust/Bun
+  必须通过相同 golden vectors；
 - install scripts 和准备期 import 不执行；无锁或 integrity 不完整的候选拒绝；
 - Host 只能读取 prepared target，不能访问可写安装 cache 或在 open 中联网解析；
 - authority 在 open 前后撤销时不发布 contribution，并回收执行过该 target 的 Host；
@@ -491,9 +641,12 @@ Client、Auth、Provider、Workspace 和其他 Hook 只有在该闭环通过跨�
 - 同一 RuntimeServices 中兼容插件和多个 workspace 默认共享 Host；Session 数量不改变 PID；
 - Session 创建/恢复不等待插件启动，单插件失败不击穿无关 Session；
 - Session 归档只取消自己的调用，不关闭仍被插件实例、订阅、后台任务或其他 Client 使用的 Host；
+- Workspace 关闭只撤销自身实例；Host 是否仍被使用由唯一 runtime/services owner 的 generation-bound usage snapshot
+  （instance、contribution/subscription、background task、in-flight invocation、external client、recovery operation）决定；
 - 停用一个共享 Host 内的插件按整 Host 安全重启，旧进程树退出后才加载新组；
 - capability owner 原子发布/撤下 contribution，Assembly、adapter、services 不建立第二份注册状态；
-- process crash 只消费一次 Host generation 重启预算，所有旧连接结果被拒绝。
+- process crash 只消费一次 Host generation 重启预算，所有旧连接结果被拒绝；
+- event-loop stall（无在途业务请求时的后台同步死循环）由独立 supervisor liveness 通道（§4.8）在 deadline 内未观察到 progress 推进时触发 poison/recycle，与是否有业务调用无关。
 
 ### 7.3 启动、取消与故障注入
 
@@ -501,9 +654,11 @@ Client、Auth、Provider、Workspace 和其他 Hook 只有在该闭环通过跨�
 - startup timeout 后 listener、socket、主进程和受管后代全部回收；
 - Tool timeout/cancel 发送准确 `instanceID + executionID`，有界等待确认；
 - cancel 不确认时 poison/recycle Host，调用返回结果未知且副作用不重放；
+- cancel 终态区分（signal_delivered/invocation_terminal/not_found/connection_lost）按 §4.4 有界等待 invocation_terminal，仅终态可证明时返回普通 Cancelled；
 - Hook 无 cancel 时使用 generation fence；仍可能执行时回收 Host，而非只丢弃 Rust pending entry；
 - queue/byte limits、overload、malformed frame、重复 response、旧连接 notification 和 stream late chunk 均有 fixture；
-- Windows Job Object 和 Unix process group 回收由真实子进程/孙进程测试证明。
+- Windows Job Object 和 Unix process group 回收由真实子进程/孙进程测试证明；
+- event-loop stall 由独立 supervisor liveness 通道（§4.8）检测：无在途业务请求时的后台同步死循环必须在 liveness deadline 内被识别并回收，不依赖任何业务调用触发。
 
 ### 7.4 真实纵向 fixture
 
@@ -512,9 +667,18 @@ Client、Auth、Provider、Workspace 和其他 Hook 只有在该闭环通过跨�
 1. prepared target 的 digest 在 Rust 和 Bun 两端一致；
 2. Host open 不产生网络/package-manager 写入；
 3. contribution 只由能力 owner 发布一次；
-4. 正常调用、权限请求、取消确认、迟到结果和进程 crash；
+4. 正常调用、权限请求、取消终态区分（signal_delivered/invocation_terminal/not_found/connection_lost）、迟到结果和进程 crash；
 5. shutdown response -> TCP EOF -> child/descendant exit 的完整顺序；
-6. Remote fixture 在远端执行域完成同一流程，断线不触发本机 Host。
+6. Remote：P0 只验证明确拒绝且不回退本机的 fail-closed 行为；真实远端 Host 纵向 fixture 延期至 OC-R5，在对应阶段完成前不应要求真实远端执行。
+7. post-import contribution expansion fixture 包含 `reason`、`observed_contribution_digest`、`imported_generation`、旧
+   `authority_epoch`、贡献 diff 和 side-effect risk，并证明废弃旧 generation、批准后生成新 epoch、拒绝后不恢复包含该 target
+   的旧 Host（§4.2）；
+8. event-loop stall：无在途业务请求时的后台同步死循环由独立 supervisor liveness 通道（§4.8）检测并回收，不依赖业务调用；
+9. per-instance HTTP gateway 在 P0 为 disabled/unsupported（§4.7a），Host 不创建 gateway 监听器。
+10. authority 持久化只保存用户批准事实、来源/摘要和 desired target graph；应用重启重新验证执行域、OS 用户、runtime、策略、
+    凭据和 capability envelope，并生成新的 authority epoch；connection token、generation-bound handle 和当前 authority 不恢复。
+11. capability registry 的缺失/major 不兼容 fixture 覆盖 `invocation_terminal`、`outcome_unknown`、`liveness_oob`、
+    `prepared_target`、`post_import_gate` 和 `gateway_disabled`，旧 Host 必须拒绝或回滚，不得误报 Ready。
 
 文档变更至少运行：
 
@@ -535,7 +699,7 @@ node scripts/check-core-boundaries.mjs
 | [`opencode-plugin-runtime-adapter-design.md`](opencode-plugin-runtime-adapter-design.md) | 上位约束：OpenCode 加载、npm/Arborist、Hook/Tool 语义和兼容范围 |
 | [`external-ai-work-sources-design.md`](external-ai-work-sources-design.md) | 来源、确认、持续更新和 capability-specific coordinator |
 | [`opencode-extension-compatibility.md`](opencode-extension-compatibility.md) | OpenCode 能力矩阵、当前基线和阶段退出条件 |
-| 本文 | ext-host IPC 的不可变 target、安全调用和最小纵向闭环 |
+| 本文 | ext-host IPC 的防篡改 target、安全调用、lifecycle/rehydration 合同和最小纵向闭环 |
 
 本文不改变上位 owner；若实现需要按插件或 workspace 隔离 Host，必须先修改并评审 `plugin-runtime-design.md`，不能在本
 P0 文档中隐式改写默认模型。
@@ -549,11 +713,14 @@ P0 文档中隐式改写默认模型。
 当前 ext-host 审计提交已有 Bun Host、JSON-RPC schema、shutdown 和 EOF 清理基础，但仍会从裸 npm spec 解析/安装代码，
 也没有完成 BitFun 所需的 prepared target、完整取消确认、Rust supervisor 和跨语言 fixture。因此本设计的实现退出条件是：
 
-1. 冻结并审计支持 prepared target 的新协议提交；
-2. 完成 Host 外依赖准备、最终 attestation 和 materialization approval；
+1. 冻结并审计支持 prepared target 的新协议提交（含 prepared target tagged union、cancel 终态语义、gateway 在协议中固定为 disabled/unsupported、out-of-band liveness supervisor 通道与双路径 fixture）；
+2. 完成 Host 外依赖准备、最终 attestation 和 materialization approval（tamper-evident，非 OS-enforced immutable）；
 3. 沿唯一 Runtime/Services 主链接入一个真实 Tool 或稳定 Hook consumer；
-4. 证明 startup deadline、Tool cancel、不可取消调用 recycle、旧连接 fencing 和进程树回收；
-5. 保持 static-preview 入口、Session owner、来源 owner 和各能力 owner 的既有边界；
-6. 完成许可证、可复现构建、签名、升级和三平台交付决策。
+4. 证明 startup deadline、Tool cancel 终态区分（signal_delivered/invocation_terminal/not_found/connection_lost）、不可取消调用 recycle、post-import expansion gate、旧连接 fencing 和进程树回收；
+5. 完成 lifecycle/rehydration 合同与持久化矩阵的退出条件（activation single-flight、最后实例关闭安全重启、崩溃后来源 owner 提供 target graph、Ready 前置 contribution 重建、唯一 client/supervisor 基数）；
+6. 完成 §4.8 out-of-band liveness supervisor 通道、progress generation、deadline 与双路径 fixture；该保证为上位约束落地，不得删除或降为 unsupported；
+7. 在新协议提交中固定 per-instance gateway 为 disabled/unsupported（§4.7a），或完成高熵 capability 认证后才启用；P0 不得保留未认证 gateway；
+8. 保持 static-preview 入口、Session owner、来源 owner 和各能力 owner 的既有边界；
+9. 完成许可证、可复现构建、签名、升级和三平台交付决策。
 
 在这些条件全部通过前，产品和文档只能把 package-plugin ext-host 标记为 target/planned capability。

@@ -8,8 +8,8 @@
 外部来源的产品提示、风险分级和用户选择见
 [`external-ai-work-sources-design.md`](external-ai-work-sources-design.md)。
 
-固定接口以 `v1.18.4` 稳定提交的 [`packages/plugin/src/index.ts`](https://github.com/anomalyco/opencode/blob/49c69c5ed3ccf706b61b3febb43c8aaff7f8325e/packages/plugin/src/index.ts)、
-[`packages/plugin/src/tool.ts`](https://github.com/anomalyco/opencode/blob/49c69c5ed3ccf706b61b3febb43c8aaff7f8325e/packages/plugin/src/tool.ts)
+固定接口以 `v1.18.9` 稳定提交的 [`packages/plugin/src/index.ts`](https://github.com/anomalyco/opencode/blob/4da7bb44c84e013fa53e9c5d02ac753d1435c81a/packages/plugin/src/index.ts)、
+[`packages/plugin/src/tool.ts`](https://github.com/anomalyco/opencode/blob/4da7bb44c84e013fa53e9c5d02ac753d1435c81a/packages/plugin/src/tool.ts)
 和实际插件 loader/npm 服务为准；[插件文档](https://opencode.ai/docs/plugins/)用于行为说明。
 
 本文同时区分当前端到端能力与完整目标。当前实现已支持用户/项目 standalone `.js` Tool 的静态发现、非阻塞审批、
@@ -31,7 +31,7 @@ BitFun 自行实现 OpenCode 插件兼容链路，不启动完整 OpenCode Runti
 - 物理执行后端由 `ScriptToolRuntime` 所在的 services 实现选择。当前 standalone `.js` 子集使用经实际 `--version` 探测的系统 Node；
   TypeScript、模块解析、Zod refinement 和 `$` 必须按固定样例选择 Node 转译或 Bun-compatible adapter，不能互相猜测语义。
   若随产品交付运行时，发布前必须完成对应平台的许可证、签名、更新和体积验证。
-- 依赖准备不使用 `bun install` 猜测 OpenCode 行为。`v1.18.4` 兼容模块使用 npm 配置、`@npmcli/arborist`、
+- 依赖准备不使用 `bun install` 猜测 OpenCode 行为。`v1.18.9` 兼容模块使用 npm 配置、`@npmcli/arborist`、
   `package-lock.json` 和 `ignoreScripts: true`；后续 OpenCode 版本改变实现时随兼容版本更新。
 - 执行进程提供 OpenCode 兼容上下文和插件接口；插件无需感知 BitFun Rust 内部类型。
 - OpenCode Adapter 把插件调用、钩子变换和工具结果转换成类型化进程消息。
