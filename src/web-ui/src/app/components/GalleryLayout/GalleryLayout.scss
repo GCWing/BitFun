@@ -152,7 +152,7 @@ $content-max: 1360px;
   --gallery-skeleton-height: 140px;
 
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(var(--gallery-grid-min), 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(var(--gallery-grid-min), 100%), 1fr));
   gap: $size-gap-3;
   align-content: start;
 

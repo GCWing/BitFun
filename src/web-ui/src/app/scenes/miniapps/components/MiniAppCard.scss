@@ -5,7 +5,8 @@
   --miniapp-card-action-bg: color-mix(in srgb, var(--color-static-white) 30%, transparent);
   --miniapp-card-action-hover-bg: color-mix(in srgb, var(--color-static-white) 60%, transparent);
 
-  width: 360px;
+  width: 100%;
+  min-width: 0;
   min-height: 200px;
   border-radius: 15px;
   background: var(--element-bg-soft);
@@ -300,7 +301,6 @@
 // ── Responsive ──
 @media (max-width: 720px) {
   .miniapp-card {
-    width: 100%;
     min-height: 180px;
   }
 }
