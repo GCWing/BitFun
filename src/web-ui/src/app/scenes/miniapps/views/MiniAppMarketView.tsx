@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
+  ArrowUpRight,
   Check,
   Download,
   ExternalLink,
@@ -88,6 +89,18 @@ const MiniAppMarketView: React.FC = () => {
   const [installPrompt, setInstallPrompt] = useState(false);
 
   const openTabIds = useMemo(() => new Set(openTabs.map((tab) => tab.id)), [openTabs]);
+
+  /** Focuses the installed MiniApp's scene tab, opening it when absent. */
+  const openInstalledApp = useCallback((appId: string) => {
+    setDetail(undefined);
+    setInstalled(null);
+    const tabId: SceneTabId = `miniapp:${appId}`;
+    if (openTabIds.has(tabId)) {
+      activateScene(tabId);
+    } else {
+      openScene(tabId);
+    }
+  }, [activateScene, openScene, openTabIds]);
 
   const loadCatalog = useCallback(async (append = false) => {
     if (append) {
@@ -241,17 +254,10 @@ const MiniAppMarketView: React.FC = () => {
         confirmOverwrite: Boolean(installed?.localOverride),
       });
       upsertApp(result.app);
-      setDetail(undefined);
-      setInstalled(null);
       notification.success(
         t(result.updated ? 'market.messages.updated' : 'market.messages.installed'),
       );
-      const tabId: SceneTabId = `miniapp:${result.app.id}`;
-      if (openTabIds.has(tabId)) {
-        activateScene(tabId);
-      } else {
-        openScene(tabId);
-      }
+      openInstalledApp(result.app.id);
     } catch (installError) {
       notification.error(t('market.messages.installFailed', { error: String(installError) }));
     } finally {
@@ -283,11 +289,8 @@ const MiniAppMarketView: React.FC = () => {
       && requiresWorkspace(detail.permissions),
   );
   const canUpdate = Boolean(installed && detail && detail.latestRelease > installed.origin.releaseNumber);
-  const installLabel = installed
-    ? canUpdate
-      ? t('market.detail.update')
-      : t('market.detail.installed')
-    : t('market.detail.install');
+  // The install button only renders for the actionable states: fresh install or update.
+  const installLabel = canUpdate ? t('market.detail.update') : t('market.detail.install');
   const detailName = detail
     ? pickLocalizedString(detail, currentLanguage, 'name')
     : '';
@@ -472,15 +475,35 @@ const MiniAppMarketView: React.FC = () => {
               <Heart size={14} fill={detail.isFavorited ? 'currentColor' : 'none'} />
               {formatNumber(detail.favoriteCount)}
             </Button>
-            <Button
-              size="small"
-              variant="primary"
-              disabled={actionBusy || Boolean(installed && !canUpdate) || workspaceUnsupported}
-              onClick={() => setInstallPrompt(true)}
-            >
-              {actionBusy ? <Loader2 size={14} className="gallery-spinning" /> : installed ? <RefreshCw size={14} /> : <Download size={14} />}
-              {installLabel}
-            </Button>
+            {/* Installed and up to date: nothing left to install, so say so and let "Open" lead. */}
+            {installed && !canUpdate ? (
+              <span className="miniapp-market-detail__installed-state">
+                <Check size={14} />
+                {t('market.detail.installed')}
+              </span>
+            ) : null}
+            {installed ? (
+              <Button
+                size="small"
+                variant={canUpdate ? 'secondary' : 'primary'}
+                disabled={actionBusy || workspaceUnsupported}
+                onClick={() => openInstalledApp(installed.appId)}
+              >
+                <ArrowUpRight size={14} />
+                {t('market.detail.open')}
+              </Button>
+            ) : null}
+            {!installed || canUpdate ? (
+              <Button
+                size="small"
+                variant="primary"
+                disabled={actionBusy || workspaceUnsupported}
+                onClick={() => setInstallPrompt(true)}
+              >
+                {actionBusy ? <Loader2 size={14} className="gallery-spinning" /> : canUpdate ? <RefreshCw size={14} /> : <Download size={14} />}
+                {installLabel}
+              </Button>
+            ) : null}
           </>
         ) : null}
       >

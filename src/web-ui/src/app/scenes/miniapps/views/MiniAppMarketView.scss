@@ -159,6 +159,15 @@
     }
   }
 
+  // Inert "installed" state that sits beside the action buttons in the modal footer.
+  &__installed-state {
+    display: inline-flex;
+    align-items: center;
+    gap: $size-gap-1;
+    color: var(--color-success);
+    font-size: var(--font-size-sm);
+  }
+
   &__screenshots {
     display: flex;
     gap: $size-gap-2;
