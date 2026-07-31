@@ -380,10 +380,23 @@ LoopX 的 decision 映射到 `ThreadGoalStatus`：
 - [x] **2.** `LoopxIssueFix::probe()` + `issue_fix()`（含 `PYTHONUTF8=1`）
 - [x] **3.** `list_issues()`
 - [x] **4.** repository context 生成器
-- [ ] **5.** 单 issue 端到端，命令行触发，不接 UI、不接 `thread_goal`
-- [ ] **6.** 面板 UI（新 `PanelContentType` + 组件 + 头部按钮 + i18n）
-- [ ] **7.** 接 `thread_goal`，多 issue 串行
-- [ ] **8.** 真实仓库验证通过后，把 feature 纳入 `product-full`
+- [x] **5.** 单 issue 编排器（`orchestrator.rs`，类型化 outcome）
+- [x] **6.** 桌面 API 暴露（core facade → Tauri 命令 → 前端绑定）
+- [x] **7.** 面板 UI（`panels/issue-fix/`，头部按钮，三语言）
+- [x] **8.** `thread_goal` 桥接（`thread_goal_bridge.rs`，多 issue 串行）
+- [ ] **9.** 真实仓库验证后，把 feature 纳入 `product-full`
 
-第 1-4 步共 43 个测试：35 个单元测试，8 个驱动真实 LoopX CLI 的契约测试
-（无 loopx 时优雅跳过）。另有一个 `#[ignore]` 测试驱动真实 `gh` CLI 验证 issue 枚举。
+### 测试覆盖
+
+| 类型 | 数量 | 说明 |
+|---|---|---|
+| Rust 单元 | 52 | 含 issue 枚举映射、context 校验、编排器解析、goal 桥接 |
+| Rust 契约 | 12 | 驱动真实 loopx CLI，无 loopx 时优雅跳过 |
+| Rust `#[ignore]` | 1 | 驱动真实 `gh` CLI 验证 issue 枚举 |
+| 前端单元 | 29 | 行状态映射，重点是 `user_gate` 不被当作完成 |
+| i18n 契约 | 37 | 三语言对齐 + 治理预算 |
+
+### 第 9 步为何未做
+
+它要求在真实公开仓库建分支、发 PR，属于外部可见且不易撤回的动作，需显式授权后再执行。
+在那之前 feature 保持在 `product-full` 之外：代码可编译、可测试，但不进发布构建。
