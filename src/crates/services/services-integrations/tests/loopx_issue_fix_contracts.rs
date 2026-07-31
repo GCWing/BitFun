@@ -4,6 +4,10 @@
 //! test reports a skip rather than failing, so CI hosts without LoopX stay green —
 //! the feature is probe-gated at runtime for exactly the same reason.
 
+use bitfun_services_integrations::loopx_issue_fix::repository_context::{
+    ContextStatus, Freshness, RepositoryContextBuilder, RepositoryContextSource, SourceKind,
+    SupportAspect, Trust,
+};
 use bitfun_services_integrations::loopx_issue_fix::{LoopxIssueFix, LoopxIssueFixError};
 
 /// Resolve LoopX or explain the skip. Keeps the skip reason in one place.
@@ -19,38 +23,62 @@ fn loopx_or_skip(test_name: &str) -> Option<LoopxIssueFix> {
 
 const ISSUE_URL: &str = "https://github.com/GCWing/BitFun/issues/1849";
 
-/// A grounded repository context, written to a temp file per call.
+/// A grounded repository context, built through the real generator and written to
+/// a temp file per call.
 ///
 /// LoopX will not select `fix_pr` without one — an ungrounded request yields
 /// `repository_context_not_provided` in its reason codes and falls back to
-/// `triage_only`. `reference` values must be repo-relative; LoopX rejects local
-/// absolute paths as unsafe to publish.
+/// `triage_only`. Building this with `RepositoryContextBuilder` rather than a
+/// hand-written literal is the point: it proves the generator's own prediction of
+/// "grounded" matches what LoopX actually decides.
 fn write_repository_context(dir: &std::path::Path) -> std::path::PathBuf {
+    let mut builder = RepositoryContextBuilder::new()
+        .repository_revision("9ed5c5fec0000000000000000000000000000000");
+    builder
+        .push(RepositoryContextSource {
+            source_id: "workspace-item-icon".to_string(),
+            source_kind: SourceKind::SourceCode,
+            reference:
+                "src/web-ui/src/app/components/NavPanel/sections/workspaces/WorkspaceItem.tsx"
+                    .to_string(),
+            trust: Trust::Verified,
+            freshness: Freshness::Current,
+            supports: vec![
+                SupportAspect::Architecture,
+                SupportAspect::ChangeScope,
+                SupportAspect::Reproduction,
+            ],
+            summary: "Icon ternary renders an arrow for the active workspace row and a folder for its siblings."
+                .to_string(),
+            consultation_state: None,
+        })
+        .expect("the change-scope source is valid");
+    builder
+        .push(RepositoryContextSource {
+            source_id: "workspace-layout-guard".to_string(),
+            source_kind: SourceKind::TestSurface,
+            reference:
+                "src/web-ui/src/app/components/NavPanel/sections/workspaces/WorkspaceListSectionLayout.test.ts"
+                    .to_string(),
+            trust: Trust::Verified,
+            freshness: Freshness::Current,
+            supports: vec![SupportAspect::Validation],
+            summary: "Raw-text layout guard over the workspace component; focused coverage would need adding."
+                .to_string(),
+            consultation_state: None,
+        })
+        .expect("the validation source is valid");
+
+    // If the generator and LoopX ever disagree about what grounds an aspect, this
+    // assertion fails before the subprocess call and localizes the bug here.
+    assert_eq!(
+        builder.context_status(),
+        ContextStatus::Grounded,
+        "the generator should predict a grounded context"
+    );
+
+    let context = builder.build().expect("context builds");
     let path = dir.join("repository-context.json");
-    let context = serde_json::json!({
-        "schema_version": "issue_fix_repository_context_input_v0",
-        "repository_revision": "9ed5c5fec0000000000000000000000000000000",
-        "sources": [
-            {
-                "source_id": "workspace-item-icon",
-                "source_kind": "source_code",
-                "reference": "src/web-ui/src/app/components/NavPanel/sections/workspaces/WorkspaceItem.tsx",
-                "trust": "verified",
-                "freshness": "current",
-                "supports": ["architecture", "change_scope", "reproduction"],
-                "summary": "Icon ternary renders an arrow for the active workspace row and a folder for its siblings."
-            },
-            {
-                "source_id": "workspace-layout-guard",
-                "source_kind": "source_code",
-                "reference": "src/web-ui/src/app/components/NavPanel/sections/workspaces/WorkspaceListSectionLayout.test.ts",
-                "trust": "verified",
-                "freshness": "current",
-                "supports": ["validation"],
-                "summary": "Raw-text layout guard over the workspace component; focused coverage would need adding."
-            }
-        ]
-    });
     std::fs::write(
         &path,
         serde_json::to_vec_pretty(&context).expect("context serializes"),
@@ -141,11 +169,16 @@ async fn oversized_scope_refuses_to_open_a_pull_request() {
     assert_eq!(packet["transition"]["decision"], "no_followup");
 }
 
-/// Naming a validation surface is not optional: LoopX refuses `fix_pr` when it
-/// cannot see how a fix would be checked, even with everything else grounded.
+/// Naming a validation surface via `--validation-label` is mandatory for
+/// `fix_pr`. A fully grounded context does not substitute for it: LoopX refuses to
+/// open a PR when it cannot see how the fix would be checked.
+///
+/// Read together with `the_generator_prediction_matches_what_loopx_decides`, which
+/// shows the converse — the label without full grounding *is* enough. So the label
+/// is the real gate, and context grounding is not.
 #[tokio::test]
-async fn omitting_the_validation_surface_downgrades_to_triage() {
-    let Some(loopx) = loopx_or_skip("omitting_the_validation_surface_downgrades_to_triage") else {
+async fn omitting_the_validation_label_downgrades_to_triage() {
+    let Some(loopx) = loopx_or_skip("omitting_the_validation_label_downgrades_to_triage") else {
         return;
     };
     let dir = tempfile::tempdir().expect("temp dir is created");
@@ -182,7 +215,95 @@ async fn omitting_the_validation_surface_downgrades_to_triage() {
         reasons
             .iter()
             .any(|code| code == "repository_context_grounded"),
-        "context should still be grounded: {reasons:?}"
+        "grounding is intact; only the label is missing: {reasons:?}"
+    );
+}
+
+/// The generator predicts grounding locally so callers can decide what else to
+/// read before paying for a subprocess call. That prediction is only useful if it
+/// agrees with LoopX, so assert the agreement against the real CLI.
+///
+/// Note what this does *not* claim: a partial context still permits `fix_pr` as
+/// long as `--validation-label` names a validation surface. LoopX distinguishes
+/// "which test files did you read" (a context source) from "how will you check
+/// this fix" (the label), and only the latter gates the route.
+#[tokio::test]
+async fn the_generator_prediction_matches_what_loopx_decides() {
+    let Some(loopx) = loopx_or_skip("the_generator_prediction_matches_what_loopx_decides") else {
+        return;
+    };
+    let dir = tempfile::tempdir().expect("temp dir is created");
+
+    // A context with no validation source: the generator must call this partial
+    // and name validation as the gap.
+    let mut builder = RepositoryContextBuilder::new()
+        .repository_revision("9ed5c5fec0000000000000000000000000000000");
+    builder
+        .push(RepositoryContextSource {
+            source_id: "scope-only".to_string(),
+            source_kind: SourceKind::SourceCode,
+            reference:
+                "src/web-ui/src/app/components/NavPanel/sections/workspaces/WorkspaceItem.tsx"
+                    .to_string(),
+            trust: Trust::Verified,
+            freshness: Freshness::Current,
+            supports: vec![SupportAspect::ChangeScope, SupportAspect::Reproduction],
+            summary: "Only change scope and reproduction; nothing covers validation.".to_string(),
+            consultation_state: None,
+        })
+        .expect("the scope source is valid");
+
+    assert_eq!(
+        builder.context_status(),
+        ContextStatus::Partial,
+        "no validation source means partial"
+    );
+    assert_eq!(
+        builder.ungrounded_required_aspects(),
+        vec![SupportAspect::Validation]
+    );
+
+    let path = dir.path().join("partial-context.json");
+    std::fs::write(
+        &path,
+        serde_json::to_vec_pretty(&builder.build().expect("context builds"))
+            .expect("context serializes"),
+    )
+    .expect("context file is written");
+    let path = path.to_str().expect("path is valid UTF-8");
+
+    let packet = loopx
+        .issue_fix(feasibility_args("bounded", path))
+        .await
+        .expect("feasibility projection succeeds");
+
+    // LoopX must reach the same verdict the generator predicted, aspect for
+    // aspect. This is the assertion that catches drift between the two.
+    let context = &packet["observation"]["repository_context"];
+    assert_eq!(context["context_status"], "partial");
+    assert_eq!(
+        context["unresolved_required_aspects"]
+            .as_array()
+            .expect("unresolved aspects are an array"),
+        &vec![serde_json::Value::from("validation")]
+    );
+    assert_eq!(context["coverage"]["change_scope"]["status"], "grounded");
+    assert_eq!(context["coverage"]["reproduction"]["status"], "grounded");
+    assert_eq!(context["coverage"]["validation"]["status"], "missing");
+
+    let reasons = packet["decision"]["reason_codes"]
+        .as_array()
+        .expect("reason codes are an array")
+        .iter()
+        .filter_map(|code| code.as_str())
+        .collect::<Vec<_>>();
+    assert!(
+        reasons.contains(&"repository_context_partial"),
+        "a partial context must be recorded as such: {reasons:?}"
+    );
+    assert!(
+        !reasons.contains(&"repository_context_grounded"),
+        "a partial context must not read as grounded: {reasons:?}"
     );
 }
 

@@ -77,6 +77,38 @@ pr-lifecycle
 
 第三组是关键闸门：证据齐全且可复现，但范围过大时仍拒绝发 PR。
 
+### 3.2.1 真正的 PR 门禁是 `--validation-label`，不是 context grounding
+
+实测（`loopx_issue_fix_contracts.rs` 两个互为对照的测试）：
+
+| context | `--validation-label` | route |
+|---|---|---|
+| **grounded** | 缺失 | `triage_only` |
+| **partial**（validation 未覆盖） | 已提供 | **`fix_pr`** |
+
+结论：LoopX 区分两件事——
+- **context 里的 validation source** = 「你读了哪些测试文件」，影响 `coverage.validation` 和
+  `context_status`，但**不**单独决定 route
+- **`--validation-label`** = 「你打算怎么验证这个修复」，**这才是发 PR 的硬门禁**
+
+所以 BitFun 侧必须能说出验证手段（例如「web-ui focused vitest」），说不出就只能走 triage，
+即使代码读得再透。反之，context 只是 partial 时仍可发 PR，只会带上
+`repository_context_partial` 这条 reason code。
+
+### 3.2.2 什么算 aspect 已 grounded
+
+LoopX 的判定（`repository_context.py:165-169`），三个条件全满足才算：
+
+- `freshness == "current"`（且 context 必须带 `repository_revision`）
+- `trust ∈ {authoritative, verified}`
+- `source_kind != "external_expert"`
+
+`context_status` 则看 `change_scope` / `reproduction` / `validation` 三项：全 grounded →
+`grounded`，部分 → `partial`，全无 → `ungrounded`。
+
+`RepositoryContextBuilder::context_status()` 在本地复刻了这套判定，可在不启动子进程的
+情况下预测结果；契约测试逐 aspect 比对两者，防止规则漂移。
+
 ### 3.3 pr-lifecycle 的四种投影
 
 | PR 状态 | decision | state_bucket |
@@ -149,56 +181,56 @@ pnpm，均在 benchmark 的正则字符串内，不执行。该记录需更正�
 | 外部二进制探测先例 | `workspace_search/service.rs:660` `which::which` |
 | git 操作 | `git2`（已是依赖） |
 
-### 5.2 需要新增
+### 5.2 已实现（后端）
 
-**A. issue 枚举**
-
-现有 `issue()` 只取单个（签名见 `review_platform.rs:1077`，参数为
-`platform, host, project_path, issue_id, page, per_page, repository_path`）。
-需要平级新增：
+**A. issue 枚举** — `review_platform.rs`，提交 `8143f8ebc`
 
 ```rust
-pub async fn list_open_issues(
+pub async fn list_issues(
     &self,
-    platform: ReviewPlatformKind,
-    host: &str,
-    project_path: &str,
-    page: Option<u32>,
-    per_page: Option<u32>,
-    repository_path: Option<&str>,
-) -> Result<Vec<ReviewPlatformIssueSummary>, ReviewPlatformError>;
+    request: ReviewPlatformListIssuesRequest<'_>,
+) -> Result<ReviewPlatformIssuePage, ReviewPlatformError>;
 ```
 
-复用现有 `provider_context_for_identity_request` + `load_stored_tokens`，
-沿用 `map_github_issue` / `map_gitlab_issue` 的映射约定。
+用请求结构体而非位置参数，因为同级 `issue()` 已达 clippy 参数上限。返回轻量
+`ReviewPlatformIssueSummary`（不含 body 与评论），避免列举时拉取巨量数据。
 
-**B. repository context 生成**
+provider 差异：GitHub 走 `gh` CLI、issues 端点会混入 PR（按 `pull_request` 字段过滤）、
+无 Link 头故以满页推断翻页；GitLab 走 HTTP、用项目内 `iid`、无 `all` 字面量（须省略
+参数）、翻页看 `x-next-page`。
 
-把 BitFun 读代码的结果编码成 LoopX 的
-`issue_fix_repository_context_input_v0`。每条 source 的字段：
-`source_id`、`source_kind`、`reference`（仓库相对路径）、`trust`
-（`authoritative` / `verified` / `advisory`）、`freshness`、
-`supports`（`architecture` / `change_scope` / `ownership` / `reproduction` / `validation`）、
-`summary`。顶层需 `repository_revision`。
+**B. repository context 生成** — `loopx_issue_fix/repository_context.rs`
 
-关键约束：`reference` 必须是仓库相对路径，`summary` 必须 public-safe——
-LoopX 会校验并拒绝携带本地绝对路径。
+`RepositoryContextBuilder` 在 `push` 时逐条校验，而非 build 时一次性报错——调用方能
+知道是哪条 source 有问题。已强制的 LoopX 约束：
 
-**C. LoopX 进程调用层**
+- `source_id` 形状 `^[A-Za-z0-9][A-Za-z0-9_.:-]{0,119}$`、不可重复
+- `reference` ≤260 字符、**禁绝对路径与 `..`**、URL 须 https 且无 query、
+  Windows 分隔符归一化为 POSIX
+- `summary` ≤220 字符、空白折叠后计数（与 LoopX 一致）
+- sources ≤16 条
+- `memory_retrieval` / `external_expert` 的 trust 必须 `advisory`
+- `freshness: current` 必须有 `repository_revision`
 
-按 `flashgrep` 先例（探测 + 特性开关）：
+另提供 `context_status()` / `ungrounded_required_aspects()`，本地复刻 LoopX 的 grounding
+判定（见 3.2.2），可在不启动子进程的情况下预测结果并决定还需读什么。
+
+**C. LoopX 进程调用层** — `loopx_issue_fix/mod.rs`，提交 `d43576b09`
 
 ```rust
-pub struct LoopxIssueFix { program: PathBuf }
-
 impl LoopxIssueFix {
-    /// None → 特性不可用，UI 应隐藏入口
-    pub fn probe() -> Option<Self>;           // which::which("loopx")
+    /// None → 特性不可用，隐藏入口
+    pub fn probe() -> Option<Self>;   // LOOPX_BIN 覆盖，否则 which::which("loopx")
 
-    async fn invoke(&self, args: &[&str]) -> Result<serde_json::Value, Error>;
-    // 必须: env PYTHONUTF8=1, --format json
+    pub async fn issue_fix<I, S>(&self, args: I)
+        -> Result<serde_json::Value, LoopxIssueFixError>;
+    // 自动附加 issue-fix 前缀、--format json、env PYTHONUTF8=1
 }
 ```
+
+关键实现细节：LoopX 的业务拒绝**同时**输出 `{"ok": false, "error": ...}` 到 stdout
+**并**以非零码退出。因此必须先解析 stdout，否则结构化原因会被裸退出码覆盖——这是
+实测发现的，不是设计推断。
 
 统一走 `--format json`，不解析 markdown。
 
@@ -340,15 +372,18 @@ LoopX 的 decision 映射到 `ThreadGoalStatus`：
 
 ---
 
-## 9. 建议的实现顺序
+## 9. 实现进度
 
 后端优先，UI 最后——前四步都无外部副作用，可独立验证。
 
-1. 加 Cargo feature（非 `default`，暂不加入 `product-full`）
-2. `LoopxIssueFix::probe()` + `invoke()`（含 `PYTHONUTF8=1`）
-3. `list_open_issues()`
-4. repository context 生成器
-5. 单 issue 端到端，命令行触发，不接 UI、不接 `thread_goal`
-6. 面板 UI（新 `PanelContentType` + 组件 + 头部按钮 + i18n）
-7. 接 `thread_goal`，多 issue 串行
-8. 真实仓库验证通过后，把 feature 纳入 `product-full`
+- [x] **1.** Cargo feature `loopx-issue-fix`（非 `default`，暂不在 `product-full`）
+- [x] **2.** `LoopxIssueFix::probe()` + `issue_fix()`（含 `PYTHONUTF8=1`）
+- [x] **3.** `list_issues()`
+- [x] **4.** repository context 生成器
+- [ ] **5.** 单 issue 端到端，命令行触发，不接 UI、不接 `thread_goal`
+- [ ] **6.** 面板 UI（新 `PanelContentType` + 组件 + 头部按钮 + i18n）
+- [ ] **7.** 接 `thread_goal`，多 issue 串行
+- [ ] **8.** 真实仓库验证通过后，把 feature 纳入 `product-full`
+
+第 1-4 步共 43 个测试：35 个单元测试，8 个驱动真实 LoopX CLI 的契约测试
+（无 loopx 时优雅跳过）。另有一个 `#[ignore]` 测试驱动真实 `gh` CLI 验证 issue 枚举。

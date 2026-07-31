@@ -6,6 +6,8 @@
 //!
 //! See `docs/development/loopx-issue-fix-integration.md` for the verified chain.
 
+pub mod repository_context;
+
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
