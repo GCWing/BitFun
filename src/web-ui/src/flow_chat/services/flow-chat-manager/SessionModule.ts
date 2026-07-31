@@ -1018,9 +1018,22 @@ export async function deleteChatSession(
       && removedSessionIdSet.has(stateBeforeDelete.activeSessionId)
     );
     const session = stateBeforeDelete.sessions.get(sessionId);
-    if (isDispatchObserverProjection(sessionId, session)) {
+    const observerJobIds = Object.values(dispatchJobStore.getState().jobs)
+      .filter(job => job.sessionId === sessionId)
+      .map(job => job.jobId);
+    const deleteAsDispatchProjection = isDispatchObserverProjection(sessionId, session);
+    log.info('Dispatch diagnostic: session delete evaluated', {
+      sessionId,
+      sessionFound: Boolean(session),
+      dispatchTargetKind: session?.config.dispatchTarget?.kind,
+      dispatchJobId: session?.config.dispatchJobId,
+      observerJobIds,
+      deleteAsDispatchProjection,
+      cascadeSessionIds: removedSessionIds,
+    });
+    if (deleteAsDispatchProjection) {
       dismissDispatchObserverProjection(sessionId, session);
-      context.flowChatStore.removeSession(
+      const locallyRemovedSessionIds = context.flowChatStore.removeSession(
         sessionId,
         removedActiveSession ? { nextActiveSessionId: null } : undefined,
       );
@@ -1029,8 +1042,17 @@ export async function deleteChatSession(
         cleanupSaveState(context, id);
         cleanupSessionBuffers(context, id);
       });
+      log.info('Dispatch diagnostic: projection removed from flow chat store', {
+        sessionId,
+        locallyRemovedSessionIds,
+        activeSessionId: context.flowChatStore.getState().activeSessionId,
+      });
       return;
     }
+    log.info('Dispatch diagnostic: delete routed to persisted backend session', {
+      sessionId,
+      hasWorkspacePath: Boolean(session && sessionProjectWorkspacePath(session)),
+    });
     await context.flowChatStore.deleteSession(
       sessionId,
       removedActiveSession ? { nextActiveSessionId: null } : undefined,

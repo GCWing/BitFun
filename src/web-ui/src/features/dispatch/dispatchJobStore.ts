@@ -14,10 +14,13 @@ import type {
   OutboundDispatchRecord,
 } from './types';
 import { isDispatchJobTerminal } from './types';
+import { createLogger } from '@/shared/utils/logger';
 
+const log = createLogger('DispatchJobStore');
 const MAX_APPLIED_EVENT_IDS = 2048;
 const MAX_DISMISSED_JOB_IDS = 2048;
 const MAX_DISMISSED_SESSION_IDS = 2048;
+const reportedSuppressedProjectionKeys = new Set<string>();
 const fallbackStorageValues = new Map<string, string>();
 const fallbackStorage: StateStorage = {
   getItem: (name) => fallbackStorageValues.get(name) ?? null,
@@ -151,6 +154,12 @@ export const useDispatchJobStore = create<DispatchJobStoreState>()(
             state.dismissedJobIds.includes(job.jobId)
             || state.dismissedSessionIds.includes(job.sessionId)
           ) {
+            log.info('Dispatch diagnostic: job registration suppressed by tombstone', {
+              jobId: job.jobId,
+              sessionId: job.sessionId,
+              jobTombstoned: state.dismissedJobIds.includes(job.jobId),
+              sessionTombstoned: state.dismissedSessionIds.includes(job.sessionId),
+            });
             return state;
           }
           const transportByJobId = {
@@ -200,6 +209,19 @@ export const useDispatchJobStore = create<DispatchJobStoreState>()(
               state.dismissedJobIds.includes(record.jobId)
               || state.dismissedSessionIds.includes(record.sessionId)
             ) {
+              const projectionKey = `${record.jobId}:${record.sessionId}`;
+              if (!reportedSuppressedProjectionKeys.has(projectionKey)) {
+                if (reportedSuppressedProjectionKeys.size >= MAX_DISMISSED_JOB_IDS) {
+                  reportedSuppressedProjectionKeys.clear();
+                }
+                reportedSuppressedProjectionKeys.add(projectionKey);
+                log.info('Dispatch diagnostic: outbound record suppressed by tombstone', {
+                  jobId: record.jobId,
+                  sessionId: record.sessionId,
+                  jobTombstoned: state.dismissedJobIds.includes(record.jobId),
+                  sessionTombstoned: state.dismissedSessionIds.includes(record.sessionId),
+                });
+              }
               continue;
             }
             const sourceWorkspacePath = record.sourceWorkspacePath?.trim() || undefined;
@@ -240,6 +262,12 @@ export const useDispatchJobStore = create<DispatchJobStoreState>()(
               };
               continue;
             }
+            log.info('Dispatch diagnostic: outbound record restored into renderer cache', {
+              jobId: record.jobId,
+              sessionId: record.sessionId,
+              sourceWorkspaceId: record.sourceWorkspaceId,
+              state: record.lastState,
+            });
             jobs[record.jobId] = {
               jobId: record.jobId,
               sessionId: record.sessionId,
@@ -424,6 +452,9 @@ export const useDispatchJobStore = create<DispatchJobStoreState>()(
       dismissSession: (rawSessionId, knownJobId) => {
         const sessionId = rawSessionId.trim();
         const normalizedKnownJobId = knownJobId?.trim();
+        const matchingJobIds = Object.values(get().jobs)
+          .filter(job => job.sessionId === sessionId)
+          .map(job => job.jobId);
         set(state => {
           const dismissedJobIds = new Set(state.dismissedJobIds);
           if (normalizedKnownJobId) {
@@ -452,6 +483,18 @@ export const useDispatchJobStore = create<DispatchJobStoreState>()(
                 .slice(-MAX_DISMISSED_SESSION_IDS)
               : state.dismissedSessionIds,
           };
+        });
+        const state = get();
+        log.info('Dispatch diagnostic: projection dismissed', {
+          sessionId,
+          knownJobId: normalizedKnownJobId,
+          matchingJobIds,
+          persistedJobTombstone: normalizedKnownJobId
+            ? state.dismissedJobIds.includes(normalizedKnownJobId)
+            : false,
+          persistedSessionTombstone: state.dismissedSessionIds.includes(sessionId),
+          dismissedJobCount: state.dismissedJobIds.length,
+          dismissedSessionCount: state.dismissedSessionIds.length,
         });
       },
 
@@ -489,6 +532,17 @@ export const useDispatchJobStore = create<DispatchJobStoreState>()(
         dismissedJobIds: state.dismissedJobIds,
         dismissedSessionIds: state.dismissedSessionIds,
       }),
+      onRehydrateStorage: () => (state, error) => {
+        if (error) {
+          log.error('Dispatch diagnostic: projection state rehydration failed', { error });
+          return;
+        }
+        log.info('Dispatch diagnostic: projection state rehydrated', {
+          jobIds: Object.keys(state?.jobs ?? {}),
+          dismissedJobIds: state?.dismissedJobIds ?? [],
+          dismissedSessionIds: state?.dismissedSessionIds ?? [],
+        });
+      },
     },
   ),
 );

@@ -72,8 +72,42 @@ import {
   isDispatchJobTerminal,
   isNonLocalDispatchTarget,
 } from '@/features/dispatch/types';
+import { dispatchJobStore } from '@/features/dispatch/dispatchJobStore';
 
 const log = createLogger('FlowChatStore');
+
+function logPersistedDispatchMetadataOverlap(
+  metadata: Record<string, unknown>,
+  source: 'metadata-page' | 'metadata-list',
+): void {
+  const sessionId =
+    typeof metadata.sessionId === 'string' ? metadata.sessionId : undefined;
+  if (!sessionId) return;
+
+  const dispatchState = dispatchJobStore.getState();
+  const observerJobIds = Object.values(dispatchState.jobs)
+    .filter(job => job.sessionId === sessionId)
+    .map(job => job.jobId);
+  const sessionTombstoned = dispatchState.dismissedSessionIds.includes(sessionId);
+  const metadataDispatchJobId =
+    typeof metadata.dispatchJobId === 'string'
+      ? metadata.dispatchJobId
+      : typeof metadata.dispatch_job_id === 'string'
+        ? metadata.dispatch_job_id
+        : undefined;
+  if (!sessionTombstoned && observerJobIds.length === 0 && !metadataDispatchJobId) {
+    return;
+  }
+
+  log.info('Dispatch diagnostic: persisted backend metadata overlaps observer state', {
+    source,
+    sessionId,
+    metadataDispatchJobId,
+    observerJobIds,
+    sessionTombstoned,
+    dismissedSessionCount: dispatchState.dismissedSessionIds.length,
+  });
+}
 
 function sameDispatchTargetIdentity(
   left: NonNullable<SessionConfig['dispatchTarget']>,
@@ -4070,6 +4104,7 @@ export class FlowChatStore {
 
     const processSession = async (metadata: any) => {
       try {
+        logPersistedDispatchMetadataOverlap(metadata, 'metadata-page');
         if (surfaceGeneration !== this.surfaceGeneration) {
           return;
         }
@@ -4445,6 +4480,7 @@ export class FlowChatStore {
 
       const processSession = async (metadata: any) => {
         try {
+          logPersistedDispatchMetadataOverlap(metadata, 'metadata-list');
           const existingSession = this.state.sessions.get(metadata.sessionId);
           if (existingSession) {
             return;

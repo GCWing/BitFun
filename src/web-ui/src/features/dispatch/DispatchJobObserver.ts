@@ -172,6 +172,15 @@ function ensureProjection(context: FlowChatContext, job: DispatchObserverJob): b
   const sourceWorkspacePath = job.sourceWorkspacePath?.trim() || undefined;
   const existing = context.flowChatStore.getState().sessions.get(job.sessionId);
   if (existing) {
+    if (existing.config.dispatchJobId !== job.jobId) {
+      log.info('Dispatch diagnostic: observer adopted an existing flow chat session', {
+        jobId: job.jobId,
+        sessionId: job.sessionId,
+        previousDispatchJobId: existing.config.dispatchJobId,
+        wasHistorical: existing.isHistorical,
+        historyState: existing.historyState,
+      });
+    }
     // Reconcile both immutable target identity and controller-side ownership.
     // The observer can start before FlowChat knows its workspace, so a legacy
     // outbound record may only gain its source path on a later poll.
@@ -202,6 +211,12 @@ function ensureProjection(context: FlowChatContext, job: DispatchObserverJob): b
   // renderer process. Rebuild a fresh in-memory projection by replaying from
   // byte zero; never skip straight to that cursor.
   dispatchJobStore.getState().resetReplay(job.jobId);
+  log.info('Dispatch diagnostic: observer created a flow chat projection', {
+    jobId: job.jobId,
+    sessionId: job.sessionId,
+    sourceWorkspaceId: job.sourceWorkspaceId,
+    state: job.state,
+  });
   context.flowChatStore.addExternalSession(
     job.sessionId,
     job.title,
