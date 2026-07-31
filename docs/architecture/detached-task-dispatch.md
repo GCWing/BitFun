@@ -104,6 +104,16 @@ the package fail, but coordinated edits across multiple files can still span
 the traversal interval. Callers that require an application-consistent source
 must quiesce the source or select a filesystem snapshot as the source path.
 
+The controller retains the latest verified archive for each canonical source
+path and capture mode. Before packaging a later job, it recomputes a lightweight
+fingerprint from the selected paths and their filesystem identity, size,
+executable state, and write/change timestamps. An unchanged fingerprint
+hard-links the cached immutable archive into the new job instead of rereading
+and recompressing every file. Source mode ignores changes below ignored paths;
+exact mode observes them. A selected entry change invalidates and atomically
+replaces the cache. The per-job link remains immutable during submission, so a
+later cache replacement cannot change an in-flight job's bytes.
+
 SSH transports the archive with SFTP after `workspace-begin`. Account-device
 RPC uses bounded base64 chunks inside the existing end-to-end encrypted
 `HostInvoke` envelope. Neither transport puts source bytes in command-line

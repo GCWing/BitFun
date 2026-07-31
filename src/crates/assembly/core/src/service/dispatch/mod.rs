@@ -8,12 +8,14 @@ use std::path::{Path, PathBuf};
 
 use anyhow::Context as _;
 use bitfun_services_core::dispatch_workspace::{
-    create_exact_workspace_snapshot, create_source_workspace_snapshot, sha256_file,
-    WorkspaceSnapshotMetadata,
+    exact_workspace_snapshot_source_fingerprint, prepare_exact_workspace_snapshot,
+    prepare_source_workspace_snapshot, sha256_file, source_workspace_snapshot_source_fingerprint,
+    WorkspaceSnapshotMetadata, WorkspaceSnapshotSourceFingerprint,
 };
 use bitfun_services_core::json_store::{JsonFileStore, JsonFileStoreError};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use thiserror::Error;
 use tokio::fs;
 
@@ -52,6 +54,7 @@ pub use target::{DispatchTarget, DispatchTargetRequest, DispatchWorkspaceDeliver
 
 const PROMPT_PREVIEW_CHARS: usize = 160;
 const OUTBOUND_WORKSPACE_UPLOADS_DIR: &str = ".workspace-uploads";
+const OUTBOUND_WORKSPACE_CACHE_DIR: &str = ".workspace-cache";
 /// Where pulled result bundles are staged before the user applies them.
 pub(super) const OUTBOUND_RESULTS_DIR: &str = ".results";
 const TERMINAL_OUTBOUND_RETENTION_DAYS: i64 = 30;
@@ -69,6 +72,19 @@ struct OutboundWorkspaceSnapshotRecord {
     #[serde(default)]
     capture_mode: DispatchWorkspaceSnapshotCaptureMode,
     metadata: WorkspaceSnapshotMetadata,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    source_fingerprint: Option<WorkspaceSnapshotSourceFingerprint>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct OutboundWorkspaceCacheRecord {
+    source_workspace_path: String,
+    capture_mode: DispatchWorkspaceSnapshotCaptureMode,
+    source_fingerprint: WorkspaceSnapshotSourceFingerprint,
+    metadata: WorkspaceSnapshotMetadata,
+    created_at: DateTime<Utc>,
+    last_used_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -77,6 +93,15 @@ pub enum DispatchWorkspaceSnapshotCaptureMode {
     Source,
     #[default]
     Exact,
+}
+
+impl DispatchWorkspaceSnapshotCaptureMode {
+    fn cache_key_label(self) -> &'static [u8] {
+        match self {
+            Self::Source => b"source",
+            Self::Exact => b"exact",
+        }
+    }
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -409,6 +434,16 @@ impl OutboundDispatchStore {
                 "snapshot source cannot contain the controller dispatch staging directory"
             );
         }
+        let cache = self.root.join(OUTBOUND_WORKSPACE_CACHE_DIR);
+        fs::create_dir_all(&cache).await?;
+        harden_directory_permissions(&cache).await?;
+        let cache = tokio::task::spawn_blocking(move || cache.canonicalize())
+            .await
+            .map_err(|error| anyhow::anyhow!("snapshot cache path task failed: {error}"))?
+            .map_err(|error| anyhow::anyhow!("resolve snapshot cache directory: {error}"))?;
+        if cache.starts_with(&source) {
+            anyhow::bail!("snapshot source cannot contain the controller snapshot cache");
+        }
         let record_path = uploads.join(format!("{job_id}.json"));
         let archive_path = uploads.join(format!("{job_id}.tar.gz"));
         let _lock = self
@@ -424,24 +459,8 @@ impl OutboundDispatchStore {
             if record.source_workspace_path != source_wire || record.capture_mode != capture_mode {
                 anyhow::bail!("dispatch jobId is already bound to another workspace snapshot");
             }
-            let archive = archive_path.clone();
-            let expected = record.metadata.clone();
-            let valid = tokio::task::spawn_blocking(move || -> anyhow::Result<bool> {
-                let metadata = match std::fs::symlink_metadata(&archive) {
-                    Ok(metadata) => metadata,
-                    Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(false),
-                    Err(error) => return Err(error.into()),
-                };
-                if metadata.file_type().is_symlink()
-                    || !metadata.is_file()
-                    || metadata.len() != expected.archive_size
-                {
-                    return Ok(false);
-                }
-                Ok(sha256_file(&archive)?.eq_ignore_ascii_case(&expected.archive_sha256))
-            })
-            .await
-            .map_err(|error| anyhow::anyhow!("snapshot verification task failed: {error}"))??;
+            let valid =
+                snapshot_archive_is_valid(archive_path.clone(), record.metadata.clone()).await?;
             if valid {
                 return Ok(PreparedOutboundWorkspaceSnapshot {
                     archive_path,
@@ -454,31 +473,116 @@ impl OutboundDispatchStore {
             let _ = fs::remove_file(&archive_path).await;
         }
 
+        let cache_key = outbound_workspace_cache_key(&source_wire, capture_mode);
+        let cache_record_path = cache.join(format!("{cache_key}.json"));
+        let cache_archive_path = cache.join(format!("{cache_key}.tar.gz"));
+        let _cache_lock = self
+            .json_store
+            .acquire_cross_process_lock(&cache_record_path)
+            .await?;
+        let mut cached = match self
+            .json_store
+            .read_optional::<OutboundWorkspaceCacheRecord>(&cache_record_path)
+            .await
+        {
+            Ok(record) => record,
+            Err(error) => {
+                log::warn!(
+                    "Ignoring unreadable outbound workspace cache record: path={} error={}",
+                    cache_record_path.display(),
+                    error
+                );
+                None
+            }
+        };
+        if cached.as_ref().is_some_and(|record| {
+            record.source_workspace_path != source_wire || record.capture_mode != capture_mode
+        }) {
+            log::warn!(
+                "Ignoring outbound workspace cache identity mismatch: path={}",
+                cache_record_path.display()
+            );
+            cached = None;
+        }
+        if let Some(mut cached) = cached {
+            let current_fingerprint =
+                workspace_source_fingerprint(source.clone(), capture_mode).await?;
+            if current_fingerprint == cached.source_fingerprint
+                && snapshot_archive_is_valid(cache_archive_path.clone(), cached.metadata.clone())
+                    .await?
+            {
+                replace_snapshot_archive(&cache_archive_path, &archive_path).await?;
+                cached.last_used_at = Utc::now();
+                self.json_store
+                    .write_atomic_strict(&cache_record_path, &cached)
+                    .await?;
+                harden_file_permissions(&cache_record_path).await?;
+                let record = OutboundWorkspaceSnapshotRecord {
+                    source_workspace_path: source_wire,
+                    capture_mode,
+                    metadata: cached.metadata.clone(),
+                    source_fingerprint: Some(cached.source_fingerprint),
+                };
+                self.json_store
+                    .write_atomic_strict(&record_path, &record)
+                    .await?;
+                harden_file_permissions(&record_path).await?;
+                return Ok(PreparedOutboundWorkspaceSnapshot {
+                    archive_path,
+                    metadata: cached.metadata,
+                });
+            }
+        }
+
+        remove_file_if_present(&cache_record_path).await?;
+        remove_file_if_present(&cache_archive_path).await?;
         let package_source = source.clone();
         let package_archive = archive_path.clone();
-        let metadata = tokio::task::spawn_blocking(move || match capture_mode {
+        let prepared = tokio::task::spawn_blocking(move || match capture_mode {
             DispatchWorkspaceSnapshotCaptureMode::Source => {
-                create_source_workspace_snapshot(&package_source, &package_archive)
+                prepare_source_workspace_snapshot(&package_source, &package_archive)
             }
             DispatchWorkspaceSnapshotCaptureMode::Exact => {
-                create_exact_workspace_snapshot(&package_source, &package_archive)
+                prepare_exact_workspace_snapshot(&package_source, &package_archive)
             }
         })
         .await
         .map_err(|error| anyhow::anyhow!("snapshot packaging task failed: {error}"))??;
+        harden_file_permissions(&archive_path).await?;
+        publish_snapshot_cache_archive(
+            &archive_path,
+            &cache_archive_path,
+            &cache,
+            &cache_key,
+            job_id,
+        )
+        .await?;
+        let now = Utc::now();
+        let cache_record = OutboundWorkspaceCacheRecord {
+            source_workspace_path: source_wire.clone(),
+            capture_mode,
+            source_fingerprint: prepared.source_fingerprint.clone(),
+            metadata: prepared.metadata.clone(),
+            created_at: now,
+            last_used_at: now,
+        };
+        self.json_store
+            .write_atomic_strict(&cache_record_path, &cache_record)
+            .await?;
+        harden_file_permissions(&cache_record_path).await?;
         let record = OutboundWorkspaceSnapshotRecord {
             source_workspace_path: source_wire,
             capture_mode,
-            metadata: metadata.clone(),
+            metadata: prepared.metadata.clone(),
+            source_fingerprint: Some(prepared.source_fingerprint),
         };
         self.json_store
             .write_atomic_strict(&record_path, &record)
             .await?;
         harden_file_permissions(&record_path).await?;
-        harden_file_permissions(&archive_path).await?;
         Ok(PreparedOutboundWorkspaceSnapshot {
             archive_path,
-            metadata,
+            metadata: prepared.metadata,
         })
     }
 
@@ -531,6 +635,101 @@ impl OutboundDispatchStore {
         fs::create_dir_all(&self.root).await?;
         harden_directory_permissions(&self.root).await?;
         Ok(())
+    }
+}
+
+fn outbound_workspace_cache_key(
+    source_workspace_path: &str,
+    capture_mode: DispatchWorkspaceSnapshotCaptureMode,
+) -> String {
+    let mut digest = Sha256::new();
+    digest.update(b"bitfun-dispatch-outbound-workspace-cache");
+    digest.update(capture_mode.cache_key_label());
+    digest.update((source_workspace_path.len() as u64).to_le_bytes());
+    digest.update(source_workspace_path.as_bytes());
+    format!("{:x}", digest.finalize())
+}
+
+async fn workspace_source_fingerprint(
+    source: PathBuf,
+    capture_mode: DispatchWorkspaceSnapshotCaptureMode,
+) -> anyhow::Result<WorkspaceSnapshotSourceFingerprint> {
+    tokio::task::spawn_blocking(move || match capture_mode {
+        DispatchWorkspaceSnapshotCaptureMode::Source => {
+            source_workspace_snapshot_source_fingerprint(&source)
+        }
+        DispatchWorkspaceSnapshotCaptureMode::Exact => {
+            exact_workspace_snapshot_source_fingerprint(&source)
+        }
+    })
+    .await
+    .map_err(|error| anyhow::anyhow!("snapshot fingerprint task failed: {error}"))?
+}
+
+async fn snapshot_archive_is_valid(
+    archive: PathBuf,
+    expected: WorkspaceSnapshotMetadata,
+) -> anyhow::Result<bool> {
+    tokio::task::spawn_blocking(move || -> anyhow::Result<bool> {
+        let metadata = match std::fs::symlink_metadata(&archive) {
+            Ok(metadata) => metadata,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(false),
+            Err(error) => return Err(error.into()),
+        };
+        if metadata.file_type().is_symlink()
+            || !metadata.is_file()
+            || metadata.len() != expected.archive_size
+        {
+            return Ok(false);
+        }
+        Ok(sha256_file(&archive)?.eq_ignore_ascii_case(&expected.archive_sha256))
+    })
+    .await
+    .map_err(|error| anyhow::anyhow!("snapshot verification task failed: {error}"))?
+}
+
+async fn replace_snapshot_archive(source: &Path, destination: &Path) -> anyhow::Result<()> {
+    remove_file_if_present(destination).await?;
+    if let Err(link_error) = fs::hard_link(source, destination).await {
+        if let Err(copy_error) = fs::copy(source, destination).await {
+            let _ = fs::remove_file(destination).await;
+            anyhow::bail!(
+                "copy snapshot archive {} to {} after hard-link failed ({link_error}): \
+                 {copy_error}",
+                source.display(),
+                destination.display()
+            );
+        }
+    }
+    harden_file_permissions(destination).await?;
+    Ok(())
+}
+
+async fn publish_snapshot_cache_archive(
+    source: &Path,
+    destination: &Path,
+    cache_directory: &Path,
+    cache_key: &str,
+    job_id: &str,
+) -> anyhow::Result<()> {
+    let staging = cache_directory.join(format!(".{cache_key}.{job_id}.tmp"));
+    remove_file_if_present(&staging).await?;
+    replace_snapshot_archive(source, &staging).await?;
+    remove_file_if_present(destination).await?;
+    if let Err(error) = fs::rename(&staging, destination).await {
+        let _ = fs::remove_file(&staging).await;
+        return Err(error)
+            .with_context(|| format!("publish snapshot cache archive {}", destination.display()));
+    }
+    harden_file_permissions(destination).await?;
+    Ok(())
+}
+
+async fn remove_file_if_present(path: &Path) -> anyhow::Result<()> {
+    match fs::remove_file(path).await {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(error.into()),
     }
 }
 
@@ -835,6 +1034,97 @@ mod tests {
         assert!(
             store.remove_result_bundle("../escape").await.is_err(),
             "job ids must stay validated on this path too"
+        );
+    }
+
+    #[tokio::test]
+    async fn workspace_cache_reuses_unchanged_source_across_dispatch_jobs() {
+        let temp = tempfile::tempdir().expect("temp dir");
+        let root = temp.path().join("outbound");
+        let store = OutboundDispatchStore::new_in_root_for_tests(root.clone());
+        let source = temp.path().join("workspace");
+        std::fs::create_dir_all(source.join(".git")).expect("repository marker");
+        std::fs::create_dir_all(source.join("target")).expect("ignored directory");
+        std::fs::write(source.join(".gitignore"), b"target/\n").expect("gitignore");
+        std::fs::write(source.join("main.rs"), b"fn main() {}").expect("source");
+        std::fs::write(source.join("target/app"), b"first build").expect("ignored output");
+        let source_wire = source
+            .canonicalize()
+            .expect("canonical source")
+            .to_string_lossy()
+            .to_string();
+        let cache_key = outbound_workspace_cache_key(
+            &source_wire,
+            DispatchWorkspaceSnapshotCaptureMode::Source,
+        );
+        let cache_archive = root
+            .join(OUTBOUND_WORKSPACE_CACHE_DIR)
+            .join(format!("{cache_key}.tar.gz"));
+
+        let first = store
+            .prepare_workspace_snapshot(
+                "job-1",
+                &source_wire,
+                DispatchWorkspaceSnapshotCaptureMode::Source,
+            )
+            .await
+            .expect("first snapshot");
+        let first_cache_metadata = std::fs::metadata(&cache_archive).expect("first cached archive");
+        store
+            .remove_workspace_snapshot("job-1")
+            .await
+            .expect("remove first job snapshot");
+        assert!(
+            cache_archive.exists(),
+            "removing a completed job must retain the reusable cache"
+        );
+
+        std::fs::write(source.join("target/app"), b"a different ignored build")
+            .expect("change ignored output");
+        let second = store
+            .prepare_workspace_snapshot(
+                "job-2",
+                &source_wire,
+                DispatchWorkspaceSnapshotCaptureMode::Source,
+            )
+            .await
+            .expect("cached snapshot");
+        let second_cache_metadata =
+            std::fs::metadata(&cache_archive).expect("reused cached archive");
+        assert_eq!(first.metadata, second.metadata);
+        assert_eq!(
+            first_cache_metadata.modified().expect("first modified"),
+            second_cache_metadata.modified().expect("second modified"),
+            "a cache hit must not recreate the archive"
+        );
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::MetadataExt;
+            assert_eq!(
+                second_cache_metadata.ino(),
+                std::fs::metadata(&second.archive_path)
+                    .expect("job archive")
+                    .ino(),
+                "each job should hard-link the immutable cached archive"
+            );
+        }
+
+        std::fs::write(
+            source.join("main.rs"),
+            b"fn main() { println!(\"changed\"); }",
+        )
+        .expect("change included source");
+        let third = store
+            .prepare_workspace_snapshot(
+                "job-3",
+                &source_wire,
+                DispatchWorkspaceSnapshotCaptureMode::Source,
+            )
+            .await
+            .expect("invalidated snapshot");
+        assert_ne!(
+            second.metadata.archive_sha256, third.metadata.archive_sha256,
+            "an included source change must invalidate the cached archive"
         );
     }
 
