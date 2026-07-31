@@ -17,13 +17,6 @@ function readWorkspaceStripComponent(): string {
   ).replace(/\r\n/g, '\n');
 }
 
-function readDispatchPickerStylesheet(): string {
-  return readFileSync(
-    fileURLToPath(new URL('../../features/dispatch/DispatchTargetPicker.scss', import.meta.url)),
-    'utf8',
-  ).replace(/\r\n/g, '\n');
-}
-
 describe('ChatInputWorkspaceStrip layout styles', () => {
   it('keeps the session usage action visible without overpowering the strip', () => {
     const stylesheet = readWorkspaceStripStylesheet();
@@ -52,21 +45,14 @@ describe('ChatInputWorkspaceStrip layout styles', () => {
     expect(stylesheet).toContain('display: none;');
   });
 
-  it('places dispatch first in right actions and protects the narrow layout', () => {
+  it('keeps dispatch session creation hidden for the 0.2.15 release', () => {
     const component = readWorkspaceStripComponent();
-    const pickerStylesheet = readDispatchPickerStylesheet();
-    const actionsStart = component.indexOf(
-      '<div className="bitfun-chat-input-workspace-strip__actions">',
-    );
-    const dispatchIndex = component.indexOf('<DispatchTargetPicker', actionsStart);
-    const permissionIndex = component.indexOf('{showPermission ? (', actionsStart);
 
-    expect(actionsStart).toBeGreaterThan(-1);
-    expect(dispatchIndex).toBeGreaterThan(actionsStart);
-    expect(permissionIndex).toBeGreaterThan(dispatchIndex);
-    expect(pickerStylesheet).toContain('max-width: 142px;');
-    expect(pickerStylesheet).toContain('@media (max-width: 560px)');
-    expect(pickerStylesheet).toContain('width: 18px;');
-    expect(pickerStylesheet).toContain('> .dispatch-target-picker__chevron');
+    expect(component).toContain('0.2.15 release gate');
+    expect(component).toContain('Restore DispatchTargetPicker');
+    expect(component).not.toContain('<DispatchTargetPicker');
+    expect(component).not.toContain(
+      "import { DispatchTargetPicker } from '@/features/dispatch/DispatchTargetPicker';",
+    );
   });
 });

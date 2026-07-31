@@ -22,7 +22,6 @@ import { Tooltip, IconButton } from '@/component-library';
 import { useGitState } from '@/tools/git/hooks/useGitState';
 import type { SessionExecutionTarget } from '@/infrastructure/api/service-api/WorktreeAPI';
 import { useI18n } from '@/infrastructure/i18n';
-import { DispatchTargetPicker } from '@/features/dispatch/DispatchTargetPicker';
 import { DispatchResultDialog } from '@/features/dispatch/DispatchResultDialog';
 import type { DispatchSelection, DispatchTarget } from '@/features/dispatch/types';
 import './ChatInputWorkspaceStrip.scss';
@@ -136,8 +135,8 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
   const showUsage = usageReport?.visible && !!usageReport.onOpen;
   const showGoal = threadGoal?.visible && !!threadGoal.onOpen;
   const showPermission = !!permissionControl;
-  const showDispatch = !!dispatchControl;
-  const showRightActions = showDispatch || showPermission || showUsage || showGoal;
+  const showDispatchResult = !!dispatchControl?.completedSnapshotJobId;
+  const showRightActions = showDispatchResult || showPermission || showUsage || showGoal;
   const isWorktree = !!executionTarget?.worktreeId;
   const worktreeEnabled = worktreeControl?.enabled ?? isWorktree;
   const worktreeEnabledRef = useRef(worktreeEnabled);
@@ -326,15 +325,11 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
 
       {showRightActions ? (
         <div className="bitfun-chat-input-workspace-strip__actions">
-          {dispatchControl ? (
-            <DispatchTargetPicker
-              target={dispatchControl.target}
-              sourceWorkspacePath={dispatchControl.sourceWorkspacePath}
-              locked={dispatchControl.locked}
-              onSelectLocal={dispatchControl.onSelectLocal}
-              onSelectTarget={dispatchControl.onSelectTarget}
-            />
-          ) : null}
+          {/*
+           * 0.2.15 release gate: dispatch session creation stays hidden while
+           * its lifecycle semantics stabilize. Restore DispatchTargetPicker
+           * here in a later release; existing result review remains available.
+           */}
           {dispatchControl?.completedSnapshotJobId ? (
             <>
               <Tooltip content={tCommon('dispatch.resultTitle')} placement="top">
