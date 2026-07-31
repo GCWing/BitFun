@@ -1467,7 +1467,7 @@
     "snapshotResultLocation": "结果存放位置",
     "snapshotResultLocationHint": "任务在目标上的 ~/.bitfun/dispatch/workspaces/<任务ID>/current/ 中执行。结果保留在目标上，不会自动同步回本地。",
     "sourceBuildTitle": "从源码编译",
-    "sourceBuildDescription": "在目标上准备并编译 {{ref}}。用于已安装 CLI 不兼容的情况；耗时较长。",
+    "sourceBuildDescription": "在目标上编译与当前控制端一致的源码（{{ref}}）。兼容性按能力校验，不再仅凭版本号猜测；耗时较长。",
     "sourceBuildConfirm": "从源码编译",
     "sourceBuildConfirmTitle": "在此目标上从源码编译 BitFun CLI？",
     "sourceBuildConfirmMessage": "会把所选源码传输或克隆到目标上，并执行 cargo build --release。需要约 6 GB 可用空间，可能耗时数十分钟。",

@@ -1467,7 +1467,7 @@
     "snapshotResultLocation": "Where results stay",
     "snapshotResultLocationHint": "The job runs in ~/.bitfun/dispatch/workspaces/<jobId>/current/ on the target. Results stay there and are never synced back automatically.",
     "sourceBuildTitle": "Build from source",
-    "sourceBuildDescription": "Prepare and compile {{ref}} on the target. Used when the installed CLI is incompatible; takes a while.",
+    "sourceBuildDescription": "Compile the controller-matched source ({{ref}}) on the target. Compatibility is verified by capabilities instead of guessed from the version label; this takes a while.",
     "sourceBuildConfirm": "Build from source",
     "sourceBuildConfirmTitle": "Build the BitFun CLI from source on this target?",
     "sourceBuildConfirmMessage": "The selected source will be transferred or cloned on the target and built with cargo build --release. Needs about 6 GB free and can take tens of minutes.",

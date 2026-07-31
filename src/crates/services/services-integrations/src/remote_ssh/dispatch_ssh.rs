@@ -51,6 +51,13 @@ const SOURCE_BUILD_FREE_KB: u64 = 6 * 1024 * 1024;
 const REPO_GIT_URL: &str = "https://github.com/GCWing/BitFun.git";
 const DISPATCH_PROTOCOL_VERSION: u64 = 2;
 const DISPATCH_WORKER_CLI_PROFILE_CAPABILITY: &str = "dispatch_worker_cli_profile";
+/// First stable release whose CLI is known to contain every capability below.
+///
+/// Development builds can require capabilities before their next stable
+/// version is published. In that window `CARGO_PKG_VERSION` still names the
+/// previous release, so comparing only the installed and controller version
+/// strings is not a sound compatibility test.
+const FIRST_COMPATIBLE_STABLE_DISPATCH_RELEASE: (u64, u64, u64) = (0, 2, 15);
 const REQUIRED_DISPATCH_CAPABILITIES: [&str; 13] = [
     "persistent_jobs",
     "cursor_events",
@@ -129,8 +136,6 @@ struct RemoteTarget {
     arch: String,
     home: String,
     cli_path: Option<String>,
-    /// Version string of the installed CLI, when one is present and runnable.
-    cli_version: Option<String>,
     tar_available: bool,
     /// Fetcher the target can use to pull the release itself, if any.
     downloader: Option<RemoteDownloader>,
@@ -240,29 +245,29 @@ pub async fn probe(
                 None,
                 Some("remote target has no tar executable; install tar and retry".to_string()),
             )
+        } else if !published_release_supports_required_dispatch_protocol(RELEASE_VERSION) {
+            // The controller is ahead of the latest stable artifact. Avoid an
+            // unnecessary release request and offer its exact source instead.
+            (None, None)
         } else {
             match resolve_release(&target.os, &target.arch).await {
-                Ok(release) => match already_at_release_version(&target, &release) {
-                    // Reinstalling a release the target already runs cannot add
-                    // a protocol it does not implement. Offering the install
-                    // anyway traps the user in a loop of successful installs
-                    // that never clear the incompatibility.
-                    //
-                    // Carry the probe's own error: a release that genuinely
-                    // predates dispatch and a target that failed to answer for
-                    // some other reason look identical from here, and only the
-                    // underlying message tells them apart.
-                    Some(version) => {
-                        let detail = protocol_error.as_deref().unwrap_or("no dispatch protocol");
-                        (
-                            None,
-                            Some(format!(
-                                "target already runs BitFun CLI {version}, which is incompatible with this controller ({detail}); reinstalling the same release cannot change this"
-                            )),
-                        )
-                    }
-                    None => (Some(release.public), None),
-                },
+                // Capability support is a fact about the published artifact,
+                // not about whether its semver happens to equal the installed
+                // binary. A locally or previously source-built CLI may share a
+                // version string with a different artifact.
+                Ok(release)
+                    if published_release_supports_required_dispatch_protocol(
+                        &release.public.version,
+                    ) =>
+                {
+                    (Some(release.public), None)
+                }
+                // Before the first compatible stable release exists, the exact
+                // controller source is the only deterministic repair path. Do
+                // not show a speculative "same version means same binary"
+                // warning; the readiness row already names the missing
+                // capability and the source-build action explains the remedy.
+                Ok(_) => (None, None),
                 Err(error) => (None, Some(error.to_string())),
             }
         }
@@ -418,15 +423,34 @@ fn source_build_availability(target: &RemoteTarget) -> DispatchSourceBuild {
     }
 }
 
-/// The version the target already runs, when it matches the release we would
-/// install and therefore makes installing pointless.
+/// Whether a published artifact is expected to implement the controller's
+/// required protocol.
 ///
-/// A CLI that answered `--version` with the exact release version is a working
-/// binary, so the incompatibility is a missing feature in that release rather
-/// than a damaged install.
-fn already_at_release_version(target: &RemoteTarget, release: &ResolvedRelease) -> Option<String> {
-    let installed = target.cli_version.as_deref()?;
-    (installed == release.public.version).then(|| installed.to_string())
+/// Nightly Desktop and CLI artifacts are built from the same checkout, so a
+/// nightly is compatible by construction. Stable artifacts use an explicit
+/// capability floor. This avoids treating equal version labels as proof that
+/// two binaries are identical while still keeping known-old releases out of
+/// the install loop.
+fn published_release_supports_required_dispatch_protocol(version: &str) -> bool {
+    if version.contains("-nightly.") {
+        return true;
+    }
+    let core = version.split('+').next().unwrap_or(version);
+    let core = core.split('-').next().unwrap_or(core);
+    let mut parts = core.split('.');
+    let parsed = (
+        parts.next().and_then(|part| part.parse::<u64>().ok()),
+        parts.next().and_then(|part| part.parse::<u64>().ok()),
+        parts.next().and_then(|part| part.parse::<u64>().ok()),
+    );
+    if parts.next().is_some() {
+        return false;
+    }
+    matches!(
+        parsed,
+        (Some(major), Some(minor), Some(patch))
+            if (major, minor, patch) >= FIRST_COMPATIBLE_STABLE_DISPATCH_RELEASE
+    )
 }
 
 fn dispatch_protocol_is_compatible(protocol: &Value) -> bool {
@@ -515,6 +539,12 @@ pub async fn install_cli_start(
         ));
     }
     let release = resolve_release(&target.os, &target.arch).await?;
+    if !published_release_supports_required_dispatch_protocol(&release.public.version) {
+        return Err(anyhow!(
+            "published BitFun CLI {} does not contain the dispatch capabilities required by this controller; build from the controller source instead",
+            release.public.version
+        ));
+    }
     ensure_confirmed_release(&release.public, expected_release)?;
 
     // Stop an earlier attempt before replacing any of its staged files. A
@@ -1801,18 +1831,11 @@ async fn probe_remote_target(
         return Err(anyhow!("could not resolve remote $HOME"));
     }
     let cli_path = get("cli");
-    // `bitfun --version` prints "bitfun <semver>"; keep only the version.
-    let cli_version = get("cliversion")
-        .split_whitespace()
-        .next_back()
-        .unwrap_or_default()
-        .to_string();
     Ok(RemoteTarget {
         os: get("os"),
         arch: get("arch"),
         home,
         cli_path: (!cli_path.is_empty()).then_some(cli_path),
-        cli_version: (!cli_version.is_empty()).then_some(cli_version),
         tar_available: get("tar") == "1",
         downloader: match get("downloader").as_str() {
             "curl" => Some(RemoteDownloader::Curl),
@@ -1856,9 +1879,6 @@ else
   BITFUN_BIN="$(command -v bitfun 2>/dev/null || true)"
 fi
 printf 'cli=%s\n' "$BITFUN_BIN"
-if [ -n "$BITFUN_BIN" ]; then
-  printf 'cliversion=%s\n' "$("$BITFUN_BIN" --version 2>/dev/null || true)"
-fi
 if [ "$(uname -s 2>/dev/null || true)" = "Linux" ]; then
   if ls /lib/ld-musl-* >/dev/null 2>&1 || ldd --version 2>&1 | head -n1 | grep -qi musl; then
     printf 'libc=musl\n'
@@ -2687,7 +2707,6 @@ mod tests {
             arch: "x86_64".to_string(),
             home: "/home/user".to_string(),
             cli_path: None,
-            cli_version: None,
             tar_available: true,
             downloader,
             digest_tool,
@@ -2953,31 +2972,24 @@ mod tests {
     }
 
     #[test]
-    fn reinstalling_the_version_already_present_is_not_offered() {
-        let release = test_release(true);
-        let mut target = test_target(
-            Some(RemoteDownloader::Curl),
-            Some(RemoteDigestTool::Sha256Sum),
-        );
-
-        target.cli_version = Some("1.2.3".to_string());
-        assert_eq!(
-            already_at_release_version(&target, &release).as_deref(),
-            Some("1.2.3"),
-            "an install that cannot change anything must not be offered"
-        );
-
-        target.cli_version = Some("1.2.2".to_string());
+    fn release_compatibility_uses_capability_floor_not_installed_version() {
         assert!(
-            already_at_release_version(&target, &release).is_none(),
-            "an older target must still be offered the upgrade"
+            !published_release_supports_required_dispatch_protocol("0.2.14"),
+            "the last release without the worker profile must use the exact controller source"
         );
-
-        target.cli_version = None;
         assert!(
-            already_at_release_version(&target, &release).is_none(),
-            "a target with no runnable CLI must still be offered the install"
+            published_release_supports_required_dispatch_protocol("0.2.15"),
+            "the first compatible stable release must be installable"
         );
+        assert!(published_release_supports_required_dispatch_protocol(
+            "0.3.0+build.1"
+        ));
+        assert!(published_release_supports_required_dispatch_protocol(
+            "0.2.14-nightly.20260730+abc123"
+        ));
+        assert!(!published_release_supports_required_dispatch_protocol(
+            "not-a-version"
+        ));
     }
 
     #[test]
