@@ -1,16 +1,49 @@
 use bitfun_product_domains::tool_permissions::{
     merge_permission_rule_layers, resolve_child_permission_policy, resolve_permission_policy,
-    wildcard_matches, ChildPermissionPolicyLayers, PermissionDelegationContext, PermissionEffect,
-    PermissionEvaluator, PermissionPolicyConfig, PermissionPolicyLayers, PermissionPolicyPreset,
-    PermissionReply, PermissionReplySource, PermissionRequest, PermissionRequestEvent,
-    PermissionRequestSource, PermissionRequestSourceKind, PermissionResourceCaseSensitivity,
-    PermissionRule, PermissionRuntimeCeiling, ToolPermissionConfig,
+    wildcard_matches, ChildPermissionPolicyLayers, PermissionConstraintLayer,
+    PermissionDelegationContext, PermissionEffect, PermissionEvaluator, PermissionPolicyConfig,
+    PermissionPolicyLayers, PermissionPolicyPreset, PermissionReply, PermissionReplySource,
+    PermissionRequest, PermissionRequestEvent, PermissionRequestSource,
+    PermissionRequestSourceKind, PermissionResourceCaseSensitivity, PermissionRule,
+    PermissionRuntimeCeiling, ResolvedPermissionPolicy, ToolPermissionConfig,
 };
 use serde_json::json;
 use serde_json::Map;
 
 fn rule(action: &str, resource: &str, effect: PermissionEffect) -> PermissionRule {
     PermissionRule::new(action, resource, effect)
+}
+
+#[test]
+fn constraint_layers_can_only_tighten_the_resolved_host_policy() {
+    let evaluator = PermissionEvaluator::case_sensitive();
+    let policy = ResolvedPermissionPolicy::new(
+        vec![
+            rule("read", "secrets/*", PermissionEffect::Deny),
+            rule("read", "*", PermissionEffect::Allow),
+        ],
+        vec![PermissionConstraintLayer::new(vec![
+            rule("read", "*", PermissionEffect::Deny),
+            rule("read", "public/*", PermissionEffect::Allow),
+            rule("edit", "*", PermissionEffect::Ask),
+        ])],
+    );
+
+    assert_eq!(
+        evaluator.evaluate_policy_resource("read", "public/README.md", &policy),
+        PermissionEffect::Allow,
+        "an allow may relax an earlier rule inside one constraint layer"
+    );
+    assert_eq!(
+        evaluator.evaluate_policy_resource("read", "secrets/token.txt", &policy),
+        PermissionEffect::Deny,
+        "a constraint allow must never override a host deny"
+    );
+    assert_eq!(
+        evaluator.evaluate_policy_resource("edit", "src/main.rs", &policy),
+        PermissionEffect::Ask,
+        "a constraint ask must tighten a host allow"
+    );
 }
 
 fn policy(preset: PermissionPolicyPreset, rules: Vec<PermissionRule>) -> PermissionPolicyConfig {
@@ -60,7 +93,7 @@ fn policy_presets_expand_into_ordinary_baseline_rules() {
     });
 
     assert_eq!(
-        ask_rules,
+        ask_rules.rules(),
         vec![
             rule("*", "*", PermissionEffect::Ask),
             rule("read", "*", PermissionEffect::Allow),
@@ -83,15 +116,15 @@ fn policy_presets_expand_into_ordinary_baseline_rules() {
         ]
     );
     assert_eq!(
-        full_access_rules,
+        full_access_rules.rules(),
         vec![rule("*", "*", PermissionEffect::Allow)]
     );
     assert_eq!(
-        evaluator.evaluate_resource("edit", "src/main.rs", &ask_rules),
+        evaluator.evaluate_policy_resource("edit", "src/main.rs", &ask_rules),
         PermissionEffect::Ask
     );
     assert_eq!(
-        evaluator.evaluate_resource("edit", "src/main.rs", &full_access_rules),
+        evaluator.evaluate_policy_resource("edit", "src/main.rs", &full_access_rules),
         PermissionEffect::Allow
     );
 }
@@ -126,7 +159,7 @@ fn ask_preset_allows_low_risk_actions_and_keeps_mutations_guarded() {
         ("git", "git branch"),
     ] {
         assert_eq!(
-            evaluator.evaluate_resource(action, resource, &rules),
+            evaluator.evaluate_policy_resource(action, resource, &rules),
             PermissionEffect::Allow,
             "{action} {resource}"
         );
@@ -146,7 +179,7 @@ fn ask_preset_allows_low_risk_actions_and_keeps_mutations_guarded() {
         ("future_action", "resource"),
     ] {
         assert_eq!(
-            evaluator.evaluate_resource(action, resource, &rules),
+            evaluator.evaluate_policy_resource(action, resource, &rules),
             PermissionEffect::Ask,
             "{action} {resource}"
         );
@@ -173,7 +206,7 @@ fn resolved_policy_preserves_layer_order_and_enforced_limits() {
     });
 
     assert_eq!(
-        resolved,
+        resolved.rules(),
         [
             product_defaults,
             PermissionPolicyPreset::FullAccess.baseline_rules(),
@@ -187,15 +220,15 @@ fn resolved_policy_preserves_layer_order_and_enforced_limits() {
 
     let evaluator = PermissionEvaluator::case_sensitive();
     assert_eq!(
-        evaluator.evaluate_resource("bash", "rm -rf target", &resolved),
+        evaluator.evaluate_policy_resource("bash", "rm -rf target", &resolved),
         PermissionEffect::Ask
     );
     assert_eq!(
-        evaluator.evaluate_resource("edit", "generated/review.md", &resolved),
+        evaluator.evaluate_policy_resource("edit", "generated/review.md", &resolved),
         PermissionEffect::Deny
     );
     assert_eq!(
-        evaluator.evaluate_resource("webfetch", "https://example.com", &resolved),
+        evaluator.evaluate_policy_resource("webfetch", "https://example.com", &resolved),
         PermissionEffect::Allow
     );
 }
@@ -252,14 +285,13 @@ fn child_policy_preserves_exact_layer_order_and_security_precedence() {
     });
 
     assert_eq!(
-        resolved,
+        resolved.rules(),
         [
             product_defaults,
             PermissionPolicyPreset::Ask.baseline_rules(),
             global.rules,
             project,
             child_agent,
-            ceiling_rules,
             enforced,
         ]
         .concat()
@@ -267,7 +299,7 @@ fn child_policy_preserves_exact_layer_order_and_security_precedence() {
 
     let evaluator = PermissionEvaluator::case_sensitive();
     assert_eq!(
-        evaluator.evaluate_resource("edit", "generated/review.md", &resolved),
+        evaluator.evaluate_policy_resource("edit", "generated/review.md", &resolved),
         PermissionEffect::Deny,
         "enforced rules must remain later than the parent ceiling"
     );
@@ -291,7 +323,34 @@ fn parent_ceiling_overrides_child_agent_allow() {
     });
 
     assert_eq!(
-        PermissionEvaluator::case_sensitive().evaluate_resource(
+        PermissionEvaluator::case_sensitive().evaluate_policy_resource(
+            "read",
+            "secrets/token.txt",
+            &resolved,
+        ),
+        PermissionEffect::Deny
+    );
+}
+
+#[test]
+fn parent_ceiling_ask_does_not_loosen_child_agent_deny() {
+    let global = policy(PermissionPolicyPreset::FullAccess, Vec::new());
+    let child_agent = vec![rule("read", "secrets/*", PermissionEffect::Deny)];
+    let ceiling =
+        PermissionRuntimeCeiling::try_new(vec![rule("read", "secrets/*", PermissionEffect::Ask)])
+            .expect("ask ceiling should be valid");
+
+    let resolved = resolve_child_permission_policy(ChildPermissionPolicyLayers {
+        product_defaults: &[],
+        global: &global,
+        project: &[],
+        child_agent: &child_agent,
+        parent_runtime_ceiling: &ceiling,
+        enforced: &[],
+    });
+
+    assert_eq!(
+        PermissionEvaluator::case_sensitive().evaluate_policy_resource(
             "read",
             "secrets/token.txt",
             &resolved,
@@ -315,15 +374,15 @@ fn task_and_skill_default_allow_do_not_authorize_child_tools() {
     let evaluator = PermissionEvaluator::case_sensitive();
 
     assert_eq!(
-        evaluator.evaluate_resource("task", "Explore", &resolved),
+        evaluator.evaluate_policy_resource("task", "Explore", &resolved),
         PermissionEffect::Allow
     );
     assert_eq!(
-        evaluator.evaluate_resource("skill", "pdf", &resolved),
+        evaluator.evaluate_policy_resource("skill", "pdf", &resolved),
         PermissionEffect::Allow
     );
     assert_eq!(
-        evaluator.evaluate_resource("edit", "src/main.rs", &resolved),
+        evaluator.evaluate_policy_resource("edit", "src/main.rs", &resolved),
         PermissionEffect::Ask
     );
 }

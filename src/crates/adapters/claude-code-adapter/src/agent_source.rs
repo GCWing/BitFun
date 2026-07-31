@@ -560,6 +560,7 @@ fn materialize_definition(
         hidden: false,
         requested_model,
         requested_tools,
+        permission_constraints: Default::default(),
         compatibility,
         diagnostic_codes,
         behavior_version,

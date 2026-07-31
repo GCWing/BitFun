@@ -9,8 +9,8 @@ use crate::agentic::WorkspaceBinding;
 pub use bitfun_agent_runtime::events::FinishReason;
 use bitfun_agent_tools::LoadedDeferredToolSpec;
 use bitfun_runtime_ports::{
-    DelegationPolicy, PermissionDelegationContext, PermissionRuntimeCeiling, RemoteExecPort,
-    TerminalPort,
+    DelegationPolicy, PermissionConstraintLayer, PermissionDelegationContext,
+    PermissionRuntimeCeiling, RemoteExecPort, TerminalPort,
 };
 use serde_json::Value;
 use std::collections::HashMap;
@@ -74,6 +74,7 @@ pub struct RoundContext {
     pub primary_model_facts: PrimaryModelFacts,
     pub agent_type: String,
     pub context_vars: HashMap<String, String>,
+    pub permission_constraints: PermissionConstraintLayer,
     pub permission_runtime_ceiling: Option<PermissionRuntimeCeiling>,
     pub(crate) delegation_policy: DelegationPolicy,
     pub runtime_tool_restrictions: ToolRuntimeRestrictions,

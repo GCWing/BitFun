@@ -365,6 +365,7 @@ struct TurnPromptScaffoldInput<'a> {
 }
 
 struct FinalizeRoundInput<'a> {
+    permission_constraints: bitfun_runtime_ports::PermissionConstraintLayer,
     context_window: usize,
     tool_definitions: Option<Vec<ToolDefinition>>,
     reminder_text: &'a str,
@@ -1559,6 +1560,7 @@ impl ExecutionEngine {
             primary_model_facts: input.primary_model_facts.clone(),
             agent_type: input.agent_type,
             context_vars: input.execution_context_vars.clone(),
+            permission_constraints: input.permission_constraints,
             permission_runtime_ceiling: input.context.permission_runtime_ceiling.clone(),
             delegation_policy: input.context.delegation_policy,
             runtime_tool_restrictions: finalize_runtime_tool_restrictions,
@@ -3553,6 +3555,7 @@ impl ExecutionEngine {
                 primary_model_facts: primary_model_facts.clone(),
                 agent_type: agent_type.clone(),
                 context_vars: round_context_vars,
+                permission_constraints: tool_policy.permission_constraints.clone(),
                 permission_runtime_ceiling: context.permission_runtime_ceiling.clone(),
                 delegation_policy: context.delegation_policy,
                 runtime_tool_restrictions: context.runtime_tool_restrictions.clone(),
@@ -4228,6 +4231,7 @@ impl ExecutionEngine {
                     .ordered_reminders();
                 let final_round_result = self
                     .run_finalize_round(FinalizeRoundInput {
+                        permission_constraints: tool_policy.permission_constraints.clone(),
                         ai_client: ai_client.clone(),
                         context: &context,
                         agent_type: agent_type.clone(),
@@ -4258,6 +4262,7 @@ impl ExecutionEngine {
                     );
                     let retry_result = self
                         .run_finalize_round(FinalizeRoundInput {
+                            permission_constraints: tool_policy.permission_constraints.clone(),
                             ai_client: ai_client.clone(),
                             context: &context,
                             agent_type: agent_type.clone(),

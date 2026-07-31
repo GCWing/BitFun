@@ -35,7 +35,7 @@ use bitfun_agent_tools::{
 use bitfun_runtime_ports::{
     wildcard_matches, PermissionEffect, PermissionGrant, PermissionReply, PermissionRequest,
     PermissionRequestSource, PermissionRequestSourceKind, PermissionResourceCaseSensitivity,
-    PermissionRule, RoundInjectionToolPreemption,
+    ResolvedPermissionPolicy, RoundInjectionToolPreemption,
 };
 use futures::future::join_all;
 use log::{debug, error, info, warn};
@@ -550,7 +550,7 @@ fn permission_resource_case_sensitivity(
 
 fn permission_intent_effect(
     intent: &PermissionIntent,
-    rules: &[PermissionRule],
+    policy: &ResolvedPermissionPolicy,
     grants: &[PermissionGrant],
     case_sensitivity: PermissionResourceCaseSensitivity,
 ) -> PermissionEffect {
@@ -559,7 +559,8 @@ fn permission_intent_effect(
 
     for resource in &intent.resources {
         let configured_effect = if intent.action == "bash" {
-            rules
+            policy
+                .rules()
                 .iter()
                 .rev()
                 .find(|rule| {
@@ -580,8 +581,19 @@ fn permission_intent_effect(
                 .map(|rule| rule.effect)
                 .unwrap_or(PermissionEffect::Ask)
         } else {
-            evaluator.evaluate_resource(&intent.action, resource, rules)
+            evaluator.evaluate_resource(&intent.action, resource, policy.rules())
         };
+        let configured_effect =
+            policy
+                .constraint_layers()
+                .iter()
+                .fold(configured_effect, |effect, layer| {
+                    effect.most_restrictive(evaluator.evaluate_constraint_resource(
+                        &intent.action,
+                        resource,
+                        layer,
+                    ))
+                });
 
         match configured_effect {
             PermissionEffect::Deny => return PermissionEffect::Deny,
@@ -701,7 +713,7 @@ impl ToolPipeline {
         }
 
         let (project_id, project_path) = permission_scope(&context, &intents)?;
-        let permission_rules = task.options.permission_rules.clone();
+        let permission_policy = task.options.permission_policy.clone();
         let case_sensitivity = permission_resource_case_sensitivity(&context);
         let round_id = task.context.round_id.clone();
         let tool_call_id = task.tool_call.tool_id.clone();
@@ -724,7 +736,7 @@ impl ToolPipeline {
         let mut asks = Vec::new();
 
         for intent in intents {
-            match permission_intent_effect(&intent, &permission_rules, &grants, case_sensitivity) {
+            match permission_intent_effect(&intent, &permission_policy, &grants, case_sensitivity) {
                 PermissionEffect::Allow => {}
                 PermissionEffect::Ask => asks.push(intent),
                 PermissionEffect::Deny => {
@@ -2398,10 +2410,10 @@ mod tests {
     };
     use bitfun_runtime_ports::{
         ClockPort, PermissionAuditEvent, PermissionAuditRecord, PermissionAuditStorePort,
-        PermissionGrant, PermissionGrantKey, PermissionGrantStorePort, PermissionPolicyPreset,
-        PermissionReplyStorePort, PortResult, RoundInjection, RoundInjectionExecutionPolicy,
-        RoundInjectionKind, RoundInjectionTarget, RoundInjectionToolPreemption,
-        RuntimeServiceCapability, RuntimeServicePort,
+        PermissionConstraintLayer, PermissionGrant, PermissionGrantKey, PermissionGrantStorePort,
+        PermissionPolicyPreset, PermissionReplyStorePort, PermissionRule, PortResult,
+        RoundInjection, RoundInjectionExecutionPolicy, RoundInjectionKind, RoundInjectionTarget,
+        RoundInjectionToolPreemption, RuntimeServiceCapability, RuntimeServicePort,
     };
     use serde_json::json;
     use std::collections::HashMap;
@@ -2463,11 +2475,14 @@ mod tests {
     #[test]
     fn bash_permission_allows_only_exact_command_grants() {
         let intent = PermissionIntent::new("bash", vec!["git status && rm -rf build".to_string()]);
-        let wildcard_allow = vec![PermissionRule::new(
-            "bash",
-            "git *",
-            PermissionEffect::Allow,
-        )];
+        let wildcard_allow = ResolvedPermissionPolicy::new(
+            vec![PermissionRule::new(
+                "bash",
+                "git *",
+                PermissionEffect::Allow,
+            )],
+            Vec::new(),
+        );
         assert_eq!(
             permission_intent_effect(
                 &intent,
@@ -2478,11 +2493,14 @@ mod tests {
             PermissionEffect::Ask
         );
 
-        let exact_allow = vec![PermissionRule::new(
-            "bash",
-            "git status && rm -rf build",
-            PermissionEffect::Allow,
-        )];
+        let exact_allow = ResolvedPermissionPolicy::new(
+            vec![PermissionRule::new(
+                "bash",
+                "git status && rm -rf build",
+                PermissionEffect::Allow,
+            )],
+            Vec::new(),
+        );
         assert_eq!(
             permission_intent_effect(
                 &intent,
@@ -2493,7 +2511,10 @@ mod tests {
             PermissionEffect::Allow
         );
 
-        let wildcard_deny = vec![PermissionRule::new("bash", "*", PermissionEffect::Deny)];
+        let wildcard_deny = ResolvedPermissionPolicy::new(
+            vec![PermissionRule::new("bash", "*", PermissionEffect::Deny)],
+            Vec::new(),
+        );
         assert_eq!(
             permission_intent_effect(
                 &intent,
@@ -2508,7 +2529,10 @@ mod tests {
     #[test]
     fn full_access_baseline_allows_bash_commands() {
         let intent = PermissionIntent::new("bash", vec!["git status && rm -rf build".to_string()]);
-        let full_access_rules = PermissionPolicyPreset::FullAccess.baseline_rules();
+        let full_access_rules = ResolvedPermissionPolicy::new(
+            PermissionPolicyPreset::FullAccess.baseline_rules(),
+            Vec::new(),
+        );
 
         assert_eq!(
             permission_intent_effect(
@@ -2543,11 +2567,14 @@ mod tests {
             )
         );
 
-        let allow = vec![PermissionRule::new(
-            "page_publish",
-            "*",
-            PermissionEffect::Allow,
-        )];
+        let allow = ResolvedPermissionPolicy::new(
+            vec![PermissionRule::new(
+                "page_publish",
+                "*",
+                PermissionEffect::Allow,
+            )],
+            Vec::new(),
+        );
         assert_eq!(
             permission_intent_effect(
                 &intent,
@@ -2557,11 +2584,14 @@ mod tests {
             ),
             PermissionEffect::Ask
         );
-        let deny = vec![PermissionRule::new(
-            "page_publish",
-            "*",
-            PermissionEffect::Deny,
-        )];
+        let deny = ResolvedPermissionPolicy::new(
+            vec![PermissionRule::new(
+                "page_publish",
+                "*",
+                PermissionEffect::Deny,
+            )],
+            Vec::new(),
+        );
         assert_eq!(
             permission_intent_effect(
                 &intent,
@@ -3053,11 +3083,14 @@ mod tests {
                 readonly: false,
             }));
         let mut options = ToolExecutionOptions::default();
-        options.permission_rules = vec![PermissionRule::new(
-            "custom_tool",
-            "UnclassifiedMutation",
-            PermissionEffect::Deny,
-        )];
+        options.permission_policy = ResolvedPermissionPolicy::new(
+            vec![PermissionRule::new(
+                "custom_tool",
+                "UnclassifiedMutation",
+                PermissionEffect::Deny,
+            )],
+            Vec::new(),
+        );
 
         let results = pipeline
             .execute_tools(
@@ -3135,11 +3168,14 @@ mod tests {
         .await;
 
         let mut allow_options = ToolExecutionOptions::default();
-        allow_options.permission_rules = vec![PermissionRule::new(
-            "edit",
-            "src/*",
-            PermissionEffect::Allow,
-        )];
+        allow_options.permission_policy = ResolvedPermissionPolicy::new(
+            vec![PermissionRule::new(
+                "edit",
+                "src/*",
+                PermissionEffect::Allow,
+            )],
+            Vec::new(),
+        );
         let results = pipeline
             .execute_tools(
                 vec![test_tool_call("allow", "Write")],
@@ -3153,10 +3189,13 @@ mod tests {
 
         let mut deny_options = ToolExecutionOptions::default();
         deny_options.auto_approve_ask = true;
-        deny_options.permission_rules = vec![
-            PermissionRule::new("edit", "src/*", PermissionEffect::Allow),
-            PermissionRule::new("edit", "src/private/*", PermissionEffect::Deny),
-        ];
+        deny_options.permission_policy = ResolvedPermissionPolicy::new(
+            vec![
+                PermissionRule::new("edit", "src/*", PermissionEffect::Allow),
+                PermissionRule::new("edit", "src/private/*", PermissionEffect::Deny),
+            ],
+            Vec::new(),
+        );
         let results = pipeline
             .execute_tools(
                 vec![test_tool_call("deny", "Write")],
@@ -3175,6 +3214,74 @@ mod tests {
         ));
         assert_eq!(calls.load(Ordering::SeqCst), 1);
         assert_eq!(results[0].result.result["category"], "permission_denied");
+    }
+
+    #[tokio::test]
+    async fn independent_permission_constraints_tighten_but_never_widen_host_policy() {
+        let pipeline = test_tool_pipeline();
+        let calls = Arc::new(AtomicUsize::new(0));
+        register_v2_file_test_tool(
+            &pipeline,
+            vec![PermissionIntent::new(
+                "edit",
+                vec!["src/generated/output.rs".to_string()],
+            )],
+            Arc::clone(&calls),
+        )
+        .await;
+
+        let mut host_deny = ToolExecutionOptions::default();
+        host_deny.auto_approve_ask = true;
+        host_deny.permission_policy = ResolvedPermissionPolicy::new(
+            vec![PermissionRule::new(
+                "edit",
+                "src/generated/*",
+                PermissionEffect::Deny,
+            )],
+            vec![PermissionConstraintLayer::new(vec![PermissionRule::new(
+                "edit",
+                "*",
+                PermissionEffect::Allow,
+            )])],
+        );
+        pipeline
+            .execute_tools(
+                vec![test_tool_call("host-deny", "Write")],
+                permission_test_context(),
+                host_deny,
+            )
+            .await
+            .expect("constraint allow must not widen host denial");
+
+        let mut external_deny = ToolExecutionOptions::default();
+        external_deny.auto_approve_ask = true;
+        external_deny.permission_policy = ResolvedPermissionPolicy::new(
+            vec![PermissionRule::new("edit", "*", PermissionEffect::Allow)],
+            vec![PermissionConstraintLayer::new(vec![PermissionRule::new(
+                "edit",
+                "src/generated/*",
+                PermissionEffect::Deny,
+            )])],
+        );
+        pipeline
+            .execute_tools(
+                vec![test_tool_call("external-deny", "Write")],
+                permission_test_context(),
+                external_deny,
+            )
+            .await
+            .expect("constraint denial should tighten host allow");
+
+        assert_eq!(calls.load(Ordering::SeqCst), 0);
+        for tool_id in ["host-deny", "external-deny"] {
+            assert!(matches!(
+                pipeline
+                    .state_manager
+                    .get_task(tool_id)
+                    .map(|task| task.state),
+                Some(ToolExecutionState::Rejected { .. })
+            ));
+        }
     }
 
     /// A PreToolUse hook approval waives the interactive permission prompt.
@@ -3202,11 +3309,14 @@ mod tests {
             .insert("hook-approved".to_string());
 
         let mut deny_options = ToolExecutionOptions::default();
-        deny_options.permission_rules = vec![PermissionRule::new(
-            "edit",
-            "src/private/*",
-            PermissionEffect::Deny,
-        )];
+        deny_options.permission_policy = ResolvedPermissionPolicy::new(
+            vec![PermissionRule::new(
+                "edit",
+                "src/private/*",
+                PermissionEffect::Deny,
+            )],
+            Vec::new(),
+        );
         let results = pipeline
             .execute_tools(
                 vec![test_tool_call("hook-approved", "Write")],
@@ -3723,10 +3833,13 @@ mod tests {
         assert_eq!(calls.load(Ordering::SeqCst), 3);
 
         let mut deny_options = ToolExecutionOptions::default();
-        deny_options.permission_rules = vec![
-            PermissionRule::new("edit", "src/*", PermissionEffect::Allow),
-            PermissionRule::new("edit", "src/private/*", PermissionEffect::Deny),
-        ];
+        deny_options.permission_policy = ResolvedPermissionPolicy::new(
+            vec![
+                PermissionRule::new("edit", "src/*", PermissionEffect::Allow),
+                PermissionRule::new("edit", "src/private/*", PermissionEffect::Deny),
+            ],
+            Vec::new(),
+        );
         pipeline
             .execute_tools(
                 vec![test_tool_call("deny-after-grant", "Write")],

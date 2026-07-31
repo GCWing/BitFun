@@ -21,6 +21,7 @@ pub use bitfun_agent_runtime::custom_agent::{
     custom_agent_model_or_default, custom_agent_review_writable_tools, default_custom_agent_tools,
     default_custom_agent_user_context_policy, CustomAgentKind, CustomAgentLevel,
 };
+use bitfun_runtime_ports::PermissionConstraintLayer;
 pub use definitions::custom::{CustomMode, CustomSubagent, CustomSubagentKind};
 pub(crate) use definitions::external::ExternalProvidedSubagent;
 pub use definitions::hidden::{CodeReviewAgent, DeepReviewAgent, GenerateDocAgent};
@@ -63,6 +64,8 @@ pub type AgentToolPolicyOverrides = IndexMap<String, ToolExposure>;
 
 static EMPTY_AGENT_TOOL_POLICY_OVERRIDES: std::sync::LazyLock<AgentToolPolicyOverrides> =
     std::sync::LazyLock::new(AgentToolPolicyOverrides::default);
+static EMPTY_PERMISSION_CONSTRAINTS: std::sync::LazyLock<PermissionConstraintLayer> =
+    std::sync::LazyLock::new(PermissionConstraintLayer::default);
 
 pub fn shared_coding_mode_tool_exposure_overrides() -> AgentToolPolicyOverrides {
     // Web research is a baseline capability of the shared coding modes; keep
@@ -239,6 +242,12 @@ pub trait Agent: Send + Sync + 'static {
     /// Tools omitted here inherit their tool-defined default exposure.
     fn tool_exposure_overrides(&self) -> &AgentToolPolicyOverrides {
         &EMPTY_AGENT_TOOL_POLICY_OVERRIDES
+    }
+
+    /// Independent restrictions contributed by the immutable agent definition.
+    /// They may tighten, but never widen, the resolved host permission policy.
+    fn permission_constraints(&self) -> &PermissionConstraintLayer {
+        &EMPTY_PERMISSION_CONSTRAINTS
     }
 
     /// Whether this agent is read-only (prevents file modifications)

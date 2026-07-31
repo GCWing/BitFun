@@ -12,8 +12,8 @@
 
 本文同时记录当前可用切片与后续目标。BitFun 已实现本地用户全局/项目 Prompt Command 的来源发现、
 JSON/JSONC/Markdown 解析、参数展开、运行时刷新和冲突选择，也已接入全局/项目 Subagent 声明的安全子集与
-本地 MCP 配置。三类 provider 复用 adapter 内部的本地路径顺序与监听根解析；但尚未实现本文定义的完整
-OpenCode 配置来源序列、全部合并语义和其他资产映射。
+本地 MCP 配置。三类 provider 复用 adapter 内部的路径候选与监听根基础设施，但各自保留与资产语义匹配的
+来源顺序；当前尚未实现本文定义的完整 OpenCode 配置来源序列、全部合并语义和其他资产映射。
 
 ## 1. 目标与边界
 
@@ -101,13 +101,13 @@ OpenCode 当前版本的真实合并/去重语义，不用 BitFun 常规配置�
 
 所有来源合并后再应用 `OPENCODE_PERMISSION`、旧 `tools` 到 permission 的迁移，以及关闭自动压缩/裁剪的环境覆盖。这些属于固定版本的后处理，不是新的配置来源。
 
-当前 Prompt Command、Subagent 与 MCP 子集只实现上述本地来源：XDG 用户配置根、`OPENCODE_CONFIG`、root-first
-项目配置、opened-to-root 的项目 `.opencode` 目录阶段、兼容 `~/.opencode` 与最后应用的
-`OPENCODE_CONFIG_DIR`。Command/Subagent 再从对应目录读取 `command(s)/` 与 `agent(s)/mode(s)/`；
-`OPENCODE_DISABLE_PROJECT_CONFIG` 会同时关闭项目配置、项目目录资产和对应监听根。三类 provider 复用同一私有
-路径顺序和 creation-safe 监听根，`OPENCODE_CONFIG_DIR` 不替换 XDG 用户根，并在 BitFun 来源标签中保持
-`WorkspaceLocal`。`ConfigPaths.directories` 按规范化来源身份保留首次出现的位置；显式目录与 XDG、项目
-`.opencode` 或兼容目录指向同一物理路径时，在该首次位置应用显式目录的加载语义和来源标签，不把它移动到末尾。
+当前 Prompt Command、Subagent 与 MCP 子集只实现上述本地来源的一部分，并复用 creation-safe 监听根与路径候选
+基础设施；来源顺序仍由各资产 provider 自己定义，不能视为一套通用顺序。Command 与 MCP 保留各自既有的本地
+加载顺序。Subagent 依次应用用户配置与用户 Markdown、project direct config（root-to-nearest）、project
+`.opencode` config/Markdown（root-to-nearest）；`OPENCODE_CONFIG_DIR` 与其他来源指向同一物理目录时保留首次
+出现的位置，只更新该位置的加载语义和来源标签，不移动到末尾。`OPENCODE_DISABLE_PROJECT_CONFIG` 会关闭
+项目配置、项目目录资产和对应监听根；显式目录不替换 XDG 用户根，并在 BitFun 来源标签中保持
+`WorkspaceLocal`。
 
 `OPENCODE_CONFIG_CONTENT`、远程、组织、系统管理员与 MDM 来源尚未接入，不能因三类本地候选可运行就把目标来源
 序列标记为完整实现。
@@ -199,7 +199,7 @@ OpenCode adapter 在来源发现、解析和审批前不 import module、不读�
 | 资产 | OpenCode 输入 | BitFun 归属模块 / 适配方式 | 默认行为 | 降级条件 |
 |---|---|---|---|---|
 | Rules / Instructions | 项目/全局 `AGENTS.md`、Claude fallback、`instructions` glob、本地文件、远程 URL | Workspace Instructions 归属模块保存有序来源引用 | 当前实现项目根与 `.opencode` 配置中的本地精确文件/glob；全局与远程 URL 仍是目标 | 无效 JSONC 或 glob 只排除对应配置项；文件 I/O 失败时当前构建不缓存并在下一条消息重试。 |
-| Agents / Modes | JSON、Markdown、description、mode、prompt、model、variant、temperature、top_p、steps、deprecated `maxSteps`、deprecated `tools`、permission、disable、options、hidden、color | Agent 归属模块创建兼容定义和使用范围视图 | 当前支持 Subagent 安全子集；首次按行为、来源、模型和工具范围确认，fresh single-run 调用 | primary/mode、permission、variant/options、采样、steps 与续接保持诊断或阻断，不影响其他 Agent。 |
+| Agents / Modes | V1 `agent/prompt/disable/permission`、当前 `agents/system/disabled/permissions`，以及 Markdown、description、mode、model、variant、temperature、top_p、steps、deprecated `maxSteps`、deprecated `tools`、options、hidden、color | Agent 归属模块创建兼容定义和使用范围视图；OpenCode adapter 只翻译来源语义 | 当前支持 Subagent 安全子集和 Agent-local 权限约束；首次按行为、来源、模型、工具与权限范围确认，fresh single-run 调用 | primary/mode、variant/options、采样、steps 与续接保持诊断或阻断；root ambient 权限和 V1 嵌套 resource map 尚不激活，不影响其他 Agent。 |
 | Skills | `.opencode/.claude/.agents` 项目与用户根、`SKILL.md`、`skills.paths/urls` | OpenCode adapter 只由 `bitfun-core/external_sources` 组合并投影有序本地配置根；Skill 归属模块负责有界递归、解析、覆盖与按需加载 | 标准根及 V1 `skills.paths`/当前本地字符串数组可用；项目配置限项目根，用户配置限项目根或用户目录；配置根最多 64 个、每根 512 个 Skill、单文件 256 KiB、可选策略 64 KiB，实际加载再次执行有界非链接读取；配置根在同 scope 覆盖标准 OpenCode 根，但不重排更早的 BitFun/Claude/Codex/Cursor 来源 | URL、下载/缓存、脚本与外部依赖不加载；无效根不影响标准 Skill。 |
 | References | `references` / 旧 `reference`，本地 path 或 Git repository/branch/description/hidden | **基础能力缺失**：先补 Workspace Reference 的异步准备与 `@alias` 消费接口 | 本地引用保留相对来源；Git 拉取按 L2 确认并保留缓存/隐藏语义 | 拉取失败不阻止项目，外部目录仍遵守工具权限。 |
 | Commands | JSON/JSONC、Markdown、`$ARGUMENTS`、位置参数、`@file`、`!shell`、agent/model/variant/subtask | Prompt Command 专属契约；adapter 提取静态文件引用，Product Assembly 经共享本地文本服务完成有界装配 | prompt-only 与静态 workspace 相对 UTF-8 `@file` 可发送；动态/绝对/越界文件、shell、agent/model/variant/subtask 整体受限 | 任一文件失败则本次调用原子失败；最多 8 文件、单文件 64 KiB、文件总量 128 KiB、最终命令 1 MiB。 |
@@ -209,7 +209,7 @@ OpenCode adapter 在来源发现、解析和审批前不 import module、不读�
 | Themes | builtin/user/project/cwd JSON | **部分已有**：GUI Theme 已有；TUI 主题消费边界在终端阶段补齐 | 保留覆盖顺序和语义角色 | 颜色能力不支持时做可见降级。 |
 | Keybinds | `tui.json` 的 leader、组合键、禁用和命令标识 | **已有行为、边界未抽取**：从现有 TUI 输入/命令路径提取最小接口 | 保留用户和项目覆盖 | 平台冲突时显示最终绑定与原因。 |
 | Models / Providers | `model`、`small_model`、`default_agent`、provider options/variants，以及 `enabled_providers` / `disabled_providers` | Model/Provider 与 Agent 归属模块 | 静态选择按 L1 映射；新增 Provider 连接、网络、凭据或动态适配器按 L2/L3 确认 | 动态软件包适配器交给插件运行时，未知 Provider 只禁用对应选择。 |
-| Permissions / Policies | 工具、Skill、Agent 等 allow/deny/ask pattern | Permission 归属模块建立 OpenCode 兼容策略层 | 收紧可以自动应用；扩大权限进入确认，激活后保持 OpenCode 决策 | BitFun 用户/组织策略可进一步收紧并明确标记。 |
+| Permissions / Policies | 工具、Skill、Agent 等 allow/deny/ask pattern | OpenCode adapter 生成来源无关约束；Permission 归属模块保持最终裁决 | 当前只接入外部 Subagent 的当前有序 `permissions` 与 V1 Agent-local 扁平 `permission`；约束参与行为审批并随 Agent 固定到执行链 | 约束只能收紧，不能覆盖 BitFun 用户/项目/组织策略；root ambient、V1 嵌套 resource map 和其他资产权限保持明确不支持。 |
 | Plugins / Tools | config plugin 列表、`plugins/`、`tools/` | 只生成执行来源和顺序，交给 OpenCode adapter 与 `PluginRuntimeClient` | 自动发现；首次确认后才准备和 import 当前执行版本 | 不在配置解析线程加载代码。 |
 
 ### 5.1 Rules 与 Instructions
@@ -227,16 +227,36 @@ OpenCode adapter 在来源发现、解析和审批前不 import module、不读�
 
 兼容定义进入现有 Agent 归属模块，而不是新建 OpenCode Agent Runtime。当前已实现范围按是否能保持行为等价划分：
 
-- 可等价映射并激活：名称、description、prompt、`subagent|all`、隐藏/停用状态、可精确解析的 model，以及能映射到
-  当前有效 Tool route 的明确工具选择；缺省工具使用 BitFun 保守 Subagent 默认集并展示在确认摘要中。
-- 可识别但不激活：`primary`/legacy mode、`permission` pattern、variant/options、temperature/top_p、steps/
-  deprecated maxSteps，以及不能精确解析的模型或工具。当前不能把这些字段静默忽略后宣称兼容。
+- 可等价映射并激活：名称、description、V1 `prompt/disable` 与当前 `system/disabled`、`subagent|all`、隐藏状态、
+  可精确解析的 model，以及能映射到当前有效 Tool route 的明确工具选择；缺省工具使用 BitFun 保守 Subagent
+  默认集并展示在确认摘要中。
+- Agent-local 权限：当前有序 `permissions: [{ action, resource, effect }]` 保留顺序；V1 扁平精确 action map
+  `permission: { action: allow|ask|deny }` 转换为 `resource="*"`，并把 `write/edit/patch/apply_patch` 归一为
+  BitFun `edit` action。同一来源层内仍是 last-match-wins；它作为独立约束与宿主策略取最严格结果，不能授予工具，
+  也不能放宽用户、项目、组织或父 Agent 的限制。deny/ask 若命中已选中但当前没有对应 PermissionIntent 的工具，
+  整个 Agent 保持阻断；只对未激活的未知 action 做可见降级。
+- 文件资源坐标在 adapter 边界转换：当前 `read/edit` 的 workspace-relative resource 映射到 BitFun 实际使用的
+  canonical workspace 绝对资源，`read/edit/external_directory` 的 `~`/`$HOME` 按 OpenCode 规则展开；bash
+  resource 保留原始命令文本。若 action pattern 同时跨越路径与非路径工具、workspace/home 坐标不可得，或前导
+  wildcard 可能同时匹配 OpenCode 的相对 workspace 与绝对 external resource，则阻断 Agent，不以“未命中即 Allow”继续。
+- action pattern 保持 OpenCode 的平台大小写语义：Windows 导入时归一为小写 BitFun action，其他平台保持大小写
+  敏感。外部 Agent 当前不开放 `Task`，因为现有子委派 ceiling 尚不携带该 Agent 的外部约束；不能让显式工具名绕过此边界。
+- 可识别但不激活：`primary`/legacy mode、root ambient permission、V1 action pattern 或嵌套 resource pattern、variant/options、
+  temperature/top_p、steps/deprecated maxSteps，以及不能精确解析的模型或工具。当前不能把这些字段静默忽略后宣称兼容。
 - 展示映射：color 等只影响来源 Surface，不进入运行时权威事实。
 - 未知字段：进入来源限定诊断，不作为任意数据传给 core；后续版本支持时由 OpenCode adapter 更新解释。
 
-全局与项目贡献在 adapter 内按稳定 OpenCode 顺序深合并并保留有序来源。Core 只消费来源无关候选，按当前
+每份 JSON/JSONC 配置文档和 Agent Markdown frontmatter 先独立按 OpenCode V1 key 判型并迁移到当前 Agent 字段，
+再参与合并；不能把跨文档的
+`prompt/system`、`disable/disabled` 或 `permission/permissions` 误判为单份文档冲突。本地 Agent 来源按用户配置与
+用户 Markdown、project direct config（root-to-nearest）、project `.opencode` config/Markdown（root-to-nearest）
+依次应用，`OPENCODE_CONFIG_DIR` 的物理 alias 保留所在位置而不因 scope 重排；`disabled:true` 按 OpenCode remove
+语义形成 tombstone，后续同名非 disabled 文档从空定义重建。这样项目限制不会被较低优先级用户 Markdown 反向覆盖。
+Core 只消费来源无关候选，按当前
 模型、工具、执行位置和本地/其他 provider 同名项生成审批与冲突内容摘要。无冲突候选首次确认一次；只有目录文案
-变化不重问，prompt 行为、来源或实际模型、工具与执行范围变化重新确认。冲突未选择时逻辑名不可用，候选
+变化不重问，prompt 行为、来源或实际模型、工具、权限约束与执行范围变化重新确认；Core 的审批 envelope 也直接
+包含约束摘要，不能依赖 provider 正确更新行为版本。当前 `permissions` 数组按文档来源顺序追加，V1 扁平对象按
+归一化 action 做确定性去重；同义 action 给出冲突效果时阻断，不能依赖 JSON 对象键序裁决。冲突未选择时逻辑名不可用，候选
 变化后不静默回退。
 
 OpenCode adapter 负责把 `provider/model` 语法解析成来源无关的 provider 提示与模型名；Core 不解释 OpenCode 字符串
@@ -254,7 +274,7 @@ OpenCode adapter 负责把 `provider/model` 语法解析成来源无关的 provi
 
 Subagent 归属模块仍通过现有 Task 执行链完成调用。新的调用在执行前取得现有运行租约，固定
 `runtime_agent_key` 与模型绑定，并由前台或后台任务持有到结束；当前不支持外部 session follow-up、primary agent 替换、
-OpenCode 会话内核、permission DSL 或 package plugin。Desktop/TUI 摘要不包含 prompt
+OpenCode 会话内核、完整 permission DSL 或 package plugin。Desktop/TUI 摘要不包含 prompt
 正文，静态 system prompt 也不因该适配而改写。来源 `description` 只进入审批和管理界面；已批准 Agent
 进入现有 `<available_agents>` 动态视图时使用 BitFun 生成的稳定摘要，避免只改目录文案就绕过行为重批并改变模型上下文。
 

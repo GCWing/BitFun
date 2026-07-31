@@ -17,6 +17,18 @@ pub enum PermissionEffect {
     Deny,
 }
 
+impl PermissionEffect {
+    /// Combines independently owned policy decisions without allowing either
+    /// side to widen the other.
+    pub const fn most_restrictive(self, other: Self) -> Self {
+        match (self, other) {
+            (Self::Deny, _) | (_, Self::Deny) => Self::Deny,
+            (Self::Ask, _) | (_, Self::Ask) => Self::Ask,
+            (Self::Allow, Self::Allow) => Self::Allow,
+        }
+    }
+}
+
 /// An ordered action/resource permission rule.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PermissionRule {
@@ -41,6 +53,68 @@ impl PermissionRule {
 
 /// A rule list whose order is significant: later matching rules win.
 pub type PermissionRuleset = Vec<PermissionRule>;
+
+/// One independently evaluated restriction layer.
+///
+/// Rules keep their source-local last-match-wins behavior, while an unmatched
+/// request defaults to `allow`. The layer is combined with the host policy and
+/// other layers by taking the most restrictive result, so an `allow` here can
+/// express an exception to an earlier rule in this layer without widening the
+/// host policy.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct PermissionConstraintLayer {
+    rules: PermissionRuleset,
+}
+
+impl PermissionConstraintLayer {
+    pub fn new(rules: PermissionRuleset) -> Self {
+        Self { rules }
+    }
+
+    pub fn rules(&self) -> &[PermissionRule] {
+        &self.rules
+    }
+
+    pub fn into_rules(self) -> PermissionRuleset {
+        self.rules
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.rules.is_empty()
+    }
+}
+
+/// A resolved host policy plus independently owned restriction layers.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct ResolvedPermissionPolicy {
+    rules: PermissionRuleset,
+    constraint_layers: Vec<PermissionConstraintLayer>,
+}
+
+impl ResolvedPermissionPolicy {
+    pub fn new(
+        rules: PermissionRuleset,
+        constraint_layers: Vec<PermissionConstraintLayer>,
+    ) -> Self {
+        Self {
+            rules,
+            constraint_layers,
+        }
+    }
+
+    pub fn rules(&self) -> &[PermissionRule] {
+        &self.rules
+    }
+
+    pub fn constraint_layers(&self) -> &[PermissionConstraintLayer] {
+        &self.constraint_layers
+    }
+
+    pub fn into_parts(self) -> (PermissionRuleset, Vec<PermissionConstraintLayer>) {
+        (self.rules, self.constraint_layers)
+    }
+}
 
 /// A validated runtime restriction inherited by a delegated child agent.
 ///
@@ -200,33 +274,40 @@ pub struct ChildPermissionPolicyLayers<'a> {
 
 /// Expands the configured preset and merges every static rule layer in its
 /// security-significant evaluation order.
-pub fn resolve_permission_policy(layers: PermissionPolicyLayers<'_>) -> PermissionRuleset {
+pub fn resolve_permission_policy(layers: PermissionPolicyLayers<'_>) -> ResolvedPermissionPolicy {
     let baseline = layers.global.preset.baseline_rules();
-    merge_permission_rule_layers(&[
-        layers.product_defaults,
-        &baseline,
-        &layers.global.rules,
-        layers.project,
-        layers.agent,
-        layers.enforced,
-    ])
+    ResolvedPermissionPolicy::new(
+        merge_permission_rule_layers(&[
+            layers.product_defaults,
+            &baseline,
+            &layers.global.rules,
+            layers.project,
+            layers.agent,
+            layers.enforced,
+        ]),
+        Vec::new(),
+    )
 }
 
-/// Resolves a delegated child policy without allowing parent policy to widen
-/// the child's own capabilities.
+/// Resolves a delegated child policy and evaluates the parent ceiling as an
+/// independent constraint that cannot widen the child's own policy.
 pub fn resolve_child_permission_policy(
     layers: ChildPermissionPolicyLayers<'_>,
-) -> PermissionRuleset {
+) -> ResolvedPermissionPolicy {
     let baseline = layers.global.preset.baseline_rules();
-    merge_permission_rule_layers(&[
-        layers.product_defaults,
-        &baseline,
-        &layers.global.rules,
-        layers.project,
-        layers.child_agent,
-        layers.parent_runtime_ceiling.rules(),
-        layers.enforced,
-    ])
+    ResolvedPermissionPolicy::new(
+        merge_permission_rule_layers(&[
+            layers.product_defaults,
+            &baseline,
+            &layers.global.rules,
+            layers.project,
+            layers.child_agent,
+            layers.enforced,
+        ]),
+        vec![PermissionConstraintLayer::new(
+            layers.parent_runtime_ceiling.rules().to_vec(),
+        )],
+    )
 }
 
 /// Identifies the boundary that originated a permission request.
@@ -461,6 +542,45 @@ impl PermissionEvaluator {
             })
             .map(|rule| rule.effect)
             .unwrap_or(PermissionEffect::Ask)
+    }
+
+    /// Evaluates the host policy and every independent restriction layer.
+    pub fn evaluate_policy_resource(
+        &self,
+        action: &str,
+        resource: &str,
+        policy: &ResolvedPermissionPolicy,
+    ) -> PermissionEffect {
+        policy.constraint_layers().iter().fold(
+            self.evaluate_resource(action, resource, policy.rules()),
+            |effect, layer| {
+                let constraint = self.evaluate_constraint_resource(action, resource, layer);
+                effect.most_restrictive(constraint)
+            },
+        )
+    }
+
+    /// Evaluates one restriction layer. An unmatched request is unrestricted
+    /// by that layer and therefore defaults to `allow`.
+    pub fn evaluate_constraint_resource(
+        &self,
+        action: &str,
+        resource: &str,
+        layer: &PermissionConstraintLayer,
+    ) -> PermissionEffect {
+        layer
+            .rules()
+            .iter()
+            .rev()
+            .find(|rule| {
+                wildcard_matches(
+                    action,
+                    &rule.action,
+                    PermissionResourceCaseSensitivity::Sensitive,
+                ) && wildcard_matches(resource, &rule.resource, self.resource_case_sensitivity)
+            })
+            .map(|rule| rule.effect)
+            .unwrap_or(PermissionEffect::Allow)
     }
 
     /// Evaluates every resource in one tool call atomically.

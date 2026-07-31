@@ -706,6 +706,8 @@ fn resolve_external_candidate(
     diagnostics.sort_by(|left, right| left.code.cmp(&right.code));
     diagnostics.dedup_by(|left, right| left.code == right.code);
     let readonly = tools.iter().all(|tool| tool.readonly);
+    let permission_constraints = serde_json::to_string(&definition.permission_constraints)
+        .expect("validated permission constraints serialize");
     let provenance = definition
         .provenance
         .iter()
@@ -724,6 +726,7 @@ fn resolve_external_candidate(
                 "visible"
             },
             if readonly { "readonly" } else { "writable" },
+            permission_constraints.as_str(),
         ]
         .into_iter()
         .chain(provenance.iter().map(String::as_str))
@@ -967,6 +970,7 @@ fn install_active_candidate(
         runtime_description,
         candidate.definition.prompt.expose().to_string(),
         tools,
+        candidate.definition.permission_constraints.clone(),
         candidate.readonly,
         candidate.definition.behavior_version.as_str().to_string(),
     ));
@@ -1122,6 +1126,9 @@ mod tests {
         ExternalSubagentMode, ExternalSubagentProvenanceRef, ExternalSubagentToolRequest,
         ExternalSubagentToolSelector, SecretText,
     };
+    use bitfun_product_domains::tool_permissions::{
+        PermissionConstraintLayer, PermissionEffect, PermissionRule,
+    };
 
     fn definition(behavior: &str, catalog: &str) -> (ExternalSubagentDefinition, SourceKey) {
         let source = SourceKey::new("fake-provider", "agents/reviewer.md").unwrap();
@@ -1155,6 +1162,7 @@ mod tests {
                     }],
                     uses_conservative_default: false,
                 },
+                permission_constraints: Default::default(),
                 compatibility: ExternalSubagentCompatibilityState::Ready,
                 diagnostic_codes: Vec::new(),
                 behavior_version: ExternalSubagentBehaviorVersion::new(behavior).unwrap(),
@@ -1557,6 +1565,75 @@ mod tests {
             ExternalSubagentActivationState::ApprovalRequired
         );
         assert!(updated.registrations.is_empty());
+    }
+
+    #[test]
+    fn permission_constraint_change_requires_new_approval_even_with_stale_provider_version() {
+        let empty_set = BTreeSet::new();
+        let empty_map = BTreeMap::new();
+        let first = reconcile_with_facts(
+            Some(Path::new("C:/repo")),
+            "local-user",
+            &snapshot("behavior-v1", "catalog-v1"),
+            ExternalSubagentDecisions {
+                active_ecosystems: test_active_ecosystems(),
+                approved_envelopes: &empty_set,
+                declined_decisions: &empty_map,
+                conflict_choices: &empty_map,
+                conflict_lineage_current_keys: &empty_map,
+            },
+            &facts(),
+        );
+        let approved = BTreeSet::from([first.summaries[0].decision_key.clone()]);
+        let mut tightened_snapshot = snapshot("behavior-v1", "catalog-v1");
+        tightened_snapshot.definitions[0].permission_constraints = PermissionConstraintLayer::new(
+            vec![PermissionRule::new("edit", "*", PermissionEffect::Deny)],
+        );
+
+        let updated = reconcile_with_facts(
+            Some(Path::new("C:/repo")),
+            "local-user",
+            &tightened_snapshot,
+            ExternalSubagentDecisions {
+                active_ecosystems: test_active_ecosystems(),
+                approved_envelopes: &approved,
+                declined_decisions: &empty_map,
+                conflict_choices: &empty_map,
+                conflict_lineage_current_keys: &empty_map,
+            },
+            &facts(),
+        );
+
+        assert_eq!(
+            updated.summaries[0].activation_state,
+            ExternalSubagentActivationState::ApprovalRequired
+        );
+        assert!(updated.registrations.is_empty());
+
+        let reapproved = BTreeSet::from([updated.summaries[0].decision_key.clone()]);
+        let activated = reconcile_with_facts(
+            Some(Path::new("C:/repo")),
+            "local-user",
+            &tightened_snapshot,
+            ExternalSubagentDecisions {
+                active_ecosystems: test_active_ecosystems(),
+                approved_envelopes: &reapproved,
+                declined_decisions: &empty_map,
+                conflict_choices: &empty_map,
+                conflict_lineage_current_keys: &empty_map,
+            },
+            &facts(),
+        );
+        assert_eq!(activated.registrations.len(), 1);
+        assert_eq!(
+            activated.registrations[0]
+                .agent
+                .permission_constraints()
+                .rules(),
+            tightened_snapshot.definitions[0]
+                .permission_constraints
+                .rules()
+        );
     }
 
     #[test]

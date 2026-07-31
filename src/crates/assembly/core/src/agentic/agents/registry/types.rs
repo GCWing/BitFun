@@ -14,6 +14,7 @@ pub use bitfun_agent_runtime::agents::{
 };
 use bitfun_agent_runtime::custom_agent::CustomAgentLevel;
 use bitfun_agent_runtime::prompt_cache::prompt_cache_scope_key;
+use bitfun_runtime_ports::PermissionConstraintLayer;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
@@ -41,6 +42,7 @@ pub enum AgentSource {
 pub struct AgentToolPolicy {
     pub allowed_tools: Vec<String>,
     pub exposure_overrides: AgentToolPolicyOverrides,
+    pub permission_constraints: PermissionConstraintLayer,
 }
 
 /// one agent record in registry

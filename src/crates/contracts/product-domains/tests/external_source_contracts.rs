@@ -42,6 +42,9 @@ use bitfun_product_domains::external_subagents::{
     ExternalSubagentProviderSnapshot, ExternalSubagentToolRequest, ExternalSubagentToolSelector,
     SecretText,
 };
+use bitfun_product_domains::tool_permissions::{
+    PermissionConstraintLayer, PermissionEffect, PermissionRule,
+};
 use sha2::{Digest, Sha256};
 use std::path::PathBuf;
 
@@ -392,12 +395,18 @@ fn external_subagent_identity_preserves_ordered_provenance_and_separate_revision
             }],
             uses_conservative_default: false,
         },
+        permission_constraints: PermissionConstraintLayer::new(vec![PermissionRule::new(
+            "read",
+            "C:/sensitive/private/*",
+            PermissionEffect::Deny,
+        )]),
         compatibility: ExternalSubagentCompatibilityState::Ready,
         diagnostic_codes: Vec::new(),
         behavior_version: ExternalSubagentBehaviorVersion::new("behavior-v1").unwrap(),
     };
     assert_eq!(definition.prompt.expose(), "Review carefully");
     assert!(!format!("{definition:?}").contains("Review carefully"));
+    assert!(!format!("{definition:?}").contains("C:/sensitive/private"));
 
     let mut invalid_model = definition.clone();
     invalid_model.requested_model = ExternalSubagentModelRequest::Exact {
@@ -409,6 +418,15 @@ fn external_subagent_identity_preserves_ordered_provenance_and_separate_revision
     let mut invalid_tool = definition.clone();
     invalid_tool.requested_tools.selectors[0].source_name = "read\nsecret".to_string();
     assert!(invalid_tool.validate().is_err());
+
+    let mut invalid_permission = definition.clone();
+    invalid_permission.permission_constraints =
+        PermissionConstraintLayer::new(vec![PermissionRule::new(
+            "read\nsecret",
+            "*",
+            PermissionEffect::Deny,
+        )]);
+    assert!(invalid_permission.validate().is_err());
 
     let mut invalid_diagnostic = definition.clone();
     invalid_diagnostic.diagnostic_codes = vec!["provider.invalid:raw-source-key".to_string()];

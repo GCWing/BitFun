@@ -25,13 +25,13 @@ mod script_tool;
 pub use bitfun_product_domains::tool_permissions::{
     resolve_child_permission_policy, resolve_permission_policy, wildcard_matches,
     ChildPermissionPolicyLayers, PermissionAuditEvent, PermissionAuditRecord,
-    PermissionDelegationContext, PermissionEffect, PermissionEvaluator, PermissionGrant,
-    PermissionGrantKey, PermissionInteractionConfig, PermissionPolicyConfig,
+    PermissionConstraintLayer, PermissionDelegationContext, PermissionEffect, PermissionEvaluator,
+    PermissionGrant, PermissionGrantKey, PermissionInteractionConfig, PermissionPolicyConfig,
     PermissionPolicyLayers, PermissionPolicyPreset, PermissionReply, PermissionReplySource,
     PermissionRequest, PermissionRequestEvent, PermissionRequestSource,
     PermissionRequestSourceKind, PermissionResourceCaseSensitivity, PermissionRule,
     PermissionRuleset, PermissionRuntimeCeiling, PermissionRuntimeCeilingValidationError,
-    ToolPermissionConfig,
+    ResolvedPermissionPolicy, ToolPermissionConfig,
 };
 pub use local_workspace_snapshot::{
     LocalWorkspaceSnapshotPort, LocalWorkspaceSnapshotSessionRequest, LocalWorkspaceSnapshotStats,

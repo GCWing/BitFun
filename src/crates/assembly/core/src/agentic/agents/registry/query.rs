@@ -83,6 +83,7 @@ impl AgentRegistry {
             return AgentToolPolicy {
                 allowed_tools: Vec::new(),
                 exposure_overrides: Default::default(),
+                permission_constraints: Default::default(),
             };
         };
         match entry.category {
@@ -104,6 +105,7 @@ impl AgentRegistry {
                 AgentToolPolicy {
                     allowed_tools,
                     exposure_overrides,
+                    permission_constraints: entry.agent.permission_constraints().clone(),
                 }
             }
             AgentCategory::SubAgent | AgentCategory::Hidden => {
@@ -117,6 +119,7 @@ impl AgentRegistry {
                 AgentToolPolicy {
                     allowed_tools,
                     exposure_overrides,
+                    permission_constraints: entry.agent.permission_constraints().clone(),
                 }
             }
         }

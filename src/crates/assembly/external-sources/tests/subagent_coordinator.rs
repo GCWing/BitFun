@@ -105,6 +105,7 @@ fn snapshot(
                 selectors: Vec::new(),
                 uses_conservative_default: true,
             },
+            permission_constraints: Default::default(),
             compatibility: ExternalSubagentCompatibilityState::ReadyWithDegradation,
             diagnostic_codes: vec!["fake.default_tools".to_string()],
             behavior_version: ExternalSubagentBehaviorVersion::new(behavior).unwrap(),

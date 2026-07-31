@@ -8,7 +8,8 @@ use crate::agentic::workspace::WorkspaceServices;
 use crate::agentic::WorkspaceBinding;
 use bitfun_agent_tools::ResolvedToolInvocation;
 use bitfun_runtime_ports::{
-    DelegationPolicy, PermissionDelegationContext, PermissionRule, RemoteExecPort, TerminalPort,
+    DelegationPolicy, PermissionDelegationContext, RemoteExecPort, ResolvedPermissionPolicy,
+    TerminalPort,
 };
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -24,8 +25,8 @@ pub struct ToolExecutionOptions {
     pub max_retries: usize,
     /// Tool execution timeout (seconds), None means infinite waiting
     pub timeout_secs: Option<u64>,
-    /// Ordered permission rules. An unmatched resource defaults to `ask`.
-    pub permission_rules: Vec<PermissionRule>,
+    /// Resolved host policy plus independent restriction layers.
+    pub permission_policy: ResolvedPermissionPolicy,
     /// Automatically reply `once` to `ask` requests through the permission manager.
     pub auto_approve_ask: bool,
 }
@@ -37,7 +38,7 @@ impl Default for ToolExecutionOptions {
             subagent_batch_execution_policy: SubagentBatchExecutionPolicy::default(),
             max_retries: 0,
             timeout_secs: None, // Default no timeout (infinite waiting)
-            permission_rules: Vec::new(),
+            permission_policy: ResolvedPermissionPolicy::default(),
             auto_approve_ask: false,
         }
     }

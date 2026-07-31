@@ -9,6 +9,7 @@ use crate::external_sources::{
     ExternalSourceDiagnostic, ExternalSourceProviderError, ExternalSourceRecord,
     ExternalSourceScope, ExternalWatchRoot, ProviderId, SourceKey,
 };
+use crate::tool_permissions::PermissionConstraintLayer;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeSet;
@@ -18,6 +19,7 @@ const MAX_ID_LENGTH: usize = 160;
 const MAX_LABEL_LENGTH: usize = 4096;
 const MAX_PROMPT_BYTES: usize = 256 * 1024;
 const MAX_TOOL_SELECTORS: usize = 256;
+const MAX_PERMISSION_CONSTRAINTS: usize = 256;
 const MAX_DIAGNOSTIC_CODES: usize = 256;
 const MAX_PROVENANCE_REFS: usize = 256;
 const MAX_PROVIDER_SOURCES: usize = 1024;
@@ -257,6 +259,10 @@ pub struct ExternalSubagentDefinition {
     pub hidden: bool,
     pub requested_model: ExternalSubagentModelRequest,
     pub requested_tools: ExternalSubagentToolRequest,
+    /// Provider-neutral restrictions whose ask/deny rules must be enforceable
+    /// by the selected tools' permission intents. Providers must block a
+    /// definition instead of publishing a partially enforceable constraint.
+    pub permission_constraints: PermissionConstraintLayer,
     pub compatibility: ExternalSubagentCompatibilityState,
     pub diagnostic_codes: Vec<String>,
     pub behavior_version: ExternalSubagentBehaviorVersion,
@@ -277,6 +283,10 @@ impl fmt::Debug for ExternalSubagentDefinition {
             .field("hidden", &self.hidden)
             .field("requested_model", &self.requested_model)
             .field("requested_tools", &self.requested_tools)
+            .field(
+                "permission_constraint_count",
+                &self.permission_constraints.rules().len(),
+            )
             .field("compatibility", &self.compatibility)
             .field("diagnostic_codes", &self.diagnostic_codes)
             .field("behavior_version", &self.behavior_version)
@@ -369,6 +379,24 @@ impl ExternalSubagentDefinition {
             {
                 return Err(ExternalSourceContractError::InvalidText(
                     "external subagent tool selector",
+                ));
+            }
+        }
+        if self.permission_constraints.rules().len() > MAX_PERMISSION_CONSTRAINTS {
+            return Err(ExternalSourceContractError::InvalidText(
+                "external subagent permission constraints",
+            ));
+        }
+        for rule in self.permission_constraints.rules() {
+            let valid_value = |value: &str| {
+                !value.is_empty()
+                    && value.len() <= MAX_LABEL_LENGTH
+                    && value.trim() == value
+                    && !value.chars().any(char::is_control)
+            };
+            if !valid_value(&rule.action) || !valid_value(&rule.resource) {
+                return Err(ExternalSourceContractError::InvalidText(
+                    "external subagent permission constraint",
                 ));
             }
         }

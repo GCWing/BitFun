@@ -191,6 +191,9 @@ mod tests {
         DeleteFileTool, FileEditTool, FileReadTool, FileWriteTool,
     };
     use crate::agentic::WorkspaceBinding;
+    use bitfun_runtime_ports::{
+        PermissionConstraintLayer, PermissionEffect, PermissionEvaluator, PermissionRule,
+    };
     use serde_json::{json, Value};
     use std::fs;
 
@@ -242,6 +245,42 @@ mod tests {
 
         assert_eq!(intents.len(), 1);
         assert_eq!(intents[0].action, "read");
+    }
+
+    #[test]
+    fn workspace_absolute_constraint_matches_real_file_tool_intent() {
+        let temp = tempfile::tempdir().expect("temp dir");
+        let workspace = temp.path().join("workspace");
+        let secret = workspace.join("src/secrets/key.txt");
+        fs::create_dir_all(secret.parent().expect("secret parent")).expect("secret parent");
+        fs::write(&secret, "secret").expect("secret file");
+        let context = ToolUseContext::for_tool_listing(
+            Some(WorkspaceBinding::new(None, workspace.clone())),
+            None,
+        );
+        let intents = FileReadTool::new()
+            .permission_intents(&json!({ "file_path": "src/secrets/key.txt" }), &context)
+            .expect("read permission intent");
+        let workspace_resource = canonicalize_local_path_best_effort(&workspace)
+            .expect("canonical workspace")
+            .to_string_lossy()
+            .replace('\\', "/");
+        let constraints = PermissionConstraintLayer::new(vec![PermissionRule::new(
+            "read",
+            format!("{workspace_resource}/src/secrets/**"),
+            PermissionEffect::Deny,
+        )]);
+
+        assert_eq!(intents.len(), 1);
+        assert_eq!(intents[0].resources.len(), 1);
+        assert_eq!(
+            PermissionEvaluator::for_current_platform().evaluate_constraint_resource(
+                &intents[0].action,
+                &intents[0].resources[0],
+                &constraints,
+            ),
+            PermissionEffect::Deny
+        );
     }
 
     #[test]

@@ -5,6 +5,7 @@ use crate::agentic::agents::{
 use crate::agentic::session::SystemPromptCacheIdentity;
 use crate::util::errors::BitFunResult;
 use async_trait::async_trait;
+use bitfun_runtime_ports::PermissionConstraintLayer;
 
 /// Immutable, generation-keyed projection of an approved external definition.
 /// Prompt text remains backend-only and the type deliberately implements no
@@ -15,6 +16,7 @@ pub(crate) struct ExternalProvidedSubagent {
     description: String,
     prompt: String,
     tools: Vec<String>,
+    permission_constraints: PermissionConstraintLayer,
     readonly: bool,
     behavior_version: String,
 }
@@ -26,6 +28,7 @@ impl ExternalProvidedSubagent {
         description: String,
         prompt: String,
         tools: Vec<String>,
+        permission_constraints: PermissionConstraintLayer,
         readonly: bool,
         behavior_version: String,
     ) -> Self {
@@ -35,6 +38,7 @@ impl ExternalProvidedSubagent {
             description,
             prompt,
             tools,
+            permission_constraints,
             readonly,
             behavior_version,
         }
@@ -78,6 +82,10 @@ impl Agent for ExternalProvidedSubagent {
 
     fn default_tools(&self) -> Vec<String> {
         self.tools.clone()
+    }
+
+    fn permission_constraints(&self) -> &PermissionConstraintLayer {
+        &self.permission_constraints
     }
 
     fn user_context_policy(&self) -> UserContextPolicy {

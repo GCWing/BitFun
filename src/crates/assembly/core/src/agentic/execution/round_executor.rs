@@ -14,7 +14,7 @@ use crate::agentic::memories::{
     parse_bitfun_memory_citation, parse_bitfun_memory_citation_payloads,
     strip_bitfun_memory_citations,
 };
-use crate::agentic::permission_policy::resolve_effective_permission_rules;
+use crate::agentic::permission_policy::resolve_effective_permission_policy;
 use crate::agentic::tools::computer_use_host::ComputerUseHostRef;
 use crate::agentic::tools::pipeline::{
     SubagentBatchExecutionPolicy as PipelineSubagentBatchExecutionPolicy, ToolExecutionContext,
@@ -215,16 +215,18 @@ impl RoundExecutor {
         }
     }
 
-    fn resolve_permission_rules(
+    fn resolve_permission_policy(
         global: &crate::service::config::types::GlobalConfig,
         project_rules: &[PermissionRule],
         agent_profile: Option<&AgentProfileConfig>,
+        agent_definition_constraints: &bitfun_runtime_ports::PermissionConstraintLayer,
         parent_runtime_ceiling: Option<&bitfun_runtime_ports::PermissionRuntimeCeiling>,
-    ) -> Vec<PermissionRule> {
-        resolve_effective_permission_rules(
+    ) -> bitfun_runtime_ports::ResolvedPermissionPolicy {
+        resolve_effective_permission_policy(
             global,
             project_rules,
             agent_profile,
+            Some(agent_definition_constraints),
             parent_runtime_ceiling,
             &[],
         )
@@ -1085,10 +1087,11 @@ impl RoundExecutor {
                 .ai
                 .agent_profiles
                 .get(agent_profile_id.as_ref());
-            let permission_rules = Self::resolve_permission_rules(
+            let permission_policy = Self::resolve_permission_policy(
                 &global_config,
                 &project_rules,
                 agent_profile,
+                &context.permission_constraints,
                 context.permission_runtime_ceiling.as_ref(),
             );
 
@@ -1096,7 +1099,7 @@ impl RoundExecutor {
             let tool_options = ToolExecutionOptions {
                 timeout_secs: tool_execution_timeout,
                 subagent_batch_execution_policy,
-                permission_rules,
+                permission_policy,
                 auto_approve_ask,
                 ..ToolExecutionOptions::default()
             };
@@ -1734,6 +1737,7 @@ mod tests {
             ),
             agent_type: "agentic".to_string(),
             context_vars: HashMap::new(),
+            permission_constraints: Default::default(),
             permission_runtime_ceiling: None,
             delegation_policy: DelegationPolicy::top_level(),
             runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
@@ -1766,24 +1770,29 @@ mod tests {
             ..AgentProfileConfig::default()
         };
 
-        let resolved =
-            RoundExecutor::resolve_permission_rules(&global, &project_rules, Some(&agent), None);
+        let resolved = RoundExecutor::resolve_permission_policy(
+            &global,
+            &project_rules,
+            Some(&agent),
+            &Default::default(),
+            None,
+        );
         let evaluator = PermissionEvaluator::case_sensitive();
 
         assert_eq!(
-            evaluator.evaluate_resource("bash", "rm -rf target", &resolved),
+            evaluator.evaluate_policy_resource("bash", "rm -rf target", &resolved),
             PermissionEffect::Ask
         );
         assert_eq!(
-            evaluator.evaluate_resource("edit", "generated/review.md", &resolved),
+            evaluator.evaluate_policy_resource("edit", "generated/review.md", &resolved),
             PermissionEffect::Allow
         );
         assert_eq!(
-            evaluator.evaluate_resource("edit", "generated/api.rs", &resolved),
+            evaluator.evaluate_policy_resource("edit", "generated/api.rs", &resolved),
             PermissionEffect::Deny
         );
         assert_eq!(
-            evaluator.evaluate_resource("read", "src/main.rs", &resolved),
+            evaluator.evaluate_policy_resource("read", "src/main.rs", &resolved),
             PermissionEffect::Allow
         );
     }
