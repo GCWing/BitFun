@@ -71,10 +71,12 @@ import {
 } from './sessionMetadataStartup';
 import {
   getEffectiveTopLevelSessionCount,
+  getSessionBufferPrefetchLimit,
   getSessionExpandToggleState,
   SESSIONS_LEVEL_0,
   SESSIONS_LEVEL_1,
 } from './sessionNavExpand';
+import { useSessionRowRemovalTransition } from './sessionRowShift';
 import './SessionsSection.scss';
 
 const log = createLogger('SessionsSection');
@@ -85,6 +87,12 @@ type HistoryOpenIntentDispatchResult = 'none' | 'dispatched' | 'already-pending'
 
 /** Page size for the fully-expanded (level 2) session list. */
 const SESSIONS_LEVEL_2_PAGE = 200;
+
+/**
+ * Delay before topping the off-screen row buffer back up. Keeps the refill out
+ * of the startup burst and coalesces the repeated deletes of a cleanup pass.
+ */
+const SESSIONS_BUFFER_PREFETCH_DELAY_MS = 800;
 
 const escapeRegExp = (value: string): string =>
   value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -237,7 +245,14 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
   const sessionMenuPopoverRef = useRef<HTMLDivElement>(null);
   const sessionMenuAnchorRef = useRef<HTMLButtonElement>(null);
   const metadataLoadRequestIdRef = useRef(0);
+  /** User-driven metadata loads still running; background loads yield to them. */
+  const foregroundLoadCountRef = useRef(0);
   const initialMetadataLoadKeyRef = useRef<string | null>(null);
+  const sessionListRef = useRef<HTMLDivElement>(null);
+  /** Last (scope, live, synced) triple a background reconcile ran for. */
+  const liveReconcileSignatureRef = useRef<string | null>(null);
+  /** Last (scope, cursor, size) triple a buffer prefetch ran for. */
+  const bufferPrefetchSignatureRef = useRef<string | null>(null);
 
   // Subscribe to state machine changes for running status
   useEffect(() => {
@@ -326,6 +341,8 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
   useEffect(() => {
     metadataLoadRequestIdRef.current += 1;
     initialMetadataLoadKeyRef.current = null;
+    liveReconcileSignatureRef.current = null;
+    bufferPrefetchSignatureRef.current = null;
     setExpandLevel(0);
     setMetadataPageState({
       totalTopLevelCount: null,
@@ -338,18 +355,39 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
   }, [workspaceId, workspacePath, remoteConnectionId, remoteSshHost]);
 
   const loadMetadataPage = useCallback(
-    async (limit: number, cursor: string | undefined, source: string) => {
+    async (
+      limit: number,
+      cursor: string | undefined,
+      source: string,
+      options?: { background?: boolean },
+    ) => {
       if (!workspacePath || limit <= 0) {
         return null;
       }
 
-      const requestId = metadataLoadRequestIdRef.current + 1;
-      metadataLoadRequestIdRef.current = requestId;
-      setMetadataPageState(prev => ({
-        ...prev,
-        isLoading: true,
-        loadError: false,
-      }));
+      // A background refresh only re-syncs counts for a list that is already on
+      // screen. Surfacing its spinner (or its retry state) would make routine
+      // upkeep — such as replacing the row a delete consumed — flash the list.
+      // It also leaves the request id alone so it cannot strand a user-driven
+      // load (which would otherwise never clear its spinner); instead it drops
+      // its own result if anything else claimed the list meanwhile.
+      const isBackgroundLoad = options?.background === true;
+      if (isBackgroundLoad && foregroundLoadCountRef.current > 0) {
+        return null;
+      }
+
+      const requestId = isBackgroundLoad
+        ? metadataLoadRequestIdRef.current
+        : metadataLoadRequestIdRef.current + 1;
+      if (!isBackgroundLoad) {
+        metadataLoadRequestIdRef.current = requestId;
+        foregroundLoadCountRef.current += 1;
+        setMetadataPageState(prev => ({
+          ...prev,
+          isLoading: true,
+          loadError: false,
+        }));
+      }
 
       try {
         const page = await flowChatStore.loadSessionMetadataPage(
@@ -378,7 +416,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
         }
         return page;
       } catch (error) {
-        if (metadataLoadRequestIdRef.current === requestId) {
+        if (metadataLoadRequestIdRef.current === requestId && !isBackgroundLoad) {
           setMetadataPageState(prev => ({
             ...prev,
             isLoading: false,
@@ -387,6 +425,10 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
         }
         log.warn('Failed to load visible session metadata page', { error, workspacePath, cursor, limit });
         return null;
+      } finally {
+        if (!isBackgroundLoad) {
+          foregroundLoadCountRef.current = Math.max(foregroundLoadCountRef.current - 1, 0);
+        }
       }
     },
     [workspacePath, remoteConnectionId, remoteSshHost]
@@ -490,6 +532,8 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
   useEffect(() => {
     const handler = () => {
       metadataLoadRequestIdRef.current += 1;
+      liveReconcileSignatureRef.current = null;
+      bufferPrefetchSignatureRef.current = null;
       setExpandLevel(0);
       setMetadataPageState({
         totalTopLevelCount: null,
@@ -690,14 +734,83 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
       return;
     }
 
-    void loadMetadataPage(SESSIONS_LEVEL_0, undefined, 'sessions_nav_live_reconcile');
+    // Re-running for a scope whose counts have not moved would spin on a
+    // failing backend, since a background load leaves the state untouched.
+    const signature = [
+      initialMetadataKey,
+      allTopLevelSessions.length,
+      metadataPageState.syncedTopLevelCount,
+    ].join('\n');
+    if (liveReconcileSignatureRef.current === signature) {
+      return;
+    }
+    liveReconcileSignatureRef.current = signature;
+
+    void loadMetadataPage(SESSIONS_LEVEL_0, undefined, 'sessions_nav_live_reconcile', {
+      background: true,
+    });
   }, [
+    initialMetadataKey,
     isVisible,
     loadMetadataPage,
     metadataPageState.isLoading,
     metadataPageState.syncedTopLevelCount,
     metadataPageState.totalTopLevelCount,
     allTopLevelSessions.length,
+    workspacePath,
+  ]);
+
+  // Keep a few rows loaded past the visible slice. Deleting a session then
+  // promotes an already-loaded row in the same commit instead of leaving a gap
+  // until a metadata round trip lands.
+  useEffect(() => {
+    if (
+      !isVisible ||
+      !workspacePath ||
+      metadataPageState.isLoading ||
+      metadataPageState.loadError ||
+      metadataPageState.totalTopLevelCount === null ||
+      !metadataPageState.nextCursor
+    ) {
+      return;
+    }
+
+    const prefetchLimit = getSessionBufferPrefetchLimit({
+      expandLevel,
+      loadedTopLevelCount: allTopLevelSessions.length,
+      totalTopLevelCount: totalTopLevelSessionCount,
+      hasMore: metadataPageState.hasMore,
+    });
+    if (prefetchLimit <= 0) {
+      return;
+    }
+
+    const signature = [initialMetadataKey, metadataPageState.nextCursor, prefetchLimit].join('\n');
+    if (bufferPrefetchSignatureRef.current === signature) {
+      return;
+    }
+
+    const cursor = metadataPageState.nextCursor;
+    const timer = window.setTimeout(() => {
+      bufferPrefetchSignatureRef.current = signature;
+      void loadMetadataPage(prefetchLimit, cursor, 'sessions_nav_buffer_prefetch', {
+        background: true,
+      });
+    }, SESSIONS_BUFFER_PREFETCH_DELAY_MS);
+
+    return () => window.clearTimeout(timer);
+  }, [
+    allTopLevelSessions.length,
+    expandLevel,
+    initialMetadataKey,
+    isVisible,
+    loadMetadataPage,
+    metadataPageState.hasMore,
+    metadataPageState.isLoading,
+    metadataPageState.loadError,
+    metadataPageState.nextCursor,
+    metadataPageState.totalTopLevelCount,
+    totalTopLevelSessionCount,
     workspacePath,
   ]);
 
@@ -711,6 +824,12 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
     }
     return out;
   }, [childrenByParent, sessionDisplayLimit, topLevelSessions]);
+
+  const visibleRowSignature = useMemo(
+    () => visibleItems.map(item => item.session.sessionId).join('|'),
+    [visibleItems],
+  );
+  useSessionRowRemovalTransition(sessionListRef, visibleRowSignature);
 
   const activeSessionId = flowChatState.activeSessionId;
   const scheduledJobsSession = scheduledJobsSessionId
@@ -1102,7 +1221,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
   }
 
   return (
-    <div className="bitfun-nav-panel__inline-list">
+    <div className="bitfun-nav-panel__inline-list" ref={sessionListRef}>
       {dispatchTargetFilterOptions.length > 1 ? (
         <label className="bitfun-nav-panel__session-target-filter">
           <span>{t('nav.sessions.filterLabel')}</span>
@@ -1578,8 +1697,17 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
               )}
             </div>
           );
-          return isEditing || openMenuSessionId !== null ? row : (
-            <Tooltip key={session.sessionId} content={tooltipContent} placement="right" followCursor>
+          // Always wrapped, even while editing or with a row menu open: swapping
+          // the wrapper out would change every row's element type, remounting
+          // the whole list (and flashing it) on each menu open/close.
+          return (
+            <Tooltip
+              key={session.sessionId}
+              content={tooltipContent}
+              placement="right"
+              followCursor
+              disabled={isEditing || openMenuSessionId !== null}
+            >
               {row}
             </Tooltip>
           );
