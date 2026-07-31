@@ -650,10 +650,8 @@
       "deviceOffline": "离线",
       "createFailed": "无法创建派发任务。",
       "remoteTarget": "远程目标",
-      "autoConfirmTitle": "允许无人值守地修改吗？",
-      "autoConfirmMessage": "此任务将在 {{target}} 上运行，并自动批准权限请求。是否继续？",
-      "autoConfirmAction": "自动批准并派发",
-      "autoConfirmCancel": "取消"
+      "submissionInProgress": "正在向目标提交任务…",
+      "transferInProgress": "正在准备并传输工作区到目标…"
     },
     "addBoostTooltip": "智能体模式、图片或 Skill",
     "permissionMode": {

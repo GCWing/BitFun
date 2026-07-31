@@ -44,6 +44,12 @@ pub(crate) struct ExecCommandArgs {
 }
 
 pub(crate) async fn handle_dispatch_action(action: DispatchAction) -> Result<()> {
+    // Dispatch verbs may initialize global configuration before a detached
+    // worker builds its runtime. Select the CLI profile at the process entry
+    // point so config canonicalization cannot lazily claim product-full first.
+    crate::agent::agentic_system::select_agentic_system_profile(
+        bitfun_core::product_assembly::DeliveryProfile::Cli,
+    )?;
     let verb = match action {
         DispatchAction::Run { job } => return crate::dispatch::run_worker(job).await,
         DispatchAction::WorkspaceMaterialize { job } => {

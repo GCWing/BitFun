@@ -650,10 +650,8 @@
       "deviceOffline": "離線",
       "createFailed": "無法建立派發任務。",
       "remoteTarget": "遠端目標",
-      "autoConfirmTitle": "允許無人值守地修改嗎？",
-      "autoConfirmMessage": "此任務將在 {{target}} 上執行，並自動核准權限要求。是否繼續？",
-      "autoConfirmAction": "自動核准並派發",
-      "autoConfirmCancel": "取消"
+      "submissionInProgress": "正在向目標提交任務…",
+      "transferInProgress": "正在準備並傳輸工作區到目標…"
     },
     "addBoostTooltip": "智能體模式、圖片或 Skill",
     "permissionMode": {

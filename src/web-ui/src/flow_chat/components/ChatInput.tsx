@@ -132,8 +132,8 @@ import {
 } from './ChatInputWorkspaceStrip';
 import type { DispatchSelection, DispatchTarget } from '@/features/dispatch/types';
 import { isNonLocalDispatchTarget } from '@/features/dispatch/types';
-import { shouldConfirmDispatchAutoApproval } from '@/features/dispatch/dispatchPreflight';
 import { dispatchJobStore } from '@/features/dispatch/dispatchJobStore';
+import { useRuntimeStatusStore } from '../store/runtimeStatusStore';
 import { ComposerVoiceInputButton } from './voice/ComposerVoiceInputButton';
 import { useComposerVoiceInput } from './voice/useComposerVoiceInput';
 import { expandWidgetPromptReferenceTokens } from '@/tools/generative-widget/widgetPromptReference';
@@ -508,6 +508,13 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     effectiveTargetSession?.config.dispatchTarget,
   );
   const usesDispatchTransport = !registration && isDispatchInputSession;
+  const dispatchSubmissionInFlight = useRuntimeStatusStore(state => {
+    const status = effectiveTargetSessionId
+      ? state.bySessionId.get(effectiveTargetSessionId)
+      : undefined;
+    return usesDispatchTransport
+      && status?.roundId.startsWith('dispatch-transfer:') === true;
+  });
   const historySessionOpenTransition = useSyncExternalStore(
     subscribeHistorySessionOpenTransition,
     getHistorySessionOpenTransitionSnapshot,
@@ -2004,8 +2011,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         ? 'reject'
         : 'ask';
   const dispatchSubmissionOptionsLocked =
-    effectiveTargetSession?.config.dispatchJobState !== 'submitting'
-    && effectiveTargetSession?.config.dispatchJobState !== 'submission_unknown';
+    dispatchSubmissionInFlight
+    || (
+      effectiveTargetSession?.config.dispatchJobState !== 'submitting'
+      && effectiveTargetSession?.config.dispatchJobState !== 'submission_unknown'
+    );
   const handleDispatchPermissionModeChange = useCallback((
     nextMode: Exclude<ChatInputPermissionMode, 'acp'>,
   ) => {
@@ -2175,8 +2185,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       defaultModelId: effectiveTargetSession.config.dispatchDefaultModel,
       providerLabel,
       disabled:
-        state !== 'submitting'
-        && state !== 'submission_unknown',
+        dispatchSubmissionInFlight
+        || (
+          state !== 'submitting'
+          && state !== 'submission_unknown'
+        ),
       onSelect: (modelId: string) => {
         FlowChatStore.getInstance().updateSessionDispatchModel(sessionId, modelId);
         if (jobId) {
@@ -2184,7 +2197,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         }
       },
     };
-  }, [effectiveTargetSession, t, usesDispatchTransport]);
+  }, [dispatchSubmissionInFlight, effectiveTargetSession, t, usesDispatchTransport]);
 
   const handleHidePermissionModeControl = useCallback(async () => {
     try {
@@ -3863,6 +3876,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   
   const handleSendOrCancel = useCallback(async (messageOverride?: string) => {
     if (!derivedState) return;
+    if (dispatchSubmissionInFlight) return;
     
     const { sendButtonMode } = derivedState;
     const draftTrimmed = (messageOverride ?? inputState.value).trim();
@@ -4011,32 +4025,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       return;
     }
 
-    let dispatchAutoConfirmed = false;
-    if (
-      usesDispatchTransport &&
-      shouldConfirmDispatchAutoApproval(
-        effectiveTargetSession?.config.dispatchApprovalPolicy,
-        effectiveTargetSession?.config.dispatchJobState,
-      )
-    ) {
-      const dispatchTarget = effectiveTargetSession.config.dispatchTarget;
-      const targetLabel =
-        dispatchTarget?.kind === 'ssh' || dispatchTarget?.kind === 'device'
-          ? dispatchTarget.displayName
-          : t('chatInput.dispatch.remoteTarget');
-      dispatchAutoConfirmed = await confirmWarning(
-        t('chatInput.dispatch.autoConfirmTitle'),
-        t('chatInput.dispatch.autoConfirmMessage', { target: targetLabel }),
-        {
-          confirmText: t('chatInput.dispatch.autoConfirmAction'),
-          cancelText: t('chatInput.dispatch.autoConfirmCancel'),
-        },
-      );
-      if (!dispatchAutoConfirmed) {
-        return;
-      }
-    }
-
     // Add to history before clearing (session-scoped)
     if (effectiveTargetSessionId) {
       addToHistory(effectiveTargetSessionId, message);
@@ -4066,7 +4054,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         () => sendMessage(message, {
           displayMessage: originalMessage,
           composerPresentation: persistedComposerPresentation,
-          dispatchAutoConfirmed,
         }),
       );
       if (transport === 'registered') {
@@ -4099,6 +4086,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     }
   }, [
     isModelSwitching,
+    dispatchSubmissionInFlight,
     inputState.value,
     derivedState,
     dispatchInput,
@@ -4112,9 +4100,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     onSendMessage,
     addToHistory,
     effectiveTargetSessionId,
-    effectiveTargetSession?.config.dispatchApprovalPolicy,
-    effectiveTargetSession?.config.dispatchJobState,
-    effectiveTargetSession?.config.dispatchTarget,
     clearPendingLargePastes,
     expandComposerSpecialTokens,
     isAcpInputSession,
@@ -4973,7 +4958,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         <IconButton
           className="bitfun-chat-input__send-button bitfun-chat-input__send-button--retry"
           onClick={() => void handleSendOrCancel()}
-          disabled={isModelSwitching}
+          disabled={isModelSwitching || dispatchSubmissionInFlight}
           tooltip={t('input.retry')}
           size="small"
         >
@@ -4999,7 +4984,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           <IconButton
             className="bitfun-chat-input__send-button"
             onClick={() => void handleSendOrCancel()}
-            disabled={!inputState.value.trim() || isModelSwitching}
+            disabled={!inputState.value.trim() || isModelSwitching || dispatchSubmissionInFlight}
             data-testid="chat-input-send-btn"
             tooltip={t('input.sendShortcut')}
             size="small"
@@ -5014,7 +4999,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       <IconButton
         className="bitfun-chat-input__send-button"
         onClick={() => void handleSendOrCancel()}
-        disabled={!inputState.value.trim() || isModelSwitching}
+        disabled={!inputState.value.trim() || isModelSwitching || dispatchSubmissionInFlight}
         data-testid="chat-input-send-btn"
         tooltip={t('input.sendShortcut')}
         size="small"
@@ -5051,8 +5036,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       >
         <div 
           ref={containerRef}
-          className={`bitfun-chat-input ${isMultiLine ? 'bitfun-chat-input--multi-line' : 'bitfun-chat-input--capsule'} ${derivedState?.isProcessing ? 'bitfun-chat-input--processing' : ''} ${className}`}
+          className={`bitfun-chat-input ${isMultiLine ? 'bitfun-chat-input--multi-line' : 'bitfun-chat-input--capsule'} ${derivedState?.isProcessing || dispatchSubmissionInFlight ? 'bitfun-chat-input--processing' : ''} ${className}`}
           data-testid="chat-input-container"
+          aria-busy={dispatchSubmissionInFlight}
         >
         {recommendationContext && (
           <SmartRecommendations
@@ -5150,7 +5136,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                 onCompositionStart={handleImeCompositionStart}
                 onCompositionEnd={handleImeCompositionEnd}
                 placeholder=""
-                disabled={false}
+                disabled={dispatchSubmissionInFlight}
                 contexts={contexts}
                 onRemoveContext={removeContext}
                 onMentionStateChange={setMentionState}
@@ -5724,7 +5710,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                   </div>
                 ) : null}
 
-                <ComposerVoiceInputButton controller={voiceInput} />
+                {!dispatchSubmissionInFlight ? (
+                  <ComposerVoiceInputButton controller={voiceInput} />
+                ) : null}
                 {voiceInput.phase === 'idle' ? renderActionButton() : null}
               </div>
             </div>

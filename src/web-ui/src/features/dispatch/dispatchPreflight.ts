@@ -1,6 +1,4 @@
 import type {
-  DispatchApprovalPolicy,
-  DispatchJobState,
   DispatchWorkspaceProbe,
 } from './types';
 
@@ -13,16 +11,6 @@ export const BASE_DISPATCH_CAPABILITIES = [
   'frontend_event_projection',
   'workspace_serialization',
 ] as const;
-
-export function shouldConfirmDispatchAutoApproval(
-  policy: DispatchApprovalPolicy | undefined,
-  state: DispatchJobState | undefined,
-): boolean {
-  return (
-    policy === 'auto'
-    && (state === 'submitting' || state === 'submission_unknown')
-  );
-}
 
 export function isDispatchWorkspaceReady(
   workspacePath: string,

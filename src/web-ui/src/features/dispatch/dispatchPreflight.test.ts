@@ -1,12 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { shouldConfirmDispatchAutoApproval } from './dispatchPreflight';
+import { isDispatchWorkspaceReady } from './dispatchPreflight';
 
 describe('dispatch preflight', () => {
-  it('confirms auto approval only for submit and ambiguous submit retry', () => {
-    expect(shouldConfirmDispatchAutoApproval('auto', 'submitting')).toBe(true);
-    expect(shouldConfirmDispatchAutoApproval('auto', 'submission_unknown')).toBe(true);
-    expect(shouldConfirmDispatchAutoApproval('auto', 'queued')).toBe(false);
-    expect(shouldConfirmDispatchAutoApproval('auto', 'running')).toBe(false);
-    expect(shouldConfirmDispatchAutoApproval('remote', 'submitting')).toBe(false);
+  it('accepts only the exact probed target workspace', () => {
+    const workspace = {
+      path: '/srv/app',
+      exists: true,
+      isDirectory: true,
+      isGitRepository: true,
+    };
+    expect(isDispatchWorkspaceReady('/srv/app', workspace)).toBe(true);
+    expect(isDispatchWorkspaceReady('/srv/other', workspace)).toBe(false);
   });
 });

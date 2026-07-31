@@ -30,7 +30,9 @@ export const RuntimeStatusSlot: React.FC<RuntimeStatusSlotProps> = ({
     ? rawHints.filter((item): item is string => typeof item === 'string')
     : [];
   const hint = status
-    ? hints[stableHintIndex(`${status.turnId}:${status.roundId}`, hints.length)] ?? ''
+    ? status.label
+      || hints[stableHintIndex(`${status.turnId}:${status.roundId}`, hints.length)]
+      || ''
     : '';
   const visible = Boolean(status && hint);
 

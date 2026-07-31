@@ -664,8 +664,6 @@ export class FlowChatManager {
       userMessageMetadata?: Record<string, unknown>;
       turnId?: string;
       preserveTurnOnStartError?: boolean;
-      /** One-shot UI confirmation for unattended auto approval. */
-      dispatchAutoConfirmed?: boolean;
       onSessionConflictRetryStart?: () => void;
       onSessionConflictRetrySuccess?: () => void;
     }

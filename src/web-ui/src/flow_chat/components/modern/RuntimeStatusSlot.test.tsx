@@ -53,6 +53,16 @@ describe('RuntimeStatusSlot', () => {
     expect(slot?.textContent).toContain('Working on it');
 
     act(() => {
+      useRuntimeStatusStore.getState().show({
+        sessionId: 'session-1',
+        turnId: 'dispatch-turn',
+        roundId: 'dispatch-transfer:job-1',
+        label: 'Transferring workspace',
+      });
+    });
+    expect(slot?.textContent).toContain('Transferring workspace');
+
+    act(() => {
       useRuntimeStatusStore.getState().clear({ sessionId: 'session-1' });
     });
     expect(container.querySelector('.runtime-status-slot')).toBe(slot);

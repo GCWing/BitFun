@@ -32,6 +32,10 @@ import { isNonLocalDispatchTarget } from '@/features/dispatch/types';
 import { markOptimisticDispatchTurnMetadata } from '@/features/dispatch/optimisticDispatchTurn';
 import { isSessionInUseError } from '@/infrastructure/api/errors/TauriCommandError';
 import { i18nService } from '@/infrastructure/i18n';
+import {
+  clearRuntimeStatusState,
+  showRuntimeStatus,
+} from '@/flow_chat/store/runtimeStatusStore';
 
 const log = createLogger('MessageModule');
 
@@ -201,8 +205,6 @@ export async function sendMessage(
     userMessageMetadata?: Record<string, unknown>;
     turnId?: string;
     preserveTurnOnStartError?: boolean;
-    /** One-shot UI confirmation for unattended auto approval. Never persist this flag. */
-    dispatchAutoConfirmed?: boolean;
     onSessionConflictRetryStart?: () => void;
     onSessionConflictRetrySuccess?: () => void;
     fromSessionConflictRetry?: boolean;
@@ -372,9 +374,6 @@ export async function sendMessage(
       ) {
         throw new Error('This detached dispatch job has already been submitted');
       }
-      if (approvalPolicy === 'auto' && options?.dispatchAutoConfirmed !== true) {
-        throw new Error('Auto-approval dispatch requires an explicit confirmation before submit');
-      }
       if (isFirstMessage) {
         handleTitleGeneration(context, sessionId, message);
       }
@@ -411,17 +410,38 @@ export async function sendMessage(
         'MessageModule',
       );
 
-      const response = await dispatchApi.submit({
-        target: targetRequest,
-        workspaceDelivery:
-          readySession.config.dispatchWorkspaceDelivery ?? { kind: 'existing' },
-        jobId,
+      const workspaceDelivery =
+        readySession.config.dispatchWorkspaceDelivery ?? { kind: 'existing' as const };
+      const transferRoundId = `dispatch-transfer:${jobId}`;
+      showRuntimeStatus({
         sessionId,
-        agentType: currentAgentType,
-        prompt: message,
-        approvalPolicy,
-        model: readySession.config.dispatchModel?.trim() || undefined,
+        turnId: optimisticTurnId,
+        roundId: transferRoundId,
+        label: i18nService.t(
+          workspaceDelivery.kind === 'existing'
+            ? 'flow-chat:chatInput.dispatch.submissionInProgress'
+            : 'flow-chat:chatInput.dispatch.transferInProgress',
+        ),
       });
+      let response: Awaited<ReturnType<typeof dispatchApi.submit>>;
+      try {
+        response = await dispatchApi.submit({
+          target: targetRequest,
+          workspaceDelivery,
+          jobId,
+          sessionId,
+          agentType: currentAgentType,
+          prompt: message,
+          approvalPolicy,
+          model: readySession.config.dispatchModel?.trim() || undefined,
+        });
+      } finally {
+        clearRuntimeStatusState({
+          sessionId,
+          turnId: optimisticTurnId,
+          roundId: transferRoundId,
+        });
+      }
       if (!response.accepted || response.jobId !== jobId || response.sessionId !== sessionId) {
         throw new Error('Dispatch target returned a mismatched acknowledgement');
       }

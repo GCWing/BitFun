@@ -4,6 +4,8 @@ export interface RuntimeStatusEntry {
   sessionId: string;
   turnId: string;
   roundId: string;
+  /** Optional operation-specific progress label instead of a rotating model hint. */
+  label?: string;
 }
 
 export interface RuntimeStatusFilter {

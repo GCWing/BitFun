@@ -650,10 +650,8 @@
       "deviceOffline": "Offline",
       "createFailed": "Could not create the dispatched task.",
       "remoteTarget": "the remote target",
-      "autoConfirmTitle": "Allow unattended changes?",
-      "autoConfirmMessage": "This task will run on {{target}} and automatically approve permission requests. Continue?",
-      "autoConfirmAction": "Dispatch with auto approval",
-      "autoConfirmCancel": "Cancel"
+      "submissionInProgress": "Submitting the task to the target…",
+      "transferInProgress": "Preparing and transferring the workspace to the target…"
     },
     "addBoostTooltip": "Agent modes, image, or skills",
     "permissionMode": {

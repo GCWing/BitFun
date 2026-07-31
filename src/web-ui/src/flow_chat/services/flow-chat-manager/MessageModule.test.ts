@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { cancelSessionTask, sendMessage, syncSessionModelSelection } from './MessageModule';
 import { SessionExecutionEvent } from '../../state-machine/types';
+import {
+  getRuntimeStatus,
+  resetRuntimeStatuses,
+} from '../../store/runtimeStatusStore';
 
 const mockTransition = vi.fn();
 const mockGetCurrentState = vi.fn(() => 'processing');
@@ -346,6 +350,7 @@ describe('MessageModule session writer conflict', () => {
 describe('MessageModule cancellation', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    resetRuntimeStatuses();
     mockGetCurrentState.mockReturnValue('processing');
     mockTransition.mockResolvedValue(true);
   });
@@ -463,6 +468,10 @@ describe('MessageModule detached dispatch', () => {
 
   it('projects the user message immediately while the target is still queued', async () => {
     const { context, session } = createDispatchContext('reject-and-report');
+    (session.config as any).dispatchWorkspaceDelivery = {
+      kind: 'snapshot-source',
+      sourceWorkspacePath: '/controller/repo',
+    };
     let resolveSubmit!: (value: {
       accepted: boolean;
       jobId: string;
@@ -494,6 +503,11 @@ describe('MessageModule detached dispatch', () => {
       modelRounds: [],
       status: 'pending',
     });
+    expect(getRuntimeStatus('dispatch-session')).toMatchObject({
+      turnId: 'dispatch_pending_job-1',
+      roundId: 'dispatch-transfer:job-1',
+      label: 'flow-chat:chatInput.dispatch.transferInProgress',
+    });
     resolveSubmit({
       accepted: true,
       jobId: 'job-1',
@@ -501,6 +515,7 @@ describe('MessageModule detached dispatch', () => {
       state: 'queued',
     });
     await submission;
+    expect(getRuntimeStatus('dispatch-session')).toBeUndefined();
 
     expect(mockDispatchSubmit).toHaveBeenCalledWith({
       target: {
@@ -508,7 +523,10 @@ describe('MessageModule detached dispatch', () => {
         connectionId: 'ssh-1',
         workspacePath: '/target/repo',
       },
-      workspaceDelivery: { kind: 'existing' },
+      workspaceDelivery: {
+        kind: 'snapshot-source',
+        sourceWorkspacePath: '/controller/repo',
+      },
       jobId: 'job-1',
       sessionId: 'dispatch-session',
       agentType: 'agentic',
@@ -531,24 +549,11 @@ describe('MessageModule detached dispatch', () => {
     expect(session.dialogTurns).toEqual([]);
   });
 
-  it('requires a one-shot auto-approval confirmation before the actual submit', async () => {
+  it('submits with the session-scoped auto-approval setting without another confirmation', async () => {
     const { context } = createDispatchContext('auto');
 
     await expect(
       sendMessage(context, 'run remote checks', 'dispatch-session'),
-    ).rejects.toThrow('requires an explicit confirmation');
-    expect(mockDispatchSubmit).not.toHaveBeenCalled();
-
-    await expect(
-      sendMessage(
-        context,
-        'run remote checks',
-        'dispatch-session',
-        undefined,
-        undefined,
-        undefined,
-        { dispatchAutoConfirmed: true },
-      ),
     ).resolves.toBeUndefined();
     expect(mockDispatchSubmit).toHaveBeenCalledTimes(1);
   });
