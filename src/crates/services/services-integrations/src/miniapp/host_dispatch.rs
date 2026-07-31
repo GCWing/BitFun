@@ -704,7 +704,6 @@ fn is_private_ipv4(address: Ipv4Addr) -> bool {
         || a == 0
         || (a == 100 && (64..=127).contains(&b))
         || (a == 192 && b == 0)
-        || (a == 198 && (b == 18 || b == 19))
         || a >= 240
 }
 
@@ -767,6 +766,18 @@ mod tests {
         assert!(!is_private_network_address("1.1.1.1".parse().unwrap()));
         assert!(!is_private_network_address(
             "2606:4700:4700::1111".parse().unwrap()
+        ));
+    }
+
+    #[test]
+    fn ssrf_filter_allows_tun_proxy_fake_ip_range() {
+        // TUN proxies commonly synthesize DNS records from RFC 2544's
+        // benchmarking block. The request still has to pass the MiniApp domain
+        // allowlist and remains pinned to the resolved address with the
+        // original hostname used for TLS.
+        assert!(!is_private_network_address("198.18.0.108".parse().unwrap()));
+        assert!(!is_private_network_address(
+            "198.19.255.254".parse().unwrap()
         ));
     }
 
