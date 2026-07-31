@@ -20,6 +20,7 @@ function registerJob(state: 'running' | 'succeeded' = 'running'): void {
       workspacePath: '/repo',
       displayName: 'build-host',
     },
+    sourceWorkspacePath: '/source',
     title: 'Dispatch test',
     agentType: 'agentic',
     approvalPolicy: 'reject-and-report',
@@ -79,6 +80,7 @@ describe('dispatchJobStore', () => {
         workspacePath: '/repo',
         displayName: 'build-host',
       },
+      sourceWorkspacePath: '/source',
       workspacePath: '/repo',
       promptPreview: 'Dispatch test',
       lastCursor: 9,
@@ -104,6 +106,7 @@ describe('dispatchJobStore', () => {
         workspacePath: '/canonical/repo',
         displayName: 'build-host',
       },
+      sourceWorkspacePath: '/source',
       workspacePath: '/canonical/repo',
       promptPreview: 'Dispatch test',
       lastCursor: 900,
@@ -155,7 +158,7 @@ describe('dispatchJobStore', () => {
     });
   });
 
-  it('backfills a legacy outbound job after the source workspace initializes', () => {
+  it('drops a legacy outbound job instead of guessing its source workspace', () => {
     const record = {
       jobId: 'job-restored',
       sessionId: 'session-restored',
@@ -173,18 +176,37 @@ describe('dispatchJobStore', () => {
       updatedAt: '2026-07-28T00:00:01Z',
     };
 
-    dispatchJobStore.getState().mergeOutboundRecords([record]);
-    expect(
-      dispatchJobStore.getState().jobs['job-restored'].sourceWorkspacePath
-    ).toBeUndefined();
+    // Simulate a cache polluted by the old current-workspace fallback.
+    dispatchJobStore.getState().registerJob({
+      jobId: 'job-restored',
+      sessionId: 'session-restored',
+      targetRequest: {
+        kind: 'ssh',
+        connectionId: 'ssh-1',
+        workspacePath: '/target/repo',
+      },
+      target: record.target,
+      sourceWorkspacePath: '/wrong/current/workspace',
+      title: 'Prompt preview',
+      agentType: 'agentic',
+      approvalPolicy: 'reject-and-report',
+      workspaceDelivery: { kind: 'existing' },
+      cursor: 0,
+      state: 'running',
+      appliedEventIds: [],
+      pendingPermissions: [],
+      eventLogComplete: true,
+      historyTruncated: false,
+      omittedEventCount: 0,
+      createdAt: 1,
+      updatedAt: 1,
+    });
 
-    dispatchJobStore.getState().mergeOutboundRecords(
-      [record],
-      '/projects/BitFun',
-    );
+    dispatchJobStore.getState().mergeOutboundRecords([record]);
+    expect(dispatchJobStore.getState().jobs['job-restored']).toBeUndefined();
     expect(
-      dispatchJobStore.getState().jobs['job-restored'].sourceWorkspacePath
-    ).toBe('/projects/BitFun');
+      dispatchJobStore.getState().transportByJobId['job-restored'],
+    ).toBeUndefined();
   });
 
   it('persists a dismissal tombstone so reconciliation cannot reopen the projection', () => {

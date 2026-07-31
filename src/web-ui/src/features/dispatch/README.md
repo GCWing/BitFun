@@ -59,10 +59,10 @@ dispatch.
 20. The controller projects the initial user turn before waiting for target
     startup. The target's `DialogTurnStarted` event adopts that pending turn in
     place so queued work is visible without duplicating the message.
-21. Every outbound observer record carries its controller-side source workspace
-    identity. Legacy records wait for a concrete workspace fallback before
-    creating a projection; a workspace-less projection must never match every
-    navigation group.
+21. Every projected outbound observer record carries its durable
+    controller-side source workspace identity. Legacy or adopted records
+    without that identity remain hidden; the renderer must never guess
+    ownership from whichever workspace initializes after restart.
 22. CLI compatibility is capability-based, not semver-only. A target must
     advertise safe CLI-profile selection for detached workers; development
     source updates use the clean controller commit only after the existing

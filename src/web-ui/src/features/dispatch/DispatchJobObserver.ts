@@ -160,10 +160,7 @@ export function dispatchEventId(event: DispatchEvent): string {
 }
 
 function ensureProjection(context: FlowChatContext, job: DispatchObserverJob): boolean {
-  const sourceWorkspacePath =
-    job.sourceWorkspacePath?.trim()
-    || context.currentWorkspacePath?.trim()
-    || undefined;
+  const sourceWorkspacePath = job.sourceWorkspacePath?.trim() || undefined;
   const existing = context.flowChatStore.getState().sessions.get(job.sessionId);
   if (existing) {
     // Reconcile both immutable target identity and controller-side ownership.
@@ -529,10 +526,7 @@ export function installDispatchJobObserver(context: FlowChatContext): () => void
     inFlight = true;
     try {
       const records = await dispatchApi.listJobs();
-      dispatchJobStore.getState().mergeOutboundRecords(
-        records,
-        context.currentWorkspacePath || undefined,
-      );
+      dispatchJobStore.getState().mergeOutboundRecords(records);
       const jobs = Object.values(dispatchJobStore.getState().jobs)
         .filter(job => !requestedJobId || job.jobId === requestedJobId);
       for (const job of jobs) {

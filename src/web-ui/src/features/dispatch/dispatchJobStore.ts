@@ -70,10 +70,7 @@ interface DispatchJobStoreState {
   /** Local projection tombstones. The target job remains durable, but must not reopen in navigation. */
   dismissedJobIds: string[];
   registerJob: (job: DispatchObserverJob) => void;
-  mergeOutboundRecords: (
-    records: OutboundDispatchRecord[],
-    fallbackSourceWorkspacePath?: string,
-  ) => void;
+  mergeOutboundRecords: (records: OutboundDispatchRecord[]) => void;
   updateProgress: (
     jobId: string,
     update: {
@@ -163,11 +160,23 @@ export const useDispatchJobStore = create<DispatchJobStoreState>()(
         });
       },
 
-      mergeOutboundRecords: (records, fallbackSourceWorkspacePath) => {
+      mergeOutboundRecords: (records) => {
         set(state => {
           const jobs = { ...state.jobs };
+          const unownedJobIds = new Set<string>();
           for (const record of records) {
             if (state.dismissedJobIds.includes(record.jobId)) {
+              continue;
+            }
+            const sourceWorkspacePath = record.sourceWorkspacePath?.trim() || undefined;
+            if (!sourceWorkspacePath) {
+              // A legacy/adopted record without controller-side ownership
+              // cannot safely be projected into any workspace. In particular,
+              // never assign it to whichever workspace happened to initialize
+              // first after restart. Remove any previously inferred cache
+              // entry so the old behavior migrates itself away.
+              delete jobs[record.jobId];
+              unownedJobIds.add(record.jobId);
               continue;
             }
             const existing = jobs[record.jobId];
@@ -178,13 +187,9 @@ export const useDispatchJobStore = create<DispatchJobStoreState>()(
                 ...existing,
                 target: record.target,
                 targetRequest: requestFromTarget(record.target),
-                // The durable outbound record is authoritative when it knows
-                // the source. Legacy records are backfilled once FlowChat has
-                // initialized a concrete controller workspace.
-                sourceWorkspacePath:
-                  record.sourceWorkspacePath
-                  || existing.sourceWorkspacePath
-                  || fallbackSourceWorkspacePath,
+                // The durable outbound record is the only authority allowed
+                // to restore a projection after renderer restart.
+                sourceWorkspacePath,
                 sourceWorkspaceId:
                   record.sourceWorkspaceId || existing.sourceWorkspaceId,
                 title: record.title || existing.title,
@@ -206,8 +211,7 @@ export const useDispatchJobStore = create<DispatchJobStoreState>()(
               sessionId: record.sessionId,
               targetRequest: requestFromTarget(record.target),
               target: record.target,
-              sourceWorkspacePath:
-                record.sourceWorkspacePath || fallbackSourceWorkspacePath,
+              sourceWorkspacePath,
               sourceWorkspaceId: record.sourceWorkspaceId,
               title: record.title || record.promptPreview || record.sessionId.slice(0, 8),
               agentType: record.agentType || 'agentic',
@@ -229,6 +233,9 @@ export const useDispatchJobStore = create<DispatchJobStoreState>()(
             };
           }
           const transportByJobId = { ...state.transportByJobId };
+          for (const jobId of unownedJobIds) {
+            delete transportByJobId[jobId];
+          }
           for (const jobId of Object.keys(jobs)) {
             transportByJobId[jobId] ??= { reachability: 'unknown' };
           }
