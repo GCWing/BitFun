@@ -9,6 +9,7 @@ use crate::agentic::core::{
 };
 use crate::agentic::memories::db::{MemoryDatabase, MEMORY_PHASE2_GLOBAL_JOB_KEY};
 use crate::agentic::memories::external_context::dialog_turn_uses_external_context;
+use crate::agentic::session::revert::{SessionRevertState, SESSION_REVERT_SCHEMA_VERSION};
 use crate::agentic::session::transcript_render::{
     render_transcript, rendered_turn_char_count, transcript_fingerprint,
 };
@@ -469,6 +470,12 @@ impl PersistenceManager {
         self.session_layout(workspace_path)
             .session_dir(session_id)
             .join("token-anchors.json")
+    }
+
+    fn session_revert_path(&self, workspace_path: &Path, session_id: &str) -> PathBuf {
+        self.session_layout(workspace_path)
+            .session_dir(session_id)
+            .join("session-revert.json")
     }
 
     fn turns_dir(&self, workspace_path: &Path, session_id: &str) -> PathBuf {
@@ -1441,6 +1448,59 @@ impl PersistenceManager {
         }
     }
 
+    pub(crate) async fn load_session_revert_state(
+        &self,
+        workspace_path: &Path,
+        session_id: &str,
+    ) -> BitFunResult<Option<SessionRevertState>> {
+        Self::validate_session_id(session_id)?;
+        let state = self
+            .read_json_optional::<SessionRevertState>(
+                &self.session_revert_path(workspace_path, session_id),
+            )
+            .await?;
+        if let Some(state) = state.as_ref() {
+            if state.schema_version != SESSION_REVERT_SCHEMA_VERSION {
+                return Err(BitFunError::Deserialization(format!(
+                    "Unsupported Session revert schema version: session_id={}, version={}",
+                    session_id, state.schema_version
+                )));
+            }
+        }
+        Ok(state)
+    }
+
+    pub(crate) async fn save_session_revert_state(
+        &self,
+        workspace_path: &Path,
+        session_id: &str,
+        state: &SessionRevertState,
+    ) -> BitFunResult<()> {
+        Self::validate_session_id(session_id)?;
+        let _session_write = self.lock_session_write_operation(workspace_path, session_id)?;
+        self.ensure_runtime_for_write(workspace_path).await?;
+        self.ensure_session_dir(workspace_path, session_id).await?;
+        self.write_json_atomic(&self.session_revert_path(workspace_path, session_id), state)
+            .await
+    }
+
+    pub(crate) async fn delete_session_revert_state(
+        &self,
+        workspace_path: &Path,
+        session_id: &str,
+    ) -> BitFunResult<()> {
+        Self::validate_session_id(session_id)?;
+        let _session_write = self.lock_session_write_operation(workspace_path, session_id)?;
+        match fs::remove_file(self.session_revert_path(workspace_path, session_id)).await {
+            Ok(()) => Ok(()),
+            Err(error) if error.kind() == ErrorKind::NotFound => Ok(()),
+            Err(error) => Err(BitFunError::io(format!(
+                "Failed to delete staged Session revert for {}: {}",
+                session_id, error
+            ))),
+        }
+    }
+
     pub async fn load_token_anchors(
         &self,
         workspace_path: &Path,
@@ -1545,6 +1605,16 @@ impl PersistenceManager {
         workspace_path: &Path,
         session_id: &str,
     ) -> BitFunResult<Option<(usize, Vec<Message>)>> {
+        self.load_latest_turn_context_snapshot_before(workspace_path, session_id, usize::MAX)
+            .await
+    }
+
+    pub(crate) async fn load_latest_turn_context_snapshot_before(
+        &self,
+        workspace_path: &Path,
+        session_id: &str,
+        exclusive_turn_index: usize,
+    ) -> BitFunResult<Option<(usize, Vec<Message>)>> {
         Self::validate_session_id(session_id)?;
         let started_at = Instant::now();
         let dir = self.snapshots_dir(workspace_path, session_id);
@@ -1576,7 +1646,9 @@ impl PersistenceManager {
             };
             if let Ok(index) = index_str.parse::<usize>() {
                 snapshot_file_count += 1;
-                latest = Some(latest.map(|value| value.max(index)).unwrap_or(index));
+                if index < exclusive_turn_index {
+                    latest = Some(latest.map(|value| value.max(index)).unwrap_or(index));
+                }
             }
         }
         let scan_duration = scan_started_at.elapsed();
@@ -2355,6 +2427,25 @@ impl PersistenceManager {
             && self
                 .turn_path(workspace_path, &turn.session_id, turn.turn_index)
                 .exists();
+        if let Some(revert) = self
+            .read_json_optional::<SessionRevertState>(
+                &self.session_revert_path(workspace_path, &turn.session_id),
+            )
+            .await?
+        {
+            if revert.schema_version != SESSION_REVERT_SCHEMA_VERSION {
+                return Err(BitFunError::Deserialization(format!(
+                    "Unsupported Session revert schema version: session_id={}, version={}",
+                    turn.session_id, revert.schema_version
+                )));
+            }
+            if turn.turn_index >= revert.boundary_turn {
+                return Err(BitFunError::Validation(format!(
+                    "Cannot persist a Turn over the staged Session suffix: session_id={}, turn_index={}, boundary_turn={}",
+                    turn.session_id, turn.turn_index, revert.boundary_turn
+                )));
+            }
+        }
 
         let file = StoredDialogTurnFile {
             schema_version: SESSION_STORAGE_SCHEMA_VERSION,
@@ -2561,6 +2652,32 @@ impl PersistenceManager {
         Ok(turns)
     }
 
+    /// Load the product-visible Session history while retaining the current
+    /// process's persisted writer lease across the marker and Turn reads.
+    ///
+    /// Runtime owners that reconcile, redo, or permanently discard a staged
+    /// suffix must use [`Self::load_session_turns`] instead. Passive product
+    /// consumers must enter through Core's per-Session mutation owner before
+    /// using this projection; the persistence lease supplies cross-process,
+    /// not in-process, ordering.
+    pub async fn load_visible_session_turns(
+        &self,
+        workspace_path: &Path,
+        session_id: &str,
+    ) -> BitFunResult<Vec<DialogTurnData>> {
+        Self::validate_session_id(session_id)?;
+        let _session_write = self.lock_session_write_operation(workspace_path, session_id)?;
+        let boundary_turn = self
+            .load_session_revert_state(workspace_path, session_id)
+            .await?
+            .map(|state| state.boundary_turn);
+        let mut turns = self.load_session_turns(workspace_path, session_id).await?;
+        if let Some(boundary_turn) = boundary_turn {
+            turns.retain(|turn| turn.turn_index < boundary_turn);
+        }
+        Ok(turns)
+    }
+
     pub async fn load_session_tail_turns(
         &self,
         workspace_path: &Path,
@@ -2709,7 +2826,9 @@ impl PersistenceManager {
         count: usize,
     ) -> BitFunResult<Vec<DialogTurnData>> {
         Self::validate_session_id(session_id)?;
-        let turns = self.load_session_turns(workspace_path, session_id).await?;
+        let turns = self
+            .load_visible_session_turns(workspace_path, session_id)
+            .await?;
         let start = turns.len().saturating_sub(count);
         Ok(turns[start..].to_vec())
     }
@@ -3024,7 +3143,14 @@ impl PersistenceManager {
             }),
         };
 
-        let all_turns = self.load_session_turns(workspace_path, session_id).await?;
+        let revert_boundary = self
+            .load_session_revert_state(workspace_path, session_id)
+            .await?
+            .map(|state| state.boundary_turn);
+        let mut all_turns = self.load_session_turns(workspace_path, session_id).await?;
+        if let Some(boundary_turn) = revert_boundary {
+            all_turns.retain(|turn| turn.turn_index < boundary_turn);
+        }
         let selected_indices = parsed_turn_selectors
             .as_ref()
             .map(|selectors| Self::transcript_select_turn_indices(all_turns.len(), selectors))
@@ -3132,7 +3258,7 @@ impl PersistenceManager {
             turns: None,
         };
         let all_turns = self
-            .load_session_turns(reference_workspace_path, reference_session_id)
+            .load_visible_session_turns(reference_workspace_path, reference_session_id)
             .await?;
 
         // Pick complete turns backwards from the newest one. The first turn
@@ -3300,6 +3426,9 @@ mod tests {
     };
     use crate::agentic::core::{Message, Session, SessionConfig, SessionKind, ToolResult};
     use crate::agentic::memories::db::{MemoryDatabase, MemoryRow, MEMORY_PHASE2_GLOBAL_JOB_KEY};
+    use crate::agentic::session::revert::{
+        SessionRevertPhase, SessionRevertState, SESSION_REVERT_SCHEMA_VERSION,
+    };
     use crate::agentic::session::{TokenAnchor, TokenAnchorInput};
     use crate::agentic::skill_agent_snapshot::{
         AgentSnapshotEntry, SkillSnapshotEntry, TurnSkillAgentSnapshot,
@@ -3343,6 +3472,121 @@ mod tests {
         fn drop(&mut self) {
             let _ = std::fs::remove_dir_all(&self.path);
         }
+    }
+
+    #[tokio::test]
+    async fn staged_session_revert_state_round_trips_and_clears_independently() {
+        let workspace = TestWorkspace::new();
+        let manager =
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager");
+        let state = SessionRevertState {
+            schema_version: SESSION_REVERT_SCHEMA_VERSION,
+            boundary_turn: 2,
+            original_turn_end: 5,
+            phase: SessionRevertPhase::Staged,
+            workspace_checkpoint: Vec::new(),
+        };
+
+        manager
+            .save_session_revert_state(workspace.path(), "session-1", &state)
+            .await
+            .expect("staged revert should persist");
+        assert_eq!(
+            manager
+                .load_session_revert_state(workspace.path(), "session-1")
+                .await
+                .expect("staged revert should load"),
+            Some(state)
+        );
+
+        manager
+            .delete_session_revert_state(workspace.path(), "session-1")
+            .await
+            .expect("staged revert should clear");
+        assert!(manager
+            .load_session_revert_state(workspace.path(), "session-1")
+            .await
+            .expect("cleared staged revert should stay absent")
+            .is_none());
+    }
+
+    #[tokio::test]
+    async fn staged_revert_rejects_overwriting_a_hidden_turn_index() {
+        let workspace = TestWorkspace::new();
+        let manager =
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager");
+        let session_id = "session-hidden-suffix";
+        manager
+            .save_session_metadata(
+                workspace.path(),
+                &SessionMetadata::new(
+                    session_id.to_string(),
+                    "Hidden suffix".to_string(),
+                    "agentic".to_string(),
+                    "model-a".to_string(),
+                ),
+            )
+            .await
+            .expect("session metadata should persist");
+
+        for index in 0..=1 {
+            let turn = DialogTurnData::new(
+                format!("turn-{index}"),
+                index,
+                session_id.to_string(),
+                UserMessageData {
+                    id: format!("user-{index}"),
+                    content: format!("prompt {index}"),
+                    timestamp: index as u64,
+                    metadata: None,
+                },
+            );
+            manager
+                .save_dialog_turn(workspace.path(), &turn)
+                .await
+                .expect("fixture turn should persist");
+        }
+        manager
+            .save_session_revert_state(
+                workspace.path(),
+                session_id,
+                &SessionRevertState {
+                    schema_version: SESSION_REVERT_SCHEMA_VERSION,
+                    boundary_turn: 1,
+                    original_turn_end: 2,
+                    phase: SessionRevertPhase::Staged,
+                    workspace_checkpoint: Vec::new(),
+                },
+            )
+            .await
+            .expect("staged revert should persist");
+
+        let replacement = DialogTurnData::new(
+            "local-command".to_string(),
+            1,
+            session_id.to_string(),
+            UserMessageData {
+                id: "local-command-user".to_string(),
+                content: "usage report".to_string(),
+                timestamp: 3,
+                metadata: None,
+            },
+        );
+        let error = manager
+            .save_dialog_turn(workspace.path(), &replacement)
+            .await
+            .expect_err("a staged hidden turn must not be overwritten");
+        assert!(
+            error.to_string().contains("staged Session suffix"),
+            "{error}"
+        );
+
+        let preserved = manager
+            .load_dialog_turn(workspace.path(), session_id, 1)
+            .await
+            .expect("hidden turn should remain readable")
+            .expect("hidden turn should remain present");
+        assert_eq!(preserved.turn_id, "turn-1");
     }
 
     #[test]
@@ -3604,6 +3848,36 @@ mod tests {
             .save_dialog_turn(workspace.path(), &turn)
             .await
             .expect("turn should save");
+        let mut hidden_turn = DialogTurnData::new(
+            "turn-hidden".to_string(),
+            1,
+            session_id.clone(),
+            UserMessageData {
+                id: "user-hidden".to_string(),
+                content: "hidden transcript payload".to_string(),
+                timestamp: 1,
+                metadata: None,
+            },
+        );
+        hidden_turn.mark_completed();
+        manager
+            .save_dialog_turn(workspace.path(), &hidden_turn)
+            .await
+            .expect("hidden turn should save");
+        manager
+            .save_session_revert_state(
+                workspace.path(),
+                &session_id,
+                &SessionRevertState {
+                    schema_version: SESSION_REVERT_SCHEMA_VERSION,
+                    boundary_turn: 1,
+                    original_turn_end: 2,
+                    phase: SessionRevertPhase::Staged,
+                    workspace_checkpoint: Vec::new(),
+                },
+            )
+            .await
+            .expect("staged marker should save");
 
         let export = manager
             .export_session_transcript(
@@ -3621,6 +3895,24 @@ mod tests {
             .expect("transcript file should be readable");
         assert!(transcript.contains("## Turn 0"));
         assert!(transcript.contains("hello transcript"));
+        assert!(!transcript.contains("hidden transcript payload"));
+
+        let selected = manager
+            .export_session_transcript(
+                workspace.path(),
+                &session_id,
+                &SessionTranscriptExportOptions {
+                    turns: Some(vec!["-1".to_string()]),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("visible-relative transcript selection should succeed");
+        assert_eq!(selected.turn_count, 1);
+        let selected_transcript = std::fs::read_to_string(&selected.transcript_path)
+            .expect("selected transcript should be readable");
+        assert!(selected_transcript.contains("hello transcript"));
+        assert!(!selected_transcript.contains("hidden transcript payload"));
     }
 
     #[tokio::test]

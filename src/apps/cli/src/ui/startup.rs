@@ -1068,6 +1068,8 @@ impl StartupPage {
             ActionHandler::NavigateBack => self.navigate_back(),
             ActionHandler::RenameSession
             | ActionHandler::ForkSession
+            | ActionHandler::UndoSession
+            | ActionHandler::RedoSession
             | ActionHandler::Reload
             | ActionHandler::Tools
             | ActionHandler::Extensions

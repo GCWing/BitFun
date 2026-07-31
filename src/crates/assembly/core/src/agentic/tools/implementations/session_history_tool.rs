@@ -1,15 +1,12 @@
-use crate::agentic::persistence::PersistenceManager;
 use crate::agentic::tools::framework::{
     Tool, ToolExposure, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
 };
-use crate::infrastructure::PathManager;
 use crate::service::session::SessionTranscriptExportOptions;
 use crate::service_agent_runtime::CoreServiceAgentRuntime;
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
 use serde::Deserialize;
 use serde_json::{json, Value};
-use std::sync::Arc;
 
 /// SessionHistory tool - export a grep-friendly transcript file for a session.
 pub struct SessionHistoryTool;
@@ -237,9 +234,12 @@ Examples:
                     ))
                 })?;
         let display_workspace = display_workspace.to_string_lossy().into_owned();
-        let manager = PersistenceManager::new(Arc::new(PathManager::new()?))?;
-        let transcript = manager
-            .export_session_transcript(
+        let coordinator =
+            crate::agentic::coordination::get_global_coordinator().ok_or_else(|| {
+                BitFunError::service("Core coordinator is unavailable for SessionHistory export")
+            })?;
+        let transcript = coordinator
+            .export_visible_persisted_session_transcript(
                 &session_storage_dir,
                 &session_id,
                 &SessionTranscriptExportOptions {

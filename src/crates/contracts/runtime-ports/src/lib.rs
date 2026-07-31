@@ -2072,6 +2072,57 @@ pub trait AgentSessionCompactionPort: Send + Sync {
     ) -> PortResult<AgentSessionCompactionResult>;
 }
 
+/// Local Session history mutation requested by an interactive product surface.
+///
+/// This is deliberately narrower than a generic checkpoint or workspace rewind
+/// API: one Core-owned operation keeps the persisted transcript, model context,
+/// and tracked workspace files on the same staged boundary.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentSessionRevertRequest {
+    pub workspace_path: String,
+    pub session_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_connection_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_ssh_host: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum AgentSessionComposerUpdate {
+    Preserve,
+    Replace { text: String },
+    Clear,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentSessionRevertResult {
+    pub session_id: String,
+    pub transcript: SessionTranscript,
+    pub composer: AgentSessionComposerUpdate,
+    /// Active and queued Turns retired by the maintenance boundary. Consumers
+    /// use this as an event-stream fence after replacing their local projection.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub retired_turn_ids: Vec<String>,
+    pub changed: bool,
+    pub hidden_turn_count: usize,
+}
+
+#[async_trait::async_trait]
+pub trait AgentSessionRevertPort: Send + Sync {
+    async fn undo_session(
+        &self,
+        request: AgentSessionRevertRequest,
+    ) -> PortResult<AgentSessionRevertResult>;
+
+    async fn redo_session(
+        &self,
+        request: AgentSessionRevertRequest,
+    ) -> PortResult<AgentSessionRevertResult>;
+}
+
 #[async_trait::async_trait]
 pub trait AgentSessionForkPort: Send + Sync {
     async fn fork_session(
@@ -2398,6 +2449,35 @@ impl SubagentContextMode {
 mod tests {
     use super::*;
     use std::sync::Mutex;
+
+    #[test]
+    fn session_revert_contract_preserves_authoritative_transcript_and_composer_intent() {
+        let result = AgentSessionRevertResult {
+            session_id: "session-1".to_string(),
+            transcript: SessionTranscript {
+                session_id: "session-1".to_string(),
+                messages: Vec::new(),
+            },
+            composer: AgentSessionComposerUpdate::Replace {
+                text: "restore this prompt".to_string(),
+            },
+            retired_turn_ids: vec!["turn-2".to_string(), "turn-queued".to_string()],
+            changed: true,
+            hidden_turn_count: 2,
+        };
+
+        let value = serde_json::to_value(&result).expect("session revert result should serialize");
+        assert_eq!(value["sessionId"], "session-1");
+        assert_eq!(value["composer"]["kind"], "replace");
+        assert_eq!(value["composer"]["text"], "restore this prompt");
+        assert_eq!(value["hiddenTurnCount"], 2);
+        assert_eq!(value["retiredTurnIds"][1], "turn-queued");
+        assert_eq!(
+            serde_json::from_value::<AgentSessionRevertResult>(value)
+                .expect("session revert result should deserialize"),
+            result
+        );
+    }
 
     #[test]
     fn context_reload_contract_is_closed_and_target_specific() {

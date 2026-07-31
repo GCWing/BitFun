@@ -37,16 +37,19 @@ fn pending_session_operation_blocks_runtime_action(
     pending_for_current_session: bool,
     handler: ActionHandler,
 ) -> bool {
-    shared_tui
-        && pending_for_current_session
-        && matches!(
+    pending_for_current_session
+        && (matches!(
             handler,
-            ActionHandler::Sessions
-                | ActionHandler::ForkSession
-                | ActionHandler::RenameSession
-                | ActionHandler::CompactSession
-                | ActionHandler::Init
-        )
+            ActionHandler::UndoSession | ActionHandler::RedoSession
+        ) || shared_tui
+            && matches!(
+                handler,
+                ActionHandler::Sessions
+                    | ActionHandler::ForkSession
+                    | ActionHandler::RenameSession
+                    | ActionHandler::CompactSession
+                    | ActionHandler::Init
+            ))
 }
 
 fn requested_session_name(arguments: &str) -> Option<String> {
@@ -94,6 +97,8 @@ fn builtin_arguments_error(
     match handler {
         ActionHandler::CompactSession => Some("Usage: /compact"),
         ActionHandler::ForkSession => Some("Usage: /fork"),
+        ActionHandler::UndoSession => Some("Usage: /undo"),
+        ActionHandler::RedoSession => Some("Usage: /redo"),
         _ => None,
     }
 }
@@ -151,9 +156,13 @@ fn session_command_help_note() -> String {
         .expect("current session rename action must remain registered");
     let fork = action_for_alias("/fork", ActionContext::Chat)
         .expect("current session fork action must remain registered");
+    let undo = action_for_alias("/undo", ActionContext::Chat)
+        .expect("current session undo action must remain registered");
+    let redo = action_for_alias("/redo", ActionContext::Chat)
+        .expect("current session redo action must remain registered");
     format!(
-        "Session Commands\n  {}\n  {}",
-        fork.description, rename.description
+        "Session Commands\n  /fork - {}\n  /rename <name> - {}\n  /undo - {}\n  /redo - {}",
+        fork.description, rename.description, undo.description, redo.description
     )
 }
 
@@ -917,6 +926,12 @@ impl ChatMode {
             ActionHandler::ForkSession => {
                 self.show_fork_selector(chat_view, chat_state);
             }
+            ActionHandler::UndoSession => {
+                self.revert_session(true, chat_view, chat_state, rt_handle);
+            }
+            ActionHandler::RedoSession => {
+                self.revert_session(false, chat_view, chat_state, rt_handle);
+            }
             ActionHandler::RenameSession => {
                 return self.start_session_rename("", chat_view, chat_state, rt_handle);
             }
@@ -1068,6 +1083,63 @@ impl ChatMode {
         if let Err(error) = result {
             chat_view.set_status(Some(format!("Could not compact context: {error}")));
         }
+    }
+
+    fn revert_session(
+        &mut self,
+        undo: bool,
+        chat_view: &mut ChatView,
+        chat_state: &mut ChatState,
+        rt_handle: &tokio::runtime::Handle,
+    ) {
+        let operation = if undo { "Undo" } else { "Redo" };
+        chat_view.set_status(Some(format!("{operation}ing session...")));
+        let agent = self.agent.clone();
+        let result = tokio::task::block_in_place(|| {
+            rt_handle.block_on(async move { agent.revert_current_session(undo).await })
+        });
+        let reverted = match result {
+            Ok(reverted) => reverted,
+            Err(error) => {
+                chat_view.set_status(Some(format!(
+                    "Could not {} session: {error}",
+                    operation.to_ascii_lowercase()
+                )));
+                return;
+            }
+        };
+
+        chat_state.replace_from_authoritative_transcript(
+            &reverted.transcript,
+            &reverted.retired_turn_ids,
+        );
+        match reverted.composer {
+            AgentSessionComposerUpdate::Preserve => {}
+            AgentSessionComposerUpdate::Replace { text } => chat_view.set_input(&text),
+            AgentSessionComposerUpdate::Clear => chat_view.clear_input(),
+        }
+        self.selected_native_command_once = None;
+        chat_view.clear_screen();
+        chat_view.scroll_to_bottom();
+        chat_view.set_status(Some(if reverted.changed {
+            if undo {
+                format!(
+                    "Undid the latest prompt; {} persisted turn(s) are hidden.",
+                    reverted.hidden_turn_count
+                )
+            } else if reverted.hidden_turn_count == 0 {
+                "Restored the full session history.".to_string()
+            } else {
+                format!(
+                    "Redid session history; {} persisted turn(s) remain hidden.",
+                    reverted.hidden_turn_count
+                )
+            }
+        } else if undo {
+            "Nothing to undo.".to_string()
+        } else {
+            "Nothing to redo.".to_string()
+        }));
     }
 
     fn start_session_rename(

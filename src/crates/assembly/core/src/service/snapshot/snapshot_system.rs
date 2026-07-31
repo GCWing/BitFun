@@ -330,6 +330,24 @@ impl FileSnapshotSystem {
 
     /// Creates a file snapshot.
     pub async fn create_snapshot(&mut self, file_path: &Path) -> SnapshotResult<String> {
+        self.create_snapshot_with_ownership(file_path, false).await
+    }
+
+    /// Creates a snapshot with an independent metadata handle while retaining
+    /// content-addressed blob deduplication. The caller owns this handle and may
+    /// delete it without invalidating another operation's snapshot reference.
+    pub(crate) async fn create_owned_snapshot(
+        &mut self,
+        file_path: &Path,
+    ) -> SnapshotResult<String> {
+        self.create_snapshot_with_ownership(file_path, true).await
+    }
+
+    async fn create_snapshot_with_ownership(
+        &mut self,
+        file_path: &Path,
+        independent_handle: bool,
+    ) -> SnapshotResult<String> {
         debug!("Creating snapshot: file_path={}", file_path.display());
 
         if !file_path.exists() {
@@ -356,7 +374,10 @@ impl FileSnapshotSystem {
 
         let content_hash = self.calculate_content_hash(&content);
 
-        if self.dedup_enabled && self.hash_to_path.contains_key(&content_hash) {
+        if !independent_handle
+            && self.dedup_enabled
+            && self.hash_to_path.contains_key(&content_hash)
+        {
             if let Some(snapshot_id) = self.find_snapshot_by_hash(&content_hash) {
                 debug!(
                     "Found duplicate content, reusing existing snapshot: content_hash={}",
@@ -914,6 +935,44 @@ mod tests {
             .expect("restore snapshot content");
 
         assert!(restored.is_empty());
+
+        fs::remove_dir_all(&context.runtime_root).expect("cleanup runtime root");
+    }
+
+    #[tokio::test]
+    async fn owned_snapshot_handle_does_not_delete_an_existing_deduplicated_snapshot() {
+        let context = test_runtime_context();
+        create_runtime_dirs(&context);
+        let file_path = context.runtime_root.join("workspace").join("shared.txt");
+        fs::create_dir_all(file_path.parent().expect("file has parent")).expect("create parent");
+        fs::write(&file_path, "same content").expect("write fixture");
+
+        let mut snapshot_system = FileSnapshotSystem::new(context.clone());
+        snapshot_system
+            .initialize()
+            .await
+            .expect("initialize snapshots");
+        let existing = snapshot_system
+            .create_snapshot(&file_path)
+            .await
+            .expect("create existing snapshot");
+        let owned = snapshot_system
+            .create_owned_snapshot(&file_path)
+            .await
+            .expect("create independent checkpoint handle");
+
+        assert_ne!(existing, owned);
+        snapshot_system
+            .delete_snapshot(&owned)
+            .await
+            .expect("delete owned handle");
+        assert_eq!(
+            snapshot_system
+                .get_snapshot_content(&existing)
+                .await
+                .expect("existing snapshot must survive"),
+            "same content"
+        );
 
         fs::remove_dir_all(&context.runtime_root).expect("cleanup runtime root");
     }

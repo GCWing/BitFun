@@ -75,6 +75,8 @@ pub(crate) enum ActionHandler {
     NewSession,
     Sessions,
     ForkSession,
+    UndoSession,
+    RedoSession,
     RenameSession,
     Skills,
     Reload,
@@ -128,6 +130,8 @@ impl ActionHandler {
                     | Self::NewSession
                     | Self::Sessions
                     | Self::ForkSession
+                    | Self::UndoSession
+                    | Self::RedoSession
                     | Self::RenameSession
                     | Self::AcpHelp
                     | Self::Init
@@ -388,6 +392,36 @@ static ACTION_SPECS: &[ActionSpec] = &[
         fallback_bindings: &[],
         shortcut_field: None,
         palette: palette("Session", false),
+        shortcut_label: None,
+        slash_on_startup: false,
+    },
+    ActionSpec {
+        id: "undo_session",
+        name: "Undo session",
+        aliases: &["/undo"],
+        description: "Undo the latest user prompt and restore it to the composer",
+        contexts: CHAT,
+        availability: ActionAvailability::Always,
+        handler: ActionHandler::UndoSession,
+        default_bindings: &[],
+        fallback_bindings: &[],
+        shortcut_field: None,
+        palette: None,
+        shortcut_label: None,
+        slash_on_startup: false,
+    },
+    ActionSpec {
+        id: "redo_session",
+        name: "Redo session",
+        aliases: &["/redo"],
+        description: "Redo the most recently undone session history",
+        contexts: CHAT,
+        availability: ActionAvailability::Always,
+        handler: ActionHandler::RedoSession,
+        default_bindings: &[],
+        fallback_bindings: &[],
+        shortcut_field: None,
+        palette: None,
         shortcut_label: None,
         slash_on_startup: false,
     },
@@ -1908,6 +1942,35 @@ mod tests {
         assert!(!action.available(ActionState::chat(true, false)));
         assert!(action_by_id("fork_session", ActionContext::Startup).is_none());
         assert!(action_for_alias("/branch", ActionContext::Chat).is_none());
+    }
+
+    #[test]
+    fn undo_and_redo_use_only_the_opencode_commands_in_both_deployments() {
+        let undo = action_by_id("undo_session", ActionContext::Chat)
+            .expect("OpenCode-compatible session undo action");
+        let redo = action_by_id("redo_session", ActionContext::Chat)
+            .expect("OpenCode-compatible session redo action");
+
+        assert_eq!(undo.aliases, &["/undo"]);
+        assert_eq!(undo.handler, ActionHandler::UndoSession);
+        assert_eq!(undo.availability, ActionAvailability::Always);
+        assert!(undo.default_bindings.is_empty());
+        assert!(undo.fallback_bindings.is_empty());
+        assert!(undo.available(ActionState::chat(false, false).for_shared_tui()));
+        assert!(undo.available(ActionState::chat(true, false).for_shared_tui()));
+
+        assert_eq!(redo.aliases, &["/redo"]);
+        assert_eq!(redo.handler, ActionHandler::RedoSession);
+        assert_eq!(redo.availability, ActionAvailability::Always);
+        assert!(redo.default_bindings.is_empty());
+        assert!(redo.fallback_bindings.is_empty());
+        assert!(redo.available(ActionState::chat(false, false).for_shared_tui()));
+        assert!(redo.available(ActionState::chat(true, false).for_shared_tui()));
+
+        assert!(action_for_alias("/rewind", ActionContext::Chat).is_none());
+        assert!(action_for_alias("/revert", ActionContext::Chat).is_none());
+        assert!(action_by_id("undo_session", ActionContext::Startup).is_none());
+        assert!(action_by_id("redo_session", ActionContext::Startup).is_none());
     }
 
     #[test]

@@ -354,6 +354,18 @@ impl RuntimeIpcRequestHandler for SharedRuntimeHandler {
                     turn_id: result.turn_id,
                 })
                 .map_err(runtime_ipc_error),
+            RuntimeIpcOperation::UndoSession { request } => self
+                .runtime
+                .undo_session(request)
+                .await
+                .map(|revert| RuntimeIpcOperationResult::SessionReverted { revert })
+                .map_err(runtime_ipc_error),
+            RuntimeIpcOperation::RedoSession { request } => self
+                .runtime
+                .redo_session(request)
+                .await
+                .map(|revert| RuntimeIpcOperationResult::SessionReverted { revert })
+                .map_err(runtime_ipc_error),
             RuntimeIpcOperation::SubmitTurn { request } => {
                 let outcome = self
                     .runtime
@@ -599,6 +611,8 @@ impl SharedRuntimeHandler {
                     .as_deref()
                     .ok_or_else(workspace_mismatch_error)?,
             ),
+            RuntimeIpcOperation::UndoSession { request }
+            | RuntimeIpcOperation::RedoSession { request } => Some(request.workspace_path.as_str()),
             _ => None,
         };
         let Some(requested) = requested else {

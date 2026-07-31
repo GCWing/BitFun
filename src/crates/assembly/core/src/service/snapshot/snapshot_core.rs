@@ -1,3 +1,4 @@
+use crate::agentic::session::revert::{SessionRevertState, SessionWorkspaceCheckpoint};
 use crate::service::snapshot::snapshot_system::FileSnapshotSystem;
 use crate::service::snapshot::types::{
     DiffSummary, FileOperation, OperationType, SessionFileDiffStats, SnapshotError, SnapshotResult,
@@ -150,8 +151,21 @@ impl SnapshotCore {
         tool_input: serde_json::Value,
         operation_id_override: Option<String>,
     ) -> SnapshotResult<String> {
+        let operation_id = operation_id_override
+            .filter(|s| !s.is_empty())
+            .unwrap_or_else(|| Uuid::new_v4().to_string());
+        if self.operation_index.contains_key(&operation_id) {
+            return Err(SnapshotError::ConfigError(format!(
+                "operation_id already exists: {}",
+                operation_id
+            )));
+        }
         let before_snapshot_id = if file_path.exists() {
-            Some(self.snapshot_system.create_snapshot(&file_path).await?)
+            Some(
+                self.snapshot_system
+                    .create_owned_snapshot(&file_path)
+                    .await?,
+            )
         } else {
             None
         };
@@ -207,15 +221,6 @@ impl SnapshotCore {
             .or_insert_with(|| SessionHistory::new(session_id.to_string()));
         let turn = session.ensure_turn_mut(turn_index);
         let seq_in_turn = turn.operations.len();
-        let operation_id = operation_id_override
-            .filter(|s| !s.is_empty())
-            .unwrap_or_else(|| Uuid::new_v4().to_string());
-        if self.operation_index.contains_key(&operation_id) {
-            return Err(SnapshotError::ConfigError(format!(
-                "operation_id already exists: {}",
-                operation_id
-            )));
-        }
 
         turn.operations.push(FileOperation {
             operation_id: operation_id.clone(),
@@ -252,6 +257,15 @@ impl SnapshotCore {
         session_id: &str,
         operation_id: &str,
     ) -> SnapshotResult<FileOperation> {
+        self.get_operation_before(session_id, operation_id, None)
+    }
+
+    pub fn get_operation_before(
+        &self,
+        session_id: &str,
+        operation_id: &str,
+        max_turn_exclusive: Option<usize>,
+    ) -> SnapshotResult<FileOperation> {
         let Some((sid, turn_index, seq)) = self.operation_index.get(operation_id).cloned() else {
             return Err(SnapshotError::OperationNotFound(operation_id.to_string()));
         };
@@ -260,6 +274,9 @@ impl SnapshotCore {
                 "operation_id does not belong to current session: op={} session={} actual={}",
                 operation_id, session_id, sid
             )));
+        }
+        if max_turn_exclusive.is_some_and(|end| turn_index >= end) {
+            return Err(SnapshotError::OperationNotFound(operation_id.to_string()));
         }
         let session = self
             .sessions
@@ -311,7 +328,11 @@ impl SnapshotCore {
             op.tool_context.execution_time_ms = execution_time_ms;
 
             let after_snapshot_id = if op.file_path.exists() {
-                Some(self.snapshot_system.create_snapshot(&op.file_path).await?)
+                Some(
+                    self.snapshot_system
+                        .create_owned_snapshot(&op.file_path)
+                        .await?,
+                )
             } else {
                 None
             };
@@ -348,13 +369,38 @@ impl SnapshotCore {
     }
 
     pub fn get_session_turns(&self, session_id: &str) -> Vec<usize> {
+        self.get_session_turns_before(session_id, None)
+    }
+
+    pub fn get_session_turns_before(
+        &self,
+        session_id: &str,
+        max_turn_exclusive: Option<usize>,
+    ) -> Vec<usize> {
         let Some(session) = self.sessions.get(session_id) else {
             return Vec::new();
         };
-        session.turns.keys().cloned().collect()
+        session
+            .turns
+            .keys()
+            .copied()
+            .filter(|turn| max_turn_exclusive.is_none_or(|end| *turn < end))
+            .collect()
     }
 
     pub fn get_turn_files(&self, session_id: &str, turn_index: usize) -> Vec<PathBuf> {
+        self.get_turn_files_before(session_id, turn_index, None)
+    }
+
+    pub fn get_turn_files_before(
+        &self,
+        session_id: &str,
+        turn_index: usize,
+        max_turn_exclusive: Option<usize>,
+    ) -> Vec<PathBuf> {
+        if max_turn_exclusive.is_some_and(|end| turn_index >= end) {
+            return Vec::new();
+        }
         let Some(session) = self.sessions.get(session_id) else {
             return Vec::new();
         };
@@ -370,22 +416,43 @@ impl SnapshotCore {
     }
 
     pub fn get_session_files(&self, session_id: &str) -> Vec<PathBuf> {
+        self.get_session_files_before(session_id, None)
+    }
+
+    pub fn get_session_files_before(
+        &self,
+        session_id: &str,
+        max_turn_exclusive: Option<usize>,
+    ) -> Vec<PathBuf> {
         let Some(session) = self.sessions.get(session_id) else {
             return Vec::new();
         };
         unique_paths(
             session
                 .all_operations_iter()
+                .filter(|op| operation_is_before(op, max_turn_exclusive))
                 .filter(|op| operation_is_completed_for_session_file(op))
                 .map(|op| op.file_path.clone()),
         )
     }
 
     pub fn get_session_operations(&self, session_id: &str) -> Vec<FileOperation> {
+        self.get_session_operations_before(session_id, None)
+    }
+
+    pub fn get_session_operations_before(
+        &self,
+        session_id: &str,
+        max_turn_exclusive: Option<usize>,
+    ) -> Vec<FileOperation> {
         let Some(session) = self.sessions.get(session_id) else {
             return Vec::new();
         };
-        session.all_operations_iter().cloned().collect()
+        session
+            .all_operations_iter()
+            .filter(|op| operation_is_before(op, max_turn_exclusive))
+            .cloned()
+            .collect()
     }
 
     pub fn get_all_modified_files(&self) -> Vec<PathBuf> {
@@ -402,14 +469,24 @@ impl SnapshotCore {
     }
 
     pub fn get_session_stats(&self, session_id: &str) -> SessionStats {
+        self.get_session_stats_before(session_id, None)
+    }
+
+    pub fn get_session_stats_before(
+        &self,
+        session_id: &str,
+        max_turn_exclusive: Option<usize>,
+    ) -> SessionStats {
         let ops: Vec<FileOperation> = self
-            .get_session_operations(session_id)
+            .get_session_operations_before(session_id, max_turn_exclusive)
             .into_iter()
             .filter(operation_is_completed_for_session_file)
             .collect();
         let total_changes = ops.len();
         let total_files = unique_paths(ops.iter().map(|op| op.file_path.clone())).len();
-        let total_turns = self.get_session_turns(session_id).len();
+        let total_turns = self
+            .get_session_turns_before(session_id, max_turn_exclusive)
+            .len();
         SessionStats {
             session_id: session_id.to_string(),
             total_files,
@@ -489,11 +566,20 @@ impl SnapshotCore {
         file_path: &Path,
         session_id: &str,
     ) -> SnapshotResult<(String, String)> {
+        self.get_file_diff_before(file_path, session_id, None).await
+    }
+
+    pub async fn get_file_diff_before(
+        &self,
+        file_path: &Path,
+        session_id: &str,
+        max_turn_exclusive: Option<usize>,
+    ) -> SnapshotResult<(String, String)> {
         let Some(session) = self.sessions.get(session_id) else {
             return Err(SnapshotError::SessionNotFound(session_id.to_string()));
         };
 
-        let Some(boundary) = session_file_boundary(session, file_path) else {
+        let Some(boundary) = session_file_boundary(session, file_path, max_turn_exclusive) else {
             debug!(
                 "No completed session file operation found for diff: file_path={:?} session_id={}",
                 file_path, session_id
@@ -531,13 +617,26 @@ impl SnapshotCore {
         session_id: &str,
         anchor_operation_id: Option<&str>,
     ) -> SnapshotResult<(String, String, Option<usize>)> {
-        let (before, after) = self.get_file_diff(file_path, session_id).await?;
+        self.get_file_diff_with_anchor_before(file_path, session_id, anchor_operation_id, None)
+            .await
+    }
+
+    pub async fn get_file_diff_with_anchor_before(
+        &self,
+        file_path: &Path,
+        session_id: &str,
+        anchor_operation_id: Option<&str>,
+        max_turn_exclusive: Option<usize>,
+    ) -> SnapshotResult<(String, String, Option<usize>)> {
+        let (before, after) = self
+            .get_file_diff_before(file_path, session_id, max_turn_exclusive)
+            .await?;
 
         let Some(operation_id) = anchor_operation_id.filter(|s| !s.is_empty()) else {
             return Ok((before, after, None));
         };
 
-        let op = self.get_operation(session_id, operation_id)?;
+        let op = self.get_operation_before(session_id, operation_id, max_turn_exclusive)?;
         if op.file_path != file_path {
             return Ok((before, after, None));
         }
@@ -576,11 +675,21 @@ impl SnapshotCore {
         session_id: &str,
         file_path: &Path,
     ) -> SnapshotResult<SessionFileDiffStats> {
+        self.get_session_file_diff_stats_before(session_id, file_path, None)
+            .await
+    }
+
+    pub async fn get_session_file_diff_stats_before(
+        &self,
+        session_id: &str,
+        file_path: &Path,
+        max_turn_exclusive: Option<usize>,
+    ) -> SnapshotResult<SessionFileDiffStats> {
         let Some(session) = self.sessions.get(session_id) else {
             return Err(SnapshotError::SessionNotFound(session_id.to_string()));
         };
 
-        let Some(boundary) = session_file_boundary(session, file_path) else {
+        let Some(boundary) = session_file_boundary(session, file_path, max_turn_exclusive) else {
             return Ok(SessionFileDiffStats {
                 file_path: file_path.to_string_lossy().to_string(),
                 lines_added: 0,
@@ -604,7 +713,8 @@ impl SnapshotCore {
             || before_bytes > SESSION_FILE_DIFF_STATS_MAX_SOURCE_BYTES;
 
         if too_large {
-            let agg = aggregate_operations_diff_summary_for_file(session, file_path);
+            let agg =
+                aggregate_operations_diff_summary_for_file(session, file_path, max_turn_exclusive);
             let change_kind = change_kind_from_session_boundary(&boundary);
             debug!(
                 "get_session_file_diff_stats: approximate session_id={} file_path={:?} after_bytes={} before_bytes={} lines_added={} lines_removed={}",
@@ -624,7 +734,9 @@ impl SnapshotCore {
             });
         }
 
-        let (before, after) = self.get_file_diff(file_path, session_id).await?;
+        let (before, after) = self
+            .get_file_diff_before(file_path, session_id, max_turn_exclusive)
+            .await?;
         let summary = compute_diff_summary(&before, &after);
         let change_kind = change_kind_from_session_boundary(&boundary);
         debug!(
@@ -735,36 +847,199 @@ impl SnapshotCore {
         Ok(restored)
     }
 
-    pub async fn cleanup_session(&mut self, session_id: &str) -> SnapshotResult<()> {
-        let snapshot_ids_to_delete: Vec<String> =
-            if let Some(session) = self.sessions.get(session_id) {
-                session
-                    .all_operations_iter()
-                    .flat_map(|op| {
-                        let mut ids = Vec::new();
-                        if let Some(ref id) = op.before_snapshot_id {
-                            if !id.starts_with("empty_snapshot_") {
-                                ids.push(id.clone());
-                            }
-                        }
-                        if let Some(ref id) = op.after_snapshot_id {
-                            if !id.starts_with("empty_snapshot_") {
-                                ids.push(id.clone());
-                            }
-                        }
-                        ids
-                    })
-                    .collect()
+    /// Extends the pre-undo workspace checkpoint for every path affected at or
+    /// after the requested boundary. Repeated undo can safely discover earlier
+    /// paths because paths not already checkpointed are still at their original
+    /// pre-undo state before that earlier boundary is applied.
+    pub(crate) async fn prepare_workspace_revert(
+        &mut self,
+        session_id: &str,
+        state: &mut SessionRevertState,
+    ) -> SnapshotResult<()> {
+        let Some(session) = self.sessions.get(session_id) else {
+            return Ok(());
+        };
+        let existing = state
+            .workspace_checkpoint
+            .iter()
+            .map(|checkpoint| checkpoint.path.clone())
+            .collect::<HashSet<_>>();
+        let mut affected = session
+            .all_operations_iter()
+            .filter(|operation| operation.turn_index >= state.boundary_turn)
+            .flat_map(|operation| {
+                [
+                    operation
+                        .path_before
+                        .clone()
+                        .unwrap_or_else(|| operation.file_path.clone()),
+                    operation
+                        .path_after
+                        .clone()
+                        .unwrap_or_else(|| operation.file_path.clone()),
+                ]
+            })
+            .filter(|path| !existing.contains(path))
+            .collect::<Vec<_>>();
+        affected.sort();
+        affected.dedup();
+
+        for path in affected {
+            let snapshot_id = if path.exists() {
+                Some(self.snapshot_system.create_owned_snapshot(&path).await?)
             } else {
-                Vec::new()
+                None
             };
+            state
+                .workspace_checkpoint
+                .push(SessionWorkspaceCheckpoint { path, snapshot_id });
+        }
+        state
+            .workspace_checkpoint
+            .sort_by(|left, right| left.path.cmp(&right.path));
+        Ok(())
+    }
+
+    /// Applies a staged Session boundary without deleting operation history.
+    /// Restoring the original checkpoint first makes retries and redo idempotent.
+    pub(crate) async fn apply_workspace_revert(
+        &self,
+        session_id: &str,
+        state: &SessionRevertState,
+    ) -> SnapshotResult<Vec<PathBuf>> {
+        let mut restored = self.restore_workspace_revert(state).await?;
+        let Some(session) = self.sessions.get(session_id) else {
+            return Ok(restored);
+        };
+        let mut operations = session
+            .all_operations_iter()
+            .filter(|operation| operation.turn_index >= state.boundary_turn)
+            .cloned()
+            .collect::<Vec<_>>();
+        operations.sort_by_key(|operation| (operation.turn_index, operation.seq_in_turn));
+        operations.reverse();
+        restored.extend(
+            self.apply_rollback_ops_with_policy(&operations, true)
+                .await?,
+        );
+        Ok(unique_paths(restored.into_iter()))
+    }
+
+    pub(crate) async fn restore_workspace_revert(
+        &self,
+        state: &SessionRevertState,
+    ) -> SnapshotResult<Vec<PathBuf>> {
+        let mut restored = Vec::new();
+        for checkpoint in &state.workspace_checkpoint {
+            match checkpoint.snapshot_id.as_deref() {
+                Some(snapshot_id) => {
+                    self.snapshot_system
+                        .restore_file(snapshot_id, &checkpoint.path)
+                        .await?;
+                    restored.push(checkpoint.path.clone());
+                }
+                None if checkpoint.path.exists() => {
+                    tokio::fs::remove_file(&checkpoint.path).await?;
+                    restored.push(checkpoint.path.clone());
+                }
+                None => {}
+            }
+        }
+        Ok(unique_paths(restored.into_iter()))
+    }
+
+    pub(crate) async fn commit_workspace_revert(
+        &mut self,
+        session_id: &str,
+        state: &SessionRevertState,
+    ) -> SnapshotResult<()> {
+        let discarded_snapshot_ids = self
+            .sessions
+            .get(session_id)
+            .into_iter()
+            .flat_map(|session| {
+                session
+                    .turns
+                    .range(state.boundary_turn..)
+                    .flat_map(|(_, turn)| turn.operations.iter())
+            })
+            .flat_map(Self::operation_snapshot_ids)
+            .collect::<HashSet<_>>();
+        let retained_snapshot_ids = self
+            .sessions
+            .iter()
+            .flat_map(|(candidate_session_id, session)| {
+                session.all_operations_iter().filter(move |operation| {
+                    candidate_session_id != session_id || operation.turn_index < state.boundary_turn
+                })
+            })
+            .flat_map(Self::operation_snapshot_ids)
+            .collect::<HashSet<_>>();
+        // Release suffix-owned handles before pruning their durable history.
+        // A retry can still rediscover every handle if deletion or persistence
+        // fails part-way through this committing phase.
+        for snapshot_id in discarded_snapshot_ids.difference(&retained_snapshot_ids) {
+            match self.snapshot_system.delete_snapshot(snapshot_id).await {
+                Ok(()) | Err(SnapshotError::SnapshotNotFound(_)) => {}
+                Err(error) => return Err(error),
+            }
+        }
+        if let Some(session) = self.sessions.get_mut(session_id) {
+            session
+                .turns
+                .retain(|turn_index, _| *turn_index < state.boundary_turn);
+            session.last_updated = SystemTime::now();
+            self.persist_session(session_id).await?;
+            self.rebuild_operation_index();
+        }
+        self.delete_workspace_revert_checkpoint(state).await
+    }
+
+    pub(crate) async fn delete_workspace_revert_checkpoint(
+        &mut self,
+        state: &SessionRevertState,
+    ) -> SnapshotResult<()> {
+        let operation_snapshot_ids = self.referenced_operation_snapshot_ids();
+        for checkpoint in &state.workspace_checkpoint {
+            if let Some(snapshot_id) = checkpoint.snapshot_id.as_deref() {
+                // Markers written by older builds could borrow a deduplicated
+                // operation snapshot ID. Preserve that handle until its
+                // operation history owner releases it.
+                if operation_snapshot_ids.contains(snapshot_id) {
+                    continue;
+                }
+                match self.snapshot_system.delete_snapshot(snapshot_id).await {
+                    Ok(()) | Err(SnapshotError::SnapshotNotFound(_)) => {}
+                    Err(error) => return Err(error),
+                }
+            }
+        }
+        Ok(())
+    }
+
+    pub async fn cleanup_session(&mut self, session_id: &str) -> SnapshotResult<()> {
+        let owned_snapshot_ids = self
+            .sessions
+            .get(session_id)
+            .into_iter()
+            .flat_map(SessionHistory::all_operations_iter)
+            .flat_map(Self::operation_snapshot_ids)
+            .collect::<HashSet<_>>();
+
+        self.sessions.remove(session_id);
+        let retained_snapshot_ids = self.referenced_operation_snapshot_ids();
+        let snapshot_ids_to_delete = owned_snapshot_ids
+            .difference(&retained_snapshot_ids)
+            .cloned()
+            .collect::<Vec<_>>();
 
         for snapshot_id in &snapshot_ids_to_delete {
-            if let Err(e) = self.snapshot_system.delete_snapshot(snapshot_id).await {
-                warn!(
+            match self.snapshot_system.delete_snapshot(snapshot_id).await {
+                Ok(()) | Err(SnapshotError::SnapshotNotFound(_)) => {}
+                Err(error) => warn!(
                     "Failed to delete snapshot: snapshot_id={} error={}",
-                    snapshot_id, e
-                );
+                    snapshot_id, error
+                ),
             }
         }
 
@@ -776,13 +1051,30 @@ impl SnapshotCore {
             );
         }
 
-        self.sessions.remove(session_id);
-
         self.delete_session_file(session_id).await?;
 
         self.rebuild_operation_index();
 
         Ok(())
+    }
+
+    fn operation_snapshot_ids(operation: &FileOperation) -> impl Iterator<Item = String> + '_ {
+        [
+            operation.before_snapshot_id.as_ref(),
+            operation.after_snapshot_id.as_ref(),
+        ]
+        .into_iter()
+        .flatten()
+        .filter(|snapshot_id| !snapshot_id.starts_with("empty_snapshot_"))
+        .cloned()
+    }
+
+    fn referenced_operation_snapshot_ids(&self) -> HashSet<String> {
+        self.sessions
+            .values()
+            .flat_map(SessionHistory::all_operations_iter)
+            .flat_map(Self::operation_snapshot_ids)
+            .collect()
     }
 
     pub async fn cleanup_file_session(
@@ -834,6 +1126,14 @@ impl SnapshotCore {
     }
 
     async fn apply_rollback_ops(&self, ops: &[FileOperation]) -> SnapshotResult<Vec<PathBuf>> {
+        self.apply_rollback_ops_with_policy(ops, false).await
+    }
+
+    async fn apply_rollback_ops_with_policy(
+        &self,
+        ops: &[FileOperation],
+        fail_on_delete_error: bool,
+    ) -> SnapshotResult<Vec<PathBuf>> {
         let mut restored_files: Vec<PathBuf> = Vec::new();
 
         for op in ops {
@@ -850,6 +1150,9 @@ impl SnapshotCore {
 
             if before_path != after_path && after_path.exists() {
                 if let Err(e) = tokio::fs::remove_file(&after_path).await {
+                    if fail_on_delete_error {
+                        return Err(SnapshotError::Io(e));
+                    }
                     warn!(
                         "Failed to delete after_path: path={} error={}",
                         after_path.display(),
@@ -862,6 +1165,9 @@ impl SnapshotCore {
                 None => {
                     if after_path.exists() {
                         if let Err(e) = tokio::fs::remove_file(&after_path).await {
+                            if fail_on_delete_error {
+                                return Err(SnapshotError::Io(e));
+                            }
                             warn!(
                                 "Failed to delete file: path={} error={}",
                                 after_path.display(),
@@ -874,7 +1180,11 @@ impl SnapshotCore {
                 }
                 Some(snapshot_id) if snapshot_id.starts_with("empty_snapshot_") => {
                     if after_path.exists() {
-                        let _ = tokio::fs::remove_file(&after_path).await;
+                        if let Err(error) = tokio::fs::remove_file(&after_path).await {
+                            if fail_on_delete_error {
+                                return Err(SnapshotError::Io(error));
+                            }
+                        }
                         restored_files.push(after_path.clone());
                     }
                 }
@@ -1014,12 +1324,18 @@ fn operation_is_completed_for_session_file(op: &FileOperation) -> bool {
         || op.diff_summary.lines_modified > 0
 }
 
+fn operation_is_before(op: &FileOperation, max_turn_exclusive: Option<usize>) -> bool {
+    max_turn_exclusive.is_none_or(|end| op.turn_index < end)
+}
+
 fn completed_session_operations_for_file<'a>(
     session: &'a SessionHistory,
     file_path: &Path,
+    max_turn_exclusive: Option<usize>,
 ) -> Vec<&'a FileOperation> {
     let mut operations: Vec<&FileOperation> = session
         .all_operations_iter()
+        .filter(|op| operation_is_before(op, max_turn_exclusive))
         .filter(|op| SnapshotCore::operation_matches_file_path(op, file_path))
         .filter(|op| operation_is_completed_for_session_file(op))
         .collect();
@@ -1031,8 +1347,9 @@ fn completed_session_operations_for_file<'a>(
 fn session_file_boundary(
     session: &SessionHistory,
     file_path: &Path,
+    max_turn_exclusive: Option<usize>,
 ) -> Option<SessionFileBoundary> {
-    let operations = completed_session_operations_for_file(session, file_path);
+    let operations = completed_session_operations_for_file(session, file_path, max_turn_exclusive);
     let first = operations.first()?;
     let last = operations.last()?;
 
@@ -1048,10 +1365,12 @@ fn session_file_boundary(
 fn aggregate_operations_diff_summary_for_file(
     session: &SessionHistory,
     file_path: &Path,
+    max_turn_exclusive: Option<usize>,
 ) -> DiffSummary {
     let mut out = DiffSummary::default();
     for op in session.all_operations_iter() {
-        if SnapshotCore::operation_matches_file_path(op, file_path)
+        if operation_is_before(op, max_turn_exclusive)
+            && SnapshotCore::operation_matches_file_path(op, file_path)
             && operation_is_completed_for_session_file(op)
         {
             out.lines_added += op.diff_summary.lines_added;
@@ -1178,6 +1497,9 @@ fn find_anchor_in_current(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::agentic::session::revert::{
+        SessionRevertPhase, SessionRevertState, SESSION_REVERT_SCHEMA_VERSION,
+    };
     use crate::service::snapshot::snapshot_system::FileSnapshotSystem;
     use crate::service::workspace_runtime::{WorkspaceRuntimeContext, WorkspaceRuntimeTarget};
     use serde_json::json;
@@ -1275,6 +1597,121 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn bounded_session_view_hides_suffix_operations_from_every_projection() {
+        let mut runtime = make_test_runtime("bounded_session_view").await;
+        let file_path = runtime.workspace.join("src/lib.rs");
+        let hidden_only_path = runtime.workspace.join("src/hidden.rs");
+        fs::create_dir_all(file_path.parent().unwrap()).unwrap();
+        tokio::fs::write(&file_path, "base\n").await.unwrap();
+
+        let visible_operation = runtime
+            .core
+            .start_file_operation(
+                "session-1",
+                0,
+                file_path.clone(),
+                OperationType::Modify,
+                "Edit".to_string(),
+                json!({}),
+                None,
+            )
+            .await
+            .unwrap();
+        tokio::fs::write(&file_path, "visible\n").await.unwrap();
+        runtime
+            .core
+            .complete_file_operation("session-1", &visible_operation, 1)
+            .await
+            .unwrap();
+
+        let hidden_operation = runtime
+            .core
+            .start_file_operation(
+                "session-1",
+                1,
+                file_path.clone(),
+                OperationType::Modify,
+                "Edit".to_string(),
+                json!({}),
+                None,
+            )
+            .await
+            .unwrap();
+        tokio::fs::write(&file_path, "hidden\n").await.unwrap();
+        runtime
+            .core
+            .complete_file_operation("session-1", &hidden_operation, 1)
+            .await
+            .unwrap();
+
+        let hidden_only_operation = runtime
+            .core
+            .start_file_operation(
+                "session-1",
+                1,
+                hidden_only_path.clone(),
+                OperationType::Create,
+                "Write".to_string(),
+                json!({}),
+                None,
+            )
+            .await
+            .unwrap();
+        tokio::fs::write(&hidden_only_path, "hidden only\n")
+            .await
+            .unwrap();
+        runtime
+            .core
+            .complete_file_operation("session-1", &hidden_only_operation, 1)
+            .await
+            .unwrap();
+
+        assert_eq!(
+            runtime.core.get_session_turns_before("session-1", Some(1)),
+            vec![0]
+        );
+        assert!(runtime
+            .core
+            .get_turn_files_before("session-1", 1, Some(1))
+            .is_empty());
+        assert_eq!(
+            runtime.core.get_session_files_before("session-1", Some(1)),
+            vec![file_path.clone()]
+        );
+        assert_eq!(
+            runtime
+                .core
+                .get_session_operations_before("session-1", Some(1))
+                .len(),
+            1
+        );
+        let stats = runtime.core.get_session_stats_before("session-1", Some(1));
+        assert_eq!(
+            (stats.total_turns, stats.total_files, stats.total_changes),
+            (1, 1, 1)
+        );
+
+        let (before, after) = runtime
+            .core
+            .get_file_diff_before(&file_path, "session-1", Some(1))
+            .await
+            .unwrap();
+        assert_eq!((before.as_str(), after.as_str()), ("base\n", "visible\n"));
+        assert!(matches!(
+            runtime
+                .core
+                .get_file_diff_with_anchor_before(
+                    &file_path,
+                    "session-1",
+                    Some(&hidden_operation),
+                    Some(1),
+                )
+                .await,
+            Err(SnapshotError::OperationNotFound(_))
+        ));
+    }
+
+    #[tokio::test]
     async fn session_files_ignore_unfinished_operations() {
         let mut runtime = make_test_runtime("unfinished_ops").await;
         let file_path = runtime.workspace.join("src/lib.rs");
@@ -1307,5 +1744,177 @@ mod tests {
             .unwrap();
         assert_eq!(stats.lines_added, 0);
         assert_eq!(stats.lines_removed, 0);
+    }
+
+    #[tokio::test]
+    async fn legacy_checkpoint_cleanup_preserves_an_operation_owned_snapshot() {
+        let mut runtime = make_test_runtime("legacy_checkpoint_owner").await;
+        let file_path = runtime.workspace.join("src/lib.rs");
+        fs::create_dir_all(file_path.parent().unwrap()).unwrap();
+        tokio::fs::write(&file_path, "base\n").await.unwrap();
+        let operation_id = runtime
+            .core
+            .start_file_operation(
+                "session-1",
+                0,
+                file_path.clone(),
+                OperationType::Modify,
+                "Edit".to_string(),
+                json!({ "file_path": "src/lib.rs" }),
+                None,
+            )
+            .await
+            .unwrap();
+        let snapshot_id = runtime
+            .core
+            .get_operation("session-1", &operation_id)
+            .unwrap()
+            .before_snapshot_id
+            .expect("before snapshot");
+        let legacy_state = SessionRevertState {
+            schema_version: SESSION_REVERT_SCHEMA_VERSION,
+            boundary_turn: 0,
+            original_turn_end: 1,
+            phase: SessionRevertPhase::Staged,
+            workspace_checkpoint: vec![SessionWorkspaceCheckpoint {
+                path: file_path,
+                snapshot_id: Some(snapshot_id.clone()),
+            }],
+        };
+
+        runtime
+            .core
+            .delete_workspace_revert_checkpoint(&legacy_state)
+            .await
+            .expect("legacy checkpoint cleanup");
+
+        assert_eq!(
+            runtime
+                .core
+                .snapshot_system
+                .get_snapshot_content(&snapshot_id)
+                .await
+                .expect("operation snapshot must survive"),
+            "base\n"
+        );
+    }
+
+    #[tokio::test]
+    async fn staged_workspace_revert_moves_between_boundaries_and_restores_original_state() {
+        let mut runtime = make_test_runtime("staged_revert").await;
+        let file_path = runtime.workspace.join("src/lib.rs");
+        fs::create_dir_all(file_path.parent().unwrap()).unwrap();
+        tokio::fs::write(&file_path, "base\n").await.unwrap();
+
+        // A -> B -> A exercises content deduplication: the Session checkpoint
+        // must not borrow and later delete the first operation's A snapshot.
+        for (turn_index, next) in [(0, "first\n"), (2, "base\n")] {
+            let operation_id = runtime
+                .core
+                .start_file_operation(
+                    "session-1",
+                    turn_index,
+                    file_path.clone(),
+                    OperationType::Modify,
+                    "Edit".to_string(),
+                    json!({ "file_path": "src/lib.rs" }),
+                    None,
+                )
+                .await
+                .unwrap();
+            tokio::fs::write(&file_path, next).await.unwrap();
+            runtime
+                .core
+                .complete_file_operation("session-1", &operation_id, 1)
+                .await
+                .unwrap();
+        }
+
+        let mut state = SessionRevertState {
+            schema_version: SESSION_REVERT_SCHEMA_VERSION,
+            boundary_turn: 2,
+            original_turn_end: 3,
+            phase: SessionRevertPhase::Staged,
+            workspace_checkpoint: Vec::new(),
+        };
+        runtime
+            .core
+            .prepare_workspace_revert("session-1", &mut state)
+            .await
+            .expect("latest workspace state should be checkpointed");
+        runtime
+            .core
+            .apply_workspace_revert("session-1", &state)
+            .await
+            .expect("latest turn should be reverted");
+        assert_eq!(
+            tokio::fs::read_to_string(&file_path).await.unwrap(),
+            "first\n"
+        );
+
+        state.boundary_turn = 0;
+        runtime
+            .core
+            .prepare_workspace_revert("session-1", &mut state)
+            .await
+            .expect("earlier affected files should join the checkpoint");
+        runtime
+            .core
+            .apply_workspace_revert("session-1", &state)
+            .await
+            .expect("all turns should be reverted");
+        assert_eq!(
+            tokio::fs::read_to_string(&file_path).await.unwrap(),
+            "base\n"
+        );
+
+        state.boundary_turn = 2;
+        runtime
+            .core
+            .apply_workspace_revert("session-1", &state)
+            .await
+            .expect("redo should advance to the later boundary");
+        assert_eq!(
+            tokio::fs::read_to_string(&file_path).await.unwrap(),
+            "first\n"
+        );
+
+        runtime
+            .core
+            .restore_workspace_revert(&state)
+            .await
+            .expect("final redo should restore the pre-undo workspace");
+        assert_eq!(
+            tokio::fs::read_to_string(&file_path).await.unwrap(),
+            "base\n"
+        );
+
+        runtime
+            .core
+            .delete_workspace_revert_checkpoint(&state)
+            .await
+            .expect("full redo should release only its owned checkpoint handle");
+
+        let mut repeated = SessionRevertState {
+            schema_version: SESSION_REVERT_SCHEMA_VERSION,
+            boundary_turn: 0,
+            original_turn_end: 3,
+            phase: SessionRevertPhase::Staged,
+            workspace_checkpoint: Vec::new(),
+        };
+        runtime
+            .core
+            .prepare_workspace_revert("session-1", &mut repeated)
+            .await
+            .expect("a later undo should create a fresh checkpoint");
+        runtime
+            .core
+            .apply_workspace_revert("session-1", &repeated)
+            .await
+            .expect("operation snapshots must survive a previous checkpoint release");
+        assert_eq!(
+            tokio::fs::read_to_string(&file_path).await.unwrap(),
+            "base\n"
+        );
     }
 }

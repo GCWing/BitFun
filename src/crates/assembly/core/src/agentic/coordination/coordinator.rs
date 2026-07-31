@@ -36,6 +36,9 @@ use crate::agentic::goal_mode::{
 use crate::agentic::image_analysis::ImageContextData;
 use crate::agentic::memories::{start_memory_startup_task, MemoryStartupRequest};
 use crate::agentic::round_preempt::DialogRoundInjectionSource;
+use crate::agentic::session::revert::{
+    resolve_redo, resolve_undo, SessionRevertPhase, SessionRevertTransition,
+};
 use crate::agentic::session::session_store_port::CoreSessionStorePort;
 use crate::agentic::session::{SessionManager, SessionReferenceLocator};
 use crate::agentic::side_question::build_btw_user_input;
@@ -82,10 +85,11 @@ use bitfun_agent_runtime::remote_file_delivery::{
 use bitfun_agent_runtime::sdk::PermissionReply;
 use bitfun_agent_runtime::user_questions::USER_INPUT_AVAILABLE_CONTEXT_KEY;
 use bitfun_runtime_ports::{
-    AgentSessionWorkspaceBinding, AgentThreadGoalDeliveryKind, AgentThreadGoalDeliveryRequest,
-    DelegationPolicy, PermissionDelegationContext, PermissionRuntimeCeiling, RemoteExecPort,
-    SessionStoragePathRequest, SessionStoragePathResolution, SessionStorePort, SubagentContextMode,
-    TerminalPort, ThreadGoal, ThreadGoalContinuationPlan, ThreadGoalStatus,
+    AgentSessionComposerUpdate, AgentSessionWorkspaceBinding, AgentThreadGoalDeliveryKind,
+    AgentThreadGoalDeliveryRequest, DelegationPolicy, PermissionDelegationContext,
+    PermissionRuntimeCeiling, RemoteExecPort, SessionStoragePathRequest,
+    SessionStoragePathResolution, SessionStorePort, SubagentContextMode, TerminalPort, ThreadGoal,
+    ThreadGoalContinuationPlan, ThreadGoalStatus,
 };
 use dashmap::DashMap;
 use log::{debug, error, info, warn};
@@ -2651,7 +2655,6 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             match self.restore_path_for_existing_session(session_id).await {
                 Ok(restore_path) => {
                     match self
-                        .session_manager
                         .restore_session_from_storage_path(&restore_path, session_id)
                         .await
                     {
@@ -2807,11 +2810,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
 
         let session = match self.session_manager.get_session(&session_id) {
             Some(session) => session,
-            None => {
-                self.session_manager
-                    .restore_session(&workspace_root, &session_id)
-                    .await?
-            }
+            None => self.restore_session(&workspace_root, &session_id).await?,
         };
 
         let turn_count = self.session_manager.get_turn_count(&session_id);
@@ -3630,6 +3629,10 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 "Manual compaction turn_id must not be empty".to_string(),
             ));
         }
+        let mutation_guard = self
+            .session_manager
+            .acquire_session_mutation(&session_id)
+            .await?;
         let initial_session = self
             .session_manager
             .get_session(&session_id)
@@ -3663,16 +3666,19 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             )));
         }
 
+        self.commit_session_revert_before_persisted_turn_locked(&session_id, "Manual compaction")
+            .await?;
         let user_message_metadata = Some(Self::manual_compaction_metadata());
         let turn_id = self
             .session_manager
-            .start_maintenance_turn(
+            .start_maintenance_turn_locked(
                 &session_id,
                 MANUAL_COMPACTION_COMMAND.to_string(),
                 requested_turn_id,
                 user_message_metadata.clone(),
             )
             .await?;
+        drop(mutation_guard);
         // Once the maintenance turn owns Processing, competing dialog turns
         // can no longer mutate context. Capture the authoritative context only
         // after that atomic admission so a just-completed turn cannot be lost.
@@ -4050,8 +4056,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 if !restore.is_remote_storage() {
                     self.ensure_runtime_ownership(&restore.requested_workspace_path, None, None)?;
                 }
-                self.session_manager
-                    .restore_session_from_storage_path(&restore.effective_storage_path, &session_id)
+                self.restore_session_from_storage_path(&restore.effective_storage_path, &session_id)
                     .await?
             }
         };
@@ -4251,7 +4256,6 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             )
             .await?;
             match self
-                .session_manager
                 .restore_session_from_storage_path(&restore_path, &session_id)
                 .await
             {
@@ -5233,6 +5237,32 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         workspace_path: &Path,
         session_id: &str,
     ) -> BitFunResult<()> {
+        let session_storage_path = self
+            .session_manager
+            .resolve_storage_path_for_workspace_path(workspace_path)
+            .await;
+        let has_revert_state = self
+            .session_manager
+            .persistence_manager()
+            .load_session_revert_state(&session_storage_path, session_id)
+            .await?
+            .is_some();
+        if has_revert_state
+            && !self
+                .session_manager
+                .is_session_loaded_from_storage_path(&session_storage_path, session_id)?
+        {
+            self.restore_internal_session_from_storage_path(&session_storage_path, session_id)
+                .await?;
+        }
+        let _mutation_guard = self
+            .session_manager
+            .acquire_session_mutation(session_id)
+            .await?;
+        self.session_manager
+            .validate_session_storage_path_binding(session_id, &session_storage_path)?;
+        self.reconcile_session_revert_locked(&session_storage_path, session_id)
+            .await?;
         // SessionEnd hooks observe the session before its state is gone.
         // Their timeout is capped tightly so deletion cannot hang.
         let session_hook_facts = match self.session_manager.get_session(session_id) {
@@ -5259,7 +5289,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             native_hooks::clear_session_hook_state(session_id);
         }
         self.session_manager
-            .delete_session(workspace_path, session_id)
+            .delete_session_locked(workspace_path, session_id)
             .await?;
         self.background_subagent_outcomes
             .delete_session_references(session_id)
@@ -5387,9 +5417,477 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         session_id: &str,
     ) -> BitFunResult<Session> {
         self.ensure_runtime_ownership(workspace_path, None, None)?;
-        self.session_manager
+        let session = self
+            .session_manager
             .restore_session(workspace_path, session_id)
+            .await?;
+        self.reconcile_restored_session(session_id, session).await
+    }
+
+    pub(crate) fn local_revert_workspace(&self, session_id: &str) -> BitFunResult<PathBuf> {
+        let session = self
+            .session_manager
+            .get_session(session_id)
+            .ok_or_else(|| BitFunError::NotFound(format!("Session not found: {session_id}")))?;
+        if session.config.remote_connection_id.is_some() || session.config.remote_ssh_host.is_some()
+        {
+            return Err(BitFunError::Validation(
+                "Session undo and redo are unavailable for remote workspaces".to_string(),
+            ));
+        }
+        let workspace_path = session.config.workspace_path.as_deref().ok_or_else(|| {
+            BitFunError::Validation(format!("Session workspace_path is missing: {session_id}"))
+        })?;
+        let workspace_path = PathBuf::from(workspace_path);
+        if !workspace_path.is_dir() {
+            return Err(BitFunError::Validation(format!(
+                "Session workspace directory does not exist: {}",
+                workspace_path.display()
+            )));
+        }
+        Ok(workspace_path)
+    }
+
+    pub(crate) async fn apply_session_revert_locked(
+        &self,
+        session_storage_path: &Path,
+        session_id: &str,
+        undo: bool,
+    ) -> BitFunResult<(AgentSessionComposerUpdate, bool, usize)> {
+        let workspace_path = self.local_revert_workspace(session_id)?;
+        let snapshot_manager =
+            crate::service::snapshot::get_or_create_snapshot_manager(workspace_path.clone(), None)
+                .await
+                .map_err(|error| BitFunError::service(error.to_string()))?;
+        let persistence = self.session_manager.persistence_manager();
+        let mut current = persistence
+            .load_session_revert_state(session_storage_path, session_id)
+            .await?;
+        if current
+            .as_ref()
+            .is_some_and(|state| state.phase != SessionRevertPhase::Staged)
+        {
+            self.reconcile_session_revert_locked(session_storage_path, session_id)
+                .await
+                .map_err(|error| {
+                    BitFunError::OutcomeUnknown(format!(
+                        "Session revert could not finish a pending transition: session_id={session_id}, error={error}"
+                    ))
+                })?;
+            current = persistence
+                .load_session_revert_state(session_storage_path, session_id)
+                .await?;
+        }
+        let turns = persistence
+            .load_session_turns(session_storage_path, session_id)
+            .await?;
+        let transition = if undo {
+            resolve_undo(&turns, current.as_ref())
+        } else {
+            resolve_redo(&turns, current.as_ref())
+        };
+        let Some(transition) = transition else {
+            return Ok((AgentSessionComposerUpdate::Preserve, false, 0));
+        };
+
+        match transition {
+            SessionRevertTransition::Stage {
+                mut state,
+                replacement_prompt,
+                hidden_turn_count,
+            } => {
+                state.phase = SessionRevertPhase::Applying;
+                snapshot_manager
+                    .prepare_workspace_revert(session_id, &mut state)
+                    .await
+                    .map_err(|error| BitFunError::service(error.to_string()))?;
+                persistence
+                    .save_session_revert_state(session_storage_path, session_id, &state)
+                    .await?;
+                snapshot_manager
+                    .apply_workspace_revert(session_id, &state)
+                    .await
+                    .map_err(|error| {
+                        BitFunError::OutcomeUnknown(format!(
+                            "Staged Session boundary was persisted but workspace reconciliation failed: session_id={session_id}, error={error}"
+                        ))
+                    })?;
+                self.session_manager
+                    .apply_staged_revert_context_locked(
+                        session_storage_path,
+                        session_id,
+                        state.boundary_turn,
+                    )
+                    .await
+                    .map_err(|error| {
+                        BitFunError::OutcomeUnknown(format!(
+                            "Staged Session boundary and workspace were updated but runtime context reconciliation failed: session_id={session_id}, error={error}"
+                        ))
+                    })?;
+                state.phase = SessionRevertPhase::Staged;
+                persistence
+                    .save_session_revert_state(session_storage_path, session_id, &state)
+                    .await
+                    .map_err(|error| {
+                        BitFunError::OutcomeUnknown(format!(
+                            "Session boundary was applied but its stable phase could not be persisted: session_id={session_id}, error={error}"
+                        ))
+                    })?;
+                let composer = replacement_prompt
+                    .map(|text| AgentSessionComposerUpdate::Replace { text })
+                    .unwrap_or(AgentSessionComposerUpdate::Preserve);
+                Ok((composer, true, hidden_turn_count))
+            }
+            SessionRevertTransition::Clear { mut previous_state } => {
+                previous_state.boundary_turn = previous_state.original_turn_end;
+                previous_state.phase = SessionRevertPhase::Clearing;
+                persistence
+                    .save_session_revert_state(session_storage_path, session_id, &previous_state)
+                    .await?;
+                snapshot_manager
+                    .apply_workspace_revert(session_id, &previous_state)
+                    .await
+                    .map_err(|error| {
+                        BitFunError::OutcomeUnknown(format!(
+                            "Session redo may have partially restored the workspace: session_id={session_id}, error={error}"
+                        ))
+                    })?;
+                self.session_manager
+                    .apply_staged_revert_context_locked(
+                        session_storage_path,
+                        session_id,
+                        previous_state.original_turn_end,
+                    )
+                    .await
+                    .map_err(|error| {
+                        BitFunError::OutcomeUnknown(format!(
+                            "Session redo restored the workspace but could not reconcile runtime context: session_id={session_id}, error={error}"
+                        ))
+                    })?;
+                persistence
+                    .delete_session_revert_state(session_storage_path, session_id)
+                    .await
+                    .map_err(|error| {
+                        BitFunError::OutcomeUnknown(format!(
+                            "Session redo restored history but could not clear its staged marker: session_id={session_id}, error={error}"
+                        ))
+                    })?;
+                if let Err(error) = snapshot_manager
+                    .delete_workspace_revert_checkpoint(&previous_state)
+                    .await
+                {
+                    warn!(
+                        "Failed to delete cleared Session revert checkpoint: session_id={}, error={}",
+                        session_id, error
+                    );
+                }
+                Ok((AgentSessionComposerUpdate::Clear, true, 0))
+            }
+        }
+    }
+
+    pub(crate) async fn reconcile_session_revert_locked(
+        &self,
+        session_storage_path: &Path,
+        session_id: &str,
+    ) -> BitFunResult<()> {
+        let persistence = self.session_manager.persistence_manager();
+        let Some(state) = persistence
+            .load_session_revert_state(session_storage_path, session_id)
+            .await?
+        else {
+            return Ok(());
+        };
+        match state.phase {
+            SessionRevertPhase::Committing => self
+                .commit_session_revert_locked(session_storage_path, session_id)
+                .await
+                .map_err(|error| {
+                    BitFunError::OutcomeUnknown(format!(
+                        "Session restore could not finish a pending revert commit: session_id={session_id}, error={error}"
+                    ))
+                }),
+            SessionRevertPhase::Staged => self
+                .session_manager
+                .apply_staged_revert_context_locked(
+                    session_storage_path,
+                    session_id,
+                    state.boundary_turn,
+                )
+                .await
+                .map_err(|error| {
+                    BitFunError::OutcomeUnknown(format!(
+                        "Session restore could not reconcile staged runtime context: session_id={session_id}, error={error}"
+                    ))
+                }),
+            SessionRevertPhase::Applying | SessionRevertPhase::Clearing => self
+                .reconcile_session_revert_application_locked(
+                    session_storage_path,
+                    session_id,
+                    state,
+                )
+                .await,
+        }
+    }
+
+    async fn prepare_persisted_session_read_locked(
+        &self,
+        session_storage_path: &Path,
+        session_id: &str,
+    ) -> BitFunResult<()> {
+        bitfun_core_types::validate_session_id(session_id).map_err(BitFunError::Validation)?;
+        self.session_manager
+            .validate_session_storage_path_binding(session_id, session_storage_path)?;
+        if let Some(state) = self
+            .session_manager
+            .persistence_manager()
+            .load_session_revert_state(session_storage_path, session_id)
+            .await?
+        {
+            if state.phase != SessionRevertPhase::Staged {
+                if self.session_manager.get_session(session_id).is_none() {
+                    return Err(BitFunError::OutcomeUnknown(format!(
+                        "Session history is unavailable until the unfinished undo transition is restored: session_id={session_id}"
+                    )));
+                }
+                self.reconcile_session_revert_locked(session_storage_path, session_id)
+                    .await?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Read the product-visible persisted Turn history through Core's
+    /// per-Session mutation owner. Persistence supplies cross-process
+    /// exclusion; this keyed guard supplies the missing in-process ordering
+    /// against undo, redo, commit, and external history imports.
+    pub async fn load_visible_persisted_session_turns(
+        &self,
+        session_storage_path: &Path,
+        session_id: &str,
+    ) -> BitFunResult<Vec<DialogTurnData>> {
+        let _mutation = self
+            .session_manager
+            .acquire_session_mutation(session_id)
+            .await?;
+        self.prepare_persisted_session_read_locked(session_storage_path, session_id)
+            .await?;
+        self.session_manager
+            .persistence_manager()
+            .load_visible_session_turns(session_storage_path, session_id)
             .await
+    }
+
+    /// Export a transcript while retaining the same Session history boundary
+    /// from marker admission through artifact generation.
+    pub async fn export_visible_persisted_session_transcript(
+        &self,
+        session_storage_path: &Path,
+        session_id: &str,
+        options: &crate::service::session::SessionTranscriptExportOptions,
+    ) -> BitFunResult<crate::service::session::SessionTranscriptExport> {
+        let _mutation = self
+            .session_manager
+            .acquire_session_mutation(session_id)
+            .await?;
+        self.prepare_persisted_session_read_locked(session_storage_path, session_id)
+            .await?;
+        self.session_manager
+            .persistence_manager()
+            .export_session_transcript(session_storage_path, session_id, options)
+            .await
+    }
+
+    async fn reconcile_session_revert_application_locked(
+        &self,
+        session_storage_path: &Path,
+        session_id: &str,
+        state: crate::agentic::session::revert::SessionRevertState,
+    ) -> BitFunResult<()> {
+        let persistence = self.session_manager.persistence_manager();
+        let workspace_path = self.local_revert_workspace(session_id)?;
+        let snapshot_manager =
+            crate::service::snapshot::get_or_create_snapshot_manager(workspace_path.clone(), None)
+                .await
+                .map_err(|error| BitFunError::service(error.to_string()))?;
+        snapshot_manager
+            .apply_workspace_revert(session_id, &state)
+            .await
+            .map_err(|error| {
+                BitFunError::OutcomeUnknown(format!(
+                    "Session restore could not reconcile an applying workspace boundary: session_id={session_id}, error={error}"
+                ))
+            })?;
+        self.session_manager
+            .apply_staged_revert_context_locked(
+                session_storage_path,
+                session_id,
+                state.boundary_turn,
+            )
+            .await
+            .map_err(|error| {
+                BitFunError::OutcomeUnknown(format!(
+                    "Session restore reconciled the workspace but not runtime context: session_id={session_id}, error={error}"
+                ))
+            })?;
+        if state.phase == SessionRevertPhase::Clearing {
+            persistence
+                .delete_session_revert_state(session_storage_path, session_id)
+                .await?;
+            if let Err(error) = snapshot_manager
+                .delete_workspace_revert_checkpoint(&state)
+                .await
+            {
+                warn!(
+                    "Failed to delete recovered Session revert checkpoint: session_id={}, error={}",
+                    session_id, error
+                );
+            }
+        } else {
+            let mut staged = state;
+            staged.phase = SessionRevertPhase::Staged;
+            persistence
+                .save_session_revert_state(session_storage_path, session_id, &staged)
+                .await?;
+        }
+        Ok(())
+    }
+
+    pub(crate) async fn commit_session_revert_locked(
+        &self,
+        session_storage_path: &Path,
+        session_id: &str,
+    ) -> BitFunResult<()> {
+        let persistence = self.session_manager.persistence_manager();
+        let Some(mut state) = persistence
+            .load_session_revert_state(session_storage_path, session_id)
+            .await?
+        else {
+            return Ok(());
+        };
+        if matches!(
+            state.phase,
+            SessionRevertPhase::Applying | SessionRevertPhase::Clearing
+        ) {
+            self.reconcile_session_revert_application_locked(
+                session_storage_path,
+                session_id,
+                state.clone(),
+            )
+            .await?;
+            let Some(reconciled) = persistence
+                .load_session_revert_state(session_storage_path, session_id)
+                .await?
+            else {
+                return Ok(());
+            };
+            state = reconciled;
+        }
+        let workspace_path = self.local_revert_workspace(session_id)?;
+        let snapshot_manager =
+            crate::service::snapshot::get_or_create_snapshot_manager(workspace_path.clone(), None)
+                .await
+                .map_err(|error| BitFunError::service(error.to_string()))?;
+        if state.phase == SessionRevertPhase::Staged {
+            state.phase = SessionRevertPhase::Committing;
+            persistence
+                .save_session_revert_state(session_storage_path, session_id, &state)
+                .await?;
+        }
+        let discarded_parent_turn_ids = persistence
+            .load_session_turns(session_storage_path, session_id)
+            .await?
+            .into_iter()
+            .filter(|turn| turn.turn_index >= state.boundary_turn)
+            .map(|turn| turn.turn_id)
+            .collect::<HashSet<_>>();
+        if !discarded_parent_turn_ids.is_empty() {
+            Box::pin(self.delete_hidden_subagent_sessions_for_parent_turns(
+                &workspace_path,
+                session_id,
+                &discarded_parent_turn_ids,
+            ))
+            .await?;
+        }
+        self.session_manager
+            .commit_staged_revert_context_locked(
+                session_storage_path,
+                session_id,
+                state.boundary_turn,
+            )
+            .await?;
+        snapshot_manager
+            .commit_workspace_revert(session_id, &state)
+            .await
+            .map_err(|error| BitFunError::service(error.to_string()))?;
+        persistence
+            .delete_session_revert_state(session_storage_path, session_id)
+            .await
+    }
+
+    async fn commit_session_revert_before_persisted_turn_locked(
+        &self,
+        session_id: &str,
+        operation: &str,
+    ) -> BitFunResult<()> {
+        let Some(session_storage_path) = self
+            .session_manager
+            .effective_session_storage_path(session_id)
+            .await
+        else {
+            return Ok(());
+        };
+        if self
+            .session_manager
+            .persistence_manager()
+            .load_session_revert_state(&session_storage_path, session_id)
+            .await?
+            .is_none()
+        {
+            return Ok(());
+        }
+        self.commit_session_revert_locked(&session_storage_path, session_id)
+            .await
+            .map_err(|error| {
+                BitFunError::OutcomeUnknown(format!(
+                    "{operation} was not admitted because the staged Session suffix could not be committed safely: session_id={session_id}, error={error}"
+                ))
+            })
+    }
+
+    /// Commit an existing staged boundary before the scheduler admits a new
+    /// user Turn. The scheduler's per-Session operation lock must already be held.
+    pub(crate) async fn commit_session_revert_before_submission(
+        &self,
+        session_id: &str,
+    ) -> BitFunResult<()> {
+        let _mutation_guard = self
+            .session_manager
+            .acquire_session_mutation(session_id)
+            .await?;
+        self.commit_session_revert_before_persisted_turn_locked(session_id, "A new Turn")
+            .await
+    }
+
+    async fn reconcile_restored_session<T>(
+        &self,
+        session_id: &str,
+        restored: T,
+    ) -> BitFunResult<T> {
+        let session_storage_path = self
+            .session_manager
+            .effective_session_storage_path(session_id)
+            .await
+            .ok_or_else(|| {
+                BitFunError::NotFound(format!("Session storage path not found: {session_id}"))
+            })?;
+        let _mutation_guard = self
+            .session_manager
+            .acquire_session_mutation(session_id)
+            .await?;
+        self.reconcile_session_revert_locked(&session_storage_path, session_id)
+            .await?;
+        Ok(restored)
     }
 
     pub async fn restore_session_from_storage_path(
@@ -5397,9 +5895,11 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         session_storage_path: &Path,
         session_id: &str,
     ) -> BitFunResult<Session> {
-        self.session_manager
+        let session = self
+            .session_manager
             .restore_session_from_storage_path(session_storage_path, session_id)
-            .await
+            .await?;
+        self.reconcile_restored_session(session_id, session).await
     }
 
     pub async fn restore_internal_session_from_storage_path(
@@ -5407,9 +5907,11 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         session_storage_path: &Path,
         session_id: &str,
     ) -> BitFunResult<Session> {
-        self.session_manager
+        let session = self
+            .session_manager
             .restore_internal_session_from_storage_path(session_storage_path, session_id)
-            .await
+            .await?;
+        self.reconcile_restored_session(session_id, session).await
     }
 
     pub async fn restore_session_for_workspace(
@@ -5422,9 +5924,11 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             request.remote_connection_id.as_deref(),
             request.remote_ssh_host.as_deref(),
         )?;
-        self.session_manager
+        let session = self
+            .session_manager
             .restore_session_for_workspace(request, session_id)
-            .await
+            .await?;
+        self.reconcile_restored_session(session_id, session).await
     }
 
     pub async fn restore_internal_session_for_workspace(
@@ -5437,9 +5941,11 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             request.remote_connection_id.as_deref(),
             request.remote_ssh_host.as_deref(),
         )?;
-        self.session_manager
+        let session = self
+            .session_manager
             .restore_internal_session_for_workspace(request, session_id)
-            .await
+            .await?;
+        self.reconcile_restored_session(session_id, session).await
     }
 
     pub async fn restore_internal_session(
@@ -5448,9 +5954,11 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         session_id: &str,
     ) -> BitFunResult<Session> {
         self.ensure_runtime_ownership(workspace_path, None, None)?;
-        self.session_manager
+        let session = self
+            .session_manager
             .restore_internal_session(workspace_path, session_id)
-            .await
+            .await?;
+        self.reconcile_restored_session(session_id, session).await
     }
 
     /// Restore session and return the persisted turns read during restore.
@@ -5460,9 +5968,11 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         session_id: &str,
     ) -> BitFunResult<(Session, Vec<crate::service::session::DialogTurnData>)> {
         self.ensure_runtime_ownership(workspace_path, None, None)?;
-        self.session_manager
+        let restored = self
+            .session_manager
             .restore_session_with_turns(workspace_path, session_id)
-            .await
+            .await?;
+        self.reconcile_restored_session(session_id, restored).await
     }
 
     pub async fn restore_session_with_turns_from_storage_path(
@@ -5470,9 +5980,11 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         session_storage_path: &Path,
         session_id: &str,
     ) -> BitFunResult<(Session, Vec<crate::service::session::DialogTurnData>)> {
-        self.session_manager
+        let restored = self
+            .session_manager
             .restore_session_with_turns_from_storage_path(session_storage_path, session_id)
-            .await
+            .await?;
+        self.reconcile_restored_session(session_id, restored).await
     }
 
     pub async fn restore_internal_session_with_turns_from_storage_path(
@@ -5480,9 +5992,11 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         session_storage_path: &Path,
         session_id: &str,
     ) -> BitFunResult<(Session, Vec<crate::service::session::DialogTurnData>)> {
-        self.session_manager
+        let restored = self
+            .session_manager
             .restore_internal_session_with_turns_from_storage_path(session_storage_path, session_id)
-            .await
+            .await?;
+        self.reconcile_restored_session(session_id, restored).await
     }
 
     pub async fn restore_session_with_turns_for_workspace(
@@ -5495,9 +6009,11 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             request.remote_connection_id.as_deref(),
             request.remote_ssh_host.as_deref(),
         )?;
-        self.session_manager
+        let restored = self
+            .session_manager
             .restore_session_with_turns_for_workspace(request, session_id)
-            .await
+            .await?;
+        self.reconcile_restored_session(session_id, restored).await
     }
 
     pub async fn restore_internal_session_with_turns_for_workspace(
@@ -5510,9 +6026,11 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             request.remote_connection_id.as_deref(),
             request.remote_ssh_host.as_deref(),
         )?;
-        self.session_manager
+        let restored = self
+            .session_manager
             .restore_internal_session_with_turns_for_workspace(request, session_id)
-            .await
+            .await?;
+        self.reconcile_restored_session(session_id, restored).await
     }
 
     pub async fn restore_internal_session_with_turns(
@@ -5521,9 +6039,11 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         session_id: &str,
     ) -> BitFunResult<(Session, Vec<crate::service::session::DialogTurnData>)> {
         self.ensure_runtime_ownership(workspace_path, None, None)?;
-        self.session_manager
+        let restored = self
+            .session_manager
             .restore_internal_session_with_turns(workspace_path, session_id)
-            .await
+            .await?;
+        self.reconcile_restored_session(session_id, restored).await
     }
 
     /// Restore only the UI-visible persisted session view.
@@ -7354,12 +7874,11 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                             .to_string(),
                     ));
                 }
-                self.session_manager
-                    .restore_internal_session_from_storage_path(
-                        &binding.session_storage_dir(),
-                        target_session_id,
-                    )
-                    .await?
+                self.restore_internal_session_from_storage_path(
+                    &binding.session_storage_dir(),
+                    target_session_id,
+                )
+                .await?
             }
         };
 
@@ -7503,8 +8022,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
 
         if needs_restore {
             let restore_path = self.restore_path_for_existing_session(session_id).await?;
-            self.session_manager
-                .restore_internal_session_from_storage_path(&restore_path, session_id)
+            self.restore_internal_session_from_storage_path(&restore_path, session_id)
                 .await?;
             context_messages = self
                 .session_manager
@@ -9629,20 +10147,42 @@ impl bitfun_runtime_ports::AgentLocalCommandTurnPort for ConversationCoordinator
     ) -> bitfun_runtime_ports::PortResult<()> {
         self.ensure_session_runtime_ownership(&request.session_id, None)
             .map_err(runtime_port_error_preserving_message)?;
+        let mutation_guard = self
+            .session_manager
+            .acquire_session_mutation(&request.session_id)
+            .await
+            .map_err(runtime_port_error_preserving_message)?;
+        self.session_manager
+            .get_session(&request.session_id)
+            .ok_or_else(|| {
+                runtime_port_error_preserving_message(BitFunError::NotFound(format!(
+                    "Session not found: {}",
+                    request.session_id
+                )))
+            })?;
+        self.commit_session_revert_before_persisted_turn_locked(
+            &request.session_id,
+            "Local command Turn",
+        )
+        .await
+        .map_err(runtime_port_error_preserving_message)?;
         let metadata = if request.metadata.is_empty() {
             None
         } else {
             Some(serde_json::Value::Object(request.metadata))
         };
-        self.get_session_manager()
-            .append_completed_local_command_turn(
+        let result = self
+            .session_manager
+            .append_completed_local_command_turn_locked(
                 &request.session_id,
                 request.content,
                 request.turn_id,
                 request.timestamp_ms,
                 metadata,
             )
-            .await
+            .await;
+        drop(mutation_guard);
+        result
             .map(|_| ())
             .map_err(runtime_port_error_preserving_message)
     }
@@ -9857,15 +10397,14 @@ impl bitfun_runtime_ports::RemoteControlStatePort for ConversationCoordinator {
     }
 }
 
-#[async_trait::async_trait]
-impl bitfun_runtime_ports::SessionTranscriptReader for ConversationCoordinator {
-    async fn read_session_transcript(
+impl ConversationCoordinator {
+    pub(crate) async fn read_session_transcript_locked(
         &self,
         request: bitfun_runtime_ports::SessionTranscriptRequest,
     ) -> bitfun_runtime_ports::PortResult<bitfun_runtime_ports::SessionTranscript> {
         let messages = match self
             .session_manager
-            .load_persisted_transcript_turns(&request.session_id)
+            .load_persisted_transcript_turns_locked(&request.session_id)
             .await
             .map_err(runtime_port_error_preserving_message)?
         {
@@ -9873,7 +10412,8 @@ impl bitfun_runtime_ports::SessionTranscriptReader for ConversationCoordinator {
                 runtime_transcript_messages_from_turns(&turns, request.turn_id.as_deref())
             }
             None => self
-                .get_messages(&request.session_id)
+                .session_manager
+                .get_context_messages(&request.session_id)
                 .await
                 .map_err(runtime_port_error_preserving_message)?
                 .into_iter()
@@ -9889,6 +10429,53 @@ impl bitfun_runtime_ports::SessionTranscriptReader for ConversationCoordinator {
             session_id: request.session_id,
             messages,
         })
+    }
+}
+
+#[async_trait::async_trait]
+impl bitfun_runtime_ports::SessionTranscriptReader for ConversationCoordinator {
+    async fn read_session_transcript(
+        &self,
+        request: bitfun_runtime_ports::SessionTranscriptRequest,
+    ) -> bitfun_runtime_ports::PortResult<bitfun_runtime_ports::SessionTranscript> {
+        let _mutation = self
+            .session_manager
+            .acquire_session_mutation(&request.session_id)
+            .await
+            .map_err(runtime_port_error_preserving_message)?;
+        if let Some(storage_path) = self
+            .session_manager
+            .effective_session_storage_path(&request.session_id)
+            .await
+        {
+            self.session_manager
+                .validate_session_storage_path_binding(&request.session_id, &storage_path)
+                .map_err(runtime_port_error_preserving_message)?;
+            if let Some(state) = self
+                .session_manager
+                .persistence_manager()
+                .load_session_revert_state(&storage_path, &request.session_id)
+                .await
+                .map_err(runtime_port_error_preserving_message)?
+            {
+                if state.phase != SessionRevertPhase::Staged {
+                    if self
+                        .session_manager
+                        .get_session(&request.session_id)
+                        .is_none()
+                    {
+                        return Err(bitfun_runtime_ports::PortError::new(
+                            bitfun_runtime_ports::PortErrorKind::OutcomeUnknown,
+                            "Session transcript is unavailable until the unfinished undo transition is restored",
+                        ));
+                    }
+                    self.reconcile_session_revert_locked(&storage_path, &request.session_id)
+                        .await
+                        .map_err(runtime_port_error_preserving_message)?;
+                }
+            }
+        }
+        self.read_session_transcript_locked(request).await
     }
 }
 
@@ -10010,7 +10597,7 @@ mod tests {
     use crate::agentic::core::{
         InternalReminderKind, Message, MessageContent, MessageRole, MessageSemanticKind,
         SessionConfig, SessionContinuationPolicy, SessionKind, SessionModelBindingPolicy,
-        SessionState,
+        SessionState, TurnStats,
     };
     use crate::agentic::events::{AgenticEvent, EventQueue, EventQueueConfig, EventRouter};
     use crate::agentic::execution::{
@@ -10053,7 +10640,8 @@ mod tests {
     use crate::service::config::{AgentModelDefaultsConfig, SubagentModelSelection};
     use crate::service::remote_ssh::workspace_state::init_remote_workspace_manager;
     use crate::service::session::{
-        DialogTurnData, DialogTurnKind, SessionMetadata, SessionStatus, TurnStatus, UserMessageData,
+        DialogTurnData, DialogTurnKind, SessionMetadata, SessionRelationship, SessionStatus,
+        TurnStatus, UserMessageData,
     };
     use crate::service::workspace::WorkspaceKind;
     use bitfun_agent_runtime::permission::AUTO_APPROVE_ASK_CONTEXT_KEY;
@@ -10061,11 +10649,12 @@ mod tests {
         SessionExecutionTarget, SessionExecutionTargetKind, WorktreeLifecycle,
     };
     use bitfun_runtime_ports::{
-        AgentSessionArchiveRequest, AgentSessionCreateRequest, AgentSessionManagementPort,
-        AgentSessionRenameRequest, AgentSubmissionPort, AgentSubmissionRequest,
-        AgentSubmissionSource, AgentThreadGoalGetRequest, AgentThreadGoalManagementPort,
-        DelegationPolicy, PermissionEffect, PermissionRule, PermissionRuntimeCeiling,
-        SessionStoragePathRequest, SubagentContextMode, ThreadGoal, ThreadGoalStatus,
+        AgentLocalCommandTurnPort, AgentLocalCommandTurnRecordRequest, AgentSessionArchiveRequest,
+        AgentSessionCreateRequest, AgentSessionManagementPort, AgentSessionRenameRequest,
+        AgentSubmissionPort, AgentSubmissionRequest, AgentSubmissionSource,
+        AgentThreadGoalGetRequest, AgentThreadGoalManagementPort, DelegationPolicy,
+        PermissionEffect, PermissionRule, PermissionRuntimeCeiling, SessionStoragePathRequest,
+        SubagentContextMode, ThreadGoal, ThreadGoalStatus,
     };
     use std::collections::HashMap;
     use std::path::PathBuf;
@@ -10866,6 +11455,463 @@ mod tests {
 
     fn test_coordinator() -> (ConversationCoordinator, Arc<SessionManager>) {
         test_coordinator_with_max_active_sessions(100)
+    }
+
+    async fn create_two_turn_session(
+        session_manager: &SessionManager,
+        workspace: &std::path::Path,
+        session_id: &str,
+    ) -> PathBuf {
+        session_manager
+            .create_session_with_id(
+                Some(session_id.to_string()),
+                "Reverted".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.to_string_lossy().into_owned()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("create session");
+        for (turn_id, prompt) in [("turn-0", "first"), ("turn-1", "second")] {
+            session_manager
+                .start_dialog_turn(
+                    session_id,
+                    "agentic".to_string(),
+                    prompt.to_string(),
+                    Some(turn_id.to_string()),
+                    None,
+                    None,
+                )
+                .await
+                .expect("start persisted turn");
+            session_manager
+                .complete_dialog_turn(
+                    session_id,
+                    turn_id,
+                    format!("reply to {prompt}"),
+                    &[],
+                    TurnStats::default(),
+                )
+                .await
+                .expect("complete persisted turn");
+            session_manager.reset_session_state_if_processing(session_id, turn_id);
+        }
+        let storage_path = session_manager
+            .effective_session_storage_path(session_id)
+            .await
+            .expect("session storage path");
+        storage_path
+    }
+
+    async fn create_staged_two_turn_session(
+        session_manager: &SessionManager,
+        workspace: &std::path::Path,
+        session_id: &str,
+    ) -> PathBuf {
+        let storage_path = create_two_turn_session(session_manager, workspace, session_id).await;
+        session_manager
+            .persistence_manager()
+            .save_session_revert_state(
+                &storage_path,
+                session_id,
+                &crate::agentic::session::revert::SessionRevertState {
+                    schema_version: crate::agentic::session::revert::SESSION_REVERT_SCHEMA_VERSION,
+                    boundary_turn: 1,
+                    original_turn_end: 2,
+                    phase: crate::agentic::session::revert::SessionRevertPhase::Staged,
+                    workspace_checkpoint: Vec::new(),
+                },
+            )
+            .await
+            .expect("stage session revert");
+        let mutation = session_manager
+            .acquire_session_mutation(session_id)
+            .await
+            .expect("session mutation");
+        session_manager
+            .apply_staged_revert_context_locked(&storage_path, session_id, 1)
+            .await
+            .expect("apply staged context");
+        drop(mutation);
+        storage_path
+    }
+
+    #[tokio::test]
+    async fn staged_revert_is_committed_before_local_and_maintenance_turns() {
+        let (coordinator, session_manager) = test_persistent_coordinator();
+        let workspace = tempfile::tempdir().expect("workspace");
+
+        let local_session_id = format!("local-revert-{}", uuid::Uuid::new_v4());
+        let local_storage = create_staged_two_turn_session(
+            session_manager.as_ref(),
+            workspace.path(),
+            &local_session_id,
+        )
+        .await;
+        let child_session_id = format!("{local_session_id}-child");
+        let grandchild_session_id = format!("{local_session_id}-grandchild");
+        let mut child = SessionMetadata::new(
+            child_session_id.clone(),
+            "Hidden child".to_string(),
+            "Explore".to_string(),
+            "model".to_string(),
+        );
+        child.session_kind = SessionKind::Subagent;
+        child.relationship = Some(SessionRelationship {
+            kind: Some(SessionRelationshipKind::Subagent),
+            parent_session_id: Some(local_session_id.clone()),
+            parent_request_id: None,
+            parent_dialog_turn_id: Some("turn-1".to_string()),
+            parent_turn_index: Some(1),
+            parent_tool_call_id: Some("tool-child".to_string()),
+            subagent_type: Some("Explore".to_string()),
+            continuation_policy: None,
+        });
+        child.workspace_path = Some(workspace.path().to_string_lossy().into_owned());
+        session_manager
+            .persistence_manager()
+            .save_session_metadata(&local_storage, &child)
+            .await
+            .expect("hidden child metadata");
+        let mut grandchild = SessionMetadata::new(
+            grandchild_session_id.clone(),
+            "Hidden grandchild".to_string(),
+            "Explore".to_string(),
+            "model".to_string(),
+        );
+        grandchild.session_kind = SessionKind::Subagent;
+        grandchild.relationship = Some(SessionRelationship {
+            kind: Some(SessionRelationshipKind::Subagent),
+            parent_session_id: Some(child_session_id.clone()),
+            parent_request_id: None,
+            parent_dialog_turn_id: Some("child-turn".to_string()),
+            parent_turn_index: Some(0),
+            parent_tool_call_id: Some("tool-grandchild".to_string()),
+            subagent_type: Some("Explore".to_string()),
+            continuation_policy: None,
+        });
+        grandchild.workspace_path = Some(workspace.path().to_string_lossy().into_owned());
+        session_manager
+            .persistence_manager()
+            .save_session_metadata(&local_storage, &grandchild)
+            .await
+            .expect("hidden grandchild metadata");
+        AgentLocalCommandTurnPort::record_completed_local_command_turn(
+            &coordinator,
+            AgentLocalCommandTurnRecordRequest {
+                session_id: local_session_id.clone(),
+                content: "/usage".to_string(),
+                turn_id: Some("local-turn".to_string()),
+                timestamp_ms: None,
+                metadata: serde_json::Map::new(),
+            },
+        )
+        .await
+        .expect("record local command after staged undo");
+        let local_turns = session_manager
+            .persistence_manager()
+            .load_session_turns(&local_storage, &local_session_id)
+            .await
+            .expect("load local turns");
+        assert_eq!(
+            local_turns
+                .iter()
+                .map(|turn| turn.turn_id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["turn-0", "local-turn"]
+        );
+        assert!(session_manager
+            .persistence_manager()
+            .load_session_revert_state(&local_storage, &local_session_id)
+            .await
+            .expect("load local marker")
+            .is_none());
+        for discarded_session_id in [&child_session_id, &grandchild_session_id] {
+            assert!(session_manager
+                .persistence_manager()
+                .load_session_metadata(&local_storage, discarded_session_id)
+                .await
+                .expect("discarded child metadata lookup")
+                .is_none());
+        }
+
+        let maintenance_session_id = format!("compact-revert-{}", uuid::Uuid::new_v4());
+        let maintenance_storage = create_staged_two_turn_session(
+            session_manager.as_ref(),
+            workspace.path(),
+            &maintenance_session_id,
+        )
+        .await;
+        let task = coordinator
+            .start_manual_compaction_task(
+                maintenance_session_id.clone(),
+                Some("maintenance-turn".to_string()),
+            )
+            .await
+            .expect("start maintenance after staged undo");
+        let maintenance_turns = session_manager
+            .persistence_manager()
+            .load_session_turns(&maintenance_storage, &maintenance_session_id)
+            .await
+            .expect("load maintenance turns");
+        assert_eq!(
+            maintenance_turns
+                .iter()
+                .map(|turn| turn.turn_id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["turn-0", "maintenance-turn"]
+        );
+        assert!(session_manager
+            .persistence_manager()
+            .load_session_revert_state(&maintenance_storage, &maintenance_session_id)
+            .await
+            .expect("load maintenance marker")
+            .is_none());
+        coordinator
+            .cancel_dialog_turn(&maintenance_session_id, &task.turn_id)
+            .await
+            .expect("cancel maintenance task");
+        let _ = tokio::time::timeout(Duration::from_secs(5), task.completion).await;
+    }
+
+    #[tokio::test]
+    async fn mutating_restore_reconciles_a_marker_written_before_workspace_apply() {
+        let (coordinator, session_manager) = test_persistent_coordinator();
+        let workspace = tempfile::tempdir().expect("workspace");
+        let file_path = workspace.path().join("src/lib.rs");
+        std::fs::create_dir_all(file_path.parent().expect("file parent"))
+            .expect("create file parent");
+        tokio::fs::write(&file_path, "before\n")
+            .await
+            .expect("write original file");
+        let session_id = format!("restore-revert-{}", uuid::Uuid::new_v4());
+        let storage_path =
+            create_two_turn_session(session_manager.as_ref(), workspace.path(), &session_id).await;
+        let snapshot_manager = crate::service::snapshot::get_or_create_snapshot_manager(
+            workspace.path().to_path_buf(),
+            None,
+        )
+        .await
+        .expect("snapshot manager");
+        let operation_id = snapshot_manager
+            .record_file_change(
+                &session_id,
+                1,
+                file_path.clone(),
+                crate::service::snapshot::types::OperationType::Modify,
+                "Edit".to_string(),
+            )
+            .await
+            .expect("record file change");
+        tokio::fs::write(&file_path, "after\n")
+            .await
+            .expect("write changed file");
+        snapshot_manager
+            .get_snapshot_service()
+            .read()
+            .await
+            .complete_file_modification(&session_id, &operation_id, 1)
+            .await
+            .expect("complete file change");
+
+        let mut state = crate::agentic::session::revert::SessionRevertState {
+            schema_version: crate::agentic::session::revert::SESSION_REVERT_SCHEMA_VERSION,
+            boundary_turn: 1,
+            original_turn_end: 2,
+            phase: crate::agentic::session::revert::SessionRevertPhase::Applying,
+            workspace_checkpoint: Vec::new(),
+        };
+        snapshot_manager
+            .prepare_workspace_revert(&session_id, &mut state)
+            .await
+            .expect("prepare staged checkpoint");
+        session_manager
+            .persistence_manager()
+            .save_session_revert_state(&storage_path, &session_id, &state)
+            .await
+            .expect("persist marker before workspace apply");
+
+        coordinator
+            .restore_session_from_storage_path(&storage_path, &session_id)
+            .await
+            .expect("restore should reconcile staged workspace");
+
+        assert_eq!(
+            tokio::fs::read_to_string(&file_path)
+                .await
+                .expect("read reconciled file"),
+            "before\n"
+        );
+        assert_eq!(
+            session_manager
+                .get_session(&session_id)
+                .expect("restored session")
+                .dialog_turn_ids,
+            vec!["turn-0"]
+        );
+        let staged = session_manager
+            .persistence_manager()
+            .load_session_revert_state(&storage_path, &session_id)
+            .await
+            .expect("load staged marker")
+            .expect("staged marker should remain");
+        assert_eq!(
+            staged.phase,
+            crate::agentic::session::revert::SessionRevertPhase::Staged
+        );
+
+        tokio::fs::write(&file_path, "external edit\n")
+            .await
+            .expect("write external edit after successful undo");
+        coordinator
+            .commit_session_revert_before_submission(&session_id)
+            .await
+            .expect("commit stable staged boundary");
+        assert_eq!(
+            tokio::fs::read_to_string(&file_path)
+                .await
+                .expect("read external edit after commit"),
+            "external edit\n"
+        );
+        assert!(session_manager
+            .persistence_manager()
+            .load_session_revert_state(&storage_path, &session_id)
+            .await
+            .expect("load committed marker")
+            .is_none());
+    }
+
+    #[tokio::test]
+    async fn coordinator_delete_reconciles_an_unfinished_revert_before_cleanup() {
+        let (coordinator, session_manager) = test_persistent_coordinator();
+        let workspace = tempfile::tempdir().expect("workspace");
+        let session_id = format!("delete-revert-{}", uuid::Uuid::new_v4());
+        let storage_path =
+            create_two_turn_session(session_manager.as_ref(), workspace.path(), &session_id).await;
+        let state = crate::agentic::session::revert::SessionRevertState {
+            schema_version: crate::agentic::session::revert::SESSION_REVERT_SCHEMA_VERSION,
+            boundary_turn: 1,
+            original_turn_end: 2,
+            phase: crate::agentic::session::revert::SessionRevertPhase::Applying,
+            workspace_checkpoint: Vec::new(),
+        };
+        session_manager
+            .persistence_manager()
+            .save_session_revert_state(&storage_path, &session_id, &state)
+            .await
+            .expect("pending marker");
+
+        coordinator
+            .delete_session(workspace.path(), &session_id)
+            .await
+            .expect("coordinator should reconcile before deleting");
+
+        assert!(session_manager.get_session(&session_id).is_none());
+        assert!(session_manager
+            .persistence_manager()
+            .load_session_revert_state(&storage_path, &session_id)
+            .await
+            .expect("deleted marker load")
+            .is_none());
+    }
+
+    #[tokio::test]
+    async fn transcript_read_waits_for_session_history_mutation_before_loading_turns() {
+        let (coordinator, session_manager) = test_persistent_coordinator();
+        let coordinator = Arc::new(coordinator);
+        let workspace = tempfile::tempdir().expect("workspace");
+        let session_id = format!("transcript-mutation-{}", uuid::Uuid::new_v4());
+        let storage_path =
+            create_two_turn_session(session_manager.as_ref(), workspace.path(), &session_id).await;
+
+        let mutation = session_manager
+            .acquire_session_mutation(&session_id)
+            .await
+            .expect("simulated revert mutation");
+        let reader = coordinator.clone();
+        let read_session_id = session_id.clone();
+        let transcript_task = tokio::spawn(async move {
+            bitfun_runtime_ports::SessionTranscriptReader::read_session_transcript(
+                reader.as_ref(),
+                bitfun_runtime_ports::SessionTranscriptRequest {
+                    session_id: read_session_id,
+                    turn_id: None,
+                },
+            )
+            .await
+        });
+        tokio::task::yield_now().await;
+        assert!(
+            !transcript_task.is_finished(),
+            "transcript reads must share the session history mutation boundary"
+        );
+
+        session_manager
+            .persistence_manager()
+            .delete_turns_from(&storage_path, &session_id, 1)
+            .await
+            .expect("commit simulated suffix deletion");
+        drop(mutation);
+
+        let transcript = transcript_task
+            .await
+            .expect("transcript task")
+            .expect("transcript after mutation");
+        assert!(transcript
+            .messages
+            .iter()
+            .all(|message| message.turn_id.as_deref() != Some("turn-1")));
+        assert!(transcript
+            .messages
+            .iter()
+            .any(|message| message.turn_id.as_deref() == Some("turn-0")));
+    }
+
+    #[tokio::test]
+    async fn transient_transcript_locked_fallback_does_not_reenter_session_mutation() {
+        let (coordinator, session_manager) = test_coordinator();
+        let workspace = tempfile::tempdir().expect("transient workspace");
+        let session = session_manager
+            .create_session(
+                "Transient transcript".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.path().to_string_lossy().into_owned()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("transient session");
+        session_manager
+            .add_message(
+                &session.session_id,
+                Message::user("visible transient context".to_string()),
+            )
+            .await
+            .expect("transient context message");
+
+        let transcript = tokio::time::timeout(
+            Duration::from_secs(1),
+            bitfun_runtime_ports::SessionTranscriptReader::read_session_transcript(
+                &coordinator,
+                bitfun_runtime_ports::SessionTranscriptRequest {
+                    session_id: session.session_id,
+                    turn_id: None,
+                },
+            ),
+        )
+        .await
+        .expect("transient transcript must not deadlock")
+        .expect("transient transcript");
+
+        assert_eq!(transcript.messages.len(), 1);
+        assert!(matches!(
+            &transcript.messages[0].content,
+            bitfun_runtime_ports::TranscriptContent::Text(text)
+                if text == "visible transient context"
+        ));
     }
 
     #[tokio::test]

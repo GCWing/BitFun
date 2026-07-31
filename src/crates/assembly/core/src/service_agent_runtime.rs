@@ -8,17 +8,19 @@
 use bitfun_agent_runtime::sdk::{
     AgentEventSource, AgentInteractionResponsePort, AgentRuntime, AgentRuntimeBuilder,
     AgentSessionCompactionPort, AgentSessionForkPort, AgentSessionModePort, AgentSessionModelPort,
-    AgentSessionModelUpdateRequest, AgentSessionRestorePort, AgentSessionUsagePort,
-    AgentTurnSettlementPort, RuntimeError,
+    AgentSessionModelUpdateRequest, AgentSessionRestorePort, AgentSessionRevertPort,
+    AgentSessionUsagePort, AgentTurnSettlementPort, RuntimeError,
 };
+use bitfun_events::AgenticEvent;
 use bitfun_runtime_ports::{
     AgentDialogTurnPort, AgentDialogTurnRequest, AgentInputAttachment, AgentLifecycleDeliveryPort,
     AgentLocalCommandTurnPort, AgentSessionClosePort, AgentSessionCreateRequest,
-    AgentSessionManagementPort, AgentSubmissionPort, AgentSubmissionSource,
-    AgentThreadGoalManagementPort, AgentTurnCancellationPort, AgentTurnCancellationRequest,
-    PermissionPolicyPreset, RemoteControlStatePort, RemoteControlStateRequest,
-    RemoteControlStateSnapshot, RemoteSessionWorkspaceIdentity, RuntimeServiceCapability,
-    RuntimeServicePort, SessionStoragePathRequest, SessionStorePort, ToolPermissionConfig,
+    AgentSessionManagementPort, AgentSessionRevertRequest, AgentSessionRevertResult,
+    AgentSubmissionPort, AgentSubmissionSource, AgentThreadGoalManagementPort,
+    AgentTurnCancellationPort, AgentTurnCancellationRequest, PermissionPolicyPreset,
+    RemoteControlStatePort, RemoteControlStateRequest, RemoteControlStateSnapshot,
+    RemoteSessionWorkspaceIdentity, RuntimeServiceCapability, RuntimeServicePort,
+    SessionStoragePathRequest, SessionStorePort, ToolPermissionConfig,
 };
 use bitfun_services_integrations::remote_connect::{
     agent_input_attachment_from_remote_image_context, build_remote_chat_messages,
@@ -450,6 +452,114 @@ impl ScheduledSessionManagementPort {
             scheduler,
         }
     }
+
+    async fn apply_session_revert(
+        &self,
+        request: AgentSessionRevertRequest,
+        undo: bool,
+    ) -> bitfun_runtime_ports::PortResult<AgentSessionRevertResult> {
+        bitfun_core_types::validate_session_id(&request.session_id).map_err(|message| {
+            bitfun_runtime_ports::PortError::new(
+                bitfun_runtime_ports::PortErrorKind::InvalidRequest,
+                message,
+            )
+        })?;
+        if request.remote_connection_id.is_some() || request.remote_ssh_host.is_some() {
+            return Err(bitfun_runtime_ports::PortError::new(
+                bitfun_runtime_ports::PortErrorKind::NotAvailable,
+                "Session undo and redo are unavailable for remote workspaces",
+            ));
+        }
+        self.coordinator
+            .local_revert_workspace(&request.session_id)
+            .map_err(|error| {
+                if matches!(&error, crate::util::errors::BitFunError::Validation(message) if message == "Session undo and redo are unavailable for remote workspaces")
+                {
+                    bitfun_runtime_ports::PortError::new(
+                        bitfun_runtime_ports::PortErrorKind::NotAvailable,
+                        error.to_string(),
+                    )
+                } else {
+                    map_session_close_error(error)
+                }
+            })?;
+        let storage_path = CoreSessionStorePort::default()
+            .resolve_session_storage_path(SessionStoragePathRequest {
+                workspace_path: std::path::PathBuf::from(&request.workspace_path),
+                remote_connection_id: None,
+                remote_ssh_host: None,
+            })
+            .await
+            .map(|resolution| resolution.effective_storage_path)?;
+        let session_manager = self.coordinator.get_session_manager();
+        session_manager
+            .validate_session_storage_path_binding(&request.session_id, &storage_path)
+            .map_err(map_session_close_error)?;
+        let maintenance = self
+            .scheduler
+            .begin_session_maintenance(&request.session_id, &storage_path, Duration::from_secs(30))
+            .await
+            .map_err(map_session_close_error)?;
+        let _mutation = session_manager
+            .acquire_session_mutation(&request.session_id)
+            .await
+            .map_err(map_session_close_error)?;
+        session_manager
+            .validate_session_storage_path_binding(&request.session_id, &storage_path)
+            .map_err(map_session_close_error)?;
+        let (composer, changed, hidden_turn_count) = self
+            .coordinator
+            .apply_session_revert_locked(&storage_path, &request.session_id, undo)
+            .await
+            .map_err(map_session_close_error)?;
+        if changed {
+            self.coordinator
+                .emit_event(AgenticEvent::SessionHistoryChanged {
+                    session_id: request.session_id.clone(),
+                })
+                .await;
+        }
+        let transcript = self
+            .coordinator
+            .read_session_transcript_locked(bitfun_runtime_ports::SessionTranscriptRequest {
+                session_id: request.session_id.clone(),
+                turn_id: None,
+            })
+            .await
+        .map_err(|error| {
+            bitfun_runtime_ports::PortError::new(
+                bitfun_runtime_ports::PortErrorKind::OutcomeUnknown,
+                format!(
+                    "Session revert completed but the authoritative transcript could not be read: {error}"
+                ),
+            )
+        })?;
+        Ok(AgentSessionRevertResult {
+            session_id: request.session_id,
+            transcript,
+            composer,
+            retired_turn_ids: maintenance.retired_turn_ids().to_vec(),
+            changed,
+            hidden_turn_count,
+        })
+    }
+}
+
+#[async_trait::async_trait]
+impl AgentSessionRevertPort for ScheduledSessionManagementPort {
+    async fn undo_session(
+        &self,
+        request: AgentSessionRevertRequest,
+    ) -> bitfun_runtime_ports::PortResult<AgentSessionRevertResult> {
+        self.apply_session_revert(request, true).await
+    }
+
+    async fn redo_session(
+        &self,
+        request: AgentSessionRevertRequest,
+    ) -> bitfun_runtime_ports::PortResult<AgentSessionRevertResult> {
+        self.apply_session_revert(request, false).await
+    }
 }
 
 /// ACP accepts one prompt at a time per session. Keep that protocol-specific
@@ -683,6 +793,13 @@ fn scheduled_session_close_port(
     Arc::new(ScheduledSessionManagementPort::new(coordinator, scheduler))
 }
 
+fn scheduled_session_revert_port(
+    coordinator: Arc<ConversationCoordinator>,
+    scheduler: Arc<DialogScheduler>,
+) -> Arc<dyn AgentSessionRevertPort> {
+    Arc::new(ScheduledSessionManagementPort::new(coordinator, scheduler))
+}
+
 pub(crate) struct CoreServiceAgentRuntime;
 
 impl CoreServiceAgentRuntime {
@@ -780,21 +897,15 @@ impl CoreServiceAgentRuntime {
     pub(crate) async fn load_remote_chat_messages(
         session_storage_dir: &std::path::Path,
         session_id: &str,
-    ) -> (Vec<ChatMessage>, bool) {
-        let Ok(pm) = crate::infrastructure::PathManager::new() else {
-            return (vec![], false);
-        };
-        let pm = std::sync::Arc::new(pm);
-        let Ok(store) = crate::agentic::persistence::PersistenceManager::new(pm) else {
-            return (vec![], false);
-        };
-        let Ok(turns) = store
-            .load_session_turns(session_storage_dir, session_id)
+    ) -> Result<(Vec<ChatMessage>, bool), String> {
+        let coordinator = get_global_coordinator().ok_or_else(|| {
+            "Core coordinator is unavailable for remote history reads".to_string()
+        })?;
+        let turns = coordinator
+            .load_visible_persisted_session_turns(session_storage_dir, session_id)
             .await
-        else {
-            return (vec![], false);
-        };
-        (remote_chat_messages_from_turns(&turns), false)
+            .map_err(|error| error.to_string())?;
+        Ok((remote_chat_messages_from_turns(&turns), false))
     }
 
     pub(crate) async fn load_remote_model_catalog(
@@ -973,6 +1084,7 @@ impl CoreServiceAgentRuntime {
         let session_management =
             scheduled_session_management_port(coordinator.clone(), scheduler.clone());
         let session_close = scheduled_session_close_port(coordinator.clone(), scheduler.clone());
+        let session_revert = scheduled_session_revert_port(coordinator.clone(), scheduler.clone());
         let session_mode: Arc<dyn AgentSessionModePort> = coordinator.clone();
         let session_model: Arc<dyn AgentSessionModelPort> = coordinator.clone();
         let session_restore: Arc<dyn AgentSessionRestorePort> = coordinator.clone();
@@ -999,6 +1111,7 @@ impl CoreServiceAgentRuntime {
             interaction_response,
         )?
         .with_session_close_port(session_close)
+        .with_session_revert_port(session_revert)
         .with_dialog_turn_port(dialog_turn)
         .with_lifecycle_delivery_port(lifecycle_delivery)
         .build()
@@ -1012,6 +1125,7 @@ impl CoreServiceAgentRuntime {
         let submission: Arc<dyn AgentSubmissionPort> = coordinator.clone();
         let session_management =
             scheduled_session_management_port(coordinator.clone(), scheduler.clone());
+        let session_revert = scheduled_session_revert_port(coordinator.clone(), scheduler.clone());
         let session_mode: Arc<dyn AgentSessionModePort> = coordinator.clone();
         let session_model: Arc<dyn AgentSessionModelPort> = coordinator.clone();
         let session_restore: Arc<dyn AgentSessionRestorePort> = coordinator.clone();
@@ -1036,6 +1150,7 @@ impl CoreServiceAgentRuntime {
             cancellation,
             interaction_response,
         )?
+        .with_session_revert_port(session_revert)
         .with_lifecycle_delivery_port(lifecycle_delivery)
         .build()
         .map_err(|error| error.to_string())
@@ -1052,6 +1167,7 @@ impl CoreServiceAgentRuntime {
         let submission: Arc<dyn AgentSubmissionPort> = coordinator.clone();
         let session_management =
             scheduled_session_management_port(coordinator.clone(), scheduler.clone());
+        let session_revert = scheduled_session_revert_port(coordinator.clone(), scheduler.clone());
         let session_model: Arc<dyn AgentSessionModelPort> = coordinator.clone();
         let session_compaction: Arc<dyn AgentSessionCompactionPort> = coordinator.clone();
         let interaction_response: Arc<dyn AgentInteractionResponsePort> = coordinator;
@@ -1061,6 +1177,7 @@ impl CoreServiceAgentRuntime {
         AgentRuntimeBuilder::new()
             .with_submission_port(submission)
             .with_session_management_port(session_management)
+            .with_session_revert_port(session_revert)
             .with_session_model_port(session_model)
             .with_session_compaction_port(session_compaction)
             .with_dialog_turn_port(dialog_turn)
@@ -1082,6 +1199,7 @@ impl CoreServiceAgentRuntime {
         let submission: Arc<dyn AgentSubmissionPort> = coordinator.clone();
         let session_management =
             scheduled_session_management_port(coordinator.clone(), scheduler.clone());
+        let session_revert = scheduled_session_revert_port(coordinator.clone(), scheduler.clone());
         let session_mode: Arc<dyn AgentSessionModePort> = coordinator.clone();
         let session_model: Arc<dyn AgentSessionModelPort> = coordinator.clone();
         let session_restore: Arc<dyn AgentSessionRestorePort> = coordinator.clone();
@@ -1107,6 +1225,7 @@ impl CoreServiceAgentRuntime {
             cancellation,
             interaction_response,
         )?
+        .with_session_revert_port(session_revert)
         .with_dialog_turn_port(dialog_turn)
         .with_lifecycle_delivery_port(lifecycle_delivery)
         .build()
@@ -1198,6 +1317,7 @@ impl CoreServiceAgentRuntime {
         let session_management =
             scheduled_session_management_port(coordinator.clone(), scheduler.clone());
         let session_close = scheduled_session_close_port(coordinator.clone(), scheduler.clone());
+        let session_revert = scheduled_session_revert_port(coordinator.clone(), scheduler.clone());
         let session_mode: Arc<dyn AgentSessionModePort> = coordinator.clone();
         let session_model: Arc<dyn AgentSessionModelPort> = coordinator.clone();
         let session_restore: Arc<dyn AgentSessionRestorePort> = coordinator.clone();
@@ -1224,6 +1344,7 @@ impl CoreServiceAgentRuntime {
             interaction_response,
         )?
         .with_session_close_port(session_close)
+        .with_session_revert_port(session_revert)
         .with_dialog_turn_port(dialog_turn)
         .with_lifecycle_delivery_port(lifecycle_delivery);
         let builder = match event_source {
@@ -1765,7 +1886,7 @@ impl RemoteSessionRuntimeHost for CoreRemoteSessionRuntimeHost {
         &self,
         session_storage_dir: &std::path::Path,
         session_id: &str,
-    ) -> (Vec<ChatMessage>, bool) {
+    ) -> Result<(Vec<ChatMessage>, bool), String> {
         CoreServiceAgentRuntime::load_remote_chat_messages(session_storage_dir, session_id).await
     }
 
@@ -1848,7 +1969,7 @@ impl RemotePollRuntimeHost for CoreRemotePollRuntimeHost<'_> {
         &self,
         session_storage_dir: &std::path::Path,
         session_id: &str,
-    ) -> (Vec<ChatMessage>, bool) {
+    ) -> Result<(Vec<ChatMessage>, bool), String> {
         CoreServiceAgentRuntime::load_remote_chat_messages(session_storage_dir, session_id).await
     }
 }

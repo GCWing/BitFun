@@ -18,7 +18,8 @@ use std::time::{Duration, Instant};
 use tokio::sync::broadcast::error::TryRecvError;
 
 use bitfun_agent_runtime::sdk::{
-    AgentLocalCommandTurnRecordRequest, AgentSessionUsageRequest, SessionUsageReport,
+    AgentLocalCommandTurnRecordRequest, AgentSessionComposerUpdate, AgentSessionUsageRequest,
+    SessionUsageReport,
 };
 use bitfun_events::{AgenticEvent, ToolEventData, ToolEventIdentity};
 use resize::ResizeRedrawState;

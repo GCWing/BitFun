@@ -1197,6 +1197,22 @@ mod tests {
             ),
             Some("Usage: /fork")
         );
+        assert_eq!(
+            builtin_arguments_error(
+                CommandRoute::Builtin,
+                ActionHandler::UndoSession,
+                "unexpected"
+            ),
+            Some("Usage: /undo")
+        );
+        assert_eq!(
+            builtin_arguments_error(
+                CommandRoute::Builtin,
+                ActionHandler::RedoSession,
+                "unexpected"
+            ),
+            Some("Usage: /redo")
+        );
     }
 
     #[test]
@@ -1878,6 +1894,16 @@ mod tests {
             true,
             ActionHandler::Sessions,
         ));
+        assert!(pending_session_operation_blocks_runtime_action(
+            false,
+            true,
+            ActionHandler::UndoSession,
+        ));
+        assert!(pending_session_operation_blocks_runtime_action(
+            true,
+            true,
+            ActionHandler::RedoSession,
+        ));
         assert!(!pending_session_operation_blocks_runtime_action(
             true,
             false,
@@ -1967,6 +1993,8 @@ mod tests {
         assert!(help.contains("Session Commands"));
         assert!(help.contains(rename.description));
         assert!(help.contains("/rename <name>"));
+        assert!(help.contains("/undo"));
+        assert!(help.contains("/redo"));
     }
 
     #[test]

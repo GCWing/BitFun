@@ -358,6 +358,10 @@ pub fn project_agentic_frontend_event(event: AgenticEvent) -> Option<AgenticFron
                 "newState": new_state,
             }),
         )),
+        AgenticEvent::SessionHistoryChanged { session_id } => Some(AgenticFrontendEvent::new(
+            "agentic://session-history-changed",
+            json!({ "sessionId": session_id }),
+        )),
         AgenticEvent::SessionModelAutoMigrated {
             session_id,
             previous_model_id,

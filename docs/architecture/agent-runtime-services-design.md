@@ -1129,7 +1129,7 @@ Product 测试：
   turn、处理基础会话控制、更新会话模型并处理工具确认/拒绝；本地工作区快照准备、文件清单、统计和文件回滚通过独立 owner port 复用 Core 实现，
   富历史和其余持久化维护缺口仍通过单一 Core 兼容接口处理，不再构造独立调度器、持久化 manager 或事件队列；
   wire schema、Relay ACK/重放和重连协议未在该切换中扩张。
-- CLI 主会话客户端通过 Rust Runtime SDK 处理 session、transcript、fork、usage report、用量卡片完成态本地命令轮次、turn、cancel 与 settlement；其他 preview 缺口仍通过一个 Core 兼容接口处理；
+- CLI 主会话客户端通过 Rust Runtime SDK 处理 session、transcript、fork、本地 Session undo/redo、usage report、用量卡片完成态本地命令轮次、turn、cancel 与 settlement；undo/redo 使用独立窄 port，由 Core 统一暂存 transcript、模型上下文与工作区边界，不扩展 `RuntimeServices` 为 service locator；其他 preview 缺口仍通过一个 Core 兼容接口处理；
   该接口复用现有归属模块，不建立第二套状态或事件格式。
 - CLI 托管的 ACP 服务端已以 `DeliveryProfile::Acp` 构造真实 Runtime Parts；会话创建/列举、轮次、取消、会话模型更新、工具确认/拒绝和
   Agent 事件订阅复用同一 Agent Runtime API 语义，ACP stdio、连接与协议转换保持不变。Agentic Event Queue 仍是唯一事件归属模块；

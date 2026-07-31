@@ -358,6 +358,9 @@ pub(crate) struct ChatState {
     // -- Streaming state (transient, not persisted) --
     /// Current turn ID being processed
     current_turn_id: Option<String>,
+    /// Turns retired by authoritative Session operations. Their already queued
+    /// events are fenced from the rebuilt visible transcript.
+    ignored_turn_ids: HashSet<String>,
     /// Ordered flow items for the current streaming message.
     /// Text, thinking, and tool blocks are interleaved in chronological order,
     /// matching the actual conversation flow (inspired by opencode's Part model).
@@ -414,6 +417,7 @@ impl ChatState {
             metadata: ChatMetadata::default(),
             last_primary_model_usage: None,
             current_turn_id: None,
+            ignored_turn_ids: HashSet::new(),
             current_flow_items: Vec::new(),
             tool_index: HashMap::new(),
             is_processing: false,
@@ -741,6 +745,37 @@ impl ChatState {
         state.metadata.tool_calls = tool_count;
         state.messages = messages;
         state
+    }
+
+    /// Replace the render projection from the Runtime-owned transcript while
+    /// retaining Session/workspace/product settings owned by the TUI shell.
+    pub(crate) fn replace_from_authoritative_transcript(
+        &mut self,
+        transcript: &SessionTranscript,
+        retired_turn_ids: &[String],
+    ) {
+        debug_assert_eq!(transcript.session_id, self.core_session_id);
+        let projected = Self::from_session_transcript(
+            self.core_session_id.clone(),
+            self.session_name.clone(),
+            self.agent_type.clone(),
+            self.workspace.clone(),
+            transcript,
+        );
+        self.messages = projected.messages;
+        self.metadata = projected.metadata;
+        self.last_primary_model_usage = None;
+        if let Some(turn_id) = self.current_turn_id.take() {
+            self.ignored_turn_ids.insert(turn_id);
+        }
+        self.ignored_turn_ids
+            .extend(retired_turn_ids.iter().cloned());
+        self.current_flow_items.clear();
+        self.tool_index.clear();
+        self.is_processing = false;
+        self.permission_prompt = None;
+        self.permission_queue.clear();
+        self.question_prompt = None;
     }
 
     // ============ Event Handlers ============
@@ -1199,6 +1234,17 @@ impl ChatState {
         self.tool_index.clear();
         self.is_processing = false;
         self.question_prompt = None;
+    }
+
+    pub(crate) fn should_apply_turn_cancelled(&mut self, turn_id: &str) -> bool {
+        if self.should_ignore_turn_event(turn_id) {
+            return false;
+        }
+        self.current_turn_id.is_none() || self.current_turn_id.as_deref() == Some(turn_id)
+    }
+
+    pub(crate) fn should_ignore_turn_event(&self, turn_id: &str) -> bool {
+        self.ignored_turn_ids.contains(turn_id)
     }
 
     /// Record the latest primary-model request observed by this TUI.
@@ -1790,6 +1836,80 @@ mod tests {
             },
             &wire_input
         );
+    }
+
+    #[test]
+    fn authoritative_transcript_replaces_only_session_projection_and_clears_active_turn() {
+        let mut state = ChatState::new(
+            "session-1".to_string(),
+            "Session".to_string(),
+            "agentic".to_string(),
+            Some("D:/workspace/project".to_string()),
+        );
+        state.current_model_id = Some("model-1".to_string());
+        state.handle_turn_started("turn-2", "Hidden prompt");
+        let transcript = SessionTranscript {
+            session_id: "session-1".to_string(),
+            messages: vec![TranscriptMessage {
+                id: Some("user-1".to_string()),
+                role: "user".to_string(),
+                turn_id: Some("turn-1".to_string()),
+                timestamp_ms: Some(1_000),
+                content: TranscriptContent::Text("Visible prompt".to_string()),
+            }],
+        };
+
+        state.replace_from_authoritative_transcript(&transcript, &[]);
+
+        assert_eq!(state.messages.len(), 1);
+        assert_eq!(state.messages[0].turn_id.as_deref(), Some("turn-1"));
+        assert_eq!(state.current_model_id.as_deref(), Some("model-1"));
+        assert_eq!(state.workspace.as_deref(), Some("D:/workspace/project"));
+        assert!(!state.is_processing);
+        assert!(state.current_turn_id().is_none());
+        assert!(!state.should_apply_turn_cancelled("turn-2"));
+    }
+
+    #[test]
+    fn authoritative_transcript_fences_a_turn_start_that_arrives_after_revert() {
+        let mut state = ChatState::new(
+            "session-1".to_string(),
+            "Session".to_string(),
+            "agentic".to_string(),
+            None,
+        );
+        let transcript = SessionTranscript {
+            session_id: "session-1".to_string(),
+            messages: vec![TranscriptMessage {
+                id: Some("assistant-visible".to_string()),
+                role: "assistant".to_string(),
+                turn_id: Some("turn-visible".to_string()),
+                timestamp_ms: Some(1_000),
+                content: TranscriptContent::Text("Visible answer".to_string()),
+            }],
+        };
+
+        state.replace_from_authoritative_transcript(
+            &transcript,
+            &["retired-turn".to_string(), "queued-turn".to_string()],
+        );
+
+        assert!(state.should_ignore_turn_event("retired-turn"));
+        assert!(state.should_ignore_turn_event("queued-turn"));
+        if !state.should_ignore_turn_event("retired-turn") {
+            state.handle_turn_started("retired-turn", "late prompt");
+        }
+        assert_eq!(state.messages.len(), 1);
+        assert!(!state.is_processing);
+        assert!(!state.should_apply_turn_cancelled("retired-turn"));
+        assert!(!state.should_apply_turn_cancelled("queued-turn"));
+        if state.should_apply_turn_cancelled("queued-turn") {
+            state.handle_turn_cancelled();
+        }
+        assert!(matches!(
+            state.messages[0].flow_items.as_slice(),
+            [FlowItem::Text { content, .. }] if content == "Visible answer"
+        ));
     }
 
     #[test]

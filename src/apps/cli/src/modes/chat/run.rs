@@ -712,6 +712,17 @@ impl ChatMode {
 
                 tracing::debug!("Processing core event: {:?}", event);
 
+                if event
+                    .turn_id()
+                    .is_some_and(|turn_id| chat_state.should_ignore_turn_event(turn_id))
+                {
+                    tracing::debug!(
+                        "Ignoring event for a Turn retired by authoritative Session state: turn_id={:?}",
+                        event.turn_id()
+                    );
+                    continue;
+                }
+
                 match event {
                     AgenticEvent::DialogTurnStarted {
                         turn_id,
@@ -825,8 +836,7 @@ impl ChatMode {
                     }
 
                     AgenticEvent::DialogTurnCancelled { turn_id, .. } => {
-                        let active_turn_id = chat_state.current_turn_id();
-                        if active_turn_id.is_none() || active_turn_id == Some(turn_id.as_str()) {
+                        if chat_state.should_apply_turn_cancelled(turn_id) {
                             chat_state.handle_turn_cancelled();
                             self.refresh_workspace_git_status(&mut chat_state, &rt_handle);
                             chat_view.invalidate_lines_cache();

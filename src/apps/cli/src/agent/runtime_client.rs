@@ -16,10 +16,11 @@ use bitfun_agent_runtime::sdk::{
     AgentSessionCompactionRequest, AgentSessionCreateRequest, AgentSessionDeleteRequest,
     AgentSessionForkBeforeTurnRequest, AgentSessionForkRequest, AgentSessionForkResult,
     AgentSessionListRequest, AgentSessionModeUpdateRequest, AgentSessionModelUpdateRequest,
-    AgentSessionRenameRequest, AgentSessionRestoreRequest, AgentSessionUsageRequest,
-    AgentTurnCancellationRequest, AgentTurnSettlementRequest, AgentUserAnswersRequest,
-    PermissionReply, PermissionRequest, PermissionRequestEventReceiver, PortError, PortErrorKind,
-    RuntimeError, SessionTranscript, SessionTranscriptRequest, SessionUsageReport,
+    AgentSessionRenameRequest, AgentSessionRestoreRequest, AgentSessionRevertRequest,
+    AgentSessionRevertResult, AgentSessionUsageRequest, AgentTurnCancellationRequest,
+    AgentTurnSettlementRequest, AgentUserAnswersRequest, PermissionReply, PermissionRequest,
+    PermissionRequestEventReceiver, PortError, PortErrorKind, RuntimeError, SessionTranscript,
+    SessionTranscriptRequest, SessionUsageReport,
 };
 use bitfun_agent_runtime_ipc::{
     RuntimeIpcClient, RuntimeIpcClientError, RuntimeIpcClientEvent, RuntimeIpcErrorCode,
@@ -813,6 +814,55 @@ impl CliAgentRuntimeClient {
             .unwrap_or_else(|poisoned| poisoned.into_inner())
             .clear();
         Ok((session, binding, transcript))
+    }
+
+    pub(crate) async fn revert_current_session(
+        &self,
+        undo: bool,
+    ) -> Result<AgentSessionRevertResult> {
+        let session_id = self.require_session_id().await?;
+        let request = AgentSessionRevertRequest {
+            workspace_path: self.project_workspace_path_string(),
+            session_id: session_id.clone(),
+            remote_connection_id: None,
+            remote_ssh_host: None,
+        };
+        let locally_active_turn_id = self.current_turn_id.lock().await.clone();
+        let mut reverted = match &self.backend {
+            CliAgentRuntimeBackend::Embedded(runtime) => if undo {
+                runtime.undo_session(request).await
+            } else {
+                runtime.redo_session(request).await
+            }
+            .map_err(|error| anyhow::anyhow!(error.into_message()))?,
+            CliAgentRuntimeBackend::Shared(client) => {
+                let operation = if undo {
+                    RuntimeIpcOperation::UndoSession { request }
+                } else {
+                    RuntimeIpcOperation::RedoSession { request }
+                };
+                match client.request(operation).await? {
+                    RuntimeIpcOperationResult::SessionReverted { revert }
+                        if revert.session_id == session_id =>
+                    {
+                        revert
+                    }
+                    _ => return Err(unexpected_shared_result("revert_session")),
+                }
+            }
+        };
+        if reverted.session_id != session_id {
+            return Err(anyhow::anyhow!(
+                "Runtime reverted an unexpected session identity"
+            ));
+        }
+        if let Some(turn_id) = locally_active_turn_id {
+            if !reverted.retired_turn_ids.contains(&turn_id) {
+                reverted.retired_turn_ids.push(turn_id);
+            }
+        }
+        *self.current_turn_id.lock().await = None;
+        Ok(reverted)
     }
 
     pub(crate) async fn generate_session_usage_report(
@@ -1654,6 +1704,25 @@ mod tests {
         assert!(fork.contains("CliAgentRuntimeBackend::Shared(client)"));
         assert!(fork.contains("RuntimeIpcOperation::ForkSession"));
         assert!(fork.contains("RuntimeIpcOperationResult::SessionForked"));
+    }
+
+    #[test]
+    fn session_revert_uses_the_same_authoritative_result_in_both_deployments() {
+        let source = include_str!("runtime_client.rs").replace("\r\n", "\n");
+        let revert = source
+            .split_once("pub(crate) async fn revert_current_session(")
+            .expect("session revert method")
+            .1
+            .split_once("pub(crate) async fn generate_session_usage_report(")
+            .expect("session revert method boundary")
+            .0;
+
+        assert!(revert.contains("CliAgentRuntimeBackend::Embedded(runtime)"));
+        assert!(revert.contains("runtime.undo_session(request)"));
+        assert!(revert.contains("runtime.redo_session(request)"));
+        assert!(revert.contains("RuntimeIpcOperation::UndoSession"));
+        assert!(revert.contains("RuntimeIpcOperation::RedoSession"));
+        assert!(revert.contains("RuntimeIpcOperationResult::SessionReverted"));
     }
 
     #[test]

@@ -10,9 +10,9 @@ use std::time::Instant;
 
 use async_trait::async_trait;
 use bitfun_agent_runtime::sdk::{
-    AgentRuntime, AgentSessionArchiveStateRequest, AgentSessionDeleteRequest,
-    AgentSessionForkAtTurnRequest, AgentSessionRenameRequest, AgentSessionUsageRequest,
-    PortErrorKind, RuntimeError,
+    AgentLocalCommandTurnRecordRequest, AgentRuntime, AgentSessionArchiveStateRequest,
+    AgentSessionDeleteRequest, AgentSessionForkAtTurnRequest, AgentSessionRenameRequest,
+    AgentSessionUsageRequest, PortErrorKind, RuntimeError,
 };
 use bitfun_core::agentic::coordination::{ConversationCoordinator, DialogScheduler};
 use bitfun_core::agentic::core::Session;
@@ -21,7 +21,10 @@ use bitfun_core::agentic::session::SessionViewRestoreTiming;
 use bitfun_core::product_runtime::{CoreAgentRuntimeCompatibility, CoreProductAgentRuntime};
 use bitfun_core::service::remote_ssh::workspace_state::get_effective_session_path;
 use bitfun_core::service::remote_ssh::SSHConnectionManager;
-use bitfun_core::service::session::{DialogTurnData, SessionMetadata, SessionStatus};
+use bitfun_core::service::session::{
+    DialogTurnData, DialogTurnKind, SessionMetadata, SessionStatus, SessionTranscriptExport,
+    SessionTranscriptExportOptions,
+};
 use bitfun_core::service::session_usage::SessionUsageReport;
 use bitfun_core::service::token_usage::TokenUsageService;
 use bitfun_core::service::workspace::WorkspaceService;
@@ -88,6 +91,30 @@ fn desktop_runtime_session_error(error: RuntimeError) -> DesktopSessionApplicati
         }
         error => DesktopSessionApplicationError::Runtime(error.into_message()),
     }
+}
+
+fn local_command_turn_record_request(
+    turn: &DialogTurnData,
+) -> DesktopSessionApplicationResult<Option<AgentLocalCommandTurnRecordRequest>> {
+    if turn.kind != DialogTurnKind::LocalCommand {
+        return Ok(None);
+    }
+    let metadata = match turn.user_message.metadata.clone() {
+        None => serde_json::Map::new(),
+        Some(serde_json::Value::Object(metadata)) => metadata,
+        Some(_) => {
+            return Err(DesktopSessionApplicationError::Validation(
+                "Local command Turn metadata must be an object".to_string(),
+            ));
+        }
+    };
+    Ok(Some(AgentLocalCommandTurnRecordRequest {
+        session_id: turn.session_id.clone(),
+        content: turn.user_message.content.clone(),
+        turn_id: Some(turn.turn_id.clone()),
+        timestamp_ms: Some(turn.timestamp),
+        metadata,
+    }))
 }
 
 #[derive(Debug)]
@@ -254,6 +281,10 @@ impl DesktopSessionApplication {
         &self.agent_runtime
     }
 
+    pub(crate) fn compatibility(&self) -> &CoreAgentRuntimeCompatibility {
+        &self.compatibility
+    }
+
     pub(crate) async fn reload_session_context(
         &self,
         request: AgentContextReloadRequest,
@@ -344,6 +375,20 @@ impl DesktopSessionApplication {
             .collect())
     }
 
+    pub(crate) async fn export_session_transcript(
+        &self,
+        request: DesktopSessionScopeRequest,
+        session_id: &str,
+        options: &SessionTranscriptExportOptions,
+    ) -> DesktopSessionApplicationResult<SessionTranscriptExport> {
+        let scope = self.resolved_scope(request).await;
+        self.ensure_runtime_ownership(&scope)?;
+        self.compatibility
+            .export_persisted_session_transcript(&self.storage_path(&scope), session_id, options)
+            .await
+            .map_err(desktop_core_session_error)
+    }
+
     pub(crate) async fn load_session_turns(
         &self,
         request: DesktopSessionScopeRequest,
@@ -369,6 +414,36 @@ impl DesktopSessionApplication {
             .load_persisted_session_metadata(&storage_path, session_id)
             .await
             .map_err(|error| DesktopSessionApplicationError::Core(error.to_string()))
+    }
+
+    pub(crate) async fn save_session_turn(
+        &self,
+        request: DesktopSessionScopeRequest,
+        turn: &DialogTurnData,
+    ) -> DesktopSessionApplicationResult<()> {
+        let scope = self.resolved_scope(request).await;
+        self.ensure_runtime_ownership(&scope)?;
+        let storage_path = self.storage_path(&scope);
+        self.compatibility
+            .ensure_session_loaded_from_storage_path(&storage_path, &turn.session_id, false)
+            .await
+            .map_err(desktop_core_session_error)?;
+        if let Some(local_command) = local_command_turn_record_request(turn)? {
+            return self
+                .agent_runtime
+                .record_completed_local_command_turn(local_command)
+                .await
+                .map_err(desktop_runtime_session_error);
+        }
+        let mutation = self
+            .compatibility
+            .begin_persisted_session_mutation(&storage_path, &turn.session_id)
+            .await
+            .map_err(desktop_core_session_error)?;
+        self.compatibility
+            .save_persisted_dialog_turn(&mutation, turn)
+            .await
+            .map_err(desktop_core_session_error)
     }
 
     pub(crate) async fn touch_session(
@@ -789,6 +864,39 @@ mod tests {
             error.to_string(),
             "outcome_unknown: inspect authoritative state"
         );
+    }
+
+    #[test]
+    fn desktop_local_usage_turn_maps_to_the_fixed_runtime_append_contract() {
+        let mut turn = DialogTurnData::new_with_kind(
+            DialogTurnKind::LocalCommand,
+            "local-usage-report-1".to_string(),
+            2,
+            "session-1".to_string(),
+            None,
+            bitfun_core::service::session::UserMessageData {
+                id: "local-usage-user-report-1".to_string(),
+                content: "# Usage".to_string(),
+                timestamp: 42,
+                metadata: Some(json!({
+                    "localCommandKind": "usage_report",
+                    "reportId": "report-1"
+                })),
+            },
+        );
+        turn.timestamp = 42;
+
+        let request = local_command_turn_record_request(&turn)
+            .expect("valid local command")
+            .expect("local command request");
+        assert_eq!(request.session_id, "session-1");
+        assert_eq!(request.turn_id.as_deref(), Some("local-usage-report-1"));
+        assert_eq!(request.content, "# Usage");
+        assert_eq!(request.timestamp_ms, Some(42));
+        assert_eq!(request.metadata["localCommandKind"], "usage_report");
+
+        let source = include_str!("session_application.rs");
+        assert!(source.contains("record_completed_local_command_turn(local_command)"));
     }
 
     struct RecordingDeletePort {

@@ -90,6 +90,53 @@ impl SnapshotManager {
             .await
     }
 
+    pub(crate) async fn prepare_workspace_revert(
+        &self,
+        session_id: &str,
+        state: &mut crate::agentic::session::revert::SessionRevertState,
+    ) -> SnapshotResult<()> {
+        self.snapshot_service
+            .read()
+            .await
+            .prepare_workspace_revert(session_id, state)
+            .await
+    }
+
+    pub(crate) async fn apply_workspace_revert(
+        &self,
+        session_id: &str,
+        state: &crate::agentic::session::revert::SessionRevertState,
+    ) -> SnapshotResult<Vec<PathBuf>> {
+        self.snapshot_service
+            .read()
+            .await
+            .apply_workspace_revert(session_id, state)
+            .await
+    }
+
+    pub(crate) async fn commit_workspace_revert(
+        &self,
+        session_id: &str,
+        state: &crate::agentic::session::revert::SessionRevertState,
+    ) -> SnapshotResult<()> {
+        self.snapshot_service
+            .read()
+            .await
+            .commit_workspace_revert(session_id, state)
+            .await
+    }
+
+    pub(crate) async fn delete_workspace_revert_checkpoint(
+        &self,
+        state: &crate::agentic::session::revert::SessionRevertState,
+    ) -> SnapshotResult<()> {
+        self.snapshot_service
+            .read()
+            .await
+            .delete_workspace_revert_checkpoint(state)
+            .await
+    }
+
     /// Accepts all changes in a session.
     pub async fn accept_session(&self, session_id: &str) -> SnapshotResult<()> {
         let snapshot_service = self.snapshot_service.read().await;
@@ -116,14 +163,34 @@ impl SnapshotManager {
 
     /// Returns the list of files affected by a session.
     pub async fn get_session_files(&self, session_id: &str) -> SnapshotResult<Vec<PathBuf>> {
+        self.get_session_files_before(session_id, None).await
+    }
+
+    pub async fn get_session_files_before(
+        &self,
+        session_id: &str,
+        max_turn_exclusive: Option<usize>,
+    ) -> SnapshotResult<Vec<PathBuf>> {
         let snapshot_service = self.snapshot_service.read().await;
-        snapshot_service.get_session_files(session_id).await
+        snapshot_service
+            .get_session_files_before(session_id, max_turn_exclusive)
+            .await
     }
 
     /// Returns the list of turns for a session.
     pub async fn get_session_turns(&self, session_id: &str) -> SnapshotResult<Vec<usize>> {
+        self.get_session_turns_before(session_id, None).await
+    }
+
+    pub async fn get_session_turns_before(
+        &self,
+        session_id: &str,
+        max_turn_exclusive: Option<usize>,
+    ) -> SnapshotResult<Vec<usize>> {
         let snapshot_service = self.snapshot_service.read().await;
-        snapshot_service.get_session_turns(session_id).await
+        snapshot_service
+            .get_session_turns_before(session_id, max_turn_exclusive)
+            .await
     }
 
     /// Returns the list of files modified in a turn.
@@ -132,9 +199,19 @@ impl SnapshotManager {
         session_id: &str,
         turn_index: usize,
     ) -> SnapshotResult<Vec<PathBuf>> {
+        self.get_turn_files_before(session_id, turn_index, None)
+            .await
+    }
+
+    pub async fn get_turn_files_before(
+        &self,
+        session_id: &str,
+        turn_index: usize,
+        max_turn_exclusive: Option<usize>,
+    ) -> SnapshotResult<Vec<PathBuf>> {
         let snapshot_service = self.snapshot_service.read().await;
         snapshot_service
-            .get_turn_files(session_id, turn_index)
+            .get_turn_files_before(session_id, turn_index, max_turn_exclusive)
             .await
     }
 
@@ -145,10 +222,26 @@ impl SnapshotManager {
         file_path: &str,
         anchor_operation_id: Option<&str>,
     ) -> SnapshotResult<serde_json::Value> {
+        self.get_file_diff_before(session_id, file_path, anchor_operation_id, None)
+            .await
+    }
+
+    pub async fn get_file_diff_before(
+        &self,
+        session_id: &str,
+        file_path: &str,
+        anchor_operation_id: Option<&str>,
+        max_turn_exclusive: Option<usize>,
+    ) -> SnapshotResult<serde_json::Value> {
         let snapshot_service = self.snapshot_service.read().await;
         let file_path = std::path::Path::new(file_path);
         let (original, modified, anchor_line) = snapshot_service
-            .get_file_diff_with_anchor(session_id, file_path, anchor_operation_id)
+            .get_file_diff_with_anchor_before(
+                session_id,
+                file_path,
+                anchor_operation_id,
+                max_turn_exclusive,
+            )
             .await?;
 
         Ok(serde_json::json!({
@@ -164,10 +257,20 @@ impl SnapshotManager {
         session_id: &str,
         file_path: &str,
     ) -> SnapshotResult<crate::service::snapshot::types::SessionFileDiffStats> {
+        self.get_session_file_diff_stats_before(session_id, file_path, None)
+            .await
+    }
+
+    pub async fn get_session_file_diff_stats_before(
+        &self,
+        session_id: &str,
+        file_path: &str,
+        max_turn_exclusive: Option<usize>,
+    ) -> SnapshotResult<crate::service::snapshot::types::SessionFileDiffStats> {
         let snapshot_service = self.snapshot_service.read().await;
         let file_path = std::path::Path::new(file_path);
         snapshot_service
-            .get_session_file_diff_stats(session_id, file_path)
+            .get_session_file_diff_stats_before(session_id, file_path, max_turn_exclusive)
             .await
     }
 
@@ -176,9 +279,19 @@ impl SnapshotManager {
         session_id: &str,
         operation_id: &str,
     ) -> SnapshotResult<serde_json::Value> {
+        self.get_operation_summary_before(session_id, operation_id, None)
+            .await
+    }
+
+    pub async fn get_operation_summary_before(
+        &self,
+        session_id: &str,
+        operation_id: &str,
+        max_turn_exclusive: Option<usize>,
+    ) -> SnapshotResult<serde_json::Value> {
         let snapshot_service = self.snapshot_service.read().await;
         let op = snapshot_service
-            .get_operation_summary(session_id, operation_id)
+            .get_operation_summary_before(session_id, operation_id, max_turn_exclusive)
             .await?;
         Ok(serde_json::json!({
             "operation_id": op.operation_id,
@@ -197,25 +310,48 @@ impl SnapshotManager {
         &self,
         session_id: &str,
     ) -> SnapshotResult<crate::service::snapshot::types::SessionInfo> {
+        self.get_session_before(session_id, None).await
+    }
+
+    pub async fn get_session_before(
+        &self,
+        session_id: &str,
+        max_turn_exclusive: Option<usize>,
+    ) -> SnapshotResult<crate::service::snapshot::types::SessionInfo> {
         let snapshot_service = self.snapshot_service.read().await;
-        snapshot_service.get_session(session_id).await
+        snapshot_service
+            .get_session_before(session_id, max_turn_exclusive)
+            .await
     }
 
     /// Returns session statistics.
     pub async fn get_session_stats(&self, session_id: &str) -> SnapshotResult<serde_json::Value> {
-        let stats = self.get_session_stats_fact(session_id).await?;
+        self.get_session_stats_before(session_id, None).await
+    }
+
+    pub async fn get_session_stats_before(
+        &self,
+        session_id: &str,
+        max_turn_exclusive: Option<usize>,
+    ) -> SnapshotResult<serde_json::Value> {
+        let stats = self
+            .get_session_stats_fact_before(session_id, max_turn_exclusive)
+            .await?;
 
         serde_json::to_value(stats).map_err(|e| {
             SnapshotError::ConfigError(format!("Failed to serialize statistics: {}", e))
         })
     }
 
-    pub(crate) async fn get_session_stats_fact(
+    pub(crate) async fn get_session_stats_fact_before(
         &self,
         session_id: &str,
+        max_turn_exclusive: Option<usize>,
     ) -> SnapshotResult<SessionStats> {
         let snapshot_service = self.snapshot_service.read().await;
-        snapshot_service.get_session_stats(session_id).await
+        snapshot_service
+            .get_session_stats_before(session_id, max_turn_exclusive)
+            .await
     }
 
     /// Returns system statistics.

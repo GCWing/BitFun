@@ -4863,8 +4863,11 @@ export function runManifestParserSelfTest({
     runtimeIpcOperationPattern.test('    RenameSession {') ||
     runtimeIpcOperationPattern.test('    UpdateSessionMode {') ||
     runtimeIpcOperationPattern.test('    UpdateSessionModel {') ||
+    runtimeIpcOperationPattern.test('    UndoSession {') ||
+    runtimeIpcOperationPattern.test('    RedoSession {') ||
     runtimeIpcOperationPattern.test('    SubmitTurn {') ||
-    runtimeIpcOperationPattern.test('    SessionForked {')
+    runtimeIpcOperationPattern.test('    SessionForked {') ||
+    runtimeIpcOperationPattern.test('    SessionReverted {')
   ) {
     throw new Error('agent-runtime-ipc operation guard must preserve the Shared TUI operation budget');
   }

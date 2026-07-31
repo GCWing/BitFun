@@ -456,10 +456,17 @@ async fn process_single_session(
         source.turn_count,
         format_unix_secs(source.last_finished_unix_secs)
     );
-    let turns = match persistence
-        .load_session_turns(session_storage_path, &source.session_id)
-        .await
-    {
+    let turns_result = match crate::agentic::coordination::get_global_coordinator() {
+        Some(coordinator) => {
+            coordinator
+                .load_visible_persisted_session_turns(session_storage_path, &source.session_id)
+                .await
+        }
+        None => Err(BitFunError::service(
+            "Core coordinator is unavailable for AI Memory history reads",
+        )),
+    };
+    let turns = match turns_result {
         Ok(turns) => turns,
         Err(error) => {
             record_failure(

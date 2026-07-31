@@ -546,10 +546,19 @@ pub(crate) async fn get_session_stats(
         .map_err(session_stats_validation_error)?;
     require_local_snapshot_workspace(request, &workspace_path).await?;
 
+    let scope = ensure_session_workspace_runtime_ownership(state, request)?;
+    let storage_path = resolved_session_storage_scope(state, scope).await?;
+    let read = state
+        .compatibility
+        .begin_persisted_session_read(&storage_path, &session_id)
+        .await
+        .map_err(|error| format!("Failed to open a consistent snapshot view: {error}"))?;
+
     let stats = local_snapshot_session_stats(
         state.local_workspace_snapshot.as_ref(),
         PathBuf::from(&workspace_path),
         session_id,
+        read.visible_turn_end(),
     )
     .await?;
 
@@ -587,7 +596,12 @@ pub(crate) async fn save_session_turn(
             return Err("turn_data session_id does not match request session_id".to_string());
         }
     }
-    let _mutation = state
+    state
+        .compatibility
+        .ensure_session_loaded_from_storage_path(&workspace_path, &turn.session_id, false)
+        .await
+        .map_err(|error| format!("Failed to load session before saving a Turn: {error}"))?;
+    let mutation = state
         .compatibility
         .begin_persisted_session_mutation(&workspace_path, &turn.session_id)
         .await
@@ -595,7 +609,7 @@ pub(crate) async fn save_session_turn(
 
     state
         .compatibility
-        .save_persisted_dialog_turn(&workspace_path, &turn)
+        .save_persisted_dialog_turn(&mutation, &turn)
         .await
         .map_err(|e| format!("Failed to save session turn: {e}"))?;
     Ok(Value::Null)

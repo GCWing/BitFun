@@ -8,8 +8,9 @@ use crate::{
 use async_trait::async_trait;
 use bitfun_events::{AgenticEvent, AgenticEventEnvelope, AgenticEventPriority};
 use bitfun_runtime_ports::{
-    AgentDialogTurnRequest, AgentSessionCompactionRequest, AgentSessionCreateRequest,
-    AgentSessionCreateResult, AgentSessionModeUpdateRequest, AgentSessionModelUpdateRequest,
+    AgentDialogTurnRequest, AgentSessionCompactionRequest, AgentSessionComposerUpdate,
+    AgentSessionCreateRequest, AgentSessionCreateResult, AgentSessionModeUpdateRequest,
+    AgentSessionModelUpdateRequest, AgentSessionRevertRequest, AgentSessionRevertResult,
     AgentSessionSummary, AgentSubmissionSource, DialogSubmissionPolicy, SessionTranscript,
 };
 use serde_json::Map;
@@ -225,6 +226,22 @@ impl RuntimeIpcRequestHandler for FakeHandler {
                 Ok(RuntimeIpcOperationResult::TurnAccepted {
                     session_id: request.session_id,
                     turn_id: request.turn_id,
+                })
+            }
+            RuntimeIpcOperation::UndoSession { request }
+            | RuntimeIpcOperation::RedoSession { request } => {
+                Ok(RuntimeIpcOperationResult::SessionReverted {
+                    revert: AgentSessionRevertResult {
+                        transcript: SessionTranscript {
+                            session_id: request.session_id.clone(),
+                            messages: Vec::new(),
+                        },
+                        session_id: request.session_id,
+                        composer: AgentSessionComposerUpdate::Preserve,
+                        retired_turn_ids: Vec::new(),
+                        changed: true,
+                        hidden_turn_count: 1,
+                    },
                 })
             }
             RuntimeIpcOperation::CancelTurn { request } => {
@@ -533,6 +550,17 @@ fn compact_operation(session_id: &str, turn_id: &str) -> RuntimeIpcOperation {
         request: AgentSessionCompactionRequest {
             session_id: session_id.to_string(),
             turn_id: turn_id.to_string(),
+        },
+    }
+}
+
+fn undo_operation(workspace: &Path, session_id: &str) -> RuntimeIpcOperation {
+    RuntimeIpcOperation::UndoSession {
+        request: AgentSessionRevertRequest {
+            workspace_path: workspace.to_string_lossy().to_string(),
+            session_id: session_id.to_string(),
+            remote_connection_id: None,
+            remote_ssh_host: None,
         },
     }
 }
@@ -1133,6 +1161,41 @@ async fn rename_requires_the_controlled_idle_session() {
         1,
         "only the controlled idle-session rename reaches the Runtime handler"
     );
+    drop(calls);
+    drop(client);
+    server.finish().await;
+}
+
+#[tokio::test]
+async fn undo_can_cancel_the_controlled_active_turn_and_clears_its_projection() {
+    let handler = Arc::new(FakeHandler::default());
+    let server = TestServer::start(server_config(), handler.clone()).await;
+    let mut client = server.connect("undo-controller").await;
+
+    expect_response(
+        &mut client,
+        2,
+        restore_operation(server.workspace.path(), "session-a"),
+    )
+    .await;
+    expect_response(
+        &mut client,
+        3,
+        submit_operation(server.workspace.path(), "session-a", "turn-a"),
+    )
+    .await;
+    expect_response(
+        &mut client,
+        4,
+        undo_operation(server.workspace.path(), "session-a"),
+    )
+    .await;
+    expect_response(&mut client, 5, rename_operation("session-a", "After undo")).await;
+
+    let calls = handler.calls.lock().expect("calls");
+    assert!(calls
+        .iter()
+        .any(|operation| matches!(operation, RuntimeIpcOperation::UndoSession { .. })));
     drop(calls);
     drop(client);
     server.finish().await;

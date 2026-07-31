@@ -8,6 +8,7 @@
 use anyhow::{anyhow, Result};
 use argon2::{Algorithm, Argon2, Params, Version};
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
+use bitfun_services_core::session::SessionMetadata;
 #[cfg(test)]
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
@@ -74,6 +75,73 @@ pub struct AccountSession {
     pub token: String,
     pub user_id: String,
     pub master_key: [u8; MASTER_KEY_LEN],
+}
+
+const RELAY_TURNS_IMPORT_STATE_KEY: &str = "relayTurnsImportState";
+const RELAY_TURNS_IMPORT_PENDING: &str = "pending";
+const RELAY_TURNS_IMPORT_COMPLETE: &str = "complete";
+
+/// Return the durable import state used by account-backed Session history.
+/// A missing marker denotes a locally-created Session.
+pub fn relay_session_history_import_state(metadata: &SessionMetadata) -> Option<&str> {
+    metadata
+        .custom_metadata
+        .as_ref()
+        .and_then(serde_json::Value::as_object)
+        .and_then(|custom| custom.get(RELAY_TURNS_IMPORT_STATE_KEY))
+        .and_then(serde_json::Value::as_str)
+}
+
+pub fn relay_session_history_import_is_complete(metadata: &SessionMetadata) -> bool {
+    relay_session_history_import_state(metadata) == Some(RELAY_TURNS_IMPORT_COMPLETE)
+}
+
+/// Fail closed while an imported Session has not completed its local turn
+/// batch. Uploading a metadata-only or partial prefix would overwrite the
+/// account's authoritative full-history bundle.
+pub fn ensure_relay_session_history_exportable(
+    metadata: &SessionMetadata,
+) -> std::result::Result<(), String> {
+    match relay_session_history_import_state(metadata) {
+        None | Some(RELAY_TURNS_IMPORT_COMPLETE) => Ok(()),
+        Some(state) => Err(format!(
+            "session {} history import is incomplete ({state})",
+            metadata.session_id
+        )),
+    }
+}
+
+/// Align exported metadata with the visible history projection. This matters
+/// while a staged Session restore hides a physical suffix from every consumer.
+pub fn relay_session_export_metadata(
+    metadata: &SessionMetadata,
+    visible_turn_count: usize,
+) -> SessionMetadata {
+    let mut exported = metadata.clone();
+    exported.turn_count = visible_turn_count;
+    exported
+}
+
+fn set_relay_session_history_import_state(metadata: &mut SessionMetadata, state: &str) {
+    let mut custom = metadata
+        .custom_metadata
+        .as_ref()
+        .and_then(serde_json::Value::as_object)
+        .cloned()
+        .unwrap_or_default();
+    custom.insert(
+        RELAY_TURNS_IMPORT_STATE_KEY.to_string(),
+        serde_json::Value::String(state.to_string()),
+    );
+    metadata.custom_metadata = Some(serde_json::Value::Object(custom));
+}
+
+pub fn mark_relay_session_history_import_pending(metadata: &mut SessionMetadata) {
+    set_relay_session_history_import_state(metadata, RELAY_TURNS_IMPORT_PENDING);
+}
+
+pub fn mark_relay_session_history_import_complete(metadata: &mut SessionMetadata) {
+    set_relay_session_history_import_state(metadata, RELAY_TURNS_IMPORT_COMPLETE);
 }
 
 /// A delegated token for a paired client (mobile-web / IM bot).
@@ -1085,5 +1153,33 @@ mod tests {
             build_relay_websocket_url("http://127.0.0.1:3000/relay").unwrap(),
             "ws://127.0.0.1:3000/relay/ws"
         );
+    }
+
+    #[test]
+    fn account_history_export_waits_for_the_durable_import_marker() {
+        let mut metadata = SessionMetadata::new(
+            "session".to_string(),
+            "Session".to_string(),
+            "agentic".to_string(),
+            "auto".to_string(),
+        );
+        metadata.turn_count = 3;
+
+        assert!(ensure_relay_session_history_exportable(&metadata).is_ok());
+        mark_relay_session_history_import_pending(&mut metadata);
+        assert!(!relay_session_history_import_is_complete(&metadata));
+        assert!(ensure_relay_session_history_exportable(&metadata).is_err());
+
+        mark_relay_session_history_import_complete(&mut metadata);
+        assert!(relay_session_history_import_is_complete(&metadata));
+        assert!(ensure_relay_session_history_exportable(&metadata).is_ok());
+        let exported = relay_session_export_metadata(&metadata, 2);
+        assert_eq!(metadata.turn_count, 3);
+        assert_eq!(exported.turn_count, 2);
+
+        metadata.custom_metadata = Some(serde_json::json!({
+            "relayTurnsImportState": "unknown"
+        }));
+        assert!(ensure_relay_session_history_exportable(&metadata).is_err());
     }
 }

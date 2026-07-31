@@ -343,6 +343,13 @@ pub struct DialogScheduler {
 /// performs maintenance that must not overlap turn dispatch.
 pub(crate) struct SessionMaintenancePermit {
     _operation_guard: KeyedAsyncLockGuard,
+    retired_turn_ids: Vec<String>,
+}
+
+impl SessionMaintenancePermit {
+    pub(crate) fn retired_turn_ids(&self) -> &[String] {
+        &self.retired_turn_ids
+    }
 }
 
 fn take_active_turn_for_outcome(
@@ -948,7 +955,7 @@ impl DialogScheduler {
                 )
                 .await
                 .map_err(|error| error.to_string())?;
-                self.session_manager
+                self.coordinator
                     .restore_session_from_storage_path(&restore_path, session_id)
                     .await
                     .map_err(|error| error.to_string())?
@@ -1046,6 +1053,13 @@ impl DialogScheduler {
             ));
         }
 
+        // OpenCode-compatible semantics: accepting a new prompt while history
+        // is staged permanently discards the hidden suffix before the Turn starts.
+        self.coordinator
+            .commit_session_revert_before_submission(&session_id)
+            .await
+            .map_err(SchedulerSubmitError::Core)?;
+
         match action {
             DialogSubmitQueueAction::StartImmediately => {
                 let tid = self.start_turn(&session_id, &queued_turn).await?;
@@ -1059,7 +1073,7 @@ impl DialogScheduler {
             }
 
             DialogSubmitQueueAction::ClearQueueAndStartImmediately => {
-                self.clear_queue(&session_id).await;
+                let _ = self.clear_queue(&session_id).await;
                 let tid = self.start_turn(&session_id, &queued_turn).await?;
                 queued_turn.accept_settlement();
                 self.record_last_submitted_agent_type(&session_id, &queued_turn.agent_type)
@@ -1264,9 +1278,11 @@ impl DialogScheduler {
         let operation_guard = self.lock_session_operation(session_id).await;
         self.session_manager
             .validate_session_storage_path_binding(session_id, requested_storage_path)?;
-        if self.queue_depth(session_id) > 0 {
-            self.clear_queue(session_id).await;
-        }
+        let mut retired_turn_ids = if self.queue_depth(session_id) > 0 {
+            self.clear_queue(session_id).await
+        } else {
+            Vec::new()
+        };
         abort_thread_goal_continuation_for_session(session_id);
         let deadline = Instant::now() + wait_timeout;
         let cancelled_before_parent = self
@@ -1283,7 +1299,8 @@ impl DialogScheduler {
             self.maintenance_background_sessions
                 .insert(session_id.to_string(), subagent_session_ids.clone());
         }
-        self.coordinator
+        let cancelled_turn_id = self
+            .coordinator
             .cancel_active_turn_for_session(
                 session_id,
                 deadline.saturating_duration_since(Instant::now()),
@@ -1313,9 +1330,15 @@ impl DialogScheduler {
             )
             .await?;
         self.maintenance_background_sessions.remove(session_id);
-        self.retire_active_turn_for_maintenance(session_id);
+        let scheduler_turn_id = self.retire_active_turn_for_maintenance(session_id);
+        for retired_turn_id in [cancelled_turn_id, scheduler_turn_id].into_iter().flatten() {
+            if !retired_turn_ids.contains(&retired_turn_id) {
+                retired_turn_ids.push(retired_turn_id);
+            }
+        }
         Ok(SessionMaintenancePermit {
             _operation_guard: operation_guard,
+            retired_turn_ids,
         })
     }
 
@@ -1329,9 +1352,9 @@ impl DialogScheduler {
             .await
     }
 
-    fn retire_active_turn_for_maintenance(&self, session_id: &str) {
+    fn retire_active_turn_for_maintenance(&self, session_id: &str) -> Option<String> {
         let Some(active_turn) = self.active_turns.remove(session_id) else {
-            return;
+            return None;
         };
         let turn_id = active_turn.turn_id().to_string();
         self.retired_maintenance_outcomes.mark(session_id, &turn_id);
@@ -1343,6 +1366,7 @@ impl DialogScheduler {
             "Retired active turn before destructive session maintenance: session_id={}, turn_id={}",
             session_id, turn_id
         );
+        Some(turn_id)
     }
 
     // ── Private helpers ──────────────────────────────────────────────────────
@@ -1368,13 +1392,15 @@ impl DialogScheduler {
         Ok(())
     }
 
-    async fn clear_queue(&self, session_id: &str) {
+    async fn clear_queue(&self, session_id: &str) -> Vec<String> {
         let cleared_turns = self.queues.clear(session_id);
         let count = cleared_turns.len();
+        let mut retired_turn_ids = Vec::new();
         for queued_turn in cleared_turns {
             match queued_turn.execution {
                 QueuedTurnExecution::Standard => {
                     if let Some(turn_id) = queued_turn.turn_id {
+                        retired_turn_ids.push(turn_id.clone());
                         self.coordinator
                             .emit_event(AgenticEvent::DialogTurnCancelled {
                                 session_id: session_id.to_string(),
@@ -1409,6 +1435,7 @@ impl DialogScheduler {
                 count, session_id
             );
         }
+        retired_turn_ids
     }
 
     fn dequeue_next(&self, session_id: &str) -> Option<QueuedTurn> {
@@ -1826,7 +1853,7 @@ impl DialogScheduler {
                         "Turn {}, clearing queue: session_id={}",
                         lifecycle_plan.status, session_id
                     );
-                    self.clear_queue(&session_id).await;
+                    let _ = self.clear_queue(&session_id).await;
                 }
                 (active_turn, active_internal_turn, lifecycle_plan)
             };
@@ -2389,6 +2416,7 @@ mod tests {
     use crate::agentic::persistence::PersistenceManager;
     use crate::agentic::session::{
         compression::{CompressionConfig, ContextCompressor},
+        revert::{SessionRevertPhase, SessionRevertState, SESSION_REVERT_SCHEMA_VERSION},
         PromptCachePolicy, SessionContextStore, SessionManagerConfig,
     };
     use crate::agentic::tools::registry::ToolRegistry;
@@ -2478,6 +2506,67 @@ mod tests {
             QueuedTurnExecution::default(),
             QueuedTurnExecution::Standard
         ));
+    }
+
+    #[tokio::test]
+    async fn submission_preflight_commits_a_persisted_revert_marker() {
+        let (scheduler, session_manager, _, root) = test_scheduler();
+        let session_id = "reverted-session";
+        let workspace = root.path().join("workspace");
+        std::fs::create_dir_all(&workspace).expect("workspace");
+        session_manager
+            .create_session_with_id(
+                Some(session_id.to_string()),
+                "Reverted".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.to_string_lossy().into_owned()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("create session");
+        let storage_path = session_manager
+            .effective_session_storage_path(session_id)
+            .await
+            .expect("storage path");
+        session_manager
+            .persistence_manager()
+            .save_session_revert_state(
+                &storage_path,
+                session_id,
+                &SessionRevertState {
+                    schema_version: SESSION_REVERT_SCHEMA_VERSION,
+                    boundary_turn: 0,
+                    original_turn_end: 1,
+                    phase: SessionRevertPhase::Staged,
+                    workspace_checkpoint: Vec::new(),
+                },
+            )
+            .await
+            .expect("persist staged revert");
+
+        scheduler
+            .coordinator
+            .commit_session_revert_before_submission(session_id)
+            .await
+            .expect("commit staged revert");
+
+        assert!(session_manager
+            .persistence_manager()
+            .load_session_revert_state(&storage_path, session_id)
+            .await
+            .expect("load revert marker")
+            .is_none());
+        let source = include_str!("scheduler.rs");
+        let submission = source
+            .split_once("async fn submit_queued_turn_locked(")
+            .expect("submission method")
+            .1
+            .split_once("async fn record_last_submitted_agent_type(")
+            .expect("submission method boundary")
+            .0;
+        assert!(submission.contains("commit_session_revert_before_submission(&session_id)"));
     }
 
     #[tokio::test]
@@ -3116,6 +3205,58 @@ mod tests {
         assert!(scheduler
             .active_turns
             .matches_turn(session_id, "turn-active"));
+    }
+
+    #[tokio::test]
+    async fn maintenance_retires_scheduler_state_even_when_core_cancel_returns_a_turn_id() {
+        let (scheduler, session_manager, _, root) = test_scheduler();
+        let session_id = "session-maintenance-retire";
+        let turn_id = "turn-active";
+        let workspace = root.path().join("workspace-maintenance-retire");
+        std::fs::create_dir_all(&workspace).expect("workspace");
+        session_manager
+            .create_session_with_id(
+                Some(session_id.to_string()),
+                "Maintenance retire".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.to_string_lossy().to_string()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("create session");
+        session_manager
+            .update_session_state(
+                session_id,
+                SessionState::Processing {
+                    current_turn_id: turn_id.to_string(),
+                    phase: ProcessingPhase::ToolCalling,
+                },
+            )
+            .await
+            .expect("mark processing");
+        scheduler
+            .active_turns
+            .insert(session_id, desktop_active_turn(turn_id));
+        let storage_path = session_manager
+            .storage_path_binding_for_test(session_id)
+            .expect("storage binding");
+
+        let maintenance = scheduler
+            .begin_session_maintenance(session_id, &storage_path, Duration::from_secs(1))
+            .await
+            .expect("maintenance");
+
+        assert_eq!(maintenance.retired_turn_ids(), &[turn_id.to_string()]);
+        assert!(!scheduler.active_turns.matches_turn(session_id, turn_id));
+        assert!(take_active_turn_for_outcome(
+            &scheduler.active_turns,
+            &scheduler.retired_maintenance_outcomes,
+            session_id,
+            turn_id,
+        )
+        .is_none());
     }
 
     #[test]

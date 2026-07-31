@@ -2,8 +2,9 @@ use bitfun_product_domains::tool_permissions::{PermissionReply, PermissionReques
 use bitfun_runtime_ports::{
     AgentContextReloadRequest, AgentDialogTurnRequest, AgentSessionCompactionRequest,
     AgentSessionCreateRequest, AgentSessionCreateResult, AgentSessionListRequest,
-    AgentSessionModeUpdateRequest, AgentSessionModelUpdateRequest, AgentSessionSummary,
-    AgentTurnCancellationRequest, AgentTurnCancellationResult, SessionTranscript,
+    AgentSessionModeUpdateRequest, AgentSessionModelUpdateRequest, AgentSessionRevertRequest,
+    AgentSessionRevertResult, AgentSessionSummary, AgentTurnCancellationRequest,
+    AgentTurnCancellationResult, SessionTranscript,
 };
 use serde::{Deserialize, Serialize};
 
@@ -78,6 +79,12 @@ pub enum RuntimeIpcOperation {
     CompactSession {
         request: AgentSessionCompactionRequest,
     },
+    UndoSession {
+        request: AgentSessionRevertRequest,
+    },
+    RedoSession {
+        request: AgentSessionRevertRequest,
+    },
     SubmitTurn {
         request: AgentDialogTurnRequest,
     },
@@ -108,6 +115,8 @@ impl RuntimeIpcOperation {
             Self::ForkSession { request } => Some(&request.session_id),
             Self::ReloadSessionContext { request } => Some(&request.session_id),
             Self::CompactSession { request } => Some(&request.session_id),
+            Self::UndoSession { request } => Some(&request.session_id),
+            Self::RedoSession { request } => Some(&request.session_id),
             Self::SubmitTurn { request } => Some(&request.session_id),
             Self::CancelTurn { request } => Some(&request.session_id),
             Self::PendingPermissions { session_id }
@@ -144,6 +153,8 @@ impl RuntimeIpcOperation {
                 RuntimeIpcOperationRules::new(CurrentController, true, true, true)
             }
             Self::ReloadSessionContext { .. }
+            | Self::UndoSession { .. }
+            | Self::RedoSession { .. }
             | Self::CancelTurn { .. }
             | Self::RespondPermission { .. }
             | Self::SubmitUserAnswers { .. } => {
@@ -215,6 +226,9 @@ pub enum RuntimeIpcOperationResult {
     SessionForked {
         session: AgentSessionSummary,
         transcript: SessionTranscript,
+    },
+    SessionReverted {
+        revert: AgentSessionRevertResult,
     },
     TurnAccepted {
         session_id: String,

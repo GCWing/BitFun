@@ -9,7 +9,7 @@ use bitfun_product_domains::tool_permissions::PermissionReply;
 use bitfun_runtime_ports::{
     AgentContextReloadRequest, AgentContextReloadTarget, AgentDialogTurnRequest,
     AgentSessionCompactionRequest, AgentSessionModeUpdateRequest, AgentSessionModelUpdateRequest,
-    AgentSubmissionSource, DialogSubmissionPolicy,
+    AgentSessionRevertRequest, AgentSubmissionSource, DialogSubmissionPolicy,
 };
 use serde_json::{json, Map};
 
@@ -215,6 +215,35 @@ fn protocol_round_trips_manual_compaction_as_an_idle_controller_turn() {
         RuntimeIpcSessionRequirement::CurrentController
     );
     assert!(rules.requires_idle);
+    assert!(!rules.serializes_session_selection);
+    assert!(rules.side_effecting);
+}
+
+#[test]
+fn protocol_round_trips_undo_as_an_active_controller_operation() {
+    let operation = RuntimeIpcOperation::UndoSession {
+        request: AgentSessionRevertRequest {
+            workspace_path: "D:/workspace/project".to_string(),
+            session_id: "session-1".to_string(),
+            remote_connection_id: None,
+            remote_ssh_host: None,
+        },
+    };
+
+    let encoded = serde_json::to_value(&operation).expect("serialize session undo");
+    assert_eq!(encoded["operation"], "undo_session");
+    assert_eq!(encoded["request"]["sessionId"], "session-1");
+    let decoded: RuntimeIpcOperation =
+        serde_json::from_value(encoded).expect("deserialize session undo");
+
+    assert_eq!(decoded, operation);
+    assert_eq!(decoded.session_id(), Some("session-1"));
+    let rules = decoded.rules();
+    assert_eq!(
+        rules.session_requirement,
+        RuntimeIpcSessionRequirement::CurrentController
+    );
+    assert!(!rules.requires_idle);
     assert!(!rules.serializes_session_selection);
     assert!(rules.side_effecting);
 }

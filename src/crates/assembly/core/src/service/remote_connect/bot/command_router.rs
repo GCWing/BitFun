@@ -1796,18 +1796,14 @@ async fn load_last_dialog_pair_from_turns(
     workspace: Option<&BotWorkspaceRef>,
     session_id: &str,
 ) -> Option<(String, String)> {
-    use crate::agentic::persistence::PersistenceManager;
-    use crate::infrastructure::PathManager;
-
     const MAX_USER_LEN: usize = 200;
     const MAX_AI_LEN: usize = 400;
 
     let workspace = workspace?;
     let storage_path = resolve_bot_session_storage_path_for_ref(workspace).await?;
-    let pm = std::sync::Arc::new(PathManager::new().ok()?);
-    let store = PersistenceManager::new(pm).ok()?;
-    let turns = store
-        .load_session_turns(&storage_path, session_id)
+    let coordinator = crate::agentic::coordination::get_global_coordinator()?;
+    let turns = coordinator
+        .load_visible_persisted_session_turns(&storage_path, session_id)
         .await
         .ok()?;
     let turn = turns.last()?;

@@ -2,11 +2,14 @@
 
 use crate::api::session_storage_path::desktop_effective_session_storage_path;
 use crate::embedded_relay_host::DesktopEmbeddedRelayHost;
-use bitfun_core::agentic::coordination::{get_global_coordinator, ConversationCoordinator};
+use bitfun_core::agentic::coordination::{
+    get_global_coordinator, get_global_scheduler, ConversationCoordinator,
+};
 use bitfun_core::agentic::persistence::PersistenceManager;
 use bitfun_core::agentic::tools::account_login_capability::set_account_login_available;
 use bitfun_core::agentic::tools::page_deploy_host::set_page_deploy_handler;
 use bitfun_core::agentic::tools::page_publish_host::set_page_publish_handler;
+use bitfun_core::product_runtime::CoreAgentRuntimeCompatibility;
 use bitfun_core::service::remote_connect::session_store::{
     clear_credential_hint, load_credential_hint, save_credential_hint, AccountHint,
 };
@@ -20,7 +23,10 @@ use bitfun_core::service::session::{DialogTurnData, SessionMetadata};
 use bitfun_core::service::workspace::{get_global_workspace_service, WorkspaceKind};
 use bitfun_core::service::workspace_runtime::WorkspaceRuntimeService;
 use bitfun_services_integrations::remote_connect::account::{
-    error_indicates_expired_token, validate_relay_base_url,
+    ensure_relay_session_history_exportable, error_indicates_expired_token,
+    mark_relay_session_history_import_complete, mark_relay_session_history_import_pending,
+    relay_session_export_metadata, relay_session_history_import_is_complete,
+    relay_session_history_import_state, validate_relay_base_url,
 };
 use bitfun_services_integrations::remote_connect::{
     deploy_page_version_on_relay, join_relay_url, list_pages_from_relay,
@@ -2981,40 +2987,16 @@ pub struct SessionBundle {
     pub source_device_name: Option<String>,
 }
 
-const RELAY_TURNS_IMPORT_STATE_KEY: &str = "relayTurnsImportState";
-const RELAY_TURNS_IMPORT_PENDING: &str = "pending";
-const RELAY_TURNS_IMPORT_COMPLETE: &str = "complete";
-
-fn relay_turns_import_state(metadata: &SessionMetadata) -> Option<&str> {
-    metadata
-        .custom_metadata
-        .as_ref()
-        .and_then(serde_json::Value::as_object)
-        .and_then(|custom| custom.get(RELAY_TURNS_IMPORT_STATE_KEY))
-        .and_then(serde_json::Value::as_str)
-}
-
-fn relay_turns_import_is_complete(metadata: &SessionMetadata, local_turn_count: usize) -> bool {
-    metadata.turn_count == local_turn_count
-        && relay_turns_import_state(metadata) == Some(RELAY_TURNS_IMPORT_COMPLETE)
-}
-
-fn set_relay_turns_import_state(metadata: &mut SessionMetadata, state: &str) {
-    let mut custom = metadata
-        .custom_metadata
-        .as_ref()
-        .and_then(serde_json::Value::as_object)
-        .cloned()
-        .unwrap_or_default();
-    custom.insert(
-        RELAY_TURNS_IMPORT_STATE_KEY.to_string(),
-        serde_json::Value::String(state.to_string()),
-    );
-    metadata.custom_metadata = Some(serde_json::Value::Object(custom));
-}
-
-fn mark_relay_turns_import_complete(metadata: &mut SessionMetadata) {
-    set_relay_turns_import_state(metadata, RELAY_TURNS_IMPORT_COMPLETE);
+async fn load_account_visible_session_turns(
+    storage_path: &std::path::Path,
+    session_id: &str,
+) -> Result<Vec<DialogTurnData>, String> {
+    let coordinator = get_global_coordinator()
+        .ok_or_else(|| "Core coordinator is not initialized for session sync".to_string())?;
+    coordinator
+        .load_visible_persisted_session_turns(storage_path, session_id)
+        .await
+        .map_err(|error| format!("load visible session history: {error}"))
 }
 
 /// Export a single local session as an encrypted blob and upload it to the relay.
@@ -3042,12 +3024,11 @@ pub async fn account_export_local_session(
         .await
         .map_err(|e| format!("load metadata: {e}"))?
         .ok_or_else(|| format!("session not found: {session_id}"))?;
+    ensure_relay_session_history_exportable(&metadata)?;
 
     // Load all turns
-    let turns = manager
-        .load_session_turns(&storage_path, &session_id)
-        .await
-        .map_err(|e| format!("load turns: {e}"))?;
+    let turns = load_account_visible_session_turns(&storage_path, &session_id).await?;
+    let metadata = relay_session_export_metadata(&metadata, turns.len());
 
     // Serialize to bundle
     let metadata_json =
@@ -3106,13 +3087,17 @@ pub async fn account_export_all_sessions(
     let mut state = sync_state::load(&acct_session.user_id);
     let mut pending: Vec<(String, String, String)> = Vec::new();
     for meta in &sessions {
-        let turns = manager
-            .load_session_turns(&storage_path, &meta.session_id)
+        if let Err(error) = ensure_relay_session_history_exportable(meta) {
+            log::debug!("Skipping account session export: {error}");
+            continue;
+        }
+        let turns = load_account_visible_session_turns(&storage_path, &meta.session_id)
             .await
             .map_err(|e| format!("load turns for {}: {e}", meta.session_id))?;
+        let metadata = relay_session_export_metadata(meta, turns.len());
 
         let metadata_json =
-            serde_json::to_value(meta).map_err(|e| format!("serialize metadata: {e}"))?;
+            serde_json::to_value(metadata).map_err(|e| format!("serialize metadata: {e}"))?;
         let turns_json: Vec<serde_json::Value> = turns
             .iter()
             .map(|t| serde_json::to_value(t).unwrap_or(serde_json::Value::Null))
@@ -3219,7 +3204,7 @@ pub async fn account_import_remote_sessions(
         }
         // Only write metadata — turns are lazy-loaded when the user opens
         // the session (see `account_fetch_session_turns`).
-        set_relay_turns_import_state(&mut metadata, RELAY_TURNS_IMPORT_PENDING);
+        mark_relay_session_history_import_pending(&mut metadata);
         if !manager
             .create_session_metadata_if_absent(&storage_path, &metadata)
             .await
@@ -3273,8 +3258,8 @@ pub async fn account_fetch_session_turns(
         .map_err(|e| format!("create persistence manager: {e}"))?;
 
     // Ordinary local sessions carry no relay marker and return without an
-    // account or network lookup. A non-empty turn prefix is not proof that an
-    // import completed, so pending or inconsistent imports are retried.
+    // account or network lookup. Only the durable complete marker proves that
+    // the imported turn batch finished; a partial prefix remains pending.
     let Some(metadata) = manager
         .load_session_metadata(&storage_path, &session_id)
         .await
@@ -3282,15 +3267,11 @@ pub async fn account_fetch_session_turns(
     else {
         return Ok(false);
     };
-    if relay_turns_import_state(&metadata).is_none() {
+    if relay_session_history_import_state(&metadata).is_none() {
         return Ok(false);
     }
 
-    let local_turns = manager
-        .load_session_turns(&storage_path, &session_id)
-        .await
-        .map_err(|error| format!("load imported turns: {error}"))?;
-    if relay_turns_import_is_complete(&metadata, local_turns.len()) {
+    if relay_session_history_import_is_complete(&metadata) {
         return Ok(false);
     }
 
@@ -3325,6 +3306,16 @@ pub async fn account_fetch_session_turns(
         return Err("relay session turn identity does not match request".to_string());
     }
 
+    let coordinator = get_global_coordinator()
+        .ok_or_else(|| "Core coordinator is not initialized for session import".to_string())?;
+    let scheduler = get_global_scheduler()
+        .ok_or_else(|| "Core scheduler is not initialized for session import".to_string())?;
+    let compatibility = CoreAgentRuntimeCompatibility::build(coordinator, scheduler);
+    let _history_write = compatibility
+        .begin_external_persisted_history_write(&storage_path, &session_id)
+        .await
+        .map_err(|error| format!("session import is unavailable during undo or redo: {error}"))?;
+
     manager
         .create_session_metadata_if_absent(&storage_path, &metadata)
         .await
@@ -3339,7 +3330,7 @@ pub async fn account_fetch_session_turns(
     }
     manager
         .update_session_metadata(&storage_path, &session_id, |metadata| {
-            mark_relay_turns_import_complete(metadata);
+            mark_relay_session_history_import_complete(metadata);
         })
         .await
         .map_err(|e| format!("mark imported turns complete: {e}"))?;
@@ -3749,12 +3740,16 @@ async fn account_auto_sync_inner(
     let mut pending_uploads: Vec<(String, String, String)> = Vec::new();
     for meta in local_sessions.iter() {
         ensure_account_auto_sync_current(sync_operation_id)?;
-        let turns = manager
-            .load_session_turns(&storage_path, &meta.session_id)
+        if let Err(error) = ensure_relay_session_history_exportable(meta) {
+            log::debug!("Skipping account auto-sync export: {error}");
+            continue;
+        }
+        let turns = load_account_visible_session_turns(&storage_path, &meta.session_id)
             .await
             .map_err(|e| format!("load turns: {e}"))?;
+        let metadata = relay_session_export_metadata(meta, turns.len());
         let metadata_json =
-            serde_json::to_value(meta).map_err(|e| format!("serialize metadata: {e}"))?;
+            serde_json::to_value(metadata).map_err(|e| format!("serialize metadata: {e}"))?;
         let turns_json: Vec<serde_json::Value> = turns
             .iter()
             .map(|t| serde_json::to_value(t).unwrap_or(serde_json::Value::Null))
@@ -4187,10 +4182,12 @@ async fn export_and_upload_session(
         .load_session_metadata(&storage_path, session_id)
         .await?
         .ok_or_else(|| anyhow::anyhow!("session not found: {session_id}"))?;
+    ensure_relay_session_history_exportable(&metadata).map_err(anyhow::Error::msg)?;
 
-    let turns = manager
-        .load_session_turns(&storage_path, session_id)
-        .await?;
+    let turns = load_account_visible_session_turns(&storage_path, session_id)
+        .await
+        .map_err(anyhow::Error::msg)?;
+    let metadata = relay_session_export_metadata(&metadata, turns.len());
 
     let metadata_json = serde_json::to_value(&metadata)?;
     let turns_json: Vec<serde_json::Value> = turns
@@ -4378,7 +4375,7 @@ async fn import_session_bundle(bundle_json: &str, account_generation: u64) -> an
     // Only write metadata — turns are lazy-loaded when the user opens the
     // session. This keeps the import fast and avoids writing potentially
     // large turn data that may never be read.
-    set_relay_turns_import_state(&mut metadata, RELAY_TURNS_IMPORT_PENDING);
+    mark_relay_session_history_import_pending(&mut metadata);
     manager
         .create_session_metadata_if_absent(&target_dir, &metadata)
         .await
@@ -4734,7 +4731,7 @@ mod sync_state_tests {
     }
 
     #[test]
-    fn relay_turn_import_requires_an_explicit_complete_marker_and_exact_count() {
+    fn pending_relay_turn_imports_are_never_exportable() {
         let mut metadata = SessionMetadata::new(
             "session".to_string(),
             "Session".to_string(),
@@ -4743,18 +4740,40 @@ mod sync_state_tests {
         );
         metadata.turn_count = 2;
 
-        assert_eq!(relay_turns_import_state(&metadata), None);
-        assert!(!relay_turns_import_is_complete(&metadata, 1));
-        assert!(!relay_turns_import_is_complete(&metadata, 2));
-        set_relay_turns_import_state(&mut metadata, RELAY_TURNS_IMPORT_PENDING);
+        assert_eq!(relay_session_history_import_state(&metadata), None);
+        assert!(!relay_session_history_import_is_complete(&metadata));
+        assert!(ensure_relay_session_history_exportable(&metadata).is_ok());
+        mark_relay_session_history_import_pending(&mut metadata);
         assert_eq!(
-            relay_turns_import_state(&metadata),
-            Some(RELAY_TURNS_IMPORT_PENDING)
+            relay_session_history_import_state(&metadata),
+            Some("pending")
         );
-        assert!(!relay_turns_import_is_complete(&metadata, 2));
-        mark_relay_turns_import_complete(&mut metadata);
-        assert!(!relay_turns_import_is_complete(&metadata, 1));
-        assert!(relay_turns_import_is_complete(&metadata, 2));
+        assert!(!relay_session_history_import_is_complete(&metadata));
+        assert!(ensure_relay_session_history_exportable(&metadata).is_err());
+        mark_relay_session_history_import_complete(&mut metadata);
+        assert!(relay_session_history_import_is_complete(&metadata));
+        assert!(ensure_relay_session_history_exportable(&metadata).is_ok());
+
+        metadata.custom_metadata = Some(serde_json::json!({
+            "relayTurnsImportState": "unknown"
+        }));
+        assert!(ensure_relay_session_history_exportable(&metadata).is_err());
+    }
+
+    #[test]
+    fn account_export_metadata_matches_the_visible_history_projection() {
+        let mut metadata = SessionMetadata::new(
+            "session".to_string(),
+            "Session".to_string(),
+            "agentic".to_string(),
+            "auto".to_string(),
+        );
+        metadata.turn_count = 3;
+
+        let exported = relay_session_export_metadata(&metadata, 2);
+
+        assert_eq!(metadata.turn_count, 3);
+        assert_eq!(exported.turn_count, 2);
     }
 }
 
