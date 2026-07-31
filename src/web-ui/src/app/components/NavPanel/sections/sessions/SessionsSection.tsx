@@ -107,13 +107,6 @@ const resolveSessionModeType = (session: Session): SessionMode => {
 const getTitle = (session: Session): string =>
   resolveSessionTitle(session, (key, options) => i18nService.t(key, options));
 
-const dispatchFilterKey = (session: Session): string => {
-  const target = session.config.dispatchTarget;
-  if (target?.kind === 'ssh') return `ssh:${target.connectionId}`;
-  if (target?.kind === 'device') return `device:${target.deviceId}`;
-  return 'local';
-};
-
 const countTopLevelSessionsInScope = (
   sessions: Iterable<Session>,
   workspacePath?: string,
@@ -209,7 +202,6 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState('');
   const [expandLevel, setExpandLevel] = useState<0 | 1 | 2>(0);
-  const [dispatchTargetFilter, setDispatchTargetFilter] = useState('all');
   // Level-2 ("show all") renders in pages of 200 rows so a huge session
   // history cannot mount thousands of un-virtualized rows at once.
   const [level2DisplayCount, setLevel2DisplayCount] = useState(SESSIONS_LEVEL_2_PAGE);
@@ -667,39 +659,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
     };
   }, [sessions]);
 
-  const dispatchTargetFilterOptions = useMemo(() => {
-    const options = new Map<string, string>();
-    for (const session of allTopLevelSessions) {
-      const key = dispatchFilterKey(session);
-      if (key === 'local') {
-        options.set(key, t('nav.sessions.filterLocal'));
-        continue;
-      }
-      const target = session.config.dispatchTarget;
-      if (target?.kind === 'ssh' || target?.kind === 'device') {
-        options.set(key, target.displayName);
-      }
-    }
-    return Array.from(options.entries()).map(([value, label]) => ({ value, label }));
-  }, [allTopLevelSessions, t]);
-
-  useEffect(() => {
-    if (
-      dispatchTargetFilter !== 'all'
-      && !dispatchTargetFilterOptions.some(option => option.value === dispatchTargetFilter)
-    ) {
-      setDispatchTargetFilter('all');
-    }
-  }, [dispatchTargetFilter, dispatchTargetFilterOptions]);
-
-  const topLevelSessions = useMemo(
-    () => dispatchTargetFilter === 'all'
-      ? allTopLevelSessions
-      : allTopLevelSessions.filter(
-          session => dispatchFilterKey(session) === dispatchTargetFilter,
-        ),
-    [allTopLevelSessions, dispatchTargetFilter],
-  );
+  const topLevelSessions = allTopLevelSessions;
 
   const sessionDisplayLimit = useMemo(() => {
     const total = topLevelSessions.length;
@@ -709,17 +669,14 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
     return SESSIONS_LEVEL_0;
   }, [topLevelSessions.length, expandLevel, level2DisplayCount]);
 
-  const totalTopLevelSessionCount = dispatchTargetFilter === 'all'
-    ? getEffectiveTopLevelSessionCount(
-        metadataPageState.totalTopLevelCount,
-        metadataPageState.syncedTopLevelCount,
-        allTopLevelSessions.length,
-        metadataPageState.isLoading,
-      )
-    : topLevelSessions.length;
+  const totalTopLevelSessionCount = getEffectiveTopLevelSessionCount(
+    metadataPageState.totalTopLevelCount,
+    metadataPageState.syncedTopLevelCount,
+    allTopLevelSessions.length,
+    metadataPageState.isLoading,
+  );
   const hasMoreUnloadedSessions =
-    dispatchTargetFilter === 'all'
-    && allTopLevelSessions.length < totalTopLevelSessionCount;
+    allTopLevelSessions.length < totalTopLevelSessionCount;
   const expandToggleState = getSessionExpandToggleState(totalTopLevelSessionCount, expandLevel);
 
   useEffect(() => {
@@ -1222,28 +1179,6 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
 
   return (
     <div className="bitfun-nav-panel__inline-list" ref={sessionListRef}>
-      {dispatchTargetFilterOptions.length > 1 ? (
-        <label className="bitfun-nav-panel__session-target-filter">
-          <span>{t('nav.sessions.filterLabel')}</span>
-          <select
-            value={dispatchTargetFilter}
-            onChange={event => {
-              setDispatchTargetFilter(event.target.value);
-              setExpandLevel(0);
-            }}
-          >
-            <option value="all">{t('nav.sessions.filterAll')}</option>
-            {dispatchTargetFilterOptions.map(option => (
-              <option key={option.value} value={option.value}>{option.label}</option>
-            ))}
-          </select>
-        </label>
-      ) : null}
-      {topLevelSessions.length === 0 ? (
-        <div className="bitfun-nav-panel__inline-empty">
-          {t('nav.sessions.noSessionsForTarget')}
-        </div>
-      ) : null}
       {visibleItems.map(({ session, level }) => {
           const isEditing = editingSessionId === session.sessionId;
           const relationship = resolveSessionRelationship(session);

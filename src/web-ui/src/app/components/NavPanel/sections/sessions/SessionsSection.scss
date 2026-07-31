@@ -21,34 +21,6 @@
     margin: 0 $size-gap-1 0 calc(#{$size-gap-1} + 4px);
   }
 
-  &__session-target-filter {
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr);
-    align-items: center;
-    gap: $size-gap-1;
-    min-width: 0;
-    padding: 2px $size-gap-1 4px;
-    color: var(--color-text-muted);
-    font-size: var(--font-size-2xs);
-
-    select {
-      min-width: 0;
-      height: 22px;
-      padding: 0 20px 0 6px;
-      border: 1px solid var(--border-subtle);
-      border-radius: $size-radius-sm;
-      background: var(--element-bg-soft);
-      color: var(--color-text-secondary);
-      font: inherit;
-      text-overflow: ellipsis;
-
-      &:focus-visible {
-        border-color: var(--color-accent-500);
-        outline: 1px solid var(--color-accent-500);
-      }
-    }
-  }
-
   &__inline-action {
     display: flex;
     align-items: center;

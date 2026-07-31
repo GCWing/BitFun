@@ -29,6 +29,7 @@ import { dispatchApi } from '@/features/dispatch/dispatchApi';
 import { dispatchJobStore } from '@/features/dispatch/dispatchJobStore';
 import { requestDispatchJobRefresh } from '@/features/dispatch/DispatchJobObserver';
 import { isNonLocalDispatchTarget } from '@/features/dispatch/types';
+import { markOptimisticDispatchTurnMetadata } from '@/features/dispatch/optimisticDispatchTurn';
 import { isSessionInUseError } from '@/infrastructure/api/errors/TauriCommandError';
 import { i18nService } from '@/infrastructure/i18n';
 
@@ -377,6 +378,38 @@ export async function sendMessage(
       if (isFirstMessage) {
         handleTitleGeneration(context, sessionId, message);
       }
+
+      const optimisticTurnId = `dispatch_pending_${jobId}`;
+      const optimisticTurn: DialogTurn = {
+        id: optimisticTurnId,
+        sessionId,
+        agentType: currentAgentType,
+        userMessage: {
+          id: `user_dispatch_${Date.now()}`,
+          content: displayMessage || message,
+          timestamp: Date.now(),
+          metadata: markOptimisticDispatchTurnMetadata(
+            options?.userMessageMetadata,
+            jobId,
+          ),
+        },
+        modelRounds: [],
+        status: 'pending',
+        startTime: Date.now(),
+      };
+      context.flowChatStore.addDialogTurn(sessionId, optimisticTurn);
+      createdLocalTurnId = optimisticTurnId;
+      globalEventBus.emit(
+        FLOWCHAT_PIN_TURN_TO_TOP_EVENT,
+        {
+          sessionId,
+          turnId: optimisticTurnId,
+          behavior: 'auto',
+          source: 'send-message',
+          pinMode: 'sticky-latest',
+        } satisfies FlowChatPinTurnToTopRequest,
+        'MessageModule',
+      );
 
       const response = await dispatchApi.submit({
         target: targetRequest,

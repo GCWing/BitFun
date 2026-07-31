@@ -410,13 +410,13 @@ describe('MessageModule detached dispatch', () => {
     });
   });
 
-  function createDispatchContext(approvalPolicy: 'auto' | 'reject-and-report') {
+  function createDispatchContext(approvalPolicy: 'auto' | 'reject-and-report' | 'remote') {
     const session = {
       sessionId: 'dispatch-session',
       title: 'New Chat',
       titleStatus: 'generated',
       mode: 'agentic',
-      dialogTurns: [],
+      dialogTurns: [] as any[],
       config: {
         modelName: 'controller-model',
         dispatchTargetRequest: {
@@ -444,6 +444,14 @@ describe('MessageModule detached dispatch', () => {
             activeSessionId: session.sessionId,
             sessions: new Map([[session.sessionId, session]]),
           }),
+          addDialogTurn: vi.fn((_sessionId: string, turn: any) => {
+            if (!session.dialogTurns.some(existing => existing.id === turn.id)) {
+              session.dialogTurns.push(turn);
+            }
+          }),
+          deleteDialogTurn: vi.fn((_sessionId: string, turnId: string) => {
+            session.dialogTurns = session.dialogTurns.filter(turn => turn.id !== turnId);
+          }),
           applyDispatchSnapshot: vi.fn(() => ({ applied: true, cursor: 0 })),
           updateSessionLastSubmittedMode: vi.fn(),
           updateSessionMode: vi.fn(),
@@ -453,10 +461,46 @@ describe('MessageModule detached dispatch', () => {
     };
   }
 
-  it('submits with existing workspace delivery and lets the target derive model/title', async () => {
-    const { context } = createDispatchContext('reject-and-report');
+  it('projects the user message immediately while the target is still queued', async () => {
+    const { context, session } = createDispatchContext('reject-and-report');
+    let resolveSubmit!: (value: {
+      accepted: boolean;
+      jobId: string;
+      sessionId: string;
+      state: string;
+    }) => void;
+    mockDispatchSubmit.mockImplementationOnce(() => new Promise(resolve => {
+      resolveSubmit = resolve;
+    }));
 
-    await sendMessage(context, 'run remote checks', 'dispatch-session');
+    const submission = sendMessage(
+      context,
+      'expanded remote prompt',
+      'dispatch-session',
+      'run remote checks',
+    );
+
+    expect(session.dialogTurns).toHaveLength(1);
+    expect(session.dialogTurns[0]).toMatchObject({
+      id: 'dispatch_pending_job-1',
+      sessionId: 'dispatch-session',
+      agentType: 'agentic',
+      userMessage: {
+        content: 'run remote checks',
+        metadata: {
+          __bitfunOptimisticDispatchJobId: 'job-1',
+        },
+      },
+      modelRounds: [],
+      status: 'pending',
+    });
+    resolveSubmit({
+      accepted: true,
+      jobId: 'job-1',
+      sessionId: 'dispatch-session',
+      state: 'queued',
+    });
+    await submission;
 
     expect(mockDispatchSubmit).toHaveBeenCalledWith({
       target: {
@@ -468,12 +512,23 @@ describe('MessageModule detached dispatch', () => {
       jobId: 'job-1',
       sessionId: 'dispatch-session',
       agentType: 'agentic',
-      prompt: 'run remote checks',
+      prompt: 'expanded remote prompt',
       approvalPolicy: 'reject-and-report',
       model: undefined,
     });
     expect(mockStartDialogTurn).not.toHaveBeenCalled();
     expect(mockBindSession).not.toHaveBeenCalled();
+  });
+
+  it('removes the optimistic message when dispatch submission fails', async () => {
+    const { context, session } = createDispatchContext('reject-and-report');
+    mockDispatchSubmit.mockRejectedValueOnce(new Error('target unavailable'));
+
+    await expect(
+      sendMessage(context, 'run remote checks', 'dispatch-session'),
+    ).rejects.toThrow('target unavailable');
+
+    expect(session.dialogTurns).toEqual([]);
   });
 
   it('requires a one-shot auto-approval confirmation before the actual submit', async () => {

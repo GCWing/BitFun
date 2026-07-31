@@ -71,3 +71,19 @@ describe('dispatch preflight contract', () => {
     expect(isDispatchWorkspaceReady('~/repo', probe, '~/repo')).toBe(true);
   });
 });
+
+describe('dispatch navigation scope contract', () => {
+  const sessionsSection = read(
+    '../../app/components/NavPanel/sections/sessions/SessionsSection.tsx',
+  );
+  const sessionsSectionStyles = read(
+    '../../app/components/NavPanel/sections/sessions/SessionsSection.scss',
+  );
+
+  it('keeps dispatch presentation on sessions without a workspace-level target filter', () => {
+    expect(sessionsSection).toContain('session.config.dispatchTarget');
+    expect(sessionsSection).toContain('session.config.dispatchJobState');
+    expect(sessionsSection).not.toContain('dispatchTargetFilter');
+    expect(sessionsSectionStyles).not.toContain('session-target-filter');
+  });
+});

@@ -78,6 +78,11 @@ import {
 } from './RuntimeStatusModule';
 import { requestPeerSessionRefresh } from './PeerSessionRefreshModule';
 import { isPeerDeviceModeActive } from '@/infrastructure/peer-device/peerModeFlag';
+import {
+  optimisticDispatchTurnJobId,
+  stripOptimisticDispatchTurnMetadata,
+} from '@/features/dispatch/optimisticDispatchTurn';
+import { isNonLocalDispatchTarget } from '@/features/dispatch/types';
 
 const log = createLogger('EventHandlerModule');
 const TURN_COMPLETION_QUIET_WINDOW_MS = 500;
@@ -152,6 +157,7 @@ export const __test_only__ = {
   resolveDialogTurnDisplayContent,
   mergeParamsPartialEventData,
   findSubagentParentInfoByRound,
+  handleDialogTurnStarted,
   handleDialogTurnFailed,
   handleSubagentSessionLinked,
 };
@@ -1562,7 +1568,49 @@ function handleDialogTurnStarted(context: FlowChatContext, event: any): void {
     userMessageMetadata?.kind === 'manual_compaction' ? 'manual_compaction' : 'user_dialog';
 
   const freshSession = store.getState().sessions.get(sessionId);
-  const dialogTurn = freshSession?.dialogTurns.find((turn: DialogTurn) => turn.id === turnId);
+  let dialogTurn = freshSession?.dialogTurns.find((turn: DialogTurn) => turn.id === turnId);
+  let projectedNewTurn = false;
+
+  if (
+    !dialogTurn
+    && freshSession
+    && isNonLocalDispatchTarget(freshSession.config.dispatchTarget)
+    && freshSession.config.dispatchJobId
+  ) {
+    const optimisticTurn = freshSession.dialogTurns.find(
+      turn => optimisticDispatchTurnJobId(turn) === freshSession.config.dispatchJobId,
+    );
+    if (optimisticTurn) {
+      store.updateDialogTurn(sessionId, optimisticTurn.id, turn => {
+        const optimisticMetadata = stripOptimisticDispatchTurnMetadata(
+          turn.userMessage.metadata,
+        );
+        const mergedMetadata =
+          optimisticMetadata || userMessageMetadata
+            ? { ...optimisticMetadata, ...userMessageMetadata }
+            : undefined;
+        return {
+          ...turn,
+          id: turnId,
+          kind: turn.kind || turnKind,
+          userMessage: {
+            ...turn.userMessage,
+            content: turn.userMessage.content || displayContent,
+            hasImages,
+            metadata: mergedMetadata,
+            images,
+          },
+          status: 'pending',
+          backendTurnIndex: typeof turnIndex === 'number' ? turnIndex : undefined,
+        };
+      });
+      dialogTurn = store.getState().sessions
+        .get(sessionId)
+        ?.dialogTurns.find((turn: DialogTurn) => turn.id === turnId);
+      projectedNewTurn = !!dialogTurn;
+    }
+  }
+
   if (!dialogTurn) {
     const newTurn: DialogTurn = {
       id: turnId,
@@ -1582,6 +1630,10 @@ function handleDialogTurnStarted(context: FlowChatContext, event: any): void {
       backendTurnIndex: typeof turnIndex === 'number' ? turnIndex : undefined,
     };
     store.addDialogTurn(sessionId, newTurn);
+    projectedNewTurn = true;
+  }
+
+  if (projectedNewTurn) {
     reconcileBackgroundSubagentSession(sessionId);
 
     context.contentBuffers.set(sessionId, new Map());
@@ -1595,6 +1647,10 @@ function handleDialogTurnStarted(context: FlowChatContext, event: any): void {
         log.error('State machine transition failed on dialog turn start', { sessionId, error });
       });
     }
+    return;
+  }
+
+  if (!dialogTurn) {
     return;
   }
 

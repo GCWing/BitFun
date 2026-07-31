@@ -52,3 +52,9 @@ dispatch.
     into the target's `app.json`, preserves every other target setting, aborts
     rather than overwrite an unreadable or unparseable target config, and
     writes owner-only via a temp-file rename.
+19. Dispatch target and status are session-scoped navigation metadata. Workspace
+    navigation must not install a dispatch target or filter its session list by
+    dispatch target.
+20. The controller projects the initial user turn before waiting for target
+    startup. The target's `DialogTurnStarted` event adopts that pending turn in
+    place so queued work is visible without duplicating the message.

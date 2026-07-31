@@ -161,10 +161,6 @@
       "dispatchUnreachable": "目标不可达",
       "dispatchUnreachableDetails": "目标不可达：{{target}} · {{error}}",
       "dispatchTransportErrorFallback": "传输请求失败",
-      "filterLabel": "运行位置",
-      "filterAll": "所有目标",
-      "filterLocal": "本机",
-      "noSessionsForTarget": "此目标上没有会话",
       "dispatchStates": {
         "submitting": "待提交",
         "submission_unknown": "正在确认提交状态",

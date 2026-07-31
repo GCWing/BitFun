@@ -13,6 +13,7 @@ import { FlowChatStore } from '../../store/FlowChatStore';
 import { notificationService } from '../../../shared/notification-system/services/NotificationService';
 import type { DialogTurn, FlowToolItem, FlowUserSteeringItem, ModelRound, Session } from '../../types/flow-chat';
 import type { FlowChatContext } from './types';
+import { markOptimisticDispatchTurnMetadata } from '@/features/dispatch/optimisticDispatchTurn';
 
 vi.mock('../../../shared/notification-system/services/NotificationService', () => ({
   notificationService: {
@@ -47,6 +48,90 @@ describe('resolveDialogTurnDisplayContent', () => {
         { kind: 'background_subagent_result' },
       ),
     ).toBe('Display content chosen by backend');
+  });
+});
+
+describe('dispatch optimistic turn reconciliation', () => {
+  beforeEach(() => {
+    resetFlowChatStore();
+    stateMachineManager.clear();
+  });
+
+  afterEach(() => {
+    resetFlowChatStore();
+    stateMachineManager.clear();
+  });
+
+  it('lets the target DialogTurnStarted event adopt the visible pending turn', () => {
+    FlowChatStore.getInstance().setState(() => ({
+      sessions: new Map([[
+        'dispatch-session',
+        {
+          sessionId: 'dispatch-session',
+          title: 'Remote task',
+          dialogTurns: [{
+            id: 'dispatch_pending_job-1',
+            sessionId: 'dispatch-session',
+            agentType: 'agentic',
+            userMessage: {
+              id: 'user-dispatch-1',
+              content: 'Original visible prompt',
+              timestamp: 1000,
+              metadata: markOptimisticDispatchTurnMetadata(
+                { source: 'composer' },
+                'job-1',
+              ),
+            },
+            modelRounds: [],
+            status: 'pending',
+            startTime: 1000,
+          }],
+          status: 'idle',
+          config: {
+            dispatchTarget: {
+              kind: 'ssh',
+              connectionId: 'ssh-1',
+              workspacePath: '/target/repo',
+              displayName: 'build-host',
+            },
+            dispatchJobId: 'job-1',
+          },
+          createdAt: 1000,
+          lastActiveAt: 1000,
+          error: null,
+          sessionKind: 'normal',
+        } as Session,
+      ]]),
+      activeSessionId: 'dispatch-session',
+    }));
+
+    __test_only__.handleDialogTurnStarted(createFlowChatContext(), {
+      sessionId: 'dispatch-session',
+      turnId: 'target-turn-1',
+      turnIndex: 0,
+      userInput: 'Expanded target prompt',
+      userMessageMetadata: { targetFact: true },
+    });
+
+    const turns = FlowChatStore.getInstance()
+      .getState()
+      .sessions.get('dispatch-session')
+      ?.dialogTurns;
+    expect(turns).toHaveLength(1);
+    expect(turns?.[0]).toMatchObject({
+      id: 'target-turn-1',
+      userMessage: {
+        content: 'Original visible prompt',
+        metadata: {
+          source: 'composer',
+          targetFact: true,
+        },
+      },
+      backendTurnIndex: 0,
+      status: 'pending',
+    });
+    expect(turns?.[0]?.userMessage.metadata)
+      .not.toHaveProperty('__bitfunOptimisticDispatchJobId');
   });
 });
 

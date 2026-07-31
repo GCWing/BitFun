@@ -161,10 +161,6 @@
       "dispatchUnreachable": "目標無法連線",
       "dispatchUnreachableDetails": "目標無法連線：{{target}} · {{error}}",
       "dispatchTransportErrorFallback": "傳輸請求失敗",
-      "filterLabel": "執行位置",
-      "filterAll": "所有目標",
-      "filterLocal": "本機",
-      "noSessionsForTarget": "此目標上沒有工作階段",
       "dispatchStates": {
         "submitting": "待提交",
         "submission_unknown": "正在確認提交狀態",

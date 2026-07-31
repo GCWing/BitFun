@@ -161,10 +161,6 @@
       "dispatchUnreachable": "Target unreachable",
       "dispatchUnreachableDetails": "Target unreachable: {{target}} · {{error}}",
       "dispatchTransportErrorFallback": "Transport request failed",
-      "filterLabel": "Runs on",
-      "filterAll": "All targets",
-      "filterLocal": "This computer",
-      "noSessionsForTarget": "No sessions on this target",
       "dispatchStates": {
         "submitting": "submitting",
         "submission_unknown": "checking submission",
