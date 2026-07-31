@@ -41,8 +41,19 @@
 | `src/styles.css` | 响应式布局与视觉样式 |
 | `src/api.test.ts` | API 客户端契约测试 |
 | `vite.config.ts` | `/miniapp/` base、本地端口和 API proxy |
-| `public/` | 网页静态资源 |
+| `public/` | 网页静态资源；见下方"站点图标" |
 | `dist/` | 本地构建产物；由构建生成，不手工修改、不单独部署 |
+
+### 站点图标
+
+`public/favicon.svg` 是唯一的图标源文件，画的是 BitFun 立方体标志的简化
+等轴测版本（16px 下仍然可辨认）。`favicon.ico`、`apple-touch-icon.png`、
+`icon-192.png`、`icon-512.png` 都是按同一份几何数据栅格化出来的产物：小尺寸
+去掉了面与面之间的缝隙并放大立方体，否则 16px 下三个面会糊成一团。
+
+改图标时先改 `favicon.svg`，再重新生成这几个 PNG/ICO，保证两者不会漂移。
+`index.html` 里的 `<link rel="icon">` 必须带 `/miniapp/` 前缀——站点不在
+域名根目录下，浏览器默认探测的 `/favicon.ico` 会被 Nginx 挡在 404。
 
 BitFun 桌面端内嵌的原生市场 Scene 不在这里。它位于
 `src/web-ui/src/app/scenes/miniapps/`，通过

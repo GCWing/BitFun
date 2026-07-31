@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="BitFun MiniApp Market">
+  <rect width="32" height="32" rx="7" fill="#16181d" />
+  <g stroke="#16181d" stroke-width="1.1" stroke-linejoin="round">
+    <path d="M16 5.4 25.4 10.8 16 16.2 6.6 10.8Z" fill="#c4c6cb" />
+    <path d="M6.6 10.8 16 16.2v10.8L6.6 21.6Z" fill="#5f636b" />
+    <path d="M25.4 10.8 16 16.2v10.8l9.4-5.4Z" fill="#33384a" />
+  </g>
+</svg>

@@ -606,7 +606,7 @@ function AppCard({
       <div className="card-body">
         <div className="card-topline">
           <span className="category-chip">{categoryLabel(app.category, t)}</span>
-          <span>BitFun {app.minBitfunVersion}+</span>
+          <span className="card-version">v{app.latestRelease}</span>
         </div>
         <div className="card-heading">
           <span className="app-icon">
@@ -621,16 +621,22 @@ function AppCard({
         </div>
         <p className="card-description">{localized.description}</p>
         <div className="card-meta">
-          <span>
+          <span title={t('ratingLabel')}>
             <Star weight={app.ratingAverage > 0 ? 'fill' : 'regular'} aria-hidden="true" />
             {app.ratingAverage.toFixed(1)}
             <small>{app.ratingCount}</small>
+            <span className="sr-only">{t('ratingLabel')}</span>
           </span>
-          <span>
+          <span className={`card-favorites ${app.isFavorited ? 'active' : ''}`} title={t('favoritesLabel')}>
+            <Heart weight={app.isFavorited ? 'fill' : 'regular'} aria-hidden="true" />
+            {formatCompactNumber(app.favoriteCount, locale)}
+            <span className="sr-only">{t('favoritesLabel')}</span>
+          </span>
+          <span title={t('downloadsLabel')}>
             <DownloadSimple aria-hidden="true" />
             {formatCompactNumber(app.downloadCount, locale)}
+            <span className="sr-only">{t('downloadsLabel')}</span>
           </span>
-          <span className="card-version">v{app.latestRelease}</span>
           <ArrowRight className="card-arrow" aria-hidden="true" />
         </div>
       </div>
@@ -745,6 +751,7 @@ function DetailPage({
             >
               <Heart weight={app.isFavorited ? 'fill' : 'regular'} aria-hidden="true" />
               {app.isFavorited ? t('favorited') : t('favorite')}
+              <small>{formatCompactNumber(app.favoriteCount, locale)}</small>
             </button>
             {owner && webSubmissionsEnabled && (
               <button
