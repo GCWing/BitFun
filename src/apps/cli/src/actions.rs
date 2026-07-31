@@ -74,6 +74,7 @@ pub(crate) enum ActionHandler {
     AddModel,
     NewSession,
     Sessions,
+    ForkSession,
     RenameSession,
     Skills,
     Reload,
@@ -115,7 +116,7 @@ pub(crate) enum ActionHandler {
 pub(crate) const SHARED_TUI_EMBEDDED_HANDOFF: &str =
     "Exit all Shared TUI clients, wait up to 30 seconds for their Runtime to stop, then use default Embedded `bitfun chat`";
 pub(crate) const SHARED_TUI_HELP_NOTE: &str =
-    "Shared TUI: start with `bitfun chat --shared`. Multiple TUI processes reuse one workspace Runtime, while each TUI controls at most one Session and each Session has one controller. Use `/sessions` and Ctrl+D to delete an idle, non-current Session; use `/rename <name>` to rename the current Session, `/compact` to compact its context, `/agent`, Tab, or Shift+Tab to change its Agent mode, `/models` to change its model, and `/reload [skills|instructions]` to refresh declarative context for the next message. Model configuration, Agent/Subagent management, MCP, extension, account-sync, usage, and other management remain Embedded. Exit all Shared TUI clients and wait up to 30 seconds before returning to default Embedded `bitfun chat`.";
+    "Shared TUI: start with `bitfun chat --shared`. Multiple TUI processes reuse one workspace Runtime, while each TUI controls at most one Session and each Session has one controller. Use `/sessions` and Ctrl+D to delete an idle, non-current Session; use `/fork` to branch the current idle Session, `/rename <name>` to rename it, `/compact` to compact its context, `/agent`, Tab, or Shift+Tab to change its Agent mode, `/models` to change its model, and `/reload [skills|instructions]` to refresh declarative context for the next message. Model configuration, Agent/Subagent management, MCP, extension, account-sync, usage, and other management remain Embedded. Exit all Shared TUI clients and wait up to 30 seconds before returning to default Embedded `bitfun chat`.";
 
 impl ActionHandler {
     pub(crate) const fn available_in_shared_tui(self, context: ActionContext) -> bool {
@@ -126,6 +127,7 @@ impl ActionHandler {
                     | Self::SelectTheme
                     | Self::NewSession
                     | Self::Sessions
+                    | Self::ForkSession
                     | Self::RenameSession
                     | Self::AcpHelp
                     | Self::Init
@@ -371,6 +373,21 @@ static ACTION_SPECS: &[ActionSpec] = &[
         fallback_bindings: &[],
         shortcut_field: None,
         palette: None,
+        shortcut_label: None,
+        slash_on_startup: false,
+    },
+    ActionSpec {
+        id: "fork_session",
+        name: "Fork session",
+        aliases: &["/fork"],
+        description: "Fork from the full session or a previous prompt",
+        contexts: CHAT,
+        availability: ActionAvailability::Idle,
+        handler: ActionHandler::ForkSession,
+        default_bindings: &[],
+        fallback_bindings: &[],
+        shortcut_field: None,
+        palette: palette("Session", false),
         shortcut_label: None,
         slash_on_startup: false,
     },
@@ -1838,6 +1855,7 @@ mod tests {
         assert!(SHARED_TUI_HELP_NOTE.contains("bitfun chat --shared"));
         assert!(SHARED_TUI_HELP_NOTE.contains("one Session"));
         assert!(SHARED_TUI_HELP_NOTE.contains("`/models`"));
+        assert!(SHARED_TUI_HELP_NOTE.contains("`/fork`"));
         assert!(SHARED_TUI_HELP_NOTE.contains("`/rename <name>`"));
         assert!(SHARED_TUI_HELP_NOTE.contains("`/reload [skills|instructions]`"));
         assert!(SHARED_TUI_HELP_NOTE.contains("Ctrl+D"));
@@ -1874,6 +1892,22 @@ mod tests {
         assert!(action.available(ActionState::chat(false, false).for_shared_tui()));
         assert!(!action.available(ActionState::chat(true, false)));
         assert!(action_by_id("rename_session", ActionContext::Startup).is_none());
+    }
+
+    #[test]
+    fn fork_uses_only_the_opencode_command_and_is_idle_in_both_deployments() {
+        let action = action_by_id("fork_session", ActionContext::Chat)
+            .expect("OpenCode-compatible session fork action");
+
+        assert_eq!(action.aliases, &["/fork"]);
+        assert_eq!(action.handler, ActionHandler::ForkSession);
+        assert_eq!(action.availability, ActionAvailability::Idle);
+        assert!(action.default_bindings.is_empty());
+        assert!(action.available(ActionState::chat(false, false)));
+        assert!(action.available(ActionState::chat(false, false).for_shared_tui()));
+        assert!(!action.available(ActionState::chat(true, false)));
+        assert!(action_by_id("fork_session", ActionContext::Startup).is_none());
+        assert!(action_for_alias("/branch", ActionContext::Chat).is_none());
     }
 
     #[test]

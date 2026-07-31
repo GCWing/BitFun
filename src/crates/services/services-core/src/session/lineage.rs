@@ -32,6 +32,32 @@ struct SubagentRelationshipFacts {
 pub struct SessionBranchRequest {
     pub source_session_id: String,
     pub source_turn_id: String,
+    #[serde(
+        default,
+        skip_serializing_if = "SessionBranchBoundary::is_through_turn"
+    )]
+    pub boundary: SessionBranchBoundary,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SessionBranchBoundary {
+    #[default]
+    ThroughTurn,
+    BeforeTurn,
+}
+
+impl SessionBranchBoundary {
+    pub const fn is_through_turn(&self) -> bool {
+        matches!(self, Self::ThroughTurn)
+    }
+
+    pub const fn copied_turn_count(self, source_turn_index: usize) -> usize {
+        match self {
+            Self::ThroughTurn => source_turn_index + 1,
+            Self::BeforeTurn => source_turn_index,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -58,6 +84,7 @@ pub struct BranchSessionMetadataFacts<'a> {
     pub source_session_id: &'a str,
     pub source_turn_id: &'a str,
     pub source_turn_index: usize,
+    pub boundary: SessionBranchBoundary,
     pub branched_turns: &'a [DialogTurnData],
     pub branch_lineage: &'a BranchSessionLineage,
     pub now_ms: u64,
@@ -271,6 +298,7 @@ pub fn build_branched_session_metadata(facts: BranchSessionMetadataFacts<'_>) ->
         facts.source_session_id,
         facts.source_turn_id,
         facts.source_turn_index,
+        facts.boundary,
         facts.branch_lineage,
     );
     metadata.relationship = None;
@@ -314,6 +342,7 @@ fn build_branch_custom_metadata(
     source_session_id: &str,
     source_turn_id: &str,
     source_turn_index: usize,
+    boundary: SessionBranchBoundary,
     branch_lineage: &BranchSessionLineage,
 ) -> Option<JsonValue> {
     let mut base = match strip_child_session_metadata(source_metadata) {
@@ -321,15 +350,16 @@ fn build_branch_custom_metadata(
         _ => JsonMap::new(),
     };
 
-    base.insert(
-        "forkOrigin".to_string(),
-        serde_json::json!({
-            "sessionId": source_session_id,
-            "turnId": source_turn_id,
-            "turnIndex": source_turn_index + 1,
-            "baseTitle": branch_lineage.base_session_name,
-        }),
-    );
+    let mut fork_origin = serde_json::json!({
+        "sessionId": source_session_id,
+        "turnId": source_turn_id,
+        "turnIndex": boundary.copied_turn_count(source_turn_index),
+        "baseTitle": branch_lineage.base_session_name,
+    });
+    if boundary == SessionBranchBoundary::BeforeTurn {
+        fork_origin["boundary"] = JsonValue::String("before_turn".to_string());
+    }
+    base.insert("forkOrigin".to_string(), fork_origin);
 
     Some(JsonValue::Object(base))
 }
@@ -588,6 +618,7 @@ mod tests {
             source_session_id: "source",
             source_turn_id: "turn-2",
             source_turn_index: 1,
+            boundary: SessionBranchBoundary::ThroughTurn,
             branched_turns: &turns,
             branch_lineage: &branch_lineage,
             now_ms: 42,

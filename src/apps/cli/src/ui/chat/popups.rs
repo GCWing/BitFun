@@ -436,6 +436,35 @@ impl ChatView {
         self.session_selector.remove_item(session_id);
     }
 
+    // ============ Fork selector methods ============
+
+    pub(crate) fn show_fork_selector(
+        &mut self,
+        points: Vec<crate::chat_state::SessionForkPoint>,
+    ) {
+        self.fork_selector.show(points);
+        self.popup_stack.push(PopupType::ForkSelector);
+    }
+
+    pub(crate) fn fork_selector_visible(&self) -> bool {
+        self.fork_selector.is_visible()
+    }
+
+    pub(crate) fn hide_fork_selector(&mut self) {
+        self.fork_selector.hide();
+    }
+
+    pub(crate) fn reshow_fork_selector(&mut self) {
+        self.fork_selector.reshow();
+    }
+
+    pub(crate) fn fork_selector_handle_key(
+        &mut self,
+        key: crossterm::event::KeyEvent,
+    ) -> ForkAction {
+        self.fork_selector.handle_key_event(key)
+    }
+
     // ============ Provider selector methods (add model step 1) ============
 
     pub(crate) fn show_provider_selector(&mut self) {

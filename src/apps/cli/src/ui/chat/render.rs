@@ -97,6 +97,7 @@ impl ChatView {
         self.render_model_selector(frame, chunks[1]);
         self.render_agent_selector(frame, chunks[1]);
         self.render_session_selector(frame, chunks[1]);
+        self.render_fork_selector(frame, chunks[1]);
         self.render_skill_selector(frame, chunks[1]);
         self.render_subagent_selector(frame, chunks[1]);
         self.render_mcp_selector(frame, chunks[1]);
@@ -885,6 +886,10 @@ impl ChatView {
 
     fn render_session_selector(&mut self, frame: &mut Frame, area: Rect) {
         self.session_selector.render(frame, area, &self.theme);
+    }
+
+    fn render_fork_selector(&mut self, frame: &mut Frame, area: Rect) {
+        self.fork_selector.render(frame, area, &self.theme);
     }
 
     fn render_skill_selector(&mut self, frame: &mut Frame, area: Rect) {

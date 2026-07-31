@@ -13,7 +13,7 @@ pub use layout::SessionStorageLayout;
 pub use lineage::{
     apply_session_lineage, build_branched_session_metadata, collect_hidden_subagent_cascade,
     format_branch_session_name, resolve_branch_session_lineage, BranchSessionLineage,
-    BranchSessionMetadataFacts, SessionBranchRequest, SessionBranchResult,
+    BranchSessionMetadataFacts, SessionBranchBoundary, SessionBranchRequest, SessionBranchResult,
 };
 pub use memory_workspace::{
     ensure_memory_workspace_git_baseline, memory_workspace_diff, render_memory_workspace_diff_file,

@@ -5,10 +5,10 @@ mod tests {
     use super::{
         action_opens_extension_management, agent_event_stream_failure, apply_agent_mode_feedback,
         apply_model_selection_feedback, apply_session_model_migration,
-        apply_session_rename_feedback, begin_slash_menu_selection, builtin_arguments_route,
-        builtin_command_reconfirmation, clear_selected_native_command_prefill,
-        cli_native_prompt_command_descriptors, command_route, compact_arguments_error,
-        consume_selected_native_command_once, context_compression_tool_event,
+        apply_session_rename_feedback, begin_slash_menu_selection, builtin_arguments_error,
+        builtin_arguments_route, builtin_command_reconfirmation,
+        clear_selected_native_command_prefill, cli_native_prompt_command_descriptors,
+        command_route, consume_selected_native_command_once, context_compression_tool_event,
         extension_command_help_request, external_agent_attention, external_agent_diagnostic_lines,
         external_agent_pending_notice_key, external_agent_result_is_stale,
         external_agent_review_text, external_command_projections, external_control_review_text,
@@ -1168,9 +1168,9 @@ mod tests {
     }
 
     #[test]
-    fn compact_rejects_arguments_only_after_the_builtin_route_wins() {
+    fn session_actions_reject_arguments_only_after_the_builtin_route_wins() {
         assert_eq!(
-            compact_arguments_error(
+            builtin_arguments_error(
                 CommandRoute::Builtin,
                 ActionHandler::CompactSession,
                 "unexpected"
@@ -1178,16 +1178,24 @@ mod tests {
             Some("Usage: /compact")
         );
         assert_eq!(
-            compact_arguments_error(CommandRoute::Builtin, ActionHandler::CompactSession, "   "),
+            builtin_arguments_error(CommandRoute::Builtin, ActionHandler::CompactSession, "   "),
             None
         );
         assert_eq!(
-            compact_arguments_error(
+            builtin_arguments_error(
                 CommandRoute::External,
                 ActionHandler::CompactSession,
                 "unexpected"
             ),
             None
+        );
+        assert_eq!(
+            builtin_arguments_error(
+                CommandRoute::Builtin,
+                ActionHandler::ForkSession,
+                "unexpected"
+            ),
+            Some("Usage: /fork")
         );
     }
 

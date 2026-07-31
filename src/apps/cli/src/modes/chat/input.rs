@@ -195,6 +195,16 @@ impl ChatMode {
             return Ok(None);
         }
 
+        if chat_view.fork_selector_visible() {
+            match chat_view.fork_selector_handle_key(key) {
+                ForkAction::Select(target) => {
+                    return Ok(Some(ChatExitReason::ForkSession(target)));
+                }
+                ForkAction::Close | ForkAction::None => {}
+            }
+            return Ok(None);
+        }
+
         if chat_view.skill_selector_visible() {
             match key.code {
                 KeyCode::Up => chat_view.skill_selector_up(),
@@ -403,7 +413,9 @@ impl ChatMode {
         } = context;
         if matches!(
             &reason,
-            ChatExitReason::SwitchSession(_) | ChatExitReason::NewSession
+            ChatExitReason::SwitchSession(_)
+                | ChatExitReason::ForkSession(_)
+                | ChatExitReason::NewSession
         ) && shared_session_change_is_blocked(
             this.agent.is_shared(),
             this.pending_session_operation.is_some(),
@@ -443,6 +455,15 @@ impl ChatMode {
                         chat_state
                             .add_system_message(format!("Failed to create new session: {}", e));
                         tracing::error!("Failed to create new session: {}", e);
+                    }
+                }
+            }
+            ChatExitReason::ForkSession(target) => {
+                match this.fork_session(target, session_id, chat_state, chat_view, rt_handle) {
+                    Ok(()) => tracing::info!("Forked current session: {}", session_id),
+                    Err(error) => {
+                        chat_view.set_status(Some(format!("Failed to fork session: {error}")));
+                        tracing::error!("Failed to fork session: {error}");
                     }
                 }
             }

@@ -14,8 +14,9 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use bitfun_agent_runtime::permission::PermissionRequestManager;
 use bitfun_agent_runtime::sdk::{
     AgentEventReceiver, AgentEventSource, AgentRuntime, AgentSessionForkAtTurnRequest,
-    AgentSessionForkPort, AgentSessionForkRequest, AgentSessionForkResult, AgentSessionUsagePort,
-    AgentSessionUsageRequest, AgentTurnSettlementPort, AgentTurnSettlementRequest,
+    AgentSessionForkBeforeTurnRequest, AgentSessionForkPort, AgentSessionForkRequest,
+    AgentSessionForkResult, AgentSessionUsagePort, AgentSessionUsageRequest,
+    AgentTurnSettlementPort, AgentTurnSettlementRequest,
 };
 use bitfun_harness::HarnessRegistry;
 use bitfun_runtime_ports::{
@@ -27,6 +28,7 @@ use bitfun_runtime_ports::{
 };
 use bitfun_runtime_services::RuntimeServices;
 use bitfun_services_core::permission_store::ProjectPermissionSqliteStore;
+use bitfun_services_core::session::SessionBranchBoundary;
 
 use crate::agentic::coordination::{
     ConversationCoordinator, DialogScheduler, DialogSteerOutcome, SessionMaintenancePermit,
@@ -1029,6 +1031,7 @@ impl CoreSessionOperationsPort {
         storage_path: &Path,
         source_session_id: String,
         source_turn_id: String,
+        boundary: SessionBranchBoundary,
     ) -> PortResult<AgentSessionForkResult> {
         if source_turn_id.trim().is_empty() {
             return Err(PortError::new(
@@ -1044,6 +1047,7 @@ impl CoreSessionOperationsPort {
                 &SessionBranchRequest {
                     source_session_id,
                     source_turn_id,
+                    boundary,
                 },
             )
             .await
@@ -1091,7 +1095,17 @@ fn runtime_port_error(error: BitFunError) -> PortError {
 }
 
 fn validate_latest_turn_fork_scope(request: &AgentSessionForkRequest) -> PortResult<()> {
-    if request.remote_connection_id.is_some() || request.remote_ssh_host.is_some() {
+    validate_local_fork_scope(
+        request.remote_connection_id.as_deref(),
+        request.remote_ssh_host.as_deref(),
+    )
+}
+
+fn validate_local_fork_scope(
+    remote_connection_id: Option<&str>,
+    remote_ssh_host: Option<&str>,
+) -> PortResult<()> {
+    if remote_connection_id.is_some() || remote_ssh_host.is_some() {
         return Err(PortError::new(
             PortErrorKind::NotAvailable,
             "Remote session fork is not supported by the local CLI runtime",
@@ -1129,14 +1143,23 @@ impl AgentSessionForkPort for CoreSessionOperationsPort {
             .await
             .map_err(runtime_port_error)?;
         let source_turn_id = latest_persisted_turn_id(&turns).map_err(runtime_port_error)?;
-        self.fork_at_persisted_turn(&storage_path, source_session_id, source_turn_id)
-            .await
+        self.fork_at_persisted_turn(
+            &storage_path,
+            source_session_id,
+            source_turn_id,
+            SessionBranchBoundary::ThroughTurn,
+        )
+        .await
     }
 
     async fn fork_session_at_turn(
         &self,
         request: AgentSessionForkAtTurnRequest,
     ) -> PortResult<AgentSessionForkResult> {
+        validate_local_fork_scope(
+            request.remote_connection_id.as_deref(),
+            request.remote_ssh_host.as_deref(),
+        )?;
         self.coordinator
             .ensure_workspace_runtime_ownership(
                 Path::new(&request.workspace_path),
@@ -1155,6 +1178,38 @@ impl AgentSessionForkPort for CoreSessionOperationsPort {
             &storage_path,
             request.source_session_id,
             request.source_turn_id,
+            SessionBranchBoundary::ThroughTurn,
+        )
+        .await
+    }
+
+    async fn fork_session_before_turn(
+        &self,
+        request: AgentSessionForkBeforeTurnRequest,
+    ) -> PortResult<AgentSessionForkResult> {
+        validate_local_fork_scope(
+            request.remote_connection_id.as_deref(),
+            request.remote_ssh_host.as_deref(),
+        )?;
+        self.coordinator
+            .ensure_workspace_runtime_ownership(
+                Path::new(&request.workspace_path),
+                request.remote_connection_id.as_deref(),
+                request.remote_ssh_host.as_deref(),
+            )
+            .map_err(runtime_port_error)?;
+        let storage_path = self
+            .resolve_fork_storage_path(
+                request.workspace_path,
+                request.remote_connection_id,
+                request.remote_ssh_host,
+            )
+            .await?;
+        self.fork_at_persisted_turn(
+            &storage_path,
+            request.source_session_id,
+            request.source_turn_id,
+            SessionBranchBoundary::BeforeTurn,
         )
         .await
     }
@@ -1416,9 +1471,10 @@ mod tests {
             fork_impl
                 .matches("ensure_workspace_runtime_ownership")
                 .count(),
-            2,
-            "latest-turn and explicit-turn forks must share the Coordinator ownership gate"
+            3,
+            "latest-turn, explicit-turn, and before-turn forks must share the Coordinator ownership gate"
         );
+        assert!(fork_impl.contains("fork_session_before_turn"));
         assert!(!fork_impl.contains("RuntimeOwnershipKey"));
         assert!(!fork_impl.contains("try_acquire"));
     }

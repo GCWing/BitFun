@@ -163,6 +163,8 @@ pub(crate) enum FlowItem {
 #[derive(Debug, Clone)]
 pub(crate) struct ChatMessage {
     pub id: String,
+    /// Stable persisted DialogTurn identity used for history operations.
+    pub turn_id: Option<String>,
     pub role: MessageRole,
     pub timestamp: SystemTime,
     pub flow_items: Vec<FlowItem>,
@@ -272,6 +274,7 @@ impl ChatMessage {
                 .id
                 .clone()
                 .unwrap_or_else(|| format!("transcript-message-{index}")),
+            turn_id: msg.turn_id.clone(),
             role,
             timestamp: UNIX_EPOCH
                 .checked_add(Duration::from_millis(msg.timestamp_ms.unwrap_or_default()))
@@ -281,6 +284,13 @@ impl ChatMessage {
             version: 0,
         }
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct SessionForkPoint {
+    pub turn_id: String,
+    pub prompt: String,
+    pub timestamp: SystemTime,
 }
 
 // ============ Chat Metadata ============
@@ -458,6 +468,32 @@ impl ChatState {
 
     pub(crate) fn has_conversation_history(&self) -> bool {
         self.metadata.message_count > 0
+    }
+
+    /// User prompts eligible for `/fork`, newest first like OpenCode's fork dialog.
+    pub(crate) fn session_fork_points(&self) -> Vec<SessionForkPoint> {
+        self.messages
+            .iter()
+            .rev()
+            .filter(|message| message.role == MessageRole::User)
+            .filter_map(|message| {
+                let turn_id = message.turn_id.clone()?;
+                let prompt = message
+                    .flow_items
+                    .iter()
+                    .filter_map(|item| match item {
+                        FlowItem::Text { content, .. } => Some(content.as_str()),
+                        FlowItem::Thinking { .. } | FlowItem::Tool { .. } => None,
+                    })
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                (!prompt.is_empty()).then_some(SessionForkPoint {
+                    turn_id,
+                    prompt,
+                    timestamp: message.timestamp,
+                })
+            })
+            .collect()
     }
 
     pub(crate) fn set_worktree_control_available(&mut self, available: bool) {
@@ -720,6 +756,7 @@ impl ChatState {
         // Add user message
         self.messages.push(ChatMessage {
             id: uuid::Uuid::new_v4().to_string(),
+            turn_id: Some(turn_id.to_string()),
             role: MessageRole::User,
             timestamp: SystemTime::now(),
             flow_items: vec![FlowItem::Text {
@@ -734,6 +771,7 @@ impl ChatState {
         // Add empty assistant message (will be filled by streaming)
         self.messages.push(ChatMessage {
             id: uuid::Uuid::new_v4().to_string(),
+            turn_id: Some(turn_id.to_string()),
             role: MessageRole::Assistant,
             timestamp: SystemTime::now(),
             flow_items: Vec::new(),
@@ -1172,6 +1210,7 @@ impl ChatState {
     pub(crate) fn add_system_message(&mut self, content: String) {
         self.messages.push(ChatMessage {
             id: uuid::Uuid::new_v4().to_string(),
+            turn_id: None,
             role: MessageRole::System,
             timestamp: SystemTime::now(),
             flow_items: vec![FlowItem::Text {
@@ -1187,6 +1226,7 @@ impl ChatState {
     pub(crate) fn add_assistant_message(&mut self, content: String) {
         self.messages.push(ChatMessage {
             id: uuid::Uuid::new_v4().to_string(),
+            turn_id: None,
             role: MessageRole::Assistant,
             timestamp: SystemTime::now(),
             flow_items: vec![FlowItem::Text {
@@ -1750,6 +1790,51 @@ mod tests {
             },
             &wire_input
         );
+    }
+
+    #[test]
+    fn session_fork_points_keep_stable_turn_ids_and_newest_prompt_first() {
+        let transcript = SessionTranscript {
+            session_id: "session-1".to_string(),
+            messages: vec![
+                TranscriptMessage {
+                    id: Some("user-1".to_string()),
+                    role: "user".to_string(),
+                    turn_id: Some("turn-1".to_string()),
+                    timestamp_ms: Some(1_000),
+                    content: TranscriptContent::Text("First prompt".to_string()),
+                },
+                TranscriptMessage {
+                    id: Some("assistant-1".to_string()),
+                    role: "assistant".to_string(),
+                    turn_id: Some("turn-1".to_string()),
+                    timestamp_ms: Some(1_100),
+                    content: TranscriptContent::Text("First answer".to_string()),
+                },
+                TranscriptMessage {
+                    id: Some("user-2".to_string()),
+                    role: "user".to_string(),
+                    turn_id: Some("turn-2".to_string()),
+                    timestamp_ms: Some(2_000),
+                    content: TranscriptContent::Text("Second\nprompt".to_string()),
+                },
+            ],
+        };
+        let state = ChatState::from_session_transcript(
+            "session-1".to_string(),
+            "Session".to_string(),
+            "agentic".to_string(),
+            None,
+            &transcript,
+        );
+
+        let points = state.session_fork_points();
+
+        assert_eq!(points.len(), 2);
+        assert_eq!(points[0].turn_id, "turn-2");
+        assert_eq!(points[0].prompt, "Second\nprompt");
+        assert_eq!(points[1].turn_id, "turn-1");
+        assert_eq!(points[1].prompt, "First prompt");
     }
 
     #[test]

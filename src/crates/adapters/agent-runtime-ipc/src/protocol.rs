@@ -5,7 +5,7 @@ use crate::{RuntimeIpcOperation, RuntimeIpcOperationResult};
 use bitfun_events::AgenticEventEnvelope;
 use bitfun_product_domains::tool_permissions::PermissionRequestEvent;
 
-pub const PROTOCOL_VERSION: u32 = 8;
+pub const PROTOCOL_VERSION: u32 = 9;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]

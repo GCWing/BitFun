@@ -16,19 +16,20 @@ use bitfun_runtime_ports::{
     AgentSessionArchiveStateRequest, AgentSessionClosePort, AgentSessionCompactionPort,
     AgentSessionCompactionRequest, AgentSessionCompactionResult, AgentSessionCreateRequest,
     AgentSessionCreateResult, AgentSessionDeleteRequest, AgentSessionForkAtTurnRequest,
-    AgentSessionForkPort, AgentSessionForkRequest, AgentSessionForkResult, AgentSessionListRequest,
-    AgentSessionManagementPort, AgentSessionModePort, AgentSessionModeUpdateRequest,
-    AgentSessionModelPort, AgentSessionModelUpdateRequest, AgentSessionRenameRequest,
-    AgentSessionSummary, AgentSessionUsagePort, AgentSessionUsageRequest,
-    AgentSessionWorkspaceBinding, AgentSessionWorkspaceRequest, AgentSubmissionPort,
-    AgentSubmissionRequest, AgentSubmissionResult, AgentSubmissionSource,
-    AgentThreadGoalCreateRequest, AgentThreadGoalDeliveryRequest, AgentThreadGoalGetRequest,
-    AgentThreadGoalManagementPort, AgentThreadGoalUpdateStatusRequest,
-    AgentTransientSessionDiscardRequest, AgentTurnCancellationPort, AgentTurnCancellationRequest,
-    AgentTurnCancellationResult, AgentTurnSettlementPort, AgentTurnSettlementRequest,
-    DialogSubmitOutcome, PermissionAuditRecord, PermissionGrant, PermissionGrantKey,
-    PluginRuntimeBinding, PortError, PortErrorKind, PortResult, RuntimeEventEnvelope,
-    SessionTranscript, SessionTranscriptReader, SessionTranscriptRequest, ThreadGoal,
+    AgentSessionForkBeforeTurnRequest, AgentSessionForkPort, AgentSessionForkRequest,
+    AgentSessionForkResult, AgentSessionListRequest, AgentSessionManagementPort,
+    AgentSessionModePort, AgentSessionModeUpdateRequest, AgentSessionModelPort,
+    AgentSessionModelUpdateRequest, AgentSessionRenameRequest, AgentSessionSummary,
+    AgentSessionUsagePort, AgentSessionUsageRequest, AgentSessionWorkspaceBinding,
+    AgentSessionWorkspaceRequest, AgentSubmissionPort, AgentSubmissionRequest,
+    AgentSubmissionResult, AgentSubmissionSource, AgentThreadGoalCreateRequest,
+    AgentThreadGoalDeliveryRequest, AgentThreadGoalGetRequest, AgentThreadGoalManagementPort,
+    AgentThreadGoalUpdateStatusRequest, AgentTransientSessionDiscardRequest,
+    AgentTurnCancellationPort, AgentTurnCancellationRequest, AgentTurnCancellationResult,
+    AgentTurnSettlementPort, AgentTurnSettlementRequest, DialogSubmitOutcome,
+    PermissionAuditRecord, PermissionGrant, PermissionGrantKey, PluginRuntimeBinding, PortError,
+    PortErrorKind, PortResult, RuntimeEventEnvelope, SessionTranscript, SessionTranscriptReader,
+    SessionTranscriptRequest, ThreadGoal,
 };
 use bitfun_runtime_services::RuntimeServices;
 
@@ -1121,6 +1122,21 @@ impl AgentRuntime {
             .map_err(RuntimeError::from)
     }
 
+    pub async fn fork_session_before_turn(
+        &self,
+        request: AgentSessionForkBeforeTurnRequest,
+    ) -> Result<AgentSessionForkResult, RuntimeError> {
+        let port = self.session_fork.as_ref().ok_or_else(|| {
+            RuntimeError::Port(PortError::new(
+                PortErrorKind::NotAvailable,
+                "agent session fork port is not registered",
+            ))
+        })?;
+        port.fork_session_before_turn(request)
+            .await
+            .map_err(RuntimeError::from)
+    }
+
     pub async fn generate_session_usage(
         &self,
         request: AgentSessionUsageRequest,
@@ -1424,6 +1440,7 @@ mod tests {
         submitted_messages: Mutex<Vec<AgentSubmissionRequest>>,
         cancelled_turns: Mutex<Vec<AgentTurnCancellationRequest>>,
         compaction_requests: Mutex<Vec<AgentSessionCompactionRequest>>,
+        before_turn_fork_requests: Mutex<Vec<AgentSessionForkBeforeTurnRequest>>,
         listed_sessions: Mutex<Vec<AgentSessionListRequest>>,
         deleted_sessions: Mutex<Vec<AgentSessionDeleteRequest>>,
         renamed_sessions: Mutex<Vec<AgentSessionRenameRequest>>,
@@ -1590,6 +1607,32 @@ mod tests {
             Ok(AgentSessionCompactionResult {
                 session_id: request.session_id,
                 turn_id: request.turn_id,
+            })
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl AgentSessionForkPort for FakeAgentRuntimePorts {
+        async fn fork_session(
+            &self,
+            request: AgentSessionForkRequest,
+        ) -> PortResult<AgentSessionForkResult> {
+            Ok(AgentSessionForkResult {
+                session_id: format!("{}-fork", request.source_session_id),
+                session_name: "Forked session".to_string(),
+                agent_type: "agentic".to_string(),
+            })
+        }
+
+        async fn fork_session_before_turn(
+            &self,
+            request: AgentSessionForkBeforeTurnRequest,
+        ) -> PortResult<AgentSessionForkResult> {
+            self.before_turn_fork_requests.lock().unwrap().push(request);
+            Ok(AgentSessionForkResult {
+                session_id: "session-fork".to_string(),
+                session_name: "Forked session".to_string(),
+                agent_type: "agentic".to_string(),
             })
         }
     }
@@ -1858,6 +1901,34 @@ mod tests {
         );
         assert_eq!(
             ports.compaction_requests.lock().unwrap().as_slice(),
+            &[request]
+        );
+    }
+
+    #[tokio::test]
+    async fn session_fork_before_turn_forwards_exact_boundary_identity() {
+        let ports = Arc::new(FakeAgentRuntimePorts::default());
+        let runtime = AgentRuntimeBuilder::new()
+            .with_submission_port(ports.clone())
+            .with_session_fork_port(ports.clone())
+            .build()
+            .expect("runtime");
+        let request = AgentSessionForkBeforeTurnRequest {
+            workspace_path: "/workspace/project".to_string(),
+            source_session_id: "session-1".to_string(),
+            source_turn_id: "turn-2".to_string(),
+            remote_connection_id: None,
+            remote_ssh_host: None,
+        };
+
+        let result = runtime
+            .fork_session_before_turn(request.clone())
+            .await
+            .expect("fork before turn");
+
+        assert_eq!(result.session_id, "session-fork");
+        assert_eq!(
+            ports.before_turn_fork_requests.lock().unwrap().as_slice(),
             &[request]
         );
     }

@@ -42,6 +42,7 @@ fn pending_session_operation_blocks_runtime_action(
         && matches!(
             handler,
             ActionHandler::Sessions
+                | ActionHandler::ForkSession
                 | ActionHandler::RenameSession
                 | ActionHandler::CompactSession
                 | ActionHandler::Init
@@ -81,15 +82,20 @@ fn builtin_arguments_route(route: CommandRoute, handler: ActionHandler) -> bool 
     route == CommandRoute::Builtin && handler == ActionHandler::RenameSession
 }
 
-fn compact_arguments_error(
+fn builtin_arguments_error(
     route: CommandRoute,
     handler: ActionHandler,
     arguments: &str,
 ) -> Option<&'static str> {
-    (route == CommandRoute::Builtin
-        && handler == ActionHandler::CompactSession
-        && !arguments.trim().is_empty())
-    .then_some("Usage: /compact")
+    if route != CommandRoute::Builtin || arguments.trim().is_empty() {
+        return None;
+    }
+
+    match handler {
+        ActionHandler::CompactSession => Some("Usage: /compact"),
+        ActionHandler::ForkSession => Some("Usage: /fork"),
+        _ => None,
+    }
 }
 
 fn selected_command_prefill(handler: ActionHandler) -> Option<&'static str> {
@@ -143,7 +149,12 @@ fn clear_selected_native_command_prefill(
 fn session_command_help_note() -> String {
     let rename = action_for_alias("/rename", ActionContext::Chat)
         .expect("current session rename action must remain registered");
-    format!("Session Commands\n  {}", rename.description)
+    let fork = action_for_alias("/fork", ActionContext::Chat)
+        .expect("current session fork action must remain registered");
+    format!(
+        "Session Commands\n  {}\n  {}",
+        fork.description, rename.description
+    )
 }
 
 impl ChatMode {
@@ -358,7 +369,7 @@ impl ChatMode {
             if let Some(action) = builtin_action {
                 let state = self.action_state(chat_state.is_processing, false);
                 if let Some(usage) =
-                    compact_arguments_error(CommandRoute::Builtin, action.handler, arguments)
+                    builtin_arguments_error(CommandRoute::Builtin, action.handler, arguments)
                 {
                     chat_view.set_status(Some(usage.to_string()));
                     return Ok(None);
@@ -432,7 +443,7 @@ impl ChatMode {
             )
         };
         if let Some(action) = builtin_action {
-            if let Some(usage) = compact_arguments_error(route, action.handler, arguments) {
+            if let Some(usage) = builtin_arguments_error(route, action.handler, arguments) {
                 chat_view.set_status(Some(usage.to_string()));
                 return Ok(None);
             }
@@ -902,6 +913,9 @@ impl ChatMode {
             }
             ActionHandler::Sessions => {
                 self.show_session_selector(chat_view, chat_state, rt_handle);
+            }
+            ActionHandler::ForkSession => {
+                self.show_fork_selector(chat_view, chat_state);
             }
             ActionHandler::RenameSession => {
                 return self.start_session_rename("", chat_view, chat_state, rt_handle);

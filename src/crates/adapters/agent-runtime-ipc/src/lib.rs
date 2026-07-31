@@ -25,8 +25,8 @@ pub use handler::RuntimeIpcRequestHandler;
 pub use ipc::RuntimeIpcTransportError;
 pub(crate) use ipc::{LocalIpcEndpoint, LocalIpcListener, LocalIpcStream};
 pub use operation::{
-    RuntimeIpcOperation, RuntimeIpcOperationResult, RuntimeSessionRenameRequest,
-    RuntimeSessionRestoreRequest, RuntimeUserAnswersRequest,
+    RuntimeIpcOperation, RuntimeIpcOperationResult, RuntimeSessionForkRequest,
+    RuntimeSessionRenameRequest, RuntimeSessionRestoreRequest, RuntimeUserAnswersRequest,
 };
 pub use protocol::{
     HealthResult, InitializeRequest, InitializeResult, RuntimeIpcCapabilities, RuntimeIpcError,

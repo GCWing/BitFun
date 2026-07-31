@@ -1,4 +1,61 @@
 impl ChatMode {
+    fn fork_session(
+        &mut self,
+        target: ForkTarget,
+        session_id: &mut String,
+        chat_state: &mut ChatState,
+        chat_view: &mut ChatView,
+        rt_handle: &tokio::runtime::Handle,
+    ) -> Result<()> {
+        let (before_turn_id, prefill) = match target {
+            ForkTarget::FullSession => (None, None),
+            ForkTarget::BeforeTurn { turn_id, prompt } => (Some(turn_id), Some(prompt)),
+        };
+        chat_view.set_status(Some("Forking session...".to_string()));
+        self.close_all_popups(chat_view);
+        let agent = self.agent.clone();
+        let (summary, workspace_binding, transcript) = tokio::task::block_in_place(|| {
+            rt_handle.block_on(agent.fork_current_session(before_turn_id.as_deref()))
+        })?;
+        let new_session_id = summary.session_id.clone();
+        let restored_agent_type = summary.agent_type.clone();
+        let mut new_state = ChatState::from_session_transcript(
+            new_session_id.clone(),
+            summary.session_name.clone(),
+            restored_agent_type.clone(),
+            Some(workspace_binding.workspace_path.clone()),
+            &transcript,
+        );
+        new_state.current_model_id = summary.model_id;
+        new_state.apply_workspace_binding(workspace_binding);
+
+        *session_id = new_session_id.clone();
+        *chat_state = new_state;
+        chat_state.set_worktree_control_available(!self.agent.is_shared());
+        self.agent_type = restored_agent_type;
+        self.workspace = chat_state.workspace.clone();
+        self.refresh_workspace_git_status(chat_state, rt_handle);
+        self.auto_approve_ask_override = None;
+        clear_selected_native_command_prefill(&mut self.selected_native_command_once, chat_view);
+        chat_state.auto_approve_ask = self.auto_approve_ask_default;
+        self.agent
+            .set_approval_policy(crate::runtime::approval::CliApprovalPolicy::Ask);
+        self.load_current_model_name(chat_state, rt_handle);
+
+        chat_view.clear_screen();
+        chat_view.scroll_to_bottom();
+        if let Some(prompt) = prefill {
+            chat_view.set_input(&prompt);
+            chat_view.set_status(Some(
+                "Forked before the selected prompt; review the copied input before sending."
+                    .to_string(),
+            ));
+        } else {
+            chat_view.set_status(Some(format!("Forked session: {}", summary.session_name)));
+        }
+        Ok(())
+    }
+
     /// Switch to a different session: restore it from core, reload messages, update state
     fn switch_to_session(
         &mut self,
@@ -220,6 +277,20 @@ impl ChatMode {
                 self.pending_session_operation.is_some(),
             ),
         );
+    }
+
+    fn show_fork_selector(&self, chat_view: &mut ChatView, chat_state: &ChatState) {
+        let points = chat_state.session_fork_points();
+        if points.is_empty() {
+            chat_view.set_status(Some(
+                "No persisted prompts are available to fork.".to_string(),
+            ));
+            return;
+        }
+        chat_view.show_fork_selector(points);
+        chat_view.set_status(Some(
+            "Choose Full session or a prompt to fork immediately before it.".to_string(),
+        ));
     }
 
     /// Handle session deletion from the session selector

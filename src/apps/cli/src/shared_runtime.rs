@@ -1,7 +1,8 @@
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use bitfun_agent_runtime::sdk::{
-    AgentRuntime, AgentSessionDeleteRequest, AgentSessionRenameRequest, AgentSessionRestoreRequest,
+    AgentRuntime, AgentSessionDeleteRequest, AgentSessionForkBeforeTurnRequest,
+    AgentSessionForkRequest, AgentSessionRenameRequest, AgentSessionRestoreRequest,
     AgentUserAnswersRequest, DialogSubmitOutcome, PermissionRequest, PermissionRequestEvent,
     PortErrorKind, RuntimeError, SessionTranscriptRequest,
 };
@@ -263,6 +264,56 @@ impl RuntimeIpcRequestHandler for SharedRuntimeHandler {
                     session: restored.session,
                     transcript,
                     pending_permissions,
+                })
+            }
+            RuntimeIpcOperation::ForkSession { request } => {
+                let workspace_path = self.workspace.to_string_lossy().into_owned();
+                let forked = match request.before_turn_id {
+                    Some(source_turn_id) => {
+                        self.runtime
+                            .fork_session_before_turn(AgentSessionForkBeforeTurnRequest {
+                                workspace_path: workspace_path.clone(),
+                                source_session_id: request.session_id,
+                                source_turn_id,
+                                remote_connection_id: None,
+                                remote_ssh_host: None,
+                            })
+                            .await
+                    }
+                    None => {
+                        self.runtime
+                            .fork_session(AgentSessionForkRequest {
+                                workspace_path: workspace_path.clone(),
+                                source_session_id: request.session_id,
+                                remote_connection_id: None,
+                                remote_ssh_host: None,
+                            })
+                            .await
+                    }
+                }
+                .map_err(runtime_ipc_error)?;
+                let restored = self
+                    .runtime
+                    .restore_session(AgentSessionRestoreRequest {
+                        workspace_path,
+                        session_id: forked.session_id.clone(),
+                        include_internal: false,
+                        remote_connection_id: None,
+                        remote_ssh_host: None,
+                    })
+                    .await
+                    .map_err(runtime_ipc_error)?;
+                let transcript = self
+                    .runtime
+                    .read_session_transcript(SessionTranscriptRequest {
+                        session_id: forked.session_id,
+                        turn_id: None,
+                    })
+                    .await
+                    .map_err(runtime_ipc_error)?;
+                Ok(RuntimeIpcOperationResult::SessionForked {
+                    session: restored.session,
+                    transcript,
                 })
             }
             RuntimeIpcOperation::DeleteSession { session_id } => {

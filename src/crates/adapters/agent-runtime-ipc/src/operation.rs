@@ -21,6 +21,16 @@ pub struct RuntimeSessionRenameRequest {
     pub session_name: String,
 }
 
+/// Forks the controlled Session at its latest persisted turn, or immediately
+/// before `before_turn_id` when the TUI selected a historical user prompt.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RuntimeSessionForkRequest {
+    pub session_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub before_turn_id: Option<String>,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct RuntimeUserAnswersRequest {
@@ -59,6 +69,9 @@ pub enum RuntimeIpcOperation {
     RenameSession {
         request: RuntimeSessionRenameRequest,
     },
+    ForkSession {
+        request: RuntimeSessionForkRequest,
+    },
     ReloadSessionContext {
         request: AgentContextReloadRequest,
     },
@@ -92,6 +105,7 @@ impl RuntimeIpcOperation {
             Self::UpdateSessionMode { request } => Some(&request.session_id),
             Self::UpdateSessionModel { request } => Some(&request.session_id),
             Self::RenameSession { request } => Some(&request.session_id),
+            Self::ForkSession { request } => Some(&request.session_id),
             Self::ReloadSessionContext { request } => Some(&request.session_id),
             Self::CompactSession { request } => Some(&request.session_id),
             Self::SubmitTurn { request } => Some(&request.session_id),
@@ -125,6 +139,9 @@ impl RuntimeIpcOperation {
             | Self::CompactSession { .. }
             | Self::SubmitTurn { .. } => {
                 RuntimeIpcOperationRules::new(CurrentController, true, false, true)
+            }
+            Self::ForkSession { .. } => {
+                RuntimeIpcOperationRules::new(CurrentController, true, true, true)
             }
             Self::ReloadSessionContext { .. }
             | Self::CancelTurn { .. }
@@ -194,6 +211,10 @@ pub enum RuntimeIpcOperationResult {
         session: AgentSessionSummary,
         transcript: SessionTranscript,
         pending_permissions: Vec<PermissionRequest>,
+    },
+    SessionForked {
+        session: AgentSessionSummary,
+        transcript: SessionTranscript,
     },
     TurnAccepted {
         session_id: String,

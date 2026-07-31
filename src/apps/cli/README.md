@@ -87,6 +87,9 @@ The Embedded and Shared TUI use the same session command names:
 - `/sessions` opens the session browser; `/resume`, `/continue`, and `/history` are aliases.
 - `/new` starts a fresh conversation session; `/clear` is its OpenCode-compatible alias and does not
   merely clear the terminal display.
+- `/fork` opens an OpenCode-compatible fork dialog. `Full session` copies through the latest
+  persisted turn; choosing a previous user prompt forks immediately before that turn and copies the
+  prompt into the composer without sending it. Forking requires an idle session.
 - `/status` opens a transient view of current session, runtime, workspace, approval, and latest
   primary-model request facts observed by this TUI. It is not a cumulative usage report; use
   `/usage` for cumulative session usage in Embedded TUI.
