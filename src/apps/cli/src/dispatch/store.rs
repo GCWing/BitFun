@@ -1292,6 +1292,14 @@ impl JobLock {
     }
 }
 
+impl Drop for JobLock {
+    fn drop(&mut self) {
+        if let Err(error) = fs2::FileExt::unlock(&self._file) {
+            tracing::warn!("Failed to release dispatch job lock: {error}");
+        }
+    }
+}
+
 struct FileLock;
 
 impl FileLock {
@@ -2537,12 +2545,28 @@ mod tests {
             0
         );
         assert!(job_dir.exists());
-        assert_eq!(
-            store
+
+        let released_lock = JobLock::try_exclusive(&job_dir.join(".lock"))
+            .expect("reopen released job lock")
+            .expect("job lock must be released after contention");
+        drop(released_lock);
+
+        let retry_deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        let removed = loop {
+            let removed = store
                 .collect_expired_terminal_jobs(now)
-                .expect("retry expired job"),
-            1
-        );
+                .expect("retry expired job");
+            if removed == 1 {
+                break removed;
+            }
+            assert_eq!(removed, 0, "only the contended job may be removed");
+            assert!(
+                std::time::Instant::now() < retry_deadline,
+                "expired job must be removed after transient Windows file contention clears"
+            );
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        };
+        assert_eq!(removed, 1);
         assert!(!job_dir.exists());
     }
 
