@@ -22,6 +22,10 @@ export type DispatchApprovalPolicy = 'auto' | 'reject-and-report' | 'remote';
 export type DispatchWorkspaceDeliveryRequest =
   | { kind: 'existing' }
   | {
+      kind: 'snapshot-source';
+      sourceWorkspacePath: string;
+    }
+  | {
       kind: 'snapshot-exact';
       sourceWorkspacePath: string;
       sensitiveFilesConfirmed: true;
@@ -241,6 +245,8 @@ export interface DispatchSelection {
   workspaceDelivery: DispatchWorkspaceDeliveryRequest;
   approvalPolicy: DispatchApprovalPolicy;
   model?: string;
+  availableModels?: string[];
+  defaultModel?: string;
 }
 
 export function isNonLocalDispatchTarget(

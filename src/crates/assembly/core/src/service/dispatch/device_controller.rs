@@ -19,7 +19,7 @@ use super::controller::{
 };
 use super::{
     adopt_target_jobs, DispatchTarget, DispatchTargetRequest, DispatchWorkspaceDeliveryRequest,
-    OutboundDispatchRecord, OutboundDispatchStore,
+    DispatchWorkspaceSnapshotCaptureMode, OutboundDispatchRecord, OutboundDispatchStore,
 };
 
 const DEVICE_WORKSPACE_CHUNK_BYTES: usize = 256 * 1024;
@@ -339,6 +339,25 @@ async fn resolve_device_workspace(
             }
             Ok(path.to_string())
         }
+        DispatchWorkspaceDeliveryRequest::SnapshotSource {
+            source_workspace_path,
+        } => {
+            let prepared = store
+                .prepare_workspace_snapshot(
+                    job_id,
+                    source_workspace_path,
+                    DispatchWorkspaceSnapshotCaptureMode::Source,
+                )
+                .await?;
+            upload_device_workspace(
+                rpc,
+                device_id,
+                job_id,
+                &prepared.archive_path,
+                &prepared.metadata,
+            )
+            .await
+        }
         DispatchWorkspaceDeliveryRequest::SnapshotExact {
             source_workspace_path,
             sensitive_files_confirmed,
@@ -349,7 +368,11 @@ async fn resolve_device_workspace(
                 );
             }
             let prepared = store
-                .prepare_workspace_snapshot(job_id, source_workspace_path)
+                .prepare_workspace_snapshot(
+                    job_id,
+                    source_workspace_path,
+                    DispatchWorkspaceSnapshotCaptureMode::Exact,
+                )
                 .await?;
             upload_device_workspace(
                 rpc,
@@ -741,7 +764,9 @@ mod tests {
         .await
         .expect_err("a digest mismatch must fail the pull");
         assert!(
-            error.to_string().contains("does not match the reported digest"),
+            error
+                .to_string()
+                .contains("does not match the reported digest"),
             "{error}"
         );
         assert!(

@@ -13,7 +13,7 @@ use serde_json::{json, Value};
 
 use super::{
     adopt_target_jobs, DispatchTarget, DispatchTargetRequest, DispatchWorkspaceDeliveryRequest,
-    OutboundDispatchRecord, OutboundDispatchStore,
+    DispatchWorkspaceSnapshotCaptureMode, OutboundDispatchRecord, OutboundDispatchStore,
 };
 
 pub(super) const DISPATCH_PROTOCOL_VERSION: u64 = 2;
@@ -408,6 +408,39 @@ async fn resolve_ssh_workspace(
             }
             Ok(workspace_path.to_string())
         }
+        DispatchWorkspaceDeliveryRequest::SnapshotSource {
+            source_workspace_path,
+        } => {
+            let prepared = store
+                .prepare_workspace_snapshot(
+                    job_id,
+                    source_workspace_path,
+                    DispatchWorkspaceSnapshotCaptureMode::Source,
+                )
+                .await?;
+            let begin_request = json!({
+                "protocolVersion": DISPATCH_PROTOCOL_VERSION,
+                "jobId": job_id,
+                "metadata": prepared.metadata,
+            });
+            let committed = dispatch_ssh::upload_workspace_snapshot(
+                manager,
+                connection_id,
+                &begin_request,
+                &prepared.archive_path,
+            )
+            .await?;
+            committed
+                .get("workspacePath")
+                .and_then(Value::as_str)
+                .filter(|path| !path.trim().is_empty())
+                .map(ToOwned::to_owned)
+                .ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "dispatch target did not return the materialized workspace path"
+                    )
+                })
+        }
         DispatchWorkspaceDeliveryRequest::SnapshotExact {
             source_workspace_path,
             sensitive_files_confirmed,
@@ -418,7 +451,11 @@ async fn resolve_ssh_workspace(
                 );
             }
             let prepared = store
-                .prepare_workspace_snapshot(job_id, source_workspace_path)
+                .prepare_workspace_snapshot(
+                    job_id,
+                    source_workspace_path,
+                    DispatchWorkspaceSnapshotCaptureMode::Exact,
+                )
                 .await?;
             let begin_request = json!({
                 "protocolVersion": DISPATCH_PROTOCOL_VERSION,

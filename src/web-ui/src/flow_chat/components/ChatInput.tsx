@@ -133,6 +133,7 @@ import {
 import type { DispatchSelection, DispatchTarget } from '@/features/dispatch/types';
 import { isNonLocalDispatchTarget } from '@/features/dispatch/types';
 import { shouldConfirmDispatchAutoApproval } from '@/features/dispatch/dispatchPreflight';
+import { dispatchJobStore } from '@/features/dispatch/dispatchJobStore';
 import { ComposerVoiceInputButton } from './voice/ComposerVoiceInputButton';
 import { useComposerVoiceInput } from './voice/useComposerVoiceInput';
 import { expandWidgetPromptReferenceTokens } from '@/tools/generative-widget/widgetPromptReference';
@@ -1996,6 +1997,41 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     }
   }, [isAcpTargetSession, permissionModeSaving, t, toolPermissionConfig]);
 
+  const dispatchPermissionMode: ChatInputPermissionMode =
+    effectiveTargetSession?.config.dispatchApprovalPolicy === 'auto'
+      ? 'auto'
+      : effectiveTargetSession?.config.dispatchApprovalPolicy === 'reject-and-report'
+        ? 'reject'
+        : 'ask';
+  const dispatchSubmissionOptionsLocked =
+    effectiveTargetSession?.config.dispatchJobState !== 'submitting'
+    && effectiveTargetSession?.config.dispatchJobState !== 'submission_unknown';
+  const handleDispatchPermissionModeChange = useCallback((
+    nextMode: Exclude<ChatInputPermissionMode, 'acp'>,
+  ) => {
+    if (!effectiveTargetSessionId || dispatchSubmissionOptionsLocked) {
+      return;
+    }
+    const approvalPolicy =
+      nextMode === 'auto' || nextMode === 'full_access'
+        ? 'auto'
+        : nextMode === 'reject'
+          ? 'reject-and-report'
+          : 'remote';
+    FlowChatStore.getInstance().updateSessionDispatchApprovalPolicy(
+      effectiveTargetSessionId,
+      approvalPolicy,
+    );
+    const jobId = effectiveTargetSession?.config.dispatchJobId;
+    if (jobId) {
+      dispatchJobStore.getState().updateApprovalPolicy(jobId, approvalPolicy);
+    }
+  }, [
+    dispatchSubmissionOptionsLocked,
+    effectiveTargetSession?.config.dispatchJobId,
+    effectiveTargetSessionId,
+  ]);
+
   /**
    * Checking worktree isolation only arms the empty session. The first prompt
    * materializes the worktree after it has visibly been submitted.
@@ -2058,6 +2094,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           // Undefined is intentional: the target's probed default model wins
           // unless a future preflight selector records an explicit choice.
           dispatchModel: selection.model,
+          dispatchAvailableModels: selection.availableModels,
+          dispatchDefaultModel: selection.defaultModel,
         },
         effectiveSendAgentType,
       );
@@ -2085,7 +2123,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     const jobId = effectiveTargetSession?.config.dispatchJobId;
     const jobState = effectiveTargetSession?.config.dispatchJobState;
     const completedSnapshotJobId =
-      effectiveTargetSession?.config.dispatchWorkspaceDelivery?.kind === 'snapshot-exact' &&
+      (
+        effectiveTargetSession?.config.dispatchWorkspaceDelivery?.kind === 'snapshot-source'
+        || effectiveTargetSession?.config.dispatchWorkspaceDelivery?.kind === 'snapshot-exact'
+      ) &&
       (jobState === 'succeeded' || jobState === 'failed') &&
       jobId
         ? jobId
@@ -2115,6 +2156,35 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     remoteWorkspaceSession,
     workspacePath,
   ]);
+
+  const dispatchModelSelection = useMemo(() => {
+    if (!usesDispatchTransport || !effectiveTargetSession) {
+      return undefined;
+    }
+    const target = effectiveTargetSession.config.dispatchTarget;
+    const providerLabel =
+      target && target.kind !== 'local'
+        ? target.displayName
+        : t('chatInput.dispatch.remoteTarget');
+    const sessionId = effectiveTargetSession.sessionId;
+    const jobId = effectiveTargetSession.config.dispatchJobId;
+    const state = effectiveTargetSession.config.dispatchJobState;
+    return {
+      models: effectiveTargetSession.config.dispatchAvailableModels ?? [],
+      selectedModelId: effectiveTargetSession.config.dispatchModel,
+      defaultModelId: effectiveTargetSession.config.dispatchDefaultModel,
+      providerLabel,
+      disabled:
+        state !== 'submitting'
+        && state !== 'submission_unknown',
+      onSelect: (modelId: string) => {
+        FlowChatStore.getInstance().updateSessionDispatchModel(sessionId, modelId);
+        if (jobId) {
+          dispatchJobStore.getState().updateModel(jobId, modelId);
+        }
+      },
+    };
+  }, [effectiveTargetSession, t, usesDispatchTransport]);
 
   const handleHidePermissionModeControl = useCallback(async () => {
     try {
@@ -2823,7 +2893,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       setSelectedNonExternalSlashCandidateId(undefined);
     }
 
-    const localSlashCommandsEnabled = !isAcpInputSession && !usesDispatchTransport;
+    const promptSlashCommandsEnabled = !isAcpInputSession;
+    const localSlashCommandsEnabled = promptSlashCommandsEnabled && !usesDispatchTransport;
     const trimmed = text.trim();
     const isBtwCommand = localSlashCommandsEnabled && isSlashCommand(trimmed, '/btw');
     const isCompactCommand = localSlashCommandsEnabled && isSlashCommand(trimmed, '/compact');
@@ -2842,7 +2913,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       const hasWhitespace = /\s/.test(afterSlash);
       const pickerQuery = getSlashCommandPickerQuery(text);
       const query = pickerQuery ?? afterSlash.trimStart().split(/\s+/, 1)[0]?.toLowerCase?.() ?? '';
-      const matchedMcpPrompt = localSlashCommandsEnabled
+      const matchedMcpPrompt = promptSlashCommandsEnabled
         ? resolveTypedMcpPromptCommand(text)
         : null;
 
@@ -3832,15 +3903,17 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       : expandedMessage);
     const messageCharCount = getCharacterCount(message);
     // Voice transcripts are always message content; they must not accidentally execute local commands.
-    const localSlashCommandsEnabled =
+    const promptSlashCommandsEnabled =
       !isAcpInputSession &&
-      !usesDispatchTransport &&
       messageOverride === undefined;
+    const localSlashCommandsEnabled =
+      promptSlashCommandsEnabled &&
+      !usesDispatchTransport;
     const parsedReload = messageOverride === undefined
       ? parseReloadCommand(message)
       : null;
 
-    if (localSlashCommandsEnabled && await submitExternalPromptCommandFromInput(
+    if (promptSlashCommandsEnabled && await submitExternalPromptCommandFromInput(
       message,
       originalMessage,
       originalPendingLargePastes,
@@ -3888,7 +3961,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       return;
     }
 
-    if (localSlashCommandsEnabled && resolveTypedMcpPromptCommand(message)) {
+    if (promptSlashCommandsEnabled && resolveTypedMcpPromptCommand(message)) {
       await submitMcpPromptFromInput();
       return;
     }
@@ -5636,7 +5709,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                 </div>
               </div>
               <div className="bitfun-chat-input__actions-right">
-                {voiceInput.phase === 'idle' && !usesDispatchTransport ? (
+                {voiceInput.phase === 'idle' ? (
                   <div className="bitfun-chat-input__model-usage-group">
                   <ModelSelector
                     currentMode={effectiveSendAgentType}
@@ -5646,6 +5719,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                     maxTokens={tokenUsage.max}
                     contextUsageSource={tokenUsage.source}
                     onLoadingChange={handleModelLoadingChange}
+                    externalSelection={dispatchModelSelection}
                   />
                   </div>
                 ) : null}
@@ -5664,12 +5738,23 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         dispatchControl={dispatchControl}
         worktreeControl={worktreeControl}
         deferPassiveGitRefresh={deferChatStripPassiveGitRefresh}
-        permissionControl={showPermissionModeControl && !usesDispatchTransport ? {
-          mode: permissionMode,
-          saving: permissionModeSaving,
-          onChange: isAcpTargetSession ? undefined : handlePermissionModeChange,
-          onHide: isAcpTargetSession ? undefined : handleHidePermissionModeControl,
-        } : undefined}
+        permissionControl={showPermissionModeControl
+          ? usesDispatchTransport
+            ? {
+                mode: dispatchPermissionMode,
+                disabled: dispatchSubmissionOptionsLocked,
+                options: ['ask', 'auto', 'reject'],
+                scopeLabel: t('chatInput.dispatch.sessionScope'),
+                onChange: handleDispatchPermissionModeChange,
+                onHide: handleHidePermissionModeControl,
+              }
+            : {
+                mode: permissionMode,
+                saving: permissionModeSaving,
+                onChange: isAcpTargetSession ? undefined : handlePermissionModeChange,
+                onHide: isAcpTargetSession ? undefined : handleHidePermissionModeControl,
+              }
+          : undefined}
         usageReport={
           effectiveTargetSessionId && effectiveTargetSession && !usesDispatchTransport
             ? { visible: true, onOpen: handleToolbarUsageReport }

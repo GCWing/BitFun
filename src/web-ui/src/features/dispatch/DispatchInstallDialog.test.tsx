@@ -306,6 +306,75 @@ describe('DispatchInstallDialog installation lifecycle', () => {
     expect(container.textContent).toContain('dispatch.snapshotResultLocationHint');
   });
 
+  it('defaults an unbound target to a source snapshot and preserves target model facts', async () => {
+    const onReady = vi.fn();
+    mocks.probeTarget.mockResolvedValue({
+      cliInstalled: true,
+      os: 'linux',
+      arch: 'x86_64',
+      installSupported: false,
+      protocol: {
+        protocolVersion: 2,
+        cliVersion: '1.2.3',
+        os: 'linux',
+        arch: 'x86_64',
+        capabilities: [
+          'persistent_jobs',
+          'cursor_events',
+          'detached_worker',
+          'frontend_event_projection',
+          'workspace_serialization',
+          'workspace_snapshot_exact',
+          'workspace_snapshot_chunked',
+          'approval_remote',
+        ],
+        modelConfigured: true,
+        availableModels: ['model-a', 'model-b'],
+        defaultModel: 'model-b',
+      },
+    });
+
+    await act(async () => {
+      root.render(
+        <DispatchInstallDialog
+          open
+          target={{ kind: 'ssh', connectionId: 'ssh-1', displayName: 'build-host' }}
+          sourceWorkspacePath="/home/me/project"
+          onClose={vi.fn()}
+          onReady={onReady}
+        />,
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const sourceSnapshot = Array.from(container.querySelectorAll('button'))
+      .find(button => button.textContent?.includes('dispatch.deliverySourceSnapshot'));
+    expect(sourceSnapshot?.getAttribute('aria-checked')).toBe('true');
+
+    const remoteApproval = Array.from(container.querySelectorAll('button'))
+      .find(button => button.textContent?.includes('dispatch.approvalRemote'));
+    await act(async () => {
+      remoteApproval?.click();
+    });
+    const useTarget = Array.from(container.querySelectorAll('button'))
+      .find(button => button.textContent?.includes('dispatch.useTarget'));
+    expect(useTarget?.disabled).toBe(false);
+
+    await act(async () => {
+      useTarget?.click();
+    });
+    expect(onReady).toHaveBeenCalledWith(expect.objectContaining({
+      workspaceDelivery: {
+        kind: 'snapshot-source',
+        sourceWorkspacePath: '/home/me/project',
+      },
+      approvalPolicy: 'remote',
+      availableModels: ['model-a', 'model-b'],
+      defaultModel: 'model-b',
+    }));
+  });
+
   it('cancels an acknowledged installer when the parent closes the dialog during polling', async () => {
     const poll = createDeferred<{
       cursor: number;

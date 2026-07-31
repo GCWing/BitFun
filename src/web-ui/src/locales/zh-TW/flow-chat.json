@@ -675,6 +675,10 @@
         "label": "完全存取",
         "description": "預設允許工具執行，無需確認。"
       },
+      "reject": {
+        "label": "拒絕要求",
+        "description": "任務需要確認時停止並回報。"
+      },
       "acp": {
         "label": "ACP 控制",
         "tooltip": "此工作階段的權限由 ACP 用戶端控制。"

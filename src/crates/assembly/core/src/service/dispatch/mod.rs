@@ -8,7 +8,8 @@ use std::path::{Path, PathBuf};
 
 use anyhow::Context as _;
 use bitfun_services_core::dispatch_workspace::{
-    create_exact_workspace_snapshot, sha256_file, WorkspaceSnapshotMetadata,
+    create_exact_workspace_snapshot, create_source_workspace_snapshot, sha256_file,
+    WorkspaceSnapshotMetadata,
 };
 use bitfun_services_core::json_store::{JsonFileStore, JsonFileStoreError};
 use chrono::{DateTime, Utc};
@@ -26,29 +27,25 @@ pub use bitfun_services_core::dispatch_workspace::{
 };
 #[cfg(feature = "ssh-remote")]
 pub use controller::{
-    answer as answer_dispatch, append as append_dispatch, cancel as cancel_dispatch,
-    install_cli_cancel as cancel_dispatch_cli_install,
+    answer as answer_dispatch, append as append_dispatch, apply_result as apply_dispatch_result,
+    cancel as cancel_dispatch, install_cli_cancel as cancel_dispatch_cli_install,
     install_cli_poll as poll_dispatch_cli_install,
     install_cli_source_start as start_dispatch_cli_source_build,
-    install_cli_start as start_dispatch_cli_install,
-    list_jobs as list_dispatch_jobs, list_targets as list_dispatch_targets,
-    apply_result as apply_dispatch_result, probe_target as probe_dispatch_target,
-    pull_result as pull_dispatch_result,
-    status as get_dispatch_status,
-    submit as submit_dispatch, sync_model_config as sync_dispatch_model_config,
-    DispatchAnswerRequest, DispatchApplyResultRequest, DispatchAppendRequest,
-    DispatchConnectionRequest, DispatchInstallPollRequest, DispatchInstallStartRequest,
-    DispatchJobRequest, DispatchListJobsRequest, DispatchListTargetsRequest,
-    DispatchPermissionReplyKind, DispatchProbeTargetRequest, DispatchStatusRequest,
-    DispatchSubmitRequest, DispatchTargetOption,
+    install_cli_start as start_dispatch_cli_install, list_jobs as list_dispatch_jobs,
+    list_targets as list_dispatch_targets, probe_target as probe_dispatch_target,
+    pull_result as pull_dispatch_result, status as get_dispatch_status, submit as submit_dispatch,
+    sync_model_config as sync_dispatch_model_config, DispatchAnswerRequest, DispatchAppendRequest,
+    DispatchApplyResultRequest, DispatchConnectionRequest, DispatchInstallPollRequest,
+    DispatchInstallStartRequest, DispatchJobRequest, DispatchListJobsRequest,
+    DispatchListTargetsRequest, DispatchPermissionReplyKind, DispatchProbeTargetRequest,
+    DispatchStatusRequest, DispatchSubmitRequest, DispatchTargetOption,
 };
 #[cfg(feature = "ssh-remote")]
 pub use device_controller::{
     answer_device as answer_device_dispatch, append_device as append_device_dispatch,
     cancel_device as cancel_device_dispatch, list_device_jobs as list_device_dispatch_jobs,
     probe_device as probe_device_dispatch_target,
-    pull_device_result as pull_device_dispatch_result,
-    status_device as get_device_dispatch_status,
+    pull_device_result as pull_device_dispatch_result, status_device as get_device_dispatch_status,
     submit_device as submit_device_dispatch, DeviceDispatchRpc,
 };
 pub use target::{DispatchTarget, DispatchTargetRequest, DispatchWorkspaceDeliveryRequest};
@@ -69,7 +66,17 @@ pub struct PreparedOutboundWorkspaceSnapshot {
 #[serde(rename_all = "camelCase")]
 struct OutboundWorkspaceSnapshotRecord {
     source_workspace_path: String,
+    #[serde(default)]
+    capture_mode: DispatchWorkspaceSnapshotCaptureMode,
     metadata: WorkspaceSnapshotMetadata,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum DispatchWorkspaceSnapshotCaptureMode {
+    Source,
+    #[default]
+    Exact,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -355,6 +362,7 @@ impl OutboundDispatchStore {
         &self,
         job_id: &str,
         source_workspace_path: &str,
+        capture_mode: DispatchWorkspaceSnapshotCaptureMode,
     ) -> anyhow::Result<PreparedOutboundWorkspaceSnapshot> {
         validate_id(job_id)?;
         let source = std::path::PathBuf::from(source_workspace_path.trim());
@@ -396,10 +404,8 @@ impl OutboundDispatchStore {
             .read_optional::<OutboundWorkspaceSnapshotRecord>(&record_path)
             .await?
         {
-            if record.source_workspace_path != source_wire {
-                anyhow::bail!(
-                    "dispatch jobId is already bound to a snapshot from another source workspace"
-                );
+            if record.source_workspace_path != source_wire || record.capture_mode != capture_mode {
+                anyhow::bail!("dispatch jobId is already bound to another workspace snapshot");
             }
             let archive = archive_path.clone();
             let expected = record.metadata.clone();
@@ -433,13 +439,19 @@ impl OutboundDispatchStore {
 
         let package_source = source.clone();
         let package_archive = archive_path.clone();
-        let metadata = tokio::task::spawn_blocking(move || {
-            create_exact_workspace_snapshot(&package_source, &package_archive)
+        let metadata = tokio::task::spawn_blocking(move || match capture_mode {
+            DispatchWorkspaceSnapshotCaptureMode::Source => {
+                create_source_workspace_snapshot(&package_source, &package_archive)
+            }
+            DispatchWorkspaceSnapshotCaptureMode::Exact => {
+                create_exact_workspace_snapshot(&package_source, &package_archive)
+            }
         })
         .await
         .map_err(|error| anyhow::anyhow!("snapshot packaging task failed: {error}"))??;
         let record = OutboundWorkspaceSnapshotRecord {
             source_workspace_path: source_wire,
+            capture_mode,
             metadata: metadata.clone(),
         };
         self.json_store

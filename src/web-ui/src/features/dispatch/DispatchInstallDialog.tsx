@@ -71,7 +71,9 @@ export const DispatchInstallDialog: React.FC<DispatchInstallDialogProps> = ({
   const { t } = useI18n('common');
   const [workspacePath, setWorkspacePath] = useState('');
   const [approvalPolicy, setApprovalPolicy] = useState<DispatchApprovalPolicy | null>(null);
-  const [deliveryKind, setDeliveryKind] = useState<'existing' | 'snapshot-exact'>('existing');
+  const [deliveryKind, setDeliveryKind] = useState<
+    'existing' | 'snapshot-source' | 'snapshot-exact'
+  >('existing');
   const [sensitiveFilesConfirmed, setSensitiveFilesConfirmed] = useState(false);
   const [probe, setProbe] = useState<DispatchSshProbe | null>(null);
   const [probedWorkspaceInput, setProbedWorkspaceInput] = useState<string | null>(null);
@@ -126,9 +128,14 @@ export const DispatchInstallDialog: React.FC<DispatchInstallDialogProps> = ({
   useEffect(() => {
     if (!open || !targetId) return;
     const initialPath = target?.defaultWorkspace?.trim() ?? '';
+    const initialDelivery = initialPath
+      ? 'existing'
+      : sourceWorkspacePath?.trim()
+        ? 'snapshot-source'
+        : 'existing';
     setWorkspacePath(initialPath);
     setApprovalPolicy(null);
-    setDeliveryKind('existing');
+    setDeliveryKind(initialDelivery);
     setSensitiveFilesConfirmed(false);
     setProbe(null);
     setProbedWorkspaceInput(null);
@@ -138,7 +145,7 @@ export const DispatchInstallDialog: React.FC<DispatchInstallDialogProps> = ({
     setSyncingModel(false);
     setError(null);
     void runProbe(initialPath);
-  }, [open, runProbe, target?.defaultWorkspace, targetId]);
+  }, [open, runProbe, sourceWorkspacePath, target?.defaultWorkspace, targetId]);
 
   const clearActiveInstall = useCallback((generation: number) => {
     if (activeInstallRef.current?.generation === generation) {
@@ -347,9 +354,11 @@ export const DispatchInstallDialog: React.FC<DispatchInstallDialogProps> = ({
   const requiredCapabilities = [
     ...BASE_DISPATCH_CAPABILITIES,
     ...(selectedApprovalCapability ? [selectedApprovalCapability] : []),
-    ...(deliveryKind === 'snapshot-exact'
+    ...(deliveryKind === 'snapshot-source'
       ? ['workspace_snapshot_exact', 'workspace_snapshot_chunked']
-      : []),
+      : deliveryKind === 'snapshot-exact'
+        ? ['workspace_snapshot_exact', 'workspace_snapshot_chunked']
+        : []),
   ];
   const missingCapabilities = protocol
     ? requiredCapabilities.filter(capability => !protocol.capabilities.includes(capability))
@@ -362,9 +371,11 @@ export const DispatchInstallDialog: React.FC<DispatchInstallDialogProps> = ({
     !!protocol &&
     !probe.protocolError &&
     protocolCompatible;
-  const workspaceReady = deliveryKind === 'snapshot-exact'
-    ? !!sourceWorkspacePath?.trim() && sensitiveFilesConfirmed
-    : isDispatchWorkspaceReady(workspacePath, workspace, probedWorkspaceInput ?? undefined);
+  const workspaceReady = deliveryKind === 'snapshot-source'
+    ? !!sourceWorkspacePath?.trim()
+    : deliveryKind === 'snapshot-exact'
+      ? !!sourceWorkspacePath?.trim() && sensitiveFilesConfirmed
+      : isDispatchWorkspaceReady(workspacePath, workspace, probedWorkspaceInput ?? undefined);
   const modelReady = protocol?.modelConfigured === true;
   const ready = cliReady && workspaceReady && modelReady && approvalPolicy !== null;
 
@@ -380,7 +391,12 @@ export const DispatchInstallDialog: React.FC<DispatchInstallDialogProps> = ({
       ? workspace?.path?.trim() || workspacePath.trim()
       : '';
     const workspaceDelivery: DispatchWorkspaceDeliveryRequest =
-      deliveryKind === 'snapshot-exact'
+      deliveryKind === 'snapshot-source'
+        ? {
+            kind: 'snapshot-source',
+            sourceWorkspacePath: sourceWorkspacePath!.trim(),
+          }
+        : deliveryKind === 'snapshot-exact'
         ? {
             kind: 'snapshot-exact',
             sourceWorkspacePath: sourceWorkspacePath!.trim(),
@@ -407,6 +423,8 @@ export const DispatchInstallDialog: React.FC<DispatchInstallDialogProps> = ({
       },
       workspaceDelivery,
       approvalPolicy,
+      availableModels: protocol?.availableModels,
+      defaultModel: protocol?.defaultModel,
     });
   };
 
@@ -465,6 +483,25 @@ export const DispatchInstallDialog: React.FC<DispatchInstallDialogProps> = ({
                   type="button"
                   role="radio"
                   className="dispatch-install-dialog__option"
+                  aria-checked={deliveryKind === 'snapshot-source'}
+                  data-selected={deliveryKind === 'snapshot-source'}
+                  disabled={!sourceWorkspacePath?.trim()}
+                  onClick={() => setDeliveryKind('snapshot-source')}
+                >
+                  <span>
+                    <strong>{t('dispatch.deliverySourceSnapshot')}</strong>
+                    <small>
+                      {sourceWorkspacePath?.trim()
+                        ? t('dispatch.deliverySourceSnapshotDescription')
+                        : t('dispatch.deliverySnapshotUnavailable')}
+                    </small>
+                  </span>
+                  {deliveryKind === 'snapshot-source' ? <Check size={16} /> : null}
+                </button>
+                <button
+                  type="button"
+                  role="radio"
+                  className="dispatch-install-dialog__option"
                   aria-checked={deliveryKind === 'snapshot-exact'}
                   data-selected={deliveryKind === 'snapshot-exact'}
                   disabled={!sourceWorkspacePath?.trim()}
@@ -510,7 +547,7 @@ export const DispatchInstallDialog: React.FC<DispatchInstallDialogProps> = ({
                     </Button>
                   </div>
                 </label>
-              ) : (
+              ) : deliveryKind === 'snapshot-exact' ? (
                 <>
                   <div className="dispatch-install-dialog__consent">
                     <strong>{t('dispatch.snapshotSource')}</strong>
@@ -527,6 +564,22 @@ export const DispatchInstallDialog: React.FC<DispatchInstallDialogProps> = ({
                   </div>
                   {/* The design contract requires naming where results land; until a
                       pull-back exists this is the only way to reach them. */}
+                  <div className="dispatch-install-dialog__field">
+                    <span className="dispatch-install-dialog__field-label">
+                      {t('dispatch.snapshotResultLocation')}
+                    </span>
+                    <span className="dispatch-install-dialog__hint">
+                      {t('dispatch.snapshotResultLocationHint')}
+                    </span>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="dispatch-install-dialog__consent">
+                    <strong>{t('dispatch.snapshotSource')}</strong>
+                    <code>{sourceWorkspacePath}</code>
+                    <span>{t('dispatch.sourceSnapshotHint')}</span>
+                  </div>
                   <div className="dispatch-install-dialog__field">
                     <span className="dispatch-install-dialog__field-label">
                       {t('dispatch.snapshotResultLocation')}

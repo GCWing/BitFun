@@ -35,9 +35,10 @@ dispatch.
     implemented, so creating an unmarked child projection would violate the
     observer-only persistence and cancellation boundary.
 13. Workspace delivery is explicit. `existing` addresses a target directory;
-    `snapshot-exact` transfers one verified source snapshot, including ignored
-    and hidden regular files but excluding `.git`. It is never live or
-    bidirectional synchronization.
+    `snapshot-source` transfers tracked and non-ignored source without ignored
+    build output or secrets; `snapshot-exact` transfers one verified source
+    snapshot, including ignored and hidden regular files but excluding `.git`.
+    Neither snapshot mode is live or bidirectional synchronization.
 14. Cursor pulls are multi-observer safe. Truncation and omitted events are
     visible completeness facts and must not be rendered as a full transcript.
 15. The observer continues bounded polling while the window is hidden so

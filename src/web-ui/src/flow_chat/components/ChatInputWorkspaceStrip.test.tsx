@@ -160,6 +160,43 @@ describe('ChatInputWorkspaceStrip git refresh behavior', () => {
     expect(container.querySelector('[data-testid="chat-input-permission-menu"]')).toBeNull();
   });
 
+  it('reuses the permission control with dispatch-scoped choices', async () => {
+    const onChange = vi.fn();
+    await act(async () => {
+      root.render(
+        <ChatInputWorkspaceStrip
+          repositoryPath="/repo"
+          workspaceLabel="repo"
+          permissionControl={{
+            mode: 'reject',
+            options: ['ask', 'auto', 'reject'],
+            scopeLabel: 'This dispatched session',
+            onChange,
+          }}
+        />
+      );
+    });
+
+    const trigger = container.querySelector<HTMLButtonElement>(
+      '[data-testid="chat-input-permission-trigger"]',
+    );
+    expect(trigger?.dataset.permissionMode).toBe('reject');
+    await act(async () => {
+      trigger?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(container.textContent).toContain('This dispatched session');
+    expect(container.querySelector(
+      '[data-testid="chat-input-permission-option-full_access"]',
+    )).toBeNull();
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>(
+        '[data-testid="chat-input-permission-option-auto"]',
+      )?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(onChange).toHaveBeenCalledWith('auto');
+  });
+
   it('offers the worktree toggle for a Git workspace and reports the new state', async () => {
     const onChange = vi.fn(async () => undefined);
     await act(async () => {

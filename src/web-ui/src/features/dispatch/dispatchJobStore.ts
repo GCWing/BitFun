@@ -40,6 +40,8 @@ export interface DispatchObserverJob {
   approvalPolicy: DispatchApprovalPolicy;
   workspaceDelivery: DispatchWorkspaceDeliveryRequest;
   model?: string;
+  availableModels?: string[];
+  defaultModel?: string;
   cursor: number;
   state: DispatchJobState;
   terminalDrained?: boolean;
@@ -95,6 +97,8 @@ interface DispatchJobStoreState {
   ) => void;
   resetReplay: (jobId: string) => void;
   updateTitle: (jobId: string, title: string) => void;
+  updateModel: (jobId: string, model: string) => void;
+  updateApprovalPolicy: (jobId: string, policy: DispatchApprovalPolicy) => void;
   dismissJob: (jobId: string) => void;
   removeJob: (jobId: string) => void;
   clear: () => void;
@@ -319,6 +323,45 @@ export const useDispatchJobStore = create<DispatchJobStoreState>()(
               [jobId]: {
                 ...current,
                 title: normalizedTitle,
+                updatedAt: Date.now(),
+              },
+            },
+          };
+        });
+      },
+
+      updateModel: (jobId, model) => {
+        set(state => {
+          const current = state.jobs[jobId];
+          const normalizedModel = model.trim();
+          if (!current || !normalizedModel || current.model === normalizedModel) {
+            return state;
+          }
+          return {
+            jobs: {
+              ...state.jobs,
+              [jobId]: {
+                ...current,
+                model: normalizedModel,
+                updatedAt: Date.now(),
+              },
+            },
+          };
+        });
+      },
+
+      updateApprovalPolicy: (jobId, approvalPolicy) => {
+        set(state => {
+          const current = state.jobs[jobId];
+          if (!current || current.approvalPolicy === approvalPolicy) {
+            return state;
+          }
+          return {
+            jobs: {
+              ...state.jobs,
+              [jobId]: {
+                ...current,
+                approvalPolicy,
                 updatedAt: Date.now(),
               },
             },

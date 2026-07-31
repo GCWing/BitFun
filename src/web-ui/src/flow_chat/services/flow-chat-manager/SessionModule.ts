@@ -769,6 +769,8 @@ export async function createChatSession(
           // Do not inherit the controller's model selector. An omitted target
           // model lets the probed target use its own configured default.
           model: config.dispatchModel?.trim() || undefined,
+          availableModels: config.dispatchAvailableModels,
+          defaultModel: config.dispatchDefaultModel,
           cursor: 0,
           state: 'submitting',
           appliedEventIds: [],

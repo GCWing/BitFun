@@ -675,6 +675,10 @@
         "label": "Full access",
         "description": "Tools are allowed by default without confirmation."
       },
+      "reject": {
+        "label": "Reject requests",
+        "description": "Stop and report when the task needs confirmation."
+      },
       "acp": {
         "label": "ACP controlled",
         "tooltip": "Permissions for this session are controlled by the ACP client."

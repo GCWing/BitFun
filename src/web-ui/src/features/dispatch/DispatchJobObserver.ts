@@ -171,6 +171,9 @@ function ensureProjection(context: FlowChatContext, job: DispatchObserverJob): b
       target: job.target,
       jobId: job.jobId,
       approvalPolicy: job.approvalPolicy,
+      model: job.model,
+      availableModels: job.availableModels,
+      defaultModel: job.defaultModel,
       state: job.state,
       cursor: job.cursor,
     });
@@ -197,6 +200,9 @@ function ensureProjection(context: FlowChatContext, job: DispatchObserverJob): b
     target: job.target,
     jobId: job.jobId,
     approvalPolicy: job.approvalPolicy,
+    model: job.model,
+    availableModels: job.availableModels,
+    defaultModel: job.defaultModel,
     state: job.state,
     cursor: 0,
   });

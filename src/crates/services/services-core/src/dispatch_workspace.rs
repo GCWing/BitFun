@@ -71,6 +71,27 @@ pub struct WorkspaceSnapshotMetadata {
     pub uncompressed_bytes: u64,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum WorkspaceSnapshotCaptureMode {
+    Source,
+    Exact,
+}
+
+impl WorkspaceSnapshotCaptureMode {
+    fn manifest_mode(self) -> &'static str {
+        // The transport envelope remains the existing exact-snapshot contract:
+        // source filtering happens while the controller captures the input set,
+        // then that complete captured set is signed and transferred exactly.
+        "exact"
+    }
+
+    fn includes_ignored_files(self) -> bool {
+        // True relative to the captured input set. Source mode has already
+        // removed ignored paths before the manifest is constructed.
+        true
+    }
+}
+
 /// What the target changed, relative to the snapshot it was given.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -220,7 +241,12 @@ pub fn create_workspace_result_bundle(
         ..summary.clone()
     })
     .context("encode dispatch result summary")?;
-    append_bytes(&mut archive, RESULT_SUMMARY_ARCHIVE_PATH, &summary_bytes, false)?;
+    append_bytes(
+        &mut archive,
+        RESULT_SUMMARY_ARCHIVE_PATH,
+        &summary_bytes,
+        false,
+    )?;
 
     archive
         .into_inner()
@@ -357,8 +383,7 @@ pub fn apply_workspace_result_bundle(
         }
         let destination = resolve_workspace_child(&workspace, &relative_wire)?;
         if let Some(parent) = destination.parent() {
-            fs::create_dir_all(parent)
-                .with_context(|| format!("create {}", parent.display()))?;
+            fs::create_dir_all(parent).with_context(|| format!("create {}", parent.display()))?;
         }
         let mut bytes = Vec::new();
         entry
@@ -409,16 +434,38 @@ pub fn create_exact_workspace_snapshot(
     source: &Path,
     archive_path: &Path,
 ) -> Result<WorkspaceSnapshotMetadata> {
-    let result = create_exact_workspace_snapshot_inner(source, archive_path);
+    create_workspace_snapshot(source, archive_path, WorkspaceSnapshotCaptureMode::Exact)
+}
+
+/// Package workspace source while honoring repository ignore rules.
+///
+/// Hidden source files remain eligible (for example `.github/workflows`), but
+/// ignored dependency caches and build output are not transferred. Callers
+/// that need byte-for-byte workspace contents must use the explicit exact
+/// snapshot path instead.
+pub fn create_source_workspace_snapshot(
+    source: &Path,
+    archive_path: &Path,
+) -> Result<WorkspaceSnapshotMetadata> {
+    create_workspace_snapshot(source, archive_path, WorkspaceSnapshotCaptureMode::Source)
+}
+
+fn create_workspace_snapshot(
+    source: &Path,
+    archive_path: &Path,
+    capture_mode: WorkspaceSnapshotCaptureMode,
+) -> Result<WorkspaceSnapshotMetadata> {
+    let result = create_workspace_snapshot_inner(source, archive_path, capture_mode);
     if result.is_err() {
         let _ = fs::remove_file(archive_path);
     }
     result
 }
 
-fn create_exact_workspace_snapshot_inner(
+fn create_workspace_snapshot_inner(
     source: &Path,
     archive_path: &Path,
+    capture_mode: WorkspaceSnapshotCaptureMode,
 ) -> Result<WorkspaceSnapshotMetadata> {
     let source_metadata = fs::symlink_metadata(source)
         .with_context(|| format!("inspect workspace {}", source.display()))?;
@@ -448,14 +495,25 @@ fn create_exact_workspace_snapshot_inner(
     archive.mode(tar::HeaderMode::Deterministic);
 
     let mut walk = WalkBuilder::new(&source);
-    walk.hidden(false)
-        .ignore(false)
-        .git_ignore(false)
-        .git_global(false)
-        .git_exclude(false)
-        .parents(false)
-        .follow_links(false)
-        .sort_by_file_path(|left, right| left.cmp(right));
+    walk.hidden(false).follow_links(false);
+    match capture_mode {
+        WorkspaceSnapshotCaptureMode::Source => {
+            walk.ignore(true)
+                .git_ignore(true)
+                .git_global(true)
+                .git_exclude(true)
+                .require_git(false)
+                .parents(false);
+        }
+        WorkspaceSnapshotCaptureMode::Exact => {
+            walk.ignore(false)
+                .git_ignore(false)
+                .git_global(false)
+                .git_exclude(false)
+                .parents(false);
+        }
+    }
+    walk.sort_by_file_path(|left, right| left.cmp(right));
     let filter_root = source.clone();
     walk.filter_entry(move |entry| {
         entry.path() == filter_root || entry.file_name().to_str() != Some(".git")
@@ -542,8 +600,8 @@ fn create_exact_workspace_snapshot_inner(
 
     let manifest = WorkspaceSnapshotManifest {
         format_version: WORKSPACE_SNAPSHOT_FORMAT_VERSION,
-        mode: "exact".to_string(),
-        includes_ignored_files: true,
+        mode: capture_mode.manifest_mode().to_string(),
+        includes_ignored_files: capture_mode.includes_ignored_files(),
         excludes_git_metadata: true,
         file_count,
         directory_count,
@@ -828,9 +886,13 @@ fn validate_manifest(
     manifest: &WorkspaceSnapshotManifest,
     expected: &WorkspaceSnapshotMetadata,
 ) -> Result<()> {
+    let compatible_capture_mode = match manifest.mode.as_str() {
+        "exact" => manifest.includes_ignored_files,
+        "source" => !manifest.includes_ignored_files,
+        _ => false,
+    };
     if manifest.format_version != WORKSPACE_SNAPSHOT_FORMAT_VERSION
-        || manifest.mode != "exact"
-        || !manifest.includes_ignored_files
+        || !compatible_capture_mode
         || !manifest.excludes_git_metadata
     {
         bail!("workspace snapshot manifest contract is incompatible");
@@ -1162,6 +1224,39 @@ mod tests {
     }
 
     #[test]
+    fn source_snapshot_keeps_hidden_source_and_excludes_ignored_build_output() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let source = temp.path().join("source");
+        fs::create_dir_all(source.join(".git")).expect("repository marker");
+        fs::create_dir_all(source.join(".github/workflows")).expect("hidden source directory");
+        fs::create_dir_all(source.join("target/debug")).expect("ignored build directory");
+        fs::write(source.join(".gitignore"), b"target/\n.env\n").expect("gitignore");
+        fs::write(source.join(".github/workflows/check.yml"), b"name: check")
+            .expect("hidden source file");
+        fs::write(source.join("source.rs"), b"fn main() {}").expect("source");
+        fs::write(source.join(".env"), b"SECRET=test").expect("ignored secret");
+        fs::write(source.join("target/debug/app"), b"build output").expect("build output");
+        let archive = temp.path().join("source-snapshot.tar.gz");
+
+        let metadata =
+            create_source_workspace_snapshot(&source, &archive).expect("create source snapshot");
+        let destination = temp.path().join("destination");
+        let manifest =
+            extract_workspace_snapshot(&archive, &destination, &metadata).expect("extract");
+
+        assert_eq!(manifest.mode, "exact");
+        assert!(manifest.includes_ignored_files);
+        assert_eq!(
+            fs::read(destination.join(".github/workflows/check.yml")).expect("workflow"),
+            b"name: check"
+        );
+        assert!(destination.join("source.rs").is_file());
+        assert!(destination.join(".gitignore").is_file());
+        assert!(!destination.join(".env").exists());
+        assert!(!destination.join("target").exists());
+    }
+
+    #[test]
     fn result_bundle_reports_adds_edits_and_deletes_without_git() {
         let temp = tempfile::tempdir().expect("tempdir");
         let source = temp.path().join("source");
@@ -1229,7 +1324,11 @@ mod tests {
         temp: &Path,
         seed: &[(&str, &[u8])],
         mutate: impl FnOnce(&Path),
-    ) -> (WorkspaceResultSummary, std::path::PathBuf, std::path::PathBuf) {
+    ) -> (
+        WorkspaceResultSummary,
+        std::path::PathBuf,
+        std::path::PathBuf,
+    ) {
         let source = temp.join("source");
         fs::create_dir_all(&source).expect("source");
         for (name, bytes) in seed {
@@ -1241,8 +1340,7 @@ mod tests {
         let baseline = extract_workspace_snapshot(&archive, &target, &metadata).expect("extract");
         mutate(&target);
         let bundle = temp.join("result.tar.gz");
-        let summary =
-            create_workspace_result_bundle(&target, &baseline, &bundle).expect("bundle");
+        let summary = create_workspace_result_bundle(&target, &baseline, &bundle).expect("bundle");
         // A second extraction stands in for the controller's own copy of S0.
         let local = temp.join("local");
         extract_workspace_snapshot(&archive, &local, &metadata).expect("extract local");
@@ -1254,7 +1352,11 @@ mod tests {
         let temp = tempfile::tempdir().expect("tempdir");
         let (summary, bundle, local) = snapshot_and_diff(
             temp.path(),
-            &[("keep.txt", b"same"), ("edit.txt", b"before"), ("gone.txt", b"bye")],
+            &[
+                ("keep.txt", b"same"),
+                ("edit.txt", b"before"),
+                ("gone.txt", b"bye"),
+            ],
             |target| {
                 fs::write(target.join("edit.txt"), b"after").expect("edit");
                 fs::remove_file(target.join("gone.txt")).expect("delete");
@@ -1262,13 +1364,16 @@ mod tests {
             },
         );
 
-        let outcome = apply_workspace_result_bundle(&bundle, &local, &summary, false)
-            .expect("apply");
+        let outcome =
+            apply_workspace_result_bundle(&bundle, &local, &summary, false).expect("apply");
         assert!(!outcome.aborted, "an untouched local tree has no conflicts");
         assert!(outcome.conflicts.is_empty());
         assert_eq!(fs::read(local.join("edit.txt")).expect("edit"), b"after");
         assert_eq!(fs::read(local.join("new.txt")).expect("new"), b"created");
-        assert!(!local.join("gone.txt").exists(), "deletions must be applied");
+        assert!(
+            !local.join("gone.txt").exists(),
+            "deletions must be applied"
+        );
         assert_eq!(
             fs::read(local.join("keep.txt")).expect("keep"),
             b"same",
@@ -1279,18 +1384,15 @@ mod tests {
     #[test]
     fn a_locally_edited_file_blocks_the_apply_instead_of_being_overwritten() {
         let temp = tempfile::tempdir().expect("tempdir");
-        let (summary, bundle, local) = snapshot_and_diff(
-            temp.path(),
-            &[("shared.txt", b"before")],
-            |target| {
+        let (summary, bundle, local) =
+            snapshot_and_diff(temp.path(), &[("shared.txt", b"before")], |target| {
                 fs::write(target.join("shared.txt"), b"target edit").expect("edit");
-            },
-        );
+            });
         // The user kept working locally while the job ran.
         fs::write(local.join("shared.txt"), b"my local work").expect("local edit");
 
-        let outcome = apply_workspace_result_bundle(&bundle, &local, &summary, false)
-            .expect("apply");
+        let outcome =
+            apply_workspace_result_bundle(&bundle, &local, &summary, false).expect("apply");
         assert!(outcome.aborted, "a conflict must stop the apply");
         assert_eq!(
             outcome.conflicts,
@@ -1310,25 +1412,27 @@ mod tests {
         let forced =
             apply_workspace_result_bundle(&bundle, &local, &summary, true).expect("forced apply");
         assert!(!forced.aborted);
-        assert_eq!(fs::read(local.join("shared.txt")).expect("local"), b"target edit");
+        assert_eq!(
+            fs::read(local.join("shared.txt")).expect("local"),
+            b"target edit"
+        );
     }
 
     #[test]
     fn a_tampered_bundle_is_rejected_before_anything_is_written() {
         let temp = tempfile::tempdir().expect("tempdir");
-        let (summary, bundle, local) = snapshot_and_diff(
-            temp.path(),
-            &[("a.txt", b"before")],
-            |target| {
+        let (summary, bundle, local) =
+            snapshot_and_diff(temp.path(), &[("a.txt", b"before")], |target| {
                 fs::write(target.join("a.txt"), b"after").expect("edit");
-            },
-        );
+            });
         fs::write(&bundle, b"not the bundle you verified").expect("tamper");
 
         let error = apply_workspace_result_bundle(&bundle, &local, &summary, false)
             .expect_err("a tampered bundle must be refused");
         assert!(
-            error.to_string().contains("does not match the reported digest"),
+            error
+                .to_string()
+                .contains("does not match the reported digest"),
             "{error}"
         );
         assert_eq!(fs::read(local.join("a.txt")).expect("local"), b"before");

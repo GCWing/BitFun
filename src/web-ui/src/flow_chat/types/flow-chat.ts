@@ -505,6 +505,10 @@ export interface SessionConfig {
   dispatchWorkspaceDelivery?: import('@/features/dispatch/types').DispatchWorkspaceDeliveryRequest;
   /** Target model explicitly selected during preflight; omitted to use the target default. */
   dispatchModel?: string;
+  /** Model ids reported by the selected target during dispatch preflight. */
+  dispatchAvailableModels?: string[];
+  /** Target-owned default model reported during dispatch preflight. */
+  dispatchDefaultModel?: string;
   /** Last target-side job state applied by the observer. */
   dispatchJobState?: import('@/features/dispatch/types').DispatchJobState;
   /** Byte cursor applied successfully from the target-side event log. */

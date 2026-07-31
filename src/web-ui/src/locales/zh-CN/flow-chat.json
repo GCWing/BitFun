@@ -675,6 +675,10 @@
         "label": "完全访问",
         "description": "默认允许工具执行，无需确认。"
       },
+      "reject": {
+        "label": "拒绝请求",
+        "description": "任务需要确认时停止并报告。"
+      },
       "acp": {
         "label": "ACP 控制",
         "tooltip": "此会话的权限由 ACP 客户端控制。"

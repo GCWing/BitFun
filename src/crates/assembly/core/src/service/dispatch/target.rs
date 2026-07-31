@@ -6,6 +6,10 @@ use serde::{Deserialize, Serialize};
 pub enum DispatchWorkspaceDeliveryRequest {
     #[default]
     Existing,
+    SnapshotSource {
+        #[serde(rename = "sourceWorkspacePath")]
+        source_workspace_path: String,
+    },
     SnapshotExact {
         #[serde(rename = "sourceWorkspacePath")]
         source_workspace_path: String,
@@ -13,7 +17,6 @@ pub enum DispatchWorkspaceDeliveryRequest {
         sensitive_files_confirmed: bool,
     },
 }
-
 
 /// The execution location selected while a chat session is being created.
 ///
@@ -39,7 +42,6 @@ pub enum DispatchTargetRequest {
         workspace_path: String,
     },
 }
-
 
 impl DispatchTargetRequest {
     pub fn is_local(&self) -> bool {
@@ -132,6 +134,21 @@ mod tests {
                 "kind": "snapshot-exact",
                 "sourceWorkspacePath": "/work/app",
                 "sensitiveFilesConfirmed": true
+            })
+        );
+    }
+
+    #[test]
+    fn source_snapshot_requires_only_an_explicit_source() {
+        let value = serde_json::to_value(DispatchWorkspaceDeliveryRequest::SnapshotSource {
+            source_workspace_path: "/work/app".to_string(),
+        })
+        .expect("serialize delivery");
+        assert_eq!(
+            value,
+            serde_json::json!({
+                "kind": "snapshot-source",
+                "sourceWorkspacePath": "/work/app"
             })
         );
     }

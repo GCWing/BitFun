@@ -36,6 +36,15 @@ import './ModelSelector.scss';
 const log = createLogger('ModelSelector');
 const ACP_SESSION_OPTIONS_TIMEOUT_MS = 65_000;
 
+export interface ExternalModelSelection {
+  models: string[];
+  selectedModelId?: string;
+  defaultModelId?: string;
+  providerLabel: string;
+  disabled?: boolean;
+  onSelect: (modelId: string) => void | Promise<void>;
+}
+
 interface ModelSelectorProps {
   /** Current target agent type. */
   currentMode: string;
@@ -55,6 +64,8 @@ interface ModelSelectorProps {
   contextUsageSource?: ContextUsageSource;
   /** Called when model switching starts or completes, so the parent can gate sending. */
   onLoadingChange?: (loading: boolean) => void;
+  /** Target-owned model catalog for transports that do not have a local backend session. */
+  externalSelection?: ExternalModelSelection;
 }
 
 interface ModelInfo {
@@ -173,6 +184,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
   maxTokens = 0,
   contextUsageSource,
   onLoadingChange,
+  externalSelection,
 }) => {
   const { t } = useTranslation('flow-chat');
   const [allModels, setAllModels] = useState<AIModelConfig[]>([]);
@@ -406,6 +418,31 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     };
   }, [acpAvailableModels, acpClientId, acpOptions?.currentModelId, isAcpSession]);
 
+  const externalAvailableModels = useMemo((): ModelInfo[] => {
+    if (!externalSelection) return [];
+    return Array.from(new Set([
+      ...externalSelection.models,
+      externalSelection.defaultModelId,
+      externalSelection.selectedModelId,
+    ].filter((model): model is string => !!model?.trim())))
+      .map(model => ({
+        id: model,
+        configName: model,
+        modelName: model,
+        providerName: externalSelection.providerLabel,
+        provider: 'external',
+      }));
+  }, [externalSelection]);
+
+  const externalCurrentModelId =
+    externalSelection?.selectedModelId?.trim()
+    || externalSelection?.defaultModelId?.trim()
+    || externalAvailableModels[0]?.id
+    || '';
+  const externalCurrentModel = externalAvailableModels.find(
+    model => model.id === externalCurrentModelId,
+  ) ?? null;
+
   const acpFastMode = useMemo(
     () => resolveAcpFastModeState(acpOptions?.configOptions ?? []),
     [acpOptions?.configOptions],
@@ -515,6 +552,10 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     setDropdownOpen(false);
 
     try {
+      if (externalSelection) {
+        await externalSelection.onSelect(modelId);
+        return;
+      }
       if (isAcpSession && acpClientId && sessionId) {
         const options = await ACPClientAPI.setSessionModel({
           sessionId,
@@ -578,6 +619,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     activeSession?.workspacePath,
     acpClientId,
     currentMode,
+    externalSelection,
     isAcpSession,
     loading,
     sessionId,
@@ -697,6 +739,98 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
 
   const resolvedContextUsageSource: ContextUsageSource =
     contextUsageSource ?? (isAcpSession ? 'acp_context' : 'agent_prompt');
+
+  if (externalSelection) {
+    if (externalAvailableModels.length === 0) {
+      return null;
+    }
+
+    return (
+      <div
+        ref={dropdownRef}
+        className={`bitfun-model-selector ${className}`}
+      >
+        <Tooltip content={getModelTooltipText(
+          externalCurrentModel,
+          externalSelection.providerLabel,
+        )}>
+          <button
+            ref={triggerRef}
+            data-testid="chat-model-selector-btn"
+            className={`bitfun-model-selector__trigger ${dropdownOpen ? 'bitfun-model-selector__trigger--open' : ''}`}
+            type="button"
+            aria-haspopup="menu"
+            aria-expanded={dropdownOpen}
+            aria-controls={dropdownOpen ? menuId : undefined}
+            onKeyDown={handleTriggerKeyDown}
+            onClick={(event) => {
+              const nextOpen = !dropdownOpen;
+              setKeyboardNavigationOpen(nextOpen && event.detail === 0);
+              setDropdownOpen(nextOpen);
+            }}
+            disabled={loading || externalSelection.disabled}
+          >
+            <span className="bitfun-model-selector__name">
+              {getModelDisplayLabel(externalCurrentModel, externalCurrentModelId)}
+            </span>
+            <ChevronDown size={10} className="bitfun-model-selector__chevron" />
+          </button>
+        </Tooltip>
+
+        {dropdownOpen && createPortal(
+          <div
+            id={menuId}
+            className="bitfun-model-selector__dropdown"
+            ref={portalDropdownRef}
+            style={dropdownStyle}
+            data-testid="chat-model-selector-menu"
+            data-keyboard-open={keyboardNavigationOpen ? 'true' : 'false'}
+            data-placement={dropdownPlacement}
+            role="menu"
+            aria-label={t('modelSelector.modelSelection')}
+            onKeyDown={handleDropdownKeyDown}
+          >
+            <div className="bitfun-model-selector__dropdown-header">
+              <span>{t('modelSelector.modelSelection')}</span>
+              <span className="bitfun-model-selector__dropdown-hint">
+                {externalSelection.providerLabel}
+              </span>
+            </div>
+            <div className="bitfun-model-selector__list">
+              {externalAvailableModels.map(model => {
+                const isSelected = externalCurrentModelId === model.id;
+                return (
+                  <Tooltip key={model.id} content={model.providerName} placement="right">
+                    <button
+                      type="button"
+                      role="menuitemradio"
+                      aria-checked={isSelected}
+                      data-testid="chat-model-selector-option"
+                      data-model-id={model.id}
+                      data-model-name={model.modelName}
+                      data-selected={isSelected ? 'true' : 'false'}
+                      className={`bitfun-model-selector__option ${isSelected ? 'bitfun-model-selector__option--selected' : ''}`}
+                      onClick={() => handleSelectModel(model.id)}
+                    >
+                      <div className="bitfun-model-selector__option-main">
+                        <span className="bitfun-model-selector__option-name">
+                          {model.modelName}
+                        </span>
+                      </div>
+                      {isSelected ? (
+                        <Check size={14} className="bitfun-model-selector__option-check" />
+                      ) : null}
+                    </button>
+                  </Tooltip>
+                );
+              })}
+            </div>
+          </div>,
+          document.body,
+        )}
+      </div>
+    );
+  }
 
   if (isAcpSession) {
     if (acpAvailableModels.length === 0) {

@@ -36,13 +36,27 @@ storage is not used for workspace contents.
 
 `workspacePath` in a submit request identifies a directory on the target. It
 does not imply that similarly named directories on two machines are related.
-Dispatch therefore supports two explicit delivery modes.
+Dispatch therefore supports three explicit delivery modes.
 
 ### Existing target directory
 
 `existing` uses a directory that already exists on the target. Probe returns its
 canonical path and Git facts before submit. BitFun never clones, fetches,
 checks out, stashes, or rewrites that directory as part of dispatch.
+
+### One-shot source snapshot
+
+`snapshot-source` captures the controller workspace while honoring repository
+ignore rules. It includes tracked and non-ignored source files, including
+hidden source such as `.github/`, while excluding ignored dependency caches,
+build output, and local secrets. It uses the same verified, one-shot upload,
+materialization, result, and conflict rules as an exact snapshot. The filtered
+input set is carried in the existing exact-snapshot wire envelope, so compatible
+targets do not need a second materialization protocol.
+
+This is the default snapshot choice for ordinary source workspaces. Users who
+need ignored runtime inputs must choose the exact mode explicitly and confirm
+its wider data boundary.
 
 ### One-shot exact snapshot
 
