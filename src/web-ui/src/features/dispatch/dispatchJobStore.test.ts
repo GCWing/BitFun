@@ -240,6 +240,7 @@ describe('dispatchJobStore', () => {
         workspacePath: '/repo',
         displayName: 'build-host',
       },
+      sourceWorkspacePath: '/source',
       workspacePath: '/repo',
       promptPreview: 'Dispatch test',
       lastCursor: 10,
@@ -250,6 +251,31 @@ describe('dispatchJobStore', () => {
 
     expect(dispatchJobStore.getState().jobs['job-1']).toBeUndefined();
     expect(dispatchJobStore.getState().dismissedJobIds).toContain('job-1');
+    expect(dispatchJobStore.getState().dismissedSessionIds).toContain('session-1');
+  });
+
+  it('uses a session tombstone when deletion happens before the job id is known', () => {
+    dispatchJobStore.getState().dismissSession('session-late');
+    dispatchJobStore.getState().mergeOutboundRecords([{
+      jobId: 'job-late',
+      sessionId: 'session-late',
+      target: {
+        kind: 'ssh',
+        connectionId: 'ssh-1',
+        workspacePath: '/repo',
+        displayName: 'build-host',
+      },
+      sourceWorkspacePath: '/source',
+      workspacePath: '/repo',
+      promptPreview: 'Dispatch test',
+      lastCursor: 0,
+      lastState: 'running',
+      createdAt: '2026-07-28T00:00:00Z',
+      updatedAt: '2026-07-28T00:00:01Z',
+    }]);
+
+    expect(dispatchJobStore.getState().jobs['job-late']).toBeUndefined();
+    expect(dispatchJobStore.getState().dismissedSessionIds).toContain('session-late');
   });
 
   it('keeps transport reachability transient and separate from authoritative job state', () => {
@@ -271,5 +297,6 @@ describe('dispatchJobStore', () => {
       dispatchJobStore.getState(),
     ) as Record<string, unknown> | undefined;
     expect(persistedState?.transportByJobId).toBeUndefined();
+    expect(persistedState?.dismissedSessionIds).toEqual([]);
   });
 });

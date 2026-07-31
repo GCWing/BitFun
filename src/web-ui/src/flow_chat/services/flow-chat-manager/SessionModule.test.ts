@@ -49,8 +49,9 @@ const stateMachineMocks = vi.hoisted(() => ({
 }));
 
 const dispatchStoreMocks = vi.hoisted(() => ({
+  jobs: {} as Record<string, { sessionId: string }>,
   registerJob: vi.fn(),
-  dismissJob: vi.fn(),
+  dismissSession: vi.fn(),
   updateTitle: vi.fn(),
 }));
 
@@ -513,6 +514,7 @@ describe('reloadSessionTitle', () => {
 describe('SessionModule historical session coordination', () => {
   beforeEach(() => {
     vi.useFakeTimers();
+    dispatchStoreMocks.jobs = {};
   });
 
   afterEach(async () => {
@@ -1055,7 +1057,36 @@ describe('SessionModule historical session coordination', () => {
 
     await deleteChatSession(context, session.sessionId);
 
-    expect(dispatchStoreMocks.dismissJob).toHaveBeenCalledWith('job-1');
+    expect(dispatchStoreMocks.dismissSession).toHaveBeenCalledWith(
+      session.sessionId,
+      'job-1',
+    );
+    expect(flowChatStore.removeSession).toHaveBeenCalledWith(
+      session.sessionId,
+      { nextActiveSessionId: null },
+    );
+    expect(flowChatStore.deleteSession).not.toHaveBeenCalled();
+  });
+
+  it('deletes a dispatch projection found only through the observer job index', async () => {
+    const session = createSession({
+      sessionId: 'dispatch-session',
+      isHistorical: false,
+      config: { agentType: 'agentic' },
+    });
+    dispatchStoreMocks.jobs = {
+      'job-1': { sessionId: session.sessionId },
+    };
+    const { context, flowChatStore } = createContext(session, {
+      activeSessionId: session.sessionId,
+    });
+
+    await deleteChatSession(context, session.sessionId);
+
+    expect(dispatchStoreMocks.dismissSession).toHaveBeenCalledWith(
+      session.sessionId,
+      undefined,
+    );
     expect(flowChatStore.removeSession).toHaveBeenCalledWith(
       session.sessionId,
       { nextActiveSessionId: null },

@@ -17,6 +17,7 @@ import { isDispatchJobTerminal } from './types';
 
 const MAX_APPLIED_EVENT_IDS = 2048;
 const MAX_DISMISSED_JOB_IDS = 2048;
+const MAX_DISMISSED_SESSION_IDS = 2048;
 const fallbackStorageValues = new Map<string, string>();
 const fallbackStorage: StateStorage = {
   getItem: (name) => fallbackStorageValues.get(name) ?? null,
@@ -69,6 +70,11 @@ interface DispatchJobStoreState {
   transportByJobId: Record<string, DispatchTransportState>;
   /** Local projection tombstones. The target job remains durable, but must not reopen in navigation. */
   dismissedJobIds: string[];
+  /**
+   * Session-level tombstones cover incomplete projections where the job id is
+   * temporarily missing when the user deletes the navigation row.
+   */
+  dismissedSessionIds: string[];
   registerJob: (job: DispatchObserverJob) => void;
   mergeOutboundRecords: (records: OutboundDispatchRecord[]) => void;
   updateProgress: (
@@ -96,6 +102,7 @@ interface DispatchJobStoreState {
   updateTitle: (jobId: string, title: string) => void;
   updateModel: (jobId: string, model: string) => void;
   updateApprovalPolicy: (jobId: string, policy: DispatchApprovalPolicy) => void;
+  dismissSession: (sessionId: string, knownJobId?: string) => void;
   dismissJob: (jobId: string) => void;
   removeJob: (jobId: string) => void;
   clear: () => void;
@@ -136,9 +143,16 @@ export const useDispatchJobStore = create<DispatchJobStoreState>()(
       jobs: {},
       transportByJobId: {},
       dismissedJobIds: [],
+      dismissedSessionIds: [],
 
       registerJob: (job) => {
         set(state => {
+          if (
+            state.dismissedJobIds.includes(job.jobId)
+            || state.dismissedSessionIds.includes(job.sessionId)
+          ) {
+            return state;
+          }
           const transportByJobId = {
             ...state.transportByJobId,
             [job.jobId]: state.transportByJobId[job.jobId] ?? {
@@ -155,7 +169,6 @@ export const useDispatchJobStore = create<DispatchJobStoreState>()(
               },
             },
             transportByJobId,
-            dismissedJobIds: state.dismissedJobIds.filter(id => id !== job.jobId),
           };
         });
       },
@@ -167,19 +180,26 @@ export const useDispatchJobStore = create<DispatchJobStoreState>()(
           const prunedJobIds = new Set<string>();
           for (const [jobId, job] of Object.entries(jobs)) {
             if (
-              !authoritativeJobIds.has(jobId)
-              && job.state !== 'submitting'
-              && job.state !== 'submission_unknown'
+              state.dismissedJobIds.includes(jobId)
+              || state.dismissedSessionIds.includes(job.sessionId)
+              || (
+                !authoritativeJobIds.has(jobId)
+                && job.state !== 'submitting'
+                && job.state !== 'submission_unknown'
+              )
             ) {
-              // The controller index is authoritative after acknowledgement.
-              // Remove renderer cache left behind by retention, manual cleanup,
-              // or an older build instead of restoring a ghost projection.
+              // The controller index is authoritative after acknowledgement,
+              // while a tombstone also wins over cache rehydrated by an older
+              // renderer build.
               delete jobs[jobId];
               prunedJobIds.add(jobId);
             }
           }
           for (const record of records) {
-            if (state.dismissedJobIds.includes(record.jobId)) {
+            if (
+              state.dismissedJobIds.includes(record.jobId)
+              || state.dismissedSessionIds.includes(record.sessionId)
+            ) {
               continue;
             }
             const sourceWorkspacePath = record.sourceWorkspacePath?.trim() || undefined;
@@ -401,19 +421,43 @@ export const useDispatchJobStore = create<DispatchJobStoreState>()(
         });
       },
 
-      dismissJob: (jobId) => {
+      dismissSession: (rawSessionId, knownJobId) => {
+        const sessionId = rawSessionId.trim();
+        const normalizedKnownJobId = knownJobId?.trim();
         set(state => {
+          const dismissedJobIds = new Set(state.dismissedJobIds);
+          if (normalizedKnownJobId) {
+            dismissedJobIds.add(normalizedKnownJobId);
+          }
+          for (const job of Object.values(state.jobs)) {
+            if (job.sessionId === sessionId) {
+              dismissedJobIds.add(job.jobId);
+            }
+          }
+
           const jobs = { ...state.jobs };
           const transportByJobId = { ...state.transportByJobId };
-          delete jobs[jobId];
-          delete transportByJobId[jobId];
+          for (const jobId of dismissedJobIds) {
+            delete jobs[jobId];
+            delete transportByJobId[jobId];
+          }
+
           return {
             jobs,
             transportByJobId,
-            dismissedJobIds: Array.from(new Set([...state.dismissedJobIds, jobId]))
+            dismissedJobIds: Array.from(dismissedJobIds)
               .slice(-MAX_DISMISSED_JOB_IDS),
+            dismissedSessionIds: sessionId
+              ? Array.from(new Set([...state.dismissedSessionIds, sessionId]))
+                .slice(-MAX_DISMISSED_SESSION_IDS)
+              : state.dismissedSessionIds,
           };
         });
+      },
+
+      dismissJob: (jobId) => {
+        const sessionId = get().jobs[jobId]?.sessionId ?? '';
+        get().dismissSession(sessionId, jobId);
       },
 
       removeJob: (jobId) => {
@@ -427,7 +471,12 @@ export const useDispatchJobStore = create<DispatchJobStoreState>()(
         });
       },
 
-      clear: () => set({ jobs: {}, transportByJobId: {}, dismissedJobIds: [] }),
+      clear: () => set({
+        jobs: {},
+        transportByJobId: {},
+        dismissedJobIds: [],
+        dismissedSessionIds: [],
+      }),
     }),
     {
       name: 'bitfun-dispatch-jobs-v1',
@@ -438,6 +487,7 @@ export const useDispatchJobStore = create<DispatchJobStoreState>()(
       partialize: state => ({
         jobs: state.jobs,
         dismissedJobIds: state.dismissedJobIds,
+        dismissedSessionIds: state.dismissedSessionIds,
       }),
     },
   ),

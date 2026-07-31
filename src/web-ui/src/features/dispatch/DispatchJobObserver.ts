@@ -154,6 +154,7 @@ function isJobStillObserved(job: DispatchObserverJob): boolean {
   return (
     state.jobs[job.jobId]?.sessionId === job.sessionId
     && !state.dismissedJobIds.includes(job.jobId)
+    && !state.dismissedSessionIds.includes(job.sessionId)
   );
 }
 

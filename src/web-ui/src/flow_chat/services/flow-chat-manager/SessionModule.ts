@@ -60,6 +60,31 @@ const log = createLogger('SessionModule');
 const pendingSessionCreations = new Map<string, Promise<string>>();
 const DISPATCH_OBSERVER_MAX_CONTEXT_TOKENS = 128128;
 
+function isDispatchObserverProjection(
+  sessionId: string,
+  session: Session | undefined,
+): boolean {
+  if (
+    isNonLocalDispatchTarget(session?.config.dispatchTarget)
+    || Boolean(session?.config.dispatchJobId?.trim())
+  ) {
+    return true;
+  }
+
+  return Object.values(dispatchJobStore.getState().jobs)
+    .some(job => job.sessionId === sessionId);
+}
+
+function dismissDispatchObserverProjection(
+  sessionId: string,
+  session: Session | undefined,
+): void {
+  dispatchJobStore.getState().dismissSession(
+    sessionId,
+    session?.config.dispatchJobId,
+  );
+}
+
 const getHydrationLocationKey = (
   location: SessionHistoryHydrationLocation | undefined,
 ): string => location?.workspacePath
@@ -993,10 +1018,8 @@ export async function deleteChatSession(
       && removedSessionIdSet.has(stateBeforeDelete.activeSessionId)
     );
     const session = stateBeforeDelete.sessions.get(sessionId);
-    if (isNonLocalDispatchTarget(session?.config.dispatchTarget)) {
-      if (session?.config.dispatchJobId) {
-        dispatchJobStore.getState().dismissJob(session.config.dispatchJobId);
-      }
+    if (isDispatchObserverProjection(sessionId, session)) {
+      dismissDispatchObserverProjection(sessionId, session);
       context.flowChatStore.removeSession(
         sessionId,
         removedActiveSession ? { nextActiveSessionId: null } : undefined,
@@ -1044,10 +1067,8 @@ export async function archiveChatSession(
       && removedSessionIdSet.has(stateBeforeArchive.activeSessionId)
     );
 
-    if (isNonLocalDispatchTarget(session.config.dispatchTarget)) {
-      if (session.config.dispatchJobId) {
-        dispatchJobStore.getState().dismissJob(session.config.dispatchJobId);
-      }
+    if (isDispatchObserverProjection(sessionId, session)) {
+      dismissDispatchObserverProjection(sessionId, session);
       context.flowChatStore.removeSession(
         sessionId,
         removedActiveSession ? { nextActiveSessionId: null } : undefined,
