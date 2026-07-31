@@ -35,6 +35,7 @@ pub mod git_tool;
 pub mod glob_tool;
 pub mod grep_tool;
 pub mod harmony_device;
+pub mod hdc_fallback;
 pub mod hdc_log_tool;
 pub mod list_models_tool;
 pub mod ls_tool;

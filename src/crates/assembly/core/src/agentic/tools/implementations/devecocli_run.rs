@@ -17,6 +17,8 @@ pub(crate) const DEFAULT_TIMEOUT: Duration = Duration::from_secs(600);
 pub(crate) const DEVECOCLI_MISSING: &str =
     "devecocli is not installed or not in PATH. Install with: npm install -g devecocli (or @deveco/deveco-cli)";
 
+pub(crate) const HDC_MISSING: &str = "hdc is not installed or not in PATH. hdc ships with the HarmonyOS SDK / DevEco Studio; ensure the SDK platform-tools directory is on PATH.";
+
 pub(crate) struct DevecocliOutput {
     pub stdout: String,
     pub stderr: String,
@@ -64,22 +66,28 @@ pub(crate) fn truncate_output(text: &str, limit: usize) -> String {
     )
 }
 
-pub(crate) async fn run_devecocli(
+/// Spawn a shell-wrapped HarmonyOS CLI binary (`devecocli` or `hdc`) and capture
+/// stdout/stderr (64 KB cap per stream), enforcing a timeout. `missing_msg` is
+/// returned when the binary cannot be resolved in the user's shell PATH.
+///
+/// Wrapping in the user's configured terminal shell (same as ExecCommand) is
+/// required so that PATH, PATHEXT, and shell profiles are honored — without it,
+/// npm-installed `.cmd` shims and SDK paths only present in shell profiles
+/// cannot be found.
+async fn run_shell_command(
+    binary: &str,
     args: &[&str],
     context: &ToolUseContext,
     options: DevecocliOptions,
+    missing_msg: &str,
 ) -> BitFunResult<DevecocliOutput> {
     let cwd = resolve_harmony_cwd(context);
-    let full_command = format!("devecocli {}", args.join(" "));
-    log::info!("devecocli {} (cwd: {})", args.join(" "), cwd);
+    let full_command = format!("{} {}", binary, args.join(" "));
+    log::info!("{} {} (cwd: {})", binary, args.join(" "), cwd);
 
-    // Resolve the user's configured terminal shell (same as ExecCommand) so that
-    // PATH, PATHEXT, and shell profiles are respected. Without a shell wrapper,
-    // Command::new("devecocli") cannot find npm-installed .cmd shims or paths
-    // only present in shell profiles.
     let shell_argv = super::exec_command::resolve_shell_argv_for_command(&full_command).await;
     if shell_argv.is_empty() {
-        return Err(BitFunError::tool(DEVECOCLI_MISSING));
+        return Err(BitFunError::tool(missing_msg.to_string()));
     }
 
     let mut command = Command::new(&shell_argv[0]);
@@ -93,12 +101,12 @@ pub(crate) async fn run_devecocli(
     let child = match command.spawn() {
         Ok(child) => child,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-            return Err(BitFunError::tool(DEVECOCLI_MISSING));
+            return Err(BitFunError::tool(missing_msg.to_string()));
         }
         Err(e) => {
             return Err(BitFunError::tool(format!(
-                "Failed to spawn shell for devecocli: {}",
-                e
+                "Failed to spawn shell for {}: {}",
+                binary, e
             )));
         }
     };
@@ -108,14 +116,16 @@ pub(crate) async fn run_devecocli(
         Ok(Ok(output)) => output,
         Ok(Err(e)) => {
             return Err(BitFunError::tool(format!(
-                "devecocli {} failed to collect output: {}",
+                "{} {} failed to collect output: {}",
+                binary,
                 args.join(" "),
                 e
             )));
         }
         Err(_) => {
             return Err(BitFunError::tool(format!(
-                "devecocli {} timed out after {:?}",
+                "{} {} timed out after {:?}",
+                binary,
                 args.join(" "),
                 options.timeout
             )));
@@ -128,11 +138,12 @@ pub(crate) async fn run_devecocli(
 
     if exit_code == 127 {
         let combined = format!("{}\n{}", stderr, stdout);
-        if combined.to_lowercase().contains("enoent")
-            || combined.to_lowercase().contains("not recognized")
-            || combined.to_lowercase().contains("command not found")
+        let lower = combined.to_lowercase();
+        if lower.contains("enoent")
+            || lower.contains("not recognized")
+            || lower.contains("command not found")
         {
-            return Err(BitFunError::tool(DEVECOCLI_MISSING));
+            return Err(BitFunError::tool(missing_msg.to_string()));
         }
     }
 
@@ -163,6 +174,24 @@ pub(crate) async fn run_devecocli(
         exit_code,
         cwd: cwd_resolved,
     })
+}
+
+pub(crate) async fn run_devecocli(
+    args: &[&str],
+    context: &ToolUseContext,
+    options: DevecocliOptions,
+) -> BitFunResult<DevecocliOutput> {
+    run_shell_command("devecocli", args, context, options, DEVECOCLI_MISSING).await
+}
+
+/// Spawn the `hdc` binary directly (bypassing devecocli). Used by the automatic
+/// `start_app` fallback path when devecocli cannot enumerate or drive devices.
+pub(crate) async fn run_hdc(
+    args: &[&str],
+    context: &ToolUseContext,
+    options: DevecocliOptions,
+) -> BitFunResult<DevecocliOutput> {
+    run_shell_command("hdc", args, context, options, HDC_MISSING).await
 }
 
 #[cfg(test)]
