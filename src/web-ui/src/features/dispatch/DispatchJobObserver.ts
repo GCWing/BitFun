@@ -27,10 +27,24 @@ const log = createLogger('DispatchJobObserver');
 export const DISPATCH_JOB_POLL_INTERVAL_MS = 1800;
 
 type RefreshRequester = (jobId?: string) => void;
-let installedRefreshRequester: RefreshRequester | null = null;
+
+interface DispatchObserverLease {
+  requestRefresh: RefreshRequester;
+  dispose: () => void;
+}
+
+type DispatchObserverGlobal = typeof globalThis & {
+  __bitfunDispatchJobObserverLease__?: DispatchObserverLease;
+};
+
+function getDispatchObserverGlobal(): DispatchObserverGlobal {
+  return globalThis as DispatchObserverGlobal;
+}
 
 export function requestDispatchJobRefresh(jobId?: string): void {
-  installedRefreshRequester?.(jobId);
+  getDispatchObserverGlobal()
+    .__bitfunDispatchJobObserverLease__
+    ?.requestRefresh(jobId);
 }
 
 const RAW_EVENT_NAMES: Record<string, string> = {
@@ -346,7 +360,14 @@ function reconcileDispatchTerminalRuntime(
   });
 }
 
-async function refreshJob(context: FlowChatContext, requestedJobId: string): Promise<void> {
+async function refreshJob(
+  context: FlowChatContext,
+  requestedJobId: string,
+  isObserverCurrent: () => boolean,
+): Promise<void> {
+  if (!isObserverCurrent()) {
+    return;
+  }
   let job = dispatchJobStore.getState().jobs[requestedJobId];
   if (!job) {
     return;
@@ -372,7 +393,7 @@ async function refreshJob(context: FlowChatContext, requestedJobId: string): Pro
   try {
     response = await dispatchApi.status(job.jobId, requestCursor);
   } catch (error) {
-    if (!isJobStillObserved(job)) {
+    if (!isObserverCurrent() || !isJobStillObserved(job)) {
       return;
     }
     dispatchJobStore.getState().setTransportState(
@@ -385,7 +406,7 @@ async function refreshJob(context: FlowChatContext, requestedJobId: string): Pro
   // Deleting a dispatch session writes a projection tombstone while an
   // already-issued target poll may still be in flight. Never let that stale
   // response project SessionCreated/DialogTurnStarted and recreate the row.
-  if (!isJobStillObserved(job)) {
+  if (!isObserverCurrent() || !isJobStillObserved(job)) {
     return;
   }
   // A successful target status request is the only authoritative signal that
@@ -398,7 +419,7 @@ async function refreshJob(context: FlowChatContext, requestedJobId: string): Pro
   const userCancelledBeforeRefresh =
     context.userCancelledSessionIds?.has(job.sessionId) ?? false;
   for (const event of response.events) {
-    if (!isJobStillObserved(job)) {
+    if (!isObserverCurrent() || !isJobStillObserved(job)) {
       return;
     }
     const eventId = dispatchEventId(event);
@@ -414,7 +435,7 @@ async function refreshJob(context: FlowChatContext, requestedJobId: string): Pro
       appliedEventIds: [eventId],
     });
   }
-  if (!isJobStillObserved(job)) {
+  if (!isObserverCurrent() || !isJobStillObserved(job)) {
     return;
   }
 
@@ -550,13 +571,28 @@ async function refreshJob(context: FlowChatContext, requestedJobId: string): Pro
 }
 
 export function installDispatchJobObserver(context: FlowChatContext): () => void {
+  const observerGlobal = getDispatchObserverGlobal();
+  const previousLease = observerGlobal.__bitfunDispatchJobObserverLease__;
+  if (previousLease) {
+    log.info('Replacing an existing dispatch job observer');
+    previousLease.dispose();
+  }
+
   let disposed = false;
   let inFlight = false;
   let queuedJobId: string | undefined;
   let immediateTimer: ReturnType<typeof setTimeout> | null = null;
+  let interval: ReturnType<typeof setInterval> | null = null;
+  let handleVisibilityChanged: (() => void) | null = null;
+  let lease: DispatchObserverLease;
+
+  const ownsLease = (): boolean => (
+    !disposed
+    && observerGlobal.__bitfunDispatchJobObserverLease__ === lease
+  );
 
   async function run(requestedJobId?: string): Promise<void> {
-    if (disposed || isPeerDeviceModeActive()) return;
+    if (!ownsLease() || isPeerDeviceModeActive()) return;
     if (inFlight) {
       queuedJobId = requestedJobId;
       return;
@@ -565,17 +601,29 @@ export function installDispatchJobObserver(context: FlowChatContext): () => void
     inFlight = true;
     try {
       const records = await dispatchApi.listJobs();
+      if (!ownsLease()) {
+        return;
+      }
       dispatchJobStore.getState().mergeOutboundRecords(records);
       const jobs = Object.values(dispatchJobStore.getState().jobs)
         .filter(job => !requestedJobId || job.jobId === requestedJobId);
       for (const job of jobs) {
+        if (!ownsLease()) {
+          return;
+        }
         try {
-          await refreshJob(context, job.jobId);
+          await refreshJob(context, job.jobId, ownsLease);
         } catch (error) {
+          if (!ownsLease()) {
+            return;
+          }
           log.warn('Dispatch job refresh failed', { jobId: job.jobId, error });
         }
       }
     } catch (error) {
+      if (!ownsLease()) {
+        return;
+      }
       const message = transportErrorMessage(error);
       const jobs = Object.values(dispatchJobStore.getState().jobs)
         .filter(job => (
@@ -593,7 +641,7 @@ export function installDispatchJobObserver(context: FlowChatContext): () => void
       log.warn('Failed to reconcile outbound dispatch jobs', { error });
     } finally {
       inFlight = false;
-      if (queuedJobId !== undefined && !disposed) {
+      if (queuedJobId !== undefined && ownsLease()) {
         const next = queuedJobId;
         queuedJobId = undefined;
         schedule(next);
@@ -602,7 +650,7 @@ export function installDispatchJobObserver(context: FlowChatContext): () => void
   }
 
   function schedule(jobId?: string): void {
-    if (disposed) return;
+    if (!ownsLease()) return;
     if (immediateTimer !== null) {
       clearTimeout(immediateTimer);
     }
@@ -612,11 +660,36 @@ export function installDispatchJobObserver(context: FlowChatContext): () => void
     }, 0);
   }
 
-  installedRefreshRequester = schedule;
-  const interval = setInterval(() => {
+  const dispose = (): void => {
+    if (disposed) {
+      return;
+    }
+    disposed = true;
+    if (observerGlobal.__bitfunDispatchJobObserverLease__ === lease) {
+      delete observerGlobal.__bitfunDispatchJobObserverLease__;
+    }
+    if (immediateTimer !== null) {
+      clearTimeout(immediateTimer);
+      immediateTimer = null;
+    }
+    if (interval !== null) {
+      clearInterval(interval);
+      interval = null;
+    }
+    if (typeof document !== 'undefined' && handleVisibilityChanged) {
+      document.removeEventListener('visibilitychange', handleVisibilityChanged);
+    }
+  };
+  lease = {
+    requestRefresh: schedule,
+    dispose,
+  };
+  observerGlobal.__bitfunDispatchJobObserverLease__ = lease;
+
+  interval = setInterval(() => {
     void run();
   }, DISPATCH_JOB_POLL_INTERVAL_MS);
-  const handleVisibilityChanged = () => {
+  handleVisibilityChanged = () => {
     if (typeof document === 'undefined' || document.visibilityState === 'visible') {
       schedule();
     }
@@ -626,17 +699,5 @@ export function installDispatchJobObserver(context: FlowChatContext): () => void
   }
   schedule();
 
-  return () => {
-    disposed = true;
-    if (installedRefreshRequester === schedule) {
-      installedRefreshRequester = null;
-    }
-    if (immediateTimer !== null) {
-      clearTimeout(immediateTimer);
-    }
-    clearInterval(interval);
-    if (typeof document !== 'undefined') {
-      document.removeEventListener('visibilitychange', handleVisibilityChanged);
-    }
-  };
+  return dispose;
 }
