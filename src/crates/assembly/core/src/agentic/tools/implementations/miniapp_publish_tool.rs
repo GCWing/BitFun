@@ -17,8 +17,11 @@ use bitfun_services_integrations::miniapp_market::{
 use serde_json::{json, Value};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-const DEFAULT_MIN_BITFUN_VERSION: &str = "0.1.0";
 const DEFAULT_LICENSE: &str = "MIT";
+
+fn default_min_bitfun_version() -> &'static str {
+    crate::VERSION
+}
 
 pub struct PublishMiniAppTool;
 
@@ -161,10 +164,9 @@ Publishing is an outward-facing action: only call this when the user explicitly 
                 }
             }
         } else if let Some(app_name) = app_name {
-            let apps = manager
-                .list()
-                .await
-                .map_err(|e| BitFunError::tool(format!("Could not list installed MiniApps: {e}")))?;
+            let apps = manager.list().await.map_err(|e| {
+                BitFunError::tool(format!("Could not list installed MiniApps: {e}"))
+            })?;
             let matches = find_apps_by_name(&apps, app_name);
             match matches.as_slice() {
                 [only] => manager
@@ -365,7 +367,7 @@ Publishing is an outward-facing action: only call this when the user explicitly 
             icon: app.icon.clone(),
             category,
             tags,
-            min_bitfun_version: DEFAULT_MIN_BITFUN_VERSION.to_string(),
+            min_bitfun_version: default_min_bitfun_version().to_string(),
             changelog,
             license: MarketLicense {
                 spdx_expression: Some(DEFAULT_LICENSE.to_string()),
@@ -462,7 +464,11 @@ fn find_apps_by_name<'a>(apps: &'a [MiniAppMeta], needle: &str) -> Vec<&'a MiniA
         return exact;
     }
     apps.iter()
-        .filter(|meta| display_names(meta).iter().any(|name| name.contains(&needle)))
+        .filter(|meta| {
+            display_names(meta)
+                .iter()
+                .any(|name| name.contains(&needle))
+        })
         .collect()
 }
 
@@ -488,7 +494,7 @@ fn unix_now() -> i64 {
 
 #[cfg(test)]
 mod tests {
-    use super::{find_apps_by_name, PublishMiniAppTool};
+    use super::{default_min_bitfun_version, find_apps_by_name, PublishMiniAppTool};
     use crate::agentic::tools::framework::{Tool, ToolExposure, ToolUseContext};
     use bitfun_product_domains::miniapp::types::MiniAppMeta;
     use serde_json::json;
@@ -497,6 +503,11 @@ mod tests {
     fn publish_miniapp_stays_expanded_for_assistant_use() {
         let tool = PublishMiniAppTool::new();
         assert_eq!(tool.default_exposure(), ToolExposure::Direct);
+    }
+
+    #[test]
+    fn publish_miniapp_defaults_to_current_client_version() {
+        assert_eq!(default_min_bitfun_version(), crate::VERSION);
     }
 
     #[test]
@@ -584,10 +595,7 @@ mod tests {
 
     #[test]
     fn find_apps_by_name_falls_back_to_substring_and_reports_ambiguity() {
-        let apps = vec![
-            meta("a1", "循天问命", None),
-            meta("a2", "问命笺", None),
-        ];
+        let apps = vec![meta("a1", "循天问命", None), meta("a2", "问命笺", None)];
         let partial = find_apps_by_name(&apps, "问命");
         assert_eq!(partial.len(), 2);
         assert!(find_apps_by_name(&apps, "不存在").is_empty());

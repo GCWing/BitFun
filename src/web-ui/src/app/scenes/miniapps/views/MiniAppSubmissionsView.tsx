@@ -34,6 +34,10 @@ import { createLogger } from '@/shared/utils/logger';
 import { useSceneManager } from '@/app/hooks/useSceneManager';
 import type { SceneTabId } from '@/app/components/SceneBar/types';
 import { renderMiniAppIcon } from '../utils/miniAppIcons';
+import {
+  applyCurrentClientVersionDefault,
+  createEmptyMarketSubmissionDraft,
+} from './miniAppSubmissionDraft';
 import './MiniAppSubmissionsView.scss';
 
 const log = createLogger('MiniAppSubmissionsView');
@@ -49,18 +53,14 @@ const MARKET_CATEGORIES = [
   'other',
 ] as const;
 
-const emptyDraft: MarketSubmissionDraftRequest = {
-  slug: '',
-  releaseNumber: 1,
-  name: '',
-  description: '',
-  icon: 'box',
-  category: 'other',
-  tags: [],
-  minBitfunVersion: '0.1.0',
-  changelog: '',
-  license: { spdxExpression: 'MIT' },
-};
+async function loadCurrentClientVersion(): Promise<string | undefined> {
+  try {
+    return await systemAPI.getAppVersion();
+  } catch (error) {
+    log.warn('Failed to load current BitFun version for MiniApp submission defaults', error);
+    return undefined;
+  }
+}
 
 const MiniAppSubmissionsView: React.FC = () => {
   const { t } = useI18n('scenes/miniapp');
@@ -73,7 +73,9 @@ const MiniAppSubmissionsView: React.FC = () => {
   const [apps, setApps] = useState<MiniAppMeta[]>([]);
   const [submissions, setSubmissions] = useState<MarketSubmission[]>([]);
   const [selectedAppId, setSelectedAppId] = useState('');
-  const [draft, setDraft] = useState<MarketSubmissionDraftRequest>(emptyDraft);
+  const [draft, setDraft] = useState<MarketSubmissionDraftRequest>(
+    createEmptyMarketSubmissionDraft,
+  );
   const [screenshotPaths, setScreenshotPaths] = useState<string[]>([]);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -89,10 +91,18 @@ const MiniAppSubmissionsView: React.FC = () => {
   const refresh = async () => {
     setLoading(true);
     try {
-      const profile = await miniAppMarketAPI.me();
+      const [profile, installed, currentClientVersion] = await Promise.all([
+        miniAppMarketAPI.me(),
+        miniAppAPI.listMiniApps(),
+        draft.minBitfunVersion ? Promise.resolve(undefined) : loadCurrentClientVersion(),
+      ]);
       setMe(profile);
-      const installed = await miniAppAPI.listMiniApps();
       setApps(installed);
+      if (currentClientVersion) {
+        setDraft((current) =>
+          applyCurrentClientVersionDefault(current, currentClientVersion),
+        );
+      }
       if (!selectedAppId && installed[0]) {
         selectApp(installed[0]);
       }
