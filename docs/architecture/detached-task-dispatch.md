@@ -149,6 +149,18 @@ Workspace upload uses the internal `workspace-begin`, `workspace-chunk`, and
 `workspace-commit` verbs. They are target data-plane operations and are not
 normal product or Peer Device Mode commands.
 
+`dispatch_worker_cli_profile` is a required execution-safety capability. It
+means every dispatch process selects `DeliveryProfile::Cli` before model/config
+inspection can lazily initialize product-full tool state. Controllers must
+check it both during target setup and immediately before submission; package
+version equality is not evidence of this behavior.
+
+CLI installation smoke-tests the same capability before replacing an existing
+target binary. An untagged Desktop development build may, after the normal
+explicit source-build confirmation, archive its clean current Git commit and
+build that exact source on the target. This avoids reinstalling an older
+same-semver release while keeping executable transfer an explicit user action.
+
 Account-device transport wraps target verbs in names reserved for detached
 dispatch, such as `dispatch_target_submit`. They are handled before the
 attach-shaped Peer Host bridge and never acquire an attached-controller lease.
@@ -201,6 +213,8 @@ originally submitted the job.
 ## Failure rules
 
 - A missing or offline target fails submit; the Relay does not queue jobs.
+- A target missing a required behavioral capability fails preflight before a
+  durable job is created, even when its CLI package version matches.
 - A lost submit response leaves `submission_unknown`; status or an idempotent
   retry reconciles the target's durable truth.
 - A live PID that no longer matches the exact worker command is never signaled

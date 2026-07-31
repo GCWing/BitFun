@@ -19,8 +19,8 @@ use protocol::{
     DispatchListRequest, DispatchProbeRequest, DispatchProbeResponse, DispatchStatusRequest,
     DispatchStatusResponse, DispatchSubmitRequest, DispatchSubmitResponse,
     DispatchWorkspaceBeginRequest, DispatchWorkspaceChunkRequest, DispatchWorkspaceCommitRequest,
-    DispatchWorkspaceResultChunkRequest, DispatchWorkspaceResultRequest,
-    DispatchWorkspaceProbe, DISPATCH_PROTOCOL_VERSION, MAX_DISPATCH_TEXT_BYTES,
+    DispatchWorkspaceProbe, DispatchWorkspaceResultChunkRequest, DispatchWorkspaceResultRequest,
+    DISPATCH_PROTOCOL_VERSION, MAX_DISPATCH_TEXT_BYTES,
 };
 use store::{CreateJobOutcome, DispatchStateRecord, DispatchStore};
 
@@ -76,10 +76,12 @@ pub(crate) async fn run_dispatch_verb(
             DispatchWorkspaceResultRequest,
         >(input)?)?)
         .context("encode workspace result response"),
-        "workspace-result-chunk" => serde_json::to_value(workspace::result_chunk(parse::<
-            DispatchWorkspaceResultChunkRequest,
-        >(input)?)?)
-        .context("encode workspace result chunk response"),
+        "workspace-result-chunk" => {
+            serde_json::to_value(workspace::result_chunk(parse::<
+                DispatchWorkspaceResultChunkRequest,
+            >(input)?)?)
+            .context("encode workspace result chunk response")
+        }
         _ => bail!("unsupported dispatch verb: {verb}"),
     }
 }
@@ -111,6 +113,11 @@ async fn probe(request: DispatchProbeRequest) -> Result<DispatchProbeResponse> {
         "event_log_completeness".to_string(),
         "workspace_snapshot_exact".to_string(),
         "workspace_snapshot_chunked".to_string(),
+        // A target may share the same package version while predating the
+        // dispatch entrypoint's early CLI-profile selection. Such a binary can
+        // accept a job but every detached worker then fails before execution.
+        // Advertise the behavioral fix explicitly so controllers fail closed.
+        "dispatch_worker_cli_profile".to_string(),
         // Optional on purpose: controllers must feature-detect this rather than
         // require it, so an older target stays usable for everything else.
         "workspace_result_bundle".to_string(),

@@ -63,3 +63,7 @@ dispatch.
     identity. Legacy records wait for a concrete workspace fallback before
     creating a projection; a workspace-less projection must never match every
     navigation group.
+22. CLI compatibility is capability-based, not semver-only. A target must
+    advertise safe CLI-profile selection for detached workers; development
+    source updates use the clean controller commit only after the existing
+    explicit source-build confirmation.

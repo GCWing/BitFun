@@ -10,6 +10,7 @@ export const BASE_DISPATCH_CAPABILITIES = [
   'detached_worker',
   'frontend_event_projection',
   'workspace_serialization',
+  'dispatch_worker_cli_profile',
 ] as const;
 
 export function isDispatchWorkspaceReady(
