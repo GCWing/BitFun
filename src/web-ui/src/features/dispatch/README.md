@@ -62,7 +62,9 @@ dispatch.
 21. Every projected outbound observer record carries its durable
     controller-side source workspace identity. Legacy or adopted records
     without that identity remain hidden; the renderer must never guess
-    ownership from whichever workspace initializes after restart.
+    ownership from whichever workspace initializes after restart. After submit
+    acknowledgement, the controller index is authoritative and stale renderer
+    cache without a matching record is pruned.
 22. CLI compatibility is capability-based, not semver-only. A target must
     advertise safe CLI-profile selection for detached workers; development
     source updates use the clean controller commit only after the existing

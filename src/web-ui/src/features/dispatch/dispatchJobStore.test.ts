@@ -209,6 +209,25 @@ describe('dispatchJobStore', () => {
     ).toBeUndefined();
   });
 
+  it('drops acknowledged renderer cache missing from the controller index', () => {
+    registerJob();
+    dispatchJobStore.getState().mergeOutboundRecords([]);
+
+    expect(dispatchJobStore.getState().jobs['job-1']).toBeUndefined();
+    expect(dispatchJobStore.getState().transportByJobId['job-1']).toBeUndefined();
+  });
+
+  it('keeps a pre-ack job while the controller index has no record yet', () => {
+    registerJob();
+    dispatchJobStore.getState().registerJob({
+      ...dispatchJobStore.getState().jobs['job-1'],
+      state: 'submitting',
+    });
+    dispatchJobStore.getState().mergeOutboundRecords([]);
+
+    expect(dispatchJobStore.getState().jobs['job-1']?.state).toBe('submitting');
+  });
+
   it('persists a dismissal tombstone so reconciliation cannot reopen the projection', () => {
     registerJob();
     dispatchJobStore.getState().dismissJob('job-1');

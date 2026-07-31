@@ -163,7 +163,21 @@ export const useDispatchJobStore = create<DispatchJobStoreState>()(
       mergeOutboundRecords: (records) => {
         set(state => {
           const jobs = { ...state.jobs };
-          const unownedJobIds = new Set<string>();
+          const authoritativeJobIds = new Set(records.map(record => record.jobId));
+          const prunedJobIds = new Set<string>();
+          for (const [jobId, job] of Object.entries(jobs)) {
+            if (
+              !authoritativeJobIds.has(jobId)
+              && job.state !== 'submitting'
+              && job.state !== 'submission_unknown'
+            ) {
+              // The controller index is authoritative after acknowledgement.
+              // Remove renderer cache left behind by retention, manual cleanup,
+              // or an older build instead of restoring a ghost projection.
+              delete jobs[jobId];
+              prunedJobIds.add(jobId);
+            }
+          }
           for (const record of records) {
             if (state.dismissedJobIds.includes(record.jobId)) {
               continue;
@@ -176,7 +190,7 @@ export const useDispatchJobStore = create<DispatchJobStoreState>()(
               // first after restart. Remove any previously inferred cache
               // entry so the old behavior migrates itself away.
               delete jobs[record.jobId];
-              unownedJobIds.add(record.jobId);
+              prunedJobIds.add(record.jobId);
               continue;
             }
             const existing = jobs[record.jobId];
@@ -233,7 +247,7 @@ export const useDispatchJobStore = create<DispatchJobStoreState>()(
             };
           }
           const transportByJobId = { ...state.transportByJobId };
-          for (const jobId of unownedJobIds) {
+          for (const jobId of prunedJobIds) {
             delete transportByJobId[jobId];
           }
           for (const jobId of Object.keys(jobs)) {
