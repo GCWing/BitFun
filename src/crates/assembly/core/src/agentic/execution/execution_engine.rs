@@ -43,7 +43,9 @@ use crate::service::config::types::{
     automatic_max_output_tokens, model_runtime_binding_fingerprint, ModelCapability, ModelCategory,
 };
 use crate::service::instruction_context::{
-    build_workspace_instruction_files_context, build_workspace_instruction_files_context_with_fs,
+    build_local_workspace_instruction_files_context_with_fs_detailed,
+    build_workspace_instruction_files_context_detailed,
+    build_workspace_instruction_files_context_with_fs, InstructionContextBuild,
 };
 use crate::util::errors::{BitFunError, BitFunResult};
 use crate::util::token_counter::TokenCounter;
@@ -1061,25 +1063,51 @@ impl ExecutionEngine {
     ) -> (Option<String>, bool) {
         let mut cacheable = true;
         if policy.includes(UserContextSection::WorkspaceInstructions) {
-            let instruction_context: BitFunResult<Option<String>> =
+            let instruction_context: BitFunResult<InstructionContextBuild> =
                 if let Some(workspace) = workspace {
-                    if let Some(services) = workspace_services {
-                        build_workspace_instruction_files_context_with_fs(
-                            services.fs.as_ref(),
-                            &workspace.root_path_string(),
-                        )
-                        .await
-                    } else if workspace.is_remote() {
-                        cacheable = false;
-                        Ok(None)
+                    if workspace.is_remote() {
+                        if let Some(services) = workspace_services {
+                            build_workspace_instruction_files_context_with_fs(
+                                services.fs.as_ref(),
+                                &workspace.root_path_string(),
+                            )
+                            .await
+                            .map(|content| InstructionContextBuild {
+                                content,
+                                cacheable: true,
+                            })
+                        } else {
+                            Ok(InstructionContextBuild {
+                                content: None,
+                                cacheable: false,
+                            })
+                        }
                     } else {
-                        build_workspace_instruction_files_context(workspace.root_path()).await
+                        if let Some(services) = workspace_services {
+                            build_local_workspace_instruction_files_context_with_fs_detailed(
+                                workspace.root_path(),
+                                services.fs.as_ref(),
+                                &workspace.root_path_string(),
+                            )
+                            .await
+                        } else {
+                            build_workspace_instruction_files_context_detailed(
+                                workspace.root_path(),
+                            )
+                            .await
+                        }
                     }
                 } else {
-                    Ok(None)
+                    Ok(InstructionContextBuild {
+                        content: None,
+                        cacheable: true,
+                    })
                 };
             let instruction_context = match instruction_context {
-                Ok(instruction_context) => instruction_context,
+                Ok(instruction_context) => {
+                    cacheable &= instruction_context.cacheable;
+                    instruction_context.content
+                }
                 Err(error) => {
                     cacheable = false;
                     warn!(
@@ -4502,6 +4530,7 @@ mod tests {
     use crate::agentic::session::{TokenAnchor, TokenAnchorInput};
     use crate::agentic::tools::ToolRuntimeRestrictions;
     use crate::agentic::workspace::{local_workspace_services, WorkspaceBinding};
+    use crate::instruction_sources::test_support::{lock_environment, EnvironmentGuard};
     use crate::service::config::types::AIConfig;
     use crate::service::config::types::AIModelConfig;
     use crate::service::remote_ssh::workspace_state::workspace_session_identity;
@@ -4534,6 +4563,13 @@ mod tests {
             Self {
                 operation_count: Arc::new(AtomicUsize::new(0)),
                 fail_next_probe: Arc::new(AtomicBool::new(true)),
+            }
+        }
+
+        fn stable() -> Self {
+            Self {
+                operation_count: Arc::new(AtomicUsize::new(0)),
+                fail_next_probe: Arc::new(AtomicBool::new(false)),
             }
         }
 
@@ -4614,8 +4650,17 @@ mod tests {
         let mut workspace_services =
             local_workspace_services(workspace_root.to_string_lossy().to_string());
         workspace_services.fs = fs;
+        let identity =
+            workspace_session_identity("/workspace", Some("instruction-test"), Some("remote-host"))
+                .expect("remote test identity");
         (
-            WorkspaceBinding::new(None, workspace_root),
+            WorkspaceBinding::new_remote(
+                None,
+                workspace_root,
+                "instruction-test".to_string(),
+                "Instruction test".to_string(),
+                identity,
+            ),
             workspace_services,
         )
     }
@@ -4699,6 +4744,96 @@ mod tests {
             .as_deref()
             .unwrap_or_default()
             .contains("Recovered workspace instructions."));
+    }
+
+    #[tokio::test]
+    async fn local_workspace_services_still_include_local_user_instruction_sources() {
+        let _environment = lock_environment();
+        let temp = tempfile::tempdir().expect("tempdir");
+        let workspace_root = temp.path().join("workspace");
+        let xdg = temp.path().join("xdg");
+        let codex = temp.path().join("codex");
+        let claude = temp.path().join("claude");
+        std::fs::create_dir_all(xdg.join("opencode")).expect("OpenCode config directory");
+        std::fs::create_dir_all(&codex).expect("Codex config directory");
+        std::fs::create_dir_all(&claude).expect("Claude config directory");
+        std::fs::create_dir_all(&workspace_root).expect("workspace directory");
+        std::fs::write(xdg.join("opencode/AGENTS.md"), "Local engine user\n")
+            .expect("OpenCode instructions");
+        std::fs::write(workspace_root.join("AGENTS.md"), "Local engine project\n")
+            .expect("workspace instructions");
+        let _guard = EnvironmentGuard::set(&[
+            ("XDG_CONFIG_HOME", &xdg),
+            ("CODEX_HOME", &codex),
+            ("CLAUDE_CONFIG_DIR", &claude),
+        ]);
+        let workspace = WorkspaceBinding::new(None, workspace_root.clone());
+        let workspace_services =
+            local_workspace_services(workspace_root.to_string_lossy().to_string());
+        let policy = UserContextPolicy::empty().with_workspace_instructions();
+
+        let (context, cacheable) = ExecutionEngine::build_user_context_for_cache_miss(
+            Some(&workspace),
+            Some(&workspace_services),
+            PromptBuilderContext::new(
+                workspace_root.to_string_lossy().to_string(),
+                Some("session".to_string()),
+                Some("model".to_string()),
+            ),
+            &policy,
+        )
+        .await;
+        let context = context.expect("user context");
+
+        assert!(cacheable);
+        assert!(context.contains("Local engine user"));
+        assert!(context.contains("Local engine project"));
+    }
+
+    #[tokio::test]
+    async fn local_workspace_services_remain_the_project_instruction_io_owner() {
+        let _environment = lock_environment();
+        let temp = tempfile::tempdir().expect("tempdir");
+        let workspace_root = temp.path().join("workspace");
+        let xdg = temp.path().join("xdg");
+        let codex = temp.path().join("codex");
+        let claude = temp.path().join("claude");
+        std::fs::create_dir_all(xdg.join("opencode")).expect("OpenCode config directory");
+        std::fs::create_dir_all(&codex).expect("Codex config directory");
+        std::fs::create_dir_all(&claude).expect("Claude config directory");
+        std::fs::create_dir_all(&workspace_root).expect("workspace directory");
+        std::fs::write(xdg.join("opencode/AGENTS.md"), "Local user source\n")
+            .expect("OpenCode instructions");
+        std::fs::write(workspace_root.join("AGENTS.md"), "Disk project source\n")
+            .expect("disk instructions");
+        let _guard = EnvironmentGuard::set(&[
+            ("XDG_CONFIG_HOME", &xdg),
+            ("CODEX_HOME", &codex),
+            ("CLAUDE_CONFIG_DIR", &claude),
+        ]);
+        let workspace = WorkspaceBinding::new(None, workspace_root.clone());
+        let mut workspace_services =
+            local_workspace_services(workspace_root.to_string_lossy().to_string());
+        workspace_services.fs = Arc::new(InstructionWorkspaceFs::stable());
+        let policy = UserContextPolicy::empty().with_workspace_instructions();
+
+        let (context, cacheable) = ExecutionEngine::build_user_context_for_cache_miss(
+            Some(&workspace),
+            Some(&workspace_services),
+            PromptBuilderContext::new(
+                workspace_root.to_string_lossy().to_string(),
+                Some("session".to_string()),
+                Some("model".to_string()),
+            ),
+            &policy,
+        )
+        .await;
+        let context = context.expect("user context");
+
+        assert!(cacheable);
+        assert!(context.contains("Local user source"));
+        assert!(context.contains("Recovered workspace instructions."));
+        assert!(!context.contains("Disk project source"));
     }
 
     #[tokio::test]

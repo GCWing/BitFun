@@ -901,6 +901,9 @@ export function runManifestParserSelfTest({
   const staticHookSupportPublicApiRule = publicApiAllowlistRules.find(
     (rule) => rule.path === 'src/crates/adapters/static-hook-support/src/lib.rs',
   );
+  const userInstructionSourceServicePublicApiRule = publicApiAllowlistRules.find(
+    (rule) => rule.path === 'src/crates/services/services-core/src/local_instructions.rs',
+  );
   const externalSubagentPublicApiRule = publicApiAllowlistRules.find(
     (rule) => rule.path === 'src/crates/contracts/product-domains/src/external_subagents.rs',
   );
@@ -1034,23 +1037,74 @@ export function runManifestParserSelfTest({
   ).map((entry) => entry.symbol);
   if (
     opencodeAdapterPublicApiSymbols.join(',') !==
-    'load_opencode_package_adapter,OpenCodeCommandProvider,OpenCodeCommandProviderOptions,OpenCodeConfiguredSkillRoot,OpenCodeSkillRootProvider,OpenCodeSkillRootProviderOptions,OpenCodeToolProvider,OpenCodeToolProviderOptions,OpenCodeSubagentProvider,OpenCodeSubagentProviderOptions,OpenCodeMcpProvider,OpenCodeMcpProviderOptions,OpenCodeHookProvider,OpenCodeHookProviderOptions'
+    'load_opencode_package_adapter,OpenCodeCommandProvider,OpenCodeCommandProviderOptions,OpenCodeConfiguredSkillRoot,OpenCodeSkillRootProvider,OpenCodeSkillRootProviderOptions,OpenCodeToolProvider,OpenCodeToolProviderOptions,OpenCodeSubagentProvider,OpenCodeSubagentProviderOptions,OpenCodeMcpProvider,OpenCodeMcpProviderOptions,OpenCodeHookProvider,OpenCodeHookProviderOptions,load_opencode_user_instructions,OpenCodeInstructionSourceOptions'
   ) {
     throw new Error(
-      'OpenCode adapter public API budget must stay limited to the reviewed package factory and capability-specific command, configured Skill root, tool, subagent, MCP, and static Hook providers',
+      'OpenCode adapter public API budget must stay limited to the reviewed package factory and capability-specific command, configured Skill root, tool, subagent, MCP, static Hook, and user Instruction providers',
     );
   }
+  const opencodeInstructionSymbols = new Set([
+    'load_opencode_user_instructions',
+    'OpenCodeInstructionSourceOptions',
+  ]);
   for (const entry of opencodeAdapterPublicApiRule.allowedSymbolEntries) {
     for (const field of ['owner', 'consumer', 'verification', 'p0', 'contractSlice', 'rationale', 'exit']) {
       if (!entry[field]) {
         throw new Error(`OpenCode adapter public API entry must declare ${field}: ${entry.symbol}`);
       }
     }
-    if (entry.contractSlice !== 'opencode-adapter-boundary') {
+    const expectedContractSlice = opencodeInstructionSymbols.has(entry.symbol)
+      ? 'user-instruction-source-boundary'
+      : 'opencode-adapter-boundary';
+    if (entry.contractSlice !== expectedContractSlice) {
       throw new Error(`OpenCode adapter public API entry uses wrong contractSlice: ${entry.symbol}`);
     }
     if (entry.wireImpact !== false) {
       throw new Error(`OpenCode adapter public API entry must not claim wire impact: ${entry.symbol}`);
+    }
+  }
+  if (!publicApiContractSlices.includes('user-instruction-source-boundary')) {
+    throw new Error('user Instruction sources must have an independent contract slice');
+  }
+  for (const [label, rule, requiredSymbols] of [
+    ['OpenCode Instruction adapter', opencodeAdapterPublicApiRule, ['load_opencode_user_instructions', 'OpenCodeInstructionSourceOptions']],
+    ['Claude Code Instruction adapter', claudeHookAdapterPublicApiRule, ['load_claude_code_user_instructions', 'ClaudeCodeInstructionSourceOptions']],
+    ['Codex Instruction adapter', codexHookAdapterPublicApiRule, ['load_codex_user_instructions', 'CodexInstructionSourceOptions']],
+  ]) {
+    if (!rule || requiredSymbols.some((symbol) => !rule.allowedSymbolEntries.some(
+      (entry) => entry.symbol === symbol
+        && entry.contractSlice === 'user-instruction-source-boundary'
+        && entry.wireImpact === false,
+    ))) {
+      throw new Error(`${label} must have a narrow consumer-backed public API budget`);
+    }
+  }
+  const expectedUserInstructionSourceServiceSymbols = [
+    'MAX_LOCAL_INSTRUCTION_FILE_BYTES',
+    'MAX_LOCAL_INSTRUCTION_FILES',
+    'MAX_LOCAL_INSTRUCTION_TOTAL_BYTES',
+    'LocalInstructionFile',
+    'LocalInstructionFiles',
+    'local_instruction_path_exists',
+    'read_local_instruction_file',
+    'read_local_text_file',
+  ];
+  if (
+    !userInstructionSourceServicePublicApiRule
+    || (userInstructionSourceServicePublicApiRule.allowedSymbolEntries || [])
+      .map((entry) => entry.symbol)
+      .join(',') !== expectedUserInstructionSourceServiceSymbols.join(',')
+  ) {
+    throw new Error('services-core user Instruction support must have an exact public API budget');
+  }
+  for (const entry of userInstructionSourceServicePublicApiRule.allowedSymbolEntries) {
+    for (const field of ['owner', 'consumer', 'verification', 'p0', 'contractSlice', 'rationale', 'exit']) {
+      if (!entry[field]) {
+        throw new Error(`services-core user Instruction public API entry must declare ${field}: ${entry.symbol}`);
+      }
+    }
+    if (entry.contractSlice !== 'user-instruction-source-boundary' || entry.wireImpact !== false) {
+      throw new Error(`services-core user Instruction public API entry has the wrong boundary: ${entry.symbol}`);
     }
   }
   for (const [label, rule, requiredSymbols] of [

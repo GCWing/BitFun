@@ -2,7 +2,7 @@
 
 # OpenCode Adapter
 
-The current crate owns the static OpenCode source preview used by the existing
+The current crate owns OpenCode user Instruction path/config precedence, the static OpenCode source preview used by the existing
 managed-package path, the OpenCode-specific implementations of command,
 standalone-tool, subagent, and MCP provider contracts, the bounded projection of
 configured local Skill roots, and runtime-free mapping
@@ -94,7 +94,8 @@ Product-source boundary:
   import the adapter directly. The composition layer does not
   discover dynamic sources, prepare dependencies, or import plugin modules.
 - Product Assembly may consume this crate only from reviewed composition modules
-  such as `bitfun-core/plugin_runtime` or `bitfun-core/external_sources`; boundary
+  such as `bitfun-core/plugin_runtime`, `bitfun-core/external_sources`, or
+  `bitfun-core/instruction_sources`; boundary
   guards and focused assembly-path tests must change with any additional consumer.
 - This crate must not depend on Codex, Claude Code, or another ecosystem adapter.
   New ecosystems are sibling adapters registered by Product Assembly, not modes of

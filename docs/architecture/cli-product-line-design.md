@@ -544,14 +544,30 @@ plan stale 后只保留旧选择与新 eligible 项的交集，新候选不自�
 规则文件优先复用项目已有文件，不复制出第二份内容。若不同生态规则冲突，导入报告必须展示目标文件、
 优先级和冲突段，不能自动拼接。
 
-当前 Workspace Instructions 只消费真实工作区根，本地和 Remote 共用同一个解析器与 `WorkspaceFileSystem` 端口。
-固定顺序是：`AGENTS.override.md`（存在时替代 `AGENTS.md`，空文件也不回退）、根 `CLAUDE.md` 或
-`.claude/CLAUDE.md`、`CLAUDE.local.md`、不带 `paths` front matter 的 `.claude/rules/**/*.md`，最后是项目根与
-`.opencode` 中 `opencode.json/jsonc` 的本地 `instructions` 文件或 glob。Claude `@import` 只跟随工作区内文件，
-深度上限为 5，并对重复和循环引用去重；所有目录遍历都跳过符号链接。运行时尚无稳定的嵌套活动目录事实，因此
-不声明 root-to-cwd 级联。递归扫描跳过 VCS、依赖与构建目录，并对扫描节点、文件数量、单文件和总内容字节设置固定
-上限，避免宽 glob 阻塞本地或 Remote 工作区。Claude path-scoped rules、全局规则、OpenCode 远程 URL、变化监听和冲突
-报告也不属于当前实现。
+本地 Workspace Instructions 先读取用户级生态来源，再追加项目来源。用户级固定顺序是 OpenCode、Codex、Claude Code：
+OpenCode 读取 `$XDG_CONFIG_HOME/opencode/AGENTS.md`（默认 `~/.config/opencode/AGENTS.md`），不存在时回退
+`~/.claude/CLAUDE.md`；随后按 `config.json`、`opencode.json`、`opencode.jsonc` 的原生覆盖顺序读取最终
+`instructions` 数组，支持 workspace 相对、`~/`、绝对本地精确文件和有界 glob，不获取 HTTP/HTTPS URL。Codex 在
+`$CODEX_HOME`（默认 `~/.codex`）中读取首个非空的 `AGENTS.override.md` 或 `AGENTS.md`；空 override 继续回退到基础文件。Claude Code
+从 `$CLAUDE_CONFIG_DIR`（默认 `~/.claude`）读取 `CLAUDE.md`、不带 `paths` front matter 的 `rules/**/*.md`，并只在
+该用户配置根内跟随深度最多 5 的 `@import`。跨生态按 canonical path 保留首个来源，用户来源合计限制为 256 个文件、
+单文件 1 MiB、总内容 2 MiB；进入提示词的名称只显示 `~`、环境变量根、`<workspace>` 或 `<configured-path>`。环境变量
+指定的用户根必须是绝对路径，无法确定用户根时跳过该生态而不回退进程 cwd。Codex 只读取用户根的 Instruction 文件，
+不扫描 `$CODEX_HOME/plugins/cache` 等产品插件缓存。用户与项目来源合成后再次执行一个共享的 256 文件、2 MiB 最终
+渲染预算；按既定顺序保留完整文件前缀，不截断单个 Instruction 文档。
+
+项目来源仍由 Workspace Instructions owner 通过本地文件系统或 `WorkspaceFileSystem` 端口统一解析。固定顺序是：
+`AGENTS.override.md`（存在时替代 `AGENTS.md`，空文件也不回退）、根 `CLAUDE.md` 或 `.claude/CLAUDE.md`、
+`CLAUDE.local.md`、不带 `paths` front matter 的 `.claude/rules/**/*.md`，最后是项目根与 `.opencode` 中
+`opencode.json/jsonc` 的本地 `instructions` 文件或 glob。Claude `@import` 只跟随工作区内文件，深度上限为 5，并对
+重复和循环引用去重；所有目录遍历都跳过符号链接。运行时尚无稳定的嵌套活动目录事实，因此不声明 root-to-cwd 级联。
+递归扫描跳过 VCS、依赖与构建目录，并对扫描节点、文件数量、单文件和总内容字节设置固定上限，避免宽 glob 阻塞本地
+或 Remote 工作区。Remote 只使用端口可见的项目来源，绝不回退到控制端的本机用户目录。单个用户生态读取失败只隔离
+该生态，项目来源和其他用户生态仍可用；I/O 或解析失败时这次 user context 构建不写缓存，下一条消息会重试。确定性
+遍历预算超限则跳过对应 OpenCode glob 或 Claude rules 集合、保留已读取的基础文件并允许缓存，避免每条消息重复同一宽扫描。
+
+Claude path-scoped rules、OpenCode 远程 URL、managed/organization policy、变化监听、冲突报告和 Plugin Runtime 不属于
+当前实现。
 
 现有对 `.claude/.codex/.opencode/.agents` Skill 根的直接发现已经保留来源身份和全局/项目使用范围，并在 GUI/TUI
 展示来源和默认覆盖状态，模式配置再展示实际采用项；固定根顺序保持为 Skill Registry 的独立回归契约。Registry 仅按

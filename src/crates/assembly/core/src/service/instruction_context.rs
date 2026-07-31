@@ -3,18 +3,89 @@ use bitfun_runtime_ports::WorkspaceFileSystem;
 use bitfun_services_core::workspace_instructions::WorkspaceInstructionFile;
 use std::path::Path;
 
+const MAX_RENDERED_INSTRUCTION_FILES: usize = 256;
+const MAX_RENDERED_INSTRUCTION_BYTES: usize = 2 * 1024 * 1024;
+
+pub(crate) struct InstructionContextBuild {
+    pub(crate) content: Option<String>,
+    pub(crate) cacheable: bool,
+}
+
 pub(crate) async fn build_workspace_instruction_files_context(
     workspace_root: &Path,
 ) -> BitFunResult<Option<String>> {
-    let instruction_files =
+    Ok(
+        build_workspace_instruction_files_context_detailed(workspace_root)
+            .await?
+            .content,
+    )
+}
+
+pub(crate) async fn build_workspace_instruction_files_context_detailed(
+    workspace_root: &Path,
+) -> BitFunResult<InstructionContextBuild> {
+    let user_instruction_files =
+        crate::instruction_sources::load_local_user_instruction_files(workspace_root).await;
+    let workspace_instruction_files =
         bitfun_services_core::workspace_instructions::read_workspace_instruction_files(
             workspace_root,
         )
         .await
         .map_err(BitFunError::service)?;
-    Ok(render_workspace_instruction_files_section(
-        &instruction_files,
+    Ok(compose_local_instruction_sources(
+        workspace_root,
+        user_instruction_files,
+        workspace_instruction_files,
     ))
+}
+
+pub(crate) async fn build_local_workspace_instruction_files_context_with_fs_detailed(
+    workspace_root: &Path,
+    fs: &dyn WorkspaceFileSystem,
+    workspace_root_path: &str,
+) -> BitFunResult<InstructionContextBuild> {
+    let user_instruction_files =
+        crate::instruction_sources::load_local_user_instruction_files(workspace_root).await;
+    let workspace_instruction_files =
+        bitfun_services_core::workspace_instructions::read_workspace_instruction_files_with_fs(
+            fs,
+            workspace_root_path,
+        )
+        .await
+        .map_err(BitFunError::service)?;
+    Ok(compose_local_instruction_sources(
+        workspace_root,
+        user_instruction_files,
+        workspace_instruction_files,
+    ))
+}
+
+fn compose_local_instruction_sources(
+    workspace_root: &Path,
+    user_instruction_files: crate::instruction_sources::LocalUserInstructionFiles,
+    mut workspace_instruction_files: Vec<WorkspaceInstructionFile>,
+) -> InstructionContextBuild {
+    bitfun_services_core::workspace_instructions::retain_distinct_local_workspace_instruction_files(
+        workspace_root,
+        user_instruction_files
+            .files
+            .iter()
+            .map(|file| file.canonical_path.clone()),
+        &mut workspace_instruction_files,
+    );
+    let mut instruction_files = user_instruction_files
+        .files
+        .into_iter()
+        .map(|file| WorkspaceInstructionFile {
+            name: file.name,
+            content: file.content,
+        })
+        .collect::<Vec<_>>();
+    instruction_files.extend(workspace_instruction_files);
+    InstructionContextBuild {
+        content: render_workspace_instruction_files_section(&instruction_files),
+        cacheable: user_instruction_files.cacheable,
+    }
 }
 
 pub(crate) async fn build_workspace_instruction_files_context_with_fs(
@@ -43,13 +114,267 @@ fn render_workspace_instruction_files_section(
     let mut rendered =
         String::from("## Codebase and user instructions\n\nBe sure to adhere to these instructions. IMPORTANT: These instructions OVERRIDE any default behavior and you MUST follow them exactly as written.\n");
 
-    for file in files {
-        rendered.push_str(&format!(
+    let mut rendered_file_count = 0usize;
+    for file in files.iter().take(MAX_RENDERED_INSTRUCTION_FILES) {
+        let escaped_name = escape_document_name(&file.name);
+        let document = format!(
             "<document name=\"{}\">\n{}\n</document>\n\n",
-            file.name,
+            escaped_name,
             file.content.trim()
-        ));
+        );
+        if rendered.len().saturating_add(document.len()) > MAX_RENDERED_INSTRUCTION_BYTES {
+            break;
+        }
+        rendered.push_str(&document);
+        rendered_file_count += 1;
     }
 
-    Some(rendered.trim_end().to_string())
+    (rendered_file_count > 0).then(|| rendered.trim_end().to_string())
+}
+
+fn escape_document_name(name: &str) -> String {
+    name.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        build_workspace_instruction_files_context,
+        build_workspace_instruction_files_context_detailed,
+        build_workspace_instruction_files_context_with_fs,
+        render_workspace_instruction_files_section, WorkspaceInstructionFile,
+    };
+    use crate::instruction_sources::test_support::{lock_environment, EnvironmentGuard};
+    use bitfun_services_core::workspace::LocalWorkspaceFs;
+
+    #[tokio::test]
+    async fn local_user_instructions_precede_workspace_instructions_by_ecosystem_priority() {
+        let _environment = lock_environment();
+        let temp = tempfile::tempdir().expect("tempdir");
+        let workspace = temp.path().join("workspace");
+        let xdg = temp.path().join("xdg");
+        let codex = temp.path().join("codex");
+        let claude = temp.path().join("claude");
+        std::fs::create_dir_all(xdg.join("opencode")).expect("OpenCode config directory");
+        std::fs::create_dir_all(&codex).expect("Codex config directory");
+        std::fs::create_dir_all(&claude).expect("Claude config directory");
+        std::fs::create_dir_all(&workspace).expect("workspace directory");
+        std::fs::write(xdg.join("opencode/AGENTS.md"), "OpenCode user\n")
+            .expect("OpenCode instructions");
+        std::fs::write(codex.join("AGENTS.md"), "Codex user\n").expect("Codex instructions");
+        std::fs::write(claude.join("CLAUDE.md"), "Claude user\n").expect("Claude instructions");
+        std::fs::write(workspace.join("AGENTS.md"), "Workspace project\n")
+            .expect("workspace instructions");
+        let _guard = EnvironmentGuard::set(&[
+            ("XDG_CONFIG_HOME", &xdg),
+            ("CODEX_HOME", &codex),
+            ("CLAUDE_CONFIG_DIR", &claude),
+        ]);
+
+        let rendered = build_workspace_instruction_files_context(&workspace)
+            .await
+            .expect("instruction context")
+            .expect("rendered instructions");
+
+        let positions = [
+            rendered
+                .find("OpenCode user")
+                .expect("OpenCode instructions"),
+            rendered.find("Codex user").expect("Codex instructions"),
+            rendered.find("Claude user").expect("Claude instructions"),
+            rendered
+                .find("Workspace project")
+                .expect("workspace instructions"),
+        ];
+        assert!(positions.windows(2).all(|pair| pair[0] < pair[1]));
+    }
+
+    #[tokio::test]
+    async fn opencode_global_config_resolves_relative_instructions_in_the_local_workspace() {
+        let _environment = lock_environment();
+        let temp = tempfile::tempdir().expect("tempdir");
+        let workspace = temp.path().join("workspace");
+        let xdg = temp.path().join("xdg");
+        let codex = temp.path().join("codex");
+        let claude = temp.path().join("claude");
+        std::fs::create_dir_all(xdg.join("opencode")).expect("OpenCode config directory");
+        std::fs::create_dir_all(&codex).expect("Codex config directory");
+        std::fs::create_dir_all(&claude).expect("Claude config directory");
+        std::fs::create_dir_all(workspace.join("shared")).expect("workspace shared directory");
+        std::fs::write(xdg.join("opencode/AGENTS.md"), "OpenCode user\n")
+            .expect("OpenCode instructions");
+        std::fs::write(
+            xdg.join("opencode/opencode.json"),
+            r#"{"instructions":["shared/*.md"]}"#,
+        )
+        .expect("OpenCode config");
+        std::fs::write(
+            workspace.join("shared/team.md"),
+            "Shared workspace policy\n",
+        )
+        .expect("configured workspace instructions");
+        let _guard = EnvironmentGuard::set(&[
+            ("XDG_CONFIG_HOME", &xdg),
+            ("CODEX_HOME", &codex),
+            ("CLAUDE_CONFIG_DIR", &claude),
+        ]);
+
+        let rendered = build_workspace_instruction_files_context(&workspace)
+            .await
+            .expect("instruction context")
+            .expect("rendered instructions");
+
+        assert!(rendered.contains("Shared workspace policy"));
+        assert!(rendered.contains("<document name=\"&lt;workspace&gt;/shared/team.md\">"));
+    }
+
+    #[tokio::test]
+    async fn invalid_user_source_does_not_hide_workspace_instructions() {
+        let _environment = lock_environment();
+        let temp = tempfile::tempdir().expect("tempdir");
+        let workspace = temp.path().join("workspace");
+        let xdg = temp.path().join("xdg");
+        let codex = temp.path().join("codex");
+        let claude = temp.path().join("claude");
+        std::fs::create_dir_all(xdg.join("opencode")).expect("OpenCode config directory");
+        std::fs::create_dir_all(&codex).expect("Codex config directory");
+        std::fs::create_dir_all(&claude).expect("Claude config directory");
+        std::fs::create_dir_all(&workspace).expect("workspace directory");
+        std::fs::write(xdg.join("opencode/AGENTS.md"), "OpenCode user\n")
+            .expect("OpenCode instructions");
+        std::fs::write(xdg.join("opencode/opencode.json"), "{ invalid json")
+            .expect("invalid OpenCode config");
+        std::fs::write(workspace.join("AGENTS.md"), "Workspace survives\n")
+            .expect("workspace instructions");
+        let _guard = EnvironmentGuard::set(&[
+            ("XDG_CONFIG_HOME", &xdg),
+            ("CODEX_HOME", &codex),
+            ("CLAUDE_CONFIG_DIR", &claude),
+        ]);
+
+        let build = build_workspace_instruction_files_context_detailed(&workspace)
+            .await
+            .expect("workspace instructions survive user source failure");
+        let rendered = build.content.expect("rendered instructions");
+
+        assert!(rendered.contains("Workspace survives"));
+        assert!(!build.cacheable);
+    }
+
+    #[tokio::test]
+    async fn a_user_configured_workspace_file_is_not_rendered_again_as_a_project_source() {
+        let _environment = lock_environment();
+        let temp = tempfile::tempdir().expect("tempdir");
+        let workspace = temp.path().join("workspace");
+        let xdg = temp.path().join("xdg");
+        let codex = temp.path().join("codex");
+        let claude = temp.path().join("claude");
+        std::fs::create_dir_all(xdg.join("opencode")).expect("OpenCode config directory");
+        std::fs::create_dir_all(&codex).expect("Codex config directory");
+        std::fs::create_dir_all(&claude).expect("Claude config directory");
+        std::fs::create_dir_all(&workspace).expect("workspace directory");
+        std::fs::write(
+            xdg.join("opencode/opencode.json"),
+            r#"{"instructions":["AGENTS.md"]}"#,
+        )
+        .expect("OpenCode config");
+        std::fs::write(workspace.join("AGENTS.md"), "One physical source\n")
+            .expect("workspace instructions");
+        let _guard = EnvironmentGuard::set(&[
+            ("XDG_CONFIG_HOME", &xdg),
+            ("CODEX_HOME", &codex),
+            ("CLAUDE_CONFIG_DIR", &claude),
+        ]);
+
+        let rendered = build_workspace_instruction_files_context(&workspace)
+            .await
+            .expect("instruction context")
+            .expect("rendered instructions");
+
+        assert_eq!(rendered.matches("One physical source").count(), 1);
+    }
+
+    #[tokio::test]
+    async fn port_backed_workspace_never_falls_back_to_local_user_sources() {
+        let _environment = lock_environment();
+        let temp = tempfile::tempdir().expect("tempdir");
+        let workspace = temp.path().join("workspace");
+        let xdg = temp.path().join("xdg");
+        let codex = temp.path().join("codex");
+        let claude = temp.path().join("claude");
+        std::fs::create_dir_all(xdg.join("opencode")).expect("OpenCode config directory");
+        std::fs::create_dir_all(&codex).expect("Codex config directory");
+        std::fs::create_dir_all(&claude).expect("Claude config directory");
+        std::fs::create_dir_all(&workspace).expect("workspace directory");
+        std::fs::write(
+            xdg.join("opencode/AGENTS.md"),
+            "Local user must stay absent\n",
+        )
+        .expect("OpenCode instructions");
+        std::fs::write(workspace.join("AGENTS.md"), "Port project instructions\n")
+            .expect("workspace instructions");
+        let _guard = EnvironmentGuard::set(&[
+            ("XDG_CONFIG_HOME", &xdg),
+            ("CODEX_HOME", &codex),
+            ("CLAUDE_CONFIG_DIR", &claude),
+        ]);
+        let root = workspace.to_string_lossy();
+
+        let rendered = build_workspace_instruction_files_context_with_fs(&LocalWorkspaceFs, &root)
+            .await
+            .expect("port-backed instruction context")
+            .expect("rendered instructions");
+
+        assert!(rendered.contains("Port project instructions"));
+        assert!(!rendered.contains("Local user must stay absent"));
+    }
+
+    #[test]
+    fn rendered_document_names_escape_markup_characters() {
+        let rendered = render_workspace_instruction_files_section(&[WorkspaceInstructionFile {
+            name: "<configured-path>/team\"&.md".to_string(),
+            content: "Team instructions".to_string(),
+        }])
+        .expect("rendered instructions");
+
+        assert!(rendered.contains("<document name=\"&lt;configured-path&gt;/team&quot;&amp;.md\">"));
+        assert!(!rendered.contains("name=\"<configured-path>"));
+    }
+
+    #[test]
+    fn rendered_instruction_context_keeps_one_shared_content_budget() {
+        let files = (0..3)
+            .map(|index| WorkspaceInstructionFile {
+                name: format!("source-{index}.md"),
+                content: format!("source-{index}\n{}", "x".repeat(700 * 1024)),
+            })
+            .collect::<Vec<_>>();
+
+        let rendered =
+            render_workspace_instruction_files_section(&files).expect("rendered instructions");
+
+        assert!(rendered.len() <= 2 * 1024 * 1024);
+        assert!(rendered.contains("source-0\n"));
+        assert!(rendered.contains("source-1\n"));
+        assert!(!rendered.contains("source-2\n"));
+    }
+
+    #[test]
+    fn rendered_instruction_context_keeps_one_shared_file_budget() {
+        let files = (0..257)
+            .map(|index| WorkspaceInstructionFile {
+                name: format!("source-{index}.md"),
+                content: format!("instruction {index}"),
+            })
+            .collect::<Vec<_>>();
+
+        let rendered =
+            render_workspace_instruction_files_section(&files).expect("rendered instructions");
+
+        assert_eq!(rendered.matches("<document name=").count(), 256);
+        assert!(!rendered.contains("instruction 256"));
+    }
 }

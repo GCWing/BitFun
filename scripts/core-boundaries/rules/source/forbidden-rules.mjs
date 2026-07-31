@@ -4126,6 +4126,7 @@ export const forbiddenContentUnderRules = [
           'src/crates/assembly/core/src/plugin_runtime.rs',
           'src/crates/assembly/core/src/external_sources.rs',
           'src/crates/assembly/core/src/external_hooks.rs',
+          'src/crates/assembly/core/src/instruction_sources.rs',
         ],
         message:
           'only a reviewed product composition root may import bitfun-opencode-adapter through a capability-specific provider boundary',
@@ -4157,6 +4158,7 @@ export const forbiddenContentUnderRules = [
         'src/crates/adapters/claude-code-adapter/tests/mcp_source.rs',
         'src/crates/assembly/core/src/external_sources.rs',
         'src/crates/assembly/core/src/external_hooks.rs',
+        'src/crates/assembly/core/src/instruction_sources.rs',
       ],
       message: 'Claude Code declarative source adapter may only be imported by its fixtures and reviewed composition roots',
     }],
@@ -4172,6 +4174,7 @@ export const forbiddenContentUnderRules = [
         'src/crates/adapters/codex-adapter/tests/mcp_source.rs',
         'src/crates/assembly/core/src/external_sources.rs',
         'src/crates/assembly/core/src/external_hooks.rs',
+        'src/crates/assembly/core/src/instruction_sources.rs',
       ],
       message: 'Codex declarative source adapter may only be imported by its fixtures and reviewed composition roots',
     }],

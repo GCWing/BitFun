@@ -942,6 +942,7 @@ name = "bitfun-codex-adapter"
 version = "0.2.15"
 dependencies = [
  "bitfun-product-domains",
+ "bitfun-services-core",
  "bitfun-static-hook-support",
  "dirs 6.0.0",
  "dunce",
@@ -1214,6 +1215,7 @@ dependencies = [
  "bitfun-static-hook-support",
  "dirs 6.0.0",
  "dunce",
+ "globset",
  "hex",
  "oxc",
  "regex",

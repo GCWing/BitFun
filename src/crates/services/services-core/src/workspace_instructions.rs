@@ -39,6 +39,23 @@ pub struct WorkspaceInstructionFile {
     pub content: String,
 }
 
+/// Keeps the first physical local file across a preceding source set and the
+/// workspace-relative files resolved by this owner.
+pub fn retain_distinct_local_workspace_instruction_files(
+    workspace_root: &Path,
+    preceding_canonical_paths: impl IntoIterator<Item = PathBuf>,
+    files: &mut Vec<WorkspaceInstructionFile>,
+) {
+    let mut seen = preceding_canonical_paths
+        .into_iter()
+        .collect::<HashSet<_>>();
+    files.retain(|file| {
+        std::fs::canonicalize(workspace_root.join(&file.name))
+            .map(|path| seen.insert(path))
+            .unwrap_or(true)
+    });
+}
+
 #[derive(Debug, Clone)]
 struct InstructionDirEntry {
     relative_path: String,

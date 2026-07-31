@@ -65,7 +65,7 @@ SessionManager -> Session -> DialogTurn -> ModelRound
   concrete managed-package discovery and trust persistence stay in
   `services-integrations`, while ecosystem parsing and PluginRuntimeClient
   behavior remain in their adapter and execution owners.
-- `plugin_runtime` and `external_sources` are the reviewed product-full
+- `plugin_runtime`, `external_sources`, and `instruction_sources` are the reviewed product-full
   composition files allowed to select ecosystem adapters for their respective
   capability contracts. Product surfaces consume product-level views and must
   not import adapter or raw plugin runtime client types.

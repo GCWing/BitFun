@@ -198,7 +198,7 @@ OpenCode adapter 在来源发现、解析和审批前不 import module、不读�
 
 | 资产 | OpenCode 输入 | BitFun 归属模块 / 适配方式 | 默认行为 | 降级条件 |
 |---|---|---|---|---|
-| Rules / Instructions | 项目/全局 `AGENTS.md`、Claude fallback、`instructions` glob、本地文件、远程 URL | Workspace Instructions 归属模块保存有序来源引用 | 当前实现项目根与 `.opencode` 配置中的本地精确文件/glob；全局与远程 URL 仍是目标 | 无效 JSONC 或 glob 只排除对应配置项；文件 I/O 失败时当前构建不缓存并在下一条消息重试。 |
+| Rules / Instructions | 项目/全局 `AGENTS.md`、Claude fallback、`instructions` glob、本地文件、远程 URL | 各生态 adapter 保留原生用户来源语义；Workspace Instructions owner 解析项目来源；Product Assembly 有序合成 | 当前支持 OpenCode 用户 `AGENTS.md`/Claude fallback、三份全局配置的最终本地 `instructions`，以及既有项目根与 `.opencode` 本地精确文件/glob；不获取远程 URL | 单个用户生态的无效配置、glob 或文件 I/O 失败会隔离该生态，保留其他用户生态与项目来源，并使本次构建不可缓存；项目配置继续按项目解析器的逐项降级语义处理。 |
 | Agents / Modes | 当前生产 V1 `agent/prompt/disable/permission`、Core V2 `agents/system/disabled/permissions` 输入形状，以及 Markdown、description、mode、model、variant、temperature、top_p、steps、deprecated `maxSteps`、deprecated `tools`、options、hidden、color | Agent 归属模块创建兼容定义和使用范围视图；OpenCode adapter 只翻译来源语义 | 当前支持 Subagent 安全子集和 Agent-local 权限约束；V1 是生产兼容主路径，Core V2 字段只按已验证安全子集解析；首次按行为、来源、模型、工具与权限范围确认，fresh single-run 调用 | primary/mode、variant/options、采样、steps 与续接保持诊断或阻断；root ambient 权限和 V1 嵌套 resource map 尚不激活，不影响其他 Agent。 |
 | Skills | `.opencode/.claude/.agents` 项目与用户根、`SKILL.md`、`skills.paths/urls` | OpenCode adapter 只由 `bitfun-core/external_sources` 组合并投影有序本地配置根；Skill 归属模块负责有界递归、解析、覆盖与按需加载 | 标准根及 V1 `skills.paths`/当前本地字符串数组可用；项目配置限项目根，用户配置限项目根或用户目录；配置根最多 64 个、每根 512 个 Skill、单文件 256 KiB、可选策略 64 KiB，实际加载再次执行有界非链接读取；配置根在同 scope 覆盖标准 OpenCode 根，但不重排更早的 BitFun/Claude/Codex/Cursor 来源 | URL、下载/缓存、脚本与外部依赖不加载；无效根不影响标准 Skill。 |
 | References | `references` / 旧 `reference`，本地 path 或 Git repository/branch/description/hidden | **基础能力缺失**：先补 Workspace Reference 的异步准备与 `@alias` 消费接口 | 本地引用保留相对来源；Git 拉取按 L2 确认并保留缓存/隐藏语义 | 拉取失败不阻止项目，外部目录仍遵守工具权限。 |
@@ -217,11 +217,19 @@ OpenCode adapter 在来源发现、解析和审批前不 import module、不读�
 规则内容尽量原地引用，不复制成第二份文件。组合结果保留原始段落来源和顺序。OpenCode 与 BitFun 原生规则
 同时存在时，配置视图展示实际进入模型的顺序；不能把冲突文本自动改写成“合并后的真相”。
 
-当前 runtime-free 子集不建立通用配置来源图：Workspace Instructions owner 在每个 Session 首次需要 user context 时读取
-项目根 `opencode.json`、`opencode.jsonc`、`.opencode/opencode.json` 和 `.opencode/opencode.jsonc` 中的
-`instructions` 数组，只接受工作区内相对精确文件与 glob，确定性排序后追加到既有 `AGENTS`/Claude 来源之后。
-绝对路径、`~`、越出工作区的路径、符号链接和 URL 都不会加载。文件变更不启动 watcher；用户通过统一的
-`/reload instructions`（或默认 `/reload`）失效当前 Session 的 `UserContext` 缓存，下一条消息重新读取。
+当前 runtime-free 子集不建立通用配置来源图，也不进入 `ExternalSourceControlPlane`。OpenCode adapter 负责用户级原生
+来源语义：先选 `$XDG_CONFIG_HOME/opencode/AGENTS.md`（默认 `~/.config/opencode/AGENTS.md`），不存在时回退
+`~/.claude/CLAUDE.md`；再按 `config.json`、`opencode.json`、`opencode.jsonc` 顺序合并，后出现的 `instructions`
+数组覆盖前者。最终数组支持 workspace 相对、`~/`、绝对本地精确文件和有界 glob；HTTP/HTTPS 项直接拒绝，不下载、
+缓存或探测网络。Product Assembly 依次合成 OpenCode、Codex、Claude Code 用户来源，再追加项目来源，并按 canonical path
+保留首项。非递归 glob 只遍历模式所需层级；递归 glob 超出固定扫描预算时只跳过该项，保留此前已读取的用户来源。
+用户与项目来源最终进入模型前还共享既有 256 文件、2 MiB 渲染上限，避免两个独立来源预算叠加扩大固定提示词。
+
+Workspace Instructions owner 继续读取项目根 `opencode.json`、`opencode.jsonc`、`.opencode/opencode.json` 和
+`.opencode/opencode.jsonc` 中的 `instructions` 数组，只接受工作区内相对精确文件与 glob，确定性排序后追加到既有
+项目 `AGENTS`/Claude 来源之后。Remote 只执行这条端口可见的项目路径，不读取控制端的用户目录。文件变更不启动
+watcher；用户通过统一的 `/reload instructions`（或默认 `/reload`）失效当前 Session 的 `UserContext` 缓存，下一条
+消息重新读取。用户生态失败不会吞掉项目 instructions，但会阻止本次 user context 写入缓存，因而下一条消息自动重试。
 
 ### 5.2 Agents、Modes 与 Skills
 

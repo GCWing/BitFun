@@ -11,6 +11,7 @@ export const publicApiContractSlices = [
   'external-source-subagent-contract',
   'external-source-mcp-contract',
   'external-source-hook-contract',
+  'user-instruction-source-boundary',
   'external-integration-policy-contract',
 ];
 
@@ -25,6 +26,7 @@ const contractSlices = {
   externalSourceSubagentContract: 'external-source-subagent-contract',
   externalSourceMcpContract: 'external-source-mcp-contract',
   externalSourceHookContract: 'external-source-hook-contract',
+  userInstructionSourceBoundary: 'user-instruction-source-boundary',
   externalIntegrationPolicyContract: 'external-integration-policy-contract',
 };
 
@@ -255,6 +257,8 @@ export const opencodeAdapterPublicApiEntries = [
     'OpenCodeHookProviderOptions',
     'OpenCode static Hook fixture tests and explicit environment injection',
   ),
+  userInstructionSourceAdapterEntry('load_opencode_user_instructions', 'OpenCode'),
+  userInstructionSourceAdapterEntry('OpenCodeInstructionSourceOptions', 'OpenCode'),
 ];
 
 function staticHookAdapterEntry(symbol, owner, consumer) {
@@ -311,6 +315,51 @@ function declarativeSourceAdapterEntry(
   };
 }
 
+function userInstructionSourceAdapterEntry(symbol, ecosystem) {
+  return {
+    symbol,
+    owner: `${ecosystem} adapter user Instruction source owner`,
+    consumer: 'bitfun-core instruction_sources composition root',
+    verification:
+      `${ecosystem} user Instruction fixtures, bitfun-core prompt composition tests, and core-boundary public API budget checks`,
+    p0: 'runtime-free local user Instruction source discovery',
+    contractSlice: contractSlices.userInstructionSourceBoundary,
+    wireImpact: false,
+    rationale:
+      'ecosystem-specific user file precedence belongs in its adapter while Product Assembly owns cross-ecosystem order',
+    exit:
+      'remove only if the ecosystem source semantics move behind an equivalent reviewed adapter boundary',
+  };
+}
+
+function userInstructionSourceServiceEntry(symbol) {
+  return {
+    symbol,
+    owner: 'services-core bounded local user Instruction file owner',
+    consumer: 'reviewed OpenCode, Claude Code, and Codex adapters plus bitfun-core prompt composition',
+    verification:
+      'services-core bounded file tests, ecosystem Instruction fixtures, prompt composition tests, and core-boundary public API checks',
+    p0: 'runtime-free bounded local user Instruction reads and accumulation',
+    contractSlice: contractSlices.userInstructionSourceBoundary,
+    wireImpact: false,
+    rationale:
+      'sibling adapters need one canonical, bounded file implementation while raw content stays inside backend prompt composition',
+    exit:
+      'remove only if every reviewed adapter migrates to an equivalent bounded local source owner',
+  };
+}
+
+export const userInstructionSourceServicePublicApiEntries = [
+  'MAX_LOCAL_INSTRUCTION_FILE_BYTES',
+  'MAX_LOCAL_INSTRUCTION_FILES',
+  'MAX_LOCAL_INSTRUCTION_TOTAL_BYTES',
+  'LocalInstructionFile',
+  'LocalInstructionFiles',
+  'local_instruction_path_exists',
+  'read_local_instruction_file',
+  'read_local_text_file',
+].map(userInstructionSourceServiceEntry);
+
 export const claudeCodeAdapterPublicApiEntries = [
   'ClaudeCodeHookProvider',
   'ClaudeCodeHookProviderOptions',
@@ -331,7 +380,10 @@ export const claudeCodeAdapterPublicApiEntries = [
   `bitfun-core composition root and Claude Code ${capability} fixtures`,
   capability,
   contractSlice,
-)));
+))).concat([
+  'load_claude_code_user_instructions',
+  'ClaudeCodeInstructionSourceOptions',
+].map((symbol) => userInstructionSourceAdapterEntry(symbol, 'Claude Code')));
 
 export const codexAdapterPublicApiEntries = [
   'CodexHookProvider',
@@ -351,7 +403,10 @@ export const codexAdapterPublicApiEntries = [
   `bitfun-core composition root and Codex ${capability} fixtures`,
   capability,
   contractSlice,
-)));
+))).concat([
+  'load_codex_user_instructions',
+  'CodexInstructionSourceOptions',
+].map((symbol) => userInstructionSourceAdapterEntry(symbol, 'Codex')));
 
 export const staticHookSupportPublicApiEntries = [
   'BoundedFileRead',
@@ -1075,7 +1130,7 @@ export const publicApiAllowlistRules = [
   {
     path: 'src/crates/adapters/opencode-adapter/src/lib.rs',
     reason:
-      'OpenCode adapter public API must stay limited to source and candidate mapping through the PluginRuntimeClient adapter boundary',
+      'OpenCode adapter public API must stay limited to reviewed runtime-free sources and the PluginRuntimeClient adapter boundary',
     allowedSymbolEntries: opencodeAdapterPublicApiEntries,
   },
   {
@@ -1092,6 +1147,12 @@ export const publicApiAllowlistRules = [
     path: 'src/crates/adapters/static-hook-support/src/lib.rs',
     reason: 'shared static Hook parsing helpers must stay narrow and redacted',
     allowedSymbolEntries: staticHookSupportPublicApiEntries,
+  },
+  {
+    path: 'src/crates/services/services-core/src/local_instructions.rs',
+    reason:
+      'bounded local user Instruction file support must stay narrow, backend-only, and explicitly consumer-backed',
+    allowedSymbolEntries: userInstructionSourceServicePublicApiEntries,
   },
   {
     path: 'src/crates/execution/plugin-runtime-client/src/lib.rs',
