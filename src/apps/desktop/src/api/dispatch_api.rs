@@ -22,8 +22,9 @@ use bitfun_core::service::dispatch::{
     DispatchAppendRequest, DispatchApplyResultRequest, DispatchConnectionRequest,
     DispatchInstallPollRequest, DispatchInstallStartRequest, DispatchJobRequest,
     DispatchListJobsRequest, DispatchListTargetsRequest, DispatchProbeTargetRequest,
-    DispatchStatusRequest, DispatchSubmitRequest, DispatchTarget, DispatchTargetOption,
-    DispatchTargetRequest, OutboundDispatchStore, WorkspaceResultApplyOutcome,
+    DispatchSaveTranscriptRequest, DispatchStatusRequest, DispatchSubmitRequest, DispatchTarget,
+    DispatchTargetOption, DispatchTargetRequest, DispatchTranscriptRequest, OutboundDispatchStore,
+    WorkspaceResultApplyOutcome,
 };
 use bitfun_core::service::remote_ssh::dispatch_ssh::{
     DispatchInstallPoll, DispatchInstallStart, DispatchSshProbe,
@@ -521,6 +522,48 @@ pub async fn dispatch_append(
         .await
         .map_err(|error| error.to_string())?;
     append_dispatch(&manager, &store, request)
+        .await
+        .map_err(|error| error.to_string())
+}
+
+/// Read this controller's cached observer transcript for one dispatch job.
+///
+/// Purely local: it touches neither the target nor any local session runtime.
+/// A missing or unreadable cache returns `null` and the observer replays the
+/// job from the beginning.
+#[tauri::command]
+pub async fn dispatch_load_transcript(
+    path_manager: State<'_, Arc<PathManager>>,
+    request: DispatchTranscriptRequest,
+) -> Result<Option<Value>, String> {
+    OutboundDispatchStore::new(path_manager.as_ref())
+        .read_transcript(&request.job_id)
+        .await
+        .map_err(|error| error.to_string())
+}
+
+/// Persist this controller's observer transcript for one dispatch job.
+///
+/// A `null` transcript erases the cache instead, which is how deleting a
+/// projection drops its cached content right away.
+///
+/// Returns `false` when the transcript exceeds the cache ceiling, in which case
+/// the previous entry is kept and the renderer keeps polling as before.
+#[tauri::command]
+pub async fn dispatch_save_transcript(
+    path_manager: State<'_, Arc<PathManager>>,
+    request: DispatchSaveTranscriptRequest,
+) -> Result<bool, String> {
+    let store = OutboundDispatchStore::new(path_manager.as_ref());
+    let Some(transcript) = request.transcript else {
+        return store
+            .remove_transcript(&request.job_id)
+            .await
+            .map(|()| true)
+            .map_err(|error| error.to_string());
+    };
+    store
+        .write_transcript(&request.job_id, &transcript)
         .await
         .map_err(|error| error.to_string())
 }

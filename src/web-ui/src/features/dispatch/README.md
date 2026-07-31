@@ -14,9 +14,17 @@ dispatch.
    local session persistence for it.
 4. The target CLI owns the ordinary durable session and the append-only event
    log. The controller owns only the outbound observer index and a UI cache.
+   That UI cache is the observer transcript stored under
+   `~/.bitfun/dispatch/outbound/.transcripts/<jobId>.json`. It holds the
+   rendered projection, never a durable session, and the controller stores it
+   verbatim without interpreting it.
 5. Status cursors advance only after every returned event has been applied.
    Agent envelope ids are deduplicated before replay. Terminal jobs keep
-   polling until an empty page confirms that the event log is fully drained.
+   polling until an empty page confirms that the event log is fully drained. A
+   persisted cursor is only reusable while its transcript cache is present and
+   valid; the cursor recorded in that cache wins over any other stored cursor,
+   because only those two were written together. Missing, corrupt, or
+   version-mismatched cache means replay from byte zero.
 6. SSH CLI installation is always a separate, explicit confirmation. The UI
    displays the resolved version, URL, and SHA256 before starting it.
 7. Account devices use encrypted request/response RPC and distinct

@@ -55,6 +55,7 @@ import {
   type DispatchTarget,
 } from '@/features/dispatch/types';
 import { dispatchJobStore } from '@/features/dispatch/dispatchJobStore';
+import { forgetDispatchTranscript } from '@/features/dispatch/dispatchTranscriptCache';
 
 const log = createLogger('SessionModule');
 const pendingSessionCreations = new Map<string, Promise<string>>();
@@ -79,10 +80,28 @@ function dismissDispatchObserverProjection(
   sessionId: string,
   session: Session | undefined,
 ): void {
+  // Collect before dismissing: dismissSession removes the store entries that
+  // are the only remaining link from this session to its cached transcripts.
+  const jobIds = new Set(
+    Object.values(dispatchJobStore.getState().jobs)
+      .filter(job => job.sessionId === sessionId)
+      .map(job => job.jobId),
+  );
+  const configuredJobId = session?.config.dispatchJobId?.trim();
+  if (configuredJobId) {
+    jobIds.add(configuredJobId);
+  }
+
   dispatchJobStore.getState().dismissSession(
     sessionId,
     session?.config.dispatchJobId,
   );
+
+  // The projection is gone for good, so its cached transcript must not stay
+  // readable on disk until retention gets around to it.
+  jobIds.forEach(jobId => {
+    void forgetDispatchTranscript(jobId);
+  });
 }
 
 const getHydrationLocationKey = (

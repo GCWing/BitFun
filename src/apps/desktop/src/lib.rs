@@ -1758,6 +1758,8 @@ pub async fn run() {
             api::dispatch_api::dispatch_list_jobs,
             api::dispatch_api::dispatch_answer,
             api::dispatch_api::dispatch_append,
+            api::dispatch_api::dispatch_load_transcript,
+            api::dispatch_api::dispatch_save_transcript,
             // Relay self-deploy API
             api::relay_deploy_api::relay_deploy_preflight,
             api::relay_deploy_api::relay_deploy_install_docker,

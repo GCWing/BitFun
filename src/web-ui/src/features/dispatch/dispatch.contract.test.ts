@@ -19,6 +19,8 @@ const OUTBOUND_DISPATCH_COMMANDS = [
   'dispatch_list_jobs',
   'dispatch_answer',
   'dispatch_append',
+  'dispatch_load_transcript',
+  'dispatch_save_transcript',
 ] as const;
 
 function read(relativePath: string): string {

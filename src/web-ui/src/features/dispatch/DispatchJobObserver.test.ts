@@ -28,6 +28,8 @@ import {
 const mocks = vi.hoisted(() => ({
   listJobs: vi.fn(),
   status: vi.fn(),
+  loadTranscript: vi.fn(),
+  saveTranscript: vi.fn(),
   dispatchExternal: vi.fn(),
 }));
 
@@ -35,6 +37,8 @@ vi.mock('./dispatchApi', () => ({
   dispatchApi: {
     listJobs: mocks.listJobs,
     status: mocks.status,
+    loadTranscript: mocks.loadTranscript,
+    saveTranscript: mocks.saveTranscript,
   },
 }));
 
@@ -71,7 +75,9 @@ function runningOutboundRecord() {
   };
 }
 
-function registerRunningJob(): void {
+function registerRunningJob(
+  overrides: { cursor?: number; appliedEventIds?: string[] } = {},
+): void {
   mocks.listJobs.mockResolvedValue([runningOutboundRecord()]);
   dispatchJobStore.getState().registerJob({
     jobId: 'job-1',
@@ -101,6 +107,7 @@ function registerRunningJob(): void {
     omittedEventCount: 0,
     createdAt: 1,
     updatedAt: 1,
+    ...overrides,
   });
 }
 
@@ -271,6 +278,34 @@ function status(
   };
 }
 
+function cachedTranscript(
+  overrides: Record<string, unknown> = {},
+): Record<string, unknown> {
+  return {
+    schemaVersion: 1,
+    jobId: 'job-1',
+    sessionId: 'session-1',
+    cursor: 120,
+    dialogTurns: [{
+      id: 'turn-cached',
+      sessionId: 'session-1',
+      userMessage: {
+        id: 'user-cached',
+        content: 'run task',
+        timestamp: 1,
+      },
+      modelRounds: [],
+      status: 'completed',
+      startTime: 1,
+    }],
+    appliedEventIds: ['event-cached'],
+    eventLogComplete: true,
+    historyTruncated: false,
+    omittedEventCount: 0,
+    ...overrides,
+  };
+}
+
 function createDeferred<T>() {
   let resolve!: (value: T) => void;
   const promise = new Promise<T>(resolvePromise => {
@@ -292,6 +327,8 @@ describe('DispatchJobObserver', () => {
     stateMachineManager.clear();
     mocks.listJobs.mockReset().mockResolvedValue([]);
     mocks.status.mockReset();
+    mocks.loadTranscript.mockReset().mockResolvedValue(null);
+    mocks.saveTranscript.mockReset().mockResolvedValue(true);
     mocks.dispatchExternal.mockReset().mockReturnValue(true);
   });
 
@@ -665,7 +702,7 @@ describe('DispatchJobObserver', () => {
     cleanup();
   });
 
-  it('settles cancellation after the terminal log drains without a dialog-turn-cancelled event', async () => {
+  it('drains the terminal log within one poll and settles cancellation without a dialog-turn-cancelled event', async () => {
     registerRunningJob();
     installProcessingProjection();
     const context = createTerminalContext();
@@ -692,13 +729,12 @@ describe('DispatchJobObserver', () => {
     const cleanup = installDispatchJobObserver(context);
 
     await vi.advanceTimersByTimeAsync(0);
-    expect(flowChatStore.getState().sessions.get('session-1')?.dialogTurns[0].status)
-      .toBe('processing');
-    expect(stateMachineManager.getCurrentState('session-1'))
-      .toBe(SessionExecutionState.PROCESSING);
-
-    requestDispatchJobRefresh('job-1');
-    await vi.advanceTimersByTimeAsync(0);
+    // The terminal page carrying events does not settle anything by itself;
+    // the empty page at the same cursor does. Both are pulled in this one
+    // cycle, so a long log no longer costs one poll interval per page.
+    expect(mocks.status).toHaveBeenCalledTimes(2);
+    expect(mocks.status).toHaveBeenNthCalledWith(1, 'job-1', 0);
+    expect(mocks.status).toHaveBeenNthCalledWith(2, 'job-1', 12);
     const turn = flowChatStore.getState().sessions.get('session-1')?.dialogTurns[0];
     expect(turn).toMatchObject({
       status: 'cancelled',
@@ -717,6 +753,108 @@ describe('DispatchJobObserver', () => {
     expect(context.processingManager.clearSessionStatus)
       .toHaveBeenCalledWith('session-1');
     expect(mocks.dispatchExternal).not.toHaveBeenCalled();
+    cleanup();
+  });
+
+  it('resumes a restarted projection from the cached transcript instead of replaying', async () => {
+    // The renderer's own cursor survived in localStorage but its transcript did
+    // not. The cache is what makes resuming possible at all, so it also decides
+    // where to resume — even though it trails the persisted cursor here.
+    registerRunningJob({ cursor: 900, appliedEventIds: ['event-stale'] });
+    mocks.loadTranscript.mockResolvedValue(cachedTranscript());
+    mocks.status.mockResolvedValue(status({ state: 'running', cursor: 120 }));
+    const cleanup = installDispatchJobObserver(createTerminalContext());
+
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(mocks.status).toHaveBeenNthCalledWith(1, 'job-1', 120);
+    const session = flowChatStore.getState().sessions.get('session-1');
+    expect(session?.dialogTurns.map(turn => turn.id)).toEqual(['turn-cached']);
+    expect(session?.config.dispatchCursor).toBe(120);
+    const job = dispatchJobStore.getState().jobs['job-1'];
+    expect(job.cursor).toBe(120);
+    // Replaced, not merged: an id remembered past the cached cursor would make
+    // the observer skip an event whose projection is not in the restored turns.
+    expect(job.appliedEventIds).toEqual(['event-cached']);
+    cleanup();
+  });
+
+  it('replays from byte zero when no transcript is cached', async () => {
+    registerRunningJob({ cursor: 900 });
+    mocks.loadTranscript.mockResolvedValue(null);
+    mocks.status.mockResolvedValue(status({ state: 'running', cursor: 0 }));
+    const cleanup = installDispatchJobObserver(createTerminalContext());
+
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(mocks.status).toHaveBeenNthCalledWith(1, 'job-1', 0);
+    expect(dispatchJobStore.getState().jobs['job-1'].cursor).toBe(0);
+    expect(flowChatStore.getState().sessions.get('session-1')?.dialogTurns)
+      .toEqual([]);
+    cleanup();
+  });
+
+  it('replays from byte zero when the cached transcript predates the current projection rules', async () => {
+    registerRunningJob({ cursor: 900 });
+    mocks.loadTranscript.mockResolvedValue(cachedTranscript({ schemaVersion: 0 }));
+    mocks.status.mockResolvedValue(status({ state: 'running', cursor: 0 }));
+    const cleanup = installDispatchJobObserver(createTerminalContext());
+
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(mocks.status).toHaveBeenNthCalledWith(1, 'job-1', 0);
+    expect(flowChatStore.getState().sessions.get('session-1')?.dialogTurns)
+      .toEqual([]);
+    cleanup();
+  });
+
+  it('restores truncation facts with the transcript so an incomplete history is not shown as whole', async () => {
+    registerRunningJob();
+    mocks.loadTranscript.mockResolvedValue(cachedTranscript({
+      eventLogComplete: false,
+      historyTruncated: true,
+      omittedEventCount: 42,
+    }));
+    mocks.status.mockResolvedValue(status({
+      state: 'running',
+      cursor: 120,
+      eventLogComplete: false,
+      historyTruncated: true,
+      omittedEventCount: 42,
+    }));
+    const cleanup = installDispatchJobObserver(createTerminalContext());
+
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(dispatchJobStore.getState().jobs['job-1']).toMatchObject({
+      eventLogComplete: false,
+      historyTruncated: true,
+      omittedEventCount: 42,
+    });
+    cleanup();
+  });
+
+  it('caches the transcript together with the cursor that produced it', async () => {
+    registerRunningJob();
+    installProcessingProjection();
+    mocks.status.mockResolvedValue(status({ state: 'running', cursor: 12 }));
+    const cleanup = installDispatchJobObserver(createTerminalContext());
+
+    await vi.advanceTimersByTimeAsync(0);
+    expect(mocks.saveTranscript).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(mocks.saveTranscript).toHaveBeenCalledTimes(1);
+    const [jobId, payload] = mocks.saveTranscript.mock.calls[0];
+    expect(jobId).toBe('job-1');
+    expect(payload).toMatchObject({
+      schemaVersion: 1,
+      jobId: 'job-1',
+      sessionId: 'session-1',
+      cursor: 12,
+    });
+    expect(payload.dialogTurns.map((turn: { id: string }) => turn.id))
+      .toEqual(['turn-1']);
     cleanup();
   });
 

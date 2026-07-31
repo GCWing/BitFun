@@ -71,6 +71,8 @@ const LOCAL_ONLY_COMMANDS = new Set([
   'dispatch_list_jobs',
   'dispatch_answer',
   'dispatch_append',
+  'dispatch_load_transcript',
+  'dispatch_save_transcript',
   'remote_connect_get_device_info',
   'remote_connect_get_lan_ip',
   'remote_connect_get_lan_network_info',

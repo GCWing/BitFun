@@ -13,6 +13,7 @@ import type {
   DispatchSubmitResponse,
   DispatchTargetOption,
   DispatchTargetRequest,
+  DispatchTranscriptCache,
   DispatchWorkspaceDeliveryRequest,
   OutboundDispatchRecord,
 } from './types';
@@ -165,6 +166,34 @@ export const dispatchApi = {
   async listTargetJobs(target: DispatchTargetRequest): Promise<DispatchJobListEntry[]> {
     return api.invoke<DispatchJobListEntry[]>('dispatch_list_jobs', {
       request: { target },
+    });
+  },
+
+  /**
+   * Read this controller's cached observer transcript for a job.
+   *
+   * Controller-local only. Returns `null` when nothing is cached, which sends
+   * the observer back to replaying the target's event log from byte zero.
+   */
+  async loadTranscript(jobId: string): Promise<DispatchTranscriptCache | null> {
+    return api.invoke<DispatchTranscriptCache | null>('dispatch_load_transcript', {
+      request: { jobId },
+    });
+  },
+
+  /**
+   * Persist this controller's observer transcript for a job, or pass `null` to
+   * erase it.
+   *
+   * Resolves `false` when the transcript is above the controller's cache
+   * ceiling; the previous entry is kept and observing continues unchanged.
+   */
+  async saveTranscript(
+    jobId: string,
+    transcript: DispatchTranscriptCache | null,
+  ): Promise<boolean> {
+    return api.invoke<boolean>('dispatch_save_transcript', {
+      request: { jobId, transcript },
     });
   },
 };

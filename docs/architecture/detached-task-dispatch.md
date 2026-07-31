@@ -109,10 +109,26 @@ path and capture mode. Before packaging a later job, it recomputes a lightweight
 fingerprint from the selected paths and their filesystem identity, size,
 executable state, and write/change timestamps. An unchanged fingerprint
 hard-links the cached immutable archive into the new job instead of rereading
-and recompressing every file. Source mode ignores changes below ignored paths;
-exact mode observes them. A selected entry change invalidates and atomically
-replaces the cache. The per-job link remains immutable during submission, so a
-later cache replacement cannot change an in-flight job's bytes.
+and recompressing every file.
+
+That fingerprint is metadata-only, so operations that leave every byte intact
+still change it: `chmod`, an editor's write-then-rename, a `git checkout` round
+trip. Because the target's own cache is keyed by the archive digest, a
+controller miss forces a full retransfer as well, so a changed fingerprint alone
+is not allowed to condemn the cache. Packaging therefore publishes the archive's
+per-file manifest as a sidecar next to the cached archive, and a fingerprint
+mismatch falls through to comparing the source against it: first structurally,
+by path, kind, size, and executable bit, which needs no more I/O than the
+fingerprint itself and rejects nearly every real change; then, only when the
+structure is identical, by per-file SHA-256. An identical tree reuses the cached
+archive and writes the new fingerprint back, so the content comparison is paid
+once rather than on every later job. A cache entry with no manifest sidecar —
+one written by an older build — silently repackages as before.
+
+Source mode ignores changes below ignored paths; exact mode observes them. A
+selected entry change invalidates and atomically replaces the cache. The per-job
+link remains immutable during submission, so a later cache replacement cannot
+change an in-flight job's bytes.
 
 SSH transports the archive with SFTP after `workspace-begin`. Account-device
 RPC uses bounded base64 chunks inside the existing end-to-end encrypted
@@ -209,7 +225,22 @@ per observer and the target has no controller lease. Explicitly listing jobs
 for a selected target adopts observer-only routing records on that controller;
 it does not copy sessions or acquire workspace/runtime ownership.
 
-Target and outbound records are retained for 30 days after terminal state.
+A cursor records how far into the event log an observer has read, not what it
+drew, so a cursor on its own cannot restore a projection. The controller
+therefore caches each observer's rendered transcript beside its outbound index,
+one file per job, holding the projected turns together with the cursor that
+produced them and the completeness facts that applied at that point. Storing
+them in one document is what keeps them consistent: a restart resumes from the
+cached cursor rather than any other stored one, because only that pair was
+written together, and a truncated history stays marked as truncated. The cache
+is versioned by the projection rules that wrote it, and anything missing,
+corrupt, mismatched, or above the size ceiling replays the job from byte zero.
+The controller stores the projection verbatim and never interprets it; caching
+it creates no durable session and acquires no runtime ownership.
+
+Target and outbound records are retained for 30 days after terminal state, as
+are the cached transcripts, which are also dropped as soon as a projection is
+deleted or archived.
 Garbage collection never removes queued or running jobs. Removing a terminal
 snapshot also removes only the managed directory bound to that job; an
 arbitrary user-supplied target directory is never a cleanup target.

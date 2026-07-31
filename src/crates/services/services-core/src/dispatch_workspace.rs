@@ -6,7 +6,7 @@
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, Read, Write};
-use std::path::{Component, Path};
+use std::path::{Component, Path, PathBuf};
 
 use anyhow::{anyhow, bail, Context, Result};
 use flate2::read::GzDecoder;
@@ -88,6 +88,12 @@ pub struct WorkspaceSnapshotSourceFingerprint {
 pub struct PreparedWorkspaceSnapshot {
     pub metadata: WorkspaceSnapshotMetadata,
     pub source_fingerprint: WorkspaceSnapshotSourceFingerprint,
+    /// The per-file manifest that was sealed into the archive.
+    ///
+    /// Packaging already hashes every file while writing the tar stream, so
+    /// handing this back lets a controller cache answer "did the content
+    /// actually change?" without repacking.
+    pub manifest: WorkspaceSnapshotManifest,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -495,6 +501,20 @@ pub fn source_workspace_snapshot_source_fingerprint(
     workspace_snapshot_source_fingerprint(source, WorkspaceSnapshotCaptureMode::Source)
 }
 
+pub fn exact_workspace_matches_manifest(
+    source: &Path,
+    manifest: &WorkspaceSnapshotManifest,
+) -> Result<bool> {
+    workspace_matches_manifest(source, WorkspaceSnapshotCaptureMode::Exact, manifest)
+}
+
+pub fn source_workspace_matches_manifest(
+    source: &Path,
+    manifest: &WorkspaceSnapshotManifest,
+) -> Result<bool> {
+    workspace_matches_manifest(source, WorkspaceSnapshotCaptureMode::Source, manifest)
+}
+
 fn create_workspace_snapshot(
     source: &Path,
     archive_path: &Path,
@@ -676,6 +696,7 @@ fn create_workspace_snapshot_inner(
             uncompressed_bytes,
         },
         source_fingerprint: finish_source_fingerprint(source_fingerprint),
+        manifest,
     })
 }
 
@@ -762,6 +783,97 @@ fn workspace_snapshot_source_fingerprint(
         )?;
     }
     Ok(finish_source_fingerprint(fingerprint))
+}
+
+/// Decide whether a source tree still produces the contents of a known manifest.
+///
+/// The source fingerprint is deliberately cheap, so it also reports a change for
+/// content-neutral operations: `chmod`, a `git checkout` round trip, an editor's
+/// write-then-rename (new inode), or a backup tool touching timestamps. This is
+/// the more expensive second opinion, and it is only worth asking after the
+/// fingerprint already disagreed.
+///
+/// Two passes, cheapest first:
+/// 1. Structure, using stat data only. Any added, removed, resized, or
+///    re-typed entry, or a flipped executable bit, rejects at today's cost.
+/// 2. Content, only once the structure matched exactly. Each file is hashed and
+///    compared against the digest packaging recorded for it.
+///
+/// Anything this function cannot verify — a symlink, a special file, a manifest
+/// entry with no recorded digest — is reported as "does not match" so the caller
+/// repacks. Repacking surfaces the real diagnostic for those cases.
+fn workspace_matches_manifest(
+    source: &Path,
+    capture_mode: WorkspaceSnapshotCaptureMode,
+    manifest: &WorkspaceSnapshotManifest,
+) -> Result<bool> {
+    let source_metadata = fs::symlink_metadata(source)
+        .with_context(|| format!("inspect workspace {}", source.display()))?;
+    if source_metadata.file_type().is_symlink() || !source_metadata.is_dir() {
+        bail!(
+            "workspace snapshot source is not a real directory: {}",
+            source.display()
+        );
+    }
+    let source = source
+        .canonicalize()
+        .with_context(|| format!("resolve workspace {}", source.display()))?;
+
+    let mut expected: BTreeMap<&str, &WorkspaceSnapshotEntry> = manifest
+        .entries
+        .iter()
+        .map(|entry| (entry.path.as_str(), entry))
+        .collect();
+    let mut pending_content: Vec<(PathBuf, &str)> = Vec::new();
+
+    for walked in workspace_walk(&source, capture_mode) {
+        let walked = walked.context("walk workspace for dispatch snapshot comparison")?;
+        let path = walked.path();
+        if path == source {
+            continue;
+        }
+        let relative = path
+            .strip_prefix(&source)
+            .with_context(|| format!("resolve snapshot path {}", path.display()))?;
+        let relative_wire = portable_relative_path(relative)?;
+        let metadata = fs::symlink_metadata(path)
+            .with_context(|| format!("inspect snapshot entry {}", path.display()))?;
+        let Some(entry) = expected.remove(relative_wire.as_str()) else {
+            // Added since the snapshot was packaged.
+            return Ok(false);
+        };
+        if metadata.file_type().is_symlink() || !(metadata.is_dir() || metadata.is_file()) {
+            return Ok(false);
+        }
+        if metadata.is_dir() {
+            if entry.kind != WorkspaceSnapshotEntryKind::Directory {
+                return Ok(false);
+            }
+            continue;
+        }
+        if entry.kind != WorkspaceSnapshotEntryKind::File
+            || entry.size != metadata.len()
+            || entry.executable != is_executable(&metadata)
+        {
+            return Ok(false);
+        }
+        let Some(digest) = entry.sha256.as_deref() else {
+            return Ok(false);
+        };
+        pending_content.push((path.to_path_buf(), digest));
+    }
+
+    if !expected.is_empty() {
+        // Removed since the snapshot was packaged.
+        return Ok(false);
+    }
+
+    for (path, expected_digest) in pending_content {
+        if !expected_digest.eq_ignore_ascii_case(&sha256_file(&path)?) {
+            return Ok(false);
+        }
+    }
+    Ok(true)
 }
 
 fn workspace_walk(source: &Path, capture_mode: WorkspaceSnapshotCaptureMode) -> ignore::Walk {
@@ -1537,6 +1649,97 @@ mod tests {
             unchanged,
             source_workspace_snapshot_source_fingerprint(&source)
                 .expect("fingerprint after source change")
+        );
+    }
+
+    /// The manifest comparison is the second opinion the source fingerprint
+    /// cannot give: it must forgive metadata churn while still catching every
+    /// real difference in the captured set.
+    #[test]
+    fn manifest_comparison_separates_metadata_churn_from_content_changes() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let source = temp.path().join("source");
+        fs::create_dir_all(source.join(".git")).expect("repository marker");
+        fs::create_dir_all(source.join("nested")).expect("nested");
+        fs::write(source.join(".gitignore"), b"target/\n").expect("gitignore");
+        fs::write(source.join("keep.txt"), b"unchanged").expect("keep");
+        fs::write(source.join("nested/deep.txt"), b"deep").expect("deep");
+        let archive = temp.path().join("snapshot.tar.gz");
+        let prepared =
+            prepare_source_workspace_snapshot(&source, &archive).expect("prepare snapshot");
+        let manifest = &prepared.manifest;
+
+        assert!(
+            source_workspace_matches_manifest(&source, manifest).expect("compare untouched"),
+            "an untouched tree must match its own manifest"
+        );
+
+        // Rewriting identical bytes changes mtime (and ctime) but nothing the
+        // archive would contain.
+        fs::write(source.join("keep.txt"), b"unchanged").expect("rewrite identical bytes");
+        assert_ne!(
+            prepared.source_fingerprint,
+            source_workspace_snapshot_source_fingerprint(&source).expect("fingerprint"),
+            "the cheap fingerprint is expected to report this as a change"
+        );
+        assert!(
+            source_workspace_matches_manifest(&source, manifest).expect("compare after rewrite"),
+            "identical bytes must still match the manifest"
+        );
+
+        // An ignored path is outside the captured set entirely.
+        fs::create_dir_all(source.join("target")).expect("ignored directory");
+        fs::write(source.join("target/app"), b"build output").expect("ignored output");
+        assert!(
+            source_workspace_matches_manifest(&source, manifest).expect("compare ignored addition"),
+            "an ignored addition is not part of the captured set"
+        );
+
+        // Same length, different bytes: only the content pass can see this.
+        fs::write(source.join("keep.txt"), b"unchangeD").expect("same-size edit");
+        assert!(
+            !source_workspace_matches_manifest(&source, manifest).expect("compare same-size edit"),
+            "a same-size content change must not match"
+        );
+        fs::write(source.join("keep.txt"), b"unchanged").expect("restore");
+
+        fs::write(source.join("added.txt"), b"new").expect("added");
+        assert!(
+            !source_workspace_matches_manifest(&source, manifest).expect("compare addition"),
+            "an added file must not match"
+        );
+        fs::remove_file(source.join("added.txt")).expect("undo addition");
+
+        fs::remove_file(source.join("nested/deep.txt")).expect("deleted");
+        assert!(
+            !source_workspace_matches_manifest(&source, manifest).expect("compare deletion"),
+            "a deleted file must not match"
+        );
+    }
+
+    /// Packaging refuses symlinks. The comparison must not quietly approve a
+    /// tree that packaging would reject; it reports "no match" and lets the
+    /// repack produce the real diagnostic.
+    #[cfg(unix)]
+    #[test]
+    fn manifest_comparison_rejects_a_path_that_became_a_symlink() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let source = temp.path().join("source");
+        fs::create_dir_all(&source).expect("source");
+        fs::write(source.join("real.txt"), b"payload").expect("real");
+        let archive = temp.path().join("snapshot.tar.gz");
+        let prepared =
+            prepare_exact_workspace_snapshot(&source, &archive).expect("prepare snapshot");
+
+        fs::write(temp.path().join("outside.txt"), b"payload").expect("outside");
+        fs::remove_file(source.join("real.txt")).expect("remove real file");
+        std::os::unix::fs::symlink(temp.path().join("outside.txt"), source.join("real.txt"))
+            .expect("symlink");
+
+        assert!(
+            !exact_workspace_matches_manifest(&source, &prepared.manifest)
+                .expect("compare symlinked path"),
+            "a path that became a symlink must not be reported as a match"
         );
     }
 

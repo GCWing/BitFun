@@ -2341,6 +2341,51 @@ export class FlowChatStore {
   }
 
   /**
+   * Restore an observer projection's transcript from the controller's UI cache.
+   *
+   * Frontend state only, exactly like {@link updateSessionDispatchTarget}: the
+   * target CLI still owns the durable session, so this must not create a local
+   * runtime session or write the normal session store.
+   *
+   * The turns and the cursor are cached together, so the cursor may only be
+   * adopted when this call reports success. Refuses to hydrate a session that
+   * already has turns — replacing live content with a stale cache would drop
+   * whatever the observer projected in the meantime.
+   */
+  public hydrateDispatchTranscript(
+    sessionId: string,
+    turns: DialogTurn[],
+  ): boolean {
+    if (turns.length === 0) return false;
+    let hydrated = false;
+
+    this.setState(prev => {
+      const session = prev.sessions.get(sessionId);
+      if (
+        !session ||
+        session.dialogTurns.length > 0 ||
+        !session.config.dispatchTarget ||
+        session.config.dispatchTarget.kind === 'local'
+      ) {
+        return prev;
+      }
+
+      const newSessions = new Map(prev.sessions);
+      newSessions.set(sessionId, {
+        ...session,
+        // `historyState` deliberately stays as `addExternalSession` left it.
+        // An observer projection has no local history to lazily hydrate, and
+        // the full-replay path does not move it either.
+        dialogTurns: [...turns].sort(compareDialogTurnOrder),
+      });
+      hydrated = true;
+      return { ...prev, sessions: newSessions };
+    });
+
+    return hydrated;
+  }
+
+  /**
    * Commit a target-side status snapshot only when it still follows the cursor
    * that was polled. The observer applies all events first, then calls this
    * method; a stale response therefore cannot jump the durable cursor forward.

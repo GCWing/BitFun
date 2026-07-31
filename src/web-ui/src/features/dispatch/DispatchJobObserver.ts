@@ -5,6 +5,7 @@ import { i18nService } from '@/infrastructure/i18n';
 import { notificationService } from '@/shared/notification-system';
 import { agenticEventListener } from '@/flow_chat/services/AgenticEventListener';
 import type { FlowChatContext } from '@/flow_chat/services/flow-chat-manager/types';
+import type { DialogTurn } from '@/flow_chat/types/flow-chat';
 import { clearRuntimeStatus } from '@/flow_chat/services/flow-chat-manager/RuntimeStatusModule';
 import { clearRuntimeStatusState } from '@/flow_chat/store/runtimeStatusStore';
 import { stateMachineManager } from '@/flow_chat/state-machine';
@@ -14,6 +15,12 @@ import {
 } from '@/flow_chat/state-machine/types';
 import { dispatchApi } from './dispatchApi';
 import { dispatchJobStore, type DispatchObserverJob } from './dispatchJobStore';
+import {
+  cancelDispatchTranscriptSaves,
+  flushDispatchTranscriptSave,
+  loadDispatchTranscript,
+  scheduleDispatchTranscriptSave,
+} from './dispatchTranscriptCache';
 import type {
   DispatchAgentEventEnvelope,
   DispatchEvent,
@@ -182,7 +189,10 @@ export function dispatchEventId(event: DispatchEvent): string {
   return `${event.type}:${event.timestamp}:${hashText(JSON.stringify(event))}`;
 }
 
-function ensureProjection(context: FlowChatContext, job: DispatchObserverJob): boolean {
+async function ensureProjection(
+  context: FlowChatContext,
+  job: DispatchObserverJob,
+): Promise<boolean> {
   const sourceWorkspacePath = job.sourceWorkspacePath?.trim() || undefined;
   const existing = context.flowChatStore.getState().sessions.get(job.sessionId);
   if (existing) {
@@ -221,16 +231,12 @@ function ensureProjection(context: FlowChatContext, job: DispatchObserverJob): b
     return false;
   }
 
-  // The persisted cursor represents a transcript that lived only in the old
-  // renderer process. Rebuild a fresh in-memory projection by replaying from
-  // byte zero; never skip straight to that cursor.
-  dispatchJobStore.getState().resetReplay(job.jobId);
-  log.info('Dispatch diagnostic: observer created a flow chat projection', {
-    jobId: job.jobId,
-    sessionId: job.sessionId,
-    sourceWorkspaceId: job.sourceWorkspaceId,
-    state: job.state,
-  });
+  // A cursor alone cannot rebuild a projection, so it may only be resumed
+  // together with the transcript it produced. Read that pairing before
+  // touching any store: if it is missing or unusable, this falls back to the
+  // original behavior of replaying the whole event log from byte zero.
+  const cached = await loadDispatchTranscript(job);
+
   context.flowChatStore.addExternalSession(
     job.sessionId,
     job.title,
@@ -241,18 +247,58 @@ function ensureProjection(context: FlowChatContext, job: DispatchObserverJob): b
       workspaceId: job.sourceWorkspaceId,
     },
   );
-  context.flowChatStore.updateSessionDispatchTarget(job.sessionId, {
-    targetRequest: job.targetRequest,
-    target: job.target,
+  const bindTarget = (cursor: number) => {
+    context.flowChatStore.updateSessionDispatchTarget(job.sessionId, {
+      targetRequest: job.targetRequest,
+      target: job.target,
+      jobId: job.jobId,
+      approvalPolicy: job.approvalPolicy,
+      model: job.model,
+      availableModels: job.availableModels,
+      defaultModel: job.defaultModel,
+      state: job.state,
+      cursor,
+      sourceWorkspacePath,
+      sourceWorkspaceId: job.sourceWorkspaceId,
+    });
+  };
+  // Bind the target before hydrating: restoring a transcript is only allowed
+  // on a session already known to be an observer projection.
+  bindTarget(0);
+  const hydrated =
+    !!cached &&
+    context.flowChatStore.hydrateDispatchTranscript(
+      job.sessionId,
+      // Cache content is disk state, not a validated projection. It is
+      // rendered as-is, exactly like the turns the event replay would build.
+      cached.dialogTurns as DialogTurn[],
+    );
+  if (hydrated && cached) {
+    bindTarget(cached.cursor);
+    // The cache, not the persisted renderer state, decides where to resume.
+    // The two are written separately, so the renderer's own cursor can be
+    // ahead of the last transcript that was actually stored; resuming from
+    // the ahead one would silently skip events the restored turns never saw.
+    dispatchJobStore.getState().adoptCachedReplay(job.jobId, {
+      cursor: cached.cursor,
+      appliedEventIds: cached.appliedEventIds,
+      eventLogComplete: cached.eventLogComplete,
+      historyTruncated: cached.historyTruncated,
+      omittedEventCount: cached.omittedEventCount,
+    });
+  } else {
+    dispatchJobStore.getState().resetReplay(job.jobId);
+  }
+  log.info('Dispatch diagnostic: observer created a flow chat projection', {
     jobId: job.jobId,
-    approvalPolicy: job.approvalPolicy,
-    model: job.model,
-    availableModels: job.availableModels,
-    defaultModel: job.defaultModel,
-    state: job.state,
-    cursor: 0,
-    sourceWorkspacePath,
+    sessionId: job.sessionId,
     sourceWorkspaceId: job.sourceWorkspaceId,
+    state: job.state,
+    // Which of the two restore paths ran, and from where. A projection that
+    // reports `restoredFromCache: false` on every restart is the symptom to
+    // chase if long histories still reload page by page.
+    restoredFromCache: hydrated,
+    resumeCursor: hydrated && cached ? cached.cursor : 0,
   });
   return context.flowChatStore.getState().sessions.has(job.sessionId);
 }
@@ -360,32 +406,24 @@ function reconcileDispatchTerminalRuntime(
   });
 }
 
-async function refreshJob(
+/**
+ * One status page: pull from the job's current cursor, apply every event, then
+ * commit. Returns whether the cursor moved, which is the only reason to ask for
+ * another page in the same poll.
+ */
+async function refreshJobPage(
   context: FlowChatContext,
   requestedJobId: string,
   isObserverCurrent: () => boolean,
-): Promise<void> {
+): Promise<'progressed' | 'settled'> {
   if (!isObserverCurrent()) {
-    return;
+    return 'settled';
   }
-  let job = dispatchJobStore.getState().jobs[requestedJobId];
+  // Re-read every page: draining spans several awaits, and the store is where
+  // the cursor this page must request has just been committed.
+  const job = dispatchJobStore.getState().jobs[requestedJobId];
   if (!job) {
-    return;
-  }
-  // `submitting` is a local pre-ack state. There is no durable target job to
-  // query yet, and a failed submit intentionally remains retryable.
-  if (job.state === 'submitting') {
-    return;
-  }
-  const projectionExisted = context.flowChatStore.getState().sessions.has(job.sessionId);
-  if (!ensureProjection(context, job)) {
-    return;
-  }
-  if (projectionExisted && isDispatchJobTerminal(job.state) && job.terminalDrained) {
-    return;
-  }
-  if (!projectionExisted) {
-    job = dispatchJobStore.getState().jobs[requestedJobId] ?? job;
+    return 'settled';
   }
 
   const requestCursor = job.cursor;
@@ -394,7 +432,7 @@ async function refreshJob(
     response = await dispatchApi.status(job.jobId, requestCursor);
   } catch (error) {
     if (!isObserverCurrent() || !isJobStillObserved(job)) {
-      return;
+      return 'settled';
     }
     dispatchJobStore.getState().setTransportState(
       job.jobId,
@@ -407,7 +445,7 @@ async function refreshJob(
   // already-issued target poll may still be in flight. Never let that stale
   // response project SessionCreated/DialogTurnStarted and recreate the row.
   if (!isObserverCurrent() || !isJobStillObserved(job)) {
-    return;
+    return 'settled';
   }
   // A successful target status request is the only authoritative signal that
   // clears a transient transport failure. It does not alter the durable job
@@ -420,14 +458,14 @@ async function refreshJob(
     context.userCancelledSessionIds?.has(job.sessionId) ?? false;
   for (const event of response.events) {
     if (!isObserverCurrent() || !isJobStillObserved(job)) {
-      return;
+      return 'settled';
     }
     const eventId = dispatchEventId(event);
     if (dispatchJobStore.getState().hasAppliedEvent(job.jobId, eventId)) {
       continue;
     }
     if (!applyEvent(context, event)) {
-      return;
+      return 'settled';
     }
     // Persist each applied id immediately. If a later event in this response
     // fails, the cursor stays put but already-applied chunks are not duplicated.
@@ -436,7 +474,7 @@ async function refreshJob(
     });
   }
   if (!isObserverCurrent() || !isJobStillObserved(job)) {
-    return;
+    return 'settled';
   }
 
   const terminalDrained =
@@ -468,7 +506,7 @@ async function refreshJob(
     terminalDrained: needsTerminalFallback,
   });
   if (!applied.applied) {
-    return;
+    return 'settled';
   }
   const background =
     typeof document !== 'undefined'
@@ -493,6 +531,19 @@ async function refreshJob(
     historyTruncated: response.historyTruncated,
     omittedEventCount: response.omittedEventCount,
   });
+  // Both halves are committed here: the projection holds every event of this
+  // page and the cursor is the one that produced it. Capturing the pair now,
+  // rather than when the throttled write runs, is what keeps a cached cursor
+  // from ever being paired with turns from a different point in the stream.
+  const projectedSession = context.flowChatStore.getState().sessions.get(job.sessionId);
+  const committedJob = dispatchJobStore.getState().jobs[job.jobId];
+  if (projectedSession && committedJob) {
+    scheduleDispatchTranscriptSave(
+      committedJob,
+      projectedSession.dialogTurns,
+      applied.cursor,
+    );
+  }
   if (
     job.eventLogComplete !== false
     && response.eventLogComplete === false
@@ -550,6 +601,12 @@ async function refreshJob(
       });
     }
   }
+  if (terminalDrained) {
+    // Nothing more will ever change this transcript. Write it now instead of
+    // leaving the last few turns to a throttle window that a shutdown could
+    // cut short.
+    void flushDispatchTranscriptSave(job.jobId);
+  }
   if (needsTerminalFallback) {
     const effectiveSession = context.flowChatStore
       .getState()
@@ -557,7 +614,7 @@ async function refreshJob(
       .get(job.sessionId);
     const effectiveState = effectiveSession?.config.dispatchJobState;
     if (!effectiveState || !isDispatchJobTerminal(effectiveState)) {
-      return;
+      return 'settled';
     }
     reconcileDispatchTerminalRuntime(
       context,
@@ -568,6 +625,51 @@ async function refreshJob(
         response.lastError,
     );
   }
+  return response.cursor > requestCursor ? 'progressed' : 'settled';
+}
+
+/**
+ * Upper bound on pages pulled in one poll cycle.
+ *
+ * Draining is what makes a long history load in one pass instead of one page
+ * per 1.8s tick. The bound keeps a target that keeps producing events from
+ * starving every other job in the same cycle.
+ */
+const MAX_DRAIN_PAGES = 12;
+
+async function refreshJob(
+  context: FlowChatContext,
+  requestedJobId: string,
+  isObserverCurrent: () => boolean,
+): Promise<void> {
+  if (!isObserverCurrent()) {
+    return;
+  }
+  const job = dispatchJobStore.getState().jobs[requestedJobId];
+  if (!job) {
+    return;
+  }
+  // `submitting` is a local pre-ack state. There is no durable target job to
+  // query yet, and a failed submit intentionally remains retryable.
+  if (job.state === 'submitting') {
+    return;
+  }
+  const projectionExisted = context.flowChatStore.getState().sessions.has(job.sessionId);
+  if (!await ensureProjection(context, job)) {
+    return;
+  }
+  if (projectionExisted && isDispatchJobTerminal(job.state) && job.terminalDrained) {
+    return;
+  }
+
+  for (let page = 0; page < MAX_DRAIN_PAGES; page += 1) {
+    if (await refreshJobPage(context, requestedJobId, isObserverCurrent) === 'settled') {
+      return;
+    }
+  }
+  log.debug('Stopped draining dispatch pages at the per-poll bound', {
+    jobId: requestedJobId,
+  });
 }
 
 export function installDispatchJobObserver(context: FlowChatContext): () => void {
@@ -679,6 +781,10 @@ export function installDispatchJobObserver(context: FlowChatContext): () => void
     if (typeof document !== 'undefined' && handleVisibilityChanged) {
       document.removeEventListener('visibilitychange', handleVisibilityChanged);
     }
+    // Drop rather than flush: a pending payload only ever trails what is
+    // already cached, so losing it costs a few replayed events, while writing
+    // during teardown could race whatever tears the store down next.
+    cancelDispatchTranscriptSaves();
   };
   lease = {
     requestRefresh: schedule,

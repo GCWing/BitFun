@@ -196,6 +196,16 @@ interface DispatchJobStoreState {
     lastTransportError?: string,
   ) => void;
   resetReplay: (jobId: string) => void;
+  adoptCachedReplay: (
+    jobId: string,
+    cached: {
+      cursor: number;
+      appliedEventIds: string[];
+      eventLogComplete: boolean;
+      historyTruncated: boolean;
+      omittedEventCount: number;
+    },
+  ) => void;
   updateTitle: (jobId: string, title: string) => void;
   updateModel: (jobId: string, model: string) => void;
   updateApprovalPolicy: (jobId: string, policy: DispatchApprovalPolicy) => void;
@@ -508,6 +518,32 @@ export const useDispatchJobStore = create<DispatchJobStoreState>()(
                 cursor: 0,
                 terminalDrained: false,
                 appliedEventIds: [],
+                updatedAt: Date.now(),
+              },
+            },
+          };
+        });
+      },
+
+      adoptCachedReplay: (jobId, cached) => {
+        set(state => {
+          const current = state.jobs[jobId];
+          if (!current) return state;
+          return {
+            jobs: {
+              ...state.jobs,
+              [jobId]: {
+                ...current,
+                // Replaces rather than merges, and may move the cursor
+                // backwards. The restored transcript defines exactly which
+                // events are already on screen; anything this store remembers
+                // beyond that was projected into a renderer that is gone.
+                cursor: Math.max(0, cached.cursor),
+                terminalDrained: false,
+                appliedEventIds: cached.appliedEventIds.slice(-MAX_APPLIED_EVENT_IDS),
+                eventLogComplete: cached.eventLogComplete,
+                historyTruncated: cached.historyTruncated,
+                omittedEventCount: cached.omittedEventCount,
                 updatedAt: Date.now(),
               },
             },
