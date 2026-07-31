@@ -42,6 +42,7 @@
     "sortLabel": "排序方式",
     "search": "搜索市场…",
     "signIn": "使用 GitHub 登录",
+    "signOut": "注销登录",
     "empty": "暂时没有已发布的小应用。",
     "loadMore": "加载更多",
     "tabs": {
@@ -117,6 +118,7 @@
     "messages": {
       "detailFailed": "加载详情失败：{{error}}",
       "signedIn": "GitHub 登录成功。",
+      "signedOut": "已注销登录。",
       "authExpired": "登录授权已过期，请重试。",
       "authFailed": "登录失败：{{error}}",
       "actionFailed": "操作失败：{{error}}",

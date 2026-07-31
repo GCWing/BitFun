@@ -42,6 +42,7 @@
     "sortLabel": "排序方式",
     "search": "搜尋市場…",
     "signIn": "使用 GitHub 登入",
+    "signOut": "登出",
     "empty": "暫時沒有已發佈的小應用。",
     "loadMore": "載入更多",
     "tabs": {
@@ -117,6 +118,7 @@
     "messages": {
       "detailFailed": "載入詳情失敗：{{error}}",
       "signedIn": "GitHub 登入成功。",
+      "signedOut": "已登出。",
       "authExpired": "登入授權已過期，請重試。",
       "authFailed": "登入失敗：{{error}}",
       "actionFailed": "操作失敗：{{error}}",

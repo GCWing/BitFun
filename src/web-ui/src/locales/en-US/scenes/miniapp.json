@@ -42,6 +42,7 @@
     "sortLabel": "Sort by",
     "search": "Search the market…",
     "signIn": "Sign in with GitHub",
+    "signOut": "Sign out",
     "empty": "No reviewed MiniApps have been published yet.",
     "loadMore": "Load more",
     "tabs": {
@@ -117,6 +118,7 @@
     "messages": {
       "detailFailed": "Could not load details: {{error}}",
       "signedIn": "Signed in with GitHub.",
+      "signedOut": "Signed out.",
       "authExpired": "The sign-in authorization expired. Try again.",
       "authFailed": "Sign-in failed: {{error}}",
       "actionFailed": "Action failed: {{error}}",

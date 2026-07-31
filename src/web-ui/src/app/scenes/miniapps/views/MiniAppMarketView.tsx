@@ -6,6 +6,7 @@ import {
   ExternalLink,
   Heart,
   Loader2,
+  LogOut,
   PackageCheck,
   RefreshCw,
   ShieldCheck,
@@ -170,6 +171,22 @@ const MiniAppMarketView: React.FC = () => {
     }
   };
 
+  const signOut = async () => {
+    setAuthBusy(true);
+    try {
+      await miniAppMarketAPI.logout();
+      setMe(null);
+      if (detail) {
+        setDetail(await miniAppMarketAPI.getListing(detail.slug));
+      }
+      notification.success(t('market.messages.signedOut'));
+    } catch (authError) {
+      notification.error(t('market.messages.actionFailed', { error: String(authError) }));
+    } finally {
+      setAuthBusy(false);
+    }
+  };
+
   const toggleFavorite = async () => {
     if (!detail) return;
     if (!me) {
@@ -224,7 +241,8 @@ const MiniAppMarketView: React.FC = () => {
         confirmOverwrite: Boolean(installed?.localOverride),
       });
       upsertApp(result.app);
-      setInstalled(await miniAppMarketAPI.installedStatus(detail.listingId));
+      setDetail(undefined);
+      setInstalled(null);
       notification.success(
         t(result.updated ? 'market.messages.updated' : 'market.messages.installed'),
       );
@@ -299,6 +317,17 @@ const MiniAppMarketView: React.FC = () => {
               <div className="miniapp-market-native__identity">
                 <Avatar size={22} src={me.user.avatarUrl} alt={me.user.login} />
                 <span>@{me.user.login}</span>
+                <Button
+                  size="small"
+                  variant="ghost"
+                  iconOnly
+                  onClick={() => void signOut()}
+                  disabled={authBusy}
+                  title={t('market.signOut')}
+                  aria-label={t('market.signOut')}
+                >
+                  {authBusy ? <Loader2 size={14} className="gallery-spinning" /> : <LogOut size={14} />}
+                </Button>
               </div>
             ) : (
               <Button size="small" variant="secondary" onClick={() => void signIn()} disabled={authBusy}>
