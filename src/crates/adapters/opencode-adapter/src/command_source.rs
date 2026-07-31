@@ -1,7 +1,7 @@
 use crate::local_source_paths::{
     find_project_root, local_watch_roots, ordered_local_config_directories,
-    project_asset_directories, project_config_directories, user_config_dir,
-    LocalConfigDirectoryKind,
+    project_asset_directories, project_config_directories, LocalConfigDirectoryKind,
+    LocalConfigFileLayer, OpenCodeLocalConfigOptions,
 };
 use bitfun_product_domains::external_sources::{
     EcosystemId, ExternalSourceAssetKind, ExternalSourceContext, ExternalSourceDiagnostic,
@@ -33,38 +33,7 @@ const MAX_COMMAND_TEMPLATE_BYTES: usize = 8 * 1024 * 1024;
 const MAX_CONFIG_FILE_BYTES: usize = 1024 * 1024;
 const MAX_EXPANDED_COMMAND_BYTES: usize = 1024 * 1024;
 
-#[derive(Debug, Clone)]
-pub struct OpenCodeCommandProviderOptions {
-    pub user_config_dir: PathBuf,
-    pub legacy_user_config_dir: Option<PathBuf>,
-    pub explicit_config_file: Option<PathBuf>,
-    pub explicit_config_dir: Option<PathBuf>,
-    pub project_config_enabled: bool,
-}
-
-impl OpenCodeCommandProviderOptions {
-    pub fn from_environment() -> Self {
-        let home = dirs::home_dir();
-        let user_config_dir = user_config_dir(
-            std::env::var_os("XDG_CONFIG_HOME").map(PathBuf::from),
-            home.clone(),
-        );
-        let legacy_user_config_dir = home.map(|home| home.join(".opencode"));
-        Self {
-            user_config_dir,
-            legacy_user_config_dir,
-            explicit_config_file: std::env::var_os("OPENCODE_CONFIG").map(PathBuf::from),
-            explicit_config_dir: std::env::var_os("OPENCODE_CONFIG_DIR").map(PathBuf::from),
-            project_config_enabled: !environment_truthy("OPENCODE_DISABLE_PROJECT_CONFIG"),
-        }
-    }
-}
-
-impl Default for OpenCodeCommandProviderOptions {
-    fn default() -> Self {
-        Self::from_environment()
-    }
-}
+pub type OpenCodeCommandProviderOptions = OpenCodeLocalConfigOptions;
 
 pub struct OpenCodeCommandProvider {
     options: OpenCodeCommandProviderOptions,
@@ -162,14 +131,11 @@ impl OpenCodeCommandProvider {
         deduplicate_layers_keep_last(layers)
     }
 
-    pub(crate) fn config_file_layers(
-        &self,
-        workspace_root: Option<&Path>,
-    ) -> Vec<OpenCodeConfigFileLayer> {
+    fn config_file_layers(&self, workspace_root: Option<&Path>) -> Vec<LocalConfigFileLayer> {
         self.discover_layers(workspace_root)
             .into_iter()
             .filter_map(|layer| match layer.kind {
-                SourceLayerKind::ConfigFile(path) => Some(OpenCodeConfigFileLayer {
+                SourceLayerKind::ConfigFile(path) => Some(LocalConfigFileLayer {
                     path,
                     scope: layer.scope,
                 }),
@@ -177,6 +143,13 @@ impl OpenCodeCommandProvider {
             })
             .collect()
     }
+}
+
+pub(crate) fn command_config_file_layers(
+    options: &OpenCodeLocalConfigOptions,
+    workspace_root: Option<&Path>,
+) -> Vec<LocalConfigFileLayer> {
+    OpenCodeCommandProvider::new(options.clone()).config_file_layers(workspace_root)
 }
 
 impl Default for OpenCodeCommandProvider {
@@ -431,12 +404,6 @@ struct SourceLayer {
     scope: ExternalSourceScope,
     display_name: String,
     source_kind: &'static str,
-}
-
-#[derive(Debug, Clone)]
-pub(crate) struct OpenCodeConfigFileLayer {
-    pub(crate) path: PathBuf,
-    pub(crate) scope: ExternalSourceScope,
 }
 
 #[derive(Debug)]
@@ -991,12 +958,6 @@ fn command_content_version(name: &str, input: &OpenCodeCommandInput) -> String {
     hasher.update([u8::from(input.subtask.unwrap_or(false))]);
     hasher.update([u8::from(input.subtask.is_some())]);
     format!("sha256:{}", hex::encode(hasher.finalize()))
-}
-
-fn environment_truthy(key: &str) -> bool {
-    std::env::var(key)
-        .ok()
-        .is_some_and(|value| matches!(value.to_ascii_lowercase().as_str(), "true" | "1"))
 }
 
 fn expand_template(template: &str, arguments: &str) -> String {

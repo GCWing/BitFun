@@ -177,6 +177,7 @@
       "auto": "自动使用"
     },
     "capability": {
+      "reference": "引用目录",
       "command": "命令",
       "tool": "工具",
       "subagent": "Agent",
@@ -535,6 +536,11 @@
     "configLocations": "配置位置",
     "inherited": "继承自整体模式",
     "capability": {
+      "reference": {
+        "description": "OpenCode 配置中的具名本地目录",
+        "effect": "在工作空间目录视图和显式目录导航中展示引用。",
+        "risk": "引用不会授予额外的文件访问权限。"
+      },
       "subagent": {
         "description": "发现 {{count}} 个 Agent · 来自{{scope}}",
         "effect": "启用后允许调用 OpenCode 中定义的 Agent。",

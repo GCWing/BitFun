@@ -1,5 +1,5 @@
-use crate::command_source::{strip_jsonc, OpenCodeCommandProvider, OpenCodeCommandProviderOptions};
-use crate::local_source_paths::find_project_root;
+use crate::command_source::{command_config_file_layers, strip_jsonc};
+use crate::local_source_paths::{find_project_root, OpenCodeLocalConfigOptions};
 use bitfun_product_domains::external_sources::ExternalSourceScope;
 use bitfun_services_core::bounded_fs::{read_bounded_text, BoundedTextRead};
 use serde_json::Value;
@@ -11,14 +11,14 @@ const MAX_CONFIGURED_SKILL_ROOTS: usize = 64;
 
 #[derive(Debug, Clone)]
 pub struct OpenCodeSkillRootProviderOptions {
-    pub command: OpenCodeCommandProviderOptions,
+    pub config: OpenCodeLocalConfigOptions,
     pub home_dir: Option<PathBuf>,
 }
 
 impl OpenCodeSkillRootProviderOptions {
     pub fn from_environment() -> Self {
         Self {
-            command: OpenCodeCommandProviderOptions::from_environment(),
+            config: OpenCodeLocalConfigOptions::from_environment(),
             home_dir: dirs::home_dir(),
         }
     }
@@ -38,14 +38,14 @@ pub struct OpenCodeConfiguredSkillRoot {
 }
 
 pub struct OpenCodeSkillRootProvider {
-    command_provider: OpenCodeCommandProvider,
+    config: OpenCodeLocalConfigOptions,
     home_dir: Option<PathBuf>,
 }
 
 impl OpenCodeSkillRootProvider {
     pub fn new(options: OpenCodeSkillRootProviderOptions) -> Self {
         Self {
-            command_provider: OpenCodeCommandProvider::new(options.command),
+            config: options.config,
             home_dir: options.home_dir,
         }
     }
@@ -61,7 +61,7 @@ impl OpenCodeSkillRootProvider {
         let mut configured_paths = Vec::new();
         let mut precedence = 0usize;
 
-        for layer in self.command_provider.config_file_layers(workspace_root) {
+        for layer in command_config_file_layers(&self.config, workspace_root) {
             let Some(paths) = read_local_skill_paths(&layer.path) else {
                 continue;
             };

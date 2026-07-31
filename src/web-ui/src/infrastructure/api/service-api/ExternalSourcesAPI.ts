@@ -115,7 +115,7 @@ export interface ExternalSourceRecord {
   contentVersion: string;
   diagnostics?: Array<{
     severity: string;
-    assetKind?: 'source' | 'command' | 'tool' | 'subagent' | 'mcp';
+    assetKind?: 'source' | 'command' | 'tool' | 'subagent' | 'mcp' | 'reference';
     code: string;
     message: string;
   }>;
@@ -184,7 +184,7 @@ export interface ExternalSourceCatalogSnapshot {
   integrationPolicy: ExternalIntegrationPolicySnapshot;
   diagnostics?: Array<{
     severity: string;
-    assetKind?: 'source' | 'command' | 'tool' | 'subagent' | 'mcp';
+    assetKind?: 'source' | 'command' | 'tool' | 'subagent' | 'mcp' | 'reference';
     code: string;
     message: string;
   }>;
@@ -554,6 +554,30 @@ export interface NativePromptCommandConflictSnapshot {
   reconfirmations?: Array<{
     commandName: string;
     nativeCandidateId: string;
+  }>;
+}
+
+export interface WorkspaceReferenceEntry {
+  stableKey: string;
+  alias?: string;
+  path: string;
+  description?: string;
+  hidden: boolean;
+  origin: 'native' | 'external';
+  ecosystemId?: string;
+  sourceDisplayName?: string;
+  sourceScope?: ExternalSourceScope;
+}
+
+export interface WorkspaceReferenceSnapshot {
+  generation: number;
+  discoveryPending: boolean;
+  references: WorkspaceReferenceEntry[];
+  diagnostics?: Array<{
+    severity: string;
+    assetKind?: 'reference';
+    code: string;
+    message: string;
   }>;
 }
 
@@ -1185,6 +1209,30 @@ export const externalSourcesAPI = {
     return (await invokeCompatibleSurfaceSnapshot({
       request: { workspacePath: normalizeOptionalWorkspacePath(workspacePath), forceRefresh },
     })).catalog;
+  },
+
+  async getWorkspaceReferences(
+    workspacePath: string,
+    workspaceId?: string,
+    forceRefresh = false,
+  ) {
+    const snapshot = await invokeExternalSourceCommand<WorkspaceReferenceSnapshot>(
+      'get_workspace_reference_snapshot',
+      {
+        request: {
+          workspacePath: normalizeOptionalWorkspacePath(workspacePath),
+          workspaceId: workspaceId?.trim() || undefined,
+          forceRefresh,
+        },
+      },
+    );
+    return {
+      ...snapshot,
+      references: normalizeOptionalArray<WorkspaceReferenceEntry>(snapshot.references),
+      diagnostics: normalizeOptionalArray<NonNullable<WorkspaceReferenceSnapshot['diagnostics']>[number]>(
+        snapshot.diagnostics,
+      ),
+    };
   },
 
   expandPromptCommand(

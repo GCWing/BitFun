@@ -177,6 +177,7 @@
       "auto": "Use automatically"
     },
     "capability": {
+      "reference": "References",
       "command": "Commands",
       "tool": "Tools",
       "subagent": "Agents",
@@ -535,6 +536,11 @@
     "configLocations": "Configuration locations",
     "inherited": "Inherited from overall mode",
     "capability": {
+      "reference": {
+        "description": "Named local directories from OpenCode configuration",
+        "effect": "Shows references in workspace directory views and explicit directory navigation.",
+        "risk": "References do not grant additional file access."
+      },
       "subagent": {
         "description": "{{count}} agents found · from {{scope}}",
         "effect": "Allows calling agents defined in OpenCode.",

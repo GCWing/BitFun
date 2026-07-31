@@ -2,6 +2,11 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Button, Input, Modal, Textarea } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
+import {
+  externalSourcesAPI,
+  type WorkspaceReferenceEntry,
+  type WorkspaceReferenceSnapshot,
+} from '@/infrastructure/api/service-api/ExternalSourcesAPI';
 import { sshApi } from '@/features/ssh-remote/sshApi';
 import RemoteFileBrowser from '@/features/ssh-remote/RemoteFileBrowser';
 import { createLogger } from '@/shared/utils/logger';
@@ -22,6 +27,8 @@ interface DraftRelatedPath {
   path: string;
   description: string;
 }
+
+type WorkspaceReferenceDiagnostic = NonNullable<WorkspaceReferenceSnapshot['diagnostics']>[number];
 
 function createDraft(path?: Partial<RelatedPath>): DraftRelatedPath {
   return {
@@ -52,10 +59,18 @@ export const WorkspaceRelatedPathsDialog: React.FC<WorkspaceRelatedPathsDialogPr
   const [error, setError] = useState<string | null>(null);
   const [browsingIndex, setBrowsingIndex] = useState<number | null>(null);
   const [remoteHomePath, setRemoteHomePath] = useState<string | undefined>(undefined);
+  const [externalReferences, setExternalReferences] = useState<WorkspaceReferenceEntry[]>([]);
+  const [externalReferencesLoading, setExternalReferencesLoading] = useState(false);
+  const [externalReferencesFailed, setExternalReferencesFailed] = useState(false);
+  const [externalReferenceDiagnostics, setExternalReferenceDiagnostics] = useState<WorkspaceReferenceDiagnostic[]>([]);
 
   const remoteWorkspace = isRemoteWorkspace(workspace);
   const connectionId = workspace.connectionId?.trim() || undefined;
-  const relatedPathCount = drafts.length;
+  const visibleExternalReferences = useMemo(
+    () => externalReferences.filter(reference => reference.origin === 'external' && !reference.hidden),
+    [externalReferences],
+  );
+  const relatedPathCount = drafts.length + visibleExternalReferences.length;
   const scopeDescription = remoteWorkspace
     ? t('nav.workspaces.relatedPaths.dialog.remoteScope', {
         connectionName: workspace.connectionName || workspace.name,
@@ -71,6 +86,48 @@ export const WorkspaceRelatedPathsDialog: React.FC<WorkspaceRelatedPathsDialogPr
     setSaving(false);
     setError(null);
   }, [isOpen, workspace.relatedPaths]);
+
+  useEffect(() => {
+    if (!isOpen || remoteWorkspace) {
+      setExternalReferences([]);
+      setExternalReferencesLoading(false);
+      setExternalReferencesFailed(false);
+      setExternalReferenceDiagnostics([]);
+      return;
+    }
+
+    let cancelled = false;
+    setExternalReferencesLoading(true);
+    setExternalReferencesFailed(false);
+    void externalSourcesAPI
+      .getWorkspaceReferences(workspace.rootPath, workspace.id)
+      .then(snapshot => {
+        if (!cancelled) {
+          setExternalReferences(snapshot.references);
+          setExternalReferenceDiagnostics(snapshot.diagnostics ?? []);
+        }
+      })
+      .catch(fetchError => {
+        log.warn('Failed to load external workspace references', {
+          workspaceId: workspace.id,
+          error: fetchError,
+        });
+        if (!cancelled) {
+          setExternalReferences([]);
+          setExternalReferencesFailed(true);
+          setExternalReferenceDiagnostics([]);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setExternalReferencesLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, remoteWorkspace, workspace.id, workspace.rootPath]);
 
   useEffect(() => {
     if (!isOpen || !remoteWorkspace || !connectionId) {
@@ -202,6 +259,10 @@ export const WorkspaceRelatedPathsDialog: React.FC<WorkspaceRelatedPathsDialogPr
             </div>
           </div>
 
+          <div className="workspace-related-paths-dialog__section-heading">
+            {t('nav.workspaces.relatedPaths.dialog.nativeHeading')}
+          </div>
+
           {drafts.length === 0 ? (
             <div className="workspace-related-paths-dialog__empty">
               {t('nav.workspaces.relatedPaths.dialog.empty')}
@@ -265,6 +326,75 @@ export const WorkspaceRelatedPathsDialog: React.FC<WorkspaceRelatedPathsDialogPr
               ))}
             </div>
           )}
+
+          {!remoteWorkspace ? (
+            <section className="workspace-related-paths-dialog__external-section">
+              <div className="workspace-related-paths-dialog__section-heading">
+                <span>{t('nav.workspaces.relatedPaths.dialog.externalHeading')}</span>
+                <span className="workspace-related-paths-dialog__read-only">
+                  {t('nav.workspaces.relatedPaths.dialog.readOnly')}
+                </span>
+              </div>
+              <div className="workspace-related-paths-dialog__section-description">
+                {t('nav.workspaces.relatedPaths.dialog.externalDescription')}
+              </div>
+              {externalReferenceDiagnostics.length > 0 ? (
+                <details className="workspace-related-paths-dialog__diagnostics">
+                  <summary>
+                    {t('nav.workspaces.relatedPaths.dialog.externalDiagnostics', {
+                      count: externalReferenceDiagnostics.length,
+                    })}
+                  </summary>
+                  <ul>
+                    {externalReferenceDiagnostics.map((diagnostic, index) => (
+                      <li key={`${diagnostic.code}-${index}`}>
+                        <code>{diagnostic.code}</code>
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              ) : null}
+              {externalReferencesLoading ? (
+                <div className="workspace-related-paths-dialog__empty">
+                  {t('nav.workspaces.relatedPaths.dialog.externalLoading')}
+                </div>
+              ) : externalReferencesFailed ? (
+                <div className="workspace-related-paths-dialog__error" role="status">
+                  {t('nav.workspaces.relatedPaths.messages.externalLoadFailed')}
+                </div>
+              ) : visibleExternalReferences.length === 0 ? (
+                <div className="workspace-related-paths-dialog__empty">
+                  {t('nav.workspaces.relatedPaths.dialog.externalEmpty')}
+                </div>
+              ) : (
+                <div className="workspace-related-paths-dialog__list">
+                  {visibleExternalReferences.map(reference => (
+                    <div
+                      key={reference.stableKey}
+                      className="workspace-related-paths-dialog__card workspace-related-paths-dialog__card--external"
+                    >
+                      <div className="workspace-related-paths-dialog__card-header">
+                        <span className="workspace-related-paths-dialog__external-alias">
+                          @{reference.alias}
+                        </span>
+                        <span className="workspace-related-paths-dialog__external-source">
+                          {reference.sourceDisplayName}
+                        </span>
+                      </div>
+                      <div className="workspace-related-paths-dialog__external-path">
+                        {reference.path}
+                      </div>
+                      {reference.description ? (
+                        <div className="workspace-related-paths-dialog__section-description">
+                          {reference.description}
+                        </div>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+          ) : null}
 
           {error ? (
             <div className="workspace-related-paths-dialog__error" role="alert">

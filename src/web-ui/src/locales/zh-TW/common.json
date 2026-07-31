@@ -420,6 +420,13 @@
       "relatedPaths": {
         "badge": "{{count}} 關聯",
         "dialog": {
+          "nativeHeading": "BitFun 工作空間目錄",
+          "externalHeading": "OpenCode 引用",
+          "externalDescription": "依 OpenCode 的來源優先順序從其設定中探索。此處僅供唯讀顯示，不會授予額外的檔案存取權限。",
+          "externalLoading": "正在載入 OpenCode 引用…",
+          "externalEmpty": "目前工作空間未探索到可見的本機 OpenCode 引用。",
+          "externalDiagnostics": "{{count}} 個引用項目需要留意",
+          "readOnly": "唯讀",
           "title": "關聯目錄",
           "heading": "為目前工作區補充相關目錄",
           "description": "這些目錄會連同說明一起進入工作區上下文，適合跨項目遷移、monorepo 子目錄協作等場景。",
@@ -433,6 +440,7 @@
           "descriptionPlaceholder": "選填：簡短說明這個目錄為什麼重要，例如：舊版 TypeScript 實現 / monorepo 中的 billing 子目錄"
         },
         "messages": {
+          "externalLoadFailed": "無法載入 OpenCode 引用，BitFun 工作空間目錄不受影響。",
           "saveFailed": "儲存關聯目錄失敗",
           "selectFailed": "選擇目錄失敗"
         },

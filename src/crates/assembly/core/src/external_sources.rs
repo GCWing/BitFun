@@ -59,11 +59,11 @@ use bitfun_codex_adapter::{CodexMcpProvider, CodexSubagentProvider};
 use bitfun_external_sources::{
     DeferredDiscovery, ExternalMcpDiscoveryResult, ExternalSourceControlPlane,
     ExternalSourceCoordinator, ExternalSourceDiscoveryResult, ExternalSubagentDiscoveryResult,
-    ExternalToolDiscoveryResult,
+    ExternalToolDiscoveryResult, ExternalWorkspaceReferenceDiscoveryResult,
 };
 use bitfun_opencode_adapter::{
     OpenCodeCommandProvider, OpenCodeMcpProvider, OpenCodeSkillRootProvider,
-    OpenCodeSubagentProvider, OpenCodeToolProvider,
+    OpenCodeSubagentProvider, OpenCodeToolProvider, OpenCodeWorkspaceReferenceProvider,
 };
 #[cfg(test)]
 use bitfun_opencode_adapter::{
@@ -82,6 +82,10 @@ use bitfun_product_domains::external_sources::{
     PromptCommandSourceProvider,
 };
 use bitfun_product_domains::external_subagents::ExternalSubagentSourceProvider;
+use bitfun_product_domains::workspace_references::{
+    ExternalWorkspaceReferenceSourceProvider, WorkspaceReferenceCatalogEntry,
+    WorkspaceReferenceOrigin, WorkspaceReferenceSnapshot,
+};
 use bitfun_services_core::json_store::JsonFileStore;
 use bitfun_services_core::workspace_text::read_workspace_relative_text_bounded;
 use bitfun_services_integrations::file_watch::{FileWatchService, FileWatcherConfig};
@@ -106,6 +110,7 @@ pub const EXTERNAL_CAPABILITY_COMMAND: &str = "command";
 pub const EXTERNAL_CAPABILITY_TOOL: &str = "tool";
 pub const EXTERNAL_CAPABILITY_SUBAGENT: &str = "subagent";
 pub const EXTERNAL_CAPABILITY_MCP: &str = "mcp";
+pub const EXTERNAL_CAPABILITY_REFERENCE: &str = "reference";
 const EXTERNAL_ADAPTER_CONTRACT_MAJOR: u32 = 1;
 const MAX_PROMPT_COMMAND_FILE_REFERENCES: usize = 8;
 const MAX_PROMPT_COMMAND_FILE_BYTES: usize = 64 * 1024;
@@ -252,6 +257,7 @@ struct ExternalEcosystemRegistration {
     tool_provider: Option<Arc<dyn ExternalToolSourceProvider>>,
     subagent_provider: Option<Arc<dyn ExternalSubagentSourceProvider>>,
     mcp_provider: Option<Arc<dyn ExternalMcpSourceProvider>>,
+    workspace_reference_provider: Option<Arc<dyn ExternalWorkspaceReferenceSourceProvider>>,
 }
 
 impl ExternalEcosystemRegistration {
@@ -291,6 +297,12 @@ impl ExternalEcosystemRegistration {
             (
                 EXTERNAL_CAPABILITY_MCP,
                 self.mcp_provider
+                    .as_ref()
+                    .map(|provider| provider.identity().ecosystem_id),
+            ),
+            (
+                EXTERNAL_CAPABILITY_REFERENCE,
+                self.workspace_reference_provider
                     .as_ref()
                     .map(|provider| provider.identity().ecosystem_id),
             ),
@@ -343,6 +355,11 @@ fn default_external_integration_registry() -> Vec<ExternalEcosystemRegistration>
                         ExternalIntegrationAccess::AskBeforeUse,
                         ExternalIntegrationAccess::AskBeforeUse,
                     ),
+                    external_capability_descriptor(
+                        EXTERNAL_CAPABILITY_REFERENCE,
+                        ExternalIntegrationAccess::Auto,
+                        ExternalIntegrationAccess::Auto,
+                    ),
                 ],
             },
             contract_major: EXTERNAL_ADAPTER_CONTRACT_MAJOR,
@@ -351,6 +368,9 @@ fn default_external_integration_registry() -> Vec<ExternalEcosystemRegistration>
             tool_provider: Some(Arc::new(OpenCodeToolProvider::default())),
             subagent_provider: Some(Arc::new(OpenCodeSubagentProvider::default())),
             mcp_provider: Some(Arc::new(OpenCodeMcpProvider::default())),
+            workspace_reference_provider: Some(Arc::new(
+                OpenCodeWorkspaceReferenceProvider::default(),
+            )),
         },
         ExternalEcosystemRegistration {
             descriptor: ExternalIntegrationEcosystemDescriptor {
@@ -382,6 +402,7 @@ fn default_external_integration_registry() -> Vec<ExternalEcosystemRegistration>
             tool_provider: None,
             subagent_provider: Some(Arc::new(ClaudeCodeSubagentProvider::default())),
             mcp_provider: Some(Arc::new(ClaudeCodeMcpProvider::default())),
+            workspace_reference_provider: None,
         },
         ExternalEcosystemRegistration {
             descriptor: ExternalIntegrationEcosystemDescriptor {
@@ -408,6 +429,7 @@ fn default_external_integration_registry() -> Vec<ExternalEcosystemRegistration>
             tool_provider: None,
             subagent_provider: Some(Arc::new(CodexSubagentProvider::default())),
             mcp_provider: Some(Arc::new(CodexMcpProvider::default())),
+            workspace_reference_provider: None,
         },
     ]
 }
@@ -984,6 +1006,16 @@ impl WorkspaceExternalSourceService {
             .iter()
             .filter_map(|registration| registration.mcp_provider.as_ref().map(Arc::clone))
             .collect();
+        let workspace_reference_providers: Vec<Arc<dyn ExternalWorkspaceReferenceSourceProvider>> =
+            registrations
+                .iter()
+                .filter_map(|registration| {
+                    registration
+                        .workspace_reference_provider
+                        .as_ref()
+                        .map(Arc::clone)
+                })
+                .collect();
         let (preferences, mcp_revision_key) =
             external_sources_config_with_mcp_revision_key().await?;
         let control_plane = Arc::new(ExternalSourceControlPlane::new(
@@ -993,6 +1025,7 @@ impl WorkspaceExternalSourceService {
             tool_providers,
             subagent_providers,
             mcp_providers,
+            workspace_reference_providers,
         )?);
         let suppressed_sources = preferences
             .suppressed_source_keys
@@ -1054,6 +1087,57 @@ impl WorkspaceExternalSourceService {
     async fn refresh(self: &Arc<Self>) -> Result<ExternalSourceCatalogSnapshot, String> {
         self.refresh_with_worker_recovery(WorkerRecoveryPolicy::ResetAndAttempt)
             .await
+    }
+
+    async fn refresh_workspace_references(self: &Arc<Self>, force: bool) -> Result<(), String> {
+        sync_service_preferences(self).await?;
+        let _refresh_guard = self.refresh_gate.lock().await;
+        if !force
+            && !lock_workspace_reference_coordinator(&self.control_plane)
+                .snapshot()
+                .discovery_pending
+        {
+            return Ok(());
+        }
+        let preferences = read_external_sources_config().await?;
+        let policy = integration_policy_snapshot(&preferences, self.workspace_root.as_deref())?;
+        let mut requests = Vec::new();
+        let mut disabled_results = Vec::new();
+        for request in
+            lock_workspace_reference_coordinator(&self.control_plane).discovery_requests()
+        {
+            if integration_capability_is_discoverable(
+                &policy,
+                request.ecosystem_id().as_str(),
+                EXTERNAL_CAPABILITY_REFERENCE,
+            ) {
+                requests.push(request);
+            } else {
+                disabled_results.push(request.disabled());
+            }
+        }
+        let mut batch = self
+            .control_plane
+            .discover_workspace_references(requests, PROVIDER_DISCOVERY_TIMEOUT)
+            .await;
+        batch.immediate.append(&mut disabled_results);
+        lock_workspace_reference_coordinator(&self.control_plane)
+            .apply_discovery_results(batch.immediate);
+        for deferred in batch.deferred {
+            self.schedule_deferred_workspace_reference_discovery(deferred);
+        }
+        self.ensure_watch_roots(&policy).await;
+        Ok(())
+    }
+
+    async fn ensure_workspace_reference_refresh(self: &Arc<Self>) -> Result<(), String> {
+        let pending = lock_workspace_reference_coordinator(&self.control_plane)
+            .snapshot()
+            .discovery_pending;
+        if pending {
+            self.refresh_workspace_references(false).await?;
+        }
+        Ok(())
     }
 
     async fn refresh_with_runtime_invalidation(
@@ -1157,7 +1241,22 @@ impl WorkspaceExternalSourceService {
                 disabled_mcp_results.push(request.disabled());
             }
         }
-        let (command_batch, tool_batch, subagent_batch, mcp_batch) = tokio::join!(
+        let mut workspace_reference_requests = Vec::new();
+        let mut disabled_workspace_reference_results = Vec::new();
+        for request in
+            lock_workspace_reference_coordinator(&self.control_plane).discovery_requests()
+        {
+            if integration_capability_is_discoverable(
+                &policy,
+                request.ecosystem_id().as_str(),
+                EXTERNAL_CAPABILITY_REFERENCE,
+            ) {
+                workspace_reference_requests.push(request);
+            } else {
+                disabled_workspace_reference_results.push(request.disabled());
+            }
+        }
+        let (command_batch, tool_batch, subagent_batch, mcp_batch, workspace_reference_batch) = tokio::join!(
             self.control_plane
                 .discover_commands(requests, PROVIDER_DISCOVERY_TIMEOUT),
             self.control_plane
@@ -1166,6 +1265,10 @@ impl WorkspaceExternalSourceService {
                 .discover_subagents(subagent_requests, PROVIDER_DISCOVERY_TIMEOUT),
             self.control_plane
                 .discover_mcp(mcp_requests, PROVIDER_DISCOVERY_TIMEOUT),
+            self.control_plane.discover_workspace_references(
+                workspace_reference_requests,
+                PROVIDER_DISCOVERY_TIMEOUT,
+            ),
         );
         let mut results = command_batch.immediate;
         results.append(&mut disabled_command_results);
@@ -1175,12 +1278,16 @@ impl WorkspaceExternalSourceService {
         subagent_results.append(&mut disabled_subagent_results);
         let mut mcp_results = mcp_batch.immediate;
         mcp_results.append(&mut disabled_mcp_results);
+        let mut workspace_reference_results = workspace_reference_batch.immediate;
+        workspace_reference_results.append(&mut disabled_workspace_reference_results);
         let command_snapshot =
             lock_coordinator(&self.control_plane).apply_discovery_results(results);
         lock_tool_coordinator(&self.control_plane).apply_discovery_results(tool_results);
         let subagent_snapshot = lock_subagent_coordinator(&self.control_plane)
             .apply_discovery_results(subagent_results);
         lock_mcp_coordinator(&self.control_plane).apply_discovery_results(mcp_results);
+        lock_workspace_reference_coordinator(&self.control_plane)
+            .apply_discovery_results(workspace_reference_results);
         for deferred in command_batch.deferred {
             self.schedule_deferred_command_discovery(deferred);
         }
@@ -1192,6 +1299,9 @@ impl WorkspaceExternalSourceService {
         }
         for deferred in mcp_batch.deferred {
             self.schedule_deferred_mcp_discovery(deferred);
+        }
+        for deferred in workspace_reference_batch.deferred {
+            self.schedule_deferred_workspace_reference_discovery(deferred);
         }
         self.schedule_subagent_last_valid_expiry(&subagent_snapshot);
         self.ensure_watch_roots(&policy).await;
@@ -1888,6 +1998,47 @@ impl WorkspaceExternalSourceService {
         });
     }
 
+    fn schedule_deferred_workspace_reference_discovery(
+        self: &Arc<Self>,
+        deferred: DeferredDiscovery<ExternalWorkspaceReferenceDiscoveryResult>,
+    ) {
+        let weak = Arc::downgrade(self);
+        let control_plane = Arc::clone(&self.control_plane);
+        tokio::spawn(async move {
+            let mut deferred = deferred;
+            loop {
+                let Some((completed, observer)) =
+                    control_plane.complete_workspace_reference(deferred).await
+                else {
+                    return;
+                };
+                {
+                    let Some(service) = weak.upgrade() else {
+                        return;
+                    };
+                    let _refresh_guard = service.refresh_gate.lock().await;
+                    let Some(result) = control_plane.finalize_workspace_reference(completed).await
+                    else {
+                        return;
+                    };
+                    service
+                        .complete_deferred_workspace_reference_discovery(result)
+                        .await;
+                }
+                let Some(observer) = observer else {
+                    return;
+                };
+                let Some(next) = control_plane
+                    .resume_abandoned_workspace_reference(observer)
+                    .await
+                else {
+                    return;
+                };
+                deferred = next;
+            }
+        });
+    }
+
     async fn complete_deferred_discovery(&self, result: ExternalSourceDiscoveryResult) {
         let provider_id = result.provider_id().clone();
         let Ok(preferences) = read_external_sources_config().await else {
@@ -2006,6 +2157,34 @@ impl WorkspaceExternalSourceService {
         if let Ok(snapshot) = self.rebuild_product_snapshot(command_snapshot).await {
             let _ = self.updates.send(snapshot);
         }
+    }
+
+    async fn complete_deferred_workspace_reference_discovery(
+        &self,
+        result: ExternalWorkspaceReferenceDiscoveryResult,
+    ) {
+        let provider_id = result.provider_id().clone();
+        let Ok(preferences) = read_external_sources_config().await else {
+            return;
+        };
+        let Ok(policy) = integration_policy_snapshot(&preferences, self.workspace_root.as_deref())
+        else {
+            return;
+        };
+        let ecosystem_id = lock_workspace_reference_coordinator(&self.control_plane)
+            .ecosystem_for_provider(&provider_id);
+        if ecosystem_id.is_none_or(|ecosystem_id| {
+            !integration_capability_is_discoverable(
+                &policy,
+                ecosystem_id.as_str(),
+                EXTERNAL_CAPABILITY_REFERENCE,
+            )
+        }) {
+            self.ensure_watch_roots(&policy).await;
+            return;
+        }
+        lock_workspace_reference_coordinator(&self.control_plane).apply_discovery_result(result);
+        self.ensure_watch_roots(&policy).await;
     }
 
     fn schedule_subagent_last_valid_expiry(
@@ -2368,7 +2547,18 @@ impl WorkspaceExternalSourceService {
             let known = coordinator.set_source_enabled(stable_key, enabled).is_ok();
             (previous, known)
         };
-        if !command_known && !tool_known && !subagent_known && !mcp_known {
+        let (previous_workspace_references, workspace_reference_known) = {
+            let mut coordinator = lock_workspace_reference_coordinator(&self.control_plane);
+            let previous = coordinator.suppressed_sources().clone();
+            let known = coordinator.set_source_enabled(stable_key, enabled).is_ok();
+            (previous, known)
+        };
+        if !command_known
+            && !tool_known
+            && !subagent_known
+            && !mcp_known
+            && !workspace_reference_known
+        {
             return Err(missing_candidate_error(format!(
                 "External source '{stable_key}' is no longer available"
             )));
@@ -2387,6 +2577,8 @@ impl WorkspaceExternalSourceService {
                         .replace_suppressed_sources(previous_subagents);
                     lock_mcp_coordinator(&self.control_plane)
                         .replace_suppressed_sources(previous_mcps);
+                    lock_workspace_reference_coordinator(&self.control_plane)
+                        .replace_suppressed_sources(previous_workspace_references);
                     return Err(error);
                 }
             };
@@ -2396,6 +2588,8 @@ impl WorkspaceExternalSourceService {
         lock_subagent_coordinator(&self.control_plane)
             .replace_suppressed_sources(authoritative.clone());
         lock_mcp_coordinator(&self.control_plane).replace_suppressed_sources(authoritative.clone());
+        lock_workspace_reference_coordinator(&self.control_plane)
+            .replace_suppressed_sources(authoritative.clone());
         propagate_suppressed_sources(&authoritative, self);
         // Refresh acquires the same gate. Release the mutation critical section
         // after the preference and in-memory coordinators agree, then refresh
@@ -3083,6 +3277,12 @@ impl WorkspaceExternalSourceService {
         provider_roots.extend(
             lock_mcp_coordinator(&self.control_plane).watch_roots_for_ecosystems(&mcp_ecosystems),
         );
+        let workspace_reference_ecosystems =
+            ecosystems_with_discoverable_capability(policy, EXTERNAL_CAPABILITY_REFERENCE);
+        provider_roots.extend(
+            lock_workspace_reference_coordinator(&self.control_plane)
+                .watch_roots_for_ecosystems(&workspace_reference_ecosystems),
+        );
         for root in provider_roots {
             roots
                 .entry(root.path)
@@ -3128,6 +3328,12 @@ fn lock_mcp_coordinator(
     control_plane: &ExternalSourceControlPlane,
 ) -> MutexGuard<'_, bitfun_external_sources::ExternalMcpCoordinator> {
     control_plane.lock_mcp()
+}
+
+fn lock_workspace_reference_coordinator(
+    control_plane: &ExternalSourceControlPlane,
+) -> MutexGuard<'_, bitfun_external_sources::ExternalWorkspaceReferenceCoordinator> {
+    control_plane.lock_workspace_references()
 }
 
 fn lock_snapshot(
@@ -4585,6 +4791,8 @@ fn propagate_suppressed_sources(
         lock_subagent_coordinator(&service.control_plane)
             .replace_suppressed_sources(sources.clone());
         lock_mcp_coordinator(&service.control_plane).replace_suppressed_sources(sources.clone());
+        lock_workspace_reference_coordinator(&service.control_plane)
+            .replace_suppressed_sources(sources.clone());
         tokio::spawn(async move {
             if let Err(error) = service.refresh_preserving_worker_recovery().await {
                 log::warn!(
@@ -4781,6 +4989,15 @@ async fn sync_service_preferences(service: &WorkspaceExternalSourceService) -> R
             false
         }
     };
+    let workspace_reference_changed = {
+        let mut coordinator = lock_workspace_reference_coordinator(&service.control_plane);
+        if coordinator.suppressed_sources() != &suppressed_sources {
+            coordinator.replace_suppressed_sources(suppressed_sources.clone());
+            true
+        } else {
+            false
+        }
+    };
     let subagent_preferences_changed =
         service.snapshot().preference_revision != preferences.preference_revision;
     let policy_changed = service.snapshot().integration_policy != policy;
@@ -4788,6 +5005,7 @@ async fn sync_service_preferences(service: &WorkspaceExternalSourceService) -> R
         || tool_changed
         || subagent_changed
         || mcp_changed
+        || workspace_reference_changed
         || subagent_preferences_changed
         || policy_changed
     {
@@ -5475,6 +5693,85 @@ pub async fn external_source_snapshot(
     }
 }
 
+pub async fn workspace_reference_snapshot(
+    workspace_root: &Path,
+    native_related_paths: &[crate::service::workspace::RelatedPath],
+    force_refresh: bool,
+) -> Result<WorkspaceReferenceSnapshot, String> {
+    let service = service_for(Some(workspace_root)).await?;
+    sync_service_preferences(&service).await?;
+    if force_refresh {
+        service.refresh_workspace_references(true).await?;
+    } else {
+        service.ensure_workspace_reference_refresh().await?;
+    }
+    let active_ecosystems = ecosystems_with_active_capability(
+        &service.snapshot().integration_policy,
+        EXTERNAL_CAPABILITY_REFERENCE,
+    );
+    let external = lock_workspace_reference_coordinator(&service.control_plane).snapshot();
+    Ok(compose_workspace_reference_snapshot(
+        native_related_paths,
+        external,
+        &active_ecosystems,
+    ))
+}
+
+fn compose_workspace_reference_snapshot(
+    native_related_paths: &[crate::service::workspace::RelatedPath],
+    external: bitfun_external_sources::ExternalWorkspaceReferenceCoordinatorSnapshot,
+    active_ecosystems: &BTreeSet<EcosystemId>,
+) -> WorkspaceReferenceSnapshot {
+    let external_sources = external
+        .sources
+        .iter()
+        .filter(|source| active_ecosystems.contains(&source.record.ecosystem_id))
+        .map(|source| (source.record.key.clone(), &source.record))
+        .collect::<BTreeMap<_, _>>();
+    let mut references = native_related_paths
+        .iter()
+        .map(|related_path| WorkspaceReferenceCatalogEntry {
+            stable_key: native_workspace_reference_key(related_path),
+            alias: None,
+            path: PathBuf::from(&related_path.path),
+            description: related_path.description.clone(),
+            hidden: false,
+            origin: WorkspaceReferenceOrigin::Native,
+            ecosystem_id: None,
+            source_display_name: None,
+            source_scope: None,
+        })
+        .collect::<Vec<_>>();
+    references.extend(external.references.into_iter().filter_map(|reference| {
+        let source = external_sources.get(&reference.source)?;
+        Some(WorkspaceReferenceCatalogEntry {
+            stable_key: reference.stable_key(),
+            alias: Some(reference.alias),
+            path: reference.path,
+            description: reference.description,
+            hidden: reference.hidden,
+            origin: WorkspaceReferenceOrigin::External,
+            ecosystem_id: Some(source.ecosystem_id.clone()),
+            source_display_name: Some(source.display_name.clone()),
+            source_scope: Some(source.scope),
+        })
+    }));
+    WorkspaceReferenceSnapshot {
+        generation: external.generation,
+        discovery_pending: external.discovery_pending,
+        references,
+        diagnostics: external.diagnostics,
+    }
+}
+
+fn native_workspace_reference_key(related_path: &crate::service::workspace::RelatedPath) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(related_path.path.as_bytes());
+    hasher.update([0]);
+    hasher.update(related_path.description.as_deref().unwrap_or("").as_bytes());
+    format!("native:{}", hex::encode(hasher.finalize()))
+}
+
 /// Resolves an opaque source identity to its host-local location for a host
 /// action. The raw path must not be serialized into the public snapshot.
 pub async fn external_source_location_for_host_action(
@@ -5863,6 +6160,7 @@ mod tests {
         PromptCommandAvailability, PromptCommandDefinition, PromptCommandProviderIdentity,
         PromptCommandProviderSnapshot, SourceQualifiedCommandId,
     };
+    use bitfun_product_domains::workspace_references::ExternalWorkspaceReferenceDefinition;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
     fn native_mcp_config_with_pin(pin: &str) -> MCPServerConfig {
@@ -5887,6 +6185,72 @@ mod tests {
             oauth_enabled: None,
             xaa: None,
         }
+    }
+
+    #[test]
+    fn effective_workspace_references_keep_native_order_before_external_aliases() {
+        let native = vec![crate::service::workspace::RelatedPath {
+            path: "D:/native-docs".to_string(),
+            description: Some("BitFun workspace setting".to_string()),
+        }];
+        let source_key = SourceKey::new("opencode.references", "project-config").unwrap();
+        let external = bitfun_external_sources::ExternalWorkspaceReferenceCoordinatorSnapshot {
+            generation: 7,
+            discovery_pending: false,
+            sources: vec![ExternalSourceCatalogEntry {
+                stable_key: source_key.stable_key(),
+                presentation_group_id: None,
+                record: ExternalSourceRecord {
+                    key: source_key.clone(),
+                    ecosystem_id: EcosystemId::new("opencode").unwrap(),
+                    display_name: "OpenCode project references".to_string(),
+                    source_kind: "opencode_config".to_string(),
+                    scope: ExternalSourceScope::Project,
+                    location: "D:/workspace/opencode.json".to_string(),
+                    execution_domain_id: ExecutionDomainId::new("local-user").unwrap(),
+                    health:
+                        bitfun_product_domains::external_sources::ExternalSourceHealth::Available,
+                    content_version: "source-v1".to_string(),
+                    diagnostics: Vec::new(),
+                },
+                lifecycle: ExternalSourceLifecycleState::Available,
+            }],
+            references: vec![ExternalWorkspaceReferenceDefinition {
+                source: source_key,
+                alias: "docs".to_string(),
+                path: PathBuf::from("D:/external-docs"),
+                description: Some("OpenCode reference".to_string()),
+                hidden: false,
+                content_version: "reference-v1".to_string(),
+            }],
+            diagnostics: Vec::new(),
+        };
+
+        let inactive =
+            compose_workspace_reference_snapshot(&native, external.clone(), &BTreeSet::new());
+        assert_eq!(inactive.references.len(), 1);
+        assert_eq!(
+            inactive.references[0].origin,
+            WorkspaceReferenceOrigin::Native
+        );
+
+        let active_ecosystems = [EcosystemId::new("opencode").unwrap()]
+            .into_iter()
+            .collect();
+        let snapshot = compose_workspace_reference_snapshot(&native, external, &active_ecosystems);
+
+        assert_eq!(snapshot.generation, 7);
+        assert_eq!(snapshot.references.len(), 2);
+        assert_eq!(
+            snapshot.references[0].origin,
+            WorkspaceReferenceOrigin::Native
+        );
+        assert_eq!(snapshot.references[0].alias, None);
+        assert_eq!(
+            snapshot.references[1].origin,
+            WorkspaceReferenceOrigin::External
+        );
+        assert_eq!(snapshot.references[1].alias.as_deref(), Some("docs"));
     }
 
     #[test]
@@ -6558,6 +6922,7 @@ mod tests {
                 Vec::new(),
                 Vec::new(),
                 Vec::new(),
+                Vec::new(),
             )
             .unwrap(),
         );
@@ -6609,7 +6974,7 @@ mod tests {
         )
         .unwrap();
         let provider = OpenCodeSkillRootProvider::new(OpenCodeSkillRootProviderOptions {
-            command: OpenCodeCommandProviderOptions {
+            config: OpenCodeCommandProviderOptions {
                 user_config_dir: user_config,
                 legacy_user_config_dir: Some(home.join(".opencode")),
                 explicit_config_file: None,
@@ -7059,6 +7424,11 @@ mod tests {
                 ExternalIntegrationAccess::AskBeforeUse,
                 ExternalIntegrationAccess::AskBeforeUse,
             ),
+            (
+                EXTERNAL_CAPABILITY_REFERENCE,
+                ExternalIntegrationAccess::Auto,
+                ExternalIntegrationAccess::Auto,
+            ),
         ] {
             let capability = descriptor
                 .capabilities
@@ -7087,6 +7457,7 @@ mod tests {
                     EXTERNAL_CAPABILITY_TOOL,
                     EXTERNAL_CAPABILITY_SUBAGENT,
                     EXTERNAL_CAPABILITY_MCP,
+                    EXTERNAL_CAPABILITY_REFERENCE,
                 ]),
             ),
             (
@@ -7117,7 +7488,10 @@ mod tests {
             assert_eq!(capabilities, expected[ecosystem]);
             for capability in &registration.descriptor.capabilities {
                 let expected_access = if ecosystem == "opencode"
-                    && capability.capability_id.as_str() == EXTERNAL_CAPABILITY_COMMAND
+                    && matches!(
+                        capability.capability_id.as_str(),
+                        EXTERNAL_CAPABILITY_COMMAND | EXTERNAL_CAPABILITY_REFERENCE
+                    )
                     || ecosystem == "claude-code"
                         && capability.capability_id.as_str() == EXTERNAL_CAPABILITY_COMMAND
                 {
@@ -7176,6 +7550,7 @@ mod tests {
             EXTERNAL_CAPABILITY_TOOL,
             EXTERNAL_CAPABILITY_SUBAGENT,
             EXTERNAL_CAPABILITY_MCP,
+            EXTERNAL_CAPABILITY_REFERENCE,
         ] {
             assert_eq!(
                 ecosystems_with_discoverable_capability(&policy, capability),

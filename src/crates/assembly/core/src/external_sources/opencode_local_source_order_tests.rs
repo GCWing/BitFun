@@ -117,6 +117,7 @@ impl Fixture {
                 self.subagent_provider(explicit_config_dir.clone()),
             )],
             vec![Arc::new(self.mcp_provider(explicit_config_dir))],
+            Vec::new(),
         )
         .expect("OpenCode control plane")
     }

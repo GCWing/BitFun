@@ -1371,6 +1371,7 @@ pub enum ExternalSourceAssetKind {
     Subagent,
     Mcp,
     Hook,
+    Reference,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

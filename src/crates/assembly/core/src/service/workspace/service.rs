@@ -629,6 +629,17 @@ impl WorkspaceService {
     }
 
     #[cfg(feature = "service-integrations")]
+    pub async fn is_live_worktree_root_in_same_repository(
+        &self,
+        registered_path: &Path,
+        candidate: &Path,
+    ) -> Result<bool, GitError> {
+        super::worktree_topology::global_worktree_topology_service()
+            .is_live_worktree_root_in_same_repository(registered_path, candidate)
+            .await
+    }
+
+    #[cfg(feature = "service-integrations")]
     pub async fn invalidate_worktree_topology(&self, path: &Path) {
         super::worktree_topology::global_worktree_topology_service()
             .invalidate(path)

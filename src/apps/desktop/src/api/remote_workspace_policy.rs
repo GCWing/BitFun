@@ -550,6 +550,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         RemoteWorkspacePolicy::RemoteUnsupported,
     ),
     (
+        "get_workspace_reference_snapshot",
+        RemoteWorkspacePolicy::RemoteUnsupported,
+    ),
+    (
         "get_native_prompt_command_conflicts_command",
         RemoteWorkspacePolicy::RemoteUnsupported,
     ),
@@ -2031,6 +2035,15 @@ mod tests {
                 "{command} must never fall back to the controller's local MCP config"
             );
         }
+    }
+
+    #[test]
+    fn workspace_reference_snapshot_explicitly_rejects_remote_workspaces() {
+        assert_eq!(
+            remote_workspace_policy("get_workspace_reference_snapshot"),
+            Some(RemoteWorkspacePolicy::RemoteUnsupported),
+            "workspace references must never scan controller-local OpenCode config for a remote workspace"
+        );
     }
 
     #[test]

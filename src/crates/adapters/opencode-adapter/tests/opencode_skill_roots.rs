@@ -34,7 +34,7 @@ impl Fixture {
 
     fn provider(&self) -> OpenCodeSkillRootProvider {
         OpenCodeSkillRootProvider::new(OpenCodeSkillRootProviderOptions {
-            command: OpenCodeCommandProviderOptions {
+            config: OpenCodeCommandProviderOptions {
                 user_config_dir: self.user_config.clone(),
                 legacy_user_config_dir: Some(self.home.join(".opencode")),
                 explicit_config_file: None,

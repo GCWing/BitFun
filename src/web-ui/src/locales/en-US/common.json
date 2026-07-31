@@ -420,6 +420,13 @@
       "relatedPaths": {
         "badge": "{{count}} linked",
         "dialog": {
+          "nativeHeading": "BitFun workspace directories",
+          "externalHeading": "OpenCode references",
+          "externalDescription": "Discovered from OpenCode configuration using OpenCode's source priority. These entries are read-only here and do not grant additional file access.",
+          "externalLoading": "Loading OpenCode references…",
+          "externalEmpty": "No visible local OpenCode references were found for this workspace.",
+          "externalDiagnostics": "{{count}} reference entries need attention",
+          "readOnly": "Read-only",
           "title": "Related directories",
           "heading": "Add supporting directories to this workspace",
           "description": "These directories and descriptions are injected into workspace context, which is useful for cross-project migrations and focused monorepo slices.",
@@ -433,6 +440,7 @@
           "descriptionPlaceholder": "Optional: briefly explain why this directory matters, for example: legacy TypeScript implementation / billing package inside the monorepo"
         },
         "messages": {
+          "externalLoadFailed": "OpenCode references could not be loaded. Your BitFun workspace directories are unaffected.",
           "saveFailed": "Failed to save related directories",
           "selectFailed": "Failed to select directory"
         },

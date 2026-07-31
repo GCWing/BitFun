@@ -76,6 +76,28 @@ describe('ExternalSourcesAPI', () => {
     });
   });
 
+  it('keeps the execution root and workspace metadata identity in reference discovery', async () => {
+    invokeMock.mockResolvedValueOnce({
+      generation: 3,
+      discoveryPending: false,
+      references: [],
+    });
+
+    await externalSourcesAPI.getWorkspaceReferences(
+      'D:/workspace/project/.bitfun/worktrees/task',
+      'workspace-1',
+      true,
+    );
+
+    expect(invokeMock).toHaveBeenCalledWith('get_workspace_reference_snapshot', {
+      request: {
+        workspacePath: 'D:/workspace/project/.bitfun/worktrees/task',
+        workspaceId: 'workspace-1',
+        forceRefresh: true,
+      },
+    });
+  });
+
   it('treats an empty workspace path as the global scope', async () => {
     await externalSourcesAPI.getSnapshot('', false);
 

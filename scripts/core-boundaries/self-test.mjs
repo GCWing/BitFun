@@ -913,6 +913,9 @@ export function runManifestParserSelfTest({
   const externalHookCatalogPublicApiRule = publicApiAllowlistRules.find(
     (rule) => rule.path === 'src/crates/contracts/product-domains/src/external_hook_catalog.rs',
   );
+  const workspaceReferencePublicApiRule = publicApiAllowlistRules.find(
+    (rule) => rule.path === 'src/crates/contracts/product-domains/src/workspace_references.rs',
+  );
   const externalSourcePublicApiRule = publicApiAllowlistRules.find(
     (rule) => rule.path === 'src/crates/contracts/product-domains/src/external_sources.rs',
   );
@@ -1037,10 +1040,10 @@ export function runManifestParserSelfTest({
   ).map((entry) => entry.symbol);
   if (
     opencodeAdapterPublicApiSymbols.join(',') !==
-    'load_opencode_package_adapter,OpenCodeCommandProvider,OpenCodeCommandProviderOptions,OpenCodeConfiguredSkillRoot,OpenCodeSkillRootProvider,OpenCodeSkillRootProviderOptions,OpenCodeToolProvider,OpenCodeToolProviderOptions,OpenCodeSubagentProvider,OpenCodeSubagentProviderOptions,OpenCodeMcpProvider,OpenCodeMcpProviderOptions,OpenCodeHookProvider,OpenCodeHookProviderOptions,load_opencode_user_instructions,OpenCodeInstructionSourceOptions'
+    'load_opencode_package_adapter,OpenCodeCommandProvider,OpenCodeCommandProviderOptions,OpenCodeConfiguredSkillRoot,OpenCodeSkillRootProvider,OpenCodeSkillRootProviderOptions,OpenCodeToolProvider,OpenCodeToolProviderOptions,OpenCodeSubagentProvider,OpenCodeSubagentProviderOptions,OpenCodeMcpProvider,OpenCodeMcpProviderOptions,OpenCodeHookProvider,OpenCodeHookProviderOptions,OpenCodeWorkspaceReferenceProvider,OpenCodeWorkspaceReferenceProviderOptions,load_opencode_user_instructions,OpenCodeInstructionSourceOptions'
   ) {
     throw new Error(
-      'OpenCode adapter public API budget must stay limited to the reviewed package factory and capability-specific command, configured Skill root, tool, subagent, MCP, static Hook, and user Instruction providers',
+      'OpenCode adapter public API budget must stay limited to the reviewed package factory and capability-specific command, configured Skill root, tool, subagent, MCP, static Hook, workspace Reference, and user Instruction providers',
     );
   }
   const opencodeInstructionSymbols = new Set([
@@ -1127,6 +1130,9 @@ export function runManifestParserSelfTest({
   if (!externalHookCatalogPublicApiRule) {
     throw new Error('external Hook catalog contracts must have an independent public API budget rule');
   }
+  if (!workspaceReferencePublicApiRule) {
+    throw new Error('workspace Reference contracts must have an independent public API budget rule');
+  }
   if (!publicApiContractSlices.includes('external-source-hook-contract')) {
     throw new Error('external Hook contracts must have an independent contract slice');
   }
@@ -1173,6 +1179,26 @@ export function runManifestParserSelfTest({
   if (!publicApiContractSlices.includes('external-source-control-contract')) {
     throw new Error('external source control contracts must have an independent contract slice');
   }
+  if (!publicApiContractSlices.includes('external-source-reference-contract')) {
+    throw new Error('workspace Reference contracts must have an independent contract slice');
+  }
+  for (const requiredSymbol of [
+    'ExternalWorkspaceReferenceProviderIdentity',
+    'ExternalWorkspaceReferenceDefinition',
+    'ExternalWorkspaceReferenceSourceProvider',
+    'WorkspaceReferenceCatalogEntry',
+    'WorkspaceReferenceSnapshot',
+  ]) {
+    if (!workspaceReferencePublicApiRule.allowedSymbolEntries.some(
+      (entry) => entry.symbol === requiredSymbol
+        && entry.contractSlice === 'external-source-reference-contract'
+        && entry.wireImpact === true
+        && entry.consumer
+        && entry.verification,
+    )) {
+      throw new Error(`workspace Reference public API budget is missing a consumer-backed symbol: ${requiredSymbol}`);
+    }
+  }
   for (const requiredSymbol of [
     'EXTERNAL_SOURCE_CONTROL_SCHEMA_V1',
     'ExternalSourceControlSnapshotV1',
@@ -1213,6 +1239,20 @@ export function runManifestParserSelfTest({
     throw new Error('external source coordinator public API budget is missing the typed Hook discovery result');
   }
   for (const requiredSymbol of [
+    'ExternalWorkspaceReferenceCoordinator',
+    'ExternalWorkspaceReferenceCoordinatorSnapshot',
+    'ExternalWorkspaceReferenceDiscoveryRequest',
+    'ExternalWorkspaceReferenceDiscoveryResult',
+  ]) {
+    if (!externalSourceCoordinatorPublicApiRule.allowedSymbolEntries.some(
+      (entry) => entry.symbol === requiredSymbol
+        && entry.contractSlice === 'external-source-reference-contract'
+        && entry.wireImpact === false,
+    )) {
+      throw new Error(`external source coordinator public API budget is missing workspace Reference symbol: ${requiredSymbol}`);
+    }
+  }
+  for (const requiredSymbol of [
     'ExternalSourceControlSnapshotV1',
     'ExternalSourceControlRequestV1',
     'get_external_source_control_snapshot',
@@ -1223,6 +1263,15 @@ export function runManifestParserSelfTest({
         && entry.contractSlice === 'external-source-control-contract',
     )) {
       throw new Error(`external source core public API budget is missing control symbol: ${requiredSymbol}`);
+    }
+  }
+  for (const requiredSymbol of ['EXTERNAL_CAPABILITY_REFERENCE', 'workspace_reference_snapshot']) {
+    if (!externalSourceCorePublicApiRule?.allowedSymbolEntries.some(
+      (entry) => entry.symbol === requiredSymbol
+        && entry.consumer
+        && entry.verification,
+    )) {
+      throw new Error(`external source core public API budget is missing workspace Reference symbol: ${requiredSymbol}`);
     }
   }
   for (const requiredSymbol of [

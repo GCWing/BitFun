@@ -15,6 +15,10 @@ import {
   ChevronLeft,
 } from 'lucide-react';
 import { sessionAPI, workspaceAPI } from '@/infrastructure/api';
+import {
+  externalSourcesAPI,
+  type WorkspaceReferenceEntry,
+} from '@/infrastructure/api/service-api/ExternalSourcesAPI';
 import type {
   ExplorerNodeDto,
   FileSearchResult,
@@ -37,6 +41,7 @@ export interface FileMentionPickerProps {
   isOpen: boolean;
   searchQuery: string;
   workspacePath?: string;
+  workspaceId?: string;
   /** The composing session itself must not appear as a reference candidate. */
   excludeSessionId?: string;
   onSelect: (context: FileContext | DirectoryContext | SessionReferenceContext) => void;
@@ -50,6 +55,30 @@ interface FileItem {
   name: string;
   isDirectory: boolean;
   relativePath: string;
+  referenceStableKey?: string;
+  referenceDescription?: string;
+}
+
+export function workspaceReferenceItems(
+  references: WorkspaceReferenceEntry[],
+  query = '',
+): FileItem[] {
+  const normalizedQuery = query.trim().toLocaleLowerCase();
+  return references
+    .filter(reference => !reference.hidden)
+    .filter(reference => {
+      if (!normalizedQuery) return true;
+      return [reference.alias, reference.description, reference.path]
+        .some(value => value?.toLocaleLowerCase().includes(normalizedQuery));
+    })
+    .map(reference => ({
+      path: reference.path,
+      name: reference.alias ? `@${reference.alias}` : reference.path.replace(/\\/g, '/').split('/').pop() || reference.path,
+      isDirectory: true,
+      relativePath: reference.path,
+      referenceStableKey: reference.stableKey,
+      referenceDescription: reference.description,
+    }));
 }
 
 type MentionItem =
@@ -60,6 +89,7 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
   isOpen,
   searchQuery,
   workspacePath,
+  workspaceId,
   excludeSessionId,
   onSelect,
   onClose,
@@ -68,6 +98,7 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
   const { t } = useTranslation('flow-chat');
   const [results, setResults] = useState<FileItem[]>([]);
   const [sessionResults, setSessionResults] = useState<SessionReferenceCandidate[]>([]);
+  const [workspaceReferences, setWorkspaceReferences] = useState<WorkspaceReferenceEntry[]>([]);
   const [currentFiles, setCurrentFiles] = useState<FileItem[]>([]);
   const [isFileLoading, setIsFileLoading] = useState(false);
   const [isSessionLoading, setIsSessionLoading] = useState(false);
@@ -83,6 +114,7 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
   const directoryLoadRequestIdRef = useRef(0);
   const fileSearchRequestIdRef = useRef(0);
   const sessionSearchRequestIdRef = useRef(0);
+  const workspaceReferenceRequestIdRef = useRef(0);
   const skipNextPathLoadRef = useRef(false);
 
   const getRelativePath = useCallback((fullPath: string): string => {
@@ -166,6 +198,27 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
     targetSelectedPathRef.current = null;
     loadDirectory('', null);
   }, [isOpen, workspacePath, loadDirectory]);
+
+  useEffect(() => {
+    if (!isOpen || !workspacePath) {
+      workspaceReferenceRequestIdRef.current += 1;
+      setWorkspaceReferences([]);
+      return;
+    }
+    const requestId = ++workspaceReferenceRequestIdRef.current;
+    void externalSourcesAPI
+      .getWorkspaceReferences(workspacePath, workspaceId)
+      .then(snapshot => {
+        if (requestId === workspaceReferenceRequestIdRef.current) {
+          setWorkspaceReferences(snapshot.references);
+        }
+      })
+      .catch(() => {
+        if (requestId === workspaceReferenceRequestIdRef.current) {
+          setWorkspaceReferences([]);
+        }
+      });
+  }, [isOpen, workspaceId, workspacePath]);
 
   useEffect(() => {
     if (!isOpen || searchQuery.trim()) return;
@@ -292,14 +345,22 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
   }, [excludeSessionId, isOpen, searchQuery]);
 
   const isSearchMode = searchQuery.trim().length > 0;
+  const referenceItems = useMemo(
+    () => workspaceReferenceItems(workspaceReferences, isSearchMode ? searchQuery : ''),
+    [isSearchMode, searchQuery, workspaceReferences],
+  );
   const displayItems = useMemo<MentionItem[]>(() => (
     isSearchMode
       ? [
           ...results.map(item => ({ kind: 'file' as const, item })),
+          ...referenceItems.map(item => ({ kind: 'file' as const, item })),
           ...sessionResults.map(item => ({ kind: 'session' as const, item })),
         ]
-      : currentFiles.map(item => ({ kind: 'file' as const, item }))
-  ), [currentFiles, isSearchMode, results, sessionResults]);
+      : [
+          ...currentFiles.map(item => ({ kind: 'file' as const, item })),
+          ...(currentPath ? [] : referenceItems.map(item => ({ kind: 'file' as const, item }))),
+        ]
+  ), [currentFiles, currentPath, isSearchMode, referenceItems, results, sessionResults]);
   const currentDirName = currentPath
     ? currentPath.replace(/\\/g, '/').split('/').pop() || ''
     : workspacePath?.replace(/\\/g, '/').split('/').pop() || t('fileMention.rootDirectory');
@@ -451,7 +512,9 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
               const isSession = mention.kind === 'session';
               const file = mention.kind === 'file' ? mention.item : null;
               const session = mention.kind === 'session' ? mention.item : null;
-              const key = isSession ? `session-${session?.sessionId}-${session?.workspacePath}` : `file-${file?.path}`;
+              const key = isSession
+                ? `session-${session?.sessionId}-${session?.workspacePath}`
+                : `file-${file?.referenceStableKey || file?.path}`;
               return (
                 <div
                   key={key}
@@ -467,6 +530,11 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
                   {isSession ? <MessageCircle size={13} className="file-mention-picker__icon file-mention-picker__icon--session" /> : file?.isDirectory ? <Folder size={13} className="file-mention-picker__icon file-mention-picker__icon--folder" /> : <File size={13} className="file-mention-picker__icon file-mention-picker__icon--file" />}
                   <span className="file-mention-picker__item-name">{session?.sessionName ?? file?.name}</span>
                   {session && <span className="file-mention-picker__item-detail">{session.workspaceLabel}</span>}
+                  {file?.referenceStableKey && (
+                    <span className="file-mention-picker__item-detail">
+                      {file.referenceDescription || file.path}
+                    </span>
+                  )}
                   {file?.isDirectory && !isSearchMode && <ChevronRight size={12} className="file-mention-picker__expand-icon" />}
                 </div>
               );

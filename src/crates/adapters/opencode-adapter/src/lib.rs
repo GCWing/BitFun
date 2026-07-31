@@ -13,6 +13,7 @@ mod hook_source;
 mod instruction_source;
 mod local_source_paths;
 mod mcp_source;
+mod reference_source;
 mod skill_source;
 mod source_adapter;
 mod tool_source;
@@ -22,6 +23,9 @@ pub use command_source::{OpenCodeCommandProvider, OpenCodeCommandProviderOptions
 pub use hook_source::{OpenCodeHookProvider, OpenCodeHookProviderOptions};
 pub use instruction_source::{load_opencode_user_instructions, OpenCodeInstructionSourceOptions};
 pub use mcp_source::{OpenCodeMcpProvider, OpenCodeMcpProviderOptions};
+pub use reference_source::{
+    OpenCodeWorkspaceReferenceProvider, OpenCodeWorkspaceReferenceProviderOptions,
+};
 pub use skill_source::{
     OpenCodeConfiguredSkillRoot, OpenCodeSkillRootProvider, OpenCodeSkillRootProviderOptions,
 };

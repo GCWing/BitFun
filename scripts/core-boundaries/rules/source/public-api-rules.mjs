@@ -11,6 +11,7 @@ export const publicApiContractSlices = [
   'external-source-subagent-contract',
   'external-source-mcp-contract',
   'external-source-hook-contract',
+  'external-source-reference-contract',
   'user-instruction-source-boundary',
   'external-integration-policy-contract',
 ];
@@ -26,6 +27,7 @@ const contractSlices = {
   externalSourceSubagentContract: 'external-source-subagent-contract',
   externalSourceMcpContract: 'external-source-mcp-contract',
   externalSourceHookContract: 'external-source-hook-contract',
+  externalSourceReferenceContract: 'external-source-reference-contract',
   userInstructionSourceBoundary: 'user-instruction-source-boundary',
   externalIntegrationPolicyContract: 'external-integration-policy-contract',
 };
@@ -200,6 +202,23 @@ function opencodeHookAdapterEntry(symbol, consumer) {
   };
 }
 
+function opencodeReferenceAdapterEntry(symbol, consumer) {
+  return {
+    symbol,
+    owner: 'opencode-adapter workspace Reference source owner',
+    consumer,
+    verification:
+      'OpenCode workspace Reference fixtures, bitfun-core composition tests, and core-boundary public API budget checks',
+    p0: 'runtime-free OpenCode local workspace Reference discovery',
+    contractSlice: contractSlices.opencodeAdapterBoundary,
+    wireImpact: false,
+    rationale:
+      'the product catalog needs one OpenCode-specific parser behind the ecosystem-neutral workspace Reference provider contract',
+    exit:
+      'remove only if OpenCode workspace Reference discovery moves behind another reviewed adapter with equivalent precedence and fail-closed tests',
+  };
+}
+
 export const opencodeAdapterPublicApiEntries = [
   opencodeAdapterEntry(
     'load_opencode_package_adapter',
@@ -256,6 +275,14 @@ export const opencodeAdapterPublicApiEntries = [
   opencodeHookAdapterEntry(
     'OpenCodeHookProviderOptions',
     'OpenCode static Hook fixture tests and explicit environment injection',
+  ),
+  opencodeReferenceAdapterEntry(
+    'OpenCodeWorkspaceReferenceProvider',
+    'bitfun-core workspace Reference composition root and OpenCode adapter fixtures',
+  ),
+  opencodeReferenceAdapterEntry(
+    'OpenCodeWorkspaceReferenceProviderOptions',
+    'OpenCode workspace Reference fixtures and explicit environment injection',
   ),
   userInstructionSourceAdapterEntry('load_opencode_user_instructions', 'OpenCode'),
   userInstructionSourceAdapterEntry('OpenCodeInstructionSourceOptions', 'OpenCode'),
@@ -638,6 +665,40 @@ function externalMcpEntry(symbol, owner, consumer, wireImpact = false) {
   };
 }
 
+function externalReferenceEntry(symbol, owner, consumer, wireImpact = false) {
+  return {
+    symbol,
+    owner,
+    consumer,
+    verification:
+      'workspace Reference contract, coordinator, OpenCode adapter, product composition, Desktop, and Web tests',
+    p0: 'runtime-free named local workspace Reference discovery and native-first product projection',
+    contractSlice: contractSlices.externalSourceReferenceContract,
+    wireImpact,
+    rationale:
+      'workspace Reference discovery needs typed provider facts and one product projection without granting filesystem permissions or leaking ecosystem payloads',
+    exit:
+      'remove only through a reviewed workspace Reference contract migration with equivalent precedence, policy, remote, and permission-boundary tests',
+  };
+}
+
+export const workspaceReferenceContractPublicApiEntries = [
+  'ExternalWorkspaceReferenceProviderIdentity',
+  'ExternalWorkspaceReferenceDefinition',
+  'ExternalWorkspaceReferenceProviderSnapshot',
+  'ExternalWorkspaceReferenceSourceProvider',
+  'WorkspaceReferenceOrigin',
+  'WorkspaceReferenceCatalogEntry',
+  'WorkspaceReferenceSnapshot',
+].map((symbol) =>
+  externalReferenceEntry(
+    symbol,
+    'product-domains workspace Reference contract owner',
+    'OpenCode provider, external-sources coordinator, bitfun-core composition, and Desktop/Web workspace surfaces',
+    true,
+  ),
+);
+
 export const externalSourceContractPublicApiEntries = [
   'ExternalSourceContractError',
   'SourceKey',
@@ -883,6 +944,18 @@ export const externalSourceCoordinatorPublicApiEntries = [
       'bitfun-core bounded concurrent external-MCP provider scheduler',
     ),
   ),
+  ...[
+    'ExternalWorkspaceReferenceCoordinator',
+    'ExternalWorkspaceReferenceCoordinatorSnapshot',
+    'ExternalWorkspaceReferenceDiscoveryRequest',
+    'ExternalWorkspaceReferenceDiscoveryResult',
+  ].map((symbol) =>
+    externalReferenceEntry(
+      symbol,
+      'external-sources workspace Reference coordinator owner',
+      'bitfun-core bounded concurrent workspace Reference provider scheduler',
+    ),
+  ),
 ];
 
 export const externalSourceCorePublicApiEntries = [
@@ -918,6 +991,7 @@ export const externalSourceCorePublicApiEntries = [
     'EXTERNAL_CAPABILITY_TOOL',
     'EXTERNAL_CAPABILITY_SUBAGENT',
     'EXTERNAL_CAPABILITY_MCP',
+    'EXTERNAL_CAPABILITY_REFERENCE',
     'update_external_integration_policy',
   ].map((symbol) =>
     externalIntegrationPolicyEntry(
@@ -967,6 +1041,12 @@ export const externalSourceCorePublicApiEntries = [
       'bitfun-core external source composition facade',
       'BitFun CLI and desktop host APIs',
     ),
+  ),
+  externalReferenceEntry(
+    'workspace_reference_snapshot',
+    'bitfun-core workspace Reference composition facade',
+    'Desktop and Web workspace directory surfaces',
+    true,
   ),
   externalSourceEntry(
     'external_source_location_for_host_action',
@@ -1201,6 +1281,12 @@ export const publicApiAllowlistRules = [
     reason:
       'external Hook catalog contracts must stay ecosystem-neutral, runtime-free, redacted, bounded, and explicitly consumer-backed',
     allowedSymbolEntries: externalHookCatalogPublicApiEntries,
+  },
+  {
+    path: 'src/crates/contracts/product-domains/src/workspace_references.rs',
+    reason:
+      'workspace Reference contracts must stay ecosystem-neutral, runtime-free, non-authorizing, bounded, and explicitly consumer-backed',
+    allowedSymbolEntries: workspaceReferenceContractPublicApiEntries,
   },
   {
     path: 'src/crates/assembly/external-sources/src/lib.rs',

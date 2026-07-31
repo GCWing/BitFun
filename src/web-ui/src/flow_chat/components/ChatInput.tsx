@@ -5149,6 +5149,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                 isOpen={mentionState.isActive}
                 searchQuery={mentionState.query}
                 workspacePath={sessionBoundWorkspacePath}
+                workspaceId={hasRegisteredWorkspace
+                  ? undefined
+                  : effectiveTargetSession?.workspaceId || workspace?.id}
                 excludeSessionId={effectiveTargetSessionId || undefined}
                 onSelect={(context: FileContext | DirectoryContext | SessionReferenceContext) => {
                   addContext(context);

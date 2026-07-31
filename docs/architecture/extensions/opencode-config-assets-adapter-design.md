@@ -109,6 +109,12 @@ OpenCode 当前版本的真实合并/去重语义，不用 BitFun 常规配置�
 不移动到末尾。`OPENCODE_DISABLE_PROJECT_CONFIG` 会关闭项目配置、项目目录资产和对应监听根；显式目录不替换
 XDG 用户根，并在 BitFun 来源标签中保持 `WorkspaceLocal`。
 
+当前 References 切片按审计时 OpenCode Core V2 `e4bd9757` 的配置插件顺序独立组装：
+`OPENCODE_CONFIG_DIR` 存在时替换默认全局配置根，而不是追加更高优先级目录；随后依次应用 project direct config
+（root-to-nearest）和 project `.opencode` config（root-to-nearest）。该生产路径不读取 `OPENCODE_CONFIG`、旧用户目录
+或 `config.json`，也不复用 Command/Subagent 的目录资产顺序。相同 alias 由后出现的有效声明覆盖；不同 alias 即使指向
+同一路径也保留。若总量超过 1024，先完成全部覆盖，再保留最高优先级声明，不能让低优先级填满限额而屏蔽项目声明。
+
 `OPENCODE_CONFIG_CONTENT`、远程、组织、系统管理员与 MDM 来源尚未接入，不能因三类本地候选可运行就把目标来源
 序列标记为完整实现。
 
@@ -201,7 +207,7 @@ OpenCode adapter 在来源发现、解析和审批前不 import module、不读�
 | Rules / Instructions | 项目/全局 `AGENTS.md`、Claude fallback、`instructions` glob、本地文件、远程 URL | 各生态 adapter 保留原生用户来源语义；Workspace Instructions owner 解析项目来源；Product Assembly 有序合成 | 当前支持 OpenCode 用户 `AGENTS.md`/Claude fallback、三份全局配置的最终本地 `instructions`，以及既有项目根与 `.opencode` 本地精确文件/glob；不获取远程 URL | 单个用户生态的无效配置、glob 或文件 I/O 失败会隔离该生态，保留其他用户生态与项目来源，并使本次构建不可缓存；项目配置继续按项目解析器的逐项降级语义处理。 |
 | Agents / Modes | 当前生产 V1 `agent/prompt/disable/permission`、Core V2 `agents/system/disabled/permissions` 输入形状，以及 Markdown、description、mode、model、variant、temperature、top_p、steps、deprecated `maxSteps`、deprecated `tools`、options、hidden、color | Agent 归属模块创建兼容定义和使用范围视图；OpenCode adapter 只翻译来源语义 | 当前支持 Subagent 安全子集和 Agent-local 权限约束；V1 是生产兼容主路径，Core V2 字段只按已验证安全子集解析；首次按行为、来源、模型、工具与权限范围确认，fresh single-run 调用 | primary/mode、variant/options、采样、steps 与续接保持诊断或阻断；root ambient 权限和 V1 嵌套 resource map 尚不激活，不影响其他 Agent。 |
 | Skills | `.opencode/.claude/.agents` 项目与用户根、`SKILL.md`、`skills.paths/urls` | OpenCode adapter 只由 `bitfun-core/external_sources` 组合并投影有序本地配置根；Skill 归属模块负责有界递归、解析、覆盖与按需加载 | 标准根及 V1 `skills.paths`/当前本地字符串数组可用；项目配置限项目根，用户配置限项目根或用户目录；配置根最多 64 个、每根 512 个 Skill、单文件 256 KiB、可选策略 64 KiB，实际加载再次执行有界非链接读取；配置根在同 scope 覆盖标准 OpenCode 根，但不重排更早的 BitFun/Claude/Codex/Cursor 来源 | URL、下载/缓存、脚本与外部依赖不加载；无效根不影响标准 Skill。 |
-| References | `references` / 旧 `reference`，本地 path 或 Git repository/branch/description/hidden | **基础能力缺失**：先补 Workspace Reference 的异步准备与 `@alias` 消费接口 | 本地引用保留相对来源；Git 拉取按 L2 确认并保留缓存/隐藏语义 | 拉取失败不阻止项目，外部目录仍遵守工具权限。 |
+| References | `references` / 旧 `reference`，本地 path 或 Git repository/branch/description/hidden | OpenCode adapter 输出来源无关的 Reference provider snapshot；Product Assembly 生命周期协调器与 BitFun 原生关联目录合成唯一有效引用目录；关联目录视图和既有目录选择器消费 | 当前支持本地声明路径、description/hidden、异步刷新和 `@alias` 展示；原生关联目录始终在 OpenCode 引用之前，外部引用只读、不自动进入 Prompt 且不改变权限 | Git 引用、Remote 发现和下载/缓存不实现；无效高优先级 entry 阻断同 alias 的旧值并给出诊断，不回退到更宽松来源。 |
 | Commands | JSON/JSONC、Markdown、`$ARGUMENTS`、位置参数、`@file`、`!shell`、agent/model/variant/subtask | Prompt Command 专属契约；adapter 提取静态文件引用，Product Assembly 经共享本地文本服务完成有界装配 | prompt-only 与静态 workspace 相对 UTF-8 `@file` 可发送；动态/绝对/越界文件、shell、agent/model/variant/subtask 整体受限 | 任一文件失败则本次调用原子失败；最多 8 文件、单文件 64 KiB、文件总量 128 KiB、最终命令 1 MiB。 |
 | MCP | local 的 command/environment/cwd/timeout，remote 的 URL/headers/oauth/timeout，Agent 选择 | MCP 归属模块创建兼容配置视图 | 当前支持 local stdio 和 HTTPS remote 的静态发现、首次/行为变化审批、冲突选择与 workspace 隔离的运行期接纳；C0a 快照导入只复制无 env/cwd 的 local command/args 或无 header/query/fragment 的 HTTPS remote，并保持 disabled | `{env:NAME}` 当前只允许用于运行期兼容来源的 environment/Header 值，不进入 C0a 快照；SSE、OpenCode OAuth client 配置、完整 timeout/Agent 范围与 Remote 执行域保持明确不支持；凭据或网络失败只影响单个 Server。 |
 | LSP | command、extensions、env、initialization | LSP 归属模块注册兼容实例 | 首次确认外部进程和使用范围后按文件类型启动 | 自定义 Server 缺少 extensions 或启动失败时只禁用该项。 |
@@ -297,6 +303,30 @@ V1 `skills.paths` 和当前 `skills: string[]`；字段类型错误只拒绝该�
 2048 个目录、接纳 512 个 `SKILL.md`，单个 Skill 限制 256 KiB，可选 `agents/openai.yaml` 限制 64 KiB。扫描和实际加载都
 拒绝符号链接/reparse point；加载时重新校验规范化根及其稳定 source slot，防止目录整体替换改变已发现来源身份。同 scope
 内配置根位于标准 OpenCode 根之前，较后的不同配置根覆盖同名 Skill，但不重排更早的 BitFun/Claude/Codex/Cursor 来源。
+
+### 5.2.1 References
+
+Workspace Reference 不是第二套 Workspace，也不是文件权限入口。OpenCode adapter 只解析有界 JSON/JSONC 配置，
+把相对 path 固定到声明它的配置文档目录；`~/` 与绝对路径保留 OpenCode 语义。与 OpenCode 相同，声明路径不要求
+发现时已经存在：存在路径用规范身份，尚未创建的路径保留词法绝对路径，因此目标目录创建/删除不需要另一套生命周期。
+Provider snapshot 经过 `ExternalSourceControlPlane` 的独立 Reference 生命周期通道发布。配置文件临时 I/O 失败可保留
+上一代结果；稳定的 JSON/UTF-8/大小错误按本次静态诊断处理，明确删除、策略禁用或不支持的 Git entry 不借旧值放宽结果。
+配置枚举阶段只有 `NotFound` 表示来源不存在，权限或其他元数据错误同样按临时 I/O 失败处理。Provider 最多发布
+256 条诊断（含一条截断汇总），避免单个有界配置文件放大为无界 IPC/DOM 内容。
+
+Product Assembly 生成唯一的有效引用目录：BitFun `WorkspaceInfo.related_paths` 按用户顺序在前，OpenCode 引用按其
+最终 alias 顺序在后。工作树以会话实际根发现 OpenCode 配置，同时用稳定 workspace id 取得主工作空间的原生关联目录；
+会话根必须等于已注册根，或由服务端现有 Git worktree owner 实时解析为同一 repository 的 live worktree 根；缓存中的
+prunable 路径不能授权扫描。缺少注册元数据、id 失效、
+路径不匹配或元数据标记为 Remote 时整体 fail closed，不按前缀或同名控制端路径猜测本地工作空间。不同 alias
+指向同一路径不会去重，因为 alias 本身是用户可见身份。只有策略为 `Auto`/`AskBeforeUse` 的生态进入有效快照；
+`DiscoverOnly` 可以刷新来源但不能投影为可用目录。关联目录弹窗只读展示可见外部项，现有 `@` 目录选择器直接导航
+同一快照；`hidden` 项不进入这些消费点。
+
+本切片不下载 Git repository、不创建缓存目录、不接入 Remote workspace，也不启动任何 plugin host runtime。
+Git/裸 repository 形状返回稳定的 `git_unsupported` 诊断；本地引用只提供目录发现和用户显式导航，不自动写入
+Agent Prompt，不把配置声明解释成工作区外文件授权。只有用户在现有目录选择器中显式选择后，才沿用既有 context/tool
+权限裁决。
 
 ### 5.3 Commands
 

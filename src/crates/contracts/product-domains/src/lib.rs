@@ -27,6 +27,9 @@ pub mod external_sources;
 #[cfg(feature = "external-sources")]
 pub mod external_subagents;
 
+#[cfg(feature = "external-sources")]
+pub mod workspace_references;
+
 #[cfg(feature = "plugin-source")]
 pub mod plugin_source;
 

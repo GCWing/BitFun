@@ -10,6 +10,7 @@ mod mcp;
 mod refresh;
 mod subagent;
 mod tool;
+mod workspace_reference;
 
 pub use control_plane::ExternalSourceControlPlane;
 pub use hook::{ExternalHookCatalogCoordinator, ExternalHookDiscoveryResult};
@@ -28,6 +29,10 @@ pub use subagent::{
 pub use tool::{
     ExternalToolCoordinator, ExternalToolCoordinatorSnapshot, ExternalToolDiscoveryRequest,
     ExternalToolDiscoveryResult,
+};
+pub use workspace_reference::{
+    ExternalWorkspaceReferenceCoordinator, ExternalWorkspaceReferenceCoordinatorSnapshot,
+    ExternalWorkspaceReferenceDiscoveryRequest, ExternalWorkspaceReferenceDiscoveryResult,
 };
 
 use bitfun_product_domains::external_sources::{
