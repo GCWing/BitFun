@@ -1328,6 +1328,7 @@ pub async fn run() {
             review_platform_get_pull_request_detail,
             review_platform_get_pull_request_review_target,
             review_platform_get_issue,
+            review_platform_list_issues,
             review_platform_get_pull_request_review_target_by_identity,
             review_platform_get_pull_request_detail_page,
             review_platform_get_pull_request_ci_log,
