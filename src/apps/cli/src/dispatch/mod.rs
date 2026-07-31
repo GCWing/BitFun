@@ -121,6 +121,9 @@ async fn probe(request: DispatchProbeRequest) -> Result<DispatchProbeResponse> {
         // Optional on purpose: controllers must feature-detect this rather than
         // require it, so an older target stays usable for everything else.
         "workspace_result_bundle".to_string(),
+        // Identical snapshots from different jobs reuse one verified archive
+        // on the target. Jobs still receive independent writable workspaces.
+        "workspace_snapshot_cache".to_string(),
     ];
     if runner::is_supported() {
         capabilities.push("detached_worker".to_string());

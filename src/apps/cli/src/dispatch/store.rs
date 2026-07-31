@@ -39,6 +39,9 @@ const TERMINAL_JOB_RETENTION_DAYS: i64 = 30;
 const RETENTION_GC_INTERVAL_SECONDS: u64 = 24 * 60 * 60;
 const RETENTION_GC_MARKER: &str = ".retention-gc";
 const RETENTION_GC_LOCK: &str = ".retention-gc.lock";
+const WORKSPACE_SNAPSHOT_CACHE_DIR: &str = "workspace-cache";
+pub(super) const WORKSPACE_SNAPSHOT_CACHE_RECORD_FILE: &str = "cache.json";
+const WORKSPACE_SNAPSHOT_CACHE_RETENTION_DAYS: i64 = 30;
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -128,6 +131,12 @@ struct StoredAppendMessage {
     created_at: String,
 }
 
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct WorkspaceSnapshotCacheRetentionRecord {
+    last_used_at: String,
+}
+
 #[derive(Clone, Debug)]
 pub(crate) struct DispatchStore {
     root: PathBuf,
@@ -149,6 +158,7 @@ impl DispatchStore {
         create_private_dir(&root)?;
         create_private_dir(&root.join("jobs"))?;
         create_private_dir(&root.join("workspaces"))?;
+        create_private_dir(&root.join(WORKSPACE_SNAPSHOT_CACHE_DIR))?;
         Ok(Self {
             root,
             max_events_bytes: DEFAULT_MAX_EVENTS_BYTES,
@@ -837,6 +847,10 @@ impl DispatchStore {
         Ok(self.root.join("workspaces").join(job_id))
     }
 
+    pub(crate) fn workspace_snapshot_cache_root(&self) -> PathBuf {
+        self.root.join(WORKSPACE_SNAPSHOT_CACHE_DIR)
+    }
+
     fn maybe_collect_expired_terminal_jobs(&self) -> Result<()> {
         let marker = self.root.join(RETENTION_GC_MARKER);
         if fs::metadata(&marker)
@@ -1025,7 +1039,76 @@ impl DispatchStore {
             })?;
             removed += 1;
         }
+        self.collect_expired_workspace_snapshot_cache(now)?;
         Ok(removed)
+    }
+
+    fn collect_expired_workspace_snapshot_cache(
+        &self,
+        now: chrono::DateTime<chrono::Utc>,
+    ) -> Result<()> {
+        let cache_root = self.workspace_snapshot_cache_root();
+        for entry in fs::read_dir(&cache_root)
+            .with_context(|| format!("read dispatch workspace cache {}", cache_root.display()))?
+        {
+            let entry = entry?;
+            let Some(digest) = entry.file_name().to_str().map(ToOwned::to_owned) else {
+                continue;
+            };
+            if digest.len() != 64 || !digest.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+                continue;
+            }
+            let cache_dir = entry.path();
+            let metadata = fs::symlink_metadata(&cache_dir)?;
+            if metadata.file_type().is_symlink() || !metadata.is_dir() {
+                continue;
+            }
+            let lock_path = cache_root.join(format!(".{digest}.lock"));
+            let Some(_lock) = JobLock::try_exclusive(&lock_path)? else {
+                continue;
+            };
+            let record = match read_json::<WorkspaceSnapshotCacheRetentionRecord>(
+                &cache_dir.join(WORKSPACE_SNAPSHOT_CACHE_RECORD_FILE),
+            ) {
+                Ok(record) => record,
+                Err(error) => {
+                    tracing::warn!(
+                            "Skipping unreadable dispatch workspace cache entry: digest={} error={error:#}",
+                            digest
+                        );
+                    continue;
+                }
+            };
+            let Some(last_used_at) = chrono::DateTime::parse_from_rfc3339(&record.last_used_at)
+                .ok()
+                .map(|value| value.with_timezone(&chrono::Utc))
+            else {
+                continue;
+            };
+            if now.signed_duration_since(last_used_at).num_days()
+                < WORKSPACE_SNAPSHOT_CACHE_RETENTION_DAYS
+            {
+                continue;
+            }
+            let tombstone = cache_root.join(format!(
+                ".gc-{}-{}",
+                digest,
+                uuid::Uuid::new_v4().as_simple()
+            ));
+            fs::rename(&cache_dir, &tombstone).with_context(|| {
+                format!(
+                    "quarantine expired dispatch workspace cache {}",
+                    cache_dir.display()
+                )
+            })?;
+            fs::remove_dir_all(&tombstone).with_context(|| {
+                format!(
+                    "remove expired dispatch workspace cache {}",
+                    tombstone.display()
+                )
+            })?;
+        }
+        Ok(())
     }
 
     fn load_state_unlocked(&self, job_dir: &Path) -> Result<DispatchStateRecord> {
@@ -2379,6 +2462,24 @@ mod tests {
             &expired,
         )
         .expect("age terminal state");
+        let expired_digest = "a".repeat(64);
+        let recent_digest = "b".repeat(64);
+        for (digest, last_used_at) in [
+            (
+                &expired_digest,
+                (now - chrono::Duration::days(WORKSPACE_SNAPSHOT_CACHE_RETENTION_DAYS + 1))
+                    .to_rfc3339(),
+            ),
+            (&recent_digest, now.to_rfc3339()),
+        ] {
+            let cache_dir = store.workspace_snapshot_cache_root().join(digest);
+            create_private_dir(&cache_dir).expect("create cache entry");
+            atomic_write_json(
+                &cache_dir.join(WORKSPACE_SNAPSHOT_CACHE_RECORD_FILE),
+                &serde_json::json!({ "lastUsedAt": last_used_at }),
+            )
+            .expect("write cache record");
+        }
 
         assert_eq!(
             store
@@ -2392,6 +2493,14 @@ mod tests {
         assert!(store.root.join("workspaces/recent").exists());
         assert!(store.root.join("jobs/running").exists());
         assert!(store.root.join("workspaces/running").exists());
+        assert!(!store
+            .workspace_snapshot_cache_root()
+            .join(expired_digest)
+            .exists());
+        assert!(store
+            .workspace_snapshot_cache_root()
+            .join(recent_digest)
+            .exists());
     }
 
     #[test]

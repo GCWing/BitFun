@@ -109,6 +109,14 @@ RPC uses bounded base64 chunks inside the existing end-to-end encrypted
 `HostInvoke` envelope. Neither transport puts source bytes in command-line
 arguments, process listings, logs, or the outbound observer record.
 
+After a target has fully verified and materialized a snapshot, it retains one
+owner-only archive keyed by the archive SHA-256. A later job with identical
+metadata attaches that immutable archive and reports the full retained offset,
+so both SSH and account-device controllers skip the source transfer. The
+temporary per-job archive link is removed after materialization; each job still
+gets its own writable `current/` directory, so cache reuse never makes jobs
+share writes. Cache entries expire after 30 days without a hit.
+
 ## Synchronization semantics
 
 A snapshot is an immutable input boundary, not a live shared folder:

@@ -5,9 +5,10 @@ use std::path::{Path, PathBuf};
 use anyhow::{bail, Context, Result};
 use base64::Engine as _;
 use bitfun_services_core::dispatch_workspace::{
-    create_workspace_result_bundle, extract_workspace_snapshot, WorkspaceSnapshotManifest,
-    WorkspaceSnapshotMetadata, MAX_SNAPSHOT_ARCHIVE_BYTES, MAX_SNAPSHOT_DIRECTORIES,
-    MAX_SNAPSHOT_FILES, MAX_SNAPSHOT_UNCOMPRESSED_BYTES, WORKSPACE_SNAPSHOT_FORMAT_VERSION,
+    create_workspace_result_bundle, extract_workspace_snapshot, sha256_file,
+    WorkspaceSnapshotManifest, WorkspaceSnapshotMetadata, MAX_SNAPSHOT_ARCHIVE_BYTES,
+    MAX_SNAPSHOT_DIRECTORIES, MAX_SNAPSHOT_FILES, MAX_SNAPSHOT_UNCOMPRESSED_BYTES,
+    WORKSPACE_SNAPSHOT_FORMAT_VERSION,
 };
 use serde::{Deserialize, Serialize};
 
@@ -21,10 +22,12 @@ use super::protocol::{
 use super::store::{
     atomic_write_json, create_private_dir, read_json, remove_file_if_present,
     set_private_file_permissions, sync_directory, DispatchStore, JobLock,
+    WORKSPACE_SNAPSHOT_CACHE_RECORD_FILE,
 };
 
 const UPLOAD_RECORD_FILE: &str = "upload.json";
 const UPLOAD_ARCHIVE_FILE: &str = "workspace.tar.gz";
+const CACHE_ARCHIVE_FILE: &str = "workspace.tar.gz";
 const CURRENT_WORKSPACE_DIR: &str = "current";
 /// The delivered snapshot's manifest, kept as the baseline a result diff is
 /// computed against.
@@ -58,13 +61,28 @@ struct WorkspaceUploadRecord {
     last_error: Option<String>,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct WorkspaceSnapshotCacheRecord {
+    metadata: WorkspaceSnapshotMetadata,
+    created_at: String,
+    last_used_at: String,
+}
+
 pub(crate) fn begin(
     request: DispatchWorkspaceBeginRequest,
 ) -> Result<DispatchWorkspaceBeginResponse> {
-    validate_begin(&request)?;
     let store = DispatchStore::open_default()?;
+    begin_in_store(&store, request)
+}
+
+fn begin_in_store(
+    store: &DispatchStore,
+    request: DispatchWorkspaceBeginRequest,
+) -> Result<DispatchWorkspaceBeginResponse> {
+    validate_begin(&request)?;
     let upload_dir = store.workspace_upload_dir(&request.job_id)?;
-    let lock_path = workspace_upload_lock_path(&store, &request.job_id);
+    let lock_path = workspace_upload_lock_path(store, &request.job_id);
     let Some(_lock) = JobLock::try_exclusive(&lock_path)? else {
         let existing: WorkspaceUploadRecord = read_json(&upload_dir.join(UPLOAD_RECORD_FILE))
             .context("workspace upload is currently being initialized")?;
@@ -148,6 +166,15 @@ pub(crate) fn begin(
     }
 
     let archive_path = upload_dir.join(UPLOAD_ARCHIVE_FILE);
+    if try_attach_cached_snapshot(store, &upload_dir, &archive_path, &request.metadata)? {
+        return Ok(DispatchWorkspaceBeginResponse {
+            accepted: true,
+            offset: request.metadata.archive_size,
+            upload_path: archive_path.to_string_lossy().to_string(),
+            committed: false,
+            workspace_path: None,
+        });
+    }
     let archive_metadata = fs::symlink_metadata(&archive_path);
     let offset = match archive_metadata {
         Ok(metadata) => {
@@ -324,9 +351,8 @@ pub(crate) fn result(
         bail!("workspace snapshot is not committed yet");
     }
     let baseline: WorkspaceSnapshotManifest =
-        read_json(&upload_dir.join(BASELINE_MANIFEST_FILE)).context(
-            "this job predates result bundles; its baseline manifest was not recorded",
-        )?;
+        read_json(&upload_dir.join(BASELINE_MANIFEST_FILE))
+            .context("this job predates result bundles; its baseline manifest was not recorded")?;
 
     let current = upload_dir.join(CURRENT_WORKSPACE_DIR);
     if !is_real_directory(&current) {
@@ -423,6 +449,13 @@ fn materialize_in_store(store: &DispatchStore, job_id: &str) -> Result<()> {
             )
         })?;
         sync_directory(&upload_dir)?;
+        if let Err(error) = persist_verified_snapshot_cache(store, &archive_path, &record.metadata)
+        {
+            tracing::warn!(
+                "Failed to retain verified dispatch workspace snapshot: digest={} error={error:#}",
+                record.metadata.archive_sha256
+            );
+        }
         mark_workspace_committed(&record_path, &upload_dir, &mut record)?;
         remove_file_if_present(&archive_path);
         Ok(())
@@ -529,6 +562,191 @@ fn validate_complete_archive(
         );
     }
     Ok(())
+}
+
+/// Reuse a verified snapshot uploaded by an earlier job.
+///
+/// The cache owns one immutable, content-addressed archive. Each job gets a
+/// hard link only while its detached materializer is reading the archive; the
+/// link is removed after `current/` is published. This keeps writable job
+/// workspaces isolated while avoiding another network transfer and another
+/// compressed archive on the target.
+fn try_attach_cached_snapshot(
+    store: &DispatchStore,
+    upload_dir: &Path,
+    archive_path: &Path,
+    expected: &WorkspaceSnapshotMetadata,
+) -> Result<bool> {
+    let cache_root = store.workspace_snapshot_cache_root();
+    let digest = expected.archive_sha256.to_ascii_lowercase();
+    let cache_dir = cache_root.join(&digest);
+    let _lock = JobLock::exclusive(&workspace_snapshot_cache_lock_path(store, &digest))?;
+    let Some(mut record) = read_valid_snapshot_cache(&cache_dir, expected)? else {
+        discard_snapshot_cache_entry(&cache_dir)?;
+        return Ok(false);
+    };
+
+    match fs::symlink_metadata(archive_path) {
+        Ok(metadata) => {
+            if metadata.file_type().is_symlink() || !metadata.is_file() {
+                bail!("workspace upload archive is not a regular file");
+            }
+            fs::remove_file(archive_path)
+                .with_context(|| format!("replace workspace upload {}", archive_path.display()))?;
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => return Err(error).context("inspect workspace upload archive"),
+    }
+    fs::hard_link(cache_dir.join(CACHE_ARCHIVE_FILE), archive_path).with_context(|| {
+        format!(
+            "attach cached workspace snapshot {} -> {}",
+            cache_dir.display(),
+            upload_dir.display()
+        )
+    })?;
+    set_private_file_permissions(archive_path)?;
+
+    record.last_used_at = chrono::Utc::now().to_rfc3339();
+    atomic_write_json(
+        &cache_dir.join(WORKSPACE_SNAPSHOT_CACHE_RECORD_FILE),
+        &record,
+    )?;
+    Ok(true)
+}
+
+/// Publish an archive only after extraction verified its archive digest,
+/// manifest digest, paths, entry types, and size limits.
+fn persist_verified_snapshot_cache(
+    store: &DispatchStore,
+    archive_path: &Path,
+    expected: &WorkspaceSnapshotMetadata,
+) -> Result<()> {
+    let cache_root = store.workspace_snapshot_cache_root();
+    let digest = expected.archive_sha256.to_ascii_lowercase();
+    let cache_dir = cache_root.join(&digest);
+    let _lock = JobLock::exclusive(&workspace_snapshot_cache_lock_path(store, &digest))?;
+
+    if let Some(mut record) = read_valid_snapshot_cache(&cache_dir, expected)? {
+        record.last_used_at = chrono::Utc::now().to_rfc3339();
+        atomic_write_json(
+            &cache_dir.join(WORKSPACE_SNAPSHOT_CACHE_RECORD_FILE),
+            &record,
+        )?;
+        return Ok(());
+    }
+    discard_snapshot_cache_entry(&cache_dir)?;
+
+    if !sha256_file(archive_path)?.eq_ignore_ascii_case(&expected.archive_sha256) {
+        bail!("verified workspace snapshot changed before it entered the cache");
+    }
+    let staging = cache_root.join(format!(
+        ".staging-{}-{}",
+        digest,
+        uuid::Uuid::new_v4().as_simple()
+    ));
+    create_private_dir(&staging)?;
+    let cached_archive = staging.join(CACHE_ARCHIVE_FILE);
+    let result = (|| -> Result<()> {
+        if fs::hard_link(archive_path, &cached_archive).is_err() {
+            fs::copy(archive_path, &cached_archive).with_context(|| {
+                format!(
+                    "copy verified workspace snapshot into cache {}",
+                    cached_archive.display()
+                )
+            })?;
+        }
+        set_private_file_permissions(&cached_archive)?;
+        let now = chrono::Utc::now().to_rfc3339();
+        atomic_write_json(
+            &staging.join(WORKSPACE_SNAPSHOT_CACHE_RECORD_FILE),
+            &WorkspaceSnapshotCacheRecord {
+                metadata: expected.clone(),
+                created_at: now.clone(),
+                last_used_at: now,
+            },
+        )?;
+        sync_directory(&staging)?;
+        fs::rename(&staging, &cache_dir).with_context(|| {
+            format!(
+                "publish dispatch workspace cache {} -> {}",
+                staging.display(),
+                cache_dir.display()
+            )
+        })?;
+        sync_directory(&cache_root)?;
+        Ok(())
+    })();
+    if result.is_err() {
+        let _ = fs::remove_dir_all(&staging);
+    }
+    result
+}
+
+fn read_valid_snapshot_cache(
+    cache_dir: &Path,
+    expected: &WorkspaceSnapshotMetadata,
+) -> Result<Option<WorkspaceSnapshotCacheRecord>> {
+    let directory = match fs::symlink_metadata(cache_dir) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(error).context("inspect dispatch workspace cache"),
+    };
+    if directory.file_type().is_symlink() || !directory.is_dir() {
+        return Ok(None);
+    }
+    let record = match read_json::<WorkspaceSnapshotCacheRecord>(
+        &cache_dir.join(WORKSPACE_SNAPSHOT_CACHE_RECORD_FILE),
+    ) {
+        Ok(record) => record,
+        Err(_) => return Ok(None),
+    };
+    if record.metadata != *expected {
+        return Ok(None);
+    }
+    let archive_path = cache_dir.join(CACHE_ARCHIVE_FILE);
+    let archive = match fs::symlink_metadata(&archive_path) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(error).context("inspect cached workspace snapshot"),
+    };
+    if archive.file_type().is_symlink()
+        || !archive.is_file()
+        || archive.len() != expected.archive_size
+    {
+        return Ok(None);
+    }
+    if !sha256_file(&archive_path)?.eq_ignore_ascii_case(&expected.archive_sha256) {
+        return Ok(None);
+    }
+    Ok(Some(record))
+}
+
+fn discard_snapshot_cache_entry(cache_dir: &Path) -> Result<()> {
+    match fs::symlink_metadata(cache_dir) {
+        Ok(metadata) if metadata.file_type().is_symlink() || metadata.is_file() => {
+            fs::remove_file(cache_dir).with_context(|| {
+                format!(
+                    "remove invalid dispatch workspace cache {}",
+                    cache_dir.display()
+                )
+            })
+        }
+        Ok(metadata) if metadata.is_dir() => fs::remove_dir_all(cache_dir).with_context(|| {
+            format!(
+                "remove invalid dispatch workspace cache {}",
+                cache_dir.display()
+            )
+        }),
+        Ok(_) => bail!("dispatch workspace cache entry is an unsupported file type"),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(error).context("inspect invalid dispatch workspace cache"),
+    }
+}
+
+fn workspace_snapshot_cache_lock_path(store: &DispatchStore, digest: &str) -> PathBuf {
+    store
+        .workspace_snapshot_cache_root()
+        .join(format!(".{digest}.lock"))
 }
 
 fn remove_stale_staging_directories(upload_dir: &Path) -> Result<()> {
@@ -703,6 +921,86 @@ mod tests {
         assert_eq!(record.state, WorkspaceUploadState::Committed);
         assert_eq!(record.metadata, metadata);
         assert!(record.workspace_path.is_some());
+    }
+
+    #[test]
+    fn identical_jobs_reuse_one_verified_target_archive_but_keep_writes_isolated() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let store = DispatchStore::open(temp.path().join("dispatch")).expect("store");
+        let source = temp.path().join("source");
+        fs::create_dir_all(&source).expect("source");
+        fs::write(source.join("file.txt"), b"shared input").expect("source file");
+        let source_archive = temp.path().join("source.tar.gz");
+        let metadata = create_exact_workspace_snapshot(&source, &source_archive).expect("snapshot");
+
+        let first = begin_in_store(
+            &store,
+            DispatchWorkspaceBeginRequest {
+                protocol_version: DISPATCH_PROTOCOL_VERSION,
+                job_id: "job-1".to_string(),
+                metadata: metadata.clone(),
+            },
+        )
+        .expect("begin first upload");
+        assert_eq!(first.offset, 0);
+        fs::copy(&source_archive, &first.upload_path).expect("upload first snapshot");
+        materialize_in_store(&store, "job-1").expect("materialize first job");
+
+        let cache_dir = store
+            .workspace_snapshot_cache_root()
+            .join(&metadata.archive_sha256);
+        assert!(cache_dir.join(CACHE_ARCHIVE_FILE).is_file());
+        assert_eq!(
+            fs::read_dir(store.workspace_snapshot_cache_root())
+                .expect("read cache")
+                .filter_map(Result::ok)
+                .filter(|entry| entry.path().is_dir())
+                .count(),
+            1
+        );
+
+        let second = begin_in_store(
+            &store,
+            DispatchWorkspaceBeginRequest {
+                protocol_version: DISPATCH_PROTOCOL_VERSION,
+                job_id: "job-2".to_string(),
+                metadata: metadata.clone(),
+            },
+        )
+        .expect("begin cached upload");
+        assert_eq!(
+            second.offset, metadata.archive_size,
+            "a cache hit must tell the controller that no bytes remain"
+        );
+
+        fs::write(
+            store
+                .workspace_upload_dir("job-1")
+                .expect("first workspace")
+                .join(CURRENT_WORKSPACE_DIR)
+                .join("file.txt"),
+            b"job one changed",
+        )
+        .expect("modify first job");
+        materialize_in_store(&store, "job-2").expect("materialize cached job");
+        assert_eq!(
+            fs::read(
+                store
+                    .workspace_upload_dir("job-2")
+                    .expect("second workspace")
+                    .join(CURRENT_WORKSPACE_DIR)
+                    .join("file.txt")
+            )
+            .expect("read second job"),
+            b"shared input",
+            "cache reuse must not share the writable job workspace"
+        );
+        assert!(cache_dir.join(CACHE_ARCHIVE_FILE).is_file());
+        assert!(!store
+            .workspace_upload_dir("job-2")
+            .expect("second workspace")
+            .join(UPLOAD_ARCHIVE_FILE)
+            .exists());
     }
 
     #[test]
