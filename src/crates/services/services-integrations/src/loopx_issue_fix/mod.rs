@@ -6,6 +6,7 @@
 //!
 //! See `docs/development/loopx-issue-fix-integration.md` for the verified chain.
 
+pub mod orchestrator;
 pub mod repository_context;
 
 use std::ffi::OsStr;

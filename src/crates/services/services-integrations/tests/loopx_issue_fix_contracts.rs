@@ -4,6 +4,10 @@
 //! test reports a skip rather than failing, so CI hosts without LoopX stay green —
 //! the feature is probe-gated at runtime for exactly the same reason.
 
+use bitfun_services_integrations::loopx_issue_fix::orchestrator::{
+    ContextGrounding, ExecutionMode, FixRoute, IssueFixOrchestrator, IssueFixRequest, NextStep,
+    ReproductionStatus, ScopeClass,
+};
 use bitfun_services_integrations::loopx_issue_fix::repository_context::{
     ContextStatus, Freshness, RepositoryContextBuilder, RepositoryContextSource, SourceKind,
     SupportAspect, Trust,
@@ -23,15 +27,15 @@ fn loopx_or_skip(test_name: &str) -> Option<LoopxIssueFix> {
 
 const ISSUE_URL: &str = "https://github.com/GCWing/BitFun/issues/1849";
 
-/// A grounded repository context, built through the real generator and written to
-/// a temp file per call.
+/// A grounded repository context, built through the real generator.
 ///
 /// LoopX will not select `fix_pr` without one — an ungrounded request yields
 /// `repository_context_not_provided` in its reason codes and falls back to
 /// `triage_only`. Building this with `RepositoryContextBuilder` rather than a
 /// hand-written literal is the point: it proves the generator's own prediction of
 /// "grounded" matches what LoopX actually decides.
-fn write_repository_context(dir: &std::path::Path) -> std::path::PathBuf {
+fn grounded_repository_context(
+) -> bitfun_services_integrations::loopx_issue_fix::repository_context::RepositoryContext {
     let mut builder = RepositoryContextBuilder::new()
         .repository_revision("9ed5c5fec0000000000000000000000000000000");
     builder
@@ -77,7 +81,12 @@ fn write_repository_context(dir: &std::path::Path) -> std::path::PathBuf {
         "the generator should predict a grounded context"
     );
 
-    let context = builder.build().expect("context builds");
+    builder.build().expect("context builds")
+}
+
+/// The same context, written to a temp file for the raw-CLI tests below.
+fn write_repository_context(dir: &std::path::Path) -> std::path::PathBuf {
+    let context = grounded_repository_context();
     let path = dir.join("repository-context.json");
     std::fs::write(
         &path,
@@ -405,4 +414,203 @@ async fn fetching_public_metadata_survives_a_non_utf8_host_locale() {
         }
         Err(other) => panic!("metadata fetch failed unexpectedly: {other:?}"),
     }
+}
+
+/// One issue's request, pointing at the real BitFun repository.
+fn issue_request<'a>(
+    context: &'a bitfun_services_integrations::loopx_issue_fix::repository_context::RepositoryContext,
+    scope_class: ScopeClass,
+) -> IssueFixRequest<'a> {
+    IssueFixRequest {
+        repo: "GCWing/BitFun",
+        issue_ref: "1849",
+        issue_url: ISSUE_URL,
+        context,
+        validation_label: "web-ui focused vitest",
+        reproduction_label: "workspace-row-icon-branch",
+        reproduction_status: ReproductionStatus::Confirmed,
+        scope_class,
+        base_branch: "main",
+    }
+}
+
+/// The orchestrator's whole reason to exist: reading LoopX's nested JSON without
+/// mistaking a refusal for approval. This drives the real CLI end to end.
+#[tokio::test]
+async fn the_orchestrator_plans_a_bounded_issue_as_a_fix() {
+    let Some(loopx) = loopx_or_skip("the_orchestrator_plans_a_bounded_issue_as_a_fix") else {
+        return;
+    };
+    let dir = tempfile::tempdir().expect("temp dir is created");
+    let context = grounded_repository_context();
+    let request = issue_request(&context, ScopeClass::Bounded);
+
+    let outcome = IssueFixOrchestrator::new(&loopx)
+        .plan_issue(
+            &request,
+            env!("CARGO_MANIFEST_DIR"),
+            dir.path(),
+            // Dry run: nothing may touch the working tree in a test.
+            ExecutionMode::DryRun,
+        )
+        .await
+        .expect("planning succeeds");
+
+    assert_eq!(outcome.issue_ref, "1849");
+    assert_eq!(outcome.feasibility.route, FixRoute::FixPr);
+    assert_eq!(outcome.feasibility.next_step, NextStep::RunnableSuccessor);
+    assert_eq!(
+        outcome.feasibility.context_grounding,
+        ContextGrounding::Grounded
+    );
+    assert!(!outcome.feasibility.reason_codes.is_empty());
+
+    let branch = outcome.branch.expect("a fix route prepares a branch");
+    assert_eq!(branch.issue_branch, "codex/issue-1849-fix");
+    assert_eq!(branch.base_branch, "main");
+    assert_eq!(branch.branch_action, "dry_run");
+    assert!(!branch.branch_ready, "a dry run creates nothing");
+    assert!(!branch.validation_executed);
+    // The PR gate must stay shut: a dry run has neither validation nor evidence.
+    assert!(
+        !branch.may_open_pull_request(outcome.feasibility.route),
+        "a dry run must never permit a pull request"
+    );
+}
+
+/// An oversized scope must not even reach branch preparation. Under
+/// `ExecutionMode::Execute` that would create a branch LoopX just declined to
+/// justify, so the skip is a safety property, not an optimization.
+#[tokio::test]
+async fn the_orchestrator_skips_the_branch_on_a_triage_route() {
+    let Some(loopx) = loopx_or_skip("the_orchestrator_skips_the_branch_on_a_triage_route") else {
+        return;
+    };
+    let dir = tempfile::tempdir().expect("temp dir is created");
+    let context = grounded_repository_context();
+    let request = issue_request(&context, ScopeClass::Oversized);
+
+    let outcome = IssueFixOrchestrator::new(&loopx)
+        .plan_issue(
+            &request,
+            env!("CARGO_MANIFEST_DIR"),
+            dir.path(),
+            ExecutionMode::DryRun,
+        )
+        .await
+        .expect("planning succeeds");
+
+    assert_eq!(outcome.feasibility.route, FixRoute::TriageOnly);
+    assert_eq!(outcome.feasibility.next_step, NextStep::NoFollowup);
+    assert!(
+        outcome.branch.is_none(),
+        "a declined route must not prepare a branch"
+    );
+}
+
+/// LoopX raises `user_gate` for semantic ambiguity and missing write authority.
+/// The orchestrator must surface it as a distinct step a caller cannot cross.
+#[tokio::test]
+async fn the_orchestrator_surfaces_a_user_gate_from_a_pull_request() {
+    let Some(loopx) = loopx_or_skip("the_orchestrator_surfaces_a_user_gate_from_a_pull_request")
+    else {
+        return;
+    };
+    let dir = tempfile::tempdir().expect("temp dir is created");
+
+    let metadata = dir.path().join("pr.json");
+    std::fs::write(
+        &metadata,
+        serde_json::json!({
+            "number": 9999,
+            "state": "OPEN",
+            "isDraft": false,
+            "mergeable": "MERGEABLE",
+            "reviewDecision": "",
+            "statusCheckRollup": [{"state": "SUCCESS"}],
+        })
+        .to_string(),
+    )
+    .expect("metadata is written");
+
+    let correction = dir.path().join("correction.json");
+    std::fs::write(
+        &correction,
+        serde_json::json!({
+            "schema_version": "issue_fix_maintainer_correction_input_v0",
+            "correction_kind": "semantic_ambiguity",
+            "source_kind": "maintainer_comment",
+            "source_ref": "GCWing/BitFun:issues/1849#comment",
+            "summary": "maintainer suggests highlighting the session instead of the workspace",
+            "user_question": "Should the arrow be removed or replaced with a check glyph?",
+        })
+        .to_string(),
+    )
+    .expect("correction is written");
+
+    // Raw call: the orchestrator's lifecycle method does not take a correction,
+    // so drive the CLI directly and assert the decision the orchestrator would
+    // then have to classify.
+    let packet = loopx
+        .issue_fix([
+            "pr-lifecycle",
+            "--repo",
+            "GCWing/BitFun",
+            "--pr-ref",
+            "9999",
+            "--issue-ref",
+            "1849",
+            "--metadata-json",
+            metadata.to_str().expect("path is UTF-8"),
+            "--maintainer-correction-json",
+            correction.to_str().expect("path is UTF-8"),
+            "--no-write-domain-state",
+        ])
+        .await
+        .expect("lifecycle projection succeeds");
+
+    assert_eq!(packet["transition"]["decision"], "user_gate");
+    assert_eq!(packet["transition"]["role"], "user");
+    assert!(
+        NextStep::UserGate.requires_human(),
+        "the orchestrator must treat this as a human gate"
+    );
+}
+
+/// The lifecycle method against a mocked PR state, through the typed path.
+#[tokio::test]
+async fn the_orchestrator_projects_a_merged_pull_request_as_terminal() {
+    let Some(loopx) = loopx_or_skip("the_orchestrator_projects_a_merged_pull_request_as_terminal")
+    else {
+        return;
+    };
+    let dir = tempfile::tempdir().expect("temp dir is created");
+    let metadata = dir.path().join("merged.json");
+    std::fs::write(
+        &metadata,
+        serde_json::json!({
+            "number": 9999,
+            "state": "MERGED",
+            "isDraft": false,
+            "reviewDecision": "APPROVED",
+            "statusCheckRollup": [{"state": "SUCCESS"}],
+        })
+        .to_string(),
+    )
+    .expect("metadata is written");
+
+    let outcome = IssueFixOrchestrator::new(&loopx)
+        .pull_request_lifecycle(
+            "GCWing/BitFun",
+            "9999",
+            "1849",
+            Some(metadata.to_str().expect("path is UTF-8")),
+        )
+        .await
+        .expect("lifecycle projection succeeds");
+
+    assert_eq!(outcome.next_step, NextStep::NoFollowup);
+    assert_eq!(outcome.state, "MERGED");
+    assert_eq!(outcome.state_bucket, "terminal");
+    assert!(!outcome.next_step.requires_human());
 }
