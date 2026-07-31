@@ -35,6 +35,7 @@
 | `src/App.tsx` | 目录、详情、受开关控制的投稿、只读“我的投稿”和管理员审核页面 |
 | `src/api.ts` | `/miniapp/api/v1` 客户端、CSRF、登录和下载 URL |
 | `src/types.ts` | 网页使用的 API DTO |
+| `src/MiniAppIcon.tsx` | 将 MiniApp 元数据中的 Lucide 图标名安全解析为图标组件 |
 | `src/i18n.ts` | `zh-CN`、`zh-TW`、`en-US` 文案与 fallback |
 | `src/format.ts` | 市场页面的日期和数字格式化 |
 | `src/styles.css` | 响应式布局与视觉样式 |

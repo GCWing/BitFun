@@ -5,6 +5,8 @@
 //! update transaction against the desktop MiniApp manager.
 
 use crate::api::app_state::AppState;
+use bitfun_core::infrastructure::events::{emit_global_event, BackendEvent};
+use bitfun_core::miniapp::lifecycle::miniapp_runtime_event_payload;
 use bitfun_core::miniapp::{
     MiniApp, MiniAppCustomizationMetadata, MiniAppPermissionDiff, MiniAppPermissions, MiniAppSource,
 };
@@ -344,6 +346,16 @@ pub async fn miniapp_market_install(
             .map_err(|error| error.to_string())?;
         (app, false, diff)
     };
+    let (event_name, reason) = if updated {
+        ("miniapp-updated", "market-update")
+    } else {
+        ("miniapp-created", "market-install")
+    };
+    let _ = emit_global_event(BackendEvent::Custom {
+        event_name: event_name.to_string(),
+        payload: miniapp_runtime_event_payload(&app, reason),
+    })
+    .await;
     Ok(MarketInstallResult {
         app,
         origin,

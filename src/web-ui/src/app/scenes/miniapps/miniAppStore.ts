@@ -148,6 +148,7 @@ interface MiniAppState {
   composerClaims: Record<string, MiniAppComposerClaim>;
 
   setApps: (apps: MiniAppMeta[]) => void;
+  upsertApp: (app: MiniAppMeta) => void;
   setLoading: (loading: boolean) => void;
   openApp: (id: string) => void;
   closeApp: (id: string) => void;
@@ -185,6 +186,16 @@ export const useMiniAppStore = create<MiniAppState>((set) => ({
           Object.entries(state.composerClaims).filter(([id]) => validIds.has(id))
         ),
       };
+    }),
+  upsertApp: (app) =>
+    set((state) => {
+      const existingIndex = state.apps.findIndex((current) => current.id === app.id);
+      if (existingIndex < 0) {
+        return { apps: [app, ...state.apps] };
+      }
+      const apps = [...state.apps];
+      apps[existingIndex] = app;
+      return { apps };
     }),
   setLoading: (loading) => set({ loading }),
 

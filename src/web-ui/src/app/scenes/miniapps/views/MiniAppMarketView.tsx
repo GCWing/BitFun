@@ -47,6 +47,7 @@ import {
 import { createLogger } from '@/shared/utils/logger';
 import { useNotification } from '@/shared/notification-system';
 import { getMiniAppIconGradient, renderMiniAppIcon } from '../utils/miniAppIcons';
+import { useMiniAppStore } from '../miniAppStore';
 import { pickLocalizedString } from '../utils/pickLocalizedString';
 import './MiniAppMarketView.scss';
 
@@ -68,6 +69,7 @@ const MiniAppMarketView: React.FC = () => {
   const notification = useNotification();
   const { workspace } = useCurrentWorkspace();
   const { openScene, activateScene, openTabs } = useSceneManager();
+  const upsertApp = useMiniAppStore((state) => state.upsertApp);
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState<(typeof CATEGORIES)[number]>('all');
   const [sort, setSort] = useState<MarketSort>('newest');
@@ -221,6 +223,7 @@ const MiniAppMarketView: React.FC = () => {
         confirmPermissions: true,
         confirmOverwrite: Boolean(installed?.localOverride),
       });
+      upsertApp(result.app);
       setInstalled(await miniAppMarketAPI.installedStatus(detail.listingId));
       notification.success(
         t(result.updated ? 'market.messages.updated' : 'market.messages.installed'),

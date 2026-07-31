@@ -53,6 +53,28 @@ describe('miniAppStore customization state', () => {
     expect(useMiniAppStore.getState().openedAppIds).toEqual(['gomoku']);
     expect(useMiniAppStore.getState().runningWorkerIds).toEqual(['gomoku']);
   });
+
+  it('adds and updates an installed app without waiting for a catalog reload', () => {
+    const installed = {
+      id: 'market-app',
+      name: 'Market App',
+      description: '',
+      category: 'productivity',
+      version: 1,
+      icon: 'Aperture',
+      tags: [],
+      created_at: 1,
+      updated_at: 1,
+      permissions: {},
+    };
+
+    useMiniAppStore.getState().upsertApp(installed);
+    expect(useMiniAppStore.getState().apps).toEqual([installed]);
+
+    const updated = { ...installed, name: 'Updated Market App', version: 2 };
+    useMiniAppStore.getState().upsertApp(updated);
+    expect(useMiniAppStore.getState().apps).toEqual([updated]);
+  });
 });
 
 describe('miniAppStore floating bubble composer claims', () => {

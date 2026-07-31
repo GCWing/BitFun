@@ -33,6 +33,7 @@ import {
 import { downloadUrl, loginUrl, marketApi, MarketApiError } from './api';
 import { formatCompactNumber, formatMarketDate } from './format';
 import { useLocale, type Locale, type MessageKey } from './i18n';
+import { MiniAppIcon } from './MiniAppIcon';
 import { useTheme, type Theme } from './theme';
 import type {
   AdminSubmissionDetail,
@@ -598,7 +599,7 @@ function AppCard({
           <img src={app.screenshotUrls[0]} alt={localized.name} loading="lazy" />
         ) : (
           <span className="app-icon-large">
-            {app.icon || <Cube weight="duotone" aria-hidden="true" />}
+            <MiniAppIcon name={app.icon} />
           </span>
         )}
       </div>
@@ -609,7 +610,7 @@ function AppCard({
         </div>
         <div className="card-heading">
           <span className="app-icon">
-            {app.icon || <Cube weight="duotone" aria-hidden="true" />}
+            <MiniAppIcon name={app.icon} />
           </span>
           <div>
             <h2>{localized.name}</h2>
@@ -715,7 +716,7 @@ function DetailPage({
           <span className="category-chip">{categoryLabel(app.category, t)}</span>
           <div className="detail-title-row">
             <span className="detail-icon">
-              {app.icon || <Cube weight="duotone" aria-hidden="true" />}
+              <MiniAppIcon name={app.icon} />
             </span>
             <div>
               <h1>{localized.name}</h1>
@@ -806,7 +807,7 @@ function DetailPage({
               ))}
             </div>
           ) : (
-            <span>{app.icon || <Cube weight="duotone" aria-hidden="true" />}</span>
+            <span><MiniAppIcon name={app.icon} /></span>
           )}
         </div>
       </section>
@@ -1260,7 +1261,7 @@ function AdminPage({
               }}
             >
               <span className="app-icon">
-                {item.icon || <Cube weight="duotone" aria-hidden="true" />}
+                <MiniAppIcon name={item.icon} />
               </span>
               <span>
                 <strong>{item.name}</strong>
@@ -1284,7 +1285,7 @@ function AdminPage({
             <>
               <div className="review-summary">
                 <span className="detail-icon">
-                  {selected.submission.icon || <Cube weight="duotone" aria-hidden="true" />}
+                  <MiniAppIcon name={selected.submission.icon} />
                 </span>
                 <div>
                   <h2>{selected.submission.name}</h2>
@@ -1509,7 +1510,7 @@ function SubmissionRow({
   return (
     <article className="submission-row">
       <span className="app-icon">
-        {item.icon || <Cube weight="duotone" aria-hidden="true" />}
+        <MiniAppIcon name={item.icon} />
       </span>
       <div>
         <h2>{item.name}</h2>
