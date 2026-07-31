@@ -2250,6 +2250,8 @@ export class FlowChatStore {
       defaultModel?: string;
       state?: NonNullable<SessionConfig['dispatchJobState']>;
       cursor?: number;
+      sourceWorkspacePath?: string;
+      sourceWorkspaceId?: string;
     },
   ): void {
     this.setState(prev => {
@@ -2271,10 +2273,21 @@ export class FlowChatStore {
       }
 
       const newSessions = new Map(prev.sessions);
+      const sourceWorkspacePath = binding.sourceWorkspacePath?.trim() || undefined;
+      const sourceWorkspaceId = binding.sourceWorkspaceId?.trim() || undefined;
       newSessions.set(sessionId, {
         ...session,
+        workspacePath: sourceWorkspacePath ?? session.workspacePath,
+        projectWorkspacePath:
+          sourceWorkspacePath ?? session.projectWorkspacePath,
+        workspaceId: sourceWorkspaceId ?? session.workspaceId,
         config: {
           ...session.config,
+          workspacePath:
+            sourceWorkspacePath ?? session.config.workspacePath,
+          projectWorkspacePath:
+            sourceWorkspacePath ?? session.config.projectWorkspacePath,
+          workspaceId: sourceWorkspaceId ?? session.config.workspaceId,
           dispatchTargetRequest: binding.targetRequest,
           dispatchTarget: binding.target,
           dispatchJobId: binding.jobId,

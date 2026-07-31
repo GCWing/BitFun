@@ -24,8 +24,8 @@ dispatch.
    offline target never falls back to local execution.
 8. Approval policy is explicit per job: `auto`, `reject-and-report`, or
    `remote`. `remote` projects pending requests into the normal permission
-   panel; `auto` requires a one-shot, non-persisted confirmation immediately
-   before submit.
+   panel. The selected policy is visible in the normal session controls; submit
+   must not add a second confirmation dialog.
 9. MiniApp and quick-input hosts do not expose the dispatch picker.
 10. Controller-side model settings never leak into an SSH dispatch. The submit
     omits `model` unless preflight recorded an explicit target model choice.
@@ -59,3 +59,7 @@ dispatch.
 20. The controller projects the initial user turn before waiting for target
     startup. The target's `DialogTurnStarted` event adopts that pending turn in
     place so queued work is visible without duplicating the message.
+21. Every outbound observer record carries its controller-side source workspace
+    identity. Legacy records wait for a concrete workspace fallback before
+    creating a projection; a workspace-less projection must never match every
+    navigation group.

@@ -136,6 +136,8 @@ describe('dispatchJobStore', () => {
       agentType: 'debug',
       approvalPolicy: 'remote',
       model: 'configured-model',
+      sourceWorkspacePath: '/controller/repo',
+      sourceWorkspaceId: 'workspace-1',
       lastCursor: 900,
       lastState: 'running',
       createdAt: '2026-07-28T00:00:00Z',
@@ -147,8 +149,42 @@ describe('dispatchJobStore', () => {
       agentType: 'debug',
       approvalPolicy: 'remote',
       model: 'configured-model',
+      sourceWorkspacePath: '/controller/repo',
+      sourceWorkspaceId: 'workspace-1',
       cursor: 0,
     });
+  });
+
+  it('backfills a legacy outbound job after the source workspace initializes', () => {
+    const record = {
+      jobId: 'job-restored',
+      sessionId: 'session-restored',
+      target: {
+        kind: 'ssh' as const,
+        connectionId: 'ssh-1',
+        workspacePath: '/target/repo',
+        displayName: 'build-host',
+      },
+      workspacePath: '/target/repo',
+      promptPreview: 'Prompt preview',
+      lastCursor: 0,
+      lastState: 'running' as const,
+      createdAt: '2026-07-28T00:00:00Z',
+      updatedAt: '2026-07-28T00:00:01Z',
+    };
+
+    dispatchJobStore.getState().mergeOutboundRecords([record]);
+    expect(
+      dispatchJobStore.getState().jobs['job-restored'].sourceWorkspacePath
+    ).toBeUndefined();
+
+    dispatchJobStore.getState().mergeOutboundRecords(
+      [record],
+      '/projects/BitFun',
+    );
+    expect(
+      dispatchJobStore.getState().jobs['job-restored'].sourceWorkspacePath
+    ).toBe('/projects/BitFun');
   });
 
   it('persists a dismissal tombstone so reconciliation cannot reopen the projection', () => {

@@ -174,4 +174,20 @@ describe('sessionOrdering', () => {
       sessionBelongsToWorkspaceNavRow(session, '/projects/other')
     ).toBe(false);
   });
+
+  it('does not assign a workspace-less session to every navigation row', () => {
+    const session = {
+      workspacePath: undefined,
+      projectWorkspacePath: undefined,
+      remoteConnectionId: undefined,
+      remoteSshHost: undefined,
+    };
+
+    expect(
+      sessionBelongsToWorkspaceNavRow(session, '/assistants/default')
+    ).toBe(false);
+    expect(
+      sessionBelongsToWorkspaceNavRow(session, '/projects/BitFun')
+    ).toBe(false);
+  });
 });

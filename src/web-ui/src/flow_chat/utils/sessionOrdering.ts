@@ -32,11 +32,16 @@ export function sessionBelongsToWorkspaceNavRow(
   remoteConnectionId?: string | null,
   remoteSshHost?: string | null
 ): boolean {
-  const sessionRoot = session.workspacePath || workspacePath;
-  const projectRoot = session.projectWorkspacePath;
+  const sessionRoot = session.workspacePath?.trim();
+  const projectRoot = session.projectWorkspacePath?.trim();
   const pathsMatch =
-    isSamePath(sessionRoot, workspacePath) ||
-    normalizeRemoteWorkspacePath(sessionRoot) === normalizeRemoteWorkspacePath(workspacePath) ||
+    Boolean(
+      sessionRoot &&
+      (
+        isSamePath(sessionRoot, workspacePath) ||
+        normalizeRemoteWorkspacePath(sessionRoot) === normalizeRemoteWorkspacePath(workspacePath)
+      )
+    ) ||
     Boolean(
       projectRoot &&
       (

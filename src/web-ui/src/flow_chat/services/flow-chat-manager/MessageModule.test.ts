@@ -422,7 +422,13 @@ describe('MessageModule detached dispatch', () => {
       titleStatus: 'generated',
       mode: 'agentic',
       dialogTurns: [] as any[],
+      workspacePath: '/controller/repo',
+      projectWorkspacePath: '/controller/repo',
+      workspaceId: 'workspace-1',
       config: {
+        workspacePath: '/controller/repo',
+        projectWorkspacePath: '/controller/repo',
+        workspaceId: 'workspace-1',
         modelName: 'controller-model',
         dispatchTargetRequest: {
           kind: 'ssh',
@@ -533,6 +539,8 @@ describe('MessageModule detached dispatch', () => {
       prompt: 'expanded remote prompt',
       approvalPolicy: 'reject-and-report',
       model: undefined,
+      sourceWorkspacePath: '/controller/repo',
+      sourceWorkspaceId: 'workspace-1',
     });
     expect(mockStartDialogTurn).not.toHaveBeenCalled();
     expect(mockBindSession).not.toHaveBeenCalled();

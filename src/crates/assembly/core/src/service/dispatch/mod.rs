@@ -103,6 +103,11 @@ pub struct OutboundDispatchRecord {
     pub job_id: String,
     pub target: DispatchTarget,
     pub session_id: String,
+    /// Controller-side workspace that owns the observer session.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_workspace_path: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_workspace_id: Option<String>,
     pub workspace_path: String,
     pub prompt_preview: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -134,6 +139,8 @@ impl OutboundDispatchRecord {
             job_id,
             target,
             session_id,
+            source_workspace_path: None,
+            source_workspace_id: None,
             workspace_path,
             prompt_preview: prompt.chars().take(PROMPT_PREVIEW_CHARS).collect(),
             title: None,
@@ -158,6 +165,16 @@ impl OutboundDispatchRecord {
         self.agent_type = Some(agent_type);
         self.approval_policy = Some(approval_policy);
         self.model = model.filter(|value| !value.trim().is_empty());
+        self
+    }
+
+    pub fn with_source_workspace(
+        mut self,
+        source_workspace_path: Option<String>,
+        source_workspace_id: Option<String>,
+    ) -> Self {
+        self.source_workspace_path = source_workspace_path.filter(|value| !value.trim().is_empty());
+        self.source_workspace_id = source_workspace_id.filter(|value| !value.trim().is_empty());
         self
     }
 }
@@ -724,9 +741,26 @@ mod tests {
             "Summarize the repository",
             "queued",
         )
-        .expect("record");
+        .expect("record")
+        .with_source_workspace(
+            Some("/Users/test/projects/BitFun".to_string()),
+            Some("workspace-1".to_string()),
+        );
 
         store.bind_if_absent(&record).await.expect("persist");
+        let persisted = store
+            .get("job-1")
+            .await
+            .expect("load persisted record")
+            .expect("persisted record");
+        assert_eq!(
+            persisted.source_workspace_path.as_deref(),
+            Some("/Users/test/projects/BitFun")
+        );
+        assert_eq!(
+            persisted.source_workspace_id.as_deref(),
+            Some("workspace-1")
+        );
         let first = store
             .update_progress("job-1", 42, "running")
             .await

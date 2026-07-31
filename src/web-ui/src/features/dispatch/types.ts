@@ -227,6 +227,9 @@ export interface OutboundDispatchRecord {
   jobId: string;
   target: DispatchTarget;
   sessionId: string;
+  /** Controller workspace that owns the observer session. */
+  sourceWorkspacePath?: string;
+  sourceWorkspaceId?: string;
   workspacePath: string;
   promptPreview: string;
   title?: string;

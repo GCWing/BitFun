@@ -160,12 +160,15 @@ export function dispatchEventId(event: DispatchEvent): string {
 }
 
 function ensureProjection(context: FlowChatContext, job: DispatchObserverJob): boolean {
+  const sourceWorkspacePath =
+    job.sourceWorkspacePath?.trim()
+    || context.currentWorkspacePath?.trim()
+    || undefined;
   const existing = context.flowChatStore.getState().sessions.get(job.sessionId);
   if (existing) {
-    // The immutable target identity is selected before submit, but the target
-    // may return a canonical or managed workspace path only after preflight
-    // and snapshot materialization. Reconcile that authoritative path without
-    // creating or restoring a controller-side backend session.
+    // Reconcile both immutable target identity and controller-side ownership.
+    // The observer can start before FlowChat knows its workspace, so a legacy
+    // outbound record may only gain its source path on a later poll.
     context.flowChatStore.updateSessionDispatchTarget(job.sessionId, {
       targetRequest: job.targetRequest,
       target: job.target,
@@ -176,22 +179,30 @@ function ensureProjection(context: FlowChatContext, job: DispatchObserverJob): b
       defaultModel: job.defaultModel,
       state: job.state,
       cursor: job.cursor,
+      sourceWorkspacePath,
+      sourceWorkspaceId: job.sourceWorkspaceId,
     });
     return true;
+  }
+
+  // Never create a workspace-less projection. SessionsSection renders once
+  // per workspace, and an unowned projection must not be allowed to appear in
+  // every navigation group while startup workspace state is still loading.
+  if (!sourceWorkspacePath) {
+    return false;
   }
 
   // The persisted cursor represents a transcript that lived only in the old
   // renderer process. Rebuild a fresh in-memory projection by replaying from
   // byte zero; never skip straight to that cursor.
   dispatchJobStore.getState().resetReplay(job.jobId);
-  const workspacePath = job.sourceWorkspacePath || context.currentWorkspacePath || undefined;
   context.flowChatStore.addExternalSession(
     job.sessionId,
     job.title,
     job.agentType,
-    workspacePath,
+    sourceWorkspacePath,
     {
-      projectWorkspacePath: workspacePath,
+      projectWorkspacePath: sourceWorkspacePath,
       workspaceId: job.sourceWorkspaceId,
     },
   );
@@ -205,6 +216,8 @@ function ensureProjection(context: FlowChatContext, job: DispatchObserverJob): b
     defaultModel: job.defaultModel,
     state: job.state,
     cursor: 0,
+    sourceWorkspacePath,
+    sourceWorkspaceId: job.sourceWorkspaceId,
   });
   return context.flowChatStore.getState().sessions.has(job.sessionId);
 }

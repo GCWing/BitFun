@@ -412,6 +412,16 @@ export async function sendMessage(
 
       const workspaceDelivery =
         readySession.config.dispatchWorkspaceDelivery ?? { kind: 'existing' as const };
+      const sourceWorkspacePath =
+        sessionProjectWorkspacePath(readySession)
+        || (
+          workspaceDelivery.kind === 'snapshot-source'
+          || workspaceDelivery.kind === 'snapshot-exact'
+            ? workspaceDelivery.sourceWorkspacePath
+            : undefined
+        );
+      const sourceWorkspaceId =
+        readySession.workspaceId || readySession.config.workspaceId;
       const transferRoundId = `dispatch-transfer:${jobId}`;
       showRuntimeStatus({
         sessionId,
@@ -434,6 +444,8 @@ export async function sendMessage(
           prompt: message,
           approvalPolicy,
           model: readySession.config.dispatchModel?.trim() || undefined,
+          ...(sourceWorkspacePath ? { sourceWorkspacePath } : {}),
+          ...(sourceWorkspaceId ? { sourceWorkspaceId } : {}),
         });
       } finally {
         clearRuntimeStatusState({

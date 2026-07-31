@@ -178,6 +178,15 @@ export const useDispatchJobStore = create<DispatchJobStoreState>()(
                 ...existing,
                 target: record.target,
                 targetRequest: requestFromTarget(record.target),
+                // The durable outbound record is authoritative when it knows
+                // the source. Legacy records are backfilled once FlowChat has
+                // initialized a concrete controller workspace.
+                sourceWorkspacePath:
+                  record.sourceWorkspacePath
+                  || existing.sourceWorkspacePath
+                  || fallbackSourceWorkspacePath,
+                sourceWorkspaceId:
+                  record.sourceWorkspaceId || existing.sourceWorkspaceId,
                 title: record.title || existing.title,
                 agentType: record.agentType || existing.agentType,
                 approvalPolicy: record.approvalPolicy || existing.approvalPolicy,
@@ -197,7 +206,9 @@ export const useDispatchJobStore = create<DispatchJobStoreState>()(
               sessionId: record.sessionId,
               targetRequest: requestFromTarget(record.target),
               target: record.target,
-              sourceWorkspacePath: fallbackSourceWorkspacePath,
+              sourceWorkspacePath:
+                record.sourceWorkspacePath || fallbackSourceWorkspacePath,
+              sourceWorkspaceId: record.sourceWorkspaceId,
               title: record.title || record.promptPreview || record.sessionId.slice(0, 8),
               agentType: record.agentType || 'agentic',
               approvalPolicy: record.approvalPolicy || 'reject-and-report',

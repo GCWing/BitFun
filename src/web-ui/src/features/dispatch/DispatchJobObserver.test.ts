@@ -4,6 +4,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  DISPATCH_JOB_POLL_INTERVAL_MS,
   dispatchEventId,
   installDispatchJobObserver,
   projectDispatchAgentEvent,
@@ -412,6 +413,65 @@ describe('DispatchJobObserver', () => {
 
     await vi.advanceTimersByTimeAsync(0);
     expect(mocks.status).not.toHaveBeenCalled();
+    cleanup();
+  });
+
+  it('waits for workspace ownership before restoring a legacy projection', async () => {
+    const record = {
+      jobId: 'job-restored',
+      sessionId: 'session-restored',
+      target: {
+        kind: 'ssh' as const,
+        connectionId: 'ssh-1',
+        workspacePath: '/target/repo',
+        displayName: 'build-host',
+      },
+      workspacePath: '/target/repo',
+      promptPreview: 'Dispatch test',
+      title: 'Dispatch test',
+      agentType: 'agentic',
+      approvalPolicy: 'reject-and-report' as const,
+      lastCursor: 0,
+      lastState: 'running' as const,
+      createdAt: '2026-07-28T00:00:00Z',
+      updatedAt: '2026-07-28T00:00:01Z',
+    };
+    mocks.listJobs.mockResolvedValue([record]);
+    mocks.status.mockResolvedValue(status());
+    const sessions = new Map<string, any>();
+    const context = createContext();
+    context.currentWorkspacePath = null;
+    context.flowChatStore.getState = vi.fn(() => ({ sessions }));
+    context.flowChatStore.addExternalSession = vi.fn((
+      sessionId: string,
+      _title: string,
+      _mode: string,
+      workspacePath: string,
+      meta: { projectWorkspacePath: string },
+    ) => {
+      sessions.set(sessionId, {
+        sessionId,
+        workspacePath,
+        projectWorkspacePath: meta.projectWorkspacePath,
+        config: {},
+      });
+    });
+
+    const cleanup = installDispatchJobObserver(context);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(context.flowChatStore.addExternalSession).not.toHaveBeenCalled();
+
+    context.currentWorkspacePath = '/projects/BitFun';
+    await vi.advanceTimersByTimeAsync(DISPATCH_JOB_POLL_INTERVAL_MS);
+    expect(context.flowChatStore.addExternalSession).toHaveBeenCalledWith(
+      'session-restored',
+      'Dispatch test',
+      'agentic',
+      '/projects/BitFun',
+      expect.objectContaining({
+        projectWorkspacePath: '/projects/BitFun',
+      }),
+    );
     cleanup();
   });
 

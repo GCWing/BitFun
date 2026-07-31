@@ -103,6 +103,8 @@ export const dispatchApi = {
     approvalPolicy: DispatchApprovalPolicy;
     model?: string;
     title?: string;
+    sourceWorkspacePath?: string;
+    sourceWorkspaceId?: string;
   }): Promise<DispatchSubmitResponse> {
     return api.invoke<DispatchSubmitResponse>('dispatch_submit', {
       request,

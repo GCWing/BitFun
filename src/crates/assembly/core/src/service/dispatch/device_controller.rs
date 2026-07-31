@@ -149,6 +149,10 @@ pub async fn submit_device(
         request.agent_type.clone(),
         request.approval_policy.clone(),
         request.model.clone(),
+    )
+    .with_source_workspace(
+        request.source_workspace_path.clone(),
+        request.source_workspace_id.clone(),
     );
     let bound_record = store.bind_if_absent(&requested_record).await?;
     if bound_record.session_id != request.session_id
