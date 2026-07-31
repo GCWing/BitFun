@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
   installCliCancel: vi.fn(),
   syncModelConfig: vi.fn(),
   confirmWarning: vi.fn(),
+  getConfig: vi.fn(),
   modalOnClose: null as (() => void) | null,
   modalLifecycleProps: null as {
     closeOnOverlayClick?: boolean;
@@ -38,6 +39,15 @@ vi.mock('@/infrastructure/i18n', () => ({
   useI18n: () => ({
     t: (key: string) => key,
   }),
+}));
+
+vi.mock('@/infrastructure/config', () => ({
+  configManager: { getConfig: mocks.getConfig },
+}));
+
+vi.mock('@/infrastructure/config/services/modelConfigs', () => ({
+  getModelDisplayName: (config: { name?: string; model_name?: string }) =>
+    `${config.name ?? ''}/${config.model_name ?? ''}`,
 }));
 
 vi.mock('@/component-library', () => ({
@@ -129,6 +139,7 @@ describe('DispatchInstallDialog installation lifecycle', () => {
     });
     mocks.confirmWarning.mockResolvedValue(true);
     mocks.installCliCancel.mockResolvedValue(undefined);
+    mocks.getConfig.mockResolvedValue([]);
     container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);
@@ -508,6 +519,7 @@ describe('DispatchInstallDialog model configuration sync', () => {
     mocks.modalOnClose = null;
     mocks.probeTarget.mockImplementation(async () => probeResult());
     mocks.confirmWarning.mockResolvedValue(true);
+    mocks.getConfig.mockResolvedValue([]);
     container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);
@@ -581,5 +593,127 @@ describe('DispatchInstallDialog model configuration sync', () => {
     });
 
     expect(mocks.probeTarget.mock.calls.length).toBe(probesBeforeClose);
+  });
+});
+
+describe('DispatchInstallDialog target model readout', () => {
+  let container: HTMLDivElement;
+  let root: Root;
+
+  const target = {
+    kind: 'ssh' as const,
+    connectionId: 'ssh-1',
+    displayName: 'build-host',
+  };
+
+  function localModel(id: string, modelName: string) {
+    return {
+      id,
+      name: 'Anthropic',
+      model_name: modelName,
+      provider: 'anthropic',
+      base_url: 'https://example.test',
+      api_key: 'secret',
+      enabled: true,
+      category: 'chat',
+      capabilities: [],
+    };
+  }
+
+  function probeWith(availableModels: string[], defaultModel: string) {
+    return {
+      cliInstalled: true,
+      os: 'linux',
+      arch: 'x86_64',
+      installSupported: true,
+      protocol: {
+        protocolVersion: 2,
+        cliVersion: '1.2.3',
+        os: 'linux',
+        arch: 'x86_64',
+        capabilities: [
+          'persistent_jobs',
+          'cursor_events',
+          'detached_worker',
+          'frontend_event_projection',
+          'workspace_serialization',
+          'dispatch_worker_cli_profile',
+        ],
+        modelConfigured: true,
+        availableModels,
+        defaultModel,
+      },
+    };
+  }
+
+  async function mount() {
+    await act(async () => {
+      root.render(
+        <DispatchInstallDialog
+          open
+          target={target}
+          onClose={vi.fn()}
+          onReady={vi.fn()}
+        />,
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.modalOnClose = null;
+    mocks.confirmWarning.mockResolvedValue(true);
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+  });
+
+  afterEach(() => {
+    act(() => root.unmount());
+    container.remove();
+  });
+
+  it('reports parity with this device instead of an opaque config id', async () => {
+    mocks.probeTarget.mockResolvedValue(
+      probeWith(['model_1', 'model_2'], 'model_2'),
+    );
+    mocks.getConfig.mockResolvedValue([
+      localModel('model_1', 'claude-haiku'),
+      localModel('model_2', 'claude-opus'),
+    ]);
+
+    await mount();
+
+    expect(container.textContent).toContain('dispatch.modelMatchesLocal');
+    expect(container.textContent).not.toContain('dispatch.modelDiffersFromLocal');
+    // The id itself must never be what the user is asked to read.
+    expect(container.textContent).not.toContain('model_2');
+  });
+
+  it('reports the target model count when the catalogs differ', async () => {
+    mocks.probeTarget.mockResolvedValue(probeWith(['model_1'], 'model_1'));
+    mocks.getConfig.mockResolvedValue([
+      localModel('model_1', 'claude-haiku'),
+      localModel('model_2', 'claude-opus'),
+    ]);
+
+    await mount();
+
+    expect(container.textContent).toContain('dispatch.modelDiffersFromLocal');
+    expect(container.textContent).not.toContain('dispatch.modelMatchesLocal');
+  });
+
+  it('claims no parity when the local catalog cannot be read', async () => {
+    mocks.probeTarget.mockResolvedValue(probeWith(['model_1'], 'model_1'));
+    mocks.getConfig.mockRejectedValue(new Error('config unavailable'));
+
+    await mount();
+
+    expect(container.textContent).toContain('dispatch.modelReadyCount');
+    expect(container.textContent).not.toContain('dispatch.modelMatchesLocal');
+    expect(container.textContent).not.toContain('dispatch.modelDiffersFromLocal');
   });
 });

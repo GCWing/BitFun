@@ -30,6 +30,13 @@ import {
   DISPATCH_PROTOCOL_VERSION,
   isDispatchWorkspaceReady,
 } from './dispatchPreflight';
+import {
+  compareDispatchModels,
+  syncableLocalModelIds,
+} from './dispatchModelParity';
+import { configManager } from '@/infrastructure/config';
+import { getModelDisplayName } from '@/infrastructure/config/services/modelConfigs';
+import type { AIModelConfig } from '@/infrastructure/config/types';
 import './DispatchInstallDialog.scss';
 
 const log = createLogger('DispatchInstallDialog');
@@ -83,6 +90,7 @@ export const DispatchInstallDialog: React.FC<DispatchInstallDialogProps> = ({
   const [installStart, setInstallStart] = useState<DispatchInstallStart | null>(null);
   const [installOutput, setInstallOutput] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [localModels, setLocalModels] = useState<AIModelConfig[] | null>(null);
   const generationRef = useRef(0);
   const activeInstallRef = useRef<ActiveInstall | null>(null);
   const workspacePathRef = useRef(workspacePath);
@@ -146,6 +154,28 @@ export const DispatchInstallDialog: React.FC<DispatchInstallDialogProps> = ({
     setError(null);
     void runProbe(initialPath);
   }, [open, runProbe, sourceWorkspacePath, target?.defaultWorkspace, targetId]);
+
+  // Reload on every open: the model catalog can change in settings while this
+  // dialog is closed, and a stale local list would report a false divergence.
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    void configManager.getConfig<AIModelConfig[]>('ai.models')
+      .then(models => {
+        if (!cancelled) setLocalModels(Array.isArray(models) ? models : []);
+      })
+      .catch(nextError => {
+        // Parity is advisory. Losing it degrades the readout to the target's
+        // own facts rather than blocking the dialog.
+        log.warn('Failed to read local model configuration for dispatch parity', {
+          error: nextError,
+        });
+        if (!cancelled) setLocalModels(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
 
   const clearActiveInstall = useCallback((generation: number) => {
     if (activeInstallRef.current?.generation === generation) {
@@ -378,6 +408,22 @@ export const DispatchInstallDialog: React.FC<DispatchInstallDialogProps> = ({
       : isDispatchWorkspaceReady(workspacePath, workspace, probedWorkspaceInput ?? undefined);
   const modelReady = protocol?.modelConfigured === true;
   const ready = cliReady && workspaceReady && modelReady && approvalPolicy !== null;
+
+  const targetModelCount = protocol?.availableModels?.length ?? 0;
+  const modelParity = compareDispatchModels(
+    syncableLocalModelIds(localModels),
+    protocol?.availableModels,
+  );
+  // The probe carries ids, which name nothing a user recognizes. Resolve the
+  // target's default through the local catalog when the two agree; when they
+  // do not, the id would be misleading anyway and the count is the actionable
+  // fact.
+  const targetDefaultModelLabel = (() => {
+    const id = protocol?.defaultModel?.trim();
+    if (!id) return t('dispatch.modelAutomatic');
+    const local = localModels?.find(model => model.id?.trim() === id);
+    return local ? getModelDisplayName(local) : id;
+  })();
 
   const confirmTarget = () => {
     if (
@@ -649,9 +695,13 @@ export const DispatchInstallDialog: React.FC<DispatchInstallDialogProps> = ({
                   <div data-state={modelReady ? 'ok' : 'blocked'}>
                     <span>{t('dispatch.modelStatus')}</span>
                     <strong>
-                      {modelReady
-                        ? t('dispatch.modelReady', { model: protocol?.defaultModel || t('dispatch.modelAutomatic') })
-                        : protocol?.modelDiagnostic || t('dispatch.modelMissing')}
+                      {!modelReady
+                        ? protocol?.modelDiagnostic || t('dispatch.modelMissing')
+                        : modelParity === 'match'
+                          ? t('dispatch.modelMatchesLocal', { model: targetDefaultModelLabel })
+                          : modelParity === 'diverged'
+                            ? t('dispatch.modelDiffersFromLocal', { count: targetModelCount })
+                            : t('dispatch.modelReadyCount', { count: targetModelCount })}
                     </strong>
                   </div>
                 </div>
