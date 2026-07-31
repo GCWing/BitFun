@@ -11,6 +11,7 @@ import './ScrollAnchor.scss';
 interface ScrollAnchorProps {
   onAnchorNavigate: (turnId: string) => void;
   scrollerRef?: React.RefObject<HTMLElement | null>;
+  scrollerElement?: HTMLElement | null;
 }
 
 interface AnchorPoint {
@@ -27,6 +28,7 @@ interface AnchorPoint {
 export const ScrollAnchor: React.FC<ScrollAnchorProps> = ({
   onAnchorNavigate,
   scrollerRef,
+  scrollerElement,
 }) => {
   const virtualItems = useVirtualItems();
   const [hoveredAnchor, setHoveredAnchor] = useState<AnchorPoint | null>(null);
@@ -37,7 +39,10 @@ export const ScrollAnchor: React.FC<ScrollAnchorProps> = ({
   const [isHovering, setIsHovering] = useState(false);
 
   useEffect(() => {
-    const scroller = scrollerRef?.current;
+    // The ref object is stable while the static-history renderer hands off to
+    // Virtuoso. Depend on the actual element as well so the listener follows
+    // that DOM replacement instead of staying attached to a disconnected node.
+    const scroller = scrollerElement ?? scrollerRef?.current;
     if (!scroller) return;
 
     const handleScroll = () => {
@@ -60,10 +65,10 @@ export const ScrollAnchor: React.FC<ScrollAnchorProps> = ({
         clearTimeout(scrollTimeoutRef.current);
       }
     };
-  }, [scrollerRef]);
+  }, [scrollerElement, scrollerRef]);
 
   useEffect(() => {
-    const scroller = scrollerRef?.current;
+    const scroller = scrollerElement ?? scrollerRef?.current;
     if (!scroller) return;
 
     if (isHovering) {
@@ -75,7 +80,7 @@ export const ScrollAnchor: React.FC<ScrollAnchorProps> = ({
     return () => {
       scroller.classList.remove('anchor-hovering');
     };
-  }, [scrollerRef, isHovering]);
+  }, [isHovering, scrollerElement, scrollerRef]);
 
   const anchorPoints = useMemo<AnchorPoint[]>(() => {
     if (virtualItems.length === 0) return [];

@@ -260,6 +260,25 @@ reservation. User navigation drops a provisional sticky range instead of
 transferring it into protected collapse. Established pins keep the existing
 protected-range handoff.
 
+Arbitrary-turn navigation is a materialize-then-align transaction. Starting a
+new request exits tail follow, but it does not remove the previous established
+pin reservation before the target DOM exists. That reservation remains only as
+physical scroll range; the active request prevents the old sticky target from
+reconciling it. Once the requested user message is rendered, the shared pin
+resolver replaces the old reservation, aligns the message to the 57px viewport
+offset, and starts bounded transient stabilization. An expired request releases
+semantic ownership while preserving the current physical range, so failure
+cannot silently clamp the pane to the bottom.
+
+`rangeChanged` is a target-materialization signal, not a source of turn
+identity. It retries the active generation against real DOM geometry. RAF
+retries remain as a bounded fallback for browsers that coalesce range updates.
+When the static initial-history renderer hands off to Virtuoso with a pending
+target, that target becomes Virtuoso's `initialTopMostItemIndex`; the normal pin
+resolver then performs exact alignment after mount. The right-side
+`ScrollAnchor` must bind to the actual scroller element, because the stable ref
+object does not change identity when its `.current` node is replaced.
+
 Mounting an already-streaming session is not a new-turn event. Session entry
 resumes tail follow directly, while sticky pinning remains reserved for a new
 turn that appears in the currently mounted session.
@@ -344,6 +363,53 @@ If a shrink happens without a collapse intent:
 
 This path is safer than doing nothing, but it is more likely to show visible movement than the pre-compensation path.
 
+## C. Static Initial-History Turn Navigation
+
+The initial-history path renders a bounded static window plus estimated leading
+and trailing spacers before handing the complete projection to Virtuoso. Header
+turn selection and the right-side scroll anchor may target a turn outside that
+window. The list first materializes a new window around the target and then
+issues the requested scroll.
+
+A smooth scroll does not update `scrollTop` synchronously. The window swap can
+therefore emit a scroll event at the old, browser-clamped physical bottom before
+the target motion begins. That geometry is not evidence that the user returned
+to the latest turn. While a static anchor window is active:
+
+- physical `atBottom` does not make the viewport semantically latest
+- programmatic turn navigation never releases the anchor window
+- programmatic turn navigation must not start older-history pagination when it
+  crosses the leading spacer; only an explicit upward user gesture may do so
+- explicit jump-to-latest navigation releases it directly
+- wheel, touch, keyboard, or scrollbar motion must establish a recent downward
+  user intent before arrival at the physical bottom may release it
+- session reset clears the anchor window and any pending bottom-return intent
+
+Keep the user-intent window bounded. It exists only to classify the scroll event
+that follows an input gesture; it must not become a persistent scroll lock or a
+second viewport writer.
+
+## D. Arbitrary Turn Navigation Through Virtuoso
+
+Header turn selection and the right-side scroll anchor use the same top-aligned
+pin transaction:
+
+1. record generation, session, target turn, behavior, and pin mode
+2. exit tail follow without removing established physical range
+3. if the target is absent, issue an immediate `scrollToIndex(..., align:
+   'start')`
+4. retry from `rangeChanged` and bounded RAF work until the target user message
+   exists
+5. replace the prior pin reservation with the target's measured reservation
+6. align the target to the shared 57px header offset and stabilize delayed
+   Virtuoso measurements
+7. cancel stale work on a newer request, user intent, session switch, jump to
+   latest, or timeout
+
+Do not clear the previous pin/footer range in step 2. The target may be outside
+the current Virtuoso range, and removing the footer first lets the browser clamp
+the old position to the physical bottom before materialization succeeds.
+
 ## Why Transition Tracking Exists
 
 User-initiated expand/collapse still uses animated layout properties such as:
@@ -379,7 +445,7 @@ current `scrollTop`, without retaining provisional pixels above that range.
 These owner-specific transactions prevent both clear-and-reacquire frames and
 cumulative provisional whitespace. Any deferred follow is then replayed.
 
-## C. Follow-Output Mode (continuous tail)
+## E. Follow-Output Mode (continuous tail)
 
 When the viewport is in follow-output mode and the latest turn is still
 streaming, the user's intent is "keep the tail visible". After the viewport
