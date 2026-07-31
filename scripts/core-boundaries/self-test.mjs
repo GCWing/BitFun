@@ -4919,6 +4919,10 @@ export function runManifestParserSelfTest({
     runtimeIpcOperationPattern.test('    UpdateSessionModel {') ||
     runtimeIpcOperationPattern.test('    UndoSession {') ||
     runtimeIpcOperationPattern.test('    RedoSession {') ||
+    runtimeIpcOperationPattern.test('    SearchWorkspaceReferences {') ||
+    runtimeIpcOperationPattern.test('    WorkspaceReferencesForMessage {') ||
+    runtimeIpcOperationPattern.test('    WorkspaceReferenceSearch {') ||
+    runtimeIpcOperationPattern.test('    WorkspaceReferences {') ||
     runtimeIpcOperationPattern.test('    SubmitTurn {') ||
     runtimeIpcOperationPattern.test('    SessionForked {') ||
     runtimeIpcOperationPattern.test('    SessionReverted {')

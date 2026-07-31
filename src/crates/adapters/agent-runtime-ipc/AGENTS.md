@@ -22,7 +22,7 @@ session controller leases, event delivery, connection bounds, and cleanup. It is
 
 - Export only the exact workspace-private API needed by the CLI adapter. Do not
   publish this crate or expose its wire as an SDK contract.
-- The closed operation budget is Health, Session list/create/restore/delete/fork (including transcript on restore/fork), current-Session rename, Agent mode/model update, manual context compaction, and Session undo/redo,
+- The closed operation budget is Health, Session list/create/restore/delete/fork (including transcript on restore/fork), current-Session rename, Agent mode/model update, manual context compaction, Session undo/redo, and current-controller read-only workspace-reference search/persisted-reference lookup,
   declarative context reload, Turn submit/cancel, pending/respond Permission, and UserInput answers. Delete is limited to an idle Session not controlled by any client.
   Fork is a current-controller, idle-only operation. It either copies through the latest persisted Turn or stops immediately before an explicitly selected Turn. The encoded success result carries the authoritative new Session and transcript; only then may the server atomically switch the connection lease from the source Session to the fork.
   Manual compaction is a current-controller, idle-only Turn operation. The client supplies its exact Turn ID before admission so timeout or disconnect cleanup can cancel the same owned task; once Core begins the atomic context commit, a late cancellation does not expose a false idle state.

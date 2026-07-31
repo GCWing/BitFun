@@ -288,6 +288,7 @@ impl ChatMessage {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct SessionForkPoint {
+    pub message_id: String,
     pub turn_id: String,
     pub prompt: String,
     pub timestamp: SystemTime,
@@ -492,12 +493,21 @@ impl ChatState {
                     .collect::<Vec<_>>()
                     .join("\n");
                 (!prompt.is_empty()).then_some(SessionForkPoint {
+                    message_id: message.id.clone(),
                     turn_id,
                     prompt,
                     timestamp: message.timestamp,
                 })
             })
             .collect()
+    }
+
+    pub(crate) fn latest_user_message_id(&self) -> Option<String> {
+        self.messages
+            .iter()
+            .rev()
+            .find(|message| message.role == MessageRole::User)
+            .map(|message| message.id.clone())
     }
 
     pub(crate) fn set_worktree_control_available(&mut self, available: bool) {

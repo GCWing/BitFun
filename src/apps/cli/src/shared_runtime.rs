@@ -366,6 +366,18 @@ impl RuntimeIpcRequestHandler for SharedRuntimeHandler {
                 .await
                 .map(|revert| RuntimeIpcOperationResult::SessionReverted { revert })
                 .map_err(runtime_ipc_error),
+            RuntimeIpcOperation::SearchWorkspaceReferences { request } => self
+                .runtime
+                .search_workspace_references(request)
+                .await
+                .map(|search| RuntimeIpcOperationResult::WorkspaceReferenceSearch { search })
+                .map_err(runtime_ipc_error),
+            RuntimeIpcOperation::WorkspaceReferencesForMessage { request } => self
+                .runtime
+                .workspace_references_for_message(request)
+                .await
+                .map(|references| RuntimeIpcOperationResult::WorkspaceReferences { references })
+                .map_err(runtime_ipc_error),
             RuntimeIpcOperation::SubmitTurn { request } => {
                 let outcome = self
                     .runtime

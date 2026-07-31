@@ -60,12 +60,12 @@ pub use bitfun_harness::{
 pub use bitfun_runtime_ports::{
     AgentBackgroundResultRequest, AgentDialogTurnPort, AgentDialogTurnRequest,
     AgentInputAttachment, AgentLifecycleDeliveryPort, AgentLocalCommandTurnPort,
-    AgentLocalCommandTurnRecordRequest, AgentSessionArchiveRequest,
-    AgentSessionArchiveStateRequest, AgentSessionClosePort, AgentSessionCompactionPort,
-    AgentSessionCompactionRequest, AgentSessionCompactionResult, AgentSessionComposerUpdate,
-    AgentSessionCreateRequest, AgentSessionCreateResult, AgentSessionDeleteRequest,
-    AgentSessionForkAtTurnRequest, AgentSessionForkBeforeTurnRequest, AgentSessionForkPort,
-    AgentSessionForkRequest, AgentSessionForkResult, AgentSessionListRequest,
+    AgentLocalCommandTurnRecordRequest, AgentMessageWorkspaceReferencesRequest,
+    AgentSessionArchiveRequest, AgentSessionArchiveStateRequest, AgentSessionClosePort,
+    AgentSessionCompactionPort, AgentSessionCompactionRequest, AgentSessionCompactionResult,
+    AgentSessionComposerUpdate, AgentSessionCreateRequest, AgentSessionCreateResult,
+    AgentSessionDeleteRequest, AgentSessionForkAtTurnRequest, AgentSessionForkBeforeTurnRequest,
+    AgentSessionForkPort, AgentSessionForkRequest, AgentSessionForkResult, AgentSessionListRequest,
     AgentSessionManagementPort, AgentSessionModePort, AgentSessionModeUpdateRequest,
     AgentSessionModelPort, AgentSessionModelUpdateRequest, AgentSessionRenameRequest,
     AgentSessionRevertPort, AgentSessionRevertRequest, AgentSessionRevertResult,
@@ -75,7 +75,10 @@ pub use bitfun_runtime_ports::{
     AgentThreadGoalCreateRequest, AgentThreadGoalDeliveryRequest, AgentThreadGoalGetRequest,
     AgentThreadGoalManagementPort, AgentThreadGoalUpdateStatusRequest,
     AgentTransientSessionDiscardRequest, AgentTurnCancellationPort, AgentTurnCancellationRequest,
-    AgentTurnCancellationResult, AgentTurnSettlementPort, AgentTurnSettlementRequest, ClockPort,
+    AgentTurnCancellationResult, AgentTurnSettlementPort, AgentTurnSettlementRequest,
+    AgentWorkspaceReference, AgentWorkspaceReferenceKind, AgentWorkspaceReferencePort,
+    AgentWorkspaceReferenceSearchEntry, AgentWorkspaceReferenceSearchRequest,
+    AgentWorkspaceReferenceSearchResult, AgentWorkspaceReferenceSourceRange, ClockPort,
     DialogSubmissionPolicy, DialogSubmitOutcome, FileSystemPort, GitPort, McpCatalogPort,
     NetworkPort, PermissionAuditRecord, PermissionDelegationContext, PermissionGrant,
     PermissionGrantKey, PermissionReply, PermissionReplySource, PermissionRequest,
@@ -127,6 +130,14 @@ impl AgentRuntimeBuilder {
         port: Arc<dyn AgentSessionManagementPort>,
     ) -> Self {
         self.inner = self.inner.with_session_management_port(port);
+        self
+    }
+
+    pub fn with_workspace_reference_port(
+        mut self,
+        port: Arc<dyn AgentWorkspaceReferencePort>,
+    ) -> Self {
+        self.inner = self.inner.with_workspace_reference_port(port);
         self
     }
 
@@ -552,6 +563,20 @@ impl AgentRuntime {
         request: AgentSessionWorkspaceRequest,
     ) -> Result<Option<AgentSessionWorkspaceBinding>, RuntimeError> {
         self.inner.resolve_session_workspace_binding(request).await
+    }
+
+    pub async fn search_workspace_references(
+        &self,
+        request: AgentWorkspaceReferenceSearchRequest,
+    ) -> Result<AgentWorkspaceReferenceSearchResult, RuntimeError> {
+        self.inner.search_workspace_references(request).await
+    }
+
+    pub async fn workspace_references_for_message(
+        &self,
+        request: AgentMessageWorkspaceReferencesRequest,
+    ) -> Result<Vec<AgentWorkspaceReference>, RuntimeError> {
+        self.inner.workspace_references_for_message(request).await
     }
 
     pub async fn submit_turn(

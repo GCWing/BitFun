@@ -7,10 +7,28 @@ impl ChatMode {
         chat_view: &mut ChatView,
         rt_handle: &tokio::runtime::Handle,
     ) -> Result<()> {
-        let (before_turn_id, prefill) = match target {
-            ForkTarget::FullSession => (None, None),
-            ForkTarget::BeforeTurn { turn_id, prompt } => (Some(turn_id), Some(prompt)),
+        let source_session_id = chat_state.core_session_id.clone();
+        let (before_turn_id, prefill, prefill_message_id) = match target {
+            ForkTarget::FullSession => (None, None, None),
+            ForkTarget::BeforeTurn {
+                turn_id,
+                message_id,
+                prompt,
+            } => (Some(turn_id), Some(prompt), Some(message_id)),
         };
+        let prefill_references =
+            prefill_message_id
+                .map(|message_id| {
+                    let agent = self.agent.clone();
+                    tokio::task::block_in_place(|| {
+                        rt_handle.block_on(agent.workspace_references_for_message(
+                            source_session_id.clone(),
+                            message_id,
+                        ))
+                    })
+                })
+                .transpose()?
+                .unwrap_or_default();
         chat_view.set_status(Some("Forking session...".to_string()));
         self.close_all_popups(chat_view);
         let agent = self.agent.clone();
@@ -45,7 +63,10 @@ impl ChatMode {
         chat_view.clear_screen();
         chat_view.scroll_to_bottom();
         if let Some(prompt) = prefill {
-            chat_view.set_input(&prompt);
+            chat_view.set_draft(crate::ui::workspace_reference::ComposerDraft {
+                text: prompt,
+                workspace_references: prefill_references,
+            });
             chat_view.set_status(Some(
                 "Forked before the selected prompt; review the copied input before sending."
                     .to_string(),
@@ -175,6 +196,24 @@ impl ChatMode {
         chat_state: &mut ChatState,
         rt_handle: &tokio::runtime::Handle,
     ) {
+        self.send_draft_to_agent(
+            crate::ui::workspace_reference::ComposerDraft {
+                text: message,
+                workspace_references: Vec::new(),
+            },
+            chat_view,
+            chat_state,
+            rt_handle,
+        );
+    }
+
+    fn send_draft_to_agent(
+        &mut self,
+        draft: crate::ui::workspace_reference::ComposerDraft,
+        chat_view: &mut ChatView,
+        chat_state: &mut ChatState,
+        rt_handle: &tokio::runtime::Handle,
+    ) {
         if self
             .pending_session_operation
             .as_ref()
@@ -183,6 +222,7 @@ impl ChatMode {
             chat_view.set_status(Some(
                 "Waiting for the pending Session operation to finish before sending.".to_string(),
             ));
+            chat_view.set_draft(draft);
             return;
         }
         if chat_state.is_processing {
@@ -194,6 +234,7 @@ impl ChatMode {
             tracing::error!("Failed to prepare worktree for submitted prompt: {error}");
             chat_view.set_status(Some(format!("Error: {error}")));
             chat_state.add_system_message(error);
+            chat_view.set_draft(draft);
             return;
         }
 
@@ -203,7 +244,11 @@ impl ChatMode {
         let agent = self.agent.clone();
         let agent_type = self.agent_type.clone();
         match tokio::task::block_in_place(|| {
-            rt_handle.block_on(agent.send_message(message, &agent_type))
+            rt_handle.block_on(agent.send_message_with_workspace_references(
+                draft.text.clone(),
+                draft.workspace_references.clone(),
+                &agent_type,
+            ))
         }) {
             Ok(turn_id) => {
                 tracing::info!("Started turn: {}", turn_id);
@@ -211,6 +256,7 @@ impl ChatMode {
             Err(e) => {
                 tracing::error!("Failed to send message: {}", e);
                 chat_view.set_status(Some(format!("Error: {}", e)));
+                chat_view.set_draft(draft);
             }
         }
     }

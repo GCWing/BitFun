@@ -12,13 +12,15 @@ use std::sync::{Arc, RwLock};
 use tokio::sync::{broadcast, Mutex};
 
 use bitfun_agent_runtime::sdk::{
-    AgentDialogTurnRequest, AgentEventReceiver, AgentLocalCommandTurnRecordRequest, AgentRuntime,
-    AgentSessionCompactionRequest, AgentSessionCreateRequest, AgentSessionDeleteRequest,
-    AgentSessionForkBeforeTurnRequest, AgentSessionForkRequest, AgentSessionForkResult,
-    AgentSessionListRequest, AgentSessionModeUpdateRequest, AgentSessionModelUpdateRequest,
-    AgentSessionRenameRequest, AgentSessionRestoreRequest, AgentSessionRevertRequest,
-    AgentSessionRevertResult, AgentSessionUsageRequest, AgentTurnCancellationRequest,
-    AgentTurnSettlementRequest, AgentUserAnswersRequest, PermissionReply, PermissionRequest,
+    AgentDialogTurnRequest, AgentEventReceiver, AgentLocalCommandTurnRecordRequest,
+    AgentMessageWorkspaceReferencesRequest, AgentRuntime, AgentSessionCompactionRequest,
+    AgentSessionCreateRequest, AgentSessionDeleteRequest, AgentSessionForkBeforeTurnRequest,
+    AgentSessionForkRequest, AgentSessionForkResult, AgentSessionListRequest,
+    AgentSessionModeUpdateRequest, AgentSessionModelUpdateRequest, AgentSessionRenameRequest,
+    AgentSessionRestoreRequest, AgentSessionRevertRequest, AgentSessionRevertResult,
+    AgentSessionUsageRequest, AgentTurnCancellationRequest, AgentTurnSettlementRequest,
+    AgentUserAnswersRequest, AgentWorkspaceReference, AgentWorkspaceReferenceSearchRequest,
+    AgentWorkspaceReferenceSearchResult, PermissionReply, PermissionRequest,
     PermissionRequestEventReceiver, PortError, PortErrorKind, RuntimeError, SessionTranscript,
     SessionTranscriptRequest, SessionUsageReport,
 };
@@ -30,8 +32,9 @@ use bitfun_agent_runtime_ipc::{
 };
 use bitfun_events::{AgenticEvent, AgenticEventEnvelope};
 use bitfun_runtime_ports::{
-    AgentSessionSummary, AgentSessionWorkspaceBinding, AgentSessionWorkspaceRequest,
-    AgentSubmissionSource, DialogSubmissionPolicy, SessionExecutionTarget,
+    put_agent_workspace_references, AgentSessionSummary, AgentSessionWorkspaceBinding,
+    AgentSessionWorkspaceRequest, AgentSubmissionSource, DialogSubmissionPolicy,
+    SessionExecutionTarget,
 };
 
 use crate::actions::SHARED_TUI_EMBEDDED_HANDOFF;
@@ -1117,6 +1120,16 @@ impl CliAgentRuntimeClient {
     }
 
     pub(crate) async fn send_message(&self, message: String, agent_type: &str) -> Result<String> {
+        self.send_message_with_workspace_references(message, Vec::new(), agent_type)
+            .await
+    }
+
+    pub(crate) async fn send_message_with_workspace_references(
+        &self,
+        message: String,
+        workspace_references: Vec<AgentWorkspaceReference>,
+        agent_type: &str,
+    ) -> Result<String> {
         let session_id = self.ensure_session(agent_type).await?;
         tracing::info!("Sending message to session {}: {}", session_id, message);
 
@@ -1130,7 +1143,9 @@ impl CliAgentRuntimeClient {
         }
 
         // Start the dialog turn; events arrive through the shared broadcast source.
-        let metadata = approval_metadata(self.approval_policy());
+        let mut metadata = approval_metadata(self.approval_policy());
+        put_agent_workspace_references(&mut metadata, &workspace_references)
+            .map_err(|error| anyhow::anyhow!(error.message))?;
         let request = AgentDialogTurnRequest {
             session_id: session_id.clone(),
             message: message.clone(),
@@ -1193,6 +1208,60 @@ impl CliAgentRuntimeClient {
             *self.current_turn_id.lock().await = None;
         }
         submission
+    }
+
+    pub(crate) async fn search_workspace_references(
+        &self,
+        query: String,
+    ) -> Result<AgentWorkspaceReferenceSearchResult> {
+        let session_id = self
+            .session_id
+            .lock()
+            .await
+            .clone()
+            .ok_or_else(|| anyhow::anyhow!("No active session"))?;
+        let request = AgentWorkspaceReferenceSearchRequest {
+            session_id,
+            query,
+            limit: 20,
+        };
+        match &self.backend {
+            CliAgentRuntimeBackend::Embedded(runtime) => runtime
+                .search_workspace_references(request)
+                .await
+                .map_err(|error| anyhow::anyhow!(error.into_message())),
+            CliAgentRuntimeBackend::Shared(client) => match client
+                .request(RuntimeIpcOperation::SearchWorkspaceReferences { request })
+                .await?
+            {
+                RuntimeIpcOperationResult::WorkspaceReferenceSearch { search } => Ok(search),
+                _ => Err(unexpected_shared_result("search_workspace_references")),
+            },
+        }
+    }
+
+    pub(crate) async fn workspace_references_for_message(
+        &self,
+        session_id: String,
+        message_id: String,
+    ) -> Result<Vec<AgentWorkspaceReference>> {
+        let request = AgentMessageWorkspaceReferencesRequest {
+            session_id,
+            message_id,
+        };
+        match &self.backend {
+            CliAgentRuntimeBackend::Embedded(runtime) => runtime
+                .workspace_references_for_message(request)
+                .await
+                .map_err(|error| anyhow::anyhow!(error.into_message())),
+            CliAgentRuntimeBackend::Shared(client) => match client
+                .request(RuntimeIpcOperation::WorkspaceReferencesForMessage { request })
+                .await?
+            {
+                RuntimeIpcOperationResult::WorkspaceReferences { references } => Ok(references),
+                _ => Err(unexpected_shared_result("workspace_references_for_message")),
+            },
+        }
     }
 
     pub(crate) async fn cancel_current_turn(&self) -> Result<()> {

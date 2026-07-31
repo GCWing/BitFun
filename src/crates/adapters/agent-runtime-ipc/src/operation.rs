@@ -1,10 +1,11 @@
 use bitfun_product_domains::tool_permissions::{PermissionReply, PermissionRequest};
 use bitfun_runtime_ports::{
-    AgentContextReloadRequest, AgentDialogTurnRequest, AgentSessionCompactionRequest,
-    AgentSessionCreateRequest, AgentSessionCreateResult, AgentSessionListRequest,
-    AgentSessionModeUpdateRequest, AgentSessionModelUpdateRequest, AgentSessionRevertRequest,
-    AgentSessionRevertResult, AgentSessionSummary, AgentTurnCancellationRequest,
-    AgentTurnCancellationResult, SessionTranscript,
+    AgentContextReloadRequest, AgentDialogTurnRequest, AgentMessageWorkspaceReferencesRequest,
+    AgentSessionCompactionRequest, AgentSessionCreateRequest, AgentSessionCreateResult,
+    AgentSessionListRequest, AgentSessionModeUpdateRequest, AgentSessionModelUpdateRequest,
+    AgentSessionRevertRequest, AgentSessionRevertResult, AgentSessionSummary,
+    AgentTurnCancellationRequest, AgentTurnCancellationResult, AgentWorkspaceReference,
+    AgentWorkspaceReferenceSearchRequest, AgentWorkspaceReferenceSearchResult, SessionTranscript,
 };
 use serde::{Deserialize, Serialize};
 
@@ -85,6 +86,12 @@ pub enum RuntimeIpcOperation {
     RedoSession {
         request: AgentSessionRevertRequest,
     },
+    SearchWorkspaceReferences {
+        request: AgentWorkspaceReferenceSearchRequest,
+    },
+    WorkspaceReferencesForMessage {
+        request: AgentMessageWorkspaceReferencesRequest,
+    },
     SubmitTurn {
         request: AgentDialogTurnRequest,
     },
@@ -117,6 +124,8 @@ impl RuntimeIpcOperation {
             Self::CompactSession { request } => Some(&request.session_id),
             Self::UndoSession { request } => Some(&request.session_id),
             Self::RedoSession { request } => Some(&request.session_id),
+            Self::SearchWorkspaceReferences { request } => Some(&request.session_id),
+            Self::WorkspaceReferencesForMessage { request } => Some(&request.session_id),
             Self::SubmitTurn { request } => Some(&request.session_id),
             Self::CancelTurn { request } => Some(&request.session_id),
             Self::PendingPermissions { session_id }
@@ -161,6 +170,9 @@ impl RuntimeIpcOperation {
                 RuntimeIpcOperationRules::new(CurrentController, false, false, true)
             }
             Self::PendingPermissions { .. } => {
+                RuntimeIpcOperationRules::new(CurrentController, false, false, false)
+            }
+            Self::SearchWorkspaceReferences { .. } | Self::WorkspaceReferencesForMessage { .. } => {
                 RuntimeIpcOperationRules::new(CurrentController, false, false, false)
             }
         }
@@ -239,6 +251,12 @@ pub enum RuntimeIpcOperationResult {
     },
     PendingPermissions {
         requests: Vec<PermissionRequest>,
+    },
+    WorkspaceReferenceSearch {
+        search: AgentWorkspaceReferenceSearchResult,
+    },
+    WorkspaceReferences {
+        references: Vec<AgentWorkspaceReference>,
     },
 }
 

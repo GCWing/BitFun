@@ -188,6 +188,17 @@ impl TextInput {
         self.scroll_offset = 0;
     }
 
+    pub(super) fn replace_char_range(&mut self, start: usize, end: usize, replacement: &str) {
+        let char_count = self.input.chars().count();
+        let start = start.min(char_count);
+        let end = end.clamp(start, char_count);
+        let start_byte = self.char_pos_to_byte_pos(start);
+        let end_byte = self.char_pos_to_byte_pos(end);
+        self.input.replace_range(start_byte..end_byte, replacement);
+        self.cursor = start + replacement.chars().count();
+        self.scroll_offset = 0;
+    }
+
     /// Take input text and reset state. Returns None if input is blank.
     pub(super) fn take_input(&mut self) -> Option<String> {
         if self.input.trim().is_empty() {

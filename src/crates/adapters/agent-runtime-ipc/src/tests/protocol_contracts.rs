@@ -8,8 +8,9 @@ use crate::{
 use bitfun_product_domains::tool_permissions::PermissionReply;
 use bitfun_runtime_ports::{
     AgentContextReloadRequest, AgentContextReloadTarget, AgentDialogTurnRequest,
-    AgentSessionCompactionRequest, AgentSessionModeUpdateRequest, AgentSessionModelUpdateRequest,
-    AgentSessionRevertRequest, AgentSubmissionSource, DialogSubmissionPolicy,
+    AgentMessageWorkspaceReferencesRequest, AgentSessionCompactionRequest,
+    AgentSessionModeUpdateRequest, AgentSessionModelUpdateRequest, AgentSessionRevertRequest,
+    AgentSubmissionSource, AgentWorkspaceReferenceSearchRequest, DialogSubmissionPolicy,
 };
 use serde_json::{json, Map};
 
@@ -69,6 +70,41 @@ fn protocol_round_trips_reviewed_permission_and_user_input_operations() {
 }
 
 #[test]
+fn protocol_round_trips_read_only_workspace_reference_operations() {
+    let operations = vec![
+        RuntimeIpcOperation::SearchWorkspaceReferences {
+            request: AgentWorkspaceReferenceSearchRequest {
+                session_id: "session-1".to_string(),
+                query: "src/ma".to_string(),
+                limit: 20,
+            },
+        },
+        RuntimeIpcOperation::WorkspaceReferencesForMessage {
+            request: AgentMessageWorkspaceReferencesRequest {
+                session_id: "session-1".to_string(),
+                message_id: "message-1".to_string(),
+            },
+        },
+    ];
+
+    for operation in operations {
+        let encoded = serde_json::to_value(&operation).expect("serialize workspace operation");
+        let decoded: RuntimeIpcOperation =
+            serde_json::from_value(encoded).expect("deserialize workspace operation");
+        assert_eq!(decoded, operation);
+        assert_eq!(decoded.session_id(), Some("session-1"));
+        let rules = decoded.rules();
+        assert_eq!(
+            rules.session_requirement,
+            RuntimeIpcSessionRequirement::CurrentController
+        );
+        assert!(!rules.requires_idle);
+        assert!(!rules.serializes_session_selection);
+        assert!(!rules.side_effecting);
+    }
+}
+
+#[test]
 fn protocol_round_trips_the_reviewed_session_mode_operation() {
     let operation = RuntimeIpcOperation::UpdateSessionMode {
         request: AgentSessionModeUpdateRequest {
@@ -118,7 +154,7 @@ fn protocol_round_trips_the_reviewed_session_model_operation() {
 
 #[test]
 fn protocol_round_trips_the_current_session_rename_operation() {
-    assert_eq!(PROTOCOL_VERSION, 9);
+    assert_eq!(PROTOCOL_VERSION, 10);
 
     let operation = RuntimeIpcOperation::RenameSession {
         request: RuntimeSessionRenameRequest {

@@ -1312,6 +1312,125 @@ pub struct AgentSessionWorkspaceBinding {
     pub remote_ssh_host: Option<String>,
 }
 
+pub const AGENT_WORKSPACE_REFERENCES_METADATA_KEY: &str = "workspace_references";
+pub const MAX_AGENT_WORKSPACE_REFERENCES_PER_TURN: usize = 20;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AgentWorkspaceReferenceKind {
+    File,
+    Directory,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentWorkspaceReferenceSourceRange {
+    /// Zero-based character offset in the original user input.
+    pub start: usize,
+    /// Exclusive zero-based character offset in the original user input.
+    pub end: usize,
+    pub value: String,
+}
+
+/// A user-selected workspace path carried as structured turn metadata.
+///
+/// The path is workspace-relative and slash-normalized. It is not an
+/// authorization token: the runtime owner validates the current Session
+/// binding and path again before accepting the turn.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentWorkspaceReference {
+    pub path: String,
+    pub kind: AgentWorkspaceReferenceKind,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub start_line: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub end_line: Option<u32>,
+    pub source: AgentWorkspaceReferenceSourceRange,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentWorkspaceReferenceSearchRequest {
+    pub session_id: String,
+    #[serde(default)]
+    pub query: String,
+    pub limit: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentWorkspaceReferenceSearchEntry {
+    pub path: String,
+    pub kind: AgentWorkspaceReferenceKind,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentWorkspaceReferenceSearchResult {
+    #[serde(default)]
+    pub entries: Vec<AgentWorkspaceReferenceSearchEntry>,
+    #[serde(default)]
+    pub truncated: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentMessageWorkspaceReferencesRequest {
+    pub session_id: String,
+    pub message_id: String,
+}
+
+pub fn put_agent_workspace_references(
+    metadata: &mut serde_json::Map<String, serde_json::Value>,
+    references: &[AgentWorkspaceReference],
+) -> PortResult<()> {
+    if references.is_empty() {
+        metadata.remove(AGENT_WORKSPACE_REFERENCES_METADATA_KEY);
+        return Ok(());
+    }
+    if references.len() > MAX_AGENT_WORKSPACE_REFERENCES_PER_TURN {
+        return Err(PortError::new(
+            PortErrorKind::InvalidRequest,
+            format!(
+                "a message can reference at most {MAX_AGENT_WORKSPACE_REFERENCES_PER_TURN} workspace paths"
+            ),
+        ));
+    }
+    let value = serde_json::to_value(references).map_err(|error| {
+        PortError::new(
+            PortErrorKind::InvalidRequest,
+            format!("failed to serialize workspace references: {error}"),
+        )
+    })?;
+    metadata.insert(AGENT_WORKSPACE_REFERENCES_METADATA_KEY.to_string(), value);
+    Ok(())
+}
+
+pub fn agent_workspace_references_from_metadata(
+    metadata: &serde_json::Map<String, serde_json::Value>,
+) -> PortResult<Vec<AgentWorkspaceReference>> {
+    let Some(value) = metadata.get(AGENT_WORKSPACE_REFERENCES_METADATA_KEY) else {
+        return Ok(Vec::new());
+    };
+    let references: Vec<AgentWorkspaceReference> =
+        serde_json::from_value(value.clone()).map_err(|error| {
+            PortError::new(
+                PortErrorKind::InvalidRequest,
+                format!("invalid workspace reference metadata: {error}"),
+            )
+        })?;
+    if references.len() > MAX_AGENT_WORKSPACE_REFERENCES_PER_TURN {
+        return Err(PortError::new(
+            PortErrorKind::InvalidRequest,
+            format!(
+                "a message can reference at most {MAX_AGENT_WORKSPACE_REFERENCES_PER_TURN} workspace paths"
+            ),
+        ));
+    }
+    Ok(references)
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentSubmissionRequest {
@@ -2015,6 +2134,22 @@ pub trait AgentSessionManagementPort: Send + Sync {
     ) -> PortResult<Option<AgentSessionWorkspaceBinding>>;
 }
 
+/// Narrow workspace-reference use cases shared by first-party interactive
+/// adapters. Implementations keep filesystem search and persisted message
+/// lookup behind the authoritative Session owner.
+#[async_trait::async_trait]
+pub trait AgentWorkspaceReferencePort: Send + Sync {
+    async fn search_workspace_references(
+        &self,
+        request: AgentWorkspaceReferenceSearchRequest,
+    ) -> PortResult<AgentWorkspaceReferenceSearchResult>;
+
+    async fn workspace_references_for_message(
+        &self,
+        request: AgentMessageWorkspaceReferencesRequest,
+    ) -> PortResult<Vec<AgentWorkspaceReference>>;
+}
+
 /// Deadline-bearing request for discarding a connection-scoped transient
 /// Session. This is separate from [`AgentSessionDeleteRequest`] so adding Host
 /// cleanup policy cannot break the established Rust Session-management API.
@@ -2477,6 +2612,78 @@ mod tests {
                 .expect("session revert result should deserialize"),
             result
         );
+    }
+
+    #[test]
+    fn workspace_reference_metadata_round_trips_without_expanding_dialog_turn_dto() {
+        let references = vec![AgentWorkspaceReference {
+            path: "src/lib.rs".to_string(),
+            kind: AgentWorkspaceReferenceKind::File,
+            start_line: Some(12),
+            end_line: Some(24),
+            source: AgentWorkspaceReferenceSourceRange {
+                start: 7,
+                end: 28,
+                value: "@src/lib.rs#12-24".to_string(),
+            },
+        }];
+        let mut metadata = serde_json::Map::new();
+
+        put_agent_workspace_references(&mut metadata, &references)
+            .expect("workspace reference metadata should serialize");
+
+        assert_eq!(
+            agent_workspace_references_from_metadata(&metadata)
+                .expect("workspace reference metadata should deserialize"),
+            references
+        );
+        assert_eq!(
+            metadata[AGENT_WORKSPACE_REFERENCES_METADATA_KEY][0]["startLine"],
+            12
+        );
+    }
+
+    #[test]
+    fn workspace_reference_metadata_rejects_invalid_shapes() {
+        let metadata = serde_json::Map::from_iter([(
+            AGENT_WORKSPACE_REFERENCES_METADATA_KEY.to_string(),
+            serde_json::json!([{"path": 7}]),
+        )]);
+
+        let error = agent_workspace_references_from_metadata(&metadata)
+            .expect_err("invalid workspace reference metadata must fail closed");
+
+        assert_eq!(error.kind, PortErrorKind::InvalidRequest);
+
+        let too_many = vec![
+            serde_json::json!({
+                "path": "src/lib.rs",
+                "kind": "file",
+                "source": {"start": 0, "end": 11, "value": "@src/lib.rs"}
+            });
+            MAX_AGENT_WORKSPACE_REFERENCES_PER_TURN + 1
+        ];
+        let metadata = serde_json::Map::from_iter([(
+            AGENT_WORKSPACE_REFERENCES_METADATA_KEY.to_string(),
+            serde_json::Value::Array(too_many),
+        )]);
+        assert!(agent_workspace_references_from_metadata(&metadata).is_err());
+
+        let references = vec![
+            AgentWorkspaceReference {
+                path: "src/lib.rs".to_string(),
+                kind: AgentWorkspaceReferenceKind::File,
+                start_line: None,
+                end_line: None,
+                source: AgentWorkspaceReferenceSourceRange {
+                    start: 0,
+                    end: 11,
+                    value: "@src/lib.rs".to_string(),
+                },
+            };
+            MAX_AGENT_WORKSPACE_REFERENCES_PER_TURN + 1
+        ];
+        assert!(put_agent_workspace_references(&mut serde_json::Map::new(), &references).is_err());
     }
 
     #[test]

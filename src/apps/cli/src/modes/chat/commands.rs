@@ -1095,6 +1095,28 @@ impl ChatMode {
         let operation = if undo { "Undo" } else { "Redo" };
         chat_view.set_status(Some(format!("{operation}ing session...")));
         let agent = self.agent.clone();
+        let restored_workspace_references = if undo {
+            if let Some(message_id) = chat_state.latest_user_message_id() {
+                let session_id = chat_state.core_session_id.clone();
+                match tokio::task::block_in_place(|| {
+                    rt_handle
+                        .block_on(agent.workspace_references_for_message(session_id, message_id))
+                }) {
+                    Ok(references) => Some(references),
+                    Err(error) => {
+                        chat_view.set_status(Some(format!(
+                            "Could not prepare undo composer metadata: {error}"
+                        )));
+                        return;
+                    }
+                }
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+        let agent = self.agent.clone();
         let result = tokio::task::block_in_place(|| {
             rt_handle.block_on(async move { agent.revert_current_session(undo).await })
         });
@@ -1115,7 +1137,12 @@ impl ChatMode {
         );
         match reverted.composer {
             AgentSessionComposerUpdate::Preserve => {}
-            AgentSessionComposerUpdate::Replace { text } => chat_view.set_input(&text),
+            AgentSessionComposerUpdate::Replace { text } => {
+                chat_view.set_draft(crate::ui::workspace_reference::ComposerDraft {
+                    text,
+                    workspace_references: restored_workspace_references.unwrap_or_default(),
+                })
+            }
             AgentSessionComposerUpdate::Clear => chat_view.clear_input(),
         }
         self.selected_native_command_once = None;
@@ -1221,7 +1248,7 @@ impl ChatMode {
         if chat_state.is_processing {
             if trimmed.starts_with('/') {
                 if let Some(input) = chat_view.send_input() {
-                    return self.handle_command(&input, chat_view, chat_state, rt_handle);
+                    return self.handle_command(&input.text, chat_view, chat_state, rt_handle);
                 }
             } else if !trimmed.is_empty() {
                 chat_view.set_status(Some(
@@ -1233,11 +1260,11 @@ impl ChatMode {
         }
 
         if let Some(input) = chat_view.send_input() {
-            tracing::info!("User input: {}", input);
-            if input.starts_with('/') {
-                return self.handle_command(&input, chat_view, chat_state, rt_handle);
+            tracing::info!("User input: {}", input.text);
+            if input.text.starts_with('/') {
+                return self.handle_command(&input.text, chat_view, chat_state, rt_handle);
             }
-            self.send_message_to_agent(input, chat_view, chat_state, rt_handle);
+            self.send_draft_to_agent(input, chat_view, chat_state, rt_handle);
         }
         Ok(None)
     }

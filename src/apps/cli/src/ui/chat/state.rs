@@ -28,6 +28,9 @@ use super::text_input::TextInput;
 use super::theme::{StyleKind, Theme};
 use super::theme_selector::{ThemeItem, ThemeSelectorState};
 use super::widgets::Spinner;
+use super::workspace_reference::{
+    ComposerDraft, WorkspaceReferencePopupState, WorkspaceReferenceQuery,
+};
 use crate::actions::{ActionState, ResolvedKeymap};
 use crate::chat_state::{ChatMessage, ChatState, FlowItem, MessageRole};
 
@@ -132,7 +135,9 @@ pub(crate) struct ChatView {
     /// Status message
     status: Option<String>,
     /// Input history (for up/down arrows)
-    input_history: VecDeque<String>,
+    input_history: VecDeque<ComposerDraft>,
+    workspace_references: Vec<bitfun_agent_runtime::sdk::AgentWorkspaceReference>,
+    workspace_reference_popup: WorkspaceReferencePopupState,
     /// History position
     history_index: Option<usize>,
     /// Markdown renderer
@@ -258,6 +263,8 @@ impl ChatView {
             auto_scroll: true,
             status: None,
             input_history: VecDeque::with_capacity(50),
+            workspace_references: Vec::new(),
+            workspace_reference_popup: WorkspaceReferencePopupState::default(),
             history_index: None,
             browse_mode: false,
             scroll_offset: 0,

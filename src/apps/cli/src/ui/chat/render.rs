@@ -94,6 +94,8 @@ impl ChatView {
         self.render_status_bar(frame, chunks[2], chat_state);
         self.render_input(frame, chunks[3], chat_state);
         self.render_command_menu(frame, chunks[1]);
+        self.workspace_reference_popup
+            .render(frame, chunks[1], &self.theme);
         self.render_model_selector(frame, chunks[1]);
         self.render_agent_selector(frame, chunks[1]);
         self.render_session_selector(frame, chunks[1]);

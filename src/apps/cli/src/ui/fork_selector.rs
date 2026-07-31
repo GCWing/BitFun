@@ -14,7 +14,11 @@ use crate::ui::theme::{StyleKind, Theme};
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum ForkTarget {
     FullSession,
-    BeforeTurn { turn_id: String, prompt: String },
+    BeforeTurn {
+        turn_id: String,
+        message_id: String,
+        prompt: String,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -93,6 +97,7 @@ impl ForkSelectorState {
                 .get(index - 1)
                 .map(|point| ForkTarget::BeforeTurn {
                     turn_id: point.turn_id.clone(),
+                    message_id: point.message_id.clone(),
                     prompt: point.prompt.clone(),
                 }),
         }
@@ -207,6 +212,7 @@ mod tests {
     fn full_session_is_first_then_prompts_keep_their_supplied_order() {
         let mut selector = ForkSelectorState::new();
         selector.show(vec![SessionForkPoint {
+            message_id: "message-newest".to_string(),
             turn_id: "turn-newest".to_string(),
             prompt: "Newest prompt".to_string(),
             timestamp: SystemTime::now(),
@@ -217,6 +223,7 @@ mod tests {
             ForkAction::Select(ForkTarget::FullSession)
         );
         selector.show(vec![SessionForkPoint {
+            message_id: "message-newest".to_string(),
             turn_id: "turn-newest".to_string(),
             prompt: "Newest prompt".to_string(),
             timestamp: SystemTime::now(),
@@ -226,6 +233,7 @@ mod tests {
             selector.handle_key_event(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
             ForkAction::Select(ForkTarget::BeforeTurn {
                 turn_id: "turn-newest".to_string(),
+                message_id: "message-newest".to_string(),
                 prompt: "Newest prompt".to_string(),
             })
         );

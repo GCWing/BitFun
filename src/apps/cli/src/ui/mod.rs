@@ -29,6 +29,7 @@ pub(crate) mod theme;
 pub(crate) mod theme_selector;
 mod tool_cards;
 mod widgets;
+pub(crate) mod workspace_reference;
 
 use anyhow::Result;
 use crossterm::{

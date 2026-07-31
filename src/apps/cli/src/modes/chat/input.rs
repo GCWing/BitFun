@@ -346,6 +346,32 @@ impl ChatMode {
             return self.handle_login_form_action(action, chat_view, chat_state, rt_handle);
         }
 
+        if chat_view.workspace_reference_popup_visible() {
+            match (key.code, key.modifiers) {
+                (KeyCode::Up, _) | (KeyCode::Char('p'), KeyModifiers::CONTROL) => {
+                    chat_view.workspace_reference_up();
+                    return Ok(None);
+                }
+                (KeyCode::Down, _) | (KeyCode::Char('n'), KeyModifiers::CONTROL) => {
+                    chat_view.workspace_reference_down();
+                    return Ok(None);
+                }
+                (KeyCode::Enter, _) => {
+                    chat_view.apply_workspace_reference_selection(false);
+                    return Ok(None);
+                }
+                (KeyCode::Tab, _) => {
+                    chat_view.apply_workspace_reference_selection(true);
+                    return Ok(None);
+                }
+                (KeyCode::Esc, _) => {
+                    chat_view.hide_workspace_reference_popup();
+                    return Ok(None);
+                }
+                _ => {}
+            }
+        }
+
         if let Some(action) = self
             .keymap
             .resolve(key, self.action_state(chat_state.is_processing, false))
@@ -362,6 +388,10 @@ impl ChatMode {
         match (key.code, key.modifiers) {
             (KeyCode::Backspace, _) => {
                 chat_view.handle_backspace();
+                self.sync_selected_native_command(chat_view);
+            }
+            (KeyCode::Delete, _) => {
+                chat_view.handle_delete();
                 self.sync_selected_native_command(chat_view);
             }
 
