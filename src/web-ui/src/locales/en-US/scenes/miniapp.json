@@ -80,6 +80,8 @@
       "rating": "Rating",
       "changelog": "What's new",
       "releases": "Version history",
+      "releasesExpand": "Show older releases ({{count}})",
+      "releasesCollapse": "Show only the latest release",
       "yanked": "Permanently yanked",
       "repository": "View public repository",
       "remoteWorkspaceUnsupported": "This app requires {workspace}; installing and running it is unavailable in remote workspaces.",

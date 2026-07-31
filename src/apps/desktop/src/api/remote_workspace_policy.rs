@@ -1150,6 +1150,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
     ),
     ("miniapp_market_install", RemoteWorkspacePolicy::LocalOnly),
     (
+        "miniapp_market_installed_origins",
+        RemoteWorkspacePolicy::LocalOnly,
+    ),
+    (
         "miniapp_market_installed_status",
         RemoteWorkspacePolicy::LocalOnly,
     ),

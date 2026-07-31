@@ -12,6 +12,13 @@ interface MiniAppCardProps {
   index?: number;
   isRunning?: boolean;
   isCustomizing?: boolean;
+  /**
+   * Marketplace release this copy was installed from, when it came from the
+   * marketplace. It takes over the version label because `app.version` is a
+   * local edit counter that always starts at 1 — showing it made a freshly
+   * installed v2 read as "v1".
+   */
+  marketReleaseNumber?: number;
   onOpenDetails: (app: MiniAppMeta) => void;
   onOpen: (id: string) => void;
   onDelete: (id: string) => void;
@@ -26,6 +33,7 @@ const MiniAppCard: React.FC<MiniAppCardProps> = ({
   index = 0,
   isRunning = false,
   isCustomizing = false,
+  marketReleaseNumber,
   onOpenDetails,
   onOpen,
   onDelete,
@@ -82,7 +90,7 @@ const MiniAppCard: React.FC<MiniAppCardProps> = ({
         </div>
         <div className="miniapp-card__title-group">
           <span className="miniapp-card__name">{localizedName}</span>
-          <span className="miniapp-card__version">v{app.version}</span>
+          <span className="miniapp-card__version">v{marketReleaseNumber ?? app.version}</span>
         </div>
         {(isRunning || isCustomizing) && (
           <span className="miniapp-card__status-dots" aria-hidden="true">

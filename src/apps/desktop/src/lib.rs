@@ -1679,6 +1679,7 @@ pub async fn run() {
             api::miniapp_market_api::miniapp_market_list_submissions,
             api::miniapp_market_api::miniapp_market_withdraw_submission,
             api::miniapp_market_api::miniapp_market_installed_status,
+            api::miniapp_market_api::miniapp_market_installed_origins,
             api::miniapp_market_api::miniapp_market_install,
             api::miniapp_market_api::miniapp_market_import_package,
             api::miniapp_market_api::miniapp_market_inspect_package,

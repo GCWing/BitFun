@@ -3,6 +3,7 @@
  */
 import { create } from 'zustand';
 import type { MiniAppMeta } from '@/infrastructure/api/service-api/MiniAppAPI';
+import type { InstalledMarketOrigin } from '@/infrastructure/api/service-api/MiniAppMarketAPI';
 
 /**
  * Window event dispatched after the shared ChatInput routes a submission to a
@@ -146,10 +147,20 @@ interface MiniAppState {
   customizingAppIds: string[];
   /** Floating bubble registrations, keyed by app ID (`app.chat.claimComposer`). */
   composerClaims: Record<string, MiniAppComposerClaim>;
+  /**
+   * Marketplace origin of each installed app, keyed by app ID. Apps installed
+   * from anywhere else are simply absent. The local `version` counter on a
+   * MiniApp is independent from the marketplace release number, so this is what
+   * the gallery reads to name the release a user actually installed.
+   */
+  marketOrigins: Record<string, InstalledMarketOrigin>;
 
   setApps: (apps: MiniAppMeta[]) => void;
   upsertApp: (app: MiniAppMeta) => void;
   setLoading: (loading: boolean) => void;
+  setMarketOrigins: (origins: Record<string, InstalledMarketOrigin>) => void;
+  /** Records the origin of a single app right after a market install/update. */
+  setMarketOrigin: (appId: string, origin: InstalledMarketOrigin) => void;
   openApp: (id: string) => void;
   closeApp: (id: string) => void;
   setRunningWorkerIds: (ids: string[]) => void;
@@ -173,6 +184,7 @@ export const useMiniAppStore = create<MiniAppState>((set) => ({
   runningWorkerIds: [],
   customizingAppIds: [],
   composerClaims: {},
+  marketOrigins: {},
 
   setApps: (apps) =>
     set((state) => {
@@ -184,6 +196,9 @@ export const useMiniAppStore = create<MiniAppState>((set) => ({
         customizingAppIds: state.customizingAppIds.filter((id) => validIds.has(id)),
         composerClaims: Object.fromEntries(
           Object.entries(state.composerClaims).filter(([id]) => validIds.has(id))
+        ),
+        marketOrigins: Object.fromEntries(
+          Object.entries(state.marketOrigins).filter(([id]) => validIds.has(id))
         ),
       };
     }),
@@ -198,6 +213,9 @@ export const useMiniAppStore = create<MiniAppState>((set) => ({
       return { apps };
     }),
   setLoading: (loading) => set({ loading }),
+  setMarketOrigins: (marketOrigins) => set({ marketOrigins }),
+  setMarketOrigin: (appId, origin) =>
+    set((state) => ({ marketOrigins: { ...state.marketOrigins, [appId]: origin } })),
 
   openApp: (id) =>
     set((state) =>

@@ -13,6 +13,7 @@ describe('miniAppStore customization state', () => {
       runningWorkerIds: [],
       customizingAppIds: [],
       composerClaims: {},
+      marketOrigins: {},
     });
   });
 
@@ -52,6 +53,34 @@ describe('miniAppStore customization state', () => {
     expect(useMiniAppStore.getState().customizingAppIds).toEqual(['gomoku']);
     expect(useMiniAppStore.getState().openedAppIds).toEqual(['gomoku']);
     expect(useMiniAppStore.getState().runningWorkerIds).toEqual(['gomoku']);
+  });
+
+  it('keeps market origins only for apps still in the catalog', () => {
+    const origin = {
+      listingId: 'listing-1',
+      releaseId: 'release-2',
+      releaseNumber: 2,
+      packageSha256: 'a'.repeat(64),
+    };
+    useMiniAppStore.getState().setMarketOrigin('gomoku', origin);
+    useMiniAppStore.getState().setMarketOrigin('removed-app', origin);
+
+    useMiniAppStore.getState().setApps([
+      {
+        id: 'gomoku',
+        name: 'Gomoku',
+        description: '',
+        category: 'game',
+        version: 1,
+        icon: 'box',
+        tags: [],
+        created_at: 1,
+        updated_at: 1,
+        permissions: {},
+      },
+    ]);
+
+    expect(useMiniAppStore.getState().marketOrigins).toEqual({ gomoku: origin });
   });
 
   it('adds and updates an installed app without waiting for a catalog reload', () => {

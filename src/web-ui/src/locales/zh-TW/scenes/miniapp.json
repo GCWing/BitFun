@@ -80,6 +80,8 @@
       "rating": "評分",
       "changelog": "版本說明",
       "releases": "版本歷史",
+      "releasesExpand": "展開歷史版本（{{count}}）",
+      "releasesCollapse": "僅顯示最新版本",
       "yanked": "已永久撤回",
       "repository": "查看公開儲存庫",
       "remoteWorkspaceUnsupported": "此應用需要 {workspace}，遠端工作區暫不支援安裝或執行。",
