@@ -36,13 +36,6 @@
     position: relative;
     z-index: 1; // Keep scroll content below overlays.
     overflow-x: hidden; // Disable horizontal scrolling.
-    
-    // Show scrollbar thumb when the anchor track is hovered.
-    &.anchor-hovering {
-      &::-webkit-scrollbar-thumb {
-        background: var(--scrollbar-thumb) !important;
-      }
-    }
   }
 
   // Ensure the real scroller always spans the full panel width,

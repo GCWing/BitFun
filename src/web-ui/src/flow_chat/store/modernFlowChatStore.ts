@@ -94,6 +94,7 @@ export interface VisibleTurnInfo {
   totalTurns: number;
   userMessage: string;
   turnId: string;
+  visibleTurnIds: string[];
 }
 
 interface ModernFlowChatState {

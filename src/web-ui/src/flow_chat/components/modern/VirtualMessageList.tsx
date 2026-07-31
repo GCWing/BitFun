@@ -28,7 +28,6 @@ import { useScrollToTurnHeader } from '../../hooks/useScrollToTurnHeader';
 import { useVisibleTaskInfo } from '../../hooks/useVisibleTaskInfo';
 import { StickyTaskIndicator } from '../StickyTaskIndicator';
 import { RuntimeStatusSlot } from './RuntimeStatusSlot';
-import { ScrollAnchor } from './ScrollAnchor';
 import { useFlowChatFollowOutput } from './useFlowChatFollowOutput';
 import type { FlowChatPinTurnToTopMode } from '../../events/flowchatNavigation';
 import { useVirtualItems, useActiveSession, useModernFlowChatStore, type VisibleTurnInfo, type VirtualItem } from '../../store/modernFlowChatStore';
@@ -465,7 +464,6 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
   const sessionOpenHandoffSessionIdRef = useRef<string | null>(null);
   const previousActiveSessionIdForOpenHandoffRef = useRef<string | null | undefined>(undefined);
   const viewportCoordinatorRef = useRef(new FlowChatViewportCoordinator());
-  const pendingStaticAnchorTurnIdRef = useRef<string | null>(null);
   const bottomReservationStateRef = useRef<BottomReservationState>(createInitialBottomReservationState());
   const restoreScrollerMethodsRef = useRef<(() => void) | null>(null);
   const previousMeasuredHeightRef = useRef<number | null>(null);
@@ -705,7 +703,6 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
 
   const releaseStaticHistoryAnchorWindow = useCallback(() => {
     pendingStaticTurnPinRef.current = null;
-    pendingStaticAnchorTurnIdRef.current = null;
     clearStaticHistoryBottomReturnIntent();
     setStaticAnchorWindowTurnId(null);
   }, [clearStaticHistoryBottomReturnIntent]);
@@ -1922,7 +1919,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
   const previousSessionIdForFollowRef = useRef<string | undefined>(activeSession?.sessionId);
 
   const visibleTurnInfoByTurnId = React.useMemo(() => {
-    const infoMap = new Map<string, VisibleTurnInfo>();
+    const infoMap = new Map<string, Omit<VisibleTurnInfo, 'visibleTurnIds'>>();
 
     userMessageItems.forEach(({ item }, index) => {
       if (item.type !== 'user-message') return;
@@ -1951,12 +1948,16 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
 
     const scroller = scrollerElementRef.current;
     if (!scroller) {
-      const fallbackInfo = visibleTurnInfoByTurnId.get(userMessageItems[0]?.item.turnId ?? '') ?? null;
+      const fallbackBaseInfo = visibleTurnInfoByTurnId.get(userMessageItems[0]?.item.turnId ?? '') ?? null;
+      const fallbackInfo: VisibleTurnInfo | null = fallbackBaseInfo
+        ? { ...fallbackBaseInfo, visibleTurnIds: [] }
+        : null;
       if (
         currentVisibleTurnInfo?.turnId !== fallbackInfo?.turnId ||
         currentVisibleTurnInfo?.turnIndex !== fallbackInfo?.turnIndex ||
         currentVisibleTurnInfo?.totalTurns !== fallbackInfo?.totalTurns ||
-        currentVisibleTurnInfo?.userMessage !== fallbackInfo?.userMessage
+        currentVisibleTurnInfo?.userMessage !== fallbackInfo?.userMessage ||
+        (currentVisibleTurnInfo?.visibleTurnIds?.length ?? 0) !== 0
       ) {
         setVisibleTurnInfo(fallbackInfo);
       }
@@ -1970,19 +1971,43 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
       scroller.querySelectorAll<HTMLElement>('.virtual-item-wrapper[data-turn-id]')
     );
 
-    const topVisibleItem = renderedItems.find(node => {
+    const visibleTurnIds: string[] = [];
+    const visibleTurnIdSet = new Set<string>();
+    let topVisibleTurnId: string | null = null;
+    for (const node of renderedItems) {
       const rect = node.getBoundingClientRect();
-      return rect.bottom > viewportTop && rect.top < viewportBottom;
-    });
+      if (rect.bottom <= viewportTop || rect.top >= viewportBottom) {
+        continue;
+      }
 
-    const nextTurnId = topVisibleItem?.dataset.turnId ?? userMessageItems[0]?.item.turnId ?? null;
-    const nextInfo = nextTurnId ? (visibleTurnInfoByTurnId.get(nextTurnId) ?? null) : null;
+      const turnId = node.dataset.turnId;
+      if (!turnId) {
+        continue;
+      }
+
+      topVisibleTurnId ??= turnId;
+      if (!visibleTurnIdSet.has(turnId)) {
+        visibleTurnIdSet.add(turnId);
+        visibleTurnIds.push(turnId);
+      }
+    }
+
+    const nextTurnId = topVisibleTurnId ?? userMessageItems[0]?.item.turnId ?? null;
+    const nextBaseInfo = nextTurnId ? (visibleTurnInfoByTurnId.get(nextTurnId) ?? null) : null;
+    const nextInfo: VisibleTurnInfo | null = nextBaseInfo
+      ? { ...nextBaseInfo, visibleTurnIds }
+      : null;
+    const currentVisibleTurnIds = currentVisibleTurnInfo?.visibleTurnIds ?? [];
+    const visibleTurnIdsUnchanged =
+      currentVisibleTurnIds.length === visibleTurnIds.length &&
+      currentVisibleTurnIds.every((turnId, index) => turnId === visibleTurnIds[index]);
 
     if (
       currentVisibleTurnInfo?.turnId === nextInfo?.turnId &&
       currentVisibleTurnInfo?.turnIndex === nextInfo?.turnIndex &&
       currentVisibleTurnInfo?.totalTurns === nextInfo?.totalTurns &&
-      currentVisibleTurnInfo?.userMessage === nextInfo?.userMessage
+      currentVisibleTurnInfo?.userMessage === nextInfo?.userMessage &&
+      visibleTurnIdsUnchanged
     ) {
       return;
     }
@@ -6335,13 +6360,6 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
   const trailingOmittedInitialHistoryEstimatedHeightPx = isInitialHistoryRenderWindowExpanded
     ? 0
     : initialHistoryRenderWindow.trailingOmittedEstimatedHeightPx;
-  const getStaticAnchorScrollTop = useCallback((turnId: string) => {
-    const scroller = scrollerElementRef.current;
-    const targetElement = getRenderedUserMessageElement(turnId);
-    if (!scroller || !targetElement) return null;
-
-    return getPinnedTurnScrollTop(scroller, targetElement);
-  }, [getRenderedUserMessageElement]);
   const expandInitialHistoryRenderWindow = useCallback((reason: string) => {
     if (
       !useStaticInitialHistoryList ||
@@ -6380,33 +6398,6 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     initialHistoryRenderWindow,
     useStaticInitialHistoryList,
     virtualItems.length,
-  ]);
-  useLayoutEffect(() => {
-    const pendingAnchorTurnId = pendingStaticAnchorTurnIdRef.current;
-    if (!pendingAnchorTurnId || pendingAnchorTurnId !== staticAnchorWindowTurnId) {
-      return;
-    }
-
-    const scroller = scrollerElementRef.current;
-    const anchorScrollTop = getStaticAnchorScrollTop(pendingAnchorTurnId);
-    if (!scroller || anchorScrollTop === null) {
-      return;
-    }
-
-    scroller.scrollTo({
-      top: anchorScrollTop,
-      behavior: 'smooth',
-    });
-    previousScrollTopRef.current = anchorScrollTop;
-    previousMeasuredHeightRef.current = snapshotMeasuredContentHeight(scroller);
-    recordScrollerGeometry(scroller);
-    pendingStaticAnchorTurnIdRef.current = null;
-  }, [
-    getStaticAnchorScrollTop,
-    initialHistoryRenderKey,
-    recordScrollerGeometry,
-    snapshotMeasuredContentHeight,
-    staticAnchorWindowTurnId,
   ]);
   const expandInitialHistoryRenderWindowIfNeeded = useCallback((reason: string) => {
     if (
@@ -6556,7 +6547,6 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
 
     if (expandedInitialHistoryRenderKey !== initialHistoryRenderKey) {
       pendingInitialHistoryExpansionRef.current = null;
-      pendingStaticAnchorTurnIdRef.current = null;
       return;
     }
 
@@ -6566,13 +6556,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
       return;
     }
 
-    const pendingAnchorTurnId = pendingStaticAnchorTurnIdRef.current;
-    const anchorScrollTop = pendingAnchorTurnId
-      ? getStaticAnchorScrollTop(pendingAnchorTurnId)
-      : null;
-    pendingStaticAnchorTurnIdRef.current = null;
-
-    const nextScrollTop = anchorScrollTop ?? mapInitialHistoryExpansionScrollTop({
+    const nextScrollTop = mapInitialHistoryExpansionScrollTop({
       previousScrollTop: pending.scrollTop,
       previousScrollHeight: pending.scrollHeight,
       nextScrollHeight: scroller.scrollHeight,
@@ -6586,7 +6570,6 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     recordScrollerGeometry(scroller);
   }, [
     expandedInitialHistoryRenderKey,
-    getStaticAnchorScrollTop,
     initialHistoryRenderKey,
     recordScrollerGeometry,
     snapshotMeasuredContentHeight,
@@ -6718,7 +6701,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     }
 
     const scroller = scrollerElementRef.current;
-    if (!scroller || staticAnchorWindowTurnId || pendingStaticAnchorTurnIdRef.current) {
+    if (!scroller || staticAnchorWindowTurnId) {
       return;
     }
 
@@ -6997,42 +6980,6 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
           </div>
         </div>
       ) : null}
-
-      <ScrollAnchor
-        onAnchorNavigate={(turnId) => {
-          if (!turnId) return;
-
-          if (virtuosoRef.current) {
-            pinTurnToTop(turnId, { behavior: 'smooth' });
-            return;
-          }
-
-          const targetItem = userMessageItems.find(({ item }) => item.turnId === turnId);
-          if (!targetItem) return;
-
-          retainedCollapseAnchorRef.current = null;
-          exitFollowOutput('scroll-to-turn');
-          clearPinReservationForUserNavigation();
-          clearStaticHistoryBottomReturnIntent();
-
-          pendingStaticAnchorTurnIdRef.current = turnId;
-          const anchorScrollTop = getStaticAnchorScrollTop(turnId);
-          if (anchorScrollTop === null) {
-            setStaticAnchorWindowTurnId(turnId);
-            return;
-          }
-
-          if (scrollerElementRef.current) {
-            scrollerElementRef.current.scrollTo({
-              top: anchorScrollTop,
-              behavior: 'smooth',
-            });
-          }
-          pendingStaticAnchorTurnIdRef.current = null;
-        }}
-        scrollerRef={scrollerElementRef}
-        scrollerElement={scrollerElement}
-      />
 
       <ScrollToTurnHeaderButton
         visible={shouldShowTurnHeaderButton}

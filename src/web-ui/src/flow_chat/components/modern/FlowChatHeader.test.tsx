@@ -66,11 +66,6 @@ function createProps(overrides: Partial<FlowChatHeaderProps> = {}): FlowChatHead
     totalTurns: 2,
     currentUserMessage: 'First prompt',
     visible: true,
-    turns: [
-      { turnId: 'turn-1', turnIndex: 1, title: 'First prompt' },
-      { turnId: 'turn-2', turnIndex: 2, title: 'Second prompt' },
-    ],
-    onJumpToTurn: vi.fn(),
     ...overrides,
   };
 }
@@ -130,80 +125,14 @@ describe('FlowChatHeader', () => {
     expect(header?.style.getPropertyValue('--flowchat-header-side-width')).toBe('196px');
   });
 
-  it('closes the turn list as soon as a different turn selection is accepted', () => {
-    const onJumpToTurn = vi.fn(() => true);
-    const initialProps = createProps({ onJumpToTurn });
-
+  it('omits the list, previous-turn, and next-turn navigation controls', () => {
     act(() => {
-      root.render(<FlowChatHeader {...initialProps} />);
+      root.render(<FlowChatHeader {...createProps()} />);
     });
 
-    const turnListButton = container.querySelector<HTMLButtonElement>('[data-testid="flowchat-header-turn-list"]');
-    expect(turnListButton).not.toBeNull();
-
-    act(() => {
-      turnListButton?.click();
-    });
-
-    expect(container.querySelector('[role="dialog"]')).not.toBeNull();
-
-    const turnItems = Array.from(container.querySelectorAll<HTMLButtonElement>('.flowchat-header__turn-list-item'));
-    expect(turnItems).toHaveLength(2);
-
-    act(() => {
-      turnItems[1]?.click();
-    });
-
-    expect(onJumpToTurn).toHaveBeenCalledWith('turn-2');
-    expect(container.querySelector('[role="dialog"]')).toBeNull();
-
-    act(() => {
-      root.render(<FlowChatHeader {...initialProps} currentTurn={2} />);
-    });
-
-    expect(container.querySelector('[role="dialog"]')).toBeNull();
-  });
-
-  it('closes the turn list and notifies the container when selecting the current turn', () => {
-    const onJumpToTurn = vi.fn(() => true);
-
-    act(() => {
-      root.render(<FlowChatHeader {...createProps({ onJumpToTurn })} />);
-    });
-
-    const turnListButton = container.querySelector<HTMLButtonElement>('[data-testid="flowchat-header-turn-list"]');
-    act(() => {
-      turnListButton?.click();
-    });
-
-    const currentTurnItem = container.querySelector<HTMLButtonElement>('.flowchat-header__turn-list-item');
-    act(() => {
-      currentTurnItem?.click();
-    });
-
-    expect(onJumpToTurn).toHaveBeenCalledWith('turn-1');
-    expect(container.querySelector('[role="dialog"]')).toBeNull();
-  });
-
-  it('keeps the turn list open when the container rejects the selection', () => {
-    const onJumpToTurn = vi.fn(() => false);
-
-    act(() => {
-      root.render(<FlowChatHeader {...createProps({ onJumpToTurn })} />);
-    });
-
-    const turnListButton = container.querySelector<HTMLButtonElement>('[data-testid="flowchat-header-turn-list"]');
-    act(() => {
-      turnListButton?.click();
-    });
-
-    const turnItems = Array.from(container.querySelectorAll<HTMLButtonElement>('.flowchat-header__turn-list-item'));
-    act(() => {
-      turnItems[1]?.click();
-    });
-
-    expect(onJumpToTurn).toHaveBeenCalledWith('turn-2');
-    expect(container.querySelector('[role="dialog"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="flowchat-header-turn-list"]')).toBeNull();
+    expect(container.querySelector('[data-testid="flowchat-header-turn-prev"]')).toBeNull();
+    expect(container.querySelector('[data-testid="flowchat-header-turn-next"]')).toBeNull();
   });
 
   it('renders background activity menus in a portal outside the scrollable panel', () => {

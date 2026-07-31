@@ -42,7 +42,7 @@
       "max": 0
     },
     "surfaceTokenRenames.registeredUnique": {
-      "max": 8
+      "max": 7
     },
     "surfaceTokenRenames.activeUnique": {
       "max": 0

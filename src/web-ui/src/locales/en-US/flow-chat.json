@@ -1192,11 +1192,11 @@
     "skippedSummary_one": "{{count}} optional review work item was not run. This result reflects only the completed review scope.",
     "skippedSummary_other": "{{count}} optional review work items were not run. This result reflects only the completed review scope."
   },
+  "flowChatTurnRail": {
+    "label": "Turn list",
+    "untitledTurn": "Untitled turn"
+  },
   "flowChatHeader": {
-    "turnList": "Turn list",
-    "untitledTurn": "Untitled turn",
-    "previousTurn": "Previous turn",
-    "nextTurn": "Next turn",
     "turnBadge": "Turn {{current}}",
     "btwBackTooltipWithTurn": "Go back to the source session: {{title}} (Turn {{turn}})",
     "btwBackTooltipWithoutTurn": "Go back to the source session: {{title}}",

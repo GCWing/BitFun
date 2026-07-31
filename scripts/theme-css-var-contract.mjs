@@ -260,12 +260,6 @@ export const SURFACE_TOKEN_RENAME_CONTRACTS = [
     reason: 'Snapshot operation color is a card-local role and should not look like a reusable operation namespace for other surfaces.',
   },
   {
-    key: '--delay',
-    canonical: '--flowchat-scroll-anchor-delay',
-    owner: 'src/web-ui/src/flow_chat/components/modern/ScrollAnchor',
-    reason: 'ScrollAnchor animation delay is a Flow Chat runtime input; the generic key is too easy to collide with unrelated animation code.',
-  },
-  {
     key: '--um-failed-fs',
     canonical: '--user-message-failed-font-size',
     owner: 'src/web-ui/src/flow_chat/components/modern/UserMessageItem.scss',

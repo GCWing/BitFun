@@ -241,6 +241,14 @@ function flushAnimationFrame() {
   });
 }
 
+function clickTurnRailItem(container: HTMLElement, turnId: string) {
+  const item = container.querySelector<HTMLButtonElement>(`[data-turn-id="${turnId}"]`);
+  expect(item).not.toBeNull();
+  act(() => {
+    item?.click();
+  });
+}
+
 describe('ModernFlowChatContainer historical empty state', () => {
   let container: HTMLDivElement;
   let root: Root;
@@ -957,6 +965,7 @@ describe('ModernFlowChatContainer historical empty state', () => {
       turnIndex: 2,
       totalTurns: 2,
       userMessage: 'Latest restored prompt',
+      visibleTurnIds: ['turn-99', 'turn-100'],
     };
 
     await act(async () => {
@@ -966,25 +975,25 @@ describe('ModernFlowChatContainer historical empty state', () => {
     expect(headerPropsMock.latest).toMatchObject({
       currentTurn: 100,
       totalTurns: 100,
-      canJumpToPreviousTurn: true,
-      canJumpToNextTurn: false,
     });
-    expect(headerPropsMock.latest?.turns).toMatchObject([
-      { turnId: 'turn-99', turnIndex: 99 },
-      { turnId: 'turn-100', turnIndex: 100 },
-    ]);
+    const previousTurnRailItem = container.querySelector<HTMLButtonElement>('[data-turn-id="turn-99"]');
+    const currentTurnRailItem = container.querySelector<HTMLButtonElement>('[data-turn-id="turn-100"]');
+    expect(previousTurnRailItem?.dataset.turnIndex).toBe('99');
+    expect(currentTurnRailItem?.dataset.turnIndex).toBe('100');
+    expect(currentTurnRailItem?.getAttribute('aria-current')).toBe('step');
+    expect(previousTurnRailItem?.className).toContain('flowchat-turn-rail__item--visible');
+    expect(currentTurnRailItem?.className).toContain('flowchat-turn-rail__item--visible');
 
-    act(() => {
-      (headerPropsMock.latest?.onJumpToPreviousTurn as (() => void) | undefined)?.();
-    });
+    clickTurnRailItem(container, 'turn-99');
 
     expect(virtualListMock.pinTurnToTopWithStatus).toHaveBeenLastCalledWith('turn-99', {
       behavior: 'smooth',
       pinMode: 'transient',
     });
+
   });
 
-  it('retries header turn selection without advancing header state until the virtual list accepts it', async () => {
+  it('retries turn-rail selection without advancing visible-turn state until the virtual list accepts it', async () => {
     stateMocks.activeSession = createSession({
       isHistorical: false,
       historyState: 'ready',
@@ -1014,12 +1023,7 @@ describe('ModernFlowChatContainer historical empty state', () => {
       totalTurns: 2,
     });
 
-    let initialAccepted = true;
-    await act(async () => {
-      initialAccepted = (headerPropsMock.latest?.onJumpToTurn as ((turnId: string) => boolean) | undefined)?.('turn-1') ?? true;
-    });
-
-    expect(initialAccepted).toBe(false);
+    clickTurnRailItem(container, 'turn-1');
     expect(virtualListMock.pinTurnToTopWithStatus).toHaveBeenLastCalledWith('turn-1', {
       behavior: 'smooth',
       pinMode: 'transient',
@@ -1065,7 +1069,7 @@ describe('ModernFlowChatContainer historical empty state', () => {
     });
   });
 
-  it('delegates accepted header turn selections to the list without container-level retry', async () => {
+  it('delegates accepted turn-rail selections to the list without container-level retry', async () => {
     stateMocks.activeSession = createSession({
       isHistorical: false,
       historyState: 'ready',
@@ -1090,12 +1094,7 @@ describe('ModernFlowChatContainer historical empty state', () => {
       root.render(<ModernFlowChatContainer />);
     });
 
-    let accepted = false;
-    await act(async () => {
-      accepted = (headerPropsMock.latest?.onJumpToTurn as ((turnId: string) => boolean) | undefined)?.('turn-1') ?? false;
-    });
-
-    expect(accepted).toBe(true);
+    clickTurnRailItem(container, 'turn-1');
     expect(virtualListMock.pinTurnToTopWithStatus).toHaveBeenLastCalledWith('turn-1', {
       behavior: 'smooth',
       pinMode: 'transient',
@@ -1154,12 +1153,7 @@ describe('ModernFlowChatContainer historical empty state', () => {
       root.render(<ModernFlowChatContainer />);
     });
 
-    let accepted = false;
-    await act(async () => {
-      accepted = (headerPropsMock.latest?.onJumpToTurn as ((turnId: string) => boolean) | undefined)?.('turn-1') ?? false;
-    });
-
-    expect(accepted).toBe(true);
+    clickTurnRailItem(container, 'turn-1');
     expect(virtualListMock.pinTurnToTopWithStatus).toHaveBeenLastCalledWith('turn-1', {
       behavior: 'smooth',
       pinMode: 'transient',
@@ -1170,7 +1164,7 @@ describe('ModernFlowChatContainer historical empty state', () => {
     expect(virtualListMock.pinTurnToTopWithStatus.mock.calls.length).toBe(pendingCallCount);
   });
 
-  it('rejects stale header turn selections without issuing a pin request', async () => {
+  it('does not render stale turn-rail targets', async () => {
     stateMocks.activeSession = createSession({
       isHistorical: false,
       historyState: 'ready',
@@ -1195,16 +1189,11 @@ describe('ModernFlowChatContainer historical empty state', () => {
     });
 
     const beforeSelectionCallCount = virtualListMock.pinTurnToTopWithStatus.mock.calls.length;
-    let accepted = true;
-    await act(async () => {
-      accepted = (headerPropsMock.latest?.onJumpToTurn as ((turnId: string) => boolean) | undefined)?.('turn-missing') ?? true;
-    });
-
-    expect(accepted).toBe(false);
+    expect(container.querySelector('[data-turn-id="turn-missing"]')).toBeNull();
     expect(virtualListMock.pinTurnToTopWithStatus.mock.calls.length).toBe(beforeSelectionCallCount);
   });
 
-  it('keeps long-session header turn selections single-shot after the list accepts the pin', async () => {
+  it('keeps long-session turn-rail selections single-shot after the list accepts the pin', async () => {
     const turns = Array.from({ length: 25 }, (_, index) => {
       const turnNumber = index + 1;
       return createTurn(`turn-${turnNumber}`, `Prompt ${turnNumber}`);
@@ -1235,15 +1224,10 @@ describe('ModernFlowChatContainer historical empty state', () => {
       currentTurn: 25,
       totalTurns: 25,
     });
-    expect(headerPropsMock.latest?.turns).toHaveLength(25);
+    expect(container.querySelectorAll('.flowchat-turn-rail__item')).toHaveLength(25);
 
     const beforeSelectionCallCount = virtualListMock.pinTurnToTopWithStatus.mock.calls.length;
-    let accepted = false;
-    await act(async () => {
-      accepted = (headerPropsMock.latest?.onJumpToTurn as ((turnId: string) => boolean) | undefined)?.('turn-7') ?? false;
-    });
-
-    expect(accepted).toBe(true);
+    clickTurnRailItem(container, 'turn-7');
     expect(virtualListMock.pinTurnToTopWithStatus.mock.calls.length).toBe(beforeSelectionCallCount + 1);
     expect(virtualListMock.pinTurnToTopWithStatus).toHaveBeenLastCalledWith('turn-7', {
       behavior: 'smooth',
@@ -1256,7 +1240,7 @@ describe('ModernFlowChatContainer historical empty state', () => {
     expect(virtualListMock.pinTurnToTopWithStatus.mock.calls.length).toBe(beforeSelectionCallCount + 1);
   });
 
-  it('cancels not-yet-accepted header turn retry when the user scrolls manually', async () => {
+  it('cancels a not-yet-accepted turn-navigation retry when the user scrolls manually', async () => {
     stateMocks.activeSession = createSession({
       isHistorical: false,
       historyState: 'ready',
@@ -1281,12 +1265,7 @@ describe('ModernFlowChatContainer historical empty state', () => {
       root.render(<ModernFlowChatContainer />);
     });
 
-    let accepted = true;
-    await act(async () => {
-      accepted = (headerPropsMock.latest?.onJumpToTurn as ((turnId: string) => boolean) | undefined)?.('turn-1') ?? true;
-    });
-
-    expect(accepted).toBe(false);
+    clickTurnRailItem(container, 'turn-1');
     expect(headerPropsMock.latest).toMatchObject({
       currentTurn: 2,
       totalTurns: 2,
@@ -1308,7 +1287,7 @@ describe('ModernFlowChatContainer historical empty state', () => {
     expect(virtualListMock.pinTurnToTopWithStatus.mock.calls.length).toBe(retryCallCount);
   });
 
-  it('does not expose previous navigation before the loaded tail range in partial history', async () => {
+  it('does not synthesize unloaded turn-rail targets in partial history', async () => {
     stateMocks.activeSession = createSession({
       isHistorical: false,
       historyState: 'ready',
@@ -1338,15 +1317,10 @@ describe('ModernFlowChatContainer historical empty state', () => {
     expect(headerPropsMock.latest).toMatchObject({
       currentTurn: 99,
       totalTurns: 100,
-      canJumpToPreviousTurn: false,
-      canJumpToNextTurn: true,
     });
-
-    act(() => {
-      (headerPropsMock.latest?.onJumpToPreviousTurn as (() => void) | undefined)?.();
-    });
-
-    expect(virtualListMock.pinTurnToTop).not.toHaveBeenCalled();
+    expect(container.querySelectorAll('.flowchat-turn-rail__item')).toHaveLength(2);
+    expect(container.querySelector('[data-turn-id="turn-98"]')).toBeNull();
+    expect(virtualListMock.pinTurnToTopWithStatus).not.toHaveBeenCalled();
   });
 
   it('lets streaming restored sessions use follow-output instead of container sticky anchoring', async () => {

@@ -1192,11 +1192,11 @@
     "skippedSummary_one": "{{count}} 項可選審核工作未執行；本次結果僅反映已完成的審核範圍。",
     "skippedSummary_other": "{{count}} 項可選審核工作未執行；本次結果僅反映已完成的審核範圍。"
   },
+  "flowChatTurnRail": {
+    "label": "輪次列表",
+    "untitledTurn": "未命名輪次"
+  },
   "flowChatHeader": {
-    "turnList": "輪次列表",
-    "untitledTurn": "未命名輪次",
-    "previousTurn": "上一輪對話",
-    "nextTurn": "下一輪對話",
     "turnBadge": "第 {{current}} 輪",
     "btwBackTooltipWithTurn": "返回到來源會話：{{title}}（第 {{turn}} 輪）",
     "btwBackTooltipWithoutTurn": "返回到來源會話：{{title}}",

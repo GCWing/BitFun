@@ -6,7 +6,7 @@
 
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { Activity, Bot, ChevronDown, ChevronUp, GitPullRequest, Keyboard, List, MoreHorizontal, Search, Square, Terminal, X } from 'lucide-react';
+import { Activity, Bot, ChevronDown, ChevronUp, GitPullRequest, Keyboard, MoreHorizontal, Search, Square, Terminal, X } from 'lucide-react';
 import { Tooltip, IconButton, Input } from '@/component-library';
 import { useTranslation } from 'react-i18next';
 import { SessionFilesBadge } from './SessionFilesBadge';
@@ -14,13 +14,6 @@ import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext'
 import { computeFixedPopoverPosition } from '@/shared/utils/fixedPopoverViewport';
 import { createReviewPlatformTab } from '@/shared/utils/tabUtils';
 import './FlowChatHeader.scss';
-
-export interface FlowChatHeaderTurnSummary {
-  turnId: string;
-  turnIndex: number;
-  backendTurnIndex?: number;
-  title: string;
-}
 
 export interface FlowChatHeaderSubagentSummary {
   sessionId: string;
@@ -54,20 +47,8 @@ export interface FlowChatHeaderProps {
   visible: boolean;
   /** Session ID. */
   sessionId?: string;
-  /** Ordered turn summaries used by header navigation. */
-  turns?: FlowChatHeaderTurnSummary[];
-  /** Jump to a specific turn. Return false only when the selection is rejected. */
-  onJumpToTurn?: (turnId: string) => boolean | void;
   /** Jump to the currently displayed turn. */
   onJumpToCurrentTurn?: () => void;
-  /** Jump to the previous turn. */
-  onJumpToPreviousTurn?: () => void;
-  /** Jump to the next turn. */
-  onJumpToNextTurn?: () => void;
-  /** Whether the previous-turn action can navigate within the loaded turn range. */
-  canJumpToPreviousTurn?: boolean;
-  /** Whether the next-turn action can navigate within the loaded turn range. */
-  canJumpToNextTurn?: boolean;
   /** Current search query string. */
   searchQuery?: string;
   /** Called when the user types in the search box. */
@@ -109,13 +90,7 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
   currentUserMessage,
   visible,
   sessionId,
-  turns = [],
-  onJumpToTurn,
   onJumpToCurrentTurn,
-  onJumpToPreviousTurn,
-  onJumpToNextTurn,
-  canJumpToPreviousTurn,
-  canJumpToNextTurn,
   searchQuery = '',
   onSearchChange,
   searchMatchCount = 0,
@@ -136,7 +111,6 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
 }) => {
   const { t } = useTranslation('flow-chat');
   const { currentWorkspace } = useWorkspaceContext();
-  const [isTurnListOpen, setIsTurnListOpen] = useState(false);
   const [isBackgroundActivityPanelOpen, setIsBackgroundActivityPanelOpen] = useState(false);
   const [openBackgroundSectionMenuId, setOpenBackgroundSectionMenuId] = useState<'subagents' | 'commands' | null>(null);
   const [openBackgroundSubagentMenuId, setOpenBackgroundSubagentMenuId] = useState<string | null>(null);
@@ -145,11 +119,9 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
   const headerRef = useRef<HTMLDivElement | null>(null);
   const leftActionsRef = useRef<HTMLDivElement | null>(null);
   const rightActionsRef = useRef<HTMLDivElement | null>(null);
-  const turnListRef = useRef<HTMLDivElement | null>(null);
   const backgroundActivityPanelRef = useRef<HTMLDivElement | null>(null);
   const backgroundActivityMenuAnchorRef = useRef<HTMLButtonElement | null>(null);
   const backgroundActivityMenuRef = useRef<HTMLDivElement | null>(null);
-  const activeTurnItemRef = useRef<HTMLButtonElement | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const [backgroundActivityMenuPosition, setBackgroundActivityMenuPosition] = useState<{
     top: number;
@@ -160,24 +132,13 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
   const truncatedMessage = currentUserMessage.length > 50
     ? currentUserMessage.slice(0, 50) + '...'
     : currentUserMessage;
-  const turnListTooltip = t('flowChatHeader.turnList');
-  const untitledTurnLabel = t('flowChatHeader.untitledTurn');
   const turnBadgeLabel = t('flowChatHeader.turnBadge', {
     current: currentTurn
   });
-  const previousTurnDisabled = !(canJumpToPreviousTurn ?? currentTurn > 1);
-  const nextTurnDisabled = !(canJumpToNextTurn ?? (currentTurn > 0 && currentTurn < totalTurns));
-  const hasTurnNavigation = turns.length > 0 && !!onJumpToTurn;
   const hasBackgroundSubagents = backgroundSubagents.length > 0;
   const hasBackgroundCommands = backgroundCommands.length > 0;
   const hasBackgroundActivities = hasBackgroundSubagents || hasBackgroundCommands;
   const backgroundActivityCount = backgroundSubagents.length + backgroundCommands.length;
-  const displayTurns = useMemo(() => (
-    turns.map(turn => ({
-      ...turn,
-      title: turn.title.trim() || untitledTurnLabel,
-    }))
-  ), [turns, untitledTurnLabel]);
   const displayBackgroundSubagents = useMemo(() => (
     backgroundSubagents.map((subagent) => ({
       ...subagent,
@@ -217,16 +178,14 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
   }, [updateBackgroundActivityMenuPosition]);
 
   useEffect(() => {
-    if (!isTurnListOpen && !isBackgroundActivityPanelOpen) return;
+    if (!isBackgroundActivityPanelOpen) return;
 
     const handlePointerDown = (event: MouseEvent) => {
       const target = event.target as Node;
       if (
-        !turnListRef.current?.contains(target) &&
         !backgroundActivityPanelRef.current?.contains(target) &&
         !backgroundActivityMenuRef.current?.contains(target)
       ) {
-        setIsTurnListOpen(false);
         setIsBackgroundActivityPanelOpen(false);
         setOpenBackgroundSectionMenuId(null);
         setOpenBackgroundSubagentMenuId(null);
@@ -236,7 +195,6 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
-        setIsTurnListOpen(false);
         setIsBackgroundActivityPanelOpen(false);
         setOpenBackgroundSectionMenuId(null);
         setOpenBackgroundSubagentMenuId(null);
@@ -251,7 +209,7 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
       document.removeEventListener('mousedown', handlePointerDown);
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [isBackgroundActivityPanelOpen, isTurnListOpen]);
+  }, [isBackgroundActivityPanelOpen]);
 
   useLayoutEffect(() => {
     if (!hasOpenBackgroundActivityMenu) {
@@ -284,10 +242,6 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
   }, [searchOpenRequest]);
 
   useEffect(() => {
-    setIsTurnListOpen(false);
-  }, [currentTurn]);
-
-  useEffect(() => {
     if (!hasBackgroundActivities) {
       setIsBackgroundActivityPanelOpen(false);
     }
@@ -305,21 +259,6 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
       cancelAnimationFrame(frameId);
     };
   }, [isSearchOpen]);
-
-  useEffect(() => {
-    if (!isTurnListOpen) return;
-
-    const frameId = requestAnimationFrame(() => {
-      activeTurnItemRef.current?.scrollIntoView({
-        block: 'center',
-        inline: 'nearest',
-      });
-    });
-
-    return () => {
-      cancelAnimationFrame(frameId);
-    };
-  }, [currentTurn, displayTurns.length, isTurnListOpen]);
 
   useLayoutEffect(() => {
     const header = headerRef.current;
@@ -378,15 +317,8 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
     [handleCloseSearch, onSearchNext, onSearchPrev],
   );
 
-  const handleToggleTurnList = () => {
-    if (!hasTurnNavigation) return;
-    setIsBackgroundActivityPanelOpen(false);
-    setIsTurnListOpen(prev => !prev);
-  };
-
   const handleToggleBackgroundActivityPanel = () => {
     if (!hasBackgroundActivities) return;
-    setIsTurnListOpen(false);
     setOpenBackgroundSectionMenuId(null);
     setOpenBackgroundSubagentMenuId(null);
     setOpenBackgroundCommandMenuId(null);
@@ -396,14 +328,6 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
   const handleOpenPullRequests = useCallback(() => {
     createReviewPlatformTab(currentWorkspace?.rootPath);
   }, [currentWorkspace?.rootPath]);
-
-  const handleTurnSelect = (turnId: string) => {
-    if (!onJumpToTurn) return;
-    const accepted = onJumpToTurn(turnId);
-    if (accepted !== false) {
-      setIsTurnListOpen(false);
-    }
-  };
 
   const handleSubagentSelect = (sessionId: string) => {
     onOpenBackgroundSubagent?.(sessionId);
@@ -962,73 +886,6 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
             <Search size={14} />
           </IconButton>
         )}
-        <div className="flowchat-header__turn-nav" ref={turnListRef}>
-          <IconButton
-            className={`flowchat-header__turn-nav-button${isTurnListOpen ? ' flowchat-header__turn-nav-button--active' : ''}`}
-            variant="ghost"
-            size="xs"
-            onClick={handleToggleTurnList}
-            tooltip={turnListTooltip}
-            disabled={!hasTurnNavigation}
-            aria-label={turnListTooltip}
-            aria-expanded={isTurnListOpen}
-            aria-haspopup="dialog"
-            data-testid="flowchat-header-turn-list"
-          >
-            <List size={14} />
-          </IconButton>
-          <IconButton
-            className="flowchat-header__turn-nav-button"
-            variant="ghost"
-            size="xs"
-            onClick={onJumpToPreviousTurn}
-            tooltip={t('flowChatHeader.previousTurn')}
-            disabled={previousTurnDisabled || !onJumpToPreviousTurn}
-            aria-label={t('flowChatHeader.previousTurn')}
-            data-testid="flowchat-header-turn-prev"
-          >
-            <ChevronUp size={14} />
-          </IconButton>
-          <IconButton
-            className="flowchat-header__turn-nav-button"
-            variant="ghost"
-            size="xs"
-            onClick={onJumpToNextTurn}
-            tooltip={t('flowChatHeader.nextTurn')}
-            disabled={nextTurnDisabled || !onJumpToNextTurn}
-            aria-label={t('flowChatHeader.nextTurn')}
-            data-testid="flowchat-header-turn-next"
-          >
-            <ChevronDown size={14} />
-          </IconButton>
-
-          {isTurnListOpen && hasTurnNavigation && (
-            <div className="flowchat-header__turn-list-panel" role="dialog" aria-label={turnListTooltip}>
-              <div className="flowchat-header__turn-list-header">
-                <span>{turnListTooltip}</span>
-                <span>{currentTurn}/{totalTurns}</span>
-              </div>
-              <div className="flowchat-header__turn-list">
-                {displayTurns.map(turn => (
-                  <button
-                    key={turn.turnId}
-                    type="button"
-                    className={`flowchat-header__turn-list-item${turn.turnIndex === currentTurn ? ' flowchat-header__turn-list-item--active' : ''}`}
-                    onClick={() => handleTurnSelect(turn.turnId)}
-                    ref={turn.turnIndex === currentTurn ? activeTurnItemRef : undefined}
-                  >
-                    <span className="flowchat-header__turn-list-badge">
-                      {t('flowChatHeader.turnBadge', {
-                        current: turn.turnIndex
-                      })}
-                    </span>
-                    <span className="flowchat-header__turn-list-title">{turn.title}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
       </div>
     </div>
   );

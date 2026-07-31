@@ -275,9 +275,10 @@ identity. It retries the active generation against real DOM geometry. RAF
 retries remain as a bounded fallback for browsers that coalesce range updates.
 When the static initial-history renderer hands off to Virtuoso with a pending
 target, that target becomes Virtuoso's `initialTopMostItemIndex`; the normal pin
-resolver then performs exact alignment after mount. The right-side
-`ScrollAnchor` must bind to the actual scroller element, because the stable ref
-object does not change identity when its `.current` node is replaced.
+resolver then performs exact alignment after mount. The left-side
+`FlowChatTurnRail` is mounted outside the scroller and delegates navigation to
+the same container-owned turn-pin request, so it does not need to rebind across
+renderer handoffs or write the FlowChat viewport directly.
 
 Mounting an already-streaming session is not a new-turn event. Session entry
 resumes tail follow directly, while sticky pinning remains reserved for a new
@@ -366,10 +367,10 @@ This path is safer than doing nothing, but it is more likely to show visible mov
 ## C. Static Initial-History Turn Navigation
 
 The initial-history path renders a bounded static window plus estimated leading
-and trailing spacers before handing the complete projection to Virtuoso. Header
-turn selection and the right-side scroll anchor may target a turn outside that
-window. The list first materializes a new window around the target and then
-issues the requested scroll.
+and trailing spacers before handing the complete projection to Virtuoso. The
+left-side turn rail may target a turn outside that window. The list first
+materializes a new window around the target and then issues the requested
+scroll.
 
 A smooth scroll does not update `scrollTop` synchronously. The window swap can
 therefore emit a scroll event at the old, browser-clamped physical bottom before
@@ -391,8 +392,8 @@ second viewport writer.
 
 ## D. Arbitrary Turn Navigation Through Virtuoso
 
-Header turn selection and the right-side scroll anchor use the same top-aligned
-pin transaction:
+The left-side turn rail delegates to the container-owned top-aligned pin
+transaction:
 
 1. record generation, session, target turn, behavior, and pin mode
 2. exit tail follow without removing established physical range
@@ -409,6 +410,19 @@ pin transaction:
 Do not clear the previous pin/footer range in step 2. The target may be outside
 the current Virtuoso range, and removing the footer first lets the browser clamp
 the old position to the physical bottom before materialization succeeds.
+
+The turn rail is an independent overlay surface. Its height is bounded to 60%
+of the FlowChat content area; overflow scrolls only the rail, and keeping the
+current marker visible may update only the rail list's `scrollTop`. Rail wheel,
+keyboard, hover, and tooltip behavior must never become another writer for the
+outer FlowChat viewport.
+
+The existing visible-turn DOM measurement also collects every distinct turn
+whose rendered items intersect the readable viewport. The first intersecting
+turn remains the semantic current turn, while every intersecting turn marker
+uses the same rail emphasis. Publish a new ordered `visibleTurnIds` snapshot
+only when membership or order changes so ordinary scroll frames do not cause
+redundant rail renders.
 
 ## Why Transition Tracking Exists
 
