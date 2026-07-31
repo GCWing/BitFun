@@ -22,5 +22,8 @@
     "author": "Author",
     "comments": "Comments",
     "openOnProvider": "Open on provider"
-  }
+  },
+  "start": "Plan fixes",
+  "running": "Planning…",
+  "loopxMissing": "loopx is not installed, so planning is unavailable."
 }

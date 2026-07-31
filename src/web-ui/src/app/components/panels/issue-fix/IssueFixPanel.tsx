@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, CheckCircle, Circle, Loader2, RefreshCw } from 'lucide-react';
+import { AlertTriangle, CheckCircle, Circle, Loader2, Play, RefreshCw, Square } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Button, Checkbox } from '@/component-library';
 import {
+  issueFixAPI,
   reviewPlatformAPI,
   type ReviewPlatformIssueSummary,
   type ReviewPlatformKind,
@@ -11,6 +12,8 @@ import { createLogger } from '@/shared/utils/logger';
 import {
   emptyRunState,
   isBlockedOnHuman,
+  nextIssueToRun,
+  recordOutcome,
   rowLocked,
   rowState,
   rowStatusKey,
@@ -19,6 +22,7 @@ import {
   setAllSelected,
   toggleSelection,
   type IssueFixRowState,
+  type IssueFixRunState,
 } from './issueFixRunState';
 import './IssueFixPanel.scss';
 
@@ -60,6 +64,8 @@ export const IssueFixPanel: React.FC<IssueFixPanelProps> = ({
   const [loadError, setLoadError] = useState<string | null>(null);
   const [runState, setRunState] = useState(emptyRunState);
   const [selectedIssueId, setSelectedIssueId] = useState<string | null>(null);
+  const [available, setAvailable] = useState<boolean | null>(null);
+  const [running, setRunning] = useState(false);
   const [resolved, setResolved] = useState<{
     projectPath: string;
     host: string;
@@ -101,6 +107,21 @@ export const IssueFixPanel: React.FC<IssueFixPanelProps> = ({
       cancelled = true;
     };
   }, [projectPathProp, workspacePath]);
+
+  // Probe once: without loopx the run controls stay disabled rather than
+  // failing on click.
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const result = await issueFixAPI.probe();
+      if (!cancelled) {
+        setAvailable(result.available);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const projectPath = resolved?.projectPath;
   const host = resolved?.host ?? 'github.com';
@@ -147,6 +168,63 @@ export const IssueFixPanel: React.FC<IssueFixPanelProps> = ({
     setRunState((current) => setAllSelected(current, issueIds, allState !== 'all'));
   }, [allState, issueIds]);
 
+  /**
+   * Walk the selected issues serially, asking LoopX for each one's route.
+   *
+   * Planning only: nothing here creates a branch or opens a pull request. The
+   * loop stops as soon as `nextIssueToRun` returns null, which happens when any
+   * row is blocked — stepping over a gate is the one thing it must not do.
+   */
+  const handleStart = useCallback(async () => {
+    if (!projectPath || !workspacePath) {
+      return;
+    }
+    setRunning(true);
+    try {
+      // Track state locally through the loop: reading it back from React state
+      // would lag a render behind and could re-run an issue.
+      let current: IssueFixRunState = runState;
+      for (;;) {
+        const issueId = nextIssueToRun(current, issueIds);
+        if (!issueId) {
+          break;
+        }
+        const issue = issues.find((candidate) => candidate.issueId === issueId);
+        if (!issue) {
+          break;
+        }
+
+        current = { ...current, activeIssueId: issueId };
+        setRunState(current);
+        setSelectedIssueId(issueId);
+
+        try {
+          const plan = await issueFixAPI.planIssue({
+            repo: projectPath,
+            issueRef: issue.issueId,
+            issueUrl: issue.webUrl,
+            repositoryPath: workspacePath,
+          });
+          current = recordOutcome(current, {
+            issueId,
+            route: plan.route,
+            nextStep: plan.nextStep,
+            reasonCodes: plan.reasonCodes,
+          });
+        } catch (error) {
+          log.error('Failed to plan an issue', { issueId, error });
+          current = recordOutcome(current, {
+            issueId,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+        setRunState(current);
+      }
+    } finally {
+      setRunning(false);
+    }
+  }, [issueIds, issues, projectPath, runState, workspacePath]);
+
   if (!projectPath) {
     return (
       <div className="issue-fix issue-fix--empty">
@@ -167,17 +245,37 @@ export const IssueFixPanel: React.FC<IssueFixPanelProps> = ({
             })}
           </span>
         </div>
-        <Button
-          size="small"
-          variant="ghost"
-          iconOnly
-          onClick={() => void loadIssues()}
-          disabled={loading}
-          aria-label={t('refresh')}
-        >
-          <RefreshCw size={14} />
-        </Button>
+        <div className="issue-fix__actions">
+          <Button
+            size="small"
+            variant="primary"
+            onClick={() => void handleStart()}
+            disabled={
+              !available || running || blocked || runState.selectedIssueIds.size === 0
+            }
+          >
+            {running ? <Square size={12} /> : <Play size={12} />}
+            <span>{running ? t('running') : t('start')}</span>
+          </Button>
+          <Button
+            size="small"
+            variant="ghost"
+            iconOnly
+            onClick={() => void loadIssues()}
+            disabled={loading || running}
+            aria-label={t('refresh')}
+          >
+            <RefreshCw size={14} />
+          </Button>
+        </div>
       </header>
+
+      {available === false ? (
+        <div className="issue-fix__gate-notice" role="status">
+          <AlertTriangle size={14} />
+          <span>{t('loopxMissing')}</span>
+        </div>
+      ) : null}
 
       {blocked ? (
         <div className="issue-fix__gate-notice" role="status">

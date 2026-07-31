@@ -22,5 +22,8 @@
     "author": "作者",
     "comments": "評論數",
     "openOnProvider": "在平台上開啟"
-  }
+  },
+  "start": "規劃修復",
+  "running": "規劃中…",
+  "loopxMissing": "未安裝 loopx，無法規劃。"
 }

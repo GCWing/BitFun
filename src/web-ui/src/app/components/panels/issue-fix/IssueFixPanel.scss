@@ -23,6 +23,13 @@
     border-bottom: 1px solid var(--color-border-subtle);
   }
 
+  &__actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex: none;
+  }
+
   &__header-main {
     display: flex;
     align-items: baseline;
