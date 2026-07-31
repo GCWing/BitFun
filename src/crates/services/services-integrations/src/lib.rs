@@ -30,6 +30,9 @@ pub mod git;
 #[cfg(feature = "hook-import")]
 pub mod hook_import;
 
+#[cfg(feature = "loopx-issue-fix")]
+pub mod loopx_issue_fix;
+
 #[cfg(feature = "mcp")]
 pub mod mcp;
 

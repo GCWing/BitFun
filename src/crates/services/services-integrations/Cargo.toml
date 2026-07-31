@@ -107,6 +107,15 @@ debug-log = ["anyhow", "chrono", "reqwest", "uuid"]
 deep-research = ["bitfun-agent-runtime"]
 git = ["bitfun-services-core", "chrono", "git2", "thiserror"]
 file-watch = ["notify"]
+# Automatic repository issue fixing driven by the external `loopx` CLI.
+# Deliberately outside `product-full` until the chain is verified against a real
+# repository; see docs/development/loopx-issue-fix-integration.md.
+loopx-issue-fix = [
+    "async-trait",
+    "review-platform",
+    "thiserror",
+    "which",
+]
 function-agents = [
     "bitfun-product-domains/function-agents",
     "dep:bitfun-product-domains",
@@ -311,6 +320,10 @@ required-features = ["debug-log"]
 [[test]]
 name = "script_tool_runtime"
 required-features = ["script-tool-runtime"]
+
+[[test]]
+name = "loopx_issue_fix_contracts"
+required-features = ["loopx-issue-fix"]
 
 [lints]
 workspace = true
