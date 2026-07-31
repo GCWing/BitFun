@@ -9,6 +9,7 @@ use async_trait::async_trait;
 use bitfun_product_domains::miniapp::market::{
     MarketLicense, MarketSubmissionDraftRequest, MARKET_CATEGORIES, MARKET_MAX_SCREENSHOTS,
 };
+use bitfun_product_domains::miniapp::types::MiniAppMeta;
 use bitfun_services_integrations::miniapp_market::{
     map_local_category_to_market, resolve_release_target, submit_installed_app,
     suggest_market_slug, DesktopAuthPollRequest, MarketClient, ReleaseTarget,
@@ -42,6 +43,8 @@ impl Tool for PublishMiniAppTool {
     async fn description(&self) -> BitFunResult<String> {
         Ok(r#"Submit an installed MiniApp to the BitFun MiniApp market for human review.
 
+Identify the app by `app_name` — the display name the user used (e.g. "循天问命"), matched against installed apps' manifest names in every locale — or by `app_id` if you already have one. Installed apps are resolved through the running MiniApp manager: do NOT search the filesystem for the app; if the name does not resolve, the error lists every installed app to pick from.
+
 Listing metadata (name, description, icon, category, tags) is derived from the app's manifest; the marketplace slug and release number are derived automatically from the user's submission history. Provide 1-5 screenshot file paths (PNG/JPEG/WebP, each <= 5 MiB) — ask the user for screenshots, or have them use 市场 → 我的投稿 → 截取当前画面 to capture one.
 
 If the user is not signed in to the market, the tool returns a GitHub authorization link. Show the link to the user, wait for them to authorize in the browser, then call this tool again with the same arguments.
@@ -58,11 +61,15 @@ Publishing is an outward-facing action: only call this when the user explicitly 
         json!({
             "type": "object",
             "additionalProperties": false,
-            "required": ["app_id", "screenshot_paths"],
+            "required": ["screenshot_paths"],
             "properties": {
+                "app_name": {
+                    "type": "string",
+                    "description": "Display name of the installed MiniApp as the user refers to it (matched case-insensitively against manifest names in every locale). Preferred when the user named the app. Provide this or app_id."
+                },
                 "app_id": {
                     "type": "string",
-                    "description": "Installed MiniApp id (returned by InitMiniApp, or the directory name under the miniapps data root)"
+                    "description": "Installed MiniApp id (e.g. returned by InitMiniApp or an earlier PublishMiniApp error). Provide this or app_name."
                 },
                 "screenshot_paths": {
                     "type": "array",
@@ -100,14 +107,22 @@ Publishing is an outward-facing action: only call this when the user explicitly 
         input: &Value,
         _context: &ToolUseContext,
     ) -> BitFunResult<Vec<PermissionIntent>> {
-        let app_id = input
+        let identity = input
             .get("app_id")
             .and_then(Value::as_str)
-            .unwrap_or("unknown")
-            .trim();
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .or_else(|| {
+                input
+                    .get("app_name")
+                    .and_then(Value::as_str)
+                    .map(str::trim)
+                    .filter(|value| !value.is_empty())
+            })
+            .unwrap_or("unknown");
         Ok(vec![PermissionIntent::new(
             "custom_tool",
-            vec![format!("miniapp:PublishMiniApp:{app_id}")],
+            vec![format!("miniapp:PublishMiniApp:{identity}")],
         )])
     }
 
@@ -123,8 +138,60 @@ Publishing is an outward-facing action: only call this when the user explicitly 
             .get("app_id")
             .and_then(Value::as_str)
             .map(str::trim)
-            .filter(|value| !value.is_empty())
-            .ok_or_else(|| BitFunError::validation("Missing required field: app_id"))?;
+            .filter(|value| !value.is_empty());
+        let app_name = input
+            .get("app_name")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|value| !value.is_empty());
+
+        // Resolve the app through the running MiniApp manager — never via the
+        // filesystem. Every failure path carries the installed-app roster so
+        // the model can correct itself in the next call instead of going
+        // hunting for ids elsewhere.
+        let app = if let Some(app_id) = app_id {
+            match manager.get(app_id).await {
+                Ok(app) => app,
+                Err(error) => {
+                    let apps = manager.list().await.unwrap_or_default();
+                    return Err(BitFunError::validation(format!(
+                        "Installed MiniApp '{app_id}' not found: {error}\nInstalled apps (id — name):\n{}",
+                        installed_roster(apps.iter())
+                    )));
+                }
+            }
+        } else if let Some(app_name) = app_name {
+            let apps = manager
+                .list()
+                .await
+                .map_err(|e| BitFunError::tool(format!("Could not list installed MiniApps: {e}")))?;
+            let matches = find_apps_by_name(&apps, app_name);
+            match matches.as_slice() {
+                [only] => manager
+                    .get(&only.id)
+                    .await
+                    .map_err(|e| BitFunError::tool(format!("Installed MiniApp not found: {e}")))?,
+                [] => {
+                    return Err(BitFunError::validation(format!(
+                        "No installed MiniApp is named '{app_name}'. Installed apps (id — name):\n{}",
+                        installed_roster(apps.iter())
+                    )));
+                }
+                many => {
+                    return Err(BitFunError::validation(format!(
+                        "'{app_name}' matches several installed MiniApps — call again with the app_id:\n{}",
+                        installed_roster(many.iter().copied())
+                    )));
+                }
+            }
+        } else {
+            let apps = manager.list().await.unwrap_or_default();
+            return Err(BitFunError::validation(format!(
+                "Provide app_name (the display name the user used) or app_id. Installed apps (id — name):\n{}",
+                installed_roster(apps.iter())
+            )));
+        };
+
         let screenshot_paths: Vec<String> = input
             .get("screenshot_paths")
             .and_then(Value::as_array)
@@ -148,11 +215,6 @@ Publishing is an outward-facing action: only call this when the user explicitly 
                 )));
             }
         }
-
-        let app = manager
-            .get(app_id)
-            .await
-            .map_err(|e| BitFunError::tool(format!("Installed MiniApp not found: {e}")))?;
 
         let mut client = MarketClient::from_environment()
             .await
@@ -371,6 +433,52 @@ Publishing is an outward-facing action: only call this when the user explicitly 
     }
 }
 
+/// Every display name an installed app answers to, lower-cased: the manifest
+/// name plus each locale's i18n name.
+fn display_names(meta: &MiniAppMeta) -> Vec<String> {
+    let mut names = vec![meta.name.trim().to_lowercase()];
+    if let Some(i18n) = &meta.i18n {
+        for strings in i18n.locales.values() {
+            if let Some(name) = &strings.name {
+                names.push(name.trim().to_lowercase());
+            }
+        }
+    }
+    names
+}
+
+/// Match a user-supplied display name against installed apps: exact
+/// (case-insensitive, any locale) first, substring as a fallback.
+fn find_apps_by_name<'a>(apps: &'a [MiniAppMeta], needle: &str) -> Vec<&'a MiniAppMeta> {
+    let needle = needle.trim().to_lowercase();
+    if needle.is_empty() {
+        return Vec::new();
+    }
+    let exact: Vec<&MiniAppMeta> = apps
+        .iter()
+        .filter(|meta| display_names(meta).iter().any(|name| *name == needle))
+        .collect();
+    if !exact.is_empty() {
+        return exact;
+    }
+    apps.iter()
+        .filter(|meta| display_names(meta).iter().any(|name| name.contains(&needle)))
+        .collect()
+}
+
+/// "id — name" lines for error messages, capped to keep the result readable.
+fn installed_roster<'a>(apps: impl Iterator<Item = &'a MiniAppMeta>) -> String {
+    let lines: Vec<String> = apps
+        .take(40)
+        .map(|meta| format!("{} — {}", meta.id, meta.name))
+        .collect();
+    if lines.is_empty() {
+        "(no MiniApps installed)".to_string()
+    } else {
+        lines.join("\n")
+    }
+}
+
 fn unix_now() -> i64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -380,8 +488,9 @@ fn unix_now() -> i64 {
 
 #[cfg(test)]
 mod tests {
-    use super::PublishMiniAppTool;
+    use super::{find_apps_by_name, PublishMiniAppTool};
     use crate::agentic::tools::framework::{Tool, ToolExposure, ToolUseContext};
+    use bitfun_product_domains::miniapp::types::MiniAppMeta;
     use serde_json::json;
 
     #[test]
@@ -407,10 +516,81 @@ mod tests {
     }
 
     #[test]
-    fn publish_miniapp_schema_requires_app_and_screenshots() {
+    fn publish_miniapp_schema_requires_only_screenshots() {
         let tool = PublishMiniAppTool::new();
         let schema = tool.input_schema();
-        assert_eq!(schema["required"], json!(["app_id", "screenshot_paths"]));
+        assert_eq!(schema["required"], json!(["screenshot_paths"]));
+        assert!(schema["properties"]["app_name"].is_object());
+        assert!(schema["properties"]["app_id"].is_object());
         assert_eq!(schema["additionalProperties"], json!(false));
+    }
+
+    #[test]
+    fn publish_miniapp_permission_identity_falls_back_to_app_name() {
+        let tool = PublishMiniAppTool::new();
+        let context = ToolUseContext::for_tool_listing(None, None);
+        let intents = tool
+            .permission_intents(&json!({ "app_name": "循天问命" }), &context)
+            .expect("permission intent");
+        assert_eq!(
+            intents[0].resources,
+            ["miniapp:PublishMiniApp:循天问命".to_string()]
+        );
+    }
+
+    fn meta(id: &str, name: &str, locale_name: Option<&str>) -> MiniAppMeta {
+        use bitfun_product_domains::miniapp::types::{MiniAppI18n, MiniAppLocaleStrings};
+        use std::collections::HashMap;
+        MiniAppMeta {
+            id: id.to_string(),
+            name: name.to_string(),
+            description: String::new(),
+            icon: String::new(),
+            category: String::new(),
+            tags: Vec::new(),
+            version: 1,
+            created_at: 0,
+            updated_at: 0,
+            permissions: Default::default(),
+            ai_context: None,
+            runtime: Default::default(),
+            runtime_profile: Default::default(),
+            i18n: locale_name.map(|value| MiniAppI18n {
+                locales: HashMap::from([(
+                    "en-US".to_string(),
+                    MiniAppLocaleStrings {
+                        name: Some(value.to_string()),
+                        description: None,
+                        tags: None,
+                    },
+                )]),
+            }),
+        }
+    }
+
+    #[test]
+    fn find_apps_by_name_matches_any_locale_exactly() {
+        let apps = vec![
+            meta("a1", "循天问命", Some("BaZi Chart")),
+            meta("a2", "五子棋", None),
+        ];
+        let by_zh = find_apps_by_name(&apps, "循天问命");
+        assert_eq!(by_zh.len(), 1);
+        assert_eq!(by_zh[0].id, "a1");
+        let by_en = find_apps_by_name(&apps, "bazi chart");
+        assert_eq!(by_en.len(), 1);
+        assert_eq!(by_en[0].id, "a1");
+    }
+
+    #[test]
+    fn find_apps_by_name_falls_back_to_substring_and_reports_ambiguity() {
+        let apps = vec![
+            meta("a1", "循天问命", None),
+            meta("a2", "问命笺", None),
+        ];
+        let partial = find_apps_by_name(&apps, "问命");
+        assert_eq!(partial.len(), 2);
+        assert!(find_apps_by_name(&apps, "不存在").is_empty());
+        assert!(find_apps_by_name(&apps, "  ").is_empty());
     }
 }
