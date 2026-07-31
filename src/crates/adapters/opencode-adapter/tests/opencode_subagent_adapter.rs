@@ -222,6 +222,72 @@ fn current_path_permission_resources_expand_like_opencode() {
 }
 
 #[test]
+fn v2_relative_path_permissions_use_the_opened_location_coordinate() {
+    let temp = TempDir::new().unwrap();
+    let project = temp.path().join("workspace");
+    let opened = project.join("packages/app");
+    fs::create_dir_all(project.join(".git")).unwrap();
+    fs::create_dir_all(&opened).unwrap();
+    fs::create_dir_all(temp.path().join("user")).unwrap();
+    fs::write(
+        temp.path().join("user/opencode.json"),
+        r#"{
+          "agents": {
+            "reviewer": {
+              "system": "Do not read location-local secrets",
+              "mode": "subagent",
+              "permissions": [
+                { "action": "read", "resource": "secrets/**", "effect": "deny" }
+              ]
+            }
+          }
+        }"#,
+    )
+    .unwrap();
+    let provider = OpenCodeSubagentProvider::new(OpenCodeSubagentProviderOptions {
+        user_config_dir: temp.path().join("user"),
+        legacy_user_config_dir: None,
+        explicit_config_file: None,
+        explicit_config_dir: None,
+        project_config_enabled: true,
+        project_root_override: Some(project.clone()),
+    });
+
+    let snapshot = discover(&provider, opened.clone(), BTreeSet::new());
+    let constraints = &snapshot.definitions[0].permission_constraints;
+    let opened = dunce::canonicalize(opened)
+        .unwrap()
+        .to_string_lossy()
+        .replace('\\', "/");
+    let project = dunce::canonicalize(project)
+        .unwrap()
+        .to_string_lossy()
+        .replace('\\', "/");
+
+    assert_eq!(
+        constraints.rules()[0].resource,
+        format!("{opened}/secrets/**")
+    );
+    assert_eq!(
+        PermissionEvaluator::for_current_platform().evaluate_constraint_resource(
+            "read",
+            &format!("{opened}/secrets/key.txt"),
+            constraints,
+        ),
+        PermissionEffect::Deny
+    );
+    assert_eq!(
+        PermissionEvaluator::for_current_platform().evaluate_constraint_resource(
+            "read",
+            &format!("{project}/secrets/key.txt"),
+            constraints,
+        ),
+        PermissionEffect::Allow,
+        "Core V2 resources are active-Location relative; V1 worktree-relative resource maps stay unsupported"
+    );
+}
+
+#[test]
 fn ambiguous_cross_domain_path_patterns_fail_closed() {
     let temp = TempDir::new().unwrap();
     let workspace = temp.path().join("workspace");
@@ -401,7 +467,156 @@ fn later_enabled_document_recreates_agent_after_disabled_tombstone() {
 }
 
 #[test]
-fn v1_markdown_migrates_before_current_project_overlay() {
+fn v1_disable_remains_effective_when_later_overlay_omits_it() {
+    let temp = TempDir::new().unwrap();
+    let workspace = temp.path().join("workspace");
+    fs::create_dir_all(workspace.join(".git")).unwrap();
+    fs::create_dir_all(temp.path().join("user")).unwrap();
+    fs::write(
+        temp.path().join("user/opencode.json"),
+        r#"{
+          "agent": {
+            "reviewer": {
+              "prompt": "Disabled user definition",
+              "mode": "subagent",
+              "disable": true,
+              "permission": { "edit": "deny" }
+            }
+          }
+        }"#,
+    )
+    .unwrap();
+    fs::write(
+        workspace.join("opencode.json"),
+        r#"{
+          "agent": {
+            "reviewer": {
+              "prompt": "Project overlay",
+              "mode": "subagent"
+            }
+          }
+        }"#,
+    )
+    .unwrap();
+
+    let snapshot = discover(&provider(&temp, &workspace), workspace, BTreeSet::new());
+    let definition = &snapshot.definitions[0];
+
+    assert!(definition.disabled);
+    assert_eq!(definition.prompt.expose(), "Project overlay");
+    assert_eq!(
+        definition.permission_constraints.rules(),
+        [PermissionRule::new("edit", "*", PermissionEffect::Deny)]
+    );
+}
+
+#[test]
+fn v1_explicit_false_reenables_without_erasing_merged_fields() {
+    let temp = TempDir::new().unwrap();
+    let workspace = temp.path().join("workspace");
+    fs::create_dir_all(workspace.join(".git")).unwrap();
+    fs::create_dir_all(temp.path().join("user")).unwrap();
+    fs::write(
+        temp.path().join("user/opencode.json"),
+        r#"{
+          "agent": {
+            "reviewer": {
+              "prompt": "Disabled user definition",
+              "mode": "subagent",
+              "disable": true,
+              "permission": { "edit": "deny" }
+            }
+          }
+        }"#,
+    )
+    .unwrap();
+    fs::write(
+        workspace.join("opencode.json"),
+        r#"{
+          "agent": {
+            "reviewer": {
+              "prompt": "Explicitly enabled project overlay",
+              "mode": "subagent",
+              "disable": false
+            }
+          }
+        }"#,
+    )
+    .unwrap();
+
+    let snapshot = discover(&provider(&temp, &workspace), workspace, BTreeSet::new());
+    let definition = &snapshot.definitions[0];
+
+    assert!(!definition.disabled);
+    assert_eq!(
+        definition.prompt.expose(),
+        "Explicitly enabled project overlay"
+    );
+    assert_eq!(
+        definition.permission_constraints.rules(),
+        [PermissionRule::new("edit", "*", PermissionEffect::Deny)]
+    );
+}
+
+#[test]
+fn v1_document_readds_after_v2_tombstone_without_losing_constraints() {
+    let temp = TempDir::new().unwrap();
+    let workspace = temp.path().join("workspace");
+    fs::create_dir_all(workspace.join(".git")).unwrap();
+    fs::create_dir_all(workspace.join(".opencode")).unwrap();
+    fs::create_dir_all(temp.path().join("user")).unwrap();
+    fs::write(
+        temp.path().join("user/opencode.json"),
+        r#"{
+          "agents": {
+            "reviewer": {
+              "system": "Removed user definition",
+              "mode": "subagent",
+              "disabled": true
+            }
+          }
+        }"#,
+    )
+    .unwrap();
+    fs::write(
+        workspace.join("opencode.json"),
+        r#"{
+          "agent": {
+            "reviewer": {
+              "prompt": "V1 project definition",
+              "mode": "subagent",
+              "permission": { "edit": "deny" }
+            }
+          }
+        }"#,
+    )
+    .unwrap();
+    fs::write(
+        workspace.join(".opencode/opencode.json"),
+        r#"{
+          "agents": {
+            "reviewer": {
+              "system": "V2 project overlay",
+              "mode": "subagent"
+            }
+          }
+        }"#,
+    )
+    .unwrap();
+
+    let snapshot = discover(&provider(&temp, &workspace), workspace, BTreeSet::new());
+    let definition = &snapshot.definitions[0];
+
+    assert_eq!(definition.prompt.expose(), "V2 project overlay");
+    assert_eq!(
+        definition.permission_constraints.rules(),
+        [PermissionRule::new("edit", "*", PermissionEffect::Deny)],
+        "the first document after a V2 tombstone re-adds the agent regardless of source schema"
+    );
+}
+
+#[test]
+fn user_markdown_applies_after_project_direct_config() {
     let temp = TempDir::new().unwrap();
     let workspace = temp.path().join("workspace");
     fs::create_dir_all(workspace.join(".git")).unwrap();
@@ -429,15 +644,12 @@ fn v1_markdown_migrates_before_current_project_overlay() {
     let snapshot = discover(&provider(&temp, &workspace), workspace, BTreeSet::new());
     let definition = &snapshot.definitions[0];
 
-    assert_eq!(
-        definition.prompt.expose(),
-        "Review using the project policy"
-    );
+    assert_eq!(definition.prompt.expose(), "Review using the user policy.");
     assert_eq!(
         definition.permission_constraints.rules(),
         [
-            PermissionRule::new("edit", "*", PermissionEffect::Deny),
             PermissionRule::new("read", "*", PermissionEffect::Deny),
+            PermissionRule::new("edit", "*", PermissionEffect::Deny),
         ]
     );
     assert_eq!(
@@ -447,7 +659,7 @@ fn v1_markdown_migrates_before_current_project_overlay() {
 }
 
 #[test]
-fn project_permission_rules_follow_user_agent_markdown() {
+fn user_agent_markdown_permissions_follow_project_direct_config() {
     let temp = TempDir::new().unwrap();
     let workspace = temp.path().join("workspace");
     fs::create_dir_all(workspace.join(".git")).unwrap();
@@ -477,8 +689,8 @@ fn project_permission_rules_follow_user_agent_markdown() {
     assert_eq!(
         constraints.rules(),
         [
-            PermissionRule::new("read", "*", PermissionEffect::Allow),
             PermissionRule::new("read", "*", PermissionEffect::Deny),
+            PermissionRule::new("read", "*", PermissionEffect::Allow),
         ]
     );
     assert_eq!(
@@ -487,7 +699,7 @@ fn project_permission_rules_follow_user_agent_markdown() {
             "C:/workspace/secrets/key.txt",
             constraints,
         ),
-        PermissionEffect::Deny
+        PermissionEffect::Allow
     );
 }
 

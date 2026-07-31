@@ -1,6 +1,7 @@
 use crate::local_source_paths::{
     find_project_root, local_watch_roots, ordered_local_config_directories,
-    project_config_directories, user_config_dir, LocalConfigDirectory, LocalConfigDirectoryKind,
+    project_asset_directories, project_config_directories, user_config_dir, LocalConfigDirectory,
+    LocalConfigDirectoryKind,
 };
 use bitfun_product_domains::external_sources::{
     EcosystemId, ExternalSourceAssetKind, ExternalSourceContext, ExternalSourceDiagnostic,
@@ -184,56 +185,40 @@ impl OpenCodeSubagentProvider {
                 "OpenCode OPENCODE_CONFIG",
             );
         }
+        if self.options.project_config_enabled {
+            if let Some(workspace_root) = &context.workspace_root {
+                let project_root = self.project_root(workspace_root);
+                for directory in project_config_directories(&project_root, workspace_root) {
+                    push_config_files(
+                        &mut layers,
+                        &directory,
+                        ExternalSourceScope::Project,
+                        "OpenCode project configuration",
+                    );
+                }
+            }
+        }
         let project_directories = if self.options.project_config_enabled {
             context
                 .workspace_root
                 .as_ref()
                 .map(|workspace_root| {
-                    project_config_directories(&self.project_root(workspace_root), workspace_root)
+                    project_asset_directories(&self.project_root(workspace_root), workspace_root)
                 })
                 .unwrap_or_default()
         } else {
             Vec::new()
         };
-        let local_directories = ordered_local_config_directories(
+        for directory in ordered_local_config_directories(
             &self.options.user_config_dir,
             self.options.legacy_user_config_dir.as_deref(),
             self.options.explicit_config_dir.as_deref(),
             &project_directories,
-        );
-        for directory in local_directories.iter().filter(|directory| {
-            !occupies_project_directory_position(directory, &project_directories)
-        }) {
-            push_local_directory_layers(&mut layers, directory)?;
-        }
-        for directory in &project_directories {
-            push_config_files(
-                &mut layers,
-                directory,
-                ExternalSourceScope::Project,
-                "OpenCode project configuration",
-            );
-        }
-        for directory in local_directories.iter().filter(|directory| {
-            occupies_project_directory_position(directory, &project_directories)
-        }) {
-            push_local_directory_layers(&mut layers, directory)?;
+        ) {
+            push_local_directory_layers(&mut layers, &directory)?;
         }
         Ok(deduplicate_layers_keep_last(layers))
     }
-}
-
-fn occupies_project_directory_position(
-    directory: &LocalConfigDirectory,
-    project_directories: &[PathBuf],
-) -> bool {
-    let identity = dunce::canonicalize(&directory.path)
-        .unwrap_or_else(|_| normalize_path_lexically(&directory.path));
-    project_directories.iter().any(|project_directory| {
-        let project_identity = dunce::canonicalize(project_directory.join(".opencode"))
-            .unwrap_or_else(|_| normalize_path_lexically(&project_directory.join(".opencode")));
-        identity == project_identity
-    })
 }
 
 fn push_local_directory_layers(
@@ -467,6 +452,7 @@ struct AgentPatch {
     logical_id: String,
     fields: Map<String, Value>,
     legacy: bool,
+    disabled_is_tombstone: bool,
 }
 
 fn parse_layer(layer: &AgentLayer) -> Result<ParsedAgentLayer, ExternalSourceProviderError> {
@@ -559,6 +545,7 @@ fn parse_config_layer(
                     logical_id: normalize_logical_id(logical_id),
                     fields,
                     legacy: false,
+                    disabled_is_tombstone: !legacy_document,
                 });
             }
         } else {
@@ -716,6 +703,7 @@ fn parse_markdown_layer(
             logical_id: normalize_logical_id(logical_id),
             fields,
             legacy,
+            disabled_is_tombstone: !legacy_schema,
         }],
         ambient_permission: false,
         diagnostics: Vec::new(),
@@ -739,10 +727,11 @@ fn materialize_definition(
     let mut legacy = false;
     let mut removed = false;
     for (index, contribution) in contributions.iter().enumerate() {
-        let removes_agent = contribution
-            .fields
-            .get("disabled")
-            .is_some_and(|value| value == &Value::Bool(true));
+        let removes_agent = contribution.disabled_is_tombstone
+            && contribution
+                .fields
+                .get("disabled")
+                .is_some_and(|value| value == &Value::Bool(true));
         if removes_agent || removed {
             effective = Value::Object(Map::new());
         }
