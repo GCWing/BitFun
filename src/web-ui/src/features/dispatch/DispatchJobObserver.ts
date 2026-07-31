@@ -149,6 +149,14 @@ function transportErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+function isJobStillObserved(job: DispatchObserverJob): boolean {
+  const state = dispatchJobStore.getState();
+  return (
+    state.jobs[job.jobId]?.sessionId === job.sessionId
+    && !state.dismissedJobIds.includes(job.jobId)
+  );
+}
+
 export function dispatchEventId(event: DispatchEvent): string {
   if (event.type === 'agentEvent') {
     const envelope = event.event as DispatchAgentEventEnvelope;
@@ -348,12 +356,21 @@ async function refreshJob(context: FlowChatContext, requestedJobId: string): Pro
   try {
     response = await dispatchApi.status(job.jobId, requestCursor);
   } catch (error) {
+    if (!isJobStillObserved(job)) {
+      return;
+    }
     dispatchJobStore.getState().setTransportState(
       job.jobId,
       'unreachable',
       transportErrorMessage(error),
     );
     throw error;
+  }
+  // Deleting a dispatch session writes a projection tombstone while an
+  // already-issued target poll may still be in flight. Never let that stale
+  // response project SessionCreated/DialogTurnStarted and recreate the row.
+  if (!isJobStillObserved(job)) {
+    return;
   }
   // A successful target status request is the only authoritative signal that
   // clears a transient transport failure. It does not alter the durable job
@@ -365,6 +382,9 @@ async function refreshJob(context: FlowChatContext, requestedJobId: string): Pro
   const userCancelledBeforeRefresh =
     context.userCancelledSessionIds?.has(job.sessionId) ?? false;
   for (const event of response.events) {
+    if (!isJobStillObserved(job)) {
+      return;
+    }
     const eventId = dispatchEventId(event);
     if (dispatchJobStore.getState().hasAppliedEvent(job.jobId, eventId)) {
       continue;
@@ -377,6 +397,9 @@ async function refreshJob(context: FlowChatContext, requestedJobId: string): Pro
     dispatchJobStore.getState().updateProgress(job.jobId, {
       appliedEventIds: [eventId],
     });
+  }
+  if (!isJobStillObserved(job)) {
+    return;
   }
 
   const terminalDrained =

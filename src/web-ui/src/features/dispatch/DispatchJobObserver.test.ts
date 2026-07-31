@@ -48,7 +48,31 @@ vi.mock('@/flow_chat/services/AgenticEventListener', () => ({
   },
 }));
 
+function runningOutboundRecord() {
+  return {
+    jobId: 'job-1',
+    sessionId: 'session-1',
+    target: {
+      kind: 'ssh' as const,
+      connectionId: 'ssh-1',
+      workspacePath: '/repo',
+      displayName: 'build-host',
+    },
+    sourceWorkspacePath: '/source',
+    workspacePath: '/repo',
+    promptPreview: 'Dispatch test',
+    title: 'Dispatch test',
+    agentType: 'agentic',
+    approvalPolicy: 'reject-and-report' as const,
+    lastCursor: 0,
+    lastState: 'running' as const,
+    createdAt: '2026-07-28T00:00:00Z',
+    updatedAt: '2026-07-28T00:00:01Z',
+  };
+}
+
 function registerRunningJob(): void {
+  mocks.listJobs.mockResolvedValue([runningOutboundRecord()]);
   dispatchJobStore.getState().registerJob({
     jobId: 'job-1',
     sessionId: 'session-1',
@@ -247,6 +271,14 @@ function status(
   };
 }
 
+function createDeferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>(resolvePromise => {
+    resolve = resolvePromise;
+  });
+  return { promise, resolve };
+}
+
 describe('DispatchJobObserver', () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -409,10 +441,46 @@ describe('DispatchJobObserver', () => {
       ...dispatchJobStore.getState().jobs['job-1'],
       state: 'submitting',
     });
+    mocks.listJobs.mockResolvedValue([]);
     const cleanup = installDispatchJobObserver(createContext());
 
     await vi.advanceTimersByTimeAsync(0);
     expect(mocks.status).not.toHaveBeenCalled();
+    cleanup();
+  });
+
+  it('does not recreate a dismissed projection from an in-flight status response', async () => {
+    registerRunningJob();
+    const deferred = createDeferred<DispatchStatusResponse>();
+    mocks.status.mockReturnValue(deferred.promise);
+    const context = createContext();
+    const cleanup = installDispatchJobObserver(context);
+
+    await vi.advanceTimersByTimeAsync(0);
+    expect(mocks.status).toHaveBeenCalledWith('job-1', 0);
+
+    dispatchJobStore.getState().dismissJob('job-1');
+    deferred.resolve(status({
+      cursor: 1,
+      events: [{
+        type: 'agentEvent',
+        timestamp: '2026-07-28T00:00:01Z',
+        event: {
+          id: 'event-after-delete',
+          frontendEventName: 'agentic://session-created',
+          frontendPayload: {
+            sessionId: 'session-1',
+            sessionName: 'Dispatch test',
+          },
+        },
+      }],
+    }));
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(mocks.dispatchExternal).not.toHaveBeenCalled();
+    expect(context.flowChatStore.applyDispatchSnapshot).not.toHaveBeenCalled();
+    expect(dispatchJobStore.getState().jobs['job-1']).toBeUndefined();
+    expect(dispatchJobStore.getState().dismissedJobIds).toContain('job-1');
     cleanup();
   });
 
