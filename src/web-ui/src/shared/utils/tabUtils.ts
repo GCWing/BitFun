@@ -308,6 +308,41 @@ export function createReviewPlatformTab(workspacePath?: string): void {
   window.dispatchEvent(new CustomEvent(TAB_EVENTS.AGENT_CREATE_TAB, { detail }));
 }
 
+/**
+ * Open the issue-fix panel for one repository.
+ *
+ * Mirrors `createReviewPlatformTab`: the right panel is expanded first, and tab
+ * creation waits out the expand animation when it was collapsed.
+ */
+export function createIssueFixTab(options: {
+  workspacePath?: string;
+  projectPath?: string;
+  host?: string;
+}): void {
+  const { workspacePath, projectPath, host } = options;
+  const duplicateCheckKey = `issue-fix:${projectPath || workspacePath || 'current'}`;
+  const detail = {
+    type: 'issue-fix',
+    title: i18nService.getT()('common:tabs.fixIssues'),
+    data: { workspacePath, projectPath, host },
+    metadata: { workspacePath, duplicateCheckKey },
+    checkDuplicate: true,
+    duplicateCheckKey,
+    replaceExisting: true,
+  };
+
+  window.dispatchEvent(new CustomEvent(TAB_EVENTS.EXPAND_RIGHT_PANEL));
+
+  if (isRightPanelCollapsed()) {
+    window.setTimeout(() => {
+      window.dispatchEvent(new CustomEvent(TAB_EVENTS.AGENT_CREATE_TAB, { detail }));
+    }, 300);
+    return;
+  }
+
+  window.dispatchEvent(new CustomEvent(TAB_EVENTS.AGENT_CREATE_TAB, { detail }));
+}
+
 export function createBackgroundCommandOutputTab(options: {
   execSessionKey: string;
   execSessionId: number;

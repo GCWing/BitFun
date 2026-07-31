@@ -140,6 +140,10 @@ const ReviewPlatformPanel = React.lazy(() =>
   import('@/app/components/panels/review-platform/ReviewPlatformPanel')
 );
 
+const IssueFixPanel = React.lazy(() =>
+  import('@/app/components/panels/issue-fix/IssueFixPanel')
+);
+
 // CodePreview, ChartRenderer and CodeNode removed - visualization features disabled
 import { 
   FlexiblePanelProps
@@ -834,6 +838,17 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
               initialPullRequestId={content.data?.pullRequestId}
               initialPullRequestUrl={content.data?.pullRequestUrl}
               detailOnly
+            />
+          </React.Suspense>
+        );
+
+      case 'issue-fix':
+        return (
+          <React.Suspense fallback={<div className="bitfun-flexible-panel__loading">Loading issues...</div>}>
+            <IssueFixPanel
+              workspacePath={content.data?.workspacePath || workspacePath}
+              projectPath={content.data?.projectPath}
+              host={content.data?.host}
             />
           </React.Suspense>
         );

@@ -1230,7 +1230,8 @@
     "backgroundCommandStopping": "正在终止命令",
     "backgroundCommandStopAll": "全部终止",
     "backgroundCommandStopFailed": "终止后台命令失败。",
-    "pullRequests": "拉取请求"
+    "pullRequests": "拉取请求",
+    "fixIssues": "修复 Issue"
   },
   "backgroundCommandInput": {
     "title": "输入命令内容",

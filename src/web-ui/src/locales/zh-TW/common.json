@@ -1111,7 +1111,8 @@
     "fileBrowser": "檔案瀏覽器",
     "editor": "編輯器",
     "markdown": "Markdown",
-    "settingsWithSection": "設置 - {{section}}"
+    "settingsWithSection": "設置 - {{section}}",
+    "fixIssues": "修復 Issue"
   },
   "welcome": {
     "greetingMorning": "早安，創造者",

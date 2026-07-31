@@ -1,0 +1,26 @@
+{
+  "noRepository": "Open a workspace with a GitHub or GitLab remote to list its issues.",
+  "noIssues": "No open issues.",
+  "noSelection": "Select an issue to see its details.",
+  "loading": "Loading issues…",
+  "refresh": "Refresh issues",
+  "issuesLabel": "Issues",
+  "detailLabel": "Issue details",
+  "progress": "{{done}} of {{total}} done",
+  "selectedCount": "{{selected}} of {{total}} selected",
+  "gateNotice": "Paused: an issue needs your decision before the run continues.",
+  "status": {
+    "queued": "Queued",
+    "fixing": "Fixing",
+    "pullRequestOpened": "PR opened",
+    "resolvedWithoutPullRequest": "Resolved",
+    "awaitingDecision": "Needs you",
+    "stopped": "Stopped"
+  },
+  "detail": {
+    "state": "State",
+    "author": "Author",
+    "comments": "Comments",
+    "openOnProvider": "Open on provider"
+  }
+}

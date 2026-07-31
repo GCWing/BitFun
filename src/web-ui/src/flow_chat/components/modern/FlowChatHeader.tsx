@@ -6,13 +6,13 @@
 
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { Activity, Bot, ChevronDown, ChevronUp, GitPullRequest, Keyboard, List, MoreHorizontal, Search, Square, Terminal, X } from 'lucide-react';
+import { Activity, Bot, ChevronDown, ChevronUp, GitPullRequest, Keyboard, List, MoreHorizontal, Search, Square, Terminal, Wrench, X } from 'lucide-react';
 import { Tooltip, IconButton, Input } from '@/component-library';
 import { useTranslation } from 'react-i18next';
 import { SessionFilesBadge } from './SessionFilesBadge';
 import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
 import { computeFixedPopoverPosition } from '@/shared/utils/fixedPopoverViewport';
-import { createReviewPlatformTab } from '@/shared/utils/tabUtils';
+import { createIssueFixTab, createReviewPlatformTab } from '@/shared/utils/tabUtils';
 import './FlowChatHeader.scss';
 
 export interface FlowChatHeaderTurnSummary {
@@ -395,6 +395,10 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
 
   const handleOpenPullRequests = useCallback(() => {
     createReviewPlatformTab(currentWorkspace?.rootPath);
+  }, [currentWorkspace?.rootPath]);
+
+  const handleOpenIssueFix = useCallback(() => {
+    createIssueFixTab({ workspacePath: currentWorkspace?.rootPath });
   }, [currentWorkspace?.rootPath]);
 
   const handleTurnSelect = (turnId: string) => {
@@ -885,6 +889,16 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
           data-testid="flowchat-header-pull-requests"
         >
           <GitPullRequest size={14} />
+        </IconButton>
+        <IconButton
+          variant="ghost"
+          size="xs"
+          onClick={handleOpenIssueFix}
+          tooltip={t('flowChatHeader.fixIssues')}
+          aria-label={t('flowChatHeader.fixIssues')}
+          data-testid="flowchat-header-fix-issues"
+        >
+          <Wrench size={14} />
         </IconButton>
         {isSearchOpen ? (
           <div className="flowchat-header__search" role="search" data-testid="flowchat-header-search-bar">

@@ -1111,7 +1111,8 @@
     "fileBrowser": "File Browser",
     "editor": "Editor",
     "markdown": "Markdown",
-    "settingsWithSection": "Settings - {{section}}"
+    "settingsWithSection": "Settings - {{section}}",
+    "fixIssues": "Fix Issues"
   },
   "welcome": {
     "greetingMorning": "Good morning, creator",

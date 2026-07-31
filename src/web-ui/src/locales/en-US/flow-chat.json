@@ -1230,7 +1230,8 @@
     "backgroundCommandStopping": "Stopping command",
     "backgroundCommandStopAll": "Stop all",
     "backgroundCommandStopFailed": "Failed to stop background command.",
-    "pullRequests": "Pull requests"
+    "pullRequests": "Pull requests",
+    "fixIssues": "Fix issues"
   },
   "backgroundCommandInput": {
     "title": "Send command input",

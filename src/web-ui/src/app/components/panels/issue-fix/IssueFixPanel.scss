@@ -1,0 +1,270 @@
+@use '../../../../component-library/styles/tokens' as *;
+
+.issue-fix {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+  color: var(--color-text-primary);
+  background: var(--color-bg-primary);
+  font-size: 12px;
+
+  &--empty {
+    align-items: center;
+    justify-content: center;
+  }
+
+  &__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--color-border-subtle);
+  }
+
+  &__header-main {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  &__repo {
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  &__progress,
+  &__list-count {
+    color: var(--color-text-tertiary);
+    font-variant-numeric: tabular-nums;
+  }
+
+  // An open gate is the one state a user must notice, so it gets a persistent
+  // banner rather than only a per-row icon.
+  &__gate-notice {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    color: var(--color-warning);
+    background: color-mix(in srgb, var(--color-warning) 12%, transparent);
+    border-bottom: 1px solid color-mix(in srgb, var(--color-warning) 30%, transparent);
+  }
+
+  &__body {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    min-height: 0;
+    flex: 1;
+
+    @container (max-width: 560px) {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+
+  &__list {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    border-right: 1px solid var(--color-border-subtle);
+    overflow: hidden;
+  }
+
+  &__list-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    border-bottom: 1px solid var(--color-border-subtle);
+  }
+
+  &__rows {
+    margin: 0;
+    padding: 4px 0;
+    list-style: none;
+    overflow-y: auto;
+    min-height: 0;
+  }
+
+  &__row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 2px 12px;
+
+    &:hover {
+      background: var(--element-bg-soft);
+    }
+
+    &.is-selected {
+      background: color-mix(in srgb, var(--color-primary) 10%, transparent);
+    }
+
+    &--done {
+      color: var(--color-text-tertiary);
+    }
+
+    &--blocked {
+      color: var(--color-warning);
+    }
+  }
+
+  &__row-button {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 1;
+    min-width: 0;
+    padding: 4px 0;
+    color: inherit;
+    background: none;
+    border: none;
+    text-align: left;
+    cursor: pointer;
+    font: inherit;
+  }
+
+  &__row-number {
+    color: var(--color-text-tertiary);
+    font-variant-numeric: tabular-nums;
+  }
+
+  &__row-title {
+    flex: 1;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  &__row-status {
+    color: var(--color-text-tertiary);
+    white-space: nowrap;
+  }
+
+  &__row-icon {
+    flex: none;
+
+    &--idle {
+      opacity: 0.3;
+    }
+
+    &--queued {
+      opacity: 0.6;
+    }
+
+    &--fixing {
+      animation: issue-fix-spin 1s linear infinite;
+      color: var(--color-primary);
+    }
+
+    &--done {
+      color: var(--color-success);
+    }
+
+    &--blocked {
+      color: var(--color-warning);
+    }
+  }
+
+  &__detail {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px;
+    overflow-y: auto;
+    min-height: 0;
+  }
+
+  &__detail-title {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  &__detail-facts {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 2px 8px;
+    margin: 0;
+
+    dt {
+      color: var(--color-text-tertiary);
+    }
+
+    dd {
+      margin: 0;
+    }
+  }
+
+  &__labels {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  &__label {
+    padding: 1px 6px;
+    border: 1px solid var(--color-border-subtle);
+    border-radius: 10px;
+    color: var(--color-text-secondary);
+  }
+
+  // LoopX's reason codes, shown verbatim so a declined fix explains itself in
+  // LoopX's own vocabulary rather than a paraphrase.
+  &__reasons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  &__reason {
+    padding: 1px 6px;
+    border-radius: 4px;
+    background: var(--element-bg-soft);
+    color: var(--color-text-secondary);
+    font-family: var(--font-mono);
+    font-size: 11px;
+  }
+
+  &__error {
+    margin: 0;
+    color: var(--color-danger);
+  }
+
+  &__loading,
+  &__empty-text {
+    margin: 0;
+    padding: 12px;
+    color: var(--color-text-tertiary);
+  }
+
+  &__detail-link {
+    color: var(--color-primary);
+    text-decoration: none;
+
+    &:hover {
+      text-decoration: underline;
+    }
+  }
+}
+
+@keyframes issue-fix-spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "noRepository": "開啟一個帶 GitHub 或 GitLab 遠端的工作區，才能列出它的 issue。",
+  "noIssues": "沒有開放的 issue。",
+  "noSelection": "選擇一個 issue 查看詳情。",
+  "loading": "正在載入 issue…",
+  "refresh": "重新載入 issue",
+  "issuesLabel": "Issue 清單",
+  "detailLabel": "Issue 詳情",
+  "progress": "已完成 {{done}} / {{total}}",
+  "selectedCount": "已選 {{selected}} / {{total}}",
+  "gateNotice": "已暫停：有 issue 需要你確認後才能繼續。",
+  "status": {
+    "queued": "排隊中",
+    "fixing": "正在修",
+    "pullRequestOpened": "已發 PR",
+    "resolvedWithoutPullRequest": "已處理",
+    "awaitingDecision": "等你確認",
+    "stopped": "已中止"
+  },
+  "detail": {
+    "state": "狀態",
+    "author": "作者",
+    "comments": "評論數",
+    "openOnProvider": "在平台上開啟"
+  }
+}
