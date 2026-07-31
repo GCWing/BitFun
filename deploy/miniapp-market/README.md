@@ -57,6 +57,7 @@ MiniApp 市场网页源码在 `src/miniapp-market-web/`，后端入口在
 | 容器 | `bitfun-miniapp-market` |
 | 监听 | 仅宿主 `127.0.0.1:9710` |
 | Nginx vhost | `/etc/nginx/sites-available/market.openbitfun.com.conf` |
+| Nginx 未知 Host 兜底 | `/etc/nginx/sites-available/00-default-server.conf` |
 | 部署 ref | `refs/heads/market-deploy` |
 
 容器以 UID/GID `10001` 非 root、read-only filesystem、drop all
@@ -301,6 +302,7 @@ ssh lwb 'docker logs --since 10m --tail 200 bitfun-miniapp-market'
 
 普通前后端发布不需要改 Nginx。先检查目标 commit 是否修改了：
 
+- `deploy/miniapp-market/nginx-default-server.conf`
 - `deploy/miniapp-market/nginx-log-format.conf`
 - `deploy/miniapp-market/nginx-market.openbitfun.com.conf`
 
@@ -308,6 +310,12 @@ ssh lwb 'docker logs --since 10m --tail 200 bitfun-miniapp-market'
 
 ```bash
 ssh lwb 'set -eu
+install -m 0644 \
+  /srv/bitfun-miniapp-market/app/deploy/miniapp-market/nginx-default-server.conf \
+  /etc/nginx/sites-available/00-default-server.conf
+ln -sfn \
+  /etc/nginx/sites-available/00-default-server.conf \
+  /etc/nginx/sites-enabled/00-default-server.conf
 install -m 0644 \
   /srv/bitfun-miniapp-market/app/deploy/miniapp-market/nginx-log-format.conf \
   /etc/nginx/conf.d/miniapp-market-log-format.conf
@@ -321,6 +329,24 @@ systemctl reload nginx'
 必须让 `nginx -t` 成功后才能 reload。不要编辑或重载其他产品的 vhost。市场
 vhost 的上传上限是 25 MiB；访问日志刻意不记录 IP、query、Cookie、body 或
 Authorization。
+
+`nginx-default-server.conf` 是服务器级安全兜底，不代理任何产品。当前
+`openbitfun.com` 的 DNS/WAF 会让未显式配置的子域名也到达该源站；这个
+`default_server` 必须返回 404，避免未知 Host 因 Nginx 加载顺序落到 New API、
+Relay、官网或市场。新增 vhost 后至少验证：
+
+```bash
+curl -sS -o /dev/null -w "%{http_code}\n" \
+  -H "Host: unconfigured.openbitfun.com" http://127.0.0.1/
+curl -sS -o /dev/null -w "%{http_code} %{redirect_url}\n" \
+  -H "Host: market.openbitfun.com" http://127.0.0.1/
+curl -sS -o /dev/null -w "%{http_code}\n" \
+  https://unconfigured.openbitfun.com/
+```
+
+预期依次为 `404`、跳转到
+`https://market.openbitfun.com/miniapp/`、`404`。不要用真实但尚未发布的
+产品域名做探针，避免以后与新 vhost 冲突。
 
 ## 8. 回滚
 
@@ -431,6 +457,7 @@ curl -s -o /dev/null -w "%{http_code} %{redirect_url}\n" \
 2. 从 `market.env.example` 创建 root-only `market.env`，生成强随机 session
    secret，填 GitHub OAuth 凭据；
 3. 安装市场专用 Nginx log format/vhost；
+   同时安装 `nginx-default-server.conf`，让所有未知 Host fail closed；
 4. 安装 `backup.sh`、`restore-drill.sh`、systemd service/timer；
 5. 运行一次备份和恢复演练；
 6. 以 `MARKET_PUBLIC_BROWSE=false` 完成生产验收后再开放。
