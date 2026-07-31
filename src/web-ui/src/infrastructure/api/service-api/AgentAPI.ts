@@ -478,9 +478,9 @@ export interface ModelRoundCompletedEvent extends AgenticEvent {
   durationMs?: number;
   providerId?: string;
   /** Resolved AI model configuration ID. */
-  modelConfigId: string;
+  modelConfigId?: string;
   /** Provider model name sent on the request. */
-  effectiveModelName: string;
+  effectiveModelName?: string;
   firstChunkMs?: number;
   firstVisibleOutputMs?: number;
   streamDurationMs?: number;
@@ -501,9 +501,9 @@ export interface ModelRoundStartedEvent extends AgenticEvent {
   roundGroupId?: string;
   roundIndex: number;
   /** Resolved AI model configuration ID. */
-  modelConfigId: string;
+  modelConfigId?: string;
   /** Provider model name sent on the request. */
-  effectiveModelName: string;
+  effectiveModelName?: string;
 }
 
 export interface AcpContextUsageUpdatedEvent extends AgenticEvent {

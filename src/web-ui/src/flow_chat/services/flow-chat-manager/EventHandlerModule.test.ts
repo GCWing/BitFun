@@ -532,6 +532,103 @@ describe('handleDialogTurnFailed', () => {
   });
 });
 
+async function startStreamingMachine(): Promise<void> {
+  await stateMachineManager.transition('session-1', SessionExecutionEvent.START, {
+    taskId: 'session-1',
+    dialogTurnId: 'turn-1',
+  });
+}
+
+describe('handleModelRoundStart', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    resetFlowChatStore();
+    stateMachineManager.clear();
+  });
+
+  afterEach(() => {
+    resetFlowChatStore();
+    stateMachineManager.clear();
+  });
+
+  it('creates a model round even when model identity fields are absent (external ACP agents)', async () => {
+    createSessionWithTurn({
+      id: 'turn-1',
+      sessionId: 'session-1',
+      userMessage: {
+        id: 'user-1',
+        content: 'Initial request',
+        timestamp: 900,
+      },
+      modelRounds: [],
+      status: 'processing',
+      startTime: 900,
+    });
+    await startStreamingMachine();
+    const context = createFlowChatContext();
+
+    expect(() =>
+      __test_only__.handleModelRoundStart(context, {
+        sessionId: 'session-1',
+        turnId: 'turn-1',
+        roundId: 'round-1',
+        roundIndex: 0,
+      } as any),
+    ).not.toThrow();
+
+    const turn = FlowChatStore.getInstance()
+      .getState()
+      .sessions.get('session-1')
+      ?.dialogTurns.find(item => item.id === 'turn-1');
+
+    expect(turn?.modelRounds).toHaveLength(1);
+    expect(turn?.modelRounds[0]).toMatchObject({
+      id: 'round-1',
+      index: 0,
+      isStreaming: true,
+    });
+    expect(turn?.modelRounds[0]?.modelConfigId).toBeUndefined();
+    expect(turn?.modelRounds[0]?.effectiveModelName).toBeUndefined();
+  });
+
+  it('trims and stores model identity fields when present', async () => {
+    createSessionWithTurn({
+      id: 'turn-1',
+      sessionId: 'session-1',
+      userMessage: {
+        id: 'user-1',
+        content: 'Initial request',
+        timestamp: 900,
+      },
+      modelRounds: [],
+      status: 'processing',
+      startTime: 900,
+    });
+    await startStreamingMachine();
+    const context = createFlowChatContext();
+
+    __test_only__.handleModelRoundStart(context, {
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      roundId: 'round-1',
+      roundIndex: 0,
+      modelConfigId: '  config-1  ',
+      effectiveModelName: '  gpt-4o  ',
+    } as any);
+
+    const turn = FlowChatStore.getInstance()
+      .getState()
+      .sessions.get('session-1')
+      ?.dialogTurns.find(item => item.id === 'turn-1');
+
+    expect(turn?.modelRounds).toHaveLength(1);
+    expect(turn?.modelRounds[0]).toMatchObject({
+      modelConfigId: 'config-1',
+      effectiveModelName: 'gpt-4o',
+    });
+  });
+});
+
 function resetFlowChatStore(): void {
   FlowChatStore.getInstance().setState(() => ({
     sessions: new Map(),

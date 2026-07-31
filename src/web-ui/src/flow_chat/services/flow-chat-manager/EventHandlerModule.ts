@@ -160,6 +160,7 @@ export const __test_only__ = {
   handleDialogTurnStarted,
   handleDialogTurnFailed,
   handleSubagentSessionLinked,
+  handleModelRoundStart,
 };
 
 function shouldMarkUnreadCompletion(sessionId: string): boolean {
@@ -1906,9 +1907,6 @@ function handleModelRoundStart(context: FlowChatContext, event: ModelRoundStarte
     event.renderHints?.disableExploreGrouping === true ||
     event.metadata?.disableExploreGrouping === true ||
     event.disableExploreGrouping === true;
-  const modelConfigId = event.modelConfigId.trim();
-  const effectiveModelName = event.effectiveModelName.trim();
-
   const modelRound: ModelRound = {
     id: roundId,
     index: roundIndex || 0,
@@ -1918,8 +1916,9 @@ function handleModelRoundStart(context: FlowChatContext, event: ModelRoundStarte
     isComplete: false,
     status: 'streaming',
     startTime: Date.now(),
-    modelConfigId,
-    effectiveModelName,
+    // Model identity is optional: external ACP agents carry none.
+    ...(event.modelConfigId ? { modelConfigId: event.modelConfigId.trim() } : {}),
+    ...(event.effectiveModelName ? { effectiveModelName: event.effectiveModelName.trim() } : {}),
     ...(disableExploreGrouping
       ? { renderHints: { disableExploreGrouping: true } }
       : {}),
@@ -1931,12 +1930,12 @@ function handleModelRoundStart(context: FlowChatContext, event: ModelRoundStarte
   const linkedParentInfo =
     findSubagentParentInfoByRound(sessionId, turnId) ||
     getLinkedSubagentParentInfo(sessionId);
-  if (linkedParentInfo && effectiveModelName) {
+  if (linkedParentInfo && modelRound.effectiveModelName) {
     updateSubagentParentTaskModel(
       context,
       linkedParentInfo,
-      modelConfigId,
-      effectiveModelName,
+      modelRound.modelConfigId,
+      modelRound.effectiveModelName,
     );
   }
   
