@@ -24,7 +24,20 @@ vi.mock('@/component-library', () => ({
 
 vi.mock('@/infrastructure/config/services/ConfigManager', () => ({
   configManager: {
-    getConfigs: vi.fn(async () => ({})),
+    getConfigs: vi.fn(async () => ({
+      'ai.models': [
+        {
+          id: 'model-a',
+          name: 'Synced provider',
+          model_name: 'friendly-model-a',
+          provider: 'openai',
+          base_url: 'https://example.test/v1',
+          enabled: true,
+          category: 'text',
+          capabilities: ['text_chat'],
+        },
+      ],
+    })),
     onConfigChange: vi.fn(() => () => undefined),
     setConfig: vi.fn(async () => undefined),
   },
@@ -99,7 +112,7 @@ describe('ModelSelector external transport reuse', () => {
     const trigger = container.querySelector<HTMLButtonElement>(
       '[data-testid="chat-model-selector-btn"]',
     );
-    expect(trigger?.textContent).toContain('model-a');
+    expect(trigger?.textContent).toContain('friendly-model-a');
     await act(async () => {
       trigger?.click();
     });

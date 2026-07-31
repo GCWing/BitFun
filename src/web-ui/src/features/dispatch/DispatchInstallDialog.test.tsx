@@ -516,7 +516,7 @@ describe('DispatchInstallDialog model configuration sync', () => {
     container.remove();
   });
 
-  it('offers the sync only while the target CLI answers without a usable model', async () => {
+  it('keeps model sync available after the target reports a usable model', async () => {
     await mount();
     expect(syncButton()).toBeDefined();
 
@@ -536,7 +536,7 @@ describe('DispatchInstallDialog model configuration sync', () => {
     expect(mocks.syncModelConfig).toHaveBeenCalledWith('ssh-1');
     // The sync re-probes so the model check reflects the target, not the write.
     expect(mocks.probeTarget.mock.calls.length).toBeGreaterThan(probesBeforeSync);
-    expect(syncButton()).toBeUndefined();
+    expect(syncButton()).toBeDefined();
   });
 
   it('does not write the credential-bearing config when the confirmation is declined', async () => {

@@ -1493,7 +1493,7 @@
     "modelAutomatic": "target default",
     "modelMissing": "No usable model is configured on the target",
     "syncModelRequired": "Sync model configuration",
-    "syncModelDescription": "Copy this device's model configuration (including API credentials) to the target.",
+    "syncModelDescription": "Replace the target's model catalog and defaults with this device's configuration, including API credentials.",
     "syncModelConfirmTitle": "Sync model configuration to this target?",
     "syncModelConfirmMessage": "This device's model catalog and default model selections, including API credentials, will be written to the target user's BitFun config file with owner-only permissions.",
     "syncModelConfirm": "Sync",

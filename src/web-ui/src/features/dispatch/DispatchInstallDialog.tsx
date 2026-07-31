@@ -725,7 +725,7 @@ export const DispatchInstallDialog: React.FC<DispatchInstallDialogProps> = ({
             </section>
           ) : null}
 
-          {target?.kind === 'ssh' && probe?.protocol && !modelReady ? (
+          {target?.kind === 'ssh' && probe?.protocol ? (
             <section className="dispatch-install-dialog__section">
               <div className="dispatch-install-dialog__section-header">
                 <h3 className="dispatch-install-dialog__section-title">

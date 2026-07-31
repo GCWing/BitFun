@@ -425,14 +425,33 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
       externalSelection.defaultModelId,
       externalSelection.selectedModelId,
     ].filter((model): model is string => !!model?.trim())))
-      .map(model => ({
-        id: model,
-        configName: model,
-        modelName: model,
-        providerName: externalSelection.providerLabel,
-        provider: 'external',
-      }));
-  }, [externalSelection]);
+      .map(modelId => {
+        // A synced target reports stable config ids because those are what the
+        // worker must execute. Reuse the controller catalog for presentation
+        // so generated ids never leak into the normal model-picker UI.
+        const localModel = allModels.find(model => model.id === modelId);
+        return localModel
+          ? {
+              id: modelId,
+              configName: localModel.name,
+              modelName: localModel.model_name,
+              providerName: getProviderDisplayName(localModel),
+              provider: localModel.provider,
+              contextWindow: localModel.context_window,
+              enableThinking: isReasoningVisiblyEnabled(
+                getEffectiveReasoningMode(localModel),
+              ),
+              reasoningEffort: localModel.reasoning_effort,
+            }
+          : {
+              id: modelId,
+              configName: modelId,
+              modelName: modelId,
+              providerName: externalSelection.providerLabel,
+              provider: 'external',
+            };
+      });
+  }, [allModels, externalSelection]);
 
   const externalCurrentModelId =
     externalSelection?.selectedModelId?.trim()

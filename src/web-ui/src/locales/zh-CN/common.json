@@ -1493,7 +1493,7 @@
     "modelAutomatic": "目标默认模型",
     "modelMissing": "目标上没有可用的模型配置",
     "syncModelRequired": "同步模型配置",
-    "syncModelDescription": "将本机的模型配置（含 API 密钥）复制到目标。",
+    "syncModelDescription": "使用本机模型配置（含 API 密钥）替换目标端的模型列表与默认选择。",
     "syncModelConfirmTitle": "同步模型配置到此目标？",
     "syncModelConfirmMessage": "本机的模型列表与默认模型选择（包含 API 密钥）将写入目标用户的 BitFun 配置文件，且仅目标用户可读。",
     "syncModelConfirm": "同步",
