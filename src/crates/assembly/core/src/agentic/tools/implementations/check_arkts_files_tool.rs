@@ -1,19 +1,16 @@
 //! CheckArktsFiles tool — static ArkTS syntax check on .ets files.
 //!
-//! Calls the "check" MCP tool on the `deveco-mcp` server (configured in app
-//! settings) via BitFun's existing `MCPServerManager` infrastructure.
+//! Calls the "check" MCP tool on the `deveco-mcp` server via the shared
+//! `deveco_mcp_check` helper, which auto-provisions and (re)starts the
+//! `devecocli serve mcp` server on demand when it is not connected.
 
 use crate::agentic::tools::framework::{
     Tool, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
 };
-use crate::service::mcp::get_global_mcp_service;
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
-use bitfun_services_integrations::mcp::protocol::MCPToolResultContent;
 use serde_json::{json, Value};
 use std::path::Path;
-
-const MCP_SERVER_ID: &str = "deveco-mcp";
 
 /// CheckArktsFiles tool — static ArkTS syntax check on .ets files.
 pub struct CheckArktsFilesTool;
@@ -40,7 +37,7 @@ impl Tool for CheckArktsFilesTool {
         Ok(r#"Run static ArkTS syntax check (ArkTS-Check) on .ets files via devecocli MCP.
 
 Use before a full build for fast feedback on syntax and type errors.
-Requires the `deveco-mcp` MCP server configured in app settings with `devecocli serve mcp`.
+The `deveco-mcp` MCP server (`devecocli serve mcp`) is auto-provisioned and started on demand when not already connected, so no manual MCP configuration is required.
 
 Provide absolute or workspace-relative paths to .ets files."#.to_string())
     }
@@ -105,7 +102,7 @@ Provide absolute or workspace-relative paths to .ets files."#.to_string())
     async fn call_impl(
         &self,
         input: &Value,
-        _context: &ToolUseContext,
+        context: &ToolUseContext,
     ) -> BitFunResult<Vec<ToolResult>> {
         let all_files: Vec<String> = input
             .get("files")
@@ -134,7 +131,7 @@ Provide absolute or workspace-relative paths to .ets files."#.to_string())
             ));
         }
 
-        let result = call_mcp_check(&ets_files).await?;
+        let result = super::deveco_mcp_check::call_deveco_mcp_check(&ets_files, context).await?;
 
         Ok(vec![ToolResult::Result {
             data: json!({
@@ -145,51 +142,4 @@ Provide absolute or workspace-relative paths to .ets files."#.to_string())
             image_attachments: None,
         }])
     }
-}
-
-/// Get the `deveco-mcp` connection from the global MCP service and call the
-/// "check" tool. The server must be configured in app settings.
-async fn call_mcp_check(files: &[String]) -> BitFunResult<String> {
-    let mcp_service = get_global_mcp_service().ok_or_else(|| {
-        BitFunError::tool("MCP service is not initialized".to_string())
-    })?;
-
-    let connection = mcp_service
-        .server_manager()
-        .get_connection(MCP_SERVER_ID)
-        .await
-        .ok_or_else(|| {
-            BitFunError::tool(format!(
-                "MCP server '{}' is not connected. Configure it in app settings with command `devecocli` and args `[\"serve\", \"mcp\"]`.",
-                MCP_SERVER_ID
-            ))
-        })?;
-
-    let result = connection
-        .call_tool("check", Some(json!({ "files": files })))
-        .await
-        .map_err(|e| BitFunError::tool(format!("MCP check call failed: {}", e)))?;
-
-    if result.is_error {
-        return Err(BitFunError::tool(extract_text(&result)));
-    }
-
-    Ok(extract_text(&result))
-}
-
-/// Extract concatenated text content from an MCP tool result.
-fn extract_text(result: &bitfun_services_integrations::mcp::protocol::MCPToolResult) -> String {
-    if let Some(content) = &result.content {
-        let texts: Vec<String> = content
-            .iter()
-            .filter_map(|c| match c {
-                MCPToolResultContent::Text { text } => Some(text.clone()),
-                _ => None,
-            })
-            .collect();
-        if !texts.is_empty() {
-            return texts.join("\n");
-        }
-    }
-    serde_json::to_string_pretty(result).unwrap_or_default()
 }

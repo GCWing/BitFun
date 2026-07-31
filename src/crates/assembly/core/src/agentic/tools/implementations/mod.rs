@@ -22,6 +22,7 @@ pub mod control_hub_tool;
 pub mod create_plan_tool;
 pub mod cron_tool;
 pub mod devecocli_run;
+pub mod deveco_mcp_check;
 pub mod delete_file_tool;
 pub mod exec_command;
 pub mod file_edit_tool;
