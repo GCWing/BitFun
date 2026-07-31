@@ -112,6 +112,7 @@ file-watch = ["notify"]
 # repository; see docs/development/loopx-issue-fix-integration.md.
 loopx-issue-fix = [
     "async-trait",
+    "bitfun-runtime-ports",
     "review-platform",
     "thiserror",
     "which",

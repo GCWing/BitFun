@@ -8,6 +8,7 @@
 
 pub mod orchestrator;
 pub mod repository_context;
+pub mod thread_goal_bridge;
 
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
