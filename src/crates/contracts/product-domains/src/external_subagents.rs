@@ -229,6 +229,43 @@ fn is_default_model_request(request: &ExternalSubagentModelRequest) -> bool {
     matches!(request, ExternalSubagentModelRequest::Default)
 }
 
+/// Optional model-profile intent declared by an external subagent source.
+///
+/// A named variant remains opaque because its provider-specific options are
+/// owned by the source ecosystem. Reasoning effort stays separate for display
+/// and decision identity; both profiles require an explicit existing-config
+/// binding rather than a request-time override or assembly-layer inference.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(
+    tag = "kind",
+    rename_all = "snake_case",
+    rename_all_fields = "camelCase",
+    deny_unknown_fields
+)]
+pub enum ExternalSubagentModelProfileRequest {
+    NamedVariant { name: String },
+    ReasoningEffort { value: String },
+}
+
+impl ExternalSubagentModelProfileRequest {
+    pub fn validate(&self) -> Result<(), ExternalSourceContractError> {
+        let value = match self {
+            Self::NamedVariant { name } => name,
+            Self::ReasoningEffort { value } => value,
+        };
+        if value.is_empty()
+            || value.len() > MAX_LABEL_LENGTH
+            || value.trim() != value
+            || value.chars().any(char::is_control)
+        {
+            return Err(ExternalSourceContractError::InvalidText(
+                "external subagent model profile request",
+            ));
+        }
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(
     tag = "kind",
@@ -263,6 +300,8 @@ fn is_default_model_binding_method(method: &ExternalSubagentModelBindingMethod) 
 pub struct ExternalSubagentModelBindingOption {
     pub target: ExternalSubagentModelBindingTarget,
     pub effective_model_label: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub configured_reasoning_effort: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -270,6 +309,8 @@ pub struct ExternalSubagentModelBindingOption {
 pub struct ExternalSubagentModelBindingGroup {
     pub binding_key: String,
     pub request: ExternalSubagentModelRequest,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub profile_request: Option<ExternalSubagentModelProfileRequest>,
     pub scope: ExternalSourceScope,
     pub method: ExternalSubagentModelBindingMethod,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -282,17 +323,11 @@ pub struct ExternalSubagentModelBindingGroup {
 pub fn external_subagent_model_binding_key(
     ecosystem_id: &EcosystemId,
     request: &ExternalSubagentModelRequest,
+    profile_request: Option<&ExternalSubagentModelProfileRequest>,
     execution_domain_id: &str,
     scope: ExternalSourceScope,
     workspace_scope: &str,
 ) -> Option<String> {
-    let ExternalSubagentModelRequest::Reference {
-        provider_hint,
-        model_name,
-    } = request
-    else {
-        return None;
-    };
     let scope_identity = match scope {
         ExternalSourceScope::UserGlobal | ExternalSourceScope::RemoteUser => "",
         _ => workspace_scope,
@@ -304,16 +339,66 @@ pub fn external_subagent_model_binding_key(
         ExternalSourceScope::RemoteUser => "remote_user",
         ExternalSourceScope::RemoteProject => "remote_project",
     };
+
+    // Keep the original key byte-for-byte when no profile is requested so
+    // existing user decisions remain valid after this additive change.
+    if profile_request.is_none() {
+        let ExternalSubagentModelRequest::Reference {
+            provider_hint,
+            model_name,
+        } = request
+        else {
+            return None;
+        };
+        return Some(format!(
+            "external_subagent_model_binding:{}",
+            stable_digest([
+                ecosystem_id.as_str(),
+                provider_hint
+                    .as_deref()
+                    .unwrap_or_default()
+                    .to_ascii_lowercase()
+                    .as_str(),
+                model_name,
+                execution_domain_id,
+                scope_label,
+                scope_identity,
+            ])
+        ));
+    }
+
+    let (model_kind, provider_identity, model_name_identity) = match request {
+        ExternalSubagentModelRequest::Default => ("default", String::new(), ""),
+        ExternalSubagentModelRequest::Inherit => ("inherit", String::new(), ""),
+        ExternalSubagentModelRequest::Reference {
+            provider_hint,
+            model_name,
+        } => (
+            "reference",
+            provider_hint
+                .as_deref()
+                .unwrap_or_default()
+                .to_ascii_lowercase(),
+            model_name.as_str(),
+        ),
+    };
+    let (profile_kind, profile_value) = match profile_request.expect("checked above") {
+        ExternalSubagentModelProfileRequest::NamedVariant { name } => {
+            ("named_variant", name.clone())
+        }
+        ExternalSubagentModelProfileRequest::ReasoningEffort { value } => {
+            ("reasoning_effort", value.clone())
+        }
+    };
     Some(format!(
         "external_subagent_model_binding:{}",
         stable_digest([
             ecosystem_id.as_str(),
-            provider_hint
-                .as_deref()
-                .unwrap_or_default()
-                .to_ascii_lowercase()
-                .as_str(),
-            model_name,
+            model_kind,
+            provider_identity.as_str(),
+            model_name_identity,
+            profile_kind,
+            profile_value.as_str(),
             execution_domain_id,
             scope_label,
             scope_identity,
@@ -360,6 +445,7 @@ pub struct ExternalSubagentDefinition {
     pub disabled: bool,
     pub hidden: bool,
     pub requested_model: ExternalSubagentModelRequest,
+    pub requested_model_profile: Option<ExternalSubagentModelProfileRequest>,
     pub requested_tools: ExternalSubagentToolRequest,
     /// Provider-neutral restrictions whose ask/deny rules must be enforceable
     /// by the selected tools' permission intents. Providers must block a
@@ -384,6 +470,7 @@ impl fmt::Debug for ExternalSubagentDefinition {
             .field("disabled", &self.disabled)
             .field("hidden", &self.hidden)
             .field("requested_model", &self.requested_model)
+            .field("requested_model_profile", &self.requested_model_profile)
             .field("requested_tools", &self.requested_tools)
             .field(
                 "permission_constraint_count",
@@ -455,6 +542,9 @@ impl ExternalSubagentDefinition {
                     "external subagent model request",
                 ));
             }
+        }
+        if let Some(profile_request) = &self.requested_model_profile {
+            profile_request.validate()?;
         }
         if self.requested_tools.selectors.len() > MAX_TOOL_SELECTORS {
             return Err(ExternalSourceContractError::InvalidText(
@@ -645,6 +735,8 @@ pub struct ExternalSubagentSummary {
     pub source_count: usize,
     #[serde(default, skip_serializing_if = "is_default_model_request")]
     pub requested_model: ExternalSubagentModelRequest,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub requested_model_profile: Option<ExternalSubagentModelProfileRequest>,
     #[serde(default, skip_serializing_if = "is_default_model_binding_method")]
     pub model_binding_method: ExternalSubagentModelBindingMethod,
     #[serde(default, skip_serializing_if = "Option::is_none")]

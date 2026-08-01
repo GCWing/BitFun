@@ -4,7 +4,8 @@ use bitfun_product_domains::external_sources::{
 };
 use bitfun_product_domains::external_subagents::{
     ExternalSubagentCompatibilityState, ExternalSubagentDiscoveryInput, ExternalSubagentMode,
-    ExternalSubagentModelRequest, ExternalSubagentSourceProvider,
+    ExternalSubagentModelProfileRequest, ExternalSubagentModelRequest,
+    ExternalSubagentSourceProvider,
 };
 use bitfun_product_domains::tool_permissions::{
     PermissionEffect, PermissionEvaluator, PermissionRule,
@@ -119,6 +120,203 @@ fn model_named_inherit_remains_an_opaque_opencode_reference() {
             model_name: "inherit".to_string(),
         }
     );
+}
+
+#[test]
+fn named_variant_is_preserved_as_a_profile_instead_of_guessed_as_reasoning_effort() {
+    let temp = TempDir::new().unwrap();
+    let workspace = temp.path().join("workspace");
+    fs::create_dir_all(workspace.join(".git")).unwrap();
+    fs::create_dir_all(temp.path().join("user")).unwrap();
+    fs::write(
+        temp.path().join("user/opencode.json"),
+        r#"{
+          "agent": {
+            "review": {
+              "description": "Variant reviewer",
+              "prompt": "Review carefully",
+              "mode": "subagent",
+              "model": "openrouter/vendor/model",
+              "variant": "high"
+            }
+          }
+        }"#,
+    )
+    .unwrap();
+
+    let definition =
+        &discover(&provider(&temp, &workspace), workspace, BTreeSet::new()).definitions[0];
+    assert_eq!(
+        definition.requested_model_profile,
+        Some(ExternalSubagentModelProfileRequest::NamedVariant {
+            name: "high".to_string(),
+        })
+    );
+    assert!(!definition
+        .diagnostic_codes
+        .contains(&"opencode_agent_variant_not_imported".to_string()));
+    assert!(
+        !matches!(
+            definition.compatibility,
+            ExternalSubagentCompatibilityState::Blocked
+                | ExternalSubagentCompatibilityState::Invalid
+        ),
+        "variant support must not block an otherwise usable agent: {:?}",
+        definition.diagnostic_codes
+    );
+}
+
+#[test]
+fn named_variant_without_an_agent_model_remains_inert_like_opencode() {
+    let temp = TempDir::new().unwrap();
+    let workspace = temp.path().join("workspace");
+    fs::create_dir_all(workspace.join(".git")).unwrap();
+    fs::create_dir_all(temp.path().join("user")).unwrap();
+    fs::write(
+        temp.path().join("user/opencode.json"),
+        r#"{
+          "agent": {
+            "review": {
+              "description": "Default-model reviewer",
+              "prompt": "Review carefully",
+              "mode": "subagent",
+              "variant": "high"
+            }
+          }
+        }"#,
+    )
+    .unwrap();
+
+    let definition =
+        &discover(&provider(&temp, &workspace), workspace, BTreeSet::new()).definitions[0];
+    assert_eq!(
+        definition.requested_model,
+        ExternalSubagentModelRequest::Default
+    );
+    assert_eq!(definition.requested_model_profile, None);
+    assert!(!matches!(
+        definition.compatibility,
+        ExternalSubagentCompatibilityState::Blocked | ExternalSubagentCompatibilityState::Invalid
+    ));
+    assert!(!definition
+        .diagnostic_codes
+        .iter()
+        .any(|code| code.contains("variant")));
+}
+
+#[test]
+fn empty_or_whitespace_variant_without_an_agent_model_is_also_inert() {
+    let temp = TempDir::new().unwrap();
+    let workspace = temp.path().join("workspace");
+    fs::create_dir_all(workspace.join(".git")).unwrap();
+    fs::create_dir_all(temp.path().join("user")).unwrap();
+    fs::write(
+        temp.path().join("user/opencode.json"),
+        r#"{
+          "agent": {
+            "empty": {
+              "prompt": "Review carefully",
+              "mode": "subagent",
+              "variant": ""
+            },
+            "spaced": {
+              "prompt": "Review carefully",
+              "mode": "subagent",
+              "variant": " custom "
+            }
+          }
+        }"#,
+    )
+    .unwrap();
+
+    let snapshot = discover(&provider(&temp, &workspace), workspace, BTreeSet::new());
+    assert_eq!(snapshot.definitions.len(), 2);
+    assert!(snapshot.definitions.iter().all(|definition| {
+        definition.requested_model_profile.is_none()
+            && !matches!(
+                definition.compatibility,
+                ExternalSubagentCompatibilityState::Blocked
+                    | ExternalSubagentCompatibilityState::Invalid
+            )
+            && !definition
+                .diagnostic_codes
+                .iter()
+                .any(|code| code.contains("variant"))
+    }));
+}
+
+#[test]
+fn named_variant_with_surrounding_whitespace_is_not_rewritten() {
+    let temp = TempDir::new().unwrap();
+    let workspace = temp.path().join("workspace");
+    fs::create_dir_all(workspace.join(".git")).unwrap();
+    fs::create_dir_all(temp.path().join("user")).unwrap();
+    fs::write(
+        temp.path().join("user/opencode.json"),
+        r#"{
+          "agent": {
+            "review": {
+              "prompt": "Review carefully",
+              "mode": "subagent",
+              "model": "openrouter/vendor/model",
+              "variant": " high "
+            }
+          }
+        }"#,
+    )
+    .unwrap();
+
+    let definition =
+        &discover(&provider(&temp, &workspace), workspace, BTreeSet::new()).definitions[0];
+    assert_eq!(definition.requested_model_profile, None);
+    assert_eq!(
+        definition.compatibility,
+        ExternalSubagentCompatibilityState::Invalid
+    );
+    assert!(definition
+        .diagnostic_codes
+        .contains(&"opencode_agent_variant_invalid".to_string()));
+}
+
+#[test]
+fn invalid_variant_text_isolated_to_its_agent_instead_of_failing_discovery() {
+    let temp = TempDir::new().unwrap();
+    let workspace = temp.path().join("workspace");
+    fs::create_dir_all(workspace.join(".git")).unwrap();
+    fs::create_dir_all(temp.path().join("user")).unwrap();
+    fs::write(
+        temp.path().join("user/opencode.json"),
+        r#"{
+          "agent": {
+            "bad": {
+              "prompt": "Review carefully",
+              "mode": "subagent",
+              "model": "openrouter/vendor/model",
+              "variant": "bad\u0001value"
+            },
+            "good": {
+              "prompt": "Review carefully",
+              "mode": "subagent"
+            }
+          }
+        }"#,
+    )
+    .unwrap();
+
+    let snapshot = discover(&provider(&temp, &workspace), workspace, BTreeSet::new());
+    assert_eq!(snapshot.definitions.len(), 2);
+    let bad = snapshot
+        .definitions
+        .iter()
+        .find(|definition| definition.logical_id == "bad")
+        .unwrap();
+    assert_eq!(
+        bad.compatibility,
+        ExternalSubagentCompatibilityState::Invalid
+    );
+    assert!(bad
+        .diagnostic_codes
+        .contains(&"opencode_agent_variant_invalid".to_string()));
 }
 
 #[test]

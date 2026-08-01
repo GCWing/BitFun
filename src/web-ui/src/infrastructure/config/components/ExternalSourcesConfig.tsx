@@ -36,6 +36,7 @@ import {
   type ExternalSubagentModelBindingGroup,
   type ExternalSubagentModelBindingMethod,
   type ExternalSubagentModelBindingTarget,
+  type ExternalSubagentModelProfileRequest,
   type ExternalSubagentModelRequest,
   type ExternalSubagentSummary,
   type ExternalToolCatalogEntry,
@@ -190,6 +191,17 @@ function externalAgentRequestedModelLabel(
   return request.providerHint
     ? `${request.providerHint}/${request.modelName}`
     : request.modelName;
+}
+
+function externalAgentRequestedProfileLabel(
+  request: ExternalSubagentModelProfileRequest | undefined,
+  t: TFunction,
+): string | undefined {
+  if (!request) return undefined;
+  if (request.kind === 'named_variant') {
+    return t('agentModelBindings.profile.namedVariant', { name: request.name });
+  }
+  return t('agentModelBindings.profile.reasoningEffort', { value: request.value });
 }
 
 function externalAgentBindingTargetKey(target: ExternalSubagentModelBindingTarget): string {
@@ -2334,17 +2346,26 @@ const ExternalSourcesConfig: React.FC = () => {
                     : 'source';
                   const selectedUnavailable = group.selectedTarget
                     && !targetsByKey.has(selectedKey);
-                  const canEdit = group.method !== 'exact';
+                  const canEdit = group.method === 'binding_required'
+                    || group.method === 'explicit'
+                    || group.method === 'binding_unavailable';
                   const effective = externalAgentModelLabel(group.effectiveModelLabel, t);
+                  const requestedProfile = externalAgentRequestedProfileLabel(
+                    group.profileRequest,
+                    t,
+                  );
                   return (
                     <ConfigPageRow
                       key={group.bindingKey}
                       label={externalAgentRequestedModelLabel(group.request, t)}
-                      description={`${t('agentModelBindings.affectedAgents', {
-                        count: group.affectedCandidateIds.length,
-                      })} · ${t(`agentModelBindings.method.${group.method}`)} · ${t(
-                        'agentModelBindings.effectiveModel', { model: effective },
-                      )}`}
+                      description={[
+                        t('agentModelBindings.affectedAgents', {
+                          count: group.affectedCandidateIds.length,
+                        }),
+                        requestedProfile,
+                        t(`agentModelBindings.method.${group.method}`),
+                        t('agentModelBindings.effectiveModel', { model: effective }),
+                      ].filter(Boolean).join(' · ')}
                       align="center"
                     >
                       {canEdit ? (
@@ -2359,12 +2380,21 @@ const ExternalSourcesConfig: React.FC = () => {
                           options={[
                             {
                               value: 'source',
-                              label: t('agentModelBindings.target.source'),
+                              label: t(group.profileRequest
+                                ? 'agentModelBindings.target.unbound'
+                                : 'agentModelBindings.target.source'),
                             },
                             ...targetOptions.map((option) => ({
                               value: externalAgentBindingTargetKey(option.target),
                               label: option.effectiveModelLabel,
-                              description: t(`agentModelBindings.target.${option.target.kind}`),
+                              description: [
+                                t(`agentModelBindings.target.${option.target.kind}`),
+                                option.configuredReasoningEffort
+                                  ? t('agentModelBindings.configuredEffort', {
+                                      value: option.configuredReasoningEffort,
+                                    })
+                                  : undefined,
+                              ].filter(Boolean).join(' · '),
                             })),
                             ...(selectedUnavailable && group.selectedTarget ? [{
                               value: selectedKey,
@@ -2469,6 +2499,14 @@ const ExternalSourcesConfig: React.FC = () => {
                             <span>{t('agents.requestedModel', {
                               model: externalAgentRequestedModelLabel(agent.requestedModel, t),
                             })}</span>
+                            {agent.requestedModelProfile ? (
+                              <span>{t('agents.requestedModelProfile', {
+                                profile: externalAgentRequestedProfileLabel(
+                                  agent.requestedModelProfile,
+                                  t,
+                                ),
+                              })}</span>
+                            ) : null}
                             <span>{t('agents.modelBindingMethod', {
                               method: t(`agentModelBindings.method.${agent.modelBindingMethod}`),
                             })}</span>

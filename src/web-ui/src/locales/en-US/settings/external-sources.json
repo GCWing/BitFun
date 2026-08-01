@@ -252,6 +252,7 @@
     "modelUnavailable": "Unavailable",
     "modelResolvedFromParentAtTaskStart": "Resolved from the parent session when the task starts",
     "requestedModel": "Requested by source: {{model}}",
+    "requestedModelProfile": "Requested profile: {{profile}}",
     "modelBindingMethod": "Resolution: {{method}}",
     "model": "Model: {{model}}",
     "tools": "Tools: {{tools}}",
@@ -266,6 +267,7 @@
     "title": "Agent model bindings",
     "affectedAgents": "Affects {{count}} agents",
     "effectiveModel": "Uses {{model}}",
+    "configuredEffort": "Configured effort: {{value}}",
     "selectLabel": "Choose a BitFun model for {{request}}",
     "automatic": "Matched automatically",
     "targetUnavailable": "Unavailable: {{target}}",
@@ -273,8 +275,13 @@
       "default": "BitFun default",
       "inherit": "Parent session model"
     },
+    "profile": {
+      "namedVariant": "Named variant {{name}}",
+      "reasoningEffort": "Reasoning effort {{value}}"
+    },
     "target": {
       "source": "Use automatic source matching",
+      "unbound": "No model binding",
       "primary": "Primary model",
       "fast": "Fast model",
       "model": "Configured model"

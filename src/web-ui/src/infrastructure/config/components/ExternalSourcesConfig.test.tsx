@@ -1543,6 +1543,7 @@ describe('ExternalSourcesConfig', () => {
           providerHint: 'anthropic',
           modelName: 'claude-sonnet-4',
         },
+        requestedModelProfile: { kind: 'named_variant', name: 'high' },
         modelBindingMethod: 'binding_required',
         modelBindingKey: 'external_subagent_model_binding:review',
         effectiveToolLabels: ['Read'],
@@ -1560,6 +1561,7 @@ describe('ExternalSourcesConfig', () => {
           providerHint: 'anthropic',
           modelName: 'claude-sonnet-4',
         },
+        profileRequest: { kind: 'named_variant', name: 'high' },
         scope: 'project',
         method: 'binding_required',
         affectedCandidateIds: ['opencode-review', 'claude-review'],
@@ -1567,6 +1569,7 @@ describe('ExternalSourcesConfig', () => {
       subagentModelBindingOptions: [{
         target: { kind: 'primary' },
         effectiveModelLabel: 'GPT-5',
+        configuredReasoningEffort: 'high',
       }, {
         target: { kind: 'fast' },
         effectiveModelLabel: 'GLM-4.5-Air',
@@ -1597,8 +1600,12 @@ describe('ExternalSourcesConfig', () => {
 
     expect(container.textContent).toContain('agentModelBindings.title');
     expect(container.textContent).toContain('anthropic/claude-sonnet-4');
+    expect(container.textContent).toContain(
+      'agentModelBindings.profile.namedVariant:{"name":"high"}',
+    );
     expect(container.textContent).toContain('agentModelBindings.affectedAgents:{"count":2}');
     expect(container.textContent).toContain('agentModelBindings.method.binding_required');
+    expect(container.textContent).toContain('agentModelBindings.target.unbound');
 
     const trigger = container.querySelector<HTMLElement>(
       '[aria-label^="agentModelBindings.selectLabel"]',

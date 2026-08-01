@@ -2118,6 +2118,7 @@ mod tests {
                     "providerHint": "anthropic",
                     "modelName": "claude-sonnet-4"
                 },
+                "requestedModelProfile": { "kind": "named_variant", "name": "high" },
                 "modelBindingMethod": "binding_required",
                 "modelBindingKey": "external_subagent_model_binding:review",
                 "effectiveModelLabel": "fast",
@@ -2135,6 +2136,7 @@ mod tests {
                     "providerHint": "anthropic",
                     "modelName": "claude-sonnet-4"
                 },
+                "profileRequest": { "kind": "named_variant", "name": "high" },
                 "scope": "project",
                 "method": "binding_required",
                 "affectedCandidateIds": [
@@ -2144,7 +2146,8 @@ mod tests {
             }],
             "subagentModelBindingOptions": [{
                 "target": { "kind": "primary" },
-                "effectiveModelLabel": "GPT-5"
+                "effectiveModelLabel": "GPT-5",
+                "configuredReasoningEffort": "high"
             }, {
                 "target": { "kind": "fast" },
                 "effectiveModelLabel": "GLM-4.5-Air"
@@ -2176,6 +2179,8 @@ mod tests {
         assert!(summary.contains("one run only; no follow-up"));
         assert!(summary.contains("Model: fast"));
         assert!(summary.contains("Requested model: anthropic/claude-sonnet-4"));
+        assert!(summary.contains("Requested profile: named variant high"));
+        assert!(summary.contains("configured effort: high"));
         assert!(summary.contains("Resolution: choose a BitFun model"));
         assert!(summary.contains("Affects 2 agents"));
         assert!(summary.contains("/agent bind 1 2"));

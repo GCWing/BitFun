@@ -2291,6 +2291,7 @@ impl ExternalSourcePublicSnapshot {
         }
         for subagent in &mut self.subagents {
             subagent.requested_model = Default::default();
+            subagent.requested_model_profile = None;
             subagent.model_binding_method = Default::default();
             subagent.model_binding_key = None;
             subagent.unavailable_tool_labels.clear();

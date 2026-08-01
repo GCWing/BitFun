@@ -7,8 +7,8 @@ use bitfun_product_domains::external_subagents::{
     external_subagent_candidate_id, ExternalSubagentBehaviorVersion,
     ExternalSubagentCompatibilityState, ExternalSubagentContributionId,
     ExternalSubagentContributionRole, ExternalSubagentDefinition, ExternalSubagentDiscoveryInput,
-    ExternalSubagentLocalId, ExternalSubagentMode, ExternalSubagentModelRequest,
-    ExternalSubagentProvenanceRef, ExternalSubagentProviderIdentity,
+    ExternalSubagentLocalId, ExternalSubagentMode, ExternalSubagentModelProfileRequest,
+    ExternalSubagentModelRequest, ExternalSubagentProvenanceRef, ExternalSubagentProviderIdentity,
     ExternalSubagentProviderSnapshot, ExternalSubagentSourceProvider, ExternalSubagentToolRequest,
     ExternalSubagentToolSelector, SecretText,
 };
@@ -473,7 +473,6 @@ fn materialize_definition(
         ("hooks", "claude_agent_hooks_not_imported"),
         ("memory", "claude_agent_memory_not_imported"),
         ("background", "claude_agent_background_not_imported"),
-        ("effort", "claude_agent_effort_not_imported"),
         ("isolation", "claude_agent_isolation_not_imported"),
         ("initialPrompt", "claude_agent_initial_prompt_not_imported"),
     ] {
@@ -510,6 +509,20 @@ fn materialize_definition(
             ExternalSubagentModelRequest::Default
         }
     };
+    let requested_model_profile = match fields.get("effort") {
+        None => None,
+        Some(Value::String(value))
+            if matches!(value.as_str(), "low" | "medium" | "high" | "xhigh" | "max") =>
+        {
+            Some(ExternalSubagentModelProfileRequest::ReasoningEffort {
+                value: value.clone(),
+            })
+        }
+        Some(_) => {
+            invalid.push("claude_agent_effort_invalid".to_string());
+            None
+        }
+    };
     let requested_tools = tool_request(fields, &mut invalid, &mut degraded);
     let compatibility = if !invalid.is_empty() {
         ExternalSubagentCompatibilityState::Invalid
@@ -536,6 +549,7 @@ fn materialize_definition(
             logical_id.as_str(),
             winner.prompt.as_str(),
             &serde_json::to_string(&requested_model).unwrap_or_default(),
+            &serde_json::to_string(&requested_model_profile).unwrap_or_default(),
             &serde_json::to_string(&requested_tools).unwrap_or_default(),
             &provenance
                 .iter()
@@ -559,6 +573,7 @@ fn materialize_definition(
         disabled: false,
         hidden: false,
         requested_model,
+        requested_model_profile,
         requested_tools,
         permission_constraints: Default::default(),
         compatibility,

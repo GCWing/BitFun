@@ -252,6 +252,7 @@
     "modelUnavailable": "不可用",
     "modelResolvedFromParentAtTaskStart": "任务开始时从父会话解析",
     "requestedModel": "来源声明：{{model}}",
+    "requestedModelProfile": "来源 Profile：{{profile}}",
     "modelBindingMethod": "解析方式：{{method}}",
     "model": "模型：{{model}}",
     "tools": "工具：{{tools}}",
@@ -266,6 +267,7 @@
     "title": "Agent 模型绑定",
     "affectedAgents": "影响 {{count}} 个 Agent",
     "effectiveModel": "实际使用 {{model}}",
+    "configuredEffort": "已配置推理强度：{{value}}",
     "selectLabel": "为 {{request}} 选择 BitFun 模型",
     "automatic": "已自动匹配",
     "targetUnavailable": "已不可用：{{target}}",
@@ -273,8 +275,13 @@
       "default": "BitFun 默认模型",
       "inherit": "父会话模型"
     },
+    "profile": {
+      "namedVariant": "命名变体 {{name}}",
+      "reasoningEffort": "推理强度 {{value}}"
+    },
     "target": {
       "source": "使用来源自动匹配",
+      "unbound": "未绑定模型",
       "primary": "主模型",
       "fast": "快速模型",
       "model": "已配置模型"

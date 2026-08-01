@@ -478,6 +478,15 @@ fn resolved_model_fact(model: &AIModelConfig) -> ResolvedModelFact {
     }
 }
 
+fn configured_reasoning_effort(model: &AIModelConfig) -> Option<String> {
+    model
+        .reasoning_effort
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string)
+}
+
 fn resolve_model_binding_target(
     target: &ExternalSubagentModelBindingTarget,
     ai_config: &AIConfig,
@@ -508,6 +517,11 @@ fn external_model_binding_options(ai_config: &AIConfig) -> Vec<ExternalSubagentM
             options.push(ExternalSubagentModelBindingOption {
                 target,
                 effective_model_label: model.display_label,
+                configured_reasoning_effort: ai_config
+                    .models
+                    .iter()
+                    .find(|candidate| candidate.enabled && candidate.id == model.runtime_id)
+                    .and_then(configured_reasoning_effort),
             });
         }
     }
@@ -520,6 +534,7 @@ fn external_model_binding_options(ai_config: &AIConfig) -> Vec<ExternalSubagentM
                 model_id: model.id.clone(),
             },
             effective_model_label: model_display_label(model),
+            configured_reasoning_effort: configured_reasoning_effort(model),
         })
         .collect::<Vec<_>>();
     let label_counts =
@@ -572,11 +587,7 @@ fn resolve_bitfun_subagent_model(
                 .models
                 .iter()
                 .find(|model| model.enabled && model.id == runtime_id)?;
-            Some(ResolvedModelFact {
-                runtime_id,
-                display_label: model_display_label(model),
-                configuration_fingerprint: model_runtime_binding_fingerprint(model),
-            })
+            Some(resolved_model_fact(model))
         }
     }
 }
@@ -590,83 +601,92 @@ fn resolve_model_request(
     ai_config: Option<&AIConfig>,
     model_bindings: &BTreeMap<String, ExternalSubagentModelBindingTarget>,
 ) -> ResolvedModelRequest {
-    match &definition.requested_model {
-        ExternalSubagentModelRequest::Default => ResolvedModelRequest {
-            model: ai_config
+    let (automatic_model, automatic_method) = match &definition.requested_model {
+        ExternalSubagentModelRequest::Default => (
+            ai_config
                 .and_then(|config| resolve_bitfun_subagent_model(&definition.logical_id, config))
                 .map(ResolvedCandidateModel::Fixed)
                 .unwrap_or(ResolvedCandidateModel::Unavailable),
-            method: ExternalSubagentModelBindingMethod::Default,
-            binding_key: None,
-            selected_target: None,
-        },
-        ExternalSubagentModelRequest::Inherit => ResolvedModelRequest {
-            model: if ai_config.is_some() {
+            ExternalSubagentModelBindingMethod::Default,
+        ),
+        ExternalSubagentModelRequest::Inherit => (
+            if ai_config.is_some() {
                 ResolvedCandidateModel::InheritParent
             } else {
                 ResolvedCandidateModel::Unavailable
             },
-            method: ExternalSubagentModelBindingMethod::Inherit,
-            binding_key: None,
-            selected_target: None,
-        },
+            ExternalSubagentModelBindingMethod::Inherit,
+        ),
         ExternalSubagentModelRequest::Reference {
             provider_hint,
             model_name,
-        } => {
-            let binding_key = ecosystem_id.and_then(|ecosystem_id| {
-                external_subagent_model_binding_key(
-                    ecosystem_id,
-                    &definition.requested_model,
-                    execution_domain_id,
-                    scope,
-                    workspace_scope,
-                )
-            });
-            if let Some(model) = ai_config.and_then(|config| {
-                resolve_exact_external_model(provider_hint.as_deref(), model_name, config)
-            }) {
-                return ResolvedModelRequest {
-                    model: ResolvedCandidateModel::Fixed(model),
-                    method: ExternalSubagentModelBindingMethod::Exact,
-                    binding_key,
-                    selected_target: None,
-                };
-            }
-            let selected_target = binding_key
-                .as_ref()
-                .and_then(|key| model_bindings.get(key))
-                .cloned();
-            match (ai_config, selected_target.clone()) {
-                (Some(config), Some(target)) => match resolve_model_binding_target(&target, config)
-                {
-                    Some(model) => ResolvedModelRequest {
-                        model: ResolvedCandidateModel::Fixed(model),
-                        method: ExternalSubagentModelBindingMethod::Explicit,
-                        binding_key,
-                        selected_target: Some(target),
-                    },
-                    None => ResolvedModelRequest {
-                        model: ResolvedCandidateModel::Unavailable,
-                        method: ExternalSubagentModelBindingMethod::BindingUnavailable,
-                        binding_key,
-                        selected_target: Some(target),
-                    },
-                },
-                (Some(_), None) => ResolvedModelRequest {
-                    model: ResolvedCandidateModel::Unavailable,
-                    method: ExternalSubagentModelBindingMethod::BindingRequired,
-                    binding_key,
-                    selected_target: None,
-                },
-                (None, target) => ResolvedModelRequest {
-                    model: ResolvedCandidateModel::Unavailable,
-                    method: ExternalSubagentModelBindingMethod::BindingUnavailable,
-                    binding_key,
-                    selected_target: target,
-                },
-            }
-        }
+        } => (
+            ai_config
+                .and_then(|config| {
+                    resolve_exact_external_model(provider_hint.as_deref(), model_name, config)
+                })
+                .map(ResolvedCandidateModel::Fixed)
+                .unwrap_or(ResolvedCandidateModel::Unavailable),
+            ExternalSubagentModelBindingMethod::Exact,
+        ),
+    };
+    let binding_key = ecosystem_id.and_then(|ecosystem_id| {
+        external_subagent_model_binding_key(
+            ecosystem_id,
+            &definition.requested_model,
+            definition.requested_model_profile.as_ref(),
+            execution_domain_id,
+            scope,
+            workspace_scope,
+        )
+    });
+    let exact_reference_unavailable =
+        matches!(
+            &definition.requested_model,
+            ExternalSubagentModelRequest::Reference { .. }
+        ) && matches!(&automatic_model, ResolvedCandidateModel::Unavailable);
+    let needs_binding_path =
+        definition.requested_model_profile.is_some() || exact_reference_unavailable;
+    if !needs_binding_path {
+        return ResolvedModelRequest {
+            model: automatic_model,
+            method: automatic_method,
+            binding_key,
+            selected_target: None,
+        };
+    }
+
+    let selected_target = binding_key
+        .as_ref()
+        .and_then(|key| model_bindings.get(key))
+        .cloned();
+    match (ai_config, selected_target.clone()) {
+        (Some(config), Some(target)) => match resolve_model_binding_target(&target, config) {
+            Some(model) => ResolvedModelRequest {
+                model: ResolvedCandidateModel::Fixed(model),
+                method: ExternalSubagentModelBindingMethod::Explicit,
+                binding_key,
+                selected_target: Some(target),
+            },
+            None => ResolvedModelRequest {
+                model: ResolvedCandidateModel::Unavailable,
+                method: ExternalSubagentModelBindingMethod::BindingUnavailable,
+                binding_key,
+                selected_target: Some(target),
+            },
+        },
+        (Some(_), None) => ResolvedModelRequest {
+            model: ResolvedCandidateModel::Unavailable,
+            method: ExternalSubagentModelBindingMethod::BindingRequired,
+            binding_key,
+            selected_target: None,
+        },
+        (None, target) => ResolvedModelRequest {
+            model: ResolvedCandidateModel::Unavailable,
+            method: ExternalSubagentModelBindingMethod::BindingUnavailable,
+            binding_key,
+            selected_target: target,
+        },
     }
 }
 
@@ -873,6 +893,7 @@ fn collect_model_binding_group(
             .or_insert_with(|| ExternalSubagentModelBindingGroup {
                 binding_key: binding_key.clone(),
                 request: candidate.definition.requested_model.clone(),
+                profile_request: candidate.definition.requested_model_profile.clone(),
                 scope: candidate.scope,
                 method: candidate.model_binding_method,
                 selected_target: candidate.selected_model_binding_target.clone(),
@@ -1296,6 +1317,7 @@ fn summary_for(
         source_location_labels: candidate.source_location_labels.clone(),
         source_count: candidate.definition.provenance.len(),
         requested_model: candidate.definition.requested_model.clone(),
+        requested_model_profile: candidate.definition.requested_model_profile.clone(),
         model_binding_method: candidate.model_binding_method,
         model_binding_key: candidate.model_binding_key.clone(),
         effective_model_label: candidate.model.effective_label().map(str::to_string),
@@ -1424,8 +1446,9 @@ mod tests {
         ExternalSubagentBehaviorVersion, ExternalSubagentCandidateId,
         ExternalSubagentContributionId, ExternalSubagentContributionRole, ExternalSubagentLocalId,
         ExternalSubagentMode, ExternalSubagentModelBindingMethod,
-        ExternalSubagentModelBindingTarget, ExternalSubagentProvenanceRef,
-        ExternalSubagentToolRequest, ExternalSubagentToolSelector, SecretText,
+        ExternalSubagentModelBindingTarget, ExternalSubagentModelProfileRequest,
+        ExternalSubagentProvenanceRef, ExternalSubagentToolRequest, ExternalSubagentToolSelector,
+        SecretText,
     };
     use bitfun_product_domains::tool_permissions::{
         PermissionConstraintLayer, PermissionEffect, PermissionRule,
@@ -1455,6 +1478,7 @@ mod tests {
                 disabled: false,
                 hidden: false,
                 requested_model: ExternalSubagentModelRequest::Default,
+                requested_model_profile: None,
                 requested_tools: ExternalSubagentToolRequest {
                     selectors: vec![ExternalSubagentToolSelector {
                         source_name: "read".to_string(),
@@ -1611,6 +1635,160 @@ mod tests {
             .expect("a unique config id has priority");
         assert_eq!(resolved.runtime_id, "review-model");
         assert_eq!(resolved.display_label, "OpenAI · gpt-5");
+    }
+
+    #[test]
+    fn reasoning_effort_profile_requires_explicit_binding_without_guessing_runtime_support() {
+        let mut definition_snapshot = snapshot("behavior-v1", "catalog-v1");
+        definition_snapshot.definitions[0].requested_model =
+            ExternalSubagentModelRequest::Reference {
+                provider_hint: Some("fake".to_string()),
+                model_name: "fast-model".to_string(),
+            };
+        definition_snapshot.definitions[0].requested_model_profile =
+            Some(ExternalSubagentModelProfileRequest::ReasoningEffort {
+                value: "high".to_string(),
+            });
+        let mut product_facts = facts();
+        let model = &mut product_facts.ai_config.as_mut().unwrap().models[0];
+        model.reasoning_effort = Some("high".to_string());
+        model.reasoning_mode = Some(crate::service::config::types::ReasoningMode::Enabled);
+        let empty_set = BTreeSet::new();
+        let empty_decisions = BTreeMap::new();
+        let empty_bindings = BTreeMap::new();
+
+        let unbound = reconcile_with_facts(
+            Some(Path::new("C:/repo")),
+            "local-user",
+            &definition_snapshot,
+            ExternalSubagentDecisions {
+                active_ecosystems: test_active_ecosystems(),
+                approved_envelopes: &empty_set,
+                declined_decisions: &empty_decisions,
+                conflict_choices: &empty_decisions,
+                conflict_lineage_current_keys: &empty_decisions,
+                model_bindings: &empty_bindings,
+            },
+            &product_facts,
+        );
+        assert_eq!(
+            unbound.summaries[0].model_binding_method,
+            ExternalSubagentModelBindingMethod::BindingRequired
+        );
+        assert_eq!(unbound.model_binding_groups.len(), 1);
+        assert_eq!(
+            unbound.model_binding_groups[0].profile_request,
+            definition_snapshot.definitions[0].requested_model_profile
+        );
+        let bindings = BTreeMap::from([(
+            unbound.model_binding_groups[0].binding_key.clone(),
+            ExternalSubagentModelBindingTarget::Fast,
+        )]);
+        let bound = reconcile_with_facts(
+            Some(Path::new("C:/repo")),
+            "local-user",
+            &definition_snapshot,
+            ExternalSubagentDecisions {
+                active_ecosystems: test_active_ecosystems(),
+                approved_envelopes: &empty_set,
+                declined_decisions: &empty_decisions,
+                conflict_choices: &empty_decisions,
+                conflict_lineage_current_keys: &empty_decisions,
+                model_bindings: &bindings,
+            },
+            &product_facts,
+        );
+        assert_eq!(
+            bound.summaries[0].model_binding_method,
+            ExternalSubagentModelBindingMethod::Explicit
+        );
+        assert_eq!(
+            bound.model_binding_options[0]
+                .configured_reasoning_effort
+                .as_deref(),
+            Some("high")
+        );
+
+        definition_snapshot.definitions[0].requested_model = ExternalSubagentModelRequest::Default;
+        let default_unbound = reconcile_with_facts(
+            Some(Path::new("C:/repo")),
+            "local-user",
+            &definition_snapshot,
+            ExternalSubagentDecisions {
+                active_ecosystems: test_active_ecosystems(),
+                approved_envelopes: &empty_set,
+                declined_decisions: &empty_decisions,
+                conflict_choices: &empty_decisions,
+                conflict_lineage_current_keys: &empty_decisions,
+                model_bindings: &empty_bindings,
+            },
+            &product_facts,
+        );
+        assert_eq!(
+            default_unbound.summaries[0].model_binding_method,
+            ExternalSubagentModelBindingMethod::BindingRequired,
+            "a matching configured value is not proof that the selected provider sends it"
+        );
+    }
+
+    #[test]
+    fn named_variant_requires_an_explicit_binding_without_guessing_source_options() {
+        let mut definition_snapshot = snapshot("behavior-v1", "catalog-v1");
+        definition_snapshot.definitions[0].requested_model =
+            ExternalSubagentModelRequest::Reference {
+                provider_hint: Some("fake".to_string()),
+                model_name: "fast-model".to_string(),
+            };
+        definition_snapshot.definitions[0].requested_model_profile =
+            Some(ExternalSubagentModelProfileRequest::NamedVariant {
+                name: "high".to_string(),
+            });
+        let empty_set = BTreeSet::new();
+        let empty_decisions = BTreeMap::new();
+        let empty_bindings = BTreeMap::new();
+        let product_facts = facts();
+
+        let unbound = reconcile_with_facts(
+            Some(Path::new("C:/repo")),
+            "local-user",
+            &definition_snapshot,
+            ExternalSubagentDecisions {
+                active_ecosystems: test_active_ecosystems(),
+                approved_envelopes: &empty_set,
+                declined_decisions: &empty_decisions,
+                conflict_choices: &empty_decisions,
+                conflict_lineage_current_keys: &empty_decisions,
+                model_bindings: &empty_bindings,
+            },
+            &product_facts,
+        );
+        assert_eq!(
+            unbound.summaries[0].model_binding_method,
+            ExternalSubagentModelBindingMethod::BindingRequired
+        );
+
+        let bindings = BTreeMap::from([(
+            unbound.model_binding_groups[0].binding_key.clone(),
+            ExternalSubagentModelBindingTarget::Fast,
+        )]);
+        let bound = reconcile_with_facts(
+            Some(Path::new("C:/repo")),
+            "local-user",
+            &definition_snapshot,
+            ExternalSubagentDecisions {
+                active_ecosystems: test_active_ecosystems(),
+                approved_envelopes: &empty_set,
+                declined_decisions: &empty_decisions,
+                conflict_choices: &empty_decisions,
+                conflict_lineage_current_keys: &empty_decisions,
+                model_bindings: &bindings,
+            },
+            &product_facts,
+        );
+        assert_eq!(
+            bound.summaries[0].model_binding_method,
+            ExternalSubagentModelBindingMethod::Explicit
+        );
     }
 
     #[test]

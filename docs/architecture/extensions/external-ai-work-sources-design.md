@@ -255,7 +255,23 @@ Domain、Assembly 或 UI 中维护跨厂商替换表。生态 adapter 只解释�
 - `Inherit`：仅当来源规范明确声明继承父会话模型时使用，不能由通用模块根据字符串猜测；
 - `Reference`：保留 adapter 已解析的可选 provider 提示和原始模型引用，模型名保持不透明。
 
-`Reference` 的解析顺序固定如下：
+来源还可以在模型请求之外声明一个可选 profile 意图，但只支持两个有明确消费点的形态：
+
+- `NamedVariant`：保留 OpenCode `variant` 的不透明名称。variant 的请求 options 由模型/provider 定义，不能推断成推理强度；
+  OpenCode 自身也只在 Agent 模型与实际模型一致且该模型声明了同名 variant 时应用。BitFun 不导入其 provider 模型目录，
+  因此仅在 Agent 显式声明模型时保留 variant，未声明模型时与 OpenCode 一样视为不生效；保留的 variant 不参与自动匹配，
+  用户必须显式绑定到一个现有 BitFun 模型配置或选择器；
+- `ReasoningEffort`：保留 Claude Code `effort`、Codex 角色 `model_reasoning_effort` 或
+  `default_subagent_reasoning_effort`。它同样要求显式绑定：配置中存在同名 `reasoning_effort` 并不能证明所选 provider、
+  协议和模型会把该值发送到请求，因此 Product Assembly 不建立第二套运行时能力判断。
+
+profile 只是选择现有配置时的来源意图，不是新的模型配置 owner，也不会在调用入口覆盖 `AIModelConfig`。显式绑定表示用户选择
+一个可接受的现有替代配置；Web/TUI 展示来源 profile、实际模型，并在绑定选项中标明目标配置填写的 effort。该字段只是配置值，
+不能被描述成运行时已发送的有效值，也不能把替代配置描述成已原样执行来源 variant。
+没有 profile 的候选保持原有解析顺序和原有 binding key；有 profile 时，profile 身份进入同一工作区/执行域限定的 binding key，
+避免把针对不同 variant 或 effort 的决定错误聚合。
+
+没有 profile 的 `Reference` 解析顺序固定如下；带 profile 的请求直接进入同一显式绑定流程：
 
 1. 在当前执行域的已启用模型中按配置 ID，或按 provider 提示与 `model_name`，查找唯一精确匹配；
 2. 精确匹配不存在时，读取用户对该外部模型引用保存的显式绑定；
@@ -285,8 +301,9 @@ Desktop、交互式 TUI 以及未来通过 Host 能力访问该状态的界面�
 回退到控制端本机的同名模型或本地绑定。
 
 本切片明确不实现：内置厂商/型号别名表、按名称推断能力、模型质量评分、成本优化、自动跨 provider fallback、在线模型目录、
-模型下载或安装、Plugin Host Runtime、LSP，以及通用动态模型路由器。现有 capability 标签只用于验证模型是否具备调用所需
-的已声明功能，不能据此宣称两个模型在质量、成本、隐私或上下文行为上等价。
+模型下载或安装、请求级配置覆盖、通用 options map、temperature/top_p/thinking budget/reasoning summary/verbosity、
+Plugin Host Runtime、LSP，以及通用动态模型路由器。现有 capability 标签只用于验证模型是否具备调用所需的已声明功能，
+不能据此宣称两个模型在质量、成本、隐私或上下文行为上等价。
 
 完成判定使用表驱动契约覆盖 Claude、GPT、GLM、DeepSeek 风格以及未知未来名称，证明生产解析不依赖任何厂商列表；同时
 覆盖无模型默认项、真实 `Inherit`、provider-qualified 与无 provider 精确匹配、歧义拒绝、显式绑定到选择器或具体模型、
@@ -322,11 +339,16 @@ Desktop、交互式 TUI 以及未来通过 Host 能力访问该状态的界面�
 为基线。Codex 字段 allowlist 与覆盖契约审计固定在上游
 [`205d37a20f742b0bf8e191622bd07c43f567ea49`](https://github.com/openai/codex/tree/205d37a20f742b0bf8e191622bd07c43f567ea49)；
 升级 adapter 基线时必须记录新的精确 revision，并重新跑字段分类与覆盖顺序契约测试。
+本节新增的窄 profile 语义另行复核于 OpenCode `dev`
+[`32f278b48f1a495611165d8a9f1ace0b512933e2`](https://github.com/anomalyco/opencode/tree/32f278b48f1a495611165d8a9f1ace0b512933e2)
+的 Agent variant 解析链，以及 Codex `main`
+[`feee0b07c7564455e253312e62e6dba69dc861d3`](https://github.com/openai/codex/tree/feee0b07c7564455e253312e62e6dba69dc861d3)
+的角色级/default Subagent reasoning effort 优先级；这不表示其余字段已完成整版基线升级。
 
 | 能力 | OpenCode | Claude Code | Codex | 当前边界 |
 |---|---|---|---|---|
 | Prompt Command | JSON/JSONC、Markdown 的 prompt-only 与静态本地文本文件子集 | legacy `commands/**/*.md` 的同一静态本地文本文件子集；Skills 仍由 Skill 归属模块处理 | 没有稳定、独立于 Skills 的声明式 Command 来源，因此不伪造 provider | `$ARGUMENTS`/位置参数及模板内 workspace 相对 UTF-8 `@file` 可展开；shell、动态/绝对/越界文件、指定 Agent/模型等整体受限。 |
-| Subagent | 用户/项目声明的安全子集 | 用户/项目 `agents/**/*.md` 的安全子集 | 用户/项目 `[agents]`、角色文件与安全配置层子集 | prompt、描述、`Default`/真实继承/不透明模型引用和可表达工具请求进入既有归属模块；唯一精确匹配或用户显式绑定后才可激活。来源请求、实际模型和解析方式在 Web/TUI 可见。权限、私有 MCP/Hook、推理/并发等没有对应实现的字段会阻止激活。 |
+| Subagent | 用户/项目声明的安全子集 | 用户/项目 `agents/**/*.md` 的安全子集 | 用户/项目 `[agents]`、角色文件与安全配置层子集 | prompt、描述、`Default`/真实继承/不透明模型引用、OpenCode 不透明 variant、Claude/Codex reasoning effort 和可表达工具请求进入既有归属模块；无 profile 的模型引用可唯一精确匹配，variant/effort profile 必须由用户绑定到现有配置后才可激活。来源请求、profile、实际模型和解析方式在 Web/TUI 可见。权限、私有 MCP/Hook、reasoning summary/verbosity、采样、并发等没有对应实现的字段仍会阻止或降级。 |
 | MCP | 用户/显式目录/项目配置的安全子集 | user/project/local 原生层的安全子集 | 用户与项目 `config.toml` 原生层的安全子集 | 支持可表达的 stdio 与 HTTPS Streamable HTTP；发现不启动 Server，首次激活继续经 BitFun MCP 审批。OAuth、remote executor、per-tool policy 等不完整语义明确降级。 |
 | Standalone Tool | 已有单文件 JavaScript 子集 | 无稳定的 runtime-free standalone Tool 来源 | 无稳定的 runtime-free standalone Tool 来源 | TypeScript、package/plugin Tool 与动态工具注册依赖独立 Plugin Host，不在声明式 adapter 中猜测。 |
 | Skill | 由现有 Skill 加载模块发现 `.opencode` 标准根及 OpenCode 本地配置根 | 由现有 Skill 加载模块发现 `.claude` 标准根；目录名是调用身份，描述可回退正文首段，`when_to_use` 合入索引，声明参数可做纯文本命名展开 | 由现有 Skill 加载模块发现 `.codex`、`.agents` 标准根；`.codex` 缺少 `name` 时回退目录名 | OpenCode V1 `skills.paths`/当前本地字符串数组只经 `bitfun-core/external_sources` 组合边界投影根目录，递归、加载、覆盖、模式开关与执行仍由同一个 Skill 模块负责；URL 不加载。 |
@@ -344,13 +366,16 @@ Desktop、交互式 TUI 以及未来通过 Host 能力访问该状态的界面�
   字符串或字符串列表；名称按参数顺序绑定并由现有纯文本参数展开器处理，缺失命名参数展开为空，既有缺失位置参数仍保留
   占位符。`.codex` Skill 只增加上游已有的目录名 fallback，`description` 仍必填；`.agents`、`.opencode`、`.bitfun` 和
   `.cursor` 的严格格式不变。本地与 Remote 发现及实际加载必须使用同一方言映射，避免目录显示可用而执行时重新解析失败。
-- Claude `allowed-tools` 不能授予 BitFun 工具预批准，因此安全降级为无额外权限；`context`/`fork`、`agent`、`model`、
-  `effort`、`hooks`、`paths`、`shell`、`runtime` 等会改变执行行为而当前没有等价 owner 的字段阻止加载。Claude runtime 变量与动态
+- Claude `allowed-tools` 不能授予 BitFun 工具预批准，因此安全降级为无额外权限；`effort` 只作为 reasoning profile 参与
+  现有显式模型绑定，不成为请求级 override；`context`/`fork`、`agent`、`model`、`hooks`、`paths`、`shell`、
+  `runtime` 等会改变执行行为而当前没有等价 owner 的字段阻止加载。Claude runtime 变量与动态
   shell 注入也不执行。此切片不增加插件 Skill、祖先活动目录、文件 watcher、URL 来源或另一条 reload 命令。
 - Claude Subagent 扫描用户与逐层项目 `.claude/agents/**/*.md`，近工作目录定义整项覆盖；Claude MCP 保留
   `local > project > user` 的整项覆盖，local 只读取与规范化当前工作区严格匹配的项目项。
-- Codex Subagent 从用户与逐层项目 `[agents]`、角色文件合并，缺失字段按 Codex 层级继承；`enabled`、默认模型等已支持
-  控制字段进入行为版本，推理、权限、私有 MCP/Hook、并发等没有对应实现的字段阻止激活。Codex MCP 按原生层级逐字段
+- Codex Subagent 从用户与逐层项目 `[agents]`、角色文件合并，缺失字段按 Codex 层级继承；`enabled`、默认模型、角色级
+  `model_reasoning_effort` 与全局 `default_subagent_reasoning_effort` 已支持并进入行为版本，角色值优先。effort 只作为
+  reasoning profile 参与现有显式模型绑定；reasoning summary/verbosity、权限、私有 MCP/Hook、并发等没有对应
+  实现的字段仍阻止激活。Codex MCP 按原生层级逐字段
   覆盖；任一未被用户显式停用的必需 `config.toml` 层读取或解析失败时，本次 MCP/Subagent provider 发现整体失败并交由
   coordinator 的规则处理：保留上一有效结果，并阻止继续激活后续项目层；`required` 只诊断，不能使 BitFun 启动或聊天失败。
 - 同一 provider 先完成原生覆盖，再把一个 effective candidate 交给产品管理模块；跨 provider 或 BitFun-native 同名才生成

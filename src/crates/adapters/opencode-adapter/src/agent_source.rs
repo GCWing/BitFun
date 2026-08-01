@@ -12,8 +12,8 @@ use bitfun_product_domains::external_subagents::{
     external_subagent_candidate_id, ExternalSubagentBehaviorVersion,
     ExternalSubagentCompatibilityState, ExternalSubagentContributionId,
     ExternalSubagentContributionRole, ExternalSubagentDefinition, ExternalSubagentDiscoveryInput,
-    ExternalSubagentLocalId, ExternalSubagentMode, ExternalSubagentModelRequest,
-    ExternalSubagentProvenanceRef, ExternalSubagentProviderIdentity,
+    ExternalSubagentLocalId, ExternalSubagentMode, ExternalSubagentModelProfileRequest,
+    ExternalSubagentModelRequest, ExternalSubagentProvenanceRef, ExternalSubagentProviderIdentity,
     ExternalSubagentProviderSnapshot, ExternalSubagentSourceProvider, ExternalSubagentToolRequest,
     ExternalSubagentToolSelector, SecretText,
 };
@@ -795,14 +795,7 @@ fn materialize_definition(
     {
         blocked.push("opencode_agent_request_not_imported".to_string());
     }
-    for field in [
-        "variant",
-        "temperature",
-        "top_p",
-        "steps",
-        "maxSteps",
-        "color",
-    ] {
+    for field in ["temperature", "top_p", "steps", "maxSteps", "color"] {
         if fields.contains_key(field) {
             degraded.push(format!("opencode_agent_{field}_not_imported"));
         }
@@ -876,6 +869,33 @@ fn materialize_definition(
             ExternalSubagentModelRequest::Default
         }
     };
+    let has_explicit_model = matches!(
+        &requested_model,
+        ExternalSubagentModelRequest::Reference { .. }
+    );
+    let requested_model_profile = match fields.get("variant") {
+        None => None,
+        Some(Value::String(_)) if !has_explicit_model => None,
+        Some(Value::String(value)) => {
+            let profile = ExternalSubagentModelProfileRequest::NamedVariant {
+                name: value.clone(),
+            };
+            if profile.validate().is_ok() {
+                Some(profile)
+            } else {
+                invalid.push("opencode_agent_variant_invalid".to_string());
+                None
+            }
+        }
+        Some(_) => {
+            invalid.push("opencode_agent_variant_type_invalid".to_string());
+            None
+        }
+    };
+    // OpenCode applies an agent variant only when that agent declares a model
+    // and the active model matches it. A variant on a default-model agent is
+    // inert, so importing it as an active profile would add behavior that the
+    // source does not have.
     let requested_tools = tool_request(fields, &mut invalid, &mut blocked, &mut degraded);
     let permission_constraints = permission_constraints(
         fields,
@@ -915,6 +935,8 @@ fn materialize_definition(
             if disabled { "disabled" } else { "enabled" },
             if hidden { "hidden" } else { "visible" },
             &serde_json::to_string(&requested_model).expect("model request serializes"),
+            &serde_json::to_string(&requested_model_profile)
+                .expect("model profile request serializes"),
             &serde_json::to_string(&requested_tools).expect("tool request serializes"),
             &serde_json::to_string(&permission_constraints)
                 .expect("permission constraints serialize"),
@@ -940,6 +962,7 @@ fn materialize_definition(
         disabled,
         hidden,
         requested_model,
+        requested_model_profile,
         requested_tools,
         permission_constraints,
         compatibility,

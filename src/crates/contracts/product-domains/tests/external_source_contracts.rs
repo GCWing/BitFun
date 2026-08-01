@@ -40,7 +40,8 @@ use bitfun_product_domains::external_subagents::{
     ExternalSubagentDiscoveryInput, ExternalSubagentLocalId, ExternalSubagentMode,
     ExternalSubagentModelBindingGroup, ExternalSubagentModelBindingMethod,
     ExternalSubagentModelBindingOption, ExternalSubagentModelBindingTarget,
-    ExternalSubagentModelRequest, ExternalSubagentProvenanceRef, ExternalSubagentProviderIdentity,
+    ExternalSubagentModelProfileRequest, ExternalSubagentModelRequest,
+    ExternalSubagentProvenanceRef, ExternalSubagentProviderIdentity,
     ExternalSubagentProviderSnapshot, ExternalSubagentToolRequest, ExternalSubagentToolSelector,
     SecretText,
 };
@@ -389,6 +390,7 @@ fn external_subagent_identity_preserves_ordered_provenance_and_separate_revision
         disabled: false,
         hidden: false,
         requested_model: ExternalSubagentModelRequest::Default,
+        requested_model_profile: None,
         requested_tools: ExternalSubagentToolRequest {
             selectors: vec![ExternalSubagentToolSelector {
                 source_name: "read".to_string(),
@@ -625,6 +627,48 @@ fn external_subagent_model_contract_preserves_control_and_opaque_reference_seman
 }
 
 #[test]
+fn external_subagent_model_profile_contract_keeps_variant_and_effort_semantics_distinct() {
+    let profiles = [
+        ExternalSubagentModelProfileRequest::NamedVariant {
+            name: "high".to_string(),
+        },
+        ExternalSubagentModelProfileRequest::ReasoningEffort {
+            value: "high".to_string(),
+        },
+    ];
+
+    let encoded = profiles
+        .iter()
+        .map(|profile| serde_json::to_value(profile).unwrap())
+        .collect::<Vec<_>>();
+    assert_eq!(
+        encoded[0],
+        serde_json::json!({ "kind": "named_variant", "name": "high" })
+    );
+    assert_eq!(
+        encoded[1],
+        serde_json::json!({ "kind": "reasoning_effort", "value": "high" })
+    );
+    assert_ne!(profiles[0], profiles[1]);
+
+    for (profile, encoded) in profiles.into_iter().zip(encoded) {
+        let decoded: ExternalSubagentModelProfileRequest = serde_json::from_value(encoded).unwrap();
+        assert_eq!(decoded, profile);
+    }
+
+    assert!(ExternalSubagentModelProfileRequest::NamedVariant {
+        name: "x".repeat(4097),
+    }
+    .validate()
+    .is_err());
+    assert!(ExternalSubagentModelProfileRequest::ReasoningEffort {
+        value: "bad\u{0001}".to_string(),
+    }
+    .validate()
+    .is_err());
+}
+
+#[test]
 fn external_subagent_model_binding_contract_groups_only_matching_scope_identity() {
     let ecosystem = EcosystemId::new("opencode").unwrap();
     let request = ExternalSubagentModelRequest::Reference {
@@ -634,14 +678,21 @@ fn external_subagent_model_binding_contract_groups_only_matching_scope_identity(
     let global_a = external_subagent_model_binding_key(
         &ecosystem,
         &request,
+        None,
         "local-user",
         ExternalSourceScope::UserGlobal,
         "D:/workspace/a",
     )
     .unwrap();
+    assert_eq!(
+        global_a,
+        "external_subagent_model_binding:408ebedb7c2644acda3b4c0c5a78e8eb83fb2ece8b3a1671a866ed0d6cc08f56",
+        "profile-free bindings must retain their pre-profile persisted identity"
+    );
     let global_b = external_subagent_model_binding_key(
         &ecosystem,
         &request,
+        None,
         "local-user",
         ExternalSourceScope::UserGlobal,
         "D:/workspace/b",
@@ -655,6 +706,7 @@ fn external_subagent_model_binding_contract_groups_only_matching_scope_identity(
     let project_a = external_subagent_model_binding_key(
         &ecosystem,
         &request,
+        None,
         "local-user",
         ExternalSourceScope::Project,
         "D:/workspace/a",
@@ -663,6 +715,7 @@ fn external_subagent_model_binding_contract_groups_only_matching_scope_identity(
     let project_b = external_subagent_model_binding_key(
         &ecosystem,
         &request,
+        None,
         "local-user",
         ExternalSourceScope::Project,
         "D:/workspace/b",
@@ -679,6 +732,7 @@ fn external_subagent_model_binding_contract_groups_only_matching_scope_identity(
     let remote_global = external_subagent_model_binding_key(
         &ecosystem,
         &request,
+        None,
         "remote:user@example",
         ExternalSourceScope::RemoteUser,
         "D:/workspace/a",
@@ -692,10 +746,14 @@ fn external_subagent_model_binding_contract_groups_only_matching_scope_identity(
     let option = ExternalSubagentModelBindingOption {
         target: ExternalSubagentModelBindingTarget::Primary,
         effective_model_label: "Provider / Model".to_string(),
+        configured_reasoning_effort: Some("high".to_string()),
     };
     let group = ExternalSubagentModelBindingGroup {
         binding_key: project_a,
         request,
+        profile_request: Some(ExternalSubagentModelProfileRequest::ReasoningEffort {
+            value: "high".to_string(),
+        }),
         scope: ExternalSourceScope::Project,
         method: ExternalSubagentModelBindingMethod::Explicit,
         selected_target: Some(option.target.clone()),
@@ -708,6 +766,67 @@ fn external_subagent_model_binding_contract_groups_only_matching_scope_identity(
         ExternalSubagentModelBindingGroup,
     ) = serde_json::from_value(encoded).unwrap();
     assert_eq!(decoded, (option, group));
+}
+
+#[test]
+fn external_subagent_profile_binding_identity_extends_existing_model_binding_scope() {
+    let ecosystem = EcosystemId::new("opencode").unwrap();
+    let default_request = ExternalSubagentModelRequest::Default;
+    assert!(external_subagent_model_binding_key(
+        &ecosystem,
+        &default_request,
+        None,
+        "local-user",
+        ExternalSourceScope::Project,
+        "D:/workspace/a",
+    )
+    .is_none());
+
+    let variant = ExternalSubagentModelProfileRequest::NamedVariant {
+        name: "high".to_string(),
+    };
+    let effort = ExternalSubagentModelProfileRequest::ReasoningEffort {
+        value: "high".to_string(),
+    };
+    let variant_key = external_subagent_model_binding_key(
+        &ecosystem,
+        &default_request,
+        Some(&variant),
+        "local-user",
+        ExternalSourceScope::Project,
+        "D:/workspace/a",
+    )
+    .unwrap();
+    let effort_key = external_subagent_model_binding_key(
+        &ecosystem,
+        &default_request,
+        Some(&effort),
+        "local-user",
+        ExternalSourceScope::Project,
+        "D:/workspace/a",
+    )
+    .unwrap();
+    assert_ne!(variant_key, effort_key);
+    let delimited_provider = ExternalSubagentModelRequest::Reference {
+        provider_hint: Some("a:b".to_string()),
+        model_name: "c".to_string(),
+    };
+    let delimited_model = ExternalSubagentModelRequest::Reference {
+        provider_hint: Some("a".to_string()),
+        model_name: "b:c".to_string(),
+    };
+    let key_for = |request| {
+        external_subagent_model_binding_key(
+            &ecosystem,
+            request,
+            Some(&effort),
+            "local-user",
+            ExternalSourceScope::Project,
+            "D:/workspace/a",
+        )
+        .unwrap()
+    };
+    assert_ne!(key_for(&delimited_provider), key_for(&delimited_model));
 }
 
 #[test]
@@ -862,6 +981,10 @@ fn legacy_public_snapshot_downprojects_new_tool_review_variants() {
                 "providerHint": "anthropic",
                 "modelName": "claude-sonnet-4"
             },
+            "requestedModelProfile": {
+                "kind": "reasoning_effort",
+                "value": "high"
+            },
             "modelBindingMethod": "binding_required",
             "modelBindingKey": "external_subagent_model_binding:review",
             "effectiveToolLabels": ["Read"],
@@ -878,13 +1001,15 @@ fn legacy_public_snapshot_downprojects_new_tool_review_variants() {
         "subagentModelBindingGroups": [{
             "bindingKey": "external_subagent_model_binding:review",
             "request": { "kind": "reference", "modelName": "claude-sonnet-4" },
+            "profileRequest": { "kind": "reasoning_effort", "value": "high" },
             "scope": "project",
             "method": "binding_required",
             "affectedCandidateIds": ["external-review"]
         }],
         "subagentModelBindingOptions": [{
             "target": { "kind": "fast" },
-            "effectiveModelLabel": "Fast"
+            "effectiveModelLabel": "Fast",
+            "configuredReasoningEffort": "high"
         }]
     }))
     .expect("new public snapshot");
@@ -897,6 +1022,9 @@ fn legacy_public_snapshot_downprojects_new_tool_review_variants() {
         .get("unavailableToolLabels")
         .is_none());
     assert!(legacy["subagents"][0].get("requestedModel").is_none());
+    assert!(legacy["subagents"][0]
+        .get("requestedModelProfile")
+        .is_none());
     assert!(legacy["subagents"][0].get("modelBindingMethod").is_none());
     assert!(legacy["subagents"][0].get("modelBindingKey").is_none());
     assert!(legacy.get("subagentModelBindingGroups").is_none());
@@ -1629,6 +1757,7 @@ fn public_snapshot_never_exposes_executable_prompt_templates() {
                 provider_hint: Some("anthropic".to_string()),
                 model_name: "claude-sonnet-4".to_string(),
             },
+            profile_request: None,
             scope: ExternalSourceScope::Project,
             method: ExternalSubagentModelBindingMethod::BindingRequired,
             selected_target: None,
@@ -1638,6 +1767,7 @@ fn public_snapshot_never_exposes_executable_prompt_templates() {
         subagent_model_binding_options: vec![ExternalSubagentModelBindingOption {
             target: ExternalSubagentModelBindingTarget::Fast,
             effective_model_label: "GLM-4.5-Air".to_string(),
+            configured_reasoning_effort: None,
         }],
         subagent_conflicts: Vec::new(),
         pending_subagent_approvals: Vec::new(),

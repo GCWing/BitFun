@@ -212,6 +212,10 @@ export type ExternalSubagentModelRequest =
   | { kind: 'inherit' }
   | { kind: 'reference'; providerHint?: string; modelName: string };
 
+export type ExternalSubagentModelProfileRequest =
+  | { kind: 'named_variant'; name: string }
+  | { kind: 'reasoning_effort'; value: string };
+
 export type ExternalSubagentModelBindingTarget =
   | { kind: 'primary' }
   | { kind: 'fast' }
@@ -228,11 +232,13 @@ export type ExternalSubagentModelBindingMethod =
 export interface ExternalSubagentModelBindingOption {
   target: ExternalSubagentModelBindingTarget;
   effectiveModelLabel: string;
+  configuredReasoningEffort?: string;
 }
 
 export interface ExternalSubagentModelBindingGroup {
   bindingKey: string;
   request: ExternalSubagentModelRequest;
+  profileRequest?: ExternalSubagentModelProfileRequest;
   scope: ExternalSourceScope;
   method: ExternalSubagentModelBindingMethod;
   selectedTarget?: ExternalSubagentModelBindingTarget;
@@ -251,6 +257,7 @@ export interface ExternalSubagentSummary {
   sourceLocationLabels: string[];
   sourceCount: number;
   requestedModel: ExternalSubagentModelRequest;
+  requestedModelProfile?: ExternalSubagentModelProfileRequest;
   modelBindingMethod: ExternalSubagentModelBindingMethod;
   modelBindingKey?: string;
   effectiveModelLabel?: string;

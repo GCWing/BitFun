@@ -1142,6 +1142,17 @@ fn external_agent_model_request_label(request: &ExternalSubagentModelRequest) ->
     }
 }
 
+fn external_agent_model_profile_label(request: &ExternalSubagentModelProfileRequest) -> String {
+    match request {
+        ExternalSubagentModelProfileRequest::NamedVariant { name } => {
+            format!("named variant {name}")
+        }
+        ExternalSubagentModelProfileRequest::ReasoningEffort { value } => {
+            format!("reasoning effort {value}")
+        }
+    }
+}
+
 fn external_agent_model_binding_method_label(
     method: ExternalSubagentModelBindingMethod,
 ) -> &'static str {
@@ -1203,6 +1214,12 @@ fn external_agent_review_text(snapshot: Option<&ExternalSourceCatalogSnapshot>) 
                 external_agent_model_request_label(&binding.request),
                 external_agent_model_binding_method_label(binding.method)
             ));
+            if let Some(profile) = &binding.profile_request {
+                lines.push(format!(
+                    "     Requested profile: {}",
+                    external_agent_model_profile_label(profile)
+                ));
+            }
             lines.push(format!(
                 "     Affects {} agents; effective model: {}",
                 binding.affected_candidate_ids.len(),
@@ -1211,7 +1228,12 @@ fn external_agent_review_text(snapshot: Option<&ExternalSourceCatalogSnapshot>) 
                     binding.method,
                 )
             ));
-            if binding.method == ExternalSubagentModelBindingMethod::Exact {
+            if !matches!(
+                binding.method,
+                ExternalSubagentModelBindingMethod::BindingRequired
+                    | ExternalSubagentModelBindingMethod::Explicit
+                    | ExternalSubagentModelBindingMethod::BindingUnavailable
+            ) {
                 lines.push("     Matched automatically; no binding is needed.".to_string());
                 continue;
             }
@@ -1227,10 +1249,15 @@ fn external_agent_review_text(snapshot: Option<&ExternalSourceCatalogSnapshot>) 
             for (choice_index, option) in snapshot.subagent_model_binding_options.iter().enumerate()
             {
                 lines.push(format!(
-                    "     {}. {} ({}){} - /agent bind {} {}",
+                    "     {}. {} ({}){}{} - /agent bind {} {}",
                     choice_index + 1,
                     option.effective_model_label,
                     external_agent_model_binding_target_label(&option.target),
+                    option
+                        .configured_reasoning_effort
+                        .as_deref()
+                        .map(|value| format!(", configured effort: {value}"))
+                        .unwrap_or_default(),
                     if binding.selected_target.as_ref() == Some(&option.target) {
                         " [selected]"
                     } else {
@@ -1282,6 +1309,12 @@ fn external_agent_review_text(snapshot: Option<&ExternalSourceCatalogSnapshot>) 
                 "     Requested model: {}",
                 external_agent_model_request_label(&agent.requested_model)
             ));
+            if let Some(profile) = &agent.requested_model_profile {
+                lines.push(format!(
+                    "     Requested profile: {}",
+                    external_agent_model_profile_label(profile)
+                ));
+            }
             lines.push(format!(
                 "     Resolution: {}",
                 external_agent_model_binding_method_label(agent.model_binding_method)

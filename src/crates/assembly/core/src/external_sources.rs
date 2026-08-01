@@ -34,7 +34,8 @@ pub use bitfun_product_domains::external_subagents::{
     ExternalSubagentActivationState, ExternalSubagentCompatibilityState, ExternalSubagentConflict,
     ExternalSubagentConflictCandidate, ExternalSubagentModelBindingGroup,
     ExternalSubagentModelBindingMethod, ExternalSubagentModelBindingOption,
-    ExternalSubagentModelBindingTarget, ExternalSubagentModelRequest, ExternalSubagentSummary,
+    ExternalSubagentModelBindingTarget, ExternalSubagentModelProfileRequest,
+    ExternalSubagentModelRequest, ExternalSubagentSummary,
 };
 
 use crate::external_mcp::{
@@ -6549,6 +6550,7 @@ mod tests {
                     provider_hint: Some("openai".to_string()),
                     model_name: "gpt-project".to_string(),
                 },
+                profile_request: None,
                 scope: ExternalSourceScope::Project,
                 method: ExternalSubagentModelBindingMethod::BindingRequired,
                 selected_target: None,
@@ -6558,6 +6560,7 @@ mod tests {
             subagent_model_binding_options: vec![ExternalSubagentModelBindingOption {
                 target: ExternalSubagentModelBindingTarget::Primary,
                 effective_model_label: "Primary model".to_string(),
+                configured_reasoning_effort: None,
             }],
             subagent_conflicts: Vec::new(),
             pending_subagent_approvals: Vec::new(),

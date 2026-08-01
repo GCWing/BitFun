@@ -4,7 +4,8 @@ use bitfun_product_domains::external_sources::{
 };
 use bitfun_product_domains::external_subagents::{
     ExternalSubagentCompatibilityState, ExternalSubagentDiscoveryInput,
-    ExternalSubagentModelRequest, ExternalSubagentSourceProvider,
+    ExternalSubagentModelProfileRequest, ExternalSubagentModelRequest,
+    ExternalSubagentSourceProvider,
 };
 use std::collections::BTreeSet;
 use std::fs;
@@ -142,6 +143,30 @@ fn explicit_inherit_is_distinct_from_an_opaque_model_reference() {
             model_name: "vendor/inherit".to_string(),
         }
     );
+}
+
+#[test]
+fn effort_is_preserved_as_a_reasoning_profile() {
+    let fixture = Fixture::new();
+    write(
+        fixture.user_claude.join("agents/reviewer.md"),
+        "---\nname: reviewer\ndescription: Reviewer\nmodel: inherit\neffort: xhigh\ntools: [Read]\n---\nReview carefully",
+    );
+
+    let definition = &fixture.discover(BTreeSet::new()).definitions[0];
+    assert_eq!(
+        definition.requested_model_profile,
+        Some(ExternalSubagentModelProfileRequest::ReasoningEffort {
+            value: "xhigh".to_string(),
+        })
+    );
+    assert_eq!(
+        definition.compatibility,
+        ExternalSubagentCompatibilityState::Ready
+    );
+    assert!(!definition
+        .diagnostic_codes
+        .contains(&"claude_agent_effort_not_imported".to_string()));
 }
 
 #[test]
