@@ -6656,8 +6656,8 @@ export const requiredContentRules = [
         message: 'missing remote chat history assembly shape/order test',
       },
       {
-        regex: /\bremote_chat_history_assembly_skips_in_progress_assistant_history\b/,
-        message: 'missing remote chat history in-progress guard test',
+        regex: /\bremote_chat_history_assembly_preserves_in_progress_assistant_history\b/,
+        message: 'missing remote chat history in-progress preservation test',
       },
       {
         regex: /\bremote_connect_file_transfer_policy_preserves_limits_and_chunk_ranges\b/,

@@ -21,6 +21,9 @@ Headless CLI 与各产品入口的统一心智见
 状态共享、隔离、容量与 Plugin Host 关系见
 [`agent-runtime-deployment-design.md`](agent-runtime-deployment-design.md)。详细设计与本文件冲突时，以本文件为准。
 
+Cargo feature、第三方依赖 owner、测试目标和本地/CI 验证分工见
+[`rust-build-dependency-boundaries.md`](rust-build-dependency-boundaries.md)。该文档补充本架构的构建视图，不改变本文定义的运行时 owner 和分层依赖方向。
+
 本文件只约束稳定边界，不记录单次 PR 进度，也不把未来可能支持的生态能力提前声明为公开接口。
 
 ## 1. 架构目标

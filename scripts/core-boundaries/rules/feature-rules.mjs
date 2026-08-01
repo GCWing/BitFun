@@ -138,44 +138,6 @@ export const optionalDependencyFeatureOwnerRules = [
   },
 ];
 
-export const productCoreFeatureAssemblyRules = [
-  {
-    manifestPath: 'src/apps/desktop/Cargo.toml',
-    dependencyName: 'bitfun-core',
-    requiredFeatures: ['product-full'],
-    reason: 'desktop must explicitly assemble the full bitfun-core product runtime',
-  },
-  {
-    manifestPath: 'src/apps/cli/Cargo.toml',
-    dependencyName: 'bitfun-core',
-    requiredFeatures: ['product-full'],
-    reason: 'CLI must explicitly assemble the full bitfun-core product runtime',
-  },
-  {
-    manifestPath: 'src/apps/sdk-host/Cargo.toml',
-    dependencyName: 'bitfun-core',
-    requiredFeatures: ['product-full'],
-    reason: 'SDK Host must explicitly assemble the full bitfun-core product runtime',
-  },
-  {
-    manifestPath: 'src/apps/server/Cargo.toml',
-    dependencyName: 'bitfun-core',
-    requiredFeatures: ['product-full'],
-    reason: 'Server must explicitly assemble the full bitfun-core product runtime',
-  },
-  {
-    manifestPath: 'src/crates/interfaces/acp/Cargo.toml',
-    dependencyName: 'bitfun-core',
-    requiredFeatures: ['product-full'],
-    reason: 'ACP must explicitly assemble the full bitfun-core product runtime',
-  },
-];
-
-export const productCoreFeatureAssemblyScanRoots = [
-  'src/apps',
-  'src/crates/interfaces/acp',
-];
-
 export const coreProductFullFeatureAssemblyRule = {
   manifestPath: 'src/crates/assembly/core/Cargo.toml',
   featureName: 'product-full',

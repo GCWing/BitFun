@@ -459,13 +459,16 @@ fn remote_chat_history_assembly_preserves_message_shape_and_item_order() {
 }
 
 #[test]
-fn remote_chat_history_assembly_skips_in_progress_assistant_history() {
+fn remote_chat_history_assembly_preserves_in_progress_assistant_history() {
     let turn = remote_history_contract_turn(true);
 
     let messages = build_remote_chat_messages(vec![turn]);
 
-    assert_eq!(messages.len(), 1);
+    assert_eq!(messages.len(), 2);
     assert_eq!(messages[0].role, "user");
+    assert_eq!(messages[1].role, "assistant");
+    assert_eq!(messages[1].content, "visible text");
+    assert_eq!(messages[1].tools.as_ref().unwrap()[0].status, "running");
 }
 
 #[test]

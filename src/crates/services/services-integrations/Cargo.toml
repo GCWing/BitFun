@@ -319,5 +319,45 @@ required-features = ["debug-log"]
 name = "script_tool_runtime"
 required-features = ["script-tool-runtime"]
 
+[[test]]
+name = "announcement_contracts"
+required-features = ["announcement"]
+
+[[test]]
+name = "file_watch_contracts"
+required-features = ["file-watch"]
+
+[[test]]
+name = "function_agent_contracts"
+required-features = ["function-agents"]
+
+[[test]]
+name = "git_contracts"
+required-features = ["git"]
+
+[[test]]
+name = "mcp_contracts"
+required-features = ["mcp"]
+
+[[test]]
+name = "remote_connect_contracts"
+required-features = ["remote-connect"]
+
+[[test]]
+name = "remote_ssh_contracts"
+required-features = ["remote-ssh"]
+
+[[test]]
+name = "remote_ssh_disabled_contracts"
+required-features = ["remote-ssh"]
+
+[[test]]
+name = "remote_workspace_search_disabled_contracts"
+required-features = ["remote-ssh", "workspace-search"]
+
+[[test]]
+name = "workspace_search_contracts"
+required-features = ["workspace-search"]
+
 [lints]
 workspace = true

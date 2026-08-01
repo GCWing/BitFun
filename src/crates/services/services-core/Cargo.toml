@@ -78,6 +78,18 @@ name = "runtime_ownership_contracts"
 required-features = ["runtime-ownership"]
 
 [[test]]
+name = "local_runtime_ports"
+required-features = ["workspace-runtime"]
+
+[[test]]
+name = "permission_store_contracts"
+required-features = ["permission"]
+
+[[test]]
+name = "workspace_instruction_contracts"
+required-features = ["workspace-runtime"]
+
+[[test]]
 name = "session_write_lock_contracts"
 
 [lints]

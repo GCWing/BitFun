@@ -8,6 +8,8 @@ import {
   collectCargoMetadataGraph,
   collectCargoMetadataPackages,
   findCargoLayerViolations,
+  findFeatureGatedTestTargetViolations,
+  findProductEntrypointCoreFeatureViolations,
 } from './core-boundaries/cargo-dependency-boundaries.mjs';
 import { crateLayoutRules } from './core-boundaries/rules/crate-layout.mjs';
 
@@ -44,8 +46,211 @@ function pathDependency(repoCratePath, options = {}) {
     kind: options.kind ?? null,
     optional: options.optional ?? false,
     target: options.target ?? null,
+    uses_default_features: options.usesDefaultFeatures ?? true,
+    features: options.features ?? [],
   };
 }
+
+function integrationTarget(name, sourcePath, requiredFeatures = []) {
+  return {
+    kind: ['test'],
+    name,
+    src_path: sourcePath,
+    'required-features': requiredFeatures,
+  };
+}
+
+test('feature-gated integration targets require every positive crate feature', () => {
+  const sourcePath = join(TEST_ROOT, 'tests', 'remote.rs');
+  const pkg = {
+    ...packageAt('example', 'src/crates/services/example/Cargo.toml'),
+    targets: [integrationTarget('remote', sourcePath, ['remote-ssh'])],
+  };
+  const sources = new Map([[
+    sourcePath,
+    '#![cfg(all(feature = "remote-ssh", feature = "workspace-search", not(feature = "remote-ssh-concrete")))]\n',
+  ]]);
+
+  const violations = findFeatureGatedTestTargetViolations([pkg], {
+    readSource: (path) => sources.get(path),
+  });
+
+  assert.equal(violations.length, 1);
+  assert.match(violations[0].message, /workspace-search/);
+  assert.doesNotMatch(violations[0].message, /remote-ssh-concrete.*missing/);
+});
+
+test('matching integration target requirements cover all positive crate features', () => {
+  const sourcePath = join(TEST_ROOT, 'tests', 'remote.rs');
+  const pkg = {
+    ...packageAt('example', 'src/crates/services/example/Cargo.toml'),
+    targets: [integrationTarget(
+      'remote',
+      sourcePath,
+      ['remote-ssh', 'workspace-search'],
+    )],
+  };
+
+  assert.deepEqual(
+    findFeatureGatedTestTargetViolations([pkg], {
+      readSource: () => '#![cfg(all(feature = "remote-ssh", feature = "workspace-search", not(feature = "remote-ssh-concrete")))]\n',
+    }),
+    [],
+  );
+});
+
+test('feature-gated integration targets reject extra umbrella requirements', () => {
+  const sourcePath = join(TEST_ROOT, 'tests', 'focused.rs');
+  const pkg = {
+    ...packageAt('example', 'src/crates/services/example/Cargo.toml'),
+    targets: [integrationTarget('focused', sourcePath, ['focused', 'product-full'])],
+  };
+
+  const violations = findFeatureGatedTestTargetViolations([pkg], {
+    readSource: () => '#![cfg(feature = "focused")]\n',
+  });
+
+  assert.equal(violations.length, 1);
+  assert.match(violations[0].message, /unexpected required-features: product-full/);
+});
+
+test('target guard ignores module cfg and non-integration targets', () => {
+  const moduleSourcePath = join(TEST_ROOT, 'tests', 'module.rs');
+  const binarySourcePath = join(TEST_ROOT, 'src', 'main.rs');
+  const pkg = {
+    ...packageAt('example', 'src/crates/services/example/Cargo.toml'),
+    targets: [
+      integrationTarget('module', moduleSourcePath),
+      {
+        ...integrationTarget('binary', binarySourcePath),
+        kind: ['bin'],
+      },
+    ],
+  };
+  const sources = new Map([
+    [moduleSourcePath, '#[cfg(feature = "serde")]\nmod serde_tests {}\n'],
+    [binarySourcePath, '#![cfg(feature = "cli")]\nfn main() {}\n'],
+  ]);
+
+  assert.deepEqual(
+    findFeatureGatedTestTargetViolations([pkg], {
+      readSource: (path) => sources.get(path),
+    }),
+    [],
+  );
+});
+
+test('target guard ignores crate cfg examples in comments and strings', () => {
+  const sourcePath = join(TEST_ROOT, 'tests', 'documented.rs');
+  const pkg = {
+    ...packageAt('example', 'src/crates/services/example/Cargo.toml'),
+    targets: [integrationTarget('documented', sourcePath)],
+  };
+
+  assert.deepEqual(
+    findFeatureGatedTestTargetViolations([pkg], {
+      readSource: () => [
+        '// Example: #![cfg(feature = "commented")]',
+        'const EXAMPLE: &str = r#"',
+        '#![cfg(feature = "string-literal")]',
+        '"#;',
+      ].join('\n'),
+    }),
+    [],
+  );
+});
+
+test('target guard rejects feature OR gates that Cargo cannot express', () => {
+  const sourcePath = join(TEST_ROOT, 'tests', 'provider.rs');
+  const pkg = {
+    ...packageAt('example', 'src/crates/services/example/Cargo.toml'),
+    targets: [integrationTarget('provider', sourcePath, ['provider-a'])],
+  };
+
+  const violations = findFeatureGatedTestTargetViolations([pkg], {
+    readSource: () => '#![cfg(any(feature = "provider-a", feature = "provider-b"))]\n',
+  });
+
+  assert.equal(violations.length, 1);
+  assert.match(violations[0].message, /cannot express.*split the target/);
+});
+
+test('multiple crate feature gates combine as required feature AND conditions', () => {
+  const sourcePath = join(TEST_ROOT, 'tests', 'combined.rs');
+  const pkg = {
+    ...packageAt('example', 'src/crates/services/example/Cargo.toml'),
+    targets: [integrationTarget('combined', sourcePath, ['first'])],
+  };
+
+  const violations = findFeatureGatedTestTargetViolations([pkg], {
+    readSource: () => '#![cfg(feature = "first")]\n#![cfg(feature = "second")]\n',
+  });
+
+  assert.equal(violations.length, 1);
+  assert.match(violations[0].message, /second/);
+});
+
+test('product entrypoints must disable bitfun-core default features', () => {
+  const core = packageAt('bitfun-core', 'src/crates/assembly/core/Cargo.toml');
+  const app = packageAt('entry', 'src/apps/example/Cargo.toml', [
+    pathDependency('src/crates/assembly/core', {
+      name: 'bitfun-core',
+      features: ['plugin-source'],
+    }),
+  ]);
+
+  const violations = findProductEntrypointCoreFeatureViolations(
+    [app, core],
+    { root: TEST_ROOT, crateLayoutRules },
+  );
+
+  assert.equal(violations.length, 1);
+  assert.match(violations[0].message, /default-features = false/);
+});
+
+test('product entrypoints must select explicit bitfun-core features', () => {
+  const core = packageAt('bitfun-core', 'src/crates/assembly/core/Cargo.toml');
+  const interfacePackage = packageAt(
+    'interface',
+    'src/crates/interfaces/acp/Cargo.toml',
+    [pathDependency('src/crates/assembly/core', {
+      name: 'bitfun-core',
+      usesDefaultFeatures: false,
+    })],
+  );
+
+  const violations = findProductEntrypointCoreFeatureViolations(
+    [interfacePackage, core],
+    { root: TEST_ROOT, crateLayoutRules },
+  );
+
+  assert.equal(violations.length, 1);
+  assert.match(violations[0].message, /at least one explicit feature/);
+});
+
+test('explicit product entrypoint bitfun-core feature selections pass', () => {
+  const core = packageAt('bitfun-core', 'src/crates/assembly/core/Cargo.toml');
+  const consumers = [
+    packageAt('app', 'src/apps/example/Cargo.toml'),
+    packageAt('interface', 'src/crates/interfaces/acp/Cargo.toml'),
+    packageAt('installer', 'BitFun-Installer/src-tauri/Cargo.toml'),
+  ].map((pkg) => ({
+    ...pkg,
+    dependencies: [pathDependency('src/crates/assembly/core', {
+      name: 'bitfun-core',
+      usesDefaultFeatures: false,
+      features: ['plugin-source'],
+    })],
+  }));
+
+  assert.deepEqual(
+    findProductEntrypointCoreFeatureViolations(
+      [...consumers, core, packageAt('no-core', 'src/apps/no-core/Cargo.toml')],
+      { root: TEST_ROOT, crateLayoutRules },
+    ),
+    [],
+  );
+});
 
 test('cargo layer checker rejects reverse edges across dependency kinds', () => {
   const packages = [
@@ -198,8 +403,8 @@ test('cargo metadata collection scans standalone manifests not covered by the wo
   const packages = collectCargoMetadataPackages({
     root: TEST_ROOT,
     manifestPaths: [workspaceManifest, memberManifest, installerManifest],
-    loadMetadata(manifestPath) {
-      calls.push(manifestPath);
+    loadMetadata(manifestPath, options) {
+      calls.push([manifestPath, options]);
       if (manifestPath === workspaceManifest) {
         const entry = packageAt('entry', 'src/apps/example/Cargo.toml');
         return { packages: [entry], workspace_members: [entry.id] };
@@ -211,7 +416,10 @@ test('cargo metadata collection scans standalone manifests not covered by the wo
     },
   });
 
-  assert.deepEqual(calls, [workspaceManifest, installerManifest]);
+  assert.deepEqual(calls, [
+    [workspaceManifest, { noDeps: false }],
+    [installerManifest, { noDeps: true }],
+  ]);
   assert.deepEqual(packages.map((pkg) => pkg.name), ['entry', 'installer']);
 });
 
@@ -230,8 +438,8 @@ test('cargo metadata collection rescans standalone packages discovered by the wo
   const graph = collectCargoMetadataGraph({
     root: TEST_ROOT,
     manifestPaths: [workspaceManifest, serviceManifest],
-    loadMetadata(manifestPath) {
-      calls.push(manifestPath);
+    loadMetadata(manifestPath, options) {
+      calls.push([manifestPath, options]);
       if (manifestPath === workspaceManifest) {
         return {
           packages: [assembly, service, entry],
@@ -271,7 +479,10 @@ test('cargo metadata collection rescans standalone packages discovered by the wo
     graph.resolvedDependencies,
   );
 
-  assert.deepEqual(calls, [workspaceManifest, serviceManifest]);
+  assert.deepEqual(calls, [
+    [workspaceManifest, { noDeps: false }],
+    [serviceManifest, { noDeps: true }],
+  ]);
   assert.equal(violations.length, 1);
   assert.match(violations[0].message, /service.*services.*->.*example.*apps.*normal optional dependency/);
 });
@@ -343,6 +554,53 @@ test('core boundary check is split into focused modules', async () => {
     sourceRuleEntry.split(/\r?\n/).length <= 40,
     'source rule entrypoint should delegate to focused source-rule modules',
   );
+});
+
+test('core checker runs the unified cargo dependency boundary check', async () => {
+  const checker = await readFile(
+    new URL('./core-boundaries/checker.mjs', import.meta.url),
+    'utf8',
+  );
+
+  assert.match(checker, /checkCargoDependencyBoundariesSafely/);
+  assert.doesNotMatch(checker, /checkCargoDependencyLayersSafely/);
+});
+
+test('product entrypoint feature policy does not pin product-full per manifest', async () => {
+  const [checker, featureRules] = await Promise.all([
+    readFile(new URL('./core-boundaries/checker.mjs', import.meta.url), 'utf8'),
+    readFile(
+      new URL('./core-boundaries/rules/feature-rules.mjs', import.meta.url),
+      'utf8',
+    ),
+  ]);
+
+  assert.doesNotMatch(checker, /checkProductCoreFeatureAssembly/);
+  assert.doesNotMatch(featureRules, /productCoreFeatureAssemblyRules/);
+});
+
+test('Rust build dependency boundary policy stays discoverable', async () => {
+  const policyUrl = new URL(
+    '../docs/architecture/rust-build-dependency-boundaries.md',
+    import.meta.url,
+  );
+  await assert.doesNotReject(
+    () => access(policyUrl),
+    'the Rust build dependency boundary policy must exist',
+  );
+  const [agents, productArchitecture, policy] = await Promise.all([
+    readFile(new URL('../AGENTS.md', import.meta.url), 'utf8'),
+    readFile(new URL('../docs/architecture/product-architecture.md', import.meta.url), 'utf8'),
+    readFile(policyUrl, 'utf8'),
+  ]);
+
+  assert.match(agents, /docs\/architecture\/rust-build-dependency-boundaries\.md/);
+  assert.match(productArchitecture, /rust-build-dependency-boundaries\.md/);
+  assert.match(policy, /Cargo feature/);
+  assert.match(policy, /Delivery Profile/);
+  assert.match(policy, /Runtime Config/);
+  assert.match(policy, /Capability Availability/);
+  assert.match(policy, /pnpm run check:core-boundaries:test/);
 });
 
 test('transport contract stays limited to current delivery needs', async () => {

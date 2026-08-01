@@ -202,9 +202,11 @@ await api.invoke('your_command', { request: { ... } });
 ### Product architecture guardrails
 
 For any `bitfun-core` decomposition, feature-boundary, dependency-boundary, or
-Rust build-speed refactor, read
+Rust build-speed refactor, read both
 [`docs/architecture/product-architecture.md`](docs/architecture/product-architecture.md)
-before editing. Keep this file as an entry point; put module-specific ownership
+and
+[`docs/architecture/rust-build-dependency-boundaries.md`](docs/architecture/rust-build-dependency-boundaries.md)
+before editing. Keep these files as entry points; put module-specific ownership
 details in the nearest module `AGENTS.md`.
 
 Repository-level decomposition rules:
@@ -291,6 +293,7 @@ change directly affects build, packaging, or CI cannot protect the path.
 | Web UI i18n runtime, namespace loading, or direct `i18nService.t(...)` usage | `pnpm run i18n:contract:test && pnpm run type-check:web && pnpm --dir src/web-ui run test:run src/infrastructure/i18n/core/I18nService.test.ts` |
 | Mobile web UI, state, pairing, disconnect, or reconnect behavior | `pnpm --dir src/mobile-web run type-check`; include manual pairing / reconnect notes when behavior changes |
 | Product definition, schema, resolver, or Desktop/CLI product build adapter | `pnpm run product:test`, plus `pnpm run product:check` for the default definition |
+| Cargo manifests, features, test targets, or crate dependency boundaries | `pnpm run check:core-boundaries:test && pnpm run check:core-boundaries`; add the smallest affected `cargo check -p <owner> --no-default-features --features <feature>` or focused target test when the compiled path changes |
 | Shared Rust logic in `core`, `transport`, adapters, or services | `cargo check --workspace`, plus the nearest focused `cargo test` when behavior changed |
 | Desktop integration, Tauri APIs, browser/computer-use, or desktop-only behavior | `cargo check -p bitfun-desktop`, plus focused desktop tests when behavior changed |
 | Behavior covered by desktop smoke/functional flows | Prefer the nearest focused E2E/smoke check; rely on CI for broad build/test coverage unless build behavior changed |

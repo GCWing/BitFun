@@ -7,11 +7,7 @@ export function runManifestParserSelfTest({
   parseManifestDependencies,
   manifestDependencyMatches,
   matchingForbiddenDependency,
-  manifestDependencyDisablesDefaultFeatures,
-  parseManifestDependencyFeatureNames,
-  productCoreFeatureAssemblyRules,
   coreProductFullFeatureAssemblyRule,
-  collectProductCoreDependencyManifestPaths,
   ownerCrateFeatureAssemblyRules,
   parseManifestFeatures,
   optionalDependencyFeatureOwnerRules,
@@ -105,29 +101,6 @@ export function runManifestParserSelfTest({
   ) {
     throw new Error('dependency profile parser must detect single-quoted package aliases');
   }
-  const parsedCoreDep = parsedByName.get('bitfun-core');
-  if (!manifestDependencyDisablesDefaultFeatures(parsedCoreDep)) {
-    throw new Error('dependency profile parser must detect default-features = false');
-  }
-  if (!parseManifestDependencyFeatureNames(parsedCoreDep).has('product-full')) {
-    throw new Error('dependency profile parser must detect inline dependency features');
-  }
-  const parsedCoreTableDeps = parseManifestDependencies([
-    '[dependencies."bitfun-core"]',
-    'path = "../core"',
-    'default-features = false',
-    'features = [',
-    '  "product-full",',
-    '  "ssh-remote",',
-    ']',
-  ]);
-  const parsedCoreTableDep = parsedCoreTableDeps.find((dep) => dep.name === 'bitfun-core');
-  if (!manifestDependencyDisablesDefaultFeatures(parsedCoreTableDep)) {
-    throw new Error('dependency profile parser must detect table default-features = false');
-  }
-  if (!parseManifestDependencyFeatureNames(parsedCoreTableDep).has('ssh-remote')) {
-    throw new Error('dependency profile parser must detect table dependency features');
-  }
   if (parsedByName.has('image')) {
     throw new Error('dependency profile parser must ignore feature entries named like dependencies');
   }
@@ -170,24 +143,6 @@ export function runManifestParserSelfTest({
     throw new Error('forbidden dependency checks must reject Cargo package aliases');
   }
 
-  const productCoreRulePaths = new Set(
-    productCoreFeatureAssemblyRules.map((rule) => rule.manifestPath),
-  );
-  for (const manifestPath of [
-    'src/apps/desktop/Cargo.toml',
-    'src/apps/cli/Cargo.toml',
-    'src/apps/server/Cargo.toml',
-    'src/crates/interfaces/acp/Cargo.toml',
-  ]) {
-    if (!productCoreRulePaths.has(manifestPath)) {
-      throw new Error(`product core feature assembly rule must cover ${manifestPath}`);
-    }
-  }
-  for (const rule of productCoreFeatureAssemblyRules) {
-    if (!rule.requiredFeatures.includes('product-full')) {
-      throw new Error(`${rule.manifestPath} must require bitfun-core product-full`);
-    }
-  }
   for (const featureName of [
     'ssh-remote',
     'product-capabilities',
@@ -198,30 +153,6 @@ export function runManifestParserSelfTest({
     if (!coreProductFullFeatureAssemblyRule.requiredFeatureRefs.includes(featureName)) {
       throw new Error(`core product-full assembly rule must require ${featureName}`);
     }
-  }
-  const discoveredProductCoreManifests = collectProductCoreDependencyManifestPaths([
-    {
-      manifestPath: 'src/apps/desktop/Cargo.toml',
-      text:
-        '[dependencies]\nbitfun-core = { path = "../../crates/assembly/core", default-features = false, features = ["product-full"] }',
-    },
-    {
-      manifestPath: 'src/apps/server/Cargo.toml',
-      text:
-        '[dependencies]\nbitfun-core = { path = "../../crates/assembly/core", default-features = false, features = ["product-full"] }',
-    },
-    {
-      manifestPath: 'src/crates/interfaces/acp/Cargo.toml',
-      text: '[dependencies."bitfun-core"]\npath = "../../assembly/core"\ndefault-features = false\nfeatures = ["product-full"]',
-    },
-  ]);
-  if (
-    discoveredProductCoreManifests.join(',') !==
-    'src/apps/desktop/Cargo.toml,src/apps/server/Cargo.toml,src/crates/interfaces/acp/Cargo.toml'
-  ) {
-    throw new Error(
-      'product core dependency scanner must discover only manifests that depend on bitfun-core',
-    );
   }
   const ownerFeatureRulePaths = new Set(
     ownerCrateFeatureAssemblyRules.map((rule) => rule.manifestPath),
@@ -3313,7 +3244,7 @@ export function runManifestParserSelfTest({
         'remote_connect_cancel_and_restore_policy_preserve_runtime_decisions',
         'remote_connect_dialog_submit_outcome_builder_preserves_scheduler_shape',
         'remote_chat_history_assembly_preserves_message_shape_and_item_order',
-        'remote_chat_history_assembly_skips_in_progress_assistant_history',
+        'remote_chat_history_assembly_preserves_in_progress_assistant_history',
         'remote_connect_file_transfer_policy_preserves_limits_and_chunk_ranges',
         'remote_connect_file_transfer_policy_preserves_name_fallback',
         'remote_connect_tracker_keeps_finished_turn_snapshot_until_persistence_finalizes',
