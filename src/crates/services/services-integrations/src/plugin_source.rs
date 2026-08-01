@@ -3157,6 +3157,7 @@ mod tests {
         map_activation_store_error, map_load_store_error,
         persist_trust_bytes_with_parent_sync, read_bounded_reader, read_scanned_file,
         replace_file_atomically, trust_file_identity, trust_store_issue_code, workspace_scope,
+        native_path_identity,
         ManagedPluginSourceError, ManagedPluginSourceService, OperationScanBudget,
         PluginPackageManifest, PluginPackageRoot, PluginPackageScope, PluginSourceDiscovery,
         PluginSourceIssue, PluginSourceIssueCode, PluginSourceStoreError, PluginTrustScope,

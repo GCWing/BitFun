@@ -108,8 +108,7 @@ deep-research = ["bitfun-agent-runtime"]
 git = ["bitfun-services-core", "chrono", "git2", "thiserror"]
 file-watch = ["notify"]
 # Automatic repository issue fixing driven by the external `loopx` CLI.
-# Deliberately outside `product-full` until the chain is verified against a real
-# repository; see docs/development/loopx-issue-fix-integration.md.
+# Included in `product-full`; see docs/development/loopx-issue-fix-integration.md.
 loopx-issue-fix = [
     "async-trait",
     "bitfun-runtime-ports",
@@ -297,6 +296,7 @@ product-full = [
     "function-agents",
     "git",
     "hook-import",
+    "loopx-issue-fix",
     "miniapp-runtime",
     "mcp",
     "plugin-source",

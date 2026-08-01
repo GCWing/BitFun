@@ -280,6 +280,34 @@ impl From<LoopxIssueFixError> for OrchestratorError {
     }
 }
 
+/// Make a validation command spawnable by LoopX on Windows.
+///
+/// LoopX launches the caller-declared validation command with
+/// `subprocess.run(shlex.split(command))` and no shell (see
+/// `acceptance_loop.py:_run_caller_validation`). On Windows that cannot start
+/// `.cmd` / `.bat` shims such as `pnpm` or `npm` — `CreateProcess` only
+/// resolves executables — so the bridge reports `[WinError 2]`. Delegating
+/// through `cmd /c` makes every command spawnable. This is a host-side concern:
+/// BitFun owns the validation command and must not patch LoopX itself.
+#[cfg(windows)]
+fn windows_safe_validation_command(command: &str) -> String {
+    let trimmed = command.trim_start();
+    if trimmed.starts_with("cmd /c")
+        || trimmed.starts_with("cmd.exe /c")
+        || trimmed.starts_with("cmd ")
+        || trimmed.starts_with("cmd.exe ")
+    {
+        command.to_string()
+    } else {
+        format!("cmd /c {command}")
+    }
+}
+
+#[cfg(not(windows))]
+fn windows_safe_validation_command(command: &str) -> String {
+    command.to_string()
+}
+
 /// Drives one issue through the chain.
 pub struct IssueFixOrchestrator<'a> {
     loopx: &'a LoopxIssueFix,
@@ -356,9 +384,14 @@ impl<'a> IssueFixOrchestrator<'a> {
             "--validation-label",
             request.validation_label,
         ];
+        let mut validation_arg: Option<String> = None;
         if let ExecutionMode::Execute { validation_command } = mode {
+            let wrapped = windows_safe_validation_command(validation_command);
+            validation_arg = Some(wrapped);
+        }
+        if let Some(command) = validation_arg.as_deref() {
             args.push("--validation-command");
-            args.push(validation_command);
+            args.push(command);
             args.push("--execute");
         }
 
@@ -784,5 +817,37 @@ mod tests {
         assert!(!outcome.branch_ready);
         assert!(outcome.changed_files.is_empty());
         assert!(outcome.review_packet_summary.is_empty());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_validation_commands_are_delegated_through_cmd() {
+        assert_eq!(windows_safe_validation_command("pnpm test"), "cmd /c pnpm test");
+        assert_eq!(
+            windows_safe_validation_command("pnpm --dir src/web-ui run test:run x"),
+            "cmd /c pnpm --dir src/web-ui run test:run x"
+        );
+        assert_eq!(
+            windows_safe_validation_command("cmd /c pnpm test"),
+            "cmd /c pnpm test"
+        );
+        assert_eq!(
+            windows_safe_validation_command("cmd.exe /c pnpm test"),
+            "cmd.exe /c pnpm test"
+        );
+        assert_eq!(
+            windows_safe_validation_command("  cmd /c pnpm test"),
+            "  cmd /c pnpm test"
+        );
+    }
+
+    #[cfg(not(windows))]
+    #[test]
+    fn non_windows_validation_commands_are_passed_through() {
+        assert_eq!(windows_safe_validation_command("pnpm test"), "pnpm test");
+        assert_eq!(
+            windows_safe_validation_command("cmd /c pnpm test"),
+            "cmd /c pnpm test"
+        );
     }
 }

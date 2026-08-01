@@ -150,7 +150,7 @@ LoopX 包内 **123 处** `subprocess` 调用带 `text=True` 但不带 `encoding`
 **这是宿主职责**：BitFun spawn LoopX 进程时必须在 env 中带上该变量。
 不要试图修改 LoopX 源码——散弹改 123 处会与上游 `git pull` 冲突。
 
-### 4.2 已知缺陷：临时目录清理
+### 4.2 已知缺陷：临时目录清理与 Windows validation 启动
 
 `repo-branch-fixture` 的 `finally` 清理会因 git object 只读属性抛 `WinError 5`
 （`acceptance_loop.py:227` 的 `_remove_temporary_git_workspace` 重试 5 次无效——
@@ -159,6 +159,13 @@ LoopX 包内 **123 处** `subprocess` 调用带 `text=True` 但不带 `encoding`
 循环主体不受影响（实测 `ok: True`）。若 BitFun 要用这个子命令，需要：
 - 要么在调用侧接受非零退出但解析已产出的 artifact
 - 要么向上游提 `shutil.rmtree(onexc=...)` + `os.chmod(p, stat.S_IWRITE)` 的修复
+
+另一个 Windows 缺陷已被 BitFun 侧修复：`caller-repo-branch --execute` 的
+validation command 由 LoopX 用 `subprocess.run(shlex.split(cmd))` 启动，不带 shell。
+Windows 上 `CreateProcess` 无法直接解析 `.cmd` / `.bat` shim（如 `pnpm`），报
+`[WinError 2]`。BitFun 编排器在 Windows 上自动用 `cmd /c` 包装 validation command
+（`orchestrator.rs` 的 `windows_safe_validation_command`），这是宿主职责，不改
+LoopX 源码；2026-08-01 已在真实仓库实测通过。
 
 **注**：memory 中记录的「pnpm WinError 2 阻塞」与 LoopX 无关——全仓仅两处提及
 pnpm，均在 benchmark 的正则字符串内，不执行。该记录需更正。
@@ -384,19 +391,31 @@ LoopX 的 decision 映射到 `ThreadGoalStatus`：
 - [x] **6.** 桌面 API 暴露（core facade → Tauri 命令 → 前端绑定）
 - [x] **7.** 面板 UI（`panels/issue-fix/`，头部按钮，三语言）
 - [x] **8.** `thread_goal` 桥接（`thread_goal_bridge.rs`，多 issue 串行）
-- [ ] **9.** 真实仓库验证后，把 feature 纳入 `product-full`
+- [x] **9.** 真实仓库验证通过，feature 已纳入 `product-full`
 
 ### 测试覆盖
 
 | 类型 | 数量 | 说明 |
 |---|---|---|
-| Rust 单元 | 52 | 含 issue 枚举映射、context 校验、编排器解析、goal 桥接 |
+| Rust 单元 | 53 | 含 issue 枚举映射、context 校验、编排器解析、goal 桥接、Windows validation 包装 |
 | Rust 契约 | 12 | 驱动真实 loopx CLI，无 loopx 时优雅跳过 |
 | Rust `#[ignore]` | 1 | 驱动真实 `gh` CLI 验证 issue 枚举 |
 | 前端单元 | 29 | 行状态映射，重点是 `user_gate` 不被当作完成 |
 | i18n 契约 | 37 | 三语言对齐 + 治理预算 |
 
-### 第 9 步为何未做
+### 第 9 步的验证记录（2026-08-01）
 
-它要求在真实公开仓库建分支、发 PR，属于外部可见且不易撤回的动作，需显式授权后再执行。
-在那之前 feature 保持在 `product-full` 之外：代码可编译、可测试，但不进发布构建。
+在真实公开仓库 GCWing/BitFun 上对 issue #1849 走完整链路：
+
+1. `workflow-plan --fetch-metadata`（只读）→ `candidate_runnable: true`，零写入
+2. `feasibility`（grounded context + confirmed repro + 命名 validation 面）
+   → `route: fix_pr`，四个 reason code 全部满足，`decision: runnable_successor`
+3. `caller-repo-branch --execute`（经授权的临时 worktree `loopx/1849-verify`）
+   → 分支创建 + 真实 vitest validation 通过，`review_packet.ready: true`
+4. 过程中发现并修复 Windows 缺陷：validation command 必须以 `cmd /c` 包装
+   （见 4.2）
+
+按文档 7.2 的门禁，发 PR 动作需显式授权后才执行；feature 的编译期门禁已
+从「暂不入 product-full」切换为「纳入 product-full」。边界检查
+（`scripts/core-boundaries/rules/feature-rules.mjs`）同步登记了
+`loopx-issue-fix` 的 owner 覆盖与 product-full 组。
