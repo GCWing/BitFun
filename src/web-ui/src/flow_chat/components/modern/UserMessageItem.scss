@@ -7,6 +7,15 @@
 .user-message-item {
   box-sizing: border-box;
   /*
+   * Height of the first text line. The action cluster collapses to this box so
+   * its taller hit targets never drive the row height — see
+   * `.user-message-item__actions`. Variants that restyle the text (e.g.
+   * `--failed`) re-point it to their own line box.
+   */
+  --user-message-line-box: calc(
+    var(--flowchat-font-size-base) * var(--flowchat-text-line-height)
+  );
+  /*
    * Fills the reading column instead of hugging its text: the bubble shares the
    * exact leading and trailing edge as the tool-call bars and body text below
    * it, so a turn reads as one column rather than a right-floating chat bubble.
@@ -110,6 +119,18 @@
   align-items: center;
   gap: 0.125rem;
   flex-shrink: 0;
+  /*
+   * The 28px hit targets are taller than the first-line box, and they keep that
+   * layout box while idle at `opacity: 0`. Left alone the cluster becomes the
+   * tallest item in `.user-message-item__main`, so `align-items: flex-start`
+   * pins a single-line message to the top of an over-tall row and the text
+   * reads as sitting above the bubble's centre. Collapsing the cluster to the
+   * first-line box hands the row height back to the text — restoring the
+   * bubble's symmetric vertical padding — and centres the buttons on the first
+   * line for taller messages.
+   */
+  margin-top: calc((var(--user-message-line-box) - 28px) / 2);
+  margin-bottom: calc((var(--user-message-line-box) - 28px) / 2);
 }
 
 .user-message-item__blocks {
@@ -182,6 +203,8 @@
   --user-message-failed-line-box: calc(
     var(--user-message-failed-font-size) * var(--user-message-failed-line-height)
   );
+  /* Smaller text than the default bubble, so the shared line box follows it. */
+  --user-message-line-box: var(--user-message-failed-line-box);
 
   background: transparent;
   border: none;
@@ -248,8 +271,8 @@
   .user-message-item__actions {
     flex: 0 0 auto;
     align-items: center;
-    /* Match `.user-message-item__copy-btn` height (28px) to first-line box. */
-    margin-top: calc((var(--user-message-failed-line-box) - 28px) / 2);
+    /* Vertical centring on the first line comes from the base rule, which reads
+       the `--user-message-line-box` override above. */
   }
 
   .user-message-item__failed-body .user-message-item__steering-tag {
