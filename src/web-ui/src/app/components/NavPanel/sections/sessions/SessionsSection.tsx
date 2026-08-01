@@ -1174,7 +1174,13 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
         </div>
       );
     }
-    return null;
+    return (
+      <div className="bitfun-nav-panel__inline-list">
+        <div className="bitfun-nav-panel__inline-empty" aria-disabled="true">
+          {t('nav.sessions.noSessions')}
+        </div>
+      </div>
+    );
   }
 
   return (
