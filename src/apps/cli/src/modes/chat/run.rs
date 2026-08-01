@@ -154,12 +154,15 @@ impl ChatMode {
                             external_editor::ExternalEditOutcome::Changed(text) => {
                                 let reconcile = draft.replace_text_from_external_editor(text);
                                 chat_view.set_draft(draft);
-                                chat_view.set_status(Some(if reconcile.dropped == 0 {
+                                let references_dropped = reconcile.workspace_references.dropped;
+                                let images_dropped = reconcile.images.dropped;
+                                chat_view.set_status(Some(if references_dropped == 0
+                                    && images_dropped == 0
+                                {
                                     format!("Draft updated from external editor{warning}")
                                 } else {
                                     format!(
-                                        "Draft updated; {} ambiguous or removed workspace reference(s) were converted to plain text{warning}",
-                                        reconcile.dropped
+                                        "Draft updated; dropped metadata for {references_dropped} workspace reference(s) and {images_dropped} image(s) removed or made ambiguous by the edit{warning}"
                                     )
                                 }));
                             }
@@ -517,34 +520,19 @@ impl ChatMode {
         }
 
         // Send initial prompt if provided (from startup page input)
-        if let Some(prompt) = self.initial_prompt.take() {
+        if let Some(draft) = self.initial_prompt.take() {
             if !migration_notices.is_empty() {
-                chat_view.text_input.set_text(&prompt);
+                chat_view.set_draft(draft);
                 chat_view.set_status(Some(
                     "The restored session uses fallback settings. Review them, then send the preserved input explicitly."
                         .to_string(),
                 ));
-            } else if prompt.starts_with('/') {
+            } else if draft.text.starts_with('/') {
                 // Slash commands will be handled in the main loop
-                chat_view.text_input.set_text(&prompt);
+                chat_view.set_draft(draft);
             } else {
-                tracing::info!("Sending initial prompt: {}", prompt);
-                let display_name = agent_display_name(&self.agent_type);
-                chat_view.set_status(Some(format!("{} is thinking...", display_name)));
-
-                let agent = self.agent.clone();
-                let agent_type = self.agent_type.clone();
-                match tokio::task::block_in_place(|| {
-                    rt_handle.block_on(agent.send_message(prompt, &agent_type))
-                }) {
-                    Ok(turn_id) => {
-                        tracing::info!("Started initial turn: {}", turn_id);
-                    }
-                    Err(e) => {
-                        tracing::error!("Failed to send initial prompt: {}", e);
-                        chat_view.set_status(Some(format!("Error: {}", e)));
-                    }
-                }
+                tracing::info!("Sending initial prompt: {}", draft.text);
+                self.send_draft_to_agent(draft, &mut chat_view, &mut chat_state, &rt_handle);
             }
         }
 

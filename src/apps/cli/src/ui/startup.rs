@@ -1,6 +1,8 @@
 use super::agent_selector::{AgentItem, AgentSelectorAction, AgentSelectorState};
 use super::command_menu::CommandMenuState;
 use super::command_palette::{CommandPaletteState, PaletteAction};
+use super::composer::{ComposerDraft, ComposerImageAttachment};
+use super::image_paste::{self, ImagePaste};
 use super::login_form::{LoginFormAction, LoginFormState};
 use super::model_config_form::{ModelConfigFormState, ModelFormAction, ModelFormResult};
 use super::model_selector::{ModelItem, ModelSelectorState};
@@ -16,7 +18,8 @@ use super::theme::{
 use super::theme_selector::{ThemeItem, ThemeSelectorState};
 use crate::actions::{
     action_by_id, action_for_alias, removed_management_command_hint, ActionContext, ActionHandler,
-    ActionSpec, ActionState, ResolvedKeymap, SHARED_TUI_EMBEDDED_HANDOFF, SHARED_TUI_HELP_NOTE,
+    ActionSpec, ActionState, ResolvedKeymap, IMAGE_ATTACHMENTS_REQUIRE_MESSAGE,
+    SHARED_TUI_EMBEDDED_HANDOFF, SHARED_TUI_HELP_NOTE,
 };
 use crate::config::CliConfig;
 /// Startup page module
@@ -104,7 +107,7 @@ impl PopupStack {
 #[derive(Debug, Clone)]
 pub(crate) enum StartupResult {
     /// Start a new session with an optional initial prompt
-    NewSession { prompt: Option<String> },
+    NewSession { prompt: Option<ComposerDraft> },
     /// Continue last session (session ID)
     ContinueSession(String),
     /// User cancelled exit
@@ -173,6 +176,7 @@ fn append_styled_logo_lines(
 pub(crate) struct StartupPage {
     /// Multiline text input component
     text_input: TextInput,
+    image_attachments: Vec<ComposerImageAttachment>,
     /// Theme
     theme: Theme,
     /// CLI config, including persisted theme preference.
@@ -268,6 +272,7 @@ impl StartupPage {
         let action_state = ActionState::startup(false).with_shared_tui(agent.is_shared());
         let mut page = Self {
             text_input: TextInput::new(),
+            image_attachments: Vec::new(),
             theme,
             config,
             keymap,
@@ -408,7 +413,11 @@ impl StartupPage {
                     }
                 } else if self.command_menu.captures_mouse(&mouse) {
                     if let Some(action_id) = self.command_menu.handle_mouse_event(&mouse) {
-                        self.text_input.clear();
+                        if !self.image_attachments.is_empty() {
+                            self.status = Some(IMAGE_ATTACHMENTS_REQUIRE_MESSAGE.to_string());
+                            return Ok(None);
+                        }
+                        self.clear_composer();
                         self.refresh_command_menu();
                         return Ok(self.handle_palette_action(&action_id));
                     }
@@ -418,8 +427,7 @@ impl StartupPage {
                 if self.login_form.is_visible() {
                     self.login_form.insert_paste(&text);
                 } else if self.info_popup.is_none() && !self.any_popup_visible() {
-                    self.text_input.insert_paste(&text);
-                    self.refresh_command_menu();
+                    self.paste_terminal_text(&text);
                 }
             }
             Event::Resize(_, _) => {
@@ -936,7 +944,7 @@ impl StartupPage {
         match (key.code, key.modifiers) {
             (KeyCode::Esc, _) => {
                 if !self.text_input.is_empty() {
-                    self.text_input.clear();
+                    self.clear_composer();
                     self.refresh_command_menu();
                 }
             }
@@ -944,31 +952,30 @@ impl StartupPage {
                 if !self.text_input.move_cursor_up() {
                     self.text_input.set_cursor_home();
                 }
+                self.snap_cursor_out_of_image();
                 self.refresh_command_menu();
             }
             (KeyCode::Down, KeyModifiers::NONE) => {
                 if !self.text_input.move_cursor_down() {
                     self.text_input.set_cursor_end();
                 }
+                self.snap_cursor_out_of_image();
                 self.refresh_command_menu();
             }
             (KeyCode::Char(c), _) => {
-                self.text_input.handle_char(c);
-                self.refresh_command_menu();
+                self.handle_composer_char(c);
             }
             (KeyCode::Backspace, _) => {
-                self.text_input.handle_backspace();
-                self.refresh_command_menu();
+                self.handle_composer_backspace();
             }
             (KeyCode::Delete, _) => {
-                self.text_input.handle_delete();
-                self.refresh_command_menu();
+                self.handle_composer_delete();
             }
             (KeyCode::Left, _) => {
-                self.text_input.move_cursor_left();
+                self.text_input.cursor = self.draft_snapshot().cursor_left(self.text_input.cursor);
             }
             (KeyCode::Right, _) => {
-                self.text_input.move_cursor_right();
+                self.text_input.cursor = self.draft_snapshot().cursor_right(self.text_input.cursor);
             }
             (KeyCode::Home, _) => {
                 self.text_input.set_cursor_home();
@@ -1026,12 +1033,12 @@ impl StartupPage {
             ActionHandler::Skills => self.show_skill_selector(),
             ActionHandler::McpServers => {
                 return Some(StartupResult::NewSession {
-                    prompt: Some("/mcp".to_string()),
+                    prompt: Some(ComposerDraft::from_text("/mcp")),
                 });
             }
             ActionHandler::AcpHelp => {
                 return Some(StartupResult::NewSession {
-                    prompt: Some("/acp".to_string()),
+                    prompt: Some(ComposerDraft::from_text("/acp")),
                 });
             }
             ActionHandler::Login => self.show_login_form(),
@@ -1042,7 +1049,7 @@ impl StartupPage {
             ActionHandler::Init => match crate::prompts::get_cli_prompt("init") {
                 Some(prompt) => {
                     return Some(StartupResult::NewSession {
-                        prompt: Some(prompt.to_string()),
+                        prompt: Some(ComposerDraft::from_text(prompt)),
                     });
                 }
                 None => self.status = Some("Init prompt not found".to_string()),
@@ -1053,17 +1060,9 @@ impl StartupPage {
             }
             ActionHandler::SubmitInput => return self.submit_input(),
             ActionHandler::InsertNewline => {
-                self.text_input.handle_newline();
-                self.refresh_command_menu();
+                self.handle_composer_newline();
             }
-            ActionHandler::Paste => {
-                if let Ok(mut clipboard) = arboard::Clipboard::new() {
-                    if let Ok(text) = clipboard.get_text() {
-                        self.text_input.insert_paste(&text);
-                        self.refresh_command_menu();
-                    }
-                }
-            }
+            ActionHandler::Paste => self.paste_clipboard(),
             ActionHandler::ClosePopups => self.close_all_popups(),
             ActionHandler::NavigateBack => self.navigate_back(),
             ActionHandler::RenameSession
@@ -1101,9 +1100,144 @@ impl StartupPage {
         None
     }
 
+    fn draft_snapshot(&self) -> ComposerDraft {
+        ComposerDraft {
+            text: self.text_input.text().to_string(),
+            workspace_references: Vec::new(),
+            image_attachments: self.image_attachments.clone(),
+        }
+    }
+
+    fn apply_draft_at_cursor(&mut self, draft: ComposerDraft, cursor: usize) {
+        self.text_input.set_text_and_cursor(&draft.text, cursor);
+        self.image_attachments = draft.image_attachments;
+        self.refresh_command_menu();
+    }
+
+    fn clear_composer(&mut self) {
+        self.text_input.clear();
+        self.image_attachments.clear();
+    }
+
+    fn snap_cursor_out_of_image(&mut self) {
+        self.text_input.cursor = self
+            .draft_snapshot()
+            .safe_insertion_cursor(self.text_input.cursor);
+    }
+
+    fn reconcile_composer_edit(
+        &mut self,
+        edit_start: usize,
+        removed_chars: usize,
+        inserted_chars: usize,
+    ) {
+        let cursor = self.text_input.cursor;
+        let mut draft = self.draft_snapshot();
+        draft.reconcile_edit(edit_start, removed_chars, inserted_chars);
+        draft.retain_valid_sources();
+        self.apply_draft_at_cursor(draft, cursor);
+    }
+
+    fn handle_composer_char(&mut self, character: char) {
+        self.snap_cursor_out_of_image();
+        let cursor = self.text_input.cursor;
+        self.text_input.handle_char(character);
+        let inserted = self.text_input.cursor.saturating_sub(cursor);
+        self.reconcile_composer_edit(cursor, 0, inserted);
+    }
+
+    fn handle_composer_newline(&mut self) {
+        self.snap_cursor_out_of_image();
+        let cursor = self.text_input.cursor;
+        self.text_input.handle_newline();
+        self.reconcile_composer_edit(cursor, 0, 1);
+    }
+
+    fn handle_composer_backspace(&mut self) {
+        let cursor = self.text_input.cursor;
+        if cursor > 0 {
+            let mut draft = self.draft_snapshot();
+            if let Some(cursor) = draft.remove_image_overlapping_edit(cursor - 1, 1) {
+                self.apply_draft_at_cursor(draft, cursor);
+                return;
+            }
+        }
+        self.text_input.handle_backspace();
+        if self.text_input.cursor < cursor {
+            self.reconcile_composer_edit(cursor - 1, 1, 0);
+        } else {
+            self.refresh_command_menu();
+        }
+    }
+
+    fn handle_composer_delete(&mut self) {
+        let mut draft = self.draft_snapshot();
+        if let Some(cursor) = draft.remove_image_overlapping_edit(self.text_input.cursor, 1) {
+            self.apply_draft_at_cursor(draft, cursor);
+            return;
+        }
+        let cursor = self.text_input.cursor;
+        let before = self.text_input.text().chars().count();
+        self.text_input.handle_delete();
+        if self.text_input.text().chars().count() < before {
+            self.reconcile_composer_edit(cursor, 1, 0);
+        } else {
+            self.refresh_command_menu();
+        }
+    }
+
+    fn paste_clipboard(&mut self) {
+        match image_paste::read_clipboard(&self.workspace_path_buf()) {
+            Ok(Some(paste)) => self.apply_composer_paste(paste),
+            Ok(None) => {}
+            Err(error) => self.status = Some(error.to_string()),
+        }
+    }
+
+    fn paste_terminal_text(&mut self, text: &str) {
+        match image_paste::classify_pasted_text(text, &self.workspace_path_buf()) {
+            Ok(paste) => self.apply_composer_paste(paste),
+            Err(error) => self.status = Some(error.to_string()),
+        }
+    }
+
+    fn apply_composer_paste(&mut self, paste: ImagePaste) {
+        match paste {
+            ImagePaste::Text(text) => {
+                self.snap_cursor_out_of_image();
+                let cursor = self.text_input.cursor;
+                self.text_input.insert_paste(&text);
+                let inserted = self.text_input.cursor.saturating_sub(cursor);
+                self.reconcile_composer_edit(cursor, 0, inserted);
+            }
+            ImagePaste::Image(_image) if self.agent.is_shared() => {
+                self.status = Some(crate::actions::shared_tui_image_attachment_error());
+                return;
+            }
+            ImagePaste::Image(image) => {
+                let name = image.name.clone();
+                let mut draft = self.draft_snapshot();
+                let cursor = draft.safe_insertion_cursor(self.text_input.cursor);
+                match draft.insert_image(cursor, image) {
+                    Ok(cursor) => self.apply_draft_at_cursor(draft, cursor),
+                    Err(error) => {
+                        self.status = Some(error.to_string());
+                        return;
+                    }
+                }
+                self.status = Some(format!("Attached image: {name}"));
+            }
+        }
+        self.refresh_command_menu();
+    }
+
     fn submit_input(&mut self) -> Option<StartupResult> {
+        if !self.image_attachments.is_empty() && self.command_menu.is_visible() {
+            self.status = Some(IMAGE_ATTACHMENTS_REQUIRE_MESSAGE.to_string());
+            return None;
+        }
         if let Some(action_id) = self.command_menu.apply_selection() {
-            self.text_input.clear();
+            self.clear_composer();
             self.refresh_command_menu();
             return self.handle_palette_action(&action_id);
         }
@@ -1116,10 +1250,16 @@ impl StartupPage {
             return Some(StartupResult::Exit);
         }
         if trimmed.starts_with('/') {
+            if !self.image_attachments.is_empty() {
+                self.status = Some(IMAGE_ATTACHMENTS_REQUIRE_MESSAGE.to_string());
+                return None;
+            }
             return self.handle_command(&trimmed);
         }
+        let mut draft = self.draft_snapshot();
+        draft.replace_text_from_external_editor(trimmed);
         Some(StartupResult::NewSession {
-            prompt: Some(trimmed),
+            prompt: Some(draft),
         })
     }
 
@@ -1146,7 +1286,7 @@ impl StartupPage {
     fn handle_command(&mut self, command: &str) -> Option<StartupResult> {
         let cmd = command.split_whitespace().next().unwrap_or("");
 
-        self.text_input.clear();
+        self.clear_composer();
         self.refresh_command_menu();
         let Some(action) = action_for_alias(cmd, ActionContext::Startup) else {
             self.status = Some(

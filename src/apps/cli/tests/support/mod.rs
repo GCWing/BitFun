@@ -151,6 +151,20 @@ impl CliTestEnvironment {
     }
 
     pub(crate) fn configure_mock_model(&self, server_base_url: &str) {
+        self.configure_mock_model_with_capabilities(
+            server_base_url,
+            &["text_chat", "function_calling"],
+        );
+    }
+
+    pub(crate) fn configure_mock_image_model(&self, server_base_url: &str) {
+        self.configure_mock_model_with_capabilities(
+            server_base_url,
+            &["text_chat", "function_calling", "image_understanding"],
+        );
+    }
+
+    fn configure_mock_model_with_capabilities(&self, server_base_url: &str, capabilities: &[&str]) {
         let config_dir = self.user_root.join("config");
         std::fs::create_dir_all(&config_dir).expect("create model config directory");
         let base_url = format!("{}/v1", server_base_url.trim_end_matches('/'));
@@ -172,7 +186,7 @@ impl CliTestEnvironment {
                     "api_key": "cli-e2e-key",
                     "enabled": true,
                     "category": "general_chat",
-                    "capabilities": ["text_chat", "function_calling"]
+                    "capabilities": capabilities
                 }],
                 "default_models": {
                     "primary": "cli-e2e-model"
@@ -325,24 +339,32 @@ impl MockOpenAiServer {
     }
 
     pub(crate) fn assert_chat_completion_requests(&self, expected_count: usize) {
-        let requests = self.requests.lock().expect("lock mock model requests");
+        let requests = self.chat_completion_request_bodies();
         assert_eq!(
             requests.len(),
             expected_count,
             "unexpected mock model request count"
         );
-        for request in requests.iter() {
-            let header_end = find_header_end(request).expect("mock request header terminator");
-            let headers = String::from_utf8_lossy(&request[..header_end]);
-            assert_eq!(
-                headers.lines().next(),
-                Some("POST /v1/chat/completions HTTP/1.1"),
-                "unexpected mock model request target"
-            );
-            let body: serde_json::Value = serde_json::from_slice(&request[header_end + 4..])
-                .expect("parse mock model request body");
-            assert_eq!(body["model"], "cli-e2e-model", "unexpected mock model id");
-        }
+    }
+
+    pub(crate) fn chat_completion_request_bodies(&self) -> Vec<serde_json::Value> {
+        let requests = self.requests.lock().expect("lock mock model requests");
+        requests
+            .iter()
+            .map(|request| {
+                let header_end = find_header_end(request).expect("mock request header terminator");
+                let headers = String::from_utf8_lossy(&request[..header_end]);
+                assert_eq!(
+                    headers.lines().next(),
+                    Some("POST /v1/chat/completions HTTP/1.1"),
+                    "unexpected mock model request target"
+                );
+                let body: serde_json::Value = serde_json::from_slice(&request[header_end + 4..])
+                    .expect("parse mock model request body");
+                assert_eq!(body["model"], "cli-e2e-model", "unexpected mock model id");
+                body
+            })
+            .collect()
     }
 
     fn spawn(response: MockModelResponse) -> Self {

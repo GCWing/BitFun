@@ -70,6 +70,10 @@ impl ChatView {
             return true;
         }
         if self.command_menu.captures_mouse(mouse) {
+            if self.draft_snapshot().has_images() {
+                self.status = Some(crate::actions::IMAGE_ATTACHMENTS_REQUIRE_MESSAGE.to_string());
+                return true;
+            }
             if let Some(cmd) = self.command_menu.handle_mouse_event_with_name(mouse) {
                 self.text_input.clear();
                 self.refresh_command_menu();

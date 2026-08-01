@@ -708,8 +708,7 @@ impl ChatMode {
                     && context.chat_state.question_prompt.is_none()
                     && !context.this.any_popup_visible(context.chat_view)
                 {
-                    context.chat_view.insert_paste(&text);
-                    context.this.sync_selected_native_command(context.chat_view);
+                    context.this.paste_terminal_text(&text, context.chat_view);
                 }
                 outcome.request_redraw = true;
             }

@@ -12,17 +12,17 @@ use std::sync::{Arc, RwLock};
 use tokio::sync::{broadcast, Mutex};
 
 use bitfun_agent_runtime::sdk::{
-    AgentDialogTurnRequest, AgentEventReceiver, AgentLocalCommandTurnRecordRequest,
-    AgentMessageWorkspaceReferencesRequest, AgentRuntime, AgentSessionCompactionRequest,
-    AgentSessionCreateRequest, AgentSessionDeleteRequest, AgentSessionForkBeforeTurnRequest,
-    AgentSessionForkRequest, AgentSessionForkResult, AgentSessionListRequest,
-    AgentSessionModeUpdateRequest, AgentSessionModelUpdateRequest, AgentSessionRenameRequest,
-    AgentSessionRestoreRequest, AgentSessionRevertRequest, AgentSessionRevertResult,
-    AgentSessionUsageRequest, AgentTurnCancellationRequest, AgentTurnSettlementRequest,
-    AgentUserAnswersRequest, AgentWorkspaceReference, AgentWorkspaceReferenceSearchRequest,
-    AgentWorkspaceReferenceSearchResult, PermissionReply, PermissionRequest,
-    PermissionRequestEventReceiver, PortError, PortErrorKind, RuntimeError, SessionTranscript,
-    SessionTranscriptRequest, SessionUsageReport, WorkspaceDiffSnapshot,
+    AgentDialogTurnRequest, AgentEventReceiver, AgentInputAttachment,
+    AgentLocalCommandTurnRecordRequest, AgentMessageWorkspaceReferencesRequest, AgentRuntime,
+    AgentSessionCompactionRequest, AgentSessionCreateRequest, AgentSessionDeleteRequest,
+    AgentSessionForkBeforeTurnRequest, AgentSessionForkRequest, AgentSessionForkResult,
+    AgentSessionListRequest, AgentSessionModeUpdateRequest, AgentSessionModelUpdateRequest,
+    AgentSessionRenameRequest, AgentSessionRestoreRequest, AgentSessionRevertRequest,
+    AgentSessionRevertResult, AgentSessionUsageRequest, AgentTurnCancellationRequest,
+    AgentTurnSettlementRequest, AgentUserAnswersRequest, AgentWorkspaceReference,
+    AgentWorkspaceReferenceSearchRequest, AgentWorkspaceReferenceSearchResult, PermissionReply,
+    PermissionRequest, PermissionRequestEventReceiver, PortError, PortErrorKind, RuntimeError,
+    SessionTranscript, SessionTranscriptRequest, SessionUsageReport, WorkspaceDiffSnapshot,
 };
 use bitfun_agent_runtime_ipc::{
     RuntimeIpcClient, RuntimeIpcClientError, RuntimeIpcClientEvent, RuntimeIpcErrorCode,
@@ -1169,16 +1169,22 @@ impl CliAgentRuntimeClient {
     }
 
     pub(crate) async fn send_message(&self, message: String, agent_type: &str) -> Result<String> {
-        self.send_message_with_workspace_references(message, Vec::new(), agent_type)
+        self.send_message_with_context(message, Vec::new(), Vec::new(), agent_type)
             .await
     }
 
-    pub(crate) async fn send_message_with_workspace_references(
+    pub(crate) async fn send_message_with_context(
         &self,
         message: String,
         workspace_references: Vec<AgentWorkspaceReference>,
+        attachments: Vec<AgentInputAttachment>,
         agent_type: &str,
     ) -> Result<String> {
+        if !attachments.is_empty() && self.is_shared() {
+            return Err(anyhow::anyhow!(
+                crate::actions::shared_tui_image_attachment_error()
+            ));
+        }
         let session_id = self.ensure_session(agent_type).await?;
         tracing::info!("Sending message to session {}: {}", session_id, message);
 
@@ -1209,7 +1215,7 @@ impl CliAgentRuntimeClient {
             policy: DialogSubmissionPolicy::for_source(AgentSubmissionSource::Cli),
             reply_route: None,
             prepended_reminders: Vec::new(),
-            attachments: Vec::new(),
+            attachments,
             metadata,
         };
         let submission: Result<String> = async {
@@ -1841,6 +1847,28 @@ mod tests {
         assert!(compact.contains("RuntimeIpcOperationResult::TurnAccepted"));
         assert!(!compact.contains("serde_json::to_value"));
         assert!(!compact.contains("serde_json::from_value"));
+    }
+
+    #[test]
+    fn image_attachments_use_the_runtime_contract_and_fail_before_shared_ipc() {
+        let source = include_str!("runtime_client.rs").replace("\r\n", "\n");
+        let submission = source
+            .split_once("pub(crate) async fn send_message_with_context(")
+            .expect("context submission method")
+            .1
+            .split_once("pub(crate) async fn search_workspace_references(")
+            .expect("context submission method boundary")
+            .0;
+
+        let shared_rejection = submission
+            .find("if !attachments.is_empty() && self.is_shared()")
+            .expect("shared attachment rejection");
+        let session_creation = submission
+            .find("let session_id = self.ensure_session")
+            .expect("session creation");
+        assert!(shared_rejection < session_creation);
+        assert!(submission.contains("attachments,"));
+        assert!(!submission.contains("imagePath"));
     }
 
     #[test]

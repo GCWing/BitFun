@@ -34,6 +34,67 @@ const MULTILINE_INPUT_SENTINEL: &str = "M7Q4";
 const RECOVERY_INPUT: &[u8] = b"READY_AFTER_CANCEL K4W8";
 const RECOVERY_INPUT_SENTINEL: &str = "K4W8";
 
+#[cfg(unix)]
+#[test]
+fn startup_bracketed_paste_attaches_an_image_path_without_rendering_the_path() {
+    let server = MockOpenAiServer::immediate();
+    let environment = CliTestEnvironment::new();
+    environment.initialize_git_repository();
+    environment.configure_mock_image_model(server.base_url());
+    let image_path = environment.workspace().join("startup attachment.png");
+    image::DynamicImage::new_rgba8(2, 1)
+        .save_with_format(&image_path, image::ImageFormat::Png)
+        .expect("write startup image fixture");
+    let mut process = PtyProcess::spawn(environment.pty_command(), INITIAL_SIZE);
+
+    process.expect_output(
+        "\x1b[?2004h",
+        Duration::from_secs(30),
+        "interactive startup did not enable bracketed paste",
+    );
+    process.write(format!("\x1b[200~{}\x1b[201~", image_path.display()).as_bytes());
+    process.expect_output(
+        "[Image 1]",
+        Duration::from_secs(15),
+        "startup did not render the OpenCode-compatible image placeholder",
+    );
+    assert!(
+        !process
+            .output()
+            .contains(image_path.to_string_lossy().as_ref()),
+        "the local image path leaked into the rendered prompt"
+    );
+
+    process.write(b"\r");
+    process.expect_output(
+        STREAM_COMPLETED_MARKER,
+        Duration::from_secs(30),
+        "the image draft did not reach the model request",
+    );
+    process.write(&[0x03]);
+    let (status, output) = process.finish(Duration::from_secs(15));
+    assert!(
+        status.success(),
+        "unexpected process status {status}:\n{output}"
+    );
+    assert!(output.contains("[Image 1]"), "{output}");
+    assert!(output.contains("Goodbye!"), "{output}");
+
+    let requests = server.chat_completion_request_bodies();
+    assert_eq!(
+        requests.len(),
+        1,
+        "unexpected model requests: {requests:#?}"
+    );
+    let request = requests[0].to_string();
+    assert!(request.contains("\"type\":\"image_url\""), "{request}");
+    assert!(request.contains("data:image/"), "{request}");
+    assert!(
+        !request.contains(image_path.to_string_lossy().as_ref()),
+        "the local image path leaked into the model request: {request}"
+    );
+}
+
 #[test]
 fn interactive_startup_survives_resize_multiline_input_and_emits_cleanup() {
     let environment = CliTestEnvironment::new();

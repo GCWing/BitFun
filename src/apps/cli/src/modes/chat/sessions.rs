@@ -63,9 +63,10 @@ impl ChatMode {
         chat_view.clear_screen();
         chat_view.scroll_to_bottom();
         if let Some(prompt) = prefill {
-            chat_view.set_draft(crate::ui::workspace_reference::ComposerDraft {
+            chat_view.set_draft(crate::ui::composer::ComposerDraft {
                 text: prompt,
                 workspace_references: prefill_references,
+                ..crate::ui::composer::ComposerDraft::default()
             });
             chat_view.set_status(Some(
                 "Forked before the selected prompt; review the copied input before sending."
@@ -197,9 +198,10 @@ impl ChatMode {
         rt_handle: &tokio::runtime::Handle,
     ) {
         self.send_draft_to_agent(
-            crate::ui::workspace_reference::ComposerDraft {
+            crate::ui::composer::ComposerDraft {
                 text: message,
                 workspace_references: Vec::new(),
+                ..crate::ui::composer::ComposerDraft::default()
             },
             chat_view,
             chat_state,
@@ -209,11 +211,16 @@ impl ChatMode {
 
     fn send_draft_to_agent(
         &mut self,
-        draft: crate::ui::workspace_reference::ComposerDraft,
+        draft: crate::ui::composer::ComposerDraft,
         chat_view: &mut ChatView,
         chat_state: &mut ChatState,
         rt_handle: &tokio::runtime::Handle,
     ) {
+        if draft.has_images() && self.agent.is_shared() {
+            chat_view.set_status(Some(crate::actions::shared_tui_image_attachment_error()));
+            chat_view.set_draft(draft);
+            return;
+        }
         if self
             .pending_session_operation
             .as_ref()
@@ -243,15 +250,18 @@ impl ChatMode {
 
         let agent = self.agent.clone();
         let agent_type = self.agent_type.clone();
+        let attachments = draft.runtime_attachments();
         match tokio::task::block_in_place(|| {
-            rt_handle.block_on(agent.send_message_with_workspace_references(
+            rt_handle.block_on(agent.send_message_with_context(
                 draft.text.clone(),
                 draft.workspace_references.clone(),
+                attachments,
                 &agent_type,
             ))
         }) {
             Ok(turn_id) => {
                 tracing::info!("Started turn: {}", turn_id);
+                chat_view.remember_submitted_draft(&chat_state.core_session_id, &draft);
             }
             Err(e) => {
                 tracing::error!("Failed to send message: {}", e);

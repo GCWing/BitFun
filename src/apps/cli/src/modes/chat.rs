@@ -29,7 +29,8 @@ use resize::ResizeRedrawState;
 use crate::actions::{
     action_by_id, action_conflict_behavior_version, action_for_alias,
     removed_management_command_hint, slash_actions, ActionContext, ActionHandler, ActionSpec,
-    ActionState, ResolvedKeymap, SHARED_TUI_EMBEDDED_HANDOFF, SHARED_TUI_HELP_NOTE,
+    ActionState, ResolvedKeymap, IMAGE_ATTACHMENTS_REQUIRE_MESSAGE, SHARED_TUI_EMBEDDED_HANDOFF,
+    SHARED_TUI_HELP_NOTE,
 };
 use crate::agent::context_reload_client::CliContextReloadClient;
 use crate::agent::runtime_client::{CliAgentRuntimeClient, SessionOperationError};
@@ -40,6 +41,7 @@ use crate::ui::chat::{session_status_text, ChatView, MouseGestureOutcome};
 use crate::ui::command_menu::{ExternalCommandProjection, NativeCommandCollisionProjection};
 use crate::ui::command_palette::PaletteAction;
 use crate::ui::fork_selector::{ForkAction, ForkTarget};
+use crate::ui::image_paste::{self, ImagePaste};
 use crate::ui::login_form::LoginFormAction;
 use crate::ui::mcp_add_dialog::McpAddAction;
 use crate::ui::mcp_selector::{McpItem, McpItemAction};
@@ -238,7 +240,7 @@ struct PendingWorkspaceDiff {
 enum PendingLocalEffect {
     EditComposer {
         command: external_editor::EditorCommand,
-        draft: crate::ui::workspace_reference::ComposerDraft,
+        draft: crate::ui::composer::ComposerDraft,
     },
     ExportTranscript {
         markdown: String,
@@ -289,7 +291,7 @@ pub(crate) struct ChatMode {
     /// If set, restore this existing session instead of creating a new one
     restore_session_id: Option<String>,
     /// If set, send this prompt automatically when the session starts
-    initial_prompt: Option<String>,
+    initial_prompt: Option<crate::ui::composer::ComposerDraft>,
     /// Pending MCP operation — set in key handler, executed after one render frame
     pending_mcp_op: Option<PendingMcpOp>,
     /// Running MCP tasks (non-blocking, polled in main loop)
@@ -391,7 +393,10 @@ impl ChatMode {
     }
 
     /// Set an initial prompt to send automatically when the session starts
-    pub(crate) fn with_initial_prompt(mut self, prompt: String) -> Self {
+    pub(crate) fn with_initial_prompt(
+        mut self,
+        prompt: crate::ui::composer::ComposerDraft,
+    ) -> Self {
         self.initial_prompt = Some(prompt);
         self
     }

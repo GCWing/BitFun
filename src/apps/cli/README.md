@@ -112,6 +112,27 @@ The Embedded and Shared TUI use the same session command names:
   replacement only after confirmation. These commands work the same in Embedded and Shared TUI;
   they remain local client effects and do not add Runtime or IPC operations.
 
+### Image attachments
+
+The Embedded TUI follows OpenCode's existing paste interaction instead of adding a command or a
+new shortcut. Paste an image from the system clipboard, or paste one local PNG, JPEG, GIF, or WebP
+path, using the configured paste action (Ctrl+V by default) or terminal bracketed paste. Quoted
+paths, `file://` URLs, and POSIX shell-escaped paths are accepted. The composer renders
+`[Image N]`, keeps at most five images, and rejects files larger than 20 MiB or files whose decoded
+format does not match a supported image format.
+
+Image bytes are read and validated when pasted, so later file changes do not alter the submitted
+Turn and absolute paths are not sent to the Agent Runtime. File decoding is limited to 64 MiB of
+allocation. The platform clipboard API supplies already-decoded pixels, so BitFun validates its
+dimensions and applies the encoded-size limit after that API returns; the provider's own decoding
+cannot be bounded by BitFun. Local input history, deletion and relabeling, per-Session successful
+submission undo/redo within the same TUI run (including after switching Sessions), startup-page
+submission, and `/editor` draft reconciliation retain the same attachment state when their
+placeholders remain unambiguous and can be safely associated. Local draft histories share a 200 MiB
+image-byte budget; older retained placeholders become plain text when that budget is exceeded. Slash
+commands do not accept image attachments. Shared TUI reports image paste as unsupported and keeps
+the current draft unchanged; image data is not placed in the bounded Shared IPC frame.
+
 The interactive TUI supports per-session worktree isolation through `/worktree`. Run the command
 without arguments to toggle it, or use `/worktree on`, `/worktree off`, and `/worktree status`.
 The header shows the active branch and `Worktree: on|off`; detached managed worktrees use their base

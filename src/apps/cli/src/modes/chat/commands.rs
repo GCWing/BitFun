@@ -1301,13 +1301,23 @@ impl ChatMode {
             &reverted.transcript,
             &reverted.retired_turn_ids,
         );
+        if !undo && reverted.changed {
+            chat_view.note_session_redo(&chat_state.core_session_id);
+        }
         match reverted.composer {
             AgentSessionComposerUpdate::Preserve => {}
             AgentSessionComposerUpdate::Replace { text } => {
-                chat_view.set_draft(crate::ui::workspace_reference::ComposerDraft {
-                    text,
-                    workspace_references: restored_workspace_references.unwrap_or_default(),
-                })
+                let references = restored_workspace_references.unwrap_or_default();
+                let draft = if undo && reverted.changed {
+                    chat_view.restore_undo_draft(&chat_state.core_session_id, text, references)
+                } else {
+                    crate::ui::composer::ComposerDraft {
+                        text,
+                        workspace_references: references,
+                        ..crate::ui::composer::ComposerDraft::default()
+                    }
+                };
+                chat_view.set_draft(draft)
             }
             AgentSessionComposerUpdate::Clear => chat_view.clear_input(),
         }
@@ -1415,6 +1425,11 @@ impl ChatMode {
         chat_state: &mut ChatState,
         rt_handle: &tokio::runtime::Handle,
     ) -> Result<Option<ChatExitReason>> {
+        let draft_has_images = chat_view.draft_snapshot().has_images();
+        if draft_has_images && chat_view.command_menu_visible() {
+            chat_view.set_status(Some(IMAGE_ATTACHMENTS_REQUIRE_MESSAGE.to_string()));
+            return Ok(None);
+        }
         if let Some(selection) = chat_view.apply_command_menu_selection() {
             return self.handle_action_id(
                 &selection.action_id,
@@ -1426,6 +1441,10 @@ impl ChatMode {
         }
 
         let trimmed = chat_view.input_text().trim();
+        if draft_has_images && trimmed.starts_with('/') {
+            chat_view.set_status(Some(IMAGE_ATTACHMENTS_REQUIRE_MESSAGE.to_string()));
+            return Ok(None);
+        }
         if !trimmed.starts_with('/') {
             self.selected_native_command_once = None;
         }
@@ -1490,10 +1509,37 @@ impl ChatMode {
     }
 
     fn paste_clipboard(&mut self, chat_view: &mut ChatView) {
-        if let Ok(text) = Clipboard::new().and_then(|mut clipboard| clipboard.get_text()) {
-            chat_view.insert_paste(&text);
-            self.sync_selected_native_command(chat_view);
+        match image_paste::read_clipboard(&self.local_cwd) {
+            Ok(Some(paste)) => self.apply_composer_paste(paste, chat_view),
+            Ok(None) => {}
+            Err(error) => chat_view.set_status(Some(error.to_string())),
         }
+    }
+
+    fn paste_terminal_text(&mut self, text: &str, chat_view: &mut ChatView) {
+        match image_paste::classify_pasted_text(text, &self.local_cwd) {
+            Ok(paste) => self.apply_composer_paste(paste, chat_view),
+            Err(error) => chat_view.set_status(Some(error.to_string())),
+        }
+    }
+
+    fn apply_composer_paste(&mut self, paste: ImagePaste, chat_view: &mut ChatView) {
+        match paste {
+            ImagePaste::Text(text) => chat_view.insert_paste(&text),
+            ImagePaste::Image(_image) if self.agent.is_shared() => {
+                chat_view.set_status(Some(crate::actions::shared_tui_image_attachment_error()));
+                return;
+            }
+            ImagePaste::Image(image) => {
+                let name = image.name.clone();
+                if let Err(error) = chat_view.insert_image(image) {
+                    chat_view.set_status(Some(error.to_string()));
+                    return;
+                }
+                chat_view.set_status(Some(format!("Attached image: {name}")));
+            }
+        }
+        self.sync_selected_native_command(chat_view);
     }
 }
 

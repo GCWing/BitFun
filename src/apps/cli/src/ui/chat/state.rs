@@ -11,6 +11,7 @@ use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 use super::agent_selector::{AgentItem, AgentSelectorAction, AgentSelectorState};
 use super::command_menu::{CommandMenuSelection, CommandMenuState};
 use super::command_palette::{CommandPaletteState, PaletteAction};
+use super::composer::{ComposerDraft, ComposerImageAttachment};
 use super::export_dialog::ExportDialogState;
 use super::fork_selector::{ForkAction, ForkSelectorState};
 use super::login_form::{LoginFormAction, LoginFormState};
@@ -30,11 +31,27 @@ use super::theme::{StyleKind, Theme};
 use super::theme_selector::{ThemeItem, ThemeSelectorState};
 use super::widgets::Spinner;
 use super::workspace_diff::WorkspaceDiffViewState;
-use super::workspace_reference::{
-    ComposerDraft, WorkspaceReferencePopupState, WorkspaceReferenceQuery,
-};
+use super::workspace_reference::{WorkspaceReferencePopupState, WorkspaceReferenceQuery};
 use crate::actions::{ActionState, ResolvedKeymap};
 use crate::chat_state::{ChatMessage, ChatState, FlowItem, MessageRole};
+
+#[derive(Debug)]
+struct SubmittedDraftRecord {
+    sequence: u64,
+    draft: ComposerDraft,
+}
+
+#[derive(Debug, Default)]
+struct SessionSubmittedDraftHistory {
+    active: Vec<SubmittedDraftRecord>,
+    undone: Vec<SubmittedDraftRecord>,
+}
+
+#[derive(Debug, Default)]
+struct SubmittedDraftHistory {
+    sessions: HashMap<String, SessionSubmittedDraftHistory>,
+    next_sequence: u64,
+}
 
 /// Types of popups that can be shown in the ChatView
 #[derive(Debug, Clone, PartialEq)]
@@ -140,7 +157,10 @@ pub(crate) struct ChatView {
     status: Option<String>,
     /// Input history (for up/down arrows)
     input_history: VecDeque<ComposerDraft>,
+    /// Drafts accepted by the Runtime, isolated by Session for local undo/redo identity.
+    submitted_drafts: SubmittedDraftHistory,
     workspace_references: Vec<bitfun_agent_runtime::sdk::AgentWorkspaceReference>,
+    image_attachments: Vec<ComposerImageAttachment>,
     workspace_reference_popup: WorkspaceReferencePopupState,
     /// History position
     history_index: Option<usize>,
@@ -269,7 +289,9 @@ impl ChatView {
             auto_scroll: true,
             status: None,
             input_history: VecDeque::with_capacity(50),
+            submitted_drafts: SubmittedDraftHistory::default(),
             workspace_references: Vec::new(),
+            image_attachments: Vec::new(),
             workspace_reference_popup: WorkspaceReferencePopupState::default(),
             history_index: None,
             browse_mode: false,
