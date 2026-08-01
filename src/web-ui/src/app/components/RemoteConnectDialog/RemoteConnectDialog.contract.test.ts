@@ -239,6 +239,18 @@ describe('Remote Connect safety contracts', () => {
     expect(rejectionCleanup).toContain('setWeixinAwaitingPhoneConfirm(false)');
   });
 
+  it('auto-starts Weixin after QR login without exposing a redundant Connect action', () => {
+    const botContent = dialogSource.slice(
+      dialogSource.indexOf('const renderBotContent'),
+      dialogSource.indexOf('// ── Layout'),
+    );
+
+    expect(botContent).toContain("botTab !== 'weixin'");
+    expect(botContent).not.toContain('botWeixinLinked');
+    expect(dialogSource).toContain("t('remoteConnect.botWeixinRestriction')");
+    expect(dialogSource).toContain('prepareAndStartWeixinBotFromQr');
+  });
+
   it('restores an existing relay pairing as cancellable in-progress UI', () => {
     const restoreFlow = dialogSource.slice(
       dialogSource.indexOf('// On dialog open: check if a connection'),

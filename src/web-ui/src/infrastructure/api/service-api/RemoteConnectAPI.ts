@@ -71,6 +71,7 @@ export interface WeixinQrStartResponse {
 export type WeixinQrPollStatus =
   | 'wait'
   | 'scanned'
+  | 'need_verify_code'
   | 'confirmed'
   | 'expired'
   | 'error';
@@ -256,15 +257,31 @@ class RemoteConnectAPIService {
     }
   }
 
-  async weixinQrStart(baseUrl?: string | null): Promise<WeixinQrStartResponse> {
+  async weixinQrStart(
+    baseUrl?: string | null,
+    existingIlinkToken?: string | null,
+    existingBotAccountId?: string | null,
+  ): Promise<WeixinQrStartResponse> {
     return await this.adapter.request<WeixinQrStartResponse>('remote_connect_weixin_qr_start', {
-      request: { base_url: baseUrl ?? null },
+      request: {
+        base_url: baseUrl ?? null,
+        existing_ilink_token: existingIlinkToken ?? null,
+        existing_bot_account_id: existingBotAccountId ?? null,
+      },
     });
   }
 
-  async weixinQrPoll(sessionKey: string, baseUrl?: string | null): Promise<WeixinQrPollResponse> {
+  async weixinQrPoll(
+    sessionKey: string,
+    baseUrl?: string | null,
+    verifyCode?: string | null,
+  ): Promise<WeixinQrPollResponse> {
     return await this.adapter.request<WeixinQrPollResponse>('remote_connect_weixin_qr_poll', {
-      request: { session_key: sessionKey, base_url: baseUrl ?? null },
+      request: {
+        session_key: sessionKey,
+        base_url: baseUrl ?? null,
+        verify_code: verifyCode ?? null,
+      },
     });
   }
 

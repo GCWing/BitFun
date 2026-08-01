@@ -1924,12 +1924,15 @@ pub struct ConfigureBotRequest {
 #[derive(Debug, Deserialize)]
 pub struct WeixinQrStartRequest {
     pub base_url: Option<String>,
+    pub existing_ilink_token: Option<String>,
+    pub existing_bot_account_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct WeixinQrPollRequest {
     pub session_key: String,
     pub base_url: Option<String>,
+    pub verify_code: Option<String>,
 }
 
 #[tauri::command]
@@ -1984,16 +1987,20 @@ pub async fn remote_connect_configure_bot(request: ConfigureBotRequest) -> Resul
 pub async fn remote_connect_weixin_qr_start(
     request: WeixinQrStartRequest,
 ) -> Result<weixin::WeixinQrStartResponse, String> {
-    weixin::weixin_qr_start(request.base_url)
-        .await
-        .map_err(|e| format!("weixin qr start: {e}"))
+    weixin::weixin_qr_start_with_existing(
+        request.base_url,
+        request.existing_ilink_token,
+        request.existing_bot_account_id,
+    )
+    .await
+    .map_err(|e| format!("weixin qr start: {e}"))
 }
 
 #[tauri::command]
 pub async fn remote_connect_weixin_qr_poll(
     request: WeixinQrPollRequest,
 ) -> Result<weixin::WeixinQrPollResponse, String> {
-    weixin::weixin_qr_poll(&request.session_key, request.base_url)
+    weixin::weixin_qr_poll(&request.session_key, request.base_url, request.verify_code)
         .await
         .map_err(|e| format!("weixin qr poll: {e}"))
 }
