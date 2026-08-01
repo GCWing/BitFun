@@ -118,7 +118,7 @@ async fn run_inner(store: &DispatchStore, job_id: &str) -> Result<()> {
     // history is the agent's context. Restoring first is what makes a dispatch
     // session a conversation; creating unconditionally would fail on the second
     // turn because the persisted id already exists.
-    let restored = agent_runtime
+    let restore_error = agent_runtime
         .restore_session(AgentSessionRestoreRequest {
             workspace_path: workspace_path.clone(),
             session_id: job.request.session_id.clone(),
@@ -127,8 +127,12 @@ async fn run_inner(store: &DispatchStore, job_id: &str) -> Result<()> {
             remote_ssh_host: None,
         })
         .await
-        .is_ok();
-    if !restored {
+        .err();
+    if let Some(error) = restore_error.as_ref() {
+        // Expected on the first turn — there is nothing to restore yet.
+        tracing::debug!("Dispatch session restore did not apply: {error}");
+    }
+    if restore_error.is_some() {
         agent_runtime
             .create_session_with_id(
                 job.request.session_id.clone(),
@@ -147,7 +151,16 @@ async fn run_inner(store: &DispatchStore, job_id: &str) -> Result<()> {
             )
             .await
             .map_err(|error| anyhow!(error.into_message()))
-            .context("create target-owned dispatch session")?;
+            // A follow-up turn reaches this only when its restore failed, and
+            // creating then fails on the existing persisted id. Carry the
+            // restore error so the report names the real cause instead of the
+            // "already exists" symptom.
+            .with_context(|| match restore_error {
+                Some(restore) => {
+                    format!("create target-owned dispatch session after restore failed: {restore}")
+                }
+                None => "create target-owned dispatch session".to_string(),
+            })?;
     }
 
     let turn_id = uuid::Uuid::new_v4().to_string();
