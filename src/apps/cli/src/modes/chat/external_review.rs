@@ -682,20 +682,31 @@ fn external_tool_pending_notice_key(snapshot: &ExternalSourceCatalogSnapshot) ->
                 .map(|conflict| format!("conflict:{}", conflict.conflict_key)),
         )
         .collect::<Vec<_>>();
-    decisions.extend(snapshot.diagnostics.iter().filter(|&diagnostic| matches!(
-            diagnostic.severity,
-            ExternalSourceDiagnosticSeverity::Warning | ExternalSourceDiagnosticSeverity::Error
-        )).map(|diagnostic| format!(
-                "diagnostic:{:?}:{}:{}:{}",
-                diagnostic.severity,
-                diagnostic.code,
-                diagnostic.message,
-                diagnostic
-                    .source
-                    .as_ref()
-                    .map(|source| source.stable_key())
-                    .unwrap_or_default()
-            )));
+    decisions.extend(
+        snapshot
+            .diagnostics
+            .iter()
+            .filter(|&diagnostic| {
+                matches!(
+                    diagnostic.severity,
+                    ExternalSourceDiagnosticSeverity::Warning
+                        | ExternalSourceDiagnosticSeverity::Error
+                )
+            })
+            .map(|diagnostic| {
+                format!(
+                    "diagnostic:{:?}:{}:{}:{}",
+                    diagnostic.severity,
+                    diagnostic.code,
+                    diagnostic.message,
+                    diagnostic
+                        .source
+                        .as_ref()
+                        .map(|source| source.stable_key())
+                        .unwrap_or_default()
+                )
+            }),
+    );
     if decisions.is_empty() {
         return None;
     }
@@ -946,6 +957,12 @@ enum ExternalAgentReviewAction {
         expected_subagent_generation: u64,
         expected_preference_revision: u64,
     },
+    Bind {
+        binding_key: String,
+        target: Option<ExternalSubagentModelBindingTarget>,
+        expected_subagent_generation: u64,
+        expected_preference_revision: u64,
+    },
     Choose {
         conflict_key: String,
         candidate_id: String,
@@ -1099,8 +1116,55 @@ fn external_agent_compatibility_label(state: ExternalSubagentCompatibilityState)
     }
 }
 
-fn external_agent_model_label(model: Option<&str>) -> &str {
-    model.unwrap_or("unavailable")
+fn external_agent_model_label(
+    model: Option<&str>,
+    method: ExternalSubagentModelBindingMethod,
+) -> &str {
+    model.unwrap_or(match method {
+        ExternalSubagentModelBindingMethod::Inherit => {
+            "resolved from the parent session when the task starts"
+        }
+        _ => "unavailable",
+    })
+}
+
+fn external_agent_model_request_label(request: &ExternalSubagentModelRequest) -> String {
+    match request {
+        ExternalSubagentModelRequest::Default => "BitFun default".to_string(),
+        ExternalSubagentModelRequest::Inherit => "parent session model".to_string(),
+        ExternalSubagentModelRequest::Reference {
+            provider_hint,
+            model_name,
+        } => provider_hint
+            .as_ref()
+            .map(|provider| format!("{provider}/{model_name}"))
+            .unwrap_or_else(|| model_name.clone()),
+    }
+}
+
+fn external_agent_model_binding_method_label(
+    method: ExternalSubagentModelBindingMethod,
+) -> &'static str {
+    match method {
+        ExternalSubagentModelBindingMethod::Default => "BitFun default",
+        ExternalSubagentModelBindingMethod::Inherit => "inherited from the parent session",
+        ExternalSubagentModelBindingMethod::Exact => "exact configured model",
+        ExternalSubagentModelBindingMethod::Explicit => "user binding",
+        ExternalSubagentModelBindingMethod::BindingRequired => "choose a BitFun model",
+        ExternalSubagentModelBindingMethod::BindingUnavailable => {
+            "saved BitFun model is unavailable"
+        }
+    }
+}
+
+fn external_agent_model_binding_target_label(
+    target: &ExternalSubagentModelBindingTarget,
+) -> &'static str {
+    match target {
+        ExternalSubagentModelBindingTarget::Primary => "primary model",
+        ExternalSubagentModelBindingTarget::Fast => "fast model",
+        ExternalSubagentModelBindingTarget::Model { .. } => "configured model",
+    }
 }
 
 fn external_agent_review_text(snapshot: Option<&ExternalSourceCatalogSnapshot>) -> String {
@@ -1128,6 +1192,69 @@ fn external_agent_review_text(snapshot: Option<&ExternalSourceCatalogSnapshot>) 
     append_external_source_issues(&mut lines, snapshot, ExternalIssueSurface::Agents);
 
     lines.push(String::new());
+    lines.push("Model bindings".to_string());
+    if snapshot.subagent_model_binding_groups.is_empty() {
+        lines.push("  None".to_string());
+    } else {
+        for (binding_index, binding) in snapshot.subagent_model_binding_groups.iter().enumerate() {
+            lines.push(format!(
+                "  {}. {} - {}",
+                binding_index + 1,
+                external_agent_model_request_label(&binding.request),
+                external_agent_model_binding_method_label(binding.method)
+            ));
+            lines.push(format!(
+                "     Affects {} agents; effective model: {}",
+                binding.affected_candidate_ids.len(),
+                external_agent_model_label(
+                    binding.effective_model_label.as_deref(),
+                    binding.method,
+                )
+            ));
+            if binding.method == ExternalSubagentModelBindingMethod::Exact {
+                lines.push("     Matched automatically; no binding is needed.".to_string());
+                continue;
+            }
+            lines.push(format!(
+                "     0. Automatic source matching{} - /agent bind {} 0",
+                if binding.selected_target.is_none() {
+                    " [selected]"
+                } else {
+                    ""
+                },
+                binding_index + 1
+            ));
+            for (choice_index, option) in snapshot.subagent_model_binding_options.iter().enumerate()
+            {
+                lines.push(format!(
+                    "     {}. {} ({}){} - /agent bind {} {}",
+                    choice_index + 1,
+                    option.effective_model_label,
+                    external_agent_model_binding_target_label(&option.target),
+                    if binding.selected_target.as_ref() == Some(&option.target) {
+                        " [selected]"
+                    } else {
+                        ""
+                    },
+                    binding_index + 1,
+                    choice_index + 1
+                ));
+            }
+            if let Some(target) = binding.selected_target.as_ref().filter(|target| {
+                !snapshot
+                    .subagent_model_binding_options
+                    .iter()
+                    .any(|option| &option.target == *target)
+            }) {
+                lines.push(format!(
+                    "     Saved {} is unavailable; choose another entry or clear the binding.",
+                    external_agent_model_binding_target_label(target)
+                ));
+            }
+        }
+    }
+
+    lines.push(String::new());
     lines.push("Agents".to_string());
     if snapshot.subagents.is_empty() {
         lines.push("  None".to_string());
@@ -1152,8 +1279,19 @@ fn external_agent_review_text(snapshot: Option<&ExternalSourceCatalogSnapshot>) 
                 ));
             }
             lines.push(format!(
+                "     Requested model: {}",
+                external_agent_model_request_label(&agent.requested_model)
+            ));
+            lines.push(format!(
+                "     Resolution: {}",
+                external_agent_model_binding_method_label(agent.model_binding_method)
+            ));
+            lines.push(format!(
                 "     Model: {}",
-                external_agent_model_label(agent.effective_model_label.as_deref())
+                external_agent_model_label(
+                    agent.effective_model_label.as_deref(),
+                    agent.model_binding_method,
+                )
             ));
             lines.push(format!(
                 "     Tools: {}",
@@ -1242,7 +1380,10 @@ fn external_agent_review_text(snapshot: Option<&ExternalSourceCatalogSnapshot>) 
                     {
                         lines.push(format!(
                             "        Model: {}",
-                            external_agent_model_label(agent.effective_model_label.as_deref())
+                            external_agent_model_label(
+                                agent.effective_model_label.as_deref(),
+                                agent.model_binding_method,
+                            )
                         ));
                         lines.push(format!(
                             "        Tools: {}",
@@ -1438,6 +1579,10 @@ fn merge_external_agent_mutation_snapshot(
     merged.subagent_generation = result.subagent_generation;
     merged.preference_revision = result.preference_revision;
     merged.subagents = std::mem::take(&mut result.subagents);
+    merged.subagent_model_binding_groups =
+        std::mem::take(&mut result.subagent_model_binding_groups);
+    merged.subagent_model_binding_options =
+        std::mem::take(&mut result.subagent_model_binding_options);
     merged.subagent_conflicts = std::mem::take(&mut result.subagent_conflicts);
     merged.pending_subagent_approvals = std::mem::take(&mut result.pending_subagent_approvals);
     merged
@@ -1445,6 +1590,7 @@ fn merge_external_agent_mutation_snapshot(
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct ExternalAgentAttention {
+    bindings: usize,
     confirmations: usize,
     conflicts: usize,
     unavailable: usize,
@@ -1508,14 +1654,28 @@ fn external_agent_attention(
         })
         .collect::<Vec<_>>();
     let confirmations = snapshot.pending_subagent_approvals.len();
+    let binding_keys = snapshot
+        .subagent_model_binding_groups
+        .iter()
+        .filter(|binding| {
+            matches!(
+                binding.method,
+                ExternalSubagentModelBindingMethod::BindingRequired
+                    | ExternalSubagentModelBindingMethod::BindingUnavailable
+            )
+        })
+        .map(|binding| binding.binding_key.as_str())
+        .collect::<Vec<_>>();
+    let bindings = binding_keys.len();
     let conflicts = unresolved.len();
     let unavailable_count = unavailable.len();
     let diagnostic_count = diagnostics.len();
-    let key = if confirmations + conflicts + unavailable_count + diagnostic_count == 0 {
+    let key = if bindings + confirmations + conflicts + unavailable_count + diagnostic_count == 0 {
         None
     } else {
         Some(format!(
-            "approvals={};conflicts={};unavailable={};diagnostics={}",
+            "bindings={};approvals={};conflicts={};unavailable={};diagnostics={}",
+            binding_keys.join(","),
             pending_decisions.join(","),
             unresolved.join(","),
             unavailable.into_iter().collect::<Vec<_>>().join(","),
@@ -1523,6 +1683,7 @@ fn external_agent_attention(
         ))
     };
     ExternalAgentAttention {
+        bindings,
         confirmations,
         conflicts,
         unavailable: unavailable_count,
@@ -1596,6 +1757,55 @@ fn parse_external_agent_review_action(
             expected_preference_revision: snapshot.preference_revision,
         });
     }
+    if command.eq_ignore_ascii_case("bind") {
+        let binding_index = parse_positive_index(parts.next(), "binding number")?;
+        let raw_choice = parts
+            .next()
+            .ok_or_else(|| "missing choice number".to_string())?;
+        let choice_number = raw_choice
+            .parse::<usize>()
+            .map_err(|_| "choice number must be zero or a positive number".to_string())?;
+        if parts.next().is_some() {
+            return Err("usage: /agent bind <binding-number> <choice-number>".to_string());
+        }
+        let binding = snapshot
+            .subagent_model_binding_groups
+            .get(binding_index)
+            .ok_or_else(|| {
+                "that model binding is no longer available; run /agent refresh".to_string()
+            })?;
+        if !matches!(
+            binding.method,
+            ExternalSubagentModelBindingMethod::BindingRequired
+                | ExternalSubagentModelBindingMethod::Explicit
+                | ExternalSubagentModelBindingMethod::BindingUnavailable
+        ) {
+            return Err(format!(
+                "model binding {} is automatic and cannot be changed",
+                binding_index + 1
+            ));
+        }
+        let target = if choice_number == 0 {
+            None
+        } else {
+            Some(
+                snapshot
+                    .subagent_model_binding_options
+                    .get(choice_number - 1)
+                    .ok_or_else(|| {
+                        "that model choice is no longer available; run /agent refresh".to_string()
+                    })?
+                    .target
+                    .clone(),
+            )
+        };
+        return Ok(ExternalAgentReviewAction::Bind {
+            binding_key: binding.binding_key.clone(),
+            target,
+            expected_subagent_generation: snapshot.subagent_generation,
+            expected_preference_revision: snapshot.preference_revision,
+        });
+    }
     if command.eq_ignore_ascii_case("choose") {
         let conflict_index = parse_positive_index(parts.next(), "conflict number")?;
         let raw_candidate = parts
@@ -1640,7 +1850,7 @@ fn parse_external_agent_review_action(
             expected_preference_revision: snapshot.preference_revision,
         });
     }
-    Err("usage: /agent [refresh | enable <number> | disable <number> | choose <conflict-number> <choice-number>]".to_string())
+    Err("usage: /agent [refresh | bind <binding-number> <choice-number> | enable <number> | disable <number> | choose <conflict-number> <choice-number>]".to_string())
 }
 
 fn external_agent_mutation_result_label(
@@ -1688,6 +1898,26 @@ fn external_agent_mutation_result_label(
                 }
             } else {
                 "Agent choices changed; run /agent refresh before choosing".to_string()
+            }
+        }
+        ExternalAgentReviewAction::Bind {
+            binding_key,
+            target,
+            ..
+        } => {
+            let binding = snapshot
+                .subagent_model_binding_groups
+                .iter()
+                .find(|binding| binding.binding_key == *binding_key);
+            if target.is_none() && binding.is_some_and(|binding| binding.selected_target.is_none())
+            {
+                "Agent model binding cleared".to_string()
+            } else if binding
+                .is_some_and(|binding| binding.selected_target.as_ref() == target.as_ref())
+            {
+                "Agent model binding saved".to_string()
+            } else {
+                "Agent model choices changed; run /agent refresh before choosing".to_string()
             }
         }
         ExternalAgentReviewAction::Show => "External agents".to_string(),

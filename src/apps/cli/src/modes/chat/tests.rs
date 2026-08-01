@@ -52,6 +52,7 @@ mod tests {
     };
     use bitfun_events::{AgenticEvent, ToolEventData};
     use bitfun_product_domains::external_sources::ExternalSourceScope;
+    use bitfun_product_domains::external_subagents::ExternalSubagentModelBindingTarget;
     use bitfun_runtime_ports::AgentContextReloadTarget;
     use std::collections::{BTreeMap, BTreeSet};
 
@@ -2112,6 +2113,13 @@ mod tests {
                 }],
                 "sourceLocationLabels": ["<workspace>/.opencode/agents/review.md"],
                 "sourceCount": 1,
+                "requestedModel": {
+                    "kind": "reference",
+                    "providerHint": "anthropic",
+                    "modelName": "claude-sonnet-4"
+                },
+                "modelBindingMethod": "binding_required",
+                "modelBindingKey": "external_subagent_model_binding:review",
                 "effectiveModelLabel": "fast",
                 "effectiveToolLabels": ["read", "search"],
                 "supportsFollowUp": false,
@@ -2119,6 +2127,27 @@ mod tests {
                 "diagnostics": [],
                 "activationState": { "state": "approval_required" },
                 "decisionKey": "decision-v1"
+            }],
+            "subagentModelBindingGroups": [{
+                "bindingKey": "external_subagent_model_binding:review",
+                "request": {
+                    "kind": "reference",
+                    "providerHint": "anthropic",
+                    "modelName": "claude-sonnet-4"
+                },
+                "scope": "project",
+                "method": "binding_required",
+                "affectedCandidateIds": [
+                    "external_subagent:opencode:review:v1",
+                    "external_subagent:claude:review:v1"
+                ]
+            }],
+            "subagentModelBindingOptions": [{
+                "target": { "kind": "primary" },
+                "effectiveModelLabel": "GPT-5"
+            }, {
+                "target": { "kind": "fast" },
+                "effectiveModelLabel": "GLM-4.5-Air"
             }],
             "subagentConflicts": [{
                 "conflictKey": "conflict-v1",
@@ -2146,6 +2175,10 @@ mod tests {
 
         assert!(summary.contains("one run only; no follow-up"));
         assert!(summary.contains("Model: fast"));
+        assert!(summary.contains("Requested model: anthropic/claude-sonnet-4"));
+        assert!(summary.contains("Resolution: choose a BitFun model"));
+        assert!(summary.contains("Affects 2 agents"));
+        assert!(summary.contains("/agent bind 1 2"));
         assert!(summary.contains("Tools: read, search"));
         assert!(summary.contains("/agent enable 1"));
         assert!(summary.contains("/agent choose 1 2"));
@@ -2162,6 +2195,18 @@ mod tests {
         let mut unavailable = external_agent_review_snapshot();
         unavailable.subagents[0].effective_model_label = None;
         assert!(external_agent_review_text(Some(&unavailable)).contains("Model: unavailable"));
+
+        let mut inherited = external_agent_review_snapshot();
+        inherited.subagents[0].requested_model =
+            bitfun_product_domains::external_subagents::ExternalSubagentModelRequest::Inherit;
+        inherited.subagents[0].model_binding_method =
+            bitfun_product_domains::external_subagents::ExternalSubagentModelBindingMethod::Inherit;
+        inherited.subagents[0].model_binding_key = None;
+        inherited.subagents[0].effective_model_label = None;
+        let inherited_summary = external_agent_review_text(Some(&inherited));
+        assert!(inherited_summary
+            .contains("Model: resolved from the parent session when the task starts"));
+        assert!(!inherited_summary.contains("Model: unavailable"));
     }
 
     #[test]
@@ -2283,6 +2328,24 @@ mod tests {
                 candidate_id: "external_subagent:opencode:review:v1".to_string(),
                 decision_key: "decision-v1".to_string(),
                 approved: true,
+                expected_subagent_generation: 4,
+                expected_preference_revision: 7,
+            }
+        );
+        assert_eq!(
+            parse_external_agent_review_action("bind 1 2", Some(&snapshot), None).unwrap(),
+            ExternalAgentReviewAction::Bind {
+                binding_key: "external_subagent_model_binding:review".to_string(),
+                target: Some(ExternalSubagentModelBindingTarget::Fast),
+                expected_subagent_generation: 4,
+                expected_preference_revision: 7,
+            }
+        );
+        assert_eq!(
+            parse_external_agent_review_action("bind 1 0", Some(&snapshot), None).unwrap(),
+            ExternalAgentReviewAction::Bind {
+                binding_key: "external_subagent_model_binding:review".to_string(),
+                target: None,
                 expected_subagent_generation: 4,
                 expected_preference_revision: 7,
             }

@@ -521,6 +521,89 @@ describe('ExternalSourcesAPI', () => {
     );
   });
 
+  it('normalizes omitted subagent model-binding collections at the API boundary', async () => {
+    invokeMock.mockResolvedValue(surface({
+      generation: 2,
+      discoveryPending: false,
+      sources: [],
+      commands: [],
+      subagents: [{
+        candidateId: 'opencode-review',
+        logicalId: 'review',
+        displayName: 'Review',
+        description: 'Review changes',
+        providerLabel: 'OpenCode',
+        scope: 'project',
+        sourceKeys: [],
+        sourceLocationLabels: [],
+        sourceCount: 1,
+        effectiveToolLabels: [],
+        unavailableToolLabels: [],
+        supportsFollowUp: false,
+        compatibilityState: 'ready',
+        diagnostics: [],
+        activationState: { state: 'approval_required' },
+        decisionKey: 'decision-v1',
+      }],
+    }));
+
+    const result = await externalSourcesAPI.getSnapshot();
+
+    expect(result.subagentModelBindingGroups).toEqual([]);
+    expect(result.subagentModelBindingOptions).toEqual([]);
+    expect(result.subagents?.[0]).toMatchObject({
+      requestedModel: { kind: 'default' },
+      modelBindingMethod: 'default',
+    });
+  });
+
+  it('sends typed subagent model bindings and clears them through the same command', async () => {
+    await externalSourcesAPI.setSubagentModelBinding(
+      'D:/workspace/project',
+      'external_subagent_model_binding:review',
+      { kind: 'model', modelId: 'anthropic/claude-sonnet-4' },
+      5,
+      8,
+    );
+
+    expect(invokeMock).toHaveBeenNthCalledWith(
+      1,
+      'set_external_subagent_model_binding_command',
+      {
+        request: {
+          workspacePath: 'D:/workspace/project',
+          bindingKey: 'external_subagent_model_binding:review',
+          target: { kind: 'model', modelId: 'anthropic/claude-sonnet-4' },
+          expectedSubagentGeneration: 5,
+          expectedPreferenceRevision: 8,
+        },
+      },
+    );
+
+    invokeMock.mockClear();
+    await externalSourcesAPI.setSubagentModelBinding(
+      'D:/workspace/project',
+      'external_subagent_model_binding:review',
+      undefined,
+      6,
+      9,
+    );
+
+    expect(invokeMock).toHaveBeenNthCalledWith(
+      1,
+      'set_external_subagent_model_binding_command',
+      {
+        request: {
+          workspacePath: 'D:/workspace/project',
+          bindingKey: 'external_subagent_model_binding:review',
+          target: undefined,
+          expectedSubagentGeneration: 6,
+          expectedPreferenceRevision: 9,
+        },
+      },
+    );
+  });
+
   it('restores omitted empty MCP collections at the API boundary', async () => {
     invokeMock.mockResolvedValue(surface({
       generation: 3,

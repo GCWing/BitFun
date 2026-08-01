@@ -34,11 +34,13 @@ use bitfun_product_domains::external_sources::{
 };
 use bitfun_product_domains::external_subagents::{
     external_subagent_approval_key, external_subagent_candidate_id, external_subagent_conflict_key,
-    ExternalSubagentBehaviorVersion, ExternalSubagentCandidateId,
-    ExternalSubagentCompatibilityState, ExternalSubagentContributionId,
-    ExternalSubagentContributionRole, ExternalSubagentDefinition, ExternalSubagentDiscoveryInput,
-    ExternalSubagentLocalId, ExternalSubagentMode, ExternalSubagentModelRequest,
-    ExternalSubagentProvenanceRef, ExternalSubagentProviderIdentity,
+    external_subagent_model_binding_key, ExternalSubagentBehaviorVersion,
+    ExternalSubagentCandidateId, ExternalSubagentCompatibilityState,
+    ExternalSubagentContributionId, ExternalSubagentContributionRole, ExternalSubagentDefinition,
+    ExternalSubagentDiscoveryInput, ExternalSubagentLocalId, ExternalSubagentMode,
+    ExternalSubagentModelBindingGroup, ExternalSubagentModelBindingMethod,
+    ExternalSubagentModelBindingOption, ExternalSubagentModelBindingTarget,
+    ExternalSubagentModelRequest, ExternalSubagentProvenanceRef, ExternalSubagentProviderIdentity,
     ExternalSubagentProviderSnapshot, ExternalSubagentToolRequest, ExternalSubagentToolSelector,
     SecretText,
 };
@@ -409,7 +411,7 @@ fn external_subagent_identity_preserves_ordered_provenance_and_separate_revision
     assert!(!format!("{definition:?}").contains("C:/sensitive/private"));
 
     let mut invalid_model = definition.clone();
-    invalid_model.requested_model = ExternalSubagentModelRequest::Exact {
+    invalid_model.requested_model = ExternalSubagentModelRequest::Reference {
         provider_hint: Some("fake\nprovider".to_string()),
         model_name: "model".to_string(),
     };
@@ -569,6 +571,146 @@ fn external_subagent_identity_preserves_ordered_provenance_and_separate_revision
 }
 
 #[test]
+fn external_subagent_model_contract_preserves_control_and_opaque_reference_semantics() {
+    let requests = [
+        ExternalSubagentModelRequest::Default,
+        ExternalSubagentModelRequest::Inherit,
+        ExternalSubagentModelRequest::Reference {
+            provider_hint: Some("openrouter".to_string()),
+            model_name: "anthropic/claude-sonnet-4".to_string(),
+        },
+        ExternalSubagentModelRequest::Reference {
+            provider_hint: None,
+            model_name: "gpt-5.6-codex".to_string(),
+        },
+        ExternalSubagentModelRequest::Reference {
+            provider_hint: None,
+            model_name: "glm-5".to_string(),
+        },
+        ExternalSubagentModelRequest::Reference {
+            provider_hint: None,
+            model_name: "deepseek-v4".to_string(),
+        },
+        ExternalSubagentModelRequest::Reference {
+            provider_hint: None,
+            model_name: "future-model-that-does-not-exist-yet".to_string(),
+        },
+    ];
+
+    for request in requests {
+        let encoded = serde_json::to_value(&request).unwrap();
+        if let ExternalSubagentModelRequest::Reference {
+            provider_hint,
+            model_name,
+        } = &request
+        {
+            assert_eq!(encoded["modelName"], model_name.as_str());
+            assert!(encoded.get("model_name").is_none());
+            if let Some(provider_hint) = provider_hint {
+                assert_eq!(encoded["providerHint"], provider_hint.as_str());
+                assert!(encoded.get("provider_hint").is_none());
+            }
+        }
+        let decoded: ExternalSubagentModelRequest = serde_json::from_value(encoded).unwrap();
+        assert_eq!(decoded, request);
+    }
+
+    assert_ne!(
+        ExternalSubagentModelRequest::Inherit,
+        ExternalSubagentModelRequest::Reference {
+            provider_hint: None,
+            model_name: "inherit".to_string(),
+        }
+    );
+}
+
+#[test]
+fn external_subagent_model_binding_contract_groups_only_matching_scope_identity() {
+    let ecosystem = EcosystemId::new("opencode").unwrap();
+    let request = ExternalSubagentModelRequest::Reference {
+        provider_hint: Some("openrouter".to_string()),
+        model_name: "vendor/model".to_string(),
+    };
+    let global_a = external_subagent_model_binding_key(
+        &ecosystem,
+        &request,
+        "local-user",
+        ExternalSourceScope::UserGlobal,
+        "D:/workspace/a",
+    )
+    .unwrap();
+    let global_b = external_subagent_model_binding_key(
+        &ecosystem,
+        &request,
+        "local-user",
+        ExternalSourceScope::UserGlobal,
+        "D:/workspace/b",
+    )
+    .unwrap();
+    assert_eq!(
+        global_a, global_b,
+        "user bindings belong to the execution domain"
+    );
+
+    let project_a = external_subagent_model_binding_key(
+        &ecosystem,
+        &request,
+        "local-user",
+        ExternalSourceScope::Project,
+        "D:/workspace/a",
+    )
+    .unwrap();
+    let project_b = external_subagent_model_binding_key(
+        &ecosystem,
+        &request,
+        "local-user",
+        ExternalSourceScope::Project,
+        "D:/workspace/b",
+    )
+    .unwrap();
+    assert_ne!(
+        project_a, project_b,
+        "project bindings stay workspace-scoped"
+    );
+    assert_ne!(
+        global_a, project_a,
+        "global and project bindings never alias"
+    );
+    let remote_global = external_subagent_model_binding_key(
+        &ecosystem,
+        &request,
+        "remote:user@example",
+        ExternalSourceScope::RemoteUser,
+        "D:/workspace/a",
+    )
+    .unwrap();
+    assert_ne!(
+        global_a, remote_global,
+        "remote and local execution domains never share bindings"
+    );
+
+    let option = ExternalSubagentModelBindingOption {
+        target: ExternalSubagentModelBindingTarget::Primary,
+        effective_model_label: "Provider / Model".to_string(),
+    };
+    let group = ExternalSubagentModelBindingGroup {
+        binding_key: project_a,
+        request,
+        scope: ExternalSourceScope::Project,
+        method: ExternalSubagentModelBindingMethod::Explicit,
+        selected_target: Some(option.target.clone()),
+        effective_model_label: Some(option.effective_model_label.clone()),
+        affected_candidate_ids: vec!["candidate-a".to_string(), "candidate-b".to_string()],
+    };
+    let encoded = serde_json::to_value((&option, &group)).unwrap();
+    let decoded: (
+        ExternalSubagentModelBindingOption,
+        ExternalSubagentModelBindingGroup,
+    ) = serde_json::from_value(encoded).unwrap();
+    assert_eq!(decoded, (option, group));
+}
+
+#[test]
 fn external_subagent_decision_keys_bind_behavior_but_not_catalog_copy() {
     let candidate = ExternalSubagentCandidateId::new("candidate-v1").unwrap();
     let behavior = ExternalSubagentBehaviorVersion::new("behavior-v1").unwrap();
@@ -715,6 +857,13 @@ fn legacy_public_snapshot_downprojects_new_tool_review_variants() {
             "sourceKeys": [],
             "sourceLocationLabels": [],
             "sourceCount": 1,
+            "requestedModel": {
+                "kind": "reference",
+                "providerHint": "anthropic",
+                "modelName": "claude-sonnet-4"
+            },
+            "modelBindingMethod": "binding_required",
+            "modelBindingKey": "external_subagent_model_binding:review",
             "effectiveToolLabels": ["Read"],
             "unavailableToolLabels": ["Shell"],
             "supportsFollowUp": false,
@@ -725,6 +874,17 @@ fn legacy_public_snapshot_downprojects_new_tool_review_variants() {
             }],
             "activationState": { "state": "blocked" },
             "decisionKey": "agent-decision-v1"
+        }],
+        "subagentModelBindingGroups": [{
+            "bindingKey": "external_subagent_model_binding:review",
+            "request": { "kind": "reference", "modelName": "claude-sonnet-4" },
+            "scope": "project",
+            "method": "binding_required",
+            "affectedCandidateIds": ["external-review"]
+        }],
+        "subagentModelBindingOptions": [{
+            "target": { "kind": "fast" },
+            "effectiveModelLabel": "Fast"
         }]
     }))
     .expect("new public snapshot");
@@ -736,6 +896,11 @@ fn legacy_public_snapshot_downprojects_new_tool_review_variants() {
     assert!(legacy["subagents"][0]
         .get("unavailableToolLabels")
         .is_none());
+    assert!(legacy["subagents"][0].get("requestedModel").is_none());
+    assert!(legacy["subagents"][0].get("modelBindingMethod").is_none());
+    assert!(legacy["subagents"][0].get("modelBindingKey").is_none());
+    assert!(legacy.get("subagentModelBindingGroups").is_none());
+    assert!(legacy.get("subagentModelBindingOptions").is_none());
 }
 
 #[test]
@@ -1458,6 +1623,22 @@ fn public_snapshot_never_exposes_executable_prompt_templates() {
         subagent_generation: 0,
         preference_revision: 0,
         subagents: Vec::new(),
+        subagent_model_binding_groups: vec![ExternalSubagentModelBindingGroup {
+            binding_key: "external_subagent_model_binding:review".to_string(),
+            request: ExternalSubagentModelRequest::Reference {
+                provider_hint: Some("anthropic".to_string()),
+                model_name: "claude-sonnet-4".to_string(),
+            },
+            scope: ExternalSourceScope::Project,
+            method: ExternalSubagentModelBindingMethod::BindingRequired,
+            selected_target: None,
+            effective_model_label: None,
+            affected_candidate_ids: vec!["opencode-review".to_string()],
+        }],
+        subagent_model_binding_options: vec![ExternalSubagentModelBindingOption {
+            target: ExternalSubagentModelBindingTarget::Fast,
+            effective_model_label: "GLM-4.5-Air".to_string(),
+        }],
         subagent_conflicts: Vec::new(),
         pending_subagent_approvals: Vec::new(),
         integration_policy: Default::default(),
@@ -1471,6 +1652,14 @@ fn public_snapshot_never_exposes_executable_prompt_templates() {
     assert!(encoded["commands"][0]["definition"]
         .get("template")
         .is_none());
+    assert_eq!(
+        encoded["subagentModelBindingGroups"][0]["bindingKey"],
+        "external_subagent_model_binding:review"
+    );
+    assert_eq!(
+        encoded["subagentModelBindingOptions"][0]["effectiveModelLabel"],
+        "GLM-4.5-Air"
+    );
 }
 
 #[test]
@@ -1498,6 +1687,8 @@ fn control_projection_keeps_lifecycle_facts_orthogonal() {
         subagent_generation: 3,
         preference_revision: 11,
         subagents: Vec::new(),
+        subagent_model_binding_groups: Vec::new(),
+        subagent_model_binding_options: Vec::new(),
         subagent_conflicts: Vec::new(),
         pending_subagent_approvals: Vec::new(),
         integration_policy: Default::default(),
@@ -1577,6 +1768,8 @@ fn control_projection_does_not_infer_review_facts_from_runtime_activation() {
         subagent_generation: 1,
         preference_revision: 1,
         subagents: Vec::new(),
+        subagent_model_binding_groups: Vec::new(),
+        subagent_model_binding_options: Vec::new(),
         subagent_conflicts: Vec::new(),
         pending_subagent_approvals: Vec::new(),
         integration_policy: Default::default(),

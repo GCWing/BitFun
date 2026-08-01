@@ -1161,7 +1161,7 @@ async fn external_routes_are_workspace_scoped_fail_closed_and_generation_leased(
             runtime_key: runtime_v1.to_string(),
             logical_id: "Explore".to_string(),
             provider_label: "OpenCode".to_string(),
-            model_binding: super::ExternalSubagentModelBinding {
+            model_binding: super::ExternalSubagentModelBinding::Fixed {
                 model_id: "inherit".to_string(),
                 configuration_fingerprint: "model-config-v1".to_string(),
             },
@@ -1225,8 +1225,11 @@ async fn external_routes_are_workspace_scoped_fail_closed_and_generation_leased(
         .as_ref()
         .expect("external binding keeps a generation lease")
         .model_binding();
-    assert_eq!(leased_model.model_id, "inherit");
-    assert_eq!(leased_model.configuration_fingerprint, "model-config-v1");
+    assert_eq!(leased_model.fixed_model_id(), Some("inherit"));
+    assert_eq!(
+        leased_model.configuration_fingerprint(),
+        Some("model-config-v1")
+    );
 
     let runtime_v2 = "external::candidate::behavior-v2";
     let agent_v2: Arc<dyn Agent> = Arc::new(TestAgent {
@@ -1238,7 +1241,7 @@ async fn external_routes_are_workspace_scoped_fail_closed_and_generation_leased(
             runtime_key: runtime_v2.to_string(),
             logical_id: "Explore".to_string(),
             provider_label: "OpenCode".to_string(),
-            model_binding: super::ExternalSubagentModelBinding {
+            model_binding: super::ExternalSubagentModelBinding::Fixed {
                 model_id: "inherit".to_string(),
                 configuration_fingerprint: "model-config-v2".to_string(),
             },
@@ -1259,8 +1262,8 @@ async fn external_routes_are_workspace_scoped_fail_closed_and_generation_leased(
             .as_ref()
             .expect("old generation remains leased")
             .model_binding()
-            .configuration_fingerprint,
-        "model-config-v1"
+            .configuration_fingerprint(),
+        Some("model-config-v1")
     );
 
     registry.install_external_subagent_routes(

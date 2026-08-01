@@ -13,6 +13,7 @@ const setConflictChoiceMock = vi.hoisted(() => vi.fn());
 const setToolTargetDecisionMock = vi.hoisted(() => vi.fn());
 const setToolConflictChoiceMock = vi.hoisted(() => vi.fn());
 const setSubagentActivationMock = vi.hoisted(() => vi.fn());
+const setSubagentModelBindingMock = vi.hoisted(() => vi.fn());
 const chooseSubagentConflictMock = vi.hoisted(() => vi.fn());
 const setMcpServerDecisionMock = vi.hoisted(() => vi.fn());
 const chooseMcpConflictMock = vi.hoisted(() => vi.fn());
@@ -74,6 +75,7 @@ vi.mock('@/infrastructure/api/service-api/ExternalSourcesAPI', () => ({
     setToolTargetDecision: setToolTargetDecisionMock,
     setToolConflictChoice: setToolConflictChoiceMock,
     setSubagentActivation: setSubagentActivationMock,
+    setSubagentModelBinding: setSubagentModelBindingMock,
     chooseSubagentConflict: chooseSubagentConflictMock,
     setMcpServerDecision: setMcpServerDecisionMock,
     chooseMcpConflict: chooseMcpConflictMock,
@@ -267,6 +269,7 @@ describe('ExternalSourcesConfig', () => {
     setToolTargetDecisionMock.mockResolvedValue(snapshot);
     setToolConflictChoiceMock.mockResolvedValue(snapshot);
     setSubagentActivationMock.mockResolvedValue(snapshot);
+    setSubagentModelBindingMock.mockResolvedValue(snapshot);
     chooseSubagentConflictMock.mockResolvedValue(snapshot);
     setMcpServerDecisionMock.mockResolvedValue(snapshot);
     chooseMcpConflictMock.mockResolvedValue(snapshot);
@@ -1513,6 +1516,153 @@ describe('ExternalSourcesConfig', () => {
       true,
       4,
       7,
+    );
+  });
+
+  it('shows one model binding for matching agent requests and applies a typed target', async () => {
+    Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
+      configurable: true,
+      value: vi.fn(),
+    });
+    const bindingSnapshot = {
+      ...snapshot,
+      subagentGeneration: 5,
+      preferenceRevision: 8,
+      subagents: [{
+        candidateId: 'opencode-review',
+        logicalId: 'review',
+        displayName: 'OpenCode Review',
+        description: 'Review changes',
+        providerLabel: 'OpenCode',
+        scope: 'project',
+        sourceKeys: [],
+        sourceLocationLabels: [],
+        sourceCount: 1,
+        requestedModel: {
+          kind: 'reference',
+          providerHint: 'anthropic',
+          modelName: 'claude-sonnet-4',
+        },
+        modelBindingMethod: 'binding_required',
+        modelBindingKey: 'external_subagent_model_binding:review',
+        effectiveToolLabels: ['Read'],
+        unavailableToolLabels: [],
+        supportsFollowUp: false,
+        compatibilityState: 'blocked',
+        diagnostics: [],
+        activationState: { state: 'unavailable' },
+        decisionKey: 'decision-v1',
+      }],
+      subagentModelBindingGroups: [{
+        bindingKey: 'external_subagent_model_binding:review',
+        request: {
+          kind: 'reference',
+          providerHint: 'anthropic',
+          modelName: 'claude-sonnet-4',
+        },
+        scope: 'project',
+        method: 'binding_required',
+        affectedCandidateIds: ['opencode-review', 'claude-review'],
+      }],
+      subagentModelBindingOptions: [{
+        target: { kind: 'primary' },
+        effectiveModelLabel: 'GPT-5',
+      }, {
+        target: { kind: 'fast' },
+        effectiveModelLabel: 'GLM-4.5-Air',
+      }],
+      subagentConflicts: [],
+      pendingSubagentApprovals: [],
+    };
+    const updatedSnapshot = {
+      ...bindingSnapshot,
+      subagentGeneration: 6,
+      preferenceRevision: 9,
+      subagentModelBindingGroups: [{
+        ...bindingSnapshot.subagentModelBindingGroups[0],
+        method: 'explicit',
+        selectedTarget: { kind: 'fast' },
+        effectiveModelLabel: 'GLM-4.5-Air',
+      }],
+    };
+    getSnapshotMock
+      .mockResolvedValueOnce(bindingSnapshot)
+      .mockResolvedValue(updatedSnapshot);
+    setSubagentModelBindingMock.mockResolvedValue(updatedSnapshot);
+
+    await act(async () => {
+      root.render(<ExternalSourcesConfig />);
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toContain('agentModelBindings.title');
+    expect(container.textContent).toContain('anthropic/claude-sonnet-4');
+    expect(container.textContent).toContain('agentModelBindings.affectedAgents:{"count":2}');
+    expect(container.textContent).toContain('agentModelBindings.method.binding_required');
+
+    const trigger = container.querySelector<HTMLElement>(
+      '[aria-label^="agentModelBindings.selectLabel"]',
+    );
+    await act(async () => trigger?.click());
+    const fastOption = Array.from(document.querySelectorAll<HTMLElement>('[role="option"]'))
+      .find((option) => option.textContent?.includes('GLM-4.5-Air'));
+    await act(async () => fastOption?.click());
+
+    expect(setSubagentModelBindingMock).toHaveBeenCalledWith(
+      'D:/workspace/project',
+      'external_subagent_model_binding:review',
+      { kind: 'fast' },
+      5,
+      8,
+    );
+    expect(container.textContent).toContain('agentModelBindings.method.explicit');
+  });
+
+  it('shows inherited models as resolved when the task starts instead of unavailable', async () => {
+    getSnapshotMock.mockResolvedValue({
+      ...snapshot,
+      commandConflicts: [],
+      subagentGeneration: 5,
+      preferenceRevision: 8,
+      subagents: [{
+        candidateId: 'claude-review',
+        logicalId: 'review',
+        displayName: 'Claude Review',
+        description: 'Review changes',
+        providerLabel: 'Claude Code',
+        scope: 'project',
+        sourceKeys: [],
+        sourceLocationLabels: [],
+        sourceCount: 1,
+        requestedModel: { kind: 'inherit' },
+        modelBindingMethod: 'inherit',
+        effectiveToolLabels: ['Read'],
+        unavailableToolLabels: [],
+        supportsFollowUp: false,
+        compatibilityState: 'ready',
+        diagnostics: [],
+        activationState: { state: 'approval_required' },
+        decisionKey: 'decision-inherit-v1',
+      }],
+      subagentModelBindingGroups: [],
+      subagentModelBindingOptions: [],
+      subagentConflicts: [],
+      pendingSubagentApprovals: ['claude-review'],
+    });
+
+    await act(async () => {
+      root.render(<ExternalSourcesConfig />);
+      await Promise.resolve();
+    });
+    const details = Array.from(container.querySelectorAll('button')).find((button) =>
+      button.textContent?.includes('common.details'));
+    await act(async () => details?.click());
+
+    expect(container.textContent).toContain(
+      'agents.model:{"model":"agents.modelResolvedFromParentAtTaskStart"}',
+    );
+    expect(container.textContent).not.toContain(
+      'agents.model:{"model":"agents.modelUnavailable"}',
     );
   });
 

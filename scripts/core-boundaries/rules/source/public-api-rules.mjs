@@ -637,8 +637,8 @@ function externalSubagentEntry(symbol, owner, consumer, wireImpact = false) {
     owner,
     consumer,
     verification:
-      'external subagent contract, coordinator, OpenCode adapter, product reconciliation, registry lease, TUI, Desktop, and Web tests',
-    p0: 'PR3 ecosystem-neutral fresh subagent activation and OpenCode agent vertical slice',
+      'external subagent contract, coordinator, OpenCode, Claude Code, and Codex adapters, product reconciliation, registry lease, TUI, Desktop, and Web tests',
+    p0: 'ecosystem-neutral fresh subagent activation and declarative model binding vertical slice',
     contractSlice: contractSlices.externalSourceSubagentContract,
     wireImpact,
     rationale:
@@ -853,6 +853,10 @@ export const externalSubagentContractPublicApiEntries = [
   'ExternalSubagentProviderIdentity',
   'ExternalSubagentMode',
   'ExternalSubagentModelRequest',
+  'ExternalSubagentModelBindingTarget',
+  'ExternalSubagentModelBindingMethod',
+  'ExternalSubagentModelBindingOption',
+  'ExternalSubagentModelBindingGroup',
   'ExternalSubagentToolSelector',
   'ExternalSubagentToolRequest',
   'ExternalSubagentCompatibilityState',
@@ -868,6 +872,7 @@ export const externalSubagentContractPublicApiEntries = [
   'external_subagent_candidate_id',
   'external_subagent_approval_key',
   'external_subagent_conflict_key',
+  'external_subagent_model_binding_key',
 ].map((symbol) =>
   externalSubagentEntry(
     symbol,
@@ -1076,8 +1081,14 @@ export const externalSourceCorePublicApiEntries = [
     'ExternalSubagentCompatibilityState',
     'ExternalSubagentConflict',
     'ExternalSubagentConflictCandidate',
+    'ExternalSubagentModelBindingGroup',
+    'ExternalSubagentModelBindingMethod',
+    'ExternalSubagentModelBindingOption',
+    'ExternalSubagentModelBindingTarget',
+    'ExternalSubagentModelRequest',
     'ExternalSubagentSummary',
     'set_external_subagent_activation',
+    'set_external_subagent_model_binding',
     'choose_external_subagent_conflict',
   ].map((symbol) =>
     externalSubagentEntry(

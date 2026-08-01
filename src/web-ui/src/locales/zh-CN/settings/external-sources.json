@@ -105,6 +105,7 @@
     "updated": "已保存。",
     "waitForUpdate": "另一项更改仍在保存，请等待完成后再做选择。",
     "agentUpdated": "已保存“{{name}}”的更改并刷新状态。",
+    "modelBindingUpdated": "已保存 Agent 模型绑定并刷新受影响的 Agent。",
     "mcpUpdated": "已保存 MCP 服务器选择并刷新状态。"
   },
   "recoveryActions": {
@@ -249,6 +250,9 @@
     "approvalWarning": "启用后，该 Agent 可以让所选模型调用上方工具。其指令、模型、工具或配置来源发生变化时，BitFun 会要求你再次确认。",
     "singleRun": "单次运行，不支持续问",
     "modelUnavailable": "不可用",
+    "modelResolvedFromParentAtTaskStart": "任务开始时从父会话解析",
+    "requestedModel": "来源声明：{{model}}",
+    "modelBindingMethod": "解析方式：{{method}}",
     "model": "模型：{{model}}",
     "tools": "工具：{{tools}}",
     "executionDomain": "运行位置：本机和当前工作区",
@@ -257,6 +261,32 @@
     "noTools": "无工具",
     "unavailableToolsUnknown": "当前 Host 未提供工具名称",
     "sourceLocations": "配置来源（{{count}} 个）"
+  },
+  "agentModelBindings": {
+    "title": "Agent 模型绑定",
+    "affectedAgents": "影响 {{count}} 个 Agent",
+    "effectiveModel": "实际使用 {{model}}",
+    "selectLabel": "为 {{request}} 选择 BitFun 模型",
+    "automatic": "已自动匹配",
+    "targetUnavailable": "已不可用：{{target}}",
+    "request": {
+      "default": "BitFun 默认模型",
+      "inherit": "父会话模型"
+    },
+    "target": {
+      "source": "使用来源自动匹配",
+      "primary": "主模型",
+      "fast": "快速模型",
+      "model": "已配置模型"
+    },
+    "method": {
+      "default": "BitFun 默认模型",
+      "inherit": "继承父会话模型",
+      "exact": "精确匹配已配置模型",
+      "explicit": "用户绑定",
+      "binding_required": "需要选择模型",
+      "binding_unavailable": "已保存的模型不可用"
+    }
   },
   "agentState": {
     "approval_required": "待确认",

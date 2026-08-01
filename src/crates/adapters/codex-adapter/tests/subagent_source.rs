@@ -91,6 +91,33 @@ developer_instructions = "Project-only instructions"
 }
 
 #[test]
+fn model_named_inherit_remains_an_opaque_codex_reference() {
+    let fixture = Fixture::new();
+    write(
+        fixture.codex_home.join("config.toml"),
+        r#"[agents.named]
+description = "Named model"
+config_file = "./agents/named.toml"
+"#,
+    );
+    write(
+        fixture.codex_home.join("agents/named.toml"),
+        r#"developer_instructions = "Use the configured model"
+model = "inherit"
+"#,
+    );
+
+    let definition = &fixture.discover(BTreeSet::new()).definitions[0];
+    assert_eq!(
+        definition.requested_model,
+        ExternalSubagentModelRequest::Reference {
+            provider_hint: None,
+            model_name: "inherit".to_string(),
+        }
+    );
+}
+
+#[test]
 fn standalone_project_role_overlays_user_role_and_inherits_missing_description() {
     let fixture = Fixture::new();
     write(
@@ -124,7 +151,7 @@ model = "gpt-project"
     assert_eq!(definition.provenance.len(), 2);
     assert_eq!(
         definition.requested_model,
-        ExternalSubagentModelRequest::Exact {
+        ExternalSubagentModelRequest::Reference {
             provider_hint: None,
             model_name: "gpt-project".to_string(),
         }
@@ -165,7 +192,7 @@ nickname_candidates = ["Atlas"]
     assert_eq!(definition.provenance.len(), 2);
     assert_eq!(
         definition.requested_model,
-        ExternalSubagentModelRequest::Exact {
+        ExternalSubagentModelRequest::Reference {
             provider_hint: None,
             model_name: "gpt-inherited".to_string(),
         }
@@ -225,7 +252,7 @@ config_file = "./agents/prompt_only.toml"
     assert_eq!(model_only.prompt.expose(), "Inherited prompt");
     assert_eq!(
         model_only.requested_model,
-        ExternalSubagentModelRequest::Exact {
+        ExternalSubagentModelRequest::Reference {
             provider_hint: None,
             model_name: "gpt-project".to_string(),
         }
@@ -239,7 +266,7 @@ config_file = "./agents/prompt_only.toml"
     assert_eq!(prompt_only.prompt.expose(), "Project prompt");
     assert_eq!(
         prompt_only.requested_model,
-        ExternalSubagentModelRequest::Exact {
+        ExternalSubagentModelRequest::Reference {
             provider_hint: None,
             model_name: "gpt-inherited".to_string(),
         }
@@ -481,7 +508,7 @@ config_file = "./agents/reviewer.toml"
     assert!(definition.disabled);
     assert_eq!(
         definition.requested_model,
-        ExternalSubagentModelRequest::Exact {
+        ExternalSubagentModelRequest::Reference {
             provider_hint: None,
             model_name: "gpt-default".to_string(),
         },

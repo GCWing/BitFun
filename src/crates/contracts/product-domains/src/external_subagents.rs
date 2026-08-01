@@ -208,15 +208,117 @@ pub enum ExternalSubagentMode {
     Primary,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "kind", rename_all = "snake_case")]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(
+    tag = "kind",
+    rename_all = "snake_case",
+    rename_all_fields = "camelCase"
+)]
 pub enum ExternalSubagentModelRequest {
+    #[default]
     Default,
-    Exact {
+    Inherit,
+    Reference {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         provider_hint: Option<String>,
         model_name: String,
     },
+}
+
+fn is_default_model_request(request: &ExternalSubagentModelRequest) -> bool {
+    matches!(request, ExternalSubagentModelRequest::Default)
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(
+    tag = "kind",
+    rename_all = "snake_case",
+    rename_all_fields = "camelCase",
+    deny_unknown_fields
+)]
+pub enum ExternalSubagentModelBindingTarget {
+    Primary,
+    Fast,
+    Model { model_id: String },
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ExternalSubagentModelBindingMethod {
+    #[default]
+    Default,
+    Inherit,
+    Exact,
+    Explicit,
+    BindingRequired,
+    BindingUnavailable,
+}
+
+fn is_default_model_binding_method(method: &ExternalSubagentModelBindingMethod) -> bool {
+    matches!(method, ExternalSubagentModelBindingMethod::Default)
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ExternalSubagentModelBindingOption {
+    pub target: ExternalSubagentModelBindingTarget,
+    pub effective_model_label: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ExternalSubagentModelBindingGroup {
+    pub binding_key: String,
+    pub request: ExternalSubagentModelRequest,
+    pub scope: ExternalSourceScope,
+    pub method: ExternalSubagentModelBindingMethod,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub selected_target: Option<ExternalSubagentModelBindingTarget>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub effective_model_label: Option<String>,
+    pub affected_candidate_ids: Vec<String>,
+}
+
+pub fn external_subagent_model_binding_key(
+    ecosystem_id: &EcosystemId,
+    request: &ExternalSubagentModelRequest,
+    execution_domain_id: &str,
+    scope: ExternalSourceScope,
+    workspace_scope: &str,
+) -> Option<String> {
+    let ExternalSubagentModelRequest::Reference {
+        provider_hint,
+        model_name,
+    } = request
+    else {
+        return None;
+    };
+    let scope_identity = match scope {
+        ExternalSourceScope::UserGlobal | ExternalSourceScope::RemoteUser => "",
+        _ => workspace_scope,
+    };
+    let scope_label = match scope {
+        ExternalSourceScope::UserGlobal => "user_global",
+        ExternalSourceScope::Project => "project",
+        ExternalSourceScope::WorkspaceLocal => "workspace_local",
+        ExternalSourceScope::RemoteUser => "remote_user",
+        ExternalSourceScope::RemoteProject => "remote_project",
+    };
+    Some(format!(
+        "external_subagent_model_binding:{}",
+        stable_digest([
+            ecosystem_id.as_str(),
+            provider_hint
+                .as_deref()
+                .unwrap_or_default()
+                .to_ascii_lowercase()
+                .as_str(),
+            model_name,
+            execution_domain_id,
+            scope_label,
+            scope_identity,
+        ])
+    ))
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -334,7 +436,7 @@ impl ExternalSubagentDefinition {
                 "external subagent prompt",
             ));
         }
-        if let ExternalSubagentModelRequest::Exact {
+        if let ExternalSubagentModelRequest::Reference {
             provider_hint,
             model_name,
         } = &self.requested_model
@@ -541,6 +643,12 @@ pub struct ExternalSubagentSummary {
     pub source_keys: Vec<SourceKey>,
     pub source_location_labels: Vec<String>,
     pub source_count: usize,
+    #[serde(default, skip_serializing_if = "is_default_model_request")]
+    pub requested_model: ExternalSubagentModelRequest,
+    #[serde(default, skip_serializing_if = "is_default_model_binding_method")]
+    pub model_binding_method: ExternalSubagentModelBindingMethod,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model_binding_key: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub effective_model_label: Option<String>,
     pub effective_tool_labels: Vec<String>,

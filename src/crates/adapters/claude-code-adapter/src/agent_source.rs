@@ -498,9 +498,9 @@ fn materialize_definition(
     };
     let requested_model = match fields.get("model") {
         None => ExternalSubagentModelRequest::Default,
-        Some(Value::String(value)) if value == "inherit" => ExternalSubagentModelRequest::Default,
+        Some(Value::String(value)) if value == "inherit" => ExternalSubagentModelRequest::Inherit,
         Some(Value::String(value)) if !value.trim().is_empty() => {
-            ExternalSubagentModelRequest::Exact {
+            ExternalSubagentModelRequest::Reference {
                 provider_hint: None,
                 model_name: value.trim().to_string(),
             }

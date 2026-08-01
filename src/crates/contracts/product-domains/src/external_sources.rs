@@ -2127,6 +2127,12 @@ pub struct ExternalSourceCatalogSnapshot {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub subagents: Vec<crate::external_subagents::ExternalSubagentSummary>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub subagent_model_binding_groups:
+        Vec<crate::external_subagents::ExternalSubagentModelBindingGroup>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub subagent_model_binding_options:
+        Vec<crate::external_subagents::ExternalSubagentModelBindingOption>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub subagent_conflicts: Vec<crate::external_subagents::ExternalSubagentConflict>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub pending_subagent_approvals: Vec<String>,
@@ -2254,6 +2260,12 @@ pub struct ExternalSourcePublicSnapshot {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub subagents: Vec<crate::external_subagents::ExternalSubagentSummary>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub subagent_model_binding_groups:
+        Vec<crate::external_subagents::ExternalSubagentModelBindingGroup>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub subagent_model_binding_options:
+        Vec<crate::external_subagents::ExternalSubagentModelBindingOption>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub subagent_conflicts: Vec<crate::external_subagents::ExternalSubagentConflict>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub pending_subagent_approvals: Vec<String>,
@@ -2278,8 +2290,13 @@ impl ExternalSourcePublicSnapshot {
             }
         }
         for subagent in &mut self.subagents {
+            subagent.requested_model = Default::default();
+            subagent.model_binding_method = Default::default();
+            subagent.model_binding_key = None;
             subagent.unavailable_tool_labels.clear();
         }
+        self.subagent_model_binding_groups.clear();
+        self.subagent_model_binding_options.clear();
         self
     }
 }
@@ -2319,6 +2336,8 @@ impl From<ExternalSourceCatalogSnapshot> for ExternalSourcePublicSnapshot {
             subagent_generation: snapshot.subagent_generation,
             preference_revision: snapshot.preference_revision,
             subagents: snapshot.subagents,
+            subagent_model_binding_groups: snapshot.subagent_model_binding_groups,
+            subagent_model_binding_options: snapshot.subagent_model_binding_options,
             subagent_conflicts: snapshot.subagent_conflicts,
             pending_subagent_approvals: snapshot.pending_subagent_approvals,
             integration_policy: snapshot.integration_policy,

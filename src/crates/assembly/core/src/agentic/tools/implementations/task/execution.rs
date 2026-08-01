@@ -12,6 +12,13 @@ fn resolve_focused_review_model_selection(
     }
 }
 
+fn external_subagent_model_override_requested(
+    model_id: Option<&str>,
+    inherit_parent_model: bool,
+) -> bool {
+    model_id.is_some() || inherit_parent_model
+}
+
 fn build_deep_review_subagent_context(
     role: DeepReviewSubagentRole,
     subagent_type: Option<&str>,
@@ -267,7 +274,12 @@ impl TaskTool {
                         )));
                     }
                     supports_follow_up = binding.supports_follow_up;
-                    if !supports_follow_up && model_id.is_some() {
+                    if !supports_follow_up
+                        && external_subagent_model_override_requested(
+                            model_id.as_deref(),
+                            inherit_parent_model,
+                        )
+                    {
                         return Err(BitFunError::tool(
                             "external_subagent_model_override_unsupported: external subagents use the approved model binding"
                                 .to_string(),
@@ -1224,6 +1236,16 @@ mod target_context_tests {
             resolve_focused_review_model_selection(None, true, None),
             (None, true),
         );
+    }
+
+    #[test]
+    fn external_subagent_rejects_fixed_and_inherited_caller_model_overrides() {
+        assert!(external_subagent_model_override_requested(
+            Some("caller-model"),
+            false
+        ));
+        assert!(external_subagent_model_override_requested(None, true));
+        assert!(!external_subagent_model_override_requested(None, false));
     }
 
     #[test]

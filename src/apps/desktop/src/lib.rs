@@ -1191,6 +1191,7 @@ pub async fn run() {
             set_external_tool_target_decision_command,
             set_external_tool_conflict_choice_command,
             set_external_subagent_activation_command,
+            set_external_subagent_model_binding_command,
             choose_external_subagent_conflict_command,
             set_external_mcp_server_decision_command,
             choose_external_mcp_conflict_command,

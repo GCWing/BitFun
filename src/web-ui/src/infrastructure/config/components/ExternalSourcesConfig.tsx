@@ -33,6 +33,10 @@ import {
   type ExternalIntegrationPolicyMutation,
   type ExternalSourceCatalogSnapshot,
   type ExternalSourceRecoveryAction,
+  type ExternalSubagentModelBindingGroup,
+  type ExternalSubagentModelBindingMethod,
+  type ExternalSubagentModelBindingTarget,
+  type ExternalSubagentModelRequest,
   type ExternalSubagentSummary,
   type ExternalToolCatalogEntry,
 } from '@/infrastructure/api/service-api/ExternalSourcesAPI';
@@ -163,6 +167,42 @@ function sourceScopeLabel(scope: string, t: TFunction): string {
 
 function externalAgentModelLabel(model: string | undefined, t: TFunction): string {
   return model || t('agents.modelUnavailable');
+}
+
+function externalAgentEffectiveModelLabel(
+  model: string | undefined,
+  method: ExternalSubagentModelBindingMethod,
+  t: TFunction,
+): string {
+  if (!model && method === 'inherit') {
+    return t('agents.modelResolvedFromParentAtTaskStart');
+  }
+  return externalAgentModelLabel(model, t);
+}
+
+function externalAgentRequestedModelLabel(
+  request: ExternalSubagentModelRequest | undefined,
+  t: TFunction,
+): string {
+  if (!request) return t('agentModelBindings.request.default');
+  if (request.kind === 'default') return t('agentModelBindings.request.default');
+  if (request.kind === 'inherit') return t('agentModelBindings.request.inherit');
+  return request.providerHint
+    ? `${request.providerHint}/${request.modelName}`
+    : request.modelName;
+}
+
+function externalAgentBindingTargetKey(target: ExternalSubagentModelBindingTarget): string {
+  if (target.kind === 'model') return `model:${target.modelId}`;
+  return target.kind;
+}
+
+function externalAgentBindingTargetFallbackLabel(
+  target: ExternalSubagentModelBindingTarget,
+  t: TFunction,
+): string {
+  if (target.kind === 'model') return target.modelId;
+  return t(`agentModelBindings.target.${target.kind}`);
 }
 
 function executionLocationLabel(t: TFunction, executionDomainId?: string): string {
@@ -354,6 +394,8 @@ const ExternalSourcesConfig: React.FC = () => {
         subagentGeneration: next.subagentGeneration,
         preferenceRevision: next.preferenceRevision,
         subagents: next.subagents,
+        subagentModelBindingGroups: next.subagentModelBindingGroups,
+        subagentModelBindingOptions: next.subagentModelBindingOptions,
         subagentConflicts: next.subagentConflicts,
         pendingSubagentApprovals: next.pendingSubagentApprovals,
       };
@@ -776,6 +818,29 @@ const ExternalSourcesConfig: React.FC = () => {
     if (accepted) await loadSnapshot(true, false);
     return accepted;
   }, [loadSnapshot, runMutation, snapshot, t, workspacePath]);
+
+  const setAgentModelBinding = useCallback(async (
+    group: ExternalSubagentModelBindingGroup,
+    target: ExternalSubagentModelBindingTarget | undefined,
+  ) => {
+    const current = snapshotRef.current;
+    if (!current) return;
+    const accepted = await runMutation(
+      group.bindingKey,
+      () => externalSourcesAPI.setSubagentModelBinding(
+        workspacePath,
+        group.bindingKey,
+        target,
+        current.subagentGeneration ?? 0,
+        current.preferenceRevision ?? 0,
+      ),
+      true,
+      'subagents',
+      t('actions.modelBindingUpdated'),
+      'canApproveRuntime',
+    );
+    if (accepted) await loadSnapshot(true, false);
+  }, [loadSnapshot, runMutation, t, workspacePath]);
 
   const chooseAgentConflict = useCallback(async (
     conflictKey: string,
@@ -2256,6 +2321,83 @@ const ExternalSourcesConfig: React.FC = () => {
               </ConfigPageSection>
             ) : null}
 
+            {(snapshot?.subagentModelBindingGroups?.length ?? 0) > 0 ? (
+              <ConfigPageSection title={t('agentModelBindings.title')}>
+                {snapshot?.subagentModelBindingGroups?.map((group) => {
+                  const targetOptions = snapshot.subagentModelBindingOptions ?? [];
+                  const targetsByKey = new Map(targetOptions.map((option) => [
+                    externalAgentBindingTargetKey(option.target),
+                    option.target,
+                  ]));
+                  const selectedKey = group.selectedTarget
+                    ? externalAgentBindingTargetKey(group.selectedTarget)
+                    : 'source';
+                  const selectedUnavailable = group.selectedTarget
+                    && !targetsByKey.has(selectedKey);
+                  const canEdit = group.method !== 'exact';
+                  const effective = externalAgentModelLabel(group.effectiveModelLabel, t);
+                  return (
+                    <ConfigPageRow
+                      key={group.bindingKey}
+                      label={externalAgentRequestedModelLabel(group.request, t)}
+                      description={`${t('agentModelBindings.affectedAgents', {
+                        count: group.affectedCandidateIds.length,
+                      })} · ${t(`agentModelBindings.method.${group.method}`)} · ${t(
+                        'agentModelBindings.effectiveModel', { model: effective },
+                      )}`}
+                      align="center"
+                    >
+                      {canEdit ? (
+                        <Select
+                          size="small"
+                          value={selectedKey}
+                          triggerAriaLabel={t('agentModelBindings.selectLabel', {
+                            request: externalAgentRequestedModelLabel(group.request, t),
+                          })}
+                          disabled={!policyCompatible || busyKey !== null
+                            || !hostCapabilities.canApproveRuntime}
+                          options={[
+                            {
+                              value: 'source',
+                              label: t('agentModelBindings.target.source'),
+                            },
+                            ...targetOptions.map((option) => ({
+                              value: externalAgentBindingTargetKey(option.target),
+                              label: option.effectiveModelLabel,
+                              description: t(`agentModelBindings.target.${option.target.kind}`),
+                            })),
+                            ...(selectedUnavailable && group.selectedTarget ? [{
+                              value: selectedKey,
+                              label: t('agentModelBindings.targetUnavailable', {
+                                target: externalAgentBindingTargetFallbackLabel(
+                                  group.selectedTarget,
+                                  t,
+                                ),
+                              }),
+                              disabled: true,
+                            }] : []),
+                          ]}
+                          onChange={(value) => {
+                            const nextKey = String(Array.isArray(value) ? value[0] : value);
+                            if (nextKey === 'source') {
+                              void setAgentModelBinding(group, undefined);
+                              return;
+                            }
+                            const target = targetsByKey.get(nextKey);
+                            if (target) void setAgentModelBinding(group, target);
+                          }}
+                        />
+                      ) : (
+                        <span className="bitfun-external-sources-config__state is-active">
+                          {t('agentModelBindings.automatic')}
+                        </span>
+                      )}
+                    </ConfigPageRow>
+                  );
+                })}
+              </ConfigPageSection>
+            ) : null}
+
             {(snapshot?.subagents?.length ?? 0) > 0 ? (
               <ConfigPageSection title={t('agents.title')}>
                 {snapshot?.subagents?.map((agent) => {
@@ -2286,7 +2428,7 @@ const ExternalSourcesConfig: React.FC = () => {
                     <React.Fragment key={agent.candidateId}>
                       <ConfigPageRow
                         label={agent.displayName}
-                        description={`${agent.providerLabel} · ${agent.logicalId} · ${externalAgentModelLabel(agent.effectiveModelLabel, t)} · ${t('agents.singleRun')}`}
+                        description={`${agent.providerLabel} · ${agent.logicalId} · ${externalAgentEffectiveModelLabel(agent.effectiveModelLabel, agent.modelBindingMethod, t)} · ${t('agents.singleRun')}`}
                         align="center"
                       >
                         <div className="bitfun-external-sources-config__source-control">
@@ -2324,7 +2466,13 @@ const ExternalSourcesConfig: React.FC = () => {
                           </div>
                           <div className="bitfun-external-sources-config__tool-detail">
                             <span>{agent.description || t('agents.noDescription')}</span>
-                            <span>{t('agents.model', { model: externalAgentModelLabel(agent.effectiveModelLabel, t) })}</span>
+                            <span>{t('agents.requestedModel', {
+                              model: externalAgentRequestedModelLabel(agent.requestedModel, t),
+                            })}</span>
+                            <span>{t('agents.modelBindingMethod', {
+                              method: t(`agentModelBindings.method.${agent.modelBindingMethod}`),
+                            })}</span>
+                            <span>{t('agents.model', { model: externalAgentEffectiveModelLabel(agent.effectiveModelLabel, agent.modelBindingMethod, t) })}</span>
                             <span>{t('agents.tools', { tools: agent.effectiveToolLabels.join(', ') || t('agents.noTools') })}</span>
                             <span>{t('agents.executionDomain')}</span>
                             <span>{t('agents.compatibility', { state: t(`agentCompatibility.${agent.compatibilityState}`) })}</span>
@@ -2460,7 +2608,7 @@ const ExternalSourcesConfig: React.FC = () => {
                             </span>
                             {externalAgent ? (
                               <div className="bitfun-external-sources-config__candidate-detail">
-                                <span>{t('agents.model', { model: externalAgentModelLabel(externalAgent.effectiveModelLabel, t) })}</span>
+                                <span>{t('agents.model', { model: externalAgentEffectiveModelLabel(externalAgent.effectiveModelLabel, externalAgent.modelBindingMethod, t) })}</span>
                                 <span>{t('agents.tools', { tools: externalAgent.effectiveToolLabels.join(', ') || t('agents.noTools') })}</span>
                                 <span>{t('agents.executionDomain')}</span>
                                 <span>{t('agents.compatibility', { state: t(`agentCompatibility.${externalAgent.compatibilityState}`) })}</span>

@@ -92,7 +92,7 @@ fn nearest_project_agent_overrides_user_agent_without_field_merge() {
     assert_eq!(definition.provenance.len(), 3);
     assert_eq!(
         definition.requested_model,
-        ExternalSubagentModelRequest::Exact {
+        ExternalSubagentModelRequest::Reference {
             provider_hint: None,
             model_name: "claude-opus-4".to_string(),
         }
@@ -105,6 +105,42 @@ fn nearest_project_agent_overrides_user_agent_without_field_merge() {
             .map(|selector| selector.source_name.as_str())
             .collect::<Vec<_>>(),
         vec!["Glob", "Read"]
+    );
+}
+
+#[test]
+fn explicit_inherit_is_distinct_from_an_opaque_model_reference() {
+    let fixture = Fixture::new();
+    write(
+        fixture.user_claude.join("agents/inherited.md"),
+        "---\nname: inherited\ndescription: Inherited\nmodel: inherit\ntools: [Read]\n---\nInherited prompt",
+    );
+    write(
+        fixture.user_claude.join("agents/named-inherit.md"),
+        "---\nname: named-inherit\ndescription: Named\nmodel: vendor/inherit\ntools: [Read]\n---\nNamed prompt",
+    );
+
+    let snapshot = fixture.discover(BTreeSet::new());
+    let inherited = snapshot
+        .definitions
+        .iter()
+        .find(|definition| definition.logical_id == "inherited")
+        .unwrap();
+    assert_eq!(
+        inherited.requested_model,
+        ExternalSubagentModelRequest::Inherit
+    );
+    let named = snapshot
+        .definitions
+        .iter()
+        .find(|definition| definition.logical_id == "named-inherit")
+        .unwrap();
+    assert_eq!(
+        named.requested_model,
+        ExternalSubagentModelRequest::Reference {
+            provider_hint: None,
+            model_name: "vendor/inherit".to_string(),
+        }
     );
 }
 

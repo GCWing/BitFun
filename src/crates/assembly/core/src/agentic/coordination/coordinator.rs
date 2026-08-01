@@ -12,7 +12,7 @@ use super::{
     turn_settlement::TurnSettlementTracker,
     BackgroundSubagentOutcomeStore, BackgroundSubagentWaitMode, BackgroundSubagentWaitResult,
 };
-use crate::agentic::agents::get_agent_registry;
+use crate::agentic::agents::{get_agent_registry, ExternalSubagentModelBinding};
 use crate::agentic::context_profile::ContextProfilePolicy;
 use crate::agentic::core::{
     InternalReminderKind, Message, MessageContent, MessageSemanticKind, ProcessingPhase, Session,
@@ -59,6 +59,7 @@ use crate::service::bootstrap::{
     ensure_workspace_persona_files_for_prompt, is_workspace_bootstrap_pending,
 };
 use crate::service::config::global::GlobalConfigManager;
+use crate::service::config::types::{model_runtime_binding_fingerprint, AIConfig};
 use crate::service::config::{
     get_global_config_service, AgentModelDefaultsConfig, SubagentModelSelection,
 };
@@ -219,6 +220,57 @@ async fn normalize_model_selection(model_id: &str) -> BitFunResult<String> {
                 })
         }
     }
+}
+
+fn resolve_approved_immutable_model_binding(
+    binding: &ExternalSubagentModelBinding,
+    parent_model_selection: Option<&str>,
+    ai_config: &AIConfig,
+) -> BitFunResult<(String, String)> {
+    let (model_id, expected_fingerprint) = match binding {
+        ExternalSubagentModelBinding::Fixed {
+            model_id,
+            configuration_fingerprint,
+        } => (model_id.clone(), Some(configuration_fingerprint.as_str())),
+        ExternalSubagentModelBinding::InheritParent => {
+            let parent_model_selection = parent_model_selection
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .ok_or_else(|| {
+                    BitFunError::Validation(
+                        "Approved inherited subagent model has no parent model selection"
+                            .to_string(),
+                    )
+                })?;
+            (
+                ai_config
+                    .resolve_model_selection(parent_model_selection)
+                    .ok_or_else(|| {
+                        BitFunError::Validation(format!(
+                            "Parent model selection is unknown or disabled: {parent_model_selection}"
+                        ))
+                    })?,
+                None,
+            )
+        }
+    };
+    let model = ai_config
+        .models
+        .iter()
+        .find(|model| model.enabled && model.id == model_id)
+        .ok_or_else(|| {
+            BitFunError::Validation(format!(
+                "Approved subagent model configuration is unknown or disabled: {model_id}"
+            ))
+        })?;
+    let fingerprint = model_runtime_binding_fingerprint(model);
+    if expected_fingerprint.is_some_and(|expected| expected != fingerprint) {
+        return Err(BitFunError::Validation(
+            "Approved subagent model configuration changed; review the external agent again"
+                .to_string(),
+        ));
+    }
+    Ok((model_id, fingerprint))
 }
 
 fn inherit_matching_parent_workspace_binding(
@@ -8286,6 +8338,38 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         normalize_model_selection(&model_selection).await
     }
 
+    async fn resolve_approved_external_model_binding(
+        &self,
+        binding: &ExternalSubagentModelBinding,
+        parent_session_id: &str,
+    ) -> BitFunResult<(String, String)> {
+        let config_service = get_global_config_service().await.map_err(|error| {
+            BitFunError::AIClient(format!(
+                "Failed to load AI configuration for approved subagent binding: {error}"
+            ))
+        })?;
+        let ai_config: AIConfig = config_service
+            .get_config(Some("ai"))
+            .await
+            .map_err(|error| {
+                BitFunError::AIClient(format!(
+                    "Failed to read AI configuration for approved subagent binding: {error}"
+                ))
+            })?;
+        let parent_model_selection =
+            if matches!(binding, ExternalSubagentModelBinding::InheritParent) {
+                let defaults = Self::agent_model_defaults().await;
+                Some(self.parent_model_selection(parent_session_id, &defaults)?)
+            } else {
+                None
+            };
+        resolve_approved_immutable_model_binding(
+            binding,
+            parent_model_selection.as_deref(),
+            &ai_config,
+        )
+    }
+
     async fn resolve_hidden_subagent_execution_request(
         &self,
         request: SubagentExecutionRequest,
@@ -8431,7 +8515,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                             .to_string(),
                     )
                 })?;
-                let resolved_model_id = if matches!(
+                let (resolved_model_id, immutable_model_fingerprint) = if matches!(
                     request.model_binding_policy,
                     SessionModelBindingPolicy::ApprovedImmutable
                 ) {
@@ -8440,24 +8524,31 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                             "An approved immutable subagent model cannot be overridden".to_string(),
                         ));
                     }
-                    approved_model_binding
-                        .as_ref()
-                        .map(|binding| binding.model_id.clone())
-                        .ok_or_else(|| {
-                            BitFunError::Validation(
-                                "Approved immutable subagent generation has no concrete model binding"
-                                    .to_string(),
-                            )
-                        })?
+                    let binding = approved_model_binding.as_ref().ok_or_else(|| {
+                        BitFunError::Validation(
+                            "Approved immutable subagent generation has no model binding"
+                                .to_string(),
+                        )
+                    })?;
+                    let resolved = self
+                        .resolve_approved_external_model_binding(
+                            binding,
+                            &request.subagent_parent_info.session_id,
+                        )
+                        .await?;
+                    (resolved.0, Some(resolved.1))
                 } else {
-                    self.resolve_fresh_subagent_model_id(
-                        model_id.as_deref(),
-                        inherit_parent_model,
-                        &agent_type,
-                        &workspace_path,
-                        &request.subagent_parent_info.session_id,
+                    (
+                        self.resolve_fresh_subagent_model_id(
+                            model_id.as_deref(),
+                            inherit_parent_model,
+                            &agent_type,
+                            &workspace_path,
+                            &request.subagent_parent_info.session_id,
+                        )
+                        .await?,
+                        None,
                     )
-                    .await?
                 };
                 let logical_agent_type = logical_subagent_type_or_runtime(
                     request.logical_subagent_type.as_deref(),
@@ -8474,9 +8565,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 );
                 session_config.continuation_policy = request.continuation_policy;
                 session_config.model_binding_policy = request.model_binding_policy;
-                session_config.model_binding_fingerprint = approved_model_binding
-                    .as_ref()
-                    .map(|binding| binding.configuration_fingerprint.clone());
+                session_config.model_binding_fingerprint = immutable_model_fingerprint;
 
                 Ok(HiddenSubagentExecutionRequest {
                     target_session_id: None,
@@ -10988,6 +11077,7 @@ mod tests {
         ManualCompactionCommitGate, SessionMemoryMode, SessionReferenceLocator,
         SessionRelationshipKind, SubagentExecutionRequest, TEST_AGENT_MODEL_DEFAULTS,
     };
+    use crate::agentic::agents::ExternalSubagentModelBinding;
     use crate::agentic::coordination::coordination_store::{
         BackgroundTaskRegistration, RegisteredBackgroundTask,
     };
@@ -11034,6 +11124,9 @@ mod tests {
         assert_eq!(summary.model_id.as_deref(), Some("fast"));
     }
     use crate::runtime_ownership::CoreRuntimeOwnership;
+    use crate::service::config::types::{
+        model_runtime_binding_fingerprint, AIConfig, AIModelConfig,
+    };
     use crate::service::config::{AgentModelDefaultsConfig, SubagentModelSelection};
     use crate::service::remote_ssh::workspace_state::init_remote_workspace_manager;
     use crate::service::session::{
@@ -14044,6 +14137,70 @@ mod tests {
             .expect("fresh subagent request should inherit the parent model");
 
         assert_eq!(model_id, "primary");
+    }
+
+    #[test]
+    fn approved_external_inherit_resolves_parent_once_to_a_concrete_runtime_fingerprint() {
+        let model = AIModelConfig {
+            id: "model-primary".to_string(),
+            name: "Provider".to_string(),
+            provider: "provider".to_string(),
+            model_name: "model-name".to_string(),
+            enabled: true,
+            ..AIModelConfig::default()
+        };
+        let mut config = AIConfig {
+            models: vec![model.clone()],
+            ..AIConfig::default()
+        };
+        config.default_models.primary = Some(model.id.clone());
+
+        let resolved = super::resolve_approved_immutable_model_binding(
+            &ExternalSubagentModelBinding::InheritParent,
+            Some("primary"),
+            &config,
+        )
+        .expect("inherit should materialize the current parent selection");
+        assert_eq!(resolved.0, "model-primary");
+        assert_eq!(resolved.1, model_runtime_binding_fingerprint(&model));
+
+        config.models[0].enabled = false;
+        assert!(super::resolve_approved_immutable_model_binding(
+            &ExternalSubagentModelBinding::InheritParent,
+            Some("primary"),
+            &config,
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn approved_external_fixed_binding_rejects_changed_runtime_configuration() {
+        let mut model = AIModelConfig {
+            id: "model-review".to_string(),
+            name: "Provider".to_string(),
+            provider: "provider".to_string(),
+            model_name: "model-name".to_string(),
+            enabled: true,
+            ..AIModelConfig::default()
+        };
+        let fingerprint = model_runtime_binding_fingerprint(&model);
+        let binding = ExternalSubagentModelBinding::Fixed {
+            model_id: model.id.clone(),
+            configuration_fingerprint: fingerprint.clone(),
+        };
+        let mut config = AIConfig {
+            models: vec![model.clone()],
+            ..AIConfig::default()
+        };
+
+        assert_eq!(
+            super::resolve_approved_immutable_model_binding(&binding, None, &config).unwrap(),
+            ("model-review".to_string(), fingerprint)
+        );
+
+        model.base_url = "https://changed.example/v1".to_string();
+        config.models[0] = model;
+        assert!(super::resolve_approved_immutable_model_binding(&binding, None, &config).is_err());
     }
 
     #[tokio::test]

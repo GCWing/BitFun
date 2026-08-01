@@ -1680,6 +1680,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         RemoteWorkspacePolicy::RemoteUnsupported,
     ),
     (
+        "set_external_subagent_model_binding_command",
+        RemoteWorkspacePolicy::RemoteUnsupported,
+    ),
+    (
         "set_global_skill_disabled",
         RemoteWorkspacePolicy::WorkspaceAgnostic,
     ),

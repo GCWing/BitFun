@@ -7,11 +7,12 @@ use bitfun_core::external_sources::{
     choose_external_subagent_conflict, external_source_snapshot,
     get_external_source_control_snapshot, set_external_mcp_server_decision,
     set_external_prompt_command_conflict_choice, set_external_source_enabled,
-    set_external_subagent_activation, set_external_tool_conflict_choice,
-    set_external_tool_target_decision, update_external_integration_policy,
-    ExternalIntegrationPolicyMutation, ExternalSourceControlRequestV1,
-    ExternalSourceHostCapabilities, ExternalSourceOperationError, ExternalSourceOperationErrorCode,
-    ExternalSourceOperationResult, ExternalSourcePublicSnapshot,
+    set_external_subagent_activation, set_external_subagent_model_binding,
+    set_external_tool_conflict_choice, set_external_tool_target_decision,
+    update_external_integration_policy, ExternalIntegrationPolicyMutation,
+    ExternalSourceControlRequestV1, ExternalSourceHostCapabilities, ExternalSourceOperationError,
+    ExternalSourceOperationErrorCode, ExternalSourceOperationResult, ExternalSourcePublicSnapshot,
+    ExternalSubagentModelBindingTarget,
 };
 use serde_json::Value;
 
@@ -57,6 +58,22 @@ fn required_u64(request: &Value, key: &str) -> ExternalSourceOperationResult<u64
     request.get(key).and_then(Value::as_u64).ok_or_else(|| {
         ExternalSourceOperationError::invalid_request(format!("Missing or invalid '{key}'"))
     })
+}
+
+fn model_binding_target_field(
+    request: &Value,
+    key: &str,
+) -> ExternalSourceOperationResult<Option<ExternalSubagentModelBindingTarget>> {
+    match request.get(key) {
+        None | Some(Value::Null) => Ok(None),
+        Some(value) => serde_json::from_value(value.clone())
+            .map(Some)
+            .map_err(|_| {
+                ExternalSourceOperationError::invalid_request(format!(
+                    "'{key}' must be a valid external subagent model binding target"
+                ))
+            }),
+    }
 }
 
 async fn workspace_root(
@@ -224,6 +241,16 @@ async fn dispatch_inner(
             )
             .await
         }
+        "set_external_subagent_model_binding_command" => {
+            set_external_subagent_model_binding(
+                workspace,
+                &required_string(request, "bindingKey")?,
+                model_binding_target_field(request, "target")?,
+                required_u64(request, "expectedSubagentGeneration")?,
+                required_u64(request, "expectedPreferenceRevision")?,
+            )
+            .await
+        }
         "choose_external_subagent_conflict_command" => {
             choose_external_subagent_conflict(
                 workspace,
@@ -345,5 +372,27 @@ mod tests {
             control.action,
             ExternalSourceControlActionV1::SetSafeMode { enabled: true }
         ));
+    }
+
+    #[test]
+    fn peer_model_binding_target_parser_accepts_set_and_clear_shapes() {
+        let set = serde_json::json!({
+            "target": { "kind": "primary" }
+        });
+        assert_eq!(
+            model_binding_target_field(&set, "target").unwrap(),
+            Some(ExternalSubagentModelBindingTarget::Primary)
+        );
+
+        let clear = serde_json::json!({ "target": null });
+        assert_eq!(model_binding_target_field(&clear, "target").unwrap(), None);
+
+        let invalid = serde_json::json!({ "target": { "kind": "automatic" } });
+        assert_eq!(
+            model_binding_target_field(&invalid, "target")
+                .unwrap_err()
+                .code,
+            ExternalSourceOperationErrorCode::InvalidRequest
+        );
     }
 }

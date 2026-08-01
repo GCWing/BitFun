@@ -709,7 +709,7 @@ fn materialize_definition(
         .filter(|value| !value.is_empty());
     let requested_model = match effective_behavior.model.as_deref().or(default_model) {
         None | Some("") => ExternalSubagentModelRequest::Default,
-        Some(model) => ExternalSubagentModelRequest::Exact {
+        Some(model) => ExternalSubagentModelRequest::Reference {
             provider_hint: None,
             model_name: model.trim().to_string(),
         },

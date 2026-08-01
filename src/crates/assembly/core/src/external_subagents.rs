@@ -12,7 +12,7 @@ use crate::agentic::agents::{
 };
 use crate::agentic::tools::registry::get_all_registered_tools;
 use crate::external_sources::safe_external_source_location;
-use crate::external_tools::resolve_external_tool_for_workspace;
+use crate::external_tools::{resolve_external_tool_for_workspace, workspace_route_key};
 use crate::service::config::global::GlobalConfigManager;
 use crate::service::config::types::{model_runtime_binding_fingerprint, AIConfig, AIModelConfig};
 use crate::service::config::SubagentModelSelection;
@@ -22,9 +22,12 @@ use bitfun_product_domains::external_sources::EcosystemId;
 use bitfun_product_domains::external_sources::{ExternalSourceScope, ProviderId, SourceKey};
 use bitfun_product_domains::external_subagents::{
     external_subagent_approval_key, external_subagent_conflict_key,
-    ExternalSubagentActivationState, ExternalSubagentCompatibilityState, ExternalSubagentConflict,
+    external_subagent_model_binding_key, ExternalSubagentActivationState,
+    ExternalSubagentCompatibilityState, ExternalSubagentConflict,
     ExternalSubagentConflictCandidate, ExternalSubagentDefinition,
-    ExternalSubagentDiagnosticSummary, ExternalSubagentModelRequest, ExternalSubagentSummary,
+    ExternalSubagentDiagnosticSummary, ExternalSubagentModelBindingGroup,
+    ExternalSubagentModelBindingMethod, ExternalSubagentModelBindingOption,
+    ExternalSubagentModelBindingTarget, ExternalSubagentModelRequest, ExternalSubagentSummary,
 };
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
@@ -41,6 +44,7 @@ pub(super) struct ExternalSubagentDecisions<'a> {
     pub declined_decisions: &'a BTreeMap<String, String>,
     pub conflict_choices: &'a BTreeMap<String, String>,
     pub conflict_lineage_current_keys: &'a BTreeMap<String, String>,
+    pub model_bindings: &'a BTreeMap<String, ExternalSubagentModelBindingTarget>,
 }
 
 #[derive(Default)]
@@ -48,6 +52,8 @@ pub(super) struct ExternalSubagentProductState {
     pub summaries: Vec<ExternalSubagentSummary>,
     pub conflicts: Vec<ExternalSubagentConflict>,
     pub pending_approvals: Vec<String>,
+    pub model_binding_groups: Vec<ExternalSubagentModelBindingGroup>,
+    pub model_binding_options: Vec<ExternalSubagentModelBindingOption>,
     pub registrations: Vec<ExternalSubagentRegistration>,
     pub routes: BTreeMap<String, ExternalSubagentRoute>,
     pub observed_conflict_lineage_current_keys: BTreeMap<String, String>,
@@ -82,9 +88,10 @@ struct ResolvedExternalCandidate {
     scope: ExternalSourceScope,
     source_keys: Vec<SourceKey>,
     source_location_labels: Vec<String>,
-    model_id: String,
-    model_label: String,
-    model_configuration_fingerprint: String,
+    model: ResolvedCandidateModel,
+    model_binding_method: ExternalSubagentModelBindingMethod,
+    model_binding_key: Option<String>,
+    selected_model_binding_target: Option<ExternalSubagentModelBindingTarget>,
     tools: Vec<ResolvedToolFact>,
     unavailable_tool_labels: Vec<String>,
     readonly: bool,
@@ -93,6 +100,37 @@ struct ResolvedExternalCandidate {
     conflict_behavior_version: String,
     diagnostics: Vec<ExternalSubagentDiagnosticSummary>,
     compatibility: ExternalSubagentCompatibilityState,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum ResolvedCandidateModel {
+    Fixed(ResolvedModelFact),
+    InheritParent,
+    Unavailable,
+}
+
+impl ResolvedCandidateModel {
+    fn effective_label(&self) -> Option<&str> {
+        match self {
+            Self::Fixed(model) => Some(model.display_label.as_str()),
+            Self::InheritParent | Self::Unavailable => None,
+        }
+    }
+
+    fn approval_identity(&self) -> (&str, &str) {
+        match self {
+            Self::Fixed(model) => (&model.runtime_id, &model.configuration_fingerprint),
+            Self::InheritParent => ("inherit_parent", "inherit_parent_v1"),
+            Self::Unavailable => ("unavailable", "unavailable"),
+        }
+    }
+}
+
+struct ResolvedModelRequest {
+    model: ResolvedCandidateModel,
+    method: ExternalSubagentModelBindingMethod,
+    binding_key: Option<String>,
+    selected_target: Option<ExternalSubagentModelBindingTarget>,
 }
 
 pub(super) async fn reconcile_external_subagents(
@@ -135,6 +173,7 @@ pub(super) fn project_external_subagents_read_only(
             &source_map,
             &snapshot.provider_labels,
             &facts,
+            decisions.model_bindings,
         );
         let ecosystem_active = resolved.source_keys.iter().all(|source_key| {
             source_map
@@ -396,14 +435,24 @@ fn resolve_exact_external_model(
         return None;
     }
 
+    if provider_hint.is_none() {
+        let mut id_matches = ai_config
+            .models
+            .iter()
+            .filter(|model| model.enabled && model.id == model_name);
+        if let Some(model) = id_matches.next() {
+            if id_matches.next().is_none() {
+                return Some(resolved_model_fact(model));
+            }
+            return None;
+        }
+    }
+
     let mut matches = ai_config
         .models
         .iter()
         .filter(|model| model.enabled)
         .filter(|model| {
-            if provider_hint.is_none() && model.id == model_name {
-                return true;
-            }
             if model.model_name != model_name {
                 return false;
             }
@@ -418,11 +467,90 @@ fn resolve_exact_external_model(
     if matches.next().is_some() {
         return None;
     }
-    Some(ResolvedModelFact {
+    Some(resolved_model_fact(model))
+}
+
+fn resolved_model_fact(model: &AIModelConfig) -> ResolvedModelFact {
+    ResolvedModelFact {
         runtime_id: model.id.clone(),
         display_label: model_display_label(model),
         configuration_fingerprint: model_runtime_binding_fingerprint(model),
-    })
+    }
+}
+
+fn resolve_model_binding_target(
+    target: &ExternalSubagentModelBindingTarget,
+    ai_config: &AIConfig,
+) -> Option<ResolvedModelFact> {
+    let runtime_id = match target {
+        ExternalSubagentModelBindingTarget::Primary => {
+            ai_config.resolve_model_selection("primary")?
+        }
+        ExternalSubagentModelBindingTarget::Fast => ai_config.resolve_model_selection("fast")?,
+        ExternalSubagentModelBindingTarget::Model { model_id } => {
+            ai_config.resolve_model_reference(model_id)?
+        }
+    };
+    ai_config
+        .models
+        .iter()
+        .find(|model| model.enabled && model.id == runtime_id)
+        .map(resolved_model_fact)
+}
+
+fn external_model_binding_options(ai_config: &AIConfig) -> Vec<ExternalSubagentModelBindingOption> {
+    let mut options = Vec::new();
+    for target in [
+        ExternalSubagentModelBindingTarget::Primary,
+        ExternalSubagentModelBindingTarget::Fast,
+    ] {
+        if let Some(model) = resolve_model_binding_target(&target, ai_config) {
+            options.push(ExternalSubagentModelBindingOption {
+                target,
+                effective_model_label: model.display_label,
+            });
+        }
+    }
+    let mut configured = ai_config
+        .models
+        .iter()
+        .filter(|model| model.enabled)
+        .map(|model| ExternalSubagentModelBindingOption {
+            target: ExternalSubagentModelBindingTarget::Model {
+                model_id: model.id.clone(),
+            },
+            effective_model_label: model_display_label(model),
+        })
+        .collect::<Vec<_>>();
+    let label_counts =
+        configured
+            .iter()
+            .fold(BTreeMap::<String, usize>::new(), |mut counts, option| {
+                *counts
+                    .entry(option.effective_model_label.clone())
+                    .or_default() += 1;
+                counts
+            });
+    for option in &mut configured {
+        if label_counts
+            .get(&option.effective_model_label)
+            .copied()
+            .unwrap_or_default()
+            > 1
+        {
+            let ExternalSubagentModelBindingTarget::Model { model_id } = &option.target else {
+                continue;
+            };
+            option.effective_model_label = format!("{} · {model_id}", option.effective_model_label);
+        }
+    }
+    configured.sort_by(|left, right| {
+        left.effective_model_label
+            .cmp(&right.effective_model_label)
+            .then(left.target.cmp(&right.target))
+    });
+    options.extend(configured);
+    options
 }
 
 fn resolve_bitfun_subagent_model(
@@ -453,6 +581,95 @@ fn resolve_bitfun_subagent_model(
     }
 }
 
+fn resolve_model_request(
+    definition: &ExternalSubagentDefinition,
+    ecosystem_id: Option<&EcosystemId>,
+    scope: ExternalSourceScope,
+    workspace_scope: &str,
+    execution_domain_id: &str,
+    ai_config: Option<&AIConfig>,
+    model_bindings: &BTreeMap<String, ExternalSubagentModelBindingTarget>,
+) -> ResolvedModelRequest {
+    match &definition.requested_model {
+        ExternalSubagentModelRequest::Default => ResolvedModelRequest {
+            model: ai_config
+                .and_then(|config| resolve_bitfun_subagent_model(&definition.logical_id, config))
+                .map(ResolvedCandidateModel::Fixed)
+                .unwrap_or(ResolvedCandidateModel::Unavailable),
+            method: ExternalSubagentModelBindingMethod::Default,
+            binding_key: None,
+            selected_target: None,
+        },
+        ExternalSubagentModelRequest::Inherit => ResolvedModelRequest {
+            model: if ai_config.is_some() {
+                ResolvedCandidateModel::InheritParent
+            } else {
+                ResolvedCandidateModel::Unavailable
+            },
+            method: ExternalSubagentModelBindingMethod::Inherit,
+            binding_key: None,
+            selected_target: None,
+        },
+        ExternalSubagentModelRequest::Reference {
+            provider_hint,
+            model_name,
+        } => {
+            let binding_key = ecosystem_id.and_then(|ecosystem_id| {
+                external_subagent_model_binding_key(
+                    ecosystem_id,
+                    &definition.requested_model,
+                    execution_domain_id,
+                    scope,
+                    workspace_scope,
+                )
+            });
+            if let Some(model) = ai_config.and_then(|config| {
+                resolve_exact_external_model(provider_hint.as_deref(), model_name, config)
+            }) {
+                return ResolvedModelRequest {
+                    model: ResolvedCandidateModel::Fixed(model),
+                    method: ExternalSubagentModelBindingMethod::Exact,
+                    binding_key,
+                    selected_target: None,
+                };
+            }
+            let selected_target = binding_key
+                .as_ref()
+                .and_then(|key| model_bindings.get(key))
+                .cloned();
+            match (ai_config, selected_target.clone()) {
+                (Some(config), Some(target)) => match resolve_model_binding_target(&target, config)
+                {
+                    Some(model) => ResolvedModelRequest {
+                        model: ResolvedCandidateModel::Fixed(model),
+                        method: ExternalSubagentModelBindingMethod::Explicit,
+                        binding_key,
+                        selected_target: Some(target),
+                    },
+                    None => ResolvedModelRequest {
+                        model: ResolvedCandidateModel::Unavailable,
+                        method: ExternalSubagentModelBindingMethod::BindingUnavailable,
+                        binding_key,
+                        selected_target: Some(target),
+                    },
+                },
+                (Some(_), None) => ResolvedModelRequest {
+                    model: ResolvedCandidateModel::Unavailable,
+                    method: ExternalSubagentModelBindingMethod::BindingRequired,
+                    binding_key,
+                    selected_target: None,
+                },
+                (None, target) => ResolvedModelRequest {
+                    model: ResolvedCandidateModel::Unavailable,
+                    method: ExternalSubagentModelBindingMethod::BindingUnavailable,
+                    binding_key,
+                    selected_target: target,
+                },
+            }
+        }
+    }
+}
+
 fn reconcile_with_facts(
     workspace_root: Option<&Path>,
     execution_domain_id: &str,
@@ -467,6 +684,7 @@ fn reconcile_with_facts(
         .map(|entry| (entry.record.key.clone(), &entry.record))
         .collect::<BTreeMap<_, _>>();
     let mut state = ExternalSubagentProductState::default();
+    let mut model_binding_groups = BTreeMap::<String, ExternalSubagentModelBindingGroup>::new();
     let mut by_logical = BTreeMap::<String, Vec<ResolvedExternalCandidate>>::new();
 
     for definition in &snapshot.definitions {
@@ -477,6 +695,7 @@ fn reconcile_with_facts(
             &source_map,
             &snapshot.provider_labels,
             facts,
+            decisions.model_bindings,
         );
         let ecosystem_active = resolved.source_keys.iter().all(|source_key| {
             source_map
@@ -505,6 +724,7 @@ fn reconcile_with_facts(
             state.summaries.push(summary);
             continue;
         }
+        collect_model_binding_group(&resolved, &mut model_binding_groups);
         if matches!(
             resolved.compatibility,
             ExternalSubagentCompatibilityState::Blocked
@@ -513,7 +733,7 @@ fn reconcile_with_facts(
             state.summaries.push(summary);
             continue;
         }
-        if has_configuration_unavailable_diagnostic(&resolved) {
+        if has_runtime_unavailable_diagnostic(&resolved) {
             state.summaries.push(summary);
             continue;
         }
@@ -538,6 +758,7 @@ fn reconcile_with_facts(
                 .cmp(&right.logical_id)
                 .then(left.candidate_id.cmp(&right.candidate_id))
         });
+        finalize_model_binding_catalog(&mut state, model_binding_groups, facts.ai_config.as_ref());
         return state;
     }
 
@@ -615,7 +836,65 @@ fn reconcile_with_facts(
     });
     state.pending_approvals.sort();
     state.pending_approvals.dedup();
+    finalize_model_binding_catalog(&mut state, model_binding_groups, facts.ai_config.as_ref());
     state
+}
+
+fn finalize_model_binding_catalog(
+    state: &mut ExternalSubagentProductState,
+    groups: BTreeMap<String, ExternalSubagentModelBindingGroup>,
+    ai_config: Option<&AIConfig>,
+) {
+    state.model_binding_groups = finalized_model_binding_groups(groups);
+    if state.model_binding_groups.iter().any(|group| {
+        matches!(
+            group.method,
+            ExternalSubagentModelBindingMethod::BindingRequired
+                | ExternalSubagentModelBindingMethod::Explicit
+                | ExternalSubagentModelBindingMethod::BindingUnavailable
+        )
+    }) {
+        state.model_binding_options = ai_config
+            .map(external_model_binding_options)
+            .unwrap_or_default();
+    }
+}
+
+fn collect_model_binding_group(
+    candidate: &ResolvedExternalCandidate,
+    groups: &mut BTreeMap<String, ExternalSubagentModelBindingGroup>,
+) {
+    let Some(binding_key) = candidate.model_binding_key.as_ref() else {
+        return;
+    };
+    let group =
+        groups
+            .entry(binding_key.clone())
+            .or_insert_with(|| ExternalSubagentModelBindingGroup {
+                binding_key: binding_key.clone(),
+                request: candidate.definition.requested_model.clone(),
+                scope: candidate.scope,
+                method: candidate.model_binding_method,
+                selected_target: candidate.selected_model_binding_target.clone(),
+                effective_model_label: candidate.model.effective_label().map(str::to_string),
+                affected_candidate_ids: Vec::new(),
+            });
+    group
+        .affected_candidate_ids
+        .push(candidate.definition.candidate_id.as_str().to_string());
+}
+
+fn finalized_model_binding_groups(
+    groups: BTreeMap<String, ExternalSubagentModelBindingGroup>,
+) -> Vec<ExternalSubagentModelBindingGroup> {
+    groups
+        .into_values()
+        .map(|mut group| {
+            group.affected_candidate_ids.sort();
+            group.affected_candidate_ids.dedup();
+            group
+        })
+        .collect()
 }
 
 fn resolve_external_candidate(
@@ -625,6 +904,7 @@ fn resolve_external_candidate(
     sources: &BTreeMap<SourceKey, &bitfun_product_domains::external_sources::ExternalSourceRecord>,
     provider_labels: &BTreeMap<ProviderId, String>,
     facts: &ProductFacts,
+    model_bindings: &BTreeMap<String, ExternalSubagentModelBindingTarget>,
 ) -> ResolvedExternalCandidate {
     let mut compatibility = definition.compatibility;
     let mut diagnostics = definition
@@ -639,41 +919,61 @@ fn resolve_external_candidate(
             ),
         })
         .collect::<Vec<_>>();
-    let model = match facts.ai_config.as_ref() {
-        Some(ai_config) => match &definition.requested_model {
-            ExternalSubagentModelRequest::Default => {
-                resolve_bitfun_subagent_model(&definition.logical_id, ai_config)
+    let mut source_location_labels = Vec::new();
+    let mut source_keys = Vec::new();
+    let mut scope = ExternalSourceScope::UserGlobal;
+    let mut ecosystem_id = None;
+    for item in &definition.provenance {
+        if let Some(source) = sources.get(&item.contribution_id.source) {
+            ecosystem_id.get_or_insert_with(|| source.ecosystem_id.clone());
+            if !source_keys.contains(&source.key) {
+                source_keys.push(source.key.clone());
             }
-            ExternalSubagentModelRequest::Exact {
-                provider_hint,
-                model_name,
-            } => resolve_exact_external_model(provider_hint.as_deref(), model_name, ai_config),
-        },
-        None => {
-            diagnostics.push(ExternalSubagentDiagnosticSummary {
-                code: "external_subagent.configuration_unavailable".to_string(),
-                blocks_activation: true,
-            });
-            None
-        }
-    };
-    let model = match model {
-        Some(model) => model,
-        None => {
-            if facts.ai_config.is_some() {
-                compatibility = ExternalSubagentCompatibilityState::Blocked;
-                diagnostics.push(ExternalSubagentDiagnosticSummary {
-                    code: "external_subagent.model_unavailable".to_string(),
-                    blocks_activation: true,
-                });
+            let location_label =
+                safe_external_source_location(source.scope, &source.location, workspace_root);
+            if !source_location_labels.contains(&location_label) {
+                source_location_labels.push(location_label);
             }
-            ResolvedModelFact {
-                runtime_id: "unavailable".to_string(),
-                display_label: "unavailable".to_string(),
-                configuration_fingerprint: "unavailable".to_string(),
+            if scope_rank(source.scope) >= scope_rank(scope) {
+                scope = source.scope;
             }
         }
-    };
+    }
+    let model_resolution = resolve_model_request(
+        definition,
+        ecosystem_id.as_ref(),
+        scope,
+        &workspace_scope_key(workspace_root),
+        execution_domain_id,
+        facts.ai_config.as_ref(),
+        model_bindings,
+    );
+    if facts.ai_config.is_none() {
+        diagnostics.push(ExternalSubagentDiagnosticSummary {
+            code: "external_subagent.configuration_unavailable".to_string(),
+            blocks_activation: true,
+        });
+    } else if matches!(model_resolution.model, ResolvedCandidateModel::Unavailable) {
+        let code = match model_resolution.method {
+            ExternalSubagentModelBindingMethod::BindingRequired => {
+                "external_subagent.model_binding_required"
+            }
+            ExternalSubagentModelBindingMethod::BindingUnavailable => {
+                "external_subagent.model_binding_unavailable"
+            }
+            _ => "external_subagent.model_unavailable",
+        };
+        if !matches!(
+            model_resolution.method,
+            ExternalSubagentModelBindingMethod::BindingUnavailable
+        ) {
+            compatibility = ExternalSubagentCompatibilityState::Blocked;
+        }
+        diagnostics.push(ExternalSubagentDiagnosticSummary {
+            code: code.to_string(),
+            blocks_activation: true,
+        });
+    }
 
     let mut tools = Vec::new();
     let mut unavailable_tool_labels = Vec::new();
@@ -713,13 +1013,15 @@ fn resolve_external_candidate(
         .iter()
         .map(|item| item.contribution_id.stable_key())
         .collect::<Vec<_>>();
+    let (model_approval_id, model_approval_fingerprint) =
+        model_resolution.model.approval_identity();
     let activation_envelope = stable_digest(
         [
             execution_domain_id,
             definition.candidate_id.as_str(),
             &format!("{:?}", definition.mode),
-            model.runtime_id.as_str(),
-            model.configuration_fingerprint.as_str(),
+            model_approval_id,
+            model_approval_fingerprint,
             if definition.hidden {
                 "hidden"
             } else {
@@ -759,33 +1061,16 @@ fn resolve_external_candidate(
         .and_then(|provider_id| provider_labels.get(provider_id))
         .cloned()
         .unwrap_or_else(|| "External AI app".to_string());
-    let mut source_location_labels = Vec::new();
-    let mut source_keys = Vec::new();
-    let mut scope = ExternalSourceScope::UserGlobal;
-    for item in &definition.provenance {
-        if let Some(source) = sources.get(&item.contribution_id.source) {
-            if !source_keys.contains(&source.key) {
-                source_keys.push(source.key.clone());
-            }
-            let location_label =
-                safe_external_source_location(source.scope, &source.location, workspace_root);
-            if !source_location_labels.contains(&location_label) {
-                source_location_labels.push(location_label);
-            }
-            if scope_rank(source.scope) >= scope_rank(scope) {
-                scope = source.scope;
-            }
-        }
-    }
     ResolvedExternalCandidate {
         definition: definition.clone(),
         provider_label,
         scope,
         source_keys,
         source_location_labels,
-        model_id: model.runtime_id,
-        model_label: model.display_label,
-        model_configuration_fingerprint: model.configuration_fingerprint,
+        model: model_resolution.model,
+        model_binding_method: model_resolution.method,
+        model_binding_key: model_resolution.binding_key,
+        selected_model_binding_target: model_resolution.selected_target,
         tools,
         unavailable_tool_labels,
         readonly,
@@ -974,14 +1259,19 @@ fn install_active_candidate(
         candidate.readonly,
         candidate.definition.behavior_version.as_str().to_string(),
     ));
+    let model_binding = match &candidate.model {
+        ResolvedCandidateModel::Fixed(model) => ExternalSubagentModelBinding::Fixed {
+            model_id: model.runtime_id.clone(),
+            configuration_fingerprint: model.configuration_fingerprint.clone(),
+        },
+        ResolvedCandidateModel::InheritParent => ExternalSubagentModelBinding::InheritParent,
+        ResolvedCandidateModel::Unavailable => return,
+    };
     state.registrations.push(ExternalSubagentRegistration {
         runtime_key: runtime_key.clone(),
         logical_id: candidate.definition.logical_id.clone(),
         provider_label: candidate.provider_label.clone(),
-        model_binding: ExternalSubagentModelBinding {
-            model_id: candidate.model_id.clone(),
-            configuration_fingerprint: candidate.model_configuration_fingerprint.clone(),
-        },
+        model_binding,
         hidden: candidate.definition.hidden,
         agent,
     });
@@ -1005,8 +1295,10 @@ fn summary_for(
         source_keys: candidate.source_keys.clone(),
         source_location_labels: candidate.source_location_labels.clone(),
         source_count: candidate.definition.provenance.len(),
-        effective_model_label: (candidate.model_id != "unavailable")
-            .then(|| candidate.model_label.clone()),
+        requested_model: candidate.definition.requested_model.clone(),
+        model_binding_method: candidate.model_binding_method,
+        model_binding_key: candidate.model_binding_key.clone(),
+        effective_model_label: candidate.model.effective_label().map(str::to_string),
         effective_tool_labels: candidate
             .tools
             .iter()
@@ -1031,28 +1323,30 @@ fn initial_activation_state(
         ExternalSubagentCompatibilityState::Blocked | ExternalSubagentCompatibilityState::Invalid
     ) {
         ExternalSubagentActivationState::Blocked
-    } else if has_configuration_unavailable_diagnostic(candidate) {
+    } else if has_runtime_unavailable_diagnostic(candidate) {
         ExternalSubagentActivationState::Unavailable
     } else {
         ExternalSubagentActivationState::ApprovalRequired
     }
 }
 
-fn has_configuration_unavailable_diagnostic(candidate: &ResolvedExternalCandidate) -> bool {
+fn has_runtime_unavailable_diagnostic(candidate: &ResolvedExternalCandidate) -> bool {
     candidate.diagnostics.iter().any(|diagnostic| {
-        diagnostic.code == "external_subagent.configuration_unavailable"
-            && diagnostic.blocks_activation
+        matches!(
+            diagnostic.code.as_str(),
+            "external_subagent.configuration_unavailable"
+                | "external_subagent.model_binding_unavailable"
+        ) && diagnostic.blocks_activation
     })
 }
 
 fn workspace_scope_key(workspace_root: Option<&Path>) -> String {
-    workspace_root
-        .map(|path| {
-            path.to_string_lossy()
-                .replace('\\', "/")
-                .to_ascii_lowercase()
-        })
-        .unwrap_or_else(|| "<global>".to_string())
+    let normalized = workspace_route_key(workspace_root).replace('\\', "/");
+    if cfg!(windows) {
+        normalized.to_ascii_lowercase()
+    } else {
+        normalized
+    }
 }
 
 fn normalize_logical_id(value: &str) -> String {
@@ -1116,6 +1410,12 @@ mod tests {
             BTreeSet::from([EcosystemId::new("fake").expect("valid test ecosystem")])
         })
     }
+
+    fn empty_model_bindings() -> &'static BTreeMap<String, ExternalSubagentModelBindingTarget> {
+        static BINDINGS: std::sync::OnceLock<BTreeMap<String, ExternalSubagentModelBindingTarget>> =
+            std::sync::OnceLock::new();
+        BINDINGS.get_or_init(BTreeMap::new)
+    }
     use bitfun_product_domains::external_sources::{
         EcosystemId, ExecutionDomainId, ExternalSourceCatalogEntry, ExternalSourceHealth,
         ExternalSourceLifecycleState, ExternalSourceRecord,
@@ -1123,8 +1423,9 @@ mod tests {
     use bitfun_product_domains::external_subagents::{
         ExternalSubagentBehaviorVersion, ExternalSubagentCandidateId,
         ExternalSubagentContributionId, ExternalSubagentContributionRole, ExternalSubagentLocalId,
-        ExternalSubagentMode, ExternalSubagentProvenanceRef, ExternalSubagentToolRequest,
-        ExternalSubagentToolSelector, SecretText,
+        ExternalSubagentMode, ExternalSubagentModelBindingMethod,
+        ExternalSubagentModelBindingTarget, ExternalSubagentProvenanceRef,
+        ExternalSubagentToolRequest, ExternalSubagentToolSelector, SecretText,
     };
     use bitfun_product_domains::tool_permissions::{
         PermissionConstraintLayer, PermissionEffect, PermissionRule,
@@ -1280,6 +1581,36 @@ mod tests {
         };
 
         assert!(resolve_exact_external_model(None, "anthropic/claude-sonnet-4", &config).is_none());
+        let options = external_model_binding_options(&config)
+            .into_iter()
+            .filter(|option| {
+                matches!(
+                    option.target,
+                    ExternalSubagentModelBindingTarget::Model { .. }
+                )
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(options.len(), 2);
+        assert_ne!(
+            options[0].effective_model_label, options[1].effective_model_label,
+            "ambiguous configured models need distinguishable binding labels"
+        );
+    }
+
+    #[test]
+    fn exact_external_model_prefers_a_unique_config_id_before_provider_model_matching() {
+        let config = AIConfig {
+            models: vec![
+                active_model("review-model", "OpenAI", "openai", "gpt-5"),
+                active_model("other", "Review Model", "review-model", "review-model"),
+            ],
+            ..AIConfig::default()
+        };
+
+        let resolved = resolve_exact_external_model(None, "review-model", &config)
+            .expect("a unique config id has priority");
+        assert_eq!(resolved.runtime_id, "review-model");
+        assert_eq!(resolved.display_label, "OpenAI · gpt-5");
     }
 
     #[test]
@@ -1312,6 +1643,255 @@ mod tests {
             SubagentModelSelection::fixed("model_review");
         config.models[0].enabled = false;
         assert!(resolve_bitfun_subagent_model("reviewer", &config).is_none());
+    }
+
+    #[test]
+    fn external_subagent_model_binding_groups_unknown_references_and_resolves_explicit_targets() {
+        let mut definition_snapshot = snapshot("behavior-v1", "catalog-v1");
+        definition_snapshot.definitions[0].requested_model =
+            ExternalSubagentModelRequest::Reference {
+                provider_hint: Some("future-provider".to_string()),
+                model_name: "future-model".to_string(),
+            };
+        let mut product_facts = facts();
+        let ai_config = product_facts.ai_config.as_mut().unwrap();
+        ai_config.default_models.primary = Some("model_fast".to_string());
+        let empty_set = BTreeSet::new();
+        let empty_decisions = BTreeMap::new();
+        let empty_bindings = BTreeMap::new();
+
+        let unbound = reconcile_with_facts(
+            Some(Path::new("C:/repo")),
+            "local-user",
+            &definition_snapshot,
+            ExternalSubagentDecisions {
+                active_ecosystems: test_active_ecosystems(),
+                approved_envelopes: &empty_set,
+                declined_decisions: &empty_decisions,
+                conflict_choices: &empty_decisions,
+                conflict_lineage_current_keys: &empty_decisions,
+                model_bindings: &empty_bindings,
+            },
+            &product_facts,
+        );
+
+        assert_eq!(unbound.model_binding_groups.len(), 1);
+        assert!(!unbound.model_binding_options.is_empty());
+        let group = &unbound.model_binding_groups[0];
+        assert_eq!(
+            group.method,
+            ExternalSubagentModelBindingMethod::BindingRequired
+        );
+        assert_eq!(
+            group.affected_candidate_ids,
+            ["external_subagent:fake:reviewer:candidate"]
+        );
+        assert_eq!(
+            unbound.summaries[0].model_binding_method,
+            ExternalSubagentModelBindingMethod::BindingRequired
+        );
+        assert_eq!(
+            unbound.summaries[0].activation_state,
+            ExternalSubagentActivationState::Blocked
+        );
+
+        let inactive_ecosystems = BTreeSet::new();
+        let inactive = reconcile_with_facts(
+            Some(Path::new("C:/repo")),
+            "local-user",
+            &definition_snapshot,
+            ExternalSubagentDecisions {
+                active_ecosystems: &inactive_ecosystems,
+                approved_envelopes: &empty_set,
+                declined_decisions: &empty_decisions,
+                conflict_choices: &empty_decisions,
+                conflict_lineage_current_keys: &empty_decisions,
+                model_bindings: &empty_bindings,
+            },
+            &product_facts,
+        );
+        assert!(inactive.model_binding_groups.is_empty());
+        assert!(inactive.model_binding_options.is_empty());
+
+        let bindings = BTreeMap::from([(
+            group.binding_key.clone(),
+            ExternalSubagentModelBindingTarget::Primary,
+        )]);
+        let bound = reconcile_with_facts(
+            Some(Path::new("C:/repo")),
+            "local-user",
+            &definition_snapshot,
+            ExternalSubagentDecisions {
+                active_ecosystems: test_active_ecosystems(),
+                approved_envelopes: &empty_set,
+                declined_decisions: &empty_decisions,
+                conflict_choices: &empty_decisions,
+                conflict_lineage_current_keys: &empty_decisions,
+                model_bindings: &bindings,
+            },
+            &product_facts,
+        );
+
+        let group = &bound.model_binding_groups[0];
+        assert_eq!(group.method, ExternalSubagentModelBindingMethod::Explicit);
+        assert_eq!(
+            group.selected_target,
+            Some(ExternalSubagentModelBindingTarget::Primary)
+        );
+        assert_eq!(
+            group.effective_model_label.as_deref(),
+            Some("Fast provider · fast-model")
+        );
+        assert_eq!(
+            bound.summaries[0].model_binding_method,
+            ExternalSubagentModelBindingMethod::Explicit
+        );
+        assert_eq!(
+            bound.summaries[0].activation_state,
+            ExternalSubagentActivationState::ApprovalRequired
+        );
+
+        let unavailable_bindings = BTreeMap::from([(
+            group.binding_key.clone(),
+            ExternalSubagentModelBindingTarget::Model {
+                model_id: "removed-model".to_string(),
+            },
+        )]);
+        let unavailable = reconcile_with_facts(
+            Some(Path::new("C:/repo")),
+            "local-user",
+            &definition_snapshot,
+            ExternalSubagentDecisions {
+                active_ecosystems: test_active_ecosystems(),
+                approved_envelopes: &empty_set,
+                declined_decisions: &empty_decisions,
+                conflict_choices: &empty_decisions,
+                conflict_lineage_current_keys: &empty_decisions,
+                model_bindings: &unavailable_bindings,
+            },
+            &product_facts,
+        );
+        assert_eq!(
+            unavailable.model_binding_groups[0].method,
+            ExternalSubagentModelBindingMethod::BindingUnavailable
+        );
+        assert_eq!(
+            unavailable.summaries[0].activation_state,
+            ExternalSubagentActivationState::Unavailable
+        );
+    }
+
+    #[test]
+    fn external_subagent_model_binding_aggregates_matching_references_but_not_workspaces() {
+        let mut definition_snapshot = snapshot("behavior-v1", "catalog-v1");
+        definition_snapshot.sources[0].record.scope = ExternalSourceScope::Project;
+        let request = ExternalSubagentModelRequest::Reference {
+            provider_hint: None,
+            model_name: "unknown-model".to_string(),
+        };
+        definition_snapshot.definitions[0].requested_model = request.clone();
+        let mut second = definition_snapshot.definitions[0].clone();
+        second.candidate_id =
+            ExternalSubagentCandidateId::new("external_subagent:fake:second:candidate").unwrap();
+        second.logical_id = "second".to_string();
+        second.provenance[0].contribution_id.local_id =
+            ExternalSubagentLocalId::new("second").unwrap();
+        second.requested_model = request;
+        definition_snapshot.definitions.push(second);
+        let empty_set = BTreeSet::new();
+        let empty_decisions = BTreeMap::new();
+        let empty_bindings = BTreeMap::new();
+        let decisions = ExternalSubagentDecisions {
+            active_ecosystems: test_active_ecosystems(),
+            approved_envelopes: &empty_set,
+            declined_decisions: &empty_decisions,
+            conflict_choices: &empty_decisions,
+            conflict_lineage_current_keys: &empty_decisions,
+            model_bindings: &empty_bindings,
+        };
+
+        let first = reconcile_with_facts(
+            Some(Path::new("C:/repo-a")),
+            "local-user",
+            &definition_snapshot,
+            decisions,
+            &facts(),
+        );
+        assert_eq!(first.model_binding_groups.len(), 1);
+        assert_eq!(
+            first.model_binding_groups[0].affected_candidate_ids.len(),
+            2
+        );
+
+        let second = reconcile_with_facts(
+            Some(Path::new("C:/repo-b")),
+            "local-user",
+            &definition_snapshot,
+            ExternalSubagentDecisions {
+                active_ecosystems: test_active_ecosystems(),
+                approved_envelopes: &empty_set,
+                declined_decisions: &empty_decisions,
+                conflict_choices: &empty_decisions,
+                conflict_lineage_current_keys: &empty_decisions,
+                model_bindings: &empty_bindings,
+            },
+            &facts(),
+        );
+        assert_ne!(
+            first.model_binding_groups[0].binding_key,
+            second.model_binding_groups[0].binding_key
+        );
+    }
+
+    #[test]
+    fn external_subagent_inherit_registers_intent_without_a_fixed_model_label() {
+        let mut definition_snapshot = snapshot("behavior-v1", "catalog-v1");
+        definition_snapshot.definitions[0].requested_model = ExternalSubagentModelRequest::Inherit;
+        let empty_set = BTreeSet::new();
+        let empty_decisions = BTreeMap::new();
+        let empty_bindings = BTreeMap::new();
+        let preview = reconcile_with_facts(
+            Some(Path::new("C:/repo")),
+            "local-user",
+            &definition_snapshot,
+            ExternalSubagentDecisions {
+                active_ecosystems: test_active_ecosystems(),
+                approved_envelopes: &empty_set,
+                declined_decisions: &empty_decisions,
+                conflict_choices: &empty_decisions,
+                conflict_lineage_current_keys: &empty_decisions,
+                model_bindings: &empty_bindings,
+            },
+            &facts(),
+        );
+        assert_eq!(
+            preview.summaries[0].model_binding_method,
+            ExternalSubagentModelBindingMethod::Inherit
+        );
+        assert_eq!(preview.summaries[0].effective_model_label, None);
+        assert!(preview.model_binding_groups.is_empty());
+        assert!(preview.model_binding_options.is_empty());
+
+        let approved = BTreeSet::from([preview.summaries[0].decision_key.clone()]);
+        let active = reconcile_with_facts(
+            Some(Path::new("C:/repo")),
+            "local-user",
+            &definition_snapshot,
+            ExternalSubagentDecisions {
+                active_ecosystems: test_active_ecosystems(),
+                approved_envelopes: &approved,
+                declined_decisions: &empty_decisions,
+                conflict_choices: &empty_decisions,
+                conflict_lineage_current_keys: &empty_decisions,
+                model_bindings: &empty_bindings,
+            },
+            &facts(),
+        );
+        assert_eq!(active.registrations.len(), 1);
+        assert_eq!(
+            active.registrations[0].model_binding,
+            ExternalSubagentModelBinding::InheritParent
+        );
     }
 
     #[test]
@@ -1374,6 +1954,7 @@ mod tests {
                 declined_decisions: &empty_map,
                 conflict_choices: &empty_map,
                 conflict_lineage_current_keys: &empty_map,
+                model_bindings: empty_model_bindings(),
             },
             &healthy_facts,
         );
@@ -1391,6 +1972,7 @@ mod tests {
                 declined_decisions: &empty_map,
                 conflict_choices: &empty_map,
                 conflict_lineage_current_keys: &empty_map,
+                model_bindings: empty_model_bindings(),
             },
             &unavailable_facts,
         );
@@ -1424,6 +2006,7 @@ mod tests {
                 declined_decisions: &empty_map,
                 conflict_choices: &empty_map,
                 conflict_lineage_current_keys: &empty_map,
+                model_bindings: empty_model_bindings(),
             },
             &healthy_facts,
         );
@@ -1458,6 +2041,7 @@ mod tests {
                 declined_decisions: &empty_map,
                 conflict_choices: &empty_map,
                 conflict_lineage_current_keys: &empty_map,
+                model_bindings: empty_model_bindings(),
             },
             &facts(),
         );
@@ -1499,6 +2083,7 @@ mod tests {
                 declined_decisions: &empty_map,
                 conflict_choices: &empty_map,
                 conflict_lineage_current_keys: &empty_map,
+                model_bindings: empty_model_bindings(),
             },
             &facts(),
         );
@@ -1515,6 +2100,7 @@ mod tests {
                 declined_decisions: &empty_map,
                 conflict_choices: &empty_map,
                 conflict_lineage_current_keys: &empty_map,
+                model_bindings: empty_model_bindings(),
             },
             &facts(),
         );
@@ -1543,6 +2129,7 @@ mod tests {
                 declined_decisions: &empty_map,
                 conflict_choices: &empty_map,
                 conflict_lineage_current_keys: &empty_map,
+                model_bindings: empty_model_bindings(),
             },
             &facts(),
         );
@@ -1557,6 +2144,7 @@ mod tests {
                 declined_decisions: &empty_map,
                 conflict_choices: &empty_map,
                 conflict_lineage_current_keys: &empty_map,
+                model_bindings: empty_model_bindings(),
             },
             &facts(),
         );
@@ -1581,6 +2169,7 @@ mod tests {
                 declined_decisions: &empty_map,
                 conflict_choices: &empty_map,
                 conflict_lineage_current_keys: &empty_map,
+                model_bindings: empty_model_bindings(),
             },
             &facts(),
         );
@@ -1600,6 +2189,7 @@ mod tests {
                 declined_decisions: &empty_map,
                 conflict_choices: &empty_map,
                 conflict_lineage_current_keys: &empty_map,
+                model_bindings: empty_model_bindings(),
             },
             &facts(),
         );
@@ -1621,6 +2211,7 @@ mod tests {
                 declined_decisions: &empty_map,
                 conflict_choices: &empty_map,
                 conflict_lineage_current_keys: &empty_map,
+                model_bindings: empty_model_bindings(),
             },
             &facts(),
         );
@@ -1651,6 +2242,7 @@ mod tests {
                 declined_decisions: &empty_map,
                 conflict_choices: &empty_map,
                 conflict_lineage_current_keys: &empty_map,
+                model_bindings: empty_model_bindings(),
             },
             &first_facts,
         );
@@ -1675,6 +2267,7 @@ mod tests {
                 declined_decisions: &empty_map,
                 conflict_choices: &empty_map,
                 conflict_lineage_current_keys: &empty_map,
+                model_bindings: empty_model_bindings(),
             },
             &updated_facts,
         );
@@ -1705,6 +2298,7 @@ mod tests {
                 declined_decisions: &empty_map,
                 conflict_choices: &empty_map,
                 conflict_lineage_current_keys: &empty_map,
+                model_bindings: empty_model_bindings(),
             },
             &first_facts,
         );
@@ -1725,6 +2319,7 @@ mod tests {
                 declined_decisions: &empty_map,
                 conflict_choices: &empty_map,
                 conflict_lineage_current_keys: &empty_map,
+                model_bindings: empty_model_bindings(),
             },
             &updated_facts,
         );
@@ -1763,6 +2358,7 @@ mod tests {
                 declined_decisions: &empty_map,
                 conflict_choices: &empty_map,
                 conflict_lineage_current_keys: &empty_map,
+                model_bindings: empty_model_bindings(),
             },
             &unavailable_facts,
         );
@@ -1800,6 +2396,7 @@ mod tests {
                 declined_decisions: &empty_map,
                 conflict_choices: &empty_map,
                 conflict_lineage_current_keys: &empty_map,
+                model_bindings: empty_model_bindings(),
             },
             &facts,
         );
@@ -1832,6 +2429,7 @@ mod tests {
                 declined_decisions: &empty_map,
                 conflict_choices: &choices,
                 conflict_lineage_current_keys: &preview.observed_conflict_lineage_current_keys,
+                model_bindings: empty_model_bindings(),
             },
             &facts,
         );
@@ -1873,6 +2471,7 @@ mod tests {
                     declined_decisions: &empty_map,
                     conflict_choices: &choices,
                     conflict_lineage_current_keys: &preview.observed_conflict_lineage_current_keys,
+                    model_bindings: empty_model_bindings(),
                 },
                 &product_facts,
             );
@@ -1904,6 +2503,7 @@ mod tests {
                     declined_decisions: &empty_map,
                     conflict_choices: &choices,
                     conflict_lineage_current_keys: &preview.observed_conflict_lineage_current_keys,
+                    model_bindings: empty_model_bindings(),
                 },
                 &product_facts,
             );
@@ -1956,6 +2556,7 @@ mod tests {
                 declined_decisions: &empty_map,
                 conflict_choices: &empty_map,
                 conflict_lineage_current_keys: &empty_map,
+                model_bindings: empty_model_bindings(),
             },
             &product_facts,
         );
@@ -1983,6 +2584,7 @@ mod tests {
                 declined_decisions: &empty_map,
                 conflict_choices: &choices,
                 conflict_lineage_current_keys: &preview.observed_conflict_lineage_current_keys,
+                model_bindings: empty_model_bindings(),
             },
             &facts(),
         );
@@ -2022,6 +2624,7 @@ mod tests {
                 declined_decisions: &empty_map,
                 conflict_choices: &choices,
                 conflict_lineage_current_keys: &preview.observed_conflict_lineage_current_keys,
+                model_bindings: empty_model_bindings(),
             },
             &facts_with_local,
         );
@@ -2056,6 +2659,7 @@ mod tests {
                 declined_decisions: &empty_map,
                 conflict_choices: &choices,
                 conflict_lineage_current_keys: &preview.observed_conflict_lineage_current_keys,
+                model_bindings: empty_model_bindings(),
             },
             &facts_with_local,
         );

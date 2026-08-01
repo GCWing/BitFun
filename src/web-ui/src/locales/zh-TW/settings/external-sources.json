@@ -105,6 +105,7 @@
     "updated": "已儲存。",
     "waitForUpdate": "另一項變更仍在儲存，請等待完成後再做選擇。",
     "agentUpdated": "已儲存「{{name}}」的變更並重新整理狀態。",
+    "modelBindingUpdated": "已儲存 Agent 模型綁定並重新整理受影響的 Agent。",
     "mcpUpdated": "已儲存 MCP 伺服器選擇並重新整理狀態。"
   },
   "recoveryActions": {
@@ -249,6 +250,9 @@
     "approvalWarning": "啟用後，此 Agent 可以讓所選模型呼叫上方工具。其指令、模型、工具或設定來源變更時，BitFun 會要求你再次確認。",
     "singleRun": "單次執行，不支援追問",
     "modelUnavailable": "無法使用",
+    "modelResolvedFromParentAtTaskStart": "任務開始時從父工作階段解析",
+    "requestedModel": "來源宣告：{{model}}",
+    "modelBindingMethod": "解析方式：{{method}}",
     "model": "模型：{{model}}",
     "tools": "工具：{{tools}}",
     "executionDomain": "執行位置：本機與目前工作區",
@@ -257,6 +261,32 @@
     "noTools": "無工具",
     "unavailableToolsUnknown": "目前 Host 未提供工具名稱",
     "sourceLocations": "設定來源（{{count}} 個）"
+  },
+  "agentModelBindings": {
+    "title": "Agent 模型綁定",
+    "affectedAgents": "影響 {{count}} 個 Agent",
+    "effectiveModel": "實際使用 {{model}}",
+    "selectLabel": "為 {{request}} 選擇 BitFun 模型",
+    "automatic": "已自動比對",
+    "targetUnavailable": "已無法使用：{{target}}",
+    "request": {
+      "default": "BitFun 預設模型",
+      "inherit": "父工作階段模型"
+    },
+    "target": {
+      "source": "使用來源自動比對",
+      "primary": "主要模型",
+      "fast": "快速模型",
+      "model": "已設定模型"
+    },
+    "method": {
+      "default": "BitFun 預設模型",
+      "inherit": "繼承父工作階段模型",
+      "exact": "精確比對已設定模型",
+      "explicit": "使用者綁定",
+      "binding_required": "需要選擇模型",
+      "binding_unavailable": "已儲存的模型無法使用"
+    }
   },
   "agentState": {
     "approval_required": "待確認",

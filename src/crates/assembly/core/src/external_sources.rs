@@ -32,7 +32,9 @@ pub use bitfun_product_domains::external_sources::{
 };
 pub use bitfun_product_domains::external_subagents::{
     ExternalSubagentActivationState, ExternalSubagentCompatibilityState, ExternalSubagentConflict,
-    ExternalSubagentConflictCandidate, ExternalSubagentSummary,
+    ExternalSubagentConflictCandidate, ExternalSubagentModelBindingGroup,
+    ExternalSubagentModelBindingMethod, ExternalSubagentModelBindingOption,
+    ExternalSubagentModelBindingTarget, ExternalSubagentModelRequest, ExternalSubagentSummary,
 };
 
 use crate::external_mcp::{
@@ -497,6 +499,8 @@ struct ExternalSourcesConfig {
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     subagent_conflict_lineage_current_keys: BTreeMap<String, String>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    subagent_model_bindings: BTreeMap<String, ExternalSubagentModelBindingTarget>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     mcp_server_decisions: BTreeMap<String, ExternalMcpDecision>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     mcp_conflict_choices: BTreeMap<String, String>,
@@ -542,6 +546,7 @@ impl std::fmt::Debug for ExternalSourcesConfig {
                 "subagent_conflict_lineage_current_keys",
                 &self.subagent_conflict_lineage_current_keys,
             )
+            .field("subagent_model_bindings", &self.subagent_model_bindings)
             .field("mcp_server_decisions", &self.mcp_server_decisions)
             .field("mcp_conflict_choices", &self.mcp_conflict_choices)
             .field("extensions", &self.extensions)
@@ -1472,6 +1477,7 @@ impl WorkspaceExternalSourceService {
                 declined_decisions: &preferences.declined_subagent_decisions,
                 conflict_choices: &preferences.subagent_conflict_choices,
                 conflict_lineage_current_keys: &preferences.subagent_conflict_lineage_current_keys,
+                model_bindings: &preferences.subagent_model_bindings,
             },
         )
         .await;
@@ -1505,6 +1511,7 @@ impl WorkspaceExternalSourceService {
                                 conflict_choices: &preferences.subagent_conflict_choices,
                                 conflict_lineage_current_keys: &preferences
                                     .subagent_conflict_lineage_current_keys,
+                                model_bindings: &preferences.subagent_model_bindings,
                             },
                         )
                         .await;
@@ -1691,6 +1698,7 @@ impl WorkspaceExternalSourceService {
                 declined_decisions: &preferences.declined_subagent_decisions,
                 conflict_choices: &preferences.subagent_conflict_choices,
                 conflict_lineage_current_keys: &preferences.subagent_conflict_lineage_current_keys,
+                model_bindings: &preferences.subagent_model_bindings,
             },
         );
         merge_subagent_state(
@@ -2976,6 +2984,30 @@ impl WorkspaceExternalSourceService {
         self.rebuild_product_snapshot(command_snapshot).await
     }
 
+    async fn set_subagent_model_binding(
+        &self,
+        binding_key: &str,
+        target: Option<ExternalSubagentModelBindingTarget>,
+        expected_subagent_generation: u64,
+        expected_preference_revision: u64,
+    ) -> Result<ExternalSourceCatalogSnapshot, String> {
+        let _refresh_guard = self.refresh_gate.lock().await;
+        let snapshot = self.snapshot();
+        validate_subagent_model_binding_mutation(
+            &snapshot,
+            binding_key,
+            target.as_ref(),
+            expected_subagent_generation,
+            expected_preference_revision,
+        )?;
+        let preferences =
+            persist_subagent_model_binding(binding_key, target, expected_preference_revision)
+                .await?;
+        propagate_subagent_preferences(&preferences);
+        let command_snapshot = lock_coordinator(&self.control_plane).snapshot();
+        self.rebuild_product_snapshot(command_snapshot).await
+    }
+
     async fn choose_subagent_conflict(
         &self,
         conflict_key: &str,
@@ -4128,6 +4160,8 @@ fn merge_subagent_state(
     snapshot.subagent_generation = coordinator_snapshot.generation;
     snapshot.preference_revision = preference_revision;
     snapshot.subagents = state.summaries.clone();
+    snapshot.subagent_model_binding_groups = state.model_binding_groups.clone();
+    snapshot.subagent_model_binding_options = state.model_binding_options.clone();
     snapshot.subagent_conflicts = state.conflicts.clone();
     snapshot.pending_subagent_approvals = state.pending_approvals.clone();
     snapshot
@@ -4401,6 +4435,99 @@ async fn persist_subagent_conflict_choice_with_store(
                     .approved_subagent_envelopes
                     .insert(approval_key.clone());
                 config.declined_subagent_decisions.remove(&approval_key);
+            }
+            config.preference_revision = config.preference_revision.saturating_add(1);
+            true
+        })
+        .await
+        .and_then(|(applied, config)| {
+            applied.then_some(config).ok_or_else(|| {
+                stale_operation_error(
+                    "External subagent preferences changed; refresh before retrying",
+                )
+            })
+        })
+}
+
+fn validate_subagent_model_binding_mutation(
+    snapshot: &ExternalSourceCatalogSnapshot,
+    binding_key: &str,
+    target: Option<&ExternalSubagentModelBindingTarget>,
+    expected_subagent_generation: u64,
+    expected_preference_revision: u64,
+) -> Result<(), String> {
+    if snapshot.subagent_generation != expected_subagent_generation
+        || snapshot.preference_revision != expected_preference_revision
+    {
+        return Err(stale_operation_error(
+            "External subagent catalog changed; refresh before retrying",
+        ));
+    }
+    let group = snapshot
+        .subagent_model_binding_groups
+        .iter()
+        .find(|group| group.binding_key == binding_key)
+        .ok_or_else(|| {
+            missing_candidate_error("External subagent model binding is no longer available")
+        })?;
+    if !matches!(
+        group.method,
+        ExternalSubagentModelBindingMethod::BindingRequired
+            | ExternalSubagentModelBindingMethod::Explicit
+            | ExternalSubagentModelBindingMethod::BindingUnavailable
+    ) {
+        return Err(unavailable_operation_error(
+            "External subagent model binding is read-only in its current state",
+        ));
+    }
+    if let Some(target) = target {
+        if !snapshot
+            .subagent_model_binding_options
+            .iter()
+            .any(|option| &option.target == target)
+        {
+            return Err(unavailable_operation_error(
+                "External subagent model binding target is unavailable",
+            ));
+        }
+    }
+    Ok(())
+}
+
+async fn persist_subagent_model_binding(
+    binding_key: &str,
+    target: Option<ExternalSubagentModelBindingTarget>,
+    expected_preference_revision: u64,
+) -> Result<ExternalSourcesConfig, String> {
+    let store = ExternalSourcePreferenceStore::global()?;
+    persist_subagent_model_binding_with_store(
+        &store,
+        binding_key,
+        target,
+        expected_preference_revision,
+    )
+    .await
+}
+
+async fn persist_subagent_model_binding_with_store(
+    store: &ExternalSourcePreferenceStore,
+    binding_key: &str,
+    target: Option<ExternalSubagentModelBindingTarget>,
+    expected_preference_revision: u64,
+) -> Result<ExternalSourcesConfig, String> {
+    let binding_key = binding_key.to_string();
+    store
+        .update(move |config| {
+            if config.preference_revision != expected_preference_revision {
+                return false;
+            }
+            match target {
+                Some(target) => {
+                    config.subagent_model_bindings.insert(binding_key, target);
+                }
+                None => {
+                    config.subagent_model_bindings.remove(&binding_key);
+                }
             }
             config.preference_revision = config.preference_revision.saturating_add(1);
             true
@@ -5660,6 +5787,24 @@ pub async fn set_external_subagent_activation(
         .await
 }
 
+pub async fn set_external_subagent_model_binding(
+    workspace_root: Option<&Path>,
+    binding_key: &str,
+    target: Option<ExternalSubagentModelBindingTarget>,
+    expected_subagent_generation: u64,
+    expected_preference_revision: u64,
+) -> Result<ExternalSourceCatalogSnapshot, String> {
+    service_for(workspace_root)
+        .await?
+        .set_subagent_model_binding(
+            binding_key,
+            target,
+            expected_subagent_generation,
+            expected_preference_revision,
+        )
+        .await
+}
+
 pub async fn choose_external_subagent_conflict(
     workspace_root: Option<&Path>,
     conflict_key: &str,
@@ -6301,6 +6446,193 @@ mod tests {
         assert!(!debug.contains("private-revision-secret"));
     }
 
+    #[tokio::test]
+    async fn external_subagent_model_bindings_share_the_existing_atomic_preference_owner() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("external-sources.json");
+        let process_a = ExternalSourcePreferenceStore::new(path.clone());
+        let process_b = ExternalSourcePreferenceStore::new(path);
+        let workspace_a = "external_subagent_model_binding:workspace-a";
+        let workspace_b = "external_subagent_model_binding:workspace-b";
+
+        let first = persist_subagent_model_binding_with_store(
+            &process_a,
+            workspace_a,
+            Some(ExternalSubagentModelBindingTarget::Primary),
+            0,
+        )
+        .await
+        .unwrap();
+        assert_eq!(first.preference_revision, 1);
+        assert_eq!(
+            first.subagent_model_bindings.get(workspace_a),
+            Some(&ExternalSubagentModelBindingTarget::Primary)
+        );
+
+        let merged = persist_subagent_model_binding_with_store(
+            &process_b,
+            workspace_b,
+            Some(ExternalSubagentModelBindingTarget::Model {
+                model_id: "glm-project".to_string(),
+            }),
+            first.preference_revision,
+        )
+        .await
+        .unwrap();
+        assert_eq!(merged.preference_revision, 2);
+        assert_eq!(merged.subagent_model_bindings.len(), 2);
+
+        let error = persist_subagent_model_binding_with_store(
+            &process_a,
+            workspace_a,
+            Some(ExternalSubagentModelBindingTarget::Fast),
+            first.preference_revision,
+        )
+        .await
+        .expect_err("a stale process must not overwrite a newer workspace binding");
+        assert_eq!(
+            ExternalSourceOperationError::decode(&error)
+                .expect("stale binding writes use the typed error contract")
+                .code,
+            ExternalSourceOperationErrorCode::StaleRevision
+        );
+
+        let replaced = persist_subagent_model_binding_with_store(
+            &process_a,
+            workspace_a,
+            Some(ExternalSubagentModelBindingTarget::Fast),
+            merged.preference_revision,
+        )
+        .await
+        .unwrap();
+        assert_eq!(replaced.preference_revision, 3);
+        assert_eq!(
+            replaced.subagent_model_bindings.get(workspace_a),
+            Some(&ExternalSubagentModelBindingTarget::Fast)
+        );
+
+        let cleared = persist_subagent_model_binding_with_store(
+            &process_b,
+            workspace_a,
+            None,
+            replaced.preference_revision,
+        )
+        .await
+        .unwrap();
+        assert_eq!(cleared.preference_revision, 4);
+        assert!(!cleared.subagent_model_bindings.contains_key(workspace_a));
+        assert!(cleared.subagent_model_bindings.contains_key(workspace_b));
+    }
+
+    #[test]
+    fn external_subagent_model_binding_mutation_fails_closed_against_the_current_snapshot() {
+        let binding_key = "external_subagent_model_binding:known";
+        let mut snapshot = ExternalSourceCatalogSnapshot {
+            generation: 0,
+            discovery_pending: false,
+            sources: Vec::new(),
+            commands: Vec::new(),
+            command_conflicts: Vec::new(),
+            tools: Vec::new(),
+            tool_approval_requests: Vec::new(),
+            tool_conflicts: Vec::new(),
+            mcp_generation: 0,
+            mcp_servers: Vec::new(),
+            mcp_approval_requests: Vec::new(),
+            mcp_conflicts: Vec::new(),
+            subagent_generation: 7,
+            preference_revision: 11,
+            subagents: Vec::new(),
+            subagent_model_binding_groups: vec![ExternalSubagentModelBindingGroup {
+                binding_key: binding_key.to_string(),
+                request: ExternalSubagentModelRequest::Reference {
+                    provider_hint: Some("openai".to_string()),
+                    model_name: "gpt-project".to_string(),
+                },
+                scope: ExternalSourceScope::Project,
+                method: ExternalSubagentModelBindingMethod::BindingRequired,
+                selected_target: None,
+                effective_model_label: None,
+                affected_candidate_ids: vec!["review".to_string()],
+            }],
+            subagent_model_binding_options: vec![ExternalSubagentModelBindingOption {
+                target: ExternalSubagentModelBindingTarget::Primary,
+                effective_model_label: "Primary model".to_string(),
+            }],
+            subagent_conflicts: Vec::new(),
+            pending_subagent_approvals: Vec::new(),
+            integration_policy: Default::default(),
+            diagnostics: Vec::new(),
+        };
+
+        assert!(validate_subagent_model_binding_mutation(
+            &snapshot,
+            binding_key,
+            Some(&ExternalSubagentModelBindingTarget::Primary),
+            7,
+            11,
+        )
+        .is_ok());
+        assert!(
+            validate_subagent_model_binding_mutation(&snapshot, binding_key, None, 7, 11,).is_ok()
+        );
+
+        for (key, target, generation, revision, expected_code) in [
+            (
+                "external_subagent_model_binding:missing",
+                None,
+                7,
+                11,
+                ExternalSourceOperationErrorCode::NotFound,
+            ),
+            (
+                binding_key,
+                Some(&ExternalSubagentModelBindingTarget::Fast),
+                7,
+                11,
+                ExternalSourceOperationErrorCode::Unavailable,
+            ),
+            (
+                binding_key,
+                None,
+                8,
+                11,
+                ExternalSourceOperationErrorCode::StaleRevision,
+            ),
+            (
+                binding_key,
+                None,
+                7,
+                12,
+                ExternalSourceOperationErrorCode::StaleRevision,
+            ),
+        ] {
+            let error = validate_subagent_model_binding_mutation(
+                &snapshot, key, target, generation, revision,
+            )
+            .expect_err("invalid binding mutations must fail closed");
+            assert_eq!(
+                ExternalSourceOperationError::decode(&error).unwrap().code,
+                expected_code
+            );
+        }
+
+        snapshot.subagent_model_binding_groups[0].method =
+            ExternalSubagentModelBindingMethod::Exact;
+        let error = validate_subagent_model_binding_mutation(
+            &snapshot,
+            binding_key,
+            Some(&ExternalSubagentModelBindingTarget::Primary),
+            7,
+            11,
+        )
+        .expect_err("exact source matches are read-only");
+        assert_eq!(
+            ExternalSourceOperationError::decode(&error).unwrap().code,
+            ExternalSourceOperationErrorCode::Unavailable
+        );
+    }
+
     #[test]
     fn only_model_configuration_events_refresh_external_model_bindings() {
         assert!(config_update_refreshes_external_model_bindings(
@@ -6369,6 +6701,8 @@ mod tests {
             subagents: Vec::new(),
             subagent_conflicts: Vec::new(),
             pending_subagent_approvals: Vec::new(),
+            subagent_model_binding_groups: Vec::new(),
+            subagent_model_binding_options: Vec::new(),
             integration_policy: Default::default(),
             diagnostics: Vec::new(),
         };
@@ -6678,6 +7012,8 @@ mod tests {
             subagents: Vec::new(),
             subagent_conflicts: Vec::new(),
             pending_subagent_approvals: Vec::new(),
+            subagent_model_binding_groups: Vec::new(),
+            subagent_model_binding_options: Vec::new(),
             integration_policy: Default::default(),
             diagnostics: vec![ExternalSourceDiagnostic::warning(
                 "future.tool.file_read_failed",
@@ -6766,6 +7102,8 @@ mod tests {
             subagents: Vec::new(),
             subagent_conflicts: Vec::new(),
             pending_subagent_approvals: Vec::new(),
+            subagent_model_binding_groups: Vec::new(),
+            subagent_model_binding_options: Vec::new(),
             integration_policy: Default::default(),
             diagnostics: Vec::new(),
         };

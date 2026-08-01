@@ -7,12 +7,13 @@ use bitfun_core::external_sources::{
     get_external_source_control_snapshot as core_get_external_source_control_snapshot,
     native_prompt_command_conflicts, set_external_mcp_server_decision,
     set_external_prompt_command_conflict_choice, set_external_source_enabled,
-    set_external_subagent_activation, set_external_tool_conflict_choice,
-    set_external_tool_target_decision, set_native_prompt_command_conflict_choice,
-    update_external_integration_policy, workspace_reference_snapshot, ExpandedPromptCommand,
-    ExternalIntegrationPolicyMutation, ExternalSourceControlRequestV1,
-    ExternalSourceHostCapabilities, ExternalSourceOperationError, ExternalSourceOperationErrorCode,
-    ExternalSourceOperationResult, ExternalSourcePublicSnapshot, ExternalSourceSurfaceSnapshotV1,
+    set_external_subagent_activation, set_external_subagent_model_binding,
+    set_external_tool_conflict_choice, set_external_tool_target_decision,
+    set_native_prompt_command_conflict_choice, update_external_integration_policy,
+    workspace_reference_snapshot, ExpandedPromptCommand, ExternalIntegrationPolicyMutation,
+    ExternalSourceControlRequestV1, ExternalSourceHostCapabilities, ExternalSourceOperationError,
+    ExternalSourceOperationErrorCode, ExternalSourceOperationResult, ExternalSourcePublicSnapshot,
+    ExternalSourceSurfaceSnapshotV1, ExternalSubagentModelBindingTarget,
     NativePromptCommandConflictSnapshot, NativePromptCommandDescriptor,
 };
 use bitfun_core::service::remote_ssh::workspace_state::is_remote_path;
@@ -147,6 +148,16 @@ pub struct SetExternalSubagentActivationRequest {
     pub expected_subagent_generation: u64,
     pub expected_preference_revision: u64,
     pub decision_key: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SetExternalSubagentModelBindingRequest {
+    pub workspace_path: Option<String>,
+    pub binding_key: String,
+    pub target: Option<ExternalSubagentModelBindingTarget>,
+    pub expected_subagent_generation: u64,
+    pub expected_preference_revision: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -521,6 +532,23 @@ pub async fn set_external_subagent_activation_command(
 }
 
 #[tauri::command]
+pub async fn set_external_subagent_model_binding_command(
+    request: SetExternalSubagentModelBindingRequest,
+) -> ExternalSourceOperationResult<ExternalSourceSnapshotResponse> {
+    let workspace = require_local_workspace(request.workspace_path.as_deref()).await?;
+    set_external_subagent_model_binding(
+        workspace,
+        &request.binding_key,
+        request.target,
+        request.expected_subagent_generation,
+        request.expected_preference_revision,
+    )
+    .await
+    .map(Into::into)
+    .map_err(bitfun_core::external_sources::sanitize_external_source_operation_error)
+}
+
+#[tauri::command]
 pub async fn choose_external_subagent_conflict_command(
     request: ChooseExternalSubagentConflictRequest,
 ) -> ExternalSourceOperationResult<ExternalSourceSnapshotResponse> {
@@ -674,6 +702,36 @@ mod tests {
             request.control.action,
             ExternalSourceControlActionV1::SetSafeMode { enabled: true }
         ));
+    }
+
+    #[test]
+    fn desktop_subagent_model_binding_request_keeps_the_target_typed_and_nullable() {
+        let set: SetExternalSubagentModelBindingRequest =
+            serde_json::from_value(serde_json::json!({
+                "workspacePath": "D:/workspace/project",
+                "bindingKey": "external_subagent_model_binding:review",
+                "target": { "kind": "model", "modelId": "glm-project" },
+                "expectedSubagentGeneration": 5,
+                "expectedPreferenceRevision": 8
+            }))
+            .unwrap();
+        assert_eq!(
+            set.target,
+            Some(ExternalSubagentModelBindingTarget::Model {
+                model_id: "glm-project".to_string(),
+            })
+        );
+
+        let clear: SetExternalSubagentModelBindingRequest =
+            serde_json::from_value(serde_json::json!({
+                "workspacePath": null,
+                "bindingKey": "external_subagent_model_binding:review",
+                "target": null,
+                "expectedSubagentGeneration": 5,
+                "expectedPreferenceRevision": 8
+            }))
+            .unwrap();
+        assert_eq!(clear.target, None);
     }
 
     #[test]

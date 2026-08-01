@@ -14,9 +14,31 @@ pub(crate) fn external_subagent_runtime_key(digest: &str) -> String {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ExternalSubagentModelBinding {
-    pub model_id: String,
-    pub configuration_fingerprint: String,
+pub enum ExternalSubagentModelBinding {
+    Fixed {
+        model_id: String,
+        configuration_fingerprint: String,
+    },
+    InheritParent,
+}
+
+impl ExternalSubagentModelBinding {
+    pub fn fixed_model_id(&self) -> Option<&str> {
+        match self {
+            Self::Fixed { model_id, .. } => Some(model_id),
+            Self::InheritParent => None,
+        }
+    }
+
+    pub fn configuration_fingerprint(&self) -> Option<&str> {
+        match self {
+            Self::Fixed {
+                configuration_fingerprint,
+                ..
+            } => Some(configuration_fingerprint),
+            Self::InheritParent => None,
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -398,8 +420,12 @@ fn external_agent_info(entry: &ExternalSubagentGenerationEntry) -> AgentInfo {
         source: AgentSource::External,
         subagent_source: Some(SubAgentSource::External),
         path: None,
-        model: Some(entry.registration.model_binding.model_id.clone()),
-        model_is_explicit: Some(true),
+        model: entry
+            .registration
+            .model_binding
+            .fixed_model_id()
+            .map(str::to_string),
+        model_is_explicit: Some(entry.registration.model_binding.fixed_model_id().is_some()),
         visibility: Some(SubagentVisibilityPolicy::public().summary()),
         external_provider_label: Some(entry.registration.provider_label.clone()),
         supports_follow_up: false,

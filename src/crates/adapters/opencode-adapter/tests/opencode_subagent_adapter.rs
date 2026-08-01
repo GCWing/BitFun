@@ -90,6 +90,38 @@ fn omo_oracle_flat_permissions_become_provider_neutral_constraints() {
 }
 
 #[test]
+fn model_named_inherit_remains_an_opaque_opencode_reference() {
+    let temp = TempDir::new().unwrap();
+    let workspace = temp.path().join("workspace");
+    fs::create_dir_all(workspace.join(".git")).unwrap();
+    fs::create_dir_all(temp.path().join("user")).unwrap();
+    fs::write(
+        temp.path().join("user/opencode.json"),
+        r#"{
+          "agent": {
+            "named": {
+              "description": "Named model",
+              "prompt": "Use the configured model",
+              "mode": "subagent",
+              "model": "inherit"
+            }
+          }
+        }"#,
+    )
+    .unwrap();
+
+    let definition =
+        &discover(&provider(&temp, &workspace), workspace, BTreeSet::new()).definitions[0];
+    assert_eq!(
+        definition.requested_model,
+        ExternalSubagentModelRequest::Reference {
+            provider_hint: None,
+            model_name: "inherit".to_string(),
+        }
+    );
+}
+
+#[test]
 fn current_opencode_agent_permissions_preserve_ordered_resource_rules() {
     let temp = TempDir::new().unwrap();
     let workspace = temp.path().join("workspace");
@@ -898,7 +930,7 @@ fn global_and_project_agent_fields_deep_merge_with_ordered_provenance() {
     assert_eq!(definition.mode, ExternalSubagentMode::Subagent);
     assert_eq!(
         definition.requested_model,
-        ExternalSubagentModelRequest::Exact {
+        ExternalSubagentModelRequest::Reference {
             provider_hint: Some("openrouter".to_string()),
             model_name: "anthropic/claude-sonnet-4".to_string(),
         }

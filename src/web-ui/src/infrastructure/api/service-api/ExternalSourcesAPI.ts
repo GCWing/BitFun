@@ -179,6 +179,8 @@ export interface ExternalSourceCatalogSnapshot {
   subagentGeneration?: number;
   preferenceRevision?: number;
   subagents?: ExternalSubagentSummary[];
+  subagentModelBindingGroups?: ExternalSubagentModelBindingGroup[];
+  subagentModelBindingOptions?: ExternalSubagentModelBindingOption[];
   subagentConflicts?: ExternalSubagentConflict[];
   pendingSubagentApprovals?: string[];
   integrationPolicy: ExternalIntegrationPolicySnapshot;
@@ -205,6 +207,39 @@ export type ExternalSubagentActivation =
   | { state: 'blocked' }
   | { state: 'unavailable' };
 
+export type ExternalSubagentModelRequest =
+  | { kind: 'default' }
+  | { kind: 'inherit' }
+  | { kind: 'reference'; providerHint?: string; modelName: string };
+
+export type ExternalSubagentModelBindingTarget =
+  | { kind: 'primary' }
+  | { kind: 'fast' }
+  | { kind: 'model'; modelId: string };
+
+export type ExternalSubagentModelBindingMethod =
+  | 'default'
+  | 'inherit'
+  | 'exact'
+  | 'explicit'
+  | 'binding_required'
+  | 'binding_unavailable';
+
+export interface ExternalSubagentModelBindingOption {
+  target: ExternalSubagentModelBindingTarget;
+  effectiveModelLabel: string;
+}
+
+export interface ExternalSubagentModelBindingGroup {
+  bindingKey: string;
+  request: ExternalSubagentModelRequest;
+  scope: ExternalSourceScope;
+  method: ExternalSubagentModelBindingMethod;
+  selectedTarget?: ExternalSubagentModelBindingTarget;
+  effectiveModelLabel?: string;
+  affectedCandidateIds: string[];
+}
+
 export interface ExternalSubagentSummary {
   candidateId: string;
   logicalId: string;
@@ -215,6 +250,9 @@ export interface ExternalSubagentSummary {
   sourceKeys: Array<{ providerId: string; sourceId: string }>;
   sourceLocationLabels: string[];
   sourceCount: number;
+  requestedModel: ExternalSubagentModelRequest;
+  modelBindingMethod: ExternalSubagentModelBindingMethod;
+  modelBindingKey?: string;
   effectiveModelLabel?: string;
   effectiveToolLabels: string[];
   unavailableToolLabels: string[];
@@ -854,12 +892,23 @@ function normalizeSnapshot(value: unknown): ExternalSourceCatalogSnapshot {
     })),
     subagents: normalizeOptionalArray<ExternalSubagentSummary>(candidate.subagents).map((subagent) => ({
       ...subagent,
+      requestedModel: subagent.requestedModel ?? { kind: 'default' },
+      modelBindingMethod: subagent.modelBindingMethod ?? 'default',
       sourceKeys: normalizeOptionalArray(subagent.sourceKeys),
       sourceLocationLabels: normalizeOptionalArray(subagent.sourceLocationLabels),
       effectiveToolLabels: normalizeOptionalArray(subagent.effectiveToolLabels),
       unavailableToolLabels: normalizeOptionalArray(subagent.unavailableToolLabels),
       diagnostics: normalizeOptionalArray(subagent.diagnostics),
     })),
+    subagentModelBindingGroups: normalizeOptionalArray<ExternalSubagentModelBindingGroup>(
+      candidate.subagentModelBindingGroups,
+    ).map((group) => ({
+      ...group,
+      affectedCandidateIds: normalizeOptionalArray(group.affectedCandidateIds),
+    })),
+    subagentModelBindingOptions: normalizeOptionalArray<ExternalSubagentModelBindingOption>(
+      candidate.subagentModelBindingOptions,
+    ),
     subagentConflicts: normalizeOptionalArray<ExternalSubagentConflict>(candidate.subagentConflicts).map((conflict) => ({
       ...conflict,
       candidates: normalizeOptionalArray(conflict.candidates),
@@ -1416,6 +1465,24 @@ export const externalSourcesAPI = {
         expectedSubagentGeneration,
         expectedPreferenceRevision,
         decisionKey,
+      },
+    });
+  },
+
+  setSubagentModelBinding(
+    workspacePath: string | undefined,
+    bindingKey: string,
+    target: ExternalSubagentModelBindingTarget | undefined,
+    expectedSubagentGeneration: number,
+    expectedPreferenceRevision: number,
+  ) {
+    return invokeSnapshot('set_external_subagent_model_binding_command', {
+      request: {
+        workspacePath: normalizeOptionalWorkspacePath(workspacePath),
+        bindingKey,
+        target,
+        expectedSubagentGeneration,
+        expectedPreferenceRevision,
       },
     });
   },

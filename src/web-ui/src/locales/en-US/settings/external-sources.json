@@ -105,6 +105,7 @@
     "updated": "Saved.",
     "waitForUpdate": "Another change is still being saved. Wait for it to finish before making another choice.",
     "agentUpdated": "Saved changes to {{name}} and refreshed its status.",
+    "modelBindingUpdated": "Saved the agent model binding and refreshed affected agents.",
     "mcpUpdated": "Saved the MCP server choice and refreshed its status."
   },
   "recoveryActions": {
@@ -249,6 +250,9 @@
     "approvalWarning": "Once enabled, this agent can instruct the selected model to use the tools shown above. BitFun asks again if its instructions, model, tools, or configuration sources change.",
     "singleRun": "One run only; no follow-up",
     "modelUnavailable": "Unavailable",
+    "modelResolvedFromParentAtTaskStart": "Resolved from the parent session when the task starts",
+    "requestedModel": "Requested by source: {{model}}",
+    "modelBindingMethod": "Resolution: {{method}}",
     "model": "Model: {{model}}",
     "tools": "Tools: {{tools}}",
     "executionDomain": "Runs in: this computer and current workspace",
@@ -257,6 +261,32 @@
     "noTools": "No tools",
     "unavailableToolsUnknown": "Names were not provided by this host",
     "sourceLocations": "Configuration sources ({{count}})"
+  },
+  "agentModelBindings": {
+    "title": "Agent model bindings",
+    "affectedAgents": "Affects {{count}} agents",
+    "effectiveModel": "Uses {{model}}",
+    "selectLabel": "Choose a BitFun model for {{request}}",
+    "automatic": "Matched automatically",
+    "targetUnavailable": "Unavailable: {{target}}",
+    "request": {
+      "default": "BitFun default",
+      "inherit": "Parent session model"
+    },
+    "target": {
+      "source": "Use automatic source matching",
+      "primary": "Primary model",
+      "fast": "Fast model",
+      "model": "Configured model"
+    },
+    "method": {
+      "default": "BitFun default",
+      "inherit": "Inherited from the parent session",
+      "exact": "Exact configured model",
+      "explicit": "User binding",
+      "binding_required": "Choose a model",
+      "binding_unavailable": "Saved model is unavailable"
+    }
   },
   "agentState": {
     "approval_required": "Confirmation required",

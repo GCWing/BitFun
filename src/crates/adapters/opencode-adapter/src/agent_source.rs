@@ -866,7 +866,7 @@ fn materialize_definition(
                 .split_once('/')
                 .map(|(provider, model_name)| (Some(provider.to_string()), model_name.to_string()))
                 .unwrap_or_else(|| (None, model.to_string()));
-            ExternalSubagentModelRequest::Exact {
+            ExternalSubagentModelRequest::Reference {
                 provider_hint,
                 model_name,
             }
