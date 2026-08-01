@@ -34,6 +34,31 @@ export interface IssueFixPlanResponse {
   branchReady: boolean;
 }
 
+export interface IssueFixExecuteRequest {
+  /** The session whose agent loop should do the fixing. */
+  sessionId: string;
+  /** Public-safe `owner/repo`. */
+  repo: string;
+  issueRef: string;
+  issueUrl: string;
+  /** Local checkout the agent works in. */
+  repositoryPath: string;
+  baseBranch?: string;
+  /** Issue title, included in the task message. */
+  issueTitle?: string;
+}
+
+export interface IssueFixExecuteResponse {
+  issueRef: string;
+  route: 'fix_pr' | 'comment_only' | 'triage_only';
+  /** Whether the fix task was actually submitted to the agent loop. */
+  submitted: boolean;
+  /** Why nothing was submitted, when `submitted` is false. */
+  notSubmittedReason?: string | null;
+  /** The dialog turn id, when submitted. */
+  turnId?: string | null;
+}
+
 /**
  * Planning-only access to the issue-fix chain.
  *
@@ -63,6 +88,19 @@ class IssueFixAPI {
         error,
       });
       throw createTauriCommandError('issue_fix_plan_issue', error, request);
+    }
+  }
+
+  async executeIssue(request: IssueFixExecuteRequest): Promise<IssueFixExecuteResponse> {
+    try {
+      return await api.invoke('issue_fix_execute', { request });
+    } catch (error) {
+      log.error('Failed to execute an issue fix', {
+        repo: request.repo,
+        issueRef: request.issueRef,
+        error,
+      });
+      throw createTauriCommandError('issue_fix_execute', error, request);
     }
   }
 }

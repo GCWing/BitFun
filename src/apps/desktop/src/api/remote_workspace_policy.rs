@@ -1555,7 +1555,23 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         RemoteWorkspacePolicy::RemoteRouted,
     ),
     (
+        "review_platform_list_issues",
+        RemoteWorkspacePolicy::RemoteRouted,
+    ),
+    (
         "review_platform_update_auth_token",
+        RemoteWorkspacePolicy::WorkspaceAgnostic,
+    ),
+    (
+        "issue_fix_execute",
+        RemoteWorkspacePolicy::RemoteUnsupported,
+    ),
+    (
+        "issue_fix_plan_issue",
+        RemoteWorkspacePolicy::RemoteUnsupported,
+    ),
+    (
+        "issue_fix_probe",
         RemoteWorkspacePolicy::WorkspaceAgnostic,
     ),
     ("rollback_miniapp", RemoteWorkspacePolicy::LegacyUnaudited),

@@ -1,22 +1,27 @@
 //! Issue-fix Tauri commands.
 //!
-//! Deliberately dry-run only. There is no execute flag anywhere in this surface,
-//! so nothing reachable from the UI can create a branch, run a validation
-//! command, or open a pull request. Granting that authority is a separate,
-//! explicit step — see `docs/development/loopx-issue-fix-integration.md`.
+//! Two-step surface: planning is read-only (route projection), execution
+//! hands the actual fix to the agent loop as a dialog turn. Nothing in the
+//! planning path can create a branch, run a validation command, or open a
+//! pull request; execution only submits agent work and returns the outcome,
+//! so PR creation stays behind the existing gates.
 
 use bitfun_services_integrations::loopx_issue_fix::orchestrator::{
-    ExecutionMode, IssueFixOrchestrator, IssueFixRequest, ReproductionStatus, ScopeClass,
+    ExecutionMode, FixRoute, IssueFixOrchestrator, IssueFixRequest, ReproductionStatus, ScopeClass,
 };
 use bitfun_services_integrations::loopx_issue_fix::repository_context::{
     RepositoryContext, RepositoryContextBuilder,
 };
 use bitfun_services_integrations::loopx_issue_fix::LoopxIssueFix;
+use bitfun_runtime_ports::{
+    AgentDialogTurnRequest, DialogSubmissionPolicy, DialogTriggerSource,
+};
 use log::error;
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
 use crate::api::app_state::AppState;
+use crate::runtime::DesktopRuntimeContext;
 
 /// Whether the feature can run on this host.
 #[derive(Debug, Serialize)]
@@ -152,6 +157,187 @@ pub async fn issue_fix_plan_issue(
             .as_ref()
             .is_some_and(|branch| branch.branch_ready),
     })
+}
+
+/// Request to hand one issue's fix to the agent loop.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct IssueFixExecuteRequest {
+    /// The session whose agent loop should do the fixing.
+    pub session_id: String,
+    /// Public-safe `owner/repo`.
+    pub repo: String,
+    pub issue_ref: String,
+    pub issue_url: String,
+    /// Local checkout the agent works in.
+    pub repository_path: String,
+    pub base_branch: Option<String>,
+    /// Issue title, included in the task message so the agent can work
+    /// without an extra metadata fetch.
+    pub issue_title: Option<String>,
+}
+
+/// Outcome of handing an issue to the agent loop.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct IssueFixExecuteResponse {
+    pub issue_ref: String,
+    /// `fix_pr`, `comment_only`, or `triage_only` — the route LoopX selected.
+    pub route: String,
+    /// Whether the fix task was actually submitted to the agent loop.
+    pub submitted: bool,
+    /// Why nothing was submitted, when `submitted` is false.
+    pub not_submitted_reason: Option<String>,
+    /// The dialog turn id, when submitted.
+    pub turn_id: Option<String>,
+}
+
+/// Ask LoopX for the route, then hand the fix to the agent loop when it is
+/// a fixable one.
+///
+/// This is the step that actually spends model tokens: the returned dialog
+/// turn drives the session's agent through reading the repository, patching
+/// the issue, and validating the result. Branch creation and PR opening are
+/// still separate gates that follow the agent's work; this command never
+/// performs those itself.
+#[tauri::command]
+pub async fn issue_fix_execute(
+    runtime: State<'_, DesktopRuntimeContext>,
+    request: IssueFixExecuteRequest,
+) -> Result<IssueFixExecuteResponse, String> {
+    let Some(loopx) = LoopxIssueFix::probe() else {
+        return Err("loopx is not installed on this host".to_string());
+    };
+
+    let temp_dir = tempfile::tempdir().map_err(|error| {
+        error!("Failed to create a temp dir for the issue-fix context: {error}");
+        format!("Failed to prepare the issue-fix workspace: {error}")
+    })?;
+
+    let context = empty_repository_context().map_err(|error| {
+        error!("Failed to build a placeholder repository context: {error}");
+        format!("Failed to prepare issue-fix evidence: {error}")
+    })?;
+
+    let base_branch = request.base_branch.as_deref().unwrap_or("main");
+    let issue_request = IssueFixRequest {
+        repo: &request.repo,
+        issue_ref: &request.issue_ref,
+        issue_url: &request.issue_url,
+        context: &context,
+        validation_label: "agent-run validation",
+        reproduction_label: "agent-investigated reproduction",
+        reproduction_status: ReproductionStatus::Planned,
+        scope_class: ScopeClass::Uncertain,
+        base_branch,
+    };
+
+    let outcome = IssueFixOrchestrator::new(&loopx)
+        .plan_issue(
+            &issue_request,
+            &request.repository_path,
+            temp_dir.path(),
+            ExecutionMode::DryRun,
+        )
+        .await
+        .map_err(|error| {
+            error!(
+                "Failed to plan issue-fix execution: repo={}, issue={}, error={error}",
+                request.repo, request.issue_ref
+            );
+            format!("Failed to plan this issue: {error}")
+        })?;
+
+    let route = route_label(outcome.feasibility.route);
+    if outcome.feasibility.route != FixRoute::FixPr {
+        return Ok(IssueFixExecuteResponse {
+            issue_ref: request.issue_ref.clone(),
+            route,
+            submitted: false,
+            not_submitted_reason: Some(
+                "LoopX selected a non-fix route (comment_only or triage_only); nothing was submitted"
+                    .to_string(),
+            ),
+            turn_id: None,
+        });
+    }
+
+    let message = issue_fix_task_message(&request);
+    let session_id = request.session_id.trim().to_string();
+    if session_id.is_empty() {
+        return Err("session_id is required to execute an issue fix".to_string());
+    }
+
+    let dialog_request = AgentDialogTurnRequest {
+        session_id: session_id.clone(),
+        message: message.clone(),
+        original_message: None,
+        turn_id: None,
+        // Empty: the coordinator resolves the session's own mode instead of
+        // overriding it with a hard-coded type.
+        agent_type: String::new(),
+        workspace_path: Some(request.repository_path.clone()),
+        remote_connection_id: None,
+        remote_ssh_host: None,
+        policy: DialogSubmissionPolicy::for_source(DialogTriggerSource::DesktopApi),
+        reply_route: None,
+        prepended_reminders: Vec::new(),
+        attachments: Vec::new(),
+        metadata: serde_json::Map::new(),
+    };
+
+    let outcome = runtime
+        .agent_runtime()
+        .submit_dialog_turn(dialog_request)
+        .await
+        .map_err(|error| {
+            error!(
+                "Failed to submit the issue-fix dialog turn: repo={}, issue={}, error={error}",
+                request.repo, request.issue_ref
+            );
+            format!("Failed to start the fix task: {error}")
+        })?;
+
+    let turn_id = match &outcome {
+        bitfun_runtime_ports::DialogSubmitOutcome::Started { turn_id, .. }
+        | bitfun_runtime_ports::DialogSubmitOutcome::Queued { turn_id, .. } => {
+            Some(turn_id.clone())
+        }
+    };
+
+    Ok(IssueFixExecuteResponse {
+        issue_ref: request.issue_ref,
+        route,
+        submitted: true,
+        not_submitted_reason: None,
+        turn_id,
+    })
+}
+
+/// The task message handed to the agent loop for one issue.
+fn issue_fix_task_message(request: &IssueFixExecuteRequest) -> String {
+    let title = request
+        .issue_title
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or("(no title captured)");
+    format!(
+        "Please fix the following repository issue.\n\
+         Issue: {repo}#{issue_ref}\n\
+         Title: {title}\n\
+         URL: {url}\n\n\
+         Instructions:\n\
+         - Read the relevant repository sources first and locate the code that causes the problem.\n\
+         - Make the smallest fix that addresses the reported problem.\n\
+         - Validate the change with the repository's focused checks for the touched surface.\n\
+         - Report what you changed, how you validated it, and any remaining risks.\n\
+         Do not create a branch or open a pull request yourself; report the result here instead.",
+        repo = request.repo,
+        issue_ref = request.issue_ref,
+        title = title,
+        url = request.issue_url,
+    )
 }
 
 /// A context with one advisory placeholder source.

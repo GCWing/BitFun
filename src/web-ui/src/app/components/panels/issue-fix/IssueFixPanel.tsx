@@ -9,6 +9,7 @@ import {
   type ReviewPlatformKind,
 } from '@/infrastructure/api';
 import { createLogger } from '@/shared/utils/logger';
+import { flowChatStore } from '@/flow_chat/store/FlowChatStore';
 import {
   emptyRunState,
   isBlockedOnHuman,
@@ -169,16 +170,21 @@ export const IssueFixPanel: React.FC<IssueFixPanelProps> = ({
   }, [allState, issueIds]);
 
   /**
-   * Walk the selected issues serially, asking LoopX for each one's route.
+   * Plan every selected issue, then hand the fixable ones to the agent loop.
    *
-   * Planning only: nothing here creates a branch or opens a pull request. The
-   * loop stops as soon as `nextIssueToRun` returns null, which happens when any
-   * row is blocked — stepping over a gate is the one thing it must not do.
+   * Planning is read-only: LoopX projects a route for each issue. Issues on a
+   * `fix_pr` route are then submitted to the session's agent as dialog turns —
+   * that is the step that actually reads the repository and spends model
+   * tokens, and its streaming output appears in the chat transcript. Issues on
+   * a non-fix route are recorded as done with their reason codes. The loop
+   * stops as soon as `nextIssueToRun` returns null, which happens when any row
+   * is blocked — stepping over a gate is the one thing it must not do.
    */
   const handleStart = useCallback(async () => {
     if (!projectPath || !workspacePath) {
       return;
     }
+    const activeSessionId = flowChatStore.getState().activeSessionId;
     setRunning(true);
     try {
       // Track state locally through the loop: reading it back from React state
@@ -205,12 +211,32 @@ export const IssueFixPanel: React.FC<IssueFixPanelProps> = ({
             issueUrl: issue.webUrl,
             repositoryPath: workspacePath,
           });
-          current = recordOutcome(current, {
-            issueId,
-            route: plan.route,
-            nextStep: plan.nextStep,
-            reasonCodes: plan.reasonCodes,
-          });
+          if (plan.route === 'fix_pr') {
+            if (!activeSessionId) {
+              throw new Error('No active session; open a chat session before starting a fix run');
+            }
+            const executed = await issueFixAPI.executeIssue({
+              sessionId: activeSessionId,
+              repo: projectPath,
+              issueRef: issue.issueId,
+              issueUrl: issue.webUrl,
+              repositoryPath: workspacePath,
+              issueTitle: issue.title,
+            });
+            current = recordOutcome(current, {
+              issueId,
+              route: executed.route,
+              nextStep: executed.submitted ? 'runnable_successor' : plan.nextStep,
+              reasonCodes: plan.reasonCodes,
+            });
+          } else {
+            current = recordOutcome(current, {
+              issueId,
+              route: plan.route,
+              nextStep: plan.nextStep,
+              reasonCodes: plan.reasonCodes,
+            });
+          }
         } catch (error) {
           log.error('Failed to plan an issue', { issueId, error });
           current = recordOutcome(current, {

@@ -283,7 +283,15 @@ LoopX 的 decision 映射到 `ThreadGoalStatus`：
 ```
 
 **流程**：打开页签 → 自动枚举开放 issue → 用户勾选要修哪些 → 点「开始」→
-串行推进，每个 issue 实时更新状态 → 遇 `user_gate` 停下等确认。
+先逐个跑只读的 `feasibility` 判定路线 → `fix_pr` 的 issue 作为一条任务消息
+提交给会话的 agent（`issue_fix_execute` → `submit_dialog_turn`），模型的流式
+输出直接出现在聊天区 → 其余路线记录原因码后转下一个 → 遇 `user_gate` 停下
+等确认。
+
+**执行方式**：修复动作不是 BitFun 自己写代码，而是把任务交给 BitFun 现有
+的 agent 循环（与用户手动发消息完全同一条调度路径）：agent 读代码、定位、
+改码、跑验证，全部可见于聊天区。LoopX 在这一步只负责「该不该修」的判断
+（`feasibility` 返回 `fix_pr` 才会提交），不参与修的过程。
 
 **四种行状态**，直接对应 LoopX 的 decision：
 
