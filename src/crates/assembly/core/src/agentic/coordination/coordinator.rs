@@ -47,7 +47,7 @@ use crate::agentic::skill_agent_snapshot::{
 };
 use crate::agentic::tools::pipeline::{SubagentParentInfo, ToolPipeline};
 use crate::agentic::tools::{
-    is_miniapp_headless_agent_run, miniapp_headless_agent_tool_restrictions,
+    miniapp_agent_run_tool_restrictions,
     tool_restrictions_for_delegation_policy as runtime_tool_restrictions_for_delegation_policy,
     ToolRuntimeRestrictions,
 };
@@ -2113,6 +2113,31 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             "Coordinator updated session model: session_id={}, model_id={}",
             session_id, normalized_model_id
         );
+
+        Ok(())
+    }
+
+    /// Re-enable (or disable) the tool loop of an already persisted session.
+    ///
+    /// Session configs are written once at creation, so a host that changes its
+    /// tool policy would otherwise only affect newly created sessions.
+    pub async fn update_session_tool_enablement(
+        &self,
+        session_id: &str,
+        enable_tools: bool,
+    ) -> BitFunResult<()> {
+        self.ensure_session_runtime_ownership(session_id, None)?;
+
+        if self
+            .session_manager
+            .update_session_tool_enablement(session_id, enable_tools)
+            .await?
+        {
+            info!(
+                "Coordinator updated session tool enablement: session_id={}, enable_tools={}",
+                session_id, enable_tools
+            );
+        }
 
         Ok(())
     }
@@ -4506,14 +4531,13 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         {
             skill_agent_context_vars.insert("acp_transport".to_string(), "true".to_string());
         }
-        let runtime_tool_restrictions = if is_miniapp_headless_agent_run(
+        // Marketplace MiniApps are third-party code, so their hidden agent turns
+        // run on a read-only research allowlist rather than the wider built-in
+        // MiniApp tool set.
+        let runtime_tool_restrictions = miniapp_agent_run_tool_restrictions(
             user_message_metadata.as_ref(),
             session.created_by.as_deref(),
-        ) {
-            miniapp_headless_agent_tool_restrictions()
-        } else {
-            ToolRuntimeRestrictions::default()
-        };
+        );
         let runtime_tool_restrictions = runtime_tool_restrictions_for_session_lifetime(
             runtime_tool_restrictions,
             self.session_manager.is_transient_session(&session_id),

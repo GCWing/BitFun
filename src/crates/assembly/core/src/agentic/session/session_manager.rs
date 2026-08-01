@@ -3441,6 +3441,50 @@ impl SessionManager {
         Ok(())
     }
 
+    /// Update whether a session runs its tool loop.
+    ///
+    /// `enable_tools` is persisted per session, so a session created while the
+    /// caller disabled tools stays tool-less forever on reuse. Hosts that later
+    /// change their mind (for example MiniApp runs that moved from a frontend
+    /// switch to a backend allowlist) call this to repair existing sessions.
+    pub async fn update_session_tool_enablement(
+        &self,
+        session_id: &str,
+        enable_tools: bool,
+    ) -> BitFunResult<bool> {
+        let _mutation_guard = self.acquire_session_mutation(session_id).await?;
+        if let Some(mut session) = self.sessions.get_mut(session_id) {
+            if session.config.enable_tools == enable_tools {
+                return Ok(false);
+            }
+            session.config.enable_tools = enable_tools;
+            session.updated_at = SystemTime::now();
+            session.last_activity_at = SystemTime::now();
+        } else {
+            return Err(BitFunError::NotFound(format!(
+                "Session not found: {}",
+                session_id
+            )));
+        }
+
+        if self.should_persist_session_id(session_id) {
+            let effective_path = self.effective_session_storage_path(session_id).await;
+            let session_snapshot = self.sessions.get(session_id).map(|s| s.clone());
+            if let (Some(workspace_path), Some(session)) = (effective_path, session_snapshot) {
+                self.persistence_manager
+                    .save_session(&workspace_path, &session)
+                    .await?;
+            }
+        }
+
+        debug!(
+            "Session tool enablement updated: session_id={}, enable_tools={}",
+            session_id, enable_tools
+        );
+
+        Ok(true)
+    }
+
     /// Inherit parent dialog mode state when creating forked child sessions.
     ///
     /// `last_user_dialog_agent_type` drives first-entry mode reminders, while

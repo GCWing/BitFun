@@ -202,4 +202,26 @@ describe('useMiniAppBridge floating Agent routing', () => {
     expect(mocks.openMainSession).toHaveBeenCalledWith('session-1');
     expect(mocks.agentRun).toHaveBeenCalledTimes(1);
   });
+
+  it('leaves the tool loop of a strict Agent run to the backend allowlist', async () => {
+    await act(async () => {
+      root.render(<BridgeHarness />);
+    });
+    const iframe = container.querySelector('iframe') as HTMLIFrameElement;
+
+    await dispatchRpc(iframe, 1, 'agent.ensureSession', {
+      sessionName: 'Market Lens',
+      appDataWorkspace: 'chat',
+    });
+    await dispatchRpc(iframe, 2, 'agent.run', {
+      sessionId: 'session-1',
+      prompt: 'Summarize the market',
+    });
+
+    // The host used to force enableTools=false for marketplace MiniApps, which
+    // also killed WebSearch/WebFetch. Tool access is now scoped by the backend
+    // research allowlist instead, so the bridge must not disable the loop.
+    expect(mocks.agentEnsureSession.mock.calls[0][1].enableTools).toBeUndefined();
+    expect(mocks.agentRun.mock.calls[0][3].enableTools).toBeUndefined();
+  });
 });
