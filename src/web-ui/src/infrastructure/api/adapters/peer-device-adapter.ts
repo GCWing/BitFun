@@ -72,6 +72,7 @@ const LOCAL_ONLY_COMMANDS = new Set([
   'dispatch_list_jobs',
   'dispatch_answer',
   'dispatch_append',
+  'dispatch_continue',
   'dispatch_sync_result',
   'dispatch_load_transcript',
   'dispatch_save_transcript',

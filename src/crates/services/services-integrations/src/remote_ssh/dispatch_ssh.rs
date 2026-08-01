@@ -1385,6 +1385,15 @@ pub async fn append(
     invoke_json(manager, connection_id, "append", request).await
 }
 
+/// Start the next turn of a dispatch session that has already finished one.
+pub async fn continue_job(
+    manager: &SSHConnectionManager,
+    connection_id: &str,
+    request: &Value,
+) -> Result<Value> {
+    invoke_json(manager, connection_id, "continue", request).await
+}
+
 /// Commit the target's worktree and fetch the Git bundle it produced.
 ///
 /// Downloads only. The controller decides separately whether to fast-forward

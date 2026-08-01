@@ -15,12 +15,12 @@ use serde::de::DeserializeOwned;
 
 use protocol::{
     DispatchAnswerRequest, DispatchAnswerResponse, DispatchAppendRequest, DispatchAppendResponse,
-    DispatchCancelRequest, DispatchCancelResponse, DispatchJobListEntry, DispatchJobState,
-    DispatchListRequest, DispatchProbeRequest, DispatchProbeResponse, DispatchStatusRequest,
-    DispatchStatusResponse, DispatchSubmitRequest, DispatchSubmitResponse,
-    DispatchWorkspaceBundleBeginRequest, DispatchWorkspaceBundleChunkRequest,
-    DispatchWorkspaceBundleCommitRequest, DispatchWorkspaceProbe,
-    DispatchWorkspaceProvisionRequest, DispatchWorkspaceSyncChunkRequest,
+    DispatchCancelRequest, DispatchCancelResponse, DispatchContinueRequest,
+    DispatchContinueResponse, DispatchJobListEntry, DispatchJobState, DispatchListRequest,
+    DispatchProbeRequest, DispatchProbeResponse, DispatchStatusRequest, DispatchStatusResponse,
+    DispatchSubmitRequest, DispatchSubmitResponse, DispatchWorkspaceBundleBeginRequest,
+    DispatchWorkspaceBundleChunkRequest, DispatchWorkspaceBundleCommitRequest,
+    DispatchWorkspaceProbe, DispatchWorkspaceProvisionRequest, DispatchWorkspaceSyncChunkRequest,
     DispatchWorkspaceSyncRequest, DISPATCH_PROTOCOL_VERSION, MAX_DISPATCH_TEXT_BYTES,
 };
 use store::{CreateJobOutcome, DispatchStateRecord, DispatchStore};
@@ -61,6 +61,8 @@ pub(crate) async fn run_dispatch_verb(
             serde_json::to_value(answer(parse(input)?)?).context("encode permission answer")
         }
         "append" => serde_json::to_value(append(parse(input)?)?).context("encode appended message"),
+        "continue" => serde_json::to_value(continue_job(parse(input)?)?)
+            .context("encode follow-up turn response"),
         "workspace-provision" => serde_json::to_value(workspace::provision(parse::<
             DispatchWorkspaceProvisionRequest,
         >(input)?)?)
@@ -205,6 +207,44 @@ async fn submit(mut request: DispatchSubmitRequest) -> Result<DispatchSubmitResp
         accepted: true,
         job_id: request.job_id,
         session_id: request.session_id,
+        state: state.state,
+    })
+}
+
+/// Start the next turn in an existing dispatch session.
+///
+/// The job keeps its identity, workspace, and event log; only its run state
+/// rewinds so a fresh worker can pick up the queued prompt. That is what makes
+/// the controller's projection a continuous transcript instead of one job per
+/// message.
+fn continue_job(request: DispatchContinueRequest) -> Result<DispatchContinueResponse> {
+    if request.protocol_version != DISPATCH_PROTOCOL_VERSION {
+        bail!(
+            "unsupported dispatch protocolVersion {}; target requires {}",
+            request.protocol_version,
+            DISPATCH_PROTOCOL_VERSION
+        );
+    }
+    if request.prompt.trim().is_empty() {
+        bail!("dispatch follow-up requires a prompt");
+    }
+    if request.prompt.len() > MAX_DISPATCH_TEXT_BYTES {
+        bail!("dispatch follow-up prompt exceeds the 32 KiB safety limit");
+    }
+    if !runner::is_supported() {
+        bail!("dispatch detached workers are supported only on Linux and macOS");
+    }
+    let store = DispatchStore::open_default()?;
+    let job = store.load_job(&request.job_id)?;
+    // A worker may still be settling the previous turn's terminal state.
+    reconcile_worker_liveness(&store, &request.job_id)?;
+    let state = store.queue_follow_up_turn(&request)?;
+    ensure_worker_spawned(&store, &request.job_id, state.state)?;
+    Ok(DispatchContinueResponse {
+        accepted: true,
+        job_id: request.job_id,
+        session_id: job.request.session_id,
+        turn_id: request.turn_id,
         state: state.state,
     })
 }

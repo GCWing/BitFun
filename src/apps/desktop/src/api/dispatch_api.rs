@@ -14,16 +14,17 @@ use bitfun_core::infrastructure::PathManager;
 use bitfun_core::service::dispatch::{
     answer_device_dispatch, answer_dispatch, append_device_dispatch, append_dispatch,
     cancel_device_dispatch, cancel_dispatch, cancel_dispatch_cli_install,
-    get_device_dispatch_status, get_dispatch_status, list_device_dispatch_jobs, list_dispatch_jobs,
-    list_dispatch_targets, poll_dispatch_cli_install, probe_device_dispatch_target,
-    probe_dispatch_target, start_dispatch_cli_install, start_dispatch_cli_source_build,
-    submit_device_dispatch, submit_dispatch, sync_device_dispatch_result,
-    sync_dispatch_model_config, sync_dispatch_result, DeviceDispatchRpc, DispatchAnswerRequest,
-    DispatchAppendRequest, DispatchConnectionRequest, DispatchInstallPollRequest,
-    DispatchInstallStartRequest, DispatchJobRequest, DispatchListJobsRequest,
-    DispatchListTargetsRequest, DispatchProbeTargetRequest, DispatchSaveTranscriptRequest,
-    DispatchStatusRequest, DispatchSubmitRequest, DispatchSyncResultRequest, DispatchTarget,
-    DispatchTargetOption, DispatchTargetRequest, DispatchTranscriptRequest, OutboundDispatchStore,
+    continue_device_dispatch_job, continue_dispatch_job, get_device_dispatch_status,
+    get_dispatch_status, list_device_dispatch_jobs, list_dispatch_jobs, list_dispatch_targets,
+    poll_dispatch_cli_install, probe_device_dispatch_target, probe_dispatch_target,
+    start_dispatch_cli_install, start_dispatch_cli_source_build, submit_device_dispatch,
+    submit_dispatch, sync_device_dispatch_result, sync_dispatch_model_config, sync_dispatch_result,
+    DeviceDispatchRpc, DispatchAnswerRequest, DispatchAppendRequest, DispatchConnectionRequest,
+    DispatchContinueRequest, DispatchInstallPollRequest, DispatchInstallStartRequest,
+    DispatchJobRequest, DispatchListJobsRequest, DispatchListTargetsRequest,
+    DispatchProbeTargetRequest, DispatchSaveTranscriptRequest, DispatchStatusRequest,
+    DispatchSubmitRequest, DispatchSyncResultRequest, DispatchTarget, DispatchTargetOption,
+    DispatchTargetRequest, DispatchTranscriptRequest, OutboundDispatchStore,
 };
 use bitfun_core::service::remote_ssh::dispatch_ssh::{
     DispatchInstallPoll, DispatchInstallStart, DispatchSshProbe,
@@ -388,6 +389,39 @@ pub async fn dispatch_sync_result(
         .await
         .map_err(|error| error.to_string())?;
     sync_dispatch_result(&manager, &store, request)
+        .await
+        .map_err(|error| error.to_string())
+}
+
+/// Start the next turn of a dispatch session.
+///
+/// A dispatch session is a conversation, not a single exchange: this reuses the
+/// target's session, worktree, and event log, so the projection keeps growing
+/// as one transcript.
+#[tauri::command]
+pub async fn dispatch_continue(
+    state: State<'_, AppState>,
+    path_manager: State<'_, Arc<PathManager>>,
+    request: DispatchContinueRequest,
+) -> Result<Value, String> {
+    let store = OutboundDispatchStore::new(path_manager.as_ref());
+    if matches!(
+        store
+            .get(&request.job_id)
+            .await
+            .map_err(|error| error.to_string())?
+            .map(|record| record.target),
+        Some(DispatchTarget::Device { .. })
+    ) {
+        return continue_device_dispatch_job(&AccountDeviceDispatchRpc, &store, request)
+            .await
+            .map_err(|error| error.to_string());
+    }
+    let manager = state
+        .get_ssh_manager_async()
+        .await
+        .map_err(|error| error.to_string())?;
+    continue_dispatch_job(&manager, &store, request)
         .await
         .map_err(|error| error.to_string())
 }

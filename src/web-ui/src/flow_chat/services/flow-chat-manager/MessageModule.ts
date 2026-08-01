@@ -28,7 +28,7 @@ import { sessionWorktreeMaterializationPlan } from '../../utils/sessionWorktree'
 import { dispatchApi } from '@/features/dispatch/dispatchApi';
 import { dispatchJobStore } from '@/features/dispatch/dispatchJobStore';
 import { requestDispatchJobRefresh } from '@/features/dispatch/DispatchJobObserver';
-import { isNonLocalDispatchTarget } from '@/features/dispatch/types';
+import { isDispatchJobTerminal, isNonLocalDispatchTarget } from '@/features/dispatch/types';
 import { markOptimisticDispatchTurnMetadata } from '@/features/dispatch/optimisticDispatchTurn';
 import { isSessionInUseError } from '@/infrastructure/api/errors/TauriCommandError';
 import { i18nService } from '@/infrastructure/i18n';
@@ -84,6 +84,16 @@ interface PendingDispatchAppendRetry {
 // same message can then ask the target mailbox for the same idempotent append
 // instead of injecting the steering text twice.
 const pendingDispatchAppendRetries = new Map<string, PendingDispatchAppendRetry>();
+
+interface PendingDispatchContinueRetry {
+  content: string;
+  displayContent?: string;
+  turnId: string;
+}
+
+// Same reasoning as the append retries above: an ambiguous transport failure
+// must be retryable without starting the follow-up turn twice on the target.
+const pendingDispatchContinueRetries = new Map<string, PendingDispatchContinueRetry>();
 
 function acpClientIdFromMode(mode: string | undefined): string | null {
   const value = mode?.trim();
@@ -215,6 +225,83 @@ export async function sendMessage(
     throw new Error(`Session does not exist: ${sessionId}`);
   }
   const sendAttempt = beginSessionSend(sessionId);
+
+  /**
+   * Start the next turn of a finished dispatch job.
+   *
+   * The optimistic turn mirrors the first-message path so the user sees their
+   * message immediately; the target's own `DialogTurnStarted` adopts it once
+   * the follow-up worker starts.
+   */
+  const continueDispatchJob = async (jobId: string): Promise<void> => {
+    const followUpSession = context.flowChatStore.getState().sessions.get(sessionId) ?? session;
+    const followUpAgentType = (agentType?.trim() || followUpSession.mode || 'agentic').trim();
+    const current = pendingDispatchContinueRetries.get(sessionId);
+    const retry =
+      current?.content === message && current.displayContent === displayMessage
+        ? current
+        : {
+            content: message,
+            displayContent: displayMessage,
+            // Reused across retries so a lost response cannot start two turns.
+            turnId:
+              globalThis.crypto?.randomUUID?.()
+              ?? `dispatch-turn-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+          };
+    pendingDispatchContinueRetries.set(sessionId, retry);
+
+    const optimisticTurnId = `dispatch_pending_${jobId}`;
+    context.flowChatStore.addDialogTurn(sessionId, {
+      id: optimisticTurnId,
+      sessionId,
+      agentType: followUpAgentType,
+      userMessage: {
+        id: `user_dispatch_${retry.turnId}`,
+        content: displayMessage || message,
+        timestamp: Date.now(),
+        metadata: markOptimisticDispatchTurnMetadata(
+          options?.userMessageMetadata,
+          jobId,
+        ),
+      },
+      modelRounds: [],
+      status: 'pending',
+      startTime: Date.now(),
+    });
+    globalEventBus.emit(
+      FLOWCHAT_PIN_TURN_TO_TOP_EVENT,
+      {
+        sessionId,
+        turnId: optimisticTurnId,
+        behavior: 'auto',
+        source: 'send-message',
+        pinMode: 'sticky-latest',
+      } satisfies FlowChatPinTurnToTopRequest,
+      'MessageModule',
+    );
+
+    try {
+      const response = await dispatchApi.continueJob(
+        jobId,
+        retry.turnId,
+        message,
+        displayMessage,
+      );
+      if (!response.accepted) {
+        throw new Error('Dispatch target did not accept the follow-up turn');
+      }
+      // The target owns the job state; the refresh below reads it back rather
+      // than this side guessing what the follow-up did to it.
+    } catch (error) {
+      context.flowChatStore.deleteDialogTurn(sessionId, optimisticTurnId);
+      throw error;
+    } finally {
+      if (pendingDispatchContinueRetries.get(sessionId)?.turnId === retry.turnId) {
+        pendingDispatchContinueRetries.delete(sessionId);
+      }
+    }
+    requestDispatchJobRefresh(jobId);
+  };
 
   const appendToDispatchJob = async (jobId: string): Promise<void> => {
     const current = pendingDispatchAppendRetries.get(sessionId);
@@ -361,18 +448,25 @@ export async function sendMessage(
       if ((options?.imageContexts?.length ?? 0) > 0) {
         throw new Error('Image attachments are not supported for detached dispatch yet');
       }
-      if (
-        readySession.config.dispatchJobState === 'queued'
-        || readySession.config.dispatchJobState === 'running'
-      ) {
+      const dispatchState = readySession.config.dispatchJobState;
+      if (dispatchState === 'queued' || dispatchState === 'running') {
+        // A turn is already in flight; this message steers it rather than
+        // starting another one underneath it.
         await appendToDispatchJob(jobId);
         return;
       }
+      if (dispatchState && isDispatchJobTerminal(dispatchState)) {
+        // The previous turn finished. A dispatch session is a conversation, so
+        // this starts the next turn against the same target session, worktree,
+        // and event log instead of refusing the message.
+        await continueDispatchJob(jobId);
+        return;
+      }
       if (
-        readySession.config.dispatchJobState !== 'submitting' &&
-        readySession.config.dispatchJobState !== 'submission_unknown'
+        dispatchState !== 'submitting' &&
+        dispatchState !== 'submission_unknown'
       ) {
-        throw new Error('This detached dispatch job has already been submitted');
+        throw new Error('This dispatch session is not ready to accept a message');
       }
       if (isFirstMessage) {
         handleTitleGeneration(context, sessionId, message);

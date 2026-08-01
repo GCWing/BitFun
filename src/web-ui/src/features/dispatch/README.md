@@ -7,6 +7,11 @@ dispatch.
 
 1. A dispatch target is selected while creating a session and is immutable after
    the first turn.
+1a. A dispatch session accepts follow-up messages. While a turn runs, a message
+   is an `append` that steers it; once it has finished, a message is a
+   `dispatch_continue` that queues the next turn against the same target
+   session, worktree, and event log. The follow-up carries a caller-generated
+   `turnId` so an ambiguous response cannot start two turns.
 2. `local` uses the current session, worktree, persistence, and dialog-turn
    paths unchanged.
 3. The dispatch picker follows the same Git-workspace visibility condition as

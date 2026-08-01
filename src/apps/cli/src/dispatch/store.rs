@@ -7,8 +7,8 @@ use bitfun_agent_runtime::sdk::{PermissionReply, PermissionRequest};
 use serde::{Deserialize, Serialize};
 
 use super::protocol::{
-    DispatchAppendRequest, DispatchEvent, DispatchJobListEntry, DispatchJobState,
-    DispatchSubmitRequest, DISPATCH_PROTOCOL_VERSION,
+    DispatchAppendRequest, DispatchContinueRequest, DispatchEvent, DispatchJobListEntry,
+    DispatchJobState, DispatchSubmitRequest, DISPATCH_PROTOCOL_VERSION,
 };
 
 const JOB_RECORD_FILE: &str = "job.json";
@@ -25,6 +25,12 @@ const PERMISSION_ANSWERS_DIR: &str = "permissions/answers";
 const RESOLVED_PERMISSIONS_DIR: &str = "permissions/resolved";
 const PENDING_MESSAGES_DIR: &str = "messages/pending";
 const CONSUMED_MESSAGES_DIR: &str = "messages/consumed";
+/// Follow-up turns queued against a job that has already finished one.
+///
+/// Distinct from the append mailbox: an appended message steers the turn that
+/// is already running, while a follow-up starts the next one.
+const PENDING_TURNS_DIR: &str = "turns/pending";
+const CONSUMED_TURNS_DIR: &str = "turns/consumed";
 const DEFAULT_MAX_EVENTS_BYTES: u64 = 64 * 1024 * 1024;
 // Keep a single projected event and a complete status page comfortably below
 // the server transport's 256 KiB WebSocket frame ceiling.
@@ -45,6 +51,19 @@ const DISPATCH_REPOS_DIR: &str = "repos";
 const DISPATCH_WORKTREES_DIR: &str = "worktrees";
 pub(super) const REPO_CACHE_RECORD_FILE: &str = "repo.json";
 const REPO_CACHE_RETENTION_DAYS: i64 = 30;
+/// Written by the workspace layer; read here only to find a job's checkout.
+const PROVISION_RECORD_FILE: &str = "provision.json";
+
+/// The one field retention needs from a provision record.
+///
+/// Deliberately not the workspace layer's full record: this only has to survive
+/// that struct gaining fields, and reading fewer fields cannot fail on one.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ProvisionedWorktreeRecord {
+    #[serde(default)]
+    workspace_path: Option<String>,
+}
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -132,6 +151,17 @@ pub(crate) struct StoredPermissionAnswer {
 struct StoredAppendMessage {
     request: DispatchAppendRequest,
     created_at: String,
+}
+
+/// One queued follow-up turn.
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct StoredFollowUpTurn {
+    pub(crate) turn_id: String,
+    pub(crate) prompt: String,
+    #[serde(default)]
+    pub(crate) display_content: Option<String>,
+    pub(crate) created_at: String,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -426,17 +456,6 @@ impl DispatchStore {
         Ok(state)
     }
 
-    pub(crate) fn record_turn_id(&self, job_id: &str, turn_id: &str) -> Result<()> {
-        let job_dir = self.existing_job_dir(job_id)?;
-        let _lock = JobLock::exclusive(&job_dir.join(".lock"))?;
-        let mut state = self.load_state_unlocked(&job_dir)?;
-        if !state.state.is_terminal() && state.turn_id.as_deref() != Some(turn_id) {
-            state.turn_id = Some(turn_id.to_string());
-            atomic_write_json(&job_dir.join(STATE_FILE), &state)?;
-        }
-        Ok(())
-    }
-
     pub(crate) fn try_claim_worker_spawn(&self, job_id: &str) -> Result<Option<DispatchLease>> {
         let job_dir = self.existing_job_dir(job_id)?;
         let Some(lease) = DispatchLease::try_acquire(&job_dir.join(SPAWN_LOCK_FILE))? else {
@@ -676,6 +695,100 @@ impl DispatchStore {
         }
     }
 
+    /// Queue the next turn for a job whose previous turn has finished.
+    ///
+    /// This is what makes a dispatch session a conversation rather than a
+    /// one-shot: the target session, its worktree, and its event log all stay
+    /// put, and only the job's run state rewinds to `Queued`.
+    pub(crate) fn queue_follow_up_turn(
+        &self,
+        request: &DispatchContinueRequest,
+    ) -> Result<DispatchStateRecord> {
+        validate_id("turnId", &request.turn_id)?;
+        let job_dir = self.existing_job_dir(&request.job_id)?;
+        let _lock = JobLock::exclusive(&job_dir.join(".lock"))?;
+
+        let stored = StoredFollowUpTurn {
+            turn_id: request.turn_id.clone(),
+            prompt: request.prompt.clone(),
+            display_content: request.display_content.clone(),
+            created_at: chrono::Utc::now().to_rfc3339(),
+        };
+        // A retried request must not start a second turn. Both mailboxes are
+        // checked because the worker may already have claimed this one.
+        let consumed_path = mailbox_path(&job_dir, CONSUMED_TURNS_DIR, &request.turn_id)?;
+        if let Some(existing) = read_optional_regular_json::<StoredFollowUpTurn>(&consumed_path)? {
+            if existing.prompt != request.prompt {
+                bail!("dispatch turnId is already bound to different content");
+            }
+            return self.load_state_unlocked(&job_dir);
+        }
+        let pending_path = mailbox_path(&job_dir, PENDING_TURNS_DIR, &request.turn_id)?;
+        if let Some(existing) = read_optional_regular_json::<StoredFollowUpTurn>(&pending_path)? {
+            if existing.prompt != request.prompt {
+                bail!("dispatch turnId is already bound to different content");
+            }
+            return self.load_state_unlocked(&job_dir);
+        }
+
+        let mut state = self.load_state_unlocked(&job_dir)?;
+        if !state.state.is_terminal() {
+            bail!("this dispatch job is still running; steer it with an appended message instead");
+        }
+        write_json_if_absent_or_equal(&pending_path, &stored)?;
+
+        // Rewind only the run state. `started_at` is left alone so the job keeps
+        // reporting when its first turn began.
+        state.state = DispatchJobState::Queued;
+        state.turn_id = None;
+        state.finished_at = None;
+        state.last_error = None;
+        state.cancel_requested_at = None;
+        atomic_write_json(&job_dir.join(STATE_FILE), &state)?;
+        self.append_event_unlocked(
+            &job_dir,
+            &DispatchEvent::job_state(DispatchJobState::Queued, None),
+        )?;
+        Ok(state)
+    }
+
+    /// Take the next queued turn and bind it to the runtime turn the worker is
+    /// about to submit.
+    ///
+    /// Consuming and recording the turn id happen under one lock so a crash can
+    /// never leave a turn that looks unclaimed but was already submitted. A
+    /// crash after this point settles the job as failed rather than replaying
+    /// the prompt, which is the same promise the first turn makes.
+    pub(crate) fn claim_follow_up_turn(
+        &self,
+        job_id: &str,
+        runtime_turn_id: &str,
+    ) -> Result<Option<StoredFollowUpTurn>> {
+        let job_dir = self.existing_job_dir(job_id)?;
+        let _lock = JobLock::exclusive(&job_dir.join(".lock"))?;
+        let mut pending =
+            read_json_directory::<StoredFollowUpTurn>(&job_dir.join(PENDING_TURNS_DIR))?;
+        pending.sort_by(|left, right| {
+            left.created_at
+                .cmp(&right.created_at)
+                .then_with(|| left.turn_id.cmp(&right.turn_id))
+        });
+        let claimed = pending.into_iter().next();
+
+        let mut state = self.load_state_unlocked(&job_dir)?;
+        if !state.state.is_terminal() && state.turn_id.as_deref() != Some(runtime_turn_id) {
+            state.turn_id = Some(runtime_turn_id.to_string());
+            atomic_write_json(&job_dir.join(STATE_FILE), &state)?;
+        }
+
+        if let Some(turn) = claimed.as_ref() {
+            let consumed_path = mailbox_path(&job_dir, CONSUMED_TURNS_DIR, &turn.turn_id)?;
+            write_json_if_absent_or_equal(&consumed_path, turn)?;
+            remove_file_if_present(&mailbox_path(&job_dir, PENDING_TURNS_DIR, &turn.turn_id)?);
+        }
+        Ok(claimed)
+    }
+
     pub(crate) fn enqueue_append_message(&self, request: DispatchAppendRequest) -> Result<bool> {
         validate_id("messageId", &request.message_id)?;
         let job_dir = self.existing_job_dir(&request.job_id)?;
@@ -903,9 +1016,23 @@ impl DispatchStore {
         self.root.join(DISPATCH_WORKTREES_DIR)
     }
 
-    pub(crate) fn worktree_dir(&self, job_id: &str) -> Result<PathBuf> {
-        validate_id("jobId", job_id)?;
-        Ok(self.worktrees_root().join(job_id))
+    /// Checkout directory for one job, grouped under its repository's clone.
+    ///
+    /// `directory_name` is built by the workspace layer from a sanitized project
+    /// label; re-check it here so this path constructor is safe on its own and
+    /// cannot be walked out of the worktree root.
+    pub(crate) fn worktree_dir(&self, repo_key: &str, directory_name: &str) -> Result<PathBuf> {
+        self.repo_dir(repo_key)?;
+        if directory_name.is_empty()
+            || directory_name.len() > 128
+            || !directory_name
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.'))
+            || directory_name.starts_with('.')
+        {
+            bail!("dispatch worktree directory name is not a safe path component");
+        }
+        Ok(self.worktrees_root().join(repo_key).join(directory_name))
     }
 
     fn maybe_collect_expired_terminal_jobs(&self) -> Result<()> {
@@ -1098,6 +1225,12 @@ impl DispatchStore {
             else {
                 continue;
             };
+            // The checkout is named after the project, not the job, so the
+            // provision record is the only link back to it. Remove it before
+            // the record that points at it, or it becomes unreachable.
+            if !self.remove_recorded_worktree(&workspace_dir)? {
+                continue;
+            }
             let tombstone = workspaces_root.join(format!(
                 ".gc-{}-{}",
                 job_id,
@@ -1117,89 +1250,71 @@ impl DispatchStore {
             self.remove_workspace_operation_locks(&job_id)?;
             removed += 1;
         }
-        removed += self.collect_orphaned_worktrees(&jobs_root)?;
         self.collect_expired_repo_clones(now)?;
         Ok(removed)
     }
 
-    /// Remove worktrees whose job record is gone.
+    /// Remove the checkout a departing job's provision record points at.
     ///
     /// The directory is only the checkout: every commit made in it was fetched
-    /// into the shared clone during sync, so removing it cannot lose work that
-    /// the controller pulled. Work the controller never pulled is discarded
-    /// along with the job it belonged to, which is the same retention promise
-    /// the event log makes.
+    /// into the shared clone during sync, so removing it cannot lose work the
+    /// controller pulled. Work the controller never pulled is discarded with the
+    /// job it belonged to, which is the same promise the event log makes.
     ///
-    /// Stale worktree administrative entries left inside the clone are pruned
-    /// by the next provision, which always runs `git worktree prune` first.
-    fn collect_orphaned_worktrees(&self, jobs_root: &Path) -> Result<usize> {
-        let worktrees_root = self.worktrees_root();
-        let mut removed = 0;
-        for entry in fs::read_dir(&worktrees_root)
-            .with_context(|| format!("read dispatch worktrees {}", worktrees_root.display()))?
-        {
-            let entry = entry?;
-            let Some(job_id) = entry.file_name().to_str().map(ToOwned::to_owned) else {
-                continue;
-            };
-            if validate_id("jobId", &job_id).is_err() || jobs_root.join(&job_id).exists() {
-                continue;
-            }
-            let worktree_dir = entry.path();
-            let metadata = fs::symlink_metadata(&worktree_dir)?;
-            if metadata.file_type().is_symlink() || !metadata.is_dir() {
-                continue;
-            }
-            let old_enough = metadata
-                .modified()
-                .ok()
-                .and_then(|modified| modified.elapsed().ok())
-                .is_some_and(|elapsed| {
-                    elapsed.as_secs() >= (TERMINAL_JOB_RETENTION_DAYS as u64) * 24 * 60 * 60
-                });
-            if !old_enough {
-                continue;
-            }
-            let Some(operation_lock) =
-                JobLock::try_exclusive(&self.workspace_operation_lock_path(&job_id)?)?
-            else {
-                continue;
-            };
-            let Some(git_operation_lock) =
-                JobLock::try_exclusive(&self.workspace_git_operation_lock_path(&job_id)?)?
-            else {
-                continue;
-            };
-            let canonical_worktree = std::fs::canonicalize(&worktree_dir)
-                .unwrap_or_else(|_| worktree_dir.clone())
-                .to_string_lossy()
-                .to_string();
-            let Some(workspace_runtime_lock) =
-                WorkspaceLock::try_acquire(&self.workspace_lock_path(&canonical_worktree))?
-            else {
-                continue;
-            };
-            let tombstone = worktrees_root.join(format!(
-                ".gc-{}-{}",
-                job_id,
-                uuid::Uuid::new_v4().as_simple()
-            ));
-            fs::rename(&worktree_dir, &tombstone).with_context(|| {
-                format!(
-                    "quarantine orphaned dispatch worktree {}",
-                    worktree_dir.display()
-                )
-            })?;
-            fs::remove_dir_all(&tombstone).with_context(|| {
-                format!("remove orphaned dispatch worktree {}", tombstone.display())
-            })?;
-            drop(workspace_runtime_lock);
-            drop(git_operation_lock);
-            drop(operation_lock);
-            self.remove_workspace_operation_locks(&job_id)?;
-            removed += 1;
+    /// Returns `false` when the worktree is still busy, so the caller leaves the
+    /// record in place and retries on the next sweep rather than orphaning it.
+    /// Stale worktree administrative entries inside the clone are pruned by the
+    /// next provision, which always runs `git worktree prune` first.
+    fn remove_recorded_worktree(&self, workspace_dir: &Path) -> Result<bool> {
+        let Ok(record) =
+            read_json::<ProvisionedWorktreeRecord>(&workspace_dir.join(PROVISION_RECORD_FILE))
+        else {
+            // No record, or one written before checkouts were recorded: there is
+            // nothing this sweep can safely delete.
+            return Ok(true);
+        };
+        let Some(path) = record.workspace_path else {
+            return Ok(true);
+        };
+        let worktree_dir = PathBuf::from(&path);
+        // Only ever delete inside the managed worktree root, whatever the record
+        // claims. A record is target-owned, but this keeps one corrupt file from
+        // turning into an arbitrary recursive delete.
+        if !worktree_dir.starts_with(self.worktrees_root()) {
+            tracing::warn!("Skipping dispatch worktree outside the managed root: {path}");
+            return Ok(true);
         }
-        Ok(removed)
+        let metadata = match fs::symlink_metadata(&worktree_dir) {
+            Ok(metadata) => metadata,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(true),
+            Err(error) => return Err(error.into()),
+        };
+        if metadata.file_type().is_symlink() || !metadata.is_dir() {
+            return Ok(true);
+        }
+        let canonical = std::fs::canonicalize(&worktree_dir)
+            .unwrap_or_else(|_| worktree_dir.clone())
+            .to_string_lossy()
+            .to_string();
+        let Some(workspace_runtime_lock) =
+            WorkspaceLock::try_acquire(&self.workspace_lock_path(&canonical))?
+        else {
+            return Ok(false);
+        };
+        let tombstone = self
+            .worktrees_root()
+            .join(format!(".gc-{}", uuid::Uuid::new_v4().as_simple()));
+        fs::rename(&worktree_dir, &tombstone).with_context(|| {
+            format!(
+                "quarantine orphaned dispatch worktree {}",
+                worktree_dir.display()
+            )
+        })?;
+        fs::remove_dir_all(&tombstone).with_context(|| {
+            format!("remove orphaned dispatch worktree {}", tombstone.display())
+        })?;
+        drop(workspace_runtime_lock);
+        Ok(true)
     }
 
     fn collect_expired_repo_clones(&self, now: chrono::DateTime<chrono::Utc>) -> Result<()> {
@@ -2037,6 +2152,100 @@ mod tests {
             }
         ));
         assert!(recovered.cursor > initial.cursor);
+    }
+
+    fn continue_request(job_id: &str, turn_id: &str, prompt: &str) -> DispatchContinueRequest {
+        DispatchContinueRequest {
+            protocol_version: DISPATCH_PROTOCOL_VERSION,
+            job_id: job_id.to_string(),
+            turn_id: turn_id.to_string(),
+            prompt: prompt.to_string(),
+            display_content: None,
+        }
+    }
+
+    #[test]
+    fn a_follow_up_turn_requeues_a_finished_job_and_is_claimed_once() {
+        let (_dir, store) = store();
+        store
+            .create_job(request("job-1"), "job title".to_string())
+            .expect("create job");
+        store
+            .mark_state("job-1", DispatchJobState::Running, Some("turn-1"), None)
+            .expect("running");
+        store
+            .mark_state("job-1", DispatchJobState::Succeeded, None, None)
+            .expect("succeeded");
+
+        let state = store
+            .queue_follow_up_turn(&continue_request("job-1", "turn-2", "and now this"))
+            .expect("queue follow-up");
+        assert_eq!(state.state, DispatchJobState::Queued);
+        // The previous turn's identity must not survive, or the next worker
+        // would refuse to run believing a turn was already submitted.
+        assert!(state.turn_id.is_none());
+        assert!(state.finished_at.is_none());
+
+        let claimed = store
+            .claim_follow_up_turn("job-1", "runtime-turn-2")
+            .expect("claim")
+            .expect("a queued turn");
+        assert_eq!(claimed.prompt, "and now this");
+        assert_eq!(
+            store.load_state("job-1").expect("state").turn_id.as_deref(),
+            Some("runtime-turn-2")
+        );
+        // A second worker must find nothing left to run.
+        assert!(store
+            .claim_follow_up_turn("job-1", "runtime-turn-3")
+            .expect("second claim")
+            .is_none());
+    }
+
+    #[test]
+    fn a_retried_follow_up_request_never_starts_a_second_turn() {
+        let (_dir, store) = store();
+        store
+            .create_job(request("job-1"), "job title".to_string())
+            .expect("create job");
+        store
+            .mark_state("job-1", DispatchJobState::Succeeded, None, None)
+            .expect("succeeded");
+
+        let queued = continue_request("job-1", "turn-2", "and now this");
+        store.queue_follow_up_turn(&queued).expect("first");
+        store.queue_follow_up_turn(&queued).expect("retry");
+        store
+            .claim_follow_up_turn("job-1", "runtime-turn-2")
+            .expect("claim");
+        // Even a retry that arrives after the worker claimed the turn is a
+        // no-op rather than a duplicate submission.
+        store.queue_follow_up_turn(&queued).expect("late retry");
+        assert!(store
+            .claim_follow_up_turn("job-1", "runtime-turn-3")
+            .expect("claim again")
+            .is_none());
+
+        let conflicting = continue_request("job-1", "turn-2", "something else");
+        assert!(store.queue_follow_up_turn(&conflicting).is_err());
+    }
+
+    #[test]
+    fn a_running_job_refuses_a_follow_up_turn() {
+        let (_dir, store) = store();
+        store
+            .create_job(request("job-1"), "job title".to_string())
+            .expect("create job");
+        store
+            .mark_state("job-1", DispatchJobState::Running, Some("turn-1"), None)
+            .expect("running");
+
+        // Steering a live turn is what `append` is for; starting a second turn
+        // underneath a running one would race the worker.
+        let error = store
+            .queue_follow_up_turn(&continue_request("job-1", "turn-2", "next"))
+            .expect_err("a running job cannot take a follow-up");
+        assert!(error.to_string().contains("still running"));
     }
 
     #[test]

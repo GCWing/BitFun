@@ -41,6 +41,11 @@ const BUNDLE_RECORD_FILE: &str = "bundle.json";
 const SYNC_OPERATION_FILE: &str = "sync-operation.json";
 const INCOMING_BUNDLE_FILE: &str = "incoming.bundle";
 const RESULT_BUNDLE_FILE: &str = "result.bundle";
+/// Short job-id suffix that keeps two dispatches of one project apart, matching
+/// the local managed-worktree convention.
+const WORKTREE_SUFFIX_CHARS: usize = 8;
+/// Upper bound on the readable half of a worktree directory name.
+const WORKTREE_LABEL_MAX_CHARS: usize = 48;
 const MAX_CHUNK_BYTES: usize = 256 * 1024;
 const MAX_CHUNK_BASE64_BYTES: usize = 384 * 1024;
 /// Ceiling for one delivered bundle. Generous for source history, small enough
@@ -134,6 +139,8 @@ struct ProvisionRecord {
     base_commit: String,
     branch: String,
     created_at: String,
+    /// Resolved checkout directory. Recorded rather than recomputed so the path
+    /// stays stable even if the naming rules change under an existing job.
     #[serde(default)]
     workspace_path: Option<String>,
 }
@@ -323,7 +330,20 @@ fn provision_in_store(
 
     let _repo_lock = JobLock::exclusive(&store.repo_lock_path(&request.repo_key)?)?;
 
-    let worktree_path = store.worktree_dir(&request.job_id)?;
+    // Reuse the recorded path when there is one: a job keeps the directory it
+    // was first given, whatever the current naming rules would produce.
+    let existing_record: ProvisionRecord = read_json(&record_path)?;
+    let worktree_path = match existing_record.workspace_path.as_deref() {
+        Some(path) => PathBuf::from(path),
+        None => store.worktree_dir(
+            &request.repo_key,
+            &worktree_directory_name(
+                request.project_label.as_deref(),
+                request.remote_url.as_deref(),
+                &request.job_id,
+            ),
+        )?,
+    };
     if let Some(existing) =
         existing_worktree(&worktree_path, &request.branch, &request.base_commit)?
     {
@@ -971,7 +991,12 @@ fn sync_in_store(
     let provision: ProvisionRecord = read_json(&job_dir.join(PROVISION_RECORD_FILE))
         .context("this job did not receive a Git workspace")?;
     let _repo_lock = JobLock::exclusive(&store.repo_lock_path(&provision.repo_key)?)?;
-    let worktree = store.worktree_dir(&request.job_id)?;
+    let worktree = PathBuf::from(
+        provision
+            .workspace_path
+            .as_deref()
+            .context("this job's Git workspace was never checked out")?,
+    );
     if !is_real_directory(&worktree) {
         bail!("the dispatch worktree is missing");
     }
@@ -1327,6 +1352,64 @@ fn create_worktree(
     canonical_utf8(worktree_path)
 }
 
+/// Leaf directory name for a job's checkout.
+///
+/// Mirrors the local managed-worktree convention (`<project>-<short id>`) so a
+/// target directory is recognizable rather than a bare job UUID. The label is
+/// advisory input from the controller, so it is sanitized here and falls back to
+/// the remote URL's basename and finally to a constant — the path must never be
+/// shaped by an untrusted string.
+fn worktree_directory_name(
+    project_label: Option<&str>,
+    remote_url: Option<&str>,
+    job_id: &str,
+) -> String {
+    let label = sanitize_label(project_label.unwrap_or_default())
+        .or_else(|| sanitize_label(&remote_basename(remote_url.unwrap_or_default())))
+        .unwrap_or_else(|| "workspace".to_string());
+    let suffix = job_id
+        .chars()
+        .filter(|character| character.is_ascii_alphanumeric())
+        .take(WORKTREE_SUFFIX_CHARS)
+        .collect::<String>();
+    if suffix.is_empty() {
+        label
+    } else {
+        format!("{label}-{suffix}")
+    }
+}
+
+fn sanitize_label(value: &str) -> Option<String> {
+    let cleaned = value
+        .chars()
+        .map(|character| {
+            if character.is_ascii_alphanumeric() || matches!(character, '-' | '_' | '.') {
+                character
+            } else {
+                '-'
+            }
+        })
+        .collect::<String>();
+    let trimmed = cleaned.trim_matches(|character| character == '-' || character == '.');
+    let bounded = trimmed
+        .chars()
+        .take(WORKTREE_LABEL_MAX_CHARS)
+        .collect::<String>();
+    let bounded = bounded.trim_end_matches(['-', '.']).to_string();
+    (!bounded.is_empty()).then_some(bounded)
+}
+
+/// `git@host:acme/app.git` and `https://host/acme/app.git` both yield `app`.
+fn remote_basename(remote_url: &str) -> String {
+    remote_url
+        .trim_end_matches('/')
+        .rsplit(['/', ':'])
+        .next()
+        .unwrap_or_default()
+        .trim_end_matches(".git")
+        .to_string()
+}
+
 fn commit_exists(repo: &Path, commit: &str) -> Result<bool> {
     git_succeeds(repo, &["cat-file", "-e", &format!("{commit}^{{commit}}")])
 }
@@ -1598,6 +1681,7 @@ mod tests {
                 protocol_version: DISPATCH_PROTOCOL_VERSION,
                 job_id: "job-1".to_string(),
                 repo_key: "abcdef0123456789".to_string(),
+                project_label: Some("BitFun".to_string()),
                 remote_url: None,
                 base_commit: "0".repeat(40),
                 branch: "bitfun/dispatch/job-1".to_string(),
@@ -1624,6 +1708,7 @@ mod tests {
             job_id: "job-1".to_string(),
             repo_key: "abcdef0123456789".to_string(),
             remote_url: None,
+            project_label: Some("BitFun".to_string()),
             base_commit: base_commit.clone(),
             branch: "main".to_string(),
         };
@@ -1677,7 +1762,7 @@ mod tests {
         let base_commit = init_source_repository(&source);
         provision_from_bundle(&store, &source, &base_commit);
 
-        let worktree = store.worktree_dir("job-1").expect("worktree");
+        let worktree = provisioned_worktree(&store, "job-1");
         fs::write(worktree.join("agent.txt"), b"valuable work").expect("edit");
         git(&worktree, &["add", "-A"]).expect("stage");
         git(
@@ -1719,6 +1804,7 @@ mod tests {
                 protocol_version: DISPATCH_PROTOCOL_VERSION,
                 job_id: "job-1".to_string(),
                 repo_key: "abcdef0123456789".to_string(),
+                project_label: Some("BitFun".to_string()),
                 remote_url: None,
                 base_commit,
                 branch: "main".to_string(),
@@ -1768,7 +1854,7 @@ mod tests {
         let base_commit = init_source_repository(&source);
         provision_from_bundle(&store, &source, &base_commit);
 
-        let worktree = store.worktree_dir("job-1").expect("worktree");
+        let worktree = provisioned_worktree(&store, "job-1");
         git(&worktree, &["config", "user.email", "dispatch@example.com"]).expect("email");
         git(&worktree, &["config", "user.name", "Dispatch Test"]).expect("name");
         fs::write(worktree.join("file.txt"), b"changed by the agent").expect("edit");
@@ -1816,7 +1902,7 @@ mod tests {
         let source = temp.path().join("source");
         let base_commit = init_source_repository(&source);
         provision_from_bundle(&store, &source, &base_commit);
-        let worktree = store.worktree_dir("job-1").expect("worktree");
+        let worktree = provisioned_worktree(&store, "job-1");
 
         fs::write(worktree.join("first.txt"), b"first checkpoint").expect("first edit");
         let first = sync_in_store(
@@ -2135,7 +2221,7 @@ mod tests {
         let source = temp.path().join("source");
         let base_commit = init_source_repository(&source);
         provision_from_bundle(&store, &source, &base_commit);
-        let worktree = store.worktree_dir("job-1").expect("worktree");
+        let worktree = provisioned_worktree(&store, "job-1");
         git(&worktree, &["switch", "--quiet", "-c", "agent/other"]).expect("switch branch");
 
         let error = sync_in_store(
@@ -2167,6 +2253,7 @@ mod tests {
                 protocol_version: DISPATCH_PROTOCOL_VERSION,
                 job_id: "job-1".to_string(),
                 repo_key: "abcdef0123456789".to_string(),
+                project_label: Some("BitFun".to_string()),
                 remote_url: None,
                 base_commit: "0".repeat(40),
                 branch: "bitfun/dispatch/job-1".to_string(),
@@ -2193,6 +2280,18 @@ mod tests {
         );
     }
 
+    /// Resolve a job's checkout the way production does: from its record.
+    fn provisioned_worktree(store: &DispatchStore, job_id: &str) -> PathBuf {
+        let record: ProvisionRecord = read_json(
+            &store
+                .workspace_upload_dir(job_id)
+                .expect("job dir")
+                .join(PROVISION_RECORD_FILE),
+        )
+        .expect("provision record");
+        PathBuf::from(record.workspace_path.expect("checked-out workspace"))
+    }
+
     fn provision_from_bundle(store: &DispatchStore, source: &Path, base_commit: &str) {
         let bundle = source.parent().expect("parent").join("base.bundle");
         bundle_everything(source, &bundle);
@@ -2201,6 +2300,7 @@ mod tests {
             job_id: "job-1".to_string(),
             repo_key: "abcdef0123456789".to_string(),
             remote_url: None,
+            project_label: Some("BitFun".to_string()),
             base_commit: base_commit.to_string(),
             branch: "main".to_string(),
         };
@@ -2225,6 +2325,48 @@ mod tests {
         )
         .expect("bundle commit");
         provision_in_store(store, request).expect("second provision");
+    }
+
+    #[test]
+    fn worktree_directories_are_named_after_the_project_not_the_job() {
+        assert_eq!(
+            worktree_directory_name(Some("BitFun"), None, "dispatch-3d82ff46-bbf9-44c3"),
+            "BitFun-dispatch"
+        );
+        // No label: the remote's own basename is the next most recognizable name.
+        assert_eq!(
+            worktree_directory_name(None, Some("git@example.com:acme/app.git"), "abcdef123456"),
+            "app-abcdef12"
+        );
+        assert_eq!(
+            worktree_directory_name(None, Some("https://example.com/acme/app/"), "abcdef123456"),
+            "app-abcdef12"
+        );
+        // Neither available: a constant, never an empty or job-shaped path.
+        assert_eq!(
+            worktree_directory_name(None, None, "abcdef123456"),
+            "workspace-abcdef12"
+        );
+    }
+
+    #[test]
+    fn a_hostile_project_label_cannot_shape_the_worktree_path() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let store = DispatchStore::open(temp.path().join("dispatch")).expect("store");
+
+        for label in ["../../etc", "..", "/absolute", ".hidden", "", "   "] {
+            let name = worktree_directory_name(Some(label), None, "job1");
+            assert!(!name.contains('/'), "{label} produced a path separator");
+            assert!(!name.contains(".."), "{label} produced a traversal");
+            assert!(!name.starts_with('.'), "{label} produced a hidden entry");
+            let path = store.worktree_dir("abcdef0123456789", &name).expect("path");
+            assert!(path.starts_with(store.worktrees_root()));
+        }
+
+        // The store refuses anything the workspace layer did not sanitize.
+        assert!(store.worktree_dir("abcdef0123456789", "../escape").is_err());
+        assert!(store.worktree_dir("abcdef0123456789", ".git").is_err());
+        assert!(store.worktree_dir("abcdef0123456789", "").is_err());
     }
 
     #[test]

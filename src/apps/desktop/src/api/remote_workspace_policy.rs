@@ -380,6 +380,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
     ("dispatch_answer", RemoteWorkspacePolicy::WorkspaceAgnostic),
     ("dispatch_append", RemoteWorkspacePolicy::WorkspaceAgnostic),
     (
+        "dispatch_continue",
+        RemoteWorkspacePolicy::WorkspaceAgnostic,
+    ),
+    (
         "dispatch_load_transcript",
         RemoteWorkspacePolicy::WorkspaceAgnostic,
     ),

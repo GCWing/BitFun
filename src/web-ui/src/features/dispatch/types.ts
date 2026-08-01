@@ -205,6 +205,14 @@ export interface DispatchStatusResponse {
   lastError?: string;
 }
 
+export interface DispatchContinueResponse {
+  accepted: boolean;
+  jobId: string;
+  sessionId: string;
+  turnId: string;
+  state: Exclude<DispatchJobState, 'submitting'>;
+}
+
 export interface DispatchCancelResponse {
   cancelled: boolean;
 }

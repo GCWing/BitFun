@@ -187,6 +187,7 @@ Public job verbs are:
 | `list` | List durable target jobs. |
 | `answer` | Resolve one persisted permission request for `remote` approval policy. |
 | `append` | Queue an idempotent steering message for the active turn. |
+| `continue` | Queue the next turn for a job whose previous turn has finished. |
 
 Git delivery and synchronization use these internal data-plane verbs:
 
@@ -241,6 +242,40 @@ installed `bitfun` binary (including a package-manager symlink); if none is
 available, probe reports the missing runner and submission remains disabled
 rather than falling back to local execution. Device dispatch never performs
 SSH-style installation through the Relay.
+
+## Conversation model
+
+A dispatch session is a conversation, not a single exchange. One job owns one
+target session, one worktree, and one append-only event log; each user message
+is a turn inside it:
+
+- while a turn is running, a message is an `append` that steers it;
+- once it has finished, a message is a `continue` that queues the next turn.
+
+`continue` rewinds only the job's run state to `queued` and clears the runtime
+turn id, so a fresh detached worker picks it up. The worker restores the target
+session rather than creating it, which is what gives the follow-up turn the
+previous turns as context. Its `turnId` is caller-generated, so a retry after an
+ambiguous response resolves to the same turn instead of starting a second one.
+
+Because the event log is per job rather than per turn, the controller's cursor,
+transcript cache, and projection are unchanged by follow-ups: the observer keeps
+reading one growing transcript.
+
+## Workspace naming
+
+A target checkout lives at:
+
+```text
+~/.bitfun/dispatch/worktrees/<repoKey>/<project>-<short job id>
+```
+
+`repoKey` groups every checkout of one source repository under its shared clone.
+The leaf mirrors the local managed-worktree convention so a target directory is
+recognizable rather than a bare job UUID. The project name is advisory input from
+the controller: the target sanitizes it, falls back to the remote URL's basename
+and then to a constant, and rejects anything that is not a single safe path
+component — the path is never shaped by an untrusted string.
 
 ## Event and observer contract
 

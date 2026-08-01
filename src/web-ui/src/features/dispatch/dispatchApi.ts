@@ -5,6 +5,7 @@ import type {
   DispatchCliRelease,
   DispatchInstallPoll,
   DispatchInstallStart,
+  DispatchContinueResponse,
   DispatchJobListEntry,
   DispatchSshProbe,
   DispatchStatusResponse,
@@ -92,6 +93,24 @@ export const dispatchApi = {
   }): Promise<DispatchSubmitResponse> {
     return api.invoke<DispatchSubmitResponse>('dispatch_submit', {
       request,
+    });
+  },
+
+  /**
+   * Start the next turn of a dispatch session.
+   *
+   * Distinct from `append`, which steers a turn that is still running: this is
+   * for a job whose previous turn has finished. The target keeps its session,
+   * worktree, and event log, so the projection stays one continuous transcript.
+   */
+  async continueJob(
+    jobId: string,
+    turnId: string,
+    prompt: string,
+    displayContent?: string,
+  ): Promise<DispatchContinueResponse> {
+    return api.invoke<DispatchContinueResponse>('dispatch_continue', {
+      request: { jobId, turnId, prompt, displayContent },
     });
   },
 

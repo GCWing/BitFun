@@ -14,10 +14,11 @@ use super::baseline::{
     build_base_bundle, prepare_baseline, release_prepared_baseline, PreparedBaseline,
 };
 use super::controller::{
-    bind_outbound_record, finish_sync, provisioned_path, release_unbound_preparation_baseline,
-    result_bundle_path, same_target_identity, target_have_tips, validate_answer_request,
-    validate_append_request, validate_submission_preflight, validate_submit_ack,
-    validate_submit_request, DispatchAnswerRequest, DispatchAppendRequest, DispatchJobRequest,
+    bind_outbound_record, continue_payload, finish_sync, provisioned_path, record_follow_up_state,
+    release_unbound_preparation_baseline, result_bundle_path, same_target_identity,
+    target_have_tips, validate_answer_request, validate_append_request, validate_continue_request,
+    validate_submission_preflight, validate_submit_ack, validate_submit_request,
+    DispatchAnswerRequest, DispatchAppendRequest, DispatchContinueRequest, DispatchJobRequest,
     DispatchListJobsRequest, DispatchProbeTargetRequest, DispatchStatusRequest,
     DispatchSubmitRequest, DispatchSyncResultRequest, DISPATCH_PROTOCOL_VERSION,
 };
@@ -441,6 +442,28 @@ pub async fn append_device(
     .await
 }
 
+/// Send the next turn of a dispatch session to an account device.
+pub async fn continue_device_job(
+    rpc: &dyn DeviceDispatchRpc,
+    store: &OutboundDispatchStore,
+    request: DispatchContinueRequest,
+) -> anyhow::Result<Value> {
+    validate_continue_request(&request)?;
+    let record = load_device_record(store, &request.job_id).await?;
+    let DispatchTarget::Device { device_id, .. } = &record.target else {
+        unreachable!("load_device_record validates target kind")
+    };
+    let response = rpc
+        .invoke(
+            device_id,
+            "dispatch_target_continue",
+            continue_payload(&request),
+        )
+        .await?;
+    record_follow_up_state(store, &record, &response).await;
+    Ok(response)
+}
+
 pub async fn list_device_jobs(
     rpc: &dyn DeviceDispatchRpc,
     store: &OutboundDispatchStore,
@@ -483,6 +506,7 @@ async fn provision_device_workspace(
         "protocolVersion": DISPATCH_PROTOCOL_VERSION,
         "jobId": job_id,
         "repoKey": baseline.repo_key,
+        "projectLabel": baseline.project_label,
         "remoteUrl": baseline.delivery.remote_url,
         "baseCommit": baseline.delivery.base_commit,
         "branch": baseline.delivery.branch,

@@ -29,6 +29,8 @@ const UNCOMMITTED_COMMIT_MESSAGE: &str = "BitFun dispatch: uncommitted baseline 
 
 #[derive(Debug, Clone)]
 pub(super) struct PreparedBaseline {
+    /// Readable project name the target uses to name its checkout.
+    pub(super) project_label: String,
     pub(super) delivery: DispatchWorkspaceDelivery,
     /// Absolute path of the managed worktree on this controller.
     pub(super) worktree_path: String,
@@ -116,6 +118,7 @@ pub(super) async fn prepare_baseline(
         let repo_key = repo_key(remote_url.as_deref(), &repository.common_git_dir);
 
         Ok(PreparedBaseline {
+            project_label: project_label(&project_workspace_path),
             delivery: DispatchWorkspaceDelivery {
                 source_workspace_path: project.to_string(),
                 project_workspace_path: project_workspace_path.clone(),
@@ -519,6 +522,18 @@ fn sanitized_stem(value: &str) -> String {
         .collect()
 }
 
+/// Readable name for the project a dispatch came from.
+///
+/// The target sanitizes this again before it becomes a path component, so this
+/// only has to be recognizable — a directory basename is exactly that, and it
+/// matches what the local managed-worktree naming already shows the user.
+fn project_label(project_workspace_path: &str) -> String {
+    Path::new(project_workspace_path)
+        .file_name()
+        .map(|name| name.to_string_lossy().to_string())
+        .unwrap_or_default()
+}
+
 /// Stable directory name for the target's shared clone.
 ///
 /// Keyed on the remote URL when there is one, so unrelated controllers cloning
@@ -586,6 +601,14 @@ mod tests {
     }
 
     #[test]
+    fn project_labels_come_from_the_workspace_basename() {
+        assert_eq!(project_label("/Users/me/code/BitFun"), "BitFun");
+        assert_eq!(project_label("/Users/me/code/BitFun/"), "BitFun");
+        // Nothing recognizable to use; the target falls back on its own side.
+        assert_eq!(project_label("/"), "");
+    }
+
+    #[test]
     fn repo_keys_are_hex_stable_and_separate_remote_from_local_identity() {
         let remote = repo_key(Some("git@example.com:acme/app.git"), Path::new("/a/.git"));
         let same_remote = repo_key(Some("git@example.com:acme/app.git"), Path::new("/b/.git"));
@@ -620,6 +643,7 @@ mod tests {
         let store =
             OutboundDispatchStore::new_in_root_for_tests(temp.path().join("dispatch-outbound"));
         let baseline = PreparedBaseline {
+            project_label: "BitFun".to_string(),
             delivery: DispatchWorkspaceDelivery {
                 source_workspace_path: repository.to_string_lossy().to_string(),
                 project_workspace_path: repository.to_string_lossy().to_string(),

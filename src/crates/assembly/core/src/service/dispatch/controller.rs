@@ -121,6 +121,22 @@ pub struct DispatchAnswerRequest {
     pub feedback: Option<String>,
 }
 
+/// Start the next turn of an existing dispatch session.
+///
+/// Separate from `append`, which steers a turn that is still running: this one
+/// is for a job whose previous turn has finished, and it is what makes a
+/// dispatch session hold a conversation instead of a single exchange.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DispatchContinueRequest {
+    pub job_id: String,
+    /// Caller-generated identity so a retry cannot start two turns.
+    pub turn_id: String,
+    pub prompt: String,
+    #[serde(default)]
+    pub display_content: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DispatchAppendRequest {
@@ -658,6 +674,7 @@ async fn provision_ssh_workspace(
         "protocolVersion": DISPATCH_PROTOCOL_VERSION,
         "jobId": job_id,
         "repoKey": baseline.repo_key,
+        "projectLabel": baseline.project_label,
         "remoteUrl": baseline.delivery.remote_url,
         "baseCommit": baseline.delivery.base_commit,
         "branch": baseline.delivery.branch,
@@ -920,6 +937,69 @@ pub async fn append(
     dispatch_ssh::append(manager, connection_id, &serde_json::to_value(request)?).await
 }
 
+/// Send the next turn of a dispatch session to its SSH target.
+pub async fn continue_job(
+    manager: &SSHConnectionManager,
+    store: &OutboundDispatchStore,
+    request: DispatchContinueRequest,
+) -> anyhow::Result<Value> {
+    validate_continue_request(&request)?;
+    let record = store
+        .get(&request.job_id)
+        .await?
+        .ok_or_else(|| anyhow::anyhow!("Outbound dispatch job was not found"))?;
+    let DispatchTarget::Ssh { connection_id, .. } = &record.target else {
+        anyhow::bail!("SSH dispatch follow-up requires an SSH target");
+    };
+    let response =
+        dispatch_ssh::continue_job(manager, connection_id, &continue_payload(&request)).await?;
+    record_follow_up_state(store, &record, &response).await;
+    Ok(response)
+}
+
+/// The wire payload both transports send for a follow-up turn.
+pub(super) fn continue_payload(request: &DispatchContinueRequest) -> Value {
+    let mut payload = json!({
+        "protocolVersion": DISPATCH_PROTOCOL_VERSION,
+        "jobId": request.job_id,
+        "turnId": request.turn_id,
+        "prompt": request.prompt,
+    });
+    if let Some(display) = request
+        .display_content
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        payload["displayContent"] = Value::String(display.to_string());
+    }
+    payload
+}
+
+/// Move the observer record back out of its terminal state.
+///
+/// Best effort: the next status poll reconciles it from the target anyway, but
+/// updating here keeps the composer from briefly re-offering "send" as if the
+/// follow-up had not been accepted.
+pub(super) async fn record_follow_up_state(
+    store: &OutboundDispatchStore,
+    record: &OutboundDispatchRecord,
+    response: &Value,
+) {
+    let Some(state) = response.get("state").and_then(Value::as_str) else {
+        return;
+    };
+    if let Err(error) = store
+        .update_progress(&record.job_id, record.last_cursor, state)
+        .await
+    {
+        log::warn!(
+            "Failed to record dispatch follow-up state: job_id={} error={error}",
+            record.job_id
+        );
+    }
+}
+
 pub async fn list_jobs(
     manager: &SSHConnectionManager,
     store: &OutboundDispatchStore,
@@ -996,6 +1076,23 @@ pub(super) fn validate_append_request(request: &DispatchAppendRequest) -> anyhow
         .saturating_add(request.display_content.as_ref().map_or(0, String::len));
     if total_bytes > MAX_DISPATCH_TEXT_BYTES {
         anyhow::bail!("Dispatch appended message exceeds the 32 KiB request limit");
+    }
+    Ok(())
+}
+
+pub(super) fn validate_continue_request(request: &DispatchContinueRequest) -> anyhow::Result<()> {
+    if request.turn_id.trim().is_empty() || request.turn_id.len() > 128 {
+        anyhow::bail!("Dispatch turnId must contain 1-128 bytes");
+    }
+    if request.prompt.trim().is_empty() {
+        anyhow::bail!("Dispatch follow-up prompt cannot be empty");
+    }
+    let total_bytes = request
+        .prompt
+        .len()
+        .saturating_add(request.display_content.as_ref().map_or(0, String::len));
+    if total_bytes > MAX_DISPATCH_TEXT_BYTES {
+        anyhow::bail!("Dispatch follow-up exceeds the 32 KiB request limit");
     }
     Ok(())
 }

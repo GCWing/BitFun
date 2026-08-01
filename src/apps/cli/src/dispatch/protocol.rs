@@ -167,6 +167,11 @@ pub(crate) struct DispatchWorkspaceProvisionRequest {
     pub(crate) repo_key: String,
     #[serde(default)]
     pub(crate) remote_url: Option<String>,
+    /// Readable name of the controller's project, used to build a worktree path
+    /// a human can recognize. Advisory: the target sanitizes it and falls back
+    /// to the remote's own basename, so a hostile value cannot shape the path.
+    #[serde(default)]
+    pub(crate) project_label: Option<String>,
     /// Full 40-character commit id. A ref name would be ambiguous — it can move
     /// between the controller resolving it and the target fetching it.
     pub(crate) base_commit: String,
@@ -314,6 +319,35 @@ pub(crate) struct DispatchWorkspaceSyncChunkResponse {
     pub(crate) data_base64: String,
     /// True once this chunk reaches the end of the bundle.
     pub(crate) eof: bool,
+}
+
+/// Start the next turn in a dispatch session whose previous turn has finished.
+///
+/// Distinct from `append`, which steers a turn that is still running. This is
+/// what lets a dispatch session hold a conversation: the target session, its
+/// worktree, and its event log all persist, and only the job's run state
+/// rewinds so a new worker can pick it up.
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct DispatchContinueRequest {
+    pub(crate) protocol_version: u32,
+    pub(crate) job_id: String,
+    /// Caller-generated identity for this turn, so a retried request cannot
+    /// start two.
+    pub(crate) turn_id: String,
+    pub(crate) prompt: String,
+    #[serde(default)]
+    pub(crate) display_content: Option<String>,
+}
+
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct DispatchContinueResponse {
+    pub(crate) accepted: bool,
+    pub(crate) job_id: String,
+    pub(crate) session_id: String,
+    pub(crate) turn_id: String,
+    pub(crate) state: DispatchJobState,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq)]

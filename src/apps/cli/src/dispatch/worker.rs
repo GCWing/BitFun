@@ -4,9 +4,9 @@ use std::time::Duration;
 
 use anyhow::{anyhow, bail, Context, Result};
 use bitfun_agent_runtime::sdk::{
-    AgentDialogTurnRequest, AgentSessionCreateRequest, AgentTurnCancellationRequest,
-    AgentTurnSettlementRequest, PermissionReply, PermissionReplySource, PermissionRequest,
-    PermissionRequestEvent,
+    AgentDialogTurnRequest, AgentSessionCreateRequest, AgentSessionRestoreRequest,
+    AgentTurnCancellationRequest, AgentTurnSettlementRequest, PermissionReply,
+    PermissionReplySource, PermissionRequest, PermissionRequestEvent,
 };
 use bitfun_events::{project_agentic_frontend_event, AgenticEvent};
 use bitfun_runtime_ports::{AgentSubmissionSource, DialogSubmissionPolicy, SessionExecutionTarget};
@@ -114,35 +114,55 @@ async fn run_inner(store: &DispatchStore, job_id: &str) -> Result<()> {
         .map_err(|error| anyhow!(error.into_message()))?;
 
     let workspace_path = job.request.workspace_path.clone();
-    agent_runtime
-        .create_session_with_id(
-            job.request.session_id.clone(),
-            AgentSessionCreateRequest {
-                session_name: job.title.clone(),
-                agent_type: job.request.agent_type.clone(),
-                workspace_path: Some(workspace_path.clone()),
-                project_workspace_path: Some(workspace_path.clone()),
-                execution_target: Some(SessionExecutionTarget::local(workspace_path.clone())),
-                workspace_id: None,
-                remote_connection_id: None,
-                remote_ssh_host: None,
-                model_id: job.request.model.clone(),
-                metadata: serde_json::Map::new(),
-            },
-        )
+    // A follow-up turn runs against the session the previous turn built, so its
+    // history is the agent's context. Restoring first is what makes a dispatch
+    // session a conversation; creating unconditionally would fail on the second
+    // turn because the persisted id already exists.
+    let restored = agent_runtime
+        .restore_session(AgentSessionRestoreRequest {
+            workspace_path: workspace_path.clone(),
+            session_id: job.request.session_id.clone(),
+            include_internal: false,
+            remote_connection_id: None,
+            remote_ssh_host: None,
+        })
         .await
-        .map_err(|error| anyhow!(error.into_message()))
-        .context("create target-owned dispatch session")?;
+        .is_ok();
+    if !restored {
+        agent_runtime
+            .create_session_with_id(
+                job.request.session_id.clone(),
+                AgentSessionCreateRequest {
+                    session_name: job.title.clone(),
+                    agent_type: job.request.agent_type.clone(),
+                    workspace_path: Some(workspace_path.clone()),
+                    project_workspace_path: Some(workspace_path.clone()),
+                    execution_target: Some(SessionExecutionTarget::local(workspace_path.clone())),
+                    workspace_id: None,
+                    remote_connection_id: None,
+                    remote_ssh_host: None,
+                    model_id: job.request.model.clone(),
+                    metadata: serde_json::Map::new(),
+                },
+            )
+            .await
+            .map_err(|error| anyhow!(error.into_message()))
+            .context("create target-owned dispatch session")?;
+    }
 
     let turn_id = uuid::Uuid::new_v4().to_string();
-    // Persist the deterministic turn id before submission. A crash after the
-    // Runtime accepts the turn must never make a replacement worker submit the
-    // prompt a second time.
-    store.record_turn_id(job_id, &turn_id)?;
+    // Claim the queued follow-up and persist the turn id in one step. A crash
+    // after the Runtime accepts the turn must never make a replacement worker
+    // submit the prompt a second time.
+    let follow_up = store.claim_follow_up_turn(job_id, &turn_id)?;
+    let prompt = follow_up
+        .as_ref()
+        .map(|turn| turn.prompt.clone())
+        .unwrap_or_else(|| job.request.prompt.clone());
     agent_runtime
         .submit_dialog_turn(AgentDialogTurnRequest {
             session_id: job.request.session_id.clone(),
-            message: job.request.prompt.clone(),
+            message: prompt,
             original_message: None,
             turn_id: Some(turn_id.clone()),
             agent_type: job.request.agent_type.clone(),

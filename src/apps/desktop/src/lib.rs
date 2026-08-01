@@ -1759,6 +1759,7 @@ pub async fn run() {
             api::dispatch_api::dispatch_list_jobs,
             api::dispatch_api::dispatch_answer,
             api::dispatch_api::dispatch_append,
+            api::dispatch_api::dispatch_continue,
             api::dispatch_api::dispatch_load_transcript,
             api::dispatch_api::dispatch_save_transcript,
             // Relay self-deploy API
