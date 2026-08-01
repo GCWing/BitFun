@@ -21,7 +21,7 @@
    * sans + `sm` + line-height 1.5 + normal — not monospace (mono reads “thinner” vs “思考了 N 字”).
    */
   .compact-card-action,
-  .compact-card-content .tool-command-preview.tool-command-preview--compact {
+  .compact-card-content .copyable-text-preview.copyable-text-preview--compact {
     font-family: var(--font-family-sans);
     font-size: var(--flowchat-font-size-sm);
     line-height: var(--flowchat-support-line-height);
@@ -265,7 +265,7 @@
   flex: 1;
   gap: 0;
 
-  .tool-command-preview {
+  .copyable-text-preview {
     flex: 0 1 auto;
     max-width: 60%;
   }
@@ -615,7 +615,7 @@
     }
 
     .compact-card-action,
-    .compact-card-content .tool-command-preview--compact {
+    .compact-card-content .copyable-text-preview--compact {
       font-size: var(--flowchat-font-size-xs);
       line-height: var(--flowchat-support-line-height);
       font-weight: normal;

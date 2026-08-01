@@ -1,7 +1,7 @@
 import React from 'react';
 import { Check, Copy } from 'lucide-react';
 import { IconButton } from '../../component-library';
-import { useCopyTextAction } from './useCopyTextAction';
+import { useCopyTextAction } from '../hooks/useCopyTextAction';
 import './ToolCardHeaderActions.scss';
 
 interface ToolCardHeaderActionsProps {

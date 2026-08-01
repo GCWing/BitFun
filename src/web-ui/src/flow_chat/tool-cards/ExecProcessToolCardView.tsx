@@ -8,7 +8,7 @@ import {
 } from '@/tools/terminal/components/LazyTerminalOutputRenderer';
 import { BaseToolCard, ToolCardHeader } from './BaseToolCard';
 import { ToolCardCopyAction, ToolCardHeaderActions } from './ToolCardHeaderActions';
-import { ToolCommandPreview } from './ToolCommandPreview';
+import { CopyableTextPreview } from '../components/CopyableTextPreview';
 import { ToolTimeoutIndicator } from './ToolTimeoutIndicator';
 import { DotMatrixLoader } from '../../component-library';
 import { useToolCardHeightContract, type ToolCardCollapseReason } from './useToolCardHeightContract';
@@ -304,15 +304,15 @@ export const ExecProcessToolCardView: React.FC<ExecProcessToolCardViewProps> = (
     : undefined;
 
   const renderPrimaryText = (variant: 'default' | 'compact' = 'default') => (
-    <ToolCommandPreview
+    <CopyableTextPreview
       ref={commandRef}
       as={variant === 'compact' ? 'span' : 'code'}
-      command={model.primaryText}
+      text={model.primaryText}
       emptyText={model.emptyText}
       className={
         variant === 'compact'
-          ? 'terminal-command-compact tool-command-preview--compact'
-          : 'terminal-command'
+          ? 'terminal-command-compact copyable-text-preview--compact copyable-text-preview--theme-font'
+          : 'terminal-command copyable-text-preview--theme-font'
       }
       tooltipContent={model.primaryText && isPrimaryTextTruncated ? model.primaryText : undefined}
     />

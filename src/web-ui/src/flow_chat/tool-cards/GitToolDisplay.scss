@@ -26,7 +26,7 @@
 /* Collapsed row: match thinking summary typography (`ModelThinkingDisplay.scss` `.thinking-label`). */
 .compact-tool-card-wrapper.git-tool-display {
   .compact-card-action,
-  .compact-card-content .tool-command-preview.tool-command-preview--compact {
+  .compact-card-content .copyable-text-preview.copyable-text-preview--compact {
     font-family: var(--font-family-sans);
     font-size: var(--flowchat-font-size-sm);
     line-height: var(--flowchat-support-line-height);
@@ -107,7 +107,7 @@
     // Prevent command preview from consuming all flex space so the inline
     // summary can sit right next to the command text instead of being
     // pushed to the far right.
-    .tool-command-preview {
+    .copyable-text-preview {
       flex: 0 1 auto;
       max-width: 50%;
     }
@@ -128,7 +128,7 @@
 
   /* Collapsed row only — expanded uses `.terminal-command` from TerminalToolCard.scss. */
   .compact-tool-card-wrapper.git-tool-display .git-tool-info .git-command-preview,
-  .compact-tool-card-wrapper.git-tool-display .git-command-preview.tool-command-preview--compact {
+  .compact-tool-card-wrapper.git-tool-display .git-command-preview.copyable-text-preview--compact {
     color: var(--color-text-muted);
   }
 

@@ -30,8 +30,7 @@
   background: color-mix(in srgb, var(--color-bg-elevated) 96%, var(--color-warning));
   box-shadow:
     0 16px 40px var(--color-overlay-black-30),
-    0 3px 10px var(--color-overlay-black-12),
-    inset 3px 0 0 color-mix(in srgb, var(--color-warning) 76%, transparent);
+    0 3px 10px var(--color-overlay-black-12);
   color: var(--color-text-primary);
   transform-origin: center bottom;
   animation: permission-request-panel-in 180ms cubic-bezier(0.23, 1, 0.32, 1);
@@ -97,11 +96,17 @@
   height: 30px;
   padding: 0;
   border-radius: 5px;
+  border-color: transparent;
+  background: transparent;
 }
 
 .permission-request-panel__collapse:hover,
 .permission-request-panel__collapsed-trigger:hover {
   background: color-mix(in srgb, var(--color-warning) 14%, var(--color-bg-primary));
+}
+
+.permission-request-panel__collapse:hover {
+  background: transparent;
 }
 
 .permission-request-panel__collapse:focus-visible,
@@ -231,6 +236,7 @@
   border: 1px solid var(--border-base);
   border-radius: 6px;
   padding: 7px 9px;
+  font-family: var(--font-family-sans);
   color: var(--color-text-primary);
   background: var(--color-bg-primary);
 }
@@ -301,13 +307,15 @@
 }
 
 .permission-request-panel__actions button:disabled {
-  cursor: wait;
   opacity: 0.6;
 }
 
-.permission-request-panel__batch-actions button:disabled {
+.permission-request-panel__actions button:disabled:not(.permission-request-panel__feedback-disabled) {
   cursor: wait;
-  opacity: 0.6;
+}
+
+.permission-request-panel__actions button.permission-request-panel__feedback-disabled {
+  cursor: not-allowed;
 }
 
 .permission-request-panel .permission-request-panel__reject {

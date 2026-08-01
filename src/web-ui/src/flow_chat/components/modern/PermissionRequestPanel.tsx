@@ -7,6 +7,7 @@ import type {
   PermissionRequest,
 } from '@/infrastructure/api/service-api/AgentAPI';
 import { useChatInputState } from '../../store/chatInputStateStore';
+import { CopyableTextPreview } from '../CopyableTextPreview';
 import { CHAT_INPUT_DROP_ZONE_BOTTOM_PX } from '../../utils/flowChatScrollLayout';
 import './PermissionRequestPanel.scss';
 
@@ -97,6 +98,8 @@ export function PermissionRequestPanel({
   const request = requests[0];
   const risk = permissionRisk(request, t);
   const pendingCount = Math.max(totalPendingCount ?? requests.length, requests.length);
+  const hasRejectFeedback = feedback.trim().length > 0;
+  const allowActionsDisabledForFeedback = hasRejectFeedback && !responding;
 
   const alwaysAllowTooltip = request?.saveResources?.length
     ? request.projectPath?.trim()
@@ -189,36 +192,44 @@ export function PermissionRequestPanel({
             </div>
           </div>
           <div className="permission-request-panel__requests" role="list">
-            {requests.map((item, index) => (
-              <div
-                className={`permission-request-panel__request${index === 0 ? ' permission-request-panel__request--active' : ''}`}
-                key={item.requestId}
-                role="listitem"
-              >
-                <div className="permission-request-panel__request-heading">
-                  <div className="permission-request-panel__tool-identity">
-                    <strong>{item.source.identity}</strong>
-                    {item.delegation && (
-                      <span className="permission-request-panel__subagent">
-                        {t('permission.subagentOwner', { subagent: item.delegation.subagentType })}
-                      </span>
-                    )}
+            {requests.map((item, index) => {
+              const resourceSummary = item.resources.join(', ');
+              const resourceTooltip = item.resources.join('\n');
+
+              return (
+                <div
+                  className={`permission-request-panel__request${index === 0 ? ' permission-request-panel__request--active' : ''}`}
+                  key={item.requestId}
+                  role="listitem"
+                >
+                  <div className="permission-request-panel__request-heading">
+                    <div className="permission-request-panel__tool-identity">
+                      <strong>{item.source.identity}</strong>
+                      {item.delegation && (
+                        <span className="permission-request-panel__subagent">
+                          {t('permission.subagentOwner', { subagent: item.delegation.subagentType })}
+                        </span>
+                      )}
+                    </div>
+                    <span>{index === 0 ? t('permission.current') : t('permission.pending')}</span>
                   </div>
-                  <span>{index === 0 ? t('permission.current') : t('permission.pending')}</span>
+                  <div className="permission-request-panel__request-details">
+                    <span className="permission-request-panel__action">
+                      {permissionActionLabel(item.action, t)}
+                    </span>
+                    <span className="permission-request-panel__detail-separator" aria-hidden="true">·</span>
+                    <CopyableTextPreview
+                      as="code"
+                      text={resourceSummary}
+                      emptyText=""
+                      className="permission-request-panel__resource-summary copyable-text-preview--theme-font"
+                      tooltipContent={resourceTooltip || undefined}
+                      tooltipPlacement="top"
+                    />
+                  </div>
                 </div>
-                <div className="permission-request-panel__request-details">
-                  <span className="permission-request-panel__action">
-                    {permissionActionLabel(item.action, t)}
-                  </span>
-                  <span className="permission-request-panel__detail-separator" aria-hidden="true">·</span>
-                  <Tooltip content={item.resources.join(', ')} placement="top">
-                    <code className="permission-request-panel__resource-summary">
-                      {item.resources.join(', ')}
-                    </code>
-                  </Tooltip>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
           {risk && <p className="permission-request-panel__risk">{risk}</p>}
           {error && <p role="alert">{t('permission.responseFailed')}</p>}
@@ -232,12 +243,22 @@ export function PermissionRequestPanel({
           />
           <div className="permission-request-panel__actions">
             <div className="permission-request-panel__single-actions">
-              <button type="button" onClick={() => void respond('once')} disabled={responding}>
+              <button
+                type="button"
+                onClick={() => void respond('once')}
+                disabled={responding || hasRejectFeedback}
+                className={allowActionsDisabledForFeedback ? 'permission-request-panel__feedback-disabled' : undefined}
+              >
                 <Check size={15} aria-hidden="true" /> {t('permission.allowOnce')}
               </button>
               {!!request.saveResources?.length && (
                 <Tooltip content={alwaysAllowTooltip} placement="top">
-                  <button type="button" onClick={() => void respond('always')} disabled={responding}>
+                  <button
+                    type="button"
+                    onClick={() => void respond('always')}
+                    disabled={responding || hasRejectFeedback}
+                    className={allowActionsDisabledForFeedback ? 'permission-request-panel__feedback-disabled' : undefined}
+                  >
                     <Check size={15} aria-hidden="true" /> {t('permission.allowAlways')}
                   </button>
                 </Tooltip>
@@ -251,21 +272,24 @@ export function PermissionRequestPanel({
                 <X size={15} aria-hidden="true" /> {t('permission.reject')}
               </button>
             </div>
-            {requests.length > 1 && (
-              <div className="permission-request-panel__batch-actions">
-                <button type="button" onClick={() => void respondBatch('once')} disabled={responding}>
-                  <Check size={15} aria-hidden="true" /> {t('permission.allowCurrentAndFollowing')}
-                </button>
-                <button
-                  type="button"
-                  className="permission-request-panel__reject"
-                  onClick={() => void respondBatch('reject')}
-                  disabled={responding}
-                >
-                  <X size={15} aria-hidden="true" /> {t('permission.rejectCurrentAndFollowing')}
-                </button>
-              </div>
-            )}
+            <div className="permission-request-panel__batch-actions">
+              <button
+                type="button"
+                onClick={() => void respondBatch('once')}
+                disabled={responding || hasRejectFeedback}
+                className={allowActionsDisabledForFeedback ? 'permission-request-panel__feedback-disabled' : undefined}
+              >
+                <Check size={15} aria-hidden="true" /> {t('permission.allowCurrentAndFollowing')}
+              </button>
+              <button
+                type="button"
+                className="permission-request-panel__reject"
+                onClick={() => void respondBatch('reject')}
+                disabled={responding}
+              >
+                <X size={15} aria-hidden="true" /> {t('permission.rejectCurrentAndFollowing')}
+              </button>
+            </div>
           </div>
         </section>
       )}

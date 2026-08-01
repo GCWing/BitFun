@@ -9,7 +9,7 @@ import { CubeLoading } from '../../component-library';
 import type { ToolCardProps } from '../types/flow-chat';
 import { BaseToolCard, ToolCardHeader } from './BaseToolCard';
 import { ToolCardCopyAction, ToolCardHeaderActions } from './ToolCardHeaderActions';
-import { ToolCommandPreview } from './ToolCommandPreview';
+import { CopyableTextPreview } from '../components/CopyableTextPreview';
 import { createLogger } from '@/shared/utils/logger';
 import { useToolCardHeightContract } from './useToolCardHeightContract';
 import './GitToolDisplay.scss';
@@ -152,13 +152,13 @@ export const GitToolDisplay: React.FC<ToolCardProps> = ({
   };
 
   const renderCommandPreview = (variant: 'expanded' | 'compact') => (
-    <ToolCommandPreview
-      command={commandText}
+    <CopyableTextPreview
+      text={commandText}
       emptyText={t('toolCards.terminal.noCommand')}
       as={variant === 'compact' ? 'span' : 'code'}
       className={
         variant === 'compact'
-          ? 'git-command-preview tool-command-preview--compact'
+          ? 'git-command-preview copyable-text-preview--compact'
           : 'git-command-preview terminal-command'
       }
     />

@@ -27,7 +27,7 @@ import { useToolCardCompletionGracePeriod } from './useToolCardCompletionGracePe
 import { getTerminalViewState, type TerminalViewState } from './terminalToolCardState';
 import { ToolTimeoutIndicator } from './ToolTimeoutIndicator';
 import { ToolCardCopyAction, ToolCardHeaderActions } from './ToolCardHeaderActions';
-import { ToolCommandPreview } from './ToolCommandPreview';
+import { CopyableTextPreview } from '../components/CopyableTextPreview';
 import { formatSessionViewPreviewText } from '../utils/sessionViewPreview';
 import './TerminalToolCard.scss';
 
@@ -566,14 +566,14 @@ export const TerminalToolCard: React.FC<TerminalToolCardProps> = ({
     const emptyText = t(showConfirmButtons ? 'toolCards.terminal.commandEmpty' : 'toolCards.terminal.noCommand');
 
     return (
-      <ToolCommandPreview
+      <CopyableTextPreview
         ref={commandRef}
         as={variant === 'compact' ? 'span' : 'code'}
-        command={commandText}
+        text={commandText}
         emptyText={emptyText}
         className={
           variant === 'compact'
-            ? 'terminal-command-compact tool-command-preview--compact'
+            ? 'terminal-command-compact copyable-text-preview--compact'
             : 'terminal-command'
         }
         tooltipContent={commandText && isCommandTruncated ? commandText : undefined}
