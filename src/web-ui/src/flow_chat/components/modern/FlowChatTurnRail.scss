@@ -13,7 +13,7 @@
     width: 100%;
     max-height: 100%;
     display: grid;
-    grid-auto-rows: 14px;
+    grid-auto-rows: 12px;
     align-content: start;
     padding: 3px 1px;
     overflow-x: hidden;
@@ -30,7 +30,7 @@
   &__item {
     position: relative;
     width: 26px;
-    height: 14px;
+    height: 12px;
     margin: 0;
     padding: 0;
     border: 0;
@@ -69,7 +69,6 @@
   &__item:hover &__bar,
   &__item:focus-visible &__bar {
     width: 22px;
-    height: 3px;
     background: var(--color-text-primary);
     opacity: 1;
   }
