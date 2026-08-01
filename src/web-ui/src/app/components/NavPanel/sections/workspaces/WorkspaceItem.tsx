@@ -1041,11 +1041,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
         >
           <span className="bitfun-nav-panel__workspace-item-icon" aria-hidden="true">
             <span className="bitfun-nav-panel__workspace-item-icon-default">
-              {isActive ? (
-                <span className="bitfun-nav-panel__workspace-item-active-icon">
-                  <DotMatrixArrowRightIcon size={14} />
-                </span>
-              ) : workspaceIsRemote ? (
+              {workspaceIsRemote ? (
                 <Server size={14} />
               ) : (
                 <FolderOpen size={14} />
