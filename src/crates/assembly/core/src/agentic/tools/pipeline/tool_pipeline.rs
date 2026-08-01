@@ -27,8 +27,7 @@ use bitfun_agent_tools::{
     build_tool_execution_timeout_presentation,
     build_user_rejected_tool_presentation_with_instruction,
     build_user_steering_interrupted_presentation, build_write_tail_closure_notice,
-    render_tool_result_for_assistant, truncate_raw_tool_arguments_preview,
-    truncate_tool_arguments_preview, validate_tool_execution_admission, PermissionIntent,
+    render_tool_result_for_assistant, validate_tool_execution_admission, PermissionIntent,
     ResolvedToolInvocation, ToolExecutionAdmissionRejection, ToolExecutionAdmissionRequest,
     ToolExecutionErrorPresentation, GET_TOOL_SPEC_TOOL_NAME, USER_STEERING_INTERRUPTED_MESSAGE,
 };
@@ -202,23 +201,24 @@ fn build_error_execution_result(
     task: Option<ToolTask>,
     error: &BitFunError,
 ) -> ToolExecutionResult {
+    let error_message = error.to_string();
+    let category = classify_tool_error(error);
     let (tool_id, wire_tool_name, effective_tool_name, execution_time_ms, provided_arguments) =
         if let Some(task) = task {
-            let preview = if task.invocation.is_deferred() {
-                truncate_tool_arguments_preview(task.effective_arguments())
-            } else {
-                task.tool_call
-                    .raw_arguments
-                    .as_deref()
-                    .map(truncate_raw_tool_arguments_preview)
-                    .unwrap_or_else(|| truncate_tool_arguments_preview(task.effective_arguments()))
-            };
+            // Parsed arguments are already present on the preceding tool call.
+            // Preserve the complete provider output only when it could not be
+            // parsed into that structured call.
+            let provided_arguments = task
+                .tool_call
+                .is_error
+                .then(|| task.tool_call.raw_arguments.clone())
+                .flatten();
             (
                 task.tool_call.tool_id,
                 task.tool_call.tool_name,
                 task.invocation.effective_tool_name,
                 elapsed_ms_since(task.created_at),
-                Some(preview),
+                provided_arguments,
             )
         } else {
             warn!("Task not found in state manager: {}", task_id);
@@ -230,8 +230,6 @@ fn build_error_execution_result(
                 None,
             )
         };
-    let error_message = error.to_string();
-    let category = classify_tool_error(error);
     let presentation = build_tool_execution_error_presentation(
         &effective_tool_name,
         category,
@@ -1651,16 +1649,11 @@ impl ToolPipeline {
         let invalid_call_error = if let Some(error) = task.invocation_resolution_error.clone() {
             Some(error)
         } else if wire_tool_name.is_empty() || tool_is_error {
-            let raw_arguments_preview = task
-                .tool_call
-                .raw_arguments
-                .as_deref()
-                .map(truncate_raw_tool_arguments_preview);
             Some(build_invalid_tool_call_error_message(
                 &wire_tool_name,
                 tool_is_error,
                 recovered_from_truncation,
-                raw_arguments_preview,
+                None,
             ))
         } else if recovered_write_has_potentially_truncated_marked_path(
             &tool_name,
@@ -4201,10 +4194,12 @@ mod tests {
     }
 
     #[test]
-    fn error_result_prefers_raw_arguments_preview_when_available() {
+    fn error_result_preserves_full_raw_arguments_for_unparseable_calls() {
         let mut task = test_tool_task("tool_1", "Git");
         task.tool_call.arguments = json!({});
-        task.tool_call.raw_arguments = Some("{\"operation\":\"log\"".to_string());
+        task.tool_call.is_error = true;
+        let raw_arguments = format!("{{\"operation\":\"{}", "log".repeat(512));
+        task.tool_call.raw_arguments = Some(raw_arguments.clone());
 
         let result = build_error_execution_result(
             "tool_1",
@@ -4214,20 +4209,38 @@ mod tests {
 
         assert_eq!(
             result.result.result["provided_arguments"],
-            serde_json::Value::String("{\"operation\":\"log\"".to_string())
+            serde_json::Value::String(raw_arguments.clone())
         );
         assert!(result
             .result
             .result_for_assistant
             .as_deref()
             .unwrap_or_default()
-            .contains("Provided arguments: {\"operation\":\"log\""));
+            .ends_with(&raw_arguments));
         assert!(!result
             .result
             .result_for_assistant
             .as_deref()
             .unwrap_or_default()
-            .contains("Raw arguments:"));
+            .contains("[truncated"));
+    }
+
+    #[test]
+    fn error_result_omits_arguments_for_parsed_validation_errors() {
+        let mut task = test_tool_task("tool_1", "Git");
+        task.tool_call.raw_arguments = Some(r#"{\"operation\":\"log\"}"#.to_string());
+
+        let result = build_error_execution_result(
+            "tool_1",
+            Some(task),
+            &BitFunError::Validation("operation is not supported".to_string()),
+        );
+
+        assert!(result.result.result["provided_arguments"].is_null());
+        assert_eq!(
+            result.result.result_for_assistant.as_deref(),
+            Some("Tool 'Git' failed (invalid_arguments): Validation error: operation is not supported")
+        );
     }
 
     #[tokio::test]
