@@ -384,6 +384,9 @@ impl ChatMode {
             if self.poll_workspace_reference_search(&mut chat_view) {
                 needs_redraw = true;
             }
+            if self.poll_workspace_diff(&mut chat_view) {
+                needs_redraw = true;
+            }
             chat_view.set_action_state(
                 self.action_state(chat_state.is_processing, false),
                 &self.keymap,

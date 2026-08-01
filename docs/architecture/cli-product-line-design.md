@@ -89,7 +89,7 @@ BitFun CLI 应成为可独立安装和发布的 Agent 产品，而不是 Desktop
 
 当前主线已经具备以下基础：
 
-- 交互式 TUI、Markdown/代码/Diff/工具卡片、主题、模型/Agent/MCP/Skill/Subagent/Session 选择；权限请求默认询问，
+- 交互式 TUI、Markdown/代码/Diff/工具卡片、主题、模型/Agent/MCP/Skill/Subagent/Session 选择；OpenCode 对齐的 `/diff` 通过 Runtime Git port 查看当前工作区 staged、unstaged 与 untracked 的 `HEAD` 相对差异；权限请求默认询问，
   提供 `Allow once / Allow always / Reject`，其中 `Allow always` 只对当前运行上下文中的同名工具有效。
 - `exec` 支持 stdin、会话恢复/分叉、Patch 输出和 `text/json/stream-json`。非交互执行默认拒绝权限请求，
   显式 `--auto` 才在本次调用内自动批准；兼容参数 `--confirm` 隐藏并映射到安全默认值。`Ctrl+C` 会请求取消
@@ -258,12 +258,14 @@ Headless CLI 和公开 Agent SDK 都调用同一 Agent Runtime API，但交付�
 
 | 形态 | 默认部署 | 当前 Shared 范围 |
 |---|---|---|
-| 交互式 TUI | Embedded | 显式 `--shared` 后支持 Session list/create/restore/delete/fork、transcript、当前 Session rename/Agent mode/model、声明式上下文 reload、当前 Session 手动 context compaction、Session undo/redo、Turn submit/cancel、Permission 和 UserInput |
+| 交互式 TUI | Embedded | 显式 `--shared` 后支持 Session list/create/restore/delete/fork、transcript、当前 Session rename/Agent mode/model、声明式上下文 reload、当前 Session 手动 context compaction、Session undo/redo、只读 workspace diff、Turn submit/cancel、Permission 和 UserInput |
 | `bitfun exec` / CI | Embedded | 不接受 Shared；保持独立进程、stdout/stderr 和退出码语义 |
 | ACP / SDK Host / GUI / Remote / Peer | 各自既有部署 | 不消费 TUI IPC，也不因本开关改变生命周期 |
 
 Shared TUI 不提供 Session archive、模型目录/默认值、Agent/Subagent 管理、MCP/扩展、账号同步、用量、observer、replay 或通用 controller transfer；对应入口给出明确的 Embedded 恢复建议，不在 Client 进程初始化第二套 Core owner。
 Shared 模式的斜杠命令、快捷键帮助和底部提示使用同一能力投影：OpenCode 对齐的 `/fork` 以 `Full session` 或历史用户提示词选择分支边界；选择提示词时 fork 只复制该 Turn 之前的历史，并把提示词放回 composer 而不自动发送。`/rename <name>` 修改当前 Session 名称；`/agent`、Tab 和 Shift+Tab 只切换当前 Session 的 Agent mode；`/models` 只切换当前 Session 的 model；`/reload [skills|instructions]` 刷新下一条消息使用的声明式上下文；OpenCode 对齐的 `/compact` 及其 `/summarize` alias 以一个可取消的 maintenance Turn 压缩当前 Session 上下文，不增加自创命令或快捷键。该 Turn 与普通对话共用 Session 原子准入，取得所有权后再读取待压缩上下文；权威 transcript 保留完整 tool payload，但重建模型上下文时排除该 maintenance Turn。Embedded 与 Shared 的 `/help` 都从 Action Registry 展示这些入口；在 slash menu 中选择 rename 只预填命令并等待用户输入名称。若外部来源使用相同命令名，用户明确选择的 BitFun 命令可完成这一次参数提交，即使偏好保存失败也不会重新弹出来源选择。它们不进入管理页面，也不修改未来 Session 的默认值。其他不支持动作不显示为可执行入口。Session 切换或 fork 失败保留原控制权；Shared fork 只有在新 Session 与 transcript 的响应可编码后才原子转移 controller。单个连接已有活动 Turn 时拒绝重复提交、fork、manual compaction 以及 Session rename/mode/model update，但允许 reload 只影响下一条消息；事件订阅失效后当前视图立即失效并要求重启 Shared TUI。
+
+`/diff` 只使用 OpenCode 已有命令名，不增加 alias 或全局快捷键，并且只在当前 Turn 空闲时进入。查看器以 `n`/`p` 切换文件、`]`/`[` 跳转 hunk，并保留方向键和 PageUp/PageDown 滚动；窄屏隐藏文件栏但保留当前 patch。TUI 只持有快照和导航状态，Git 仓库发现、差异计算及 staged/unstaged/untracked 事实由 `services-integrations` 中的 Runtime provider 负责。补丁与 OpenCode working-tree 视图一致，是 `HEAD` 到当前工作树的单一净补丁；staged/unstaged/untracked 仅作为文件状态展示，不在本阶段引入分区补丁或 source switch，相互抵消时仍保留文件和状态。冲突文件保留 `U` 状态并显示明确占位，不把 libgit2 的不完整两路投影伪装成三路冲突内容。Embedded 与 Shared 调用同一个 `AgentRuntime::workspace_diff`；TUI 仅在 Session execution workspace 与 Runtime 绑定的 project workspace 相同时调用，其他 worktree 与 Remote Session 明确返回不支持，避免显示错误的本地工作区事实。Shared 的无请求体只读 operation 不取得 Session lease，但要求连接没有活动 Turn，加载期间同一 Shared 客户端不再发起其他 Runtime 请求。单文件文本 diff 上限 1 MiB、总文本 diff 上限 3 MiB、文件数上限 256，超限和二进制文件显示明确占位。该入口不包含 refresh watcher、split diff、stage/reset/commit、变更归因、Remote 或 Relay 映射。
 
 OpenCode 对齐的 `/undo` 与 `/redo` 只提供这两个命令名，不增加 alias、快捷键或通用 checkpoint API。Core 以持久化的 staged boundary 同步裁剪可见 transcript、模型上下文和该边界后的受跟踪工作区改动；`/undo` 把被撤销的用户提示词放回 composer，连续调用可继续向前，`/redo` 逐级恢复直到清除 boundary，usage 与 fork 也只读取该 boundary 前的可见事实。活动 Turn 必须先由 scheduler 完成取消和 drain，失败时不写入 boundary；Shared 仍要求 current controller，并以 Runtime 返回的权威 transcript 更新 TUI。暂存期间提交新提示词或执行既有本地 snapshot accept/reject/rollback mutation，会先进入可恢复的 committing 阶段，永久删除隐藏后缀再建立新分支；同一阶段的 snapshot record 被拒绝，避免追加到隐藏历史。崩溃恢复会按持久化阶段重放 workspace/context 对齐或完成提交；跨文件系统与 Session 存储不宣称原子事务，部分失败返回 `outcome_unknown` 并要求恢复 Session 后检查。该能力当前只支持本地工作区，Remote 在任何回退写入前返回 `NotAvailable`。
 

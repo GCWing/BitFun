@@ -32,7 +32,7 @@ use bitfun_runtime_ports::{
     AgentWorkspaceReferenceSearchResult, DialogSubmitOutcome, PermissionAuditRecord,
     PermissionGrant, PermissionGrantKey, PluginRuntimeBinding, PortError, PortErrorKind,
     PortResult, RuntimeEventEnvelope, SessionTranscript, SessionTranscriptReader,
-    SessionTranscriptRequest, ThreadGoal,
+    SessionTranscriptRequest, ThreadGoal, WorkspaceDiffSnapshot,
 };
 use bitfun_runtime_services::RuntimeServices;
 
@@ -888,6 +888,22 @@ impl AgentRuntime {
 
     pub fn services(&self) -> Option<&RuntimeServices> {
         self.services.as_ref()
+    }
+
+    pub async fn workspace_diff(&self) -> Result<WorkspaceDiffSnapshot, RuntimeError> {
+        let services = self.services.as_ref().ok_or_else(|| {
+            PortError::new(
+                PortErrorKind::NotAvailable,
+                "runtime services are not registered",
+            )
+        })?;
+        let git = services.git.as_ref().ok_or_else(|| {
+            PortError::new(
+                PortErrorKind::NotAvailable,
+                "Git runtime service is not registered",
+            )
+        })?;
+        git.workspace_diff().await.map_err(RuntimeError::from)
     }
 
     pub fn registered_tool_names(&self) -> Vec<String> {

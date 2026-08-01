@@ -43,6 +43,7 @@ const DEFAULT_ITEM_ORDER: &[&str] = &[
     "new_session",
     "sessions",
     "fork_session",
+    "workspace_diff",
     "compact_session",
     "usage",
     "toggle_auto_approve",

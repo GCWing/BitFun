@@ -63,7 +63,7 @@ export const optionalDependencyFeatureOwnerRules = [
       { depName: 'anyhow', ownerFeatures: ['browser-control', 'debug-log', 'mcp', 'remote-connect', 'remote-ssh', 'remote-ssh-concrete'] },
       {
         depName: 'async-trait',
-        ownerFeatures: ['mcp', 'remote-connect', 'remote-ssh', 'remote-ssh-concrete', 'review-platform', 'script-tool-runtime', 'speech', 'workspace-search'],
+        ownerFeatures: ['git', 'mcp', 'remote-connect', 'remote-ssh', 'remote-ssh-concrete', 'review-platform', 'script-tool-runtime', 'speech', 'workspace-search'],
       },
       {
         depName: 'base64',
@@ -72,7 +72,7 @@ export const optionalDependencyFeatureOwnerRules = [
       { depName: 'bitfun-agent-runtime', ownerFeatures: ['deep-research', 'hook-import'] },
       { depName: 'bitfun-core-types', ownerFeatures: ['speech'] },
       { depName: 'bitfun-product-domains', ownerFeatures: ['canvas-runtime', 'function-agents', 'hook-import', 'miniapp-runtime', 'plugin-source'] },
-      { depName: 'bitfun-runtime-ports', ownerFeatures: ['remote-connect', 'remote-ssh', 'remote-ssh-concrete', 'script-tool-runtime'] },
+      { depName: 'bitfun-runtime-ports', ownerFeatures: ['git', 'remote-connect', 'remote-ssh', 'remote-ssh-concrete', 'script-tool-runtime'] },
       {
         depName: 'bitfun-services-core',
         ownerFeatures: ['browser-control', 'git', 'hook-import', 'mcp', 'miniapp-runtime', 'process-tree', 'remote-connect', 'remote-ssh-concrete', 'review-platform', 'workspace-search'],

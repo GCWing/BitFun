@@ -1857,6 +1857,61 @@ mod tests {
     }
 
     #[test]
+    fn workspace_diff_load_does_not_block_the_tui_event_loop() {
+        let commands = include_str!("commands.rs").replace("\r\n", "\n");
+        let handler = commands
+            .split_once("ActionHandler::WorkspaceDiff => {")
+            .expect("workspace diff handler")
+            .1
+            .split_once("ActionHandler::CompactSession => {")
+            .expect("workspace diff handler boundary")
+            .0;
+        let run_loop = include_str!("run.rs").replace("\r\n", "\n");
+
+        assert!(handler.contains("rt_handle.spawn"));
+        assert!(handler.contains("pending_workspace_diff"));
+        assert!(!handler.contains("block_in_place"));
+        assert!(run_loop.contains("poll_workspace_diff"));
+    }
+
+    #[test]
+    fn shared_workspace_diff_pending_state_serializes_runtime_actions_only() {
+        use crate::actions::ActionHandler;
+        use crate::modes::chat::pending_workspace_diff_blocks_runtime_action;
+
+        assert!(pending_workspace_diff_blocks_runtime_action(
+            true,
+            true,
+            ActionHandler::SubmitInput
+        ));
+        assert!(pending_workspace_diff_blocks_runtime_action(
+            true,
+            true,
+            ActionHandler::SelectModel
+        ));
+        assert!(pending_workspace_diff_blocks_runtime_action(
+            true,
+            true,
+            ActionHandler::NewSession
+        ));
+        assert!(!pending_workspace_diff_blocks_runtime_action(
+            true,
+            true,
+            ActionHandler::SelectTheme
+        ));
+        assert!(!pending_workspace_diff_blocks_runtime_action(
+            false,
+            true,
+            ActionHandler::SubmitInput
+        ));
+        assert!(!pending_workspace_diff_blocks_runtime_action(
+            true,
+            false,
+            ActionHandler::SubmitInput
+        ));
+    }
+
+    #[test]
     fn pending_session_operation_routes_commands_to_their_action_guards() {
         assert!(session_update_blocks_typed_submission(true, "continue"));
         assert!(!session_update_blocks_typed_submission(true, "/new"));

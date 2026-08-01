@@ -7,13 +7,15 @@ use bitfun_agent_runtime::sdk::{
     AgentRuntimeSdkCompatibility, AgentRuntimeSdkStability, AgentSessionClosePort,
     AgentSessionCreateRequest, AgentSessionCreateResult, AgentSubmissionPort,
     AgentSubmissionRequest, AgentSubmissionResult, AgentSubmissionSource,
-    AgentTransientSessionDiscardRequest, ClockPort, FileSystemPort, HarnessCapability,
+    AgentTransientSessionDiscardRequest, ClockPort, FileSystemPort, GitPort, HarnessCapability,
     HarnessProviderDescriptor, HarnessWorkflow, PortErrorKind, PortResult, RuntimeAgentRegistry,
     RuntimeAgentRegistryQuery, RuntimeError, RuntimeEventEnvelope, RuntimeEventSink,
     RuntimeEventType, RuntimeHookErrorPolicy, RuntimeHookKind, RuntimeHookPlan,
     RuntimeHookRegistry, RuntimeServiceCapability, RuntimeServicePort, RuntimeServices,
     RuntimeServicesBuilder, SessionSelector, SessionStorageKind, SessionStoragePathRequest,
-    SessionStoragePathResolution, SessionStorePort, ToolRegistry, ToolRegistryItem, WorkspacePort,
+    SessionStoragePathResolution, SessionStorePort, ToolRegistry, ToolRegistryItem,
+    WorkspaceDiffContent, WorkspaceDiffFile, WorkspaceDiffFileStatus, WorkspaceDiffSnapshot,
+    WorkspacePort,
 };
 use serde_json::{json, Value};
 
@@ -35,6 +37,9 @@ struct FakeSdkAgentRegistry {
 struct FakeSdkRuntimePort {
     capability: RuntimeServiceCapability,
 }
+
+#[derive(Debug)]
+struct FakeSdkGitPort;
 
 #[derive(Debug, Default)]
 struct FakeSdkRuntimeEventSink;
@@ -77,6 +82,34 @@ impl RuntimeServicePort for FakeSdkRuntimePort {
 
 impl FileSystemPort for FakeSdkRuntimePort {}
 impl WorkspacePort for FakeSdkRuntimePort {}
+
+#[async_trait]
+impl GitPort for FakeSdkGitPort {
+    async fn workspace_diff(&self) -> PortResult<WorkspaceDiffSnapshot> {
+        Ok(WorkspaceDiffSnapshot {
+            files: vec![WorkspaceDiffFile {
+                path: "src/lib.rs".to_string(),
+                old_path: None,
+                status: WorkspaceDiffFileStatus::Modified,
+                staged: false,
+                unstaged: true,
+                untracked: false,
+                additions: 1,
+                deletions: 1,
+                content: WorkspaceDiffContent::Text {
+                    patch: "@@ -1 +1 @@\n-old\n+new\n".to_string(),
+                },
+            }],
+            truncated: false,
+        })
+    }
+}
+
+impl RuntimeServicePort for FakeSdkGitPort {
+    fn capability(&self) -> RuntimeServiceCapability {
+        RuntimeServiceCapability::Git
+    }
+}
 
 #[async_trait]
 impl AgentSessionClosePort for FakeSessionClosePort {
@@ -135,6 +168,26 @@ fn fake_sdk_services() -> RuntimeServices {
         )))
         .build()
         .expect("fake SDK services")
+}
+
+fn fake_sdk_services_with_git() -> RuntimeServices {
+    RuntimeServicesBuilder::new()
+        .with_filesystem(Arc::new(FakeSdkRuntimePort::new(
+            RuntimeServiceCapability::FileSystem,
+        )))
+        .with_workspace(Arc::new(FakeSdkRuntimePort::new(
+            RuntimeServiceCapability::Workspace,
+        )))
+        .with_session_store(Arc::new(FakeSdkRuntimePort::new(
+            RuntimeServiceCapability::SessionStore,
+        )))
+        .with_events(Arc::new(FakeSdkRuntimeEventSink))
+        .with_clock(Arc::new(FakeSdkRuntimePort::new(
+            RuntimeServiceCapability::Clock,
+        )))
+        .with_optional_git(Some(Arc::new(FakeSdkGitPort)))
+        .build()
+        .expect("fake SDK services with Git")
 }
 
 #[async_trait]
@@ -298,6 +351,20 @@ async fn sdk_facade_accepts_fake_services_tools_harnesses_and_hooks_without_core
         .services()
         .expect("services should be injected")
         .has_capability(RuntimeServiceCapability::SessionStore));
+}
+
+#[tokio::test]
+async fn sdk_facade_delegates_workspace_diff_to_runtime_services() {
+    let runtime = AgentRuntimeBuilder::new()
+        .with_submission_port(Arc::new(FakeSdkAgentProvider::default()))
+        .with_services(fake_sdk_services_with_git())
+        .build()
+        .expect("sdk runtime");
+
+    let snapshot = runtime.workspace_diff().await.expect("workspace diff");
+
+    assert_eq!(snapshot.files.len(), 1);
+    assert_eq!(snapshot.files[0].path, "src/lib.rs");
 }
 
 #[tokio::test]

@@ -378,6 +378,12 @@ impl RuntimeIpcRequestHandler for SharedRuntimeHandler {
                 .await
                 .map(|references| RuntimeIpcOperationResult::WorkspaceReferences { references })
                 .map_err(runtime_ipc_error),
+            RuntimeIpcOperation::WorkspaceDiff => self
+                .runtime
+                .workspace_diff()
+                .await
+                .map(|snapshot| RuntimeIpcOperationResult::WorkspaceDiff { snapshot })
+                .map_err(runtime_ipc_error),
             RuntimeIpcOperation::SubmitTurn { request } => {
                 let outcome = self
                     .runtime

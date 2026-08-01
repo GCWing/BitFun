@@ -105,7 +105,14 @@ canvas-runtime = [
 ]
 debug-log = ["anyhow", "chrono", "reqwest", "uuid"]
 deep-research = ["bitfun-agent-runtime"]
-git = ["bitfun-services-core", "chrono", "git2", "thiserror"]
+git = [
+    "async-trait",
+    "bitfun-runtime-ports",
+    "bitfun-services-core",
+    "chrono",
+    "git2",
+    "thiserror",
+]
 file-watch = ["notify"]
 function-agents = [
     "bitfun-product-domains/function-agents",

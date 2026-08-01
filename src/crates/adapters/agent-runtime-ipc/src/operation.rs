@@ -6,6 +6,7 @@ use bitfun_runtime_ports::{
     AgentSessionRevertRequest, AgentSessionRevertResult, AgentSessionSummary,
     AgentTurnCancellationRequest, AgentTurnCancellationResult, AgentWorkspaceReference,
     AgentWorkspaceReferenceSearchRequest, AgentWorkspaceReferenceSearchResult, SessionTranscript,
+    WorkspaceDiffSnapshot,
 };
 use serde::{Deserialize, Serialize};
 
@@ -92,6 +93,7 @@ pub enum RuntimeIpcOperation {
     WorkspaceReferencesForMessage {
         request: AgentMessageWorkspaceReferencesRequest,
     },
+    WorkspaceDiff,
     SubmitTurn {
         request: AgentDialogTurnRequest,
     },
@@ -131,7 +133,10 @@ impl RuntimeIpcOperation {
             Self::PendingPermissions { session_id }
             | Self::RespondPermission { session_id, .. } => Some(session_id),
             Self::SubmitUserAnswers { request } => Some(&request.session_id),
-            Self::Health | Self::ListSessions { .. } | Self::CreateSession { .. } => None,
+            Self::Health
+            | Self::ListSessions { .. }
+            | Self::CreateSession { .. }
+            | Self::WorkspaceDiff => None,
         }
     }
 
@@ -144,6 +149,7 @@ impl RuntimeIpcOperation {
             Self::Health | Self::ListSessions { .. } => {
                 RuntimeIpcOperationRules::new(None, false, false, false)
             }
+            Self::WorkspaceDiff => RuntimeIpcOperationRules::new(None, true, false, false),
             Self::CreateSession { .. } => RuntimeIpcOperationRules::new(None, true, true, true),
             Self::RestoreSession { .. } => {
                 RuntimeIpcOperationRules::new(AttachExisting, true, true, true)
@@ -257,6 +263,9 @@ pub enum RuntimeIpcOperationResult {
     },
     WorkspaceReferences {
         references: Vec<AgentWorkspaceReference>,
+    },
+    WorkspaceDiff {
+        snapshot: WorkspaceDiffSnapshot,
     },
 }
 

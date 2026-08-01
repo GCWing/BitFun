@@ -1,8 +1,9 @@
 use crate::operation::RuntimeIpcSessionRequirement;
 use crate::{
     serialize_frame_with_limit, InitializeRequest, RuntimeIpcError, RuntimeIpcErrorCode,
-    RuntimeIpcFrame, RuntimeIpcOperation, RuntimeSessionForkRequest, RuntimeSessionRenameRequest,
-    RuntimeUserAnswersRequest, MAX_REQUEST_FRAME_BYTES, PROTOCOL_VERSION,
+    RuntimeIpcFrame, RuntimeIpcOperation, RuntimeIpcOperationResult, RuntimeSessionForkRequest,
+    RuntimeSessionRenameRequest, RuntimeUserAnswersRequest, MAX_REQUEST_FRAME_BYTES,
+    PROTOCOL_VERSION,
 };
 
 use bitfun_product_domains::tool_permissions::PermissionReply;
@@ -11,6 +12,7 @@ use bitfun_runtime_ports::{
     AgentMessageWorkspaceReferencesRequest, AgentSessionCompactionRequest,
     AgentSessionModeUpdateRequest, AgentSessionModelUpdateRequest, AgentSessionRevertRequest,
     AgentSubmissionSource, AgentWorkspaceReferenceSearchRequest, DialogSubmissionPolicy,
+    WorkspaceDiffContent, WorkspaceDiffFile, WorkspaceDiffFileStatus, WorkspaceDiffSnapshot,
 };
 use serde_json::{json, Map};
 
@@ -105,6 +107,50 @@ fn protocol_round_trips_read_only_workspace_reference_operations() {
 }
 
 #[test]
+fn protocol_round_trips_workspace_diff_as_a_read_only_workspace_operation() {
+    assert_eq!(PROTOCOL_VERSION, 11);
+
+    let operation = RuntimeIpcOperation::WorkspaceDiff;
+    let encoded = serde_json::to_value(&operation).expect("serialize workspace diff operation");
+    assert_eq!(encoded, json!({"operation": "workspace_diff"}));
+    let decoded: RuntimeIpcOperation =
+        serde_json::from_value(encoded).expect("deserialize workspace diff operation");
+    assert_eq!(decoded, operation);
+    assert_eq!(decoded.session_id(), None);
+    let rules = decoded.rules();
+    assert_eq!(
+        rules.session_requirement,
+        RuntimeIpcSessionRequirement::None
+    );
+    assert!(rules.requires_idle);
+    assert!(!rules.serializes_session_selection);
+    assert!(!rules.side_effecting);
+
+    let result = RuntimeIpcOperationResult::WorkspaceDiff {
+        snapshot: WorkspaceDiffSnapshot {
+            files: vec![WorkspaceDiffFile {
+                path: "src/main.rs".to_string(),
+                old_path: None,
+                status: WorkspaceDiffFileStatus::Modified,
+                staged: false,
+                unstaged: true,
+                untracked: false,
+                additions: 1,
+                deletions: 1,
+                content: WorkspaceDiffContent::Text {
+                    patch: "@@ -1 +1 @@\n-old\n+new\n".to_string(),
+                },
+            }],
+            truncated: false,
+        },
+    };
+    let encoded = serde_json::to_value(&result).expect("serialize workspace diff result");
+    let decoded: RuntimeIpcOperationResult =
+        serde_json::from_value(encoded).expect("deserialize workspace diff result");
+    assert_eq!(decoded, result);
+}
+
+#[test]
 fn protocol_round_trips_the_reviewed_session_mode_operation() {
     let operation = RuntimeIpcOperation::UpdateSessionMode {
         request: AgentSessionModeUpdateRequest {
@@ -154,7 +200,7 @@ fn protocol_round_trips_the_reviewed_session_model_operation() {
 
 #[test]
 fn protocol_round_trips_the_current_session_rename_operation() {
-    assert_eq!(PROTOCOL_VERSION, 10);
+    assert_eq!(PROTOCOL_VERSION, 11);
 
     let operation = RuntimeIpcOperation::RenameSession {
         request: RuntimeSessionRenameRequest {

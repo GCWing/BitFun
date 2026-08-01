@@ -22,7 +22,7 @@ use bitfun_agent_runtime::sdk::{
     AgentUserAnswersRequest, AgentWorkspaceReference, AgentWorkspaceReferenceSearchRequest,
     AgentWorkspaceReferenceSearchResult, PermissionReply, PermissionRequest,
     PermissionRequestEventReceiver, PortError, PortErrorKind, RuntimeError, SessionTranscript,
-    SessionTranscriptRequest, SessionUsageReport,
+    SessionTranscriptRequest, SessionUsageReport, WorkspaceDiffSnapshot,
 };
 use bitfun_agent_runtime_ipc::{
     RuntimeIpcClient, RuntimeIpcClientError, RuntimeIpcClientEvent, RuntimeIpcErrorCode,
@@ -187,6 +187,7 @@ struct CliWorkspacePaths {
     project: Option<PathBuf>,
     execution: Option<PathBuf>,
     execution_target: Option<SessionExecutionTarget>,
+    remote: bool,
 }
 
 impl CliWorkspacePaths {
@@ -195,6 +196,7 @@ impl CliWorkspacePaths {
             project: workspace_path.clone(),
             execution: workspace_path,
             execution_target: None,
+            remote: false,
         }
     }
 
@@ -225,6 +227,7 @@ impl CliWorkspacePaths {
         self.execution = Some(execution);
         self.project = Some(project);
         self.execution_target = binding.execution_target.clone();
+        self.remote = binding.remote_connection_id.is_some() || binding.remote_ssh_host.is_some();
     }
 
     fn reset_execution_to_project(&mut self) -> PathBuf {
@@ -233,8 +236,31 @@ impl CliWorkspacePaths {
         self.execution_target = Some(SessionExecutionTarget::local(
             project.to_string_lossy().to_string(),
         ));
+        self.remote = false;
         project
     }
+
+    fn workspace_diff_unavailable_reason(&self) -> Option<&'static str> {
+        if self.remote {
+            return Some("Workspace diff is unavailable for remote Sessions");
+        }
+        let execution = self.execution();
+        let project = self.project();
+        if !same_workspace_location(&execution, &project) {
+            return Some(
+                "Workspace diff is unavailable when the Session uses a different worktree",
+            );
+        }
+        None
+    }
+}
+
+fn same_workspace_location(left: &Path, right: &Path) -> bool {
+    left == right
+        || dunce::canonicalize(left)
+            .ok()
+            .zip(dunce::canonicalize(right).ok())
+            .is_some_and(|(left, right)| left == right)
 }
 
 /// CLI-owned client for the portable Agent Runtime SDK.
@@ -866,6 +892,29 @@ impl CliAgentRuntimeClient {
         }
         *self.current_turn_id.lock().await = None;
         Ok(reverted)
+    }
+
+    pub(crate) async fn workspace_diff(&self) -> Result<WorkspaceDiffSnapshot> {
+        if let Some(reason) = self
+            .workspace_paths
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .workspace_diff_unavailable_reason()
+        {
+            return Err(anyhow::anyhow!(reason));
+        }
+        match &self.backend {
+            CliAgentRuntimeBackend::Embedded(runtime) => runtime
+                .workspace_diff()
+                .await
+                .map_err(|error| anyhow::anyhow!(error.into_message())),
+            CliAgentRuntimeBackend::Shared(client) => {
+                match client.request(RuntimeIpcOperation::WorkspaceDiff).await? {
+                    RuntimeIpcOperationResult::WorkspaceDiff { snapshot } => Ok(snapshot),
+                    _ => Err(unexpected_shared_result("workspace_diff")),
+                }
+            }
+        }
     }
 
     pub(crate) async fn generate_session_usage_report(
@@ -1706,6 +1755,44 @@ mod tests {
     }
 
     #[test]
+    fn workspace_diff_fails_closed_for_other_worktrees_and_remote_sessions() {
+        let mut paths = CliWorkspacePaths::new(Some("/project".into()));
+        assert_eq!(paths.workspace_diff_unavailable_reason(), None);
+
+        paths.apply_binding(&AgentSessionWorkspaceBinding {
+            workspace_id: Some("workspace-1".to_string()),
+            workspace_path: "/managed-worktree".to_string(),
+            project_workspace_path: Some("/project".to_string()),
+            execution_target: Some(SessionExecutionTarget {
+                kind: SessionExecutionTargetKind::ManagedWorktree,
+                worktree_id: Some("worktree-1".to_string()),
+                root_path: "/managed-worktree".to_string(),
+                base_ref: Some("main".to_string()),
+                base_commit: Some("123456789abcdef".to_string()),
+                branch: None,
+                lifecycle: Some(WorktreeLifecycle::Managed),
+            }),
+            remote_connection_id: None,
+            remote_ssh_host: None,
+        });
+        assert!(paths
+            .workspace_diff_unavailable_reason()
+            .is_some_and(|reason| reason.contains("different worktree")));
+
+        paths.apply_binding(&AgentSessionWorkspaceBinding {
+            workspace_id: None,
+            workspace_path: "/project".to_string(),
+            project_workspace_path: Some("/project".to_string()),
+            execution_target: Some(SessionExecutionTarget::local("/project")),
+            remote_connection_id: Some("remote-1".to_string()),
+            remote_ssh_host: Some("example.test".to_string()),
+        });
+        assert!(paths
+            .workspace_diff_unavailable_reason()
+            .is_some_and(|reason| reason.contains("remote Sessions")));
+    }
+
+    #[test]
     fn model_updates_use_the_runtime_sdk_without_the_core_compatibility_facade() {
         let source = include_str!("runtime_client.rs").replace("\r\n", "\n");
         let compatibility_update =
@@ -1773,6 +1860,25 @@ mod tests {
         assert!(fork.contains("CliAgentRuntimeBackend::Shared(client)"));
         assert!(fork.contains("RuntimeIpcOperation::ForkSession"));
         assert!(fork.contains("RuntimeIpcOperationResult::SessionForked"));
+    }
+
+    #[test]
+    fn workspace_diff_uses_the_same_runtime_boundary_in_both_deployments() {
+        let source = include_str!("runtime_client.rs").replace("\r\n", "\n");
+        let workspace_diff = source
+            .split_once("pub(crate) async fn workspace_diff(")
+            .expect("workspace diff method")
+            .1
+            .split_once("pub(crate) async fn generate_session_usage_report(")
+            .expect("workspace diff method boundary")
+            .0;
+
+        assert!(workspace_diff.contains("workspace_diff_unavailable_reason"));
+        assert!(workspace_diff.contains("CliAgentRuntimeBackend::Embedded(runtime)"));
+        assert!(workspace_diff.contains(".workspace_diff()"));
+        assert!(workspace_diff.contains("CliAgentRuntimeBackend::Shared(client)"));
+        assert!(workspace_diff.contains("RuntimeIpcOperation::WorkspaceDiff"));
+        assert!(workspace_diff.contains("RuntimeIpcOperationResult::WorkspaceDiff"));
     }
 
     #[test]

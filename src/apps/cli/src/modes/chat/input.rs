@@ -88,6 +88,17 @@ impl ChatMode {
             }
         }
 
+        // Workspace diff viewer intercepts all keys when visible
+        if chat_view.workspace_diff_visible() {
+            if matches!(
+                chat_view.workspace_diff_handle_key(key),
+                crate::ui::workspace_diff::WorkspaceDiffAction::Close
+            ) {
+                self.navigate_back(chat_view);
+            }
+            return Ok(None);
+        }
+
         // Info popup intercepts all keys when visible
         if chat_view.info_popup_visible() {
             match key.code {

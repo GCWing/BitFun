@@ -225,6 +225,12 @@ struct PendingWorkspaceReferenceSearch {
     >,
 }
 
+struct PendingWorkspaceDiff {
+    handle: tokio::task::JoinHandle<
+        std::result::Result<bitfun_agent_runtime::sdk::WorkspaceDiffSnapshot, String>,
+    >,
+}
+
 const SESSION_OPERATION_SLOW_NOTICE: Duration = Duration::from_secs(15);
 const SHARED_TUI_CHAT_STATUS: &str = "Shared TUI preview: this view controls sessions, including deleting an idle Session, turns, the current Session name, current Session Agent mode, current Session model, and declarative context via /reload [skills|instructions]; model management remains Embedded, along with local extension, MCP, account-sync, and Agent/Subagent management.";
 
@@ -268,6 +274,7 @@ pub(crate) struct ChatMode {
     /// One Session operation in flight. The event loop remains responsive while
     /// the Runtime owner updates or deletes Session state.
     pending_session_operation: Option<PendingSessionOperation>,
+    pending_workspace_diff: Option<PendingWorkspaceDiff>,
     pending_workspace_reference_search: Option<PendingWorkspaceReferenceSearch>,
     workspace_reference_search_generation: u64,
     last_workspace_reference_query: Option<String>,
@@ -329,6 +336,7 @@ impl ChatMode {
             pending_mcp_op: None,
             pending_mcp_tasks: Vec::new(),
             pending_session_operation: None,
+            pending_workspace_diff: None,
             pending_workspace_reference_search: None,
             workspace_reference_search_generation: 0,
             last_workspace_reference_query: None,

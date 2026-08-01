@@ -1,10 +1,11 @@
 #![cfg(feature = "git")]
 
+use bitfun_runtime_ports::{GitPort, WorkspaceDiffContent, WorkspaceDiffFileStatus};
 use bitfun_services_integrations::git::{
     build_git_changed_files_args, build_git_diff_args, parse_branch_line, parse_git_log_line,
     parse_name_status_output, parse_worktree_list, GitAuthor, GitChangedFile, GitChangedFileStatus,
     GitChangedFilesParams, GitCommandOutput, GitCommitParams, GitDiffParams, GitError, GitGraph,
-    GitService, GitStatus, GitWorktreeInfo, GraphNode, GraphRef,
+    GitService, GitStatus, GitWorkspaceDiffPort, GitWorktreeInfo, GraphNode, GraphRef,
 };
 use std::fs;
 use std::process::Command;
@@ -235,6 +236,304 @@ async fn git_service_preserves_repository_status_contract() {
         .any(|path| path == "new-file.txt" || path == "new-file.txt/"));
 }
 
+#[tokio::test]
+async fn workspace_diff_port_reports_staged_unstaged_and_untracked_changes() {
+    let repo_dir = TempRepoDir::new("workspace-diff-port");
+    run_git(repo_dir.path(), &["init"]);
+    run_git(repo_dir.path(), &["config", "user.name", "BitFun Tests"]);
+    run_git(
+        repo_dir.path(),
+        &["config", "user.email", "tests@bitfun.dev"],
+    );
+    fs::write(repo_dir.path().join("both.txt"), "base\n").unwrap();
+    run_git(repo_dir.path(), &["add", "--", "both.txt"]);
+    run_git(repo_dir.path(), &["commit", "-m", "base"]);
+
+    fs::write(repo_dir.path().join("both.txt"), "base\nstaged\n").unwrap();
+    run_git(repo_dir.path(), &["add", "--", "both.txt"]);
+    fs::write(repo_dir.path().join("both.txt"), "base\nstaged\nunstaged\n").unwrap();
+    fs::write(repo_dir.path().join("new.txt"), "untracked\n").unwrap();
+
+    let snapshot = GitWorkspaceDiffPort::new(repo_dir.path())
+        .workspace_diff()
+        .await
+        .expect("workspace diff");
+
+    let both = snapshot
+        .files
+        .iter()
+        .find(|file| file.path == "both.txt")
+        .expect("tracked file");
+    assert_eq!(both.status, WorkspaceDiffFileStatus::Modified);
+    assert!(both.staged);
+    assert!(both.unstaged);
+    assert!(!both.untracked);
+    assert!(matches!(
+        &both.content,
+        WorkspaceDiffContent::Text { patch } if patch.contains("+staged") && patch.contains("+unstaged")
+    ));
+
+    let untracked = snapshot
+        .files
+        .iter()
+        .find(|file| file.path == "new.txt")
+        .expect("untracked file");
+    assert_eq!(untracked.status, WorkspaceDiffFileStatus::Added);
+    assert!(untracked.untracked);
+    assert!(matches!(
+        &untracked.content,
+        WorkspaceDiffContent::Text { patch } if patch.contains("+untracked")
+    ));
+    assert!(!snapshot.truncated);
+}
+
+#[tokio::test]
+async fn workspace_diff_port_keeps_staged_changes_when_worktree_returns_to_head() {
+    let repo_dir = TempRepoDir::new("workspace-diff-cancelled-worktree");
+    run_git(repo_dir.path(), &["init"]);
+    run_git(repo_dir.path(), &["config", "user.name", "BitFun Tests"]);
+    run_git(
+        repo_dir.path(),
+        &["config", "user.email", "tests@bitfun.dev"],
+    );
+    fs::write(repo_dir.path().join("both.txt"), "base\n").unwrap();
+    run_git(repo_dir.path(), &["add", "--", "both.txt"]);
+    run_git(repo_dir.path(), &["commit", "-m", "base"]);
+
+    fs::write(repo_dir.path().join("both.txt"), "staged\n").unwrap();
+    run_git(repo_dir.path(), &["add", "--", "both.txt"]);
+    fs::write(repo_dir.path().join("both.txt"), "base\n").unwrap();
+
+    let snapshot = GitWorkspaceDiffPort::new(repo_dir.path())
+        .workspace_diff()
+        .await
+        .expect("workspace diff");
+
+    let both = snapshot
+        .files
+        .iter()
+        .find(|file| file.path == "both.txt")
+        .expect("staged change must remain visible");
+    assert!(both.staged);
+    assert!(both.unstaged);
+    assert!(matches!(&both.content, WorkspaceDiffContent::Text { .. }));
+}
+
+#[tokio::test]
+async fn workspace_diff_port_keeps_staged_additions_deleted_from_the_worktree() {
+    let repo_dir = TempRepoDir::new("workspace-diff-staged-add-deleted");
+    run_git(repo_dir.path(), &["init"]);
+    fs::write(repo_dir.path().join("added.txt"), "staged\n").unwrap();
+    run_git(repo_dir.path(), &["add", "--", "added.txt"]);
+    fs::remove_file(repo_dir.path().join("added.txt")).unwrap();
+
+    let snapshot = GitWorkspaceDiffPort::new(repo_dir.path())
+        .workspace_diff()
+        .await
+        .expect("workspace diff");
+    let added = snapshot
+        .files
+        .iter()
+        .find(|file| file.path == "added.txt")
+        .expect("status-only staged addition must remain visible");
+
+    assert_eq!(added.status, WorkspaceDiffFileStatus::Added);
+    assert!(added.staged);
+    assert!(added.unstaged);
+    assert!(!added.untracked);
+    assert!(matches!(
+        &added.content,
+        WorkspaceDiffContent::Text { patch } if patch.is_empty()
+    ));
+}
+
+#[tokio::test]
+async fn workspace_diff_port_preserves_staged_delete_and_recreated_file_sources() {
+    let repo_dir = TempRepoDir::new("workspace-diff-staged-delete-recreated");
+    run_git(repo_dir.path(), &["init"]);
+    run_git(repo_dir.path(), &["config", "user.name", "BitFun Tests"]);
+    run_git(
+        repo_dir.path(),
+        &["config", "user.email", "tests@bitfun.dev"],
+    );
+    fs::write(repo_dir.path().join("rebuilt.txt"), "base\n").unwrap();
+    run_git(repo_dir.path(), &["add", "--", "rebuilt.txt"]);
+    run_git(repo_dir.path(), &["commit", "-m", "base"]);
+    run_git(repo_dir.path(), &["rm", "--cached", "--", "rebuilt.txt"]);
+    fs::write(repo_dir.path().join("rebuilt.txt"), "rebuilt\n").unwrap();
+
+    let snapshot = GitWorkspaceDiffPort::new(repo_dir.path())
+        .workspace_diff()
+        .await
+        .expect("workspace diff");
+    let rebuilt = snapshot
+        .files
+        .iter()
+        .find(|file| file.path == "rebuilt.txt")
+        .expect("recreated file");
+
+    assert!(rebuilt.staged);
+    assert!(rebuilt.untracked);
+}
+
+#[tokio::test]
+async fn workspace_diff_port_marks_conflicts_without_projecting_an_incomplete_patch() {
+    let repo_dir = TempRepoDir::new("workspace-diff-conflict");
+    run_git(repo_dir.path(), &["init"]);
+    run_git(repo_dir.path(), &["config", "user.name", "BitFun Tests"]);
+    run_git(
+        repo_dir.path(),
+        &["config", "user.email", "tests@bitfun.dev"],
+    );
+    fs::write(repo_dir.path().join("conflict.txt"), "base\n").unwrap();
+    run_git(repo_dir.path(), &["add", "--", "conflict.txt"]);
+    run_git(repo_dir.path(), &["commit", "-m", "base"]);
+    run_git(repo_dir.path(), &["branch", "-M", "main"]);
+    run_git(repo_dir.path(), &["checkout", "-b", "side"]);
+    fs::write(repo_dir.path().join("conflict.txt"), "side\n").unwrap();
+    run_git(repo_dir.path(), &["commit", "-am", "side"]);
+    run_git(repo_dir.path(), &["checkout", "main"]);
+    fs::write(repo_dir.path().join("conflict.txt"), "main\n").unwrap();
+    run_git(repo_dir.path(), &["commit", "-am", "main"]);
+    run_git_expect_failure(repo_dir.path(), &["merge", "side"]);
+
+    let snapshot = GitWorkspaceDiffPort::new(repo_dir.path())
+        .workspace_diff()
+        .await
+        .expect("workspace diff");
+    let conflict = snapshot
+        .files
+        .iter()
+        .find(|file| file.path == "conflict.txt")
+        .expect("conflicted file");
+
+    assert_eq!(conflict.status, WorkspaceDiffFileStatus::Conflicted);
+    assert!(matches!(
+        &conflict.content,
+        WorkspaceDiffContent::Text { patch } if patch.is_empty()
+    ));
+}
+
+#[tokio::test]
+async fn workspace_diff_port_scopes_parent_repository_paths_to_the_bound_workspace() {
+    let repo_dir = TempRepoDir::new("workspace-diff-scope");
+    run_git(repo_dir.path(), &["init"]);
+    run_git(repo_dir.path(), &["config", "user.name", "BitFun Tests"]);
+    run_git(
+        repo_dir.path(),
+        &["config", "user.email", "tests@bitfun.dev"],
+    );
+    fs::create_dir_all(repo_dir.path().join("scope[1]")).unwrap();
+    fs::write(repo_dir.path().join("outside.txt"), "base\n").unwrap();
+    fs::write(
+        repo_dir.path().join("scope[1]").join("inside.txt"),
+        "base\n",
+    )
+    .unwrap();
+    run_git(repo_dir.path(), &["add", "."]);
+    run_git(repo_dir.path(), &["commit", "-m", "base"]);
+
+    fs::write(repo_dir.path().join("outside.txt"), "outside change\n").unwrap();
+    fs::write(
+        repo_dir.path().join("scope[1]").join("inside.txt"),
+        "inside change\n",
+    )
+    .unwrap();
+    fs::write(repo_dir.path().join("scope[1]").join("new.txt"), "new\n").unwrap();
+
+    let snapshot = GitWorkspaceDiffPort::new(repo_dir.path().join("scope[1]"))
+        .workspace_diff()
+        .await
+        .expect("workspace diff");
+
+    assert_eq!(
+        snapshot
+            .files
+            .iter()
+            .map(|file| file.path.as_str())
+            .collect::<Vec<_>>(),
+        vec!["inside.txt", "new.txt"]
+    );
+}
+
+#[tokio::test]
+async fn workspace_diff_port_omits_large_text_before_building_a_patch() {
+    let repo_dir = TempRepoDir::new("workspace-diff-large-text");
+    run_git(repo_dir.path(), &["init"]);
+    fs::write(
+        repo_dir.path().join("large.txt"),
+        "x".repeat(1024 * 1024 + 1),
+    )
+    .unwrap();
+
+    let snapshot = GitWorkspaceDiffPort::new(repo_dir.path())
+        .workspace_diff()
+        .await
+        .expect("workspace diff");
+    let large = snapshot
+        .files
+        .iter()
+        .find(|file| file.path == "large.txt")
+        .expect("large file");
+
+    assert_eq!(large.content, WorkspaceDiffContent::TooLarge);
+    assert!(snapshot.truncated);
+}
+
+#[tokio::test]
+async fn workspace_diff_port_stops_projecting_content_after_the_total_text_cap() {
+    let repo_dir = TempRepoDir::new("workspace-diff-total-cap");
+    run_git(repo_dir.path(), &["init"]);
+    for name in ["a.txt", "b.txt", "c.txt", "d.txt"] {
+        fs::write(repo_dir.path().join(name), "x".repeat(800 * 1024)).unwrap();
+    }
+    fs::write(repo_dir.path().join("z.bin"), [0, 1, 0, 2]).unwrap();
+
+    let snapshot = GitWorkspaceDiffPort::new(repo_dir.path())
+        .workspace_diff()
+        .await
+        .expect("workspace diff");
+
+    assert!(snapshot.truncated);
+    assert_eq!(
+        snapshot
+            .files
+            .iter()
+            .find(|file| file.path == "d.txt")
+            .expect("first over-budget file")
+            .content,
+        WorkspaceDiffContent::TooLarge
+    );
+    assert_eq!(
+        snapshot
+            .files
+            .iter()
+            .find(|file| file.path == "z.bin")
+            .expect("later file")
+            .content,
+        WorkspaceDiffContent::TooLarge
+    );
+}
+
+#[tokio::test]
+async fn workspace_diff_port_marks_binary_content_without_text_projection() {
+    let repo_dir = TempRepoDir::new("workspace-diff-binary");
+    run_git(repo_dir.path(), &["init"]);
+    fs::write(repo_dir.path().join("binary.dat"), [0, 1, 2, 0, 3]).unwrap();
+
+    let snapshot = GitWorkspaceDiffPort::new(repo_dir.path())
+        .workspace_diff()
+        .await
+        .expect("workspace diff");
+    let binary = snapshot
+        .files
+        .iter()
+        .find(|file| file.path == "binary.dat")
+        .expect("binary file");
+
+    assert_eq!(binary.content, WorkspaceDiffContent::Binary);
+}
+
 #[test]
 fn git_name_status_parser_preserves_nul_delimited_unicode_and_rename_paths() {
     let files = parse_name_status_output("M\0src/中文.rs\0R100\0old name.rs\0new name.rs\0");
@@ -449,6 +748,19 @@ fn run_git(repo_dir: &std::path::Path, args: &[&str]) {
         args,
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+fn run_git_expect_failure(repo_dir: &std::path::Path, args: &[&str]) {
+    let output = Command::new("git")
+        .current_dir(repo_dir)
+        .args(args)
+        .output()
+        .unwrap();
+    assert!(
+        !output.status.success(),
+        "git {:?} unexpectedly succeeded",
+        args
     );
 }
 

@@ -197,6 +197,7 @@ impl ChatMode {
             || chat_view.login_form_visible()
             || chat_view.theme_selector_visible()
             || chat_view.info_popup_visible()
+            || chat_view.workspace_diff_visible()
     }
 
     /// Close all popups and clear the navigation stack
@@ -219,6 +220,7 @@ impl ChatMode {
         chat_view.hide_login_form();
         chat_view.hide_theme_selector();
         chat_view.dismiss_info_popup();
+        chat_view.hide_workspace_diff();
         chat_view.popup_stack.clear();
     }
 
@@ -245,6 +247,7 @@ impl ChatMode {
                     chat_view.cancel_theme_preview();
                 }
                 crate::ui::chat::PopupType::InfoPopup => chat_view.dismiss_info_popup(),
+                crate::ui::chat::PopupType::WorkspaceDiff => chat_view.hide_workspace_diff(),
             }
 
             // If there's a previous popup in the stack, re-show it
@@ -274,6 +277,7 @@ impl ChatMode {
                     crate::ui::chat::PopupType::LoginForm => chat_view.reshow_login_form(),
                     crate::ui::chat::PopupType::ThemeSelector => chat_view.reshow_theme_selector(),
                     crate::ui::chat::PopupType::InfoPopup => {}
+                    crate::ui::chat::PopupType::WorkspaceDiff => chat_view.reshow_workspace_diff(),
                 }
             }
         }

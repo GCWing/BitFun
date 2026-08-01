@@ -1076,6 +1076,7 @@ impl StartupPage {
             | ActionHandler::NativeHooks
             | ActionHandler::ExternalHooks
             | ActionHandler::Status
+            | ActionHandler::WorkspaceDiff
             | ActionHandler::CompactSession
             | ActionHandler::ToggleAutoApprove
             | ActionHandler::ToggleWorktree

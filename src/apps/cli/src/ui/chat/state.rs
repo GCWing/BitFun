@@ -28,6 +28,7 @@ use super::text_input::TextInput;
 use super::theme::{StyleKind, Theme};
 use super::theme_selector::{ThemeItem, ThemeSelectorState};
 use super::widgets::Spinner;
+use super::workspace_diff::WorkspaceDiffViewState;
 use super::workspace_reference::{
     ComposerDraft, WorkspaceReferencePopupState, WorkspaceReferenceQuery,
 };
@@ -51,6 +52,7 @@ pub(crate) enum PopupType {
     LoginForm,
     ThemeSelector,
     InfoPopup,
+    WorkspaceDiff,
 }
 
 /// Navigation stack for managing popup hierarchy
@@ -206,6 +208,7 @@ pub(crate) struct ChatView {
     info_popup: Option<String>,
     info_popup_scroll: u16,
     info_popup_max_scroll: u16,
+    workspace_diff: WorkspaceDiffViewState,
 
     /// Hovered thinking block (message_id) for mouse-over highlight
     hovered_thinking_block_id: Option<String>,
@@ -290,6 +293,7 @@ impl ChatView {
             info_popup: None,
             info_popup_scroll: 0,
             info_popup_max_scroll: 0,
+            workspace_diff: WorkspaceDiffViewState::new(),
             hovered_thinking_block_id: None,
             collapsed_tools: HashSet::new(),
             focused_block_tool: None,

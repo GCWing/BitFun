@@ -52,6 +52,34 @@ fn pending_session_operation_blocks_runtime_action(
             ))
 }
 
+pub(crate) fn pending_workspace_diff_blocks_runtime_action(
+    shared_tui: bool,
+    pending_workspace_diff: bool,
+    handler: ActionHandler,
+) -> bool {
+    shared_tui
+        && pending_workspace_diff
+        && matches!(
+            handler,
+            ActionHandler::OpenAgentSelector
+                | ActionHandler::SwitchAgent
+                | ActionHandler::SwitchAgentReverse
+                | ActionHandler::SelectModel
+                | ActionHandler::NewSession
+                | ActionHandler::Sessions
+                | ActionHandler::ForkSession
+                | ActionHandler::UndoSession
+                | ActionHandler::RedoSession
+                | ActionHandler::RenameSession
+                | ActionHandler::Reload
+                | ActionHandler::Init
+                | ActionHandler::WorkspaceDiff
+                | ActionHandler::CompactSession
+                | ActionHandler::SubmitInput
+                | ActionHandler::Interrupt
+        )
+}
+
 fn requested_session_name(arguments: &str) -> Option<String> {
     let session_name = arguments.trim();
     (!session_name.is_empty()).then(|| session_name.to_string())
@@ -99,6 +127,7 @@ fn builtin_arguments_error(
         ActionHandler::ForkSession => Some("Usage: /fork"),
         ActionHandler::UndoSession => Some("Usage: /undo"),
         ActionHandler::RedoSession => Some("Usage: /redo"),
+        ActionHandler::WorkspaceDiff => Some("Usage: /diff"),
         _ => None,
     }
 }
@@ -870,6 +899,17 @@ impl ChatMode {
             chat_view.set_status(Some(action.unavailable_message(state)));
             return Ok(None);
         }
+        if pending_workspace_diff_blocks_runtime_action(
+            self.agent.is_shared(),
+            self.pending_workspace_diff.is_some(),
+            action.handler,
+        ) {
+            chat_view.set_status(Some(
+                "Waiting for the workspace diff to finish before using the Runtime again."
+                    .to_string(),
+            ));
+            return Ok(None);
+        }
         let pending_for_current_session = self
             .pending_session_operation
             .as_ref()
@@ -975,6 +1015,23 @@ impl ChatMode {
             },
             ActionHandler::Status => {
                 chat_view.show_info_popup(session_status_text(chat_state, self.agent.is_shared()));
+            }
+            ActionHandler::WorkspaceDiff => {
+                if self.pending_workspace_diff.is_some() {
+                    chat_view.set_status(Some(
+                        "Workspace diff is already loading. Please wait.".to_string(),
+                    ));
+                    return Ok(None);
+                }
+                chat_view.set_status(Some("Loading workspace diff...".to_string()));
+                let agent = self.agent.clone();
+                let handle = rt_handle.spawn(async move {
+                    agent
+                        .workspace_diff()
+                        .await
+                        .map_err(|error| error.to_string())
+                });
+                self.pending_workspace_diff = Some(PendingWorkspaceDiff { handle });
             }
             ActionHandler::CompactSession => {
                 self.start_session_compaction(chat_view, chat_state, rt_handle);
@@ -1167,6 +1224,35 @@ impl ChatMode {
         } else {
             "Nothing to redo.".to_string()
         }));
+    }
+
+    fn poll_workspace_diff(&mut self, chat_view: &mut ChatView) -> bool {
+        let Some(pending) = self.pending_workspace_diff.as_ref() else {
+            return false;
+        };
+        if !pending.handle.is_finished() {
+            return false;
+        }
+        let pending = self
+            .pending_workspace_diff
+            .take()
+            .expect("workspace diff task was checked above");
+        match tokio::task::block_in_place(|| {
+            tokio::runtime::Handle::current().block_on(pending.handle)
+        }) {
+            Ok(Ok(snapshot)) => {
+                self.close_all_popups(chat_view);
+                chat_view.show_workspace_diff(snapshot);
+                chat_view.set_status(None);
+            }
+            Ok(Err(error)) => {
+                chat_view.set_status(Some(format!("Unable to load workspace diff: {error}")));
+            }
+            Err(error) => {
+                chat_view.set_status(Some(format!("Workspace diff loading stopped: {error}")));
+            }
+        }
+        true
     }
 
     fn start_session_rename(

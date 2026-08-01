@@ -108,6 +108,7 @@ impl ChatView {
         self.render_model_config_form(frame, chunks[1]);
         self.render_theme_selector(frame, chunks[1]);
         self.render_shortcuts(frame, chunks[4], chat_state);
+        self.workspace_diff.render(frame, size, &self.theme);
 
         // Render permission overlay on top of messages area if active (highest priority)
         if let Some(ref prompt) = chat_state.permission_prompt {

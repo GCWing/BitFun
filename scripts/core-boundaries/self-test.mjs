@@ -740,6 +740,14 @@ export function runManifestParserSelfTest({
       throw new Error(`services-integrations process-tree must delegate to ${dep}`);
     }
   }
+  for (const dep of ['async-trait', 'bitfun-runtime-ports']) {
+    const owner = servicesOptionalOwnerRule?.dependencies.find(
+      (dependency) => dependency.depName === dep,
+    );
+    if (!owner?.ownerFeatures.includes('git')) {
+      throw new Error(`services-integrations git must own optional dependency ${dep}`);
+    }
+  }
   const productDomainsOptionalOwnerRule = optionalDependencyFeatureOwnerRules.find(
     (rule) => rule.crateName === 'product-domains',
   );
@@ -4972,6 +4980,8 @@ export function runManifestParserSelfTest({
     runtimeIpcOperationPattern.test('    WorkspaceReferencesForMessage {') ||
     runtimeIpcOperationPattern.test('    WorkspaceReferenceSearch {') ||
     runtimeIpcOperationPattern.test('    WorkspaceReferences {') ||
+    runtimeIpcOperationPattern.test('    WorkspaceDiff {') ||
+    runtimeIpcOperationPattern.test('    WorkspaceDiffSnapshot,') ||
     runtimeIpcOperationPattern.test('    SubmitTurn {') ||
     runtimeIpcOperationPattern.test('    SessionForked {') ||
     runtimeIpcOperationPattern.test('    SessionReverted {')

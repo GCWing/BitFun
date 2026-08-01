@@ -1,4 +1,31 @@
 impl ChatView {
+    pub(crate) fn show_workspace_diff(
+        &mut self,
+        snapshot: bitfun_agent_runtime::sdk::WorkspaceDiffSnapshot,
+    ) {
+        self.workspace_diff.show(snapshot);
+        self.popup_stack.push(PopupType::WorkspaceDiff);
+    }
+
+    pub(crate) fn workspace_diff_visible(&self) -> bool {
+        self.workspace_diff.is_visible()
+    }
+
+    pub(crate) fn hide_workspace_diff(&mut self) {
+        self.workspace_diff.hide();
+    }
+
+    pub(crate) fn reshow_workspace_diff(&mut self) {
+        self.workspace_diff.reshow();
+    }
+
+    pub(crate) fn workspace_diff_handle_key(
+        &mut self,
+        key: crossterm::event::KeyEvent,
+    ) -> super::workspace_diff::WorkspaceDiffAction {
+        self.workspace_diff.handle_key_event(key)
+    }
+
     // ============ Info popup methods ============
 
     pub(crate) fn show_info_popup(&mut self, message: String) {
@@ -438,10 +465,7 @@ impl ChatView {
 
     // ============ Fork selector methods ============
 
-    pub(crate) fn show_fork_selector(
-        &mut self,
-        points: Vec<crate::chat_state::SessionForkPoint>,
-    ) {
+    pub(crate) fn show_fork_selector(&mut self, points: Vec<crate::chat_state::SessionForkPoint>) {
         self.fork_selector.show(points);
         self.popup_stack.push(PopupType::ForkSelector);
     }

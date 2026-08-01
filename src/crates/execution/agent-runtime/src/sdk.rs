@@ -90,7 +90,8 @@ pub use bitfun_runtime_ports::{
     RuntimeEventType, RuntimeServiceCapability, RuntimeServicePort, SessionStorageKind,
     SessionStoragePathRequest, SessionStoragePathResolution, SessionStorePort, SessionTranscript,
     SessionTranscriptReader, SessionTranscriptRequest, TerminalPort, ThreadGoal, ThreadGoalStatus,
-    TranscriptContent, TranscriptMessage, TranscriptToolCall, WorkspacePort,
+    TranscriptContent, TranscriptMessage, TranscriptToolCall, WorkspaceDiffContent,
+    WorkspaceDiffFile, WorkspaceDiffFileStatus, WorkspaceDiffSnapshot, WorkspacePort,
 };
 pub use bitfun_runtime_services::{
     CapabilityAvailability, RuntimeServices, RuntimeServicesBuilder, RuntimeServicesError,
@@ -377,6 +378,10 @@ impl AgentRuntime {
 
     pub fn services(&self) -> Option<&RuntimeServices> {
         self.inner.services()
+    }
+
+    pub async fn workspace_diff(&self) -> Result<WorkspaceDiffSnapshot, RuntimeError> {
+        self.inner.workspace_diff().await
     }
 
     pub fn registered_tool_names(&self) -> Vec<String> {
