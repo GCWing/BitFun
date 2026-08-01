@@ -202,9 +202,11 @@ CLI-P1 应提供：
 - `@` 文件/目录引用和受控 `!` shell 请求；shell 仍进入工具、权限、取消和审计路径。
 - TUI 的 `@` 入口遵循 OpenCode 交互：仅在输入开头或空白后触发，Enter 选择文件/目录，Tab 对目录继续下钻，文件可附带 `#start[-end]` 行范围；不新增平行斜杠命令。
 - TUI 只维护 composer 文本、候选框和结构化引用位置。按 Session 绑定的搜索、路径/类型/行范围校验、持久化与历史恢复由 Agent Runtime 端口和 Core owner 负责；Core 不提前读取文件内容，Agent 仍通过既有 Read/Glob 工具进入权限、取消和审计路径。远程工作区当前返回明确的不可用原因，不回退到本地文件系统。
+- OpenCode 对齐的 `/editor`、`/copy`、`/export` 只提供这些命令名，不增加 alias 或默认快捷键。三者从 TUI 当前 `ChatState`/composer 做本地投影，不新增 Runtime operation、IPC 消息或通用 Export/Process port。`/editor` 与 export 的 editor 路径仅使用 `VISUAL` 后 `EDITOR`，由用户提供阻塞等待参数；CLI 在主循环渲染 loading 状态后临时释放 terminal guard，编辑结束后完整重建 raw mode、alternate screen、mouse 与 bracketed paste。编辑失败、非零退出或空文件不替换原草稿；重接管失败时退出而不在半初始化 TUI 中继续。结构化 `@` 引用只在标记唯一或重复标记数量精确匹配时重定位，否则降级为普通文本。
+- `/copy` 固定排除 reasoning、工具输入/结果和 TUI 本地 System 通知，并限制在 Idle，避免慢剪贴板 helper 阻塞活动 Turn 的事件流；`/export` 的专用表单可显式加入 reasoning/工具详情、选择保存及 editor review。导出根目录是 CLI 客户端启动目录，不使用 Remote/Shared Runtime 的 workspace；空值、绝对路径、Windows root/prefix 与 `..` 被拒绝。首次发布使用原子 create-new，竞争出现的文件会回到二次确认，确认后才使用 `services-core` 的严格 UTF-8 原子替换。剪贴板复用本地系统 provider 的平台诊断。Shared TUI 仅共享已有 transcript 事实，文件、剪贴板、临时文件与 editor 进程始终留在客户端。
 - 对话 checkpoint 与工作区 checkpoint 的独立事实；rewind 必须明确选择只回退对话、只回退工作区或两者。
 - 后台 Agent/工具/工作流的状态、取消和结果回收，不允许无结果的隐式 detached task。
-- 外部编辑器、命令历史、详情/用量视图、图片附件和终端能力降级。
+- 命令历史、详情/用量视图、图片附件和终端能力降级。
 - 鼠标关闭、低色彩、窄终端、无剪贴板、非 TTY、屏幕阅读器和不可用通知能力下的纯文本回退。
 - 基于真实长会话建立首屏反馈、按键到绘制、滚动和峰值内存基线，再设置回归预算；不先拍脑袋固定阈值。
 

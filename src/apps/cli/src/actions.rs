@@ -91,6 +91,9 @@ pub(crate) enum ActionHandler {
     WorkspaceDiff,
     CompactSession,
     Usage,
+    Editor,
+    CopyTranscript,
+    ExportTranscript,
     ToggleAutoApprove,
     ToggleWorktree,
     Exit,
@@ -139,6 +142,9 @@ impl ActionHandler {
                     | Self::Status
                     | Self::WorkspaceDiff
                     | Self::CompactSession
+                    | Self::Editor
+                    | Self::CopyTranscript
+                    | Self::ExportTranscript
                     | Self::ToggleAutoApprove
                     | Self::OpenAgentSelector
                     | Self::SwitchAgent
@@ -621,6 +627,51 @@ static ACTION_SPECS: &[ActionSpec] = &[
         palette: palette("Session", true),
         shortcut_label: None,
         slash_on_startup: true,
+    },
+    ActionSpec {
+        id: "editor",
+        name: "Open editor",
+        aliases: &["/editor"],
+        description: "Compose the current prompt in an external editor",
+        contexts: CHAT,
+        availability: ActionAvailability::Idle,
+        handler: ActionHandler::Editor,
+        default_bindings: &[],
+        fallback_bindings: &[],
+        shortcut_field: None,
+        palette: palette("Prompt", false),
+        shortcut_label: None,
+        slash_on_startup: false,
+    },
+    ActionSpec {
+        id: "copy_transcript",
+        name: "Copy transcript",
+        aliases: &["/copy"],
+        description: "Copy the current session as Markdown",
+        contexts: CHAT,
+        availability: ActionAvailability::Idle,
+        handler: ActionHandler::CopyTranscript,
+        default_bindings: &[],
+        fallback_bindings: &[],
+        shortcut_field: None,
+        palette: palette("Session", false),
+        shortcut_label: None,
+        slash_on_startup: false,
+    },
+    ActionSpec {
+        id: "export_transcript",
+        name: "Export transcript",
+        aliases: &["/export"],
+        description: "Export the current session as Markdown",
+        contexts: CHAT,
+        availability: ActionAvailability::Idle,
+        handler: ActionHandler::ExportTranscript,
+        default_bindings: &[],
+        fallback_bindings: &[],
+        shortcut_field: None,
+        palette: palette("Session", false),
+        shortcut_label: None,
+        slash_on_startup: false,
     },
     ActionSpec {
         id: "toggle_auto_approve",
@@ -2824,5 +2875,28 @@ mod tests {
         assert!(!help.contains("more shortcut notices"), "{help}");
         assert!(help.lines().count() <= 19, "{help}");
         assert!(help.lines().all(|line| line.chars().count() <= 74));
+    }
+
+    #[test]
+    fn opencode_transcript_actions_use_exact_command_names_and_availability() {
+        let editor = action_for_alias("/editor", ActionContext::Chat).expect("/editor action");
+        let copy = action_for_alias("/copy", ActionContext::Chat).expect("/copy action");
+        let export = action_for_alias("/export", ActionContext::Chat).expect("/export action");
+
+        assert_eq!(editor.aliases, ["/editor"]);
+        assert_eq!(copy.aliases, ["/copy"]);
+        assert_eq!(export.aliases, ["/export"]);
+        assert_eq!(editor.handler, ActionHandler::Editor);
+        assert_eq!(copy.handler, ActionHandler::CopyTranscript);
+        assert_eq!(export.handler, ActionHandler::ExportTranscript);
+        assert!(!editor.available(ActionState::chat(true, false)));
+        assert!(!copy.available(ActionState::chat(true, false)));
+        assert!(!export.available(ActionState::chat(true, false)));
+        assert!(editor.default_bindings.is_empty());
+        assert!(copy.default_bindings.is_empty());
+        assert!(export.default_bindings.is_empty());
+        assert!(editor.handler.available_in_shared_tui(ActionContext::Chat));
+        assert!(copy.handler.available_in_shared_tui(ActionContext::Chat));
+        assert!(export.handler.available_in_shared_tui(ActionContext::Chat));
     }
 }

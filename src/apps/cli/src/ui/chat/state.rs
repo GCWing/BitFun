@@ -11,6 +11,7 @@ use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 use super::agent_selector::{AgentItem, AgentSelectorAction, AgentSelectorState};
 use super::command_menu::{CommandMenuSelection, CommandMenuState};
 use super::command_palette::{CommandPaletteState, PaletteAction};
+use super::export_dialog::ExportDialogState;
 use super::fork_selector::{ForkAction, ForkSelectorState};
 use super::login_form::{LoginFormAction, LoginFormState};
 use super::markdown::MarkdownRenderer;
@@ -43,6 +44,7 @@ pub(crate) enum PopupType {
     AgentSelector,
     SessionSelector,
     ForkSelector,
+    ExportDialog,
     SkillSelector,
     SubagentSelector,
     McpSelector,
@@ -156,6 +158,7 @@ pub(crate) struct ChatView {
     session_selector: SessionSelectorState,
     /// OpenCode-compatible session fork-point selector.
     fork_selector: ForkSelectorState,
+    export_dialog: ExportDialogState,
     /// Skill selector popup state
     skill_selector: SkillSelectorState,
     /// Subagent selector popup state
@@ -275,6 +278,7 @@ impl ChatView {
             agent_selector: AgentSelectorState::new(),
             session_selector: SessionSelectorState::new(),
             fork_selector: ForkSelectorState::new(),
+            export_dialog: ExportDialogState::new(),
             skill_selector: SkillSelectorState::new(),
             subagent_selector: SubagentSelectorState::new(),
             mcp_selector: McpSelectorState::new(),

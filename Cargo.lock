@@ -923,11 +923,13 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+ "shlex 1.3.0",
  "similar",
  "syntect",
  "syntect-tui",
  "tar",
  "tempfile",
+ "thiserror 2.0.19",
  "tokio",
  "toml 0.9.12+spec-1.1.0",
  "tracing",
@@ -935,6 +937,7 @@ dependencies = [
  "unicode-width 0.2.0",
  "uuid",
  "windows 0.61.3",
+ "winsplit",
 ]
 
 [[package]]
@@ -12202,6 +12205,12 @@ dependencies = [
  "cfg-if",
  "windows-sys 0.59.0",
 ]
+
+[[package]]
+name = "winsplit"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3ab703352da6a72f35c39a533526393725640575bb211f61987a2748323ad956"
 
 [[package]]
 name = "wit-bindgen"

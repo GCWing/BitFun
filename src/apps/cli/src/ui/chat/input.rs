@@ -5,6 +5,13 @@ impl ChatView {
         self.text_input.text()
     }
 
+    pub(crate) fn draft_snapshot(&self) -> ComposerDraft {
+        ComposerDraft {
+            text: self.text_input.text().to_string(),
+            workspace_references: self.workspace_references.clone(),
+        }
+    }
+
     fn refresh_command_menu(&mut self) {
         self.command_menu
             .update(&self.text_input.input, self.text_input.cursor);

@@ -26,10 +26,10 @@ mod tests {
         retain_selected_native_command_for_input, selected_command_prefill,
         session_command_help_note, session_delete_allowed, session_delete_feedback,
         session_update_allowed, session_update_blocks_typed_submission,
-        session_update_completion_should_exit, shared_session_change_is_blocked, CommandRoute,
-        ExternalAgentReviewAction, ExternalControlUiAction, ExternalSourceConflictPreferences,
-        ExternalToolReviewAction, HookManagementAction, SessionUpdateApplyOutcome,
-        SHARED_TUI_CHAT_STATUS,
+        session_update_completion_should_exit, shared_session_change_is_blocked,
+        terminal_event_allowed_while_local_effect_pending, CommandRoute, ExternalAgentReviewAction,
+        ExternalControlUiAction, ExternalSourceConflictPreferences, ExternalToolReviewAction,
+        HookManagementAction, SessionUpdateApplyOutcome, SHARED_TUI_CHAT_STATUS,
     };
     use crate::actions::{
         action_conflict_behavior_version, ActionHandler, ActionState, ResolvedKeymap,
@@ -54,6 +54,7 @@ mod tests {
     use bitfun_product_domains::external_sources::ExternalSourceScope;
     use bitfun_product_domains::external_subagents::ExternalSubagentModelBindingTarget;
     use bitfun_runtime_ports::AgentContextReloadTarget;
+    use crossterm::event::Event;
     use std::collections::{BTreeMap, BTreeSet};
 
     #[test]
@@ -1214,6 +1215,39 @@ mod tests {
             ),
             Some("Usage: /redo")
         );
+        assert_eq!(
+            builtin_arguments_error(CommandRoute::Builtin, ActionHandler::Editor, "unexpected"),
+            Some("Usage: /editor")
+        );
+        assert_eq!(
+            builtin_arguments_error(
+                CommandRoute::Builtin,
+                ActionHandler::CopyTranscript,
+                "unexpected"
+            ),
+            Some("Usage: /copy")
+        );
+        assert_eq!(
+            builtin_arguments_error(
+                CommandRoute::Builtin,
+                ActionHandler::ExportTranscript,
+                "unexpected"
+            ),
+            Some("Usage: /export")
+        );
+    }
+
+    #[test]
+    fn pending_local_effect_fences_input_but_keeps_resize_events() {
+        assert!(!terminal_event_allowed_while_local_effect_pending(
+            &Event::Paste("new draft".to_string())
+        ));
+        assert!(!terminal_event_allowed_while_local_effect_pending(
+            &Event::FocusLost
+        ));
+        assert!(terminal_event_allowed_while_local_effect_pending(
+            &Event::Resize(120, 40)
+        ));
     }
 
     #[test]

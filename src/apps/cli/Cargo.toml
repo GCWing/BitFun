@@ -88,12 +88,17 @@ reqwest = { workspace = true }
 sha2 = { workspace = true }
 tar = { workspace = true }
 tempfile = "3"
+thiserror = { workspace = true }
+
+[target.'cfg(not(windows))'.dependencies]
+shlex = { workspace = true }
 
 [dev-dependencies]
 hex = { workspace = true }
 
 [target.'cfg(windows)'.dependencies]
 windows = { workspace = true, features = ["Win32_Foundation", "Win32_System_Console"] }
+winsplit = { workspace = true }
 
 # portable-pty: ohos requires 0.9 (nix 0.25 is incompatible); all other
 # platforms use 0.8 to avoid the PSEUDOCONSOLE_INHERIT_CURSOR ConPTY bug.

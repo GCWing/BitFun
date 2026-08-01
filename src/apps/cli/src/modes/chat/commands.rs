@@ -128,6 +128,9 @@ fn builtin_arguments_error(
         ActionHandler::UndoSession => Some("Usage: /undo"),
         ActionHandler::RedoSession => Some("Usage: /redo"),
         ActionHandler::WorkspaceDiff => Some("Usage: /diff"),
+        ActionHandler::Editor => Some("Usage: /editor"),
+        ActionHandler::CopyTranscript => Some("Usage: /copy"),
+        ActionHandler::ExportTranscript => Some("Usage: /export"),
         _ => None,
     }
 }
@@ -1037,6 +1040,49 @@ impl ChatMode {
                 self.start_session_compaction(chat_view, chat_state, rt_handle);
             }
             ActionHandler::Usage => self.show_usage_report(chat_view, chat_state, rt_handle),
+            ActionHandler::Editor => match external_editor::resolve_editor_command() {
+                Ok(command) => {
+                    self.pending_local_effect = Some(PendingLocalEffect::EditComposer {
+                        command,
+                        draft: chat_view.draft_snapshot(),
+                    });
+                    chat_view.set_status(Some("Opening external editor...".to_string()));
+                }
+                Err(error) => chat_view.set_status(Some(format!("Editor unavailable: {error}"))),
+            },
+            ActionHandler::CopyTranscript => {
+                let markdown = transcript::render_session_markdown(
+                    chat_state,
+                    transcript::MarkdownTranscriptOptions::default(),
+                );
+                let provider = bitfun_services_core::system::LocalSystemProvider::new();
+                match tokio::task::block_in_place(|| {
+                    rt_handle.block_on(provider.clipboard_write_text(&markdown))
+                }) {
+                    Ok(()) => chat_view.set_status(Some(
+                        "Copied the current session transcript as Markdown".to_string(),
+                    )),
+                    Err(error) => {
+                        let hints = if error.hints().is_empty() {
+                            String::new()
+                        } else {
+                            format!(" ({})", error.hints().join("; "))
+                        };
+                        chat_view.set_status(Some(format!(
+                            "Could not copy the transcript: {}{hints}",
+                            error.message()
+                        )));
+                    }
+                }
+            }
+            ActionHandler::ExportTranscript => {
+                chat_view.show_export_dialog(transcript::default_export_filename(
+                    &chat_state.core_session_id,
+                ));
+                chat_view.set_status(Some(
+                    "Choose what to include in the Markdown export".to_string(),
+                ));
+            }
             ActionHandler::ToggleAutoApprove => {}
             ActionHandler::ToggleWorktree => {
                 return self.handle_worktree_command("", chat_view, chat_state, rt_handle);
@@ -1123,6 +1169,69 @@ impl ChatMode {
             ActionHandler::ScrollDown => chat_view.scroll_down(10),
         }
         Ok(None)
+    }
+
+    fn prepare_transcript_export(
+        &mut self,
+        request: crate::ui::export_dialog::ExportDialogRequest,
+        overwrite_confirmed: bool,
+        chat_view: &mut ChatView,
+        chat_state: &ChatState,
+    ) {
+        let target = if request.save_to_file {
+            let target = match transcript::resolve_export_target(&self.local_cwd, &request.filename)
+            {
+                Ok(target) => target,
+                Err(error) => {
+                    chat_view.export_dialog_set_error(error.to_string());
+                    return;
+                }
+            };
+            if target.is_dir() {
+                chat_view.export_dialog_set_error(format!(
+                    "Export target is a directory: {}",
+                    target.display()
+                ));
+                return;
+            }
+            if target.exists() && !overwrite_confirmed {
+                chat_view.export_dialog_confirm_overwrite(target.display().to_string());
+                return;
+            }
+            Some(target)
+        } else {
+            None
+        };
+
+        let (editor_command, editor_error) = if request.open_in_editor {
+            match external_editor::resolve_editor_command() {
+                Ok(command) => (Some(command), None),
+                Err(error) if request.save_to_file => (None, Some(error.to_string())),
+                Err(error) => {
+                    chat_view
+                        .export_dialog_set_error(format!("Cannot open an unsaved export: {error}"));
+                    return;
+                }
+            }
+        } else {
+            (None, None)
+        };
+
+        let markdown = transcript::render_session_markdown(
+            chat_state,
+            transcript::MarkdownTranscriptOptions {
+                include_reasoning: request.include_reasoning,
+                include_tool_details: request.include_tool_details,
+            },
+        );
+        chat_view.set_status(Some("Exporting session transcript...".to_string()));
+        self.pending_local_effect = Some(PendingLocalEffect::ExportTranscript {
+            markdown,
+            target,
+            editor_command,
+            editor_error,
+            overwrite_confirmed,
+        });
     }
 
     fn start_session_compaction(

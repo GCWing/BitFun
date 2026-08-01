@@ -129,6 +129,188 @@ fn context_compression_tool_event(
 }
 
 impl ChatMode {
+    fn execute_pending_local_effect(
+        &mut self,
+        terminal: &mut TerminalGuard,
+        chat_view: &mut ChatView,
+        rt_handle: &tokio::runtime::Handle,
+    ) -> Result<bool> {
+        let Some(effect) = self.pending_local_effect.take() else {
+            return Ok(false);
+        };
+        match effect {
+            PendingLocalEffect::EditComposer { command, mut draft } => {
+                let cwd = self.local_cwd.clone();
+                let result = terminal.with_restored(|| {
+                    external_editor::run_external_editor(&command, &draft.text, Some(&cwd))
+                })?;
+                match result {
+                    Ok(edit) => {
+                        let warning = edit
+                            .cleanup_warning
+                            .map(|warning| format!("; warning: {warning}"))
+                            .unwrap_or_default();
+                        match edit.outcome {
+                            external_editor::ExternalEditOutcome::Changed(text) => {
+                                let reconcile = draft.replace_text_from_external_editor(text);
+                                chat_view.set_draft(draft);
+                                chat_view.set_status(Some(if reconcile.dropped == 0 {
+                                    format!("Draft updated from external editor{warning}")
+                                } else {
+                                    format!(
+                                        "Draft updated; {} ambiguous or removed workspace reference(s) were converted to plain text{warning}",
+                                        reconcile.dropped
+                                    )
+                                }));
+                            }
+                            external_editor::ExternalEditOutcome::Unchanged => {
+                                chat_view.set_draft(draft);
+                                chat_view.set_status(Some(format!(
+                                    "Editor closed without changes. If it returned immediately, add its wait flag to VISUAL or EDITOR{warning}"
+                                )));
+                            }
+                            external_editor::ExternalEditOutcome::Empty => {
+                                chat_view.set_draft(draft);
+                                chat_view.set_status(Some(format!(
+                                    "Editor returned an empty file; the existing draft was preserved{warning}"
+                                )));
+                            }
+                        }
+                    }
+                    Err(error) => {
+                        chat_view.set_draft(draft);
+                        chat_view.set_status(Some(format!(
+                            "External editor failed; the draft was preserved: {error}"
+                        )));
+                    }
+                }
+            }
+            PendingLocalEffect::ExportTranscript {
+                markdown,
+                target,
+                editor_command,
+                editor_error,
+                overwrite_confirmed,
+            } => {
+                let store = bitfun_services_core::json_store::JsonFileStore;
+                if let Some(path) = target.as_deref() {
+                    let write_result = tokio::task::block_in_place(|| {
+                        if overwrite_confirmed {
+                            rt_handle.block_on(store.write_text_atomic_strict(path, &markdown))
+                        } else {
+                            rt_handle.block_on(store.write_text_atomic_create_new(path, &markdown))
+                        }
+                    });
+                    if let Err(error) = write_result {
+                        if !overwrite_confirmed && error.is_already_exists() {
+                            chat_view.export_dialog_confirm_overwrite(path.display().to_string());
+                            chat_view.set_status(Some(format!(
+                                "{} appeared before the export was written; confirm before overwriting it",
+                                path.display()
+                            )));
+                        } else {
+                            let message = format!(
+                                "Could not export the transcript to {}: {error}",
+                                path.display()
+                            );
+                            chat_view.export_dialog_set_error(message.clone());
+                            chat_view.set_status(Some(message));
+                        }
+                        return Ok(true);
+                    }
+                }
+
+                self.close_all_popups(chat_view);
+
+                if let Some(error) = editor_error {
+                    let saved = target
+                        .as_deref()
+                        .map(|path| format!("Transcript saved to {}", path.display()))
+                        .unwrap_or_else(|| "Transcript was not saved".to_string());
+                    chat_view.set_status(Some(format!("{saved}; editor unavailable: {error}")));
+                    return Ok(true);
+                }
+
+                if let Some(command) = editor_command {
+                    let cwd = self.local_cwd.clone();
+                    let edit = terminal.with_restored(|| {
+                        external_editor::run_external_editor(&command, &markdown, Some(&cwd))
+                    })?;
+                    match edit {
+                        Ok(edit) => {
+                            let warning = edit
+                                .cleanup_warning
+                                .map(|warning| format!("; warning: {warning}"))
+                                .unwrap_or_default();
+                            match edit.outcome {
+                                external_editor::ExternalEditOutcome::Changed(edited) => {
+                                    if let Some(path) = target.as_deref() {
+                                        match tokio::task::block_in_place(|| {
+                                            rt_handle.block_on(
+                                                store.write_text_atomic_strict(path, &edited),
+                                            )
+                                        }) {
+                                            Ok(()) => chat_view.set_status(Some(format!(
+                                                "Transcript exported and editor changes saved to {}{warning}",
+                                                path.display()
+                                            ))),
+                                            Err(error) => chat_view.set_status(Some(format!(
+                                                "The original transcript remains at {}; editor changes could not be saved atomically: {error}{warning}",
+                                                path.display()
+                                            ))),
+                                        }
+                                    } else {
+                                        chat_view.set_status(Some(format!(
+                                            "Unsaved transcript editor closed; no file was created{warning}"
+                                        )));
+                                    }
+                                }
+                                external_editor::ExternalEditOutcome::Unchanged => {
+                                    let saved = target
+                                        .as_deref()
+                                        .map(|path| {
+                                            format!("Transcript saved to {}", path.display())
+                                        })
+                                        .unwrap_or_else(|| "No file was created".to_string());
+                                    chat_view.set_status(Some(format!(
+                                        "{saved}; editor closed without changes. Add its wait flag to VISUAL or EDITOR if it returned immediately{warning}"
+                                    )));
+                                }
+                                external_editor::ExternalEditOutcome::Empty => {
+                                    let saved = target
+                                        .as_deref()
+                                        .map(|path| {
+                                            format!(
+                                                "The original export remains at {}",
+                                                path.display()
+                                            )
+                                        })
+                                        .unwrap_or_else(|| "No file was created".to_string());
+                                    chat_view.set_status(Some(format!(
+                                        "{saved}; empty editor content was ignored{warning}"
+                                    )));
+                                }
+                            }
+                        }
+                        Err(error) => {
+                            let saved = target
+                                .as_deref()
+                                .map(|path| format!("Transcript saved to {}", path.display()))
+                                .unwrap_or_else(|| "No file was created".to_string());
+                            chat_view.set_status(Some(format!(
+                                "{saved}; external editor failed: {error}"
+                            )));
+                        }
+                    }
+                } else if let Some(path) = target.as_deref() {
+                    chat_view
+                        .set_status(Some(format!("Transcript exported to {}", path.display())));
+                }
+            }
+        }
+        Ok(true)
+    }
+
     pub(crate) fn run(
         &mut self,
         existing_terminal: Option<TerminalGuard>,
@@ -610,6 +792,10 @@ impl ChatMode {
 
             // 1.5. Execute pending MCP operations (after render so loading state is visible)
             if resize_redraw.can_render() {
+                if self.execute_pending_local_effect(&mut terminal, &mut chat_view, &rt_handle)? {
+                    needs_redraw = true;
+                    did_render_this_loop = true;
+                }
                 if let Some(op) = self.pending_mcp_op.take() {
                     if !did_render_this_loop {
                         terminal.draw(|frame| {
@@ -905,6 +1091,11 @@ impl ChatMode {
             // 3. Process terminal input
             if let Some(events) = event_reader.read_event_batch(Duration::from_millis(16))? {
                 for event in events {
+                    if self.pending_local_effect.is_some()
+                        && !terminal_event_allowed_while_local_effect_pending(&event)
+                    {
+                        continue;
+                    }
                     match event {
                         Event::Key(key) => {
                             if let Some(reason) = self.handle_key_event(

@@ -13,6 +13,9 @@ impl ChatMode {
         if key.kind != KeyEventKind::Press && key.kind != KeyEventKind::Repeat {
             return Ok(None);
         }
+        if self.pending_local_effect.is_some() {
+            return Ok(None);
+        }
 
         let modal_state =
             self.action_state(chat_state.is_processing, self.any_popup_visible(chat_view));
@@ -78,15 +81,32 @@ impl ChatMode {
             return Ok(None);
         }
 
-        // ── Normal key handling ──
-
-        // Host recovery keys win over configured actions while a popup is open.
+        // Host recovery keys win over popup-specific input handling.
         if self.any_popup_visible(chat_view) {
             let state = self.action_state(chat_state.is_processing, true);
             if let Some(action) = self.keymap.resolve_reserved(key, state) {
                 return self.dispatch_action(action, state, chat_view, chat_state, rt_handle);
             }
         }
+
+        if chat_view.export_dialog_visible() {
+            match chat_view.export_dialog_handle_key(key) {
+                crate::ui::export_dialog::ExportDialogAction::Confirm(request) => {
+                    self.prepare_transcript_export(request, false, chat_view, chat_state);
+                }
+                crate::ui::export_dialog::ExportDialogAction::ConfirmOverwrite(request) => {
+                    self.prepare_transcript_export(request, true, chat_view, chat_state);
+                }
+                crate::ui::export_dialog::ExportDialogAction::Cancel => {
+                    self.close_all_popups(chat_view);
+                    chat_view.set_status(Some("Transcript export cancelled".to_string()));
+                }
+                crate::ui::export_dialog::ExportDialogAction::None => {}
+            }
+            return Ok(None);
+        }
+
+        // ── Normal key handling ──
 
         // Workspace diff viewer intercepts all keys when visible
         if chat_view.workspace_diff_visible() {
@@ -678,7 +698,9 @@ impl ChatMode {
                 outcome.request_redraw = true;
             }
             Event::Paste(text) => {
-                if context.chat_view.mcp_add_dialog_visible() {
+                if context.chat_view.export_dialog_visible() {
+                    context.chat_view.export_dialog_handle_paste(&text);
+                } else if context.chat_view.mcp_add_dialog_visible() {
                     context.chat_view.mcp_add_dialog_handle_paste(&text);
                 } else if context.chat_view.login_form_visible() {
                     context.chat_view.login_form_insert_paste(&text);

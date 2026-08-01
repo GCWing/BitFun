@@ -96,6 +96,21 @@ The Embedded and Shared TUI use the same session command names:
 - `/compact` compacts the current session's model context without deleting saved conversation
   history; `/summarize` is its OpenCode-compatible alias. Compaction is available only while the
   session is idle.
+- `/editor` opens the current composer draft in the command configured by `VISUAL`, then `EDITOR`.
+  The command must wait until editing is complete (for example, include the editor's wait flag).
+  BitFun does not guess or install an editor. Missing commands, non-zero exits, and empty files
+  leave the existing draft unchanged; structured `@` references are retained only when their
+  edited markers remain unambiguous. A terminal reacquisition failure exits instead of continuing
+  in a partially initialized TUI.
+- `/copy` copies a safe Markdown snapshot of the visible User/Assistant transcript. Reasoning and
+  tool payloads are excluded by default; local System notices are never exported. Copy is idle-only
+  so a slow platform clipboard helper cannot stall an active Turn's event stream.
+- `/export` opens a TUI form for the relative output filename, reasoning/tool-detail options,
+  optional external-editor review, and an explicit save toggle. Exports resolve under the local
+  directory where this CLI process started, reject absolute or parent-traversal paths, confirm
+  overwrites, publish a new file without clobbering a racing creator, and use strict atomic
+  replacement only after confirmation. These commands work the same in Embedded and Shared TUI;
+  they remain local client effects and do not add Runtime or IPC operations.
 
 The interactive TUI supports per-session worktree isolation through `/worktree`. Run the command
 without arguments to toggle it, or use `/worktree on`, `/worktree off`, and `/worktree status`.

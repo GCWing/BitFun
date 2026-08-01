@@ -100,6 +100,7 @@ impl ChatView {
         self.render_agent_selector(frame, chunks[1]);
         self.render_session_selector(frame, chunks[1]);
         self.render_fork_selector(frame, chunks[1]);
+        self.export_dialog.render(frame, size, &self.theme);
         self.render_skill_selector(frame, chunks[1]);
         self.render_subagent_selector(frame, chunks[1]);
         self.render_mcp_selector(frame, chunks[1]);

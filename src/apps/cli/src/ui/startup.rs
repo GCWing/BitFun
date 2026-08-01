@@ -1078,6 +1078,9 @@ impl StartupPage {
             | ActionHandler::Status
             | ActionHandler::WorkspaceDiff
             | ActionHandler::CompactSession
+            | ActionHandler::Editor
+            | ActionHandler::CopyTranscript
+            | ActionHandler::ExportTranscript
             | ActionHandler::ToggleAutoApprove
             | ActionHandler::ToggleWorktree
             | ActionHandler::Interrupt

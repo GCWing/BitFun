@@ -6,6 +6,7 @@ pub(crate) mod chat;
 pub(crate) mod command_menu;
 pub(crate) mod command_palette;
 mod diff_render;
+pub(crate) mod export_dialog;
 pub(crate) mod fork_selector;
 pub(crate) mod input;
 pub(crate) mod login_form;
@@ -70,6 +71,29 @@ impl DerefMut for TerminalGuard {
         self.terminal
             .as_mut()
             .expect("terminal guard must own a terminal")
+    }
+}
+
+impl TerminalGuard {
+    /// Temporarily return the process terminal to normal mode while a blocking
+    /// foreground operation (such as an editor) inherits its stdio.
+    pub(crate) fn with_restored<T>(&mut self, operation: impl FnOnce() -> T) -> Result<T> {
+        let mut terminal = self
+            .terminal
+            .take()
+            .expect("terminal guard must own a terminal");
+        restore_terminal_inner(&mut terminal)?;
+        drop(terminal);
+
+        let operation_result = operation();
+
+        let mut resumed = init_terminal()?;
+        if let Err(error) = resumed.clear() {
+            drop(resumed);
+            return Err(error.into());
+        }
+        self.terminal = resumed.terminal.take();
+        Ok(operation_result)
     }
 }
 

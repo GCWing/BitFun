@@ -1,8 +1,10 @@
+mod external_editor;
 /// Chat mode implementation
 ///
 /// Interactive chat mode with TUI interface.
 /// Events are observed through an independent runtime broadcast subscription.
 mod resize;
+mod transcript;
 
 use anyhow::{anyhow, Result};
 use arboard::Clipboard;
@@ -233,6 +235,24 @@ struct PendingWorkspaceDiff {
     >,
 }
 
+enum PendingLocalEffect {
+    EditComposer {
+        command: external_editor::EditorCommand,
+        draft: crate::ui::workspace_reference::ComposerDraft,
+    },
+    ExportTranscript {
+        markdown: String,
+        target: Option<std::path::PathBuf>,
+        editor_command: Option<external_editor::EditorCommand>,
+        editor_error: Option<String>,
+        overwrite_confirmed: bool,
+    },
+}
+
+fn terminal_event_allowed_while_local_effect_pending(event: &Event) -> bool {
+    matches!(event, Event::Resize(_, _))
+}
+
 const SESSION_OPERATION_SLOW_NOTICE: Duration = Duration::from_secs(15);
 const SHARED_TUI_CHAT_STATUS: &str = "Shared TUI preview: this view controls sessions, including deleting an idle Session, turns, the current Session name, current Session Agent mode, current Session model, and declarative context via /reload [skills|instructions]; model management remains Embedded, along with local extension, MCP, account-sync, and Agent/Subagent management.";
 
@@ -258,6 +278,7 @@ pub(crate) struct ChatMode {
     /// Current agent type (e.g. "agentic", "plan", "debug")
     agent_type: String,
     workspace: Option<String>,
+    local_cwd: std::path::PathBuf,
     agent: Arc<CliAgentRuntimeClient>,
     context_reload: CliContextReloadClient,
     compatibility: Option<CoreAgentRuntimeCompatibility>,
@@ -277,6 +298,7 @@ pub(crate) struct ChatMode {
     /// the Runtime owner updates or deletes Session state.
     pending_session_operation: Option<PendingSessionOperation>,
     pending_workspace_diff: Option<PendingWorkspaceDiff>,
+    pending_local_effect: Option<PendingLocalEffect>,
     pending_workspace_reference_search: Option<PendingWorkspaceReferenceSearch>,
     workspace_reference_search_generation: u64,
     last_workspace_reference_query: Option<String>,
@@ -328,6 +350,7 @@ impl ChatMode {
             keymap,
             agent_type,
             workspace,
+            local_cwd: std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from(".")),
             agent,
             context_reload,
             compatibility,
@@ -339,6 +362,7 @@ impl ChatMode {
             pending_mcp_tasks: Vec::new(),
             pending_session_operation: None,
             pending_workspace_diff: None,
+            pending_local_effect: None,
             pending_workspace_reference_search: None,
             workspace_reference_search_generation: 0,
             last_workspace_reference_query: None,

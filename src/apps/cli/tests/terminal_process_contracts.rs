@@ -5,7 +5,10 @@ use std::io::{Read, Write};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
-use support::{CliTestEnvironment, MockOpenAiServer, STREAM_RESIZED_MARKER, STREAM_START_MARKER};
+use support::{
+    CliTestEnvironment, MockOpenAiServer, STREAM_COMPLETED_MARKER, STREAM_RESIZED_MARKER,
+    STREAM_START_MARKER,
+};
 
 const INITIAL_SIZE: PtySize = PtySize {
     rows: 30,
@@ -180,6 +183,198 @@ fn active_turn_resize_can_be_cancelled_and_returns_to_editable_input() {
     assert!(output.contains("\x1b[?2004l"), "{output}");
     assert!(output.contains("\x1b[?25h"), "{output}");
     assert!(output.contains("Goodbye!"), "{output}");
+}
+
+#[test]
+fn external_editor_restores_the_tui_and_applies_the_edited_draft() {
+    let server = MockOpenAiServer::immediate();
+    let environment = CliTestEnvironment::new();
+    environment.initialize_git_repository();
+    environment.configure_mock_model(server.base_url());
+    let editor = create_editor_helper(environment.workspace());
+    let mut command = environment.pty_command();
+    command.env("EDITOR", editor.as_os_str());
+    command.env_remove("VISUAL");
+    let mut process = PtyProcess::spawn(command, INITIAL_SIZE);
+
+    process.expect_output(
+        "\x1b[?2004h",
+        Duration::from_secs(30),
+        "interactive startup did not enable bracketed paste",
+    );
+    process.write(b"enter chat for editor test");
+    process.expect_output(
+        "editor test",
+        Duration::from_secs(15),
+        "startup prompt was not rendered before submission",
+    );
+    process.write(b"\r");
+    process.expect_output(
+        STREAM_COMPLETED_MARKER,
+        Duration::from_secs(30),
+        "initial turn did not finish before /editor",
+    );
+
+    process.write(b"/editor");
+    process.expect_output(
+        "/editor",
+        Duration::from_secs(15),
+        "editor command was not rendered before submission",
+    );
+    process.write(b"\r");
+    process.expect_output(
+        "EDITOR_UPDATED_DRAFT",
+        Duration::from_secs(30),
+        "edited draft was not rendered after the editor closed",
+    );
+    process.expect_output(
+        "Draft updated from external editor",
+        Duration::from_secs(15),
+        "editor completion status was not rendered",
+    );
+
+    let output = process.output();
+    assert!(
+        output.matches("\x1b[?2004h").count() >= 2,
+        "TUI did not re-enable bracketed paste after editor: {output}"
+    );
+    assert!(
+        output.contains("\x1b[?2004l"),
+        "TUI did not disable bracketed paste before editor: {output}"
+    );
+
+    process.write(&[0x15]);
+    process.write(b"/exit\r");
+    let (status, output) = process.finish(Duration::from_secs(20));
+    assert!(
+        status.success(),
+        "unexpected process status {status}:\n{output}"
+    );
+    assert!(output.contains("EDITOR_UPDATED_DRAFT"), "{output}");
+    assert!(output.contains("Goodbye!"), "{output}");
+}
+
+#[test]
+fn export_dialog_writes_markdown_under_the_local_cli_directory() {
+    let server = MockOpenAiServer::immediate();
+    let environment = CliTestEnvironment::new();
+    environment.initialize_git_repository();
+    environment.configure_mock_model(server.base_url());
+    let mut process = PtyProcess::spawn(environment.pty_command(), INITIAL_SIZE);
+
+    process.expect_output("\x1b[?2004h", Duration::from_secs(30), "TUI did not start");
+    process.write(b"export transcript contract");
+    process.expect_output(
+        "transcript contract",
+        Duration::from_secs(15),
+        "startup prompt was not rendered",
+    );
+    process.write(b"\r");
+    process.expect_output(
+        STREAM_COMPLETED_MARKER,
+        Duration::from_secs(30),
+        "initial turn did not finish before /export",
+    );
+
+    process.write(b"/export");
+    process.expect_output(
+        "/export",
+        Duration::from_secs(15),
+        "export command was not rendered",
+    );
+    process.write(b"\r");
+    process.expect_output(
+        "Export session",
+        Duration::from_secs(15),
+        "export dialog did not open",
+    );
+    process.write(b"\r");
+    let export_deadline = Instant::now() + Duration::from_secs(20);
+    while session_markdown_exports(environment.workspace()).is_empty()
+        && Instant::now() < export_deadline
+    {
+        if let Some(status) = process
+            .child
+            .as_mut()
+            .expect("PTY process child")
+            .try_wait()
+            .expect("poll BitFun CLI process")
+        {
+            panic!(
+                "export process exited with {status}; output:\n{}",
+                process.output()
+            );
+        }
+        thread::sleep(Duration::from_millis(25));
+    }
+    assert!(
+        !session_markdown_exports(environment.workspace()).is_empty(),
+        "export did not create a Markdown file; output:\n{}",
+        process.output()
+    );
+
+    process.write(b"/exit");
+    process.expect_output(
+        "/exit",
+        Duration::from_secs(10),
+        "exit command was not rendered",
+    );
+    process.write(b"\r");
+    let (status, output) = process.finish(Duration::from_secs(20));
+    assert!(
+        status.success(),
+        "unexpected process status {status}:\n{output}"
+    );
+
+    let exports = session_markdown_exports(environment.workspace());
+    assert_eq!(exports.len(), 1, "unexpected exports: {exports:?}");
+    let markdown = std::fs::read_to_string(&exports[0]).expect("read Markdown export");
+    assert!(
+        markdown.contains("## User\n\nexport transcript contract"),
+        "{markdown}"
+    );
+    assert!(markdown.contains("## Assistant"), "{markdown}");
+    assert!(!markdown.contains("Welcome to BitFun CLI!"), "{markdown}");
+}
+
+fn session_markdown_exports(workspace: &std::path::Path) -> Vec<std::path::PathBuf> {
+    std::fs::read_dir(workspace)
+        .expect("read workspace exports")
+        .flatten()
+        .map(|entry| entry.path())
+        .filter(|path| {
+            path.file_name()
+                .and_then(|name| name.to_str())
+                .is_some_and(|name| name.starts_with("session-") && name.ends_with(".md"))
+        })
+        .collect()
+}
+
+fn create_editor_helper(workspace: &std::path::Path) -> std::path::PathBuf {
+    #[cfg(windows)]
+    {
+        let path = workspace.join("bitfun-test-editor.cmd");
+        std::fs::write(&path, "@echo off\r\n>\"%~1\" echo EDITOR_UPDATED_DRAFT\r\n")
+            .expect("write Windows editor helper");
+        path
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+
+        let path = workspace.join("bitfun-test-editor.sh");
+        std::fs::write(
+            &path,
+            "#!/bin/sh\nprintf '%s\\n' EDITOR_UPDATED_DRAFT > \"$1\"\n",
+        )
+        .expect("write Unix editor helper");
+        let mut permissions = std::fs::metadata(&path)
+            .expect("editor helper metadata")
+            .permissions();
+        permissions.set_mode(0o755);
+        std::fs::set_permissions(&path, permissions).expect("make editor helper executable");
+        path
+    }
 }
 
 #[test]

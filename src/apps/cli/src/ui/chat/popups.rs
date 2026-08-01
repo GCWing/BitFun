@@ -1,4 +1,36 @@
 impl ChatView {
+    pub(crate) fn show_export_dialog(&mut self, filename: String) {
+        self.export_dialog.show(filename);
+        self.popup_stack.push(PopupType::ExportDialog);
+    }
+
+    pub(crate) fn export_dialog_visible(&self) -> bool {
+        self.export_dialog.is_visible()
+    }
+
+    pub(crate) fn hide_export_dialog(&mut self) {
+        self.export_dialog.hide();
+    }
+
+    pub(crate) fn export_dialog_handle_key(
+        &mut self,
+        key: crossterm::event::KeyEvent,
+    ) -> crate::ui::export_dialog::ExportDialogAction {
+        self.export_dialog.handle_key_event(key)
+    }
+
+    pub(crate) fn export_dialog_handle_paste(&mut self, text: &str) {
+        self.export_dialog.insert_text(text);
+    }
+
+    pub(crate) fn export_dialog_confirm_overwrite(&mut self, target: String) {
+        self.export_dialog.request_overwrite_confirmation(target);
+    }
+
+    pub(crate) fn export_dialog_set_error(&mut self, error: String) {
+        self.export_dialog.set_error(error);
+    }
+
     pub(crate) fn show_workspace_diff(
         &mut self,
         snapshot: bitfun_agent_runtime::sdk::WorkspaceDiffSnapshot,
