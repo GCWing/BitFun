@@ -131,7 +131,7 @@ vi.mock('@/component-library', () => ({
   Alert: () => null,
 }));
 
-describe('SSHConnectionDialog advanced settings', () => {
+describe('SSHConnectionDialog', () => {
   let container: HTMLDivElement;
   let root: Root;
 
@@ -158,9 +158,9 @@ describe('SSHConnectionDialog advanced settings', () => {
     container.remove();
   });
 
-  async function renderDialog(): Promise<void> {
+  async function renderDialog(onClose = vi.fn()): Promise<void> {
     await act(async () => {
-      root.render(<SSHConnectionDialog open onClose={vi.fn()} />);
+      root.render(<SSHConnectionDialog open onClose={onClose} />);
     });
     await act(async () => {
       await Promise.resolve();
@@ -255,5 +255,49 @@ describe('SSHConnectionDialog advanced settings', () => {
     expect(
       container.querySelector<HTMLInputElement>('input[aria-label="ssh.remote.certificatePath"]')?.value
     ).toBe('/keys/dev-cert.pub');
+  });
+
+  it('notifies the controlling surface after a successful connection', async () => {
+    const onClose = vi.fn();
+    remoteContextMock.connect.mockResolvedValue(undefined);
+    await renderDialog(onClose);
+
+    const setValue = (label: string, value: string) => {
+      const input = container.querySelector<HTMLInputElement>(`input[aria-label="${label}"]`);
+      expect(input).not.toBeNull();
+      act(() => {
+        if (input) {
+          const setter = Object.getOwnPropertyDescriptor(
+            HTMLInputElement.prototype,
+            'value',
+          )?.set;
+          setter?.call(input, value);
+          input.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+      });
+    };
+
+    setValue('ssh.remote.host', 'example.test');
+    setValue('ssh.remote.username', 'dev');
+    setValue('ssh.remote.password', 'secret');
+
+    const connectButton = Array.from(container.querySelectorAll<HTMLButtonElement>('button'))
+      .find((button) => button.textContent?.includes('ssh.remote.connect'));
+    expect(connectButton).not.toBeUndefined();
+    await act(async () => {
+      connectButton?.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(remoteContextMock.connect).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        host: 'example.test',
+        username: 'dev',
+      }),
+      { browseAfterConnect: true },
+    );
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 });

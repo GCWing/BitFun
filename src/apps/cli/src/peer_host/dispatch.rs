@@ -128,11 +128,12 @@ fn dispatch_target_verb(command: &str) -> Option<&'static str> {
         "dispatch_target_list" => Some("list"),
         "dispatch_target_answer" => Some("answer"),
         "dispatch_target_append" => Some("append"),
-        "dispatch_target_workspace_begin" => Some("workspace-begin"),
-        "dispatch_target_workspace_chunk" => Some("workspace-chunk"),
-        "dispatch_target_workspace_commit" => Some("workspace-commit"),
-        "dispatch_target_workspace_result" => Some("workspace-result"),
-        "dispatch_target_workspace_result_chunk" => Some("workspace-result-chunk"),
+        "dispatch_target_workspace_provision" => Some("workspace-provision"),
+        "dispatch_target_workspace_bundle_begin" => Some("workspace-bundle-begin"),
+        "dispatch_target_workspace_bundle_chunk" => Some("workspace-bundle-chunk"),
+        "dispatch_target_workspace_bundle_commit" => Some("workspace-bundle-commit"),
+        "dispatch_target_workspace_sync" => Some("workspace-sync"),
+        "dispatch_target_workspace_sync_chunk" => Some("workspace-sync-chunk"),
         _ => None,
     }
 }

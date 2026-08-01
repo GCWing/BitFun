@@ -112,7 +112,7 @@
     align-items: center;
   }
 
-  // Selectable option cards, shared by delivery mode and approval policy.
+  // Selectable approval-policy cards.
   // Single column: three across a 560px modal left ~165px per card, which is
   // not enough for a title plus a two-line description.
   &__options {
@@ -152,7 +152,7 @@
       opacity: 0.55;
     }
 
-    // Icon column is optional; delivery cards have no icon.
+    // Keep the leading policy icon aligned with the text column.
     > svg:first-child {
       margin-top: 1px;
       color: var(--color-text-muted);
@@ -163,7 +163,6 @@
       min-width: 0;
       flex-direction: column;
       gap: 2px;
-      // Fill the icon column when this card has no icon.
       grid-column: 2 / 3;
     }
 
@@ -183,8 +182,7 @@
     }
   }
 
-  // Consent gate. Warning colour is reserved for this — it is the only place
-  // the user is accepting a risk rather than triggering an action.
+  // Baseline summary and the opt-in for carrying local Git-visible changes.
   &__consent {
     display: flex;
     flex-direction: column;
@@ -213,6 +211,30 @@
       font-weight: 500;
       line-height: 1.4;
       cursor: pointer;
+    }
+
+    .dispatch-install-dialog__base-ref {
+      flex-direction: column;
+      gap: $size-gap-1;
+      cursor: text;
+
+      input {
+        box-sizing: border-box;
+        width: 100%;
+        min-height: 32px;
+        padding: 0 $size-gap-2;
+        border: 1px solid var(--border-subtle);
+        border-radius: $size-radius-base;
+        background: var(--color-bg-primary);
+        color: var(--color-text-primary);
+        font-family: var(--font-family-mono);
+
+        &:focus-visible {
+          border-color: var(--color-accent-500);
+          outline: 2px solid color-mix(in srgb, var(--color-accent-500) 24%, transparent);
+          outline-offset: 1px;
+        }
+      }
     }
   }
 

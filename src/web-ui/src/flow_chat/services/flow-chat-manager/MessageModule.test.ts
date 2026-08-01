@@ -474,10 +474,7 @@ describe('MessageModule detached dispatch', () => {
 
   it('projects the user message immediately while the target is still queued', async () => {
     const { context, session } = createDispatchContext('reject-and-report');
-    (session.config as any).dispatchWorkspaceDelivery = {
-      kind: 'snapshot-source',
-      sourceWorkspacePath: '/controller/repo',
-    };
+    session.config.dispatchIncludeUncommitted = true;
     let resolveSubmit!: (value: {
       accepted: boolean;
       jobId: string;
@@ -529,10 +526,8 @@ describe('MessageModule detached dispatch', () => {
         connectionId: 'ssh-1',
         workspacePath: '/target/repo',
       },
-      workspaceDelivery: {
-        kind: 'snapshot-source',
-        sourceWorkspacePath: '/controller/repo',
-      },
+      includeUncommitted: true,
+      baseRef: 'HEAD',
       jobId: 'job-1',
       sessionId: 'dispatch-session',
       agentType: 'agentic',

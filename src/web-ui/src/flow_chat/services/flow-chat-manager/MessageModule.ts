@@ -410,34 +410,27 @@ export async function sendMessage(
         'MessageModule',
       );
 
-      const workspaceDelivery =
-        readySession.config.dispatchWorkspaceDelivery ?? { kind: 'existing' as const };
-      const sourceWorkspacePath =
-        sessionProjectWorkspacePath(readySession)
-        || (
-          workspaceDelivery.kind === 'snapshot-source'
-          || workspaceDelivery.kind === 'snapshot-exact'
-            ? workspaceDelivery.sourceWorkspacePath
-            : undefined
-        );
+      const includeUncommitted = readySession.config.dispatchIncludeUncommitted ?? false;
+      const baseRef = readySession.config.dispatchBaseRef?.trim() || 'HEAD';
+      const sourceWorkspacePath = sessionProjectWorkspacePath(readySession);
       const sourceWorkspaceId =
         readySession.workspaceId || readySession.config.workspaceId;
       const transferRoundId = `dispatch-transfer:${jobId}`;
+      // Provisioning is always more than a submit now — a worktree is created,
+      // the target checks out the baseline, and objects may be transferred —
+      // so the transfer label always applies.
       showRuntimeStatus({
         sessionId,
         turnId: optimisticTurnId,
         roundId: transferRoundId,
-        label: i18nService.t(
-          workspaceDelivery.kind === 'existing'
-            ? 'flow-chat:chatInput.dispatch.submissionInProgress'
-            : 'flow-chat:chatInput.dispatch.transferInProgress',
-        ),
+        label: i18nService.t('flow-chat:chatInput.dispatch.transferInProgress'),
       });
       let response: Awaited<ReturnType<typeof dispatchApi.submit>>;
       try {
         response = await dispatchApi.submit({
           target: targetRequest,
-          workspaceDelivery,
+          baseRef,
+          includeUncommitted,
           jobId,
           sessionId,
           agentType: currentAgentType,

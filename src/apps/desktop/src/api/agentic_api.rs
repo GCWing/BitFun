@@ -1323,6 +1323,9 @@ pub async fn create_session(
                 source_workspace_path: Some(source_workspace_path.clone()),
                 base_ref,
                 copy_local_changes,
+                // A user-created worktree is claimed by the sessions bound to
+                // it, which already block automatic removal.
+                claimed_by: None,
             })
             .await
             .map_err(|error| serde_json::to_string(&error).unwrap_or_else(|_| error.to_string()))?;

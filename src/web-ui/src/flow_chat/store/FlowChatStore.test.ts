@@ -3,6 +3,7 @@ import { flowChatStore, mergeModelRoundAttemptDiagnostics } from './FlowChatStor
 import type { FlowChatState, Session } from '../types/flow-chat';
 import { startupTrace } from '@/shared/utils/startupTrace';
 import { projectEffectiveToolItem } from '../utils/toolInvocationIdentity';
+import { dispatchJobStore } from '@/features/dispatch/dispatchJobStore';
 
 const apiMocks = vi.hoisted(() => ({
   listSessions: vi.fn(),
@@ -136,6 +137,7 @@ const resetStore = () => {
     sessions: new Map(),
     activeSessionId: null,
   }));
+  dispatchJobStore.getState().clear();
   flowChatStore.registerPersistUnreadCompletionCallback(() => {});
 };
 
@@ -236,6 +238,9 @@ describe('FlowChatStore dispatch observer boundaries', () => {
   it('accepts a canonical workspace path without allowing target identity changes', () => {
     const session = createSession({
       workspacePath: '/source',
+      isHistorical: true,
+      historyState: 'metadata-only',
+      contextRestoreState: 'pending',
       config: {
         dispatchTargetRequest: {
           kind: 'ssh',
@@ -280,6 +285,11 @@ describe('FlowChatStore dispatch observer boundaries', () => {
       connectionId: 'ssh-1',
       workspacePath: '/home/user/repo',
       displayName: 'renamed-host',
+    });
+    expect(flowChatStore.getState().sessions.get(session.sessionId)).toMatchObject({
+      isHistorical: false,
+      historyState: 'ready',
+      contextRestoreState: 'ready',
     });
 
     flowChatStore.updateSessionDispatchTarget(session.sessionId, {
@@ -1962,6 +1972,147 @@ describe('FlowChatStore historical session hydration state', () => {
       historyState: 'ready',
       dialogTurns: [],
     });
+  });
+
+  it('never sends a dispatch observer projection through local history restore', async () => {
+    flowChatStore.setState(() => ({
+      sessions: new Map([
+        ['session-1', createSession({
+          sessionId: 'session-1',
+          isHistorical: true,
+          historyState: 'metadata-only',
+          config: {
+            agentType: 'agentic',
+            dispatchTarget: {
+              kind: 'ssh',
+              connectionId: 'ssh-1',
+              workspacePath: '/target',
+              displayName: 'build-host',
+            },
+            dispatchJobId: 'job-1',
+          },
+        })],
+      ]),
+      activeSessionId: 'session-1',
+    }));
+
+    await flowChatStore.loadSessionHistory('session-1', '/source');
+
+    expect(apiMocks.accountFetchSessionTurns).not.toHaveBeenCalled();
+    expect(apiMocks.restoreSessionView).not.toHaveBeenCalled();
+    expect(apiMocks.restoreSessionWithTurns).not.toHaveBeenCalled();
+    expect(apiMocks.restoreSession).not.toHaveBeenCalled();
+    expect(apiMocks.loadSessionTurns).not.toHaveBeenCalled();
+    expect(flowChatStore.getState().sessions.get('session-1')).toMatchObject({
+      isHistorical: false,
+      historyState: 'ready',
+      contextRestoreState: 'ready',
+    });
+  });
+
+  it('preserves a dispatch transcript when an earlier local restore resolves late', async () => {
+    const restore = createDeferred<{
+      session: {
+        sessionId: string;
+        sessionName: string;
+        agentType: string;
+        state: string;
+        turnCount: number;
+        createdAt: number;
+      };
+      turns: any[];
+      contextRestoreState: 'pending';
+    }>();
+    apiMocks.restoreSessionView.mockReturnValueOnce(restore.promise);
+    flowChatStore.setState(() => ({
+      sessions: new Map([
+        ['session-1', createSession({
+          sessionId: 'session-1',
+          workspacePath: '/source',
+          isHistorical: true,
+          historyState: 'metadata-only',
+        })],
+      ]),
+      activeSessionId: 'session-1',
+    }));
+
+    const load = flowChatStore.loadSessionHistory('session-1', '/source');
+    await vi.waitFor(() => {
+      expect(apiMocks.restoreSessionView).toHaveBeenCalledTimes(1);
+    });
+
+    flowChatStore.updateSessionDispatchTarget('session-1', {
+      targetRequest: {
+        kind: 'ssh',
+        connectionId: 'ssh-1',
+        workspacePath: '/target',
+      },
+      target: {
+        kind: 'ssh',
+        connectionId: 'ssh-1',
+        workspacePath: '/target',
+        displayName: 'build-host',
+      },
+      jobId: 'job-1',
+      approvalPolicy: 'reject-and-report',
+      cursor: 120,
+      sourceWorkspacePath: '/source',
+    });
+    expect(flowChatStore.hydrateDispatchTranscript('session-1', [{
+      id: 'turn-cached',
+      sessionId: 'session-1',
+      userMessage: {
+        id: 'user-cached',
+        content: 'run task',
+        timestamp: 1,
+      },
+      modelRounds: [{
+        id: 'round-cached',
+        index: 0,
+        items: [{
+          id: 'text-cached',
+          type: 'text',
+          content: 'cached body',
+          status: 'completed',
+          isStreaming: false,
+          timestamp: 2,
+        }],
+        isStreaming: false,
+        isComplete: true,
+        status: 'completed',
+        startTime: 1,
+        endTime: 2,
+      }],
+      status: 'completed',
+      startTime: 1,
+      endTime: 2,
+    } as any])).toBe(true);
+
+    restore.resolve({
+      session: {
+        sessionId: 'session-1',
+        sessionName: 'Saved local shell',
+        agentType: 'agentic',
+        state: 'Idle',
+        turnCount: 0,
+        createdAt: 1,
+      },
+      turns: [],
+      contextRestoreState: 'pending',
+    });
+    await load;
+
+    expect(flowChatStore.getState().sessions.get('session-1')).toMatchObject({
+      isHistorical: false,
+      historyState: 'ready',
+      contextRestoreState: 'ready',
+      dialogTurns: [{
+        id: 'turn-cached',
+        modelRounds: [{ items: [{ content: 'cached body' }] }],
+      }],
+    });
+    expect(stateMachineManagerMock.getOrCreate).not.toHaveBeenCalled();
+    expect(stateMachineManagerMock.reset).not.toHaveBeenCalled();
   });
 
   it('merges restored session model selection into an existing subagent shell', async () => {

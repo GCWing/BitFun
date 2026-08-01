@@ -298,6 +298,8 @@ impl WorktreeService {
             source_workspace_path: Some(context.execution_target.root_path.clone()),
             base_ref: None,
             copy_local_changes: settings.copy_local_changes,
+            // A bound session is the claim: it already blocks automatic removal.
+            claimed_by: None,
         })
         .await?;
 

@@ -9,6 +9,7 @@
     "togglePendingOnDescription": "已开启 worktree 隔离；发送第一条消息后才会创建 worktree。",
     "togglePendingOffDescription": "已关闭 worktree 隔离；发送第一条消息后会回到项目目录。",
     "toggleLocked": "只能在会话发出第一条消息之前切换 worktree 隔离。",
+    "dispatchBaseline": "本次派发以该仓库的受管 worktree 作为基线执行。基线在选定目标时即已固定。",
     "retained": "该 worktree 仍有本地工作，已保留在 {{path}}。"
   },
   "settings": {

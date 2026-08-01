@@ -650,8 +650,13 @@
       "deviceOffline": "Offline",
       "createFailed": "Could not create the dispatched task.",
       "remoteTarget": "the remote target",
-      "submissionInProgress": "Submitting the task to the target…",
-      "transferInProgress": "Preparing and transferring the workspace to the target…"
+      "transferInProgress": "Creating the baseline worktree, fetching the repository, and transferring missing Git objects…",
+      "cliInstallStarted": "Installing verified BitFun CLI {{version}} for {{target}} on the SSH target.",
+      "cliInstallSucceeded": "Verified BitFun CLI {{version}} is ready on the SSH target.",
+      "cliInstallFailed": "BitFun CLI installation failed on the SSH target: {{details}}",
+      "cliInstallStage": "SSH target CLI setup: {{stage}}",
+      "cliInstallUnknownVersion": "release",
+      "cliInstallUnknownStage": "status update"
     },
     "addBoostTooltip": "Agent modes, image, or skills",
     "permissionMode": {

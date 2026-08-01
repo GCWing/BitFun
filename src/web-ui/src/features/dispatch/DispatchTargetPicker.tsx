@@ -221,7 +221,7 @@ export const DispatchTargetPicker: React.FC<DispatchTargetPickerProps> = ({
               <Server size={15} aria-hidden />
               <span>
                 <strong>{option.displayName}</strong>
-                <small>{option.description || option.defaultWorkspace || t('chatInput.dispatch.sshDescription')}</small>
+                <small>{option.description || t('chatInput.dispatch.sshDescription')}</small>
               </span>
               {selected ? <Check size={14} aria-hidden /> : null}
             </button>

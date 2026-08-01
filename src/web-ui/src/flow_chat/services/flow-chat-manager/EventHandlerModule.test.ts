@@ -133,6 +133,79 @@ describe('dispatch optimistic turn reconciliation', () => {
     expect(turns?.[0]?.userMessage.metadata)
       .not.toHaveProperty('__bitfunOptimisticDispatchJobId');
   });
+
+  it('hydrates the real prompt into an audit-only dispatch placeholder', () => {
+    FlowChatStore.getInstance().setState(() => ({
+      sessions: new Map([[
+        'dispatch-session',
+        {
+          sessionId: 'dispatch-session',
+          title: 'Remote task title',
+          dialogTurns: [{
+            id: 'dispatch_pending_job-1',
+            sessionId: 'dispatch-session',
+            agentType: 'agentic',
+            userMessage: {
+              id: 'user-dispatch-1',
+              content: '',
+              timestamp: 1000,
+              metadata: markOptimisticDispatchTurnMetadata(undefined, 'job-1'),
+            },
+            modelRounds: [{
+              id: 'dispatch-setup:job-1',
+              index: -1,
+              items: [],
+              isStreaming: false,
+              isComplete: true,
+              status: 'completed',
+              startTime: 1000,
+              endTime: 1000,
+            }],
+            status: 'pending',
+            startTime: 1000,
+          }],
+          status: 'idle',
+          config: {
+            dispatchTarget: {
+              kind: 'ssh',
+              connectionId: 'ssh-1',
+              workspacePath: '/target/repo',
+              displayName: 'build-host',
+            },
+            dispatchJobId: 'job-1',
+          },
+          createdAt: 1000,
+          lastActiveAt: 1000,
+          error: null,
+          sessionKind: 'normal',
+        } as Session,
+      ]]),
+      activeSessionId: 'dispatch-session',
+    }));
+
+    __test_only__.handleDialogTurnStarted(createFlowChatContext(), {
+      sessionId: 'dispatch-session',
+      turnId: 'target-turn-1',
+      turnIndex: 0,
+      userInput: 'Expanded target prompt',
+      originalUserInput: 'Original user prompt',
+      userMessageMetadata: { targetFact: true },
+    });
+
+    const turns = FlowChatStore.getInstance()
+      .getState()
+      .sessions.get('dispatch-session')
+      ?.dialogTurns;
+    expect(turns).toHaveLength(1);
+    expect(turns?.[0]).toMatchObject({
+      id: 'target-turn-1',
+      userMessage: {
+        content: 'Original user prompt',
+        metadata: { targetFact: true },
+      },
+      modelRounds: [{ id: 'dispatch-setup:job-1' }],
+    });
+  });
 });
 
 describe('mergeParamsPartialEventData', () => {
@@ -949,5 +1022,38 @@ describe('handleDialogTurnComplete', () => {
     expect(turn?.status).toBe('finishing');
     expect(turn?.finishReason).toBe('max_rounds');
     expect(turn?.hasFinalResponse).toBe(false);
+  });
+
+  it('preserves the event duration when the quiet completion finalizer runs later', async () => {
+    putFinishingSessionInStore();
+    const context = createFlowChatContext();
+    await setFinishingMachine();
+
+    handleDialogTurnComplete(context, {
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      durationMs: 21_206,
+      success: true,
+      finishReason: 'stop',
+      hasFinalResponse: true,
+    }, vi.fn());
+
+    const eventOwnedEndTime = 900 + 21_206;
+    expect(FlowChatStore.getInstance()
+      .getState()
+      .sessions.get('session-1')
+      ?.dialogTurns[0].endTime).toBe(eventOwnedEndTime);
+
+    handleSessionStateChanged(context, {
+      sessionId: 'session-1',
+      newState: 'Idle',
+    });
+
+    const finalizedTurn = FlowChatStore.getInstance()
+      .getState()
+      .sessions.get('session-1')
+      ?.dialogTurns[0];
+    expect(finalizedTurn?.status).toBe('completed');
+    expect(finalizedTurn?.endTime).toBe(eventOwnedEndTime);
   });
 });

@@ -9,6 +9,7 @@
     "togglePendingOnDescription": "Worktree isolation is armed. The worktree will be created after you send the first message.",
     "togglePendingOffDescription": "Worktree isolation will be turned off after you send the first message.",
     "toggleLocked": "Worktree isolation can only be changed before the session's first message.",
+    "dispatchBaseline": "This dispatch runs against a managed worktree baseline of this repository. The baseline is fixed when the target is chosen.",
     "retained": "The worktree still held local work and was kept at {{path}}."
   },
   "settings": {

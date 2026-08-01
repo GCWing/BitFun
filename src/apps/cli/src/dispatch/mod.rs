@@ -18,9 +18,10 @@ use protocol::{
     DispatchCancelRequest, DispatchCancelResponse, DispatchJobListEntry, DispatchJobState,
     DispatchListRequest, DispatchProbeRequest, DispatchProbeResponse, DispatchStatusRequest,
     DispatchStatusResponse, DispatchSubmitRequest, DispatchSubmitResponse,
-    DispatchWorkspaceBeginRequest, DispatchWorkspaceChunkRequest, DispatchWorkspaceCommitRequest,
-    DispatchWorkspaceProbe, DispatchWorkspaceResultChunkRequest, DispatchWorkspaceResultRequest,
-    DISPATCH_PROTOCOL_VERSION, MAX_DISPATCH_TEXT_BYTES,
+    DispatchWorkspaceBundleBeginRequest, DispatchWorkspaceBundleChunkRequest,
+    DispatchWorkspaceBundleCommitRequest, DispatchWorkspaceProbe,
+    DispatchWorkspaceProvisionRequest, DispatchWorkspaceSyncChunkRequest,
+    DispatchWorkspaceSyncRequest, DISPATCH_PROTOCOL_VERSION, MAX_DISPATCH_TEXT_BYTES,
 };
 use store::{CreateJobOutcome, DispatchStateRecord, DispatchStore};
 
@@ -60,28 +61,36 @@ pub(crate) async fn run_dispatch_verb(
             serde_json::to_value(answer(parse(input)?)?).context("encode permission answer")
         }
         "append" => serde_json::to_value(append(parse(input)?)?).context("encode appended message"),
-        "workspace-begin" => serde_json::to_value(workspace::begin(parse::<
-            DispatchWorkspaceBeginRequest,
+        "workspace-provision" => serde_json::to_value(workspace::provision(parse::<
+            DispatchWorkspaceProvisionRequest,
         >(input)?)?)
-        .context("encode workspace begin response"),
-        "workspace-chunk" => serde_json::to_value(workspace::chunk(parse::<
-            DispatchWorkspaceChunkRequest,
-        >(input)?)?)
-        .context("encode workspace chunk response"),
-        "workspace-commit" => serde_json::to_value(workspace::commit(parse::<
-            DispatchWorkspaceCommitRequest,
-        >(input)?)?)
-        .context("encode workspace commit response"),
-        "workspace-result" => serde_json::to_value(workspace::result(parse::<
-            DispatchWorkspaceResultRequest,
-        >(input)?)?)
-        .context("encode workspace result response"),
-        "workspace-result-chunk" => {
-            serde_json::to_value(workspace::result_chunk(parse::<
-                DispatchWorkspaceResultChunkRequest,
+        .context("encode workspace provision response"),
+        "workspace-bundle-begin" => {
+            serde_json::to_value(workspace::bundle_begin(parse::<
+                DispatchWorkspaceBundleBeginRequest,
             >(input)?)?)
-            .context("encode workspace result chunk response")
+            .context("encode workspace bundle begin response")
         }
+        "workspace-bundle-chunk" => {
+            serde_json::to_value(workspace::bundle_chunk(parse::<
+                DispatchWorkspaceBundleChunkRequest,
+            >(input)?)?)
+            .context("encode workspace bundle chunk response")
+        }
+        "workspace-bundle-commit" => {
+            serde_json::to_value(workspace::bundle_commit(parse::<
+                DispatchWorkspaceBundleCommitRequest,
+            >(input)?)?)
+            .context("encode workspace bundle commit response")
+        }
+        "workspace-sync" => serde_json::to_value(workspace::sync(parse::<
+            DispatchWorkspaceSyncRequest,
+        >(input)?)?)
+        .context("encode workspace sync response"),
+        "workspace-sync-chunk" => serde_json::to_value(workspace::sync_chunk(parse::<
+            DispatchWorkspaceSyncChunkRequest,
+        >(input)?)?)
+        .context("encode workspace sync chunk response"),
         _ => bail!("unsupported dispatch verb: {verb}"),
     }
 }
@@ -90,8 +99,16 @@ pub(crate) async fn run_worker(job_id: String) -> Result<()> {
     worker::run(job_id).await
 }
 
-pub(crate) fn run_workspace_materializer(job_id: String) -> Result<()> {
-    workspace::materialize(job_id)
+pub(crate) fn run_workspace_provision(job_id: String) -> Result<()> {
+    workspace::run_provision(job_id)
+}
+
+pub(crate) fn run_workspace_bundle_commit(job_id: String) -> Result<()> {
+    workspace::run_bundle_commit(job_id)
+}
+
+pub(crate) fn run_workspace_sync(job_id: String) -> Result<()> {
+    workspace::run_sync(job_id)
 }
 
 async fn probe(request: DispatchProbeRequest) -> Result<DispatchProbeResponse> {
@@ -111,19 +128,17 @@ async fn probe(request: DispatchProbeRequest) -> Result<DispatchProbeResponse> {
         "frontend_event_projection".to_string(),
         "append_message".to_string(),
         "event_log_completeness".to_string(),
-        "workspace_snapshot_exact".to_string(),
-        "workspace_snapshot_chunked".to_string(),
+        // Git-worktree delivery. A target without these cannot be provisioned
+        // at all — there is no snapshot fallback left — so controllers fail
+        // preflight rather than degrade.
+        "workspace_git_worktree".to_string(),
+        "workspace_git_bundle_upload".to_string(),
+        "workspace_git_sync".to_string(),
         // A target may share the same package version while predating the
         // dispatch entrypoint's early CLI-profile selection. Such a binary can
         // accept a job but every detached worker then fails before execution.
         // Advertise the behavioral fix explicitly so controllers fail closed.
         "dispatch_worker_cli_profile".to_string(),
-        // Optional on purpose: controllers must feature-detect this rather than
-        // require it, so an older target stays usable for everything else.
-        "workspace_result_bundle".to_string(),
-        // Identical snapshots from different jobs reuse one verified archive
-        // on the target. Jobs still receive independent writable workspaces.
-        "workspace_snapshot_cache".to_string(),
     ];
     if runner::is_supported() {
         capabilities.push("detached_worker".to_string());
@@ -149,7 +164,11 @@ async fn submit(mut request: DispatchSubmitRequest) -> Result<DispatchSubmitResp
     }
     bitfun_agent_runtime::session_control::validate_session_id(&request.session_id)
         .map_err(anyhow::Error::msg)?;
-    let intent = request.clone();
+    let mut intent = request.clone();
+    // Setup audit is observational metadata. A retry after an ambiguous SSH
+    // response will not repeat an installation, so including it in the intent
+    // fingerprint would incorrectly turn that safe retry into a conflict.
+    intent.setup_audit.clear();
     let store = DispatchStore::open_default()?;
     if let Some((record, state)) = store.load_existing_job_for_intent(&intent)? {
         ensure_worker_spawned(&store, &record.request.job_id, state.state)?;
@@ -670,6 +689,19 @@ fn validate_submit_request(request: &DispatchSubmitRequest) -> Result<()> {
     if request.prompt.len() > MAX_DISPATCH_TEXT_BYTES {
         bail!("dispatch prompt exceeds the 32 KiB request limit");
     }
+    if request.setup_audit.len() > 32 {
+        bail!("dispatch setup audit exceeds the 32-event safety limit");
+    }
+    for event in &request.setup_audit {
+        if event.action != "cli-install" {
+            bail!("dispatch setup audit contains an unsupported action");
+        }
+        if event.timestamp.trim().is_empty()
+            || serde_json::to_vec(&event.details)?.len() > MAX_DISPATCH_TEXT_BYTES
+        {
+            bail!("dispatch setup audit event is invalid or too large");
+        }
+    }
     Ok(())
 }
 
@@ -703,6 +735,7 @@ mod tests {
             approval_policy: DispatchApprovalPolicy::RejectAndReport,
             model: Some("model-1".to_string()),
             title: Some("Task".to_string()),
+            setup_audit: Vec::new(),
         }
     }
 

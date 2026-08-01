@@ -13,18 +13,17 @@ use async_trait::async_trait;
 use bitfun_core::infrastructure::PathManager;
 use bitfun_core::service::dispatch::{
     answer_device_dispatch, answer_dispatch, append_device_dispatch, append_dispatch,
-    apply_dispatch_result, cancel_device_dispatch, cancel_dispatch, cancel_dispatch_cli_install,
+    cancel_device_dispatch, cancel_dispatch, cancel_dispatch_cli_install,
     get_device_dispatch_status, get_dispatch_status, list_device_dispatch_jobs, list_dispatch_jobs,
     list_dispatch_targets, poll_dispatch_cli_install, probe_device_dispatch_target,
-    probe_dispatch_target, pull_device_dispatch_result, pull_dispatch_result,
-    start_dispatch_cli_install, start_dispatch_cli_source_build, submit_device_dispatch,
-    submit_dispatch, sync_dispatch_model_config, DeviceDispatchRpc, DispatchAnswerRequest,
-    DispatchAppendRequest, DispatchApplyResultRequest, DispatchConnectionRequest,
-    DispatchInstallPollRequest, DispatchInstallStartRequest, DispatchJobRequest,
-    DispatchListJobsRequest, DispatchListTargetsRequest, DispatchProbeTargetRequest,
-    DispatchSaveTranscriptRequest, DispatchStatusRequest, DispatchSubmitRequest, DispatchTarget,
+    probe_dispatch_target, start_dispatch_cli_install, start_dispatch_cli_source_build,
+    submit_device_dispatch, submit_dispatch, sync_device_dispatch_result,
+    sync_dispatch_model_config, sync_dispatch_result, DeviceDispatchRpc, DispatchAnswerRequest,
+    DispatchAppendRequest, DispatchConnectionRequest, DispatchInstallPollRequest,
+    DispatchInstallStartRequest, DispatchJobRequest, DispatchListJobsRequest,
+    DispatchListTargetsRequest, DispatchProbeTargetRequest, DispatchSaveTranscriptRequest,
+    DispatchStatusRequest, DispatchSubmitRequest, DispatchSyncResultRequest, DispatchTarget,
     DispatchTargetOption, DispatchTargetRequest, DispatchTranscriptRequest, OutboundDispatchStore,
-    WorkspaceResultApplyOutcome,
 };
 use bitfun_core::service::remote_ssh::dispatch_ssh::{
     DispatchInstallPoll, DispatchInstallStart, DispatchSshProbe,
@@ -181,7 +180,6 @@ pub async fn dispatch_list_targets(
                 device_id: Some(device.device_id),
                 display_name: device.device_name,
                 description: None,
-                default_workspace: None,
                 online: Some(device.online),
             })
         }));
@@ -360,19 +358,19 @@ pub async fn dispatch_status(
         .map_err(|error| error.to_string())
 }
 
-/// Download what a finished snapshot job changed on its target.
+/// Bring a job's work back into the controller's baseline worktree.
 ///
-/// Fetch and report only — the caller shows the diff and the user decides
-/// whether any of it reaches their workspace.
+/// One operation on purpose: the target commits and bundles, then this
+/// controller fast-forwards its baseline onto the result. There is no separate
+/// apply step because there is nothing to reconcile — both sides branched from
+/// the same commit.
 #[tauri::command]
-pub async fn dispatch_pull_result(
+pub async fn dispatch_sync_result(
     state: State<'_, AppState>,
     path_manager: State<'_, Arc<PathManager>>,
-    request: DispatchJobRequest,
+    request: DispatchSyncResultRequest,
 ) -> Result<Value, String> {
     let store = OutboundDispatchStore::new(path_manager.as_ref());
-    // Both transports stage the bundle and its summary identically, so the
-    // apply step below is transport-blind.
     if matches!(
         store
             .get(&request.job_id)
@@ -381,7 +379,7 @@ pub async fn dispatch_pull_result(
             .map(|record| record.target),
         Some(DispatchTarget::Device { .. })
     ) {
-        return pull_device_dispatch_result(&AccountDeviceDispatchRpc, &store, request)
+        return sync_device_dispatch_result(&AccountDeviceDispatchRpc, &store, request)
             .await
             .map_err(|error| error.to_string());
     }
@@ -389,22 +387,7 @@ pub async fn dispatch_pull_result(
         .get_ssh_manager_async()
         .await
         .map_err(|error| error.to_string())?;
-    pull_dispatch_result(&manager, &store, request)
-        .await
-        .map_err(|error| error.to_string())
-}
-
-/// Apply a pulled result bundle to a local workspace.
-///
-/// Aborts without writing when a path changed on both sides, unless the user
-/// explicitly chose to take the target's version.
-#[tauri::command]
-pub async fn dispatch_apply_result(
-    path_manager: State<'_, Arc<PathManager>>,
-    request: DispatchApplyResultRequest,
-) -> Result<WorkspaceResultApplyOutcome, String> {
-    let store = OutboundDispatchStore::new(path_manager.as_ref());
-    apply_dispatch_result(&store, request)
+    sync_dispatch_result(&manager, &store, request)
         .await
         .map_err(|error| error.to_string())
 }

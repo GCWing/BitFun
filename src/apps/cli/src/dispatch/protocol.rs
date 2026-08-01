@@ -1,9 +1,8 @@
 use serde::{Deserialize, Serialize};
 
 use bitfun_agent_runtime::sdk::{PermissionReply, PermissionRequest};
-use bitfun_services_core::dispatch_workspace::{WorkspaceResultSummary, WorkspaceSnapshotMetadata};
 
-pub(crate) const DISPATCH_PROTOCOL_VERSION: u32 = 2;
+pub(crate) const DISPATCH_PROTOCOL_VERSION: u32 = 3;
 pub(crate) const MAX_DISPATCH_TEXT_BYTES: usize = 32 * 1024;
 
 #[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq)]
@@ -70,6 +69,21 @@ pub(crate) struct DispatchSubmitRequest {
     pub(crate) model: Option<String>,
     #[serde(default)]
     pub(crate) title: Option<String>,
+    /// Controller-side setup actions that happened before the target job could
+    /// exist (currently the signed CLI auto-install). They are replayed into
+    /// the durable job event log at creation time and are deliberately excluded
+    /// from submit idempotency.
+    #[serde(default)]
+    pub(crate) setup_audit: Vec<DispatchSetupAuditEvent>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct DispatchSetupAuditEvent {
+    pub(crate) timestamp: String,
+    pub(crate) action: String,
+    #[serde(default)]
+    pub(crate) details: serde_json::Value,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
@@ -97,7 +111,7 @@ pub(crate) struct DispatchSubmitResponse {
     pub(crate) state: DispatchJobState,
 }
 
-#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(crate) struct DispatchStatusRequest {
     pub(crate) job_id: String,
@@ -137,28 +151,69 @@ pub(crate) struct DispatchAppendResponse {
     pub(crate) message_id: String,
 }
 
-#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+/// Ask the target to check out this dispatch's baseline commit.
+///
+/// The target answers `needsBundle` when it cannot reach `baseCommit` from the
+/// shared Git remote — an unpushed commit, or a repository with no remote at
+/// all. The controller then delivers exactly the missing objects as a bundle
+/// and retries, so the remote stays the fast path without being a requirement.
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub(crate) struct DispatchWorkspaceBeginRequest {
+pub(crate) struct DispatchWorkspaceProvisionRequest {
     pub(crate) protocol_version: u32,
     pub(crate) job_id: String,
-    pub(crate) metadata: WorkspaceSnapshotMetadata,
+    /// Hex digest naming the shared clone on the target. Never a user-supplied
+    /// path: it becomes a directory name.
+    pub(crate) repo_key: String,
+    #[serde(default)]
+    pub(crate) remote_url: Option<String>,
+    /// Full 40-character commit id. A ref name would be ambiguous — it can move
+    /// between the controller resolving it and the target fetching it.
+    pub(crate) base_commit: String,
+    pub(crate) branch: String,
 }
 
-#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct DispatchWorkspaceBeginResponse {
-    pub(crate) accepted: bool,
-    pub(crate) offset: u64,
-    pub(crate) upload_path: String,
-    pub(crate) committed: bool,
+pub(crate) struct DispatchWorkspaceProvisionResponse {
+    /// True while a detached target-side Git process is still running. The
+    /// controller polls the same idempotent verb; no individual RPC owns the
+    /// lifetime of clone/fetch/worktree creation.
+    #[serde(default)]
+    pub(crate) pending: bool,
+    pub(crate) provisioned: bool,
+    pub(crate) needs_bundle: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) workspace_path: Option<String>,
+    pub(crate) base_commit: String,
+    pub(crate) branch: String,
+    /// Commits the target already has, so the controller can bundle only the
+    /// difference instead of the whole history.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub(crate) have_tips: Vec<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct DispatchWorkspaceBundleBeginRequest {
+    pub(crate) protocol_version: u32,
+    pub(crate) job_id: String,
+    pub(crate) sha256: String,
+    pub(crate) size: u64,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct DispatchWorkspaceBundleBeginResponse {
+    pub(crate) accepted: bool,
+    /// Bytes the target already holds, so a resumed upload skips them.
+    pub(crate) offset: u64,
+    pub(crate) committed: bool,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub(crate) struct DispatchWorkspaceChunkRequest {
+pub(crate) struct DispatchWorkspaceBundleChunkRequest {
     pub(crate) job_id: String,
     pub(crate) offset: u64,
     pub(crate) data_base64: String,
@@ -166,44 +221,77 @@ pub(crate) struct DispatchWorkspaceChunkRequest {
 
 #[derive(Clone, Debug, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct DispatchWorkspaceChunkResponse {
+pub(crate) struct DispatchWorkspaceBundleChunkResponse {
     pub(crate) accepted: bool,
     pub(crate) offset: u64,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub(crate) struct DispatchWorkspaceCommitRequest {
+pub(crate) struct DispatchWorkspaceBundleCommitRequest {
     pub(crate) job_id: String,
 }
 
 #[derive(Clone, Debug, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct DispatchWorkspaceCommitResponse {
+pub(crate) struct DispatchWorkspaceBundleCommitResponse {
     pub(crate) committed: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) workspace_path: Option<String>,
-    pub(crate) metadata: WorkspaceSnapshotMetadata,
+    #[serde(default)]
+    pub(crate) pending: bool,
 }
 
-/// Ask the target to diff its terminal tree against the delivered snapshot.
+/// Commit the worktree and package its new history for the controller.
 ///
-/// Read-only on the target: it builds a bundle and reports what changed. The
-/// controller decides whether to fetch it, and applying it locally is a
-/// separate step the user confirms.
-#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+/// Only ever appends commits on this job's own branch, so a controller that
+/// never syncs leaves the target unchanged.
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub(crate) struct DispatchWorkspaceResultRequest {
+pub(crate) struct DispatchWorkspaceSyncRequest {
     pub(crate) job_id: String,
+    /// Identifies one controller-side sync invocation. Every poll for that
+    /// invocation reuses this value, while a later user-requested sync gets a
+    /// new value even when `knownHead` has not advanced.
+    ///
+    /// The default keeps operation journals written by older v3 development
+    /// builds readable after an upgrade. New requests must still provide a
+    /// non-empty validated value.
+    #[serde(default)]
+    pub(crate) operation_id: String,
+    #[serde(default)]
+    pub(crate) message: Option<String>,
+    /// Head the controller has already fetched. A later invocation combines
+    /// this boundary with a new `operationId` to start a new operation;
+    /// transport retries before acknowledgement receive the cached result.
+    #[serde(default)]
+    pub(crate) known_head: Option<String>,
 }
 
-#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct DispatchWorkspaceResultResponse {
-    /// Absolute path of the bundle on the target, for the controller to fetch.
-    pub(crate) bundle_path: String,
-    pub(crate) workspace_path: String,
-    pub(crate) summary: WorkspaceResultSummary,
+pub(crate) struct DispatchWorkspaceSyncedChange {
+    pub(crate) status: String,
+    pub(crate) path: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct DispatchWorkspaceSyncResponse {
+    #[serde(default)]
+    pub(crate) pending: bool,
+    /// False when the worktree still matches `baseCommit`; no bundle is built.
+    pub(crate) changed: bool,
+    pub(crate) branch: String,
+    pub(crate) base_commit: String,
+    pub(crate) head_commit: String,
+    pub(crate) commit_count: u64,
+    pub(crate) changes: Vec<DispatchWorkspaceSyncedChange>,
+    /// True when the change list was capped; the bundle is still complete.
+    pub(crate) truncated_changes: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) bundle_path: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) bundle_sha256: Option<String>,
+    pub(crate) bundle_size: u64,
 }
 
 /// Read a slice of an already-built result bundle.
@@ -213,7 +301,7 @@ pub(crate) struct DispatchWorkspaceResultResponse {
 /// the same bytes back in chunks — the mirror of the upload path.
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub(crate) struct DispatchWorkspaceResultChunkRequest {
+pub(crate) struct DispatchWorkspaceSyncChunkRequest {
     pub(crate) job_id: String,
     pub(crate) offset: u64,
     pub(crate) length: u64,
@@ -221,7 +309,7 @@ pub(crate) struct DispatchWorkspaceResultChunkRequest {
 
 #[derive(Clone, Debug, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct DispatchWorkspaceResultChunkResponse {
+pub(crate) struct DispatchWorkspaceSyncChunkResponse {
     pub(crate) offset: u64,
     pub(crate) data_base64: String,
     /// True once this chunk reaches the end of the bundle.
@@ -268,6 +356,14 @@ pub(crate) enum DispatchEvent {
 }
 
 impl DispatchEvent {
+    pub(crate) fn setup_audit(event: DispatchSetupAuditEvent) -> Self {
+        Self::Audit {
+            timestamp: event.timestamp,
+            action: event.action,
+            details: event.details,
+        }
+    }
+
     pub(crate) fn approval_policy_selected(policy: DispatchApprovalPolicy) -> Self {
         Self::Audit {
             timestamp: chrono::Utc::now().to_rfc3339(),

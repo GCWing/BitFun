@@ -1,6 +1,6 @@
 @use '../../component-library/styles/tokens' as *;
 
-// Same type scale and shell as DispatchInstallDialog, so the two dispatch
+// Same type scale and shell as the dispatch target setup dialog, so the two
 // dialogs read as one feature.
 .dispatch-result-dialog {
   display: flex;
@@ -121,6 +121,16 @@
       color: var(--color-text-secondary);
       font-family: var(--font-family-mono);
       font-size: var(--font-size-xs);
+
+      > strong {
+        min-width: 2ch;
+        color: var(--color-text-muted);
+        font-weight: 600;
+      }
+
+      > span {
+        overflow-wrap: anywhere;
+      }
     }
 
     // Deletions read as removals, not as ordinary paths.
@@ -138,6 +148,12 @@
       font-style: normal;
       white-space: nowrap;
     }
+  }
+
+  &__empty {
+    padding: $size-gap-3;
+    color: var(--color-text-muted);
+    font-size: var(--font-size-xs);
   }
 
   &__actions {

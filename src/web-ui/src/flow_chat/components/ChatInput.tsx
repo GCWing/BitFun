@@ -504,6 +504,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const effectiveTargetSession = effectiveTargetSessionId
     ? flowChatState.sessions.get(effectiveTargetSessionId)
     : undefined;
+  const dispatchObserverJob = dispatchJobStore(state => {
+    const jobId = effectiveTargetSession?.config.dispatchJobId;
+    return jobId ? state.jobs[jobId] : undefined;
+  });
   const isDispatchInputSession = isNonLocalDispatchTarget(
     effectiveTargetSession?.config.dispatchTarget,
   );
@@ -2052,8 +2056,18 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const worktreeControl = useMemo(() => {
     if (!effectiveTargetSessionId || !effectiveTargetSession) return undefined;
     if (remoteWorkspaceSession) return undefined;
-    if (usesDispatchTransport) return undefined;
     if (isSubagentInputTarget || isAcpTargetSession) return undefined;
+    // A dispatch always executes against a managed worktree baseline of this
+    // repository, so the chip reports that state instead of disappearing. It is
+    // never togglable: the baseline is chosen with the target, not after.
+    if (usesDispatchTransport) {
+      return {
+        enabled: true,
+        locked: true,
+        lockedReason: 'dispatch' as const,
+        onChange: () => {},
+      };
+    }
 
     const locked = isSessionWorktreeBindingLocked(
       effectiveTargetSession,
@@ -2100,7 +2114,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           dispatchTargetRequest: selection.request,
           dispatchTarget: selection.target,
           dispatchApprovalPolicy: selection.approvalPolicy,
-          dispatchWorkspaceDelivery: selection.workspaceDelivery,
+          dispatchIncludeUncommitted: selection.includeUncommitted,
+          dispatchBaseRef: selection.baseRef,
           // Undefined is intentional: the target's probed default model wins
           // unless a future preflight selector records an explicit choice.
           dispatchModel: selection.model,
@@ -2127,18 +2142,18 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     }
     const target: DispatchTarget =
       effectiveTargetSession?.config.dispatchTarget ?? { kind: 'local' };
-    // Results only exist for a snapshot-delivered job that has finished: an
-    // "existing directory" job never took a snapshot to diff against, and a
-    // running one has no terminal tree yet.
+    // Syncing is available as soon as the target has a worktree to commit —
+    // that is, from the moment the job starts running. Waiting for a terminal
+    // state would block the common "let me see what it has so far" case.
     const jobId = effectiveTargetSession?.config.dispatchJobId;
     const jobState = effectiveTargetSession?.config.dispatchJobState;
-    const completedSnapshotJobId =
-      (
-        effectiveTargetSession?.config.dispatchWorkspaceDelivery?.kind === 'snapshot-source'
-        || effectiveTargetSession?.config.dispatchWorkspaceDelivery?.kind === 'snapshot-exact'
-      ) &&
-      (jobState === 'succeeded' || jobState === 'failed') &&
-      jobId
+    const syncableJobId =
+      isNonLocalDispatchTarget(target)
+      && jobId
+      && (jobState === 'running'
+        || jobState === 'succeeded'
+        || jobState === 'failed'
+        || jobState === 'cancelled')
         ? jobId
         : undefined;
     return {
@@ -2149,15 +2164,20 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         (effectiveTargetSession?.dialogTurns.length ?? 0) > 0 ||
         !!derivedState?.isProcessing,
       onSelectTarget: handleSelectDispatchTarget,
-      completedSnapshotJobId,
+      syncableJobId,
+      branch: dispatchObserverJob?.branch,
+      baselineWorktreePath: dispatchObserverJob?.baselineWorktreePath,
+      baselineMissing: dispatchObserverJob?.baselineWorktreeMissing,
     };
   }, [
     derivedState?.isProcessing,
     effectiveTargetSession?.config.dispatchJobId,
     effectiveTargetSession?.config.dispatchJobState,
     effectiveTargetSession?.config.dispatchTarget,
-    effectiveTargetSession?.config.dispatchWorkspaceDelivery?.kind,
     effectiveTargetSession?.dialogTurns.length,
+    dispatchObserverJob?.baselineWorktreeMissing,
+    dispatchObserverJob?.baselineWorktreePath,
+    dispatchObserverJob?.branch,
     handleSelectDispatchTarget,
     isAcpInputSession,
     isBtwSession,

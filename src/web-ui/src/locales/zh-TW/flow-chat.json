@@ -650,8 +650,13 @@
       "deviceOffline": "離線",
       "createFailed": "無法建立派發任務。",
       "remoteTarget": "遠端目標",
-      "submissionInProgress": "正在向目標提交任務…",
-      "transferInProgress": "正在準備並傳輸工作區到目標…"
+      "transferInProgress": "正在建立基線 worktree、擷取程式碼儲存庫並傳輸缺少的 Git 物件…",
+      "cliInstallStarted": "正在 SSH 目標上安裝適用於 {{target}} 的已驗證 BitFun CLI {{version}}。",
+      "cliInstallSucceeded": "已驗證的 BitFun CLI {{version}} 已在 SSH 目標上就緒。",
+      "cliInstallFailed": "SSH 目標上的 BitFun CLI 安裝失敗：{{details}}",
+      "cliInstallStage": "SSH 目標 CLI 設定：{{stage}}",
+      "cliInstallUnknownVersion": "發佈版本",
+      "cliInstallUnknownStage": "狀態更新"
     },
     "addBoostTooltip": "智能體模式、圖片或 Skill",
     "permissionMode": {

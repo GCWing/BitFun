@@ -3,13 +3,14 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
   BASE_DISPATCH_CAPABILITIES,
-  isDispatchWorkspaceReady,
+  DISPATCH_PROTOCOL_VERSION,
 } from './dispatchPreflight';
 
 const OUTBOUND_DISPATCH_COMMANDS = [
   'dispatch_list_targets',
   'dispatch_probe_target',
   'dispatch_install_cli_start',
+  'dispatch_install_cli_source_start',
   'dispatch_install_cli_poll',
   'dispatch_install_cli_cancel',
   'dispatch_sync_model_config',
@@ -19,6 +20,7 @@ const OUTBOUND_DISPATCH_COMMANDS = [
   'dispatch_list_jobs',
   'dispatch_answer',
   'dispatch_append',
+  'dispatch_sync_result',
   'dispatch_load_transcript',
   'dispatch_save_transcript',
 ] as const;
@@ -56,21 +58,29 @@ describe('dispatch controller-only routing contract', () => {
 });
 
 describe('dispatch preflight contract', () => {
-  it('requires the workspace serialization capability enforced by submit', () => {
-    expect(BASE_DISPATCH_CAPABILITIES).toContain('workspace_serialization');
+  it('fails closed on protocol v3 Git worktree delivery', () => {
+    expect(DISPATCH_PROTOCOL_VERSION).toBe(3);
+    expect(BASE_DISPATCH_CAPABILITIES).toEqual(expect.arrayContaining([
+      'workspace_serialization',
+      'workspace_git_worktree',
+      'workspace_git_bundle_upload',
+      'workspace_git_sync',
+    ]));
+    expect(BASE_DISPATCH_CAPABILITIES.join(' ')).not.toContain('workspace_snapshot');
+    expect(BASE_DISPATCH_CAPABILITIES).not.toContain('workspace_result_bundle');
   });
 
-  it('invalidates workspace readiness when the input no longer matches the probe', () => {
-    const probe = {
-      path: '/repo',
-      exists: true,
-      isDirectory: true,
-      isGitRepository: true,
-    };
-
-    expect(isDispatchWorkspaceReady(' /repo ', probe)).toBe(true);
-    expect(isDispatchWorkspaceReady('/another-repo', probe)).toBe(false);
-    expect(isDispatchWorkspaceReady('~/repo', probe, '~/repo')).toBe(true);
+  it('uses one Git sync command and exposes no snapshot pull/apply fallback', () => {
+    const api = read('./dispatchApi.ts');
+    const types = read('./types.ts');
+    const picker = read('./DispatchTargetPicker.tsx');
+    expect(api).toContain("'dispatch_sync_result'");
+    expect(api).not.toContain("'dispatch_pull_result'");
+    expect(api).not.toContain("'dispatch_apply_result'");
+    expect(types).not.toContain("'snapshot-source'");
+    expect(types).not.toContain("'snapshot-exact'");
+    expect(types).not.toContain('defaultWorkspace?:');
+    expect(picker).not.toContain('option.defaultWorkspace');
   });
 });
 

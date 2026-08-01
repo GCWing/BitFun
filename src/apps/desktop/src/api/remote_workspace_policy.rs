@@ -362,11 +362,7 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         RemoteWorkspacePolicy::WorkspaceAgnostic,
     ),
     (
-        "dispatch_apply_result",
-        RemoteWorkspacePolicy::WorkspaceAgnostic,
-    ),
-    (
-        "dispatch_pull_result",
+        "dispatch_sync_result",
         RemoteWorkspacePolicy::WorkspaceAgnostic,
     ),
     (

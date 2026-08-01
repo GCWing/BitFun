@@ -767,7 +767,6 @@ export async function createChatSession(
         if (!approvalPolicy) {
           throw new Error('Dispatch approval policy must be selected before creating a session');
         }
-        const workspaceDelivery = config.dispatchWorkspaceDelivery ?? { kind: 'existing' as const };
         const resolvedConfig: SessionConfig = {
           ...config,
           // A dispatch projection must not inherit or resolve a controller-side
@@ -780,7 +779,8 @@ export async function createChatSession(
           dispatchTarget,
           dispatchJobId: jobId,
           dispatchApprovalPolicy: approvalPolicy,
-          dispatchWorkspaceDelivery: workspaceDelivery,
+          dispatchIncludeUncommitted: config.dispatchIncludeUncommitted ?? false,
+          dispatchBaseRef: config.dispatchBaseRef?.trim() || 'HEAD',
           dispatchJobState: 'submitting',
           dispatchCursor: 0,
         };
@@ -809,7 +809,6 @@ export async function createChatSession(
           title: sessionName,
           agentType,
           approvalPolicy,
-          workspaceDelivery,
           // Do not inherit the controller's model selector. An omitted target
           // model lets the probed target use its own configured default.
           model: config.dispatchModel?.trim() || undefined,

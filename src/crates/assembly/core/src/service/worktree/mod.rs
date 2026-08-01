@@ -66,6 +66,10 @@ pub struct WorktreeCreateRequest {
     pub base_ref: Option<String>,
     #[serde(default)]
     pub copy_local_changes: bool,
+    /// Marks the new worktree as owned by a caller that must release it later,
+    /// exempting it from automatic cleanup until then.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub claimed_by: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -156,6 +160,16 @@ struct RegisteredWorktree {
     branch: Option<String>,
     lifecycle: WorktreeLifecycle,
     created_at_ms: u64,
+    /// Owner that still needs this worktree, e.g. `dispatch:<jobId>`.
+    ///
+    /// A claim only suppresses automatic cleanup. It is not a lifecycle: the
+    /// worktree stays `Managed` and stays manually removable. The claim exists
+    /// because a claimed worktree can be indistinguishable from an abandoned
+    /// one — a dispatch baseline has no local session and stays clean until its
+    /// remote result is synced back, so none of the ordinary safety vetoes
+    /// (dirty, unpublished commits, associated sessions) would protect it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    claimed_by: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -166,6 +180,8 @@ enum WorktreeOperationReceipt {
         source_workspace_path: String,
         base_ref: String,
         copy_local_changes: bool,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        claimed_by: Option<String>,
     },
     CreateBranch {
         worktree_id: String,
@@ -206,6 +222,18 @@ struct RepositoryContext {
 pub struct WorktreeService;
 
 impl WorktreeService {
+    /// Resolve any checkout (including a linked worktree) to the stable main
+    /// project path that owns this repository's managed-worktree registry.
+    ///
+    /// Dispatch persists this before it creates a claimed baseline so crash
+    /// recovery never depends on the short-lived checkout that initiated it.
+    pub async fn resolve_project_workspace_path(
+        workspace_path: &str,
+    ) -> Result<String, WorktreeError> {
+        let context = Self::repository_context(Path::new(workspace_path)).await?;
+        Ok(path_string(&context.project_workspace_path))
+    }
+
     /// Stable session identity for an idempotent worktree-session request.
     pub fn session_id_for_request(request_id: &str) -> Result<String, WorktreeError> {
         validate_request_id(request_id)?;
@@ -371,6 +399,12 @@ impl WorktreeService {
             .unwrap_or_else(|| context.project_workspace_path.clone());
         let source_workspace_path = normalized_lookup_path(&source_path);
         let base_ref = request.base_ref.as_deref().unwrap_or("HEAD").trim();
+        let claimed_by = request
+            .claimed_by
+            .as_deref()
+            .map(str::trim)
+            .filter(|claim| !claim.is_empty())
+            .map(ToOwned::to_owned);
 
         if let Some(receipt) = registry.receipts.get(&request.request_id).cloned() {
             return match receipt {
@@ -379,11 +413,44 @@ impl WorktreeService {
                     source_workspace_path: receipt_source,
                     base_ref: receipt_base_ref,
                     copy_local_changes,
+                    claimed_by: receipt_claimed_by,
                 } if receipt_source == source_workspace_path
                     && receipt_base_ref == base_ref
-                    && copy_local_changes == request.copy_local_changes =>
+                    && copy_local_changes == request.copy_local_changes
+                    && receipt_claimed_by.as_deref() == claimed_by.as_deref() =>
                 {
-                    Self::create_result_for_id(&context, &mut registry, &worktree_id, false).await
+                    let claim_restored = Self::restore_create_receipt_claim(
+                        &mut registry,
+                        &worktree_id,
+                        claimed_by.as_deref(),
+                    )?;
+                    if claim_restored {
+                        Self::save_registry(&context, &registry).await?;
+                    }
+                    let result =
+                        Self::create_result_for_id(&context, &mut registry, &worktree_id, false)
+                            .await;
+                    if result.is_err()
+                        && claim_restored
+                        && Self::clear_matching_claim(
+                            &mut registry,
+                            &worktree_id,
+                            claimed_by.as_deref(),
+                        )
+                    {
+                        // This invocation reacquired the claim, so it also owns
+                        // rolling that mutation back when result reconciliation
+                        // fails. A pre-existing claim may belong to an in-flight
+                        // or durable dispatch and is never cleared here.
+                        if let Err(cleanup_error) = Self::save_registry(&context, &registry).await {
+                            log::warn!(
+                                "Failed to roll back a restored worktree claim after create reconciliation failed: worktree_id={} error={}",
+                                worktree_id,
+                                cleanup_error
+                            );
+                        }
+                    }
+                    result
                 }
                 _ => Err(error(
                     WorktreeErrorCode::RequestConflict,
@@ -474,6 +541,7 @@ impl WorktreeService {
             None
         };
 
+        let created_claim = claimed_by.clone();
         registry.worktrees.push(RegisteredWorktree {
             worktree_id: worktree_id.clone(),
             path: path_string(&target_path),
@@ -482,6 +550,7 @@ impl WorktreeService {
             branch: None,
             lifecycle: WorktreeLifecycle::Managed,
             created_at_ms: current_unix_ms(),
+            claimed_by: claimed_by.clone(),
         });
         registry.receipts.insert(
             request.request_id,
@@ -490,6 +559,7 @@ impl WorktreeService {
                 source_workspace_path,
                 base_ref: base_ref.to_string(),
                 copy_local_changes: request.copy_local_changes,
+                claimed_by,
             },
         );
         if let Err(registry_error) = Self::save_registry(&context, &registry).await {
@@ -512,8 +582,28 @@ impl WorktreeService {
             );
         }
 
-        let result =
-            Self::create_result_for_id(&context, &mut registry, &worktree_id, true).await?;
+        let result = match Self::create_result_for_id(&context, &mut registry, &worktree_id, true)
+            .await
+        {
+            Ok(result) => result,
+            Err(result_error) => {
+                if Self::clear_matching_claim(&mut registry, &worktree_id, created_claim.as_deref())
+                {
+                    // The worktree and its idempotency receipt remain usable,
+                    // but this failed call must not leave an ownerless retention
+                    // claim behind. A later retry can reacquire the receipt's
+                    // exact claim through `restore_create_receipt_claim`.
+                    if let Err(cleanup_error) = Self::save_registry(&context, &registry).await {
+                        log::warn!(
+                            "Failed to roll back a new worktree claim after create reconciliation failed: worktree_id={} error={}",
+                            worktree_id,
+                            cleanup_error
+                        );
+                    }
+                }
+                return Err(result_error);
+            }
+        };
         notify_changed(&context.project_workspace_path).await;
         Ok(result)
     }
@@ -634,6 +724,62 @@ impl WorktreeService {
             Self::mutation_result_for_id(&context, &mut registry, &request.worktree_id).await?;
         notify_changed(&context.project_workspace_path).await;
         Ok(result)
+    }
+
+    /// Drop a retention claim so the worktree can be cleaned up normally again.
+    ///
+    /// Idempotent by construction rather than by receipt: releasing an absent
+    /// claim, an already-released one, or a worktree that has since been removed
+    /// all report `false` instead of failing. Callers run this from cleanup
+    /// paths where an error would strand the claim forever.
+    pub async fn release_claim(
+        project_workspace_path: &str,
+        claimed_by: &str,
+    ) -> Result<bool, WorktreeError> {
+        Self::release_claim_matching(project_workspace_path, None, claimed_by).await
+    }
+
+    /// Release one exact worktree's claim without affecting another record
+    /// that may use the same logical owner string.
+    pub async fn release_claim_for_worktree(
+        project_workspace_path: &str,
+        worktree_id: &str,
+        claimed_by: &str,
+    ) -> Result<bool, WorktreeError> {
+        let worktree_id = worktree_id.trim();
+        if worktree_id.is_empty() {
+            return Ok(false);
+        }
+        Self::release_claim_matching(project_workspace_path, Some(worktree_id), claimed_by).await
+    }
+
+    async fn release_claim_matching(
+        project_workspace_path: &str,
+        worktree_id: Option<&str>,
+        claimed_by: &str,
+    ) -> Result<bool, WorktreeError> {
+        let claim = claimed_by.trim();
+        if claim.is_empty() {
+            return Ok(false);
+        }
+        let context = Self::repository_context(Path::new(project_workspace_path)).await?;
+        let lock = repository_lock(&context.common_git_dir);
+        let _guard = lock.lock().await;
+        let _process_guard = Self::acquire_repository_process_lock(&context).await?;
+        let mut registry = Self::load_registry(&context).await?;
+        let mut released = false;
+        for record in &mut registry.worktrees {
+            if worktree_id.is_none_or(|expected| record.worktree_id == expected)
+                && record.claimed_by.as_deref() == Some(claim)
+            {
+                record.claimed_by = None;
+                released = true;
+            }
+        }
+        if released {
+            Self::save_registry(&context, &registry).await?;
+        }
+        Ok(released)
     }
 
     pub async fn remove(
@@ -950,6 +1096,7 @@ impl WorktreeService {
                     branch: git_worktree.branch.clone(),
                     lifecycle: WorktreeLifecycle::External,
                     created_at_ms: current_unix_ms(),
+                    claimed_by: None,
                 });
                 seen_registered_ids.insert(worktree_id.clone());
                 changed = true;
@@ -1081,6 +1228,65 @@ impl WorktreeService {
             worktree,
             created,
         })
+    }
+
+    /// Re-establish the claim recorded by an idempotent create receipt.
+    ///
+    /// Cleanup may release a claim before a submit retry reaches this path. A
+    /// retry is allowed to reacquire only the exact claim bound to its original
+    /// receipt; it must never adopt an older unclaimed create receipt or steal
+    /// a worktree that is now held by another owner.
+    fn restore_create_receipt_claim(
+        registry: &mut WorktreeRegistry,
+        worktree_id: &str,
+        claimed_by: Option<&str>,
+    ) -> Result<bool, WorktreeError> {
+        let record = registry
+            .worktrees
+            .iter_mut()
+            .find(|record| record.worktree_id == worktree_id)
+            .ok_or_else(|| {
+                error(
+                    WorktreeErrorCode::WorktreeNotFound,
+                    "Idempotent worktree result no longer exists",
+                )
+            })?;
+
+        match (record.claimed_by.as_deref(), claimed_by) {
+            (None, Some(claim)) => {
+                record.claimed_by = Some(claim.to_string());
+                Ok(true)
+            }
+            (None, None) => Ok(false),
+            (Some(existing), Some(claim)) if existing == claim => Ok(false),
+            _ => Err(error(
+                WorktreeErrorCode::RequestConflict,
+                "The idempotent worktree claim no longer matches its creation receipt",
+            )),
+        }
+    }
+
+    /// Clear only the claim introduced by the current create attempt.
+    fn clear_matching_claim(
+        registry: &mut WorktreeRegistry,
+        worktree_id: &str,
+        claimed_by: Option<&str>,
+    ) -> bool {
+        let Some(claim) = claimed_by else {
+            return false;
+        };
+        let Some(record) = registry
+            .worktrees
+            .iter_mut()
+            .find(|record| record.worktree_id == worktree_id)
+        else {
+            return false;
+        };
+        if record.claimed_by.as_deref() != Some(claim) {
+            return false;
+        }
+        record.claimed_by = None;
+        true
     }
 
     async fn mutation_result_for_id(
@@ -1298,6 +1504,7 @@ fn automatic_delete_candidate_ids(
         .into_iter()
         .skip(limit.max(1))
         .filter(|record| record.worktree_id != protected_worktree_id)
+        .filter(|record| record.claimed_by.is_none())
         .filter(|record| now_ms.saturating_sub(record.created_at_ms) >= AUTO_DELETE_MIN_AGE_MS)
         .map(|record| record.worktree_id.clone())
         .collect()
@@ -2045,12 +2252,42 @@ mod tests {
                 branch: None,
                 lifecycle,
                 created_at_ms,
+                claimed_by: None,
             });
         }
 
         assert_eq!(
             automatic_delete_candidate_ids(&registry, 2, "newest", AUTO_DELETE_MIN_AGE_MS + 100,),
             vec!["older".to_string(), "oldest".to_string()]
+        );
+    }
+
+    #[test]
+    fn automatic_cleanup_never_selects_a_claimed_worktree() {
+        let project = Path::new("/repo");
+        let mut registry = WorktreeRegistry::new(project);
+        for (worktree_id, created_at_ms, claimed_by) in [
+            ("newest", 30, None),
+            ("unclaimed", 20, None),
+            ("claimed", 10, Some("dispatch:job-1")),
+        ] {
+            registry.worktrees.push(RegisteredWorktree {
+                worktree_id: worktree_id.to_string(),
+                path: format!("/worktrees/{worktree_id}"),
+                base_ref: Some("main".to_string()),
+                base_commit: "0123456789abcdef".to_string(),
+                branch: None,
+                lifecycle: WorktreeLifecycle::Managed,
+                created_at_ms,
+                claimed_by: claimed_by.map(ToOwned::to_owned),
+            });
+        }
+
+        // A dispatch baseline is clean, session-less, and older than the grace
+        // period, so only the claim keeps it alive.
+        assert_eq!(
+            automatic_delete_candidate_ids(&registry, 1, "newest", AUTO_DELETE_MIN_AGE_MS + 100,),
+            vec!["unclaimed".to_string()]
         );
     }
 
@@ -2067,6 +2304,7 @@ mod tests {
                 branch: None,
                 lifecycle: WorktreeLifecycle::Managed,
                 created_at_ms: 10,
+                claimed_by: None,
             });
         }
 
@@ -2089,6 +2327,7 @@ mod tests {
                 branch: None,
                 lifecycle: WorktreeLifecycle::Managed,
                 created_at_ms,
+                claimed_by: None,
             });
         }
 
@@ -2119,6 +2358,7 @@ mod tests {
             branch: None,
             lifecycle: WorktreeLifecycle::Managed,
             created_at_ms: 123,
+            claimed_by: Some("dispatch:job-restored".to_string()),
         });
         registry.receipts.insert(
             "request-restored".to_string(),
@@ -2127,6 +2367,7 @@ mod tests {
                 source_workspace_path: project.to_string_lossy().to_string(),
                 base_ref: "main".to_string(),
                 copy_local_changes: false,
+                claimed_by: Some("dispatch:job-restored".to_string()),
             },
         );
 
@@ -2140,6 +2381,10 @@ mod tests {
         assert_eq!(restored.worktrees.len(), 1);
         assert_eq!(restored.worktrees[0].worktree_id, "wt-restored");
         assert_eq!(
+            restored.worktrees[0].claimed_by.as_deref(),
+            Some("dispatch:job-restored")
+        );
+        assert_eq!(
             restored
                 .receipts
                 .get("request-restored")
@@ -2147,5 +2392,120 @@ mod tests {
                 .worktree_id(),
             "wt-restored"
         );
+        match restored.receipts.get("request-restored").expect("receipt") {
+            WorktreeOperationReceipt::Create { claimed_by, .. } => assert_eq!(
+                claimed_by.as_deref(),
+                Some("dispatch:job-restored"),
+                "the receipt must retain the claim needed by an idempotent retry"
+            ),
+            receipt => panic!("unexpected receipt: {receipt:?}"),
+        }
+    }
+
+    #[test]
+    fn create_receipt_reacquires_only_its_recorded_claim() {
+        let project = Path::new("/repo");
+        let mut registry = WorktreeRegistry::new(project);
+        registry.worktrees.push(RegisteredWorktree {
+            worktree_id: "wt-claimed".to_string(),
+            path: "/managed/wt-claimed".to_string(),
+            base_ref: Some("main".to_string()),
+            base_commit: "0123456789abcdef".to_string(),
+            branch: None,
+            lifecycle: WorktreeLifecycle::Managed,
+            created_at_ms: 123,
+            claimed_by: None,
+        });
+
+        assert!(WorktreeService::restore_create_receipt_claim(
+            &mut registry,
+            "wt-claimed",
+            Some("dispatch:job-1"),
+        )
+        .expect("reacquire released claim"));
+        assert_eq!(
+            registry.worktrees[0].claimed_by.as_deref(),
+            Some("dispatch:job-1")
+        );
+        assert!(!WorktreeService::restore_create_receipt_claim(
+            &mut registry,
+            "wt-claimed",
+            Some("dispatch:job-1"),
+        )
+        .expect("same claim is idempotent"));
+
+        let conflict = WorktreeService::restore_create_receipt_claim(
+            &mut registry,
+            "wt-claimed",
+            Some("dispatch:job-2"),
+        )
+        .expect_err("a retry must not steal another claim");
+        assert_eq!(conflict.code, WorktreeErrorCode::RequestConflict);
+        assert_eq!(
+            registry.worktrees[0].claimed_by.as_deref(),
+            Some("dispatch:job-1")
+        );
+    }
+
+    #[test]
+    fn failed_create_cleanup_clears_only_the_exact_attempt_claim() {
+        let project = Path::new("/repo");
+        let mut registry = WorktreeRegistry::new(project);
+        for (worktree_id, claimed_by) in [
+            ("wt-current", Some("dispatch:job-1")),
+            ("wt-other", Some("dispatch:job-2")),
+        ] {
+            registry.worktrees.push(RegisteredWorktree {
+                worktree_id: worktree_id.to_string(),
+                path: format!("/managed/{worktree_id}"),
+                base_ref: Some("main".to_string()),
+                base_commit: "0123456789abcdef".to_string(),
+                branch: None,
+                lifecycle: WorktreeLifecycle::Managed,
+                created_at_ms: 123,
+                claimed_by: claimed_by.map(ToOwned::to_owned),
+            });
+        }
+
+        assert!(!WorktreeService::clear_matching_claim(
+            &mut registry,
+            "wt-current",
+            Some("dispatch:job-2")
+        ));
+        assert!(!WorktreeService::clear_matching_claim(
+            &mut registry,
+            "missing",
+            Some("dispatch:job-1")
+        ));
+        assert!(WorktreeService::clear_matching_claim(
+            &mut registry,
+            "wt-current",
+            Some("dispatch:job-1")
+        ));
+        assert_eq!(registry.worktrees[0].claimed_by, None);
+        assert_eq!(
+            registry.worktrees[1].claimed_by.as_deref(),
+            Some("dispatch:job-2"),
+            "cleanup must not release another worktree's claim"
+        );
+    }
+
+    #[test]
+    fn legacy_create_receipt_defaults_to_unclaimed() {
+        let receipt: WorktreeOperationReceipt = serde_json::from_value(serde_json::json!({
+            "operation": "create",
+            "worktree_id": "wt-legacy",
+            "source_workspace_path": "/repo",
+            "base_ref": "main",
+            "copy_local_changes": false
+        }))
+        .expect("legacy receipt");
+
+        match receipt {
+            WorktreeOperationReceipt::Create { claimed_by, .. } => {
+                assert_eq!(claimed_by, None);
+            }
+            receipt => panic!("unexpected receipt: {receipt:?}"),
+        }
     }
 }

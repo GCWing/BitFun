@@ -1,391 +1,1116 @@
+//! Target-side Git workspace provisioning and result sync.
+//!
+//! A dispatch runs in a Git worktree of the controller's repository, checked out
+//! here at the exact commit the controller branched from. Objects normally
+//! arrive from the shared Git remote; only what the remote does not have —
+//! unpushed commits, or every object when the repository has no remote at all —
+//! is carried over the wire as a Git bundle.
+//!
+//! Results travel the same way in reverse: the worktree's commits become a
+//! bundle the controller fetches into its own baseline worktree. Because both
+//! sides share `base_commit`, that fetch is an ordinary fast-forward rather than
+//! a file-by-file overwrite.
+
 use std::fs::{self, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
+use std::process::{Command, Stdio};
 
 use anyhow::{bail, Context, Result};
 use base64::Engine as _;
-use bitfun_services_core::dispatch_workspace::{
-    create_workspace_result_bundle, extract_workspace_snapshot, sha256_file,
-    WorkspaceSnapshotManifest, WorkspaceSnapshotMetadata, MAX_SNAPSHOT_ARCHIVE_BYTES,
-    MAX_SNAPSHOT_DIRECTORIES, MAX_SNAPSHOT_FILES, MAX_SNAPSHOT_UNCOMPRESSED_BYTES,
-    WORKSPACE_SNAPSHOT_FORMAT_VERSION,
-};
+use bitfun_services_core::dispatch_workspace::sha256_file;
 use serde::{Deserialize, Serialize};
 
 use super::protocol::{
-    DispatchWorkspaceBeginRequest, DispatchWorkspaceBeginResponse, DispatchWorkspaceChunkRequest,
-    DispatchWorkspaceChunkResponse, DispatchWorkspaceCommitRequest,
-    DispatchWorkspaceCommitResponse, DispatchWorkspaceResultChunkRequest,
-    DispatchWorkspaceResultChunkResponse, DispatchWorkspaceResultRequest,
-    DispatchWorkspaceResultResponse, DISPATCH_PROTOCOL_VERSION,
+    DispatchWorkspaceBundleBeginRequest, DispatchWorkspaceBundleBeginResponse,
+    DispatchWorkspaceBundleChunkRequest, DispatchWorkspaceBundleChunkResponse,
+    DispatchWorkspaceBundleCommitRequest, DispatchWorkspaceBundleCommitResponse,
+    DispatchWorkspaceProvisionRequest, DispatchWorkspaceProvisionResponse,
+    DispatchWorkspaceSyncChunkRequest, DispatchWorkspaceSyncChunkResponse,
+    DispatchWorkspaceSyncRequest, DispatchWorkspaceSyncResponse, DispatchWorkspaceSyncedChange,
+    DISPATCH_PROTOCOL_VERSION,
 };
 use super::store::{
     atomic_write_json, create_private_dir, read_json, remove_file_if_present,
     set_private_file_permissions, sync_directory, DispatchStore, JobLock,
-    WORKSPACE_SNAPSHOT_CACHE_RECORD_FILE,
 };
 
-const UPLOAD_RECORD_FILE: &str = "upload.json";
-const UPLOAD_ARCHIVE_FILE: &str = "workspace.tar.gz";
-const CACHE_ARCHIVE_FILE: &str = "workspace.tar.gz";
-const CURRENT_WORKSPACE_DIR: &str = "current";
-/// The delivered snapshot's manifest, kept as the baseline a result diff is
-/// computed against.
-const BASELINE_MANIFEST_FILE: &str = "baseline-manifest.json";
-const RESULT_BUNDLE_FILE: &str = "result.tar.gz";
+const PROVISION_RECORD_FILE: &str = "provision.json";
+const PROVISION_OPERATION_FILE: &str = "provision-operation.json";
+const BUNDLE_RECORD_FILE: &str = "bundle.json";
+const SYNC_OPERATION_FILE: &str = "sync-operation.json";
+const INCOMING_BUNDLE_FILE: &str = "incoming.bundle";
+const RESULT_BUNDLE_FILE: &str = "result.bundle";
 const MAX_CHUNK_BYTES: usize = 256 * 1024;
 const MAX_CHUNK_BASE64_BYTES: usize = 384 * 1024;
-const MAX_MATERIALIZATION_ERROR_BYTES: usize = 16 * 1024;
+/// Ceiling for one delivered bundle. Generous for source history, small enough
+/// that a hostile or broken controller cannot fill the target's disk.
+const MAX_BUNDLE_BYTES: u64 = 2 * 1024 * 1024 * 1024;
+/// Cap on the change list reported after a sync, so a huge refactor cannot push
+/// the response past the smallest host transport envelope.
+const MAX_REPORTED_CHANGES: usize = 2_000;
+const DEFAULT_SYNC_COMMIT_MESSAGE: &str = "BitFun dispatch result";
+/// A freshly spawned child may not have published an inspectable process
+/// identity by the first poll. Keep that tiny start window from spawning a
+/// duplicate worker while still allowing a dead child to be recovered.
+const OPERATION_START_GRACE_SECONDS: i64 = 10;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-enum WorkspaceUploadState {
+enum BundleUploadState {
     Uploading,
+    Committing,
     Committed,
     Failed,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct WorkspaceUploadRecord {
+struct BundleUploadRecord {
     protocol_version: u32,
     job_id: String,
-    metadata: WorkspaceSnapshotMetadata,
-    state: WorkspaceUploadState,
+    sha256: String,
+    size: u64,
+    state: BundleUploadState,
     created_at: String,
     #[serde(default)]
-    committed_at: Option<String>,
-    #[serde(default)]
-    workspace_path: Option<String>,
+    worker_pid: Option<u32>,
     #[serde(default)]
     last_error: Option<String>,
+    #[serde(default)]
+    updated_at: String,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+enum WorkspaceOperationState {
+    Pending,
+    Running,
+    Succeeded,
+    Failed,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ProvisionOperationRecord {
+    request: DispatchWorkspaceProvisionRequest,
+    state: WorkspaceOperationState,
+    #[serde(default)]
+    worker_pid: Option<u32>,
+    #[serde(default)]
+    response: Option<DispatchWorkspaceProvisionResponse>,
+    #[serde(default)]
+    last_error: Option<String>,
+    updated_at: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SyncOperationRecord {
+    request: DispatchWorkspaceSyncRequest,
+    state: WorkspaceOperationState,
+    #[serde(default)]
+    worker_pid: Option<u32>,
+    #[serde(default)]
+    response: Option<DispatchWorkspaceSyncResponse>,
+    #[serde(default)]
+    last_error: Option<String>,
+    /// True only after the retained failure diagnostic was returned to a
+    /// controller. A later operation may replace that failed generation once
+    /// its worker is also gone.
+    #[serde(default)]
+    failure_reported: bool,
+    updated_at: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct WorkspaceSnapshotCacheRecord {
-    metadata: WorkspaceSnapshotMetadata,
+struct ProvisionRecord {
+    protocol_version: u32,
+    job_id: String,
+    repo_key: String,
+    #[serde(default)]
+    remote_url: Option<String>,
+    base_commit: String,
+    branch: String,
     created_at: String,
-    last_used_at: String,
+    #[serde(default)]
+    workspace_path: Option<String>,
 }
 
-pub(crate) fn begin(
-    request: DispatchWorkspaceBeginRequest,
-) -> Result<DispatchWorkspaceBeginResponse> {
+/// Touch file that keeps a shared clone from being collected while in use.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(super) struct RepoCacheRecord {
+    #[serde(default)]
+    pub(super) remote_url: Option<String>,
+    pub(super) created_at: String,
+    pub(super) last_used_at: String,
+}
+
+pub(crate) fn provision(
+    request: DispatchWorkspaceProvisionRequest,
+) -> Result<DispatchWorkspaceProvisionResponse> {
+    validate_provision(&request)?;
     let store = DispatchStore::open_default()?;
-    begin_in_store(&store, request)
-}
-
-fn begin_in_store(
-    store: &DispatchStore,
-    request: DispatchWorkspaceBeginRequest,
-) -> Result<DispatchWorkspaceBeginResponse> {
-    validate_begin(&request)?;
-    let upload_dir = store.workspace_upload_dir(&request.job_id)?;
-    let lock_path = workspace_upload_lock_path(store, &request.job_id);
-    let Some(_lock) = JobLock::try_exclusive(&lock_path)? else {
-        let existing: WorkspaceUploadRecord = read_json(&upload_dir.join(UPLOAD_RECORD_FILE))
-            .context("workspace upload is currently being initialized")?;
-        ensure_begin_binding(&existing, &request)?;
-        ensure_upload_not_failed(&existing)?;
-        if existing.state == WorkspaceUploadState::Committed {
-            let workspace_path =
-                validate_committed_workspace(&upload_dir, existing.workspace_path.as_deref())?;
-            return Ok(DispatchWorkspaceBeginResponse {
-                accepted: true,
-                offset: request.metadata.archive_size,
-                upload_path: upload_dir
-                    .join(UPLOAD_ARCHIVE_FILE)
-                    .to_string_lossy()
-                    .to_string(),
-                committed: true,
-                workspace_path: Some(workspace_path),
-            });
+    let job_dir = store.workspace_upload_dir(&request.job_id)?;
+    create_private_dir(&job_dir)?;
+    let _lock = JobLock::exclusive(&store.workspace_operation_lock_path(&request.job_id)?)?;
+    let operation_path = job_dir.join(PROVISION_OPERATION_FILE);
+    let mut operation = match read_optional_json::<ProvisionOperationRecord>(&operation_path)? {
+        Some(existing) => {
+            if existing.request != request {
+                bail!("dispatch job is already bound to a different Git baseline");
+            }
+            existing
         }
-        let archive_path = upload_dir.join(UPLOAD_ARCHIVE_FILE);
-        let offset = fs::symlink_metadata(&archive_path)
-            .ok()
-            .filter(|metadata| !metadata.file_type().is_symlink() && metadata.is_file())
-            .map(|metadata| metadata.len().min(request.metadata.archive_size))
-            .unwrap_or(0);
-        return Ok(DispatchWorkspaceBeginResponse {
-            accepted: true,
-            offset,
-            upload_path: archive_path.to_string_lossy().to_string(),
-            committed: false,
-            workspace_path: None,
-        });
+        None => ProvisionOperationRecord {
+            request: request.clone(),
+            state: WorkspaceOperationState::Pending,
+            worker_pid: None,
+            response: None,
+            last_error: None,
+            updated_at: chrono::Utc::now().to_rfc3339(),
+        },
     };
 
-    let record_path = upload_dir.join(UPLOAD_RECORD_FILE);
-    if let Ok(existing) = read_json::<WorkspaceUploadRecord>(&record_path) {
-        ensure_begin_binding(&existing, &request)?;
-        ensure_upload_not_failed(&existing)?;
-        if existing.state == WorkspaceUploadState::Committed {
-            let workspace_path =
-                validate_committed_workspace(&upload_dir, existing.workspace_path.as_deref())?;
-            return Ok(DispatchWorkspaceBeginResponse {
-                accepted: true,
-                offset: request.metadata.archive_size,
-                upload_path: upload_dir
-                    .join(UPLOAD_ARCHIVE_FILE)
-                    .to_string_lossy()
-                    .to_string(),
-                committed: true,
-                workspace_path: Some(workspace_path),
-            });
+    if operation.state == WorkspaceOperationState::Succeeded {
+        let response = operation
+            .response
+            .clone()
+            .context("dispatch provision operation has no response")?;
+        let bundle_committed =
+            read_optional_json::<BundleUploadRecord>(&job_dir.join(BUNDLE_RECORD_FILE))?
+                .is_some_and(|record| record.state == BundleUploadState::Committed);
+        if !response.needs_bundle || !bundle_committed {
+            return Ok(response);
         }
-    } else {
-        match fs::symlink_metadata(&upload_dir) {
-            Ok(metadata) => {
-                if metadata.file_type().is_symlink() || !metadata.is_dir() {
-                    bail!("workspace upload path is not a private directory");
-                }
-                fs::remove_dir_all(&upload_dir).with_context(|| {
-                    format!("reset incomplete workspace upload {}", upload_dir.display())
-                })?;
-            }
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-            Err(error) => {
-                return Err(error)
-                    .with_context(|| format!("inspect workspace upload {}", upload_dir.display()))
-            }
-        }
-        create_private_dir(&upload_dir)?;
-        let record = WorkspaceUploadRecord {
-            protocol_version: request.protocol_version,
-            job_id: request.job_id.clone(),
-            metadata: request.metadata.clone(),
-            state: WorkspaceUploadState::Uploading,
-            created_at: chrono::Utc::now().to_rfc3339(),
-            committed_at: None,
-            workspace_path: None,
-            last_error: None,
-        };
-        atomic_write_json(&record_path, &record)?;
+        // The first pass asked for objects and the upload is now committed.
+        // Re-run the same immutable request to publish the worktree.
+        operation.state = WorkspaceOperationState::Pending;
+        operation.worker_pid = None;
+        operation.response = None;
+        operation.last_error = None;
+    } else if operation.state == WorkspaceOperationState::Failed {
+        let diagnostic = operation
+            .last_error
+            .clone()
+            .unwrap_or_else(|| "target retained no diagnostic".to_string());
+        // Surface this attempt's failure once, but leave a retryable marker so
+        // the next controller action can recover from transient Git/IO errors.
+        operation.state = WorkspaceOperationState::Pending;
+        operation.worker_pid = None;
+        operation.response = None;
+        operation.last_error = None;
+        operation.updated_at = chrono::Utc::now().to_rfc3339();
+        atomic_write_json(&operation_path, &operation)?;
+        bail!("dispatch workspace provisioning failed: {diagnostic}");
+    } else if operation.worker_pid.is_some_and(|pid| {
+        workspace_worker_is_active(
+            pid,
+            "__workspace_provision_run",
+            &request.job_id,
+            &operation.updated_at,
+        )
+    }) {
+        return Ok(pending_provision_response(&request));
     }
 
-    let archive_path = upload_dir.join(UPLOAD_ARCHIVE_FILE);
-    if try_attach_cached_snapshot(store, &upload_dir, &archive_path, &request.metadata)? {
-        return Ok(DispatchWorkspaceBeginResponse {
-            accepted: true,
-            offset: request.metadata.archive_size,
-            upload_path: archive_path.to_string_lossy().to_string(),
-            committed: false,
-            workspace_path: None,
+    operation.state = WorkspaceOperationState::Pending;
+    operation.worker_pid = None;
+    operation.updated_at = chrono::Utc::now().to_rfc3339();
+    atomic_write_json(&operation_path, &operation)?;
+    match super::runner::spawn_workspace_provision(&request.job_id) {
+        Ok(pid) => {
+            operation.worker_pid = Some(pid);
+            operation.updated_at = chrono::Utc::now().to_rfc3339();
+            atomic_write_json(&operation_path, &operation)?;
+            Ok(pending_provision_response(&request))
+        }
+        Err(error) => {
+            operation.state = WorkspaceOperationState::Failed;
+            operation.last_error = Some(truncate_utf8(&format!("{error:#}")));
+            operation.updated_at = chrono::Utc::now().to_rfc3339();
+            let _ = atomic_write_json(&operation_path, &operation);
+            Err(error)
+        }
+    }
+}
+
+/// Detached half of `workspace-provision`.
+pub(crate) fn run_provision(job_id: String) -> Result<()> {
+    let store = DispatchStore::open_default()?;
+    let job_dir = store.workspace_upload_dir(&job_id)?;
+    let operation_path = job_dir.join(PROVISION_OPERATION_FILE);
+    {
+        let _lock = JobLock::exclusive(&store.workspace_operation_lock_path(&job_id)?)?;
+        let mut operation: ProvisionOperationRecord = read_json(&operation_path)
+            .context("dispatch workspace provision operation was not initialized")?;
+        if operation.state == WorkspaceOperationState::Succeeded {
+            return Ok(());
+        }
+        operation.state = WorkspaceOperationState::Running;
+        operation.worker_pid = Some(std::process::id());
+        operation.updated_at = chrono::Utc::now().to_rfc3339();
+        atomic_write_json(&operation_path, &operation)?;
+    }
+
+    let request: DispatchWorkspaceProvisionRequest =
+        read_json::<ProvisionOperationRecord>(&operation_path)?.request;
+    let outcome = provision_in_store(&store, request);
+    let _lock = JobLock::exclusive(&store.workspace_operation_lock_path(&job_id)?)?;
+    let mut operation: ProvisionOperationRecord = read_json(&operation_path)?;
+    operation.worker_pid = None;
+    operation.updated_at = chrono::Utc::now().to_rfc3339();
+    match outcome {
+        Ok(response) => {
+            operation.state = WorkspaceOperationState::Succeeded;
+            operation.response = Some(response);
+            operation.last_error = None;
+            atomic_write_json(&operation_path, &operation)
+        }
+        Err(error) => {
+            operation.state = WorkspaceOperationState::Failed;
+            operation.last_error = Some(truncate_utf8(&format!("{error:#}")));
+            atomic_write_json(&operation_path, &operation)?;
+            Err(error)
+        }
+    }
+}
+
+fn pending_provision_response(
+    request: &DispatchWorkspaceProvisionRequest,
+) -> DispatchWorkspaceProvisionResponse {
+    DispatchWorkspaceProvisionResponse {
+        pending: true,
+        provisioned: false,
+        needs_bundle: false,
+        workspace_path: None,
+        base_commit: request.base_commit.clone(),
+        branch: request.branch.clone(),
+        have_tips: Vec::new(),
+    }
+}
+
+fn provision_in_store(
+    store: &DispatchStore,
+    request: DispatchWorkspaceProvisionRequest,
+) -> Result<DispatchWorkspaceProvisionResponse> {
+    validate_provision(&request)?;
+    let job_dir = store.workspace_upload_dir(&request.job_id)?;
+    let _lock = JobLock::exclusive(&store.workspace_git_operation_lock_path(&request.job_id)?)?;
+    create_private_dir(&job_dir)?;
+
+    let record_path = job_dir.join(PROVISION_RECORD_FILE);
+    match read_json::<ProvisionRecord>(&record_path) {
+        Ok(existing) => ensure_provision_binding(&existing, &request)?,
+        Err(_) => {
+            atomic_write_json(
+                &record_path,
+                &ProvisionRecord {
+                    protocol_version: request.protocol_version,
+                    job_id: request.job_id.clone(),
+                    repo_key: request.repo_key.clone(),
+                    remote_url: request.remote_url.clone(),
+                    base_commit: request.base_commit.clone(),
+                    branch: request.branch.clone(),
+                    created_at: chrono::Utc::now().to_rfc3339(),
+                    workspace_path: None,
+                },
+            )?;
+        }
+    }
+
+    let _repo_lock = JobLock::exclusive(&store.repo_lock_path(&request.repo_key)?)?;
+
+    let worktree_path = store.worktree_dir(&request.job_id)?;
+    if let Some(existing) =
+        existing_worktree(&worktree_path, &request.branch, &request.base_commit)?
+    {
+        return Ok(DispatchWorkspaceProvisionResponse {
+            pending: false,
+            provisioned: true,
+            needs_bundle: false,
+            workspace_path: Some(existing),
+            base_commit: request.base_commit,
+            branch: request.branch,
+            have_tips: Vec::new(),
         });
     }
-    let archive_metadata = fs::symlink_metadata(&archive_path);
-    let offset = match archive_metadata {
+
+    let repo = ensure_repository(store, &request.repo_key, request.remote_url.as_deref())?;
+    if request.remote_url.is_some() && !commit_exists(&repo, &request.base_commit)? {
+        // A fetch failure is not fatal on its own: the controller can still
+        // deliver the missing objects by bundle, which is also the only path for
+        // a repository with no remote.
+        if let Err(error) = fetch_remote(&repo) {
+            tracing::warn!("Dispatch target could not fetch from the Git remote: {error:#}");
+        }
+    }
+    if !commit_exists(&repo, &request.base_commit)? {
+        return Ok(DispatchWorkspaceProvisionResponse {
+            pending: false,
+            provisioned: false,
+            needs_bundle: true,
+            workspace_path: None,
+            base_commit: request.base_commit,
+            branch: request.branch,
+            have_tips: repository_tips(&repo)?,
+        });
+    }
+
+    let workspace_path =
+        create_worktree(&repo, &worktree_path, &request.branch, &request.base_commit)?;
+    let mut record: ProvisionRecord = read_json(&record_path)?;
+    record.workspace_path = Some(workspace_path.clone());
+    atomic_write_json(&record_path, &record)?;
+    Ok(DispatchWorkspaceProvisionResponse {
+        pending: false,
+        provisioned: true,
+        needs_bundle: false,
+        workspace_path: Some(workspace_path),
+        base_commit: request.base_commit,
+        branch: request.branch,
+        have_tips: Vec::new(),
+    })
+}
+
+pub(crate) fn bundle_begin(
+    request: DispatchWorkspaceBundleBeginRequest,
+) -> Result<DispatchWorkspaceBundleBeginResponse> {
+    let store = DispatchStore::open_default()?;
+    bundle_begin_in_store(&store, request)
+}
+
+fn bundle_begin_in_store(
+    store: &DispatchStore,
+    request: DispatchWorkspaceBundleBeginRequest,
+) -> Result<DispatchWorkspaceBundleBeginResponse> {
+    if request.protocol_version != DISPATCH_PROTOCOL_VERSION {
+        bail!(
+            "unsupported dispatch protocolVersion {}; target requires {}",
+            request.protocol_version,
+            DISPATCH_PROTOCOL_VERSION
+        );
+    }
+    super::store::validate_id("jobId", &request.job_id)?;
+    validate_digest(&request.sha256)?;
+    if request.size == 0 || request.size > MAX_BUNDLE_BYTES {
+        bail!("dispatch bundle size is outside the target limit");
+    }
+
+    let job_dir = store.workspace_upload_dir(&request.job_id)?;
+    let _lock = JobLock::exclusive(&store.workspace_operation_lock_path(&request.job_id)?)?;
+    create_private_dir(&job_dir)?;
+    let record_path = job_dir.join(BUNDLE_RECORD_FILE);
+    let bundle_path = job_dir.join(INCOMING_BUNDLE_FILE);
+
+    match read_json::<BundleUploadRecord>(&record_path) {
+        Ok(mut existing) => {
+            ensure_bundle_binding(&existing, &request)?;
+            if existing.state == BundleUploadState::Failed {
+                // The prior commit poll already received its diagnostic. A new
+                // begin is a new controller attempt and may resume the retained
+                // verified bytes instead of leaving the job permanently stuck.
+                existing.state = BundleUploadState::Uploading;
+                existing.worker_pid = None;
+                existing.last_error = None;
+                existing.updated_at = chrono::Utc::now().to_rfc3339();
+                atomic_write_json(&record_path, &existing)?;
+            }
+            if existing.state == BundleUploadState::Committed {
+                return Ok(DispatchWorkspaceBundleBeginResponse {
+                    accepted: true,
+                    offset: existing.size,
+                    committed: true,
+                });
+            }
+        }
+        Err(_) => {
+            // A begin for different bytes replaces whatever partial upload was
+            // there: the digest is what binds an upload, and this one is new.
+            remove_file_if_present(&bundle_path);
+            atomic_write_json(
+                &record_path,
+                &BundleUploadRecord {
+                    protocol_version: request.protocol_version,
+                    job_id: request.job_id.clone(),
+                    sha256: request.sha256.to_ascii_lowercase(),
+                    size: request.size,
+                    state: BundleUploadState::Uploading,
+                    created_at: chrono::Utc::now().to_rfc3339(),
+                    worker_pid: None,
+                    last_error: None,
+                    updated_at: chrono::Utc::now().to_rfc3339(),
+                },
+            )?;
+        }
+    }
+
+    let offset = match fs::symlink_metadata(&bundle_path) {
         Ok(metadata) => {
             if metadata.file_type().is_symlink() || !metadata.is_file() {
-                bail!("workspace upload archive is not a regular file");
+                bail!("dispatch bundle upload path is not a regular file");
             }
-            set_private_file_permissions(&archive_path)?;
-            if metadata.len() > request.metadata.archive_size {
-                let file = OpenOptions::new()
+            set_private_file_permissions(&bundle_path)?;
+            if metadata.len() > request.size {
+                OpenOptions::new()
                     .write(true)
-                    .open(&archive_path)
-                    .context("open oversized workspace upload archive")?;
-                file.set_len(0)
-                    .context("reset oversized workspace upload archive")?;
+                    .open(&bundle_path)
+                    .context("open oversized dispatch bundle upload")?
+                    .set_len(0)
+                    .context("reset oversized dispatch bundle upload")?;
                 0
             } else {
                 metadata.len()
             }
         }
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            let file = OpenOptions::new()
-                .write(true)
-                .create_new(true)
-                .open(&archive_path)
-                .context("create workspace upload archive")?;
-            drop(file);
-            set_private_file_permissions(&archive_path)?;
+            drop(
+                OpenOptions::new()
+                    .write(true)
+                    .create_new(true)
+                    .open(&bundle_path)
+                    .context("create dispatch bundle upload")?,
+            );
+            set_private_file_permissions(&bundle_path)?;
             0
         }
-        Err(error) => return Err(error).context("inspect workspace upload archive"),
+        Err(error) => return Err(error).context("inspect dispatch bundle upload"),
     };
-    Ok(DispatchWorkspaceBeginResponse {
+    Ok(DispatchWorkspaceBundleBeginResponse {
         accepted: true,
         offset,
-        upload_path: archive_path.to_string_lossy().to_string(),
         committed: false,
-        workspace_path: None,
     })
 }
 
-pub(crate) fn chunk(
-    request: DispatchWorkspaceChunkRequest,
-) -> Result<DispatchWorkspaceChunkResponse> {
+pub(crate) fn bundle_chunk(
+    request: DispatchWorkspaceBundleChunkRequest,
+) -> Result<DispatchWorkspaceBundleChunkResponse> {
     if request.data_base64.len() > MAX_CHUNK_BASE64_BYTES {
-        bail!("workspace upload chunk exceeds the encoded safety limit");
+        bail!("dispatch bundle chunk exceeds the encoded safety limit");
     }
     let data = base64::engine::general_purpose::STANDARD
         .decode(request.data_base64.as_bytes())
-        .context("decode workspace upload chunk")?;
+        .context("decode dispatch bundle chunk")?;
     if data.is_empty() || data.len() > MAX_CHUNK_BYTES {
-        bail!(
-            "workspace upload chunk must contain 1-{} bytes",
-            MAX_CHUNK_BYTES
-        );
+        bail!("dispatch bundle chunk must contain 1-{MAX_CHUNK_BYTES} bytes");
     }
     let store = DispatchStore::open_default()?;
-    let upload_dir = store.workspace_upload_dir(&request.job_id)?;
-    let lock_path = workspace_upload_lock_path(&store, &request.job_id);
-    let _lock = JobLock::exclusive(&lock_path)?;
-    let record: WorkspaceUploadRecord = read_json(&upload_dir.join(UPLOAD_RECORD_FILE))
-        .context("workspace upload was not initialized")?;
-    ensure_upload_identity(&record, &request.job_id)?;
-    ensure_upload_not_failed(&record)?;
-    if record.state != WorkspaceUploadState::Uploading {
-        bail!("workspace upload is not accepting chunks");
+    let job_dir = store.workspace_upload_dir(&request.job_id)?;
+    let _lock = JobLock::exclusive(&store.workspace_operation_lock_path(&request.job_id)?)?;
+    let record: BundleUploadRecord = read_json(&job_dir.join(BUNDLE_RECORD_FILE))
+        .context("dispatch bundle upload was not initialized")?;
+    if record.job_id != request.job_id {
+        bail!("dispatch bundle upload identity mismatch");
     }
-    let archive_path = upload_dir.join(UPLOAD_ARCHIVE_FILE);
+    ensure_bundle_not_failed(&record)?;
+    if record.state != BundleUploadState::Uploading {
+        bail!("dispatch bundle upload is not accepting chunks");
+    }
+
+    let bundle_path = job_dir.join(INCOMING_BUNDLE_FILE);
     let mut file = OpenOptions::new()
         .read(true)
         .write(true)
-        .open(&archive_path)
-        .context("open workspace upload archive")?;
-    set_private_file_permissions(&archive_path)?;
+        .open(&bundle_path)
+        .context("open dispatch bundle upload")?;
+    set_private_file_permissions(&bundle_path)?;
     let current = file.metadata()?.len();
     let chunk_end = request.offset.saturating_add(data.len() as u64);
-    if chunk_end > record.metadata.archive_size {
-        bail!("workspace upload chunk exceeds the declared archive size");
+    if chunk_end > record.size {
+        bail!("dispatch bundle chunk exceeds the declared size");
     }
     if request.offset < current {
         if chunk_end > current {
-            bail!("workspace upload chunk overlaps the retained archive tail");
+            bail!("dispatch bundle chunk overlaps the retained tail");
         }
+        // A retry that repeats bytes already on disk is accepted only when it
+        // repeats them exactly; anything else means two different bundles are
+        // racing for one job.
         file.seek(SeekFrom::Start(request.offset))?;
         let mut existing = vec![0_u8; data.len()];
         file.read_exact(&mut existing)?;
         if existing != data {
-            bail!("workspace upload retry does not match retained bytes");
+            bail!("dispatch bundle retry does not match retained bytes");
         }
-        return Ok(DispatchWorkspaceChunkResponse {
+        return Ok(DispatchWorkspaceBundleChunkResponse {
             accepted: true,
             offset: current,
         });
     }
     if request.offset != current {
         bail!(
-            "workspace upload offset mismatch: expected {}, received {}",
-            current,
+            "dispatch bundle offset mismatch: expected {current}, received {}",
             request.offset
         );
     }
     file.seek(SeekFrom::End(0))?;
     file.write_all(&data)?;
     file.sync_data()?;
-    Ok(DispatchWorkspaceChunkResponse {
+    Ok(DispatchWorkspaceBundleChunkResponse {
         accepted: true,
         offset: chunk_end,
     })
 }
 
-pub(crate) fn commit(
-    request: DispatchWorkspaceCommitRequest,
-) -> Result<DispatchWorkspaceCommitResponse> {
+pub(crate) fn bundle_commit(
+    request: DispatchWorkspaceBundleCommitRequest,
+) -> Result<DispatchWorkspaceBundleCommitResponse> {
     let store = DispatchStore::open_default()?;
-    let upload_dir = store.workspace_upload_dir(&request.job_id)?;
-    let lock_path = workspace_upload_lock_path(&store, &request.job_id);
-    let Some(_lock) = JobLock::try_exclusive(&lock_path)? else {
-        let record: WorkspaceUploadRecord = read_json(&upload_dir.join(UPLOAD_RECORD_FILE))
-            .context("workspace upload was not initialized")?;
-        ensure_upload_identity(&record, &request.job_id)?;
-        ensure_upload_not_failed(&record)?;
-        return Ok(pending_commit_response(&record));
-    };
-    let record_path = upload_dir.join(UPLOAD_RECORD_FILE);
-    let mut record: WorkspaceUploadRecord =
-        read_json(&record_path).context("workspace upload was not initialized")?;
-    ensure_upload_identity(&record, &request.job_id)?;
-    ensure_upload_not_failed(&record)?;
-    if record.state == WorkspaceUploadState::Committed {
-        let workspace_path =
-            validate_committed_workspace(&upload_dir, record.workspace_path.as_deref())?;
-        return Ok(DispatchWorkspaceCommitResponse {
+    let job_dir = store.workspace_upload_dir(&request.job_id)?;
+    let _lock = JobLock::exclusive(&store.workspace_operation_lock_path(&request.job_id)?)?;
+    let record_path = job_dir.join(BUNDLE_RECORD_FILE);
+    let mut record: BundleUploadRecord =
+        read_json(&record_path).context("dispatch bundle upload was not initialized")?;
+    if record.job_id != request.job_id {
+        bail!("dispatch bundle upload identity mismatch");
+    }
+    if record.state == BundleUploadState::Failed {
+        let diagnostic = record
+            .last_error
+            .clone()
+            .unwrap_or_else(|| "target did not retain a diagnostic".to_string());
+        record.state = BundleUploadState::Uploading;
+        record.worker_pid = None;
+        record.last_error = None;
+        record.updated_at = chrono::Utc::now().to_rfc3339();
+        atomic_write_json(&record_path, &record)?;
+        bail!("dispatch bundle delivery failed: {diagnostic}");
+    }
+    if record.state == BundleUploadState::Committed {
+        return Ok(DispatchWorkspaceBundleCommitResponse {
             committed: true,
-            workspace_path: Some(workspace_path),
-            metadata: record.metadata,
+            pending: false,
+        });
+    }
+    if record.state == BundleUploadState::Committing
+        && record.worker_pid.is_some_and(|pid| {
+            workspace_worker_is_active(
+                pid,
+                "__workspace_bundle_commit_run",
+                &request.job_id,
+                &record.updated_at,
+            )
+        })
+    {
+        return Ok(DispatchWorkspaceBundleCommitResponse {
+            committed: false,
+            pending: true,
         });
     }
 
-    if managed_workspace_exists(&upload_dir)? {
-        // Extraction publishes this directory only after every digest and
-        // manifest check succeeds. Recover the narrow crash window between
-        // directory publication and record publication.
-        let workspace_path = mark_workspace_committed(&record_path, &upload_dir, &mut record)?;
-        return Ok(DispatchWorkspaceCommitResponse {
-            committed: true,
-            workspace_path: Some(workspace_path),
-            metadata: record.metadata,
-        });
+    record.state = BundleUploadState::Committing;
+    record.worker_pid = None;
+    record.last_error = None;
+    record.updated_at = chrono::Utc::now().to_rfc3339();
+    atomic_write_json(&record_path, &record)?;
+    match super::runner::spawn_workspace_bundle_commit(&request.job_id) {
+        Ok(pid) => {
+            record.worker_pid = Some(pid);
+            record.updated_at = chrono::Utc::now().to_rfc3339();
+            atomic_write_json(&record_path, &record)?;
+            Ok(DispatchWorkspaceBundleCommitResponse {
+                committed: false,
+                pending: true,
+            })
+        }
+        Err(error) => {
+            record.state = BundleUploadState::Failed;
+            record.last_error = Some(truncate_utf8(&format!("{error:#}")));
+            record.updated_at = chrono::Utc::now().to_rfc3339();
+            let _ = atomic_write_json(&record_path, &record);
+            Err(error)
+        }
     }
-
-    let archive_path = upload_dir.join(UPLOAD_ARCHIVE_FILE);
-    validate_complete_archive(&archive_path, &record.metadata)?;
-    super::runner::spawn_workspace_materializer(&request.job_id)?;
-    Ok(pending_commit_response(&record))
 }
 
-/// Diff the terminal workspace against the snapshot it was given and package
-/// what changed.
+/// Detached half of `workspace-bundle-commit`.
+pub(crate) fn run_bundle_commit(job_id: String) -> Result<()> {
+    bundle_commit_in_store(
+        &DispatchStore::open_default()?,
+        DispatchWorkspaceBundleCommitRequest { job_id },
+    )
+    .map(|_| ())
+}
+
+fn bundle_commit_in_store(
+    store: &DispatchStore,
+    request: DispatchWorkspaceBundleCommitRequest,
+) -> Result<DispatchWorkspaceBundleCommitResponse> {
+    let job_dir = store.workspace_upload_dir(&request.job_id)?;
+    let _git_lock = JobLock::exclusive(&store.workspace_git_operation_lock_path(&request.job_id)?)?;
+    let record_path = job_dir.join(BUNDLE_RECORD_FILE);
+    let record: BundleUploadRecord =
+        read_json(&record_path).context("dispatch bundle upload was not initialized")?;
+    if record.job_id != request.job_id {
+        bail!("dispatch bundle upload identity mismatch");
+    }
+    ensure_bundle_not_failed(&record)?;
+    if record.state == BundleUploadState::Committed {
+        return Ok(DispatchWorkspaceBundleCommitResponse {
+            committed: true,
+            pending: false,
+        });
+    }
+
+    let provision: ProvisionRecord = read_json(&job_dir.join(PROVISION_RECORD_FILE))
+        .context("dispatch bundle requires a provisioned job")?;
+    let _repo_lock = JobLock::exclusive(&store.repo_lock_path(&provision.repo_key)?)?;
+    let bundle_path = job_dir.join(INCOMING_BUNDLE_FILE);
+    let outcome = (|| -> Result<()> {
+        let metadata = fs::symlink_metadata(&bundle_path).context("inspect dispatch bundle")?;
+        if metadata.file_type().is_symlink() || !metadata.is_file() {
+            bail!("dispatch bundle is not a regular file");
+        }
+        if metadata.len() != record.size {
+            bail!(
+                "dispatch bundle is incomplete: expected {} bytes, received {}",
+                record.size,
+                metadata.len()
+            );
+        }
+        if !sha256_file(&bundle_path)?.eq_ignore_ascii_case(&record.sha256) {
+            bail!("dispatch bundle SHA-256 mismatch");
+        }
+        let repo = ensure_repository(store, &provision.repo_key, provision.remote_url.as_deref())?;
+        // `git bundle verify` checks the bundle's own integrity and that every
+        // prerequisite commit is already present, so a bundle that would leave
+        // a broken history is rejected before it touches the object store.
+        git(&repo, &["bundle", "verify", path_arg(&bundle_path)?])
+            .context("verify dispatch bundle")?;
+        git(
+            &repo,
+            &[
+                "fetch",
+                "--no-tags",
+                path_arg(&bundle_path)?,
+                &format!("+refs/heads/{0}:refs/heads/{0}", provision.branch),
+            ],
+        )
+        .context("fetch dispatch bundle into the target repository")?;
+        if !commit_exists(&repo, &provision.base_commit)? {
+            bail!("dispatch bundle did not deliver the requested base commit");
+        }
+        Ok(())
+    })();
+
+    let _state_lock = JobLock::exclusive(&store.workspace_operation_lock_path(&request.job_id)?)?;
+    // Re-read after the long Git operation so a poller's atomic state update is
+    // never overwritten by a stale in-memory copy.
+    let mut record: BundleUploadRecord = read_json(&record_path)?;
+    match outcome {
+        Ok(()) => {
+            record.state = BundleUploadState::Committed;
+            record.worker_pid = None;
+            record.updated_at = chrono::Utc::now().to_rfc3339();
+            atomic_write_json(&record_path, &record)?;
+            // The objects live in the repository now; the transfer artifact is
+            // pure duplication.
+            remove_file_if_present(&bundle_path);
+            Ok(DispatchWorkspaceBundleCommitResponse {
+                committed: true,
+                pending: false,
+            })
+        }
+        Err(error) => {
+            record.state = BundleUploadState::Failed;
+            record.worker_pid = None;
+            record.last_error = Some(truncate_utf8(&format!("{error:#}")));
+            record.updated_at = chrono::Utc::now().to_rfc3339();
+            let _ = atomic_write_json(&record_path, &record);
+            Err(error)
+        }
+    }
+}
+
+/// Commit whatever the agent changed and package it as a bundle.
 ///
-/// Only valid for snapshot-delivered jobs: a job that ran against a directory
-/// the user already had has no baseline to diff against, and BitFun never took
-/// ownership of that directory.
-pub(crate) fn result(
-    request: DispatchWorkspaceResultRequest,
-) -> Result<DispatchWorkspaceResultResponse> {
+/// Read-only with respect to the controller: it only ever adds commits on the
+/// job's own branch, so a controller that never syncs leaves no trace here.
+pub(crate) fn sync(request: DispatchWorkspaceSyncRequest) -> Result<DispatchWorkspaceSyncResponse> {
     let store = DispatchStore::open_default()?;
-    let upload_dir = store.workspace_upload_dir(&request.job_id)?;
-    let lock_path = workspace_upload_lock_path(&store, &request.job_id);
-    let _lock = JobLock::exclusive(&lock_path)?;
-
-    let record: WorkspaceUploadRecord = read_json(&upload_dir.join(UPLOAD_RECORD_FILE))
-        .context("this job did not receive a workspace snapshot")?;
-    ensure_upload_identity(&record, &request.job_id)?;
-    if record.state != WorkspaceUploadState::Committed {
-        bail!("workspace snapshot is not committed yet");
+    super::store::validate_id("jobId", &request.job_id)?;
+    super::store::validate_id("operationId", &request.operation_id)?;
+    if request
+        .known_head
+        .as_deref()
+        .is_some_and(|head| validate_commit(head).is_err())
+    {
+        bail!("dispatch knownHead must be a full 40-character commit id");
     }
-    let baseline: WorkspaceSnapshotManifest =
-        read_json(&upload_dir.join(BASELINE_MANIFEST_FILE))
-            .context("this job predates result bundles; its baseline manifest was not recorded")?;
+    let job_dir = store.workspace_upload_dir(&request.job_id)?;
+    let _lock = JobLock::exclusive(&store.workspace_operation_lock_path(&request.job_id)?)?;
+    let provision: ProvisionRecord = read_json(&job_dir.join(PROVISION_RECORD_FILE))
+        .context("this job did not receive a Git workspace")?;
+    let operation_path = job_dir.join(SYNC_OPERATION_FILE);
+    let mut operation = match read_optional_json::<SyncOperationRecord>(&operation_path)? {
+        // Polls from one controller invocation must observe its durable result,
+        // especially a clean result whose head is identical to `knownHead`.
+        // Checking this before the generation boundary prevents every poll
+        // from reopening that completed no-op.
+        Some(existing) if existing.request.operation_id == request.operation_id => {
+            if existing.request != request {
+                bail!("dispatch operationId is already bound to a different sync request");
+            }
+            existing
+        }
+        // Before the controller records a changed head, a retry uses a new
+        // operation id but the old known head. Return the retained bundle
+        // response instead of starting over so transfer/apply failures remain
+        // safely retryable.
+        Some(existing)
+            if existing.state == WorkspaceOperationState::Succeeded
+                && existing
+                    .response
+                    .as_ref()
+                    .is_some_and(|response| response.changed)
+                && existing.request.known_head == request.known_head =>
+        {
+            existing
+        }
+        // An acknowledged head is the generation boundary. A later click gets
+        // a new operation id and intentionally re-opens the operation so a
+        // still-running agent's newer commits can be discovered.
+        Some(existing)
+            if existing.state == WorkspaceOperationState::Succeeded
+                && request.known_head.as_deref()
+                    == existing
+                        .response
+                        .as_ref()
+                        .map(|response| response.head_commit.as_str()) =>
+        {
+            SyncOperationRecord {
+                request: request.clone(),
+                state: WorkspaceOperationState::Pending,
+                worker_pid: None,
+                response: None,
+                last_error: None,
+                failure_reported: false,
+                updated_at: chrono::Utc::now().to_rfc3339(),
+            }
+        }
+        // A failed generation remains durable until its diagnostic has been
+        // returned. Older v3 journals did not carry operationId, so the first
+        // current request acts as that final poll before a retry can take over.
+        Some(existing)
+            if existing.state == WorkspaceOperationState::Failed
+                && existing.request.operation_id.is_empty()
+                && !existing.failure_reported =>
+        {
+            existing
+        }
+        // Replacing an abandoned generation is safe only while holding this
+        // job's operation lock and after its detached worker is verifiably
+        // gone. Pending/Running without a live worker covers process crashes
+        // and the failure-consumption state written by early v3 builds.
+        Some(existing) if sync_operation_can_be_replaced(&existing, &request.job_id) => {
+            new_sync_operation(request.clone())
+        }
+        Some(_) => bail!("dispatch sync is already bound to a different request"),
+        None => new_sync_operation(request.clone()),
+    };
 
-    let current = upload_dir.join(CURRENT_WORKSPACE_DIR);
-    if !is_real_directory(&current) {
-        bail!("managed dispatch workspace is missing");
+    match operation.state {
+        WorkspaceOperationState::Succeeded => {
+            return operation
+                .response
+                .context("dispatch sync operation has no response")
+        }
+        WorkspaceOperationState::Failed => {
+            let diagnostic = operation
+                .last_error
+                .clone()
+                .unwrap_or_else(|| "target retained no diagnostic".to_string());
+            if !operation.failure_reported {
+                operation.failure_reported = true;
+                operation.updated_at = chrono::Utc::now().to_rfc3339();
+                atomic_write_json(&operation_path, &operation)?;
+            }
+            bail!("dispatch workspace sync failed: {diagnostic}");
+        }
+        WorkspaceOperationState::Pending | WorkspaceOperationState::Running
+            if operation.worker_pid.is_some_and(|pid| {
+                workspace_worker_is_active(
+                    pid,
+                    "__workspace_sync_run",
+                    &request.job_id,
+                    &operation.updated_at,
+                )
+            }) =>
+        {
+            return Ok(pending_sync_response(&provision));
+        }
+        WorkspaceOperationState::Pending | WorkspaceOperationState::Running => {}
     }
-    let bundle_path = upload_dir.join(RESULT_BUNDLE_FILE);
-    let summary = create_workspace_result_bundle(&current, &baseline, &bundle_path)?;
+
+    operation.state = WorkspaceOperationState::Pending;
+    operation.worker_pid = None;
+    operation.response = None;
+    operation.last_error = None;
+    operation.failure_reported = false;
+    operation.updated_at = chrono::Utc::now().to_rfc3339();
+    atomic_write_json(&operation_path, &operation)?;
+    match super::runner::spawn_workspace_sync(&request.job_id) {
+        Ok(pid) => {
+            operation.worker_pid = Some(pid);
+            operation.updated_at = chrono::Utc::now().to_rfc3339();
+            atomic_write_json(&operation_path, &operation)?;
+            Ok(pending_sync_response(&provision))
+        }
+        Err(error) => {
+            operation.state = WorkspaceOperationState::Failed;
+            operation.last_error = Some(truncate_utf8(&format!("{error:#}")));
+            // This synchronous failure is returned by the current call, so it
+            // does not need one more poll before a new operation can retry.
+            operation.failure_reported = true;
+            operation.updated_at = chrono::Utc::now().to_rfc3339();
+            let _ = atomic_write_json(&operation_path, &operation);
+            Err(error)
+        }
+    }
+}
+
+/// Detached half of `workspace-sync`.
+pub(crate) fn run_sync(job_id: String) -> Result<()> {
+    let store = DispatchStore::open_default()?;
+    let job_dir = store.workspace_upload_dir(&job_id)?;
+    let operation_path = job_dir.join(SYNC_OPERATION_FILE);
+    let request = {
+        let _lock = JobLock::exclusive(&store.workspace_operation_lock_path(&job_id)?)?;
+        let mut operation: SyncOperationRecord = read_json(&operation_path)
+            .context("dispatch workspace sync operation was not initialized")?;
+        if operation.state == WorkspaceOperationState::Succeeded {
+            return Ok(());
+        }
+        operation.state = WorkspaceOperationState::Running;
+        operation.worker_pid = Some(std::process::id());
+        operation.updated_at = chrono::Utc::now().to_rfc3339();
+        let request = operation.request.clone();
+        atomic_write_json(&operation_path, &operation)?;
+        request
+    };
+
+    let outcome = sync_in_store(&store, request.clone());
+    let _lock = JobLock::exclusive(&store.workspace_operation_lock_path(&job_id)?)?;
+    let mut operation: SyncOperationRecord = read_json(&operation_path)?;
+    // A replacement is allowed only after the previous worker is gone, but
+    // retain a generation fence as defense in depth against stale/corrupt PIDs.
+    if operation.request != request {
+        return Ok(());
+    }
+    operation.worker_pid = None;
+    operation.updated_at = chrono::Utc::now().to_rfc3339();
+    match outcome {
+        Ok(response) => {
+            operation.state = WorkspaceOperationState::Succeeded;
+            operation.response = Some(response);
+            operation.last_error = None;
+            operation.failure_reported = false;
+            atomic_write_json(&operation_path, &operation)
+        }
+        Err(error) => {
+            operation.state = WorkspaceOperationState::Failed;
+            operation.last_error = Some(truncate_utf8(&format!("{error:#}")));
+            operation.failure_reported = false;
+            atomic_write_json(&operation_path, &operation)?;
+            Err(error)
+        }
+    }
+}
+
+fn new_sync_operation(request: DispatchWorkspaceSyncRequest) -> SyncOperationRecord {
+    SyncOperationRecord {
+        request,
+        state: WorkspaceOperationState::Pending,
+        worker_pid: None,
+        response: None,
+        last_error: None,
+        failure_reported: false,
+        updated_at: chrono::Utc::now().to_rfc3339(),
+    }
+}
+
+fn sync_operation_can_be_replaced(operation: &SyncOperationRecord, job_id: &str) -> bool {
+    let worker_is_active = operation.worker_pid.is_some_and(|pid| {
+        workspace_worker_is_active(pid, "__workspace_sync_run", job_id, &operation.updated_at)
+    });
+    if worker_is_active {
+        return false;
+    }
+    match operation.state {
+        WorkspaceOperationState::Pending | WorkspaceOperationState::Running => true,
+        WorkspaceOperationState::Failed => operation.failure_reported,
+        WorkspaceOperationState::Succeeded => false,
+    }
+}
+
+fn pending_sync_response(provision: &ProvisionRecord) -> DispatchWorkspaceSyncResponse {
+    DispatchWorkspaceSyncResponse {
+        pending: true,
+        changed: false,
+        branch: provision.branch.clone(),
+        base_commit: provision.base_commit.clone(),
+        head_commit: provision.base_commit.clone(),
+        commit_count: 0,
+        changes: Vec::new(),
+        truncated_changes: false,
+        bundle_path: None,
+        bundle_sha256: None,
+        bundle_size: 0,
+    }
+}
+
+fn sync_in_store(
+    store: &DispatchStore,
+    request: DispatchWorkspaceSyncRequest,
+) -> Result<DispatchWorkspaceSyncResponse> {
+    let job_dir = store.workspace_upload_dir(&request.job_id)?;
+    let _git_lock = JobLock::exclusive(&store.workspace_git_operation_lock_path(&request.job_id)?)?;
+    let provision: ProvisionRecord = read_json(&job_dir.join(PROVISION_RECORD_FILE))
+        .context("this job did not receive a Git workspace")?;
+    let _repo_lock = JobLock::exclusive(&store.repo_lock_path(&provision.repo_key)?)?;
+    let worktree = store.worktree_dir(&request.job_id)?;
+    if !is_real_directory(&worktree) {
+        bail!("the dispatch worktree is missing");
+    }
+
+    let current_branch = git(&worktree, &["symbolic-ref", "--quiet", "--short", "HEAD"])
+        .context("verify the dispatch worktree branch before syncing")?
+        .trim()
+        .to_string();
+    if current_branch != provision.branch {
+        bail!(
+            "dispatch worktree is on branch '{}' instead of its managed branch '{}'",
+            current_branch,
+            provision.branch
+        );
+    }
+
+    git(&worktree, &["add", "-A"]).context("stage dispatch worktree changes")?;
+    if !git_succeeds(&worktree, &["diff", "--cached", "--quiet"])? {
+        let message = request
+            .message
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .unwrap_or(DEFAULT_SYNC_COMMIT_MESSAGE);
+        git(
+            &worktree,
+            &[
+                "-c",
+                "commit.gpgsign=false",
+                "-c",
+                "user.name=BitFun Dispatch",
+                "-c",
+                "user.email=dispatch@bitfun.local",
+                "commit",
+                "--no-verify",
+                "-m",
+                message,
+            ],
+        )
+        .context("commit dispatch worktree changes")?;
+    }
+
+    let head_commit = git(&worktree, &["rev-parse", "HEAD"])?.trim().to_string();
+    if !git_succeeds(
+        &worktree,
+        &[
+            "merge-base",
+            "--is-ancestor",
+            &provision.base_commit,
+            &head_commit,
+        ],
+    )? {
+        bail!("dispatch branch no longer descends from its immutable base commit");
+    }
+    let sync_base = request
+        .known_head
+        .as_deref()
+        .unwrap_or(&provision.base_commit)
+        .to_string();
+    if !commit_exists(&worktree, &sync_base)?
+        || !git_succeeds(
+            &worktree,
+            &["merge-base", "--is-ancestor", &sync_base, &head_commit],
+        )?
+    {
+        bail!("dispatch knownHead is not an ancestor of the managed branch");
+    }
+    if head_commit == sync_base {
+        return Ok(DispatchWorkspaceSyncResponse {
+            pending: false,
+            changed: false,
+            branch: provision.branch,
+            base_commit: sync_base,
+            head_commit,
+            commit_count: 0,
+            changes: Vec::new(),
+            truncated_changes: false,
+            bundle_path: None,
+            bundle_sha256: None,
+            bundle_size: 0,
+        });
+    }
+
+    let range = format!("{sync_base}..{head_commit}");
+    let commit_count = git(&worktree, &["rev-list", "--count", &range])?
+        .trim()
+        .parse::<u64>()
+        .unwrap_or(0);
+    let (changes, truncated_changes) = collect_changes(&worktree, &sync_base, &head_commit)?;
+
+    let bundle_path = job_dir.join(RESULT_BUNDLE_FILE);
+    remove_file_if_present(&bundle_path);
+    // The wanted side must name a ref, not a commit id: a bundle carries refs,
+    // and `git bundle` refuses to create one that would contain none.
+    let bundle_range = format!("{sync_base}..{}", provision.branch);
+    git(
+        &worktree,
+        &["bundle", "create", path_arg(&bundle_path)?, &bundle_range],
+    )
+    .context("package dispatch result bundle")?;
     set_private_file_permissions(&bundle_path)?;
-    Ok(DispatchWorkspaceResultResponse {
-        bundle_path: bundle_path.to_string_lossy().to_string(),
-        workspace_path: current.to_string_lossy().to_string(),
-        summary,
+    let bundle_size = fs::symlink_metadata(&bundle_path)
+        .context("inspect dispatch result bundle")?
+        .len();
+    let bundle_sha256 = sha256_file(&bundle_path)?;
+
+    Ok(DispatchWorkspaceSyncResponse {
+        pending: false,
+        changed: true,
+        branch: provision.branch,
+        base_commit: sync_base,
+        head_commit,
+        commit_count,
+        changes,
+        truncated_changes,
+        bundle_path: Some(bundle_path.to_string_lossy().to_string()),
+        bundle_sha256: Some(bundle_sha256),
+        bundle_size,
     })
 }
 
-/// Stream back a slice of the bundle `result` already produced.
+/// Stream back a slice of the bundle `sync` already produced.
 ///
-/// Read-only and bounded: it never rebuilds the bundle, so the digest the
-/// controller verified stays the digest it receives.
-pub(crate) fn result_chunk(
-    request: DispatchWorkspaceResultChunkRequest,
-) -> Result<DispatchWorkspaceResultChunkResponse> {
+/// Never rebuilds the bundle, so the digest the controller verified stays the
+/// digest it receives.
+pub(crate) fn sync_chunk(
+    request: DispatchWorkspaceSyncChunkRequest,
+) -> Result<DispatchWorkspaceSyncChunkResponse> {
     if request.length == 0 || request.length > MAX_CHUNK_BYTES as u64 {
-        bail!("workspace result chunk length must be between 1 and {MAX_CHUNK_BYTES} bytes");
+        bail!("dispatch sync chunk length must be between 1 and {MAX_CHUNK_BYTES} bytes");
     }
     let store = DispatchStore::open_default()?;
-    let upload_dir = store.workspace_upload_dir(&request.job_id)?;
-    let bundle_path = upload_dir.join(RESULT_BUNDLE_FILE);
-    let mut file = fs::File::open(&bundle_path)
-        .context("build the dispatch result bundle before reading it")?;
+    let job_dir = store.workspace_upload_dir(&request.job_id)?;
+    let bundle_path = job_dir.join(RESULT_BUNDLE_FILE);
+    let mut file =
+        fs::File::open(&bundle_path).context("run the dispatch sync before reading its bundle")?;
     let size = file.metadata()?.len();
     if request.offset > size {
-        bail!("workspace result chunk offset is past the end of the bundle");
+        bail!("dispatch sync chunk offset is past the end of the bundle");
     }
     file.seek(SeekFrom::Start(request.offset))?;
     let remaining = size - request.offset;
@@ -394,111 +1119,348 @@ pub(crate) fn result_chunk(
     file.read_exact(&mut buffer)
         .context("read dispatch result bundle")?;
     let next_offset = request.offset + take as u64;
-    Ok(DispatchWorkspaceResultChunkResponse {
+    Ok(DispatchWorkspaceSyncChunkResponse {
         offset: next_offset,
         data_base64: base64::engine::general_purpose::STANDARD.encode(&buffer),
         eof: next_offset >= size,
     })
 }
 
-/// Detached target-side materialization. The short `workspace-commit` RPC
-/// starts this process and subsequent commit calls poll the durable record, so
-/// extraction is not bounded by an SSH or Relay request timeout.
-pub(crate) fn materialize(job_id: String) -> Result<()> {
-    let store = DispatchStore::open_default()?;
-    materialize_in_store(&store, &job_id)
+fn collect_changes(
+    worktree: &Path,
+    base_commit: &str,
+    head_commit: &str,
+) -> Result<(Vec<DispatchWorkspaceSyncedChange>, bool)> {
+    let raw = git(
+        worktree,
+        &[
+            "diff",
+            "--name-status",
+            "--no-renames",
+            base_commit,
+            head_commit,
+        ],
+    )?;
+    let mut changes = Vec::new();
+    let mut truncated = false;
+    for line in raw.lines() {
+        let mut parts = line.splitn(2, '\t');
+        let (Some(status), Some(path)) = (parts.next(), parts.next()) else {
+            continue;
+        };
+        if changes.len() >= MAX_REPORTED_CHANGES {
+            truncated = true;
+            break;
+        }
+        changes.push(DispatchWorkspaceSyncedChange {
+            status: status.trim().to_string(),
+            path: path.trim().to_string(),
+        });
+    }
+    Ok((changes, truncated))
 }
 
-fn materialize_in_store(store: &DispatchStore, job_id: &str) -> Result<()> {
-    let upload_dir = store.workspace_upload_dir(job_id)?;
-    let lock_path = workspace_upload_lock_path(store, job_id);
-    let _lock = JobLock::exclusive(&lock_path)?;
-    let record_path = upload_dir.join(UPLOAD_RECORD_FILE);
-    let mut record: WorkspaceUploadRecord =
-        read_json(&record_path).context("workspace upload was not initialized")?;
-    ensure_upload_identity(&record, job_id)?;
-    ensure_upload_not_failed(&record)?;
-    if record.state == WorkspaceUploadState::Committed {
-        validate_committed_workspace(&upload_dir, record.workspace_path.as_deref())?;
-        return Ok(());
-    }
-    let current = upload_dir.join(CURRENT_WORKSPACE_DIR);
-    let result = (|| -> Result<()> {
-        if managed_workspace_exists(&upload_dir)? {
-            mark_workspace_committed(&record_path, &upload_dir, &mut record)?;
-            return Ok(());
-        }
-
-        remove_stale_staging_directories(&upload_dir)?;
-        let archive_path = upload_dir.join(UPLOAD_ARCHIVE_FILE);
-        validate_complete_archive(&archive_path, &record.metadata)?;
-        let staging = upload_dir.join(format!(".staging-{}", uuid::Uuid::new_v4().as_simple()));
-        let manifest = extract_workspace_snapshot(&archive_path, &staging, &record.metadata)?;
-        // Persist S0 as the baseline for a later result diff. The controller
-        // deletes its own copy of the archive as soon as the job is durably
-        // owned here, so this is the only surviving record of what was sent —
-        // and its per-file digests are what make a diff possible for workspaces
-        // that are not git repositories.
-        atomic_write_json(&upload_dir.join(BASELINE_MANIFEST_FILE), &manifest)
-            .context("persist dispatch workspace baseline manifest")?;
-        fs::rename(&staging, &current).with_context(|| {
-            format!(
-                "publish dispatch workspace {} -> {}",
-                staging.display(),
-                current.display()
-            )
-        })?;
-        sync_directory(&upload_dir)?;
-        if let Err(error) = persist_verified_snapshot_cache(store, &archive_path, &record.metadata)
-        {
-            tracing::warn!(
-                "Failed to retain verified dispatch workspace snapshot: digest={} error={error:#}",
-                record.metadata.archive_sha256
+fn existing_worktree(
+    worktree_path: &Path,
+    branch: &str,
+    base_commit: &str,
+) -> Result<Option<String>> {
+    match fs::symlink_metadata(worktree_path) {
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(error).context("inspect the dispatch worktree path"),
+        Ok(metadata) if metadata.file_type().is_symlink() || !metadata.is_dir() => {
+            bail!(
+                "dispatch worktree path exists but is not a safe directory: {}",
+                worktree_path.display()
             );
         }
-        mark_workspace_committed(&record_path, &upload_dir, &mut record)?;
-        remove_file_if_present(&archive_path);
-        Ok(())
-    })();
-    if let Err(error) = result {
-        // Once `current` exists, a later commit can recover the narrow crash
-        // window between atomic publication and record publication. Before
-        // publication, persist a bounded diagnostic so controllers do not
-        // poll an irrecoverably bad archive until their transport timeout.
-        if !is_real_directory(&current) {
-            record.state = WorkspaceUploadState::Failed;
-            record.last_error = Some(truncate_utf8(&format!("{error:#}")));
-            let _ = atomic_write_json(&record_path, &record);
-        }
-        return Err(error);
+        Ok(_) => {}
     }
-    Ok(())
-}
-
-fn ensure_upload_identity(record: &WorkspaceUploadRecord, job_id: &str) -> Result<()> {
-    if record.job_id != job_id {
-        bail!("workspace upload identity mismatch");
+    // An existing directory only counts as this job's worktree when Git agrees.
+    // A non-Git directory under this managed root is a partial `worktree add`
+    // left by a crash. Quarantine it so the idempotent retry can rebuild.
+    if !git_succeeds(worktree_path, &["rev-parse", "--git-dir"])? {
+        quarantine_partial_directory(worktree_path, "worktree")?;
+        return Ok(None);
     }
-    Ok(())
-}
-
-fn ensure_begin_binding(
-    record: &WorkspaceUploadRecord,
-    request: &DispatchWorkspaceBeginRequest,
-) -> Result<()> {
-    if record.protocol_version != request.protocol_version
-        || record.job_id != request.job_id
-        || record.metadata != request.metadata
-    {
-        bail!("workspace upload job is already bound to different snapshot metadata");
+    if !commit_exists(worktree_path, base_commit)? {
+        bail!("dispatch worktree exists without the requested base commit");
     }
-    Ok(())
-}
-
-fn ensure_upload_not_failed(record: &WorkspaceUploadRecord) -> Result<()> {
-    if record.state == WorkspaceUploadState::Failed {
+    let current_branch = git(
+        worktree_path,
+        &["symbolic-ref", "--quiet", "--short", "HEAD"],
+    )
+    .context("inspect the existing dispatch worktree branch")?
+    .trim()
+    .to_string();
+    if current_branch != branch {
         bail!(
-            "workspace materialization failed: {}",
+            "dispatch worktree is on branch '{current_branch}' instead of its managed branch '{branch}'"
+        );
+    }
+    let head = git(worktree_path, &["rev-parse", "HEAD"])?;
+    if !git_succeeds(
+        worktree_path,
+        &["merge-base", "--is-ancestor", base_commit, head.trim()],
+    )? {
+        bail!("existing dispatch worktree does not descend from its requested base commit");
+    }
+    Ok(Some(canonical_utf8(worktree_path)?))
+}
+
+fn ensure_repository(
+    store: &DispatchStore,
+    repo_key: &str,
+    remote_url: Option<&str>,
+) -> Result<PathBuf> {
+    let repo_root = store.repo_dir(repo_key)?;
+    create_private_dir(&repo_root)?;
+    let repo = repo_root.join("git");
+    let initialize = match fs::symlink_metadata(&repo) {
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => true,
+        Err(error) => return Err(error).context("inspect the dispatch repository cache"),
+        Ok(metadata) if metadata.file_type().is_symlink() || !metadata.is_dir() => {
+            bail!(
+                "dispatch repository cache exists but is not a safe directory: {}",
+                repo.display()
+            );
+        }
+        Ok(_) => {
+            let valid = git(&repo, &["rev-parse", "--is-bare-repository"])
+                .map(|value| value.trim() == "true")
+                .unwrap_or(false);
+            if !valid {
+                quarantine_partial_directory(&repo, "repository")?;
+            }
+            !valid
+        }
+    };
+    if initialize {
+        let parent = repo
+            .parent()
+            .ok_or_else(|| anyhow::anyhow!("dispatch repository path has no parent"))?;
+        git(parent, &["init", "--bare", "--quiet", "git"])
+            .context("initialize the dispatch target repository")?;
+    }
+    if let Some(url) = remote_url {
+        set_origin(&repo, url)?;
+    }
+    let now = chrono::Utc::now().to_rfc3339();
+    let record_path = repo_root.join(super::store::REPO_CACHE_RECORD_FILE);
+    let created_at = read_json::<RepoCacheRecord>(&record_path)
+        .map(|record| record.created_at)
+        .unwrap_or_else(|_| now.clone());
+    atomic_write_json(
+        &record_path,
+        &RepoCacheRecord {
+            remote_url: remote_url.map(ToOwned::to_owned),
+            created_at,
+            last_used_at: now,
+        },
+    )?;
+    sync_directory(&repo_root)?;
+    Ok(repo)
+}
+
+fn set_origin(repo: &Path, url: &str) -> Result<()> {
+    if git_succeeds(repo, &["remote", "get-url", "origin"])? {
+        git(repo, &["remote", "set-url", "origin", url])?;
+    } else {
+        git(repo, &["remote", "add", "origin", url])?;
+    }
+    Ok(())
+}
+
+fn fetch_remote(repo: &Path) -> Result<()> {
+    git(
+        repo,
+        &[
+            "fetch",
+            "--no-tags",
+            "--prune",
+            "origin",
+            "+refs/heads/*:refs/remotes/origin/*",
+        ],
+    )
+    .map(|_| ())
+}
+
+fn repository_tips(repo: &Path) -> Result<Vec<String>> {
+    let raw = git(repo, &["rev-list", "--max-count=64", "--all"])?;
+    Ok(raw
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .map(ToOwned::to_owned)
+        .collect())
+}
+
+fn create_worktree(
+    repo: &Path,
+    worktree_path: &Path,
+    branch: &str,
+    base_commit: &str,
+) -> Result<String> {
+    if let Some(parent) = worktree_path.parent() {
+        create_private_dir(parent)?;
+    }
+    // Registered-but-missing worktrees survive a crashed job and would make
+    // `worktree add` refuse the same path forever.
+    let _ = git(repo, &["worktree", "prune"]);
+    let branch_ref = format!("refs/heads/{branch}");
+    if git_succeeds(repo, &["show-ref", "--verify", "--quiet", &branch_ref])? {
+        // A missing checkout may still leave the job branch with valuable
+        // commits. Reattach it when it descends from the immutable baseline;
+        // never reset it back to the base and make that work unreachable.
+        if !git_succeeds(
+            repo,
+            &["merge-base", "--is-ancestor", base_commit, &branch_ref],
+        )? {
+            bail!("existing dispatch branch does not descend from the requested base commit");
+        }
+    } else {
+        git(repo, &["update-ref", &branch_ref, base_commit])
+            .context("point the dispatch branch at the requested base commit")?;
+    }
+    git(repo, &["worktree", "add", path_arg(worktree_path)?, branch])
+        .context("create the dispatch worktree")?;
+    canonical_utf8(worktree_path)
+}
+
+fn commit_exists(repo: &Path, commit: &str) -> Result<bool> {
+    git_succeeds(repo, &["cat-file", "-e", &format!("{commit}^{{commit}}")])
+}
+
+fn git_command(dir: &Path) -> Command {
+    let mut command = Command::new("git");
+    command
+        .current_dir(dir)
+        // A detached dispatch worker has nobody to answer a credential or
+        // host-key prompt, so every one of them must fail fast instead of
+        // blocking the job until its transport times out.
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .env("GIT_ASKPASS", "")
+        .env("SSH_ASKPASS", "")
+        .env("GCM_INTERACTIVE", "never")
+        .stdin(Stdio::null());
+    command
+}
+
+fn git(dir: &Path, args: &[&str]) -> Result<String> {
+    let output = git_command(dir)
+        .args(args)
+        .output()
+        .with_context(|| format!("run git {}", args.join(" ")))?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        bail!(
+            "git {} failed: {}",
+            args.join(" "),
+            truncate_utf8(stderr.trim())
+        );
+    }
+    Ok(String::from_utf8_lossy(&output.stdout).into_owned())
+}
+
+fn git_succeeds(dir: &Path, args: &[&str]) -> Result<bool> {
+    let status = git_command(dir)
+        .args(args)
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .with_context(|| format!("run git {}", args.join(" ")))?;
+    Ok(status.success())
+}
+
+fn path_arg(path: &Path) -> Result<&str> {
+    path.to_str()
+        .ok_or_else(|| anyhow::anyhow!("dispatch path is not valid UTF-8: {}", path.display()))
+}
+
+fn canonical_utf8(path: &Path) -> Result<String> {
+    path.canonicalize()
+        .with_context(|| format!("resolve dispatch path {}", path.display()))?
+        .to_str()
+        .map(ToOwned::to_owned)
+        .ok_or_else(|| anyhow::anyhow!("dispatch path is not valid UTF-8"))
+}
+
+fn is_real_directory(path: &Path) -> bool {
+    fs::symlink_metadata(path)
+        .ok()
+        .is_some_and(|metadata| !metadata.file_type().is_symlink() && metadata.is_dir())
+}
+
+fn quarantine_partial_directory(path: &Path, label: &str) -> Result<()> {
+    let parent = path
+        .parent()
+        .ok_or_else(|| anyhow::anyhow!("managed dispatch {label} path has no parent"))?;
+    let tombstone = parent.join(format!(
+        ".partial-{label}-{}",
+        uuid::Uuid::new_v4().as_simple()
+    ));
+    fs::rename(path, &tombstone)
+        .with_context(|| format!("quarantine partial dispatch {label} {}", path.display()))?;
+    fs::remove_dir_all(&tombstone)
+        .with_context(|| format!("remove partial dispatch {label} {}", tombstone.display()))
+}
+
+fn workspace_worker_is_active(pid: u32, action: &str, job_id: &str, updated_at: &str) -> bool {
+    super::runner::workspace_operation_process_alive(pid, action, job_id)
+        || chrono::DateTime::parse_from_rfc3339(updated_at)
+            .ok()
+            .map(|updated| {
+                chrono::Utc::now()
+                    .signed_duration_since(updated)
+                    .num_seconds()
+            })
+            .is_some_and(|age| (0..OPERATION_START_GRACE_SECONDS).contains(&age))
+}
+
+fn ensure_provision_binding(
+    record: &ProvisionRecord,
+    request: &DispatchWorkspaceProvisionRequest,
+) -> Result<()> {
+    if record.job_id != request.job_id
+        || record.repo_key != request.repo_key
+        || record.base_commit != request.base_commit
+        || record.branch != request.branch
+    {
+        bail!("dispatch job is already bound to a different Git baseline");
+    }
+    Ok(())
+}
+
+fn read_optional_json<T: for<'de> Deserialize<'de>>(path: &Path) -> Result<Option<T>> {
+    match fs::symlink_metadata(path) {
+        Ok(metadata) => {
+            if metadata.file_type().is_symlink() || !metadata.is_file() {
+                bail!("dispatch operation record is not a regular file");
+            }
+            read_json(path).map(Some)
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(error) => Err(error).with_context(|| format!("inspect {}", path.display())),
+    }
+}
+
+fn ensure_bundle_binding(
+    record: &BundleUploadRecord,
+    request: &DispatchWorkspaceBundleBeginRequest,
+) -> Result<()> {
+    if record.job_id != request.job_id
+        || !record.sha256.eq_ignore_ascii_case(&request.sha256)
+        || record.size != request.size
+    {
+        bail!("dispatch job is already bound to a different bundle");
+    }
+    Ok(())
+}
+
+fn ensure_bundle_not_failed(record: &BundleUploadRecord) -> Result<()> {
+    if record.state == BundleUploadState::Failed {
+        bail!(
+            "dispatch bundle delivery failed: {}",
             record
                 .last_error
                 .as_deref()
@@ -508,270 +1470,7 @@ fn ensure_upload_not_failed(record: &WorkspaceUploadRecord) -> Result<()> {
     Ok(())
 }
 
-fn pending_commit_response(record: &WorkspaceUploadRecord) -> DispatchWorkspaceCommitResponse {
-    DispatchWorkspaceCommitResponse {
-        committed: false,
-        workspace_path: None,
-        metadata: record.metadata.clone(),
-    }
-}
-
-fn is_real_directory(path: &Path) -> bool {
-    fs::symlink_metadata(path)
-        .ok()
-        .is_some_and(|metadata| !metadata.file_type().is_symlink() && metadata.is_dir())
-}
-
-fn managed_workspace_exists(upload_dir: &Path) -> Result<bool> {
-    let current = upload_dir.join(CURRENT_WORKSPACE_DIR);
-    match fs::symlink_metadata(&current) {
-        Ok(metadata) if !metadata.file_type().is_symlink() && metadata.is_dir() => Ok(true),
-        Ok(_) => bail!("managed dispatch workspace path is not a real directory"),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
-        Err(error) => Err(error).context("inspect managed dispatch workspace"),
-    }
-}
-
-fn mark_workspace_committed(
-    record_path: &Path,
-    upload_dir: &Path,
-    record: &mut WorkspaceUploadRecord,
-) -> Result<String> {
-    let workspace_path = validate_committed_workspace(upload_dir, None)?;
-    record.state = WorkspaceUploadState::Committed;
-    record.committed_at = Some(chrono::Utc::now().to_rfc3339());
-    record.workspace_path = Some(workspace_path.clone());
-    atomic_write_json(record_path, record)?;
-    Ok(workspace_path)
-}
-
-fn validate_complete_archive(
-    archive_path: &Path,
-    metadata: &WorkspaceSnapshotMetadata,
-) -> Result<()> {
-    let archive =
-        fs::symlink_metadata(archive_path).context("inspect complete workspace upload archive")?;
-    if archive.file_type().is_symlink() || !archive.is_file() {
-        bail!("workspace upload archive is not a regular file");
-    }
-    if archive.len() != metadata.archive_size {
-        bail!(
-            "workspace upload is incomplete: expected {} bytes, received {}",
-            metadata.archive_size,
-            archive.len()
-        );
-    }
-    Ok(())
-}
-
-/// Reuse a verified snapshot uploaded by an earlier job.
-///
-/// The cache owns one immutable, content-addressed archive. Each job gets a
-/// hard link only while its detached materializer is reading the archive; the
-/// link is removed after `current/` is published. This keeps writable job
-/// workspaces isolated while avoiding another network transfer and another
-/// compressed archive on the target.
-fn try_attach_cached_snapshot(
-    store: &DispatchStore,
-    upload_dir: &Path,
-    archive_path: &Path,
-    expected: &WorkspaceSnapshotMetadata,
-) -> Result<bool> {
-    let cache_root = store.workspace_snapshot_cache_root();
-    let digest = expected.archive_sha256.to_ascii_lowercase();
-    let cache_dir = cache_root.join(&digest);
-    let _lock = JobLock::exclusive(&workspace_snapshot_cache_lock_path(store, &digest))?;
-    let Some(mut record) = read_valid_snapshot_cache(&cache_dir, expected)? else {
-        discard_snapshot_cache_entry(&cache_dir)?;
-        return Ok(false);
-    };
-
-    match fs::symlink_metadata(archive_path) {
-        Ok(metadata) => {
-            if metadata.file_type().is_symlink() || !metadata.is_file() {
-                bail!("workspace upload archive is not a regular file");
-            }
-            fs::remove_file(archive_path)
-                .with_context(|| format!("replace workspace upload {}", archive_path.display()))?;
-        }
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-        Err(error) => return Err(error).context("inspect workspace upload archive"),
-    }
-    fs::hard_link(cache_dir.join(CACHE_ARCHIVE_FILE), archive_path).with_context(|| {
-        format!(
-            "attach cached workspace snapshot {} -> {}",
-            cache_dir.display(),
-            upload_dir.display()
-        )
-    })?;
-    set_private_file_permissions(archive_path)?;
-
-    record.last_used_at = chrono::Utc::now().to_rfc3339();
-    atomic_write_json(
-        &cache_dir.join(WORKSPACE_SNAPSHOT_CACHE_RECORD_FILE),
-        &record,
-    )?;
-    Ok(true)
-}
-
-/// Publish an archive only after extraction verified its archive digest,
-/// manifest digest, paths, entry types, and size limits.
-fn persist_verified_snapshot_cache(
-    store: &DispatchStore,
-    archive_path: &Path,
-    expected: &WorkspaceSnapshotMetadata,
-) -> Result<()> {
-    let cache_root = store.workspace_snapshot_cache_root();
-    let digest = expected.archive_sha256.to_ascii_lowercase();
-    let cache_dir = cache_root.join(&digest);
-    let _lock = JobLock::exclusive(&workspace_snapshot_cache_lock_path(store, &digest))?;
-
-    if let Some(mut record) = read_valid_snapshot_cache(&cache_dir, expected)? {
-        record.last_used_at = chrono::Utc::now().to_rfc3339();
-        atomic_write_json(
-            &cache_dir.join(WORKSPACE_SNAPSHOT_CACHE_RECORD_FILE),
-            &record,
-        )?;
-        return Ok(());
-    }
-    discard_snapshot_cache_entry(&cache_dir)?;
-
-    if !sha256_file(archive_path)?.eq_ignore_ascii_case(&expected.archive_sha256) {
-        bail!("verified workspace snapshot changed before it entered the cache");
-    }
-    let staging = cache_root.join(format!(
-        ".staging-{}-{}",
-        digest,
-        uuid::Uuid::new_v4().as_simple()
-    ));
-    create_private_dir(&staging)?;
-    let cached_archive = staging.join(CACHE_ARCHIVE_FILE);
-    let result = (|| -> Result<()> {
-        if fs::hard_link(archive_path, &cached_archive).is_err() {
-            fs::copy(archive_path, &cached_archive).with_context(|| {
-                format!(
-                    "copy verified workspace snapshot into cache {}",
-                    cached_archive.display()
-                )
-            })?;
-        }
-        set_private_file_permissions(&cached_archive)?;
-        let now = chrono::Utc::now().to_rfc3339();
-        atomic_write_json(
-            &staging.join(WORKSPACE_SNAPSHOT_CACHE_RECORD_FILE),
-            &WorkspaceSnapshotCacheRecord {
-                metadata: expected.clone(),
-                created_at: now.clone(),
-                last_used_at: now,
-            },
-        )?;
-        sync_directory(&staging)?;
-        fs::rename(&staging, &cache_dir).with_context(|| {
-            format!(
-                "publish dispatch workspace cache {} -> {}",
-                staging.display(),
-                cache_dir.display()
-            )
-        })?;
-        sync_directory(&cache_root)?;
-        Ok(())
-    })();
-    if result.is_err() {
-        let _ = fs::remove_dir_all(&staging);
-    }
-    result
-}
-
-fn read_valid_snapshot_cache(
-    cache_dir: &Path,
-    expected: &WorkspaceSnapshotMetadata,
-) -> Result<Option<WorkspaceSnapshotCacheRecord>> {
-    let directory = match fs::symlink_metadata(cache_dir) {
-        Ok(metadata) => metadata,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-        Err(error) => return Err(error).context("inspect dispatch workspace cache"),
-    };
-    if directory.file_type().is_symlink() || !directory.is_dir() {
-        return Ok(None);
-    }
-    let record = match read_json::<WorkspaceSnapshotCacheRecord>(
-        &cache_dir.join(WORKSPACE_SNAPSHOT_CACHE_RECORD_FILE),
-    ) {
-        Ok(record) => record,
-        Err(_) => return Ok(None),
-    };
-    if record.metadata != *expected {
-        return Ok(None);
-    }
-    let archive_path = cache_dir.join(CACHE_ARCHIVE_FILE);
-    let archive = match fs::symlink_metadata(&archive_path) {
-        Ok(metadata) => metadata,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-        Err(error) => return Err(error).context("inspect cached workspace snapshot"),
-    };
-    if archive.file_type().is_symlink()
-        || !archive.is_file()
-        || archive.len() != expected.archive_size
-    {
-        return Ok(None);
-    }
-    if !sha256_file(&archive_path)?.eq_ignore_ascii_case(&expected.archive_sha256) {
-        return Ok(None);
-    }
-    Ok(Some(record))
-}
-
-fn discard_snapshot_cache_entry(cache_dir: &Path) -> Result<()> {
-    match fs::symlink_metadata(cache_dir) {
-        Ok(metadata) if metadata.file_type().is_symlink() || metadata.is_file() => {
-            fs::remove_file(cache_dir).with_context(|| {
-                format!(
-                    "remove invalid dispatch workspace cache {}",
-                    cache_dir.display()
-                )
-            })
-        }
-        Ok(metadata) if metadata.is_dir() => fs::remove_dir_all(cache_dir).with_context(|| {
-            format!(
-                "remove invalid dispatch workspace cache {}",
-                cache_dir.display()
-            )
-        }),
-        Ok(_) => bail!("dispatch workspace cache entry is an unsupported file type"),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
-        Err(error) => Err(error).context("inspect invalid dispatch workspace cache"),
-    }
-}
-
-fn workspace_snapshot_cache_lock_path(store: &DispatchStore, digest: &str) -> PathBuf {
-    store
-        .workspace_snapshot_cache_root()
-        .join(format!(".{digest}.lock"))
-}
-
-fn remove_stale_staging_directories(upload_dir: &Path) -> Result<()> {
-    for entry in fs::read_dir(upload_dir)
-        .with_context(|| format!("read workspace upload directory {}", upload_dir.display()))?
-    {
-        let entry = entry?;
-        let Some(name) = entry.file_name().to_str().map(ToOwned::to_owned) else {
-            continue;
-        };
-        if !name.starts_with(".staging-") {
-            continue;
-        }
-        let path = entry.path();
-        let metadata = fs::symlink_metadata(&path)?;
-        if metadata.file_type().is_symlink() || !metadata.is_dir() {
-            bail!("workspace upload contains an unsafe staging path");
-        }
-        fs::remove_dir_all(&path)
-            .with_context(|| format!("remove stale workspace staging {}", path.display()))?;
-    }
-    Ok(())
-}
-
-fn validate_begin(request: &DispatchWorkspaceBeginRequest) -> Result<()> {
+fn validate_provision(request: &DispatchWorkspaceProvisionRequest) -> Result<()> {
     if request.protocol_version != DISPATCH_PROTOCOL_VERSION {
         bail!(
             "unsupported dispatch protocolVersion {}; target requires {}",
@@ -780,61 +1479,83 @@ fn validate_begin(request: &DispatchWorkspaceBeginRequest) -> Result<()> {
         );
     }
     super::store::validate_id("jobId", &request.job_id)?;
-    let metadata = &request.metadata;
-    if metadata.format_version != WORKSPACE_SNAPSHOT_FORMAT_VERSION {
-        bail!("unsupported workspace snapshot format");
-    }
-    if metadata.archive_size == 0 || metadata.archive_size > MAX_SNAPSHOT_ARCHIVE_BYTES {
-        bail!("workspace snapshot archive size is outside the target limit");
-    }
-    if metadata.file_count > MAX_SNAPSHOT_FILES
-        || metadata.directory_count > MAX_SNAPSHOT_DIRECTORIES
-        || metadata.uncompressed_bytes > MAX_SNAPSHOT_UNCOMPRESSED_BYTES
-    {
-        bail!("workspace snapshot summary exceeds target safety limits");
-    }
-    for digest in [&metadata.archive_sha256, &metadata.manifest_sha256] {
-        if digest.len() != 64 || !digest.bytes().all(|byte| byte.is_ascii_hexdigit()) {
-            bail!("workspace snapshot metadata contains an invalid SHA-256 digest");
-        }
+    validate_repo_key(&request.repo_key)?;
+    validate_commit(&request.base_commit)?;
+    validate_branch(&request.branch)?;
+    if let Some(url) = request.remote_url.as_deref() {
+        validate_remote_url(url)?;
     }
     Ok(())
 }
 
-fn validate_committed_workspace(
-    upload_dir: &Path,
-    recorded_workspace_path: Option<&str>,
-) -> Result<String> {
-    let current = upload_dir.join(CURRENT_WORKSPACE_DIR);
-    let metadata =
-        fs::symlink_metadata(&current).context("inspect committed dispatch workspace")?;
-    if metadata.file_type().is_symlink() || !metadata.is_dir() {
-        bail!("committed dispatch workspace is not a real directory");
+/// The repo key names a directory, so it is restricted to a hex digest the
+/// controller derives rather than anything user-controlled.
+fn validate_repo_key(repo_key: &str) -> Result<()> {
+    if repo_key.len() < 8
+        || repo_key.len() > 64
+        || !repo_key.bytes().all(|byte| byte.is_ascii_hexdigit())
+    {
+        bail!("dispatch repoKey must be an 8-64 character hex digest");
     }
-    let canonical = current
-        .canonicalize()
-        .context("resolve committed dispatch workspace")?;
-    if recorded_workspace_path.is_some_and(|recorded| Path::new(recorded) != canonical) {
-        bail!("committed dispatch workspace path no longer matches its durable record");
-    }
-    canonical
-        .to_str()
-        .map(ToOwned::to_owned)
-        .ok_or_else(|| anyhow::anyhow!("committed dispatch workspace path is not valid UTF-8"))
+    Ok(())
 }
 
-fn workspace_upload_lock_path(store: &DispatchStore, job_id: &str) -> PathBuf {
-    store
-        .root()
-        .join("workspaces")
-        .join(format!(".{job_id}.upload.lock"))
+fn validate_commit(commit: &str) -> Result<()> {
+    if commit.len() != 40 || !commit.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        bail!("dispatch baseCommit must be a full 40-character commit id");
+    }
+    Ok(())
+}
+
+fn validate_digest(digest: &str) -> Result<()> {
+    if digest.len() != 64 || !digest.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        bail!("dispatch bundle digest must be a SHA-256 hex string");
+    }
+    Ok(())
+}
+
+/// Reject anything Git itself would not accept as a branch, plus leading
+/// dashes, which Git would read as an option rather than a ref.
+fn validate_branch(branch: &str) -> Result<()> {
+    if branch.is_empty() || branch.len() > 255 || branch.starts_with('-') {
+        bail!("dispatch branch name is outside the accepted range");
+    }
+    if !branch
+        .bytes()
+        .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'/' | b'-' | b'_' | b'.'))
+    {
+        bail!("dispatch branch name contains unsupported characters");
+    }
+    if branch.contains("..") || branch.ends_with('/') || branch.ends_with(".lock") {
+        bail!("dispatch branch name is not a valid Git ref");
+    }
+    Ok(())
+}
+
+/// A remote URL becomes a `git remote` argument, so it must not look like an
+/// option, and `ext::` would let a URL execute an arbitrary command.
+fn validate_remote_url(url: &str) -> Result<()> {
+    if url.is_empty() || url.len() > 2048 {
+        bail!("dispatch remoteUrl is outside the accepted length");
+    }
+    if url.starts_with('-') {
+        bail!("dispatch remoteUrl must not start with a dash");
+    }
+    if url.bytes().any(|byte| byte.is_ascii_control()) {
+        bail!("dispatch remoteUrl must not contain control characters");
+    }
+    if url.to_ascii_lowercase().starts_with("ext::") {
+        bail!("dispatch remoteUrl must not use the ext transport");
+    }
+    Ok(())
 }
 
 fn truncate_utf8(value: &str) -> String {
-    if value.len() <= MAX_MATERIALIZATION_ERROR_BYTES {
+    const MAX_ERROR_BYTES: usize = 16 * 1024;
+    if value.len() <= MAX_ERROR_BYTES {
         return value.to_string();
     }
-    let mut end = MAX_MATERIALIZATION_ERROR_BYTES;
+    let mut end = MAX_ERROR_BYTES;
     while !value.is_char_boundary(end) {
         end -= 1;
     }
@@ -844,220 +1565,677 @@ fn truncate_utf8(value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bitfun_services_core::dispatch_workspace::create_exact_workspace_snapshot;
+
+    fn init_source_repository(path: &Path) -> String {
+        fs::create_dir_all(path).expect("source directory");
+        git(path, &["init", "--quiet", "--initial-branch=main"]).expect("init");
+        git(path, &["config", "user.email", "dispatch@example.com"]).expect("email");
+        git(path, &["config", "user.name", "Dispatch Test"]).expect("name");
+        fs::write(path.join("file.txt"), b"base").expect("seed file");
+        git(path, &["add", "-A"]).expect("stage");
+        git(path, &["commit", "--quiet", "-m", "base"]).expect("commit");
+        git(path, &["rev-parse", "HEAD"])
+            .expect("head")
+            .trim()
+            .to_string()
+    }
+
+    fn bundle_everything(source: &Path, bundle: &Path) {
+        git(
+            source,
+            &["bundle", "create", path_arg(bundle).expect("path"), "main"],
+        )
+        .expect("bundle");
+    }
 
     #[test]
-    fn validation_rejects_unbounded_or_malformed_uploads() {
-        let request = DispatchWorkspaceBeginRequest {
+    fn provision_asks_for_a_bundle_when_the_commit_is_unreachable() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let store = DispatchStore::open(temp.path().join("dispatch")).expect("store");
+        let response = provision_in_store(
+            &store,
+            DispatchWorkspaceProvisionRequest {
+                protocol_version: DISPATCH_PROTOCOL_VERSION,
+                job_id: "job-1".to_string(),
+                repo_key: "abcdef0123456789".to_string(),
+                remote_url: None,
+                base_commit: "0".repeat(40),
+                branch: "bitfun/dispatch/job-1".to_string(),
+            },
+        )
+        .expect("provision");
+
+        assert!(!response.provisioned);
+        assert!(response.needs_bundle);
+        assert!(response.workspace_path.is_none());
+    }
+
+    #[test]
+    fn a_delivered_bundle_provisions_a_worktree_at_the_requested_commit() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let store = DispatchStore::open(temp.path().join("dispatch")).expect("store");
+        let source = temp.path().join("source");
+        let base_commit = init_source_repository(&source);
+        let bundle = temp.path().join("base.bundle");
+        bundle_everything(&source, &bundle);
+
+        let request = DispatchWorkspaceProvisionRequest {
             protocol_version: DISPATCH_PROTOCOL_VERSION,
             job_id: "job-1".to_string(),
-            metadata: WorkspaceSnapshotMetadata {
-                format_version: WORKSPACE_SNAPSHOT_FORMAT_VERSION,
-                archive_size: 1,
-                archive_sha256: "x".repeat(64),
-                manifest_sha256: "0".repeat(64),
-                file_count: 0,
-                directory_count: 0,
-                uncompressed_bytes: 0,
-            },
+            repo_key: "abcdef0123456789".to_string(),
+            remote_url: None,
+            base_commit: base_commit.clone(),
+            branch: "main".to_string(),
         };
-        assert!(validate_begin(&request).is_err());
+        assert!(
+            provision_in_store(&store, request.clone())
+                .expect("first provision")
+                .needs_bundle
+        );
+
+        let job_dir = store.workspace_upload_dir("job-1").expect("job dir");
+        let size = fs::symlink_metadata(&bundle)
+            .expect("bundle metadata")
+            .len();
+        bundle_begin_in_store(
+            &store,
+            DispatchWorkspaceBundleBeginRequest {
+                protocol_version: DISPATCH_PROTOCOL_VERSION,
+                job_id: "job-1".to_string(),
+                sha256: sha256_file(&bundle).expect("digest"),
+                size,
+            },
+        )
+        .expect("bundle begin");
+        fs::copy(&bundle, job_dir.join(INCOMING_BUNDLE_FILE)).expect("stage bundle");
+        assert!(
+            bundle_commit_in_store(
+                &store,
+                DispatchWorkspaceBundleCommitRequest {
+                    job_id: "job-1".to_string()
+                },
+            )
+            .expect("bundle commit")
+            .committed
+        );
+
+        let response = provision_in_store(&store, request).expect("second provision");
+        assert!(response.provisioned);
+        assert!(!response.needs_bundle);
+        let workspace = response.workspace_path.expect("workspace path");
+        assert_eq!(
+            fs::read(Path::new(&workspace).join("file.txt")).expect("checked out file"),
+            b"base"
+        );
     }
 
     #[test]
-    fn snapshot_fixture_metadata_is_accepted() {
+    fn reprovisioning_a_missing_checkout_never_resets_the_job_branch() {
         let temp = tempfile::tempdir().expect("tempdir");
+        let store = DispatchStore::open(temp.path().join("dispatch")).expect("store");
         let source = temp.path().join("source");
-        fs::create_dir_all(&source).expect("source");
-        fs::write(source.join("file.txt"), b"hello").expect("file");
-        let metadata =
-            create_exact_workspace_snapshot(&source, &temp.path().join("snapshot.tar.gz"))
-                .expect("snapshot");
-        validate_begin(&DispatchWorkspaceBeginRequest {
+        let base_commit = init_source_repository(&source);
+        provision_from_bundle(&store, &source, &base_commit);
+
+        let worktree = store.worktree_dir("job-1").expect("worktree");
+        fs::write(worktree.join("agent.txt"), b"valuable work").expect("edit");
+        git(&worktree, &["add", "-A"]).expect("stage");
+        git(
+            &worktree,
+            &[
+                "-c",
+                "user.name=Dispatch Test",
+                "-c",
+                "user.email=dispatch@example.com",
+                "commit",
+                "--quiet",
+                "-m",
+                "agent work",
+            ],
+        )
+        .expect("commit");
+        let advanced = git(&worktree, &["rev-parse", "HEAD"])
+            .expect("head")
+            .trim()
+            .to_string();
+        let repo = store
+            .repo_dir("abcdef0123456789")
+            .expect("repo")
+            .join("git");
+        git(
+            &repo,
+            &[
+                "worktree",
+                "remove",
+                "--force",
+                path_arg(&worktree).unwrap(),
+            ],
+        )
+        .expect("remove checkout only");
+
+        let response = provision_in_store(
+            &store,
+            DispatchWorkspaceProvisionRequest {
+                protocol_version: DISPATCH_PROTOCOL_VERSION,
+                job_id: "job-1".to_string(),
+                repo_key: "abcdef0123456789".to_string(),
+                remote_url: None,
+                base_commit,
+                branch: "main".to_string(),
+            },
+        )
+        .expect("reprovision");
+        let restored = PathBuf::from(response.workspace_path.expect("restored path"));
+        assert_eq!(
+            git(&restored, &["rev-parse", "HEAD"]).unwrap().trim(),
+            advanced
+        );
+        assert_eq!(
+            fs::read(restored.join("agent.txt")).unwrap(),
+            b"valuable work"
+        );
+    }
+
+    #[test]
+    fn sync_reports_no_change_for_an_untouched_worktree() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let store = DispatchStore::open(temp.path().join("dispatch")).expect("store");
+        let source = temp.path().join("source");
+        let base_commit = init_source_repository(&source);
+        provision_from_bundle(&store, &source, &base_commit);
+
+        let response = sync_in_store(
+            &store,
+            DispatchWorkspaceSyncRequest {
+                job_id: "job-1".to_string(),
+                operation_id: "sync-untouched".to_string(),
+                message: None,
+                known_head: None,
+            },
+        )
+        .expect("sync");
+
+        assert!(!response.changed);
+        assert_eq!(response.commit_count, 0);
+        assert!(response.bundle_path.is_none());
+    }
+
+    #[test]
+    fn sync_commits_agent_edits_and_bundles_only_the_new_history() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let store = DispatchStore::open(temp.path().join("dispatch")).expect("store");
+        let source = temp.path().join("source");
+        let base_commit = init_source_repository(&source);
+        provision_from_bundle(&store, &source, &base_commit);
+
+        let worktree = store.worktree_dir("job-1").expect("worktree");
+        git(&worktree, &["config", "user.email", "dispatch@example.com"]).expect("email");
+        git(&worktree, &["config", "user.name", "Dispatch Test"]).expect("name");
+        fs::write(worktree.join("file.txt"), b"changed by the agent").expect("edit");
+        fs::write(worktree.join("added.txt"), b"new").expect("add");
+
+        let response = sync_in_store(
+            &store,
+            DispatchWorkspaceSyncRequest {
+                job_id: "job-1".to_string(),
+                operation_id: "sync-agent-edits".to_string(),
+                message: Some("agent work".to_string()),
+                known_head: None,
+            },
+        )
+        .expect("sync");
+
+        assert!(response.changed);
+        assert_eq!(response.commit_count, 1);
+        assert_eq!(response.base_commit, base_commit);
+        assert_ne!(response.head_commit, base_commit);
+        let mut paths = response
+            .changes
+            .iter()
+            .map(|change| change.path.clone())
+            .collect::<Vec<_>>();
+        paths.sort();
+        assert_eq!(paths, vec!["added.txt".to_string(), "file.txt".to_string()]);
+
+        // The bundle carries only what the controller is missing, so applying it
+        // is a fast-forward rather than a re-delivery of the whole repository.
+        let bundle = PathBuf::from(response.bundle_path.expect("bundle path"));
+        assert!(bundle.is_file());
+        let prerequisites = git(
+            &worktree,
+            &["bundle", "list-heads", path_arg(&bundle).unwrap()],
+        )
+        .expect("list heads");
+        assert!(prerequisites.contains("refs/heads/main"));
+    }
+
+    #[test]
+    fn sync_uses_known_head_as_the_incremental_generation_boundary() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let store = DispatchStore::open(temp.path().join("dispatch")).expect("store");
+        let source = temp.path().join("source");
+        let base_commit = init_source_repository(&source);
+        provision_from_bundle(&store, &source, &base_commit);
+        let worktree = store.worktree_dir("job-1").expect("worktree");
+
+        fs::write(worktree.join("first.txt"), b"first checkpoint").expect("first edit");
+        let first = sync_in_store(
+            &store,
+            DispatchWorkspaceSyncRequest {
+                job_id: "job-1".to_string(),
+                operation_id: "sync-first".to_string(),
+                message: None,
+                known_head: None,
+            },
+        )
+        .expect("first sync");
+        assert!(first.changed);
+
+        let unchanged = sync_in_store(
+            &store,
+            DispatchWorkspaceSyncRequest {
+                job_id: "job-1".to_string(),
+                operation_id: "sync-clean".to_string(),
+                message: None,
+                known_head: Some(first.head_commit.clone()),
+            },
+        )
+        .expect("clean incremental sync");
+        assert!(!unchanged.changed);
+        assert_eq!(unchanged.base_commit, first.head_commit);
+
+        fs::write(worktree.join("second.txt"), b"second checkpoint").expect("second edit");
+        let second = sync_in_store(
+            &store,
+            DispatchWorkspaceSyncRequest {
+                job_id: "job-1".to_string(),
+                operation_id: "sync-second".to_string(),
+                message: None,
+                known_head: Some(first.head_commit.clone()),
+            },
+        )
+        .expect("second sync");
+        assert!(second.changed);
+        assert_eq!(second.base_commit, first.head_commit);
+        assert_eq!(second.commit_count, 1);
+        assert_eq!(
+            second
+                .changes
+                .iter()
+                .map(|change| change.path.as_str())
+                .collect::<Vec<_>>(),
+            vec!["second.txt"]
+        );
+    }
+
+    #[test]
+    fn completed_clean_sync_poll_returns_the_durable_result() {
+        const CHILD_ENV: &str = "BITFUN_DISPATCH_CLEAN_SYNC_POLL_CHILD";
+        if let Some(bitfun_home) = std::env::var_os(CHILD_ENV) {
+            let store = DispatchStore::open_default().expect("open isolated default store");
+            let source = PathBuf::from(bitfun_home).join("source");
+            let base_commit = init_source_repository(&source);
+            provision_from_bundle(&store, &source, &base_commit);
+
+            // Model the second user-requested sync: the controller has already
+            // acknowledged the target head, and this invocation finds no newer
+            // work. Its later polls must return this clean response instead of
+            // opening another detached operation forever.
+            let request = DispatchWorkspaceSyncRequest {
+                job_id: "job-1".to_string(),
+                operation_id: "sync-clean-poll".to_string(),
+                message: None,
+                known_head: Some(base_commit),
+            };
+            let response = sync_in_store(&store, request.clone()).expect("clean sync");
+            assert!(!response.changed);
+
+            let operation_path = store
+                .workspace_upload_dir("job-1")
+                .expect("workspace path")
+                .join(SYNC_OPERATION_FILE);
+            atomic_write_json(
+                &operation_path,
+                &SyncOperationRecord {
+                    request: request.clone(),
+                    state: WorkspaceOperationState::Succeeded,
+                    worker_pid: None,
+                    response: Some(response.clone()),
+                    last_error: None,
+                    failure_reported: false,
+                    updated_at: chrono::Utc::now().to_rfc3339(),
+                },
+            )
+            .expect("seed completed operation");
+
+            let polled = sync(request.clone()).expect("poll completed operation");
+            assert_eq!(polled, response);
+            assert!(!polled.pending);
+            let retained: SyncOperationRecord =
+                read_json(&operation_path).expect("read retained operation");
+            assert_eq!(retained.state, WorkspaceOperationState::Succeeded);
+            assert_eq!(retained.request.operation_id, "sync-clean-poll");
+
+            let mut mismatched = request;
+            mismatched.message = Some("different request".to_string());
+            let error = sync(mismatched).expect_err("one operation id binds one request");
+            assert!(error.to_string().contains("operationId is already bound"));
+            return;
+        }
+
+        let dir = tempfile::tempdir().expect("tempdir");
+        let bitfun_home = dir.path().join("bitfun-home");
+        let user_root = dir.path().join("user-root");
+        let output = std::process::Command::new(std::env::current_exe().expect("test executable"))
+            .args([
+                "--exact",
+                "dispatch::workspace::tests::completed_clean_sync_poll_returns_the_durable_result",
+                "--nocapture",
+            ])
+            .env(CHILD_ENV, &bitfun_home)
+            .env("BITFUN_HOME", &bitfun_home)
+            .env("BITFUN_USER_ROOT", &user_root)
+            .env("BITFUN_E2E_STORAGE_GUARD", "1")
+            .env_remove("BITFUN_E2E_HOME")
+            .env_remove("BITFUN_E2E_USER_ROOT")
+            .output()
+            .expect("run isolated clean-sync poll test");
+        assert!(
+            output.status.success(),
+            "isolated child failed:\nstdout:\n{}\nstderr:\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    #[test]
+    fn reported_sync_failure_allows_a_new_operation_to_take_over() {
+        const CHILD_ENV: &str = "BITFUN_DISPATCH_FAILED_SYNC_RETRY_CHILD";
+        if let Some(bitfun_home) = std::env::var_os(CHILD_ENV) {
+            let store = DispatchStore::open_default().expect("open isolated default store");
+            let source = PathBuf::from(bitfun_home).join("source");
+            let base_commit = init_source_repository(&source);
+            provision_from_bundle(&store, &source, &base_commit);
+            let operation_path = store
+                .workspace_upload_dir("job-1")
+                .expect("workspace path")
+                .join(SYNC_OPERATION_FILE);
+            let failed_request = DispatchWorkspaceSyncRequest {
+                job_id: "job-1".to_string(),
+                operation_id: "sync-failed-generation".to_string(),
+                message: None,
+                known_head: Some(base_commit.clone()),
+            };
+            atomic_write_json(
+                &operation_path,
+                &SyncOperationRecord {
+                    request: failed_request.clone(),
+                    state: WorkspaceOperationState::Failed,
+                    worker_pid: None,
+                    response: None,
+                    last_error: Some("transient Git lock".to_string()),
+                    failure_reported: false,
+                    updated_at: chrono::Utc::now().to_rfc3339(),
+                },
+            )
+            .expect("seed failed operation");
+
+            let error = sync(failed_request).expect_err("the failed generation must be reported");
+            assert!(error.to_string().contains("transient Git lock"));
+            let mut retained: SyncOperationRecord =
+                read_json(&operation_path).expect("read reported failure");
+            assert_eq!(retained.state, WorkspaceOperationState::Failed);
+            assert!(retained.failure_reported);
+            assert_eq!(retained.last_error.as_deref(), Some("transient Git lock"));
+
+            let retry = DispatchWorkspaceSyncRequest {
+                job_id: "job-1".to_string(),
+                operation_id: "sync-retry-generation".to_string(),
+                message: None,
+                known_head: Some(base_commit),
+            };
+            retained.worker_pid = Some(std::process::id());
+            retained.updated_at = chrono::Utc::now().to_rfc3339();
+            atomic_write_json(&operation_path, &retained).expect("seed active worker marker");
+            let error =
+                sync(retry.clone()).expect_err("an active generation must retain ownership");
+            assert!(error
+                .to_string()
+                .contains("already bound to a different request"));
+
+            retained.worker_pid = None;
+            atomic_write_json(&operation_path, &retained).expect("retire failed worker marker");
+            let response = sync(retry.clone()).expect("retry with a new operation id");
+            assert!(response.pending);
+            let replacement: SyncOperationRecord =
+                read_json(&operation_path).expect("read replacement operation");
+            assert_eq!(replacement.request, retry);
+            assert!(matches!(
+                replacement.state,
+                WorkspaceOperationState::Pending | WorkspaceOperationState::Running
+            ));
+            assert!(!replacement.failure_reported);
+            return;
+        }
+
+        let dir = tempfile::tempdir().expect("tempdir");
+        let bitfun_home = dir.path().join("bitfun-home");
+        let user_root = dir.path().join("user-root");
+        let output = std::process::Command::new(std::env::current_exe().expect("test executable"))
+            .args([
+                "--exact",
+                "dispatch::workspace::tests::reported_sync_failure_allows_a_new_operation_to_take_over",
+                "--nocapture",
+            ])
+            .env(CHILD_ENV, &bitfun_home)
+            .env("BITFUN_HOME", &bitfun_home)
+            .env("BITFUN_USER_ROOT", &user_root)
+            .env("BITFUN_E2E_STORAGE_GUARD", "1")
+            .env_remove("BITFUN_E2E_HOME")
+            .env_remove("BITFUN_E2E_USER_ROOT")
+            .output()
+            .expect("run isolated failed-sync retry test");
+        assert!(
+            output.status.success(),
+            "isolated child failed:\nstdout:\n{}\nstderr:\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    #[test]
+    fn legacy_sync_failure_without_operation_id_is_reported_then_retryable() {
+        const CHILD_ENV: &str = "BITFUN_DISPATCH_LEGACY_SYNC_RETRY_CHILD";
+        if let Some(bitfun_home) = std::env::var_os(CHILD_ENV) {
+            let store = DispatchStore::open_default().expect("open isolated default store");
+            let source = PathBuf::from(bitfun_home).join("source");
+            let base_commit = init_source_repository(&source);
+            provision_from_bundle(&store, &source, &base_commit);
+            let operation_path = store
+                .workspace_upload_dir("job-1")
+                .expect("workspace path")
+                .join(SYNC_OPERATION_FILE);
+            // Early protocol-v3 development builds wrote neither operationId
+            // nor failureReported. Keep that exact JSON shape readable.
+            atomic_write_json(
+                &operation_path,
+                &serde_json::json!({
+                    "request": {
+                        "jobId": "job-1",
+                        "message": null,
+                        "knownHead": base_commit,
+                    },
+                    "state": "failed",
+                    "workerPid": null,
+                    "response": null,
+                    "lastError": "legacy sync failure",
+                    "updatedAt": chrono::Utc::now().to_rfc3339(),
+                }),
+            )
+            .expect("seed legacy operation");
+
+            let first_retry = DispatchWorkspaceSyncRequest {
+                job_id: "job-1".to_string(),
+                operation_id: "sync-after-upgrade-1".to_string(),
+                message: None,
+                known_head: Some(base_commit.clone()),
+            };
+            let error = sync(first_retry).expect_err("legacy failure must be surfaced once");
+            assert!(error.to_string().contains("legacy sync failure"));
+            let reported: SyncOperationRecord =
+                read_json(&operation_path).expect("read upgraded legacy operation");
+            assert!(reported.request.operation_id.is_empty());
+            assert_eq!(reported.state, WorkspaceOperationState::Failed);
+            assert!(reported.failure_reported);
+
+            let second_retry = DispatchWorkspaceSyncRequest {
+                job_id: "job-1".to_string(),
+                operation_id: "sync-after-upgrade-2".to_string(),
+                message: None,
+                known_head: Some(base_commit),
+            };
+            let response = sync(second_retry.clone()).expect("replace legacy generation");
+            assert!(response.pending);
+            let replacement: SyncOperationRecord =
+                read_json(&operation_path).expect("read replacement operation");
+            assert_eq!(replacement.request, second_retry);
+            assert!(!replacement.failure_reported);
+            return;
+        }
+
+        let dir = tempfile::tempdir().expect("tempdir");
+        let bitfun_home = dir.path().join("bitfun-home");
+        let user_root = dir.path().join("user-root");
+        let output = std::process::Command::new(std::env::current_exe().expect("test executable"))
+            .args([
+                "--exact",
+                "dispatch::workspace::tests::legacy_sync_failure_without_operation_id_is_reported_then_retryable",
+                "--nocapture",
+            ])
+            .env(CHILD_ENV, &bitfun_home)
+            .env("BITFUN_HOME", &bitfun_home)
+            .env("BITFUN_USER_ROOT", &user_root)
+            .env("BITFUN_E2E_STORAGE_GUARD", "1")
+            .env_remove("BITFUN_E2E_HOME")
+            .env_remove("BITFUN_E2E_USER_ROOT")
+            .output()
+            .expect("run isolated legacy-sync retry test");
+        assert!(
+            output.status.success(),
+            "isolated child failed:\nstdout:\n{}\nstderr:\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    #[test]
+    fn sync_fails_loudly_when_the_agent_switches_away_from_the_managed_branch() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let store = DispatchStore::open(temp.path().join("dispatch")).expect("store");
+        let source = temp.path().join("source");
+        let base_commit = init_source_repository(&source);
+        provision_from_bundle(&store, &source, &base_commit);
+        let worktree = store.worktree_dir("job-1").expect("worktree");
+        git(&worktree, &["switch", "--quiet", "-c", "agent/other"]).expect("switch branch");
+
+        let error = sync_in_store(
+            &store,
+            DispatchWorkspaceSyncRequest {
+                job_id: "job-1".to_string(),
+                operation_id: "sync-wrong-branch".to_string(),
+                message: None,
+                known_head: None,
+            },
+        )
+        .expect_err("a different branch must not be bundled under the managed ref");
+        assert!(error.to_string().contains("instead of its managed branch"));
+    }
+
+    #[test]
+    fn provision_repairs_a_partial_bare_repository_left_by_a_crash() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let store = DispatchStore::open(temp.path().join("dispatch")).expect("store");
+        let repo = store
+            .repo_dir("abcdef0123456789")
+            .expect("repo root")
+            .join("git");
+        fs::create_dir_all(&repo).expect("partial repository directory");
+
+        let response = provision_in_store(
+            &store,
+            DispatchWorkspaceProvisionRequest {
+                protocol_version: DISPATCH_PROTOCOL_VERSION,
+                job_id: "job-1".to_string(),
+                repo_key: "abcdef0123456789".to_string(),
+                remote_url: None,
+                base_commit: "0".repeat(40),
+                branch: "bitfun/dispatch/job-1".to_string(),
+            },
+        )
+        .expect("partial repository should be rebuilt");
+
+        assert!(response.needs_bundle);
+        assert_eq!(
+            git(&repo, &["rev-parse", "--is-bare-repository"])
+                .expect("inspect repaired repository")
+                .trim(),
+            "true"
+        );
+    }
+
+    #[test]
+    fn polling_and_long_git_operations_use_distinct_locks() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let store = DispatchStore::open(temp.path().join("dispatch")).expect("store");
+        assert_ne!(
+            store.workspace_operation_lock_path("job-1").unwrap(),
+            store.workspace_git_operation_lock_path("job-1").unwrap()
+        );
+    }
+
+    fn provision_from_bundle(store: &DispatchStore, source: &Path, base_commit: &str) {
+        let bundle = source.parent().expect("parent").join("base.bundle");
+        bundle_everything(source, &bundle);
+        let request = DispatchWorkspaceProvisionRequest {
             protocol_version: DISPATCH_PROTOCOL_VERSION,
             job_id: "job-1".to_string(),
-            metadata,
-        })
-        .expect("valid metadata");
-    }
-
-    #[test]
-    fn materializer_verifies_and_atomically_publishes_the_uploaded_snapshot() {
-        let temp = tempfile::tempdir().expect("tempdir");
-        let store = DispatchStore::open(temp.path().join("dispatch")).expect("store");
-        let source = temp.path().join("source");
-        fs::create_dir_all(&source).expect("source");
-        fs::write(source.join("file.txt"), b"materialized").expect("source file");
-        let source_archive = temp.path().join("source.tar.gz");
-        let metadata = create_exact_workspace_snapshot(&source, &source_archive).expect("snapshot");
-        let upload_dir = store.workspace_upload_dir("job-1").expect("upload path");
-        create_private_dir(&upload_dir).expect("upload directory");
-        fs::copy(&source_archive, upload_dir.join(UPLOAD_ARCHIVE_FILE)).expect("stage archive");
-        atomic_write_json(
-            &upload_dir.join(UPLOAD_RECORD_FILE),
-            &WorkspaceUploadRecord {
+            repo_key: "abcdef0123456789".to_string(),
+            remote_url: None,
+            base_commit: base_commit.to_string(),
+            branch: "main".to_string(),
+        };
+        provision_in_store(store, request.clone()).expect("first provision");
+        let job_dir = store.workspace_upload_dir("job-1").expect("job dir");
+        bundle_begin_in_store(
+            store,
+            DispatchWorkspaceBundleBeginRequest {
                 protocol_version: DISPATCH_PROTOCOL_VERSION,
                 job_id: "job-1".to_string(),
-                metadata: metadata.clone(),
-                state: WorkspaceUploadState::Uploading,
-                created_at: chrono::Utc::now().to_rfc3339(),
-                committed_at: None,
-                workspace_path: None,
-                last_error: None,
+                sha256: sha256_file(&bundle).expect("digest"),
+                size: fs::symlink_metadata(&bundle).expect("metadata").len(),
             },
         )
-        .expect("upload record");
-
-        materialize_in_store(&store, "job-1").expect("materialize");
-
-        assert_eq!(
-            fs::read(upload_dir.join(CURRENT_WORKSPACE_DIR).join("file.txt"))
-                .expect("materialized file"),
-            b"materialized"
-        );
-        assert!(!upload_dir.join(UPLOAD_ARCHIVE_FILE).exists());
-        let record: WorkspaceUploadRecord =
-            read_json(&upload_dir.join(UPLOAD_RECORD_FILE)).expect("committed record");
-        assert_eq!(record.state, WorkspaceUploadState::Committed);
-        assert_eq!(record.metadata, metadata);
-        assert!(record.workspace_path.is_some());
-    }
-
-    #[test]
-    fn identical_jobs_reuse_one_verified_target_archive_but_keep_writes_isolated() {
-        let temp = tempfile::tempdir().expect("tempdir");
-        let store = DispatchStore::open(temp.path().join("dispatch")).expect("store");
-        let source = temp.path().join("source");
-        fs::create_dir_all(&source).expect("source");
-        fs::write(source.join("file.txt"), b"shared input").expect("source file");
-        let source_archive = temp.path().join("source.tar.gz");
-        let metadata = create_exact_workspace_snapshot(&source, &source_archive).expect("snapshot");
-
-        let first = begin_in_store(
-            &store,
-            DispatchWorkspaceBeginRequest {
-                protocol_version: DISPATCH_PROTOCOL_VERSION,
+        .expect("bundle begin");
+        fs::copy(&bundle, job_dir.join(INCOMING_BUNDLE_FILE)).expect("stage bundle");
+        bundle_commit_in_store(
+            store,
+            DispatchWorkspaceBundleCommitRequest {
                 job_id: "job-1".to_string(),
-                metadata: metadata.clone(),
             },
         )
-        .expect("begin first upload");
-        assert_eq!(first.offset, 0);
-        fs::copy(&source_archive, &first.upload_path).expect("upload first snapshot");
-        materialize_in_store(&store, "job-1").expect("materialize first job");
-
-        let cache_dir = store
-            .workspace_snapshot_cache_root()
-            .join(&metadata.archive_sha256);
-        assert!(cache_dir.join(CACHE_ARCHIVE_FILE).is_file());
-        assert_eq!(
-            fs::read_dir(store.workspace_snapshot_cache_root())
-                .expect("read cache")
-                .filter_map(Result::ok)
-                .filter(|entry| entry.path().is_dir())
-                .count(),
-            1
-        );
-
-        let second = begin_in_store(
-            &store,
-            DispatchWorkspaceBeginRequest {
-                protocol_version: DISPATCH_PROTOCOL_VERSION,
-                job_id: "job-2".to_string(),
-                metadata: metadata.clone(),
-            },
-        )
-        .expect("begin cached upload");
-        assert_eq!(
-            second.offset, metadata.archive_size,
-            "a cache hit must tell the controller that no bytes remain"
-        );
-
-        fs::write(
-            store
-                .workspace_upload_dir("job-1")
-                .expect("first workspace")
-                .join(CURRENT_WORKSPACE_DIR)
-                .join("file.txt"),
-            b"job one changed",
-        )
-        .expect("modify first job");
-        materialize_in_store(&store, "job-2").expect("materialize cached job");
-        assert_eq!(
-            fs::read(
-                store
-                    .workspace_upload_dir("job-2")
-                    .expect("second workspace")
-                    .join(CURRENT_WORKSPACE_DIR)
-                    .join("file.txt")
-            )
-            .expect("read second job"),
-            b"shared input",
-            "cache reuse must not share the writable job workspace"
-        );
-        assert!(cache_dir.join(CACHE_ARCHIVE_FILE).is_file());
-        assert!(!store
-            .workspace_upload_dir("job-2")
-            .expect("second workspace")
-            .join(UPLOAD_ARCHIVE_FILE)
-            .exists());
+        .expect("bundle commit");
+        provision_in_store(store, request).expect("second provision");
     }
 
     #[test]
-    fn materialization_failure_is_persisted_for_commit_pollers() {
-        let temp = tempfile::tempdir().expect("tempdir");
-        let store = DispatchStore::open(temp.path().join("dispatch")).expect("store");
-        let source = temp.path().join("source");
-        fs::create_dir_all(&source).expect("source");
-        fs::write(source.join("file.txt"), b"original").expect("source file");
-        let source_archive = temp.path().join("source.tar.gz");
-        let metadata = create_exact_workspace_snapshot(&source, &source_archive).expect("snapshot");
-        let upload_dir = store.workspace_upload_dir("job-1").expect("upload path");
-        create_private_dir(&upload_dir).expect("upload directory");
-        let staged_archive = upload_dir.join(UPLOAD_ARCHIVE_FILE);
-        fs::copy(&source_archive, &staged_archive).expect("stage archive");
-        let mut bytes = fs::read(&staged_archive).expect("archive");
-        bytes[0] ^= 1;
-        fs::write(&staged_archive, bytes).expect("tamper archive");
-        atomic_write_json(
-            &upload_dir.join(UPLOAD_RECORD_FILE),
-            &WorkspaceUploadRecord {
-                protocol_version: DISPATCH_PROTOCOL_VERSION,
-                job_id: "job-1".to_string(),
-                metadata,
-                state: WorkspaceUploadState::Uploading,
-                created_at: chrono::Utc::now().to_rfc3339(),
-                committed_at: None,
-                workspace_path: None,
-                last_error: None,
-            },
-        )
-        .expect("upload record");
-
-        materialize_in_store(&store, "job-1").expect_err("tampering must fail");
-
-        let record: WorkspaceUploadRecord =
-            read_json(&upload_dir.join(UPLOAD_RECORD_FILE)).expect("failed record");
-        assert_eq!(record.state, WorkspaceUploadState::Failed);
-        assert!(record
-            .last_error
-            .as_deref()
-            .is_some_and(|message| message.contains("SHA-256 mismatch")));
-        assert!(ensure_upload_not_failed(&record).is_err());
-    }
-
-    #[cfg(unix)]
-    #[test]
-    fn committed_workspace_validation_rejects_a_replaced_symlink() {
-        use std::os::unix::fs::symlink;
-
-        let temp = tempfile::tempdir().expect("tempdir");
-        let upload = temp.path().join("upload");
-        let outside = temp.path().join("outside");
-        fs::create_dir_all(&upload).expect("upload");
-        fs::create_dir_all(&outside).expect("outside");
-        symlink(&outside, upload.join(CURRENT_WORKSPACE_DIR)).expect("replace current");
-
-        assert!(validate_committed_workspace(&upload, None).is_err());
+    fn hostile_provisioning_inputs_are_rejected_before_git_runs() {
+        assert!(validate_repo_key("../escape").is_err());
+        assert!(validate_repo_key("zz").is_err());
+        assert!(validate_commit("HEAD").is_err());
+        assert!(validate_branch("--upload-pack=touch").is_err());
+        assert!(validate_branch("feature/..\\/etc").is_err());
+        assert!(validate_remote_url("ext::sh -c whoami").is_err());
+        assert!(validate_remote_url("--upload-pack=touch").is_err());
+        assert!(validate_remote_url("https://example.com/acme/app.git").is_ok());
     }
 }

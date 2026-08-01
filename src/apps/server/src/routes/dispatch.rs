@@ -10,12 +10,12 @@ use bitfun_core::external_sources::{
 use bitfun_core::service::dispatch::{
     answer_dispatch, append_dispatch, cancel_dispatch, cancel_dispatch_cli_install,
     get_dispatch_status, list_dispatch_jobs, list_dispatch_targets, poll_dispatch_cli_install,
-    probe_dispatch_target, start_dispatch_cli_install, submit_dispatch,
-    sync_dispatch_model_config, DispatchAnswerRequest,
+    probe_dispatch_target, start_dispatch_cli_install, start_dispatch_cli_source_build,
+    submit_dispatch, sync_dispatch_model_config, sync_dispatch_result, DispatchAnswerRequest,
     DispatchAppendRequest, DispatchConnectionRequest, DispatchInstallPollRequest,
     DispatchInstallStartRequest, DispatchJobRequest, DispatchListJobsRequest,
     DispatchListTargetsRequest, DispatchProbeTargetRequest, DispatchStatusRequest,
-    DispatchSubmitRequest, OutboundDispatchStore,
+    DispatchSubmitRequest, DispatchSyncResultRequest, OutboundDispatchStore,
 };
 use serde::de::DeserializeOwned;
 
@@ -27,11 +27,13 @@ pub(crate) fn supports(method: &str) -> bool {
         "dispatch_list_targets"
             | "dispatch_probe_target"
             | "dispatch_install_cli_start"
+            | "dispatch_install_cli_source_start"
             | "dispatch_install_cli_poll"
             | "dispatch_install_cli_cancel"
             | "dispatch_sync_model_config"
             | "dispatch_submit"
             | "dispatch_status"
+            | "dispatch_sync_result"
             | "dispatch_cancel"
             | "dispatch_list_jobs"
             | "dispatch_answer"
@@ -77,6 +79,14 @@ pub(crate) async fn dispatch(
                     .map_err(operation_error)?,
             )
         }
+        "dispatch_install_cli_source_start" => {
+            let request = parse_request::<DispatchConnectionRequest>(&params)?;
+            encode(
+                start_dispatch_cli_source_build(&host.ssh_manager, request)
+                    .await
+                    .map_err(operation_error)?,
+            )
+        }
         "dispatch_install_cli_poll" => {
             let request = parse_request::<DispatchInstallPollRequest>(&params)?;
             encode(
@@ -108,6 +118,12 @@ pub(crate) async fn dispatch(
         "dispatch_status" => {
             let request = parse_request::<DispatchStatusRequest>(&params)?;
             get_dispatch_status(&host.ssh_manager, &store(host), request)
+                .await
+                .map_err(operation_error)
+        }
+        "dispatch_sync_result" => {
+            let request = parse_request::<DispatchSyncResultRequest>(&params)?;
+            sync_dispatch_result(&host.ssh_manager, &store(host), request)
                 .await
                 .map_err(operation_error)
         }
@@ -186,11 +202,13 @@ mod tests {
             "dispatch_list_targets",
             "dispatch_probe_target",
             "dispatch_install_cli_start",
+            "dispatch_install_cli_source_start",
             "dispatch_install_cli_poll",
             "dispatch_install_cli_cancel",
             "dispatch_sync_model_config",
             "dispatch_submit",
             "dispatch_status",
+            "dispatch_sync_result",
             "dispatch_cancel",
             "dispatch_list_jobs",
             "dispatch_answer",
@@ -206,5 +224,15 @@ mod tests {
     fn structured_requests_are_required() {
         let error = parse_request::<DispatchJobRequest>(&serde_json::json!({})).unwrap_err();
         assert_eq!(error.code, ExternalSourceOperationErrorCode::InvalidRequest);
+    }
+
+    #[test]
+    fn source_build_route_accepts_a_structured_connection_request() {
+        let request = parse_request::<DispatchConnectionRequest>(&serde_json::json!({
+            "request": { "connectionId": "ssh-target" }
+        }))
+        .unwrap();
+
+        assert_eq!(request.connection_id, "ssh-target");
     }
 }

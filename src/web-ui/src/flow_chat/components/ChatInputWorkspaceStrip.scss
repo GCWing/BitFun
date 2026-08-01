@@ -73,8 +73,8 @@
     flex: none;
   }
 
-  // Appears only when a finished snapshot job has results waiting, so it is
-  // given accent treatment rather than the muted default of the other controls.
+  // One-click branch sync is a primary recovery/review path for remote work,
+  // so it gets accent treatment rather than the muted default of other controls.
   &__dispatch-result {
     box-sizing: border-box;
     display: inline-flex;

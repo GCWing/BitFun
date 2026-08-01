@@ -39,9 +39,12 @@ const TERMINAL_JOB_RETENTION_DAYS: i64 = 30;
 const RETENTION_GC_INTERVAL_SECONDS: u64 = 24 * 60 * 60;
 const RETENTION_GC_MARKER: &str = ".retention-gc";
 const RETENTION_GC_LOCK: &str = ".retention-gc.lock";
-const WORKSPACE_SNAPSHOT_CACHE_DIR: &str = "workspace-cache";
-pub(super) const WORKSPACE_SNAPSHOT_CACHE_RECORD_FILE: &str = "cache.json";
-const WORKSPACE_SNAPSHOT_CACHE_RETENTION_DAYS: i64 = 30;
+/// Shared bare clones, one per source repository, reused across dispatch jobs.
+const DISPATCH_REPOS_DIR: &str = "repos";
+/// Per-job Git worktrees checked out from those clones.
+const DISPATCH_WORKTREES_DIR: &str = "worktrees";
+pub(super) const REPO_CACHE_RECORD_FILE: &str = "repo.json";
+const REPO_CACHE_RETENTION_DAYS: i64 = 30;
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -133,7 +136,7 @@ struct StoredAppendMessage {
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct WorkspaceSnapshotCacheRetentionRecord {
+struct RepoCacheRetentionRecord {
     last_used_at: String,
 }
 
@@ -158,7 +161,8 @@ impl DispatchStore {
         create_private_dir(&root)?;
         create_private_dir(&root.join("jobs"))?;
         create_private_dir(&root.join("workspaces"))?;
-        create_private_dir(&root.join(WORKSPACE_SNAPSHOT_CACHE_DIR))?;
+        create_private_dir(&root.join(DISPATCH_REPOS_DIR))?;
+        create_private_dir(&root.join(DISPATCH_WORKTREES_DIR))?;
         Ok(Self {
             root,
             max_events_bytes: DEFAULT_MAX_EVENTS_BYTES,
@@ -227,6 +231,9 @@ impl DispatchStore {
             &job_dir.join(EVENTS_METADATA_FILE),
             &EventLogMetadata::default(),
         )?;
+        for event in record.request.setup_audit.iter().cloned() {
+            self.append_event_unlocked(&job_dir, &DispatchEvent::setup_audit(event))?;
+        }
         self.append_event_unlocked(
             &job_dir,
             &DispatchEvent::approval_policy_selected(record.request.approval_policy),
@@ -838,8 +845,25 @@ impl DispatchStore {
             .join(format!("{digest:x}.lock"))
     }
 
-    pub(crate) fn root(&self) -> &Path {
-        &self.root
+    /// Serializes the small JSON state machine used to start and poll one
+    /// detached Git operation. It must never be held while Git itself runs,
+    /// otherwise a status RPC blocks behind the worker it is meant to poll.
+    pub(crate) fn workspace_operation_lock_path(&self, job_id: &str) -> Result<PathBuf> {
+        validate_id("jobId", job_id)?;
+        Ok(self
+            .root
+            .join("workspaces")
+            .join(format!(".{job_id}.workspace.lock")))
+    }
+
+    /// Serializes long-running Git mutations for one managed dispatch
+    /// worktree. Retention uses the same lock before removing its artifacts.
+    pub(crate) fn workspace_git_operation_lock_path(&self, job_id: &str) -> Result<PathBuf> {
+        validate_id("jobId", job_id)?;
+        Ok(self
+            .root
+            .join("workspaces")
+            .join(format!(".{job_id}.git.lock")))
     }
 
     pub(crate) fn workspace_upload_dir(&self, job_id: &str) -> Result<PathBuf> {
@@ -847,8 +871,41 @@ impl DispatchStore {
         Ok(self.root.join("workspaces").join(job_id))
     }
 
-    pub(crate) fn workspace_snapshot_cache_root(&self) -> PathBuf {
-        self.root.join(WORKSPACE_SNAPSHOT_CACHE_DIR)
+    pub(crate) fn repos_root(&self) -> PathBuf {
+        self.root.join(DISPATCH_REPOS_DIR)
+    }
+
+    /// Directory holding one shared clone. `repo_key` is validated by the
+    /// workspace layer before it ever reaches here, but re-checking costs
+    /// nothing and keeps the path constructor safe on its own.
+    pub(crate) fn repo_dir(&self, repo_key: &str) -> Result<PathBuf> {
+        if repo_key.len() < 8
+            || repo_key.len() > 64
+            || !repo_key.bytes().all(|byte| byte.is_ascii_hexdigit())
+        {
+            bail!("dispatch repoKey must be an 8-64 character hex digest");
+        }
+        Ok(self.repos_root().join(repo_key))
+    }
+
+    /// Cross-process lock for every Git operation that touches one shared
+    /// bare repository. Provision, bundle import, sync, and retention all use
+    /// the same lock so two jobs cannot concurrently mutate refs or race a
+    /// repository-cache deletion.
+    pub(crate) fn repo_lock_path(&self, repo_key: &str) -> Result<PathBuf> {
+        // Reuse the path validation performed by `repo_dir` before deriving a
+        // sibling lock-file name from the key.
+        self.repo_dir(repo_key)?;
+        Ok(self.repos_root().join(format!(".{repo_key}.lock")))
+    }
+
+    pub(crate) fn worktrees_root(&self) -> PathBuf {
+        self.root.join(DISPATCH_WORKTREES_DIR)
+    }
+
+    pub(crate) fn worktree_dir(&self, job_id: &str) -> Result<PathBuf> {
+        validate_id("jobId", job_id)?;
+        Ok(self.worktrees_root().join(job_id))
     }
 
     fn maybe_collect_expired_terminal_jobs(&self) -> Result<()> {
@@ -919,6 +976,32 @@ impl DispatchStore {
             if now.signed_duration_since(finished_at).num_days() < TERMINAL_JOB_RETENTION_DAYS {
                 continue;
             }
+            let Some(operation_lock) =
+                JobLock::try_exclusive(&self.workspace_operation_lock_path(&job_id)?)?
+            else {
+                continue;
+            };
+            let Some(git_operation_lock) =
+                JobLock::try_exclusive(&self.workspace_git_operation_lock_path(&job_id)?)?
+            else {
+                continue;
+            };
+            let job_record: DispatchJobRecord = match read_json(&job_dir.join(JOB_RECORD_FILE)) {
+                Ok(record) => record,
+                Err(error) => {
+                    tracing::warn!(
+                        "Skipping dispatch job with unreadable workspace binding during retention cleanup: job_id={} error={error:#}",
+                        job_id
+                    );
+                    continue;
+                }
+            };
+            let Some(workspace_runtime_lock) = WorkspaceLock::try_acquire(
+                &self.workspace_lock_path(&job_record.request.workspace_path),
+            )?
+            else {
+                continue;
+            };
             let tombstone = jobs_root.join(format!(
                 ".gc-{}-{}",
                 job_id,
@@ -973,28 +1056,10 @@ impl DispatchStore {
                 Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
                 Err(error) => return Err(error.into()),
             }
-            let upload_lock = self
-                .root
-                .join("workspaces")
-                .join(format!(".{job_id}.upload.lock"));
-            match fs::symlink_metadata(&upload_lock) {
-                Ok(metadata) if !metadata.file_type().is_symlink() && metadata.is_file() => {
-                    fs::remove_file(&upload_lock).with_context(|| {
-                        format!(
-                            "remove expired dispatch workspace lock {}",
-                            upload_lock.display()
-                        )
-                    })?;
-                }
-                Ok(_) => {
-                    tracing::warn!(
-                        "Skipping unsafe expired dispatch workspace lock: {}",
-                        upload_lock.display()
-                    );
-                }
-                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-                Err(error) => return Err(error.into()),
-            }
+            drop(workspace_runtime_lock);
+            drop(git_operation_lock);
+            drop(operation_lock);
+            self.remove_workspace_operation_locks(&job_id)?;
             removed += 1;
         }
         let workspaces_root = self.root.join("workspaces");
@@ -1023,6 +1088,16 @@ impl DispatchStore {
             if !old_enough {
                 continue;
             }
+            let Some(operation_lock) =
+                JobLock::try_exclusive(&self.workspace_operation_lock_path(&job_id)?)?
+            else {
+                continue;
+            };
+            let Some(git_operation_lock) =
+                JobLock::try_exclusive(&self.workspace_git_operation_lock_path(&job_id)?)?
+            else {
+                continue;
+            };
             let tombstone = workspaces_root.join(format!(
                 ".gc-{}-{}",
                 job_id,
@@ -1037,25 +1112,106 @@ impl DispatchStore {
             fs::remove_dir_all(&tombstone).with_context(|| {
                 format!("remove orphaned dispatch workspace {}", tombstone.display())
             })?;
+            drop(git_operation_lock);
+            drop(operation_lock);
+            self.remove_workspace_operation_locks(&job_id)?;
             removed += 1;
         }
-        self.collect_expired_workspace_snapshot_cache(now)?;
+        removed += self.collect_orphaned_worktrees(&jobs_root)?;
+        self.collect_expired_repo_clones(now)?;
         Ok(removed)
     }
 
-    fn collect_expired_workspace_snapshot_cache(
-        &self,
-        now: chrono::DateTime<chrono::Utc>,
-    ) -> Result<()> {
-        let cache_root = self.workspace_snapshot_cache_root();
+    /// Remove worktrees whose job record is gone.
+    ///
+    /// The directory is only the checkout: every commit made in it was fetched
+    /// into the shared clone during sync, so removing it cannot lose work that
+    /// the controller pulled. Work the controller never pulled is discarded
+    /// along with the job it belonged to, which is the same retention promise
+    /// the event log makes.
+    ///
+    /// Stale worktree administrative entries left inside the clone are pruned
+    /// by the next provision, which always runs `git worktree prune` first.
+    fn collect_orphaned_worktrees(&self, jobs_root: &Path) -> Result<usize> {
+        let worktrees_root = self.worktrees_root();
+        let mut removed = 0;
+        for entry in fs::read_dir(&worktrees_root)
+            .with_context(|| format!("read dispatch worktrees {}", worktrees_root.display()))?
+        {
+            let entry = entry?;
+            let Some(job_id) = entry.file_name().to_str().map(ToOwned::to_owned) else {
+                continue;
+            };
+            if validate_id("jobId", &job_id).is_err() || jobs_root.join(&job_id).exists() {
+                continue;
+            }
+            let worktree_dir = entry.path();
+            let metadata = fs::symlink_metadata(&worktree_dir)?;
+            if metadata.file_type().is_symlink() || !metadata.is_dir() {
+                continue;
+            }
+            let old_enough = metadata
+                .modified()
+                .ok()
+                .and_then(|modified| modified.elapsed().ok())
+                .is_some_and(|elapsed| {
+                    elapsed.as_secs() >= (TERMINAL_JOB_RETENTION_DAYS as u64) * 24 * 60 * 60
+                });
+            if !old_enough {
+                continue;
+            }
+            let Some(operation_lock) =
+                JobLock::try_exclusive(&self.workspace_operation_lock_path(&job_id)?)?
+            else {
+                continue;
+            };
+            let Some(git_operation_lock) =
+                JobLock::try_exclusive(&self.workspace_git_operation_lock_path(&job_id)?)?
+            else {
+                continue;
+            };
+            let canonical_worktree = std::fs::canonicalize(&worktree_dir)
+                .unwrap_or_else(|_| worktree_dir.clone())
+                .to_string_lossy()
+                .to_string();
+            let Some(workspace_runtime_lock) =
+                WorkspaceLock::try_acquire(&self.workspace_lock_path(&canonical_worktree))?
+            else {
+                continue;
+            };
+            let tombstone = worktrees_root.join(format!(
+                ".gc-{}-{}",
+                job_id,
+                uuid::Uuid::new_v4().as_simple()
+            ));
+            fs::rename(&worktree_dir, &tombstone).with_context(|| {
+                format!(
+                    "quarantine orphaned dispatch worktree {}",
+                    worktree_dir.display()
+                )
+            })?;
+            fs::remove_dir_all(&tombstone).with_context(|| {
+                format!("remove orphaned dispatch worktree {}", tombstone.display())
+            })?;
+            drop(workspace_runtime_lock);
+            drop(git_operation_lock);
+            drop(operation_lock);
+            self.remove_workspace_operation_locks(&job_id)?;
+            removed += 1;
+        }
+        Ok(removed)
+    }
+
+    fn collect_expired_repo_clones(&self, now: chrono::DateTime<chrono::Utc>) -> Result<()> {
+        let cache_root = self.repos_root();
         for entry in fs::read_dir(&cache_root)
-            .with_context(|| format!("read dispatch workspace cache {}", cache_root.display()))?
+            .with_context(|| format!("read dispatch repository cache {}", cache_root.display()))?
         {
             let entry = entry?;
             let Some(digest) = entry.file_name().to_str().map(ToOwned::to_owned) else {
                 continue;
             };
-            if digest.len() != 64 || !digest.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+            if self.repo_dir(&digest).is_err() {
                 continue;
             }
             let cache_dir = entry.path();
@@ -1063,12 +1219,15 @@ impl DispatchStore {
             if metadata.file_type().is_symlink() || !metadata.is_dir() {
                 continue;
             }
-            let lock_path = cache_root.join(format!(".{digest}.lock"));
+            let lock_path = self.repo_lock_path(&digest)?;
             let Some(_lock) = JobLock::try_exclusive(&lock_path)? else {
                 continue;
             };
-            let record = match read_json::<WorkspaceSnapshotCacheRetentionRecord>(
-                &cache_dir.join(WORKSPACE_SNAPSHOT_CACHE_RECORD_FILE),
+            if self.repo_cache_is_referenced(&digest)? {
+                continue;
+            }
+            let record = match read_json::<RepoCacheRetentionRecord>(
+                &cache_dir.join(REPO_CACHE_RECORD_FILE),
             ) {
                 Ok(record) => record,
                 Err(error) => {
@@ -1085,9 +1244,7 @@ impl DispatchStore {
             else {
                 continue;
             };
-            if now.signed_duration_since(last_used_at).num_days()
-                < WORKSPACE_SNAPSHOT_CACHE_RETENTION_DAYS
-            {
+            if now.signed_duration_since(last_used_at).num_days() < REPO_CACHE_RETENTION_DAYS {
                 continue;
             }
             let tombstone = cache_root.join(format!(
@@ -1107,6 +1264,61 @@ impl DispatchStore {
                     tombstone.display()
                 )
             })?;
+        }
+        Ok(())
+    }
+
+    /// A live job keeps its shared bare repository alive even when it has not
+    /// performed a Git operation for longer than the cache retention window.
+    /// Its worktree's Git metadata points into that repository, so collecting
+    /// the clone would otherwise break an in-flight detached task.
+    fn repo_cache_is_referenced(&self, repo_key: &str) -> Result<bool> {
+        let workspaces_root = self.root.join("workspaces");
+        let jobs_root = self.root.join("jobs");
+        for entry in fs::read_dir(&workspaces_root)
+            .with_context(|| format!("read dispatch workspaces {}", workspaces_root.display()))?
+        {
+            let entry = entry?;
+            if !entry.file_type()?.is_dir() {
+                continue;
+            }
+            let Some(job_id) = entry.file_name().to_str().map(ToOwned::to_owned) else {
+                continue;
+            };
+            if validate_id("jobId", &job_id).is_err() || !jobs_root.join(&job_id).is_dir() {
+                continue;
+            }
+            let provision_path = entry.path().join("provision.json");
+            let Ok(value) = read_json::<serde_json::Value>(&provision_path) else {
+                continue;
+            };
+            if value.get("repoKey").and_then(serde_json::Value::as_str) == Some(repo_key) {
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
+
+    fn remove_workspace_operation_locks(&self, job_id: &str) -> Result<()> {
+        validate_id("jobId", job_id)?;
+        for suffix in ["upload", "workspace", "git"] {
+            let path = self
+                .root
+                .join("workspaces")
+                .join(format!(".{job_id}.{suffix}.lock"));
+            match fs::symlink_metadata(&path) {
+                Ok(metadata) if !metadata.file_type().is_symlink() && metadata.is_file() => {
+                    fs::remove_file(&path).with_context(|| {
+                        format!("remove expired dispatch operation lock {}", path.display())
+                    })?;
+                }
+                Ok(_) => tracing::warn!(
+                    "Skipping unsafe expired dispatch operation lock: {}",
+                    path.display()
+                ),
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                Err(error) => return Err(error.into()),
+            }
         }
         Ok(())
     }
@@ -1228,6 +1440,21 @@ impl WorkspaceLock {
         set_private_file_permissions(path)?;
         FileLock::exclusive(&file)?;
         Ok(Self { _file: file })
+    }
+
+    pub(crate) fn try_acquire(path: &Path) -> Result<Option<Self>> {
+        if let Some(parent) = path.parent() {
+            create_private_dir(parent)?;
+        }
+        let file = OpenOptions::new()
+            .create(true)
+            .read(true)
+            .write(true)
+            .truncate(false)
+            .open(path)
+            .with_context(|| format!("open workspace dispatch lock {}", path.display()))?;
+        set_private_file_permissions(path)?;
+        try_lock_file_exclusive(&file).map(|acquired| acquired.then_some(Self { _file: file }))
     }
 }
 
@@ -1690,7 +1917,9 @@ fn retryable_retention_rename_error(error: &std::io::Error) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::dispatch::protocol::{DispatchApprovalPolicy, DispatchSubmitRequest};
+    use crate::dispatch::protocol::{
+        DispatchApprovalPolicy, DispatchSetupAuditEvent, DispatchSubmitRequest,
+    };
     use bitfun_agent_runtime::sdk::{PermissionRequestSource, PermissionRequestSourceKind};
     use serde_json::Map;
 
@@ -1705,6 +1934,7 @@ mod tests {
             approval_policy: DispatchApprovalPolicy::RejectAndReport,
             model: Some("model-1".to_string()),
             title: None,
+            setup_audit: Vec::new(),
         }
     }
 
@@ -2129,6 +2359,32 @@ mod tests {
     }
 
     #[test]
+    fn controller_setup_audit_is_replayed_before_target_job_events() {
+        let (_dir, store) = store();
+        let mut request = request("job-setup-audit");
+        request.setup_audit.push(DispatchSetupAuditEvent {
+            timestamp: "2026-07-31T00:00:00Z".to_string(),
+            action: "cli-install".to_string(),
+            details: serde_json::json!({ "stage": "cli-install-succeeded" }),
+        });
+        store
+            .create_job(request, "Task".to_string())
+            .expect("create job");
+
+        let page = store.read_events("job-setup-audit", 0).expect("events");
+        assert!(matches!(
+            &page.events[0],
+            DispatchEvent::Audit { action, details, .. }
+                if action == "cli-install"
+                    && details["stage"] == "cli-install-succeeded"
+        ));
+        assert!(matches!(
+            &page.events[1],
+            DispatchEvent::Audit { action, .. } if action == "approvalPolicySelected"
+        ));
+    }
+
+    #[test]
     fn cursor_beyond_the_file_resets_to_the_retained_prefix() {
         let (_dir, store) = store();
         store
@@ -2475,15 +2731,14 @@ mod tests {
         for (digest, last_used_at) in [
             (
                 &expired_digest,
-                (now - chrono::Duration::days(WORKSPACE_SNAPSHOT_CACHE_RETENTION_DAYS + 1))
-                    .to_rfc3339(),
+                (now - chrono::Duration::days(REPO_CACHE_RETENTION_DAYS + 1)).to_rfc3339(),
             ),
             (&recent_digest, now.to_rfc3339()),
         ] {
-            let cache_dir = store.workspace_snapshot_cache_root().join(digest);
+            let cache_dir = store.repos_root().join(digest);
             create_private_dir(&cache_dir).expect("create cache entry");
             atomic_write_json(
-                &cache_dir.join(WORKSPACE_SNAPSHOT_CACHE_RECORD_FILE),
+                &cache_dir.join(REPO_CACHE_RECORD_FILE),
                 &serde_json::json!({ "lastUsedAt": last_used_at }),
             )
             .expect("write cache record");
@@ -2497,18 +2752,20 @@ mod tests {
         );
         assert!(!store.root.join("jobs/expired").exists());
         assert!(!store.root.join("workspaces/expired").exists());
+        assert!(!store
+            .workspace_operation_lock_path("expired")
+            .expect("operation lock path")
+            .exists());
+        assert!(!store
+            .workspace_git_operation_lock_path("expired")
+            .expect("git operation lock path")
+            .exists());
         assert!(store.root.join("jobs/recent").exists());
         assert!(store.root.join("workspaces/recent").exists());
         assert!(store.root.join("jobs/running").exists());
         assert!(store.root.join("workspaces/running").exists());
-        assert!(!store
-            .workspace_snapshot_cache_root()
-            .join(expired_digest)
-            .exists());
-        assert!(store
-            .workspace_snapshot_cache_root()
-            .join(recent_digest)
-            .exists());
+        assert!(!store.repos_root().join(expired_digest).exists());
+        assert!(store.repos_root().join(recent_digest).exists());
     }
 
     #[test]

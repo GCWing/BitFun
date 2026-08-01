@@ -1064,6 +1064,7 @@ function finalizeTurnCompletionState(
   context.flowChatStore.markSessionFinished(sessionId);
 
   context.flowChatStore.updateDialogTurn(sessionId, turnId, turn => {
+    const completedAt = Date.now();
     const updatedModelRounds = turn.modelRounds.map((round) => {
       if (round.isStreaming) {
         return {
@@ -1071,7 +1072,7 @@ function finalizeTurnCompletionState(
           isStreaming: false,
           isComplete: true,
           status: 'completed' as const,
-          endTime: Date.now()
+          endTime: round.endTime ?? completedAt
         };
       }
       return round;
@@ -1081,7 +1082,7 @@ function finalizeTurnCompletionState(
       ...turn,
       modelRounds: updatedModelRounds,
       status: 'completed' as const,
-      endTime: Date.now()
+      endTime: turn.endTime ?? completedAt
     };
   });
   reconcileBackgroundSubagentSession(sessionId);
@@ -2302,6 +2303,7 @@ export function handleDialogTurnComplete(
   const success = event?.success;
   const finishReason = event?.finishReason ?? event?.finish_reason;
   const hasFinalResponse = event?.hasFinalResponse ?? event?.has_final_response;
+  const durationMs = optionalNumber(event?.durationMs ?? event?.duration_ms);
 
   if (!sessionId || !turnId) {
     log.warn('DialogTurnCompleted missing sessionId or turnId', { event });
@@ -2348,6 +2350,9 @@ export function handleDialogTurnComplete(
     return {
       ...turn,
       status: 'finishing' as const,
+      endTime: durationMs === undefined
+        ? turn.endTime
+        : turn.startTime + Math.max(0, durationMs),
       success: success ?? undefined,
       finishReason: finishReason ?? undefined,
       hasFinalResponse: typeof hasFinalResponse === 'boolean' ? hasFinalResponse : undefined,

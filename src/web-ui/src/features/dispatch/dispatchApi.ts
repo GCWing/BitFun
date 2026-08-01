@@ -6,15 +6,13 @@ import type {
   DispatchInstallPoll,
   DispatchInstallStart,
   DispatchJobListEntry,
-  DispatchResultApplyOutcome,
-  DispatchResultBundle,
   DispatchSshProbe,
   DispatchStatusResponse,
   DispatchSubmitResponse,
+  DispatchSyncResult,
   DispatchTargetOption,
   DispatchTargetRequest,
   DispatchTranscriptCache,
-  DispatchWorkspaceDeliveryRequest,
   OutboundDispatchRecord,
 } from './types';
 
@@ -60,31 +58,15 @@ export const dispatchApi = {
   },
 
   /**
-   * Download what a finished snapshot job changed on its target.
+   * Bring a job's work back into this controller's baseline worktree.
    *
-   * Fetch and report only: the bundle lands in the controller's staging area
-   * and nothing reaches the local workspace until the user reviews the diff
-   * and explicitly applies it.
+   * One call, both halves: the target commits and bundles its branch, then the
+   * controller fast-forwards its baseline onto it. The user's own checkout is
+   * never touched — the baseline worktree is a separate directory.
    */
-  async pullResult(jobId: string): Promise<DispatchResultBundle> {
-    return api.invoke<DispatchResultBundle>('dispatch_pull_result', {
-      request: { jobId },
-    });
-  },
-
-  /**
-   * Apply a pulled bundle to a local workspace.
-   *
-   * Aborts without writing when a path changed on both sides, unless
-   * `overwriteConflicts` says to take the target's version.
-   */
-  async applyResult(
-    jobId: string,
-    workspacePath: string,
-    overwriteConflicts: boolean,
-  ): Promise<DispatchResultApplyOutcome> {
-    return api.invoke<DispatchResultApplyOutcome>('dispatch_apply_result', {
-      request: { jobId, workspacePath, overwriteConflicts },
+  async syncResult(jobId: string, message?: string): Promise<DispatchSyncResult> {
+    return api.invoke<DispatchSyncResult>('dispatch_sync_result', {
+      request: { jobId, message },
     });
   },
 
@@ -96,7 +78,8 @@ export const dispatchApi = {
 
   async submit(request: {
     target: DispatchTargetRequest;
-    workspaceDelivery: DispatchWorkspaceDeliveryRequest;
+    baseRef?: string;
+    includeUncommitted: boolean;
     jobId: string;
     sessionId: string;
     agentType: string;

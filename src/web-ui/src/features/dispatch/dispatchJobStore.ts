@@ -9,7 +9,6 @@ import type {
   DispatchReachability,
   DispatchTarget,
   DispatchTargetRequest,
-  DispatchWorkspaceDeliveryRequest,
   OutboundDispatchRecord,
 } from './types';
 import { isDispatchJobTerminal } from './types';
@@ -136,7 +135,11 @@ export interface DispatchObserverJob {
   title: string;
   agentType: string;
   approvalPolicy: DispatchApprovalPolicy;
-  workspaceDelivery: DispatchWorkspaceDeliveryRequest;
+  /** Baseline branch on the controller, once the backend has resolved one. */
+  branch?: string;
+  baselineWorktreePath?: string;
+  baselineWorktreeMissing?: boolean;
+  syncedHeadCommit?: string;
   model?: string;
   availableModels?: string[];
   defaultModel?: string;
@@ -195,6 +198,7 @@ interface DispatchJobStoreState {
     reachability: DispatchReachability,
     lastTransportError?: string,
   ) => void;
+  setBaselineWorktreeMissing: (jobId: string, missing: boolean) => void;
   resetReplay: (jobId: string) => void;
   adoptCachedReplay: (
     jobId: string,
@@ -354,7 +358,10 @@ export const useDispatchJobStore = create<DispatchJobStoreState>()(
               }
               continue;
             }
-            const sourceWorkspacePath = record.sourceWorkspacePath?.trim() || undefined;
+            const sourceWorkspacePath =
+              record.sourceWorkspacePath?.trim()
+              || record.baselineProjectWorkspacePath?.trim()
+              || undefined;
             if (!sourceWorkspacePath) {
               // A legacy/adopted record without controller-side ownership
               // cannot safely be projected into any workspace. In particular,
@@ -369,6 +376,8 @@ export const useDispatchJobStore = create<DispatchJobStoreState>()(
             if (existing) {
               const nextState = nextJobState(existing.state, record.lastState);
               const progressed = nextState !== existing.state;
+              const nextBaselinePath =
+                record.baselineWorktreePath || existing.baselineWorktreePath;
               jobs[record.jobId] = {
                 ...existing,
                 target: record.target,
@@ -382,6 +391,14 @@ export const useDispatchJobStore = create<DispatchJobStoreState>()(
                 agentType: record.agentType || existing.agentType,
                 approvalPolicy: record.approvalPolicy || existing.approvalPolicy,
                 model: record.model || existing.model,
+                branch: record.branch || existing.branch,
+                baselineWorktreePath: nextBaselinePath,
+                baselineWorktreeMissing:
+                  nextBaselinePath === existing.baselineWorktreePath
+                    ? existing.baselineWorktreeMissing
+                    : undefined,
+                syncedHeadCommit:
+                  record.syncedHeadCommit || existing.syncedHeadCommit,
                 // `lastCursor` is controller-wide diagnostic progress. A
                 // renderer cursor is per observer and must never jump because
                 // another observer polled the same target job.
@@ -408,7 +425,9 @@ export const useDispatchJobStore = create<DispatchJobStoreState>()(
               title: record.title || record.promptPreview || record.sessionId.slice(0, 8),
               agentType: record.agentType || 'agentic',
               approvalPolicy: record.approvalPolicy || 'reject-and-report',
-              workspaceDelivery: { kind: 'existing' },
+              branch: record.branch,
+              baselineWorktreePath: record.baselineWorktreePath,
+              syncedHeadCommit: record.syncedHeadCommit,
               model: record.model,
               // A newly reconstructed projection must replay its own
               // transcript instead of inheriting another observer's cursor.
@@ -500,6 +519,25 @@ export const useDispatchJobStore = create<DispatchJobStoreState>()(
               [jobId]: {
                 reachability,
                 lastTransportError: normalizedError,
+              },
+            },
+          };
+        });
+      },
+
+      setBaselineWorktreeMissing: (jobId, missing) => {
+        set(state => {
+          const current = state.jobs[jobId];
+          if (!current || current.baselineWorktreeMissing === missing) {
+            return state;
+          }
+          return {
+            jobs: {
+              ...state.jobs,
+              [jobId]: {
+                ...current,
+                baselineWorktreeMissing: missing,
+                updatedAt: Date.now(),
               },
             },
           };

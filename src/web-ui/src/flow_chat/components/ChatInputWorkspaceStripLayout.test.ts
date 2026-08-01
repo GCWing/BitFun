@@ -45,14 +45,20 @@ describe('ChatInputWorkspaceStrip layout styles', () => {
     expect(stylesheet).toContain('display: none;');
   });
 
-  it('keeps dispatch session creation hidden for the 0.2.15 release', () => {
+  it('mounts the dispatch picker behind the same Git gate as worktree isolation', () => {
     const component = readWorkspaceStripComponent();
 
-    expect(component).toContain('0.2.15 release gate');
-    expect(component).toContain('Restore DispatchTargetPicker');
-    expect(component).not.toContain('<DispatchTargetPicker');
-    expect(component).not.toContain(
+    expect(component).toContain(
       "import { DispatchTargetPicker } from '@/features/dispatch/DispatchTargetPicker';",
     );
+    expect(component).toContain('<DispatchTargetPicker');
+    // One Git probe decides both controls, so they can never disagree about
+    // whether the workspace is a repository.
+    expect(component).toContain(
+      'const isGitWorkspace = isRepository || isWorktree || worktreeEnabled;',
+    );
+    expect(component).toContain('const showWorktreeToggle = !!worktreeControl && isGitWorkspace;');
+    expect(component).toContain('const showDispatchPicker = !!dispatchControl && isGitWorkspace;');
+    expect(component).not.toContain('0.2.15 release gate');
   });
 });

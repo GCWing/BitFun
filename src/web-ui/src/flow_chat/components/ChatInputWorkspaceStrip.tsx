@@ -7,9 +7,9 @@ import { useTranslation } from 'react-i18next';
 import {
   Activity,
   Check,
-  Download,
   EyeOff,
   GitBranch,
+  RefreshCw,
   Shield,
   ShieldAlert,
   ShieldCheck,
@@ -23,6 +23,7 @@ import { useGitState } from '@/tools/git/hooks/useGitState';
 import type { SessionExecutionTarget } from '@/infrastructure/api/service-api/WorktreeAPI';
 import { useI18n } from '@/infrastructure/i18n';
 import { DispatchResultDialog } from '@/features/dispatch/DispatchResultDialog';
+import { DispatchTargetPicker } from '@/features/dispatch/DispatchTargetPicker';
 import type { DispatchSelection, DispatchTarget } from '@/features/dispatch/types';
 import './ChatInputWorkspaceStrip.scss';
 
@@ -65,6 +66,8 @@ export interface ChatInputWorkspaceStripProps {
     enabled: boolean;
     /** Locked once the session has a transcript — its history describes one directory. */
     locked: boolean;
+    /** Why the control is locked, when a transcript is not the reason. */
+    lockedReason?: 'dispatch';
     onChange: (enabled: boolean) => void;
   };
   /** Immutable per-session dispatch destination. Hidden on embedded/mini composers. */
@@ -74,12 +77,11 @@ export interface ChatInputWorkspaceStripProps {
     locked: boolean;
     onSelectLocal?: () => void;
     onSelectTarget: (selection: DispatchSelection) => void;
-    /**
-     * Set once a snapshot-delivered job has finished, so its results can be
-     * reviewed. Absent for local, non-snapshot, or still-running sessions —
-     * there is nothing to pull in those cases.
-     */
-    completedSnapshotJobId?: string;
+    /** Target worktree can be committed and synced from running onward. */
+    syncableJobId?: string;
+    branch?: string;
+    baselineWorktreePath?: string;
+    baselineMissing?: boolean;
   };
 }
 
@@ -135,14 +137,19 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
   const showUsage = usageReport?.visible && !!usageReport.onOpen;
   const showGoal = threadGoal?.visible && !!threadGoal.onOpen;
   const showPermission = !!permissionControl;
-  const showDispatchResult = !!dispatchControl?.completedSnapshotJobId;
-  const showRightActions = showDispatchResult || showPermission || showUsage || showGoal;
+  const showDispatchResult = !!dispatchControl?.syncableJobId;
   const isWorktree = !!executionTarget?.worktreeId;
   const worktreeEnabled = worktreeControl?.enabled ?? isWorktree;
   const worktreeEnabledRef = useRef(worktreeEnabled);
   worktreeEnabledRef.current = worktreeEnabled;
-  const showWorktreeToggle =
-    !!worktreeControl && (isRepository || isWorktree || worktreeEnabled);
+  // Dispatch delivers work as a Git worktree of the controller's repository, so
+  // it is only meaningful where a worktree itself is — the same condition the
+  // isolation toggle uses, evaluated from the same Git probe.
+  const isGitWorkspace = isRepository || isWorktree || worktreeEnabled;
+  const showWorktreeToggle = !!worktreeControl && isGitWorkspace;
+  const showDispatchPicker = !!dispatchControl && isGitWorkspace;
+  const showRightActions =
+    showDispatchPicker || showDispatchResult || showPermission || showUsage || showGoal;
   const permissionCopy = {
     ask: {
       label: t('chatInput.permissionMode.ask.label'),
@@ -188,19 +195,25 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
     };
   }, [permissionMenuOpen]);
 
+  const dispatchBranch = dispatchControl?.locked
+    && worktreeControl?.lockedReason === 'dispatch'
+    ? dispatchControl?.branch?.trim()
+    : undefined;
   const branchTooltipContent = useMemo(
     () =>
-      isRepository && currentBranch?.trim()
+      dispatchBranch
+        || (isRepository && currentBranch?.trim()
         ? currentBranch.trim()
-        : t('workspaceStrip.branchTooltipUnavailable'),
-    [currentBranch, isRepository, t],
+        : t('workspaceStrip.branchTooltipUnavailable')),
+    [currentBranch, dispatchBranch, isRepository, t],
   );
 
   if (!label && !showRightActions) {
     return null;
   }
 
-  const branchLabel = executionTarget?.branch?.trim()
+  const branchLabel = dispatchBranch
+    || executionTarget?.branch?.trim()
     || (isWorktree && currentBranch?.trim())
     || (isWorktree && executionTarget?.baseCommit
       ? tWorktrees('labels.detached', { commit: executionTarget.baseCommit.slice(0, 9) })
@@ -211,7 +224,9 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
   const workspaceTooltipContent = trimmedPath || label;
   const worktreeToggleDisabled = !!worktreeControl?.locked;
   let worktreeTooltip = tWorktrees('strip.toggleOffDescription');
-  if (worktreeControl?.locked) {
+  if (worktreeControl?.lockedReason === 'dispatch') {
+    worktreeTooltip = tWorktrees('strip.dispatchBaseline');
+  } else if (worktreeControl?.locked) {
     worktreeTooltip = tWorktrees('strip.toggleLocked');
   } else if (worktreeEnabled && !isWorktree) {
     worktreeTooltip = tWorktrees('strip.togglePendingOnDescription');
@@ -325,28 +340,34 @@ export const ChatInputWorkspaceStrip: React.FC<ChatInputWorkspaceStripProps> = (
 
       {showRightActions ? (
         <div className="bitfun-chat-input-workspace-strip__actions">
-          {/*
-           * 0.2.15 release gate: dispatch session creation stays hidden while
-           * its lifecycle semantics stabilize. Restore DispatchTargetPicker
-           * here in a later release; existing result review remains available.
-           */}
-          {dispatchControl?.completedSnapshotJobId ? (
+          {showDispatchPicker && dispatchControl ? (
+            <DispatchTargetPicker
+              target={dispatchControl.target}
+              sourceWorkspacePath={dispatchControl.sourceWorkspacePath}
+              locked={dispatchControl.locked}
+              onSelectLocal={dispatchControl.onSelectLocal}
+              onSelectTarget={dispatchControl.onSelectTarget}
+            />
+          ) : null}
+          {dispatchControl?.syncableJobId ? (
             <>
-              <Tooltip content={tCommon('dispatch.resultTitle')} placement="top">
+              <Tooltip content={tCommon('dispatch.syncTitle')} placement="top">
                 <button
                   type="button"
                   className="bitfun-chat-input-workspace-strip__dispatch-result"
                   onClick={() => setResultDialogOpen(true)}
-                  data-testid="dispatch-result-trigger"
+                  data-testid="dispatch-sync-trigger"
                 >
-                  <Download size={11} strokeWidth={2} aria-hidden />
-                  <span>{tCommon('dispatch.resultApply')}</span>
+                  <RefreshCw size={11} strokeWidth={2} aria-hidden />
+                  <span>{tCommon('dispatch.syncAction')}</span>
                 </button>
               </Tooltip>
               <DispatchResultDialog
                 open={resultDialogOpen}
-                jobId={dispatchControl.completedSnapshotJobId}
-                workspacePath={dispatchControl.sourceWorkspacePath ?? ''}
+                jobId={dispatchControl.syncableJobId}
+                branch={dispatchControl.branch}
+                baselineWorktreePath={dispatchControl.baselineWorktreePath}
+                baselineMissing={dispatchControl.baselineMissing}
                 targetLabel={dispatchControl.target.kind !== 'local'
                   ? dispatchControl.target.displayName
                   : undefined}

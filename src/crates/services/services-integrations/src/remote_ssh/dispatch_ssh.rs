@@ -5,15 +5,18 @@
 //! workspaces, sessions, transcripts, process detachment, supervision, and
 //! cancellation semantics.
 //!
-//! Installing the CLI is a separate, explicit operation. `probe` never installs
-//! anything; `install_cli_start` downloads an official archive locally, verifies
-//! its SHA256 sidecar (signed, when the release ships `.sha256.sig`) and the
-//! mandatory archive minisign signature, then stages it under the SSH user's
-//! home before starting an owner-only installer.
+//! `probe` is read-only. Submission may automatically install a matching
+//! prebuilt release when the target is missing a compatible CLI;
+//! `install_cli_start` still verifies the signed SHA256 sidecar and mandatory
+//! archive minisign signature before staging an owner-only installer. Source
+//! builds remain a separate, explicitly confirmed operation.
 
 use anyhow::{anyhow, Context, Result};
+use base64::Engine as _;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use sha2::{Digest, Sha256};
+use std::future::Future;
 use std::time::Duration;
 
 use super::manager::SSHConnectionManager;
@@ -32,16 +35,48 @@ const INSTALL_STEM: &str = "install-cli";
 const INSTALL_DONE_MARKER: &str = "BITFUN_DISPATCH_CLI_INSTALL_DONE";
 const INSTALL_PREPARE_GRACE_SECONDS: u64 = 30;
 const COMMAND_TIMEOUT_MS: u64 = 30_000;
+const WORKSPACE_OPERATION_WAIT: Duration = Duration::from_secs(30 * 60);
+const WORKSPACE_OPERATION_POLL_INTERVAL: Duration = Duration::from_millis(750);
 /// A release archive is tens of megabytes and the target's uplink is unknown,
 /// so this is far longer than an ordinary setup command.
 const TARGET_DOWNLOAD_TIMEOUT_MS: u64 = 10 * 60 * 1000;
-const WORKSPACE_COMMIT_POLL_INTERVAL: Duration = Duration::from_millis(750);
-const WORKSPACE_COMMIT_WAIT: Duration = Duration::from_secs(15 * 60);
+const CLI_INSTALL_POLL_INTERVAL: Duration = Duration::from_millis(750);
+/// A source-free release install is a download plus an unpack; anything past
+/// this is a hung target rather than a slow one.
+const CLI_INSTALL_WAIT: Duration = Duration::from_secs(15 * 60);
 const RELEASE_READ_TIMEOUT_SECONDS: u64 = 30;
 const MAX_ARCHIVE_BYTES: usize = 512 * 1024 * 1024;
-/// A result bundle carries only changed files, so it is bounded well below a
-/// full workspace snapshot.
+/// A result bundle carries only commits since the dispatch baseline, so it is
+/// bounded well below a full repository clone in the usual case.
 const MAX_RESULT_BUNDLE_BYTES: u64 = 1024 * 1024 * 1024;
+const RESULT_BUNDLE_CHUNK_BYTES: u64 = 256 * 1024;
+const MAX_RESULT_BUNDLE_CHUNK_BASE64_BYTES: usize = 384 * 1024;
+
+struct UnverifiedResultBundle {
+    path: std::path::PathBuf,
+    verified: bool,
+}
+
+impl UnverifiedResultBundle {
+    fn new(path: &std::path::Path) -> Self {
+        Self {
+            path: path.to_path_buf(),
+            verified: false,
+        }
+    }
+
+    fn retain(&mut self) {
+        self.verified = true;
+    }
+}
+
+impl Drop for UnverifiedResultBundle {
+    fn drop(&mut self) {
+        if !self.verified {
+            let _ = std::fs::remove_file(&self.path);
+        }
+    }
+}
 /// Oldest glibc the published Linux binaries run against. Kept in step with
 /// `scripts/ci/check-glibc-floor.sh`, which enforces it at release time.
 const GLIBC_FLOOR: &str = "2.35";
@@ -49,7 +84,7 @@ const GLIBC_FLOOR: &str = "2.35";
 /// Same figure the relay source build uses.
 const SOURCE_BUILD_FREE_KB: u64 = 6 * 1024 * 1024;
 const REPO_GIT_URL: &str = "https://github.com/GCWing/BitFun.git";
-const DISPATCH_PROTOCOL_VERSION: u64 = 2;
+const DISPATCH_PROTOCOL_VERSION: u64 = 3;
 const DISPATCH_WORKER_CLI_PROFILE_CAPABILITY: &str = "dispatch_worker_cli_profile";
 /// First stable release whose CLI is known to contain every capability below.
 ///
@@ -57,8 +92,8 @@ const DISPATCH_WORKER_CLI_PROFILE_CAPABILITY: &str = "dispatch_worker_cli_profil
 /// version is published. In that window `CARGO_PKG_VERSION` still names the
 /// previous release, so comparing only the installed and controller version
 /// strings is not a sound compatibility test.
-const FIRST_COMPATIBLE_STABLE_DISPATCH_RELEASE: (u64, u64, u64) = (0, 2, 15);
-const REQUIRED_DISPATCH_CAPABILITIES: [&str; 13] = [
+const FIRST_COMPATIBLE_STABLE_DISPATCH_RELEASE: (u64, u64, u64) = (0, 2, 16);
+const REQUIRED_DISPATCH_CAPABILITIES: [&str; 14] = [
     "persistent_jobs",
     "cursor_events",
     "detached_worker",
@@ -69,8 +104,11 @@ const REQUIRED_DISPATCH_CAPABILITIES: [&str; 13] = [
     "approval_remote",
     "append_message",
     "event_log_completeness",
-    "workspace_snapshot_exact",
-    "workspace_snapshot_chunked",
+    // Git-worktree delivery. There is no snapshot fallback, so these are hard
+    // requirements rather than feature-detected extras.
+    "workspace_git_worktree",
+    "workspace_git_bundle_upload",
+    "workspace_git_sync",
     DISPATCH_WORKER_CLI_PROFILE_CAPABILITY,
 ];
 
@@ -472,37 +510,31 @@ pub fn validate_dispatch_protocol(protocol: &Value, approval_policy: Option<&str
     let Some(capabilities) = protocol.get("capabilities").and_then(Value::as_array) else {
         return Err(anyhow!("dispatch target returned no capability list"));
     };
-    let required: &[&str] = match approval_policy {
-        Some("auto") => &[
-            "persistent_jobs",
-            "cursor_events",
-            "detached_worker",
-            "workspace_serialization",
-            "frontend_event_projection",
-            "approval_auto",
-            DISPATCH_WORKER_CLI_PROFILE_CAPABILITY,
-        ],
-        Some("reject-and-report") => &[
-            "persistent_jobs",
-            "cursor_events",
-            "detached_worker",
-            "workspace_serialization",
-            "frontend_event_projection",
-            "approval_reject_and_report",
-            DISPATCH_WORKER_CLI_PROFILE_CAPABILITY,
-        ],
-        Some("remote") => &[
-            "persistent_jobs",
-            "cursor_events",
-            "detached_worker",
-            "workspace_serialization",
-            "frontend_event_projection",
-            "approval_remote",
-            DISPATCH_WORKER_CLI_PROFILE_CAPABILITY,
-        ],
+    let mut required = vec![
+        "persistent_jobs",
+        "cursor_events",
+        "detached_worker",
+        "workspace_serialization",
+        "frontend_event_projection",
+        "workspace_git_worktree",
+        "workspace_git_bundle_upload",
+        "workspace_git_sync",
+        DISPATCH_WORKER_CLI_PROFILE_CAPABILITY,
+    ];
+    match approval_policy {
+        Some("auto") => &["approval_auto"],
+        Some("reject-and-report") => &["approval_reject_and_report"],
+        Some("remote") => &["approval_remote"],
         Some(_) => return Err(anyhow!("unsupported dispatch approval policy")),
-        None => &REQUIRED_DISPATCH_CAPABILITIES,
-    };
+        None => REQUIRED_DISPATCH_CAPABILITIES.as_slice(),
+    }
+    .iter()
+    .copied()
+    .for_each(|capability| {
+        if !required.contains(&capability) {
+            required.push(capability);
+        }
+    });
     let missing = required
         .iter()
         .copied()
@@ -1353,50 +1385,65 @@ pub async fn append(
     invoke_json(manager, connection_id, "append", request).await
 }
 
-/// Ask the target what a finished job changed, and fetch the bundle.
+/// Commit the target's worktree and fetch the Git bundle it produced.
 ///
-/// Downloads only; nothing is written into the user's workspace here. Applying
-/// the bundle is a separate operation the user confirms after seeing the diff,
-/// because the local tree may have moved on since the snapshot was taken.
-pub async fn pull_result(
+/// Downloads only. The controller decides separately whether to fast-forward
+/// its baseline worktree onto the fetched branch, so nothing in the user's
+/// repository moves as a side effect of asking.
+pub async fn sync_workspace(
     manager: &SSHConnectionManager,
     connection_id: &str,
     job_id: &str,
+    message: Option<&str>,
+    known_head: Option<&str>,
     destination: &std::path::Path,
 ) -> Result<Value> {
     ensure_plain_ssh_target(manager, connection_id).await?;
     let target = probe_remote_target(manager, connection_id).await?;
     let cli_path = target.cli_path.as_deref().ok_or_else(|| {
-        anyhow!("BitFun CLI is not installed on the SSH target; confirm installation first")
+        anyhow!("BitFun CLI is not installed on the SSH target; install it before syncing")
     })?;
 
-    // Returning results is an optional capability, so a target that predates it
-    // is a normal situation rather than a fault. Ask before invoking the verb:
-    // otherwise the only signal is clap's `unrecognized subcommand`, which says
-    // nothing about what the user should do.
-    let protocol = invoke_json_at_path(
-        manager,
-        connection_id,
-        &target.home,
-        cli_path,
-        "probe",
-        &serde_json::json!({}),
-    )
-    .await
-    .context("probe the dispatch target before pulling results")?;
-    ensure_result_bundle_capability(&protocol)?;
+    // A clean incremental sync has `headCommit == knownHead`. Without an
+    // invocation identity, the target cannot distinguish this call's poll
+    // from a later click that intentionally checks for newer work, and would
+    // restart the completed no-op forever.
+    let mut request = serde_json::json!({
+        "jobId": job_id,
+        "operationId": uuid::Uuid::new_v4().as_simple().to_string(),
+    });
+    if let Some(message) = message.map(str::trim).filter(|value| !value.is_empty()) {
+        request["message"] = Value::String(message.to_string());
+    }
+    if let Some(head) = known_head.map(str::trim).filter(|value| !value.is_empty()) {
+        request["knownHead"] = Value::String(head.to_string());
+    }
+    let deadline = tokio::time::Instant::now() + WORKSPACE_OPERATION_WAIT;
+    let response = loop {
+        let response = invoke_json_at_path(
+            manager,
+            connection_id,
+            &target.home,
+            cli_path,
+            "__workspace_sync",
+            &request,
+        )
+        .await?;
+        if response.get("pending").and_then(Value::as_bool) != Some(true) {
+            break response;
+        }
+        if tokio::time::Instant::now() >= deadline {
+            return Err(anyhow!(
+                "Git workspace sync did not finish within {} minutes",
+                WORKSPACE_OPERATION_WAIT.as_secs() / 60
+            ));
+        }
+        tokio::time::sleep(WORKSPACE_OPERATION_POLL_INTERVAL).await;
+    };
 
-    let response = invoke_json_at_path(
-        manager,
-        connection_id,
-        &target.home,
-        cli_path,
-        // The target CLI exposes workspace data-plane verbs under reserved
-        // names, matching `__workspace_begin` and `__workspace_commit` above.
-        "__workspace_result",
-        &serde_json::json!({ "jobId": job_id }),
-    )
-    .await?;
+    if response.get("changed").and_then(Value::as_bool) != Some(true) {
+        return Ok(response);
+    }
 
     let bundle_path = response
         .get("bundlePath")
@@ -1405,26 +1452,97 @@ pub async fn pull_result(
     // The path comes from the target, so bound it to the managed job directory
     // before reading it, exactly as the upload path is bounded.
     validate_managed_result_path(&target.home, job_id, bundle_path)?;
-
-    let bytes = manager
-        .sftp_read(connection_id, bundle_path)
-        .await
-        .context("download dispatch result bundle")?;
-    if bytes.len() as u64 > MAX_RESULT_BUNDLE_BYTES {
+    let expected_size = response
+        .get("bundleSize")
+        .and_then(Value::as_u64)
+        .ok_or_else(|| anyhow!("dispatch target returned no result bundle size"))?;
+    if expected_size == 0 || expected_size > MAX_RESULT_BUNDLE_BYTES {
         return Err(anyhow!(
             "dispatch result bundle exceeds the {} MB safety limit",
             MAX_RESULT_BUNDLE_BYTES / (1024 * 1024)
         ));
     }
-    // The bundle carries the user's source, including the ignored files the
-    // snapshot deliberately shipped. The outbound root is already owner-only,
-    // but harden this level too rather than relying on a parent one layer up.
+    let expected_digest = response
+        .get("bundleSha256")
+        .and_then(Value::as_str)
+        .ok_or_else(|| anyhow!("dispatch target returned no result bundle digest"))?;
+
+    // The bundle carries repository history. The outbound root is already
+    // owner-only, but harden this level too rather than relying on a parent.
     if let Some(parent) = destination.parent() {
         std::fs::create_dir_all(parent)
             .with_context(|| format!("create result staging {}", parent.display()))?;
         harden_result_directory(parent)?;
     }
-    write_private_file(destination, &bytes)?;
+    let mut staged_bundle = UnverifiedResultBundle::new(destination);
+    write_private_file(destination, &[])?;
+    let mut output = std::fs::OpenOptions::new()
+        .append(true)
+        .open(destination)
+        .with_context(|| format!("open result staging {}", destination.display()))?;
+    let mut digest = Sha256::new();
+    let mut received = 0_u64;
+    while received < expected_size {
+        let chunk = invoke_json_at_path(
+            manager,
+            connection_id,
+            &target.home,
+            cli_path,
+            "__workspace_sync_chunk",
+            &serde_json::json!({
+                "jobId": job_id,
+                "offset": received,
+                "length": RESULT_BUNDLE_CHUNK_BYTES,
+            }),
+        )
+        .await?;
+        let encoded = chunk
+            .get("dataBase64")
+            .and_then(Value::as_str)
+            .ok_or_else(|| anyhow!("dispatch target returned no result chunk data"))?;
+        if encoded.len() > MAX_RESULT_BUNDLE_CHUNK_BASE64_BYTES {
+            return Err(anyhow!(
+                "dispatch target returned an oversized result chunk"
+            ));
+        }
+        let decoded = base64::engine::general_purpose::STANDARD
+            .decode(encoded)
+            .context("decode dispatch result chunk")?;
+        if decoded.is_empty() || decoded.len() as u64 > RESULT_BUNDLE_CHUNK_BYTES {
+            return Err(anyhow!(
+                "dispatch result bundle ended at {received} of {expected_size} bytes"
+            ));
+        }
+        let next_offset = received.saturating_add(decoded.len() as u64);
+        if next_offset > expected_size {
+            return Err(anyhow!(
+                "dispatch target returned more result bytes than it declared"
+            ));
+        }
+        if chunk.get("offset").and_then(Value::as_u64) != Some(next_offset) {
+            return Err(anyhow!(
+                "dispatch target returned a mismatched result chunk offset"
+            ));
+        }
+        std::io::Write::write_all(&mut output, &decoded)
+            .with_context(|| format!("write result staging {}", destination.display()))?;
+        digest.update(&decoded);
+        received = next_offset;
+        let eof = chunk.get("eof").and_then(Value::as_bool) == Some(true);
+        if eof != (received == expected_size) {
+            return Err(anyhow!(
+                "dispatch target returned an inconsistent result end marker"
+            ));
+        }
+    }
+    output
+        .sync_all()
+        .with_context(|| format!("flush result staging {}", destination.display()))?;
+    let actual_digest = format!("{:x}", digest.finalize());
+    if !actual_digest.eq_ignore_ascii_case(expected_digest) {
+        return Err(anyhow!("dispatch result bundle SHA-256 mismatch"));
+    }
+    staged_bundle.retain();
 
     let mut response = response;
     if let Some(object) = response.as_object_mut() {
@@ -1466,33 +1584,11 @@ pub fn write_private_file(path: &std::path::Path, bytes: &[u8]) -> Result<()> {
     Ok(())
 }
 
-/// Optional capability: a target without it still runs jobs, it just cannot
-/// hand their results back. Deliberately absent from
-/// `REQUIRED_DISPATCH_CAPABILITIES` so an older CLI stays fully usable.
-pub const WORKSPACE_RESULT_CAPABILITY: &str = "workspace_result_bundle";
-
-fn ensure_result_bundle_capability(protocol: &Value) -> Result<()> {
-    let advertises = protocol
-        .get("capabilities")
-        .and_then(Value::as_array)
-        .is_some_and(|capabilities| {
-            capabilities
-                .iter()
-                .any(|capability| capability.as_str() == Some(WORKSPACE_RESULT_CAPABILITY))
-        });
-    if !advertises {
-        return Err(anyhow!(
-            "this target's BitFun CLI cannot return job results; update it to a release that supports {WORKSPACE_RESULT_CAPABILITY}"
-        ));
-    }
-    Ok(())
-}
-
 /// A result bundle may only be read from the managed directory of the job it
 /// belongs to.
 fn validate_managed_result_path(home: &str, job_id: &str, bundle_path: &str) -> Result<()> {
     let expected = format!(
-        "{}/.bitfun/dispatch/workspaces/{job_id}/result.tar.gz",
+        "{}/.bitfun/dispatch/workspaces/{job_id}/result.bundle",
         home.trim_end_matches('/')
     );
     if bundle_path != expected {
@@ -1503,29 +1599,111 @@ fn validate_managed_result_path(home: &str, job_id: &str, bundle_path: &str) -> 
     Ok(())
 }
 
-/// Stage and atomically materialize a controller-created workspace snapshot.
+/// The upload path for a delivered base bundle, bounded to the job directory.
+fn validate_managed_bundle_upload_path(home: &str, job_id: &str, upload_path: &str) -> Result<()> {
+    let expected = format!(
+        "{}/.bitfun/dispatch/workspaces/{job_id}/incoming.bundle",
+        home.trim_end_matches('/')
+    );
+    if upload_path != expected {
+        return Err(anyhow!(
+            "dispatch target returned an invalid managed bundle upload path"
+        ));
+    }
+    Ok(())
+}
+
+/// Ask the target to check out this dispatch's baseline commit.
 ///
-/// The target CLI chooses the owner-only upload path. This adapter validates
-/// that the returned path stays under the target's managed dispatch root before
-/// allowing SFTP to write it.
-pub async fn upload_workspace_snapshot(
+/// Returns the target's raw response so the controller can react to
+/// `needsBundle` — the target is the only side that knows what its own clone
+/// can reach, so the decision to ship objects belongs to it, not to a guess
+/// made from this machine's remote-tracking refs.
+pub async fn provision_workspace(
     manager: &SSHConnectionManager,
     connection_id: &str,
-    begin_request: &Value,
-    archive_path: &std::path::Path,
+    request: &Value,
+) -> Result<Value> {
+    invoke_workspace_operation(
+        manager,
+        connection_id,
+        "__workspace_provision",
+        request,
+        "Git workspace provisioning",
+    )
+    .await
+}
+
+/// Poll an idempotent target verb whose expensive Git work runs in a detached
+/// CLI child. Every SSH command returns quickly, so losing one channel cannot
+/// kill clone/fetch/bundle work that the next poll can observe.
+async fn invoke_workspace_operation(
+    manager: &SSHConnectionManager,
+    connection_id: &str,
+    verb: &'static str,
+    request: &Value,
+    operation: &str,
 ) -> Result<Value> {
     ensure_plain_ssh_target(manager, connection_id).await?;
     let target = probe_remote_target(manager, connection_id).await?;
     let cli_path = target.cli_path.as_deref().ok_or_else(|| {
-        anyhow!("BitFun CLI is not installed on the SSH target; confirm installation first")
+        anyhow!("BitFun CLI is not installed on the SSH target; install it before dispatching")
     })?;
+    let deadline = tokio::time::Instant::now() + WORKSPACE_OPERATION_WAIT;
+    loop {
+        let response = invoke_json_at_path(
+            manager,
+            connection_id,
+            &target.home,
+            cli_path,
+            verb,
+            request,
+        )
+        .await?;
+        if response.get("pending").and_then(Value::as_bool) != Some(true) {
+            return Ok(response);
+        }
+        if tokio::time::Instant::now() >= deadline {
+            return Err(anyhow!(
+                "{operation} did not finish within {} minutes",
+                WORKSPACE_OPERATION_WAIT.as_secs() / 60
+            ));
+        }
+        tokio::time::sleep(WORKSPACE_OPERATION_POLL_INTERVAL).await;
+    }
+}
+
+/// Upload a Git bundle carrying the objects the target reported missing.
+///
+/// The target CLI chooses the owner-only upload path. This adapter validates
+/// that the returned path stays under the target's managed dispatch root before
+/// allowing SFTP to write it.
+pub async fn upload_bundle(
+    manager: &SSHConnectionManager,
+    connection_id: &str,
+    job_id: &str,
+    sha256: &str,
+    size: u64,
+    bundle_path: &std::path::Path,
+) -> Result<Value> {
+    ensure_plain_ssh_target(manager, connection_id).await?;
+    let target = probe_remote_target(manager, connection_id).await?;
+    let cli_path = target.cli_path.as_deref().ok_or_else(|| {
+        anyhow!("BitFun CLI is not installed on the SSH target; install it before dispatching")
+    })?;
+
     let begin = invoke_json_at_path(
         manager,
         connection_id,
         &target.home,
         cli_path,
-        "__workspace_begin",
-        begin_request,
+        "__workspace_bundle_begin",
+        &serde_json::json!({
+            "protocolVersion": DISPATCH_PROTOCOL_VERSION,
+            "jobId": job_id,
+            "sha256": sha256,
+            "size": size,
+        }),
     )
     .await?;
     if begin
@@ -1536,122 +1714,247 @@ pub async fn upload_workspace_snapshot(
         return Ok(begin);
     }
     if begin.get("accepted").and_then(Value::as_bool) != Some(true) {
-        return Err(anyhow!(
-            "dispatch target did not accept the workspace upload"
-        ));
+        return Err(anyhow!("dispatch target did not accept the bundle upload"));
     }
-    let upload_path = begin
-        .get("uploadPath")
-        .and_then(Value::as_str)
-        .ok_or_else(|| anyhow!("dispatch target returned no workspace upload path"))?;
-    validate_managed_workspace_upload_path(&target.home, upload_path)?;
-    let archive_size = begin_request
-        .pointer("/metadata/archiveSize")
-        .and_then(Value::as_u64)
-        .ok_or_else(|| anyhow!("workspace upload request has no archiveSize"))?;
-    let local_size = std::fs::symlink_metadata(archive_path)
-        .with_context(|| format!("inspect workspace snapshot {}", archive_path.display()))?
+
+    let upload_path = format!(
+        "{}/.bitfun/dispatch/workspaces/{job_id}/incoming.bundle",
+        target.home.trim_end_matches('/')
+    );
+    validate_managed_bundle_upload_path(&target.home, job_id, &upload_path)?;
+    let local_size = std::fs::symlink_metadata(bundle_path)
+        .with_context(|| format!("inspect dispatch bundle {}", bundle_path.display()))?
         .len();
-    if local_size != archive_size {
+    if local_size != size {
         return Err(anyhow!(
-            "workspace snapshot changed before SSH upload: expected {archive_size} bytes, found {local_size}"
+            "dispatch bundle changed before SSH upload: expected {size} bytes, found {local_size}"
         ));
     }
     let retained_offset = begin
         .get("offset")
         .and_then(Value::as_u64)
-        .ok_or_else(|| anyhow!("dispatch target returned no workspace upload offset"))?;
-    if retained_offset > archive_size {
+        .ok_or_else(|| anyhow!("dispatch target returned no bundle upload offset"))?;
+    if retained_offset > size {
         return Err(anyhow!(
-            "dispatch target returned an invalid workspace upload offset"
+            "dispatch target returned an invalid bundle upload offset"
         ));
     }
-    if retained_offset < archive_size {
+    if retained_offset < size {
         let written = manager
-            .sftp_write_from_file(connection_id, upload_path, archive_path, archive_size)
+            .sftp_write_from_file(connection_id, &upload_path, bundle_path, size)
             .await
-            .context("upload workspace snapshot over SFTP")?;
-        if written != archive_size {
+            .context("upload dispatch bundle over SFTP")?;
+        if written != size {
             return Err(anyhow!(
-                "workspace snapshot SFTP upload ended at {written} of {archive_size} bytes"
+                "dispatch bundle SFTP upload ended at {written} of {size} bytes"
             ));
         }
     }
-    let job_id = begin_request
-        .get("jobId")
-        .and_then(Value::as_str)
-        .ok_or_else(|| anyhow!("workspace upload request has no jobId"))?;
-    let expected_digest = begin_request
-        .pointer("/metadata/archiveSha256")
-        .and_then(Value::as_str)
-        .ok_or_else(|| anyhow!("workspace upload request has no archiveSha256"))?;
-    let deadline = tokio::time::Instant::now() + WORKSPACE_COMMIT_WAIT;
+
+    let commit_request = serde_json::json!({ "jobId": job_id });
+    let deadline = tokio::time::Instant::now() + WORKSPACE_OPERATION_WAIT;
     loop {
-        let committed = invoke_json_at_path(
+        let response = invoke_json_at_path(
             manager,
             connection_id,
             &target.home,
             cli_path,
-            "__workspace_commit",
-            &serde_json::json!({ "jobId": job_id }),
+            "__workspace_bundle_commit",
+            &commit_request,
         )
         .await?;
-        if committed
-            .pointer("/metadata/archiveSha256")
-            .and_then(Value::as_str)
-            != Some(expected_digest)
-        {
-            return Err(anyhow!(
-                "dispatch target returned mismatched workspace snapshot metadata"
-            ));
-        }
-        if committed
-            .get("committed")
-            .and_then(Value::as_bool)
-            .unwrap_or(false)
-        {
-            if committed
-                .get("workspacePath")
-                .and_then(Value::as_str)
-                .is_none_or(|path| path.trim().is_empty())
-            {
-                return Err(anyhow!(
-                    "dispatch target committed no materialized workspace path"
-                ));
+        if response.get("pending").and_then(Value::as_bool) != Some(true) {
+            if response.get("committed").and_then(Value::as_bool) == Some(true) {
+                return Ok(response);
             }
-            return Ok(committed);
+            return Err(anyhow!(
+                "dispatch target did not commit the delivered bundle"
+            ));
         }
         if tokio::time::Instant::now() >= deadline {
             return Err(anyhow!(
-                "dispatch target workspace materialization did not finish within 15 minutes"
+                "Git bundle import did not finish within {} minutes",
+                WORKSPACE_OPERATION_WAIT.as_secs() / 60
             ));
         }
-        tokio::time::sleep(WORKSPACE_COMMIT_POLL_INTERVAL).await;
+        tokio::time::sleep(WORKSPACE_OPERATION_POLL_INTERVAL).await;
     }
 }
 
-fn validate_managed_workspace_upload_path(home: &str, upload_path: &str) -> Result<()> {
-    let prefix = format!(
-        "{}/.bitfun/dispatch/workspaces/",
-        home.trim_end_matches('/')
-    );
-    let Some(relative) = upload_path.strip_prefix(&prefix) else {
+/// Make sure the target runs a CLI this controller can dispatch to.
+///
+/// Installing is automatic because a dispatch is useless without it and the
+/// user already authorized this SSH connection. What the confirmation dialog
+/// used to guarantee is preserved by other means: the archive is still verified
+/// against a signed SHA-256 and a mandatory minisign signature before it is
+/// staged, and every step is reported through `progress` so the install is
+/// visible in the dispatch session rather than silent.
+///
+/// Source builds are deliberately not automatic. They upload the user's own
+/// repository and compile it on the target, which is a different kind of act
+/// from fetching a signed release.
+pub async fn ensure_target_cli<Progress, ProgressFuture>(
+    manager: &SSHConnectionManager,
+    connection_id: &str,
+    mut progress: Progress,
+) -> Result<DispatchSshProbe>
+where
+    Progress: FnMut(&str, Value) -> ProgressFuture,
+    ProgressFuture: Future<Output = Result<()>>,
+{
+    let probed = probe(manager, connection_id, None).await?;
+    if let Some(protocol) = probed.protocol.as_ref() {
+        if validate_dispatch_protocol(protocol, None).is_ok() {
+            return Ok(probed);
+        }
+    }
+    if !probed.install_supported {
         return Err(anyhow!(
-            "dispatch target returned an upload path outside its managed workspace root"
-        ));
-    };
-    let components = relative.split('/').collect::<Vec<_>>();
-    if components.len() != 2
-        || components[0].is_empty()
-        || components[0] == "."
-        || components[0] == ".."
-        || components[1] != "workspace.tar.gz"
-    {
-        return Err(anyhow!(
-            "dispatch target returned an invalid managed workspace upload path"
+            "{}",
+            probed
+                .install_error
+                .as_deref()
+                .or(probed.protocol_error.as_deref())
+                .unwrap_or("this SSH target cannot run the BitFun CLI")
         ));
     }
-    Ok(())
+    if let Some(reason) = probed.prebuilt_incompatible.as_deref() {
+        // A source build needs its own confirmation, so stop here with the
+        // reason rather than silently escalating to compiling on the target.
+        return Err(anyhow!(
+            "no published BitFun CLI can run on this target ({reason}); build it from source explicitly"
+        ));
+    }
+    let release = probed.release.clone().ok_or_else(|| {
+        anyhow!("could not resolve a BitFun CLI release for this target's platform")
+    })?;
+
+    progress(
+        "cli-install-started",
+        serde_json::json!({
+            "version": release.version,
+            "target": release.target,
+            "url": release.url,
+            "sha256": release.sha256,
+            "reason": probed
+                .protocol_error
+                .clone()
+                .unwrap_or_else(|| "the target has no compatible BitFun CLI".to_string()),
+        }),
+    )
+    .await
+    .context("persist the CLI install started audit event")?;
+    if let Err(error) = install_cli_start(manager, connection_id, &release).await {
+        emit_cli_install_failure(&mut progress, "install-start", &error).await?;
+        return Err(error);
+    }
+
+    let deadline = tokio::time::Instant::now() + CLI_INSTALL_WAIT;
+    let mut cursor = 0_u64;
+    loop {
+        let poll = match install_cli_poll(manager, connection_id, cursor).await {
+            Ok(poll) => poll,
+            Err(error) => {
+                emit_cli_install_failure(&mut progress, "install-poll", &error).await?;
+                return Err(error);
+            }
+        };
+        cursor = poll.cursor;
+        match poll.status {
+            DispatchInstallStatus::Succeeded => break,
+            DispatchInstallStatus::Failed => {
+                let error = anyhow!(
+                    "BitFun CLI installation failed on the SSH target: {}",
+                    bounded_detail(&poll.output)
+                );
+                emit_cli_install_failure(&mut progress, "install-status", &error).await?;
+                return Err(error);
+            }
+            _ => {}
+        }
+        if tokio::time::Instant::now() >= deadline {
+            let _ = install_cli_cancel(manager, connection_id).await;
+            let error = anyhow!(
+                "BitFun CLI installation did not finish within {} minutes",
+                CLI_INSTALL_WAIT.as_secs() / 60
+            );
+            emit_cli_install_failure(&mut progress, "install-timeout", &error).await?;
+            return Err(error);
+        }
+        tokio::time::sleep(CLI_INSTALL_POLL_INTERVAL).await;
+    }
+
+    let reprobed = match probe(manager, connection_id, None).await {
+        Ok(probed) => probed,
+        Err(error) => {
+            emit_cli_install_failure(&mut progress, "reprobe", &error).await?;
+            return Err(error);
+        }
+    };
+    let protocol = match reprobed.protocol.as_ref() {
+        Some(protocol) => protocol,
+        None => {
+            let error = anyhow!(
+                "{}",
+                reprobed.protocol_error.as_deref().unwrap_or(
+                    "the installed BitFun CLI still does not answer the dispatch protocol"
+                )
+            );
+            emit_cli_install_failure(&mut progress, "protocol-validation", &error).await?;
+            return Err(error);
+        }
+    };
+    // Fail closed: an install that "succeeded" but left an incompatible binary
+    // must not be treated as a usable target.
+    if let Err(error) = validate_dispatch_protocol(protocol, None) {
+        emit_cli_install_failure(&mut progress, "protocol-validation", &error).await?;
+        return Err(error);
+    }
+    progress(
+        "cli-install-succeeded",
+        serde_json::json!({
+            "version": release.version,
+            "cliPath": reprobed.cli_path,
+        }),
+    )
+    .await
+    .context("persist the CLI install succeeded audit event")?;
+    Ok(reprobed)
+}
+
+async fn emit_cli_install_failure<Progress, ProgressFuture>(
+    progress: &mut Progress,
+    phase: &str,
+    error: &anyhow::Error,
+) -> Result<()>
+where
+    Progress: FnMut(&str, Value) -> ProgressFuture,
+    ProgressFuture: Future<Output = Result<()>>,
+{
+    progress(
+        "cli-install-failed",
+        cli_install_failure_details(phase, &error.to_string()),
+    )
+    .await
+    .map_err(|audit_error| {
+        anyhow!(
+            "persist the CLI install failed audit event for phase '{}': {}; original failure: {}",
+            bounded_detail(phase),
+            bounded_detail(&audit_error.to_string()),
+            bounded_detail(&error.to_string())
+        )
+    })
+}
+
+fn cli_install_failure_details(phase: &str, error: &str) -> Value {
+    let error = bounded_detail(error);
+    serde_json::json!({
+        "phase": bounded_detail(phase),
+        "error": error,
+        // Keep the existing audit/UI projection useful while `phase` and
+        // `error` provide the structured durable form.
+        "output": error,
+    })
 }
 
 async fn invoke_json(
@@ -2720,36 +3023,17 @@ mod tests {
     }
 
     #[test]
-    fn a_target_without_the_result_capability_is_told_what_to_do() {
-        // Optional capability: the failure must name the fix, not surface
-        // clap's "unrecognized subcommand" from the verb invocation.
-        let without = serde_json::json!({
-            "capabilities": ["persistent_jobs", "cursor_events"]
-        });
-        let error = ensure_result_bundle_capability(&without)
-            .expect_err("a target that cannot return results must say so");
-        assert!(
-            error.to_string().contains("cannot return job results"),
-            "{error}"
-        );
-
-        let with = serde_json::json!({
-            "capabilities": ["persistent_jobs", WORKSPACE_RESULT_CAPABILITY]
-        });
-        assert!(ensure_result_bundle_capability(&with).is_ok());
-
-        // A malformed probe must fail closed rather than assume support.
-        assert!(ensure_result_bundle_capability(&serde_json::json!({})).is_err());
-    }
-
-    #[test]
-    fn the_optional_result_capability_is_never_required_for_ordinary_dispatch() {
-        // Requiring it would make every older target unusable for jobs it can
-        // still run perfectly well.
-        assert!(
-            !REQUIRED_DISPATCH_CAPABILITIES.contains(&WORKSPACE_RESULT_CAPABILITY),
-            "returning results must stay optional"
-        );
+    fn git_worktree_delivery_capabilities_are_required() {
+        for capability in [
+            "workspace_git_worktree",
+            "workspace_git_bundle_upload",
+            "workspace_git_sync",
+        ] {
+            assert!(
+                REQUIRED_DISPATCH_CAPABILITIES.contains(&capability),
+                "{capability} must fail closed because snapshot delivery no longer exists"
+            );
+        }
     }
 
     #[cfg(unix)]
@@ -2800,18 +3084,37 @@ mod tests {
     }
 
     #[test]
+    fn unverified_result_bundles_are_removed_but_verified_ones_are_retained() {
+        let temp = tempfile::tempdir().expect("temp dir");
+        let rejected = temp.path().join("rejected.bundle");
+        std::fs::write(&rejected, b"tampered").expect("write rejected bundle");
+        drop(UnverifiedResultBundle::new(&rejected));
+        assert!(!rejected.exists());
+
+        let accepted = temp.path().join("accepted.bundle");
+        std::fs::write(&accepted, b"verified").expect("write accepted bundle");
+        let mut guard = UnverifiedResultBundle::new(&accepted);
+        guard.retain();
+        drop(guard);
+        assert_eq!(
+            std::fs::read(&accepted).expect("read accepted"),
+            b"verified"
+        );
+    }
+
+    #[test]
     fn a_result_bundle_is_only_read_from_its_own_managed_directory() {
         // The path is chosen by the target, so a compromised or buggy one must
         // not be able to point this at an arbitrary file to exfiltrate.
         assert!(validate_managed_result_path(
             "/home/user",
             "job-1",
-            "/home/user/.bitfun/dispatch/workspaces/job-1/result.tar.gz"
+            "/home/user/.bitfun/dispatch/workspaces/job-1/result.bundle"
         )
         .is_ok());
         for hostile in [
             "/home/user/.ssh/id_ed25519",
-            "/home/user/.bitfun/dispatch/workspaces/job-2/result.tar.gz",
+            "/home/user/.bitfun/dispatch/workspaces/job-2/result.bundle",
             "/home/user/.bitfun/dispatch/workspaces/job-1/../../../.ssh/id_ed25519",
             "/home/user/.bitfun/dispatch/workspaces/job-1/current/secret",
         ] {
@@ -2974,11 +3277,11 @@ mod tests {
     #[test]
     fn release_compatibility_uses_capability_floor_not_installed_version() {
         assert!(
-            !published_release_supports_required_dispatch_protocol("0.2.14"),
-            "the last release without the worker profile must use the exact controller source"
+            !published_release_supports_required_dispatch_protocol("0.2.15"),
+            "the last snapshot-delivery release cannot satisfy protocol v3"
         );
         assert!(
-            published_release_supports_required_dispatch_protocol("0.2.15"),
+            published_release_supports_required_dispatch_protocol("0.2.16"),
             "the first compatible stable release must be installable"
         );
         assert!(published_release_supports_required_dispatch_protocol(
@@ -3713,6 +4016,32 @@ mod tests {
     }
 
     #[test]
+    fn cli_install_failure_audit_details_are_structured_and_bounded() {
+        let details = cli_install_failure_details(&"p".repeat(700), &"e".repeat(700));
+
+        assert_eq!(
+            details
+                .get("phase")
+                .and_then(Value::as_str)
+                .expect("phase")
+                .chars()
+                .count(),
+            500
+        );
+        assert_eq!(
+            details
+                .get("error")
+                .and_then(Value::as_str)
+                .expect("error")
+                .chars()
+                .count(),
+            500
+        );
+        assert_eq!(details.get("output"), details.get("error"));
+        assert_eq!(details.as_object().expect("details").len(), 3);
+    }
+
+    #[test]
     fn incompatible_dispatch_protocols_require_an_upgrade() {
         let capabilities = REQUIRED_DISPATCH_CAPABILITIES;
         let compatible = serde_json::json!({
@@ -3742,6 +4071,9 @@ mod tests {
                 "workspace_serialization",
                 "frontend_event_projection",
                 "approval_reject_and_report",
+                "workspace_git_worktree",
+                "workspace_git_bundle_upload",
+                "workspace_git_sync",
                 DISPATCH_WORKER_CLI_PROFILE_CAPABILITY
             ],
         });
@@ -3757,7 +4089,10 @@ mod tests {
                 "detached_worker",
                 "workspace_serialization",
                 "frontend_event_projection",
-                "approval_reject_and_report"
+                "approval_reject_and_report",
+                "workspace_git_worktree",
+                "workspace_git_bundle_upload",
+                "workspace_git_sync"
             ],
         });
         let error = validate_dispatch_protocol(&unsafe_worker, Some("reject-and-report"))

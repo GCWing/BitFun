@@ -383,7 +383,7 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
     setLocalError(null);
     try {
       await connect(config.id, config, { browseAfterConnect: true });
-      // Don't call onClose() here - connect() handles closing the dialog via context
+      onClose();
     } catch (e) {
       setLocalError(e instanceof Error ? e.message : 'Connection failed');
     } finally {
@@ -449,6 +449,7 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
           },
           { browseAfterConnect: true }
         );
+        onClose();
       } catch {
         setCredentialsPrompt(conn);
       } finally {
@@ -484,6 +485,7 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
           },
           { browseAfterConnect: true }
         );
+        onClose();
       } catch {
         setCredentialsPrompt(conn);
       } finally {
@@ -553,6 +555,7 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
       };
       await connect(conn.id, full, { browseAfterConnect: true });
       setCredentialsPrompt(null);
+      onClose();
     } catch (e) {
       setLocalError(e instanceof Error ? e.message : 'Connection failed');
     } finally {

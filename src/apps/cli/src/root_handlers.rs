@@ -52,8 +52,14 @@ pub(crate) async fn handle_dispatch_action(action: DispatchAction) -> Result<()>
     )?;
     let verb = match action {
         DispatchAction::Run { job } => return crate::dispatch::run_worker(job).await,
-        DispatchAction::WorkspaceMaterialize { job } => {
-            return crate::dispatch::run_workspace_materializer(job)
+        DispatchAction::WorkspaceProvisionRun { job } => {
+            return crate::dispatch::run_workspace_provision(job)
+        }
+        DispatchAction::WorkspaceBundleCommitRun { job } => {
+            return crate::dispatch::run_workspace_bundle_commit(job)
+        }
+        DispatchAction::WorkspaceSyncRun { job } => {
+            return crate::dispatch::run_workspace_sync(job)
         }
         DispatchAction::Probe => "probe",
         DispatchAction::Submit => "submit",
@@ -62,11 +68,12 @@ pub(crate) async fn handle_dispatch_action(action: DispatchAction) -> Result<()>
         DispatchAction::List => "list",
         DispatchAction::Answer => "answer",
         DispatchAction::Append => "append",
-        DispatchAction::WorkspaceBegin => "workspace-begin",
-        DispatchAction::WorkspaceChunk => "workspace-chunk",
-        DispatchAction::WorkspaceCommit => "workspace-commit",
-        DispatchAction::WorkspaceResult => "workspace-result",
-        DispatchAction::WorkspaceResultChunk => "workspace-result-chunk",
+        DispatchAction::WorkspaceProvision => "workspace-provision",
+        DispatchAction::WorkspaceBundleBegin => "workspace-bundle-begin",
+        DispatchAction::WorkspaceBundleChunk => "workspace-bundle-chunk",
+        DispatchAction::WorkspaceBundleCommit => "workspace-bundle-commit",
+        DispatchAction::WorkspaceSync => "workspace-sync",
+        DispatchAction::WorkspaceSyncChunk => "workspace-sync-chunk",
     };
     let result = async {
         use std::io::{IsTerminal, Read};

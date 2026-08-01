@@ -598,18 +598,30 @@ pub(crate) enum DispatchAction {
     Answer,
     /// Append a steering message to a queued or running job
     Append,
-    #[command(name = "__workspace_begin", hide = true)]
-    WorkspaceBegin,
-    #[command(name = "__workspace_chunk", hide = true)]
-    WorkspaceChunk,
-    #[command(name = "__workspace_commit", hide = true)]
-    WorkspaceCommit,
-    #[command(name = "__workspace_result", hide = true)]
-    WorkspaceResult,
-    #[command(name = "__workspace_result_chunk", hide = true)]
-    WorkspaceResultChunk,
-    #[command(name = "__workspace_materialize", hide = true)]
-    WorkspaceMaterialize {
+    #[command(name = "__workspace_provision", hide = true)]
+    WorkspaceProvision,
+    #[command(name = "__workspace_bundle_begin", hide = true)]
+    WorkspaceBundleBegin,
+    #[command(name = "__workspace_bundle_chunk", hide = true)]
+    WorkspaceBundleChunk,
+    #[command(name = "__workspace_bundle_commit", hide = true)]
+    WorkspaceBundleCommit,
+    #[command(name = "__workspace_sync", hide = true)]
+    WorkspaceSync,
+    #[command(name = "__workspace_sync_chunk", hide = true)]
+    WorkspaceSyncChunk,
+    #[command(name = "__workspace_provision_run", hide = true)]
+    WorkspaceProvisionRun {
+        #[arg(long)]
+        job: String,
+    },
+    #[command(name = "__workspace_bundle_commit_run", hide = true)]
+    WorkspaceBundleCommitRun {
+        #[arg(long)]
+        job: String,
+    },
+    #[command(name = "__workspace_sync_run", hide = true)]
+    WorkspaceSyncRun {
         #[arg(long)]
         job: String,
     },
@@ -1835,21 +1847,15 @@ mod dispatch_command_tests {
             }) if job == "job-1"
         ));
         assert!(is_dispatch_command(&worker.command));
-        let materializer = Cli::try_parse_from([
-            "bitfun",
-            "dispatch",
-            "__workspace_materialize",
-            "--job",
-            "job-1",
-        ])
-        .expect("parse internal workspace materializer");
+        let provision = Cli::try_parse_from(["bitfun", "dispatch", "__workspace_provision"])
+            .expect("parse internal workspace provision");
         assert!(matches!(
-            materializer.command,
+            provision.command,
             Some(Commands::Dispatch {
-                action: DispatchAction::WorkspaceMaterialize { ref job }
-            }) if job == "job-1"
+                action: DispatchAction::WorkspaceProvision
+            })
         ));
-        assert!(is_dispatch_command(&materializer.command));
+        assert!(is_dispatch_command(&provision.command));
         let unrelated = Cli::try_parse_from(["bitfun", "config", "show"]).expect("parse config");
         assert!(!is_dispatch_command(&unrelated.command));
 

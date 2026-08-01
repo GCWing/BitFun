@@ -13,6 +13,7 @@ export function useDispatchTargets(enabled = true): {
 } {
   const [targets, setTargets] = useState<DispatchTargetOption[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
@@ -31,6 +32,7 @@ export function useDispatchTargets(enabled = true): {
       setTargets([{ kind: 'local', displayName: 'Local' }]);
     } finally {
       setLoading(false);
+      setLoaded(true);
     }
   }, [enabled]);
 
@@ -38,5 +40,8 @@ export function useDispatchTargets(enabled = true): {
     void refresh();
   }, [refresh]);
 
-  return { targets, loading, error, refresh };
+  // Opening the picker enables this hook one render before the effect starts
+  // the request. Treat that first render as loading so users never see a
+  // misleading empty-target message flash before saved SSH targets arrive.
+  return { targets, loading: loading || (enabled && !loaded), error, refresh };
 }

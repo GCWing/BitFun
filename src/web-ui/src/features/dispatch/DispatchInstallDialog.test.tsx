@@ -4,19 +4,19 @@ import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DispatchInstallDialog } from './DispatchInstallDialog';
-import type { DispatchInstallStart } from './types';
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
 const mocks = vi.hoisted(() => ({
   probeTarget: vi.fn(),
-  installCliStart: vi.fn(),
   installCliSourceStart: vi.fn(),
   installCliPoll: vi.fn(),
   installCliCancel: vi.fn(),
   syncModelConfig: vi.fn(),
   confirmWarning: vi.fn(),
   getConfig: vi.fn(),
+  getFreshConfig: vi.fn(),
+  resolveRevision: vi.fn(),
   modalOnClose: null as (() => void) | null,
   modalLifecycleProps: null as {
     closeOnOverlayClick?: boolean;
@@ -27,7 +27,6 @@ const mocks = vi.hoisted(() => ({
 vi.mock('./dispatchApi', () => ({
   dispatchApi: {
     probeTarget: mocks.probeTarget,
-    installCliStart: mocks.installCliStart,
     installCliSourceStart: mocks.installCliSourceStart,
     installCliPoll: mocks.installCliPoll,
     installCliCancel: mocks.installCliCancel,
@@ -43,6 +42,14 @@ vi.mock('@/infrastructure/i18n', () => ({
 
 vi.mock('@/infrastructure/config', () => ({
   configManager: { getConfig: mocks.getConfig },
+}));
+
+vi.mock('@/infrastructure/api/service-api/ConfigAPI', () => ({
+  configAPI: { getConfig: mocks.getFreshConfig },
+}));
+
+vi.mock('@/infrastructure/api/service-api/GitAPI', () => ({
+  gitAPI: { resolveRevision: mocks.resolveRevision },
 }));
 
 vi.mock('@/infrastructure/config/services/modelConfigs', () => ({
@@ -140,6 +147,8 @@ describe('DispatchInstallDialog installation lifecycle', () => {
     mocks.confirmWarning.mockResolvedValue(true);
     mocks.installCliCancel.mockResolvedValue(undefined);
     mocks.getConfig.mockResolvedValue([]);
+    mocks.getFreshConfig.mockResolvedValue(undefined);
+    mocks.resolveRevision.mockResolvedValue('a'.repeat(40));
     container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);
@@ -150,10 +159,9 @@ describe('DispatchInstallDialog installation lifecycle', () => {
     container.remove();
   });
 
-  it('cancels a late installer acknowledgement after the dialog closes during start', async () => {
-    const start = createDeferred<DispatchInstallStart>();
-    mocks.installCliStart.mockReturnValue(start.promise);
-    const onClose = vi.fn();
+  it('shows the verified release as automatic and follows the worktree copy setting', async () => {
+    const onReady = vi.fn();
+    mocks.getFreshConfig.mockResolvedValue({ copyLocalChanges: true });
 
     await act(async () => {
       root.render(
@@ -164,57 +172,137 @@ describe('DispatchInstallDialog installation lifecycle', () => {
             connectionId: 'ssh-1',
             displayName: 'build-host',
           }}
-          onClose={onClose}
+          sourceWorkspacePath="/home/me/project"
+          onClose={vi.fn()}
+          onReady={onReady}
+        />,
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toContain('dispatch.installAutomaticTitle');
+    expect(container.textContent).toContain('1.2.3');
+    expect(container.textContent).toContain('abc123');
+    expect(container.textContent).not.toContain('dispatch.installConfirm');
+    expect(mocks.modalLifecycleProps).toEqual({
+      closeOnOverlayClick: true,
+      showCloseButton: true,
+    });
+    const includeUncommitted = container.querySelector<HTMLInputElement>('input[type="checkbox"]');
+    expect(includeUncommitted?.checked).toBe(true);
+
+    await act(async () => {
+      Array.from(container.querySelectorAll('button'))
+        .find(button => button.textContent?.includes('dispatch.approvalReject'))
+        ?.click();
+    });
+
+    await act(async () => {
+      Array.from(container.querySelectorAll('button'))
+        .find(button => button.textContent?.includes('dispatch.useTarget'))
+        ?.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(mocks.getFreshConfig).toHaveBeenCalledWith('app.worktrees', {
+      skipRetryOnNotFound: true,
+    });
+    expect(mocks.resolveRevision).toHaveBeenCalledWith('/home/me/project', 'HEAD');
+    expect(onReady).toHaveBeenCalledWith(expect.objectContaining({
+      baseRef: 'HEAD',
+      includeUncommitted: true,
+      approvalPolicy: 'reject-and-report',
+      request: { kind: 'ssh', connectionId: 'ssh-1', workspacePath: '' },
+    }));
+  });
+
+  it('does not overwrite a user choice when the worktree default resolves late', async () => {
+    const worktreeSettings = createDeferred<{ copyLocalChanges: boolean }>();
+    mocks.getFreshConfig.mockReturnValue(worktreeSettings.promise);
+
+    await act(async () => {
+      root.render(
+        <DispatchInstallDialog
+          open
+          target={{ kind: 'ssh', connectionId: 'ssh-1', displayName: 'build-host' }}
+          sourceWorkspacePath="/home/me/project"
+          onClose={vi.fn()}
           onReady={vi.fn()}
         />,
       );
       await Promise.resolve();
     });
 
-    const installButton = Array.from(container.querySelectorAll('button'))
-      .find(button => button.textContent?.includes('dispatch.installConfirm'));
-    expect(installButton).toBeDefined();
+    const includeUncommitted = container.querySelector<HTMLInputElement>(
+      'input[type="checkbox"]',
+    );
+    expect(includeUncommitted?.checked).toBe(false);
 
     await act(async () => {
-      installButton?.click();
-      await Promise.resolve();
+      includeUncommitted?.click();
     });
-    expect(mocks.installCliStart).toHaveBeenCalledTimes(1);
-    expect(mocks.modalLifecycleProps).toEqual({
-      closeOnOverlayClick: true,
-      showCloseButton: true,
-    });
-    const snapshotButton = Array.from(container.querySelectorAll('button'))
-      .find(button => button.textContent?.includes('dispatch.deliverySnapshot'));
-    expect(snapshotButton?.disabled).toBe(true);
-    expect(snapshotButton?.textContent).toContain('dispatch.deliverySnapshotUnavailable');
-    const cancelButton = Array.from(container.querySelectorAll('button'))
-      .find(button => button.textContent === 'dispatch.cancel');
-    expect(cancelButton?.disabled).toBe(false);
+    expect(includeUncommitted?.checked).toBe(true);
 
     await act(async () => {
-      mocks.modalOnClose?.();
+      worktreeSettings.resolve({ copyLocalChanges: false });
+      await Promise.resolve();
       await Promise.resolve();
     });
-    expect(onClose).toHaveBeenCalledTimes(1);
-    expect(mocks.installCliCancel).toHaveBeenCalledTimes(1);
+
+    expect(includeUncommitted?.checked).toBe(true);
+  });
+
+  it('keeps setup open and reports an invalid base revision before creating a session', async () => {
+    const onReady = vi.fn();
+    mocks.resolveRevision.mockRejectedValue(new Error('unknown revision'));
 
     await act(async () => {
-      start.resolve({
-        scriptPath: '/tmp/install-bitfun.sh',
-        version: '1.2.3',
-        target: 'x86_64-unknown-linux-gnu',
-        url: 'https://example.test/bitfun',
-        sha256: 'abc123',
-      });
+      root.render(
+        <DispatchInstallDialog
+          open
+          target={{ kind: 'ssh', connectionId: 'ssh-1', displayName: 'build-host' }}
+          sourceWorkspacePath="/home/me/project"
+          onClose={vi.fn()}
+          onReady={onReady}
+        />,
+      );
       await Promise.resolve();
       await Promise.resolve();
     });
 
-    expect(mocks.installCliCancel).toHaveBeenCalledTimes(2);
-    expect(mocks.installCliCancel).toHaveBeenLastCalledWith('ssh-1');
-    expect(mocks.installCliPoll).not.toHaveBeenCalled();
-    expect(container.querySelector('pre')).toBeNull();
+    const baseRefInput = container.querySelector<HTMLInputElement>(
+      '.dispatch-install-dialog__base-ref input',
+    );
+    await act(async () => {
+      if (baseRefInput) {
+        Object.getOwnPropertyDescriptor(
+          HTMLInputElement.prototype,
+          'value',
+        )?.set?.call(baseRefInput, 'missing/ref');
+        baseRefInput.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+      Array.from(container.querySelectorAll('button'))
+        .find(button => button.textContent?.includes('dispatch.approvalReject'))
+        ?.click();
+    });
+
+    await act(async () => {
+      Array.from(container.querySelectorAll('button'))
+        .find(button => button.textContent?.includes('dispatch.useTarget'))
+        ?.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(mocks.resolveRevision).toHaveBeenCalledWith(
+      '/home/me/project',
+      'missing/ref',
+    );
+    expect(onReady).not.toHaveBeenCalled();
+    expect(container.textContent).toContain('dispatch.baseRefInvalid');
+    expect(container.querySelector('.dispatch-install-dialog')).not.toBeNull();
   });
 
   it('offers a source build only when the target can actually run one', async () => {
@@ -273,12 +361,19 @@ describe('DispatchInstallDialog installation lifecycle', () => {
       url: 'https://github.com/GCWing/BitFun.git',
       sha256: '',
     });
-    mocks.installCliPoll.mockResolvedValue({ cursor: 0, output: '', status: 'running' });
+    mocks.installCliPoll.mockResolvedValue({ cursor: 1, output: '', status: 'failed' });
 
-    const checkButton = Array.from(container.querySelectorAll('button'))
-      .find(button => button.textContent?.includes('dispatch.check'));
     await act(async () => {
-      checkButton?.click();
+      root.render(
+        <DispatchInstallDialog
+          open
+          target={{ kind: 'ssh', connectionId: 'ssh-1', displayName: 'alpine-host' }}
+          sourceWorkspacePath="/home/me/project"
+          onClose={vi.fn()}
+          onReady={vi.fn()}
+        />,
+      );
+      await Promise.resolve();
       await Promise.resolve();
     });
 
@@ -288,12 +383,13 @@ describe('DispatchInstallDialog installation lifecycle', () => {
     await act(async () => {
       ready?.click();
       await Promise.resolve();
+      await Promise.resolve();
     });
     expect(mocks.confirmWarning).toHaveBeenCalled();
     expect(mocks.installCliSourceStart).toHaveBeenCalledWith('ssh-1');
   });
 
-  it('names where snapshot results stay, since nothing is synced back', async () => {
+  it('explains the Git baseline and never offers a snapshot delivery mode', async () => {
     await act(async () => {
       root.render(
         <DispatchInstallDialog
@@ -307,17 +403,15 @@ describe('DispatchInstallDialog installation lifecycle', () => {
       await Promise.resolve();
     });
 
-    const snapshot = Array.from(container.querySelectorAll('button'))
-      .find(button => button.textContent?.includes('dispatch.deliverySnapshot'));
-    await act(async () => {
-      snapshot?.click();
-      await Promise.resolve();
-    });
-
-    expect(container.textContent).toContain('dispatch.snapshotResultLocationHint');
+    expect(container.textContent).toContain('dispatch.baselineSource');
+    expect(container.textContent).toContain('dispatch.baselineDescription');
+    expect(container.textContent).toContain('dispatch.baseRefHint');
+    expect(container.textContent).toContain('dispatch.includeUncommittedHint');
+    expect(container.textContent).not.toContain('dispatch.deliverySnapshot');
+    expect(container.textContent).not.toContain('dispatch.snapshotResultLocationHint');
   });
 
-  it('defaults an unbound target to a source snapshot and preserves target model facts', async () => {
+  it('preserves protocol v3 target model facts without a delivery-mode choice', async () => {
     const onReady = vi.fn();
     mocks.probeTarget.mockResolvedValue({
       cliInstalled: true,
@@ -325,7 +419,7 @@ describe('DispatchInstallDialog installation lifecycle', () => {
       arch: 'x86_64',
       installSupported: false,
       protocol: {
-        protocolVersion: 2,
+        protocolVersion: 3,
         cliVersion: '1.2.3',
         os: 'linux',
         arch: 'x86_64',
@@ -336,8 +430,9 @@ describe('DispatchInstallDialog installation lifecycle', () => {
           'frontend_event_projection',
           'workspace_serialization',
           'dispatch_worker_cli_profile',
-          'workspace_snapshot_exact',
-          'workspace_snapshot_chunked',
+          'workspace_git_worktree',
+          'workspace_git_bundle_upload',
+          'workspace_git_sync',
           'approval_remote',
         ],
         modelConfigured: true,
@@ -360,10 +455,6 @@ describe('DispatchInstallDialog installation lifecycle', () => {
       await Promise.resolve();
     });
 
-    const sourceSnapshot = Array.from(container.querySelectorAll('button'))
-      .find(button => button.textContent?.includes('dispatch.deliverySourceSnapshot'));
-    expect(sourceSnapshot?.getAttribute('aria-checked')).toBe('true');
-
     const remoteApproval = Array.from(container.querySelectorAll('button'))
       .find(button => button.textContent?.includes('dispatch.approvalRemote'));
     await act(async () => {
@@ -375,12 +466,11 @@ describe('DispatchInstallDialog installation lifecycle', () => {
 
     await act(async () => {
       useTarget?.click();
+      await Promise.resolve();
+      await Promise.resolve();
     });
     expect(onReady).toHaveBeenCalledWith(expect.objectContaining({
-      workspaceDelivery: {
-        kind: 'snapshot-source',
-        sourceWorkspacePath: '/home/me/project',
-      },
+      includeUncommitted: false,
       approvalPolicy: 'remote',
       availableModels: ['model-a', 'model-b'],
       defaultModel: 'model-b',
@@ -393,12 +483,25 @@ describe('DispatchInstallDialog installation lifecycle', () => {
       output: string;
       status: 'running';
     }>();
-    mocks.installCliStart.mockResolvedValue({
+    mocks.probeTarget.mockResolvedValue({
+      cliInstalled: false,
+      os: 'linux',
+      arch: 'x86_64',
+      installSupported: false,
+      prebuiltIncompatible: 'target uses musl libc',
+      sourceBuild: {
+        supported: true,
+        blockers: [],
+        gitRef: 'v1.2.3',
+        cargoVersion: '1.90.0',
+      },
+    });
+    mocks.installCliSourceStart.mockResolvedValue({
       scriptPath: '/tmp/install-bitfun.sh',
       version: '1.2.3',
-      target: 'x86_64-unknown-linux-gnu',
-      url: 'https://example.test/bitfun',
-      sha256: 'abc123',
+      target: 'linux x86_64',
+      url: 'https://github.com/GCWing/BitFun.git',
+      sha256: '',
     });
     mocks.installCliPoll.mockReturnValue(poll.promise);
     const target = {
@@ -420,13 +523,13 @@ describe('DispatchInstallDialog installation lifecycle', () => {
     });
 
     const installButton = Array.from(container.querySelectorAll('button'))
-      .find(button => button.textContent?.includes('dispatch.installConfirm'));
+      .find(button => button.textContent?.includes('dispatch.sourceBuildConfirm'));
     await act(async () => {
       installButton?.click();
       await Promise.resolve();
       await Promise.resolve();
     });
-    expect(mocks.installCliStart).toHaveBeenCalledTimes(1);
+    expect(mocks.installCliSourceStart).toHaveBeenCalledTimes(1);
     expect(mocks.installCliPoll).toHaveBeenCalledTimes(1);
 
     await act(async () => {
@@ -474,7 +577,7 @@ describe('DispatchInstallDialog model configuration sync', () => {
       arch: 'x86_64',
       installSupported: true,
       protocol: {
-        protocolVersion: 2,
+        protocolVersion: 3,
         cliVersion: '1.2.3',
         os: 'linux',
         arch: 'x86_64',
@@ -484,6 +587,9 @@ describe('DispatchInstallDialog model configuration sync', () => {
           'detached_worker',
           'frontend_event_projection',
           'workspace_serialization',
+          'workspace_git_worktree',
+          'workspace_git_bundle_upload',
+          'workspace_git_sync',
           'dispatch_worker_cli_profile',
         ],
         modelConfigured,
@@ -520,6 +626,8 @@ describe('DispatchInstallDialog model configuration sync', () => {
     mocks.probeTarget.mockImplementation(async () => probeResult());
     mocks.confirmWarning.mockResolvedValue(true);
     mocks.getConfig.mockResolvedValue([]);
+    mocks.getFreshConfig.mockResolvedValue(undefined);
+    mocks.resolveRevision.mockResolvedValue('a'.repeat(40));
     container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);
@@ -627,7 +735,7 @@ describe('DispatchInstallDialog target model readout', () => {
       arch: 'x86_64',
       installSupported: true,
       protocol: {
-        protocolVersion: 2,
+        protocolVersion: 3,
         cliVersion: '1.2.3',
         os: 'linux',
         arch: 'x86_64',
@@ -637,6 +745,9 @@ describe('DispatchInstallDialog target model readout', () => {
           'detached_worker',
           'frontend_event_projection',
           'workspace_serialization',
+          'workspace_git_worktree',
+          'workspace_git_bundle_upload',
+          'workspace_git_sync',
           'dispatch_worker_cli_profile',
         ],
         modelConfigured: true,
@@ -666,6 +777,8 @@ describe('DispatchInstallDialog target model readout', () => {
     vi.clearAllMocks();
     mocks.modalOnClose = null;
     mocks.confirmWarning.mockResolvedValue(true);
+    mocks.getFreshConfig.mockResolvedValue(undefined);
+    mocks.resolveRevision.mockResolvedValue('a'.repeat(40));
     container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);

@@ -76,6 +76,17 @@ import { dispatchJobStore } from '@/features/dispatch/dispatchJobStore';
 
 const log = createLogger('FlowChatStore');
 
+function dispatchObserverOwnsSession(
+  sessionId: string,
+  session?: Session,
+): boolean {
+  if (isNonLocalDispatchTarget(session?.config.dispatchTarget)) {
+    return true;
+  }
+  return Object.values(dispatchJobStore.getState().jobs)
+    .some(job => job.sessionId === sessionId);
+}
+
 function logPersistedDispatchMetadataOverlap(
   metadata: Record<string, unknown>,
   source: 'metadata-page' | 'metadata-list',
@@ -2284,6 +2295,12 @@ export class FlowChatStore {
       defaultModel?: string;
       state?: NonNullable<SessionConfig['dispatchJobState']>;
       cursor?: number;
+      /**
+       * Observer recovery may deliberately resume from a transcript cache that
+       * trails the renderer cursor persisted before shutdown. Only that paired
+       * cache/replay path may move the projection cursor backwards.
+       */
+      cursorReset?: boolean;
       sourceWorkspacePath?: string;
       sourceWorkspaceId?: string;
     },
@@ -2311,6 +2328,16 @@ export class FlowChatStore {
       const sourceWorkspaceId = binding.sourceWorkspaceId?.trim() || undefined;
       newSessions.set(sessionId, {
         ...session,
+        // Observer projections are reconstructed from the target event log,
+        // never from the local session-history API. Reclassifying a startup
+        // metadata row here prevents a later click from hydrating empty local
+        // history over a dispatch transcript restored by the observer.
+        isHistorical: false,
+        historyState: 'ready',
+        contextRestoreState: 'ready',
+        isPartial: false,
+        loadedTurnCount: session.dialogTurns.length,
+        totalTurnCount: session.dialogTurns.length,
         workspacePath: sourceWorkspacePath ?? session.workspacePath,
         projectWorkspacePath:
           sourceWorkspacePath ?? session.projectWorkspacePath,
@@ -2332,7 +2359,9 @@ export class FlowChatStore {
           dispatchDefaultModel:
             binding.defaultModel ?? session.config.dispatchDefaultModel,
           dispatchJobState: binding.state ?? session.config.dispatchJobState ?? 'queued',
-          dispatchCursor: Math.max(0, binding.cursor ?? session.config.dispatchCursor ?? 0),
+          dispatchCursor: binding.cursorReset
+            ? Math.max(0, binding.cursor ?? 0)
+            : Math.max(0, binding.cursor ?? session.config.dispatchCursor ?? 0),
         },
         lastActiveAt: Date.now(),
       });
@@ -2373,9 +2402,12 @@ export class FlowChatStore {
       const newSessions = new Map(prev.sessions);
       newSessions.set(sessionId, {
         ...session,
-        // `historyState` deliberately stays as `addExternalSession` left it.
-        // An observer projection has no local history to lazily hydrate, and
-        // the full-replay path does not move it either.
+        isHistorical: false,
+        historyState: 'ready',
+        contextRestoreState: 'ready',
+        isPartial: false,
+        loadedTurnCount: turns.length,
+        totalTurnCount: turns.length,
         dialogTurns: [...turns].sort(compareDialogTurnOrder),
       });
       hydrated = true;
@@ -4851,6 +4883,54 @@ export class FlowChatStore {
       sessionTraceId,
     });
     const initialSession = this.state.sessions.get(sessionId);
+    const preserveDispatchObserverProjection = (): boolean => {
+      const latestSession = this.state.sessions.get(sessionId);
+      if (!dispatchObserverOwnsSession(sessionId, latestSession)) {
+        return false;
+      }
+
+      // If the observer has already bound the target, make its ownership
+      // explicit. If only the durable job index is present, leave the metadata
+      // placeholder untouched until ensureProjection supplies the full target.
+      if (isNonLocalDispatchTarget(latestSession?.config.dispatchTarget)) {
+        this.setState(prev => {
+          const session = prev.sessions.get(sessionId);
+          if (
+            !session
+            || !isNonLocalDispatchTarget(session.config.dispatchTarget)
+          ) {
+            return prev;
+          }
+          const newSessions = new Map(prev.sessions);
+          newSessions.set(sessionId, {
+            ...session,
+            isHistorical: false,
+            historyState: 'ready',
+            contextRestoreState: 'ready',
+            isPartial: false,
+            loadedTurnCount: session.dialogTurns.length,
+            totalTurnCount: session.dialogTurns.length,
+          });
+          return { ...prev, sessions: newSessions };
+        });
+      }
+      return true;
+    };
+    const finishDispatchObserverSkip = (stage: 'initial' | 'late' | 'failed'): void => {
+      startupTrace.markPhase('historical_session_hydrate_end', {
+        remote,
+        sessionId,
+        sessionTraceId,
+        skipped: true,
+        reason: 'dispatch-observer-owned',
+        stage,
+        durationMs: elapsedMs(traceStartedAt),
+      });
+    };
+    if (preserveDispatchObserverProjection()) {
+      finishDispatchObserverSkip('initial');
+      return;
+    }
     // The caller remains authoritative for legacy and remote sessions. Only a
     // persisted dual-root binding may redirect history storage to the project
     // root; otherwise a stale in-memory execution path can cross workspaces.
@@ -5093,7 +5173,16 @@ export class FlowChatStore {
           durationMs: elapsedMs(turnsLoadStartedAt),
         });
       }
-      const { stateMachineManager, SessionExecutionEvent } = await stateMachineManagerPromise;
+      const stateMachineModule = await stateMachineManagerPromise;
+      // A local restore may have started just before the observer bound this
+      // session. Re-check ownership after every restore await and before any
+      // commit or state-machine mutation so that late empty history cannot
+      // overwrite a reconstructed dispatch transcript.
+      if (preserveDispatchObserverProjection()) {
+        finishDispatchObserverSkip('late');
+        return;
+      }
+      const { stateMachineManager, SessionExecutionEvent } = stateMachineModule;
       stateMachineManager.getOrCreate(sessionId);
       startupTrace.markPhase('historical_session_turns_loaded', {
         remote,
@@ -5278,6 +5367,13 @@ export class FlowChatStore {
         }
       }
     } catch (error) {
+      // The same race can fail instead of resolving. Once dispatch owns the
+      // session, that stale local failure must not relabel its projection as a
+      // failed historical session or surface an irrelevant restore error.
+      if (preserveDispatchObserverProjection()) {
+        finishDispatchObserverSkip('failed');
+        return;
+      }
       this.setState(prev => {
         const session = prev.sessions.get(sessionId);
         if (!session) return prev;

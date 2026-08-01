@@ -501,8 +501,10 @@ export interface SessionConfig {
   dispatchJobId?: string;
   /** Explicit unattended permission behavior selected before submission. */
   dispatchApprovalPolicy?: import('@/features/dispatch/types').DispatchApprovalPolicy;
-  /** Explicit code delivery mode selected before submission. */
-  dispatchWorkspaceDelivery?: import('@/features/dispatch/types').DispatchWorkspaceDeliveryRequest;
+  /** Carry the baseline worktree's uncommitted changes into the base commit. */
+  dispatchIncludeUncommitted?: boolean;
+  /** Git revision used to create the immutable dispatch baseline. */
+  dispatchBaseRef?: string;
   /** Target model explicitly selected during preflight; omitted to use the target default. */
   dispatchModel?: string;
   /** Model ids reported by the selected target during dispatch preflight. */

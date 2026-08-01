@@ -19,11 +19,27 @@ pub(crate) fn spawn(store: &DispatchStore, job_id: &str) -> Result<u32> {
     result
 }
 
-pub(crate) fn spawn_workspace_materializer(job_id: &str) -> Result<u32> {
+pub(crate) fn spawn_workspace_provision(job_id: &str) -> Result<u32> {
     spawn_detached_action(
-        "__workspace_materialize",
+        "__workspace_provision_run",
         job_id,
-        "dispatch workspace materializer",
+        "dispatch workspace provisioner",
+    )
+}
+
+pub(crate) fn spawn_workspace_bundle_commit(job_id: &str) -> Result<u32> {
+    spawn_detached_action(
+        "__workspace_bundle_commit_run",
+        job_id,
+        "dispatch bundle importer",
+    )
+}
+
+pub(crate) fn spawn_workspace_sync(job_id: &str) -> Result<u32> {
+    spawn_detached_action(
+        "__workspace_sync_run",
+        job_id,
+        "dispatch workspace synchronizer",
     )
 }
 
@@ -58,6 +74,10 @@ fn spawn_detached_action(action: &str, job_id: &str, description: &str) -> Resul
 
 pub(crate) fn worker_process_alive(pid: u32, job_id: &str) -> bool {
     process_alive(pid) && process_matches_job(pid, job_id)
+}
+
+pub(crate) fn workspace_operation_process_alive(pid: u32, action: &str, job_id: &str) -> bool {
+    process_alive(pid) && process_matches_action(pid, action, job_id)
 }
 
 pub(crate) fn worker_process_group_alive(pid: u32) -> bool {
@@ -216,6 +236,11 @@ pub(crate) fn process_alive(_pid: u32) -> bool {
 
 #[cfg(target_os = "linux")]
 fn process_matches_job(pid: u32, job_id: &str) -> bool {
+    process_matches_action(pid, "__run", job_id)
+}
+
+#[cfg(target_os = "linux")]
+fn process_matches_action(pid: u32, action: &str, job_id: &str) -> bool {
     let Ok(raw) = std::fs::read(format!("/proc/{pid}/cmdline")) else {
         return false;
     };
@@ -224,11 +249,16 @@ fn process_matches_job(pid: u32, job_id: &str) -> bool {
         .filter(|arg| !arg.is_empty())
         .map(|arg| String::from_utf8_lossy(arg).into_owned())
         .collect::<Vec<_>>();
-    arguments_match_job(&args, job_id)
+    arguments_match_action(&args, action, job_id)
 }
 
 #[cfg(target_os = "macos")]
 fn process_matches_job(pid: u32, job_id: &str) -> bool {
+    process_matches_action(pid, "__run", job_id)
+}
+
+#[cfg(target_os = "macos")]
+fn process_matches_action(pid: u32, action: &str, job_id: &str) -> bool {
     let output = Command::new("ps")
         .args(["-p", &pid.to_string(), "-o", "command="])
         .output();
@@ -243,7 +273,7 @@ fn process_matches_job(pid: u32, job_id: &str) -> bool {
         .split_whitespace()
         .map(ToOwned::to_owned)
         .collect::<Vec<_>>();
-    arguments_match_job(&args, job_id)
+    arguments_match_action(&args, action, job_id)
 }
 
 #[cfg(not(any(target_os = "linux", target_os = "macos")))]
@@ -251,10 +281,15 @@ fn process_matches_job(_pid: u32, _job_id: &str) -> bool {
     false
 }
 
-fn arguments_match_job(args: &[String], job_id: &str) -> bool {
+#[cfg(not(any(target_os = "linux", target_os = "macos")))]
+fn process_matches_action(_pid: u32, _action: &str, _job_id: &str) -> bool {
+    false
+}
+
+fn arguments_match_action(args: &[String], action: &str, job_id: &str) -> bool {
     args.windows(4).any(|window| {
         window[0] == "dispatch"
-            && window[1] == "__run"
+            && window[1] == action
             && window[2] == "--job"
             && window[3] == job_id
     })
@@ -280,10 +315,37 @@ mod tests {
     #[test]
     fn process_identity_requires_the_exact_hidden_worker_arguments() {
         let expected = ["bitfun", "dispatch", "__run", "--job", "job-1"].map(str::to_string);
-        assert!(arguments_match_job(&expected, "job-1"));
-        assert!(!arguments_match_job(&expected, "job-2"));
+        assert!(arguments_match_action(&expected, "__run", "job-1"));
+        assert!(!arguments_match_action(&expected, "__run", "job-2"));
         let unrelated = ["bitfun", "dispatch", "status"].map(str::to_string);
-        assert!(!arguments_match_job(&unrelated, "job-1"));
+        assert!(!arguments_match_action(&unrelated, "__run", "job-1"));
+    }
+
+    #[test]
+    fn workspace_operation_identity_requires_the_exact_hidden_action() {
+        let expected = [
+            "bitfun",
+            "dispatch",
+            "__workspace_sync_run",
+            "--job",
+            "job-1",
+        ]
+        .map(str::to_string);
+        assert!(arguments_match_action(
+            &expected,
+            "__workspace_sync_run",
+            "job-1"
+        ));
+        assert!(!arguments_match_action(
+            &expected,
+            "__workspace_provision_run",
+            "job-1"
+        ));
+        assert!(!arguments_match_action(
+            &expected,
+            "__workspace_sync_run",
+            "job-2"
+        ));
     }
 
     #[cfg(unix)]
