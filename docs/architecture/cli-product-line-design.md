@@ -604,6 +604,14 @@ Skill Registry 并失效当前 Session 的 Workspace Instructions 缓存；`/rel
 `UserContext` 缓存失效仍由各自既有 owner 完成。指令变更从下一条消息开始生效；运行期不承诺文件监听或当前生成中的
 消息热替换。缓存 generation 会拒绝活动 Turn 在失效之后写回的旧构建结果；旧 `/reload-skills` 输入仅作为隐藏兼容别名
 映射到 `/reload skills`，不增加第二个命令入口。
+
+外部 Prompt Command 的 shell 上下文只支持 OpenCode JSON/JSONC/Markdown Command 与 Claude legacy
+`commands/**/*.md` 的 `!shell` 语义。生态 adapter 只解析来源、参数和 shell 偏好；Product Assembly 生成包含
+执行域、候选版本、工作目录、解析后的绝对 shell 路径与精确命令的审批指纹，并委托现有 Terminal owner 通过不加载 profile 的隔离式 argv 并发执行。GUI/TUI
+只展示当前计划并提交“仅本次”或“记住静态计划”的决定，后端必须重新发现并校验完整指纹后才能执行；参数改变命令的
+动态计划不能记住。仅 stdout 按模板顺序进入最终 Prompt，stderr 只被排空；为保持 OpenCode Command 语义，进程正常启动并退出后即使退出码非零也使用 stdout。文件读取、进程启动、超时或超限失败时不发送部分 Prompt，已经发生的进程副作用不可回滚。安全模式和 Remote
+工作区保持明确不支持，不回退到控制端本机；这条路径不依赖也不扩展 Plugin Host Runtime。
+
 本切片也不实现 `allowed-tools` 的权限预批准、`context`、`fork`、`agent`、`model`、动态 shell/runtime 变量、URL、祖先目录
 级联、插件 Runtime 或 OpenCode 复杂 Hook。后续只有在存在稳定消费方和独立安全边界时才扩展这些语义。
 

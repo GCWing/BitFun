@@ -194,9 +194,27 @@ export interface ExternalSourceCatalogSnapshot {
   control?: ExternalSourceControlSnapshot;
 }
 
-export interface ExpandedExternalPromptCommand {
-  content: string;
+export interface PromptCommandShellReviewPlan {
+  schemaVersion: number;
+  planFingerprint: string;
+  sourceDisplayName: string;
+  workingDirectory: string;
+  shellDisplayName: string;
+  shellExecutable: string;
+  commands: string[];
+  canRemember: boolean;
+  preferenceRevision: number;
 }
+
+export interface PromptCommandShellReviewDecision {
+  planFingerprint: string;
+  mode: 'run_once' | 'remember';
+  expectedPreferenceRevision: number;
+}
+
+export type ExternalPromptCommandInvocationOutcome =
+  | { state: 'ready'; content: string }
+  | { state: 'review_required'; review: PromptCommandShellReviewPlan };
 
 export type ExternalSubagentActivation =
   | { state: 'approval_required' }
@@ -1302,8 +1320,9 @@ export const externalSourcesAPI = {
       conflictKey: string;
       expectedPreferenceRevision: number;
     },
+    shellReviewDecision?: PromptCommandShellReviewDecision,
   ) {
-    return invokeExternalSourceCommand<ExpandedExternalPromptCommand>(
+    return invokeExternalSourceCommand<ExternalPromptCommandInvocationOutcome>(
       'expand_external_prompt_command_command',
       {
         request: {
@@ -1317,6 +1336,7 @@ export const externalSourcesAPI = {
             expectedNativeConflictKey: nativeConflictGuard.conflictKey,
             expectedPreferenceRevision: nativeConflictGuard.expectedPreferenceRevision,
           } : {}),
+          ...(shellReviewDecision ? { shellReviewDecision } : {}),
         },
       },
     );

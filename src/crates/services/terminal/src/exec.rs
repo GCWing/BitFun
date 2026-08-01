@@ -224,6 +224,7 @@ struct OutputInner {
     chunks: VecDeque<(u64, Vec<u8>)>,
     next_seq: u64,
     retained_bytes: usize,
+    total_output_chars: usize,
     closed: bool,
     exit_code: Option<i32>,
 }
@@ -231,6 +232,7 @@ struct OutputInner {
 #[derive(Clone)]
 struct OutputCursor {
     next_seq: u64,
+    observed_output_chars: usize,
 }
 
 struct HeadTailText {
@@ -246,12 +248,34 @@ struct HeadTailText {
     total_chars: usize,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ExecOutputCapture {
+    Combined,
+    StdoutOnly,
+}
+
 impl ExecProcessManager {
     pub async fn exec_command(
         &self,
         request: ExecCommandRequest,
     ) -> TerminalResult<ExecCommandResponse> {
-        self.exec_command_inner(request, None).await
+        self.exec_command_inner(request, None, ExecOutputCapture::Combined)
+            .await
+    }
+
+    /// Runs a non-TTY command while draining stderr without adding it to the
+    /// returned model-facing output.
+    pub async fn exec_command_stdout(
+        &self,
+        request: ExecCommandRequest,
+    ) -> TerminalResult<ExecCommandResponse> {
+        if request.tty {
+            return Err(TerminalError::InvalidConfig(
+                "stdout-only capture does not support tty execution".to_string(),
+            ));
+        }
+        self.exec_command_inner(request, None, ExecOutputCapture::StdoutOnly)
+            .await
     }
 
     pub async fn exec_command_streaming(
@@ -259,16 +283,21 @@ impl ExecProcessManager {
         request: ExecCommandRequest,
         output_tx: mpsc::Sender<String>,
     ) -> TerminalResult<ExecCommandResponse> {
-        self.exec_command_inner(request, Some(output_tx)).await
+        self.exec_command_inner(request, Some(output_tx), ExecOutputCapture::Combined)
+            .await
     }
 
     async fn exec_command_inner(
         &self,
         request: ExecCommandRequest,
         output_tx: Option<mpsc::Sender<String>>,
+        capture: ExecOutputCapture,
     ) -> TerminalResult<ExecCommandResponse> {
-        let process = Arc::new(spawn_exec_process(&request).await?);
-        let cursor = OutputCursor { next_seq: 0 };
+        let process = Arc::new(spawn_exec_process(&request, capture).await?);
+        let cursor = OutputCursor {
+            next_seq: 0,
+            observed_output_chars: 0,
+        };
         let session_id = self
             .store_session(
                 Arc::clone(&process),
@@ -725,6 +754,7 @@ impl OutputState {
                 chunks: VecDeque::new(),
                 next_seq: 0,
                 retained_bytes: 0,
+                total_output_chars: 0,
                 closed: false,
                 exit_code: None,
             }),
@@ -737,15 +767,15 @@ impl OutputState {
         if chunk.is_empty() {
             return;
         }
-        let capture_text = self
-            .output_capture_tx
-            .as_ref()
-            .map(|_| bytes_to_string_smart(&chunk));
+        let decoded = bytes_to_string_smart(&chunk);
+        let decoded_chars = decoded.chars().count();
+        let capture_text = self.output_capture_tx.as_ref().map(|_| decoded);
         {
             let mut inner = self.inner.lock().await;
             let seq = inner.next_seq;
             inner.next_seq = inner.next_seq.saturating_add(1);
             inner.retained_bytes = inner.retained_bytes.saturating_add(chunk.len());
+            inner.total_output_chars = inner.total_output_chars.saturating_add(decoded_chars);
             inner.chunks.push_back((seq, chunk));
             while inner.retained_bytes > MAX_RETAINED_OUTPUT_BYTES {
                 if let Some((_, dropped)) = inner.chunks.pop_front() {
@@ -808,6 +838,7 @@ impl OutputState {
             }
         }
         cursor.next_seq = inner.next_seq;
+        cursor.observed_output_chars = inner.total_output_chars;
         inner.closed
     }
 
@@ -819,6 +850,7 @@ impl OutputState {
         output_tx: Option<&mpsc::Sender<String>>,
     ) -> CollectedOutput {
         let mut sink = HeadTailText::new(max_output_chars);
+        let initial_output_chars = cursor.observed_output_chars;
 
         loop {
             let closed = self
@@ -834,7 +866,9 @@ impl OutputState {
             }
         }
 
-        let original_output_chars = sink.total_chars;
+        let original_output_chars = cursor
+            .observed_output_chars
+            .saturating_sub(initial_output_chars);
         CollectedOutput {
             output: sink.render(),
             original_output_chars,
@@ -1023,7 +1057,10 @@ impl HeadTailText {
     }
 }
 
-async fn spawn_exec_process(request: &ExecCommandRequest) -> TerminalResult<ExecProcess> {
+async fn spawn_exec_process(
+    request: &ExecCommandRequest,
+    capture: ExecOutputCapture,
+) -> TerminalResult<ExecProcess> {
     if request.argv.is_empty() || request.argv[0].is_empty() {
         return Err(TerminalError::InvalidConfig(
             "missing command executable".to_string(),
@@ -1039,7 +1076,7 @@ async fn spawn_exec_process(request: &ExecCommandRequest) -> TerminalResult<Exec
     if request.tty {
         spawn_pty_process(request).await
     } else {
-        spawn_pipe_process(request).await
+        spawn_pipe_process(request, capture).await
     }
 }
 
@@ -1171,7 +1208,10 @@ async fn spawn_pty_process(request: &ExecCommandRequest) -> TerminalResult<ExecP
     })
 }
 
-async fn spawn_pipe_process(request: &ExecCommandRequest) -> TerminalResult<ExecProcess> {
+async fn spawn_pipe_process(
+    request: &ExecCommandRequest,
+    capture: ExecOutputCapture,
+) -> TerminalResult<ExecProcess> {
     let mut command = Command::new(&request.argv[0]);
     command.args(request.argv.iter().skip(1));
     command.current_dir(&request.cwd);
@@ -1218,13 +1258,19 @@ async fn spawn_pipe_process(request: &ExecCommandRequest) -> TerminalResult<Exec
     }
     if let Some(stderr) = stderr {
         #[cfg(unix)]
-        reader_tasks.push(spawn_pipe_reader_with_done(
-            stderr,
-            Arc::clone(&output),
-            reader_done_tx.clone(),
-        ));
+        reader_tasks.push(match capture {
+            ExecOutputCapture::Combined => {
+                spawn_pipe_reader_with_done(stderr, Arc::clone(&output), reader_done_tx.clone())
+            }
+            ExecOutputCapture::StdoutOnly => {
+                spawn_pipe_discard_reader_with_done(stderr, reader_done_tx.clone())
+            }
+        });
         #[cfg(not(unix))]
-        reader_tasks.push(spawn_pipe_reader(stderr, Arc::clone(&output)));
+        reader_tasks.push(match capture {
+            ExecOutputCapture::Combined => spawn_pipe_reader(stderr, Arc::clone(&output)),
+            ExecOutputCapture::StdoutOnly => spawn_pipe_discard_reader(stderr),
+        });
     }
 
     let (control_tx, mut control_rx) = mpsc::channel::<ExecControlAction>(1);
@@ -1552,6 +1598,24 @@ where
     })
 }
 
+#[cfg(not(unix))]
+fn spawn_pipe_discard_reader<R>(mut reader: R) -> JoinHandle<()>
+where
+    R: AsyncRead + Unpin + Send + 'static,
+{
+    tokio::spawn(async move {
+        let mut buffer = vec![0u8; 8192];
+        loop {
+            match reader.read(&mut buffer).await {
+                Ok(0) => break,
+                Ok(_) => {}
+                Err(ref error) if error.kind() == ErrorKind::Interrupted => continue,
+                Err(_) => break,
+            }
+        }
+    })
+}
+
 #[cfg(unix)]
 fn spawn_pipe_reader_with_done<R>(
     mut reader: R,
@@ -1567,6 +1631,28 @@ where
             match reader.read(&mut buffer).await {
                 Ok(0) => break,
                 Ok(n) => output.push_chunk(buffer[..n].to_vec()).await,
+                Err(ref error) if error.kind() == ErrorKind::Interrupted => continue,
+                Err(_) => break,
+            }
+        }
+        let _ = done_tx.send(()).await;
+    })
+}
+
+#[cfg(unix)]
+fn spawn_pipe_discard_reader_with_done<R>(
+    mut reader: R,
+    done_tx: mpsc::Sender<()>,
+) -> JoinHandle<()>
+where
+    R: AsyncRead + Unpin + Send + 'static,
+{
+    tokio::spawn(async move {
+        let mut buffer = vec![0u8; 8192];
+        loop {
+            match reader.read(&mut buffer).await {
+                Ok(0) => break,
+                Ok(_) => {}
                 Err(ref error) if error.kind() == ErrorKind::Interrupted => continue,
                 Err(_) => break,
             }
@@ -1706,14 +1792,15 @@ mod tests {
     use super::{
         bytes_to_string_smart, input_bytes_for_write, ExecCommandRequest, ExecControlAction,
         ExecControlOrigin, ExecControlRequest, ExecProcessLifecycleStatus, ExecProcessManager,
-        ExecSessionCompletionSource, ExecSessionCompletionStatus, HeadTailText, SendStdinRequest,
-        WriteStdinRequest,
+        ExecSessionCompletionSource, ExecSessionCompletionStatus, HeadTailText, OutputCursor,
+        OutputState, SendStdinRequest, WriteStdinRequest,
     };
     #[cfg(windows)]
     use crate::shell::{ShellDetector, ShellType};
     use encoding_rs::GBK;
     use std::collections::HashMap;
-    
+    #[cfg(windows)]
+    use std::path::PathBuf;
     use std::sync::Arc;
 
     #[cfg(windows)]
@@ -1776,6 +1863,58 @@ mod tests {
         assert_eq!(response.exit_code, Some(0));
         assert!(response.session_id.is_none());
         assert!(response.output.contains("bitfun_exec_test"));
+    }
+
+    #[tokio::test]
+    async fn pipe_exec_stdout_only_drains_but_does_not_return_stderr() {
+        let manager = ExecProcessManager::default();
+        #[cfg(windows)]
+        let script = "echo captured_stdout & echo ignored_stderr 1>&2";
+        #[cfg(not(windows))]
+        let script = "printf captured_stdout; printf ignored_stderr >&2";
+
+        let response = manager
+            .exec_command_stdout(ExecCommandRequest {
+                argv: shell_argv(script),
+                cwd: std::env::current_dir().expect("current dir"),
+                env: HashMap::new(),
+                tty: false,
+                yield_time_ms: Some(5_000),
+                max_output_chars: Some(10_000),
+                lifecycle_tx: None,
+                output_capture_tx: None,
+            })
+            .await
+            .expect("stdout-only command should run");
+
+        assert_eq!(response.exit_code, Some(0));
+        assert!(response.output.contains("captured_stdout"));
+        assert!(!response.output.contains("ignored_stderr"));
+    }
+
+    #[tokio::test]
+    async fn original_output_chars_survives_multibyte_retention_eviction() {
+        let output = OutputState::new(None);
+        let chunk = "🦀".repeat(32 * 1024).into_bytes();
+        for _ in 0..10 {
+            output.push_chunk(chunk.clone()).await;
+        }
+        output.close(Some(0)).await;
+
+        let collected = output
+            .collect_until(
+                OutputCursor {
+                    next_seq: 0,
+                    observed_output_chars: 0,
+                },
+                tokio::time::Instant::now() + std::time::Duration::from_secs(1),
+                256 * 1024,
+                None,
+            )
+            .await;
+
+        assert_eq!(collected.original_output_chars, 320 * 1024);
+        assert_eq!(collected.output.chars().count(), 256 * 1024);
     }
 
     #[cfg(unix)]

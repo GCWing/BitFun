@@ -28,7 +28,9 @@ pub use bitfun_product_domains::external_sources::{
     ExternalToolRuntimeKind, NativePromptCommandConflictProjection,
     NativePromptCommandConflictSnapshot, NativePromptCommandDescriptor,
     NativePromptCommandReconfirmationProjection, PromptCommandAvailability,
-    PromptCommandCatalogEntry, PromptCommandDefinition, SourceKey,
+    PromptCommandCatalogEntry, PromptCommandDefinition, PromptCommandInvocationOutcome,
+    PromptCommandShellReviewDecision, PromptCommandShellReviewMode, PromptCommandShellReviewPlan,
+    SourceKey,
 };
 pub use bitfun_product_domains::external_subagents::{
     ExternalSubagentActivationState, ExternalSubagentCompatibilityState, ExternalSubagentConflict,
@@ -82,7 +84,7 @@ use bitfun_product_domains::external_integration_policy::{
 use bitfun_product_domains::external_sources::{
     ExecutionDomainId, ExternalMcpRevisionKey, ExternalMcpSourceProvider, ExternalMcpStaticStatus,
     ExternalSourceContext, ExternalSourceScope, ExternalToolSourceProvider, PromptCommandExpansion,
-    PromptCommandSourceProvider,
+    PromptCommandShellInvocation, PromptCommandShellPreference, PromptCommandSourceProvider,
 };
 use bitfun_product_domains::external_subagents::ExternalSubagentSourceProvider;
 use bitfun_product_domains::workspace_references::{
@@ -101,7 +103,15 @@ use std::future::Future;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex as StdMutex, MutexGuard, OnceLock, Weak};
+use terminal_core::exec::{ExecControlAction, ExecControlOrigin, ExecControlRequest};
+use terminal_core::{
+    resolve_local_exec_shell_without_probe, ExecProcessManager, LocalExecCommandRequest,
+    ShellDetector, ShellType,
+};
 use tokio::sync::broadcast;
+use tool_runtime::exec_command::{
+    exec_command_argv_for_isolated_shell, exec_command_noninteractive_env, ExecCommandShellKind,
+};
 
 const PROVIDER_DISCOVERY_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
 const EXTERNAL_SOURCE_PREFERENCES_FILE: &str = "external-sources.json";
@@ -119,6 +129,409 @@ const MAX_PROMPT_COMMAND_FILE_REFERENCES: usize = 8;
 const MAX_PROMPT_COMMAND_FILE_BYTES: usize = 64 * 1024;
 const MAX_PROMPT_COMMAND_TOTAL_FILE_BYTES: usize = 128 * 1024;
 const MAX_EXPANDED_PROMPT_COMMAND_BYTES: usize = 1024 * 1024;
+const PROMPT_COMMAND_SHELL_REVIEW_SCHEMA_VERSION: u32 = 1;
+const MAX_PROMPT_COMMAND_SHELL_INVOCATIONS: usize = 8;
+const MAX_PROMPT_COMMAND_SHELL_COMMAND_BYTES: usize = 64 * 1024;
+const MAX_PROMPT_COMMAND_SHELL_TOTAL_BYTES: usize = 128 * 1024;
+const MAX_PROMPT_COMMAND_SHELL_OUTPUT_CHARS: usize = 256 * 1024;
+const PROMPT_COMMAND_SHELL_TIMEOUT_MS: u64 = 30_000;
+const PROMPT_COMMAND_SHELL_KILL_YIELD_MS: u64 = 5_000;
+const MAX_APPROVED_PROMPT_COMMAND_SHELL_PLANS: usize = 512;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ResolvedPromptCommandShell {
+    display_name: String,
+    path: PathBuf,
+    kind: ExecCommandShellKind,
+}
+
+#[derive(Debug, Clone)]
+struct PreparedPromptCommandShellPlan {
+    expansion: PromptCommandExpansion,
+    invocations: Vec<PromptCommandShellInvocation>,
+    working_directory: PathBuf,
+    resolved_shell: ResolvedPromptCommandShell,
+    review: PromptCommandShellReviewPlan,
+}
+
+fn prepare_prompt_command_shell_plan(
+    expansion: PromptCommandExpansion,
+    source_display_name: &str,
+    execution_domain_id: &str,
+    candidate_id: &str,
+    content_version: &str,
+    preference_revision: u64,
+    resolved_shell: ResolvedPromptCommandShell,
+) -> Result<PreparedPromptCommandShellPlan, String> {
+    let shell = expansion
+        .shell
+        .as_ref()
+        .ok_or_else(|| "prompt command does not contain shell directives".to_string())?;
+    if !shell.working_directory.is_absolute() {
+        return Err("prompt command shell working directory must be absolute".to_string());
+    }
+    if shell.invocations.is_empty()
+        || shell.invocations.len() > MAX_PROMPT_COMMAND_SHELL_INVOCATIONS
+    {
+        return Err(format!(
+            "prompt commands may contain at most {MAX_PROMPT_COMMAND_SHELL_INVOCATIONS} shell directives"
+        ));
+    }
+    let mut previous_end = 0usize;
+    let mut total_bytes = 0usize;
+    for invocation in &shell.invocations {
+        let directive = expansion
+            .content
+            .get(invocation.range_start..invocation.range_end)
+            .ok_or_else(|| "prompt command shell directive range is invalid".to_string())?;
+        if invocation.range_start < previous_end
+            || !directive.starts_with("!`")
+            || !directive.ends_with('`')
+            || directive.get(2..directive.len().saturating_sub(1))
+                != Some(invocation.command.as_str())
+        {
+            return Err("prompt command shell directive range is inconsistent".to_string());
+        }
+        if invocation.command.len() > MAX_PROMPT_COMMAND_SHELL_COMMAND_BYTES {
+            return Err(format!(
+                "a prompt command shell directive exceeds the {MAX_PROMPT_COMMAND_SHELL_COMMAND_BYTES} byte limit"
+            ));
+        }
+        total_bytes = total_bytes
+            .checked_add(invocation.command.len())
+            .ok_or_else(|| {
+                "prompt command shell directives exceed the total byte limit".to_string()
+            })?;
+        previous_end = invocation.range_end;
+    }
+    if total_bytes > MAX_PROMPT_COMMAND_SHELL_TOTAL_BYTES {
+        return Err(format!(
+            "prompt command shell directives exceed the {MAX_PROMPT_COMMAND_SHELL_TOTAL_BYTES} byte total limit"
+        ));
+    }
+
+    let plan_fingerprint = prompt_command_shell_plan_fingerprint(
+        execution_domain_id,
+        candidate_id,
+        content_version,
+        &shell.working_directory,
+        &resolved_shell,
+        &shell.invocations,
+    );
+    let review = PromptCommandShellReviewPlan {
+        schema_version: PROMPT_COMMAND_SHELL_REVIEW_SCHEMA_VERSION,
+        plan_fingerprint,
+        source_display_name: source_display_name.to_string(),
+        working_directory: shell.working_directory.to_string_lossy().to_string(),
+        shell_display_name: resolved_shell.display_name.clone(),
+        shell_executable: resolved_shell
+            .path
+            .to_str()
+            .ok_or_else(|| "prompt command shell executable path is not valid Unicode".to_string())?
+            .to_string(),
+        commands: shell
+            .invocations
+            .iter()
+            .map(|invocation| invocation.command.clone())
+            .collect(),
+        can_remember: shell
+            .invocations
+            .iter()
+            .all(|invocation| invocation.can_remember),
+        preference_revision,
+    };
+    Ok(PreparedPromptCommandShellPlan {
+        invocations: shell.invocations.clone(),
+        working_directory: shell.working_directory.clone(),
+        expansion,
+        resolved_shell,
+        review,
+    })
+}
+
+fn prompt_command_shell_plan_fingerprint(
+    execution_domain_id: &str,
+    candidate_id: &str,
+    content_version: &str,
+    working_directory: &Path,
+    shell: &ResolvedPromptCommandShell,
+    invocations: &[PromptCommandShellInvocation],
+) -> String {
+    let mut hasher = Sha256::new();
+    for part in [
+        PROMPT_COMMAND_SHELL_REVIEW_SCHEMA_VERSION.to_string(),
+        execution_domain_id.to_string(),
+        candidate_id.to_string(),
+        content_version.to_string(),
+        prompt_command_shell_kind_id(&shell.kind),
+    ] {
+        update_prompt_command_shell_fingerprint(&mut hasher, part.as_bytes());
+    }
+    update_prompt_command_shell_fingerprint(
+        &mut hasher,
+        &prompt_command_shell_path_bytes(working_directory),
+    );
+    update_prompt_command_shell_fingerprint(
+        &mut hasher,
+        &prompt_command_shell_path_bytes(&shell.path),
+    );
+    for invocation in invocations {
+        update_prompt_command_shell_fingerprint(&mut hasher, invocation.command.as_bytes());
+    }
+    format!("sha256:{}", hex::encode(hasher.finalize()))
+}
+
+fn update_prompt_command_shell_fingerprint(hasher: &mut Sha256, value: &[u8]) {
+    hasher.update((value.len() as u64).to_be_bytes());
+    hasher.update(value);
+}
+
+fn prompt_command_shell_path_bytes(path: &Path) -> Vec<u8> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::ffi::OsStrExt;
+        return path.as_os_str().as_bytes().to_vec();
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::ffi::OsStrExt;
+        return path
+            .as_os_str()
+            .encode_wide()
+            .flat_map(u16::to_le_bytes)
+            .collect();
+    }
+    #[cfg(not(any(unix, windows)))]
+    path.to_string_lossy().as_bytes().to_vec()
+}
+
+fn prompt_command_shell_kind_id(kind: &ExecCommandShellKind) -> String {
+    match kind {
+        ExecCommandShellKind::Bash => "bash".to_string(),
+        ExecCommandShellKind::Zsh => "zsh".to_string(),
+        ExecCommandShellKind::Fish => "fish".to_string(),
+        ExecCommandShellKind::PowerShell => "powershell".to_string(),
+        ExecCommandShellKind::PowerShellCore => "powershell_core".to_string(),
+        ExecCommandShellKind::Cmd => "cmd".to_string(),
+        ExecCommandShellKind::Sh => "sh".to_string(),
+        ExecCommandShellKind::Ksh => "ksh".to_string(),
+        ExecCommandShellKind::Csh => "csh".to_string(),
+        ExecCommandShellKind::Custom(name) => format!("custom:{name}"),
+    }
+}
+
+fn apply_prompt_command_shell_outputs(
+    content: &str,
+    invocations: &[PromptCommandShellInvocation],
+    outputs: &[String],
+) -> Result<String, String> {
+    if invocations.len() != outputs.len() {
+        return Err("prompt command shell output count is inconsistent".to_string());
+    }
+    let output_bytes = outputs.iter().map(String::len).sum::<usize>();
+    let removed_bytes = invocations
+        .iter()
+        .map(|invocation| invocation.range_end.saturating_sub(invocation.range_start))
+        .sum::<usize>();
+    let capacity = content
+        .len()
+        .saturating_sub(removed_bytes)
+        .saturating_add(output_bytes);
+    if capacity > MAX_EXPANDED_PROMPT_COMMAND_BYTES {
+        return Err(format!(
+            "expanded external prompt command exceeds the {MAX_EXPANDED_PROMPT_COMMAND_BYTES} byte limit"
+        ));
+    }
+    let mut expanded = String::with_capacity(capacity);
+    let mut cursor = 0usize;
+    for (invocation, output) in invocations.iter().zip(outputs) {
+        let prefix = content
+            .get(cursor..invocation.range_start)
+            .ok_or_else(|| "prompt command shell directive range is invalid".to_string())?;
+        expanded.push_str(prefix);
+        expanded.push_str(output);
+        cursor = invocation.range_end;
+    }
+    expanded.push_str(
+        content
+            .get(cursor..)
+            .ok_or_else(|| "prompt command shell directive range is invalid".to_string())?,
+    );
+    Ok(expanded)
+}
+
+fn resolve_prompt_command_shell(
+    preference: &PromptCommandShellPreference,
+) -> Result<ResolvedPromptCommandShell, String> {
+    let resolved = match preference {
+        PromptCommandShellPreference::HostDefault => {
+            let shell = resolve_local_exec_shell_without_probe(None);
+            return finalize_resolved_prompt_command_shell(
+                shell.display_name,
+                shell.path,
+                shell.shell_type,
+            );
+        }
+        PromptCommandShellPreference::Preferred { executable } => {
+            if let Some(shell) = ShellDetector::resolve_configured_shell_without_probe(executable) {
+                return finalize_resolved_prompt_command_shell(
+                    shell.display_name,
+                    shell.path,
+                    shell.shell_type,
+                );
+            }
+            let fallback = resolve_local_exec_shell_without_probe(None);
+            return finalize_resolved_prompt_command_shell(
+                fallback.display_name,
+                fallback.path,
+                fallback.shell_type,
+            );
+        }
+        PromptCommandShellPreference::Required { executable } => {
+            ShellDetector::resolve_configured_shell_without_probe(executable).ok_or_else(|| {
+                format!("required prompt command shell '{executable}' is unavailable")
+            })?
+        }
+        PromptCommandShellPreference::RequiredOneOf { executables } => {
+            let mut resolved = None;
+            for executable in executables {
+                if let Some(shell) =
+                    ShellDetector::resolve_configured_shell_without_probe(executable)
+                {
+                    resolved = Some(shell);
+                    break;
+                }
+            }
+            resolved.ok_or_else(|| {
+                "none of the required prompt command shell candidates are available".to_string()
+            })?
+        }
+    };
+    finalize_resolved_prompt_command_shell(
+        resolved.display_name,
+        resolved.path,
+        resolved.shell_type,
+    )
+}
+
+fn finalize_resolved_prompt_command_shell(
+    display_name: String,
+    path: PathBuf,
+    shell_type: ShellType,
+) -> Result<ResolvedPromptCommandShell, String> {
+    let path = dunce::canonicalize(&path)
+        .map_err(|_| "prompt command shell executable is unavailable".to_string())?;
+    if path.to_str().is_none() {
+        return Err("prompt command shell executable path is not valid Unicode".to_string());
+    }
+    Ok(ResolvedPromptCommandShell {
+        display_name,
+        path,
+        kind: prompt_command_shell_kind(&shell_type),
+    })
+}
+
+fn prompt_command_shell_kind(shell_type: &ShellType) -> ExecCommandShellKind {
+    match shell_type {
+        ShellType::Bash => ExecCommandShellKind::Bash,
+        ShellType::Zsh => ExecCommandShellKind::Zsh,
+        ShellType::Fish => ExecCommandShellKind::Fish,
+        ShellType::PowerShell => ExecCommandShellKind::PowerShell,
+        ShellType::PowerShellCore => ExecCommandShellKind::PowerShellCore,
+        ShellType::Cmd => ExecCommandShellKind::Cmd,
+        ShellType::Sh => ExecCommandShellKind::Sh,
+        ShellType::Ksh => ExecCommandShellKind::Ksh,
+        ShellType::Csh => ExecCommandShellKind::Csh,
+        ShellType::Custom(name) => ExecCommandShellKind::Custom(name.clone()),
+    }
+}
+
+async fn execute_prompt_command_shell_plan(
+    plan: PreparedPromptCommandShellPlan,
+) -> Result<PromptCommandExpansion, String> {
+    if !plan.working_directory.is_dir() {
+        return Err("prompt command shell working directory is unavailable".to_string());
+    }
+    let manager = Arc::new(ExecProcessManager::default());
+    let tasks = plan
+        .invocations
+        .iter()
+        .enumerate()
+        .map(|(index, invocation)| {
+            let manager = Arc::clone(&manager);
+            let argv = exec_command_argv_for_isolated_shell(
+                plan.resolved_shell
+                    .path
+                    .to_str()
+                    .expect("prepared prompt command shell paths are valid Unicode")
+                    .to_string(),
+                plan.resolved_shell.kind.clone(),
+                &invocation.command,
+            );
+            let cwd = plan.working_directory.clone();
+            async move {
+                let response = manager
+                    .exec_command_stdout(LocalExecCommandRequest {
+                        argv,
+                        cwd,
+                        env: exec_command_noninteractive_env(),
+                        tty: false,
+                        yield_time_ms: Some(PROMPT_COMMAND_SHELL_TIMEOUT_MS),
+                        max_output_chars: Some(MAX_PROMPT_COMMAND_SHELL_OUTPUT_CHARS),
+                        lifecycle_tx: None,
+                        output_capture_tx: None,
+                    })
+                    .await
+                    .map_err(|error| {
+                        format!(
+                            "prompt command shell directive {} failed to start: {error}",
+                            index + 1
+                        )
+                    })?;
+                if let Some(session_id) = response.session_id {
+                    let _ = manager
+                        .control_session(ExecControlRequest {
+                            session_id,
+                            action: ExecControlAction::Kill,
+                            origin: ExecControlOrigin::OutOfBand,
+                            yield_time_ms: Some(PROMPT_COMMAND_SHELL_KILL_YIELD_MS),
+                            max_output_chars: Some(MAX_PROMPT_COMMAND_SHELL_OUTPUT_CHARS),
+                        })
+                        .await;
+                    if response.original_output_chars >= MAX_PROMPT_COMMAND_SHELL_OUTPUT_CHARS {
+                        return Err(format!(
+                            "prompt command shell directive {} exceeded the output limit",
+                            index + 1
+                        ));
+                    }
+                    return Err(format!(
+                        "prompt command shell directive {} exceeded the {} second timeout",
+                        index + 1,
+                        PROMPT_COMMAND_SHELL_TIMEOUT_MS / 1000
+                    ));
+                }
+                if response.original_output_chars > MAX_PROMPT_COMMAND_SHELL_OUTPUT_CHARS {
+                    return Err(format!(
+                        "prompt command shell directive {} exceeded the output limit",
+                        index + 1
+                    ));
+                }
+                Ok(response.output)
+            }
+        })
+        .collect::<Vec<_>>();
+    let outputs = join_all(tasks)
+        .await
+        .into_iter()
+        .collect::<Result<Vec<_>, _>>()?;
+    let content =
+        apply_prompt_command_shell_outputs(&plan.expansion.content, &plan.invocations, &outputs)?;
+    Ok(PromptCommandExpansion {
+        content,
+        workspace_file_references: plan.expansion.workspace_file_references,
+        shell: None,
+    })
+}
 
 #[derive(Debug, Clone)]
 pub(crate) struct LocalConfiguredSkillRootContribution {
@@ -485,6 +898,8 @@ struct ExternalSourcesConfig {
     conflicted_candidate_ids: BTreeSet<String>,
     #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
     approved_tool_targets: BTreeSet<String>,
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    approved_prompt_command_shell_plans: BTreeSet<String>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     declined_tool_decisions: BTreeMap<String, String>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
@@ -531,6 +946,10 @@ impl std::fmt::Debug for ExternalSourcesConfig {
             )
             .field("conflicted_candidate_ids", &self.conflicted_candidate_ids)
             .field("approved_tool_targets", &self.approved_tool_targets)
+            .field(
+                "approved_prompt_command_shell_plans",
+                &self.approved_prompt_command_shell_plans.len(),
+            )
             .field("declined_tool_decisions", &self.declined_tool_decisions)
             .field("tool_conflict_choices", &self.tool_conflict_choices)
             .field("preference_revision", &self.preference_revision)
@@ -3092,7 +3511,8 @@ impl WorkspaceExternalSourceService {
         expected_content_version: Option<&str>,
         expected_native_conflict_key: Option<&str>,
         expected_preference_revision: Option<u64>,
-    ) -> Result<ExpandedPromptCommand, String> {
+        shell_review_decision: Option<&PromptCommandShellReviewDecision>,
+    ) -> Result<PromptCommandInvocationOutcome, String> {
         // Explicit invocation refreshes first, so a stable deletion cannot be
         // bypassed by an old menu projection.
         let snapshot = self.refresh_preserving_worker_recovery().await?;
@@ -3116,15 +3536,22 @@ impl WorkspaceExternalSourceService {
             expected_native_conflict_key,
             expected_preference_revision,
         )?;
-        let source_key = snapshot
+        let selected_command = snapshot
             .commands
             .iter()
             .find(|entry| entry.definition.name.eq_ignore_ascii_case(name))
-            .map(|entry| entry.definition.id.source.clone())
+            .map(|entry| entry.definition.clone())
             .ok_or_else(|| {
                 missing_candidate_error(format!("External prompt command '{name}' was not found"))
             })?;
+        let source_key = selected_command.id.source.clone();
         ensure_source_capability_active(&snapshot, &source_key, EXTERNAL_CAPABILITY_COMMAND)?;
+        let source_display_name = snapshot
+            .sources
+            .iter()
+            .find(|source| source.record.key == source_key)
+            .map(|source| source.record.display_name.clone())
+            .unwrap_or_else(|| "External prompt command".to_string());
         let coordinator = Arc::clone(&self.control_plane);
         let name = name.to_string();
         let arguments = arguments.to_string();
@@ -3142,7 +3569,74 @@ impl WorkspaceExternalSourceService {
         })
         .await
         .map_err(|error| format!("external command expansion task failed: {error}"))??;
-        finalize_prompt_command_expansion(self.workspace_root.as_deref(), expansion).await
+        let Some(shell_expansion) = expansion.shell.as_ref() else {
+            let expanded =
+                finalize_prompt_command_expansion(self.workspace_root.as_deref(), expansion)
+                    .await?;
+            return Ok(PromptCommandInvocationOutcome::Ready {
+                content: expanded.content,
+            });
+        };
+        if self.safe_mode_enabled() {
+            return Err(policy_limited_error(
+                "Shell-backed external prompt commands are disabled while External Sources safe mode is active",
+            ));
+        }
+        let resolved_shell = resolve_prompt_command_shell(&shell_expansion.preference)?;
+        let plan = prepare_prompt_command_shell_plan(
+            expansion,
+            &source_display_name,
+            self.execution_domain_id.as_str(),
+            &selected_command.id.stable_key(),
+            &selected_command.content_version,
+            preferences.preference_revision,
+            resolved_shell,
+        )?;
+        let approved = preferences
+            .approved_prompt_command_shell_plans
+            .contains(&plan.review.plan_fingerprint);
+        let run = if approved {
+            true
+        } else if let Some(decision) = shell_review_decision {
+            if decision.plan_fingerprint != plan.review.plan_fingerprint
+                || decision.expected_preference_revision != preferences.preference_revision
+            {
+                return Ok(PromptCommandInvocationOutcome::ReviewRequired {
+                    review: plan.review,
+                });
+            }
+            match decision.mode {
+                PromptCommandShellReviewMode::RunOnce => true,
+                PromptCommandShellReviewMode::Remember => {
+                    if !plan.review.can_remember {
+                        return Err(
+                            "argument-dependent prompt command shell directives cannot be remembered"
+                                .to_string(),
+                        );
+                    }
+                    let updated = persist_prompt_command_shell_plan_approval(
+                        &plan.review.plan_fingerprint,
+                        decision.expected_preference_revision,
+                    )
+                    .await?;
+                    propagate_prompt_command_preferences(&updated);
+                    true
+                }
+            }
+        } else {
+            false
+        };
+        if !run {
+            return Ok(PromptCommandInvocationOutcome::ReviewRequired {
+                review: plan.review,
+            });
+        }
+        let expansion = execute_prompt_command_shell_plan(plan).await?;
+        let expanded =
+            finalize_prompt_command_expansion(self.workspace_root.as_deref(), expansion).await?;
+        Ok(PromptCommandInvocationOutcome::Ready {
+            content: expanded.content,
+        })
     }
 
     async fn start_watching(self: &Arc<Self>) {
@@ -4002,6 +4496,43 @@ fn epoch_seconds() -> u64 {
 
 async fn read_external_sources_config() -> Result<ExternalSourcesConfig, String> {
     ExternalSourcePreferenceStore::global()?.read().await
+}
+
+async fn persist_prompt_command_shell_plan_approval(
+    fingerprint: &str,
+    expected_preference_revision: u64,
+) -> Result<ExternalSourcesConfig, String> {
+    let fingerprint = fingerprint.to_string();
+    ExternalSourcePreferenceStore::global()?
+        .update(move |config| {
+            if config.preference_revision != expected_preference_revision {
+                return false;
+            }
+            if config
+                .approved_prompt_command_shell_plans
+                .contains(&fingerprint)
+            {
+                return true;
+            }
+            if config.approved_prompt_command_shell_plans.len()
+                >= MAX_APPROVED_PROMPT_COMMAND_SHELL_PLANS
+            {
+                return false;
+            }
+            config
+                .approved_prompt_command_shell_plans
+                .insert(fingerprint);
+            config.preference_revision = config.preference_revision.saturating_add(1);
+            true
+        })
+        .await
+        .and_then(|(applied, config)| {
+            applied.then_some(config).ok_or_else(|| {
+                stale_operation_error(
+                    "Prompt command shell approvals changed or reached their storage limit; refresh before retrying",
+                )
+            })
+        })
 }
 
 pub(crate) async fn external_tool_invocation_is_authorized(
@@ -4957,6 +5488,14 @@ fn propagate_conflict_preferences(preferences: &ExternalSourcesConfig) {
 }
 
 fn propagate_tool_preferences(_preferences: &ExternalSourcesConfig) {
+    propagate_runtime_preference_revision();
+}
+
+fn propagate_prompt_command_preferences(_preferences: &ExternalSourcesConfig) {
+    propagate_runtime_preference_revision();
+}
+
+fn propagate_runtime_preference_revision() {
     for service in workspace_services().iter() {
         let Some(service) = service.value().upgrade() else {
             continue;
@@ -4971,31 +5510,11 @@ fn propagate_tool_preferences(_preferences: &ExternalSourcesConfig) {
 }
 
 fn propagate_subagent_preferences(_preferences: &ExternalSourcesConfig) {
-    for service in workspace_services().iter() {
-        let Some(service) = service.value().upgrade() else {
-            continue;
-        };
-        tokio::spawn(async move {
-            let command_snapshot = lock_coordinator(&service.control_plane).snapshot();
-            if let Ok(snapshot) = service.rebuild_product_snapshot(command_snapshot).await {
-                let _ = service.updates.send(snapshot);
-            }
-        });
-    }
+    propagate_runtime_preference_revision();
 }
 
 fn propagate_mcp_preferences(_preferences: &ExternalSourcesConfig) {
-    for service in workspace_services().iter() {
-        let Some(service) = service.value().upgrade() else {
-            continue;
-        };
-        tokio::spawn(async move {
-            let command_snapshot = lock_coordinator(&service.control_plane).snapshot();
-            if let Ok(snapshot) = service.rebuild_product_snapshot(command_snapshot).await {
-                let _ = service.updates.send(snapshot);
-            }
-        });
-    }
+    propagate_runtime_preference_revision();
 }
 
 fn propagate_integration_policy_preferences(
@@ -6254,7 +6773,8 @@ pub async fn expand_external_prompt_command(
     expected_content_version: Option<&str>,
     expected_native_conflict_key: Option<&str>,
     expected_preference_revision: Option<u64>,
-) -> Result<ExpandedPromptCommand, String> {
+    shell_review_decision: Option<&PromptCommandShellReviewDecision>,
+) -> Result<PromptCommandInvocationOutcome, String> {
     service_for(workspace_root)
         .await?
         .expand_command(
@@ -6265,6 +6785,7 @@ pub async fn expand_external_prompt_command(
             expected_content_version,
             expected_native_conflict_key,
             expected_preference_revision,
+            shell_review_decision,
         )
         .await
 }
@@ -6304,7 +6825,8 @@ mod tests {
     use bitfun_product_domains::external_sources::{
         EcosystemId, ExternalSourceProviderError, ExternalSourceRecord, ExternalSourceScope,
         PromptCommandAvailability, PromptCommandDefinition, PromptCommandProviderIdentity,
-        PromptCommandProviderSnapshot, SourceQualifiedCommandId,
+        PromptCommandProviderSnapshot, PromptCommandShellExpansion, PromptCommandShellInvocation,
+        PromptCommandShellPreference, SourceQualifiedCommandId,
     };
     use bitfun_product_domains::workspace_references::ExternalWorkspaceReferenceDefinition;
     use std::sync::atomic::{AtomicUsize, Ordering};
@@ -6331,6 +6853,253 @@ mod tests {
             oauth_enabled: None,
             xaa: None,
         }
+    }
+
+    fn prompt_shell_expansion(command: &str, can_remember: bool) -> PromptCommandExpansion {
+        let content = format!("Before !`{command}` after");
+        PromptCommandExpansion {
+            content: content.clone(),
+            workspace_file_references: Vec::new(),
+            shell: Some(PromptCommandShellExpansion {
+                working_directory: std::env::current_dir()
+                    .expect("the test process should have an absolute working directory"),
+                preference: PromptCommandShellPreference::HostDefault,
+                invocations: vec![PromptCommandShellInvocation {
+                    range_start: 7,
+                    range_end: content.len() - 6,
+                    command: command.to_string(),
+                    can_remember,
+                }],
+            }),
+        }
+    }
+
+    fn resolved_test_shell() -> ResolvedPromptCommandShell {
+        ResolvedPromptCommandShell {
+            display_name: "Bash".to_string(),
+            path: PathBuf::from("/bin/bash"),
+            kind: tool_runtime::exec_command::ExecCommandShellKind::Bash,
+        }
+    }
+
+    #[test]
+    fn prompt_shell_review_fingerprint_covers_command_cwd_shell_and_content_version() {
+        let plan = prepare_prompt_command_shell_plan(
+            prompt_shell_expansion("git status", true),
+            "OpenCode",
+            "local-user",
+            "candidate-v1",
+            "content-v1",
+            4,
+            resolved_test_shell(),
+        )
+        .unwrap();
+        assert!(plan.review.can_remember);
+        assert_eq!(plan.review.commands, ["git status"]);
+        assert_eq!(plan.review.shell_executable, "/bin/bash");
+
+        let changed_command = prepare_prompt_command_shell_plan(
+            prompt_shell_expansion("git diff", true),
+            "OpenCode",
+            "local-user",
+            "candidate-v1",
+            "content-v1",
+            4,
+            resolved_test_shell(),
+        )
+        .unwrap();
+        let changed_content = prepare_prompt_command_shell_plan(
+            prompt_shell_expansion("git status", true),
+            "OpenCode",
+            "local-user",
+            "candidate-v1",
+            "content-v2",
+            4,
+            resolved_test_shell(),
+        )
+        .unwrap();
+
+        assert_ne!(
+            plan.review.plan_fingerprint,
+            changed_command.review.plan_fingerprint
+        );
+        assert_ne!(
+            plan.review.plan_fingerprint,
+            changed_content.review.plan_fingerprint
+        );
+    }
+
+    #[test]
+    fn prompt_shell_preference_falls_back_only_when_the_ecosystem_allows_it() {
+        let host =
+            resolve_prompt_command_shell(&PromptCommandShellPreference::HostDefault).unwrap();
+        let preferred = resolve_prompt_command_shell(&PromptCommandShellPreference::Preferred {
+            executable: "bitfun-missing-shell-for-test".to_string(),
+        })
+        .unwrap();
+
+        assert_eq!(preferred.path, host.path);
+        assert!(
+            resolve_prompt_command_shell(&PromptCommandShellPreference::Required {
+                executable: "bitfun-missing-shell-for-test".to_string(),
+            })
+            .is_err()
+        );
+        let required_one_of =
+            resolve_prompt_command_shell(&PromptCommandShellPreference::RequiredOneOf {
+                executables: vec![
+                    "bitfun-missing-shell-for-test".to_string(),
+                    host.path.to_string_lossy().to_string(),
+                ],
+            })
+            .unwrap();
+        assert_eq!(required_one_of.path, host.path);
+    }
+
+    #[test]
+    fn prompt_shell_executable_is_canonical_before_review_and_execution() {
+        let directory = tempfile::tempdir().unwrap();
+        let executable = directory.path().join("reviewed-shell");
+        std::fs::write(&executable, "test").unwrap();
+
+        let resolved = finalize_resolved_prompt_command_shell(
+            "Reviewed shell".to_string(),
+            executable.clone(),
+            ShellType::Custom("reviewed-shell".to_string()),
+        )
+        .unwrap();
+
+        assert!(resolved.path.is_absolute());
+        assert_eq!(resolved.path, dunce::canonicalize(executable).unwrap());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn prompt_shell_fingerprint_keeps_non_utf8_path_identity() {
+        use std::ffi::OsString;
+        use std::os::unix::ffi::OsStringExt;
+
+        let first = PathBuf::from(OsString::from_vec(b"/tmp/bitfun-\x80".to_vec()));
+        let second = PathBuf::from(OsString::from_vec(b"/tmp/bitfun-\x81".to_vec()));
+        assert_ne!(
+            prompt_command_shell_path_bytes(&first),
+            prompt_command_shell_path_bytes(&second)
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn prompt_shell_fingerprint_keeps_non_unicode_windows_path_identity() {
+        use std::ffi::OsString;
+        use std::os::windows::ffi::OsStringExt;
+
+        let first = PathBuf::from(OsString::from_wide(&[b'C' as u16, b':' as u16, 0xd800]));
+        let second = PathBuf::from(OsString::from_wide(&[b'C' as u16, b':' as u16, 0xd801]));
+        assert_ne!(
+            prompt_command_shell_path_bytes(&first),
+            prompt_command_shell_path_bytes(&second)
+        );
+    }
+
+    #[test]
+    fn dynamic_shell_plans_cannot_be_remembered_and_outputs_replace_in_template_order() {
+        let mut expansion = prompt_shell_expansion("first $ARGUMENTS", false);
+        let second_start = expansion.content.len();
+        expansion.content.push_str(" then !`second`");
+        expansion
+            .shell
+            .as_mut()
+            .unwrap()
+            .invocations
+            .push(PromptCommandShellInvocation {
+                range_start: second_start + 6,
+                range_end: expansion.content.len(),
+                command: "second".to_string(),
+                can_remember: true,
+            });
+        let plan = prepare_prompt_command_shell_plan(
+            expansion,
+            "Claude Code",
+            "local-user",
+            "candidate-v1",
+            "content-v1",
+            1,
+            resolved_test_shell(),
+        )
+        .unwrap();
+
+        assert!(!plan.review.can_remember);
+        assert_eq!(
+            apply_prompt_command_shell_outputs(
+                &plan.expansion.content,
+                &plan.invocations,
+                &["one".to_string(), "two".to_string()],
+            )
+            .unwrap(),
+            "Before one after then two"
+        );
+    }
+
+    #[tokio::test]
+    async fn prompt_shell_plan_uses_stdout_even_after_nonzero_exit_and_preserves_template_order() {
+        let resolved = resolve_prompt_command_shell(&PromptCommandShellPreference::HostDefault)
+            .expect("the host default shell should resolve");
+        let (first, second) = match resolved.kind {
+            ExecCommandShellKind::PowerShell | ExecCommandShellKind::PowerShellCore => (
+                "Write-Output first; [Console]::Error.WriteLine('not-prompt'); exit 7",
+                "Write-Output second",
+            ),
+            ExecCommandShellKind::Cmd => (
+                "echo first & echo not-prompt 1>&2 & exit /b 7",
+                "echo second",
+            ),
+            _ => (
+                "printf first; printf not-prompt >&2; exit 7",
+                "printf second",
+            ),
+        };
+        let content = format!("Before !`{first}` middle !`{second}` after");
+        let invocations = [first, second]
+            .into_iter()
+            .map(|command| {
+                let marker = format!("!`{command}`");
+                let range_start = content.find(&marker).unwrap();
+                PromptCommandShellInvocation {
+                    range_start,
+                    range_end: range_start + marker.len(),
+                    command: command.to_string(),
+                    can_remember: true,
+                }
+            })
+            .collect();
+        let expansion = PromptCommandExpansion {
+            content,
+            workspace_file_references: Vec::new(),
+            shell: Some(PromptCommandShellExpansion {
+                working_directory: tempfile::tempdir().unwrap().keep(),
+                preference: PromptCommandShellPreference::HostDefault,
+                invocations,
+            }),
+        };
+        let plan = prepare_prompt_command_shell_plan(
+            expansion,
+            "OpenCode",
+            "local-user",
+            "candidate-v1",
+            "content-v1",
+            1,
+            resolved,
+        )
+        .unwrap();
+
+        let expanded = execute_prompt_command_shell_plan(plan).await.unwrap();
+
+        assert!(!expanded.content.contains("not-prompt"));
+        let first_index = expanded.content.find("first").unwrap();
+        let second_index = expanded.content.find("second").unwrap();
+        assert!(first_index < second_index);
+        assert!(expanded.content.starts_with("Before "));
+        assert!(expanded.content.ends_with(" after"));
     }
 
     #[test]
@@ -6666,6 +7435,7 @@ mod tests {
             name: "review".to_string(),
             description: "Review changes".to_string(),
             template: "Review changes".to_string(),
+            shell_preference: None,
             availability: PromptCommandAvailability::Available,
             content_version: "external-v1".to_string(),
         };
@@ -7206,6 +7976,7 @@ mod tests {
                     name: self.command_name.clone(),
                     description: self.command_name.clone(),
                     template: self.command_name.clone(),
+                    shell_preference: None,
                     availability: PromptCommandAvailability::Available,
                     content_version: "command-v1".to_string(),
                 }],
@@ -7216,12 +7987,14 @@ mod tests {
 
         fn expand(
             &self,
+            _context: &ExternalSourceContext,
             command: &PromptCommandDefinition,
             _arguments: &str,
         ) -> Result<PromptCommandExpansion, ExternalSourceProviderError> {
             Ok(PromptCommandExpansion {
                 content: command.template.clone(),
                 workspace_file_references: Vec::new(),
+                shell: None,
             })
         }
 
@@ -7351,6 +8124,7 @@ mod tests {
             PromptCommandExpansion {
                 content: "plain prompt".to_string(),
                 workspace_file_references: Vec::new(),
+                shell: None,
             },
         )
         .await
@@ -7366,6 +8140,7 @@ mod tests {
                     "README.md".to_string(),
                     "src/lib.rs".to_string(),
                 ],
+                shell: None,
             },
         )
         .await
@@ -7404,6 +8179,7 @@ mod tests {
             PromptCommandExpansion {
                 content: "prompt".to_string(),
                 workspace_file_references: vec!["0.txt".to_string()],
+                shell: None,
             },
         )
         .await
@@ -7417,6 +8193,7 @@ mod tests {
                 workspace_file_references: (0..=MAX_PROMPT_COMMAND_FILE_REFERENCES)
                     .map(|index| format!("{index}.txt"))
                     .collect(),
+                shell: None,
             },
         )
         .await
@@ -7428,6 +8205,7 @@ mod tests {
             PromptCommandExpansion {
                 content: "prompt".to_string(),
                 workspace_file_references: vec!["large.txt".to_string()],
+                shell: None,
             },
         )
         .await
@@ -7441,6 +8219,7 @@ mod tests {
                 workspace_file_references: (0..3)
                     .map(|index| format!("total-{index}.txt"))
                     .collect(),
+                shell: None,
             },
         )
         .await
@@ -7452,6 +8231,7 @@ mod tests {
             PromptCommandExpansion {
                 content: "x".repeat(MAX_EXPANDED_PROMPT_COMMAND_BYTES),
                 workspace_file_references: vec!["0.txt".to_string()],
+                shell: None,
             },
         )
         .await
@@ -7463,6 +8243,7 @@ mod tests {
             PromptCommandExpansion {
                 content: "x".repeat(MAX_EXPANDED_PROMPT_COMMAND_BYTES + 1),
                 workspace_file_references: Vec::new(),
+                shell: None,
             },
         )
         .await
@@ -7474,6 +8255,7 @@ mod tests {
             PromptCommandExpansion {
                 content: "must not be returned partially".to_string(),
                 workspace_file_references: vec!["0.txt".to_string(), "missing.txt".to_string()],
+                shell: None,
             },
         )
         .await

@@ -538,7 +538,7 @@ impl ExternalSourceCoordinator {
                     false,
                 )
             })?;
-        provider.provider.expand(command, arguments)
+        provider.provider.expand(&self.context, command, arguments)
     }
 
     fn rebuild_snapshot(&mut self) -> ExternalSourceCatalogSnapshot {

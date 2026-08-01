@@ -1,4 +1,30 @@
 impl ChatView {
+    pub(crate) fn show_prompt_command_shell_review(
+        &mut self,
+        plan: bitfun_core::external_sources::PromptCommandShellReviewPlan,
+    ) {
+        self.prompt_command_shell_review =
+            Some(crate::ui::prompt_command_shell_review::PromptCommandShellReviewPrompt::new(plan));
+    }
+
+    pub(crate) fn prompt_command_shell_review_visible(&self) -> bool {
+        self.prompt_command_shell_review.is_some()
+    }
+
+    pub(crate) fn prompt_command_shell_review_handle_key(
+        &mut self,
+        key: crossterm::event::KeyEvent,
+    ) -> crate::ui::prompt_command_shell_review::PromptCommandShellReviewAction {
+        self.prompt_command_shell_review.as_mut().map_or(
+            crate::ui::prompt_command_shell_review::PromptCommandShellReviewAction::None,
+            |prompt| prompt.handle_key_event(key),
+        )
+    }
+
+    pub(crate) fn hide_prompt_command_shell_review(&mut self) {
+        self.prompt_command_shell_review = None;
+    }
+
     pub(crate) fn show_export_dialog(&mut self, filename: String) {
         self.export_dialog.show(filename);
         self.popup_stack.push(PopupType::ExportDialog);

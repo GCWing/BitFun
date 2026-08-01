@@ -1,4 +1,5 @@
 use serde_yaml::Value;
+use std::ops::Range;
 use std::sync::LazyLock;
 
 /// Compiled once; front-matter parsing runs on every `.md` scan.
@@ -25,6 +26,105 @@ pub fn prompt_template_expansion_upper_bound(template: &str, arguments: &str) ->
         .checked_add(placeholder_bound)?
         .checked_add(arguments.len())?
         .checked_add("\n\nARGUMENTS: ".len())
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PromptShellDirective {
+    pub range: Range<usize>,
+    pub command: String,
+    pub can_remember: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PromptShellTemplateExpansion {
+    pub content: String,
+    pub template_without_directives: String,
+    pub directives: Vec<PromptShellDirective>,
+}
+
+/// Parses OpenCode/Claude-compatible inline shell-output directives after
+/// prompt arguments have been expanded. The original and expanded forms are
+/// paired so argument-provided backticks cannot silently change the executable
+/// plan.
+pub fn parse_prompt_shell_directives(
+    template: &str,
+    expanded: &str,
+) -> Result<PromptShellTemplateExpansion, String> {
+    let original = prompt_shell_directive_spans(template);
+    if original.is_empty() {
+        return Ok(PromptShellTemplateExpansion {
+            content: expanded.to_string(),
+            template_without_directives: template.to_string(),
+            directives: Vec::new(),
+        });
+    }
+    if template.matches('`').count() != expanded.matches('`').count() {
+        return Err(
+            "prompt command shell directive structure changed during argument expansion"
+                .to_string(),
+        );
+    }
+    let rendered = prompt_shell_directive_spans(expanded);
+    if original.len() != rendered.len() {
+        return Err(
+            "prompt command shell directive structure changed during argument expansion"
+                .to_string(),
+        );
+    }
+
+    let template_without_directives = content_without_prompt_shell_directives(template, &original);
+    let mut directives = Vec::with_capacity(rendered.len());
+    for ((_, _, original_command), (start, end, command)) in
+        original.into_iter().zip(rendered.iter().cloned())
+    {
+        directives.push(PromptShellDirective {
+            range: start..end,
+            can_remember: original_command == command,
+            command,
+        });
+    }
+
+    Ok(PromptShellTemplateExpansion {
+        content: expanded.to_string(),
+        template_without_directives,
+        directives,
+    })
+}
+
+fn content_without_prompt_shell_directives(
+    value: &str,
+    spans: &[(usize, usize, String)],
+) -> String {
+    let mut content = String::with_capacity(value.len());
+    let mut cursor = 0;
+    for (start, end, _) in spans {
+        content.push_str(&value[cursor..*start]);
+        content.push(' ');
+        cursor = *end;
+    }
+    content.push_str(&value[cursor..]);
+    content
+}
+
+fn prompt_shell_directive_spans(value: &str) -> Vec<(usize, usize, String)> {
+    let mut spans = Vec::new();
+    let mut cursor = 0;
+    while let Some(relative_start) = value[cursor..].find("!`") {
+        let start = cursor + relative_start;
+        let command_start = start + 2;
+        let Some(relative_end) = value[command_start..].find('`') else {
+            break;
+        };
+        let command_end = command_start + relative_end;
+        let end = command_end + 1;
+        if command_start == command_end {
+            cursor = end;
+            continue;
+        }
+        spans.push((start, end, value[command_start..command_end].to_string()));
+        cursor = end;
+    }
+    spans
 }
 
 /// Expands Claude-compatible prompt arguments without executing dynamic content.

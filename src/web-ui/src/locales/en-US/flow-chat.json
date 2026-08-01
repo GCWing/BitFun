@@ -630,6 +630,13 @@
     "processingFailed": "Processing failed"
   },
   "chatInput": {
+    "promptCommandShellReview": {
+      "title": "Run prompt command context?",
+      "message": "{{source}} wants to run {{count}} command(s) with {{shell}} in {{directory}}. Review the exact commands before adding their standard output to the prompt.",
+      "runOnce": "Run once",
+      "remember": "Always allow this exact plan",
+      "cancel": "Cancel"
+    },
     "dispatch": {
       "local": "This computer",
       "locked": "Runs on {{target}} (fixed for this task)",

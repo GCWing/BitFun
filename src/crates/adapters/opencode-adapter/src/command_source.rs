@@ -7,11 +7,14 @@ use bitfun_product_domains::external_sources::{
     EcosystemId, ExternalSourceAssetKind, ExternalSourceContext, ExternalSourceDiagnostic,
     ExternalSourceHealth, ExternalSourceProviderError, ExternalSourceRecord, ExternalSourceScope,
     ExternalWatchRoot, PromptCommandAvailability, PromptCommandDefinition, PromptCommandExpansion,
-    PromptCommandProviderIdentity, PromptCommandProviderSnapshot, PromptCommandSourceProvider,
+    PromptCommandProviderIdentity, PromptCommandProviderSnapshot, PromptCommandShellExpansion,
+    PromptCommandShellInvocation, PromptCommandShellPreference, PromptCommandSourceProvider,
     SourceKey, SourceQualifiedCommandId,
 };
 pub(crate) use bitfun_services_core::jsonc::strip_jsonc;
-use bitfun_services_core::markdown::{prompt_template_expansion_upper_bound, FrontMatterMarkdown};
+use bitfun_services_core::markdown::{
+    parse_prompt_shell_directives, prompt_template_expansion_upper_bound, FrontMatterMarkdown,
+};
 use bitfun_services_core::workspace_text::normalize_workspace_relative_path;
 use bitfun_static_hook_support::{
     collect_bounded_regular_files, read_bounded_text, BoundedDirectoryWalkError,
@@ -186,11 +189,24 @@ impl PromptCommandSourceProvider for OpenCodeCommandProvider {
         let mut unavailable_command_ids = Vec::new();
         let mut provider_template_bytes = 0usize;
 
-        for layer in self.discover_layers(context.workspace_root.as_deref()) {
-            let parsed = match &layer.kind {
-                SourceLayerKind::ConfigFile(path) => parse_config_file(path),
-                SourceLayerKind::CommandDirectory(path) => parse_command_directory(path),
-            };
+        let parsed_layers = self
+            .discover_layers(context.workspace_root.as_deref())
+            .into_iter()
+            .map(|layer| {
+                let parsed = match &layer.kind {
+                    SourceLayerKind::ConfigFile(path) => parse_config_file(path),
+                    SourceLayerKind::CommandDirectory(path) => parse_command_directory(path),
+                };
+                (layer, parsed)
+            })
+            .collect::<Vec<_>>();
+        let configured_shell = parsed_layers
+            .iter()
+            .filter_map(|(_, parsed)| parsed.configured_shell.as_deref())
+            .last()
+            .map(str::to_string);
+
+        for (layer, parsed) in parsed_layers {
             let source_key = source_key(&layer);
             let ParsedLayer {
                 commands,
@@ -198,6 +214,7 @@ impl PromptCommandSourceProvider for OpenCodeCommandProvider {
                 diagnostics: parsed_diagnostics,
                 content_version,
                 mut fatal,
+                configured_shell: _,
             } = parsed;
             let mut layer_diagnostics = parsed_diagnostics
                 .into_iter()
@@ -229,7 +246,12 @@ impl PromptCommandSourceProvider for OpenCodeCommandProvider {
                     |name| SourceQualifiedCommandId::new(source_key.clone(), name).ok(),
                 ));
                 for (name, input) in commands {
-                    match command_definition(source_key.clone(), name.clone(), input) {
+                    match command_definition(
+                        source_key.clone(),
+                        name.clone(),
+                        input,
+                        configured_shell.as_deref(),
+                    ) {
                         Ok(definition) => {
                             has_restricted_commands |= !matches!(
                                 definition.availability,
@@ -296,6 +318,7 @@ impl PromptCommandSourceProvider for OpenCodeCommandProvider {
 
     fn expand(
         &self,
+        context: &ExternalSourceContext,
         command: &PromptCommandDefinition,
         arguments: &str,
     ) -> Result<PromptCommandExpansion, ExternalSourceProviderError> {
@@ -317,9 +340,50 @@ impl PromptCommandSourceProvider for OpenCodeCommandProvider {
                         false,
                     ));
                 }
+                let expanded = expand_template(&command.template, arguments);
+                let parsed = parse_prompt_shell_directives(&command.template, &expanded).map_err(
+                    |error| {
+                        ExternalSourceProviderError::new(
+                            "opencode.command.shell_structure_invalid",
+                            error,
+                            false,
+                        )
+                    },
+                )?;
+                let shell = if parsed.directives.is_empty() {
+                    None
+                } else {
+                    let workspace = context.workspace_root.as_deref().ok_or_else(|| {
+                        ExternalSourceProviderError::new(
+                            "opencode.command.shell_workspace_required",
+                            "OpenCode shell-backed commands require a local workspace",
+                            false,
+                        )
+                    })?;
+                    Some(PromptCommandShellExpansion {
+                        working_directory: find_project_root(workspace),
+                        preference: command
+                            .shell_preference
+                            .clone()
+                            .unwrap_or(PromptCommandShellPreference::HostDefault),
+                        invocations: parsed
+                            .directives
+                            .iter()
+                            .map(|directive| PromptCommandShellInvocation {
+                                range_start: directive.range.start,
+                                range_end: directive.range.end,
+                                command: directive.command.clone(),
+                                can_remember: directive.can_remember,
+                            })
+                            .collect(),
+                    })
+                };
                 Ok(PromptCommandExpansion {
-                    content: expand_template(&command.template, arguments),
-                    workspace_file_references: literal_file_references(&command.template),
+                    content: parsed.content,
+                    workspace_file_references: literal_file_references(
+                        &parsed.template_without_directives,
+                    ),
+                    shell,
                 })
             }
             PromptCommandAvailability::Restricted { reason, .. }
@@ -518,6 +582,8 @@ fn normalize_path_lexically(path: &Path) -> PathBuf {
 
 #[derive(Debug, Default, Deserialize)]
 struct OpenCodeConfigDocument {
+    #[serde(default)]
+    shell: Option<String>,
     #[serde(default, rename = "command")]
     commands: BTreeMap<String, OpenCodeCommandInput>,
 }
@@ -543,6 +609,7 @@ struct ParsedLayer {
     diagnostics: Vec<ExternalSourceDiagnostic>,
     content_version: String,
     fatal: bool,
+    configured_shell: Option<String>,
 }
 
 fn parse_config_file(path: &Path) -> ParsedLayer {
@@ -556,6 +623,10 @@ fn parse_config_file(path: &Path) -> ParsedLayer {
                     diagnostics: Vec::new(),
                     content_version,
                     fatal: false,
+                    configured_shell: document
+                        .shell
+                        .map(|shell| shell.trim().to_string())
+                        .filter(|shell| !shell.is_empty()),
                 },
                 Err(error) => ParsedLayer {
                     commands: BTreeMap::new(),
@@ -567,6 +638,7 @@ fn parse_config_file(path: &Path) -> ParsedLayer {
                     )],
                     content_version,
                     fatal: true,
+                    configured_shell: None,
                 },
             }
         }
@@ -580,6 +652,7 @@ fn parse_config_file(path: &Path) -> ParsedLayer {
             )],
             content_version: "too-large".to_string(),
             fatal: true,
+            configured_shell: None,
         },
         Ok(BoundedTextRead::InvalidUtf8) => ParsedLayer {
             commands: BTreeMap::new(),
@@ -591,6 +664,7 @@ fn parse_config_file(path: &Path) -> ParsedLayer {
             )],
             content_version: "invalid-utf8".to_string(),
             fatal: true,
+            configured_shell: None,
         },
         Err(error) => ParsedLayer {
             commands: BTreeMap::new(),
@@ -602,6 +676,7 @@ fn parse_config_file(path: &Path) -> ParsedLayer {
             )],
             content_version: "unreadable".to_string(),
             fatal: true,
+            configured_shell: None,
         },
     }
 }
@@ -748,6 +823,7 @@ fn parse_command_directory(directory: &Path) -> ParsedLayer {
         diagnostics,
         content_version: format!("sha256:{}", hex::encode(version_hasher.finalize())),
         fatal: scan_failed || template_budget_exhausted,
+        configured_shell: None,
     }
 }
 
@@ -867,12 +943,17 @@ fn command_definition(
     source: SourceKey,
     name: String,
     input: OpenCodeCommandInput,
+    configured_shell: Option<&str>,
 ) -> Result<PromptCommandDefinition, ExternalSourceProviderError> {
-    let content_version = command_content_version(&name, &input);
     let mut required_capabilities = Vec::new();
-    if shell_regex().is_match(&input.template) {
-        required_capabilities.push("command.shell".to_string());
-    }
+    let shell_preference = shell_regex().is_match(&input.template).then(|| {
+        configured_shell.map_or(PromptCommandShellPreference::HostDefault, |executable| {
+            PromptCommandShellPreference::Preferred {
+                executable: executable.to_string(),
+            }
+        })
+    });
+    let content_version = command_content_version(&name, &input, shell_preference.as_ref());
     if input.agent.is_some() {
         required_capabilities.push("command.agent".to_string());
     }
@@ -915,6 +996,7 @@ fn command_definition(
             .description
             .unwrap_or_else(|| format!("OpenCode command /{name}")),
         template: input.template,
+        shell_preference,
         availability,
         content_version,
     };
@@ -937,7 +1019,11 @@ fn parse_config_document(input: &str) -> Result<OpenCodeConfigDocument, String> 
     serde_json::from_value(value).map_err(|error| error.to_string())
 }
 
-fn command_content_version(name: &str, input: &OpenCodeCommandInput) -> String {
+fn command_content_version(
+    name: &str,
+    input: &OpenCodeCommandInput,
+    shell_preference: Option<&PromptCommandShellPreference>,
+) -> String {
     let mut hasher = Sha256::new();
     for value in [
         Some(name),
@@ -957,6 +1043,10 @@ fn command_content_version(name: &str, input: &OpenCodeCommandInput) -> String {
     }
     hasher.update([u8::from(input.subtask.unwrap_or(false))]);
     hasher.update([u8::from(input.subtask.is_some())]);
+    hasher.update(
+        serde_json::to_vec(&shell_preference)
+            .expect("prompt command shell preference is serializable"),
+    );
     format!("sha256:{}", hex::encode(hasher.finalize()))
 }
 

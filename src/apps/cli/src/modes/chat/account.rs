@@ -198,11 +198,12 @@ impl ChatMode {
             || chat_view.login_form_visible()
             || chat_view.theme_selector_visible()
             || chat_view.info_popup_visible()
+            || chat_view.prompt_command_shell_review_visible()
             || chat_view.workspace_diff_visible()
     }
 
     /// Close all popups and clear the navigation stack
-    fn close_all_popups(&self, chat_view: &mut ChatView) {
+    fn close_all_popups(&mut self, chat_view: &mut ChatView) {
         // Cancel theme preview if active
         if chat_view.theme_selector_visible() {
             chat_view.cancel_theme_preview();
@@ -222,6 +223,8 @@ impl ChatMode {
         chat_view.hide_login_form();
         chat_view.hide_theme_selector();
         chat_view.dismiss_info_popup();
+        chat_view.hide_prompt_command_shell_review();
+        self.pending_prompt_command_shell_invocation = None;
         chat_view.hide_workspace_diff();
         chat_view.popup_stack.clear();
     }

@@ -227,7 +227,7 @@ pub(super) fn render_permission_overlay(
 }
 
 /// Render a horizontal button bar with selectable options
-fn render_button_bar(
+pub(super) fn render_button_bar(
     frame: &mut Frame,
     area: Rect,
     theme: &Theme,

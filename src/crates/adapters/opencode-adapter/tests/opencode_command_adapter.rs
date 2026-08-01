@@ -1,7 +1,8 @@
 use bitfun_opencode_adapter::{OpenCodeCommandProvider, OpenCodeCommandProviderOptions};
 use bitfun_product_domains::external_sources::{
     ExecutionDomainId, ExternalSourceContext, ExternalSourceHealth, PromptCommandAvailability,
-    PromptCommandDefinition, PromptCommandProviderSnapshot, PromptCommandSourceProvider,
+    PromptCommandDefinition, PromptCommandProviderSnapshot, PromptCommandShellPreference,
+    PromptCommandSourceProvider,
 };
 use std::collections::BTreeSet;
 use std::fs;
@@ -350,6 +351,7 @@ fn unsupported_expansion_features_restrict_the_whole_command() {
     write(
         fixture.user_config.join("opencode.json"),
         r#"{
+          "shell": "pwsh",
           "command": {
             "shell": {"template":"Run !`git status` and review @src/main.rs"},
             "file": {"template":"Review @src/main.rs, @src/main.rs, and @docs/guide.md with $ARGUMENTS"},
@@ -369,7 +371,6 @@ fn unsupported_expansion_features_restrict_the_whole_command() {
         .iter()
         .any(|source| source.health == ExternalSourceHealth::Partial));
     for name in [
-        "shell",
         "dynamic-file",
         "unsafe-file",
         "config-var",
@@ -385,8 +386,31 @@ fn unsupported_expansion_features_restrict_the_whole_command() {
             command.availability,
             PromptCommandAvailability::Restricted { .. }
         ));
-        assert!(provider.expand(command, "").is_err());
+        assert!(provider.expand(&fixture.context(), command, "").is_err());
     }
+    let shell = snapshot
+        .commands
+        .iter()
+        .find(|command| command.name == "shell")
+        .unwrap();
+    assert!(matches!(
+        shell.availability,
+        PromptCommandAvailability::Available
+    ));
+    assert_eq!(
+        shell.shell_preference,
+        Some(PromptCommandShellPreference::Preferred {
+            executable: "pwsh".to_string()
+        })
+    );
+    let shell_expansion = provider
+        .expand(&fixture.context(), shell, "")
+        .unwrap()
+        .shell
+        .unwrap();
+    assert_eq!(shell_expansion.working_directory, fixture.project);
+    assert_eq!(shell_expansion.invocations[0].command, "git status");
+    assert!(shell_expansion.invocations[0].can_remember);
     let dynamic_file = snapshot
         .commands
         .iter()
@@ -424,7 +448,11 @@ fn unsupported_expansion_features_restrict_the_whole_command() {
         PromptCommandAvailability::Available
     ));
     let expansion = provider
-        .expand(file_command, "@arguments/are-not-files.md")
+        .expand(
+            &fixture.context(),
+            file_command,
+            "@arguments/are-not-files.md",
+        )
         .unwrap();
     assert_eq!(
         expansion.workspace_file_references,
@@ -433,6 +461,36 @@ fn unsupported_expansion_features_restrict_the_whole_command() {
     assert_eq!(
         expansion.content,
         "Review @src/main.rs, @src/main.rs, and @docs/guide.md with @arguments/are-not-files.md"
+    );
+}
+
+#[test]
+fn empty_configured_shell_uses_the_host_default() {
+    let fixture = Fixture::new();
+    write(
+        fixture.user_config.join("opencode.json"),
+        r#"{
+          "shell": "  ",
+          "command": {
+            "status": {"template":"Run !`git status`"}
+          }
+        }"#,
+    );
+
+    let snapshot = fixture.provider().discover(&fixture.context()).unwrap();
+    let command = snapshot
+        .commands
+        .iter()
+        .find(|command| command.name == "status")
+        .unwrap();
+
+    assert!(matches!(
+        command.availability,
+        PromptCommandAvailability::Available
+    ));
+    assert_eq!(
+        command.shell_preference,
+        Some(PromptCommandShellPreference::HostDefault)
     );
 }
 
@@ -548,7 +606,10 @@ fn expands_arguments_and_positions_using_the_frozen_opencode_semantics() {
             .iter()
             .find(|item| item.name == name)
             .unwrap();
-        provider.expand(command, arguments).unwrap().content
+        provider
+            .expand(&fixture.context(), command, arguments)
+            .unwrap()
+            .content
     };
     assert_eq!(
         expand("all", "src/lib.rs carefully"),
@@ -579,7 +640,9 @@ fn rejects_argument_expansion_before_repeated_placeholders_can_overallocate() {
         .find(|command| command.name == "large")
         .unwrap();
 
-    let error = provider.expand(command, &"x".repeat(2048)).unwrap_err();
+    let error = provider
+        .expand(&fixture.context(), command, &"x".repeat(2048))
+        .unwrap_err();
 
     assert_eq!(error.code, "opencode.command.expansion_too_large");
 }

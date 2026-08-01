@@ -319,6 +319,37 @@ pub fn exec_command_argv_for_shell(
     }
 }
 
+/// Builds argv for a reviewed one-shot command without loading shell profiles.
+///
+/// This is intentionally separate from [`exec_command_argv_for_shell`]: Agent
+/// Exec keeps its login-shell and pipefail behavior, while reviewed expansion
+/// must not execute undisclosed profile or autorun content before the command
+/// the user approved.
+pub fn exec_command_argv_for_isolated_shell(
+    shell_path: impl Into<String>,
+    shell_kind: ExecCommandShellKind,
+    cmd: &str,
+) -> Vec<String> {
+    let shell = shell_path.into();
+    match shell_kind {
+        ExecCommandShellKind::PowerShell | ExecCommandShellKind::PowerShellCore => vec![
+            shell,
+            "-NoProfile".to_string(),
+            "-NonInteractive".to_string(),
+            "-Command".to_string(),
+            exec_command_powershell_command_with_utf8_output(cmd),
+        ],
+        ExecCommandShellKind::Cmd => vec![
+            shell,
+            "/d".to_string(),
+            "/s".to_string(),
+            "/c".to_string(),
+            cmd.to_string(),
+        ],
+        _ => vec![shell, "-c".to_string(), cmd.to_string()],
+    }
+}
+
 pub fn exec_command_powershell_command_with_utf8_output(cmd: &str) -> String {
     let trimmed = cmd.trim_start();
     if trimmed.starts_with(EXEC_COMMAND_POWERSHELL_UTF8_OUTPUT_PREFIX) {
@@ -1152,6 +1183,41 @@ mod tests {
             exec_command_argv_for_shell("pwsh", ExecCommandShellKind::PowerShellCore, &script);
 
         assert_eq!(prefixed[2], script);
+    }
+
+    #[test]
+    fn isolated_shell_policy_does_not_load_profiles() {
+        let powershell = exec_command_argv_for_isolated_shell(
+            "pwsh",
+            ExecCommandShellKind::PowerShellCore,
+            "Write-Output ok",
+        );
+        assert_eq!(
+            &powershell[..4],
+            ["pwsh", "-NoProfile", "-NonInteractive", "-Command"]
+        );
+        assert!(powershell[4].starts_with(EXEC_COMMAND_POWERSHELL_UTF8_OUTPUT_PREFIX));
+
+        assert_eq!(
+            exec_command_argv_for_isolated_shell(
+                "/usr/bin/fish",
+                ExecCommandShellKind::Fish,
+                "echo ok"
+            ),
+            ["/usr/bin/fish", "-c", "echo ok"]
+        );
+        assert_eq!(
+            exec_command_argv_for_isolated_shell(
+                "/usr/bin/nu",
+                ExecCommandShellKind::Custom("nu".to_string()),
+                "echo ok"
+            ),
+            ["/usr/bin/nu", "-c", "echo ok"]
+        );
+        assert_eq!(
+            exec_command_argv_for_isolated_shell("cmd.exe", ExecCommandShellKind::Cmd, "echo ok"),
+            ["cmd.exe", "/d", "/s", "/c", "echo ok"]
+        );
     }
 
     #[test]

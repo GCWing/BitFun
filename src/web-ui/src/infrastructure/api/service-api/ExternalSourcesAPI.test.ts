@@ -146,7 +146,7 @@ describe('ExternalSourcesAPI', () => {
   });
 
   it('expands a prompt command only with the selected candidate and behavior version', async () => {
-    invokeMock.mockResolvedValueOnce({ content: 'expanded prompt' });
+    invokeMock.mockResolvedValueOnce({ state: 'ready', content: 'expanded prompt' });
 
     await externalSourcesAPI.expandPromptCommand(
       'D:/workspace/project',
@@ -161,6 +161,11 @@ describe('ExternalSourcesAPI', () => {
       }],
       {
         conflictKey: 'native:prompt_command:local-user:review:v1',
+        expectedPreferenceRevision: 7,
+      },
+      {
+        planFingerprint: 'sha256:shell-plan',
+        mode: 'run_once',
         expectedPreferenceRevision: 7,
       },
     );
@@ -179,6 +184,11 @@ describe('ExternalSourcesAPI', () => {
         expectedContentVersion: 'behavior-v1',
         expectedNativeConflictKey: 'native:prompt_command:local-user:review:v1',
         expectedPreferenceRevision: 7,
+        shellReviewDecision: {
+          planFingerprint: 'sha256:shell-plan',
+          mode: 'run_once',
+          expectedPreferenceRevision: 7,
+        },
       },
     });
   });

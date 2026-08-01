@@ -1474,6 +1474,41 @@ pub enum PromptCommandAvailability {
     },
 }
 
+/// Provider-neutral shell selection semantics carried by a discovered prompt
+/// command. `Preferred` follows OpenCode's fallback behavior, while `Required`
+/// is used for formats such as Claude Code where a declared shell is part of
+/// the command contract.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "mode", rename_all = "snake_case", deny_unknown_fields)]
+pub enum PromptCommandShellPreference {
+    HostDefault,
+    Preferred { executable: String },
+    Required { executable: String },
+    RequiredOneOf { executables: Vec<String> },
+}
+
+impl PromptCommandShellPreference {
+    fn validate(&self) -> Result<(), ExternalSourceContractError> {
+        match self {
+            Self::HostDefault => Ok(()),
+            Self::Preferred { executable } | Self::Required { executable } => {
+                validate_text(executable, "prompt command shell")
+            }
+            Self::RequiredOneOf { executables } => {
+                if executables.is_empty() || executables.len() > 4 {
+                    return Err(ExternalSourceContractError::InvalidText(
+                        "prompt command shell candidates",
+                    ));
+                }
+                for executable in executables {
+                    validate_text(executable, "prompt command shell")?;
+                }
+                Ok(())
+            }
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PromptCommandDefinition {
@@ -1481,6 +1516,8 @@ pub struct PromptCommandDefinition {
     pub name: String,
     pub description: String,
     pub template: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub shell_preference: Option<PromptCommandShellPreference>,
     pub availability: PromptCommandAvailability,
     /// Version of this command only. Unrelated edits in the same source must
     /// not invalidate a remembered conflict choice.
@@ -1496,6 +1533,9 @@ impl PromptCommandDefinition {
         if self.template.is_empty() || self.template.len() > 256 * 1024 {
             return Err(ExternalSourceContractError::InvalidText("command template"));
         }
+        if let Some(shell) = &self.shell_preference {
+            shell.validate()?;
+        }
         validate_id(&self.content_version, "command content version")
     }
 }
@@ -1506,12 +1546,100 @@ pub struct ExpandedPromptCommand {
     pub content: String,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PromptCommandShellReviewMode {
+    RunOnce,
+    Remember,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PromptCommandShellReviewDecision {
+    pub plan_fingerprint: String,
+    pub mode: PromptCommandShellReviewMode,
+    pub expected_preference_revision: u64,
+}
+
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PromptCommandShellReviewPlan {
+    pub schema_version: u32,
+    pub plan_fingerprint: String,
+    pub source_display_name: String,
+    pub working_directory: String,
+    pub shell_display_name: String,
+    pub shell_executable: String,
+    pub commands: Vec<String>,
+    pub can_remember: bool,
+    pub preference_revision: u64,
+}
+
+impl fmt::Debug for PromptCommandShellReviewPlan {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("PromptCommandShellReviewPlan")
+            .field("schema_version", &self.schema_version)
+            .field("plan_fingerprint", &self.plan_fingerprint)
+            .field("source_display_name", &self.source_display_name)
+            .field("working_directory", &"[REDACTED]")
+            .field("shell_display_name", &self.shell_display_name)
+            .field("shell_executable", &"[REDACTED]")
+            .field("command_count", &self.commands.len())
+            .field("can_remember", &self.can_remember)
+            .field("preference_revision", &self.preference_revision)
+            .finish()
+    }
+}
+
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "state", rename_all = "snake_case")]
+pub enum PromptCommandInvocationOutcome {
+    Ready {
+        content: String,
+    },
+    ReviewRequired {
+        review: PromptCommandShellReviewPlan,
+    },
+}
+
+impl fmt::Debug for PromptCommandInvocationOutcome {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Ready { content } => formatter
+                .debug_struct("Ready")
+                .field("content_bytes", &content.len())
+                .finish(),
+            Self::ReviewRequired { review } => formatter
+                .debug_struct("ReviewRequired")
+                .field("review", review)
+                .finish(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PromptCommandShellInvocation {
+    pub range_start: usize,
+    pub range_end: usize,
+    pub command: String,
+    pub can_remember: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PromptCommandShellExpansion {
+    pub working_directory: PathBuf,
+    pub preference: PromptCommandShellPreference,
+    pub invocations: Vec<PromptCommandShellInvocation>,
+}
+
 /// Provider-prepared command content plus the narrow set of local workspace
 /// files that Product Assembly must resolve before sending the final prompt.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PromptCommandExpansion {
     pub content: String,
     pub workspace_file_references: Vec<String>,
+    pub shell: Option<PromptCommandShellExpansion>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -1691,6 +1819,7 @@ pub trait PromptCommandSourceProvider: Send + Sync {
 
     fn expand(
         &self,
+        context: &ExternalSourceContext,
         command: &PromptCommandDefinition,
         arguments: &str,
     ) -> Result<PromptCommandExpansion, ExternalSourceProviderError>;
@@ -2344,5 +2473,89 @@ impl From<ExternalSourceCatalogSnapshot> for ExternalSourcePublicSnapshot {
             integration_policy: snapshot.integration_policy,
             diagnostics: snapshot.diagnostics,
         }
+    }
+}
+
+#[cfg(test)]
+mod prompt_command_shell_review_tests {
+    use super::{
+        PromptCommandInvocationOutcome, PromptCommandShellReviewDecision,
+        PromptCommandShellReviewMode, PromptCommandShellReviewPlan,
+    };
+
+    #[test]
+    fn review_outcome_uses_a_stable_tagged_transport_shape() {
+        let outcome = PromptCommandInvocationOutcome::ReviewRequired {
+            review: PromptCommandShellReviewPlan {
+                schema_version: 1,
+                plan_fingerprint: "sha256:plan".to_string(),
+                source_display_name: "OpenCode".to_string(),
+                working_directory: "D:/workspace/project".to_string(),
+                shell_display_name: "PowerShell 7".to_string(),
+                shell_executable: "C:/Program Files/PowerShell/7/pwsh.exe".to_string(),
+                commands: vec!["git status --short".to_string()],
+                can_remember: true,
+                preference_revision: 7,
+            },
+        };
+
+        assert_eq!(
+            serde_json::to_value(outcome).unwrap(),
+            serde_json::json!({
+                "state": "review_required",
+                "review": {
+                    "schemaVersion": 1,
+                    "planFingerprint": "sha256:plan",
+                    "sourceDisplayName": "OpenCode",
+                    "workingDirectory": "D:/workspace/project",
+                    "shellDisplayName": "PowerShell 7",
+                    "shellExecutable": "C:/Program Files/PowerShell/7/pwsh.exe",
+                    "commands": ["git status --short"],
+                    "canRemember": true,
+                    "preferenceRevision": 7
+                }
+            })
+        );
+    }
+
+    #[test]
+    fn review_decision_requires_the_exact_plan_and_preference_revision() {
+        let decision = PromptCommandShellReviewDecision {
+            plan_fingerprint: "sha256:plan".to_string(),
+            mode: PromptCommandShellReviewMode::Remember,
+            expected_preference_revision: 7,
+        };
+
+        assert_eq!(
+            serde_json::to_value(decision).unwrap(),
+            serde_json::json!({
+                "planFingerprint": "sha256:plan",
+                "mode": "remember",
+                "expectedPreferenceRevision": 7
+            })
+        );
+    }
+
+    #[test]
+    fn debug_output_does_not_disclose_reviewed_shell_commands() {
+        let outcome = PromptCommandInvocationOutcome::ReviewRequired {
+            review: PromptCommandShellReviewPlan {
+                schema_version: 1,
+                plan_fingerprint: "sha256:plan".to_string(),
+                source_display_name: "OpenCode".to_string(),
+                working_directory: "D:/secret/project".to_string(),
+                shell_display_name: "PowerShell 7".to_string(),
+                shell_executable: "C:/secret/pwsh.exe".to_string(),
+                commands: vec!["echo a-sensitive-token".to_string()],
+                can_remember: false,
+                preference_revision: 2,
+            },
+        };
+
+        let debug = format!("{outcome:?}");
+        assert!(!debug.contains("a-sensitive-token"));
+        assert!(!debug.contains("D:/secret/project"));
+        assert!(!debug.contains("C:/secret/pwsh.exe"));
+        assert!(debug.contains("command_count"));
     }
 }

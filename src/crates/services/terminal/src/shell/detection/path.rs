@@ -35,6 +35,9 @@ pub(super) fn split_path_entries(path_var: &str) -> Vec<PathBuf> {
 pub(super) fn executable_names(executable: &str) -> Vec<String> {
     #[cfg(windows)]
     {
+        if Path::new(executable).extension().is_some() {
+            return vec![executable.to_string()];
+        }
         let extensions =
             std::env::var("PATHEXT").unwrap_or_else(|_| ".COM;.EXE;.BAT;.CMD".to_string());
         let names = extensions

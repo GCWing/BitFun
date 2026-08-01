@@ -196,7 +196,8 @@ OpenCode 来源顺序决定兼容输入如何合并；BitFun 产品能力上限�
 
 ## 5. 声明式资产映射
 
-下表的“默认行为”是对应交付阶段完成后的目标行为。当前已接入本地 prompt-only Command 和 Subagent 安全子集。
+下表的“默认行为”是对应交付阶段完成后的目标行为。当前已接入本地 Prompt Command（含静态文件与经审阅的 shell
+上下文）和 Subagent 安全子集。
 OpenCode adapter 在来源发现、解析和审批前不 import module、不读取来源凭据、不主动联网；用户确认模型、工具和
 执行位置后，Subagent 归属模块才通过现有 Task 执行链发起 fresh single-run 调用。激活后的模型、工具、权限与凭据
 使用仍由对应归属模块按用户已经确认的运行条件控制。除已完整流程的 standalone Tool 外，其余尚未完整流程的远程或可执行资产仍只
@@ -208,7 +209,7 @@ OpenCode adapter 在来源发现、解析和审批前不 import module、不读�
 | Agents / Modes | 当前生产 V1 `agent/prompt/disable/permission`、Core V2 `agents/system/disabled/permissions` 输入形状，以及 Markdown、description、mode、model、variant、temperature、top_p、steps、deprecated `maxSteps`、deprecated `tools`、options、hidden、color | Agent 归属模块创建兼容定义和使用范围视图；OpenCode adapter 只翻译来源语义 | 当前支持 Subagent 安全子集、Agent-local 权限约束和不透明 `variant` profile；V1 是生产兼容主路径，Core V2 字段只按已验证安全子集解析；variant 不映射为 reasoning 或请求 options，需显式绑定现有模型配置；首次按行为、来源、模型/profile、工具与权限范围确认，fresh single-run 调用 | primary/mode、options、采样、steps 与续接保持诊断或阻断；root ambient 权限和 V1 嵌套 resource map 尚不激活，不影响其他 Agent。 |
 | Skills | `.opencode/.claude/.agents` 项目与用户根、`SKILL.md`、`skills.paths/urls` | OpenCode adapter 只由 `bitfun-core/external_sources` 组合并投影有序本地配置根；Skill 归属模块负责有界递归、解析、覆盖与按需加载 | 标准根及 V1 `skills.paths`/当前本地字符串数组可用；项目配置限项目根，用户配置限项目根或用户目录；配置根最多 64 个、每根 512 个 Skill、单文件 256 KiB、可选策略 64 KiB，实际加载再次执行有界非链接读取；配置根在同 scope 覆盖标准 OpenCode 根，但不重排更早的 BitFun/Claude/Codex/Cursor 来源 | URL、下载/缓存、脚本与外部依赖不加载；无效根不影响标准 Skill。 |
 | References | `references` / 旧 `reference`，本地 path 或 Git repository/branch/description/hidden | OpenCode adapter 输出来源无关的 Reference provider snapshot；Product Assembly 生命周期协调器与 BitFun 原生关联目录合成唯一有效引用目录；关联目录视图和既有目录选择器消费 | 当前支持本地声明路径、description/hidden、异步刷新和 `@alias` 展示；原生关联目录始终在 OpenCode 引用之前，外部引用只读、不自动进入 Prompt 且不改变权限 | Git 引用、Remote 发现和下载/缓存不实现；无效高优先级 entry 阻断同 alias 的旧值并给出诊断，不回退到更宽松来源。 |
-| Commands | JSON/JSONC、Markdown、`$ARGUMENTS`、位置参数、`@file`、`!shell`、agent/model/variant/subtask | Prompt Command 专属契约；adapter 提取静态文件引用，Product Assembly 经共享本地文本服务完成有界装配 | prompt-only 与静态 workspace 相对 UTF-8 `@file` 可发送；动态/绝对/越界文件、shell、agent/model/variant/subtask 整体受限 | 任一文件失败则本次调用原子失败；最多 8 文件、单文件 64 KiB、文件总量 128 KiB、最终命令 1 MiB。 |
+| Commands | JSON/JSONC、Markdown、`$ARGUMENTS`、位置参数、`@file`、`!shell`、agent/model/variant/subtask | Prompt Command 专属契约；adapter 提取静态文件引用与 shell 计划，Product Assembly 负责审批指纹和装配，Terminal owner 负责进程执行 | prompt 与静态 workspace 相对 UTF-8 `@file` 可发送；`!shell` 展示精确命令、工作目录与绝对 shell 路径，经重新校验后以不加载 profile 的隔离式 argv 执行，并仅把 stdout 按模板顺序加入 Prompt。为保持 OpenCode 语义，正常退出后的非零退出码仍使用 stdout。静态计划可记住，参数相关计划仅可单次运行；动态/绝对/越界文件及 agent/model/variant/subtask 整体受限 | 任一文件读取、进程启动、超时或超限失败时不发送部分 Prompt；进程副作用不可回滚。最多 8 文件、单文件 64 KiB、文件总量 128 KiB；最多 8 条 shell 指令、单条 64 KiB、总计 128 KiB、每条 stdout 256 Ki 字符、30 秒；最终命令 1 MiB。安全模式禁用，Remote 不回退到本机。 |
 | MCP | local 的 command/environment/cwd/timeout，remote 的 URL/headers/oauth/timeout，Agent 选择 | MCP 归属模块创建兼容配置视图 | 当前支持 local stdio 和 HTTPS remote 的静态发现、首次/行为变化审批、冲突选择与 workspace 隔离的运行期接纳；C0a 快照导入只复制无 env/cwd 的 local command/args 或无 header/query/fragment 的 HTTPS remote，并保持 disabled | `{env:NAME}` 当前只允许用于运行期兼容来源的 environment/Header 值，不进入 C0a 快照；SSE、OpenCode OAuth client 配置、完整 timeout/Agent 范围与 Remote 执行域保持明确不支持；凭据或网络失败只影响单个 Server。 |
 | LSP | command、extensions、env、initialization | LSP 归属模块注册兼容实例 | 首次确认外部进程和使用范围后按文件类型启动 | 自定义 Server 缺少 extensions 或启动失败时只禁用该项。 |
 | Formatters | command、environment、extensions、`$FILE` | **基础能力缺失**：先补文件写入后的 Formatter 执行消费点，再做格式转换 | 首次确认命令后执行匹配 Formatter | 超时后标记未格式化，文件写入结果保留。 |

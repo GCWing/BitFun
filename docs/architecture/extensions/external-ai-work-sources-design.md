@@ -11,7 +11,7 @@ SDK 或 Server 输出到外部宿主，以及内部能力组合、状态、事�
 `ExternalSourceControlPlane` 负责生命周期；`contracts/product-domains` 提供版本化控制事实、固定动作与错误语义，
 Desktop、交互式 TUI、Peer Host 和只读 Server 只显示宿主所需状态，不再各自派生另一套状态机。OpenCode Prompt Command
 适配器已接入本地用户全局/项目来源；Desktop 可查看、刷新、抑制和处理跨来源冲突，交互式 TUI（ChatMode）可列出并执行
-prompt-only Command。第二条端到端能力已让受支持的单文件 OpenCode `.js` standalone Tool 经静态
+Prompt Command；静态文件和经审阅的本地 shell 输出由共享归属模块完成装配。第二条端到端能力已让受支持的单文件 OpenCode `.js` standalone Tool 经静态
 预览、来源/能力确认和同名冲突选择后进入现有 Tool Runtime；Desktop 与交互式 TUI（ChatMode）使用同一决策状态。第三条纵向
 切片已把 OpenCode 全局/项目 Subagent 的安全子集通过独立 provider 契约接入现有 Subagent 归属模块：首次启用与
 同名冲突使用非阻塞决策，fresh 调用持续使用启动时选定的版本，更新和撤下不会静默切换到同名实现。第四条端到端能力
@@ -347,7 +347,7 @@ Plugin Host Runtime、LSP，以及通用动态模型路由器。现有 capabilit
 
 | 能力 | OpenCode | Claude Code | Codex | 当前边界 |
 |---|---|---|---|---|
-| Prompt Command | JSON/JSONC、Markdown 的 prompt-only 与静态本地文本文件子集 | legacy `commands/**/*.md` 的同一静态本地文本文件子集；Skills 仍由 Skill 归属模块处理 | 没有稳定、独立于 Skills 的声明式 Command 来源，因此不伪造 provider | `$ARGUMENTS`/位置参数及模板内 workspace 相对 UTF-8 `@file` 可展开；shell、动态/绝对/越界文件、指定 Agent/模型等整体受限。 |
+| Prompt Command | JSON/JSONC、Markdown 的 prompt、本地文本文件与经审阅 shell 上下文子集 | legacy `commands/**/*.md` 的同一子集；Skills 仍由 Skill 归属模块处理 | 没有稳定、独立于 Skills 的声明式 Command 来源，因此不伪造 provider | `$ARGUMENTS`/位置参数及模板内 workspace 相对 UTF-8 `@file` 可展开；`!shell` 在展示精确计划并重新校验后仅把 stdout 加入 Prompt，参数相关计划不可记住。动态/绝对/越界文件、指定 Agent/模型等整体受限；Remote 不回退本机执行。 |
 | Subagent | 用户/项目声明的安全子集 | 用户/项目 `agents/**/*.md` 的安全子集 | 用户/项目 `[agents]`、角色文件与安全配置层子集 | prompt、描述、`Default`/真实继承/不透明模型引用、OpenCode 不透明 variant、Claude/Codex reasoning effort 和可表达工具请求进入既有归属模块；无 profile 的模型引用可唯一精确匹配，variant/effort profile 必须由用户绑定到现有配置后才可激活。来源请求、profile、实际模型和解析方式在 Web/TUI 可见。权限、私有 MCP/Hook、reasoning summary/verbosity、采样、并发等没有对应实现的字段仍会阻止或降级。 |
 | MCP | 用户/显式目录/项目配置的安全子集 | user/project/local 原生层的安全子集 | 用户与项目 `config.toml` 原生层的安全子集 | 支持可表达的 stdio 与 HTTPS Streamable HTTP；发现不启动 Server，首次激活继续经 BitFun MCP 审批。OAuth、remote executor、per-tool policy 等不完整语义明确降级。 |
 | Standalone Tool | 已有单文件 JavaScript 子集 | 无稳定的 runtime-free standalone Tool 来源 | 无稳定的 runtime-free standalone Tool 来源 | TypeScript、package/plugin Tool 与动态工具注册依赖独立 Plugin Host，不在声明式 adapter 中猜测。 |
@@ -359,7 +359,9 @@ Plugin Host Runtime、LSP，以及通用动态模型路由器。现有 capabilit
 - Claude legacy Command 扫描用户与项目 `.claude/commands/**/*.md`，保留 `frontend/component` 到
   `/frontend:component` 的原生命名空间；同层重名无效，遵循 Claude Code 当前“personal 覆盖 project”的 Skill/legacy Command
   规则，同名 Skill 仅通过有界名称索引遮蔽 Command。
-  展开 `$ARGUMENTS`、`$ARGUMENTS[N]` 和 `$N` 纯文本参数，并允许原模板中的静态 workspace 相对 `@file`；shell、动态/绝对/越界文件引用和改变 Agent、模型、工具或 Hook 的字段整体阻止激活。
+  展开 `$ARGUMENTS`、`$ARGUMENTS[N]` 和 `$N` 纯文本参数，并允许原模板中的静态 workspace 相对 `@file`；
+  `!shell` 使用 `shell: bash|powershell`（缺省为 bash）的必需 shell 语义并进入共享审批与 Terminal 执行链；`powershell` 按 `pwsh`、Windows PowerShell 的顺序选择，候选均不可用时拒绝执行而不回退其他 shell。
+  动态/绝对/越界文件引用和改变 Agent、模型、工具或 Hook 的字段仍整体阻止激活。
 - Skill Registry 继续拥有所有根的发现、覆盖、显式加载与刷新，只用既有稳定 source slot 在内部选择格式方言，不向用户
   暴露主选择器，也不按路径字符串临时猜测。`.claude` Skill 的调用名固定为目录名；`description` 缺失时取正文首个
   非空段落，并与可选 `when_to_use` 合并为最多 1536 个 Unicode 字符的模型索引说明。`arguments` 可为以空白分隔的名称
@@ -555,8 +557,9 @@ Command；明确缺失且未被标记失败的 Command 是稳定删除。产品�
    provider 更新、失败和删除彼此隔离。
 2. 发现 OpenCode 当前支持的用户全局和项目 Command 来源，建立来源限定身份、生态内覆盖关系和聚合清单；
    OpenCode 自身定义的项目/用户优先级仍由 adapter 解释，跨 provider 或与 BitFun 本地 Command 的同名冲突进入待选择状态。
-3. 支持 `$ARGUMENTS` 与位置参数的 prompt-only 命令在用户显式选择或输入时展开并提交；发现本身不向会话发送内容。
-4. 模板内静态 workspace 相对 `@file` 经有界 UTF-8 读取后原子装配；含 `!shell`、动态/绝对/越界文件引用、`{env:...}`、
+3. 支持 `$ARGUMENTS` 与位置参数的 Prompt Command 在用户显式选择或输入时展开并提交；发现本身不向会话发送内容。
+4. 模板内静态 workspace 相对 `@file` 经有界 UTF-8 读取后原子装配；`!shell` 必须展示包含工作目录、解析后的绝对 shell 路径和精确命令的
+   当前计划，后端重新发现并校验完整指纹后才以不加载 profile 的隔离式 argv 执行，且只把 stdout 加入 Prompt。动态/绝对/越界文件引用、`{env:...}`、
    `{file:...}`、`agent`、`model`、`variant` 或 `subtask` 等未接通语义的命令标记为“部分受限”，不做静默忽略后的部分执行。
 5. Desktop 提供统一来源状态、刷新、按执行域抑制/恢复和冲突候选选择；首次 provider 扫描完成前显示中性检查状态，
    不把暂时空目录误报为最终空结果；已经选择且内容摘要未变化的冲突退出待处理区。交互式 TUI（ChatMode）使用同一目录列出和执行

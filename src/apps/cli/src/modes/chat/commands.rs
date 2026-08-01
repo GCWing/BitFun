@@ -855,7 +855,6 @@ impl ChatMode {
             ));
             return Ok(None);
         }
-        let workspace = self.agent.workspace_path_buf();
         let native_commands = cli_native_prompt_command_descriptors(command_name);
         let native_conflict_key = expected
             .and_then(|command| command.native_collision.as_ref())
@@ -863,27 +862,61 @@ impl ChatMode {
         let expected_preference_revision = native_conflict_key
             .and(self.external_source_snapshot.as_ref())
             .map(|snapshot| snapshot.preference_revision);
+        self.invoke_external_prompt_command(
+            ExternalPromptCommandInvocation {
+                command_name: command_name.to_string(),
+                arguments: arguments.to_string(),
+                native_commands,
+                candidate_id: expected.map(|command| command.candidate_id.clone()),
+                content_version: expected.map(|command| command.content_version.clone()),
+                native_conflict_key: native_conflict_key.map(str::to_string),
+                expected_preference_revision,
+            },
+            None,
+            chat_view,
+            chat_state,
+            rt_handle,
+        )
+    }
+
+    fn invoke_external_prompt_command(
+        &mut self,
+        invocation: ExternalPromptCommandInvocation,
+        shell_review_decision: Option<PromptCommandShellReviewDecision>,
+        chat_view: &mut ChatView,
+        chat_state: &mut ChatState,
+        rt_handle: &tokio::runtime::Handle,
+    ) -> Result<Option<ChatExitReason>> {
+        let workspace = self.agent.workspace_path_buf();
         let expanded = tokio::task::block_in_place(|| {
             rt_handle.block_on(expand_external_prompt_command(
                 Some(&workspace),
-                command_name,
-                arguments,
-                native_commands,
-                expected.map(|command| command.candidate_id.as_str()),
-                expected.map(|command| command.content_version.as_str()),
-                native_conflict_key,
-                expected_preference_revision,
+                &invocation.command_name,
+                &invocation.arguments,
+                invocation.native_commands.clone(),
+                invocation.candidate_id.as_deref(),
+                invocation.content_version.as_deref(),
+                invocation.native_conflict_key.as_deref(),
+                invocation.expected_preference_revision,
+                shell_review_decision.as_ref(),
             ))
         });
         match expanded {
-            Ok(expanded) => {
-                self.send_message_to_agent(expanded.content, chat_view, chat_state, rt_handle);
+            Ok(PromptCommandInvocationOutcome::Ready { content }) => {
+                self.send_message_to_agent(content, chat_view, chat_state, rt_handle);
+                Ok(None)
+            }
+            Ok(PromptCommandInvocationOutcome::ReviewRequired { review }) => {
+                chat_view.show_prompt_command_shell_review(review.clone());
+                self.pending_prompt_command_shell_invocation =
+                    Some(PendingPromptCommandShellInvocation { invocation, review });
                 Ok(None)
             }
             Err(error) if error.contains("command not found") => Err(anyhow!(error)),
             Err(error) => {
                 chat_state.add_system_message(format!(
-                    "External command /{command_name} is unavailable: {error}"
+                    "External command /{} is unavailable: {error}",
+                    invocation.command_name
                 ));
                 Ok(None)
             }

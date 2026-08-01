@@ -48,6 +48,7 @@ use crate::ui::mcp_selector::{McpItem, McpItemAction};
 use crate::ui::model_config_form::{ModelFormAction, ModelFormResult};
 use crate::ui::model_selector::ModelItem;
 use crate::ui::permission::PermissionAction;
+use crate::ui::prompt_command_shell_review::PromptCommandShellReviewAction;
 use crate::ui::provider_selector::ProviderSelection;
 use crate::ui::question::QuestionAction;
 use crate::ui::session_selector::{SessionAction, SessionItem};
@@ -89,7 +90,9 @@ use bitfun_core::external_sources::{
     ExternalSubagentModelBindingMethod, ExternalSubagentModelBindingTarget,
     ExternalSubagentModelProfileRequest, ExternalSubagentModelRequest, ExternalToolActivationState,
     ExternalToolCapability, ExternalToolCatalogEntry, ExternalToolRuntimeKind,
-    NativePromptCommandDescriptor, PromptCommandAvailability, EXTERNAL_SOURCE_CONTROL_SCHEMA_V1,
+    NativePromptCommandDescriptor, PromptCommandAvailability, PromptCommandInvocationOutcome,
+    PromptCommandShellReviewDecision, PromptCommandShellReviewMode, PromptCommandShellReviewPlan,
+    EXTERNAL_SOURCE_CONTROL_SCHEMA_V1,
 };
 use bitfun_core::native_hooks::{
     overview as native_hook_overview, NativeHookOverview, NativeHookRuleView,
@@ -237,6 +240,22 @@ struct PendingWorkspaceDiff {
     >,
 }
 
+#[derive(Debug, Clone)]
+struct ExternalPromptCommandInvocation {
+    command_name: String,
+    arguments: String,
+    native_commands: Vec<NativePromptCommandDescriptor>,
+    candidate_id: Option<String>,
+    content_version: Option<String>,
+    native_conflict_key: Option<String>,
+    expected_preference_revision: Option<u64>,
+}
+
+struct PendingPromptCommandShellInvocation {
+    invocation: ExternalPromptCommandInvocation,
+    review: PromptCommandShellReviewPlan,
+}
+
 enum PendingLocalEffect {
     EditComposer {
         command: external_editor::EditorCommand,
@@ -306,6 +325,7 @@ pub(crate) struct ChatMode {
     last_workspace_reference_query: Option<String>,
     /// One explicit native slash-menu choice waiting for its parameterized submission.
     selected_native_command_once: Option<String>,
+    pending_prompt_command_shell_invocation: Option<PendingPromptCommandShellInvocation>,
     external_source_snapshot: Option<ExternalSourceCatalogSnapshot>,
     external_source_conflict_choices: BTreeMap<String, String>,
     external_source_conflict_lineage_current_keys: BTreeMap<String, String>,
@@ -369,6 +389,7 @@ impl ChatMode {
             workspace_reference_search_generation: 0,
             last_workspace_reference_query: None,
             selected_native_command_once: None,
+            pending_prompt_command_shell_invocation: None,
             external_source_snapshot: None,
             external_source_conflict_choices: BTreeMap::new(),
             external_source_conflict_lineage_current_keys: BTreeMap::new(),

@@ -1,6 +1,6 @@
 use bitfun_services_core::markdown::{
     expand_prompt_template_arguments, expand_prompt_template_arguments_with_names,
-    prompt_template_expansion_upper_bound, FrontMatterMarkdown,
+    parse_prompt_shell_directives, prompt_template_expansion_upper_bound, FrontMatterMarkdown,
 };
 use std::fs;
 
@@ -138,4 +138,52 @@ fn existing_prompt_argument_api_remains_compatible_without_declared_names() {
         expand_prompt_template_arguments("Keep $target and use $0", "alpha"),
         "Keep $target and use alpha"
     );
+}
+
+#[test]
+fn shell_directives_keep_expanded_ranges_and_static_review_scope() {
+    let template = "Before !`git diff -- $1` after !`git status`";
+    let expanded = "Before !`git diff -- src/lib.rs` after !`git status`";
+
+    let parsed = parse_prompt_shell_directives(template, expanded).unwrap();
+
+    assert_eq!(parsed.directives.len(), 2);
+    assert_eq!(parsed.directives[0].command, "git diff -- src/lib.rs");
+    assert!(!parsed.directives[0].can_remember);
+    assert!(parsed.directives[1].can_remember);
+    assert_eq!(
+        &parsed.content[parsed.directives[1].range.clone()],
+        "!`git status`"
+    );
+    assert!(!parsed.template_without_directives.contains("git status"));
+}
+
+#[test]
+fn shell_directives_fail_closed_when_argument_expansion_changes_structure() {
+    let error = parse_prompt_shell_directives(
+        "Inspect !`printf $ARGUMENTS`",
+        "Inspect !`printf injected`backtick`",
+    )
+    .unwrap_err();
+
+    assert!(error.contains("structure changed"));
+}
+
+#[test]
+fn prompt_only_commands_accept_backticks_from_arguments() {
+    let parsed = parse_prompt_shell_directives(
+        "Explain $ARGUMENTS",
+        "Explain `inline code` without running it",
+    )
+    .unwrap();
+
+    assert!(parsed.directives.is_empty());
+    assert_eq!(parsed.content, "Explain `inline code` without running it");
+}
+
+#[test]
+fn empty_shell_markers_are_not_executable_directives() {
+    let parsed = parse_prompt_shell_directives("Keep !`` literal", "Keep !`` literal").unwrap();
+
+    assert!(parsed.directives.is_empty());
 }

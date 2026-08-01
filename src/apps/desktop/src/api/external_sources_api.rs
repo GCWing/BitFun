@@ -10,11 +10,12 @@ use bitfun_core::external_sources::{
     set_external_subagent_activation, set_external_subagent_model_binding,
     set_external_tool_conflict_choice, set_external_tool_target_decision,
     set_native_prompt_command_conflict_choice, update_external_integration_policy,
-    workspace_reference_snapshot, ExpandedPromptCommand, ExternalIntegrationPolicyMutation,
+    workspace_reference_snapshot, ExternalIntegrationPolicyMutation,
     ExternalSourceControlRequestV1, ExternalSourceHostCapabilities, ExternalSourceOperationError,
     ExternalSourceOperationErrorCode, ExternalSourceOperationResult, ExternalSourcePublicSnapshot,
     ExternalSourceSurfaceSnapshotV1, ExternalSubagentModelBindingTarget,
     NativePromptCommandConflictSnapshot, NativePromptCommandDescriptor,
+    PromptCommandInvocationOutcome, PromptCommandShellReviewDecision,
 };
 use bitfun_core::service::remote_ssh::workspace_state::is_remote_path;
 use bitfun_core::service::remote_ssh::workspace_state::{
@@ -118,6 +119,8 @@ pub struct ExpandExternalPromptCommandRequest {
     pub expected_native_conflict_key: Option<String>,
     #[serde(default)]
     pub expected_preference_revision: Option<u64>,
+    #[serde(default)]
+    pub shell_review_decision: Option<PromptCommandShellReviewDecision>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -210,7 +213,7 @@ pub struct ApplyExternalMcpImportRequest {
 
 pub type ExternalSourceSnapshotResponse = ExternalSourcePublicSnapshot;
 pub type ExternalSourceControlResponse = ExternalSourceSurfaceSnapshotV1;
-pub type ExpandExternalPromptCommandResponse = ExpandedPromptCommand;
+pub type ExpandExternalPromptCommandResponse = PromptCommandInvocationOutcome;
 pub type NativePromptCommandConflictsResponse = NativePromptCommandConflictSnapshot;
 pub type WorkspaceReferenceResponse = WorkspaceReferenceSnapshot;
 
@@ -475,6 +478,7 @@ pub async fn expand_external_prompt_command_command(
         Some(&request.expected_content_version),
         request.expected_native_conflict_key.as_deref(),
         request.expected_preference_revision,
+        request.shell_review_decision.as_ref(),
     )
     .await
     .map_err(bitfun_core::external_sources::sanitize_external_source_operation_error)
@@ -755,6 +759,30 @@ mod tests {
         assert_eq!(request.arguments, "focus on auth");
         assert_eq!(request.native_commands.len(), 1);
         assert_eq!(request.candidate_id, "claude-code.commands:project:review");
+        assert!(request.shell_review_decision.is_none());
+
+        let approved: ExpandExternalPromptCommandRequest =
+            serde_json::from_value(serde_json::json!({
+                "workspacePath": "D:/workspace/project",
+                "name": "review",
+                "arguments": "",
+                "nativeCommands": [],
+                "candidateId": "opencode.commands:project:review",
+                "expectedContentVersion": "behavior-v2",
+                "shellReviewDecision": {
+                    "planFingerprint": "sha256:plan-v2",
+                    "mode": "run_once",
+                    "expectedPreferenceRevision": 9
+                }
+            }))
+            .unwrap();
+        assert_eq!(
+            approved
+                .shell_review_decision
+                .as_ref()
+                .map(|decision| decision.plan_fingerprint.as_str()),
+            Some("sha256:plan-v2")
+        );
         assert!(
             serde_json::from_value::<ExpandExternalPromptCommandRequest>(serde_json::json!({
                 "name": "review",

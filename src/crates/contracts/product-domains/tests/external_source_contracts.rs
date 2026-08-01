@@ -148,6 +148,7 @@ fn command(provider_id: &str, source_id: &str, precedence: i32) -> PromptCommand
         name: "review".to_string(),
         description: format!("Review from {provider_id}"),
         template: format!("{provider_id}: $ARGUMENTS"),
+        shell_preference: None,
         availability: PromptCommandAvailability::Available,
         content_version: format!("command-v{precedence}"),
     }
@@ -234,6 +235,7 @@ fn prompt_commands_use_a_typed_contract_instead_of_an_arbitrary_asset_payload() 
         name: "review".to_string(),
         description: "Review the current change".to_string(),
         template: "Review $ARGUMENTS".to_string(),
+        shell_preference: None,
         availability: PromptCommandAvailability::Restricted {
             reason: "Shell expansion is not supported yet".to_string(),
             required_capabilities: vec!["command.shell".to_string()],
@@ -287,12 +289,14 @@ impl PromptCommandSourceProvider for FakeProvider {
 
     fn expand(
         &self,
+        _context: &ExternalSourceContext,
         command: &PromptCommandDefinition,
         arguments: &str,
     ) -> Result<PromptCommandExpansion, ExternalSourceProviderError> {
         Ok(PromptCommandExpansion {
             content: command.template.replace("$ARGUMENTS", arguments),
             workspace_file_references: vec!["src/lib.rs".to_string()],
+            shell: None,
         })
     }
 
@@ -317,7 +321,7 @@ fn capability_provider_contract_does_not_require_core_or_an_ecosystem_enum() {
     assert_eq!(snapshot.provider.ecosystem_id.as_str(), "fake.ecosystem");
     assert_eq!(provider.watch_roots(&context()).len(), 1);
     let expansion = provider
-        .expand(&snapshot.commands[0], "change")
+        .expand(&context(), &snapshot.commands[0], "change")
         .expect("prepare fake command expansion");
     assert_eq!(expansion.content, "fake-provider: change");
     assert_eq!(expansion.workspace_file_references, ["src/lib.rs"]);

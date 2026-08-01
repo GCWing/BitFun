@@ -47,6 +47,7 @@ import {
   type SlashActionId,
 } from '../utils/slashActionSelection';
 import { parseReloadCommand, supportsLocalReloadContext } from '../utils/reloadCommand';
+import { reviewPromptCommandShell } from '../utils/promptCommandShellReview';
 import { notificationService } from '@/shared/notification-system';
 import { useI18n } from '@/infrastructure/i18n';
 import { inputReducer, initialInputState, type InputAction } from '../reducers/inputReducer';
@@ -3790,18 +3791,41 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         }
         if (!submissionTargetIsCurrent()) return true;
       }
-      const expanded = await externalSourcesAPI.expandPromptCommand(
+      const nativeConflictGuard = nativeConflictKey ? {
+        conflictKey: nativeConflictKey,
+        expectedPreferenceRevision,
+      } : undefined;
+      let expanded = await externalSourcesAPI.expandPromptCommand(
         submissionWorkspacePath || undefined,
         resolution.item.command.slice(1),
         resolution.arguments,
         resolution.item.candidateId,
         resolution.item.contentVersion,
         nativeCommands,
-        nativeConflictKey ? {
-          conflictKey: nativeConflictKey,
-          expectedPreferenceRevision,
-        } : undefined,
+        nativeConflictGuard,
       );
+      let shellReviewCount = 0;
+      while (expanded.state === 'review_required') {
+        if (shellReviewCount >= 2) {
+          throw new Error('Prompt command shell review changed repeatedly');
+        }
+        const decision = await reviewPromptCommandShell(
+          expanded.review,
+          (key, values) => t(key, values),
+        );
+        if (!decision || !submissionTargetIsCurrent()) return true;
+        shellReviewCount += 1;
+        expanded = await externalSourcesAPI.expandPromptCommand(
+          submissionWorkspacePath || undefined,
+          resolution.item.command.slice(1),
+          resolution.arguments,
+          resolution.item.candidateId,
+          resolution.item.contentVersion,
+          nativeCommands,
+          nativeConflictGuard,
+          decision,
+        );
+      }
       if (!submissionTargetIsCurrent()) return true;
       const expandedCharCount = getCharacterCount(expanded.content);
       if (expandedCharCount > CHAT_INPUT_CONFIG.largePaste.maxMessageChars) {

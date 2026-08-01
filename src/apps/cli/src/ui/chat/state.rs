@@ -231,6 +231,8 @@ pub(crate) struct ChatView {
     info_popup: Option<String>,
     info_popup_scroll: u16,
     info_popup_max_scroll: u16,
+    prompt_command_shell_review:
+        Option<crate::ui::prompt_command_shell_review::PromptCommandShellReviewPrompt>,
     workspace_diff: WorkspaceDiffViewState,
 
     /// Hovered thinking block (message_id) for mouse-over highlight
@@ -319,6 +321,7 @@ impl ChatView {
             info_popup: None,
             info_popup_scroll: 0,
             info_popup_max_scroll: 0,
+            prompt_command_shell_review: None,
             workspace_diff: WorkspaceDiffViewState::new(),
             hovered_thinking_block_id: None,
             collapsed_tools: HashSet::new(),

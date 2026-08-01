@@ -26,7 +26,7 @@ struct InfoPopupLayout {
     max_scroll: u16,
 }
 
-fn wrapped_line_count(message: &str, width: u16) -> u16 {
+pub(super) fn wrapped_line_count(message: &str, width: u16) -> u16 {
     let width = usize::from(width.max(1));
     message
         .lines()

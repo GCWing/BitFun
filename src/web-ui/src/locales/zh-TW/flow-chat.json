@@ -630,6 +630,13 @@
     "processingFailed": "處理失敗"
   },
   "chatInput": {
+    "promptCommandShellReview": {
+      "title": "執行提示命令內容？",
+      "message": "{{source}} 將在 {{directory}} 中使用 {{shell}} 執行 {{count}} 條命令。請先檢查完整命令；只有標準輸出會加入提示詞。",
+      "runOnce": "僅執行一次",
+      "remember": "一律允許此精確計畫",
+      "cancel": "取消"
+    },
     "dispatch": {
       "local": "本機",
       "locked": "執行於 {{target}}（此任務不可變更）",

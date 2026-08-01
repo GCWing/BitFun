@@ -630,6 +630,13 @@
     "processingFailed": "处理失败"
   },
   "chatInput": {
+    "promptCommandShellReview": {
+      "title": "运行提示命令上下文？",
+      "message": "{{source}} 将在 {{directory}} 中使用 {{shell}} 运行 {{count}} 条命令。请先检查完整命令；只有标准输出会加入提示词。",
+      "runOnce": "仅运行一次",
+      "remember": "始终允许此精确计划",
+      "cancel": "取消"
+    },
     "dispatch": {
       "local": "本机",
       "locked": "运行在 {{target}}（此任务不可更改）",

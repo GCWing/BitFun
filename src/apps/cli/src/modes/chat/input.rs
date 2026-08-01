@@ -17,6 +17,46 @@ impl ChatMode {
             return Ok(None);
         }
 
+        if chat_view.prompt_command_shell_review_visible() {
+            let action = chat_view.prompt_command_shell_review_handle_key(key);
+            match action {
+                PromptCommandShellReviewAction::None => {}
+                PromptCommandShellReviewAction::Cancel => {
+                    self.pending_prompt_command_shell_invocation = None;
+                    chat_view.hide_prompt_command_shell_review();
+                    chat_view.set_status(Some(
+                        "External prompt command cancelled before running local commands"
+                            .to_string(),
+                    ));
+                }
+                PromptCommandShellReviewAction::RunOnce
+                | PromptCommandShellReviewAction::Remember => {
+                    let Some(pending) = self.pending_prompt_command_shell_invocation.take() else {
+                        chat_view.hide_prompt_command_shell_review();
+                        return Ok(None);
+                    };
+                    chat_view.hide_prompt_command_shell_review();
+                    let decision = PromptCommandShellReviewDecision {
+                        plan_fingerprint: pending.review.plan_fingerprint,
+                        mode: if matches!(action, PromptCommandShellReviewAction::Remember) {
+                            PromptCommandShellReviewMode::Remember
+                        } else {
+                            PromptCommandShellReviewMode::RunOnce
+                        },
+                        expected_preference_revision: pending.review.preference_revision,
+                    };
+                    return self.invoke_external_prompt_command(
+                        pending.invocation,
+                        Some(decision),
+                        chat_view,
+                        chat_state,
+                        rt_handle,
+                    );
+                }
+            }
+            return Ok(None);
+        }
+
         let modal_state =
             self.action_state(chat_state.is_processing, self.any_popup_visible(chat_view));
         if let Some(action) = self.keymap.resolve_modal_safe(key, modal_state) {
