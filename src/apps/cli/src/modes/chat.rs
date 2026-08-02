@@ -90,9 +90,9 @@ use bitfun_core::external_sources::{
     ExternalSubagentModelBindingMethod, ExternalSubagentModelBindingTarget,
     ExternalSubagentModelProfileRequest, ExternalSubagentModelRequest, ExternalToolActivationState,
     ExternalToolCapability, ExternalToolCatalogEntry, ExternalToolRuntimeKind,
-    NativePromptCommandDescriptor, PromptCommandAvailability, PromptCommandInvocationOutcome,
-    PromptCommandShellReviewDecision, PromptCommandShellReviewMode, PromptCommandShellReviewPlan,
-    EXTERNAL_SOURCE_CONTROL_SCHEMA_V1,
+    NativePromptCommandDescriptor, PromptCommandAvailability, PromptCommandExecutionTarget,
+    PromptCommandInvocationOutcome, PromptCommandShellReviewDecision, PromptCommandShellReviewMode,
+    PromptCommandShellReviewPlan, EXTERNAL_SOURCE_CONTROL_SCHEMA_V1,
 };
 use bitfun_core::native_hooks::{
     overview as native_hook_overview, NativeHookOverview, NativeHookRuleView,

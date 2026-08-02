@@ -8,7 +8,7 @@
 
 use std::sync::Arc;
 
-pub const AGENT_RUNTIME_SDK_API_VERSION: u32 = 2;
+pub const AGENT_RUNTIME_SDK_API_VERSION: u32 = 3;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]
@@ -58,14 +58,15 @@ pub use bitfun_harness::{
     HarnessRegistry, HarnessWorkflow,
 };
 pub use bitfun_runtime_ports::{
-    AgentBackgroundResultRequest, AgentDialogTurnPort, AgentDialogTurnRequest,
-    AgentInputAttachment, AgentLifecycleDeliveryPort, AgentLocalCommandTurnPort,
-    AgentLocalCommandTurnRecordRequest, AgentMessageWorkspaceReferencesRequest,
-    AgentSessionArchiveRequest, AgentSessionArchiveStateRequest, AgentSessionClosePort,
-    AgentSessionCompactionPort, AgentSessionCompactionRequest, AgentSessionCompactionResult,
-    AgentSessionComposerUpdate, AgentSessionCreateRequest, AgentSessionCreateResult,
-    AgentSessionDeleteRequest, AgentSessionForkAtTurnRequest, AgentSessionForkBeforeTurnRequest,
-    AgentSessionForkPort, AgentSessionForkRequest, AgentSessionForkResult, AgentSessionListRequest,
+    AgentBackgroundResultRequest, AgentDialogTurnExecution, AgentDialogTurnPort,
+    AgentDialogTurnRequest, AgentInputAttachment, AgentLifecycleDeliveryPort,
+    AgentLocalCommandTurnPort, AgentLocalCommandTurnRecordRequest,
+    AgentMessageWorkspaceReferencesRequest, AgentSessionArchiveRequest,
+    AgentSessionArchiveStateRequest, AgentSessionClosePort, AgentSessionCompactionPort,
+    AgentSessionCompactionRequest, AgentSessionCompactionResult, AgentSessionComposerUpdate,
+    AgentSessionCreateRequest, AgentSessionCreateResult, AgentSessionDeleteRequest,
+    AgentSessionForkAtTurnRequest, AgentSessionForkBeforeTurnRequest, AgentSessionForkPort,
+    AgentSessionForkRequest, AgentSessionForkResult, AgentSessionListRequest,
     AgentSessionManagementPort, AgentSessionModePort, AgentSessionModeUpdateRequest,
     AgentSessionModelPort, AgentSessionModelUpdateRequest, AgentSessionRenameRequest,
     AgentSessionRevertPort, AgentSessionRevertRequest, AgentSessionRevertResult,

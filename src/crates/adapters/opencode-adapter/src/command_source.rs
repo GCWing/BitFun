@@ -6,10 +6,10 @@ use crate::local_source_paths::{
 use bitfun_product_domains::external_sources::{
     EcosystemId, ExternalSourceAssetKind, ExternalSourceContext, ExternalSourceDiagnostic,
     ExternalSourceHealth, ExternalSourceProviderError, ExternalSourceRecord, ExternalSourceScope,
-    ExternalWatchRoot, PromptCommandAvailability, PromptCommandDefinition, PromptCommandExpansion,
-    PromptCommandProviderIdentity, PromptCommandProviderSnapshot, PromptCommandShellExpansion,
-    PromptCommandShellInvocation, PromptCommandShellPreference, PromptCommandSourceProvider,
-    SourceKey, SourceQualifiedCommandId,
+    ExternalWatchRoot, PromptCommandAvailability, PromptCommandDefinition,
+    PromptCommandExecutionTarget, PromptCommandExpansion, PromptCommandProviderIdentity,
+    PromptCommandProviderSnapshot, PromptCommandShellExpansion, PromptCommandShellInvocation,
+    PromptCommandShellPreference, PromptCommandSourceProvider, SourceKey, SourceQualifiedCommandId,
 };
 pub(crate) use bitfun_services_core::jsonc::strip_jsonc;
 use bitfun_services_core::markdown::{
@@ -954,7 +954,27 @@ fn command_definition(
         })
     });
     let content_version = command_content_version(&name, &input, shell_preference.as_ref());
-    if input.agent.is_some() {
+    let execution_target = match (
+        input.agent.as_deref(),
+        input.subtask,
+        input.model.as_ref(),
+        input.variant.as_ref(),
+    ) {
+        (Some(agent), None | Some(true), None, None) => {
+            PromptCommandExecutionTarget::FreshExternalSubagent {
+                ecosystem_id: EcosystemId::new(ECOSYSTEM_ID).map_err(|error| {
+                    ExternalSourceProviderError::new(
+                        "opencode.command.ecosystem_invalid",
+                        error.to_string(),
+                        false,
+                    )
+                })?,
+                logical_id: agent.to_string(),
+            }
+        }
+        _ => PromptCommandExecutionTarget::Inline,
+    };
+    if input.agent.is_some() && execution_target.is_inline() {
         required_capabilities.push("command.agent".to_string());
     }
     if input.model.is_some() {
@@ -963,8 +983,11 @@ fn command_definition(
     if input.variant.is_some() {
         required_capabilities.push("command.variant".to_string());
     }
-    if input.subtask.is_some() {
+    if input.subtask.is_some() && execution_target.is_inline() {
         required_capabilities.push("command.subtask".to_string());
+    }
+    if !execution_target.is_inline() && shell_preference.is_some() {
+        required_capabilities.push("command.external_subagent.shell".to_string());
     }
     if config_variable_regex().is_match(&input.template) {
         required_capabilities.push("command.config_variable".to_string());
@@ -997,6 +1020,7 @@ fn command_definition(
             .unwrap_or_else(|| format!("OpenCode command /{name}")),
         template: input.template,
         shell_preference,
+        execution_target,
         availability,
         content_version,
     };

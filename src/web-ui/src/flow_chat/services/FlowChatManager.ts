@@ -662,6 +662,7 @@ export class FlowChatManager {
       imageContexts?: import('@/infrastructure/api/service-api/ImageContextTypes').ImageContextData[];
       imageDisplayData?: Array<{ id: string; name: string; dataUrl?: string; imagePath?: string; mimeType?: string }>;
       userMessageMetadata?: Record<string, unknown>;
+      execution?: import('@/infrastructure/api/service-api/AgentAPI').AgentDialogTurnExecution;
       turnId?: string;
       preserveTurnOnStartError?: boolean;
       onSessionConflictRetryStart?: () => void;

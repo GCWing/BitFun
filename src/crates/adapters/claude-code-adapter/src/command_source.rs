@@ -749,6 +749,7 @@ fn command_definition(
         description: input.description,
         template: input.template,
         shell_preference,
+        execution_target: Default::default(),
         availability,
         content_version: format!("sha256:{content_version}"),
     };

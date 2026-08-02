@@ -106,6 +106,7 @@ fn dialog_turn_request(session: &AcpSessionState, prompt: ParsedPrompt) -> Agent
         message: prompt.user_message,
         original_message: prompt.original_user_message,
         turn_id: None,
+        execution: Default::default(),
         agent_type: session.mode_id.clone(),
         workspace_path: Some(session.cwd.clone()),
         remote_connection_id: None,

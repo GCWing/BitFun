@@ -782,6 +782,7 @@
     "currentMode": "Current mode: {{mode}}",
     "noMatchingMode": "No matching mode",
     "noMatchingCommand": "No matching command",
+    "externalCommandContextUnsupported": "Remove composer attachments and references before running this delegated command.",
     "nativeCommandChoiceNotSaved": "This command will run once, but your conflict choice could not be saved.",
     "nativeCommandReconfirmationRequired": "The external command you previously chose is no longer available. Choose the BitFun command from the slash menu to run it.",
     "selectHint": "↑↓ Select · Enter Confirm · Esc Cancel",

@@ -1510,6 +1510,46 @@ impl PromptCommandShellPreference {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(
+    tag = "kind",
+    rename_all = "snake_case",
+    rename_all_fields = "camelCase",
+    deny_unknown_fields
+)]
+pub enum PromptCommandExecutionTarget {
+    Inline,
+    FreshExternalSubagent {
+        ecosystem_id: EcosystemId,
+        logical_id: String,
+    },
+}
+
+impl Default for PromptCommandExecutionTarget {
+    fn default() -> Self {
+        Self::Inline
+    }
+}
+
+impl PromptCommandExecutionTarget {
+    pub fn is_inline(&self) -> bool {
+        matches!(self, Self::Inline)
+    }
+
+    fn validate(&self) -> Result<(), ExternalSourceContractError> {
+        match self {
+            Self::Inline => Ok(()),
+            Self::FreshExternalSubagent {
+                ecosystem_id,
+                logical_id,
+            } => {
+                validate_id(ecosystem_id.as_str(), "prompt command subagent ecosystem")?;
+                validate_id(logical_id, "prompt command subagent logical id")
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PromptCommandDefinition {
     pub id: SourceQualifiedCommandId,
@@ -1518,6 +1558,11 @@ pub struct PromptCommandDefinition {
     pub template: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub shell_preference: Option<PromptCommandShellPreference>,
+    #[serde(
+        default,
+        skip_serializing_if = "PromptCommandExecutionTarget::is_inline"
+    )]
+    pub execution_target: PromptCommandExecutionTarget,
     pub availability: PromptCommandAvailability,
     /// Version of this command only. Unrelated edits in the same source must
     /// not invalidate a remembered conflict choice.
@@ -1536,6 +1581,7 @@ impl PromptCommandDefinition {
         if let Some(shell) = &self.shell_preference {
             shell.validate()?;
         }
+        self.execution_target.validate()?;
         validate_id(&self.content_version, "command content version")
     }
 }
@@ -1593,10 +1639,15 @@ impl fmt::Debug for PromptCommandShellReviewPlan {
 }
 
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "state", rename_all = "snake_case")]
+#[serde(
+    tag = "state",
+    rename_all = "snake_case",
+    rename_all_fields = "camelCase"
+)]
 pub enum PromptCommandInvocationOutcome {
     Ready {
         content: String,
+        execution_target: PromptCommandExecutionTarget,
     },
     ReviewRequired {
         review: PromptCommandShellReviewPlan,
@@ -1606,9 +1657,13 @@ pub enum PromptCommandInvocationOutcome {
 impl fmt::Debug for PromptCommandInvocationOutcome {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Ready { content } => formatter
+            Self::Ready {
+                content,
+                execution_target,
+            } => formatter
                 .debug_struct("Ready")
                 .field("content_bytes", &content.len())
+                .field("execution_target", execution_target)
                 .finish(),
             Self::ReviewRequired { review } => formatter
                 .debug_struct("ReviewRequired")
@@ -2075,6 +2130,11 @@ pub struct PromptCommandConflictCandidate {
     pub command_description: String,
     pub source_scope: ExternalSourceScope,
     pub source_location: String,
+    #[serde(
+        default,
+        skip_serializing_if = "PromptCommandExecutionTarget::is_inline"
+    )]
+    pub execution_target: PromptCommandExecutionTarget,
     pub availability: PromptCommandAvailability,
 }
 
@@ -2479,9 +2539,42 @@ impl From<ExternalSourceCatalogSnapshot> for ExternalSourcePublicSnapshot {
 #[cfg(test)]
 mod prompt_command_shell_review_tests {
     use super::{
-        PromptCommandInvocationOutcome, PromptCommandShellReviewDecision,
-        PromptCommandShellReviewMode, PromptCommandShellReviewPlan,
+        EcosystemId, PromptCommandExecutionTarget, PromptCommandInvocationOutcome,
+        PromptCommandShellReviewDecision, PromptCommandShellReviewMode,
+        PromptCommandShellReviewPlan,
     };
+
+    #[test]
+    fn ready_outcome_preserves_the_typed_execution_target() {
+        let outcome = PromptCommandInvocationOutcome::Ready {
+            content: "Review this change".to_string(),
+            execution_target: PromptCommandExecutionTarget::FreshExternalSubagent {
+                ecosystem_id: EcosystemId::new("opencode").unwrap(),
+                logical_id: "reviewer".to_string(),
+            },
+        };
+
+        assert_eq!(
+            serde_json::to_value(outcome).unwrap(),
+            serde_json::json!({
+                "state": "ready",
+                "content": "Review this change",
+                "executionTarget": {
+                    "kind": "fresh_external_subagent",
+                    "ecosystemId": "opencode",
+                    "logicalId": "reviewer"
+                }
+            })
+        );
+
+        let invalid = serde_json::from_value::<PromptCommandExecutionTarget>(serde_json::json!({
+            "kind": "fresh_external_subagent",
+            "ecosystemId": "",
+            "logicalId": "reviewer"
+        }))
+        .expect("open ids validate at their owning contract boundary");
+        assert!(invalid.validate().is_err());
+    }
 
     #[test]
     fn review_outcome_uses_a_stable_tagged_transport_shape() {

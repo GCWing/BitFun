@@ -213,6 +213,7 @@ export async function sendMessage(
      */
     bypassPendingQueue?: boolean;
     userMessageMetadata?: Record<string, unknown>;
+    execution?: import('@/infrastructure/api/service-api/AgentAPI').AgentDialogTurnExecution;
     turnId?: string;
     preserveTurnOnStartError?: boolean;
     onSessionConflictRetryStart?: () => void;
@@ -360,6 +361,9 @@ export async function sendMessage(
     const hasPendingQueue = pendingQueueManager.list(sessionId).length > 0;
 
     if (sessionBusy || hasPendingQueue) {
+      if (options?.execution?.kind === 'fresh_external_subagent') {
+        throw new Error('External subagent command delegation requires an idle session');
+      }
       if (await appendToRunningDispatch()) {
         return;
       }
@@ -414,6 +418,10 @@ export async function sendMessage(
     const currentAgentType = (agentType?.trim() || refreshedSession.mode || 'agentic').trim();
     const acpClientId = acpClientIdFromMode(currentAgentType);
     const isDispatched = isNonLocalDispatchTarget(refreshedSession.config.dispatchTarget);
+    const delegatesExternalSubagent = options?.execution?.kind === 'fresh_external_subagent';
+    if (delegatesExternalSubagent && (acpClientId || isDispatched)) {
+      throw new Error('External subagent command delegation requires the local BitFun runtime');
+    }
 
     if (
       !acpClientId &&
@@ -700,6 +708,7 @@ export async function sendMessage(
           remoteSshHost: updatedSession.remoteSshHost,
           imageContexts: options?.imageContexts,
           userMessageMetadata: options?.userMessageMetadata,
+          execution: options?.execution,
         });
         context.flowChatStore.updateSessionLastSubmittedMode(sessionId, currentAgentType);
       } catch (error: any) {
@@ -723,6 +732,7 @@ export async function sendMessage(
             remoteSshHost: updatedSession.remoteSshHost,
             imageContexts: options?.imageContexts,
             userMessageMetadata: options?.userMessageMetadata,
+            execution: options?.execution,
           });
           context.flowChatStore.updateSessionLastSubmittedMode(sessionId, currentAgentType);
         } else {

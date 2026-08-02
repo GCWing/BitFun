@@ -1095,6 +1095,21 @@ export const requiredContentRules = [
     ],
   },
   {
+    path: 'src/crates/execution/agent-runtime/src/subagent_task.rs',
+    reason:
+      'agent-runtime must own provider-neutral subagent Task completion presentation shared by ordinary Task and product command delegation',
+    patterns: [
+      {
+        regex: /\bpub struct SubagentTaskCompletionResultInput\b/,
+        message: 'missing provider-neutral subagent Task completion input',
+      },
+      {
+        regex: /\bpub fn subagent_task_completion_result\b/,
+        message: 'missing provider-neutral subagent Task completion formatter',
+      },
+    ],
+  },
+  {
     path: 'src/crates/execution/agent-runtime/src/deep_review/mod.rs',
     reason:
       'agent-runtime must own provider-neutral DeepReview policy, manifest, budget, queue, report, and shared-context runtime state',
@@ -1180,7 +1195,11 @@ export const requiredContentRules = [
       },
       {
         regex: /\bpub fn deep_review_task_completion_result\b/,
-        message: 'missing DeepReview task completion result presentation owner function',
+        message: 'missing DeepReview task completion result compatibility wrapper',
+      },
+      {
+        regex: /crate::subagent_task::subagent_task_completion_result/,
+        message: 'missing DeepReview delegation to the provider-neutral Task formatter',
       },
       {
         regex: /\bpub fn deep_review_cancelled_reviewer_result\b/,
@@ -2521,10 +2540,6 @@ export const requiredContentRules = [
         message: 'missing DeepReview reviewer admission queue runtime delegation',
       },
       {
-        regex: /runtime_task_execution::deep_review_task_completion_result/,
-        message: 'missing DeepReview task completion result runtime delegation',
-      },
-      {
         regex: /runtime_task_execution::deep_review_cancelled_reviewer_result/,
         message: 'missing DeepReview cancelled reviewer result runtime delegation',
       },
@@ -2579,8 +2594,8 @@ export const requiredContentRules = [
         message: 'missing TaskTool DeepReview retry guidance facade call',
       },
       {
-        regex: /deep_review_task_adapter::deep_review_task_completion_result/,
-        message: 'missing TaskTool DeepReview completion result facade call',
+        regex: /bitfun_agent_runtime::subagent_task::subagent_task_completion_result/,
+        message: 'missing TaskTool provider-neutral completion result owner call',
       },
       {
         regex: /DeepReviewProviderCapacityRetryRuntime::default/,
@@ -5707,6 +5722,10 @@ export const requiredContentRules = [
       {
         regex: /pub use bitfun_runtime_ports::DialogTriggerSource;/,
         message: 'missing dialog trigger source compatibility re-export',
+      },
+      {
+        regex: /bitfun_agent_runtime::subagent_task::subagent_task_completion_result/,
+        message: 'missing delegated command provider-neutral Task result formatting',
       },
     ],
   },

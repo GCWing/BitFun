@@ -209,6 +209,77 @@ impl ChatMode {
         );
     }
 
+    #[allow(clippy::too_many_arguments)]
+    fn send_external_subagent_command_to_agent(
+        &mut self,
+        prompt: String,
+        original_command: String,
+        ecosystem_id: String,
+        logical_id: String,
+        chat_view: &mut ChatView,
+        chat_state: &mut ChatState,
+        rt_handle: &tokio::runtime::Handle,
+    ) {
+        let submitted_draft = crate::ui::composer::ComposerDraft {
+            text: original_command.clone(),
+            ..crate::ui::composer::ComposerDraft::default()
+        };
+        if self.agent.is_shared() {
+            chat_view.set_status(Some(
+                "External subagent commands require Embedded TUI; Shared TUI does not transport delegated command submissions"
+                    .to_string(),
+            ));
+            chat_view.set_draft(submitted_draft);
+            return;
+        }
+        if self
+            .pending_session_operation
+            .as_ref()
+            .is_some_and(|pending| pending.session_id == chat_state.core_session_id)
+        {
+            chat_view.set_status(Some(
+                "Waiting for the pending Session operation to finish before sending.".to_string(),
+            ));
+            chat_view.set_draft(submitted_draft);
+            return;
+        }
+        if chat_state.is_processing {
+            chat_state.add_system_message("Already processing, please wait.".to_string());
+            chat_view.set_draft(submitted_draft);
+            return;
+        }
+        if let Err(error) = self.materialize_requested_worktree(chat_view, chat_state, rt_handle) {
+            tracing::error!("Failed to prepare worktree for delegated command: {error}");
+            chat_view.set_status(Some(format!("Error: {error}")));
+            chat_view.set_draft(submitted_draft);
+            return;
+        }
+
+        let display_name = agent_display_name(&self.agent_type);
+        chat_view.set_status(Some(format!("{} is delegating...", display_name)));
+        let agent = self.agent.clone();
+        let agent_type = self.agent_type.clone();
+        match tokio::task::block_in_place(|| {
+            rt_handle.block_on(agent.send_external_subagent_command(
+                prompt,
+                original_command,
+                ecosystem_id,
+                logical_id,
+                &agent_type,
+            ))
+        }) {
+            Ok(turn_id) => {
+                tracing::info!("Started delegated command turn: {}", turn_id);
+                chat_view.remember_submitted_draft(&chat_state.core_session_id, &submitted_draft);
+            }
+            Err(error) => {
+                tracing::error!("Failed to delegate external command: {}", error);
+                chat_view.set_status(Some(format!("Error: {error}")));
+                chat_view.set_draft(submitted_draft);
+            }
+        }
+    }
+
     fn send_draft_to_agent(
         &mut self,
         draft: crate::ui::composer::ComposerDraft,

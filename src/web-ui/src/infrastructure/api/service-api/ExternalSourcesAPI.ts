@@ -166,6 +166,7 @@ export interface ExternalSourceCatalogSnapshot {
       commandDescription: string;
       sourceScope: ExternalSourceScope;
       sourceLocation: string;
+      executionTarget?: PromptCommandExecutionTarget;
       availability: PromptCommandAvailability;
     }>;
   }>;
@@ -212,8 +213,20 @@ export interface PromptCommandShellReviewDecision {
   expectedPreferenceRevision: number;
 }
 
+export type PromptCommandExecutionTarget =
+  | { kind: 'inline' }
+  | {
+      kind: 'fresh_external_subagent';
+      ecosystemId: string;
+      logicalId: string;
+    };
+
 export type ExternalPromptCommandInvocationOutcome =
-  | { state: 'ready'; content: string }
+  | {
+      state: 'ready';
+      content: string;
+      executionTarget: PromptCommandExecutionTarget;
+    }
   | { state: 'review_required'; review: PromptCommandShellReviewPlan };
 
 export type ExternalSubagentActivation =
@@ -598,6 +611,52 @@ export class ExternalSourceApiError extends Error {
     super(detail);
     this.name = 'ExternalSourceApiError';
   }
+}
+
+function normalizePromptCommandInvocationOutcome(
+  value: unknown,
+): ExternalPromptCommandInvocationOutcome {
+  if (!value || typeof value !== 'object') {
+    throw new ExternalSourceApiError(
+      'invalid_response',
+      'Prompt command expansion response was invalid',
+      false,
+    );
+  }
+  const outcome = value as Record<string, unknown>;
+  if (outcome.state === 'review_required' && outcome.review && typeof outcome.review === 'object') {
+    return value as ExternalPromptCommandInvocationOutcome;
+  }
+  if (outcome.state !== 'ready' || typeof outcome.content !== 'string') {
+    throw new ExternalSourceApiError(
+      'invalid_response',
+      'Prompt command expansion response was invalid',
+      false,
+    );
+  }
+  const target = outcome.executionTarget;
+  if (!target || typeof target !== 'object') {
+    throw new ExternalSourceApiError(
+      'invalid_response',
+      'Prompt command expansion execution target was invalid',
+      false,
+    );
+  }
+  const targetRecord = target as Record<string, unknown>;
+  const validInline = targetRecord.kind === 'inline';
+  const validExternalSubagent = targetRecord.kind === 'fresh_external_subagent'
+    && typeof targetRecord.ecosystemId === 'string'
+    && targetRecord.ecosystemId.trim().length > 0
+    && typeof targetRecord.logicalId === 'string'
+    && targetRecord.logicalId.trim().length > 0;
+  if (!validInline && !validExternalSubagent) {
+    throw new ExternalSourceApiError(
+      'invalid_response',
+      'Prompt command expansion execution target was invalid',
+      false,
+    );
+  }
+  return value as ExternalPromptCommandInvocationOutcome;
 }
 
 export interface NativePromptCommandDescriptor {
@@ -1309,7 +1368,7 @@ export const externalSourcesAPI = {
     };
   },
 
-  expandPromptCommand(
+  async expandPromptCommand(
     workspacePath: string | undefined,
     name: string,
     argumentsText: string,
@@ -1322,7 +1381,7 @@ export const externalSourcesAPI = {
     },
     shellReviewDecision?: PromptCommandShellReviewDecision,
   ) {
-    return invokeExternalSourceCommand<ExternalPromptCommandInvocationOutcome>(
+    const outcome = await invokeExternalSourceCommand<unknown>(
       'expand_external_prompt_command_command',
       {
         request: {
@@ -1340,6 +1399,7 @@ export const externalSourcesAPI = {
         },
       },
     );
+    return normalizePromptCommandInvocationOutcome(outcome);
   },
 
   getNativePromptCommandConflicts(

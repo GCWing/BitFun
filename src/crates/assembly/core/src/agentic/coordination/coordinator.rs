@@ -17,7 +17,7 @@ use crate::agentic::context_profile::ContextProfilePolicy;
 use crate::agentic::core::{
     InternalReminderKind, Message, MessageContent, MessageSemanticKind, ProcessingPhase, Session,
     SessionConfig, SessionContinuationPolicy, SessionKind, SessionModelBindingPolicy, SessionState,
-    SessionSummary, TurnStats,
+    SessionSummary, ToolCall, ToolResult, TurnStats,
 };
 use crate::agentic::events::{
     AgenticEvent, DeepReviewQueueState, EventPriority, EventQueue, EventRouter, EventSubscriber,
@@ -85,6 +85,8 @@ use bitfun_agent_runtime::remote_file_delivery::{
 };
 use bitfun_agent_runtime::sdk::PermissionReply;
 use bitfun_agent_runtime::user_questions::USER_INPUT_AVAILABLE_CONTEXT_KEY;
+use bitfun_events::{ToolEventData, ToolEventIdentity};
+use bitfun_product_domains::external_sources::EcosystemId;
 use bitfun_runtime_ports::{
     agent_workspace_references_from_metadata, AgentMessageWorkspaceReferencesRequest,
     AgentSessionComposerUpdate, AgentSessionWorkspaceBinding, AgentThreadGoalDeliveryKind,
@@ -113,6 +115,7 @@ use tokio_util::sync::CancellationToken;
 
 const MANUAL_COMPACTION_COMMAND: &str = "/compact";
 const CONTEXT_COMPRESSION_TOOL_NAME: &str = "ContextCompression";
+const TASK_TOOL_NAME: &str = "Task";
 const DEFAULT_SUBAGENT_MAX_CONCURRENCY: usize = 5;
 const MAX_SUBAGENT_MAX_CONCURRENCY: usize = 64;
 const SUBAGENT_TIMEOUT_GRACE_PERIOD: Duration = Duration::from_secs(10);
@@ -3161,6 +3164,585 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             false,
         )
         .await
+    }
+
+    /// Execute a statically discovered external command through the existing
+    /// fresh-subagent owner while preserving a normal parent UserDialog/Task
+    /// transcript. The command source selects the target; no model routing or
+    /// same-name local fallback is performed here.
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn start_external_subagent_delegation_turn(
+        self: &Arc<Self>,
+        session_id: String,
+        prompt: String,
+        original_user_input: Option<String>,
+        requested_turn_id: Option<String>,
+        agent_type: String,
+        workspace_path: Option<String>,
+        _submission_policy: DialogSubmissionPolicy,
+        extra_user_message_metadata: Option<serde_json::Value>,
+        ecosystem_id: String,
+        logical_id: String,
+    ) -> futures::future::BoxFuture<'_, BitFunResult<()>> {
+        Box::pin(async move {
+            bitfun_core_types::validate_session_id(&session_id).map_err(BitFunError::Validation)?;
+            if prompt.trim().is_empty() {
+                return Err(BitFunError::Validation(
+                    "External subagent delegation prompt must not be empty".to_string(),
+                ));
+            }
+            let ecosystem_id = EcosystemId::new(ecosystem_id).map_err(|error| {
+                BitFunError::Validation(format!(
+                    "Invalid external subagent delegation ecosystem: {error}"
+                ))
+            })?;
+            let logical_id = logical_id.trim().to_string();
+            if logical_id.is_empty() {
+                return Err(BitFunError::Validation(
+                    "External subagent delegation logical_id must not be empty".to_string(),
+                ));
+            }
+
+            let mut session = self
+                .session_manager
+                .get_session(&session_id)
+                .ok_or_else(|| BitFunError::NotFound(format!("Session not found: {session_id}")))?;
+            self.ensure_session_runtime_ownership(&session_id, None)?;
+            if session.config.remote_connection_id.is_some()
+                || session.config.remote_ssh_host.is_some()
+            {
+                return Err(BitFunError::NotImplemented(
+                    "External subagent command delegation is unavailable for remote workspaces"
+                        .to_string(),
+                ));
+            }
+            if !matches!(session.state, SessionState::Idle) {
+                return Err(BitFunError::Validation(format!(
+                    "Session must be idle before external subagent command delegation: {:?}",
+                    session.state
+                )));
+            }
+            if self
+                .wait_session_drained(&session_id, Duration::from_millis(800))
+                .await
+                > 0
+            {
+                return Err(BitFunError::Validation(format!(
+                    "Previous dialog turn is still draining: session_id={session_id}"
+                )));
+            }
+
+            let project_workspace_path = session
+                .config
+                .project_workspace_path
+                .clone()
+                .or_else(|| session.config.workspace_path.clone())
+                .or(workspace_path)
+                .ok_or_else(|| {
+                    BitFunError::Validation(format!(
+                        "Session workspace_path is missing: {session_id}"
+                    ))
+                })?;
+            let execution_workspace_path = session
+                .config
+                .workspace_path
+                .clone()
+                .unwrap_or_else(|| project_workspace_path.clone());
+
+            let context_messages = self
+                .session_manager
+                .get_context_messages(&session_id)
+                .await?;
+            if (context_messages.is_empty()
+                || (context_messages.len() == 1 && !session.dialog_turn_ids.is_empty()))
+                && !session.dialog_turn_ids.is_empty()
+            {
+                let restore_path =
+                    Self::resolve_session_restore_path(&project_workspace_path, None, None).await?;
+                self.restore_session_from_storage_path(&restore_path, &session_id)
+                    .await?;
+                session = self
+                    .session_manager
+                    .get_session(&session_id)
+                    .ok_or_else(|| {
+                        BitFunError::NotFound(format!("Session not found: {session_id}"))
+                    })?;
+            }
+
+            let binding = get_agent_registry()
+            .resolve_external_subagent_for_fresh_invocation(
+                &logical_id,
+                &ecosystem_id,
+                Some(Path::new(&project_workspace_path)),
+            )
+            .ok_or_else(|| {
+                BitFunError::Validation(format!(
+                    "candidate_unavailable: approved external subagent {}:{} changed before the command could start",
+                    ecosystem_id, logical_id
+                ))
+            })?;
+            let external_generation_lease = binding.lease.ok_or_else(|| {
+                BitFunError::Validation(
+                    "Approved external subagent route is missing its generation lease".to_string(),
+                )
+            })?;
+
+            let effective_agent_type = Self::normalize_agent_type(agent_type.trim());
+            let permission_runtime_ceiling =
+                crate::agentic::permission_policy::load_parent_permission_runtime_ceiling(Some(
+                    &effective_agent_type,
+                ))
+                .await?;
+            if session.agent_type != effective_agent_type {
+                self.session_manager
+                    .update_session_agent_type(&session_id, &effective_agent_type)
+                    .await?;
+            }
+            let display_input = original_user_input
+                .filter(|input| !input.trim().is_empty())
+                .unwrap_or_else(|| prompt.clone());
+            let mut user_message_metadata =
+                Self::ensure_user_message_metadata_object(extra_user_message_metadata);
+            if let Some(metadata) = user_message_metadata.as_object_mut() {
+                if display_input != prompt {
+                    metadata.insert(
+                        "original_text".to_string(),
+                        serde_json::Value::String(display_input.clone()),
+                    );
+                }
+                metadata.insert(
+                    "externalCommandDelegation".to_string(),
+                    serde_json::json!({
+                        "ecosystemId": ecosystem_id.as_str(),
+                        "logicalId": logical_id,
+                    }),
+                );
+            }
+            let turn_index = self.session_manager.get_turn_count(&session_id);
+            let turn_id = self
+                .session_manager
+                .start_dialog_turn(
+                    &session_id,
+                    effective_agent_type.clone(),
+                    prompt.clone(),
+                    requested_turn_id,
+                    None,
+                    Some(user_message_metadata.clone()),
+                )
+                .await?;
+            let execution_lease = self.register_session_execution(&session_id);
+            let turn_settlement_registration = self
+                .turn_settlements
+                .register_accepted(session_id.clone(), turn_id.clone());
+            let cancellation_token = CancellationToken::new();
+            self.execution_engine
+                .register_cancel_token(&turn_id, cancellation_token.clone());
+            if let Err(error) = self
+                .session_manager
+                .update_session_state_for_turn_if_processing(
+                    &session_id,
+                    &turn_id,
+                    SessionState::Processing {
+                        current_turn_id: turn_id.clone(),
+                        phase: ProcessingPhase::ToolCalling,
+                    },
+                )
+                .await
+            {
+                warn!(
+                    "Failed to persist delegated command ToolCalling phase: session_id={}, turn_id={}, error={}",
+                    session_id, turn_id, error
+                );
+            }
+            let round_id = format!("{}-round-0", turn_id);
+            let tool_call_id = format!("task_{}", uuid::Uuid::new_v4());
+            let tool_params = serde_json::json!({
+                "action": "spawn",
+                "description": format!("Run external command with {logical_id}"),
+                "prompt": prompt,
+                "subagent_type": logical_id,
+            });
+
+            self.emit_event(AgenticEvent::DialogTurnStarted {
+                session_id: session_id.clone(),
+                turn_id: turn_id.clone(),
+                turn_index,
+                user_input: prompt.clone(),
+                original_user_input: (display_input != prompt).then_some(display_input),
+                user_message_metadata: Some(user_message_metadata.clone()),
+            })
+            .await;
+            self.emit_event(AgenticEvent::ModelRoundStarted {
+                session_id: session_id.clone(),
+                turn_id: turn_id.clone(),
+                round_id: round_id.clone(),
+                round_group_id: None,
+                round_index: 0,
+                model_config_id: String::new(),
+                effective_model_name: String::new(),
+            })
+            .await;
+            self.emit_event(AgenticEvent::ToolEvent {
+                session_id: session_id.clone(),
+                turn_id: turn_id.clone(),
+                round_id: round_id.clone(),
+                attempt_id: None,
+                attempt_index: None,
+                tool_event: ToolEventData::Started {
+                    identity: ToolEventIdentity::direct(tool_call_id.clone(), TASK_TOOL_NAME),
+                    params: tool_params.clone(),
+                    timeout_seconds: None,
+                },
+            })
+            .await;
+
+            let mut child_context = HashMap::new();
+            for key in [
+                USER_INPUT_AVAILABLE_CONTEXT_KEY,
+                AUTO_APPROVE_ASK_CONTEXT_KEY,
+            ] {
+                if let Some(value) = metadata_bool(Some(&user_message_metadata), key) {
+                    child_context.insert(key.to_string(), value.to_string());
+                }
+            }
+            let request = SubagentExecutionRequest {
+                task_description: prompt.clone(),
+                context_mode: SubagentContextMode::Fresh,
+                target_session_id: None,
+                subagent_type: Some(binding.runtime_agent_key),
+                logical_subagent_type: Some(binding.logical_id),
+                continuation_policy: binding.continuation_policy,
+                model_binding_policy: binding.model_binding_policy,
+                workspace_path: Some(execution_workspace_path),
+                model_id: None,
+                inherit_parent_model: false,
+                subagent_parent_info: SubagentParentInfo {
+                    tool_call_id: tool_call_id.clone(),
+                    session_id: session_id.clone(),
+                    dialog_turn_id: turn_id.clone(),
+                },
+                context: child_context,
+                permission_runtime_ceiling,
+                delegation_policy: DelegationPolicy::top_level().spawn_child(),
+                external_generation_lease: Some(external_generation_lease),
+            };
+
+            let coordinator = Arc::clone(self);
+            tokio::spawn(async move {
+                let _execution_lease = execution_lease;
+                let _turn_settlement_registration = turn_settlement_registration;
+                let _cancel_guard = CancelTokenGuard {
+                    execution_engine: Arc::clone(&coordinator.execution_engine),
+                    dialog_turn_id: turn_id.clone(),
+                };
+                let started_at = Instant::now();
+                let execution_result = coordinator
+                    .execute_subagent(request, Some(&cancellation_token), None)
+                    .await;
+                let duration_ms = started_at.elapsed().as_millis() as u64;
+                let (
+                    result_data,
+                    result_for_assistant,
+                    is_error,
+                    cancelled,
+                    child_session_id,
+                    failure_error,
+                ) = match execution_result {
+                    Ok(result) => {
+                        let child_session_id = result.session_id().map(str::to_string);
+                        let delegate_target_label = format!("subagent '{}'", logical_id);
+                        let (data, assistant_text) =
+                            bitfun_agent_runtime::subagent_task::subagent_task_completion_result(
+                                bitfun_agent_runtime::subagent_task::SubagentTaskCompletionResultInput {
+                                    delegate_target_label: &delegate_target_label,
+                                    result_text: &result.text,
+                                    context_mode: SubagentContextMode::Fresh.as_str(),
+                                    duration_ms: duration_ms as u128,
+                                    is_partial_timeout: result.is_partial_timeout(),
+                                    reason: result.reason.as_deref(),
+                                    ledger_event_id: result.ledger_event_id(),
+                                    partial_timeout_suffix: "",
+                                },
+                            );
+                        coordinator
+                            .emit_event(AgenticEvent::ToolEvent {
+                                session_id: session_id.clone(),
+                                turn_id: turn_id.clone(),
+                                round_id: round_id.clone(),
+                                attempt_id: None,
+                                attempt_index: None,
+                                tool_event: ToolEventData::Completed {
+                                    identity: ToolEventIdentity::direct(
+                                        tool_call_id.clone(),
+                                        TASK_TOOL_NAME,
+                                    ),
+                                    result: data.clone(),
+                                    result_for_assistant: Some(assistant_text.clone()),
+                                    image_attachments: None,
+                                    duration_ms,
+                                    queue_wait_ms: None,
+                                    preflight_ms: None,
+                                    confirmation_wait_ms: None,
+                                    execution_ms: Some(duration_ms),
+                                },
+                            })
+                            .await;
+                        (data, assistant_text, false, false, child_session_id, None)
+                    }
+                    Err(error) => {
+                        let cancelled = matches!(error, BitFunError::Cancelled(_));
+                        let error_text = error.to_string();
+                        let tool_event = if cancelled {
+                            ToolEventData::Cancelled {
+                                identity: ToolEventIdentity::direct(
+                                    tool_call_id.clone(),
+                                    TASK_TOOL_NAME,
+                                ),
+                                reason: error_text.clone(),
+                                duration_ms: Some(duration_ms),
+                                queue_wait_ms: None,
+                                preflight_ms: None,
+                                confirmation_wait_ms: None,
+                                execution_ms: Some(duration_ms),
+                            }
+                        } else {
+                            ToolEventData::Failed {
+                                identity: ToolEventIdentity::direct(
+                                    tool_call_id.clone(),
+                                    TASK_TOOL_NAME,
+                                ),
+                                error: error_text.clone(),
+                                duration_ms: Some(duration_ms),
+                                queue_wait_ms: None,
+                                preflight_ms: None,
+                                confirmation_wait_ms: None,
+                                execution_ms: Some(duration_ms),
+                            }
+                        };
+                        coordinator
+                            .emit_event(AgenticEvent::ToolEvent {
+                                session_id: session_id.clone(),
+                                turn_id: turn_id.clone(),
+                                round_id: round_id.clone(),
+                                attempt_id: None,
+                                attempt_index: None,
+                                tool_event,
+                            })
+                            .await;
+                        (
+                            serde_json::json!({ "error": error_text }),
+                            error_text,
+                            true,
+                            cancelled,
+                            None,
+                            (!cancelled).then_some(error),
+                        )
+                    }
+                };
+
+                let assistant_message = Message::assistant_with_tools(
+                    String::new(),
+                    vec![ToolCall {
+                        tool_id: tool_call_id.clone(),
+                        tool_name: TASK_TOOL_NAME.to_string(),
+                        arguments: tool_params,
+                        raw_arguments: None,
+                        is_error: false,
+                        parse_error: None,
+                        recovered_from_truncation: false,
+                        repair_kind: Default::default(),
+                    }],
+                )
+                .with_turn_id(turn_id.clone())
+                .with_round_id(round_id.clone());
+                let tool_result_message = Message::tool_result(ToolResult {
+                    tool_id: tool_call_id.clone(),
+                    tool_name: TASK_TOOL_NAME.to_string(),
+                    effective_tool_name: None,
+                    result: result_data,
+                    result_for_assistant: Some(result_for_assistant),
+                    is_error,
+                    duration_ms: Some(duration_ms),
+                    image_attachments: None,
+                })
+                .with_turn_id(turn_id.clone())
+                .with_round_id(round_id.clone());
+                let new_messages = vec![assistant_message, tool_result_message];
+                for message in &new_messages {
+                    if let Err(error) = coordinator
+                        .session_manager
+                        .add_message(&session_id, message.clone())
+                        .await
+                    {
+                        error!(
+                        "Failed to append delegated command Task message: session_id={}, turn_id={}, error={}",
+                        session_id, turn_id, error
+                    );
+                    }
+                }
+
+                let completed_at = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_millis() as u64;
+                let mut rounds = SessionManager::build_model_rounds_from_messages(
+                    &new_messages,
+                    &turn_id,
+                    completed_at,
+                );
+                let child_dialog_turn_id = child_session_id.as_ref().and_then(|child_session_id| {
+                    coordinator
+                        .session_manager
+                        .get_session(child_session_id)
+                        .and_then(|session| session.dialog_turn_ids.last().cloned())
+                });
+                let child_model_id = child_session_id.as_ref().and_then(|child_session_id| {
+                    coordinator
+                        .session_manager
+                        .get_session(child_session_id)
+                        .and_then(|session| session.config.model_id)
+                });
+                if let Some(tool_item) = rounds
+                    .iter_mut()
+                    .flat_map(|round| round.tool_items.iter_mut())
+                    .find(|item| item.id == tool_call_id)
+                {
+                    tool_item.subagent_session_id = child_session_id;
+                    tool_item.subagent_dialog_turn_id = child_dialog_turn_id;
+                    tool_item.subagent_model_id = child_model_id;
+                    tool_item.duration_ms = Some(duration_ms);
+                    tool_item.execution_ms = Some(duration_ms);
+                    if let Some(result) = tool_item.tool_result.as_mut() {
+                        result.duration_ms = Some(duration_ms);
+                    }
+                    tool_item.status =
+                        Some(if is_error { "error" } else { "completed" }.to_string());
+                }
+                let turn_persistence = if let Some(error) = failure_error.as_ref() {
+                    coordinator
+                        .session_manager
+                        .fail_synthetic_dialog_turn(
+                            &session_id,
+                            &turn_id,
+                            error.to_string(),
+                            rounds,
+                        )
+                        .await
+                } else {
+                    coordinator
+                        .session_manager
+                        .complete_synthetic_dialog_turn(&session_id, &turn_id, rounds, duration_ms)
+                        .await
+                };
+                if let Err(error) = turn_persistence {
+                    error!(
+                    "Failed to persist delegated external command turn: session_id={}, turn_id={}, error={}",
+                    session_id, turn_id, error
+                );
+                }
+                if cancelled {
+                    let _ = coordinator
+                        .session_manager
+                        .cancel_dialog_turn(&session_id, &turn_id)
+                        .await;
+                }
+                let final_session_state = if let Some(error) = failure_error.as_ref() {
+                    SessionState::Error {
+                        error: error.to_string(),
+                        recoverable: !matches!(
+                            error,
+                            BitFunError::AIClient(_) | BitFunError::Timeout(_)
+                        ),
+                    }
+                } else {
+                    SessionState::Idle
+                };
+                let _ = coordinator
+                    .session_manager
+                    .update_session_state_for_turn_if_processing(
+                        &session_id,
+                        &turn_id,
+                        final_session_state,
+                    )
+                    .await;
+                coordinator
+                    .emit_event(AgenticEvent::ModelRoundCompleted {
+                        session_id: session_id.clone(),
+                        turn_id: turn_id.clone(),
+                        round_id,
+                        has_tool_calls: true,
+                        duration_ms: Some(duration_ms),
+                        provider_id: None,
+                        model_config_id: String::new(),
+                        effective_model_name: String::new(),
+                        first_chunk_ms: None,
+                        first_visible_output_ms: None,
+                        stream_duration_ms: None,
+                        attempt_count: None,
+                        failure_category: is_error.then_some("tool_error".to_string()),
+                        token_details: None,
+                    })
+                    .await;
+
+                if cancelled {
+                    coordinator
+                        .emit_event(AgenticEvent::DialogTurnCancelled {
+                            session_id: session_id.clone(),
+                            turn_id: turn_id.clone(),
+                        })
+                        .await;
+                } else if let Some(error) = failure_error.as_ref() {
+                    coordinator
+                        .emit_event(AgenticEvent::DialogTurnFailed {
+                            session_id: session_id.clone(),
+                            turn_id: turn_id.clone(),
+                            error: error.to_string(),
+                            error_category: Some(error.error_category()),
+                            error_detail: Some(error.error_detail()),
+                        })
+                        .await;
+                } else {
+                    coordinator
+                        .emit_event(AgenticEvent::DialogTurnCompleted {
+                            session_id: session_id.clone(),
+                            turn_id: turn_id.clone(),
+                            total_rounds: 1,
+                            total_tools: 1,
+                            duration_ms,
+                            partial_recovery_reason: None,
+                            success: Some(true),
+                            finish_reason: Some("complete".to_string()),
+                            has_final_response: Some(false),
+                        })
+                        .await;
+                }
+                if let Some(tx) = coordinator.scheduler_notify_tx.get() {
+                    let outcome = if cancelled {
+                        TurnOutcome::Cancelled {
+                            turn_id: turn_id.clone(),
+                        }
+                    } else if let Some(error) = failure_error.as_ref() {
+                        TurnOutcome::Failed {
+                            turn_id: turn_id.clone(),
+                            error: error.to_string(),
+                        }
+                    } else {
+                        TurnOutcome::Completed {
+                            turn_id: turn_id.clone(),
+                            final_response: String::new(),
+                        }
+                    };
+                    if let Err(error) = tx.try_send((session_id.clone(), outcome)) {
+                        error!(
+                        "Failed to notify scheduler of delegated command settlement: session_id={}, turn_id={}, error={}",
+                        session_id, turn_id, error
+                    );
+                    }
+                }
+            });
+
+            Ok(())
+        })
     }
 
     #[allow(clippy::too_many_arguments)]

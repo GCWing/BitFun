@@ -41,6 +41,7 @@ fn command_named(
         description: format!("Review from {provider_id}"),
         template: format!("{provider_id}: $ARGUMENTS"),
         shell_preference: None,
+        execution_target: Default::default(),
         availability: PromptCommandAvailability::Available,
         content_version: format!("command-v{version}"),
     }

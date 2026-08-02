@@ -532,6 +532,7 @@ fn submit_operation(workspace: &Path, session_id: &str, turn_id: &str) -> Runtim
             message: "hello".to_string(),
             original_message: None,
             turn_id: Some(turn_id.to_string()),
+            execution: Default::default(),
             agent_type: "agentic".to_string(),
             workspace_path: Some(workspace.to_string_lossy().to_string()),
             remote_connection_id: None,

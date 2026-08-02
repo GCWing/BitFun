@@ -28,9 +28,9 @@ pub use bitfun_product_domains::external_sources::{
     ExternalToolRuntimeKind, NativePromptCommandConflictProjection,
     NativePromptCommandConflictSnapshot, NativePromptCommandDescriptor,
     NativePromptCommandReconfirmationProjection, PromptCommandAvailability,
-    PromptCommandCatalogEntry, PromptCommandDefinition, PromptCommandInvocationOutcome,
-    PromptCommandShellReviewDecision, PromptCommandShellReviewMode, PromptCommandShellReviewPlan,
-    SourceKey,
+    PromptCommandCatalogEntry, PromptCommandDefinition, PromptCommandExecutionTarget,
+    PromptCommandInvocationOutcome, PromptCommandShellReviewDecision, PromptCommandShellReviewMode,
+    PromptCommandShellReviewPlan, SourceKey,
 };
 pub use bitfun_product_domains::external_subagents::{
     ExternalSubagentActivationState, ExternalSubagentCompatibilityState, ExternalSubagentConflict,
@@ -83,8 +83,9 @@ use bitfun_product_domains::external_integration_policy::{
 };
 use bitfun_product_domains::external_sources::{
     ExecutionDomainId, ExternalMcpRevisionKey, ExternalMcpSourceProvider, ExternalMcpStaticStatus,
-    ExternalSourceContext, ExternalSourceScope, ExternalToolSourceProvider, PromptCommandExpansion,
-    PromptCommandShellInvocation, PromptCommandShellPreference, PromptCommandSourceProvider,
+    ExternalSourceContext, ExternalSourceScope, ExternalToolSourceProvider, PromptCommandConflict,
+    PromptCommandExpansion, PromptCommandShellInvocation, PromptCommandShellPreference,
+    PromptCommandSourceProvider,
 };
 use bitfun_product_domains::external_subagents::ExternalSubagentSourceProvider;
 use bitfun_product_domains::workspace_references::{
@@ -1319,6 +1320,67 @@ fn source_ecosystem_id(
         })
 }
 
+fn restrict_prompt_commands_without_active_subagents(
+    commands: &mut [PromptCommandCatalogEntry],
+    conflicts: &mut [PromptCommandConflict],
+    active_subagents: &BTreeSet<(EcosystemId, String)>,
+) {
+    for command in commands {
+        if !matches!(
+            command.definition.availability,
+            PromptCommandAvailability::Available
+        ) {
+            continue;
+        }
+        let PromptCommandExecutionTarget::FreshExternalSubagent {
+            ecosystem_id,
+            logical_id,
+        } = &command.definition.execution_target
+        else {
+            continue;
+        };
+        let key = (ecosystem_id.clone(), logical_id.to_ascii_lowercase());
+        if !active_subagents.contains(&key) {
+            command.definition.availability = PromptCommandAvailability::Restricted {
+                reason: format!(
+                    "External command subagent '{}' is not currently approved and available",
+                    logical_id
+                ),
+                required_capabilities: vec!["command.external_subagent".to_string()],
+            };
+        }
+    }
+    for conflict in conflicts {
+        for candidate in &mut conflict.candidates {
+            if !matches!(candidate.availability, PromptCommandAvailability::Available) {
+                continue;
+            }
+            let PromptCommandExecutionTarget::FreshExternalSubagent {
+                ecosystem_id,
+                logical_id,
+            } = &candidate.execution_target
+            else {
+                continue;
+            };
+            let key = (ecosystem_id.clone(), logical_id.to_ascii_lowercase());
+            if !active_subagents.contains(&key) {
+                candidate.availability = PromptCommandAvailability::Restricted {
+                    reason: format!(
+                        "External command subagent '{}' is not currently approved and available",
+                        logical_id
+                    ),
+                    required_capabilities: vec!["command.external_subagent".to_string()],
+                };
+                if conflict.selected_candidate_id.as_deref()
+                    == Some(candidate.candidate_id.as_str())
+                {
+                    conflict.selected_candidate_id = None;
+                }
+            }
+        }
+    }
+}
+
 fn ensure_source_capability_active(
     snapshot: &ExternalSourceCatalogSnapshot,
     source_key: &SourceKey,
@@ -1953,6 +2015,21 @@ impl WorkspaceExternalSourceService {
             &subagent_snapshot,
             &subagent_state,
             preferences.preference_revision,
+        );
+        let active_subagents = subagent_state
+            .registrations
+            .iter()
+            .map(|registration| {
+                (
+                    registration.ecosystem_id.clone(),
+                    registration.logical_id.to_ascii_lowercase(),
+                )
+            })
+            .collect::<BTreeSet<_>>();
+        restrict_prompt_commands_without_active_subagents(
+            &mut snapshot.commands,
+            &mut snapshot.command_conflicts,
+            &active_subagents,
         );
         if let Some(workspace_root) = self.workspace_root.as_deref() {
             crate::agentic::agents::get_agent_registry().install_external_subagent_routes(
@@ -3545,6 +3622,7 @@ impl WorkspaceExternalSourceService {
                 missing_candidate_error(format!("External prompt command '{name}' was not found"))
             })?;
         let source_key = selected_command.id.source.clone();
+        let execution_target = selected_command.execution_target.clone();
         ensure_source_capability_active(&snapshot, &source_key, EXTERNAL_CAPABILITY_COMMAND)?;
         let source_display_name = snapshot
             .sources
@@ -3575,6 +3653,7 @@ impl WorkspaceExternalSourceService {
                     .await?;
             return Ok(PromptCommandInvocationOutcome::Ready {
                 content: expanded.content,
+                execution_target,
             });
         };
         if self.safe_mode_enabled() {
@@ -3636,6 +3715,7 @@ impl WorkspaceExternalSourceService {
             finalize_prompt_command_expansion(self.workspace_root.as_deref(), expansion).await?;
         Ok(PromptCommandInvocationOutcome::Ready {
             content: expanded.content,
+            execution_target,
         })
     }
 
@@ -6824,9 +6904,10 @@ mod tests {
     use crate::service::mcp::{ConfigLocation, MCPServerConfig, MCPServerType};
     use bitfun_product_domains::external_sources::{
         EcosystemId, ExternalSourceProviderError, ExternalSourceRecord, ExternalSourceScope,
-        PromptCommandAvailability, PromptCommandDefinition, PromptCommandProviderIdentity,
-        PromptCommandProviderSnapshot, PromptCommandShellExpansion, PromptCommandShellInvocation,
-        PromptCommandShellPreference, SourceQualifiedCommandId,
+        PromptCommandAvailability, PromptCommandCatalogEntry, PromptCommandConflict,
+        PromptCommandConflictCandidate, PromptCommandDefinition, PromptCommandExecutionTarget,
+        PromptCommandProviderIdentity, PromptCommandProviderSnapshot, PromptCommandShellExpansion,
+        PromptCommandShellInvocation, PromptCommandShellPreference, SourceQualifiedCommandId,
     };
     use bitfun_product_domains::workspace_references::ExternalWorkspaceReferenceDefinition;
     use std::sync::atomic::{AtomicUsize, Ordering};
@@ -7436,6 +7517,7 @@ mod tests {
             description: "Review changes".to_string(),
             template: "Review changes".to_string(),
             shell_preference: None,
+            execution_target: Default::default(),
             availability: PromptCommandAvailability::Available,
             content_version: "external-v1".to_string(),
         };
@@ -7570,6 +7652,74 @@ mod tests {
             first_conflict.conflict_key
         );
         assert_eq!(changed.conflicts[0].selected_candidate_id, None);
+    }
+
+    #[test]
+    fn delegated_prompt_commands_require_an_active_same_ecosystem_subagent() {
+        let source = SourceKey::new("opencode.commands", "project").unwrap();
+        let definition = |logical_id: &str| PromptCommandDefinition {
+            id: SourceQualifiedCommandId::new(source.clone(), logical_id).unwrap(),
+            name: logical_id.to_string(),
+            description: logical_id.to_string(),
+            template: "Review changes".to_string(),
+            shell_preference: None,
+            execution_target: PromptCommandExecutionTarget::FreshExternalSubagent {
+                ecosystem_id: EcosystemId::new("opencode").unwrap(),
+                logical_id: logical_id.to_string(),
+            },
+            availability: PromptCommandAvailability::Available,
+            content_version: "command-v1".to_string(),
+        };
+        let mut commands = vec![
+            PromptCommandCatalogEntry {
+                definition: definition("reviewer"),
+            },
+            PromptCommandCatalogEntry {
+                definition: definition("missing"),
+            },
+        ];
+        let active = BTreeSet::from([(
+            EcosystemId::new("opencode").unwrap(),
+            "reviewer".to_string(),
+        )]);
+        let missing_candidate_id = commands[1].definition.id.stable_key();
+        let mut conflicts = vec![PromptCommandConflict {
+            conflict_key: "prompt-command-conflict".to_string(),
+            command_name: "missing".to_string(),
+            candidates: vec![PromptCommandConflictCandidate {
+                candidate_id: missing_candidate_id.clone(),
+                source: source.clone(),
+                source_display_name: "OpenCode".to_string(),
+                ecosystem_id: EcosystemId::new("opencode").unwrap(),
+                content_version: "command-v1".to_string(),
+                command_description: "missing".to_string(),
+                source_scope: ExternalSourceScope::Project,
+                source_location: ".opencode/commands/missing.md".to_string(),
+                execution_target: commands[1].definition.execution_target.clone(),
+                availability: PromptCommandAvailability::Available,
+            }],
+            selected_candidate_id: Some(missing_candidate_id),
+        }];
+
+        restrict_prompt_commands_without_active_subagents(&mut commands, &mut conflicts, &active);
+
+        assert_eq!(
+            commands[0].definition.availability,
+            PromptCommandAvailability::Available
+        );
+        let PromptCommandAvailability::Restricted {
+            required_capabilities,
+            ..
+        } = &commands[1].definition.availability
+        else {
+            panic!("missing delegated subagent must restrict the command");
+        };
+        assert_eq!(required_capabilities, &["command.external_subagent"]);
+        assert!(matches!(
+            conflicts[0].candidates[0].availability,
+            PromptCommandAvailability::Restricted { .. }
+        ));
+        assert_eq!(conflicts[0].selected_candidate_id, None);
     }
 
     #[test]
@@ -7977,6 +8127,7 @@ mod tests {
                     description: self.command_name.clone(),
                     template: self.command_name.clone(),
                     shell_preference: None,
+                    execution_target: Default::default(),
                     availability: PromptCommandAvailability::Available,
                     content_version: "command-v1".to_string(),
                 }],

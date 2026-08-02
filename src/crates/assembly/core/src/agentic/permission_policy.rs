@@ -1,4 +1,6 @@
+use crate::service::config::global::GlobalConfigManager;
 use crate::service::config::types::{AgentProfileConfig, GlobalConfig};
+use crate::util::errors::BitFunResult;
 use bitfun_runtime_ports::{
     resolve_child_permission_policy, resolve_permission_policy, ChildPermissionPolicyLayers,
     PermissionConstraintLayer, PermissionEffect, PermissionPolicyLayers, PermissionRule,
@@ -20,6 +22,18 @@ pub(crate) fn derive_parent_permission_runtime_ceiling(
 
     PermissionRuntimeCeiling::try_new(rules)
         .expect("parent permission ceiling extraction must exclude allow rules")
+}
+
+pub(crate) async fn load_parent_permission_runtime_ceiling(
+    agent_type: Option<&str>,
+) -> BitFunResult<PermissionRuntimeCeiling> {
+    let service = GlobalConfigManager::get_service().await?;
+    let global: GlobalConfig = service.get_config(None).await?;
+    let profile = agent_type.and_then(|agent_type| {
+        let profile_id = crate::agentic::agents::resolve_mode_config_profile_id(agent_type);
+        global.ai.agent_profiles.get(profile_id.as_ref())
+    });
+    Ok(derive_parent_permission_runtime_ceiling(profile))
 }
 
 pub(crate) fn resolve_effective_permission_policy(

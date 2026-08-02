@@ -345,6 +345,32 @@ describe('MessageModule session writer conflict', () => {
     retryAction.onClick();
     expect(mockEnsureBackendSession).toHaveBeenCalledTimes(1);
   });
+
+  it('does not turn external command delegation into a pending queue item', async () => {
+    const sessionId = 'session-delegated-command';
+    const { context } = conflictContext(sessionId);
+    mockGetCurrentState.mockReturnValue('processing');
+
+    await expect(sendMessage(
+      context,
+      'expanded prompt',
+      sessionId,
+      '/review',
+      undefined,
+      undefined,
+      {
+        execution: {
+          kind: 'fresh_external_subagent',
+          ecosystemId: 'opencode',
+          logicalId: 'reviewer',
+        },
+      },
+    )).rejects.toThrow('requires an idle session');
+
+    expect(mockPendingEnqueue).not.toHaveBeenCalled();
+    expect(mockEnsureBackendSession).not.toHaveBeenCalled();
+    expect(mockStartDialogTurn).not.toHaveBeenCalled();
+  });
 });
 
 describe('MessageModule cancellation', () => {

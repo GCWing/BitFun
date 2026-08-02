@@ -907,8 +907,34 @@ impl ChatMode {
             ))
         });
         match expanded {
-            Ok(PromptCommandInvocationOutcome::Ready { content }) => {
-                self.send_message_to_agent(content, chat_view, chat_state, rt_handle);
+            Ok(PromptCommandInvocationOutcome::Ready {
+                content,
+                execution_target,
+            }) => {
+                match execution_target {
+                    PromptCommandExecutionTarget::Inline => {
+                        self.send_message_to_agent(content, chat_view, chat_state, rt_handle);
+                    }
+                    PromptCommandExecutionTarget::FreshExternalSubagent {
+                        ecosystem_id,
+                        logical_id,
+                    } => {
+                        let original_command = if invocation.arguments.trim().is_empty() {
+                            format!("/{}", invocation.command_name)
+                        } else {
+                            format!("/{} {}", invocation.command_name, invocation.arguments)
+                        };
+                        self.send_external_subagent_command_to_agent(
+                            content,
+                            original_command,
+                            ecosystem_id.to_string(),
+                            logical_id,
+                            chat_view,
+                            chat_state,
+                            rt_handle,
+                        );
+                    }
+                }
                 Ok(None)
             }
             Ok(PromptCommandInvocationOutcome::ReviewRequired { review }) => {

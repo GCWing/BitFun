@@ -17,6 +17,7 @@ use bitfun_agent_runtime::custom_agent::{
     CustomAgentKind, CustomAgentLevel,
 };
 use bitfun_agent_runtime::sdk::{RuntimeAgentRegistry, RuntimeAgentRegistryQuery};
+use bitfun_product_domains::external_sources::EcosystemId;
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -1160,6 +1161,7 @@ async fn external_routes_are_workspace_scoped_fail_closed_and_generation_leased(
         vec![ExternalSubagentRegistration {
             runtime_key: runtime_v1.to_string(),
             logical_id: "Explore".to_string(),
+            ecosystem_id: EcosystemId::new("opencode").unwrap(),
             provider_label: "OpenCode".to_string(),
             model_binding: super::ExternalSubagentModelBinding::Fixed {
                 model_id: "inherit".to_string(),
@@ -1214,6 +1216,29 @@ async fn external_routes_are_workspace_scoped_fail_closed_and_generation_leased(
     assert!(registry.is_external_subagent_route("EXPLORE", Some(&workspace)));
     assert!(!registry.is_external_subagent_route("Explore", None));
     assert!(!registry.is_external_subagent_route("Explore", Some(Path::new("C:/workspace/other"))));
+    assert!(registry
+        .resolve_external_subagent_for_fresh_invocation(
+            "Explore",
+            &EcosystemId::new("claude-code").unwrap(),
+            Some(&workspace),
+        )
+        .is_none());
+    assert!(registry
+        .resolve_external_subagent_for_fresh_invocation(
+            "Explore",
+            &EcosystemId::new("opencode").unwrap(),
+            None,
+        )
+        .is_none());
+    let command_binding = registry
+        .resolve_external_subagent_for_fresh_invocation(
+            "Explore",
+            &EcosystemId::new("opencode").unwrap(),
+            Some(&workspace),
+        )
+        .expect("command delegation resolves only the exact external ecosystem route");
+    assert_eq!(command_binding.runtime_agent_key, runtime_v1);
+    drop(command_binding);
 
     let binding = registry
         .resolve_subagent_for_fresh_invocation("Explore", Some(&workspace), true)
@@ -1240,6 +1265,7 @@ async fn external_routes_are_workspace_scoped_fail_closed_and_generation_leased(
         vec![ExternalSubagentRegistration {
             runtime_key: runtime_v2.to_string(),
             logical_id: "Explore".to_string(),
+            ecosystem_id: EcosystemId::new("opencode").unwrap(),
             provider_label: "OpenCode".to_string(),
             model_binding: super::ExternalSubagentModelBinding::Fixed {
                 model_id: "inherit".to_string(),

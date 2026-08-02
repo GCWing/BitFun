@@ -776,6 +776,7 @@
     "currentMode": "目前模式: {{mode}}",
     "noMatchingMode": "沒有匹配的模式",
     "noMatchingCommand": "沒有匹配的命令",
+    "externalCommandContextUnsupported": "執行此委派命令前，請先移除輸入框中的附件與引用。",
     "nativeCommandChoiceNotSaved": "本次仍會執行該命令，但未能儲存這次衝突選擇。",
     "nativeCommandReconfirmationRequired": "先前選擇的外部命令已無法使用。請從斜線選單中選擇 BitFun 命令後再執行。",
     "selectHint": "↑↓ 選擇 · Enter 確認 · Esc 取消",

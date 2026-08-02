@@ -1692,6 +1692,7 @@ impl RemoteDialogRuntimeHost for CoreRemoteDialogRuntimeHost<'_> {
                 message: submission.content,
                 original_message: None,
                 turn_id: Some(submission.turn_id),
+                execution: Default::default(),
                 agent_type: submission.resolved_agent_type,
                 workspace_path,
                 remote_connection_id,

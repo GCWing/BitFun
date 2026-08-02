@@ -1,8 +1,8 @@
 use bitfun_opencode_adapter::{OpenCodeCommandProvider, OpenCodeCommandProviderOptions};
 use bitfun_product_domains::external_sources::{
-    ExecutionDomainId, ExternalSourceContext, ExternalSourceHealth, PromptCommandAvailability,
-    PromptCommandDefinition, PromptCommandProviderSnapshot, PromptCommandShellPreference,
-    PromptCommandSourceProvider,
+    EcosystemId, ExecutionDomainId, ExternalSourceContext, ExternalSourceHealth,
+    PromptCommandAvailability, PromptCommandDefinition, PromptCommandExecutionTarget,
+    PromptCommandProviderSnapshot, PromptCommandShellPreference, PromptCommandSourceProvider,
 };
 use std::collections::BTreeSet;
 use std::fs;
@@ -346,7 +346,7 @@ fn invalid_source_is_diagnostic_and_does_not_remove_other_valid_sources() {
 }
 
 #[test]
-fn unsupported_expansion_features_restrict_the_whole_command() {
+fn supported_subagent_delegation_is_typed_and_other_unsupported_features_stay_restricted() {
     let fixture = Fixture::new();
     write(
         fixture.user_config.join("opencode.json"),
@@ -359,7 +359,12 @@ fn unsupported_expansion_features_restrict_the_whole_command() {
             "unsafe-file": {"template":"Review @/etc/passwd"},
             "config-var": {"template":"Review {env:HOME}"},
             "agent": {"template":"Delegate this", "agent":"explore"},
-            "subtask": {"template":"Delegate this", "subtask":true}
+            "agent-subtask": {"template":"Delegate this", "agent":"explore", "subtask":true},
+            "agent-shell": {"template":"Run !`git status` then delegate", "agent":"explore"},
+            "primary-agent": {"template":"Stay primary", "agent":"build", "subtask":false},
+            "subtask": {"template":"Delegate this", "subtask":true},
+            "model": {"template":"Delegate this", "agent":"explore", "model":"provider/model"},
+            "variant": {"template":"Delegate this", "agent":"explore", "variant":"high"}
           }
         }"#,
     );
@@ -374,8 +379,11 @@ fn unsupported_expansion_features_restrict_the_whole_command() {
         "dynamic-file",
         "unsafe-file",
         "config-var",
-        "agent",
+        "agent-shell",
+        "primary-agent",
         "subtask",
+        "model",
+        "variant",
     ] {
         let command = snapshot
             .commands
@@ -387,6 +395,44 @@ fn unsupported_expansion_features_restrict_the_whole_command() {
             PromptCommandAvailability::Restricted { .. }
         ));
         assert!(provider.expand(&fixture.context(), command, "").is_err());
+    }
+    let agent_shell = snapshot
+        .commands
+        .iter()
+        .find(|command| command.name == "agent-shell")
+        .unwrap();
+    let PromptCommandAvailability::Restricted {
+        required_capabilities,
+        ..
+    } = &agent_shell.availability
+    else {
+        panic!("shell-backed subagent delegation must be restricted")
+    };
+    assert!(required_capabilities.contains(&"command.external_subagent.shell".to_string()));
+    for name in ["agent", "agent-subtask"] {
+        let command = snapshot
+            .commands
+            .iter()
+            .find(|command| command.name == name)
+            .unwrap();
+        assert!(matches!(
+            command.availability,
+            PromptCommandAvailability::Available
+        ));
+        assert_eq!(
+            command.execution_target,
+            PromptCommandExecutionTarget::FreshExternalSubagent {
+                ecosystem_id: EcosystemId::new("opencode").unwrap(),
+                logical_id: "explore".to_string(),
+            }
+        );
+        assert_eq!(
+            provider
+                .expand(&fixture.context(), command, "")
+                .unwrap()
+                .content,
+            "Delegate this"
+        );
     }
     let shell = snapshot
         .commands

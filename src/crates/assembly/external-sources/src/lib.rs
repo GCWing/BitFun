@@ -684,6 +684,7 @@ impl ExternalSourceCoordinator {
                         command_description: command.description.clone(),
                         source_scope: source.record.scope,
                         source_location: source.record.location.clone(),
+                        execution_target: command.execution_target.clone(),
                         availability: command.availability.clone(),
                     })
                 })

@@ -57,11 +57,12 @@ use bitfun_agent_runtime::scheduler::{
 };
 use bitfun_runtime_ports::{
     resolve_dialog_submit_queue_action, AgentBackgroundResultRequest, AgentDialogPrependedReminder,
-    AgentDialogTurnPort, AgentDialogTurnRequest, AgentInputAttachment, AgentLifecycleDeliveryPort,
-    AgentThreadGoalDeliveryKind, AgentThreadGoalDeliveryRequest, AgentTurnCancellationPort,
-    AgentTurnCancellationRequest, AgentTurnCancellationResult, DialogSessionStateFact,
-    DialogSubmitQueueAction, DialogSubmitQueueFacts, PortError, PortErrorKind, PortResult,
-    RoundInjection, RoundInjectionKind, SessionStoragePathRequest, SessionStorePort,
+    AgentDialogTurnExecution, AgentDialogTurnPort, AgentDialogTurnRequest, AgentInputAttachment,
+    AgentLifecycleDeliveryPort, AgentThreadGoalDeliveryKind, AgentThreadGoalDeliveryRequest,
+    AgentTurnCancellationPort, AgentTurnCancellationRequest, AgentTurnCancellationResult,
+    DialogSessionStateFact, DialogSubmitQueueAction, DialogSubmitQueueFacts, PortError,
+    PortErrorKind, PortResult, RoundInjection, RoundInjectionKind, SessionStoragePathRequest,
+    SessionStorePort,
 };
 pub use bitfun_runtime_ports::{
     AgentSessionReplyRoute, DialogQueuePriority, DialogSteerOutcome, DialogSubmissionPolicy,
@@ -101,7 +102,14 @@ impl QueuedTurn {
 pub(crate) enum QueuedTurnExecution {
     #[default]
     Standard,
+    FreshExternalSubagent(ExternalSubagentDelegationQueuedExecution),
     HiddenSubagent(HiddenSubagentQueuedExecution),
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct ExternalSubagentDelegationQueuedExecution {
+    ecosystem_id: String,
+    logical_id: String,
 }
 
 fn remove_queued_turn_by_id(
@@ -1035,6 +1043,16 @@ impl DialogScheduler {
         };
 
         let queue_has_items = self.queues.has_items(&session_id);
+        if matches!(
+            &queued_turn.execution,
+            QueuedTurnExecution::FreshExternalSubagent(_)
+        ) && (!matches!(&state_fact, DialogSessionStateFact::Idle) || queue_has_items)
+        {
+            return Err(SchedulerSubmitError::Core(BitFunError::Validation(
+                "External subagent delegation requires an idle session with an empty queue"
+                    .to_string(),
+            )));
+        }
         let action = resolve_dialog_submit_queue_action(DialogSubmitQueueFacts {
             session_state: state_fact,
             queue_has_items,
@@ -1141,7 +1159,7 @@ impl DialogScheduler {
 
     async fn finish_removed_queued_turn(&self, session_id: &str, removed_turn: QueuedTurn) {
         match removed_turn.execution {
-            QueuedTurnExecution::Standard => {
+            QueuedTurnExecution::Standard | QueuedTurnExecution::FreshExternalSubagent(_) => {
                 if let Some(turn_id) = removed_turn.turn_id {
                     self.coordinator
                         .emit_event(AgenticEvent::DialogTurnCancelled {
@@ -1398,7 +1416,7 @@ impl DialogScheduler {
         let mut retired_turn_ids = Vec::new();
         for queued_turn in cleared_turns {
             match queued_turn.execution {
-                QueuedTurnExecution::Standard => {
+                QueuedTurnExecution::Standard | QueuedTurnExecution::FreshExternalSubagent(_) => {
                     if let Some(turn_id) = queued_turn.turn_id {
                         retired_turn_ids.push(turn_id.clone());
                         self.coordinator
@@ -1491,11 +1509,55 @@ impl DialogScheduler {
         session_id: &str,
         queued_turn: &QueuedTurn,
     ) -> Result<String, SchedulerSubmitError> {
-        if let QueuedTurnExecution::HiddenSubagent(execution) = &queued_turn.execution {
-            return self
-                .start_hidden_subagent_turn(session_id, queued_turn, execution)
-                .await
-                .map_err(SchedulerSubmitError::Message);
+        match &queued_turn.execution {
+            QueuedTurnExecution::HiddenSubagent(execution) => {
+                return self
+                    .start_hidden_subagent_turn(session_id, queued_turn, execution)
+                    .await
+                    .map_err(SchedulerSubmitError::Message);
+            }
+            QueuedTurnExecution::FreshExternalSubagent(execution) => {
+                self.coordinator
+                    .start_external_subagent_delegation_turn(
+                        session_id.to_string(),
+                        queued_turn.user_input.clone(),
+                        queued_turn.original_user_input.clone(),
+                        queued_turn.turn_id.clone(),
+                        queued_turn.agent_type.clone(),
+                        queued_turn.workspace_path.clone(),
+                        queued_turn.policy,
+                        queued_turn.user_message_metadata.clone(),
+                        execution.ecosystem_id.clone(),
+                        execution.logical_id.clone(),
+                    )
+                    .await
+                    .map_err(SchedulerSubmitError::Core)?;
+
+                let resolved = queued_turn.turn_id.clone().ok_or_else(|| {
+                    format!(
+                        "Scheduled external subagent delegation is missing turn_id: session_id={session_id}"
+                    )
+                })?;
+                self.active_turns.insert(
+                    session_id,
+                    ActiveDialogTurn::new(
+                        resolved.clone(),
+                        queued_turn.workspace_path.clone(),
+                        None,
+                        None,
+                        queued_turn.agent_type.clone(),
+                        queued_turn
+                            .original_user_input
+                            .clone()
+                            .unwrap_or_else(|| queued_turn.user_input.clone()),
+                        queued_turn.user_message_metadata.clone(),
+                        queued_turn.policy,
+                        queued_turn.reply_route.clone(),
+                    ),
+                );
+                return Ok(resolved);
+            }
+            QueuedTurnExecution::Standard => {}
         }
 
         let images = queued_turn
@@ -2167,6 +2229,41 @@ impl DialogScheduler {
         request: AgentDialogTurnRequest,
         reject_if_busy: bool,
     ) -> PortResult<DialogSubmitOutcome> {
+        let (execution, reject_if_busy) = match &request.execution {
+            AgentDialogTurnExecution::Standard => (QueuedTurnExecution::Standard, reject_if_busy),
+            AgentDialogTurnExecution::FreshExternalSubagent {
+                ecosystem_id,
+                logical_id,
+            } => {
+                if ecosystem_id.trim().is_empty() || logical_id.trim().is_empty() {
+                    return Err(PortError::new(
+                        PortErrorKind::InvalidRequest,
+                        "External subagent delegation requires non-empty ecosystem_id and logical_id",
+                    ));
+                }
+                if !request.attachments.is_empty() || !request.prepended_reminders.is_empty() {
+                    return Err(PortError::new(
+                        PortErrorKind::InvalidRequest,
+                        "External subagent delegation does not accept attachments or prepended reminders",
+                    ));
+                }
+                if request.remote_connection_id.is_some() || request.remote_ssh_host.is_some() {
+                    return Err(PortError::new(
+                        PortErrorKind::NotAvailable,
+                        "External subagent delegation is unavailable for remote workspaces",
+                    ));
+                }
+                (
+                    QueuedTurnExecution::FreshExternalSubagent(
+                        ExternalSubagentDelegationQueuedExecution {
+                            ecosystem_id: ecosystem_id.trim().to_string(),
+                            logical_id: logical_id.trim().to_string(),
+                        },
+                    ),
+                    true,
+                )
+            }
+        };
         let image_contexts = agent_dialog_turn_image_contexts(&request.attachments)?;
         let prepended_messages =
             agent_dialog_turn_prepended_messages(&request.prepended_reminders)?;
@@ -2205,7 +2302,7 @@ impl DialogScheduler {
             image_contexts,
             enqueued_at: SystemTime::now(),
             _settlement_registration: Some(settlement_registration),
-            execution: QueuedTurnExecution::Standard,
+            execution,
         };
 
         self.submit_queued_turn(
@@ -2780,6 +2877,7 @@ mod tests {
                 message: "hello".to_string(),
                 original_message: None,
                 turn_id: Some("missing-turn".to_string()),
+                execution: Default::default(),
                 agent_type: "agentic".to_string(),
                 workspace_path: Some(workspace.to_string_lossy().to_string()),
                 remote_connection_id: None,
@@ -2844,6 +2942,7 @@ mod tests {
                 message: "queued prompt".to_string(),
                 original_message: None,
                 turn_id: Some(turn_id.to_string()),
+                execution: Default::default(),
                 agent_type: "agentic".to_string(),
                 workspace_path: None,
                 remote_connection_id: None,
@@ -2884,6 +2983,154 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn delegated_dialog_turn_rejects_instead_of_queueing_behind_an_active_turn() {
+        let (scheduler, session_manager, _, root) = test_scheduler();
+        let session_id = "delegated-busy-session";
+        let workspace = root.path().join("workspace");
+        std::fs::create_dir_all(&workspace).expect("workspace");
+        session_manager
+            .create_session_with_id(
+                Some(session_id.to_string()),
+                "Delegated".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.to_string_lossy().to_string()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("create delegated session");
+        session_manager
+            .update_session_state(
+                session_id,
+                SessionState::Processing {
+                    current_turn_id: "active-turn".to_string(),
+                    phase: ProcessingPhase::Thinking,
+                },
+            )
+            .await
+            .expect("mark active turn");
+
+        let error = scheduler
+            .submit_dialog_turn(AgentDialogTurnRequest {
+                session_id: session_id.to_string(),
+                message: "expanded command prompt".to_string(),
+                original_message: Some("/review".to_string()),
+                turn_id: Some("delegated-turn".to_string()),
+                execution: bitfun_runtime_ports::AgentDialogTurnExecution::FreshExternalSubagent {
+                    ecosystem_id: "opencode".to_string(),
+                    logical_id: "reviewer".to_string(),
+                },
+                agent_type: "agentic".to_string(),
+                workspace_path: None,
+                remote_connection_id: None,
+                remote_ssh_host: None,
+                policy: DialogSubmissionPolicy::for_source(DialogTriggerSource::Cli),
+                reply_route: None,
+                prepended_reminders: Vec::new(),
+                attachments: Vec::new(),
+                metadata: serde_json::Map::new(),
+            })
+            .await
+            .expect_err("delegated commands must not queue behind another turn");
+
+        assert_eq!(error.kind, PortErrorKind::InvalidRequest);
+        assert!(error.message.contains("idle session"), "{error}");
+        assert_eq!(scheduler.queue_depth(session_id), 0);
+    }
+
+    #[tokio::test]
+    async fn delegated_dialog_turn_does_not_clear_a_queue_from_an_error_session() {
+        let (scheduler, session_manager, _, root) = test_scheduler();
+        let session_id = "delegated-error-session";
+        let workspace = root.path().join("workspace");
+        std::fs::create_dir_all(&workspace).expect("workspace");
+        session_manager
+            .create_session_with_id(
+                Some(session_id.to_string()),
+                "Delegated".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.to_string_lossy().to_string()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("create delegated session");
+        session_manager
+            .update_session_state(
+                session_id,
+                SessionState::Processing {
+                    current_turn_id: "active-turn".to_string(),
+                    phase: ProcessingPhase::Thinking,
+                },
+            )
+            .await
+            .expect("mark active turn");
+
+        scheduler
+            .submit_dialog_turn(AgentDialogTurnRequest {
+                session_id: session_id.to_string(),
+                message: "queued prompt".to_string(),
+                original_message: None,
+                turn_id: Some("queued-turn".to_string()),
+                execution: Default::default(),
+                agent_type: "agentic".to_string(),
+                workspace_path: None,
+                remote_connection_id: None,
+                remote_ssh_host: None,
+                policy: DialogSubmissionPolicy::for_source(DialogTriggerSource::Cli),
+                reply_route: None,
+                prepended_reminders: Vec::new(),
+                attachments: Vec::new(),
+                metadata: serde_json::Map::new(),
+            })
+            .await
+            .expect("queue standard turn");
+        session_manager
+            .update_session_state(
+                session_id,
+                SessionState::Error {
+                    error: "previous turn failed".to_string(),
+                    recoverable: true,
+                },
+            )
+            .await
+            .expect("mark session recoverable error");
+
+        let error = scheduler
+            .submit_dialog_turn(AgentDialogTurnRequest {
+                session_id: session_id.to_string(),
+                message: "expanded command prompt".to_string(),
+                original_message: Some("/review".to_string()),
+                turn_id: Some("delegated-turn".to_string()),
+                execution: bitfun_runtime_ports::AgentDialogTurnExecution::FreshExternalSubagent {
+                    ecosystem_id: "opencode".to_string(),
+                    logical_id: "reviewer".to_string(),
+                },
+                agent_type: "agentic".to_string(),
+                workspace_path: None,
+                remote_connection_id: None,
+                remote_ssh_host: None,
+                policy: DialogSubmissionPolicy::for_source(DialogTriggerSource::Cli),
+                reply_route: None,
+                prepended_reminders: Vec::new(),
+                attachments: Vec::new(),
+                metadata: serde_json::Map::new(),
+            })
+            .await
+            .expect_err("delegated commands must not replace a queued turn after an error");
+
+        assert_eq!(error.kind, PortErrorKind::InvalidRequest);
+        assert!(error.message.contains("idle"), "{error}");
+        assert_eq!(scheduler.queue_depth(session_id), 1);
+        assert!(scheduler
+            .cancel_queued_or_active_turn(session_id, "queued-turn")
+            .await
+            .expect("cancel preserved queued turn"));
+    }
+
+    #[tokio::test]
     async fn reject_busy_dialog_port_does_not_enqueue_or_replace_the_active_turn() {
         let (scheduler, session_manager, _, root) = test_scheduler();
         let session_id = "acp-session";
@@ -2918,6 +3165,7 @@ mod tests {
                 message: "second prompt".to_string(),
                 original_message: None,
                 turn_id: Some("rejected-turn".to_string()),
+                execution: Default::default(),
                 agent_type: "agentic".to_string(),
                 workspace_path: None,
                 remote_connection_id: None,
@@ -2989,6 +3237,7 @@ mod tests {
                 message: "duplicate".to_string(),
                 original_message: None,
                 turn_id: Some(turn_id.to_string()),
+                execution: Default::default(),
                 agent_type: "agentic".to_string(),
                 workspace_path: None,
                 remote_connection_id: None,
@@ -3032,6 +3281,7 @@ mod tests {
                 message: "wrong workspace".to_string(),
                 original_message: None,
                 turn_id: Some(turn_id.to_string()),
+                execution: Default::default(),
                 agent_type: "agentic".to_string(),
                 workspace_path: Some(workspace_b.to_string_lossy().to_string()),
                 remote_connection_id: None,
@@ -3081,6 +3331,7 @@ mod tests {
                 message: "invalid agent".to_string(),
                 original_message: None,
                 turn_id: Some(turn_id.to_string()),
+                execution: Default::default(),
                 agent_type: "agent-that-does-not-exist".to_string(),
                 workspace_path: None,
                 remote_connection_id: None,

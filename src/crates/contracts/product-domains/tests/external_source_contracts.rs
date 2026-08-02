@@ -149,6 +149,7 @@ fn command(provider_id: &str, source_id: &str, precedence: i32) -> PromptCommand
         description: format!("Review from {provider_id}"),
         template: format!("{provider_id}: $ARGUMENTS"),
         shell_preference: None,
+        execution_target: Default::default(),
         availability: PromptCommandAvailability::Available,
         content_version: format!("command-v{precedence}"),
     }
@@ -236,6 +237,7 @@ fn prompt_commands_use_a_typed_contract_instead_of_an_arbitrary_asset_payload() 
         description: "Review the current change".to_string(),
         template: "Review $ARGUMENTS".to_string(),
         shell_preference: None,
+        execution_target: Default::default(),
         availability: PromptCommandAvailability::Restricted {
             reason: "Shell expansion is not supported yet".to_string(),
             required_capabilities: vec!["command.shell".to_string()],

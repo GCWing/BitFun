@@ -12,7 +12,7 @@ use std::sync::{Arc, RwLock};
 use tokio::sync::{broadcast, Mutex};
 
 use bitfun_agent_runtime::sdk::{
-    AgentDialogTurnRequest, AgentEventReceiver, AgentInputAttachment,
+    AgentDialogTurnExecution, AgentDialogTurnRequest, AgentEventReceiver, AgentInputAttachment,
     AgentLocalCommandTurnRecordRequest, AgentMessageWorkspaceReferencesRequest, AgentRuntime,
     AgentSessionCompactionRequest, AgentSessionCreateRequest, AgentSessionDeleteRequest,
     AgentSessionForkBeforeTurnRequest, AgentSessionForkRequest, AgentSessionForkResult,
@@ -1186,6 +1186,58 @@ impl CliAgentRuntimeClient {
             ));
         }
         let session_id = self.ensure_session(agent_type).await?;
+        self.submit_dialog_turn_request(
+            session_id,
+            message,
+            None,
+            workspace_references,
+            attachments,
+            AgentDialogTurnExecution::Standard,
+            agent_type,
+        )
+        .await
+    }
+
+    pub(crate) async fn send_external_subagent_command(
+        &self,
+        prompt: String,
+        original_command: String,
+        ecosystem_id: String,
+        logical_id: String,
+        agent_type: &str,
+    ) -> Result<String> {
+        if self.is_shared() {
+            return Err(anyhow::anyhow!(
+                "External subagent commands require Embedded TUI; Shared TUI does not transport delegated command submissions"
+            ));
+        }
+        let session_id = self.ensure_session(agent_type).await?;
+        self.submit_dialog_turn_request(
+            session_id,
+            prompt,
+            Some(original_command),
+            Vec::new(),
+            Vec::new(),
+            AgentDialogTurnExecution::FreshExternalSubagent {
+                ecosystem_id,
+                logical_id,
+            },
+            agent_type,
+        )
+        .await
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    async fn submit_dialog_turn_request(
+        &self,
+        session_id: String,
+        message: String,
+        original_message: Option<String>,
+        workspace_references: Vec<AgentWorkspaceReference>,
+        attachments: Vec<AgentInputAttachment>,
+        execution: AgentDialogTurnExecution,
+        agent_type: &str,
+    ) -> Result<String> {
         tracing::info!("Sending message to session {}: {}", session_id, message);
 
         // Generate a turn_id
@@ -1204,8 +1256,9 @@ impl CliAgentRuntimeClient {
         let request = AgentDialogTurnRequest {
             session_id: session_id.clone(),
             message: message.clone(),
-            original_message: None,
+            original_message,
             turn_id: Some(turn_id.clone()),
+            execution,
             agent_type: agent_type.to_string(),
             // Dialog submission uses this path to locate persisted session
             // state. Execution still comes from the session's resolved binding.
@@ -1869,6 +1922,28 @@ mod tests {
         assert!(shared_rejection < session_creation);
         assert!(submission.contains("attachments,"));
         assert!(!submission.contains("imagePath"));
+    }
+
+    #[test]
+    fn delegated_external_commands_fail_before_shared_ipc() {
+        let source = include_str!("runtime_client.rs").replace("\r\n", "\n");
+        let submission = source
+            .split_once("pub(crate) async fn send_external_subagent_command(")
+            .expect("delegated command submission method")
+            .1
+            .split_once("async fn submit_dialog_turn_request(")
+            .expect("delegated command submission boundary")
+            .0;
+
+        let shared_rejection = submission
+            .find("if self.is_shared()")
+            .expect("shared runtime rejection");
+        let session_creation = submission
+            .find("let session_id = self.ensure_session")
+            .expect("session creation");
+        assert!(shared_rejection < session_creation);
+        assert!(submission.contains("AgentDialogTurnExecution::FreshExternalSubagent"));
+        assert!(!submission.contains("RuntimeIpcOperation::SubmitTurn"));
     }
 
     #[test]

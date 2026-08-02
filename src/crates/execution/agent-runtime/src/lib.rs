@@ -37,6 +37,7 @@ pub mod session_state_manager;
 pub mod side_question;
 pub mod skill_agent_snapshot;
 pub mod skills;
+pub mod subagent_task;
 pub mod thread_goal;
 pub mod thread_goal_tools;
 pub mod turn_cancellation;

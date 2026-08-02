@@ -2986,6 +2986,7 @@ export function runManifestParserSelfTest({
         'RemoteControlStatePort',
         'generic attachments',
         'DialogTriggerSource',
+        'bitfun_agent_runtime::subagent_task::subagent_task_completion_result',
       ],
     },
     {
@@ -3631,9 +3632,17 @@ export function runManifestParserSelfTest({
       ],
     },
     {
+      path: 'src/crates/execution/agent-runtime/src/subagent_task.rs',
+      contracts: [
+        'SubagentTaskCompletionResultInput',
+        'subagent_task_completion_result',
+      ],
+    },
+    {
       path: 'src/crates/execution/agent-runtime/src/deep_review/task_execution.rs',
       contracts: [
         'deep_review_task_completion_result',
+        'crate::subagent_task::subagent_task_completion_result',
         'deep_review_cancelled_reviewer_result',
         'should_emit_deep_review_retry_guidance',
         'deep_review_retry_guidance',
@@ -3657,7 +3666,6 @@ export function runManifestParserSelfTest({
     {
       path: 'src/crates/assembly/core/src/agentic/deep_review/task_adapter.rs',
       contracts: [
-        'runtime_task_execution::deep_review_task_completion_result',
         'runtime_task_execution::deep_review_cancelled_reviewer_result',
         'runtime_task_execution::should_emit_deep_review_retry_guidance',
         'runtime_task_execution::deep_review_retry_guidance',
@@ -3682,7 +3690,7 @@ export function runManifestParserSelfTest({
       path: 'src/crates/assembly/core/src/agentic/tools/implementations/task/execution.rs',
       contracts: [
         'deep_review_task_adapter::deep_review_retry_guidance',
-        'deep_review_task_adapter::deep_review_task_completion_result',
+        'bitfun_agent_runtime::subagent_task::subagent_task_completion_result',
         'DeepReviewProviderCapacityRetryRuntime::default',
         'DeepReviewProviderCapacityRetryDecision::WaitForCapacity',
       ],

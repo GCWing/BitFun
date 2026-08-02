@@ -84,6 +84,7 @@ export interface StartDialogTurnRequest {
   userInput: string;
   originalUserInput?: string;
   turnId?: string; 
+  execution?: AgentDialogTurnExecution;
   agentType: string; 
   /** Concrete root where this session executes. */
   workspacePath?: string;
@@ -95,6 +96,14 @@ export interface StartDialogTurnRequest {
   imageContexts?: ImageInputContextData[];
   userMessageMetadata?: Record<string, unknown>;
 }
+
+export type AgentDialogTurnExecution =
+  | { kind: 'standard' }
+  | {
+      kind: 'fresh_external_subagent';
+      ecosystemId: string;
+      logicalId: string;
+    };
 
 export interface StartDialogTurnResponse {
   success: boolean;

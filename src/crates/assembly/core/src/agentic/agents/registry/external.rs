@@ -3,6 +3,7 @@ use super::AgentRegistry;
 use crate::agentic::agents::{Agent, SubagentVisibilityPolicy};
 use bitfun_agent_runtime::prompt_cache::prompt_cache_scope_key;
 use bitfun_core_types::{SessionContinuationPolicy, SessionModelBindingPolicy};
+use bitfun_product_domains::external_sources::EcosystemId;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock, Weak};
@@ -45,6 +46,7 @@ impl ExternalSubagentModelBinding {
 pub struct ExternalSubagentRegistration {
     pub runtime_key: String,
     pub logical_id: String,
+    pub ecosystem_id: EcosystemId,
     pub provider_label: String,
     pub model_binding: ExternalSubagentModelBinding,
     pub hidden: bool,
@@ -136,9 +138,18 @@ impl ExternalSubagentRegistryState {
             .retain(|runtime_key, entry| entry.lease_count > 0 || routed.contains(runtime_key));
     }
 
-    fn acquire(self: &Arc<Self>, runtime_key: &str) -> Option<ExternalSubagentInvocationBinding> {
+    fn acquire_matching(
+        self: &Arc<Self>,
+        runtime_key: &str,
+        expected_ecosystem_id: Option<&EcosystemId>,
+    ) -> Option<ExternalSubagentInvocationBinding> {
         let mut generations = self.write_generations();
         let entry = generations.get_mut(runtime_key)?;
+        if expected_ecosystem_id
+            .is_some_and(|expected| expected != &entry.registration.ecosystem_id)
+        {
+            return None;
+        }
         entry.lease_count = entry.lease_count.saturating_add(1);
         Some(ExternalSubagentInvocationBinding {
             runtime_agent_key: runtime_key.to_string(),
@@ -152,6 +163,10 @@ impl ExternalSubagentRegistryState {
                 model_binding: entry.registration.model_binding.clone(),
             }),
         })
+    }
+
+    fn acquire(self: &Arc<Self>, runtime_key: &str) -> Option<ExternalSubagentInvocationBinding> {
+        self.acquire_matching(runtime_key, None)
     }
 
     fn release(&self, runtime_key: &str) {
@@ -339,6 +354,31 @@ impl AgentRegistry {
         }
         self.find_agent_entry(logical_id, workspace_root)
             .map(|entry| local_binding(logical_id, entry.agent.id()))
+    }
+
+    /// Resolve only the currently approved external route for an exact
+    /// ecosystem. Command delegation must never fall back to a same-name local
+    /// agent or cross an ecosystem boundary after the command was expanded.
+    pub fn resolve_external_subagent_for_fresh_invocation(
+        &self,
+        logical_id: &str,
+        ecosystem_id: &EcosystemId,
+        workspace_root: Option<&Path>,
+    ) -> Option<ExternalSubagentInvocationBinding> {
+        let workspace_root = workspace_root?;
+        let logical_key = normalize_external_logical_id(logical_id);
+        let route = self
+            .external_subagents
+            .read_routes()
+            .get(workspace_root)
+            .and_then(|routes| routes.get(&logical_key))
+            .cloned()?;
+        match route {
+            ExternalSubagentRoute::External(runtime_key) => self
+                .external_subagents
+                .acquire_matching(&runtime_key, Some(ecosystem_id)),
+            ExternalSubagentRoute::Local | ExternalSubagentRoute::Unavailable => None,
+        }
     }
 
     pub(super) fn apply_external_routes_to_query(

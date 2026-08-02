@@ -425,39 +425,18 @@ pub struct DeepReviewTaskCompletionResultInput<'a> {
 pub fn deep_review_task_completion_result(
     input: DeepReviewTaskCompletionResultInput<'_>,
 ) -> (Value, String) {
-    let status = if input.is_partial_timeout {
-        "partial_timeout"
-    } else {
-        "completed"
-    };
-    let assistant_message = if input.is_partial_timeout {
-        format!(
-            "{} timed out with partial result:\n<partial_result status=\"partial_timeout\">\n{}\n</partial_result>{}",
-            input.delegate_target_label, input.result_text, input.retry_hint
-        )
-    } else {
-        format!(
-            "{} completed successfully with result:\n<result>\n{}\n</result>",
-            input.delegate_target_label, input.result_text
-        )
-    };
-    let mut data = json!({
-        "duration": input.duration_ms,
-        "context_mode": input.context_mode,
-        "status": status
-    });
-
-    if input.is_partial_timeout {
-        data["partial_output"] = json!(input.result_text);
-        if let Some(reason) = input.reason {
-            data["reason"] = json!(reason);
-        }
-        if let Some(event_id) = input.ledger_event_id {
-            data["ledger_event_id"] = json!(event_id);
-        }
-    }
-
-    (data, assistant_message)
+    crate::subagent_task::subagent_task_completion_result(
+        crate::subagent_task::SubagentTaskCompletionResultInput {
+            delegate_target_label: input.delegate_target_label,
+            result_text: input.result_text,
+            context_mode: input.context_mode,
+            duration_ms: input.duration_ms,
+            is_partial_timeout: input.is_partial_timeout,
+            reason: input.reason,
+            ledger_event_id: input.ledger_event_id,
+            partial_timeout_suffix: input.retry_hint,
+        },
+    )
 }
 
 pub fn deep_review_cancelled_reviewer_result(

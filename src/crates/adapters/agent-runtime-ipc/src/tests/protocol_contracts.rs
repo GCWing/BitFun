@@ -414,6 +414,7 @@ fn submit_turn_accepts_the_existing_64_kib_tui_paste_contract() {
                 message: "x".repeat(64 * 1024),
                 original_message: None,
                 turn_id: Some("turn-1".to_string()),
+                execution: Default::default(),
                 agent_type: "agentic".to_string(),
                 workspace_path: Some("D:/workspace/project".to_string()),
                 remote_connection_id: None,

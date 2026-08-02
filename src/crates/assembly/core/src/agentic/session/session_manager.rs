@@ -6329,7 +6329,7 @@ impl SessionManager {
     /// host surface (e.g. CLI) does not persist rounds itself. This ensures
     /// turn files contain rich conversation data (text, tools, thinking) that
     /// other surfaces (e.g. Desktop) can render.
-    fn build_model_rounds_from_messages(
+    pub(crate) fn build_model_rounds_from_messages(
         messages: &[Message],
         turn_id: &str,
         timestamp: u64,
@@ -6793,9 +6793,44 @@ impl SessionManager {
         model_rounds: Vec<ModelRoundData>,
         duration_ms: u64,
     ) -> BitFunResult<()> {
+        self.complete_turn_with_model_rounds(
+            session_id,
+            turn_id,
+            model_rounds,
+            duration_ms,
+            "maintenance_turn_completed",
+        )
+        .await
+    }
+
+    pub(crate) async fn complete_synthetic_dialog_turn(
+        &self,
+        session_id: &str,
+        turn_id: &str,
+        model_rounds: Vec<ModelRoundData>,
+        duration_ms: u64,
+    ) -> BitFunResult<()> {
+        self.complete_turn_with_model_rounds(
+            session_id,
+            turn_id,
+            model_rounds,
+            duration_ms,
+            "synthetic_dialog_turn_completed",
+        )
+        .await
+    }
+
+    async fn complete_turn_with_model_rounds(
+        &self,
+        session_id: &str,
+        turn_id: &str,
+        model_rounds: Vec<ModelRoundData>,
+        duration_ms: u64,
+        snapshot_reason: &str,
+    ) -> BitFunResult<()> {
         if !self.should_persist_session_id(session_id) {
             debug!(
-                "Skipping maintenance turn persistence for transient session completion: session_id={}, turn_id={}, rounds={}, duration_ms={}",
+                "Skipping turn persistence for transient session completion: session_id={}, turn_id={}, rounds={}, duration_ms={}",
                 session_id,
                 turn_id,
                 model_rounds.len(),
@@ -6836,7 +6871,7 @@ impl SessionManager {
         self.persist_context_snapshot_for_turn_best_effort(
             session_id,
             turn.turn_index,
-            "maintenance_turn_completed",
+            snapshot_reason,
         )
         .await;
 
@@ -6857,9 +6892,44 @@ impl SessionManager {
         error: String,
         model_rounds: Vec<ModelRoundData>,
     ) -> BitFunResult<()> {
+        self.fail_turn_with_model_rounds(
+            session_id,
+            turn_id,
+            error,
+            model_rounds,
+            "maintenance_turn_failed",
+        )
+        .await
+    }
+
+    pub(crate) async fn fail_synthetic_dialog_turn(
+        &self,
+        session_id: &str,
+        turn_id: &str,
+        error: String,
+        model_rounds: Vec<ModelRoundData>,
+    ) -> BitFunResult<()> {
+        self.fail_turn_with_model_rounds(
+            session_id,
+            turn_id,
+            error,
+            model_rounds,
+            "synthetic_dialog_turn_failed",
+        )
+        .await
+    }
+
+    async fn fail_turn_with_model_rounds(
+        &self,
+        session_id: &str,
+        turn_id: &str,
+        error: String,
+        model_rounds: Vec<ModelRoundData>,
+        snapshot_reason: &str,
+    ) -> BitFunResult<()> {
         if !self.should_persist_session_id(session_id) {
             debug!(
-                "Skipping maintenance turn persistence for transient session failure: session_id={}, turn_id={}, rounds={}, error={}",
+                "Skipping turn persistence for transient session failure: session_id={}, turn_id={}, rounds={}, error={}",
                 session_id,
                 turn_id,
                 model_rounds.len(),
@@ -6901,7 +6971,7 @@ impl SessionManager {
         self.persist_context_snapshot_for_turn_best_effort(
             session_id,
             turn.turn_index,
-            "maintenance_turn_failed",
+            snapshot_reason,
         )
         .await;
 
@@ -6912,7 +6982,7 @@ impl SessionManager {
         }
 
         debug!(
-            "Maintenance turn marked as failed: turn_id={}, turn_index={}, error={}",
+            "Turn marked as failed: turn_id={}, turn_index={}, error={}",
             turn_id, turn.turn_index, error
         );
 

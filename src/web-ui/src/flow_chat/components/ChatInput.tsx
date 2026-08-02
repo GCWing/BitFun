@@ -3827,6 +3827,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         );
       }
       if (!submissionTargetIsCurrent()) return true;
+      const executionTarget = expanded.executionTarget;
+      if (executionTarget.kind === 'fresh_external_subagent' && contexts.length > 0) {
+        notificationService.warning(t('chatInput.externalCommandContextUnsupported'));
+        return true;
+      }
       const expandedCharCount = getCharacterCount(expanded.content);
       if (expandedCharCount > CHAT_INPUT_CONFIG.largePaste.maxMessageChars) {
         notificationService.error(
@@ -3860,7 +3865,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         setSelectedNonExternalSlashCommand(undefined);
         setSelectedNonExternalSlashCandidateId(undefined);
       }
-      await sendMessage(expanded.content, { displayMessage: originalMessage });
+      await sendMessage(expanded.content, {
+        displayMessage: originalMessage,
+        ...(executionTarget.kind === 'fresh_external_subagent'
+          ? { execution: executionTarget }
+          : {}),
+      });
       if (!submissionTargetIsCurrent()) return true;
       if (composerCleared && inputValueRef.current === '') {
         dispatchInput({ type: 'DEACTIVATE' });
@@ -3904,7 +3914,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       );
     }
     return true;
-  }, [addToHistory, clearPendingLargePastes, confirmPromptCacheGuardIfNeeded, dispatchInput, effectiveTargetSessionId, externalPromptCommands, externalPromptCommandsIssue, externalPromptCommandsLoading, externalPromptCommandsPending, getSlashPickerItems, refreshExternalPromptCommands, replacePendingLargePastes, selectedExternalPromptCandidateId, selectedNonExternalSlashCandidateId, selectedNonExternalSlashCommand, sendMessage, sessionBoundWorkspacePath, setQueuedInput, t]);
+  }, [addToHistory, clearPendingLargePastes, confirmPromptCacheGuardIfNeeded, contexts, dispatchInput, effectiveTargetSessionId, externalPromptCommands, externalPromptCommandsIssue, externalPromptCommandsLoading, externalPromptCommandsPending, getSlashPickerItems, refreshExternalPromptCommands, replacePendingLargePastes, selectedExternalPromptCandidateId, selectedNonExternalSlashCandidateId, selectedNonExternalSlashCommand, sendMessage, sessionBoundWorkspacePath, setQueuedInput, t]);
 
   const handleCancelCurrentTask = useCallback(async () => {
     if (effectiveTargetSessionId) {

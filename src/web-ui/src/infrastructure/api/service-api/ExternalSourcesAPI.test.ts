@@ -146,9 +146,17 @@ describe('ExternalSourcesAPI', () => {
   });
 
   it('expands a prompt command only with the selected candidate and behavior version', async () => {
-    invokeMock.mockResolvedValueOnce({ state: 'ready', content: 'expanded prompt' });
+    invokeMock.mockResolvedValueOnce({
+      state: 'ready',
+      content: 'expanded prompt',
+      executionTarget: {
+        kind: 'fresh_external_subagent',
+        ecosystemId: 'opencode',
+        logicalId: 'reviewer',
+      },
+    });
 
-    await externalSourcesAPI.expandPromptCommand(
+    const outcome = await externalSourcesAPI.expandPromptCommand(
       'D:/workspace/project',
       'review',
       'focus on auth',
@@ -170,6 +178,15 @@ describe('ExternalSourcesAPI', () => {
       },
     );
 
+    expect(outcome).toMatchObject({
+      state: 'ready',
+      executionTarget: {
+        kind: 'fresh_external_subagent',
+        ecosystemId: 'opencode',
+        logicalId: 'reviewer',
+      },
+    });
+
     expect(invokeMock).toHaveBeenCalledWith('expand_external_prompt_command_command', {
       request: {
         workspacePath: 'D:/workspace/project',
@@ -190,6 +207,29 @@ describe('ExternalSourcesAPI', () => {
           expectedPreferenceRevision: 7,
         },
       },
+    });
+  });
+
+  it.each([
+    ['a missing execution target', { state: 'ready', content: 'expanded prompt' }],
+    ['an unknown execution target', {
+      state: 'ready',
+      content: 'expanded prompt',
+      executionTarget: { kind: 'future_target' },
+    }],
+  ])('rejects prompt command expansion with %s', async (_label, response) => {
+    invokeMock.mockResolvedValueOnce(response);
+
+    await expect(externalSourcesAPI.expandPromptCommand(
+      'D:/workspace/project',
+      'review',
+      '',
+      'opencode.commands:project:review',
+      'behavior-v1',
+      [],
+    )).rejects.toMatchObject({
+      code: 'invalid_response',
+      retryable: false,
     });
   });
 

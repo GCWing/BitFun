@@ -178,6 +178,7 @@ async fn run_inner(store: &DispatchStore, job_id: &str) -> Result<()> {
             message: prompt,
             original_message: None,
             turn_id: Some(turn_id.clone()),
+            execution: Default::default(),
             agent_type: job.request.agent_type.clone(),
             workspace_path: Some(workspace_path),
             remote_connection_id: None,

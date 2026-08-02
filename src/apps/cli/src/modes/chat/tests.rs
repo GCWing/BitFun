@@ -1912,6 +1912,34 @@ mod tests {
     }
 
     #[test]
+    fn delegated_command_checks_session_state_before_materializing_a_worktree() {
+        let source = include_str!("sessions.rs").replace("\r\n", "\n");
+        let submission = source
+            .split_once("fn send_external_subagent_command_to_agent(")
+            .expect("delegated command submission")
+            .1
+            .split_once("fn send_draft_to_agent(")
+            .expect("delegated command submission boundary")
+            .0;
+
+        let shared_guard = submission.find("if self.agent.is_shared()").unwrap();
+        let pending_guard = submission.find("pending_session_operation").unwrap();
+        let busy_guard = submission.find("if chat_state.is_processing").unwrap();
+        let worktree_materialization = submission
+            .find("self.materialize_requested_worktree")
+            .unwrap();
+        assert!(shared_guard < worktree_materialization);
+        assert!(pending_guard < worktree_materialization);
+        assert!(busy_guard < worktree_materialization);
+        assert!(
+            submission
+                .matches("chat_view.set_draft(submitted_draft)")
+                .count()
+                >= 4
+        );
+    }
+
+    #[test]
     fn workspace_diff_load_does_not_block_the_tui_event_loop() {
         let commands = include_str!("commands.rs").replace("\r\n", "\n");
         let handler = commands

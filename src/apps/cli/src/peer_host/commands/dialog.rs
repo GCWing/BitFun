@@ -70,6 +70,7 @@ pub(crate) async fn start_dialog_turn(
             message: user_input,
             original_message: original_user_input,
             turn_id: Some(turn_id.clone()),
+            execution: Default::default(),
             agent_type,
             workspace_path,
             remote_connection_id,

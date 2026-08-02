@@ -84,6 +84,7 @@ struct ProductFacts {
 
 struct ResolvedExternalCandidate {
     definition: ExternalSubagentDefinition,
+    ecosystem_id: Option<EcosystemId>,
     provider_label: String,
     scope: ExternalSourceScope,
     source_keys: Vec<SourceKey>,
@@ -960,6 +961,13 @@ fn resolve_external_candidate(
             }
         }
     }
+    if ecosystem_id.is_none() {
+        compatibility = ExternalSubagentCompatibilityState::Invalid;
+        diagnostics.push(ExternalSubagentDiagnosticSummary {
+            code: "external_subagent.source_unavailable".to_string(),
+            blocks_activation: true,
+        });
+    }
     let model_resolution = resolve_model_request(
         definition,
         ecosystem_id.as_ref(),
@@ -1084,6 +1092,7 @@ fn resolve_external_candidate(
         .unwrap_or_else(|| "External AI app".to_string());
     ResolvedExternalCandidate {
         definition: definition.clone(),
+        ecosystem_id,
         provider_label,
         scope,
         source_keys,
@@ -1251,6 +1260,9 @@ fn install_active_candidate(
     candidate: &ResolvedExternalCandidate,
     state: &mut ExternalSubagentProductState,
 ) {
+    let Some(ecosystem_id) = candidate.ecosystem_id.clone() else {
+        return;
+    };
     let runtime_key = external_subagent_runtime_key(&stable_digest([
         candidate.definition.candidate_id.as_str(),
         candidate.definition.behavior_version.as_str(),
@@ -1291,6 +1303,7 @@ fn install_active_candidate(
     state.registrations.push(ExternalSubagentRegistration {
         runtime_key: runtime_key.clone(),
         logical_id: candidate.definition.logical_id.clone(),
+        ecosystem_id,
         provider_label: candidate.provider_label.clone(),
         model_binding,
         hidden: candidate.definition.hidden,

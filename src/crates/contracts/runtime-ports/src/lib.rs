@@ -1495,6 +1495,27 @@ pub struct AgentSubmissionRequest {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(
+    tag = "kind",
+    rename_all = "snake_case",
+    rename_all_fields = "camelCase",
+    deny_unknown_fields
+)]
+pub enum AgentDialogTurnExecution {
+    Standard,
+    FreshExternalSubagent {
+        ecosystem_id: String,
+        logical_id: String,
+    },
+}
+
+impl Default for AgentDialogTurnExecution {
+    fn default() -> Self {
+        Self::Standard
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentDialogTurnRequest {
     pub session_id: String,
@@ -1503,6 +1524,8 @@ pub struct AgentDialogTurnRequest {
     pub original_message: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub turn_id: Option<String>,
+    #[serde(default, skip_serializing_if = "AgentDialogTurnExecution::is_standard")]
+    pub execution: AgentDialogTurnExecution,
     pub agent_type: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub workspace_path: Option<String>,
@@ -1519,6 +1542,12 @@ pub struct AgentDialogTurnRequest {
     pub attachments: Vec<AgentInputAttachment>,
     #[serde(default, skip_serializing_if = "serde_json::Map::is_empty")]
     pub metadata: serde_json::Map<String, serde_json::Value>,
+}
+
+impl AgentDialogTurnExecution {
+    pub fn is_standard(&self) -> bool {
+        matches!(self, Self::Standard)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -3056,6 +3085,36 @@ mod tests {
     }
 
     #[test]
+    fn delegated_dialog_turn_target_is_typed_and_provider_neutral() {
+        let target = AgentDialogTurnExecution::FreshExternalSubagent {
+            ecosystem_id: "opencode".to_string(),
+            logical_id: "reviewer".to_string(),
+        };
+
+        assert_eq!(
+            serde_json::to_value(target).expect("serialize delegated execution"),
+            serde_json::json!({
+                "kind": "fresh_external_subagent",
+                "ecosystemId": "opencode",
+                "logicalId": "reviewer",
+            })
+        );
+        assert_eq!(
+            AgentDialogTurnExecution::default(),
+            AgentDialogTurnExecution::Standard
+        );
+        assert!(
+            serde_json::from_value::<AgentDialogTurnExecution>(serde_json::json!({
+                "kind": "fresh_external_subagent",
+                "ecosystemId": "opencode",
+                "logicalId": "reviewer",
+                "model": "provider/model"
+            }))
+            .is_err()
+        );
+    }
+
+    #[test]
     fn dialog_submission_policy_preserves_current_surface_queue_defaults() {
         let remote = DialogSubmissionPolicy::for_source(DialogTriggerSource::RemoteRelay);
         assert_eq!(remote.queue_priority, DialogQueuePriority::Normal);
@@ -3483,6 +3542,7 @@ mod tests {
             message: "hello".to_string(),
             original_message: Some("raw hello".to_string()),
             turn_id: Some("turn_1".to_string()),
+            execution: Default::default(),
             agent_type: "agentic".to_string(),
             workspace_path: Some("/workspace/project".to_string()),
             remote_connection_id: Some("conn-1".to_string()),

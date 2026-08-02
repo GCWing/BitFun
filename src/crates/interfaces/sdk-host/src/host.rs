@@ -984,6 +984,7 @@ impl SdkHostConnection {
                 message: params.prompt,
                 original_message: None,
                 turn_id: None,
+                execution: Default::default(),
                 agent_type,
                 workspace_path: Some(session.workspace_path.clone()),
                 remote_connection_id: session.remote_connection_id.clone(),
