@@ -25,8 +25,8 @@ use bitfun_services_integrations::mcp::server::{
     compute_mcp_backoff_delay, detect_mcp_list_changed_kind, is_mcp_auth_error_message,
     mcp_reconnect_runtime_decision, mcp_server_is_running, mcp_should_start_after_config_update,
     merge_mcp_remote_headers, MCPCatalogCache, MCPConnectionPool, MCPListChangedKind,
-    MCPReconnectRuntimeDecision, MCPRuntimeErrorKind, MCPRuntimeResult, MCPServerConfig,
-    MCPServerProcess, MCPServerRuntimeState, MCPServerStatus, MCPServerTransport, MCPServerType,
+    MCPProcessStartContext, MCPReconnectRuntimeDecision, MCPRuntimeErrorKind, MCPRuntimeResult,
+    MCPServerConfig, MCPServerRuntimeState, MCPServerStatus, MCPServerTransport, MCPServerType,
 };
 use bitfun_services_integrations::mcp::{
     build_mcp_tool_descriptor, build_mcp_tool_name, normalize_name_for_mcp,
@@ -1283,7 +1283,7 @@ async fn mcp_dynamic_tool_provider_preserves_manifest_order_and_metadata_snapsho
 }
 
 #[tokio::test]
-async fn mcp_server_process_owner_preserves_unsupported_remote_transport_contract() {
+async fn mcp_runtime_state_owner_preserves_unsupported_remote_transport_contract() {
     let mut config = make_mcp_config(
         "remote-sse",
         ConfigLocation::User,
@@ -1293,23 +1293,37 @@ async fn mcp_server_process_owner_preserves_unsupported_remote_transport_contrac
     );
     config.transport = Some(MCPServerTransport::Sse);
 
-    let mut process = MCPServerProcess::new(
-        "remote-sse".to_string(),
-        "Remote SSE".to_string(),
-        MCPServerType::Remote,
+    let runtime = MCPServerRuntimeState::new();
+    runtime.register(&config).await.expect("register process");
+    assert_eq!(
+        runtime
+            .process_status("remote-sse")
+            .await
+            .expect("registered process status"),
+        MCPServerStatus::Uninitialized
     );
-    assert_eq!(process.status().await, MCPServerStatus::Uninitialized);
-    assert_eq!(process.server_type(), MCPServerType::Remote);
 
-    let error = process
-        .start_remote(std::env::temp_dir(), &config)
+    let error = runtime
+        .start_process(
+            &config,
+            MCPProcessStartContext::Remote {
+                data_dir: std::env::temp_dir(),
+            },
+        )
         .await
         .unwrap_err();
     assert_eq!(error.kind(), MCPRuntimeErrorKind::NotImplemented);
     assert!(error
         .to_string()
         .contains("Remote MCP transport 'sse' is not yet supported"));
-    assert_eq!(process.status().await, MCPServerStatus::Uninitialized);
+    assert_eq!(
+        runtime
+            .process_status("remote-sse")
+            .await
+            .expect("registered process status"),
+        MCPServerStatus::Uninitialized
+    );
+    assert!(runtime.process_connection("remote-sse").await.is_none());
 
     let pool = MCPConnectionPool::new();
     assert!(pool.get_all_server_ids().await.is_empty());
@@ -1546,6 +1560,20 @@ async fn mcp_runtime_state_owns_registry_runtime_config_and_reconnect_state() {
     config.auto_start = false;
 
     assert!(runtime.is_empty().await);
+    let error = runtime
+        .start_process(
+            &config,
+            MCPProcessStartContext::Remote {
+                data_dir: std::env::temp_dir(),
+            },
+        )
+        .await
+        .expect_err("local config must reject remote start context");
+    assert_eq!(error.kind(), MCPRuntimeErrorKind::Configuration);
+    assert!(error
+        .to_string()
+        .contains("does not match server type 'local'"));
+    assert!(runtime.is_empty().await);
 
     runtime
         .insert_runtime_config(config.clone())
@@ -1558,7 +1586,14 @@ async fn mcp_runtime_state_owns_registry_runtime_config_and_reconnect_state() {
 
     assert!(runtime.contains("runtime-only").await);
     assert_eq!(runtime.get_all_server_ids().await, vec!["runtime-only"]);
-    assert!(runtime.get_process("runtime-only").await.is_some());
+    assert_eq!(
+        runtime
+            .process_status("runtime-only")
+            .await
+            .expect("registered process status"),
+        MCPServerStatus::Uninitialized
+    );
+    assert!(runtime.process_connection("runtime-only").await.is_none());
     assert_eq!(
         runtime.get_all_statuses().await,
         vec![("runtime-only".to_string(), MCPServerStatus::Uninitialized)]

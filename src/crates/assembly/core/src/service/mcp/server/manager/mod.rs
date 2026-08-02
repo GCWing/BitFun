@@ -5,6 +5,7 @@
 
 mod auth;
 mod catalog;
+mod external_lifecycle;
 mod interaction;
 mod lifecycle;
 mod reconnect;

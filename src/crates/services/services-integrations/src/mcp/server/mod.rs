@@ -30,7 +30,7 @@ pub use runtime_policy::{
     mcp_server_is_running, mcp_server_is_starting_or_running, mcp_should_start_after_config_update,
     MCPListChangedKind, MCPReconnectRuntimeDecision,
 };
-pub use runtime_state::MCPServerRuntimeState;
+pub use runtime_state::{MCPProcessStartContext, MCPProcessStartOutcome, MCPServerRuntimeState};
 
 /// MCP server type.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
