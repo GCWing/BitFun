@@ -73,6 +73,7 @@ import {
   isNonLocalDispatchTarget,
 } from '@/features/dispatch/types';
 import { dispatchJobStore } from '@/features/dispatch/dispatchJobStore';
+import { resolveSessionDriverId } from '../session-drivers/resolve';
 
 const log = createLogger('FlowChatStore');
 
@@ -80,11 +81,7 @@ function dispatchObserverOwnsSession(
   sessionId: string,
   session?: Session,
 ): boolean {
-  if (isNonLocalDispatchTarget(session?.config.dispatchTarget)) {
-    return true;
-  }
-  return Object.values(dispatchJobStore.getState().jobs)
-    .some(job => job.sessionId === sessionId);
+  return resolveSessionDriverId(sessionId, session) === 'dispatch';
 }
 
 function logPersistedDispatchMetadataOverlap(

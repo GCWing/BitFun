@@ -12,6 +12,7 @@ import {
   effectiveToolInvocation,
 } from '../../utils/toolInvocationIdentity';
 import { requireSessionProjectWorkspacePath } from '../../utils/sessionWorkspace';
+import { resolveSessionDriverId } from '../../session-drivers/resolve';
 
 const log = createLogger('PersistenceModule');
 const COALESCED_IMMEDIATE_SAVE_DELAY_MS = 500;
@@ -20,10 +21,17 @@ function isTransientSession(session: { isTransient?: boolean } | undefined): boo
   return session?.isTransient === true;
 }
 
+/**
+ * Observer projections are target-owned; the controller must never persist
+ * them as local sessions. Uses the driver resolver so a projection whose
+ * config is not bound yet (startup race) is still recognized via the
+ * observer-store membership signal.
+ */
 function isObserverOnlyDispatchSession(
-  session: { config?: { dispatchTarget?: { kind?: string } } } | undefined,
+  sessionId: string,
+  session: Parameters<typeof resolveSessionDriverId>[1],
 ): boolean {
-  return !!session?.config?.dispatchTarget && session.config.dispatchTarget.kind !== 'local';
+  return resolveSessionDriverId(sessionId, session) === 'dispatch';
 }
 
 function requireWorkspacePath(sessionId: string, workspacePath?: string): string {
@@ -282,7 +290,7 @@ async function performSaveDialogTurnToDisk(
       log.debug('Session not found, skipping save', { sessionId, turnId });
       return;
     }
-    if (isTransientSession(session) || isObserverOnlyDispatchSession(session)) {
+    if (isTransientSession(session) || isObserverOnlyDispatchSession(sessionId, session)) {
       return;
     }
 
@@ -320,7 +328,7 @@ export async function saveAllInProgressTurns(context: FlowChatContext): Promise<
   const savePromises: Promise<void>[] = [];
   
   for (const [sessionId, session] of state.sessions.entries()) {
-    if (isTransientSession(session) || isObserverOnlyDispatchSession(session)) {
+    if (isTransientSession(session) || isObserverOnlyDispatchSession(sessionId, session)) {
       continue;
     }
     const lastTurn = session.dialogTurns[session.dialogTurns.length - 1];
@@ -525,7 +533,7 @@ export async function updateSessionMetadata(
 
     const session = context.flowChatStore.getState().sessions.get(sessionId);
     if (!session) return;
-    if (isTransientSession(session) || isObserverOnlyDispatchSession(session)) return;
+    if (isTransientSession(session) || isObserverOnlyDispatchSession(sessionId, session)) return;
 
     const workspacePath = requireSessionProjectWorkspacePath(session, sessionId);
 

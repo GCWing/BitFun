@@ -56,6 +56,7 @@ import {
 } from '@/features/dispatch/types';
 import { dispatchJobStore } from '@/features/dispatch/dispatchJobStore';
 import { forgetDispatchTranscript } from '@/features/dispatch/dispatchTranscriptCache';
+import { resolveSessionDriverId } from '../../session-drivers/resolve';
 
 const log = createLogger('SessionModule');
 const pendingSessionCreations = new Map<string, Promise<string>>();
@@ -65,15 +66,7 @@ function isDispatchObserverProjection(
   sessionId: string,
   session: Session | undefined,
 ): boolean {
-  if (
-    isNonLocalDispatchTarget(session?.config.dispatchTarget)
-    || Boolean(session?.config.dispatchJobId?.trim())
-  ) {
-    return true;
-  }
-
-  return Object.values(dispatchJobStore.getState().jobs)
-    .some(job => job.sessionId === sessionId);
+  return resolveSessionDriverId(sessionId, session) === 'dispatch';
 }
 
 function dismissDispatchObserverProjection(
