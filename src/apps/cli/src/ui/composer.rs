@@ -94,6 +94,10 @@ pub(crate) enum ComposerImageInsertError {
     TooManyImages,
     #[error("Images are unavailable in Shell mode")]
     ShellModeUnsupported,
+    #[error(
+        "Local draft image memory is full; remove or send an image from another session first"
+    )]
+    LocalDraftBudgetExceeded,
 }
 
 impl ComposerDraft {

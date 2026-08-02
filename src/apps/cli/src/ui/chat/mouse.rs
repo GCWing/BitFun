@@ -31,7 +31,10 @@ impl ChatView {
 
     pub(crate) fn handle_mouse_event(&mut self, mouse: &crossterm::event::MouseEvent) -> bool {
         // Popups take priority when visible
-        if self.fork_selector.is_visible() || self.timeline_selector.is_visible() {
+        if self.fork_selector.is_visible()
+            || self.timeline_selector.is_visible()
+            || self.prompt_stash_selector.is_visible()
+        {
             // These conversation-point dialogs are keyboard-driven. Do not let mouse gestures
             // mutate the transcript hidden underneath them.
             return true;
@@ -375,5 +378,35 @@ impl ChatView {
                 break;
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod prompt_stash_mouse_tests {
+    use super::*;
+    use crossterm::event::{KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
+
+    #[test]
+    fn prompt_stash_selector_captures_mouse_before_the_transcript() {
+        let directory = tempfile::tempdir().unwrap();
+        let store =
+            crate::prompt_stash::PromptStashStore::new(directory.path().join("prompt-stash.jsonl"));
+        store
+            .push(
+                &ComposerDraft::from_text("saved prompt"),
+                Some("workspace-a"),
+                1,
+            )
+            .unwrap();
+        let mut view = ChatView::new(Theme::dark(), Vec::new());
+        view.show_prompt_stash_selector(store.list().unwrap());
+        let mouse = MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: 1,
+            row: 1,
+            modifiers: KeyModifiers::NONE,
+        };
+
+        assert!(view.handle_mouse_event(&mouse));
     }
 }

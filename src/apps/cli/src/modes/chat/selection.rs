@@ -783,6 +783,7 @@ impl ChatMode {
             let (remove_item, status) = session_delete_feedback(session_name, &outcome);
             if remove_item {
                 chat_view.session_selector_remove_item(&pending.session_id);
+                chat_view.forget_session_composer(&pending.session_id);
                 tracing::info!("Deleted session: {}", pending.session_id);
             } else {
                 tracing::error!(

@@ -67,6 +67,38 @@ configuration. `/editor` does not install or guess an editor. For GUI editors,
 configure a command that waits until the file is closed; missing commands,
 non-zero exits, and empty editor output leave the current draft unchanged.
 
+### Prompt continuity
+
+Unsent drafts stay with their session while the TUI remains open. Switching,
+creating, or forking a session swaps the existing composer state, including
+structured `@` references, image attachments, and Shell/Chat mode, instead of
+putting UI drafts into Runtime session persistence.
+
+The command palette also follows OpenCode's prompt-stash entrypoints: **Stash
+prompt**, **Stash pop**, and **Stash list**. They intentionally have no slash
+aliases or default key bindings. Stashes are shared across CLI processes in a
+bounded `prompt-stash.jsonl` file and preserve text plus structured workspace
+references. Image drafts are rejected with an explicit message because the
+persistent stash does not copy image bytes. When a stash is restored from a
+different workspace, its text is kept but structured references are detached
+with a visible warning so a relative path cannot silently bind another file.
+
+### Terminal notifications
+
+Terminal attention notifications are off by default. Enable them in the CLI
+config when completed turns, failures, permission requests, and question
+prompts should emit a terminal notification:
+
+```toml
+[ui]
+notifications = true
+notification_method = "auto" # auto, osc9, or bel
+```
+
+`auto` uses OSC 9 for terminals known to support it and falls back to the
+terminal bell. Notification text is bounded and strips terminal control
+characters.
+
 ### Shell mode
 
 With an empty composer, type `!` to enter **SHELL** mode, matching OpenCode's

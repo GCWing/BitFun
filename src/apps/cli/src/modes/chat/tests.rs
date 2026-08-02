@@ -25,12 +25,13 @@ mod tests {
         render_external_hook_catalog, render_native_hook_overview, requested_session_name,
         retain_selected_native_command_for_input, selected_command_prefill,
         session_command_help_note, session_delete_allowed, session_delete_feedback,
-        session_update_allowed, session_update_blocks_typed_submission,
-        session_update_completion_should_exit, shared_session_change_is_blocked,
-        steering_unsupported_reason, terminal_event_allowed_while_local_effect_pending,
-        CommandRoute, ExternalAgentReviewAction, ExternalControlUiAction,
-        ExternalSourceConflictPreferences, ExternalToolReviewAction, HookManagementAction,
-        SessionUpdateApplyOutcome, SHARED_TUI_CHAT_STATUS,
+        session_switch_targets_pending_delete, session_update_allowed,
+        session_update_blocks_typed_submission, session_update_completion_should_exit,
+        shared_session_change_is_blocked, steering_unsupported_reason,
+        terminal_event_allowed_while_local_effect_pending, CommandRoute, ExternalAgentReviewAction,
+        ExternalControlUiAction, ExternalSourceConflictPreferences, ExternalToolReviewAction,
+        HookManagementAction, PendingSessionOperationKind, SessionUpdateApplyOutcome,
+        SHARED_TUI_CHAT_STATUS,
     };
     use crate::actions::{
         action_conflict_behavior_version, ActionHandler, ActionState, ResolvedKeymap,
@@ -2142,6 +2143,30 @@ mod tests {
         assert!(shared_session_change_is_blocked(true, true));
         assert!(!shared_session_change_is_blocked(true, false));
         assert!(!shared_session_change_is_blocked(false, true));
+    }
+
+    #[test]
+    fn embedded_session_switch_waits_only_when_the_target_is_being_deleted() {
+        let deleting = PendingSessionOperationKind::Delete {
+            session_name: "Old session".to_string(),
+        };
+        let renaming = PendingSessionOperationKind::Rename {
+            session_name: "New name".to_string(),
+        };
+
+        assert!(session_switch_targets_pending_delete(
+            "session-b",
+            Some(("session-b", &deleting)),
+        ));
+        assert!(!session_switch_targets_pending_delete(
+            "session-a",
+            Some(("session-b", &deleting)),
+        ));
+        assert!(!session_switch_targets_pending_delete(
+            "session-b",
+            Some(("session-b", &renaming)),
+        ));
+        assert!(!session_switch_targets_pending_delete("session-b", None));
     }
 
     #[test]

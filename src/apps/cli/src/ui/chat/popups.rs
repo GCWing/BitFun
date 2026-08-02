@@ -578,6 +578,35 @@ impl ChatView {
         self.timeline_selector.handle_key_event(key)
     }
 
+    // ============ Prompt stash selector methods ============
+
+    pub(crate) fn show_prompt_stash_selector(
+        &mut self,
+        entries: Vec<crate::prompt_stash::PromptStashEntry>,
+    ) {
+        self.prompt_stash_selector.show(entries);
+        self.popup_stack.push(PopupType::PromptStashSelector);
+    }
+
+    pub(crate) fn prompt_stash_selector_visible(&self) -> bool {
+        self.prompt_stash_selector.is_visible()
+    }
+
+    pub(crate) fn hide_prompt_stash_selector(&mut self) {
+        self.prompt_stash_selector.hide();
+    }
+
+    pub(crate) fn reshow_prompt_stash_selector(&mut self) {
+        self.prompt_stash_selector.reshow();
+    }
+
+    pub(crate) fn prompt_stash_selector_handle_key(
+        &mut self,
+        key: crossterm::event::KeyEvent,
+    ) -> crate::ui::prompt_stash_selector::PromptStashAction {
+        self.prompt_stash_selector.handle_key_event(key)
+    }
+
     // ============ Provider selector methods (add model step 1) ============
 
     pub(crate) fn show_provider_selector(&mut self) {

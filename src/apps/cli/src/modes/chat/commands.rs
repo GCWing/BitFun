@@ -1154,6 +1154,9 @@ impl ChatMode {
                 }
                 Err(error) => chat_view.set_status(Some(format!("Editor unavailable: {error}"))),
             },
+            ActionHandler::PromptStash => self.stash_current_prompt(chat_view),
+            ActionHandler::PromptStashPop => self.pop_prompt_stash(chat_view),
+            ActionHandler::PromptStashList => self.show_prompt_stash(chat_view),
             ActionHandler::ToggleTimestamps => {
                 let visible = chat_view.toggle_timestamps();
                 self.persist_presentation_preference(

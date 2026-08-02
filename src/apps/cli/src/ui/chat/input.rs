@@ -277,12 +277,23 @@ impl ChatView {
         &mut self,
         image: super::composer::ComposerImage,
     ) -> Result<(), super::composer::ComposerImageInsertError> {
+        self.insert_image_with_budget(image, MAX_LOCAL_DRAFT_HISTORY_IMAGE_BYTES)
+    }
+
+    fn insert_image_with_budget(
+        &mut self,
+        image: super::composer::ComposerImage,
+        image_budget: usize,
+    ) -> Result<(), super::composer::ComposerImageInsertError> {
         if self.is_shell_mode() {
             return Err(super::composer::ComposerImageInsertError::ShellModeUnsupported);
         }
         let mut draft = self.draft_snapshot();
         let cursor = draft.safe_insertion_cursor(self.text_input.cursor);
         let cursor = draft.insert_image(cursor, image)?;
+        if !self.make_room_for_projected_active_image_bytes(draft.image_byte_len(), image_budget) {
+            return Err(super::composer::ComposerImageInsertError::LocalDraftBudgetExceeded);
+        }
         self.apply_draft_at_cursor(draft, cursor);
         Ok(())
     }
@@ -376,6 +387,51 @@ impl ChatView {
         self.refresh_command_menu();
     }
 
+    pub(crate) fn set_chat_draft(&mut self, draft: ComposerDraft) {
+        self.composer_mode = ComposerMode::Chat;
+        self.history_index = None;
+        self.set_draft(draft);
+    }
+
+    /// Make `next_session_id` the owner of the visible composer.
+    ///
+    /// Runtime Session state intentionally does not own unsent UI input. Keep
+    /// only inactive Session composers here and move, rather than clone, the
+    /// target draft back into the existing active composer fields.
+    pub(crate) fn activate_session_composer(
+        &mut self,
+        previous_session_id: &str,
+        next_session_id: &str,
+    ) {
+        if previous_session_id == next_session_id {
+            return;
+        }
+
+        let current = InactiveSessionComposer {
+            draft: self.draft_snapshot(),
+            mode: self.composer_mode,
+        };
+        if current.draft == ComposerDraft::default() && current.mode == ComposerMode::Chat {
+            self.inactive_session_composers.remove(previous_session_id);
+        } else {
+            self.inactive_session_composers
+                .insert(previous_session_id.to_string(), current);
+        }
+
+        let next = self
+            .inactive_session_composers
+            .remove(next_session_id)
+            .unwrap_or_default();
+        self.composer_mode = next.mode;
+        self.set_draft(next.draft);
+        self.history_index = None;
+        self.enforce_draft_history_image_budget();
+    }
+
+    pub(crate) fn forget_session_composer(&mut self, session_id: &str) {
+        self.inactive_session_composers.remove(session_id);
+    }
+
     pub(crate) fn restore_undo_draft(
         &mut self,
         session_id: &str,
@@ -416,14 +472,33 @@ impl ChatView {
     }
 
     fn enforce_draft_history_image_budget_with_limit(&mut self, limit: usize) {
+        let active_bytes = self.draft_snapshot().image_byte_len();
+        let _ = self.make_room_for_projected_active_image_bytes(active_bytes, limit);
+    }
+
+    fn make_room_for_projected_active_image_bytes(
+        &mut self,
+        projected_active_bytes: usize,
+        limit: usize,
+    ) -> bool {
         loop {
             let input_bytes = self
                 .input_history
                 .iter()
                 .map(ComposerDraft::image_byte_len)
                 .fold(0usize, usize::saturating_add);
-            if input_bytes.saturating_add(self.submitted_drafts.image_bytes()) <= limit {
-                break;
+            let inactive_bytes = self
+                .inactive_session_composers
+                .values()
+                .map(|composer| composer.draft.image_byte_len())
+                .fold(0usize, usize::saturating_add);
+            if projected_active_bytes
+                .saturating_add(input_bytes)
+                .saturating_add(inactive_bytes)
+                .saturating_add(self.submitted_drafts.image_bytes())
+                <= limit
+            {
+                return true;
             }
             if let Some(draft) = self
                 .input_history
@@ -432,8 +507,10 @@ impl ChatView {
                 .find(|draft| draft.has_images())
             {
                 draft.drop_image_metadata();
-            } else if !self.submitted_drafts.drop_oldest_image_metadata() {
-                break;
+            } else if self.submitted_drafts.drop_oldest_image_metadata() {
+                continue;
+            } else {
+                return false;
             }
         }
     }
@@ -683,6 +760,85 @@ mod composer_input_tests {
 
         assert!(!view.is_shell_mode());
         assert_eq!(view.input_text(), "/rename ");
+    }
+
+    #[test]
+    fn restored_prompt_draft_exits_shell_mode() {
+        let mut view = ChatView::new(Theme::dark(), Vec::new());
+        assert!(view.try_enter_shell_mode());
+
+        view.set_chat_draft(ComposerDraft::from_text("restored prompt"));
+
+        assert!(!view.is_shell_mode());
+        assert_eq!(view.input_text(), "restored prompt");
+    }
+
+    #[test]
+    fn switching_sessions_swaps_exact_inactive_composer_drafts() {
+        let mut view = ChatView::new(Theme::dark(), Vec::new());
+        let first_image = image("first");
+        let mut first = ComposerDraft::from_text("first draft");
+        first
+            .insert_image(first.text.chars().count(), first_image.clone())
+            .unwrap();
+        view.set_draft(first.clone());
+
+        view.activate_session_composer("session-1", "session-2");
+        assert_eq!(view.draft_snapshot(), ComposerDraft::default());
+        assert!(!view.is_shell_mode());
+
+        assert!(view.try_enter_shell_mode());
+        view.handle_char('p');
+        view.handle_char('w');
+        view.handle_char('d');
+        let second = view.draft_snapshot();
+
+        view.activate_session_composer("session-2", "session-1");
+        assert_eq!(view.draft_snapshot(), first);
+        assert!(!view.is_shell_mode());
+
+        view.activate_session_composer("session-1", "session-2");
+        assert_eq!(view.draft_snapshot(), second);
+        assert!(view.is_shell_mode());
+    }
+
+    #[test]
+    fn activating_the_current_session_does_not_mutate_its_composer() {
+        let mut view = ChatView::new(Theme::dark(), Vec::new());
+        view.set_input("keep me");
+
+        view.activate_session_composer("session-1", "session-1");
+
+        assert_eq!(view.input_text(), "keep me");
+    }
+
+    #[test]
+    fn forgotten_session_composer_is_not_restored() {
+        let mut view = ChatView::new(Theme::dark(), Vec::new());
+        view.set_input("discard me");
+        view.activate_session_composer("session-1", "session-2");
+
+        view.forget_session_composer("session-1");
+        view.activate_session_composer("session-2", "session-1");
+
+        assert_eq!(view.draft_snapshot(), ComposerDraft::default());
+        assert!(!view.is_shell_mode());
+    }
+
+    #[test]
+    fn inactive_session_images_are_preserved_when_the_local_budget_rejects_growth() {
+        let mut view = ChatView::new(Theme::dark(), Vec::new());
+        view.insert_image(image("first")).unwrap();
+        view.activate_session_composer("session-1", "session-2");
+
+        assert_eq!(
+            view.insert_image_with_budget(image("second"), 5),
+            Err(crate::ui::composer::ComposerImageInsertError::LocalDraftBudgetExceeded)
+        );
+        assert!(!view.draft_snapshot().has_images());
+
+        view.activate_session_composer("session-2", "session-1");
+        assert!(view.draft_snapshot().has_images());
     }
 
     #[test]

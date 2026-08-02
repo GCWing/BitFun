@@ -2,6 +2,16 @@ fn shared_session_change_is_blocked(is_shared: bool, session_update_pending: boo
     is_shared && session_update_pending
 }
 
+fn session_switch_targets_pending_delete(
+    target_session_id: &str,
+    pending: Option<(&str, &PendingSessionOperationKind)>,
+) -> bool {
+    pending.is_some_and(|(pending_session_id, kind)| {
+        pending_session_id == target_session_id
+            && matches!(kind, PendingSessionOperationKind::Delete { .. })
+    })
+}
+
 impl ChatMode {
     fn handle_key_event(
         &mut self,
@@ -293,6 +303,17 @@ impl ChatMode {
             return Ok(None);
         }
 
+        if chat_view.prompt_stash_selector_visible() {
+            match chat_view.prompt_stash_selector_handle_key(key) {
+                PromptStashAction::Select(id) => {
+                    self.restore_prompt_stash(&id, chat_view);
+                }
+                PromptStashAction::Close => self.navigate_back(chat_view),
+                PromptStashAction::None => {}
+            }
+            return Ok(None);
+        }
+
         if chat_view.skill_selector_visible() {
             match key.code {
                 KeyCode::Up => chat_view.skill_selector_up(),
@@ -551,6 +572,19 @@ impl ChatMode {
             should_quit,
             exit_reason,
         } = context;
+        if let ChatExitReason::SwitchSession(target_session_id) = &reason {
+            let pending = this
+                .pending_session_operation
+                .as_ref()
+                .map(|operation| (operation.session_id.as_str(), &operation.kind));
+            if session_switch_targets_pending_delete(target_session_id, pending) {
+                chat_view.set_status(Some(
+                    "Wait for this Session's pending deletion to finish before opening it."
+                        .to_string(),
+                ));
+                return;
+            }
+        }
         if matches!(
             &reason,
             ChatExitReason::SwitchSession(_)

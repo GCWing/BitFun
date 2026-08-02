@@ -189,6 +189,7 @@ impl ChatMode {
             || chat_view.session_selector_visible()
             || chat_view.fork_selector_visible()
             || chat_view.timeline_selector_visible()
+            || chat_view.prompt_stash_selector_visible()
             || chat_view.export_dialog_visible()
             || chat_view.skill_selector_visible()
             || chat_view.subagent_selector_visible()
@@ -215,6 +216,7 @@ impl ChatMode {
         chat_view.hide_session_selector();
         chat_view.hide_fork_selector();
         chat_view.hide_timeline_selector();
+        chat_view.hide_prompt_stash_selector();
         chat_view.hide_export_dialog();
         chat_view.hide_skill_selector();
         chat_view.hide_subagent_selector();
@@ -243,6 +245,9 @@ impl ChatMode {
                 crate::ui::chat::PopupType::SessionSelector => chat_view.hide_session_selector(),
                 crate::ui::chat::PopupType::ForkSelector => chat_view.hide_fork_selector(),
                 crate::ui::chat::PopupType::TimelineSelector => chat_view.hide_timeline_selector(),
+                crate::ui::chat::PopupType::PromptStashSelector => {
+                    chat_view.hide_prompt_stash_selector()
+                }
                 crate::ui::chat::PopupType::ExportDialog => chat_view.hide_export_dialog(),
                 crate::ui::chat::PopupType::SkillSelector => chat_view.hide_skill_selector(),
                 crate::ui::chat::PopupType::SubagentSelector => chat_view.hide_subagent_selector(),
@@ -273,6 +278,9 @@ impl ChatMode {
                     crate::ui::chat::PopupType::ForkSelector => chat_view.reshow_fork_selector(),
                     crate::ui::chat::PopupType::TimelineSelector => {
                         chat_view.reshow_timeline_selector()
+                    }
+                    crate::ui::chat::PopupType::PromptStashSelector => {
+                        chat_view.reshow_prompt_stash_selector()
                     }
                     crate::ui::chat::PopupType::ExportDialog => {}
                     crate::ui::chat::PopupType::SkillSelector => chat_view.reshow_skill_selector(),

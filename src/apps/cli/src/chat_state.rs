@@ -348,6 +348,12 @@ pub(crate) struct ModelTokenUsageSnapshot {
 
 // ============ ChatState ============
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(crate) struct PermissionReconcileOutcome {
+    pub(crate) changed: bool,
+    pub(crate) added: bool,
+}
+
 /// Complete UI state for the chat interface.
 /// This is the single source of truth for rendering — but NOT for persistence.
 /// All persistence is handled by bitfun-core's SessionManager.
@@ -697,7 +703,7 @@ impl ChatState {
     pub(crate) fn reconcile_permission_requests(
         &mut self,
         requests: Vec<PermissionRequest>,
-    ) -> bool {
+    ) -> PermissionReconcileOutcome {
         let expected = requests
             .iter()
             .map(|request| request.request_id.clone())
@@ -713,14 +719,16 @@ impl ChatState {
             )
             .filter(|request_id| !expected.contains(request_id))
             .collect::<Vec<_>>();
-        let mut changed = false;
+        let mut outcome = PermissionReconcileOutcome::default();
         for request_id in stale {
-            changed |= self.resolve_permission_request(&request_id);
+            outcome.changed |= self.resolve_permission_request(&request_id);
         }
         for request in requests {
-            changed |= self.enqueue_permission_request(request);
+            let added = self.enqueue_permission_request(request);
+            outcome.changed |= added;
+            outcome.added |= added;
         }
-        changed
+        outcome
     }
 
     /// Load historical messages from the portable runtime transcript.
@@ -1563,7 +1571,10 @@ fn truncate_string(s: &str, max_len: usize) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{ChatState, FlowItem, ModelTokenUsageSnapshot, ToolDisplayStatus};
+    use super::{
+        ChatState, FlowItem, ModelTokenUsageSnapshot, PermissionReconcileOutcome,
+        ToolDisplayStatus,
+    };
     use bitfun_agent_runtime::sdk::{
         PermissionDelegationContext, PermissionRequest, PermissionRequestSource,
         PermissionRequestSourceKind, SessionTranscript, TranscriptContent, TranscriptMessage,
@@ -1790,13 +1801,19 @@ mod tests {
         assert!(state.permission_prompt.is_none());
 
         assert!(state.enqueue_permission_request(first));
-        assert!(state.reconcile_permission_requests(vec![third]));
+        let outcome = state.reconcile_permission_requests(vec![third.clone()]);
+        assert!(outcome.changed);
+        assert!(outcome.added);
         assert_eq!(
             state
                 .permission_prompt
                 .as_ref()
                 .map(|prompt| prompt.request.request_id.as_str()),
             Some("request-m")
+        );
+        assert_eq!(
+            state.reconcile_permission_requests(vec![third]),
+            PermissionReconcileOutcome::default()
         );
     }
 

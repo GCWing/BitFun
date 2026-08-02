@@ -129,6 +129,19 @@ fn context_compression_tool_event(
 }
 
 impl ChatMode {
+    fn emit_terminal_attention(&self, terminal: &mut TerminalGuard, message: &str) {
+        if !self.config.ui.notifications {
+            return;
+        }
+        if let Err(error) = crate::terminal_attention::notify(
+            terminal.backend_mut(),
+            self.config.ui.notification_method,
+            message,
+        ) {
+            tracing::warn!("Failed to emit terminal notification: {error}");
+        }
+    }
+
     fn execute_pending_local_effect(
         &mut self,
         terminal: &mut TerminalGuard,
@@ -625,6 +638,10 @@ impl ChatMode {
                         ) =>
                         {
                             if chat_state.enqueue_permission_request(request) {
+                                self.emit_terminal_attention(
+                                    &mut terminal,
+                                    "BitFun requires permission",
+                                );
                                 needs_redraw = true;
                             }
                         }
@@ -653,7 +670,15 @@ impl ChatMode {
                                             )
                                         })
                                         .collect();
-                                    if chat_state.reconcile_permission_requests(requests) {
+                                    let outcome =
+                                        chat_state.reconcile_permission_requests(requests);
+                                    if outcome.added {
+                                        self.emit_terminal_attention(
+                                            &mut terminal,
+                                            "BitFun requires permission",
+                                        );
+                                    }
+                                    if outcome.changed {
                                         needs_redraw = true;
                                     }
                                 }
@@ -961,7 +986,14 @@ impl ChatMode {
                             );
                             continue;
                         }
+                        let question_pending = chat_state.question_prompt.is_some();
                         chat_state.handle_tool_event(tool_event);
+                        if !question_pending && chat_state.question_prompt.is_some() {
+                            self.emit_terminal_attention(
+                                &mut terminal,
+                                "BitFun requires your input",
+                            );
+                        }
                         chat_view.invalidate_lines_cache();
                         needs_redraw = true;
                     }
@@ -1014,6 +1046,10 @@ impl ChatMode {
                             self.refresh_workspace_git_status(&mut chat_state, &rt_handle);
                             chat_view.invalidate_lines_cache();
                             chat_view.set_status(None);
+                            self.emit_terminal_attention(
+                                &mut terminal,
+                                "BitFun finished the current turn",
+                            );
                             needs_redraw = true;
                             tracing::info!("Dialog turn completed");
                         } else {
@@ -1031,6 +1067,7 @@ impl ChatMode {
                             self.refresh_workspace_git_status(&mut chat_state, &rt_handle);
                             chat_view.invalidate_lines_cache();
                             chat_view.set_status(Some(format!("Error: {}", error)));
+                            self.emit_terminal_attention(&mut terminal, "BitFun turn failed");
                             needs_redraw = true;
                             tracing::error!("Dialog turn failed: {}", error);
                         } else {

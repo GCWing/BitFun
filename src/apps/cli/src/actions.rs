@@ -93,6 +93,9 @@ pub(crate) enum ActionHandler {
     CompactSession,
     Usage,
     Editor,
+    PromptStash,
+    PromptStashPop,
+    PromptStashList,
     ToggleTimestamps,
     ToggleThinking,
     ToggleToolDetails,
@@ -153,6 +156,9 @@ impl ActionHandler {
                     | Self::WorkspaceDiff
                     | Self::CompactSession
                     | Self::Editor
+                    | Self::PromptStash
+                    | Self::PromptStashPop
+                    | Self::PromptStashList
                     | Self::ToggleTimestamps
                     | Self::ToggleThinking
                     | Self::ToggleToolDetails
@@ -664,6 +670,51 @@ static ACTION_SPECS: &[ActionSpec] = &[
         contexts: CHAT,
         availability: ActionAvailability::Idle,
         handler: ActionHandler::Editor,
+        default_bindings: &[],
+        fallback_bindings: &[],
+        shortcut_field: None,
+        palette: palette("Prompt", false),
+        shortcut_label: None,
+        slash_on_startup: false,
+    },
+    ActionSpec {
+        id: "prompt_stash",
+        name: "Stash prompt",
+        aliases: &[],
+        description: "Save the current prompt for later",
+        contexts: CHAT,
+        availability: ActionAvailability::Always,
+        handler: ActionHandler::PromptStash,
+        default_bindings: &[],
+        fallback_bindings: &[],
+        shortcut_field: None,
+        palette: palette("Prompt", false),
+        shortcut_label: None,
+        slash_on_startup: false,
+    },
+    ActionSpec {
+        id: "prompt_stash_pop",
+        name: "Stash pop",
+        aliases: &[],
+        description: "Restore the most recently stashed prompt",
+        contexts: CHAT,
+        availability: ActionAvailability::Always,
+        handler: ActionHandler::PromptStashPop,
+        default_bindings: &[],
+        fallback_bindings: &[],
+        shortcut_field: None,
+        palette: palette("Prompt", false),
+        shortcut_label: None,
+        slash_on_startup: false,
+    },
+    ActionSpec {
+        id: "prompt_stash_list",
+        name: "Stash list",
+        aliases: &[],
+        description: "Browse and restore stashed prompts",
+        contexts: CHAT,
+        availability: ActionAvailability::Always,
+        handler: ActionHandler::PromptStashList,
         default_bindings: &[],
         fallback_bindings: &[],
         shortcut_field: None,
@@ -2971,6 +3022,40 @@ mod tests {
         assert!(editor.handler.available_in_shared_tui(ActionContext::Chat));
         assert!(copy.handler.available_in_shared_tui(ActionContext::Chat));
         assert!(export.handler.available_in_shared_tui(ActionContext::Chat));
+    }
+
+    #[test]
+    fn opencode_prompt_stash_uses_palette_only_entrypoints_without_default_bindings() {
+        let state = ActionState::chat(false, false);
+        let expected = [
+            ("prompt_stash", "Stash prompt", ActionHandler::PromptStash),
+            (
+                "prompt_stash_pop",
+                "Stash pop",
+                ActionHandler::PromptStashPop,
+            ),
+            (
+                "prompt_stash_list",
+                "Stash list",
+                ActionHandler::PromptStashList,
+            ),
+        ];
+
+        for (id, name, handler) in expected {
+            let action = action_by_id(id, ActionContext::Chat).expect("stash action");
+            assert_eq!(action.name, name);
+            assert_eq!(action.handler, handler);
+            assert!(action.aliases.is_empty());
+            assert!(action.default_bindings.is_empty());
+            assert_eq!(action.palette.map(|palette| palette.group), Some("Prompt"));
+            assert!(action.handler.available_in_shared_tui(ActionContext::Chat));
+        }
+
+        let slash_ids = slash_actions(state)
+            .into_iter()
+            .map(|action| action.id)
+            .collect::<Vec<_>>();
+        assert!(!slash_ids.iter().any(|id| id.starts_with("prompt_stash")));
     }
 
     #[test]

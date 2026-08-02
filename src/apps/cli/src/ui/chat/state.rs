@@ -21,6 +21,7 @@ use super::mcp_selector::{McpAction, McpItem, McpSelectorState};
 use super::model_config_form::{ModelConfigFormState, ModelFormAction};
 use super::model_selector::{ModelItem, ModelSelectorState};
 use super::permission::render_permission_overlay;
+use super::prompt_stash_selector::PromptStashSelectorState;
 use super::provider_selector::{ProviderSelection, ProviderSelectorState};
 use super::question::render_question_overlay;
 use super::session_selector::{SessionAction, SessionItem, SessionSelectorState};
@@ -51,6 +52,12 @@ pub(crate) enum ComposerMode {
 }
 
 #[derive(Debug, Default)]
+struct InactiveSessionComposer {
+    draft: ComposerDraft,
+    mode: ComposerMode,
+}
+
+#[derive(Debug, Default)]
 struct SessionSubmittedDraftHistory {
     active: Vec<SubmittedDraftRecord>,
     undone: Vec<SubmittedDraftRecord>,
@@ -71,6 +78,7 @@ pub(crate) enum PopupType {
     SessionSelector,
     ForkSelector,
     TimelineSelector,
+    PromptStashSelector,
     ExportDialog,
     SkillSelector,
     SubagentSelector,
@@ -208,6 +216,10 @@ pub(crate) struct ChatView {
     /// Shell command history is intentionally isolated from chat prompts.
     shell_input_history: VecDeque<ComposerDraft>,
     composer_mode: ComposerMode,
+    /// Unsent composer state for inactive Sessions. The active Session remains
+    /// represented by the existing composer fields, so rich drafts are never
+    /// duplicated between two UI owners.
+    inactive_session_composers: HashMap<String, InactiveSessionComposer>,
     /// Drafts accepted by the Runtime, isolated by Session for local undo/redo identity.
     submitted_drafts: SubmittedDraftHistory,
     workspace_references: Vec<bitfun_agent_runtime::sdk::AgentWorkspaceReference>,
@@ -233,6 +245,7 @@ pub(crate) struct ChatView {
     fork_selector: ForkSelectorState,
     /// OpenCode-compatible user-message timeline selector.
     timeline_selector: TimelineSelectorState,
+    prompt_stash_selector: PromptStashSelectorState,
     export_dialog: ExportDialogState,
     /// Skill selector popup state
     skill_selector: SkillSelectorState,
@@ -345,6 +358,7 @@ impl ChatView {
             input_history: VecDeque::with_capacity(50),
             shell_input_history: VecDeque::with_capacity(50),
             composer_mode: ComposerMode::Chat,
+            inactive_session_composers: HashMap::new(),
             submitted_drafts: SubmittedDraftHistory::default(),
             workspace_references: Vec::new(),
             image_attachments: Vec::new(),
@@ -358,6 +372,7 @@ impl ChatView {
             session_selector: SessionSelectorState::new(),
             fork_selector: ForkSelectorState::new(),
             timeline_selector: TimelineSelectorState::new(),
+            prompt_stash_selector: PromptStashSelectorState::new(),
             export_dialog: ExportDialogState::new(),
             skill_selector: SkillSelectorState::new(),
             subagent_selector: SubagentSelectorState::new(),

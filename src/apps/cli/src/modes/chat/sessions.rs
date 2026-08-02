@@ -47,6 +47,8 @@ impl ChatMode {
         new_state.current_model_id = summary.model_id;
         new_state.apply_workspace_binding(workspace_binding);
 
+        clear_selected_native_command_prefill(&mut self.selected_native_command_once, chat_view);
+        chat_view.activate_session_composer(&source_session_id, &new_session_id);
         *session_id = new_session_id.clone();
         *chat_state = new_state;
         chat_state.set_worktree_control_available(!self.agent.is_shared());
@@ -54,7 +56,6 @@ impl ChatMode {
         self.workspace = chat_state.workspace.clone();
         self.refresh_workspace_git_status(chat_state, rt_handle);
         self.auto_approve_ask_override = None;
-        clear_selected_native_command_prefill(&mut self.selected_native_command_once, chat_view);
         chat_state.auto_approve_ask = self.auto_approve_ask_default;
         self.agent
             .set_approval_policy(crate::runtime::approval::CliApprovalPolicy::Ask);
@@ -87,6 +88,7 @@ impl ChatMode {
         chat_view: &mut ChatView,
         rt_handle: &tokio::runtime::Handle,
     ) -> Result<()> {
+        let previous_session_id = chat_state.core_session_id.clone();
         let agent = self.agent.clone();
         let sid = new_session_id.to_string();
 
@@ -113,6 +115,8 @@ impl ChatMode {
             })?;
 
         // Update session state
+        clear_selected_native_command_prefill(&mut self.selected_native_command_once, chat_view);
+        chat_view.activate_session_composer(&previous_session_id, new_session_id);
         *session_id = new_session_id.to_string();
         *chat_state = new_state;
         chat_state.set_worktree_control_available(!self.agent.is_shared());
@@ -120,7 +124,6 @@ impl ChatMode {
         self.workspace = chat_state.workspace.clone();
         self.refresh_workspace_git_status(chat_state, rt_handle);
         self.auto_approve_ask_override = None;
-        clear_selected_native_command_prefill(&mut self.selected_native_command_once, chat_view);
         chat_state.auto_approve_ask = self.auto_approve_ask_default;
         self.agent
             .set_approval_policy(crate::runtime::approval::CliApprovalPolicy::Ask);
@@ -147,6 +150,7 @@ impl ChatMode {
         chat_view: &mut ChatView,
         rt_handle: &tokio::runtime::Handle,
     ) -> Result<()> {
+        let previous_session_id = chat_state.core_session_id.clone();
         let agent = self.agent.clone();
         let agent_type = self.agent_type.clone();
 
@@ -166,13 +170,14 @@ impl ChatMode {
         );
         new_state.apply_workspace_binding(workspace_binding);
 
+        clear_selected_native_command_prefill(&mut self.selected_native_command_once, chat_view);
+        chat_view.activate_session_composer(&previous_session_id, &new_session_id);
         *session_id = new_session_id;
         *chat_state = new_state;
         chat_state.set_worktree_control_available(!self.agent.is_shared());
         self.workspace = chat_state.workspace.clone();
         self.refresh_workspace_git_status(chat_state, rt_handle);
         self.auto_approve_ask_override = None;
-        clear_selected_native_command_prefill(&mut self.selected_native_command_once, chat_view);
         chat_state.auto_approve_ask = self.auto_approve_ask_default;
         self.agent
             .set_approval_policy(crate::runtime::approval::CliApprovalPolicy::Ask);

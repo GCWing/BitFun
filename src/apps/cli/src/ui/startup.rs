@@ -1079,6 +1079,9 @@ impl StartupPage {
             | ActionHandler::WorkspaceDiff
             | ActionHandler::CompactSession
             | ActionHandler::Editor
+            | ActionHandler::PromptStash
+            | ActionHandler::PromptStashPop
+            | ActionHandler::PromptStashList
             | ActionHandler::ToggleTimestamps
             | ActionHandler::ToggleThinking
             | ActionHandler::ToggleToolDetails

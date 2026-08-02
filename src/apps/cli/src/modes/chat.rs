@@ -1,4 +1,5 @@
 mod external_editor;
+mod prompt_stash;
 /// Chat mode implementation
 ///
 /// Interactive chat mode with TUI interface.
@@ -49,6 +50,7 @@ use crate::ui::model_config_form::{ModelFormAction, ModelFormResult};
 use crate::ui::model_selector::ModelItem;
 use crate::ui::permission::PermissionAction;
 use crate::ui::prompt_command_shell_review::PromptCommandShellReviewAction;
+use crate::ui::prompt_stash_selector::PromptStashAction;
 use crate::ui::provider_selector::ProviderSelection;
 use crate::ui::question::QuestionAction;
 use crate::ui::session_selector::{SessionAction, SessionItem};

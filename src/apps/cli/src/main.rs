@@ -28,11 +28,13 @@ mod modes;
 mod peer_host;
 mod plugin_diagnostics;
 mod product_assembly;
+mod prompt_stash;
 mod prompts;
 mod root_handlers;
 mod runtime;
 mod self_update;
 mod shared_runtime;
+mod terminal_attention;
 mod ui;
 
 use anyhow::{anyhow, Result};

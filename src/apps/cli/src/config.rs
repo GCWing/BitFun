@@ -44,6 +44,10 @@ pub(crate) struct UiConfig {
     pub thinking: ThinkingMode,
     /// Show tool-card details by default.
     pub tool_details: bool,
+    /// Emit terminal attention notifications for completed turns and input requests.
+    pub notifications: bool,
+    /// Escape-sequence backend used for terminal attention notifications.
+    pub notification_method: NotificationMethod,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -56,6 +60,20 @@ pub(crate) enum ThinkingMode {
 impl Default for ThinkingMode {
     fn default() -> Self {
         Self::Hide
+    }
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub(crate) enum NotificationMethod {
+    Auto,
+    Osc9,
+    Bel,
+}
+
+impl Default for NotificationMethod {
+    fn default() -> Self {
+        Self::Auto
     }
 }
 
@@ -106,6 +124,8 @@ impl Default for UiConfig {
             timestamps: false,
             thinking: ThinkingMode::Hide,
             tool_details: true,
+            notifications: false,
+            notification_method: NotificationMethod::Auto,
         }
     }
 }
@@ -277,7 +297,7 @@ impl CliConfig {
 
 #[cfg(test)]
 mod tests {
-    use super::{CliConfig, ThinkingMode};
+    use super::{CliConfig, NotificationMethod, ThinkingMode};
     use std::fs;
 
     #[test]
@@ -290,6 +310,8 @@ mod tests {
         assert!(config.ui.show_tips);
         assert!(config.ui.animation);
         assert_eq!(config.ui.color_scheme, "default");
+        assert!(!config.ui.notifications);
+        assert_eq!(config.ui.notification_method, NotificationMethod::Auto);
         assert!(config.behavior.auto_save);
         assert!(config.behavior.confirm_dangerous);
         assert_eq!(config.behavior.default_agent, "agentic");
@@ -305,6 +327,11 @@ mod tests {
         assert!(serialized.contains("timestamps = false"), "{serialized}");
         assert!(serialized.contains("thinking = \"hide\""), "{serialized}");
         assert!(serialized.contains("tool_details = true"), "{serialized}");
+        assert!(serialized.contains("notifications = false"), "{serialized}");
+        assert!(
+            serialized.contains("notification_method = \"auto\""),
+            "{serialized}"
+        );
     }
 
     #[test]
