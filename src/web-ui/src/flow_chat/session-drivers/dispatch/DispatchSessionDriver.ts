@@ -12,8 +12,14 @@
 import { createLogger } from '@/shared/utils/logger';
 import { globalEventBus } from '@/infrastructure/event-bus';
 import { i18nService } from '@/infrastructure/i18n';
+import type {
+  PermissionReplyKind,
+  PermissionRequest,
+} from '@/infrastructure/api/service-api/AgentAPI';
 import type { FlowChatContext, SessionConfig } from '../../services/flow-chat-manager/types';
 import type { DialogTurn, Session } from '../../types/flow-chat';
+import { FlowChatStore } from '../../store/FlowChatStore';
+import { selectActivePermissionBatch } from '../../components/modern/permissionRequestRouting';
 import type {
   SessionCascadeRemoval,
   SessionCreationSeed,
@@ -53,6 +59,22 @@ const log = createLogger('DispatchSessionDriver');
 const IMAGES_UNSUPPORTED_MESSAGE = 'Image attachments are not supported for detached dispatch yet';
 const APPEND_RETRY_SCOPE = 'dispatch-append';
 const CONTINUE_RETRY_SCOPE = 'dispatch-continue';
+const EMPTY_PENDING_PERMISSIONS: ReadonlyArray<Record<string, unknown>> = [];
+
+/**
+ * The durable job observed by a projection session. The bound config id wins;
+ * the observer-store fallback covers the startup window before
+ * `ensureProjection` binds the config.
+ */
+function jobIdForSession(sessionId: string): string | undefined {
+  const session = FlowChatStore.getInstance().getState().sessions.get(sessionId);
+  const configured = session?.config.dispatchJobId?.trim();
+  if (configured) {
+    return configured;
+  }
+  return Object.values(dispatchJobStore.getState().jobs)
+    .find(job => job.sessionId === sessionId)?.jobId;
+}
 
 function pinTurnToTop(sessionId: string, turnId: string): void {
   globalEventBus.emit(
@@ -391,6 +413,62 @@ export const dispatchSessionDriver: SessionDriver = {
       requestDispatchJobRefresh(jobId);
     }
     return response.cancelled;
+  },
+
+  permissionRequestSource(sessionId: string) {
+    return {
+      subscribe: (listener: () => void) => dispatchJobStore.subscribe(listener),
+      getSnapshot: () => {
+        const jobId = jobIdForSession(sessionId);
+        if (!jobId) {
+          return EMPTY_PENDING_PERMISSIONS;
+        }
+        return dispatchJobStore.getState().jobs[jobId]?.pendingPermissions
+          ?? EMPTY_PENDING_PERMISSIONS;
+      },
+    };
+  },
+
+  async respondPermission(
+    sessionId: string,
+    requestId: string,
+    reply: PermissionReplyKind,
+    feedback?: string,
+  ): Promise<void> {
+    const jobId = jobIdForSession(sessionId);
+    if (!jobId) {
+      throw new Error('Dispatch session is missing its job id');
+    }
+    await dispatchApi.answerPermission(jobId, requestId, reply, feedback);
+    requestDispatchJobRefresh(jobId);
+  },
+
+  async respondPermissionBatch(
+    sessionId: string,
+    requestId: string,
+    reply: PermissionReplyKind,
+    feedback?: string,
+  ): Promise<string[]> {
+    const jobId = jobIdForSession(sessionId);
+    if (!jobId) {
+      throw new Error('Dispatch session is missing its job id');
+    }
+    const pending = (dispatchJobStore.getState().jobs[jobId]?.pendingPermissions
+      ?? []) as unknown as PermissionRequest[];
+    const batch = selectActivePermissionBatch(pending, sessionId);
+    const requestIds = batch?.requests.map(request => request.requestId) ?? [requestId];
+    for (const pendingRequestId of requestIds) {
+      await dispatchApi.answerPermission(
+        jobId,
+        pendingRequestId,
+        reply,
+        feedback,
+      );
+    }
+    requestDispatchJobRefresh(jobId);
+    // The observer store refreshes from the target; there is no local
+    // subscription state to reconcile.
+    return [];
   },
 
   planSubmission(

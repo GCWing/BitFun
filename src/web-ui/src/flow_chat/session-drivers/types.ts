@@ -93,6 +93,29 @@ export interface TurnTracker {
 export type StartTurnResult = 'completed' | 'detached';
 
 /**
+ * Where a session's pending permission requests come from.
+ *
+ * `'live'` — the runtime pushes permission events over the transport; the
+ * shared hook owns the subscription and reconciliation.
+ * Otherwise — an external-store pair (`useSyncExternalStore`-shaped) over the
+ * driver's own state; used when requests arrive by polling a durable mailbox.
+ */
+export type PermissionRequestSource =
+  | 'live'
+  | {
+      subscribe: (listener: () => void) => () => void;
+      getSnapshot: () => readonly PermissionRequestLike[];
+    };
+
+/**
+ * Structural stand-in for AgentAPI's PermissionRequest wire shape. `object`
+ * so both the typed interface and raw store records assign without casts.
+ */
+export type PermissionRequestLike = object;
+
+export type PermissionReplyKindLike = 'once' | 'always' | 'reject';
+
+/**
  * Everything flavor-independent that session creation resolved before the
  * driver takes over: workspace identity, agent type, and the initial title.
  */
@@ -182,4 +205,27 @@ export interface SessionDriver {
     input: StartTurnInput,
     tracker: TurnTracker,
   ): Promise<StartTurnResult>;
+
+  /** How pending permission requests for this session are obtained. */
+  permissionRequestSource(sessionId: string): PermissionRequestSource;
+
+  /** Answer one permission request over this session's transport. */
+  respondPermission(
+    sessionId: string,
+    requestId: string,
+    reply: PermissionReplyKindLike,
+    feedback?: string,
+  ): Promise<void>;
+
+  /**
+   * Answer a request's whole batch. Returns the ids the transport reports as
+   * resolved so a live-subscription caller can reconcile its local state;
+   * external-store flavors return an empty list (their store refreshes).
+   */
+  respondPermissionBatch(
+    sessionId: string,
+    requestId: string,
+    reply: PermissionReplyKindLike,
+    feedback?: string,
+  ): Promise<string[]>;
 }

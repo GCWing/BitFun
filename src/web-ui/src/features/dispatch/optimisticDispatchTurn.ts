@@ -1,29 +1,29 @@
-import type { DialogTurn } from '@/flow_chat/types/flow-chat';
+/**
+ * Dispatch-named wrappers over the generic optimistic-turn adoption helpers.
+ * The metadata key and behavior are unchanged; see
+ * `flow_chat/utils/optimisticTurnAdoption.ts`.
+ */
 
-const OPTIMISTIC_DISPATCH_JOB_ID_KEY = '__bitfunOptimisticDispatchJobId';
+import type { DialogTurn } from '@/flow_chat/types/flow-chat';
+import {
+  markOptimisticTurnAdoption,
+  optimisticTurnAdoptionKey,
+  stripOptimisticTurnAdoption,
+} from '@/flow_chat/utils/optimisticTurnAdoption';
 
 export function markOptimisticDispatchTurnMetadata(
   metadata: Record<string, unknown> | undefined,
   jobId: string,
 ): Record<string, unknown> {
-  return {
-    ...metadata,
-    [OPTIMISTIC_DISPATCH_JOB_ID_KEY]: jobId,
-  };
+  return markOptimisticTurnAdoption(metadata, jobId);
 }
 
 export function optimisticDispatchTurnJobId(turn: DialogTurn): string | undefined {
-  const value = turn.userMessage.metadata?.[OPTIMISTIC_DISPATCH_JOB_ID_KEY];
-  return typeof value === 'string' && value ? value : undefined;
+  return optimisticTurnAdoptionKey(turn);
 }
 
 export function stripOptimisticDispatchTurnMetadata(
   metadata: Record<string, unknown> | undefined,
 ): Record<string, unknown> | undefined {
-  if (!metadata) {
-    return undefined;
-  }
-  const next = { ...metadata };
-  delete next[OPTIMISTIC_DISPATCH_JOB_ID_KEY];
-  return Object.keys(next).length > 0 ? next : undefined;
+  return stripOptimisticTurnAdoption(metadata);
 }

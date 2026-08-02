@@ -79,10 +79,10 @@ import {
 import { requestPeerSessionRefresh } from './PeerSessionRefreshModule';
 import { isPeerDeviceModeActive } from '@/infrastructure/peer-device/peerModeFlag';
 import {
-  optimisticDispatchTurnJobId,
-  stripOptimisticDispatchTurnMetadata,
-} from '@/features/dispatch/optimisticDispatchTurn';
-import { isNonLocalDispatchTarget } from '@/features/dispatch/types';
+  optimisticTurnAdoptionKey,
+  sessionPendingTurnAdoptionKey,
+  stripOptimisticTurnAdoption,
+} from '../../utils/optimisticTurnAdoption';
 
 const log = createLogger('EventHandlerModule');
 const TURN_COMPLETION_QUIET_WINDOW_MS = 500;
@@ -1573,18 +1573,20 @@ function handleDialogTurnStarted(context: FlowChatContext, event: any): void {
   let dialogTurn = freshSession?.dialogTurns.find((turn: DialogTurn) => turn.id === turnId);
   let projectedNewTurn = false;
 
-  if (
-    !dialogTurn
-    && freshSession
-    && isNonLocalDispatchTarget(freshSession.config.dispatchTarget)
-    && freshSession.config.dispatchJobId
-  ) {
-    const optimisticTurn = freshSession.dialogTurns.find(
-      turn => optimisticDispatchTurnJobId(turn) === freshSession.config.dispatchJobId,
-    );
+  if (!dialogTurn && freshSession) {
+    // Adoption is keyed purely by turn metadata: a driver that projected an
+    // optimistic turn marked it with the session's pending adoption key, and
+    // the executor's own DialogTurnStarted adopts it in place. No transport
+    // check — a session whose turns carry no key never matches.
+    const pendingAdoptionKey = sessionPendingTurnAdoptionKey(freshSession);
+    const optimisticTurn = pendingAdoptionKey
+      ? freshSession.dialogTurns.find(
+          turn => optimisticTurnAdoptionKey(turn) === pendingAdoptionKey,
+        )
+      : undefined;
     if (optimisticTurn) {
       store.updateDialogTurn(sessionId, optimisticTurn.id, turn => {
-        const optimisticMetadata = stripOptimisticDispatchTurnMetadata(
+        const optimisticMetadata = stripOptimisticTurnAdoption(
           turn.userMessage.metadata,
         );
         const mergedMetadata =

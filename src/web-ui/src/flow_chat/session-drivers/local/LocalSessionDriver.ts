@@ -220,6 +220,28 @@ export const localSessionDriver: SessionDriver = {
     return { kind: 'queue' };
   },
 
+  permissionRequestSource(): 'live' {
+    return 'live';
+  },
+
+  async respondPermission(
+    _sessionId: string,
+    requestId: string,
+    reply: 'once' | 'always' | 'reject',
+    feedback?: string,
+  ): Promise<void> {
+    await agentAPI.respondPermission(requestId, reply, feedback);
+  },
+
+  async respondPermissionBatch(
+    _sessionId: string,
+    requestId: string,
+    reply: 'once' | 'always' | 'reject',
+    feedback?: string,
+  ): Promise<string[]> {
+    return agentAPI.respondPermissionBatch(requestId, reply, feedback);
+  },
+
   async steer(): Promise<void> {
     throw new Error('Local sessions queue messages while a turn is running');
   },
