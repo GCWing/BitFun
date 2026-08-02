@@ -48,7 +48,6 @@ import {
   requireSessionProjectWorkspacePath,
   sessionProjectWorkspacePath,
 } from '../../utils/sessionWorkspace';
-import { isNonLocalDispatchTarget } from '@/features/dispatch/types';
 import { driverForCreation, driverForSession } from '../../session-drivers/registry';
 
 const log = createLogger('SessionModule');
@@ -656,7 +655,7 @@ export async function switchChatSession(
     });
 
     const touchActiveSessionInBackground = () => {
-      if (isNonLocalDispatchTarget(session?.config.dispatchTarget)) {
+      if (driverForSession(sessionId, session).id === 'dispatch') {
         return;
       }
       scheduleSessionActivityTouch(() => {
@@ -867,7 +866,7 @@ export async function forkChatSession(
   if (!sourceSession) {
     throw new Error(`Session does not exist: ${sourceSessionId}`);
   }
-  if (isNonLocalDispatchTarget(sourceSession.config.dispatchTarget)) {
+  if (driverForSession(sourceSessionId, sourceSession).id === 'dispatch') {
     throw new Error('Forking a detached dispatch session is not supported');
   }
 
@@ -940,7 +939,7 @@ export async function ensureBackendSession(
   if (session.isTransient) {
     return;
   }
-  if (isNonLocalDispatchTarget(session.config.dispatchTarget)) {
+  if (driverForSession(sessionId, session).id === 'dispatch') {
     return;
   }
 

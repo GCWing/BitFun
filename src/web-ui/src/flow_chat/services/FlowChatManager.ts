@@ -58,7 +58,7 @@ import {
 } from './flow-chat-manager';
 import { ensureBackendSession } from './flow-chat-manager/SessionModule';
 import { installPeerSessionRefresh } from './flow-chat-manager/PeerSessionRefreshModule';
-import { installDispatchJobObserver } from '@/features/dispatch/DispatchJobObserver';
+import { installDispatchJobObserver } from '../session-drivers/dispatch/install';
 
 const log = createLogger('FlowChatManager');
 
