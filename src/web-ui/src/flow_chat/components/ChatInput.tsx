@@ -134,7 +134,7 @@ import {
 import type { DispatchSelection, DispatchTarget } from '@/features/dispatch/types';
 import { isNonLocalDispatchTarget } from '@/features/dispatch/types';
 import { dispatchJobStore } from '@/features/dispatch/dispatchJobStore';
-import { useRuntimeStatusStore } from '../store/runtimeStatusStore';
+import { useComposerCapabilities } from '../session-drivers/useComposerCapabilities';
 import { ComposerVoiceInputButton } from './voice/ComposerVoiceInputButton';
 import { useComposerVoiceInput } from './voice/useComposerVoiceInput';
 import { expandWidgetPromptReferenceTokens } from '@/tools/generative-widget/widgetPromptReference';
@@ -509,25 +509,20 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     const jobId = effectiveTargetSession?.config.dispatchJobId;
     return jobId ? state.jobs[jobId] : undefined;
   });
-  const isDispatchInputSession = isNonLocalDispatchTarget(
-    effectiveTargetSession?.config.dispatchTarget,
-  );
-  const usesDispatchTransport = !registration && isDispatchInputSession;
-  const dispatchSubmissionInFlight = useRuntimeStatusStore(state => {
-    const status = effectiveTargetSessionId
-      ? state.bySessionId.get(effectiveTargetSessionId)
-      : undefined;
-    return usesDispatchTransport
-      && status?.roundId.startsWith('dispatch-transfer:') === true;
+  const effectiveTargetRelationship = resolveSessionRelationship(effectiveTargetSession);
+  const isBtwSession = effectiveTargetRelationship.displayAsChild;
+  const isSubagentInputTarget = effectiveTargetRelationship.isSubagent;
+  const caps = useComposerCapabilities({
+    sessionId: effectiveTargetSessionId,
+    session: effectiveTargetSession,
+    hostMasksDispatch: !!registration,
+    displayAsChild: isBtwSession,
   });
   const historySessionOpenTransition = useSyncExternalStore(
     subscribeHistorySessionOpenTransition,
     getHistorySessionOpenTransitionSnapshot,
     getHistorySessionOpenTransitionSnapshot,
   );
-  const effectiveTargetRelationship = resolveSessionRelationship(effectiveTargetSession);
-  const isBtwSession = effectiveTargetRelationship.displayAsChild;
-  const isSubagentInputTarget = effectiveTargetRelationship.isSubagent;
   const acpSessionForInput = useMemo(
     () => acpSessionRef(effectiveTargetSession),
     [effectiveTargetSession],
@@ -537,7 +532,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const reloadContextSupported = supportsLocalReloadContext({
     desktopRuntime: isTauriRuntime(),
     acpSession: isAcpInputSession,
-    dispatchTransport: usesDispatchTransport,
+    dispatchTransport: caps.dispatchTransport,
   });
   const canReloadContext = reloadContextSupported && Boolean(effectiveTargetSessionId);
   const { entries: acpPlanEntries } = useAcpPlan(acpSessionForInput?.sessionId ?? null);
@@ -2015,12 +2010,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       : effectiveTargetSession?.config.dispatchApprovalPolicy === 'reject-and-report'
         ? 'reject'
         : 'ask';
-  const dispatchSubmissionOptionsLocked =
-    dispatchSubmissionInFlight
-    || (
-      effectiveTargetSession?.config.dispatchJobState !== 'submitting'
-      && effectiveTargetSession?.config.dispatchJobState !== 'submission_unknown'
-    );
+  const dispatchSubmissionOptionsLocked = caps.submissionOptionsLocked;
   const handleDispatchPermissionModeChange = useCallback((
     nextMode: Exclude<ChatInputPermissionMode, 'acp'>,
   ) => {
@@ -2061,7 +2051,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     // A dispatch always executes against a managed worktree baseline of this
     // repository, so the chip reports that state instead of disappearing. It is
     // never togglable: the baseline is chosen with the target, not after.
-    if (usesDispatchTransport) {
+    if (caps.worktreeBaselineLocked) {
       return {
         enabled: true,
         locked: true,
@@ -2104,7 +2094,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     isSubagentInputTarget,
     remoteWorkspaceSession,
     tWorktrees,
-    usesDispatchTransport,
+    caps.worktreeBaselineLocked,
   ]);
 
   const handleSelectDispatchTarget = useCallback(async (selection: DispatchSelection) => {
@@ -2189,7 +2179,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   ]);
 
   const dispatchModelSelection = useMemo(() => {
-    if (!usesDispatchTransport || !effectiveTargetSession) {
+    if (!caps.targetModelSelection || !effectiveTargetSession) {
       return undefined;
     }
     const target = effectiveTargetSession.config.dispatchTarget;
@@ -2199,18 +2189,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         : t('chatInput.dispatch.remoteTarget');
     const sessionId = effectiveTargetSession.sessionId;
     const jobId = effectiveTargetSession.config.dispatchJobId;
-    const state = effectiveTargetSession.config.dispatchJobState;
     return {
       models: effectiveTargetSession.config.dispatchAvailableModels ?? [],
       selectedModelId: effectiveTargetSession.config.dispatchModel,
       defaultModelId: effectiveTargetSession.config.dispatchDefaultModel,
       providerLabel,
-      disabled:
-        dispatchSubmissionInFlight
-        || (
-          state !== 'submitting'
-          && state !== 'submission_unknown'
-        ),
+      disabled: caps.submissionOptionsLocked,
       onSelect: (modelId: string) => {
         FlowChatStore.getInstance().updateSessionDispatchModel(sessionId, modelId);
         if (jobId) {
@@ -2218,7 +2202,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         }
       },
     };
-  }, [dispatchSubmissionInFlight, effectiveTargetSession, t, usesDispatchTransport]);
+  }, [caps.submissionOptionsLocked, caps.targetModelSelection, effectiveTargetSession, t]);
 
   const handleHidePermissionModeControl = useCallback(async () => {
     try {
@@ -2928,7 +2912,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     }
 
     const promptSlashCommandsEnabled = !isAcpInputSession;
-    const localSlashCommandsEnabled = promptSlashCommandsEnabled && !usesDispatchTransport;
+    const localSlashCommandsEnabled = promptSlashCommandsEnabled && caps.localSlashCommands;
     const trimmed = text.trim();
     const isBtwCommand = localSlashCommandsEnabled && isSlashCommand(trimmed, '/btw');
     const isCompactCommand = localSlashCommandsEnabled && isSlashCommand(trimmed, '/compact');
@@ -3006,7 +2990,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         selectedIndex: 0,
       });
     }
-  }, [contexts, derivedState, dispatchInput, externalPromptCommands, inputState.isActive, isAcpInputSession, prunePendingLargePastes, removeContext, resolveTypedMcpPromptCommand, selectedExternalPromptCandidateId, selectedNonExternalSlashCommand, setQueuedInput, slashCommandState.isActive, slashCommandState.kind, usesDispatchTransport]);
+  }, [contexts, derivedState, dispatchInput, externalPromptCommands, inputState.isActive, isAcpInputSession, prunePendingLargePastes, removeContext, resolveTypedMcpPromptCommand, selectedExternalPromptCandidateId, selectedNonExternalSlashCommand, setQueuedInput, slashCommandState.isActive, slashCommandState.kind, caps.localSlashCommands]);
 
   const submitBtwFromInput = useCallback(async () => {
     if (!derivedState) return;
@@ -3930,7 +3914,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   
   const handleSendOrCancel = useCallback(async (messageOverride?: string) => {
     if (!derivedState) return;
-    if (dispatchSubmissionInFlight) return;
+    if (caps.transferInFlight) return;
     
     const { sendButtonMode } = derivedState;
     const draftTrimmed = (messageOverride ?? inputState.value).trim();
@@ -3976,7 +3960,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       messageOverride === undefined;
     const localSlashCommandsEnabled =
       promptSlashCommandsEnabled &&
-      !usesDispatchTransport;
+      caps.localSlashCommands;
     const parsedReload = messageOverride === undefined
       ? parseReloadCommand(message)
       : null;
@@ -4140,7 +4124,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     }
   }, [
     isModelSwitching,
-    dispatchSubmissionInFlight,
+    caps.transferInFlight,
     inputState.value,
     derivedState,
     dispatchInput,
@@ -4173,7 +4157,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     t,
     resolveTypedMcpPromptCommand,
     submitExternalPromptCommandFromInput,
-    usesDispatchTransport,
+    caps.localSlashCommands,
     composerMutationRevision,
   ]);
   
@@ -5012,7 +4996,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         <IconButton
           className="bitfun-chat-input__send-button bitfun-chat-input__send-button--retry"
           onClick={() => void handleSendOrCancel()}
-          disabled={isModelSwitching || dispatchSubmissionInFlight}
+          disabled={isModelSwitching || caps.transferInFlight}
           tooltip={t('input.retry')}
           size="small"
         >
@@ -5038,7 +5022,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           <IconButton
             className="bitfun-chat-input__send-button"
             onClick={() => void handleSendOrCancel()}
-            disabled={!inputState.value.trim() || isModelSwitching || dispatchSubmissionInFlight}
+            disabled={!inputState.value.trim() || isModelSwitching || caps.transferInFlight}
             data-testid="chat-input-send-btn"
             tooltip={t('input.sendShortcut')}
             size="small"
@@ -5053,7 +5037,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       <IconButton
         className="bitfun-chat-input__send-button"
         onClick={() => void handleSendOrCancel()}
-        disabled={!inputState.value.trim() || isModelSwitching || dispatchSubmissionInFlight}
+        disabled={!inputState.value.trim() || isModelSwitching || caps.transferInFlight}
         data-testid="chat-input-send-btn"
         tooltip={t('input.sendShortcut')}
         size="small"
@@ -5090,9 +5074,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       >
         <div 
           ref={containerRef}
-          className={`bitfun-chat-input ${isMultiLine ? 'bitfun-chat-input--multi-line' : 'bitfun-chat-input--capsule'} ${derivedState?.isProcessing || dispatchSubmissionInFlight ? 'bitfun-chat-input--processing' : ''} ${className}`}
+          className={`bitfun-chat-input ${isMultiLine ? 'bitfun-chat-input--multi-line' : 'bitfun-chat-input--capsule'} ${derivedState?.isProcessing || caps.transferInFlight ? 'bitfun-chat-input--processing' : ''} ${className}`}
           data-testid="chat-input-container"
-          aria-busy={dispatchSubmissionInFlight}
+          aria-busy={caps.transferInFlight}
         >
         {recommendationContext && (
           <SmartRecommendations
@@ -5190,7 +5174,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                 onCompositionStart={handleImeCompositionStart}
                 onCompositionEnd={handleImeCompositionEnd}
                 placeholder=""
-                disabled={dispatchSubmissionInFlight}
+                disabled={caps.transferInFlight}
                 contexts={contexts}
                 onRemoveContext={removeContext}
                 onMentionStateChange={setMentionState}
@@ -5767,7 +5751,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                   </div>
                 ) : null}
 
-                {!dispatchSubmissionInFlight ? (
+                {!caps.transferInFlight ? (
                   <ComposerVoiceInputButton controller={voiceInput} />
                 ) : null}
                 {voiceInput.phase === 'idle' ? renderActionButton() : null}
@@ -5784,7 +5768,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         worktreeControl={worktreeControl}
         deferPassiveGitRefresh={deferChatStripPassiveGitRefresh}
         permissionControl={showPermissionModeControl
-          ? usesDispatchTransport
+          ? caps.sessionScopedApproval
             ? {
                 mode: dispatchPermissionMode,
                 disabled: dispatchSubmissionOptionsLocked,
@@ -5801,15 +5785,14 @@ export const ChatInput: React.FC<ChatInputProps> = ({
               }
           : undefined}
         usageReport={
-          effectiveTargetSessionId && effectiveTargetSession && !usesDispatchTransport
+          effectiveTargetSessionId && effectiveTargetSession && caps.usageReport
             ? { visible: true, onOpen: handleToolbarUsageReport }
             : undefined
         }
         threadGoal={
           effectiveTargetSessionId &&
           effectiveTargetSession &&
-          !isBtwSession &&
-          !usesDispatchTransport
+          caps.threadGoal
             ? {
                 visible: true,
                 goal: threadGoalController.goal,
@@ -5820,7 +5803,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             : undefined
         }
       />
-      {effectiveTargetSession && !isBtwSession && !usesDispatchTransport ? (
+      {effectiveTargetSession && caps.threadGoal ? (
         <ThreadGoalDialogs
           controller={threadGoalController}
           disabled={!effectiveTargetSession.workspacePath}
