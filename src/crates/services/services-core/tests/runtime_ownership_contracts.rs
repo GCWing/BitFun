@@ -1,3 +1,5 @@
+#![cfg(feature = "runtime-ownership")]
+
 use bitfun_services_core::runtime_ownership::{
     RuntimeDeployment, RuntimeOwnershipError, RuntimeOwnershipKey, WorkspaceRuntimeOwnership,
 };

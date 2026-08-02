@@ -5,6 +5,7 @@ pub mod errors;
 pub mod front_matter_markdown;
 pub mod json_extract;
 pub mod plain_output;
+#[cfg(feature = "process-runtime")]
 pub use bitfun_services_core::process_manager;
 pub mod timing;
 pub mod token_counter;
@@ -15,6 +16,7 @@ pub use errors::*;
 pub use front_matter_markdown::FrontMatterMarkdown;
 pub use json_extract::extract_json_from_ai_response;
 pub use plain_output::sanitize_plain_model_output;
+#[cfg(feature = "process-runtime")]
 pub use process_manager::*;
 pub use timing::*;
 pub use token_counter::*;

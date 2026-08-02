@@ -9,8 +9,11 @@ pub mod diff;
 pub mod dispatch_contract;
 #[cfg(feature = "dispatch-workspace")]
 pub mod dispatch_workspace;
+#[cfg(any(feature = "local-storage", feature = "runtime-ownership"))]
 mod file_lock;
+#[cfg(feature = "filesystem")]
 pub mod filesystem;
+#[cfg(feature = "local-storage")]
 pub mod json_store;
 pub mod jsonc;
 pub mod local_instructions;
@@ -18,24 +21,34 @@ pub mod local_instructions;
 pub mod local_runtime_ports;
 #[cfg(feature = "lsp")]
 pub mod lsp;
+#[cfg(feature = "process-runtime")]
 pub mod managed_runtime;
 #[cfg(feature = "markdown")]
 pub mod markdown;
 #[cfg(feature = "permission")]
 pub mod permission_store;
+#[cfg(feature = "local-storage")]
 pub mod persistence;
+#[cfg(feature = "process-runtime")]
 pub mod process_manager;
+#[cfg(feature = "process-runtime")]
 pub mod process_tree;
 #[cfg(feature = "runtime-ownership")]
 pub mod runtime_ownership;
+#[cfg(feature = "local-storage")]
 pub mod session;
+#[cfg(feature = "local-storage")]
 pub mod session_usage;
+#[cfg(feature = "local-storage")]
 pub mod storage_cleanup;
+#[cfg(feature = "process-runtime")]
 pub mod system;
+#[cfg(feature = "local-storage")]
 pub mod token_usage;
 #[cfg(feature = "workspace-runtime")]
 pub mod workspace;
 #[cfg(feature = "workspace-identity")]
 pub mod workspace_identity;
+#[cfg(feature = "workspace-instructions")]
 pub mod workspace_instructions;
 pub mod workspace_text;

@@ -1,6 +1,7 @@
+#![cfg(feature = "local-storage")]
+
 use bitfun_services_core::persistence::{PersistenceService, StorageOptions};
 use bitfun_services_core::storage_cleanup::{CleanupPolicy, CleanupRoots, CleanupService};
-use bitfun_services_core::workspace_instructions::read_workspace_instruction_files;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::fs;
@@ -163,54 +164,6 @@ async fn cleanup_service_trims_oldest_cache_files_when_size_exceeds_policy() {
     assert!(!oldest_file.exists());
     assert_eq!(result.categories.len(), 1);
     assert_eq!(result.categories[0].name, "Oversized Cache");
-}
-
-#[tokio::test]
-async fn workspace_instruction_files_reads_agents_then_claude_and_skips_empty_files() {
-    let temp = tempfile::tempdir().expect("tempdir");
-    fs::write(temp.path().join("AGENTS.md"), "agent rules\n").expect("agents");
-    fs::write(temp.path().join("CLAUDE.md"), "claude rules\n").expect("claude");
-
-    let files = read_workspace_instruction_files(temp.path())
-        .await
-        .expect("instruction files");
-
-    assert_eq!(files.len(), 2);
-    assert_eq!(files[0].name, "AGENTS.md");
-    assert_eq!(files[0].content, "agent rules\n");
-    assert_eq!(files[1].name, "CLAUDE.md");
-    assert_eq!(files[1].content, "claude rules\n");
-
-    fs::write(temp.path().join("AGENTS.md"), "").expect("empty agents");
-    let files = read_workspace_instruction_files(temp.path())
-        .await
-        .expect("instruction files");
-    assert_eq!(files.len(), 1);
-    assert_eq!(files[0].name, "CLAUDE.md");
-}
-
-#[tokio::test]
-async fn workspace_instruction_override_replaces_agents_without_hiding_claude() {
-    let temp = tempfile::tempdir().expect("tempdir");
-    fs::write(temp.path().join("AGENTS.override.md"), "override rules\n").expect("override");
-    fs::write(temp.path().join("AGENTS.md"), "base rules\n").expect("agents");
-    fs::write(temp.path().join("CLAUDE.md"), "claude rules\n").expect("claude");
-
-    let files = read_workspace_instruction_files(temp.path())
-        .await
-        .expect("instruction files");
-
-    assert_eq!(files.len(), 2);
-    assert_eq!(files[0].name, "AGENTS.override.md");
-    assert_eq!(files[0].content, "override rules\n");
-    assert_eq!(files[1].name, "CLAUDE.md");
-
-    fs::write(temp.path().join("AGENTS.override.md"), "").expect("empty override");
-    let files = read_workspace_instruction_files(temp.path())
-        .await
-        .expect("instruction files");
-    assert_eq!(files.len(), 1);
-    assert_eq!(files[0].name, "CLAUDE.md");
 }
 
 #[tokio::test]

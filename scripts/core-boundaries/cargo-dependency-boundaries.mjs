@@ -80,6 +80,16 @@ const SERVICES_INTEGRATIONS_TOKIO_FEATURES = new Map([
   ['script-tool-runtime', ['io-util', 'process', 'rt', 'sync', 'time']],
 ]);
 
+const SERVICES_CORE_TOKIO_FEATURES = new Map([
+  ['filesystem', ['fs']],
+  ['local-storage', ['fs', 'sync']],
+  ['process-runtime', ['io-util', 'process']],
+  ['workspace-instructions', ['fs', 'io-util']],
+  ['lsp', ['fs', 'io-util', 'process', 'sync']],
+  ['workspace-runtime', ['fs', 'io-util', 'process', 'sync']],
+]);
+const SERVICES_CORE_BASE_TOKIO_FEATURES = ['rt', 'time'];
+
 // The installer is an excluded standalone workspace with its own Rust checks
 // and packaging lifecycle; this policy governs the root product workspace.
 const TOKIO_DEPENDENCY_POLICY_EXCLUDED_PACKAGES = new Set(['bitfun-installer']);
@@ -105,11 +115,11 @@ function effectiveTokioCapabilities(feature, featureGraph, visiting = new Set())
   return capabilities;
 }
 
-export function findServicesIntegrationsTokioFeatureViolations(pkg) {
+function findOwnedTokioFeatureViolations(pkg, ownerProfiles) {
   const violations = [];
   const featureGraph = pkg.features ?? {};
 
-  for (const [feature, expectedCapabilities] of SERVICES_INTEGRATIONS_TOKIO_FEATURES) {
+  for (const [feature, expectedCapabilities] of ownerProfiles) {
     if (!Object.hasOwn(featureGraph, feature)) {
       violations.push({
         path: pkg.manifest_path,
@@ -140,7 +150,7 @@ export function findServicesIntegrationsTokioFeatureViolations(pkg) {
   }
 
   for (const [feature, values] of Object.entries(featureGraph)) {
-    if (SERVICES_INTEGRATIONS_TOKIO_FEATURES.has(feature)) {
+    if (ownerProfiles.has(feature)) {
       continue;
     }
     if (values.some((value) => value.startsWith('tokio/'))) {
@@ -148,6 +158,37 @@ export function findServicesIntegrationsTokioFeatureViolations(pkg) {
         path: pkg.manifest_path,
         line: 1,
         message: `${pkg.name}:${feature} Tokio capabilities require an explicit owner contract`,
+      });
+    }
+  }
+
+  return violations;
+}
+
+export function findServicesIntegrationsTokioFeatureViolations(pkg) {
+  return findOwnedTokioFeatureViolations(pkg, SERVICES_INTEGRATIONS_TOKIO_FEATURES);
+}
+
+export function findServicesCoreTokioFeatureViolations(pkg) {
+  return findOwnedTokioFeatureViolations(pkg, SERVICES_CORE_TOKIO_FEATURES);
+}
+
+export function findServicesCorePlatformDependencyFeatureViolations(packages) {
+  const violations = [];
+
+  for (const pkg of packages) {
+    if (pkg.name !== 'bitfun-services-core') {
+      continue;
+    }
+    for (const dependency of pkg.dependencies ?? []) {
+      if (dependency.name !== 'windows' || (dependency.features ?? []).length === 0) {
+        continue;
+      }
+      violations.push({
+        path: pkg.manifest_path,
+        line: 1,
+        message:
+          'windows API capabilities must be selected by services-core owner features, not the dependency declaration',
       });
     }
   }
@@ -177,7 +218,29 @@ export function findTokioDependencyFeatureViolations(packages) {
       const featureOwnedIntegrationRuntime =
         pkg.name === 'bitfun-services-integrations'
         && (dependency.kind ?? null) === null;
-      if (features.length === 0 && !featureOwnedIntegrationRuntime) {
+      const featureOwnedServicesCoreRuntime =
+        pkg.name === 'bitfun-services-core'
+        && (dependency.kind ?? null) === null;
+      if (featureOwnedServicesCoreRuntime) {
+        const actual = [...features].sort();
+        const expected = [...SERVICES_CORE_BASE_TOKIO_FEATURES].sort();
+        const missing = expected.filter((feature) => !actual.includes(feature));
+        const unexpected = actual.filter((feature) => !expected.includes(feature));
+        if (missing.length > 0) {
+          violations.push({
+            path: pkg.manifest_path,
+            line: 1,
+            message: `${pkg.name} missing base Tokio capabilities: ${missing.join(', ')}`,
+          });
+        }
+        if (unexpected.length > 0) {
+          violations.push({
+            path: pkg.manifest_path,
+            line: 1,
+            message: `${pkg.name} has unexpected base Tokio capabilities: ${unexpected.join(', ')}`,
+          });
+        }
+      } else if (features.length === 0 && !featureOwnedIntegrationRuntime) {
         violations.push({
           path: pkg.manifest_path,
           line: 1,
@@ -188,6 +251,9 @@ export function findTokioDependencyFeatureViolations(packages) {
 
     if (pkg.name === 'bitfun-services-integrations') {
       violations.push(...findServicesIntegrationsTokioFeatureViolations(pkg));
+    }
+    if (pkg.name === 'bitfun-services-core') {
+      violations.push(...findServicesCoreTokioFeatureViolations(pkg));
     }
   }
 
@@ -728,6 +794,7 @@ export function checkCargoDependencyBoundaries({ root, crateLayoutRules }) {
     ),
     ...findFeatureGatedTestTargetViolations(packages),
     ...findTokioDependencyFeatureViolations(packages),
+    ...findServicesCorePlatformDependencyFeatureViolations(packages),
   ];
 }
 

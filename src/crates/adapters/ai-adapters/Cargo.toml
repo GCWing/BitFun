@@ -47,7 +47,7 @@ zbus-secret-service-keyring-store = { workspace = true, optional = true }
 subscription-auth = [
     "dep:apple-native-keyring-store",
     "dep:base64",
-    "dep:bitfun-services-core",
+    "bitfun-services-core/process-runtime",
     "dep:dirs",
     "dep:fs2",
     "dep:keyring-core",

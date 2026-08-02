@@ -1,3 +1,5 @@
+#![cfg(feature = "markdown")]
+
 use bitfun_services_core::markdown::{
     expand_prompt_template_arguments, expand_prompt_template_arguments_with_names,
     parse_prompt_shell_directives, prompt_template_expansion_upper_bound, FrontMatterMarkdown,

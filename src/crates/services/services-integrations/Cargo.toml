@@ -95,7 +95,7 @@ zbus-secret-service-keyring-store = { workspace = true, optional = true }
 [features]
 default = []
 announcement = ["reqwest", "tokio/fs", "tokio/sync"]
-browser-control = ["anyhow", "bitfun-services-core", "dirs", "reqwest", "thiserror", "tokio/time"]
+browser-control = ["anyhow", "bitfun-services-core/process-runtime", "dirs", "reqwest", "thiserror", "tokio/time"]
 canvas-runtime = [
     "dep:bitfun-product-domains",
     "oxc",
@@ -109,7 +109,7 @@ deep-research = ["bitfun-agent-runtime", "tokio/fs"]
 git = [
     "async-trait",
     "bitfun-runtime-ports",
-    "bitfun-services-core",
+    "bitfun-services-core/process-runtime",
     "chrono",
     "git2",
     "thiserror",
@@ -131,7 +131,7 @@ mcp = [
     "async-trait",
     "base64",
     "bitfun-agent-tools",
-    "bitfun-services-core",
+    "bitfun-services-core/process-runtime",
     "futures",
     "hex",
     "rand",
@@ -153,7 +153,7 @@ mcp = [
 miniapp-runtime = [
     "base64",
     "bitfun-product-domains/miniapp",
-    "bitfun-services-core",
+    "bitfun-services-core/process-runtime",
     "dep:bitfun-product-domains",
     "dirs",
     "reqwest",
@@ -201,7 +201,7 @@ plugin-source = [
 hook-import = [
     "bitfun-agent-runtime",
     "bitfun-product-domains/external-sources",
-    "bitfun-services-core",
+    "bitfun-services-core/local-storage",
     "dep:bitfun-product-domains",
     "hex",
     "sha2",
@@ -218,7 +218,8 @@ remote-connect = [
     "async-trait",
     "base64",
     "bitfun-agent-tools",
-    "bitfun-services-core",
+    "bitfun-services-core/local-storage",
+    "bitfun-services-core/process-runtime",
     "bitfun-runtime-ports",
     "chrono",
     "dirs",
@@ -252,7 +253,8 @@ remote-connect = [
 remote-ssh = [
     "anyhow",
     "async-trait",
-    "bitfun-services-core",
+    "bitfun-services-core/filesystem",
+    "bitfun-services-core/process-runtime",
     "bitfun-services-core/workspace-identity",
     "bitfun-runtime-ports",
     "sha2",
@@ -274,7 +276,6 @@ remote-ssh-concrete = [
     "anyhow",
     "async-trait",
     "base64",
-    "bitfun-services-core",
     "bitfun-runtime-ports",
     "chrono",
     "dirs",
@@ -292,7 +293,7 @@ remote-ssh-concrete = [
 ]
 review-platform = [
     "async-trait",
-    "bitfun-services-core",
+    "bitfun-services-core/process-runtime",
     "chrono",
     "futures",
     "reqwest",
@@ -326,7 +327,8 @@ speech = [
 ]
 workspace-search = [
     "async-trait",
-    "bitfun-services-core",
+    "bitfun-services-core/filesystem",
+    "bitfun-services-core/process-runtime",
     "dunce",
     "thiserror",
     "tokio/io-util",
@@ -335,7 +337,7 @@ workspace-search = [
     "tokio/time",
     "which",
 ]
-process-tree = ["bitfun-services-core"]
+process-tree = ["bitfun-services-core/process-runtime"]
 script-tool-runtime = [
     "async-trait",
     "bitfun-runtime-ports",

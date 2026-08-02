@@ -1,4 +1,4 @@
-#![cfg(feature = "workspace-runtime")]
+#![cfg(all(feature = "workspace-instructions", feature = "workspace-runtime"))]
 
 use bitfun_services_core::workspace::LocalWorkspaceFs;
 use bitfun_services_core::workspace_instructions::{

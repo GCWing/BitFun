@@ -2,6 +2,65 @@
 
 export const requiredContentRules = [
   {
+    path: 'src/crates/services/services-core/src/lib.rs',
+    reason:
+      'services-core must compile concrete service owners only through their declared capability features',
+    patterns: [
+      {
+        regex: /#\[cfg\(any\(feature = "local-storage", feature = "runtime-ownership"\)\)\]\s*mod file_lock;/,
+        message: 'missing shared file lock owner source gate',
+      },
+      {
+        regex: /#\[cfg\(feature = "filesystem"\)\]\s*pub mod filesystem;/,
+        message: 'missing filesystem capability source gate',
+      },
+      {
+        regex: /#\[cfg\(feature = "local-storage"\)\]\s*pub mod json_store;/,
+        message: 'missing local-storage JSON owner source gate',
+      },
+      {
+        regex: /#\[cfg\(feature = "local-storage"\)\]\s*pub mod persistence;/,
+        message: 'missing local-storage persistence owner source gate',
+      },
+      {
+        regex: /#\[cfg\(feature = "local-storage"\)\]\s*pub mod session;/,
+        message: 'missing local-storage session owner source gate',
+      },
+      {
+        regex: /#\[cfg\(feature = "local-storage"\)\]\s*pub mod session_usage;/,
+        message: 'missing local-storage session usage owner source gate',
+      },
+      {
+        regex: /#\[cfg\(feature = "local-storage"\)\]\s*pub mod storage_cleanup;/,
+        message: 'missing local-storage cleanup owner source gate',
+      },
+      {
+        regex: /#\[cfg\(feature = "local-storage"\)\]\s*pub mod token_usage;/,
+        message: 'missing local-storage token usage owner source gate',
+      },
+      {
+        regex: /#\[cfg\(feature = "process-runtime"\)\]\s*pub mod managed_runtime;/,
+        message: 'missing process-runtime managed runtime source gate',
+      },
+      {
+        regex: /#\[cfg\(feature = "process-runtime"\)\]\s*pub mod process_manager;/,
+        message: 'missing process-runtime process manager source gate',
+      },
+      {
+        regex: /#\[cfg\(feature = "process-runtime"\)\]\s*pub mod process_tree;/,
+        message: 'missing process-runtime process tree source gate',
+      },
+      {
+        regex: /#\[cfg\(feature = "process-runtime"\)\]\s*pub mod system;/,
+        message: 'missing process-runtime local system source gate',
+      },
+      {
+        regex: /#\[cfg\(feature = "workspace-instructions"\)\]\s*pub mod workspace_instructions;/,
+        message: 'missing workspace-instructions source gate',
+      },
+    ],
+  },
+  {
     path: 'src/crates/services/services-core/src/persistence.rs',
     reason:
       'services-core must own generic JSON persistence storage while core keeps only PathManager compatibility adapters',
@@ -145,7 +204,7 @@ export const requiredContentRules = [
   {
     path: 'src/crates/services/services-core/tests/storage_owner_contracts.rs',
     reason:
-      'services-core owner migrations must keep persistence, cleanup, workspace instruction, and token usage behavior contracts',
+      'services-core local storage owner must keep persistence, cleanup, and token usage behavior contracts',
     patterns: [
       {
         regex: /\bpersistence_service_keeps_atomic_json_shape_and_backups\b/,
@@ -156,12 +215,23 @@ export const requiredContentRules = [
         message: 'missing storage cleanup owner behavior regression',
       },
       {
+        regex: /\btoken_usage_service_persists_records_and_filters_subagents_by_default\b/,
+        message: 'missing token usage owner behavior regression',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/services/services-core/tests/declarative_workspace_instruction_contracts.rs',
+    reason:
+      'services-core workspace instruction owner must keep local and declarative discovery behavior contracts',
+    patterns: [
+      {
         regex: /\bworkspace_instruction_files_reads_agents_then_claude_and_skips_empty_files\b/,
         message: 'missing workspace instruction owner behavior regression',
       },
       {
-        regex: /\btoken_usage_service_persists_records_and_filters_subagents_by_default\b/,
-        message: 'missing token usage owner behavior regression',
+        regex: /\bopencode_project_instructions_support_local_files_and_globs_only\b/,
+        message: 'missing declarative workspace instruction behavior regression',
       },
     ],
   },

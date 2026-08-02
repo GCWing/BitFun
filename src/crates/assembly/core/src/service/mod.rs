@@ -15,6 +15,7 @@ pub mod config; // Config management
 pub mod cron; // Scheduled jobs
 #[cfg(feature = "dispatch-store")]
 pub mod dispatch; // Outbound dispatch observer index and target contracts
+#[cfg(feature = "filesystem")]
 pub mod filesystem; // FileSystem management
 #[cfg(feature = "git")]
 pub mod git; // Git service
@@ -31,9 +32,11 @@ pub mod remote_connect; // Remote Connect (phone → desktop)
 pub mod remote_ssh; // Remote SSH (desktop → server)
 #[cfg(feature = "review-platform")]
 pub mod review_platform; // Pull request review platform adapters
+#[cfg(feature = "process-runtime")]
 pub mod runtime; // Managed runtime and capability management
 #[cfg(feature = "product-full")]
 pub mod search; // Workspace search via managed flashgrep daemon
+#[cfg(feature = "local-storage")]
 pub mod session; // Session persistence
 #[cfg(feature = "product-full")]
 pub mod session_usage; // Session runtime usage reports
@@ -56,7 +59,9 @@ pub use terminal_core as terminal;
 // Re-export main components.
 #[cfg(feature = "announcement")]
 pub use announcement::{AnnouncementCard, AnnouncementScheduler, AnnouncementSchedulerRef};
-pub use bitfun_services_core::{diagnostics, diff, system};
+#[cfg(feature = "process-runtime")]
+pub use bitfun_services_core::system;
+pub use bitfun_services_core::{diagnostics, diff};
 #[cfg(feature = "file-watch")]
 pub use bitfun_services_integrations::file_watch;
 #[cfg(feature = "workspace-runtime")]
@@ -77,6 +82,7 @@ pub use file_watch::{
     start_file_watch, stop_file_watch, FileWatchEvent, FileWatchEventKind, FileWatchService,
     FileWatcherConfig,
 };
+#[cfg(feature = "filesystem")]
 pub use filesystem::{DirectoryStats, FileSystemService, FileSystemServiceFactory};
 #[cfg(feature = "git")]
 pub use git::GitService;
@@ -96,6 +102,7 @@ pub use review_platform::{
     ReviewPlatformPullRequestReviewTarget, ReviewPlatformRemote, ReviewPlatformRepositoryRef,
     ReviewPlatformService, ReviewPlatformThread, ReviewPlatformWorkspaceSnapshot,
 };
+#[cfg(feature = "process-runtime")]
 pub use runtime::{ResolvedCommand, RuntimeCommandCapability, RuntimeManager, RuntimeSource};
 #[cfg(feature = "product-full")]
 pub use search::{
@@ -110,6 +117,7 @@ pub use search::{
 };
 #[cfg(feature = "product-full")]
 pub use snapshot::SnapshotService;
+#[cfg(feature = "process-runtime")]
 pub use system::{
     check_command, check_commands, run_command, run_command_simple, CheckCommandResult,
     CommandOutput, SystemError,

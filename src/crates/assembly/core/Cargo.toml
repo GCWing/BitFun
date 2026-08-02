@@ -167,7 +167,10 @@ product-full = [
     "bitfun-services-core/runtime-ownership",
     "bitfun-services-core/session-git",
     "dispatch-store",
+    "filesystem",
     "lsp",
+    "local-storage",
+    "process-runtime",
     "remote-workspace",
     "terminal",
     "workspace-runtime",
@@ -211,13 +214,20 @@ file-watch = ["bitfun-services-integrations/file-watch"]
 git = ["bitfun-services-integrations/git"]
 review-platform = ["bitfun-services-integrations/review-platform"]
 service-integrations = ["announcement", "file-watch", "git", "review-platform"]
-dispatch-store = []
+dispatch-store = ["local-storage"]
+filesystem = ["bitfun-services-core/filesystem"]
+local-storage = ["bitfun-services-core/local-storage"]
+process-runtime = ["bitfun-services-core/process-runtime"]
 lsp = ["dep:notify", "bitfun-services-core/lsp"]
 terminal = ["dep:terminal-core"]
 workspace-runtime = [
     "dep:serde_yaml",
+    "filesystem",
+    "local-storage",
+    "process-runtime",
     "bitfun-services-core/markdown",
     "bitfun-services-core/workspace-identity",
+    "bitfun-services-core/workspace-instructions",
     "bitfun-services-core/workspace-runtime",
 ]
 workspace-watch = ["workspace-runtime", "dep:notify"]

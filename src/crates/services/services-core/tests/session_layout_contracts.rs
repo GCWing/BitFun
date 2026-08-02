@@ -1,3 +1,5 @@
+#![cfg(feature = "local-storage")]
+
 use bitfun_services_core::session::SessionStorageLayout;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};

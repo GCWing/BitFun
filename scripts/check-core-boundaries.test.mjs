@@ -795,6 +795,211 @@ test('optional dependency ownership rejects undeclared direct feature owners', a
   );
 });
 
+test('services-core capability profiles keep heavy owners out of the empty profile', async () => {
+  const { coreClosedFeatureProfileRules } = await import(
+    './core-boundaries/rules/feature-rules.mjs'
+  );
+  const { dependencyProfileRules } = await import(
+    './core-boundaries/rules/crate-rules.mjs'
+  );
+  const { requiredContentRules } = await import(
+    './core-boundaries/rules/source/required-rules.mjs'
+  );
+  const serviceManifest = 'src/crates/services/services-core/Cargo.toml';
+  const profiles = new Map(
+    coreClosedFeatureProfileRules
+      .filter((rule) => rule.manifestPath === serviceManifest)
+      .map((rule) => [rule.featureName, rule.requiredFeatureRefs]),
+  );
+
+  assert.deepEqual(profiles.get('filesystem'), [
+    'dep:base64',
+    'dep:chrono',
+    'dep:ignore',
+    'dep:sha2',
+    'tokio/fs',
+  ]);
+  assert.deepEqual(profiles.get('local-storage'), [
+    'dep:bitfun-core-types',
+    'dep:bitfun-events',
+    'dep:chrono',
+    'dep:fs2',
+    'dep:libc',
+    'dep:sha2',
+    'dep:windows',
+    'tokio/fs',
+    'tokio/sync',
+    'windows/Win32_Foundation',
+    'windows/Win32_Storage_FileSystem',
+  ]);
+  assert.deepEqual(profiles.get('process-runtime'), [
+    'dep:libc',
+    'dep:which',
+    'dep:win32job',
+    'dep:windows',
+    'tokio/io-util',
+    'tokio/process',
+    'windows/Win32_Foundation',
+    'windows/Win32_System_Diagnostics_ToolHelp',
+    'windows/Win32_System_Threading',
+  ]);
+  assert.deepEqual(profiles.get('workspace-instructions'), [
+    'dep:globset',
+    'tokio/fs',
+    'tokio/io-util',
+  ]);
+  assert.deepEqual(profiles.get('lsp'), [
+    'dep:anyhow',
+    'dep:bitfun-core-types',
+    'dep:notify',
+    'dep:zip',
+    'process-runtime',
+    'tokio/fs',
+    'tokio/io-util',
+    'tokio/sync',
+  ]);
+  assert.deepEqual(profiles.get('workspace-runtime'), [
+    'dep:anyhow',
+    'dep:async-trait',
+    'dep:bitfun-runtime-ports',
+    'dep:dunce',
+    'process-runtime',
+    'tokio/fs',
+    'tokio/io-util',
+    'tokio/sync',
+  ]);
+
+  const defaultProfile = dependencyProfileRules.find(
+    (rule) => rule.crateName === 'services-core',
+  );
+  for (const dependency of [
+    'base64',
+    'bitfun-core-types',
+    'bitfun-events',
+    'chrono',
+    'fs2',
+    'globset',
+    'ignore',
+    'libc',
+    'sha2',
+    'which',
+    'win32job',
+    'windows',
+  ]) {
+    assert.ok(
+      defaultProfile?.forbiddenNonOptionalDeps.includes(dependency),
+      `services-core empty profile must reject ambient ${dependency}`,
+    );
+  }
+
+  const sourceRule = requiredContentRules.find(
+    (rule) => rule.path === 'src/crates/services/services-core/src/lib.rs',
+  );
+  const sourceContracts = sourceRule?.patterns.map((pattern) => pattern.regex.source).join('\n') ?? '';
+  for (const moduleName of [
+    'filesystem',
+    'json_store',
+    'managed_runtime',
+    'persistence',
+    'process_manager',
+    'process_tree',
+    'session',
+    'session_usage',
+    'storage_cleanup',
+    'system',
+    'token_usage',
+    'workspace_instructions',
+  ]) {
+    assert.match(
+      sourceContracts,
+      new RegExp(`pub mod ${moduleName}`),
+      `services-core source rule must protect the ${moduleName} capability gate`,
+    );
+  }
+});
+
+test('services-core Tokio capabilities stay owner-scoped', () => {
+  const invalidPackage = {
+    name: 'bitfun-services-core',
+    manifest_path: 'src/crates/services/services-core/Cargo.toml',
+    dependencies: [
+      {
+        name: 'tokio',
+        kind: null,
+        optional: false,
+        features: ['fs', 'io-util', 'process', 'rt', 'sync', 'time'],
+      },
+    ],
+    features: {
+      filesystem: [],
+      'local-storage': [],
+      'process-runtime': [],
+      'workspace-instructions': [],
+      lsp: [],
+      'workspace-runtime': [],
+    },
+  };
+
+  const messages = findTokioDependencyFeatureViolations([invalidPackage]).map(
+    (violation) => violation.message,
+  );
+  assert.ok(
+    messages.some((message) => message.includes('unexpected base Tokio capabilities')),
+    'services-core must reject ambient fs/io/process/sync Tokio capabilities',
+  );
+  assert.ok(
+    messages.some((message) => message.includes('filesystem missing effective Tokio capabilities: fs')),
+    'services-core must require filesystem to own tokio/fs',
+  );
+  assert.ok(
+    messages.some((message) => message.includes('lsp missing effective Tokio capabilities')),
+    'services-core must require lsp to declare its complete effective Tokio profile',
+  );
+});
+
+test('services-core Windows API capabilities stay feature-owned', async () => {
+  const { findServicesCorePlatformDependencyFeatureViolations } = await import(
+    './core-boundaries/cargo-dependency-boundaries.mjs'
+  );
+  assert.equal(
+    typeof findServicesCorePlatformDependencyFeatureViolations,
+    'function',
+    'Cargo boundary checker must expose the services-core platform dependency policy',
+  );
+  const packageWithAmbientWindowsApis = {
+    name: 'bitfun-services-core',
+    manifest_path: 'src/crates/services/services-core/Cargo.toml',
+    dependencies: [
+      {
+        name: 'windows',
+        kind: null,
+        optional: true,
+        target: 'cfg(windows)',
+        features: ['Win32_Storage_FileSystem', 'Win32_System_Threading'],
+      },
+    ],
+  };
+
+  const violations = findServicesCorePlatformDependencyFeatureViolations([
+    packageWithAmbientWindowsApis,
+  ]);
+  assert.equal(violations.length, 1);
+  assert.match(
+    violations[0].message,
+    /windows API capabilities must be selected by services-core owner features/,
+  );
+
+  assert.deepEqual(
+    findServicesCorePlatformDependencyFeatureViolations([
+      {
+        ...packageWithAmbientWindowsApis,
+        dependencies: [{ ...packageWithAmbientWindowsApis.dependencies[0], features: [] }],
+      },
+    ]),
+    [],
+  );
+});
+
 test('closed feature profiles reject product-full hidden behind a child feature', async () => {
   const { unexpectedReachableLocalFeatures } = await import(
     './core-boundaries/manifest-feature-helpers.mjs'

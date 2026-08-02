@@ -148,8 +148,11 @@ export function runManifestParserSelfTest({
     'announcement',
     'dispatch-store',
     'file-watch',
+    'filesystem',
     'git',
     'lsp',
+    'local-storage',
+    'process-runtime',
     'remote-workspace',
     'review-platform',
     'ssh-remote',
@@ -175,9 +178,82 @@ export function runManifestParserSelfTest({
   const servicesCoreManifest = 'src/crates/services/services-core/Cargo.toml';
   const expectedClosedCoreProfiles = [
     [servicesCoreManifest, 'default', []],
-    [servicesCoreManifest, 'session-git', ['dep:git2']],
-    [servicesCoreManifest, 'workspace-identity', ['dep:dunce']],
-    [coreManifest, 'dispatch-store', []],
+    [
+      servicesCoreManifest,
+      'filesystem',
+      ['dep:base64', 'dep:chrono', 'dep:ignore', 'dep:sha2', 'tokio/fs'],
+    ],
+    [
+      servicesCoreManifest,
+      'local-storage',
+      [
+        'dep:bitfun-core-types',
+        'dep:bitfun-events',
+        'dep:chrono',
+        'dep:fs2',
+        'dep:libc',
+        'dep:sha2',
+        'dep:windows',
+        'tokio/fs',
+        'tokio/sync',
+        'windows/Win32_Foundation',
+        'windows/Win32_Storage_FileSystem',
+      ],
+    ],
+    [
+      servicesCoreManifest,
+      'process-runtime',
+      [
+        'dep:libc',
+        'dep:which',
+        'dep:win32job',
+        'dep:windows',
+        'tokio/io-util',
+        'tokio/process',
+        'windows/Win32_Foundation',
+        'windows/Win32_System_Diagnostics_ToolHelp',
+        'windows/Win32_System_Threading',
+      ],
+    ],
+    [
+      servicesCoreManifest,
+      'workspace-instructions',
+      ['dep:globset', 'tokio/fs', 'tokio/io-util'],
+    ],
+    [
+      servicesCoreManifest,
+      'lsp',
+      [
+        'dep:anyhow',
+        'dep:bitfun-core-types',
+        'dep:notify',
+        'dep:zip',
+        'process-runtime',
+        'tokio/fs',
+        'tokio/io-util',
+        'tokio/sync',
+      ],
+    ],
+    [
+      servicesCoreManifest,
+      'workspace-runtime',
+      [
+        'dep:anyhow',
+        'dep:async-trait',
+        'dep:bitfun-runtime-ports',
+        'dep:dunce',
+        'process-runtime',
+        'tokio/fs',
+        'tokio/io-util',
+        'tokio/sync',
+      ],
+    ],
+    [servicesCoreManifest, 'session-git', ['local-storage', 'dep:git2']],
+    [servicesCoreManifest, 'workspace-identity', ['dep:dunce', 'dep:sha2']],
+    [coreManifest, 'dispatch-store', ['local-storage']],
+    [coreManifest, 'filesystem', ['bitfun-services-core/filesystem']],
+    [coreManifest, 'local-storage', ['bitfun-services-core/local-storage']],
+    [coreManifest, 'process-runtime', ['bitfun-services-core/process-runtime']],
     [coreManifest, 'lsp', ['dep:notify', 'bitfun-services-core/lsp']],
     [coreManifest, 'terminal', ['dep:terminal-core']],
     [
@@ -185,8 +261,12 @@ export function runManifestParserSelfTest({
       'workspace-runtime',
       [
         'dep:serde_yaml',
+        'filesystem',
+        'local-storage',
+        'process-runtime',
         'bitfun-services-core/markdown',
         'bitfun-services-core/workspace-identity',
+        'bitfun-services-core/workspace-instructions',
         'bitfun-services-core/workspace-runtime',
       ],
     ],
@@ -719,10 +799,31 @@ export function runManifestParserSelfTest({
     }
   }
   const expectedServicesCoreOwners = new Map([
+    ['base64', ['filesystem']],
+    ['bitfun-core-types', ['local-storage', 'lsp']],
+    ['bitfun-events', ['local-storage']],
+    ['chrono', ['filesystem', 'local-storage']],
+    ['fs2', ['local-storage', 'runtime-ownership']],
     ['git2', ['session-git']],
+    ['globset', ['workspace-instructions']],
+    ['ignore', ['filesystem']],
+    ['libc', ['local-storage', 'process-runtime']],
     ['notify', ['lsp']],
     ['rusqlite', ['permission']],
     ['serde_yaml', ['markdown']],
+    [
+      'sha2',
+      [
+        'dispatch-workspace',
+        'filesystem',
+        'local-storage',
+        'runtime-ownership',
+        'workspace-identity',
+      ],
+    ],
+    ['which', ['process-runtime']],
+    ['win32job', ['process-runtime']],
+    ['windows', ['local-storage', 'process-runtime']],
     ['zip', ['lsp']],
   ]);
   for (const [dependencyName, ownerFeatures] of expectedServicesCoreOwners) {
@@ -733,6 +834,19 @@ export function runManifestParserSelfTest({
       if (!dependency?.ownerFeatures.includes(featureName)) {
         throw new Error(`services-core ${featureName} must own optional dependency ${dependencyName}`);
       }
+    }
+  }
+  const servicesCoreOptionalOwnerDeps = new Set(
+    servicesCoreOptionalOwnerRule?.dependencies.map((dependency) => dependency.depName) ?? [],
+  );
+  const servicesCoreDefaultProfile = dependencyProfileRules.find(
+    (rule) => rule.crateName === 'services-core',
+  );
+  for (const dep of servicesCoreDefaultProfile?.forbiddenNonOptionalDeps ?? []) {
+    if (!servicesCoreOptionalOwnerDeps.has(dep)) {
+      throw new Error(
+        `services-core optional dependency owner rule must cover forbidden dependency ${dep}`,
+      );
     }
   }
   const servicesOptionalOwnerDeps = new Set(

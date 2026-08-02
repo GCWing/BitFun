@@ -1,3 +1,5 @@
+#![cfg(feature = "local-storage")]
+
 use bitfun_services_core::session_usage::{
     classify_tool_usage, display_workspace_relative_path, render_usage_report_terminal,
     SessionUsageReport, UsageToolCategory,

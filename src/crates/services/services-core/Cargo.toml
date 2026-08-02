@@ -12,56 +12,95 @@ crate-type = ["rlib"]
 [dependencies]
 anyhow = { workspace = true, optional = true }
 async-trait = { workspace = true, optional = true }
-bitfun-core-types = { path = "../../contracts/core-types" }
-bitfun-events = { path = "../../contracts/events" }
+bitfun-core-types = { path = "../../contracts/core-types", optional = true }
+bitfun-events = { path = "../../contracts/events", optional = true }
 bitfun-runtime-ports = { path = "../../contracts/runtime-ports", optional = true }
-tokio = { workspace = true, features = ["fs", "io-util", "process", "rt", "sync", "time"] }
+tokio = { workspace = true, features = ["rt", "time"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 serde_yaml = { workspace = true, optional = true }
-base64 = { workspace = true }
-chrono = { workspace = true }
+base64 = { workspace = true, optional = true }
+chrono = { workspace = true, optional = true }
 git2 = { workspace = true, optional = true }
 dunce = { workspace = true, optional = true }
 zip = { workspace = true, optional = true }
 thiserror = { workspace = true }
 log = { workspace = true }
-fs2 = { workspace = true }
+fs2 = { workspace = true, optional = true }
 notify = { workspace = true, optional = true }
-ignore = { workspace = true }
-globset = { workspace = true }
-sha2 = { workspace = true }
-which = { workspace = true }
+ignore = { workspace = true, optional = true }
+globset = { workspace = true, optional = true }
+sha2 = { workspace = true, optional = true }
+which = { workspace = true, optional = true }
 similar = { workspace = true }
 regex = { workspace = true }
 rusqlite = { version = "0.32", features = ["bundled"], optional = true }
 
 [target.'cfg(windows)'.dependencies]
-win32job = { workspace = true }
-windows = { workspace = true, features = [
-    "Win32_Foundation",
-    "Win32_Storage_FileSystem",
-    "Win32_System_Diagnostics_ToolHelp",
-    "Win32_System_Threading",
-] }
+win32job = { workspace = true, optional = true }
+windows = { workspace = true, optional = true }
 
 # Keep libgit2 self-contained on Unix, matching the product assembly dependency.
 [target.'cfg(not(windows))'.dependencies]
 git2 = { workspace = true, features = ["vendored-openssl"], optional = true }
 
 [target.'cfg(unix)'.dependencies]
-libc = { workspace = true }
+libc = { workspace = true, optional = true }
 
 [features]
 default = []
-lsp = ["dep:anyhow", "dep:notify", "dep:zip"]
+filesystem = ["dep:base64", "dep:chrono", "dep:ignore", "dep:sha2", "tokio/fs"]
+local-storage = [
+    "dep:bitfun-core-types",
+    "dep:bitfun-events",
+    "dep:chrono",
+    "dep:fs2",
+    "dep:libc",
+    "dep:sha2",
+    "dep:windows",
+    "tokio/fs",
+    "tokio/sync",
+    "windows/Win32_Foundation",
+    "windows/Win32_Storage_FileSystem",
+]
+process-runtime = [
+    "dep:libc",
+    "dep:which",
+    "dep:win32job",
+    "dep:windows",
+    "tokio/io-util",
+    "tokio/process",
+    "windows/Win32_Foundation",
+    "windows/Win32_System_Diagnostics_ToolHelp",
+    "windows/Win32_System_Threading",
+]
+workspace-instructions = ["dep:globset", "tokio/fs", "tokio/io-util"]
+lsp = [
+    "dep:anyhow",
+    "dep:bitfun-core-types",
+    "dep:notify",
+    "dep:zip",
+    "process-runtime",
+    "tokio/fs",
+    "tokio/io-util",
+    "tokio/sync",
+]
 markdown = ["dep:serde_yaml"]
-workspace-runtime = ["dep:anyhow", "dep:async-trait", "dep:bitfun-runtime-ports", "dep:dunce"]
-workspace-identity = ["dep:dunce"]
-runtime-ownership = ["dep:dunce"]
+workspace-runtime = [
+    "dep:anyhow",
+    "dep:async-trait",
+    "dep:bitfun-runtime-ports",
+    "dep:dunce",
+    "process-runtime",
+    "tokio/fs",
+    "tokio/io-util",
+    "tokio/sync",
+]
+workspace-identity = ["dep:dunce", "dep:sha2"]
+runtime-ownership = ["dep:dunce", "dep:fs2", "dep:sha2"]
 permission = ["dep:async-trait", "dep:bitfun-runtime-ports", "dep:rusqlite", "bitfun-runtime-ports/permission"]
-dispatch-workspace = ["dep:anyhow"]
-session-git = ["dep:git2"]
+dispatch-workspace = ["dep:anyhow", "dep:sha2"]
+session-git = ["local-storage", "dep:git2"]
 
 [dev-dependencies]
 filetime = { workspace = true }
@@ -71,6 +110,14 @@ tokio = { workspace = true, features = ["macros"] }
 [[test]]
 name = "markdown_owner_contracts"
 required-features = ["markdown"]
+
+[[test]]
+name = "declarative_workspace_instruction_contracts"
+required-features = ["workspace-instructions"]
+
+[[test]]
+name = "json_store_contracts"
+required-features = ["local-storage"]
 
 [[test]]
 name = "lsp_plugin_registry_contracts"
@@ -90,10 +137,43 @@ required-features = ["permission"]
 
 [[test]]
 name = "workspace_instruction_contracts"
-required-features = ["workspace-runtime"]
+required-features = ["workspace-instructions", "workspace-runtime"]
 
 [[test]]
 name = "session_write_lock_contracts"
+required-features = ["local-storage"]
+
+[[test]]
+name = "process_runtime_contracts"
+required-features = ["process-runtime"]
+
+[[test]]
+name = "session_contracts"
+required-features = ["local-storage"]
+
+[[test]]
+name = "session_layout_contracts"
+required-features = ["local-storage"]
+
+[[test]]
+name = "session_metadata_contracts"
+required-features = ["local-storage"]
+
+[[test]]
+name = "session_page_contracts"
+required-features = ["local-storage"]
+
+[[test]]
+name = "session_usage_contracts"
+required-features = ["local-storage"]
+
+[[test]]
+name = "storage_owner_contracts"
+required-features = ["local-storage"]
+
+[[test]]
+name = "token_usage_contracts"
+required-features = ["local-storage"]
 
 [lints]
 workspace = true

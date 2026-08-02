@@ -1,3 +1,5 @@
+#![cfg(feature = "local-storage")]
+
 use bitfun_services_core::session::{SessionWriteLock, SessionWriteLockError};
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
