@@ -8088,6 +8088,7 @@ mod tests {
         source: SourceKey,
         command_name: String,
         delay: std::time::Duration,
+        release: Option<Arc<StdMutex<std::sync::mpsc::Receiver<()>>>>,
         calls: Arc<AtomicUsize>,
     }
 
@@ -8101,7 +8102,16 @@ mod tests {
             context: &ExternalSourceContext,
         ) -> Result<PromptCommandProviderSnapshot, ExternalSourceProviderError> {
             self.calls.fetch_add(1, Ordering::SeqCst);
-            std::thread::sleep(self.delay);
+            if let Some(release) = &self.release {
+                // A disconnected channel also releases the provider, so a
+                // panicking test cannot strand the blocking worker.
+                let _ = release
+                    .lock()
+                    .expect("provider release gate remains available")
+                    .recv();
+            } else {
+                std::thread::sleep(self.delay);
+            }
             let record = ExternalSourceRecord {
                 key: self.source.clone(),
                 ecosystem_id: self.identity.ecosystem_id.clone(),
@@ -8167,8 +8177,30 @@ mod tests {
             source: SourceKey::new(id, "global").unwrap(),
             command_name: id.to_string(),
             delay,
+            release: None,
             calls,
         })
+    }
+
+    fn blocked_provider(
+        id: &str,
+        calls: Arc<AtomicUsize>,
+    ) -> (
+        Arc<dyn PromptCommandSourceProvider>,
+        std::sync::mpsc::Sender<()>,
+    ) {
+        let (release, wait_for_release) = std::sync::mpsc::channel();
+        (
+            Arc::new(DelayedProvider {
+                identity: PromptCommandProviderIdentity::new(id, id, id).unwrap(),
+                source: SourceKey::new(id, "global").unwrap(),
+                command_name: id.to_string(),
+                delay: std::time::Duration::ZERO,
+                release: Some(Arc::new(StdMutex::new(wait_for_release))),
+                calls,
+            }),
+            release,
+        )
     }
 
     fn test_service(
@@ -8222,6 +8254,22 @@ mod tests {
             tool_decision_gate_acquired: tokio::sync::Notify::new(),
             subagent_expiry_schedule: AtomicU64::new(0),
         })
+    }
+
+    async fn refresh_test_commands(
+        service: &Arc<WorkspaceExternalSourceService>,
+    ) -> ExternalSourceCatalogSnapshot {
+        let requests = lock_coordinator(&service.control_plane).discovery_requests();
+        let batch = service
+            .control_plane
+            .discover_commands(requests, std::time::Duration::from_millis(25))
+            .await;
+        let snapshot =
+            lock_coordinator(&service.control_plane).apply_discovery_results(batch.immediate);
+        for deferred in batch.deferred {
+            service.schedule_deferred_command_discovery(deferred);
+        }
+        snapshot
     }
 
     #[test]
@@ -9431,12 +9479,10 @@ mod tests {
     async fn slow_provider_is_not_respawned_while_healthy_sibling_updates() {
         let slow_calls = Arc::new(AtomicUsize::new(0));
         let healthy_calls = Arc::new(AtomicUsize::new(0));
+        let (slow_provider, release_slow_provider) =
+            blocked_provider("slow", Arc::clone(&slow_calls));
         let service = test_service(vec![
-            delayed_provider(
-                "slow",
-                std::time::Duration::from_millis(250),
-                Arc::clone(&slow_calls),
-            ),
+            slow_provider,
             delayed_provider(
                 "healthy",
                 std::time::Duration::ZERO,
@@ -9444,35 +9490,42 @@ mod tests {
             ),
         ]);
 
-        let requests = lock_coordinator(&service.control_plane).discovery_requests();
-        let batch = service
-            .control_plane
-            .discover_commands(requests, std::time::Duration::from_millis(25))
-            .await;
-        let snapshot =
-            lock_coordinator(&service.control_plane).apply_discovery_results(batch.immediate);
-        for deferred in batch.deferred {
-            service.schedule_deferred_command_discovery(deferred);
-        }
-        assert!(snapshot
-            .commands
-            .iter()
-            .any(|command| command.definition.name == "healthy"));
+        tokio::time::timeout(std::time::Duration::from_secs(2), async {
+            loop {
+                let snapshot = refresh_test_commands(&service).await;
+                if slow_calls.load(Ordering::SeqCst) == 1
+                    && snapshot
+                        .commands
+                        .iter()
+                        .any(|command| command.definition.name == "healthy")
+                {
+                    break;
+                }
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("slow and healthy providers must both start");
 
-        let requests = lock_coordinator(&service.control_plane).discovery_requests();
-        let batch = service
-            .control_plane
-            .discover_commands(requests, std::time::Duration::from_millis(25))
-            .await;
-        let snapshot =
-            lock_coordinator(&service.control_plane).apply_discovery_results(batch.immediate);
+        let healthy_calls_before_refresh = healthy_calls.load(Ordering::SeqCst);
+        let snapshot = tokio::time::timeout(std::time::Duration::from_secs(2), async {
+            loop {
+                let snapshot = refresh_test_commands(&service).await;
+                if healthy_calls.load(Ordering::SeqCst) > healthy_calls_before_refresh {
+                    break snapshot;
+                }
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("healthy provider must refresh while the slow provider is blocked");
 
         assert_eq!(slow_calls.load(Ordering::SeqCst), 1);
-        assert!(healthy_calls.load(Ordering::SeqCst) >= 2);
         assert!(snapshot
             .commands
             .iter()
             .any(|command| command.definition.name == "healthy"));
+        let _ = release_slow_provider.send(());
     }
 
     #[tokio::test]
