@@ -70,6 +70,13 @@ Product-source boundary:
   expansion inside this crate. Cross-crate outputs use typed source snapshots,
   adapter bindings, and PluginRuntimeClient DTOs; do not expose raw OpenCode JSON
   or source syntax as product contracts.
+- `local_source_paths` owns the adapter-private local source plan: user config,
+  `OPENCODE_CONFIG`, project files, ordered config directories, and
+  `OPENCODE_CONFIG_CONTENT`. Capability providers consume only the plan items
+  they understand and retain their field-specific merge and validation rules;
+  do not introduce a generic merged OpenCode config contract. Inline content is
+  bounded, uses a redacted virtual source identity, has no watch root, and may
+  resolve relative paths only from an explicit workspace context.
 - Current source inspection recognizes only the tested declarative subset. The
   adapter may reuse the workspace-pinned parse-only OXC profile for syntax-safe static
   projection, but it is not a general JavaScript/TypeScript semantic analyzer or

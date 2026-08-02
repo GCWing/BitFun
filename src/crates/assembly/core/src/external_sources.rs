@@ -8292,6 +8292,7 @@ mod tests {
                 legacy_user_config_dir: Some(home.join(".opencode")),
                 explicit_config_file: None,
                 explicit_config_dir: None,
+                inline_config_content: None,
                 project_config_enabled: true,
             },
             home_dir: Some(home),

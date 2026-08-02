@@ -33,34 +33,31 @@ impl Fixture {
         }
     }
 
-    fn command_provider(&self, explicit_config_dir: Option<PathBuf>) -> OpenCodeCommandProvider {
-        OpenCodeCommandProvider::new(OpenCodeCommandProviderOptions {
+    fn config(&self, explicit_config_dir: Option<PathBuf>) -> OpenCodeCommandProviderOptions {
+        OpenCodeCommandProviderOptions {
             user_config_dir: self.user_config.clone(),
             legacy_user_config_dir: None,
             explicit_config_file: None,
             explicit_config_dir,
+            inline_config_content: None,
             project_config_enabled: true,
-        })
+        }
+    }
+
+    fn command_provider(&self, explicit_config_dir: Option<PathBuf>) -> OpenCodeCommandProvider {
+        OpenCodeCommandProvider::new(self.config(explicit_config_dir))
     }
 
     fn subagent_provider(&self, explicit_config_dir: Option<PathBuf>) -> OpenCodeSubagentProvider {
         OpenCodeSubagentProvider::new(OpenCodeSubagentProviderOptions {
-            user_config_dir: self.user_config.clone(),
-            legacy_user_config_dir: None,
-            explicit_config_file: None,
-            explicit_config_dir,
-            project_config_enabled: true,
+            config: self.config(explicit_config_dir),
             project_root_override: Some(self.project.clone()),
         })
     }
 
     fn mcp_provider(&self, explicit_config_dir: Option<PathBuf>) -> OpenCodeMcpProvider {
         OpenCodeMcpProvider::new(OpenCodeMcpProviderOptions {
-            user_config_dir: self.user_config.clone(),
-            legacy_user_config_dir: None,
-            explicit_config_file: None,
-            explicit_config_dir,
-            project_config_enabled: true,
+            config: self.config(explicit_config_dir),
             project_root_override: Some(self.project.clone()),
         })
     }
@@ -108,15 +105,30 @@ impl Fixture {
         &self,
         explicit_config_dir: Option<PathBuf>,
     ) -> ExternalSourceControlPlane {
+        self.control_plane_with_config(self.config(explicit_config_dir))
+    }
+
+    fn control_plane_with_config(
+        &self,
+        config: OpenCodeCommandProviderOptions,
+    ) -> ExternalSourceControlPlane {
         ExternalSourceControlPlane::new(
             self.context(),
             ExternalMcpRevisionKey::new([17; 32]),
-            vec![Arc::new(self.command_provider(explicit_config_dir.clone()))],
+            vec![Arc::new(OpenCodeCommandProvider::new(config.clone()))],
             Vec::new(),
-            vec![Arc::new(
-                self.subagent_provider(explicit_config_dir.clone()),
-            )],
-            vec![Arc::new(self.mcp_provider(explicit_config_dir))],
+            vec![Arc::new(OpenCodeSubagentProvider::new(
+                OpenCodeSubagentProviderOptions {
+                    config: config.clone(),
+                    project_root_override: Some(self.project.clone()),
+                },
+            ))],
+            vec![Arc::new(OpenCodeMcpProvider::new(
+                OpenCodeMcpProviderOptions {
+                    config,
+                    project_root_override: Some(self.project.clone()),
+                },
+            ))],
             Vec::new(),
         )
         .expect("OpenCode control plane")
@@ -294,4 +306,35 @@ fn config_directory_aliases_keep_their_first_upstream_position() {
         .control_plane_with_explicit_dir(Some(nested_alias.opened_directory.join(".opencode")));
     refresh_all(&plane);
     assert_winners(&plane, "outer");
+}
+
+#[test]
+fn inline_config_is_the_shared_last_override_without_becoming_a_watch_root() {
+    let fixture = Fixture::new();
+    fixture.write_layer(&fixture.project, "project");
+    let mut config = fixture.config(None);
+    config.inline_config_content = Some(
+        r#"{
+          "command": {"review": {"description": "inline command", "template": "inline $ARGUMENTS"}},
+          "agent": {"review": {"description": "inline agent", "prompt": "inline agent prompt", "mode": "subagent"}},
+          "mcp": {"docs": {"type": "remote", "url": "https://inline.example.test/mcp"}}
+        }"#
+        .to_string(),
+    );
+    let plane = fixture.control_plane_with_config(config);
+
+    refresh_all(&plane);
+    assert_winners(&plane, "inline");
+
+    for sources in [
+        plane.commands(|coordinator| coordinator.snapshot().sources),
+        plane.subagents(|coordinator| coordinator.snapshot().sources),
+        plane.mcp(|coordinator| coordinator.snapshot().sources),
+    ] {
+        let inline = sources
+            .iter()
+            .find(|source| source.record.location == "OPENCODE_CONFIG_CONTENT")
+            .expect("inline source");
+        assert_eq!(inline.record.scope, ExternalSourceScope::WorkspaceLocal);
+    }
 }

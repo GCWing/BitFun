@@ -50,6 +50,7 @@ impl Fixture {
             legacy_user_config_dir: Some(self.legacy_user_config.clone()),
             explicit_config_file: None,
             explicit_config_dir: None,
+            inline_config_content: None,
             project_config_enabled,
         })
     }
@@ -160,6 +161,7 @@ fn mirrors_current_opencode_command_precedence_phases() {
         legacy_user_config_dir: Some(fixture.legacy_user_config.clone()),
         explicit_config_file: None,
         explicit_config_dir: Some(explicit.clone()),
+        inline_config_content: None,
         project_config_enabled: true,
     });
     let winner = || {
@@ -816,6 +818,7 @@ fn explicit_paths_aliasing_default_paths_do_not_duplicate_sources_or_commands() 
         legacy_user_config_dir: Some(fixture.legacy_user_config.clone()),
         explicit_config_file: Some(config),
         explicit_config_dir: Some(fixture.user_config.clone()),
+        inline_config_content: None,
         project_config_enabled: true,
     });
 

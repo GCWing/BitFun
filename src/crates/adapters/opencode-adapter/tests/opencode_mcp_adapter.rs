@@ -1,4 +1,6 @@
-use bitfun_opencode_adapter::{OpenCodeMcpProvider, OpenCodeMcpProviderOptions};
+use bitfun_opencode_adapter::{
+    OpenCodeCommandProviderOptions, OpenCodeMcpProvider, OpenCodeMcpProviderOptions,
+};
 use bitfun_product_domains::external_sources::{
     ExecutionDomainId, ExternalMcpDiscoveryInput, ExternalMcpRevisionKey,
     ExternalMcpSourceProvider, ExternalMcpStaticStatus, ExternalMcpTransportKind,
@@ -24,11 +26,14 @@ fn revision_key() -> ExternalMcpRevisionKey {
 
 fn options(user_config_dir: PathBuf) -> OpenCodeMcpProviderOptions {
     OpenCodeMcpProviderOptions {
-        user_config_dir,
-        legacy_user_config_dir: None,
-        explicit_config_file: None,
-        explicit_config_dir: None,
-        project_config_enabled: true,
+        config: OpenCodeCommandProviderOptions {
+            user_config_dir,
+            legacy_user_config_dir: None,
+            explicit_config_file: None,
+            explicit_config_dir: None,
+            inline_config_content: None,
+            project_config_enabled: true,
+        },
         project_root_override: None,
     }
 }
@@ -44,13 +49,16 @@ fn opencode_config_dir_keeps_xdg_user_config_when_read_from_environment() {
         let explicit =
             PathBuf::from(std::env::var_os(CHILD_EXPLICIT).expect("child explicit path"));
         let provider_options = OpenCodeMcpProviderOptions::from_environment();
-        assert_eq!(provider_options.user_config_dir, xdg.join("opencode"));
         assert_eq!(
-            provider_options.explicit_config_dir.as_deref(),
+            provider_options.config.user_config_dir,
+            xdg.join("opencode")
+        );
+        assert_eq!(
+            provider_options.config.explicit_config_dir.as_deref(),
             Some(explicit.as_path())
         );
         assert!(
-            provider_options.legacy_user_config_dir.is_some(),
+            provider_options.config.legacy_user_config_dir.is_some(),
             "OPENCODE_CONFIG_DIR must not remove the normal compatibility directory"
         );
         return;
@@ -491,7 +499,7 @@ fn unsupported_or_source_disabled_servers_remain_visible_but_cannot_be_prepared(
 }
 
 #[test]
-fn opencode_config_dir_is_a_workspace_local_late_override_and_keeps_global_sources() {
+fn external_opencode_config_dir_is_a_user_scoped_late_override_and_keeps_global_sources() {
     let temp = TempDir::new().unwrap();
     let user = temp.path().join("user");
     let project = temp.path().join("project");
@@ -515,7 +523,7 @@ fn opencode_config_dir_is_a_workspace_local_late_override_and_keeps_global_sourc
     )
     .unwrap();
     let mut provider_options = options(user.clone());
-    provider_options.explicit_config_dir = Some(explicit.clone());
+    provider_options.config.explicit_config_dir = Some(explicit.clone());
     let provider = OpenCodeMcpProvider::new(provider_options);
     let snapshot = provider
         .discover(&ExternalMcpDiscoveryInput {
@@ -538,7 +546,7 @@ fn opencode_config_dir_is_a_workspace_local_late_override_and_keeps_global_sourc
         .iter()
         .find(|source| source.location == explicit.join("opencode.jsonc").to_string_lossy())
         .unwrap();
-    assert_eq!(explicit_source.scope, ExternalSourceScope::WorkspaceLocal);
+    assert_eq!(explicit_source.scope, ExternalSourceScope::UserGlobal);
     assert!(snapshot.sources.iter().any(|source| {
         source.location == user.join("opencode.json").to_string_lossy()
             && source.scope == ExternalSourceScope::UserGlobal

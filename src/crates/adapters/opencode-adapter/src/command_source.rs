@@ -1,7 +1,6 @@
 use crate::local_source_paths::{
-    find_project_root, local_watch_roots, ordered_local_config_directories,
-    project_asset_directories, project_config_directories, LocalConfigDirectoryKind,
-    LocalConfigFileLayer, OpenCodeLocalConfigOptions,
+    find_project_root, local_source_plan, local_source_watch_roots, LocalConfigDirectoryKind,
+    LocalConfigDocument, LocalConfigDocumentKind, LocalSourcePlanItem, OpenCodeLocalConfigOptions,
 };
 use bitfun_product_domains::external_sources::{
     EcosystemId, ExternalSourceAssetKind, ExternalSourceContext, ExternalSourceDiagnostic,
@@ -49,59 +48,13 @@ impl OpenCodeCommandProvider {
 
     fn discover_layers(&self, workspace_root: Option<&Path>) -> Vec<SourceLayer> {
         let mut layers = Vec::new();
-        // Phase 1: global JSON configuration.
-        push_config_file_layer(
-            &mut layers,
-            &self.options.user_config_dir.join("config.json"),
-            ExternalSourceScope::UserGlobal,
-            "OpenCode user configuration",
-        );
-        push_config_directory_layers(
-            &mut layers,
-            &self.options.user_config_dir,
-            ExternalSourceScope::UserGlobal,
-            "OpenCode user configuration",
-        );
-        // Phase 2: OPENCODE_CONFIG.
-        if let Some(path) = &self.options.explicit_config_file {
-            push_config_file_layer(
-                &mut layers,
-                path,
-                ExternalSourceScope::UserGlobal,
-                "OpenCode OPENCODE_CONFIG",
-            );
-        }
-        // Phase 3: project JSON configuration, root first.
-        if self.options.project_config_enabled {
-            if let Some(workspace_root) = workspace_root {
-                let project_root = find_project_root(workspace_root);
-                for directory in project_config_directories(&project_root, workspace_root) {
-                    push_config_directory_layers(
-                        &mut layers,
-                        &directory,
-                        ExternalSourceScope::Project,
-                        "OpenCode project configuration",
-                    );
+        for item in local_source_plan(&self.options, workspace_root, None) {
+            let LocalSourcePlanItem::Directory(directory) = item else {
+                if let LocalSourcePlanItem::Config(document) = item {
+                    push_config_document_layer(&mut layers, document);
                 }
-            }
-        }
-        // Phase 4: ConfigPaths.directories. OpenCode keeps the first physical
-        // directory when an environment path aliases an earlier entry.
-        let project_directories = if self.options.project_config_enabled {
-            workspace_root
-                .map(|workspace_root| {
-                    project_asset_directories(&find_project_root(workspace_root), workspace_root)
-                })
-                .unwrap_or_default()
-        } else {
-            Vec::new()
-        };
-        for directory in ordered_local_config_directories(
-            &self.options.user_config_dir,
-            self.options.legacy_user_config_dir.as_deref(),
-            self.options.explicit_config_dir.as_deref(),
-            &project_directories,
-        ) {
+                continue;
+            };
             match directory.kind {
                 LocalConfigDirectoryKind::User => push_command_directory_layer(
                     &mut layers,
@@ -110,20 +63,20 @@ impl OpenCodeCommandProvider {
                     "OpenCode user command directory",
                 ),
                 LocalConfigDirectoryKind::Project => {
-                    push_directory_layers(
+                    push_command_directory_layer(
                         &mut layers,
                         &directory.path,
                         directory.scope,
                         "OpenCode project command directory",
                     );
                 }
-                LocalConfigDirectoryKind::Legacy => push_directory_layers(
+                LocalConfigDirectoryKind::Legacy => push_command_directory_layer(
                     &mut layers,
                     &directory.path,
                     directory.scope,
                     "OpenCode legacy user configuration",
                 ),
-                LocalConfigDirectoryKind::Explicit => push_directory_layers(
+                LocalConfigDirectoryKind::Explicit => push_command_directory_layer(
                     &mut layers,
                     &directory.path,
                     directory.scope,
@@ -133,26 +86,6 @@ impl OpenCodeCommandProvider {
         }
         deduplicate_layers_keep_last(layers)
     }
-
-    fn config_file_layers(&self, workspace_root: Option<&Path>) -> Vec<LocalConfigFileLayer> {
-        self.discover_layers(workspace_root)
-            .into_iter()
-            .filter_map(|layer| match layer.kind {
-                SourceLayerKind::ConfigFile(path) => Some(LocalConfigFileLayer {
-                    path,
-                    scope: layer.scope,
-                }),
-                SourceLayerKind::CommandDirectory(_) => None,
-            })
-            .collect()
-    }
-}
-
-pub(crate) fn command_config_file_layers(
-    options: &OpenCodeLocalConfigOptions,
-    workspace_root: Option<&Path>,
-) -> Vec<LocalConfigFileLayer> {
-    OpenCodeCommandProvider::new(options.clone()).config_file_layers(workspace_root)
 }
 
 impl Default for OpenCodeCommandProvider {
@@ -194,7 +127,7 @@ impl PromptCommandSourceProvider for OpenCodeCommandProvider {
             .into_iter()
             .map(|layer| {
                 let parsed = match &layer.kind {
-                    SourceLayerKind::ConfigFile(path) => parse_config_file(path),
+                    SourceLayerKind::Config(document) => parse_config_document_layer(document),
                     SourceLayerKind::CommandDirectory(path) => parse_command_directory(path),
                 };
                 (layer, parsed)
@@ -291,7 +224,7 @@ impl PromptCommandSourceProvider for OpenCodeCommandProvider {
                 display_name: layer.display_name,
                 source_kind: layer.source_kind.to_string(),
                 scope: layer.scope,
-                location: layer.location.to_string_lossy().to_string(),
+                location: layer.location,
                 execution_domain_id: context.execution_domain_id.clone(),
                 health: source_health,
                 content_version,
@@ -440,31 +373,15 @@ impl PromptCommandSourceProvider for OpenCodeCommandProvider {
     }
 
     fn watch_roots(&self, context: &ExternalSourceContext) -> Vec<ExternalWatchRoot> {
-        let project_directories = if self.options.project_config_enabled {
-            context
-                .workspace_root
-                .as_ref()
-                .map(|workspace_root| {
-                    project_config_directories(&find_project_root(workspace_root), workspace_root)
-                })
-                .unwrap_or_default()
-        } else {
-            Vec::new()
-        };
-        local_watch_roots(
-            &self.options.user_config_dir,
-            self.options.legacy_user_config_dir.as_deref(),
-            self.options.explicit_config_file.as_deref(),
-            self.options.explicit_config_dir.as_deref(),
-            &project_directories,
-        )
+        local_source_watch_roots(&self.options, context.workspace_root.as_deref(), None)
     }
 }
 
 #[derive(Debug)]
 struct SourceLayer {
     kind: SourceLayerKind,
-    location: PathBuf,
+    location: String,
+    identity: String,
     scope: ExternalSourceScope,
     display_name: String,
     source_kind: &'static str,
@@ -472,29 +389,8 @@ struct SourceLayer {
 
 #[derive(Debug)]
 enum SourceLayerKind {
-    ConfigFile(PathBuf),
+    Config(LocalConfigDocument),
     CommandDirectory(PathBuf),
-}
-
-fn push_directory_layers(
-    layers: &mut Vec<SourceLayer>,
-    directory: &Path,
-    scope: ExternalSourceScope,
-    display_name: &str,
-) {
-    push_config_directory_layers(layers, directory, scope, display_name);
-    push_command_directory_layer(layers, directory, scope, display_name);
-}
-
-fn push_config_directory_layers(
-    layers: &mut Vec<SourceLayer>,
-    directory: &Path,
-    scope: ExternalSourceScope,
-    display_name: &str,
-) {
-    for name in ["opencode.json", "opencode.jsonc"] {
-        push_config_file_layer(layers, &directory.join(name), scope, display_name);
-    }
 }
 
 fn push_command_directory_layer(
@@ -513,7 +409,11 @@ fn push_command_directory_layer(
     {
         layers.push(SourceLayer {
             kind: SourceLayerKind::CommandDirectory(directory.to_path_buf()),
-            location: directory.to_path_buf(),
+            location: directory.to_string_lossy().into_owned(),
+            identity: dunce::canonicalize(directory)
+                .unwrap_or_else(|_| directory.to_path_buf())
+                .to_string_lossy()
+                .into_owned(),
             scope,
             display_name: display_name.to_string(),
             source_kind: "opencode_command_directory",
@@ -521,30 +421,42 @@ fn push_command_directory_layer(
     }
 }
 
-fn push_config_file_layer(
-    layers: &mut Vec<SourceLayer>,
-    path: &Path,
-    scope: ExternalSourceScope,
-    display_name: &str,
-) {
-    if path.is_file() {
-        layers.push(SourceLayer {
-            kind: SourceLayerKind::ConfigFile(path.to_path_buf()),
-            location: path.to_path_buf(),
-            scope,
-            display_name: display_name.to_string(),
-            source_kind: "opencode_config",
-        });
-    }
+fn push_config_document_layer(layers: &mut Vec<SourceLayer>, document: LocalConfigDocument) {
+    let display_name = match document.kind {
+        LocalConfigDocumentKind::User => "OpenCode user configuration",
+        LocalConfigDocumentKind::ExplicitFile => "OpenCode OPENCODE_CONFIG",
+        LocalConfigDocumentKind::Project
+        | LocalConfigDocumentKind::Directory(LocalConfigDirectoryKind::Project) => {
+            "OpenCode project configuration"
+        }
+        LocalConfigDocumentKind::Directory(LocalConfigDirectoryKind::Legacy) => {
+            "OpenCode legacy user configuration"
+        }
+        LocalConfigDocumentKind::Directory(LocalConfigDirectoryKind::Explicit) => {
+            "OpenCode OPENCODE_CONFIG_DIR"
+        }
+        LocalConfigDocumentKind::Directory(LocalConfigDirectoryKind::User) => {
+            "OpenCode user configuration"
+        }
+        LocalConfigDocumentKind::Inline => "OpenCode OPENCODE_CONFIG_CONTENT",
+    };
+    let location = document.location();
+    let identity = document.identity();
+    layers.push(SourceLayer {
+        scope: document.scope,
+        kind: SourceLayerKind::Config(document),
+        location,
+        identity,
+        display_name: display_name.to_string(),
+        source_kind: "opencode_config",
+    });
 }
 
 fn source_key(layer: &SourceLayer) -> SourceKey {
     let mut hasher = Sha256::new();
     hasher.update(layer.source_kind.as_bytes());
     hasher.update([0]);
-    let identity_path = dunce::canonicalize(&layer.location)
-        .unwrap_or_else(|_| normalize_path_lexically(&layer.location));
-    hasher.update(identity_path.to_string_lossy().as_bytes());
+    hasher.update(layer.identity.as_bytes());
     let digest = hex::encode(hasher.finalize());
     SourceKey::new(
         PROVIDER_ID,
@@ -562,22 +474,6 @@ fn deduplicate_layers_keep_last(layers: Vec<SourceLayer>) -> Vec<SourceLayer> {
         .collect::<Vec<_>>();
     unique.reverse();
     unique
-}
-
-fn normalize_path_lexically(path: &Path) -> PathBuf {
-    use std::path::Component;
-
-    let mut normalized = PathBuf::new();
-    for component in path.components() {
-        match component {
-            Component::CurDir => {}
-            Component::ParentDir => {
-                normalized.pop();
-            }
-            component => normalized.push(component.as_os_str()),
-        }
-    }
-    normalized
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -612,10 +508,11 @@ struct ParsedLayer {
     configured_shell: Option<String>,
 }
 
-fn parse_config_file(path: &Path) -> ParsedLayer {
-    match read_bounded_text(path, MAX_CONFIG_FILE_BYTES) {
+fn parse_config_document_layer(document: &LocalConfigDocument) -> ParsedLayer {
+    match document.read_bounded(MAX_CONFIG_FILE_BYTES) {
         Ok(BoundedTextRead::Content(content)) => {
-            let content_version = content_version([(path, content.as_bytes())]);
+            let identity = document.identity();
+            let content_version = content_version([(Path::new(&identity), content.as_bytes())]);
             match parse_config_document(&content) {
                 Ok(document) => ParsedLayer {
                     commands: document.commands,

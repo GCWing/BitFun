@@ -1,7 +1,7 @@
 use crate::local_source_paths::{
-    find_project_root, local_watch_roots, ordered_local_config_directories,
-    project_asset_directories, project_config_directories, user_config_dir,
-    LocalConfigDirectoryKind,
+    local_source_plan, local_source_watch_roots, normalize_path_lexically,
+    LocalConfigDirectoryKind, LocalConfigDocument, LocalConfigDocumentKind, LocalSourcePlanItem,
+    OpenCodeLocalConfigOptions,
 };
 use bitfun_product_domains::external_sources::{
     EcosystemId, ExternalMcpDiscoveryInput, ExternalMcpProviderIdentity,
@@ -13,12 +13,11 @@ use bitfun_product_domains::external_sources::{
     PreparedExternalMcpTransport, SecretValue, SourceKey, SourceQualifiedMcpServerId,
 };
 use bitfun_services_core::jsonc::strip_jsonc;
-use bitfun_static_hook_support::{read_bounded_text, BoundedTextRead};
+use bitfun_static_hook_support::BoundedTextRead;
 use serde_json::{Map, Value};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
-use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 const PROVIDER_ID: &str = "opencode.mcp";
 const ECOSYSTEM_ID: &str = "opencode";
@@ -39,29 +38,15 @@ const REMOTE_FIELDS: &[&str] = &["type", "url", "headers", "oauth", "enabled", "
 
 #[derive(Debug, Clone)]
 pub struct OpenCodeMcpProviderOptions {
-    pub user_config_dir: PathBuf,
-    pub legacy_user_config_dir: Option<PathBuf>,
-    pub explicit_config_file: Option<PathBuf>,
-    pub explicit_config_dir: Option<PathBuf>,
-    pub project_config_enabled: bool,
+    pub config: OpenCodeLocalConfigOptions,
     /// Test/product-host override for an already-known project boundary.
     pub project_root_override: Option<PathBuf>,
 }
 
 impl OpenCodeMcpProviderOptions {
     pub fn from_environment() -> Self {
-        let home = dirs::home_dir();
-        let explicit_config_dir = std::env::var_os("OPENCODE_CONFIG_DIR").map(PathBuf::from);
-        let user_config_dir = user_config_dir(
-            std::env::var_os("XDG_CONFIG_HOME").map(PathBuf::from),
-            home.clone(),
-        );
         Self {
-            user_config_dir,
-            legacy_user_config_dir: home.map(|home| home.join(".opencode")),
-            explicit_config_file: std::env::var_os("OPENCODE_CONFIG").map(PathBuf::from),
-            explicit_config_dir,
-            project_config_enabled: !environment_truthy("OPENCODE_DISABLE_PROJECT_CONFIG"),
+            config: OpenCodeLocalConfigOptions::from_environment(),
             project_root_override: None,
         }
     }
@@ -82,90 +67,18 @@ impl OpenCodeMcpProvider {
         Self { options }
     }
 
-    fn project_root(&self, workspace_root: &Path) -> PathBuf {
-        self.options
-            .project_root_override
-            .clone()
-            .unwrap_or_else(|| find_project_root(workspace_root))
-    }
-
     fn discover_layers(&self, context: &ExternalSourceContext) -> Vec<ConfigLayer> {
-        let mut layers = Vec::new();
-        push_config_file(
-            &mut layers,
-            &self.options.user_config_dir.join("config.json"),
-            ExternalSourceScope::UserGlobal,
-            "OpenCode user configuration",
-        );
-        push_config_files(
-            &mut layers,
-            &self.options.user_config_dir,
-            ExternalSourceScope::UserGlobal,
-            "OpenCode user configuration",
-        );
-        if let Some(path) = &self.options.explicit_config_file {
-            push_config_file(
-                &mut layers,
-                path,
-                ExternalSourceScope::UserGlobal,
-                "OpenCode OPENCODE_CONFIG",
-            );
-        }
-        if self.options.project_config_enabled {
-            if let Some(workspace_root) = &context.workspace_root {
-                let project_root = self.project_root(workspace_root);
-                for directory in project_config_directories(&project_root, workspace_root) {
-                    push_config_files(
-                        &mut layers,
-                        &directory,
-                        ExternalSourceScope::Project,
-                        "OpenCode project configuration",
-                    );
-                }
-            }
-        }
-        let project_directories = if self.options.project_config_enabled {
-            context
-                .workspace_root
-                .as_ref()
-                .map(|workspace_root| {
-                    project_asset_directories(&self.project_root(workspace_root), workspace_root)
-                })
-                .unwrap_or_default()
-        } else {
-            Vec::new()
-        };
-        for directory in ordered_local_config_directories(
-            &self.options.user_config_dir,
-            self.options.legacy_user_config_dir.as_deref(),
-            self.options.explicit_config_dir.as_deref(),
-            &project_directories,
-        ) {
-            match directory.kind {
-                LocalConfigDirectoryKind::User => {}
-                LocalConfigDirectoryKind::Project => {
-                    push_config_files(
-                        &mut layers,
-                        &directory.path,
-                        directory.scope,
-                        "OpenCode project configuration",
-                    );
-                }
-                LocalConfigDirectoryKind::Legacy => push_config_files(
-                    &mut layers,
-                    &directory.path,
-                    directory.scope,
-                    "OpenCode legacy configuration",
-                ),
-                LocalConfigDirectoryKind::Explicit => push_config_files(
-                    &mut layers,
-                    &directory.path,
-                    directory.scope,
-                    "OpenCode OPENCODE_CONFIG_DIR",
-                ),
-            }
-        }
-        deduplicate_layers_keep_last(layers)
+        local_source_plan(
+            &self.options.config,
+            context.workspace_root.as_deref(),
+            self.options.project_root_override.as_deref(),
+        )
+        .into_iter()
+        .filter_map(|item| match item {
+            LocalSourcePlanItem::Config(document) => Some(ConfigLayer::new(document)),
+            LocalSourcePlanItem::Directory(_) => None,
+        })
+        .collect()
     }
 
     fn materialize(
@@ -193,7 +106,7 @@ impl OpenCodeMcpProvider {
 
         for layer in self.discover_layers(&input.context) {
             let key = source_key(&layer);
-            let parsed = parse_config_layer(&input.revision_key, &layer.path);
+            let parsed = parse_config_layer(&input.revision_key, &layer.document);
             let mut layer_diagnostics = parsed
                 .diagnostics
                 .into_iter()
@@ -216,7 +129,7 @@ impl OpenCodeMcpProvider {
                 display_name: layer.display_name.clone(),
                 source_kind: "opencode_mcp_config".to_string(),
                 scope: layer.scope,
-                location: layer.path.to_string_lossy().to_string(),
+                location: layer.document.location(),
                 execution_domain_id: input.context.execution_domain_id.clone(),
                 health,
                 content_version: parsed.content_version,
@@ -398,23 +311,10 @@ impl ExternalMcpSourceProvider for OpenCodeMcpProvider {
     }
 
     fn watch_roots(&self, context: &ExternalSourceContext) -> Vec<ExternalWatchRoot> {
-        let project_directories = if self.options.project_config_enabled {
-            context
-                .workspace_root
-                .as_ref()
-                .map(|workspace_root| {
-                    project_config_directories(&self.project_root(workspace_root), workspace_root)
-                })
-                .unwrap_or_default()
-        } else {
-            Vec::new()
-        };
-        local_watch_roots(
-            &self.options.user_config_dir,
-            self.options.legacy_user_config_dir.as_deref(),
-            self.options.explicit_config_file.as_deref(),
-            self.options.explicit_config_dir.as_deref(),
-            &project_directories,
+        local_source_watch_roots(
+            &self.options.config,
+            context.workspace_root.as_deref(),
+            self.options.project_root_override.as_deref(),
         )
     }
 }
@@ -1038,9 +938,37 @@ fn sanitized_https_url(value: &str) -> Result<String, String> {
 }
 
 struct ConfigLayer {
-    path: PathBuf,
+    document: LocalConfigDocument,
     scope: ExternalSourceScope,
     display_name: String,
+}
+
+impl ConfigLayer {
+    fn new(document: LocalConfigDocument) -> Self {
+        let display_name = match document.kind {
+            LocalConfigDocumentKind::User => "OpenCode user configuration",
+            LocalConfigDocumentKind::ExplicitFile => "OpenCode OPENCODE_CONFIG",
+            LocalConfigDocumentKind::Project
+            | LocalConfigDocumentKind::Directory(LocalConfigDirectoryKind::Project) => {
+                "OpenCode project configuration"
+            }
+            LocalConfigDocumentKind::Directory(LocalConfigDirectoryKind::Legacy) => {
+                "OpenCode legacy configuration"
+            }
+            LocalConfigDocumentKind::Directory(LocalConfigDirectoryKind::Explicit) => {
+                "OpenCode OPENCODE_CONFIG_DIR"
+            }
+            LocalConfigDocumentKind::Directory(LocalConfigDirectoryKind::User) => {
+                "OpenCode user configuration"
+            }
+            LocalConfigDocumentKind::Inline => "OpenCode OPENCODE_CONFIG_CONTENT",
+        };
+        Self {
+            scope: document.scope,
+            document,
+            display_name: display_name.to_string(),
+        }
+    }
 }
 
 struct ParsedConfigLayer {
@@ -1052,9 +980,9 @@ struct ParsedConfigLayer {
 
 fn parse_config_layer(
     revision_key: &bitfun_product_domains::external_sources::ExternalMcpRevisionKey,
-    path: &Path,
+    document: &LocalConfigDocument,
 ) -> ParsedConfigLayer {
-    match read_bounded_text(path, MAX_CONFIG_FILE_BYTES) {
+    match document.read_bounded(MAX_CONFIG_FILE_BYTES) {
         Ok(BoundedTextRead::TooLarge) => ParsedConfigLayer {
             servers: BTreeMap::new(),
             diagnostics: vec![ExternalSourceDiagnostic::error(
@@ -1078,7 +1006,11 @@ fn parse_config_layer(
             fatal: true,
         },
         Ok(BoundedTextRead::Content(content)) => {
-            let content_version = content_version(revision_key, path, content.as_bytes());
+            let content_version = content_version(
+                revision_key,
+                document.identity().as_bytes(),
+                content.as_bytes(),
+            );
             let value = match serde_json::from_str::<Value>(&strip_jsonc(&content)) {
                 Ok(value) => value,
                 Err(error) => {
@@ -1166,88 +1098,21 @@ fn behavior_version(
 
 fn content_version(
     revision_key: &bitfun_product_domains::external_sources::ExternalMcpRevisionKey,
-    path: &Path,
+    identity: &[u8],
     content: &[u8],
 ) -> String {
-    revision_key.opaque_revision(
-        "opencode.mcp.content.v1",
-        [path.to_string_lossy().as_bytes(), content],
-    )
+    revision_key.opaque_revision("opencode.mcp.content.v1", [identity, content])
 }
 
 fn source_key(layer: &ConfigLayer) -> SourceKey {
-    let identity_path =
-        dunce::canonicalize(&layer.path).unwrap_or_else(|_| normalize_path_lexically(&layer.path));
     let mut hasher = Sha256::new();
     hasher.update(b"opencode_mcp_config");
     hasher.update([0]);
-    hasher.update(identity_path.to_string_lossy().as_bytes());
+    hasher.update(layer.document.identity().as_bytes());
     let digest = hex::encode(hasher.finalize());
     SourceKey::new(
         PROVIDER_ID,
         format!("opencode_mcp_config-{}", &digest[..24]),
     )
     .expect("hashed OpenCode MCP source id must be valid")
-}
-
-fn push_config_files(
-    layers: &mut Vec<ConfigLayer>,
-    directory: &Path,
-    scope: ExternalSourceScope,
-    display_name: &str,
-) {
-    for name in ["opencode.json", "opencode.jsonc"] {
-        push_config_file(layers, &directory.join(name), scope, display_name);
-    }
-}
-
-fn push_config_file(
-    layers: &mut Vec<ConfigLayer>,
-    path: &Path,
-    scope: ExternalSourceScope,
-    display_name: &str,
-) {
-    let should_inspect = match fs::metadata(path) {
-        Ok(metadata) => metadata.is_file(),
-        Err(error) => error.kind() != std::io::ErrorKind::NotFound,
-    };
-    if should_inspect {
-        layers.push(ConfigLayer {
-            path: path.to_path_buf(),
-            scope,
-            display_name: display_name.to_string(),
-        });
-    }
-}
-
-fn deduplicate_layers_keep_last(layers: Vec<ConfigLayer>) -> Vec<ConfigLayer> {
-    let mut seen = BTreeSet::new();
-    let mut layers = layers
-        .into_iter()
-        .rev()
-        .filter(|layer| seen.insert(source_key(layer)))
-        .collect::<Vec<_>>();
-    layers.reverse();
-    layers
-}
-
-fn environment_truthy(key: &str) -> bool {
-    std::env::var(key)
-        .ok()
-        .is_some_and(|value| matches!(value.to_ascii_lowercase().as_str(), "true" | "1"))
-}
-
-fn normalize_path_lexically(path: &Path) -> PathBuf {
-    use std::path::Component;
-    let mut normalized = PathBuf::new();
-    for component in path.components() {
-        match component {
-            Component::CurDir => {}
-            Component::ParentDir => {
-                normalized.pop();
-            }
-            component => normalized.push(component.as_os_str()),
-        }
-    }
-    normalized
 }

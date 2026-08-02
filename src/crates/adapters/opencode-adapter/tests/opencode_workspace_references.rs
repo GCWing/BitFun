@@ -1,5 +1,6 @@
 use bitfun_opencode_adapter::{
-    OpenCodeWorkspaceReferenceProvider, OpenCodeWorkspaceReferenceProviderOptions,
+    OpenCodeCommandProviderOptions, OpenCodeWorkspaceReferenceProvider,
+    OpenCodeWorkspaceReferenceProviderOptions,
 };
 use bitfun_product_domains::external_sources::{ExecutionDomainId, ExternalSourceContext};
 use bitfun_product_domains::workspace_references::ExternalWorkspaceReferenceSourceProvider;
@@ -43,7 +44,14 @@ impl Fixture {
         global_config_dir: PathBuf,
     ) -> OpenCodeWorkspaceReferenceProvider {
         OpenCodeWorkspaceReferenceProvider::new(OpenCodeWorkspaceReferenceProviderOptions {
-            global_config_dir,
+            config: OpenCodeCommandProviderOptions {
+                user_config_dir: global_config_dir,
+                legacy_user_config_dir: None,
+                explicit_config_file: None,
+                explicit_config_dir: None,
+                inline_config_content: None,
+                project_config_enabled: true,
+            },
             home_dir: Some(self.home.clone()),
         })
     }
@@ -266,6 +274,46 @@ fn bounded_catalog_retains_a_new_alias_from_the_highest_priority_layer() {
         .diagnostics
         .iter()
         .any(|diagnostic| diagnostic.code == "opencode.reference.limit"));
+}
+
+#[test]
+fn inline_references_override_file_layers_and_resolve_from_the_opened_workspace() {
+    let fixture = Fixture::new();
+    let file_target = fixture.project.join("file-target");
+    let inline_target = fixture.project.join("inline-target");
+    fixture.write_config(
+        fixture.project.join("opencode.json"),
+        r#"{"references":{"docs":{"path":"./file-target"}}}"#,
+    );
+    let provider =
+        OpenCodeWorkspaceReferenceProvider::new(OpenCodeWorkspaceReferenceProviderOptions {
+            config: OpenCodeCommandProviderOptions {
+                user_config_dir: fixture.user_config.clone(),
+                legacy_user_config_dir: None,
+                explicit_config_file: None,
+                explicit_config_dir: None,
+                inline_config_content: Some(
+                    r#"{"references":{"docs":{"path":"../../inline-target"}}}"#.to_string(),
+                ),
+                project_config_enabled: true,
+            },
+            home_dir: Some(fixture.home.clone()),
+        });
+
+    let snapshot = provider.discover(&fixture.context()).unwrap();
+
+    let docs = snapshot
+        .references
+        .iter()
+        .find(|reference| reference.alias == "docs")
+        .expect("inline reference");
+    assert_eq!(docs.path, inline_target);
+    assert_ne!(docs.path, file_target);
+    assert!(snapshot.sources.iter().any(|source| {
+        source.location == "OPENCODE_CONFIG_CONTENT"
+            && source.scope
+                == bitfun_product_domains::external_sources::ExternalSourceScope::WorkspaceLocal
+    }));
 }
 
 #[test]

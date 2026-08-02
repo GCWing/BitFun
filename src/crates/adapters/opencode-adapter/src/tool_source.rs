@@ -1,3 +1,7 @@
+use crate::local_source_paths::{
+    find_project_root, local_source_plan, local_source_watch_roots, LocalConfigDirectoryKind,
+    LocalSourcePlanItem, OpenCodeLocalConfigOptions,
+};
 use bitfun_product_domains::external_sources::{
     EcosystemId, ExternalSourceAssetKind, ExternalSourceContext, ExternalSourceDiagnostic,
     ExternalSourceHealth, ExternalSourceProviderError, ExternalSourceRecord, ExternalSourceScope,
@@ -8,7 +12,7 @@ use bitfun_product_domains::external_sources::{
 };
 use regex::Regex;
 use sha2::{Digest, Sha256};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 use std::fs;
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -62,17 +66,12 @@ pub struct OpenCodeToolProviderOptions {
 
 impl OpenCodeToolProviderOptions {
     pub fn from_environment() -> Self {
-        let home = dirs::home_dir();
-        let user_config_dir = std::env::var_os("XDG_CONFIG_HOME")
-            .map(PathBuf::from)
-            .or_else(|| home.as_ref().map(|home| home.join(".config")))
-            .unwrap_or_else(|| PathBuf::from(".config"))
-            .join("opencode");
+        let config = OpenCodeLocalConfigOptions::from_environment();
         Self {
-            user_config_dir,
-            legacy_user_config_dir: home.map(|home| home.join(".opencode")),
-            explicit_config_dir: std::env::var_os("OPENCODE_CONFIG_DIR").map(PathBuf::from),
-            project_config_enabled: !environment_truthy("OPENCODE_DISABLE_PROJECT_CONFIG"),
+            user_config_dir: config.user_config_dir,
+            legacy_user_config_dir: config.legacy_user_config_dir,
+            explicit_config_dir: config.explicit_config_dir,
+            project_config_enabled: config.project_config_enabled,
         }
     }
 }
@@ -117,44 +116,26 @@ impl OpenCodeToolProvider {
 
     fn tool_directories(&self, context: &ExternalSourceContext) -> Vec<ToolDirectory> {
         let mut directories = Vec::new();
-        push_tool_directories(
-            &mut directories,
-            &self.options.user_config_dir,
-            ExternalSourceScope::UserGlobal,
-            "OpenCode user tools",
-        );
-        if let Some(explicit_config_dir) = &self.options.explicit_config_dir {
+        for item in local_source_plan(
+            &self.local_config(),
+            context.workspace_root.as_deref(),
+            None,
+        ) {
+            let LocalSourcePlanItem::Directory(directory) = item else {
+                continue;
+            };
+            let display_name = match directory.kind {
+                LocalConfigDirectoryKind::User => "OpenCode user tools",
+                LocalConfigDirectoryKind::Project => "OpenCode project tools",
+                LocalConfigDirectoryKind::Legacy => "OpenCode legacy tools",
+                LocalConfigDirectoryKind::Explicit => "OpenCode explicit tools",
+            };
             push_tool_directories(
                 &mut directories,
-                explicit_config_dir,
-                ExternalSourceScope::UserGlobal,
-                "OpenCode explicit user tools",
+                &directory.path,
+                directory.scope,
+                display_name,
             );
-        }
-        if self.options.project_config_enabled {
-            if let Some(workspace_root) = &context.workspace_root {
-                let project_root = find_project_root(workspace_root);
-                for directory in directories_between(&project_root, workspace_root) {
-                    push_tool_directories(
-                        &mut directories,
-                        &directory.join(".opencode"),
-                        ExternalSourceScope::Project,
-                        "OpenCode project tools",
-                    );
-                }
-            }
-        }
-        if let Some(legacy) = &self.options.legacy_user_config_dir {
-            if legacy != &self.options.user_config_dir
-                && self.options.explicit_config_dir.as_ref() != Some(legacy)
-            {
-                push_tool_directories(
-                    &mut directories,
-                    legacy,
-                    ExternalSourceScope::UserGlobal,
-                    "OpenCode legacy tools",
-                );
-            }
         }
         deduplicate_directories(directories)
     }
@@ -527,22 +508,11 @@ impl ExternalToolSourceProvider for OpenCodeToolProvider {
     }
 
     fn watch_roots(&self, context: &ExternalSourceContext) -> Vec<ExternalWatchRoot> {
-        let mut roots = BTreeMap::new();
-        for directory in self.tool_directories(context) {
-            if let Some(parent) = directory.path.parent() {
-                if let Some(existing) = nearest_existing_path(parent.to_path_buf()) {
-                    roots.entry(existing).or_insert(false);
-                }
-            }
-            roots
-                .entry(directory.path)
-                .and_modify(|recursive| *recursive = true)
-                .or_insert(true);
-        }
-        roots
-            .into_iter()
-            .map(|(path, recursive)| ExternalWatchRoot { path, recursive })
-            .collect()
+        local_source_watch_roots(
+            &self.local_config(),
+            context.workspace_root.as_deref(),
+            None,
+        )
     }
 }
 
@@ -558,6 +528,17 @@ impl OpenCodeToolProvider {
             .clone()
             .or_else(|| effective_global_config.parent().map(Path::to_path_buf))
             .unwrap_or_else(|| effective_global_config.clone())
+    }
+
+    fn local_config(&self) -> OpenCodeLocalConfigOptions {
+        OpenCodeLocalConfigOptions {
+            user_config_dir: self.options.user_config_dir.clone(),
+            legacy_user_config_dir: self.options.legacy_user_config_dir.clone(),
+            explicit_config_file: None,
+            explicit_config_dir: self.options.explicit_config_dir.clone(),
+            inline_config_content: None,
+            project_config_enabled: self.options.project_config_enabled,
+        }
     }
 }
 
@@ -733,49 +714,6 @@ fn io_error(code: &str, path: &Path, error: std::io::Error) -> ExternalSourcePro
 
 fn contract_error(error: impl std::fmt::Display) -> ExternalSourceProviderError {
     ExternalSourceProviderError::new("opencode.tool.contract_invalid", error.to_string(), false)
-}
-
-fn environment_truthy(key: &str) -> bool {
-    std::env::var(key)
-        .ok()
-        .is_some_and(|value| matches!(value.to_ascii_lowercase().as_str(), "1" | "true" | "yes"))
-}
-
-fn find_project_root(start: &Path) -> PathBuf {
-    let mut current = normalize_path(start);
-    loop {
-        if current.join(".git").exists() {
-            return current;
-        }
-        if !current.pop() {
-            return normalize_path(start);
-        }
-    }
-}
-
-fn directories_between(root: &Path, opened: &Path) -> Vec<PathBuf> {
-    let root = normalize_path(root);
-    let mut current = normalize_path(opened);
-    let mut directories = Vec::new();
-    while current.starts_with(&root) {
-        directories.push(current.clone());
-        if current == root || !current.pop() {
-            break;
-        }
-    }
-    directories.reverse();
-    directories
-}
-
-fn nearest_existing_path(mut path: PathBuf) -> Option<PathBuf> {
-    loop {
-        if path.exists() {
-            return Some(path);
-        }
-        if !path.pop() {
-            return None;
-        }
-    }
 }
 
 fn allowed_import_regex() -> &'static Regex {

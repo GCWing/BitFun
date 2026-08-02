@@ -2,18 +2,23 @@ use bitfun_services_core::bounded_fs::{
     collect_bounded_regular_files_with_prune, BoundedDirectoryWalkError, BoundedDirectoryWalkLimits,
 };
 use bitfun_services_core::local_instructions::{
-    local_instruction_path_exists, read_local_instruction_file, read_local_text_file,
-    LocalInstructionFile, LocalInstructionFiles, MAX_LOCAL_INSTRUCTION_FILES,
+    local_instruction_path_exists, read_local_instruction_file, LocalInstructionFile,
+    LocalInstructionFiles, MAX_LOCAL_INSTRUCTION_FILES,
 };
 use globset::{GlobBuilder, GlobMatcher};
 use serde_json::Value;
 use std::path::{Component, Path, PathBuf};
 
+use crate::local_source_paths::{
+    find_project_root, local_source_plan, project_asset_directories, LocalConfigDocument,
+    LocalConfigDocumentKind, LocalSourcePlanItem, OpenCodeLocalConfigOptions,
+};
+use bitfun_services_core::bounded_fs::BoundedTextRead;
 use bitfun_services_core::jsonc::strip_jsonc;
 
 #[derive(Debug, Clone)]
 pub struct OpenCodeInstructionSourceOptions {
-    pub config_dir: Option<PathBuf>,
+    pub config: OpenCodeLocalConfigOptions,
     pub home_dir: Option<PathBuf>,
     pub workspace_root: Option<PathBuf>,
     pub display_root: String,
@@ -22,23 +27,19 @@ pub struct OpenCodeInstructionSourceOptions {
 impl OpenCodeInstructionSourceOptions {
     pub fn from_environment() -> Self {
         let home_dir = dirs::home_dir().filter(|path| path.is_absolute());
-        let (config_dir, display_root) = match std::env::var_os("XDG_CONFIG_HOME") {
+        let display_root = match std::env::var_os("XDG_CONFIG_HOME") {
             Some(value) => {
                 let path = PathBuf::from(value);
-                (
-                    path.is_absolute().then(|| path.join("opencode")),
-                    "$XDG_CONFIG_HOME/opencode".to_string(),
-                )
+                if path.is_absolute() {
+                    "$XDG_CONFIG_HOME/opencode".to_string()
+                } else {
+                    ".config/opencode".to_string()
+                }
             }
-            None => (
-                home_dir
-                    .as_deref()
-                    .map(|home| home.join(".config/opencode")),
-                "~/.config/opencode".to_string(),
-            ),
+            None => "~/.config/opencode".to_string(),
         };
         Self {
-            config_dir,
+            config: OpenCodeLocalConfigOptions::from_environment(),
             home_dir,
             workspace_root: None,
             display_root,
@@ -55,9 +56,10 @@ impl Default for OpenCodeInstructionSourceOptions {
 pub fn load_opencode_user_instructions(
     options: &OpenCodeInstructionSourceOptions,
 ) -> Result<Vec<LocalInstructionFile>, String> {
-    let Some(config_dir) = options.config_dir.as_deref() else {
+    let config_dir = &options.config.user_config_dir;
+    if !config_dir.is_absolute() {
         return Ok(Vec::new());
-    };
+    }
     let mut files = LocalInstructionFiles::default();
     let agents_path = config_dir.join("AGENTS.md");
     if local_instruction_path_exists(&agents_path)? {
@@ -75,35 +77,36 @@ pub fn load_opencode_user_instructions(
     }
 
     let mut configured_instructions = None;
-    for config_name in ["config.json", "opencode.json", "opencode.jsonc"] {
-        let Some(config) = read_local_text_file(
-            &config_dir.join(config_name),
-            config_dir,
-            format!("{}/{config_name}", options.display_root),
-        )?
-        else {
+    for item in local_source_plan(&options.config, options.workspace_root.as_deref(), None) {
+        let LocalSourcePlanItem::Config(document) = item else {
             continue;
         };
-        let value =
-            serde_json::from_str::<Value>(&strip_jsonc(&config.content)).map_err(|error| {
-                format!("Failed to parse OpenCode user config {config_name}: {error}")
-            })?;
+        let value = read_instruction_config(&document)?;
         if let Some(value) = value.get("instructions") {
-            let instructions = value.as_array().ok_or_else(|| {
-                format!("OpenCode user config {config_name} instructions must be an array")
-            })?;
-            configured_instructions = Some(
-                instructions
-                    .iter()
-                    .map(|value| {
-                        value.as_str().map(str::to_string).ok_or_else(|| {
-                            format!(
-                                "OpenCode user config {config_name} instructions must contain strings"
-                            )
-                        })
+            let instructions = value
+                .as_array()
+                .ok_or_else(|| "OpenCode config instructions must be an array".to_string())?;
+            let instructions = instructions
+                .iter()
+                .map(|value| {
+                    value.as_str().map(str::to_string).ok_or_else(|| {
+                        "OpenCode config instructions must contain strings".to_string()
                     })
-                    .collect::<Result<Vec<_>, _>>()?,
-            );
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+            if document.kind == LocalConfigDocumentKind::User {
+                // OpenCode's three global files form one layer, so a later
+                // global file replaces this array. Subsequent local sources
+                // use the cross-layer merge that appends unique instructions.
+                configured_instructions = Some(instructions);
+            } else {
+                let effective = configured_instructions.get_or_insert_default();
+                for instruction in instructions {
+                    if !effective.contains(&instruction) {
+                        effective.push(instruction);
+                    }
+                }
+            }
         }
     }
 
@@ -147,13 +150,53 @@ pub fn load_opencode_user_instructions(
                 }
                 continue;
             }
-            let Some(workspace_root) = options.workspace_root.as_deref() else {
-                continue;
-            };
-            append_configured_path(&mut files, workspace_root, &raw, "<workspace>")?;
+            append_relative_configured_path(&mut files, options, &raw)?;
         }
     }
     Ok(files.into_files())
+}
+
+fn append_relative_configured_path(
+    files: &mut LocalInstructionFiles,
+    options: &OpenCodeInstructionSourceOptions,
+    raw: &str,
+) -> Result<(), String> {
+    if !options.config.project_config_enabled {
+        return append_configured_path(
+            files,
+            &options.config.user_config_dir,
+            raw,
+            &options.display_root,
+        );
+    }
+    let Some(workspace_root) = options.workspace_root.as_deref() else {
+        return Ok(());
+    };
+    let project_root = find_project_root(workspace_root);
+    for directory in project_asset_directories(&project_root, workspace_root) {
+        append_configured_path(files, &directory, raw, "<workspace>")?;
+        if files.is_at_capacity() {
+            break;
+        }
+    }
+    Ok(())
+}
+
+fn read_instruction_config(document: &LocalConfigDocument) -> Result<Value, String> {
+    let content = match document
+        .read_bounded(bitfun_services_core::local_instructions::MAX_LOCAL_INSTRUCTION_FILE_BYTES)
+        .map_err(|error| format!("Failed to read OpenCode config: {error}"))?
+    {
+        BoundedTextRead::Content(content) => content,
+        BoundedTextRead::TooLarge => {
+            return Err("OpenCode config exceeds the 1 MiB compatibility limit".to_string())
+        }
+        BoundedTextRead::InvalidUtf8 => {
+            return Err("OpenCode config must be valid UTF-8".to_string())
+        }
+    };
+    serde_json::from_str::<Value>(&strip_jsonc(&content))
+        .map_err(|error| format!("Failed to parse OpenCode config: {error}"))
 }
 
 fn append_configured_path(
@@ -332,6 +375,28 @@ fn glob_directory_matchers(pattern: &str) -> Result<Option<Vec<GlobMatcher>>, gl
 #[cfg(test)]
 mod tests {
     use super::{load_opencode_user_instructions, OpenCodeInstructionSourceOptions};
+    use crate::local_source_paths::OpenCodeLocalConfigOptions;
+    use std::path::PathBuf;
+
+    fn source_options(
+        config_dir: PathBuf,
+        home_dir: Option<PathBuf>,
+        workspace_root: Option<PathBuf>,
+    ) -> OpenCodeInstructionSourceOptions {
+        OpenCodeInstructionSourceOptions {
+            config: OpenCodeLocalConfigOptions {
+                user_config_dir: config_dir,
+                legacy_user_config_dir: None,
+                explicit_config_file: None,
+                explicit_config_dir: None,
+                inline_config_content: None,
+                project_config_enabled: true,
+            },
+            home_dir,
+            workspace_root,
+            display_root: "$XDG_CONFIG_HOME/opencode".to_string(),
+        }
+    }
 
     #[test]
     fn global_config_uses_native_override_order_and_rejects_urls() {
@@ -362,12 +427,7 @@ mod tests {
             }"#,
         )
         .expect("opencode.jsonc");
-        let options = OpenCodeInstructionSourceOptions {
-            config_dir: Some(config_dir),
-            home_dir: Some(home_dir),
-            workspace_root: None,
-            display_root: "$XDG_CONFIG_HOME/opencode".to_string(),
-        };
+        let options = source_options(config_dir, Some(home_dir), None);
 
         let files = load_opencode_user_instructions(&options).expect("instructions");
         let names = files
@@ -380,6 +440,128 @@ mod tests {
             vec!["$XDG_CONFIG_HOME/opencode/AGENTS.md", "~/from-jsonc.md"]
         );
         assert!(!files.iter().any(|file| file.name.starts_with("http")));
+    }
+
+    #[test]
+    fn inline_config_appends_unique_instructions_without_exposing_its_content() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let config_dir = temp.path().join("config");
+        let workspace = temp.path().join("workspace");
+        std::fs::create_dir_all(&config_dir).expect("config directory");
+        std::fs::create_dir_all(&workspace).expect("workspace directory");
+        std::fs::write(workspace.join("file.md"), "file\n").expect("file instruction");
+        std::fs::write(workspace.join("inline.md"), "inline\n").expect("inline instruction");
+        std::fs::write(
+            config_dir.join("opencode.json"),
+            r#"{"instructions":["file.md"]}"#,
+        )
+        .expect("OpenCode config");
+        let mut options = source_options(config_dir, None, Some(workspace));
+        options.config.inline_config_content =
+            Some(r#"{"instructions":["inline.md"]}"#.to_string());
+
+        let files = load_opencode_user_instructions(&options).expect("instructions");
+
+        assert_eq!(
+            files
+                .iter()
+                .map(|file| file.name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["<workspace>/file.md", "<workspace>/inline.md"]
+        );
+    }
+
+    #[test]
+    fn later_local_sources_append_but_global_config_files_replace_instructions() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let config_dir = temp.path().join("config");
+        let workspace = temp.path().join("workspace");
+        std::fs::create_dir_all(&config_dir).expect("config directory");
+        std::fs::create_dir_all(&workspace).expect("workspace directory");
+        for name in ["legacy.md", "global.md", "shared.md", "project.md"] {
+            std::fs::write(workspace.join(name), format!("{name}\n")).expect("instruction");
+        }
+        std::fs::write(
+            config_dir.join("config.json"),
+            r#"{"instructions":["legacy.md"]}"#,
+        )
+        .expect("legacy global config");
+        std::fs::write(
+            config_dir.join("opencode.json"),
+            r#"{"instructions":["global.md","shared.md"]}"#,
+        )
+        .expect("winning global config");
+        std::fs::write(
+            workspace.join("opencode.json"),
+            r#"{"instructions":["shared.md","project.md"]}"#,
+        )
+        .expect("project config");
+        let options = source_options(config_dir, None, Some(workspace));
+
+        let files = load_opencode_user_instructions(&options).expect("instructions");
+
+        assert_eq!(
+            files
+                .iter()
+                .map(|file| file.name.as_str())
+                .collect::<Vec<_>>(),
+            vec![
+                "<workspace>/global.md",
+                "<workspace>/shared.md",
+                "<workspace>/project.md",
+            ]
+        );
+    }
+
+    #[test]
+    fn relative_instructions_search_from_the_opened_directory_to_the_project_boundary() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let config_dir = temp.path().join("config");
+        let project = temp.path().join("workspace");
+        let opened = project.join("packages/app");
+        std::fs::create_dir_all(&config_dir).expect("config directory");
+        std::fs::create_dir_all(project.join(".git")).expect("git boundary");
+        std::fs::create_dir_all(&opened).expect("opened directory");
+        std::fs::write(opened.join("rules.md"), "opened\n").expect("opened instruction");
+        std::fs::write(project.join("rules.md"), "project\n").expect("project instruction");
+        std::fs::write(
+            config_dir.join("opencode.json"),
+            r#"{"instructions":["rules.md"]}"#,
+        )
+        .expect("OpenCode config");
+        let options = source_options(config_dir, None, Some(opened));
+
+        let files = load_opencode_user_instructions(&options).expect("instructions");
+
+        assert_eq!(
+            files
+                .iter()
+                .map(|file| file.content.as_str())
+                .collect::<Vec<_>>(),
+            vec!["opened\n", "project\n"]
+        );
+    }
+
+    #[test]
+    fn disabled_project_config_resolves_relative_instructions_from_the_user_config_root() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let config_dir = temp.path().join("config");
+        let workspace = temp.path().join("workspace");
+        std::fs::create_dir_all(&config_dir).expect("config directory");
+        std::fs::create_dir_all(&workspace).expect("workspace directory");
+        std::fs::write(config_dir.join("rules.md"), "global\n").expect("global instruction");
+        std::fs::write(
+            config_dir.join("opencode.json"),
+            r#"{"instructions":["rules.md"]}"#,
+        )
+        .expect("OpenCode config");
+        let mut options = source_options(config_dir, None, Some(workspace));
+        options.config.project_config_enabled = false;
+
+        let files = load_opencode_user_instructions(&options).expect("instructions");
+
+        assert_eq!(files.len(), 1);
+        assert_eq!(files[0].content, "global\n");
     }
 
     #[test]
@@ -410,12 +592,7 @@ mod tests {
             serde_json::to_vec(&config).expect("serialized config"),
         )
         .expect("opencode.json");
-        let options = OpenCodeInstructionSourceOptions {
-            config_dir: Some(config_dir),
-            home_dir: Some(home_dir),
-            workspace_root: Some(workspace),
-            display_root: "$XDG_CONFIG_HOME/opencode".to_string(),
-        };
+        let options = source_options(config_dir, Some(home_dir), Some(workspace));
 
         let files = load_opencode_user_instructions(&options).expect("instructions");
         let names = files
@@ -447,12 +624,7 @@ mod tests {
             "fallback must stay suppressed\n",
         )
         .expect("Claude fallback");
-        let options = OpenCodeInstructionSourceOptions {
-            config_dir: Some(config_dir),
-            home_dir: Some(home_dir),
-            workspace_root: None,
-            display_root: "$XDG_CONFIG_HOME/opencode".to_string(),
-        };
+        let options = source_options(config_dir, Some(home_dir), None);
 
         let files = load_opencode_user_instructions(&options).expect("instructions");
 
@@ -480,12 +652,7 @@ mod tests {
                 .expect("serialized config"),
         )
         .expect("OpenCode config");
-        let options = OpenCodeInstructionSourceOptions {
-            config_dir: Some(config_dir),
-            home_dir: Some(home_dir),
-            workspace_root: None,
-            display_root: "$XDG_CONFIG_HOME/opencode".to_string(),
-        };
+        let options = source_options(config_dir, Some(home_dir), None);
 
         let files = load_opencode_user_instructions(&options).expect("instructions");
         let names = files
@@ -509,27 +676,18 @@ mod tests {
         let config_dir = temp.path().join("config");
         std::fs::create_dir_all(&config_dir).expect("config directory");
         std::fs::write(config_dir.join("opencode.json"), "").expect("empty config");
-        let options = OpenCodeInstructionSourceOptions {
-            config_dir: Some(config_dir),
-            home_dir: None,
-            workspace_root: None,
-            display_root: "$XDG_CONFIG_HOME/opencode".to_string(),
-        };
+        let options = source_options(config_dir, None, None);
 
         let error = load_opencode_user_instructions(&options).expect_err("invalid empty config");
 
-        assert!(error.contains("Failed to parse OpenCode user config opencode.json"));
+        assert!(error.contains("Failed to parse OpenCode config"));
     }
 
     #[test]
     fn a_missing_config_root_does_not_fall_back_to_the_process_directory() {
-        let files = load_opencode_user_instructions(&OpenCodeInstructionSourceOptions {
-            config_dir: None,
-            home_dir: None,
-            workspace_root: None,
-            display_root: "~/.config/opencode".to_string(),
-        })
-        .expect("instructions");
+        let files =
+            load_opencode_user_instructions(&source_options(PathBuf::from(".config"), None, None))
+                .expect("instructions");
 
         assert!(files.is_empty());
     }
@@ -557,12 +715,7 @@ mod tests {
             r#"{"instructions":["**/*.md"]}"#,
         )
         .expect("OpenCode config");
-        let options = OpenCodeInstructionSourceOptions {
-            config_dir: Some(config_dir),
-            home_dir: None,
-            workspace_root: Some(workspace),
-            display_root: "$XDG_CONFIG_HOME/opencode".to_string(),
-        };
+        let options = source_options(config_dir, None, Some(workspace));
 
         let files = load_opencode_user_instructions(&options).expect("instructions");
         let names = files
@@ -591,12 +744,7 @@ mod tests {
             r#"{"instructions":["*.md"]}"#,
         )
         .expect("OpenCode config");
-        let options = OpenCodeInstructionSourceOptions {
-            config_dir: Some(config_dir),
-            home_dir: None,
-            workspace_root: Some(workspace),
-            display_root: "$XDG_CONFIG_HOME/opencode".to_string(),
-        };
+        let options = source_options(config_dir, None, Some(workspace));
 
         let files = load_opencode_user_instructions(&options).expect("instructions");
 
@@ -623,12 +771,7 @@ mod tests {
             r#"{"instructions":["team-*/*.md"]}"#,
         )
         .expect("OpenCode config");
-        let options = OpenCodeInstructionSourceOptions {
-            config_dir: Some(config_dir),
-            home_dir: None,
-            workspace_root: Some(workspace),
-            display_root: "$XDG_CONFIG_HOME/opencode".to_string(),
-        };
+        let options = source_options(config_dir, None, Some(workspace));
 
         let files = load_opencode_user_instructions(&options).expect("instructions");
 
@@ -653,12 +796,7 @@ mod tests {
             r#"{"instructions":["**/*.md"]}"#,
         )
         .expect("OpenCode config");
-        let options = OpenCodeInstructionSourceOptions {
-            config_dir: Some(config_dir),
-            home_dir: None,
-            workspace_root: Some(workspace),
-            display_root: "$XDG_CONFIG_HOME/opencode".to_string(),
-        };
+        let options = source_options(config_dir, None, Some(workspace));
 
         let files = load_opencode_user_instructions(&options).expect("instructions");
 
@@ -685,12 +823,7 @@ mod tests {
                 .expect("serialized config"),
         )
         .expect("OpenCode config");
-        let options = OpenCodeInstructionSourceOptions {
-            config_dir: Some(config_dir),
-            home_dir: None,
-            workspace_root: Some(workspace),
-            display_root: "$XDG_CONFIG_HOME/opencode".to_string(),
-        };
+        let options = source_options(config_dir, None, Some(workspace));
 
         let files = load_opencode_user_instructions(&options).expect("instructions");
 
@@ -712,12 +845,7 @@ mod tests {
             r#"{"instructions":["large-0.md","large-1.md","large-2.md"]}"#,
         )
         .expect("large OpenCode config");
-        let large_options = OpenCodeInstructionSourceOptions {
-            config_dir: Some(large_config_dir),
-            home_dir: None,
-            workspace_root: Some(large_workspace),
-            display_root: "$XDG_CONFIG_HOME/opencode".to_string(),
-        };
+        let large_options = source_options(large_config_dir, None, Some(large_workspace));
 
         let large_files = load_opencode_user_instructions(&large_options).expect("large files");
 

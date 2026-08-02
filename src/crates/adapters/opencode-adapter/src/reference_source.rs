@@ -1,7 +1,7 @@
 use crate::command_source::strip_jsonc;
 use crate::local_source_paths::{
-    normalize_path_lexically, path_identity, reference_config_file_layers, reference_watch_roots,
-    user_config_dir,
+    local_source_plan, local_source_watch_roots, normalize_path_lexically, path_identity,
+    LocalConfigDocument, LocalSourcePlanItem, OpenCodeLocalConfigOptions,
 };
 use bitfun_product_domains::external_sources::{
     EcosystemId, ExternalSourceAssetKind, ExternalSourceContext, ExternalSourceDiagnostic,
@@ -12,7 +12,7 @@ use bitfun_product_domains::workspace_references::{
     ExternalWorkspaceReferenceDefinition, ExternalWorkspaceReferenceProviderIdentity,
     ExternalWorkspaceReferenceProviderSnapshot, ExternalWorkspaceReferenceSourceProvider,
 };
-use bitfun_services_core::bounded_fs::{read_bounded_text, BoundedTextRead};
+use bitfun_services_core::bounded_fs::BoundedTextRead;
 use serde_json::{Map, Value};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
@@ -26,7 +26,7 @@ const MAX_DIAGNOSTICS: usize = 256;
 
 #[derive(Debug, Clone)]
 pub struct OpenCodeWorkspaceReferenceProviderOptions {
-    pub global_config_dir: PathBuf,
+    pub config: OpenCodeLocalConfigOptions,
     pub home_dir: Option<PathBuf>,
 }
 
@@ -34,14 +34,7 @@ impl OpenCodeWorkspaceReferenceProviderOptions {
     pub fn from_environment() -> Self {
         let home_dir = dirs::home_dir();
         Self {
-            global_config_dir: std::env::var_os("OPENCODE_CONFIG_DIR")
-                .map(PathBuf::from)
-                .unwrap_or_else(|| {
-                    user_config_dir(
-                        std::env::var_os("XDG_CONFIG_HOME").map(PathBuf::from),
-                        home_dir.clone(),
-                    )
-                }),
+            config: OpenCodeLocalConfigOptions::from_environment(),
             home_dir,
         }
     }
@@ -84,7 +77,7 @@ impl ExternalWorkspaceReferenceSourceProvider for OpenCodeWorkspaceReferenceProv
         &self,
         context: &ExternalSourceContext,
     ) -> Result<ExternalWorkspaceReferenceProviderSnapshot, ExternalSourceProviderError> {
-        if !self.options.global_config_dir.is_absolute() {
+        if !self.options.config.user_config_dir.is_absolute() {
             return Err(ExternalSourceProviderError::new(
                 "opencode.reference.global_config_invalid",
                 "OpenCode global configuration root must be absolute",
@@ -109,19 +102,16 @@ impl ExternalWorkspaceReferenceSourceProvider for OpenCodeWorkspaceReferenceProv
         let mut effective = BTreeMap::<String, EffectiveReference>::new();
         let mut precedence = 0usize;
 
-        let layers = reference_config_file_layers(
-            &self.options.global_config_dir,
+        let layers = local_source_plan(
+            &self.options.config,
             context.workspace_root.as_deref(),
-        )
-        .map_err(|_| {
-            ExternalSourceProviderError::new(
-                "opencode.reference.config_unreadable",
-                "OpenCode reference configuration metadata could not be read",
-                true,
-            )
-        })?;
+            None,
+        );
         for layer in layers {
-            let parsed = read_reference_document(&layer.path);
+            let LocalSourcePlanItem::Config(document) = layer else {
+                continue;
+            };
+            let parsed = read_reference_document(&document);
             let (content, entries) = match parsed {
                 Ok(Some(parsed)) => parsed,
                 Ok(None) => continue,
@@ -137,7 +127,7 @@ impl ExternalWorkspaceReferenceSourceProvider for OpenCodeWorkspaceReferenceProv
                     ));
                 }
             };
-            let source_key = source_key(&layer.path);
+            let source_key = source_key(&document);
             let mut source_diagnostics = Vec::new();
             let source_dropped_before = dropped_diagnostics;
             for (alias, entry) in entries {
@@ -168,7 +158,7 @@ impl ExternalWorkspaceReferenceSourceProvider for OpenCodeWorkspaceReferenceProv
                     }) => {
                         let Some(path) = resolve_local_path(
                             &path,
-                            layer.path.parent().unwrap_or_else(|| Path::new(".")),
+                            document.base_directory.as_deref(),
                             self.options.home_dir.as_deref(),
                         ) else {
                             effective.remove(&alias);
@@ -250,10 +240,10 @@ impl ExternalWorkspaceReferenceSourceProvider for OpenCodeWorkspaceReferenceProv
                 key: source_key,
                 ecosystem_id: EcosystemId::new(ECOSYSTEM_ID)
                     .expect("static OpenCode ecosystem id must be valid"),
-                display_name: source_display_name(layer.scope).to_string(),
+                display_name: source_display_name(document.scope).to_string(),
                 source_kind: "opencode_config".to_string(),
-                scope: layer.scope,
-                location: layer.path.to_string_lossy().to_string(),
+                scope: document.scope,
+                location: document.location(),
                 execution_domain_id: context.execution_domain_id.clone(),
                 health: if source_diagnostics.is_empty()
                     && dropped_diagnostics == source_dropped_before
@@ -313,12 +303,13 @@ impl ExternalWorkspaceReferenceSourceProvider for OpenCodeWorkspaceReferenceProv
     }
 
     fn watch_roots(&self, context: &ExternalSourceContext) -> Vec<ExternalWatchRoot> {
-        if !self.options.global_config_dir.is_absolute() {
+        if !self.options.config.user_config_dir.is_absolute() {
             return Vec::new();
         }
-        reference_watch_roots(
-            &self.options.global_config_dir,
+        local_source_watch_roots(
+            &self.options.config,
             context.workspace_root.as_deref(),
+            None,
         )
     }
 }
@@ -338,9 +329,9 @@ enum ReferenceDocumentReadError {
 }
 
 fn read_reference_document(
-    path: &Path,
+    document: &LocalConfigDocument,
 ) -> Result<Option<(String, Map<String, Value>)>, ReferenceDocumentReadError> {
-    let content = match read_bounded_text(path, MAX_CONFIG_FILE_BYTES) {
+    let content = match document.read_bounded(MAX_CONFIG_FILE_BYTES) {
         Ok(BoundedTextRead::Content(content)) => content,
         Ok(BoundedTextRead::TooLarge) => {
             return Err(ReferenceDocumentReadError::Diagnostic(
@@ -458,7 +449,7 @@ fn optional_bool(
 
 fn resolve_local_path(
     value: &str,
-    config_directory: &Path,
+    config_directory: Option<&Path>,
     home: Option<&Path>,
 ) -> Option<PathBuf> {
     if value.is_empty() || value.contains('\0') {
@@ -476,7 +467,7 @@ fn resolve_local_path(
     if path.is_absolute() {
         Some(normalize_path_lexically(&path))
     } else {
-        Some(normalize_path_lexically(&config_directory.join(path)))
+        config_directory.map(|directory| normalize_path_lexically(&directory.join(path)))
     }
 }
 
@@ -488,9 +479,8 @@ fn valid_alias(alias: &str) -> bool {
         })
 }
 
-fn source_key(path: &Path) -> SourceKey {
-    let identity = path_identity(path);
-    let digest = content_version(identity.to_string_lossy().as_ref());
+fn source_key(document: &LocalConfigDocument) -> SourceKey {
+    let digest = content_version(&document.identity());
     SourceKey::new(PROVIDER_ID, format!("opencode-config-{}", &digest[..24]))
         .expect("hashed OpenCode reference source id must be valid")
 }
@@ -598,13 +588,23 @@ fn diagnostic_alias(alias: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::{read_reference_document, ReferenceDocumentReadError};
+    use crate::local_source_paths::{
+        LocalConfigDocument, LocalConfigDocumentKind, LocalConfigDocumentSource,
+    };
+    use bitfun_product_domains::external_sources::ExternalSourceScope;
 
     #[test]
     fn unreadable_configuration_is_classified_as_transient() {
         let directory = tempfile::TempDir::new().unwrap();
+        let document = LocalConfigDocument {
+            source: LocalConfigDocumentSource::File(directory.path().to_path_buf()),
+            base_directory: directory.path().parent().map(std::path::Path::to_path_buf),
+            kind: LocalConfigDocumentKind::User,
+            scope: ExternalSourceScope::UserGlobal,
+        };
 
         assert!(matches!(
-            read_reference_document(directory.path()),
+            read_reference_document(&document),
             Err(ReferenceDocumentReadError::TransientIo)
         ));
     }

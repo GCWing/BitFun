@@ -39,6 +39,7 @@ impl Fixture {
                 legacy_user_config_dir: Some(self.home.join(".opencode")),
                 explicit_config_file: None,
                 explicit_config_dir: None,
+                inline_config_content: None,
                 project_config_enabled: true,
             },
             home_dir: Some(self.home.clone()),
@@ -199,4 +200,34 @@ fn no_workspace_never_interprets_a_relative_configured_root_locally() {
         dunce::canonicalize(fixture.home.join("global-skills")).unwrap()
     );
     assert_eq!(roots[0].scope, ExternalSourceScope::UserGlobal);
+}
+
+#[test]
+fn inline_config_paths_are_applied_last_and_stay_workspace_scoped() {
+    let fixture = Fixture::new();
+    let file_root = fixture.project.join("file-skills");
+    let inline_root = fixture.project.join("inline-skills");
+    fs::create_dir_all(&file_root).unwrap();
+    fs::create_dir_all(&inline_root).unwrap();
+    write(
+        fixture.project.join("opencode.json"),
+        r#"{"skills":["../../file-skills"]}"#,
+    );
+    let provider = OpenCodeSkillRootProvider::new(OpenCodeSkillRootProviderOptions {
+        config: OpenCodeCommandProviderOptions {
+            user_config_dir: fixture.user_config.clone(),
+            legacy_user_config_dir: Some(fixture.home.join(".opencode")),
+            explicit_config_file: None,
+            explicit_config_dir: None,
+            inline_config_content: Some(r#"{"skills":["../../inline-skills"]}"#.to_string()),
+            project_config_enabled: true,
+        },
+        home_dir: Some(fixture.home.clone()),
+    });
+
+    let roots = provider.discover(Some(&fixture.opened_directory));
+
+    assert_eq!(roots.len(), 2);
+    assert_eq!(roots[1].path, dunce::canonicalize(inline_root).unwrap());
+    assert_eq!(roots[1].scope, ExternalSourceScope::Project);
 }

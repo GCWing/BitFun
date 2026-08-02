@@ -1,4 +1,6 @@
-use bitfun_opencode_adapter::{OpenCodeSubagentProvider, OpenCodeSubagentProviderOptions};
+use bitfun_opencode_adapter::{
+    OpenCodeCommandProviderOptions, OpenCodeSubagentProvider, OpenCodeSubagentProviderOptions,
+};
 use bitfun_product_domains::external_sources::{
     ExecutionDomainId, ExternalSourceContext, ExternalSourceScope,
 };
@@ -24,11 +26,14 @@ fn context(workspace: PathBuf) -> ExternalSourceContext {
 
 fn provider(temp: &TempDir, workspace: &std::path::Path) -> OpenCodeSubagentProvider {
     OpenCodeSubagentProvider::new(OpenCodeSubagentProviderOptions {
-        user_config_dir: temp.path().join("user"),
-        legacy_user_config_dir: Some(temp.path().join("legacy")),
-        explicit_config_file: None,
-        explicit_config_dir: None,
-        project_config_enabled: true,
+        config: OpenCodeCommandProviderOptions {
+            user_config_dir: temp.path().join("user"),
+            legacy_user_config_dir: Some(temp.path().join("legacy")),
+            explicit_config_file: None,
+            explicit_config_dir: None,
+            inline_config_content: None,
+            project_config_enabled: true,
+        },
         project_root_override: Some(workspace.to_path_buf()),
     })
 }
@@ -428,11 +433,14 @@ fn current_path_permission_resources_expand_like_opencode() {
     )
     .unwrap();
     let provider = OpenCodeSubagentProvider::new(OpenCodeSubagentProviderOptions {
-        user_config_dir: home.join(".opencode"),
-        legacy_user_config_dir: Some(home.join(".opencode")),
-        explicit_config_file: None,
-        explicit_config_dir: None,
-        project_config_enabled: true,
+        config: OpenCodeCommandProviderOptions {
+            user_config_dir: home.join(".opencode"),
+            legacy_user_config_dir: Some(home.join(".opencode")),
+            explicit_config_file: None,
+            explicit_config_dir: None,
+            inline_config_content: None,
+            project_config_enabled: true,
+        },
         project_root_override: Some(workspace.clone()),
     });
 
@@ -475,11 +483,14 @@ fn v2_relative_path_permissions_use_the_opened_location_coordinate() {
     )
     .unwrap();
     let provider = OpenCodeSubagentProvider::new(OpenCodeSubagentProviderOptions {
-        user_config_dir: temp.path().join("user"),
-        legacy_user_config_dir: None,
-        explicit_config_file: None,
-        explicit_config_dir: None,
-        project_config_enabled: true,
+        config: OpenCodeCommandProviderOptions {
+            user_config_dir: temp.path().join("user"),
+            legacy_user_config_dir: None,
+            explicit_config_file: None,
+            explicit_config_dir: None,
+            inline_config_content: None,
+            project_config_enabled: true,
+        },
         project_root_override: Some(project.clone()),
     });
 
@@ -969,11 +980,14 @@ fn explicit_alias_keeps_project_opencode_directory_position() {
     )
     .unwrap();
     let provider = OpenCodeSubagentProvider::new(OpenCodeSubagentProviderOptions {
-        user_config_dir: temp.path().join("user"),
-        legacy_user_config_dir: Some(temp.path().join("legacy")),
-        explicit_config_file: None,
-        explicit_config_dir: Some(project_opencode),
-        project_config_enabled: true,
+        config: OpenCodeCommandProviderOptions {
+            user_config_dir: temp.path().join("user"),
+            legacy_user_config_dir: Some(temp.path().join("legacy")),
+            explicit_config_file: None,
+            explicit_config_dir: Some(project_opencode),
+            inline_config_content: None,
+            project_config_enabled: true,
+        },
         project_root_override: Some(workspace.clone()),
     });
 
