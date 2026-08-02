@@ -5,14 +5,14 @@ use super::types::{
 #[cfg(feature = "product-full")]
 use crate::agentic::WorkspaceBinding;
 use crate::infrastructure::{get_path_manager_arc, PathManager};
-use crate::service::remote_ssh::workspace_state::{
-    normalize_remote_workspace_path, remote_root_to_mirror_subpath,
-    sanitize_ssh_hostname_for_mirror,
-};
 use crate::util::errors::{BitFunError, BitFunResult};
 use bitfun_services_core::session::{
     merge_legacy_session_store, move_legacy_path, SessionStoreMigrationError,
     SessionStoreMigrationRecord,
+};
+use bitfun_services_core::workspace_identity::{
+    normalize_remote_workspace_path, remote_root_to_mirror_subpath,
+    sanitize_ssh_hostname_for_mirror,
 };
 use log::debug;
 use serde::Serialize;

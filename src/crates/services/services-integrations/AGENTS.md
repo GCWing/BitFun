@@ -31,10 +31,12 @@ slices that are outside pure product logic but still platform-neutral.
   concrete scheduler/session restore, terminal pre-warm adapters, and product
   execution remain core-owned unless a reviewed port/provider moves them with
   equivalence tests.
-- Remote-SSH path/session identity helpers, disabled surfaces, SSH channels,
-  SFTP, remote FS, remote workspace FS/shell providers, remote terminal, remote
-  ExecCommand runtime-port adapter, and manager assembly live here behind
-  explicit remote SSH features.
+- Remote-SSH registries, disabled surfaces, SSH channels, SFTP, remote FS,
+  remote workspace FS/shell providers, remote terminal, remote ExecCommand
+  runtime-port adapter, and manager assembly live here behind explicit remote
+  SSH features. Stable workspace path/session identity is owned by
+  `services-core::workspace_identity`; `remote_ssh::paths` is only its legacy
+  compatibility re-export and must not regain transport-independent logic.
 - One-click relay self-deploy (`remote_ssh/relay_deploy.rs`) stages embedded
   scripts under `~/.bitfun/relay-deploy/` and clones source to
   `~/.bitfun/relay-src/` (never `$HOME/bitfun`). Embeds

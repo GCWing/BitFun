@@ -3791,9 +3791,9 @@ export const requiredContentRules = [
       },
       {
         regex:
-          /bitfun-services-integrations = \{ path = "\.\.\/\.\.\/services\/services-integrations", default-features = false, features = \["remote-ssh"\] \}/,
+          /bitfun-services-integrations = \{ path = "\.\.\/\.\.\/services\/services-integrations", default-features = false, optional = true \}/,
         message:
-          'bitfun-services-integrations dependency may keep remote workspace identity but must not force workspace-search or product-full outside the core feature graph',
+          'bitfun-services-integrations dependency must stay optional so local workspace profiles do not compile remote integrations',
       },
       {
         regex:
@@ -8680,9 +8680,9 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/services/services-integrations/src/remote_ssh/paths.rs',
+    path: 'src/crates/services/services-core/src/workspace_identity.rs',
     reason:
-      'services-integrations remote-ssh owns workspace path/session identity helpers that do not require concrete SSH runtime handles',
+      'services-core owns stable workspace path/session identity helpers without remote transport or concrete SSH runtime handles',
     patterns: [
       {
         regex: /\bpub struct WorkspaceSessionIdentity\b/,
@@ -9959,6 +9959,73 @@ export const requiredContentRules = [
       {
         regex: /\bFunctionAgentAiPort\b/,
         message: 'missing function-agent AI port owner binding',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/service/mod.rs',
+    reason:
+      'bitfun-core service facades must compile only when their explicit capability profile is selected',
+    patterns: [
+      {
+        regex: /#\[cfg\(feature = "dispatch-store"\)\]\s*pub mod dispatch\b/s,
+        message: 'dispatch store facade must stay gated behind dispatch-store',
+      },
+      {
+        regex: /#\[cfg\(feature = "lsp"\)\]\s*pub mod lsp\b/s,
+        message: 'LSP facade must stay gated behind lsp',
+      },
+      {
+        regex: /#\[cfg\(feature = "remote-workspace"\)\]\s*pub mod remote_ssh\b/s,
+        message: 'remote workspace facade must stay gated behind remote-workspace',
+      },
+      {
+        regex: /#\[cfg\(feature = "workspace-runtime"\)\]\s*pub mod workspace\b/s,
+        message: 'workspace facade must stay gated behind workspace-runtime',
+      },
+      {
+        regex: /#\[cfg\(feature = "terminal"\)\]\s*pub use terminal_core as terminal\b/s,
+        message: 'terminal compatibility export must stay gated behind terminal',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/services/services-core/src/session/mod.rs',
+    reason: 'libgit2-backed memory workspace behavior must remain isolated from the reusable session profile',
+    patterns: [
+      {
+        regex: /#\[cfg\(feature = "session-git"\)\]\s*mod memory_workspace\b/s,
+        message: 'memory workspace implementation must stay gated behind session-git',
+      },
+      {
+        regex: /#\[cfg\(feature = "session-git"\)\]\s*pub use memory_workspace\b/s,
+        message: 'memory workspace exports must stay gated behind session-git',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/services/services-integrations/src/remote_ssh/paths.rs',
+    reason:
+      'remote SSH must preserve its public path while delegating stable workspace identity to services-core',
+    patterns: [
+      {
+        regex: /pub use bitfun_services_core::workspace_identity::\*/,
+        message: 'remote SSH path compatibility module must re-export the services-core owner',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/service/workspace/service.rs',
+    reason:
+      'local workspace profiles must use stable service-owned identity and fail closed for unavailable remote runtime behavior',
+    patterns: [
+      {
+        regex: /use bitfun_services_core::workspace_identity::\{/,
+        message: 'workspace service must consume the services-core identity owner directly',
+      },
+      {
+        regex: /Remote workspace support is not compiled into this product profile/,
+        message: 'workspace service must report an explicit unsupported state without remote-workspace',
       },
     ],
   },

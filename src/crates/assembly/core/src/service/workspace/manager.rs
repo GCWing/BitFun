@@ -3,12 +3,12 @@
 #[cfg(feature = "git")]
 use super::worktree_topology::global_worktree_topology_service;
 use super::WorktreeTopologyFreshness;
-use crate::service::remote_ssh::workspace_state::{
+use crate::util::{errors::*, FrontMatterMarkdown};
+use bitfun_services_core::workspace_identity::{
     canonicalize_local_workspace_root, local_workspace_roots_equal,
     local_workspace_stable_storage_id, normalize_local_workspace_root_for_stable_id,
     normalize_remote_workspace_path, LOCAL_WORKSPACE_SSH_HOST,
 };
-use crate::util::{errors::*, FrontMatterMarkdown};
 use log::{info, warn};
 
 use serde::{Deserialize, Serialize};

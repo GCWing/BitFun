@@ -50,6 +50,13 @@ SessionManager -> Session -> DialogTurn -> ModelRound
 - Remote/service 改动必须保持 external protocol lifecycle、workspace projection、scheduler/session restore、
   terminal pre-warm 和 product execution 边界清晰。
 - Feature 改动必须保持 `product-full` 作为兼容产品组装边界；默认能力选择只有在单独的 product matrix review 后才能变化。
+- 保持轻量兼容 feature 可独立编译。本地服务 profile 为 `dispatch-store`、`lsp`、`terminal`、
+  `workspace-runtime` 和 `workspace-watch`；`remote-workspace` 只增加远程工作区 facade，
+  `ssh-remote` 才增加具体 SSH transport。`announcement`、`file-watch`、`git`、
+  `review-platform` 也保持独立，`service-integrations` 只是其兼容聚合。任何窄 feature 都不得直接或间接启用 `product-full`。
+- `product-full` 必须显式组合自身消费的每个能力，包括 `permission`、`session-git`、
+  `runtime-ownership` 等产品专属 `services-core` feature。不得把这些 feature 写在依赖声明上，
+  否则 Cargo feature union 会迫使所有 core consumer 编译它们。
 - 保持 `cargo check -p bitfun-core --no-default-features` 可用。产品专属模块必须由 owner feature 控制；轻量 facade
   操作在缺少产品 owner 时若无法安全完成，应明确 fail-closed 并保留持久化恢复状态，不得隐式启用 `product-full`。
 
@@ -81,6 +88,9 @@ SessionManager -> Session -> DialogTurn -> ModelRound
 ```bash
 cargo check --workspace
 cargo check -p bitfun-core --no-default-features
+cargo check -p bitfun-core --no-default-features --features workspace-runtime
+cargo check -p bitfun-core --no-default-features --features remote-workspace
+cargo check -p bitfun-core --no-default-features --features ssh-remote
 cargo test -p bitfun-core --lib <test_name> -- --nocapture
 node scripts/check-core-boundaries.mjs
 ```

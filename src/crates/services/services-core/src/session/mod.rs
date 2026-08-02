@@ -1,5 +1,6 @@
 pub mod layout;
 mod lineage;
+#[cfg(feature = "session-git")]
 mod memory_workspace;
 mod metadata;
 mod metadata_store;
@@ -15,6 +16,7 @@ pub use lineage::{
     format_branch_session_name, resolve_branch_session_lineage, BranchSessionLineage,
     BranchSessionMetadataFacts, SessionBranchBoundary, SessionBranchRequest, SessionBranchResult,
 };
+#[cfg(feature = "session-git")]
 pub use memory_workspace::{
     ensure_memory_workspace_git_baseline, memory_workspace_diff, render_memory_workspace_diff_file,
     reset_memory_workspace_git_baseline, MemoryWorkspaceChange, MemoryWorkspaceChangeStatus,

@@ -252,8 +252,9 @@ remote-connect = [
 remote-ssh = [
     "anyhow",
     "async-trait",
+    "bitfun-services-core",
+    "bitfun-services-core/workspace-identity",
     "bitfun-runtime-ports",
-    "dunce",
     "sha2",
     "terminal-core",
     "thiserror",

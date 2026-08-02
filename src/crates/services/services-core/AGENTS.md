@@ -17,8 +17,11 @@ crate.
   runtime crates.
 - Prefer `bitfun-core-types` for shared DTOs and `bitfun-runtime-ports` for
   cross-layer traits.
-- Keep dependency features explicit. Non-LSP consumers should use
-  `default-features = false`; LSP consumers must enable the `lsp` feature.
+- Keep dependency features explicit and keep `default = []`. Consumers enable
+  `lsp`, `workspace-runtime`, `workspace-identity`, `runtime-ownership`,
+  `permission`, `dispatch-workspace`, `markdown`, or `session-git` only for the
+  owner behavior they use. In particular, session metadata consumers must not
+  compile libgit2 unless they use the memory-workspace baseline/diff API.
 - LSP manifest and protocol DTOs belong in `bitfun-core-types`; reusable LSP
   package, protocol, detection, debounce, watch, and process-manager helpers
   belong in `services-core`; product workspace state, event emission, global
@@ -30,6 +33,10 @@ crate.
 - `runtime_ownership` owns only canonical identity plus Embedded shared-lock and
   Shared exclusive-lock primitives. It must not select workspaces, start or
   cache Runtime instances, or define Session/Turn ownership.
+- `workspace_identity` owns canonical local roots plus stable local/remote
+  workspace and session-storage identifiers. It has no SSH registry, transport,
+  authentication, SFTP, PTY, or remote lifecycle responsibility; integrations
+  may preserve old paths through re-exports.
 - Do not add remote SSH, MiniApp storage, tool-result persistence, `PathManager`
   globals, or product runtime bindings to `filesystem`; keep those in core or a
   reviewed adapter/provider.
@@ -47,6 +54,8 @@ crate.
 
 ```bash
 cargo test -p bitfun-services-core --features lsp
+cargo test -p bitfun-services-core --no-default-features --features session-git memory_workspace
+cargo check -p bitfun-services-core --no-default-features --features workspace-identity
 cargo test -p bitfun-services-core --features workspace-runtime workspace
 cargo test -p bitfun-services-core --features runtime-ownership --test runtime_ownership_contracts
 node scripts/check-core-boundaries.mjs

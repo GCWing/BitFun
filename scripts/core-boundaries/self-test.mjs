@@ -146,10 +146,16 @@ export function runManifestParserSelfTest({
 
   for (const featureName of [
     'announcement',
+    'dispatch-store',
     'file-watch',
     'git',
+    'lsp',
+    'remote-workspace',
     'review-platform',
     'ssh-remote',
+    'terminal',
+    'workspace-runtime',
+    'workspace-watch',
     'product-capabilities',
     'product-domains',
     'tool-packs',
@@ -158,19 +164,55 @@ export function runManifestParserSelfTest({
       throw new Error(`core product-full assembly rule must require ${featureName}`);
     }
   }
+  const closedProfileKey = (manifestPath, featureName) => `${manifestPath}:${featureName}`;
   const closedCoreProfiles = new Map(
-    coreClosedFeatureProfileRules.map((rule) => [rule.featureName, rule]),
+    coreClosedFeatureProfileRules.map((rule) => [
+      closedProfileKey(rule.manifestPath, rule.featureName),
+      rule,
+    ]),
   );
-  const expectedClosedCoreProfiles = new Map([
-    ['announcement', ['bitfun-services-integrations/announcement']],
-    ['file-watch', ['bitfun-services-integrations/file-watch']],
-    ['git', ['bitfun-services-integrations/git']],
-    ['review-platform', ['bitfun-services-integrations/review-platform']],
-    ['service-integrations', ['announcement', 'file-watch', 'git', 'review-platform']],
-    ['ssh-remote', ['bitfun-services-integrations/remote-ssh-concrete']],
-  ]);
-  for (const [featureName, expectedReferences] of expectedClosedCoreProfiles) {
-    const rule = closedCoreProfiles.get(featureName);
+  const coreManifest = 'src/crates/assembly/core/Cargo.toml';
+  const servicesCoreManifest = 'src/crates/services/services-core/Cargo.toml';
+  const expectedClosedCoreProfiles = [
+    [servicesCoreManifest, 'default', []],
+    [servicesCoreManifest, 'session-git', ['dep:git2']],
+    [servicesCoreManifest, 'workspace-identity', ['dep:dunce']],
+    [coreManifest, 'dispatch-store', []],
+    [coreManifest, 'lsp', ['dep:notify', 'bitfun-services-core/lsp']],
+    [coreManifest, 'terminal', ['dep:terminal-core']],
+    [
+      coreManifest,
+      'workspace-runtime',
+      [
+        'dep:serde_yaml',
+        'bitfun-services-core/markdown',
+        'bitfun-services-core/workspace-identity',
+        'bitfun-services-core/workspace-runtime',
+      ],
+    ],
+    [coreManifest, 'workspace-watch', ['workspace-runtime', 'dep:notify']],
+    [
+      coreManifest,
+      'remote-workspace',
+      [
+        'workspace-runtime',
+        'dep:bitfun-services-integrations',
+        'bitfun-services-integrations/remote-ssh',
+      ],
+    ],
+    [coreManifest, 'announcement', ['bitfun-services-integrations/announcement']],
+    [coreManifest, 'file-watch', ['bitfun-services-integrations/file-watch']],
+    [coreManifest, 'git', ['bitfun-services-integrations/git']],
+    [coreManifest, 'review-platform', ['bitfun-services-integrations/review-platform']],
+    [coreManifest, 'service-integrations', ['announcement', 'file-watch', 'git', 'review-platform']],
+    [
+      coreManifest,
+      'ssh-remote',
+      ['remote-workspace', 'bitfun-services-integrations/remote-ssh-concrete'],
+    ],
+  ];
+  for (const [manifestPath, featureName, expectedReferences] of expectedClosedCoreProfiles) {
+    const rule = closedCoreProfiles.get(closedProfileKey(manifestPath, featureName));
     if (!rule?.exact) {
       throw new Error(`core closed feature profile must cover ${featureName} exactly`);
     }
@@ -182,6 +224,12 @@ export function runManifestParserSelfTest({
     }
     if (rule.requiredFeatureRefs.some((reference) => reference.includes('product-full'))) {
       throw new Error(`core closed feature profile must not hide product-full in ${featureName}`);
+    }
+    if (
+      (rule.allowedTransitiveFeatureRefs ?? [])
+        .some((reference) => reference.includes('product-full'))
+    ) {
+      throw new Error(`core closed feature profile must not reach product-full in ${featureName}`);
     }
   }
   const ownerFeatureRulePaths = new Set(
@@ -223,7 +271,14 @@ export function runManifestParserSelfTest({
     'git = ["bitfun-services-integrations/git"]',
     'review-platform = ["bitfun-services-integrations/review-platform"]',
     'service-integrations = ["announcement", "file-watch", "git", "review-platform"]',
+    'workspace-runtime = ["dep:serde_yaml", "bitfun-services-core/workspace-runtime"]',
+    'remote-workspace = [',
+    '    "workspace-runtime",',
+    '    "dep:bitfun-services-integrations",',
+    '    "bitfun-services-integrations/remote-ssh",',
+    ']',
     'ssh-remote = [',
+    '    "remote-workspace",',
     '    "bitfun-services-integrations/remote-ssh-concrete",',
     ']',
     '[dependencies]',
@@ -244,6 +299,9 @@ export function runManifestParserSelfTest({
       ?.refs.includes('bitfun-services-integrations/remote-ssh-concrete')
   ) {
     throw new Error('feature parser must detect dependency capability feature references');
+  }
+  if (!parsedFeatures.get('ssh-remote')?.refs.includes('remote-workspace')) {
+    throw new Error('feature parser must detect local capability feature references');
   }
 
   const acceptsGitFacadeLine = createFacadeLineChecker('bitfun_services_integrations::git');
@@ -655,9 +713,26 @@ export function runManifestParserSelfTest({
   const servicesCoreDunceOwner = servicesCoreOptionalOwnerRule?.dependencies.find(
     (dependency) => dependency.depName === 'dunce',
   );
-  for (const feature of ['runtime-ownership', 'workspace-runtime']) {
+  for (const feature of ['runtime-ownership', 'workspace-identity', 'workspace-runtime']) {
     if (!servicesCoreDunceOwner?.ownerFeatures.includes(feature)) {
       throw new Error(`services-core ${feature} must own optional dependency dunce`);
+    }
+  }
+  const expectedServicesCoreOwners = new Map([
+    ['git2', ['session-git']],
+    ['notify', ['lsp']],
+    ['rusqlite', ['permission']],
+    ['serde_yaml', ['markdown']],
+    ['zip', ['lsp']],
+  ]);
+  for (const [dependencyName, ownerFeatures] of expectedServicesCoreOwners) {
+    const dependency = servicesCoreOptionalOwnerRule?.dependencies.find(
+      (candidate) => candidate.depName === dependencyName,
+    );
+    for (const featureName of ownerFeatures) {
+      if (!dependency?.ownerFeatures.includes(featureName)) {
+        throw new Error(`services-core ${featureName} must own optional dependency ${dependencyName}`);
+      }
     }
   }
   const servicesOptionalOwnerDeps = new Set(
@@ -3814,7 +3889,7 @@ export function runManifestParserSelfTest({
         'bitfun-product-capabilities = \\{ path = "\\.\\.\\/product-capabilities", default-features = false, optional = true \\}',
         'bitfun-ai-adapters = \\{ path = "\\.\\.\\/\\.\\.\\/adapters\\/ai-adapters", optional = true \\}',
         'bitfun-tool-packs = \\{ path = "\\.\\.\\/\\.\\.\\/execution\\/tool-provider-groups", default-features = false, optional = true \\}',
-        'bitfun-services-integrations = \\{ path = "\\.\\.\\/\\.\\.\\/services\\/services-integrations", default-features = false, features = \\["remote-ssh"\\] \\}',
+        'bitfun-services-integrations = \\{ path = "\\.\\.\\/\\.\\.\\/services\\/services-integrations", default-features = false, optional = true \\}',
         'bitfun-product-domains = \\{ path = "\\.\\.\\/\\.\\.\\/contracts\\/product-domains", default-features = false, optional = true \\}',
         'dep:bitfun-ai-adapters',
         'ai-adapter-runtime',
@@ -4181,7 +4256,7 @@ export function runManifestParserSelfTest({
       contracts: ['RemoteTerminalManager', 'PtyCommand', 'channel.window_change'],
     },
     {
-      path: 'src/crates/services/services-integrations/src/remote_ssh/paths.rs',
+      path: 'src/crates/services/services-core/src/workspace_identity.rs',
       contracts: [
         'WorkspaceSessionIdentity',
         'workspace_session_identity',

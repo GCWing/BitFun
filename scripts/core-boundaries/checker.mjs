@@ -632,7 +632,10 @@ function checkClosedFeatureProfile(rule) {
   }
 
   const allowedLocalFeatures = new Set(
-    rule.requiredFeatureRefs.filter((reference) => features.has(reference)),
+    [
+      ...rule.requiredFeatureRefs,
+      ...(rule.allowedTransitiveFeatureRefs ?? []),
+    ].filter((reference) => features.has(reference)),
   );
   for (const unexpected of unexpectedReachableLocalFeatures(
     features,

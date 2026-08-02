@@ -35,5 +35,7 @@ pub mod system;
 pub mod token_usage;
 #[cfg(feature = "workspace-runtime")]
 pub mod workspace;
+#[cfg(feature = "workspace-identity")]
+pub mod workspace_identity;
 pub mod workspace_instructions;
 pub mod workspace_text;

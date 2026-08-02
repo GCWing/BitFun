@@ -18,6 +18,7 @@ fn map_filesystem_error(error: impl std::fmt::Display) -> BitFunError {
     BitFunError::service(error.to_string())
 }
 
+#[cfg(feature = "remote-workspace")]
 async fn read_remote_directory_contents(
     path: &str,
     preferred_remote_connection_id: Option<&str>,
@@ -28,8 +29,17 @@ async fn read_remote_directory_contents(
     )
     .await?;
 
-    let manager = crate::service::remote_ssh::workspace_state::get_remote_workspace_manager()?;
-    let file_service = manager.get_file_service().await?;
+    let Some(manager) = crate::service::remote_ssh::workspace_state::get_remote_workspace_manager()
+    else {
+        return Some(Err(BitFunError::service(
+            "Remote workspace manager is unavailable",
+        )));
+    };
+    let Some(file_service) = manager.get_file_service().await else {
+        return Some(Err(BitFunError::service(
+            "Remote file service is unavailable",
+        )));
+    };
 
     Some(
         match file_service.read_dir(&entry.connection_id, path).await {
@@ -51,6 +61,24 @@ async fn read_remote_directory_contents(
             ))),
         },
     )
+}
+
+#[cfg(not(feature = "remote-workspace"))]
+async fn read_remote_directory_contents(
+    _path: &str,
+    _preferred_remote_connection_id: Option<&str>,
+) -> Option<BitFunResult<Vec<FileTreeNode>>> {
+    None
+}
+
+#[cfg(feature = "remote-workspace")]
+async fn is_remote_path(path: &str) -> bool {
+    crate::service::remote_ssh::workspace_state::is_remote_path(path).await
+}
+
+#[cfg(not(feature = "remote-workspace"))]
+async fn is_remote_path(_path: &str) -> bool {
+    false
 }
 
 /// Unified file system service
@@ -84,7 +112,7 @@ impl FileSystemService {
         preferred_remote_connection_id: Option<&str>,
     ) -> BitFunResult<Vec<FileTreeNode>> {
         let started_at = std::time::Instant::now();
-        let tree = if crate::service::remote_ssh::workspace_state::is_remote_path(root_path).await {
+        let tree = if is_remote_path(root_path).await {
             self.get_directory_contents_with_remote_hint(root_path, preferred_remote_connection_id)
                 .await?
         } else {
@@ -112,30 +140,29 @@ impl FileSystemService {
     pub async fn scan_directory(&self, root_path: &str) -> BitFunResult<DirectoryScanResult> {
         let start_time = std::time::Instant::now();
 
-        let (files, statistics) =
-            if crate::service::remote_ssh::workspace_state::is_remote_path(root_path).await {
-                let nodes = self
-                    .get_directory_contents_with_remote_hint(root_path, None)
-                    .await?;
-                let stats = FileTreeStatistics {
-                    total_files: nodes.iter().filter(|node| !node.is_directory).count(),
-                    total_directories: nodes.iter().filter(|node| node.is_directory).count(),
-                    total_size_bytes: 0,
-                    max_depth_reached: 0,
-                    file_type_counts: HashMap::new(),
-                    large_files: Vec::new(),
-                    symlinks_count: 0,
-                    hidden_files_count: 0,
-                };
-                (nodes, stats)
-            } else {
-                let scan_result = self
-                    .inner
-                    .scan_directory(root_path)
-                    .await
-                    .map_err(map_filesystem_error)?;
-                (scan_result.files, scan_result.statistics)
+        let (files, statistics) = if is_remote_path(root_path).await {
+            let nodes = self
+                .get_directory_contents_with_remote_hint(root_path, None)
+                .await?;
+            let stats = FileTreeStatistics {
+                total_files: nodes.iter().filter(|node| !node.is_directory).count(),
+                total_directories: nodes.iter().filter(|node| node.is_directory).count(),
+                total_size_bytes: 0,
+                max_depth_reached: 0,
+                file_type_counts: HashMap::new(),
+                large_files: Vec::new(),
+                symlinks_count: 0,
+                hidden_files_count: 0,
             };
+            (nodes, stats)
+        } else {
+            let scan_result = self
+                .inner
+                .scan_directory(root_path)
+                .await
+                .map_err(map_filesystem_error)?;
+            (scan_result.files, scan_result.statistics)
+        };
 
         let scan_time_ms = elapsed_ms_u64(start_time);
 
@@ -453,5 +480,42 @@ impl FileSystemService {
 
     pub fn editor_sync_sha256_hex_from_raw_bytes(&self, bytes: &[u8]) -> String {
         self.inner.editor_sync_sha256_hex_from_raw_bytes(bytes)
+    }
+}
+
+#[cfg(all(test, feature = "remote-workspace", not(feature = "ssh-remote")))]
+mod tests {
+    use super::FileSystemService;
+    use crate::service::remote_ssh::workspace_state::init_remote_workspace_manager;
+
+    #[tokio::test]
+    async fn registered_remote_path_without_file_provider_fails_closed() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let remote_root = temp.path().to_string_lossy().to_string();
+        let connection_id = "filesystem-no-provider";
+        let manager = init_remote_workspace_manager();
+        manager
+            .register_remote_workspace(
+                remote_root.clone(),
+                connection_id.to_string(),
+                "No provider".to_string(),
+                "no-provider-host".to_string(),
+            )
+            .await;
+
+        let error = FileSystemService::default()
+            .get_directory_contents_with_remote_hint(&remote_root, Some(connection_id))
+            .await
+            .expect_err("registered remote paths must not fall back to the local filesystem");
+
+        manager
+            .unregister_remote_workspace(connection_id, &remote_root)
+            .await;
+        assert!(
+            error
+                .to_string()
+                .contains("Remote file service is unavailable"),
+            "unexpected error: {error}"
+        );
     }
 }

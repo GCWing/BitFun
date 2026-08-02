@@ -65,10 +65,9 @@ pub use util::errors::*;
 pub use util::types::*;
 
 // Export service layer components
-pub use service::{
-    config::{ConfigManager, ConfigService},
-    workspace::{WorkspaceManager, WorkspaceProvider, WorkspaceService},
-};
+pub use service::config::{ConfigManager, ConfigService};
+#[cfg(feature = "workspace-runtime")]
+pub use service::workspace::{WorkspaceManager, WorkspaceProvider, WorkspaceService};
 
 // Export infrastructure components
 #[cfg(feature = "ai-adapter-runtime")]
