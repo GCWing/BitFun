@@ -6,7 +6,9 @@ dispatch.
 ## Invariants
 
 1. A dispatch target is selected while creating a session and is immutable after
-   the first turn.
+   the first turn. The model and approval policy are not: protocol v4 carries
+   them per follow-up turn, and the target persists the effective values onto
+   the job.
 1a. A dispatch session accepts follow-up messages. While a turn runs, a message
    is an `append` that steers it; once it has finished, a message is a
    `dispatch_continue` that queues the next turn against the same target
@@ -67,10 +69,10 @@ dispatch.
    `dispatch_target_*` commands. They never attach Peer Device Mode and an
    offline or incompatible target never falls back to local execution. Device
    dispatch does not install software through the Relay.
-14. Approval policy is explicit per job: `auto`, `reject-and-report`, or
-   `remote`. `remote` projects pending requests into the normal permission
-   panel. The selected policy is visible in the normal session controls; submit
-   must not add a second confirmation dialog.
+14. Approval policy is explicit and editable between turns: `auto`,
+   `reject-and-report`, or `remote`. `remote` projects pending requests into
+   the normal permission panel. The selected policy is visible in the normal
+   session controls; submit must not add a second confirmation dialog.
 15. MiniApp and quick-input hosts do not expose the dispatch picker.
 16. Controller-side model settings never leak into an SSH dispatch. The submit
     omits `model` unless preflight recorded an explicit target model choice.
@@ -89,9 +91,10 @@ dispatch.
     `knownHead` unchanged, and can be repeated after the lock clears.
 19. Deleting or archiving a projection writes a local job tombstone so outbound
     reconciliation cannot silently reopen it.
-20. The observer ignores `SubagentSessionLinked`. Child observer ownership is not
-    implemented, so creating an unmarked child projection would violate the
-    observer-only persistence and cancellation boundary.
+20. Subagent sessions linked under a dispatch job flow through the event log
+    and render as child projections. Ownership is driver-resolved through the
+    parent chain: a child of a projection is itself observer-only (never
+    persisted locally, never driven as a local backend session).
 21. Cursor reads are multi-observer safe. Truncation and omitted events are
     visible completeness facts and must not be rendered as a full transcript.
 22. The observer continues bounded polling while the window is hidden so

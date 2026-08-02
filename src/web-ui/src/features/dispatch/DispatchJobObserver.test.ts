@@ -387,7 +387,9 @@ describe('DispatchJobObserver', () => {
     });
   });
 
-  it('ignores subagent links until child dispatch projections have an owner', () => {
+  it('projects subagent links so child sessions render under the projection', () => {
+    // Child ownership is driver-resolved through the parent chain, so the
+    // link event flows into the normal pipeline like any other event.
     expect(projectDispatchAgentEvent({
       type: 'agentEvent',
       timestamp: '2026-07-28T00:00:00Z',
@@ -404,7 +406,10 @@ describe('DispatchJobObserver', () => {
           child_session_id: 'child-1',
         },
       },
-    })).toBeNull();
+    })).toMatchObject({
+      eventName: 'agentic://subagent-session-linked',
+      envelopeId: 'event-child',
+    });
   });
 
   it('keeps the cursor until an event applies, then deduplicates it on replay', async () => {

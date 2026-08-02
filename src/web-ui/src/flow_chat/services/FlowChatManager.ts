@@ -60,6 +60,7 @@ import { ensureBackendSession } from './flow-chat-manager/SessionModule';
 import { installPeerSessionRefresh } from './flow-chat-manager/PeerSessionRefreshModule';
 import { installDispatchJobObserver } from '../session-drivers/dispatch/install';
 import { driverForSession } from '../session-drivers/registry';
+import { registerDriverSessionLookup } from '../session-drivers/resolve';
 
 const log = createLogger('FlowChatManager');
 
@@ -101,6 +102,9 @@ export class FlowChatManager {
     };
     
     this.agentService = AgentService.getInstance();
+    registerDriverSessionLookup(
+      sessionId => this.context.flowChatStore.getState().sessions.get(sessionId),
+    );
     installPendingQueueDrainListener(this.context);
     this.peerSessionRefreshCleanup = installPeerSessionRefresh(this.context);
     this.dispatchJobObserverCleanup = installDispatchJobObserver(this.context);

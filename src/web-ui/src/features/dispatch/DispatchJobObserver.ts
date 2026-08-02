@@ -68,8 +68,10 @@ const RAW_EVENT_NAMES: Record<string, string> = {
   ImageAnalysisStarted: 'agentic://image-analysis-started',
   ImageAnalysisCompleted: 'agentic://image-analysis-completed',
   DialogTurnStarted: 'agentic://dialog-turn-started',
-  // Detached dispatch has no child-observer ownership. Ignoring this link prevents an
-  // unmarked child projection from being mistaken for a local session.
+  // v4: the target admits linked subagent sessions into the job event log,
+  // and the driver resolver treats child sessions of a projection as
+  // observer-only through the parent chain.
+  SubagentSessionLinked: 'agentic://subagent-session-linked',
   ModelRoundStarted: 'agentic://model-round-started',
   ModelRoundCompleted: 'agentic://model-round-completed',
   ModelRoundAttemptSuperseded: 'agentic://model-round-attempt-superseded',
@@ -124,9 +126,6 @@ export function projectDispatchAgentEvent(
     || (envelope?.frontendPayload && typeof envelope.frontendPayload === 'object'
       ? envelope.frontendPayload
       : undefined);
-  if (projectedName === 'agentic://subagent-session-linked') {
-    return null;
-  }
   if (projectedName && projectedPayload) {
     return {
       eventName: projectedName,

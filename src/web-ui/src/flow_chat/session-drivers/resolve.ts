@@ -19,11 +19,28 @@ export type SessionDriverId = 'local' | 'dispatch';
  * store modules and tests can pass lightweight objects.
  */
 export interface DriverResolvableSession {
+  /** Child sessions (subagents, /btw) inherit the driver of their parent. */
+  parentSessionId?: string;
   config?: {
     dispatchTarget?: DispatchTarget;
     dispatchJobId?: string;
   };
 }
+
+type SessionLookup = (sessionId: string) => DriverResolvableSession | undefined;
+
+let parentSessionLookup: SessionLookup | null = null;
+
+/**
+ * Register how the resolver walks a session's parent chain. Installed once by
+ * FlowChatManager; kept as an injected function because the store module
+ * itself depends on this resolver.
+ */
+export function registerDriverSessionLookup(lookup: SessionLookup): void {
+  parentSessionLookup = lookup;
+}
+
+const MAX_PARENT_CHAIN_DEPTH = 4;
 
 /**
  * Three-signal core. All three are required because each covers a window the
@@ -41,6 +58,7 @@ export function resolveSessionDriverIdWith(
   sessionId: string,
   session: DriverResolvableSession | undefined,
   isDispatchObservedSession: (sessionId: string) => boolean,
+  lookupSession: SessionLookup | null = parentSessionLookup,
 ): SessionDriverId {
   if (isNonLocalDispatchTarget(session?.config?.dispatchTarget)) {
     return 'dispatch';
@@ -50,6 +68,27 @@ export function resolveSessionDriverIdWith(
   }
   if (isDispatchObservedSession(sessionId)) {
     return 'dispatch';
+  }
+  // Fourth signal: a child session (subagent projection) inherits the driver
+  // of its parent chain — it has no dispatch config of its own, but its
+  // events come from the target and it must never be persisted or driven as
+  // a local backend session.
+  let parentId = session?.parentSessionId?.trim();
+  for (let depth = 0; parentId && lookupSession && depth < MAX_PARENT_CHAIN_DEPTH; depth += 1) {
+    if (isDispatchObservedSession(parentId)) {
+      return 'dispatch';
+    }
+    const parent = lookupSession(parentId);
+    if (!parent) {
+      break;
+    }
+    if (
+      isNonLocalDispatchTarget(parent.config?.dispatchTarget)
+      || parent.config?.dispatchJobId?.trim()
+    ) {
+      return 'dispatch';
+    }
+    parentId = parent.parentSessionId?.trim();
   }
   return 'local';
 }

@@ -102,6 +102,37 @@ describe('resolveSessionDriverId (dispatchJobStore integration)', () => {
   });
 });
 
+describe('parent-chain inheritance', () => {
+  it('treats a child of a dispatch projection as dispatch-driven', () => {
+    const parent = {
+      config: {
+        dispatchTarget: {
+          kind: 'ssh' as const,
+          connectionId: 'ssh-user@host',
+          workspacePath: '/repo',
+          displayName: 'host',
+        },
+      },
+    };
+    const child = { parentSessionId: 'parent-1', config: {} };
+    const grandchild = { parentSessionId: 'child-1', config: {} };
+    const sessions = new Map<string, typeof child | typeof parent>([
+      ['parent-1', parent],
+      ['child-1', child],
+    ]);
+    const lookup = (id: string) => sessions.get(id);
+
+    expect(resolveSessionDriverIdWith('child-1', child, never, lookup)).toBe('dispatch');
+    expect(resolveSessionDriverIdWith('grandchild-1', grandchild, never, lookup)).toBe('dispatch');
+    // A child of a local parent stays local.
+    const localChild = { parentSessionId: 'local-parent', config: {} };
+    const localSessions = new Map([['local-parent', { config: {} }]]);
+    expect(
+      resolveSessionDriverIdWith('c', localChild, never, id => localSessions.get(id)),
+    ).toBe('local');
+  });
+});
+
 describe('resolveSessionDriverIdForCreation', () => {
   it('keys off the requested dispatch target', () => {
     expect(resolveSessionDriverIdForCreation({})).toBe('local');
