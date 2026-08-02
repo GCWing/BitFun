@@ -62,6 +62,10 @@ function sessionLifecycle(session: Session): SessionLineageLifecycle {
   }
 }
 
+function isActiveSessionLineageLifecycle(lifecycle: SessionLineageLifecycle): boolean {
+  return lifecycle === 'running' || lifecycle === 'finishing';
+}
+
 function nodeFromMetadata(metadata: SessionMetadata): FlatSessionLineageNode {
   const relationship = deriveSessionRelationshipFromMetadata(metadata);
   return {
@@ -137,7 +141,14 @@ export function buildSessionLineageTree(
       session.sessionKind === 'subagent' ||
       nodes.has(session.sessionId)
     ) {
-      nodes.set(session.sessionId, nodeFromSession(session));
+      const liveNode = nodeFromSession(session);
+      const persistedNode = nodes.get(session.sessionId);
+      // Opened subagent shells can expose a generic title; persisted metadata remains
+      // the display-title authority while live fields provide current runtime state.
+      if (persistedNode?.title.trim()) {
+        liveNode.title = persistedNode.title;
+      }
+      nodes.set(session.sessionId, liveNode);
     }
   }
 
@@ -173,6 +184,29 @@ export function buildSessionLineageTree(
   };
 
   return buildNode(rootSessionId);
+}
+
+export function hasActiveSessionLineageDescendants(
+  rootSessionId: string | undefined,
+  liveSessions: Map<string, Session>,
+): boolean {
+  if (!rootSessionId) return false;
+
+  for (const session of liveSessions.values()) {
+    if (session.sessionId === rootSessionId || !isActiveSessionLineageLifecycle(sessionLifecycle(session))) {
+      continue;
+    }
+
+    const visited = new Set<string>();
+    let currentSessionId: string | undefined = session.sessionId;
+    while (currentSessionId && !visited.has(currentSessionId)) {
+      if (currentSessionId === rootSessionId) return true;
+      visited.add(currentSessionId);
+      currentSessionId = liveSessions.get(currentSessionId)?.parentSessionId;
+    }
+  }
+
+  return false;
 }
 
 export function countSessionLineageDescendants(root: SessionLineageNode | null): number {

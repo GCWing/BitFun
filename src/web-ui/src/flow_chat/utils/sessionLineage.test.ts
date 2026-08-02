@@ -6,6 +6,7 @@ import {
   buildSessionLineageTree,
   collectExpandedRunningBranches,
   countSessionLineageDescendants,
+  hasActiveSessionLineageDescendants,
 } from './sessionLineage';
 
 function metadata(
@@ -92,5 +93,55 @@ describe('sessionLineage', () => {
     expect([...collectExpandedRunningBranches(tree)]).toEqual(
       expect.arrayContaining(['root', 'child']),
     );
+  });
+
+  it('keeps the persisted title when a live child session has a placeholder title', () => {
+    const snapshot: SessionLineageSnapshot = {
+      rootSessionId: 'root',
+      sessions: [
+        metadata('root'),
+        {
+          ...metadata('child', 'root', 2),
+          sessionName: 'Review authentication boundary',
+        },
+      ],
+    };
+    const live = liveSession('child', 'root');
+    live.title = 'Child session';
+
+    const tree = buildSessionLineageTree(
+      'root',
+      snapshot,
+      new Map([[live.sessionId, live]]),
+    );
+
+    expect(tree?.children[0]).toMatchObject({
+      sessionId: 'child',
+      title: 'Review authentication boundary',
+      lifecycle: 'running',
+    });
+  });
+
+  it('detects active foreground descendants through the live session hierarchy', () => {
+    const completedChild = liveSession('child', 'root');
+    completedChild.dialogTurns[0].status = 'completed';
+    const runningGrandchild = liveSession('grandchild', 'child');
+
+    expect(hasActiveSessionLineageDescendants(
+      'root',
+      new Map([
+        [completedChild.sessionId, completedChild],
+        [runningGrandchild.sessionId, runningGrandchild],
+      ]),
+    )).toBe(true);
+
+    runningGrandchild.dialogTurns[0].status = 'completed';
+    expect(hasActiveSessionLineageDescendants(
+      'root',
+      new Map([
+        [completedChild.sessionId, completedChild],
+        [runningGrandchild.sessionId, runningGrandchild],
+      ]),
+    )).toBe(false);
   });
 });

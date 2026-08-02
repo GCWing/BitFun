@@ -12,6 +12,34 @@
     &--active {
       background: color-mix(in srgb, var(--element-bg-soft) 82%, transparent);
     }
+
+    &--has-activity {
+      color: color-mix(in srgb, var(--color-success) 86%, var(--color-text-primary));
+
+      &:not(:disabled):hover,
+      &.session-tree-popover__trigger--active {
+        color: var(--color-success);
+        background: color-mix(in srgb, var(--color-success) 12%, transparent);
+      }
+    }
+  }
+
+  &__trigger-inner {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  &__status-dot {
+    position: absolute;
+    right: -2px;
+    bottom: -1px;
+    width: 4px;
+    height: 4px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--color-success) 92%, white 8%);
+    box-shadow: 0 0 0 1px var(--color-bg-elevated);
   }
 
   &__panel {
@@ -64,6 +92,10 @@
     &--root {
       font-weight: 500;
     }
+
+    &--cancelling {
+      opacity: 0.72;
+    }
   }
 
   &__expand,
@@ -105,6 +137,87 @@
     > svg {
       flex: 0 0 auto;
       color: var(--color-text-secondary);
+    }
+  }
+
+  &__node-actions {
+    flex: 0 0 auto;
+    margin-right: 2px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity $motion-base $easing-standard;
+  }
+
+  &__node:hover &__node-actions,
+  &__node:focus-within &__node-actions {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  &__action-menu-button {
+    flex: 0 0 auto;
+    color: var(--color-text-secondary);
+
+    &:not(:disabled):hover {
+      color: var(--color-text-primary);
+      background: color-mix(in srgb, var(--element-bg-soft) 88%, transparent);
+    }
+  }
+
+  &__action-menu {
+    position: fixed;
+    top: auto;
+    right: auto;
+    width: max-content;
+    min-width: 0;
+    max-width: min(200px, calc(100vw - 48px));
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 4px;
+    border: 1px solid var(--border-base);
+    border-radius: $size-radius-base;
+    background: color-mix(in srgb, var(--color-bg-elevated) 98%, transparent);
+    box-shadow: var(--shadow-base);
+    z-index: 10000;
+  }
+
+  &__action-menu-item {
+    display: flex;
+    align-items: center;
+    gap: $size-gap-2;
+    width: 100%;
+    padding: 6px 8px;
+    border: 0;
+    border-radius: calc($size-radius-base - 2px);
+    background: transparent;
+    color: var(--color-text-primary);
+    font-size: var(--flowchat-font-size-xs);
+    text-align: left;
+    white-space: nowrap;
+    cursor: pointer;
+
+    svg {
+      flex: 0 0 auto;
+      color: var(--color-text-secondary);
+    }
+
+    &:hover:not(:disabled) {
+      background: color-mix(in srgb, var(--element-bg-soft) 88%, transparent);
+    }
+
+    &:disabled {
+      opacity: 0.45;
+      cursor: default;
+    }
+
+    &--danger:hover:not(:disabled) {
+      color: var(--color-error);
+      background: color-mix(in srgb, var(--color-error) 12%, transparent);
+
+      svg {
+        color: var(--color-error);
+      }
     }
   }
 

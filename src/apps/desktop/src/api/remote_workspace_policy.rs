@@ -2258,7 +2258,6 @@ mod tests {
         "get_runtime_capabilities",
         "get_runtime_logging_info",
         "get_session_file_diff_stats",
-        "get_session_lineage",
         "get_session_files",
         "get_session_operations",
         "get_session_stats",

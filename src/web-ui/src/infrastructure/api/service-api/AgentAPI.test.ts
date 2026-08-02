@@ -105,6 +105,22 @@ describe('AgentAPI', () => {
     });
   });
 
+  it('can cancel a session without cancelling its descendants', async () => {
+    invokeMock.mockResolvedValueOnce({
+      cancelled: true,
+      dialogTurnId: 'turn-parent',
+    });
+
+    await agentAPI.cancelSession('parent-session', { cancelDescendants: false });
+
+    expect(invokeMock).toHaveBeenCalledWith('cancel_session', {
+      request: {
+        sessionId: 'parent-session',
+        cancelDescendants: false,
+      },
+    });
+  });
+
   it('sends subagent timeout extensions with seconds in the action payload', async () => {
     await agentAPI.setSubagentTimeout('subagent-session', { type: 'extend', seconds: 300 });
 

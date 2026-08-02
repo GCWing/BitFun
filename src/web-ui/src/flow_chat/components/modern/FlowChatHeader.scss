@@ -55,13 +55,13 @@
     }
   }
 
-  &__background-activity-nav {
+  &__background-command-nav {
     position: relative;
     display: flex;
     align-items: center;
   }
 
-  &__background-activity-nav-button {
+  &__background-command-nav-button {
     flex: 0 0 auto;
 
     &:not(:disabled):hover,
@@ -69,25 +69,25 @@
       background: color-mix(in srgb, var(--element-bg-soft) 82%, transparent);
     }
 
-    &--has-activity {
+    &--has-commands {
       color: color-mix(in srgb, var(--color-success) 86%, var(--color-text-primary));
 
       &:not(:disabled):hover,
-      &.flowchat-header__background-activity-nav-button--active {
+      &.flowchat-header__background-command-nav-button--active {
         color: var(--color-success);
         background: color-mix(in srgb, var(--color-success) 12%, transparent);
       }
     }
   }
 
-  &__background-activity-nav-button-inner {
+  &__background-command-nav-button-inner {
     position: relative;
     display: inline-flex;
     align-items: center;
     justify-content: center;
   }
 
-  &__background-activity-status-dot {
+  &__background-command-status-dot {
     position: absolute;
     right: -2px;
     bottom: -1px;
@@ -98,10 +98,10 @@
     box-shadow:
       0 0 0 1px var(--color-bg-elevated),
       0 0 0 0 color-mix(in srgb, var(--color-success) 42%, transparent);
-    animation: flowchat-header-background-activity-pulse 1.45s ease-out infinite;
+    animation: flowchat-header-background-command-pulse 1.45s ease-out infinite;
   }
 
-  @keyframes flowchat-header-background-activity-pulse {
+  @keyframes flowchat-header-background-command-pulse {
     0%,
     100% {
       transform: scale(1);
@@ -121,7 +121,7 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
-    &__background-activity-status-dot {
+    &__background-command-status-dot {
       animation: none;
     }
   }
@@ -224,7 +224,7 @@
     }
   }
 
-  &__background-activity-panel {
+  &__background-command-panel {
     position: absolute;
     top: calc(100% + 8px);
     right: 0;
@@ -242,7 +242,7 @@
     z-index: 30;
   }
 
-  &__background-activity-panel-header {
+  &__background-command-panel-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -253,7 +253,14 @@
     color: var(--color-text-secondary);
   }
 
-  &__background-activity-list {
+  &__background-command-panel-header-actions {
+    display: flex;
+    align-items: center;
+    gap: $size-gap-1;
+    flex: 0 0 auto;
+  }
+
+  &__background-command-list {
     display: flex;
     flex-direction: column;
     overflow-y: auto;
@@ -262,60 +269,7 @@
     scrollbar-gutter: stable;
   }
 
-  &__background-section {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-
-    & + & {
-      margin-top: $size-gap-1;
-      padding-top: $size-gap-1;
-      border-top: 1px solid var(--border-base);
-    }
-  }
-
-  &__background-section-title {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: $size-gap-1;
-    padding: 2px 2px 2px $size-gap-2;
-      color: var(--color-text-muted);
-    font-size: var(--flowchat-font-size-xs);
-  }
-
-  &__background-section-title-label {
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  &__background-section-actions {
-    position: relative;
-    flex: 0 0 auto;
-  }
-
-  &__background-section-action {
-    flex: 0 0 auto;
-    color: var(--color-text-secondary);
-
-    &:not(:disabled):hover {
-      color: var(--color-text-primary);
-      background: color-mix(in srgb, var(--element-bg-soft) 88%, transparent);
-    }
-
-    &--danger:not(:disabled):hover {
-      color: var(--color-error);
-      background: color-mix(in srgb, var(--color-error) 12%, transparent);
-
-      svg {
-        color: var(--color-error);
-      }
-    }
-  }
-
-  &__background-activity-list-item {
+  &__background-command-list-item-button {
     display: flex;
     flex-direction: column;
     align-items: flex-start;
@@ -348,7 +302,7 @@
     }
   }
 
-  &__background-command-list-item &__background-activity-list-item {
+  &__background-command-list-item &__background-command-list-item-button {
     &:hover {
       background: transparent;
     }
@@ -454,7 +408,7 @@
     }
   }
 
-  &__background-activity-list-title {
+  &__background-command-list-title {
     display: flex;
     align-items: center;
     gap: $size-gap-1;
@@ -478,7 +432,7 @@
     }
   }
 
-  &__background-activity-list-meta {
+  &__background-command-list-meta {
     width: 100%;
     font-size: var(--flowchat-font-size-xs);
     color: var(--color-text-secondary);

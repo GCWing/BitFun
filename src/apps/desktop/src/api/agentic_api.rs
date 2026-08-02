@@ -736,6 +736,13 @@ impl From<ControlDeepReviewQueueActionDTO> for DeepReviewQueueControlAction {
 #[serde(rename_all = "camelCase")]
 pub struct CancelSessionRequest {
     pub session_id: String,
+    /// Tree cancellation opts out so a parent session does not stop its children.
+    #[serde(default = "default_cancel_descendants")]
+    pub cancel_descendants: bool,
+}
+
+fn default_cancel_descendants() -> bool {
+    true
 }
 
 fn sanitize_create_session_review_metadata(request: &mut CreateSessionRequest) {
@@ -2595,7 +2602,11 @@ pub async fn cancel_session(
     request: CancelSessionRequest,
 ) -> Result<CancelSessionResponse, String> {
     let dialog_turn_id = coordinator
-        .cancel_active_turn_for_session(&request.session_id, std::time::Duration::from_secs(5))
+        .cancel_active_turn_for_session_with_descendant_policy(
+            &request.session_id,
+            std::time::Duration::from_secs(5),
+            request.cancel_descendants,
+        )
         .await
         .map_err(|e| {
             log::error!(

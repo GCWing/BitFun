@@ -6,7 +6,7 @@
 
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { Activity, Bot, ChevronDown, ChevronUp, GitPullRequest, Keyboard, MoreHorizontal, Search, Square, Terminal, X } from 'lucide-react';
+import { ChevronDown, ChevronUp, GitPullRequest, Keyboard, MoreHorizontal, Search, Square, SquareTerminal, Terminal, X } from 'lucide-react';
 import { Tooltip, IconButton, Input } from '@/component-library';
 import { useTranslation } from 'react-i18next';
 import { SessionFilesBadge } from './SessionFilesBadge';
@@ -15,14 +15,6 @@ import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext'
 import { computeFixedPopoverPosition } from '@/shared/utils/fixedPopoverViewport';
 import { createReviewPlatformTab } from '@/shared/utils/tabUtils';
 import './FlowChatHeader.scss';
-
-export interface FlowChatHeaderSubagentSummary {
-  sessionId: string;
-  title: string;
-  agentType?: string;
-  status: 'processing' | 'finishing';
-  isStopping?: boolean;
-}
 
 export interface FlowChatHeaderCommandSummary {
   execSessionKey: string;
@@ -66,18 +58,14 @@ export interface FlowChatHeaderProps {
   onSearchClose?: () => void;
   /** Increments each time the parent requests to open the search bar. */
   searchOpenRequest?: number;
-  /** Running background subagents launched by the active parent session. */
-  backgroundSubagents?: FlowChatHeaderSubagentSummary[];
   /** Open a Session from the active Agent tree. */
   onOpenSessionTreeSession?: (selection: SessionTreeSelection) => void;
+  /** Whether the active Agent tree contains running descendants. */
+  hasActiveSessionTreeDescendants?: boolean;
+  /** Cancel one running session from the active Agent tree without cancelling descendants. */
+  onCancelSessionTreeSession?: (selection: SessionTreeSelection) => Promise<boolean>;
   /** Long-running background commands launched by the active parent session. */
   backgroundCommands?: FlowChatHeaderCommandSummary[];
-  /** Open a background subagent in the right-side panel. */
-  onOpenBackgroundSubagent?: (sessionId: string) => void;
-  /** Stop a running background subagent. */
-  onStopBackgroundSubagent?: (subagent: FlowChatHeaderSubagentSummary) => void;
-  /** Stop all running background subagents. */
-  onStopAllBackgroundSubagents?: () => void;
   /** Open a read-only output panel for a background command. */
   onOpenBackgroundCommandOutput?: (command: FlowChatHeaderCommandSummary) => void;
   /** Request user-provided stdin for an interactive background command. */
@@ -102,12 +90,10 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
   onSearchPrev,
   onSearchClose,
   searchOpenRequest = 0,
-  backgroundSubagents = [],
   onOpenSessionTreeSession,
+  hasActiveSessionTreeDescendants = false,
+  onCancelSessionTreeSession,
   backgroundCommands = [],
-  onOpenBackgroundSubagent,
-  onStopBackgroundSubagent,
-  onStopAllBackgroundSubagents,
   onOpenBackgroundCommandOutput,
   onRequestBackgroundCommandInput,
   onStopBackgroundCommand,
@@ -115,19 +101,18 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
 }) => {
   const { t } = useTranslation('flow-chat');
   const { currentWorkspace } = useWorkspaceContext();
-  const [isBackgroundActivityPanelOpen, setIsBackgroundActivityPanelOpen] = useState(false);
-  const [openBackgroundSectionMenuId, setOpenBackgroundSectionMenuId] = useState<'subagents' | 'commands' | null>(null);
-  const [openBackgroundSubagentMenuId, setOpenBackgroundSubagentMenuId] = useState<string | null>(null);
+  const [isBackgroundCommandPanelOpen, setIsBackgroundCommandPanelOpen] = useState(false);
+  const [isBackgroundCommandSectionMenuOpen, setIsBackgroundCommandSectionMenuOpen] = useState(false);
   const [openBackgroundCommandMenuId, setOpenBackgroundCommandMenuId] = useState<string | null>(null);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const headerRef = useRef<HTMLDivElement | null>(null);
   const leftActionsRef = useRef<HTMLDivElement | null>(null);
   const rightActionsRef = useRef<HTMLDivElement | null>(null);
-  const backgroundActivityPanelRef = useRef<HTMLDivElement | null>(null);
-  const backgroundActivityMenuAnchorRef = useRef<HTMLButtonElement | null>(null);
-  const backgroundActivityMenuRef = useRef<HTMLDivElement | null>(null);
+  const backgroundCommandPanelRef = useRef<HTMLDivElement | null>(null);
+  const backgroundCommandMenuAnchorRef = useRef<HTMLButtonElement | null>(null);
+  const backgroundCommandMenuRef = useRef<HTMLDivElement | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
-  const [backgroundActivityMenuPosition, setBackgroundActivityMenuPosition] = useState<{
+  const [backgroundCommandMenuPosition, setBackgroundCommandMenuPosition] = useState<{
     top: number;
     left: number;
   } | null>(null);
@@ -139,16 +124,8 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
   const turnBadgeLabel = t('flowChatHeader.turnBadge', {
     current: currentTurn
   });
-  const hasBackgroundSubagents = backgroundSubagents.length > 0;
   const hasBackgroundCommands = backgroundCommands.length > 0;
-  const hasBackgroundActivities = hasBackgroundSubagents || hasBackgroundCommands;
-  const backgroundActivityCount = backgroundSubagents.length + backgroundCommands.length;
-  const displayBackgroundSubagents = useMemo(() => (
-    backgroundSubagents.map((subagent) => ({
-      ...subagent,
-      title: subagent.title.trim() || t('flowChatHeader.backgroundSubagentUntitled'),
-    }))
-  ), [backgroundSubagents, t]);
+  const backgroundCommandCount = backgroundCommands.length;
   const displayBackgroundCommands = useMemo(() => (
     backgroundCommands.map((command) => ({
       ...command,
@@ -156,16 +133,15 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
     }))
   ), [backgroundCommands, t]);
   const hasNoResults = searchQuery.trim().length > 0 && searchMatchCount === 0;
-  const hasOpenBackgroundActivityMenu =
-    openBackgroundSectionMenuId !== null ||
-    openBackgroundSubagentMenuId !== null ||
+  const hasOpenBackgroundCommandMenu =
+    isBackgroundCommandSectionMenuOpen ||
     openBackgroundCommandMenuId !== null;
 
-  const updateBackgroundActivityMenuPosition = useCallback(() => {
-    const anchor = backgroundActivityMenuAnchorRef.current;
+  const updateBackgroundCommandMenuPosition = useCallback(() => {
+    const anchor = backgroundCommandMenuAnchorRef.current;
     if (!anchor) return;
 
-    const menu = backgroundActivityMenuRef.current;
+    const menu = backgroundCommandMenuRef.current;
     const { top, left } = computeFixedPopoverPosition(
       anchor.getBoundingClientRect(),
       menu?.offsetWidth ?? 200,
@@ -173,35 +149,33 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
       4,
       8,
     );
-    setBackgroundActivityMenuPosition({ top, left });
+    setBackgroundCommandMenuPosition({ top, left });
   }, []);
 
-  const prepareBackgroundActivityMenu = useCallback((anchor: HTMLButtonElement) => {
-    backgroundActivityMenuAnchorRef.current = anchor;
-    updateBackgroundActivityMenuPosition();
-  }, [updateBackgroundActivityMenuPosition]);
+  const prepareBackgroundCommandMenu = useCallback((anchor: HTMLButtonElement) => {
+    backgroundCommandMenuAnchorRef.current = anchor;
+    updateBackgroundCommandMenuPosition();
+  }, [updateBackgroundCommandMenuPosition]);
 
   useEffect(() => {
-    if (!isBackgroundActivityPanelOpen) return;
+    if (!isBackgroundCommandPanelOpen) return;
 
     const handlePointerDown = (event: MouseEvent) => {
       const target = event.target as Node;
       if (
-        !backgroundActivityPanelRef.current?.contains(target) &&
-        !backgroundActivityMenuRef.current?.contains(target)
+        !backgroundCommandPanelRef.current?.contains(target) &&
+        !backgroundCommandMenuRef.current?.contains(target)
       ) {
-        setIsBackgroundActivityPanelOpen(false);
-        setOpenBackgroundSectionMenuId(null);
-        setOpenBackgroundSubagentMenuId(null);
+        setIsBackgroundCommandPanelOpen(false);
+        setIsBackgroundCommandSectionMenuOpen(false);
         setOpenBackgroundCommandMenuId(null);
       }
     };
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
-        setIsBackgroundActivityPanelOpen(false);
-        setOpenBackgroundSectionMenuId(null);
-        setOpenBackgroundSubagentMenuId(null);
+        setIsBackgroundCommandPanelOpen(false);
+        setIsBackgroundCommandSectionMenuOpen(false);
         setOpenBackgroundCommandMenuId(null);
       }
     };
@@ -213,28 +187,27 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
       document.removeEventListener('mousedown', handlePointerDown);
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [isBackgroundActivityPanelOpen]);
+  }, [isBackgroundCommandPanelOpen]);
 
   useLayoutEffect(() => {
-    if (!hasOpenBackgroundActivityMenu) {
-      setBackgroundActivityMenuPosition(null);
+    if (!hasOpenBackgroundCommandMenu) {
+      setBackgroundCommandMenuPosition(null);
       return;
     }
 
-    updateBackgroundActivityMenuPosition();
-    window.addEventListener('resize', updateBackgroundActivityMenuPosition);
-    window.addEventListener('scroll', updateBackgroundActivityMenuPosition, true);
+    updateBackgroundCommandMenuPosition();
+    window.addEventListener('resize', updateBackgroundCommandMenuPosition);
+    window.addEventListener('scroll', updateBackgroundCommandMenuPosition, true);
 
     return () => {
-      window.removeEventListener('resize', updateBackgroundActivityMenuPosition);
-      window.removeEventListener('scroll', updateBackgroundActivityMenuPosition, true);
+      window.removeEventListener('resize', updateBackgroundCommandMenuPosition);
+      window.removeEventListener('scroll', updateBackgroundCommandMenuPosition, true);
     };
   }, [
-    hasOpenBackgroundActivityMenu,
+    hasOpenBackgroundCommandMenu,
+    isBackgroundCommandSectionMenuOpen,
     openBackgroundCommandMenuId,
-    openBackgroundSectionMenuId,
-    openBackgroundSubagentMenuId,
-    updateBackgroundActivityMenuPosition,
+    updateBackgroundCommandMenuPosition,
   ]);
 
   const prevSearchOpenRequestRef = useRef(0);
@@ -246,10 +219,13 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
   }, [searchOpenRequest]);
 
   useEffect(() => {
-    if (!hasBackgroundActivities) {
-      setIsBackgroundActivityPanelOpen(false);
+    if (!hasBackgroundCommands) {
+      setIsBackgroundCommandPanelOpen(false);
+      setIsBackgroundCommandSectionMenuOpen(false);
+      setOpenBackgroundCommandMenuId(null);
+      setBackgroundCommandMenuPosition(null);
     }
-  }, [hasBackgroundActivities]);
+  }, [hasBackgroundCommands]);
 
   useEffect(() => {
     if (!isSearchOpen) return;
@@ -321,86 +297,32 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
     [handleCloseSearch, onSearchNext, onSearchPrev],
   );
 
-  const handleToggleBackgroundActivityPanel = () => {
-    if (!hasBackgroundActivities) return;
-    setOpenBackgroundSectionMenuId(null);
-    setOpenBackgroundSubagentMenuId(null);
+  const handleToggleBackgroundCommandPanel = () => {
+    if (!hasBackgroundCommands) return;
+    setIsBackgroundCommandSectionMenuOpen(false);
     setOpenBackgroundCommandMenuId(null);
-    setIsBackgroundActivityPanelOpen(prev => !prev);
+    setIsBackgroundCommandPanelOpen(prev => !prev);
   };
 
   const handleOpenPullRequests = useCallback(() => {
     createReviewPlatformTab(currentWorkspace?.rootPath);
   }, [currentWorkspace?.rootPath]);
 
-  const handleSubagentSelect = (sessionId: string) => {
-    onOpenBackgroundSubagent?.(sessionId);
-    setIsBackgroundActivityPanelOpen(false);
-  };
-
-  const handleSubagentMenuToggle = (
-    event: React.MouseEvent<HTMLButtonElement>,
-    subagent: FlowChatHeaderSubagentSummary,
-  ) => {
-    event.preventDefault();
-    event.stopPropagation();
-    if (openBackgroundSubagentMenuId === subagent.sessionId) {
-      setBackgroundActivityMenuPosition(null);
-    } else {
-      prepareBackgroundActivityMenu(event.currentTarget);
-    }
-    setOpenBackgroundSectionMenuId(null);
-    setOpenBackgroundCommandMenuId(null);
-    setOpenBackgroundSubagentMenuId(previous => previous === subagent.sessionId ? null : subagent.sessionId);
-  };
-
-  const handleSubagentStop = (
-    event: React.MouseEvent<HTMLButtonElement>,
-    subagent: FlowChatHeaderSubagentSummary,
-  ) => {
-    event.preventDefault();
-    event.stopPropagation();
-    onStopBackgroundSubagent?.(subagent);
-    setOpenBackgroundSubagentMenuId(null);
-  };
-
-  const handleStopAllSubagents = (event: React.MouseEvent<HTMLButtonElement>) => {
-    event.preventDefault();
-    event.stopPropagation();
-    onStopAllBackgroundSubagents?.();
-    setOpenBackgroundSectionMenuId(null);
-    setOpenBackgroundSubagentMenuId(null);
-  };
-
   const handleCommandSectionMenuToggle = (event: React.MouseEvent<HTMLButtonElement>) => {
     event.preventDefault();
     event.stopPropagation();
-    if (openBackgroundSectionMenuId === 'commands') {
-      setBackgroundActivityMenuPosition(null);
+    if (isBackgroundCommandSectionMenuOpen) {
+      setBackgroundCommandMenuPosition(null);
     } else {
-      prepareBackgroundActivityMenu(event.currentTarget);
+      prepareBackgroundCommandMenu(event.currentTarget);
     }
-    setOpenBackgroundSubagentMenuId(null);
     setOpenBackgroundCommandMenuId(null);
-    setOpenBackgroundSectionMenuId(previous => previous === 'commands' ? null : 'commands');
-  };
-
-  const handleSubagentSectionMenuToggle = (event: React.MouseEvent<HTMLButtonElement>) => {
-    event.preventDefault();
-    event.stopPropagation();
-    if (openBackgroundSectionMenuId === 'subagents') {
-      setBackgroundActivityMenuPosition(null);
-    } else {
-      prepareBackgroundActivityMenu(event.currentTarget);
-    }
-    setOpenBackgroundSubagentMenuId(null);
-    setOpenBackgroundCommandMenuId(null);
-    setOpenBackgroundSectionMenuId(previous => previous === 'subagents' ? null : 'subagents');
+    setIsBackgroundCommandSectionMenuOpen(open => !open);
   };
 
   const handleCommandSelect = (command: FlowChatHeaderCommandSummary) => {
     onOpenBackgroundCommandOutput?.(command);
-    setIsBackgroundActivityPanelOpen(false);
+    setIsBackgroundCommandPanelOpen(false);
   };
 
   const handleCommandMenuToggle = (
@@ -410,12 +332,11 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
     event.preventDefault();
     event.stopPropagation();
     if (openBackgroundCommandMenuId === command.execSessionKey) {
-      setBackgroundActivityMenuPosition(null);
+      setBackgroundCommandMenuPosition(null);
     } else {
-      prepareBackgroundActivityMenu(event.currentTarget);
+      prepareBackgroundCommandMenu(event.currentTarget);
     }
-    setOpenBackgroundSectionMenuId(null);
-    setOpenBackgroundSubagentMenuId(null);
+    setIsBackgroundCommandSectionMenuOpen(false);
     setOpenBackgroundCommandMenuId(previous => previous === command.execSessionKey ? null : command.execSessionKey);
   };
 
@@ -427,7 +348,7 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
     event.stopPropagation();
     onRequestBackgroundCommandInput?.(command);
     setOpenBackgroundCommandMenuId(null);
-    setIsBackgroundActivityPanelOpen(false);
+    setIsBackgroundCommandPanelOpen(false);
   };
 
   const handleCommandStop = (
@@ -444,56 +365,7 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
     event.preventDefault();
     event.stopPropagation();
     onStopAllBackgroundCommands?.();
-    setOpenBackgroundSectionMenuId(null);
-  };
-
-  const renderBackgroundSubagentActions = (subagent: FlowChatHeaderSubagentSummary) => {
-    if (!onStopBackgroundSubagent) {
-      return null;
-    }
-
-    return (
-      <div className="flowchat-header__background-command-actions">
-        <IconButton
-          className="flowchat-header__background-command-menu-button"
-          variant="ghost"
-          size="xs"
-          onClick={(event) => handleSubagentMenuToggle(event, subagent)}
-          tooltip={t('flowChatHeader.backgroundSubagentActions')}
-          aria-label={t('flowChatHeader.backgroundSubagentActions')}
-          aria-haspopup="menu"
-          aria-expanded={openBackgroundSubagentMenuId === subagent.sessionId}
-        >
-          <MoreHorizontal size={13} aria-hidden="true" />
-        </IconButton>
-        {openBackgroundSubagentMenuId === subagent.sessionId && backgroundActivityMenuPosition ? createPortal(
-          <div
-            ref={backgroundActivityMenuRef}
-            className="flowchat-header__background-command-menu flowchat-header__background-command-menu--compact flowchat-header__background-command-menu--portal"
-            role="menu"
-            aria-label={t('flowChatHeader.backgroundSubagentActions')}
-            style={backgroundActivityMenuPosition}
-            data-testid="flowchat-header-background-menu"
-          >
-            <button
-              type="button"
-              role="menuitem"
-              className="flowchat-header__background-command-menu-item flowchat-header__background-command-menu-item--danger"
-              onClick={(event) => handleSubagentStop(event, subagent)}
-              disabled={subagent.isStopping === true}
-            >
-              <Square size={12} aria-hidden="true" />
-              <span>
-                {subagent.isStopping
-                  ? t('flowChatHeader.backgroundSubagentStopping')
-                  : t('flowChatHeader.backgroundSubagentStop')}
-              </span>
-            </button>
-          </div>,
-          document.body,
-        ) : null}
-      </div>
-    );
+    setIsBackgroundCommandSectionMenuOpen(false);
   };
 
   const renderBackgroundCommandActions = (command: FlowChatHeaderCommandSummary) => {
@@ -523,13 +395,13 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
         >
           <MoreHorizontal size={13} aria-hidden="true" />
         </IconButton>
-        {openBackgroundCommandMenuId === command.execSessionKey && backgroundActivityMenuPosition ? createPortal(
+        {openBackgroundCommandMenuId === command.execSessionKey && backgroundCommandMenuPosition ? createPortal(
           <div
-            ref={backgroundActivityMenuRef}
+            ref={backgroundCommandMenuRef}
             className="flowchat-header__background-command-menu flowchat-header__background-command-menu--portal"
             role="menu"
             aria-label={t('flowChatHeader.backgroundCommandActions')}
-            style={backgroundActivityMenuPosition}
+            style={backgroundCommandMenuPosition}
             data-testid="flowchat-header-background-menu"
           >
             {canSendBackgroundCommandInput ? (
@@ -566,8 +438,8 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
     );
   };
 
-  const backgroundActivityLabel = t('flowChatHeader.backgroundActivities', {
-    count: backgroundActivityCount,
+  const backgroundCommandLabel = t('flowChatHeader.backgroundCommands', {
+    count: backgroundCommandCount,
   });
 
   if (!visible || totalTurns === 0) {
@@ -613,197 +485,114 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
           sessionId={sessionId}
           fallbackWorkspacePath={currentWorkspace?.rootPath}
           onSelectSession={onOpenSessionTreeSession}
+          hasActiveDescendants={hasActiveSessionTreeDescendants}
+          onCancelSession={onCancelSessionTreeSession}
           t={t}
         />
-        <div className="flowchat-header__background-activity-nav" ref={backgroundActivityPanelRef}>
+        <div className="flowchat-header__background-command-nav" ref={backgroundCommandPanelRef}>
           <IconButton
             className={[
-              'flowchat-header__background-activity-nav-button',
-              isBackgroundActivityPanelOpen && 'flowchat-header__background-activity-nav-button--active',
-              hasBackgroundActivities && 'flowchat-header__background-activity-nav-button--has-activity',
+              'flowchat-header__background-command-nav-button',
+              isBackgroundCommandPanelOpen && 'flowchat-header__background-command-nav-button--active',
+              hasBackgroundCommands && 'flowchat-header__background-command-nav-button--has-commands',
             ].filter(Boolean).join(' ')}
             variant="ghost"
             size="xs"
-            onClick={handleToggleBackgroundActivityPanel}
-            tooltip={backgroundActivityLabel}
-            disabled={!hasBackgroundActivities}
-            aria-label={backgroundActivityLabel}
-            aria-expanded={isBackgroundActivityPanelOpen}
+            onClick={handleToggleBackgroundCommandPanel}
+            tooltip={backgroundCommandLabel}
+            disabled={!hasBackgroundCommands}
+            aria-label={backgroundCommandLabel}
+            aria-expanded={isBackgroundCommandPanelOpen}
             aria-haspopup="dialog"
-            data-testid="flowchat-header-background-activities"
+            data-testid="flowchat-header-background-commands"
           >
-            <span className="flowchat-header__background-activity-nav-button-inner">
-              <Activity size={14} />
-              {hasBackgroundActivities ? (
+            <span className="flowchat-header__background-command-nav-button-inner">
+              <SquareTerminal size={14} />
+              {hasBackgroundCommands ? (
                 <span
-                  className="flowchat-header__background-activity-status-dot"
+                  className="flowchat-header__background-command-status-dot"
                   aria-hidden="true"
                 />
               ) : null}
             </span>
           </IconButton>
 
-          {isBackgroundActivityPanelOpen && hasBackgroundActivities && (
+          {isBackgroundCommandPanelOpen && hasBackgroundCommands && (
             <div
-              className="flowchat-header__background-activity-panel"
+              className="flowchat-header__background-command-panel"
               role="dialog"
-              aria-label={backgroundActivityLabel}
+              aria-label={backgroundCommandLabel}
             >
-              <div className="flowchat-header__background-activity-panel-header">
-                <span>{backgroundActivityLabel}</span>
-                <span>{backgroundActivityCount}</span>
+              <div className="flowchat-header__background-command-panel-header">
+                <span>{backgroundCommandLabel}</span>
+                <div className="flowchat-header__background-command-panel-header-actions">
+                  {onStopAllBackgroundCommands ? (
+                    <IconButton
+                      className="flowchat-header__background-command-menu-button"
+                      variant="ghost"
+                      size="xs"
+                      onClick={handleCommandSectionMenuToggle}
+                      tooltip={t('flowChatHeader.backgroundCommandActions')}
+                      aria-label={t('flowChatHeader.backgroundCommandActions')}
+                      aria-haspopup="menu"
+                      aria-expanded={isBackgroundCommandSectionMenuOpen}
+                      disabled={displayBackgroundCommands.every(command => (
+                        command.status !== 'running' || command.isStopping === true
+                      ))}
+                    >
+                      <MoreHorizontal size={13} aria-hidden="true" />
+                    </IconButton>
+                  ) : null}
+                  {isBackgroundCommandSectionMenuOpen && backgroundCommandMenuPosition ? createPortal(
+                    <div
+                      ref={backgroundCommandMenuRef}
+                      className="flowchat-header__background-command-menu flowchat-header__background-command-menu--portal"
+                      role="menu"
+                      aria-label={t('flowChatHeader.backgroundCommandActions')}
+                      style={backgroundCommandMenuPosition}
+                      data-testid="flowchat-header-background-menu"
+                    >
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="flowchat-header__background-command-menu-item flowchat-header__background-command-menu-item--danger"
+                        onClick={handleCommandStopAll}
+                      >
+                        <Square size={12} aria-hidden="true" />
+                        <span>{t('flowChatHeader.backgroundCommandStopAll')}</span>
+                      </button>
+                    </div>,
+                    document.body,
+                  ) : null}
+                </div>
               </div>
-              <div className="flowchat-header__background-activity-list">
-                {hasBackgroundSubagents && (
-                  <div className="flowchat-header__background-section">
-                    <div className="flowchat-header__background-section-title">
-                      <span className="flowchat-header__background-section-title-label">
-                        {t('flowChatHeader.backgroundSubagentSection', { count: backgroundSubagents.length })}
+              <div className="flowchat-header__background-command-list">
+                {displayBackgroundCommands.map((command) => (
+                  <div
+                    key={command.execSessionKey}
+                    className="flowchat-header__background-command-list-item"
+                  >
+                    <button
+                      type="button"
+                      className="flowchat-header__background-command-list-item-button flowchat-header__background-command-open-button"
+                      onClick={() => handleCommandSelect(command)}
+                    >
+                      <span className="flowchat-header__background-command-list-title">
+                        <Terminal size={12} aria-hidden="true" />
+                        <span>{command.title}</span>
                       </span>
-                      {onStopAllBackgroundSubagents ? (
-                        <div className="flowchat-header__background-section-actions">
-                          <IconButton
-                            className="flowchat-header__background-command-menu-button"
-                            variant="ghost"
-                            size="xs"
-                            onClick={handleSubagentSectionMenuToggle}
-                            tooltip={t('flowChatHeader.backgroundSubagentActions')}
-                            aria-label={t('flowChatHeader.backgroundSubagentActions')}
-                            aria-haspopup="menu"
-                            aria-expanded={openBackgroundSectionMenuId === 'subagents'}
-                            disabled={displayBackgroundSubagents.every(subagent => subagent.isStopping === true)}
-                          >
-                            <MoreHorizontal size={13} aria-hidden="true" />
-                          </IconButton>
-                          {openBackgroundSectionMenuId === 'subagents' && backgroundActivityMenuPosition ? createPortal(
-                            <div
-                              ref={backgroundActivityMenuRef}
-                              className="flowchat-header__background-command-menu flowchat-header__background-command-menu--portal"
-                              role="menu"
-                              aria-label={t('flowChatHeader.backgroundSubagentActions')}
-                              style={backgroundActivityMenuPosition}
-                              data-testid="flowchat-header-background-menu"
-                            >
-                              <button
-                                type="button"
-                                role="menuitem"
-                                className="flowchat-header__background-command-menu-item flowchat-header__background-command-menu-item--danger"
-                                onClick={handleStopAllSubagents}
-                              >
-                                <Square size={12} aria-hidden="true" />
-                                <span>{t('flowChatHeader.backgroundSubagentStopAll')}</span>
-                              </button>
-                            </div>,
-                            document.body,
-                          ) : null}
-                        </div>
-                      ) : null}
-                    </div>
-                    {displayBackgroundSubagents.map((subagent) => (
-                      <div
-                        key={subagent.sessionId}
-                        className="flowchat-header__background-command-list-item"
-                      >
-                        <button
-                          type="button"
-                          className="flowchat-header__background-activity-list-item flowchat-header__background-command-open-button"
-                          onClick={() => handleSubagentSelect(subagent.sessionId)}
-                        >
-                          <span className="flowchat-header__background-activity-list-title">
-                            <Bot size={12} aria-hidden="true" />
-                            <span>{subagent.title}</span>
-                          </span>
-                          <span className="flowchat-header__background-activity-list-meta">
-                            {[
-                              subagent.agentType,
-                              subagent.isStopping === true
-                                ? t('flowChatHeader.backgroundSubagentStopping')
-                                : subagent.status === 'finishing'
-                                  ? t('flowChatHeader.subagentStatusFinishing')
-                                  : t('flowChatHeader.subagentStatusProcessing'),
-                            ].filter(Boolean).join(' · ')}
-                          </span>
-                        </button>
-                        {renderBackgroundSubagentActions(subagent)}
-                      </div>
-                    ))}
-                  </div>
-                )}
-                {hasBackgroundCommands && (
-                  <div className="flowchat-header__background-section">
-                    <div className="flowchat-header__background-section-title">
-                      <span className="flowchat-header__background-section-title-label">
-                        {t('flowChatHeader.backgroundCommandSection', { count: backgroundCommands.length })}
+                      <span className="flowchat-header__background-command-list-meta">
+                        {[
+                          t('flowChatHeader.backgroundCommandSession', { id: command.execSessionId }),
+                          command.status === 'running'
+                            ? t('flowChatHeader.backgroundCommandStatusRunning')
+                            : t('flowChatHeader.backgroundCommandStatusFinished'),
+                        ].filter(Boolean).join(' · ')}
                       </span>
-                      {onStopAllBackgroundCommands ? (
-                        <div className="flowchat-header__background-section-actions">
-                          <IconButton
-                            className="flowchat-header__background-command-menu-button"
-                            variant="ghost"
-                            size="xs"
-                            onClick={handleCommandSectionMenuToggle}
-                            tooltip={t('flowChatHeader.backgroundCommandActions')}
-                            aria-label={t('flowChatHeader.backgroundCommandActions')}
-                            aria-haspopup="menu"
-                            aria-expanded={openBackgroundSectionMenuId === 'commands'}
-                            disabled={displayBackgroundCommands.every(command => (
-                              command.status !== 'running' || command.isStopping === true
-                            ))}
-                          >
-                            <MoreHorizontal size={13} aria-hidden="true" />
-                          </IconButton>
-                          {openBackgroundSectionMenuId === 'commands' && backgroundActivityMenuPosition ? createPortal(
-                            <div
-                              ref={backgroundActivityMenuRef}
-                              className="flowchat-header__background-command-menu flowchat-header__background-command-menu--portal"
-                              role="menu"
-                              aria-label={t('flowChatHeader.backgroundCommandActions')}
-                              style={backgroundActivityMenuPosition}
-                              data-testid="flowchat-header-background-menu"
-                            >
-                              <button
-                                type="button"
-                                role="menuitem"
-                                className="flowchat-header__background-command-menu-item flowchat-header__background-command-menu-item--danger"
-                                onClick={handleCommandStopAll}
-                              >
-                                <Square size={12} aria-hidden="true" />
-                                <span>{t('flowChatHeader.backgroundCommandStopAll')}</span>
-                              </button>
-                            </div>,
-                            document.body,
-                          ) : null}
-                        </div>
-                      ) : null}
-                    </div>
-                    {displayBackgroundCommands.map((command) => (
-                      <div
-                        key={command.execSessionKey}
-                        className="flowchat-header__background-command-list-item"
-                      >
-                        <button
-                          type="button"
-                          className="flowchat-header__background-activity-list-item flowchat-header__background-command-open-button"
-                          onClick={() => handleCommandSelect(command)}
-                        >
-                          <span className="flowchat-header__background-activity-list-title">
-                            <Terminal size={12} aria-hidden="true" />
-                            <span>{command.title}</span>
-                          </span>
-                          <span className="flowchat-header__background-activity-list-meta">
-                            {[
-                              t('flowChatHeader.backgroundCommandSession', { id: command.execSessionId }),
-                              command.status === 'running'
-                                ? t('flowChatHeader.backgroundCommandStatusRunning')
-                                : t('flowChatHeader.backgroundCommandStatusFinished'),
-                            ].filter(Boolean).join(' · ')}
-                          </span>
-                        </button>
-                        {renderBackgroundCommandActions(command)}
-                      </div>
-                    ))}
+                    </button>
+                    {renderBackgroundCommandActions(command)}
                   </div>
-                )}
+                ))}
               </div>
             </div>
           )}

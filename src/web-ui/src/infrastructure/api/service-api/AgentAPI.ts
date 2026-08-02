@@ -1221,16 +1221,25 @@ export class AgentAPI {
     return api.listen<SessionTitleGeneratedEvent>('session_title_generated', callback);
   }
 
-  async cancelSession(sessionId: string): Promise<{
+  async cancelSession(
+    sessionId: string,
+    options?: { cancelDescendants?: boolean },
+  ): Promise<{
     cancelled: boolean;
     dialogTurnId: string | null;
   }> {
     try {
+      const request = {
+        sessionId,
+        ...(options?.cancelDescendants === undefined
+          ? {}
+          : { cancelDescendants: options.cancelDescendants }),
+      };
       return await api.invoke<{
         cancelled: boolean;
         dialogTurnId: string | null;
       }>('cancel_session', {
-        request: { sessionId }
+        request,
       });
     } catch (error) {
       throw createTauriCommandError('cancel_session', error, { sessionId });

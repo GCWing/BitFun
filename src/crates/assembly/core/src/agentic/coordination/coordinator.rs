@@ -5919,9 +5919,19 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         session_id: &str,
         dialog_turn_id: &str,
     ) -> BitFunResult<()> {
+        self.cancel_dialog_turn_with_descendant_policy(session_id, dialog_turn_id, true)
+            .await
+    }
+
+    async fn cancel_dialog_turn_with_descendant_policy(
+        &self,
+        session_id: &str,
+        dialog_turn_id: &str,
+        cancel_descendants: bool,
+    ) -> BitFunResult<()> {
         info!(
-            "Received cancel request: dialog_turn_id={}, session_id={}",
-            dialog_turn_id, session_id
+            "Received cancel request: dialog_turn_id={}, session_id={}, cancel_descendants={}",
+            dialog_turn_id, session_id, cancel_descendants
         );
 
         if let Some(control) = self.manual_compaction_controls.get(dialog_turn_id) {
@@ -6000,8 +6010,10 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             warn!("Failed to cancel tool execution: {}", e);
         }
 
-        self.cancel_active_subagents_for_parent_turn(session_id, dialog_turn_id)
-            .await;
+        if cancel_descendants {
+            self.cancel_active_subagents_for_parent_turn(session_id, dialog_turn_id)
+                .await;
+        }
 
         // Step 4: Wait briefly for the spawn task that owns this turn to drain
         // its in-memory message writes before returning. Capped so the RPC
@@ -6030,6 +6042,17 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         session_id: &str,
         wait_timeout: Duration,
     ) -> BitFunResult<Option<String>> {
+        self.cancel_active_turn_for_session_with_descendant_policy(session_id, wait_timeout, true)
+            .await
+    }
+
+    /// Cancel only the target session when `cancel_descendants` is false.
+    pub async fn cancel_active_turn_for_session_with_descendant_policy(
+        &self,
+        session_id: &str,
+        wait_timeout: Duration,
+        cancel_descendants: bool,
+    ) -> BitFunResult<Option<String>> {
         abort_thread_goal_continuation_for_session(session_id);
 
         let Some(session) = self.session_manager.get_session(session_id) else {
@@ -6043,8 +6066,12 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             return Ok(None);
         };
 
-        self.cancel_dialog_turn(session_id, &current_turn_id)
-            .await?;
+        self.cancel_dialog_turn_with_descendant_policy(
+            session_id,
+            &current_turn_id,
+            cancel_descendants,
+        )
+        .await?;
 
         let deadline = Instant::now() + wait_timeout;
         while self.execution_engine.has_active_turn(&current_turn_id) {
