@@ -14,10 +14,83 @@
  */
 
 import type { FlowChatContext, SessionConfig } from '../services/flow-chat-manager/types';
+import type { Session } from '../types/flow-chat';
 import type { SessionTitleDescriptor } from '../utils/sessionTitle';
+import type { ImageContextData as ImageInputContextData } from '@/infrastructure/api/service-api/ImageContextTypes';
 import type { SessionDriverId } from './resolve';
 
 export type { SessionDriverId } from './resolve';
+
+/** Options accepted by FlowChatManager.sendMessage, threaded to the driver. */
+export interface SendMessageOptions {
+  imageContexts?: ImageInputContextData[];
+  imageDisplayData?: Array<{
+    id: string;
+    name: string;
+    dataUrl?: string;
+    imagePath?: string;
+    mimeType?: string;
+  }>;
+  /**
+   * When true, bypass the pending-queue check. Used by the queue drain path
+   * to actually start a new dialog turn after the previous one finished.
+   * Callers should not set this directly.
+   */
+  bypassPendingQueue?: boolean;
+  userMessageMetadata?: Record<string, unknown>;
+  execution?: import('@/infrastructure/api/service-api/AgentAPI').AgentDialogTurnExecution;
+  turnId?: string;
+  preserveTurnOnStartError?: boolean;
+  onSessionConflictRetryStart?: () => void;
+  onSessionConflictRetrySuccess?: () => void;
+  fromSessionConflictRetry?: boolean;
+}
+
+/** The message content of one submission, before flavor routing. */
+export interface SubmissionDraft {
+  message: string;
+  displayMessage?: string;
+  hasImages: boolean;
+}
+
+/**
+ * What to do with a submission while the session is busy or has queued
+ * messages. `steer` injects into the running work, `queue` parks the message
+ * for the drain listener, `reject` refuses with a reason.
+ */
+export type SubmissionPlan =
+  | { kind: 'queue' }
+  | { kind: 'steer' }
+  | { kind: 'reject'; reason: string };
+
+export interface StartTurnInput {
+  sessionId: string;
+  message: string;
+  displayMessage?: string;
+  /** Resolved agent type for this turn (falls back to session mode). */
+  currentAgentType: string;
+  /** Non-null when the session is driven by an external ACP client. */
+  acpClientId: string | null;
+  isFirstMessage: boolean;
+  /** Session snapshot taken after ensureReady. */
+  readySession: Session;
+  options?: SendMessageOptions;
+}
+
+/**
+ * Written by the driver as soon as it adds an optimistic turn it wants the
+ * shared error path to delete on failure. Read by sendMessage's catch block.
+ */
+export interface TurnTracker {
+  createdLocalTurnId: string | null;
+}
+
+/**
+ * `completed` runs the shared post-submission bookkeeping;
+ * `detached` means the message was steered into (or continued) target-owned
+ * work and the shared epilogue must be skipped.
+ */
+export type StartTurnResult = 'completed' | 'detached';
 
 /**
  * Everything flavor-independent that session creation resolved before the
@@ -68,9 +141,45 @@ export interface SessionDriver {
     title: string,
   ): Promise<string>;
 
-  /** Make the session able to accept a submission (backend session, hydration). */
-  ensureReady(context: FlowChatContext, sessionId: string): Promise<void>;
+  /**
+   * Make the session able to accept a submission (backend session,
+   * hydration). Drivers with nothing to prepare return void — synchronously —
+   * so the caller introduces no microtask boundary before the optimistic
+   * turn: a projection must show the user's message before any async work.
+   */
+  ensureReady(context: FlowChatContext, sessionId: string): Promise<void> | void;
 
   /** Cancel the in-flight work for this session. Returns whether anything was cancelled. */
   cancel(context: FlowChatContext, sessionId: string): Promise<boolean>;
+
+  /**
+   * Decide the fate of a submission arriving while the session is busy or
+   * already has queued messages. Must test steer-eligibility before falling
+   * back to queue: a steerable message that gets queued never drains for
+   * flavors that do not drive the local state machine.
+   */
+  planSubmission(
+    context: FlowChatContext,
+    sessionId: string,
+    draft: SubmissionDraft,
+  ): SubmissionPlan;
+
+  /** Inject a message into the session's currently running work. */
+  steer(
+    context: FlowChatContext,
+    sessionId: string,
+    draft: SubmissionDraft,
+  ): Promise<void>;
+
+  /**
+   * Start (or continue) a turn for an idle session. Owns the flavor-specific
+   * optimistic turn, transport call, and post-acknowledgement bookkeeping.
+   * Reports any optimistic turn to `tracker` so the shared error path can
+   * clean it up when this throws.
+   */
+  startTurn(
+    context: FlowChatContext,
+    input: StartTurnInput,
+    tracker: TurnTracker,
+  ): Promise<StartTurnResult>;
 }

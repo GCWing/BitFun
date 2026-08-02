@@ -10,18 +10,164 @@
  */
 
 import { createLogger } from '@/shared/utils/logger';
+import { globalEventBus } from '@/infrastructure/event-bus';
+import { i18nService } from '@/infrastructure/i18n';
 import type { FlowChatContext, SessionConfig } from '../../services/flow-chat-manager/types';
-import type { Session } from '../../types/flow-chat';
-import type { SessionCascadeRemoval, SessionCreationSeed, SessionDriver } from '../types';
-import { isNonLocalDispatchTarget, type DispatchTarget } from '@/features/dispatch/types';
+import type { DialogTurn, Session } from '../../types/flow-chat';
+import type {
+  SessionCascadeRemoval,
+  SessionCreationSeed,
+  SessionDriver,
+  StartTurnInput,
+  StartTurnResult,
+  SubmissionDraft,
+  SubmissionPlan,
+  TurnTracker,
+} from '../types';
+import {
+  FLOWCHAT_PIN_TURN_TO_TOP_EVENT,
+  type FlowChatPinTurnToTopRequest,
+} from '../../events/flowchatNavigation';
+import {
+  isDispatchJobTerminal,
+  isNonLocalDispatchTarget,
+  type DispatchTarget,
+} from '@/features/dispatch/types';
 import { dispatchApi } from '@/features/dispatch/dispatchApi';
 import { dispatchJobStore } from '@/features/dispatch/dispatchJobStore';
 import { forgetDispatchTranscript } from '@/features/dispatch/dispatchTranscriptCache';
 import { requestDispatchJobRefresh } from '@/features/dispatch/DispatchJobObserver';
+import { markOptimisticDispatchTurnMetadata } from '@/features/dispatch/optimisticDispatchTurn';
 import { cleanupSaveState } from '../../services/flow-chat-manager/PersistenceModule';
 import { cleanupSessionBuffers } from '../../services/flow-chat-manager/TextChunkModule';
+import { sessionProjectWorkspacePath } from '../../utils/sessionWorkspace';
+import {
+  clearRuntimeStatusState,
+  showRuntimeStatus,
+} from '../../store/runtimeStatusStore';
+import { claimSubmissionRetry, releaseSubmissionRetry } from '../idempotency';
+import { applyGeneratingTitlePlaceholder } from '../shared';
 
 const log = createLogger('DispatchSessionDriver');
+
+const IMAGES_UNSUPPORTED_MESSAGE = 'Image attachments are not supported for detached dispatch yet';
+const APPEND_RETRY_SCOPE = 'dispatch-append';
+const CONTINUE_RETRY_SCOPE = 'dispatch-continue';
+
+function pinTurnToTop(sessionId: string, turnId: string): void {
+  globalEventBus.emit(
+    FLOWCHAT_PIN_TURN_TO_TOP_EVENT,
+    {
+      sessionId,
+      turnId,
+      behavior: 'auto',
+      source: 'send-message',
+      pinMode: 'sticky-latest',
+    } satisfies FlowChatPinTurnToTopRequest,
+    'DispatchSessionDriver',
+  );
+}
+
+async function appendToDispatchJob(
+  sessionId: string,
+  jobId: string,
+  message: string,
+  displayMessage: string | undefined,
+): Promise<void> {
+  // Keep the id stable across an ambiguous transport failure. A retry with
+  // the same message can then ask the target mailbox for the same idempotent
+  // append instead of injecting the steering text twice.
+  const retry = claimSubmissionRetry(
+    APPEND_RETRY_SCOPE,
+    sessionId,
+    message,
+    displayMessage,
+    () =>
+      globalThis.crypto?.randomUUID?.()
+      ?? `dispatch-message-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+  );
+  const response = await dispatchApi.append(
+    jobId,
+    message,
+    displayMessage,
+    retry.id,
+  );
+  if (!response.accepted) {
+    releaseSubmissionRetry(APPEND_RETRY_SCOPE, sessionId, retry.id);
+    throw new Error('Dispatch target did not accept the appended message');
+  }
+  releaseSubmissionRetry(APPEND_RETRY_SCOPE, sessionId, retry.id);
+  requestDispatchJobRefresh(jobId);
+}
+
+/**
+ * Start the next turn of a finished dispatch job.
+ *
+ * The optimistic turn mirrors the first-message path so the user sees their
+ * message immediately; the target's own `DialogTurnStarted` adopts it once
+ * the follow-up worker starts.
+ */
+async function continueDispatchJob(
+  context: FlowChatContext,
+  input: StartTurnInput,
+  jobId: string,
+): Promise<void> {
+  const { sessionId, message, displayMessage } = input;
+  const followUpSession =
+    context.flowChatStore.getState().sessions.get(sessionId) ?? input.readySession;
+  const followUpAgentType =
+    (input.currentAgentType?.trim() || followUpSession.mode || 'agentic').trim();
+  // Reused across retries so a lost response cannot start two turns.
+  const retry = claimSubmissionRetry(
+    CONTINUE_RETRY_SCOPE,
+    sessionId,
+    message,
+    displayMessage,
+    () =>
+      globalThis.crypto?.randomUUID?.()
+      ?? `dispatch-turn-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+  );
+
+  const optimisticTurnId = `dispatch_pending_${jobId}`;
+  context.flowChatStore.addDialogTurn(sessionId, {
+    id: optimisticTurnId,
+    sessionId,
+    agentType: followUpAgentType,
+    userMessage: {
+      id: `user_dispatch_${retry.id}`,
+      content: displayMessage || message,
+      timestamp: Date.now(),
+      metadata: markOptimisticDispatchTurnMetadata(
+        input.options?.userMessageMetadata,
+        jobId,
+      ),
+    },
+    modelRounds: [],
+    status: 'pending',
+    startTime: Date.now(),
+  });
+  pinTurnToTop(sessionId, optimisticTurnId);
+
+  try {
+    const response = await dispatchApi.continueJob(
+      jobId,
+      retry.id,
+      message,
+      displayMessage,
+    );
+    if (!response.accepted) {
+      throw new Error('Dispatch target did not accept the follow-up turn');
+    }
+    // The target owns the job state; the refresh below reads it back rather
+    // than this side guessing what the follow-up did to it.
+  } catch (error) {
+    context.flowChatStore.deleteDialogTurn(sessionId, optimisticTurnId);
+    throw error;
+  } finally {
+    releaseSubmissionRetry(CONTINUE_RETRY_SCOPE, sessionId, retry.id);
+  }
+  requestDispatchJobRefresh(jobId);
+}
 
 /**
  * Fixed context budget for projections: no controller-side provider is ever
@@ -227,9 +373,10 @@ export const dispatchSessionDriver: SessionDriver = {
     return title;
   },
 
-  async ensureReady(): Promise<void> {
+  ensureReady(): void {
     // Nothing to prepare: the target owns the durable session, and submission
-    // itself is what creates the job.
+    // itself is what creates the job. Deliberately synchronous — see the
+    // interface note about the optimistic-projection timing invariant.
   },
 
   async cancel(context: FlowChatContext, sessionId: string): Promise<boolean> {
@@ -244,5 +391,164 @@ export const dispatchSessionDriver: SessionDriver = {
       requestDispatchJobRefresh(jobId);
     }
     return response.cancelled;
+  },
+
+  planSubmission(
+    context: FlowChatContext,
+    sessionId: string,
+    draft: SubmissionDraft,
+  ): SubmissionPlan {
+    const session = context.flowChatStore.getState().sessions.get(sessionId);
+    if (
+      !isNonLocalDispatchTarget(session?.config.dispatchTarget)
+      || !session?.config.dispatchJobId
+      || (
+        session.config.dispatchJobState !== 'queued'
+        && session.config.dispatchJobState !== 'running'
+      )
+    ) {
+      return { kind: 'queue' };
+    }
+    if (draft.hasImages) {
+      return { kind: 'reject', reason: IMAGES_UNSUPPORTED_MESSAGE };
+    }
+    return { kind: 'steer' };
+  },
+
+  async steer(
+    context: FlowChatContext,
+    sessionId: string,
+    draft: SubmissionDraft,
+  ): Promise<void> {
+    const session = context.flowChatStore.getState().sessions.get(sessionId);
+    const jobId = session?.config.dispatchJobId;
+    if (!jobId) {
+      throw new Error('Dispatch session is missing its job id');
+    }
+    await appendToDispatchJob(sessionId, jobId, draft.message, draft.displayMessage);
+  },
+
+  async startTurn(
+    context: FlowChatContext,
+    input: StartTurnInput,
+    tracker: TurnTracker,
+  ): Promise<StartTurnResult> {
+    const {
+      sessionId,
+      message,
+      displayMessage,
+      currentAgentType,
+      isFirstMessage,
+      readySession,
+      options,
+    } = input;
+
+    const targetRequest = readySession.config.dispatchTargetRequest;
+    const jobId = readySession.config.dispatchJobId;
+    const approvalPolicy = readySession.config.dispatchApprovalPolicy;
+    if (!targetRequest || targetRequest.kind === 'local' || !jobId || !approvalPolicy) {
+      throw new Error('Dispatch session is missing its immutable target or approval policy');
+    }
+    if ((options?.imageContexts?.length ?? 0) > 0) {
+      throw new Error(IMAGES_UNSUPPORTED_MESSAGE);
+    }
+    const dispatchState = readySession.config.dispatchJobState;
+    if (dispatchState === 'queued' || dispatchState === 'running') {
+      // A turn is already in flight; this message steers it rather than
+      // starting another one underneath it.
+      await appendToDispatchJob(sessionId, jobId, message, displayMessage);
+      return 'detached';
+    }
+    if (dispatchState && isDispatchJobTerminal(dispatchState)) {
+      // The previous turn finished. A dispatch session is a conversation, so
+      // this starts the next turn against the same target session, worktree,
+      // and event log instead of refusing the message.
+      await continueDispatchJob(context, input, jobId);
+      return 'detached';
+    }
+    if (
+      dispatchState !== 'submitting' &&
+      dispatchState !== 'submission_unknown'
+    ) {
+      throw new Error('This dispatch session is not ready to accept a message');
+    }
+    if (isFirstMessage) {
+      applyGeneratingTitlePlaceholder(context, sessionId, message);
+    }
+
+    const optimisticTurnId = `dispatch_pending_${jobId}`;
+    const optimisticTurn: DialogTurn = {
+      id: optimisticTurnId,
+      sessionId,
+      agentType: currentAgentType,
+      userMessage: {
+        id: `user_dispatch_${Date.now()}`,
+        content: displayMessage || message,
+        timestamp: Date.now(),
+        metadata: markOptimisticDispatchTurnMetadata(
+          options?.userMessageMetadata,
+          jobId,
+        ),
+      },
+      modelRounds: [],
+      status: 'pending',
+      startTime: Date.now(),
+    };
+    context.flowChatStore.addDialogTurn(sessionId, optimisticTurn);
+    tracker.createdLocalTurnId = optimisticTurnId;
+    pinTurnToTop(sessionId, optimisticTurnId);
+
+    const includeUncommitted = readySession.config.dispatchIncludeUncommitted ?? false;
+    const baseRef = readySession.config.dispatchBaseRef?.trim() || 'HEAD';
+    const sourceWorkspacePath = sessionProjectWorkspacePath(readySession);
+    const sourceWorkspaceId =
+      readySession.workspaceId || readySession.config.workspaceId;
+    const transferRoundId = `dispatch-transfer:${jobId}`;
+    // Provisioning is always more than a submit now — a worktree is created,
+    // the target checks out the baseline, and objects may be transferred —
+    // so the transfer label always applies.
+    showRuntimeStatus({
+      sessionId,
+      turnId: optimisticTurnId,
+      roundId: transferRoundId,
+      label: i18nService.t('flow-chat:chatInput.dispatch.transferInProgress'),
+    });
+    let response: Awaited<ReturnType<typeof dispatchApi.submit>>;
+    try {
+      response = await dispatchApi.submit({
+        target: targetRequest,
+        baseRef,
+        includeUncommitted,
+        jobId,
+        sessionId,
+        agentType: currentAgentType,
+        prompt: message,
+        approvalPolicy,
+        model: readySession.config.dispatchModel?.trim() || undefined,
+        ...(sourceWorkspacePath ? { sourceWorkspacePath } : {}),
+        ...(sourceWorkspaceId ? { sourceWorkspaceId } : {}),
+      });
+    } finally {
+      clearRuntimeStatusState({
+        sessionId,
+        turnId: optimisticTurnId,
+        roundId: transferRoundId,
+      });
+    }
+    if (!response.accepted || response.jobId !== jobId || response.sessionId !== sessionId) {
+      throw new Error('Dispatch target returned a mismatched acknowledgement');
+    }
+    context.flowChatStore.applyDispatchSnapshot(sessionId, {
+      jobId,
+      state: response.state,
+      cursor: readySession.config.dispatchCursor ?? 0,
+      expectedCursor: readySession.config.dispatchCursor ?? 0,
+    });
+    dispatchJobStore.getState().updateProgress(jobId, {
+      state: response.state,
+    });
+    context.flowChatStore.updateSessionLastSubmittedMode(sessionId, currentAgentType);
+    requestDispatchJobRefresh(jobId);
+    return 'completed';
   },
 };

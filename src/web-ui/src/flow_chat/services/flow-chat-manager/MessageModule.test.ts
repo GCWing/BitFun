@@ -587,6 +587,24 @@ describe('MessageModule detached dispatch', () => {
     expect(mockDispatchSubmit).toHaveBeenCalledTimes(1);
   });
 
+  it('steers a busy running dispatch instead of queueing the message', async () => {
+    const { context, session } = createDispatchContext('remote');
+    session.config.dispatchJobState = 'running';
+    // Busy state machine + non-empty queue would normally enqueue; a running
+    // dispatch must steer instead, because queued items only drain for
+    // sessions that drive the local state machine.
+    mockGetCurrentState.mockReturnValue('processing');
+    mockPendingList.mockReturnValue([{ id: 'queued-1' }]);
+
+    await expect(
+      sendMessage(context, 'steer the remote turn', 'dispatch-session'),
+    ).resolves.toBeUndefined();
+
+    expect(mockDispatchAppend).toHaveBeenCalledTimes(1);
+    expect(mockPendingEnqueue).not.toHaveBeenCalled();
+    expect(mockDispatchSubmit).not.toHaveBeenCalled();
+  });
+
   it('reuses the append message id after an ambiguous transport failure', async () => {
     const { context, session } = createDispatchContext('remote');
     session.config.dispatchJobState = 'running';

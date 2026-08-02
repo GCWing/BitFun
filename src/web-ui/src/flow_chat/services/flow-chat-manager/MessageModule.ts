@@ -1,41 +1,25 @@
 /**
  * Message handling module
- * Handles message sending, cancellation, and other operations
+ * Shared submission choreography: busy-gate planning, queueing, mode
+ * switching, conflict retries, and the error path. Flavor-specific transport
+ * work (optimistic turns, dialog-turn start, steering) lives in the session
+ * drivers.
  */
 
-import { agentAPI } from '@/infrastructure/api/service-api/AgentAPI';
-import { ACPClientAPI } from '@/infrastructure/api/service-api/ACPClientAPI';
-import { worktreeAPI } from '@/infrastructure/api/service-api/WorktreeAPI';
-import { configManager } from '@/infrastructure/config/services/ConfigManager';
-import type { AIModelConfig, AgentModelDefaultsConfig, DefaultModelsConfig } from '@/infrastructure/config/types';
 import { notificationService } from '../../../shared/notification-system';
 import { stateMachineManager } from '../../state-machine';
 import { SessionExecutionEvent, SessionExecutionState } from '../../state-machine/types';
-import { generateTempTitle } from '../../utils/titleUtils';
 import { createLogger } from '@/shared/utils/logger';
-import type { FlowChatContext, DialogTurn } from './types';
-import { ensureBackendSession, getModelMaxTokens, retryCreateBackendSession } from './SessionModule';
+import type { FlowChatContext } from './types';
 import type { ImageContextData as ImageInputContextData } from '@/infrastructure/api/service-api/ImageContextTypes';
-import { globalEventBus } from '@/infrastructure/event-bus';
-import {
-  FLOWCHAT_PIN_TURN_TO_TOP_EVENT,
-  type FlowChatPinTurnToTopRequest,
-} from '../../events/flowchatNavigation';
 import { pendingQueueManager } from './PendingQueueModule';
-import { sessionProjectWorkspacePath } from '../../utils/sessionWorkspace';
-import { sessionWorktreeMaterializationPlan } from '../../utils/sessionWorktree';
-import { dispatchApi } from '@/features/dispatch/dispatchApi';
-import { dispatchJobStore } from '@/features/dispatch/dispatchJobStore';
-import { requestDispatchJobRefresh } from '@/features/dispatch/DispatchJobObserver';
-import { isDispatchJobTerminal, isNonLocalDispatchTarget } from '@/features/dispatch/types';
-import { markOptimisticDispatchTurnMetadata } from '@/features/dispatch/optimisticDispatchTurn';
 import { isSessionInUseError } from '@/infrastructure/api/errors/TauriCommandError';
 import { i18nService } from '@/infrastructure/i18n';
 import { driverForSession } from '../../session-drivers/registry';
-import {
-  clearRuntimeStatusState,
-  showRuntimeStatus,
-} from '@/flow_chat/store/runtimeStatusStore';
+import type { SendMessageOptions, SubmissionDraft, TurnTracker } from '../../session-drivers/types';
+
+export { syncSessionModelSelection } from '../../utils/modelSync';
+export { markCurrentTurnItemsAsCancelled } from '../../utils/turnCancellation';
 
 const log = createLogger('MessageModule');
 
@@ -74,118 +58,11 @@ function completeSessionSend(
   retrySuccess?.();
 }
 
-interface PendingDispatchAppendRetry {
-  content: string;
-  displayContent?: string;
-  messageId: string;
-}
-
-// Keep the id stable across an ambiguous transport failure. A retry with the
-// same message can then ask the target mailbox for the same idempotent append
-// instead of injecting the steering text twice.
-const pendingDispatchAppendRetries = new Map<string, PendingDispatchAppendRetry>();
-
-interface PendingDispatchContinueRetry {
-  content: string;
-  displayContent?: string;
-  turnId: string;
-}
-
-// Same reasoning as the append retries above: an ambiguous transport failure
-// must be retryable without starting the follow-up turn twice on the target.
-const pendingDispatchContinueRetries = new Map<string, PendingDispatchContinueRetry>();
-
 function acpClientIdFromMode(mode: string | undefined): string | null {
   const value = mode?.trim();
   if (!value?.startsWith('acp:')) return null;
   const clientId = value.slice('acp:'.length).trim();
   return clientId || null;
-}
-
-function normalizeModelSelection(
-  modelId: string | undefined,
-  models: AIModelConfig[],
-  defaultModels: DefaultModelsConfig,
-): string {
-  const value = modelId?.trim();
-  if (!value || value === 'auto') return 'auto';
-
-  if (value === 'primary' || value === 'fast') {
-    const resolvedDefaultId = value === 'primary' ? defaultModels.primary : defaultModels.fast;
-    const matchedModel = models.find(model => model.id === resolvedDefaultId);
-    return matchedModel ? value : 'auto';
-  }
-
-  const matchedModel = models.find(model =>
-    model.id === value || model.name === value || model.model_name === value,
-  );
-  return matchedModel ? value : 'auto';
-}
-
-export async function syncSessionModelSelection(
-  context: FlowChatContext,
-  sessionId: string,
-  agentType: string,
-): Promise<void> {
-  const session = context.flowChatStore.getState().sessions.get(sessionId);
-  if (!session) {
-    throw new Error(`Session does not exist: ${sessionId}`);
-  }
-
-  const sessionModelId = session.config.modelName?.trim();
-
-  // Any stored selector, including "auto", belongs to the session. Still sync
-  // it to the backend in case the restored runtime session lost that state.
-  if (sessionModelId) {
-    const desiredMaxContextTokens = await getModelMaxTokens(sessionModelId, agentType);
-    if (session.maxContextTokens !== desiredMaxContextTokens) {
-      context.flowChatStore.updateSessionMaxContextTokens(sessionId, desiredMaxContextTokens);
-    }
-    await agentAPI.updateSessionModel({
-      sessionId,
-      modelName: sessionModelId,
-      workspacePath: sessionProjectWorkspacePath(session),
-      remoteConnectionId: session.remoteConnectionId,
-      remoteSshHost: session.remoteSshHost,
-      includeInternal: session.sessionKind === 'subagent',
-    });
-    return;
-  }
-
-  const configData = await configManager.getConfigs([
-    'ai.agent_model_defaults',
-    'ai.models',
-    'ai.default_models',
-  ]);
-  const agentModelDefaults = configData['ai.agent_model_defaults'] as AgentModelDefaultsConfig | undefined;
-  const allModels = (configData['ai.models'] as AIModelConfig[] | undefined) || [];
-  const defaultModels = (configData['ai.default_models'] as DefaultModelsConfig | undefined) || {};
-
-  const desiredModelId = normalizeModelSelection(agentModelDefaults?.mode, allModels, defaultModels);
-  const shouldForceAutoSync = desiredModelId === 'auto';
-  const desiredMaxContextTokens = await getModelMaxTokens(desiredModelId, agentType);
-  const shouldSyncContextWindow = session.maxContextTokens !== desiredMaxContextTokens;
-
-  context.flowChatStore.updateSessionModelName(sessionId, desiredModelId);
-  if (shouldSyncContextWindow) {
-    context.flowChatStore.updateSessionMaxContextTokens(sessionId, desiredMaxContextTokens);
-  }
-  await agentAPI.updateSessionModel({
-    sessionId,
-    modelName: desiredModelId,
-    workspacePath: sessionProjectWorkspacePath(session),
-    remoteConnectionId: session.remoteConnectionId,
-    remoteSshHost: session.remoteSshHost,
-    includeInternal: session.sessionKind === 'subagent',
-  });
-
-  log.info('Session model synchronized before send', {
-    sessionId,
-    agentType,
-    previousModelId: null,
-    nextModelId: desiredModelId,
-    forcedAutoSync: shouldForceAutoSync,
-  });
 }
 
 /**
@@ -203,154 +80,17 @@ export async function sendMessage(
   displayMessage?: string,
   agentType?: string,
   switchToMode?: string,
-  options?: {
-    imageContexts?: ImageInputContextData[];
-    imageDisplayData?: Array<{ id: string; name: string; dataUrl?: string; imagePath?: string; mimeType?: string }>;
-    /**
-     * When true, bypass the pending-queue check. Used by the queue drain path
-     * to actually start a new dialog turn after the previous one finished.
-     * Callers should not set this directly.
-     */
-    bypassPendingQueue?: boolean;
-    userMessageMetadata?: Record<string, unknown>;
-    execution?: import('@/infrastructure/api/service-api/AgentAPI').AgentDialogTurnExecution;
-    turnId?: string;
-    preserveTurnOnStartError?: boolean;
-    onSessionConflictRetryStart?: () => void;
-    onSessionConflictRetrySuccess?: () => void;
-    fromSessionConflictRetry?: boolean;
-  }
+  options?: SendMessageOptions
 ): Promise<void> {
   const session = context.flowChatStore.getState().sessions.get(sessionId);
   if (!session) {
     throw new Error(`Session does not exist: ${sessionId}`);
   }
   const sendAttempt = beginSessionSend(sessionId);
-
-  /**
-   * Start the next turn of a finished dispatch job.
-   *
-   * The optimistic turn mirrors the first-message path so the user sees their
-   * message immediately; the target's own `DialogTurnStarted` adopts it once
-   * the follow-up worker starts.
-   */
-  const continueDispatchJob = async (jobId: string): Promise<void> => {
-    const followUpSession = context.flowChatStore.getState().sessions.get(sessionId) ?? session;
-    const followUpAgentType = (agentType?.trim() || followUpSession.mode || 'agentic').trim();
-    const current = pendingDispatchContinueRetries.get(sessionId);
-    const retry =
-      current?.content === message && current.displayContent === displayMessage
-        ? current
-        : {
-            content: message,
-            displayContent: displayMessage,
-            // Reused across retries so a lost response cannot start two turns.
-            turnId:
-              globalThis.crypto?.randomUUID?.()
-              ?? `dispatch-turn-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-          };
-    pendingDispatchContinueRetries.set(sessionId, retry);
-
-    const optimisticTurnId = `dispatch_pending_${jobId}`;
-    context.flowChatStore.addDialogTurn(sessionId, {
-      id: optimisticTurnId,
-      sessionId,
-      agentType: followUpAgentType,
-      userMessage: {
-        id: `user_dispatch_${retry.turnId}`,
-        content: displayMessage || message,
-        timestamp: Date.now(),
-        metadata: markOptimisticDispatchTurnMetadata(
-          options?.userMessageMetadata,
-          jobId,
-        ),
-      },
-      modelRounds: [],
-      status: 'pending',
-      startTime: Date.now(),
-    });
-    globalEventBus.emit(
-      FLOWCHAT_PIN_TURN_TO_TOP_EVENT,
-      {
-        sessionId,
-        turnId: optimisticTurnId,
-        behavior: 'auto',
-        source: 'send-message',
-        pinMode: 'sticky-latest',
-      } satisfies FlowChatPinTurnToTopRequest,
-      'MessageModule',
-    );
-
-    try {
-      const response = await dispatchApi.continueJob(
-        jobId,
-        retry.turnId,
-        message,
-        displayMessage,
-      );
-      if (!response.accepted) {
-        throw new Error('Dispatch target did not accept the follow-up turn');
-      }
-      // The target owns the job state; the refresh below reads it back rather
-      // than this side guessing what the follow-up did to it.
-    } catch (error) {
-      context.flowChatStore.deleteDialogTurn(sessionId, optimisticTurnId);
-      throw error;
-    } finally {
-      if (pendingDispatchContinueRetries.get(sessionId)?.turnId === retry.turnId) {
-        pendingDispatchContinueRetries.delete(sessionId);
-      }
-    }
-    requestDispatchJobRefresh(jobId);
-  };
-
-  const appendToDispatchJob = async (jobId: string): Promise<void> => {
-    const current = pendingDispatchAppendRetries.get(sessionId);
-    const retry =
-      current?.content === message && current.displayContent === displayMessage
-        ? current
-        : {
-            content: message,
-            displayContent: displayMessage,
-            messageId:
-              globalThis.crypto?.randomUUID?.()
-              ?? `dispatch-message-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-          };
-    pendingDispatchAppendRetries.set(sessionId, retry);
-    const response = await dispatchApi.append(
-      jobId,
-      message,
-      displayMessage,
-      retry.messageId,
-    );
-    if (!response.accepted) {
-      if (pendingDispatchAppendRetries.get(sessionId)?.messageId === retry.messageId) {
-        pendingDispatchAppendRetries.delete(sessionId);
-      }
-      throw new Error('Dispatch target did not accept the appended message');
-    }
-    if (pendingDispatchAppendRetries.get(sessionId)?.messageId === retry.messageId) {
-      pendingDispatchAppendRetries.delete(sessionId);
-    }
-    requestDispatchJobRefresh(jobId);
-  };
-
-  const appendToRunningDispatch = async (): Promise<boolean> => {
-    if (
-      !isNonLocalDispatchTarget(session.config.dispatchTarget)
-      || !session.config.dispatchJobId
-      || (
-        session.config.dispatchJobState !== 'queued'
-        && session.config.dispatchJobState !== 'running'
-      )
-    ) {
-      return false;
-    }
-    if ((options?.imageContexts?.length ?? 0) > 0) {
-      throw new Error('Image attachments are not supported for detached dispatch yet');
-    }
-    await appendToDispatchJob(session.config.dispatchJobId);
-    return true;
+  const draft: SubmissionDraft = {
+    message,
+    displayMessage,
+    hasImages: (options?.imageContexts?.length ?? 0) > 0,
   };
 
   if (!options?.bypassPendingQueue) {
@@ -364,7 +104,16 @@ export async function sendMessage(
       if (options?.execution?.kind === 'fresh_external_subagent') {
         throw new Error('External subagent command delegation requires an idle session');
       }
-      if (await appendToRunningDispatch()) {
+      // Steer-eligibility must be decided before queueing: a steerable
+      // message that gets queued never drains for flavors that do not drive
+      // the local state machine.
+      const plan = driverForSession(sessionId, session)
+        .planSubmission(context, sessionId, draft);
+      if (plan.kind === 'reject') {
+        throw new Error(plan.reason);
+      }
+      if (plan.kind === 'steer') {
+        await driverForSession(sessionId, session).steer(context, sessionId, draft);
         return;
       }
       try {
@@ -411,15 +160,17 @@ export async function sendMessage(
     }));
   }
 
-  let createdLocalTurnId: string | null = null;
+  const turnTracker: TurnTracker = { createdLocalTurnId: null };
 
   try {
     const refreshedSession = context.flowChatStore.getState().sessions.get(sessionId) ?? session;
     const currentAgentType = (agentType?.trim() || refreshedSession.mode || 'agentic').trim();
     const acpClientId = acpClientIdFromMode(currentAgentType);
-    const isDispatched = isNonLocalDispatchTarget(refreshedSession.config.dispatchTarget);
-    const delegatesExternalSubagent = options?.execution?.kind === 'fresh_external_subagent';
-    if (delegatesExternalSubagent && (acpClientId || isDispatched)) {
+    const driver = driverForSession(sessionId, refreshedSession);
+    if (
+      options?.execution?.kind === 'fresh_external_subagent'
+      && (acpClientId || driver.id !== 'local')
+    ) {
       throw new Error('External subagent command delegation requires the local BitFun runtime');
     }
 
@@ -435,8 +186,14 @@ export async function sendMessage(
       throw new Error('Session history is still restoring, please retry once loading finishes');
     }
 
-    if (!acpClientId && !isDispatched) {
-      await ensureBackendSession(context, sessionId);
+    if (!acpClientId) {
+      // A driver with nothing to prepare returns void; awaiting only real
+      // promises keeps the projection's optimistic turn synchronous with the
+      // user's send action.
+      const readiness = driver.ensureReady(context, sessionId);
+      if (readiness) {
+        await readiness;
+      }
     }
 
     const readySession = context.flowChatStore.getState().sessions.get(sessionId);
@@ -446,305 +203,26 @@ export async function sendMessage(
 
     const isFirstMessage = readySession.dialogTurns.length === 0 && readySession.titleStatus !== 'generated';
 
-    if (isDispatched) {
-      const targetRequest = readySession.config.dispatchTargetRequest;
-      const jobId = readySession.config.dispatchJobId;
-      const approvalPolicy = readySession.config.dispatchApprovalPolicy;
-      if (!targetRequest || targetRequest.kind === 'local' || !jobId || !approvalPolicy) {
-        throw new Error('Dispatch session is missing its immutable target or approval policy');
-      }
-      if ((options?.imageContexts?.length ?? 0) > 0) {
-        throw new Error('Image attachments are not supported for detached dispatch yet');
-      }
-      const dispatchState = readySession.config.dispatchJobState;
-      if (dispatchState === 'queued' || dispatchState === 'running') {
-        // A turn is already in flight; this message steers it rather than
-        // starting another one underneath it.
-        await appendToDispatchJob(jobId);
-        return;
-      }
-      if (dispatchState && isDispatchJobTerminal(dispatchState)) {
-        // The previous turn finished. A dispatch session is a conversation, so
-        // this starts the next turn against the same target session, worktree,
-        // and event log instead of refusing the message.
-        await continueDispatchJob(jobId);
-        return;
-      }
-      if (
-        dispatchState !== 'submitting' &&
-        dispatchState !== 'submission_unknown'
-      ) {
-        throw new Error('This dispatch session is not ready to accept a message');
-      }
-      if (isFirstMessage) {
-        handleTitleGeneration(context, sessionId, message);
-      }
-
-      const optimisticTurnId = `dispatch_pending_${jobId}`;
-      const optimisticTurn: DialogTurn = {
-        id: optimisticTurnId,
+    const outcome = await driver.startTurn(
+      context,
+      {
         sessionId,
-        agentType: currentAgentType,
-        userMessage: {
-          id: `user_dispatch_${Date.now()}`,
-          content: displayMessage || message,
-          timestamp: Date.now(),
-          metadata: markOptimisticDispatchTurnMetadata(
-            options?.userMessageMetadata,
-            jobId,
-          ),
-        },
-        modelRounds: [],
-        status: 'pending',
-        startTime: Date.now(),
-      };
-      context.flowChatStore.addDialogTurn(sessionId, optimisticTurn);
-      createdLocalTurnId = optimisticTurnId;
-      globalEventBus.emit(
-        FLOWCHAT_PIN_TURN_TO_TOP_EVENT,
-        {
-          sessionId,
-          turnId: optimisticTurnId,
-          behavior: 'auto',
-          source: 'send-message',
-          pinMode: 'sticky-latest',
-        } satisfies FlowChatPinTurnToTopRequest,
-        'MessageModule',
-      );
-
-      const includeUncommitted = readySession.config.dispatchIncludeUncommitted ?? false;
-      const baseRef = readySession.config.dispatchBaseRef?.trim() || 'HEAD';
-      const sourceWorkspacePath = sessionProjectWorkspacePath(readySession);
-      const sourceWorkspaceId =
-        readySession.workspaceId || readySession.config.workspaceId;
-      const transferRoundId = `dispatch-transfer:${jobId}`;
-      // Provisioning is always more than a submit now — a worktree is created,
-      // the target checks out the baseline, and objects may be transferred —
-      // so the transfer label always applies.
-      showRuntimeStatus({
-        sessionId,
-        turnId: optimisticTurnId,
-        roundId: transferRoundId,
-        label: i18nService.t('flow-chat:chatInput.dispatch.transferInProgress'),
-      });
-      let response: Awaited<ReturnType<typeof dispatchApi.submit>>;
-      try {
-        response = await dispatchApi.submit({
-          target: targetRequest,
-          baseRef,
-          includeUncommitted,
-          jobId,
-          sessionId,
-          agentType: currentAgentType,
-          prompt: message,
-          approvalPolicy,
-          model: readySession.config.dispatchModel?.trim() || undefined,
-          ...(sourceWorkspacePath ? { sourceWorkspacePath } : {}),
-          ...(sourceWorkspaceId ? { sourceWorkspaceId } : {}),
-        });
-      } finally {
-        clearRuntimeStatusState({
-          sessionId,
-          turnId: optimisticTurnId,
-          roundId: transferRoundId,
-        });
-      }
-      if (!response.accepted || response.jobId !== jobId || response.sessionId !== sessionId) {
-        throw new Error('Dispatch target returned a mismatched acknowledgement');
-      }
-      context.flowChatStore.applyDispatchSnapshot(sessionId, {
-        jobId,
-        state: response.state,
-        cursor: readySession.config.dispatchCursor ?? 0,
-        expectedCursor: readySession.config.dispatchCursor ?? 0,
-      });
-      dispatchJobStore.getState().updateProgress(jobId, {
-        state: response.state,
-      });
-      context.flowChatStore.updateSessionLastSubmittedMode(sessionId, currentAgentType);
-      requestDispatchJobRefresh(jobId);
-      completeSessionSend(
-        sessionId,
-        sendAttempt,
-        options?.fromSessionConflictRetry
-          ? options.onSessionConflictRetrySuccess
-          : undefined,
-      );
+        message,
+        displayMessage,
+        currentAgentType,
+        acpClientId,
+        isFirstMessage,
+        readySession,
+        options,
+      },
+      turnTracker,
+    );
+    if (outcome === 'detached') {
+      // The message steered or continued target-owned work; the shared
+      // post-submission bookkeeping does not apply.
       return;
     }
 
-    const dialogTurnId = options?.turnId?.trim() ||
-      `dialog_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    const hasImages = (options?.imageContexts?.length ?? 0) > 0;
-
-    const dialogTurn: DialogTurn = {
-      id: dialogTurnId,
-      sessionId: sessionId,
-      agentType: currentAgentType,
-      userMessage: {
-        id: `user_${Date.now()}`,
-        content: displayMessage || message,
-        timestamp: Date.now(),
-        hasImages,
-        images: options?.imageDisplayData,
-        metadata: options?.userMessageMetadata,
-      },
-      modelRounds: [],
-      // Images are attached for multimodal primary models or reduced to text placeholders for text-only models.
-      // We don't run a separate frontend "image pre-analysis" phase here.
-      status: 'pending',
-      startTime: Date.now()
-    };
-
-    context.flowChatStore.addDialogTurn(sessionId, dialogTurn);
-    createdLocalTurnId = dialogTurnId;
-    const pinRequest: FlowChatPinTurnToTopRequest = {
-      sessionId,
-      turnId: dialogTurnId,
-      behavior: 'auto',
-      source: 'send-message',
-      pinMode: 'sticky-latest',
-    };
-    globalEventBus.emit(FLOWCHAT_PIN_TURN_TO_TOP_EVENT, pinRequest, 'MessageModule');
-
-    const isRestoringHistoricalSession =
-      readySession.isHistorical || context.pendingHistoryLoads.has(sessionId);
-    if (isRestoringHistoricalSession) {
-      context.processingManager.clearSessionStatus(sessionId);
-      context.flowChatStore.deleteDialogTurn(sessionId, dialogTurnId);
-      throw new Error('Session history is still restoring, please retry once loading finishes');
-    }
-
-    const startOk = await stateMachineManager.transition(sessionId, SessionExecutionEvent.START, {
-      taskId: sessionId,
-      dialogTurnId,
-    });
-    if (!startOk) {
-      const currentState = stateMachineManager.getCurrentState(sessionId);
-      throw new Error(`Session is still busy finishing the previous turn (current state: ${currentState})`);
-    }
-
-    context.processingManager.registerStatus({
-      sessionId: sessionId,
-      status: 'thinking',
-      message: '',
-      metadata: { sessionId: sessionId, dialogTurnId }
-    });
-
-    if (readySession.config.worktreeIsolationRequested !== undefined) {
-      const materialization = sessionWorktreeMaterializationPlan(readySession);
-      if (materialization) {
-        log.info('Materializing requested worktree after prompt submission', {
-          sessionId,
-          enabled: materialization.enabled,
-          projectWorkspacePath: materialization.projectWorkspacePath,
-        });
-        const result = await worktreeAPI.bindSession(
-          sessionId,
-          materialization.enabled,
-          globalThis.crypto?.randomUUID?.() ?? `worktree-first-turn-${Date.now()}`,
-          materialization.projectWorkspacePath,
-        );
-        context.flowChatStore.updateSessionExecutionTarget(sessionId, {
-          workspacePath: result.workspacePath,
-          projectWorkspacePath: result.projectWorkspacePath,
-          workspaceId: result.workspaceId,
-          executionTarget: result.executionTarget,
-        });
-        if (result.retainedWorktreePath) {
-          log.warn('Released worktree retained because it contains local work', {
-            sessionId,
-            retainedWorktreePath: result.retainedWorktreePath,
-          });
-        }
-      }
-      context.flowChatStore.setSessionWorktreeIsolationRequested(sessionId, undefined);
-    }
-
-    if (isFirstMessage) {
-      handleTitleGeneration(context, sessionId, message);
-    }
-
-    if (!acpClientId) {
-      await syncSessionModelSelection(context, sessionId, currentAgentType);
-    }
-
-    const updatedSession = context.flowChatStore.getState().sessions.get(sessionId);
-    if (!updatedSession) {
-      throw new Error(`Session lost after adding dialog turn: ${sessionId}`);
-    }
-    
-    context.contentBuffers.set(sessionId, new Map());
-    context.activeTextItems.set(sessionId, new Map());
-
-    const workspacePath = updatedSession.workspacePath;
-    const projectWorkspacePath = sessionProjectWorkspacePath(updatedSession);
-    
-    if (acpClientId) {
-      await ACPClientAPI.startDialogTurn({
-        sessionId,
-        clientId: acpClientId,
-        userInput: message,
-        originalUserInput: displayMessage || message,
-        turnId: dialogTurnId,
-        workspacePath,
-        imageContexts: options?.imageContexts,
-        userMessageMetadata: options?.userMessageMetadata,
-        remoteConnectionId: updatedSession.remoteConnectionId,
-        remoteSshHost: updatedSession.remoteSshHost,
-      });
-      context.flowChatStore.updateSessionLastSubmittedMode(sessionId, currentAgentType);
-    } else {
-      try {
-        await agentAPI.startDialogTurn({
-          sessionId: sessionId,
-          userInput: message,
-          originalUserInput: displayMessage || message,
-          turnId: dialogTurnId,
-          agentType: currentAgentType,
-          workspacePath,
-          projectWorkspacePath,
-          remoteConnectionId: updatedSession.remoteConnectionId,
-          remoteSshHost: updatedSession.remoteSshHost,
-          imageContexts: options?.imageContexts,
-          userMessageMetadata: options?.userMessageMetadata,
-          execution: options?.execution,
-        });
-        context.flowChatStore.updateSessionLastSubmittedMode(sessionId, currentAgentType);
-      } catch (error: any) {
-        if (error?.message?.includes('Session does not exist') || error?.message?.includes('Not found')) {
-          log.warn('Backend session still not found, retrying creation', {
-            sessionId: sessionId,
-            dialogTurnsCount: updatedSession.dialogTurns.length
-          });
-
-          await retryCreateBackendSession(context, sessionId);
-
-          await agentAPI.startDialogTurn({
-            sessionId: sessionId,
-            userInput: message,
-            originalUserInput: displayMessage || message,
-            turnId: dialogTurnId,
-            agentType: currentAgentType,
-            workspacePath,
-            projectWorkspacePath,
-            remoteConnectionId: updatedSession.remoteConnectionId,
-            remoteSshHost: updatedSession.remoteSshHost,
-            imageContexts: options?.imageContexts,
-            userMessageMetadata: options?.userMessageMetadata,
-            execution: options?.execution,
-          });
-          context.flowChatStore.updateSessionLastSubmittedMode(sessionId, currentAgentType);
-        } else {
-          throw error;
-        }
-      }
-    }
-
-    const sessionStateMachine = stateMachineManager.get(sessionId);
-    if (sessionStateMachine) {
-      sessionStateMachine.getContext().taskId = sessionId;
-    }
     completeSessionSend(
       sessionId,
       sendAttempt,
@@ -755,29 +233,29 @@ export async function sendMessage(
 
   } catch (error) {
     log.error('Failed to send message', { sessionId: sessionId, error });
-    
+
     const errorMessage = error instanceof Error ? error.message : 'Failed to send message';
-    
+
     const currentState = stateMachineManager.getCurrentState(sessionId);
     const activeDialogTurnId = stateMachineManager
       .get(sessionId)
       ?.getContext().currentDialogTurnId;
     const ownsProcessingTurn =
-      createdLocalTurnId !== null &&
-      activeDialogTurnId === createdLocalTurnId;
+      turnTracker.createdLocalTurnId !== null &&
+      activeDialogTurnId === turnTracker.createdLocalTurnId;
     if (currentState === SessionExecutionState.PROCESSING && ownsProcessingTurn) {
       await stateMachineManager.transition(sessionId, SessionExecutionEvent.ERROR_OCCURRED, {
         error: errorMessage
       });
       await stateMachineManager.transition(sessionId, SessionExecutionEvent.RESET);
     }
-    
+
     const state = context.flowChatStore.getState();
     const currentSession = state.sessions.get(sessionId);
-    if (createdLocalTurnId && currentSession && !options?.preserveTurnOnStartError) {
-      context.flowChatStore.deleteDialogTurn(sessionId, createdLocalTurnId);
+    if (turnTracker.createdLocalTurnId && currentSession && !options?.preserveTurnOnStartError) {
+      context.flowChatStore.deleteDialogTurn(sessionId, turnTracker.createdLocalTurnId);
     }
-    
+
     if (!options?.preserveTurnOnStartError) {
       if (isSessionInUseError(error)) {
         if (latestSendBySession.get(sessionId) !== sendAttempt) {
@@ -832,20 +310,9 @@ export async function sendMessage(
     } else if (latestSendBySession.get(sessionId) === sendAttempt) {
       latestSendBySession.delete(sessionId);
     }
-    
+
     throw error;
   }
-}
-
-function handleTitleGeneration(
-  context: FlowChatContext,
-  sessionId: string,
-  message: string
-): void {
-  const tempTitle = generateTempTitle(message, 20);
-  // Show a readable placeholder immediately; backend later confirms the
-  // authoritative title via AI or local fallback generation.
-  context.flowChatStore.updateSessionTitle(sessionId, tempTitle, 'generating');
 }
 
 export async function cancelSessionTask(context: FlowChatContext, requestedSessionId?: string): Promise<boolean> {
@@ -961,5 +428,3 @@ export function installPendingQueueDrainListener(context: FlowChatContext): void
     void drainPendingQueue(queueDrainContext, sessionId);
   });
 }
-
-export { markCurrentTurnItemsAsCancelled } from '../../utils/turnCancellation';
