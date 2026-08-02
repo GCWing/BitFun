@@ -109,12 +109,12 @@ npm run build
 # 在 desktop 目录编译后端（.so）
 cd src/apps/desktop && cargo tauri ohos init && cargo tauri ohos build
 
-# 编译 mini app 前端
-cd src/mobile-web && npm run build
+# 编译桌面前端
+cd src/web-ui && npm run build
 
 # 构建应用
-## 1. 复制 mini-app 资源
-cp src/mobile-web/dist src/apps/ohos/entry/src/main/resources/resfile
+## 1. 复制前端资源
+cp src/web-ui/dist src/apps/ohos/entry/src/main/resources/resfile
 
 ## 2. 复制应用可执行文件
 cp target/aarch64-unknow-linux-ohos/release/libbitfun_desktop_lib.so src/apps/ohos/entry/libs/arm64-v8a/libbitfun_desktop_lib.so  
