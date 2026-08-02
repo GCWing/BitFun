@@ -143,6 +143,15 @@ Cargo target gate 语义见
 
 CI 负责 workspace 级检查、真实产品 feature 组合、跨平台、完整测试和最终产品构建。本地未执行的宽泛验证必须标记为未执行或 CI 覆盖，不能表述为本地通过。CI 失败时再按失败路径复现对应重命令，不要求每次本地改动预跑全部构建。
 
+### 7.1 Hosted CI 关键路径与缓存
+
+- 验证 job 只依赖自身的编译期前置条件。Tauri `check`/`test` 只要求配置中的前端和资源目录存在时，Rust job 自行创建空目录，不等待或传递可发布前端产物；真实静态资源仍由前端构建和产品打包 owner 负责。
+- Pull Request 可以恢复可信分支产生的 Cargo 缓存，但不得写入 merge-ref 缓存。只有可信 `main` push 可以保存共享缓存；若依赖编译已经完成而后段测试失败，允许该可信构建保存依赖缓存，避免下一次跨平台构建无谓冷启动。
+- 未先修改 Cargo manifest 的 PR/main 验证 job 以仓库提交的 `Cargo.lock` 为唯一解析结果并通过 `--locked` 验证，不在 cache restore 前重新生成 lockfile。依赖解析更新必须作为可评审的源码变更提交，不能让同一 commit 因上游兼容版本发布而自然产生新的 cache key；先改写版本号的发布 job 不属于该前提。
+- 缓存只承载可复用依赖产物，不为追求命中率启用 workspace crate 或 incremental artifact 缓存；缓存容量、失效粒度和可信边界优先于单次命中率。
+- focused test 同时选择最小 Cargo target（如 `--lib` 或 `--test <target>`）和必要 feature；仅使用名称过滤不能阻止无关 test target 进入编译图。
+- 只有具备独立 owner、平台矩阵或失败归因价值的验证才拆成 job。顺序执行但共享同一依赖图的命令优先留在既有 job 中，避免用新增 job 重复结账工具链、checkout 和缓存恢复成本。
+
 ## 8. 评审证据
 
 依赖治理 PR 按改动选择证据，不机械执行全部命令：
