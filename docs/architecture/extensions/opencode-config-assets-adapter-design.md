@@ -307,6 +307,12 @@ V1 `skills.paths` 和当前 `skills: string[]`；字段类型错误只拒绝该�
 拒绝符号链接/reparse point；加载时重新校验规范化根及其稳定 source slot，防止目录整体替换改变已发现来源身份。同 scope
 内配置根位于标准 OpenCode 根之前，较后的不同配置根覆盖同名 Skill，但不重排更早的 BitFun/Claude/Codex/Cursor 来源。
 
+Skill Registry 只为与 workspace 无关的标准用户根维护进程级版本化候选快照，具体文件观察复用 File Watch Service。
+相关文件变化只使快照失效，下一次 Agent/Skill 查询重建，不改变正在执行的 Turn；瞬时读取失败或观察器无法覆盖任一目标根时
+不发布缓存，后续查询保持原有重扫行为。OpenCode 配置根的作用域取决于当前 workspace，因此继续在每次请求中按完整配置来源
+顺序统一发现和扫描，避免把项目内绝对路径误缓存为用户来源，也保证 64 根上限只计算一次。标准项目根与 Remote 项目来源同样
+按请求读取，后者继续通过 `WorkspaceFileSystem` 访问且不回退到控制端同名目录。
+
 ### 5.2.1 References
 
 Workspace Reference 不是第二套 Workspace，也不是文件权限入口。OpenCode adapter 只解析有界 JSON/JSONC 配置，

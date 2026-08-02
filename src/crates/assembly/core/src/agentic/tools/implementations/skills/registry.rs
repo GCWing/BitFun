@@ -7,6 +7,8 @@ use super::mode_overrides::{
     load_disabled_mode_skills_local, load_disabled_mode_skills_remote,
     load_globally_disabled_user_skills, load_user_mode_skill_overrides, UserModeSkillOverrides,
 };
+#[cfg(feature = "file-watch")]
+use super::source_cache::{LocalSkillWatchMonitor, LocalSkillWatchRoot, VersionedSnapshotCache};
 use super::types::{ModeSkillInfo, SkillData, SkillInfo, SkillLocation};
 use crate::agentic::workspace::WorkspaceFileSystem;
 #[cfg(feature = "product-full")]
@@ -26,10 +28,11 @@ use bitfun_agent_runtime::skills::{
     BITFUN_USER_SKILL_SLOT, PROJECT_SKILL_KEY_PREFIX, PROJECT_SKILL_ROOTS, USER_CONFIG_SKILL_ROOTS,
     USER_HOME_SKILL_ROOTS, USER_SKILL_KEY_PREFIX,
 };
+use bitfun_services_core::bounded_fs::is_symlink_or_reparse;
 #[cfg(feature = "product-full")]
 use bitfun_services_core::bounded_fs::{collect_bounded_regular_files, BoundedDirectoryWalkLimits};
 #[cfg(feature = "product-full")]
-use bitfun_services_core::bounded_fs::{is_symlink_or_reparse, read_bounded_text, BoundedTextRead};
+use bitfun_services_core::bounded_fs::{read_bounded_text, BoundedTextRead};
 #[cfg(feature = "product-full")]
 use bitfun_services_core::workspace_text::read_workspace_relative_text_bounded;
 use log::{debug, error, warn};
@@ -39,7 +42,6 @@ use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 use tokio::fs;
-use tokio::sync::RwLock;
 
 #[cfg(feature = "product-full")]
 const MAX_OPENCODE_CONFIGURED_SKILL_ROOTS: usize = 64;
@@ -74,6 +76,187 @@ struct RemoteSkillRootEntry {
     source_id: &'static str,
     source_label: &'static str,
     priority: usize,
+}
+
+#[derive(Debug, Clone)]
+struct UserSkillSources {
+    standard: Vec<SkillCandidate>,
+    cacheable: bool,
+    #[cfg(feature = "file-watch")]
+    watch_roots: Vec<LocalSkillWatchRoot>,
+}
+
+struct LocalSkillScan {
+    candidates: Vec<SkillCandidate>,
+    cacheable: bool,
+}
+
+async fn local_source_path_is_cacheable(path: &Path) -> bool {
+    match fs::symlink_metadata(path).await {
+        Ok(metadata) => !is_symlink_or_reparse(&metadata),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => true,
+        Err(_) => false,
+    }
+}
+
+#[cfg(test)]
+mod local_skill_scan_tests {
+    use super::{SkillLocation, SkillRegistry, SkillRootEntry};
+    use std::fs;
+    use std::path::Path;
+
+    fn write_skill(path: &Path) {
+        fs::create_dir_all(path).expect("skill directory");
+        fs::write(
+            path.join("SKILL.md"),
+            "---\nname: shared-review\ndescription: Shared review workflow\n---\n",
+        )
+        .expect("skill markdown");
+    }
+
+    fn test_root(path: impl Into<std::path::PathBuf>) -> SkillRootEntry {
+        SkillRootEntry {
+            path: path.into(),
+            level: SkillLocation::User,
+            slot: "test",
+            source_id: "test",
+            source_label: "Test",
+            priority: 0,
+            is_builtin: false,
+        }
+    }
+
+    #[cfg(unix)]
+    fn create_dir_symlink(target: &Path, link: &Path) -> bool {
+        std::os::unix::fs::symlink(target, link).is_ok()
+    }
+
+    #[cfg(windows)]
+    fn create_dir_symlink(target: &Path, link: &Path) -> bool {
+        std::os::windows::fs::symlink_dir(target, link).is_ok()
+    }
+
+    #[cfg(unix)]
+    fn create_file_symlink(target: &Path, link: &Path) -> bool {
+        std::os::unix::fs::symlink(target, link).is_ok()
+    }
+
+    #[cfg(windows)]
+    fn create_file_symlink(target: &Path, link: &Path) -> bool {
+        std::os::windows::fs::symlink_file(target, link).is_ok()
+    }
+
+    #[tokio::test]
+    async fn standard_scan_follows_linked_skill_directories_without_caching() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let root = temp.path().join("skills");
+        let shared_skill = temp.path().join("shared-review");
+        fs::create_dir_all(&root).expect("skill root");
+        write_skill(&shared_skill);
+        if !create_dir_symlink(&shared_skill, &root.join("review")) {
+            return;
+        }
+        let entry = test_root(root);
+
+        let scan = SkillRegistry::scan_skills_in_dir_with_status(&entry).await;
+
+        assert!(!scan.cacheable);
+        assert_eq!(scan.candidates.len(), 1);
+        assert_eq!(scan.candidates[0].info.name, "shared-review");
+    }
+
+    #[tokio::test]
+    async fn standard_scan_does_not_cache_a_broken_linked_root() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let missing_target = temp.path().join("missing-skills");
+        let root = temp.path().join("skills");
+        if !create_dir_symlink(&missing_target, &root) {
+            return;
+        }
+
+        let scan = SkillRegistry::scan_skills_in_dir_with_status(&test_root(root)).await;
+
+        assert!(!scan.cacheable);
+        assert!(scan.candidates.is_empty());
+    }
+
+    #[tokio::test]
+    async fn standard_scan_does_not_cache_linked_skill_markdown() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let root = temp.path().join("skills");
+        let skill_dir = root.join("review");
+        let shared_markdown = temp.path().join("shared-SKILL.md");
+        fs::create_dir_all(&skill_dir).expect("skill directory");
+        fs::write(
+            &shared_markdown,
+            "---\nname: shared-review\ndescription: Shared review workflow\n---\n",
+        )
+        .expect("shared skill markdown");
+        if !create_file_symlink(&shared_markdown, &skill_dir.join("SKILL.md")) {
+            return;
+        }
+
+        let scan = SkillRegistry::scan_skills_in_dir_with_status(&test_root(root)).await;
+
+        assert!(!scan.cacheable);
+        assert_eq!(scan.candidates.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn standard_scan_does_not_cache_linked_openai_policy() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let root = temp.path().join("skills");
+        let skill_dir = root.join("review");
+        let shared_policy = temp.path().join("openai.yaml");
+        write_skill(&skill_dir);
+        fs::create_dir_all(skill_dir.join("agents")).expect("policy directory");
+        fs::write(
+            &shared_policy,
+            "policy:\n  allow_implicit_invocation: false\n",
+        )
+        .expect("shared policy");
+        if !create_file_symlink(&shared_policy, &skill_dir.join("agents/openai.yaml")) {
+            return;
+        }
+
+        let scan = SkillRegistry::scan_skills_in_dir_with_status(&test_root(root)).await;
+
+        assert!(!scan.cacheable);
+        assert_eq!(scan.candidates.len(), 1);
+        assert!(!scan.candidates[0].info.allow_implicit_invocation);
+    }
+
+    #[tokio::test]
+    async fn transient_policy_read_failure_is_not_cacheable() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let root = temp.path().join("skills");
+        let skill_dir = root.join("review");
+        fs::create_dir_all(skill_dir.join("agents/openai.yaml")).expect("policy-shaped directory");
+        fs::write(
+            skill_dir.join("SKILL.md"),
+            "---\nname: review\ndescription: Review changes\n---\n",
+        )
+        .expect("skill markdown");
+        let entry = test_root(root);
+
+        let failed = SkillRegistry::scan_skills_in_dir_with_status(&entry).await;
+
+        assert!(!failed.cacheable);
+        assert!(failed.candidates[0].info.allow_implicit_invocation);
+
+        fs::remove_dir(skill_dir.join("agents/openai.yaml"))
+            .expect("remove policy-shaped directory");
+        fs::write(
+            skill_dir.join("agents/openai.yaml"),
+            "policy:\n  allow_implicit_invocation: false\n",
+        )
+        .expect("policy file");
+
+        let recovered = SkillRegistry::scan_skills_in_dir_with_status(&entry).await;
+
+        assert!(recovered.cacheable);
+        assert!(!recovered.candidates[0].info.allow_implicit_invocation);
+    }
 }
 
 fn sort_remote_dir_entries(entries: &mut [crate::agentic::workspace::WorkspaceDirEntry]) {
@@ -133,15 +316,25 @@ fn validate_configured_opencode_skill_root(
 
 /// Skill registry
 pub struct SkillRegistry {
-    /// Cached raw user-level skills (no workspace-specific project skills).
-    cache: RwLock<Vec<SkillInfo>>,
+    #[cfg(feature = "file-watch")]
+    user_sources: VersionedSnapshotCache<UserSkillSources>,
+    #[cfg(feature = "file-watch")]
+    user_source_monitor: LocalSkillWatchMonitor,
 }
 
 impl SkillRegistry {
     fn new() -> Self {
-        Self {
-            cache: RwLock::new(Vec::new()),
+        #[cfg(feature = "file-watch")]
+        {
+            let user_sources = VersionedSnapshotCache::new();
+            let user_source_monitor = LocalSkillWatchMonitor::new(user_sources.invalidator());
+            Self {
+                user_sources,
+                user_source_monitor,
+            }
         }
+        #[cfg(not(feature = "file-watch"))]
+        Self {}
     }
 
     fn parse_skill_markdown(
@@ -178,18 +371,21 @@ impl SkillRegistry {
             .collect()
     }
 
-    async fn apply_local_openai_policy(skill_data: &mut SkillData, skill_dir: &Path) {
-        let policy_path = skill_dir.join("agents").join("openai.yaml");
+    async fn apply_local_openai_policy(skill_data: &mut SkillData, skill_dir: &Path) -> bool {
+        let agents_dir = skill_dir.join("agents");
+        let policy_path = agents_dir.join("openai.yaml");
+        let cacheable = local_source_path_is_cacheable(&agents_dir).await
+            && local_source_path_is_cacheable(&policy_path).await;
         let content = match fs::read_to_string(&policy_path).await {
             Ok(content) => content,
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return cacheable,
             Err(error) => {
                 warn!(
                     "Failed to read optional skill policy {}: {}",
                     policy_path.display(),
                     error
                 );
-                return;
+                return false;
             }
         };
 
@@ -200,6 +396,7 @@ impl SkillRegistry {
                 error
             );
         }
+        cacheable
     }
 
     #[cfg(feature = "product-full")]
@@ -311,28 +508,30 @@ impl SkillRegistry {
         }
     }
 
-    fn get_possible_paths_for_workspace(workspace_root: Option<&Path>) -> Vec<SkillRootEntry> {
+    fn get_project_skill_roots(workspace_path: &Path) -> Vec<SkillRootEntry> {
+        let mut entries = Vec::new();
+        let mut priority = 0usize;
+
+        for spec in PROJECT_SKILL_ROOTS {
+            let path = workspace_path.join(spec.parent).join(spec.subdir);
+            entries.push(SkillRootEntry {
+                path,
+                level: SkillLocation::Project,
+                slot: spec.slot,
+                source_id: spec.source_id,
+                source_label: spec.source_label,
+                priority,
+                is_builtin: false,
+            });
+            priority += 1;
+        }
+        entries
+    }
+
+    fn get_user_skill_roots() -> Vec<SkillRootEntry> {
         let mut entries = Vec::new();
         let mut priority = 0usize;
         let mut deferred_home_entries = Vec::new();
-
-        if let Some(workspace_path) = workspace_root {
-            for spec in PROJECT_SKILL_ROOTS {
-                let path = workspace_path.join(spec.parent).join(spec.subdir);
-                if path.exists() && path.is_dir() {
-                    entries.push(SkillRootEntry {
-                        path,
-                        level: SkillLocation::Project,
-                        slot: spec.slot,
-                        source_id: spec.source_id,
-                        source_label: spec.source_label,
-                        priority,
-                        is_builtin: false,
-                    });
-                }
-                priority += 1;
-            }
-        }
 
         let home_dir = dirs::home_dir();
 
@@ -346,7 +545,7 @@ impl SkillRegistry {
                         spec.source_id,
                         spec.source_label,
                     ));
-                } else if path.exists() && path.is_dir() {
+                } else {
                     entries.push(SkillRootEntry {
                         path,
                         level: SkillLocation::User,
@@ -366,83 +565,180 @@ impl SkillRegistry {
         // while still keeping config-level overrides after BitFun defaults.
         let path_manager = get_path_manager_arc();
         let bitfun_skills = path_manager.user_skills_dir();
-        if bitfun_skills.exists() && bitfun_skills.is_dir() {
-            entries.push(SkillRootEntry {
-                path: bitfun_skills,
-                level: SkillLocation::User,
-                slot: BITFUN_USER_SKILL_SLOT,
-                source_id: BITFUN_SKILL_SOURCE_ID,
-                source_label: BITFUN_SKILL_SOURCE_LABEL,
-                priority,
-                is_builtin: false,
-            });
-        }
+        entries.push(SkillRootEntry {
+            path: bitfun_skills,
+            level: SkillLocation::User,
+            slot: BITFUN_USER_SKILL_SLOT,
+            source_id: BITFUN_SKILL_SOURCE_ID,
+            source_label: BITFUN_SKILL_SOURCE_LABEL,
+            priority,
+            is_builtin: false,
+        });
         priority += 1;
 
         let builtin_skills = path_manager.builtin_skills_dir();
-        if builtin_skills.exists() && builtin_skills.is_dir() {
-            entries.push(SkillRootEntry {
-                path: builtin_skills,
-                level: SkillLocation::User,
-                slot: BITFUN_SYSTEM_SKILL_SLOT,
-                source_id: BITFUN_SKILL_SOURCE_ID,
-                source_label: BITFUN_SKILL_SOURCE_LABEL,
-                priority,
-                is_builtin: true,
-            });
-        }
+        entries.push(SkillRootEntry {
+            path: builtin_skills,
+            level: SkillLocation::User,
+            slot: BITFUN_SYSTEM_SKILL_SLOT,
+            source_id: BITFUN_SKILL_SOURCE_ID,
+            source_label: BITFUN_SKILL_SOURCE_LABEL,
+            priority,
+            is_builtin: true,
+        });
         priority += 1;
 
         if let Some(config_dir) = dirs::config_dir() {
             for spec in USER_CONFIG_SKILL_ROOTS {
                 let path = resolve_user_config_skill_root(spec, &config_dir, home_dir.as_deref());
-                if path.exists() && path.is_dir() {
-                    entries.push(SkillRootEntry {
-                        path,
-                        level: SkillLocation::User,
-                        slot: spec.slot,
-                        source_id: spec.source_id,
-                        source_label: spec.source_label,
-                        priority,
-                        is_builtin: false,
-                    });
-                }
+                entries.push(SkillRootEntry {
+                    path,
+                    level: SkillLocation::User,
+                    slot: spec.slot,
+                    source_id: spec.source_id,
+                    source_label: spec.source_label,
+                    priority,
+                    is_builtin: false,
+                });
                 priority += 1;
             }
         }
 
         for (path, slot, source_id, source_label) in deferred_home_entries {
-            if path.exists() && path.is_dir() {
-                entries.push(SkillRootEntry {
-                    path,
-                    level: SkillLocation::User,
-                    slot,
-                    source_id,
-                    source_label,
-                    priority,
-                    is_builtin: false,
-                });
-            }
+            entries.push(SkillRootEntry {
+                path,
+                level: SkillLocation::User,
+                slot,
+                source_id,
+                source_label,
+                priority,
+                is_builtin: false,
+            });
             priority += 1;
         }
 
         entries
     }
 
-    async fn scan_skills_in_dir(entry: &SkillRootEntry) -> Vec<SkillCandidate> {
-        let mut skills = Vec::new();
-        if !entry.path.exists() {
-            return skills;
+    #[cfg(feature = "file-watch")]
+    fn standard_user_skill_watch_roots() -> Vec<LocalSkillWatchRoot> {
+        let mut roots = Vec::new();
+        let home_dir = dirs::home_dir();
+        if let Some(home) = home_dir.as_deref() {
+            roots.extend(USER_HOME_SKILL_ROOTS.iter().map(|spec| {
+                LocalSkillWatchRoot::recursive(home.join(spec.parent).join(spec.subdir))
+            }));
         }
 
-        let Ok(mut read_dir) = fs::read_dir(&entry.path).await else {
-            return skills;
-        };
+        let path_manager = get_path_manager_arc();
+        roots.push(LocalSkillWatchRoot::recursive(
+            path_manager.user_skills_dir(),
+        ));
+        roots.push(LocalSkillWatchRoot::recursive(
+            path_manager.builtin_skills_dir(),
+        ));
 
-        while let Ok(Some(item)) = read_dir.next_entry().await {
+        if let Some(config_dir) = dirs::config_dir() {
+            roots.extend(USER_CONFIG_SKILL_ROOTS.iter().map(|spec| {
+                LocalSkillWatchRoot::recursive(resolve_user_config_skill_root(
+                    spec,
+                    &config_dir,
+                    home_dir.as_deref(),
+                ))
+            }));
+        }
+        roots
+    }
+
+    async fn scan_skills_in_dir(entry: &SkillRootEntry) -> Vec<SkillCandidate> {
+        Self::scan_skills_in_dir_with_status(entry).await.candidates
+    }
+
+    async fn scan_skills_in_dir_with_status(entry: &SkillRootEntry) -> LocalSkillScan {
+        let mut skills = Vec::new();
+        let root_cacheable = local_source_path_is_cacheable(&entry.path).await;
+        match fs::metadata(&entry.path).await {
+            Ok(metadata) if metadata.is_dir() => {}
+            Ok(_) => {
+                return LocalSkillScan {
+                    candidates: skills,
+                    cacheable: root_cacheable,
+                };
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                return LocalSkillScan {
+                    candidates: skills,
+                    cacheable: root_cacheable,
+                };
+            }
+            Err(error) => {
+                debug!(
+                    "Failed to inspect Skill root {}: {}",
+                    entry.path.display(),
+                    error
+                );
+                return LocalSkillScan {
+                    candidates: skills,
+                    cacheable: false,
+                };
+            }
+        }
+
+        let mut read_dir = match fs::read_dir(&entry.path).await {
+            Ok(read_dir) => read_dir,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                return LocalSkillScan {
+                    candidates: skills,
+                    cacheable: root_cacheable,
+                };
+            }
+            Err(error) => {
+                debug!(
+                    "Failed to read Skill root {}: {}",
+                    entry.path.display(),
+                    error
+                );
+                return LocalSkillScan {
+                    candidates: skills,
+                    cacheable: false,
+                };
+            }
+        };
+        let mut cacheable = root_cacheable;
+
+        loop {
+            let item = match read_dir.next_entry().await {
+                Ok(Some(item)) => item,
+                Ok(None) => break,
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                    skills.clear();
+                    break;
+                }
+                Err(error) => {
+                    debug!(
+                        "Failed while reading Skill root {}: {}",
+                        entry.path.display(),
+                        error
+                    );
+                    cacheable = false;
+                    break;
+                }
+            };
             let path = item.path();
-            if !path.is_dir() {
-                continue;
+            cacheable &= local_source_path_is_cacheable(&path).await;
+            match fs::metadata(&path).await {
+                Ok(metadata) if metadata.is_dir() => {}
+                Ok(_) => continue,
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+                Err(error) => {
+                    debug!(
+                        "Failed to inspect Skill entry {}: {}",
+                        path.display(),
+                        error
+                    );
+                    cacheable = false;
+                    continue;
+                }
             }
 
             let Some(dir_name) = normalize_local_skill_dir_name(&path) else {
@@ -454,8 +750,16 @@ impl SkillRegistry {
             }
 
             let skill_md_path = path.join("SKILL.md");
-            if !skill_md_path.exists() {
-                continue;
+            cacheable &= local_source_path_is_cacheable(&skill_md_path).await;
+            match fs::metadata(&skill_md_path).await {
+                Ok(metadata) if metadata.is_file() => {}
+                Ok(_) => continue,
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+                Err(error) => {
+                    debug!("Failed to inspect {}: {}", skill_md_path.display(), error);
+                    cacheable = false;
+                    continue;
+                }
             }
 
             match fs::read_to_string(&skill_md_path).await {
@@ -467,7 +771,7 @@ impl SkillRegistry {
                     entry.slot,
                 ) {
                     Ok(mut skill_data) => {
-                        Self::apply_local_openai_policy(&mut skill_data, &path).await;
+                        cacheable &= Self::apply_local_openai_policy(&mut skill_data, &path).await;
                         skill_data.dir_name = dir_name;
                         let key_prefix = match entry.level {
                             SkillLocation::User => USER_SKILL_KEY_PREFIX,
@@ -489,44 +793,109 @@ impl SkillRegistry {
                 },
                 Err(error) => {
                     debug!("Failed to read {}: {}", skill_md_path.display(), error);
+                    if error.kind() != std::io::ErrorKind::NotFound {
+                        cacheable = false;
+                    }
                 }
             }
         }
 
-        sort_skill_candidates_by_dir(skills)
+        LocalSkillScan {
+            candidates: sort_skill_candidates_by_dir(skills),
+            cacheable,
+        }
+    }
+
+    async fn scan_user_skill_sources() -> UserSkillSources {
+        let mut cacheable = match ensure_builtin_skills_installed().await {
+            Ok(()) => true,
+            Err(error) => {
+                debug!("Failed to install built-in skills: {}", error);
+                false
+            }
+        };
+
+        let mut standard = Vec::new();
+        for entry in Self::get_user_skill_roots() {
+            let mut scan = Self::scan_skills_in_dir_with_status(&entry).await;
+            cacheable &= scan.cacheable;
+            standard.append(&mut scan.candidates);
+        }
+
+        UserSkillSources {
+            standard,
+            cacheable,
+            #[cfg(feature = "file-watch")]
+            watch_roots: Self::standard_user_skill_watch_roots(),
+        }
+    }
+
+    #[cfg(feature = "file-watch")]
+    async fn user_skill_sources(&self) -> UserSkillSources {
+        self.user_source_monitor.start();
+        self.user_sources
+            .get_or_load(|| async {
+                let sources = Self::scan_user_skill_sources().await;
+                let cacheable = self
+                    .user_source_monitor
+                    .sync_roots(sources.watch_roots.clone())
+                    .await
+                    && sources.cacheable;
+                (sources, cacheable)
+            })
+            .await
+    }
+
+    #[cfg(not(feature = "file-watch"))]
+    async fn user_skill_sources(&self) -> UserSkillSources {
+        Self::scan_user_skill_sources().await
     }
 
     async fn scan_skill_candidates_for_workspace(
         &self,
         workspace_root: Option<&Path>,
     ) -> Vec<SkillCandidate> {
-        if let Err(error) = ensure_builtin_skills_installed().await {
-            debug!("Failed to install built-in skills: {}", error);
+        let mut user_sources = self.user_skill_sources().await;
+        let mut standard = Vec::new();
+        if let Some(workspace_root) = workspace_root {
+            for entry in Self::get_project_skill_roots(workspace_root) {
+                let mut part = Self::scan_skills_in_dir(&entry).await;
+                standard.append(&mut part);
+            }
+            for candidate in &mut user_sources.standard {
+                candidate.priority = candidate.priority.saturating_add(PROJECT_SKILL_ROOTS.len());
+            }
+            standard.append(&mut user_sources.standard);
+        } else {
+            standard.append(&mut user_sources.standard);
         }
 
-        let entries = Self::get_possible_paths_for_workspace(workspace_root);
-        let mut skills = Vec::new();
-        for entry in entries {
-            let mut part = Self::scan_skills_in_dir(&entry).await;
-            skills.append(&mut part);
-        }
         #[cfg(feature = "product-full")]
         {
-            let existing_paths = skills
+            // OpenCode configured roots are workspace-sensitive: an absolute path
+            // from user config may become project-scoped for the current workspace.
+            // Discover and scan them once per request so scope and the 64-root cap
+            // are applied to one coherent OpenCode configuration snapshot.
+            let roots = opencode_configured_skill_roots(workspace_root);
+            let mut configured = Self::scan_configured_opencode_candidates(roots).await;
+            let existing_paths = standard
                 .iter()
                 .map(canonical_candidate_path)
                 .collect::<HashSet<_>>();
-            let roots = opencode_configured_skill_roots(workspace_root);
-            let mut configured = Self::scan_configured_opencode_candidates(roots).await;
-            configured
-                .retain(|candidate| !existing_paths.contains(&canonical_candidate_path(candidate)));
-            skills = Self::merge_configured_opencode_candidates(
-                skills,
+            let mut configured_paths = HashSet::new();
+            configured.retain(|candidate| {
+                let path = canonical_candidate_path(candidate);
+                !existing_paths.contains(&path) && configured_paths.insert(path)
+            });
+            return Self::merge_configured_opencode_candidates(
+                standard,
                 configured,
                 workspace_root.is_some(),
             );
         }
-        skills
+
+        #[cfg(not(feature = "product-full"))]
+        standard
     }
 
     #[cfg(feature = "product-full")]
@@ -998,20 +1367,9 @@ impl SkillRegistry {
         )
     }
 
-    async fn ensure_loaded(&self) {
-        let cache = self.cache.read().await;
-        if cache.is_empty() {
-            drop(cache);
-            self.refresh().await;
-        }
-    }
-
     pub async fn refresh(&self) {
-        let skills = sort_skills(annotate_shadowed_skills(
-            self.scan_skill_candidates_for_workspace(None).await,
-        ));
-        let mut cache = self.cache.write().await;
-        *cache = skills;
+        #[cfg(feature = "file-watch")]
+        self.user_sources.invalidate();
     }
 
     pub async fn refresh_for_workspace(&self, _workspace_root: Option<&Path>) {
@@ -1019,9 +1377,7 @@ impl SkillRegistry {
     }
 
     pub async fn get_all_skills(&self) -> Vec<SkillInfo> {
-        self.ensure_loaded().await;
-        let cache = self.cache.read().await;
-        cache.clone()
+        self.get_all_skills_for_workspace(None).await
     }
 
     pub async fn get_all_skills_for_workspace(
