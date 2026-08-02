@@ -347,7 +347,7 @@ Plugin Host Runtime、LSP，以及通用动态模型路由器。现有 capabilit
 
 | 能力 | OpenCode | Claude Code | Codex | 当前边界 |
 |---|---|---|---|---|
-| Prompt Command | JSON/JSONC、Markdown 的 prompt、本地文本文件与经审阅 shell 上下文子集 | legacy `commands/**/*.md` 的同一子集；Skills 仍由 Skill 归属模块处理 | 没有稳定、独立于 Skills 的声明式 Command 来源，因此不伪造 provider | `$ARGUMENTS`/位置参数及模板内 workspace 相对 UTF-8 `@file` 可展开；`!shell` 在展示精确计划并重新校验后仅把 stdout 加入 Prompt，参数相关计划不可记住。动态/绝对/越界文件、指定 Agent/模型等整体受限；Remote 不回退本机执行。 |
+| Prompt Command | JSON/JSONC、Markdown 的 prompt、本地文本文件与经审阅 shell 上下文子集 | legacy `commands/**/*.md` 的同一子集；Skills 仍由 Skill 归属模块处理 | 没有稳定、独立于 Skills 的声明式 Command 来源，因此不伪造 provider | `$ARGUMENTS`/位置参数及模板内 workspace 相对 UTF-8 `@file` 可展开；`!shell` 在展示精确计划并重新校验后仅把 stdout 加入 Prompt，参数相关计划不可记住。Claude `allowed-tools` 只校验宿主格式，不授予预批准；动态/绝对/越界文件、指定 Agent/模型等整体受限；Remote 不回退本机执行。 |
 | Subagent | 用户/项目声明的安全子集 | 用户/项目 `agents/**/*.md` 的安全子集 | 用户/项目 `[agents]`、角色文件与安全配置层子集 | prompt、描述、`Default`/真实继承/不透明模型引用、OpenCode 不透明 variant、Claude/Codex reasoning effort 和可表达工具请求进入既有归属模块；无 profile 的模型引用可唯一精确匹配，variant/effort profile 必须由用户绑定到现有配置后才可激活。来源请求、profile、实际模型和解析方式在 Web/TUI 可见。权限、私有 MCP/Hook、reasoning summary/verbosity、采样、并发等没有对应实现的字段仍会阻止或降级。 |
 | MCP | 用户/显式目录/项目配置的安全子集 | user/project/local 原生层的安全子集 | 用户与项目 `config.toml` 原生层的安全子集 | 支持可表达的 stdio 与 HTTPS Streamable HTTP；发现不启动 Server，首次激活继续经 BitFun MCP 审批。OAuth、remote executor、per-tool policy 等不完整语义明确降级。 |
 | Standalone Tool | 已有单文件 JavaScript 子集 | 无稳定的 runtime-free standalone Tool 来源 | 无稳定的 runtime-free standalone Tool 来源 | TypeScript、package/plugin Tool 与动态工具注册依赖独立 Plugin Host，不在声明式 adapter 中猜测。 |
@@ -361,14 +361,16 @@ Plugin Host Runtime、LSP，以及通用动态模型路由器。现有 capabilit
   规则，同名 Skill 仅通过有界名称索引遮蔽 Command。
   展开 `$ARGUMENTS`、`$ARGUMENTS[N]` 和 `$N` 纯文本参数，并允许原模板中的静态 workspace 相对 `@file`；
   `!shell` 使用 `shell: bash|powershell`（缺省为 bash）的必需 shell 语义并进入共享审批与 Terminal 执行链；`powershell` 按 `pwsh`、Windows PowerShell 的顺序选择，候选均不可用时拒绝执行而不回退其他 shell。
-  动态/绝对/越界文件引用和改变 Agent、模型、工具或 Hook 的字段仍整体阻止激活。
+  `allowed-tools` 接受 Claude Code 的字符串或字符串列表格式，但只作为非权威权限提示：adapter 校验后不投影到公共命令契约、
+  不进入命令行为版本，也不授予任何 BitFun 工具预批准；非法类型会使该文件失效。动态/绝对/越界文件引用和改变 Agent、模型、
+  Hook 或工具禁用策略的字段仍整体阻止激活。
 - Skill Registry 继续拥有所有根的发现、覆盖、显式加载与刷新，只用既有稳定 source slot 在内部选择格式方言，不向用户
   暴露主选择器，也不按路径字符串临时猜测。`.claude` Skill 的调用名固定为目录名；`description` 缺失时取正文首个
   非空段落，并与可选 `when_to_use` 合并为最多 1536 个 Unicode 字符的模型索引说明。`arguments` 可为以空白分隔的名称
   字符串或字符串列表；名称按参数顺序绑定并由现有纯文本参数展开器处理，缺失命名参数展开为空，既有缺失位置参数仍保留
   占位符。`.codex` Skill 只增加上游已有的目录名 fallback，`description` 仍必填；`.agents`、`.opencode`、`.bitfun` 和
   `.cursor` 的严格格式不变。本地与 Remote 发现及实际加载必须使用同一方言映射，避免目录显示可用而执行时重新解析失败。
-- Claude `allowed-tools` 不能授予 BitFun 工具预批准，因此安全降级为无额外权限；`effort` 只作为 reasoning profile 参与
+- Claude Skill 的 `allowed-tools` 同样不能授予 BitFun 工具预批准，因此安全降级为无额外权限；`effort` 只作为 reasoning profile 参与
   现有显式模型绑定，不成为请求级 override；`context`/`fork`、`agent`、`model`、`hooks`、`paths`、`shell`、
   `runtime` 等会改变执行行为而当前没有等价 owner 的字段阻止加载。Claude runtime 变量与动态
   shell 注入也不执行。此切片不增加插件 Skill、祖先活动目录、文件 watcher、URL 来源或另一条 reload 命令。

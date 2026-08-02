@@ -669,6 +669,22 @@ fn parse_markdown_command(name: &str, content: &str) -> Result<ClaudeCommandInpu
                         );
                     }
                 }
+                // Claude Code treats this as a permission preapproval hint.
+                // BitFun keeps its own permission policy authoritative, so the
+                // hint is validated but intentionally not projected into the
+                // executable command definition or behavior version.
+                "allowed-tools" => {
+                    if value.as_str().is_none()
+                        && !value
+                            .as_sequence()
+                            .is_some_and(|items| items.iter().all(|item| item.as_str().is_some()))
+                    {
+                        return Err(
+                            "Claude Code command allowed-tools must be a string or string list"
+                                .to_string(),
+                        );
+                    }
+                }
                 "shell" => {
                     let value = value
                         .as_str()
@@ -709,7 +725,6 @@ fn command_definition(
     for field in input.unsupported_fields {
         let capability = match field.as_str() {
             "model" => "command.model".to_string(),
-            "allowed-tools" => "command.allowed_tools".to_string(),
             "disallowed-tools" => "command.disallowed_tools".to_string(),
             "context" | "fork" => "command.context".to_string(),
             "hooks" => "command.hooks".to_string(),

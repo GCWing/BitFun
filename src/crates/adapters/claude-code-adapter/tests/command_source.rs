@@ -167,11 +167,75 @@ fn nested_command_uses_claude_codes_native_namespace() {
 }
 
 #[test]
+fn allowed_tools_hints_are_accepted_without_changing_command_behavior() {
+    let fixture = Fixture::new();
+    let path = fixture.user_claude.join("commands/review.md");
+    write(
+        &path,
+        "---\ndescription: Review\nallowed-tools: Read, Bash(git:*)\n---\nReview $ARGUMENTS",
+    );
+
+    let provider = fixture.provider();
+    let first = provider.discover(&fixture.context()).unwrap();
+    let first_command = &first.commands[0];
+    assert!(matches!(
+        first_command.availability,
+        PromptCommandAvailability::Available
+    ));
+    let behavior_version = first_command.content_version.clone();
+    assert_eq!(
+        provider
+            .expand(&fixture.context(), first_command, "this change")
+            .unwrap()
+            .content,
+        "Review this change"
+    );
+
+    write(
+        &path,
+        "---\ndescription: Review\nallowed-tools: [\"Read\", \"Grep\", \"Bash\"]\n---\nReview $ARGUMENTS",
+    );
+    let updated = provider.discover(&fixture.context()).unwrap();
+    assert!(matches!(
+        updated.commands[0].availability,
+        PromptCommandAvailability::Available
+    ));
+    assert_eq!(updated.commands[0].content_version, behavior_version);
+}
+
+#[test]
+fn malformed_allowed_tools_hints_fail_closed() {
+    let fixture = Fixture::new();
+    write(
+        fixture.user_claude.join("commands/scalar.md"),
+        "---\nallowed-tools: 42\n---\nReview the change",
+    );
+    write(
+        fixture.user_claude.join("commands/list.md"),
+        "---\nallowed-tools: [Read, false]\n---\nReview the change",
+    );
+
+    let snapshot = fixture.provider().discover(&fixture.context()).unwrap();
+
+    assert!(snapshot.commands.is_empty());
+    assert_eq!(snapshot.unavailable_command_ids.len(), 2);
+    let invalid_metadata = snapshot
+        .diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code == "claude.command.markdown_invalid")
+        .collect::<Vec<_>>();
+    assert_eq!(invalid_metadata.len(), 2);
+    assert!(invalid_metadata.iter().all(|diagnostic| diagnostic
+        .message
+        .contains("allowed-tools must be a string or string list")));
+}
+
+#[test]
 fn dynamic_and_behavioral_commands_are_visible_but_restricted() {
     let fixture = Fixture::new();
     write(
         fixture.user_claude.join("commands/shell.md"),
-        "---\ndescription: Shell\nallowed-tools: Bash\nmodel: sonnet\n---\nInspect !`git status`, @README.md, and ${CLAUDE_SESSION_ID}",
+        "---\ndescription: Shell\nallowed-tools: Bash\ndisallowed-tools: Write\nmodel: sonnet\n---\nInspect !`git status`, @README.md, and ${CLAUDE_SESSION_ID}",
     );
 
     let provider = fixture.provider();
@@ -187,7 +251,8 @@ fn dynamic_and_behavioral_commands_are_visible_but_restricted() {
     assert!(!required_capabilities.contains(&"command.shell".to_string()));
     assert!(!required_capabilities.contains(&"command.file_reference".to_string()));
     assert!(required_capabilities.contains(&"command.model".to_string()));
-    assert!(required_capabilities.contains(&"command.allowed_tools".to_string()));
+    assert!(!required_capabilities.contains(&"command.allowed_tools".to_string()));
+    assert!(required_capabilities.contains(&"command.disallowed_tools".to_string()));
     assert!(required_capabilities.contains(&"command.dynamic_variable".to_string()));
     assert!(provider.expand(&fixture.context(), command, "now").is_err());
 }
@@ -468,6 +533,29 @@ fn invalid_higher_layer_command_masks_lower_layer_until_source_is_disabled() {
         .unwrap();
     assert_eq!(fallback.len(), 1);
     assert_eq!(fallback[0].template, "Project review");
+}
+
+#[test]
+fn malformed_higher_layer_frontmatter_masks_lower_layer_command() {
+    let fixture = Fixture::new();
+    write(
+        fixture.project.join(".claude/commands/review.md"),
+        "Project review",
+    );
+    write(
+        fixture.user_claude.join("commands/review.md"),
+        "---\nallowed-tools: [Read\n---\nPersonal review",
+    );
+
+    let provider = fixture.provider();
+    let snapshot = provider.discover(&fixture.context()).unwrap();
+
+    assert!(resolve(&provider, &snapshot).is_empty());
+    assert_eq!(snapshot.unavailable_command_ids.len(), 1);
+    assert!(snapshot
+        .diagnostics
+        .iter()
+        .any(|diagnostic| diagnostic.code == "claude.command.markdown_invalid"));
 }
 
 #[test]
