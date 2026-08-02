@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use bitfun_agent_runtime::sdk::{PermissionReply, PermissionRequest};
 
-pub(crate) const DISPATCH_PROTOCOL_VERSION: u32 = 3;
+pub(crate) const DISPATCH_PROTOCOL_VERSION: u32 = 4;
 pub(crate) const MAX_DISPATCH_TEXT_BYTES: usize = 32 * 1024;
 
 #[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq)]
@@ -338,6 +338,13 @@ pub(crate) struct DispatchContinueRequest {
     pub(crate) prompt: String,
     #[serde(default)]
     pub(crate) display_content: Option<String>,
+    /// Per-turn model override. Absent keeps the job's current model; present
+    /// it also becomes the job's model for later turns.
+    #[serde(default)]
+    pub(crate) model: Option<String>,
+    /// Per-turn approval-policy override with the same carry-forward rule.
+    #[serde(default)]
+    pub(crate) approval_policy: Option<DispatchApprovalPolicy>,
 }
 
 #[derive(Clone, Debug, Serialize, PartialEq, Eq)]
@@ -403,6 +410,14 @@ impl DispatchEvent {
             timestamp: chrono::Utc::now().to_rfc3339(),
             action: "approvalPolicySelected".to_string(),
             details: serde_json::json!({ "approvalPolicy": policy }),
+        }
+    }
+
+    pub(crate) fn model_selected(model: Option<&str>) -> Self {
+        Self::Audit {
+            timestamp: chrono::Utc::now().to_rfc3339(),
+            action: "modelSelected".to_string(),
+            details: serde_json::json!({ "model": model }),
         }
     }
 

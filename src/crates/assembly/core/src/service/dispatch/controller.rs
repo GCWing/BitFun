@@ -19,7 +19,7 @@ use super::{
     OutboundDispatchStore,
 };
 
-pub(super) const DISPATCH_PROTOCOL_VERSION: u64 = 3;
+pub(super) const DISPATCH_PROTOCOL_VERSION: u64 = 4;
 pub(super) const MAX_DISPATCH_TEXT_BYTES: usize = 32 * 1024;
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -135,6 +135,12 @@ pub struct DispatchContinueRequest {
     pub prompt: String,
     #[serde(default)]
     pub display_content: Option<String>,
+    /// Per-turn model override; carries forward as the job's model.
+    #[serde(default)]
+    pub model: Option<String>,
+    /// Per-turn approval-policy override with the same carry-forward rule.
+    #[serde(default)]
+    pub approval_policy: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -953,7 +959,7 @@ pub async fn continue_job(
     };
     let response =
         dispatch_ssh::continue_job(manager, connection_id, &continue_payload(&request)).await?;
-    record_follow_up_state(store, &record, &response).await;
+    record_follow_up_state(store, &record, &request, &response).await;
     Ok(response)
 }
 
@@ -973,6 +979,22 @@ pub(super) fn continue_payload(request: &DispatchContinueRequest) -> Value {
     {
         payload["displayContent"] = Value::String(display.to_string());
     }
+    if let Some(model) = request
+        .model
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        payload["model"] = Value::String(model.to_string());
+    }
+    if let Some(policy) = request
+        .approval_policy
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        payload["approvalPolicy"] = Value::String(policy.to_string());
+    }
     payload
 }
 
@@ -984,8 +1006,22 @@ pub(super) fn continue_payload(request: &DispatchContinueRequest) -> Value {
 pub(super) async fn record_follow_up_state(
     store: &OutboundDispatchStore,
     record: &OutboundDispatchRecord,
+    request: &DispatchContinueRequest,
     response: &Value,
 ) {
+    if let Err(error) = store
+        .update_submission_options(
+            &record.job_id,
+            request.model.as_deref(),
+            request.approval_policy.as_deref(),
+        )
+        .await
+    {
+        log::warn!(
+            "Failed to record dispatch follow-up options: job_id={} error={error}",
+            record.job_id
+        );
+    }
     let Some(state) = response.get("state").and_then(Value::as_str) else {
         return;
     };
@@ -1093,6 +1129,16 @@ pub(super) fn validate_continue_request(request: &DispatchContinueRequest) -> an
         .saturating_add(request.display_content.as_ref().map_or(0, String::len));
     if total_bytes > MAX_DISPATCH_TEXT_BYTES {
         anyhow::bail!("Dispatch follow-up exceeds the 32 KiB request limit");
+    }
+    if let Some(model) = &request.model {
+        if model.trim().is_empty() || model.len() > 256 {
+            anyhow::bail!("Dispatch model override must contain 1-256 bytes");
+        }
+    }
+    if let Some(policy) = &request.approval_policy {
+        if !matches!(policy.as_str(), "auto" | "reject-and-report" | "remote") {
+            anyhow::bail!("Dispatch approval policy override is not recognized");
+        }
     }
     Ok(())
 }

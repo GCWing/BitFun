@@ -347,6 +347,38 @@ impl OutboundDispatchStore {
         Ok(record)
     }
 
+    /// Reflect per-turn option overrides in the observer index so a later
+    /// reconciliation cannot revert the UI to the pre-override values.
+    pub async fn update_submission_options(
+        &self,
+        job_id: &str,
+        model: Option<&str>,
+        approval_policy: Option<&str>,
+    ) -> Result<(), DispatchStoreError> {
+        if model.is_none() && approval_policy.is_none() {
+            return Ok(());
+        }
+        let path = self.record_path(job_id)?;
+        let _lock = self.json_store.acquire_cross_process_lock(&path).await?;
+        let Some(mut record) = self
+            .json_store
+            .read_optional::<OutboundDispatchRecord>(&path)
+            .await?
+        else {
+            return Ok(());
+        };
+        if let Some(model) = model {
+            record.model = Some(model.to_string()).filter(|value| !value.trim().is_empty());
+        }
+        if let Some(policy) = approval_policy {
+            record.approval_policy = Some(policy.to_string());
+        }
+        record.updated_at = Utc::now();
+        self.json_store.write_atomic_strict(&path, &record).await?;
+        harden_file_permissions(&path).await?;
+        Ok(())
+    }
+
     pub async fn list(&self) -> Result<Vec<OutboundDispatchRecord>, DispatchStoreError> {
         #[cfg(feature = "ssh-remote")]
         if let Err(error) = self.reconcile_expired_preparations().await {

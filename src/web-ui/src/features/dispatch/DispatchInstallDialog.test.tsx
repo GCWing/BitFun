@@ -411,7 +411,7 @@ describe('DispatchInstallDialog installation lifecycle', () => {
     expect(container.textContent).not.toContain('dispatch.snapshotResultLocationHint');
   });
 
-  it('preserves protocol v3 target model facts without a delivery-mode choice', async () => {
+  it('preserves protocol v4 target model facts without a delivery-mode choice', async () => {
     const onReady = vi.fn();
     mocks.probeTarget.mockResolvedValue({
       cliInstalled: true,
@@ -419,7 +419,7 @@ describe('DispatchInstallDialog installation lifecycle', () => {
       arch: 'x86_64',
       installSupported: false,
       protocol: {
-        protocolVersion: 3,
+        protocolVersion: 4,
         cliVersion: '1.2.3',
         os: 'linux',
         arch: 'x86_64',
@@ -434,6 +434,7 @@ describe('DispatchInstallDialog installation lifecycle', () => {
           'workspace_git_bundle_upload',
           'workspace_git_sync',
           'approval_remote',
+          'per_turn_options',
         ],
         modelConfigured: true,
         availableModels: ['model-a', 'model-b'],
@@ -577,7 +578,7 @@ describe('DispatchInstallDialog model configuration sync', () => {
       arch: 'x86_64',
       installSupported: true,
       protocol: {
-        protocolVersion: 3,
+        protocolVersion: 4,
         cliVersion: '1.2.3',
         os: 'linux',
         arch: 'x86_64',
@@ -591,6 +592,7 @@ describe('DispatchInstallDialog model configuration sync', () => {
           'workspace_git_bundle_upload',
           'workspace_git_sync',
           'dispatch_worker_cli_profile',
+          'per_turn_options',
         ],
         modelConfigured,
         availableModels: modelConfigured ? ['claude'] : [],
@@ -735,7 +737,7 @@ describe('DispatchInstallDialog target model readout', () => {
       arch: 'x86_64',
       installSupported: true,
       protocol: {
-        protocolVersion: 3,
+        protocolVersion: 4,
         cliVersion: '1.2.3',
         os: 'linux',
         arch: 'x86_64',
@@ -749,6 +751,7 @@ describe('DispatchInstallDialog target model readout', () => {
           'workspace_git_bundle_upload',
           'workspace_git_sync',
           'dispatch_worker_cli_profile',
+          'per_turn_options',
         ],
         modelConfigured: true,
         availableModels,

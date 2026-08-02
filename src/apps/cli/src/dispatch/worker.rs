@@ -9,7 +9,10 @@ use bitfun_agent_runtime::sdk::{
     PermissionReplySource, PermissionRequest, PermissionRequestEvent,
 };
 use bitfun_events::{project_agentic_frontend_event, AgenticEvent};
-use bitfun_runtime_ports::{AgentSubmissionSource, DialogSubmissionPolicy, SessionExecutionTarget};
+use bitfun_runtime_ports::{
+    AgentSessionModelUpdateRequest, AgentSubmissionSource, DialogSubmissionPolicy,
+    SessionExecutionTarget,
+};
 
 use crate::{shutdown_mcp_servers, BootstrapProfile};
 
@@ -77,7 +80,20 @@ async fn run_inner(store: &DispatchStore, job_id: &str) -> Result<()> {
             workspace.display()
         );
     }
-    super::ensure_selected_model_ready(job.request.model.as_deref()).await?;
+    // Per-turn overrides are read before runtime bootstrap because the
+    // approval policy is baked into initialize_core_services. Nothing can
+    // enqueue another turn between this peek and the claim below: queueing
+    // requires a terminal state and the job is already non-terminal here.
+    let pending_turn = store.peek_follow_up_turn(job_id)?;
+    let effective_model = pending_turn
+        .as_ref()
+        .and_then(|turn| turn.model.clone())
+        .or_else(|| job.request.model.clone());
+    let effective_policy = pending_turn
+        .as_ref()
+        .and_then(|turn| turn.approval_policy)
+        .unwrap_or(job.request.approval_policy);
+    super::ensure_selected_model_ready(effective_model.as_deref()).await?;
 
     // Every detached worker takes the same stable lock for a canonical target
     // workspace. Waiting workers remain Queued and are visible/cancellable.
@@ -98,9 +114,23 @@ async fn run_inner(store: &DispatchStore, job_id: &str) -> Result<()> {
     }
     store.mark_state(job_id, DispatchJobState::Running, None, None)?;
 
+    // Persist the effective options before execution so `list`/`status` and
+    // any replacement worker observe the same choices this turn runs with.
+    let (model_changed, policy_changed) =
+        store.update_job_request_options(job_id, effective_model.as_deref(), effective_policy)?;
+    if policy_changed {
+        store.append_event(
+            job_id,
+            &DispatchEvent::approval_policy_selected(effective_policy),
+        )?;
+    }
+    if model_changed {
+        store.append_event(job_id, &DispatchEvent::model_selected(effective_model.as_deref()))?;
+    }
+
     let runtime = crate::initialize_core_services(
         workspace,
-        permissions::cli_policy(job.request.approval_policy),
+        permissions::cli_policy(effective_policy),
         BootstrapProfile::Execution,
     )
     .await?;
@@ -145,7 +175,7 @@ async fn run_inner(store: &DispatchStore, job_id: &str) -> Result<()> {
                     workspace_id: None,
                     remote_connection_id: None,
                     remote_ssh_host: None,
-                    model_id: job.request.model.clone(),
+                    model_id: effective_model.clone(),
                     metadata: serde_json::Map::new(),
                 },
             )
@@ -161,6 +191,17 @@ async fn run_inner(store: &DispatchStore, job_id: &str) -> Result<()> {
                 }
                 None => "create target-owned dispatch session".to_string(),
             })?;
+    } else if let Some(model) = effective_model.clone() {
+        // A restored session keeps the model of its previous turn; apply this
+        // turn's effective choice before submitting.
+        agent_runtime
+            .update_session_model(AgentSessionModelUpdateRequest {
+                session_id: job.request.session_id.clone(),
+                model_id: model,
+            })
+            .await
+            .map_err(|error| anyhow!(error.into_message()))
+            .context("apply dispatch turn model to restored session")?;
     }
 
     let turn_id = uuid::Uuid::new_v4().to_string();
@@ -187,7 +228,7 @@ async fn run_inner(store: &DispatchStore, job_id: &str) -> Result<()> {
             reply_route: None,
             prepended_reminders: Vec::new(),
             attachments: Vec::new(),
-            metadata: permissions::metadata(job.request.approval_policy),
+            metadata: permissions::metadata(effective_policy),
         })
         .await
         .map_err(|error| anyhow!(error.into_message()))
@@ -214,7 +255,7 @@ async fn run_inner(store: &DispatchStore, job_id: &str) -> Result<()> {
                     &job.request.session_id,
                     &turn_id,
                     request,
-                    job.request.approval_policy,
+                    effective_policy,
                 )
                 .await?
                 {
@@ -291,7 +332,7 @@ async fn run_inner(store: &DispatchStore, job_id: &str) -> Result<()> {
                     &job.request.session_id,
                     &turn_id,
                     request,
-                    job.request.approval_policy,
+                    effective_policy,
                 )
                 .await?
                 {

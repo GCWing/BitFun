@@ -1,4 +1,4 @@
-export const DISPATCH_PROTOCOL_VERSION = 3;
+export const DISPATCH_PROTOCOL_VERSION = 4;
 
 /**
  * Capabilities every dispatch target must advertise.
@@ -17,4 +17,5 @@ export const BASE_DISPATCH_CAPABILITIES = [
   'workspace_git_bundle_upload',
   'workspace_git_sync',
   'dispatch_worker_cli_profile',
+  'per_turn_options',
 ] as const;

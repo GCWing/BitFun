@@ -141,6 +141,8 @@ async fn probe(request: DispatchProbeRequest) -> Result<DispatchProbeResponse> {
         // accept a job but every detached worker then fails before execution.
         // Advertise the behavioral fix explicitly so controllers fail closed.
         "dispatch_worker_cli_profile".to_string(),
+        // v4: follow-up turns may override model and approval policy.
+        "per_turn_options".to_string(),
     ];
     if runner::is_supported() {
         capabilities.push("detached_worker".to_string());
@@ -230,6 +232,14 @@ fn continue_job(request: DispatchContinueRequest) -> Result<DispatchContinueResp
     }
     if request.prompt.len() > MAX_DISPATCH_TEXT_BYTES {
         bail!("dispatch follow-up prompt exceeds the 32 KiB safety limit");
+    }
+    if let Some(model) = &request.model {
+        if model.trim().is_empty() {
+            bail!("dispatch model override cannot be empty");
+        }
+        if model.len() > 256 {
+            bail!("dispatch model override exceeds the 256 byte limit");
+        }
     }
     if !runner::is_supported() {
         bail!("dispatch detached workers are supported only on Linux and macOS");

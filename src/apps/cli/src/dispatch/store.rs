@@ -7,8 +7,8 @@ use bitfun_agent_runtime::sdk::{PermissionReply, PermissionRequest};
 use serde::{Deserialize, Serialize};
 
 use super::protocol::{
-    DispatchAppendRequest, DispatchContinueRequest, DispatchEvent, DispatchJobListEntry,
-    DispatchJobState, DispatchSubmitRequest, DISPATCH_PROTOCOL_VERSION,
+    DispatchAppendRequest, DispatchApprovalPolicy, DispatchContinueRequest, DispatchEvent,
+    DispatchJobListEntry, DispatchJobState, DispatchSubmitRequest, DISPATCH_PROTOCOL_VERSION,
 };
 
 const JOB_RECORD_FILE: &str = "job.json";
@@ -161,7 +161,23 @@ pub(crate) struct StoredFollowUpTurn {
     pub(crate) prompt: String,
     #[serde(default)]
     pub(crate) display_content: Option<String>,
+    /// Per-turn overrides. The worker applies them to the job record when it
+    /// claims the turn, so they carry forward to later turns and restarts.
+    #[serde(default)]
+    pub(crate) model: Option<String>,
+    #[serde(default)]
+    pub(crate) approval_policy: Option<DispatchApprovalPolicy>,
     pub(crate) created_at: String,
+}
+
+impl StoredFollowUpTurn {
+    /// A retried turnId must carry the same submission, options included.
+    fn same_submission(&self, other: &Self) -> bool {
+        self.prompt == other.prompt
+            && self.display_content == other.display_content
+            && self.model == other.model
+            && self.approval_policy == other.approval_policy
+    }
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -712,20 +728,22 @@ impl DispatchStore {
             turn_id: request.turn_id.clone(),
             prompt: request.prompt.clone(),
             display_content: request.display_content.clone(),
+            model: request.model.clone(),
+            approval_policy: request.approval_policy,
             created_at: chrono::Utc::now().to_rfc3339(),
         };
         // A retried request must not start a second turn. Both mailboxes are
         // checked because the worker may already have claimed this one.
         let consumed_path = mailbox_path(&job_dir, CONSUMED_TURNS_DIR, &request.turn_id)?;
         if let Some(existing) = read_optional_regular_json::<StoredFollowUpTurn>(&consumed_path)? {
-            if existing.prompt != request.prompt {
+            if !existing.same_submission(&stored) {
                 bail!("dispatch turnId is already bound to different content");
             }
             return self.load_state_unlocked(&job_dir);
         }
         let pending_path = mailbox_path(&job_dir, PENDING_TURNS_DIR, &request.turn_id)?;
         if let Some(existing) = read_optional_regular_json::<StoredFollowUpTurn>(&pending_path)? {
-            if existing.prompt != request.prompt {
+            if !existing.same_submission(&stored) {
                 bail!("dispatch turnId is already bound to different content");
             }
             return self.load_state_unlocked(&job_dir);
@@ -750,6 +768,50 @@ impl DispatchStore {
             &DispatchEvent::job_state(DispatchJobState::Queued, None),
         )?;
         Ok(state)
+    }
+
+    /// Read the next queued turn without consuming it.
+    ///
+    /// The worker peeks before initializing the runtime because the approval
+    /// policy is baked into runtime bootstrap; the later claim takes the same
+    /// earliest turn (identical ordering), and nothing can enqueue in between
+    /// — `queue_follow_up_turn` requires a terminal state and the job is
+    /// already Queued/Running by then.
+    pub(crate) fn peek_follow_up_turn(&self, job_id: &str) -> Result<Option<StoredFollowUpTurn>> {
+        let job_dir = self.existing_job_dir(job_id)?;
+        let _lock = JobLock::exclusive(&job_dir.join(".lock"))?;
+        let mut pending =
+            read_json_directory::<StoredFollowUpTurn>(&job_dir.join(PENDING_TURNS_DIR))?;
+        pending.sort_by(|left, right| {
+            left.created_at
+                .cmp(&right.created_at)
+                .then_with(|| left.turn_id.cmp(&right.turn_id))
+        });
+        Ok(pending.into_iter().next())
+    }
+
+    /// Persist the effective per-turn options onto the job record so `list`,
+    /// `status`, and any replacement worker observe the same choices the turn
+    /// runs with. Returns (model_changed, approval_policy_changed).
+    pub(crate) fn update_job_request_options(
+        &self,
+        job_id: &str,
+        model: Option<&str>,
+        approval_policy: DispatchApprovalPolicy,
+    ) -> Result<(bool, bool)> {
+        let job_dir = self.existing_job_dir(job_id)?;
+        let _lock = JobLock::exclusive(&job_dir.join(".lock"))?;
+        let mut job = self.load_job(job_id)?;
+        let model = model.map(str::to_string);
+        let model_changed = job.request.model != model;
+        let policy_changed = job.request.approval_policy != approval_policy;
+        if !model_changed && !policy_changed {
+            return Ok((false, false));
+        }
+        job.request.model = model;
+        job.request.approval_policy = approval_policy;
+        atomic_write_json(&job_dir.join(JOB_RECORD_FILE), &job)?;
+        Ok((model_changed, policy_changed))
     }
 
     /// Take the next queued turn and bind it to the runtime turn the worker is
@@ -2161,6 +2223,8 @@ mod tests {
             turn_id: turn_id.to_string(),
             prompt: prompt.to_string(),
             display_content: None,
+            model: None,
+            approval_policy: None,
         }
     }
 
@@ -2200,6 +2264,67 @@ mod tests {
             .claim_follow_up_turn("job-1", "runtime-turn-3")
             .expect("second claim")
             .is_none());
+    }
+
+    #[test]
+    fn per_turn_options_are_peeked_applied_and_kept_idempotent() {
+        let (_dir, store) = store();
+        store
+            .create_job(request("job-1"), "job title".to_string())
+            .expect("create job");
+        store
+            .mark_state("job-1", DispatchJobState::Succeeded, Some("turn-1"), None)
+            .expect("succeeded");
+
+        let mut follow_up = continue_request("job-1", "turn-2", "with new options");
+        follow_up.model = Some("model-2".to_string());
+        follow_up.approval_policy = Some(DispatchApprovalPolicy::Remote);
+        store
+            .queue_follow_up_turn(&follow_up)
+            .expect("queue follow-up");
+
+        // The worker reads the overrides before runtime bootstrap.
+        let peeked = store
+            .peek_follow_up_turn("job-1")
+            .expect("peek")
+            .expect("a queued turn");
+        assert_eq!(peeked.model.as_deref(), Some("model-2"));
+        assert_eq!(peeked.approval_policy, Some(DispatchApprovalPolicy::Remote));
+
+        // A retried turnId bound to different options must be refused.
+        let mut conflicting = follow_up.clone();
+        conflicting.model = Some("model-3".to_string());
+        assert!(store.queue_follow_up_turn(&conflicting).is_err());
+
+        // Applying the effective options rewrites the job record...
+        let (model_changed, policy_changed) = store
+            .update_job_request_options("job-1", Some("model-2"), DispatchApprovalPolicy::Remote)
+            .expect("apply options");
+        assert!(model_changed);
+        assert!(policy_changed);
+        let job = store.load_job("job-1").expect("job");
+        assert_eq!(job.request.model.as_deref(), Some("model-2"));
+        assert_eq!(job.request.approval_policy, DispatchApprovalPolicy::Remote);
+
+        // ...without breaking submit idempotency: the ORIGINAL submit retry
+        // still matches its stored fingerprint after the rewrite.
+        let existing = store
+            .load_existing_job_for_intent(&request("job-1"))
+            .expect("intent lookup")
+            .expect("existing job");
+        assert_eq!(existing.0.request.model.as_deref(), Some("model-2"));
+
+        // Re-applying identical options reports no change.
+        assert_eq!(
+            store
+                .update_job_request_options(
+                    "job-1",
+                    Some("model-2"),
+                    DispatchApprovalPolicy::Remote
+                )
+                .expect("idempotent apply"),
+            (false, false)
+        );
     }
 
     #[test]

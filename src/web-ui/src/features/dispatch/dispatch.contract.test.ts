@@ -58,8 +58,9 @@ describe('dispatch controller-only routing contract', () => {
 });
 
 describe('dispatch preflight contract', () => {
-  it('fails closed on protocol v3 Git worktree delivery', () => {
-    expect(DISPATCH_PROTOCOL_VERSION).toBe(3);
+  it('fails closed on protocol v4 Git worktree delivery with per-turn options', () => {
+    expect(DISPATCH_PROTOCOL_VERSION).toBe(4);
+    expect(BASE_DISPATCH_CAPABILITIES).toContain('per_turn_options');
     expect(BASE_DISPATCH_CAPABILITIES).toEqual(expect.arrayContaining([
       'workspace_serialization',
       'workspace_git_worktree',

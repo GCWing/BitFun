@@ -84,7 +84,7 @@ const GLIBC_FLOOR: &str = "2.35";
 /// Same figure the relay source build uses.
 const SOURCE_BUILD_FREE_KB: u64 = 6 * 1024 * 1024;
 const REPO_GIT_URL: &str = "https://github.com/GCWing/BitFun.git";
-const DISPATCH_PROTOCOL_VERSION: u64 = 3;
+const DISPATCH_PROTOCOL_VERSION: u64 = 4;
 const DISPATCH_WORKER_CLI_PROFILE_CAPABILITY: &str = "dispatch_worker_cli_profile";
 /// First stable release whose CLI is known to contain every capability below.
 ///
@@ -93,7 +93,7 @@ const DISPATCH_WORKER_CLI_PROFILE_CAPABILITY: &str = "dispatch_worker_cli_profil
 /// previous release, so comparing only the installed and controller version
 /// strings is not a sound compatibility test.
 const FIRST_COMPATIBLE_STABLE_DISPATCH_RELEASE: (u64, u64, u64) = (0, 2, 16);
-const REQUIRED_DISPATCH_CAPABILITIES: [&str; 14] = [
+const REQUIRED_DISPATCH_CAPABILITIES: [&str; 15] = [
     "persistent_jobs",
     "cursor_events",
     "detached_worker",
@@ -110,6 +110,8 @@ const REQUIRED_DISPATCH_CAPABILITIES: [&str; 14] = [
     "workspace_git_bundle_upload",
     "workspace_git_sync",
     DISPATCH_WORKER_CLI_PROFILE_CAPABILITY,
+    // v4: follow-up turns may override model and approval policy.
+    "per_turn_options",
 ];
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

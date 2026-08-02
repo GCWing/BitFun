@@ -460,7 +460,7 @@ pub async fn continue_device_job(
             continue_payload(&request),
         )
         .await?;
-    record_follow_up_state(store, &record, &response).await;
+    record_follow_up_state(store, &record, &request, &response).await;
     Ok(response)
 }
 
