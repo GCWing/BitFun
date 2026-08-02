@@ -19,6 +19,7 @@ import RustModule from 'libbitfun_desktop_lib.so';
 import { AppUpdater, UpdateCheckResult } from '../utils/AppUpdater';
 import { CommonUtils } from '../utils/CommonUtils';
 import { runDeveco } from '../utils/DevecoStart';
+import { VoiceInputService } from '../services/VoiceInputService';
 
 
 const DOMAIN = 0x0000;
@@ -29,6 +30,7 @@ export default class EntryAbility extends RustAbility {
   public commonEventListener: CommonEventListener | undefined = undefined;
   public remoteUrl: string = "";
   private appUpdater: AppUpdater = new AppUpdater();
+  private voiceInputService: VoiceInputService = new VoiceInputService();
   public shareStatus: boolean = false;
 
   async onCreate(want: Want, launchParam: AbilityConstant.LaunchParam): Promise<void> {
@@ -219,6 +221,25 @@ export default class EntryAbility extends RustAbility {
       }
       return '';
     });
+    this.voiceInputService.setContext(this.context);
+    RustModule.registerArktsFunction('ohos_speech_start', async (err: Error, arg: string): Promise<string> => {
+      try {
+        return await this.voiceInputService.start(arg);
+      } catch (e) {
+        const detail: string = describeError(e);
+        hilog.error(0x0000, 'BitFunVoiceInput', 'ohos_speech_start callback error: %{public}s', detail);
+        return JSON.stringify({ '__error': detail });
+      }
+    });
+    RustModule.registerArktsFunction('ohos_speech_append', async (err: Error, arg: string): Promise<string> => {
+      return await this.voiceInputService.append(arg);
+    });
+    RustModule.registerArktsFunction('ohos_speech_finish', async (err: Error, arg: string): Promise<string> => {
+      return await this.voiceInputService.finish(arg);
+    });
+    RustModule.registerArktsFunction('ohos_speech_cancel', async (err: Error, _arg: string): Promise<string> => {
+      return await this.voiceInputService.cancel('');
+    });
     const autoUpdateEnabled = RustModule.getAppConfigBool('app.auto_update');
     hilog.info(0x0000, 'vnext', 'autoUpdateEnabled: ' + autoUpdateEnabled);
     if (autoUpdateEnabled) {
@@ -262,6 +283,17 @@ interface AppGlobalType {
 export const AppGlobal: AppGlobalType = {
   calendarMgr: null,
   mContext: null
+}
+
+function describeError(e: Object): string {
+  if (e instanceof Error) {
+    return `Error: ${e.message}`;
+  }
+  try {
+    return `json: ${JSON.stringify(e)}`;
+  } catch (_jsonErr) {
+    return `str: ${e}`;
+  }
 }
 
 export async function createMeetingEvent(input: string): Promise<string> {
