@@ -284,7 +284,7 @@ impl WorkspaceService {
         Ok(service)
     }
 
-    #[cfg(test)]
+    #[cfg(all(test, feature = "product-full"))]
     pub(crate) async fn new_for_test_path_manager(path_manager: Arc<PathManager>) -> Self {
         path_manager
             .initialize_user_directories()

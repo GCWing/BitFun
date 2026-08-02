@@ -3785,6 +3785,7 @@ export function runManifestParserSelfTest({
       contracts: [
         'feature = "product-full"',
         'pub mod agentic',
+        'mod external_subagents',
         'feature = "product-domains"',
         'pub mod function_agents',
         'pub mod miniapp',
@@ -3845,6 +3846,15 @@ export function runManifestParserSelfTest({
         'merge_legacy_session_store',
         'move_legacy_path',
         'session_store_migration_error',
+      ],
+    },
+    {
+      path: 'src/crates/assembly/core/src/service/dispatch/mod.rs',
+      contracts: [
+        'feature = "product-full"',
+        'not\\(feature = "product-full"\\)',
+        'release_baseline_claim',
+        'DispatchStoreError::ClaimRelease',
       ],
     },
     {
@@ -4417,6 +4427,30 @@ export function runManifestParserSelfTest({
         throw new Error(`owner content anchor rule for ${path} must require: ${contract}`);
       }
     }
+  }
+
+  const dispatchClaimReleaseRule = requiredContentRules
+    .find((rule) => rule.path === 'src/crates/assembly/core/src/service/dispatch/mod.rs')
+    ?.patterns.find((pattern) => pattern.message === 'no-default dispatch claim release must fail closed');
+  if (!dispatchClaimReleaseRule) {
+    throw new Error('missing no-default dispatch claim release boundary rule');
+  }
+  const failClosedDispatchRelease = `
+#[cfg(not(feature = "product-full"))]
+async fn release_baseline_claim(release: BaselineClaimRelease) -> Result<(), DispatchStoreError> {
+    Err(DispatchStoreError::ClaimRelease(format!("job_id={}", release.job_id)))
+}`;
+  const unsafeDispatchRelease = `
+#[cfg(not(feature = "product-full"))]
+async fn release_baseline_claim(release: BaselineClaimRelease) -> Result<(), DispatchStoreError> {
+    let _ignored = DispatchStoreError::ClaimRelease(format!("job_id={}", release.job_id));
+    Ok(())
+}`;
+  if (!dispatchClaimReleaseRule.regex.test(failClosedDispatchRelease)) {
+    throw new Error('no-default dispatch claim release rule must accept a direct fail-closed return');
+  }
+  if (dispatchClaimReleaseRule.regex.test(unsafeDispatchRelease)) {
+    throw new Error('no-default dispatch claim release rule must reject a discarded error followed by success');
   }
 
   const sessionControlRuleText = forbiddenRuleTextForPath(

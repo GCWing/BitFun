@@ -12,6 +12,11 @@ Repository rule: **keep product logic platform-agnostic, then expose it through 
 2. For desktop development, prefer `pnpm run desktop:dev` — it provides full hot-reload (Vite HMR + Rust auto-rebuild & restart). Use `pnpm run desktop:preview:debug` only when you need a faster cold-start for frontend-only iteration (Rust changes are not auto-rebuilt).
 3. After Rust file changes, prefer `pnpm run fmt:rs` to format only changed or staged `.rs` files. Use `cargo fmt` only when you intentionally want broader formatting coverage.
 4. After changes, run the smallest matching verification from the table below.
+5. Workspace Rust dependencies own compatible versions, not broad capability
+   unions. Each crate must select the dependency features it actually uses;
+   keep test-only features in dev-dependencies and attach feature-gated service
+   capabilities to the owning crate feature. `tokio/full` is forbidden in the
+   root workspace and workspace members.
 
 ## Layered Module Index
 

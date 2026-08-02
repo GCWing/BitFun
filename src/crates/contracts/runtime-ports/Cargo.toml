@@ -16,7 +16,7 @@ bitfun-product-domains = { path = "../product-domains", default-features = false
 bitfun-core-types = { path = "../core-types" }
 serde = { workspace = true }
 serde_json = { workspace = true }
-tokio = { workspace = true }
+tokio = { workspace = true, features = ["sync"] }
 tokio-util = { workspace = true }
 
 [features]
@@ -24,7 +24,7 @@ default = []
 permission = ["dep:bitfun-product-domains"]
 
 [dev-dependencies]
-tokio = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt"] }
 
 [lints]
 workspace = true

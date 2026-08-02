@@ -12,6 +12,7 @@ BitFun 是一个由 Rust workspace 与 React 前端组成的项目。
 2. 桌面端开发优先使用 `pnpm run desktop:dev` — 提供完整热更新（Vite HMR + Rust 自动重编译并重启）。仅在需要更快冷启动且只迭代前端时使用 `pnpm run desktop:preview:debug`（Rust 改动不会自动重编译）。
 3. 修改 Rust 文件后，优先使用 `pnpm run fmt:rs`，只格式化已改动或已暂存的 `.rs` 文件。只有在你明确需要更大范围格式化时才使用 `cargo fmt`。
 4. 改完后按下方表格执行与改动范围匹配的最小验证。
+5. Rust workspace 依赖应在根清单中统一版本，而由消费 crate 按自身职责声明所需 feature；仅测试所需的 feature 应放入 `dev-dependencies`，受 crate feature 控制的服务能力应只在对应 feature 中启用。禁止使用 `tokio/full` 绕过依赖边界设计。
 
 ## 分层模块索引
 

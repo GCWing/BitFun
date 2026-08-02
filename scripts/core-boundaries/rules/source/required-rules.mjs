@@ -3880,6 +3880,10 @@ export const requiredContentRules = [
         message: 'agentic runtime must stay behind product-full for no-default builds',
       },
       {
+        regex: /#\[cfg\(feature = "product-full"\)\]\s*mod external_subagents\b/s,
+        message: 'external subagent product assembly must stay behind product-full',
+      },
+      {
         regex: /#\[cfg\(feature = "product-domains"\)\]\s*pub mod function_agents\b/s,
         message: 'function-agent product domain facade must stay behind product-domains',
       },
@@ -3890,6 +3894,23 @@ export const requiredContentRules = [
       {
         regex: /#\[cfg\(feature = "service-integrations"\)\]\s*pub\(crate\) mod service_agent_runtime\b/s,
         message: 'service agent runtime owner assembly must stay behind service-integrations',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/service/dispatch/mod.rs',
+    reason:
+      'no-default dispatch cleanup must retain claimed records when the product worktree owner is unavailable',
+    patterns: [
+      {
+        regex:
+          /#\[cfg\(feature = "product-full"\)\]\s*async fn release_baseline_claim\b/s,
+        message: 'worktree-backed dispatch claim release must stay behind product-full',
+      },
+      {
+        regex:
+          /#\[cfg\(not\(feature = "product-full"\)\)\]\s*async fn release_baseline_claim\([^)]*\)\s*->\s*Result<\(\), DispatchStoreError>\s*\{\s*Err\(\s*DispatchStoreError::ClaimRelease\([\s\S]*?\)\s*\)\s*\}/s,
+        message: 'no-default dispatch claim release must fail closed',
       },
     ],
   },
@@ -3982,7 +4003,7 @@ export const requiredContentRules = [
         message: 'worktree topology owner import must stay gated for no-default builds',
       },
       {
-        regex: /#\[cfg\(not\(feature = "service-integrations"\)\)\]\s*\{\s*let _ = workspace_root;\s*return None;\s*\}/s,
+        regex: /#\[cfg\(not\(feature = "service-integrations"\)\)\]\s*\{\s*let _ = \(workspace_root, freshness\);\s*return None;\s*\}/s,
         message: 'no-default worktree enrichment fallback must remain explicit',
       },
     ],

@@ -50,6 +50,8 @@ SessionManager -> Session -> DialogTurn -> ModelRound
 - Remote/service 改动必须保持 external protocol lifecycle、workspace projection、scheduler/session restore、
   terminal pre-warm 和 product execution 边界清晰。
 - Feature 改动必须保持 `product-full` 作为兼容产品组装边界；默认能力选择只有在单独的 product matrix review 后才能变化。
+- 保持 `cargo check -p bitfun-core --no-default-features` 可用。产品专属模块必须由 owner feature 控制；轻量 facade
+  操作在缺少产品 owner 时若无法安全完成，应明确 fail-closed 并保留持久化恢复状态，不得隐式启用 `product-full`。
 
 ## 归属参考
 
@@ -78,7 +80,8 @@ SessionManager -> Session -> DialogTurn -> ModelRound
 
 ```bash
 cargo check --workspace
-cargo test -p bitfun-core <test_name> -- --nocapture
+cargo check -p bitfun-core --no-default-features
+cargo test -p bitfun-core --lib <test_name> -- --nocapture
 node scripts/check-core-boundaries.mjs
 ```
 

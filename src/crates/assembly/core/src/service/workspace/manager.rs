@@ -452,7 +452,7 @@ impl WorkspaceInfo {
     ) -> Option<WorkspaceWorktreeInfo> {
         #[cfg(not(feature = "service-integrations"))]
         {
-            let _ = workspace_root;
+            let _ = (workspace_root, freshness);
             return None;
         }
 

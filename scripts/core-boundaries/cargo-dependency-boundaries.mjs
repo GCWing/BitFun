@@ -57,6 +57,143 @@ function dependencyDescription(dependency) {
   return `${kind}${optional} dependency${target}`;
 }
 
+const SERVICES_INTEGRATIONS_TOKIO_FEATURES = new Map([
+  ['announcement', ['fs', 'sync']],
+  ['browser-control', ['time']],
+  ['canvas-runtime', ['fs']],
+  ['debug-log', ['rt']],
+  ['deep-research', ['fs']],
+  ['git', ['fs', 'io-util', 'macros', 'rt', 'time']],
+  ['file-watch', ['rt', 'sync']],
+  ['function-agents', ['fs', 'io-util', 'macros', 'rt', 'time']],
+  ['mcp', ['fs', 'io-util', 'net', 'process', 'rt', 'sync', 'time']],
+  ['miniapp-runtime', ['fs', 'io-util', 'net', 'process', 'rt', 'sync', 'time']],
+  ['miniapp-market', ['fs', 'io-util', 'net', 'process', 'rt', 'sync', 'time']],
+  ['plugin-source', ['fs', 'rt', 'sync', 'time']],
+  ['hook-import', ['fs', 'sync']],
+  ['remote-connect', ['fs', 'io-util', 'net', 'process', 'rt', 'sync', 'time']],
+  ['remote-ssh', ['fs', 'io-util', 'macros', 'net', 'process', 'rt', 'sync', 'time']],
+  ['remote-ssh-concrete', ['fs', 'io-util', 'macros', 'net', 'process', 'rt', 'sync', 'time']],
+  ['review-platform', ['fs', 'io-util', 'sync']],
+  ['speech', ['fs', 'io-util', 'macros', 'rt', 'sync']],
+  ['workspace-search', ['io-util', 'rt', 'sync', 'time']],
+  ['script-tool-runtime', ['io-util', 'process', 'rt', 'sync', 'time']],
+]);
+
+// The installer is an excluded standalone workspace with its own Rust checks
+// and packaging lifecycle; this policy governs the root product workspace.
+const TOKIO_DEPENDENCY_POLICY_EXCLUDED_PACKAGES = new Set(['bitfun-installer']);
+
+function effectiveTokioCapabilities(feature, featureGraph, visiting = new Set()) {
+  if (visiting.has(feature)) {
+    return new Set();
+  }
+  visiting.add(feature);
+
+  const capabilities = new Set();
+  for (const value of featureGraph[feature] ?? []) {
+    if (value.startsWith('tokio/')) {
+      capabilities.add(value.slice('tokio/'.length));
+    } else if (Object.hasOwn(featureGraph, value)) {
+      for (const capability of effectiveTokioCapabilities(value, featureGraph, visiting)) {
+        capabilities.add(capability);
+      }
+    }
+  }
+
+  visiting.delete(feature);
+  return capabilities;
+}
+
+export function findServicesIntegrationsTokioFeatureViolations(pkg) {
+  const violations = [];
+  const featureGraph = pkg.features ?? {};
+
+  for (const [feature, expectedCapabilities] of SERVICES_INTEGRATIONS_TOKIO_FEATURES) {
+    if (!Object.hasOwn(featureGraph, feature)) {
+      violations.push({
+        path: pkg.manifest_path,
+        line: 1,
+        message: `${pkg.name}:${feature} governed Tokio feature is missing`,
+      });
+      continue;
+    }
+
+    const actualCapabilities = [...effectiveTokioCapabilities(feature, featureGraph)].sort();
+    const expected = [...expectedCapabilities].sort();
+    const missing = expected.filter((capability) => !actualCapabilities.includes(capability));
+    const unexpected = actualCapabilities.filter((capability) => !expected.includes(capability));
+    if (missing.length > 0) {
+      violations.push({
+        path: pkg.manifest_path,
+        line: 1,
+        message: `${pkg.name}:${feature} missing effective Tokio capabilities: ${missing.join(', ')}`,
+      });
+    }
+    if (unexpected.length > 0) {
+      violations.push({
+        path: pkg.manifest_path,
+        line: 1,
+        message: `${pkg.name}:${feature} has unexpected effective Tokio capabilities: ${unexpected.join(', ')}`,
+      });
+    }
+  }
+
+  for (const [feature, values] of Object.entries(featureGraph)) {
+    if (SERVICES_INTEGRATIONS_TOKIO_FEATURES.has(feature)) {
+      continue;
+    }
+    if (values.some((value) => value.startsWith('tokio/'))) {
+      violations.push({
+        path: pkg.manifest_path,
+        line: 1,
+        message: `${pkg.name}:${feature} Tokio capabilities require an explicit owner contract`,
+      });
+    }
+  }
+
+  return violations;
+}
+
+export function findTokioDependencyFeatureViolations(packages) {
+  const violations = [];
+
+  for (const pkg of packages) {
+    if (TOKIO_DEPENDENCY_POLICY_EXCLUDED_PACKAGES.has(pkg.name)) {
+      continue;
+    }
+    for (const dependency of pkg.dependencies ?? []) {
+      if (dependency.name !== 'tokio') {
+        continue;
+      }
+      const features = dependency.features ?? [];
+      if (features.includes('full')) {
+        violations.push({
+          path: pkg.manifest_path,
+          line: 1,
+          message: `${pkg.name} must not enable tokio/full for its ${dependencyDescription(dependency)}`,
+        });
+      }
+      const featureOwnedIntegrationRuntime =
+        pkg.name === 'bitfun-services-integrations'
+        && (dependency.kind ?? null) === null;
+      if (features.length === 0 && !featureOwnedIntegrationRuntime) {
+        violations.push({
+          path: pkg.manifest_path,
+          line: 1,
+          message: `${pkg.name} must declare explicit Tokio capabilities for its ${dependencyDescription(dependency)}`,
+        });
+      }
+    }
+
+    if (pkg.name === 'bitfun-services-integrations') {
+      violations.push(...findServicesIntegrationsTokioFeatureViolations(pkg));
+    }
+  }
+
+  return violations;
+}
+
 export function findCargoLayerViolations(
   packages,
   { root, crateLayoutRules },
@@ -590,6 +727,7 @@ export function checkCargoDependencyBoundaries({ root, crateLayoutRules }) {
       { root, crateLayoutRules },
     ),
     ...findFeatureGatedTestTargetViolations(packages),
+    ...findTokioDependencyFeatureViolations(packages),
   ];
 }
 

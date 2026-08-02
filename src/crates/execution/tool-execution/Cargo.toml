@@ -23,7 +23,7 @@ log = { workspace = true }
 regex = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-tokio = { workspace = true }
+tokio = { workspace = true, features = ["rt", "sync", "time"] }
 tokio-util = { workspace = true }
 vte = { workspace = true, features = ["ansi"] }
 
@@ -35,6 +35,9 @@ windows = { workspace = true, features = [
 
 [target.'cfg(not(target_env = "ohos"))'.dependencies]
 readability-js = { version = "0.1.5", optional = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros"] }
 
 [lints]
 workspace = true

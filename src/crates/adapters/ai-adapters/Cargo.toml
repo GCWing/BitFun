@@ -28,7 +28,7 @@ reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true, optional = true }
-tokio = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt", "sync", "time"] }
 tokio-stream = { workspace = true }
 tokio-util = { workspace = true }
 urlencoding = { workspace = true }
@@ -53,6 +53,9 @@ subscription-auth = [
     "dep:keyring-core",
     "dep:libc",
     "dep:sha2",
+    "tokio/fs",
+    "tokio/io-util",
+    "tokio/net",
     "dep:uuid",
     "dep:windows-native-keyring-store",
     "dep:zbus-secret-service-keyring-store",
@@ -61,6 +64,7 @@ subscription-auth = [
 [dev-dependencies]
 axum = { workspace = true }
 bitfun-events = { path = "../../contracts/events" }
+tokio = { workspace = true, features = ["io-util", "net", "rt-multi-thread"] }
 
 [lints]
 workspace = true

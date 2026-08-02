@@ -52,7 +52,7 @@ alloc-no-stdlib = { workspace = true }
 alloc-stdlib = { workspace = true }
 
 # Inherited from workspace
-tokio = { workspace = true }
+tokio = { workspace = true, features = ["fs", "io-util", "macros", "net", "process", "rt-multi-thread", "sync", "time"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 anyhow = { workspace = true }

@@ -31,10 +31,11 @@ serde_yaml = { workspace = true }
 sha2 = { workspace = true }
 thiserror = { workspace = true }
 uuid = { workspace = true }
-tokio = { workspace = true }
+tokio = { workspace = true, features = ["io-util", "macros", "process", "rt", "sync", "time"] }
 tokio-util = { workspace = true }
 
 [dev-dependencies]
+tokio = { workspace = true, features = ["rt-multi-thread"] }
 
 [lints]
 workspace = true

@@ -3154,7 +3154,7 @@ fn declared_parent_metadata_issue_code(kind: ErrorKind) -> PluginSourceIssueCode
 mod tests {
     use super::{
         build_snapshot, charge_scanned_read, declared_parent_metadata_issue_code,
-        map_activation_store_error, map_load_store_error,
+        map_activation_store_error, map_load_store_error, native_path_identity,
         persist_trust_bytes_with_parent_sync, read_bounded_reader, read_scanned_file,
         replace_file_atomically, trust_file_identity, trust_store_issue_code, workspace_scope,
         ManagedPluginSourceError, ManagedPluginSourceService, OperationScanBudget,

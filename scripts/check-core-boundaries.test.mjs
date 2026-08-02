@@ -1,6 +1,7 @@
 import { access, readFile } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -10,6 +11,8 @@ import {
   findCargoLayerViolations,
   findFeatureGatedTestTargetViolations,
   findProductEntrypointCoreFeatureViolations,
+  findServicesIntegrationsTokioFeatureViolations,
+  findTokioDependencyFeatureViolations,
 } from './core-boundaries/cargo-dependency-boundaries.mjs';
 import { crateLayoutRules } from './core-boundaries/rules/crate-layout.mjs';
 
@@ -29,6 +32,31 @@ const MODULES = [
 ];
 
 const TEST_ROOT = join('C:', 'repo');
+
+function parseManifestFeatures(manifest) {
+  const section = manifest.match(/^\[features\]\s*$([\s\S]*?)(?=^\[|(?![\s\S]))/m)?.[1] ?? '';
+  const features = {};
+
+  for (const match of section.matchAll(/^([a-zA-Z0-9_-]+)\s*=\s*\[([\s\S]*?)\]/gm)) {
+    features[match[1]] = [...match[2].matchAll(/["']([^"']+)["']/g)].map((value) => value[1]);
+  }
+
+  return features;
+}
+
+function removeFeatureValue(manifest, feature, value) {
+  const featurePattern = new RegExp(`^${feature}\\s*=\\s*\\[([\\s\\S]*?)\\]`, 'm');
+  return manifest.replace(featurePattern, (definition) =>
+    definition.replace(new RegExp(`\\s*["']${value}["'],?`), ''));
+}
+
+function servicesIntegrationsPackage(manifest) {
+  return {
+    name: 'bitfun-services-integrations',
+    manifest_path: join(TEST_ROOT, 'src', 'crates', 'services', 'services-integrations', 'Cargo.toml'),
+    features: parseManifestFeatures(manifest),
+  };
+}
 
 function packageAt(name, repoManifestPath, dependencies = []) {
   return {
@@ -287,6 +315,55 @@ test('cargo layer checker rejects reverse edges across dependency kinds', () => 
   assert.match(violations[3].message, /runtime.*execution.*->.*adapter.*adapters.*normal dependency/);
   assert.match(violations[4].message, /runtime.*execution.*->.*service.*services.*normal dependency/);
   assert.match(violations[5].message, /contract.*contracts.*->.*service.*services.*build dependency/);
+});
+
+test('workspace Tokio capabilities stay crate-owned', async () => {
+  const repositoryRoot = fileURLToPath(new URL('..', import.meta.url));
+  const workspaceManifest = await readFile(new URL('../Cargo.toml', import.meta.url), 'utf8');
+  const workspaceTokio = workspaceManifest.match(/^tokio\s*=\s*\{[^}]+\}/m)?.[0];
+
+  assert.ok(workspaceTokio, 'workspace dependencies must declare Tokio once');
+  assert.match(workspaceTokio, /default-features\s*=\s*false/);
+  assert.doesNotMatch(workspaceTokio, /(?:^|,\s*)features\s*=/);
+  const packages = collectCargoMetadataPackages({ root: repositoryRoot });
+  assert.deepEqual(findTokioDependencyFeatureViolations(packages), []);
+});
+
+test('services integrations Tokio owner contracts reject feature-union masking', async () => {
+  const manifest = await readFile(
+    new URL('../src/crates/services/services-integrations/Cargo.toml', import.meta.url),
+    'utf8',
+  );
+  const mutations = [
+    ['plugin-source', 'tokio/time', /plugin-source missing effective Tokio capabilities: time/],
+    ['mcp', 'tokio/process', /mcp missing effective Tokio capabilities: process/],
+    ['miniapp-market', 'miniapp-runtime', /miniapp-market missing effective Tokio capabilities: fs/],
+    ['function-agents', 'git', /function-agents missing effective Tokio capabilities: fs/],
+    ['remote-ssh-concrete', 'remote-ssh', /remote-ssh-concrete missing effective Tokio capabilities: fs/],
+  ];
+
+  for (const [feature, value, expected] of mutations) {
+    const mutated = removeFeatureValue(manifest, feature, value);
+    assert.notEqual(mutated, manifest, `${feature} must own ${value} in the fixture`);
+    const messages = findServicesIntegrationsTokioFeatureViolations(
+      servicesIntegrationsPackage(mutated),
+    ).map((violation) => violation.message).join('\n');
+    assert.match(messages, expected);
+  }
+});
+
+test('Cargo metadata Tokio policy catches table-style and renamed full dependencies', () => {
+  const pkg = packageAt('table-style', 'src/crates/services/table-style/Cargo.toml', [{
+    name: 'tokio',
+    rename: 'async_runtime',
+    kind: null,
+    optional: false,
+    features: ['full'],
+  }]);
+  const violations = findTokioDependencyFeatureViolations([pkg]);
+
+  assert.equal(violations.length, 1);
+  assert.match(violations[0].message, /table-style must not enable tokio\/full/);
 });
 
 test('cargo layer checker allows documented downward and peer dependencies', () => {

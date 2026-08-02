@@ -11,7 +11,7 @@ crate-type = ["rlib"]
 
 [dependencies]
 # Inherit shared dependencies from workspace
-tokio = { workspace = true }
+tokio = { workspace = true, features = ["fs", "io-util", "macros", "net", "rt", "sync", "time"] }
 tokio-stream = { workspace = true }
 tokio-util = { workspace = true }
 async-trait = { workspace = true }
@@ -241,6 +241,7 @@ ssh-remote = [
 
 [dev-dependencies]
 tempfile = { workspace = true }
+tokio = { workspace = true, features = ["rt-multi-thread"] }
 
 [[test]]
 name = "context_profile"
@@ -256,6 +257,10 @@ required-features = ["product-full"]
 
 [[test]]
 name = "remote_mcp_streamable_http"
+required-features = ["service-integrations"]
+
+[[test]]
+name = "remote_connect_host_boundary"
 required-features = ["service-integrations"]
 
 [build-dependencies]

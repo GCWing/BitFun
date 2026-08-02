@@ -21,6 +21,7 @@ pub mod external_mcp_import;
 mod external_mcp_tests;
 #[cfg(feature = "product-full")]
 pub mod external_sources;
+#[cfg(feature = "product-full")]
 mod external_subagents;
 #[cfg(feature = "product-full")]
 mod external_tools;

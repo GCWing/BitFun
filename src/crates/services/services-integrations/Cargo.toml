@@ -94,17 +94,18 @@ zbus-secret-service-keyring-store = { workspace = true, optional = true }
 
 [features]
 default = []
-announcement = ["reqwest"]
-browser-control = ["anyhow", "bitfun-services-core", "dirs", "reqwest", "thiserror"]
+announcement = ["reqwest", "tokio/fs", "tokio/sync"]
+browser-control = ["anyhow", "bitfun-services-core", "dirs", "reqwest", "thiserror", "tokio/time"]
 canvas-runtime = [
     "dep:bitfun-product-domains",
     "oxc",
     "sha2",
+    "tokio/fs",
     "urlencoding",
     "uuid",
 ]
-debug-log = ["anyhow", "chrono", "reqwest", "uuid"]
-deep-research = ["bitfun-agent-runtime"]
+debug-log = ["anyhow", "chrono", "reqwest", "tokio/rt", "uuid"]
+deep-research = ["bitfun-agent-runtime", "tokio/fs"]
 git = [
     "async-trait",
     "bitfun-runtime-ports",
@@ -112,8 +113,13 @@ git = [
     "chrono",
     "git2",
     "thiserror",
+    "tokio/fs",
+    "tokio/io-util",
+    "tokio/macros",
+    "tokio/rt",
+    "tokio/time",
 ]
-file-watch = ["notify"]
+file-watch = ["notify", "tokio/rt", "tokio/sync"]
 function-agents = [
     "bitfun-product-domains/function-agents",
     "dep:bitfun-product-domains",
@@ -134,6 +140,13 @@ mcp = [
     "rmcp/transport-streamable-http-client-reqwest",
     "sha2",
     "sse-stream",
+    "tokio/fs",
+    "tokio/io-util",
+    "tokio/net",
+    "tokio/process",
+    "tokio/rt",
+    "tokio/sync",
+    "tokio/time",
     "url",
     "process-tree",
 ]
@@ -144,6 +157,13 @@ miniapp-runtime = [
     "dep:bitfun-product-domains",
     "dirs",
     "reqwest",
+    "tokio/fs",
+    "tokio/io-util",
+    "tokio/net",
+    "tokio/process",
+    "tokio/rt",
+    "tokio/sync",
+    "tokio/time",
     "uuid",
     "which",
 ]
@@ -171,6 +191,10 @@ plugin-source = [
     "libc",
     "sha2",
     "thiserror",
+    "tokio/fs",
+    "tokio/rt",
+    "tokio/sync",
+    "tokio/time",
     "uuid",
     "windows",
 ]
@@ -182,6 +206,8 @@ hook-import = [
     "hex",
     "sha2",
     "thiserror",
+    "tokio/fs",
+    "tokio/sync",
     "uuid",
 ]
 remote-connect = [
@@ -210,6 +236,13 @@ remote-connect = [
     "rustls-native-certs",
     "schannel",
     "sha2",
+    "tokio/fs",
+    "tokio/io-util",
+    "tokio/net",
+    "tokio/process",
+    "tokio/rt",
+    "tokio/sync",
+    "tokio/time",
     "tokio-tungstenite",
     "urlencoding",
     "uuid",
@@ -224,6 +257,14 @@ remote-ssh = [
     "sha2",
     "terminal-core",
     "thiserror",
+    "tokio/fs",
+    "tokio/io-util",
+    "tokio/macros",
+    "tokio/net",
+    "tokio/process",
+    "tokio/rt",
+    "tokio/sync",
+    "tokio/time",
     "tokio-util",
 ]
 remote-ssh-concrete = [
@@ -256,6 +297,9 @@ review-platform = [
     "reqwest",
     "sha2",
     "thiserror",
+    "tokio/fs",
+    "tokio/io-util",
+    "tokio/sync",
     "urlencoding",
     "windows",
 ]
@@ -271,6 +315,11 @@ speech = [
     "sherpa-onnx",
     "tar",
     "thiserror",
+    "tokio/fs",
+    "tokio/io-util",
+    "tokio/macros",
+    "tokio/rt",
+    "tokio/sync",
     "tokio-util",
     "uuid",
 ]
@@ -279,10 +328,24 @@ workspace-search = [
     "bitfun-services-core",
     "dunce",
     "thiserror",
+    "tokio/io-util",
+    "tokio/rt",
+    "tokio/sync",
+    "tokio/time",
     "which",
 ]
 process-tree = ["bitfun-services-core"]
-script-tool-runtime = ["async-trait", "bitfun-runtime-ports", "process-tree", "which"]
+script-tool-runtime = [
+    "async-trait",
+    "bitfun-runtime-ports",
+    "process-tree",
+    "tokio/io-util",
+    "tokio/process",
+    "tokio/rt",
+    "tokio/sync",
+    "tokio/time",
+    "which",
+]
 web-tools = ["reqwest", "thiserror"]
 product-full = [
     "announcement",
@@ -309,7 +372,7 @@ ssh_config = ["dep:ssh_config"]
 
 [dev-dependencies]
 tempfile = { workspace = true }
-tokio = { workspace = true, features = ["test-util"] }
+tokio = { workspace = true, features = ["macros", "rt", "test-util"] }
 
 [[test]]
 name = "debug_log_owner_contracts"

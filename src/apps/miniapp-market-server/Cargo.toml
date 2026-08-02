@@ -13,7 +13,7 @@ path = "src/main.rs"
 anyhow = { workspace = true }
 axum = { workspace = true }
 bitfun-miniapp-market-service = { path = "../../crates/services/miniapp-market-service" }
-tokio = { workspace = true }
+tokio = { workspace = true, features = ["macros", "net", "rt-multi-thread", "signal"] }
 tracing = { workspace = true }
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 

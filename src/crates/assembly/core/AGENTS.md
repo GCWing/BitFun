@@ -79,6 +79,10 @@ SessionManager -> Session -> DialogTurn -> ModelRound
 - Feature work must keep `product-full` as the compatibility product assembly
   boundary unless a separate product matrix review changes default capability
   selection.
+- Keep `cargo check -p bitfun-core --no-default-features` viable. Gate
+  product-only modules at their owner feature; if a light facade operation
+  cannot safely complete without a product owner, fail closed and preserve any
+  durable recovery state instead of enabling `product-full` implicitly.
 
 ## Owner References
 
@@ -107,7 +111,8 @@ Use the smallest check that matches the touched behavior:
 
 ```bash
 cargo check --workspace
-cargo test -p bitfun-core <test_name> -- --nocapture
+cargo check -p bitfun-core --no-default-features
+cargo test -p bitfun-core --lib <test_name> -- --nocapture
 node scripts/check-core-boundaries.mjs
 ```
 

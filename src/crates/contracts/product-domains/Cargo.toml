@@ -62,7 +62,7 @@ external-sources = ["hex", "hmac", "sha2", "url"]
 product-full = ["plugin-source", "miniapp", "function-agents", "external-sources"]
 
 [dev-dependencies]
-tokio = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt"] }
 
 [lints]
 workspace = true
