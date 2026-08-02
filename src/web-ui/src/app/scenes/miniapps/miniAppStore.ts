@@ -29,6 +29,13 @@ export interface MiniAppComposerMessageDetail {
  */
 export const MINIAPP_COMPOSER_DRAFT_EVENT = 'miniapp-composer-draft';
 
+export interface MiniAppDraftEventDetail {
+  token: string;
+  text: string;
+  /** Session the draft belongs to when the claim is already topic-bound. */
+  sessionId?: string;
+}
+
 export interface MiniAppBubbleSuggestion {
   label: string;
   prompt: string;

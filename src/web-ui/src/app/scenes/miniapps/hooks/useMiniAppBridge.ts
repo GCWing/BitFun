@@ -494,7 +494,11 @@ export function useMiniAppBridge(
             }
             window.dispatchEvent(
               new CustomEvent(MINIAPP_COMPOSER_DRAFT_EVENT, {
-                detail: { token: composerTokenRef.current, text: String(params.text ?? '') },
+                detail: {
+                  token: composerTokenRef.current,
+                  text: String(params.text ?? ''),
+                  sessionId: claim.sessionId,
+                },
               }),
             );
             reply(null);

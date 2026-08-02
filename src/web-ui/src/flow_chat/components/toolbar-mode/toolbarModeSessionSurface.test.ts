@@ -94,15 +94,40 @@ describe('floating mini chat bubble MiniApp registration', () => {
     expect(source).toContain('onDraftConsumed: handleMiniAppDraftConsumed');
   });
 
-  it('shows only the active MiniApp topic session while its claim is active', () => {
-    expect(source).toContain('activeComposerClaim?.sessionId');
-    expect(source).toContain(
-      'activeSession?.sessionId === activeComposerSessionId'
+  it('activates the freshly bound topic before opening a MiniApp draft', () => {
+    expect(source).toContain('const liveClaim = useMiniAppStore.getState().composerClaims');
+    expect(source).toContain('const sessionId = liveClaim.sessionId || detail.sessionId');
+
+    const rememberIndex = source.indexOf('rememberPreviousHostSession(detail.token);');
+    const activateIndex = source.indexOf('activateMiniAppSession(draftClaim);');
+    const draftIndex = source.indexOf(
+      'setMiniAppComposerDraft(detail.text, detail.token, sessionId);',
     );
+    const openIndex = source.indexOf('handleOpen();', draftIndex);
+    expect(rememberIndex).toBeGreaterThan(-1);
+    expect(activateIndex).toBeGreaterThan(rememberIndex);
+    expect(draftIndex).toBeGreaterThan(activateIndex);
+    expect(openIndex).toBeGreaterThan(draftIndex);
+  });
+
+  it('does not clear a draft that already belongs to the newly focused session', () => {
+    expect(source).toContain('claimToken: string');
+    expect(source).toContain('sessionId?: string');
+    expect(source).toContain('current.claimToken !== activeComposerToken');
+    expect(source).toContain('current.sessionId !== activeComposerSessionId');
+  });
+
+  it('fails closed around an Agentic MiniApp and shows only its exact topic session', () => {
+    expect(source).toContain('activeComposerClaim?.sessionId');
+    expect(source).toContain('isFloatingMiniChatIsolated({');
+    expect(source).toContain('canRenderFloatingMiniChatSession({');
+    expect(source).toContain('surfaceMounted && isMiniAppSessionReady');
     expect(source).toContain(
-      'surfaceMounted && (!activeComposerClaim || isMiniAppSessionReady)'
+      'surfaceMounted && isMiniAppBubbleIsolated && !isMiniAppSessionReady'
     );
     expect(source).toContain('previousHostSessionRef');
+    expect(source).toContain('restorePreviousHostSession(activeComposerToken)');
+    expect(source).toContain('restorePreviousHostSession();');
   });
 
   it('renders the MiniApp entry model against the topic session workspace', () => {
@@ -114,7 +139,7 @@ describe('floating mini chat bubble MiniApp registration', () => {
     expect(source).not.toContain('getMiniAppIconGradient');
     // The ordinary project workspace remains valid only for the host session.
     expect(source).toContain(
-      'activeComposerClaim\n                  ? displayedSession?.workspacePath\n                  : workspacePath'
+      'isMiniAppBubbleIsolated\n                  ? displayedSession?.workspacePath\n                  : workspacePath'
     );
   });
 

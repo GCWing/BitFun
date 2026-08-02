@@ -27,12 +27,18 @@ import {
   useMiniAppStore,
   MINIAPP_COMPOSER_MESSAGE_EVENT,
   MINIAPP_COMPOSER_DRAFT_EVENT,
+  type MiniAppComposerClaim,
+  type MiniAppDraftEventDetail,
   type MiniAppComposerMessageDetail,
 } from '@/app/scenes/miniapps/miniAppStore';
 import { pickLocalizedString } from '@/app/scenes/miniapps/utils/pickLocalizedString';
 import { renderMiniAppIcon } from '@/app/scenes/miniapps/utils/miniAppIcons';
 import MiniAppBubbleWelcome from './MiniAppBubbleWelcome';
 import { isFloatingMiniChatSessionExecuting } from './floatingMiniChatActivity';
+import {
+  canRenderFloatingMiniChatSession,
+  isFloatingMiniChatIsolated,
+} from './floatingMiniChatIsolation';
 import './FloatingMiniChat.scss';
 
 /**
@@ -59,6 +65,8 @@ export const FloatingMiniChat: React.FC = () => {
   const [composerPrefill, setComposerPrefill] = useState<{
     id: number;
     text: string;
+    claimToken: string;
+    sessionId?: string;
   } | null>(null);
   const composerPrefillIdRef = useRef(0);
   /** True while a press that may legitimately close the panel is in flight. */
@@ -101,18 +109,25 @@ export const FloatingMiniChat: React.FC = () => {
   const bubbleCustomization = activeComposerClaim?.customization;
   const activeComposerToken = activeComposerClaim?.token;
   const activeComposerSessionId = activeComposerClaim?.sessionId;
+  const isMiniAppBubbleIsolated = isFloatingMiniChatIsolated({
+    activeMiniAppId,
+    permissions: activeMiniApp?.permissions,
+    hasComposerClaim: Boolean(activeComposerClaim),
+  });
   const {
     activeSession,
     trackedSession: activeMiniAppSession,
     sessionTitle,
   } = useFlowChatSessions(activeComposerSessionId);
-  const isMiniAppSessionReady = Boolean(
-    activeComposerSessionId && activeSession?.sessionId === activeComposerSessionId
-  );
-  const displayedSession = activeComposerClaim
+  const isMiniAppSessionReady = canRenderFloatingMiniChatSession({
+    isolated: isMiniAppBubbleIsolated,
+    claimedSessionId: activeComposerSessionId,
+    activeSessionId: activeSession?.sessionId,
+  });
+  const displayedSession = isMiniAppBubbleIsolated
     ? activeMiniAppSession
     : activeSession;
-  const displayedTitle = activeComposerClaim
+  const displayedTitle = isMiniAppBubbleIsolated
     ? (bubbleCustomization?.title || activeMiniAppName)
     : sessionTitle;
 
@@ -144,17 +159,24 @@ export const FloatingMiniChat: React.FC = () => {
     setPhase('closed');
   }, []);
 
-  const setMiniAppComposerDraft = useCallback((text: string) => {
+  const setMiniAppComposerDraft = useCallback((
+    text: string,
+    claimToken: string,
+    sessionId?: string,
+  ) => {
     composerPrefillIdRef.current += 1;
     setComposerPrefill({
       id: composerPrefillIdRef.current,
       text,
+      claimToken,
+      sessionId,
     });
   }, []);
 
   const handleMiniAppSuggestion = useCallback((prompt: string) => {
-    setMiniAppComposerDraft(prompt);
-  }, [setMiniAppComposerDraft]);
+    if (!activeComposerToken) return;
+    setMiniAppComposerDraft(prompt, activeComposerToken, activeComposerSessionId);
+  }, [activeComposerSessionId, activeComposerToken, setMiniAppComposerDraft]);
 
   const handleMiniAppDraftConsumed = useCallback((id: number) => {
     setComposerPrefill((current) => (current?.id === id ? null : current));
@@ -189,7 +211,9 @@ export const FloatingMiniChat: React.FC = () => {
       // Registration presence makes this an isolated workspace even when the
       // hidden session has no path, so the normal project never leaks in.
       workspacePath: displayedSession?.workspacePath || '',
-      draft: composerPrefill || undefined,
+      draft: composerPrefill
+        ? { id: composerPrefill.id, text: composerPrefill.text }
+        : undefined,
       onDraftConsumed: handleMiniAppDraftConsumed,
       onSubmit: handleMiniAppSubmit,
     };
@@ -205,8 +229,75 @@ export const FloatingMiniChat: React.FC = () => {
   ]);
 
   useEffect(() => {
-    setComposerPrefill(null);
+    setComposerPrefill((current) => {
+      if (!current) return current;
+      if (current.claimToken !== activeComposerToken) return null;
+      // focusSession and setComposerDraft are two consecutive bridge calls.
+      // React may observe their host-store updates in either order, so keep a
+      // draft that already identifies the newly focused session instead of
+      // clearing it during that transition.
+      if (current.sessionId && current.sessionId !== activeComposerSessionId) {
+        return null;
+      }
+      return current;
+    });
   }, [activeComposerSessionId, activeComposerToken]);
+
+  const activateMiniAppSession = useCallback((claim: MiniAppComposerClaim | undefined) => {
+    const sessionId = claim?.sessionId;
+    if (!sessionId) return false;
+    const state = flowChatStore.getState();
+    if (!state.sessions.has(sessionId)) return false;
+    if (state.activeSessionId !== sessionId) {
+      flowChatStore.switchSession(sessionId);
+    }
+    syncSessionToModernStore(sessionId);
+    return true;
+  }, []);
+
+  const rememberPreviousHostSession = useCallback((claimToken: string) => {
+    if (previousHostSessionRef.current?.claimToken === claimToken) return;
+    const state = flowChatStore.getState();
+    const currentSession = state.activeSessionId
+      ? state.sessions.get(state.activeSessionId)
+      : undefined;
+    previousHostSessionRef.current = {
+      claimToken,
+      sessionId:
+        currentSession && currentSession.sessionKind !== 'miniapp'
+          ? currentSession.sessionId
+          : null,
+    };
+  }, []);
+
+  const restorePreviousHostSession = useCallback((claimToken?: string) => {
+    const previous = previousHostSessionRef.current;
+    if (
+      !previous
+      || (claimToken !== undefined && previous.claimToken !== claimToken)
+    ) return;
+    previousHostSessionRef.current = null;
+    if (!previous.sessionId) return;
+
+    const latest = flowChatStore.getState();
+    if (!latest.sessions.has(previous.sessionId)) return;
+    const currentSession = latest.activeSessionId
+      ? latest.sessions.get(latest.activeSessionId)
+      : undefined;
+    // Do not overwrite an explicit navigation that already selected another
+    // ordinary session while the bubble was closing/unmounting.
+    if (
+      currentSession
+      && currentSession.sessionKind !== 'miniapp'
+      && currentSession.sessionId !== previous.sessionId
+    ) {
+      return;
+    }
+    if (latest.activeSessionId !== previous.sessionId) {
+      flowChatStore.switchSession(previous.sessionId);
+    }
+    syncSessionToModernStore(previous.sessionId);
+  }, []);
 
   // ChatPane is intentionally the shared session surface, so displaying a
   // MiniApp session temporarily switches the shared store. Capture the user's
@@ -215,31 +306,24 @@ export const FloatingMiniChat: React.FC = () => {
   useEffect(() => {
     if (!isOpen || !activeComposerToken) return;
 
-    const state = flowChatStore.getState();
-    const currentSession = state.activeSessionId
-      ? state.sessions.get(state.activeSessionId)
-      : undefined;
-    previousHostSessionRef.current = {
-      claimToken: activeComposerToken,
-      sessionId:
-        currentSession && currentSession.sessionKind !== 'miniapp'
-          ? currentSession.sessionId
-          : null,
-    };
+    rememberPreviousHostSession(activeComposerToken);
 
     return () => {
-      const previous = previousHostSessionRef.current;
-      if (!previous || previous.claimToken !== activeComposerToken) return;
-      previousHostSessionRef.current = null;
-      if (!previous.sessionId) return;
-      const latest = flowChatStore.getState();
-      if (!latest.sessions.has(previous.sessionId)) return;
-      if (latest.activeSessionId !== previous.sessionId) {
-        flowChatStore.switchSession(previous.sessionId);
-      }
-      syncSessionToModernStore(previous.sessionId);
+      restorePreviousHostSession(activeComposerToken);
     };
-  }, [activeComposerToken, isOpen]);
+  }, [
+    activeComposerToken,
+    isOpen,
+    rememberPreviousHostSession,
+    restorePreviousHostSession,
+  ]);
+
+  // setComposerDraft activates the MiniApp session synchronously before the
+  // open-state effect commits. Keep an unconditional unmount fallback so a
+  // simultaneous scene change cannot strand that hidden session globally.
+  useEffect(() => () => {
+    restorePreviousHostSession();
+  }, [restorePreviousHostSession]);
 
   // The claim carries the topic's dedicated session. Activate it only while
   // the bubble is open; if the Agent session has not reached FlowChat yet,
@@ -247,42 +331,61 @@ export const FloatingMiniChat: React.FC = () => {
   useEffect(() => {
     if (!isOpen || !activeComposerToken || !activeComposerSessionId) return;
 
-    const activateDedicatedSession = () => {
-      const state = flowChatStore.getState();
-      if (!state.sessions.has(activeComposerSessionId)) return false;
-      if (state.activeSessionId !== activeComposerSessionId) {
-        flowChatStore.switchSession(activeComposerSessionId);
-      }
-      syncSessionToModernStore(activeComposerSessionId);
-      return true;
-    };
-
-    if (activateDedicatedSession()) return;
+    if (activateMiniAppSession(activeComposerClaim)) return;
     const unsubscribe = flowChatStore.subscribe((state) => {
       if (!state.sessions.has(activeComposerSessionId)) return;
       unsubscribe();
-      activateDedicatedSession();
+      activateMiniAppSession(activeComposerClaim);
     });
     return unsubscribe;
-  }, [activeComposerSessionId, activeComposerToken, isOpen]);
+  }, [
+    activateMiniAppSession,
+    activeComposerClaim,
+    activeComposerSessionId,
+    activeComposerToken,
+    isOpen,
+  ]);
 
   // A MiniApp holding the composer can hand it a prepared prompt (PPT Live's
   // welcome examples). Open the bubble so the user sees what landed there and
   // can edit before sending — this never submits on its own.
   useEffect(() => {
     const claimToken = activeComposerClaim?.token;
-    if (!claimToken) return;
+    if (!claimToken || !activeMiniAppId) return;
     const handler = (e: Event) => {
-      const detail = (e as CustomEvent<{ token?: string; text?: string }>).detail;
+      const detail = (e as CustomEvent<MiniAppDraftEventDetail>).detail;
       if (!detail || detail.token !== claimToken || typeof detail.text !== 'string') return;
-      setMiniAppComposerDraft(detail.text);
+      // focusSession and setComposerDraft can arrive before React commits the
+      // updated claim. Read the live claim, switch synchronously, then open the
+      // panel so its first rendered frame already owns the correct session.
+      const liveClaim = useMiniAppStore.getState().composerClaims[activeMiniAppId];
+      if (liveClaim?.token !== detail.token) return;
+      // The live claim is authoritative if a newer focusSession overtook an
+      // older queued draft event. The event snapshot is only a fallback for
+      // the same host transition.
+      const sessionId = liveClaim.sessionId || detail.sessionId;
+      const draftClaim = sessionId && liveClaim.sessionId !== sessionId
+        ? { ...liveClaim, sessionId }
+        : liveClaim;
+      // The draft path activates the topic before React opens the panel, so
+      // capture the ordinary chat first; closing the bubble must restore it.
+      rememberPreviousHostSession(detail.token);
+      activateMiniAppSession(draftClaim);
+      setMiniAppComposerDraft(detail.text, detail.token, sessionId);
       handleOpen();
     };
     window.addEventListener(MINIAPP_COMPOSER_DRAFT_EVENT, handler);
     return () => {
       window.removeEventListener(MINIAPP_COMPOSER_DRAFT_EVENT, handler);
     };
-  }, [activeComposerClaim?.token, handleOpen, setMiniAppComposerDraft]);
+  }, [
+    activateMiniAppSession,
+    activeComposerClaim?.token,
+    activeMiniAppId,
+    handleOpen,
+    rememberPreviousHostSession,
+    setMiniAppComposerDraft,
+  ]);
 
   // Open on pointer press, not on click. A click only fires when pointerdown
   // and pointerup land on the same element, so anything that moves or replaces
@@ -396,14 +499,14 @@ export const FloatingMiniChat: React.FC = () => {
         type="button"
         className={[
           'bitfun-fmc__button',
-          activeComposerClaim && 'bitfun-fmc__button--miniapp',
+          isMiniAppBubbleIsolated && 'bitfun-fmc__button--miniapp',
           isMiniAppSessionExecuting && 'bitfun-fmc__button--processing',
         ].filter(Boolean).join(' ')}
         onPointerDown={handleTriggerPointerDown}
         onClick={handleOpen}
         aria-expanded={isOpen}
         aria-busy={isMiniAppSessionExecuting || undefined}
-        aria-label={activeComposerClaim ? displayedTitle : t('toolCards.toolbar.startNewChat')}
+        aria-label={isMiniAppBubbleIsolated ? displayedTitle : t('toolCards.toolbar.startNewChat')}
       >
         {isMiniAppSessionExecuting && (
           <span
@@ -411,7 +514,7 @@ export const FloatingMiniChat: React.FC = () => {
             aria-hidden="true"
           />
         )}
-        {activeComposerClaim ? (
+        {isMiniAppBubbleIsolated ? (
           <span
             className="bitfun-fmc__miniapp-trigger-icon"
             aria-hidden="true"
@@ -430,11 +533,11 @@ export const FloatingMiniChat: React.FC = () => {
         onKeyDown={handlePanelKeyDown}
         onTransitionEnd={handlePanelTransitionEnd}
       >
-        {/* Header — normal chat keeps the shared SessionMenu. A claimed
-            MiniApp bubble replaces that switcher with app identity so the user
-            cannot navigate the dedicated composer back into a normal chat. */}
+        {/* Header — normal chat keeps the shared SessionMenu. An isolated
+            Agentic MiniApp replaces that switcher with app identity, including
+            during claim/session bootstrap, so normal chats are never exposed. */}
         <div className="bitfun-fmc__header">
-          {activeComposerClaim ? (
+          {isMiniAppBubbleIsolated ? (
             <div
               className="bitfun-fmc__miniapp-session-icon"
               aria-hidden="true"
@@ -465,13 +568,13 @@ export const FloatingMiniChat: React.FC = () => {
             panel is open to avoid running a second VirtualMessageList and store
             sync in the background while the agent streams in another scene. */}
         <div className="bitfun-fmc__body">
-          {surfaceMounted && (!activeComposerClaim || isMiniAppSessionReady) && (
+          {surfaceMounted && isMiniAppSessionReady && (
             <ChatPane
               width={0}
               isFullscreen={false}
               isSceneActive
               workspacePath={
-                activeComposerClaim
+                isMiniAppBubbleIsolated
                   ? displayedSession?.workspacePath
                   : workspacePath
               }
@@ -489,7 +592,7 @@ export const FloatingMiniChat: React.FC = () => {
               ) : undefined}
             />
           )}
-          {surfaceMounted && activeComposerClaim && !isMiniAppSessionReady && (
+          {surfaceMounted && isMiniAppBubbleIsolated && !isMiniAppSessionReady && (
             <div className="bitfun-fmc__miniapp-session-pending">
               <div
                 className="bitfun-fmc__miniapp-session-pending-icon"
