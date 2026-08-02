@@ -50,6 +50,10 @@
         {
             "name": "permission_read_pasteboard_reason",
             "value": "Used to read clipboard contents for terminal copy and paste"
+        },
+        {
+            "name": "permission_microphone_reason",
+            "value": "Used to capture microphone audio for voice input transcription in the chat composer"
         }
     ]
 }

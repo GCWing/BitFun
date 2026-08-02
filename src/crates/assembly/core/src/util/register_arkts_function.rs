@@ -136,3 +136,39 @@ fn parse_picker_result(json: &str) -> Result<String, String> {
 fn parse_paths_result(json: &str) -> Result<Vec<String>, String> {
     parse_paths_envelope(json, "get_clipboard_files")
 }
+
+/// Invoke an ArkTS-registered speech bridge function by name.
+///
+/// Mirrors [`open_dialog_file`]: looks up the `ThreadsafeFunction` registered
+/// on the ArkTS side via `RustModule.registerArktsFunction(name, ...)`, calls
+/// it with a JSON string argument, and awaits the returned `Promise<String>`.
+/// Used by the ohos branches of the `speech_*` Tauri commands to route voice
+/// input to the HarmonyOS system `speechRecognizer` (via
+/// `src/apps/ohos/.../services/VoiceInputService.ets`) instead of the local
+/// sherpa-onnx recognizer, which is unsupported on the ohos target.
+pub async fn ohos_speech_call(name: &str, json: &str) -> Result<String, String> {
+    let function = {
+        let lock = JS_THREADSAFE_FUNCTION.read();
+        lock.get(name).cloned()
+    };
+
+    let Some(function) = function else {
+        log::error!("[ohos_speech] {} not registered by ArkTS", name);
+        return Err(format!("{name} has not been registered by ArkTS"));
+    };
+
+    let res = function.call_async(Ok(json.to_string())).await;
+    match res {
+        Ok(promise) => match promise.await {
+            Ok(json) => Ok(json),
+            Err(err) => {
+                log::error!("[ohos_speech] {} promise rejected: {} | {:?}", name, err.to_string(), err);
+                Err(err.to_string())
+            }
+        },
+        Err(err) => {
+            log::error!("[ohos_speech] {} call_async failed: {} | {:?}", name, err.to_string(), err);
+            Err(err.to_string())
+        }
+    }
+}
