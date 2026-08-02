@@ -91,11 +91,12 @@ describe('DispatchResultDialog Git sync', () => {
     container.remove();
   });
 
-  it('shows the immutable branch and baseline before explicitly syncing', async () => {
+  it('keeps branch and save location in collapsed details before syncing', async () => {
     await render();
 
     expect(container.textContent).toContain('bitfun/dispatch/job-1');
     expect(container.textContent).toContain('/home/me/.bitfun/worktrees/repo/dispatch-job-1');
+    expect(container.querySelector('details')?.open).toBe(false);
     expect(mocks.syncResult).not.toHaveBeenCalled();
 
     await act(async () => {
@@ -139,7 +140,7 @@ describe('DispatchResultDialog Git sync', () => {
     expect(mocks.syncResult).not.toHaveBeenCalled();
   });
 
-  it('surfaces a target sync failure in the dialog', async () => {
+  it('shows an actionable sync failure without exposing backend diagnostics', async () => {
     mocks.syncResult.mockRejectedValue(new Error('target worktree is locked'));
     await render();
 
@@ -149,6 +150,7 @@ describe('DispatchResultDialog Git sync', () => {
       await Promise.resolve();
     });
 
-    expect(container.textContent).toContain('target worktree is locked');
+    expect(container.textContent).toContain('dispatch.syncFailed');
+    expect(container.textContent).not.toContain('target worktree is locked');
   });
 });

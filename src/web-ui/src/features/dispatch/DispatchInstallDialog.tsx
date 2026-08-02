@@ -10,6 +10,7 @@ import { createLogger } from '@/shared/utils/logger';
 import {
   Check,
   Loader2,
+  RefreshCw,
   ShieldAlert,
   ShieldCheck,
   ShieldQuestion,
@@ -63,10 +64,6 @@ interface DispatchInstallDialogProps {
   onReady: (selection: DispatchSelection) => void;
 }
 
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
 export const DispatchInstallDialog: React.FC<DispatchInstallDialogProps> = ({
   open,
   target,
@@ -83,6 +80,7 @@ export const DispatchInstallDialog: React.FC<DispatchInstallDialogProps> = ({
   const [worktreeSettingsLoading, setWorktreeSettingsLoading] = useState(true);
   const [probe, setProbe] = useState<DispatchSshProbe | null>(null);
   const [probing, setProbing] = useState(false);
+  const [probeError, setProbeError] = useState(false);
   const [installing, setInstalling] = useState(false);
   const [syncingModel, setSyncingModel] = useState(false);
   const [installStart, setInstallStart] = useState<DispatchInstallStart | null>(null);
@@ -104,7 +102,7 @@ export const DispatchInstallDialog: React.FC<DispatchInstallDialogProps> = ({
     const path = '';
     const generation = ++generationRef.current;
     setProbing(true);
-    setError(null);
+    setProbeError(false);
     try {
       const result = await dispatchApi.probeTarget(
         target.kind === 'device'
@@ -117,7 +115,12 @@ export const DispatchInstallDialog: React.FC<DispatchInstallDialogProps> = ({
     } catch (nextError) {
       if (generation === generationRef.current) {
         setProbe(null);
-        setError(errorMessage(nextError));
+        setProbeError(true);
+        log.warn('Failed to check dispatch target readiness', {
+          targetKind: target.kind,
+          targetId,
+          error: nextError,
+        });
       }
     } finally {
       if (generation === generationRef.current) {
@@ -136,6 +139,7 @@ export const DispatchInstallDialog: React.FC<DispatchInstallDialogProps> = ({
     setValidatingBaseRef(false);
     setWorktreeSettingsLoading(true);
     setProbe(null);
+    setProbeError(false);
     setInstallStart(null);
     setInstallOutput('');
     setInstalling(false);
@@ -262,7 +266,11 @@ export const DispatchInstallDialog: React.FC<DispatchInstallDialogProps> = ({
       if (generation === generationRef.current) {
         clearActiveInstall(generation);
         setInstalling(false);
-        setError(errorMessage(nextError));
+        setError(t('dispatch.installFailed'));
+        log.warn('Failed while polling SSH CLI installation', {
+          connectionId,
+          error: nextError,
+        });
       }
     }
   }, [clearActiveInstall, connectionId, runProbe, t]);
@@ -301,7 +309,11 @@ export const DispatchInstallDialog: React.FC<DispatchInstallDialogProps> = ({
       clearActiveInstall(generation);
       if (generation === generationRef.current) {
         setInstalling(false);
-        setError(errorMessage(nextError));
+        setError(t('dispatch.sourceBuildFailed'));
+        log.warn('Failed to start SSH CLI source build', {
+          connectionId,
+          error: nextError,
+        });
       }
     }
   }, [clearActiveInstall, connectionId, pollInstallation, t]);
@@ -325,7 +337,11 @@ export const DispatchInstallDialog: React.FC<DispatchInstallDialogProps> = ({
     } catch (nextError) {
       if (generation === generationRef.current) {
         setSyncingModel(false);
-        setError(errorMessage(nextError));
+        setError(t('dispatch.syncModelFailed'));
+        log.warn('Failed to sync dispatch model configuration', {
+          connectionId,
+          error: nextError,
+        });
       }
       return;
     }
@@ -335,12 +351,20 @@ export const DispatchInstallDialog: React.FC<DispatchInstallDialogProps> = ({
     await runProbe();
   }, [connectionId, runProbe, t]);
 
-  const close = useCallback(() => {
+  const closeDialog = useCallback(() => {
     invalidateInstallLifecycle();
     setInstalling(false);
     setSyncingModel(false);
     onClose();
   }, [invalidateInstallLifecycle, onClose]);
+
+  const handleModalClose = useCallback(() => {
+    // Keep Escape, the close button, and backdrop clicks from silently
+    // abandoning a target mutation. A source build can still be stopped with
+    // the explicit footer action.
+    if (installing || syncingModel) return;
+    closeDialog();
+  }, [closeDialog, installing, syncingModel]);
 
   const protocol = probe?.protocol;
   const selectedApprovalCapability = approvalCapability(approvalPolicy);
@@ -376,11 +400,18 @@ export const DispatchInstallDialog: React.FC<DispatchInstallDialogProps> = ({
     && workspaceReady
     && (cliReady ? modelReady : installPending);
 
+  const localModelIds = syncableLocalModelIds(localModels);
   const targetModelCount = protocol?.availableModels?.length ?? 0;
   const modelParity = compareDispatchModels(
-    syncableLocalModelIds(localModels),
+    localModelIds,
     protocol?.availableModels,
   );
+  const hasLocalModelsToSync = (localModelIds?.length ?? 0) > 0;
+  const offerModelSync =
+    target?.kind === 'ssh'
+    && !!protocol
+    && hasLocalModelsToSync
+    && (!modelReady || modelParity === 'diverged');
   // The probe carries ids, which name nothing a user recognizes. Resolve the
   // target's default through the local catalog when the two agree; when they
   // do not, the id would be misleading anyway and the count is the actionable
@@ -389,7 +420,7 @@ export const DispatchInstallDialog: React.FC<DispatchInstallDialogProps> = ({
     const id = protocol?.defaultModel?.trim();
     if (!id) return t('dispatch.modelAutomatic');
     const local = localModels?.find(model => model.id?.trim() === id);
-    return local ? getModelDisplayName(local) : id;
+    return local ? getModelDisplayName(local) : t('dispatch.modelAutomatic');
   })();
 
   const confirmTarget = async () => {
@@ -456,10 +487,10 @@ export const DispatchInstallDialog: React.FC<DispatchInstallDialogProps> = ({
   return (
     <Modal
       isOpen={open}
-      onClose={close}
+      onClose={handleModalClose}
       size="medium"
-      closeOnOverlayClick
-      showCloseButton
+      closeOnOverlayClick={!installing && !syncingModel}
+      showCloseButton={!installing && !syncingModel}
       // The dialog renders its own heading, so point the modal's label at it
       // rather than at the chrome title it no longer uses.
       ariaLabelledBy={DIALOG_TITLE_ID}
@@ -487,6 +518,86 @@ export const DispatchInstallDialog: React.FC<DispatchInstallDialogProps> = ({
               onClose={() => setBaseRefError(null)}
             />
           ) : null}
+
+          <section className="dispatch-install-dialog__section">
+            <div className="dispatch-install-dialog__section-header">
+              <h3 className="dispatch-install-dialog__section-title">
+                {t('dispatch.readinessTitle')}
+              </h3>
+            </div>
+            <div className="dispatch-install-dialog__section-body">
+              {probing || (!probe && !probeError) ? (
+                <div className="dispatch-install-dialog__pending" role="status">
+                  <Loader2 size={14} className="dispatch-install-dialog__spin" />
+                  {t('dispatch.checkingTarget')}
+                </div>
+              ) : null}
+              {probeError ? (
+                <div className="dispatch-install-dialog__retry">
+                  <span className="dispatch-install-dialog__hint">
+                    {t('dispatch.probeFailed')}
+                  </span>
+                  <Button
+                    variant="secondary"
+                    size="small"
+                    disabled={probing}
+                    onClick={() => void runProbe()}
+                  >
+                    <RefreshCw size={14} aria-hidden />
+                    {t('dispatch.retryCheck')}
+                  </Button>
+                </div>
+              ) : null}
+              {probe ? (
+                <div className="dispatch-install-dialog__checks">
+                  <div data-state={cliReady ? 'ok' : installPending ? 'pending' : 'blocked'}>
+                    <span>{t('dispatch.cliStatus')}</span>
+                    <strong>
+                      {cliReady
+                        ? t('dispatch.cliReady', { version: protocol?.cliVersion })
+                        : installPending
+                          ? t('dispatch.cliWillInstall')
+                          : probe.cliInstalled
+                            ? t('dispatch.cliUpdateRequired')
+                            : t('dispatch.cliUnavailable')}
+                    </strong>
+                  </div>
+                  <div data-state={modelReady ? 'ok' : protocol ? 'blocked' : 'pending'}>
+                    <span>{t('dispatch.modelStatus')}</span>
+                    <strong>
+                      {!protocol
+                        ? t('dispatch.modelCheckPending')
+                        : !modelReady
+                          ? localModelIds?.length === 0
+                            ? t('dispatch.modelMissingOnBoth')
+                            : t('dispatch.modelMissing')
+                          : modelParity === 'match'
+                            ? t('dispatch.modelMatchesLocal', { model: targetDefaultModelLabel })
+                            : modelParity === 'diverged'
+                              ? t('dispatch.modelDiffersFromLocal', { count: targetModelCount })
+                              : t('dispatch.modelReadyCount', { count: targetModelCount })}
+                    </strong>
+                  </div>
+                </div>
+              ) : null}
+              {target?.kind === 'device' && probe && !cliReady ? (
+                <div className="dispatch-install-dialog__retry">
+                  <span className="dispatch-install-dialog__hint">
+                    {t('dispatch.deviceUpdateRequired')}
+                  </span>
+                  <Button
+                    variant="secondary"
+                    size="small"
+                    disabled={probing}
+                    onClick={() => void runProbe()}
+                  >
+                    <RefreshCw size={14} aria-hidden />
+                    {t('dispatch.retryCheck')}
+                  </Button>
+                </div>
+              ) : null}
+            </div>
+          </section>
 
           <section className="dispatch-install-dialog__section">
             <div className="dispatch-install-dialog__section-header">
@@ -535,55 +646,6 @@ export const DispatchInstallDialog: React.FC<DispatchInstallDialogProps> = ({
             </div>
           </section>
 
-          {probe ? (
-            <section className="dispatch-install-dialog__section">
-              <div className="dispatch-install-dialog__section-header">
-                <h3 className="dispatch-install-dialog__section-title">
-                  {t('dispatch.readinessTitle')}
-                </h3>
-              </div>
-              <div className="dispatch-install-dialog__section-body">
-                <div className="dispatch-install-dialog__checks">
-                  <div data-state={cliReady ? 'ok' : 'blocked'}>
-                    <span>{t('dispatch.cliStatus')}</span>
-                    <strong>
-                      {cliReady
-                        ? t('dispatch.cliReady', { version: protocol?.cliVersion })
-                        : probe.cliInstalled && protocol
-                          ? t('dispatch.cliIncompatible', {
-                              details: protocol.protocolVersion !== DISPATCH_PROTOCOL_VERSION
-                                ? t('dispatch.protocolVersionMismatch', {
-                                    expected: DISPATCH_PROTOCOL_VERSION,
-                                    actual: protocol.protocolVersion,
-                                  })
-                                : missingCapabilities.join(', '),
-                            })
-                          : t('dispatch.cliMissing')}
-                    </strong>
-                  </div>
-                  <div data-state={modelReady ? 'ok' : 'blocked'}>
-                    <span>{t('dispatch.modelStatus')}</span>
-                    <strong>
-                      {!modelReady
-                        ? protocol?.modelDiagnostic || t('dispatch.modelMissing')
-                        : modelParity === 'match'
-                          ? t('dispatch.modelMatchesLocal', { model: targetDefaultModelLabel })
-                          : modelParity === 'diverged'
-                            ? t('dispatch.modelDiffersFromLocal', { count: targetModelCount })
-                            : t('dispatch.modelReadyCount', { count: targetModelCount })}
-                    </strong>
-                  </div>
-                </div>
-              </div>
-            </section>
-          ) : null}
-
-          {probe?.prebuiltIncompatible ? (
-            <Alert type="warning" message={probe.prebuiltIncompatible} />
-          ) : probe?.installError ? (
-            <Alert type="warning" message={probe.installError} />
-          ) : null}
-
           {target?.kind === 'ssh' && !cliReady && probe?.release ? (
             <section className="dispatch-install-dialog__section">
               <div className="dispatch-install-dialog__section-header">
@@ -595,13 +657,14 @@ export const DispatchInstallDialog: React.FC<DispatchInstallDialogProps> = ({
                 <span className="dispatch-install-dialog__hint">
                   {t('dispatch.installAutomaticDescription')}
                 </span>
-                {/* The digest is still shown: automatic installation removed the
-                    prompt, not the verification it used to display. */}
-                <dl>
-                  <div><dt>{t('dispatch.version')}</dt><dd>{probe.release.version}</dd></div>
-                  <div><dt>{t('dispatch.downloadUrl')}</dt><dd>{probe.release.url}</dd></div>
-                  <div><dt>SHA256</dt><dd>{probe.release.sha256}</dd></div>
-                </dl>
+                <details className="dispatch-install-dialog__details">
+                  <summary>{t('dispatch.installDetails')}</summary>
+                  <dl>
+                    <div><dt>{t('dispatch.version')}</dt><dd>{probe.release.version}</dd></div>
+                    <div><dt>{t('dispatch.downloadUrl')}</dt><dd>{probe.release.url}</dd></div>
+                    <div><dt>{t('dispatch.integrity')}</dt><dd>{probe.release.sha256}</dd></div>
+                  </dl>
+                </details>
               </div>
             </section>
           ) : null}
@@ -615,19 +678,15 @@ export const DispatchInstallDialog: React.FC<DispatchInstallDialogProps> = ({
               </div>
               <div className="dispatch-install-dialog__section-body dispatch-install-dialog__action-panel">
                 <span className="dispatch-install-dialog__hint">
-                  {t('dispatch.sourceBuildDescription', { ref: sourceBuild.gitRef })}
+                  {t('dispatch.sourceBuildDescription')}
                 </span>
-                {sourceBuild.blockers.length > 0 ? (
-                  <ul className="dispatch-install-dialog__blockers">
-                    {sourceBuild.blockers.map(blocker => (
-                      <li key={blocker}>{blocker}</li>
-                    ))}
-                  </ul>
+                {!sourceBuild.supported ? (
+                  <Alert type="warning" message={t('dispatch.sourceBuildUnavailable')} />
                 ) : null}
                 <Button
                   variant="primary"
                   size="small"
-                  disabled={installing || !sourceBuild.supported}
+                  disabled={installing || probing || !sourceBuild.supported}
                   onClick={() => void startSourceBuild()}
                 >
                   {installing ? <Loader2 size={14} className="dispatch-install-dialog__spin" /> : null}
@@ -637,11 +696,11 @@ export const DispatchInstallDialog: React.FC<DispatchInstallDialogProps> = ({
             </section>
           ) : null}
 
-          {target?.kind === 'ssh' && probe?.protocol ? (
+          {offerModelSync ? (
             <section className="dispatch-install-dialog__section">
               <div className="dispatch-install-dialog__section-header">
                 <h3 className="dispatch-install-dialog__section-title">
-                  {t('dispatch.syncModelRequired')}
+                  {t('dispatch.syncModelTitle')}
                 </h3>
               </div>
               <div className="dispatch-install-dialog__section-body dispatch-install-dialog__action-panel">
@@ -669,7 +728,10 @@ export const DispatchInstallDialog: React.FC<DispatchInstallDialogProps> = ({
 
           <section className="dispatch-install-dialog__section">
             <div className="dispatch-install-dialog__section-header">
-              <h3 className="dispatch-install-dialog__section-title">
+              <h3
+                id="dispatch-install-dialog-approval-title"
+                className="dispatch-install-dialog__section-title"
+              >
                 {t('dispatch.approvalTitle')}
               </h3>
             </div>
@@ -679,6 +741,8 @@ export const DispatchInstallDialog: React.FC<DispatchInstallDialogProps> = ({
               </span>
               <fieldset
                 className="dispatch-install-dialog__options"
+                role="radiogroup"
+                aria-labelledby="dispatch-install-dialog-approval-title"
                 disabled={installing || validatingBaseRef}
               >
                 <button
@@ -732,8 +796,13 @@ export const DispatchInstallDialog: React.FC<DispatchInstallDialogProps> = ({
         </div>
 
         <div className="dispatch-install-dialog__actions">
-          <Button variant="secondary" size="small" onClick={close}>
-            {t('dispatch.cancel')}
+          <Button
+            variant="secondary"
+            size="small"
+            disabled={syncingModel}
+            onClick={closeDialog}
+          >
+            {installing ? t('dispatch.stopSourceBuild') : t('dispatch.cancel')}
           </Button>
           <Button
             variant="primary"
@@ -741,6 +810,7 @@ export const DispatchInstallDialog: React.FC<DispatchInstallDialogProps> = ({
             disabled={
               !ready
               || installing
+              || probing
               || validatingBaseRef
               || worktreeSettingsLoading
             }

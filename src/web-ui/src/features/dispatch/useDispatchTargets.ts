@@ -8,27 +8,26 @@ const log = createLogger('DispatchTargets');
 export function useDispatchTargets(enabled = true): {
   targets: DispatchTargetOption[];
   loading: boolean;
-  error: string | null;
+  error: boolean;
   refresh: () => Promise<void>;
 } {
   const [targets, setTargets] = useState<DispatchTargetOption[]>([]);
   const [loading, setLoading] = useState(false);
   const [loaded, setLoaded] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState(false);
 
   const refresh = useCallback(async () => {
     if (!enabled) return;
     setLoading(true);
-    setError(null);
+    setError(false);
     try {
       const nextTargets = await dispatchApi.listTargets();
       setTargets(nextTargets.filter(
         target => target.kind === 'local' || target.kind === 'ssh' || target.kind === 'device',
       ));
     } catch (nextError) {
-      const message = nextError instanceof Error ? nextError.message : String(nextError);
       log.warn('Failed to list dispatch targets', { error: nextError });
-      setError(message);
+      setError(true);
       setTargets([{ kind: 'local', displayName: 'Local' }]);
     } finally {
       setLoading(false);

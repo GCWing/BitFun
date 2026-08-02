@@ -72,6 +72,32 @@
     font-weight: 600;
   }
 
+  &__details {
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-xs);
+
+    summary {
+      width: fit-content;
+      cursor: pointer;
+      user-select: none;
+
+      &:hover,
+      &:focus-visible {
+        color: var(--color-text-primary);
+      }
+    }
+  }
+
+  &__details-body {
+    display: grid;
+    gap: $size-gap-2;
+    margin-top: $size-gap-2;
+    padding: $size-gap-3;
+    border: 1px solid var(--border-subtle);
+    border-radius: $size-radius-base;
+    background: var(--element-bg-subtle);
+  }
+
   &__group {
     display: flex;
     flex-direction: column;

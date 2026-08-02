@@ -20,10 +20,6 @@ interface DispatchResultDialogProps {
   onClose: () => void;
 }
 
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
 /**
  * Commit the target worktree and fast-forward the controller's managed
  * baseline worktree from a Git bundle. The user's checkout is never touched.
@@ -61,15 +57,16 @@ export const DispatchResultDialog: React.FC<DispatchResultDialogProps> = ({
       setResult(synced);
     } catch (nextError) {
       if (generation !== generationRef.current) return;
-      setError(errorMessage(nextError));
+      setError(t('dispatch.syncFailed'));
       log.warn('Failed to sync dispatch result', { jobId, error: nextError });
     } finally {
       if (generation === generationRef.current) setSyncing(false);
     }
-  }, [baselineMissing, jobId]);
+  }, [baselineMissing, jobId, t]);
 
   const resolvedBranch = result?.branch || branch;
   const resolvedBaselinePath = result?.baselineWorktreePath || baselineWorktreePath;
+  const resolvedHeadCommit = result?.headCommit;
 
   return (
     <Modal
@@ -101,21 +98,36 @@ export const DispatchResultDialog: React.FC<DispatchResultDialogProps> = ({
             <Alert type="error" message={t('dispatch.syncBaselineMissing')} />
           ) : null}
 
-          {resolvedBranch ? (
-            <div className="dispatch-result-dialog__field">
-              <span className="dispatch-result-dialog__field-label">
-                {t('dispatch.syncBranch')}
-              </span>
-              <code>{resolvedBranch}</code>
-            </div>
-          ) : null}
-          {resolvedBaselinePath ? (
-            <div className="dispatch-result-dialog__field">
-              <span className="dispatch-result-dialog__field-label">
-                {t('dispatch.syncBaselineWorktree')}
-              </span>
-              <code>{resolvedBaselinePath}</code>
-            </div>
+          {resolvedBranch || resolvedBaselinePath || resolvedHeadCommit ? (
+            <details className="dispatch-result-dialog__details">
+              <summary>{t('dispatch.syncDetails')}</summary>
+              <div className="dispatch-result-dialog__details-body">
+                {resolvedBranch ? (
+                  <div className="dispatch-result-dialog__field">
+                    <span className="dispatch-result-dialog__field-label">
+                      {t('dispatch.syncBranch')}
+                    </span>
+                    <code>{resolvedBranch}</code>
+                  </div>
+                ) : null}
+                {resolvedBaselinePath ? (
+                  <div className="dispatch-result-dialog__field">
+                    <span className="dispatch-result-dialog__field-label">
+                      {t('dispatch.syncBaselineWorktree')}
+                    </span>
+                    <code>{resolvedBaselinePath}</code>
+                  </div>
+                ) : null}
+                {resolvedHeadCommit ? (
+                  <div className="dispatch-result-dialog__field">
+                    <span className="dispatch-result-dialog__field-label">
+                      {t('dispatch.syncHeadCommit')}
+                    </span>
+                    <code>{resolvedHeadCommit}</code>
+                  </div>
+                ) : null}
+              </div>
+            </details>
           ) : null}
 
           {syncing ? (
@@ -132,12 +144,6 @@ export const DispatchResultDialog: React.FC<DispatchResultDialogProps> = ({
                   type="success"
                   message={t('dispatch.syncSucceeded', { count: result.commitCount })}
                 />
-                <div className="dispatch-result-dialog__field">
-                  <span className="dispatch-result-dialog__field-label">
-                    {t('dispatch.syncHeadCommit')}
-                  </span>
-                  <code>{result.headCommit}</code>
-                </div>
                 <section className="dispatch-result-dialog__group">
                   <div className="dispatch-result-dialog__group-header">
                     <GitCommitHorizontal size={14} />

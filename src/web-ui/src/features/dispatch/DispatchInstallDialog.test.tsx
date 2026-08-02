@@ -185,6 +185,7 @@ describe('DispatchInstallDialog installation lifecycle', () => {
     expect(container.textContent).toContain('dispatch.installAutomaticTitle');
     expect(container.textContent).toContain('1.2.3');
     expect(container.textContent).toContain('abc123');
+    expect(container.querySelector('details')?.open).toBe(false);
     expect(container.textContent).not.toContain('dispatch.installConfirm');
     expect(mocks.modalLifecycleProps).toEqual({
       closeOnOverlayClick: true,
@@ -335,8 +336,9 @@ describe('DispatchInstallDialog installation lifecycle', () => {
       await Promise.resolve();
     });
 
-    expect(container.textContent).toContain('target uses musl libc');
-    expect(container.textContent).toContain('no cargo on the target');
+    expect(container.textContent).toContain('dispatch.sourceBuildUnavailable');
+    expect(container.textContent).not.toContain('target uses musl libc');
+    expect(container.textContent).not.toContain('no cargo on the target');
     const buttons = () => Array.from(container.querySelectorAll('button'));
     expect(
       buttons().find(button => button.textContent?.includes('dispatch.installConfirm')),
@@ -388,6 +390,63 @@ describe('DispatchInstallDialog installation lifecycle', () => {
     });
     expect(mocks.confirmWarning).toHaveBeenCalled();
     expect(mocks.installCliSourceStart).toHaveBeenCalledWith('ssh-1');
+  });
+
+  it('keeps protocol capability names and probe failures out of the user interface', async () => {
+    mocks.probeTarget.mockResolvedValueOnce({
+      cliInstalled: true,
+      os: 'linux',
+      arch: 'x86_64',
+      installSupported: false,
+      protocol: {
+        protocolVersion: 4,
+        cliVersion: '1.2.3',
+        os: 'linux',
+        arch: 'x86_64',
+        capabilities: BASE_DISPATCH_CAPABILITIES.filter(
+          capability => capability !== 'workspace_git_sync',
+        ),
+        modelConfigured: true,
+        availableModels: ['model-a'],
+      },
+    });
+
+    await act(async () => {
+      root.render(
+        <DispatchInstallDialog
+          open
+          target={{ kind: 'ssh', connectionId: 'ssh-1', displayName: 'build-host' }}
+          sourceWorkspacePath="/home/me/project"
+          onClose={vi.fn()}
+          onReady={vi.fn()}
+        />,
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toContain('dispatch.cliUpdateRequired');
+    expect(container.textContent).not.toContain('workspace_git_sync');
+
+    mocks.probeTarget.mockRejectedValueOnce(
+      new Error('ssh handshake failed at internal transport stage'),
+    );
+    await act(async () => {
+      root.render(
+        <DispatchInstallDialog
+          open
+          target={{ kind: 'ssh', connectionId: 'ssh-2', displayName: 'backup-host' }}
+          sourceWorkspacePath="/home/me/project"
+          onClose={vi.fn()}
+          onReady={vi.fn()}
+        />,
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toContain('dispatch.probeFailed');
+    expect(container.textContent).not.toContain('internal transport stage');
   });
 
   it('explains the Git baseline and never offers a snapshot delivery mode', async () => {
@@ -584,13 +643,13 @@ describe('DispatchInstallDialog model configuration sync', () => {
       .find(button => button.textContent?.includes('dispatch.syncModelConfirm'));
   }
 
-  async function mount() {
+  async function mount(onClose = vi.fn()) {
     await act(async () => {
       root.render(
         <DispatchInstallDialog
           open
           target={target}
-          onClose={vi.fn()}
+          onClose={onClose}
           onReady={vi.fn()}
         />,
       );
@@ -605,7 +664,9 @@ describe('DispatchInstallDialog model configuration sync', () => {
     mocks.modalOnClose = null;
     mocks.probeTarget.mockImplementation(async () => probeResult());
     mocks.confirmWarning.mockResolvedValue(true);
-    mocks.getConfig.mockResolvedValue([]);
+    mocks.getConfig.mockResolvedValue([
+      { id: 'claude', enabled: true, api_key: 'secret' },
+    ]);
     mocks.getFreshConfig.mockResolvedValue(undefined);
     mocks.resolveRevision.mockResolvedValue('a'.repeat(40));
     container = document.createElement('div');
@@ -618,7 +679,7 @@ describe('DispatchInstallDialog model configuration sync', () => {
     container.remove();
   });
 
-  it('keeps model sync available after the target reports a usable model', async () => {
+  it('hides model sync after the target matches this device', async () => {
     await mount();
     expect(syncButton()).toBeDefined();
 
@@ -638,7 +699,7 @@ describe('DispatchInstallDialog model configuration sync', () => {
     expect(mocks.syncModelConfig).toHaveBeenCalledWith('ssh-1');
     // The sync re-probes so the model check reflects the target, not the write.
     expect(mocks.probeTarget.mock.calls.length).toBeGreaterThan(probesBeforeSync);
-    expect(syncButton()).toBeDefined();
+    expect(syncButton()).toBeUndefined();
   });
 
   it('does not write the credential-bearing config when the confirmation is declined', async () => {
@@ -655,10 +716,11 @@ describe('DispatchInstallDialog model configuration sync', () => {
     expect(syncButton()).toBeDefined();
   });
 
-  it('discards a late sync acknowledgement after the dialog closes', async () => {
+  it('keeps the dialog open while model sync is in progress', async () => {
     const sync = createDeferred<void>();
+    const onClose = vi.fn();
     mocks.syncModelConfig.mockReturnValue(sync.promise);
-    await mount();
+    await mount(onClose);
 
     await act(async () => {
       syncButton()?.click();
@@ -666,11 +728,17 @@ describe('DispatchInstallDialog model configuration sync', () => {
       await Promise.resolve();
     });
     expect(mocks.syncModelConfig).toHaveBeenCalledTimes(1);
-    const probesBeforeClose = mocks.probeTarget.mock.calls.length;
+    const probesBeforeSettle = mocks.probeTarget.mock.calls.length;
 
     await act(async () => {
       mocks.modalOnClose?.();
       await Promise.resolve();
+    });
+
+    expect(onClose).not.toHaveBeenCalled();
+    expect(mocks.modalLifecycleProps).toEqual({
+      closeOnOverlayClick: false,
+      showCloseButton: false,
     });
 
     await act(async () => {
@@ -680,7 +748,8 @@ describe('DispatchInstallDialog model configuration sync', () => {
       await Promise.resolve();
     });
 
-    expect(mocks.probeTarget.mock.calls.length).toBe(probesBeforeClose);
+    expect(mocks.probeTarget.mock.calls.length).toBeGreaterThan(probesBeforeSettle);
+    expect(syncButton()).toBeUndefined();
   });
 });
 

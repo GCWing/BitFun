@@ -58,8 +58,6 @@ import { applyGeneratingTitlePlaceholder } from '../shared';
 
 const log = createLogger('DispatchSessionDriver');
 
-const IMAGES_WHILE_RUNNING_MESSAGE =
-  'Images join the next turn; wait for the current dispatch turn to finish';
 const DEVICE_ATTACHMENT_BUDGET_BYTES = 192 * 1024;
 const APPEND_RETRY_SCOPE = 'dispatch-append';
 const CONTINUE_RETRY_SCOPE = 'dispatch-continue';
@@ -96,7 +94,9 @@ function dispatchAttachments(
   const attachments = imageContexts.map(image => {
     const dataUrl = image.data_url?.trim();
     if (!dataUrl) {
-      throw new Error('This image has no inline data and cannot be sent to a dispatch target');
+      throw new Error(
+        i18nService.t('flow-chat:chatInput.dispatch.errors.attachmentUnavailable'),
+      );
     }
     const name = typeof image.metadata?.name === 'string' ? image.metadata.name : undefined;
     return {
@@ -110,7 +110,7 @@ function dispatchAttachments(
     const total = attachments.reduce((sum, attachment) => sum + attachment.dataUrl.length, 0);
     if (total > DEVICE_ATTACHMENT_BUDGET_BYTES) {
       throw new Error(
-        'Device dispatch carries at most 192 KiB of inline images; use an SSH target for larger screenshots',
+        i18nService.t('flow-chat:chatInput.dispatch.errors.deviceAttachmentTooLarge'),
       );
     }
   }
@@ -157,7 +157,9 @@ async function appendToDispatchJob(
   );
   if (!response.accepted) {
     releaseSubmissionRetry(APPEND_RETRY_SCOPE, sessionId, retry.id);
-    throw new Error('Dispatch target did not accept the appended message');
+    throw new Error(
+      i18nService.t('flow-chat:chatInput.dispatch.errors.appendRejected'),
+    );
   }
   releaseSubmissionRetry(APPEND_RETRY_SCOPE, sessionId, retry.id);
   requestDispatchJobRefresh(jobId);
@@ -239,7 +241,9 @@ async function continueDispatchJob(
       },
     );
     if (!response.accepted) {
-      throw new Error('Dispatch target did not accept the follow-up turn');
+      throw new Error(
+        i18nService.t('flow-chat:chatInput.dispatch.errors.followUpRejected'),
+      );
     }
     // The target owns the job state; the refresh below reads it back rather
     // than this side guessing what the follow-up did to it.
@@ -321,7 +325,9 @@ export const dispatchSessionDriver: SessionDriver = {
     } = seed;
 
     if (!isNonLocalDispatchTarget(config.dispatchTargetRequest)) {
-      throw new Error('Dispatch driver requires a non-local dispatch target request');
+      throw new Error(
+        i18nService.t('flow-chat:chatInput.dispatch.errors.targetInvalid'),
+      );
     }
     const dispatchTarget: DispatchTarget = config.dispatchTarget
       ?? (
@@ -344,7 +350,9 @@ export const dispatchSessionDriver: SessionDriver = {
         ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`}`;
     const approvalPolicy = config.dispatchApprovalPolicy;
     if (!approvalPolicy) {
-      throw new Error('Dispatch approval policy must be selected before creating a session');
+      throw new Error(
+        i18nService.t('flow-chat:chatInput.dispatch.errors.approvalRequired'),
+      );
     }
     const resolvedConfig: SessionConfig = {
       ...config,
@@ -447,7 +455,9 @@ export const dispatchSessionDriver: SessionDriver = {
   ): Promise<string> {
     const session = context.flowChatStore.getState().sessions.get(sessionId);
     if (!session) {
-      throw new Error(`Session does not exist: ${sessionId}`);
+      throw new Error(
+        i18nService.t('flow-chat:chatInput.dispatch.errors.sessionUnavailable'),
+      );
     }
     await context.flowChatStore.updateSessionTitle(sessionId, title, 'generated');
     if (session.config.dispatchJobId) {
@@ -480,11 +490,15 @@ export const dispatchSessionDriver: SessionDriver = {
     const session = context.flowChatStore.getState().sessions.get(sessionId);
     const jobId = session?.config.dispatchJobId;
     if (!jobId) {
-      throw new Error('Dispatch session is missing its job id');
+      throw new Error(
+        i18nService.t('flow-chat:chatInput.dispatch.errors.sessionUnavailable'),
+      );
     }
     const state = session?.config.dispatchJobState;
     if (!isDispatchJobTerminal(state)) {
-      throw new Error('Wait for the current dispatch turn to finish before compacting');
+      throw new Error(
+        i18nService.t('flow-chat:chatInput.dispatch.errors.compactWhileRunning'),
+      );
     }
     // Same idempotency contract as a prompt follow-up: a retried request
     // reuses the turn id so a lost response cannot start two compactions.
@@ -502,7 +516,9 @@ export const dispatchSessionDriver: SessionDriver = {
         kind: 'compact',
       });
       if (!response.accepted) {
-        throw new Error('Dispatch target did not accept the compact turn');
+        throw new Error(
+          i18nService.t('flow-chat:chatInput.dispatch.errors.compactRejected'),
+        );
       }
     } finally {
       releaseSubmissionRetry(COMPACT_RETRY_SCOPE, sessionId, retry.id);
@@ -517,11 +533,15 @@ export const dispatchSessionDriver: SessionDriver = {
   ): Promise<{ inserted: boolean }> {
     const session = context.flowChatStore.getState().sessions.get(sessionId);
     if (!session) {
-      throw new Error(`Session does not exist: ${sessionId}`);
+      throw new Error(
+        i18nService.t('flow-chat:chatInput.dispatch.errors.sessionUnavailable'),
+      );
     }
     const jobId = jobIdForSession(sessionId);
     if (!jobId) {
-      throw new Error('Dispatch session is missing its job id');
+      throw new Error(
+        i18nService.t('flow-chat:chatInput.dispatch.errors.sessionUnavailable'),
+      );
     }
     const { runUsageReportCommand } = await import('../../services/usageReportService');
     const result = await runUsageReportCommand({
@@ -561,7 +581,9 @@ export const dispatchSessionDriver: SessionDriver = {
   ): Promise<void> {
     const jobId = jobIdForSession(sessionId);
     if (!jobId) {
-      throw new Error('Dispatch session is missing its job id');
+      throw new Error(
+        i18nService.t('flow-chat:chatInput.dispatch.errors.sessionUnavailable'),
+      );
     }
     await dispatchApi.answerPermission(jobId, requestId, reply, feedback);
     requestDispatchJobRefresh(jobId);
@@ -575,7 +597,9 @@ export const dispatchSessionDriver: SessionDriver = {
   ): Promise<string[]> {
     const jobId = jobIdForSession(sessionId);
     if (!jobId) {
-      throw new Error('Dispatch session is missing its job id');
+      throw new Error(
+        i18nService.t('flow-chat:chatInput.dispatch.errors.sessionUnavailable'),
+      );
     }
     const pending = (dispatchJobStore.getState().jobs[jobId]?.pendingPermissions
       ?? []) as unknown as PermissionRequest[];
@@ -614,7 +638,12 @@ export const dispatchSessionDriver: SessionDriver = {
     if (draft.hasImages) {
       // Steering has no attachment channel; the runtime accepts images only
       // at turn boundaries.
-      return { kind: 'reject', reason: IMAGES_WHILE_RUNNING_MESSAGE };
+      return {
+        kind: 'reject',
+        reason: i18nService.t(
+          'flow-chat:chatInput.dispatch.errors.imagesWhileRunning',
+        ),
+      };
     }
     return { kind: 'steer' };
   },
@@ -627,7 +656,9 @@ export const dispatchSessionDriver: SessionDriver = {
     const session = context.flowChatStore.getState().sessions.get(sessionId);
     const jobId = session?.config.dispatchJobId;
     if (!jobId) {
-      throw new Error('Dispatch session is missing its job id');
+      throw new Error(
+        i18nService.t('flow-chat:chatInput.dispatch.errors.sessionUnavailable'),
+      );
     }
     await appendToDispatchJob(sessionId, jobId, draft.message, draft.displayMessage);
   },
@@ -651,13 +682,17 @@ export const dispatchSessionDriver: SessionDriver = {
     const jobId = readySession.config.dispatchJobId;
     const approvalPolicy = readySession.config.dispatchApprovalPolicy;
     if (!targetRequest || targetRequest.kind === 'local' || !jobId || !approvalPolicy) {
-      throw new Error('Dispatch session is missing its immutable target or approval policy');
+      throw new Error(
+        i18nService.t('flow-chat:chatInput.dispatch.errors.sessionUnavailable'),
+      );
     }
     const dispatchState = readySession.config.dispatchJobState;
     if (dispatchState === 'queued' || dispatchState === 'running') {
       if ((options?.imageContexts?.length ?? 0) > 0) {
         // Steering has no attachment channel; images ride turn boundaries.
-        throw new Error(IMAGES_WHILE_RUNNING_MESSAGE);
+        throw new Error(
+          i18nService.t('flow-chat:chatInput.dispatch.errors.imagesWhileRunning'),
+        );
       }
       // A turn is already in flight; this message steers it rather than
       // starting another one underneath it.
@@ -675,7 +710,9 @@ export const dispatchSessionDriver: SessionDriver = {
       dispatchState !== 'submitting' &&
       dispatchState !== 'submission_unknown'
     ) {
-      throw new Error('This dispatch session is not ready to accept a message');
+      throw new Error(
+        i18nService.t('flow-chat:chatInput.dispatch.errors.sessionNotReady'),
+      );
     }
     if (isFirstMessage) {
       applyGeneratingTitlePlaceholder(context, sessionId, message);
@@ -745,7 +782,9 @@ export const dispatchSessionDriver: SessionDriver = {
       });
     }
     if (!response.accepted || response.jobId !== jobId || response.sessionId !== sessionId) {
-      throw new Error('Dispatch target returned a mismatched acknowledgement');
+      throw new Error(
+        i18nService.t('flow-chat:chatInput.dispatch.errors.submissionUnconfirmed'),
+      );
     }
     context.flowChatStore.applyDispatchSnapshot(sessionId, {
       jobId,

@@ -373,26 +373,19 @@ function cliInstallAuditLabel(
     ? event.details.stage.trim()
     : '';
   const version = auditDetail(event.details, 'version');
-  const target = auditDetail(event.details, 'target');
-  const output = auditDetail(event.details, 'output');
   switch (stage) {
     case 'cli-install-started':
       return i18nService.t('flow-chat:chatInput.dispatch.cliInstallStarted', {
         version: version || i18nService.t('flow-chat:chatInput.dispatch.cliInstallUnknownVersion'),
-        target: target || i18nService.t('flow-chat:chatInput.dispatch.remoteTarget'),
       });
     case 'cli-install-succeeded':
       return i18nService.t('flow-chat:chatInput.dispatch.cliInstallSucceeded', {
         version: version || i18nService.t('flow-chat:chatInput.dispatch.cliInstallUnknownVersion'),
       });
     case 'cli-install-failed':
-      return i18nService.t('flow-chat:chatInput.dispatch.cliInstallFailed', {
-        details: output || stage,
-      });
+      return i18nService.t('flow-chat:chatInput.dispatch.cliInstallFailed');
     default:
-      return i18nService.t('flow-chat:chatInput.dispatch.cliInstallStage', {
-        stage: stage || i18nService.t('flow-chat:chatInput.dispatch.cliInstallUnknownStage'),
-      });
+      return i18nService.t('flow-chat:chatInput.dispatch.cliInstallInProgress');
   }
 }
 

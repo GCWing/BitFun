@@ -24,6 +24,11 @@
     font-size: var(--flowchat-font-size-xxs);
     line-height: 1;
     cursor: pointer;
+    transition:
+      background-color 120ms ease,
+      border-color 120ms ease,
+      color 120ms ease,
+      transform 100ms ease-out;
 
     &:hover:not(:disabled),
     &[aria-expanded='true'] {
@@ -40,6 +45,10 @@
     &:disabled {
       cursor: default;
       opacity: 0.8;
+    }
+
+    &:active:not(:disabled) {
+      transform: scale(0.97);
     }
 
     > span {
@@ -124,6 +133,9 @@
     font: inherit;
     text-align: left;
     cursor: pointer;
+    transition:
+      background-color 120ms ease,
+      transform 100ms ease-out;
 
     &:hover,
     &:focus-visible,
@@ -135,6 +147,10 @@
     &:disabled {
       cursor: not-allowed;
       opacity: 0.5;
+    }
+
+    &:active:not(:disabled) {
+      transform: scale(0.99);
     }
 
     &[aria-checked='true'] > svg:last-child {
@@ -194,6 +210,10 @@
     font: inherit;
     font-size: var(--font-size-xs);
     cursor: pointer;
+    transition:
+      background-color 120ms ease,
+      color 120ms ease,
+      transform 100ms ease-out;
 
     &:hover,
     &:focus-visible {
@@ -201,10 +221,22 @@
       color: var(--color-text-primary);
       outline: none;
     }
+
+    &:active {
+      transform: scale(0.99);
+    }
   }
 
   &__spin {
     animation: dispatch-picker-spin 1s linear infinite;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dispatch-target-picker__trigger,
+  .dispatch-target-picker__option,
+  .dispatch-target-picker__footer-action {
+    transition-duration: 0.01ms;
   }
 }
 

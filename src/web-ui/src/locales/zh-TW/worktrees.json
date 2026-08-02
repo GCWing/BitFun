@@ -9,7 +9,7 @@
     "togglePendingOnDescription": "已開啟 worktree 隔離；傳送第一則訊息後才會建立 worktree。",
     "togglePendingOffDescription": "已關閉 worktree 隔離；傳送第一則訊息後會回到專案目錄。",
     "toggleLocked": "只能在工作階段送出第一則訊息之前切換 worktree 隔離。",
-    "dispatchBaseline": "本次派發以該儲存庫的受管 worktree 作為基線執行。基線在選定目標時即已固定。",
+    "dispatchBaseline": "遠端任務會在隔離副本中執行，選定目標後無法變更。",
     "retained": "該 worktree 仍有本機工作，已保留在 {{path}}。"
   },
   "settings": {

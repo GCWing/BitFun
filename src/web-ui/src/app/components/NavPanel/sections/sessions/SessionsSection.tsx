@@ -1241,9 +1241,6 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
           const dispatchTransport = session.config.dispatchJobId
             ? dispatchTransportByJobId[session.config.dispatchJobId]
             : undefined;
-          const dispatchTransportError =
-            dispatchTransport?.lastTransportError?.trim()
-            || t('nav.sessions.dispatchTransportErrorFallback');
           const dispatchPresentation = isDispatched
             ? resolveDispatchNavPresentation({
                 targetLabel: dispatchTargetLabel,
@@ -1256,7 +1253,6 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                 unreachableLabel: t('nav.sessions.dispatchUnreachable'),
                 unreachableSummary: t('nav.sessions.dispatchUnreachableDetails', {
                   target: dispatchTargetLabel,
-                  error: dispatchTransportError,
                 }),
               })
             : null;
