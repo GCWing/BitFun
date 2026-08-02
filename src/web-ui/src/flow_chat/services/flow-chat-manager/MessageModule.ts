@@ -15,7 +15,6 @@ import { generateTempTitle } from '../../utils/titleUtils';
 import { createLogger } from '@/shared/utils/logger';
 import type { FlowChatContext, DialogTurn } from './types';
 import { ensureBackendSession, getModelMaxTokens, retryCreateBackendSession } from './SessionModule';
-import { cleanupSessionBuffers } from './TextChunkModule';
 import type { ImageContextData as ImageInputContextData } from '@/infrastructure/api/service-api/ImageContextTypes';
 import { globalEventBus } from '@/infrastructure/event-bus';
 import {
@@ -32,6 +31,7 @@ import { isDispatchJobTerminal, isNonLocalDispatchTarget } from '@/features/disp
 import { markOptimisticDispatchTurnMetadata } from '@/features/dispatch/optimisticDispatchTurn';
 import { isSessionInUseError } from '@/infrastructure/api/errors/TauriCommandError';
 import { i18nService } from '@/infrastructure/i18n';
+import { driverForSession } from '../../session-drivers/registry';
 import {
   clearRuntimeStatusState,
   showRuntimeStatus,
@@ -852,39 +852,14 @@ export async function cancelSessionTask(context: FlowChatContext, requestedSessi
   try {
     const state = context.flowChatStore.getState();
     const sessionId = requestedSessionId || state.activeSessionId;
-    
+
     if (!sessionId) {
       log.debug('No active session to cancel');
       return false;
     }
 
     const session = state.sessions.get(sessionId);
-    if (isNonLocalDispatchTarget(session?.config.dispatchTarget)) {
-      const jobId = session?.config.dispatchJobId;
-      if (!jobId) {
-        return false;
-      }
-      const response = await dispatchApi.cancel(jobId);
-      if (response.cancelled) {
-        context.userCancelledSessionIds.add(sessionId);
-        requestDispatchJobRefresh(jobId);
-      }
-      return response.cancelled;
-    }
-
-    const currentState = stateMachineManager.getCurrentState(sessionId);
-    const success = currentState === SessionExecutionState.PROCESSING 
-      ? await stateMachineManager.transition(sessionId, SessionExecutionEvent.USER_CANCEL)
-      : false;
-    
-    if (success) {
-      context.userCancelledSessionIds.add(sessionId);
-      markCurrentTurnItemsAsCancelled(context, sessionId);
-      cleanupSessionBuffers(context, sessionId);
-    }
-    
-    return success;
-    
+    return await driverForSession(sessionId, session).cancel(context, sessionId);
   } catch (error) {
     log.error('Failed to cancel current task', error);
     return false;
@@ -987,41 +962,4 @@ export function installPendingQueueDrainListener(context: FlowChatContext): void
   });
 }
 
-export function markCurrentTurnItemsAsCancelled(
-  context: FlowChatContext,
-  sessionId: string
-): void {
-  const state = context.flowChatStore.getState();
-  const session = state.sessions.get(sessionId);
-  if (!session) return;
-  
-  const lastDialogTurn = session.dialogTurns[session.dialogTurns.length - 1];
-  if (!lastDialogTurn) return;
-  
-  if (lastDialogTurn.status === 'completed' || lastDialogTurn.status === 'cancelled') {
-    return;
-  }
-  
-  lastDialogTurn.modelRounds.forEach(round => {
-    round.items.forEach(item => {
-      if (item.status === 'completed' || item.status === 'cancelled' || item.status === 'error') {
-        return;
-      }
-      
-      context.flowChatStore.updateModelRoundItem(sessionId, lastDialogTurn.id, item.id, {
-        status: 'cancelled',
-        ...(item.type === 'text' && { isStreaming: false }),
-        ...(item.type === 'tool' && { 
-          isParamsStreaming: false,
-          endTime: Date.now()
-        })
-      } as any);
-    });
-  });
-  
-  context.flowChatStore.updateDialogTurn(sessionId, lastDialogTurn.id, turn => ({
-    ...turn,
-    status: 'cancelled',
-    endTime: Date.now()
-  }));
-}
+export { markCurrentTurnItemsAsCancelled } from '../../utils/turnCancellation';

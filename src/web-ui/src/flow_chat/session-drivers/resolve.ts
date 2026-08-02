@@ -55,7 +55,10 @@ export function resolveSessionDriverIdWith(
 }
 
 export function dispatchJobStoreObservesSession(sessionId: string): boolean {
-  return Object.values(dispatchJobStore.getState().jobs)
+  // `jobs` always exists on the real store; the fallback tolerates partial
+  // test doubles of dispatchJobStore so an unrelated suite cannot turn a
+  // resolver lookup into a thrown error.
+  return Object.values(dispatchJobStore.getState().jobs ?? {})
     .some(job => job.sessionId === sessionId);
 }
 
