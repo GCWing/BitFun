@@ -7,7 +7,9 @@ use crate::runtime::{
 };
 use crate::startup_trace::DesktopStartupTrace;
 use bitfun_core::agentic::coordination::get_global_scheduler;
-use bitfun_core::agentic::persistence::{SessionBranchResult, SessionMetadataPage};
+use bitfun_core::agentic::persistence::{
+    SessionBranchResult, SessionLineageSnapshot, SessionMetadataPage,
+};
 use bitfun_core::service::remote_ssh::normalize_remote_workspace_path;
 use bitfun_core::service::session::{
     DialogTurnData, SessionKind, SessionMetadata, SessionStatus, SessionTranscriptExport,
@@ -50,6 +52,16 @@ pub struct ListPersistedSessionsPageRequest {
     pub limit: usize,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cursor: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_connection_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_ssh_host: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GetSessionLineageRequest {
+    pub session_id: String,
+    pub workspace_path: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub remote_connection_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -357,6 +369,30 @@ pub async fn list_persisted_sessions_page(
         });
     startup_trace.record_tauri_command_elapsed("list_persisted_sessions_page", None, trace_started);
     result
+}
+
+#[tauri::command]
+pub async fn get_session_lineage(
+    request: GetSessionLineageRequest,
+    runtime: State<'_, DesktopRuntimeContext>,
+) -> Result<Option<SessionLineageSnapshot>, String> {
+    runtime
+        .session_application()
+        .get_session_lineage(
+            desktop_session_scope(
+                request.workspace_path,
+                request.remote_connection_id,
+                request.remote_ssh_host,
+            ),
+            &request.session_id,
+        )
+        .await
+        .map_err(|error| {
+            format!(
+                "Failed to load session lineage: {}",
+                desktop_session_error(error)
+            )
+        })
 }
 
 #[tauri::command]

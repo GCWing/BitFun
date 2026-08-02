@@ -1413,6 +1413,7 @@ pub async fn run() {
             list_persisted_sessions,
             search_referenceable_sessions,
             list_persisted_sessions_page,
+            get_session_lineage,
             load_session_turns,
             get_session_usage_report,
             save_session_turn,

@@ -660,6 +660,7 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         "get_session_file_diff_stats",
         RemoteWorkspacePolicy::LegacyUnaudited,
     ),
+    ("get_session_lineage", RemoteWorkspacePolicy::RemoteRouted),
     ("get_session_files", RemoteWorkspacePolicy::LegacyUnaudited),
     (
         "get_session_operations",
@@ -2257,6 +2258,7 @@ mod tests {
         "get_runtime_capabilities",
         "get_runtime_logging_info",
         "get_session_file_diff_stats",
+        "get_session_lineage",
         "get_session_files",
         "get_session_operations",
         "get_session_stats",

@@ -121,6 +121,27 @@ describe('SessionAPI paged metadata reads', () => {
     });
   });
 
+  it('loads the scoped hidden Session lineage without listing all internal Sessions', async () => {
+    const snapshot = { rootSessionId: 'root', sessions: [] };
+    invokeMock.mockResolvedValueOnce(snapshot);
+
+    await expect(sessionAPI.getSessionLineage({
+      sessionId: 'child',
+      workspacePath: '/repo',
+      remoteConnectionId: 'remote-1',
+      remoteSshHost: 'host',
+    })).resolves.toBe(snapshot);
+
+    expect(invokeMock).toHaveBeenCalledWith('get_session_lineage', {
+      request: {
+        session_id: 'child',
+        workspace_path: '/repo',
+        remote_connection_id: 'remote-1',
+        remote_ssh_host: 'host',
+      },
+    });
+  });
+
   it('requests usage reports with explicit hidden subagent scope', async () => {
     const report = {
       reportId: 'usage-report-1',

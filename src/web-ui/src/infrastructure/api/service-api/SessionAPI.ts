@@ -29,6 +29,18 @@ export interface SessionMetadataPage {
   hasMore: boolean;
 }
 
+export interface SessionLineageRequest {
+  sessionId: string;
+  workspacePath: string;
+  remoteConnectionId?: string;
+  remoteSshHost?: string;
+}
+
+export interface SessionLineageSnapshot {
+  rootSessionId: string;
+  sessions: SessionMetadata[];
+}
+
 export interface SessionReferenceCandidate {
   sessionId: string;
   sessionName: string;
@@ -278,6 +290,25 @@ export class SessionAPI {
         workspacePath: request.workspacePath,
         limit: request.limit,
         cursor: request.cursor,
+      });
+    }
+  }
+
+  async getSessionLineage(
+    request: SessionLineageRequest
+  ): Promise<SessionLineageSnapshot | null> {
+    try {
+      return await api.invoke('get_session_lineage', {
+        request: {
+          session_id: request.sessionId,
+          workspace_path: request.workspacePath,
+          ...remoteSessionFields(request.remoteConnectionId, request.remoteSshHost),
+        }
+      });
+    } catch (error) {
+      throw createTauriCommandError('get_session_lineage', error, {
+        sessionId: request.sessionId,
+        workspacePath: request.workspacePath,
       });
     }
   }

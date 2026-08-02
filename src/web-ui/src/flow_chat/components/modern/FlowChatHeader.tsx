@@ -10,6 +10,7 @@ import { Activity, Bot, ChevronDown, ChevronUp, GitPullRequest, Keyboard, MoreHo
 import { Tooltip, IconButton, Input } from '@/component-library';
 import { useTranslation } from 'react-i18next';
 import { SessionFilesBadge } from './SessionFilesBadge';
+import { SessionTreePopover, type SessionTreeSelection } from './SessionTreePopover';
 import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
 import { computeFixedPopoverPosition } from '@/shared/utils/fixedPopoverViewport';
 import { createReviewPlatformTab } from '@/shared/utils/tabUtils';
@@ -67,6 +68,8 @@ export interface FlowChatHeaderProps {
   searchOpenRequest?: number;
   /** Running background subagents launched by the active parent session. */
   backgroundSubagents?: FlowChatHeaderSubagentSummary[];
+  /** Open a Session from the active Agent tree. */
+  onOpenSessionTreeSession?: (selection: SessionTreeSelection) => void;
   /** Long-running background commands launched by the active parent session. */
   backgroundCommands?: FlowChatHeaderCommandSummary[];
   /** Open a background subagent in the right-side panel. */
@@ -100,6 +103,7 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
   onSearchClose,
   searchOpenRequest = 0,
   backgroundSubagents = [],
+  onOpenSessionTreeSession,
   backgroundCommands = [],
   onOpenBackgroundSubagent,
   onStopBackgroundSubagent,
@@ -605,6 +609,12 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
       </Tooltip>
 
       <div className="flowchat-header__actions" ref={rightActionsRef}>
+        <SessionTreePopover
+          sessionId={sessionId}
+          fallbackWorkspacePath={currentWorkspace?.rootPath}
+          onSelectSession={onOpenSessionTreeSession}
+          t={t}
+        />
         <div className="flowchat-header__background-activity-nav" ref={backgroundActivityPanelRef}>
           <IconButton
             className={[

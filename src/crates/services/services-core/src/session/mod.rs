@@ -12,9 +12,10 @@ mod write_lock;
 pub use bitfun_core_types::SessionKind;
 pub use layout::SessionStorageLayout;
 pub use lineage::{
-    apply_session_lineage, build_branched_session_metadata, collect_hidden_subagent_cascade,
-    format_branch_session_name, resolve_branch_session_lineage, BranchSessionLineage,
-    BranchSessionMetadataFacts, SessionBranchBoundary, SessionBranchRequest, SessionBranchResult,
+    apply_session_lineage, build_branched_session_metadata, build_session_lineage_snapshot,
+    collect_hidden_subagent_cascade, format_branch_session_name, resolve_branch_session_lineage,
+    BranchSessionLineage, BranchSessionMetadataFacts, SessionBranchBoundary, SessionBranchRequest,
+    SessionBranchResult, SessionLineageSnapshot,
 };
 #[cfg(feature = "session-git")]
 pub use memory_workspace::{

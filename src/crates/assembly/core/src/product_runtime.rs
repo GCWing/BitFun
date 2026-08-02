@@ -28,7 +28,9 @@ use bitfun_runtime_ports::{
 };
 use bitfun_runtime_services::RuntimeServices;
 use bitfun_services_core::permission_store::ProjectPermissionSqliteStore;
-use bitfun_services_core::session::SessionBranchBoundary;
+use bitfun_services_core::session::{
+    build_session_lineage_snapshot, SessionBranchBoundary, SessionLineageSnapshot,
+};
 
 use crate::agentic::coordination::{
     ConversationCoordinator, DialogScheduler, SessionMaintenancePermit,
@@ -851,6 +853,18 @@ impl CoreAgentRuntimeCompatibility {
         self.persistence
             .list_session_metadata_page(workspace_path, cursor, limit)
             .await
+    }
+
+    pub async fn get_persisted_session_lineage(
+        &self,
+        workspace_path: &Path,
+        anchor_session_id: &str,
+    ) -> BitFunResult<Option<SessionLineageSnapshot>> {
+        let metadata = self
+            .persistence
+            .list_session_metadata_including_internal(workspace_path)
+            .await?;
+        Ok(build_session_lineage_snapshot(metadata, anchor_session_id))
     }
 
     pub async fn load_persisted_session_metadata(

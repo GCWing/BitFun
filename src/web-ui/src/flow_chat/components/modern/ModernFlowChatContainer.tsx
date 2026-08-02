@@ -20,6 +20,7 @@ import {
   type FlowChatHeaderCommandSummary,
   type FlowChatHeaderSubagentSummary,
 } from './FlowChatHeader';
+import type { SessionTreeSelection } from './SessionTreePopover';
 import { FlowChatTurnRail, type FlowChatTurnRailItem } from './FlowChatTurnRail';
 import { BackgroundCommandInputDialog } from '../background-command/BackgroundCommandInputDialog';
 import { WelcomePanel } from '../WelcomePanel';
@@ -2108,6 +2109,31 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     });
   }, [activeSession, backgroundSubagents]);
 
+  const handleOpenSessionTreeSession = useCallback((selection: SessionTreeSelection) => {
+    if (
+      !activeSession?.sessionId ||
+      selection.isRoot ||
+      selection.sessionId === activeSession.sessionId ||
+      !selection.parentSessionId
+    ) {
+      return;
+    }
+
+    openBtwSessionInAuxPane({
+      childSessionId: selection.sessionId,
+      parentSessionId: selection.parentSessionId,
+      workspacePath: selection.workspacePath || activeSession.workspacePath,
+      sessionKind: 'subagent',
+      sessionTitle: selection.title,
+      agentType: selection.agentType,
+      parentToolCallId: selection.parentToolCallId,
+      subagentType: selection.subagentType,
+      remoteConnectionId: selection.remoteConnectionId || activeSession.remoteConnectionId,
+      remoteSshHost: selection.remoteSshHost || activeSession.remoteSshHost,
+      includeInternal: true,
+    });
+  }, [activeSession]);
+
   const handleStopBackgroundSubagent = useCallback(async (subagent: FlowChatHeaderSubagentSummary) => {
     if (stoppingBackgroundSubagentIds.has(subagent.sessionId)) {
       return;
@@ -2376,6 +2402,7 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
           searchOpenRequest={searchOpenRequest}
           backgroundSubagents={headerBackgroundSubagents}
           backgroundCommands={headerBackgroundCommands}
+          onOpenSessionTreeSession={handleOpenSessionTreeSession}
           onOpenBackgroundSubagent={handleOpenBackgroundSubagent}
           onStopBackgroundSubagent={handleStopBackgroundSubagent}
           onStopAllBackgroundSubagents={handleStopAllBackgroundSubagents}

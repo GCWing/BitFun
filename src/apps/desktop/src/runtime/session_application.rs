@@ -16,7 +16,9 @@ use bitfun_agent_runtime::sdk::{
 };
 use bitfun_core::agentic::coordination::{ConversationCoordinator, DialogScheduler};
 use bitfun_core::agentic::core::Session;
-use bitfun_core::agentic::persistence::{SessionBranchResult, SessionMetadataPage};
+use bitfun_core::agentic::persistence::{
+    SessionBranchResult, SessionLineageSnapshot, SessionMetadataPage,
+};
 use bitfun_core::agentic::session::SessionViewRestoreTiming;
 use bitfun_core::product_runtime::{CoreAgentRuntimeCompatibility, CoreProductAgentRuntime};
 use bitfun_core::service::remote_ssh::workspace_state::{
@@ -388,6 +390,19 @@ impl DesktopSessionApplication {
         let storage_path = self.storage_path(&scope);
         self.compatibility
             .list_persisted_sessions_page(&storage_path, cursor, limit)
+            .await
+            .map_err(|error| DesktopSessionApplicationError::Core(error.to_string()))
+    }
+
+    pub(crate) async fn get_session_lineage(
+        &self,
+        request: DesktopSessionScopeRequest,
+        anchor_session_id: &str,
+    ) -> DesktopSessionApplicationResult<Option<SessionLineageSnapshot>> {
+        let scope = self.resolved_scope(request).await;
+        let storage_path = self.storage_path(&scope);
+        self.compatibility
+            .get_persisted_session_lineage(&storage_path, anchor_session_id)
             .await
             .map_err(|error| DesktopSessionApplicationError::Core(error.to_string()))
     }

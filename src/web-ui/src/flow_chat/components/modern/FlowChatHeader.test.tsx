@@ -43,6 +43,7 @@ vi.mock('@/component-library', async () => {
     Input: ReactModule.forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTMLInputElement>>((props, ref) => (
       <input ref={ref} {...props} />
     )),
+    DotMatrixLoader: () => <span data-testid="dot-matrix-loader" />,
   };
 });
 
@@ -58,6 +59,14 @@ vi.mock('@/shared/utils/tabUtils', () => ({
 
 vi.mock('./SessionFilesBadge', () => ({
   SessionFilesBadge: () => <div data-testid="session-files-badge" />,
+}));
+
+vi.mock('./SessionTreePopover', () => ({
+  SessionTreePopover: () => (
+    <div className="session-tree-popover">
+      <button type="button" data-testid="flowchat-header-session-tree" />
+    </div>
+  ),
 }));
 
 function createProps(overrides: Partial<FlowChatHeaderProps> = {}): FlowChatHeaderProps {
@@ -133,6 +142,19 @@ describe('FlowChatHeader', () => {
     expect(container.querySelector('[data-testid="flowchat-header-turn-list"]')).toBeNull();
     expect(container.querySelector('[data-testid="flowchat-header-turn-prev"]')).toBeNull();
     expect(container.querySelector('[data-testid="flowchat-header-turn-next"]')).toBeNull();
+  });
+
+  it('places the Agent tree entry immediately before background activity', () => {
+    act(() => {
+      root.render(<FlowChatHeader {...createProps({ sessionId: 'session-1' })} />);
+    });
+
+    const treeButton = container.querySelector('[data-testid="flowchat-header-session-tree"]');
+    const activityButton = container.querySelector('[data-testid="flowchat-header-background-activities"]');
+    const treeContainer = treeButton?.closest('.session-tree-popover');
+    const activityContainer = activityButton?.closest('.flowchat-header__background-activity-nav');
+
+    expect(treeContainer?.nextElementSibling).toBe(activityContainer);
   });
 
   it('renders background activity menus in a portal outside the scrollable panel', () => {
