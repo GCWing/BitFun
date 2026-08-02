@@ -57,12 +57,12 @@ use bitfun_agent_runtime::scheduler::{
 };
 use bitfun_runtime_ports::{
     resolve_dialog_submit_queue_action, AgentBackgroundResultRequest, AgentDialogPrependedReminder,
-    AgentDialogTurnExecution, AgentDialogTurnPort, AgentDialogTurnRequest, AgentInputAttachment,
-    AgentLifecycleDeliveryPort, AgentThreadGoalDeliveryKind, AgentThreadGoalDeliveryRequest,
-    AgentTurnCancellationPort, AgentTurnCancellationRequest, AgentTurnCancellationResult,
-    DialogSessionStateFact, DialogSubmitQueueAction, DialogSubmitQueueFacts, PortError,
-    PortErrorKind, PortResult, RoundInjection, RoundInjectionKind, SessionStoragePathRequest,
-    SessionStorePort,
+    AgentDialogSteerRequest, AgentDialogTurnExecution, AgentDialogTurnPort, AgentDialogTurnRequest,
+    AgentInputAttachment, AgentLifecycleDeliveryPort, AgentThreadGoalDeliveryKind,
+    AgentThreadGoalDeliveryRequest, AgentTurnCancellationPort, AgentTurnCancellationRequest,
+    AgentTurnCancellationResult, DialogSessionStateFact, DialogSubmitQueueAction,
+    DialogSubmitQueueFacts, PortError, PortErrorKind, PortResult, RoundInjection,
+    RoundInjectionKind, SessionStoragePathRequest, SessionStorePort,
 };
 pub use bitfun_runtime_ports::{
     AgentSessionReplyRoute, DialogQueuePriority, DialogSteerOutcome, DialogSubmissionPolicy,
@@ -451,14 +451,19 @@ impl DialogScheduler {
     /// can inject it at the next model-round boundary. Errors:
     ///
     /// - Session is not currently `Processing` the requested `turn_id` (the targeted turn
-    ///   already finished or never existed). Caller should fall back to `submit`.
-    pub async fn submit_steering(
+    ///   already finished or never existed). Callers must preserve the user's input so it
+    ///   can be submitted explicitly after authoritative state is observed.
+    async fn buffer_steering(
         &self,
         session_id: String,
         turn_id: String,
         content: String,
         display_content: Option<String>,
     ) -> Result<DialogSteerOutcome, String> {
+        if content.trim().is_empty() {
+            return Err("Steering content cannot be empty".to_string());
+        }
+        let _operation_guard = self.lock_session_operation(&session_id).await;
         let active_turn_id = match self
             .session_manager
             .get_session(&session_id)
@@ -466,7 +471,12 @@ impl DialogScheduler {
         {
             Some(SessionState::Processing {
                 current_turn_id, ..
-            }) => Some(current_turn_id),
+            }) if self
+                .active_turns
+                .matches_turn(&session_id, &current_turn_id) =>
+            {
+                Some(current_turn_id)
+            }
             _ => None,
         };
 
@@ -482,7 +492,7 @@ impl DialogScheduler {
         ) {
             DialogSteeringAction::Reject { error } => {
                 warn!(
-                    "submit_steering rejected: target turn is not running: session_id={}, turn_id={}",
+                    "Steering rejected: target turn is not running: session_id={}, turn_id={}",
                     session_id, turn_id
                 );
                 Err(error)
@@ -2325,6 +2335,31 @@ impl AgentDialogTurnPort for DialogScheduler {
         self.submit_agent_dialog_turn_with_busy_policy(request, false)
             .await
     }
+
+    async fn steer_dialog_turn(
+        &self,
+        request: AgentDialogSteerRequest,
+    ) -> PortResult<DialogSteerOutcome> {
+        let empty_content = request.content.trim().is_empty();
+        DialogScheduler::buffer_steering(
+            self,
+            request.session_id,
+            request.turn_id,
+            request.content,
+            request.display_content,
+        )
+        .await
+        .map_err(|error| {
+            PortError::new(
+                if empty_content {
+                    PortErrorKind::InvalidRequest
+                } else {
+                    PortErrorKind::SessionInUse
+                },
+                error,
+            )
+        })
+    }
 }
 
 #[async_trait::async_trait]
@@ -3404,6 +3439,116 @@ mod tests {
             DialogSubmissionPolicy::for_source(DialogTriggerSource::DesktopUi),
             None,
         )
+    }
+
+    async fn mark_session_processing(
+        session_manager: &SessionManager,
+        root: &tempfile::TempDir,
+        session_id: &str,
+        turn_id: &str,
+    ) {
+        let workspace = root.path().join(format!("workspace-{session_id}"));
+        std::fs::create_dir_all(&workspace).expect("workspace");
+        session_manager
+            .create_session_with_id(
+                Some(session_id.to_string()),
+                "Steering".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.to_string_lossy().into_owned()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("create session");
+        session_manager
+            .update_session_state(
+                session_id,
+                SessionState::Processing {
+                    current_turn_id: turn_id.to_string(),
+                    phase: ProcessingPhase::Thinking,
+                },
+            )
+            .await
+            .expect("mark turn active");
+    }
+
+    #[tokio::test]
+    async fn steering_rejects_stale_processing_state_without_authoritative_active_turn() {
+        let (scheduler, session_manager, _, root) = test_scheduler();
+        let session_id = "stale-steering-session";
+        let turn_id = "stale-turn";
+        mark_session_processing(&session_manager, &root, session_id, turn_id).await;
+
+        let error = scheduler
+            .buffer_steering(
+                session_id.to_string(),
+                turn_id.to_string(),
+                "check tests".to_string(),
+                None,
+            )
+            .await
+            .expect_err("stale processing state must not accept steering");
+
+        assert!(error.contains("no longer running"), "{error}");
+        assert!(scheduler
+            .round_injection_monitor()
+            .take_pending(session_id, turn_id)
+            .is_empty());
+    }
+
+    #[tokio::test]
+    async fn steering_rejects_empty_content_as_an_invalid_request() {
+        let (scheduler, _, _, _) = test_scheduler();
+
+        let error = AgentDialogTurnPort::steer_dialog_turn(
+            scheduler.as_ref(),
+            AgentDialogSteerRequest {
+                session_id: "session-1".to_string(),
+                turn_id: "turn-1".to_string(),
+                content: "  ".to_string(),
+                display_content: None,
+            },
+        )
+        .await
+        .expect_err("empty steering must fail");
+
+        assert_eq!(error.kind, PortErrorKind::InvalidRequest);
+    }
+
+    #[tokio::test]
+    async fn steering_serializes_with_other_operations_for_the_same_session() {
+        let (scheduler, session_manager, _, root) = test_scheduler();
+        let session_id = "locked-steering-session";
+        let turn_id = "active-turn";
+        mark_session_processing(&session_manager, &root, session_id, turn_id).await;
+        scheduler
+            .active_turns
+            .insert(session_id, desktop_active_turn(turn_id));
+
+        let operation_guard = scheduler.lock_session_operation(session_id).await;
+        let steering_scheduler = scheduler.clone();
+        let steering = tokio::spawn(async move {
+            steering_scheduler
+                .buffer_steering(
+                    session_id.to_string(),
+                    turn_id.to_string(),
+                    "check tests".to_string(),
+                    None,
+                )
+                .await
+        });
+        tokio::task::yield_now().await;
+
+        assert!(
+            !steering.is_finished(),
+            "steering must wait for the session operation lock"
+        );
+        drop(operation_guard);
+        steering
+            .await
+            .expect("steering task")
+            .expect("steering outcome");
     }
 
     #[tokio::test]

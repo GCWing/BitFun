@@ -43,6 +43,18 @@ export interface EnqueueInput {
 
 export type PendingQueueListener = (sessionId: string, items: QueuedMessage[]) => void;
 
+/**
+ * The core steering contract is text-only. Keep payloads that need structured
+ * attachment/reference metadata queued for the regular turn submission path.
+ */
+export function queuedMessageHasUnsupportedSteeringPayload(item: QueuedMessage): boolean {
+  if ((item.imageContexts?.length ?? 0) > 0 || (item.imageDisplayData?.length ?? 0) > 0) {
+    return true;
+  }
+  const metadata = item.userMessageMetadata;
+  return metadata != null && Object.keys(metadata).length > 0;
+}
+
 class PendingQueueManager {
   private static _instance: PendingQueueManager | null = null;
   private queues = new Map<string, QueuedMessage[]>();
@@ -160,6 +172,24 @@ class PendingQueueManager {
     } else {
       this.queues.set(sessionId, next);
     }
+    this.persist(sessionId);
+    this.notify(sessionId);
+    return true;
+  }
+
+  /** Confirm a queued item for immediate idle-session drain without rebuilding its payload. */
+  promoteForExplicitDrain(sessionId: string, id: string): boolean {
+    const items = this.queues.get(sessionId);
+    if (!items) return false;
+    const index = items.findIndex(item => item.id === id);
+    if (index === -1) return false;
+    const item = items[index];
+    if (index > 0) {
+      items.splice(index, 1);
+      items.unshift(item);
+    }
+    item.status = 'queued';
+    item.retryCount = 0;
     this.persist(sessionId);
     this.notify(sessionId);
     return true;

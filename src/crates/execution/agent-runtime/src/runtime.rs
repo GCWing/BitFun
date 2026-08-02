@@ -10,29 +10,30 @@ use std::sync::{Arc, Mutex};
 use bitfun_agent_tools::{ToolRegistry, ToolRegistryItem};
 use bitfun_harness::HarnessRegistry;
 use bitfun_runtime_ports::{
-    AgentBackgroundResultRequest, AgentDialogTurnPort, AgentDialogTurnRequest,
-    AgentInputAttachment, AgentLifecycleDeliveryPort, AgentLocalCommandTurnPort,
-    AgentLocalCommandTurnRecordRequest, AgentMessageWorkspaceReferencesRequest,
-    AgentSessionArchiveRequest, AgentSessionArchiveStateRequest, AgentSessionClosePort,
-    AgentSessionCompactionPort, AgentSessionCompactionRequest, AgentSessionCompactionResult,
-    AgentSessionCreateRequest, AgentSessionCreateResult, AgentSessionDeleteRequest,
-    AgentSessionForkAtTurnRequest, AgentSessionForkBeforeTurnRequest, AgentSessionForkPort,
-    AgentSessionForkRequest, AgentSessionForkResult, AgentSessionListRequest,
-    AgentSessionManagementPort, AgentSessionModePort, AgentSessionModeUpdateRequest,
-    AgentSessionModelPort, AgentSessionModelUpdateRequest, AgentSessionRenameRequest,
-    AgentSessionRevertPort, AgentSessionRevertRequest, AgentSessionRevertResult,
-    AgentSessionSummary, AgentSessionUsagePort, AgentSessionUsageRequest,
-    AgentSessionWorkspaceBinding, AgentSessionWorkspaceRequest, AgentSubmissionPort,
-    AgentSubmissionRequest, AgentSubmissionResult, AgentSubmissionSource,
-    AgentThreadGoalCreateRequest, AgentThreadGoalDeliveryRequest, AgentThreadGoalGetRequest,
-    AgentThreadGoalManagementPort, AgentThreadGoalUpdateStatusRequest,
-    AgentTransientSessionDiscardRequest, AgentTurnCancellationPort, AgentTurnCancellationRequest,
-    AgentTurnCancellationResult, AgentTurnSettlementPort, AgentTurnSettlementRequest,
-    AgentUserShellCommandPort, AgentUserShellCommandRequest, AgentUserShellCommandResult,
-    AgentWorkspaceReference, AgentWorkspaceReferencePort, AgentWorkspaceReferenceSearchRequest,
-    AgentWorkspaceReferenceSearchResult, DialogSubmitOutcome, PermissionAuditRecord,
-    PermissionGrant, PermissionGrantKey, PluginRuntimeBinding, PortError, PortErrorKind,
-    PortResult, RuntimeEventEnvelope, SessionTranscript, SessionTranscriptReader,
+    AgentBackgroundResultRequest, AgentDialogSteerRequest, AgentDialogTurnPort,
+    AgentDialogTurnRequest, AgentInputAttachment, AgentLifecycleDeliveryPort,
+    AgentLocalCommandTurnPort, AgentLocalCommandTurnRecordRequest,
+    AgentMessageWorkspaceReferencesRequest, AgentSessionArchiveRequest,
+    AgentSessionArchiveStateRequest, AgentSessionClosePort, AgentSessionCompactionPort,
+    AgentSessionCompactionRequest, AgentSessionCompactionResult, AgentSessionCreateRequest,
+    AgentSessionCreateResult, AgentSessionDeleteRequest, AgentSessionForkAtTurnRequest,
+    AgentSessionForkBeforeTurnRequest, AgentSessionForkPort, AgentSessionForkRequest,
+    AgentSessionForkResult, AgentSessionListRequest, AgentSessionManagementPort,
+    AgentSessionModePort, AgentSessionModeUpdateRequest, AgentSessionModelPort,
+    AgentSessionModelUpdateRequest, AgentSessionRenameRequest, AgentSessionRevertPort,
+    AgentSessionRevertRequest, AgentSessionRevertResult, AgentSessionSummary,
+    AgentSessionUsagePort, AgentSessionUsageRequest, AgentSessionWorkspaceBinding,
+    AgentSessionWorkspaceRequest, AgentSubmissionPort, AgentSubmissionRequest,
+    AgentSubmissionResult, AgentSubmissionSource, AgentThreadGoalCreateRequest,
+    AgentThreadGoalDeliveryRequest, AgentThreadGoalGetRequest, AgentThreadGoalManagementPort,
+    AgentThreadGoalUpdateStatusRequest, AgentTransientSessionDiscardRequest,
+    AgentTurnCancellationPort, AgentTurnCancellationRequest, AgentTurnCancellationResult,
+    AgentTurnSettlementPort, AgentTurnSettlementRequest, AgentUserShellCommandPort,
+    AgentUserShellCommandRequest, AgentUserShellCommandResult, AgentWorkspaceReference,
+    AgentWorkspaceReferencePort, AgentWorkspaceReferenceSearchRequest,
+    AgentWorkspaceReferenceSearchResult, DialogSteerOutcome, DialogSubmitOutcome,
+    PermissionAuditRecord, PermissionGrant, PermissionGrantKey, PluginRuntimeBinding, PortError,
+    PortErrorKind, PortResult, RuntimeEventEnvelope, SessionTranscript, SessionTranscriptReader,
     SessionTranscriptRequest, ThreadGoal, WorkspaceDiffSnapshot,
 };
 use bitfun_runtime_services::RuntimeServices;
@@ -1397,6 +1398,38 @@ impl AgentRuntime {
                 format!(
                     "agent dialog provider returned session_id '{}' for requested session_id '{}'",
                     returned_session_id, requested_session_id
+                ),
+            )
+            .into());
+        }
+        Ok(outcome)
+    }
+
+    pub async fn steer_dialog_turn(
+        &self,
+        request: AgentDialogSteerRequest,
+    ) -> Result<DialogSteerOutcome, RuntimeError> {
+        let requested_session_id = request.session_id.clone();
+        let requested_turn_id = request.turn_id.clone();
+        let dialog_turn = self
+            .dialog_turn
+            .as_ref()
+            .ok_or(RuntimeError::MissingDialogTurnPort)?;
+        let outcome = dialog_turn
+            .steer_dialog_turn(request)
+            .await
+            .map_err(RuntimeError::from)?;
+        let DialogSteerOutcome::Buffered {
+            session_id,
+            turn_id,
+            ..
+        } = &outcome;
+        if session_id != &requested_session_id || turn_id != &requested_turn_id {
+            return Err(PortError::new(
+                PortErrorKind::Backend,
+                format!(
+                    "agent dialog provider returned session_id '{}' and turn_id '{}' for requested session_id '{}' and turn_id '{}'",
+                    session_id, turn_id, requested_session_id, requested_turn_id
                 ),
             )
             .into());
@@ -3055,6 +3088,142 @@ mod tests {
             })
         ));
         assert!(error.into_message().contains("requested-session"));
+    }
+
+    #[tokio::test]
+    async fn steer_dialog_turn_requires_registered_dialog_turn_port() {
+        let runtime = AgentRuntimeBuilder::new()
+            .with_submission_port(Arc::new(FakeAgentRuntimePorts::default()))
+            .build()
+            .expect("runtime");
+
+        let error = runtime
+            .steer_dialog_turn(bitfun_runtime_ports::AgentDialogSteerRequest {
+                session_id: "session_1".to_string(),
+                turn_id: "turn_1".to_string(),
+                content: "check tests".to_string(),
+                display_content: None,
+            })
+            .await
+            .expect_err("steering without a dialog-turn provider must fail");
+
+        assert_eq!(error, RuntimeError::MissingDialogTurnPort);
+    }
+
+    #[tokio::test]
+    async fn steer_dialog_turn_delegates_and_validates_exact_turn_identity() {
+        #[derive(Debug, Default)]
+        struct RecordingSteerPort {
+            requests: Mutex<Vec<bitfun_runtime_ports::AgentDialogSteerRequest>>,
+        }
+
+        #[async_trait::async_trait]
+        impl bitfun_runtime_ports::AgentDialogTurnPort for RecordingSteerPort {
+            async fn submit_dialog_turn(
+                &self,
+                request: AgentDialogTurnRequest,
+            ) -> PortResult<DialogSubmitOutcome> {
+                Ok(DialogSubmitOutcome::Started {
+                    session_id: request.session_id,
+                    turn_id: request.turn_id.unwrap_or_else(|| "generated".to_string()),
+                })
+            }
+
+            async fn steer_dialog_turn(
+                &self,
+                request: bitfun_runtime_ports::AgentDialogSteerRequest,
+            ) -> PortResult<bitfun_runtime_ports::DialogSteerOutcome> {
+                self.requests.lock().unwrap().push(request.clone());
+                Ok(bitfun_runtime_ports::DialogSteerOutcome::Buffered {
+                    session_id: request.session_id,
+                    turn_id: request.turn_id,
+                    steering_id: "steer_1".to_string(),
+                })
+            }
+        }
+
+        let port = Arc::new(RecordingSteerPort::default());
+        let runtime = AgentRuntimeBuilder::new()
+            .with_submission_port(Arc::new(FakeAgentRuntimePorts::default()))
+            .with_dialog_turn_port(port.clone())
+            .build()
+            .expect("runtime");
+        let request = bitfun_runtime_ports::AgentDialogSteerRequest {
+            session_id: "session_1".to_string(),
+            turn_id: "turn_1".to_string(),
+            content: "check tests".to_string(),
+            display_content: Some("Check tests".to_string()),
+        };
+
+        let result = runtime
+            .steer_dialog_turn(request.clone())
+            .await
+            .expect("steer dialog turn");
+
+        assert_eq!(port.requests.lock().unwrap().as_slice(), &[request]);
+        assert_eq!(
+            result,
+            bitfun_runtime_ports::DialogSteerOutcome::Buffered {
+                session_id: "session_1".to_string(),
+                turn_id: "turn_1".to_string(),
+                steering_id: "steer_1".to_string(),
+            }
+        );
+    }
+
+    #[tokio::test]
+    async fn steer_dialog_turn_rejects_provider_turn_identity_mismatch() {
+        #[derive(Debug)]
+        struct MismatchedSteerPort;
+
+        #[async_trait::async_trait]
+        impl bitfun_runtime_ports::AgentDialogTurnPort for MismatchedSteerPort {
+            async fn submit_dialog_turn(
+                &self,
+                request: AgentDialogTurnRequest,
+            ) -> PortResult<DialogSubmitOutcome> {
+                Ok(DialogSubmitOutcome::Started {
+                    session_id: request.session_id,
+                    turn_id: request.turn_id.unwrap_or_else(|| "generated".to_string()),
+                })
+            }
+
+            async fn steer_dialog_turn(
+                &self,
+                request: bitfun_runtime_ports::AgentDialogSteerRequest,
+            ) -> PortResult<bitfun_runtime_ports::DialogSteerOutcome> {
+                Ok(bitfun_runtime_ports::DialogSteerOutcome::Buffered {
+                    session_id: request.session_id,
+                    turn_id: "different-turn".to_string(),
+                    steering_id: "steer_1".to_string(),
+                })
+            }
+        }
+
+        let runtime = AgentRuntimeBuilder::new()
+            .with_submission_port(Arc::new(FakeAgentRuntimePorts::default()))
+            .with_dialog_turn_port(Arc::new(MismatchedSteerPort))
+            .build()
+            .expect("runtime");
+
+        let error = runtime
+            .steer_dialog_turn(bitfun_runtime_ports::AgentDialogSteerRequest {
+                session_id: "session_1".to_string(),
+                turn_id: "turn_1".to_string(),
+                content: "check tests".to_string(),
+                display_content: None,
+            })
+            .await
+            .expect_err("provider turn mismatch must fail closed");
+
+        assert!(matches!(
+            error,
+            RuntimeError::Port(PortError {
+                kind: PortErrorKind::Backend,
+                ..
+            })
+        ));
+        assert!(error.into_message().contains("different-turn"));
     }
 
     #[tokio::test]

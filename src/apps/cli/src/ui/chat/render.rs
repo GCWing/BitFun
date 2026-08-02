@@ -704,6 +704,48 @@ impl ChatView {
                         plain_lines.push(String::new());
                     }
 
+                    FlowItem::UserSteering {
+                        content,
+                        is_pending,
+                        ..
+                    } => {
+                        close_user_bubble(
+                            &mut items,
+                            &mut plain_lines,
+                            &mut user_bubble_open,
+                            user_bg_style,
+                            user_border_style,
+                        );
+                        let label = if *is_pending {
+                            "You steered (pending)"
+                        } else {
+                            "You steered"
+                        };
+                        let prefix = format!("  {label}: ");
+                        let content_width = available_width
+                            .saturating_sub(prefix.width().min(u16::MAX as usize) as u16)
+                            as usize;
+                        let mut first_line = true;
+                        for line in content.lines() {
+                            for wrapped in wrap_hard_display_width(line, content_width.max(1)) {
+                                let line_prefix = if first_line {
+                                    first_line = false;
+                                    prefix.clone()
+                                } else {
+                                    "  ".to_string()
+                                };
+                                plain_lines.push(format!("{line_prefix}{wrapped}"));
+                                items.push(ListItem::new(Line::from(vec![
+                                    Span::styled(
+                                        line_prefix,
+                                        self.theme.style(StyleKind::Primary),
+                                    ),
+                                    Span::raw(wrapped),
+                                ])));
+                            }
+                        }
+                    }
+
                     FlowItem::Tool { tool_state } => {
                         close_user_bubble(
                             &mut items,

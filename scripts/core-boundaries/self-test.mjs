@@ -5086,10 +5086,13 @@ async fn release_baseline_claim(release: BaselineClaimRelease) -> Result<(), Dis
     runtimeIpcOperationPattern.test('    WorkspaceDiff {') ||
     runtimeIpcOperationPattern.test('    WorkspaceDiffSnapshot,') ||
     runtimeIpcOperationPattern.test('    SubmitTurn {') ||
+    runtimeIpcOperationPattern.test('    SteerTurn {') ||
+    runtimeIpcOperationPattern.test('    AgentDialogSteerRequest {') ||
     runtimeIpcOperationPattern.test('    RunUserShellCommand {') ||
     runtimeIpcOperationPattern.test('    AgentUserShellCommandRequest {') ||
     runtimeIpcOperationPattern.test('    SessionForked {') ||
-    runtimeIpcOperationPattern.test('    SessionReverted {')
+    runtimeIpcOperationPattern.test('    SessionReverted {') ||
+    runtimeIpcOperationPattern.test('    TurnSteered {')
   ) {
     throw new Error('agent-runtime-ipc operation guard must preserve the Shared TUI operation budget');
   }

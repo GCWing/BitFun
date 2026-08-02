@@ -12,18 +12,19 @@ use std::sync::{Arc, RwLock};
 use tokio::sync::{broadcast, Mutex};
 
 use bitfun_agent_runtime::sdk::{
-    AgentDialogTurnExecution, AgentDialogTurnRequest, AgentEventReceiver, AgentInputAttachment,
-    AgentLocalCommandTurnRecordRequest, AgentMessageWorkspaceReferencesRequest, AgentRuntime,
-    AgentSessionCompactionRequest, AgentSessionCreateRequest, AgentSessionDeleteRequest,
-    AgentSessionForkBeforeTurnRequest, AgentSessionForkRequest, AgentSessionForkResult,
-    AgentSessionListRequest, AgentSessionModeUpdateRequest, AgentSessionModelUpdateRequest,
-    AgentSessionRenameRequest, AgentSessionRestoreRequest, AgentSessionRevertRequest,
-    AgentSessionRevertResult, AgentSessionUsageRequest, AgentTurnCancellationRequest,
-    AgentTurnSettlementRequest, AgentUserAnswersRequest, AgentUserShellCommandRequest,
-    AgentWorkspaceReference, AgentWorkspaceReferenceSearchRequest,
-    AgentWorkspaceReferenceSearchResult, PermissionReply, PermissionRequest,
-    PermissionRequestEventReceiver, PortError, PortErrorKind, RuntimeError, SessionTranscript,
-    SessionTranscriptRequest, SessionUsageReport, WorkspaceDiffSnapshot,
+    AgentDialogSteerRequest, AgentDialogTurnExecution, AgentDialogTurnRequest, AgentEventReceiver,
+    AgentInputAttachment, AgentLocalCommandTurnRecordRequest,
+    AgentMessageWorkspaceReferencesRequest, AgentRuntime, AgentSessionCompactionRequest,
+    AgentSessionCreateRequest, AgentSessionDeleteRequest, AgentSessionForkBeforeTurnRequest,
+    AgentSessionForkRequest, AgentSessionForkResult, AgentSessionListRequest,
+    AgentSessionModeUpdateRequest, AgentSessionModelUpdateRequest, AgentSessionRenameRequest,
+    AgentSessionRestoreRequest, AgentSessionRevertRequest, AgentSessionRevertResult,
+    AgentSessionUsageRequest, AgentTurnCancellationRequest, AgentTurnSettlementRequest,
+    AgentUserAnswersRequest, AgentUserShellCommandRequest, AgentWorkspaceReference,
+    AgentWorkspaceReferenceSearchRequest, AgentWorkspaceReferenceSearchResult, DialogSteerOutcome,
+    PermissionReply, PermissionRequest, PermissionRequestEventReceiver, PortError, PortErrorKind,
+    RuntimeError, SessionTranscript, SessionTranscriptRequest, SessionUsageReport,
+    WorkspaceDiffSnapshot,
 };
 use bitfun_agent_runtime_ipc::{
     RuntimeIpcClient, RuntimeIpcClientError, RuntimeIpcClientEvent, RuntimeIpcErrorCode,
@@ -1319,6 +1320,55 @@ impl CliAgentRuntimeClient {
         submission
     }
 
+    pub(crate) async fn steer_current_turn(
+        &self,
+        content: String,
+        display_content: Option<String>,
+    ) -> Result<String> {
+        if content.trim().is_empty() {
+            return Err(anyhow::anyhow!("Steering content cannot be empty"));
+        }
+        let session_id = self
+            .session_id
+            .lock()
+            .await
+            .clone()
+            .ok_or_else(|| anyhow::anyhow!("No active session is available for steering"))?;
+        let turn_id = self
+            .current_turn_id
+            .lock()
+            .await
+            .clone()
+            .ok_or_else(|| anyhow::anyhow!("No active turn is available for steering"))?;
+        let request = AgentDialogSteerRequest {
+            session_id: session_id.clone(),
+            turn_id: turn_id.clone(),
+            content,
+            display_content,
+        };
+
+        match &self.backend {
+            CliAgentRuntimeBackend::Embedded(runtime) => match runtime
+                .steer_dialog_turn(request)
+                .await
+                .map_err(|error| anyhow::anyhow!(error.into_message()))?
+            {
+                DialogSteerOutcome::Buffered { steering_id, .. } => Ok(steering_id),
+            },
+            CliAgentRuntimeBackend::Shared(client) => match client
+                .request(RuntimeIpcOperation::SteerTurn { request })
+                .await?
+            {
+                RuntimeIpcOperationResult::TurnSteered {
+                    session_id: steered_session,
+                    turn_id: steered_turn,
+                    steering_id,
+                } if steered_session == session_id && steered_turn == turn_id => Ok(steering_id),
+                _ => Err(unexpected_shared_result("steer_turn")),
+            },
+        }
+    }
+
     pub(crate) async fn run_user_shell_command(
         &self,
         command: String,
@@ -1964,6 +2014,27 @@ mod tests {
         assert!(compact.contains("RuntimeIpcOperationResult::TurnAccepted"));
         assert!(!compact.contains("serde_json::to_value"));
         assert!(!compact.contains("serde_json::from_value"));
+    }
+
+    #[test]
+    fn steering_uses_the_existing_runtime_contract_in_both_deployments() {
+        let source = include_str!("runtime_client.rs").replace("\r\n", "\n");
+        let steering = source
+            .split_once("pub(crate) async fn steer_current_turn(")
+            .expect("steering method")
+            .1
+            .split_once("pub(crate) async fn run_user_shell_command(")
+            .expect("steering method boundary")
+            .0;
+
+        assert!(steering.contains("AgentDialogSteerRequest"));
+        assert!(steering.contains("CliAgentRuntimeBackend::Embedded(runtime)"));
+        assert!(steering.contains(".steer_dialog_turn(request)"));
+        assert!(steering.contains("CliAgentRuntimeBackend::Shared(client)"));
+        assert!(steering.contains("RuntimeIpcOperation::SteerTurn { request }"));
+        assert!(steering.contains("RuntimeIpcOperationResult::TurnSteered"));
+        assert!(!steering.contains("RuntimeIpcOperation::SubmitTurn"));
+        assert!(!steering.contains("Uuid::new_v4"));
     }
 
     #[test]

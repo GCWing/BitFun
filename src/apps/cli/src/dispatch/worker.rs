@@ -4,9 +4,9 @@ use std::time::Duration;
 
 use anyhow::{anyhow, bail, Context, Result};
 use bitfun_agent_runtime::sdk::{
-    AgentDialogTurnRequest, AgentSessionCreateRequest, AgentSessionRestoreRequest,
-    AgentTurnCancellationRequest, AgentTurnSettlementRequest, PermissionReply,
-    PermissionReplySource, PermissionRequest, PermissionRequestEvent,
+    AgentDialogSteerRequest, AgentDialogTurnRequest, AgentSessionCreateRequest,
+    AgentSessionRestoreRequest, AgentTurnCancellationRequest, AgentTurnSettlementRequest,
+    PermissionReply, PermissionReplySource, PermissionRequest, PermissionRequestEvent,
 };
 use bitfun_events::{project_agentic_frontend_event, AgenticEvent};
 use bitfun_runtime_ports::{
@@ -364,7 +364,6 @@ async fn run_inner(store: &DispatchStore, job_id: &str) -> Result<()> {
                     store,
                     job_id,
                     &agent_runtime,
-                    &compatibility,
                     &job.request.session_id,
                     &turn_id,
                 ).await? {
@@ -447,7 +446,6 @@ async fn process_mailboxes(
     store: &DispatchStore,
     job_id: &str,
     runtime: &bitfun_agent_runtime::sdk::AgentRuntime,
-    compatibility: &bitfun_core::product_runtime::CoreAgentRuntimeCompatibility,
     session_id: &str,
     turn_id: &str,
 ) -> Result<Option<(DispatchJobState, Option<String>)>> {
@@ -483,15 +481,15 @@ async fn process_mailboxes(
     }
 
     for request in store.list_pending_append_messages(job_id)? {
-        compatibility
-            .submit_steering(
-                session_id.to_string(),
-                turn_id.to_string(),
-                request.content.clone(),
-                request.display_content.clone(),
-            )
+        runtime
+            .steer_dialog_turn(AgentDialogSteerRequest {
+                session_id: session_id.to_string(),
+                turn_id: turn_id.to_string(),
+                content: request.content.clone(),
+                display_content: request.display_content.clone(),
+            })
             .await
-            .map_err(anyhow::Error::msg)
+            .map_err(|error| anyhow!(error.into_message()))
             .with_context(|| {
                 format!(
                     "append message {} to running dispatch turn",
@@ -673,6 +671,21 @@ fn terminal_outcome(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn dispatch_append_reuses_the_runtime_steering_port() {
+        let source = include_str!("worker.rs").replace("\r\n", "\n");
+        let mailboxes = source
+            .split_once("async fn process_mailboxes(")
+            .expect("mailbox processor")
+            .1
+            .split_once("async fn cancel_turn(")
+            .expect("mailbox processor boundary")
+            .0;
+
+        assert!(mailboxes.contains(".steer_dialog_turn(AgentDialogSteerRequest"));
+        assert!(!mailboxes.contains("compatibility.submit_steering"));
+    }
 
     #[test]
     fn terminal_events_map_to_persistent_job_states() {

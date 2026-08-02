@@ -1,12 +1,13 @@
 use bitfun_product_domains::tool_permissions::{PermissionReply, PermissionRequest};
 use bitfun_runtime_ports::{
-    AgentContextReloadRequest, AgentDialogTurnRequest, AgentMessageWorkspaceReferencesRequest,
-    AgentSessionCompactionRequest, AgentSessionCreateRequest, AgentSessionCreateResult,
-    AgentSessionListRequest, AgentSessionModeUpdateRequest, AgentSessionModelUpdateRequest,
-    AgentSessionRevertRequest, AgentSessionRevertResult, AgentSessionSummary,
-    AgentTurnCancellationRequest, AgentTurnCancellationResult, AgentUserShellCommandRequest,
-    AgentWorkspaceReference, AgentWorkspaceReferenceSearchRequest,
-    AgentWorkspaceReferenceSearchResult, SessionTranscript, WorkspaceDiffSnapshot,
+    AgentContextReloadRequest, AgentDialogSteerRequest, AgentDialogTurnRequest,
+    AgentMessageWorkspaceReferencesRequest, AgentSessionCompactionRequest,
+    AgentSessionCreateRequest, AgentSessionCreateResult, AgentSessionListRequest,
+    AgentSessionModeUpdateRequest, AgentSessionModelUpdateRequest, AgentSessionRevertRequest,
+    AgentSessionRevertResult, AgentSessionSummary, AgentTurnCancellationRequest,
+    AgentTurnCancellationResult, AgentUserShellCommandRequest, AgentWorkspaceReference,
+    AgentWorkspaceReferenceSearchRequest, AgentWorkspaceReferenceSearchResult, SessionTranscript,
+    WorkspaceDiffSnapshot,
 };
 use serde::{Deserialize, Serialize};
 
@@ -97,6 +98,9 @@ pub enum RuntimeIpcOperation {
     SubmitTurn {
         request: AgentDialogTurnRequest,
     },
+    SteerTurn {
+        request: AgentDialogSteerRequest,
+    },
     RunUserShellCommand {
         request: AgentUserShellCommandRequest,
     },
@@ -132,6 +136,7 @@ impl RuntimeIpcOperation {
             Self::SearchWorkspaceReferences { request } => Some(&request.session_id),
             Self::WorkspaceReferencesForMessage { request } => Some(&request.session_id),
             Self::SubmitTurn { request } => Some(&request.session_id),
+            Self::SteerTurn { request } => Some(&request.session_id),
             Self::RunUserShellCommand { request } => Some(&request.session_id),
             Self::CancelTurn { request } => Some(&request.session_id),
             Self::PendingPermissions { session_id }
@@ -175,6 +180,7 @@ impl RuntimeIpcOperation {
             Self::ReloadSessionContext { .. }
             | Self::UndoSession { .. }
             | Self::RedoSession { .. }
+            | Self::SteerTurn { .. }
             | Self::CancelTurn { .. }
             | Self::RespondPermission { .. }
             | Self::SubmitUserAnswers { .. } => {
@@ -257,6 +263,11 @@ pub enum RuntimeIpcOperationResult {
         session_id: String,
         turn_id: String,
     },
+    TurnSteered {
+        session_id: String,
+        turn_id: String,
+        steering_id: String,
+    },
     TurnCancelled {
         cancellation: AgentTurnCancellationResult,
     },
@@ -277,7 +288,9 @@ pub enum RuntimeIpcOperationResult {
 #[cfg(test)]
 mod tests {
     use super::{RuntimeIpcOperation, RuntimeIpcSessionRequirement, RuntimeSessionRestoreRequest};
-    use bitfun_runtime_ports::{AgentContextReloadRequest, AgentContextReloadTarget};
+    use bitfun_runtime_ports::{
+        AgentContextReloadRequest, AgentContextReloadTarget, AgentDialogSteerRequest,
+    };
 
     #[test]
     fn delete_rules_are_fail_closed_for_shared_session_selection() {
@@ -305,6 +318,28 @@ mod tests {
         }
         .rules();
 
+        assert_eq!(
+            rules.session_requirement,
+            RuntimeIpcSessionRequirement::CurrentController
+        );
+        assert!(!rules.requires_idle);
+        assert!(!rules.serializes_session_selection);
+        assert!(rules.side_effecting);
+    }
+
+    #[test]
+    fn steer_rules_require_the_current_controller_but_allow_an_active_turn() {
+        let operation = RuntimeIpcOperation::SteerTurn {
+            request: AgentDialogSteerRequest {
+                session_id: "session-1".to_string(),
+                turn_id: "turn-1".to_string(),
+                content: "check tests".to_string(),
+                display_content: None,
+            },
+        };
+        let rules = operation.rules();
+
+        assert_eq!(operation.session_id(), Some("session-1"));
         assert_eq!(
             rules.session_requirement,
             RuntimeIpcSessionRequirement::CurrentController

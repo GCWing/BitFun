@@ -27,7 +27,10 @@ import { Tooltip, IconButton } from '@/component-library';
 import { agentAPI } from '@/infrastructure/api/service-api/AgentAPI';
 import { stateMachineManager } from '../state-machine';
 import { FlowChatStore } from '../store/FlowChatStore';
-import { pendingQueueManager } from '../services/flow-chat-manager/PendingQueueModule';
+import {
+  pendingQueueManager,
+  queuedMessageHasUnsupportedSteeringPayload,
+} from '../services/flow-chat-manager/PendingQueueModule';
 import { FlowChatManager } from '../services/FlowChatManager';
 import { insertSteeringItemIfAbsent } from '../services/flow-chat-manager/EventHandlerModule';
 import { notificationService } from '../../shared/notification-system';
@@ -138,35 +141,29 @@ export function PendingQueuePanel({ sessionId, className }: PendingQueuePanelPro
           itemId: item.id,
         });
         try {
-          // Move this specific item to the head, then trigger drain.
-          const allItems = pendingQueueManager.list(sessionId);
-          if (allItems.length > 1 && allItems[0]?.id !== item.id) {
-            pendingQueueManager.clear(sessionId);
-            pendingQueueManager.enqueue({
+          if (!pendingQueueManager.promoteForExplicitDrain(sessionId, item.id)) {
+            log.warn('Send now fallback item is no longer queued', {
               sessionId,
-              content: item.content,
-              displayMessage: item.displayMessage,
-              agentType: item.agentType,
-              imageContexts: item.imageContexts,
-              imageDisplayData: item.imageDisplayData,
+              itemId: item.id,
             });
-            for (const other of allItems) {
-              if (other.id === item.id) continue;
-              pendingQueueManager.enqueue({
-                sessionId,
-                content: other.content,
-                displayMessage: other.displayMessage,
-                agentType: other.agentType,
-                imageContexts: other.imageContexts,
-                imageDisplayData: other.imageDisplayData,
-              });
-            }
+            return;
           }
           await FlowChatManager.getInstance().drainPendingQueueForSession(sessionId);
         } catch (err) {
           log.error('Send now fallback failed', { sessionId, itemId: item.id, err });
           notificationService.error(t('pendingQueue.errors.sendNowFailed'), { duration: 4000 });
         }
+        return;
+      }
+
+      if (queuedMessageHasUnsupportedSteeringPayload(item)) {
+        log.info('Send now kept queued because steering is text-only', {
+          sessionId,
+          itemId: item.id,
+        });
+        notificationService.warning(t('pendingQueue.errors.richContentUnsupported'), {
+          duration: 4000,
+        });
         return;
       }
 

@@ -2486,6 +2486,7 @@
     },
     "errors": {
       "emptyContent": "Message content cannot be empty",
+      "richContentUnsupported": "Messages with attachments or structured metadata can only be sent after the active turn finishes",
       "sendNowFailed": "Send now failed; please try again"
     }
   },

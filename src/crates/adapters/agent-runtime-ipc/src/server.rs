@@ -424,6 +424,19 @@ async fn run_initialized_connection(
                     .await?;
                     continue;
                 }
+                if let RuntimeIpcOperation::SteerTurn { request } = &operation {
+                    if active_turn_id.as_deref() != Some(request.turn_id.as_str()) {
+                        send_error(
+                            stream,
+                            config.request_timeout,
+                            Some(request_id),
+                            RuntimeIpcErrorCode::SessionInUse,
+                            "steering requires the connection's exact active turn",
+                        )
+                        .await?;
+                        continue;
+                    }
+                }
 
                 // Serialize attachment so a newly visible Session cannot be claimed
                 // before its generated ID returns to the creating connection, or
@@ -472,6 +485,12 @@ async fn run_initialized_connection(
                         let turn_id = request.turn_id.clone();
                         *active_turn_id = Some(turn_id.clone());
                         Some(turn_id)
+                    }
+                    _ => None,
+                };
+                let steering_target = match &operation {
+                    RuntimeIpcOperation::SteerTurn { request } => {
+                        Some((request.session_id.clone(), request.turn_id.clone()))
                     }
                     _ => None,
                 };
@@ -630,6 +649,27 @@ async fn run_initialized_connection(
                             Some(request_id),
                             RuntimeIpcErrorCode::Internal,
                             "runtime returned a different turn id than the accepted turn operation",
+                        )
+                        .await?;
+                        return Err(RuntimeIpcServerError::Disconnected);
+                    }
+                }
+                if let Some((expected_session_id, expected_turn_id)) = steering_target.as_ref() {
+                    let identity_matches = matches!(
+                        result,
+                        RuntimeIpcOperationResult::TurnSteered {
+                            session_id,
+                            turn_id,
+                            ..
+                        } if session_id == expected_session_id && turn_id == expected_turn_id
+                    );
+                    if !identity_matches {
+                        send_error(
+                            stream,
+                            config.request_timeout,
+                            Some(request_id),
+                            RuntimeIpcErrorCode::Internal,
+                            "runtime returned an invalid result for the steering operation",
                         )
                         .await?;
                         return Err(RuntimeIpcServerError::Disconnected);

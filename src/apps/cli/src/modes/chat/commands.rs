@@ -2,6 +2,22 @@ fn session_update_blocks_typed_submission(pending_for_current_session: bool, inp
     pending_for_current_session && !input.trim().starts_with('/')
 }
 
+fn steering_unsupported_reason(
+    draft: &crate::ui::composer::ComposerDraft,
+) -> Option<&'static str> {
+    if draft.has_images() {
+        return Some(
+            "Images cannot steer an active turn yet. Wait for it to finish to send this draft.",
+        );
+    }
+    if !draft.workspace_references.is_empty() {
+        return Some(
+            "Workspace references cannot steer an active turn yet. Wait for it to finish to send this draft.",
+        );
+    }
+    None
+}
+
 fn parse_reload_target(
     arguments: &str,
 ) -> std::result::Result<bitfun_runtime_ports::AgentContextReloadTarget, &'static str> {
@@ -1594,13 +1610,18 @@ impl ChatMode {
                 if let Some(input) = chat_view.send_input() {
                     return self.handle_command(&input.text, chat_view, chat_state, rt_handle);
                 }
+            } else if shell_mode && !trimmed.is_empty() {
+                chat_view.set_status(Some(
+                    "Currently processing. Wait for the turn to finish or interrupt it."
+                        .to_string(),
+                ));
             } else if !trimmed.is_empty() {
-                chat_view.set_status(Some(if shell_mode {
-                    "Currently processing. Wait for the turn to finish or interrupt it.".to_string()
-                } else {
-                    "Currently processing. Type a /command, or use the interrupt shortcut."
-                        .to_string()
-                }));
+                let draft = chat_view.draft_snapshot();
+                if let Some(reason) = steering_unsupported_reason(&draft) {
+                    chat_view.set_status(Some(reason.to_string()));
+                } else if let Some(draft) = chat_view.send_input() {
+                    self.steer_draft_to_agent(draft, chat_view, chat_state, rt_handle);
+                }
             }
             return Ok(None);
         }
@@ -1617,6 +1638,41 @@ impl ChatMode {
             self.send_draft_to_agent(input, chat_view, chat_state, rt_handle);
         }
         Ok(None)
+    }
+
+    fn steer_draft_to_agent(
+        &mut self,
+        draft: crate::ui::composer::ComposerDraft,
+        chat_view: &mut ChatView,
+        chat_state: &mut ChatState,
+        rt_handle: &tokio::runtime::Handle,
+    ) {
+        let agent = self.agent.clone();
+        let result = tokio::task::block_in_place(|| {
+            rt_handle.block_on(agent.steer_current_turn(
+                draft.text.clone(),
+                Some(draft.text.clone()),
+            ))
+        });
+        match result {
+            Ok(steering_id) => {
+                tracing::info!(
+                    "Steering submitted: turn_id={:?}, steering_id={}",
+                    chat_state.current_turn_id(),
+                    steering_id
+                );
+                chat_view.remember_submitted_draft(&chat_state.core_session_id, &draft);
+                chat_state.handle_user_steering(&steering_id, &draft.text, true);
+                chat_view.invalidate_lines_cache();
+                let display_name = agent_display_name(&self.agent_type);
+                chat_view.set_status(Some(format!("{} is thinking...", display_name)));
+            }
+            Err(error) => {
+                tracing::error!("Failed to steer active turn: {error}");
+                chat_view.set_status(Some(format!("Error: {error}")));
+                chat_view.set_draft(draft);
+            }
+        }
     }
 
     fn send_shell_command(

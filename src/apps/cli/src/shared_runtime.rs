@@ -405,6 +405,22 @@ impl RuntimeIpcRequestHandler for SharedRuntimeHandler {
                     turn_id,
                 })
             }
+            RuntimeIpcOperation::SteerTurn { request } => self
+                .runtime
+                .steer_dialog_turn(request)
+                .await
+                .map(|outcome| match outcome {
+                    bitfun_agent_runtime::sdk::DialogSteerOutcome::Buffered {
+                        session_id,
+                        turn_id,
+                        steering_id,
+                    } => RuntimeIpcOperationResult::TurnSteered {
+                        session_id,
+                        turn_id,
+                        steering_id,
+                    },
+                })
+                .map_err(runtime_ipc_error),
             RuntimeIpcOperation::RunUserShellCommand { request } => self
                 .runtime
                 .run_user_shell_command(request)
@@ -1155,6 +1171,23 @@ mod tests {
     use std::sync::{Arc, Mutex};
     use std::time::Duration;
     use tokio::sync::{watch, Notify};
+
+    #[test]
+    fn shared_handler_steering_delegates_to_the_runtime_sdk() {
+        let source = include_str!("shared_runtime.rs").replace("\r\n", "\n");
+        let execute = source
+            .split_once("impl RuntimeIpcRequestHandler for SharedRuntimeHandler")
+            .expect("shared handler")
+            .1
+            .split_once("fn subscribe_events(")
+            .expect("shared handler boundary")
+            .0;
+
+        assert!(execute.contains("RuntimeIpcOperation::SteerTurn { request }"));
+        assert!(execute.contains(".steer_dialog_turn(request)"));
+        assert!(execute.contains("RuntimeIpcOperationResult::TurnSteered"));
+        assert!(!execute.contains("submit_steering"));
+    }
 
     #[derive(Default)]
     struct RecordingSessionPort {

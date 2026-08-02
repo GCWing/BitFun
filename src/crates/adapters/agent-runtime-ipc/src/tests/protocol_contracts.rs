@@ -8,8 +8,8 @@ use crate::{
 
 use bitfun_product_domains::tool_permissions::PermissionReply;
 use bitfun_runtime_ports::{
-    AgentContextReloadRequest, AgentContextReloadTarget, AgentDialogTurnRequest,
-    AgentMessageWorkspaceReferencesRequest, AgentSessionCompactionRequest,
+    AgentContextReloadRequest, AgentContextReloadTarget, AgentDialogSteerRequest,
+    AgentDialogTurnRequest, AgentMessageWorkspaceReferencesRequest, AgentSessionCompactionRequest,
     AgentSessionModeUpdateRequest, AgentSessionModelUpdateRequest, AgentSessionRevertRequest,
     AgentSubmissionSource, AgentWorkspaceReferenceSearchRequest, DialogSubmissionPolicy,
     WorkspaceDiffContent, WorkspaceDiffFile, WorkspaceDiffFileStatus, WorkspaceDiffSnapshot,
@@ -72,6 +72,42 @@ fn protocol_round_trips_reviewed_permission_and_user_input_operations() {
 }
 
 #[test]
+fn protocol_round_trips_exact_turn_steering_without_replacing_turn_admission() {
+    assert_eq!(PROTOCOL_VERSION, 13);
+    let operation = RuntimeIpcOperation::SteerTurn {
+        request: AgentDialogSteerRequest {
+            session_id: "session-1".to_string(),
+            turn_id: "turn-1".to_string(),
+            content: "check tests".to_string(),
+            display_content: Some("Check tests".to_string()),
+        },
+    };
+    let result = RuntimeIpcOperationResult::TurnSteered {
+        session_id: "session-1".to_string(),
+        turn_id: "turn-1".to_string(),
+        steering_id: "steer-1".to_string(),
+    };
+
+    let operation_json = serde_json::to_value(&operation).expect("serialize steer operation");
+    let result_json = serde_json::to_value(&result).expect("serialize steer result");
+
+    assert_eq!(operation_json["operation"], "steer_turn");
+    assert_eq!(operation_json["request"]["turnId"], "turn-1");
+    assert_eq!(result_json["result"], "turn_steered");
+    assert_eq!(result_json["steeringId"], "steer-1");
+    assert_eq!(
+        serde_json::from_value::<RuntimeIpcOperation>(operation_json)
+            .expect("deserialize steer operation"),
+        operation
+    );
+    assert_eq!(
+        serde_json::from_value::<RuntimeIpcOperationResult>(result_json)
+            .expect("deserialize steer result"),
+        result
+    );
+}
+
+#[test]
 fn protocol_round_trips_read_only_workspace_reference_operations() {
     let operations = vec![
         RuntimeIpcOperation::SearchWorkspaceReferences {
@@ -108,7 +144,7 @@ fn protocol_round_trips_read_only_workspace_reference_operations() {
 
 #[test]
 fn protocol_round_trips_workspace_diff_as_a_read_only_workspace_operation() {
-    assert_eq!(PROTOCOL_VERSION, 12);
+    assert_eq!(PROTOCOL_VERSION, 13);
 
     let operation = RuntimeIpcOperation::WorkspaceDiff;
     let encoded = serde_json::to_value(&operation).expect("serialize workspace diff operation");
@@ -229,7 +265,7 @@ fn protocol_round_trips_the_reviewed_session_model_operation() {
 
 #[test]
 fn protocol_round_trips_the_current_session_rename_operation() {
-    assert_eq!(PROTOCOL_VERSION, 12);
+    assert_eq!(PROTOCOL_VERSION, 13);
 
     let operation = RuntimeIpcOperation::RenameSession {
         request: RuntimeSessionRenameRequest {

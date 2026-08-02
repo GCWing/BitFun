@@ -8,7 +8,7 @@
 
 use std::sync::Arc;
 
-pub const AGENT_RUNTIME_SDK_API_VERSION: u32 = 3;
+pub const AGENT_RUNTIME_SDK_API_VERSION: u32 = 4;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]
@@ -58,8 +58,8 @@ pub use bitfun_harness::{
     HarnessRegistry, HarnessWorkflow,
 };
 pub use bitfun_runtime_ports::{
-    AgentBackgroundResultRequest, AgentDialogTurnExecution, AgentDialogTurnPort,
-    AgentDialogTurnRequest, AgentInputAttachment, AgentLifecycleDeliveryPort,
+    AgentBackgroundResultRequest, AgentDialogSteerRequest, AgentDialogTurnExecution,
+    AgentDialogTurnPort, AgentDialogTurnRequest, AgentInputAttachment, AgentLifecycleDeliveryPort,
     AgentLocalCommandTurnPort, AgentLocalCommandTurnRecordRequest,
     AgentMessageWorkspaceReferencesRequest, AgentSessionArchiveRequest,
     AgentSessionArchiveStateRequest, AgentSessionClosePort, AgentSessionCompactionPort,
@@ -81,9 +81,9 @@ pub use bitfun_runtime_ports::{
     AgentWorkspaceReference, AgentWorkspaceReferenceKind, AgentWorkspaceReferencePort,
     AgentWorkspaceReferenceSearchEntry, AgentWorkspaceReferenceSearchRequest,
     AgentWorkspaceReferenceSearchResult, AgentWorkspaceReferenceSourceRange, ClockPort,
-    DialogSubmissionPolicy, DialogSubmitOutcome, FileSystemPort, GitPort, McpCatalogPort,
-    NetworkPort, PermissionAuditRecord, PermissionDelegationContext, PermissionGrant,
-    PermissionGrantKey, PermissionReply, PermissionReplySource, PermissionRequest,
+    DialogSteerOutcome, DialogSubmissionPolicy, DialogSubmitOutcome, FileSystemPort, GitPort,
+    McpCatalogPort, NetworkPort, PermissionAuditRecord, PermissionDelegationContext,
+    PermissionGrant, PermissionGrantKey, PermissionReply, PermissionReplySource, PermissionRequest,
     PermissionRequestEvent, PermissionRequestSource, PermissionRequestSourceKind, PortError,
     PortErrorKind, PortResult, RemoteAssistantWorkspaceFacts, RemoteCapabilityPort,
     RemoteConnectionPort, RemoteProjectionPort, RemoteRecentWorkspaceFacts, RemoteWorkspaceFacts,
@@ -613,6 +613,13 @@ impl AgentRuntime {
         request: AgentDialogTurnRequest,
     ) -> Result<DialogSubmitOutcome, RuntimeError> {
         self.inner.submit_dialog_turn(request).await
+    }
+
+    pub async fn steer_dialog_turn(
+        &self,
+        request: AgentDialogSteerRequest,
+    ) -> Result<DialogSteerOutcome, RuntimeError> {
+        self.inner.steer_dialog_turn(request).await
     }
 
     pub async fn deliver_background_result(

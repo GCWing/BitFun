@@ -582,6 +582,13 @@ impl AgentDialogTurnPort for RejectBusyAgentDialogTurnPort {
             .submit_agent_dialog_turn_reject_if_busy(request)
             .await
     }
+
+    async fn steer_dialog_turn(
+        &self,
+        request: bitfun_runtime_ports::AgentDialogSteerRequest,
+    ) -> bitfun_runtime_ports::PortResult<bitfun_runtime_ports::DialogSteerOutcome> {
+        AgentDialogTurnPort::steer_dialog_turn(self.0.as_ref(), request).await
+    }
 }
 
 #[async_trait::async_trait]

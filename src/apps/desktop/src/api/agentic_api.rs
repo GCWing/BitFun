@@ -16,10 +16,10 @@ use crate::runtime::{
 use crate::startup_trace::DesktopStartupTrace;
 use bitfun_agent_runtime::deep_review::sanitize_focused_review_public_metadata;
 use bitfun_agent_runtime::sdk::{
-    AgentDialogTurnExecution, AgentDialogTurnRequest, AgentInputAttachment,
-    AgentSessionCreateResult, AgentSessionModelUpdateRequest, AgentSubmissionSource,
-    AgentTurnCancellationRequest, PermissionAuditRecord, PermissionGrant, PermissionGrantKey,
-    PermissionReply, PermissionRequest,
+    AgentDialogSteerRequest, AgentDialogTurnExecution, AgentDialogTurnRequest,
+    AgentInputAttachment, AgentSessionCreateResult, AgentSessionModelUpdateRequest,
+    AgentSubmissionSource, AgentTurnCancellationRequest, DialogSteerOutcome, PermissionAuditRecord,
+    PermissionGrant, PermissionGrantKey, PermissionReply, PermissionRequest,
 };
 use bitfun_core::agentic::agents::AgentSource;
 use bitfun_core::agentic::coordination::{
@@ -2505,7 +2505,7 @@ pub async fn cancel_dialog_turn(
 
 #[tauri::command]
 pub async fn steer_dialog_turn(
-    scheduler: State<'_, Arc<DialogScheduler>>,
+    runtime: State<'_, DesktopRuntimeContext>,
     request: SteerDialogTurnRequest,
 ) -> Result<SteerDialogTurnResponse, String> {
     let SteerDialogTurnRequest {
@@ -2520,15 +2520,19 @@ pub async fn steer_dialog_turn(
         return Err("Steering content cannot be empty".to_string());
     }
 
-    let outcome = scheduler
-        .submit_steering(session_id, dialog_turn_id, content, display_content)
+    let outcome = runtime
+        .agent_runtime()
+        .steer_dialog_turn(AgentDialogSteerRequest {
+            session_id,
+            turn_id: dialog_turn_id,
+            content,
+            display_content,
+        })
         .await
-        .map_err(|e| format!("Failed to steer dialog turn: {}", e))?;
+        .map_err(|error| format!("Failed to steer dialog turn: {}", error.into_message()))?;
 
     let steering_id = match outcome {
-        bitfun_core::agentic::coordination::DialogSteerOutcome::Buffered {
-            steering_id, ..
-        } => steering_id,
+        DialogSteerOutcome::Buffered { steering_id, .. } => steering_id,
     };
 
     Ok(SteerDialogTurnResponse {
@@ -3247,6 +3251,24 @@ mod tests {
     };
     use bitfun_product_domains::tool_permissions::{PermissionEffect, PermissionRule};
     use serde_json::json;
+
+    #[test]
+    fn desktop_steering_uses_the_same_agent_runtime_port_as_other_surfaces() {
+        let source = include_str!("agentic_api.rs").replace("\r\n", "\n");
+        let steering = source
+            .split_once("pub async fn steer_dialog_turn(")
+            .expect("steering command")
+            .1
+            .split_once("pub async fn control_deep_review_queue(")
+            .expect("steering command boundary")
+            .0;
+
+        assert!(steering.contains("State<'_, DesktopRuntimeContext>"));
+        assert!(steering.contains(".agent_runtime()"));
+        assert!(steering.contains(".steer_dialog_turn(AgentDialogSteerRequest"));
+        assert!(!steering.contains("State<'_, Arc<DialogScheduler>>"));
+        assert!(!steering.contains(".submit_steering("));
+    }
 
     #[test]
     fn unknown_title_outcomes_reach_the_frontend_with_a_stable_code() {

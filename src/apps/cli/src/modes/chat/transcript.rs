@@ -93,6 +93,14 @@ pub(super) fn render_session_markdown(
                 {
                     push_block(&mut body, &format!("_Thinking:_\n\n{content}"));
                 }
+                FlowItem::UserSteering {
+                    content,
+                    is_pending,
+                    ..
+                } if !content.is_empty() => {
+                    let status = if *is_pending { " (pending)" } else { "" };
+                    push_block(&mut body, &format!("> **You steered{status}:** {content}"));
+                }
                 FlowItem::Tool { tool_state } => {
                     let paired = tool_results.get(tool_state.tool_id.as_str()).copied();
                     push_block(
@@ -100,7 +108,9 @@ pub(super) fn render_session_markdown(
                         &render_tool(tool_state, paired, options.include_tool_details),
                     );
                 }
-                FlowItem::Text { .. } | FlowItem::Thinking { .. } => {}
+                FlowItem::Text { .. }
+                | FlowItem::Thinking { .. }
+                | FlowItem::UserSteering { .. } => {}
             }
         }
         if body.is_empty() {
@@ -129,7 +139,9 @@ fn collect_tool_results(state: &ChatState) -> HashMap<&str, &ToolDisplayState> {
         .flat_map(|message| message.flow_items.iter())
         .filter_map(|item| match item {
             FlowItem::Tool { tool_state } => Some((tool_state.tool_id.as_str(), tool_state)),
-            FlowItem::Text { .. } | FlowItem::Thinking { .. } => None,
+            FlowItem::Text { .. } | FlowItem::Thinking { .. } | FlowItem::UserSteering { .. } => {
+                None
+            }
         })
         .collect()
 }

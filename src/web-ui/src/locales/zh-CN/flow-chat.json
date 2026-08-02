@@ -2486,6 +2486,7 @@
     },
     "errors": {
       "emptyContent": "消息内容不能为空",
+      "richContentUnsupported": "包含附件或结构化信息的消息需要等待当前对话完成后发送",
       "sendNowFailed": "立即发送失败，请稍后重试"
     }
   },

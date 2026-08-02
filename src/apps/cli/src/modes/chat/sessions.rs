@@ -305,6 +305,7 @@ impl ChatMode {
         }
         if chat_state.is_processing {
             chat_state.add_system_message("Already processing, please wait.".to_string());
+            chat_view.set_draft(draft);
             return;
         }
 

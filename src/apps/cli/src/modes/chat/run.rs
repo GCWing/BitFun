@@ -966,6 +966,29 @@ impl ChatMode {
                         needs_redraw = true;
                     }
 
+                    AgenticEvent::UserSteeringInjected {
+                        turn_id,
+                        steering_id,
+                        display_content,
+                        ..
+                    } => {
+                        if chat_state.current_turn_id() == Some(turn_id.as_str()) {
+                            chat_state.handle_user_steering(
+                                steering_id,
+                                display_content,
+                                false,
+                            );
+                            chat_view.invalidate_lines_cache();
+                            needs_redraw = true;
+                        } else {
+                            tracing::debug!(
+                                "Ignoring UserSteeringInjected for non-active turn: active={:?}, event={}",
+                                chat_state.current_turn_id(),
+                                turn_id
+                            );
+                        }
+                    }
+
                     AgenticEvent::ContextCompressionStarted { .. }
                     | AgenticEvent::ContextCompressionCompleted { .. }
                     | AgenticEvent::ContextCompressionFailed { .. } => {

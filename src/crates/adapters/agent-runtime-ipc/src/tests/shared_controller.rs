@@ -90,6 +90,7 @@ struct FakeHandler {
     rename_delay: Option<Duration>,
     delete_delay: Option<Duration>,
     submit_delay: Option<Duration>,
+    invalid_steer_result: bool,
     settle_cancel: bool,
     events: broadcast::Sender<RuntimeIpcEvent>,
     available: watch::Sender<bool>,
@@ -114,6 +115,7 @@ impl Default for FakeHandler {
             rename_delay: None,
             delete_delay: None,
             submit_delay: None,
+            invalid_steer_result: false,
             settle_cancel: true,
             events,
             available,
@@ -221,6 +223,16 @@ impl RuntimeIpcRequestHandler for FakeHandler {
                 Ok(RuntimeIpcOperationResult::TurnAccepted {
                     session_id: request.session_id,
                     turn_id: request.turn_id.expect("test turn id"),
+                })
+            }
+            RuntimeIpcOperation::SteerTurn { request } => {
+                if self.invalid_steer_result {
+                    return Ok(RuntimeIpcOperationResult::Unit);
+                }
+                Ok(RuntimeIpcOperationResult::TurnSteered {
+                    session_id: request.session_id,
+                    turn_id: request.turn_id,
+                    steering_id: "steer-fixture".to_string(),
                 })
             }
             RuntimeIpcOperation::RunUserShellCommand { request } => {
@@ -556,6 +568,17 @@ fn submit_operation(workspace: &Path, session_id: &str, turn_id: &str) -> Runtim
     }
 }
 
+fn steer_operation(session_id: &str, turn_id: &str) -> RuntimeIpcOperation {
+    RuntimeIpcOperation::SteerTurn {
+        request: bitfun_runtime_ports::AgentDialogSteerRequest {
+            session_id: session_id.to_string(),
+            turn_id: turn_id.to_string(),
+            content: "check tests".to_string(),
+            display_content: None,
+        },
+    }
+}
+
 fn shell_operation(session_id: &str, turn_id: &str) -> RuntimeIpcOperation {
     RuntimeIpcOperation::RunUserShellCommand {
         request: AgentUserShellCommandRequest {
@@ -882,6 +905,108 @@ async fn one_connection_rejects_a_second_turn_until_the_first_finishes() {
         submitted == 1 && !forked && cancelled_first
     })
     .await;
+    server.finish().await;
+}
+
+#[tokio::test]
+async fn steering_requires_and_preserves_the_connections_exact_active_turn() {
+    let handler = Arc::new(FakeHandler::default());
+    let server = TestServer::start(server_config(), handler.clone()).await;
+    let mut client = server.connect("steering-controller").await;
+    expect_response(
+        &mut client,
+        2,
+        restore_operation(server.workspace.path(), "session-a"),
+    )
+    .await;
+    expect_response(
+        &mut client,
+        3,
+        submit_operation(server.workspace.path(), "session-a", "turn-a"),
+    )
+    .await;
+    expect_response(&mut client, 4, steer_operation("session-a", "turn-a")).await;
+    expect_error(
+        &mut client,
+        5,
+        steer_operation("session-a", "turn-b"),
+        RuntimeIpcErrorCode::SessionInUse,
+    )
+    .await;
+    expect_error(
+        &mut client,
+        6,
+        submit_operation(server.workspace.path(), "session-a", "turn-b"),
+        RuntimeIpcErrorCode::SessionInUse,
+    )
+    .await;
+
+    let calls = handler.calls.lock().unwrap().clone();
+    assert_eq!(
+        calls
+            .iter()
+            .filter(|operation| matches!(operation, RuntimeIpcOperation::SteerTurn { .. }))
+            .count(),
+        1,
+        "a mismatched steer must be rejected before reaching the runtime"
+    );
+
+    drop(client);
+    wait_for_calls(&handler, |calls| {
+        calls.iter().any(|call| {
+            matches!(
+                call,
+                RuntimeIpcOperation::CancelTurn { request }
+                    if request.session_id == "session-a"
+                        && request.turn_id.as_deref() == Some("turn-a")
+            )
+        })
+    })
+    .await;
+    server.finish().await;
+}
+
+#[tokio::test]
+async fn steering_rejects_an_invalid_runtime_result_and_closes_the_connection() {
+    let handler = Arc::new(FakeHandler {
+        invalid_steer_result: true,
+        ..FakeHandler::default()
+    });
+    let server = TestServer::start(server_config(), handler.clone()).await;
+    let mut client = server.connect("invalid-steering-result").await;
+    expect_response(
+        &mut client,
+        2,
+        restore_operation(server.workspace.path(), "session-a"),
+    )
+    .await;
+    expect_response(
+        &mut client,
+        3,
+        submit_operation(server.workspace.path(), "session-a", "turn-a"),
+    )
+    .await;
+    expect_error(
+        &mut client,
+        4,
+        steer_operation("session-a", "turn-a"),
+        RuntimeIpcErrorCode::Internal,
+    )
+    .await;
+
+    assert!(read_frame(&mut client).await.is_err());
+    wait_for_calls(&handler, |calls| {
+        calls.iter().any(|call| {
+            matches!(
+                call,
+                RuntimeIpcOperation::CancelTurn { request }
+                    if request.session_id == "session-a"
+                        && request.turn_id.as_deref() == Some("turn-a")
+            )
+        })
+    })
+    .await;
+    drop(client);
     server.finish().await;
 }
 
