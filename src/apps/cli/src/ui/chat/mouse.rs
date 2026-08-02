@@ -31,6 +31,11 @@ impl ChatView {
 
     pub(crate) fn handle_mouse_event(&mut self, mouse: &crossterm::event::MouseEvent) -> bool {
         // Popups take priority when visible
+        if self.fork_selector.is_visible() || self.timeline_selector.is_visible() {
+            // These conversation-point dialogs are keyboard-driven. Do not let mouse gestures
+            // mutate the transcript hidden underneath them.
+            return true;
+        }
         if self.model_selector.captures_mouse(mouse) {
             self.model_selector.handle_mouse_event(mouse);
             return true;
@@ -353,12 +358,7 @@ impl ChatView {
         for (block_id, y_start, y_end) in &self.thinking_regions {
             if absolute_row >= *y_start as usize && absolute_row <= *y_end as usize {
                 let block_id = block_id.clone();
-                if self.collapsed_thinking.contains(&block_id) {
-                    self.collapsed_thinking.remove(&block_id);
-                } else {
-                    self.collapsed_thinking.insert(block_id.clone());
-                }
-                self.thinking_user_overrides.insert(block_id);
+                self.thinking_disclosures.toggle(&block_id);
                 self.invalidate_render_cache();
                 self.hovered_thinking_block_id = None;
                 return;
@@ -369,11 +369,7 @@ impl ChatView {
         for (tool_id, y_start, y_end) in &self.block_tool_regions {
             if absolute_row >= *y_start as usize && absolute_row <= *y_end as usize {
                 let tool_id = tool_id.clone();
-                if self.collapsed_tools.contains(&tool_id) {
-                    self.collapsed_tools.remove(&tool_id);
-                } else {
-                    self.collapsed_tools.insert(tool_id.clone());
-                }
+                self.tool_disclosures.toggle(&tool_id);
                 self.focused_block_tool = Some(tool_id);
                 self.invalidate_render_cache();
                 break;

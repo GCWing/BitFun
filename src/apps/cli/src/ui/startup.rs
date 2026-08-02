@@ -1066,6 +1066,7 @@ impl StartupPage {
             ActionHandler::ClosePopups => self.close_all_popups(),
             ActionHandler::NavigateBack => self.navigate_back(),
             ActionHandler::RenameSession
+            | ActionHandler::Timeline
             | ActionHandler::ForkSession
             | ActionHandler::UndoSession
             | ActionHandler::RedoSession
@@ -1078,6 +1079,9 @@ impl StartupPage {
             | ActionHandler::WorkspaceDiff
             | ActionHandler::CompactSession
             | ActionHandler::Editor
+            | ActionHandler::ToggleTimestamps
+            | ActionHandler::ToggleThinking
+            | ActionHandler::ToggleToolDetails
             | ActionHandler::CopyTranscript
             | ActionHandler::ExportTranscript
             | ActionHandler::ToggleAutoApprove
@@ -2037,9 +2041,10 @@ impl StartupPage {
 
     fn apply_theme_selection(&mut self, theme: &ThemeItem) {
         let (base, appearance, scheme) = self.current_base_theme();
-        self.config.ui.theme_id = theme.id.clone();
-
-        match self.config.save() {
+        match self
+            .config
+            .update(|config| config.ui.theme_id = theme.id.clone())
+        {
             Ok(()) => {
                 self.status = Some(format!("Theme set to: {}", theme.id));
             }

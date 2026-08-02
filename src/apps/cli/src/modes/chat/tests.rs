@@ -1200,6 +1200,10 @@ mod tests {
             Some("Usage: /fork")
         );
         assert_eq!(
+            builtin_arguments_error(CommandRoute::Builtin, ActionHandler::Timeline, "unexpected"),
+            Some("Usage: /timeline")
+        );
+        assert_eq!(
             builtin_arguments_error(
                 CommandRoute::Builtin,
                 ActionHandler::UndoSession,
@@ -1218,6 +1222,22 @@ mod tests {
         assert_eq!(
             builtin_arguments_error(CommandRoute::Builtin, ActionHandler::Editor, "unexpected"),
             Some("Usage: /editor")
+        );
+        assert_eq!(
+            builtin_arguments_error(
+                CommandRoute::Builtin,
+                ActionHandler::ToggleTimestamps,
+                "unexpected"
+            ),
+            Some("Usage: /timestamps")
+        );
+        assert_eq!(
+            builtin_arguments_error(
+                CommandRoute::Builtin,
+                ActionHandler::ToggleThinking,
+                "unexpected"
+            ),
+            Some("Usage: /thinking")
         );
         assert_eq!(
             builtin_arguments_error(
@@ -2083,6 +2103,7 @@ mod tests {
         assert!(help.contains("Session Commands"));
         assert!(help.contains(rename.description));
         assert!(help.contains("/rename <name>"));
+        assert!(help.contains("/timeline"));
         assert!(help.contains("/undo"));
         assert!(help.contains("/redo"));
     }

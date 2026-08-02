@@ -90,6 +90,9 @@ The Embedded and Shared TUI use the same session command names:
 - `/fork` opens an OpenCode-compatible fork dialog. `Full session` copies through the latest
   persisted turn; choosing a previous user prompt forks immediately before that turn and copies the
   prompt into the composer without sending it. Forking requires an idle session.
+- `/timeline` opens the OpenCode-compatible user-message timeline, newest first. Moving the
+  selection previews that location in the current transcript; Enter keeps the selected message in
+  view. Timeline navigation is read-only and remains available while a turn is running.
 - `/status` opens a transient view of current session, runtime, workspace, approval, and latest
   primary-model request facts observed by this TUI. It is not a cumulative usage report; use
   `/usage` for cumulative session usage in Embedded TUI.
@@ -102,6 +105,12 @@ The Embedded and Shared TUI use the same session command names:
   leave the existing draft unchanged; structured `@` references are retained only when their
   edited markers remain unambiguous. A terminal reacquisition failure exits instead of continuing
   in a partially initialized TUI.
+- `/timestamps` (`/toggle-timestamps`) and `/thinking` (`/toggle-thinking`) use OpenCode's command
+  names to toggle message timestamps and reasoning-block visibility. Tool-detail visibility is a
+  command-palette action only, matching OpenCode rather than introducing another slash command.
+  Timestamps and thinking default to hidden; tool details default to shown. These client-local
+  preferences are saved in CLI configuration, while clicking an individual reasoning or tool block
+  still overrides its current presentation.
 - `/copy` copies a safe Markdown snapshot of the visible User/Assistant transcript. Reasoning and
   tool payloads are excluded by default; local System notices are never exported. Copy is idle-only
   so a slow platform clipboard helper cannot stall an active Turn's event stream.

@@ -4,9 +4,11 @@
 /// Only CLI-specific configuration is kept here (UI, shortcuts, etc.)
 use anyhow::Result;
 use bitfun_core::infrastructure::try_get_path_manager_arc;
+use fs2::FileExt;
 use serde::{Deserialize, Serialize};
-use std::fs;
-use std::path::PathBuf;
+use std::fs::{self, OpenOptions};
+use std::io::Write;
+use std::path::{Path, PathBuf};
 
 /// CLI configuration (contains only CLI-specific config)
 /// AI model configuration uses core's GlobalConfig
@@ -36,6 +38,25 @@ pub(crate) struct UiConfig {
     pub animation: bool,
     /// Color scheme
     pub color_scheme: String,
+    /// Show timestamps below user messages.
+    pub timestamps: bool,
+    /// Default presentation for reasoning blocks.
+    pub thinking: ThinkingMode,
+    /// Show tool-card details by default.
+    pub tool_details: bool,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub(crate) enum ThinkingMode {
+    Show,
+    Hide,
+}
+
+impl Default for ThinkingMode {
+    fn default() -> Self {
+        Self::Hide
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -82,6 +103,9 @@ impl Default for UiConfig {
             show_tips: true,
             animation: true,
             color_scheme: "default".to_string(),
+            timestamps: false,
+            thinking: ThinkingMode::Hide,
+            tool_details: true,
         }
     }
 }
@@ -154,31 +178,92 @@ impl CliConfig {
     /// Load configuration
     pub(crate) fn load() -> Result<Self> {
         let config_path = Self::config_path()?;
-
+        let config = Self::load_at(&config_path)?;
         if !config_path.exists() {
             tracing::info!("Config file not found, using defaults");
-            return Ok(Self::default());
+        } else {
+            tracing::info!("Loaded config: {:?}", config_path);
         }
-
-        let content = fs::read_to_string(&config_path)?;
-        let mut config: Self = toml::from_str(&content)?;
-        config.normalize_legacy_shortcuts();
-        tracing::info!("Loaded config: {:?}", config_path);
         Ok(config)
     }
 
     /// Save configuration
     pub(crate) fn save(&self) -> Result<()> {
         let config_path = Self::config_path()?;
+        Self::with_config_lock(&config_path, || Self::write_at(&config_path, self))?;
+        tracing::info!("Saved config: {:?}", config_path);
+        Ok(())
+    }
 
+    /// Apply a focused mutation to the latest on-disk snapshot.
+    ///
+    /// Shared TUI clients keep independent in-memory snapshots, so live settings
+    /// must merge under the config lock instead of rewriting a stale full copy.
+    pub(crate) fn update<F>(&mut self, update: F) -> Result<()>
+    where
+        F: FnOnce(&mut Self),
+    {
+        let config_path = Self::config_path()?;
+        let latest = Self::update_at(&config_path, update)?;
+        *self = latest;
+        tracing::info!("Updated config: {:?}", config_path);
+        Ok(())
+    }
+
+    fn update_at<F>(config_path: &Path, update: F) -> Result<Self>
+    where
+        F: FnOnce(&mut Self),
+    {
+        Self::with_config_lock(config_path, || {
+            let mut latest = Self::load_at(config_path)?;
+            update(&mut latest);
+            Self::write_at(config_path, &latest)?;
+            Ok(latest)
+        })
+    }
+
+    fn load_at(config_path: &Path) -> Result<Self> {
+        if !config_path.exists() {
+            return Ok(Self::default());
+        }
+        let content = fs::read_to_string(config_path)?;
+        let mut config: Self = toml::from_str(&content)?;
+        config.normalize_legacy_shortcuts();
+        Ok(config)
+    }
+
+    fn write_at(config_path: &Path, config: &Self) -> Result<()> {
+        let parent = config_path
+            .parent()
+            .ok_or_else(|| anyhow::anyhow!("Config path has no parent directory"))?;
+        fs::create_dir_all(parent)?;
+        let content = toml::to_string_pretty(config)?;
+        let mut temporary = tempfile::NamedTempFile::new_in(parent)?;
+        temporary.write_all(content.as_bytes())?;
+        temporary.as_file_mut().sync_all()?;
+        temporary
+            .persist(config_path)
+            .map_err(|error| error.error)?;
+        Ok(())
+    }
+
+    fn with_config_lock<T>(config_path: &Path, operation: impl FnOnce() -> Result<T>) -> Result<T> {
         if let Some(parent) = config_path.parent() {
             fs::create_dir_all(parent)?;
         }
-
-        let content = toml::to_string_pretty(self)?;
-        fs::write(&config_path, content)?;
-        tracing::info!("Saved config: {:?}", config_path);
-        Ok(())
+        let lock_path = config_path.with_extension("toml.lock");
+        let lock_file = OpenOptions::new()
+            .create(true)
+            .read(true)
+            .write(true)
+            .open(lock_path)?;
+        lock_file.lock_exclusive()?;
+        let result = operation();
+        let unlock_result = FileExt::unlock(&lock_file);
+        result.and_then(|value| {
+            unlock_result?;
+            Ok(value)
+        })
     }
 
     /// Get configuration directory
@@ -192,11 +277,13 @@ impl CliConfig {
 
 #[cfg(test)]
 mod tests {
-    use super::CliConfig;
+    use super::{CliConfig, ThinkingMode};
+    use std::fs;
 
     #[test]
     fn cli_config_default_composes_owner_defaults() {
         let config = CliConfig::default();
+        let serialized = toml::to_string(&config).unwrap();
 
         assert_eq!(config.ui.theme, "dark");
         assert_eq!(config.ui.theme_id, "bitfun-dark");
@@ -215,6 +302,19 @@ mod tests {
         assert_eq!(config.shortcuts.send_message, None);
         assert_eq!(config.shortcuts.interrupt, None);
         assert_eq!(config.shortcuts.menu, None);
+        assert!(serialized.contains("timestamps = false"), "{serialized}");
+        assert!(serialized.contains("thinking = \"hide\""), "{serialized}");
+        assert!(serialized.contains("tool_details = true"), "{serialized}");
+    }
+
+    #[test]
+    fn missing_transcript_presentation_fields_keep_opencode_compatible_defaults() {
+        let config: CliConfig = toml::from_str("[ui]\ntheme = \"light\"\n").unwrap();
+        let serialized = toml::to_string(&config).unwrap();
+
+        assert!(serialized.contains("timestamps = false"), "{serialized}");
+        assert!(serialized.contains("thinking = \"hide\""), "{serialized}");
+        assert!(serialized.contains("tool_details = true"), "{serialized}");
     }
 
     #[test]
@@ -266,5 +366,22 @@ mod tests {
         assert_eq!(config.shortcuts.send_message.as_deref(), Some("Ctrl+S"));
         assert_eq!(config.shortcuts.interrupt.as_deref(), Some("Ctrl+X"));
         assert_eq!(config.shortcuts.menu.as_deref(), Some("Alt+M"));
+    }
+
+    #[test]
+    fn targeted_updates_merge_with_the_latest_config_file() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("config.toml");
+        let mut initial = CliConfig::default();
+        initial.ui.theme_id = "custom-theme".to_string();
+        fs::write(&path, toml::to_string_pretty(&initial).unwrap()).unwrap();
+
+        CliConfig::update_at(&path, |latest| latest.ui.timestamps = true).unwrap();
+        CliConfig::update_at(&path, |latest| latest.ui.thinking = ThinkingMode::Show).unwrap();
+
+        let merged: CliConfig = toml::from_str(&fs::read_to_string(&path).unwrap()).unwrap();
+        assert!(merged.ui.timestamps);
+        assert_eq!(merged.ui.thinking, ThinkingMode::Show);
+        assert_eq!(merged.ui.theme_id, "custom-theme");
     }
 }

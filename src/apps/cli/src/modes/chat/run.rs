@@ -341,6 +341,7 @@ impl ChatMode {
         let theme = self.resolve_configured_theme(base, appearance, scheme);
         let shortcut_hints = self.keymap.compact_hints(self.action_state(false, false));
         let mut chat_view = ChatView::new(theme, shortcut_hints);
+        chat_view.apply_presentation_config(&self.config.ui);
 
         // Create or restore core session
         let rt_handle = tokio::runtime::Handle::current();

@@ -74,6 +74,7 @@ pub(crate) enum ActionHandler {
     AddModel,
     NewSession,
     Sessions,
+    Timeline,
     ForkSession,
     UndoSession,
     RedoSession,
@@ -92,6 +93,9 @@ pub(crate) enum ActionHandler {
     CompactSession,
     Usage,
     Editor,
+    ToggleTimestamps,
+    ToggleThinking,
+    ToggleToolDetails,
     CopyTranscript,
     ExportTranscript,
     ToggleAutoApprove,
@@ -127,7 +131,7 @@ pub(crate) fn shared_tui_image_attachment_error() -> String {
     format!("Image attachments are unavailable in Shared TUI. {SHARED_TUI_EMBEDDED_HANDOFF}.")
 }
 pub(crate) const SHARED_TUI_HELP_NOTE: &str =
-    "Shared TUI: start with `bitfun chat --shared`. Multiple TUI processes reuse one workspace Runtime, while each TUI controls at most one Session and each Session has one controller. Use `/sessions` and Ctrl+D to delete an idle, non-current Session; use `/fork` to branch the current idle Session, `/rename <name>` to rename it, `/compact` to compact its context, `/diff` to review workspace changes, `/agent`, Tab, or Shift+Tab to change its Agent mode, `/models` to change its model, and `/reload [skills|instructions]` to refresh declarative context for the next message. Model configuration, Agent/Subagent management, MCP, extension, account-sync, usage, and other management remain Embedded. Exit all Shared TUI clients and wait up to 30 seconds before returning to default Embedded `bitfun chat`.";
+    "Shared TUI: start with `bitfun chat --shared`. Multiple TUI processes reuse one workspace Runtime, while each TUI controls at most one Session and each Session has one controller. Use `/sessions` and Ctrl+D to delete an idle, non-current Session; use `/timeline` to navigate user messages, `/fork` to branch the current idle Session, `/rename <name>` to rename it, `/compact` to compact its context, `/diff` to review workspace changes, `/agent`, Tab, or Shift+Tab to change its Agent mode, `/models` to change its model, and `/reload [skills|instructions]` to refresh declarative context for the next message. Model configuration, Agent/Subagent management, MCP, extension, account-sync, usage, and other management remain Embedded. Exit all Shared TUI clients and wait up to 30 seconds before returning to default Embedded `bitfun chat`.";
 
 impl ActionHandler {
     pub(crate) const fn available_in_shared_tui(self, context: ActionContext) -> bool {
@@ -138,6 +142,7 @@ impl ActionHandler {
                     | Self::SelectTheme
                     | Self::NewSession
                     | Self::Sessions
+                    | Self::Timeline
                     | Self::ForkSession
                     | Self::UndoSession
                     | Self::RedoSession
@@ -148,6 +153,9 @@ impl ActionHandler {
                     | Self::WorkspaceDiff
                     | Self::CompactSession
                     | Self::Editor
+                    | Self::ToggleTimestamps
+                    | Self::ToggleThinking
+                    | Self::ToggleToolDetails
                     | Self::CopyTranscript
                     | Self::ExportTranscript
                     | Self::ToggleAutoApprove
@@ -377,6 +385,21 @@ static ACTION_SPECS: &[ActionSpec] = &[
         palette: palette("Session", false),
         shortcut_label: None,
         slash_on_startup: true,
+    },
+    ActionSpec {
+        id: "timeline",
+        name: "Timeline",
+        aliases: &["/timeline"],
+        description: "Jump to a user message in the current session",
+        contexts: CHAT,
+        availability: ActionAvailability::Always,
+        handler: ActionHandler::Timeline,
+        default_bindings: &[],
+        fallback_bindings: &[],
+        shortcut_field: None,
+        palette: palette("Session", false),
+        shortcut_label: None,
+        slash_on_startup: false,
     },
     ActionSpec {
         id: "rename_session",
@@ -645,6 +668,51 @@ static ACTION_SPECS: &[ActionSpec] = &[
         fallback_bindings: &[],
         shortcut_field: None,
         palette: palette("Prompt", false),
+        shortcut_label: None,
+        slash_on_startup: false,
+    },
+    ActionSpec {
+        id: "toggle_timestamps",
+        name: "Timestamps",
+        aliases: &["/timestamps", "/toggle-timestamps"],
+        description: "Toggle message timestamps",
+        contexts: CHAT,
+        availability: ActionAvailability::Always,
+        handler: ActionHandler::ToggleTimestamps,
+        default_bindings: &[],
+        fallback_bindings: &[],
+        shortcut_field: None,
+        palette: palette("Session", false),
+        shortcut_label: None,
+        slash_on_startup: false,
+    },
+    ActionSpec {
+        id: "toggle_thinking",
+        name: "Thinking blocks",
+        aliases: &["/thinking", "/toggle-thinking"],
+        description: "Toggle thinking block visibility",
+        contexts: CHAT,
+        availability: ActionAvailability::Always,
+        handler: ActionHandler::ToggleThinking,
+        default_bindings: &[],
+        fallback_bindings: &[],
+        shortcut_field: None,
+        palette: palette("Session", false),
+        shortcut_label: None,
+        slash_on_startup: false,
+    },
+    ActionSpec {
+        id: "toggle_tool_details",
+        name: "Tool details",
+        aliases: &[],
+        description: "Toggle tool detail visibility",
+        contexts: CHAT,
+        availability: ActionAvailability::Always,
+        handler: ActionHandler::ToggleToolDetails,
+        default_bindings: &[],
+        fallback_bindings: &[],
+        shortcut_field: None,
+        palette: palette("Session", false),
         shortcut_label: None,
         slash_on_startup: false,
     },
@@ -2903,5 +2971,37 @@ mod tests {
         assert!(editor.handler.available_in_shared_tui(ActionContext::Chat));
         assert!(copy.handler.available_in_shared_tui(ActionContext::Chat));
         assert!(export.handler.available_in_shared_tui(ActionContext::Chat));
+    }
+
+    #[test]
+    fn opencode_navigation_and_presentation_actions_keep_exact_entrypoints() {
+        let timeline =
+            action_for_alias("/timeline", ActionContext::Chat).expect("/timeline action");
+        let timestamps =
+            action_for_alias("/timestamps", ActionContext::Chat).expect("/timestamps action");
+        let timestamps_alias = action_for_alias("/toggle-timestamps", ActionContext::Chat)
+            .expect("/toggle-timestamps action");
+        let thinking =
+            action_for_alias("/thinking", ActionContext::Chat).expect("/thinking action");
+        let thinking_alias = action_for_alias("/toggle-thinking", ActionContext::Chat)
+            .expect("/toggle-thinking action");
+        let tool_details = action_by_id("toggle_tool_details", ActionContext::Chat)
+            .expect("tool details palette action");
+
+        assert_eq!(timeline.id, "timeline");
+        assert_eq!(timeline.aliases, ["/timeline"]);
+        assert_eq!(timestamps.id, "toggle_timestamps");
+        assert_eq!(timestamps.aliases, ["/timestamps", "/toggle-timestamps"]);
+        assert_eq!(timestamps.id, timestamps_alias.id);
+        assert_eq!(thinking.id, "toggle_thinking");
+        assert_eq!(thinking.aliases, ["/thinking", "/toggle-thinking"]);
+        assert_eq!(thinking.id, thinking_alias.id);
+        assert!(tool_details.aliases.is_empty());
+        for action in [timeline, timestamps, thinking, tool_details] {
+            assert_eq!(action.palette.map(|palette| palette.group), Some("Session"));
+            assert!(action.available(ActionState::chat(false, false)));
+            assert!(action.available(ActionState::chat(true, false)));
+            assert!(action.handler.available_in_shared_tui(ActionContext::Chat));
+        }
     }
 }

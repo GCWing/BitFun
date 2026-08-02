@@ -1,15 +1,16 @@
-use crossterm::event::{KeyCode, KeyEvent};
-use ratatui::{
-    layout::Rect,
-    style::{Modifier, Style},
-    text::{Line, Span},
-    widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragraph},
-    Frame,
-};
-use std::time::SystemTime;
+use crossterm::event::KeyEvent;
+use ratatui::{layout::Rect, Frame};
+use std::{collections::HashMap, time::SystemTime};
 
 use crate::chat_state::SessionForkPoint;
-use crate::ui::theme::{StyleKind, Theme};
+use crate::ui::{
+    conversation_selector::{
+        ConversationPoint, ConversationSelectorAction, ConversationSelectorState,
+    },
+    theme::Theme,
+};
+
+const FULL_SESSION_ID: &str = "__full_session";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum ForkTarget {
@@ -29,166 +30,72 @@ pub(crate) enum ForkAction {
 }
 
 pub(super) struct ForkSelectorState {
-    points: Vec<SessionForkPoint>,
-    list_state: ListState,
-    visible: bool,
+    selector: ConversationSelectorState,
+    targets: HashMap<String, ForkTarget>,
 }
 
 impl ForkSelectorState {
     pub(super) fn new() -> Self {
         Self {
-            points: Vec::new(),
-            list_state: ListState::default(),
-            visible: false,
+            selector: ConversationSelectorState::new("Fork Session", "Fork"),
+            targets: HashMap::new(),
         }
     }
 
     pub(super) fn show(&mut self, points: Vec<SessionForkPoint>) {
-        self.points = points;
-        self.list_state.select(Some(0));
-        self.visible = true;
+        self.targets.clear();
+        self.targets
+            .insert(FULL_SESSION_ID.to_string(), ForkTarget::FullSession);
+        let mut selector_points = vec![ConversationPoint::new(
+            FULL_SESSION_ID,
+            "Full session",
+            "Fork from the latest turn",
+        )];
+        selector_points.extend(points.into_iter().map(|point| {
+            let id = format!("message:{}", point.message_id);
+            self.targets.insert(
+                id.clone(),
+                ForkTarget::BeforeTurn {
+                    turn_id: point.turn_id,
+                    message_id: point.message_id,
+                    prompt: point.prompt.clone(),
+                },
+            );
+            ConversationPoint::new(id, point.prompt, relative_time(point.timestamp))
+        }));
+        self.selector.show(selector_points);
     }
 
     pub(super) fn hide(&mut self) {
-        self.visible = false;
+        self.selector.hide();
     }
 
     pub(super) fn reshow(&mut self) {
-        self.visible = true;
+        self.selector.reshow();
     }
 
     pub(super) fn is_visible(&self) -> bool {
-        self.visible
+        self.selector.is_visible()
     }
 
     pub(super) fn handle_key_event(&mut self, key: KeyEvent) -> ForkAction {
-        if !self.visible {
-            return ForkAction::None;
-        }
-        match key.code {
-            KeyCode::Up => {
-                self.move_selection(-1);
+        match self.selector.handle_key_event(key) {
+            ConversationSelectorAction::Select(id) => self
+                .targets
+                .get(&id)
+                .cloned()
+                .map(ForkAction::Select)
+                .unwrap_or(ForkAction::None),
+            ConversationSelectorAction::Close => ForkAction::Close,
+            ConversationSelectorAction::Move(_) | ConversationSelectorAction::None => {
                 ForkAction::None
             }
-            KeyCode::Down => {
-                self.move_selection(1);
-                ForkAction::None
-            }
-            KeyCode::Enter => {
-                let target = self.selected_target();
-                if target.is_some() {
-                    self.hide();
-                }
-                target.map(ForkAction::Select).unwrap_or(ForkAction::None)
-            }
-            KeyCode::Esc => {
-                self.hide();
-                ForkAction::Close
-            }
-            _ => ForkAction::None,
         }
-    }
-
-    fn selected_target(&self) -> Option<ForkTarget> {
-        match self.list_state.selected()? {
-            0 => Some(ForkTarget::FullSession),
-            index => self
-                .points
-                .get(index - 1)
-                .map(|point| ForkTarget::BeforeTurn {
-                    turn_id: point.turn_id.clone(),
-                    message_id: point.message_id.clone(),
-                    prompt: point.prompt.clone(),
-                }),
-        }
-    }
-
-    fn move_selection(&mut self, delta: isize) {
-        let len = self.points.len() + 1;
-        let selected = self.list_state.selected().unwrap_or(0) as isize;
-        let next = (selected + delta).rem_euclid(len as isize) as usize;
-        self.list_state.select(Some(next));
     }
 
     pub(super) fn render(&mut self, frame: &mut Frame, area: Rect, theme: &Theme) {
-        if !self.visible {
-            return;
-        }
-        let width = area.width.saturating_sub(4).min(78);
-        let height = (self.points.len() as u16 + 5).min(area.height.saturating_sub(2));
-        if width < 24 || height < 5 {
-            return;
-        }
-        let popup = Rect {
-            x: area.x + area.width.saturating_sub(width) / 2,
-            y: area.y + area.height.saturating_sub(height) / 2,
-            width,
-            height,
-        };
-        let preview_width = width.saturating_sub(16) as usize;
-        let mut items = Vec::with_capacity(self.points.len() + 1);
-        items.push(ListItem::new(Line::from(vec![
-            Span::styled(
-                "Full session",
-                theme.style(StyleKind::Primary).add_modifier(Modifier::BOLD),
-            ),
-            Span::styled("  Fork from the latest turn", theme.style(StyleKind::Muted)),
-        ])));
-        items.extend(self.points.iter().map(|point| {
-            let preview = one_line_preview(&point.prompt, preview_width);
-            ListItem::new(Line::from(vec![
-                Span::styled(preview, theme.style(StyleKind::Primary)),
-                Span::styled(
-                    format!("  {}", relative_time(point.timestamp)),
-                    theme.style(StyleKind::Muted),
-                ),
-            ]))
-        }));
-
-        let list = List::new(items)
-            .block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .border_style(theme.style(StyleKind::Primary))
-                    .style(Style::default().bg(theme.background))
-                    .title(" Fork Session "),
-            )
-            .highlight_style(
-                Style::default()
-                    .bg(theme.primary)
-                    .fg(theme.selection_foreground())
-                    .add_modifier(Modifier::BOLD),
-            );
-        frame.render_widget(Clear, popup);
-        frame.render_stateful_widget(list, popup, &mut self.list_state);
-
-        let hint_y = popup.y + popup.height;
-        if hint_y < area.y + area.height {
-            frame.render_widget(
-                Paragraph::new(" Up/Down: Navigate  Enter: Fork  Esc: Close ")
-                    .style(theme.style(StyleKind::Muted)),
-                Rect {
-                    x: popup.x,
-                    y: hint_y,
-                    width: popup.width,
-                    height: 1,
-                },
-            );
-        }
+        self.selector.render(frame, area, theme);
     }
-}
-
-fn one_line_preview(prompt: &str, max_chars: usize) -> String {
-    let normalized = prompt.split_whitespace().collect::<Vec<_>>().join(" ");
-    if normalized.chars().count() <= max_chars {
-        return normalized;
-    }
-    let mut preview = normalized
-        .chars()
-        .take(max_chars.saturating_sub(1))
-        .collect::<String>();
-    preview.push('…');
-    preview
 }
 
 fn relative_time(timestamp: SystemTime) -> String {

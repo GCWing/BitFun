@@ -374,8 +374,10 @@ impl ChatMode {
             (false, EffectiveColorScheme::Truecolor) => Theme::dark(),
         };
 
-        self.config.ui.theme_id = theme.id.clone();
-        if let Err(e) = self.config.save() {
+        if let Err(e) = self
+            .config
+            .update(|config| config.ui.theme_id = theme.id.clone())
+        {
             chat_view.set_status(Some(format!("Failed to save config: {}", e)));
         }
 

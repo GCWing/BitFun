@@ -100,6 +100,7 @@ impl ChatView {
         self.render_agent_selector(frame, chunks[1]);
         self.render_session_selector(frame, chunks[1]);
         self.render_fork_selector(frame, chunks[1]);
+        self.render_timeline_selector(frame, chunks[1]);
         self.export_dialog.render(frame, size, &self.theme);
         self.render_skill_selector(frame, chunks[1]);
         self.render_subagent_selector(frame, chunks[1]);
@@ -243,75 +244,29 @@ impl ChatView {
         } else {
             let visible_lines = inner.height as usize;
 
-            // ── Step 1: Ensure all messages are in the render cache and collect line counts ──
-            let mut msg_line_counts: Vec<usize> = Vec::with_capacity(chat_state.messages.len());
-            for msg in &chat_state.messages {
-                if msg.is_streaming {
-                    // Streaming messages: always re-render
-                    let rendered = self.render_message(msg, available_width);
-                    let lc = rendered.items.len();
-                    self.render_cache.insert(
-                        msg.id.clone(),
-                        MessageRenderEntry {
-                            items: rendered.items,
-                            line_count: lc,
-                            version: msg.version,
-                            width: available_width,
-                            plain_lines: rendered.plain_lines,
-                            tool_regions: rendered.tool_regions,
-                            thinking_regions: rendered.thinking_regions,
-                        },
-                    );
-                    msg_line_counts.push(lc);
-                } else {
-                    let cache_valid = self
-                        .render_cache
-                        .get(&msg.id)
-                        .map(|e| e.version == msg.version && e.width == available_width)
-                        .unwrap_or(false);
+            // Share one render-cache-backed layout for drawing, scrolling, and timeline jumps.
+            let layout = self.ensure_message_layout(chat_state, available_width);
+            let total_lines = layout.total_lines;
 
-                    if cache_valid {
-                        msg_line_counts.push(self.render_cache.get(&msg.id).unwrap().line_count);
-                    } else {
-                        let rendered = self.render_message(msg, available_width);
-                        let lc = rendered.items.len();
-                        self.render_cache.insert(
-                            msg.id.clone(),
-                            MessageRenderEntry {
-                                items: rendered.items,
-                                line_count: lc,
-                                version: msg.version,
-                                width: available_width,
-                                plain_lines: rendered.plain_lines,
-                                tool_regions: rendered.tool_regions,
-                                thinking_regions: rendered.thinking_regions,
-                            },
-                        );
-                        msg_line_counts.push(lc);
-                    }
+            // Keep the highlighted timeline point pinned while a running turn grows below it.
+            if let Some(message_id) = self.timeline_selector.selected_message_id() {
+                if let Some(message_index) = chat_state
+                    .messages
+                    .iter()
+                    .position(|message| message.id == message_id)
+                {
+                    self.apply_message_jump(&layout.prefix_sum, message_index, visible_lines);
                 }
+            } else {
+                self.maintain_committed_message_anchor(chat_state, &layout, visible_lines);
             }
-
-            // ── Step 2: Build prefix sum for line counts ──
-            let total_lines: usize = msg_line_counts.iter().sum();
-
-            // Update line count cache
-            self.cached_total_lines = total_lines;
-            self.cached_msg_count = chat_state.messages.len();
-            self.cached_width = available_width;
-            self.lines_cache_dirty = false;
 
             if total_lines == 0 {
                 return;
             }
 
-            // prefix_sum[i] = total lines of messages 0..i (exclusive end)
-            // prefix_sum[0] = 0, prefix_sum[1] = msg_line_counts[0], etc.
-            let mut prefix_sum: Vec<usize> = Vec::with_capacity(msg_line_counts.len() + 1);
-            prefix_sum.push(0);
-            for &lc in &msg_line_counts {
-                prefix_sum.push(prefix_sum.last().unwrap() + lc);
-            }
+            // prefix_sum[i] = total lines of messages 0..i (exclusive end).
+            let prefix_sum = layout.prefix_sum;
 
             // ── Step 3: Determine visible line range ──
             let view_start_line = if self.browse_mode {
@@ -670,22 +625,13 @@ impl ChatView {
                             user_border_style,
                         );
                         // Render thinking block with distinct style.
-                        // Use trailing <thinking_end> marker to auto-collapse once thinking is complete.
                         let trimmed = content.trim_end();
-                        let has_end_marker = trimmed.ends_with("<thinking_end>");
                         let clean_content = trimmed.trim_end_matches("<thinking_end>").trim_end();
 
-                        let thinking_ended = has_end_marker || !message.is_streaming;
-                        if thinking_ended
-                            && !self.thinking_user_overrides.contains(&thinking_block_id)
-                            && !self.thinking_auto_collapsed.contains(&thinking_block_id)
-                        {
-                            self.collapsed_thinking.insert(thinking_block_id.clone());
-                            self.thinking_auto_collapsed
-                                .insert(thinking_block_id.clone());
-                        }
-
-                        let collapsed = self.collapsed_thinking.contains(&thinking_block_id);
+                        let collapsed = self.thinking_disclosures.is_collapsed(
+                            &thinking_block_id,
+                            self.presentation.thinking == crate::config::ThinkingMode::Hide,
+                        );
                         let caret = if collapsed { "\u{25b8}" } else { "\u{25be}" }; // ▸ / ▾
 
                         let header_y = items.len().min(u16::MAX as usize) as u16;
@@ -766,7 +712,9 @@ impl ChatView {
                             user_bg_style,
                             user_border_style,
                         );
-                        let expanded = !self.collapsed_tools.contains(&tool_state.tool_id);
+                        let expanded = !self
+                            .tool_disclosures
+                            .is_collapsed(&tool_state.tool_id, !self.presentation.tool_details);
                         let focused = self.focused_block_tool.as_ref() == Some(&tool_state.tool_id);
                         let tool_render = crate::ui::tool_cards::render_tool_card(
                             tool_state,
@@ -791,6 +739,24 @@ impl ChatView {
                 Span::styled("(empty)".to_string(), self.theme.style(StyleKind::Muted)),
             ])));
             plain_lines.push("  (empty)".to_string());
+        }
+
+        if message.role == MessageRole::User && self.presentation.timestamps && user_bubble_open {
+            if let Some(timestamp) =
+                crate::ui::message_time::format_message_timestamp(message.timestamp)
+            {
+                let plain = format!(" | {timestamp}");
+                items.push(
+                    ListItem::new(Line::from(vec![
+                        Span::raw(" ".to_string()),
+                        Span::styled("\u{258f}".to_string(), user_border_style),
+                        Span::raw(" ".to_string()),
+                        Span::styled(timestamp, self.theme.style(StyleKind::Muted)),
+                    ]))
+                    .style(user_bg_style),
+                );
+                plain_lines.push(plain);
+            }
         }
 
         close_user_bubble(
@@ -896,6 +862,10 @@ impl ChatView {
 
     fn render_fork_selector(&mut self, frame: &mut Frame, area: Rect) {
         self.fork_selector.render(frame, area, &self.theme);
+    }
+
+    fn render_timeline_selector(&mut self, frame: &mut Frame, area: Rect) {
+        self.timeline_selector.render(frame, area, &self.theme);
     }
 
     fn render_skill_selector(&mut self, frame: &mut Frame, area: Rect) {
@@ -1116,5 +1086,60 @@ mod shortcut_contract_tests {
             "{processing_text}"
         );
         assert!(UnicodeWidthStr::width(processing_text.as_str()) <= 80);
+    }
+
+    #[test]
+    fn opencode_hidden_thinking_default_is_stable_while_streaming() {
+        let mut view = ChatView::new(Theme::dark(), Vec::new());
+        let message = ChatMessage {
+            id: "assistant-1".to_string(),
+            turn_id: Some("turn-1".to_string()),
+            role: MessageRole::Assistant,
+            timestamp: std::time::SystemTime::now(),
+            flow_items: vec![FlowItem::Thinking {
+                content: "private streaming reasoning".to_string(),
+            }],
+            is_streaming: true,
+            version: 1,
+        };
+
+        let rendered = view.render_message(&message, 80);
+        let plain = rendered.plain_lines.join("\n");
+
+        assert!(plain.contains("Thinking"), "{plain}");
+        assert!(plain.contains("click to expand"), "{plain}");
+        assert!(!plain.contains("private streaming reasoning"), "{plain}");
+    }
+
+    #[test]
+    fn timestamps_render_inside_user_messages_only_when_enabled() {
+        let mut view = ChatView::new(Theme::dark(), Vec::new());
+        let mut config = crate::config::UiConfig::default();
+        config.timestamps = true;
+        view.apply_presentation_config(&config);
+        let timestamp = std::time::SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(86_400);
+        let message = ChatMessage {
+            id: "user-1".to_string(),
+            turn_id: Some("turn-1".to_string()),
+            role: MessageRole::User,
+            timestamp,
+            flow_items: vec![FlowItem::Text {
+                content: "hello".to_string(),
+                is_streaming: false,
+            }],
+            is_streaming: false,
+            version: 0,
+        };
+        let expected = chrono::DateTime::<chrono::Local>::from(timestamp)
+            .format("%Y-%m-%d %H:%M")
+            .to_string();
+
+        let shown = view.render_message(&message, 80).plain_lines.join("\n");
+        assert!(shown.contains(&expected), "{shown}");
+
+        config.timestamps = false;
+        view.apply_presentation_config(&config);
+        let hidden = view.render_message(&message, 80).plain_lines.join("\n");
+        assert!(!hidden.contains(&expected), "{hidden}");
     }
 }

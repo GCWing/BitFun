@@ -276,6 +276,23 @@ impl ChatMode {
             return Ok(None);
         }
 
+        if chat_view.timeline_selector_visible() {
+            match chat_view.timeline_selector_handle_key(key) {
+                crate::ui::timeline_selector::TimelineAction::Move(message_id) => {
+                    chat_view.scroll_to_message(chat_state, &message_id);
+                }
+                crate::ui::timeline_selector::TimelineAction::Select(message_id) => {
+                    chat_view.commit_message_jump(chat_state, &message_id);
+                    self.navigate_back(chat_view);
+                }
+                crate::ui::timeline_selector::TimelineAction::Close => {
+                    self.navigate_back(chat_view);
+                }
+                crate::ui::timeline_selector::TimelineAction::None => {}
+            }
+            return Ok(None);
+        }
+
         if chat_view.skill_selector_visible() {
             match key.code {
                 KeyCode::Up => chat_view.skill_selector_up(),

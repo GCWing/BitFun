@@ -125,10 +125,13 @@ fn builtin_arguments_error(
     match handler {
         ActionHandler::CompactSession => Some("Usage: /compact"),
         ActionHandler::ForkSession => Some("Usage: /fork"),
+        ActionHandler::Timeline => Some("Usage: /timeline"),
         ActionHandler::UndoSession => Some("Usage: /undo"),
         ActionHandler::RedoSession => Some("Usage: /redo"),
         ActionHandler::WorkspaceDiff => Some("Usage: /diff"),
         ActionHandler::Editor => Some("Usage: /editor"),
+        ActionHandler::ToggleTimestamps => Some("Usage: /timestamps"),
+        ActionHandler::ToggleThinking => Some("Usage: /thinking"),
         ActionHandler::CopyTranscript => Some("Usage: /copy"),
         ActionHandler::ExportTranscript => Some("Usage: /export"),
         _ => None,
@@ -188,13 +191,15 @@ fn session_command_help_note() -> String {
         .expect("current session rename action must remain registered");
     let fork = action_for_alias("/fork", ActionContext::Chat)
         .expect("current session fork action must remain registered");
+    let timeline = action_for_alias("/timeline", ActionContext::Chat)
+        .expect("current session timeline action must remain registered");
     let undo = action_for_alias("/undo", ActionContext::Chat)
         .expect("current session undo action must remain registered");
     let redo = action_for_alias("/redo", ActionContext::Chat)
         .expect("current session redo action must remain registered");
     format!(
-        "Session Commands\n  /fork - {}\n  /rename <name> - {}\n  /undo - {}\n  /redo - {}",
-        fork.description, rename.description, undo.description, redo.description
+        "Session Commands\n  /timeline - {}\n  /fork - {}\n  /rename <name> - {}\n  /undo - {}\n  /redo - {}",
+        timeline.description, fork.description, rename.description, undo.description, redo.description
     )
 }
 
@@ -923,6 +928,20 @@ impl ChatMode {
         }
     }
 
+    fn persist_presentation_preference(
+        &mut self,
+        chat_view: &mut ChatView,
+        status: &str,
+        update: impl FnOnce(&mut crate::config::CliConfig),
+    ) {
+        match self.config.update(update) {
+            Ok(()) => chat_view.set_status(Some(status.to_string())),
+            Err(error) => chat_view.set_status(Some(format!(
+                "{status} for this run, but the preference could not be saved: {error}"
+            ))),
+        }
+    }
+
     fn dispatch_action(
         &mut self,
         action: &'static ActionSpec,
@@ -998,6 +1017,16 @@ impl ChatMode {
             }
             ActionHandler::Sessions => {
                 self.show_session_selector(chat_view, chat_state, rt_handle);
+            }
+            ActionHandler::Timeline => {
+                let points = chat_state.session_timeline_points();
+                if points.is_empty() {
+                    chat_view.set_status(Some(
+                        "No user messages are available in the current timeline".to_string(),
+                    ));
+                } else {
+                    chat_view.show_timeline_selector(points);
+                }
             }
             ActionHandler::ForkSession => {
                 self.show_fork_selector(chat_view, chat_state);
@@ -1083,6 +1112,41 @@ impl ChatMode {
                 }
                 Err(error) => chat_view.set_status(Some(format!("Editor unavailable: {error}"))),
             },
+            ActionHandler::ToggleTimestamps => {
+                let visible = chat_view.toggle_timestamps();
+                self.persist_presentation_preference(
+                    chat_view,
+                    if visible {
+                        "Message timestamps shown"
+                    } else {
+                        "Message timestamps hidden"
+                    },
+                    |config| config.ui.timestamps = visible,
+                );
+            }
+            ActionHandler::ToggleThinking => {
+                let mode = chat_view.toggle_thinking();
+                self.persist_presentation_preference(
+                    chat_view,
+                    match mode {
+                        crate::config::ThinkingMode::Show => "Thinking blocks shown",
+                        crate::config::ThinkingMode::Hide => "Thinking blocks hidden",
+                    },
+                    |config| config.ui.thinking = mode,
+                );
+            }
+            ActionHandler::ToggleToolDetails => {
+                let visible = chat_view.toggle_tool_details();
+                self.persist_presentation_preference(
+                    chat_view,
+                    if visible {
+                        "Tool details shown"
+                    } else {
+                        "Tool details hidden"
+                    },
+                    |config| config.ui.tool_details = visible,
+                );
+            }
             ActionHandler::CopyTranscript => {
                 let markdown = transcript::render_session_markdown(
                     chat_state,

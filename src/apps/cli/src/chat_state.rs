@@ -294,6 +294,25 @@ pub(crate) struct SessionForkPoint {
     pub timestamp: SystemTime,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct SessionTimelinePoint {
+    pub message_id: String,
+    pub prompt: String,
+    pub timestamp: SystemTime,
+}
+
+fn visible_message_text(message: &ChatMessage) -> String {
+    message
+        .flow_items
+        .iter()
+        .filter_map(|item| match item {
+            FlowItem::Text { content, .. } => Some(content.as_str()),
+            FlowItem::Thinking { .. } | FlowItem::Tool { .. } => None,
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 // ============ Chat Metadata ============
 
 /// Statistics for the current chat session
@@ -483,18 +502,27 @@ impl ChatState {
             .filter(|message| message.role == MessageRole::User)
             .filter_map(|message| {
                 let turn_id = message.turn_id.clone()?;
-                let prompt = message
-                    .flow_items
-                    .iter()
-                    .filter_map(|item| match item {
-                        FlowItem::Text { content, .. } => Some(content.as_str()),
-                        FlowItem::Thinking { .. } | FlowItem::Tool { .. } => None,
-                    })
-                    .collect::<Vec<_>>()
-                    .join("\n");
+                let prompt = visible_message_text(message);
                 (!prompt.is_empty()).then_some(SessionForkPoint {
                     message_id: message.id.clone(),
                     turn_id,
+                    prompt,
+                    timestamp: message.timestamp,
+                })
+            })
+            .collect()
+    }
+
+    /// User messages eligible for OpenCode-compatible `/timeline`, newest first.
+    pub(crate) fn session_timeline_points(&self) -> Vec<SessionTimelinePoint> {
+        self.messages
+            .iter()
+            .rev()
+            .filter(|message| message.role == MessageRole::User)
+            .filter_map(|message| {
+                let prompt = visible_message_text(message);
+                (!prompt.is_empty()).then_some(SessionTimelinePoint {
+                    message_id: message.id.clone(),
                     prompt,
                     timestamp: message.timestamp,
                 })
@@ -1965,6 +1993,54 @@ mod tests {
         assert_eq!(points[0].prompt, "Second\nprompt");
         assert_eq!(points[1].turn_id, "turn-1");
         assert_eq!(points[1].prompt, "First prompt");
+    }
+
+    #[test]
+    fn timeline_points_match_opencode_user_message_order_without_needing_turn_ids() {
+        let transcript = SessionTranscript {
+            session_id: "session-1".to_string(),
+            messages: vec![
+                TranscriptMessage {
+                    id: Some("user-1".to_string()),
+                    role: "user".to_string(),
+                    turn_id: None,
+                    timestamp_ms: Some(1_000),
+                    content: TranscriptContent::Text("First\nprompt".to_string()),
+                },
+                TranscriptMessage {
+                    id: Some("assistant-1".to_string()),
+                    role: "assistant".to_string(),
+                    turn_id: Some("turn-1".to_string()),
+                    timestamp_ms: Some(2_000),
+                    content: TranscriptContent::Text("Answer".to_string()),
+                },
+                TranscriptMessage {
+                    id: Some("user-2".to_string()),
+                    role: "user".to_string(),
+                    turn_id: Some("turn-2".to_string()),
+                    timestamp_ms: Some(3_000),
+                    content: TranscriptContent::Multimodal {
+                        text: "Second prompt".to_string(),
+                        image_count: 1,
+                    },
+                },
+            ],
+        };
+        let state = ChatState::from_session_transcript(
+            "session-1".to_string(),
+            "Session".to_string(),
+            "agentic".to_string(),
+            None,
+            &transcript,
+        );
+
+        let points = state.session_timeline_points();
+
+        assert_eq!(points.len(), 2);
+        assert_eq!(points[0].message_id, "user-2");
+        assert_eq!(points[0].prompt, "Second prompt");
+        assert_eq!(points[1].message_id, "user-1");
+        assert_eq!(points[1].prompt, "First\nprompt");
     }
 
     #[test]

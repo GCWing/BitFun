@@ -524,6 +524,7 @@ impl ChatView {
     // ============ Fork selector methods ============
 
     pub(crate) fn show_fork_selector(&mut self, points: Vec<crate::chat_state::SessionForkPoint>) {
+        self.clear_committed_message_anchor();
         self.fork_selector.show(points);
         self.popup_stack.push(PopupType::ForkSelector);
     }
@@ -545,6 +546,36 @@ impl ChatView {
         key: crossterm::event::KeyEvent,
     ) -> ForkAction {
         self.fork_selector.handle_key_event(key)
+    }
+
+    // ============ Timeline selector methods ============
+
+    pub(crate) fn show_timeline_selector(
+        &mut self,
+        points: Vec<crate::chat_state::SessionTimelinePoint>,
+    ) {
+        self.clear_committed_message_anchor();
+        self.timeline_selector.show(points);
+        self.popup_stack.push(PopupType::TimelineSelector);
+    }
+
+    pub(crate) fn timeline_selector_visible(&self) -> bool {
+        self.timeline_selector.is_visible()
+    }
+
+    pub(crate) fn hide_timeline_selector(&mut self) {
+        self.timeline_selector.hide();
+    }
+
+    pub(crate) fn reshow_timeline_selector(&mut self) {
+        self.timeline_selector.reshow();
+    }
+
+    pub(crate) fn timeline_selector_handle_key(
+        &mut self,
+        key: crossterm::event::KeyEvent,
+    ) -> TimelineAction {
+        self.timeline_selector.handle_key_event(key)
     }
 
     // ============ Provider selector methods (add model step 1) ============
