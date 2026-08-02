@@ -350,10 +350,6 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         RemoteWorkspacePolicy::WorkspaceAgnostic,
     ),
     (
-        "dispatch_install_cli_source_start",
-        RemoteWorkspacePolicy::WorkspaceAgnostic,
-    ),
-    (
         "dispatch_install_cli_start",
         RemoteWorkspacePolicy::WorkspaceAgnostic,
     ),

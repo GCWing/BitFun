@@ -62,9 +62,9 @@ dispatch.
     stops submission. The events are projected into the pending Dispatch turn
     and cached with the transcript, so the automatic action remains visible
     after replay or controller restart.
-12. A source build remains a separate, explicit confirmation. It uploads and
-    compiles the clean confirmed controller revision, and automatic prebuilt
-    installation never escalates to it.
+12. The signed prebuilt release is the only way a target gets a runner. The
+    controller never compiles BitFun on someone else's machine, so a target no
+    published binary fits is reported as unusable rather than offered a build.
 13. Account devices use encrypted request/response RPC and distinct
    `dispatch_target_*` commands. They never attach Peer Device Mode and an
    offline or incompatible target never falls back to local execution. Device

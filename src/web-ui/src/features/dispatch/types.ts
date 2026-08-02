@@ -98,8 +98,6 @@ export interface DispatchSshProbe {
   protocol?: DispatchProtocolProbe;
   /** Set when no published binary can run on this target, with the reason. */
   prebuiltIncompatible?: string;
-  /** Offered as the way forward when a prebuilt install cannot work. */
-  sourceBuild?: DispatchSourceBuild;
 }
 
 export interface DispatchSyncedChange {
@@ -126,14 +124,6 @@ export interface DispatchSyncResult {
   /** Controller worktree the branch was fast-forwarded into. */
   baselineWorktreePath?: string;
   syncedHeadCommit?: string;
-}
-
-export interface DispatchSourceBuild {
-  supported: boolean;
-  /** What the user must install or free up first. Empty when supported. */
-  blockers: string[];
-  cargoVersion?: string;
-  gitRef: string;
 }
 
 export interface DispatchInstallStart {

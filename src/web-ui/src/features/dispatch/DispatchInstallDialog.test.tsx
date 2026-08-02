@@ -10,9 +10,6 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
 const mocks = vi.hoisted(() => ({
   probeTarget: vi.fn(),
-  installCliSourceStart: vi.fn(),
-  installCliPoll: vi.fn(),
-  installCliCancel: vi.fn(),
   syncModelConfig: vi.fn(),
   confirmWarning: vi.fn(),
   getConfig: vi.fn(),
@@ -28,9 +25,6 @@ const mocks = vi.hoisted(() => ({
 vi.mock('./dispatchApi', () => ({
   dispatchApi: {
     probeTarget: mocks.probeTarget,
-    installCliSourceStart: mocks.installCliSourceStart,
-    installCliPoll: mocks.installCliPoll,
-    installCliCancel: mocks.installCliCancel,
     syncModelConfig: mocks.syncModelConfig,
   },
 }));
@@ -125,7 +119,7 @@ function createDeferred<T>() {
   return { promise, reject, resolve };
 }
 
-describe('DispatchInstallDialog installation lifecycle', () => {
+describe('DispatchInstallDialog target preparation', () => {
   let container: HTMLDivElement;
   let root: Root;
 
@@ -146,7 +140,6 @@ describe('DispatchInstallDialog installation lifecycle', () => {
       },
     });
     mocks.confirmWarning.mockResolvedValue(true);
-    mocks.installCliCancel.mockResolvedValue(undefined);
     mocks.getConfig.mockResolvedValue([]);
     mocks.getFreshConfig.mockResolvedValue(undefined);
     mocks.resolveRevision.mockResolvedValue('a'.repeat(40));
@@ -182,7 +175,7 @@ describe('DispatchInstallDialog installation lifecycle', () => {
       await Promise.resolve();
     });
 
-    expect(container.textContent).toContain('dispatch.installAutomaticTitle');
+    expect(container.textContent).toContain('dispatch.installAutomaticDescription');
     expect(container.textContent).toContain('1.2.3');
     expect(container.textContent).toContain('abc123');
     expect(container.querySelector('details')?.open).toBe(false);
@@ -307,64 +300,17 @@ describe('DispatchInstallDialog installation lifecycle', () => {
     expect(container.querySelector('.dispatch-install-dialog')).not.toBeNull();
   });
 
-  it('offers a source build only when the target can actually run one', async () => {
-    // A target no published binary fits: the release install is not offered,
-    // and the source build is gated on its prerequisites rather than failing
-    // partway through.
+  it('never offers to compile on the target and explains why it cannot be prepared', async () => {
+    // A target no published binary fits. Preparing it is not something this
+    // controller can do, so the dialog says so instead of offering to build
+    // BitFun on someone else's machine.
     mocks.probeTarget.mockResolvedValue({
       cliInstalled: false,
       os: 'linux',
       arch: 'x86_64',
       installSupported: false,
       prebuiltIncompatible: 'target uses musl libc',
-      sourceBuild: {
-        supported: false,
-        blockers: ['no cargo on the target'],
-        gitRef: 'v1.2.3',
-      },
     });
-
-    await act(async () => {
-      root.render(
-        <DispatchInstallDialog
-          open
-          target={{ kind: 'ssh', connectionId: 'ssh-1', displayName: 'alpine-host' }}
-          onClose={vi.fn()}
-          onReady={vi.fn()}
-        />,
-      );
-      await Promise.resolve();
-    });
-
-    expect(container.textContent).toContain('dispatch.sourceBuildUnavailable');
-    expect(container.textContent).not.toContain('target uses musl libc');
-    expect(container.textContent).not.toContain('no cargo on the target');
-    const buttons = () => Array.from(container.querySelectorAll('button'));
-    expect(
-      buttons().find(button => button.textContent?.includes('dispatch.installConfirm')),
-      'a prebuilt install that cannot work must not be offered',
-    ).toBeUndefined();
-    const blocked = buttons()
-      .find(button => button.textContent?.includes('dispatch.sourceBuildConfirm'));
-    expect(blocked?.disabled).toBe(true);
-
-    // Same target once a toolchain is present.
-    mocks.probeTarget.mockResolvedValue({
-      cliInstalled: false,
-      os: 'linux',
-      arch: 'x86_64',
-      installSupported: false,
-      prebuiltIncompatible: 'target uses musl libc',
-      sourceBuild: { supported: true, blockers: [], gitRef: 'v1.2.3', cargoVersion: '1.90.0' },
-    });
-    mocks.installCliSourceStart.mockResolvedValue({
-      scriptPath: '/tmp/install-bitfun.sh',
-      version: '1.2.3',
-      target: 'linux x86_64',
-      url: 'https://github.com/GCWing/BitFun.git',
-      sha256: '',
-    });
-    mocks.installCliPoll.mockResolvedValue({ cursor: 1, output: '', status: 'failed' });
 
     await act(async () => {
       root.render(
@@ -380,16 +326,22 @@ describe('DispatchInstallDialog installation lifecycle', () => {
       await Promise.resolve();
     });
 
-    const ready = Array.from(container.querySelectorAll('button'))
-      .find(button => button.textContent?.includes('dispatch.sourceBuildConfirm'));
-    expect(ready?.disabled).toBe(false);
+    expect(container.textContent).toContain('dispatch.installUnavailable');
+    expect(container.textContent).not.toContain('target uses musl libc');
+    expect(container.textContent).not.toContain('sourceBuild');
+    expect(container.textContent).not.toContain('dispatch.installAutomaticDescription');
+
     await act(async () => {
-      ready?.click();
-      await Promise.resolve();
-      await Promise.resolve();
+      Array.from(container.querySelectorAll('button'))
+        .find(button => button.textContent?.includes('dispatch.approvalReject'))
+        ?.click();
     });
-    expect(mocks.confirmWarning).toHaveBeenCalled();
-    expect(mocks.installCliSourceStart).toHaveBeenCalledWith('ssh-1');
+    const useTarget = Array.from(container.querySelectorAll('button'))
+      .find(button => button.textContent?.includes('dispatch.useTarget'));
+    expect(
+      useTarget?.disabled,
+      'a target that cannot be prepared must not be selectable',
+    ).toBe(true);
   });
 
   it('keeps protocol capability names and probe failures out of the user interface', async () => {
@@ -526,86 +478,6 @@ describe('DispatchInstallDialog installation lifecycle', () => {
     }));
   });
 
-  it('cancels an acknowledged installer when the parent closes the dialog during polling', async () => {
-    const poll = createDeferred<{
-      cursor: number;
-      output: string;
-      status: 'running';
-    }>();
-    mocks.probeTarget.mockResolvedValue({
-      cliInstalled: false,
-      os: 'linux',
-      arch: 'x86_64',
-      installSupported: false,
-      prebuiltIncompatible: 'target uses musl libc',
-      sourceBuild: {
-        supported: true,
-        blockers: [],
-        gitRef: 'v1.2.3',
-        cargoVersion: '1.90.0',
-      },
-    });
-    mocks.installCliSourceStart.mockResolvedValue({
-      scriptPath: '/tmp/install-bitfun.sh',
-      version: '1.2.3',
-      target: 'linux x86_64',
-      url: 'https://github.com/GCWing/BitFun.git',
-      sha256: '',
-    });
-    mocks.installCliPoll.mockReturnValue(poll.promise);
-    const target = {
-      kind: 'ssh' as const,
-      connectionId: 'ssh-1',
-      displayName: 'build-host',
-    };
-
-    await act(async () => {
-      root.render(
-        <DispatchInstallDialog
-          open
-          target={target}
-          onClose={vi.fn()}
-          onReady={vi.fn()}
-        />,
-      );
-      await Promise.resolve();
-    });
-
-    const installButton = Array.from(container.querySelectorAll('button'))
-      .find(button => button.textContent?.includes('dispatch.sourceBuildConfirm'));
-    await act(async () => {
-      installButton?.click();
-      await Promise.resolve();
-      await Promise.resolve();
-    });
-    expect(mocks.installCliSourceStart).toHaveBeenCalledTimes(1);
-    expect(mocks.installCliPoll).toHaveBeenCalledTimes(1);
-
-    await act(async () => {
-      root.render(
-        <DispatchInstallDialog
-          open={false}
-          target={target}
-          onClose={vi.fn()}
-          onReady={vi.fn()}
-        />,
-      );
-      await Promise.resolve();
-    });
-    expect(mocks.installCliCancel).toHaveBeenCalledTimes(1);
-    expect(mocks.installCliCancel).toHaveBeenCalledWith('ssh-1');
-
-    await act(async () => {
-      poll.resolve({
-        cursor: 1,
-        output: 'still running',
-        status: 'running',
-      });
-      await Promise.resolve();
-    });
-    expect(mocks.installCliPoll).toHaveBeenCalledTimes(1);
-    expect(mocks.installCliCancel).toHaveBeenCalledTimes(1);
-  });
 });
 
 describe('DispatchInstallDialog model configuration sync', () => {

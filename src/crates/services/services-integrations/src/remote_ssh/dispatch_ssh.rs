@@ -80,10 +80,6 @@ impl Drop for UnverifiedResultBundle {
 /// Oldest glibc the published Linux binaries run against. Kept in step with
 /// `scripts/ci/check-glibc-floor.sh`, which enforces it at release time.
 const GLIBC_FLOOR: &str = "2.35";
-/// A release build of the workspace needs roughly this much scratch space.
-/// Same figure the relay source build uses.
-const SOURCE_BUILD_FREE_KB: u64 = 6 * 1024 * 1024;
-const REPO_GIT_URL: &str = "https://github.com/GCWing/BitFun.git";
 const DISPATCH_PROTOCOL_VERSION: u64 =
     bitfun_services_core::dispatch_contract::DISPATCH_PROTOCOL_VERSION as u64;
 /// First stable release whose CLI is known to contain every capability below.
@@ -124,8 +120,6 @@ pub struct DispatchSshProbe {
     /// Present only when the published binaries cannot run here, so the UI can
     /// explain why instead of offering an install that would fail the same way.
     pub prebuilt_incompatible: Option<String>,
-    /// Offered as the way forward when a prebuilt install cannot work.
-    pub source_build: Option<DispatchSourceBuild>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -171,10 +165,6 @@ struct RemoteTarget {
     libc: Option<RemoteLibc>,
     /// glibc version, when the target reported one.
     libc_version: Option<String>,
-    cargo_version: Option<String>,
-    git_available: bool,
-    cc_available: bool,
-    free_kb: Option<u64>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -272,9 +262,15 @@ pub async fn probe(
                 Some("remote target has no tar executable; install tar and retry".to_string()),
             )
         } else if !published_release_supports_required_dispatch_protocol(RELEASE_VERSION) {
-            // The controller is ahead of the latest stable artifact. Avoid an
-            // unnecessary release request and offer its exact source instead.
-            (None, None)
+            // The controller is ahead of the latest stable artifact, so no
+            // published binary carries the capabilities it needs. Skip the
+            // release request and say so.
+            (
+                None,
+                Some(format!(
+                    "no published BitFun CLI yet carries the dispatch capabilities this controller requires (controller {RELEASE_VERSION})"
+                )),
+            )
         } else {
             match resolve_release(&target.os, &target.arch).await {
                 // Capability support is a fact about the published artifact,
@@ -288,12 +284,13 @@ pub async fn probe(
                 {
                     (Some(release.public), None)
                 }
-                // Before the first compatible stable release exists, the exact
-                // controller source is the only deterministic repair path. Do
-                // not show a speculative "same version means same binary"
-                // warning; the readiness row already names the missing
-                // capability and the source-build action explains the remedy.
-                Ok(_) => (None, None),
+                Ok(release) => (
+                    None,
+                    Some(format!(
+                        "published BitFun CLI {} does not carry the dispatch capabilities this controller requires",
+                        release.public.version
+                    )),
+                ),
                 Err(error) => (None, Some(error.to_string())),
             }
         }
@@ -301,13 +298,6 @@ pub async fn probe(
         (None, None)
     };
     let install_supported = release.is_some();
-    // Offer the source build whenever the target needs a CLI but no prebuilt
-    // install can deliver one — an unsupported platform, a libc floor, a
-    // missing tar, an unreachable release, or a release that does not carry
-    // dispatch. Gating this on platform incompatibility alone left the last
-    // case with a warning and no way forward.
-    let source_build =
-        (needs_install && release.is_none()).then(|| source_build_availability(&target));
 
     Ok(DispatchSshProbe {
         cli_installed: target.cli_path.is_some(),
@@ -322,15 +312,13 @@ pub async fn probe(
         prebuilt_incompatible: incompatibility
             .as_ref()
             .map(PrebuiltIncompatibility::describe),
-        source_build,
     })
 }
 
 /// Why the published binaries cannot run on this target.
 ///
 /// Kept structured rather than a flat string so the UI can say what is actually
-/// wrong — and, when a source build could fix it, offer that instead of leaving
-/// the user with an unexplained failure.
+/// wrong instead of leaving the user with an unexplained failure.
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum PrebuiltIncompatibility {
     UnsupportedPlatform { os: String, arch: String },
@@ -352,19 +340,6 @@ impl PrebuiltIncompatibility {
             ),
         }
     }
-}
-
-/// Whether a source build could produce a working CLI on this target.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct DispatchSourceBuild {
-    /// Whether a build could start right now.
-    pub supported: bool,
-    /// What the user must install or free up first, when it cannot.
-    pub blockers: Vec<String>,
-    pub cargo_version: Option<String>,
-    /// The git ref that would be built.
-    pub git_ref: String,
 }
 
 /// Detect an incompatibility that no amount of reinstalling can fix.
@@ -414,39 +389,6 @@ fn compare_versions(left: &str, right: &str) -> std::cmp::Ordering {
         }
     }
     std::cmp::Ordering::Equal
-}
-
-fn source_build_availability(target: &RemoteTarget) -> DispatchSourceBuild {
-    let mut blockers = Vec::new();
-    if target.cargo_version.is_none() {
-        blockers.push(
-            "no cargo on the target; install a Rust toolchain (https://rustup.rs) and retry"
-                .to_string(),
-        );
-    }
-    if !target.git_available {
-        blockers.push("no git on the target".to_string());
-    }
-    if !target.cc_available {
-        blockers.push(
-            "no C compiler on the target (install build-essential or equivalent)".to_string(),
-        );
-    }
-    if let Some(free_kb) = target.free_kb {
-        if free_kb < SOURCE_BUILD_FREE_KB {
-            blockers.push(format!(
-                "needs about {} GB free under $HOME, found {} GB",
-                SOURCE_BUILD_FREE_KB / 1024 / 1024,
-                free_kb / 1024 / 1024
-            ));
-        }
-    }
-    DispatchSourceBuild {
-        supported: blockers.is_empty(),
-        blockers,
-        cargo_version: target.cargo_version.clone(),
-        git_ref: release_tag_for_version(RELEASE_VERSION),
-    }
 }
 
 /// Whether a published artifact is expected to implement the controller's
@@ -555,7 +497,7 @@ pub async fn install_cli_start(
     let release = resolve_release(&target.os, &target.arch).await?;
     if !published_release_supports_required_dispatch_protocol(&release.public.version) {
         return Err(anyhow!(
-            "published BitFun CLI {} does not contain the dispatch capabilities required by this controller; build from the controller source instead",
+            "published BitFun CLI {} does not contain the dispatch capabilities required by this controller",
             release.public.version
         ));
     }
@@ -627,7 +569,7 @@ pub async fn install_cli_start(
         manager,
         connection_id,
         &dir,
-        Some(&archive_path),
+        &archive_path,
         &body_path,
         &script_path,
         &body,
@@ -780,14 +722,14 @@ trap - EXIT
 
 /// Stage the installer scripts and launch the detached body.
 ///
-/// Shared by the release and source-build paths so both get the same token
-/// handshake, log truncation, and channel-leak-free launch.
+/// Kept separate from `install_cli_start` so the token handshake, log
+/// truncation, and channel-leak-free launch stay in one place.
 #[allow(clippy::too_many_arguments)]
 async fn stage_and_launch_installer(
     manager: &SSHConnectionManager,
     connection_id: &str,
     dir: &str,
-    archive_path: Option<&str>,
+    archive_path: &str,
     body_path: &str,
     script_path: &str,
     body: &str,
@@ -847,190 +789,6 @@ async fn stage_and_launch_installer(
         while channel.wait().await.is_some() {}
     });
     Ok(())
-}
-
-/// Build and install the CLI from source on the target.
-///
-/// The way forward when no published binary can run there. Shares the install
-/// driver, log, and poll/cancel machinery with the release path, so progress
-/// reporting and cancellation behave identically.
-pub async fn install_cli_source_start(
-    manager: &SSHConnectionManager,
-    connection_id: &str,
-) -> Result<DispatchInstallStart> {
-    ensure_plain_ssh_target(manager, connection_id).await?;
-    let target = probe_remote_target(manager, connection_id).await?;
-    let availability = source_build_availability(&target);
-    if !availability.supported {
-        return Err(anyhow!(
-            "target cannot build BitFun from source: {}",
-            availability.blockers.join("; ")
-        ));
-    }
-
-    install_cli_cancel(manager, connection_id)
-        .await
-        .context("stop an earlier BitFun CLI installation")?;
-
-    let dir = format!("{}/{}", target.home, INSTALL_STATE_DIR);
-    let body_path = format!("{dir}/{INSTALL_STEM}-body.sh");
-    let script_path = format!("{dir}/{INSTALL_STEM}.sh");
-    let install_token = format!("bitfun-install-{}", uuid::Uuid::new_v4().as_simple());
-    let version = RELEASE_VERSION
-        .split('+')
-        .next()
-        .unwrap_or(RELEASE_VERSION)
-        .to_string();
-
-    exec_ok(
-        manager,
-        connection_id,
-        &format!(
-            "mkdir -p {dir} && chmod 700 {root} {dispatch} {dir}",
-            root = shell_quote_posix(&format!("{}/.bitfun", target.home)),
-            dispatch = shell_quote_posix(&format!("{}/.bitfun/dispatch", target.home)),
-            dir = shell_quote_posix(&dir),
-        ),
-    )
-    .await?;
-
-    let body = to_unix_script(&source_build_body_script(
-        &dir,
-        &version,
-        &availability.git_ref,
-    ));
-    let driver = to_unix_script(&install_driver_script(&dir, &body_path, &install_token));
-    stage_and_launch_installer(
-        manager,
-        connection_id,
-        &dir,
-        None,
-        &body_path,
-        &script_path,
-        &body,
-        &driver,
-        &install_token,
-    )
-    .await?;
-
-    Ok(DispatchInstallStart {
-        script_path,
-        version,
-        target: format!("{} {}", target.os, target.arch),
-        url: REPO_GIT_URL.to_string(),
-        sha256: String::new(),
-    })
-}
-
-/// Build and install the CLI from an exact controller-provided source archive.
-///
-/// Development Desktop builds use this after the same explicit source-build
-/// confirmation as the repository-clone path. It prevents an untagged
-/// controller from "updating" a same-semver target back to an older release
-/// whose dispatch protocol is missing required behavioral capabilities.
-pub async fn install_cli_source_archive_start(
-    manager: &SSHConnectionManager,
-    connection_id: &str,
-    source_archive: &[u8],
-    revision: &str,
-) -> Result<DispatchInstallStart> {
-    ensure_plain_ssh_target(manager, connection_id).await?;
-    if source_archive.is_empty() {
-        return Err(anyhow!("controller source archive is empty"));
-    }
-    if source_archive.len() > MAX_ARCHIVE_BYTES {
-        return Err(anyhow!(
-            "controller source archive exceeds the {} MB safety limit",
-            MAX_ARCHIVE_BYTES / (1024 * 1024)
-        ));
-    }
-    let revision = revision.trim();
-    if revision.is_empty()
-        || revision.len() > 80
-        || !revision.chars().all(|character| {
-            character.is_ascii_alphanumeric() || matches!(character, '.' | '-' | '_')
-        })
-    {
-        return Err(anyhow!("controller source revision is invalid"));
-    }
-
-    let target = probe_remote_target(manager, connection_id).await?;
-    let mut availability = source_build_availability(&target);
-    // The controller supplied a complete archive, so the target does not need
-    // git. It still needs tar to unpack that archive.
-    availability
-        .blockers
-        .retain(|blocker| blocker != "no git on the target");
-    if !target.tar_available {
-        availability
-            .blockers
-            .push("no tar executable on the target".to_string());
-    }
-    if !availability.blockers.is_empty() {
-        return Err(anyhow!(
-            "target cannot build BitFun from controller source: {}",
-            availability.blockers.join("; ")
-        ));
-    }
-
-    install_cli_cancel(manager, connection_id)
-        .await
-        .context("stop an earlier BitFun CLI installation")?;
-
-    let dir = format!("{}/{}", target.home, INSTALL_STATE_DIR);
-    let archive_path = format!("{dir}/controller-source.tar.gz");
-    let body_path = format!("{dir}/{INSTALL_STEM}-body.sh");
-    let script_path = format!("{dir}/{INSTALL_STEM}.sh");
-    let install_token = format!("bitfun-install-{}", uuid::Uuid::new_v4().as_simple());
-    let version = RELEASE_VERSION
-        .split('+')
-        .next()
-        .unwrap_or(RELEASE_VERSION)
-        .to_string();
-
-    exec_ok(
-        manager,
-        connection_id,
-        &format!(
-            "mkdir -p {dir} && chmod 700 {root} {dispatch} {dir}",
-            root = shell_quote_posix(&format!("{}/.bitfun", target.home)),
-            dispatch = shell_quote_posix(&format!("{}/.bitfun/dispatch", target.home)),
-            dir = shell_quote_posix(&dir),
-        ),
-    )
-    .await?;
-    manager
-        .sftp_write(connection_id, &archive_path, source_archive)
-        .await
-        .context("stage controller BitFun source archive")?;
-
-    let body = to_unix_script(&source_archive_build_body_script(
-        &dir,
-        &archive_path,
-        &version,
-        revision,
-    ));
-    let driver = to_unix_script(&install_driver_script(&dir, &body_path, &install_token));
-    stage_and_launch_installer(
-        manager,
-        connection_id,
-        &dir,
-        Some(&archive_path),
-        &body_path,
-        &script_path,
-        &body,
-        &driver,
-        &install_token,
-    )
-    .await?;
-
-    Ok(DispatchInstallStart {
-        script_path,
-        version,
-        target: format!("{} {}", target.os, target.arch),
-        url: format!("controller-source:{revision}"),
-        sha256: String::new(),
-    })
 }
 
 fn ensure_confirmed_release(
@@ -1818,10 +1576,8 @@ where
         ));
     }
     if let Some(reason) = probed.prebuilt_incompatible.as_deref() {
-        // A source build needs its own confirmation, so stop here with the
-        // reason rather than silently escalating to compiling on the target.
         return Err(anyhow!(
-            "no published BitFun CLI can run on this target ({reason}); build it from source explicitly"
+            "no published BitFun CLI can run on this target ({reason}); install BitFun there manually and retry"
         ));
     }
     let release = probed.release.clone().ok_or_else(|| {
@@ -2155,10 +1911,6 @@ async fn probe_remote_target(
             _ => None,
         },
         libc_version: (!get("libcversion").is_empty()).then(|| get("libcversion")),
-        cargo_version: (!get("cargo").is_empty()).then(|| get("cargo")),
-        git_available: get("git") == "1",
-        cc_available: get("cc") == "1",
-        free_kb: get("freekb").parse().ok(),
     })
 }
 
@@ -2189,16 +1941,6 @@ if [ "$(uname -s 2>/dev/null || true)" = "Linux" ]; then
     printf 'libcversion=%s\n' "$(getconf GNU_LIBC_VERSION 2>/dev/null | awk '{print $NF}' || true)"
   fi
 fi
-if command -v cargo >/dev/null 2>&1; then
-  printf 'cargo=%s\n' "$(cargo --version 2>/dev/null | awk '{print $2}' || true)"
-fi
-if command -v git >/dev/null 2>&1; then printf 'git=1\n'; else printf 'git=0\n'; fi
-if command -v cc >/dev/null 2>&1 || command -v gcc >/dev/null 2>&1; then
-  printf 'cc=1\n'
-else
-  printf 'cc=0\n'
-fi
-printf 'freekb=%s\n' "$(df -Pk "$HOME" 2>/dev/null | awk 'NR==2 {print $4}' || true)"
 "#
 }
 
@@ -2540,82 +2282,6 @@ done
     )
 }
 
-/// Build the CLI from source on the target, for hosts no published binary fits.
-///
-/// Deliberately does not install a Rust toolchain: fetching and running an
-/// installer script on someone's server is a bigger decision than this flow
-/// should make silently. A missing toolchain is reported as a blocker instead.
-fn source_build_body_script(dir: &str, expected_version: &str, git_ref: &str) -> String {
-    let build = format!(
-        r#"SRC="$D/source"
-GIT_REF={git_ref}
-echo "Building BitFun CLI {git_ref_plain} from source on the target. This can take a while."
-FREE_KB="$(df -Pk "$HOME" 2>/dev/null | awk 'NR==2 {{print $4}}' || echo 0)"
-if [ "${{FREE_KB:-0}}" -lt {free_kb} ]; then
-  echo "ERROR: source build needs about {free_gb} GB free under $HOME, found $((FREE_KB / 1024 / 1024)) GB" >&2
-  exit 1
-fi
-rm -rf "$SRC"
-git clone --depth 1 --branch "$GIT_REF" {repo} "$SRC"
-echo ">>> cargo build --release (bitfun, bitfun-cli)"
-( cd "$SRC" && cargo build --release --locked -p bitfun-cli --bin bitfun --bin bitfun-cli )
-PRIMARY="$SRC/target/release/bitfun"
-LEGACY="$SRC/target/release/bitfun-cli"
-[ -f "$PRIMARY" ] || {{ echo "ERROR: source build produced no bitfun binary" >&2; exit 1; }}
-[ -f "$LEGACY" ] || {{ echo "ERROR: source build produced no bitfun-cli binary" >&2; exit 1; }}
-"#,
-        git_ref = shell_quote_posix(git_ref),
-        git_ref_plain = git_ref,
-        repo = shell_quote_posix(REPO_GIT_URL),
-        free_kb = SOURCE_BUILD_FREE_KB,
-        free_gb = SOURCE_BUILD_FREE_KB / 1024 / 1024,
-    );
-    format!(
-        "{preamble}{build}{commit}",
-        preamble = install_preamble_fragment(dir, expected_version),
-        // The checkout is many gigabytes; leaving it behind would silently fill
-        // the target's home directory after a few installs.
-        commit = install_commit_fragment(r#"rm -rf "$SRC""#),
-    )
-}
-
-fn source_archive_build_body_script(
-    dir: &str,
-    archive_path: &str,
-    expected_version: &str,
-    revision: &str,
-) -> String {
-    let build = format!(
-        r#"SRC="$D/source"
-SOURCE_ARCHIVE={archive}
-echo "Building BitFun CLI controller source {revision_plain} on the target. This can take a while."
-FREE_KB="$(df -Pk "$HOME" 2>/dev/null | awk 'NR==2 {{print $4}}' || echo 0)"
-if [ "${{FREE_KB:-0}}" -lt {free_kb} ]; then
-  echo "ERROR: source build needs about {free_gb} GB free under $HOME, found $((FREE_KB / 1024 / 1024)) GB" >&2
-  exit 1
-fi
-rm -rf "$SRC"
-mkdir -p "$SRC"
-tar -xzf "$SOURCE_ARCHIVE" -C "$SRC"
-echo ">>> cargo build --release (bitfun, bitfun-cli)"
-( cd "$SRC" && cargo build --release --locked -p bitfun-cli --bin bitfun --bin bitfun-cli )
-PRIMARY="$SRC/target/release/bitfun"
-LEGACY="$SRC/target/release/bitfun-cli"
-[ -f "$PRIMARY" ] || {{ echo "ERROR: source build produced no bitfun binary" >&2; exit 1; }}
-[ -f "$LEGACY" ] || {{ echo "ERROR: source build produced no bitfun-cli binary" >&2; exit 1; }}
-"#,
-        archive = shell_quote_posix(archive_path),
-        revision_plain = revision,
-        free_kb = SOURCE_BUILD_FREE_KB,
-        free_gb = SOURCE_BUILD_FREE_KB / 1024 / 1024,
-    );
-    format!(
-        "{preamble}{build}{commit}",
-        preamble = install_preamble_fragment(dir, expected_version),
-        commit = install_commit_fragment(r#"rm -rf "$SRC"; rm -f "$SOURCE_ARCHIVE""#),
-    )
-}
-
 fn install_driver_script(dir: &str, body_path: &str, install_token: &str) -> String {
     format!(
         r#"#!/bin/bash
@@ -2672,8 +2338,7 @@ exit 0
 
 #[allow(clippy::too_many_arguments)]
 fn stage_install_command(
-    // Absent for a source build, which has no archive to protect.
-    archive_path: Option<&str>,
+    archive_path: &str,
     body_path: &str,
     script_path: &str,
     log_path: &str,
@@ -2683,14 +2348,12 @@ fn stage_install_command(
     exit_path: &str,
     install_token: &str,
 ) -> String {
-    let archive = archive_path
-        .map(|path| format!("chmod 600 {} && ", shell_quote_posix(path)))
-        .unwrap_or_default();
     format!(
-        "{archive}chmod 700 {body} {script} \
+        "chmod 600 {archive} && chmod 700 {body} {script} \
          && rm -f {pid} {driver_pid} {exit} \
          && : > {log} && chmod 600 {log} \
          && printf '%s\\n' {token} > {prepare} && chmod 600 {prepare}",
+        archive = shell_quote_posix(archive_path),
         body = shell_quote_posix(body_path),
         script = shell_quote_posix(script_path),
         pid = shell_quote_posix(pid_path),
@@ -2970,9 +2633,7 @@ mod tests {
             "/home/user/.bitfun/dispatch/install/install-cli-body.sh",
             "bitfun-install-test-token",
         );
-        let source =
-            source_build_body_script("/home/user/.bitfun/dispatch/install", "1.2.3", "v1.2.3");
-        for (name, script) in [("body", body), ("driver", driver), ("source", source)] {
+        for (name, script) in [("body", body), ("driver", driver)] {
             let script = to_unix_script(&script);
             assert!(!script.contains('\r'), "{name} must be LF-only");
             assert!(
@@ -3014,10 +2675,6 @@ mod tests {
             digest_tool,
             libc: Some(RemoteLibc::Glibc),
             libc_version: Some("2.39".to_string()),
-            cargo_version: None,
-            git_available: true,
-            cc_available: true,
-            free_kb: Some(SOURCE_BUILD_FREE_KB * 2),
         }
     }
 
@@ -3179,97 +2836,37 @@ mod tests {
     }
 
     #[test]
-    fn source_build_reports_every_missing_prerequisite() {
-        let mut target = test_target(None, None);
-        target.cargo_version = None;
-        target.git_available = false;
-        target.cc_available = false;
-        target.free_kb = Some(1024);
-
-        let availability = source_build_availability(&target);
-        assert!(!availability.supported);
-        assert_eq!(
-            availability.blockers.len(),
-            4,
-            "every prerequisite must be listed at once, not one per retry: {:?}",
-            availability.blockers
-        );
-        assert!(
-            availability
-                .blockers
-                .iter()
-                .any(|b| b.contains("rustup.rs")),
-            "a missing toolchain must say where to get one"
-        );
-
-        target.cargo_version = Some("1.90.0".to_string());
-        target.git_available = true;
-        target.cc_available = true;
-        target.free_kb = Some(SOURCE_BUILD_FREE_KB * 2);
-        let availability = source_build_availability(&target);
-        assert!(availability.supported, "{:?}", availability.blockers);
-        assert!(availability.git_ref.starts_with('v') || availability.git_ref == "nightly");
-    }
-
-    #[test]
-    fn both_install_paths_share_one_staging_and_commit_implementation() {
+    fn the_install_path_uses_the_shared_staging_and_commit_implementation() {
         let release = install_body_script(
             "/home/user/.bitfun/dispatch/install",
             "/home/user/.bitfun/dispatch/install/archive.tar.gz",
             "1.2.3",
             &ArchiveSource::TargetDownload,
         );
-        let source =
-            source_build_body_script("/home/user/.bitfun/dispatch/install", "1.2.3", "v1.2.3");
-        let controller_source = source_archive_build_body_script(
-            "/home/user/.bitfun/dispatch/install",
-            "/home/user/.bitfun/dispatch/install/controller-source.tar.gz",
-            "1.2.3",
-            "abc123",
-        );
-        // The atomic-replace and rollback semantics must not be able to drift
-        // between the two paths.
+        // Installing a signed release is the only way a target gets a CLI, so
+        // its atomic-replace and rollback semantics must come from the shared
+        // fragment rather than being restated inline.
         let commit = install_commit_fragment(r#"rm -f "$ARCHIVE""#);
         let shared = commit
             .lines()
             .find(|line| line.contains("mv -f \"$PRIMARY_NEW\""))
             .expect("commit fragment swaps the primary");
-        for (name, script) in [
-            ("release", &release),
-            ("source", &source),
-            ("controller source", &controller_source),
-        ] {
-            assert!(script.contains(shared), "{name} must use the shared commit");
-            assert!(
-                script.contains(r#"PRIMARY_NEW="$STAGE/bitfun""#),
-                "{name} must stage under real filenames"
-            );
-            assert!(
-                script.contains("rollback_install"),
-                "{name} must keep rollback"
-            );
-            assert!(
-                script.contains("dispatch_worker_cli_profile"),
-                "{name} must reject a CLI whose detached worker can select the wrong profile"
-            );
-        }
+        assert!(release.contains(shared), "release must use the shared commit");
         assert!(
-            source.contains("cargo build --release --locked"),
-            "source build must be reproducible"
+            release.contains(r#"PRIMARY_NEW="$STAGE/bitfun""#),
+            "release must stage under real filenames"
         );
         assert!(
-            !source.contains("rustup") && !source.contains("sudo"),
-            "source build must not install a toolchain or escalate"
+            release.contains("rollback_install"),
+            "release must keep rollback"
         );
         assert!(
-            source.contains(r#"rm -rf "$SRC""#),
-            "the checkout must be cleaned up after a successful build"
+            release.contains("dispatch_worker_cli_profile"),
+            "release must reject a CLI whose detached worker can select the wrong profile"
         );
         assert!(
-            controller_source.contains("tar -xzf \"$SOURCE_ARCHIVE\"")
-                && controller_source.contains("controller source abc123")
-                && !controller_source.contains("git clone"),
-            "a controller archive must build exactly the confirmed local revision"
+            !release.contains("cargo build"),
+            "no install path may compile BitFun on the target"
         );
     }
 
@@ -3686,13 +3283,6 @@ mod tests {
                 "/home/user/.bitfun/dispatch/install",
                 "/home/user/.bitfun/dispatch/install/install-cli-body.sh",
                 "bitfun-install-test-token",
-            ),
-            source_build_body_script("/home/user/.bitfun/dispatch/install", "1.2.3", "v1.2.3"),
-            source_archive_build_body_script(
-                "/home/user/.bitfun/dispatch/install",
-                "/home/user/.bitfun/dispatch/install/controller-source.tar.gz",
-                "1.2.3",
-                "abc123",
             ),
             target_download_script(
                 RemoteDownloader::Curl,

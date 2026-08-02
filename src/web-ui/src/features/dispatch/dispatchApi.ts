@@ -47,13 +47,6 @@ export const dispatchApi = {
     });
   },
 
-  /** Build the CLI from source on the target, for hosts no binary fits. */
-  async installCliSourceStart(connectionId: string): Promise<DispatchInstallStart> {
-    return api.invoke<DispatchInstallStart>('dispatch_install_cli_source_start', {
-      request: { connectionId },
-    });
-  },
-
   async installCliPoll(connectionId: string, cursor: number): Promise<DispatchInstallPoll> {
     return api.invoke<DispatchInstallPoll>('dispatch_install_cli_poll', {
       request: { connectionId, cursor },

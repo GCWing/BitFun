@@ -1749,7 +1749,6 @@ pub async fn run() {
             api::dispatch_api::dispatch_list_targets,
             api::dispatch_api::dispatch_probe_target,
             api::dispatch_api::dispatch_install_cli_start,
-            api::dispatch_api::dispatch_install_cli_source_start,
             api::dispatch_api::dispatch_install_cli_poll,
             api::dispatch_api::dispatch_install_cli_cancel,
             api::dispatch_api::dispatch_sync_model_config,

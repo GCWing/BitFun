@@ -224,10 +224,11 @@ checksum sidecar, its publisher signature when present, and the mandatory
 archive signature, pins the SHA-256 passed to the installer, waits with a
 bounded deadline, and probes the installed binary again before continuing.
 
-A source build is different: it uploads the controller's repository and
-compiles it on the target. It therefore remains a separate user-confirmed
-operation and uses only the clean, confirmed controller revision. Automatic
-prebuilt installation never escalates to a source build.
+The signed prebuilt release is the only install path. The controller never
+compiles BitFun on a target, and exposes no command to do so: when no published
+binary can run there — an unsupported platform, a libc floor, a missing `tar`,
+an unreachable release, or a release that predates a required capability — the
+probe reports why and the target cannot be selected.
 
 Account-device transport wraps target verbs in names reserved for detached
 dispatch, such as `dispatch_target_submit`. They are handled before the

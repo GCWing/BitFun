@@ -114,10 +114,9 @@ pub async fn probe_device(
         protocol_error,
         release: None,
         protocol: Some(protocol),
-        // An account device runs its own already-installed CLI; this controller
-        // neither installs nor builds anything for it.
+        // An account device runs its own already-installed CLI; this
+        // controller installs nothing for it.
         prebuilt_incompatible: None,
-        source_build: None,
     })
 }
 

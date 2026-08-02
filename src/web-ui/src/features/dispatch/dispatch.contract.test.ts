@@ -10,7 +10,6 @@ const OUTBOUND_DISPATCH_COMMANDS = [
   'dispatch_list_targets',
   'dispatch_probe_target',
   'dispatch_install_cli_start',
-  'dispatch_install_cli_source_start',
   'dispatch_install_cli_poll',
   'dispatch_install_cli_cancel',
   'dispatch_sync_model_config',
@@ -56,6 +55,22 @@ describe('dispatch controller-only routing contract', () => {
       }
     });
   }
+
+  // Preparing a target means installing the signed release and nothing else.
+  // Compiling BitFun on someone else's machine is not a command this client
+  // can issue, so the name must not survive anywhere in the routing surface.
+  it('exposes no way to build the CLI on a target', () => {
+    const sources = [
+      ...tables.map(table => table.source),
+      read('./dispatchApi.ts'),
+      read('./types.ts'),
+      read('../../../../../src/apps/server/src/routes/dispatch.rs'),
+    ];
+    for (const source of sources) {
+      expect(source).not.toContain('dispatch_install_cli_source_start');
+      expect(source).not.toContain('sourceBuild');
+    }
+  });
 });
 
 describe('dispatch wire contract single source', () => {

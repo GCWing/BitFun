@@ -10,8 +10,8 @@ use bitfun_core::external_sources::{
 use bitfun_core::service::dispatch::{
     answer_dispatch, append_dispatch, cancel_dispatch, cancel_dispatch_cli_install,
     get_dispatch_status, list_dispatch_jobs, list_dispatch_targets, poll_dispatch_cli_install,
-    probe_dispatch_target, start_dispatch_cli_install, start_dispatch_cli_source_build,
-    submit_dispatch, sync_dispatch_model_config, sync_dispatch_result, DispatchAnswerRequest,
+    probe_dispatch_target, start_dispatch_cli_install, submit_dispatch,
+    sync_dispatch_model_config, sync_dispatch_result, DispatchAnswerRequest,
     DispatchAppendRequest, DispatchConnectionRequest, DispatchInstallPollRequest,
     DispatchInstallStartRequest, DispatchJobRequest, DispatchListJobsRequest,
     DispatchListTargetsRequest, DispatchProbeTargetRequest, DispatchStatusRequest,
@@ -27,7 +27,6 @@ pub(crate) fn supports(method: &str) -> bool {
         "dispatch_list_targets"
             | "dispatch_probe_target"
             | "dispatch_install_cli_start"
-            | "dispatch_install_cli_source_start"
             | "dispatch_install_cli_poll"
             | "dispatch_install_cli_cancel"
             | "dispatch_sync_model_config"
@@ -75,14 +74,6 @@ pub(crate) async fn dispatch(
             let request = parse_request::<DispatchInstallStartRequest>(&params)?;
             encode(
                 start_dispatch_cli_install(&host.ssh_manager, request)
-                    .await
-                    .map_err(operation_error)?,
-            )
-        }
-        "dispatch_install_cli_source_start" => {
-            let request = parse_request::<DispatchConnectionRequest>(&params)?;
-            encode(
-                start_dispatch_cli_source_build(&host.ssh_manager, request)
                     .await
                     .map_err(operation_error)?,
             )
@@ -202,7 +193,6 @@ mod tests {
             "dispatch_list_targets",
             "dispatch_probe_target",
             "dispatch_install_cli_start",
-            "dispatch_install_cli_source_start",
             "dispatch_install_cli_poll",
             "dispatch_install_cli_cancel",
             "dispatch_sync_model_config",
@@ -227,7 +217,7 @@ mod tests {
     }
 
     #[test]
-    fn source_build_route_accepts_a_structured_connection_request() {
+    fn connection_scoped_routes_accept_a_structured_connection_request() {
         let request = parse_request::<DispatchConnectionRequest>(&serde_json::json!({
             "request": { "connectionId": "ssh-target" }
         }))

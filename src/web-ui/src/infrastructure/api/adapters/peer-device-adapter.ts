@@ -62,7 +62,6 @@ const LOCAL_ONLY_COMMANDS = new Set([
   'dispatch_list_targets',
   'dispatch_probe_target',
   'dispatch_install_cli_start',
-  'dispatch_install_cli_source_start',
   'dispatch_install_cli_poll',
   'dispatch_install_cli_cancel',
   'dispatch_sync_model_config',

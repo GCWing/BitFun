@@ -8,6 +8,12 @@
 //   support 12px      — descriptions under a title
 // Nothing uses 10px; at that size the descriptions were unreadable and every
 // level looked the same.
+//
+// One box level only. Sections are separated by a hairline rule instead of
+// being drawn as cards: the modal is already a surface, and nesting a card
+// inside it (and a second card inside that) made a three-field form read as a
+// stack of unrelated panels. The approval options stay bordered because they
+// are the one thing here that is clickable and selectable.
 .dispatch-install-dialog {
   display: flex;
   min-height: 0;
@@ -36,14 +42,13 @@
     font-size: var(--font-size-xs);
   }
 
-  // The one scrolling region. Keeps the footer reachable once the install card
-  // and the output console are both open, which used to push it off-screen.
+  // The one scrolling region. Keeps the footer reachable on short viewports,
+  // which the section stack used to push off-screen.
   &__body {
     display: flex;
     min-height: 0;
     flex: 1;
     flex-direction: column;
-    gap: $size-gap-3;
     padding: 0 $size-gap-4 $size-gap-4;
     overflow-y: auto;
 
@@ -52,39 +57,35 @@
     > * {
       flex-shrink: 0;
     }
+
+    > [role='alert'] {
+      margin-bottom: $size-gap-3;
+    }
   }
 
   &__section {
     display: flex;
     flex-direction: column;
-    border: 1px solid var(--border-subtle);
-    border-radius: $size-radius-base;
-    // Lets the header fill bleed to the card edge.
-    overflow: hidden;
-  }
-
-  &__section-header {
-    display: flex;
-    min-height: 38px;
-    align-items: center;
-    justify-content: space-between;
     gap: $size-gap-2;
-    padding: $size-gap-2 $size-gap-3;
-    border-bottom: 1px solid var(--border-subtle);
-    background: var(--element-bg-subtle);
+    padding: $size-gap-3 0;
+
+    &:first-child {
+      padding-top: 0;
+    }
+
+    &:last-child {
+      padding-bottom: 0;
+    }
+
+    + .dispatch-install-dialog__section {
+      border-top: 1px solid var(--border-subtle);
+    }
   }
 
   &__section-title {
     margin: 0;
     font-size: var(--font-size-sm);
     font-weight: 600;
-  }
-
-  &__section-body {
-    display: flex;
-    flex-direction: column;
-    gap: $size-gap-2;
-    padding: $size-gap-3;
   }
 
   &__hint {
@@ -105,11 +106,67 @@
     font-weight: 600;
   }
 
-  &__field-row {
+  // A read-only path, not a code sample: drop the global `code` pill so the
+  // section keeps exactly one box level (the revision input).
+  &__path {
+    padding: 0;
+    border: 0;
+    background: none;
+    overflow-wrap: anywhere;
+    color: var(--color-text-secondary);
+    font-family: var(--font-family-mono);
+    font-size: var(--font-size-xs);
+  }
+
+  &__base-ref {
+    cursor: text;
+
+    input {
+      box-sizing: border-box;
+      width: 100%;
+      min-height: 32px;
+      padding: 0 $size-gap-2;
+      border: 1px solid var(--border-subtle);
+      border-radius: $size-radius-base;
+      background: var(--color-bg-primary);
+      color: var(--color-text-primary);
+      font-family: var(--font-family-mono);
+      font-size: var(--font-size-xs);
+
+      &:focus-visible {
+        border-color: var(--color-accent-500);
+        outline: 2px solid color-mix(in srgb, var(--color-accent-500) 24%, transparent);
+        outline-offset: 1px;
+      }
+    }
+  }
+
+  // Checkbox with its explanation attached, rather than a label and a loose
+  // hint that could belong to anything below it.
+  &__toggle {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: start;
     gap: $size-gap-2;
-    align-items: center;
+    font-size: var(--font-size-xs);
+    line-height: 1.4;
+    cursor: pointer;
+
+    input {
+      margin: 1px 0 0;
+    }
+
+    > span {
+      display: flex;
+      min-width: 0;
+      flex-direction: column;
+      gap: 2px;
+      font-weight: 500;
+    }
+
+    small {
+      font-weight: 400;
+    }
   }
 
   // Selectable approval-policy cards.
@@ -190,64 +247,6 @@
     }
   }
 
-  // Project summary and the opt-in for carrying local Git-visible changes.
-  // This is a normal setup choice, so it uses a neutral surface rather than a
-  // warning treatment.
-  &__consent {
-    display: flex;
-    flex-direction: column;
-    gap: $size-gap-2;
-    padding: $size-gap-3;
-    border: 1px solid var(--border-subtle);
-    border-radius: $size-radius-base;
-    background: var(--element-bg-subtle);
-    font-size: var(--font-size-xs);
-
-    code {
-      overflow-wrap: anywhere;
-      color: var(--color-text-secondary);
-      font-family: var(--font-family-mono);
-    }
-
-    > span {
-      color: var(--color-text-secondary);
-      line-height: 1.45;
-    }
-
-    label {
-      display: flex;
-      align-items: flex-start;
-      gap: $size-gap-2;
-      font-weight: 500;
-      line-height: 1.4;
-      cursor: pointer;
-    }
-
-    .dispatch-install-dialog__base-ref {
-      flex-direction: column;
-      gap: $size-gap-1;
-      cursor: text;
-
-      input {
-        box-sizing: border-box;
-        width: 100%;
-        min-height: 32px;
-        padding: 0 $size-gap-2;
-        border: 1px solid var(--border-subtle);
-        border-radius: $size-radius-base;
-        background: var(--color-bg-primary);
-        color: var(--color-text-primary);
-        font-family: var(--font-family-mono);
-
-        &:focus-visible {
-          border-color: var(--color-accent-500);
-          outline: 2px solid color-mix(in srgb, var(--color-accent-500) 24%, transparent);
-          outline-offset: 1px;
-        }
-      }
-    }
-  }
-
   &__checks {
     display: grid;
     gap: 0;
@@ -304,40 +303,6 @@
     }
   }
 
-  // Neutral action panel. Deliberately not warning-coloured: this is something
-  // to do, not something to accept.
-  &__action-panel {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: $size-gap-2;
-
-    dl {
-      display: grid;
-      gap: $size-gap-1;
-      width: 100%;
-      margin: 0;
-      font-size: var(--font-size-xs);
-    }
-
-    dl > div {
-      display: grid;
-      grid-template-columns: 84px minmax(0, 1fr);
-      gap: $size-gap-2;
-    }
-
-    dt {
-      color: var(--color-text-muted);
-    }
-
-    dd {
-      min-width: 0;
-      margin: 0;
-      overflow-wrap: anywhere;
-      font-family: var(--font-family-mono);
-    }
-  }
-
   &__details {
     width: 100%;
     color: var(--color-text-secondary);
@@ -358,20 +323,30 @@
     &[open] summary {
       margin-bottom: $size-gap-2;
     }
-  }
 
-  &__output {
-    box-sizing: border-box;
-    max-height: 180px;
-    margin: 0;
-    padding: $size-gap-2;
-    overflow: auto;
-    border: 1px solid var(--border-subtle);
-    border-radius: $size-radius-sm;
-    background: var(--color-bg-secondary);
-    color: var(--color-text-secondary);
-    font: var(--font-size-xs)/1.5 var(--font-family-mono);
-    white-space: pre-wrap;
+    dl {
+      display: grid;
+      gap: $size-gap-1;
+      width: 100%;
+      margin: 0;
+    }
+
+    dl > div {
+      display: grid;
+      grid-template-columns: 84px minmax(0, 1fr);
+      gap: $size-gap-2;
+    }
+
+    dt {
+      color: var(--color-text-muted);
+    }
+
+    dd {
+      min-width: 0;
+      margin: 0;
+      overflow-wrap: anywhere;
+      font-family: var(--font-family-mono);
+    }
   }
 
   // Pinned so the primary action never scrolls away.

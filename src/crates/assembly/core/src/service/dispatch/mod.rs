@@ -25,7 +25,6 @@ pub use controller::{
     answer as answer_dispatch, append as append_dispatch, cancel as cancel_dispatch,
     continue_job as continue_dispatch_job, install_cli_cancel as cancel_dispatch_cli_install,
     install_cli_poll as poll_dispatch_cli_install,
-    install_cli_source_start as start_dispatch_cli_source_build,
     install_cli_start as start_dispatch_cli_install, list_jobs as list_dispatch_jobs,
     list_targets as list_dispatch_targets, probe_target as probe_dispatch_target,
     query_job as query_dispatch_job, status as get_dispatch_status, submit as submit_dispatch,

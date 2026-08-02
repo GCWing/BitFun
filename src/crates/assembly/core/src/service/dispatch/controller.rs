@@ -274,14 +274,6 @@ pub async fn install_cli_start(
     dispatch_ssh::install_cli_start(manager, request.connection_id.trim(), &request.release).await
 }
 
-/// Build and install the CLI from source, for targets no published binary fits.
-pub async fn install_cli_source_start(
-    manager: &SSHConnectionManager,
-    request: DispatchConnectionRequest,
-) -> anyhow::Result<DispatchInstallStart> {
-    dispatch_ssh::install_cli_source_start(manager, request.connection_id.trim()).await
-}
-
 pub async fn install_cli_poll(
     manager: &SSHConnectionManager,
     request: DispatchInstallPollRequest,
@@ -1500,7 +1492,6 @@ mod tests {
             release: None,
             protocol: Some(json!({ "cliVersion": "1.2.3" })),
             prebuilt_incompatible: None,
-            source_build: None,
         };
 
         recover_interrupted_cli_install_audit(&store, "job-install-recovery", &probe)
