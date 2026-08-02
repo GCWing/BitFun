@@ -77,6 +77,7 @@ pub use bitfun_runtime_ports::{
     AgentThreadGoalManagementPort, AgentThreadGoalUpdateStatusRequest,
     AgentTransientSessionDiscardRequest, AgentTurnCancellationPort, AgentTurnCancellationRequest,
     AgentTurnCancellationResult, AgentTurnSettlementPort, AgentTurnSettlementRequest,
+    AgentUserShellCommandPort, AgentUserShellCommandRequest, AgentUserShellCommandResult,
     AgentWorkspaceReference, AgentWorkspaceReferenceKind, AgentWorkspaceReferencePort,
     AgentWorkspaceReferenceSearchEntry, AgentWorkspaceReferenceSearchRequest,
     AgentWorkspaceReferenceSearchResult, AgentWorkspaceReferenceSourceRange, ClockPort,
@@ -196,6 +197,14 @@ impl AgentRuntimeBuilder {
         port: Arc<dyn AgentLocalCommandTurnPort>,
     ) -> Self {
         self.inner = self.inner.with_local_command_turn_port(port);
+        self
+    }
+
+    pub fn with_user_shell_command_port(
+        mut self,
+        port: Arc<dyn AgentUserShellCommandPort>,
+    ) -> Self {
+        self.inner = self.inner.with_user_shell_command_port(port);
         self
     }
 
@@ -478,6 +487,13 @@ impl AgentRuntime {
         self.inner
             .record_completed_local_command_turn(request)
             .await
+    }
+
+    pub async fn run_user_shell_command(
+        &self,
+        request: AgentUserShellCommandRequest,
+    ) -> Result<AgentUserShellCommandResult, RuntimeError> {
+        self.inner.run_user_shell_command(request).await
     }
 
     pub async fn update_session_model(

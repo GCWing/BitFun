@@ -463,6 +463,11 @@ async fn run_initialized_connection(
                         *active_turn_id = Some(turn_id.clone());
                         Some(turn_id)
                     }
+                    RuntimeIpcOperation::RunUserShellCommand { request } => {
+                        let turn_id = request.turn_id.clone();
+                        *active_turn_id = Some(turn_id.clone());
+                        Some(turn_id)
+                    }
                     RuntimeIpcOperation::CompactSession { request } => {
                         let turn_id = request.turn_id.clone();
                         *active_turn_id = Some(turn_id.clone());

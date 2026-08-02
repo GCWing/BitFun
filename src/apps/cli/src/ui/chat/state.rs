@@ -40,6 +40,14 @@ use crate::chat_state::{ChatMessage, ChatState, FlowItem, MessageRole};
 struct SubmittedDraftRecord {
     sequence: u64,
     draft: ComposerDraft,
+    mode: ComposerMode,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(crate) enum ComposerMode {
+    #[default]
+    Chat,
+    Shell,
 }
 
 #[derive(Debug, Default)]
@@ -197,6 +205,9 @@ pub(crate) struct ChatView {
     status: Option<String>,
     /// Input history (for up/down arrows)
     input_history: VecDeque<ComposerDraft>,
+    /// Shell command history is intentionally isolated from chat prompts.
+    shell_input_history: VecDeque<ComposerDraft>,
+    composer_mode: ComposerMode,
     /// Drafts accepted by the Runtime, isolated by Session for local undo/redo identity.
     submitted_drafts: SubmittedDraftHistory,
     workspace_references: Vec<bitfun_agent_runtime::sdk::AgentWorkspaceReference>,
@@ -332,6 +343,8 @@ impl ChatView {
             auto_scroll: true,
             status: None,
             input_history: VecDeque::with_capacity(50),
+            shell_input_history: VecDeque::with_capacity(50),
+            composer_mode: ComposerMode::Chat,
             submitted_drafts: SubmittedDraftHistory::default(),
             workspace_references: Vec::new(),
             image_attachments: Vec::new(),
@@ -394,8 +407,7 @@ impl ChatView {
             .set_mode_switch_allowed(!state.is_processing);
         self.command_palette.set_action_state(state);
         if self.command_menu.set_action_state(state) {
-            self.command_menu
-                .update(&self.text_input.input, self.text_input.cursor);
+            self.refresh_command_menu();
         }
     }
 

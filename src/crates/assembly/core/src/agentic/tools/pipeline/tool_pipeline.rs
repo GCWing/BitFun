@@ -1754,7 +1754,30 @@ impl ToolPipeline {
             BitFunError::tool(error_msg)
         })?;
 
-        let cancellation_token = CancellationToken::new();
+        let cancellation_token = task
+            .options
+            .parent_cancellation_token
+            .as_ref()
+            .map(CancellationToken::child_token)
+            .unwrap_or_default();
+        if cancellation_token.is_cancelled() {
+            self.state_manager
+                .update_state(
+                    &tool_id,
+                    ToolExecutionState::Cancelled {
+                        reason: "Tool was cancelled before validation".to_string(),
+                        duration_ms: Some(elapsed_ms_u64(start_time)),
+                        queue_wait_ms: Some(queue_wait_ms),
+                        preflight_ms: Some(elapsed_ms_u64(start_time)),
+                        confirmation_wait_ms: Some(0),
+                        execution_ms: None,
+                    },
+                )
+                .await;
+            return Err(BitFunError::Cancelled(
+                "Tool was cancelled before validation".to_string(),
+            ));
+        }
         let tool_context = self.build_tool_use_context(&task, cancellation_token.clone());
         // Keep the registered mux in the execution path. It rechecks the
         // persisted conflict choice immediately before dispatch and applies
@@ -1794,6 +1817,26 @@ impl ToolPipeline {
         // Register cancellation only after deterministic validation and registry lookup succeed.
         self.cancellation_tokens
             .insert(tool_id.clone(), cancellation_token.clone());
+
+        if cancellation_token.is_cancelled() {
+            self.state_manager
+                .update_state(
+                    &tool_id,
+                    ToolExecutionState::Cancelled {
+                        reason: "Tool was cancelled during validation".to_string(),
+                        duration_ms: Some(elapsed_ms_u64(start_time)),
+                        queue_wait_ms: Some(queue_wait_ms),
+                        preflight_ms: Some(elapsed_ms_u64(start_time)),
+                        confirmation_wait_ms: Some(0),
+                        execution_ms: None,
+                    },
+                )
+                .await;
+            self.cancellation_tokens.remove(&tool_id);
+            return Err(BitFunError::Cancelled(
+                "Tool was cancelled during validation".to_string(),
+            ));
+        }
 
         let has_prepared_plan = self.permission_plans.lock().await.contains_key(&tool_id);
         let permission_authorization = if has_prepared_plan {

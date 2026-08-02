@@ -92,6 +92,8 @@ pub(crate) struct ExternalDraftReconcileOutcome {
 pub(crate) enum ComposerImageInsertError {
     #[error("A message can contain at most {MAX_COMPOSER_IMAGES} images")]
     TooManyImages,
+    #[error("Images are unavailable in Shell mode")]
+    ShellModeUnsupported,
 }
 
 impl ComposerDraft {

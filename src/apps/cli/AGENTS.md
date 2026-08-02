@@ -1,118 +1,119 @@
 # BitFun CLI Agent Guide
 
-Scope: this guide applies to `src/apps/cli`.
+Scope: `src/apps/cli`.
 
-Read [`docs/architecture/cli-product-line-design.md`](../../../docs/architecture/cli-product-line-design.md),
-[`docs/architecture/product-architecture.md`](../../../docs/architecture/product-architecture.md), and
-[`docs/architecture/product-customization-blueprint.md`](../../../docs/architecture/product-customization-blueprint.md)
-before product-definition, TUI layout, branding, packaging, runtime, or plugin architecture changes.
+Read the repository `AGENTS.md` first. For architecture-sensitive work, also
+read:
+
+- [`cli-product-line-design.md`](../../../docs/architecture/cli-product-line-design.md)
+- [`product-architecture.md`](../../../docs/architecture/product-architecture.md)
+- [`agent-runtime-deployment-design.md`](../../../docs/architecture/agent-runtime-deployment-design.md)
+- [`product-customization-blueprint.md`](../../../docs/architecture/product-customization-blueprint.md) when changing product assembly, branding, or packaging
 
 ## Ownership
 
-- This app owns Clap commands, TUI state and rendering, terminal input/lifecycle,
-  CLI-local settings, structured output projection, and user-facing CLI diagnostics.
-- Peer Device Mode **host** support lives in `src/peer_host/`: after `/login`
-  (same Auth Server / Username / Password flow and `~/.bitfun` session/hint
-  files as Desktop), device routing stays up so Desktop controllers can
-  HostInvoke this process. CLI is not a Peer Mode controller. Same-machine
-  Desktop+CLI share one `device_id`; last AuthConnect wins.
-- Shared session, turn, task, tool, permission, context, checkpoint, Subagent,
-  Harness, MCP, plugin, and capability facts belong to their runtime owners.
-- Existing `bitfun-core/product-full` compatibility paths may remain during a
-  reviewed migration. Do not add new concrete managers, global mutable services,
-  or CLI-only copies of shared product behavior.
+CLI owns only surface concerns:
 
-## Product and extension boundaries
+- Clap entrypoints and CLI-local configuration
+- terminal acquisition/restoration and input normalization
+- TUI state, rendering, popups, local draft history, and local effects such as
+  clipboard or external-editor integration
+- projection of Runtime events into text, JSON, JSONL, and user diagnostics
+- Shared Runtime client/server adaptation and Peer Device host presentation
 
-- Assemble CLI behavior through `DeliveryProfile::Cli`, capability plans, typed
-  services, and capability availability. Hiding a command is not a backend
-  capability restriction.
-- The target CLI consumes product identity, theme resources, data namespaces,
-  bundled product extensions, update channels, and TUI layout IDs from the
-  validated product assembly result. Resolved Product Manifest and TUI Blueprint
-  are retired design terms, not migration inputs. Do not read authoring product
-  definitions at runtime, add hard-coded branding/source
-  rewrites, or treat user plugins as product assembly inputs. Runtime capability
-  hiding does not prove code was physically removed.
-- Product assembly may expose only the immutable protection IDs allowed by the
-  customization design. CLI must not turn them into user/source plugin policy or
-  store plugin activation, update, permission, or health state in the assembly result.
-- OpenCode Prompt Commands from standard user and project configuration are
-  read-only live sources. CLI may send only the fully expanded prompt through the
-  existing agent owner; it must re-confirm changed conflict participants. Static
-  workspace file references and reviewed shell directives are expanded by their
-  shared owners before that handoff. CLI must not execute directives that the
-  prompt-command contract marks unsupported or add another approval store.
-- OpenCode standalone JavaScript tools may execute only through the shared
-  external-source approval, conflict, Tool Runtime, and script-worker owners.
-  CLI/TUI consumes typed snapshots and actions; it must not import modules,
-  spawn tool workers, bypass a pending decision, or implement a second approval
-  store. TypeScript, dependency loading, package plugins, and hooks remain
-  non-executable until their own reviewed capability slice lands.
-- OpenCode external subagents may execute only through the shared source
-  decision and existing Subagent owner. TUI consumes typed summaries and
-  actions checked against the current Subagent and preference revisions; it must not parse agent files, inject source
-  prompts directly, invent model fallbacks, or offer follow-up for the current
-  fresh single-run compatibility slice.
-- The managed-package OpenCode adapter remains a static-preview path. Other
-  OpenCode plugin capabilities, Codex, and Claude remain import/reference sources
-  unless their own reviewed adapter design explicitly changes. Never copy
-  credentials or silently ignore unsupported fields.
-- Keep native instruction references, explicit import records, executable plugin
-  sources, and credentials as separate asset classes. Importing non-executable
-  config must not establish executable-source policy. CLI consumes the external
-  source status and typed actions; it must not add another activation layer on top
-  of the source/plugin decision or claim that post-import confirmation can undo
-  candidate-module side effects.
-- CLI plugin screens consume capability services, read-only status, and typed
-  diagnostics. They must not depend on raw PluginRuntimeClient contracts or raw ecosystem
-  payloads.
-- Non-interactive commands return `action-required` only when the current operation
-  actually depends on a pending external asset. Unrelated confirmations remain in
-  structured status or `stderr` summaries and must not block the command.
-- External ACP agents, external config import, and managed plugins are separate
-  capabilities with separate trust and lifecycle state.
+Session, turn, model round, tool execution, permissions, cancellation,
+persistence, context, workspace binding, MCP, Subagent, and other product facts
+belong to their shared owners. Do not add CLI-only managers or reproduce shared
+behavior behind a TUI branch.
 
-## TUI and automation
+Existing Core compatibility forwarding may remain until a reviewed owner
+migration has behavior-equivalence tests. A typed port is not evidence that the
+runtime owner moved.
 
-- Keep terminal session restore, event normalization, state transitions, effects,
-  command dispatch, and rendering independently testable. Reducers and views do
-  not perform filesystem, network, config, or Agent operations directly.
-- Slash commands, palette actions, and root CLI commands should map to the same
-  stable capability requests instead of reimplementing behavior per entrypoint.
-- `json` is one result document; `stream-json` is one complete event per line.
-  Keep protocol stdout free of logs and preserve schema/exit-code compatibility.
-- Keep `src/modes/exec.rs` as the stable module facade. The current private split
-  keeps lifecycle/event settlement in `exec/lifecycle.rs` and Patch capture/write
-  behavior in `exec/patch.rs`; further private splits are allowed when they keep
-  one executor, one output schema, and one lifecycle owner.
-- Approval policy is invocation-scoped: interactive TUI defaults to ask;
-  non-interactive execution fails when confirmation is required unless an
-  explicit argument or managed policy approves it. Do not mutate a global
-  confirmation flag to implement an entrypoint default.
-- Shell shortcuts, file references, background work, compact, checkpoint, and
-  rewind must use shared Tool/Agent Runtime, permission, cancellation, artifact,
-  and audit paths.
-- Always restore raw mode, alternate screen, mouse capture, and paste mode after
-  normal exit, cancellation, initialization failure, or panic.
+## Runtime paths
+
+Normal interactive submissions follow:
+
+```text
+ChatView -> CliAgentRuntimeClient -> AgentRuntime SDK
+         -> Core owner -> Session / Agent execution / ToolPipeline
+```
+
+Shared TUI inserts versioned local IPC between `CliAgentRuntimeClient` and the
+same Agent Runtime SDK. It must not create a second product implementation.
+Side-effecting operations need stable identities, controller/idle rules,
+bounded frames, and outcome-unknown handling before a connection can retry.
+
+Explicit Shell input follows:
+
+```text
+SHELL composer -> AgentUserShellCommandPort -> Core coordinator
+               -> ToolPipeline(ExecCommand) -> TerminalPort / RemoteExecPort
+               -> standard UserDialog + ModelRound persistence and events
+```
+
+CLI must never spawn the submitted command directly or expose a generic tool or
+process API. Explicit user input may auto-approve an interactive `ask`, but
+static `deny` rules, workspace routing, cancellation, audit, and tool
+restrictions remain enforced.
+
+## TUI rules
+
+- Derive slash commands, palette actions, help, availability, and key bindings
+  from the action registry. Do not add a second command table.
+- Match established competitor entry flows when equivalent behavior exists.
+  Prefer OpenCode names and interactions; do not invent `/shell` or aliases for
+  the `!` Shell entry.
+- Keep terminal input, state transitions, effects, and rendering independently
+  testable. Views and reducers do not perform filesystem, network, config, or
+  Agent operations.
+- Shell mode is CLI presentation state only. It accepts an empty-composer `!`,
+  keeps chat/shell histories separate, treats `/` as command text, and rejects
+  images and structured `@` references before Runtime submission.
+- Direct paste, `Ctrl+V`, and bracketed paste share `ComposerDraft`. Shared TUI
+  rejects unsupported image payloads before IPC.
+- Local effects such as `/editor`, copy, and export stay local. Product work
+  such as shell execution, session mutation, and permissions goes through typed
+  Runtime owners.
+- Always restore raw mode, alternate screen, mouse capture, paste mode, and the
+  cursor on success, error, cancellation, initialization failure, or panic.
+- Protocol stdout contains only the selected result format. Logs are English,
+  contain no emoji, and use stderr or log files.
+
+## Product and external-source boundaries
+
+- Assemble CLI through `DeliveryProfile::Cli` and validated product Runtime
+  parts. Hiding a command is not a backend capability restriction.
+- CLI consumes typed external-source summaries and actions. It does not parse
+  source files, import executable modules, start plugin workers, duplicate
+  approval state, or treat static discovery as runtime availability.
+- ACP agents, configuration import, executable plugins, Hooks, and Peer Device
+  hosting have separate trust and lifecycle state. Do not infer one from
+  another.
+- Remote-unsupported local effects must fail visibly; never fall back to the
+  controller machine.
+
+Detailed compatibility rules belong in the dedicated architecture documents,
+not in this file.
 
 ## Verification
 
-Run the smallest checks matching the change:
+Run the smallest checks matching the changed path:
 
 ```bash
 cargo check -p bitfun-cli
 cargo test -p bitfun-cli
 ```
 
-Also run focused protocol/PTY tests when structured output, terminal lifecycle,
-input, session control, config import, plugin management, or product assembly
-behavior changes. Theme/color changes require `pnpm run theme:color-audit:all`.
-Packaging or branding changes require the CLI package smoke path and a clean-tree
-two-product build assertion.
+Also run focused owner tests when a surface crosses a shared boundary:
 
-## Install for end users
+- Agent Runtime port/SDK changes: `cargo test -p bitfun-agent-runtime`
+- Shared IPC/protocol changes: `cargo test -p bitfun-agent-runtime-ipc`
+- Core turn/tool/persistence behavior: the focused `bitfun-core` tests, then
+  the repository shared-Rust verification row
+- terminal lifecycle/input changes: the nearest PTY/ConPTY or input test
+- product/packaging changes: product assembly and archive smoke paths
 
-Use [`install.ps1`](install.ps1), [`install.sh`](install.sh), and [`README.md`](README.md) for
-platform-native per-user installation. Document `bitfun` as primary; ship `bitfun-cli` only as the
-deprecated compatibility entrypoint, and use `bitfun` in all new examples and integrations.
+Use [`README.md`](README.md) for user-facing behavior and installation. Keep
+developer internals here or in architecture docs instead of expanding the user
+guide.

@@ -4956,6 +4956,8 @@ async fn release_baseline_claim(release: BaselineClaimRelease) -> Result<(), Dis
     runtimeIpcOperationPattern.test('    WorkspaceDiff {') ||
     runtimeIpcOperationPattern.test('    WorkspaceDiffSnapshot,') ||
     runtimeIpcOperationPattern.test('    SubmitTurn {') ||
+    runtimeIpcOperationPattern.test('    RunUserShellCommand {') ||
+    runtimeIpcOperationPattern.test('    AgentUserShellCommandRequest {') ||
     runtimeIpcOperationPattern.test('    SessionForked {') ||
     runtimeIpcOperationPattern.test('    SessionReverted {')
   ) {

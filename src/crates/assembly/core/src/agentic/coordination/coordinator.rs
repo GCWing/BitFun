@@ -35,6 +35,7 @@ use crate::agentic::goal_mode::{
 };
 use crate::agentic::image_analysis::ImageContextData;
 use crate::agentic::memories::{start_memory_startup_task, MemoryStartupRequest};
+use crate::agentic::permission_policy::resolve_effective_permission_policy;
 use crate::agentic::round_preempt::DialogRoundInjectionSource;
 use crate::agentic::session::revert::{
     resolve_redo, resolve_undo, SessionRevertPhase, SessionRevertTransition,
@@ -45,7 +46,9 @@ use crate::agentic::side_question::build_btw_user_input;
 use crate::agentic::skill_agent_snapshot::{
     diff_skill_agent_snapshot, resolve_skill_agent_snapshot, TurnSkillAgentSnapshot,
 };
-use crate::agentic::tools::pipeline::{SubagentParentInfo, ToolPipeline};
+use crate::agentic::tools::pipeline::{
+    PrimaryModelFacts, SubagentParentInfo, ToolExecutionContext, ToolExecutionOptions, ToolPipeline,
+};
 use crate::agentic::tools::{
     miniapp_agent_run_tool_restrictions,
     tool_restrictions_for_delegation_policy as runtime_tool_restrictions_for_delegation_policy,
@@ -59,6 +62,9 @@ use crate::service::bootstrap::{
     ensure_workspace_persona_files_for_prompt, is_workspace_bootstrap_pending,
 };
 use crate::service::config::global::GlobalConfigManager;
+use crate::service::config::project_permission_store::{
+    load_project_permission_config_local, load_project_permission_config_remote,
+};
 use crate::service::config::types::{model_runtime_binding_fingerprint, AIConfig};
 use crate::service::config::{
     get_global_config_service, AgentModelDefaultsConfig, SubagentModelSelection,
@@ -104,7 +110,7 @@ use bitfun_services_core::workspace_text::{
 };
 use dashmap::DashMap;
 use log::{debug, error, info, warn};
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Arc;
@@ -124,6 +130,8 @@ const MAX_SESSION_REFERENCES_PER_TURN: usize = 5;
 const SESSION_REFERENCE_ARTIFACT_STEM_LENGTH: usize = 8;
 const SESSION_REFERENCE_ARTIFACT_STEM_EXTENSION_LENGTH: usize = 4;
 const SESSION_REFERENCE_NAME_CHAR_LIMIT: usize = 96;
+const USER_SHELL_COMMAND_MAX_BYTES: usize = 64 * 1024;
+const USER_SHELL_TOOL_NAME: &str = "ExecCommand";
 
 fn comparable_workspace_path(path: &str) -> String {
     let path = path.trim();
@@ -11269,6 +11277,441 @@ impl bitfun_runtime_ports::AgentLocalCommandTurnPort for ConversationCoordinator
     }
 }
 
+fn validate_user_shell_command_request(
+    request: &bitfun_runtime_ports::AgentUserShellCommandRequest,
+) -> BitFunResult<()> {
+    bitfun_core_types::validate_session_id(&request.session_id).map_err(BitFunError::Validation)?;
+    bitfun_core_types::validate_session_id(&request.turn_id)
+        .map_err(|message| BitFunError::Validation(format!("Invalid turn_id: {message}")))?;
+    if request.command.trim().is_empty() {
+        return Err(BitFunError::Validation(
+            "Shell command must not be empty".to_string(),
+        ));
+    }
+    if request.command.contains('\0') {
+        return Err(BitFunError::Validation(
+            "Shell command must not contain NUL characters".to_string(),
+        ));
+    }
+    if request.command.len() > USER_SHELL_COMMAND_MAX_BYTES {
+        return Err(BitFunError::Validation(format!(
+            "Shell command exceeds the {USER_SHELL_COMMAND_MAX_BYTES}-byte limit"
+        )));
+    }
+    Ok(())
+}
+
+fn user_shell_tool_result_succeeded(
+    result: &crate::agentic::tools::pipeline::ToolExecutionResult,
+) -> bool {
+    if result.result.is_error {
+        return false;
+    }
+
+    if matches!(
+        result
+            .result
+            .result
+            .get("category")
+            .and_then(serde_json::Value::as_str),
+        Some("permission_denied" | "user_rejected" | "cancelled")
+    ) {
+        return false;
+    }
+
+    result
+        .result
+        .result
+        .get("exit_code")
+        .and_then(serde_json::Value::as_i64)
+        .is_none_or(|exit_code| exit_code == 0)
+}
+
+impl ConversationCoordinator {
+    async fn user_shell_tool_options(
+        agent_type: &str,
+        workspace: &Option<WorkspaceBinding>,
+        workspace_services: &Option<WorkspaceServices>,
+    ) -> BitFunResult<ToolExecutionOptions> {
+        let global_config: crate::service::config::types::GlobalConfig =
+            match GlobalConfigManager::get_service().await {
+                Ok(service) => service.get_config(None).await.unwrap_or_default(),
+                Err(_) => Default::default(),
+            };
+        let project_rules = match workspace.as_ref() {
+            Some(workspace) if workspace.is_remote() => {
+                let services = workspace_services.as_ref().ok_or_else(|| {
+                    BitFunError::service(
+                        "Remote workspace services are unavailable for a shell command".to_string(),
+                    )
+                })?;
+                load_project_permission_config_remote(
+                    services.fs.as_ref(),
+                    &workspace.root_path_string(),
+                )
+                .await?
+                .rules
+            }
+            Some(workspace) => {
+                load_project_permission_config_local(workspace.root_path())
+                    .await?
+                    .rules
+            }
+            None => Vec::new(),
+        };
+        let profile_id = crate::agentic::agents::resolve_mode_config_profile_id(agent_type);
+        let agent_profile = global_config.ai.agent_profiles.get(profile_id.as_ref());
+        let permission_policy = resolve_effective_permission_policy(
+            &global_config,
+            &project_rules,
+            agent_profile,
+            None,
+            None,
+            &[],
+        );
+
+        Ok(ToolExecutionOptions {
+            allow_parallel: false,
+            timeout_secs: global_config.ai.tool_execution_timeout_secs,
+            permission_policy,
+            // This is an explicit user-authored command. Automatically answer
+            // only interactive `ask`; ToolPipeline still enforces every deny.
+            auto_approve_ask: true,
+            ..ToolExecutionOptions::default()
+        })
+    }
+
+    async fn execute_user_shell_pipeline(
+        tool_pipeline: &ToolPipeline,
+        tool_call: ToolCall,
+        context: ToolExecutionContext,
+        options: ToolExecutionOptions,
+    ) -> BitFunResult<Vec<crate::agentic::tools::pipeline::ToolExecutionResult>> {
+        tool_pipeline
+            .execute_tools(vec![tool_call], context, options)
+            .await
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    async fn execute_user_shell_command_task(
+        session_manager: Arc<SessionManager>,
+        execution_engine: Arc<ExecutionEngine>,
+        tool_pipeline: Arc<ToolPipeline>,
+        event_queue: Arc<EventQueue>,
+        session: Session,
+        workspace: Option<WorkspaceBinding>,
+        workspace_services: Option<WorkspaceServices>,
+        terminal_port: Option<Arc<dyn TerminalPort>>,
+        remote_exec_port: Option<Arc<dyn RemoteExecPort>>,
+        options: ToolExecutionOptions,
+        session_id: String,
+        turn_id: String,
+        command: String,
+        cancellation_token: CancellationToken,
+    ) {
+        let started_at = Instant::now();
+        let round_id = format!("{turn_id}-shell-round");
+        let tool_id = format!("{turn_id}-shell-command");
+        let tool_call = ToolCall {
+            tool_id: tool_id.clone(),
+            tool_name: USER_SHELL_TOOL_NAME.to_string(),
+            arguments: serde_json::json!({
+                "cmd": command,
+                "tty": false,
+            }),
+            ..ToolCall::default()
+        };
+        let assistant_message =
+            Message::assistant_with_tools(String::new(), vec![tool_call.clone()])
+                .with_turn_id(turn_id.clone())
+                .with_round_id(round_id.clone());
+        let context = ToolExecutionContext {
+            session_id: session_id.clone(),
+            dialog_turn_id: turn_id.clone(),
+            round_id,
+            attempt_id: None,
+            attempt_index: None,
+            agent_type: session.agent_type,
+            workspace,
+            primary_model_facts: PrimaryModelFacts::default(),
+            context_vars: HashMap::new(),
+            subagent_parent_info: None,
+            permission_delegation: None,
+            delegation_policy: DelegationPolicy::top_level(),
+            deferred_tools: Vec::new(),
+            loaded_deferred_tool_specs: Vec::new(),
+            allowed_tools: vec![USER_SHELL_TOOL_NAME.to_string()],
+            runtime_tool_restrictions: ToolRuntimeRestrictions {
+                allowed_tool_names: BTreeSet::from([USER_SHELL_TOOL_NAME.to_string()]),
+                ..ToolRuntimeRestrictions::default()
+            },
+            steering_interrupt: None,
+            workspace_services,
+            terminal_port,
+            remote_exec_port,
+        };
+
+        let results = match Self::execute_user_shell_pipeline(
+            tool_pipeline.as_ref(),
+            tool_call,
+            context,
+            options,
+        )
+        .await
+        {
+            Ok(results) => results,
+            Err(_) if cancellation_token.is_cancelled() => {
+                Self::persist_cancelled_dialog_turn(
+                    event_queue.as_ref(),
+                    session_manager.as_ref(),
+                    None,
+                    &session_id,
+                    &turn_id,
+                    true,
+                )
+                .await;
+                execution_engine.cleanup_cancel_token(&turn_id).await;
+                return;
+            }
+            Err(error) => {
+                Self::persist_failed_dialog_turn(
+                    event_queue.as_ref(),
+                    session_manager.as_ref(),
+                    None,
+                    &session_id,
+                    &turn_id,
+                    &error,
+                    true,
+                )
+                .await;
+                execution_engine.cleanup_cancel_token(&turn_id).await;
+                return;
+            }
+        };
+
+        let mut new_messages = Vec::with_capacity(results.len() + 1);
+        new_messages.push(assistant_message);
+        new_messages.extend(results.iter().map(|result| {
+            Message::tool_result(result.result.clone())
+                .with_turn_id(turn_id.clone())
+                .with_round_id(format!("{turn_id}-shell-round"))
+        }));
+        for message in &new_messages {
+            if let Err(error) = session_manager
+                .add_message(&session_id, message.clone())
+                .await
+            {
+                Self::persist_failed_dialog_turn(
+                    event_queue.as_ref(),
+                    session_manager.as_ref(),
+                    None,
+                    &session_id,
+                    &turn_id,
+                    &error,
+                    true,
+                )
+                .await;
+                execution_engine.cleanup_cancel_token(&turn_id).await;
+                return;
+            }
+        }
+
+        let duration_ms = started_at.elapsed().as_millis().min(u128::from(u64::MAX)) as u64;
+        if let Err(error) = session_manager
+            .complete_dialog_turn(
+                &session_id,
+                &turn_id,
+                String::new(),
+                &new_messages,
+                TurnStats {
+                    total_rounds: 1,
+                    total_tools: results.len(),
+                    total_tokens: 0,
+                    duration_ms,
+                },
+            )
+            .await
+        {
+            Self::persist_failed_dialog_turn(
+                event_queue.as_ref(),
+                session_manager.as_ref(),
+                None,
+                &session_id,
+                &turn_id,
+                &error,
+                true,
+            )
+            .await;
+            execution_engine.cleanup_cancel_token(&turn_id).await;
+            return;
+        }
+
+        let cancelled = cancellation_token.is_cancelled()
+            || results.iter().any(|result| {
+                result
+                    .result
+                    .result
+                    .get("category")
+                    .and_then(serde_json::Value::as_str)
+                    == Some("cancelled")
+            });
+        if cancelled {
+            Self::persist_cancelled_dialog_turn(
+                event_queue.as_ref(),
+                session_manager.as_ref(),
+                None,
+                &session_id,
+                &turn_id,
+                true,
+            )
+            .await;
+        } else {
+            let success = results.iter().all(user_shell_tool_result_succeeded);
+            let _ = session_manager
+                .update_session_state_for_turn_if_processing(
+                    &session_id,
+                    &turn_id,
+                    SessionState::Idle,
+                )
+                .await;
+            let _ = event_queue
+                .enqueue(
+                    AgenticEvent::DialogTurnCompleted {
+                        session_id: session_id.clone(),
+                        turn_id: turn_id.clone(),
+                        total_rounds: 1,
+                        total_tools: results.len(),
+                        duration_ms,
+                        partial_recovery_reason: None,
+                        success: Some(success),
+                        finish_reason: Some(if success {
+                            "complete".to_string()
+                        } else {
+                            "tool_error".to_string()
+                        }),
+                        has_final_response: Some(false),
+                    },
+                    Some(EventPriority::Normal),
+                )
+                .await;
+        }
+        execution_engine.cleanup_cancel_token(&turn_id).await;
+    }
+}
+
+#[async_trait::async_trait]
+impl bitfun_runtime_ports::AgentUserShellCommandPort for ConversationCoordinator {
+    async fn run_user_shell_command(
+        &self,
+        request: bitfun_runtime_ports::AgentUserShellCommandRequest,
+    ) -> bitfun_runtime_ports::PortResult<bitfun_runtime_ports::AgentUserShellCommandResult> {
+        validate_user_shell_command_request(&request)
+            .map_err(runtime_port_error_preserving_message)?;
+        self.ensure_session_runtime_ownership(&request.session_id, None)
+            .map_err(runtime_port_error_preserving_message)?;
+        let mutation_guard = self
+            .session_manager
+            .acquire_session_mutation(&request.session_id)
+            .await
+            .map_err(runtime_port_error_preserving_message)?;
+        let session = self
+            .session_manager
+            .get_session(&request.session_id)
+            .ok_or_else(|| {
+                runtime_port_error_preserving_message(BitFunError::NotFound(format!(
+                    "Session not found: {}",
+                    request.session_id
+                )))
+            })?;
+        let workspace = Self::build_workspace_binding(&session.config).await;
+        let workspace_services = Self::build_workspace_services(&workspace).await;
+        let terminal_port = self.terminal_port();
+        let remote_exec_port = self.remote_exec_port();
+        let mut options =
+            Self::user_shell_tool_options(&session.agent_type, &workspace, &workspace_services)
+                .await
+                .map_err(runtime_port_error_preserving_message)?;
+        self.commit_session_revert_before_persisted_turn_locked(
+            &request.session_id,
+            "User shell Turn",
+        )
+        .await
+        .map_err(runtime_port_error_preserving_message)?;
+        let turn_index = self.session_manager.get_turn_count(&request.session_id);
+        let turn_id = self
+            .session_manager
+            .start_dialog_turn_locked(
+                &request.session_id,
+                session.agent_type.clone(),
+                format!("!{}", request.command),
+                Some(request.turn_id.clone()),
+                None,
+            )
+            .await
+            .map_err(runtime_port_error_preserving_message)?;
+        let execution_lease = self.register_session_execution(&request.session_id);
+        let settlement = self
+            .turn_settlements
+            .register_accepted(request.session_id.clone(), turn_id.clone());
+        let cancellation_token = CancellationToken::new();
+        options.parent_cancellation_token = Some(cancellation_token.clone());
+        self.execution_engine
+            .register_cancel_token(&turn_id, cancellation_token.clone());
+        drop(mutation_guard);
+
+        let started_event = AgenticEvent::DialogTurnStarted {
+            session_id: request.session_id.clone(),
+            turn_id: turn_id.clone(),
+            turn_index,
+            user_input: format!("!{}", request.command),
+            original_user_input: None,
+            user_message_metadata: None,
+        };
+
+        let session_manager = Arc::clone(&self.session_manager);
+        let execution_engine = Arc::clone(&self.execution_engine);
+        let tool_pipeline = Arc::clone(&self.tool_pipeline);
+        let event_queue = Arc::clone(&self.event_queue);
+        let session_id_for_task = request.session_id.clone();
+        let turn_id_for_task = turn_id.clone();
+        let (started_tx, started_rx) = oneshot::channel();
+        tokio::spawn(async move {
+            let _execution_lease = execution_lease;
+            let _settlement = settlement;
+            let _ = event_queue
+                .enqueue(started_event, Some(EventPriority::Normal))
+                .await;
+            let _ = started_tx.send(());
+            Self::execute_user_shell_command_task(
+                session_manager,
+                execution_engine,
+                tool_pipeline,
+                event_queue,
+                session,
+                workspace,
+                workspace_services,
+                terminal_port,
+                remote_exec_port,
+                options,
+                session_id_for_task,
+                turn_id_for_task,
+                request.command,
+                cancellation_token,
+            )
+            .await;
+        });
+        // The detached task owns completion once the turn is persisted. Waiting
+        // only for its started-event barrier preserves event ordering for the
+        // normal caller while remaining cancellation-safe for IPC timeouts.
+        let _ = started_rx.await;
+
+        Ok(bitfun_runtime_ports::AgentUserShellCommandResult {
+            session_id: request.session_id,
+            turn_id,
+        })
+    }
+}
+
 #[async_trait::async_trait]
 impl bitfun_agent_runtime::sdk::AgentInteractionResponsePort for ConversationCoordinator {
     async fn submit_user_answers(
@@ -11693,11 +12136,17 @@ mod tests {
         SystemPromptCacheIdentity, UserContextCacheIdentity,
     };
     use crate::agentic::skill_agent_snapshot::SkillSnapshotEntry;
+    use crate::agentic::tools::framework::{
+        PermissionIntent, Tool, ToolResult, ToolUseContext, ValidationResult,
+    };
     use crate::agentic::tools::pipeline::SubagentParentInfo;
     use crate::agentic::tools::registry::ToolRegistry;
     use crate::agentic::tools::{ToolPipeline, ToolStateManager};
     use crate::agentic::TurnSkillAgentSnapshot;
     use crate::infrastructure::PathManager;
+    use bitfun_agent_runtime::permission::PermissionRequestManager;
+    use bitfun_runtime_services::test_support::FakeRuntimePort;
+    use bitfun_services_core::permission_store::ProjectPermissionSqliteStore;
 
     #[test]
     fn runtime_session_list_preserves_the_runtime_owned_model_selector() {
@@ -11737,14 +12186,19 @@ mod tests {
         AgentLocalCommandTurnPort, AgentLocalCommandTurnRecordRequest, AgentSessionArchiveRequest,
         AgentSessionCreateRequest, AgentSessionManagementPort, AgentSessionRenameRequest,
         AgentSubmissionPort, AgentSubmissionRequest, AgentSubmissionSource,
-        AgentThreadGoalGetRequest, AgentThreadGoalManagementPort, DelegationPolicy,
-        PermissionEffect, PermissionRule, PermissionRuntimeCeiling, SessionStoragePathRequest,
-        SubagentContextMode, ThreadGoal, ThreadGoalStatus,
+        AgentThreadGoalGetRequest, AgentThreadGoalManagementPort, AgentUserShellCommandPort,
+        AgentUserShellCommandRequest, DelegationPolicy, PermissionEffect, PermissionRule,
+        PermissionRuntimeCeiling, PortErrorKind, SessionStoragePathRequest, SubagentContextMode,
+        ThreadGoal, ThreadGoalStatus,
     };
     use std::collections::HashMap;
     use std::path::PathBuf;
-    use std::sync::Arc;
+    use std::sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    };
     use std::time::Duration;
+    use tokio::sync::Notify;
     use tokio_util::sync::CancellationToken;
 
     #[test]
@@ -12451,10 +12905,100 @@ mod tests {
     }
     use tokio::sync::RwLock as TokioRwLock;
 
-    fn test_coordinator_with_config_and_ownership(
+    #[derive(Default)]
+    struct TestExecCommandTool {
+        validation_started: Option<Arc<Notify>>,
+        release_validation: Option<Arc<Notify>>,
+        call_count: Option<Arc<AtomicUsize>>,
+    }
+
+    #[async_trait::async_trait]
+    impl Tool for TestExecCommandTool {
+        fn name(&self) -> &str {
+            "ExecCommand"
+        }
+
+        async fn description(&self) -> crate::util::errors::BitFunResult<String> {
+            Ok("test user shell command".to_string())
+        }
+
+        fn short_description(&self) -> String {
+            "test user shell command".to_string()
+        }
+
+        fn input_schema(&self) -> serde_json::Value {
+            serde_json::json!({
+                "type": "object",
+                "required": ["cmd"],
+                "properties": {
+                    "cmd": { "type": "string" },
+                    "tty": { "type": "boolean" }
+                },
+                "additionalProperties": false
+            })
+        }
+
+        fn is_readonly(&self) -> bool {
+            false
+        }
+
+        fn permission_intents(
+            &self,
+            input: &serde_json::Value,
+            _context: &ToolUseContext,
+        ) -> crate::util::errors::BitFunResult<Vec<PermissionIntent>> {
+            Ok(vec![PermissionIntent::new(
+                "bash",
+                vec![input["cmd"].as_str().unwrap_or_default().to_string()],
+            )])
+        }
+
+        async fn validate_input(
+            &self,
+            _input: &serde_json::Value,
+            _context: Option<&ToolUseContext>,
+        ) -> ValidationResult {
+            if let Some(started) = &self.validation_started {
+                started.notify_one();
+            }
+            if let Some(release) = &self.release_validation {
+                release.notified().await;
+            }
+            ValidationResult {
+                result: true,
+                message: None,
+                error_code: None,
+                meta: None,
+            }
+        }
+
+        async fn call_impl(
+            &self,
+            input: &serde_json::Value,
+            _context: &ToolUseContext,
+        ) -> crate::util::errors::BitFunResult<Vec<ToolResult>> {
+            if let Some(call_count) = &self.call_count {
+                call_count.fetch_add(1, Ordering::SeqCst);
+            }
+            let command = input["cmd"].as_str().unwrap_or_default();
+            let exit_code = if command == "exit 7" { 7 } else { 0 };
+            Ok(vec![ToolResult::Result {
+                data: serde_json::json!({
+                    "exit_code": exit_code,
+                    "output": command,
+                }),
+                result_for_assistant: Some(command.to_string()),
+                image_attachments: None,
+            }])
+        }
+    }
+
+    fn test_coordinator_with_registry(
         max_active_sessions: usize,
         enable_persistence: bool,
         runtime_ownership: Arc<CoreRuntimeOwnership>,
+        registry: ToolRegistry,
+        permission_request_manager: Option<Arc<PermissionRequestManager>>,
     ) -> (ConversationCoordinator, Arc<SessionManager>) {
         let event_queue = Arc::new(EventQueue::new(EventQueueConfig::default()));
         let coordination_database_file = std::env::temp_dir()
@@ -12474,11 +13018,15 @@ mod tests {
                 prompt_cache_policy: PromptCachePolicy::default(),
             },
         ));
-        let tool_pipeline = Arc::new(ToolPipeline::new(
-            Arc::new(TokioRwLock::new(ToolRegistry::new())),
+        let mut tool_pipeline = ToolPipeline::new(
+            Arc::new(TokioRwLock::new(registry)),
             Arc::new(ToolStateManager::new(event_queue.clone())),
             None,
-        ));
+        );
+        if let Some(manager) = permission_request_manager {
+            tool_pipeline = tool_pipeline.with_permission_request_manager(manager);
+        }
+        let tool_pipeline = Arc::new(tool_pipeline);
         let execution_engine = Arc::new(ExecutionEngine::new(
             Arc::new(RoundExecutor::new(
                 Arc::new(StreamProcessor::new(event_queue.clone())),
@@ -12509,6 +13057,20 @@ mod tests {
         (coordinator, session_manager)
     }
 
+    fn test_coordinator_with_config_and_ownership(
+        max_active_sessions: usize,
+        enable_persistence: bool,
+        runtime_ownership: Arc<CoreRuntimeOwnership>,
+    ) -> (ConversationCoordinator, Arc<SessionManager>) {
+        test_coordinator_with_registry(
+            max_active_sessions,
+            enable_persistence,
+            runtime_ownership,
+            ToolRegistry::new(),
+            None,
+        )
+    }
+
     fn test_coordinator_with_config(
         max_active_sessions: usize,
         enable_persistence: bool,
@@ -12536,6 +13098,45 @@ mod tests {
 
     fn test_persistent_coordinator() -> (ConversationCoordinator, Arc<SessionManager>) {
         test_coordinator_with_config(100, true)
+    }
+
+    fn test_persistent_user_shell_coordinator_with_tool(
+        tool: Arc<dyn Tool>,
+    ) -> (ConversationCoordinator, Arc<SessionManager>) {
+        let ownership_root = std::env::temp_dir().join(format!(
+            "bitfun-runtime-ownership-test-{}",
+            uuid::Uuid::new_v4()
+        ));
+        let mut registry = ToolRegistry::new();
+        registry.register_tool(tool);
+        let permission_store = Arc::new(ProjectPermissionSqliteStore::new(
+            ownership_root.join("permissions"),
+        ));
+        let permission_request_manager = Arc::new(
+            PermissionRequestManager::new(
+                permission_store.clone(),
+                permission_store.clone(),
+                Arc::new(FakeRuntimePort::new(
+                    bitfun_runtime_ports::RuntimeServiceCapability::Clock,
+                )),
+            )
+            .with_grant_store(permission_store),
+        );
+        test_coordinator_with_registry(
+            100,
+            true,
+            Arc::new(CoreRuntimeOwnership::embedded_with_facts(
+                ownership_root,
+                "bitfun".to_string(),
+                "test",
+            )),
+            registry,
+            Some(permission_request_manager),
+        )
+    }
+
+    fn test_persistent_user_shell_coordinator() -> (ConversationCoordinator, Arc<SessionManager>) {
+        test_persistent_user_shell_coordinator_with_tool(Arc::new(TestExecCommandTool::default()))
     }
 
     fn test_coordinator() -> (ConversationCoordinator, Arc<SessionManager>) {
@@ -13299,6 +13900,312 @@ mod tests {
 
         assert_cancellation_port::<ConversationCoordinator>();
         assert_state_port::<ConversationCoordinator>();
+    }
+
+    #[tokio::test]
+    async fn user_shell_command_rejects_blank_and_nul_input_before_admission() {
+        let (coordinator, _) = test_coordinator();
+
+        for command in ["   ", "printf 'bad\0input'"] {
+            let error = AgentUserShellCommandPort::run_user_shell_command(
+                &coordinator,
+                AgentUserShellCommandRequest {
+                    session_id: "missing-session".to_string(),
+                    turn_id: "turn-shell".to_string(),
+                    command: command.to_string(),
+                },
+            )
+            .await
+            .expect_err("invalid commands must fail before session lookup");
+
+            assert_eq!(error.kind, PortErrorKind::InvalidRequest);
+        }
+    }
+
+    #[tokio::test]
+    async fn user_shell_command_persists_a_standard_exec_command_tool_turn() {
+        let workspace = tempfile::tempdir().expect("workspace");
+        let (coordinator, session_manager) = test_persistent_user_shell_coordinator();
+        let session = session_manager
+            .create_session(
+                "Shell turn".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.path().to_string_lossy().into_owned()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("create session");
+
+        let accepted = AgentUserShellCommandPort::run_user_shell_command(
+            &coordinator,
+            AgentUserShellCommandRequest {
+                session_id: session.session_id.clone(),
+                turn_id: "turn-shell".to_string(),
+                command: "git status --short".to_string(),
+            },
+        )
+        .await
+        .expect("admit shell turn");
+        coordinator
+            .wait_for_turn_settlement(
+                &accepted.session_id,
+                &accepted.turn_id,
+                Duration::from_secs(5),
+            )
+            .await
+            .expect("shell turn settles");
+
+        let turns = session_manager
+            .persistence_manager()
+            .load_session_turns(workspace.path(), &session.session_id)
+            .await
+            .expect("load turns");
+        let turn = turns.last().expect("shell turn");
+        let events = coordinator.event_queue.dequeue_batch(100).await;
+        assert!(events.iter().any(|envelope| matches!(
+            &envelope.event,
+            AgenticEvent::DialogTurnStarted { turn_id, .. } if turn_id == "turn-shell"
+        )));
+        assert!(!events.iter().any(|envelope| matches!(
+            &envelope.event,
+            AgenticEvent::DialogTurnFailed { turn_id, .. } if turn_id == "turn-shell"
+        )));
+        assert_eq!(turn.kind, DialogTurnKind::UserDialog);
+        assert_eq!(turn.user_message.content, "!git status --short");
+        assert_eq!(
+            turn.status,
+            TurnStatus::Completed,
+            "shell turn failed: error={:?}, events={events:?}",
+            turn.error,
+        );
+        let tool = turn
+            .model_rounds
+            .first()
+            .and_then(|round| round.tool_items.first())
+            .expect("ExecCommand tool item");
+        assert_eq!(tool.tool_name, "ExecCommand");
+        assert_eq!(tool.tool_call.input["cmd"], "git status --short");
+        assert!(tool.tool_result.is_some());
+
+        let context = session_manager
+            .get_context_messages(&session.session_id)
+            .await
+            .expect("context messages");
+        assert!(context.iter().any(|message| matches!(
+            &message.content,
+            MessageContent::Mixed { tool_calls, .. }
+                if tool_calls.iter().any(|call| call.tool_name == "ExecCommand")
+        )));
+        assert!(context
+            .iter()
+            .any(|message| matches!(message.content, MessageContent::ToolResult { .. })));
+    }
+
+    #[tokio::test]
+    async fn user_shell_command_auto_approves_ask_but_preserves_project_denies() {
+        let workspace = tempfile::tempdir().expect("workspace");
+        let permission_path = workspace
+            .path()
+            .join(".bitfun")
+            .join("config")
+            .join("tool_permissions.json");
+        tokio::fs::create_dir_all(permission_path.parent().expect("permission parent"))
+            .await
+            .expect("create permission directory");
+        tokio::fs::write(
+            &permission_path,
+            r#"{"rules":[{"action":"bash","resource":"git reset --hard","effect":"deny"}]}"#,
+        )
+        .await
+        .expect("write project permission rule");
+
+        let (coordinator, session_manager) = test_persistent_user_shell_coordinator();
+        let session = session_manager
+            .create_session(
+                "Denied shell turn".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.path().to_string_lossy().into_owned()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("create session");
+        let accepted = AgentUserShellCommandPort::run_user_shell_command(
+            &coordinator,
+            AgentUserShellCommandRequest {
+                session_id: session.session_id.clone(),
+                turn_id: "turn-shell-denied".to_string(),
+                command: "git reset --hard".to_string(),
+            },
+        )
+        .await
+        .expect("deny is represented as a settled tool result");
+        coordinator
+            .wait_for_turn_settlement(
+                &accepted.session_id,
+                &accepted.turn_id,
+                Duration::from_secs(5),
+            )
+            .await
+            .expect("denied shell turn settles");
+
+        let turns = session_manager
+            .persistence_manager()
+            .load_session_turns(workspace.path(), &session.session_id)
+            .await
+            .expect("load turns");
+        let tool_result = turns
+            .last()
+            .and_then(|turn| turn.model_rounds.first())
+            .and_then(|round| round.tool_items.first())
+            .and_then(|tool| tool.tool_result.as_ref())
+            .expect("permission denial tool result");
+        assert_eq!(tool_result.result["category"], "permission_denied");
+        let events = coordinator.event_queue.dequeue_batch(100).await;
+        assert!(events.iter().any(|envelope| matches!(
+            &envelope.event,
+            AgenticEvent::DialogTurnCompleted {
+                turn_id,
+                success: Some(false),
+                finish_reason: Some(reason),
+                ..
+            } if turn_id == "turn-shell-denied" && reason == "tool_error"
+        )));
+    }
+
+    #[tokio::test]
+    async fn user_shell_command_reports_a_nonzero_exit_as_a_tool_error() {
+        let workspace = tempfile::tempdir().expect("workspace");
+        let (coordinator, session_manager) = test_persistent_user_shell_coordinator();
+        let session = session_manager
+            .create_session(
+                "Failed shell turn".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.path().to_string_lossy().into_owned()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("create session");
+        let accepted = AgentUserShellCommandPort::run_user_shell_command(
+            &coordinator,
+            AgentUserShellCommandRequest {
+                session_id: session.session_id,
+                turn_id: "turn-shell-nonzero".to_string(),
+                command: "exit 7".to_string(),
+            },
+        )
+        .await
+        .expect("admit shell turn");
+        coordinator
+            .wait_for_turn_settlement(
+                &accepted.session_id,
+                &accepted.turn_id,
+                Duration::from_secs(5),
+            )
+            .await
+            .expect("failed shell turn settles");
+
+        let events = coordinator.event_queue.dequeue_batch(100).await;
+        assert!(events.iter().any(|envelope| matches!(
+            &envelope.event,
+            AgenticEvent::DialogTurnCompleted {
+                turn_id,
+                success: Some(false),
+                finish_reason: Some(reason),
+                ..
+            } if turn_id == "turn-shell-nonzero" && reason == "tool_error"
+        )));
+    }
+
+    #[tokio::test]
+    async fn user_shell_command_cancelled_during_validation_never_executes() {
+        let workspace = tempfile::tempdir().expect("workspace");
+        let validation_started = Arc::new(Notify::new());
+        let release_validation = Arc::new(Notify::new());
+        let call_count = Arc::new(AtomicUsize::new(0));
+        let (coordinator, session_manager) =
+            test_persistent_user_shell_coordinator_with_tool(Arc::new(TestExecCommandTool {
+                validation_started: Some(validation_started.clone()),
+                release_validation: Some(release_validation.clone()),
+                call_count: Some(call_count.clone()),
+            }));
+        let coordinator = Arc::new(coordinator);
+        let session = session_manager
+            .create_session(
+                "Cancelled shell turn".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.path().to_string_lossy().into_owned()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("create session");
+        let turn_id = "turn-shell-cancel-preflight".to_string();
+        let accepted = AgentUserShellCommandPort::run_user_shell_command(
+            coordinator.as_ref(),
+            AgentUserShellCommandRequest {
+                session_id: session.session_id.clone(),
+                turn_id: turn_id.clone(),
+                command: "touch must-not-run".to_string(),
+            },
+        )
+        .await
+        .expect("admit shell turn");
+        tokio::time::timeout(Duration::from_secs(1), validation_started.notified())
+            .await
+            .expect("tool validation starts");
+
+        let coordinator_for_cancel = coordinator.clone();
+        let session_id_for_cancel = session.session_id.clone();
+        let turn_id_for_cancel = turn_id.clone();
+        let cancel_task = tokio::spawn(async move {
+            bitfun_runtime_ports::AgentTurnCancellationPort::cancel_turn(
+                coordinator_for_cancel.as_ref(),
+                bitfun_runtime_ports::AgentTurnCancellationRequest {
+                    session_id: session_id_for_cancel,
+                    turn_id: Some(turn_id_for_cancel),
+                    source: None,
+                    requester_session_id: None,
+                    reason: Some("test cancellation".to_string()),
+                    wait_timeout_ms: Some(1500),
+                },
+            )
+            .await
+        });
+        tokio::time::timeout(Duration::from_secs(1), async {
+            loop {
+                if coordinator
+                    .execution_cancel_token_for_dialog_turn(&turn_id)
+                    .is_some_and(|token| token.is_cancelled())
+                {
+                    break;
+                }
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("turn cancellation is signalled");
+        release_validation.notify_one();
+        cancel_task
+            .await
+            .expect("cancel task joins")
+            .expect("cancel request succeeds");
+        coordinator
+            .wait_for_turn_settlement(
+                &accepted.session_id,
+                &accepted.turn_id,
+                Duration::from_secs(5),
+            )
+            .await
+            .expect("cancelled shell turn settles");
+
+        assert_eq!(call_count.load(Ordering::SeqCst), 0);
     }
 
     #[test]

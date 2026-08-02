@@ -1548,6 +1548,7 @@ impl ChatMode {
         chat_state: &mut ChatState,
         rt_handle: &tokio::runtime::Handle,
     ) -> Result<Option<ChatExitReason>> {
+        let shell_mode = chat_view.is_shell_mode();
         let draft_has_images = chat_view.draft_snapshot().has_images();
         if draft_has_images && chat_view.command_menu_visible() {
             chat_view.set_status(Some(IMAGE_ATTACHMENTS_REQUIRE_MESSAGE.to_string()));
@@ -1564,18 +1565,24 @@ impl ChatMode {
         }
 
         let trimmed = chat_view.input_text().trim();
-        if draft_has_images && trimmed.starts_with('/') {
+        if shell_mode && draft_has_images {
+            chat_view.set_status(Some("Images are unavailable in Shell mode".to_string()));
+            return Ok(None);
+        }
+        if !shell_mode && draft_has_images && trimmed.starts_with('/') {
             chat_view.set_status(Some(IMAGE_ATTACHMENTS_REQUIRE_MESSAGE.to_string()));
             return Ok(None);
         }
-        if !trimmed.starts_with('/') {
+        if shell_mode || !trimmed.starts_with('/') {
             self.selected_native_command_once = None;
         }
         let pending_for_current_session = self
             .pending_session_operation
             .as_ref()
             .is_some_and(|pending| pending.session_id == chat_state.core_session_id);
-        if session_update_blocks_typed_submission(pending_for_current_session, trimmed) {
+        if (shell_mode && pending_for_current_session)
+            || session_update_blocks_typed_submission(pending_for_current_session, trimmed)
+        {
             chat_view.set_status(Some(
                 "Waiting for the pending Session operation to finish before sending.".to_string(),
             ));
@@ -1583,20 +1590,26 @@ impl ChatMode {
         }
 
         if chat_state.is_processing {
-            if trimmed.starts_with('/') {
+            if !shell_mode && trimmed.starts_with('/') {
                 if let Some(input) = chat_view.send_input() {
                     return self.handle_command(&input.text, chat_view, chat_state, rt_handle);
                 }
             } else if !trimmed.is_empty() {
-                chat_view.set_status(Some(
+                chat_view.set_status(Some(if shell_mode {
+                    "Currently processing. Wait for the turn to finish or interrupt it.".to_string()
+                } else {
                     "Currently processing. Type a /command, or use the interrupt shortcut."
-                        .to_string(),
-                ));
+                        .to_string()
+                }));
             }
             return Ok(None);
         }
 
         if let Some(input) = chat_view.send_input() {
+            if shell_mode {
+                self.send_shell_command(input, chat_view, chat_state, rt_handle);
+                return Ok(None);
+            }
             tracing::info!("User input: {}", input.text);
             if input.text.starts_with('/') {
                 return self.handle_command(&input.text, chat_view, chat_state, rt_handle);
@@ -1604,6 +1617,40 @@ impl ChatMode {
             self.send_draft_to_agent(input, chat_view, chat_state, rt_handle);
         }
         Ok(None)
+    }
+
+    fn send_shell_command(
+        &mut self,
+        draft: crate::ui::composer::ComposerDraft,
+        chat_view: &mut ChatView,
+        chat_state: &mut ChatState,
+        rt_handle: &tokio::runtime::Handle,
+    ) {
+        if let Err(error) = self.materialize_requested_worktree(chat_view, chat_state, rt_handle) {
+            tracing::error!("Failed to prepare worktree for Shell command: {error}");
+            chat_view.set_status(Some(format!("Error: {error}")));
+            chat_state.add_system_message(error);
+            chat_view.set_draft(draft);
+            return;
+        }
+
+        chat_view.set_status(Some("Running Shell command...".to_string()));
+        let agent = self.agent.clone();
+        let agent_type = self.agent_type.clone();
+        match tokio::task::block_in_place(|| {
+            rt_handle.block_on(agent.run_user_shell_command(draft.text.clone(), &agent_type))
+        }) {
+            Ok(turn_id) => {
+                tracing::info!("Started Shell turn: {}", turn_id);
+                chat_view.remember_submitted_shell_command(&chat_state.core_session_id, &draft);
+                chat_view.exit_shell_mode();
+            }
+            Err(error) => {
+                tracing::error!("Failed to start Shell command: {error}");
+                chat_view.set_status(Some(format!("Error: {error}")));
+                chat_view.set_draft(draft);
+            }
+        }
     }
 
     fn cancel_active_turn(
@@ -1649,6 +1696,10 @@ impl ChatMode {
     fn apply_composer_paste(&mut self, paste: ImagePaste, chat_view: &mut ChatView) {
         match paste {
             ImagePaste::Text(text) => chat_view.insert_paste(&text),
+            ImagePaste::Image(_) if chat_view.is_shell_mode() => {
+                chat_view.set_status(Some("Images are unavailable in Shell mode".to_string()));
+                return;
+            }
             ImagePaste::Image(_image) if self.agent.is_shared() => {
                 chat_view.set_status(Some(crate::actions::shared_tui_image_attachment_error()));
                 return;

@@ -460,6 +460,22 @@ impl ChatMode {
             }
         }
 
+        if chat_view.is_shell_mode() {
+            match key.code {
+                KeyCode::Esc => {
+                    chat_view.exit_shell_mode();
+                    self.selected_native_command_once = None;
+                    return Ok(None);
+                }
+                KeyCode::Backspace if chat_view.input_text().is_empty() => {
+                    chat_view.exit_shell_mode();
+                    self.selected_native_command_once = None;
+                    return Ok(None);
+                }
+                _ => {}
+            }
+        }
+
         if let Some(action) = self
             .keymap
             .resolve(key, self.action_state(chat_state.is_processing, false))
@@ -503,6 +519,12 @@ impl ChatMode {
                     chat_view.scroll_to_bottom();
                     chat_view.set_status(Some("Exited browse mode".to_string()));
                 }
+            }
+
+            (KeyCode::Char('!'), KeyModifiers::NONE | KeyModifiers::SHIFT)
+                if !chat_state.is_processing && chat_view.try_enter_shell_mode() =>
+            {
+                self.selected_native_command_once = None;
             }
 
             (KeyCode::Char(c), KeyModifiers::NONE | KeyModifiers::SHIFT)

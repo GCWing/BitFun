@@ -6076,6 +6076,32 @@ impl SessionManager {
         Ok(turn_id)
     }
 
+    /// Starts a normal user dialog while the caller owns the Session mutation
+    /// lock. This keeps staged-revert commit and new-turn admission atomic for
+    /// non-model Runtime operations that still produce standard dialog turns.
+    pub(crate) async fn start_dialog_turn_locked(
+        &self,
+        session_id: &str,
+        agent_type: String,
+        user_input: String,
+        turn_id: Option<String>,
+        user_message_metadata: Option<serde_json::Value>,
+    ) -> BitFunResult<String> {
+        let user_message = Message::user(user_input.clone())
+            .with_semantic_kind(MessageSemanticKind::ActualUserInput);
+        self.start_persisted_turn_locked(
+            session_id,
+            DialogTurnKind::UserDialog,
+            Some(agent_type),
+            user_input,
+            turn_id,
+            vec![user_message],
+            ProcessingPhase::Starting,
+            user_message_metadata,
+        )
+        .await
+    }
+
     pub async fn start_dialog_turn_with_prepended_messages(
         &self,
         session_id: &str,

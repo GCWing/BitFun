@@ -11,7 +11,8 @@ use bitfun_runtime_ports::{
     AgentDialogTurnRequest, AgentSessionCompactionRequest, AgentSessionComposerUpdate,
     AgentSessionCreateRequest, AgentSessionCreateResult, AgentSessionModeUpdateRequest,
     AgentSessionModelUpdateRequest, AgentSessionRevertRequest, AgentSessionRevertResult,
-    AgentSessionSummary, AgentSubmissionSource, DialogSubmissionPolicy, SessionTranscript,
+    AgentSessionSummary, AgentSubmissionSource, AgentUserShellCommandRequest,
+    DialogSubmissionPolicy, SessionTranscript,
 };
 use serde_json::Map;
 use std::path::Path;
@@ -220,6 +221,15 @@ impl RuntimeIpcRequestHandler for FakeHandler {
                 Ok(RuntimeIpcOperationResult::TurnAccepted {
                     session_id: request.session_id,
                     turn_id: request.turn_id.expect("test turn id"),
+                })
+            }
+            RuntimeIpcOperation::RunUserShellCommand { request } => {
+                if let Some(delay) = self.submit_delay {
+                    tokio::time::sleep(delay).await;
+                }
+                Ok(RuntimeIpcOperationResult::TurnAccepted {
+                    session_id: request.session_id,
+                    turn_id: request.turn_id,
                 })
             }
             RuntimeIpcOperation::CompactSession { request } => {
@@ -542,6 +552,16 @@ fn submit_operation(workspace: &Path, session_id: &str, turn_id: &str) -> Runtim
             prepended_reminders: Vec::new(),
             attachments: Vec::new(),
             metadata: Map::new(),
+        },
+    }
+}
+
+fn shell_operation(session_id: &str, turn_id: &str) -> RuntimeIpcOperation {
+    RuntimeIpcOperation::RunUserShellCommand {
+        request: AgentUserShellCommandRequest {
+            session_id: session_id.to_string(),
+            turn_id: turn_id.to_string(),
+            command: "git status --short".to_string(),
         },
     }
 }
@@ -1360,6 +1380,54 @@ async fn timed_out_submit_closes_and_cancels_its_provisional_turn() {
     .await;
 
     let mut second = server.connect("second-controller").await;
+    expect_response(
+        &mut second,
+        2,
+        restore_operation(server.workspace.path(), "session-a"),
+    )
+    .await;
+    drop(first);
+    drop(second);
+    server.finish().await;
+}
+
+#[tokio::test]
+async fn timed_out_shell_command_closes_and_cancels_its_provisional_turn() {
+    let handler = Arc::new(FakeHandler {
+        submit_delay: Some(Duration::from_millis(100)),
+        ..FakeHandler::default()
+    });
+    let mut config = server_config();
+    config.request_timeout = Duration::from_millis(20);
+    let server = TestServer::start(config, handler.clone()).await;
+    let mut first = server.connect("shell-controller").await;
+    expect_response(
+        &mut first,
+        2,
+        restore_operation(server.workspace.path(), "session-a"),
+    )
+    .await;
+    expect_error(
+        &mut first,
+        3,
+        shell_operation("session-a", "turn-shell-a"),
+        RuntimeIpcErrorCode::OutcomeUnknown,
+    )
+    .await;
+
+    wait_for_calls(&handler, |calls| {
+        calls.iter().any(|call| {
+            matches!(
+                call,
+                RuntimeIpcOperation::CancelTurn { request }
+                    if request.session_id == "session-a"
+                        && request.turn_id.as_deref() == Some("turn-shell-a")
+            )
+        })
+    })
+    .await;
+
+    let mut second = server.connect("shell-successor").await;
     expect_response(
         &mut second,
         2,

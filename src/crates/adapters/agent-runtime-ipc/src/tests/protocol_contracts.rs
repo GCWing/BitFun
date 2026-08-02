@@ -108,7 +108,7 @@ fn protocol_round_trips_read_only_workspace_reference_operations() {
 
 #[test]
 fn protocol_round_trips_workspace_diff_as_a_read_only_workspace_operation() {
-    assert_eq!(PROTOCOL_VERSION, 11);
+    assert_eq!(PROTOCOL_VERSION, 12);
 
     let operation = RuntimeIpcOperation::WorkspaceDiff;
     let encoded = serde_json::to_value(&operation).expect("serialize workspace diff operation");
@@ -148,6 +148,35 @@ fn protocol_round_trips_workspace_diff_as_a_read_only_workspace_operation() {
     let decoded: RuntimeIpcOperationResult =
         serde_json::from_value(encoded).expect("deserialize workspace diff result");
     assert_eq!(decoded, result);
+}
+
+#[test]
+fn protocol_round_trips_user_shell_as_an_idle_controller_turn() {
+    let operation = RuntimeIpcOperation::RunUserShellCommand {
+        request: bitfun_runtime_ports::AgentUserShellCommandRequest {
+            session_id: "session-1".to_string(),
+            turn_id: "turn-shell".to_string(),
+            command: "git status --short".to_string(),
+        },
+    };
+
+    let encoded = serde_json::to_value(&operation).expect("serialize user shell operation");
+    assert_eq!(encoded["operation"], "run_user_shell_command");
+    assert_eq!(encoded["request"]["sessionId"], "session-1");
+    assert_eq!(encoded["request"]["turnId"], "turn-shell");
+    assert_eq!(encoded["request"]["command"], "git status --short");
+    let decoded: RuntimeIpcOperation =
+        serde_json::from_value(encoded).expect("deserialize user shell operation");
+    assert_eq!(decoded, operation);
+    assert_eq!(decoded.session_id(), Some("session-1"));
+    let rules = decoded.rules();
+    assert_eq!(
+        rules.session_requirement,
+        RuntimeIpcSessionRequirement::CurrentController
+    );
+    assert!(rules.requires_idle);
+    assert!(!rules.serializes_session_selection);
+    assert!(rules.side_effecting);
 }
 
 #[test]
@@ -200,7 +229,7 @@ fn protocol_round_trips_the_reviewed_session_model_operation() {
 
 #[test]
 fn protocol_round_trips_the_current_session_rename_operation() {
-    assert_eq!(PROTOCOL_VERSION, 11);
+    assert_eq!(PROTOCOL_VERSION, 12);
 
     let operation = RuntimeIpcOperation::RenameSession {
         request: RuntimeSessionRenameRequest {

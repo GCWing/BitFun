@@ -19,10 +19,11 @@ use bitfun_agent_runtime::sdk::{
     AgentSessionListRequest, AgentSessionModeUpdateRequest, AgentSessionModelUpdateRequest,
     AgentSessionRenameRequest, AgentSessionRestoreRequest, AgentSessionRevertRequest,
     AgentSessionRevertResult, AgentSessionUsageRequest, AgentTurnCancellationRequest,
-    AgentTurnSettlementRequest, AgentUserAnswersRequest, AgentWorkspaceReference,
-    AgentWorkspaceReferenceSearchRequest, AgentWorkspaceReferenceSearchResult, PermissionReply,
-    PermissionRequest, PermissionRequestEventReceiver, PortError, PortErrorKind, RuntimeError,
-    SessionTranscript, SessionTranscriptRequest, SessionUsageReport, WorkspaceDiffSnapshot,
+    AgentTurnSettlementRequest, AgentUserAnswersRequest, AgentUserShellCommandRequest,
+    AgentWorkspaceReference, AgentWorkspaceReferenceSearchRequest,
+    AgentWorkspaceReferenceSearchResult, PermissionReply, PermissionRequest,
+    PermissionRequestEventReceiver, PortError, PortErrorKind, RuntimeError, SessionTranscript,
+    SessionTranscriptRequest, SessionUsageReport, WorkspaceDiffSnapshot,
 };
 use bitfun_agent_runtime_ipc::{
     RuntimeIpcClient, RuntimeIpcClientError, RuntimeIpcClientEvent, RuntimeIpcErrorCode,
@@ -1309,6 +1310,69 @@ impl CliAgentRuntimeClient {
                     }
                     _ => Err(unexpected_shared_result("submit_turn")),
                 },
+            }
+        }
+        .await;
+        if submission.is_err() {
+            *self.current_turn_id.lock().await = None;
+        }
+        submission
+    }
+
+    pub(crate) async fn run_user_shell_command(
+        &self,
+        command: String,
+        agent_type: &str,
+    ) -> Result<String> {
+        let session_id = self.ensure_session(agent_type).await?;
+        let turn_id = uuid::Uuid::new_v4().to_string();
+        let request = AgentUserShellCommandRequest {
+            session_id: session_id.clone(),
+            turn_id: turn_id.clone(),
+            command,
+        };
+        *self.current_turn_id.lock().await = Some(turn_id.clone());
+
+        let submission: Result<String> = async {
+            match &self.backend {
+            CliAgentRuntimeBackend::Embedded(runtime) => {
+                let accepted = match runtime.run_user_shell_command(request.clone()).await {
+                    Ok(accepted) => accepted,
+                    Err(error) if Self::is_session_not_found_error(&error) => {
+                        tracing::warn!(
+                            "Session missing when starting Shell turn, attempting recovery and retry: session_id={}",
+                            session_id
+                        );
+                        self.ensure_backend_session_alive(&session_id, agent_type)
+                            .await?;
+                        runtime
+                            .run_user_shell_command(request)
+                            .await
+                            .map_err(|error| anyhow::anyhow!(error.into_message()))?
+                    }
+                    Err(error) => return Err(anyhow::anyhow!(error.into_message())),
+                };
+                if accepted.session_id == session_id && accepted.turn_id == turn_id {
+                    Ok(accepted.turn_id)
+                } else {
+                    Err(anyhow::anyhow!(
+                        "Runtime accepted a Shell command with an unexpected identity"
+                    ))
+                }
+            }
+            CliAgentRuntimeBackend::Shared(client) => match client
+                .request(RuntimeIpcOperation::RunUserShellCommand { request })
+                .await
+            {
+                Ok(RuntimeIpcOperationResult::TurnAccepted {
+                    session_id: accepted_session,
+                    turn_id: accepted_turn,
+                }) if accepted_session == session_id && accepted_turn == turn_id => {
+                    Ok(accepted_turn)
+                }
+                Ok(_) => Err(unexpected_shared_result("run_user_shell_command")),
+                Err(error) => Err(anyhow::Error::new(error)),
+            },
             }
         }
         .await;

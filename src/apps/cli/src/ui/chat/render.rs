@@ -822,10 +822,11 @@ impl ChatView {
     fn render_input(&mut self, frame: &mut Frame, area: Rect, chat_state: &ChatState) {
         use super::text_input::TextInputStyle;
 
+        let shell_mode = self.is_shell_mode();
         let block = Block::default()
             .borders(Borders::ALL)
             .border_style(self.theme.style(StyleKind::Primary))
-            .title(" Input ");
+            .title(if shell_mode { " SHELL " } else { " Input " });
 
         let inner = block.inner(area);
 
@@ -833,9 +834,13 @@ impl ChatView {
         frame.render_widget(block, area);
 
         let style = TextInputStyle {
-            first_line_prefix: "> ",
+            first_line_prefix: if shell_mode { "! " } else { "> " },
             continuation_prefix: "  ",
-            placeholder: "Enter message...".to_string(),
+            placeholder: if shell_mode {
+                "Enter shell command...".to_string()
+            } else {
+                "Enter message...".to_string()
+            },
             text_style: ratatui::style::Style::default(),
             placeholder_style: self.theme.style(StyleKind::Muted),
         };

@@ -405,6 +405,15 @@ impl RuntimeIpcRequestHandler for SharedRuntimeHandler {
                     turn_id,
                 })
             }
+            RuntimeIpcOperation::RunUserShellCommand { request } => self
+                .runtime
+                .run_user_shell_command(request)
+                .await
+                .map(|result| RuntimeIpcOperationResult::TurnAccepted {
+                    session_id: result.session_id,
+                    turn_id: result.turn_id,
+                })
+                .map_err(runtime_ipc_error),
             RuntimeIpcOperation::CancelTurn { request } => self
                 .runtime
                 .cancel_turn(request)

@@ -3,13 +3,19 @@ const MAX_LOCAL_DRAFT_HISTORY_IMAGE_BYTES: usize = 200 * 1024 * 1024;
 
 impl SubmittedDraftHistory {
     fn record(&mut self, session_id: &str, draft: ComposerDraft) {
+        self.record_with_mode(session_id, draft, ComposerMode::Chat);
+    }
+
+    fn record_with_mode(&mut self, session_id: &str, draft: ComposerDraft, mode: ComposerMode) {
         let sequence = self.next_sequence;
         self.next_sequence = self.next_sequence.wrapping_add(1);
         let history = self.sessions.entry(session_id.to_string()).or_default();
         history.undone.clear();
-        history
-            .active
-            .push(SubmittedDraftRecord { sequence, draft });
+        history.active.push(SubmittedDraftRecord {
+            sequence,
+            draft,
+            mode,
+        });
         while self.record_count() > MAX_LOCAL_DRAFT_HISTORY {
             if !self.remove_oldest_record() {
                 break;
@@ -17,17 +23,33 @@ impl SubmittedDraftHistory {
         }
     }
 
+    #[cfg(test)]
     fn undo(&mut self, session_id: &str, text: &str) -> Option<ComposerDraft> {
+        self.undo_with_mode(session_id, text)
+            .map(|(draft, _)| draft)
+    }
+
+    fn undo_with_mode(
+        &mut self,
+        session_id: &str,
+        text: &str,
+    ) -> Option<(ComposerDraft, ComposerMode)> {
         let history = self.sessions.get_mut(session_id)?;
         if history
             .active
             .last()
-            .is_some_and(|record| record.draft.text == text)
+            .is_some_and(|record| match record.mode {
+                ComposerMode::Chat => record.draft.text == text,
+                ComposerMode::Shell => text
+                    .strip_prefix('!')
+                    .is_some_and(|command| record.draft.text == command),
+            })
         {
             let record = history.active.pop()?;
             let draft = record.draft.clone();
+            let mode = record.mode;
             history.undone.push(record);
-            Some(draft)
+            Some((draft, mode))
         } else {
             // Runtime state is authoritative. If its reverted text no longer matches the
             // local success stack, fail closed for this Session instead of guessing by text.
@@ -152,8 +174,42 @@ impl ChatView {
     }
 
     fn refresh_command_menu(&mut self) {
-        self.command_menu
-            .update(&self.text_input.input, self.text_input.cursor);
+        if self.is_shell_mode() {
+            self.command_menu.update("", 0);
+        } else {
+            self.command_menu
+                .update(&self.text_input.input, self.text_input.cursor);
+        }
+    }
+
+    pub(crate) fn is_shell_mode(&self) -> bool {
+        self.composer_mode == ComposerMode::Shell
+    }
+
+    pub(crate) fn try_enter_shell_mode(&mut self) -> bool {
+        if self.is_shell_mode()
+            || !self.text_input.text().is_empty()
+            || !self.workspace_references.is_empty()
+            || !self.image_attachments.is_empty()
+        {
+            return false;
+        }
+        self.composer_mode = ComposerMode::Shell;
+        self.history_index = None;
+        self.workspace_reference_popup.hide();
+        self.refresh_command_menu();
+        true
+    }
+
+    pub(crate) fn exit_shell_mode(&mut self) -> bool {
+        if !self.is_shell_mode() {
+            return false;
+        }
+        self.composer_mode = ComposerMode::Chat;
+        self.history_index = None;
+        self.workspace_reference_popup.hide();
+        self.refresh_command_menu();
+        true
     }
 
     pub(crate) fn set_external_source_state(
@@ -180,9 +236,14 @@ impl ChatView {
             image_attachments: std::mem::take(&mut self.image_attachments),
         };
 
-        self.input_history.push_front(draft.clone());
-        if self.input_history.len() > MAX_LOCAL_DRAFT_HISTORY {
-            self.input_history.pop_back();
+        let history = if self.is_shell_mode() {
+            &mut self.shell_input_history
+        } else {
+            &mut self.input_history
+        };
+        history.push_front(draft.clone());
+        if history.len() > MAX_LOCAL_DRAFT_HISTORY {
+            history.pop_back();
         }
         self.enforce_draft_history_image_budget();
         self.history_index = None;
@@ -216,6 +277,9 @@ impl ChatView {
         &mut self,
         image: super::composer::ComposerImage,
     ) -> Result<(), super::composer::ComposerImageInsertError> {
+        if self.is_shell_mode() {
+            return Err(super::composer::ComposerImageInsertError::ShellModeUnsupported);
+        }
         let mut draft = self.draft_snapshot();
         let cursor = draft.safe_insertion_cursor(self.text_input.cursor);
         let cursor = draft.insert_image(cursor, image)?;
@@ -295,6 +359,7 @@ impl ChatView {
 
     /// Set input text programmatically (e.g. from skill selection)
     pub(crate) fn set_input(&mut self, text: &str) {
+        self.composer_mode = ComposerMode::Chat;
         self.text_input.set_text(text);
         self.workspace_references.clear();
         self.image_attachments.clear();
@@ -317,10 +382,10 @@ impl ChatView {
         text: String,
         workspace_references: Vec<bitfun_agent_runtime::sdk::AgentWorkspaceReference>,
     ) -> ComposerDraft {
-        let mut draft = self
-            .submitted_drafts
-            .undo(session_id, &text)
-            .unwrap_or_else(|| ComposerDraft::from_text(text));
+        let restored = self.submitted_drafts.undo_with_mode(session_id, &text);
+        let (mut draft, mode) =
+            restored.unwrap_or_else(|| (ComposerDraft::from_text(text), ComposerMode::Chat));
+        self.composer_mode = mode;
         draft.workspace_references = workspace_references;
         draft.retain_valid_sources();
         draft
@@ -328,6 +393,16 @@ impl ChatView {
 
     pub(crate) fn remember_submitted_draft(&mut self, session_id: &str, draft: &ComposerDraft) {
         self.submitted_drafts.record(session_id, draft.clone());
+        self.enforce_draft_history_image_budget();
+    }
+
+    pub(crate) fn remember_submitted_shell_command(
+        &mut self,
+        session_id: &str,
+        draft: &ComposerDraft,
+    ) {
+        self.submitted_drafts
+            .record_with_mode(session_id, draft.clone(), ComposerMode::Shell);
         self.enforce_draft_history_image_budget();
     }
 
@@ -364,6 +439,9 @@ impl ChatView {
     }
 
     pub(crate) fn current_workspace_reference_query(&self) -> Option<WorkspaceReferenceQuery> {
+        if self.is_shell_mode() {
+            return None;
+        }
         super::workspace_reference::workspace_reference_query(
             &self.text_input.input,
             self.text_input.cursor,
@@ -506,17 +584,22 @@ impl ChatView {
     }
 
     pub(crate) fn history_prev(&mut self) {
-        if self.input_history.is_empty() {
+        let history = if self.is_shell_mode() {
+            &self.shell_input_history
+        } else {
+            &self.input_history
+        };
+        if history.is_empty() {
             return;
         }
 
         let new_index = match self.history_index {
             None => 0,
-            Some(i) if i + 1 < self.input_history.len() => i + 1,
+            Some(i) if i + 1 < history.len() => i + 1,
             Some(i) => i,
         };
 
-        if let Some(history_item) = self.input_history.get(new_index) {
+        if let Some(history_item) = history.get(new_index) {
             self.text_input.set_text(&history_item.text);
             self.workspace_references = history_item.workspace_references.clone();
             self.image_attachments = history_item.image_attachments.clone();
@@ -526,6 +609,11 @@ impl ChatView {
     }
 
     pub(crate) fn history_next(&mut self) {
+        let history = if self.is_shell_mode() {
+            &self.shell_input_history
+        } else {
+            &self.input_history
+        };
         match self.history_index {
             None => {}
             Some(0) => {
@@ -537,7 +625,7 @@ impl ChatView {
             }
             Some(i) => {
                 let new_index = i - 1;
-                if let Some(history_item) = self.input_history.get(new_index) {
+                if let Some(history_item) = history.get(new_index) {
                     self.text_input.set_text(&history_item.text);
                     self.workspace_references = history_item.workspace_references.clone();
                     self.image_attachments = history_item.image_attachments.clone();
@@ -561,6 +649,72 @@ mod composer_input_tests {
             "image/png",
             Arc::<[u8]>::from([1, 2, 3]),
         )
+    }
+
+    #[test]
+    fn shell_mode_enters_only_from_an_empty_composer_and_keeps_the_marker_out_of_input() {
+        let mut view = ChatView::new(Theme::dark(), Vec::new());
+
+        assert!(view.try_enter_shell_mode());
+        assert!(view.is_shell_mode());
+        assert_eq!(view.input_text(), "");
+        assert!(!view.command_menu_visible());
+
+        view.handle_char('/');
+        let keymap =
+            crate::actions::ResolvedKeymap::new(&crate::config::ShortcutsConfig::default());
+        view.set_action_state(crate::actions::ActionState::chat(true, false), &keymap);
+        assert!(!view.command_menu_visible());
+
+        view.clear_input();
+        view.exit_shell_mode();
+        view.handle_char('x');
+        assert!(!view.try_enter_shell_mode());
+        assert!(!view.is_shell_mode());
+        assert_eq!(view.input_text(), "x");
+    }
+
+    #[test]
+    fn programmatic_chat_prefill_exits_shell_mode() {
+        let mut view = ChatView::new(Theme::dark(), Vec::new());
+        assert!(view.try_enter_shell_mode());
+
+        view.set_input("/rename ");
+
+        assert!(!view.is_shell_mode());
+        assert_eq!(view.input_text(), "/rename ");
+    }
+
+    #[test]
+    fn shell_mode_uses_separate_history_and_restores_shell_undo_identity() {
+        let mut view = ChatView::new(Theme::dark(), Vec::new());
+        view.handle_char('n');
+        view.handle_char('o');
+        view.handle_char('r');
+        view.handle_char('m');
+        view.handle_char('a');
+        view.handle_char('l');
+        assert_eq!(view.send_input().unwrap().text, "normal");
+
+        assert!(view.try_enter_shell_mode());
+        view.insert_paste("git status --short");
+        let shell = view.send_input().unwrap();
+        view.remember_submitted_shell_command("session-1", &shell);
+        view.exit_shell_mode();
+
+        assert!(view.try_enter_shell_mode());
+        view.history_prev();
+        assert_eq!(view.input_text(), "git status --short");
+
+        view.exit_shell_mode();
+        view.clear_input();
+        view.history_prev();
+        assert_eq!(view.input_text(), "normal");
+
+        let restored =
+            view.restore_undo_draft("session-1", "!git status --short".to_string(), Vec::new());
+        assert!(view.is_shell_mode());
+        assert_eq!(restored.text, "git status --short");
     }
 
     #[test]

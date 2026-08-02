@@ -4,9 +4,9 @@ use bitfun_runtime_ports::{
     AgentSessionCompactionRequest, AgentSessionCreateRequest, AgentSessionCreateResult,
     AgentSessionListRequest, AgentSessionModeUpdateRequest, AgentSessionModelUpdateRequest,
     AgentSessionRevertRequest, AgentSessionRevertResult, AgentSessionSummary,
-    AgentTurnCancellationRequest, AgentTurnCancellationResult, AgentWorkspaceReference,
-    AgentWorkspaceReferenceSearchRequest, AgentWorkspaceReferenceSearchResult, SessionTranscript,
-    WorkspaceDiffSnapshot,
+    AgentTurnCancellationRequest, AgentTurnCancellationResult, AgentUserShellCommandRequest,
+    AgentWorkspaceReference, AgentWorkspaceReferenceSearchRequest,
+    AgentWorkspaceReferenceSearchResult, SessionTranscript, WorkspaceDiffSnapshot,
 };
 use serde::{Deserialize, Serialize};
 
@@ -97,6 +97,9 @@ pub enum RuntimeIpcOperation {
     SubmitTurn {
         request: AgentDialogTurnRequest,
     },
+    RunUserShellCommand {
+        request: AgentUserShellCommandRequest,
+    },
     CancelTurn {
         request: AgentTurnCancellationRequest,
     },
@@ -129,6 +132,7 @@ impl RuntimeIpcOperation {
             Self::SearchWorkspaceReferences { request } => Some(&request.session_id),
             Self::WorkspaceReferencesForMessage { request } => Some(&request.session_id),
             Self::SubmitTurn { request } => Some(&request.session_id),
+            Self::RunUserShellCommand { request } => Some(&request.session_id),
             Self::CancelTurn { request } => Some(&request.session_id),
             Self::PendingPermissions { session_id }
             | Self::RespondPermission { session_id, .. } => Some(session_id),
@@ -161,7 +165,8 @@ impl RuntimeIpcOperation {
             | Self::UpdateSessionModel { .. }
             | Self::RenameSession { .. }
             | Self::CompactSession { .. }
-            | Self::SubmitTurn { .. } => {
+            | Self::SubmitTurn { .. }
+            | Self::RunUserShellCommand { .. } => {
                 RuntimeIpcOperationRules::new(CurrentController, true, false, true)
             }
             Self::ForkSession { .. } => {

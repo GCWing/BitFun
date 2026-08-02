@@ -1207,6 +1207,27 @@ pub struct AgentLocalCommandTurnRecordRequest {
     pub metadata: serde_json::Map<String, serde_json::Value>,
 }
 
+/// Starts one user-authored shell command as a normal, model-visible tool turn.
+///
+/// The caller provides the exact turn identity so interactive adapters can
+/// register cancellation before the side effect is admitted. Implementations
+/// must route execution through the normal tool, permission, and audit owners;
+/// this is not a generic process-spawn or arbitrary-tool contract.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct AgentUserShellCommandRequest {
+    pub session_id: String,
+    pub turn_id: String,
+    pub command: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct AgentUserShellCommandResult {
+    pub session_id: String,
+    pub turn_id: String,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentSessionModelUpdateRequest {
@@ -2263,6 +2284,14 @@ pub trait AgentLocalCommandTurnPort: Send + Sync {
         &self,
         request: AgentLocalCommandTurnRecordRequest,
     ) -> PortResult<()>;
+}
+
+#[async_trait::async_trait]
+pub trait AgentUserShellCommandPort: Send + Sync {
+    async fn run_user_shell_command(
+        &self,
+        request: AgentUserShellCommandRequest,
+    ) -> PortResult<AgentUserShellCommandResult>;
 }
 
 #[async_trait::async_trait]
