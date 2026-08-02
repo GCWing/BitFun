@@ -7,6 +7,7 @@ export function runManifestParserSelfTest({
   parseManifestDependencies,
   manifestDependencyMatches,
   matchingForbiddenDependency,
+  coreClosedFeatureProfileRules,
   coreProductFullFeatureAssemblyRule,
   ownerCrateFeatureAssemblyRules,
   parseManifestFeatures,
@@ -144,14 +145,43 @@ export function runManifestParserSelfTest({
   }
 
   for (const featureName of [
+    'announcement',
+    'file-watch',
+    'git',
+    'review-platform',
     'ssh-remote',
     'product-capabilities',
     'product-domains',
-    'service-integrations',
     'tool-packs',
   ]) {
     if (!coreProductFullFeatureAssemblyRule.requiredFeatureRefs.includes(featureName)) {
       throw new Error(`core product-full assembly rule must require ${featureName}`);
+    }
+  }
+  const closedCoreProfiles = new Map(
+    coreClosedFeatureProfileRules.map((rule) => [rule.featureName, rule]),
+  );
+  const expectedClosedCoreProfiles = new Map([
+    ['announcement', ['bitfun-services-integrations/announcement']],
+    ['file-watch', ['bitfun-services-integrations/file-watch']],
+    ['git', ['bitfun-services-integrations/git']],
+    ['review-platform', ['bitfun-services-integrations/review-platform']],
+    ['service-integrations', ['announcement', 'file-watch', 'git', 'review-platform']],
+    ['ssh-remote', ['bitfun-services-integrations/remote-ssh-concrete']],
+  ]);
+  for (const [featureName, expectedReferences] of expectedClosedCoreProfiles) {
+    const rule = closedCoreProfiles.get(featureName);
+    if (!rule?.exact) {
+      throw new Error(`core closed feature profile must cover ${featureName} exactly`);
+    }
+    if (
+      rule.requiredFeatureRefs.length !== expectedReferences.length
+      || expectedReferences.some((reference) => !rule.requiredFeatureRefs.includes(reference))
+    ) {
+      throw new Error(`core closed feature profile has stale references for ${featureName}`);
+    }
+    if (rule.requiredFeatureRefs.some((reference) => reference.includes('product-full'))) {
+      throw new Error(`core closed feature profile must not hide product-full in ${featureName}`);
     }
   }
   const ownerFeatureRulePaths = new Set(
@@ -183,12 +213,18 @@ export function runManifestParserSelfTest({
     'default = ["product-full"]',
     'product-full = [',
     '    "dep:tool-runtime",',
-    '    "service-integrations",',
+    '    "announcement",',
+    '    "file-watch",',
+    '    "git",',
+    '    "review-platform",',
     ']',
-    'service-integrations = ["dep:git2", "dep:rmcp"]',
+    'announcement = ["bitfun-services-integrations/announcement"]',
+    'file-watch = ["bitfun-services-integrations/file-watch"]',
+    'git = ["bitfun-services-integrations/git"]',
+    'review-platform = ["bitfun-services-integrations/review-platform"]',
+    'service-integrations = ["announcement", "file-watch", "git", "review-platform"]',
     'ssh-remote = [',
     '    "bitfun-services-integrations/remote-ssh-concrete",',
-    '    "russh",',
     ']',
     '[dependencies]',
     'git2 = { workspace = true, optional = true }',
@@ -199,11 +235,15 @@ export function runManifestParserSelfTest({
   if (!parsedFeatures.get('product-full')?.refs.includes('dep:tool-runtime')) {
     throw new Error('feature parser must detect multiline dependency feature references');
   }
-  if (!parsedFeatures.get('service-integrations')?.refs.includes('dep:rmcp')) {
+  if (!parsedFeatures.get('service-integrations')?.refs.includes('git')) {
     throw new Error('feature parser must detect inline dependency feature references');
   }
-  if (!parsedFeatures.get('ssh-remote')?.refs.includes('russh')) {
-    throw new Error('feature parser must detect implicit optional dependency feature references');
+  if (
+    !parsedFeatures
+      .get('ssh-remote')
+      ?.refs.includes('bitfun-services-integrations/remote-ssh-concrete')
+  ) {
+    throw new Error('feature parser must detect dependency capability feature references');
   }
 
   const acceptsGitFacadeLine = createFacadeLineChecker('bitfun_services_integrations::git');
@@ -550,6 +590,10 @@ export function runManifestParserSelfTest({
     'rmcp',
     'image',
     'tool-runtime',
+    'rustls',
+    'rustls-native-certs',
+    'schannel',
+    'win32job',
     'bitfun-relay-service',
     'htmd',
     'legible',
@@ -567,14 +611,26 @@ export function runManifestParserSelfTest({
   );
   const coreFullyMigratedDeps = new Set([
     'aes',
+    'aes-gcm',
     'bitfun-relay-service',
+    'eventsource-stream',
+    'git2',
+    'glob',
+    'globset',
     'hostname',
     'htmd',
     'legible',
     'local-ip-address',
     'mac_address',
     'qrcode',
+    'rand',
     'readability-js',
+    'russh',
+    'rustls',
+    'rustls-native-certs',
+    'schannel',
+    'sse-stream',
+    'win32job',
     'x25519-dalek',
   ]);
   for (const dep of coreProfile?.forbiddenNonOptionalDeps ?? []) {
@@ -585,16 +641,10 @@ export function runManifestParserSelfTest({
       throw new Error(`core optional dependency owner rule must cover forbidden dependency ${dep}`);
     }
   }
-  for (const dep of ['git2', 'rmcp', 'image', 'tool-runtime']) {
+  for (const dep of ['rmcp', 'image', 'tool-runtime']) {
     if (!coreOptionalOwnerDeps.has(dep)) {
       throw new Error(`core optional dependency owner rule must cover ${dep}`);
     }
-  }
-  const coreGit2Owner = coreOptionalOwnerRule?.dependencies.find(
-    (dependency) => dependency.depName === 'git2',
-  );
-  if (!coreGit2Owner?.ownerFeatures.includes('service-integrations')) {
-    throw new Error('core optional dependency owner rule must keep git2 under service-integrations');
   }
   const servicesOptionalOwnerRule = optionalDependencyFeatureOwnerRules.find(
     (rule) => rule.crateName === 'services-integrations',
@@ -3789,7 +3839,7 @@ export function runManifestParserSelfTest({
         'feature = "product-domains"',
         'pub mod function_agents',
         'pub mod miniapp',
-        'feature = "service-integrations"',
+        'feature = "product-full"',
         'service_agent_runtime',
       ],
     },
@@ -3815,12 +3865,17 @@ export function runManifestParserSelfTest({
     {
       path: 'src/crates/assembly/core/src/service/mod.rs',
       contracts: [
-        'feature = "service-integrations"',
+        'feature = "announcement"',
+        'pub mod announcement',
+        'feature = "file-watch"',
+        'file_watch',
+        'feature = "git"',
         'pub mod git',
+        'feature = "product-full"',
         'pub mod mcp',
         'pub mod remote_connect',
+        'feature = "review-platform"',
         'pub mod review_platform',
-        'feature = "product-full"',
         'pub mod search',
         'pub mod snapshot',
       ],
@@ -3832,7 +3887,7 @@ export function runManifestParserSelfTest({
     {
       path: 'src/crates/assembly/core/src/service/workspace/manager.rs',
       contracts: [
-        'feature = "service-integrations"',
+        'feature = "git"',
         'global_worktree_topology_service',
         'return None',
       ],

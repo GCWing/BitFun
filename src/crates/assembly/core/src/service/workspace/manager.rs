@@ -1,6 +1,6 @@
 //! Workspace manager.
 
-#[cfg(feature = "service-integrations")]
+#[cfg(feature = "git")]
 use super::worktree_topology::global_worktree_topology_service;
 use super::WorktreeTopologyFreshness;
 use crate::service::remote_ssh::workspace_state::{
@@ -450,13 +450,13 @@ impl WorkspaceInfo {
         workspace_root: &Path,
         freshness: WorktreeTopologyFreshness,
     ) -> Option<WorkspaceWorktreeInfo> {
-        #[cfg(not(feature = "service-integrations"))]
+        #[cfg(not(feature = "git"))]
         {
             let _ = (workspace_root, freshness);
             return None;
         }
 
-        #[cfg(feature = "service-integrations")]
+        #[cfg(feature = "git")]
         {
             let normalized_workspace_path = workspace_root.to_string_lossy().replace('\\', "/");
             let worktrees = match global_worktree_topology_service()

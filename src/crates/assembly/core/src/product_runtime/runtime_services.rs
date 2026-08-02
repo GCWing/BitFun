@@ -20,7 +20,6 @@ use terminal_core::TerminalRuntimePort;
 
 use crate::agentic::session::CoreSessionStorePort;
 
-#[cfg(feature = "service-integrations")]
 use crate::service_agent_runtime::{
     CoreRemoteWorkspaceFileRuntimeHost, CoreRemoteWorkspaceRuntimeHost,
 };
@@ -90,22 +89,14 @@ impl RuntimeServicesProvider for CoreRuntimeServicesProvider {
         #[cfg(feature = "ssh-remote")]
         let builder = builder.with_optional_remote_exec(Some(Self::remote_exec_port()));
 
-        #[cfg(feature = "service-integrations")]
-        {
-            let remote_workspace: Arc<dyn RemoteWorkspacePort> =
-                Arc::new(CoreRemoteWorkspaceRuntimeHost::new());
-            let remote_projection: Arc<dyn RemoteProjectionPort> =
-                Arc::new(CoreRemoteWorkspaceFileRuntimeHost::new());
+        let remote_workspace: Arc<dyn RemoteWorkspacePort> =
+            Arc::new(CoreRemoteWorkspaceRuntimeHost::new());
+        let remote_projection: Arc<dyn RemoteProjectionPort> =
+            Arc::new(CoreRemoteWorkspaceFileRuntimeHost::new());
 
-            builder
-                .with_optional_remote_workspace(Some(remote_workspace))
-                .with_optional_remote_projection(Some(remote_projection))
-        }
-
-        #[cfg(not(feature = "service-integrations"))]
-        {
-            builder
-        }
+        builder
+            .with_optional_remote_workspace(Some(remote_workspace))
+            .with_optional_remote_projection(Some(remote_projection))
     }
 }
 
@@ -130,7 +121,7 @@ impl RuntimeServicesProvider for CoreLocalRuntimeServicesProvider {
             .with_events(self.ports.events())
             .with_clock(self.ports.clock());
 
-        #[cfg(feature = "service-integrations")]
+        #[cfg(feature = "git")]
         let builder = builder.with_optional_git(Some(Arc::new(
             bitfun_services_integrations::git::GitWorkspaceDiffPort::new(
                 self.ports.workspace_root(),
@@ -192,7 +183,11 @@ mod local_runtime_tests {
     #[tokio::test]
     async fn local_runtime_services_bind_git_queries_to_the_canonical_workspace() {
         let workspace = tempfile::tempdir().expect("workspace");
-        git2::Repository::init(workspace.path()).expect("git repository");
+        bitfun_services_integrations::git::execute_git_command_sync(
+            workspace.path().to_string_lossy().as_ref(),
+            &["init"],
+        )
+        .expect("git repository");
         std::fs::write(workspace.path().join("new.txt"), "new file\n").expect("workspace file");
 
         let (_, services) =

@@ -4,7 +4,7 @@
 //! isolated. High-coupling runtime services stay here until their port
 //! contracts and equivalence tests are explicit.
 
-#[cfg(feature = "service-integrations")]
+#[cfg(feature = "announcement")]
 pub mod announcement; // Announcement / feature-demo / tips system
 pub(crate) mod bootstrap; // Workspace persona bootstrap helpers
 #[cfg(feature = "canvas-runtime")]
@@ -14,18 +14,18 @@ pub mod config; // Config management
 pub mod cron; // Scheduled jobs
 pub mod dispatch; // Outbound dispatch observer index and target contracts
 pub mod filesystem; // FileSystem management
-#[cfg(feature = "service-integrations")]
+#[cfg(feature = "git")]
 pub mod git; // Git service
 pub mod i18n; // I18n service
 #[cfg(feature = "product-full")]
 pub(crate) mod instruction_context; // Workspace instruction file prompt helpers
 pub mod lsp; // LSP (Language Server Protocol) system
-#[cfg(feature = "service-integrations")]
+#[cfg(feature = "product-full")]
 pub mod mcp; // MCP (Model Context Protocol) system
-#[cfg(feature = "service-integrations")]
+#[cfg(feature = "product-full")]
 pub mod remote_connect; // Remote Connect (phone → desktop)
 pub mod remote_ssh; // Remote SSH (desktop → server)
-#[cfg(feature = "service-integrations")]
+#[cfg(feature = "review-platform")]
 pub mod review_platform; // Pull request review platform adapters
 pub mod runtime; // Managed runtime and capability management
 #[cfg(feature = "product-full")]
@@ -47,10 +47,10 @@ pub mod worktree; // Managed Git worktree lifecycle and session bindings
 pub use terminal_core as terminal;
 
 // Re-export main components.
-#[cfg(feature = "service-integrations")]
+#[cfg(feature = "announcement")]
 pub use announcement::{AnnouncementCard, AnnouncementScheduler, AnnouncementSchedulerRef};
 pub use bitfun_services_core::{diagnostics, diff, system};
-#[cfg(feature = "service-integrations")]
+#[cfg(feature = "file-watch")]
 pub use bitfun_services_integrations::file_watch;
 pub use bootstrap::reset_workspace_persona_files_to_default;
 #[cfg(feature = "canvas-runtime")]
@@ -63,20 +63,20 @@ pub use cron::{
 pub use diff::{
     DiffConfig, DiffHunk, DiffLine, DiffLineType, DiffOptions, DiffResult, DiffService,
 };
-#[cfg(feature = "service-integrations")]
+#[cfg(feature = "file-watch")]
 pub use file_watch::{
     get_global_file_watch_service, get_watched_paths, initialize_file_watch_service,
     start_file_watch, stop_file_watch, FileWatchEvent, FileWatchEventKind, FileWatchService,
     FileWatcherConfig,
 };
 pub use filesystem::{DirectoryStats, FileSystemService, FileSystemServiceFactory};
-#[cfg(feature = "service-integrations")]
+#[cfg(feature = "git")]
 pub use git::GitService;
 pub use i18n::{get_global_i18n_service, I18nConfig, I18nService, LocaleId, LocaleMetadata};
 pub use lsp::LspManager;
-#[cfg(feature = "service-integrations")]
+#[cfg(feature = "product-full")]
 pub use mcp::MCPService;
-#[cfg(feature = "service-integrations")]
+#[cfg(feature = "review-platform")]
 pub use review_platform::{
     ReviewAuthSource, ReviewAuthState, ReviewChecks, ReviewDecision, ReviewEvidenceCompleteness,
     ReviewFileStatus, ReviewItemState, ReviewPlatformAccount, ReviewPlatformAuthChallenge,

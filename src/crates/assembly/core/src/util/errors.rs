@@ -206,6 +206,7 @@ impl BitFunError {
     }
 }
 
+#[cfg(feature = "product-full")]
 impl From<bitfun_agent_stream::StreamProcessorError> for BitFunError {
     fn from(error: bitfun_agent_stream::StreamProcessorError) -> Self {
         match error {
@@ -216,6 +217,7 @@ impl From<bitfun_agent_stream::StreamProcessorError> for BitFunError {
     }
 }
 
+#[cfg(feature = "product-full")]
 impl From<bitfun_agent_runtime::event_bus::EventBusError> for BitFunError {
     fn from(error: bitfun_agent_runtime::event_bus::EventBusError) -> Self {
         Self::Agent(error.to_string())
@@ -228,7 +230,7 @@ impl From<bitfun_agent_tools::computer_use::ComputerUseContractError> for BitFun
     }
 }
 
-#[cfg(feature = "service-integrations")]
+#[cfg(feature = "product-full")]
 impl From<bitfun_services_integrations::mcp::MCPRuntimeError> for BitFunError {
     fn from(error: bitfun_services_integrations::mcp::MCPRuntimeError) -> Self {
         use bitfun_services_integrations::mcp::MCPRuntimeErrorKind;

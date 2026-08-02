@@ -16,6 +16,7 @@ pub mod subscription_auth;
 #[cfg(feature = "ai-adapter-runtime")]
 pub use ai::AIClient;
 pub use app_paths::{get_path_manager_arc, try_get_path_manager_arc, PathManager, StorageLevel};
+#[cfg(feature = "runtime-services")]
 pub use events::BackendEventManager;
 pub use filesystem::{
     BatchedFileSearchProgressSink, FileContentSearchOptions, FileInfo, FileNameSearchOptions,

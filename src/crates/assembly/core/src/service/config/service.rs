@@ -120,7 +120,7 @@ impl ConfigService {
     /// Atomically replaces one JSON configuration value when its current value
     /// still matches the caller's snapshot. The read, comparison, and persisted
     /// write share the existing manager write lock.
-    #[cfg(any(test, feature = "service-integrations"))]
+    #[cfg(any(test, feature = "product-full"))]
     pub(crate) async fn compare_and_set_json_config(
         &self,
         path: &str,

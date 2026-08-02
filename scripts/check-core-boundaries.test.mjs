@@ -794,3 +794,34 @@ test('optional dependency ownership rejects undeclared direct feature owners', a
     ['missing', 'feature-ref'],
   );
 });
+
+test('closed feature profiles reject product-full hidden behind a child feature', async () => {
+  const { unexpectedReachableLocalFeatures } = await import(
+    './core-boundaries/manifest-feature-helpers.mjs'
+  );
+  const features = new Map([
+    ['service-integrations', { refs: ['announcement'], line: 1 }],
+    [
+      'announcement',
+      {
+        refs: ['bitfun-services-integrations/announcement', 'product-full'],
+        line: 2,
+      },
+    ],
+    ['product-full', { refs: ['dep:rmcp'], line: 3 }],
+  ]);
+
+  assert.deepEqual(
+    unexpectedReachableLocalFeatures(
+      features,
+      'service-integrations',
+      new Set(['announcement']),
+    ),
+    [
+      {
+        featureName: 'product-full',
+        path: ['service-integrations', 'announcement', 'product-full'],
+      },
+    ],
+  );
+});

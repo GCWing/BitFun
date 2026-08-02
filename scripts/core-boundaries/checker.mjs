@@ -15,6 +15,7 @@ import {
   cratePathForName,
 } from './rules/crate-layout.mjs';
 import {
+  coreClosedFeatureProfileRules,
   coreProductFullFeatureAssemblyRule,
   optionalDependencyFeatureOwnerRules,
   ownerCrateFeatureAssemblyRules,
@@ -32,6 +33,7 @@ import {
   featureReferencesDependency,
   featureReferencesFeature,
   unexpectedDependencyOwnerFeatures,
+  unexpectedReachableLocalFeatures,
 } from './manifest-feature-helpers.mjs';
 import { checkCargoDependencyBoundariesSafely } from './cargo-dependency-boundaries.mjs';
 
@@ -592,6 +594,61 @@ function checkCoreProductFullFeatureAssembly(rule) {
   }
 }
 
+function checkClosedFeatureProfile(rule) {
+  const manifestPath = repoPathToFsPath(rule.manifestPath);
+  const features = parseManifestFeatures(readText(manifestPath).split(/\r?\n/));
+  const feature = features.get(rule.featureName);
+  if (!feature) {
+    failures.push({
+      path: manifestPath,
+      line: 1,
+      message: `${rule.reason}; missing ${rule.featureName} feature declaration`,
+    });
+    return;
+  }
+
+  for (const reference of rule.requiredFeatureRefs) {
+    if (!feature.refs.includes(reference)) {
+      failures.push({
+        path: manifestPath,
+        line: feature.line,
+        message: `${rule.reason}; ${rule.featureName} must explicitly enable ${reference}`,
+      });
+    }
+  }
+
+  if (!rule.exact) {
+    return;
+  }
+  const allowedReferences = new Set(rule.requiredFeatureRefs);
+  for (const reference of feature.refs) {
+    if (!allowedReferences.has(reference)) {
+      failures.push({
+        path: manifestPath,
+        line: feature.line,
+        message: `${rule.reason}; ${rule.featureName} must not enable ${reference}`,
+      });
+    }
+  }
+
+  const allowedLocalFeatures = new Set(
+    rule.requiredFeatureRefs.filter((reference) => features.has(reference)),
+  );
+  for (const unexpected of unexpectedReachableLocalFeatures(
+    features,
+    rule.featureName,
+    allowedLocalFeatures,
+  )) {
+    failures.push({
+      path: manifestPath,
+      line: features.get(unexpected.featureName)?.line ?? feature.line,
+      message:
+        `${rule.reason}; ${rule.featureName} must not reach local feature `
+        + `${unexpected.featureName} via ${unexpected.path.join(' -> ')}`,
+    });
+  }
+}
+
 function checkOwnerCrateFeatureAssembly(rule) {
   const manifestPath = repoPathToFsPath(rule.manifestPath);
   const features = parseManifestFeatures(readText(manifestPath).split(/\r?\n/));
@@ -1004,6 +1061,7 @@ export function runCoreBoundaryCheck() {
       parseManifestDependencies,
       manifestDependencyMatches,
       matchingForbiddenDependency,
+      coreClosedFeatureProfileRules,
       coreProductFullFeatureAssemblyRule,
       ownerCrateFeatureAssemblyRules,
       parseManifestFeatures,
@@ -1064,6 +1122,9 @@ export function runCoreBoundaryCheck() {
 
   checkCoreDefaultProductFullFeature();
   checkCoreProductFullFeatureAssembly(coreProductFullFeatureAssemblyRule);
+  for (const rule of coreClosedFeatureProfileRules) {
+    checkClosedFeatureProfile(rule);
+  }
   for (const rule of ownerCrateFeatureAssemblyRules) {
     checkOwnerCrateFeatureAssembly(rule);
   }

@@ -45,7 +45,6 @@ reqwest = { workspace = true, optional = true }
 axum = { workspace = true, optional = true }
 tower-http = { workspace = true, optional = true }
 
-glob = { workspace = true, optional = true }
 notify = { workspace = true }
 dirs = { workspace = true }
 dunce = { workspace = true }
@@ -54,33 +53,25 @@ fs2 = { workspace = true, optional = true }
 flate2 = { workspace = true, optional = true }
 include_dir = { workspace = true, optional = true }
 
-git2 = { workspace = true, optional = true }
-
 # Command detection (cross-platform)
 similar = { workspace = true, optional = true }
 urlencoding = { workspace = true }
-
-globset = { workspace = true, optional = true }
-
-eventsource-stream = { workspace = true, optional = true }
 
 # MCP Streamable HTTP client (official rust-sdk)
 rmcp = { workspace = true, features = [
     "transport-streamable-http-client-reqwest",
 ], optional = true }
-sse-stream = { workspace = true, optional = true }
-
 # Shared AI protocol adapters
 bitfun-ai-adapters = { path = "../../adapters/ai-adapters", optional = true }
 
 # Lightweight agent stream processing
-bitfun-agent-stream = { path = "../../execution/agent-stream" }
+bitfun-agent-stream = { path = "../../execution/agent-stream", optional = true }
 
 # Agent runtime owner contracts
-bitfun-agent-runtime = { path = "../../execution/agent-runtime" }
+bitfun-agent-runtime = { path = "../../execution/agent-runtime", optional = true }
 
 # Harness workflow contracts
-bitfun-harness = { path = "../../execution/harness" }
+bitfun-harness = { path = "../../execution/harness", optional = true }
 
 # Product capability pack contracts
 bitfun-product-capabilities = { path = "../product-capabilities", default-features = false, optional = true }
@@ -122,24 +113,18 @@ terminal-core = { path = "../../services/terminal" }
 fluent-bundle = { workspace = true }
 unic-langid = { workspace = true }
 
-# Encryption (Remote Connect E2E)
-aes-gcm = { workspace = true, optional = true }
 sha2 = { workspace = true }
-rand = { workspace = true, optional = true }
 
 # QR code generation
 
 # WebSocket client
 tokio-tungstenite = { workspace = true, optional = true }
 
-# SSH - Remote SSH support (optional feature)
-russh = { workspace = true, optional = true }
-
 # Event layer dependency (lowest layer)
 bitfun-core-types = { path = "../../contracts/core-types" }
 bitfun-events = { path = "../../contracts/events" }
 bitfun-runtime-ports = { path = "../../contracts/runtime-ports", features = ["permission"] }
-bitfun-runtime-services = { path = "../../execution/runtime-services" }
+bitfun-runtime-services = { path = "../../execution/runtime-services", optional = true }
 
 # Reviewed product-full plugin composition root.
 bitfun-opencode-adapter = { path = "../../adapters/opencode-adapter", optional = true }
@@ -150,16 +135,6 @@ bitfun-plugin-runtime-client = { path = "../../execution/plugin-runtime-client",
 # Transport layer dependency
 bitfun-transport = { path = "../../adapters/transport" }
 
-# Non-Windows: vendored OpenSSL for libgit2 (no system install).
-[target.'cfg(not(windows))'.dependencies]
-git2 = { workspace = true, features = ["vendored-openssl"], optional = true }
-
-[target.'cfg(windows)'.dependencies]
-win32job = { workspace = true }
-rustls = { workspace = true }
-rustls-native-certs = "0.8"
-schannel = "0.1"
-
 [features]
 # Full product runtime feature set. Product crates should depend on this
 # explicitly before `bitfun-core` default features are made lighter.
@@ -167,15 +142,16 @@ default = ["product-full"]
 product-full = [
     "ai-adapter-runtime",
     "canvas-runtime",
+    "dep:axum",
+    "dep:bitfun-agent-runtime",
+    "dep:bitfun-agent-stream",
+    "dep:bitfun-harness",
     "dep:chrono-tz",
     "dep:cron",
     "dep:dashmap",
-    "dep:eventsource-stream",
     "dep:filetime",
     "dep:flate2",
     "dep:fs2",
-    "dep:glob",
-    "dep:globset",
     "dep:include_dir",
     "dep:bitfun-opencode-adapter",
     "dep:bitfun-claude-code-adapter",
@@ -183,14 +159,23 @@ product-full = [
     "dep:bitfun-external-sources",
     "dep:bitfun-plugin-runtime-client",
     "dep:indexmap",
+    "dep:image",
     "dep:md5",
+    "dep:reqwest",
+    "dep:rmcp",
     "dep:similar",
+    "dep:tokio-tungstenite",
+    "dep:tower-http",
     "dep:tool-runtime",
+    "bitfun-services-integrations/product-full",
     "ssh-remote",
     "product-capabilities",
     "product-domains",
     "runtime-services",
-    "service-integrations",
+    "announcement",
+    "file-watch",
+    "git",
+    "review-platform",
     "tool-packs",
 ]
 ai-adapter-runtime = [
@@ -210,33 +195,24 @@ product-domains = [
     "bitfun-services-integrations/miniapp-runtime",
     "bitfun-services-integrations/miniapp-market",
     "bitfun-product-domains/product-full",
+    "runtime-services",
 ]
 canvas-runtime = [
     "product-domains",
     "bitfun-services-integrations/canvas-runtime",
 ]
-runtime-services = []
-service-integrations = [
-    "dep:aes-gcm",
-    "dep:axum",
-    "dep:git2",
-    "dep:image",
-    "dep:md5",
-    "dep:rand",
-    "dep:reqwest",
-    "dep:rmcp",
-    "dep:sse-stream",
-    "dep:tokio-tungstenite",
-    "dep:tower-http",
-    "bitfun-services-integrations/product-full",
-]
+runtime-services = ["dep:bitfun-runtime-services"]
+announcement = ["bitfun-services-integrations/announcement"]
+file-watch = ["bitfun-services-integrations/file-watch"]
+git = ["bitfun-services-integrations/git"]
+review-platform = ["bitfun-services-integrations/review-platform"]
+service-integrations = ["announcement", "file-watch", "git", "review-platform"]
 tool-packs = ["dep:bitfun-tool-packs", "bitfun-tool-packs/product-full", "dep:image"]
 # Deprecated compatibility feature. Tauri integration is desktop-owned now;
 # keep the public feature name as a no-op for downstream manifests.
 tauri-support = []
 ssh-remote = [
     "bitfun-services-integrations/remote-ssh-concrete",
-    "russh",
 ]
 
 [dev-dependencies]
@@ -249,7 +225,7 @@ required-features = ["product-full"]
 
 [[test]]
 name = "git_contracts"
-required-features = ["service-integrations"]
+required-features = ["git"]
 
 [[test]]
 name = "product_assembly"
@@ -257,11 +233,11 @@ required-features = ["product-full"]
 
 [[test]]
 name = "remote_mcp_streamable_http"
-required-features = ["service-integrations"]
+required-features = ["product-full"]
 
 [[test]]
 name = "remote_connect_host_boundary"
-required-features = ["service-integrations"]
+required-features = ["product-full"]
 
 [build-dependencies]
 sha2 = { workspace = true }

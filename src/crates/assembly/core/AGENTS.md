@@ -79,6 +79,12 @@ SessionManager -> Session -> DialogTurn -> ModelRound
 - Feature work must keep `product-full` as the compatibility product assembly
   boundary unless a separate product matrix review changes default capability
   selection.
+- Keep the light compatibility features independently compilable:
+  `announcement`, `file-watch`, `git`, and `review-platform` own their matching
+  service facade, while `service-integrations` is only their compatibility
+  aggregate. `ssh-remote` selects the concrete SSH service only; Dispatch
+  controllers, MCP, Remote Connect, and agent runtime wiring remain
+  `product-full` product composition.
 - Keep `cargo check -p bitfun-core --no-default-features` viable. Gate
   product-only modules at their owner feature; if a light facade operation
   cannot safely complete without a product owner, fail closed and preserve any

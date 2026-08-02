@@ -163,7 +163,7 @@ pub struct DispatchAppendRequest {
 
 /// The wire shape and structural limits come from the shared contract; the
 /// controller only adds transport-owned policy (the device inline budget).
-pub use bitfun_services_core::dispatch_contract::DispatchAttachment as DispatchAttachmentPayload;
+pub(super) use bitfun_services_core::dispatch_contract::DispatchAttachment as DispatchAttachmentPayload;
 
 pub(super) fn validate_attachment_payloads(
     attachments: &[DispatchAttachmentPayload],
@@ -179,8 +179,7 @@ pub(super) fn validate_device_attachment_budget(
         .iter()
         .map(|attachment| attachment.data_url.len())
         .sum();
-    if total
-        > bitfun_services_core::dispatch_contract::MAX_DEVICE_DISPATCH_ATTACHMENTS_TOTAL_BYTES
+    if total > bitfun_services_core::dispatch_contract::MAX_DEVICE_DISPATCH_ATTACHMENTS_TOTAL_BYTES
     {
         anyhow::bail!(
             "Device dispatch carries at most 192 KiB of inline images; use an SSH target for larger screenshots"
@@ -1078,8 +1077,7 @@ pub(super) fn continue_payload(request: &DispatchContinueRequest) -> Value {
         payload["kind"] = Value::String(kind.to_string());
     }
     if !request.attachments.is_empty() {
-        payload["attachments"] = serde_json::to_value(&request.attachments)
-            .unwrap_or(Value::Null);
+        payload["attachments"] = serde_json::to_value(&request.attachments).unwrap_or(Value::Null);
     }
     payload
 }

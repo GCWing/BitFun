@@ -963,7 +963,6 @@ dependencies = [
 name = "bitfun-core"
 version = "0.2.15"
 dependencies = [
- "aes-gcm",
  "anyhow",
  "async-trait",
  "axum",
@@ -994,15 +993,11 @@ dependencies = [
  "dashmap",
  "dirs 6.0.0",
  "dunce",
- "eventsource-stream",
  "filetime",
  "flate2",
  "fluent-bundle",
  "fs2",
  "futures",
- "git2",
- "glob",
- "globset",
  "hex",
  "image 0.25.10",
  "include_dir",
@@ -1010,21 +1005,15 @@ dependencies = [
  "log",
  "md5",
  "notify",
- "rand 0.8.7",
  "regex",
  "reqwest",
  "rmcp",
  "rusqlite",
- "russh",
- "rustls",
- "rustls-native-certs",
- "schannel",
  "serde",
  "serde_json",
  "serde_yaml",
  "sha2",
  "similar",
- "sse-stream",
  "tempfile",
  "terminal-core",
  "thiserror 2.0.19",
@@ -1037,7 +1026,6 @@ dependencies = [
  "unic-langid",
  "urlencoding",
  "uuid",
- "win32job",
 ]
 
 [[package]]

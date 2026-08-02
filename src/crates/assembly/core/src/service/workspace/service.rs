@@ -13,7 +13,7 @@ use crate::infrastructure::{try_get_path_manager_arc, PathManager};
 use crate::service::bootstrap::{
     ensure_workspace_gitignore_ignores_bitfun, initialize_workspace_persona_files,
 };
-#[cfg(feature = "service-integrations")]
+#[cfg(feature = "git")]
 use crate::service::git::{GitError, GitWorktreeInfo};
 use crate::service::remote_ssh::workspace_state::{
     canonicalize_local_workspace_root, get_remote_workspace_manager, init_remote_workspace_manager,
@@ -617,7 +617,7 @@ impl WorkspaceService {
         result
     }
 
-    #[cfg(feature = "service-integrations")]
+    #[cfg(feature = "git")]
     pub async fn list_worktrees(
         &self,
         path: &Path,
@@ -628,7 +628,7 @@ impl WorkspaceService {
             .await
     }
 
-    #[cfg(feature = "service-integrations")]
+    #[cfg(feature = "git")]
     pub async fn is_live_worktree_root_in_same_repository(
         &self,
         registered_path: &Path,
@@ -639,7 +639,7 @@ impl WorkspaceService {
             .await
     }
 
-    #[cfg(feature = "service-integrations")]
+    #[cfg(feature = "git")]
     pub async fn invalidate_worktree_topology(&self, path: &Path) {
         super::worktree_topology::global_worktree_topology_service()
             .invalidate(path)

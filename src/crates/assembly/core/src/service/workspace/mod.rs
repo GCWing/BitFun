@@ -7,7 +7,7 @@ pub mod identity_watch;
 pub mod manager;
 pub mod provider;
 pub mod service;
-#[cfg(feature = "service-integrations")]
+#[cfg(feature = "git")]
 pub mod worktree_topology;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -31,5 +31,5 @@ pub use service::{
     WorkspaceHealthStatus, WorkspaceIdentityChangedEvent, WorkspaceImportResult,
     WorkspaceInfoUpdates, WorkspaceQuickSummary, WorkspaceService,
 };
-#[cfg(feature = "service-integrations")]
+#[cfg(feature = "git")]
 pub use worktree_topology::{global_worktree_topology_service, WorktreeTopologyService};
