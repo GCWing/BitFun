@@ -2,7 +2,8 @@
 @use '../../../styles/surface-stagger';
 
 .agent-card {
-  width: 360px;
+  width: 100%;
+  min-width: 0;
   height: 200px;
   border-radius: 15px;
   background: var(--element-bg-soft);

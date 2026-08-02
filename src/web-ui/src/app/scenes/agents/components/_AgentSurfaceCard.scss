@@ -4,7 +4,8 @@
 @mixin agent-surface-card($gradient, $accent) {
   --agent-surface-shadow-color: rgb(var(--color-overlay-slate-rgb));
 
-  width: 360px;
+  width: 100%;
+  min-width: 0;
   height: 200px;
   border-radius: 15px;
   background: var(--element-bg-soft);

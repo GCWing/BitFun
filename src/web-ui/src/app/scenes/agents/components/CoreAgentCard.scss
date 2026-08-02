@@ -152,34 +152,11 @@
   }
 }
 
-// ── Grid wrapper (3-col max for core section) ─────────────────────
-
-.core-agents-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
-  gap: $size-gap-2;
-  width: 100%;
-}
-
 // ── Animation ─────────────────────────────────────────────────────
 
 @media (prefers-reduced-motion: reduce) {
   .core-agent-card {
     animation: none;
     transition: none;
-  }
-}
-
-// ── Responsive ────────────────────────────────────────────────────
-
-@media (max-width: 1080px) {
-  .core-agents-grid {
-    grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
-  }
-}
-
-@media (max-width: 640px) {
-  .core-agents-grid {
-    grid-template-columns: 1fr;
   }
 }

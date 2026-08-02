@@ -656,7 +656,12 @@ const AgentsHomeView: React.FC = () => {
           )}
         >
           {loading ? (
-            <GallerySkeleton count={3} cardHeight={160} className="core-agent-skeleton" />
+            <GallerySkeleton
+              count={3}
+              cardHeight={160}
+              minCardWidth={360}
+              className="core-agent-skeleton"
+            />
           ) : coreAgents.length === 0 ? (
             <GalleryEmpty
               icon={<Cpu size={32} strokeWidth={1.5} />}
@@ -664,7 +669,7 @@ const AgentsHomeView: React.FC = () => {
               testId="agent-list-empty"
             />
           ) : (
-            <div className="core-agents-grid">
+            <GalleryGrid minCardWidth={360}>
               {coreAgents.map((agent, index) => (
                 <CoreAgentCard
                   key={agent.id}
@@ -690,7 +695,7 @@ const AgentsHomeView: React.FC = () => {
                   }
                 />
               ))}
-            </div>
+            </GalleryGrid>
           )}
         </GalleryZone>
 
