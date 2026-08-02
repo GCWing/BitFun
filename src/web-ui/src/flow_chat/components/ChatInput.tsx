@@ -2722,17 +2722,22 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         : []),
     ];
     const q = (slashCommandState.query || '').trim().toLowerCase();
-    const visibleItems = items.filter(item => isChatInputActionVisibleForTarget({
-      actionId: item.id,
-      isSubagentTarget: isSubagentInputTarget,
-    }));
+    // The picker offers exactly what this session can execute. Without this,
+    // an unsupported command picked from the list falls through the per-op
+    // submit gates and is sent to the agent as literal prompt text.
+    const visibleItems = items.filter(item =>
+      (item.id === 'reload' || caps.ops.has(item.id))
+      && isChatInputActionVisibleForTarget({
+        actionId: item.id,
+        isSubagentTarget: isSubagentInputTarget,
+      }));
     if (!q) return visibleItems;
 
     return visibleItems.filter(i => {
       const cmd = i.command.slice(1).toLowerCase();
       return cmd.includes(q) || i.label.toLowerCase().includes(q);
     });
-  }, [canLaunchReview, canReloadContext, derivedState?.isProcessing, isAcpInputSession, isBtwSession, isSubagentInputTarget, slashCommandState.query, t]);
+  }, [canLaunchReview, canReloadContext, caps.ops, derivedState?.isProcessing, isAcpInputSession, isBtwSession, isSubagentInputTarget, slashCommandState.query, t]);
 
   const getFilteredMcpPromptCommands = useCallback((): SlashMcpPromptItem[] => {
     if (isAcpInputSession) {

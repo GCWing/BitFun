@@ -123,37 +123,16 @@ async fn probe(request: DispatchProbeRequest) -> Result<DispatchProbeResponse> {
         .as_deref()
         .map(inspect_workspace)
         .transpose()?;
-    let mut capabilities = vec![
-        "persistent_jobs".to_string(),
-        "cursor_events".to_string(),
-        "workspace_serialization".to_string(),
-        "approval_auto".to_string(),
-        "approval_reject_and_report".to_string(),
-        "approval_remote".to_string(),
-        "frontend_event_projection".to_string(),
-        "append_message".to_string(),
-        "event_log_completeness".to_string(),
-        // Git-worktree delivery. A target without these cannot be provisioned
-        // at all — there is no snapshot fallback left — so controllers fail
-        // preflight rather than degrade.
-        "workspace_git_worktree".to_string(),
-        "workspace_git_bundle_upload".to_string(),
-        "workspace_git_sync".to_string(),
-        // A target may share the same package version while predating the
-        // dispatch entrypoint's early CLI-profile selection. Such a binary can
-        // accept a job but every detached worker then fails before execution.
-        // Advertise the behavioral fix explicitly so controllers fail closed.
-        "dispatch_worker_cli_profile".to_string(),
-        // v4: follow-up turns may override model and approval policy.
-        "per_turn_options".to_string(),
-        // v4: read-only persisted-state queries (usage report) and compact
-        // turns delivered through the continue mailbox.
-        "session_query".to_string(),
-        // v4: inline image attachments on submit and follow-up turns.
-        "inline_attachments".to_string(),
-    ];
+    let mut capabilities: Vec<String> =
+        bitfun_services_core::dispatch_contract::DISPATCH_BASE_TARGET_CAPABILITIES
+            .iter()
+            .map(|capability| capability.to_string())
+            .collect();
     if runner::is_supported() {
-        capabilities.push("detached_worker".to_string());
+        capabilities.push(
+            bitfun_services_core::dispatch_contract::DISPATCH_DETACHED_WORKER_CAPABILITY
+                .to_string(),
+        );
     }
     Ok(DispatchProbeResponse {
         protocol_version: DISPATCH_PROTOCOL_VERSION,
@@ -777,29 +756,7 @@ fn canonical_workspace(workspace_path: &str) -> Result<PathBuf> {
 }
 
 fn validate_attachments(attachments: &[protocol::DispatchAttachment]) -> Result<()> {
-    if attachments.len() > protocol::MAX_DISPATCH_ATTACHMENTS {
-        bail!(
-            "dispatch accepts at most {} attachments per turn",
-            protocol::MAX_DISPATCH_ATTACHMENTS
-        );
-    }
-    let mut total = 0usize;
-    for attachment in attachments {
-        if attachment.id.trim().is_empty() || attachment.id.len() > 128 {
-            bail!("dispatch attachment id must contain 1-128 bytes");
-        }
-        if !attachment.data_url.starts_with("data:image/") {
-            bail!("dispatch attachments must be image data URLs");
-        }
-        if attachment.data_url.len() > protocol::MAX_DISPATCH_ATTACHMENT_BYTES {
-            bail!("a dispatch attachment exceeds the 8 MiB limit");
-        }
-        total = total.saturating_add(attachment.data_url.len());
-    }
-    if total > protocol::MAX_DISPATCH_ATTACHMENTS_TOTAL_BYTES {
-        bail!("dispatch attachments exceed the 16 MiB total limit");
-    }
-    Ok(())
+    protocol::validate_dispatch_attachments(attachments).map_err(anyhow::Error::msg)
 }
 
 fn validate_submit_request(request: &DispatchSubmitRequest) -> Result<()> {

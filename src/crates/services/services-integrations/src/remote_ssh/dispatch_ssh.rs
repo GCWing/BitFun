@@ -84,8 +84,8 @@ const GLIBC_FLOOR: &str = "2.35";
 /// Same figure the relay source build uses.
 const SOURCE_BUILD_FREE_KB: u64 = 6 * 1024 * 1024;
 const REPO_GIT_URL: &str = "https://github.com/GCWing/BitFun.git";
-const DISPATCH_PROTOCOL_VERSION: u64 = 4;
-const DISPATCH_WORKER_CLI_PROFILE_CAPABILITY: &str = "dispatch_worker_cli_profile";
+const DISPATCH_PROTOCOL_VERSION: u64 =
+    bitfun_services_core::dispatch_contract::DISPATCH_PROTOCOL_VERSION as u64;
 /// First stable release whose CLI is known to contain every capability below.
 ///
 /// Development builds can require capabilities before their next stable
@@ -93,30 +93,12 @@ const DISPATCH_WORKER_CLI_PROFILE_CAPABILITY: &str = "dispatch_worker_cli_profil
 /// previous release, so comparing only the installed and controller version
 /// strings is not a sound compatibility test.
 const FIRST_COMPATIBLE_STABLE_DISPATCH_RELEASE: (u64, u64, u64) = (0, 2, 16);
-const REQUIRED_DISPATCH_CAPABILITIES: [&str; 17] = [
-    "persistent_jobs",
-    "cursor_events",
-    "detached_worker",
-    "workspace_serialization",
-    "frontend_event_projection",
-    "approval_auto",
-    "approval_reject_and_report",
-    "approval_remote",
-    "append_message",
-    "event_log_completeness",
-    // Git-worktree delivery. There is no snapshot fallback, so these are hard
-    // requirements rather than feature-detected extras.
-    "workspace_git_worktree",
-    "workspace_git_bundle_upload",
-    "workspace_git_sync",
-    DISPATCH_WORKER_CLI_PROFILE_CAPABILITY,
-    // v4: follow-up turns may override model and approval policy.
-    "per_turn_options",
-    // v4: read-only persisted-state queries and compact turns.
-    "session_query",
-    // v4: inline image attachments on submit and follow-up turns.
-    "inline_attachments",
-];
+/// Derived once from the shared contract: the unconditional target surface
+/// plus the platform-conditional detached worker.
+static REQUIRED_DISPATCH_CAPABILITIES: std::sync::LazyLock<Vec<&'static str>> =
+    std::sync::LazyLock::new(|| {
+        bitfun_services_core::dispatch_contract::dispatch_required_target_capabilities().collect()
+    });
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -516,31 +498,25 @@ pub fn validate_dispatch_protocol(protocol: &Value, approval_policy: Option<&str
     let Some(capabilities) = protocol.get("capabilities").and_then(Value::as_array) else {
         return Err(anyhow!("dispatch target returned no capability list"));
     };
-    let mut required = vec![
-        "persistent_jobs",
-        "cursor_events",
-        "detached_worker",
-        "workspace_serialization",
-        "frontend_event_projection",
-        "workspace_git_worktree",
-        "workspace_git_bundle_upload",
-        "workspace_git_sync",
-        DISPATCH_WORKER_CLI_PROFILE_CAPABILITY,
-    ];
+    // One source list: submission narrows the approval_* entries to the
+    // selected policy; probing (None) requires the complete surface.
+    let mut required: Vec<&'static str> = REQUIRED_DISPATCH_CAPABILITIES
+        .iter()
+        .copied()
+        .filter(|capability| !capability.starts_with("approval_"))
+        .collect();
     match approval_policy {
-        Some("auto") => &["approval_auto"],
-        Some("reject-and-report") => &["approval_reject_and_report"],
-        Some("remote") => &["approval_remote"],
+        Some("auto") => required.push("approval_auto"),
+        Some("reject-and-report") => required.push("approval_reject_and_report"),
+        Some("remote") => required.push("approval_remote"),
         Some(_) => return Err(anyhow!("unsupported dispatch approval policy")),
-        None => REQUIRED_DISPATCH_CAPABILITIES.as_slice(),
+        None => required.extend(
+            REQUIRED_DISPATCH_CAPABILITIES
+                .iter()
+                .copied()
+                .filter(|capability| capability.starts_with("approval_")),
+        ),
     }
-    .iter()
-    .copied()
-    .for_each(|capability| {
-        if !required.contains(&capability) {
-            required.push(capability);
-        }
-    });
     let missing = required
         .iter()
         .copied()
@@ -2515,7 +2491,7 @@ COMMITTED=1
 echo "Installed $installed at $HOME/.local/bin/bitfun"
 echo {INSTALL_DONE_MARKER}
 "#,
-        worker_profile_capability = DISPATCH_WORKER_CLI_PROFILE_CAPABILITY,
+        worker_profile_capability = "dispatch_worker_cli_profile",
     )
 }
 
@@ -3273,7 +3249,7 @@ mod tests {
                 "{name} must keep rollback"
             );
             assert!(
-                script.contains(DISPATCH_WORKER_CLI_PROFILE_CAPABILITY),
+                script.contains("dispatch_worker_cli_profile"),
                 "{name} must reject a CLI whose detached worker can select the wrong profile"
             );
         }
@@ -4066,7 +4042,7 @@ mod tests {
 
     #[test]
     fn incompatible_dispatch_protocols_require_an_upgrade() {
-        let capabilities = REQUIRED_DISPATCH_CAPABILITIES;
+        let capabilities = REQUIRED_DISPATCH_CAPABILITIES.clone();
         let compatible = serde_json::json!({
             "protocolVersion": DISPATCH_PROTOCOL_VERSION,
             "capabilities": capabilities,
@@ -4085,45 +4061,36 @@ mod tests {
         });
         assert!(!dispatch_protocol_is_compatible(&missing));
 
+        let mut reject_capabilities: Vec<&str> = REQUIRED_DISPATCH_CAPABILITIES
+            .iter()
+            .copied()
+            .filter(|capability| !capability.starts_with("approval_"))
+            .collect();
+        reject_capabilities.push("approval_reject_and_report");
         let reject_only = serde_json::json!({
             "protocolVersion": DISPATCH_PROTOCOL_VERSION,
-            "capabilities": [
-                "persistent_jobs",
-                "cursor_events",
-                "detached_worker",
-                "workspace_serialization",
-                "frontend_event_projection",
-                "approval_reject_and_report",
-                "workspace_git_worktree",
-                "workspace_git_bundle_upload",
-                "workspace_git_sync",
-                DISPATCH_WORKER_CLI_PROFILE_CAPABILITY
-            ],
+            "capabilities": reject_capabilities,
         });
         validate_dispatch_protocol(&reject_only, Some("reject-and-report"))
             .expect("selected policy is supported");
         assert!(validate_dispatch_protocol(&reject_only, Some("auto")).is_err());
 
+        let mut unsafe_capabilities: Vec<&str> = REQUIRED_DISPATCH_CAPABILITIES
+            .iter()
+            .copied()
+            .filter(|capability| {
+                !capability.starts_with("approval_") && *capability != "dispatch_worker_cli_profile"
+            })
+            .collect();
+        unsafe_capabilities.push("approval_reject_and_report");
         let unsafe_worker = serde_json::json!({
             "protocolVersion": DISPATCH_PROTOCOL_VERSION,
-            "capabilities": [
-                "persistent_jobs",
-                "cursor_events",
-                "detached_worker",
-                "workspace_serialization",
-                "frontend_event_projection",
-                "approval_reject_and_report",
-                "workspace_git_worktree",
-                "workspace_git_bundle_upload",
-                "workspace_git_sync"
-            ],
+            "capabilities": unsafe_capabilities,
         });
         let error = validate_dispatch_protocol(&unsafe_worker, Some("reject-and-report"))
             .expect_err("a worker that can select product-full first must be rejected");
         assert!(
-            error
-                .to_string()
-                .contains(DISPATCH_WORKER_CLI_PROFILE_CAPABILITY),
+            error.to_string().contains("dispatch_worker_cli_profile"),
             "{error}"
         );
     }

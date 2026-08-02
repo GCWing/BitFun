@@ -19,7 +19,8 @@ use super::{
     OutboundDispatchStore,
 };
 
-pub(super) const DISPATCH_PROTOCOL_VERSION: u64 = 4;
+pub(super) const DISPATCH_PROTOCOL_VERSION: u64 =
+    bitfun_services_core::dispatch_contract::DISPATCH_PROTOCOL_VERSION as u64;
 pub(super) const MAX_DISPATCH_TEXT_BYTES: usize = 32 * 1024;
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -160,47 +161,15 @@ pub struct DispatchAppendRequest {
     pub display_content: Option<String>,
 }
 
-/// One inline image attachment forwarded verbatim to the target.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct DispatchAttachmentPayload {
-    pub id: String,
-    #[serde(default)]
-    pub name: Option<String>,
-    pub mime_type: String,
-    pub data_url: String,
-}
-
-/// Inline budget for the account-device envelope. SSH stages the request as
-/// an SFTP file, so only relay-carried requests need this much smaller cap.
-pub(super) const MAX_DEVICE_ATTACHMENTS_TOTAL_BYTES: usize = 192 * 1024;
-pub(super) const MAX_ATTACHMENTS: usize = 8;
-pub(super) const MAX_ATTACHMENT_BYTES: usize = 8 * 1024 * 1024;
-pub(super) const MAX_ATTACHMENTS_TOTAL_BYTES: usize = 16 * 1024 * 1024;
+/// The wire shape and structural limits come from the shared contract; the
+/// controller only adds transport-owned policy (the device inline budget).
+pub use bitfun_services_core::dispatch_contract::DispatchAttachment as DispatchAttachmentPayload;
 
 pub(super) fn validate_attachment_payloads(
     attachments: &[DispatchAttachmentPayload],
 ) -> anyhow::Result<()> {
-    if attachments.len() > MAX_ATTACHMENTS {
-        anyhow::bail!("Dispatch accepts at most 8 image attachments per turn");
-    }
-    let mut total = 0usize;
-    for attachment in attachments {
-        if attachment.id.trim().is_empty() || attachment.id.len() > 128 {
-            anyhow::bail!("Dispatch attachment id must contain 1-128 bytes");
-        }
-        if !attachment.data_url.starts_with("data:image/") {
-            anyhow::bail!("Dispatch attachments must be image data URLs");
-        }
-        if attachment.data_url.len() > MAX_ATTACHMENT_BYTES {
-            anyhow::bail!("A dispatch attachment exceeds the 8 MiB limit");
-        }
-        total = total.saturating_add(attachment.data_url.len());
-    }
-    if total > MAX_ATTACHMENTS_TOTAL_BYTES {
-        anyhow::bail!("Dispatch attachments exceed the 16 MiB total limit");
-    }
-    Ok(())
+    bitfun_services_core::dispatch_contract::validate_dispatch_attachments(attachments)
+        .map_err(|error| anyhow::anyhow!(error))
 }
 
 pub(super) fn validate_device_attachment_budget(
@@ -210,7 +179,9 @@ pub(super) fn validate_device_attachment_budget(
         .iter()
         .map(|attachment| attachment.data_url.len())
         .sum();
-    if total > MAX_DEVICE_ATTACHMENTS_TOTAL_BYTES {
+    if total
+        > bitfun_services_core::dispatch_contract::MAX_DEVICE_DISPATCH_ATTACHMENTS_TOTAL_BYTES
+    {
         anyhow::bail!(
             "Device dispatch carries at most 192 KiB of inline images; use an SSH target for larger screenshots"
         );
@@ -892,9 +863,11 @@ pub(super) fn validate_query_request(request: &DispatchQueryJobRequest) -> anyho
     if request.job_id.trim().is_empty() {
         anyhow::bail!("Dispatch query requires a jobId");
     }
-    if !matches!(request.kind.as_str(), "usageReport") {
-        anyhow::bail!("Dispatch query kind is not recognized");
+    if request.kind.trim().is_empty() || request.kind.len() > 64 {
+        anyhow::bail!("Dispatch query kind is invalid");
     }
+    // Which kinds exist is the target's contract; an unknown kind comes back
+    // as a clear target-side error instead of drifting a second list here.
     Ok(())
 }
 
@@ -1242,19 +1215,9 @@ pub(super) fn validate_continue_request(request: &DispatchContinueRequest) -> an
     if request.turn_id.trim().is_empty() || request.turn_id.len() > 128 {
         anyhow::bail!("Dispatch turnId must contain 1-128 bytes");
     }
-    match request.kind.as_deref().unwrap_or("prompt") {
-        "prompt" => {
-            if request.prompt.trim().is_empty() {
-                anyhow::bail!("Dispatch follow-up prompt cannot be empty");
-            }
-        }
-        "compact" => {
-            if !request.prompt.trim().is_empty() {
-                anyhow::bail!("Dispatch compact turns do not take a prompt");
-            }
-        }
-        _ => anyhow::bail!("Dispatch follow-up kind is not recognized"),
-    }
+    // Kind/prompt semantics (which kinds exist, which take a prompt) are the
+    // target's contract; duplicating that list here would drift. Only
+    // transport-owned limits are enforced below.
     let total_bytes = request
         .prompt
         .len()

@@ -6,6 +6,7 @@
 pub mod bounded_fs;
 pub mod diagnostics;
 pub mod diff;
+pub mod dispatch_contract;
 #[cfg(feature = "dispatch-workspace")]
 pub mod dispatch_workspace;
 mod file_lock;

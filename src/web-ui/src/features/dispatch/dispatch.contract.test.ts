@@ -58,6 +58,40 @@ describe('dispatch controller-only routing contract', () => {
   }
 });
 
+describe('dispatch wire contract single source', () => {
+  // The Rust side has exactly one contract file; the Web UI's copies must
+  // track it. A capability or version bump that misses one side fails here
+  // instead of at runtime probe.
+  const contractSource = read(
+    '../../../../../src/crates/services/services-core/src/dispatch_contract.rs',
+  );
+
+  it('pins the protocol version to the shared Rust contract', () => {
+    expect(contractSource).toContain(
+      `pub const DISPATCH_PROTOCOL_VERSION: u32 = ${DISPATCH_PROTOCOL_VERSION};`,
+    );
+  });
+
+  it('requires only capabilities the shared Rust contract defines', () => {
+    for (const capability of BASE_DISPATCH_CAPABILITIES) {
+      if (capability === 'detached_worker') {
+        expect(contractSource).toContain(
+          `DISPATCH_DETACHED_WORKER_CAPABILITY: &str = "${capability}"`,
+        );
+        continue;
+      }
+      expect(contractSource).toContain(`"${capability}",`);
+    }
+  });
+
+  it('keeps the v4 feature capabilities required on both sides', () => {
+    for (const capability of ['per_turn_options', 'session_query', 'inline_attachments']) {
+      expect(BASE_DISPATCH_CAPABILITIES).toContain(capability);
+      expect(contractSource).toContain(`"${capability}",`);
+    }
+  });
+});
+
 describe('dispatch preflight contract', () => {
   it('fails closed on protocol v4 Git worktree delivery with per-turn options', () => {
     expect(DISPATCH_PROTOCOL_VERSION).toBe(4);
