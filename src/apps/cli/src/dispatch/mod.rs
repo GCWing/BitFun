@@ -149,6 +149,8 @@ async fn probe(request: DispatchProbeRequest) -> Result<DispatchProbeResponse> {
         // v4: read-only persisted-state queries (usage report) and compact
         // turns delivered through the continue mailbox.
         "session_query".to_string(),
+        // v4: inline image attachments on submit and follow-up turns.
+        "inline_attachments".to_string(),
     ];
     if runner::is_supported() {
         capabilities.push("detached_worker".to_string());
@@ -243,8 +245,12 @@ fn continue_job(request: DispatchContinueRequest) -> Result<DispatchContinueResp
             if !request.prompt.trim().is_empty() {
                 bail!("dispatch compact turns do not take a prompt");
             }
+            if !request.attachments.is_empty() {
+                bail!("dispatch compact turns do not take attachments");
+            }
         }
     }
+    validate_attachments(&request.attachments)?;
     if request.prompt.len() > MAX_DISPATCH_TEXT_BYTES {
         bail!("dispatch follow-up prompt exceeds the 32 KiB safety limit");
     }
@@ -770,6 +776,32 @@ fn canonical_workspace(workspace_path: &str) -> Result<PathBuf> {
     Ok(canonical)
 }
 
+fn validate_attachments(attachments: &[protocol::DispatchAttachment]) -> Result<()> {
+    if attachments.len() > protocol::MAX_DISPATCH_ATTACHMENTS {
+        bail!(
+            "dispatch accepts at most {} attachments per turn",
+            protocol::MAX_DISPATCH_ATTACHMENTS
+        );
+    }
+    let mut total = 0usize;
+    for attachment in attachments {
+        if attachment.id.trim().is_empty() || attachment.id.len() > 128 {
+            bail!("dispatch attachment id must contain 1-128 bytes");
+        }
+        if !attachment.data_url.starts_with("data:image/") {
+            bail!("dispatch attachments must be image data URLs");
+        }
+        if attachment.data_url.len() > protocol::MAX_DISPATCH_ATTACHMENT_BYTES {
+            bail!("a dispatch attachment exceeds the 8 MiB limit");
+        }
+        total = total.saturating_add(attachment.data_url.len());
+    }
+    if total > protocol::MAX_DISPATCH_ATTACHMENTS_TOTAL_BYTES {
+        bail!("dispatch attachments exceed the 16 MiB total limit");
+    }
+    Ok(())
+}
+
 fn validate_submit_request(request: &DispatchSubmitRequest) -> Result<()> {
     if request.protocol_version != DISPATCH_PROTOCOL_VERSION {
         bail!(
@@ -793,6 +825,7 @@ fn validate_submit_request(request: &DispatchSubmitRequest) -> Result<()> {
     if request.prompt.len() > MAX_DISPATCH_TEXT_BYTES {
         bail!("dispatch prompt exceeds the 32 KiB request limit");
     }
+    validate_attachments(&request.attachments)?;
     if request.setup_audit.len() > 32 {
         bail!("dispatch setup audit exceeds the 32-event safety limit");
     }
@@ -839,6 +872,7 @@ mod tests {
             approval_policy: DispatchApprovalPolicy::RejectAndReport,
             model: Some("model-1".to_string()),
             title: Some("Task".to_string()),
+            attachments: Vec::new(),
             setup_audit: Vec::new(),
         }
     }

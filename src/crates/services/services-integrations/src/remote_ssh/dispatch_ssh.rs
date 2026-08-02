@@ -93,7 +93,7 @@ const DISPATCH_WORKER_CLI_PROFILE_CAPABILITY: &str = "dispatch_worker_cli_profil
 /// previous release, so comparing only the installed and controller version
 /// strings is not a sound compatibility test.
 const FIRST_COMPATIBLE_STABLE_DISPATCH_RELEASE: (u64, u64, u64) = (0, 2, 16);
-const REQUIRED_DISPATCH_CAPABILITIES: [&str; 16] = [
+const REQUIRED_DISPATCH_CAPABILITIES: [&str; 17] = [
     "persistent_jobs",
     "cursor_events",
     "detached_worker",
@@ -114,6 +114,8 @@ const REQUIRED_DISPATCH_CAPABILITIES: [&str; 16] = [
     "per_turn_options",
     // v4: read-only persisted-state queries and compact turns.
     "session_query",
+    // v4: inline image attachments on submit and follow-up turns.
+    "inline_attachments",
 ];
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

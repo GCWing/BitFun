@@ -58,7 +58,9 @@ import { applyGeneratingTitlePlaceholder } from '../shared';
 
 const log = createLogger('DispatchSessionDriver');
 
-const IMAGES_UNSUPPORTED_MESSAGE = 'Image attachments are not supported for detached dispatch yet';
+const IMAGES_WHILE_RUNNING_MESSAGE =
+  'Images join the next turn; wait for the current dispatch turn to finish';
+const DEVICE_ATTACHMENT_BUDGET_BYTES = 192 * 1024;
 const APPEND_RETRY_SCOPE = 'dispatch-append';
 const CONTINUE_RETRY_SCOPE = 'dispatch-continue';
 const COMPACT_RETRY_SCOPE = 'dispatch-compact';
@@ -77,6 +79,42 @@ function jobIdForSession(sessionId: string): string | undefined {
   }
   return Object.values(dispatchJobStore.getState().jobs)
     .find(job => job.sessionId === sessionId)?.jobId;
+}
+
+/**
+ * Convert composer image contexts into inline wire attachments. Throws when a
+ * context has no data URL (path-only) or a device target's inline budget is
+ * exceeded — both need the user to adjust, not silent truncation.
+ */
+function dispatchAttachments(
+  session: Session | undefined,
+  imageContexts: readonly { id: string; data_url?: string; mime_type: string; metadata?: Record<string, unknown> }[] | undefined,
+): import('@/features/dispatch/dispatchApi').DispatchInlineAttachment[] | undefined {
+  if (!imageContexts?.length) {
+    return undefined;
+  }
+  const attachments = imageContexts.map(image => {
+    const dataUrl = image.data_url?.trim();
+    if (!dataUrl) {
+      throw new Error('This image has no inline data and cannot be sent to a dispatch target');
+    }
+    const name = typeof image.metadata?.name === 'string' ? image.metadata.name : undefined;
+    return {
+      id: image.id,
+      name,
+      mimeType: image.mime_type,
+      dataUrl,
+    };
+  });
+  if (session?.config.dispatchTarget?.kind === 'device') {
+    const total = attachments.reduce((sum, attachment) => sum + attachment.dataUrl.length, 0);
+    if (total > DEVICE_ATTACHMENT_BUDGET_BYTES) {
+      throw new Error(
+        'Device dispatch carries at most 192 KiB of inline images; use an SSH target for larger screenshots',
+      );
+    }
+  }
+  return attachments;
 }
 
 function pinTurnToTop(sessionId: string, turnId: string): void {
@@ -146,13 +184,20 @@ async function continueDispatchJob(
   // per-turn overrides which the target persists onto the job.
   const turnModel = followUpSession.config.dispatchModel?.trim() || undefined;
   const turnApprovalPolicy = followUpSession.config.dispatchApprovalPolicy;
+  const turnAttachments = dispatchAttachments(followUpSession, input.options?.imageContexts);
   // Reused across retries so a lost response cannot start two turns. The
-  // match key includes the per-turn options: the target refuses a turnId
-  // bound to different content, so changed options must mint a new turn id.
+  // match key includes the per-turn options and attachment ids: the target
+  // refuses a turnId bound to different content, so changed inputs must mint
+  // a new turn id.
   const retry = claimSubmissionRetry(
     CONTINUE_RETRY_SCOPE,
     sessionId,
-    JSON.stringify([message, turnModel ?? null, turnApprovalPolicy ?? null]),
+    JSON.stringify([
+      message,
+      turnModel ?? null,
+      turnApprovalPolicy ?? null,
+      turnAttachments?.map(attachment => attachment.id) ?? null,
+    ]),
     displayMessage,
     () =>
       globalThis.crypto?.randomUUID?.()
@@ -168,6 +213,8 @@ async function continueDispatchJob(
       id: `user_dispatch_${retry.id}`,
       content: displayMessage || message,
       timestamp: Date.now(),
+      hasImages: (input.options?.imageDisplayData?.length ?? 0) > 0,
+      images: input.options?.imageDisplayData,
       metadata: markOptimisticDispatchTurnMetadata(
         input.options?.userMessageMetadata,
         jobId,
@@ -188,6 +235,7 @@ async function continueDispatchJob(
       {
         model: turnModel,
         approvalPolicy: turnApprovalPolicy,
+        ...(turnAttachments ? { attachments: turnAttachments } : {}),
       },
     );
     if (!response.accepted) {
@@ -564,7 +612,9 @@ export const dispatchSessionDriver: SessionDriver = {
       return { kind: 'queue' };
     }
     if (draft.hasImages) {
-      return { kind: 'reject', reason: IMAGES_UNSUPPORTED_MESSAGE };
+      // Steering has no attachment channel; the runtime accepts images only
+      // at turn boundaries.
+      return { kind: 'reject', reason: IMAGES_WHILE_RUNNING_MESSAGE };
     }
     return { kind: 'steer' };
   },
@@ -603,11 +653,12 @@ export const dispatchSessionDriver: SessionDriver = {
     if (!targetRequest || targetRequest.kind === 'local' || !jobId || !approvalPolicy) {
       throw new Error('Dispatch session is missing its immutable target or approval policy');
     }
-    if ((options?.imageContexts?.length ?? 0) > 0) {
-      throw new Error(IMAGES_UNSUPPORTED_MESSAGE);
-    }
     const dispatchState = readySession.config.dispatchJobState;
     if (dispatchState === 'queued' || dispatchState === 'running') {
+      if ((options?.imageContexts?.length ?? 0) > 0) {
+        // Steering has no attachment channel; images ride turn boundaries.
+        throw new Error(IMAGES_WHILE_RUNNING_MESSAGE);
+      }
       // A turn is already in flight; this message steers it rather than
       // starting another one underneath it.
       await appendToDispatchJob(sessionId, jobId, message, displayMessage);
@@ -630,6 +681,7 @@ export const dispatchSessionDriver: SessionDriver = {
       applyGeneratingTitlePlaceholder(context, sessionId, message);
     }
 
+    const submitAttachments = dispatchAttachments(readySession, options?.imageContexts);
     const optimisticTurnId = `dispatch_pending_${jobId}`;
     const optimisticTurn: DialogTurn = {
       id: optimisticTurnId,
@@ -639,6 +691,8 @@ export const dispatchSessionDriver: SessionDriver = {
         id: `user_dispatch_${Date.now()}`,
         content: displayMessage || message,
         timestamp: Date.now(),
+        hasImages: (options?.imageDisplayData?.length ?? 0) > 0,
+        images: options?.imageDisplayData,
         metadata: markOptimisticDispatchTurnMetadata(
           options?.userMessageMetadata,
           jobId,
@@ -681,6 +735,7 @@ export const dispatchSessionDriver: SessionDriver = {
         model: readySession.config.dispatchModel?.trim() || undefined,
         ...(sourceWorkspacePath ? { sourceWorkspacePath } : {}),
         ...(sourceWorkspaceId ? { sourceWorkspaceId } : {}),
+        ...(submitAttachments ? { attachments: submitAttachments } : {}),
       });
     } finally {
       clearRuntimeStatusState({

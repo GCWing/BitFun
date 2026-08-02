@@ -4,6 +4,25 @@ use bitfun_agent_runtime::sdk::{PermissionReply, PermissionRequest};
 
 pub(crate) const DISPATCH_PROTOCOL_VERSION: u32 = 4;
 pub(crate) const MAX_DISPATCH_TEXT_BYTES: usize = 32 * 1024;
+pub(crate) const MAX_DISPATCH_ATTACHMENTS: usize = 8;
+pub(crate) const MAX_DISPATCH_ATTACHMENT_BYTES: usize = 8 * 1024 * 1024;
+pub(crate) const MAX_DISPATCH_ATTACHMENTS_TOTAL_BYTES: usize = 16 * 1024 * 1024;
+
+/// One inline image attachment for a submit/continue turn.
+///
+/// v4 carries images as data URLs inside the request: SSH stages the request
+/// as a file over SFTP so size is a policy choice, while the account-device
+/// envelope keeps a much smaller controller-enforced budget. Staged chunked
+/// transfer for larger payloads is a follow-up capability.
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct DispatchAttachment {
+    pub(crate) id: String,
+    #[serde(default)]
+    pub(crate) name: Option<String>,
+    pub(crate) mime_type: String,
+    pub(crate) data_url: String,
+}
 
 #[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -80,6 +99,8 @@ pub(crate) struct DispatchSubmitRequest {
     pub(crate) model: Option<String>,
     #[serde(default)]
     pub(crate) title: Option<String>,
+    #[serde(default)]
+    pub(crate) attachments: Vec<DispatchAttachment>,
     /// Controller-side setup actions that happened before the target job could
     /// exist (currently the signed CLI auto-install). They are replayed into
     /// the durable job event log at creation time and are deliberately excluded
@@ -359,6 +380,8 @@ pub(crate) struct DispatchContinueRequest {
     /// Operation the worker runs; defaults to an ordinary prompt turn.
     #[serde(default)]
     pub(crate) kind: DispatchTurnKind,
+    #[serde(default)]
+    pub(crate) attachments: Vec<DispatchAttachment>,
 }
 
 #[derive(Clone, Debug, Serialize, PartialEq, Eq)]

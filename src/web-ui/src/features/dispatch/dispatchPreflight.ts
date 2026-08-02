@@ -19,4 +19,5 @@ export const BASE_DISPATCH_CAPABILITIES = [
   'dispatch_worker_cli_profile',
   'per_turn_options',
   'session_query',
+  'inline_attachments',
 ] as const;

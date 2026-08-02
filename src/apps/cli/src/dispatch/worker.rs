@@ -216,6 +216,10 @@ async fn run_inner(store: &DispatchStore, job_id: &str) -> Result<()> {
                 .as_ref()
                 .map(|turn| turn.prompt.clone())
                 .unwrap_or_else(|| job.request.prompt.clone());
+            let turn_attachments = follow_up
+                .as_ref()
+                .map(|turn| runtime_attachments(&turn.attachments))
+                .unwrap_or_else(|| runtime_attachments(&job.request.attachments));
             agent_runtime
                 .submit_dialog_turn(AgentDialogTurnRequest {
                     session_id: job.request.session_id.clone(),
@@ -230,7 +234,7 @@ async fn run_inner(store: &DispatchStore, job_id: &str) -> Result<()> {
                     policy: DialogSubmissionPolicy::for_source(AgentSubmissionSource::Cli),
                     reply_route: None,
                     prepended_reminders: Vec::new(),
-                    attachments: Vec::new(),
+                    attachments: turn_attachments,
                     metadata: permissions::metadata(effective_policy),
                 })
                 .await
@@ -521,6 +525,24 @@ async fn cancel_turn(
     {
         tracing::error!("Failed to cancel dispatch turn: {}", error.into_message());
     }
+}
+
+fn runtime_attachments(
+    attachments: &[super::protocol::DispatchAttachment],
+) -> Vec<bitfun_runtime_ports::AgentInputAttachment> {
+    attachments
+        .iter()
+        .map(|attachment| {
+            bitfun_runtime_ports::AgentInputAttachment::remote_image(
+                attachment.id.clone(),
+                attachment
+                    .name
+                    .clone()
+                    .unwrap_or_else(|| attachment.id.clone()),
+                attachment.data_url.clone(),
+            )
+        })
+        .collect()
 }
 
 fn permission_targets_job(request: &PermissionRequest, session_id: &str) -> bool {

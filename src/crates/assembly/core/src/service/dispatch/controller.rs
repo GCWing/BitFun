@@ -78,6 +78,8 @@ pub struct DispatchSubmitRequest {
     pub source_workspace_path: Option<String>,
     #[serde(default)]
     pub source_workspace_id: Option<String>,
+    #[serde(default)]
+    pub attachments: Vec<DispatchAttachmentPayload>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -144,6 +146,8 @@ pub struct DispatchContinueRequest {
     /// Operation kind understood by the target (`prompt` default, `compact`).
     #[serde(default)]
     pub kind: Option<String>,
+    #[serde(default)]
+    pub attachments: Vec<DispatchAttachmentPayload>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -154,6 +158,64 @@ pub struct DispatchAppendRequest {
     pub content: String,
     #[serde(default)]
     pub display_content: Option<String>,
+}
+
+/// One inline image attachment forwarded verbatim to the target.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct DispatchAttachmentPayload {
+    pub id: String,
+    #[serde(default)]
+    pub name: Option<String>,
+    pub mime_type: String,
+    pub data_url: String,
+}
+
+/// Inline budget for the account-device envelope. SSH stages the request as
+/// an SFTP file, so only relay-carried requests need this much smaller cap.
+pub(super) const MAX_DEVICE_ATTACHMENTS_TOTAL_BYTES: usize = 192 * 1024;
+pub(super) const MAX_ATTACHMENTS: usize = 8;
+pub(super) const MAX_ATTACHMENT_BYTES: usize = 8 * 1024 * 1024;
+pub(super) const MAX_ATTACHMENTS_TOTAL_BYTES: usize = 16 * 1024 * 1024;
+
+pub(super) fn validate_attachment_payloads(
+    attachments: &[DispatchAttachmentPayload],
+) -> anyhow::Result<()> {
+    if attachments.len() > MAX_ATTACHMENTS {
+        anyhow::bail!("Dispatch accepts at most 8 image attachments per turn");
+    }
+    let mut total = 0usize;
+    for attachment in attachments {
+        if attachment.id.trim().is_empty() || attachment.id.len() > 128 {
+            anyhow::bail!("Dispatch attachment id must contain 1-128 bytes");
+        }
+        if !attachment.data_url.starts_with("data:image/") {
+            anyhow::bail!("Dispatch attachments must be image data URLs");
+        }
+        if attachment.data_url.len() > MAX_ATTACHMENT_BYTES {
+            anyhow::bail!("A dispatch attachment exceeds the 8 MiB limit");
+        }
+        total = total.saturating_add(attachment.data_url.len());
+    }
+    if total > MAX_ATTACHMENTS_TOTAL_BYTES {
+        anyhow::bail!("Dispatch attachments exceed the 16 MiB total limit");
+    }
+    Ok(())
+}
+
+pub(super) fn validate_device_attachment_budget(
+    attachments: &[DispatchAttachmentPayload],
+) -> anyhow::Result<()> {
+    let total: usize = attachments
+        .iter()
+        .map(|attachment| attachment.data_url.len())
+        .sum();
+    if total > MAX_DEVICE_ATTACHMENTS_TOTAL_BYTES {
+        anyhow::bail!(
+            "Device dispatch carries at most 192 KiB of inline images; use an SSH target for larger screenshots"
+        );
+    }
+    Ok(())
 }
 
 /// Read-only persisted-state question answered by the target without
@@ -535,6 +597,9 @@ pub async fn submit(
     }
     if let Some(title) = request.title.filter(|value| !value.trim().is_empty()) {
         protocol_request["title"] = Value::String(title);
+    }
+    if !request.attachments.is_empty() {
+        protocol_request["attachments"] = serde_json::to_value(&request.attachments)?;
     }
 
     let response = match dispatch_ssh::submit(manager, connection_id, &protocol_request).await {
@@ -1047,6 +1112,10 @@ pub(super) fn continue_payload(request: &DispatchContinueRequest) -> Value {
     {
         payload["kind"] = Value::String(kind.to_string());
     }
+    if !request.attachments.is_empty() {
+        payload["attachments"] = serde_json::to_value(&request.attachments)
+            .unwrap_or(Value::Null);
+    }
     payload
 }
 
@@ -1148,6 +1217,7 @@ pub(super) fn validate_submit_request(request: &DispatchSubmitRequest) -> anyhow
     }) {
         anyhow::bail!("Dispatch baseRef is invalid");
     }
+    validate_attachment_payloads(&request.attachments)?;
     Ok(())
 }
 
@@ -1202,6 +1272,7 @@ pub(super) fn validate_continue_request(request: &DispatchContinueRequest) -> an
             anyhow::bail!("Dispatch approval policy override is not recognized");
         }
     }
+    validate_attachment_payloads(&request.attachments)?;
     Ok(())
 }
 

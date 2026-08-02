@@ -2994,7 +2994,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         selectedIndex: 0,
       });
     }
-  }, [contexts, derivedState, dispatchInput, externalPromptCommands, inputState.isActive, isAcpInputSession, prunePendingLargePastes, removeContext, resolveTypedMcpPromptCommand, selectedExternalPromptCandidateId, selectedNonExternalSlashCommand, setQueuedInput, slashCommandState.isActive, slashCommandState.kind, caps.localSlashCommands]);
+  }, [contexts, derivedState, dispatchInput, externalPromptCommands, inputState.isActive, isAcpInputSession, prunePendingLargePastes, removeContext, resolveTypedMcpPromptCommand, selectedExternalPromptCandidateId, selectedNonExternalSlashCommand, setQueuedInput, slashCommandState.isActive, slashCommandState.kind, caps.localSlashCommands, caps.ops]);
 
   const submitBtwFromInput = useCallback(async () => {
     if (!derivedState) return;
@@ -4159,6 +4159,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     resolveTypedMcpPromptCommand,
     submitExternalPromptCommandFromInput,
     caps.localSlashCommands,
+    caps.ops,
     composerMutationRevision,
   ]);
   

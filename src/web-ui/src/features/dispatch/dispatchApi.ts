@@ -17,6 +17,14 @@ import type {
   OutboundDispatchRecord,
 } from './types';
 
+/** One inline image attachment forwarded to the target with the turn. */
+export interface DispatchInlineAttachment {
+  id: string;
+  name?: string;
+  mimeType: string;
+  dataUrl: string;
+}
+
 export const dispatchApi = {
   async listTargets(): Promise<DispatchTargetOption[]> {
     return api.invoke<DispatchTargetOption[]>('dispatch_list_targets', {
@@ -90,6 +98,7 @@ export const dispatchApi = {
     title?: string;
     sourceWorkspacePath?: string;
     sourceWorkspaceId?: string;
+    attachments?: DispatchInlineAttachment[];
   }): Promise<DispatchSubmitResponse> {
     return api.invoke<DispatchSubmitResponse>('dispatch_submit', {
       request,
@@ -115,6 +124,7 @@ export const dispatchApi = {
       approvalPolicy?: DispatchApprovalPolicy;
       /** Operation kind; defaults to an ordinary prompt turn. */
       kind?: 'prompt' | 'compact';
+      attachments?: DispatchInlineAttachment[];
     },
   ): Promise<DispatchContinueResponse> {
     return api.invoke<DispatchContinueResponse>('dispatch_continue', {
@@ -126,6 +136,7 @@ export const dispatchApi = {
         model: options?.model,
         approvalPolicy: options?.approvalPolicy,
         kind: options?.kind,
+        attachments: options?.attachments,
       },
     });
   },

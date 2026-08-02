@@ -7,8 +7,8 @@ use bitfun_agent_runtime::sdk::{PermissionReply, PermissionRequest};
 use serde::{Deserialize, Serialize};
 
 use super::protocol::{
-    DispatchAppendRequest, DispatchApprovalPolicy, DispatchContinueRequest, DispatchEvent,
-    DispatchJobListEntry, DispatchJobState, DispatchSubmitRequest, DispatchTurnKind,
+    DispatchAppendRequest, DispatchApprovalPolicy, DispatchAttachment, DispatchContinueRequest,
+    DispatchEvent, DispatchJobListEntry, DispatchJobState, DispatchSubmitRequest, DispatchTurnKind,
     DISPATCH_PROTOCOL_VERSION,
 };
 
@@ -170,6 +170,8 @@ pub(crate) struct StoredFollowUpTurn {
     pub(crate) approval_policy: Option<DispatchApprovalPolicy>,
     #[serde(default)]
     pub(crate) kind: DispatchTurnKind,
+    #[serde(default)]
+    pub(crate) attachments: Vec<DispatchAttachment>,
     pub(crate) created_at: String,
 }
 
@@ -181,6 +183,7 @@ impl StoredFollowUpTurn {
             && self.model == other.model
             && self.approval_policy == other.approval_policy
             && self.kind == other.kind
+            && self.attachments == other.attachments
     }
 }
 
@@ -735,6 +738,7 @@ impl DispatchStore {
             model: request.model.clone(),
             approval_policy: request.approval_policy,
             kind: request.kind,
+            attachments: request.attachments.clone(),
             created_at: chrono::Utc::now().to_rfc3339(),
         };
         // A retried request must not start a second turn. Both mailboxes are
@@ -2116,6 +2120,7 @@ mod tests {
             approval_policy: DispatchApprovalPolicy::RejectAndReport,
             model: Some("model-1".to_string()),
             title: None,
+            attachments: Vec::new(),
             setup_audit: Vec::new(),
         }
     }
@@ -2231,6 +2236,7 @@ mod tests {
             model: None,
             approval_policy: None,
             kind: DispatchTurnKind::Prompt,
+            attachments: Vec::new(),
         }
     }
 

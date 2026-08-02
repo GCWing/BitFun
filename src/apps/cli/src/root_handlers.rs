@@ -27,7 +27,9 @@ use crate::{
     ExternalPolicyModeArg, ExternalPolicyScopeArg, SessionAction,
 };
 
-const MAX_DISPATCH_STDIN_BYTES: u64 = 2 * 1024 * 1024;
+/// Sized for submit/continue requests carrying inline image attachments
+/// (16 MiB of data URLs) plus headroom for the rest of the payload.
+const MAX_DISPATCH_STDIN_BYTES: u64 = 24 * 1024 * 1024;
 
 pub(crate) struct ExecCommandArgs {
     pub message: Option<String>,
@@ -87,7 +89,7 @@ pub(crate) async fn handle_dispatch_action(action: DispatchAction) -> Result<()>
                 .read_to_string(&mut raw)
                 .context("read dispatch JSON from stdin")?;
             if raw.len() as u64 > MAX_DISPATCH_STDIN_BYTES {
-                anyhow::bail!("dispatch JSON input exceeds the 2 MiB safety limit");
+                anyhow::bail!("dispatch JSON input exceeds the 24 MiB safety limit");
             }
         }
         let input = if raw.trim().is_empty() {
