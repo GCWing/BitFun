@@ -59,6 +59,7 @@ import {
 import { ensureBackendSession } from './flow-chat-manager/SessionModule';
 import { installPeerSessionRefresh } from './flow-chat-manager/PeerSessionRefreshModule';
 import { installDispatchJobObserver } from '../session-drivers/dispatch/install';
+import { driverForSession } from '../session-drivers/registry';
 
 const log = createLogger('FlowChatManager');
 
@@ -692,6 +693,21 @@ export class FlowChatManager {
 
   async cancelSessionTask(sessionId: string): Promise<boolean> {
     return cancelSessionTaskModule(this.context, sessionId);
+  }
+
+  /** Manually compact a session's context through its driver. */
+  async compactSession(sessionId: string): Promise<void> {
+    const session = this.context.flowChatStore.getState().sessions.get(sessionId);
+    return driverForSession(sessionId, session).compactSession(this.context, sessionId);
+  }
+
+  /** Generate and insert the session usage report through its driver. */
+  async runSessionUsageReport(
+    sessionId: string,
+    uiParams: import('../session-drivers/types').UsageReportUiParams,
+  ): Promise<{ inserted: boolean }> {
+    const session = this.context.flowChatStore.getState().sessions.get(sessionId);
+    return driverForSession(sessionId, session).runUsageReport(this.context, sessionId, uiParams);
   }
 
   public async saveAllInProgressTurns(): Promise<void> {

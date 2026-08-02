@@ -141,6 +141,9 @@ pub struct DispatchContinueRequest {
     /// Per-turn approval-policy override with the same carry-forward rule.
     #[serde(default)]
     pub approval_policy: Option<String>,
+    /// Operation kind understood by the target (`prompt` default, `compact`).
+    #[serde(default)]
+    pub kind: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -151,6 +154,16 @@ pub struct DispatchAppendRequest {
     pub content: String,
     #[serde(default)]
     pub display_content: Option<String>,
+}
+
+/// Read-only persisted-state question answered by the target without
+/// starting a turn or initializing a runtime.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DispatchQueryJobRequest {
+    pub job_id: String,
+    /// Query kind understood by the target (currently `usageReport`).
+    pub kind: String,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -789,6 +802,37 @@ pub async fn status(
     Ok(response)
 }
 
+pub async fn query_job(
+    manager: &SSHConnectionManager,
+    store: &OutboundDispatchStore,
+    request: DispatchQueryJobRequest,
+) -> anyhow::Result<Value> {
+    validate_query_request(&request)?;
+    let record = store
+        .get(&request.job_id)
+        .await?
+        .ok_or_else(|| anyhow::anyhow!("Outbound dispatch job was not found"))?;
+    let DispatchTarget::Ssh { connection_id, .. } = &record.target else {
+        anyhow::bail!("SSH dispatch query requires an SSH target");
+    };
+    dispatch_ssh::query(
+        manager,
+        connection_id,
+        &json!({ "jobId": request.job_id, "kind": request.kind }),
+    )
+    .await
+}
+
+pub(super) fn validate_query_request(request: &DispatchQueryJobRequest) -> anyhow::Result<()> {
+    if request.job_id.trim().is_empty() {
+        anyhow::bail!("Dispatch query requires a jobId");
+    }
+    if !matches!(request.kind.as_str(), "usageReport") {
+        anyhow::bail!("Dispatch query kind is not recognized");
+    }
+    Ok(())
+}
+
 /// Bring the target's work back into this controller's baseline worktree.
 ///
 /// One button, two halves: the target commits and bundles its branch, then the
@@ -995,6 +1039,14 @@ pub(super) fn continue_payload(request: &DispatchContinueRequest) -> Value {
     {
         payload["approvalPolicy"] = Value::String(policy.to_string());
     }
+    if let Some(kind) = request
+        .kind
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        payload["kind"] = Value::String(kind.to_string());
+    }
     payload
 }
 
@@ -1120,8 +1172,18 @@ pub(super) fn validate_continue_request(request: &DispatchContinueRequest) -> an
     if request.turn_id.trim().is_empty() || request.turn_id.len() > 128 {
         anyhow::bail!("Dispatch turnId must contain 1-128 bytes");
     }
-    if request.prompt.trim().is_empty() {
-        anyhow::bail!("Dispatch follow-up prompt cannot be empty");
+    match request.kind.as_deref().unwrap_or("prompt") {
+        "prompt" => {
+            if request.prompt.trim().is_empty() {
+                anyhow::bail!("Dispatch follow-up prompt cannot be empty");
+            }
+        }
+        "compact" => {
+            if !request.prompt.trim().is_empty() {
+                anyhow::bail!("Dispatch compact turns do not take a prompt");
+            }
+        }
+        _ => anyhow::bail!("Dispatch follow-up kind is not recognized"),
     }
     let total_bytes = request
         .prompt

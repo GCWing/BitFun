@@ -66,7 +66,6 @@ import {
   successfulRetryCleanupTarget,
 } from './chatInputDraftRecovery';
 import { startBtwThread } from '../services/BtwThreadService';
-import { runUsageReportCommand } from '../services/usageReportService';
 import { buildImagePayload } from '../utils/imagePayload';
 import { isGoalSlashCommand, parseGoalCommand } from '../services/goalService';
 import {
@@ -2914,11 +2913,16 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     const promptSlashCommandsEnabled = !isAcpInputSession;
     const localSlashCommandsEnabled = promptSlashCommandsEnabled && caps.localSlashCommands;
     const trimmed = text.trim();
-    const isBtwCommand = localSlashCommandsEnabled && isSlashCommand(trimmed, '/btw');
-    const isCompactCommand = localSlashCommandsEnabled && isSlashCommand(trimmed, '/compact');
-    const isGoalCommand = localSlashCommandsEnabled && isGoalSlashCommand(text);
-    const isUsageCommand = localSlashCommandsEnabled && isSlashCommand(trimmed, '/usage');
-    const isReviewCommand = localSlashCommandsEnabled && isReviewSlashCommand(text);
+    const isBtwCommand =
+      promptSlashCommandsEnabled && caps.ops.has('btw') && isSlashCommand(trimmed, '/btw');
+    const isCompactCommand =
+      promptSlashCommandsEnabled && caps.ops.has('compact') && isSlashCommand(trimmed, '/compact');
+    const isGoalCommand =
+      promptSlashCommandsEnabled && caps.ops.has('goal') && isGoalSlashCommand(text);
+    const isUsageCommand =
+      promptSlashCommandsEnabled && caps.ops.has('usage') && isSlashCommand(trimmed, '/usage');
+    const isReviewCommand =
+      promptSlashCommandsEnabled && caps.ops.has('review') && isReviewSlashCommand(text);
     const isProcessing = !!derivedState?.isProcessing;
 
     // Don't queue /btw or /goal while the main session is processing; they have dedicated flows.
@@ -3099,12 +3103,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     setSlashCommandState({ isActive: false, kind: 'modes', query: '', selectedIndex: 0 });
 
     try {
-      await agentAPI.compactSession({
-        sessionId: effectiveTargetSessionId,
-        workspacePath: effectiveTargetSession.workspacePath,
-        remoteConnectionId: effectiveTargetSession.remoteConnectionId,
-        remoteSshHost: effectiveTargetSession.remoteSshHost,
-      });
+      await FlowChatManager.getInstance().compactSession(effectiveTargetSessionId);
     } catch (error) {
       log.error('Failed to trigger /compact', {
         error,
@@ -3139,15 +3138,17 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     }
 
     try {
-      const result = await runUsageReportCommand({
-        session: effectiveTargetSession,
-        isProcessing: !!derivedState?.isProcessing,
-        busyMessage: t('chatInput.usageBusy'),
-        noWorkspaceMessage: t('chatInput.usageNoWorkspace'),
-        failedTitle: t('chatInput.usageFailed'),
-        unknownErrorMessage: t('error.unknown'),
-        loadingMarkdown: t('usage.loading.markdown'),
-      });
+      const result = await FlowChatManager.getInstance().runSessionUsageReport(
+        effectiveTargetSessionId,
+        {
+          isProcessing: !!derivedState?.isProcessing,
+          busyMessage: t('chatInput.usageBusy'),
+          noWorkspaceMessage: t('chatInput.usageNoWorkspace'),
+          failedTitle: t('chatInput.usageFailed'),
+          unknownErrorMessage: t('error.unknown'),
+          loadingMarkdown: t('usage.loading.markdown'),
+        },
+      );
 
       if (result.inserted) {
         dispatchInput({ type: 'DEACTIVATE' });
@@ -3973,33 +3974,33 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       return;
     }
 
-    if (localSlashCommandsEnabled && isSlashCommand(message, '/btw')) {
+    if (promptSlashCommandsEnabled && caps.ops.has('btw') && isSlashCommand(message, '/btw')) {
       // When idle, /btw can be sent via the normal send button.
       await submitBtwFromInput();
       return;
     }
 
-    if (localSlashCommandsEnabled && isGoalSlashCommand(message)) {
+    if (promptSlashCommandsEnabled && caps.ops.has('goal') && isGoalSlashCommand(message)) {
       await submitGoalFromInput();
       return;
     }
 
-    if (localSlashCommandsEnabled && /^\/compact\s*$/i.test(message)) {
+    if (promptSlashCommandsEnabled && caps.ops.has('compact') && /^\/compact\s*$/i.test(message)) {
       await submitCompactFromInput();
       return;
     }
 
-    if (localSlashCommandsEnabled && /^\/usage\s*$/i.test(message)) {
+    if (promptSlashCommandsEnabled && caps.ops.has('usage') && /^\/usage\s*$/i.test(message)) {
       await submitUsageFromInput();
       return;
     }
 
-    if (localSlashCommandsEnabled && /^\/init\s*$/i.test(message)) {
+    if (promptSlashCommandsEnabled && caps.ops.has('init') && /^\/init\s*$/i.test(message)) {
       await submitInitFromInput();
       return;
     }
 
-    if (localSlashCommandsEnabled && isReviewSlashCommand(message)) {
+    if (promptSlashCommandsEnabled && caps.ops.has('review') && isReviewSlashCommand(message)) {
       await submitReviewFromInput();
       return;
     }
@@ -4018,21 +4019,21 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       return;
     }
 
-    if (localSlashCommandsEnabled && isSlashCommand(message, '/compact')) {
+    if (promptSlashCommandsEnabled && caps.ops.has('compact') && isSlashCommand(message, '/compact')) {
       notificationService.warning(
         t('chatInput.compactUsage')
       );
       return;
     }
 
-    if (localSlashCommandsEnabled && isSlashCommand(message, '/usage')) {
+    if (promptSlashCommandsEnabled && caps.ops.has('usage') && isSlashCommand(message, '/usage')) {
       notificationService.warning(
         t('chatInput.usageCommandUsage')
       );
       return;
     }
 
-    if (localSlashCommandsEnabled && isSlashCommand(message, '/init')) {
+    if (promptSlashCommandsEnabled && caps.ops.has('init') && isSlashCommand(message, '/init')) {
       notificationService.warning(
         t('chatInput.initUsage')
       );

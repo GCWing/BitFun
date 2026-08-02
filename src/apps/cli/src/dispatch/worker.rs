@@ -17,7 +17,7 @@ use bitfun_runtime_ports::{
 use crate::{shutdown_mcp_servers, BootstrapProfile};
 
 use super::permissions::{self, REJECT_AND_REPORT_REASON};
-use super::protocol::{DispatchApprovalPolicy, DispatchEvent, DispatchJobState};
+use super::protocol::{DispatchApprovalPolicy, DispatchEvent, DispatchJobState, DispatchTurnKind};
 use super::store::{DispatchStore, WorkspaceLock};
 
 const TURN_SETTLEMENT_TIMEOUT_MS: u64 = 5_000;
@@ -209,30 +209,45 @@ async fn run_inner(store: &DispatchStore, job_id: &str) -> Result<()> {
     // after the Runtime accepts the turn must never make a replacement worker
     // submit the prompt a second time.
     let follow_up = store.claim_follow_up_turn(job_id, &turn_id)?;
-    let prompt = follow_up
-        .as_ref()
-        .map(|turn| turn.prompt.clone())
-        .unwrap_or_else(|| job.request.prompt.clone());
-    agent_runtime
-        .submit_dialog_turn(AgentDialogTurnRequest {
-            session_id: job.request.session_id.clone(),
-            message: prompt,
-            original_message: None,
-            turn_id: Some(turn_id.clone()),
-            execution: Default::default(),
-            agent_type: job.request.agent_type.clone(),
-            workspace_path: Some(workspace_path),
-            remote_connection_id: None,
-            remote_ssh_host: None,
-            policy: DialogSubmissionPolicy::for_source(AgentSubmissionSource::Cli),
-            reply_route: None,
-            prepended_reminders: Vec::new(),
-            attachments: Vec::new(),
-            metadata: permissions::metadata(effective_policy),
-        })
-        .await
-        .map_err(|error| anyhow!(error.into_message()))
-        .context("submit dispatch dialog turn")?;
+    let turn_kind = follow_up.as_ref().map(|turn| turn.kind).unwrap_or_default();
+    match turn_kind {
+        DispatchTurnKind::Prompt => {
+            let prompt = follow_up
+                .as_ref()
+                .map(|turn| turn.prompt.clone())
+                .unwrap_or_else(|| job.request.prompt.clone());
+            agent_runtime
+                .submit_dialog_turn(AgentDialogTurnRequest {
+                    session_id: job.request.session_id.clone(),
+                    message: prompt,
+                    original_message: None,
+                    turn_id: Some(turn_id.clone()),
+                    execution: Default::default(),
+                    agent_type: job.request.agent_type.clone(),
+                    workspace_path: Some(workspace_path),
+                    remote_connection_id: None,
+                    remote_ssh_host: None,
+                    policy: DialogSubmissionPolicy::for_source(AgentSubmissionSource::Cli),
+                    reply_route: None,
+                    prepended_reminders: Vec::new(),
+                    attachments: Vec::new(),
+                    metadata: permissions::metadata(effective_policy),
+                })
+                .await
+                .map_err(|error| anyhow!(error.into_message()))
+                .context("submit dispatch dialog turn")?;
+        }
+        DispatchTurnKind::Compact => {
+            // The compaction runs as a turn with this worker's turn id, so
+            // its DialogTurn/ContextCompression events flow through the same
+            // event loop and settle the job like any other turn.
+            compatibility
+                .start_manual_compaction(job.request.session_id.clone(), turn_id.clone())
+                .await
+                .map_err(anyhow::Error::msg)
+                .context("start dispatch manual compaction")?;
+        }
+    }
 
     let mut initial_permissions = agent_runtime
         .pending_permission_requests()

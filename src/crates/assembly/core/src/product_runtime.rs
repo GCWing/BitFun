@@ -616,6 +616,22 @@ impl CoreAgentRuntimeCompatibility {
             .await
     }
 
+    /// Start a manual context compaction as a caller-identified turn.
+    ///
+    /// Detached dispatch supplies its own turn id so the compaction's
+    /// DialogTurn/ContextCompression events can be attributed in its event
+    /// log; completion is observed through those events, not awaited here.
+    pub async fn start_manual_compaction(
+        &self,
+        session_id: String,
+        turn_id: String,
+    ) -> Result<(), String> {
+        self.coordinator
+            .start_manual_compaction_turn(session_id, turn_id)
+            .await
+            .map_err(|error| error.to_string())
+    }
+
     /// Applies the same Core deployment owner before a product compatibility
     /// path attaches to or mutates a structured workspace scope.
     pub fn ensure_workspace_runtime_ownership(

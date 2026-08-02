@@ -17,10 +17,12 @@ use protocol::{
     DispatchAnswerRequest, DispatchAnswerResponse, DispatchAppendRequest, DispatchAppendResponse,
     DispatchCancelRequest, DispatchCancelResponse, DispatchContinueRequest,
     DispatchContinueResponse, DispatchJobListEntry, DispatchJobState, DispatchListRequest,
-    DispatchProbeRequest, DispatchProbeResponse, DispatchStatusRequest, DispatchStatusResponse,
-    DispatchSubmitRequest, DispatchSubmitResponse, DispatchWorkspaceBundleBeginRequest,
-    DispatchWorkspaceBundleChunkRequest, DispatchWorkspaceBundleCommitRequest,
-    DispatchWorkspaceProbe, DispatchWorkspaceProvisionRequest, DispatchWorkspaceSyncChunkRequest,
+    DispatchProbeRequest, DispatchProbeResponse, DispatchQueryKind, DispatchQueryRequest,
+    DispatchStatusRequest, DispatchStatusResponse,
+    DispatchSubmitRequest, DispatchSubmitResponse, DispatchTurnKind,
+    DispatchWorkspaceBundleBeginRequest, DispatchWorkspaceBundleChunkRequest,
+    DispatchWorkspaceBundleCommitRequest, DispatchWorkspaceProbe,
+    DispatchWorkspaceProvisionRequest, DispatchWorkspaceSyncChunkRequest,
     DispatchWorkspaceSyncRequest, DISPATCH_PROTOCOL_VERSION, MAX_DISPATCH_TEXT_BYTES,
 };
 use store::{CreateJobOutcome, DispatchStateRecord, DispatchStore};
@@ -63,6 +65,7 @@ pub(crate) async fn run_dispatch_verb(
         "append" => serde_json::to_value(append(parse(input)?)?).context("encode appended message"),
         "continue" => serde_json::to_value(continue_job(parse(input)?)?)
             .context("encode follow-up turn response"),
+        "query" => query(parse(input)?).await.context("encode query response"),
         "workspace-provision" => serde_json::to_value(workspace::provision(parse::<
             DispatchWorkspaceProvisionRequest,
         >(input)?)?)
@@ -143,6 +146,9 @@ async fn probe(request: DispatchProbeRequest) -> Result<DispatchProbeResponse> {
         "dispatch_worker_cli_profile".to_string(),
         // v4: follow-up turns may override model and approval policy.
         "per_turn_options".to_string(),
+        // v4: read-only persisted-state queries (usage report) and compact
+        // turns delivered through the continue mailbox.
+        "session_query".to_string(),
     ];
     if runner::is_supported() {
         capabilities.push("detached_worker".to_string());
@@ -227,8 +233,17 @@ fn continue_job(request: DispatchContinueRequest) -> Result<DispatchContinueResp
             DISPATCH_PROTOCOL_VERSION
         );
     }
-    if request.prompt.trim().is_empty() {
-        bail!("dispatch follow-up requires a prompt");
+    match request.kind {
+        DispatchTurnKind::Prompt => {
+            if request.prompt.trim().is_empty() {
+                bail!("dispatch follow-up requires a prompt");
+            }
+        }
+        DispatchTurnKind::Compact => {
+            if !request.prompt.trim().is_empty() {
+                bail!("dispatch compact turns do not take a prompt");
+            }
+        }
     }
     if request.prompt.len() > MAX_DISPATCH_TEXT_BYTES {
         bail!("dispatch follow-up prompt exceeds the 32 KiB safety limit");
@@ -257,6 +272,45 @@ fn continue_job(request: DispatchContinueRequest) -> Result<DispatchContinueResp
         turn_id: request.turn_id,
         state: state.state,
     })
+}
+
+/// Answer a read-only session question from persisted state.
+///
+/// Deliberately runtime-free: `PersistenceManager` reads the session's
+/// on-disk turns directly, so the query can run while a detached worker owns
+/// the live session without contending for anything.
+async fn query(request: DispatchQueryRequest) -> Result<serde_json::Value> {
+    let store = DispatchStore::open_default()?;
+    let job = store.load_job(&request.job_id)?;
+    match request.kind {
+        DispatchQueryKind::UsageReport => {
+            let path_manager = bitfun_core::infrastructure::PathManager::new()
+                .map_err(|error| anyhow::anyhow!("resolve BitFun storage root: {error}"))?;
+            let persistence = bitfun_core::agentic::persistence::PersistenceManager::new(
+                std::sync::Arc::new(path_manager),
+            )
+            .map_err(|error| anyhow::anyhow!("open session persistence: {error}"))?;
+            let report = bitfun_core::service::session_usage::generate_session_usage_report(
+                &persistence,
+                None,
+                bitfun_core::service::session_usage::SessionUsageReportRequest {
+                    session_id: job.request.session_id.clone(),
+                    workspace_path: Some(job.request.workspace_path.clone()),
+                    remote_connection_id: None,
+                    remote_ssh_host: None,
+                    include_hidden_subagents: false,
+                },
+            )
+            .await
+            .map_err(|error| anyhow::anyhow!("generate dispatch usage report: {error}"))?;
+            serde_json::to_value(serde_json::json!({
+                "kind": "usageReport",
+                "sessionId": job.request.session_id,
+                "report": report,
+            }))
+            .context("encode dispatch usage report")
+        }
+    }
 }
 
 fn ensure_worker_spawned(

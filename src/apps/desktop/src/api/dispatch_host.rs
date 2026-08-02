@@ -40,6 +40,7 @@ fn target_cli_verb(command: &str) -> Option<&'static str> {
         "dispatch_target_answer" => Some("answer"),
         "dispatch_target_append" => Some("append"),
         "dispatch_target_continue" => Some("continue"),
+        "dispatch_target_query" => Some("query"),
         "dispatch_target_workspace_provision" => Some("__workspace_provision"),
         "dispatch_target_workspace_bundle_begin" => Some("__workspace_bundle_begin"),
         "dispatch_target_workspace_bundle_chunk" => Some("__workspace_bundle_chunk"),

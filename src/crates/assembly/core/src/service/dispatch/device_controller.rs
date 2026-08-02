@@ -17,10 +17,11 @@ use super::controller::{
     bind_outbound_record, continue_payload, finish_sync, provisioned_path, record_follow_up_state,
     release_unbound_preparation_baseline, result_bundle_path, same_target_identity,
     target_have_tips, validate_answer_request, validate_append_request, validate_continue_request,
-    validate_submission_preflight, validate_submit_ack, validate_submit_request,
-    DispatchAnswerRequest, DispatchAppendRequest, DispatchContinueRequest, DispatchJobRequest,
-    DispatchListJobsRequest, DispatchProbeTargetRequest, DispatchStatusRequest,
-    DispatchSubmitRequest, DispatchSyncResultRequest, DISPATCH_PROTOCOL_VERSION,
+    validate_query_request, validate_submission_preflight, validate_submit_ack,
+    validate_submit_request, DispatchAnswerRequest, DispatchAppendRequest, DispatchContinueRequest,
+    DispatchJobRequest, DispatchListJobsRequest, DispatchProbeTargetRequest, DispatchQueryJobRequest,
+    DispatchStatusRequest, DispatchSubmitRequest, DispatchSyncResultRequest,
+    DISPATCH_PROTOCOL_VERSION,
 };
 use super::preparation::{DispatchPreparationRequest, DispatchPreparationTarget};
 use super::{
@@ -342,6 +343,24 @@ pub async fn submit_device(
         );
     }
     Ok(response)
+}
+
+pub async fn query_device_job(
+    rpc: &dyn DeviceDispatchRpc,
+    store: &OutboundDispatchStore,
+    request: DispatchQueryJobRequest,
+) -> anyhow::Result<Value> {
+    validate_query_request(&request)?;
+    let record = load_device_record(store, &request.job_id).await?;
+    let DispatchTarget::Device { device_id, .. } = &record.target else {
+        unreachable!("load_device_record validates target kind")
+    };
+    rpc.invoke(
+        device_id,
+        "dispatch_target_query",
+        json!({ "jobId": request.job_id, "kind": request.kind }),
+    )
+    .await
 }
 
 pub async fn status_device(

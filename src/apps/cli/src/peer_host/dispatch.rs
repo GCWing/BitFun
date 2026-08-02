@@ -129,6 +129,7 @@ fn dispatch_target_verb(command: &str) -> Option<&'static str> {
         "dispatch_target_answer" => Some("answer"),
         "dispatch_target_append" => Some("append"),
         "dispatch_target_continue" => Some("continue"),
+        "dispatch_target_query" => Some("query"),
         "dispatch_target_workspace_provision" => Some("workspace-provision"),
         "dispatch_target_workspace_bundle_begin" => Some("workspace-bundle-begin"),
         "dispatch_target_workspace_bundle_chunk" => Some("workspace-bundle-chunk"),

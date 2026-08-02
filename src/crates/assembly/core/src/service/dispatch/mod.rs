@@ -28,12 +28,13 @@ pub use controller::{
     install_cli_source_start as start_dispatch_cli_source_build,
     install_cli_start as start_dispatch_cli_install, list_jobs as list_dispatch_jobs,
     list_targets as list_dispatch_targets, probe_target as probe_dispatch_target,
-    status as get_dispatch_status, submit as submit_dispatch,
+    query_job as query_dispatch_job, status as get_dispatch_status, submit as submit_dispatch,
     sync_model_config as sync_dispatch_model_config, sync_result as sync_dispatch_result,
     DispatchAnswerRequest, DispatchAppendRequest, DispatchConnectionRequest,
     DispatchContinueRequest, DispatchInstallPollRequest, DispatchInstallStartRequest,
     DispatchJobRequest, DispatchListJobsRequest, DispatchListTargetsRequest,
-    DispatchPermissionReplyKind, DispatchProbeTargetRequest, DispatchStatusRequest,
+    DispatchPermissionReplyKind, DispatchProbeTargetRequest, DispatchQueryJobRequest,
+    DispatchStatusRequest,
     DispatchSubmitRequest, DispatchSyncResultRequest, DispatchTargetOption,
 };
 #[cfg(feature = "ssh-remote")]
@@ -41,6 +42,7 @@ pub use device_controller::{
     answer_device as answer_device_dispatch, append_device as append_device_dispatch,
     cancel_device as cancel_device_dispatch, continue_device_job as continue_device_dispatch_job,
     list_device_jobs as list_device_dispatch_jobs, probe_device as probe_device_dispatch_target,
+    query_device_job as query_device_dispatch_job,
     status_device as get_device_dispatch_status, submit_device as submit_device_dispatch,
     sync_device_result as sync_device_dispatch_result, DeviceDispatchRpc,
 };

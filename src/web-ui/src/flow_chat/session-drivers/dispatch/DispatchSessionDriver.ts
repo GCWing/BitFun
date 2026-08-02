@@ -16,6 +16,7 @@ import type {
   PermissionReplyKind,
   PermissionRequest,
 } from '@/infrastructure/api/service-api/AgentAPI';
+import type { SessionUsageReport } from '@/infrastructure/api/service-api/SessionAPI';
 import type { FlowChatContext, SessionConfig } from '../../services/flow-chat-manager/types';
 import type { DialogTurn, Session } from '../../types/flow-chat';
 import { FlowChatStore } from '../../store/FlowChatStore';
@@ -29,6 +30,7 @@ import type {
   SubmissionDraft,
   SubmissionPlan,
   TurnTracker,
+  UsageReportUiParams,
 } from '../types';
 import {
   FLOWCHAT_PIN_TURN_TO_TOP_EVENT,
@@ -59,6 +61,7 @@ const log = createLogger('DispatchSessionDriver');
 const IMAGES_UNSUPPORTED_MESSAGE = 'Image attachments are not supported for detached dispatch yet';
 const APPEND_RETRY_SCOPE = 'dispatch-append';
 const CONTINUE_RETRY_SCOPE = 'dispatch-continue';
+const COMPACT_RETRY_SCOPE = 'dispatch-compact';
 const EMPTY_PENDING_PERMISSIONS: ReadonlyArray<Record<string, unknown>> = [];
 
 /**
@@ -423,6 +426,69 @@ export const dispatchSessionDriver: SessionDriver = {
       requestDispatchJobRefresh(jobId);
     }
     return response.cancelled;
+  },
+
+  async compactSession(context: FlowChatContext, sessionId: string): Promise<void> {
+    const session = context.flowChatStore.getState().sessions.get(sessionId);
+    const jobId = session?.config.dispatchJobId;
+    if (!jobId) {
+      throw new Error('Dispatch session is missing its job id');
+    }
+    const state = session?.config.dispatchJobState;
+    if (!isDispatchJobTerminal(state)) {
+      throw new Error('Wait for the current dispatch turn to finish before compacting');
+    }
+    // Same idempotency contract as a prompt follow-up: a retried request
+    // reuses the turn id so a lost response cannot start two compactions.
+    const retry = claimSubmissionRetry(
+      COMPACT_RETRY_SCOPE,
+      sessionId,
+      'compact',
+      undefined,
+      () =>
+        globalThis.crypto?.randomUUID?.()
+        ?? `dispatch-compact-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    );
+    try {
+      const response = await dispatchApi.continueJob(jobId, retry.id, '', undefined, {
+        kind: 'compact',
+      });
+      if (!response.accepted) {
+        throw new Error('Dispatch target did not accept the compact turn');
+      }
+    } finally {
+      releaseSubmissionRetry(COMPACT_RETRY_SCOPE, sessionId, retry.id);
+    }
+    requestDispatchJobRefresh(jobId);
+  },
+
+  async runUsageReport(
+    context: FlowChatContext,
+    sessionId: string,
+    uiParams: UsageReportUiParams,
+  ): Promise<{ inserted: boolean }> {
+    const session = context.flowChatStore.getState().sessions.get(sessionId);
+    if (!session) {
+      throw new Error(`Session does not exist: ${sessionId}`);
+    }
+    const jobId = jobIdForSession(sessionId);
+    if (!jobId) {
+      throw new Error('Dispatch session is missing its job id');
+    }
+    const { runUsageReportCommand } = await import('../../services/usageReportService');
+    const result = await runUsageReportCommand({
+      session,
+      ...uiParams,
+      // The target computes the report from its persisted session; the
+      // rendered turn stays in the projection (transcript cache), never in
+      // local session persistence.
+      fetchReport: async () => {
+        const response = await dispatchApi.query(jobId, 'usageReport');
+        return response.report as SessionUsageReport;
+      },
+      persistTurn: false,
+    });
+    return { inserted: result.inserted };
   },
 
   permissionRequestSource(sessionId: string) {

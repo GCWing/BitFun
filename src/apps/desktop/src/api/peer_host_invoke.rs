@@ -104,6 +104,7 @@ static LOCAL_ONLY_COMMANDS: &[&str] = &[
     "dispatch_sync_model_config",
     "dispatch_submit",
     "dispatch_status",
+    "dispatch_query",
     "dispatch_cancel",
     "dispatch_sync_result",
     "dispatch_list_jobs",

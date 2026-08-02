@@ -68,6 +68,7 @@ const LOCAL_ONLY_COMMANDS = new Set([
   'dispatch_sync_model_config',
   'dispatch_submit',
   'dispatch_status',
+  'dispatch_query',
   'dispatch_cancel',
   'dispatch_list_jobs',
   'dispatch_answer',

@@ -93,7 +93,7 @@ const DISPATCH_WORKER_CLI_PROFILE_CAPABILITY: &str = "dispatch_worker_cli_profil
 /// previous release, so comparing only the installed and controller version
 /// strings is not a sound compatibility test.
 const FIRST_COMPATIBLE_STABLE_DISPATCH_RELEASE: (u64, u64, u64) = (0, 2, 16);
-const REQUIRED_DISPATCH_CAPABILITIES: [&str; 15] = [
+const REQUIRED_DISPATCH_CAPABILITIES: [&str; 16] = [
     "persistent_jobs",
     "cursor_events",
     "detached_worker",
@@ -112,6 +112,8 @@ const REQUIRED_DISPATCH_CAPABILITIES: [&str; 15] = [
     DISPATCH_WORKER_CLI_PROFILE_CAPABILITY,
     // v4: follow-up turns may override model and approval policy.
     "per_turn_options",
+    // v4: read-only persisted-state queries and compact turns.
+    "session_query",
 ];
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -1394,6 +1396,14 @@ pub async fn continue_job(
     request: &Value,
 ) -> Result<Value> {
     invoke_json(manager, connection_id, "continue", request).await
+}
+
+pub async fn query(
+    manager: &SSHConnectionManager,
+    connection_id: &str,
+    request: &Value,
+) -> Result<Value> {
+    invoke_json(manager, connection_id, "query", request).await
 }
 
 /// Commit the target's worktree and fetch the Git bundle it produced.

@@ -17,14 +17,15 @@ use bitfun_core::service::dispatch::{
     continue_device_dispatch_job, continue_dispatch_job, get_device_dispatch_status,
     get_dispatch_status, list_device_dispatch_jobs, list_dispatch_jobs, list_dispatch_targets,
     poll_dispatch_cli_install, probe_device_dispatch_target, probe_dispatch_target,
-    start_dispatch_cli_install, start_dispatch_cli_source_build, submit_device_dispatch,
-    submit_dispatch, sync_device_dispatch_result, sync_dispatch_model_config, sync_dispatch_result,
+    query_device_dispatch_job, query_dispatch_job, start_dispatch_cli_install,
+    start_dispatch_cli_source_build, submit_device_dispatch, submit_dispatch,
+    sync_device_dispatch_result, sync_dispatch_model_config, sync_dispatch_result,
     DeviceDispatchRpc, DispatchAnswerRequest, DispatchAppendRequest, DispatchConnectionRequest,
     DispatchContinueRequest, DispatchInstallPollRequest, DispatchInstallStartRequest,
     DispatchJobRequest, DispatchListJobsRequest, DispatchListTargetsRequest,
-    DispatchProbeTargetRequest, DispatchSaveTranscriptRequest, DispatchStatusRequest,
-    DispatchSubmitRequest, DispatchSyncResultRequest, DispatchTarget, DispatchTargetOption,
-    DispatchTargetRequest, DispatchTranscriptRequest, OutboundDispatchStore,
+    DispatchProbeTargetRequest, DispatchQueryJobRequest, DispatchSaveTranscriptRequest,
+    DispatchStatusRequest, DispatchSubmitRequest, DispatchSyncResultRequest, DispatchTarget,
+    DispatchTargetOption, DispatchTargetRequest, DispatchTranscriptRequest, OutboundDispatchStore,
 };
 use bitfun_core::service::remote_ssh::dispatch_ssh::{
     DispatchInstallPoll, DispatchInstallStart, DispatchSshProbe,
@@ -422,6 +423,34 @@ pub async fn dispatch_continue(
         .await
         .map_err(|error| error.to_string())?;
     continue_dispatch_job(&manager, &store, request)
+        .await
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn dispatch_query(
+    state: State<'_, AppState>,
+    path_manager: State<'_, Arc<PathManager>>,
+    request: DispatchQueryJobRequest,
+) -> Result<Value, String> {
+    let store = OutboundDispatchStore::new(path_manager.as_ref());
+    if matches!(
+        store
+            .get(&request.job_id)
+            .await
+            .map_err(|error| error.to_string())?
+            .map(|record| record.target),
+        Some(DispatchTarget::Device { .. })
+    ) {
+        return query_device_dispatch_job(&AccountDeviceDispatchRpc, &store, request)
+            .await
+            .map_err(|error| error.to_string());
+    }
+    let manager = state
+        .get_ssh_manager_async()
+        .await
+        .map_err(|error| error.to_string())?;
+    query_dispatch_job(&manager, &store, request)
         .await
         .map_err(|error| error.to_string())
 }

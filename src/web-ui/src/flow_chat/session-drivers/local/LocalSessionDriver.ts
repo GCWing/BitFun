@@ -24,6 +24,7 @@ import type {
   StartTurnResult,
   SubmissionPlan,
   TurnTracker,
+  UsageReportUiParams,
 } from '../types';
 import {
   FLOWCHAT_PIN_TURN_TO_TOP_EVENT,
@@ -218,6 +219,33 @@ export const localSessionDriver: SessionDriver = {
     // Local sessions park messages while busy; the drain listener replays
     // them when the state machine returns to IDLE.
     return { kind: 'queue' };
+  },
+
+  async compactSession(context: FlowChatContext, sessionId: string): Promise<void> {
+    const session = context.flowChatStore.getState().sessions.get(sessionId);
+    if (!session) {
+      throw new Error(`Session does not exist: ${sessionId}`);
+    }
+    await agentAPI.compactSession({
+      sessionId,
+      workspacePath: session.workspacePath,
+      remoteConnectionId: session.remoteConnectionId,
+      remoteSshHost: session.remoteSshHost,
+    });
+  },
+
+  async runUsageReport(
+    context: FlowChatContext,
+    sessionId: string,
+    uiParams: UsageReportUiParams,
+  ): Promise<{ inserted: boolean }> {
+    const session = context.flowChatStore.getState().sessions.get(sessionId);
+    if (!session) {
+      throw new Error(`Session does not exist: ${sessionId}`);
+    }
+    const { runUsageReportCommand } = await import('../../services/usageReportService');
+    const result = await runUsageReportCommand({ session, ...uiParams });
+    return { inserted: result.inserted };
   },
 
   permissionRequestSource(): 'live' {

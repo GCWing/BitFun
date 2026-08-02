@@ -16,6 +16,15 @@ import { resolveSessionDriverId, type SessionDriverId } from './resolve';
 
 export const DISPATCH_TRANSFER_ROUND_PREFIX = 'dispatch-transfer:';
 
+/** Renderer-side slash commands the composer can offer for a session. */
+export type ComposerSlashOp = 'btw' | 'compact' | 'goal' | 'usage' | 'init' | 'review';
+
+const LOCAL_SLASH_OPS: ReadonlySet<ComposerSlashOp> = new Set([
+  'btw', 'compact', 'goal', 'usage', 'init', 'review',
+]);
+/** Ops a detached target serves via its durable turn mailbox / query verb. */
+const DISPATCH_SLASH_OPS: ReadonlySet<ComposerSlashOp> = new Set(['compact', 'usage']);
+
 export interface ComposerCapabilities {
   driverId: SessionDriverId;
   /**
@@ -23,8 +32,10 @@ export interface ComposerCapabilities {
    * Prefer the semantic flags below for new gates.
    */
   dispatchTransport: boolean;
-  /** Renderer-side slash commands (/btw /goal /compact /usage /init /review). */
+  /** Renderer-side slash-command pickers (full local command surface). */
   localSlashCommands: boolean;
+  /** Individual slash commands this session can execute when typed. */
+  ops: ReadonlySet<ComposerSlashOp>;
   usageReport: boolean;
   threadGoal: boolean;
   /** The submission is being transferred to the target; composer is inert. */
@@ -74,7 +85,8 @@ export function useComposerCapabilities(input: ComposerCapabilityInput): Compose
     driverId,
     dispatchTransport,
     localSlashCommands: !dispatchTransport,
-    usageReport: !dispatchTransport,
+    ops: dispatchTransport ? DISPATCH_SLASH_OPS : LOCAL_SLASH_OPS,
+    usageReport: true,
     threadGoal: !displayAsChild && !dispatchTransport,
     transferInFlight,
     submissionOptionsLocked,

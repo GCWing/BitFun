@@ -392,6 +392,7 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         RemoteWorkspacePolicy::WorkspaceAgnostic,
     ),
     ("dispatch_status", RemoteWorkspacePolicy::WorkspaceAgnostic),
+    ("dispatch_query", RemoteWorkspacePolicy::WorkspaceAgnostic),
     ("dispatch_submit", RemoteWorkspacePolicy::WorkspaceAgnostic),
     (
         "dismiss_announcement",

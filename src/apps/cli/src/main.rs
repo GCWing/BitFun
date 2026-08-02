@@ -598,6 +598,10 @@ pub(crate) enum DispatchAction {
     Answer,
     /// Append a steering message to a queued or running job
     Append,
+    /// Queue the next turn of a dispatch session whose previous turn finished
+    Continue,
+    /// Read persisted session facts (usage report) without starting a turn
+    Query,
     #[command(name = "__workspace_provision", hide = true)]
     WorkspaceProvision,
     #[command(name = "__workspace_bundle_begin", hide = true)]

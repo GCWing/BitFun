@@ -18,4 +18,5 @@ export const BASE_DISPATCH_CAPABILITIES = [
   'workspace_git_sync',
   'dispatch_worker_cli_profile',
   'per_turn_options',
+  'session_query',
 ] as const;

@@ -55,6 +55,17 @@ pub(crate) enum DispatchApprovalPolicy {
     Remote,
 }
 
+/// What a queued follow-up turn asks the worker to run.
+#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub(crate) enum DispatchTurnKind {
+    /// An ordinary user prompt submitted as a dialog turn.
+    #[default]
+    Prompt,
+    /// Manual context compaction, run as a turn so its events attribute.
+    Compact,
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(crate) struct DispatchSubmitRequest {
@@ -345,6 +356,9 @@ pub(crate) struct DispatchContinueRequest {
     /// Per-turn approval-policy override with the same carry-forward rule.
     #[serde(default)]
     pub(crate) approval_policy: Option<DispatchApprovalPolicy>,
+    /// Operation the worker runs; defaults to an ordinary prompt turn.
+    #[serde(default)]
+    pub(crate) kind: DispatchTurnKind,
 }
 
 #[derive(Clone, Debug, Serialize, PartialEq, Eq)]
@@ -361,6 +375,24 @@ pub(crate) struct DispatchContinueResponse {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(crate) struct DispatchCancelRequest {
     pub(crate) job_id: String,
+}
+
+/// Read-only question about a job's persisted session state.
+///
+/// Served by a short-lived process straight from persistence — no runtime is
+/// initialized and no workspace runtime ownership is taken, so a query is
+/// always safe next to a running detached worker.
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct DispatchQueryRequest {
+    pub(crate) job_id: String,
+    pub(crate) kind: DispatchQueryKind,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub(crate) enum DispatchQueryKind {
+    UsageReport,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq)]

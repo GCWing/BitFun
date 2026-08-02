@@ -4797,6 +4797,19 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         })?
     }
 
+    /// Start a manual compaction bound to a caller-supplied turn id without
+    /// awaiting completion. The caller observes the outcome through the
+    /// turn's DialogTurn/ContextCompression events.
+    pub async fn start_manual_compaction_turn(
+        &self,
+        session_id: String,
+        turn_id: String,
+    ) -> BitFunResult<()> {
+        self.start_manual_compaction_task(session_id, Some(turn_id))
+            .await
+            .map(|_task| ())
+    }
+
     #[allow(clippy::too_many_arguments)]
     async fn start_dialog_turn_internal(
         &self,

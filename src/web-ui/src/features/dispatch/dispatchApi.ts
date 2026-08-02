@@ -113,6 +113,8 @@ export const dispatchApi = {
       model?: string;
       /** Per-turn approval-policy override with the same carry-forward rule. */
       approvalPolicy?: DispatchApprovalPolicy;
+      /** Operation kind; defaults to an ordinary prompt turn. */
+      kind?: 'prompt' | 'compact';
     },
   ): Promise<DispatchContinueResponse> {
     return api.invoke<DispatchContinueResponse>('dispatch_continue', {
@@ -123,7 +125,15 @@ export const dispatchApi = {
         displayContent,
         model: options?.model,
         approvalPolicy: options?.approvalPolicy,
+        kind: options?.kind,
       },
+    });
+  },
+
+  /** Read-only persisted-state question answered without starting a turn. */
+  async query(jobId: string, kind: 'usageReport'): Promise<{ kind: string; report: unknown }> {
+    return api.invoke<{ kind: string; report: unknown }>('dispatch_query', {
+      request: { jobId, kind },
     });
   },
 

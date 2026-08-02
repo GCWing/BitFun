@@ -92,6 +92,16 @@ export interface TurnTracker {
  */
 export type StartTurnResult = 'completed' | 'detached';
 
+/** Localized strings the usage-report flow surfaces; supplied by the caller. */
+export interface UsageReportUiParams {
+  isProcessing: boolean;
+  busyMessage: string;
+  noWorkspaceMessage: string;
+  failedTitle: string;
+  unknownErrorMessage: string;
+  loadingMarkdown: string;
+}
+
 /**
  * Where a session's pending permission requests come from.
  *
@@ -205,6 +215,23 @@ export interface SessionDriver {
     input: StartTurnInput,
     tracker: TurnTracker,
   ): Promise<StartTurnResult>;
+
+  /**
+   * Manually compact the session's context. Local sessions call the runtime
+   * directly; dispatch sessions queue a compact turn on the target.
+   */
+  compactSession(context: FlowChatContext, sessionId: string): Promise<void>;
+
+  /**
+   * Generate and insert the session usage report turn. `uiParams` carries the
+   * caller's localized strings; the driver decides where the report data
+   * comes from and whether the rendered turn persists.
+   */
+  runUsageReport(
+    context: FlowChatContext,
+    sessionId: string,
+    uiParams: UsageReportUiParams,
+  ): Promise<{ inserted: boolean }>;
 
   /** How pending permission requests for this session are obtained. */
   permissionRequestSource(sessionId: string): PermissionRequestSource;

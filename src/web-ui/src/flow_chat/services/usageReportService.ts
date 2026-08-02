@@ -19,6 +19,16 @@ export interface UsageReportCommandParams {
   failedTitle: string;
   unknownErrorMessage: string;
   loadingMarkdown: string;
+  /**
+   * Where the report comes from. Defaults to the local backend; a dispatch
+   * projection supplies the target's `query` verb instead.
+   */
+  fetchReport?: () => Promise<SessionUsageReport>;
+  /**
+   * Persist the rendered turn to the backend session. Observer projections
+   * must not persist locally — their transcript cache captures the turn.
+   */
+  persistTurn?: boolean;
 }
 
 export interface UsageReportCommandResult {
@@ -58,13 +68,15 @@ export async function runUsageReportCommand(
   let finalizedPendingTurn = false;
 
   try {
-    const rawReport = await sessionAPI.getSessionUsageReport({
-      sessionId: params.session.sessionId,
-      workspacePath: projectWorkspacePath,
-      remoteConnectionId: params.session.remoteConnectionId,
-      remoteSshHost: params.session.remoteSshHost,
-      includeHiddenSubagents: true,
-    });
+    const rawReport = params.fetchReport
+      ? await params.fetchReport()
+      : await sessionAPI.getSessionUsageReport({
+        sessionId: params.session.sessionId,
+        workspacePath: projectWorkspacePath,
+        remoteConnectionId: params.session.remoteConnectionId,
+        remoteSshHost: params.session.remoteSshHost,
+        includeHiddenSubagents: true,
+      });
     const report = enrichUsageReportModelIdentity(rawReport, params.session);
     const markdown = renderUsageReportMarkdown(report);
     const turn = pendingTurn
@@ -84,7 +96,7 @@ export async function runUsageReportCommand(
       });
     finalizedPendingTurn = !!pendingTurn;
 
-    if (turn) {
+    if (turn && params.persistTurn !== false) {
       await sessionAPI.saveSessionTurn(
         toPersistedLocalReportTurn(turn),
         projectWorkspacePath,
