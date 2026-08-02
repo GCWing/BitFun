@@ -55,6 +55,13 @@ function isMediaCaptureSupported(): boolean {
   return typeof navigator !== 'undefined' && Boolean(navigator.mediaDevices?.getUserMedia);
 }
 
+function isPermissionDeniedError(error: unknown): boolean {
+  return error instanceof DOMException && (
+    error.name === 'NotAllowedError' ||
+    error.name === 'PermissionDeniedError'
+  );
+}
+
 function resolveErrorMessage(error: unknown, permissionDenied: string, fallback: string): string {
   if (error instanceof DOMException && (
     error.name === 'NotAllowedError' ||
@@ -62,7 +69,8 @@ function resolveErrorMessage(error: unknown, permissionDenied: string, fallback:
   )) {
     return permissionDenied;
   }
-  return fallback;
+  const detail = error instanceof Error ? error.message : String(error);
+  return detail ? `${fallback} (${detail})` : fallback;
 }
 
 function isModelMissingError(error: unknown): boolean {
@@ -426,7 +434,7 @@ export function useComposerVoiceInput({
       notificationService.info(t('input.voiceInput.disabled'));
       return;
     }
-    if (!speechRuntimeSupported || !isMediaCaptureSupported()) {
+    if (!speechRuntimeSupported || (!isTauriRuntime() && !isMediaCaptureSupported())) {
       notificationService.error(t('input.voiceInput.unsupported'));
       return;
     }
@@ -463,22 +471,31 @@ export function useComposerVoiceInput({
       }
 
       log.debug('Voice input startup requested', { modelInstalled });
-      const recorder = await createVoiceInputRecorder({
-        targetSampleRate: DEFAULT_SPEECH_SAMPLE_RATE,
-        chunkDurationMs: RECORDING_CHUNK_DURATION_MS,
-        microphoneDeviceId: voiceSettings.microphone_device_id || undefined,
-        onChunk: enqueueChunk,
-        onLevel: updateAudioLevel,
-        onDeviceEnded: () => {
-          if (activeRecordingIdRef.current !== recordingId) return;
-          log.warn('Voice input microphone disconnected during recording');
-          notificationService.error(t('input.voiceInput.deviceDisconnected'));
-          void cancelRecordingRef.current?.();
-        },
-        onStartupTiming: timing => {
-          log.debug('Voice input recorder startup stage completed', timing);
-        },
-      });
+      let recorder: VoiceInputRecorder = { stop: async () => {} };
+      try {
+        recorder = await createVoiceInputRecorder({
+          targetSampleRate: DEFAULT_SPEECH_SAMPLE_RATE,
+          chunkDurationMs: RECORDING_CHUNK_DURATION_MS,
+          microphoneDeviceId: voiceSettings.microphone_device_id || undefined,
+          onChunk: enqueueChunk,
+          onLevel: updateAudioLevel,
+          onDeviceEnded: () => {
+            if (activeRecordingIdRef.current !== recordingId) return;
+            log.warn('Voice input microphone disconnected during recording');
+            notificationService.error(t('input.voiceInput.deviceDisconnected'));
+            void cancelRecordingRef.current?.();
+          },
+          onStartupTiming: timing => {
+            log.debug('Voice input recorder startup stage completed', timing);
+          },
+        });
+      } catch (micError) {
+        if (isTauriRuntime() && isPermissionDeniedError(micError)) {
+          log.info('Voice input getUserMedia denied on this runtime; falling back to the system speechRecognizer');
+        } else {
+          throw micError;
+        }
+      }
       if (activeRecordingIdRef.current !== recordingId) {
         await recorder.stop().catch(error => {
           log.warn('Failed to stop stale voice recorder', { error });
@@ -624,10 +641,10 @@ export function useComposerVoiceInput({
 
   const disabled = phase === 'recording'
     ? false
-    : !settings?.enabled || !speechRuntimeSupported || !isMediaCaptureSupported() || phase === 'preparing' || phase === 'transcribing';
+    : !settings?.enabled || !speechRuntimeSupported || (!isTauriRuntime() && !isMediaCaptureSupported()) || phase === 'preparing' || phase === 'transcribing';
   const tooltip = useMemo(() => {
     if (!settings?.enabled) return t('input.voiceInput.disabled');
-    if (!speechRuntimeSupported || !isMediaCaptureSupported()) return t('input.voiceInput.unsupported');
+    if (!speechRuntimeSupported || (!isTauriRuntime() && !isMediaCaptureSupported())) return t('input.voiceInput.unsupported');
     if (settings.provider === 'cloud') return t('input.voiceInput.cloudPending');
     if (modelInstalled === false) return t('input.voiceInput.modelMissing');
     if (phase === 'preparing') return t('input.voiceInput.preparing');

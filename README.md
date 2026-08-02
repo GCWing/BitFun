@@ -109,12 +109,12 @@ npm run build
 # build backend(.so) in desktop directory
 cd src/apps/desktop && cargo tauri ohos init && cargo tauri ohos build
 
-# build mini app frontend
-cd src/mobile-web && npm run build
+# build desktop frontend
+cd src/web-ui && npm run build
 
 # build app
-## copy mini-app resources
-1. cp src/mobile-web/dist src/apps/ohos/entry/src/main/resources/resfile
+## copy frontend resources
+1. cp src/web-ui/dist src/apps/ohos/entry/src/main/resources/resfile
 
 ## copy app exe
 2. cp target/aarch64-unknow-linux-ohos/release/libbitfun_desktop_lib.so src/apps/ohos/entry/libs/arm64-v8a/libbitfun_desktop_lib.so  

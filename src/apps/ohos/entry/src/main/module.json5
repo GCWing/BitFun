@@ -65,6 +65,16 @@
         }
       },
       {
+        "name": "ohos.permission.READ_WRITE_USB_DEV",
+        "reason": "$string:permission_desktop_directory_reason",
+        "usedScene": {
+          "abilities": [
+            "EntryAbility"
+          ],
+          "when": "always"
+        }
+      },
+      {
         "name": "ohos.permission.READ_WRITE_DESKTOP_DIRECTORY",
         "reason": "$string:permission_desktop_directory_reason",
         "usedScene": {
@@ -105,6 +115,16 @@
       {
         "name": "ohos.permission.READ_PASTEBOARD",
         "reason": "$string:permission_read_pasteboard_reason",
+        "usedScene": {
+          "abilities": [
+            "EntryAbility"
+          ],
+          "when": "always"
+        }
+      },
+      {
+        "name": "ohos.permission.MICROPHONE",
+        "reason": "$string:permission_microphone_reason",
         "usedScene": {
           "abilities": [
             "EntryAbility"
