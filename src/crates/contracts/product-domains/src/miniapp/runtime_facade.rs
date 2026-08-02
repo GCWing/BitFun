@@ -224,7 +224,7 @@ impl<'a> MiniAppRuntimeFacade<'a> {
             icon,
             category,
             tags,
-            version: _,
+            version,
             permissions,
             i18n,
         } = package_meta;
@@ -243,9 +243,13 @@ impl<'a> MiniAppRuntimeFacade<'a> {
             compiled_html,
             now,
         );
+        app.version = version;
         app.i18n = i18n;
         app.runtime_profile = MiniAppRuntimeProfile::MarketStrict;
-        app.runtime.content_hash = miniapp_content_hash(&app);
+        // A packaged MiniApp already has a meaningful version. Keep it as the
+        // initial local version and rebuild the runtime revision around it so
+        // list/detail views and runtime invalidation observe the same value.
+        apply_import_runtime_state(&mut app);
         let metadata = strict_package_metadata(origin_kind, market_origin, now);
 
         self.storage
@@ -890,7 +894,7 @@ mod tests {
     }
 
     #[test]
-    fn market_install_facade_builds_strict_app_and_commits_atomically() {
+    fn market_install_facade_preserves_package_version_and_commits_atomically() {
         let storage = MemoryStorage::default();
         let market_installs = storage.market_installs.clone();
         let saved = storage.saved.clone();
@@ -908,7 +912,8 @@ mod tests {
         .unwrap();
 
         assert_eq!(app.id, "local-market-app");
-        assert_eq!(app.version, 1);
+        assert_eq!(app.version, 42);
+        assert_eq!(app.runtime.source_revision, "src:42:123");
         assert_eq!(app.runtime_profile, MiniAppRuntimeProfile::MarketStrict);
         assert_eq!(app.compiled_html, "<html>strict</html>");
         assert!(saved.lock().unwrap().is_empty());
@@ -921,6 +926,35 @@ mod tests {
             MiniAppCustomizationOriginKind::Market
         );
         assert_eq!(installs[0].1.origin.market.as_ref(), Some(&origin));
+    }
+
+    #[test]
+    fn direct_strict_package_import_preserves_declared_version() {
+        let storage = MemoryStorage::default();
+        let market_installs = storage.market_installs.clone();
+        let facade = MiniAppRuntimeFacade::new(&storage);
+
+        let app = block_on(facade.import_strict_package(
+            "local-imported-app".to_string(),
+            market_package_meta(5),
+            MiniAppSource::default(),
+            "<html>strict import</html>".to_string(),
+            456,
+        ))
+        .unwrap();
+
+        assert_eq!(app.version, 5);
+        assert_eq!(app.runtime.source_revision, "src:5:456");
+        assert_eq!(app.runtime_profile, MiniAppRuntimeProfile::MarketStrict);
+
+        let installs = market_installs.lock().unwrap();
+        assert_eq!(installs.len(), 1);
+        assert_eq!(installs[0].0.version, 5);
+        assert_eq!(
+            installs[0].1.origin.kind,
+            MiniAppCustomizationOriginKind::Imported
+        );
+        assert!(installs[0].1.origin.market.is_none());
     }
 
     #[test]
