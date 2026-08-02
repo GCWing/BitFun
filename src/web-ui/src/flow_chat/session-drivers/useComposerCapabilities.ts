@@ -59,15 +59,15 @@ export function useComposerCapabilities(input: ComposerCapabilityInput): Compose
       && status?.roundId.startsWith(DISPATCH_TRANSFER_ROUND_PREFIX) === true;
   });
 
+  // Options are editable whenever no turn is in flight: before the first
+  // submit and between turns. Protocol v4 carries them per follow-up turn.
   const dispatchJobState = session?.config.dispatchJobState;
   const submissionOptionsLocked =
     dispatchTransport
     && (
       transferInFlight
-      || (
-        dispatchJobState !== 'submitting'
-        && dispatchJobState !== 'submission_unknown'
-      )
+      || dispatchJobState === 'queued'
+      || dispatchJobState === 'running'
     );
 
   return {

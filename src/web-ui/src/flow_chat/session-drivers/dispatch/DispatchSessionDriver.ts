@@ -139,11 +139,17 @@ async function continueDispatchJob(
     context.flowChatStore.getState().sessions.get(sessionId) ?? input.readySession;
   const followUpAgentType =
     (input.currentAgentType?.trim() || followUpSession.mode || 'agentic').trim();
-  // Reused across retries so a lost response cannot start two turns.
+  // The composer edits these between turns; the follow-up carries them as
+  // per-turn overrides which the target persists onto the job.
+  const turnModel = followUpSession.config.dispatchModel?.trim() || undefined;
+  const turnApprovalPolicy = followUpSession.config.dispatchApprovalPolicy;
+  // Reused across retries so a lost response cannot start two turns. The
+  // match key includes the per-turn options: the target refuses a turnId
+  // bound to different content, so changed options must mint a new turn id.
   const retry = claimSubmissionRetry(
     CONTINUE_RETRY_SCOPE,
     sessionId,
-    message,
+    JSON.stringify([message, turnModel ?? null, turnApprovalPolicy ?? null]),
     displayMessage,
     () =>
       globalThis.crypto?.randomUUID?.()
@@ -176,6 +182,10 @@ async function continueDispatchJob(
       retry.id,
       message,
       displayMessage,
+      {
+        model: turnModel,
+        approvalPolicy: turnApprovalPolicy,
+      },
     );
     if (!response.accepted) {
       throw new Error('Dispatch target did not accept the follow-up turn');

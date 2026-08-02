@@ -2214,7 +2214,7 @@ export class FlowChatStore {
     });
   }
 
-  /** Update the immutable-at-submit approval policy while the job is still local. */
+  /** Update the approval policy; the next turn carries it to the target. */
   public updateSessionDispatchApprovalPolicy(
     sessionId: string,
     approvalPolicy: NonNullable<SessionConfig['dispatchApprovalPolicy']>,

@@ -108,9 +108,22 @@ export const dispatchApi = {
     turnId: string,
     prompt: string,
     displayContent?: string,
+    options?: {
+      /** Per-turn model override; carries forward as the job's model. */
+      model?: string;
+      /** Per-turn approval-policy override with the same carry-forward rule. */
+      approvalPolicy?: DispatchApprovalPolicy;
+    },
   ): Promise<DispatchContinueResponse> {
     return api.invoke<DispatchContinueResponse>('dispatch_continue', {
-      request: { jobId, turnId, prompt, displayContent },
+      request: {
+        jobId,
+        turnId,
+        prompt,
+        displayContent,
+        model: options?.model,
+        approvalPolicy: options?.approvalPolicy,
+      },
     });
   },
 
