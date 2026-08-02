@@ -2357,6 +2357,7 @@
     "fastModel": "Fast Model",
     "fastMode": "Fast mode",
     "fastModeDescription": "1.5x speed with higher credit usage",
+    "switchFailed": "Failed to switch model",
     "modelNotConfigured": "Not Configured",
     "contextUsage": {
       "agentPrompt": "Last request prompt: {{usage}}",

@@ -1181,11 +1181,24 @@ function handleSessionTitleGenerated(event: any): void {
 }
 
 function handleSessionModelAutoMigrated(event: SessionModelAutoMigratedEvent): void {
-  const { sessionId, newModelId } = event;
+  const { sessionId, previousModelId, newModelId, reason } = event;
   if (!sessionId || !newModelId) return;
 
   const store = FlowChatStore.getInstance();
-  store.updateSessionModelName(sessionId, newModelId);
+  const applied = store.applySessionModelAutoMigration(
+    sessionId,
+    previousModelId ?? '',
+    newModelId,
+  );
+  if (!applied) {
+    log.debug('Ignoring stale session model migration', {
+      sessionId,
+      previousModelId,
+      newModelId,
+      reason,
+      currentModelId: store.getState().sessions.get(sessionId)?.config.modelName,
+    });
+  }
 }
 
 /**

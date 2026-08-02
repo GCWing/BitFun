@@ -2188,6 +2188,38 @@ export class FlowChatStore {
     });
   }
 
+  /**
+   * Apply a backend `SessionModelAutoMigrated` notice as a compare-and-swap.
+   *
+   * The backend emits this while restoring a session whose persisted model is
+   * gone. That restore is frequently triggered by the very model update the
+   * user just made, so the notice can land *after* the composer already stored
+   * the newly picked model. Applying it blindly reverts the user's choice, and
+   * the reverted value is what the next send pushes back to the backend.
+   *
+   * Only migrate while the session still holds the model the backend migrated
+   * away from (or holds no selection yet). Mirrors the CLI guard in
+   * `src/apps/cli/src/modes/chat/selection.rs`.
+   *
+   * Returns whether the migration was applied.
+   */
+  public applySessionModelAutoMigration(
+    sessionId: string,
+    previousModelId: string,
+    newModelId: string,
+  ): boolean {
+    const session = this.state.sessions.get(sessionId);
+    if (!session) return false;
+
+    const currentModelName = session.config.modelName?.trim();
+    if (currentModelName && currentModelName !== previousModelId.trim()) {
+      return false;
+    }
+
+    this.updateSessionModelName(sessionId, newModelId);
+    return true;
+  }
+
   /** Update the target-owned model choice before an observer job is submitted. */
   public updateSessionDispatchModel(sessionId: string, modelName: string): void {
     this.setState(prev => {

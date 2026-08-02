@@ -20,6 +20,7 @@ import { getEffectiveReasoningMode, isReasoningVisiblyEnabled } from '@/infrastr
 import { globalEventBus } from '@/infrastructure/event-bus';
 import type { AIModelConfig, AgentModelDefaultsConfig, DefaultModelsConfig } from '@/infrastructure/config/types';
 import { Switch, Tooltip } from '@/component-library';
+import { notificationService } from '@/shared/notification-system';
 import { FlowChatStore } from '../store/FlowChatStore';
 import { getModelMaxTokens } from '../services/flow-chat-manager/SessionModule';
 import { acpClientIdFromAgentType } from '../utils/acpSession';
@@ -570,6 +571,15 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     setLoading(true);
     setDropdownOpen(false);
 
+    // The optimistic session write below must be undone when the backend
+    // rejects the switch; otherwise the selector keeps showing a model the
+    // session never adopted, and the next send pushes it to the backend.
+    const store = FlowChatStore.getInstance();
+    const previousSessionModelName = sessionId
+      ? store.getState().sessions.get(sessionId)?.config.modelName
+      : undefined;
+    let sessionModelWrittenOptimistically = false;
+
     try {
       if (externalSelection) {
         await externalSelection.onSelect(modelId);
@@ -586,7 +596,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
         });
         setAcpOptions(options);
         syncAcpContextUsageToStore(sessionId, options);
-        FlowChatStore.getInstance().updateSessionModelName(sessionId, modelId);
+        store.updateSessionModelName(sessionId, modelId);
         log.info('ACP session model updated', { sessionId, acpClientId, modelId });
         return;
       }
@@ -594,10 +604,10 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
       const updateTargetSessionModel = async () => {
         if (!sessionId) return;
 
-        const store = FlowChatStore.getInstance();
         // Update the frontend session model immediately so the UI reflects the
         // switch without waiting for the backend IPC round-trip.
         store.updateSessionModelName(sessionId, modelId);
+        sessionModelWrittenOptimistically = true;
         const maxContextTokens = await getModelMaxTokens(modelId, currentMode);
         store.updateSessionMaxContextTokens(sessionId, maxContextTokens);
         const session = store.getState().sessions.get(sessionId);
@@ -628,6 +638,13 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
       globalEventBus.emit('mode:config:updated');
     } catch (error) {
       log.error('Failed to switch model', error);
+      // Only a previously pinned selection can be restored: the store has no
+      // way to express "never pinned", and forcing 'auto' there would claim a
+      // binding the session does not have either.
+      if (sessionId && sessionModelWrittenOptimistically && previousSessionModelName) {
+        store.updateSessionModelName(sessionId, previousSessionModelName);
+      }
+      notificationService.error(t('modelSelector.switchFailed'));
     } finally {
       setLoading(false);
     }
@@ -642,6 +659,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     isAcpSession,
     loading,
     sessionId,
+    t,
     targetIsSubagent,
   ]);
 

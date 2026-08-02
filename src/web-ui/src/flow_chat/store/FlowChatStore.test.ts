@@ -1154,6 +1154,73 @@ describe('FlowChatStore session model selection', () => {
 
     expect(flowChatStore.getState().sessions.get(session.sessionId)?.config.modelName).toBe('auto');
   });
+
+  it('applies an auto-migration notice that matches the stored model', () => {
+    const session = createSession({
+      config: { agentType: 'agentic', modelName: 'removed-model' },
+    });
+    flowChatStore.setState(() => ({
+      sessions: new Map([[session.sessionId, session]]),
+      activeSessionId: session.sessionId,
+    }));
+
+    const applied = flowChatStore.applySessionModelAutoMigration(
+      session.sessionId,
+      'removed-model',
+      'auto',
+    );
+
+    expect(applied).toBe(true);
+    expect(flowChatStore.getState().sessions.get(session.sessionId)?.config.modelName).toBe('auto');
+  });
+
+  it('applies an auto-migration notice when the session has no stored model yet', () => {
+    const session = createSession({ config: { agentType: 'agentic' } });
+    flowChatStore.setState(() => ({
+      sessions: new Map([[session.sessionId, session]]),
+      activeSessionId: session.sessionId,
+    }));
+
+    const applied = flowChatStore.applySessionModelAutoMigration(
+      session.sessionId,
+      'removed-model',
+      'auto',
+    );
+
+    expect(applied).toBe(true);
+    expect(flowChatStore.getState().sessions.get(session.sessionId)?.config.modelName).toBe('auto');
+  });
+
+  it('ignores a stale auto-migration notice that would revert a newer selection', () => {
+    // Restore-time migration races the explicit update that triggered the
+    // restore: the composer already stored the picked model when the notice
+    // for the old one lands.
+    const session = createSession({
+      config: { agentType: 'agentic', modelName: 'removed-model' },
+    });
+    flowChatStore.setState(() => ({
+      sessions: new Map([[session.sessionId, session]]),
+      activeSessionId: session.sessionId,
+    }));
+
+    flowChatStore.updateSessionModelName(session.sessionId, 'deepseek-v4-flash');
+    const applied = flowChatStore.applySessionModelAutoMigration(
+      session.sessionId,
+      'removed-model',
+      'auto',
+    );
+
+    expect(applied).toBe(false);
+    expect(flowChatStore.getState().sessions.get(session.sessionId)?.config.modelName).toBe(
+      'deepseek-v4-flash',
+    );
+  });
+
+  it('ignores an auto-migration notice for an unknown session', () => {
+    expect(
+      flowChatStore.applySessionModelAutoMigration('missing-session', 'removed-model', 'auto'),
+    ).toBe(false);
+  });
 });
 
 describe('FlowChatStore historical session hydration state', () => {
