@@ -406,6 +406,10 @@ name = "mcp_contracts"
 required-features = ["mcp"]
 
 [[test]]
+name = "mcp_streamable_http_contracts"
+required-features = ["mcp"]
+
+[[test]]
 name = "remote_connect_contracts"
 required-features = ["remote-connect"]
 

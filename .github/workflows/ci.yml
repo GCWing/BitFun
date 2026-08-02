@@ -203,8 +203,8 @@ jobs:
       - name: Check compilation
         run: cargo check --locked --workspace
 
-      - name: Run core and desktop Rust tests
-        run: cargo test --locked -p bitfun-core -p bitfun-desktop
+      - name: Run core and desktop library tests
+        run: cargo test --locked -p bitfun-core -p bitfun-desktop --lib
 
       # These crates own platform-sensitive behavior that is not exercised by
       # testing bitfun-core/bitfun-desktop alone. Keep their focused contract

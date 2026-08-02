@@ -42,6 +42,8 @@ pub mod plugin_runtime;
 pub mod plugin_source;
 #[cfg(feature = "product-full")]
 pub mod product_assembly;
+#[cfg(all(test, feature = "product-full"))]
+mod product_assembly_tests;
 #[cfg(feature = "product-domains")]
 pub(crate) mod product_domain_runtime;
 #[cfg(feature = "product-full")]

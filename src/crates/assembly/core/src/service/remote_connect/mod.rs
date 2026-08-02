@@ -1969,6 +1969,9 @@ impl RemoteConnectService {
 }
 
 #[cfg(test)]
+mod host_lifecycle_tests;
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use std::sync::atomic::{AtomicBool, Ordering};

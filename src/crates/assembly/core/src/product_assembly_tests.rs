@@ -1,5 +1,5 @@
-use bitfun_core::product_assembly;
-use bitfun_core::product_runtime::{CoreProductRuntimeAssembly, CoreRuntimeServicesProvider};
+use crate::product_assembly;
+use crate::product_runtime::{CoreProductRuntimeAssembly, CoreRuntimeServicesProvider};
 use bitfun_product_capabilities::{
     product_assembly_plan_for_profile, DeliveryProfile, ProductServiceCapabilityStatus,
 };

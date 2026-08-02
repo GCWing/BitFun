@@ -250,24 +250,8 @@ tempfile = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread"] }
 
 [[test]]
-name = "context_profile"
-required-features = ["product-full"]
-
-[[test]]
 name = "git_contracts"
 required-features = ["git"]
-
-[[test]]
-name = "product_assembly"
-required-features = ["product-full"]
-
-[[test]]
-name = "remote_mcp_streamable_http"
-required-features = ["product-full"]
-
-[[test]]
-name = "remote_connect_host_boundary"
-required-features = ["product-full"]
 
 [build-dependencies]
 sha2 = { workspace = true }
