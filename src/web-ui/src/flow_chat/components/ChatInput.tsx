@@ -41,7 +41,13 @@ import { SmartRecommendations } from './smart-recommendations';
 import { useCurrentWorkspace, useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
 import { flowChatSessionConfigForCurrentWorkspace } from '@/app/utils/projectSessionWorkspace';
 import { createImageContextFromFile, createImageContextFromClipboard } from '../utils/imageUtils';
-import { getInlineSlashCommandPickerQuery, getSlashCommandPickerQuery, isSlashCommand, stripSlashCommand } from '../utils/slashCommand';
+import {
+  getInlineSkillPickerQuery,
+  getInlineSlashCommandPickerQuery,
+  getSlashCommandPickerQuery,
+  isSlashCommand,
+  stripSlashCommand,
+} from '../utils/slashCommand';
 import {
   resolveSlashActionInputValue,
   type SlashActionId,
@@ -1516,48 +1522,36 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   ]);
 
   useEffect(() => {
-    const inlineCommandQuery = getInlineSlashCommandPickerQuery(inlineTriggerState);
-    if (inlineCommandQuery !== null) {
-      setSlashCommandState(prev => ({
-        isActive: true,
-        kind: derivedState?.isProcessing && !isAcpInputSession ? 'actions' : 'all',
-        query: inlineCommandQuery,
-        selectedIndex: prev.query === inlineCommandQuery ? prev.selectedIndex : 0,
-      }));
-      return;
-    }
+    const closeInlineSkillPicker = () => {
+      setSlashCommandState(prev => (
+        prev.isActive && prev.kind === 'skills'
+          ? { isActive: false, kind: 'modes', query: '', selectedIndex: 0 }
+          : prev
+      ));
+    };
 
     if (isAcpInputSession || !canUseSkillsForTarget) {
-      if (slashCommandState.isActive && slashCommandState.kind === 'skills') {
-        setSlashCommandState({ isActive: false, kind: 'modes', query: '', selectedIndex: 0 });
-      }
+      closeInlineSkillPicker();
       return;
     }
 
-    const inlineSlashSkillTrigger =
-      inlineTriggerState.isActive &&
-      (
-        inlineTriggerState.trigger === '$' ||
-        (inlineTriggerState.trigger === '/' && inlineTriggerState.startOffset > 0)
-      );
+    const inlineSkillQuery = getInlineSkillPickerQuery(inlineTriggerState);
 
-    if (inlineSlashSkillTrigger) {
+    if (inlineSkillQuery !== null) {
       setSlashCommandState(prev => ({
         isActive: true,
         kind: 'skills',
-        query: inlineTriggerState.query.toLowerCase(),
+        query: inlineSkillQuery,
         selectedIndex:
-          prev.kind === 'skills' && prev.query === inlineTriggerState.query.toLowerCase()
+          prev.kind === 'skills' && prev.query === inlineSkillQuery
             ? prev.selectedIndex
             : 0,
       }));
       return;
     }
 
-    if (slashCommandState.isActive && slashCommandState.kind === 'skills') {
-      setSlashCommandState({ isActive: false, kind: 'modes', query: '', selectedIndex: 0 });
-    }
-  }, [canUseSkillsForTarget, derivedState?.isProcessing, inlineTriggerState, isAcpInputSession, slashCommandState.isActive, slashCommandState.kind]);
+    closeInlineSkillPicker();
+  }, [canUseSkillsForTarget, inlineTriggerState, isAcpInputSession]);
 
   const previousComposerSessionIdRef = useRef<string | null>(null);
 
