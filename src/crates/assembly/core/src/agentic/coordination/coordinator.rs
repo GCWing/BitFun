@@ -12433,6 +12433,10 @@ mod tests {
     use tokio::sync::Notify;
     use tokio_util::sync::CancellationToken;
 
+    // These tests settle only after the real filesystem and SQLite persistence path completes.
+    // Keep the wait state-based, but allow for loaded hosted Windows runners.
+    const USER_SHELL_TURN_SETTLEMENT_TIMEOUT: Duration = Duration::from_secs(30);
+
     #[test]
     fn manual_compaction_cancellation_wins_before_commit() {
         let gate = ManualCompactionCommitGate::planning();
@@ -14184,7 +14188,7 @@ mod tests {
             .wait_for_turn_settlement(
                 &accepted.session_id,
                 &accepted.turn_id,
-                Duration::from_secs(5),
+                USER_SHELL_TURN_SETTLEMENT_TIMEOUT,
             )
             .await
             .expect("shell turn settles");
@@ -14279,7 +14283,7 @@ mod tests {
             .wait_for_turn_settlement(
                 &accepted.session_id,
                 &accepted.turn_id,
-                Duration::from_secs(5),
+                USER_SHELL_TURN_SETTLEMENT_TIMEOUT,
             )
             .await
             .expect("denied shell turn settles");
@@ -14337,7 +14341,7 @@ mod tests {
             .wait_for_turn_settlement(
                 &accepted.session_id,
                 &accepted.turn_id,
-                Duration::from_secs(5),
+                USER_SHELL_TURN_SETTLEMENT_TIMEOUT,
             )
             .await
             .expect("failed shell turn settles");
@@ -14433,7 +14437,7 @@ mod tests {
             .wait_for_turn_settlement(
                 &accepted.session_id,
                 &accepted.turn_id,
-                Duration::from_secs(5),
+                USER_SHELL_TURN_SETTLEMENT_TIMEOUT,
             )
             .await
             .expect("cancelled shell turn settles");
