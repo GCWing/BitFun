@@ -511,6 +511,7 @@ mod tests {
                 environment_reference_names: Vec::new(),
                 remote_url_preview: None,
                 header_names: Vec::new(),
+                timeouts: Default::default(),
                 source_enabled: true,
                 behavior_version: "sha256:behavior-v1".to_string(),
                 static_status: ExternalMcpStaticStatus::Ready,

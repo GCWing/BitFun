@@ -30,7 +30,8 @@ use bitfun_services_integrations::mcp::server::{
     mcp_reconnect_runtime_decision, mcp_server_is_running, mcp_should_start_after_config_update,
     merge_mcp_remote_headers, MCPCatalogCache, MCPConnectionPool, MCPListChangedKind,
     MCPProcessStartContext, MCPReconnectRuntimeDecision, MCPRuntimeErrorKind, MCPRuntimeResult,
-    MCPServerConfig, MCPServerRuntimeState, MCPServerStatus, MCPServerTransport, MCPServerType,
+    MCPServerConfig, MCPServerRuntimeState, MCPServerStatus, MCPServerTimeouts, MCPServerTransport,
+    MCPServerType,
 };
 use bitfun_services_integrations::mcp::{
     build_mcp_tool_descriptor, build_mcp_tool_name, normalize_name_for_mcp,
@@ -70,6 +71,7 @@ fn make_mcp_config(
         oauth: None,
         oauth_enabled: None,
         xaa: None,
+        timeouts: MCPServerTimeouts::default(),
     }
 }
 
@@ -213,6 +215,42 @@ fn mcp_protocol_capability_contract_matches_existing_default() {
             }
         })
     );
+}
+
+#[test]
+fn mcp_server_timeout_config_is_optional_positive_milliseconds() {
+    let timeouts = MCPServerTimeouts {
+        startup_ms: Some(250),
+        catalog_ms: Some(1_000),
+        execution_ms: Some(30_000),
+    };
+    timeouts.validate().expect("positive timeouts are valid");
+    assert_eq!(
+        serde_json::to_value(&timeouts).unwrap(),
+        serde_json::json!({
+            "startupMs": 250,
+            "catalogMs": 1_000,
+            "executionMs": 30_000,
+        })
+    );
+    assert!(MCPServerTimeouts {
+        execution_ms: Some(0),
+        ..Default::default()
+    }
+    .validate()
+    .is_err());
+    assert!(MCPServerTimeouts {
+        execution_ms: Some(9_007_199_254_740_991),
+        ..Default::default()
+    }
+    .validate()
+    .is_ok());
+    assert!(MCPServerTimeouts {
+        execution_ms: Some(9_007_199_254_740_992),
+        ..Default::default()
+    }
+    .validate()
+    .is_err());
 }
 
 #[test]
@@ -1755,6 +1793,7 @@ fn mcp_server_config_preserves_transport_defaults_and_validation_contract() {
         oauth: None,
         oauth_enabled: None,
         xaa: None,
+        timeouts: MCPServerTimeouts::default(),
     };
     assert_eq!(local.resolved_transport(), MCPServerTransport::Stdio);
     local.validate().expect("local stdio config is valid");
@@ -1956,6 +1995,7 @@ fn mcp_cursor_format_helpers_preserve_cursor_compatibility_contract() {
         oauth: None,
         oauth_enabled: None,
         xaa: None,
+        timeouts: MCPServerTimeouts::default(),
     };
 
     assert_eq!(

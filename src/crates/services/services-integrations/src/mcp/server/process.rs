@@ -3,7 +3,9 @@
 //! Handles starting, stopping, monitoring, and restarting MCP server processes.
 
 use super::connection::MCPConnection;
-use super::{MCPServerConfig, MCPServerStatus, MCPServerTransport, MCPServerType};
+use super::{
+    MCPServerConfig, MCPServerStatus, MCPServerTimeouts, MCPServerTransport, MCPServerType,
+};
 use crate::mcp::protocol::{InitializeResult, MCPMessage, MCPServerInfo, MCPTransport};
 use crate::mcp::server::{is_mcp_auth_error_message, merge_mcp_remote_headers};
 use crate::mcp::{MCPRuntimeError, MCPRuntimeResult};
@@ -95,6 +97,26 @@ impl MCPServerProcess {
         working_directory: Option<&std::path::Path>,
         inherit_parent_environment: bool,
     ) -> MCPRuntimeResult<()> {
+        self.start_with_environment_policy_and_timeouts(
+            command,
+            args,
+            env,
+            working_directory,
+            inherit_parent_environment,
+            MCPServerTimeouts::default(),
+        )
+        .await
+    }
+
+    pub(super) async fn start_with_environment_policy_and_timeouts(
+        &mut self,
+        command: &str,
+        args: &[String],
+        env: &std::collections::HashMap<String, String>,
+        working_directory: Option<&std::path::Path>,
+        inherit_parent_environment: bool,
+        timeouts: MCPServerTimeouts,
+    ) -> MCPRuntimeResult<()> {
         info!("Starting MCP server: name={} id={}", self.name, self.id);
         self.set_status(MCPServerStatus::Starting).await;
 
@@ -164,7 +186,7 @@ impl MCPServerProcess {
 
         let (tx, rx) = mpsc::unbounded_channel();
 
-        let connection = Arc::new(MCPConnection::new(stdin, rx));
+        let connection = Arc::new(MCPConnection::new_local_with_timeouts(stdin, rx, timeouts));
         self.message_rx = None; // The connection already owns rx
 
         MCPTransport::start_receive_loop(stdout, tx);
@@ -228,12 +250,13 @@ impl MCPServerProcess {
         let merged_headers = merge_mcp_remote_headers(&config.headers, &config.env);
 
         let connection = Arc::new(
-            MCPConnection::new_remote_with_data_dir(
+            MCPConnection::new_remote_with_data_dir_and_timeouts(
                 data_dir,
                 &self.id,
                 url.to_string(),
                 merged_headers,
                 config.remote_oauth_enabled(),
+                config.timeouts,
             )
             .await
             .map_err(|error| {
@@ -244,6 +267,7 @@ impl MCPServerProcess {
         self.start_time = Some(Instant::now());
 
         if let Err(e) = self.handshake().await {
+            let is_timeout = e.kind() == crate::mcp::MCPRuntimeErrorKind::Timeout;
             let redacted_error = redact_sensitive_value(&e.to_string(), Some(url));
             error!(
                 "Remote MCP server handshake failed: name={} id={} error={}",
@@ -263,7 +287,11 @@ impl MCPServerProcess {
                 self.set_status_with_error(MCPServerStatus::Failed, Some(redacted_error.clone()))
                     .await;
             }
-            return Err(MCPRuntimeError::mcp(redacted_error));
+            return if is_timeout {
+                Err(e)
+            } else {
+                Err(MCPRuntimeError::mcp(redacted_error))
+            };
         }
 
         self.set_status_with_error(MCPServerStatus::Connected, None)
@@ -556,6 +584,10 @@ impl Drop for MCPServerProcess {
 #[cfg(test)]
 mod tests {
     use super::{redact_sensitive_value, safe_process_environment_keys};
+    use crate::mcp::server::{MCPServerProcess, MCPServerTimeouts, MCPServerType};
+    use crate::mcp::MCPRuntimeErrorKind;
+    use std::collections::HashMap;
+    use std::time::Duration;
 
     #[test]
     fn isolated_environment_excludes_common_secret_variables() {
@@ -573,5 +605,51 @@ mod tests {
 
         assert!(!redacted.contains("secret"));
         assert!(redacted.contains("<redacted-url>"));
+    }
+
+    #[test]
+    fn mcp_process_timeout_child() {
+        if std::env::var_os("BITFUN_MCP_PROCESS_TIMEOUT_CHILD").is_some() {
+            std::thread::sleep(Duration::from_secs(30));
+        }
+    }
+
+    #[tokio::test]
+    async fn local_startup_timeout_releases_child_and_connection() {
+        let executable = std::env::current_exe().unwrap();
+        let args = vec![
+            "--exact".to_string(),
+            "mcp::server::process::tests::mcp_process_timeout_child".to_string(),
+            "--nocapture".to_string(),
+        ];
+        let environment = HashMap::from([(
+            "BITFUN_MCP_PROCESS_TIMEOUT_CHILD".to_string(),
+            "1".to_string(),
+        )]);
+        let mut process = MCPServerProcess::new(
+            "startup-timeout".to_string(),
+            "Startup timeout".to_string(),
+            MCPServerType::Local,
+        );
+
+        let error = process
+            .start_with_environment_policy_and_timeouts(
+                &executable.to_string_lossy(),
+                &args,
+                &environment,
+                None,
+                true,
+                MCPServerTimeouts {
+                    startup_ms: Some(20),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect_err("startup should time out");
+
+        assert_eq!(error.kind(), MCPRuntimeErrorKind::Timeout);
+        assert!(process.child.is_none());
+        assert!(process.connection.is_none());
+        assert_eq!(process.status().await, super::MCPServerStatus::Failed);
     }
 }

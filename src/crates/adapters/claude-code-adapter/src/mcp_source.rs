@@ -1,11 +1,12 @@
 use bitfun_product_domains::external_sources::{
     EcosystemId, ExternalMcpDiscoveryInput, ExternalMcpProviderIdentity,
     ExternalMcpProviderSnapshot, ExternalMcpServerDefinition, ExternalMcpSourceProvider,
-    ExternalMcpStaticStatus, ExternalMcpTransportKind, ExternalSourceAssetKind,
-    ExternalSourceContext, ExternalSourceDiagnostic, ExternalSourceHealth,
+    ExternalMcpStaticStatus, ExternalMcpTimeouts, ExternalMcpTransportKind,
+    ExternalSourceAssetKind, ExternalSourceContext, ExternalSourceDiagnostic, ExternalSourceHealth,
     ExternalSourceProviderError, ExternalSourceRecord, ExternalSourceScope, ExternalWatchRoot,
     PreparedExternalMcpImportServer, PreparedExternalMcpImportTransport, PreparedExternalMcpServer,
     PreparedExternalMcpTransport, SecretValue, SourceKey, SourceQualifiedMcpServerId,
+    MAX_EXTERNAL_MCP_TIMEOUT_MS,
 };
 use bitfun_static_hook_support::{
     read_bounded_text, redacted_executable_preview, resolve_bounded_regular_file,
@@ -24,8 +25,8 @@ const MAX_MCP_SERVERS: usize = 256;
 const MAX_COMMAND_PARTS: usize = 256;
 const MAX_MAP_ENTRIES: usize = 128;
 const MAX_RUNTIME_TEXT_BYTES: usize = 64 * 1024;
-const STDIO_FIELDS: &[&str] = &["type", "command", "args", "env", "cwd"];
-const HTTP_FIELDS: &[&str] = &["type", "url", "headers"];
+const STDIO_FIELDS: &[&str] = &["type", "command", "args", "env", "cwd", "timeout"];
+const HTTP_FIELDS: &[&str] = &["type", "url", "headers", "timeout"];
 
 #[derive(Debug, Clone)]
 pub struct ClaudeCodeMcpProviderOptions {
@@ -216,6 +217,16 @@ impl ClaudeCodeMcpProvider {
         let mut servers = Vec::new();
         let mut prepared = BTreeMap::new();
         for (name, (source, value)) in winners {
+            if timeout_is_ignored(&value) {
+                diagnostics.push(
+                    ExternalSourceDiagnostic::warning(
+                        "claude.mcp.execution_limit_ignored",
+                        format!("Claude Code MCP server '{name}' timeout below 1000 ms is ignored"),
+                        Some(source.clone()),
+                    )
+                    .with_asset_kind(ExternalSourceAssetKind::Mcp),
+                );
+            }
             let materialized =
                 materialize_server(&input.context, &input.revision_key, source, name, value)?;
             prepared.insert(
@@ -321,9 +332,14 @@ impl ExternalMcpSourceProvider for ClaudeCodeMcpProvider {
         server_id: &SourceQualifiedMcpServerId,
         expected_behavior_version: &str,
     ) -> Result<PreparedExternalMcpServer, ExternalSourceProviderError> {
-        let (_, template) =
+        let (definition, template) =
             self.current_preparation(input, server_id, expected_behavior_version)?;
-        prepare_transport(template, server_id.clone(), expected_behavior_version)
+        prepare_transport(
+            template,
+            server_id.clone(),
+            expected_behavior_version,
+            definition.timeouts,
+        )
     }
 
     fn prepare_import(
@@ -588,6 +604,7 @@ fn materialize_local(
     let args = string_array(object.get("args"));
     let environment = string_map(object.get("env"));
     let mut reason = unsupported_field_reason(object, STDIO_FIELDS);
+    let timeouts = timeout_overrides(object, &mut reason);
     if let Err(error) = &args {
         reason.get_or_insert(error.clone());
     }
@@ -656,6 +673,7 @@ fn materialize_local(
             environment_reference_names: references,
             remote_url_preview: None,
             header_names: Vec::new(),
+            timeouts,
             source_enabled: true,
             behavior_version,
             static_status: status,
@@ -683,6 +701,7 @@ fn materialize_remote(
         .to_string();
     let headers = string_map(object.get("headers"));
     let mut reason = unsupported_field_reason(object, HTTP_FIELDS);
+    let timeouts = timeout_overrides(object, &mut reason);
     if let Err(error) = &headers {
         reason.get_or_insert(error.clone());
     }
@@ -726,6 +745,7 @@ fn materialize_remote(
             environment_reference_names: references,
             remote_url_preview: Some(preview),
             header_names: headers.keys().cloned().collect(),
+            timeouts,
             source_enabled: true,
             behavior_version,
             static_status: status,
@@ -746,6 +766,54 @@ fn unsupported_field_reason(object: &Map<String, Value>, supported: &[&str]) -> 
             fields.join(", ")
         )
     })
+}
+
+fn timeout_is_ignored(value: &Value) -> bool {
+    value
+        .as_object()
+        .and_then(|object| object.get("timeout"))
+        .and_then(Value::as_u64)
+        .is_some_and(|timeout| timeout < 1_000)
+}
+
+fn timeout_overrides(
+    object: &Map<String, Value>,
+    reason: &mut Option<String>,
+) -> ExternalMcpTimeouts {
+    let execution_ms = match object.get("timeout") {
+        None => None,
+        Some(Value::Number(number)) => match number.as_u64() {
+            Some(timeout) if (1_000..=MAX_EXTERNAL_MCP_TIMEOUT_MS).contains(&timeout) => {
+                Some(timeout)
+            }
+            Some(timeout) if timeout < 1_000 => None,
+            Some(_) => {
+                reason.get_or_insert_with(|| {
+                    format!(
+                        "Claude Code MCP timeout must not exceed {MAX_EXTERNAL_MCP_TIMEOUT_MS} milliseconds"
+                    )
+                });
+                None
+            }
+            None => {
+                reason.get_or_insert_with(|| {
+                    "Claude Code MCP timeout must be a non-negative integer".to_string()
+                });
+                None
+            }
+        },
+        Some(_) => {
+            reason.get_or_insert_with(|| {
+                "Claude Code MCP timeout must be a non-negative integer".to_string()
+            });
+            None
+        }
+    };
+    ExternalMcpTimeouts {
+        startup_ms: None,
+        catalog_ms: None,
+        execution_ms,
+    }
 }
 
 fn cwd_preview(path: &Path, context: &ExternalSourceContext) -> String {
@@ -783,6 +851,7 @@ fn unsupported_local(
             environment_reference_names: Vec::new(),
             remote_url_preview: None,
             header_names: Vec::new(),
+            timeouts: ExternalMcpTimeouts::default(),
             source_enabled: true,
             behavior_version,
             static_status: ExternalMcpStaticStatus::Unsupported {
@@ -823,6 +892,7 @@ fn unsupported_remote(
                     .unwrap_or_else(|| "https://unsupported.invalid/".to_string()),
             ),
             header_names: Vec::new(),
+            timeouts: ExternalMcpTimeouts::default(),
             source_enabled: true,
             behavior_version,
             static_status: ExternalMcpStaticStatus::Unsupported {
@@ -840,6 +910,7 @@ fn prepare_transport(
     template: PreparedTransportTemplate,
     id: SourceQualifiedMcpServerId,
     behavior_version: &str,
+    timeouts: ExternalMcpTimeouts,
 ) -> Result<PreparedExternalMcpServer, ExternalSourceProviderError> {
     let transport = match template {
         PreparedTransportTemplate::Local {
@@ -877,6 +948,7 @@ fn prepare_transport(
     Ok(PreparedExternalMcpServer {
         id,
         behavior_version: behavior_version.to_string(),
+        timeouts,
         transport,
     })
 }
@@ -885,6 +957,13 @@ fn prepare_import_projection(
     definition: ExternalMcpServerDefinition,
     template: PreparedTransportTemplate,
 ) -> Result<PreparedExternalMcpImportServer, ExternalSourceProviderError> {
+    if !definition.timeouts.is_empty() {
+        return Err(ExternalSourceProviderError::new(
+            "external_mcp.import_setup_required",
+            "MCP timeout overrides cannot be imported into native configuration",
+            false,
+        ));
+    }
     let transport = match template {
         PreparedTransportTemplate::Local {
             command,

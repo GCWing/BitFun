@@ -397,6 +397,12 @@ export type ExternalMcpActivation =
   | { state: 'runtime_unavailable'; reason: string }
   | { state: 'removed' };
 
+export interface ExternalMcpTimeouts {
+  startupMs?: number;
+  catalogMs?: number;
+  executionMs?: number;
+}
+
 export interface ExternalMcpDefinition {
   id: {
     source: { providerId: string; sourceId: string };
@@ -412,6 +418,7 @@ export interface ExternalMcpDefinition {
   environmentReferenceNames?: string[];
   remoteUrlPreview?: string;
   headerNames: string[];
+  timeouts?: ExternalMcpTimeouts;
   sourceEnabled: boolean;
   behaviorVersion: string;
   staticStatus:
@@ -912,12 +919,21 @@ function normalizePolicySnapshot(value: unknown): ExternalIntegrationPolicySnaps
 }
 
 function normalizeMcpDefinition(definition: ExternalMcpDefinition): ExternalMcpDefinition {
+  const rawTimeouts = definition.timeouts;
+  const timeouts = rawTimeouts && typeof rawTimeouts === 'object'
+    ? Object.fromEntries(
+      (['startupMs', 'catalogMs', 'executionMs'] as const)
+        .map((key) => [key, rawTimeouts[key]] as const)
+        .filter(([, value]) => Number.isSafeInteger(value) && (value ?? 0) > 0),
+    ) as ExternalMcpTimeouts
+    : undefined;
   return {
     ...definition,
     provenance: normalizeOptionalArray(definition.provenance),
     environmentKeys: normalizeOptionalArray(definition.environmentKeys),
     environmentReferenceNames: normalizeOptionalArray(definition.environmentReferenceNames),
     headerNames: normalizeOptionalArray(definition.headerNames),
+    timeouts: timeouts && Object.keys(timeouts).length > 0 ? timeouts : undefined,
   };
 }
 

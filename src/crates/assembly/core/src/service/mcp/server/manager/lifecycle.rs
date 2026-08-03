@@ -292,7 +292,12 @@ impl MCPServerManager {
 
         self.start_connection_event_listener(server_id, &config.name, connection.clone())
             .await;
-        self.warm_catalog_caches(server_id, connection).await;
+        // Runtime-only external MCP currently publishes workspace-routed Tools
+        // only. Resources and Prompts have no external ownership/routing path,
+        // so their best-effort warmup must not delay external tool readiness.
+        if external_workspace_scope.is_none() {
+            self.warm_catalog_caches(server_id, connection).await;
+        }
         if external_workspace_scope.is_some() {
             self.ephemeral_ready_servers
                 .write()

@@ -760,6 +760,7 @@ describe('ExternalSourcesConfig', () => {
           environmentKeys: ['GITHUB_TOKEN'],
           environmentReferenceNames: ['OPENCODE_TOKEN'],
           headerNames: [],
+          timeouts: { startupMs: 1000, catalogMs: 2000, executionMs: 3000 },
           sourceEnabled: true,
           behaviorVersion: 'behavior-v1',
           staticStatus: { state: 'ready' },
@@ -784,6 +785,7 @@ describe('ExternalSourcesConfig', () => {
           environmentKeys: ['GITHUB_TOKEN'],
           environmentReferenceNames: ['OPENCODE_TOKEN'],
           headerNames: [],
+          timeouts: { startupMs: 1000, catalogMs: 2000, executionMs: 3000 },
           sourceEnabled: true,
           behaviorVersion: 'behavior-v1',
           staticStatus: { state: 'ready' },
@@ -853,6 +855,10 @@ describe('ExternalSourcesConfig', () => {
     expect(container.textContent).toContain('mcp.workingDirectory:{"location":"<workspace>"}');
     expect(container.textContent).toContain('GITHUB_TOKEN');
     expect(container.textContent).toContain('OPENCODE_TOKEN');
+    expect(container.textContent).toContain('mcp.timeoutSummary');
+    expect(container.textContent).toContain('mcp.timeoutStartup');
+    expect(container.textContent).toContain('mcp.timeoutCatalog');
+    expect(container.textContent).toContain('mcp.timeoutExecution');
 
     const approvalCard = Array.from(container.querySelectorAll(
       '.bitfun-external-sources-config__tool-card',

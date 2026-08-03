@@ -249,6 +249,7 @@ pub fn parse_cursor_format(config: &serde_json::Value) -> Vec<MCPServerConfig> {
                         .get("xaa")
                         .cloned()
                         .and_then(|value| serde_json::from_value(value).ok()),
+                    timeouts: Default::default(),
                 };
 
                 servers.push(server_config);

@@ -6933,6 +6933,7 @@ mod tests {
             oauth: None,
             oauth_enabled: None,
             xaa: None,
+            timeouts: Default::default(),
         }
     }
 

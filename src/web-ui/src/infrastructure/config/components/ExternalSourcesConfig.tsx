@@ -21,6 +21,7 @@ import {
   Tooltip,
 } from '@/component-library';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
+import { i18nService } from '@/infrastructure/i18n';
 import { usePeerDeviceModeOptional } from '@/infrastructure/peer-device/peerDeviceContextState';
 import { WorkspaceKind } from '@/shared/types';
 import { createLogger } from '@/shared/utils/logger';
@@ -31,6 +32,7 @@ import {
   type ExternalIntegrationAccess,
   type ExternalIntegrationMode,
   type ExternalIntegrationPolicyMutation,
+  type ExternalMcpDefinition,
   type ExternalSourceCatalogSnapshot,
   type ExternalSourceRecoveryAction,
   type ExternalSubagentModelBindingGroup,
@@ -83,6 +85,38 @@ const AGENT_DIAGNOSTIC_SETTING_KEYS: Record<string, string> = {
   opencode_agent_color_not_imported: 'color',
   opencode_primary_facet_not_imported: 'primaryFacet',
 };
+
+function mcpTimeoutSummary(definition: ExternalMcpDefinition, t: TFunction): string | null {
+  const timeouts = definition.timeouts;
+  if (!timeouts) return null;
+  const values = [
+    ['startupMs', 'mcp.timeoutStartup'],
+    ['catalogMs', 'mcp.timeoutCatalog'],
+    ['executionMs', 'mcp.timeoutExecution'],
+  ] as const;
+  const phases = values.flatMap(([field, label]) => {
+    const milliseconds = timeouts[field];
+    return milliseconds == null
+      ? []
+      : [t(label, {
+        duration: t('mcp.timeoutMilliseconds', {
+          value: i18nService.formatNumber(milliseconds),
+        }),
+      })];
+  });
+  return phases.length > 0 ? t('mcp.timeoutSummary', { values: phases.join(' · ') }) : null;
+}
+
+function McpTimeoutSummary({
+  definition,
+  t,
+}: {
+  definition: ExternalMcpDefinition;
+  t: TFunction;
+}) {
+  const summary = mcpTimeoutSummary(definition, t);
+  return summary ? <span>{summary}</span> : null;
+}
 
 type SnapshotLoadResult =
   | { status: 'accepted'; snapshot: ExternalSourceCatalogSnapshot }
@@ -1967,6 +2001,7 @@ const ExternalSourcesConfig: React.FC = () => {
                           location: request.definition.workingDirectory,
                         })}</span>
                       ) : null}
+                      <McpTimeoutSummary definition={request.definition} t={t} />
                       {(request.definition.environmentKeys?.length ?? 0) > 0 ? (
                         <span>{t('mcp.environmentNames', {
                           names: request.definition.environmentKeys.join(', '),
@@ -2106,6 +2141,7 @@ const ExternalSourcesConfig: React.FC = () => {
                                 location: server.definition.workingDirectory,
                               })}</span>
                             ) : null}
+                            <McpTimeoutSummary definition={server.definition} t={t} />
                             <span>{t('mcp.argumentCount', {
                               count: server.definition.argumentCount,
                             })}</span>
@@ -2264,6 +2300,7 @@ const ExternalSourcesConfig: React.FC = () => {
                                     location: externalServer.definition.workingDirectory,
                                   })}</span>
                                 ) : null}
+                                <McpTimeoutSummary definition={externalServer.definition} t={t} />
                                 {(externalServer.definition.environmentKeys?.length ?? 0) > 0 ? (
                                   <span>{t('mcp.environmentNames', {
                                     names: externalServer.definition.environmentKeys.join(', '),

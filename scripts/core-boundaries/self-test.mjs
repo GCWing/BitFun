@@ -1454,6 +1454,8 @@ export function runManifestParserSelfTest({
     }
   }
   for (const requiredSymbol of [
+    'ExternalMcpTimeouts',
+    'MAX_EXTERNAL_MCP_TIMEOUT_MS',
     'ExternalMcpServerDefinition',
     'ExternalMcpSourceProvider',
     'PreparedExternalMcpServer',

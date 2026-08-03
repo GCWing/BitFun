@@ -46,9 +46,10 @@ native ID、disposition 和稳定 reason code，不包含 command arguments、UR
 
 environment 值或引用、header/authorization、cwd、未知字段和其他 transport 不猜测、不复制、不记录。导入条目始终为
 `enabled: false` 与 `autoStart: false`；local 条目不继承完整父进程环境，只保留 MCP runtime owner 提供的安全环境。
-Codex 的 legacy `name` 是上游忽略的展示字段，不进入导入结果或行为版本；`startup_timeout_sec`、`tool_timeout_sec`、
-`enabled_tools`、`disabled_tools`、approval、environment/scopes/OAuth 与并行调用等运行敏感字段仍按不支持处理，不能因
-静态发现成功而丢弃语义后导入。
+Codex 的 legacy `name` 是上游忽略的展示字段，不进入导入结果或行为版本；`startup_timeout_sec`（含旧
+`startup_timeout_ms`）和 `tool_timeout_sec` 可进入受审批保护的兼容运行投影，但当前原生快照格式不能无损保留它们，
+因此仍会阻断 C0a 导入。`enabled_tools`、`disabled_tools`、approval、environment/scopes/OAuth 与并行调用等运行敏感字段
+仍按不支持处理，不能因静态发现成功而丢弃语义后导入。
 Codex 未显式声明 cwd 时，其兼容运行投影仍会把当前 workspace 作为 effective cwd；现有原生快照格式不会保留这项隐式
 语义，因此 workspace 场景的 local 声明返回“需要设置”，不能以“没有 cwd 字段”为由导入后继承 BitFun 进程目录。
 
@@ -628,8 +629,12 @@ Command；明确缺失且未被标记失败的 Command 是稳定删除。产品�
    扩展。删除项的一次性用户通知/有界墓碑尚未实现，当前行会在稳定重扫后消失；该展示增强
    留待后续 PR，不能改变“先撤 route、禁止新调用”的运行语义。
 8. 外部本地进程不继承 BitFun 的完整父进程环境，只保留启动所需的系统基线和配置显式声明的变量；这仍不是 OS
-   沙箱，进程继续拥有当前用户的文件、网络和子进程权限。Remote 执行域、OpenCode OAuth client 配置、SSE、完整
-   `timeout`/Agent 范围和通用凭据归属模块明确延后。
+   沙箱，进程继续拥有当前用户的文件、网络和子进程权限。OpenCode V1 标量 `timeout`、Codex 启动/工具 timeout 与
+   Claude Code 单服务器执行 timeout 已映射为统一的启动、目录读取、执行阶段事实；Codex `startup_timeout_sec` 同时约束
+   初始化和首次工具目录请求，`tool_timeout_sec` 只约束工具执行。只有来源显式声明时才覆盖现有运行行为；当前使用每次请求的
+   硬期限，不因 progress 重置，超时只停止
+   BitFun 的当前等待，不承诺服务端工作已经取消，也不触发自动重放或重启。Remote 执行域、OpenCode OAuth client 配置、SSE、OpenCode V2 分阶段 timeout
+   配置格式、Agent 范围和通用凭据归属模块明确延后。
 9. 本阶段只把外部 MCP 的 Tool 目录接入 Agent Tool 归属模块。通用 Resource/Prompt/MCP App Desktop 接口不接受无工作区
    上下文的外部 runtime id；外部服务器发起的 roots、sampling 和 elicitation 请求也一律拒绝，防止跨工作区读取或借用
    BitFun 宿主能力。后续若接入这些能力，必须先补独立契约、工作区路由与权限交互，不能复用全局连接绕过当前边界。

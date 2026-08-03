@@ -147,12 +147,13 @@ impl MCPServerRuntimeState {
                     resolved.command, resolved.source_label, config.id
                 );
                 process
-                    .start_with_environment_policy(
+                    .start_with_environment_policy_and_timeouts(
                         &resolved.command,
                         &config.args,
                         &config.env,
                         config.working_directory.as_deref().map(Path::new),
                         config.inherits_parent_environment(),
+                        config.timeouts,
                     )
                     .await?;
             }

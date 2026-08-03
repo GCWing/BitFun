@@ -542,6 +542,41 @@ pub enum ExternalMcpStaticStatus {
     Invalid { reason: String },
 }
 
+/// Largest timeout that remains exact across Rust, JSON, GUI, and TUI surfaces.
+pub const MAX_EXTERNAL_MCP_TIMEOUT_MS: u64 = 9_007_199_254_740_991;
+
+/// Explicit lifecycle timeout overrides disclosed by an external MCP source.
+/// Missing phases retain the product runtime's existing behavior.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ExternalMcpTimeouts {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub startup_ms: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub catalog_ms: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub execution_ms: Option<u64>,
+}
+
+impl ExternalMcpTimeouts {
+    pub fn is_empty(&self) -> bool {
+        self.startup_ms.is_none() && self.catalog_ms.is_none() && self.execution_ms.is_none()
+    }
+
+    pub fn validate(&self) -> Result<(), ExternalSourceContractError> {
+        if [self.startup_ms, self.catalog_ms, self.execution_ms]
+            .into_iter()
+            .flatten()
+            .any(|timeout| timeout == 0 || timeout > MAX_EXTERNAL_MCP_TIMEOUT_MS)
+        {
+            return Err(ExternalSourceContractError::InvalidIdentifier(
+                "MCP timeout",
+            ));
+        }
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ExternalMcpServerDefinition {
@@ -566,6 +601,8 @@ pub struct ExternalMcpServerDefinition {
     pub remote_url_preview: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub header_names: Vec<String>,
+    #[serde(default, skip_serializing_if = "ExternalMcpTimeouts::is_empty")]
+    pub timeouts: ExternalMcpTimeouts,
     pub source_enabled: bool,
     pub behavior_version: String,
     pub static_status: ExternalMcpStaticStatus,
@@ -606,6 +643,7 @@ impl ExternalMcpServerDefinition {
         if let Some(url) = &self.remote_url_preview {
             validate_text(url, "MCP remote URL preview")?;
         }
+        self.timeouts.validate()?;
         let mut environment_keys = BTreeSet::new();
         for key in &self.environment_keys {
             validate_id(key, "MCP environment key")?;
@@ -810,6 +848,7 @@ impl fmt::Debug for PreparedExternalMcpTransport {
 pub struct PreparedExternalMcpServer {
     pub id: SourceQualifiedMcpServerId,
     pub behavior_version: String,
+    pub timeouts: ExternalMcpTimeouts,
     pub transport: PreparedExternalMcpTransport,
 }
 

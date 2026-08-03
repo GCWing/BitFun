@@ -355,6 +355,69 @@ fn unsupported_upstream_fields_fail_closed_instead_of_changing_behavior_silently
 }
 
 #[test]
+fn claude_timeout_controls_execution_and_subsecond_values_are_ignored() {
+    let fixture = Fixture::new();
+    write(
+        fixture.project.join(".mcp.json"),
+        r#"{"mcpServers":{
+          "docs":{"command":"docs-server","timeout":2500},
+          "native-ignored":{"command":"ignored-server","timeout":500}
+        }}"#,
+    );
+    let provider = fixture.provider();
+    let input = fixture.input();
+
+    let snapshot = provider.discover(&input).unwrap();
+    let docs = snapshot
+        .servers
+        .iter()
+        .find(|server| server.name == "docs")
+        .unwrap();
+    let ignored = snapshot
+        .servers
+        .iter()
+        .find(|server| server.name == "native-ignored")
+        .unwrap();
+    assert_eq!(docs.static_status, ExternalMcpStaticStatus::Ready);
+    assert_eq!(docs.timeouts.startup_ms, None);
+    assert_eq!(docs.timeouts.catalog_ms, None);
+    assert_eq!(docs.timeouts.execution_ms, Some(2_500));
+    assert_eq!(ignored.static_status, ExternalMcpStaticStatus::Ready);
+    assert!(ignored.timeouts.is_empty());
+    assert!(snapshot
+        .diagnostics
+        .iter()
+        .any(|diagnostic| diagnostic.code == "claude.mcp.execution_limit_ignored"));
+
+    let prepared = provider
+        .prepare_server(&input, &docs.id, &docs.behavior_version)
+        .unwrap();
+    assert_eq!(prepared.timeouts, docs.timeouts);
+    assert_eq!(
+        provider
+            .prepare_import(&input, &docs.id, &docs.behavior_version)
+            .unwrap_err()
+            .code,
+        "external_mcp.import_setup_required"
+    );
+}
+
+#[test]
+fn claude_timeout_that_cannot_cross_product_surfaces_losslessly_is_unsupported() {
+    let fixture = Fixture::new();
+    write(
+        fixture.project.join(".mcp.json"),
+        r#"{"mcpServers":{"docs":{"command":"docs-server","timeout":9007199254740992}}}"#,
+    );
+
+    let snapshot = fixture.provider().discover(&fixture.input()).unwrap();
+    assert!(matches!(
+        snapshot.servers[0].static_status,
+        ExternalMcpStaticStatus::Unsupported { .. }
+    ));
+}
+
+#[test]
 fn suppression_recomputes_native_winner_and_stale_prepare_fails_closed() {
     let fixture = Fixture::new();
     write(

@@ -1,9 +1,13 @@
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
-use bitfun_services_integrations::mcp::server::MCPConnection;
+use bitfun_services_integrations::mcp::config::ConfigLocation;
+use bitfun_services_integrations::mcp::server::{
+    MCPConnection, MCPProcessStartContext, MCPRuntimeErrorKind, MCPServerConfig,
+    MCPServerRuntimeState, MCPServerStatus, MCPServerTimeouts, MCPServerTransport, MCPServerType,
+};
 use serde_json::{json, Value};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
@@ -18,6 +22,7 @@ struct TestState {
     saw_roots_capability: Arc<AtomicBool>,
     saw_sampling_capability: Arc<AtomicBool>,
     saw_elicitation_capability: Arc<AtomicBool>,
+    initialize_delay_ms: Arc<AtomicU64>,
 }
 
 struct TestRequest {
@@ -153,6 +158,10 @@ async fn handle_post(
 
     match method {
         "initialize" => {
+            let delay_ms = state.initialize_delay_ms.load(Ordering::SeqCst);
+            if delay_ms > 0 {
+                tokio::time::sleep(Duration::from_millis(delay_ms)).await;
+            }
             let capabilities = body
                 .get("params")
                 .and_then(|params| params.get("capabilities"))
@@ -317,6 +326,70 @@ async fn raw_status_line(addr: std::net::SocketAddr, request: &str) -> String {
         .next()
         .unwrap_or_default()
         .to_string()
+}
+
+#[tokio::test]
+async fn remote_startup_timeout_preserves_timeout_kind_and_cleans_connection() {
+    let state = TestState::default();
+    state.initialize_delay_ms.store(100, Ordering::SeqCst);
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    let server_state = state.clone();
+    tokio::spawn(async move {
+        while let Ok((stream, _)) = listener.accept().await {
+            let connection_state = server_state.clone();
+            tokio::spawn(async move {
+                handle_connection(stream, connection_state)
+                    .await
+                    .expect("test MCP connection should complete");
+            });
+        }
+    });
+
+    let runtime = MCPServerRuntimeState::new();
+    let config = MCPServerConfig {
+        id: "startup-timeout".to_string(),
+        name: "Startup timeout".to_string(),
+        server_type: MCPServerType::Remote,
+        transport: Some(MCPServerTransport::StreamableHttp),
+        command: None,
+        args: Vec::new(),
+        env: Default::default(),
+        working_directory: None,
+        inherit_parent_environment: None,
+        headers: Default::default(),
+        url: Some(format!("http://{addr}/mcp")),
+        auto_start: true,
+        enabled: true,
+        location: ConfigLocation::BuiltIn,
+        capabilities: Vec::new(),
+        settings: Default::default(),
+        oauth: None,
+        oauth_enabled: Some(false),
+        xaa: None,
+        timeouts: MCPServerTimeouts {
+            startup_ms: Some(20),
+            ..Default::default()
+        },
+    };
+    let data_dir = tempfile::tempdir().unwrap();
+
+    let error = runtime
+        .start_process(
+            &config,
+            MCPProcessStartContext::Remote {
+                data_dir: data_dir.path().to_path_buf(),
+            },
+        )
+        .await
+        .expect_err("remote startup should time out");
+
+    assert_eq!(error.kind(), MCPRuntimeErrorKind::Timeout);
+    assert_eq!(
+        runtime.process_status(&config.id).await.unwrap(),
+        MCPServerStatus::Failed
+    );
+    assert!(runtime.process_connection(&config.id).await.is_none());
 }
 
 #[tokio::test]

@@ -447,7 +447,8 @@ fn unsupported_or_source_disabled_servers_remain_visible_but_cannot_be_prepared(
           "mcp": {
             "disabled": {"type":"local","command":["node","server.js"],"enabled":false},
             "insecure": {"type":"remote","url":"http://example.test/mcp"},
-            "custom-timeout": {"type":"remote","url":"https://example.test/mcp","timeout":1000},
+            "invalid-timeout": {"type":"remote","url":"https://example.test/mcp","timeout":0},
+            "unsafe-timeout": {"type":"remote","url":"https://example.test/mcp","timeout":9007199254740992},
             "client-secret": {
               "type":"remote",
               "url":"https://example.test/mcp",
@@ -478,7 +479,8 @@ fn unsupported_or_source_disabled_servers_remain_visible_but_cannot_be_prepared(
     ));
     for name in [
         "insecure",
-        "custom-timeout",
+        "invalid-timeout",
+        "unsafe-timeout",
         "client-secret",
         "mutable-command",
         "mutable-host",
@@ -496,6 +498,52 @@ fn unsupported_or_source_disabled_servers_remain_visible_but_cannot_be_prepared(
             .prepare_server(&input, &server.id, &server.behavior_version)
             .is_err());
     }
+}
+
+#[test]
+fn opencode_timeout_applies_to_all_mcp_lifecycle_phases() {
+    let temp = TempDir::new().unwrap();
+    let user = temp.path().join("user");
+    let project = temp.path().join("project");
+    fs::create_dir_all(&user).unwrap();
+    fs::create_dir_all(project.join(".git")).unwrap();
+    fs::write(
+        user.join("opencode.json"),
+        r#"{"mcp":{"docs":{"type":"remote","url":"https://example.test/mcp","timeout":1250}}}"#,
+    )
+    .unwrap();
+    let provider = OpenCodeMcpProvider::new(options(user));
+    let input = ExternalMcpDiscoveryInput {
+        context: context(project),
+        suppressed_sources: BTreeSet::new(),
+        revision_key: revision_key(),
+    };
+
+    let snapshot = provider.discover(&input).unwrap();
+    let server = snapshot
+        .servers
+        .iter()
+        .find(|server| server.name == "docs")
+        .unwrap();
+    assert!(matches!(
+        server.static_status,
+        ExternalMcpStaticStatus::Ready
+    ));
+    assert_eq!(server.timeouts.startup_ms, Some(1_250));
+    assert_eq!(server.timeouts.catalog_ms, Some(1_250));
+    assert_eq!(server.timeouts.execution_ms, Some(1_250));
+
+    let prepared = provider
+        .prepare_server(&input, &server.id, &server.behavior_version)
+        .unwrap();
+    assert_eq!(prepared.timeouts, server.timeouts);
+    assert_eq!(
+        provider
+            .prepare_import(&input, &server.id, &server.behavior_version)
+            .unwrap_err()
+            .code,
+        "external_mcp.import_setup_required"
+    );
 }
 
 #[test]

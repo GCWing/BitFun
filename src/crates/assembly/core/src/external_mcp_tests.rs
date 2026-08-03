@@ -6,8 +6,8 @@ use bitfun_external_sources::ExternalMcpCoordinatorSnapshot;
 use bitfun_product_domains::external_sources::{
     external_mcp_approval_key, external_mcp_conflict_key, EcosystemId, ExecutionDomainId,
     ExternalMcpActivationState, ExternalMcpServerDefinition, ExternalMcpStaticStatus,
-    ExternalMcpTransportKind, ExternalSourceCatalogEntry, ExternalSourceHealth,
-    ExternalSourceLifecycleState, ExternalSourceRecord, ExternalSourceScope,
+    ExternalMcpTimeouts, ExternalMcpTransportKind, ExternalSourceCatalogEntry,
+    ExternalSourceHealth, ExternalSourceLifecycleState, ExternalSourceRecord, ExternalSourceScope,
     PreparedExternalMcpServer, PreparedExternalMcpTransport, SecretValue, SourceKey,
     SourceQualifiedMcpServerId,
 };
@@ -58,6 +58,7 @@ fn snapshot(behavior_version: &str) -> ExternalMcpCoordinatorSnapshot {
         environment_reference_names: Vec::new(),
         remote_url_preview: None,
         header_names: Vec::new(),
+        timeouts: ExternalMcpTimeouts::default(),
         source_enabled: true,
         behavior_version: behavior_version.to_string(),
         static_status: ExternalMcpStaticStatus::Ready,
@@ -338,6 +339,11 @@ fn prepared_local_external_mcp_keeps_cwd_and_does_not_inherit_bitfun_secrets() {
     let prepared = PreparedExternalMcpServer {
         id: definition.id,
         behavior_version: definition.behavior_version,
+        timeouts: ExternalMcpTimeouts {
+            startup_ms: Some(1_000),
+            catalog_ms: Some(2_000),
+            execution_ms: Some(3_000),
+        },
         transport: PreparedExternalMcpTransport::Local {
             command: "npx".to_string(),
             args: vec!["-y".to_string(), "example-mcp".to_string()],
@@ -355,6 +361,9 @@ fn prepared_local_external_mcp_keeps_cwd_and_does_not_inherit_bitfun_secrets() {
         Some("D:/workspace/project")
     );
     assert_eq!(config.inherit_parent_environment, Some(false));
+    assert_eq!(config.timeouts.startup_ms, Some(1_000));
+    assert_eq!(config.timeouts.catalog_ms, Some(2_000));
+    assert_eq!(config.timeouts.execution_ms, Some(3_000));
     assert_eq!(
         config.env.get("EXPLICIT_TOKEN").map(String::as_str),
         Some("secret")

@@ -18,12 +18,12 @@ use bitfun_product_domains::external_sources::{
     ExternalMcpConflictCandidate, ExternalMcpDiscoveryInput, ExternalMcpImportApplyRequestV1,
     ExternalMcpImportSelectionV1, ExternalMcpProviderIdentity, ExternalMcpProviderSnapshot,
     ExternalMcpRevisionKey, ExternalMcpServerDefinition, ExternalMcpStaticStatus,
-    ExternalMcpTransportKind, ExternalSourceAssetKind, ExternalSourceCatalogEntry,
-    ExternalSourceCatalogSnapshot, ExternalSourceContext, ExternalSourceDiagnostic,
-    ExternalSourceHealth, ExternalSourceHostCapabilities, ExternalSourceLifecycleState,
-    ExternalSourceOperationError, ExternalSourceOperationErrorCode, ExternalSourceProviderError,
-    ExternalSourcePublicSnapshot, ExternalSourceRecord, ExternalSourceScope,
-    ExternalToolCapability, ExternalToolDefinition, ExternalToolRuntimeKind,
+    ExternalMcpTimeouts, ExternalMcpTransportKind, ExternalSourceAssetKind,
+    ExternalSourceCatalogEntry, ExternalSourceCatalogSnapshot, ExternalSourceContext,
+    ExternalSourceDiagnostic, ExternalSourceHealth, ExternalSourceHostCapabilities,
+    ExternalSourceLifecycleState, ExternalSourceOperationError, ExternalSourceOperationErrorCode,
+    ExternalSourceProviderError, ExternalSourcePublicSnapshot, ExternalSourceRecord,
+    ExternalSourceScope, ExternalToolCapability, ExternalToolDefinition, ExternalToolRuntimeKind,
     ExternalToolStaticStatus, ExternalWatchRoot, NativePromptCommandDescriptor,
     PreparedExternalMcpImportServer, PreparedExternalMcpImportTransport, PreparedExternalMcpServer,
     PreparedExternalMcpTransport, PromptCommandAvailability, PromptCommandCatalogEntry,
@@ -1158,6 +1158,7 @@ fn external_mcp_contract_keeps_runtime_secrets_out_of_static_snapshots() {
         environment_reference_names: Vec::new(),
         remote_url_preview: Some("https://mcp.example.com/mcp".to_string()),
         header_names: vec!["Authorization".to_string()],
+        timeouts: ExternalMcpTimeouts::default(),
         source_enabled: true,
         behavior_version: "sha256:behavior-v1".to_string(),
         static_status: ExternalMcpStaticStatus::Ready,
@@ -1181,6 +1182,7 @@ fn external_mcp_contract_keeps_runtime_secrets_out_of_static_snapshots() {
     let prepared = PreparedExternalMcpServer {
         id: definition.id,
         behavior_version: definition.behavior_version,
+        timeouts: ExternalMcpTimeouts::default(),
         transport: PreparedExternalMcpTransport::Remote {
             url: "https://mcp.example.com/mcp?token=url-secret".to_string(),
             headers: [(
@@ -1198,6 +1200,43 @@ fn external_mcp_contract_keeps_runtime_secrets_out_of_static_snapshots() {
     );
     assert!(!format!("{prepared:?}").contains("Bearer secret"));
     assert!(!format!("{prepared:?}").contains("url-secret"));
+}
+
+#[test]
+fn external_mcp_timeouts_are_positive_optional_millisecond_facts() {
+    let timeouts = ExternalMcpTimeouts {
+        startup_ms: Some(2_000),
+        catalog_ms: None,
+        execution_ms: Some(30_000),
+    };
+
+    timeouts.validate().expect("positive timeouts are valid");
+    assert_eq!(
+        serde_json::to_value(&timeouts).unwrap(),
+        serde_json::json!({
+            "startupMs": 2_000,
+            "executionMs": 30_000,
+        })
+    );
+    assert!(ExternalMcpTimeouts {
+        startup_ms: Some(0),
+        ..Default::default()
+    }
+    .validate()
+    .is_err());
+    assert!(ExternalMcpTimeouts {
+        execution_ms: Some(9_007_199_254_740_991),
+        ..Default::default()
+    }
+    .validate()
+    .is_ok());
+    assert!(ExternalMcpTimeouts {
+        execution_ms: Some(9_007_199_254_740_992),
+        ..Default::default()
+    }
+    .validate()
+    .is_err());
+    assert!(ExternalMcpTimeouts::default().is_empty());
 }
 
 #[test]
@@ -1250,6 +1289,7 @@ fn external_mcp_snapshot_rejects_cross_provider_and_duplicate_servers() {
         environment_reference_names: Vec::new(),
         remote_url_preview: None,
         header_names: Vec::new(),
+        timeouts: ExternalMcpTimeouts::default(),
         source_enabled: true,
         behavior_version: "sha256:behavior-v1".to_string(),
         static_status: ExternalMcpStaticStatus::Ready,
@@ -1350,6 +1390,7 @@ fn external_mcp_product_view_is_version_guarded_and_contains_only_disclosed_fiel
         environment_reference_names: Vec::new(),
         remote_url_preview: None,
         header_names: Vec::new(),
+        timeouts: ExternalMcpTimeouts::default(),
         source_enabled: true,
         behavior_version: "sha256:behavior-v1".to_string(),
         static_status: ExternalMcpStaticStatus::Ready,
@@ -1872,6 +1913,7 @@ fn control_projection_does_not_infer_review_facts_from_runtime_activation() {
         environment_reference_names: Vec::new(),
         remote_url_preview: Some("https://mcp.example.com".to_string()),
         header_names: Vec::new(),
+        timeouts: ExternalMcpTimeouts::default(),
         source_enabled: true,
         behavior_version: "behavior-v1".to_string(),
         static_status: ExternalMcpStaticStatus::Ready,

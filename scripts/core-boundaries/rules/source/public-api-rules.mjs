@@ -788,6 +788,8 @@ export const externalSourceContractPublicApiEntries = [
     'SourceQualifiedMcpServerId',
     'ExternalMcpTransportKind',
     'ExternalMcpStaticStatus',
+    'ExternalMcpTimeouts',
+    'MAX_EXTERNAL_MCP_TIMEOUT_MS',
     'ExternalMcpServerDefinition',
     'ExternalMcpActivationState',
     'ExternalMcpCatalogEntry',

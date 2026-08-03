@@ -6,11 +6,12 @@ use crate::local_source_paths::{
 use bitfun_product_domains::external_sources::{
     EcosystemId, ExternalMcpDiscoveryInput, ExternalMcpProviderIdentity,
     ExternalMcpProviderSnapshot, ExternalMcpServerDefinition, ExternalMcpSourceProvider,
-    ExternalMcpStaticStatus, ExternalMcpTransportKind, ExternalSourceAssetKind,
-    ExternalSourceContext, ExternalSourceDiagnostic, ExternalSourceHealth,
+    ExternalMcpStaticStatus, ExternalMcpTimeouts, ExternalMcpTransportKind,
+    ExternalSourceAssetKind, ExternalSourceContext, ExternalSourceDiagnostic, ExternalSourceHealth,
     ExternalSourceProviderError, ExternalSourceRecord, ExternalSourceScope, ExternalWatchRoot,
     PreparedExternalMcpImportServer, PreparedExternalMcpImportTransport, PreparedExternalMcpServer,
     PreparedExternalMcpTransport, SecretValue, SourceKey, SourceQualifiedMcpServerId,
+    MAX_EXTERNAL_MCP_TIMEOUT_MS,
 };
 use bitfun_services_core::jsonc::strip_jsonc;
 use bitfun_static_hook_support::BoundedTextRead;
@@ -294,9 +295,14 @@ impl ExternalMcpSourceProvider for OpenCodeMcpProvider {
         server_id: &SourceQualifiedMcpServerId,
         expected_behavior_version: &str,
     ) -> Result<PreparedExternalMcpServer, ExternalSourceProviderError> {
-        let (_, prepared) =
+        let (definition, prepared) =
             self.current_preparation(input, server_id, expected_behavior_version)?;
-        resolve_runtime_values(prepared, server_id.clone(), expected_behavior_version)
+        resolve_runtime_values(
+            prepared,
+            server_id.clone(),
+            expected_behavior_version,
+            definition.timeouts,
+        )
     }
 
     fn prepare_import(
@@ -415,6 +421,7 @@ fn materialize_server(
                     environment_reference_names: Vec::new(),
                     remote_url_preview: None,
                     header_names: Vec::new(),
+                    timeouts: ExternalMcpTimeouts::default(),
                     source_enabled,
                     behavior_version,
                     static_status: ExternalMcpStaticStatus::Unsupported { reason },
@@ -443,8 +450,11 @@ fn materialize_local_server(
     let command_parts = string_array(object.get("command"));
     let mut reason = unsupported_field_reason(object, LOCAL_FIELDS)
         .or_else(|| command_parts.as_ref().err().cloned())
-        .or_else(|| timeout_unsupported_reason(object))
         .or_else(|| unsupported_variable_reason(object));
+    let timeouts = timeout_overrides(object).unwrap_or_else(|error| {
+        reason.get_or_insert(error);
+        ExternalMcpTimeouts::default()
+    });
     let command_parts = command_parts.unwrap_or_default();
     if command_parts.is_empty() {
         reason.get_or_insert_with(|| "Local MCP command must not be empty".to_string());
@@ -525,6 +535,7 @@ fn materialize_local_server(
             environment_reference_names,
             remote_url_preview: None,
             header_names: Vec::new(),
+            timeouts,
             source_enabled,
             behavior_version,
             static_status,
@@ -553,8 +564,11 @@ fn materialize_remote_server(
         .unwrap_or_default()
         .to_string();
     let mut reason = unsupported_field_reason(object, REMOTE_FIELDS)
-        .or_else(|| timeout_unsupported_reason(object))
         .or_else(|| unsupported_variable_reason(object));
+    let timeouts = timeout_overrides(object).unwrap_or_else(|error| {
+        reason.get_or_insert(error);
+        ExternalMcpTimeouts::default()
+    });
     let preview_url = match sanitized_https_url(&raw_url) {
         Ok(url) => url,
         Err(error) => {
@@ -620,6 +634,7 @@ fn materialize_remote_server(
             environment_reference_names,
             remote_url_preview: Some(preview_url),
             header_names: headers.keys().cloned().collect(),
+            timeouts,
             source_enabled,
             behavior_version,
             static_status,
@@ -636,6 +651,7 @@ fn resolve_runtime_values(
     template: PreparedTransportTemplate,
     id: SourceQualifiedMcpServerId,
     behavior_version: &str,
+    timeouts: ExternalMcpTimeouts,
 ) -> Result<PreparedExternalMcpServer, ExternalSourceProviderError> {
     let transport = match template {
         PreparedTransportTemplate::Local {
@@ -719,6 +735,7 @@ fn resolve_runtime_values(
     Ok(PreparedExternalMcpServer {
         id,
         behavior_version: behavior_version.to_string(),
+        timeouts,
         transport,
     })
 }
@@ -727,6 +744,13 @@ fn prepare_import_projection(
     definition: ExternalMcpServerDefinition,
     template: PreparedTransportTemplate,
 ) -> Result<PreparedExternalMcpImportServer, ExternalSourceProviderError> {
+    if !definition.timeouts.is_empty() {
+        return Err(ExternalSourceProviderError::new(
+            "external_mcp.import_setup_required",
+            "MCP timeout overrides cannot be imported into native configuration",
+            false,
+        ));
+    }
     let transport = match template {
         PreparedTransportTemplate::Local {
             command,
@@ -834,13 +858,25 @@ fn collect_environment_reference_names<'a>(
     Ok(names.into_iter().collect())
 }
 
-fn timeout_unsupported_reason(object: &Map<String, Value>) -> Option<String> {
+fn timeout_overrides(object: &Map<String, Value>) -> Result<ExternalMcpTimeouts, String> {
     match object.get("timeout") {
-        None => None,
-        Some(Value::Number(number)) if number.as_u64() == Some(5000) => None,
-        Some(_) => {
-            Some("Custom OpenCode MCP initialization timeout is not supported yet".to_string())
-        }
+        None => Ok(ExternalMcpTimeouts::default()),
+        Some(Value::Number(number)) => number
+            .as_u64()
+            .filter(|timeout| (1..=MAX_EXTERNAL_MCP_TIMEOUT_MS).contains(timeout))
+            .map(|timeout| ExternalMcpTimeouts {
+                startup_ms: Some(timeout),
+                catalog_ms: Some(timeout),
+                execution_ms: Some(timeout),
+            })
+            .ok_or_else(|| {
+                format!(
+                    "OpenCode MCP timeout must be an integer from 1 to {MAX_EXTERNAL_MCP_TIMEOUT_MS} milliseconds"
+                )
+            }),
+        Some(_) => Err(format!(
+            "OpenCode MCP timeout must be an integer from 1 to {MAX_EXTERNAL_MCP_TIMEOUT_MS} milliseconds"
+        )),
     }
 }
 

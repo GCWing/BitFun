@@ -687,6 +687,12 @@ describe('ExternalSourcesAPI', () => {
           name: 'docs',
           transport: 'streamable_http',
           argumentCount: 0,
+          timeouts: {
+            startupMs: 9007199254740992,
+            catalogMs: 'invalid',
+            executionMs: 3000,
+            futurePhaseMs: 4000,
+          },
           sourceEnabled: true,
           behaviorVersion: '1',
           staticStatus: { state: 'ready' },
@@ -702,7 +708,9 @@ describe('ExternalSourcesAPI', () => {
       environmentKeys: [],
       environmentReferenceNames: [],
       headerNames: [],
+      timeouts: { executionMs: 3000 },
     });
+    expect(result.mcpServers?.[0].definition.timeouts).toEqual({ executionMs: 3000 });
     expect(result.mcpApprovalRequests).toEqual([]);
     expect(result.toolConflicts).toEqual([]);
     expect(result.pendingSubagentApprovals).toEqual([]);
