@@ -337,6 +337,13 @@ jobs:
             ghcr.io/gcwing/bitfun-relay-server:${{ env.NIGHTLY_TAG }}
             ghcr.io/gcwing/bitfun-relay-server:${{ steps.nightly-image-meta.outputs.asset_version }}
 
+      - name: Smoke-test published Relay image on both platforms
+        shell: bash
+        env:
+          IMAGE_DIGEST: ${{ steps.relay-image.outputs.digest }}
+        run: bash scripts/relay/smoke-image.sh \
+          "ghcr.io/gcwing/bitfun-relay-server@${IMAGE_DIGEST}"
+
       - name: Generate signed Relay image descriptor
         shell: bash
         env:

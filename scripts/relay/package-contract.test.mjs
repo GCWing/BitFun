@@ -44,6 +44,7 @@ test('formal and nightly releases publish signed anonymous multi-platform Relay 
   const formal = read('.github/workflows/desktop-package.yml');
   const nightly = read('.github/workflows/nightly.yml');
   const dockerfile = read('src/apps/relay-server/Dockerfile.release');
+  const smoke = read('scripts/relay/smoke-image.sh');
 
   for (const workflow of [formal, nightly]) {
     assert.match(workflow, /packages:\s*write/);
@@ -52,11 +53,16 @@ test('formal and nightly releases publish signed anonymous multi-platform Relay 
     assert.match(workflow, /ghcr\.io\/gcwing\/bitfun-relay-server/);
     assert.match(workflow, /relay-image\.json/);
     assert.match(workflow, /scripts\/sign-release-assets\.sh relay-image\.json/);
+    assert.match(workflow, /scripts\/relay\/smoke-image\.sh/);
     assert.match(workflow, /Verify anonymous .*image access|Verify anonymous pull access/);
     assert.match(workflow, /DOCKER_CONFIG="\$clean_config" docker buildx imagetools inspect/);
   }
   assert.match(formal, /latest_release=.*releases\/latest/);
   assert.doesNotMatch(nightly, /bitfun-relay-server:latest/);
+
+  assert.match(smoke, /for arch in amd64 arm64/);
+  assert.match(smoke, /\.State\.Health/);
+  assert.match(smoke, /docker logs --tail/);
 
   assert.match(dockerfile, /org\.opencontainers\.image\.source="https:\/\/github\.com\/GCWing\/BitFun"/);
   assert.match(dockerfile, /TARGETARCH/);

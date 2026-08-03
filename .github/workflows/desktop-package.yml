@@ -383,6 +383,12 @@ jobs:
             REVISION=${{ needs.prepare.outputs.release_tag }}
           tags: ${{ steps.image-tags.outputs.value }}
 
+      - name: Smoke-test published image on both platforms
+        shell: bash
+        env:
+          IMAGE_DIGEST: ${{ steps.image.outputs.digest }}
+        run: bash scripts/relay/smoke-image.sh "${IMAGE}@${IMAGE_DIGEST}"
+
       - name: Verify manifest and generate signed descriptor
         shell: bash
         env:
