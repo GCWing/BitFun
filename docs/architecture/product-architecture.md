@@ -203,7 +203,7 @@ flowchart TB
 
   subgraph AssemblyLayer[" "]
     direction LR
-    AssemblyTitle["2 · Assembly"] ~~~ CoreAssembly["Core Assembly"] ~~~ ExternalSources["External Sources"] ~~~ ProductCaps["Product Capabilities"]
+    AssemblyTitle["2 · Assembly"] ~~~ AgentContent["Built-in Agent Content"] ~~~ CoreAssembly["Core Assembly"] ~~~ ExternalSources["External Sources"] ~~~ ProductCaps["Product Capabilities"]
   end
 
   subgraph AdaptersLayer[" "]
@@ -231,7 +231,7 @@ flowchart TB
   classDef header fill:#fafafa,stroke:#404040,stroke-width:1.6px,color:#171717;
   classDef module fill:#ffffff,stroke:#737373,stroke-width:1.3px,color:#171717;
   class AppsTitle,AssemblyTitle,AdaptersTitle,ServicesTitle,ExecutionTitle,ContractsTitle header;
-  class Desktop,CLI,Server,Relay,WebUI,MobileUI,ACP,SDKHost,CoreAssembly,ExternalSources,ProductCaps,RuntimeIPC,ModelAdapters,SourceAdapters,Transport,WebDriver,CoreServices,Integrations,MiniAppMarket,RelayService,Terminal,PageRuntime,AgentRuntime,AgentStream,ToolRuntime,PluginClient,Harness,RuntimeServices,CoreTypes,Events,RuntimePorts,ProductDomains module;
+  class Desktop,CLI,Server,Relay,WebUI,MobileUI,ACP,SDKHost,AgentContent,CoreAssembly,ExternalSources,ProductCaps,RuntimeIPC,ModelAdapters,SourceAdapters,Transport,WebDriver,CoreServices,Integrations,MiniAppMarket,RelayService,Terminal,PageRuntime,AgentRuntime,AgentStream,ToolRuntime,PluginClient,Harness,RuntimeServices,CoreTypes,Events,RuntimePorts,ProductDomains module;
   style AppsLayer fill:#ffffff,stroke:#a3a3a3;
   style AssemblyLayer fill:#ffffff,stroke:#a3a3a3;
   style AdaptersLayer fill:#ffffff,stroke:#a3a3a3;
@@ -252,6 +252,10 @@ flowchart TB
 | Contracts | `contracts/*` | Stable Contracts、Security Control、Service Ports |
 
 Assembly 是唯一组装根，只选择下层能力和实现，不能反向依赖 app。每个生态 adapter 独立保留外部格式和顺序语义，再映射到 BitFun owner；生态 adapter 之间不能形成兄弟依赖。
+
+`assembly/agent-content` 只持有随产品发布的不可变内置 Agent prompt 字节和兼容 key；选择、渲染、模式策略、
+Memory/Insights 工作流与运行时状态仍由 Core 的既有 owner 持有。该 crate 不是通用 prompt registry，也不加载
+用户、项目、产品定制或插件内容。
 
 ### 2.3 Process View · Level 0
 

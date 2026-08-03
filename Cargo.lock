@@ -754,6 +754,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "bitfun-agent-content"
+version = "0.2.15"
+
+[[package]]
 name = "bitfun-agent-runtime"
 version = "0.2.15"
 dependencies = [
@@ -967,6 +971,7 @@ dependencies = [
  "async-trait",
  "axum",
  "base64 0.22.1",
+ "bitfun-agent-content",
  "bitfun-agent-runtime",
  "bitfun-agent-stream",
  "bitfun-agent-tools",

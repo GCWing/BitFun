@@ -35,7 +35,7 @@ const ROLLOUT_SUMMARY_BEGIN_MARKER: &str = "<<<ROLLOUT_SUMMARY_BEGIN>>>";
 const ROLLOUT_SUMMARY_END_MARKER: &str = "<<<ROLLOUT_SUMMARY_END>>>";
 const ROLLOUT_SLUG_BEGIN_MARKER: &str = "<<<ROLLOUT_SLUG_BEGIN>>>";
 const ROLLOUT_SLUG_END_MARKER: &str = "<<<ROLLOUT_SLUG_END>>>";
-const PHASE1_SYSTEM_PROMPT: &str = include_str!("prompts/phase1_system.md");
+const PHASE1_SYSTEM_PROMPT: &str = bitfun_agent_content::memories::PHASE1_SYSTEM;
 const CLAW_PERSONA_MEMORY_RULES: &str = "\
 assistant_persona_memory_rules:\n\
 - This rollout is from an assistant-persona session. `BOOTSTRAP.md`, `IDENTITY.md`, `USER.md`, and `SOUL.md` are assistant-local persona/profile setup files.\n\

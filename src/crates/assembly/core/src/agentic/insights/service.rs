@@ -15,6 +15,13 @@ use crate::service::config::AppConfig;
 use crate::service::i18n::LocaleId;
 use crate::util::errors::{BitFunError, BitFunResult};
 use crate::util::types::{GeminiResponse, GeminiUsage, Message, ToolDefinition};
+use bitfun_agent_content::insights::{
+    AREAS as AREAS_PROMPT_TEMPLATE, AT_A_GLANCE as AT_A_GLANCE_PROMPT_TEMPLATE,
+    FACET_EXTRACTION as FACET_PROMPT_TEMPLATE, FRICTION as FRICTION_PROMPT_TEMPLATE,
+    FUN_ENDING as FUN_ENDING_PROMPT_TEMPLATE, HORIZON as HORIZON_PROMPT_TEMPLATE,
+    INTERACTION_STYLE as INTERACTION_STYLE_PROMPT_TEMPLATE,
+    SUGGESTIONS as SUGGESTIONS_PROMPT_TEMPLATE, WINS as WINS_PROMPT_TEMPLATE,
+};
 use log::{debug, info, warn};
 use serde_json::Value;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -22,16 +29,6 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::sync::Semaphore;
 use tokio_util::sync::CancellationToken;
-
-const FACET_PROMPT_TEMPLATE: &str = include_str!("prompts/facet_extraction.md");
-const SUGGESTIONS_PROMPT_TEMPLATE: &str = include_str!("prompts/suggestions.md");
-const AREAS_PROMPT_TEMPLATE: &str = include_str!("prompts/areas.md");
-const WINS_PROMPT_TEMPLATE: &str = include_str!("prompts/wins.md");
-const FRICTION_PROMPT_TEMPLATE: &str = include_str!("prompts/friction.md");
-const INTERACTION_STYLE_PROMPT_TEMPLATE: &str = include_str!("prompts/interaction_style.md");
-const AT_A_GLANCE_PROMPT_TEMPLATE: &str = include_str!("prompts/at_a_glance.md");
-const HORIZON_PROMPT_TEMPLATE: &str = include_str!("prompts/horizon.md");
-const FUN_ENDING_PROMPT_TEMPLATE: &str = include_str!("prompts/fun_ending.md");
 
 const MAX_CONCURRENT_FACET_EXTRACTIONS: usize = 5;
 

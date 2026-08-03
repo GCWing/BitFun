@@ -63,6 +63,9 @@ bitfun-ai-adapters = { path = "../../adapters/ai-adapters", optional = true }
 # Lightweight agent stream processing
 bitfun-agent-stream = { path = "../../execution/agent-stream", optional = true }
 
+# Immutable built-in Agent prompt content
+bitfun-agent-content = { path = "../agent-content", optional = true }
+
 # Agent runtime owner contracts
 bitfun-agent-runtime = { path = "../../execution/agent-runtime", optional = true }
 
@@ -133,6 +136,7 @@ product-full = [
     "canvas-runtime",
     "dep:axum",
     "dep:bitfun-agent-runtime",
+    "dep:bitfun-agent-content",
     "dep:bitfun-agent-stream",
     "dep:bitfun-harness",
     "dep:chrono-tz",

@@ -9,6 +9,7 @@ members = [
     "src/crates/interfaces/acp",
     "src/crates/interfaces/sdk-host",
     "src/crates/adapters/agent-runtime-ipc",
+    "src/crates/assembly/agent-content",
     "src/crates/assembly/core",
     "src/crates/assembly/external-sources",
     "src/crates/adapters/ai-adapters",

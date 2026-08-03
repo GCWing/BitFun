@@ -1668,6 +1668,12 @@ export function runManifestParserSelfTest({
   if (!noCoreDependencyCrates.includes('plugin-runtime-client')) {
     throw new Error('plugin-runtime-client must be covered by the no-core dependency guard');
   }
+  if (
+    crateLayoutRules.find((rule) => rule.crateName === 'agent-content')?.layer !== 'assembly'
+    || !noCoreDependencyCrates.includes('agent-content')
+  ) {
+    throw new Error('agent-content must stay an assembly-owned leaf independent from bitfun-core');
+  }
   for (const adapterCrate of ['claude-code-adapter', 'codex-adapter', 'static-hook-support']) {
     if (crateLayoutRules.find((rule) => rule.crateName === adapterCrate)?.layer !== 'adapters') {
       throw new Error(`${adapterCrate} must be registered in the adapter crate layout`);

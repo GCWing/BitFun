@@ -22,7 +22,7 @@
 | F9 | 依赖树重复严重:1177 个包中 112 个名字存在多版本(image、thiserror、rand×3、getrandom×4、windows-sys×6、phf×6 等) | Rust | 中 | Cargo.lock 解析;`src/apps/desktop/Cargo.toml:85`(image 0.24 vs workspace 0.25) |
 | F10 | reqwest TLS 单栈治理（已完成） | Rust | 已兑现 | workspace transport-only + 客户端 owner 显式 Rustls；见 F10 治理结果 |
 | F11 | Vite dev watcher 强制 usePolling + 100ms 轮询,Windows 上 CPU 高、拖慢 HMR | 前端 | 中 | `src/web-ui/vite.config.ts:68-74` |
-| F12 | prompts/公告 md 内嵌进 bitfun-core 的 build.rs 生成代码,改一个提示词 = 重编 202k 行 core + 下游 | Rust | 中 | `src/crates/assembly/core/build.rs:110-183,343-401` |
+| F12 | Agent prompts 已抽到无依赖内容 owner；Cargo 指纹仍会让 Core 重检，公告仍由 Core 按 feature 生成 | Rust | 中（部分治理） | `src/crates/assembly/agent-content`、`src/crates/assembly/core/build.rs` |
 | F13 | beforeBuildCommand 内 web 构建与 mobile-web 构建纯串行;dev.cjs 准备步骤也全串行 | 脚本 | 中 | `src/apps/desktop/tauri.conf.json`(build 块)、`scripts/dev.cjs:668-737` |
 | F14 | tokio 全 workspace 开 `full` feature;tauri 开 `unstable`;个别重依赖(oxc、rquickjs、git2 vendored、sherpa-onnx)集中于少数 feature | Rust | 低-中 | `Cargo.toml:72,149,178-180,183,248` |
 | F15 | tsconfig(web-ui/mobile-web)未启用 incremental;type-check 每次冷启动 | 前端 | 低-中 | `src/web-ui/tsconfig.json`(全文无 incremental) |
@@ -169,16 +169,30 @@ Cargo.lock 共 1177 个包,其中 112 个名字存在 2 个以上版本(解析�
 **优化方案**
 - 默认关闭 `usePolling`(删除该配置),仅当 `process.env.VITE_USE_POLLING` 显式设置时启用轮询作为逃生口;若必须保留轮询,interval 提到 ≥1000ms。
 
-### F12(中)提示词/公告内容内嵌进 bitfun-core,内容改动触发核心重编
+### F12(中，部分治理)内置 Agent 内容已独立归属，Core 失效链仍存在
 
-**问题描述**
-`src/crates/assembly/core/build.rs` 把 `src/agentic/**/prompts` 与 announcement 的 md/txt 全文生成为巨型 `map.insert(r###"..."###, ...)` Rust 源码(110-183、343-401 行),并对目录逐文件 `rerun-if-changed`。改动任何一个提示词 md → build.rs 重跑 → 生成文件变化 → **202k 行的 bitfun-core 全量重编 + 下游 desktop 重编重链**。提示词是高频改动内容,与代码逻辑无关。
+**2026-08-03 治理结果**
 
-**预期收益**:中(提示词迭代场景的编译时间从"分钟级"降到"秒级")。
+- 35 个内置 Agent prompt 移到无第三方依赖、无 feature 的 `bitfun-agent-content`；Core 只在
+  `product-full` 组装中依赖它，窄 `announcement` feature 不加载该 crate。
+- 26 个 catalog prompt 保留旧 build.rs 生成 Rust 源码时的换行归一化；Memory phase-1 的生产常量与 9 个
+  Insights 常量继续保留旧 `include_str!` 字节行为。Core 继续持有选择、渲染、Memory/Insights 工作流与错误语义。
+- Core build script 不再扫描 Agent prompt；内置 Skill metadata 仅在 `product-full` 生成，announcement
+  内容仅在 `announcement` feature 生成。
+- 未采用 debug 运行时读文件方案。它会使 debug/release 的内容来源、错误时机与自包含行为不同，不符合本轮
+  功能规格完全一致的约束。
 
-**优化方案**
-1. 首选:改用 `include_dir!`(workspace 已有 `include_dir = "0.7"` 依赖,Cargo.toml:112)直接内嵌目录,删除 build.rs 的代码生成路径——虽然内容变化仍触发重编,但可把提示词嵌入下沉到一个**只包含内嵌资源的叶子 crate**,注意:Rust 中依赖变更仍会传递重编下游,所以真正的解法是第 2 条。
-2. dev 构建从文件系统运行时读取(以 `CARGO_MANIFEST_DIR` 定位,debug_assertions 下启用),release 才走内嵌;这样日常提示词调优完全不触发 Rust 重编。风险:dev/release 行为差异,需保留 CI 中 release 路径的冒烟验证。
+**同机热缓存实测**（Windows，`cargo check -p bitfun-core --features product-full`）：
+
+| 场景 | Cargo 失效路径 | 耗时 |
+|---|---|---:|
+| 无改动热检查 | 全部 fresh | 0.92s |
+| 迁移前修改 `init_agents_md.md` | Core build script + `bitfun-core` | 11.38s |
+| 迁移后修改同一 prompt | `bitfun-agent-content` + 依赖它的 `bitfun-core` | 10.02s |
+
+当前收益约 12%，主要来自移除 Core prompt codegen 工作；Rust/Cargo 仍会因直接依赖重建而检查 Core，因此这不是
+“下游完全隔离”。若后续要消除 Core 重检，必须先以独立设计评审 prompt provider 注入或资源打包路径，并证明
+Desktop、CLI、ACP、Server 与 SDK Host 的内容、错误和生命周期完全等价，不能用运行时 fallback 换取表面指标。
 
 ### F13(中)构建/启动编排中的串行步骤
 

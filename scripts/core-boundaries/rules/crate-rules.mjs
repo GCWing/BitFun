@@ -39,6 +39,7 @@ const agentRuntimeIpcForbiddenDeps = [
 ];
 
 export const noCoreDependencyCrates = [
+  'agent-content',
   'core-types',
   'events',
   'ai-adapters',

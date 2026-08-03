@@ -122,6 +122,11 @@ Cargo 会统一同一 package 在依赖图中的 feature；workspace dependency 
 
 仅为减少文件行数、追求“一 crate 一 feature”、只有单一消费者且没有闭包收益，或必须先建立通用注册框架才能成立时，不拆 crate。可以先在原 crate 内按 owner 拆模块；只有物理 crate 边界带来真实依赖或独立验证收益时再升级。
 
+不可变的随版本发布内容只有在能够形成无第三方依赖、可独立验证的稳定 owner，并且实测能减少原 owner 的
+build-script 工作或增量编译成本时才适合独立成 crate。内容 crate 不得顺势承担选择、渲染、运行时状态、动态来源
+或通用注册职责；如果 Cargo 依赖指纹仍会让上层 crate 重检，PR 必须如实记录残余失效链，不能宣称已经隔离全部
+下游重编译。
+
 DTO/contract 抽取不等于 runtime owner 迁移。迁移 owner 必须先审查 port/provider、旧路径兼容、状态与错误语义、远程 workspace 行为和行为等价测试。
 
 ## 6. Test target 与 feature 组合
