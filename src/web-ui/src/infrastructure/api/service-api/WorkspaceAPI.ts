@@ -1102,13 +1102,32 @@ export class WorkspaceAPI {
     }
   }
 
-  async setThemeMode(theme: string): Promise<void> {
+  /**
+   * Tell the native shell which color mode the webview should adopt.
+   *
+   * `mode` is `"light"`, `"dark"`, or `"system"`:
+   * - `light`/`dark` pin the native color override so the webview matches a
+   *   fixed user-chosen theme; the native side returns an empty string.
+   * - `system` releases the override and the native side returns the real
+   *   system color mode (`"light"` or `"dark"`), so the web-ui can resolve a
+   *   concrete theme without relying on `prefers-color-scheme` (which the OHOS
+   *   webview does not update live). ThemeService also polls this return value
+   *   to follow live system theme changes on platforms where matchMedia is inert.
+   *
+   * Note: this carries only the color mode, not the theme id. The full theme
+   * (colors, typography, etc.) is applied independently via CSS variables.
+   *
+   * @returns the resolved system color mode for `system` (`"light"`/`"dark"`),
+   * or `""` for fixed `light`/`dark` modes.
+   */
+  async setThemeMode(mode: 'light' | 'dark' | 'system'): Promise<string> {
     try {
-      await api.invoke('set_theme_mode', {
-        theme
+      const result = await api.invoke<string>('set_theme_mode', {
+        mode
       });
+      return typeof result === 'string' ? result : '';
     } catch (error) {
-      throw createTauriCommandError('set_theme_mode', error, { theme });
+      throw createTauriCommandError('set_theme_mode', error, { mode });
     }
   }
 

@@ -13,13 +13,29 @@ import {
   SYSTEM_THEME_ID,
   ThemeSelectionId,
 } from '../types';
-import { builtinThemes, getSystemPreferredDefaultThemeId } from '../presets';
+import {
+  builtinThemes,
+  getSystemPreferredDefaultThemeId,
+  DEFAULT_LIGHT_THEME_ID,
+  DEFAULT_DARK_THEME_ID,
+} from '../presets';
 import { configAPI, workspaceAPI } from '@/infrastructure/api';
+import { api } from '@/infrastructure/api/service-api/ApiClient';
 import { themeValidator } from '../utils/ThemeValidator';
 import { monacoThemeSync } from '../integrations/MonacoThemeSync';
 import { createLogger } from '@/shared/utils/logger';
 
 const log = createLogger('ThemeService');
+
+/**
+ * Native→web event carrying the current system color mode (`{ scheme: 'light' | 'dark' }`).
+ * Emitted by the OHOS shell (EntryAbility.onConfigurationUpdate → rust
+ * notify_system_color_mode → global event system) whenever the OS switches
+ * light/dark — the OHOS webview does not fire `prefers-color-scheme` `change`
+ * events, so this is the live-follow signal on that platform. Desktop relies on
+ * the matchMedia listener; this event is a harmless backstop there.
+ */
+const SYSTEM_COLOR_SCHEME_CHANGED_EVENT = 'bitfun:system-color-scheme-changed';
 
 const FLOW_CHAT_LINK_COLORS = {
   dark: {
@@ -525,28 +541,84 @@ export class ThemeService {
   }
 
   private attachSystemThemeListener(): void {
-    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
-      return;
-    }
     if (this.systemThemeCleanup) {
       return;
     }
-    const mq = window.matchMedia('(prefers-color-scheme: dark)');
-    const handler = () => {
-      if (this.themeSelection !== SYSTEM_THEME_ID) {
-        return;
-      }
-      const next = getSystemPreferredDefaultThemeId();
-      if (next === this.resolvedThemeId) {
-        return;
-      }
-      void this.applyResolvedTheme(next);
-    };
-    mq.addEventListener('change', handler);
-    this.systemThemeCleanup = () => mq.removeEventListener('change', handler);
+    const cleanups: Array<() => void> = [];
+
+    // Desktop fast path: matchMedia fires `change` when the OS switches mode.
+    if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
+      const mq = window.matchMedia('(prefers-color-scheme: dark)');
+      const handler = () => {
+        if (this.themeSelection !== SYSTEM_THEME_ID) {
+          return;
+        }
+        const next = getSystemPreferredDefaultThemeId();
+        if (next === this.resolvedThemeId) {
+          return;
+        }
+        void this.applyResolvedTheme(next, 'system');
+      };
+      mq.addEventListener('change', handler);
+      cleanups.push(() => mq.removeEventListener('change', handler));
+    }
+
+    // OHOS (and harmless backstop on desktop): the native shell emits a custom
+    // event carrying the OS color mode, because the OHOS webview does not fire
+    // `prefers-color-scheme` `change` events. The shell pushes it from
+    // EntryAbility.onConfigurationUpdate → rust notify_system_color_mode.
+    const unlisten = api.listen<{ scheme?: 'light' | 'dark' }>(
+      SYSTEM_COLOR_SCHEME_CHANGED_EVENT,
+      (payload) => {
+        if (this.themeSelection !== SYSTEM_THEME_ID) {
+          return;
+        }
+        const scheme = payload?.scheme;
+        if (scheme !== 'light' && scheme !== 'dark') {
+          return;
+        }
+        const next = scheme === 'dark' ? DEFAULT_DARK_THEME_ID : DEFAULT_LIGHT_THEME_ID;
+        if (next === this.resolvedThemeId) {
+          return;
+        }
+        // The shell already released the native override when it read the color
+        // mode, so skip the redundant shell call in applyResolvedTheme.
+        void this.applyResolvedTheme(next, 'system', { skipShell: true });
+      },
+    );
+    cleanups.push(() => unlisten());
+
+    this.systemThemeCleanup = () => cleanups.forEach(fn => fn());
   }
 
-  private async applyResolvedTheme(resolvedId: ThemeId): Promise<void> {
+  /**
+   * Resolve the current system color mode by asking the native shell to release
+   * its color override and report back. Falls back to `prefers-color-scheme`
+   * (the desktop fast path) when the native shell is unavailable or errors.
+   * Returns the color mode plus the concrete built-in theme id it maps to.
+   */
+  private async discoverSystemTheme(): Promise<{ color: 'light' | 'dark'; themeId: ThemeId }> {
+    let color: 'light' | 'dark' | '' = '';
+    try {
+      const raw = await workspaceAPI.setThemeMode('system');
+      if (raw === 'light' || raw === 'dark') {
+        color = raw;
+      }
+    } catch (error) {
+      log.warn('Failed to query system color mode from native shell', error);
+    }
+    if (color !== 'light' && color !== 'dark') {
+      // Desktop / non-native: trust prefers-color-scheme.
+      color = getSystemPreferredDefaultThemeId() === DEFAULT_DARK_THEME_ID ? 'dark' : 'light';
+    }
+    return { color, themeId: color === 'dark' ? DEFAULT_DARK_THEME_ID : DEFAULT_LIGHT_THEME_ID };
+  }
+
+  private async applyResolvedTheme(
+    resolvedId: ThemeId,
+    mode: 'light' | 'dark' | 'system',
+    options: { skipShell?: boolean } = {},
+  ): Promise<void> {
     const theme = this.themes.get(resolvedId);
     if (!theme) {
       log.error('Theme not found', { id: resolvedId });
@@ -565,7 +637,20 @@ export class ThemeService {
 
       this.injectCSSVariables(theme);
 
-      await workspaceAPI.setThemeMode(resolvedId);
+      // Push the color mode to the native shell. `system` releases the native
+      // override so prefers-color-scheme follows the OS; light/dark pin it so
+      // the webview matches a fixed user-chosen theme. Callers that already
+      // released the override (and read back the system color) pass skipShell
+      // to avoid a redundant round trip. This is best-effort: on platforms with
+      // no native color-mode shell (e.g. desktop wry), the call errors and we
+      // carry on — the CSS variables above already drove the appearance.
+      if (!options.skipShell) {
+        try {
+          await workspaceAPI.setThemeMode(mode);
+        } catch (error) {
+          log.warn('Native setThemeMode unavailable or failed; CSS variables still applied', error);
+        }
+      }
 
       try {
         monacoThemeSync.syncTheme(theme);
@@ -604,8 +689,12 @@ export class ThemeService {
         this.lastSavedSelection = SYSTEM_THEME_ID;
       }
       this.attachSystemThemeListener();
-      const resolved = getSystemPreferredDefaultThemeId();
-      await this.applyResolvedTheme(resolved);
+      // Release the native override and read back the *real* system color mode
+      // before injecting CSS variables — the OHOS webview does not update
+      // prefers-color-scheme live, so reading matchMedia here would return the
+      // stale pinned value from a previously selected fixed theme.
+      const { themeId: resolved } = await this.discoverSystemTheme();
+      await this.applyResolvedTheme(resolved, 'system', { skipShell: true });
     } else {
       this.themeSelection = themeId;
       if (options.persist) {
@@ -613,7 +702,8 @@ export class ThemeService {
       } else {
         this.lastSavedSelection = themeId;
       }
-      await this.applyResolvedTheme(themeId);
+      const resolvedTheme = this.themes.get(themeId);
+      await this.applyResolvedTheme(themeId, resolvedTheme?.type ?? 'dark');
     }
   }
 
