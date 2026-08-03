@@ -136,6 +136,7 @@ DTO/contract 抽取不等于 runtime owner 迁移。迁移 owner 必须先审查
 - integration test 只依赖被测 owner 的公开契约，不通过 `product-full` 获取测试便利；窄 feature 尚不能独立编译时，应将其记录为待拆分的 owner/feature 边界并保持现有 target 声明，不得新增或扩大 `product-full` 来制造已经收敛的假象；
 - 纯解析、策略和状态转换优先使用无外部系统的 owner-local fixture；
 - 需要真实 adapter/service 的测试单独作为 feature integration target；
+- 同一 owner 内 feature、平台与依赖闭包完全相同的 integration tests，应按稳定职责收敛为少量显式 target，避免每个源文件重复编译和链接同一闭包；本地通过 `--test <target> <module>::<filter>` 保留 focused test。不同 feature、平台、进程或外部系统边界不得为减少 target 数而合并；
 - 测试常用、真实的 feature 组合，不穷举指数级组合；
 - `--all-features` 用于兼容审计，不代替目标产品的最小组合测试。
 

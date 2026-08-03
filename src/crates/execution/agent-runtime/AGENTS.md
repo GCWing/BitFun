@@ -61,10 +61,37 @@ port-backed `sdk` / `AgentRuntime` facade that can be built and tested without
   outside this crate until a reviewed migration proves behavior equivalence.
 - Add focused tests before moving any runtime decision into this crate.
 
+## Test Target Layout
+
+Integration contracts use five explicit Cargo targets so package-level checks
+do not relink the same feature-free dependency closure for every source file,
+while platform-specific process tests retain executable-level isolation:
+
+| Target | Owns |
+|---|---|
+| `agent_definition_contracts` | Agent definitions, discovery, prompts, prompt cache, and skills |
+| `agent_session_contracts` | Events, scheduling, sessions, SDK behavior, and workspace-reference ports |
+| `agent_interaction_contracts` | Permissions, questions, and hook execution |
+| `agent_long_horizon_contracts` | DeepResearch, DeepReview, and long-running thread-goal behavior |
+| `native_hook_execution_contracts` | Unix-only native process execution, timeout, and cleanup behavior |
+
+Add a contract to the nearest existing target. Do not add another top-level
+integration target unless it requires a genuinely different feature,
+platform, process, or dependency boundary. Use `--lib <filter>` for a focused
+library test, or `--test <target> <module>::<filter>` for a focused public
+contract test.
+
+Grouped target roots stay flat: apart from module documentation, they contain
+only direct `#[path = "..."]` / `mod ...;` pairs, and every leaf `.rs` file is
+referenced exactly once. Isolated platform or process targets keep their test
+implementation in the root file. The core-boundary check enforces this shape
+so `autotests = false` cannot silently omit a new contract.
+
 ## Verification
 
 ```bash
 cargo test -p bitfun-agent-runtime
+cargo test -p bitfun-agent-runtime --test agent_definition_contracts prompt_contracts::
 node scripts/check-core-boundaries.mjs
 cargo check -p bitfun-core --features product-full
 ```

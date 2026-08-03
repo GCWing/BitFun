@@ -139,7 +139,7 @@ export const forbiddenContentRules = [
     ],
   },
   {
-    path: 'src/crates/execution/agent-runtime/tests/sdk_smoke.rs',
+    path: 'src/crates/execution/agent-runtime/tests/agent_session_contracts/sdk_smoke.rs',
     patterns: [
       {
         regex: /\bbitfun_runtime_services::test_support\b/,

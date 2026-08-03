@@ -1,7 +1,6 @@
 import { existsSync, readdirSync, readFileSync, statSync } from 'fs';
-import { join, relative } from 'path';
+import { dirname, join, relative } from 'path';
 import { fileURLToPath } from 'url';
-import { dirname } from 'path';
 
 import {
   dependencyProfileRules,
@@ -36,6 +35,11 @@ import {
   unexpectedReachableLocalFeatures,
 } from './manifest-feature-helpers.mjs';
 import { checkCargoDependencyBoundariesSafely } from './cargo-dependency-boundaries.mjs';
+import {
+  agentRuntimeIntegrationTestTargets,
+  checkAgentRuntimeIntegrationTestTopology,
+  validateExplicitIntegrationTestTopology,
+} from './explicit-test-topology.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..', '..');
@@ -1086,6 +1090,8 @@ export function runCoreBoundaryCheck() {
       hasPluginWildcardReexport,
       createFacadeLineChecker,
       escapeRegex,
+      validateExplicitIntegrationTestTopology,
+      agentRuntimeIntegrationTestTargets,
     });
     console.log('Core boundary check self-test passed.');
     return;
@@ -1093,6 +1099,7 @@ export function runCoreBoundaryCheck() {
 
   checkCrateLayoutRules();
   failures.push(...checkCargoDependencyBoundariesSafely({ root: ROOT, crateLayoutRules }));
+  failures.push(...checkAgentRuntimeIntegrationTestTopology(ROOT));
 
   for (const rule of forbiddenManifestDependencyRules) {
     checkForbiddenManifestDependencyRule(rule);

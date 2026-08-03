@@ -30,6 +30,7 @@
 | F17 | pnpm 结构小问题:tests/e2e 已在 workspace 内仍单独 install;installer 独立 Rust workspace 导致 Tauri 栈本地编译两份 | 结构 | 低 | `pnpm-workspace.yaml`、`package.json:92`、`Cargo.toml:40-42` |
 | F18 | build.rs 生成代码遍历 HashMap,输出字节序不确定 → 不可复现构建,削弱 sccache/远端缓存效果 | Rust | 低 | `src/crates/assembly/core/build.rs:303,429`、`src/apps/cli/build.rs` |
 | F19 | `[profile.dev] incremental = true` 为默认值,冗余;dev profile 无任何针对性调优 | Rust | 低 | `Cargo.toml:279-280` |
+| F20 | `bitfun-agent-runtime` 的 28 个 integration targets 已收敛为 5 个显式目标，同时保留 Unix 进程测试隔离 | Rust/Test | 已兑现 | `src/crates/execution/agent-runtime/Cargo.toml`、`tests/agent_*_contracts.rs` |
 
 ---
 
@@ -243,6 +244,27 @@ Desktop、CLI、ACP、Server 与 SDK Host 的内容、错误和生命周期完�
 
 `Cargo.toml:279-280` 的 `incremental = true` 是 dev 默认值,可删;该段落是放置 F5 建议(`debug = "line-tables-only"`)的天然位置。
 
+### F20（已治理）agent-runtime integration test 重复链接
+
+`bitfun-agent-runtime` 没有可选 feature，原 28 个 integration test target 中的 27 个跨平台契约使用相同的依赖闭包，
+却在每次 `cargo test -p bitfun-agent-runtime` 时分别编译和链接。当前通过 `autotests = false` 将它们按定义、会话、
+交互和 long-horizon 职责归入 4 个 target；另保留 1 个 Unix-only 原生进程 target，避免为了减少数量而跨平台或进程
+边界合并。246 个 Unix integration tests、224 个 Windows integration tests 及原有 lib tests 均保留。现有 CI 命令和
+覆盖范围不变，未新增测试、feature、依赖或 workflow；现有边界检查会拒绝未注册入口和未被引用的叶测试文件。
+
+以下是本机观察值，不作为其他机器的固定收益承诺。测量日期 2026-08-03，基线
+`53c8c029a8b6245e810cbee0707c820bc74fb7b8`，Windows 10.0.19045、i7-10700、rustc/cargo 1.97.1；依赖预热后按
+原布局/现布局交错执行 A/B/A/B/A/B，每次运行
+`cargo clean -p bitfun-agent-runtime` 和 `cargo test -p bitfun-agent-runtime --no-run --locked --quiet`：
+
+| 布局 | 三次有效样本 | 中位数 | integration PDB |
+|---|---|---:|---:|
+| 原 28 targets | 12.48s / 15.01s / 13.63s | 13.63s | 312.3 MiB |
+| 现 5 targets | 11.90s / 11.04s / 11.31s | 11.31s | 77.4 MiB |
+
+本机包级 test 编译/链接中位数降低约 17.0%，PDB 体积降低约 75.2%。这是测试可执行目标治理，不代表第三方依赖
+或 feature 数量减少；有独立 feature、平台、进程或外部系统边界的测试仍必须保持独立 target。
+
 ---
 
 ## 三、实施建议清单(可直接派发给实施 agent)
@@ -265,6 +287,7 @@ Desktop、CLI、ACP、Server 与 SDK Host 的内容、错误和生命周期完�
 | T12 | beforeBuildCommand 并行(F13):新增 `scripts/frontend-build-all.mjs` 并行跑 build:web 与 prepare:mobile-web,tauri.conf.json / tauri.dev.conf.json 的 beforeBuildCommand 指向它;dev.cjs 准备步骤改 Promise.all。验收:desktop:build 前端阶段时长≈max(两者) 而非 sum。 | `src/apps/desktop/tauri.conf.json`、`tauri.dev.conf.json`、`scripts/dev.cjs`、新脚本 | 低 |
 | T13 | bitfun-core 拆分启动(F3,长期):先跑 `cargo build --timings` 与 `cargo tree -d` 存档基线;选 1-2 个低耦合子域(如 announcement、debug-log server)试点拆出独立 crate 并保留 re-export;结合 F12 的"dev 运行时读取提示词"改造。验收:改动试点子域后 `cargo build -p bitfun-desktop` 的重编 crate 数与耗时下降。 | `src/crates/assembly/core/**`、根 `Cargo.toml` members | 中-高(架构改动,分多个 PR 渐进) |
 | T14 | 可选工具链增强(F5):提交 `.cargo/config.toml` 模板(注释形式提供 rust-lld 与 sccache 配置,默认不启用),团队自选开启;CI 冷构建可评估 sccache-action。验收:提供文档,默认行为不变。 | 新增 `.cargo/config.toml`、文档 | 低(默认关闭) |
+| T15（已完成） | agent-runtime integration target 收敛(F20):保持全部 contract test 源与现有 CI 命令不变，将 27 个跨平台契约按定义、会话、交互、long-horizon 职责归为 4 个 target，Unix 原生进程测试保持独立；focused test 使用 `--test <target> <module>::<filter>`。 | `agent-runtime/Cargo.toml`、`agent-runtime/tests/**`、现有 boundary rule 路径 | 已完成；总体 28→5，只减少重复编译/链接，不改变 feature 或依赖闭包 |
 
 ### 快速收益组合(建议第一批实施)
 T2 + T4 + T5 + T6 + T9 + T10 + T12:全部低风险,合计可显著改善日常 dev 循环(启动省 20-60s、增量链接提速、dev CPU 下降)与 build:web 时长;随后再做 T1(最大单项前端收益)、T3(打包 CI)、T7/T8(CI 结构)。

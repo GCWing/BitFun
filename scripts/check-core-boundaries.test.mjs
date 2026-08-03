@@ -23,6 +23,7 @@ const ENTRYPOINT = new URL('./check-core-boundaries.mjs', import.meta.url);
 const MODULES = [
   './core-boundaries/checker.mjs',
   './core-boundaries/cargo-dependency-boundaries.mjs',
+  './core-boundaries/explicit-test-topology.mjs',
   './core-boundaries/manifest-feature-helpers.mjs',
   './core-boundaries/self-test.mjs',
   './core-boundaries/rules/crate-rules.mjs',
