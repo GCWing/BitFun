@@ -6,6 +6,7 @@ edition.workspace = true
 description = "BitFun CLI - Terminal User Interface"
 default-run = "bitfun"
 autobins = false
+autotests = false
 
 [[bin]]
 name = "bitfun"
@@ -14,6 +15,18 @@ path = "src/main.rs"
 [[bin]]
 name = "bitfun-cli"
 path = "src/bin/bitfun_cli_compat.rs"
+
+[[test]]
+name = "acp_stdio_cli"
+path = "tests/acp_stdio_cli.rs"
+
+[[test]]
+name = "cli_command_contracts"
+path = "tests/cli_command_contracts.rs"
+
+[[test]]
+name = "terminal_process_contracts"
+path = "tests/terminal_process_contracts.rs"
 
 [dependencies]
 # Internal crates

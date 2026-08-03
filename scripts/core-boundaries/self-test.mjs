@@ -2344,7 +2344,7 @@ export function runManifestParserSelfTest({
       contracts: ['project_agentic_frontend_event', 'projected.event_name.as_str()'],
     },
     {
-      path: 'src/crates/execution/runtime-services/tests/runtime_services_contracts.rs',
+      path: 'src/crates/execution/runtime-services/src/runtime_services_contracts.rs',
       contracts: [
         'builder_requires_mandatory_runtime_services',
         'fake_provider_registers_required_and_remote_services_through_registry',

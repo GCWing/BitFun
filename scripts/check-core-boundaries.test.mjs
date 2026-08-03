@@ -12,11 +12,17 @@ import {
   findFeatureGatedTestTargetViolations,
   findProductEntrypointCoreFeatureViolations,
   findReqwestDependencyFeatureViolations,
+  findRuntimeServicesTestSupportFeatureViolations,
   findResolvedReqwestNativeTlsViolations,
   findServicesIntegrationsReqwestFeatureViolations,
   findServicesIntegrationsTokioFeatureViolations,
   findTokioDependencyFeatureViolations,
 } from './core-boundaries/cargo-dependency-boundaries.mjs';
+import {
+  checkCliIntegrationTestTopology,
+  cliIntegrationTestTargets,
+  validateExplicitIntegrationTestTopology,
+} from './core-boundaries/explicit-test-topology.mjs';
 import { crateLayoutRules } from './core-boundaries/rules/crate-layout.mjs';
 
 const ENTRYPOINT = new URL('./check-core-boundaries.mjs', import.meta.url);
@@ -129,6 +135,131 @@ test('matching integration target requirements cover all positive crate features
     }),
     [],
   );
+});
+
+test('runtime-services test support stays dev-only across dependency and feature edges', () => {
+  const runtimeServicesPath = 'src/crates/execution/runtime-services';
+  const packages = [
+    packageAt('normal-consumer', 'src/apps/normal/Cargo.toml', [
+      pathDependency(runtimeServicesPath, {
+        name: 'bitfun-runtime-services',
+        features: ['test-support'],
+      }),
+    ]),
+    packageAt('build-consumer', 'src/apps/build/Cargo.toml', [
+      pathDependency(runtimeServicesPath, {
+        name: 'bitfun-runtime-services',
+        kind: 'build',
+        features: ['test-support'],
+      }),
+    ]),
+    {
+      ...packageAt('feature-forwarder', 'src/apps/forwarder/Cargo.toml'),
+      features: {
+        preview: ['bitfun-runtime-services/test-support'],
+      },
+    },
+    {
+      ...packageAt('weak-forwarder', 'src/apps/weak/Cargo.toml'),
+      features: {
+        preview: ['bitfun-runtime-services?/test-support'],
+      },
+    },
+    {
+      ...packageAt('renamed-forwarder', 'src/apps/renamed/Cargo.toml', [{
+        ...pathDependency(runtimeServicesPath, {
+          name: 'bitfun-runtime-services',
+          optional: true,
+        }),
+        rename: 'runtime_services',
+      }]),
+      features: {
+        preview: ['runtime_services?/test-support'],
+      },
+    },
+    {
+      ...packageAt(
+        'bitfun-runtime-services',
+        'src/crates/execution/runtime-services/Cargo.toml',
+      ),
+      features: {
+        default: ['test-support'],
+        'test-support': [],
+      },
+    },
+    packageAt('test-consumer', 'src/apps/test/Cargo.toml', [
+      pathDependency(runtimeServicesPath, {
+        name: 'bitfun-runtime-services',
+        kind: 'dev',
+        features: ['test-support'],
+      }),
+    ]),
+  ];
+
+  const violations = findRuntimeServicesTestSupportFeatureViolations(packages);
+
+  assert.equal(violations.length, 6);
+  assert.match(violations[0].message, /normal-consumer.*normal dependency/);
+  assert.match(violations[1].message, /build-consumer.*build dependency/);
+  assert.match(violations[2].message, /feature-forwarder:preview/);
+  assert.match(violations[3].message, /weak-forwarder:preview/);
+  assert.match(violations[4].message, /renamed-forwarder:preview/);
+  assert.match(violations[5].message, /bitfun-runtime-services:default/);
+});
+
+test('runtime-services feature aliases cannot hide test support from default builds', () => {
+  const owner = {
+    ...packageAt(
+      'bitfun-runtime-services',
+      'src/crates/execution/runtime-services/Cargo.toml',
+    ),
+    features: {
+      default: ['testing'],
+      testing: ['test-support'],
+      'test-support': [],
+    },
+  };
+
+  const messages = findRuntimeServicesTestSupportFeatureViolations([owner])
+    .map((violation) => violation.message)
+    .join('\n');
+
+  assert.match(messages, /bitfun-runtime-services:default/);
+  assert.match(messages, /default -> testing -> test-support/);
+  assert.match(messages, /bitfun-runtime-services:testing/);
+});
+
+test('CLI integration tests keep the reviewed three-target topology', () => {
+  const repositoryRoot = fileURLToPath(new URL('..', import.meta.url));
+
+  assert.deepEqual(cliIntegrationTestTargets, [
+    { name: 'acp_stdio_cli', path: 'tests/acp_stdio_cli.rs' },
+    { name: 'cli_command_contracts', path: 'tests/cli_command_contracts.rs' },
+    { name: 'terminal_process_contracts', path: 'tests/terminal_process_contracts.rs' },
+  ]);
+  assert.deepEqual(checkCliIntegrationTestTopology(repositoryRoot), []);
+});
+
+test('runtime-services test support is absent from ordinary library builds', async () => {
+  const [manifest, library] = await Promise.all([
+    readFile(
+      new URL('../src/crates/execution/runtime-services/Cargo.toml', import.meta.url),
+      'utf8',
+    ),
+    readFile(
+      new URL('../src/crates/execution/runtime-services/src/lib.rs', import.meta.url),
+      'utf8',
+    ),
+  ]);
+
+  assert.match(manifest, /^test-support\s*=\s*\[\]\s*$/m);
+  assert.doesNotMatch(manifest, /^required-features\s*=.*test-support.*$/m);
+  assert.match(
+    library,
+    /#\[cfg\(any\(test, feature = "test-support"\)\)\]\s*pub mod test_support;/,
+  );
+  assert.match(library, /#\[cfg\(test\)\]\s*mod runtime_services_contracts;/);
+  assert.equal((library.match(/^pub mod test_support;\s*$/gm) ?? []).length, 1);
 });
 
 test('feature-gated integration targets reject extra umbrella requirements', () => {

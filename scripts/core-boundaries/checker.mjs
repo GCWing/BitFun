@@ -38,6 +38,8 @@ import { checkCargoDependencyBoundariesSafely } from './cargo-dependency-boundar
 import {
   agentRuntimeIntegrationTestTargets,
   checkAgentRuntimeIntegrationTestTopology,
+  checkCliIntegrationTestTopology,
+  cliIntegrationTestTargets,
   validateExplicitIntegrationTestTopology,
 } from './explicit-test-topology.mjs';
 
@@ -121,6 +123,17 @@ function isDependencyListHeader(trimmedLine, options = {}) {
   return new RegExp(`^\\[(?:target\\.[^\\]]+\\.)?${workspacePrefix}(?:dependencies|dev-dependencies|build-dependencies)\\]$`).test(trimmedLine);
 }
 
+function dependencyKindForHeader(trimmedLine, options = {}) {
+  const workspacePrefix = options.includeWorkspace ? '(?:workspace\\.)?' : '';
+  const match = trimmedLine.match(
+    new RegExp(`^\\[(?:target\\.[^\\]]+\\.)?${workspacePrefix}(dependencies|dev-dependencies|build-dependencies)(?:\\.|\\])`),
+  );
+  if (!match || match[1] === 'dependencies') {
+    return 'normal';
+  }
+  return match[1] === 'dev-dependencies' ? 'dev' : 'build';
+}
+
 function dependencyTablePattern(options = {}) {
   const workspacePrefix = options.includeWorkspace ? '(?:workspace\\.)?' : '';
   return new RegExp(`^\\[(?:target\\.[^\\]]+\\.)?${workspacePrefix}(?:dependencies|dev-dependencies|build-dependencies)\\.([A-Za-z0-9_-]+|"[A-Za-z0-9_-]+")\\]$`);
@@ -129,6 +142,7 @@ function dependencyTablePattern(options = {}) {
 function parseManifestDependencies(lines, options = {}) {
   const deps = [];
   let inDependencyList = false;
+  let dependencyListKind = 'normal';
   let currentTable = null;
   let currentInline = null;
   const tablePattern = dependencyTablePattern(options);
@@ -153,12 +167,14 @@ function parseManifestDependencies(lines, options = {}) {
     const headerMatch = trimmed.match(/^\[(.+)]$/);
     if (headerMatch) {
       inDependencyList = isDependencyListHeader(trimmed, options);
+      dependencyListKind = dependencyKindForHeader(trimmed, options);
       currentTable = null;
       const dependencyTableMatch = trimmed.match(tablePattern);
       if (dependencyTableMatch) {
         currentTable = {
           name: dependencyTableMatch[1].replace(/^"|"$/g, ''),
           line: index + 1,
+          kind: dependencyListKind,
           optional: false,
           text: [trimmed],
         };
@@ -185,6 +201,7 @@ function parseManifestDependencies(lines, options = {}) {
       deps.push({
         name,
         line: index + 1,
+        kind: dependencyListKind,
         optional: /\boptional\s*=\s*true\b/.test(trimmed),
         text: [trimmed],
       });
@@ -494,7 +511,8 @@ function checkOptionalDependencyFeatureOwners(crateDir, rule) {
   const manifestPath = join(crateDir, 'Cargo.toml');
   const lines = readText(manifestPath).split(/\r?\n/);
   const deps = parseManifestDependencies(lines);
-  const depsByName = new Map(deps.map((dep) => [dep.name, dep]));
+  const normalDeps = deps.filter((dep) => dep.kind === 'normal');
+  const depsByName = new Map(normalDeps.map((dep) => [dep.name, dep]));
   const features = parseManifestFeatures(lines);
   const declaredOwnerDeps = new Set(rule.dependencies.map((dependency) => dependency.depName));
 
@@ -545,7 +563,7 @@ function checkOptionalDependencyFeatureOwners(crateDir, rule) {
   const profileRule = dependencyProfileRules.find((profile) => profile.crateName === rule.crateName);
   const depsRequiringOwner = new Set(profileRule?.forbiddenNonOptionalDeps ?? []);
   const uncoveredDeps = new Map();
-  for (const dep of deps) {
+  for (const dep of normalDeps) {
     if (!dep.optional || !depsRequiringOwner.has(dep.name) || declaredOwnerDeps.has(dep.name)) {
       continue;
     }
@@ -1092,6 +1110,7 @@ export function runCoreBoundaryCheck() {
       escapeRegex,
       validateExplicitIntegrationTestTopology,
       agentRuntimeIntegrationTestTargets,
+      cliIntegrationTestTargets,
     });
     console.log('Core boundary check self-test passed.');
     return;
@@ -1100,6 +1119,7 @@ export function runCoreBoundaryCheck() {
   checkCrateLayoutRules();
   failures.push(...checkCargoDependencyBoundariesSafely({ root: ROOT, crateLayoutRules }));
   failures.push(...checkAgentRuntimeIntegrationTestTopology(ROOT));
+  failures.push(...checkCliIntegrationTestTopology(ROOT));
 
   for (const rule of forbiddenManifestDependencyRules) {
     checkForbiddenManifestDependencyRule(rule);

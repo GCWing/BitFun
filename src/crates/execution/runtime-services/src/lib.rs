@@ -10,6 +10,9 @@ use bitfun_runtime_ports::{
 };
 
 pub mod backend_events;
+#[cfg(test)]
+mod runtime_services_contracts;
+#[cfg(any(test, feature = "test-support"))]
 pub mod test_support;
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]

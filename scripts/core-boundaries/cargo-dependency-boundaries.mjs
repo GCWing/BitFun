@@ -325,6 +325,94 @@ export function findReqwestDependencyFeatureViolations(packages) {
   });
 }
 
+export function findRuntimeServicesTestSupportFeatureViolations(packages) {
+  const violations = [];
+
+  const pathToFeature = (featureGraph, start, target, visiting = new Set()) => {
+    if (start === target) {
+      return [target];
+    }
+    if (visiting.has(start)) {
+      return null;
+    }
+    visiting.add(start);
+    for (const reference of featureGraph[start] ?? []) {
+      if (!Object.hasOwn(featureGraph, reference)) {
+        continue;
+      }
+      const suffix = pathToFeature(featureGraph, reference, target, visiting);
+      if (suffix) {
+        visiting.delete(start);
+        return [start, ...suffix];
+      }
+    }
+    visiting.delete(start);
+    return null;
+  };
+
+  for (const pkg of packages) {
+    const runtimeServiceAliases = new Set(['bitfun-runtime-services']);
+    for (const dependency of pkg.dependencies ?? []) {
+      if (dependency.name !== 'bitfun-runtime-services') {
+        continue;
+      }
+      runtimeServiceAliases.add(dependency.rename ?? dependency.name);
+      if (
+        (dependency.features ?? []).includes('test-support')
+        && dependency.kind !== 'dev'
+      ) {
+        violations.push({
+          path: pkg.manifest_path,
+          line: 1,
+          message:
+            `${pkg.name} must not enable bitfun-runtime-services/test-support for its `
+            + dependencyDescription(dependency),
+        });
+      }
+    }
+
+    for (const [featureName, references] of Object.entries(pkg.features ?? {})) {
+      const testSupportReference = references.find((reference) =>
+        [...runtimeServiceAliases].some(
+          (alias) =>
+            reference === `${alias}/test-support`
+            || reference === `${alias}?/test-support`,
+        ));
+      if (!testSupportReference) {
+        continue;
+      }
+      violations.push({
+        path: pkg.manifest_path,
+        line: 1,
+        message:
+          `${pkg.name}:${featureName} must not expose bitfun-runtime-services/test-support `
+          + 'through a package feature',
+      });
+    }
+
+    if (pkg.name === 'bitfun-runtime-services') {
+      for (const featureName of Object.keys(pkg.features ?? {})) {
+        if (featureName === 'test-support') {
+          continue;
+        }
+        const path = pathToFeature(pkg.features, featureName, 'test-support');
+        if (!path) {
+          continue;
+        }
+        violations.push({
+          path: pkg.manifest_path,
+          line: 1,
+          message:
+            `bitfun-runtime-services:${featureName} must not expose test-support; `
+            + `reachable via ${path.join(' -> ')}`,
+        });
+      }
+    }
+  }
+
+  return violations;
+}
+
 export function findResolvedReqwestNativeTlsViolations(records, { root }) {
   const reqwestRecords = records.filter((record) => record.name === 'reqwest');
   if (reqwestRecords.length === 0) {
@@ -1076,6 +1164,7 @@ export function checkCargoDependencyBoundaries({ root, crateLayoutRules }) {
       { root, crateLayoutRules },
     ),
     ...findFeatureGatedTestTargetViolations(packages),
+    ...findRuntimeServicesTestSupportFeatureViolations(packages),
     ...findTokioDependencyFeatureViolations(packages),
     ...findReqwestDependencyFeatureViolations(packages),
     ...findResolvedReqwestNativeTlsViolations(resolvedPackageFeatures, { root }),

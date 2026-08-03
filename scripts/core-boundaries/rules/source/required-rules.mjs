@@ -528,6 +528,29 @@ export const requiredContentRules = [
         regex: /\brequire_capability\b/,
         message: 'missing typed capability requirement check',
       },
+      {
+        regex:
+          /#\[cfg\(any\(test, feature = "test-support"\)\)\]\s*pub mod test_support;/,
+        message: 'runtime-services test support must stay out of ordinary library builds',
+      },
+      {
+        regex: /#\[cfg\(test\)\]\s*mod runtime_services_contracts;/,
+        message: 'runtime-services owner contracts must run in the default crate test target',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/execution/runtime-services/Cargo.toml',
+    reason: 'runtime-services test support must require an explicit dev-only feature',
+    patterns: [
+      {
+        regex: /^test-support\s*=\s*\[\]\s*$/m,
+        message: 'missing empty runtime-services test-support feature',
+      },
+      {
+        regex: /^default\s*=\s*\[\]\s*$/m,
+        message: 'runtime-services default feature set must stay empty',
+      },
     ],
   },
   {
@@ -562,7 +585,7 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/execution/runtime-services/tests/runtime_services_contracts.rs',
+    path: 'src/crates/execution/runtime-services/src/runtime_services_contracts.rs',
     reason:
       'runtime-services must keep behavior-equivalence contracts for required services, optional capabilities, registry assembly, and remote port exposure',
     patterns: [

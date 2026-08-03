@@ -141,14 +141,14 @@ fn doctor_rejects_incomplete_e2e_storage_roots() {
 
 #[test]
 fn remaining_cli_local_persistence_stays_behind_explicit_owner_boundaries() {
-    const ACCOUNT_SYNC: &str = include_str!("../src/account_sync.rs");
-    const STARTUP_PAGE: &str = include_str!("../src/ui/startup.rs");
-    const PEER_BOOTSTRAP: &str = include_str!("../src/peer_host/bootstrap.rs");
-    const PEER_STATE: &str = include_str!("../src/peer_host/state.rs");
-    const PEER_SESSION_COMMANDS: &str = include_str!("../src/peer_host/commands/session.rs");
-    const PEER_SNAPSHOT_COMMANDS: &str = include_str!("../src/peer_host/commands/snapshot.rs");
+    const ACCOUNT_SYNC: &str = include_str!("../../src/account_sync.rs");
+    const STARTUP_PAGE: &str = include_str!("../../src/ui/startup.rs");
+    const PEER_BOOTSTRAP: &str = include_str!("../../src/peer_host/bootstrap.rs");
+    const PEER_STATE: &str = include_str!("../../src/peer_host/state.rs");
+    const PEER_SESSION_COMMANDS: &str = include_str!("../../src/peer_host/commands/session.rs");
+    const PEER_SNAPSHOT_COMMANDS: &str = include_str!("../../src/peer_host/commands/snapshot.rs");
     const CORE_RUNTIME_SERVICES: &str =
-        include_str!("../../../crates/assembly/core/src/product_runtime/runtime_services.rs");
+        include_str!("../../../../crates/assembly/core/src/product_runtime/runtime_services.rs");
 
     for (path, source) in [
         ("account_sync.rs", ACCOUNT_SYNC),
@@ -202,10 +202,10 @@ fn remaining_cli_local_persistence_stays_behind_explicit_owner_boundaries() {
 
 #[test]
 fn peer_session_control_and_usage_persistence_use_runtime_sdk() {
-    const PEER_SESSION_COMMANDS: &str = include_str!("../src/peer_host/commands/session.rs");
-    const CHAT_SELECTION: &str = include_str!("../src/modes/chat/selection.rs");
+    const PEER_SESSION_COMMANDS: &str = include_str!("../../src/peer_host/commands/session.rs");
+    const CHAT_SELECTION: &str = include_str!("../../src/modes/chat/selection.rs");
     const CORE_PRODUCT_RUNTIME: &str =
-        include_str!("../../../crates/assembly/core/src/product_runtime.rs");
+        include_str!("../../../../crates/assembly/core/src/product_runtime.rs");
 
     for sdk_operation in [
         "create_session_with_id",
@@ -245,9 +245,9 @@ fn peer_session_control_and_usage_persistence_use_runtime_sdk() {
 
 #[test]
 fn local_workspace_snapshot_port_does_not_expand_the_agent_runtime_sdk() {
-    const RUNTIME_SDK: &str = include_str!("../../../crates/execution/agent-runtime/src/sdk.rs");
+    const RUNTIME_SDK: &str = include_str!("../../../../crates/execution/agent-runtime/src/sdk.rs");
     const LOCAL_SNAPSHOT_PORT: &str =
-        include_str!("../../../crates/contracts/runtime-ports/src/local_workspace_snapshot.rs");
+        include_str!("../../../../crates/contracts/runtime-ports/src/local_workspace_snapshot.rs");
 
     assert!(!RUNTIME_SDK.contains("LocalWorkspaceSnapshot"));
     assert!(!LOCAL_SNAPSHOT_PORT.contains("remote_connection_id"));
@@ -258,8 +258,8 @@ fn local_workspace_snapshot_port_does_not_expand_the_agent_runtime_sdk() {
 
 #[test]
 fn primary_cli_session_client_uses_only_the_runtime_sdk_boundary() {
-    const AGENT_MODULE: &str = include_str!("../src/agent/mod.rs");
-    const PRIMARY_CLIENT: &str = include_str!("../src/agent/runtime_client.rs");
+    const AGENT_MODULE: &str = include_str!("../../src/agent/mod.rs");
+    const PRIMARY_CLIENT: &str = include_str!("../../src/agent/runtime_client.rs");
 
     assert!(
         !AGENT_MODULE.contains("trait Agent"),
@@ -285,9 +285,9 @@ fn primary_cli_session_client_uses_only_the_runtime_sdk_boundary() {
 
 #[test]
 fn chat_context_reload_keeps_deployment_choice_behind_a_cli_adapter() {
-    const CHAT_MODE: &str = include_str!("../src/modes/chat.rs");
-    const CHAT_CAPABILITIES: &str = include_str!("../src/modes/chat/capabilities.rs");
-    const RELOAD_CLIENT: &str = include_str!("../src/agent/context_reload_client.rs");
+    const CHAT_MODE: &str = include_str!("../../src/modes/chat.rs");
+    const CHAT_CAPABILITIES: &str = include_str!("../../src/modes/chat/capabilities.rs");
+    const RELOAD_CLIENT: &str = include_str!("../../src/agent/context_reload_client.rs");
 
     assert!(
         CHAT_MODE.contains("context_reload: CliContextReloadClient"),
@@ -309,7 +309,7 @@ fn chat_context_reload_keeps_deployment_choice_behind_a_cli_adapter() {
 
 #[test]
 fn primary_cli_runtime_client_covers_interactive_permission_and_local_turn_operations() {
-    const PRIMARY_CLIENT: &str = include_str!("../src/agent/runtime_client.rs");
+    const PRIMARY_CLIENT: &str = include_str!("../../src/agent/runtime_client.rs");
 
     for sdk_operation in [
         "subscribe_permission_requests",
@@ -326,16 +326,16 @@ fn primary_cli_runtime_client_covers_interactive_permission_and_local_turn_opera
 
 #[test]
 fn interactive_tui_agent_operations_stay_behind_cli_runtime_client() {
-    const STARTUP_PAGE: &str = include_str!("../src/ui/startup.rs");
-    const CHAT_MODE: &str = include_str!("../src/modes/chat.rs");
-    const CHAT_RUN: &str = include_str!("../src/modes/chat/run.rs");
-    const CHAT_COMMANDS: &str = include_str!("../src/modes/chat/commands.rs");
-    const CHAT_INPUT: &str = include_str!("../src/modes/chat/input.rs");
-    const CHAT_SELECTION: &str = include_str!("../src/modes/chat/selection.rs");
-    const RUNTIME_CLIENT: &str = include_str!("../src/agent/runtime_client.rs");
-    const SHARED_RUNTIME: &str = include_str!("../src/shared_runtime.rs");
-    const CLI_MAIN: &str = include_str!("../src/main.rs");
-    const CLI_CARGO: &str = include_str!("../Cargo.toml");
+    const STARTUP_PAGE: &str = include_str!("../../src/ui/startup.rs");
+    const CHAT_MODE: &str = include_str!("../../src/modes/chat.rs");
+    const CHAT_RUN: &str = include_str!("../../src/modes/chat/run.rs");
+    const CHAT_COMMANDS: &str = include_str!("../../src/modes/chat/commands.rs");
+    const CHAT_INPUT: &str = include_str!("../../src/modes/chat/input.rs");
+    const CHAT_SELECTION: &str = include_str!("../../src/modes/chat/selection.rs");
+    const RUNTIME_CLIENT: &str = include_str!("../../src/agent/runtime_client.rs");
+    const SHARED_RUNTIME: &str = include_str!("../../src/shared_runtime.rs");
+    const CLI_MAIN: &str = include_str!("../../src/main.rs");
+    const CLI_CARGO: &str = include_str!("../../Cargo.toml");
 
     assert!(
         !STARTUP_PAGE.contains("bitfun_agent_runtime::sdk::AgentRuntime"),
@@ -409,10 +409,10 @@ fn interactive_tui_agent_operations_stay_behind_cli_runtime_client() {
 
 #[test]
 fn runtime_ownership_policy_is_assembled_once_in_core() {
-    const SHARED_RUNTIME: &str = include_str!("../src/shared_runtime.rs");
-    const CLI_RUNTIME: &str = include_str!("../src/runtime/mod.rs");
-    const CLI_MAIN: &str = include_str!("../src/main.rs");
-    const AGENTIC_SYSTEM: &str = include_str!("../src/agent/agentic_system.rs");
+    const SHARED_RUNTIME: &str = include_str!("../../src/shared_runtime.rs");
+    const CLI_RUNTIME: &str = include_str!("../../src/runtime/mod.rs");
+    const CLI_MAIN: &str = include_str!("../../src/main.rs");
+    const AGENTIC_SYSTEM: &str = include_str!("../../src/agent/agentic_system.rs");
 
     for private_policy in [
         "RuntimeOwnershipKey::for_workspace",

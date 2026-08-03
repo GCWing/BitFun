@@ -9,6 +9,12 @@ export const agentRuntimeIntegrationTestTargets = [
   { name: 'native_hook_execution_contracts', path: 'tests/native_hook_execution_contracts.rs' },
 ];
 
+export const cliIntegrationTestTargets = [
+  { name: 'acp_stdio_cli', path: 'tests/acp_stdio_cli.rs' },
+  { name: 'cli_command_contracts', path: 'tests/cli_command_contracts.rs' },
+  { name: 'terminal_process_contracts', path: 'tests/terminal_process_contracts.rs' },
+];
+
 function parseExplicitTestTargets(manifestText) {
   const targets = [];
   let current = null;
@@ -141,24 +147,33 @@ export function validateExplicitIntegrationTestTopology({
   return errors;
 }
 
-function collectRustFiles(dir, testsDir, files) {
+function collectRustFiles(dir, testsDir, files, ignoredDirectories) {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const path = join(dir, entry.name);
     if (entry.isDirectory()) {
-      collectRustFiles(path, testsDir, files);
+      const repoPath = `tests/${relative(testsDir, path).replaceAll('\\', '/')}`;
+      if (!ignoredDirectories.has(repoPath)) {
+        collectRustFiles(path, testsDir, files, ignoredDirectories);
+      }
     } else if (entry.isFile() && entry.name.endsWith('.rs')) {
-      files.push(`tests/${relative(testsDir, path).replaceAll('\\', '/')}`);
+      const repoPath = `tests/${relative(testsDir, path).replaceAll('\\', '/')}`;
+      files.push(repoPath);
     }
   }
 }
 
-export function checkAgentRuntimeIntegrationTestTopology(root) {
-  const crateDir = join(root, 'src', 'crates', 'execution', 'agent-runtime');
+function checkExplicitIntegrationTestTopology(root, {
+  cratePath,
+  expectedTargets,
+  ignoredDirectories = [],
+}) {
+  const crateDir = join(root, ...cratePath.split('/'));
   const testsDir = join(crateDir, 'tests');
   const manifestPath = join(crateDir, 'Cargo.toml');
   const topLevelRustFiles = [];
   const leafRustFiles = [];
   const rootSources = new Map();
+  const ignoredDirectorySet = new Set(ignoredDirectories);
 
   for (const entry of readdirSync(testsDir, { withFileTypes: true })) {
     if (entry.isFile() && entry.name.endsWith('.rs')) {
@@ -166,15 +181,38 @@ export function checkAgentRuntimeIntegrationTestTopology(root) {
       topLevelRustFiles.push(repoPath);
       rootSources.set(repoPath, readFileSync(join(testsDir, entry.name), 'utf8'));
     } else if (entry.isDirectory()) {
-      collectRustFiles(join(testsDir, entry.name), testsDir, leafRustFiles);
+      const repoPath = `tests/${entry.name}`;
+      if (!ignoredDirectorySet.has(repoPath)) {
+        collectRustFiles(
+          join(testsDir, entry.name),
+          testsDir,
+          leafRustFiles,
+          ignoredDirectorySet,
+        );
+      }
     }
   }
 
   return validateExplicitIntegrationTestTopology({
     manifestText: readFileSync(manifestPath, 'utf8'),
-    expectedTargets: agentRuntimeIntegrationTestTargets,
+    expectedTargets,
     topLevelRustFiles,
     rootSources,
     leafRustFiles,
   }).map((message) => ({ path: manifestPath, line: 1, message }));
+}
+
+export function checkAgentRuntimeIntegrationTestTopology(root) {
+  return checkExplicitIntegrationTestTopology(root, {
+    cratePath: 'src/crates/execution/agent-runtime',
+    expectedTargets: agentRuntimeIntegrationTestTargets,
+  });
+}
+
+export function checkCliIntegrationTestTopology(root) {
+  return checkExplicitIntegrationTestTopology(root, {
+    cratePath: 'src/apps/cli',
+    expectedTargets: cliIntegrationTestTargets,
+    ignoredDirectories: ['tests/support'],
+  });
 }

@@ -9,6 +9,10 @@ description = "Typed runtime service assembly for BitFun runtimes"
 name = "bitfun_runtime_services"
 crate-type = ["rlib"]
 
+[features]
+default = []
+test-support = []
+
 [dependencies]
 bitfun-events = { path = "../../contracts/events" }
 bitfun-runtime-ports = { path = "../../contracts/runtime-ports" }
