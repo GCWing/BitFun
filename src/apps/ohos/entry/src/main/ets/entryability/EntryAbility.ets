@@ -2,6 +2,7 @@ import {
   abilityAccessCtrl,
   AbilityConstant,
   common,
+  Configuration,
   ConfigurationConstant,
   Permissions,
   Want
@@ -36,11 +37,54 @@ export default class EntryAbility extends RustAbility {
   async onCreate(want: Want, launchParam: AbilityConstant.LaunchParam): Promise<void> {
     super.onCreate(want, launchParam);
     this.commonEventListener = new CommonEventListener();
+    // Cold-start best-effort report of the current system color mode so the
+    // web-ui "follow system" selection resolves correctly without waiting for
+    // the first system change. web-ui dedups when it equals the resolved theme.
+    this.notifySystemColorMode();
   }
 
   onDestroy(): void {
     RustModule.ohosMarkCleanShutdown();
     hilog.info(DOMAIN, 'testTag', '%{public}s', 'Ability onDestroy');
+  }
+
+  /**
+   * HarmonyOS calls this when the system configuration changes, including the
+   * light/dark color mode. We forward the new mode to the native module, which
+   * emits an event the web-ui listens for to re-resolve "follow system" live —
+   * the OHOS webview does not fire prefers-color-scheme change events on its own.
+   */
+  onConfigurationUpdate(newConfig: Configuration): void {
+    const mode = this.colorModeToString(newConfig?.colorMode);
+    if (mode.length > 0) {
+      try {
+        RustModule.notifySystemColorMode(mode);
+        hilog.info(DOMAIN, 'vnext', 'onConfigurationUpdate: system color mode -> ' + mode);
+      } catch (e) {
+        hilog.warn(DOMAIN, 'vnext', 'notifySystemColorMode failed: ' + JSON.stringify(e));
+      }
+    }
+  }
+
+  /** Read the current Ability config color mode and push it to the web-ui. */
+  private notifySystemColorMode(): void {
+    const mode = this.readSystemColorMode();
+    try {
+      RustModule.notifySystemColorMode(mode);
+    } catch (e) {
+      hilog.warn(DOMAIN, 'vnext', 'notifySystemColorMode failed: ' + JSON.stringify(e));
+    }
+  }
+
+  /** Map a ConfigurationConstant.ColorMode value to 'light' | 'dark' (empty if unset). */
+  private colorModeToString(colorMode: number | undefined): string {
+    if (colorMode === ConfigurationConstant.ColorMode.COLOR_MODE_LIGHT) {
+      return 'light';
+    }
+    if (colorMode === ConfigurationConstant.ColorMode.COLOR_MODE_DARK) {
+      return 'dark';
+    }
+    return '';
   }
 
   onWindowStageCreate(windowStage: window.WindowStage): Promise<void> {
@@ -214,12 +258,24 @@ export default class EntryAbility extends RustAbility {
       return '';
     });
     RustModule.registerArktsFunction('set_theme_mode', async (err: Error, arg: string): Promise<string> => {
-      if (arg === 'bitfun-light' || arg === 'bitfun-china-style') {
-        this.context.getApplicationContext().setColorMode(ConfigurationConstant.ColorMode.COLOR_MODE_LIGHT)
-      } else {
-        this.context.getApplicationContext().setColorMode(ConfigurationConstant.ColorMode.COLOR_MODE_DARK)
+      // arg is the color mode the webview should adopt: 'light' | 'dark' | 'system'.
+      // - 'light'/'dark' pin the native override so the webview matches a fixed theme.
+      // - 'system' releases the override (COLOR_MODE_NOT_SET) and returns the real
+      //   system color mode ('light' | 'dark') so the web-ui can resolve a concrete
+      //   theme without relying on `prefers-color-scheme`, which the OHOS webview does
+      //   not update live (the web-ui also polls this return value to follow system).
+      // Fixed themes return '' — the web-ui already knows the resolved theme id.
+      const appContext = this.context.getApplicationContext();
+      if (arg === 'light') {
+        appContext.setColorMode(ConfigurationConstant.ColorMode.COLOR_MODE_LIGHT);
+        return '';
       }
-      return '';
+      if (arg === 'dark') {
+        appContext.setColorMode(ConfigurationConstant.ColorMode.COLOR_MODE_DARK);
+        return '';
+      }
+      appContext.setColorMode(ConfigurationConstant.ColorMode.COLOR_MODE_NOT_SET);
+      return this.readSystemColorMode();
     });
     this.voiceInputService.setContext(this.context);
     RustModule.registerArktsFunction('ohos_speech_start', async (err: Error, arg: string): Promise<string> => {
@@ -246,6 +302,26 @@ export default class EntryAbility extends RustAbility {
       this.appUpdater.check(this.context);
     }
     return super.onWindowStageCreate(windowStage);
+  }
+
+  /**
+   * Resolve the current system color mode as a plain 'light' | 'dark' string.
+   * Reads the Ability config's colorMode; falls back to dark (the app's default
+   * appearance) when the config is unavailable or unset. Called right after
+   * releasing the native color override so the web-ui can resolve a concrete
+   * theme without depending on `prefers-color-scheme` (which the OHOS webview
+   * does not emit).
+   */
+  private readSystemColorMode(): string {
+    try {
+      const mode = this.colorModeToString(this.context?.config?.colorMode);
+      if (mode.length > 0) {
+        return mode;
+      }
+    } catch (e) {
+      hilog.warn(DOMAIN, 'vnext', 'readSystemColorMode failed: ' + JSON.stringify(e));
+    }
+    return 'dark';
   }
 
   private shareListening() {
