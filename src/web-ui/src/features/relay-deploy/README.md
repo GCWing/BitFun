@@ -93,10 +93,22 @@ Desktop Tauri surface: `src/apps/desktop/src/api/relay_deploy_api.rs`
 15. **China mirrors before overseas downloads.** Desktop orchestration embeds
    `src/apps/relay-server/mirror.sh` and runs `bitfun_mirror_init` before apt
    tool install, Docker Engine install, and GitHub sync. `deploy.sh` sources
-   the same file so manual and one-click paths stay aligned. Force with
-   `BITFUN_MIRROR=cn|global`. Docker daemon metadata must stay outside
-   `daemon.json`; host Cargo config must remain untouched; global mode rolls
-   back only BitFun-managed apt and Docker entries.
+   the same file so manual and one-click paths stay aligned. The wizard exposes
+   `auto | cn | global`; the selected value is staged on the host and must reach
+   Docker install, published-binary deploy, and the source fallback unchanged.
+   Manual deploy can force the same choice with `BITFUN_MIRROR=cn|global`.
+   Docker daemon metadata must stay outside `daemon.json`; host Cargo config
+   must remain untouched; global mode rolls back only BitFun-managed apt and
+   Docker entries.
+
+15a. **A runtime-image build has two independent mirror hops.** Docker daemon
+   `registry-mirrors` accelerates `FROM debian:trixie-slim`; it does not affect
+   the `apt-get` that later runs inside that image. The generated release
+   Dockerfile must therefore receive `BITFUN_USE_CN_MIRROR` and
+   `BITFUN_APT_MIRROR` as build args, just like the source-build Dockerfile.
+   Keep bounded apt retries/timeouts on both paths. A log line that says
+   `Mirror mode: cn` followed by `deb.debian.org` is a propagation regression,
+   not a failed region detection.
 
 16. **Scripts on the relay host are LF-only, in three independent layers.**
    `include_str!` and the `r#"..."#` remote templates both inherit the

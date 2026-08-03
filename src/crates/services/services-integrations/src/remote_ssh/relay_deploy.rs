@@ -118,6 +118,30 @@ impl RelayDeployTask {
     }
 }
 
+/// Network route used by relay deployment downloads and image builds.
+///
+/// `Auto` keeps server-side detection as the default. The explicit variants
+/// are a user-facing escape hatch for cloud IPs whose geolocation or outbound
+/// routing does not reflect where the server is actually hosted.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RelayMirrorMode {
+    #[default]
+    Auto,
+    Cn,
+    Global,
+}
+
+impl RelayMirrorMode {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Auto => "auto",
+            Self::Cn => "cn",
+            Self::Global => "global",
+        }
+    }
+}
+
 /// Fine-grained Docker access classification for the current SSH session.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -426,6 +450,7 @@ pub async fn start_task(
     connection_id: &str,
     task: RelayDeployTask,
     port: u16,
+    mirror_mode: RelayMirrorMode,
 ) -> Result<RelayTaskStart> {
     let home = resolve_home(manager, connection_id).await?;
     let dir = format!("{home}/{DEPLOY_STATE_DIR}");
@@ -464,6 +489,7 @@ pub async fn start_task(
     let body_path = format!("{dir}/{stem}-body.sh");
     let script_path = format!("{dir}/{stem}.sh");
     let port_path = format!("{dir}/relay.port");
+    let mirror_mode_path = format!("{dir}/relay.mirror-mode");
     // Upload as LF-only: bash on the relay host runs a stray CR as a command.
     let body = to_unix_script(&body);
     let driver = to_unix_script(&driver);
@@ -472,6 +498,13 @@ pub async fn start_task(
         .await?;
     manager
         .sftp_write(connection_id, &script_path, driver.as_bytes())
+        .await?;
+    manager
+        .sftp_write(
+            connection_id,
+            &mirror_mode_path,
+            format!("{}\n", mirror_mode.as_str()).as_bytes(),
+        )
         .await?;
     if matches!(task, RelayDeployTask::Deploy) {
         manager
@@ -1167,7 +1200,7 @@ bitfun_run_deploy_sh() {
   local dir="$1"
   local port="${RELAY_PORT:-9700}"
   # Prefer already-resolved mirror mode so deploy.sh does not re-probe.
-  local mirror_mode="${BITFUN_MIRROR:-${BITFUN_MIRROR_MODE:-auto}}"
+  local mirror_mode="${BITFUN_MIRROR_MODE:-${BITFUN_MIRROR:-auto}}"
   # Always --build-from-source: this function is reached ONLY after
   # bitfun_try_release_deploy already failed, and deploy.sh's own first step is
   # that same release-binary path. Without the flag it re-downloads, re-builds
@@ -1258,6 +1291,7 @@ if [ -n "${{BITFUN_KEEP_HOME:-}}" ]; then
   DRIVER_PIDF="$D/$STEM.driver.pid"
 fi
 PREPARE_FLAG="$D/$STEM.preparing"
+MIRROR_MODE_FILE="$D/relay.mirror-mode"
 # Re-claim the prepare phase: an elevated re-exec is a different process, and D
 # may have moved with HOME.
 echo $$ >"$DRIVER_PIDF"
@@ -1272,6 +1306,13 @@ trap cleanup_prepare EXIT
 # Region/mirrors before apt tool install and Docker/GitHub downloads.
 export BITFUN_REPO_GIT_URL="{REPO_GIT_URL}"
 export BITFUN_REPO_TARBALL_URL="{REPO_TARBALL_URL}"
+if [ -f "$MIRROR_MODE_FILE" ]; then
+  requested_mirror_mode="$(tr -d '[:space:]' < "$MIRROR_MODE_FILE")"
+  case "$requested_mirror_mode" in
+    auto|cn|global) export BITFUN_MIRROR="$requested_mirror_mode" ;;
+    *) echo "ERROR: invalid relay mirror mode: $requested_mirror_mode" >&2; exit 1 ;;
+  esac
+fi
 bitfun_mirror_init
 bitfun_ensure_tools
 export DOCKER_CONFIG="${{DOCKER_CONFIG:-$HOME/.bitfun/docker-config}}"
@@ -1312,11 +1353,15 @@ if [ "{kind}" = "install" ]; then
   set +e
   if command -v stdbuf >/dev/null 2>&1; then
     stdbuf -oL -eL env BITFUN_KEEP_HOME="$BITFUN_KEEP_HOME" \
-      BITFUN_MIRROR="${{BITFUN_MIRROR:-${{BITFUN_MIRROR_MODE:-auto}}}}" \
+      BITFUN_MIRROR="${{BITFUN_MIRROR:-auto}}" \
+      BITFUN_MIRROR_MODE="${{BITFUN_MIRROR_MODE:-}}" \
+      BITFUN_MIRROR_REASON="${{BITFUN_MIRROR_REASON:-}}" \
       bash "$BODY" 2>&1 | tee -a "$LOG"
   else
     env BITFUN_KEEP_HOME="$BITFUN_KEEP_HOME" \
-      BITFUN_MIRROR="${{BITFUN_MIRROR:-${{BITFUN_MIRROR_MODE:-auto}}}}" \
+      BITFUN_MIRROR="${{BITFUN_MIRROR:-auto}}" \
+      BITFUN_MIRROR_MODE="${{BITFUN_MIRROR_MODE:-}}" \
+      BITFUN_MIRROR_REASON="${{BITFUN_MIRROR_REASON:-}}" \
       bash "$BODY" 2>&1 | tee -a "$LOG"
   fi
   code=${{PIPESTATUS[0]}}
@@ -1336,7 +1381,9 @@ echo ">>> Starting background task (log: $LOG)" | tee -a "$LOG"
 nohup env BITFUN_DOCKER_MODE="$BITFUN_DOCKER_MODE" DOCKER_CONFIG="$DOCKER_CONFIG" \
   RELAY_CARGO_BUILD_JOBS="${{RELAY_CARGO_BUILD_JOBS:-}}" \
   DOCKER_BUILDKIT=1 COMPOSE_DOCKER_CLI_BUILD=1 BUILDKIT_PROGRESS=plain \
-  BITFUN_MIRROR="${{BITFUN_MIRROR:-${{BITFUN_MIRROR_MODE:-auto}}}}" \
+  BITFUN_MIRROR="${{BITFUN_MIRROR:-auto}}" \
+  BITFUN_MIRROR_MODE="${{BITFUN_MIRROR_MODE:-}}" \
+  BITFUN_MIRROR_REASON="${{BITFUN_MIRROR_REASON:-}}" \
   BITFUN_USE_CN_MIRROR="${{BITFUN_USE_CN_MIRROR:-0}}" \
   BITFUN_APT_MIRROR="${{BITFUN_APT_MIRROR:-}}" \
   BITFUN_CARGO_SPARSE_URL="${{BITFUN_CARGO_SPARSE_URL:-}}" \
@@ -1802,8 +1849,8 @@ mod tests {
         install_docker_body_script, interactive_driver_script, parse_preflight,
         prepare_helpers_bash, release_binary_deploy_bash, release_tag_for_version,
         split_poll_stdout, stage_scripts_command, sync_source_bash, to_unix_script,
-        verified_checksum_exports, verify_minisign, DockerAccessMode,
-        RelayTaskStatus, RELAY_MIRROR_SH, RELAY_RELEASE_DOWNLOAD_SH, RELEASE_PUBKEY,
+        verified_checksum_exports, verify_minisign, DockerAccessMode, RelayTaskStatus,
+        RELAY_MIRROR_SH, RELAY_RELEASE_DOWNLOAD_SH, RELEASE_PUBKEY,
     };
 
     #[test]
@@ -1829,6 +1876,10 @@ mod tests {
             "mirror.sh must support switching a managed host back to global mode"
         );
         assert!(
+            RELAY_MIRROR_SH.contains("BITFUN_MIRROR_REASON"),
+            "mirror selection must log why auto detection chose its route"
+        );
+        assert!(
             !RELAY_MIRROR_SH.contains("data[\"bitfun-cn-mirror\"]"),
             "daemon.json must contain only dockerd-supported directives"
         );
@@ -1844,6 +1895,12 @@ mod tests {
         assert!(
             helpers.contains("bitfun_run_deploy_sh"),
             "prepare helpers must keep deploy runner"
+        );
+        let driver = interactive_driver_script("deploy", "deploy");
+        assert!(
+            driver.contains("relay.mirror-mode")
+                && driver.contains("auto|cn|global) export BITFUN_MIRROR"),
+            "the wizard's explicit mirror choice must reach remote preparation"
         );
     }
 
@@ -2125,7 +2182,8 @@ sh -c "$(bitfun_shell_join printf '%s\n' 'a b' "it's" '{{{{.State.Running}}}}' '
             "bookworm-slim (glibc 2.36) cannot load the arm64 relay (needs 2.38)"
         );
         assert!(
-            script.contains("FROM debian:trixie-slim"),
+            script.contains("ARG BITFUN_RUNTIME_BASE=debian:trixie-slim")
+                && script.contains("FROM ${BITFUN_RUNTIME_BASE}"),
             "runtime base must provide a glibc at least as new as the release matrix"
         );
         // `ldd` exits 0 even when it reports an unsatisfied symbol version, so
@@ -2134,6 +2192,66 @@ sh -c "$(bitfun_shell_join printf '%s\n' 'a b' "it's" '{{{{.State.Running}}}}' '
             script.contains(r#"*"not found"*)"#),
             "the runtime image must fail its build on an unloadable binary"
         );
+        assert!(
+            script.contains("ARG BITFUN_USE_CN_MIRROR=0")
+                && script.contains("BITFUN_APT_MIRROR=mirrors.aliyun.com")
+                && script.contains("deb.debian.org/debian"),
+            "the generated runtime image must be able to rewrite its own apt sources"
+        );
+    }
+
+    /// Host apt configuration cannot affect `apt-get` inside a Docker build.
+    /// The release path therefore has to pass the resolved route as build args;
+    /// this is the exact propagation gap that made CN hosts hit deb.debian.org.
+    #[cfg(unix)]
+    #[test]
+    fn runtime_image_build_receives_resolved_mirror_args() {
+        use std::{fs, process::Command};
+
+        let dir = tempfile::tempdir().expect("temp dir");
+        let script_path = dir.path().join("release-download.sh");
+        let context = dir.path().join("runtime");
+        let trace = dir.path().join("docker-args");
+        fs::write(&script_path, release_binary_deploy_bash()).expect("write release script");
+        fs::create_dir(&context).expect("create runtime context");
+
+        let output = Command::new("bash")
+            .arg("-c")
+            .arg(
+                r#"
+set -euo pipefail
+source "$1"
+export TRACE="$3"
+bitfun_docker() { printf '%s\n' "$@" > "$TRACE"; }
+export BITFUN_USE_CN_MIRROR=1
+export BITFUN_APT_MIRROR=mirror.example
+export BITFUN_RUNTIME_BASE=registry.example/library/debian:trixie-slim
+bitfun_build_runtime_image bitfun-relay:test "$2"
+"#,
+            )
+            .arg("runtime-mirror-args")
+            .arg(&script_path)
+            .arg(&context)
+            .arg(&trace)
+            .output()
+            .expect("run runtime image build stub");
+        assert!(
+            output.status.success(),
+            "runtime build stub failed:\nstdout:\n{}\nstderr:\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let args = fs::read_to_string(trace).expect("read docker args");
+        for expected in [
+            "BITFUN_USE_CN_MIRROR=1",
+            "BITFUN_APT_MIRROR=mirror.example",
+            "BITFUN_RUNTIME_BASE=registry.example/library/debian:trixie-slim",
+        ] {
+            assert!(
+                args.lines().any(|line| line == expected),
+                "docker build is missing {expected}:\n{args}"
+            );
+        }
     }
 
     /// `docker logs` relays the container's stderr on its own stderr, and the

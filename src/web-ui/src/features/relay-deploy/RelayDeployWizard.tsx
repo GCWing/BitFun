@@ -34,6 +34,7 @@ import {
   type RelayTaskStatus,
   type RelayVerifyResult,
   type DockerAccessMode,
+  type RelayMirrorMode,
 } from './relayDeployApi';
 import { ConnectedTerminal, getTerminalService } from '@/tools/terminal';
 import { createLogger } from '@/shared/utils/logger';
@@ -142,6 +143,7 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
   const [preflight, setPreflight] = useState<RelayPreflight | null>(null);
   const [preflightLoading, setPreflightLoading] = useState(false);
   const [relayPortInput, setRelayPortInput] = useState(String(DEFAULT_RELAY_PORT));
+  const [mirrorMode, setMirrorMode] = useState<RelayMirrorMode>('auto');
 
   // ── interactive PTY task (install docker / deploy) ───────────────────────
   const [activeTask, setActiveTask] = useState<RelayDeployTask | null>(null);
@@ -268,6 +270,7 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
       setPreflight(null);
       setPreflightLoading(false);
       setRelayPortInput(String(DEFAULT_RELAY_PORT));
+      setMirrorMode('auto');
       setActiveTask(null);
       setTaskStatus(null);
       setRegUsername('');
@@ -578,7 +581,7 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
     setTaskStatus('running');
     setActiveTask('install_docker');
     try {
-      const started = await relayDeployApi.installDocker(connectionId);
+      const started = await relayDeployApi.installDocker(connectionId, mirrorMode);
       await launchInteractiveTask('install_docker', connectionId, started.scriptPath);
     } catch (e) {
       setTaskStatus('failed');
@@ -598,7 +601,7 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
     setTaskStatus('running');
     setActiveTask('deploy');
     try {
-      const started = await relayDeployApi.startDeploy(connectionId, port);
+      const started = await relayDeployApi.startDeploy(connectionId, port, mirrorMode);
       await launchInteractiveTask('deploy', connectionId, started.scriptPath);
     } catch (e) {
       setTaskStatus('failed');
@@ -743,6 +746,12 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
   const authOptions = [
     { label: t('ssh.remote.password'), value: 'password', icon: <Lock size={14} /> },
     { label: t('ssh.remote.privateKey'), value: 'privateKey', icon: <Key size={14} /> },
+  ];
+
+  const mirrorModeOptions = [
+    { label: t('relayDeploy.mirrorModeAuto'), value: 'auto' },
+    { label: t('relayDeploy.mirrorModeCn'), value: 'cn' },
+    { label: t('relayDeploy.mirrorModeGlobal'), value: 'global' },
   ];
 
   // ── step renderers ───────────────────────────────────────────────────────
@@ -988,6 +997,20 @@ export const RelayDeployWizard: React.FC<RelayDeployWizardProps> = ({
                 />
               </div>
               <p className="relay-deploy-wizard__port-hint">{t('relayDeploy.relayPortHint')}</p>
+            </div>
+
+            <div className="relay-deploy-wizard__mirror-row">
+              <div className="relay-deploy-wizard__field relay-deploy-wizard__field--mirror">
+                <label className="relay-deploy-wizard__label">{t('relayDeploy.mirrorMode')}</label>
+                <Select
+                  options={mirrorModeOptions}
+                  value={mirrorMode}
+                  onChange={(value) => setMirrorMode(String(value) as RelayMirrorMode)}
+                  size="medium"
+                  disabled={taskRunning || preflightLoading}
+                />
+              </div>
+              <p className="relay-deploy-wizard__mirror-hint">{t('relayDeploy.mirrorModeHint')}</p>
             </div>
 
             {portConflict && (

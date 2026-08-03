@@ -41,7 +41,9 @@ RELAY_CARGO_BUILD_JOBS=1 bash deploy.sh
 `deploy.sh` (and Desktop one-click deploy) auto-detects mainland China and
 configures host mirrors for apt, Docker Hub, and GitHub source retrieval plus
 a build-local Cargo/crates.io mirror. Docker Engine installation also uses a
-mainland mirror. Override when needed:
+mainland mirror. The Desktop wizard also offers **Auto / Mainland China /
+Global** so an operator can override cloud IP geolocation without editing the
+server environment. Override manual deploys when needed:
 
 ```bash
 BITFUN_MIRROR=cn bash deploy.sh          # force China mirrors
@@ -60,7 +62,9 @@ for the full list (`BITFUN_APT_MIRROR`, `BITFUN_DOCKER_REGISTRY_MIRRORS`,
 China mode does not modify the SSH user's global `~/.cargo/config.toml`; Cargo
 mirroring is scoped to the relay image build. Switching to `global` restores
 apt files disabled by BitFun and removes only Docker registry mirrors recorded
-as BitFun additions.
+as BitFun additions. The published-binary runtime image receives the same
+choice as build args: Docker daemon mirrors cover the base-image pull, while
+the apt mirror separately covers packages installed inside the image.
 
 `deploy.sh` enables Docker BuildKit so the Dockerfile can reuse Cargo
 registry/git/`target` cache mounts across redeploys. Keep BuildKit enabled

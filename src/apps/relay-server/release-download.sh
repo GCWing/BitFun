@@ -19,6 +19,9 @@
 #   BITFUN_OPENBITFUN_RELEASE_BASE  https://openbitfun.com/release
 #   BITFUN_GITHUB_PROXY             prefix-style proxy, set by mirror.sh in CN
 #   BITFUN_MIRROR_MODE              cn | global, set by mirror.sh
+#   BITFUN_USE_CN_MIRROR            1 switches apt inside the runtime image
+#   BITFUN_APT_MIRROR               Debian mirror host (default mirrors.aliyun.com)
+#   BITFUN_RUNTIME_BASE             runtime base image (default debian:trixie-slim)
 #   RELAY_PORT                      published port (default 9700)
 #   RELAY_HOST_BIND_IP              bind address (default 0.0.0.0, as compose)
 #
@@ -129,6 +132,24 @@ bitfun_canonical_checksum_url() {
 # source-build path that follows.
 bitfun_build_runtime_image() {
   local image="$1" context="$2" rc=1
+  local use_cn_mirror="${BITFUN_USE_CN_MIRROR:-0}"
+  local apt_mirror="${BITFUN_APT_MIRROR:-mirrors.aliyun.com}"
+  local runtime_base="${BITFUN_RUNTIME_BASE:-debian:trixie-slim}"
+
+  # The Docker daemon's registry-mirrors accelerate the FROM pull. These build
+  # args are a separate, equally necessary hop: apt runs *inside* the temporary
+  # runtime image and cannot see the host's /etc/apt sources. Losing these args
+  # made correctly detected CN hosts still contact deb.debian.org here.
+  local build_args=(
+    --build-arg "BITFUN_USE_CN_MIRROR=${use_cn_mirror}"
+    --build-arg "BITFUN_APT_MIRROR=${apt_mirror}"
+    --build-arg "BITFUN_RUNTIME_BASE=${runtime_base}"
+  )
+  if [ "$use_cn_mirror" = "1" ]; then
+    echo ">>> Runtime image network route: China (apt=${apt_mirror}; Docker registry mirrors are daemon-managed)"
+  else
+    echo ">>> Runtime image network route: global (official Debian apt and image registry)"
+  fi
 
   # A config dir this user definitely owns. Empty if it cannot be created, in
   # which case the retries keep the inherited DOCKER_CONFIG.
@@ -158,7 +179,7 @@ bitfun_build_runtime_image() {
           export DOCKER_BUILDKIT=0
           ;;
       esac
-      bitfun_docker build -t "$image" "$context"
+      bitfun_docker build "${build_args[@]}" -t "$image" "$context"
     ); then
       rc=0
       break
@@ -406,10 +427,27 @@ bitfun_try_release_deploy() {
   # every release a client in the wild might still install. trixie-slim carries
   # glibc 2.41 and covers both 2.38 and 2.35.
   cat >"$context.new/Dockerfile" <<'DOCKERFILE'
-FROM debian:trixie-slim
+ARG BITFUN_RUNTIME_BASE=debian:trixie-slim
+FROM ${BITFUN_RUNTIME_BASE}
+ARG BITFUN_USE_CN_MIRROR=0
+ARG BITFUN_APT_MIRROR=mirrors.aliyun.com
 ENV DEBIAN_FRONTEND=noninteractive
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates curl \
+RUN set -eux; \
+    if [ "${BITFUN_USE_CN_MIRROR}" = "1" ]; then \
+      sed -i \
+        -e "s|deb.debian.org/debian|${BITFUN_APT_MIRROR}/debian|g" \
+        -e "s|security.debian.org/debian-security|${BITFUN_APT_MIRROR}/debian-security|g" \
+        /etc/apt/sources.list 2>/dev/null || true; \
+      if [ -f /etc/apt/sources.list.d/debian.sources ]; then \
+        sed -i \
+          -e "s|deb.debian.org/debian|${BITFUN_APT_MIRROR}/debian|g" \
+          -e "s|security.debian.org/debian-security|${BITFUN_APT_MIRROR}/debian-security|g" \
+          /etc/apt/sources.list.d/debian.sources; \
+      fi; \
+    fi; \
+    apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 update \
+    && apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 \
+      install -y --no-install-recommends ca-certificates curl \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY bitfun-relay-server relay-admin /app/

@@ -389,6 +389,28 @@
     min-width: 160px;
   }
 
+  &__mirror-row {
+    display: flex;
+    align-items: flex-end;
+    gap: 12px;
+    margin: 0 16px 10px;
+    flex-wrap: wrap;
+  }
+
+  &__field--mirror {
+    width: 180px;
+    flex-shrink: 0;
+  }
+
+  &__mirror-hint {
+    margin: 0 0 6px;
+    font-size: 11px;
+    color: var(--bf-appearance-token-color-text-muted);
+    line-height: 1.4;
+    flex: 1;
+    min-width: 200px;
+  }
+
   &__notice {
     display: flex;
     align-items: flex-start;
