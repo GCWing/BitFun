@@ -1,4 +1,4 @@
-//! Core product-full runtime adapter boundary.
+//! Core Agent Runtime compatibility adapter boundary.
 //!
 //! Product runtime assembly facts live in `bitfun-product-capabilities`. Core
 //! keeps only compatibility exports and adapter wiring that still depends on

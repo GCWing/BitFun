@@ -80,6 +80,7 @@ function packageAt(name, repoManifestPath, dependencies = []) {
 function pathDependency(repoCratePath, options = {}) {
   return {
     name: options.name ?? repoCratePath.split('/').at(-1),
+    rename: options.rename ?? null,
     path: join(TEST_ROOT, ...repoCratePath.split('/')),
     kind: options.kind ?? null,
     optional: options.optional ?? false,
@@ -413,6 +414,782 @@ test('explicit product entrypoint bitfun-core feature selections pass', () => {
     ),
     [],
   );
+});
+
+test('ACP Core capability closure must retain its Canvas owner', () => {
+  const core = packageAt('bitfun-core', 'src/crates/assembly/core/Cargo.toml');
+  const acp = packageAt('bitfun-acp', 'src/crates/interfaces/acp/Cargo.toml', [
+    pathDependency('src/crates/assembly/core', {
+      name: 'bitfun-core',
+      usesDefaultFeatures: false,
+      features: ['agent-runtime', 'external-sources', 'ssh-remote'],
+    }),
+  ]);
+
+  const violations = findProductEntrypointCoreFeatureViolations(
+    [acp, core],
+    { root: TEST_ROOT, crateLayoutRules },
+  );
+
+  assert.equal(violations.length, 1);
+  assert.match(violations[0].message, /must include canvas-runtime/);
+});
+
+test('ACP Core capability closure validation cannot be disabled by removing an owner', () => {
+  const core = packageAt('bitfun-core', 'src/crates/assembly/core/Cargo.toml');
+  const acp = packageAt('bitfun-acp', 'src/crates/interfaces/acp/Cargo.toml', [
+    pathDependency('src/crates/assembly/core', {
+      name: 'bitfun-core',
+      usesDefaultFeatures: false,
+      features: ['ssh-remote'],
+    }),
+  ]);
+
+  const violations = findProductEntrypointCoreFeatureViolations(
+    [acp, core],
+    { root: TEST_ROOT, crateLayoutRules },
+  );
+
+  assert.deepEqual(
+    violations.map((violation) => violation.message).sort(),
+    [
+      'bitfun-acp Core capability closure must include agent-runtime',
+      'bitfun-acp Core capability closure must include canvas-runtime',
+      'bitfun-acp Core capability closure must include external-sources',
+    ],
+  );
+});
+
+test('CLI Core capability closure requires every reviewed owner', () => {
+  const core = packageAt('bitfun-core', 'src/crates/assembly/core/Cargo.toml');
+  const cli = packageAt('bitfun-cli', 'src/apps/cli/Cargo.toml', [
+    pathDependency('src/crates/assembly/core', {
+      name: 'bitfun-core',
+      usesDefaultFeatures: false,
+      features: [
+        'agent-runtime',
+        'canvas-runtime',
+        'external-sources',
+        'ssh-remote',
+      ],
+    }),
+  ]);
+
+  const violations = findProductEntrypointCoreFeatureViolations(
+    [cli, core],
+    { root: TEST_ROOT, crateLayoutRules },
+  );
+
+  assert.equal(violations.length, 1);
+  assert.match(violations[0].message, /must include plugin-runtime/);
+});
+
+test('CLI entrypoint must not select the product-full Core feature', () => {
+  const core = packageAt('bitfun-core', 'src/crates/assembly/core/Cargo.toml');
+  const cli = packageAt('bitfun-cli', 'src/apps/cli/Cargo.toml', [
+    pathDependency('src/crates/assembly/core', {
+      name: 'bitfun-core',
+      usesDefaultFeatures: false,
+      features: ['product-full'],
+    }),
+  ]);
+
+  const violations = findProductEntrypointCoreFeatureViolations(
+    [cli, core],
+    { root: TEST_ROOT, crateLayoutRules },
+  );
+
+  assert.ok(violations.some((violation) =>
+    /bitfun-cli -> bitfun-core\/product-full/.test(violation.message)));
+});
+
+test('CLI entrypoint must not reach product-full through a Core owner feature', () => {
+  const core = {
+    ...packageAt('bitfun-core', 'src/crates/assembly/core/Cargo.toml'),
+    features: {
+      'agent-runtime': ['runtime-services', 'product-full'],
+      'runtime-services': ['dep:bitfun-runtime-services'],
+      'product-full': ['dep:bitfun-agent-runtime'],
+    },
+  };
+  const cli = packageAt('bitfun-cli', 'src/apps/cli/Cargo.toml', [
+    pathDependency('src/crates/assembly/core', {
+      name: 'bitfun-core',
+      usesDefaultFeatures: false,
+      features: ['agent-runtime'],
+    }),
+  ]);
+
+  const violations = findProductEntrypointCoreFeatureViolations(
+    [cli, core],
+    { root: TEST_ROOT, crateLayoutRules },
+  );
+
+  assert.ok(violations.some((violation) =>
+    /bitfun-cli -> bitfun-core\/product-full/.test(violation.message)));
+});
+
+test('CLI dependency closure must not re-enable product-full through an interface crate', () => {
+  const core = packageAt('bitfun-core', 'src/crates/assembly/core/Cargo.toml');
+  const acp = packageAt('bitfun-acp', 'src/crates/interfaces/acp/Cargo.toml', [
+    pathDependency('src/crates/assembly/core', {
+      name: 'bitfun-core',
+      usesDefaultFeatures: false,
+      features: ['product-full'],
+    }),
+  ]);
+  const cli = packageAt('bitfun-cli', 'src/apps/cli/Cargo.toml', [
+    pathDependency('src/crates/interfaces/acp', { name: 'bitfun-acp' }),
+  ]);
+
+  const violations = findProductEntrypointCoreFeatureViolations(
+    [cli, acp, core],
+    { root: TEST_ROOT, crateLayoutRules },
+  );
+
+  assert.ok(violations.some((violation) =>
+    /bitfun-cli -> bitfun-acp -> bitfun-core\/product-full/.test(violation.message)));
+});
+
+test('CLI dependency closure rejects indirect Core default features', () => {
+  const core = {
+    ...packageAt('bitfun-core', 'src/crates/assembly/core/Cargo.toml'),
+    features: { default: ['product-full'], 'product-full': [] },
+  };
+  const bridge = packageAt('bridge', 'src/crates/assembly/bridge/Cargo.toml', [
+    pathDependency('src/crates/assembly/core', { name: 'bitfun-core' }),
+  ]);
+  const cli = packageAt('bitfun-cli', 'src/apps/cli/Cargo.toml', [
+    pathDependency('src/crates/assembly/bridge', { name: 'bridge' }),
+  ]);
+
+  const violations = findProductEntrypointCoreFeatureViolations(
+    [cli, bridge, core],
+    { root: TEST_ROOT, crateLayoutRules },
+  );
+
+  assert.equal(violations.length, 1);
+  assert.match(violations[0].message, /bitfun-cli -> bridge -> bitfun-core\/product-full/);
+});
+
+test('CLI dependency closure resolves active intermediate feature forwarding', () => {
+  const core = {
+    ...packageAt('bitfun-core', 'src/crates/assembly/core/Cargo.toml'),
+    features: { default: ['product-full'], 'product-full': [] },
+  };
+  const bridge = {
+    ...packageAt('bridge', 'src/crates/assembly/bridge/Cargo.toml', [
+      pathDependency('src/crates/assembly/core', {
+        name: 'bitfun-core',
+        optional: true,
+        usesDefaultFeatures: false,
+      }),
+    ]),
+    features: {
+      default: ['full'],
+      full: ['dep:bitfun-core', 'bitfun-core/product-full'],
+    },
+  };
+  const cli = packageAt('bitfun-cli', 'src/apps/cli/Cargo.toml', [
+    pathDependency('src/crates/assembly/bridge', { name: 'bridge' }),
+  ]);
+
+  const violations = findProductEntrypointCoreFeatureViolations(
+    [cli, bridge, core],
+    { root: TEST_ROOT, crateLayoutRules },
+  );
+
+  assert.equal(violations.length, 1);
+  assert.match(violations[0].message, /bitfun-cli -> bridge -> bitfun-core\/product-full/);
+});
+
+test('CLI dependency closure resolves renamed optional dependency forwarding', () => {
+  const core = {
+    ...packageAt('bitfun-core', 'src/crates/assembly/core/Cargo.toml'),
+    features: { 'product-full': [] },
+  };
+  const bridge = {
+    ...packageAt('bridge', 'src/crates/assembly/bridge/Cargo.toml', [
+      pathDependency('src/crates/assembly/core', {
+        name: 'bitfun-core',
+        rename: 'core-alias',
+        optional: true,
+        usesDefaultFeatures: false,
+      }),
+    ]),
+    features: {
+      full: ['dep:core-alias', 'core-alias/product-full'],
+    },
+  };
+  const cli = packageAt('bitfun-cli', 'src/apps/cli/Cargo.toml', [
+    pathDependency('src/crates/assembly/bridge', {
+      name: 'bridge',
+      usesDefaultFeatures: false,
+      features: ['full'],
+    }),
+  ]);
+
+  const violations = findProductEntrypointCoreFeatureViolations(
+    [cli, bridge, core],
+    { root: TEST_ROOT, crateLayoutRules },
+  );
+
+  assert.equal(violations.length, 1);
+  assert.match(violations[0].message, /bitfun-core\/product-full/);
+});
+
+test('CLI dependency closure unions weak forwarding and optional activation per package', () => {
+  const core = {
+    ...packageAt('bitfun-core', 'src/crates/assembly/core/Cargo.toml'),
+    features: { 'product-full': [] },
+  };
+  const bridge = {
+    ...packageAt('bridge', 'src/crates/assembly/bridge/Cargo.toml', [
+      pathDependency('src/crates/assembly/core', {
+        name: 'bitfun-core',
+        optional: true,
+        usesDefaultFeatures: false,
+      }),
+    ]),
+    features: {
+      forward: ['bitfun-core?/product-full'],
+      activate: ['dep:bitfun-core'],
+    },
+  };
+  const left = packageAt('left', 'src/crates/assembly/left/Cargo.toml', [
+    pathDependency('src/crates/assembly/bridge', {
+      name: 'bridge',
+      usesDefaultFeatures: false,
+      features: ['forward'],
+    }),
+  ]);
+  const right = packageAt('right', 'src/crates/assembly/right/Cargo.toml', [
+    pathDependency('src/crates/assembly/bridge', {
+      name: 'bridge',
+      usesDefaultFeatures: false,
+      features: ['activate'],
+    }),
+  ]);
+  const cli = packageAt('bitfun-cli', 'src/apps/cli/Cargo.toml', [
+    pathDependency('src/crates/assembly/left', { name: 'left' }),
+    pathDependency('src/crates/assembly/right', { name: 'right' }),
+  ]);
+
+  const violations = findProductEntrypointCoreFeatureViolations(
+    [cli, left, right, bridge, core],
+    { root: TEST_ROOT, crateLayoutRules },
+  );
+
+  assert.equal(violations.length, 1);
+  assert.match(violations[0].message, /bitfun-core\/product-full/);
+});
+
+test('CLI dependency closure keeps normal and build feature unions separate', () => {
+  const core = {
+    ...packageAt('bitfun-core', 'src/crates/assembly/core/Cargo.toml'),
+    features: { 'product-full': [] },
+  };
+  const bridge = {
+    ...packageAt('bridge', 'src/crates/assembly/bridge/Cargo.toml', [
+      pathDependency('src/crates/assembly/core', {
+        name: 'bitfun-core',
+        optional: true,
+        usesDefaultFeatures: false,
+      }),
+    ]),
+    features: {
+      forward: ['bitfun-core?/product-full'],
+      activate: ['dep:bitfun-core'],
+    },
+  };
+  const normalParent = packageAt('normal-parent', 'src/crates/assembly/normal-parent/Cargo.toml', [
+    pathDependency('src/crates/assembly/bridge', {
+      name: 'bridge',
+      usesDefaultFeatures: false,
+      features: ['forward'],
+    }),
+  ]);
+  const buildParent = packageAt('build-parent', 'src/crates/assembly/build-parent/Cargo.toml', [
+    pathDependency('src/crates/assembly/bridge', {
+      name: 'bridge',
+      usesDefaultFeatures: false,
+      features: ['activate'],
+    }),
+  ]);
+  const cli = packageAt('bitfun-cli', 'src/apps/cli/Cargo.toml', [
+    pathDependency('src/crates/assembly/normal-parent', { name: 'normal-parent' }),
+    pathDependency('src/crates/assembly/build-parent', {
+      name: 'build-parent',
+      kind: 'build',
+    }),
+  ]);
+
+  assert.deepEqual(
+    findProductEntrypointCoreFeatureViolations(
+      [cli, normalParent, buildParent, bridge, core],
+      { root: TEST_ROOT, crateLayoutRules },
+    ),
+    [],
+  );
+});
+
+test('CLI dependency closure keeps proc-macro and normal feature unions separate', () => {
+  const core = {
+    ...packageAt('bitfun-core', 'src/crates/assembly/core/Cargo.toml'),
+    features: { 'product-full': [] },
+  };
+  const shared = {
+    ...packageAt('shared', 'src/crates/assembly/shared/Cargo.toml', [
+      pathDependency('src/crates/assembly/core', {
+        name: 'bitfun-core',
+        optional: true,
+        usesDefaultFeatures: false,
+      }),
+    ]),
+    features: {
+      forward: ['bitfun-core?/product-full'],
+      activate: ['dep:bitfun-core'],
+    },
+  };
+  const normalParent = packageAt('normal-parent', 'src/crates/assembly/normal-parent/Cargo.toml', [
+    pathDependency('src/crates/assembly/shared', {
+      name: 'shared',
+      usesDefaultFeatures: false,
+      features: ['forward'],
+    }),
+  ]);
+  const macroParent = {
+    ...packageAt('macro-parent', 'src/crates/assembly/macro-parent/Cargo.toml', [
+      pathDependency('src/crates/assembly/shared', {
+        name: 'shared',
+        usesDefaultFeatures: false,
+        features: ['activate'],
+      }),
+    ]),
+    targets: [{ kind: ['proc-macro'] }],
+  };
+  const cli = packageAt('bitfun-cli', 'src/apps/cli/Cargo.toml', [
+    pathDependency('src/crates/assembly/normal-parent', { name: 'normal-parent' }),
+    pathDependency('src/crates/assembly/macro-parent', { name: 'macro-parent' }),
+  ]);
+
+  assert.deepEqual(
+    findProductEntrypointCoreFeatureViolations(
+      [cli, normalParent, macroParent, shared, core],
+      { root: TEST_ROOT, crateLayoutRules },
+    ),
+    [],
+  );
+});
+
+test('CLI dependency architecture closure cannot hide features behind target cfgs', () => {
+  const core = {
+    ...packageAt('bitfun-core', 'src/crates/assembly/core/Cargo.toml'),
+    features: { 'product-full': [] },
+  };
+  const bridge = {
+    ...packageAt('bridge', 'src/crates/assembly/bridge/Cargo.toml', [
+      pathDependency('src/crates/assembly/core', {
+        name: 'bitfun-core',
+        optional: true,
+        usesDefaultFeatures: false,
+      }),
+    ]),
+    features: {
+      forward: ['bitfun-core?/product-full'],
+      activate: ['dep:bitfun-core'],
+    },
+  };
+  const cli = packageAt('bitfun-cli', 'src/apps/cli/Cargo.toml', [
+    pathDependency('src/crates/assembly/bridge', {
+      name: 'bridge',
+      target: 'cfg(windows)',
+      usesDefaultFeatures: false,
+      features: ['forward'],
+    }),
+    pathDependency('src/crates/assembly/bridge', {
+      name: 'bridge',
+      target: 'cfg(unix)',
+      usesDefaultFeatures: false,
+      features: ['activate'],
+    }),
+  ]);
+
+  const violations = findProductEntrypointCoreFeatureViolations(
+    [cli, bridge, core],
+    { root: TEST_ROOT, crateLayoutRules },
+  );
+
+  assert.equal(violations.length, 1);
+  assert.match(violations[0].message, /bitfun-core\/product-full/);
+});
+
+test('CLI dependency architecture closure unions unconditional and target-specific declarations', () => {
+  const core = {
+    ...packageAt('bitfun-core', 'src/crates/assembly/core/Cargo.toml'),
+    features: { 'product-full': [] },
+  };
+  const bridge = {
+    ...packageAt('bridge', 'src/crates/assembly/bridge/Cargo.toml', [
+      pathDependency('src/crates/assembly/core', {
+        name: 'bitfun-core',
+        optional: true,
+        usesDefaultFeatures: false,
+      }),
+    ]),
+    features: {
+      forward: ['bitfun-core?/product-full'],
+      activate: ['dep:bitfun-core'],
+    },
+  };
+  const cli = packageAt('bitfun-cli', 'src/apps/cli/Cargo.toml', [
+    pathDependency('src/crates/assembly/bridge', {
+      name: 'bridge',
+      usesDefaultFeatures: false,
+      features: ['forward'],
+    }),
+    pathDependency('src/crates/assembly/bridge', {
+      name: 'bridge',
+      target: 'cfg(windows)',
+      usesDefaultFeatures: false,
+      features: ['activate'],
+    }),
+  ]);
+
+  const violations = findProductEntrypointCoreFeatureViolations(
+    [cli, bridge, core],
+    { root: TEST_ROOT, crateLayoutRules },
+  );
+
+  assert.equal(violations.length, 1);
+  assert.match(violations[0].message, /bitfun-core\/product-full/);
+});
+
+function reviewedCoreFeaturesFor(rootName) {
+  return rootName === 'bitfun-cli'
+    ? ['agent-runtime', 'canvas-runtime', 'external-sources', 'plugin-runtime', 'ssh-remote']
+    : ['agent-runtime', 'canvas-runtime', 'external-sources', 'ssh-remote'];
+}
+
+function targetedWeakForwardingGraph(rootName, forwardTarget, activateTarget, reverse = false) {
+  const reviewedFeatures = reviewedCoreFeaturesFor(rootName);
+  const core = {
+    ...packageAt('bitfun-core', 'src/crates/assembly/core/Cargo.toml'),
+    features: Object.fromEntries([
+      ...reviewedFeatures.map((feature) => [feature, []]),
+      ['product-full', []],
+    ]),
+  };
+  const bridge = {
+    ...packageAt('bridge', 'src/crates/assembly/bridge/Cargo.toml', [
+      pathDependency('src/crates/assembly/core', {
+        name: 'bitfun-core',
+        optional: true,
+        usesDefaultFeatures: false,
+      }),
+    ]),
+    features: {
+      forward: ['bitfun-core?/product-full'],
+      activate: ['dep:bitfun-core'],
+    },
+  };
+  const root = packageAt(rootName, rootName === 'bitfun-cli'
+    ? 'src/apps/cli/Cargo.toml'
+    : 'src/crates/interfaces/acp/Cargo.toml', [
+    pathDependency('src/crates/assembly/core', {
+      name: 'bitfun-core',
+      usesDefaultFeatures: false,
+      features: reviewedFeatures,
+    }),
+    pathDependency('src/crates/assembly/bridge', {
+      name: 'bridge',
+      target: forwardTarget,
+      usesDefaultFeatures: false,
+      features: [reverse ? 'activate' : 'forward'],
+    }),
+    pathDependency('src/crates/assembly/bridge', {
+      name: 'bridge',
+      target: activateTarget,
+      usesDefaultFeatures: false,
+      features: [reverse ? 'forward' : 'activate'],
+    }),
+  ]);
+
+  return { root, bridge, core };
+}
+
+test('CLI dependency architecture closure ignores Windows target spelling differences', () => {
+  for (const reverse of [false, true]) {
+    const { root, bridge, core } = targetedWeakForwardingGraph(
+      'bitfun-cli',
+      'cfg(windows)',
+      'cfg(target_os = "windows")',
+      reverse,
+    );
+    const violations = findProductEntrypointCoreFeatureViolations(
+      [root, bridge, core],
+      { root: TEST_ROOT, crateLayoutRules },
+    );
+
+    assert.equal(violations.length, 1);
+    assert.match(violations[0].message, /bitfun-core\/product-full/);
+  }
+});
+
+test('CLI dependency architecture closure includes Unix and not-Windows declarations', () => {
+  for (const reverse of [false, true]) {
+    const { root, bridge, core } = targetedWeakForwardingGraph(
+      'bitfun-cli',
+      'cfg(not(windows))',
+      'cfg(unix)',
+      reverse,
+    );
+    const violations = findProductEntrypointCoreFeatureViolations(
+      [root, bridge, core],
+      { root: TEST_ROOT, crateLayoutRules },
+    );
+
+    assert.equal(violations.length, 1);
+    assert.match(violations[0].message, /bitfun-core\/product-full/);
+  }
+});
+
+test('CLI dependency architecture closure includes nested target-specific declarations', () => {
+  const reviewedFeatures = reviewedCoreFeaturesFor('bitfun-cli');
+  const core = {
+    ...packageAt('bitfun-core', 'src/crates/assembly/core/Cargo.toml'),
+    features: Object.fromEntries([
+      ...reviewedFeatures.map((feature) => [feature, []]),
+      ['product-full', []],
+    ]),
+  };
+  const bridge = packageAt('bridge', 'src/crates/assembly/bridge/Cargo.toml', [
+    pathDependency('src/crates/assembly/core', {
+      name: 'bitfun-core',
+      target: 'cfg(unix)',
+      usesDefaultFeatures: false,
+      features: ['product-full'],
+    }),
+  ]);
+  const cli = packageAt('bitfun-cli', 'src/apps/cli/Cargo.toml', [
+    pathDependency('src/crates/assembly/core', {
+      name: 'bitfun-core',
+      usesDefaultFeatures: false,
+      features: reviewedFeatures,
+    }),
+    pathDependency('src/crates/assembly/bridge', {
+      name: 'bridge',
+      target: 'cfg(windows)',
+    }),
+  ]);
+
+  const violations = findProductEntrypointCoreFeatureViolations(
+    [cli, bridge, core],
+    { root: TEST_ROOT, crateLayoutRules },
+  );
+
+  assert.equal(violations.length, 1);
+  assert.match(violations[0].message, /bitfun-core\/product-full/);
+});
+
+test('CLI dependency architecture closure includes target-specific build dependencies', () => {
+  const reviewedFeatures = reviewedCoreFeaturesFor('bitfun-cli');
+  const core = {
+    ...packageAt('bitfun-core', 'src/crates/assembly/core/Cargo.toml'),
+    features: Object.fromEntries([
+      ...reviewedFeatures.map((feature) => [feature, []]),
+      ['product-full', []],
+    ]),
+  };
+  const bridge = packageAt('bridge', 'src/crates/assembly/bridge/Cargo.toml', [
+    pathDependency('src/crates/assembly/core', {
+      name: 'bitfun-core',
+      kind: 'build',
+      target: 'cfg(unix)',
+      usesDefaultFeatures: false,
+      features: ['product-full'],
+    }),
+  ]);
+  const cli = packageAt('bitfun-cli', 'src/apps/cli/Cargo.toml', [
+    pathDependency('src/crates/assembly/core', {
+      name: 'bitfun-core',
+      usesDefaultFeatures: false,
+      features: reviewedFeatures,
+    }),
+    pathDependency('src/crates/assembly/bridge', {
+      name: 'bridge',
+      target: 'cfg(windows)',
+    }),
+  ]);
+
+  const violations = findProductEntrypointCoreFeatureViolations(
+    [cli, bridge, core],
+    { root: TEST_ROOT, crateLayoutRules },
+  );
+
+  assert.equal(violations.length, 1);
+  assert.match(violations[0].message, /bitfun-core\/product-full/);
+});
+
+test('CLI dependency closure inspects non-default root features', () => {
+  const reviewedFeatures = reviewedCoreFeaturesFor('bitfun-cli');
+  const core = {
+    ...packageAt('bitfun-core', 'src/crates/assembly/core/Cargo.toml'),
+    features: Object.fromEntries([
+      ...reviewedFeatures.map((feature) => [feature, []]),
+      ['product-full', []],
+    ]),
+  };
+  const bridge = packageAt('bridge', 'src/crates/assembly/bridge/Cargo.toml', [
+    pathDependency('src/crates/assembly/core', {
+      name: 'bitfun-core',
+      usesDefaultFeatures: false,
+      features: ['product-full'],
+    }),
+  ]);
+  const cli = {
+    ...packageAt('bitfun-cli', 'src/apps/cli/Cargo.toml', [
+      pathDependency('src/crates/assembly/core', {
+        name: 'bitfun-core',
+        usesDefaultFeatures: false,
+        features: reviewedFeatures,
+      }),
+      pathDependency('src/crates/assembly/bridge', {
+        name: 'bridge',
+        optional: true,
+      }),
+    ]),
+    features: {
+      default: [],
+      bad: ['dep:bridge'],
+    },
+  };
+
+  const violations = findProductEntrypointCoreFeatureViolations(
+    [cli, bridge, core],
+    { root: TEST_ROOT, crateLayoutRules },
+  );
+
+  assert.equal(violations.length, 1);
+  assert.match(violations[0].message, /bitfun-core\/product-full/);
+});
+
+test('ACP dependency closure rejects indirect unreviewed Core features', () => {
+  const reviewedFeatures = reviewedCoreFeaturesFor('bitfun-acp');
+  const core = {
+    ...packageAt('bitfun-core', 'src/crates/assembly/core/Cargo.toml'),
+    features: Object.fromEntries([
+      ...reviewedFeatures.map((feature) => [feature, []]),
+      ['product-full', []],
+    ]),
+  };
+  const bridge = packageAt('bridge', 'src/crates/assembly/bridge/Cargo.toml', [
+    pathDependency('src/crates/assembly/core', {
+      name: 'bitfun-core',
+      usesDefaultFeatures: false,
+      features: ['product-full'],
+    }),
+  ]);
+  const acp = packageAt('bitfun-acp', 'src/crates/interfaces/acp/Cargo.toml', [
+    pathDependency('src/crates/assembly/core', {
+      name: 'bitfun-core',
+      usesDefaultFeatures: false,
+      features: reviewedFeatures,
+    }),
+    pathDependency('src/crates/assembly/bridge', { name: 'bridge' }),
+  ]);
+
+  const violations = findProductEntrypointCoreFeatureViolations(
+    [acp, bridge, core],
+    { root: TEST_ROOT, crateLayoutRules },
+  );
+
+  assert.equal(violations.length, 1);
+  assert.match(violations[0].message, /bitfun-core\/product-full/);
+});
+
+test('ACP active closure cannot be expanded by a reviewed owner definition', () => {
+  const reviewedFeatures = reviewedCoreFeaturesFor('bitfun-acp');
+  const core = {
+    ...packageAt('bitfun-core', 'src/crates/assembly/core/Cargo.toml'),
+    features: {
+      'agent-runtime': [],
+      'canvas-runtime': ['plugin-runtime'],
+      'external-sources': [],
+      'plugin-runtime': [],
+      'ssh-remote': [],
+    },
+  };
+  const acp = packageAt('bitfun-acp', 'src/crates/interfaces/acp/Cargo.toml', [
+    pathDependency('src/crates/assembly/core', {
+      name: 'bitfun-core',
+      usesDefaultFeatures: false,
+      features: reviewedFeatures,
+    }),
+  ]);
+
+  const violations = findProductEntrypointCoreFeatureViolations(
+    [acp, core],
+    { root: TEST_ROOT, crateLayoutRules },
+  );
+
+  assert.equal(violations.length, 1);
+  assert.match(violations[0].message, /bitfun-core\/plugin-runtime/);
+});
+
+test('CLI dependency closure includes build dependencies and excluded capabilities', () => {
+  const core = {
+    ...packageAt('bitfun-core', 'src/crates/assembly/core/Cargo.toml'),
+    features: {
+      'cli-everything': ['announcement', 'debug-log'],
+      announcement: [],
+      'debug-log': [],
+    },
+  };
+  const bridge = packageAt('bridge', 'src/crates/assembly/bridge/Cargo.toml', [
+    pathDependency('src/crates/assembly/core', {
+      name: 'bitfun-core',
+      kind: 'build',
+      usesDefaultFeatures: false,
+      features: ['cli-everything'],
+    }),
+  ]);
+  const cli = packageAt('bitfun-cli', 'src/apps/cli/Cargo.toml', [
+    pathDependency('src/crates/assembly/bridge', { name: 'bridge' }),
+  ]);
+
+  const violations = findProductEntrypointCoreFeatureViolations(
+    [cli, bridge, core],
+    { root: TEST_ROOT, crateLayoutRules },
+  );
+
+  assert.equal(violations.length, 1);
+  assert.match(violations[0].message, /bitfun-core\/announcement/);
+});
+
+test('CLI dependency closure excludes the Core dispatch store', () => {
+  const core = {
+    ...packageAt('bitfun-core', 'src/crates/assembly/core/Cargo.toml'),
+    features: { 'dispatch-store': [] },
+  };
+  const bridge = packageAt('bridge', 'src/crates/assembly/bridge/Cargo.toml', [
+    pathDependency('src/crates/assembly/core', {
+      name: 'bitfun-core',
+      usesDefaultFeatures: false,
+      features: ['dispatch-store'],
+    }),
+  ]);
+  const cli = packageAt('bitfun-cli', 'src/apps/cli/Cargo.toml', [
+    pathDependency('src/crates/assembly/bridge', { name: 'bridge' }),
+  ]);
+
+  const violations = findProductEntrypointCoreFeatureViolations(
+    [cli, bridge, core],
+    { root: TEST_ROOT, crateLayoutRules },
+  );
+
+  assert.equal(violations.length, 1);
+  assert.match(violations[0].message, /bitfun-core\/dispatch-store/);
 });
 
 test('cargo layer checker rejects reverse edges across dependency kinds', () => {

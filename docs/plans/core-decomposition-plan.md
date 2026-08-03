@@ -22,7 +22,7 @@
 | 事实 | 当前状态 | 结论 |
 |---|---|---|
 | 产品能力组装 | `DeliveryProfile`、`ProductAssembler`、能力计划、服务可用性和测试已存在 | 这些是可测试的 assembly facts，不代表产品入口已接入 |
-| CLI / Desktop / ACP | 三者仍按需启用 `bitfun-core/product-full`；CLI 与 ACP 已分别提交对应 `DeliveryProfile` 并消费 Runtime Parts/SDK，Desktop 主交互已消费由现有 owner 构造的窄口径 SDK 接口 | 三个入口均复用单一 Core owner；完整 Desktop profile 和剩余兼容操作仍需逐项迁移 |
+| CLI / Desktop / ACP | CLI 与 ACP 已分别提交对应 `DeliveryProfile`、消费 Runtime Parts/SDK，并选择经过评审的 Core owner feature closure；Desktop 仍启用 `bitfun-core/product-full`，主交互已消费由现有 owner 构造的窄口径 SDK 接口 | 三个入口仍复用单一 Core runtime owner；完整 Desktop profile 和剩余兼容操作仍需逐项迁移 |
 | Server | 当前生产路由只形成 health/info/ping 基线 | 没有插件状态或独立产品组装完整流程 |
 | Server / Remote / Web / Mobile Web / SDK profile | 当前为空计划、未接入入口或仅有 preview 测试 | 不得据枚举值宣称产品能力已交付 |
 | Agent Runtime SDK | 已有无 `bitfun-core` 依赖的 v3 preview 接口和 smoke test | 发布边界仍需真实嵌入方证明 |

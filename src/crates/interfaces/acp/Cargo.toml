@@ -9,7 +9,12 @@ description = "BitFun Agent Client Protocol surface"
 name = "bitfun_acp"
 
 [dependencies]
-bitfun-core = { path = "../../assembly/core", default-features = false, features = ["product-full"] }
+bitfun-core = { path = "../../assembly/core", default-features = false, features = [
+    "agent-runtime",
+    "canvas-runtime",
+    "external-sources",
+    "ssh-remote",
+] }
 bitfun-agent-runtime = { path = "../../execution/agent-runtime" }
 bitfun-agent-tools = { path = "../../execution/tool-contracts" }
 bitfun-events = { path = "../../contracts/events" }

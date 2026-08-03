@@ -18,7 +18,7 @@ use crate::agentic::core::{
     MessageRole, MessageSemanticKind, RequestReasoningTokenPolicy, Session,
 };
 use crate::agentic::events::{AgenticEvent, EventPriority, EventQueue};
-#[cfg(feature = "product-full")]
+#[cfg(feature = "agent-runtime")]
 use crate::agentic::execution::conditional_instructions::{
     build_conditional_instruction_reminder, successful_workspace_read_paths,
 };
@@ -152,7 +152,7 @@ fn manual_compaction_terminal_error(error: BitFunError) -> BitFunError {
     }
 }
 
-#[cfg(feature = "product-full")]
+#[cfg(feature = "agent-runtime")]
 async fn activate_conditional_instructions_after_round(
     session_manager: &SessionManager,
     context: &ExecutionContext,
@@ -3856,7 +3856,7 @@ impl ExecutionEngine {
                 }
             }
 
-            #[cfg(feature = "product-full")]
+            #[cfg(feature = "agent-runtime")]
             activate_conditional_instructions_after_round(
                 self.session_manager.as_ref(),
                 &context,
@@ -4453,7 +4453,7 @@ impl ExecutionEngine {
         // successfully, renumber `cit_XXX` references in the final report
         // into consecutive `[N]` display IDs. Two gates apply (agent type +
         // dialog success) so other agents and failed turns are unaffected.
-        #[cfg(feature = "product-full")]
+        #[cfg(feature = "agent-runtime")]
         {
             if bitfun_agent_runtime::deep_research::should_post_process_research_report(
                 &agent_type,
@@ -4602,6 +4602,7 @@ mod tests {
     use crate::agentic::tools::ToolRuntimeRestrictions;
     use crate::agentic::workspace::{local_workspace_services, WorkspaceBinding};
     use crate::infrastructure::PathManager;
+    #[cfg(feature = "external-sources")]
     use crate::instruction_sources::test_support::{lock_environment, EnvironmentGuard};
     use crate::service::config::types::AIConfig;
     use crate::service::config::types::AIModelConfig;
@@ -4819,6 +4820,7 @@ mod tests {
             .contains("Recovered workspace instructions."));
     }
 
+    #[cfg(feature = "external-sources")]
     #[tokio::test]
     async fn local_workspace_services_still_include_local_user_instruction_sources() {
         let _environment = lock_environment();
@@ -4863,6 +4865,7 @@ mod tests {
         assert!(context.contains("Local engine project"));
     }
 
+    #[cfg(feature = "external-sources")]
     #[tokio::test]
     async fn local_workspace_services_remain_the_project_instruction_io_owner() {
         let _environment = lock_environment();
@@ -4909,6 +4912,7 @@ mod tests {
         assert!(!context.contains("Disk project source"));
     }
 
+    #[cfg(feature = "external-sources")]
     #[tokio::test]
     async fn conditional_rules_persist_once_and_reload_after_compaction() {
         let _environment = lock_environment();

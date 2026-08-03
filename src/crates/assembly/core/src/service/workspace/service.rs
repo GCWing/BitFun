@@ -288,7 +288,7 @@ impl WorkspaceService {
         Ok(service)
     }
 
-    #[cfg(all(test, feature = "product-full"))]
+    #[cfg(all(test, feature = "agent-runtime"))]
     pub(crate) async fn new_for_test_path_manager(path_manager: Arc<PathManager>) -> Self {
         path_manager
             .initialize_user_directories()
@@ -2395,7 +2395,7 @@ pub fn get_global_workspace_service() -> Option<Arc<WorkspaceService>> {
     GLOBAL_WORKSPACE_SERVICE.get().cloned()
 }
 
-#[cfg(all(test, feature = "product-full"))]
+#[cfg(all(test, feature = "agent-runtime"))]
 mod tests {
     use super::*;
     use crate::agentic::persistence::PersistenceManager;

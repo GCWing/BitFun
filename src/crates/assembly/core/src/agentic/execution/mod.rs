@@ -2,7 +2,7 @@
 //!
 //! Responsible for AI interaction and model round control
 
-#[cfg(feature = "product-full")]
+#[cfg(feature = "agent-runtime")]
 pub(crate) mod conditional_instructions;
 pub mod edit_constraint_guard;
 pub mod execution_engine;

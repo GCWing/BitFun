@@ -19,7 +19,7 @@ Main areas:
 - `src/agentic/`: agents, prompts, tools, sessions, execution, persistence
 - `src/service/`: config, filesystem, terminal, git, LSP, MCP, remote connect, AI memory
 - `src/infrastructure/`: AI clients, app paths, event system, storage, debug log server
-- `src/product_runtime/`: product-full compatibility adapters and runtime service provider wiring
+- `src/product_runtime/`: Core Agent Runtime compatibility adapters and runtime service provider wiring
 
 Agent runtime mental model:
 
@@ -65,10 +65,11 @@ SessionManager -> Session -> DialogTurn -> ModelRound
   concrete managed-package discovery and trust persistence stay in
   `services-integrations`, while ecosystem parsing and PluginRuntimeClient
   behavior remain in their adapter and execution owners.
-- `plugin_runtime`, `external_sources`, and `instruction_sources` are the reviewed product-full
-  composition files allowed to select ecosystem adapters for their respective
-  capability contracts. Product surfaces consume product-level views and must
-  not import adapter or raw plugin runtime client types.
+- `plugin_runtime`, `external_sources`, and `instruction_sources` are the
+  reviewed owner-feature composition files allowed to select ecosystem adapters
+  for their respective capability contracts. Product surfaces consume
+  product-level views and must not import adapter or raw plugin runtime client
+  types.
 - External-source Desktop, TUI, Peer, and Server surfaces share the versioned
   product-domain control DTO and closed generic actions. Capability-specific
   approvals and conflict choices remain typed owner operations; do not add a
@@ -79,6 +80,17 @@ SessionManager -> Session -> DialogTurn -> ModelRound
 - Feature work must keep `product-full` as the compatibility product assembly
   boundary unless a separate product matrix review changes default capability
   selection.
+- `agent-runtime` owns the existing Core Agent Runtime compatibility facade,
+  including its MCP, Remote Connect, workspace-search, and native Hook runtime
+  services. `external-sources` adds third-party discovery/import adapters,
+  `plugin-runtime` adds executable plugin-client wiring, and `debug-log` keeps
+  the debug ingest server separate. None may enable `product-full`.
+- CLI/ACP closure checks keep Cargo resolver-v2 normal and host
+  (build/proc-macro) feature contexts separate, while treating all
+  target-specific declarations within each context as one reviewed architecture
+  boundary. Split a package/module owner when platforms genuinely differ; do
+  not hide an unreviewed Core capability behind mutually exclusive Cargo `cfg`
+  branches.
 - Keep the light compatibility features independently compilable. Local service
   profiles are `dispatch-store`, `lsp`, `terminal`, `workspace-runtime`, and
   `workspace-watch`; `remote-workspace` adds only the remote workspace facade,

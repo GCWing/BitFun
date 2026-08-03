@@ -1,5 +1,5 @@
 fn main() {
-    if std::env::var_os("CARGO_FEATURE_PRODUCT_FULL").is_some() {
+    if std::env::var_os("CARGO_FEATURE_AGENT_RUNTIME").is_some() {
         emit_rerun_if_changed(std::path::Path::new("builtin_skills"));
         if let Err(e) = build_embedded_builtin_skills_metadata() {
             eprintln!("Warning: Failed to embed built-in skills metadata: {}", e);

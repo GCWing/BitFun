@@ -30,7 +30,13 @@ path = "tests/terminal_process_contracts.rs"
 
 [dependencies]
 # Internal crates
-bitfun-core = { path = "../../crates/assembly/core", default-features = false, features = ["product-full"] }
+bitfun-core = { path = "../../crates/assembly/core", default-features = false, features = [
+    "agent-runtime",
+    "canvas-runtime",
+    "external-sources",
+    "plugin-runtime",
+    "ssh-remote",
+] }
 bitfun-events = { path = "../../crates/contracts/events" }
 bitfun-acp = { path = "../../crates/interfaces/acp" }
 bitfun-agent-runtime = { path = "../../crates/execution/agent-runtime" }

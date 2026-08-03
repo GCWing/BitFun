@@ -171,6 +171,9 @@ CLI-local 配置只保存终端形态偏好与调用入口设置。共享权限�
 
 CLI 通过 `DeliveryProfile::Cli` 消费经过校验的产品 Runtime parts。产品定义、Delivery Profile、Runtime Configuration 和 Capability Availability 是不同概念：
 
+- 编译期由 CLI 显式选择 `agent-runtime`、`canvas-runtime`、`external-sources`、
+  `plugin-runtime` 与 `ssh-remote` owner feature；这保持现有 CLI capability plan，
+  但不继承 Desktop 后续加入 `product-full` 的能力。
 - 隐藏入口不证明后端依赖被移除。
 - CLI 不读取 authoring product definition 作为运行时业务配置。
 - 品牌、资源、数据 namespace、更新渠道和内置扩展由产品定制 owner 生成，CLI 只消费结果。

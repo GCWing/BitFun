@@ -1,4 +1,4 @@
-//! Core product-full runtime service adapters.
+//! Core Agent Runtime service adapters.
 //!
 //! This file registers existing core concrete adapters into typed runtime
 //! service builders. It does not create new runtime behavior.

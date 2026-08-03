@@ -129,13 +129,40 @@ bitfun-plugin-runtime-client = { path = "../../execution/plugin-runtime-client",
 bitfun-transport = { path = "../../adapters/transport" }
 
 [features]
-# Full product runtime feature set. Product crates should depend on this
-# explicitly before `bitfun-core` default features are made lighter.
+# Full product runtime compatibility set. Product entrypoints with a narrower
+# construction path select stable owner features instead of inheriting this
+# union.
 default = ["product-full"]
 product-full = [
-    "ai-adapter-runtime",
+    "agent-runtime",
     "canvas-runtime",
-    "dep:axum",
+    "external-sources",
+    "plugin-runtime",
+    "debug-log",
+    "announcement",
+    "file-watch",
+    "workspace-watch",
+    "ssh-remote",
+    "dispatch-store",
+    "filesystem",
+    "git",
+    "lsp",
+    "local-storage",
+    "process-runtime",
+    "remote-workspace",
+    "review-platform",
+    "terminal",
+    "workspace-runtime",
+    "product-capabilities",
+    "product-domains",
+    "runtime-services",
+    "tool-packs",
+]
+# Core compatibility facade and concrete product Agent Runtime assembly. This
+# owns the existing agent/session/tool lifecycle, not app presentation or
+# external ecosystem discovery.
+agent-runtime = [
+    "ai-adapter-runtime",
     "dep:bitfun-agent-runtime",
     "dep:bitfun-agent-content",
     "dep:bitfun-agent-stream",
@@ -147,11 +174,6 @@ product-full = [
     "dep:flate2",
     "dep:fs2",
     "dep:include_dir",
-    "dep:bitfun-opencode-adapter",
-    "dep:bitfun-claude-code-adapter",
-    "dep:bitfun-codex-adapter",
-    "dep:bitfun-external-sources",
-    "dep:bitfun-plugin-runtime-client",
     "dep:indexmap",
     "dep:image",
     "dep:md5",
@@ -160,14 +182,20 @@ product-full = [
     "dep:rusqlite",
     "dep:similar",
     "dep:tokio-tungstenite",
-    "dep:tower-http",
     "dep:tool-runtime",
-    "bitfun-services-integrations/product-full",
+    "dep:axum",
+    "bitfun-services-integrations/browser-control",
+    "bitfun-services-integrations/deep-research",
+    "bitfun-services-integrations/mcp",
+    "bitfun-services-integrations/remote-connect",
+    "bitfun-services-integrations/script-tool-runtime",
+    "bitfun-services-integrations/web-tools",
+    "bitfun-services-integrations/workspace-search",
+    "tokio/rt-multi-thread",
     "bitfun-services-core/dispatch-workspace",
     "bitfun-services-core/permission",
     "bitfun-services-core/runtime-ownership",
     "bitfun-services-core/session-git",
-    "dispatch-store",
     "filesystem",
     "lsp",
     "local-storage",
@@ -175,16 +203,31 @@ product-full = [
     "remote-workspace",
     "terminal",
     "workspace-runtime",
-    "workspace-watch",
-    "ssh-remote",
     "product-capabilities",
     "product-domains",
     "runtime-services",
-    "announcement",
-    "file-watch",
     "git",
     "review-platform",
     "tool-packs",
+]
+external-sources = [
+    "agent-runtime",
+    "dep:bitfun-opencode-adapter",
+    "dep:bitfun-claude-code-adapter",
+    "dep:bitfun-codex-adapter",
+    "dep:bitfun-external-sources",
+    "bitfun-services-integrations/hook-import",
+    "file-watch",
+    "workspace-watch",
+]
+plugin-runtime = [
+    "external-sources",
+    "dep:bitfun-plugin-runtime-client",
+]
+debug-log = [
+    "dep:axum",
+    "dep:tower-http",
+    "bitfun-services-integrations/debug-log",
 ]
 ai-adapter-runtime = [
     "dep:bitfun-ai-adapters",

@@ -40,6 +40,7 @@ pub use bitfun_product_domains::external_subagents::{
     ExternalSubagentModelRequest, ExternalSubagentSummary,
 };
 
+use crate::agentic::workspace::workspace_route_key;
 use crate::external_mcp::{
     reconcile_external_mcp_catalog, BitFunExternalMcpRuntime, ExternalMcpDecision,
     ExternalMcpDecisions, ExternalMcpProductState, ExternalMcpRuntimePort,
@@ -53,8 +54,8 @@ use crate::external_tools::{
     begin_external_tool_workspace_recovery, external_tool_workspace_requires_recovery,
     invalidate_external_tool_runtime_availability, merge_tool_state,
     project_external_tools_read_only, reconcile_external_tools, release_external_tool_workspace,
-    reset_external_tool_workspace_recovery_budget, workspace_route_key, ExternalToolDecisions,
-    ExternalToolProductState, TOOL_CONFLICT_RESELECTION_REQUIRED, UNRESOLVED_TOOL_CONFLICT_CHOICE,
+    reset_external_tool_workspace_recovery_budget, ExternalToolDecisions, ExternalToolProductState,
+    TOOL_CONFLICT_RESELECTION_REQUIRED, UNRESOLVED_TOOL_CONFLICT_CHOICE,
 };
 use crate::service::config::{subscribe_config_updates, ConfigUpdateEvent};
 use bitfun_claude_code_adapter::{

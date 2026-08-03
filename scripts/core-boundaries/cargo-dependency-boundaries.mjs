@@ -59,6 +59,68 @@ function dependencyDescription(dependency) {
   return `${kind}${optional} dependency${target}`;
 }
 
+function expandedLocalFeatures(featureGraph, selectedFeatures, useDefaultFeatures) {
+  const pending = [...selectedFeatures];
+  if (useDefaultFeatures && Object.hasOwn(featureGraph, 'default')) {
+    pending.push('default');
+  }
+  const active = new Set();
+  const references = new Set();
+
+  while (pending.length > 0) {
+    const feature = pending.pop();
+    if (active.has(feature)) {
+      continue;
+    }
+    active.add(feature);
+    for (const reference of featureGraph[feature] ?? []) {
+      references.add(reference);
+      if (Object.hasOwn(featureGraph, reference)) {
+        pending.push(reference);
+      }
+    }
+  }
+
+  return { active, references };
+}
+
+function dependencyAlias(dependency) {
+  return dependency.rename ?? dependency.name;
+}
+
+function dependencyActivation(dependency, sourceFeatureState) {
+  const alias = dependencyAlias(dependency);
+  const forwarded = [];
+  let explicitlyActivated = false;
+  for (const reference of sourceFeatureState.references) {
+    if (reference === `dep:${alias}`) {
+      explicitlyActivated = true;
+      continue;
+    }
+    const match = reference.match(/^([^/?]+)(\?)?\/(.+)$/);
+    if (match?.[1] !== alias) {
+      continue;
+    }
+    if (!match[2]) {
+      explicitlyActivated = true;
+    }
+    forwarded.push(match[3]);
+  }
+
+  if (dependency.optional && !explicitlyActivated) {
+    return null;
+  }
+  return {
+    features: [...new Set([...(dependency.features ?? []), ...forwarded])],
+    useDefaultFeatures: dependency.uses_default_features !== false,
+  };
+}
+
+function isProcMacroPackage(pkg) {
+  return (pkg.targets ?? []).some((target) =>
+    (target.kind ?? []).includes('proc-macro'));
+}
+
 const SERVICES_INTEGRATIONS_TOKIO_FEATURES = new Map([
   ['announcement', ['fs', 'sync']],
   ['browser-control', ['time']],
@@ -708,6 +770,48 @@ export function findProductEntrypointCoreFeatureViolations(
   packages,
   { root, crateLayoutRules },
 ) {
+  const reviewedCoreFeatureClosures = new Map([
+    ['bitfun-cli', [
+      'agent-runtime',
+      'canvas-runtime',
+      'external-sources',
+      'plugin-runtime',
+      'ssh-remote',
+    ]],
+    ['bitfun-acp', [
+      'agent-runtime',
+      'canvas-runtime',
+      'external-sources',
+      'ssh-remote',
+    ]],
+  ]);
+  const acpActiveCoreFeatures = [
+    'agent-runtime',
+    'ai-adapter-runtime',
+    'canvas-runtime',
+    'external-sources',
+    'file-watch',
+    'filesystem',
+    'git',
+    'lsp',
+    'local-storage',
+    'plugin-source',
+    'process-runtime',
+    'product-capabilities',
+    'product-domains',
+    'remote-workspace',
+    'review-platform',
+    'runtime-services',
+    'ssh-remote',
+    'terminal',
+    'tool-packs',
+    'workspace-runtime',
+    'workspace-watch',
+  ];
+  const reviewedActiveCoreFeatureClosures = new Map([
+    ['bitfun-cli', [...acpActiveCoreFeatures, 'plugin-runtime']],
+    ['bitfun-acp', acpActiveCoreFeatures],
+  ]);
   const packageByManifest = new Map(
     packages.map((pkg) => [normalizedPath(pkg.manifest_path), pkg]),
   );
@@ -745,6 +849,192 @@ export function findProductEntrypointCoreFeatureViolations(
           line: 1,
           message: `product entrypoint ${sourcePackage.name} must select at least one explicit feature for its bitfun-core ${dependencyDescription(dependency)}`,
         });
+      }
+      const reviewedClosure = reviewedCoreFeatureClosures.get(sourcePackage.name);
+      if (reviewedClosure) {
+        const selectedFeatures = new Set(dependency.features ?? []);
+        for (const requiredFeature of reviewedClosure) {
+          if (!selectedFeatures.has(requiredFeature)) {
+            violations.push({
+              path: sourcePackage.manifest_path,
+              line: 1,
+              message: `${sourcePackage.name} Core capability closure must include ${requiredFeature}`,
+            });
+          }
+        }
+        for (const selectedFeature of selectedFeatures) {
+          if (!reviewedClosure.includes(selectedFeature)) {
+            violations.push({
+              path: sourcePackage.manifest_path,
+              line: 1,
+              message: `${sourcePackage.name} Core capability closure must not include unreviewed feature ${selectedFeature}`,
+            });
+          }
+        }
+      }
+    }
+  }
+
+  const corePackage = packages.find((pkg) => pkg.name === 'bitfun-core');
+  if (corePackage) {
+    const forbiddenCoreFeatures = [
+      'product-full',
+      'announcement',
+      'debug-log',
+      'dispatch-store',
+    ];
+    const reportedUnexpectedFeatures = new Set();
+
+    for (const [rootName, reviewedClosure] of reviewedCoreFeatureClosures) {
+      const rootPackage = packages.find((pkg) => pkg.name === rootName);
+      if (!rootPackage) {
+        continue;
+      }
+      const allowedCoreFeatures = new Set(
+        reviewedActiveCoreFeatureClosures.get(rootName) ?? [],
+      );
+      const rootSelectedFeatures = Object.keys(rootPackage.features ?? {})
+        .filter((feature) => feature !== 'default');
+      const rootLabel = rootName === 'bitfun-cli' ? 'CLI' : 'ACP';
+
+      const packageStates = new Map();
+      const pending = [];
+      const queued = new Set();
+
+      const mergePackageState = (
+        pkg,
+        dependencyKindContext,
+        selectedFeatures,
+        useDefaultFeatures,
+        packagePath,
+      ) => {
+        const key = [
+          normalizedPath(pkg.manifest_path),
+          dependencyKindContext,
+        ].join('|');
+        let state = packageStates.get(key);
+        if (!state) {
+          state = {
+            pkg,
+            dependencyKindContext,
+            selectedFeatures: new Set(),
+            useDefaultFeatures: false,
+            featureState: { active: new Set(), references: new Set() },
+            packagePath,
+            initialized: false,
+          };
+          packageStates.set(key, state);
+        }
+
+        let changed = false;
+        for (const feature of selectedFeatures) {
+          if (!state.selectedFeatures.has(feature)) {
+            state.selectedFeatures.add(feature);
+            changed = true;
+          }
+        }
+        if (useDefaultFeatures && !state.useDefaultFeatures) {
+          state.useDefaultFeatures = true;
+          changed = true;
+        }
+        if (!changed && state.initialized) {
+          return state;
+        }
+
+        state.featureState = expandedLocalFeatures(
+          pkg.features ?? {},
+          state.selectedFeatures,
+          state.useDefaultFeatures,
+        );
+        state.initialized = true;
+        if (!queued.has(key)) {
+          pending.push(key);
+          queued.add(key);
+        }
+        return state;
+      };
+
+      // This is an architecture declaration check, not a target simulator.
+      // Cargo target cfg facts are multi-valued and evolve with rustc. Treating
+      // every declared target edge as reachable prevents a platform-only path
+      // from hiding an unreviewed Core owner. Products that genuinely need
+      // different owners must express that difference through package/module
+      // boundaries. Cargo features are additive, so all root features form the
+      // strongest buildable profile.
+      mergePackageState(
+        rootPackage,
+        'normal',
+        rootSelectedFeatures,
+        true,
+        [rootPackage.name],
+      );
+
+      while (pending.length > 0) {
+        const stateKey = pending.shift();
+        queued.delete(stateKey);
+        const {
+          pkg: sourcePackage,
+          dependencyKindContext,
+          featureState,
+          packagePath,
+        } = packageStates.get(stateKey);
+
+        for (const dependency of sourcePackage.dependencies ?? []) {
+          const kind = dependency.kind ?? 'normal';
+          if (
+            !dependency.path
+            || (kind !== 'normal' && kind !== 'build')
+            || repositoryPath(root, dependency.path) === null
+          ) {
+            continue;
+          }
+          const activation = dependencyActivation(dependency, featureState);
+          if (!activation) {
+            continue;
+          }
+          const targetPackage = packageByManifest.get(
+            normalizedPath(join(dependency.path, 'Cargo.toml')),
+          );
+          if (!targetPackage) {
+            continue;
+          }
+          const targetDependencyKindContext =
+            dependencyKindContext === 'build'
+              || kind === 'build'
+              || isProcMacroPackage(targetPackage)
+              ? 'build'
+              : 'normal';
+          const targetPath = [...packagePath, targetPackage.name];
+          const targetState = mergePackageState(
+            targetPackage,
+            targetDependencyKindContext,
+            activation.features,
+            activation.useDefaultFeatures,
+            targetPath,
+          );
+
+          if (targetPackage.name === 'bitfun-core') {
+            const activeCoreFeatures = targetState.featureState.active;
+            const unexpected = forbiddenCoreFeatures.find((feature) =>
+              activeCoreFeatures.has(feature))
+              ?? [...activeCoreFeatures]
+                .filter((feature) => !allowedCoreFeatures.has(feature))
+                .sort()[0];
+            const reportKey = [rootName, targetDependencyKindContext, unexpected].join('|');
+            if (unexpected && !reportedUnexpectedFeatures.has(reportKey)) {
+              reportedUnexpectedFeatures.add(reportKey);
+              violations.push({
+                path: sourcePackage.manifest_path,
+                line: 1,
+                message: `${rootLabel} dependency closure must not enable ${unexpected}: ${[
+                  ...packagePath,
+                  `${targetPackage.name}/${unexpected}`,
+                ].join(' -> ')}`,
+              });
+            }
+            continue;
+          }
+        }
       }
     }
   }

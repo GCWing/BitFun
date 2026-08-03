@@ -13,6 +13,18 @@ pub use bitfun_services_integrations::remote_ssh::{
 };
 use std::path::{Path, PathBuf};
 
+/// Stable local workspace identity shared by per-workspace runtime routers.
+pub(crate) fn workspace_route_key(workspace_root: Option<&Path>) -> String {
+    workspace_root
+        .map(|path| {
+            dunce::canonicalize(path)
+                .unwrap_or_else(|_| path.to_path_buf())
+                .to_string_lossy()
+                .into_owned()
+        })
+        .unwrap_or_else(|| "<global>".to_string())
+}
+
 /// Describes whether the workspace is local or remote via SSH.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum WorkspaceBackend {

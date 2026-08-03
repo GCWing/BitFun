@@ -2,7 +2,7 @@ use super::types::{
     RuntimeMigrationRecord, WorkspaceRuntimeContext, WorkspaceRuntimeEnsureResult,
     WorkspaceRuntimeTarget, WORKSPACE_RUNTIME_LAYOUT_VERSION,
 };
-#[cfg(feature = "product-full")]
+#[cfg(feature = "agent-runtime")]
 use crate::agentic::WorkspaceBinding;
 use crate::infrastructure::{get_path_manager_arc, PathManager};
 use crate::util::errors::{BitFunError, BitFunResult};
@@ -135,7 +135,7 @@ impl WorkspaceRuntimeService {
         .await
     }
 
-    #[cfg(feature = "product-full")]
+    #[cfg(feature = "agent-runtime")]
     pub async fn ensure_runtime_for_workspace_binding(
         &self,
         workspace: &WorkspaceBinding,

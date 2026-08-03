@@ -2,6 +2,11 @@ use super::*;
 
 const EXTERNAL_START_GUARD_ALLOWANCE: Duration = Duration::from_secs(30);
 
+fn notify_external_tool_registry_changed() {
+    #[cfg(feature = "external-sources")]
+    crate::external_sources::notify_external_tool_registry_changed();
+}
+
 fn external_start_timeout(timeouts: super::super::MCPServerTimeouts) -> Duration {
     // The outer guard also covers bounded orchestration that sits outside the
     // per-request initialize and Tool catalog deadlines.
@@ -174,7 +179,7 @@ impl MCPServerManager {
                             .external_start_token_matches(&server_id, &start_token)
                             .await
                         {
-                            crate::external_sources::notify_external_tool_registry_changed();
+                            notify_external_tool_registry_changed();
                         }
                     }
                     Ok(Err(error)) => {
@@ -186,7 +191,7 @@ impl MCPServerManager {
                             .remove_ephemeral_server_for_start(&server_id, &start_token)
                             .await
                         {
-                            crate::external_sources::notify_external_tool_registry_changed();
+                            notify_external_tool_registry_changed();
                         }
                     }
                     Err(_) => {
@@ -198,7 +203,7 @@ impl MCPServerManager {
                             .remove_ephemeral_server_for_start(&server_id, &start_token)
                             .await
                         {
-                            crate::external_sources::notify_external_tool_registry_changed();
+                            notify_external_tool_registry_changed();
                         }
                     }
                 }

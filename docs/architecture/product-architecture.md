@@ -724,12 +724,13 @@ flowchart LR
 ```mermaid
 flowchart TB
   Desktop["Desktop"] --> Full["product-full"]
-  CLI["CLI / TUI"] --> Full
+  CLI["CLI / TUI"] --> CliClosure["Core owner feature closure"]
   ACP["ACP"] --> Parts["Runtime Parts"]
   SDKHost["SDK Host"] --> Parts
   ServerBootstrap["Server agent bootstrap · dormant"] --> Full
 
   Full --> Coordinator["ConversationCoordinator"]
+  CliClosure --> Coordinator
   Parts --> Coordinator
   Ownership["CoreRuntimeOwnership"] -. "first-party composition injects once" .-> Coordinator
 ```
@@ -753,8 +754,8 @@ flowchart LR
 | 当前入口 | 已有能力 | 明确边界 |
 |---|---|---|
 | Desktop | 使用 `product-full`；显示外部来源、审批、冲突、诊断和 Host 能力 | 可执行能力在事实所在 Host 运行；Safe Mode 只阻止新调用，不改来源、不取消正在运行的调用 |
-| CLI / TUI | 使用 `product-full`；提供 `/extensions`、统一 `/hooks`（旧 `/hooks_external` 为别名）、`/tools` 和 `/agents`；Claude Code/Codex 命令 Hook 可经显式审阅复制为原生层 | 生态解析仍在适配器，不启动第二套 Agent Runtime；OpenCode Hook 仍只静态发现；远程能力未接入时不回退本机 |
-| ACP | 使用 `DeliveryProfile::Acp` 和 Runtime Parts | load 成功后才发布活动状态；close 排空后再卸载；完整历史和配置仍由 Core/ACP 管理 |
+| CLI / TUI | 使用显式 Core owner feature closure（`agent-runtime`、`canvas-runtime`、`external-sources`、`plugin-runtime`、`ssh-remote`）；提供 `/extensions`、统一 `/hooks`（旧 `/hooks_external` 为别名）、`/tools` 和 `/agents`；Claude Code/Codex 命令 Hook 可经显式审阅复制为原生层 | 保持现有 CLI capability plan，但不自动继承 Desktop 后续加入 `product-full` 的能力；生态解析仍在适配器，不启动第二套 Agent Runtime；OpenCode Hook 仍只静态发现；远程能力未接入时不回退本机 |
+| ACP | 使用 `DeliveryProfile::Acp`、Runtime Parts，以及 `agent-runtime`/`canvas-runtime`/`external-sources`/`ssh-remote` Core owner feature | load 成功后才发布活动状态；close 排空后再卸载；完整历史、Canvas 工具物化、兼容指令来源和配置仍由 Core/ACP 管理 |
 | Peer / Server | Server 提供 control/catalog；Peer Host 执行真实工作区操作；当前 HTTP Server 不装配 Agent Runtime | 控制端不替远端发现或执行；旧 Host 明确降级，SSH Remote 未接入时返回不支持；只读 Server 不声明 Runtime ownership |
 | Web / Mobile Web | 依赖现有后端入口 | 不持有插件执行单元，也不能据空 profile 宣称独立能力 |
 | HarmonyOS 手机 Remote | phone-only ArkTS 远程入口 | 不等于 HarmonyOS PC 本地 Runtime、CLI/TUI 或 GUI |

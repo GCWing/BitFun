@@ -5,60 +5,60 @@
 //! New implementation code should live in owner crates under `src/crates/*`.
 //! This crate re-exports legacy paths and wires the full BitFun product runtime.
 
-#[cfg(feature = "product-full")]
+#[cfg(feature = "agent-runtime")]
 pub mod agentic; // Agent system, tool system, and product runtime orchestration
-#[cfg(feature = "product-full")]
+#[cfg(feature = "external-sources")]
 pub mod external_hook_import;
-#[cfg(feature = "product-full")]
+#[cfg(feature = "external-sources")]
 pub mod external_hooks;
-#[cfg(all(test, feature = "product-full"))]
+#[cfg(all(test, feature = "external-sources"))]
 mod external_hooks_tests;
-#[cfg(feature = "product-full")]
+#[cfg(feature = "external-sources")]
 mod external_mcp;
-#[cfg(feature = "product-full")]
+#[cfg(feature = "external-sources")]
 pub mod external_mcp_import;
-#[cfg(all(test, feature = "product-full"))]
+#[cfg(all(test, feature = "external-sources"))]
 mod external_mcp_tests;
-#[cfg(feature = "product-full")]
+#[cfg(feature = "external-sources")]
 pub mod external_sources;
-#[cfg(feature = "product-full")]
+#[cfg(feature = "external-sources")]
 mod external_subagents;
-#[cfg(feature = "product-full")]
+#[cfg(feature = "external-sources")]
 mod external_tools;
 #[cfg(feature = "product-domains")]
 pub mod function_agents; // Function-based agents
 pub mod infrastructure; // AI clients, storage, logging, events
-#[cfg(feature = "product-full")]
+#[cfg(feature = "external-sources")]
 mod instruction_sources;
 #[cfg(feature = "product-domains")]
 pub mod miniapp; // AI-generated instant apps (Zero-Dialect Runtime)
-#[cfg(feature = "product-full")]
+#[cfg(feature = "agent-runtime")]
 pub mod native_hooks;
-#[cfg(all(test, feature = "product-full"))]
+#[cfg(all(test, feature = "agent-runtime"))]
 mod native_hooks_tests;
-#[cfg(feature = "product-full")]
+#[cfg(feature = "plugin-runtime")]
 pub mod plugin_runtime;
 #[cfg(any(feature = "plugin-source", feature = "product-domains"))]
 pub mod plugin_source;
-#[cfg(feature = "product-full")]
+#[cfg(feature = "agent-runtime")]
 pub mod product_assembly;
-#[cfg(all(test, feature = "product-full"))]
+#[cfg(all(test, feature = "agent-runtime"))]
 mod product_assembly_tests;
 #[cfg(feature = "product-domains")]
 pub(crate) mod product_domain_runtime;
-#[cfg(feature = "product-full")]
+#[cfg(feature = "agent-runtime")]
 pub mod product_runtime;
-#[cfg(feature = "product-full")]
+#[cfg(feature = "agent-runtime")]
 pub mod runtime_ownership;
-#[cfg(all(test, feature = "product-full"))]
+#[cfg(all(test, feature = "agent-runtime"))]
 mod runtime_ownership_tests;
 pub mod service; // Workspace, Config, FileSystem, Terminal, Git
-#[cfg(feature = "product-full")]
+#[cfg(feature = "agent-runtime")]
 pub(crate) mod service_agent_runtime;
 pub mod util; // General types, errors, helper functions
 
 // Re-export debug_log from infrastructure for backward compatibility.
-#[cfg(feature = "product-full")]
+#[cfg(feature = "debug-log")]
 pub use infrastructure::debug_log as debug;
 
 // Export main types
@@ -78,7 +78,7 @@ pub use infrastructure::ai::AIClient;
 pub use infrastructure::events::BackendEventManager;
 
 // Export Agentic service core types
-#[cfg(feature = "product-full")]
+#[cfg(feature = "agent-runtime")]
 pub use agentic::{
     core::{Message, Session},
     // NOTE: agentic::core::DialogTurn / ModelRound used to be re-exported here
@@ -91,7 +91,7 @@ pub use agentic::{
 };
 
 // Export ToolRegistry separately.
-#[cfg(feature = "product-full")]
+#[cfg(feature = "agent-runtime")]
 pub use agentic::tools::registry::ToolRegistry;
 
 // Version information

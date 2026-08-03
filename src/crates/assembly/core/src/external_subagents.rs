@@ -11,8 +11,9 @@ use crate::agentic::agents::{
     ExternalSubagentRoute,
 };
 use crate::agentic::tools::registry::get_all_registered_tools;
+use crate::agentic::workspace::workspace_route_key;
 use crate::external_sources::safe_external_source_location;
-use crate::external_tools::{resolve_external_tool_for_workspace, workspace_route_key};
+use crate::external_tools::resolve_external_tool_for_workspace;
 use crate::service::config::global::GlobalConfigManager;
 use crate::service::config::types::{model_runtime_binding_fingerprint, AIConfig, AIModelConfig};
 use crate::service::config::SubagentModelSelection;

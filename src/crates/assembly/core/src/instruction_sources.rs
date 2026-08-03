@@ -1,4 +1,4 @@
-//! Product-full composition for local user instruction source adapters.
+//! External-source composition for local user instruction adapters.
 
 use bitfun_claude_code_adapter::{
     load_claude_code_user_instructions, ClaudeCodeInstructionSourceOptions,

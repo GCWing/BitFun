@@ -11,7 +11,7 @@ use super::mode_overrides::{
 use super::source_cache::{LocalSkillWatchMonitor, LocalSkillWatchRoot, VersionedSnapshotCache};
 use super::types::{ModeSkillInfo, SkillData, SkillInfo, SkillLocation};
 use crate::agentic::workspace::WorkspaceFileSystem;
-#[cfg(feature = "product-full")]
+#[cfg(feature = "external-sources")]
 use crate::external_sources::{
     opencode_configured_skill_roots, LocalConfiguredSkillRootContribution,
 };
@@ -29,29 +29,29 @@ use bitfun_agent_runtime::skills::{
     USER_HOME_SKILL_ROOTS, USER_SKILL_KEY_PREFIX,
 };
 use bitfun_services_core::bounded_fs::is_symlink_or_reparse;
-#[cfg(feature = "product-full")]
+#[cfg(feature = "external-sources")]
 use bitfun_services_core::bounded_fs::{collect_bounded_regular_files, BoundedDirectoryWalkLimits};
-#[cfg(feature = "product-full")]
+#[cfg(feature = "external-sources")]
 use bitfun_services_core::bounded_fs::{read_bounded_text, BoundedTextRead};
-#[cfg(feature = "product-full")]
+#[cfg(feature = "external-sources")]
 use bitfun_services_core::workspace_text::read_workspace_relative_text_bounded;
 use log::{debug, error, warn};
-#[cfg(feature = "product-full")]
+#[cfg(feature = "external-sources")]
 use sha2::{Digest, Sha256};
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 use tokio::fs;
 
-#[cfg(feature = "product-full")]
+#[cfg(feature = "external-sources")]
 const MAX_OPENCODE_CONFIGURED_SKILL_ROOTS: usize = 64;
-#[cfg(feature = "product-full")]
+#[cfg(feature = "external-sources")]
 const MAX_OPENCODE_CONFIGURED_SKILLS_PER_ROOT: usize = 512;
-#[cfg(feature = "product-full")]
+#[cfg(feature = "external-sources")]
 const MAX_OPENCODE_CONFIGURED_SKILL_BYTES: usize = 256 * 1024;
-#[cfg(feature = "product-full")]
+#[cfg(feature = "external-sources")]
 const MAX_OPENCODE_CONFIGURED_POLICY_BYTES: usize = 64 * 1024;
-#[cfg(feature = "product-full")]
+#[cfg(feature = "external-sources")]
 const OPENCODE_CONFIGURED_PRIORITY_BAND: usize =
     MAX_OPENCODE_CONFIGURED_SKILL_ROOTS * MAX_OPENCODE_CONFIGURED_SKILLS_PER_ROOT;
 
@@ -269,7 +269,7 @@ fn sort_remote_dir_entries(entries: &mut [crate::agentic::workspace::WorkspaceDi
     });
 }
 
-#[cfg(feature = "product-full")]
+#[cfg(feature = "external-sources")]
 fn configured_opencode_source_slot(skill_dir: &Path) -> String {
     let mut hasher = Sha256::new();
     hasher.update(skill_dir.to_string_lossy().as_bytes());
@@ -277,18 +277,18 @@ fn configured_opencode_source_slot(skill_dir: &Path) -> String {
     format!("config.opencode.{}", &digest[..16])
 }
 
-#[cfg(feature = "product-full")]
+#[cfg(feature = "external-sources")]
 fn canonical_candidate_path(candidate: &SkillCandidate) -> PathBuf {
     dunce::canonicalize(&candidate.info.path)
         .unwrap_or_else(|_| PathBuf::from(&candidate.info.path))
 }
 
-#[cfg(feature = "product-full")]
+#[cfg(feature = "external-sources")]
 fn is_configured_opencode_source_slot(source_slot: &str) -> bool {
     source_slot.starts_with("config.opencode.")
 }
 
-#[cfg(feature = "product-full")]
+#[cfg(feature = "external-sources")]
 fn validate_configured_opencode_skill_root(
     skill_dir: &Path,
     expected_source_slot: &str,
@@ -399,7 +399,7 @@ impl SkillRegistry {
         cacheable
     }
 
-    #[cfg(feature = "product-full")]
+    #[cfg(feature = "external-sources")]
     async fn apply_configured_opencode_policy(
         skill_data: &mut SkillData,
         skill_dir: &Path,
@@ -445,7 +445,7 @@ impl SkillRegistry {
     }
 
     async fn read_local_skill_markdown(info: &SkillInfo) -> BitFunResult<String> {
-        #[cfg(feature = "product-full")]
+        #[cfg(feature = "external-sources")]
         if is_configured_opencode_source_slot(&info.source_slot) {
             let skill_dir =
                 validate_configured_opencode_skill_root(Path::new(&info.path), &info.source_slot)
@@ -870,7 +870,7 @@ impl SkillRegistry {
             standard.append(&mut user_sources.standard);
         }
 
-        #[cfg(feature = "product-full")]
+        #[cfg(feature = "external-sources")]
         {
             // OpenCode configured roots are workspace-sensitive: an absolute path
             // from user config may become project-scoped for the current workspace.
@@ -894,11 +894,11 @@ impl SkillRegistry {
             );
         }
 
-        #[cfg(not(feature = "product-full"))]
+        #[cfg(not(feature = "external-sources"))]
         standard
     }
 
-    #[cfg(feature = "product-full")]
+    #[cfg(feature = "external-sources")]
     fn merge_configured_opencode_candidates(
         mut standard: Vec<SkillCandidate>,
         mut configured: Vec<SkillCandidate>,
@@ -955,7 +955,7 @@ impl SkillRegistry {
         standard
     }
 
-    #[cfg(feature = "product-full")]
+    #[cfg(feature = "external-sources")]
     async fn scan_configured_opencode_candidates(
         roots: Vec<LocalConfiguredSkillRootContribution>,
     ) -> Vec<SkillCandidate> {
@@ -1742,7 +1742,7 @@ impl SkillRegistry {
     }
 }
 
-#[cfg(all(test, feature = "product-full"))]
+#[cfg(all(test, feature = "external-sources"))]
 mod opencode_configured_skill_tests {
     use super::{SkillRegistry, SkillRootEntry};
     use crate::external_sources::LocalConfiguredSkillRootContribution;

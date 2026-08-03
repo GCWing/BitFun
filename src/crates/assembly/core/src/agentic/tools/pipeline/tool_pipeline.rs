@@ -39,6 +39,7 @@ use bitfun_runtime_ports::{
 use futures::future::join_all;
 use log::{debug, error, info, warn};
 use std::collections::{HashMap, HashSet};
+use std::path::Path;
 use std::sync::Arc;
 use std::time::{Instant, SystemTime};
 use tokio::sync::{Mutex as TokioMutex, RwLock as TokioRwLock};
@@ -49,6 +50,25 @@ use tool_runtime::pipeline::{
     summarize_dialog_turn_cancellation, tool_call_concurrency_safe_for_batch,
     ToolCancellationTokenStore, ToolExecutionErrorClass, ToolRetryAttemptFacts,
 };
+
+fn resolve_contextual_tool(
+    tool: Arc<dyn crate::agentic::tools::framework::Tool>,
+    workspace_root: Option<&Path>,
+    remote: bool,
+) -> Option<Arc<dyn crate::agentic::tools::framework::Tool>> {
+    #[cfg(feature = "external-sources")]
+    {
+        return crate::external_tools::resolve_external_tool_for_workspace(
+            tool,
+            crate::external_tools::external_tool_route_root(workspace_root, remote),
+        );
+    }
+    #[cfg(not(feature = "external-sources"))]
+    {
+        let _ = (workspace_root, remote);
+        Some(tool)
+    }
+}
 
 fn persisted_effective_tool_name(
     wire_tool_name: &str,
@@ -1419,21 +1439,19 @@ impl ToolPipeline {
                     if resolution_error.is_some() {
                         return false;
                     }
-                    let route_root = crate::external_tools::external_tool_route_root(
-                        context
-                            .workspace
-                            .as_ref()
-                            .map(|workspace| workspace.root_path()),
-                        context
-                            .workspace
-                            .as_ref()
-                            .is_some_and(|workspace| workspace.is_remote()),
-                    );
                     let tool_is_concurrency_safe = registry
                         .get_tool(&invocation.effective_tool_name)
                         .and_then(|tool| {
-                            crate::external_tools::resolve_external_tool_for_workspace(
-                                tool, route_root,
+                            resolve_contextual_tool(
+                                tool,
+                                context
+                                    .workspace
+                                    .as_ref()
+                                    .map(|workspace| workspace.root_path()),
+                                context
+                                    .workspace
+                                    .as_ref()
+                                    .is_some_and(|workspace| workspace.is_remote()),
                             )
                         })
                         .map(|tool| tool.is_concurrency_safe(Some(&invocation.effective_arguments)))
@@ -2209,12 +2227,10 @@ impl ToolPipeline {
 
         let execution_future = tool.call(task.effective_arguments(), &tool_context);
 
-        let timeout_owner = crate::external_tools::resolve_external_tool_for_workspace(
+        let timeout_owner = resolve_contextual_tool(
             Arc::clone(&tool),
-            crate::external_tools::external_tool_route_root(
-                tool_context.workspace_root(),
-                tool_context.is_remote(),
-            ),
+            tool_context.workspace_root(),
+            tool_context.is_remote(),
         );
         let pipeline_timeout_secs = if timeout_owner
             .as_ref()
@@ -2465,6 +2481,7 @@ mod tests {
     };
     use serde_json::json;
     use std::collections::HashMap;
+    #[cfg(feature = "external-sources")]
     use std::path::PathBuf;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::{Arc, Mutex};
@@ -2998,6 +3015,7 @@ mod tests {
         )
     }
 
+    #[cfg(feature = "external-sources")]
     #[test]
     fn remote_workspace_route_root_isolated_from_same_local_path() {
         let pipeline = test_tool_pipeline();

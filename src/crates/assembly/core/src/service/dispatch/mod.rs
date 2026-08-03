@@ -1,10 +1,10 @@
-#[cfg(feature = "product-full")]
+#[cfg(feature = "agent-runtime")]
 mod baseline;
-#[cfg(feature = "product-full")]
+#[cfg(all(feature = "agent-runtime", feature = "ssh-remote"))]
 mod controller;
-#[cfg(feature = "product-full")]
+#[cfg(all(feature = "agent-runtime", feature = "ssh-remote"))]
 mod device_controller;
-#[cfg(feature = "product-full")]
+#[cfg(feature = "agent-runtime")]
 mod preparation;
 mod target;
 
@@ -20,14 +20,14 @@ use tokio::fs;
 
 use crate::infrastructure::PathManager;
 
-#[cfg(feature = "product-full")]
+#[cfg(all(feature = "agent-runtime", feature = "ssh-remote"))]
 pub use controller::{
     answer as answer_dispatch, append as append_dispatch, cancel as cancel_dispatch,
     continue_job as continue_dispatch_job, install_cli_cancel as cancel_dispatch_cli_install,
-    install_cli_poll as poll_dispatch_cli_install,
-    install_cli_start as start_dispatch_cli_install, list_jobs as list_dispatch_jobs,
-    list_targets as list_dispatch_targets, probe_target as probe_dispatch_target,
-    query_job as query_dispatch_job, status as get_dispatch_status, submit as submit_dispatch,
+    install_cli_poll as poll_dispatch_cli_install, install_cli_start as start_dispatch_cli_install,
+    list_jobs as list_dispatch_jobs, list_targets as list_dispatch_targets,
+    probe_target as probe_dispatch_target, query_job as query_dispatch_job,
+    status as get_dispatch_status, submit as submit_dispatch,
     sync_model_config as sync_dispatch_model_config, sync_result as sync_dispatch_result,
     DispatchAnswerRequest, DispatchAppendRequest, DispatchConnectionRequest,
     DispatchContinueRequest, DispatchInstallPollRequest, DispatchInstallStartRequest,
@@ -35,7 +35,7 @@ pub use controller::{
     DispatchPermissionReplyKind, DispatchProbeTargetRequest, DispatchQueryJobRequest,
     DispatchStatusRequest, DispatchSubmitRequest, DispatchSyncResultRequest, DispatchTargetOption,
 };
-#[cfg(feature = "product-full")]
+#[cfg(all(feature = "agent-runtime", feature = "ssh-remote"))]
 pub use device_controller::{
     answer_device as answer_device_dispatch, append_device as append_device_dispatch,
     cancel_device as cancel_device_dispatch, continue_device_job as continue_device_dispatch_job,
@@ -51,7 +51,7 @@ const PROMPT_PREVIEW_CHARS: usize = 160;
 /// controller's baseline worktree.
 pub(super) const OUTBOUND_RESULTS_DIR: &str = ".results";
 /// Where base bundles are built before being uploaded to a target.
-#[cfg(feature = "product-full")]
+#[cfg(feature = "agent-runtime")]
 const OUTBOUND_BUNDLES_DIR: &str = ".bundles";
 /// Where the renderer's observer transcript cache lives.
 const OUTBOUND_TRANSCRIPTS_DIR: &str = ".transcripts";
@@ -65,7 +65,7 @@ const MAX_OUTBOUND_TRANSCRIPT_BYTES: usize = 8 * 1024 * 1024;
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-#[cfg(feature = "product-full")]
+#[cfg(feature = "agent-runtime")]
 struct DispatchTargetJobEntry {
     job_id: String,
     session_id: String,
@@ -382,7 +382,7 @@ impl OutboundDispatchStore {
     }
 
     pub async fn list(&self) -> Result<Vec<OutboundDispatchRecord>, DispatchStoreError> {
-        #[cfg(feature = "product-full")]
+        #[cfg(feature = "agent-runtime")]
         if let Err(error) = self.reconcile_expired_preparations().await {
             log::warn!("Failed to reconcile expired dispatch preparations: {error}");
         }
@@ -521,7 +521,7 @@ impl OutboundDispatchStore {
     ///
     /// Bundles hold repository contents, so they get the same private treatment
     /// as everything else the controller writes here.
-    #[cfg(feature = "product-full")]
+    #[cfg(feature = "agent-runtime")]
     pub(crate) async fn bundles_dir(&self) -> anyhow::Result<PathBuf> {
         let bundles = self.root.join(OUTBOUND_BUNDLES_DIR);
         fs::create_dir_all(&bundles).await?;
@@ -530,7 +530,7 @@ impl OutboundDispatchStore {
     }
 
     /// Owner-only staging directory for bundles fetched back from a target.
-    #[cfg(feature = "product-full")]
+    #[cfg(feature = "agent-runtime")]
     pub(crate) async fn results_dir(&self) -> anyhow::Result<PathBuf> {
         let results = self.root.join(OUTBOUND_RESULTS_DIR);
         fs::create_dir_all(&results).await?;
@@ -665,7 +665,7 @@ impl BaselineClaimRelease {
 /// The caller intentionally keeps the durable outbound record until this
 /// succeeds, so a moved repository or temporary registry error remains
 /// observable and retryable instead of silently stranding a claim.
-#[cfg(feature = "product-full")]
+#[cfg(feature = "agent-runtime")]
 async fn release_baseline_claim(release: BaselineClaimRelease) -> Result<(), DispatchStoreError> {
     crate::service::worktree::WorktreeService::release_claim_for_worktree(
         &release.project_workspace_path,
@@ -679,10 +679,10 @@ async fn release_baseline_claim(release: BaselineClaimRelease) -> Result<(), Dis
     })
 }
 
-#[cfg(not(feature = "product-full"))]
+#[cfg(not(feature = "agent-runtime"))]
 async fn release_baseline_claim(release: BaselineClaimRelease) -> Result<(), DispatchStoreError> {
     Err(DispatchStoreError::ClaimRelease(format!(
-        "job_id={} error=product-full is required to release the baseline worktree claim",
+        "job_id={} error=agent-runtime is required to release the baseline worktree claim",
         release.job_id
     )))
 }
@@ -700,7 +700,7 @@ async fn remove_file_if_present(path: &Path) -> anyhow::Result<()> {
     }
 }
 
-#[cfg(feature = "product-full")]
+#[cfg(feature = "agent-runtime")]
 async fn adopt_target_jobs(
     store: &OutboundDispatchStore,
     target: &DispatchTarget,
@@ -795,7 +795,7 @@ async fn adopt_target_jobs(
 /// Validate a path returned by the target without applying the controller
 /// process's host path semantics. The target may run POSIX while the controller
 /// runs Windows, or vice versa.
-#[cfg(feature = "product-full")]
+#[cfg(feature = "agent-runtime")]
 fn target_workspace_path_is_absolute(path: &str) -> bool {
     let path = path.trim();
     if path.starts_with('/') {
@@ -820,7 +820,7 @@ fn target_workspace_path_is_absolute(path: &str) -> bool {
     components.next().is_some() && components.next().is_some()
 }
 
-#[cfg(feature = "product-full")]
+#[cfg(feature = "agent-runtime")]
 fn same_target_identity_for_store(left: &DispatchTarget, right: &DispatchTarget) -> bool {
     match (left, right) {
         (
@@ -1094,13 +1094,13 @@ mod tests {
             .is_none());
     }
 
-    #[cfg(not(feature = "product-full"))]
+    #[cfg(not(feature = "agent-runtime"))]
     #[tokio::test]
     async fn removing_a_claimed_record_without_product_full_fails_closed() {
         let temp = tempfile::tempdir().expect("tempdir");
         let store = OutboundDispatchStore::new_in_root_for_tests(temp.path().to_path_buf());
         let mut record = OutboundDispatchRecord::new(
-            "job-no-product-full".to_string(),
+            "job-no-agent-runtime".to_string(),
             target(),
             "session-1".to_string(),
             "/srv/app".to_string(),
@@ -1114,20 +1114,20 @@ mod tests {
         store.bind_if_absent(&record).await.expect("persist");
 
         let error = store
-            .remove("job-no-product-full")
+            .remove("job-no-agent-runtime")
             .await
             .expect_err("claim cleanup without the product owner must fail closed");
         let DispatchStoreError::ClaimRelease(message) = error else {
             panic!("unexpected dispatch cleanup error: {error}");
         };
-        assert!(message.contains("product-full"));
+        assert!(message.contains("agent-runtime"));
         assert!(
             store
-                .get("job-no-product-full")
+                .get("job-no-agent-runtime")
                 .await
                 .expect("read retained record")
                 .is_some(),
-            "the durable record must remain available for a product-full retry"
+            "the durable record must remain available for an agent-runtime retry"
         );
     }
 
@@ -1402,7 +1402,7 @@ mod tests {
         assert_eq!(record.prompt_preview.chars().count(), PROMPT_PREVIEW_CHARS);
     }
 
-    #[cfg(feature = "product-full")]
+    #[cfg(feature = "agent-runtime")]
     #[test]
     fn target_workspace_paths_use_target_platform_semantics() {
         assert!(target_workspace_path_is_absolute("/srv/app"));
@@ -1417,7 +1417,7 @@ mod tests {
         assert!(!target_workspace_path_is_absolute(r"\\server"));
     }
 
-    #[cfg(feature = "product-full")]
+    #[cfg(feature = "agent-runtime")]
     #[tokio::test]
     async fn listing_a_target_adopts_observer_records_without_runtime_ownership() {
         let temp = tempfile::tempdir().expect("tempdir");

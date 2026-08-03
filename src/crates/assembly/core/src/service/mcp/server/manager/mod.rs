@@ -128,7 +128,7 @@ impl MCPServerManager {
             .await
             .get(server_id)
             .cloned();
-        let workspace_key = crate::external_tools::workspace_route_key(workspace_root);
+        let workspace_key = crate::agentic::workspace::workspace_route_key(workspace_root);
         self.tool_context_policy.server_available_for_route(
             server_id,
             external_workspace_scope.as_deref(),

@@ -17,7 +17,7 @@
 - `src/agentic/`：agents、prompts、tools、sessions、execution、persistence
 - `src/service/`：config、filesystem、terminal、git、LSP、MCP、remote connect、AI memory
 - `src/infrastructure/`：AI clients、app paths、event system、storage、debug log server
-- `src/product_runtime/`：product-full 兼容 adapter 与 runtime service provider wiring
+- `src/product_runtime/`：Core Agent Runtime 兼容 adapter 与 runtime service provider wiring
 
 Agent 运行时心智模型：
 
@@ -45,11 +45,17 @@ SessionManager -> Session -> DialogTurn -> ModelRound
 - Product-domain 改动可以在有等价保护时迁移纯产品领域计划；filesystem writes、worker/host side effect、
   Git/AI concrete calls、marker IO 和 path-manager integration 仍留在 core，除非有经过评审的 owner 设计。
 - `plugin_source` 只注入产品目录并保留兼容接口；受管插件包发现与信任持久化归 `services-integrations`，生态适配解析与 `PluginRuntimeClient` 行为分别归对应的适配器层和执行层。
-- `plugin_runtime` 与 `external_sources` 是经过评审、可分别为对应能力契约选择生态适配器的 `product-full` 组装文件。
-  产品入口只消费产品级视图，不得导入适配器或原始插件运行时 client 类型。
+- `plugin_runtime`、`external_sources` 与 `instruction_sources` 是经过评审、可分别为对应能力契约选择生态适配器的
+  owner-feature 组装文件。产品入口只消费产品级视图，不得导入适配器或原始插件运行时 client 类型。
 - Remote/service 改动必须保持 external protocol lifecycle、workspace projection、scheduler/session restore、
   terminal pre-warm 和 product execution 边界清晰。
 - Feature 改动必须保持 `product-full` 作为兼容产品组装边界；默认能力选择只有在单独的 product matrix review 后才能变化。
+- `agent-runtime` 负责现有 Core Agent Runtime 兼容 facade，包括 MCP、Remote Connect、
+  workspace-search 与原生 Hook runtime service；`external-sources` 增加第三方发现/导入 adapter，
+  `plugin-runtime` 增加可执行 plugin client wiring，`debug-log` 单独控制调试日志服务。它们都不得启用 `product-full`。
+- CLI/ACP 的闭包检查遵循 Cargo resolver-v2，保持 normal 与 host（build/proc-macro）feature context 相互隔离；
+  但同一 context 内的所有 target-specific 声明都属于同一个已评审架构边界。平台确实需要不同 owner 时，应拆分清晰的
+  package/module 归属；不得用互斥 Cargo `cfg` 隐藏未评审的 Core 能力。
 - 保持轻量兼容 feature 可独立编译。本地服务 profile 为 `dispatch-store`、`lsp`、`terminal`、
   `workspace-runtime` 和 `workspace-watch`；`remote-workspace` 只增加远程工作区 facade，
   `ssh-remote` 才增加具体 SSH transport。`announcement`、`file-watch`、`git`、

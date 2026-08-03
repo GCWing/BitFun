@@ -217,12 +217,12 @@ fn normalize_relative_read_path(path: &str) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        build_conditional_instruction_reminder, successful_workspace_read_paths,
-        ConditionalInstructionCatalog,
-    };
+    #[cfg(feature = "external-sources")]
+    use super::build_conditional_instruction_reminder;
+    use super::{successful_workspace_read_paths, ConditionalInstructionCatalog};
     use crate::agentic::core::{Message, MessageContent};
     use crate::agentic::WorkspaceBinding;
+    #[cfg(feature = "external-sources")]
     use crate::instruction_sources::test_support::{lock_environment, EnvironmentGuard};
     use bitfun_services_core::workspace_instructions::WorkspaceInstructionFile;
     use serde_json::json;
@@ -320,6 +320,7 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "external-sources")]
     #[tokio::test]
     async fn an_unmatched_read_does_not_freeze_rule_content_before_activation() {
         let _environment = lock_environment();

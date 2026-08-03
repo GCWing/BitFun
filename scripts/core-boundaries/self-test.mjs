@@ -229,7 +229,10 @@ export function runManifestParserSelfTest({
   }
 
   for (const featureName of [
+    'agent-runtime',
     'announcement',
+    'canvas-runtime',
+    'debug-log',
     'dispatch-store',
     'file-watch',
     'filesystem',
@@ -237,6 +240,8 @@ export function runManifestParserSelfTest({
     'lsp',
     'local-storage',
     'process-runtime',
+    'external-sources',
+    'plugin-runtime',
     'remote-workspace',
     'review-platform',
     'ssh-remote',
@@ -363,6 +368,11 @@ export function runManifestParserSelfTest({
         'dep:bitfun-services-integrations',
         'bitfun-services-integrations/remote-ssh',
       ],
+    ],
+    [
+      coreManifest,
+      'canvas-runtime',
+      ['product-domains', 'bitfun-services-integrations/canvas-runtime'],
     ],
     [coreManifest, 'announcement', ['bitfun-services-integrations/announcement']],
     [coreManifest, 'file-watch', ['bitfun-services-integrations/file-watch']],
@@ -4162,7 +4172,10 @@ export function runManifestParserSelfTest({
         'dep:bitfun-product-capabilities',
         'dep:bitfun-tool-packs',
         'bitfun-tool-packs\\/product-full',
-        'bitfun-services-integrations\\/product-full',
+        'agent-runtime',
+        'bitfun-services-integrations\\/mcp',
+        'bitfun-services-integrations\\/remote-connect',
+        'bitfun-services-integrations\\/workspace-search',
         'dep:bitfun-product-domains',
         'bitfun-product-domains\\/product-full',
       ],
@@ -4170,13 +4183,14 @@ export function runManifestParserSelfTest({
     {
       path: 'src/crates/assembly/core/src/lib.rs',
       contracts: [
-        'feature = "product-full"',
+        'feature = "agent-runtime"',
         'pub mod agentic',
+        'feature = "external-sources"',
         'mod external_subagents',
         'feature = "product-domains"',
         'pub mod function_agents',
         'pub mod miniapp',
-        'feature = "product-full"',
+        'feature = "agent-runtime"',
         'service_agent_runtime',
       ],
     },
@@ -4186,7 +4200,7 @@ export function runManifestParserSelfTest({
         'feature = "ai-adapter-runtime"',
         'pub mod ai',
         'pub mod subscription_auth',
-        'feature = "product-full"',
+        'feature = "debug-log"',
         'pub mod debug_log',
       ],
     },
@@ -4208,18 +4222,21 @@ export function runManifestParserSelfTest({
         'file_watch',
         'feature = "git"',
         'pub mod git',
-        'feature = "product-full"',
+        'feature = "agent-runtime"',
         'pub mod mcp',
+        'feature = "agent-runtime"',
         'pub mod remote_connect',
         'feature = "review-platform"',
         'pub mod review_platform',
+        'feature = "agent-runtime"',
         'pub mod search',
+        'feature = "agent-runtime"',
         'pub mod snapshot',
       ],
     },
     {
       path: 'src/crates/assembly/core/src/service/config/mod.rs',
-      contracts: ['feature = "product-full"', 'mode_config_canonicalizer'],
+      contracts: ['feature = "agent-runtime"', 'mode_config_canonicalizer'],
     },
     {
       path: 'src/crates/assembly/core/src/service/workspace/manager.rs',
@@ -4232,7 +4249,7 @@ export function runManifestParserSelfTest({
     {
       path: 'src/crates/assembly/core/src/service/workspace_runtime/service.rs',
       contracts: [
-        'feature = "product-full"',
+        'feature = "agent-runtime"',
         'WorkspaceBinding',
         'ensure_runtime_for_workspace_binding',
         'merge_legacy_session_store',
@@ -4243,8 +4260,8 @@ export function runManifestParserSelfTest({
     {
       path: 'src/crates/assembly/core/src/service/dispatch/mod.rs',
       contracts: [
-        'feature = "product-full"',
-        'not\\(feature = "product-full"\\)',
+        'feature = "agent-runtime"',
+        'not\\(feature = "agent-runtime"\\)',
         'release_baseline_claim',
         'DispatchStoreError::ClaimRelease',
       ],
@@ -4828,12 +4845,12 @@ export function runManifestParserSelfTest({
     throw new Error('missing no-default dispatch claim release boundary rule');
   }
   const failClosedDispatchRelease = `
-#[cfg(not(feature = "product-full"))]
+#[cfg(not(feature = "agent-runtime"))]
 async fn release_baseline_claim(release: BaselineClaimRelease) -> Result<(), DispatchStoreError> {
     Err(DispatchStoreError::ClaimRelease(format!("job_id={}", release.job_id)))
 }`;
   const unsafeDispatchRelease = `
-#[cfg(not(feature = "product-full"))]
+#[cfg(not(feature = "agent-runtime"))]
 async fn release_baseline_claim(release: BaselineClaimRelease) -> Result<(), DispatchStoreError> {
     let _ignored = DispatchStoreError::ClaimRelease(format!("job_id={}", release.job_id));
     Ok(())
