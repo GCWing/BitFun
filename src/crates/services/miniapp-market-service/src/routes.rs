@@ -70,6 +70,7 @@ struct ListingQuery {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct OAuthStartQuery {
+    #[serde(alias = "return_to")]
     return_to: Option<String>,
 }
 
@@ -2052,6 +2053,17 @@ mod tests {
     use super::*;
     use axum::http::HeaderValue;
     use std::collections::HashSet;
+
+    #[test]
+    fn oauth_start_query_accepts_canonical_and_legacy_return_target_names() {
+        for parameter in ["returnTo", "return_to"] {
+            let uri = format!("/auth/github/start?{parameter}=%2Fskin%2Fadmin")
+                .parse()
+                .unwrap();
+            let Query(query) = Query::<OAuthStartQuery>::try_from_uri(&uri).unwrap();
+            assert_eq!(query.return_to.as_deref(), Some("/skin/admin"));
+        }
+    }
 
     #[test]
     fn review_diff_covers_added_changed_and_removed_files() {

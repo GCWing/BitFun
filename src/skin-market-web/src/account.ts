@@ -66,5 +66,5 @@ export const sharedMarketAccountApi = {
 export function sharedMarketLoginUrl(
   returnTo = `${window.location.pathname}${window.location.search}`,
 ): string {
-  return `${SHARED_ACCOUNT_API_BASE}/auth/github/start?return_to=${encodeURIComponent(returnTo)}`;
+  return `${SHARED_ACCOUNT_API_BASE}/auth/github/start?returnTo=${encodeURIComponent(returnTo)}`;
 }

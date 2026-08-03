@@ -23,6 +23,12 @@ use the MiniApp auth broker and a `/skin`-scoped alias of that broker's Web
 session. Unsafe browser requests require the matching CSRF alias. Never copy
 the MiniApp OAuth secret into the Skin environment.
 
+The MiniApp identity service must run a commit that implements the same shared
+account contract as Skin. Changes under `miniapp-market-service/src/auth.rs` or
+its OAuth routes must be deployed with the MiniApp runbook before Skin is
+considered healthy. Deploy the two containers separately from their dedicated
+checkouts; do not recreate MiniApp from the Skin Compose project.
+
 ## Agent safety contract
 
 1. Deploy only a committed, explicit commit. Never build a dirty checkout or a
