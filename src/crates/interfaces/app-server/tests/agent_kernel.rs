@@ -428,6 +428,7 @@ async fn cancel_turn_maps_missing_port_to_internal_error() {
                             requester_session_id: None,
                             reason: None,
                             wait_timeout_ms: None,
+                            cancel_descendants: true,
                         },
                     )))
                     .await;
