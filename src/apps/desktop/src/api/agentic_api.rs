@@ -2522,6 +2522,7 @@ pub async fn cancel_dialog_turn(
             requester_session_id: None,
             reason: None,
             wait_timeout_ms: None,
+            cancel_descendants: true,
         })
         .await
         .map_err(|e| {
@@ -2598,15 +2599,20 @@ pub async fn control_deep_review_queue(
 
 #[tauri::command]
 pub async fn cancel_session(
-    coordinator: State<'_, Arc<ConversationCoordinator>>,
+    runtime: State<'_, DesktopRuntimeContext>,
     request: CancelSessionRequest,
 ) -> Result<CancelSessionResponse, String> {
-    let dialog_turn_id = coordinator
-        .cancel_active_turn_for_session_with_descendant_policy(
-            &request.session_id,
-            std::time::Duration::from_secs(5),
-            request.cancel_descendants,
-        )
+    let result = runtime
+        .agent_runtime()
+        .cancel_turn(AgentTurnCancellationRequest {
+            session_id: request.session_id.clone(),
+            turn_id: None,
+            source: Some(AgentSubmissionSource::DesktopUi),
+            requester_session_id: None,
+            reason: Some("user_cancelled".to_string()),
+            wait_timeout_ms: Some(5_000),
+            cancel_descendants: request.cancel_descendants,
+        })
         .await
         .map_err(|e| {
             log::error!(
@@ -2614,12 +2620,12 @@ pub async fn cancel_session(
                 request.session_id,
                 e
             );
-            format!("Failed to cancel session: {}", e)
+            format!("Failed to cancel session: {}", e.into_message())
         })?;
 
     Ok(CancelSessionResponse {
-        cancelled: dialog_turn_id.is_some(),
-        dialog_turn_id,
+        cancelled: result.requested,
+        dialog_turn_id: result.turn_id,
     })
 }
 

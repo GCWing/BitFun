@@ -11,14 +11,13 @@ use std::time::Instant;
 use async_trait::async_trait;
 use bitfun_agent_runtime::sdk::{
     AgentLocalCommandTurnRecordRequest, AgentRuntime, AgentSessionArchiveStateRequest,
-    AgentSessionDeleteRequest, AgentSessionForkAtTurnRequest, AgentSessionRenameRequest,
-    AgentSessionUsageRequest, PortErrorKind, RuntimeError,
+    AgentSessionDeleteRequest, AgentSessionForkAtTurnRequest, AgentSessionLineageRequest,
+    AgentSessionLineageSnapshot, AgentSessionRenameRequest, AgentSessionUsageRequest,
+    PortErrorKind, RuntimeError,
 };
 use bitfun_core::agentic::coordination::{ConversationCoordinator, DialogScheduler};
 use bitfun_core::agentic::core::Session;
-use bitfun_core::agentic::persistence::{
-    SessionBranchResult, SessionLineageSnapshot, SessionMetadataPage,
-};
+use bitfun_core::agentic::persistence::{SessionBranchResult, SessionMetadataPage};
 use bitfun_core::agentic::session::SessionViewRestoreTiming;
 use bitfun_core::product_runtime::{CoreAgentRuntimeCompatibility, CoreProductAgentRuntime};
 use bitfun_core::service::remote_ssh::workspace_state::{
@@ -398,13 +397,17 @@ impl DesktopSessionApplication {
         &self,
         request: DesktopSessionScopeRequest,
         anchor_session_id: &str,
-    ) -> DesktopSessionApplicationResult<Option<SessionLineageSnapshot>> {
+    ) -> DesktopSessionApplicationResult<Option<AgentSessionLineageSnapshot>> {
         let scope = self.resolved_scope(request).await;
-        let storage_path = self.storage_path(&scope);
-        self.compatibility
-            .get_persisted_session_lineage(&storage_path, anchor_session_id)
+        self.agent_runtime
+            .get_session_lineage(AgentSessionLineageRequest {
+                workspace_path: scope.workspace_path,
+                anchor_session_id: anchor_session_id.to_string(),
+                remote_connection_id: scope.remote_connection_id,
+                remote_ssh_host: scope.resolved_remote_ssh_host,
+            })
             .await
-            .map_err(|error| DesktopSessionApplicationError::Core(error.to_string()))
+            .map_err(|error| DesktopSessionApplicationError::Runtime(error.into_message()))
     }
 
     pub(crate) async fn list_archived_sessions(

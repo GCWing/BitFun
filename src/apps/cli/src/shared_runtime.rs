@@ -33,13 +33,23 @@ const EVENT_BUFFER: usize = 256;
 const SUBAGENT_ROUTE_TIMEOUT: Duration = Duration::from_secs(2);
 type SessionEventSenders = Mutex<HashMap<String, broadcast::Sender<RuntimeIpcEvent>>>;
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct SubagentRoute {
+    root_session_id: String,
+    root_turn_id: String,
+    root_tool_call_id: String,
+    source_turn_id: String,
+}
+
+type SubagentRoutes = Mutex<HashMap<String, SubagentRoute>>;
+
 pub(crate) struct SharedRuntimeHandler {
     runtime: AgentRuntime,
     compatibility: CoreAgentRuntimeCompatibility,
     workspace: PathBuf,
     events: Arc<SessionEventSenders>,
     question_sessions: Arc<Mutex<HashMap<String, String>>>,
-    subagent_routes: Arc<Mutex<HashMap<String, (String, String, String)>>>,
+    subagent_routes: Arc<SubagentRoutes>,
     event_stream_available: watch::Sender<bool>,
 }
 
@@ -60,9 +70,7 @@ impl SharedRuntimeHandler {
         let events = Arc::new(Mutex::new(HashMap::new()));
         let permission_sessions = Arc::new(Mutex::new(HashMap::new()));
         let question_sessions = Arc::new(Mutex::new(HashMap::new()));
-        let subagent_routes = Arc::new(Mutex::new(
-            HashMap::<String, (String, String, String)>::new(),
-        ));
+        let subagent_routes = Arc::new(SubagentRoutes::new(HashMap::new()));
         let route_updates = Arc::new(Notify::new());
         let (event_stream_available, _) = watch::channel(true);
 
@@ -378,6 +386,26 @@ impl RuntimeIpcRequestHandler for SharedRuntimeHandler {
                 .await
                 .map(|references| RuntimeIpcOperationResult::WorkspaceReferences { references })
                 .map_err(runtime_ipc_error),
+            RuntimeIpcOperation::GetSessionLineage { request } => self
+                .runtime
+                .get_session_lineage(request)
+                .await
+                .map(|snapshot| RuntimeIpcOperationResult::SessionLineage { snapshot })
+                .map_err(runtime_ipc_error),
+            RuntimeIpcOperation::InspectLineageSession { request } => self
+                .runtime
+                .read_lineage_session_transcript(request)
+                .await
+                .map(
+                    |inspection| RuntimeIpcOperationResult::LineageSessionInspection { inspection },
+                )
+                .map_err(runtime_ipc_error),
+            RuntimeIpcOperation::CancelLineageSession { request } => self
+                .runtime
+                .cancel_lineage_session(request)
+                .await
+                .map(|cancellation| RuntimeIpcOperationResult::TurnCancelled { cancellation })
+                .map_err(runtime_ipc_error),
             RuntimeIpcOperation::WorkspaceDiff => self
                 .runtime
                 .workspace_diff()
@@ -610,7 +638,7 @@ fn invalidate_event_stream(
 
 async fn await_permission_route(
     request: &PermissionRequest,
-    routes: &Mutex<HashMap<String, (String, String, String)>>,
+    routes: &SubagentRoutes,
     updates: &Notify,
 ) -> bool {
     if request.delegation.is_none() {
@@ -656,6 +684,27 @@ impl SharedRuntimeHandler {
             ),
             RuntimeIpcOperation::UndoSession { request }
             | RuntimeIpcOperation::RedoSession { request } => Some(request.workspace_path.as_str()),
+            RuntimeIpcOperation::GetSessionLineage { request } => {
+                reject_remote_lineage_scope(
+                    request.remote_connection_id.as_deref(),
+                    request.remote_ssh_host.as_deref(),
+                )?;
+                Some(request.workspace_path.as_str())
+            }
+            RuntimeIpcOperation::InspectLineageSession { request } => {
+                reject_remote_lineage_scope(
+                    request.remote_connection_id.as_deref(),
+                    request.remote_ssh_host.as_deref(),
+                )?;
+                Some(request.workspace_path.as_str())
+            }
+            RuntimeIpcOperation::CancelLineageSession { request } => {
+                reject_remote_lineage_scope(
+                    request.remote_connection_id.as_deref(),
+                    request.remote_ssh_host.as_deref(),
+                )?;
+                Some(request.workspace_path.as_str())
+            }
             _ => None,
         };
         let Some(requested) = requested else {
@@ -671,6 +720,16 @@ impl SharedRuntimeHandler {
     }
 }
 
+fn reject_remote_lineage_scope(
+    remote_connection_id: Option<&str>,
+    remote_ssh_host: Option<&str>,
+) -> std::result::Result<(), RuntimeIpcError> {
+    if remote_connection_id.is_some() || remote_ssh_host.is_some() {
+        return Err(workspace_mismatch_error());
+    }
+    Ok(())
+}
+
 fn workspace_mismatch_error() -> RuntimeIpcError {
     RuntimeIpcError {
         code: RuntimeIpcErrorCode::SessionMismatch,
@@ -681,32 +740,56 @@ fn workspace_mismatch_error() -> RuntimeIpcError {
 fn route_agent_event(
     event: &AgenticEvent,
     source_session_id: &str,
-    routes: &Mutex<HashMap<String, (String, String, String)>>,
+    routes: &SubagentRoutes,
 ) -> (String, Option<String>, Option<String>) {
     let mut routes = routes
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
     if let AgenticEvent::SubagentSessionLinked {
         session_id,
+        subagent_dialog_turn_id,
         parent_session_id,
         parent_dialog_turn_id,
         parent_tool_call_id,
         ..
     } = event
     {
-        let root_route = routes.get(parent_session_id).cloned().unwrap_or_else(|| {
-            (
-                parent_session_id.clone(),
-                parent_dialog_turn_id.clone(),
-                parent_tool_call_id.clone(),
-            )
-        });
-        routes.insert(session_id.clone(), root_route);
+        let (root_session_id, root_turn_id, root_tool_call_id) = routes
+            .get(parent_session_id)
+            .map(|route| {
+                (
+                    route.root_session_id.clone(),
+                    route.root_turn_id.clone(),
+                    route.root_tool_call_id.clone(),
+                )
+            })
+            .unwrap_or_else(|| {
+                (
+                    parent_session_id.clone(),
+                    parent_dialog_turn_id.clone(),
+                    parent_tool_call_id.clone(),
+                )
+            });
+        routes.insert(
+            session_id.clone(),
+            SubagentRoute {
+                root_session_id,
+                root_turn_id,
+                root_tool_call_id,
+                source_turn_id: subagent_dialog_turn_id.clone(),
+            },
+        );
     }
     let routed = routes
         .get(source_session_id)
         .cloned()
-        .map(|(session_id, turn_id, tool_call_id)| (session_id, Some(turn_id), Some(tool_call_id)))
+        .map(|route| {
+            (
+                route.root_session_id,
+                Some(route.root_turn_id),
+                Some(route.root_tool_call_id),
+            )
+        })
         .unwrap_or_else(|| (source_session_id.to_string(), None, None));
     if let AgenticEvent::DialogTurnCompleted {
         session_id,
@@ -723,9 +806,15 @@ fn route_agent_event(
         ..
     } = event
     {
-        routes.retain(|_, (parent_session_id, parent_turn_id, _)| {
-            parent_session_id != session_id || parent_turn_id != turn_id
-        });
+        // A root Turn may finish while a background descendant is still active.
+        // Remove only the route for the exact descendant Turn that settled; a
+        // stale terminal event must not erase a newer Turn's route.
+        if routes
+            .get(session_id)
+            .is_some_and(|route| route.source_turn_id == *turn_id)
+        {
+            routes.remove(session_id);
+        }
     }
     routed
 }
@@ -1055,7 +1144,7 @@ fn path_manager() -> Result<Arc<bitfun_core::infrastructure::PathManager>> {
 fn permission_targets_session(
     request: &PermissionRequest,
     session_id: &str,
-    routes: &Mutex<HashMap<String, (String, String, String)>>,
+    routes: &SubagentRoutes,
 ) -> bool {
     permission_request_session(request, routes) == session_id
 }
@@ -1063,7 +1152,7 @@ fn permission_targets_session(
 fn permission_event_session(
     event: &PermissionRequestEvent,
     index: &Mutex<HashMap<String, String>>,
-    routes: &Mutex<HashMap<String, (String, String, String)>>,
+    routes: &SubagentRoutes,
 ) -> Option<String> {
     let mut index = index
         .lock()
@@ -1079,10 +1168,7 @@ fn permission_event_session(
     }
 }
 
-fn permission_request_session(
-    request: &PermissionRequest,
-    routes: &Mutex<HashMap<String, (String, String, String)>>,
-) -> String {
+fn permission_request_session(request: &PermissionRequest, routes: &SubagentRoutes) -> String {
     let routes = routes
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
@@ -1094,7 +1180,7 @@ fn permission_request_session(
                 .as_ref()
                 .and_then(|delegation| routes.get(&delegation.parent_session_id))
         })
-        .map(|(root_session_id, _, _)| root_session_id.clone())
+        .map(|route| route.root_session_id.clone())
         .or_else(|| {
             request
                 .delegation
@@ -1153,8 +1239,9 @@ mod tests {
         await_permission_route, connect_existing, delete_owned_session, index_user_question,
         invalidate_event_stream, owned_session_rename_request, permission_event_session,
         permission_targets_session, project_subagent_link_route, project_user_question_route,
-        publish_event, rename_owned_session, route_agent_event, runtime_ipc_error,
-        subscribe_session_events, SessionEventSenders, EVENT_BUFFER,
+        publish_event, reject_remote_lineage_scope, rename_owned_session, route_agent_event,
+        runtime_ipc_error, subscribe_session_events, SessionEventSenders, SubagentRoute,
+        SubagentRoutes, EVENT_BUFFER,
     };
     use bitfun_agent_runtime::sdk::{
         AgentRuntimeBuilder, AgentSessionCreateRequest, AgentSessionCreateResult,
@@ -1171,6 +1258,17 @@ mod tests {
     use std::sync::{Arc, Mutex};
     use std::time::Duration;
     use tokio::sync::{watch, Notify};
+
+    #[test]
+    fn shared_lineage_scope_rejects_remote_identity() {
+        assert!(reject_remote_lineage_scope(None, None).is_ok());
+        let error = reject_remote_lineage_scope(Some("connection-1"), None)
+            .expect_err("Shared Runtime must stay workspace-local");
+        assert_eq!(error.code, RuntimeIpcErrorCode::SessionMismatch);
+        let error = reject_remote_lineage_scope(None, Some("host-1"))
+            .expect_err("Shared Runtime must stay workspace-local");
+        assert_eq!(error.code, RuntimeIpcErrorCode::SessionMismatch);
+    }
 
     #[test]
     fn shared_handler_steering_delegates_to_the_runtime_sdk() {
@@ -1489,7 +1587,7 @@ mod tests {
     }
 
     #[test]
-    fn subagent_events_route_to_the_parent_until_its_turn_finishes() {
+    fn descendant_routes_outlive_the_root_turn_and_end_with_each_descendant() {
         let routes = Mutex::new(HashMap::new());
         let root_route = (
             "parent-session".to_string(),
@@ -1565,7 +1663,58 @@ mod tests {
             has_final_response: Some(true),
         };
         route_agent_event(&completed, "parent-session", &routes);
+        assert_eq!(routes.lock().expect("routes").len(), 2);
+        assert_eq!(
+            route_agent_event(&grandchild_output, "grandchild-session", &routes),
+            root_route
+        );
+
+        let child_completed = AgenticEvent::DialogTurnCancelled {
+            session_id: "child-session".to_string(),
+            turn_id: "child-turn".to_string(),
+        };
+        route_agent_event(&child_completed, "child-session", &routes);
+        assert_eq!(routes.lock().expect("routes").len(), 1);
+
+        let grandchild_completed = AgenticEvent::DialogTurnCancelled {
+            session_id: "grandchild-session".to_string(),
+            turn_id: "grandchild-turn".to_string(),
+        };
+        route_agent_event(&grandchild_completed, "grandchild-session", &routes);
         assert!(routes.lock().expect("routes").is_empty());
+    }
+
+    #[test]
+    fn stale_descendant_terminal_does_not_remove_a_new_turn_route() {
+        let routes = SubagentRoutes::new(HashMap::new());
+        for turn_id in ["child-turn-old", "child-turn-new"] {
+            let linked = AgenticEvent::SubagentSessionLinked {
+                session_id: "child-session".to_string(),
+                subagent_dialog_turn_id: turn_id.to_string(),
+                parent_session_id: "root-session".to_string(),
+                parent_dialog_turn_id: "root-turn".to_string(),
+                parent_tool_call_id: "root-tool".to_string(),
+                agent_type: None,
+                model_id: None,
+                focused_review_display_label: None,
+            };
+            route_agent_event(&linked, "child-session", &routes);
+        }
+
+        let stale = AgenticEvent::DialogTurnCancelled {
+            session_id: "child-session".to_string(),
+            turn_id: "child-turn-old".to_string(),
+        };
+        route_agent_event(&stale, "child-session", &routes);
+
+        assert_eq!(
+            routes
+                .lock()
+                .expect("routes")
+                .get("child-session")
+                .map(|route| route.source_turn_id.as_str()),
+            Some("child-turn-new")
+        );
     }
 
     #[test]
@@ -1575,9 +1724,25 @@ mod tests {
             "root-turn".to_string(),
             "root-tool".to_string(),
         );
-        let routes = Mutex::new(HashMap::from([
-            ("child-session".to_string(), root_route.clone()),
-            ("nested-session".to_string(), root_route),
+        let routes = SubagentRoutes::new(HashMap::from([
+            (
+                "child-session".to_string(),
+                SubagentRoute {
+                    root_session_id: root_route.0.clone(),
+                    root_turn_id: root_route.1.clone(),
+                    root_tool_call_id: root_route.2.clone(),
+                    source_turn_id: "child-turn".to_string(),
+                },
+            ),
+            (
+                "nested-session".to_string(),
+                SubagentRoute {
+                    root_session_id: root_route.0,
+                    root_turn_id: root_route.1,
+                    root_tool_call_id: root_route.2,
+                    source_turn_id: "nested-turn".to_string(),
+                },
+            ),
         ]));
         let index = Mutex::new(HashMap::new());
         let request = delegated_permission("nested-session", "child-session");
@@ -1607,7 +1772,7 @@ mod tests {
 
     #[tokio::test]
     async fn delegated_permission_waits_for_its_authoritative_subagent_route() {
-        let routes = Arc::new(Mutex::new(HashMap::new()));
+        let routes = Arc::new(SubagentRoutes::new(HashMap::new()));
         let updates = Arc::new(Notify::new());
         let request = delegated_permission("child-session", "root-session");
         let waiting_routes = routes.clone();
@@ -1620,11 +1785,12 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(10)).await;
         routes.lock().expect("routes").insert(
             "child-session".to_string(),
-            (
-                "root-session".to_string(),
-                "root-turn".to_string(),
-                "root-tool".to_string(),
-            ),
+            SubagentRoute {
+                root_session_id: "root-session".to_string(),
+                root_turn_id: "root-turn".to_string(),
+                root_tool_call_id: "root-tool".to_string(),
+                source_turn_id: "child-turn".to_string(),
+            },
         );
         updates.notify_waiters();
 

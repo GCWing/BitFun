@@ -57,7 +57,11 @@ impl ChatView {
         let input_inner_width = size.width.saturating_sub(2); // subtract left+right borders
         let total_visual_lines = self.text_input.visual_line_count(input_inner_width) as u16;
         let content_lines = total_visual_lines.max(1).min(max_input_content_lines);
-        let input_height = content_lines + 2; // +2 for top/bottom borders
+        let input_height = if self.lineage_inspection_label.is_some() {
+            3
+        } else {
+            content_lines + 2 // +2 for top/bottom borders
+        };
 
         // Calculate shortcuts area height based on content
         let shortcuts_height = Self::calculate_shortcuts_height(
@@ -92,13 +96,19 @@ impl ChatView {
         self.render_header(frame, chunks[0], chat_state);
         self.render_messages(frame, chunks[1], chat_state);
         self.render_status_bar(frame, chunks[2], chat_state);
-        self.render_input(frame, chunks[3], chat_state);
+        if self.lineage_inspection_label.is_some() {
+            self.render_lineage_inspection(frame, chunks[3]);
+        } else {
+            self.render_input(frame, chunks[3], chat_state);
+        }
         self.render_command_menu(frame, chunks[1]);
         self.workspace_reference_popup
             .render(frame, chunks[1], &self.theme);
         self.render_model_selector(frame, chunks[1]);
         self.render_agent_selector(frame, chunks[1]);
         self.render_session_selector(frame, chunks[1]);
+        self.session_lineage_selector
+            .render(frame, chunks[1], &self.theme);
         self.render_fork_selector(frame, chunks[1]);
         self.render_timeline_selector(frame, chunks[1]);
         self.prompt_stash_selector
@@ -141,6 +151,24 @@ impl ChatView {
             self.info_popup_scroll = scroll;
             self.info_popup_max_scroll = max_scroll;
         }
+    }
+
+    fn render_lineage_inspection(&self, frame: &mut Frame, area: Rect) {
+        let label = self
+            .lineage_inspection_label
+            .as_deref()
+            .unwrap_or("Subagent");
+        frame.render_widget(
+            Paragraph::new("Up parent  ←/→ siblings  Esc root")
+                .style(self.theme.style(StyleKind::Muted))
+                .block(
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .border_style(self.theme.style(StyleKind::Border))
+                        .title(format!(" {label} · read-only ")),
+                ),
+            area,
+        );
     }
 
     fn render_theme_selector(&mut self, frame: &mut Frame, area: Rect) {

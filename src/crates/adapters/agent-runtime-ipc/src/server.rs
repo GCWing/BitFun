@@ -792,6 +792,7 @@ async fn cleanup_connection(
                 requester_session_id: None,
                 reason: Some("shared_tui_disconnected".to_string()),
                 wait_timeout_ms: None,
+                cancel_descendants: true,
             },
         });
         let cancelled = matches!(

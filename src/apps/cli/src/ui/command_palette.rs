@@ -42,6 +42,7 @@ pub(crate) enum PaletteAction {
 const DEFAULT_ITEM_ORDER: &[&str] = &[
     "new_session",
     "sessions",
+    "view_subagents",
     "timeline",
     "toggle_timestamps",
     "toggle_thinking",

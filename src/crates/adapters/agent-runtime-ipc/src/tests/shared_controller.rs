@@ -394,7 +394,7 @@ async fn first_party_timeout_reports_unknown_outcome_and_releases_the_lease() {
             client_id,
             "0.1.0",
             Duration::from_secs(2),
-            Duration::from_millis(150),
+            Duration::from_secs(2),
         )
         .await
         .expect("connect first-party client");

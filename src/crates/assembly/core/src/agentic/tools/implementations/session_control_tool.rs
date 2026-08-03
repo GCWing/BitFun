@@ -482,6 +482,7 @@ Arguments:
                         requester_session_id,
                         reason: None,
                         wait_timeout_ms: Some(CANCEL_WAIT_TIMEOUT.as_millis() as u64),
+                        cancel_descendants: true,
                     })
                     .await
                     .map_err(|error| {

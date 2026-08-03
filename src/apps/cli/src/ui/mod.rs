@@ -25,6 +25,7 @@ pub(crate) mod prompt_stash_selector;
 pub(crate) mod provider_selector;
 pub(crate) mod question;
 mod responsive_popup;
+pub(crate) mod session_lineage_selector;
 pub(crate) mod session_selector;
 pub(crate) mod skill_selector;
 pub(crate) mod startup;

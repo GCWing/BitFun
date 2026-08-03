@@ -142,10 +142,24 @@ impl ChatMode {
         if chat_view.export_dialog_visible() {
             match chat_view.export_dialog_handle_key(key) {
                 crate::ui::export_dialog::ExportDialogAction::Confirm(request) => {
-                    self.prepare_transcript_export(request, false, chat_view, chat_state);
+                    let markdown = transcript::render_session_markdown(
+                        self.displayed_chat_state(chat_state),
+                        transcript::MarkdownTranscriptOptions {
+                            include_reasoning: request.include_reasoning,
+                            include_tool_details: request.include_tool_details,
+                        },
+                    );
+                    self.prepare_transcript_export(request, false, chat_view, markdown);
                 }
                 crate::ui::export_dialog::ExportDialogAction::ConfirmOverwrite(request) => {
-                    self.prepare_transcript_export(request, true, chat_view, chat_state);
+                    let markdown = transcript::render_session_markdown(
+                        self.displayed_chat_state(chat_state),
+                        transcript::MarkdownTranscriptOptions {
+                            include_reasoning: request.include_reasoning,
+                            include_tool_details: request.include_tool_details,
+                        },
+                    );
+                    self.prepare_transcript_export(request, true, chat_view, markdown);
                 }
                 crate::ui::export_dialog::ExportDialogAction::Cancel => {
                     self.close_all_popups(chat_view);
@@ -276,6 +290,18 @@ impl ChatMode {
             return Ok(None);
         }
 
+        if chat_view.session_lineage_selector_visible() {
+            match chat_view.session_lineage_selector_handle_key(key) {
+                SessionLineageAction::Select(session_id) => {
+                    self.close_all_popups(chat_view);
+                    self.inspect_lineage_session(&session_id, chat_view, rt_handle);
+                }
+                SessionLineageAction::Close => self.navigate_back(chat_view),
+                SessionLineageAction::Move(_) | SessionLineageAction::None => {}
+            }
+            return Ok(None);
+        }
+
         if chat_view.fork_selector_visible() {
             match chat_view.fork_selector_handle_key(key) {
                 ForkAction::Select(target) => {
@@ -289,10 +315,11 @@ impl ChatMode {
         if chat_view.timeline_selector_visible() {
             match chat_view.timeline_selector_handle_key(key) {
                 crate::ui::timeline_selector::TimelineAction::Move(message_id) => {
-                    chat_view.scroll_to_message(chat_state, &message_id);
+                    chat_view.scroll_to_message(self.displayed_chat_state(chat_state), &message_id);
                 }
                 crate::ui::timeline_selector::TimelineAction::Select(message_id) => {
-                    chat_view.commit_message_jump(chat_state, &message_id);
+                    chat_view
+                        .commit_message_jump(self.displayed_chat_state(chat_state), &message_id);
                     self.navigate_back(chat_view);
                 }
                 crate::ui::timeline_selector::TimelineAction::Close => {
@@ -495,6 +522,36 @@ impl ChatMode {
                 }
                 _ => {}
             }
+        }
+
+        if self.lineage_inspection.is_some() {
+            match key.code {
+                KeyCode::Up => self.navigate_lineage_parent(chat_view, rt_handle),
+                KeyCode::Left => self.navigate_lineage_sibling(-1, chat_view, rt_handle),
+                KeyCode::Right => self.navigate_lineage_sibling(1, chat_view, rt_handle),
+                KeyCode::Esc => self.leave_lineage_inspection(chat_view),
+                _ => {
+                    if let Some(action) = self.keymap.resolve(
+                        key,
+                        self.action_state(
+                            self.displayed_chat_state(chat_state).is_processing,
+                            false,
+                        ),
+                    ) {
+                        return self.dispatch_action(
+                            action,
+                            self.action_state(
+                                self.displayed_chat_state(chat_state).is_processing,
+                                false,
+                            ),
+                            chat_view,
+                            chat_state,
+                            rt_handle,
+                        );
+                    }
+                }
+            }
+            return Ok(None);
         }
 
         if let Some(action) = self
@@ -729,7 +786,11 @@ impl ChatMode {
                 } else {
                     match mouse.kind {
                         MouseEventKind::ScrollUp => {
-                            let total = context.chat_view.count_message_lines(context.chat_state);
+                            let total = context
+                                .chat_view
+                                .count_message_lines(
+                                    context.this.displayed_chat_state(context.chat_state),
+                                );
                             context.chat_view.scroll_up(3, total);
                         }
                         MouseEventKind::ScrollDown => {
@@ -811,7 +872,10 @@ impl ChatMode {
                 outcome.request_redraw = true;
             }
             Event::Paste(text) => {
-                if context.chat_view.export_dialog_visible() {
+                if context.this.lineage_inspection.is_some() {
+                    // The root composer is deliberately hidden and immutable while a
+                    // descendant transcript is being inspected.
+                } else if context.chat_view.export_dialog_visible() {
                     context.chat_view.export_dialog_handle_paste(&text);
                 } else if context.chat_view.mcp_add_dialog_visible() {
                     context.chat_view.mcp_add_dialog_handle_paste(&text);

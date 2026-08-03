@@ -8,7 +8,7 @@
 
 use std::sync::Arc;
 
-pub const AGENT_RUNTIME_SDK_API_VERSION: u32 = 4;
+pub const AGENT_RUNTIME_SDK_API_VERSION: u32 = 5;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]
@@ -66,7 +66,10 @@ pub use bitfun_runtime_ports::{
     AgentSessionCompactionRequest, AgentSessionCompactionResult, AgentSessionComposerUpdate,
     AgentSessionCreateRequest, AgentSessionCreateResult, AgentSessionDeleteRequest,
     AgentSessionForkAtTurnRequest, AgentSessionForkBeforeTurnRequest, AgentSessionForkPort,
-    AgentSessionForkRequest, AgentSessionForkResult, AgentSessionListRequest,
+    AgentSessionForkRequest, AgentSessionForkResult, AgentSessionLifecycleStatus,
+    AgentSessionLineageCancellationRequest, AgentSessionLineageEntry,
+    AgentSessionLineageInspection, AgentSessionLineagePort, AgentSessionLineageRequest,
+    AgentSessionLineageSnapshot, AgentSessionLineageTranscriptRequest, AgentSessionListRequest,
     AgentSessionManagementPort, AgentSessionModePort, AgentSessionModeUpdateRequest,
     AgentSessionModelPort, AgentSessionModelUpdateRequest, AgentSessionRenameRequest,
     AgentSessionRevertPort, AgentSessionRevertRequest, AgentSessionRevertResult,
@@ -133,6 +136,11 @@ impl AgentRuntimeBuilder {
         port: Arc<dyn AgentSessionManagementPort>,
     ) -> Self {
         self.inner = self.inner.with_session_management_port(port);
+        self
+    }
+
+    pub fn with_session_lineage_port(mut self, port: Arc<dyn AgentSessionLineagePort>) -> Self {
+        self.inner = self.inner.with_session_lineage_port(port);
         self
     }
 
@@ -580,6 +588,20 @@ impl AgentRuntime {
         self.inner.read_session_transcript(request).await
     }
 
+    pub async fn get_session_lineage(
+        &self,
+        request: AgentSessionLineageRequest,
+    ) -> Result<Option<AgentSessionLineageSnapshot>, RuntimeError> {
+        self.inner.get_session_lineage(request).await
+    }
+
+    pub async fn read_lineage_session_transcript(
+        &self,
+        request: AgentSessionLineageTranscriptRequest,
+    ) -> Result<AgentSessionLineageInspection, RuntimeError> {
+        self.inner.read_lineage_session_transcript(request).await
+    }
+
     pub async fn resolve_session_workspace_binding(
         &self,
         request: AgentSessionWorkspaceRequest,
@@ -669,6 +691,13 @@ impl AgentRuntime {
         request: AgentTurnCancellationRequest,
     ) -> Result<AgentTurnCancellationResult, RuntimeError> {
         self.inner.cancel_turn(request).await
+    }
+
+    pub async fn cancel_lineage_session(
+        &self,
+        request: AgentSessionLineageCancellationRequest,
+    ) -> Result<AgentTurnCancellationResult, RuntimeError> {
+        self.inner.cancel_lineage_session(request).await
     }
 
     pub async fn submit_user_answers(

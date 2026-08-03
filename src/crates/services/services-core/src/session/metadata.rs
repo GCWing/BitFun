@@ -96,16 +96,39 @@ fn build_session_relationship(
     session_kind: SessionKind,
     existing: Option<&SessionMetadata>,
 ) -> Option<SessionRelationship> {
-    let existing_relationship = existing.and_then(|value| value.relationship.clone());
-    let existing_custom_metadata = existing.and_then(|value| value.custom_metadata.as_ref());
-
+    let mut relationship = existing.and_then(normalized_session_relationship);
     let kind = match session_kind {
-        SessionKind::Subagent => Some(SessionRelationshipKind::Subagent),
-        SessionKind::EphemeralChild => Some(SessionRelationshipKind::Btw),
-        SessionKind::Standard => existing_relationship
-            .as_ref()
-            .and_then(|value| value.kind.clone()),
+        SessionKind::Subagent => SessionRelationshipKind::Subagent,
+        SessionKind::EphemeralChild => SessionRelationshipKind::Btw,
+        SessionKind::Standard => return relationship,
     };
+    relationship
+        .get_or_insert_with(SessionRelationship::default)
+        .kind = Some(kind);
+    relationship
+}
+
+/// Resolves structured and legacy relationship metadata through the single
+/// Services-owned compatibility path.
+pub fn normalized_session_relationship(metadata: &SessionMetadata) -> Option<SessionRelationship> {
+    let existing_relationship = metadata.relationship.clone();
+    let existing_custom_metadata = metadata.custom_metadata.as_ref();
+
+    let kind = existing_relationship
+        .as_ref()
+        .and_then(|value| value.kind.clone())
+        .or_else(|| {
+            legacy_custom_metadata_string(existing_custom_metadata, "kind").and_then(|value| {
+                match value.as_str() {
+                    "subagent" => Some(SessionRelationshipKind::Subagent),
+                    "btw" => Some(SessionRelationshipKind::Btw),
+                    "review" => Some(SessionRelationshipKind::Review),
+                    "deep_review" => Some(SessionRelationshipKind::DeepReview),
+                    "miniapp" => Some(SessionRelationshipKind::Miniapp),
+                    _ => None,
+                }
+            })
+        });
 
     let parent_session_id = existing_relationship
         .as_ref()

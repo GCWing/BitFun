@@ -1,5 +1,6 @@
 //! Session lineage and branch metadata mutation rules.
 
+use super::normalized_session_relationship;
 use super::types::{
     DialogTurnData, SessionMetadata, SessionRelationship, SessionRelationshipKind, SessionStatus,
 };
@@ -162,38 +163,10 @@ fn strip_lineage_custom_metadata(value: Option<JsonValue>) -> Option<JsonValue> 
 }
 
 fn extract_subagent_relationship(metadata: &SessionMetadata) -> Option<SubagentRelationshipFacts> {
-    let relationship = metadata.relationship.as_ref();
-    let custom_metadata = metadata.custom_metadata.as_ref();
-
-    let kind = relationship
-        .and_then(|value| value.kind.clone())
-        .or_else(|| {
-            custom_metadata
-                .and_then(|value| value.get("kind"))
-                .and_then(|value| value.as_str())
-                .and_then(|value| match value {
-                    "subagent" => Some(SessionRelationshipKind::Subagent),
-                    _ => None,
-                })
-        })?;
-
-    let parent_session_id = relationship
-        .and_then(|value| value.parent_session_id.clone())
-        .or_else(|| {
-            custom_metadata
-                .and_then(|value| value.get("parentSessionId"))
-                .and_then(|value| value.as_str())
-                .map(str::to_string)
-        })?;
-
-    let parent_dialog_turn_id = relationship
-        .and_then(|value| value.parent_dialog_turn_id.clone())
-        .or_else(|| {
-            custom_metadata
-                .and_then(|value| value.get("parentDialogTurnId"))
-                .and_then(|value| value.as_str())
-                .map(str::to_string)
-        })?;
+    let relationship = normalized_session_relationship(metadata)?;
+    let kind = relationship.kind?;
+    let parent_session_id = relationship.parent_session_id?;
+    let parent_dialog_turn_id = relationship.parent_dialog_turn_id?;
 
     Some(SubagentRelationshipFacts {
         kind,
@@ -331,30 +304,14 @@ pub fn build_session_lineage_snapshot(
 }
 
 fn subagent_parent_session_id(metadata: &SessionMetadata) -> Option<String> {
-    let relationship = metadata.relationship.as_ref();
-    let custom_metadata = metadata.custom_metadata.as_ref();
-    let kind = relationship
-        .and_then(|value| value.kind.clone())
-        .or_else(|| {
-            custom_metadata
-                .and_then(|value| value.get("kind"))
-                .and_then(|value| value.as_str())
-                .and_then(|value| match value {
-                    "subagent" => Some(SessionRelationshipKind::Subagent),
-                    _ => None,
-                })
-        })?;
-    if kind != SessionRelationshipKind::Subagent {
+    let relationship = normalized_session_relationship(metadata)?;
+    if relationship.kind != Some(SessionRelationshipKind::Subagent) {
         return None;
     }
 
     relationship
-        .and_then(|value| value.parent_session_id.as_deref())
-        .or_else(|| {
-            custom_metadata
-                .and_then(|value| value.get("parentSessionId"))
-                .and_then(|value| value.as_str())
-        })
+        .parent_session_id
+        .as_deref()
         .map(str::trim)
         .filter(|value| !value.is_empty())
         .map(str::to_string)

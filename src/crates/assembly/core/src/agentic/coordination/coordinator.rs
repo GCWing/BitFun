@@ -72,7 +72,7 @@ use crate::service::config::{
 use crate::service::remote_ssh::normalize_remote_workspace_path;
 use crate::service::session::{
     DialogTurnData, SessionMemoryMode, SessionRelationship, SessionRelationshipKind, SessionStatus,
-    ToolItemIdentityExt,
+    ToolItemIdentityExt, TurnStatus,
 };
 use crate::service::workspace::{
     get_global_workspace_service, WorkspaceActivityMode, WorkspaceCreateOptions, WorkspaceInfo,
@@ -990,6 +990,24 @@ impl SubagentTimeoutHandle {
             SubagentTimeoutAction::Extend { seconds } => self.extend_timeout(seconds),
         }
     }
+}
+
+fn lineage_active_turn_after_transcript(
+    candidate_active_turn_id: Option<String>,
+    current_active_turn_id: Option<String>,
+    persisted_turn_status: Option<&TurnStatus>,
+) -> Option<String> {
+    (candidate_active_turn_id == current_active_turn_id)
+        .then_some(current_active_turn_id)
+        .flatten()
+        .filter(|_| persisted_turn_status.is_none_or(|status| *status == TurnStatus::InProgress))
+}
+
+fn lineage_session_is_settling_without_active_state(
+    active_turn_id: Option<&str>,
+    in_flight_execution_count: usize,
+) -> bool {
+    active_turn_id.is_none() && in_flight_execution_count > 0
 }
 
 /// Conversation coordinator
@@ -6093,6 +6111,30 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         Ok(Some(current_turn_id))
     }
 
+    pub(crate) async fn cancel_loaded_lineage_session_in_storage(
+        &self,
+        storage_path: &Path,
+        session_id: &str,
+        wait_timeout: Duration,
+    ) -> BitFunResult<Option<String>> {
+        let _mutation_guard = self
+            .session_manager
+            .acquire_session_mutation(session_id)
+            .await?;
+        if !self
+            .session_manager
+            .is_session_loaded_from_storage_path(storage_path, session_id)?
+        {
+            return Ok(None);
+        }
+        // Match the Session abort semantics used by OpenCode: interrupting an
+        // inspected subagent stops the execution subtree rooted at that Session.
+        // A running Task is part of the selected Turn, so preserving its child
+        // while cancelling the owning Tool would leave the parent Turn unsettled.
+        self.cancel_active_turn_for_session_with_descendant_policy(session_id, wait_timeout, true)
+            .await
+    }
+
     /// Delete session
     pub async fn delete_session(
         &self,
@@ -10592,7 +10634,7 @@ fn runtime_transcript_message_from_message(
     }
 }
 
-fn runtime_transcript_messages_from_turns(
+pub(crate) fn runtime_transcript_messages_from_turns(
     turns: &[DialogTurnData],
     requested_turn_id: Option<&str>,
 ) -> Vec<bitfun_runtime_ports::TranscriptMessage> {
@@ -11883,7 +11925,11 @@ impl bitfun_runtime_ports::AgentTurnCancellationPort for ConversationCoordinator
 
         let wait_timeout = Duration::from_millis(request.wait_timeout_ms.unwrap_or(1500));
         let cancelled_turn_id = self
-            .cancel_active_turn_for_session(&session_id, wait_timeout)
+            .cancel_active_turn_for_session_with_descendant_policy(
+                &session_id,
+                wait_timeout,
+                request.cancel_descendants,
+            )
             .await
             .map_err(|error| {
                 bitfun_runtime_ports::PortError::new(
@@ -11949,37 +11995,164 @@ impl bitfun_runtime_ports::RemoteControlStatePort for ConversationCoordinator {
 }
 
 impl ConversationCoordinator {
-    pub(crate) async fn read_session_transcript_locked(
+    async fn read_session_transcript_with_turn_status_locked(
         &self,
         request: bitfun_runtime_ports::SessionTranscriptRequest,
-    ) -> bitfun_runtime_ports::PortResult<bitfun_runtime_ports::SessionTranscript> {
-        let messages = match self
+        status_turn_id: Option<&str>,
+    ) -> bitfun_runtime_ports::PortResult<(
+        bitfun_runtime_ports::SessionTranscript,
+        Option<TurnStatus>,
+    )> {
+        let (messages, turn_status) = match self
             .session_manager
             .load_persisted_transcript_turns_locked(&request.session_id)
             .await
             .map_err(runtime_port_error_preserving_message)?
         {
-            Some(turns) => {
-                runtime_transcript_messages_from_turns(&turns, request.turn_id.as_deref())
-            }
-            None => self
-                .session_manager
-                .get_context_messages(&request.session_id)
-                .await
-                .map_err(runtime_port_error_preserving_message)?
-                .into_iter()
-                .filter(|message| match request.turn_id.as_ref() {
-                    Some(turn_id) => message.metadata.turn_id.as_ref() == Some(turn_id),
-                    None => true,
-                })
-                .map(runtime_transcript_message_from_message)
-                .collect(),
+            Some(turns) => (
+                runtime_transcript_messages_from_turns(&turns, request.turn_id.as_deref()),
+                status_turn_id.and_then(|turn_id| {
+                    turns
+                        .iter()
+                        .find(|turn| turn.turn_id == turn_id)
+                        .map(|turn| turn.status.clone())
+                }),
+            ),
+            None => (
+                self.session_manager
+                    .get_context_messages(&request.session_id)
+                    .await
+                    .map_err(runtime_port_error_preserving_message)?
+                    .into_iter()
+                    .filter(|message| match request.turn_id.as_ref() {
+                        Some(turn_id) => message.metadata.turn_id.as_ref() == Some(turn_id),
+                        None => true,
+                    })
+                    .map(runtime_transcript_message_from_message)
+                    .collect(),
+                None,
+            ),
         };
 
-        Ok(bitfun_runtime_ports::SessionTranscript {
-            session_id: request.session_id,
-            messages,
-        })
+        Ok((
+            bitfun_runtime_ports::SessionTranscript {
+                session_id: request.session_id,
+                messages,
+            },
+            turn_status,
+        ))
+    }
+
+    pub(crate) async fn read_session_transcript_locked(
+        &self,
+        request: bitfun_runtime_ports::SessionTranscriptRequest,
+    ) -> bitfun_runtime_ports::PortResult<bitfun_runtime_ports::SessionTranscript> {
+        self.read_session_transcript_with_turn_status_locked(request, None)
+            .await
+            .map(|(transcript, _)| transcript)
+    }
+
+    pub(crate) async fn inspect_loaded_lineage_session_in_storage(
+        &self,
+        storage_path: &Path,
+        request: bitfun_runtime_ports::SessionTranscriptRequest,
+    ) -> bitfun_runtime_ports::PortResult<Option<bitfun_runtime_ports::AgentSessionLineageInspection>>
+    {
+        let _mutation_guard = self
+            .session_manager
+            .acquire_session_mutation(&request.session_id)
+            .await
+            .map_err(runtime_port_error_preserving_message)?;
+        if !self
+            .session_manager
+            .is_session_loaded_from_storage_path(storage_path, &request.session_id)
+            .map_err(runtime_port_error_preserving_message)?
+        {
+            return Ok(None);
+        }
+        if let Some(state) = self
+            .session_manager
+            .persistence_manager()
+            .load_session_revert_state(storage_path, &request.session_id)
+            .await
+            .map_err(runtime_port_error_preserving_message)?
+        {
+            if state.phase != SessionRevertPhase::Staged {
+                self.reconcile_session_revert_locked(storage_path, &request.session_id)
+                    .await
+                    .map_err(runtime_port_error_preserving_message)?;
+            }
+        }
+
+        let candidate_active_turn_id = self
+            .session_manager
+            .get_session(&request.session_id)
+            .and_then(|session| match session.state {
+                SessionState::Processing {
+                    current_turn_id, ..
+                } => Some(current_turn_id),
+                _ => None,
+            });
+        let in_flight_execution_count = self
+            .active_turns_per_session
+            .get(&request.session_id)
+            .map(|counter| counter.load(Ordering::SeqCst))
+            .unwrap_or(0);
+        if lineage_session_is_settling_without_active_state(
+            candidate_active_turn_id.as_deref(),
+            in_flight_execution_count,
+        ) {
+            return Err(bitfun_runtime_ports::PortError::new(
+                bitfun_runtime_ports::PortErrorKind::OutcomeUnknown,
+                "Session turn is still settling after its active state changed; retry the inspection",
+            ));
+        }
+        let (transcript, persisted_turn_status) = self
+            .read_session_transcript_with_turn_status_locked(
+                request.clone(),
+                candidate_active_turn_id.as_deref(),
+            )
+            .await?;
+        let current_active_turn_id = self
+            .session_manager
+            .get_session(&request.session_id)
+            .and_then(|session| match session.state {
+                SessionState::Processing {
+                    current_turn_id, ..
+                } => Some(current_turn_id),
+                _ => None,
+            });
+        if candidate_active_turn_id != current_active_turn_id {
+            let (settled_transcript, settled_turn_status) = self
+                .read_session_transcript_with_turn_status_locked(
+                    request,
+                    candidate_active_turn_id.as_deref(),
+                )
+                .await?;
+            if settled_turn_status
+                .as_ref()
+                .is_none_or(|status| *status == TurnStatus::InProgress)
+            {
+                return Err(bitfun_runtime_ports::PortError::new(
+                    bitfun_runtime_ports::PortErrorKind::OutcomeUnknown,
+                    "Session turn settlement changed while its transcript was being inspected; retry the inspection",
+                ));
+            }
+            return Ok(Some(bitfun_runtime_ports::AgentSessionLineageInspection {
+                transcript: settled_transcript,
+                active_turn_id: None,
+            }));
+        }
+        let active_turn_id = lineage_active_turn_after_transcript(
+            candidate_active_turn_id,
+            current_active_turn_id,
+            persisted_turn_status.as_ref(),
+        );
+
+        Ok(Some(bitfun_runtime_ports::AgentSessionLineageInspection {
+            transcript,
+            active_turn_id,
+        }))
     }
 }
 
@@ -12132,6 +12305,7 @@ fn merge_prepended_messages_for_turn(
 mod tests {
     use super::{
         btw_session_memory_mode, build_subagent_session_relationship,
+        lineage_active_turn_after_transcript, lineage_session_is_settling_without_active_state,
         logical_subagent_type_or_runtime, merge_prepended_messages_for_turn,
         normalize_subagent_max_concurrency, resolve_agent_session_create_created_by,
         resolve_agent_submission_turn_id, resolve_subagent_model_selection,
@@ -12174,6 +12348,37 @@ mod tests {
     use bitfun_agent_runtime::permission::PermissionRequestManager;
     use bitfun_runtime_services::test_support::FakeRuntimePort;
     use bitfun_services_core::permission_store::ProjectPermissionSqliteStore;
+
+    #[test]
+    fn terminal_persisted_turn_is_not_replayed_as_active() {
+        assert_eq!(
+            lineage_active_turn_after_transcript(
+                Some("turn-1".to_string()),
+                Some("turn-1".to_string()),
+                Some(&TurnStatus::Completed),
+            ),
+            None
+        );
+        assert_eq!(
+            lineage_active_turn_after_transcript(
+                Some("turn-1".to_string()),
+                Some("turn-1".to_string()),
+                Some(&TurnStatus::InProgress),
+            )
+            .as_deref(),
+            Some("turn-1")
+        );
+    }
+
+    #[test]
+    fn idle_session_with_in_flight_execution_is_not_published_as_settled() {
+        assert!(lineage_session_is_settling_without_active_state(None, 1));
+        assert!(!lineage_session_is_settling_without_active_state(
+            Some("turn-1"),
+            1
+        ));
+        assert!(!lineage_session_is_settling_without_active_state(None, 0));
+    }
 
     #[test]
     fn runtime_session_list_preserves_the_runtime_owned_model_selector() {
@@ -14201,6 +14406,7 @@ mod tests {
                     requester_session_id: None,
                     reason: Some("test cancellation".to_string()),
                     wait_timeout_ms: Some(1500),
+                    cancel_descendants: true,
                 },
             )
             .await

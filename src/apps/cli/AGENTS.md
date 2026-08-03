@@ -75,6 +75,10 @@ restrictions remain enforced.
 - Local effects such as `/editor`, copy, and export stay local. Product work
   such as shell execution, session mutation, and permissions goes through typed
   Runtime owners.
+- Session-lineage membership, order, legacy relationship normalization,
+  transcript reads, and targeted cancellation stay in shared Runtime owners.
+  TUI may keep only the selector/read-only inspection state and must preserve
+  the root composer while a descendant is visible.
 - Always restore raw mode, alternate screen, mouse capture, paste mode, and the
   cursor on success, error, cancellation, initialization failure, or panic.
 - Protocol stdout contains only the selected result format. Logs are English,

@@ -22,6 +22,7 @@ pub(crate) struct ActionState {
     pub is_processing: bool,
     pub popup_open: bool,
     shared_tui: bool,
+    lineage_inspection: bool,
 }
 
 impl ActionState {
@@ -31,6 +32,7 @@ impl ActionState {
             is_processing: false,
             popup_open,
             shared_tui: false,
+            lineage_inspection: false,
         }
     }
 
@@ -40,11 +42,17 @@ impl ActionState {
             is_processing,
             popup_open,
             shared_tui: false,
+            lineage_inspection: false,
         }
     }
 
     pub(crate) const fn with_shared_tui(mut self, shared_tui: bool) -> Self {
         self.shared_tui = shared_tui;
+        self
+    }
+
+    pub(crate) const fn with_lineage_inspection(mut self, lineage_inspection: bool) -> Self {
+        self.lineage_inspection = lineage_inspection;
         self
     }
 
@@ -74,6 +82,7 @@ pub(crate) enum ActionHandler {
     AddModel,
     NewSession,
     Sessions,
+    ViewSubagents,
     Timeline,
     ForkSession,
     UndoSession,
@@ -134,7 +143,7 @@ pub(crate) fn shared_tui_image_attachment_error() -> String {
     format!("Image attachments are unavailable in Shared TUI. {SHARED_TUI_EMBEDDED_HANDOFF}.")
 }
 pub(crate) const SHARED_TUI_HELP_NOTE: &str =
-    "Shared TUI: start with `bitfun chat --shared`. Multiple TUI processes reuse one workspace Runtime, while each TUI controls at most one Session and each Session has one controller. Use `/sessions` and Ctrl+D to delete an idle, non-current Session; use `/timeline` to navigate user messages, `/fork` to branch the current idle Session, `/rename <name>` to rename it, `/compact` to compact its context, `/diff` to review workspace changes, `/agent`, Tab, or Shift+Tab to change its Agent mode, `/models` to change its model, and `/reload [skills|instructions]` to refresh declarative context for the next message. Model configuration, Agent/Subagent management, MCP, extension, account-sync, usage, and other management remain Embedded. Exit all Shared TUI clients and wait up to 30 seconds before returning to default Embedded `bitfun chat`.";
+    "Shared TUI: start with `bitfun chat --shared`. Multiple TUI processes reuse one workspace Runtime, while each TUI controls at most one Session and each Session has one controller. Use `/sessions` and Ctrl+D to delete an idle, non-current Session; use `View subagents` in the command palette to inspect this Session's subagents; use `/timeline` to navigate user messages, `/fork` to branch the current idle Session, `/rename <name>` to rename it, `/compact` to compact its context, `/diff` to review workspace changes, `/agent`, Tab, or Shift+Tab to change its Agent mode, `/models` to change its model, and `/reload [skills|instructions]` to refresh declarative context for the next message. Model configuration, Agent/Subagent management, MCP, extension, account-sync, usage, and other management remain Embedded. Exit all Shared TUI clients and wait up to 30 seconds before returning to default Embedded `bitfun chat`.";
 
 impl ActionHandler {
     pub(crate) const fn available_in_shared_tui(self, context: ActionContext) -> bool {
@@ -145,6 +154,7 @@ impl ActionHandler {
                     | Self::SelectTheme
                     | Self::NewSession
                     | Self::Sessions
+                    | Self::ViewSubagents
                     | Self::Timeline
                     | Self::ForkSession
                     | Self::UndoSession
@@ -189,6 +199,35 @@ impl ActionHandler {
                     | Self::ScrollUp
                     | Self::ScrollDown
             )
+    }
+
+    const fn available_in_lineage_inspection(self) -> bool {
+        matches!(
+            self,
+            Self::Help
+                | Self::Sessions
+                | Self::ViewSubagents
+                | Self::Timeline
+                | Self::SelectTheme
+                | Self::ToggleTimestamps
+                | Self::ToggleThinking
+                | Self::ToggleToolDetails
+                | Self::CopyTranscript
+                | Self::ExportTranscript
+                | Self::Exit
+                | Self::OpenPalette
+                | Self::Interrupt
+                | Self::ClosePopups
+                | Self::NavigateBack
+                | Self::ToggleFocusedTool
+                | Self::PreviousTool
+                | Self::NextTool
+                | Self::JumpTop
+                | Self::JumpBottom
+                | Self::ToggleBrowse
+                | Self::ScrollUp
+                | Self::ScrollDown
+        )
     }
 }
 
@@ -400,6 +439,21 @@ static ACTION_SPECS: &[ActionSpec] = &[
         contexts: CHAT,
         availability: ActionAvailability::Always,
         handler: ActionHandler::Timeline,
+        default_bindings: &[],
+        fallback_bindings: &[],
+        shortcut_field: None,
+        palette: palette("Session", false),
+        shortcut_label: None,
+        slash_on_startup: false,
+    },
+    ActionSpec {
+        id: "view_subagents",
+        name: "View subagents",
+        aliases: &[],
+        description: "Inspect child agent sessions",
+        contexts: CHAT,
+        availability: ActionAvailability::Always,
+        handler: ActionHandler::ViewSubagents,
         default_bindings: &[],
         fallback_bindings: &[],
         shortcut_field: None,
@@ -1156,6 +1210,9 @@ impl ActionSpec {
         if state.shared_tui && !self.handler.available_in_shared_tui(state.context) {
             return false;
         }
+        if state.lineage_inspection && !self.handler.available_in_lineage_inspection() {
+            return false;
+        }
         match self.availability {
             ActionAvailability::Always => true,
             ActionAvailability::Idle => !state.is_processing,
@@ -1183,6 +1240,9 @@ impl ActionSpec {
                 "{} is unavailable in Shared TUI preview. {}",
                 self.name, SHARED_TUI_EMBEDDED_HANDOFF
             );
+        }
+        if state.lineage_inspection && !self.handler.available_in_lineage_inspection() {
+            return format!("{} is unavailable while inspecting a subagent.", self.name);
         }
         match self.availability {
             ActionAvailability::Idle if state.is_processing => format!(
@@ -2081,6 +2141,7 @@ mod tests {
         assert!(SHARED_TUI_HELP_NOTE.contains("bitfun chat --shared"));
         assert!(SHARED_TUI_HELP_NOTE.contains("one Session"));
         assert!(SHARED_TUI_HELP_NOTE.contains("`/models`"));
+        assert!(SHARED_TUI_HELP_NOTE.contains("`View subagents`"));
         assert!(SHARED_TUI_HELP_NOTE.contains("`/fork`"));
         assert!(SHARED_TUI_HELP_NOTE.contains("`/rename <name>`"));
         assert!(SHARED_TUI_HELP_NOTE.contains("`/reload [skills|instructions]`"));
@@ -3022,6 +3083,34 @@ mod tests {
         assert!(editor.handler.available_in_shared_tui(ActionContext::Chat));
         assert!(copy.handler.available_in_shared_tui(ActionContext::Chat));
         assert!(export.handler.available_in_shared_tui(ActionContext::Chat));
+    }
+
+    #[test]
+    fn opencode_view_subagents_is_palette_only_and_read_only() {
+        let action = action_by_id("view_subagents", ActionContext::Chat)
+            .expect("View subagents palette action");
+        let inspection = ActionState::chat(true, false).with_lineage_inspection(true);
+
+        assert_eq!(action.name, "View subagents");
+        assert_eq!(action.handler, ActionHandler::ViewSubagents);
+        assert!(action.aliases.is_empty());
+        assert!(action.default_bindings.is_empty());
+        assert_eq!(action.palette.map(|palette| palette.group), Some("Session"));
+        assert!(action.available(inspection));
+        assert!(action.handler.available_in_shared_tui(ActionContext::Chat));
+        assert!(action_for_alias("/subagents", ActionContext::Chat).is_none());
+
+        for handler in [
+            ActionHandler::SubmitInput,
+            ActionHandler::InsertNewline,
+            ActionHandler::Paste,
+            ActionHandler::UndoSession,
+            ActionHandler::RedoSession,
+            ActionHandler::ForkSession,
+            ActionHandler::CompactSession,
+        ] {
+            assert!(!handler.available_in_lineage_inspection());
+        }
     }
 
     #[test]

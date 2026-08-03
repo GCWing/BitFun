@@ -252,6 +252,7 @@ impl ChatMode {
         chat_state: &mut ChatState,
         rt_handle: &tokio::runtime::Handle,
     ) -> Result<Option<ChatExitReason>> {
+        let displayed_is_processing = self.displayed_chat_state(chat_state).is_processing;
         begin_slash_menu_selection(
             &mut self.selected_native_command_once,
             selected_command_name,
@@ -259,7 +260,7 @@ impl ChatMode {
         if action_id == "toggle_auto_approve" || action_id.starts_with("toggle_auto_approve:") {
             let action = action_by_id("toggle_auto_approve", ActionContext::Chat)
                 .expect("Auto mode action must remain registered");
-            let state = self.action_state(chat_state.is_processing, false);
+            let state = self.action_state(displayed_is_processing, false);
             if !action.available(state) {
                 chat_view.set_status(Some(action.unavailable_message(state)));
                 return Ok(None);
@@ -359,7 +360,7 @@ impl ChatMode {
         }
         self.dispatch_action(
             action,
-            self.action_state(chat_state.is_processing, false),
+            self.action_state(displayed_is_processing, false),
             chat_view,
             chat_state,
             rt_handle,
@@ -1060,8 +1061,11 @@ impl ChatMode {
             ActionHandler::Sessions => {
                 self.show_session_selector(chat_view, chat_state, rt_handle);
             }
+            ActionHandler::ViewSubagents => {
+                self.show_session_lineage(chat_view, chat_state, rt_handle);
+            }
             ActionHandler::Timeline => {
-                let points = chat_state.session_timeline_points();
+                let points = self.displayed_chat_state(chat_state).session_timeline_points();
                 if points.is_empty() {
                     chat_view.set_status(Some(
                         "No user messages are available in the current timeline".to_string(),
@@ -1194,7 +1198,7 @@ impl ChatMode {
             }
             ActionHandler::CopyTranscript => {
                 let markdown = transcript::render_session_markdown(
-                    chat_state,
+                    self.displayed_chat_state(chat_state),
                     transcript::MarkdownTranscriptOptions::default(),
                 );
                 let provider = bitfun_services_core::system::LocalSystemProvider::new();
@@ -1218,8 +1222,9 @@ impl ChatMode {
                 }
             }
             ActionHandler::ExportTranscript => {
+                let displayed = self.displayed_chat_state(chat_state);
                 chat_view.show_export_dialog(transcript::default_export_filename(
-                    &chat_state.core_session_id,
+                    &displayed.core_session_id,
                 ));
                 chat_view.set_status(Some(
                     "Choose what to include in the Markdown export".to_string(),
@@ -1248,23 +1253,33 @@ impl ChatMode {
                 return self.submit_input(chat_view, chat_state, rt_handle);
             }
             ActionHandler::Interrupt => {
-                self.cancel_active_turn(chat_view, rt_handle);
+                if self.lineage_inspection.is_some() {
+                    self.cancel_inspected_lineage_session(chat_view, rt_handle);
+                } else {
+                    self.cancel_active_turn(chat_view, rt_handle);
+                }
             }
             ActionHandler::ClosePopups => self.close_all_popups(chat_view),
-            ActionHandler::NavigateBack => self.navigate_back(chat_view),
+            ActionHandler::NavigateBack => {
+                if self.lineage_inspection.is_some() && !state.popup_open {
+                    self.leave_lineage_inspection(chat_view);
+                } else {
+                    self.navigate_back(chat_view);
+                }
+            }
             ActionHandler::InsertNewline => {
                 chat_view.handle_newline();
                 self.sync_selected_native_command(chat_view);
             }
             ActionHandler::Paste => self.paste_clipboard(chat_view),
             ActionHandler::ToggleFocusedTool => {
-                chat_view.toggle_focused_tool_expand(chat_state);
+                chat_view.toggle_focused_tool_expand(self.displayed_chat_state(chat_state));
             }
             ActionHandler::PreviousTool => {
-                chat_view.cycle_block_tool_focus_prev(chat_state);
+                chat_view.cycle_block_tool_focus_prev(self.displayed_chat_state(chat_state));
             }
             ActionHandler::NextTool => {
-                chat_view.cycle_block_tool_focus_next(chat_state);
+                chat_view.cycle_block_tool_focus_next(self.displayed_chat_state(chat_state));
             }
             ActionHandler::HistoryPrevious => {
                 if chat_view.command_menu_visible() {
@@ -1283,7 +1298,7 @@ impl ChatMode {
                 }
             }
             ActionHandler::JumpTop => {
-                let total = chat_view.count_message_lines(chat_state);
+                let total = chat_view.count_message_lines(self.displayed_chat_state(chat_state));
                 chat_view.scroll_to_top(total);
                 chat_view.set_status(Some("Jumped to conversation top".to_string()));
             }
@@ -1305,7 +1320,7 @@ impl ChatMode {
                 chat_view.set_status(Some(status.to_string()));
             }
             ActionHandler::ScrollUp => {
-                let total = chat_view.count_message_lines(chat_state);
+                let total = chat_view.count_message_lines(self.displayed_chat_state(chat_state));
                 chat_view.scroll_up(10, total);
             }
             ActionHandler::ScrollDown => chat_view.scroll_down(10),
@@ -1318,7 +1333,7 @@ impl ChatMode {
         request: crate::ui::export_dialog::ExportDialogRequest,
         overwrite_confirmed: bool,
         chat_view: &mut ChatView,
-        chat_state: &ChatState,
+        markdown: String,
     ) {
         let target = if request.save_to_file {
             let target = match transcript::resolve_export_target(&self.local_cwd, &request.filename)
@@ -1359,13 +1374,6 @@ impl ChatMode {
             (None, None)
         };
 
-        let markdown = transcript::render_session_markdown(
-            chat_state,
-            transcript::MarkdownTranscriptOptions {
-                include_reasoning: request.include_reasoning,
-                include_tool_details: request.include_tool_details,
-            },
-        );
         chat_view.set_status(Some("Exporting session transcript...".to_string()));
         self.pending_local_effect = Some(PendingLocalEffect::ExportTranscript {
             markdown,

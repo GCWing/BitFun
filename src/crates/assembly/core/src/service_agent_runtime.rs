@@ -7,9 +7,10 @@
 
 use bitfun_agent_runtime::sdk::{
     AgentEventSource, AgentInteractionResponsePort, AgentRuntime, AgentRuntimeBuilder,
-    AgentSessionCompactionPort, AgentSessionForkPort, AgentSessionModePort, AgentSessionModelPort,
-    AgentSessionModelUpdateRequest, AgentSessionRestorePort, AgentSessionRevertPort,
-    AgentSessionUsagePort, AgentTurnSettlementPort, RuntimeError,
+    AgentSessionCompactionPort, AgentSessionForkPort, AgentSessionLineagePort,
+    AgentSessionModePort, AgentSessionModelPort, AgentSessionModelUpdateRequest,
+    AgentSessionRestorePort, AgentSessionRevertPort, AgentSessionUsagePort,
+    AgentTurnSettlementPort, RuntimeError,
 };
 use bitfun_events::AgenticEvent;
 use bitfun_runtime_ports::{
@@ -1187,6 +1188,7 @@ impl CoreServiceAgentRuntime {
         scheduler: Arc<DialogScheduler>,
         session_fork: Arc<dyn AgentSessionForkPort>,
         session_usage: Arc<dyn AgentSessionUsagePort>,
+        session_lineage: Arc<dyn AgentSessionLineagePort>,
     ) -> Result<AgentRuntime, String> {
         let submission: Arc<dyn AgentSubmissionPort> = coordinator.clone();
         let session_management =
@@ -1211,6 +1213,7 @@ impl CoreServiceAgentRuntime {
             .with_interaction_response_port(interaction_response)
             .with_session_fork_port(session_fork)
             .with_session_usage_port(session_usage)
+            .with_session_lineage_port(session_lineage)
             .with_permission_request_manager(
                 crate::product_runtime::core_permission_request_manager()?,
             )
@@ -1269,6 +1272,7 @@ impl CoreServiceAgentRuntime {
         session_fork: Arc<dyn AgentSessionForkPort>,
         session_usage: Arc<dyn AgentSessionUsagePort>,
         turn_settlement: Arc<dyn AgentTurnSettlementPort>,
+        session_lineage: Arc<dyn AgentSessionLineagePort>,
         services: bitfun_runtime_services::RuntimeServices,
         harness_registry: bitfun_harness::HarnessRegistry,
     ) -> Result<AgentRuntime, String> {
@@ -1281,6 +1285,7 @@ impl CoreServiceAgentRuntime {
             Some(session_fork),
             Some(session_usage),
             Some(turn_settlement),
+            Some(session_lineage),
             services,
             harness_registry,
         )
@@ -1300,6 +1305,7 @@ impl CoreServiceAgentRuntime {
             scheduler,
             dialog_turn,
             Some(event_source),
+            None,
             None,
             None,
             None,
@@ -1327,6 +1333,7 @@ impl CoreServiceAgentRuntime {
             Some(session_fork),
             Some(session_usage),
             Some(turn_settlement),
+            None,
             services,
             harness_registry,
         )
@@ -1340,6 +1347,7 @@ impl CoreServiceAgentRuntime {
         session_fork: Option<Arc<dyn AgentSessionForkPort>>,
         session_usage: Option<Arc<dyn AgentSessionUsagePort>>,
         turn_settlement: Option<Arc<dyn AgentTurnSettlementPort>>,
+        session_lineage: Option<Arc<dyn AgentSessionLineagePort>>,
         services: bitfun_runtime_services::RuntimeServices,
         harness_registry: bitfun_harness::HarnessRegistry,
     ) -> Result<AgentRuntime, String> {
@@ -1395,6 +1403,10 @@ impl CoreServiceAgentRuntime {
         };
         let builder = match turn_settlement {
             Some(port) => builder.with_turn_settlement_port(port),
+            None => builder,
+        };
+        let builder = match session_lineage {
+            Some(port) => builder.with_session_lineage_port(port),
             None => builder,
         };
         builder
@@ -2145,6 +2157,7 @@ impl RemoteCancelRuntimeHost for CoreRemoteCancelRuntimeHost {
                 requester_session_id: None,
                 reason: None,
                 wait_timeout_ms: None,
+                cancel_descendants: true,
             })
             .await
             .map(|_| ())

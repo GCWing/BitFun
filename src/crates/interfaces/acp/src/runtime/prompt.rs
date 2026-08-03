@@ -140,6 +140,7 @@ pub(super) fn turn_cancellation_request(
         requester_session_id: None,
         reason: Some(reason.to_string()),
         wait_timeout_ms: Some(5_000),
+        cancel_descendants: true,
     }
 }
 

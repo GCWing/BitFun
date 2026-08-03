@@ -32,7 +32,7 @@ use crate::util::errors::{BitFunError, BitFunResult};
 use bitfun_runtime_ports::{ThreadGoal, MAX_THREAD_GOAL_AUTO_CONTINUATIONS};
 use log::{debug, info, warn};
 use std::collections::HashSet;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering as AtomicOrdering};
 use std::sync::Arc;
 use std::sync::OnceLock;
@@ -58,11 +58,12 @@ use bitfun_agent_runtime::scheduler::{
 use bitfun_runtime_ports::{
     resolve_dialog_submit_queue_action, AgentBackgroundResultRequest, AgentDialogPrependedReminder,
     AgentDialogSteerRequest, AgentDialogTurnExecution, AgentDialogTurnPort, AgentDialogTurnRequest,
-    AgentInputAttachment, AgentLifecycleDeliveryPort, AgentThreadGoalDeliveryKind,
-    AgentThreadGoalDeliveryRequest, AgentTurnCancellationPort, AgentTurnCancellationRequest,
-    AgentTurnCancellationResult, DialogSessionStateFact, DialogSubmitQueueAction,
-    DialogSubmitQueueFacts, PortError, PortErrorKind, PortResult, RoundInjection,
-    RoundInjectionKind, SessionStoragePathRequest, SessionStorePort,
+    AgentInputAttachment, AgentLifecycleDeliveryPort, AgentSessionLineageInspection,
+    AgentThreadGoalDeliveryKind, AgentThreadGoalDeliveryRequest, AgentTurnCancellationPort,
+    AgentTurnCancellationRequest, AgentTurnCancellationResult, DialogSessionStateFact,
+    DialogSubmitQueueAction, DialogSubmitQueueFacts, PortError, PortErrorKind, PortResult,
+    RoundInjection, RoundInjectionKind, SessionStoragePathRequest, SessionStorePort,
+    SessionTranscriptRequest,
 };
 pub use bitfun_runtime_ports::{
     AgentSessionReplyRoute, DialogQueuePriority, DialogSteerOutcome, DialogSubmissionPolicy,
@@ -1286,10 +1287,48 @@ impl DialogScheduler {
         session_id: &str,
         wait_timeout: Duration,
     ) -> BitFunResult<Option<String>> {
+        self.cancel_active_turn_for_session_with_descendant_policy(session_id, wait_timeout, true)
+            .await
+    }
+
+    pub(crate) async fn inspect_loaded_lineage_session(
+        &self,
+        storage_path: &Path,
+        request: SessionTranscriptRequest,
+    ) -> PortResult<Option<AgentSessionLineageInspection>> {
+        let _operation_guard = self.lock_session_operation(&request.session_id).await;
+        self.coordinator
+            .inspect_loaded_lineage_session_in_storage(storage_path, request)
+            .await
+    }
+
+    pub(crate) async fn cancel_lineage_session_in_storage(
+        &self,
+        storage_path: &Path,
+        session_id: &str,
+        wait_timeout: Duration,
+    ) -> BitFunResult<Option<String>> {
         let _operation_guard = self.lock_session_operation(session_id).await;
         abort_thread_goal_continuation_for_session(session_id);
         self.coordinator
-            .cancel_active_turn_for_session(session_id, wait_timeout)
+            .cancel_loaded_lineage_session_in_storage(storage_path, session_id, wait_timeout)
+            .await
+    }
+
+    async fn cancel_active_turn_for_session_with_descendant_policy(
+        &self,
+        session_id: &str,
+        wait_timeout: Duration,
+        cancel_descendants: bool,
+    ) -> BitFunResult<Option<String>> {
+        let _operation_guard = self.lock_session_operation(session_id).await;
+        abort_thread_goal_continuation_for_session(session_id);
+        self.coordinator
+            .cancel_active_turn_for_session_with_descendant_policy(
+                session_id,
+                wait_timeout,
+                cancel_descendants,
+            )
             .await
     }
 
@@ -2444,9 +2483,13 @@ impl AgentTurnCancellationPort for DialogScheduler {
             .await
             .map_err(|error| PortError::new(PortErrorKind::Backend, error.to_string()))?
         } else {
-            self.cancel_active_turn_for_session(&session_id, wait_timeout)
-                .await
-                .map_err(|error| PortError::new(PortErrorKind::Backend, error.to_string()))?
+            self.cancel_active_turn_for_session_with_descendant_policy(
+                &session_id,
+                wait_timeout,
+                request.cancel_descendants,
+            )
+            .await
+            .map_err(|error| PortError::new(PortErrorKind::Backend, error.to_string()))?
         };
 
         Ok(AgentTurnCancellationResult {

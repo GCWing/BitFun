@@ -1,7 +1,8 @@
-import type { SessionLineageSnapshot } from '@/infrastructure/api/service-api/SessionAPI';
-import type { SessionMetadata } from '@/shared/types/session-history';
+import type {
+  SessionLineageEntry,
+  SessionLineageSnapshot,
+} from '@/infrastructure/api/service-api/SessionAPI';
 import type { Session } from '../types/flow-chat';
-import { deriveSessionRelationshipFromMetadata } from './sessionMetadata';
 
 export type SessionLineageLifecycle =
   | 'running'
@@ -30,11 +31,12 @@ export interface SessionLineageNode {
 
 type FlatSessionLineageNode = Omit<SessionLineageNode, 'children'>;
 
-function metadataLifecycle(metadata: SessionMetadata): SessionLineageLifecycle {
+function metadataLifecycle(metadata: SessionLineageEntry): SessionLineageLifecycle {
   if (metadata.needsUserAttention) return 'waiting';
   if (metadata.unreadCompletion === 'error' || metadata.unreadCompletion === 'interrupted') {
     return 'error';
   }
+  if (metadata.activeTurnId) return 'running';
   return metadata.status === 'completed' ? 'completed' : 'idle';
 }
 
@@ -66,17 +68,16 @@ function isActiveSessionLineageLifecycle(lifecycle: SessionLineageLifecycle): bo
   return lifecycle === 'running' || lifecycle === 'finishing';
 }
 
-function nodeFromMetadata(metadata: SessionMetadata): FlatSessionLineageNode {
-  const relationship = deriveSessionRelationshipFromMetadata(metadata);
+function nodeFromMetadata(metadata: SessionLineageEntry): FlatSessionLineageNode {
   return {
     sessionId: metadata.sessionId,
-    parentSessionId: relationship.parentSessionId,
-    parentToolCallId: relationship.parentToolCallId,
+    parentSessionId: metadata.parentSessionId,
+    parentToolCallId: metadata.parentToolCallId,
     title: metadata.sessionName,
     agentType: metadata.agentType,
-    subagentType: relationship.subagentType,
+    subagentType: metadata.subagentType,
     lifecycle: metadataLifecycle(metadata),
-    createdAt: metadata.createdAt,
+    createdAt: metadata.createdAtMs,
     workspacePath: metadata.workspacePath,
     remoteConnectionId: metadata.remoteConnectionId,
     remoteSshHost: metadata.remoteSshHost,
@@ -162,12 +163,6 @@ export function buildSessionLineageTree(
     children.push(node);
     childrenByParent.set(node.parentSessionId, children);
   }
-  for (const children of childrenByParent.values()) {
-    children.sort((left, right) =>
-      left.createdAt - right.createdAt || left.sessionId.localeCompare(right.sessionId)
-    );
-  }
-
   const visited = new Set<string>();
   const buildNode = (sessionId: string): SessionLineageNode | null => {
     if (visited.has(sessionId)) return null;

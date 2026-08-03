@@ -125,7 +125,10 @@ async fn run_inner(store: &DispatchStore, job_id: &str) -> Result<()> {
         )?;
     }
     if model_changed {
-        store.append_event(job_id, &DispatchEvent::model_selected(effective_model.as_deref()))?;
+        store.append_event(
+            job_id,
+            &DispatchEvent::model_selected(effective_model.as_deref()),
+        )?;
     }
 
     let runtime = crate::initialize_core_services(
@@ -519,6 +522,7 @@ async fn cancel_turn(
             requester_session_id: None,
             reason: Some(reason.to_string()),
             wait_timeout_ms: None,
+            cancel_descendants: true,
         })
         .await
     {
@@ -571,9 +575,7 @@ impl JobEventScope {
             ..
         } = event
         {
-            if parent_session_id == &self.session_id
-                || self.children.contains(parent_session_id)
-            {
+            if parent_session_id == &self.session_id || self.children.contains(parent_session_id) {
                 self.children.insert(child_session.clone());
                 return true;
             }
@@ -589,15 +591,12 @@ impl JobEventScope {
     }
 
     fn permission_targets_job(&self, request: &PermissionRequest) -> bool {
-        if crate::runtime::approval::permission_request_targets_session(request, &self.session_id)
-        {
+        if crate::runtime::approval::permission_request_targets_session(request, &self.session_id) {
             return true;
         }
-        self.children
-            .iter()
-            .any(|child| {
-                crate::runtime::approval::permission_request_targets_session(request, child)
-            })
+        self.children.iter().any(|child| {
+            crate::runtime::approval::permission_request_targets_session(request, child)
+        })
     }
 }
 

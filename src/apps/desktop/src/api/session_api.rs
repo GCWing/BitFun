@@ -6,10 +6,9 @@ use crate::runtime::{
     UiSessionMetadataField,
 };
 use crate::startup_trace::DesktopStartupTrace;
+use bitfun_agent_runtime::sdk::AgentSessionLineageSnapshot;
 use bitfun_core::agentic::coordination::get_global_scheduler;
-use bitfun_core::agentic::persistence::{
-    SessionBranchResult, SessionLineageSnapshot, SessionMetadataPage,
-};
+use bitfun_core::agentic::persistence::{SessionBranchResult, SessionMetadataPage};
 use bitfun_core::service::remote_ssh::normalize_remote_workspace_path;
 use bitfun_core::service::session::{
     DialogTurnData, SessionKind, SessionMetadata, SessionStatus, SessionTranscriptExport,
@@ -375,7 +374,7 @@ pub async fn list_persisted_sessions_page(
 pub async fn get_session_lineage(
     request: GetSessionLineageRequest,
     runtime: State<'_, DesktopRuntimeContext>,
-) -> Result<Option<SessionLineageSnapshot>, String> {
+) -> Result<Option<AgentSessionLineageSnapshot>, String> {
     runtime
         .session_application()
         .get_session_lineage(

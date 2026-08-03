@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import type { SessionLineageSnapshot } from '@/infrastructure/api/service-api/SessionAPI';
-import type { SessionMetadata } from '@/shared/types/session-history';
+import type {
+  SessionLineageEntry,
+  SessionLineageSnapshot,
+} from '@/infrastructure/api/service-api/SessionAPI';
 import type { Session } from '../types/flow-chat';
 import {
   buildSessionLineageTree,
@@ -13,22 +15,16 @@ function metadata(
   sessionId: string,
   parentSessionId?: string,
   createdAt = 1,
-): SessionMetadata {
+): SessionLineageEntry {
   return {
     sessionId,
     sessionName: sessionId,
     agentType: parentSessionId ? 'Explore' : 'agentic',
-    modelName: 'model',
-    createdAt,
-    lastActiveAt: createdAt,
-    turnCount: 0,
-    messageCount: 0,
-    toolCallCount: 0,
+    createdAtMs: createdAt,
     status: parentSessionId ? 'completed' : 'active',
-    tags: [],
-    relationship: parentSessionId
-      ? { kind: 'subagent', parentSessionId, parentToolCallId: `tool-${sessionId}` }
-      : undefined,
+    parentSessionId,
+    parentToolCallId: parentSessionId ? `tool-${sessionId}` : undefined,
+    subagentType: parentSessionId ? 'Explore' : undefined,
   };
 }
 
@@ -55,7 +51,7 @@ function liveSession(sessionId: string, parentSessionId: string): Session {
 }
 
 describe('sessionLineage', () => {
-  it('builds a stable recursive tree from persisted metadata', () => {
+  it('preserves the authoritative Runtime order in the recursive tree', () => {
     const snapshot: SessionLineageSnapshot = {
       rootSessionId: 'root',
       sessions: [
@@ -68,9 +64,26 @@ describe('sessionLineage', () => {
 
     const tree = buildSessionLineageTree('root', snapshot, new Map());
 
-    expect(tree?.children.map(node => node.sessionId)).toEqual(['child-a', 'child-b']);
-    expect(tree?.children[0].children[0].sessionId).toBe('grandchild');
+    expect(tree?.children.map(node => node.sessionId)).toEqual(['child-b', 'child-a']);
+    expect(tree?.children[1].children[0].sessionId).toBe('grandchild');
     expect(countSessionLineageDescendants(tree)).toBe(3);
+  });
+
+  it('projects an active persisted child as running without a live shell', () => {
+    const child = metadata('child', 'root', 2);
+    child.activeTurnId = 'turn-child';
+    const snapshot: SessionLineageSnapshot = {
+      rootSessionId: 'root',
+      sessions: [metadata('root'), child],
+    };
+
+    const tree = buildSessionLineageTree('root', snapshot, new Map());
+
+    expect(tree?.children[0]).toMatchObject({
+      sessionId: 'child',
+      lifecycle: 'running',
+    });
+    expect([...collectExpandedRunningBranches(tree)]).toEqual(['root']);
   });
 
   it('overlays live descendants and expands their ancestor branches', () => {

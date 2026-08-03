@@ -520,6 +520,23 @@ impl SessionManager {
         Ok(true)
     }
 
+    pub(crate) async fn active_turn_id_in_storage_path(
+        &self,
+        storage_path: &Path,
+        session_id: &str,
+    ) -> BitFunResult<Option<String>> {
+        let _mutation_guard = self.acquire_session_mutation(session_id).await?;
+        self.validate_session_storage_path_binding(session_id, storage_path)?;
+        Ok(self
+            .get_session(session_id)
+            .and_then(|session| match session.state {
+                SessionState::Processing {
+                    current_turn_id, ..
+                } => Some(current_turn_id),
+                _ => None,
+            }))
+    }
+
     async fn load_ai_config_for_model_resolution() -> Option<crate::service::config::types::AIConfig>
     {
         let config_service = get_global_config_service().await.ok()?;

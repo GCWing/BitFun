@@ -15,8 +15,11 @@ use bitfun_agent_runtime::permission::PermissionRequestManager;
 use bitfun_agent_runtime::sdk::{
     AgentEventReceiver, AgentEventSource, AgentRuntime, AgentSessionForkAtTurnRequest,
     AgentSessionForkBeforeTurnRequest, AgentSessionForkPort, AgentSessionForkRequest,
-    AgentSessionForkResult, AgentSessionUsagePort, AgentSessionUsageRequest,
-    AgentTurnSettlementPort, AgentTurnSettlementRequest,
+    AgentSessionForkResult, AgentSessionLifecycleStatus, AgentSessionLineageCancellationRequest,
+    AgentSessionLineageEntry, AgentSessionLineageInspection, AgentSessionLineagePort,
+    AgentSessionLineageRequest, AgentSessionLineageSnapshot, AgentSessionLineageTranscriptRequest,
+    AgentSessionUsagePort, AgentSessionUsageRequest, AgentTurnCancellationResult,
+    AgentTurnSettlementPort, AgentTurnSettlementRequest, SessionTranscript,
 };
 use bitfun_harness::HarnessRegistry;
 use bitfun_runtime_ports::{
@@ -24,16 +27,17 @@ use bitfun_runtime_ports::{
     LocalWorkspaceSnapshotSessionRequest, LocalWorkspaceSnapshotStats,
     LocalWorkspaceSnapshotTurnRequest, PortError, PortErrorKind, PortResult,
     RuntimeServiceCapability, RuntimeServicePort, SessionStoragePathRequest, SessionStorePort,
-    SessionTurnWindowRequest, SessionViewRestoreTiming,
+    SessionTranscriptRequest, SessionTurnWindowRequest, SessionViewRestoreTiming,
 };
 use bitfun_runtime_services::RuntimeServices;
 use bitfun_services_core::permission_store::ProjectPermissionSqliteStore;
 use bitfun_services_core::session::{
-    build_session_lineage_snapshot, SessionBranchBoundary, SessionLineageSnapshot,
+    build_session_lineage_snapshot, normalized_session_relationship, SessionBranchBoundary,
 };
 
 use crate::agentic::coordination::{
-    ConversationCoordinator, DialogScheduler, SessionMaintenancePermit,
+    runtime_transcript_messages_from_turns, ConversationCoordinator, DialogScheduler,
+    SessionMaintenancePermit,
 };
 use crate::agentic::core::Session;
 use crate::agentic::events::EventQueue;
@@ -313,6 +317,55 @@ async fn load_visible_persisted_session_turns(
     Ok(turns)
 }
 
+fn runtime_lineage_snapshot(
+    snapshot: bitfun_services_core::session::SessionLineageSnapshot,
+    remote_connection_id: Option<&str>,
+    remote_ssh_host: Option<&str>,
+) -> AgentSessionLineageSnapshot {
+    AgentSessionLineageSnapshot {
+        root_session_id: snapshot.root_session_id,
+        sessions: snapshot
+            .sessions
+            .into_iter()
+            .map(|metadata| {
+                let relationship = normalized_session_relationship(&metadata);
+                AgentSessionLineageEntry {
+                    session_id: metadata.session_id,
+                    session_name: metadata.session_name,
+                    agent_type: metadata.agent_type,
+                    created_at_ms: metadata.created_at,
+                    status: match metadata.status {
+                        bitfun_services_core::session::SessionStatus::Active => {
+                            AgentSessionLifecycleStatus::Active
+                        }
+                        bitfun_services_core::session::SessionStatus::Archived => {
+                            AgentSessionLifecycleStatus::Archived
+                        }
+                        bitfun_services_core::session::SessionStatus::Completed => {
+                            AgentSessionLifecycleStatus::Completed
+                        }
+                    },
+                    active_turn_id: None,
+                    parent_session_id: relationship
+                        .as_ref()
+                        .and_then(|value| value.parent_session_id.clone()),
+                    parent_tool_call_id: relationship
+                        .as_ref()
+                        .and_then(|value| value.parent_tool_call_id.clone()),
+                    subagent_type: relationship
+                        .as_ref()
+                        .and_then(|value| value.subagent_type.clone()),
+                    workspace_path: metadata.workspace_path,
+                    remote_connection_id: remote_connection_id.map(str::to_string),
+                    remote_ssh_host: remote_ssh_host.map(str::to_string),
+                    unread_completion: metadata.unread_completion,
+                    needs_user_attention: metadata.needs_user_attention,
+                }
+            })
+            .collect(),
+    }
+}
+
 fn snapshot_port_error(error: SnapshotError) -> PortError {
     let kind = match &error {
         SnapshotError::SnapshotNotFound(_)
@@ -459,11 +512,13 @@ impl CoreProductAgentRuntime {
     ) -> Result<AgentRuntime, String> {
         let session_operations = Arc::new(CoreSessionOperationsPort::new(
             coordinator.clone(),
+            scheduler.clone(),
             token_usage_service,
         ));
         CoreServiceAgentRuntime::session_surface_agent_runtime(
             coordinator,
             scheduler,
+            session_operations.clone(),
             session_operations.clone(),
             session_operations,
         )
@@ -515,12 +570,14 @@ impl CoreProductAgentRuntime {
     ) -> Result<AgentRuntime, String> {
         let session_operations = Arc::new(CoreSessionOperationsPort::new(
             coordinator.clone(),
+            scheduler.clone(),
             token_usage_service,
         ));
         CoreServiceAgentRuntime::product_agent_runtime(
             coordinator,
             scheduler,
             event_source,
+            session_operations.clone(),
             session_operations.clone(),
             session_operations.clone(),
             session_operations,
@@ -562,6 +619,7 @@ impl CoreProductAgentRuntime {
     ) -> Result<AgentRuntime, String> {
         let session_operations = Arc::new(CoreSessionOperationsPort::new(
             coordinator.clone(),
+            scheduler.clone(),
             token_usage_service,
         ));
         CoreServiceAgentRuntime::sdk_host_product_agent_runtime(
@@ -853,18 +911,6 @@ impl CoreAgentRuntimeCompatibility {
         self.persistence
             .list_session_metadata_page(workspace_path, cursor, limit)
             .await
-    }
-
-    pub async fn get_persisted_session_lineage(
-        &self,
-        workspace_path: &Path,
-        anchor_session_id: &str,
-    ) -> BitFunResult<Option<SessionLineageSnapshot>> {
-        let metadata = self
-            .persistence
-            .list_session_metadata_including_internal(workspace_path)
-            .await?;
-        Ok(build_session_lineage_snapshot(metadata, anchor_session_id))
     }
 
     pub async fn load_persisted_session_metadata(
@@ -1241,6 +1287,7 @@ impl CoreAgentRuntimeCompatibility {
 #[derive(Clone)]
 struct CoreSessionOperationsPort {
     coordinator: Arc<ConversationCoordinator>,
+    scheduler: Arc<DialogScheduler>,
     persistence: Arc<PersistenceManager>,
     token_usage_service: Arc<TokenUsageService>,
 }
@@ -1248,11 +1295,13 @@ struct CoreSessionOperationsPort {
 impl CoreSessionOperationsPort {
     fn new(
         coordinator: Arc<ConversationCoordinator>,
+        scheduler: Arc<DialogScheduler>,
         token_usage_service: Arc<TokenUsageService>,
     ) -> Self {
         let persistence = coordinator.get_session_manager().persistence_manager();
         Self {
             coordinator,
+            scheduler,
             persistence,
             token_usage_service,
         }
@@ -1272,6 +1321,32 @@ impl CoreSessionOperationsPort {
             })
             .await
             .map(|resolution| resolution.effective_storage_path)
+    }
+
+    async fn validate_lineage_descendant(
+        &self,
+        storage_path: &Path,
+        root_session_id: &str,
+        session_id: &str,
+    ) -> PortResult<()> {
+        let metadata = self
+            .persistence
+            .list_session_metadata_including_internal(storage_path)
+            .await
+            .map_err(runtime_port_error)?;
+        let snapshot = build_session_lineage_snapshot(metadata, session_id).ok_or_else(|| {
+            PortError::new(
+                PortErrorKind::NotFound,
+                format!("Session lineage target was not found: {session_id}"),
+            )
+        })?;
+        if snapshot.root_session_id != root_session_id || session_id == root_session_id {
+            return Err(PortError::new(
+                PortErrorKind::InvalidRequest,
+                "Lineage target is not a descendant of the requested root",
+            ));
+        }
+        Ok(())
     }
 
     async fn fork_at_persisted_turn(
@@ -1428,6 +1503,133 @@ fn validate_local_fork_scope(
         ));
     }
     Ok(())
+}
+
+#[async_trait::async_trait]
+impl AgentSessionLineagePort for CoreSessionOperationsPort {
+    async fn get_session_lineage(
+        &self,
+        request: AgentSessionLineageRequest,
+    ) -> PortResult<Option<AgentSessionLineageSnapshot>> {
+        validate_persisted_session_id(&request.anchor_session_id).map_err(runtime_port_error)?;
+        let storage_path = self
+            .resolve_session_storage_path(
+                request.workspace_path,
+                request.remote_connection_id.clone(),
+                request.remote_ssh_host.clone(),
+            )
+            .await?;
+        let metadata = self
+            .persistence
+            .list_session_metadata_including_internal(&storage_path)
+            .await
+            .map_err(runtime_port_error)?;
+        let Some(snapshot) = build_session_lineage_snapshot(metadata, &request.anchor_session_id)
+        else {
+            return Ok(None);
+        };
+        let mut snapshot = runtime_lineage_snapshot(
+            snapshot,
+            request.remote_connection_id.as_deref(),
+            request.remote_ssh_host.as_deref(),
+        );
+        let session_manager = self.coordinator.get_session_manager();
+        for entry in &mut snapshot.sessions {
+            entry.active_turn_id = session_manager
+                .active_turn_id_in_storage_path(&storage_path, &entry.session_id)
+                .await
+                .map_err(runtime_port_error)?;
+        }
+        Ok(Some(snapshot))
+    }
+
+    async fn read_lineage_session_transcript(
+        &self,
+        request: AgentSessionLineageTranscriptRequest,
+    ) -> PortResult<AgentSessionLineageInspection> {
+        validate_persisted_session_id(&request.root_session_id).map_err(runtime_port_error)?;
+        validate_persisted_session_id(&request.session_id).map_err(runtime_port_error)?;
+        let storage_path = self
+            .resolve_session_storage_path(
+                request.workspace_path,
+                request.remote_connection_id,
+                request.remote_ssh_host,
+            )
+            .await?;
+        self.validate_lineage_descendant(
+            &storage_path,
+            &request.root_session_id,
+            &request.session_id,
+        )
+        .await?;
+
+        let session_manager = self.coordinator.get_session_manager();
+        if let Some(inspection) = self
+            .scheduler
+            .inspect_loaded_lineage_session(
+                &storage_path,
+                SessionTranscriptRequest {
+                    session_id: request.session_id.clone(),
+                    turn_id: None,
+                },
+            )
+            .await?
+        {
+            return Ok(inspection);
+        }
+
+        let (_, turns, _) = session_manager
+            .restore_internal_session_view_from_storage_path_timed(
+                &storage_path,
+                &request.session_id,
+            )
+            .await
+            .map_err(runtime_port_error)?;
+        Ok(AgentSessionLineageInspection {
+            transcript: SessionTranscript {
+                session_id: request.session_id,
+                messages: runtime_transcript_messages_from_turns(&turns, None),
+            },
+            active_turn_id: None,
+        })
+    }
+
+    async fn cancel_lineage_session(
+        &self,
+        request: AgentSessionLineageCancellationRequest,
+    ) -> PortResult<AgentTurnCancellationResult> {
+        validate_persisted_session_id(&request.root_session_id).map_err(runtime_port_error)?;
+        validate_persisted_session_id(&request.session_id).map_err(runtime_port_error)?;
+        let storage_path = self
+            .resolve_session_storage_path(
+                request.workspace_path,
+                request.remote_connection_id,
+                request.remote_ssh_host,
+            )
+            .await?;
+        self.validate_lineage_descendant(
+            &storage_path,
+            &request.root_session_id,
+            &request.session_id,
+        )
+        .await?;
+
+        let session_id = request.session_id;
+        let cancelled_turn_id = self
+            .scheduler
+            .cancel_lineage_session_in_storage(
+                &storage_path,
+                &session_id,
+                Duration::from_millis(request.wait_timeout_ms.unwrap_or(1500)),
+            )
+            .await
+            .map_err(runtime_port_error)?;
+        Ok(AgentTurnCancellationResult {
+            session_id,
+            requested: cancelled_turn_id.is_some(),
+            turn_id: cancelled_turn_id,
+        })
+    }
 }
 
 #[async_trait::async_trait]
@@ -1605,10 +1807,11 @@ mod tests {
     #[allow(deprecated)]
     use super::CoreProductAgentEventSource;
     use super::{
-        generate_core_session_usage_report, get_snapshot_manager_for_workspace,
-        latest_persisted_turn_id, runtime_port_error, validate_latest_turn_fork_scope,
-        validate_persisted_session_id, CoreAgentRuntimeCompatibility, CoreLocalWorkspaceSnapshot,
-        CoreProductAgentRuntime, CoreProductEventQueueOwner, CoreSessionOperationsPort,
+        build_session_lineage_snapshot, generate_core_session_usage_report,
+        get_snapshot_manager_for_workspace, latest_persisted_turn_id, runtime_lineage_snapshot,
+        runtime_port_error, validate_latest_turn_fork_scope, validate_persisted_session_id,
+        CoreAgentRuntimeCompatibility, CoreLocalWorkspaceSnapshot, CoreProductAgentRuntime,
+        CoreProductEventQueueOwner, CoreSessionOperationsPort,
     };
     use crate::agentic::coordination::{ConversationCoordinator, DialogScheduler};
     use crate::agentic::events::{EventQueue, EventQueueConfig, EventRouter};
@@ -1784,12 +1987,164 @@ mod tests {
     fn sdk_session_operations_depend_directly_on_core_owners() {
         fn build(
             coordinator: Arc<ConversationCoordinator>,
+            scheduler: Arc<DialogScheduler>,
             token_usage_service: Arc<TokenUsageService>,
         ) -> CoreSessionOperationsPort {
-            CoreSessionOperationsPort::new(coordinator, token_usage_service)
+            CoreSessionOperationsPort::new(coordinator, scheduler, token_usage_service)
         }
 
         let _ = build;
+    }
+
+    #[test]
+    fn runtime_lineage_projection_reuses_normalized_legacy_relationships() {
+        let root = SessionMetadata::new(
+            "root".to_string(),
+            "Root".to_string(),
+            "agentic".to_string(),
+            "model".to_string(),
+        );
+        let mut child = SessionMetadata::new(
+            "child".to_string(),
+            "Explore".to_string(),
+            "explore".to_string(),
+            "model".to_string(),
+        );
+        child.created_at = 2;
+        child.custom_metadata = Some(serde_json::json!({
+            "kind": "subagent",
+            "parentSessionId": "root",
+            "parentDialogTurnId": "turn-1",
+            "parentToolCallId": "tool-1",
+            "subagentType": "explore"
+        }));
+        child.unread_completion = Some("interrupted".to_string());
+
+        let snapshot =
+            build_session_lineage_snapshot(vec![child, root], "child").expect("lineage snapshot");
+        let projection = runtime_lineage_snapshot(snapshot, None, None);
+
+        assert_eq!(projection.root_session_id, "root");
+        assert_eq!(projection.sessions[1].session_id, "child");
+        assert_eq!(
+            projection.sessions[1].parent_session_id.as_deref(),
+            Some("root")
+        );
+        assert_eq!(
+            projection.sessions[1].parent_tool_call_id.as_deref(),
+            Some("tool-1")
+        );
+        assert_eq!(
+            projection.sessions[1].unread_completion.as_deref(),
+            Some("interrupted")
+        );
+    }
+
+    #[test]
+    fn lineage_live_actions_use_scheduler_scoped_storage_operations() {
+        let scheduler_source = include_str!("agentic/coordination/scheduler.rs");
+        for (method, scoped_call) in [
+            (
+                "inspect_loaded_lineage_session",
+                "inspect_loaded_lineage_session_in_storage",
+            ),
+            (
+                "cancel_lineage_session_in_storage",
+                "cancel_loaded_lineage_session_in_storage",
+            ),
+        ] {
+            let body = scheduler_source
+                .split(&format!("fn {method}"))
+                .nth(1)
+                .and_then(|source| source.split("\n    }").next())
+                .expect("scoped lineage scheduler method");
+            let lock = body
+                .find("lock_session_operation")
+                .expect("session operation lock");
+            let scoped_operation = body.find(scoped_call).expect("scoped Session operation");
+            assert!(
+                lock < scoped_operation,
+                "{method} must acquire the Session operation lock before the scoped lifecycle operation"
+            );
+        }
+
+        let coordinator_source = include_str!("agentic/coordination/coordinator.rs");
+        for method in [
+            "inspect_loaded_lineage_session_in_storage",
+            "cancel_loaded_lineage_session_in_storage",
+        ] {
+            let body = coordinator_source
+                .split(&format!("fn {method}"))
+                .nth(1)
+                .and_then(|source| source.split("\n    }").next())
+                .expect("storage-scoped lineage coordinator method");
+            let mutation = body
+                .find("acquire_session_mutation")
+                .expect("Session lifecycle mutation lease");
+            let binding = body
+                .find("is_session_loaded_from_storage_path")
+                .expect("storage binding check");
+            assert!(
+                mutation < binding,
+                "{method} must hold the Session lifecycle lease while checking and acting on storage"
+            );
+        }
+
+        let product_source = include_str!("product_runtime.rs");
+        let lineage_impl = product_source
+            .split("impl AgentSessionLineagePort for CoreSessionOperationsPort")
+            .nth(1)
+            .and_then(|source| source.split("impl AgentSessionForkPort").next())
+            .expect("lineage port implementation");
+        assert!(lineage_impl.contains("inspect_loaded_lineage_session"));
+        assert!(lineage_impl.contains("cancel_lineage_session_in_storage"));
+        assert!(lineage_impl.contains("active_turn_id_in_storage_path"));
+        assert!(!lineage_impl.contains("SessionTranscriptReader::read_session_transcript"));
+        let product_runtime_source = product_source
+            .split("#[cfg(test)]")
+            .next()
+            .expect("production product runtime source");
+        assert!(!product_runtime_source.contains("fn lineage_active_turn_id("));
+        assert!(coordinator_source.contains("TurnStatus::InProgress"));
+        assert!(coordinator_source
+            .contains("Session turn settlement changed while its transcript was being inspected"));
+        assert!(coordinator_source
+            .contains("Session turn is still settling after its active state changed"));
+    }
+
+    #[tokio::test]
+    async fn runtime_lineage_active_turn_rejects_cross_workspace_session_ids() {
+        let workspace = TestWorkspace::new();
+        let persistence = Arc::new(
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
+        );
+        let session_manager = SessionManager::new(
+            Arc::new(SessionContextStore::new()),
+            persistence,
+            SessionManagerConfig {
+                max_active_sessions: 4,
+                session_idle_timeout: Duration::from_secs(60),
+                auto_save_interval: Duration::from_secs(60),
+                enable_persistence: false,
+                prompt_cache_policy: PromptCachePolicy::default(),
+            },
+        );
+        let first_storage = workspace.path().join("first-sessions");
+        let second_storage = workspace.path().join("second-sessions");
+        std::fs::create_dir_all(&first_storage).expect("first storage");
+        std::fs::create_dir_all(&second_storage).expect("second storage");
+        session_manager
+            .ensure_session_storage_path("duplicate-session", &first_storage)
+            .expect("bind first workspace");
+
+        let error = session_manager
+            .active_turn_id_in_storage_path(&second_storage, "duplicate-session")
+            .await
+            .map_err(runtime_port_error)
+            .expect_err("cross-workspace active state must be rejected");
+
+        assert_eq!(error.kind, PortErrorKind::InvalidRequest);
+        assert!(error.message.contains("another workspace"));
     }
 
     #[test]
@@ -2169,8 +2524,10 @@ mod tests {
                 .expect("token usage service"),
         );
         let scheduler = DialogScheduler::new(coordinator.clone(), session_manager.clone());
-        let compatibility = CoreAgentRuntimeCompatibility::build(coordinator.clone(), scheduler);
-        let port = CoreSessionOperationsPort::new(coordinator.clone(), token_usage_service);
+        let compatibility =
+            CoreAgentRuntimeCompatibility::build(coordinator.clone(), scheduler.clone());
+        let port =
+            CoreSessionOperationsPort::new(coordinator.clone(), scheduler, token_usage_service);
 
         let session_id = "session-latest-fork";
         let mut metadata = SessionMetadata::new(

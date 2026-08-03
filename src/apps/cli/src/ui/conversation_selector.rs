@@ -12,7 +12,7 @@ use crate::ui::theme::{StyleKind, Theme};
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct ConversationPoint {
     pub(super) id: String,
-    title: String,
+    pub(super) title: String,
     footer: String,
 }
 

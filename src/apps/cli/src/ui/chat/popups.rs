@@ -521,6 +521,39 @@ impl ChatView {
         self.session_selector.remove_item(session_id);
     }
 
+    // ============ Subagent Session lineage selector methods ============
+
+    pub(crate) fn show_session_lineage_selector(
+        &mut self,
+        snapshot: &bitfun_agent_runtime::sdk::AgentSessionLineageSnapshot,
+    ) {
+        self.session_lineage_selector.show(snapshot);
+        self.popup_stack.push(PopupType::SessionLineageSelector);
+    }
+
+    pub(crate) fn session_lineage_selector_visible(&self) -> bool {
+        self.session_lineage_selector.is_visible()
+    }
+
+    pub(crate) fn hide_session_lineage_selector(&mut self) {
+        self.session_lineage_selector.hide();
+    }
+
+    pub(crate) fn reshow_session_lineage_selector(&mut self) {
+        self.session_lineage_selector.reshow();
+    }
+
+    pub(crate) fn session_lineage_selector_handle_key(
+        &mut self,
+        key: crossterm::event::KeyEvent,
+    ) -> SessionLineageAction {
+        self.session_lineage_selector.handle_key_event(key)
+    }
+
+    pub(crate) fn set_lineage_inspection(&mut self, label: Option<String>) {
+        self.lineage_inspection_label = label;
+    }
+
     // ============ Fork selector methods ============
 
     pub(crate) fn show_fork_selector(&mut self, points: Vec<crate::chat_state::SessionForkPoint>) {

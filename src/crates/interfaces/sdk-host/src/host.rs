@@ -447,6 +447,7 @@ impl SdkHostConnection {
                             requester_session_id: None,
                             reason: Some("sdk_host_connection_shutdown".to_string()),
                             wait_timeout_ms: Some(2_000),
+                            cancel_descendants: true,
                         }),
                     )
                     .await
@@ -1252,6 +1253,7 @@ impl SdkHostConnection {
                     requester_session_id: None,
                     reason: Some("sdk_query_cancel".to_string()),
                     wait_timeout_ms: Some(2_000),
+                    cancel_descendants: true,
                 }),
         )
         .await
@@ -1812,6 +1814,7 @@ impl SdkHostConnection {
                     requester_session_id: None,
                     reason: Some("sdk_host_fail_closed".to_string()),
                     wait_timeout_ms: Some(2_000),
+                    cancel_descendants: true,
                 }),
         )
         .await;
@@ -2201,6 +2204,7 @@ fn runtime_error_kind(error: &RuntimeError) -> &'static str {
         RuntimeError::MissingDialogTurnPort
         | RuntimeError::MissingLifecycleDeliveryPort
         | RuntimeError::MissingCancellationPort
+        | RuntimeError::MissingSessionLineagePort
         | RuntimeError::MissingSessionManagementPort
         | RuntimeError::MissingSessionRestorePort
         | RuntimeError::MissingLocalCommandTurnPort

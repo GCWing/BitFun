@@ -16,15 +16,16 @@ use bitfun_agent_runtime::sdk::{
     AgentInputAttachment, AgentLocalCommandTurnRecordRequest,
     AgentMessageWorkspaceReferencesRequest, AgentRuntime, AgentSessionCompactionRequest,
     AgentSessionCreateRequest, AgentSessionDeleteRequest, AgentSessionForkBeforeTurnRequest,
-    AgentSessionForkRequest, AgentSessionForkResult, AgentSessionListRequest,
-    AgentSessionModeUpdateRequest, AgentSessionModelUpdateRequest, AgentSessionRenameRequest,
-    AgentSessionRestoreRequest, AgentSessionRevertRequest, AgentSessionRevertResult,
-    AgentSessionUsageRequest, AgentTurnCancellationRequest, AgentTurnSettlementRequest,
-    AgentUserAnswersRequest, AgentUserShellCommandRequest, AgentWorkspaceReference,
-    AgentWorkspaceReferenceSearchRequest, AgentWorkspaceReferenceSearchResult, DialogSteerOutcome,
-    PermissionReply, PermissionRequest, PermissionRequestEventReceiver, PortError, PortErrorKind,
-    RuntimeError, SessionTranscript, SessionTranscriptRequest, SessionUsageReport,
-    WorkspaceDiffSnapshot,
+    AgentSessionForkRequest, AgentSessionForkResult, AgentSessionLineageCancellationRequest,
+    AgentSessionLineageInspection, AgentSessionLineageRequest, AgentSessionLineageSnapshot,
+    AgentSessionLineageTranscriptRequest, AgentSessionListRequest, AgentSessionModeUpdateRequest,
+    AgentSessionModelUpdateRequest, AgentSessionRenameRequest, AgentSessionRestoreRequest,
+    AgentSessionRevertRequest, AgentSessionRevertResult, AgentSessionUsageRequest,
+    AgentTurnCancellationRequest, AgentTurnSettlementRequest, AgentUserAnswersRequest,
+    AgentUserShellCommandRequest, AgentWorkspaceReference, AgentWorkspaceReferenceSearchRequest,
+    AgentWorkspaceReferenceSearchResult, DialogSteerOutcome, PermissionReply, PermissionRequest,
+    PermissionRequestEventReceiver, PortError, PortErrorKind, RuntimeError, SessionTranscript,
+    SessionTranscriptRequest, SessionUsageReport, WorkspaceDiffSnapshot,
 };
 use bitfun_agent_runtime_ipc::{
     RuntimeIpcClient, RuntimeIpcClientError, RuntimeIpcClientEvent, RuntimeIpcErrorCode,
@@ -176,6 +177,25 @@ impl SessionOperationError {
         Self {
             message: error.to_string(),
             outcome_unknown: true,
+        }
+    }
+
+    fn read_only_shared(error: RuntimeIpcClientError) -> Self {
+        let outcome_unknown = matches!(
+            &error,
+            RuntimeIpcClientError::Remote(remote)
+                if remote.code == RuntimeIpcErrorCode::OutcomeUnknown
+        );
+        Self {
+            message: shared_restore_error(error).to_string(),
+            outcome_unknown,
+        }
+    }
+
+    fn read_only_unexpected(error: anyhow::Error) -> Self {
+        Self {
+            message: error.to_string(),
+            outcome_unknown: false,
         }
     }
 
@@ -506,6 +526,93 @@ impl CliAgentRuntimeClient {
     pub(crate) async fn list_sessions(&self) -> Result<Vec<AgentSessionSummary>> {
         let workspace_path = self.current_workspace_path();
         self.list_sessions_in_workspace(&workspace_path).await
+    }
+
+    pub(crate) async fn session_lineage(
+        &self,
+        root_session_id: &str,
+    ) -> Result<Option<AgentSessionLineageSnapshot>> {
+        let request = AgentSessionLineageRequest {
+            workspace_path: self.current_workspace_path().to_string_lossy().into_owned(),
+            anchor_session_id: root_session_id.to_string(),
+            remote_connection_id: None,
+            remote_ssh_host: None,
+        };
+        match &self.backend {
+            CliAgentRuntimeBackend::Embedded(runtime) => runtime
+                .get_session_lineage(request)
+                .await
+                .map_err(|error| anyhow::anyhow!(error.into_message())),
+            CliAgentRuntimeBackend::Shared(client) => match client
+                .request(RuntimeIpcOperation::GetSessionLineage { request })
+                .await?
+            {
+                RuntimeIpcOperationResult::SessionLineage { snapshot } => Ok(snapshot),
+                _ => Err(unexpected_shared_result("get_session_lineage")),
+            },
+        }
+    }
+
+    pub(crate) async fn inspect_lineage_session(
+        &self,
+        root_session_id: &str,
+        session_id: &str,
+    ) -> std::result::Result<AgentSessionLineageInspection, SessionOperationError> {
+        let request = AgentSessionLineageTranscriptRequest {
+            workspace_path: self.current_workspace_path().to_string_lossy().into_owned(),
+            root_session_id: root_session_id.to_string(),
+            session_id: session_id.to_string(),
+            remote_connection_id: None,
+            remote_ssh_host: None,
+        };
+        match &self.backend {
+            CliAgentRuntimeBackend::Embedded(runtime) => runtime
+                .read_lineage_session_transcript(request)
+                .await
+                .map_err(SessionOperationError::runtime),
+            CliAgentRuntimeBackend::Shared(client) => match client
+                .request(RuntimeIpcOperation::InspectLineageSession { request })
+                .await
+                .map_err(SessionOperationError::read_only_shared)?
+            {
+                RuntimeIpcOperationResult::LineageSessionInspection { inspection } => {
+                    Ok(inspection)
+                }
+                _ => Err(SessionOperationError::read_only_unexpected(
+                    unexpected_shared_result("inspect_lineage_session"),
+                )),
+            },
+        }
+    }
+
+    pub(crate) async fn cancel_lineage_session(
+        &self,
+        root_session_id: &str,
+        session_id: &str,
+    ) -> Result<bitfun_agent_runtime::sdk::AgentTurnCancellationResult> {
+        let request = AgentSessionLineageCancellationRequest {
+            workspace_path: self.current_workspace_path().to_string_lossy().into_owned(),
+            root_session_id: root_session_id.to_string(),
+            session_id: session_id.to_string(),
+            source: Some(AgentSubmissionSource::Cli),
+            reason: Some("user_cancelled".to_string()),
+            wait_timeout_ms: Some(5_000),
+            remote_connection_id: None,
+            remote_ssh_host: None,
+        };
+        match &self.backend {
+            CliAgentRuntimeBackend::Embedded(runtime) => runtime
+                .cancel_lineage_session(request)
+                .await
+                .map_err(|error| anyhow::anyhow!(error.into_message())),
+            CliAgentRuntimeBackend::Shared(client) => match client
+                .request(RuntimeIpcOperation::CancelLineageSession { request })
+                .await?
+            {
+                RuntimeIpcOperationResult::TurnCancelled { cancellation } => Ok(cancellation),
+                _ => Err(unexpected_shared_result("cancel_lineage_session")),
+            },
+        }
     }
 
     pub(crate) async fn restore_session_in_current_workspace(
@@ -1499,6 +1606,7 @@ impl CliAgentRuntimeClient {
                 requester_session_id: None,
                 reason: Some("user_cancelled".to_string()),
                 wait_timeout_ms: None,
+                cancel_descendants: true,
             };
             match &self.backend {
                 CliAgentRuntimeBackend::Embedded(runtime) => {
@@ -1873,6 +1981,33 @@ mod tests {
         )));
 
         assert!(error.outcome_unknown());
+    }
+
+    #[test]
+    fn read_only_lineage_retry_requires_typed_remote_outcome_unknown() {
+        let settling = SessionOperationError::read_only_shared(RuntimeIpcClientError::Remote(
+            RuntimeIpcError {
+                code: RuntimeIpcErrorCode::OutcomeUnknown,
+                message: "turn is settling".to_string(),
+            },
+        ));
+        let permanent = SessionOperationError::read_only_shared(RuntimeIpcClientError::Remote(
+            RuntimeIpcError {
+                code: RuntimeIpcErrorCode::NotFound,
+                message: "session missing".to_string(),
+            },
+        ));
+
+        assert!(settling.outcome_unknown());
+        assert!(!permanent.outcome_unknown());
+        assert!(
+            !SessionOperationError::read_only_shared(RuntimeIpcClientError::Timeout)
+                .outcome_unknown()
+        );
+        assert!(
+            !SessionOperationError::read_only_unexpected(anyhow::anyhow!("unexpected response"))
+                .outcome_unknown()
+        );
     }
 
     #[test]

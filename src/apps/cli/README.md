@@ -63,7 +63,14 @@ equivalent exists:
 | `/reload [skills\|instructions]` | Refresh declarative context for the next message. |
 
 The command palette and shortcut help show the bindings active in the current
-configuration. `/editor` does not install or guess an editor. For GUI editors,
+configuration. The OpenCode-compatible **View subagents** palette action has no
+slash alias or default shortcut. It opens the current conversation's child
+Session tree without replacing the root Session or its draft. The selected
+transcript is read-only: use `Up` for its parent, `Left`/`Right` for siblings,
+`Esc` for the root conversation, and the normal interrupt action to cancel the
+selected child Session's active execution subtree.
+
+`/editor` does not install or guess an editor. For GUI editors,
 configure a command that waits until the file is closed; missing commands,
 non-zero exits, and empty editor output leave the current draft unchanged.
 
@@ -138,10 +145,10 @@ bitfun chat --shared
 
 Shared TUI lets multiple terminal processes reuse one workspace Runtime. Each
 TUI controls at most one session and a session has one controller. Core chat,
-Shell mode, session navigation, model/mode selection, permissions, and
-transcript events use the same behavior as Embedded TUI. Some local management
-and attachment capabilities remain Embedded-only and report that limitation
-instead of silently falling back.
+Shell mode, session navigation, read-only subagent transcript inspection,
+model/mode selection, permissions, and transcript events use the same behavior
+as Embedded TUI. Some local management and attachment capabilities remain
+Embedded-only and report that limitation instead of silently falling back.
 
 Exit all Shared TUI clients and wait briefly before returning to the default
 Embedded mode for the same workspace.

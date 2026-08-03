@@ -187,6 +187,7 @@ impl ChatMode {
             || chat_view.model_selector_visible()
             || chat_view.agent_selector_visible()
             || chat_view.session_selector_visible()
+            || chat_view.session_lineage_selector_visible()
             || chat_view.fork_selector_visible()
             || chat_view.timeline_selector_visible()
             || chat_view.prompt_stash_selector_visible()
@@ -214,6 +215,7 @@ impl ChatMode {
         chat_view.hide_model_selector();
         chat_view.hide_agent_selector();
         chat_view.hide_session_selector();
+        chat_view.hide_session_lineage_selector();
         chat_view.hide_fork_selector();
         chat_view.hide_timeline_selector();
         chat_view.hide_prompt_stash_selector();
@@ -243,6 +245,9 @@ impl ChatMode {
                 crate::ui::chat::PopupType::ModelSelector => chat_view.hide_model_selector(),
                 crate::ui::chat::PopupType::AgentSelector => chat_view.hide_agent_selector(),
                 crate::ui::chat::PopupType::SessionSelector => chat_view.hide_session_selector(),
+                crate::ui::chat::PopupType::SessionLineageSelector => {
+                    chat_view.hide_session_lineage_selector()
+                }
                 crate::ui::chat::PopupType::ForkSelector => chat_view.hide_fork_selector(),
                 crate::ui::chat::PopupType::TimelineSelector => chat_view.hide_timeline_selector(),
                 crate::ui::chat::PopupType::PromptStashSelector => {
@@ -274,6 +279,9 @@ impl ChatMode {
                     crate::ui::chat::PopupType::AgentSelector => chat_view.reshow_agent_selector(),
                     crate::ui::chat::PopupType::SessionSelector => {
                         chat_view.reshow_session_selector()
+                    }
+                    crate::ui::chat::PopupType::SessionLineageSelector => {
+                        chat_view.reshow_session_lineage_selector()
                     }
                     crate::ui::chat::PopupType::ForkSelector => chat_view.reshow_fork_selector(),
                     crate::ui::chat::PopupType::TimelineSelector => {

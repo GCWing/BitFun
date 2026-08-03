@@ -2,12 +2,13 @@ use bitfun_product_domains::tool_permissions::{PermissionReply, PermissionReques
 use bitfun_runtime_ports::{
     AgentContextReloadRequest, AgentDialogSteerRequest, AgentDialogTurnRequest,
     AgentMessageWorkspaceReferencesRequest, AgentSessionCompactionRequest,
-    AgentSessionCreateRequest, AgentSessionCreateResult, AgentSessionListRequest,
-    AgentSessionModeUpdateRequest, AgentSessionModelUpdateRequest, AgentSessionRevertRequest,
-    AgentSessionRevertResult, AgentSessionSummary, AgentTurnCancellationRequest,
-    AgentTurnCancellationResult, AgentUserShellCommandRequest, AgentWorkspaceReference,
-    AgentWorkspaceReferenceSearchRequest, AgentWorkspaceReferenceSearchResult, SessionTranscript,
-    WorkspaceDiffSnapshot,
+    AgentSessionCreateRequest, AgentSessionCreateResult, AgentSessionLineageCancellationRequest,
+    AgentSessionLineageInspection, AgentSessionLineageRequest, AgentSessionLineageSnapshot,
+    AgentSessionLineageTranscriptRequest, AgentSessionListRequest, AgentSessionModeUpdateRequest,
+    AgentSessionModelUpdateRequest, AgentSessionRevertRequest, AgentSessionRevertResult,
+    AgentSessionSummary, AgentTurnCancellationRequest, AgentTurnCancellationResult,
+    AgentUserShellCommandRequest, AgentWorkspaceReference, AgentWorkspaceReferenceSearchRequest,
+    AgentWorkspaceReferenceSearchResult, SessionTranscript, WorkspaceDiffSnapshot,
 };
 use serde::{Deserialize, Serialize};
 
@@ -94,6 +95,15 @@ pub enum RuntimeIpcOperation {
     WorkspaceReferencesForMessage {
         request: AgentMessageWorkspaceReferencesRequest,
     },
+    GetSessionLineage {
+        request: AgentSessionLineageRequest,
+    },
+    InspectLineageSession {
+        request: AgentSessionLineageTranscriptRequest,
+    },
+    CancelLineageSession {
+        request: AgentSessionLineageCancellationRequest,
+    },
     WorkspaceDiff,
     SubmitTurn {
         request: AgentDialogTurnRequest,
@@ -135,6 +145,9 @@ impl RuntimeIpcOperation {
             Self::RedoSession { request } => Some(&request.session_id),
             Self::SearchWorkspaceReferences { request } => Some(&request.session_id),
             Self::WorkspaceReferencesForMessage { request } => Some(&request.session_id),
+            Self::GetSessionLineage { request } => Some(&request.anchor_session_id),
+            Self::InspectLineageSession { request } => Some(&request.root_session_id),
+            Self::CancelLineageSession { request } => Some(&request.root_session_id),
             Self::SubmitTurn { request } => Some(&request.session_id),
             Self::SteerTurn { request } => Some(&request.session_id),
             Self::RunUserShellCommand { request } => Some(&request.session_id),
@@ -191,6 +204,12 @@ impl RuntimeIpcOperation {
             }
             Self::SearchWorkspaceReferences { .. } | Self::WorkspaceReferencesForMessage { .. } => {
                 RuntimeIpcOperationRules::new(CurrentController, false, false, false)
+            }
+            Self::GetSessionLineage { .. } | Self::InspectLineageSession { .. } => {
+                RuntimeIpcOperationRules::new(CurrentController, false, false, false)
+            }
+            Self::CancelLineageSession { .. } => {
+                RuntimeIpcOperationRules::new(CurrentController, false, false, true)
             }
         }
     }
@@ -259,6 +278,12 @@ pub enum RuntimeIpcOperationResult {
     SessionReverted {
         revert: AgentSessionRevertResult,
     },
+    SessionLineage {
+        snapshot: Option<AgentSessionLineageSnapshot>,
+    },
+    LineageSessionInspection {
+        inspection: AgentSessionLineageInspection,
+    },
     TurnAccepted {
         session_id: String,
         turn_id: String,
@@ -290,6 +315,8 @@ mod tests {
     use super::{RuntimeIpcOperation, RuntimeIpcSessionRequirement, RuntimeSessionRestoreRequest};
     use bitfun_runtime_ports::{
         AgentContextReloadRequest, AgentContextReloadTarget, AgentDialogSteerRequest,
+        AgentSessionLineageCancellationRequest, AgentSessionLineageRequest,
+        AgentSessionLineageTranscriptRequest,
     };
 
     #[test]
@@ -377,5 +404,59 @@ mod tests {
         assert!(!pending.requires_idle);
         assert!(!pending.serializes_session_selection);
         assert!(!pending.side_effecting);
+    }
+
+    #[test]
+    fn lineage_rules_keep_root_controller_and_allow_active_read_only_inspection() {
+        let query = RuntimeIpcOperation::GetSessionLineage {
+            request: AgentSessionLineageRequest {
+                workspace_path: "D:/workspace/project".to_string(),
+                anchor_session_id: "root-1".to_string(),
+                remote_connection_id: None,
+                remote_ssh_host: None,
+            },
+        };
+        let inspect = RuntimeIpcOperation::InspectLineageSession {
+            request: AgentSessionLineageTranscriptRequest {
+                workspace_path: "D:/workspace/project".to_string(),
+                root_session_id: "root-1".to_string(),
+                session_id: "child-1".to_string(),
+                remote_connection_id: None,
+                remote_ssh_host: None,
+            },
+        };
+        let cancel = RuntimeIpcOperation::CancelLineageSession {
+            request: AgentSessionLineageCancellationRequest {
+                workspace_path: "D:/workspace/project".to_string(),
+                root_session_id: "root-1".to_string(),
+                session_id: "child-1".to_string(),
+                source: None,
+                reason: None,
+                wait_timeout_ms: None,
+                remote_connection_id: None,
+                remote_ssh_host: None,
+            },
+        };
+
+        for operation in [&query, &inspect] {
+            let rules = operation.rules();
+            assert_eq!(operation.session_id(), Some("root-1"));
+            assert_eq!(
+                rules.session_requirement,
+                RuntimeIpcSessionRequirement::CurrentController
+            );
+            assert!(!rules.requires_idle);
+            assert!(!rules.serializes_session_selection);
+            assert!(!rules.side_effecting);
+        }
+        let cancel_rules = cancel.rules();
+        assert_eq!(cancel.session_id(), Some("root-1"));
+        assert_eq!(
+            cancel_rules.session_requirement,
+            RuntimeIpcSessionRequirement::CurrentController
+        );
+        assert!(!cancel_rules.requires_idle);
+        assert!(!cancel_rules.serializes_session_selection);
+        assert!(cancel_rules.side_effecting);
     }
 }

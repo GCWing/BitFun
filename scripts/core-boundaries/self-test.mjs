@@ -5233,6 +5233,7 @@ async fn release_baseline_claim(release: BaselineClaimRelease) -> Result<(), Dis
       'DetachSession',
       'ManageModels',
       'ManageAgents',
+      'LineageSessionTranscript',
     ].every((name) => runtimeIpcOperationPattern.test(`    ${name},`)) ||
     runtimeIpcOperationPattern.test('    Health,') ||
     runtimeIpcOperationPattern.test('    DeleteSession {') ||
@@ -5244,6 +5245,15 @@ async fn release_baseline_claim(release: BaselineClaimRelease) -> Result<(), Dis
     runtimeIpcOperationPattern.test('    RedoSession {') ||
     runtimeIpcOperationPattern.test('    SearchWorkspaceReferences {') ||
     runtimeIpcOperationPattern.test('    WorkspaceReferencesForMessage {') ||
+    runtimeIpcOperationPattern.test('    GetSessionLineage {') ||
+    runtimeIpcOperationPattern.test('    InspectLineageSession {') ||
+    runtimeIpcOperationPattern.test('    CancelLineageSession {') ||
+    runtimeIpcOperationPattern.test('    SessionLineage {') ||
+    runtimeIpcOperationPattern.test('    LineageSessionInspection {') ||
+    runtimeIpcOperationPattern.test('    AgentSessionLineageCancellationRequest,') ||
+    runtimeIpcOperationPattern.test('    AgentSessionLineageRequest,') ||
+    runtimeIpcOperationPattern.test('    AgentSessionLineageSnapshot,') ||
+    runtimeIpcOperationPattern.test('    AgentSessionLineageTranscriptRequest,') ||
     runtimeIpcOperationPattern.test('    WorkspaceReferenceSearch {') ||
     runtimeIpcOperationPattern.test('    WorkspaceReferences {') ||
     runtimeIpcOperationPattern.test('    WorkspaceDiff {') ||

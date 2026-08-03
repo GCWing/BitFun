@@ -572,7 +572,7 @@ impl ChatMode {
                 needs_redraw = true;
             }
             chat_view.set_action_state(
-                self.action_state(chat_state.is_processing, false),
+                self.action_state(self.displayed_chat_state(&chat_state).is_processing, false),
                 &self.keymap,
             );
             chat_view.set_agent_mode_switch_allowed(session_update_allowed(
@@ -797,8 +797,9 @@ impl ChatMode {
 
             let mut did_render_this_loop = false;
             if needs_redraw && resize_redraw.can_render() {
+                let displayed_chat_state = self.displayed_chat_state(&chat_state);
                 terminal.draw(|frame| {
-                    chat_view.render(frame, &chat_state);
+                    chat_view.render(frame, displayed_chat_state);
                 })?;
                 needs_redraw = false;
                 did_render_this_loop = true;
@@ -812,8 +813,9 @@ impl ChatMode {
                 }
                 if let Some(op) = self.pending_mcp_op.take() {
                     if !did_render_this_loop {
+                        let displayed_chat_state = self.displayed_chat_state(&chat_state);
                         terminal.draw(|frame| {
-                            chat_view.render(frame, &chat_state);
+                            chat_view.render(frame, displayed_chat_state);
                         })?;
                     }
                     match op {
@@ -889,7 +891,6 @@ impl ChatMode {
             }
             for envelope in events {
                 let event = &envelope.event;
-
                 if let AgenticEvent::SubagentSessionLinked {
                     session_id: subagent_session_id,
                     parent_session_id,
@@ -906,6 +907,9 @@ impl ChatMode {
 
                 // Check if this is a subagent event that belongs to our session
                 if event.session_id() != Some(&session_id) {
+                    if self.project_inspected_lineage_event(event) {
+                        needs_redraw = true;
+                    }
                     // Check if this event was emitted by a subagent whose parent is in our session
                     if let Some(parent_tool_call_id) = event
                         .session_id()
@@ -921,189 +925,7 @@ impl ChatMode {
 
                 tracing::debug!("Processing core event: {:?}", event);
 
-                if event
-                    .turn_id()
-                    .is_some_and(|turn_id| chat_state.should_ignore_turn_event(turn_id))
-                {
-                    tracing::debug!(
-                        "Ignoring event for a Turn retired by authoritative Session state: turn_id={:?}",
-                        event.turn_id()
-                    );
-                    continue;
-                }
-
                 match event {
-                    AgenticEvent::DialogTurnStarted {
-                        turn_id,
-                        user_input,
-                        ..
-                    } => {
-                        chat_state.handle_turn_started(turn_id, user_input);
-                        chat_view.invalidate_lines_cache();
-                        needs_redraw = true;
-                    }
-
-                    AgenticEvent::TextChunk { turn_id, text, .. } => {
-                        if chat_state.current_turn_id() == Some(turn_id.as_str()) {
-                            chat_state.handle_text_chunk(text);
-                            chat_view.invalidate_lines_cache();
-                            needs_redraw = true;
-                        } else {
-                            tracing::debug!(
-                                "Ignoring TextChunk for non-active turn: active={:?}, event={}",
-                                chat_state.current_turn_id(),
-                                turn_id
-                            );
-                        }
-                    }
-
-                    AgenticEvent::ThinkingChunk {
-                        turn_id, content, ..
-                    } => {
-                        if chat_state.current_turn_id() == Some(turn_id.as_str()) {
-                            chat_state.handle_thinking_chunk(content);
-                            chat_view.invalidate_lines_cache();
-                            needs_redraw = true;
-                        } else {
-                            tracing::debug!(
-                                "Ignoring ThinkingChunk for non-active turn: active={:?}, event={}",
-                                chat_state.current_turn_id(),
-                                turn_id
-                            );
-                        }
-                    }
-
-                    AgenticEvent::ToolEvent {
-                        turn_id,
-                        tool_event,
-                        ..
-                    } => {
-                        if chat_state.current_turn_id() != Some(turn_id.as_str()) {
-                            tracing::debug!(
-                                "Ignoring ToolEvent for non-active turn: active={:?}, event={}",
-                                chat_state.current_turn_id(),
-                                turn_id
-                            );
-                            continue;
-                        }
-                        let question_pending = chat_state.question_prompt.is_some();
-                        chat_state.handle_tool_event(tool_event);
-                        if !question_pending && chat_state.question_prompt.is_some() {
-                            self.emit_terminal_attention(
-                                &mut terminal,
-                                "BitFun requires your input",
-                            );
-                        }
-                        chat_view.invalidate_lines_cache();
-                        needs_redraw = true;
-                    }
-
-                    AgenticEvent::UserSteeringInjected {
-                        turn_id,
-                        steering_id,
-                        display_content,
-                        ..
-                    } => {
-                        if chat_state.current_turn_id() == Some(turn_id.as_str()) {
-                            chat_state.handle_user_steering(
-                                steering_id,
-                                display_content,
-                                false,
-                            );
-                            chat_view.invalidate_lines_cache();
-                            needs_redraw = true;
-                        } else {
-                            tracing::debug!(
-                                "Ignoring UserSteeringInjected for non-active turn: active={:?}, event={}",
-                                chat_state.current_turn_id(),
-                                turn_id
-                            );
-                        }
-                    }
-
-                    AgenticEvent::ContextCompressionStarted { .. }
-                    | AgenticEvent::ContextCompressionCompleted { .. }
-                    | AgenticEvent::ContextCompressionFailed { .. } => {
-                        if let Some(tool_event) = context_compression_tool_event(event, &chat_state)
-                        {
-                            if matches!(event, AgenticEvent::ContextCompressionStarted { .. }) {
-                                chat_view.set_status(Some("Compacting context...".to_string()));
-                            }
-                            chat_state.handle_tool_event(&tool_event);
-                            chat_view.invalidate_lines_cache();
-                            needs_redraw = true;
-                        }
-                    }
-
-                    AgenticEvent::DialogTurnCompleted {
-                        turn_id,
-                        total_rounds,
-                        total_tools,
-                        ..
-                    } => {
-                        if chat_state.current_turn_id() == Some(turn_id.as_str()) {
-                            chat_state.handle_turn_completed(*total_rounds, *total_tools);
-                            self.refresh_workspace_git_status(&mut chat_state, &rt_handle);
-                            chat_view.invalidate_lines_cache();
-                            chat_view.set_status(None);
-                            self.emit_terminal_attention(
-                                &mut terminal,
-                                "BitFun finished the current turn",
-                            );
-                            needs_redraw = true;
-                            tracing::info!("Dialog turn completed");
-                        } else {
-                            tracing::debug!(
-                                "Ignoring DialogTurnCompleted for non-active turn: active={:?}, event={}",
-                                chat_state.current_turn_id(),
-                                turn_id
-                            );
-                        }
-                    }
-
-                    AgenticEvent::DialogTurnFailed { turn_id, error, .. } => {
-                        if chat_state.current_turn_id() == Some(turn_id.as_str()) {
-                            chat_state.handle_turn_failed(error);
-                            self.refresh_workspace_git_status(&mut chat_state, &rt_handle);
-                            chat_view.invalidate_lines_cache();
-                            chat_view.set_status(Some(format!("Error: {}", error)));
-                            self.emit_terminal_attention(&mut terminal, "BitFun turn failed");
-                            needs_redraw = true;
-                            tracing::error!("Dialog turn failed: {}", error);
-                        } else {
-                            tracing::debug!(
-                                "Ignoring DialogTurnFailed for non-active turn: active={:?}, event={}",
-                                chat_state.current_turn_id(),
-                                turn_id
-                            );
-                        }
-                    }
-
-                    AgenticEvent::DialogTurnCancelled { turn_id, .. } => {
-                        if chat_state.should_apply_turn_cancelled(turn_id) {
-                            chat_state.handle_turn_cancelled();
-                            self.refresh_workspace_git_status(&mut chat_state, &rt_handle);
-                            chat_view.invalidate_lines_cache();
-                            chat_view.set_status(Some("Cancelled".to_string()));
-                            needs_redraw = true;
-                            tracing::info!("Dialog turn cancelled");
-                        } else {
-                            tracing::debug!(
-                                "Ignoring DialogTurnCancelled for non-active turn: active={:?}, event={}",
-                                chat_state.current_turn_id(),
-                                turn_id
-                            );
-                        }
-                    }
-
-                    AgenticEvent::TokenUsageUpdated { .. } => {
-                        if let Some(usage) = primary_model_usage_for_active_turn(event, &chat_state)
-                        {
-                            chat_state.handle_primary_model_usage(usage);
-                            needs_redraw = true;
-                        }
-                    }
-
                     AgenticEvent::SessionModelAutoMigrated {
                         session_id,
                         previous_model_id,
@@ -1123,18 +945,56 @@ impl ChatMode {
                             needs_redraw = true;
                         }
                     }
-
-                    AgenticEvent::SystemError { error, .. } => {
-                        chat_state.add_system_message(format!("[System error: {}]", error));
-                        chat_view.invalidate_lines_cache();
-                        chat_view.set_status(Some(format!("System error: {}", error)));
-                        needs_redraw = true;
-                        tracing::error!("System error: {}", error);
+                    _ => {
+                        let projection = project_transcript_event(&mut chat_state, event, true);
+                        if projection.changed {
+                            chat_view.invalidate_lines_cache();
+                            needs_redraw = true;
+                        }
+                        if projection.requested_input {
+                            self.emit_terminal_attention(
+                                &mut terminal,
+                                "BitFun requires your input",
+                            );
+                        }
+                        if matches!(event, AgenticEvent::ContextCompressionStarted { .. })
+                            && projection.changed
+                        {
+                            chat_view.set_status(Some("Compacting context...".to_string()));
+                        }
+                        match projection.terminal {
+                            Some(TranscriptTerminalOutcome::Completed) => {
+                                self.refresh_workspace_git_status(&mut chat_state, &rt_handle);
+                                chat_view.set_status(None);
+                                self.emit_terminal_attention(
+                                    &mut terminal,
+                                    "BitFun finished the current turn",
+                                );
+                                tracing::info!("Dialog turn completed");
+                            }
+                            Some(TranscriptTerminalOutcome::Failed(error)) => {
+                                self.refresh_workspace_git_status(&mut chat_state, &rt_handle);
+                                chat_view.set_status(Some(format!("Error: {error}")));
+                                self.emit_terminal_attention(&mut terminal, "BitFun turn failed");
+                                tracing::error!("Dialog turn failed: {error}");
+                            }
+                            Some(TranscriptTerminalOutcome::Cancelled) => {
+                                self.refresh_workspace_git_status(&mut chat_state, &rt_handle);
+                                chat_view.set_status(Some("Cancelled".to_string()));
+                                tracing::info!("Dialog turn cancelled");
+                            }
+                            Some(TranscriptTerminalOutcome::SystemError(error)) => {
+                                chat_view.set_status(Some(format!("System error: {error}")));
+                                tracing::error!("System error: {error}");
+                            }
+                            None => {}
+                        }
                     }
-
-                    // Other events we don't need to handle in the UI
-                    _ => {}
                 }
+            }
+            if self.refresh_inspected_lineage_if_due(&mut chat_view, &rt_handle) {
+                chat_view.invalidate_lines_cache();
+                needs_redraw = true;
             }
 
             // 3. Process terminal input

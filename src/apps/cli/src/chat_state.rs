@@ -801,6 +801,44 @@ impl ChatState {
         state
     }
 
+    /// Continue projecting live events onto an authoritative transcript read
+    /// without inserting a duplicate user/assistant turn.
+    pub(crate) fn resume_transcript_turn(&mut self, turn_id: &str) {
+        self.current_turn_id = Some(turn_id.to_string());
+        self.is_processing = true;
+        self.current_flow_items.clear();
+        self.tool_index.clear();
+
+        if let Some(message) = self.messages.iter_mut().rev().find(|message| {
+            message.role == MessageRole::Assistant && message.turn_id.as_deref() == Some(turn_id)
+        }) {
+            message.is_streaming = true;
+            self.current_flow_items = message.flow_items.clone();
+            for (index, item) in self.current_flow_items.iter().enumerate() {
+                if let FlowItem::Tool { tool_state } = item {
+                    self.tool_index.insert(tool_state.tool_id.clone(), index);
+                }
+            }
+        } else {
+            self.push_streaming_assistant_message(turn_id);
+        }
+    }
+
+    /// Ignore delayed lifecycle events for turns already represented by an
+    /// authoritative transcript, while allowing one active turn to continue.
+    pub(crate) fn reconcile_transcript_turn_events(&mut self, active_turn_id: Option<&str>) {
+        self.ignored_turn_ids.extend(
+            self.messages
+                .iter()
+                .filter_map(|message| message.turn_id.as_deref())
+                .filter(|turn_id| Some(*turn_id) != active_turn_id)
+                .map(str::to_string),
+        );
+        if let Some(turn_id) = active_turn_id {
+            self.ignored_turn_ids.remove(turn_id);
+        }
+    }
+
     /// Replace the render projection from the Runtime-owned transcript while
     /// retaining Session/workspace/product settings owned by the TUI shell.
     pub(crate) fn replace_from_authoritative_transcript(
@@ -857,7 +895,11 @@ impl ChatState {
         });
         self.metadata.message_count += 1;
 
-        // Add empty assistant message (will be filled by streaming)
+        self.push_streaming_assistant_message(turn_id);
+    }
+
+    fn push_streaming_assistant_message(&mut self, turn_id: &str) {
+        // Add an empty assistant message that incoming chunks can rebuild.
         self.messages.push(ChatMessage {
             id: uuid::Uuid::new_v4().to_string(),
             turn_id: Some(turn_id.to_string()),
@@ -1572,8 +1614,7 @@ fn truncate_string(s: &str, max_len: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        ChatState, FlowItem, ModelTokenUsageSnapshot, PermissionReconcileOutcome,
-        ToolDisplayStatus,
+        ChatState, FlowItem, ModelTokenUsageSnapshot, PermissionReconcileOutcome, ToolDisplayStatus,
     };
     use bitfun_agent_runtime::sdk::{
         PermissionDelegationContext, PermissionRequest, PermissionRequestSource,
@@ -2208,5 +2249,77 @@ mod tests {
             tool_state.metadata,
             Some(json!({ "display_summary": "README contents" }))
         );
+    }
+
+    #[test]
+    fn active_transcript_resume_reuses_the_existing_assistant_message() {
+        let transcript = SessionTranscript {
+            session_id: "child-1".to_string(),
+            messages: vec![
+                TranscriptMessage {
+                    id: Some("user-1".to_string()),
+                    role: "user".to_string(),
+                    turn_id: Some("turn-1".to_string()),
+                    timestamp_ms: Some(1_000),
+                    content: TranscriptContent::Text("Investigate".to_string()),
+                },
+                TranscriptMessage {
+                    id: Some("assistant-1".to_string()),
+                    role: "assistant".to_string(),
+                    turn_id: Some("turn-1".to_string()),
+                    timestamp_ms: Some(1_100),
+                    content: TranscriptContent::Text("Working".to_string()),
+                },
+            ],
+        };
+        let mut state = ChatState::from_session_transcript(
+            "child-1".to_string(),
+            "Explore".to_string(),
+            "explore".to_string(),
+            None,
+            &transcript,
+        );
+
+        state.resume_transcript_turn("turn-1");
+
+        assert!(state.is_processing);
+        assert_eq!(state.current_turn_id(), Some("turn-1"));
+        assert_eq!(state.messages.len(), 2);
+        assert!(state.messages[1].is_streaming);
+        assert!(matches!(
+            state.current_flow_items.as_slice(),
+            [FlowItem::Text { content, .. }] if content == "Working"
+        ));
+    }
+
+    #[test]
+    fn active_transcript_resume_creates_streaming_target_before_first_assistant_content() {
+        let transcript = SessionTranscript {
+            session_id: "child-1".to_string(),
+            messages: vec![TranscriptMessage {
+                id: Some("user-1".to_string()),
+                role: "user".to_string(),
+                turn_id: Some("turn-1".to_string()),
+                timestamp_ms: Some(1_000),
+                content: TranscriptContent::Text("Investigate".to_string()),
+            }],
+        };
+        let mut state = ChatState::from_session_transcript(
+            "child-1".to_string(),
+            "Explore".to_string(),
+            "explore".to_string(),
+            None,
+            &transcript,
+        );
+
+        state.resume_transcript_turn("turn-1");
+        state.handle_text_chunk("First chunk");
+
+        assert_eq!(state.messages.len(), 2);
+        assert!(state.messages[1].is_streaming);
+        assert!(matches!(
+            state.messages[1].flow_items.as_slice(),
+            [FlowItem::Text { content, .. }] if content == "First chunk"
+        ));
     }
 }

@@ -38,7 +38,24 @@ export interface SessionLineageRequest {
 
 export interface SessionLineageSnapshot {
   rootSessionId: string;
-  sessions: SessionMetadata[];
+  sessions: SessionLineageEntry[];
+}
+
+export interface SessionLineageEntry {
+  sessionId: string;
+  sessionName: string;
+  agentType: string;
+  createdAtMs: number;
+  status: 'active' | 'archived' | 'completed';
+  activeTurnId?: string;
+  parentSessionId?: string;
+  parentToolCallId?: string;
+  subagentType?: string;
+  workspacePath?: string;
+  remoteConnectionId?: string;
+  remoteSshHost?: string;
+  unreadCompletion?: 'completed' | 'error' | 'interrupted';
+  needsUserAttention?: 'ask_user' | 'tool_confirm';
 }
 
 export interface SessionReferenceCandidate {
