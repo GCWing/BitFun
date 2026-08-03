@@ -575,6 +575,104 @@ describe('DispatchJobObserver', () => {
     cleanup();
   });
 
+  it('resumes draining after the target accepts a follow-up on a terminal job', async () => {
+    registerRunningJob();
+    mocks.status
+      .mockResolvedValueOnce(status({
+        state: 'succeeded',
+        cursor: 12,
+        events: [{
+          type: 'jobState',
+          timestamp: '2026-07-28T00:00:00Z',
+          state: 'succeeded',
+        }],
+      }))
+      .mockResolvedValueOnce(status({
+        state: 'succeeded',
+        cursor: 12,
+        events: [],
+      }));
+    const cleanup = installDispatchJobObserver(createContext());
+
+    await vi.advanceTimersByTimeAsync(0);
+    requestDispatchJobRefresh('job-1');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(dispatchJobStore.getState().jobs['job-1'].terminalDrained).toBe(true);
+    expect(mocks.status).toHaveBeenCalledTimes(2);
+
+    // Regression: the drained terminal job accepts a follow-up turn. The
+    // target re-queues, runs it, and appends its events, but a renderer that
+    // keeps the job pinned terminal-and-drained never pulls another page and
+    // the follow-up's response silently never renders.
+    dispatchJobStore.getState().markFollowUpAccepted('job-1', 'queued');
+    mocks.listJobs.mockResolvedValue([{
+      ...runningOutboundRecord(),
+      lastState: 'queued' as const,
+    }]);
+    mocks.status
+      .mockResolvedValueOnce(status({
+        state: 'running',
+        cursor: 30,
+        events: [{
+          type: 'agentEvent',
+          timestamp: '2026-07-28T00:01:00Z',
+          event: {
+            id: 'event-follow-up',
+            frontendEventName: 'agentic://text-chunk',
+            frontendPayload: {
+              sessionId: 'session-1',
+              turnId: 'turn-2',
+              roundId: 'round-2',
+              text: 'follow-up answer',
+            },
+          },
+        }],
+      }))
+      .mockResolvedValueOnce(status({
+        state: 'succeeded',
+        cursor: 34,
+        events: [{
+          type: 'jobState',
+          timestamp: '2026-07-28T00:01:05Z',
+          state: 'succeeded',
+        }],
+      }))
+      .mockResolvedValue(status({
+        state: 'succeeded',
+        cursor: 34,
+        events: [],
+      }));
+
+    requestDispatchJobRefresh('job-1');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(dispatchJobStore.getState().jobs['job-1']).toMatchObject({
+      state: 'running',
+      cursor: 30,
+      terminalDrained: false,
+    });
+    expect(mocks.dispatchExternal).toHaveBeenCalledWith(
+      'agentic://text-chunk',
+      expect.objectContaining({ text: 'follow-up answer' }),
+    );
+
+    requestDispatchJobRefresh('job-1');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(dispatchJobStore.getState().jobs['job-1']).toMatchObject({
+      state: 'succeeded',
+      cursor: 34,
+    });
+
+    requestDispatchJobRefresh('job-1');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(dispatchJobStore.getState().jobs['job-1'].terminalDrained).toBe(true);
+    const settledCalls = mocks.status.mock.calls.length;
+
+    requestDispatchJobRefresh('job-1');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(mocks.status).toHaveBeenCalledTimes(settledCalls);
+    cleanup();
+  });
+
   it('does not query a target job before submit acknowledgement', async () => {
     registerRunningJob();
     dispatchJobStore.getState().updateProgress('job-1', { state: 'submitting' });

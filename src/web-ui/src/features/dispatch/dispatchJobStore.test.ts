@@ -94,6 +94,34 @@ describe('dispatchJobStore', () => {
     });
   });
 
+  it('reopens the drain gate when the target accepts a follow-up turn', () => {
+    registerJob('succeeded');
+
+    dispatchJobStore.getState().markFollowUpAccepted('job-1', 'queued');
+
+    // The follow-up resumes the event log rather than replaying it, so the
+    // cursor and applied events survive while the terminal pin does not.
+    expect(dispatchJobStore.getState().jobs['job-1']).toMatchObject({
+      state: 'queued',
+      cursor: 10,
+      terminalDrained: false,
+    });
+  });
+
+  it('reopens the drain gate even when a retried follow-up already finished', () => {
+    registerJob('succeeded');
+
+    // A retried continue can report a terminal state when the turn ran to
+    // completion before the retry resolved. The reported state applies as-is,
+    // but the gate must still reopen so the missed pages get drained.
+    dispatchJobStore.getState().markFollowUpAccepted('job-1', 'succeeded');
+
+    expect(dispatchJobStore.getState().jobs['job-1']).toMatchObject({
+      state: 'succeeded',
+      terminalDrained: false,
+    });
+  });
+
   it('keeps the renderer cursor independent from controller-wide observer progress', () => {
     registerJob();
     dispatchJobStore.getState().mergeOutboundRecords([{

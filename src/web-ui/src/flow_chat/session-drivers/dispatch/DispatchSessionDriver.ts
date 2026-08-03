@@ -245,8 +245,10 @@ async function continueDispatchJob(
         i18nService.t('flow-chat:chatInput.dispatch.errors.followUpRejected'),
       );
     }
-    // The target owns the job state; the refresh below reads it back rather
-    // than this side guessing what the follow-up did to it.
+    // The accepted response reports the target's post-queue state. Applying
+    // it here reopens the observer's drain gate, which stays shut for a
+    // terminal job even after the outbound record leaves its terminal state.
+    dispatchJobStore.getState().markFollowUpAccepted(jobId, response.state);
   } catch (error) {
     context.flowChatStore.deleteDialogTurn(sessionId, optimisticTurnId);
     throw error;
@@ -520,6 +522,9 @@ export const dispatchSessionDriver: SessionDriver = {
           i18nService.t('flow-chat:chatInput.dispatch.errors.compactRejected'),
         );
       }
+      // Same as a prompt follow-up: reopen the observer's drain gate with the
+      // target-reported state, or the compact turn's events are never pulled.
+      dispatchJobStore.getState().markFollowUpAccepted(jobId, response.state);
     } finally {
       releaseSubmissionRetry(COMPACT_RETRY_SCOPE, sessionId, retry.id);
     }

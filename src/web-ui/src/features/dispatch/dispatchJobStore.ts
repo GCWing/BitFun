@@ -193,6 +193,13 @@ interface DispatchJobStoreState {
     },
   ) => void;
   hasAppliedEvent: (jobId: string, eventId: string) => boolean;
+  /**
+   * Apply the state the target reported when it accepted a follow-up turn and
+   * reopen the drain gate so the observer resumes polling from the current
+   * cursor. Without this a terminal job stays `terminalDrained` and the
+   * follow-up's events are never pulled.
+   */
+  markFollowUpAccepted: (jobId: string, state: DispatchJobState) => void;
   setTransportState: (
     jobId: string,
     reachability: DispatchReachability,
@@ -219,6 +226,12 @@ interface DispatchJobStoreState {
   clear: () => void;
 }
 
+/**
+ * Terminal states are sticky against passive channels (stale status responses,
+ * lagging outbound records) so a settled job cannot flap. The one legitimate
+ * way back out is an accepted follow-up turn, which goes through
+ * `markFollowUpAccepted` instead of this transition.
+ */
 function nextJobState(
   current: DispatchJobState,
   requested: DispatchJobState | undefined,
@@ -501,6 +514,28 @@ export const useDispatchJobStore = create<DispatchJobStoreState>()(
 
       hasAppliedEvent: (jobId, eventId) =>
         get().jobs[jobId]?.appliedEventIds.includes(eventId) ?? false,
+
+      markFollowUpAccepted: (jobId, state) => {
+        set(current => {
+          const job = current.jobs[jobId];
+          if (!job) return current;
+          return {
+            jobs: {
+              ...current.jobs,
+              [jobId]: {
+                ...job,
+                // The continue response is a fresh read of the target's state
+                // machine, so it is applied directly rather than through the
+                // sticky-terminal transition rules. Cursor and applied events
+                // are kept: the follow-up resumes the log, it does not replay.
+                state,
+                terminalDrained: false,
+                updatedAt: Date.now(),
+              },
+            },
+          };
+        });
+      },
 
       setTransportState: (jobId, reachability, lastTransportError) => {
         set(state => {
