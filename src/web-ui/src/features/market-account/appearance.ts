@@ -15,8 +15,8 @@ export const marketAccountControlsAppearanceDescriptor: AppearanceSurfaceDescrip
   ],
   states: [
     { id: 'loading', selector: { kind: 'self', suffix: '[data-bf-state~="loading"]' } },
-    { id: 'signed-out', selector: { kind: 'self', suffix: '[data-bf-state~="signed-out"]' } },
-    { id: 'signed-in', selector: { kind: 'self', suffix: '[data-bf-state~="signed-in"]' } },
+    { id: 'signedOut', selector: { kind: 'self', suffix: '[data-bf-state~="signed-out"]' } },
+    { id: 'signedIn', selector: { kind: 'self', suffix: '[data-bf-state~="signed-in"]' } },
     { id: 'authorizing', selector: { kind: 'self', suffix: '[data-bf-state~="authorizing"]' } },
   ],
 };

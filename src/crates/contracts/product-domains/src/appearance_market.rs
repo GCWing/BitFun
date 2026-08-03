@@ -182,6 +182,20 @@ pub struct AppearanceMarketSubmissionDraftRequest {
     pub repository_url: Option<String>,
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AppearanceAdminSubmissionDetail {
+    pub submission: AppearanceMarketSubmission,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub manifest: Option<serde_json::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub package_sha256: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub preview_sha256: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub review_bundle_hash: Option<String>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AppearanceMarketPackageMeta {

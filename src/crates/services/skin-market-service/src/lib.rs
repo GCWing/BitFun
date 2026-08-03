@@ -130,39 +130,38 @@ mod tests {
     use tower::ServiceExt;
     use zip::write::SimpleFileOptions;
 
+    async fn test_identity(headers: HeaderMap) -> (StatusCode, Json<Value>) {
+        let token = headers
+            .get(header::AUTHORIZATION)
+            .and_then(|value| value.to_str().ok())
+            .unwrap_or_default();
+        let (github_id, login, is_admin) = match token {
+            "Bearer owner-token" => (41, "owner", false),
+            "Bearer admin-token" => (42, "admin", true),
+            _ => {
+                return (
+                    StatusCode::UNAUTHORIZED,
+                    Json(serde_json::json!({"error": "unauthorized"})),
+                );
+            }
+        };
+        (
+            StatusCode::OK,
+            Json(serde_json::json!({
+                "user": {
+                    "githubId": github_id,
+                    "login": login,
+                    "avatarUrl": "https://example.invalid/avatar"
+                },
+                "isAdmin": is_admin
+            })),
+        )
+    }
+
     async fn identity_url() -> url::Url {
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let address = listener.local_addr().unwrap();
-        let app = Router::new().route(
-            "/me",
-            get(|headers: HeaderMap| async move {
-                let token = headers
-                    .get(header::AUTHORIZATION)
-                    .and_then(|value| value.to_str().ok())
-                    .unwrap_or_default();
-                let (github_id, login, is_admin) = match token {
-                    "Bearer owner-token" => (41, "owner", false),
-                    "Bearer admin-token" => (42, "admin", true),
-                    _ => {
-                        return (
-                            StatusCode::UNAUTHORIZED,
-                            Json(serde_json::json!({"error": "unauthorized"})),
-                        )
-                    }
-                };
-                (
-                    StatusCode::OK,
-                    Json(serde_json::json!({
-                        "user": {
-                            "githubId": github_id,
-                            "login": login,
-                            "avatarUrl": "https://example.invalid/avatar"
-                        },
-                        "isAdmin": is_admin
-                    })),
-                )
-            }),
-        );
+        let app = Router::new().route("/me", get(test_identity).post(test_identity));
         tokio::spawn(async move {
             axum::serve(listener, app).await.unwrap();
         });

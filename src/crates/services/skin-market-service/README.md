@@ -9,8 +9,10 @@ in `bitfun-product-domains::appearance_market`.
 The service is isolated from the MiniApp market database and artifacts. It
 does not own OAuth credentials: authenticated Desktop requests carry the
 existing MiniApp market Bearer token, which is forwarded only to the configured
-MiniApp `/me` endpoint. Browser catalog routes are read-only and no Cookie is
-accepted as write authorization.
+MiniApp `/me` endpoint. Browser contribution and review routes use the
+MiniApp broker's `/skin`-scoped session aliases. Unsafe requests are verified
+with the matching CSRF cookie and header through `POST /me`; unrelated browser
+cookies are never forwarded.
 
 Key invariants:
 

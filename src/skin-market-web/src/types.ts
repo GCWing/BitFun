@@ -60,6 +60,46 @@ export interface AppearanceListingDetail extends AppearanceListingSummary {
   releases: AppearanceMarketRelease[];
 }
 
+export type AppearanceSubmissionStatus =
+  | 'draft'
+  | 'submitted'
+  | 'approved'
+  | 'rejected'
+  | 'withdrawn';
+
+export interface AppearanceSubmission {
+  submissionId: string;
+  listingId?: string;
+  slug: string;
+  releaseNumber: number;
+  packageId?: string;
+  name?: string;
+  description?: string;
+  author?: string;
+  mode?: AppearanceMode;
+  packageVersion?: string;
+  minBitfunVersion: string;
+  requiredCapabilities: string[];
+  changelog: string;
+  license: AppearanceMarketLicense;
+  repositoryUrl?: string;
+  status: AppearanceSubmissionStatus;
+  packageSha256?: string;
+  packageSize?: number;
+  previewUrl?: string;
+  rejectionReason?: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface AppearanceAdminSubmissionDetail {
+  submission: AppearanceSubmission;
+  manifest?: unknown;
+  packageSha256?: string;
+  previewSha256?: string;
+  reviewBundleHash?: string;
+}
+
 export interface CursorPage<T> {
   items: T[];
   nextCursor?: string;

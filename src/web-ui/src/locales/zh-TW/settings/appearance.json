@@ -78,7 +78,54 @@
       "empty": "沒有符合目前篩選條件的外觀包。",
       "loading": "正在載入 Skin 市場…",
       "loadMore": "載入更多",
-      "retry": "重試"
+      "retry": "重試",
+      "views": {
+        "label": "Skin 市場區域",
+        "browse": "瀏覽市場",
+        "submissions": "我的投稿",
+        "review": "投稿審核"
+      },
+      "submissions": {
+        "title": "我的投稿",
+        "hint": "查看透過 BitFun Agent 投稿的外觀包與審核進度。",
+        "refresh": "重新整理",
+        "loading": "正在載入投稿…",
+        "empty": "你尚未投稿外觀包。",
+        "updated": "更新於 {{date}}",
+        "rejection": "審核意見：{{reason}}",
+        "withdraw": "撤回",
+        "withdrawTitle": "撤回此投稿？",
+        "withdrawMessage": "{{name}} 將離開審核佇列，之後仍可重新投稿。",
+        "withdrawn": "投稿已撤回",
+        "status": {
+          "draft": "草稿",
+          "submitted": "審核中",
+          "approved": "已通過",
+          "rejected": "需修改",
+          "withdrawn": "已撤回"
+        }
+      },
+      "review": {
+        "title": "投稿審核",
+        "hint": "發佈前檢查包資訊、完整性雜湊與實際清單。",
+        "refresh": "重新整理佇列",
+        "loading": "正在載入審核佇列…",
+        "detailLoading": "正在載入投稿詳情…",
+        "empty": "目前沒有待審核投稿。",
+        "package": "包 id",
+        "version": "包版本",
+        "packageHash": "包 SHA-256",
+        "previewHash": "預覽圖 SHA-256",
+        "bundleHash": "審核包雜湊",
+        "unavailable": "暫無",
+        "manifest": "包清單",
+        "reason": "審核意見",
+        "reasonPlaceholder": "要求修改時必須填寫",
+        "approve": "通過並發佈",
+        "reject": "要求修改",
+        "approveSuccess": "投稿已通過並發佈",
+        "rejectSuccess": "已向作者提出修改要求"
+      }
     },
     "diagnostics": {
       "validationTitle": "外觀包與目前版本不相容",

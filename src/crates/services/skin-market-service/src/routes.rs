@@ -13,14 +13,14 @@ use axum::{Json, Router};
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine;
 use bitfun_product_domains::appearance_market::{
-    compute_appearance_review_bundle_hash, validate_appearance_market_slug, AppearanceCursorPage,
-    AppearanceMarketListingDetail, AppearanceMarketListingSummary, AppearanceMarketPackageMeta,
-    AppearanceMarketRelease, AppearanceMarketSort, AppearanceMarketSubmission,
-    AppearanceMarketSubmissionDraftRequest, AppearanceMarketSubmissionStatus,
-    AppearanceMarketUserSummary, AppearanceReviewDecision, AppearanceReviewDecisionRequest,
-    APPEARANCE_MARKET_API_VERSION, APPEARANCE_MARKET_DEFAULT_PAGE_SIZE,
-    APPEARANCE_MARKET_MAX_PACKAGE_BYTES, APPEARANCE_MARKET_MAX_PAGE_SIZE,
-    APPEARANCE_MARKET_PACKAGE_CONTENT_TYPE,
+    compute_appearance_review_bundle_hash, validate_appearance_market_slug,
+    AppearanceAdminSubmissionDetail, AppearanceCursorPage, AppearanceMarketListingDetail,
+    AppearanceMarketListingSummary, AppearanceMarketPackageMeta, AppearanceMarketRelease,
+    AppearanceMarketSort, AppearanceMarketSubmission, AppearanceMarketSubmissionDraftRequest,
+    AppearanceMarketSubmissionStatus, AppearanceMarketUserSummary, AppearanceReviewDecision,
+    AppearanceReviewDecisionRequest, APPEARANCE_MARKET_API_VERSION,
+    APPEARANCE_MARKET_DEFAULT_PAGE_SIZE, APPEARANCE_MARKET_MAX_PACKAGE_BYTES,
+    APPEARANCE_MARKET_MAX_PAGE_SIZE, APPEARANCE_MARKET_PACKAGE_CONTENT_TYPE,
 };
 use chrono::Utc;
 use hmac::{Hmac, Mac};
@@ -73,20 +73,6 @@ struct ConfigResponse {
     web_submissions_enabled: bool,
     package_content_type: &'static str,
     max_package_bytes: u64,
-}
-
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct AdminSubmissionDetail {
-    submission: AppearanceMarketSubmission,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    manifest: Option<Value>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    package_sha256: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    preview_sha256: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    review_bundle_hash: Option<String>,
 }
 
 pub(crate) fn api_router(state: Arc<SkinMarketState>) -> Router {
@@ -433,7 +419,10 @@ async fn create_submission(
     headers: HeaderMap,
     Json(request): Json<AppearanceMarketSubmissionDraftRequest>,
 ) -> SkinMarketResult<(StatusCode, Json<AppearanceMarketSubmission>)> {
-    let identity = state.identity.require(&headers, &state.database).await?;
+    let identity = state
+        .identity
+        .require_write(&headers, &state.database)
+        .await?;
     validate_draft(&request)?;
     validate_draft_target(&state, &identity, &request).await?;
     let now = Utc::now().timestamp();
@@ -497,7 +486,10 @@ async fn upload_submission_package(
 ) -> SkinMarketResult<Json<AppearanceMarketSubmission>> {
     let headers = request.headers().clone();
     ensure_package_content_type(&headers)?;
-    let identity = state.identity.require(&headers, &state.database).await?;
+    let identity = state
+        .identity
+        .require_write(&headers, &state.database)
+        .await?;
     if headers
         .get(header::CONTENT_LENGTH)
         .and_then(|value| value.to_str().ok())
@@ -609,7 +601,10 @@ async fn submit_submission(
     headers: HeaderMap,
     Path(submission_id): Path<String>,
 ) -> SkinMarketResult<Json<AppearanceMarketSubmission>> {
-    let identity = state.identity.require(&headers, &state.database).await?;
+    let identity = state
+        .identity
+        .require_write(&headers, &state.database)
+        .await?;
     let mut transaction = state
         .database
         .pool()
@@ -737,7 +732,10 @@ async fn withdraw_submission(
     headers: HeaderMap,
     Path(submission_id): Path<String>,
 ) -> SkinMarketResult<Json<AppearanceMarketSubmission>> {
-    let identity = state.identity.require(&headers, &state.database).await?;
+    let identity = state
+        .identity
+        .require_write(&headers, &state.database)
+        .await?;
     let now = Utc::now().timestamp();
     let mut transaction = state
         .database
@@ -820,7 +818,7 @@ async fn get_admin_submission(
     State(state): State<Arc<SkinMarketState>>,
     headers: HeaderMap,
     Path(submission_id): Path<String>,
-) -> SkinMarketResult<Json<AdminSubmissionDetail>> {
+) -> SkinMarketResult<Json<AppearanceAdminSubmissionDetail>> {
     state
         .identity
         .require_admin(&headers, &state.database)
@@ -833,10 +831,10 @@ async fn review_submission(
     headers: HeaderMap,
     Path(submission_id): Path<String>,
     Json(request): Json<AppearanceReviewDecisionRequest>,
-) -> SkinMarketResult<Json<AdminSubmissionDetail>> {
+) -> SkinMarketResult<Json<AppearanceAdminSubmissionDetail>> {
     let admin = state
         .identity
-        .require_admin(&headers, &state.database)
+        .require_admin_write(&headers, &state.database)
         .await?;
     match request.decision {
         AppearanceReviewDecision::Approve => {
@@ -1081,7 +1079,7 @@ async fn yank_release(
 ) -> SkinMarketResult<StatusCode> {
     let admin = state
         .identity
-        .require_admin(&headers, &state.database)
+        .require_admin_write(&headers, &state.database)
         .await?;
     let reason = validate_reason(&request.reason)?;
     let mut transaction = state
@@ -1157,7 +1155,7 @@ async fn unpublish_listing(
 ) -> SkinMarketResult<StatusCode> {
     let admin = state
         .identity
-        .require_admin(&headers, &state.database)
+        .require_admin_write(&headers, &state.database)
         .await?;
     let reason = validate_reason(&request.reason)?;
     let mut transaction = state
@@ -1443,7 +1441,7 @@ fn submission_from_row(
 async fn admin_submission_detail(
     state: &SkinMarketState,
     submission_id: &str,
-) -> SkinMarketResult<AdminSubmissionDetail> {
+) -> SkinMarketResult<AppearanceAdminSubmissionDetail> {
     let row = sqlx::query(
         "SELECT manifest_json, package_sha256, preview_sha256, draft_json, package_meta_json
          FROM submissions WHERE id = ?",
@@ -1483,7 +1481,7 @@ async fn admin_submission_detail(
         }
         _ => None,
     };
-    Ok(AdminSubmissionDetail {
+    Ok(AppearanceAdminSubmissionDetail {
         submission: submission_by_id(state, submission_id, None).await?,
         manifest: manifest_json
             .map(|value| parse_json(value, "appearance manifest"))

@@ -1,7 +1,9 @@
 use bitfun_product_domains::appearance_market::{
-    AppearanceCursorPage, AppearanceMarketListingDetail, AppearanceMarketListingSummary,
-    AppearanceMarketSort, AppearanceMarketSubmission, AppearanceMarketSubmissionDraftRequest,
-    APPEARANCE_MARKET_MAX_PACKAGE_BYTES, APPEARANCE_MARKET_PACKAGE_CONTENT_TYPE,
+    AppearanceAdminSubmissionDetail, AppearanceCursorPage, AppearanceMarketListingDetail,
+    AppearanceMarketListingSummary, AppearanceMarketSort, AppearanceMarketSubmission,
+    AppearanceMarketSubmissionDraftRequest, AppearanceMarketSubmissionStatus,
+    AppearanceReviewDecisionRequest, APPEARANCE_MARKET_MAX_PACKAGE_BYTES,
+    APPEARANCE_MARKET_PACKAGE_CONTENT_TYPE,
 };
 use reqwest::{RequestBuilder, Response};
 use serde::de::DeserializeOwned;
@@ -247,6 +249,67 @@ impl AppearanceMarketClient {
         self.json(request).await
     }
 
+    pub async fn list_admin_submissions(
+        &mut self,
+        status: AppearanceMarketSubmissionStatus,
+    ) -> Result<Vec<AppearanceMarketSubmission>, MarketClientError> {
+        let mut submissions = Vec::new();
+        let mut cursor: Option<String> = None;
+        for _ in 0..100 {
+            let mut query = vec![
+                ("status", submission_status_value(status).to_string()),
+                ("limit", "50".to_string()),
+            ];
+            if let Some(value) = &cursor {
+                query.push(("cursor", value.clone()));
+            }
+            let request = self
+                .authorized(
+                    self.client
+                        .get(self.url("/admin/submissions"))
+                        .query(&query),
+                )
+                .await?;
+            let page: AppearanceCursorPage<AppearanceMarketSubmission> = self.json(request).await?;
+            submissions.extend(page.items);
+            cursor = page.next_cursor;
+            if cursor.is_none() {
+                return Ok(submissions);
+            }
+        }
+        Err(local_error(
+            "review_queue_too_large",
+            "Skin review queue exceeds the client pagination safety limit.",
+        ))
+    }
+
+    pub async fn admin_submission(
+        &mut self,
+        submission_id: &str,
+    ) -> Result<AppearanceAdminSubmissionDetail, MarketClientError> {
+        let request = self
+            .authorized(self.client.get(self.url(&format!(
+                "/admin/submissions/{}",
+                urlencoding::encode(submission_id)
+            ))))
+            .await?;
+        self.json(request).await
+    }
+
+    pub async fn review_submission(
+        &mut self,
+        submission_id: &str,
+        decision: &AppearanceReviewDecisionRequest,
+    ) -> Result<AppearanceAdminSubmissionDetail, MarketClientError> {
+        let request = self
+            .authorized(self.client.post(self.url(&format!(
+                "/admin/submissions/{}/decision",
+                urlencoding::encode(submission_id)
+            ))))
+            .await?;
+        self.json(request.json(decision)).await
+    }
+
     async fn authorized(
         &mut self,
         request: RequestBuilder,
@@ -293,6 +356,16 @@ fn sort_value(sort: AppearanceMarketSort) -> &'static str {
     match sort {
         AppearanceMarketSort::Newest => "newest",
         AppearanceMarketSort::Downloads => "downloads",
+    }
+}
+
+fn submission_status_value(status: AppearanceMarketSubmissionStatus) -> &'static str {
+    match status {
+        AppearanceMarketSubmissionStatus::Draft => "draft",
+        AppearanceMarketSubmissionStatus::Submitted => "submitted",
+        AppearanceMarketSubmissionStatus::Approved => "approved",
+        AppearanceMarketSubmissionStatus::Rejected => "rejected",
+        AppearanceMarketSubmissionStatus::Withdrawn => "withdrawn",
     }
 }
 

@@ -48,4 +48,32 @@ describe('AppearanceMarketAPI', () => {
       { timeout: 180_000 },
     );
   });
+
+  it('uses shared-account commands for submission history and review actions', async () => {
+    invokeMock
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce({ submissionId: 'submission-1', status: 'withdrawn' })
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce({ submission: { submissionId: 'submission-2' } })
+      .mockResolvedValueOnce({ submission: { submissionId: 'submission-2', status: 'approved' } });
+    const market = new AppearanceMarketAPI();
+
+    await market.listSubmissions();
+    await market.withdrawSubmission('submission-1');
+    await market.listReviewSubmissions();
+    await market.getReviewSubmission('submission-2');
+    await market.reviewSubmission('submission-2', 'approve');
+
+    expect(invokeMock).toHaveBeenNthCalledWith(1, 'appearance_market_list_submissions', {});
+    expect(invokeMock).toHaveBeenNthCalledWith(2, 'appearance_market_withdraw_submission', {
+      request: { submissionId: 'submission-1' },
+    });
+    expect(invokeMock).toHaveBeenNthCalledWith(3, 'appearance_market_list_review_submissions', {});
+    expect(invokeMock).toHaveBeenNthCalledWith(4, 'appearance_market_get_review_submission', {
+      request: { submissionId: 'submission-2' },
+    });
+    expect(invokeMock).toHaveBeenNthCalledWith(5, 'appearance_market_review_submission', {
+      request: { submissionId: 'submission-2', decision: 'approve', reason: '' },
+    });
+  });
 });

@@ -43,10 +43,33 @@ pub(crate) enum RequestAuthKind {
         session_token: String,
         csrf_hash: String,
         expires_at: i64,
+        surface: WebSessionSurface,
     },
     Bearer {
         family_id: String,
     },
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum WebSessionSurface {
+    MiniApp,
+    Skin,
+}
+
+impl WebSessionSurface {
+    fn session_cookie(self) -> &'static str {
+        match self {
+            Self::MiniApp => WEB_SESSION_COOKIE,
+            Self::Skin => SKIN_SESSION_COOKIE,
+        }
+    }
+
+    fn csrf_cookie(self) -> &'static str {
+        match self {
+            Self::MiniApp => CSRF_COOKIE,
+            Self::Skin => SKIN_CSRF_COOKIE,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -147,10 +170,13 @@ impl AuthService {
                 kind: RequestAuthKind::Bearer { family_id },
             }));
         }
-        if let Some(token) = cookie_value(headers, WEB_SESSION_COOKIE) {
+        for surface in [WebSessionSurface::MiniApp, WebSessionSurface::Skin] {
+            let Some(token) = cookie_value(headers, surface.session_cookie()) else {
+                continue;
+            };
             let Some((user, csrf_hash, expires_at)) = self.db.web_session_user(&token).await?
             else {
-                return Ok(None);
+                continue;
             };
             return Ok(Some(RequestAuth {
                 user,
@@ -158,6 +184,7 @@ impl AuthService {
                     session_token: token,
                     csrf_hash,
                     expires_at,
+                    surface,
                 },
             }));
         }
@@ -171,14 +198,17 @@ impl AuthService {
     }
 
     pub(crate) fn require_csrf(&self, headers: &HeaderMap, auth: &RequestAuth) -> MarketResult<()> {
-        let RequestAuthKind::Web { csrf_hash, .. } = &auth.kind else {
+        let RequestAuthKind::Web {
+            csrf_hash, surface, ..
+        } = &auth.kind
+        else {
             return Ok(());
         };
         let header_token = headers
             .get("x-csrf-token")
             .and_then(|value| value.to_str().ok())
             .unwrap_or_default();
-        let cookie_token = cookie_value(headers, CSRF_COOKIE).unwrap_or_default();
+        let cookie_token = cookie_value(headers, surface.csrf_cookie()).unwrap_or_default();
         if header_token.is_empty()
             || header_token != cookie_token
             || token_hash(header_token) != *csrf_hash
@@ -525,11 +555,12 @@ impl AuthService {
             session_token,
             csrf_hash,
             expires_at,
+            surface,
         } = &auth.kind
         else {
             return Ok(());
         };
-        let Some(csrf_token) = cookie_value(request_headers, CSRF_COOKIE) else {
+        let Some(csrf_token) = cookie_value(request_headers, surface.csrf_cookie()) else {
             return Ok(());
         };
         if token_hash(&csrf_token) != *csrf_hash {
@@ -790,6 +821,7 @@ mod tests {
                 session_token: "session".to_string(),
                 csrf_hash: token_hash("csrf-value"),
                 expires_at: (Utc::now() + Duration::hours(1)).timestamp(),
+                surface: WebSessionSurface::MiniApp,
             },
         };
         let mut headers = HeaderMap::new();

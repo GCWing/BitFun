@@ -26,8 +26,13 @@ import {
   useAppearance,
   type AppearanceCatalogEntry,
 } from '@/infrastructure/appearance';
+import { useMarketAccount } from '@/infrastructure/market-account';
 import { notificationService } from '@/shared/notification-system';
 import { getVersionInfo } from '@/shared/utils/version';
+import {
+  AppearanceMarketWorkflows,
+  type AppearanceMarketWorkflow,
+} from './AppearanceMarketWorkflows';
 
 const SUPPORTED_CAPABILITIES = new Set([
   'components.v1',
@@ -88,6 +93,7 @@ function requiresNewerBitfun(minimum: string): boolean {
 
 export function AppearanceMarketDialog({ isOpen, onClose }: AppearanceMarketDialogProps) {
   const { t } = useTranslation('settings/appearance');
+  const account = useMarketAccount();
   const {
     appearances,
     selectedAppearanceId,
@@ -106,6 +112,7 @@ export function AppearanceMarketDialog({ isOpen, onClose }: AppearanceMarketDial
   const [detailLoading, setDetailLoading] = useState(false);
   const [installing, setInstalling] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [view, setView] = useState<'browse' | AppearanceMarketWorkflow>('browse');
   const browseSequence = useRef(0);
 
   const browseRequest = useMemo<AppearanceMarketBrowseRequest>(() => ({
@@ -134,10 +141,23 @@ export function AppearanceMarketDialog({ isOpen, onClose }: AppearanceMarketDial
   }, [browseRequest]);
 
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen || view !== 'browse') return;
     setDetail(null);
     void loadPage();
-  }, [isOpen, loadPage]);
+  }, [isOpen, loadPage, view]);
+
+  useEffect(() => {
+    if ((view === 'submissions' && !account.me)
+      || (view === 'review' && !account.me?.isAdmin)) {
+      setView('browse');
+    }
+  }, [account.me, view]);
+
+  const selectView = (nextView: 'browse' | AppearanceMarketWorkflow) => {
+    setDetail(null);
+    setError(null);
+    setView(nextView);
+  };
 
   const openDetail = async (item: AppearanceMarketListingSummary) => {
     setDetailLoading(true);
@@ -410,7 +430,42 @@ export function AppearanceMarketDialog({ isOpen, onClose }: AppearanceMarketDial
         data-bf-component="appearance-config"
         data-bf-part="marketDialog"
       >
-        {detail ? renderDetail() : (
+        <nav
+          className="appearance-market__nav"
+          data-bf-component="appearance-config"
+          data-bf-part="marketNav"
+          aria-label={t('package.market.views.label')}
+        >
+          <button
+            type="button"
+            data-active={view === 'browse' || undefined}
+            aria-current={view === 'browse' ? 'page' : undefined}
+            onClick={() => selectView('browse')}
+          >
+            {t('package.market.views.browse')}
+          </button>
+          {account.me && (
+            <button
+              type="button"
+              data-active={view === 'submissions' || undefined}
+              aria-current={view === 'submissions' ? 'page' : undefined}
+              onClick={() => selectView('submissions')}
+            >
+              {t('package.market.views.submissions')}
+            </button>
+          )}
+          {account.me?.isAdmin && (
+            <button
+              type="button"
+              data-active={view === 'review' || undefined}
+              aria-current={view === 'review' ? 'page' : undefined}
+              onClick={() => selectView('review')}
+            >
+              {t('package.market.views.review')}
+            </button>
+          )}
+        </nav>
+        {view !== 'browse' ? <AppearanceMarketWorkflows workflow={view} /> : detail ? renderDetail() : (
           <>
             <div
               className="appearance-market__toolbar"

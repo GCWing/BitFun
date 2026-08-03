@@ -18,10 +18,10 @@ It is intentionally isolated from the production MiniApp market:
 
 The Skin server has no OAuth client or credential database. Desktop clients
 reuse the MiniApp market credential vault and Skin forwards each Bearer token
-to the configured MiniApp `/me` endpoint. The public Web catalog is read-only,
-while its visible GitHub identity controls use the MiniApp auth broker and a
-`/skin`-scoped alias of that broker's Web session. Never copy the MiniApp OAuth
-secret into the Skin environment.
+to the configured MiniApp `/me` endpoint. Web contribution and review routes
+use the MiniApp auth broker and a `/skin`-scoped alias of that broker's Web
+session. Unsafe browser requests require the matching CSRF alias. Never copy
+the MiniApp OAuth secret into the Skin environment.
 
 ## Agent safety contract
 
@@ -90,7 +90,9 @@ ssh lwb 'chmod 600 /etc/bitfun-skin-market/market.env; \
 
 Production identity verification should use
 `https://market.openbitfun.com/miniapp/api/v1/me`. Public HTTPS avoids coupling
-the two independent Compose networks. Only Authorization is forwarded.
+the two independent Compose networks. Skin forwards either the Bearer
+Authorization header or the exact Skin session and CSRF aliases required for
+the request; it never proxies the browser's full Cookie header.
 
 Install backup jobs after the checkout contains this deployment, but do not
 start the timer until the Skin container has created a healthy UID-10002-owned

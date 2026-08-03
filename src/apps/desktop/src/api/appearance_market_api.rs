@@ -5,8 +5,10 @@
 //! a raw IPC response after enforcing release identity, version, size and hash.
 
 use bitfun_product_domains::appearance_market::{
-    validate_appearance_market_slug, AppearanceCursorPage, AppearanceMarketListingDetail,
-    AppearanceMarketListingSummary, AppearanceMarketRelease, APPEARANCE_MARKET_MAX_PACKAGE_BYTES,
+    validate_appearance_market_slug, AppearanceAdminSubmissionDetail, AppearanceCursorPage,
+    AppearanceMarketListingDetail, AppearanceMarketListingSummary, AppearanceMarketRelease,
+    AppearanceMarketSubmission, AppearanceMarketSubmissionStatus, AppearanceReviewDecision,
+    AppearanceReviewDecisionRequest, APPEARANCE_MARKET_MAX_PACKAGE_BYTES,
 };
 use bitfun_services_integrations::appearance_market::{
     AppearanceMarketBrowseRequest, AppearanceMarketClient,
@@ -29,6 +31,21 @@ pub struct AppearanceMarketDownloadRequest {
     pub package_version: String,
     pub package_sha256: String,
     pub package_size: u64,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AppearanceMarketSubmissionIdRequest {
+    pub submission_id: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AppearanceMarketReviewRequest {
+    pub submission_id: String,
+    pub decision: AppearanceReviewDecision,
+    #[serde(default)]
+    pub reason: String,
 }
 
 #[tauri::command]
@@ -90,6 +107,72 @@ pub async fn appearance_market_download_release(
     // `tauri::ipc::Response` preserves a raw binary response. Returning Vec<u8>
     // directly would otherwise be serialized as a large JSON number array.
     Ok(tauri::ipc::Response::new(bytes))
+}
+
+#[tauri::command]
+pub async fn appearance_market_list_submissions() -> Result<Vec<AppearanceMarketSubmission>, String>
+{
+    let mut client = AppearanceMarketClient::from_environment()
+        .await
+        .map_err(market_error)?;
+    client.list_submissions().await.map_err(market_error)
+}
+
+#[tauri::command]
+pub async fn appearance_market_withdraw_submission(
+    request: AppearanceMarketSubmissionIdRequest,
+) -> Result<AppearanceMarketSubmission, String> {
+    let mut client = AppearanceMarketClient::from_environment()
+        .await
+        .map_err(market_error)?;
+    client
+        .withdraw_submission(&request.submission_id)
+        .await
+        .map_err(market_error)
+}
+
+#[tauri::command]
+pub async fn appearance_market_list_review_submissions(
+) -> Result<Vec<AppearanceMarketSubmission>, String> {
+    let mut client = AppearanceMarketClient::from_environment()
+        .await
+        .map_err(market_error)?;
+    client
+        .list_admin_submissions(AppearanceMarketSubmissionStatus::Submitted)
+        .await
+        .map_err(market_error)
+}
+
+#[tauri::command]
+pub async fn appearance_market_get_review_submission(
+    request: AppearanceMarketSubmissionIdRequest,
+) -> Result<AppearanceAdminSubmissionDetail, String> {
+    let mut client = AppearanceMarketClient::from_environment()
+        .await
+        .map_err(market_error)?;
+    client
+        .admin_submission(&request.submission_id)
+        .await
+        .map_err(market_error)
+}
+
+#[tauri::command]
+pub async fn appearance_market_review_submission(
+    request: AppearanceMarketReviewRequest,
+) -> Result<AppearanceAdminSubmissionDetail, String> {
+    let mut client = AppearanceMarketClient::from_environment()
+        .await
+        .map_err(market_error)?;
+    client
+        .review_submission(
+            &request.submission_id,
+            &AppearanceReviewDecisionRequest {
+                decision: request.decision,
+                reason: request.reason,
+            },
+        )
+        .await
+        .map_err(market_error)
 }
 
 fn validate_slug(slug: &str) -> Result<(), String> {

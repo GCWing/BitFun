@@ -1,10 +1,14 @@
 import type {
   ApiErrorEnvelope,
+  AppearanceAdminSubmissionDetail,
   AppearanceListingDetail,
   AppearanceListingSummary,
+  AppearanceSubmission,
+  AppearanceSubmissionStatus,
   CursorPage,
   ListAppearancesRequest,
 } from './types';
+import { csrfTokenFromCookie } from './account';
 
 export const API_BASE = '/skin/api/v1';
 
@@ -20,11 +24,18 @@ export class SkinMarketApiError extends Error {
   }
 }
 
-async function request<T>(path: string, signal?: AbortSignal): Promise<T> {
+async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const headers = new Headers(init.headers);
+  headers.set('accept', 'application/json');
+  const method = (init.method ?? 'GET').toUpperCase();
+  if (!['GET', 'HEAD', 'OPTIONS'].includes(method)) {
+    const csrf = csrfTokenFromCookie(document.cookie);
+    if (csrf) headers.set('x-csrf-token', csrf);
+  }
   const response = await fetch(`${API_BASE}${path}`, {
+    ...init,
     credentials: 'same-origin',
-    headers: { accept: 'application/json' },
-    signal,
+    headers,
   });
 
   if (!response.ok) {
@@ -41,6 +52,7 @@ async function request<T>(path: string, signal?: AbortSignal): Promise<T> {
     );
   }
 
+  if (response.status === 204) return undefined as T;
   return response.json() as Promise<T>;
 }
 
@@ -60,9 +72,56 @@ export function downloadUrl(slug: string, releaseNumber: number): string {
   return `${API_BASE}/listings/${encodeURIComponent(slug)}/releases/${releaseNumber}/download`;
 }
 
+async function allSubmissionPages(
+  path: string,
+  signal?: AbortSignal,
+): Promise<CursorPage<AppearanceSubmission>> {
+  const items: AppearanceSubmission[] = [];
+  let cursor: string | undefined;
+  for (let pageNumber = 0; pageNumber < 100; pageNumber += 1) {
+    const query = new URLSearchParams(path.includes('?') ? path.split('?')[1] : '');
+    query.set('limit', '50');
+    if (cursor) query.set('cursor', cursor);
+    const basePath = path.split('?')[0];
+    const page = await request<CursorPage<AppearanceSubmission>>(
+      `${basePath}?${query.toString()}`,
+      { signal },
+    );
+    items.push(...page.items);
+    cursor = page.nextCursor;
+    if (!cursor) return { items };
+  }
+  throw new SkinMarketApiError(
+    'submission_history_too_large',
+    'Skin Market submission history exceeds the browser pagination safety limit.',
+  );
+}
+
 export const skinMarketApi = {
   list: (options: ListAppearancesRequest, signal?: AbortSignal) =>
-    request<CursorPage<AppearanceListingSummary>>(buildListingPath(options), signal),
+    request<CursorPage<AppearanceListingSummary>>(buildListingPath(options), { signal }),
   detail: (slug: string, signal?: AbortSignal) =>
-    request<AppearanceListingDetail>(`/listings/${encodeURIComponent(slug)}`, signal),
+    request<AppearanceListingDetail>(`/listings/${encodeURIComponent(slug)}`, { signal }),
+  submissions: (signal?: AbortSignal) =>
+    allSubmissionPages('/submissions', signal),
+  withdrawSubmission: (submissionId: string) =>
+    request<AppearanceSubmission>(`/submissions/${encodeURIComponent(submissionId)}`, {
+      method: 'DELETE',
+    }),
+  reviewSubmissions: (status: AppearanceSubmissionStatus = 'submitted', signal?: AbortSignal) =>
+    allSubmissionPages(`/admin/submissions?status=${status}`, signal),
+  reviewSubmission: (submissionId: string, signal?: AbortSignal) =>
+    request<AppearanceAdminSubmissionDetail>(
+      `/admin/submissions/${encodeURIComponent(submissionId)}`,
+      { signal },
+    ),
+  decideSubmission: (submissionId: string, decision: 'approve' | 'reject', reason = '') =>
+    request<AppearanceAdminSubmissionDetail>(
+      `/admin/submissions/${encodeURIComponent(submissionId)}/decision`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ decision, reason }),
+      },
+    ),
 };

@@ -5,7 +5,7 @@ import {
   sharedMarketAccountApi,
   sharedMarketLoginUrl,
 } from './account';
-import { buildListingPath, downloadUrl } from './api';
+import { buildListingPath, downloadUrl, skinMarketApi } from './api';
 import type { AppearanceListingDetail, AppearanceMode } from './types';
 
 function fixtureMode(value: string): AppearanceMode {
@@ -68,5 +68,25 @@ describe('Skin Market API paths', () => {
     expect(init.method).toBe('POST');
     expect(init.credentials).toBe('include');
     expect(new Headers(init.headers).get('x-csrf-token')).toBe('shared-csrf');
+  });
+
+  it('uses the shared Skin session and CSRF token for submission writes', async () => {
+    vi.stubGlobal('document', { cookie: 'bitfun_skin_csrf=skin-write-token' });
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      submission: { submissionId: 'submission-1' },
+    }), { status: 200, headers: { 'content-type': 'application/json' } }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await skinMarketApi.decideSubmission('submission/1', 'reject', 'Update the preview');
+
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('/skin/api/v1/admin/submissions/submission%2F1/decision');
+    expect(init.method).toBe('POST');
+    expect(init.credentials).toBe('same-origin');
+    expect(new Headers(init.headers).get('x-csrf-token')).toBe('skin-write-token');
+    expect(JSON.parse(String(init.body))).toEqual({
+      decision: 'reject',
+      reason: 'Update the preview',
+    });
   });
 });

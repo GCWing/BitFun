@@ -9,6 +9,11 @@ const mocks = vi.hoisted(() => ({
   browse: vi.fn(),
   getListing: vi.fn(),
   downloadRelease: vi.fn(),
+  listSubmissions: vi.fn(),
+  withdrawSubmission: vi.fn(),
+  listReviewSubmissions: vi.fn(),
+  getReviewSubmission: vi.fn(),
+  reviewSubmission: vi.fn(),
   importPackage: vi.fn(),
   activate: vi.fn(),
   confirmDialog: vi.fn(async () => true),
@@ -16,6 +21,14 @@ const mocks = vi.hoisted(() => ({
     appearances: [] as any[],
     selectedAppearanceId: 'system',
     status: 'ready',
+  },
+  accountState: {
+    resolved: true,
+    status: 'signed-in',
+    me: {
+      user: { githubId: 1, login: 'reviewer', avatarUrl: '' },
+      isAdmin: true,
+    },
   },
 }));
 
@@ -39,6 +52,7 @@ vi.mock('@/component-library', () => ({
     />
   ),
   Select: () => <div />,
+  Textarea: ({ label, ...props }: any) => <label>{label}<textarea {...props} /></label>,
   confirmDialog: mocks.confirmDialog,
 }));
 
@@ -46,11 +60,27 @@ vi.mock('@/features/market-account', () => ({
   MarketAccountControls: () => <div data-testid="shared-market-account-controls" />,
 }));
 
+vi.mock('@/infrastructure/market-account', () => ({
+  useMarketAccount: () => mocks.accountState,
+}));
+
+vi.mock('@/infrastructure/i18n/hooks/useI18n', () => ({
+  useI18n: () => ({
+    t: (key: string) => key,
+    formatDate: () => 'Jan 1, 2026',
+  }),
+}));
+
 vi.mock('@/infrastructure/api/service-api/AppearanceMarketAPI', () => ({
   appearanceMarketAPI: {
     browse: mocks.browse,
     getListing: mocks.getListing,
     downloadRelease: mocks.downloadRelease,
+    listSubmissions: mocks.listSubmissions,
+    withdrawSubmission: mocks.withdrawSubmission,
+    listReviewSubmissions: mocks.listReviewSubmissions,
+    getReviewSubmission: mocks.getReviewSubmission,
+    reviewSubmission: mocks.reviewSubmission,
   },
 }));
 
@@ -115,6 +145,11 @@ describe('AppearanceMarketDialog', () => {
       releases: [release],
     });
     mocks.downloadRelease.mockReset().mockResolvedValue(new Uint8Array([1, 2, 3]).buffer);
+    mocks.listSubmissions.mockReset().mockResolvedValue([]);
+    mocks.withdrawSubmission.mockReset();
+    mocks.listReviewSubmissions.mockReset().mockResolvedValue([]);
+    mocks.getReviewSubmission.mockReset();
+    mocks.reviewSubmission.mockReset();
     mocks.importPackage.mockReset().mockResolvedValue(undefined);
     mocks.activate.mockReset().mockResolvedValue(undefined);
     mocks.confirmDialog.mockClear();
@@ -181,5 +216,53 @@ describe('AppearanceMarketDialog', () => {
     });
     expect(mocks.activate).not.toHaveBeenCalled();
     expect(container.textContent).toContain('package.market.noAutoApply');
+  });
+
+  it('shows the shared-account submissions and admin review workflows', async () => {
+    const submission = {
+      submissionId: 'submission-1',
+      slug: 'tokyo-night',
+      releaseNumber: 2,
+      packageId: 'community.tokyo-night',
+      name: 'Tokyo Night candidate',
+      description: 'Candidate package',
+      mode: 'dark',
+      packageVersion: '2.0.0',
+      minBitfunVersion: '0.1.0',
+      requiredCapabilities: ['components.v1'],
+      changelog: 'More polished',
+      license: { spdxExpression: 'MIT' },
+      status: 'submitted',
+      createdAt: 1,
+      updatedAt: 2,
+    };
+    mocks.listSubmissions.mockResolvedValue([submission]);
+    mocks.listReviewSubmissions.mockResolvedValue([submission]);
+    mocks.getReviewSubmission.mockResolvedValue({
+      submission,
+      manifest: { id: 'community.tokyo-night' },
+      packageSha256: 'a'.repeat(64),
+      previewSha256: 'b'.repeat(64),
+      reviewBundleHash: 'c'.repeat(64),
+    });
+
+    await act(async () => {
+      root.render(<AppearanceMarketDialog isOpen onClose={() => undefined} />);
+      await Promise.resolve();
+    });
+
+    const submissionsTab = [...container.querySelectorAll('button')]
+      .find(button => button.textContent === 'package.market.views.submissions');
+    await act(async () => submissionsTab?.click());
+    await vi.waitFor(() => expect(container.textContent).toContain('Tokyo Night candidate'));
+    expect(mocks.listSubmissions).toHaveBeenCalledOnce();
+
+    const reviewTab = [...container.querySelectorAll('button')]
+      .find(button => button.textContent === 'package.market.views.review');
+    await act(async () => reviewTab?.click());
+    await vi.waitFor(() => expect(mocks.getReviewSubmission).toHaveBeenCalledWith('submission-1'));
+    expect(mocks.listReviewSubmissions).toHaveBeenCalledOnce();
+    expect(container.textContent).toContain('package.market.review.approve');
+    expect(container.textContent).toContain('package.market.review.reject');
   });
 });

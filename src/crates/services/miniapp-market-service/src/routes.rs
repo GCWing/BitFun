@@ -164,7 +164,7 @@ pub(crate) fn api_router(state: Arc<MarketState>) -> Router {
         .route("/auth/desktop/poll", post(poll_desktop_auth))
         .route("/auth/refresh", post(refresh_tokens))
         .route("/auth/logout", post(logout))
-        .route("/me", get(me))
+        .route("/me", get(me).post(verify_write_identity))
         .route(
             "/submissions",
             post(create_submission).get(list_my_submissions),
@@ -527,6 +527,23 @@ async fn refresh_tokens(
 
 async fn me(State(state): State<Arc<MarketState>>, headers: HeaderMap) -> MarketResult<Response> {
     let auth = state.auth.require_auth(&headers).await?;
+    let mut response = identity_response(&state, &auth);
+    state
+        .auth
+        .append_shared_account_cookies(response.headers_mut(), &headers, &auth)?;
+    Ok(response)
+}
+
+async fn verify_write_identity(
+    State(state): State<Arc<MarketState>>,
+    headers: HeaderMap,
+) -> MarketResult<Response> {
+    let auth = state.auth.require_auth(&headers).await?;
+    state.auth.require_csrf(&headers, &auth)?;
+    Ok(identity_response(&state, &auth))
+}
+
+fn identity_response(state: &MarketState, auth: &RequestAuth) -> Response {
     let mut response = Json(MeResponse {
         is_admin: state.auth.is_admin(&auth.user),
         user: auth.user.profile.clone(),
@@ -535,10 +552,7 @@ async fn me(State(state): State<Arc<MarketState>>, headers: HeaderMap) -> Market
     response
         .headers_mut()
         .insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
-    state
-        .auth
-        .append_shared_account_cookies(response.headers_mut(), &headers, &auth)?;
-    Ok(response)
+    response
 }
 
 async fn logout(

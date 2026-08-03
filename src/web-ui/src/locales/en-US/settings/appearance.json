@@ -78,7 +78,54 @@
       "empty": "No appearance packages match these filters.",
       "loading": "Loading Skin Market…",
       "loadMore": "Load more",
-      "retry": "Retry"
+      "retry": "Retry",
+      "views": {
+        "label": "Skin Market sections",
+        "browse": "Browse",
+        "submissions": "My submissions",
+        "review": "Submission review"
+      },
+      "submissions": {
+        "title": "My submissions",
+        "hint": "Track appearance packages submitted from BitFun Agent.",
+        "refresh": "Refresh",
+        "loading": "Loading your submissions…",
+        "empty": "You have not submitted an appearance package yet.",
+        "updated": "Updated {{date}}",
+        "rejection": "Review feedback: {{reason}}",
+        "withdraw": "Withdraw",
+        "withdrawTitle": "Withdraw this submission?",
+        "withdrawMessage": "{{name}} will leave the review queue. You can create a new submission later.",
+        "withdrawn": "Submission withdrawn",
+        "status": {
+          "draft": "Draft",
+          "submitted": "In review",
+          "approved": "Approved",
+          "rejected": "Changes requested",
+          "withdrawn": "Withdrawn"
+        }
+      },
+      "review": {
+        "title": "Submission review",
+        "hint": "Review package metadata, integrity hashes, and the exact manifest before publishing.",
+        "refresh": "Refresh queue",
+        "loading": "Loading the review queue…",
+        "detailLoading": "Loading submission details…",
+        "empty": "There are no submissions waiting for review.",
+        "package": "Package id",
+        "version": "Package version",
+        "packageHash": "Package SHA-256",
+        "previewHash": "Preview SHA-256",
+        "bundleHash": "Review bundle hash",
+        "unavailable": "Not available",
+        "manifest": "Package manifest",
+        "reason": "Review feedback",
+        "reasonPlaceholder": "Required when requesting changes",
+        "approve": "Approve and publish",
+        "reject": "Request changes",
+        "approveSuccess": "Submission approved and published",
+        "rejectSuccess": "Changes requested from the author"
+      }
     },
     "diagnostics": {
       "validationTitle": "Appearance package is incompatible with this version",

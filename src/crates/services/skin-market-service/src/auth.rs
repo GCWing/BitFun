@@ -7,6 +7,9 @@ use serde::Deserialize;
 use std::time::Duration;
 use url::Url;
 
+const SKIN_SESSION_COOKIE: &str = "bitfun_skin_session";
+const SKIN_CSRF_COOKIE: &str = "bitfun_skin_csrf";
+
 #[derive(Debug, Clone)]
 pub(crate) struct IdentityVerifier {
     client: Client,
@@ -43,6 +46,23 @@ impl IdentityVerifier {
         headers: &HeaderMap,
         database: &Database,
     ) -> SkinMarketResult<AuthenticatedIdentity> {
+        self.verify(headers, database, false).await
+    }
+
+    pub(crate) async fn require_write(
+        &self,
+        headers: &HeaderMap,
+        database: &Database,
+    ) -> SkinMarketResult<AuthenticatedIdentity> {
+        self.verify(headers, database, true).await
+    }
+
+    async fn verify(
+        &self,
+        headers: &HeaderMap,
+        database: &Database,
+        write: bool,
+    ) -> SkinMarketResult<AuthenticatedIdentity> {
         let authorization = headers
             .get(header::AUTHORIZATION)
             .and_then(|value| value.to_str().ok())
@@ -50,27 +70,45 @@ impl IdentityVerifier {
                 value
                     .strip_prefix("Bearer ")
                     .is_some_and(|token| !token.trim().is_empty())
-            })
-            .ok_or_else(|| {
-                SkinMarketError::unauthorized(
-                    "Appearance marketplace writes require a Desktop Bearer token.",
-                )
-            })?;
-        let response = self
-            .client
-            .get(self.me_url.clone())
-            .header(reqwest::header::AUTHORIZATION, authorization)
-            .send()
-            .await
-            .map_err(|_| {
-                SkinMarketError::unavailable("The identity service could not be reached.")
-            })?;
-        if matches!(
-            response.status(),
-            reqwest::StatusCode::UNAUTHORIZED | reqwest::StatusCode::FORBIDDEN
-        ) {
+            });
+        let mut request = if write {
+            self.client.post(self.me_url.clone())
+        } else {
+            self.client.get(self.me_url.clone())
+        };
+        if let Some(authorization) = authorization {
+            request = request.header(reqwest::header::AUTHORIZATION, authorization);
+        } else {
+            let session = cookie_value(headers, SKIN_SESSION_COOKIE)
+                .ok_or_else(|| SkinMarketError::unauthorized("Sign in with GitHub to continue."))?;
+            let mut cookies = format!("{SKIN_SESSION_COOKIE}={session}");
+            if write {
+                let csrf_cookie = cookie_value(headers, SKIN_CSRF_COOKIE).ok_or_else(|| {
+                    SkinMarketError::forbidden("The CSRF token is missing or invalid.")
+                })?;
+                let csrf_header = headers
+                    .get("x-csrf-token")
+                    .and_then(|value| value.to_str().ok())
+                    .filter(|value| !value.is_empty())
+                    .ok_or_else(|| {
+                        SkinMarketError::forbidden("The CSRF token is missing or invalid.")
+                    })?;
+                cookies.push_str(&format!("; {SKIN_CSRF_COOKIE}={csrf_cookie}"));
+                request = request.header("x-csrf-token", csrf_header);
+            }
+            request = request.header(reqwest::header::COOKIE, cookies);
+        }
+        let response = request.send().await.map_err(|_| {
+            SkinMarketError::unavailable("The identity service could not be reached.")
+        })?;
+        if response.status() == reqwest::StatusCode::UNAUTHORIZED {
             return Err(SkinMarketError::unauthorized(
-                "The Desktop Bearer token is invalid or expired.",
+                "The GitHub marketplace session is invalid or expired.",
+            ));
+        }
+        if response.status() == reqwest::StatusCode::FORBIDDEN {
+            return Err(SkinMarketError::forbidden(
+                "The CSRF token is missing or invalid.",
             ));
         }
         if !response.status().is_success() {
@@ -109,21 +147,46 @@ impl IdentityVerifier {
         }
         Ok(identity)
     }
+
+    pub(crate) async fn require_admin_write(
+        &self,
+        headers: &HeaderMap,
+        database: &Database,
+    ) -> SkinMarketResult<AuthenticatedIdentity> {
+        let identity = self.require_write(headers, database).await?;
+        if !identity.is_admin {
+            return Err(SkinMarketError::forbidden(
+                "Appearance marketplace administrator access is required.",
+            ));
+        }
+        Ok(identity)
+    }
+}
+
+fn cookie_value(headers: &HeaderMap, name: &str) -> Option<String> {
+    headers
+        .get(header::COOKIE)?
+        .to_str()
+        .ok()?
+        .split(';')
+        .map(str::trim)
+        .filter_map(|cookie| cookie.split_once('='))
+        .find_map(|(candidate, value)| (candidate == name).then(|| value.to_string()))
+        .filter(|value| !value.is_empty())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use axum::routing::get;
     use axum::{Json, Router};
 
     #[tokio::test]
-    async fn bearer_identity_is_forwarded_without_accepting_cookies() {
+    async fn bearer_identity_is_forwarded_for_write_verification() {
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let address = listener.local_addr().unwrap();
         let app = Router::new().route(
             "/me",
-            get(|headers: HeaderMap| async move {
+            axum::routing::post(|headers: HeaderMap| async move {
                 assert_eq!(
                     headers.get(header::AUTHORIZATION).unwrap(),
                     "Bearer test-token"
@@ -145,18 +208,54 @@ mod tests {
             IdentityVerifier::new(Url::parse(&format!("http://{address}/me")).unwrap()).unwrap();
         let mut headers = HeaderMap::new();
         headers.insert(header::AUTHORIZATION, "Bearer test-token".parse().unwrap());
-        let identity = verifier.require_admin(&headers, &database).await.unwrap();
+        let identity = verifier
+            .require_admin_write(&headers, &database)
+            .await
+            .unwrap();
         assert!(identity.user.internal_id > 0);
+    }
 
-        let mut cookie_only = HeaderMap::new();
-        cookie_only.insert(header::COOKIE, "session=ignored".parse().unwrap());
-        assert_eq!(
-            verifier
-                .require(&cookie_only, &database)
-                .await
-                .unwrap_err()
-                .status,
-            axum::http::StatusCode::UNAUTHORIZED
+    #[tokio::test]
+    async fn skin_cookie_write_forwards_only_shared_session_and_csrf() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let app = Router::new().route(
+            "/me",
+            axum::routing::post(|headers: HeaderMap| async move {
+                assert_eq!(
+                    headers.get(header::COOKIE).unwrap(),
+                    "bitfun_skin_session=session-token; bitfun_skin_csrf=csrf-token"
+                );
+                assert_eq!(headers.get("x-csrf-token").unwrap(), "csrf-token");
+                assert!(headers.get(header::AUTHORIZATION).is_none());
+                Json(serde_json::json!({
+                    "user": {"githubId": 42, "login": "owner", "avatarUrl": "https://example.invalid/a"},
+                    "isAdmin": true
+                }))
+            }),
         );
+        tokio::spawn(async move {
+            axum::serve(listener, app).await.unwrap();
+        });
+        let temporary = tempfile::tempdir().unwrap();
+        let database = Database::open(&temporary.path().join("market.sqlite"))
+            .await
+            .unwrap();
+        let verifier =
+            IdentityVerifier::new(Url::parse(&format!("http://{address}/me")).unwrap()).unwrap();
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            header::COOKIE,
+            "unrelated=private; bitfun_skin_session=session-token; bitfun_skin_csrf=csrf-token"
+                .parse()
+                .unwrap(),
+        );
+        headers.insert("x-csrf-token", "csrf-token".parse().unwrap());
+
+        let identity = verifier
+            .require_admin_write(&headers, &database)
+            .await
+            .unwrap();
+        assert!(identity.user.internal_id > 0);
     }
 }

@@ -12,10 +12,12 @@ import {
   SharedMarketAccountError,
   sharedMarketLoginUrl,
 } from './account';
+import { AdminPage } from './AdminPage';
 import { CatalogPage } from './CatalogPage';
 import { DetailPage } from './DetailPage';
 import { useI18n } from './i18n';
-import { parseMarketRoute } from './router';
+import { adminPath, parseMarketRoute, submissionsPath } from './router';
+import { SubmissionsPage } from './SubmissionsPage';
 import { useTheme } from './theme';
 import type { SharedMarketAccount } from './types';
 
@@ -89,11 +91,12 @@ export default function App() {
   }, []);
 
   const catalogPath = `/skin/${catalogSearch}`;
-  const followCatalog = (event: React.MouseEvent<HTMLAnchorElement>) => {
+  const followPath = (path: string) => (event: React.MouseEvent<HTMLAnchorElement>) => {
     if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
     event.preventDefault();
-    navigate(catalogPath);
+    navigate(path);
   };
+  const followCatalog = followPath(catalogPath);
 
   const signOut = async () => {
     setAccountBusy(true);
@@ -101,6 +104,7 @@ export default function App() {
     try {
       await sharedMarketAccountApi.logout();
       setAccount(undefined);
+      if (route.kind === 'submissions' || route.kind === 'admin') navigate(catalogPath);
     } catch (error) {
       setAccountError(error instanceof Error ? error : new Error(String(error)));
     } finally {
@@ -120,7 +124,17 @@ export default function App() {
             <span className="brand__market">{t('market')}</span>
           </a>
           <nav className="site-nav" aria-label={t('market')}>
-            <a href={catalogPath} onClick={followCatalog}>{t('navBrowse')}</a>
+            <a href={catalogPath} onClick={followCatalog} aria-current={route.kind === 'catalog' || route.kind === 'detail' ? 'page' : undefined}>{t('navBrowse')}</a>
+            {account && (
+              <a href={submissionsPath()} onClick={followPath(submissionsPath())} aria-current={route.kind === 'submissions' ? 'page' : undefined}>
+                {t('navSubmissions')}
+              </a>
+            )}
+            {account?.isAdmin && (
+              <a href={adminPath()} onClick={followPath(adminPath())} aria-current={route.kind === 'admin' ? 'page' : undefined}>
+                {t('navReview')}
+              </a>
+            )}
           </nav>
           <div className="header-actions">
             <button
@@ -209,6 +223,10 @@ export default function App() {
           slug={route.slug}
           t={t}
         />
+      ) : route.kind === 'submissions' ? (
+        <SubmissionsPage account={account} accountResolved={accountResolved} locale={locale} t={t} />
+      ) : route.kind === 'admin' ? (
+        <AdminPage account={account} accountResolved={accountResolved} locale={locale} t={t} />
       ) : (
         <main id="main-content" className="shell detail-state">
           <div className="state-panel">

@@ -53,6 +53,46 @@ export interface AppearanceMarketListingDetail extends AppearanceMarketListingSu
   releases: AppearanceMarketRelease[];
 }
 
+export type AppearanceMarketSubmissionStatus =
+  | 'draft'
+  | 'submitted'
+  | 'approved'
+  | 'rejected'
+  | 'withdrawn';
+
+export interface AppearanceMarketSubmission {
+  submissionId: string;
+  listingId?: string;
+  slug: string;
+  releaseNumber: number;
+  packageId?: string;
+  name?: string;
+  description?: string;
+  author?: string;
+  mode?: AppearanceMarketMode;
+  packageVersion?: string;
+  minBitfunVersion: string;
+  requiredCapabilities: string[];
+  changelog: string;
+  license: AppearanceMarketLicense;
+  repositoryUrl?: string;
+  status: AppearanceMarketSubmissionStatus;
+  packageSha256?: string;
+  packageSize?: number;
+  previewUrl?: string;
+  rejectionReason?: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface AppearanceAdminSubmissionDetail {
+  submission: AppearanceMarketSubmission;
+  manifest?: unknown;
+  packageSha256?: string;
+  previewSha256?: string;
+  reviewBundleHash?: string;
+}
+
 export interface AppearanceMarketCursorPage<T> {
   items: T[];
   nextCursor?: string;
@@ -116,6 +156,63 @@ export class AppearanceMarketAPI {
         error,
         request,
       );
+    }
+  }
+
+  async listSubmissions(): Promise<AppearanceMarketSubmission[]> {
+    try {
+      return await api.invoke('appearance_market_list_submissions', {});
+    } catch (error) {
+      throw createTauriCommandError('appearance_market_list_submissions', error);
+    }
+  }
+
+  async withdrawSubmission(submissionId: string): Promise<AppearanceMarketSubmission> {
+    try {
+      return await api.invoke('appearance_market_withdraw_submission', {
+        request: { submissionId },
+      });
+    } catch (error) {
+      throw createTauriCommandError('appearance_market_withdraw_submission', error, {
+        submissionId,
+      });
+    }
+  }
+
+  async listReviewSubmissions(): Promise<AppearanceMarketSubmission[]> {
+    try {
+      return await api.invoke('appearance_market_list_review_submissions', {});
+    } catch (error) {
+      throw createTauriCommandError('appearance_market_list_review_submissions', error);
+    }
+  }
+
+  async getReviewSubmission(submissionId: string): Promise<AppearanceAdminSubmissionDetail> {
+    try {
+      return await api.invoke('appearance_market_get_review_submission', {
+        request: { submissionId },
+      });
+    } catch (error) {
+      throw createTauriCommandError('appearance_market_get_review_submission', error, {
+        submissionId,
+      });
+    }
+  }
+
+  async reviewSubmission(
+    submissionId: string,
+    decision: 'approve' | 'reject',
+    reason = '',
+  ): Promise<AppearanceAdminSubmissionDetail> {
+    try {
+      return await api.invoke('appearance_market_review_submission', {
+        request: { submissionId, decision, reason },
+      });
+    } catch (error) {
+      throw createTauriCommandError('appearance_market_review_submission', error, {
+        submissionId,
+        decision,
+      });
     }
   }
 }
