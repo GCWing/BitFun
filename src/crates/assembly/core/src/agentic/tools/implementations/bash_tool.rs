@@ -164,8 +164,15 @@ impl BashTool {
         bash_noninteractive_env()
     }
 
-    /// Resolve shell configuration for bash tool.
-    /// If configured shell doesn't support integration, falls back to system default.
+    /// Resolve shell configuration for the bash tool.
+    ///
+    /// When a default shell is configured, returns it with `shell_type: None`
+    /// so the SessionManager resolves the exact configured executable via its
+    /// `configured_default` path. This preserves the user's specific path
+    /// (instead of letting `find_shell` pick any matching binary) and works
+    /// for shells that do not support integration, which the SessionManager
+    /// disables automatically. When no shell is configured, falls back to
+    /// platform auto-detection.
     async fn resolve_shell() -> ResolvedShell {
         // Try configured shell first, fall back to system default
         Self::try_configured_shell()
@@ -173,7 +180,12 @@ impl BashTool {
             .unwrap_or_else(Self::system_default_shell)
     }
 
-    /// Try to get a valid configured shell that supports integration.
+    /// Resolve the user-configured default shell, if any.
+    ///
+    /// Only the display name is resolved here; `shell_type` is left as `None`
+    /// so the SessionManager can honor the exact configured executable path
+    /// (including for shells without integration support) instead of
+    /// re-detecting a possibly different binary of the same type.
     async fn try_configured_shell() -> Option<ResolvedShell> {
         let config_service = get_global_config_service().await.ok()?;
         let shell_str: String = config_service
@@ -183,18 +195,11 @@ impl BashTool {
             .filter(|s| !s.is_empty())?;
 
         let parsed = ShellType::from_executable(&shell_str);
-        if parsed.supports_integration() {
-            Some(ResolvedShell {
-                shell_type: Some(parsed.clone()),
-                display_name: parsed.name().to_string(),
-            })
-        } else {
-            debug!(
-                "Configured shell '{}' does not support integration, using system default",
-                shell_str
-            );
-            None
-        }
+        debug!("Using configured default shell: {}", shell_str);
+        Some(ResolvedShell {
+            shell_type: None,
+            display_name: parsed.name().to_string(),
+        })
     }
 
     /// Get system default shell configuration.

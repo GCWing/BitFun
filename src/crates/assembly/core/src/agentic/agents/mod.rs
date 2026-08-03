@@ -136,6 +136,7 @@ pub fn shared_coding_mode_tools() -> Vec<String> {
     // Canvas provider group tools disabled: canvas-runtime cannot be compiled
     // on the OHOS target. Re-enable when canvas-runtime is available.
     // append_provider_group_tools(&mut tools, "core.canvas");
+    append_provider_group_tools(&mut tools, "core.openharmony");
     tools
 }
 
@@ -306,13 +307,13 @@ mod tests {
     }
 
     #[test]
-    fn shared_coding_mode_tools_include_canvas_provider_tools() {
+    fn shared_coding_mode_tools_include_openharmony_provider_tools() {
         let tools = shared_coding_mode_tools();
 
-        assert!(tools.contains(&"CreateCanvas".to_string()));
-        assert!(tools.contains(&"ReadCanvas".to_string()));
-        assert!(tools.contains(&"UpdateCanvas".to_string()));
-        assert!(tools.contains(&"PatchCanvas".to_string()));
+        assert!(tools.contains(&"build_project".to_string()));
+        assert!(tools.contains(&"start_app".to_string()));
+        assert!(tools.contains(&"hdc_log".to_string()));
+        assert!(tools.contains(&"arkts_knowledge_search".to_string()));
     }
 
     #[test]

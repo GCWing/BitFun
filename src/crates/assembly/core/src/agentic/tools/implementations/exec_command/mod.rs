@@ -25,3 +25,17 @@ pub use tool_runtime::exec_command::{
     ExecCommandControlAction, ExecCommandControlOrigin, ExecCommandControlRequest,
     ExecCommandControlResponse,
 };
+
+/// Resolve the user's configured terminal shell (respects `terminal.default_shell`
+/// setting) and wrap `cmd` in the matching shell invocation argv, identical to how
+/// ExecCommand spawns commands. Returns argv like `["/bin/zsh", "-c", "devecocli build"]`
+/// or `["cmd", "/c", "devecocli build"]` or `["powershell", "-Command", "..."]`.
+pub(crate) async fn resolve_shell_argv_for_command(cmd: &str) -> Vec<String> {
+    let shell = local_shell::resolve_local_exec_shell().await;
+    let kind = shell_kind::exec_command_shell_kind(&shell.shell_type);
+    tool_runtime::exec_command::exec_command_argv_for_shell(
+        shell.path.to_string_lossy().to_string(),
+        kind,
+        cmd,
+    )
+}

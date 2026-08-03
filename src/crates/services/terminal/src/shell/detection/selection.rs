@@ -22,6 +22,11 @@ impl ShellDetector {
         }
         #[cfg(not(windows))]
         {
+            // Prefer zsh first when available, then honor the login shell
+            // ($SHELL), then fall back to bash / sh.
+            if let Some(shell) = Self::find_shell(&ShellType::Zsh) {
+                return shell;
+            }
             if let Ok(shell_path) = std::env::var("SHELL") {
                 if let Some(shell) = Self::resolve_explicit_shell(&shell_path) {
                     return shell;
