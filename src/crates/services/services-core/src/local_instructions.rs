@@ -13,6 +13,9 @@ pub struct LocalInstructionFile {
     pub canonical_path: PathBuf,
     pub name: String,
     pub content: String,
+    /// Empty means the document applies unconditionally. Non-empty patterns
+    /// are matched against workspace-relative paths by the product owner.
+    pub path_patterns: Vec<String>,
 }
 
 #[derive(Debug, Default)]
@@ -153,6 +156,7 @@ pub fn read_local_text_file(
         canonical_path,
         name: name.into(),
         content,
+        path_patterns: Vec::new(),
     }))
 }
 

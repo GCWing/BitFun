@@ -16,6 +16,14 @@ pub(crate) struct LocalUserInstructionFiles {
 pub(crate) async fn load_local_user_instruction_files(
     workspace_root: &Path,
 ) -> LocalUserInstructionFiles {
+    let mut sources = load_local_user_instruction_sources(workspace_root).await;
+    sources.files.retain(|file| file.path_patterns.is_empty());
+    sources
+}
+
+pub(crate) async fn load_local_user_instruction_sources(
+    workspace_root: &Path,
+) -> LocalUserInstructionFiles {
     let workspace_root = workspace_root.to_path_buf();
     let result = tokio::task::spawn_blocking(move || {
         let mut files = Vec::new();
@@ -65,6 +73,34 @@ pub(crate) async fn load_local_user_instruction_files(
     }
 }
 
+pub(crate) async fn load_local_user_conditional_instruction_sources() -> Vec<LocalInstructionFile> {
+    match tokio::task::spawn_blocking(|| {
+        load_claude_code_user_instructions(&ClaudeCodeInstructionSourceOptions::from_environment())
+            .map(|files| {
+                files
+                    .into_iter()
+                    .filter(|file| !file.path_patterns.is_empty())
+                    .collect()
+            })
+    })
+    .await
+    {
+        Ok(Ok(files)) => files,
+        Ok(Err(error)) => {
+            log::warn!(
+                "Failed to load Claude Code conditional instructions; retrying after a later matching read: {error}"
+            );
+            Vec::new()
+        }
+        Err(error) => {
+            log::warn!(
+                "Failed to join Claude Code conditional instruction discovery; retrying after a later matching read: {error}"
+            );
+            Vec::new()
+        }
+    }
+}
+
 fn deduplicate_user_instruction_files(files: &mut Vec<LocalInstructionFile>) {
     let mut bounded = LocalInstructionFiles::default();
     bounded.extend(std::mem::take(files));
@@ -84,6 +120,7 @@ mod tests {
                 canonical_path: PathBuf::from(format!("source-{index}.md")),
                 name: format!("source-{index}.md"),
                 content: format!("instruction {index}"),
+                path_patterns: Vec::new(),
             })
             .collect::<Vec<_>>();
         files.insert(
@@ -92,6 +129,7 @@ mod tests {
                 canonical_path: PathBuf::from("source-0.md"),
                 name: "duplicate.md".to_string(),
                 content: "duplicate must lose".to_string(),
+                path_patterns: Vec::new(),
             },
         );
 
@@ -109,6 +147,7 @@ mod tests {
                 canonical_path: PathBuf::from(format!("large-{index}.md")),
                 name: format!("large-{index}.md"),
                 content: "x".repeat(1024 * 1024),
+                path_patterns: Vec::new(),
             })
             .collect::<Vec<_>>();
 

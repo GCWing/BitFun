@@ -35,7 +35,7 @@ export const optionalDependencyFeatureOwnerRules = [
       { depName: 'libc', ownerFeatures: ['local-storage', 'process-runtime'] },
       { depName: 'notify', ownerFeatures: ['lsp'] },
       { depName: 'rusqlite', ownerFeatures: ['permission'] },
-      { depName: 'serde_yaml', ownerFeatures: ['markdown'] },
+      { depName: 'serde_yaml', ownerFeatures: ['markdown', 'workspace-instructions'] },
       {
         depName: 'sha2',
         ownerFeatures: [
@@ -274,9 +274,9 @@ export const coreClosedFeatureProfileRules = [
   {
     manifestPath: 'src/crates/services/services-core/Cargo.toml',
     featureName: 'workspace-instructions',
-    requiredFeatureRefs: ['dep:globset', 'tokio/fs', 'tokio/io-util'],
+    requiredFeatureRefs: ['dep:globset', 'dep:serde_yaml', 'tokio/fs', 'tokio/io-util'],
     exact: true,
-    reason: 'services-core workspace-instructions must own declarative instruction glob expansion only',
+    reason: 'services-core workspace-instructions must own declarative instruction discovery, scope parsing, and glob expansion only',
   },
   {
     manifestPath: 'src/crates/services/services-core/Cargo.toml',

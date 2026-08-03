@@ -1,11 +1,7 @@
+use crate::instruction_scope::parse_front_matter;
 use serde_yaml::Value;
 use std::ops::Range;
 use std::sync::LazyLock;
-
-/// Compiled once; front-matter parsing runs on every `.md` scan.
-static FRONT_MATTER_REGEX: LazyLock<regex::Regex> = LazyLock::new(|| {
-    regex::Regex::new(r"(?s)^---\r?\n(.*?)\r?\n---").expect("front matter regex pattern is valid")
-});
 
 static PROMPT_ARGUMENT_REGEX: LazyLock<regex::Regex> = LazyLock::new(|| {
     regex::Regex::new(r#"(?:\[Image\s+\d+\]|"[^"]*"|'[^']*'|[^\s"']+)"#)
@@ -280,25 +276,7 @@ impl FrontMatterMarkdown {
     }
 
     pub fn load_str(content: &str) -> Result<(Value, String), String> {
-        let caps = FRONT_MATTER_REGEX
-            .captures(content)
-            .ok_or_else(|| "Failed to capture content".to_string())?;
-
-        let yaml_content = caps
-            .get(1)
-            .ok_or_else(|| "Failed to get captures".to_string())?
-            .as_str();
-
-        let metadata: Value = serde_yaml::from_str(yaml_content)
-            .map_err(|e| format!("Failed to parse YAML: {}", e))?;
-
-        let after_front_matter = caps
-            .get(0)
-            .ok_or_else(|| "Failed to get captures".to_string())?
-            .end();
-        let markdown_body = content[after_front_matter..].trim_start();
-
-        Ok((metadata, markdown_body.to_string()))
+        parse_front_matter(content)
     }
 
     pub fn save(path: &str, metadata: &Value, body: &str) -> Result<(), String> {

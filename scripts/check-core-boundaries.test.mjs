@@ -967,6 +967,7 @@ test('services-core capability profiles keep heavy owners out of the empty profi
   ]);
   assert.deepEqual(profiles.get('workspace-instructions'), [
     'dep:globset',
+    'dep:serde_yaml',
     'tokio/fs',
     'tokio/io-util',
   ]);

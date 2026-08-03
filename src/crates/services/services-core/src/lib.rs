@@ -13,6 +13,8 @@ pub mod dispatch_workspace;
 mod file_lock;
 #[cfg(feature = "filesystem")]
 pub mod filesystem;
+#[cfg(any(feature = "markdown", feature = "workspace-instructions"))]
+pub mod instruction_scope;
 #[cfg(feature = "local-storage")]
 pub mod json_store;
 pub mod jsonc;

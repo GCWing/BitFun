@@ -74,7 +74,7 @@ process-runtime = [
     "windows/Win32_System_Diagnostics_ToolHelp",
     "windows/Win32_System_Threading",
 ]
-workspace-instructions = ["dep:globset", "tokio/fs", "tokio/io-util"]
+workspace-instructions = ["dep:globset", "dep:serde_yaml", "tokio/fs", "tokio/io-util"]
 lsp = [
     "dep:anyhow",
     "dep:bitfun-core-types",

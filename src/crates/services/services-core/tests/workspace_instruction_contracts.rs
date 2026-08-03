@@ -3,6 +3,7 @@
 use bitfun_services_core::workspace::LocalWorkspaceFs;
 use bitfun_services_core::workspace_instructions::{
     read_workspace_instruction_files, read_workspace_instruction_files_with_fs,
+    read_workspace_instruction_sources, read_workspace_instruction_sources_with_fs,
 };
 use std::fs;
 
@@ -56,6 +57,30 @@ async fn port_backed_and_local_instruction_resolution_have_identical_order_and_c
         .expect("port instructions");
 
     assert_eq!(port, local);
+}
+
+#[tokio::test]
+async fn port_backed_and_local_path_scoped_sources_have_identical_content() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    fs::create_dir_all(temp.path().join(".claude/rules/nested")).expect("rules dir");
+    fs::write(
+        temp.path().join(".claude/rules/nested/rust.md"),
+        "---\npaths:\n  - src/**/*.rs\n---\n\nUse workspace errors.\n",
+    )
+    .expect("scoped rule");
+    let root = temp.path().to_string_lossy();
+
+    let local = read_workspace_instruction_sources(temp.path())
+        .await
+        .expect("local sources");
+    let port = read_workspace_instruction_sources_with_fs(&LocalWorkspaceFs, &root)
+        .await
+        .expect("port sources");
+
+    assert_eq!(port, local);
+    assert_eq!(port.len(), 1);
+    assert_eq!(port[0].path_patterns, vec!["src/**/*.rs"]);
+    assert_eq!(port[0].content, "Use workspace errors.\n");
 }
 
 #[cfg(unix)]

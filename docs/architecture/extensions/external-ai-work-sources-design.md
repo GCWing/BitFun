@@ -348,6 +348,7 @@ Plugin Host Runtime、LSP，以及通用动态模型路由器。现有 capabilit
 
 | 能力 | OpenCode | Claude Code | Codex | 当前边界 |
 |---|---|---|---|---|
+| Rules / Instructions | 用户级 `AGENTS.md`/Claude fallback 与本地 `instructions` 文件、glob；项目级本地文件、glob | 用户与项目 `CLAUDE.md`、项目导入及 `.claude/rules/**/*.md`；带 `paths` 的规则延迟生效 | 用户与项目 `AGENTS.md` | 无条件来源按既有 user → workspace 顺序进入启动上下文；Claude path-scoped rule 仅在 `Read` 成功返回且工作区相对路径命中后追加到当前会话历史。条件内容在压缩时丢弃，之后需再次命中读取才恢复；不增加 watcher、UI、Plugin Host Runtime 或第二套 Rules owner。Remote 只发现远端工作区来源，不回退控制端用户目录。 |
 | Prompt Command | JSON/JSONC、Markdown 的 prompt、本地文本文件与经审阅 shell 上下文子集 | legacy `commands/**/*.md` 的同一子集；Skills 仍由 Skill 归属模块处理 | 没有稳定、独立于 Skills 的声明式 Command 来源，因此不伪造 provider | `$ARGUMENTS`/位置参数及模板内 workspace 相对 UTF-8 `@file` 可展开；`!shell` 在展示精确计划并重新校验后仅把 stdout 加入 Prompt，参数相关计划不可记住。Claude `allowed-tools` 只校验宿主格式，不授予预批准；动态/绝对/越界文件、指定 Agent/模型等整体受限；Remote 不回退本机执行。 |
 | Subagent | 用户/项目声明的安全子集 | 用户/项目 `agents/**/*.md` 的安全子集 | 用户/项目 `[agents]`、角色文件与安全配置层子集 | prompt、描述、`Default`/真实继承/不透明模型引用、OpenCode 不透明 variant、Claude/Codex reasoning effort 和可表达工具请求进入既有归属模块；无 profile 的模型引用可唯一精确匹配，variant/effort profile 必须由用户绑定到现有配置后才可激活。来源请求、profile、实际模型和解析方式在 Web/TUI 可见。权限、私有 MCP/Hook、reasoning summary/verbosity、采样、并发等没有对应实现的字段仍会阻止或降级。 |
 | MCP | 用户/显式目录/项目配置的安全子集 | user/project/local 原生层的安全子集 | 用户与项目 `config.toml` 原生层的安全子集 | 支持可表达的 stdio 与 HTTPS Streamable HTTP；发现不启动 Server，首次激活继续经 BitFun MCP 审批。OAuth、remote executor、per-tool policy 等不完整语义明确降级。 |
@@ -357,6 +358,7 @@ Plugin Host Runtime、LSP，以及通用动态模型路由器。现有 capabilit
 
 生态原生语义由各 adapter 以契约测试固定，不抽象成全局优先级：
 
+- Claude path-scoped Instructions 只解析 `.claude/rules/**/*.md` front matter 中非空的 `paths` 字符串列表；无效 YAML、绝对路径、URL、父目录逃逸与无效 glob 均 fail closed。用户与项目规则沿用既有 Instructions 发现、去重和渲染预算，执行引擎只识别成功的 `Read`/deferred `Read` 工具结果，不根据 Grep、Edit 或失败结果推测规则生效。规则首次命中后作为带来源身份的内部提醒持久化，同一活动上下文不重复注入。
 - Claude legacy Command 扫描用户与项目 `.claude/commands/**/*.md`，保留 `frontend/component` 到
   `/frontend:component` 的原生命名空间；同层重名无效，遵循 Claude Code 当前“personal 覆盖 project”的 Skill/legacy Command
   规则，同名 Skill 仅通过有界名称索引遮蔽 Command。

@@ -218,7 +218,7 @@ export function runManifestParserSelfTest({
     [
       servicesCoreManifest,
       'workspace-instructions',
-      ['dep:globset', 'tokio/fs', 'tokio/io-util'],
+      ['dep:globset', 'dep:serde_yaml', 'tokio/fs', 'tokio/io-util'],
     ],
     [
       servicesCoreManifest,
@@ -849,7 +849,7 @@ export function runManifestParserSelfTest({
     ['libc', ['local-storage', 'process-runtime']],
     ['notify', ['lsp']],
     ['rusqlite', ['permission']],
-    ['serde_yaml', ['markdown']],
+    ['serde_yaml', ['markdown', 'workspace-instructions']],
     [
       'sha2',
       [

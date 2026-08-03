@@ -1,9 +1,10 @@
 use bitfun_services_core::bounded_fs::{
     collect_bounded_regular_files, BoundedDirectoryWalkError, BoundedDirectoryWalkLimits,
 };
+use bitfun_services_core::instruction_scope::{parse_instruction_path_scope, InstructionPathScope};
 use bitfun_services_core::local_instructions::{
     read_local_instruction_file, LocalInstructionFile, LocalInstructionFiles,
-    MAX_LOCAL_INSTRUCTION_FILES,
+    MAX_LOCAL_INSTRUCTION_FILES, MAX_LOCAL_INSTRUCTION_TOTAL_BYTES,
 };
 use std::collections::HashSet;
 use std::path::{Component, Path, PathBuf};
@@ -92,19 +93,93 @@ pub fn load_claude_code_user_instructions(
         let Some(file) = read_source(options, config_dir, &rule)? else {
             continue;
         };
-        if claude_rule_has_paths_frontmatter(&file.content) {
-            continue;
+        match parse_instruction_path_scope(&file.content) {
+            Ok(InstructionPathScope::Unscoped) => append_source_tree(
+                &mut files,
+                &mut read_attempts,
+                options,
+                config_dir,
+                rule,
+                Some(file),
+            )?,
+            Ok(InstructionPathScope::Scoped { paths, body }) => {
+                let mut file = file;
+                file.content = expand_scoped_rule_imports(
+                    &mut read_attempts,
+                    options,
+                    config_dir,
+                    &rule,
+                    body,
+                )?;
+                file.path_patterns = paths;
+                files.push(file);
+            }
+            Err(error) => {
+                log::warn!("Ignoring invalid Claude Code rule front matter: {error}");
+            }
         }
-        append_source_tree(
-            &mut files,
-            &mut read_attempts,
-            options,
-            config_dir,
-            rule,
-            Some(file),
-        )?;
     }
     Ok(files.into_files())
+}
+
+fn expand_scoped_rule_imports(
+    read_attempts: &mut usize,
+    options: &ClaudeCodeInstructionSourceOptions,
+    config_dir: &Path,
+    rule_path: &Path,
+    body: String,
+) -> Result<String, String> {
+    let mut expanded = body;
+    let mut seen = HashSet::from([normalize_path_lexically(rule_path)]);
+    let mut pending = claude_import_paths(
+        config_dir,
+        options.home_dir.as_deref(),
+        rule_path,
+        &expanded,
+    )
+    .into_iter()
+    .rev()
+    .map(|path| (path, 1usize))
+    .collect::<Vec<_>>();
+
+    while let Some((path, depth)) = pending.pop() {
+        if *read_attempts >= MAX_LOCAL_INSTRUCTION_FILES {
+            break;
+        }
+        *read_attempts += 1;
+        let Some(file) = read_source(options, config_dir, &path)? else {
+            continue;
+        };
+        if !seen.insert(file.canonical_path.clone()) {
+            continue;
+        }
+        let imports = if depth < MAX_CLAUDE_IMPORT_DEPTH {
+            claude_import_paths(
+                config_dir,
+                options.home_dir.as_deref(),
+                &path,
+                &file.content,
+            )
+        } else {
+            Vec::new()
+        };
+        if !file.content.trim().is_empty() {
+            if expanded
+                .len()
+                .saturating_add(file.content.len())
+                .saturating_add(3)
+                > MAX_LOCAL_INSTRUCTION_TOTAL_BYTES
+            {
+                log::warn!("Claude Code scoped rule import byte limit reached");
+                break;
+            }
+            expanded.push_str("\n\n");
+            expanded.push_str(file.content.trim());
+            expanded.push('\n');
+        }
+        pending.extend(imports.into_iter().rev().map(|import| (import, depth + 1)));
+    }
+    Ok(expanded)
 }
 
 fn append_source_tree(
@@ -228,26 +303,6 @@ fn normalize_path_lexically(path: &Path) -> PathBuf {
     normalized
 }
 
-fn claude_rule_has_paths_frontmatter(content: &str) -> bool {
-    let mut lines = content.lines();
-    if lines.next().map(str::trim) != Some("---") {
-        return false;
-    }
-    for line in lines {
-        let trimmed = line.trim();
-        if trimmed == "---" {
-            return false;
-        }
-        if trimmed
-            .split_once(':')
-            .is_some_and(|(key, _)| key.trim() == "paths")
-        {
-            return true;
-        }
-    }
-    false
-}
-
 #[cfg(test)]
 mod tests {
     use super::{
@@ -256,7 +311,7 @@ mod tests {
     use std::path::{Path, PathBuf};
 
     #[test]
-    fn user_memory_resolves_bounded_imports_and_unconditional_rules_only() {
+    fn user_memory_resolves_bounded_imports_and_preserves_scoped_rules() {
         let temp = tempfile::tempdir().expect("tempdir");
         let config_dir = temp.path().join("claude");
         std::fs::create_dir_all(config_dir.join("imports")).expect("imports directory");
@@ -303,10 +358,84 @@ mod tests {
                 "$CLAUDE_CONFIG_DIR/imports/base.md",
                 "$CLAUDE_CONFIG_DIR/imports/nested.md",
                 "$CLAUDE_CONFIG_DIR/rules/nested/a-first.md",
+                "$CLAUDE_CONFIG_DIR/rules/scoped.md",
                 "$CLAUDE_CONFIG_DIR/rules/z-last.md",
             ]
         );
-        assert!(!files.iter().any(|file| file.name.contains("scoped")));
+        assert_eq!(
+            files
+                .iter()
+                .find(|file| file.name.ends_with("/scoped.md"))
+                .expect("scoped rule")
+                .path_patterns,
+            vec!["src/**/*.rs"]
+        );
+    }
+
+    #[test]
+    fn user_instruction_sources_preserve_path_scoped_rules_without_frontmatter() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let config_dir = temp.path().join("claude");
+        std::fs::create_dir_all(config_dir.join("rules")).expect("rules directory");
+        std::fs::write(
+            config_dir.join("rules/scoped.md"),
+            "---\npaths:\n  - src/**/*.{rs,toml}\n  - tests/**/*.rs\n---\n\nScoped rule\n",
+        )
+        .expect("scoped rule");
+        let options = ClaudeCodeInstructionSourceOptions {
+            config_dir: Some(config_dir),
+            home_dir: None,
+            display_root: "$CLAUDE_CONFIG_DIR".to_string(),
+        };
+
+        let files = load_claude_code_user_instructions(&options).expect("sources");
+
+        assert_eq!(files.len(), 1);
+        assert_eq!(files[0].name, "$CLAUDE_CONFIG_DIR/rules/scoped.md");
+        assert_eq!(
+            files[0].path_patterns,
+            vec!["src/**/*.{rs,toml}", "tests/**/*.rs"]
+        );
+        assert_eq!(files[0].content, "Scoped rule\n");
+    }
+
+    #[test]
+    fn path_scoped_user_rule_imports_inherit_the_parent_scope() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let config_dir = temp.path().join("claude");
+        std::fs::create_dir_all(config_dir.join("shared")).expect("shared directory");
+        std::fs::create_dir_all(config_dir.join("rules")).expect("rules directory");
+        std::fs::write(
+            config_dir.join("rules/rust.md"),
+            "---\npaths:\n  - src/**/*.rs\n---\nRust rule\n@../shared/base.md\n",
+        )
+        .expect("scoped rule");
+        std::fs::write(
+            config_dir.join("shared/base.md"),
+            "Imported base\n@nested.md\n",
+        )
+        .expect("base import");
+        std::fs::write(config_dir.join("shared/nested.md"), "Nested import\n")
+            .expect("nested import");
+        let options = ClaudeCodeInstructionSourceOptions {
+            config_dir: Some(config_dir),
+            home_dir: None,
+            display_root: "$CLAUDE_CONFIG_DIR".to_string(),
+        };
+
+        let files = load_claude_code_user_instructions(&options).expect("sources");
+        let rule = files
+            .iter()
+            .find(|file| file.name.ends_with("/rust.md"))
+            .expect("scoped rule");
+
+        assert_eq!(rule.path_patterns, vec!["src/**/*.rs"]);
+        assert!(rule.content.contains("Rust rule"));
+        assert!(rule.content.contains("Imported base"));
+        assert!(rule.content.contains("Nested import"));
+        assert!(files.iter().all(|file| {
+            !file.name.ends_with("/base.md") && !file.name.ends_with("/nested.md")
+        }));
     }
 
     #[test]

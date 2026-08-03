@@ -63,29 +63,93 @@ pub(crate) async fn build_local_workspace_instruction_files_context_with_fs_deta
 fn compose_local_instruction_sources(
     workspace_root: &Path,
     user_instruction_files: crate::instruction_sources::LocalUserInstructionFiles,
-    mut workspace_instruction_files: Vec<WorkspaceInstructionFile>,
+    workspace_instruction_files: Vec<WorkspaceInstructionFile>,
 ) -> InstructionContextBuild {
+    let cacheable = user_instruction_files.cacheable;
+    let instruction_files = merge_local_instruction_sources(
+        workspace_root,
+        user_instruction_files.files,
+        workspace_instruction_files,
+    );
+    InstructionContextBuild {
+        content: render_workspace_instruction_files_section(&instruction_files),
+        cacheable,
+    }
+}
+
+fn merge_local_instruction_sources(
+    workspace_root: &Path,
+    user_instruction_files: Vec<bitfun_services_core::local_instructions::LocalInstructionFile>,
+    mut workspace_instruction_files: Vec<WorkspaceInstructionFile>,
+) -> Vec<WorkspaceInstructionFile> {
     bitfun_services_core::workspace_instructions::retain_distinct_local_workspace_instruction_files(
         workspace_root,
         user_instruction_files
-            .files
             .iter()
             .map(|file| file.canonical_path.clone()),
         &mut workspace_instruction_files,
     );
     let mut instruction_files = user_instruction_files
-        .files
         .into_iter()
         .map(|file| WorkspaceInstructionFile {
             name: file.name,
             content: file.content,
+            path_patterns: file.path_patterns,
         })
         .collect::<Vec<_>>();
     instruction_files.extend(workspace_instruction_files);
-    InstructionContextBuild {
-        content: render_workspace_instruction_files_section(&instruction_files),
-        cacheable: user_instruction_files.cacheable,
-    }
+    instruction_files
+}
+
+pub(crate) async fn load_local_conditional_instruction_files(
+    workspace_root: &Path,
+) -> BitFunResult<Vec<WorkspaceInstructionFile>> {
+    let user_instruction_files =
+        crate::instruction_sources::load_local_user_conditional_instruction_sources().await;
+    let workspace_instruction_files =
+        bitfun_services_core::workspace_instructions::read_workspace_conditional_instruction_sources(
+            workspace_root,
+        )
+        .await
+        .map_err(BitFunError::service)?;
+    Ok(merge_local_instruction_sources(
+        workspace_root,
+        user_instruction_files,
+        workspace_instruction_files,
+    ))
+}
+
+pub(crate) async fn load_local_conditional_instruction_files_with_fs(
+    workspace_root: &Path,
+    fs: &dyn WorkspaceFileSystem,
+    workspace_root_path: &str,
+) -> BitFunResult<Vec<WorkspaceInstructionFile>> {
+    let user_instruction_files =
+        crate::instruction_sources::load_local_user_conditional_instruction_sources().await;
+    let workspace_instruction_files =
+        bitfun_services_core::workspace_instructions::read_workspace_conditional_instruction_sources_with_fs(
+            fs,
+            workspace_root_path,
+        )
+        .await
+        .map_err(BitFunError::service)?;
+    Ok(merge_local_instruction_sources(
+        workspace_root,
+        user_instruction_files,
+        workspace_instruction_files,
+    ))
+}
+
+pub(crate) async fn load_workspace_conditional_instruction_files_with_fs(
+    fs: &dyn WorkspaceFileSystem,
+    workspace_root: &str,
+) -> BitFunResult<Vec<WorkspaceInstructionFile>> {
+    Ok(bitfun_services_core::workspace_instructions::read_workspace_conditional_instruction_sources_with_fs(
+            fs,
+            workspace_root,
+        )
+        .await
+        .map_err(BitFunError::service)?)
 }
 
 pub(crate) async fn build_workspace_instruction_files_context_with_fs(
@@ -107,15 +171,21 @@ pub(crate) async fn build_workspace_instruction_files_context_with_fs(
 fn render_workspace_instruction_files_section(
     files: &[WorkspaceInstructionFile],
 ) -> Option<String> {
-    if files.is_empty() {
-        return None;
-    }
+    render_instruction_documents(
+        "## Codebase and user instructions\n\nBe sure to adhere to these instructions. IMPORTANT: These instructions OVERRIDE any default behavior and you MUST follow them exactly as written.\n",
+        files.iter().filter(|file| file.path_patterns.is_empty()),
+    )
+    .0
+}
 
-    let mut rendered =
-        String::from("## Codebase and user instructions\n\nBe sure to adhere to these instructions. IMPORTANT: These instructions OVERRIDE any default behavior and you MUST follow them exactly as written.\n");
+pub(crate) fn render_instruction_documents<'a>(
+    header: &str,
+    files: impl IntoIterator<Item = &'a WorkspaceInstructionFile>,
+) -> (Option<String>, Vec<String>) {
+    let mut rendered = String::from(header);
+    let mut rendered_names = Vec::new();
 
-    let mut rendered_file_count = 0usize;
-    for file in files.iter().take(MAX_RENDERED_INSTRUCTION_FILES) {
+    for file in files.into_iter().take(MAX_RENDERED_INSTRUCTION_FILES) {
         let escaped_name = escape_document_name(&file.name);
         let document = format!(
             "<document name=\"{}\">\n{}\n</document>\n\n",
@@ -126,10 +196,13 @@ fn render_workspace_instruction_files_section(
             break;
         }
         rendered.push_str(&document);
-        rendered_file_count += 1;
+        rendered_names.push(file.name.clone());
     }
 
-    (rendered_file_count > 0).then(|| rendered.trim_end().to_string())
+    (
+        (!rendered_names.is_empty()).then(|| rendered.trim_end().to_string()),
+        rendered_names,
+    )
 }
 
 fn escape_document_name(name: &str) -> String {
@@ -145,7 +218,8 @@ mod tests {
         build_workspace_instruction_files_context,
         build_workspace_instruction_files_context_detailed,
         build_workspace_instruction_files_context_with_fs,
-        render_workspace_instruction_files_section, WorkspaceInstructionFile,
+        load_local_conditional_instruction_files, render_workspace_instruction_files_section,
+        WorkspaceInstructionFile,
     };
     use crate::instruction_sources::test_support::{lock_environment, EnvironmentGuard};
     use bitfun_services_core::workspace::LocalWorkspaceFs;
@@ -190,6 +264,91 @@ mod tests {
                 .expect("workspace instructions"),
         ];
         assert!(positions.windows(2).all(|pair| pair[0] < pair[1]));
+    }
+
+    #[tokio::test]
+    async fn conditional_instructions_keep_user_then_workspace_precedence() {
+        let _environment = lock_environment();
+        let temp = tempfile::tempdir().expect("tempdir");
+        let workspace = temp.path().join("workspace");
+        let xdg = temp.path().join("xdg");
+        let codex = temp.path().join("codex");
+        let claude = temp.path().join("claude");
+        std::fs::create_dir_all(xdg.join("opencode")).expect("OpenCode config directory");
+        std::fs::create_dir_all(&codex).expect("Codex config directory");
+        std::fs::create_dir_all(claude.join("rules")).expect("Claude rules directory");
+        std::fs::create_dir_all(workspace.join(".claude/rules"))
+            .expect("workspace rules directory");
+        std::fs::write(
+            claude.join("rules/user.md"),
+            "---\npaths:\n  - src/**/*.rs\n---\nUser rule\n",
+        )
+        .expect("user rule");
+        std::fs::write(
+            workspace.join(".claude/rules/project.md"),
+            "---\npaths:\n  - src/**/*.rs\n---\nProject rule\n",
+        )
+        .expect("project rule");
+        let _guard = EnvironmentGuard::set(&[
+            ("XDG_CONFIG_HOME", &xdg),
+            ("CODEX_HOME", &codex),
+            ("CLAUDE_CONFIG_DIR", &claude),
+        ]);
+
+        let files = load_local_conditional_instruction_files(&workspace)
+            .await
+            .expect("conditional instructions");
+
+        assert_eq!(
+            files
+                .iter()
+                .map(|file| file.name.as_str())
+                .collect::<Vec<_>>(),
+            vec![
+                "$CLAUDE_CONFIG_DIR/rules/user.md",
+                ".claude/rules/project.md"
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn invalid_user_rule_does_not_hide_project_conditional_instructions() {
+        let _environment = lock_environment();
+        let temp = tempfile::tempdir().expect("tempdir");
+        let workspace = temp.path().join("workspace");
+        let xdg = temp.path().join("xdg");
+        let codex = temp.path().join("codex");
+        let claude = temp.path().join("claude");
+        std::fs::create_dir_all(xdg.join("opencode")).expect("OpenCode config directory");
+        std::fs::create_dir_all(&codex).expect("Codex config directory");
+        std::fs::create_dir_all(claude.join("rules")).expect("Claude rules directory");
+        std::fs::create_dir_all(workspace.join(".claude/rules"))
+            .expect("workspace rules directory");
+        std::fs::write(
+            claude.join("rules/oversized.md"),
+            vec![
+                b'x';
+                bitfun_services_core::local_instructions::MAX_LOCAL_INSTRUCTION_FILE_BYTES + 1
+            ],
+        )
+        .expect("oversized user rule");
+        std::fs::write(
+            workspace.join(".claude/rules/project.md"),
+            "---\npaths:\n  - src/**/*.rs\n---\nProject rule\n",
+        )
+        .expect("project rule");
+        let _guard = EnvironmentGuard::set(&[
+            ("XDG_CONFIG_HOME", &xdg),
+            ("CODEX_HOME", &codex),
+            ("CLAUDE_CONFIG_DIR", &claude),
+        ]);
+
+        let files = load_local_conditional_instruction_files(&workspace)
+            .await
+            .expect("project conditional instructions");
+
+        assert_eq!(files.len(), 1);
+        assert_eq!(files[0].name, ".claude/rules/project.md");
     }
 
     #[tokio::test]
@@ -337,6 +496,7 @@ mod tests {
         let rendered = render_workspace_instruction_files_section(&[WorkspaceInstructionFile {
             name: "<configured-path>/team\"&.md".to_string(),
             content: "Team instructions".to_string(),
+            path_patterns: Vec::new(),
         }])
         .expect("rendered instructions");
 
@@ -350,6 +510,7 @@ mod tests {
             .map(|index| WorkspaceInstructionFile {
                 name: format!("source-{index}.md"),
                 content: format!("source-{index}\n{}", "x".repeat(700 * 1024)),
+                path_patterns: Vec::new(),
             })
             .collect::<Vec<_>>();
 
@@ -368,6 +529,7 @@ mod tests {
             .map(|index| WorkspaceInstructionFile {
                 name: format!("source-{index}.md"),
                 content: format!("instruction {index}"),
+                path_patterns: Vec::new(),
             })
             .collect::<Vec<_>>();
 
