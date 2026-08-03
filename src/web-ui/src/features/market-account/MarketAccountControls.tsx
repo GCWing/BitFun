@@ -106,6 +106,7 @@ export function MarketAccountControls({
     <div
       className={['market-account-controls', className].filter(Boolean).join(' ')}
       data-bf-component="market-account-controls"
+      data-bf-part="root"
       data-bf-state={account.status}
     >
       {account.me ? (
@@ -114,6 +115,8 @@ export function MarketAccountControls({
             ref={menuTriggerRef}
             type="button"
             className="market-account-controls__identity-trigger"
+            data-bf-component="market-account-controls"
+            data-bf-part="identityTrigger"
             aria-haspopup="menu"
             aria-expanded={menuOpen}
             aria-label={t('market.account.menuLabel', { login: account.me.user.login })}
@@ -124,8 +127,17 @@ export function MarketAccountControls({
             <ChevronDown size={13} aria-hidden="true" />
           </button>
           {menuOpen && (
-            <div className="market-account-controls__menu" role="menu">
-              <div className="market-account-controls__profile">
+            <div
+              className="market-account-controls__menu"
+              role="menu"
+              data-bf-component="market-account-controls"
+              data-bf-part="menu"
+            >
+              <div
+                className="market-account-controls__profile"
+                data-bf-component="market-account-controls"
+                data-bf-part="profile"
+              >
                 <Avatar size={30} src={account.me.user.avatarUrl} alt={account.me.user.login} />
                 <div>
                   <strong>@{account.me.user.login}</strong>
@@ -136,6 +148,8 @@ export function MarketAccountControls({
                 type="button"
                 role="menuitem"
                 className="market-account-controls__menu-item"
+                data-bf-component="market-account-controls"
+                data-bf-part="menuItem"
                 onClick={() => void signOut()}
               >
                 <LogOut size={14} aria-hidden="true" />
@@ -167,7 +181,11 @@ export function MarketAccountControls({
         closeOnOverlayClick={account.status !== 'authorizing'}
         testId="market-account-login-dialog"
       >
-        <div className="market-account-login">
+        <div
+          className="market-account-login"
+          data-bf-component="market-account-controls"
+          data-bf-part="login"
+        >
           <div className="market-account-login__mark" aria-hidden="true">
             <Github size={28} />
           </div>
@@ -176,15 +194,31 @@ export function MarketAccountControls({
             <p>{t('market.account.dialogDescription')}</p>
           </div>
           {account.status === 'authorizing' && (
-            <div className="market-account-login__waiting" role="status">
+            <div
+              className="market-account-login__waiting"
+              role="status"
+              data-bf-component="market-account-controls"
+              data-bf-part="waiting"
+            >
               <Loader2 size={16} className="market-account-controls__spinner" />
               <span>{t('market.account.waiting')}</span>
             </div>
           )}
           {errorText && account.status !== 'authorizing' && (
-            <p className="market-account-login__error" role="alert">{errorText}</p>
+            <p
+              className="market-account-login__error"
+              role="alert"
+              data-bf-component="market-account-controls"
+              data-bf-part="error"
+            >
+              {errorText}
+            </p>
           )}
-          <div className="market-account-login__actions">
+          <div
+            className="market-account-login__actions"
+            data-bf-component="market-account-controls"
+            data-bf-part="actions"
+          >
             <Button variant="ghost" onClick={closeLogin}>
               {t('market.account.cancel')}
             </Button>
