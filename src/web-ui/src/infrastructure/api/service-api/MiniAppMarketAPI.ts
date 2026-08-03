@@ -86,7 +86,6 @@ export interface MarketMe {
 
 export interface DesktopAuthStart {
   transactionId: string;
-  transactionSecret: string;
   authorizationUrl: string;
   expiresAt: number;
   pollIntervalSeconds: number;
@@ -200,7 +199,6 @@ export class MiniAppMarketAPI {
         {
           request: {
             transactionId: transaction.transactionId,
-            transactionSecret: transaction.transactionSecret,
           },
         },
       );
@@ -361,6 +359,10 @@ export class MiniAppMarketAPI {
 
   onUploadProgress(handler: (progress: MarketUploadProgress) => void): () => void {
     return api.listen<MarketUploadProgress>('miniapp-market-upload-progress', handler);
+  }
+
+  onAccountChanged(handler: () => void): () => void {
+    return api.listen('miniapp-market-account-changed', handler);
   }
 }
 

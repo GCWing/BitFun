@@ -1,5 +1,10 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import listingFixture from '../../shared/appearance-market-contract-fixtures/listing-detail.json';
+import {
+  csrfTokenFromCookie,
+  sharedMarketAccountApi,
+  sharedMarketLoginUrl,
+} from './account';
 import { buildListingPath, downloadUrl } from './api';
 import type { AppearanceListingDetail, AppearanceMode } from './types';
 
@@ -14,6 +19,10 @@ const typedListingFixture: AppearanceListingDetail = {
 };
 
 describe('Skin Market API paths', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it('encodes filters and omits the all-mode sentinel', () => {
     expect(buildListingPath({
       query: '  ocean night  ',
@@ -35,5 +44,29 @@ describe('Skin Market API paths', () => {
     expect(typedListingFixture.packageId).toBe('community.ocean-night');
     expect(typedListingFixture.mode).toBe('dark');
     expect(typedListingFixture.releases[0].reviewBundleHash).toHaveLength(64);
+  });
+
+  it('uses the MiniApp auth broker and returns to the current Skin route', () => {
+    expect(sharedMarketLoginUrl('/skin/appearances/ocean-night?q=dark')).toBe(
+      '/miniapp/api/v1/auth/github/start?return_to=%2Fskin%2Fappearances%2Focean-night%3Fq%3Ddark',
+    );
+  });
+
+  it('forwards the Skin-scoped CSRF alias when signing out', async () => {
+    expect(csrfTokenFromCookie('theme=dark; bitfun_skin_csrf=shared-csrf; locale=zh')).toBe(
+      'shared-csrf',
+    );
+    vi.stubGlobal('document', { cookie: 'bitfun_skin_csrf=shared-csrf' });
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await sharedMarketAccountApi.logout();
+
+    expect(fetchMock).toHaveBeenCalledOnce();
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('/miniapp/api/v1/auth/logout');
+    expect(init.method).toBe('POST');
+    expect(init.credentials).toBe('include');
+    expect(new Headers(init.headers).get('x-csrf-token')).toBe('shared-csrf');
   });
 });

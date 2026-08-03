@@ -525,15 +525,20 @@ async fn refresh_tokens(
     ))
 }
 
-async fn me(
-    State(state): State<Arc<MarketState>>,
-    headers: HeaderMap,
-) -> MarketResult<Json<MeResponse>> {
+async fn me(State(state): State<Arc<MarketState>>, headers: HeaderMap) -> MarketResult<Response> {
     let auth = state.auth.require_auth(&headers).await?;
-    Ok(Json(MeResponse {
+    let mut response = Json(MeResponse {
         is_admin: state.auth.is_admin(&auth.user),
-        user: auth.user.profile,
-    }))
+        user: auth.user.profile.clone(),
+    })
+    .into_response();
+    response
+        .headers_mut()
+        .insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+    state
+        .auth
+        .append_shared_account_cookies(response.headers_mut(), &headers, &auth)?;
+    Ok(response)
 }
 
 async fn logout(

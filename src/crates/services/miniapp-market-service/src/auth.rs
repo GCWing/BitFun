@@ -15,6 +15,10 @@ use uuid::Uuid;
 
 const WEB_SESSION_COOKIE: &str = "bitfun_market_session";
 const CSRF_COOKIE: &str = "bitfun_market_csrf";
+const SKIN_SESSION_COOKIE: &str = "bitfun_skin_session";
+const SKIN_CSRF_COOKIE: &str = "bitfun_skin_csrf";
+const MINIAPP_COOKIE_PATH: &str = "/miniapp";
+const SKIN_COOKIE_PATH: &str = "/skin";
 const OAUTH_FLOW_MINUTES: i64 = 10;
 const WEB_SESSION_DAYS: i64 = 7;
 const ACCESS_TOKEN_MINUTES: i64 = 15;
@@ -38,6 +42,7 @@ pub(crate) enum RequestAuthKind {
     Web {
         session_token: String,
         csrf_hash: String,
+        expires_at: i64,
     },
     Bearer {
         family_id: String,
@@ -143,7 +148,8 @@ impl AuthService {
             }));
         }
         if let Some(token) = cookie_value(headers, WEB_SESSION_COOKIE) {
-            let Some((user, csrf_hash)) = self.db.web_session_user(&token).await? else {
+            let Some((user, csrf_hash, expires_at)) = self.db.web_session_user(&token).await?
+            else {
                 return Ok(None);
             };
             return Ok(Some(RequestAuth {
@@ -151,6 +157,7 @@ impl AuthService {
                 kind: RequestAuthKind::Web {
                     session_token: token,
                     csrf_hash,
+                    expires_at,
                 },
             }));
         }
@@ -488,29 +495,71 @@ impl AuthService {
         } else {
             ""
         };
-        append_set_cookie(
-            headers,
-            &format!(
-                "{WEB_SESSION_COOKIE}={session_token}; Path=/miniapp; Max-Age={max_age}; HttpOnly; SameSite=Lax{secure}"
-            ),
-        )?;
-        append_set_cookie(
-            headers,
-            &format!(
-                "{CSRF_COOKIE}={csrf_token}; Path=/miniapp; Max-Age={max_age}; SameSite=Lax{secure}"
-            ),
-        )
+        for (session_cookie, csrf_cookie, path) in [
+            (WEB_SESSION_COOKIE, CSRF_COOKIE, MINIAPP_COOKIE_PATH),
+            (SKIN_SESSION_COOKIE, SKIN_CSRF_COOKIE, SKIN_COOKIE_PATH),
+        ] {
+            append_set_cookie(
+                headers,
+                &format!(
+                    "{session_cookie}={session_token}; Path={path}; Max-Age={max_age}; HttpOnly; SameSite=Lax{secure}"
+                ),
+            )?;
+            append_set_cookie(
+                headers,
+                &format!(
+                    "{csrf_cookie}={csrf_token}; Path={path}; Max-Age={max_age}; SameSite=Lax{secure}"
+                ),
+            )?;
+        }
+        Ok(())
+    }
+
+    pub(crate) fn append_shared_account_cookies(
+        &self,
+        response_headers: &mut HeaderMap,
+        request_headers: &HeaderMap,
+        auth: &RequestAuth,
+    ) -> MarketResult<()> {
+        let RequestAuthKind::Web {
+            session_token,
+            csrf_hash,
+            expires_at,
+        } = &auth.kind
+        else {
+            return Ok(());
+        };
+        let Some(csrf_token) = cookie_value(request_headers, CSRF_COOKIE) else {
+            return Ok(());
+        };
+        if token_hash(&csrf_token) != *csrf_hash {
+            return Ok(());
+        }
+        self.append_web_session_cookies(response_headers, session_token, &csrf_token, *expires_at)
     }
 
     pub(crate) fn append_clear_cookies(&self, headers: &mut HeaderMap) -> MarketResult<()> {
-        append_set_cookie(
-            headers,
-            &format!("{WEB_SESSION_COOKIE}=; Path=/miniapp; Max-Age=0; HttpOnly; SameSite=Lax"),
-        )?;
-        append_set_cookie(
-            headers,
-            &format!("{CSRF_COOKIE}=; Path=/miniapp; Max-Age=0; SameSite=Lax"),
-        )
+        let secure = if self.config.public_base_url.starts_with("https://") {
+            "; Secure"
+        } else {
+            ""
+        };
+        for (session_cookie, csrf_cookie, path) in [
+            (WEB_SESSION_COOKIE, CSRF_COOKIE, MINIAPP_COOKIE_PATH),
+            (SKIN_SESSION_COOKIE, SKIN_CSRF_COOKIE, SKIN_COOKIE_PATH),
+        ] {
+            append_set_cookie(
+                headers,
+                &format!(
+                    "{session_cookie}=; Path={path}; Max-Age=0; HttpOnly; SameSite=Lax{secure}"
+                ),
+            )?;
+            append_set_cookie(
+                headers,
+                &format!("{csrf_cookie}=; Path={path}; Max-Age=0; SameSite=Lax{secure}"),
+            )?;
+        }
+        Ok(())
     }
 
     async fn exchange_github_code(&self, code: &str, verifier: &str) -> MarketResult<GitHubUser> {
@@ -581,10 +630,41 @@ fn random_token(bytes: usize) -> String {
 }
 
 fn safe_return_to(value: &str) -> String {
-    if value.starts_with("/miniapp/") && !value.starts_with("//") {
+    const FALLBACK: &str = "/miniapp/";
+    if value.len() > 2_048
+        || !value.starts_with('/')
+        || value.starts_with("//")
+        || value.contains('\\')
+        || value.chars().any(char::is_control)
+    {
+        return FALLBACK.to_string();
+    }
+    let encoded_path = value
+        .split(['?', '#'])
+        .next()
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    if ["%00", "%0a", "%0d", "%2f", "%5c"]
+        .iter()
+        .any(|encoded| encoded_path.contains(encoded))
+    {
+        return FALLBACK.to_string();
+    }
+    let Ok(base) = Url::parse("https://market.openbitfun.com/") else {
+        return FALLBACK.to_string();
+    };
+    let Ok(target) = base.join(value) else {
+        return FALLBACK.to_string();
+    };
+    let path = target.path();
+    if target.origin() == base.origin()
+        && (matches!(path, "/miniapp" | "/skin")
+            || path.starts_with("/miniapp/")
+            || path.starts_with("/skin/"))
+    {
         value.to_string()
     } else {
-        "/miniapp/".to_string()
+        FALLBACK.to_string()
     }
 }
 
@@ -675,6 +755,24 @@ mod tests {
         assert_eq!(replay.code, "invalid_oauth_state");
     }
 
+    #[test]
+    fn oauth_return_target_accepts_only_market_surfaces() {
+        assert_eq!(
+            safe_return_to("/skin/appearances/ocean-night?q=dark"),
+            "/skin/appearances/ocean-night?q=dark"
+        );
+        assert_eq!(
+            safe_return_to("/miniapp/apps/reviewed-app"),
+            "/miniapp/apps/reviewed-app"
+        );
+        assert_eq!(safe_return_to("//attacker.invalid/skin/"), "/miniapp/");
+        assert_eq!(safe_return_to("/skin/../admin"), "/miniapp/");
+        assert_eq!(safe_return_to("/skin/%2e%2e/admin"), "/miniapp/");
+        assert_eq!(safe_return_to("/skin/%2F%2Fattacker.invalid"), "/miniapp/");
+        assert_eq!(safe_return_to("/skin/%5c%5cattacker"), "/miniapp/");
+        assert_eq!(safe_return_to("/unrelated"), "/miniapp/");
+    }
+
     #[tokio::test]
     async fn web_csrf_requires_matching_cookie_header_and_session_hash() {
         let temporary = tempfile::tempdir().unwrap();
@@ -691,6 +789,7 @@ mod tests {
             kind: RequestAuthKind::Web {
                 session_token: "session".to_string(),
                 csrf_hash: token_hash("csrf-value"),
+                expires_at: (Utc::now() + Duration::hours(1)).timestamp(),
             },
         };
         let mut headers = HeaderMap::new();
@@ -710,6 +809,48 @@ mod tests {
                 .as_u16(),
             403
         );
+
+        let mut response_headers = HeaderMap::new();
+        service
+            .append_shared_account_cookies(&mut response_headers, &headers, &auth)
+            .unwrap();
+        let cookies = response_headers
+            .get_all(header::SET_COOKIE)
+            .iter()
+            .map(|value| value.to_str().unwrap())
+            .collect::<Vec<_>>();
+        assert_eq!(cookies.len(), 4);
+        assert!(cookies
+            .iter()
+            .any(|cookie| { cookie.starts_with("bitfun_market_session=session; Path=/miniapp;") }));
+        assert!(cookies
+            .iter()
+            .any(|cookie| { cookie.starts_with("bitfun_market_csrf=csrf-value; Path=/miniapp;") }));
+        assert!(cookies
+            .iter()
+            .any(|cookie| { cookie.starts_with("bitfun_skin_session=session; Path=/skin;") }));
+        assert!(cookies
+            .iter()
+            .any(|cookie| { cookie.starts_with("bitfun_skin_csrf=csrf-value; Path=/skin;") }));
+        assert!(cookies.iter().all(|cookie| cookie.contains("SameSite=Lax")));
+        assert!(cookies.iter().all(|cookie| cookie.contains("Secure")));
+        assert!(cookies.iter().all(|cookie| !cookie.contains("Domain=")));
+        assert!(cookies
+            .iter()
+            .filter(|cookie| cookie.contains("_session="))
+            .all(|cookie| cookie.contains("HttpOnly")));
+
+        let mut clear_headers = HeaderMap::new();
+        service.append_clear_cookies(&mut clear_headers).unwrap();
+        let clear_cookies = clear_headers
+            .get_all(header::SET_COOKIE)
+            .iter()
+            .map(|value| value.to_str().unwrap())
+            .collect::<Vec<_>>();
+        assert_eq!(clear_cookies.len(), 4);
+        assert!(clear_cookies
+            .iter()
+            .all(|cookie| cookie.contains("Max-Age=0")));
     }
 
     #[tokio::test]

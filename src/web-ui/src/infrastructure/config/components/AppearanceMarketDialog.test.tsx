@@ -27,8 +27,8 @@ vi.mock('@/component-library', () => ({
   Button: ({ children, isLoading: _isLoading, iconOnly: _iconOnly, ...props }: any) => (
     <button {...props}>{children}</button>
   ),
-  Modal: ({ isOpen, title, children }: any) => isOpen ? (
-    <section role="dialog" aria-label={title}>{children}</section>
+  Modal: ({ isOpen, title, titleExtra, children }: any) => isOpen ? (
+    <section role="dialog" aria-label={title}>{titleExtra}{children}</section>
   ) : null,
   Search: ({ value, onChange, onSearch, inputAriaLabel }: any) => (
     <input
@@ -40,6 +40,10 @@ vi.mock('@/component-library', () => ({
   ),
   Select: () => <div />,
   confirmDialog: mocks.confirmDialog,
+}));
+
+vi.mock('@/features/market-account', () => ({
+  MarketAccountControls: () => <div data-testid="shared-market-account-controls" />,
 }));
 
 vi.mock('@/infrastructure/api/service-api/AppearanceMarketAPI', () => ({
@@ -143,6 +147,7 @@ describe('AppearanceMarketDialog', () => {
       await Promise.resolve();
     });
     await vi.waitFor(() => expect(container.textContent).toContain('Tokyo Night'));
+    expect(container.querySelector('[data-testid="shared-market-account-controls"]')).not.toBeNull();
     expect(container.textContent).toContain('package.market.updateAvailable');
 
     const listingButton = [...container.querySelectorAll('button')]

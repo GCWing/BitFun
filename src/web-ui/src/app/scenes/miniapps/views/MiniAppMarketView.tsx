@@ -9,14 +9,12 @@ import {
   ExternalLink,
   Heart,
   Loader2,
-  LogOut,
   PackageCheck,
   RefreshCw,
   ShieldCheck,
   Star,
 } from 'lucide-react';
 import {
-  Avatar,
   Badge,
   Button,
   ConfirmDialog,
@@ -45,9 +43,10 @@ import {
   type MarketInstalledStatus,
   type MarketListingDetail,
   type MarketListingSummary,
-  type MarketMe,
   type MarketSort,
 } from '@/infrastructure/api/service-api/MiniAppMarketAPI';
+import { MarketAccountControls } from '@/features/market-account';
+import { useMarketAccount } from '@/infrastructure/market-account';
 import { createLogger } from '@/shared/utils/logger';
 import { useNotification } from '@/shared/notification-system';
 import { getMiniAppIconGradient, renderMiniAppIcon } from '../utils/miniAppIcons';
@@ -76,6 +75,7 @@ const MiniAppMarketView: React.FC = () => {
   const { openScene, activateScene, openTabs } = useSceneManager();
   const upsertApp = useMiniAppStore((state) => state.upsertApp);
   const setMarketOrigin = useMiniAppStore((state) => state.setMarketOrigin);
+  const { me } = useMarketAccount();
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState<(typeof CATEGORIES)[number]>('all');
   const [sort, setSort] = useState<MarketSort>('newest');
@@ -87,8 +87,7 @@ const MiniAppMarketView: React.FC = () => {
   const [detail, setDetail] = useState<MarketListingDetail>();
   const [detailLoading, setDetailLoading] = useState(false);
   const [installed, setInstalled] = useState<MarketInstalledStatus | null>(null);
-  const [me, setMe] = useState<MarketMe | null>(null);
-  const [authBusy, setAuthBusy] = useState(false);
+  const [loginOpen, setLoginOpen] = useState(false);
   const [actionBusy, setActionBusy] = useState(false);
   const [installPrompt, setInstallPrompt] = useState(false);
   const [releasesExpanded, setReleasesExpanded] = useState(false);
@@ -140,10 +139,6 @@ const MiniAppMarketView: React.FC = () => {
     return () => window.clearTimeout(timeout);
   }, [category, query, sort]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => {
-    void miniAppMarketAPI.me().then(setMe).catch(() => setMe(null));
-  }, []);
-
   const openDetail = async (summary: MarketListingSummary) => {
     setDetailLoading(true);
     setDetail(undefined);
@@ -160,56 +155,17 @@ const MiniAppMarketView: React.FC = () => {
     }
   };
 
-  const signIn = async () => {
-    setAuthBusy(true);
-    try {
-      const transaction = await miniAppMarketAPI.authStart();
-      await systemAPI.openExternal(transaction.authorizationUrl);
-      const deadline = transaction.expiresAt * 1000;
-      while (Date.now() < deadline) {
-        await new Promise((resolve) =>
-          window.setTimeout(resolve, transaction.pollIntervalSeconds * 1000),
-        );
-        const status = await miniAppMarketAPI.authPoll(transaction);
-        if (status === 'authorized') {
-          const profile = await miniAppMarketAPI.me();
-          setMe(profile);
-          if (detail) {
-            setDetail(await miniAppMarketAPI.getListing(detail.slug));
-          }
-          notification.success(t('market.messages.signedIn'));
-          return;
-        }
-        if (status === 'expired') break;
-      }
-      notification.error(t('market.messages.authExpired'));
-    } catch (authError) {
-      notification.error(t('market.messages.authFailed', { error: String(authError) }));
-    } finally {
-      setAuthBusy(false);
-    }
-  };
-
-  const signOut = async () => {
-    setAuthBusy(true);
-    try {
-      await miniAppMarketAPI.logout();
-      setMe(null);
-      if (detail) {
-        setDetail(await miniAppMarketAPI.getListing(detail.slug));
-      }
-      notification.success(t('market.messages.signedOut'));
-    } catch (authError) {
-      notification.error(t('market.messages.actionFailed', { error: String(authError) }));
-    } finally {
-      setAuthBusy(false);
-    }
+  const refreshPersonalizedDetail = () => {
+    if (!detail) return;
+    void miniAppMarketAPI.getListing(detail.slug)
+      .then(setDetail)
+      .catch(error => log.warn('Failed to refresh MiniApp market detail after account change', error));
   };
 
   const toggleFavorite = async () => {
     if (!detail) return;
     if (!me) {
-      await signIn();
+      setLoginOpen(true);
       return;
     }
     setActionBusy(true);
@@ -230,7 +186,7 @@ const MiniAppMarketView: React.FC = () => {
   const rate = async (value: number) => {
     if (!detail) return;
     if (!me) {
-      await signIn();
+      setLoginOpen(true);
       return;
     }
     setActionBusy(true);
@@ -328,28 +284,11 @@ const MiniAppMarketView: React.FC = () => {
               placeholder={t('market.search')}
               size="small"
             />
-            {me ? (
-              <div className="miniapp-market-native__identity">
-                <Avatar size={22} src={me.user.avatarUrl} alt={me.user.login} />
-                <span>@{me.user.login}</span>
-                <Button
-                  size="small"
-                  variant="ghost"
-                  iconOnly
-                  onClick={() => void signOut()}
-                  disabled={authBusy}
-                  title={t('market.signOut')}
-                  aria-label={t('market.signOut')}
-                >
-                  {authBusy ? <Loader2 size={14} className="gallery-spinning" /> : <LogOut size={14} />}
-                </Button>
-              </div>
-            ) : (
-              <Button size="small" variant="secondary" onClick={() => void signIn()} disabled={authBusy}>
-                {authBusy ? <Loader2 size={14} className="gallery-spinning" /> : null}
-                {t('market.signIn')}
-              </Button>
-            )}
+            <MarketAccountControls
+              loginOpen={loginOpen}
+              onLoginOpenChange={setLoginOpen}
+              onIdentityChanged={refreshPersonalizedDetail}
+            />
           </div>
         )}
       />

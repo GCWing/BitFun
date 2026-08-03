@@ -17,10 +17,11 @@ import {
 import { Badge, Button, Input, Select } from '@/component-library';
 import { GalleryEmpty, GalleryLayout, GalleryPageHeader } from '@/app/components';
 import { useI18n } from '@/infrastructure/i18n';
+import { MarketAccountControls } from '@/features/market-account';
+import { useMarketAccount } from '@/infrastructure/market-account';
 import { systemAPI } from '@/infrastructure/api/service-api/SystemAPI';
 import {
   miniAppMarketAPI,
-  type MarketMe,
   type MarketSubmission,
   type MarketSubmissionDraftRequest,
   type MarketUploadProgress,
@@ -67,9 +68,7 @@ const MiniAppSubmissionsView: React.FC = () => {
   const notification = useNotification();
   const { workspace } = useCurrentWorkspace();
   const { openScene, activateScene, openTabs } = useSceneManager();
-  const [me, setMe] = useState<MarketMe | null>(null);
-  const [authResolved, setAuthResolved] = useState(false);
-  const [authBusy, setAuthBusy] = useState(false);
+  const { me, resolved: authResolved } = useMarketAccount();
   const [apps, setApps] = useState<MiniAppMeta[]>([]);
   const [submissions, setSubmissions] = useState<MarketSubmission[]>([]);
   const [selectedAppId, setSelectedAppId] = useState('');
@@ -91,12 +90,10 @@ const MiniAppSubmissionsView: React.FC = () => {
   const refresh = async () => {
     setLoading(true);
     try {
-      const [profile, installed, currentClientVersion] = await Promise.all([
-        miniAppMarketAPI.me(),
+      const [installed, currentClientVersion] = await Promise.all([
         miniAppAPI.listMiniApps(),
         draft.minBitfunVersion ? Promise.resolve(undefined) : loadCurrentClientVersion(),
       ]);
-      setMe(profile);
       setApps(installed);
       if (currentClientVersion) {
         setDraft((current) =>
@@ -106,7 +103,7 @@ const MiniAppSubmissionsView: React.FC = () => {
       if (!selectedAppId && installed[0]) {
         selectApp(installed[0]);
       }
-      if (profile) {
+      if (me) {
         setSubmissions(await miniAppMarketAPI.listSubmissions());
       } else {
         setSubmissions([]);
@@ -115,18 +112,18 @@ const MiniAppSubmissionsView: React.FC = () => {
       log.error('Failed to load MiniApp submission workspace', error);
       notification.error(t('market.messages.submissionsFailed', { error: String(error) }));
     } finally {
-      setAuthResolved(true);
       setLoading(false);
     }
   };
 
   useEffect(() => {
+    if (!authResolved) return;
     void refresh();
     const stop = miniAppMarketAPI.onUploadProgress(setProgress);
     return stop;
-    // The submission workspace intentionally loads once when its native tab mounts.
+    // Identity changes reload this account-owned workspace from the shared vault.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [authResolved, me?.user.githubId]);
 
   function selectApp(app: MiniAppMeta) {
     setSelectedAppId(app.id);
@@ -140,32 +137,6 @@ const MiniAppSubmissionsView: React.FC = () => {
       tags: app.tags,
     }));
   }
-
-  const signIn = async () => {
-    setAuthBusy(true);
-    try {
-      const transaction = await miniAppMarketAPI.authStart();
-      await systemAPI.openExternal(transaction.authorizationUrl);
-      const deadline = transaction.expiresAt * 1000;
-      while (Date.now() < deadline) {
-        await new Promise((resolve) =>
-          window.setTimeout(resolve, transaction.pollIntervalSeconds * 1000),
-        );
-        const status = await miniAppMarketAPI.authPoll(transaction);
-        if (status === 'authorized') {
-          await refresh();
-          notification.success(t('market.messages.signedIn'));
-          return;
-        }
-        if (status === 'expired') break;
-      }
-      notification.error(t('market.messages.authExpired'));
-    } catch (error) {
-      notification.error(t('market.messages.authFailed', { error: String(error) }));
-    } finally {
-      setAuthBusy(false);
-    }
-  };
 
   const chooseScreenshots = async () => {
     const selected = await open({
@@ -288,12 +259,7 @@ const MiniAppSubmissionsView: React.FC = () => {
         <GalleryEmpty
           icon={<Github size={36} />}
           message={t('market.submissions.signInRequired')}
-          action={(
-            <Button variant="primary" onClick={() => void signIn()} disabled={authBusy}>
-              {authBusy ? <Loader2 size={14} className="gallery-spinning" /> : <Github size={14} />}
-              {t('market.signIn')}
-            </Button>
-          )}
+          action={<MarketAccountControls />}
         />
       </GalleryLayout>
     );
@@ -305,10 +271,13 @@ const MiniAppSubmissionsView: React.FC = () => {
         title={t('market.submissions.title')}
         subtitle={t('market.submissions.subtitle')}
         actions={(
-          <Button size="small" variant="ghost" onClick={() => void refresh()} disabled={busy}>
-            <RefreshCw size={14} />
-            {t('market.submissions.refresh')}
-          </Button>
+          <div className="miniapp-submissions__header-actions">
+            <Button size="small" variant="ghost" onClick={() => void refresh()} disabled={busy}>
+              <RefreshCw size={14} />
+              {t('market.submissions.refresh')}
+            </Button>
+            <MarketAccountControls />
+          </div>
         )}
       />
 

@@ -11,6 +11,12 @@
   // Label-to-control distance, shared by Input, Select and the textarea fields.
   --submissions-label-gap: 6px;
 
+  &__header-actions {
+    display: flex;
+    align-items: center;
+    gap: $size-gap-2;
+  }
+
   // Match GalleryLayout's $content-max / $gutter so switching tabs inside the
   // MiniApp scene doesn't shift content horizontally.
   &__workspace,

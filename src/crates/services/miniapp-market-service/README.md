@@ -50,6 +50,9 @@
   link、重复/大小写冲突路径和超限解压。
 - GitHub token 只用于读取公开 `{id,login,avatar_url}`，随后丢弃，不能下发给
   Web 或桌面客户端。
+- MiniApp 服务是 MiniApp 与 Skin 两个市场唯一的 GitHub 身份权威。Web 登录会为
+  `/miniapp` 与 `/skin` 签发同一服务端 session 的独立 Path-scoped Cookie；Skin
+  不保存 OAuth secret，退出登录必须撤销 session 并清除两组 Cookie。
 - 管理员身份每次请求按 GitHub 数字 ID 计算，不能依赖客户端声明。
 - `MARKET_WEB_SUBMISSIONS_ENABLED=false` 时，所有投稿写路由会在读取请求体前
   拒绝 Web Cookie 会话；Desktop Bearer 投稿、投稿历史读取和 Web 管理员审核

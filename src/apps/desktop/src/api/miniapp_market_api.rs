@@ -17,16 +17,51 @@ use bitfun_product_domains::miniapp::market::{
 };
 use bitfun_services_integrations::miniapp_market::{
     submit_installed_app, validate_market_package, DesktopAuthPollRequest, DesktopAuthPollResponse,
-    DesktopAuthStart, FavoriteAggregate, MarketBrowseRequest, MarketClient, MarketMe,
-    RatingAggregate, ValidatedMarketPackage,
+    FavoriteAggregate, MarketBrowseRequest, MarketClient, MarketMe, RatingAggregate,
+    ValidatedMarketPackage,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
+use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Emitter, Manager, State, WebviewWindow};
 use tokio::io::AsyncWriteExt;
+use tokio::sync::Mutex;
 
 const MARKET_UPLOAD_PROGRESS_EVENT: &str = "miniapp-market-upload-progress";
+const MARKET_ACCOUNT_CHANGED_EVENT: &str = "miniapp-market-account-changed";
+
+#[derive(Debug, Clone)]
+struct PendingDesktopAuth {
+    request: DesktopAuthPollRequest,
+    expires_at: i64,
+}
+
+fn pending_desktop_auth() -> &'static Mutex<HashMap<String, PendingDesktopAuth>> {
+    static PENDING: OnceLock<Mutex<HashMap<String, PendingDesktopAuth>>> = OnceLock::new();
+    PENDING.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DesktopAuthStartView {
+    pub transaction_id: String,
+    pub authorization_url: String,
+    pub expires_at: i64,
+    pub poll_interval_seconds: u32,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DesktopAuthPollViewRequest {
+    pub transaction_id: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct DesktopAuthPollViewResponse {
+    pub status: String,
+}
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -152,24 +187,69 @@ pub async fn miniapp_market_get_listing(
 }
 
 #[tauri::command]
-pub async fn miniapp_market_auth_start() -> Result<DesktopAuthStart, String> {
+pub async fn miniapp_market_auth_start() -> Result<DesktopAuthStartView, String> {
     let client = MarketClient::from_environment()
         .await
         .map_err(market_error)?;
-    client.start_desktop_auth().await.map_err(market_error)
+    let started = client.start_desktop_auth().await.map_err(market_error)?;
+    let mut pending = pending_desktop_auth().lock().await;
+    let now = unix_now();
+    pending.retain(|_, transaction| transaction.expires_at > now);
+    pending.insert(
+        started.transaction_id.clone(),
+        PendingDesktopAuth {
+            request: DesktopAuthPollRequest {
+                transaction_id: started.transaction_id.clone(),
+                transaction_secret: started.transaction_secret,
+            },
+            expires_at: started.expires_at,
+        },
+    );
+    Ok(DesktopAuthStartView {
+        transaction_id: started.transaction_id,
+        authorization_url: started.authorization_url,
+        expires_at: started.expires_at,
+        poll_interval_seconds: started.poll_interval_seconds,
+    })
 }
 
 #[tauri::command]
 pub async fn miniapp_market_auth_poll(
-    request: DesktopAuthPollRequest,
-) -> Result<DesktopAuthPollResponse, String> {
+    app: AppHandle,
+    request: DesktopAuthPollViewRequest,
+) -> Result<DesktopAuthPollViewResponse, String> {
+    let pending = {
+        let mut transactions = pending_desktop_auth().lock().await;
+        let Some(pending) = transactions.get(&request.transaction_id).cloned() else {
+            return Err("Desktop market authorization transaction was not found.".to_string());
+        };
+        if pending.expires_at <= unix_now() {
+            transactions.remove(&request.transaction_id);
+            return Ok(DesktopAuthPollViewResponse {
+                status: "expired".to_string(),
+            });
+        }
+        pending
+    };
     let mut client = MarketClient::from_environment()
         .await
         .map_err(market_error)?;
-    client
-        .poll_desktop_auth(&request)
+    let response: DesktopAuthPollResponse = client
+        .poll_desktop_auth(&pending.request)
         .await
-        .map_err(market_error)
+        .map_err(market_error)?;
+    if matches!(response.status.as_str(), "authorized" | "expired") {
+        pending_desktop_auth()
+            .lock()
+            .await
+            .remove(&request.transaction_id);
+    }
+    if response.status == "authorized" {
+        emit_market_account_changed(&app, "signed-in");
+    }
+    Ok(DesktopAuthPollViewResponse {
+        status: response.status,
+    })
 }
 
 #[tauri::command]
@@ -181,11 +261,13 @@ pub async fn miniapp_market_me() -> Result<Option<MarketMe>, String> {
 }
 
 #[tauri::command]
-pub async fn miniapp_market_logout() -> Result<(), String> {
+pub async fn miniapp_market_logout(app: AppHandle) -> Result<(), String> {
     let mut client = MarketClient::from_environment()
         .await
         .map_err(market_error)?;
-    client.logout().await.map_err(market_error)
+    client.logout().await.map_err(market_error)?;
+    emit_market_account_changed(&app, "signed-out");
+    Ok(())
 }
 
 #[tauri::command]
@@ -728,6 +810,45 @@ fn emit_upload_progress(
     );
 }
 
+fn emit_market_account_changed(app: &AppHandle, status: &'static str) {
+    let _ = app.emit(
+        MARKET_ACCOUNT_CHANGED_EVENT,
+        serde_json::json!({ "status": status }),
+    );
+}
+
+fn unix_now() -> i64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_secs() as i64)
+        .unwrap_or(0)
+}
+
 fn market_error(error: impl Serialize + std::fmt::Display) -> String {
     serde_json::to_string(&error).unwrap_or_else(|_| error.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{DesktopAuthPollViewResponse, DesktopAuthStartView};
+
+    #[test]
+    fn desktop_auth_views_never_serialize_oauth_secrets() {
+        let started = serde_json::to_value(DesktopAuthStartView {
+            transaction_id: "transaction-1".to_string(),
+            authorization_url: "https://github.com/login/oauth/authorize".to_string(),
+            expires_at: 123,
+            poll_interval_seconds: 3,
+        })
+        .unwrap();
+        assert!(started.get("transactionSecret").is_none());
+
+        let polled = serde_json::to_value(DesktopAuthPollViewResponse {
+            status: "authorized".to_string(),
+        })
+        .unwrap();
+        assert!(polled.get("tokens").is_none());
+        assert!(polled.get("accessToken").is_none());
+        assert!(polled.get("refreshToken").is_none());
+    }
 }

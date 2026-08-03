@@ -43,6 +43,17 @@
     "search": "搜索市场…",
     "signIn": "使用 GitHub 登录",
     "signOut": "注销登录",
+    "account": {
+      "menuLabel": "GitHub 账号 @{{login}}",
+      "githubAccount": "GitHub 市场账号",
+      "dialogTitle": "登录 BitFun 市场",
+      "dialogHeading": "使用 GitHub 继续",
+      "dialogDescription": "MiniApp 市场与 Skin 市场共用此账号。授权将在浏览器中完成，凭证只保存在桌面系统凭证库中。",
+      "waiting": "请在浏览器中完成授权，BitFun 会自动更新登录状态。",
+      "cancel": "取消",
+      "continue": "打开 GitHub",
+      "authorizing": "等待 GitHub 授权…"
+    },
     "empty": "暂时没有已发布的小应用。",
     "loadMore": "加载更多",
     "tabs": {

@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Button, confirmDialog, Modal, Search, Select } from '@/component-library';
+import { MarketAccountControls } from '@/features/market-account';
 import {
   appearanceMarketAPI,
   type AppearanceMarketBrowseRequest,
@@ -398,6 +399,7 @@ export function AppearanceMarketDialog({ isOpen, onClose }: AppearanceMarketDial
       isOpen={isOpen}
       onClose={onClose}
       title={t('package.market.title')}
+      titleExtra={<MarketAccountControls />}
       size="xlarge"
       contentInset
       contentClassName="appearance-market__modal"

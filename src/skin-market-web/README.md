@@ -9,6 +9,9 @@ Public, read-only catalog for reviewed BitFun Appearance packages.
 - Installation remains a BitFun Desktop action through Settings > Appearance.
 
 The site is self-contained and does not import the main Web UI locale or theme catalogs.
+GitHub identity is shared with the MiniApp market through its same-origin auth
+broker. Local development proxies `/miniapp/api` to `127.0.0.1:9710`; set
+`MINIAPP_MARKET_DEV_API` when the broker runs elsewhere.
 
 ```bash
 pnpm --dir src/skin-market-web dev

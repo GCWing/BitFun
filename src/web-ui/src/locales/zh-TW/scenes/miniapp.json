@@ -43,6 +43,17 @@
     "search": "搜尋市場…",
     "signIn": "使用 GitHub 登入",
     "signOut": "登出",
+    "account": {
+      "menuLabel": "GitHub 帳號 @{{login}}",
+      "githubAccount": "GitHub 市場帳號",
+      "dialogTitle": "登入 BitFun 市場",
+      "dialogHeading": "使用 GitHub 繼續",
+      "dialogDescription": "MiniApp 市場與 Skin 市場共用此帳號。授權會在瀏覽器中完成，憑證只儲存在桌面系統憑證庫中。",
+      "waiting": "請在瀏覽器中完成授權，BitFun 會自動更新登入狀態。",
+      "cancel": "取消",
+      "continue": "開啟 GitHub",
+      "authorizing": "等待 GitHub 授權…"
+    },
     "empty": "暫時沒有已發佈的小應用。",
     "loadMore": "載入更多",
     "tabs": {

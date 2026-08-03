@@ -11,6 +11,10 @@ export default defineConfig({
         target: process.env.SKIN_MARKET_DEV_API || 'http://127.0.0.1:9720',
         changeOrigin: true,
       },
+      '/miniapp/api': {
+        target: process.env.MINIAPP_MARKET_DEV_API || 'http://127.0.0.1:9710',
+        changeOrigin: true,
+      },
     },
   },
   build: {

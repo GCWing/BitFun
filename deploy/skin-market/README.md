@@ -18,8 +18,10 @@ It is intentionally isolated from the production MiniApp market:
 
 The Skin server has no OAuth client or credential database. Desktop clients
 reuse the MiniApp market credential vault and Skin forwards each Bearer token
-to the configured MiniApp `/me` endpoint. The public Web catalog is read-only.
-Never copy the MiniApp OAuth secret into the Skin environment.
+to the configured MiniApp `/me` endpoint. The public Web catalog is read-only,
+while its visible GitHub identity controls use the MiniApp auth broker and a
+`/skin`-scoped alias of that broker's Web session. Never copy the MiniApp OAuth
+secret into the Skin environment.
 
 ## Agent safety contract
 

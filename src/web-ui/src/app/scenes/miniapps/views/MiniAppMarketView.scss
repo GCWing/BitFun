@@ -11,14 +11,6 @@
     }
   }
 
-  &__identity {
-    display: flex;
-    align-items: center;
-    gap: $size-gap-1;
-    color: var(--bf-appearance-token-color-text-secondary);
-    font-size: var(--bf-appearance-token-font-size-sm);
-  }
-
   &__sort {
     min-width: 132px;
   }

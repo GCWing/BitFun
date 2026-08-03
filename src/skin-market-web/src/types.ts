@@ -8,6 +8,15 @@ export interface AppearanceMarketUser {
   avatarUrl: string;
 }
 
+export interface SharedMarketAccount {
+  user: AppearanceMarketUser;
+  isAdmin: boolean;
+}
+
+export interface SharedMarketAccountConfig {
+  githubAuthConfigured: boolean;
+}
+
 export interface AppearanceListingSummary {
   listingId: string;
   slug: string;
