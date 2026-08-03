@@ -70,6 +70,17 @@ export const noCoreDependencyCrates = [
 
 export const forbiddenManifestDependencyRules = [
   {
+    dependencyNames: ['rmcp'],
+    scanRoots: ['src/apps', 'src/crates', 'BitFun-Installer/src-tauri'],
+    workspaceManifestPath: 'Cargo.toml',
+    forbidWorkspaceAliases: false,
+    allowManifestPaths: [
+      'src/crates/services/services-integrations/Cargo.toml',
+    ],
+    reason: 'the RMCP SDK is a concrete MCP integration service dependency',
+    message: 'rmcp must stay in services-integrations and be consumed through its MCP owner facade',
+  },
+  {
     dependencyNames: ['bitfun-agent-runtime-ipc'],
     scanRoots: ['src/apps', 'src/crates', 'BitFun-Installer/src-tauri'],
     workspaceManifestPath: 'Cargo.toml',

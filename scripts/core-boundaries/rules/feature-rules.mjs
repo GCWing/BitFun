@@ -86,7 +86,6 @@ export const optionalDependencyFeatureOwnerRules = [
       { depName: 'indexmap', ownerFeatures: ['product-full'] },
       { depName: 'md5', ownerFeatures: ['product-full'] },
       { depName: 'reqwest', ownerFeatures: ['ai-adapter-runtime', 'product-full'] },
-      { depName: 'rmcp', ownerFeatures: ['product-full'] },
       { depName: 'rusqlite', ownerFeatures: ['product-full'] },
       { depName: 'serde_yaml', ownerFeatures: ['workspace-runtime'] },
       { depName: 'similar', ownerFeatures: ['product-full'] },

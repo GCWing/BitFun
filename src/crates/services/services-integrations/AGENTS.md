@@ -15,7 +15,10 @@ slices that are outside pure product logic but still platform-neutral.
   integration feature-group list.
 - MCP config/process/transport lifecycle, server runtime state
   (registry/connection pool/catalog/reconnect/runtime-only config), lifecycle
-  policy, and protocol result-content rendering live here; MCP wire types may be
+  policy, OAuth credential storage/authorization bootstrap, the concrete RMCP
+  dependency, and protocol result-content rendering live here. Core may keep
+  compatibility exports plus product callback/session/reconnect orchestration,
+  but must not reintroduce a direct RMCP dependency. MCP wire types may be
   projected into execution-owned tool bridge descriptors. Product tool registry
   assembly, manifest filtering, `GetToolSpec` execution, and bridge
   presentation/validation behavior remain outside this crate unless a reviewed

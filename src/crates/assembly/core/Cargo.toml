@@ -57,10 +57,6 @@ include_dir = { workspace = true, optional = true }
 similar = { workspace = true, optional = true }
 urlencoding = { workspace = true }
 
-# MCP Streamable HTTP client (official rust-sdk)
-rmcp = { workspace = true, features = [
-    "transport-streamable-http-client-reqwest",
-], optional = true }
 # Shared AI protocol adapters
 bitfun-ai-adapters = { path = "../../adapters/ai-adapters", optional = true }
 
@@ -156,7 +152,6 @@ product-full = [
     "dep:md5",
     "dep:reqwest",
     "dep:rusqlite",
-    "dep:rmcp",
     "dep:similar",
     "dep:tokio-tungstenite",
     "dep:tower-http",

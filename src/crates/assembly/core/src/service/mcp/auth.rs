@@ -4,12 +4,14 @@
 //! module keeps the legacy core entrypoints and injects the product data directory.
 
 use async_trait::async_trait;
-use rmcp::transport::auth::{AuthorizationManager, CredentialStore, StoredCredentials};
 use std::path::PathBuf;
 
 use crate::infrastructure::try_get_path_manager_arc;
 use crate::service::mcp::server::MCPServerConfig;
 use crate::util::errors::{BitFunError, BitFunResult};
+use bitfun_services_integrations::mcp::auth::rmcp_compat::{
+    AuthError, AuthorizationManager, CredentialStore, StoredCredentials,
+};
 
 pub use bitfun_services_integrations::mcp::auth::{
     MCPRemoteOAuthSessionSnapshot, MCPRemoteOAuthStatus, PreparedMCPRemoteOAuthAuthorization,
@@ -79,31 +81,28 @@ impl MCPRemoteOAuthCredentialStore {
 #[allow(deprecated)]
 #[async_trait]
 impl CredentialStore for MCPRemoteOAuthCredentialStore {
-    async fn load(&self) -> Result<Option<StoredCredentials>, rmcp::transport::auth::AuthError> {
+    async fn load(&self) -> Result<Option<StoredCredentials>, AuthError> {
         MCPRemoteOAuthCredentialVault::new()
-            .map_err(|error| rmcp::transport::auth::AuthError::InternalError(error.to_string()))?
+            .map_err(|error| AuthError::InternalError(error.to_string()))?
             .load(&self.server_id)
             .await
-            .map_err(|error| rmcp::transport::auth::AuthError::InternalError(error.to_string()))
+            .map_err(|error| AuthError::InternalError(error.to_string()))
     }
 
-    async fn save(
-        &self,
-        credentials: StoredCredentials,
-    ) -> Result<(), rmcp::transport::auth::AuthError> {
+    async fn save(&self, credentials: StoredCredentials) -> Result<(), AuthError> {
         MCPRemoteOAuthCredentialVault::new()
-            .map_err(|error| rmcp::transport::auth::AuthError::InternalError(error.to_string()))?
+            .map_err(|error| AuthError::InternalError(error.to_string()))?
             .store(&self.server_id, &credentials)
             .await
-            .map_err(|error| rmcp::transport::auth::AuthError::InternalError(error.to_string()))
+            .map_err(|error| AuthError::InternalError(error.to_string()))
     }
 
-    async fn clear(&self) -> Result<(), rmcp::transport::auth::AuthError> {
+    async fn clear(&self) -> Result<(), AuthError> {
         MCPRemoteOAuthCredentialVault::new()
-            .map_err(|error| rmcp::transport::auth::AuthError::InternalError(error.to_string()))?
+            .map_err(|error| AuthError::InternalError(error.to_string()))?
             .clear(&self.server_id)
             .await
-            .map_err(|error| rmcp::transport::auth::AuthError::InternalError(error.to_string()))
+            .map_err(|error| AuthError::InternalError(error.to_string()))
     }
 }
 

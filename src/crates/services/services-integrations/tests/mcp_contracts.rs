@@ -1,8 +1,12 @@
 #![cfg(feature = "mcp")]
 
 use async_trait::async_trait;
+use bitfun_services_integrations::mcp::auth::rmcp_compat::{
+    AuthorizationManager, CredentialStore, StoredCredentials,
+};
 use bitfun_services_integrations::mcp::auth::{
-    MCPRemoteOAuthCredentialVault, MCPRemoteOAuthSessionSnapshot, MCPRemoteOAuthStatus,
+    MCPRemoteOAuthCredentialStore, MCPRemoteOAuthCredentialVault, MCPRemoteOAuthSessionSnapshot,
+    MCPRemoteOAuthStatus,
 };
 use bitfun_services_integrations::mcp::config::ConfigLocation;
 use bitfun_services_integrations::mcp::config::{
@@ -35,7 +39,6 @@ use bitfun_services_integrations::mcp::{
     PromptAdapter, ResourceAdapter, MCP_TOOL_DELIMITER, MCP_TOOL_PREFIX,
 };
 use rmcp::model::{AnnotateAble, Annotations, Content, Icon, Meta, RawResource, ResourceContents};
-use rmcp::transport::auth::StoredCredentials;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -1876,6 +1879,15 @@ fn mcp_oauth_session_snapshot_preserves_camel_case_status_contract() {
             "redirectUri": "http://127.0.0.1:49152/oauth/callback"
         })
     );
+}
+
+#[test]
+fn mcp_oauth_owner_exports_the_auth_primitives_needed_by_compatibility_facades() {
+    fn assert_credential_store<T: CredentialStore>() {}
+
+    assert_credential_store::<MCPRemoteOAuthCredentialStore>();
+    let _: Option<AuthorizationManager> = None;
+    let _: Option<StoredCredentials> = None;
 }
 
 #[tokio::test]

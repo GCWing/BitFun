@@ -2,9 +2,7 @@
 
 use crate::api::app_state::AppState;
 use crate::startup_trace::DesktopStartupTrace;
-use bitfun_core::service::mcp::auth::{
-    has_stored_oauth_credentials, MCPRemoteOAuthSessionSnapshot,
-};
+use bitfun_core::service::mcp::auth::MCPRemoteOAuthSessionSnapshot;
 use bitfun_core::service::mcp::config::MCPConfigService;
 use bitfun_core::service::mcp::protocol::{
     MCPPrompt, MCPResource, PromptsGetResult, ResourcesReadResult,
@@ -203,6 +201,7 @@ pub async fn get_mcp_servers(state: State<'_, AppState>) -> Result<Vec<MCPServer
 
     let mut infos = Vec::new();
     let runtime_manager = RuntimeManager::new().ok();
+    let mcp_server_manager = mcp_service.server_manager();
 
     for config in configs {
         let transport = config.resolved_transport();
@@ -214,7 +213,8 @@ pub async fn get_mcp_servers(state: State<'_, AppState>) -> Result<Vec<MCPServer
         let oauth_enabled =
             matches!(config.server_type, MCPServerType::Remote) && config.remote_oauth_enabled();
         let oauth_auth_configured = if oauth_enabled {
-            has_stored_oauth_credentials(&config.id)
+            mcp_server_manager
+                .has_remote_oauth_credentials(&config.id)
                 .await
                 .unwrap_or(false)
         } else {

@@ -763,6 +763,7 @@ export function runManifestParserSelfTest({
     'qrcode',
     'rand',
     'readability-js',
+    'rmcp',
     'russh',
     'rustls',
     'rustls-native-certs',
@@ -779,7 +780,7 @@ export function runManifestParserSelfTest({
       throw new Error(`core optional dependency owner rule must cover forbidden dependency ${dep}`);
     }
   }
-  for (const dep of ['rmcp', 'image', 'tool-runtime']) {
+  for (const dep of ['image', 'tool-runtime']) {
     if (!coreOptionalOwnerDeps.has(dep)) {
       throw new Error(`core optional dependency owner rule must cover ${dep}`);
     }
@@ -1529,6 +1530,14 @@ export function runManifestParserSelfTest({
     'src/crates/services/services-integrations/Cargo.toml',
   )) {
     throw new Error('speech engine manifest guard must allow only its integration service owner');
+  }
+  const rmcpManifestRule = forbiddenManifestDependencyRules.find((rule) =>
+    rule.dependencyNames?.includes('rmcp'),
+  );
+  if (!rmcpManifestRule?.allowManifestPaths?.includes(
+    'src/crates/services/services-integrations/Cargo.toml',
+  )) {
+    throw new Error('RMCP manifest guard must allow only its integration service owner');
   }
   const coreSpeechOwnerRule = forbiddenContentUnderRules.find(
     (rule) => rule.path === 'src/crates/assembly/core/src/service',
