@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
 # BitFun Relay Server — one-click deploy script.
-# Usage:  bash deploy.sh [--skip-build] [--skip-health-check] [--cn-mirror|--global-mirror]
+# Usage:  bash deploy.sh [--build-from-source] [--cn-mirror|--global-mirror]
 #
 # Run this script on the target server itself after SSH login.
 # It deploys to the current machine only; it does not SSH to a remote host.
 #
 # Supported hosts: Linux amd64 (x86_64) and arm64 (aarch64) with Docker.
 #
-# Prerequisites: Docker + Compose V2 (`docker compose`) or legacy docker-compose
+# Prerequisite: Docker. The default path pulls a published multi-platform image;
+# Compose is needed only for the explicit --build-from-source escape hatch.
 #
 # Low-memory VPS tip (especially arm64):
 #   RELAY_CARGO_BUILD_JOBS=1 bash deploy.sh
@@ -45,9 +46,9 @@ Supported architectures:
   linux/amd64 (x86_64), linux/arm64 (aarch64)
 
 Options:
-  --skip-build         Skip docker compose build, only recreate/start services
-  --build-from-source  Skip the published binary and compile from source
-  --skip-health-check  Skip post-deploy health check
+  --skip-build         Source mode only: skip compose build, recreate/start services
+  --build-from-source  Explicitly compile from source instead of pulling the image
+  --skip-health-check  Source mode only: skip post-deploy health check
   --cn-mirror          Force China mirrors (apt/Docker/cargo/GitHub)
   --global-mirror      Force global upstream mirrors
   -h, --help           Show this help message
@@ -95,11 +96,34 @@ assert_supported_arch
 # Validate the host first so unsupported machines are not modified.
 bitfun_mirror_init "${MIRROR_ARGS[@]+"${MIRROR_ARGS[@]}"}"
 require_docker_daemon
-resolve_compose
 warn_if_forced_foreign_platform
 
-echo "Compose: ${COMPOSE[*]}"
 cd "$SCRIPT_DIR"
+
+# Default path: exactly one image pull followed by container start. It preserves
+# the old container until the new one passes health checks. Source compilation
+# is an explicit maintenance escape hatch, never a silent fallback.
+if [ "$BUILD_FROM_SOURCE" = true ]; then
+  echo "[1/2] Skipping the published image (--build-from-source)"
+elif [ "$SKIP_BUILD" = true ]; then
+  echo "[1/2] Skipping the published image (--skip-build)"
+elif bitfun_try_release_deploy; then
+  RELAY_PORT="${RELAY_PORT:-9700}"
+  echo ""
+  echo "=== Deploy complete (published image) ==="
+  echo "Relay server running on port ${RELAY_PORT} (host arch: ${HOST_ARCH})"
+  echo ""
+  check_relay_accounts_or_remind
+  exit 0
+else
+  echo "ERROR: Published Relay image deployment failed." >&2
+  echo "       Fix the registry route and retry; use --build-from-source only for manual recovery." >&2
+  exit 1
+fi
+
+# Everything below belongs to the explicit source/skip-build maintenance path.
+resolve_compose
+echo "Compose: ${COMPOSE[*]}"
 
 # Persist compose build-args for CN builds (and subsequent restarts).
 touch .env
@@ -115,25 +139,6 @@ fi
   echo "BITFUN_APT_MIRROR=${BITFUN_APT_MIRROR:-mirrors.aliyun.com}"
   echo "BITFUN_CARGO_SPARSE_URL=${BITFUN_CARGO_SPARSE_URL:-sparse+https://rsproxy.cn/index/}"
 } >>.env
-
-# Prefer the published binary: a runtime image around a prebuilt archive takes
-# under a minute, while compiling the relay from source on a small VPS takes
-# ~20 minutes and needs ~2GB RAM. Identical code to the Desktop one-click path
-# (release-download.sh); it restores any previous container on failure and
-# returns non-zero to hand back to the source build below.
-if [ "$BUILD_FROM_SOURCE" = true ]; then
-  echo "[1/2] Skipping the published binary (--build-from-source)"
-elif [ "$SKIP_BUILD" = true ]; then
-  echo "[1/2] Skipping the published binary (--skip-build)"
-elif bitfun_try_release_deploy; then
-  RELAY_PORT="${RELAY_PORT:-9700}"
-  echo ""
-  echo "=== Deploy complete (published binary) ==="
-  echo "Relay server running on port ${RELAY_PORT} (host arch: ${HOST_ARCH})"
-  echo ""
-  check_relay_accounts_or_remind
-  exit 0
-fi
 
 # Build first so a compile failure does not take down a running relay.
 if [ "$SKIP_BUILD" = true ]; then

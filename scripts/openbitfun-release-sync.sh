@@ -4,9 +4,8 @@
 #
 # Flow:
 #   1. Fetch latest.json from GitHub (follows /releases/latest/download/ redirect)
-#   2. If present, mirror linux-binaries.json plus its CLI/Relay assets FIRST
-#      (small, and both the CLI updater and one-click Relay deploy fall back
-#      to them, so they must not queue behind ~700 MB of Desktop packages)
+#   2. Mirror the signed Relay image descriptor and Linux binary manifest FIRST
+#      (small trust metadata must not queue behind ~700 MB of Desktop packages)
 #   3. Download every Desktop updater package into release/{version}/
 #   4. Rewrite all mirrored URLs to point at openbitfun.com
 #   5. Publish versioned and root manifests
@@ -41,13 +40,14 @@ set -euo pipefail
 # ── Configuration ──────────────────────────────────────────────
 GITHUB_LATEST_JSON_URL="https://github.com/GCWing/BitFun/releases/latest/download/latest.json"
 GITHUB_LINUX_BINARIES_URL="https://github.com/GCWing/BitFun/releases/latest/download/linux-binaries.json"
+GITHUB_RELAY_IMAGE_URL="https://github.com/GCWing/BitFun/releases/latest/download/relay-image.json"
 OPENBITFUN_BASE_URL="https://openbitfun.com/release"
 WEBSITE_RELEASE_DIR="/root/repos/BitFun-Website/dist/release"
 LOCK_FILE="/root/repos/BitFun-AutoUpdate/sync.lock"
 # Keep enough releases that the mirror still serves a Desktop build a few
 # versions behind. One-click Relay deploy asks the mirror for the version baked
-# into the running Desktop binary, so retaining too few sends older installs
-# into a 20-minute source rebuild.
+# into the running Desktop binary, so retaining too few removes its descriptor
+# fallback when GitHub metadata is temporarily unreachable.
 KEEP_VERSIONS=6
 CONNECT_TIMEOUT=30
 MAX_TIME=1800          # per-request ceiling (30 min; installer packages can be large)
@@ -247,6 +247,61 @@ PY
   fi
 }
 
+# Mirror the signed, digest-pinned container descriptor before large Desktop
+# assets. The mirror is not trusted: Desktop verifies relay-image.json.sig with
+# its compiled-in minisign key before sending the digest to a customer server.
+mirror_relay_image_descriptor() {
+  local descriptor_tmp signature_tmp status descriptor_version
+  descriptor_tmp="${VERSION_DIR}/relay-image.json.part"
+  signature_tmp="${VERSION_DIR}/relay-image.json.sig.part"
+  rm -f "$descriptor_tmp" "$signature_tmp"
+
+  status="$(curl -sSL \
+    --connect-timeout "$CONNECT_TIMEOUT" --max-time "$MAX_TIME" \
+    -o "$descriptor_tmp" -w '%{http_code}' "$GITHUB_RELAY_IMAGE_URL" || echo 000)"
+  if [ "$status" = "404" ]; then
+    log "Relay image descriptor is not present in the latest release yet."
+    rm -f "$descriptor_tmp"
+    return 0
+  fi
+  if [ "$status" != "200" ]; then
+    log "WARN: relay-image.json unreachable (HTTP $status); keeping any existing versioned copy."
+    rm -f "$descriptor_tmp"
+    return 0
+  fi
+  if ! curl -fsSL --retry "$MAX_RETRIES" --retry-delay "$RETRY_DELAY" \
+    --connect-timeout "$CONNECT_TIMEOUT" --max-time "$MAX_TIME" \
+    -o "$signature_tmp" "${GITHUB_RELAY_IMAGE_URL}.sig"; then
+    log "WARN: relay-image.json.sig unreachable; refusing to publish an unsigned descriptor."
+    rm -f "$descriptor_tmp" "$signature_tmp"
+    return 0
+  fi
+
+  descriptor_version="$("$PYTHON" - "$descriptor_tmp" <<'PY'
+import json, re, sys
+with open(sys.argv[1], encoding="utf-8") as f:
+    data = json.load(f)
+assert data.get("schema_version") == 1
+assert data.get("image") == "ghcr.io/gcwing/bitfun-relay-server"
+assert re.fullmatch(r"sha256:[0-9a-f]{64}", data.get("digest", ""))
+print(data["version"])
+PY
+)" || {
+    log "ERROR: relay-image.json failed its schema/repository/digest checks"
+    rm -f "$descriptor_tmp" "$signature_tmp"
+    return 1
+  }
+  if [ "$descriptor_version" != "$VERSION" ]; then
+    log "ERROR: Relay image descriptor version $descriptor_version does not match Desktop version $VERSION"
+    rm -f "$descriptor_tmp" "$signature_tmp"
+    return 1
+  fi
+
+  mv "$descriptor_tmp" "${VERSION_DIR}/relay-image.json"
+  mv "$signature_tmp" "${VERSION_DIR}/relay-image.json.sig"
+  log "Published signed Relay image descriptor for $VERSION"
+}
+
 # ── Main ───────────────────────────────────────────────────────
 main() {
   mkdir -p "$(dirname "$LOCK_FILE")"
@@ -282,7 +337,8 @@ main() {
   VERSION_DIR="${WEBSITE_RELEASE_DIR}/${VERSION}"
   mkdir -p "$VERSION_DIR"
 
-  # 4. Mirror the small Linux CLI/Relay archives first (see function comment).
+  # 4. Mirror small trust metadata and Linux archives first.
+  mirror_relay_image_descriptor
   mirror_linux_binaries
 
   # 5. Download all platform installer packages
