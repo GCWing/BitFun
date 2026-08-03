@@ -18,6 +18,7 @@ cleanup() {
   for container in "${containers[@]}"; do
     docker rm -fv "$container" >/dev/null 2>&1 || true
   done
+  docker image rm "$IMAGE_REF" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT INT TERM
 
@@ -54,6 +55,10 @@ for arch in amd64 arm64; do
     exit 1
   fi
   docker rm -fv "$container" >/dev/null
+  # Docker's classic image store cannot resolve one multi-platform digest to
+  # amd64 and then overwrite that local resolution with arm64. Drop the first
+  # platform before pulling the next so both runs are independent.
+  docker image rm "$IMAGE_REF" >/dev/null 2>&1 || true
   echo ">>> linux/${arch} Relay image is healthy."
 done
 

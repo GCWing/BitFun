@@ -62,6 +62,7 @@ test('formal and nightly releases publish signed anonymous multi-platform Relay 
 
   assert.match(smoke, /for arch in amd64 arm64/);
   assert.match(smoke, /\.State\.Health/);
+  assert.match(smoke, /docker image rm "\$IMAGE_REF"/);
   assert.match(smoke, /docker logs --tail/);
 
   assert.match(dockerfile, /org\.opencontainers\.image\.source="https:\/\/github\.com\/GCWing\/BitFun"/);
