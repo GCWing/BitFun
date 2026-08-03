@@ -15,12 +15,15 @@ import {
 import {
   SYSTEM_APPEARANCE_ID,
   type AppearanceCatalogEntry,
+  type AppearanceImportOptions,
+  type AppearanceMarketOrigin,
   type AppearancePackage,
   type AppearanceSelectionId,
   type AppearanceServiceSnapshot,
   type AppearanceStorage,
   type ResolvedAppearance,
   type StoredAppearanceAsset,
+  type StoredAppearanceCatalogEntry,
   type StoredAppearancePackage,
 } from '../types';
 import type { AppearanceRuntime } from './AppearanceRuntime';
@@ -63,15 +66,7 @@ function consumeBootstrapAppearance(): {
   };
 }
 
-function importedCatalogEntry(value: {
-  id: string;
-  name: string;
-  author?: string;
-  description?: string;
-  version: string;
-  mode: 'light' | 'dark';
-  importedAt: string;
-}): AppearanceCatalogEntry {
+function importedCatalogEntry(value: StoredAppearanceCatalogEntry): AppearanceCatalogEntry {
   return { ...value, source: 'imported' };
 }
 
@@ -93,8 +88,24 @@ function appearanceCatalogsEqual(
       && entry.version === candidate.version
       && entry.mode === candidate.mode
       && entry.source === candidate.source
-      && entry.importedAt === candidate.importedAt;
+      && entry.importedAt === candidate.importedAt
+      && entry.localOverride === candidate.localOverride
+      && marketOriginsEqual(entry.marketOrigin, candidate.marketOrigin);
   });
+}
+
+function marketOriginsEqual(
+  left: AppearanceMarketOrigin | undefined,
+  right: AppearanceMarketOrigin | undefined,
+): boolean {
+  if (!left || !right) return left === right;
+  return left.listingId === right.listingId
+    && left.slug === right.slug
+    && left.releaseId === right.releaseId
+    && left.releaseNumber === right.releaseNumber
+    && left.packageId === right.packageId
+    && left.packageVersion === right.packageVersion
+    && left.packageSha256 === right.packageSha256;
 }
 
 function createEventId(): string {
@@ -108,6 +119,7 @@ export class AppearanceService {
   private snapshot: AppearanceServiceSnapshot = {
     initialized: false,
     status: 'initializing',
+    persistedSelectionId: null,
     selectedAppearanceId: SYSTEM_APPEARANCE_ID,
     resolvedAppearanceId: null,
     appearances: builtinAppearanceCatalog,
@@ -192,21 +204,53 @@ export class AppearanceService {
     }));
   }
 
-  async importPackage(source: ArrayBuffer): Promise<AppearanceCatalogEntry> {
+  async importPackage(
+    source: ArrayBuffer,
+    options: AppearanceImportOptions = {},
+  ): Promise<AppearanceCatalogEntry> {
     await this.initialize();
-    const stored = await this.parser.parse(source);
-    if (getBuiltinAppearance(stored.manifest.id)) {
-      throw new Error(`Imported appearance cannot replace a builtin appearance: ${stored.manifest.id}`);
+    const parsed = await this.parser.parse(source);
+    if (getBuiltinAppearance(parsed.manifest.id)) {
+      throw new Error(`Imported appearance cannot replace a builtin appearance: ${parsed.manifest.id}`);
     }
-    const composed = composeAppearancePackage(stored.manifest);
-    this.runtime.preflight(composed, stored.assets);
+    const marketOrigin = options.marketOrigin;
+    if (marketOrigin && parsed.manifest.id !== marketOrigin.packageId) {
+      throw new Error(
+        `Downloaded appearance id ${parsed.manifest.id} does not match the reviewed package ${marketOrigin.packageId}`,
+      );
+    }
+    if (marketOrigin && parsed.manifest.version !== marketOrigin.packageVersion) {
+      throw new Error(
+        `Downloaded appearance version ${parsed.manifest.version} does not match the reviewed release ${marketOrigin.packageVersion}`,
+      );
+    }
+    const composed = composeAppearancePackage(parsed.manifest);
+    this.runtime.preflight(composed, parsed.assets);
 
     return this.enqueueMutation(async () => {
-      const id = stored.manifest.id;
+      const id = parsed.manifest.id;
       const previousStored = await this.storage.get(id);
+      if (marketOrigin && previousStored?.marketOrigin
+        && previousStored.marketOrigin.listingId !== marketOrigin.listingId) {
+        throw new Error(
+          `Appearance ${id} is already linked to a different market listing`,
+        );
+      }
+      const stored: StoredAppearancePackage = marketOrigin
+        ? { ...parsed, marketOrigin, localOverride: false }
+        : previousStored?.marketOrigin
+          ? {
+              ...parsed,
+              marketOrigin: previousStored.marketOrigin,
+              localOverride: true,
+            }
+          : parsed;
       const previousSnapshot = this.snapshot;
       const previousSource = this.activeSource;
-      const active = previousSnapshot.selectedAppearanceId === id;
+      const rehydratesPersistedSelection = previousSnapshot.status === 'degraded'
+        && previousSnapshot.selectedAppearanceId === SYSTEM_APPEARANCE_ID
+        && this.persistedSelectionId === id;
+      const active = previousSnapshot.selectedAppearanceId === id || rehydratesPersistedSelection;
       let applied: ResolvedAppearance | null = null;
       let storageCommitted = false;
       this.setApplying(active ? id : undefined);
@@ -225,7 +269,16 @@ export class AppearanceService {
           pendingSelectionId: undefined,
           lastError: undefined,
           appearances,
-          ...(applied ? { current: applied, resolvedAppearanceId: id } : {}),
+          ...(applied ? {
+            current: applied,
+            resolvedAppearanceId: id,
+            unavailableSelectionId: rehydratesPersistedSelection
+              ? undefined
+              : previousSnapshot.unavailableSelectionId,
+            selectedAppearanceId: rehydratesPersistedSelection
+              ? id
+              : previousSnapshot.selectedAppearanceId,
+          } : {}),
         });
         const imported = appearances.find(item => item.id === id);
         if (!imported) throw new Error(`Imported appearance catalog entry is missing: ${id}`);
@@ -266,7 +319,7 @@ export class AppearanceService {
         }
         this.setSnapshot({
           ...previousSnapshot,
-          status: compensationErrors.length > 0 ? 'degraded' : 'ready',
+          status: compensationErrors.length > 0 ? 'degraded' : previousSnapshot.status,
           pendingSelectionId: undefined,
           lastError: [errorMessage(error), ...compensationErrors].join('; '),
           current: restoredCurrent,
@@ -392,6 +445,7 @@ export class AppearanceService {
       this.setSnapshot({
         ...this.snapshot,
         status: 'degraded',
+        unavailableSelectionId: selected === SYSTEM_APPEARANCE_ID ? undefined : selected,
         lastError: errorMessage(error),
       });
     }
@@ -438,6 +492,7 @@ export class AppearanceService {
         pendingSelectionId: undefined,
         lastError: undefined,
         selectedAppearanceId: selected,
+        unavailableSelectionId: undefined,
         resolvedAppearanceId: resolvedId,
         current,
       });
@@ -584,7 +639,8 @@ export class AppearanceService {
       : SYSTEM_APPEARANCE_ID;
     const appearances = await this.loadCatalog();
     this.persistedSelectionId = selected;
-    if (!appearanceCatalogsEqual(this.snapshot.appearances, appearances)) {
+    if (!appearanceCatalogsEqual(this.snapshot.appearances, appearances)
+      || this.snapshot.persistedSelectionId !== selected) {
       this.setSnapshot({ ...this.snapshot, appearances });
     }
 
@@ -621,6 +677,7 @@ export class AppearanceService {
       this.setSnapshot({
         ...this.snapshot,
         status: 'degraded',
+        unavailableSelectionId: selected === SYSTEM_APPEARANCE_ID ? undefined : selected,
         lastError: errorMessage(error),
       });
     }
@@ -648,18 +705,36 @@ export class AppearanceService {
   private async applySyncEvent(event: AppearanceCommittedEvent): Promise<void> {
     if (event.kind === 'selection-changed') {
       this.persistedSelectionId = event.selectionId;
-      await this.applySelectionTransaction(event.selectionId, {
-        persist: false,
-        publish: false,
-        force: true,
-      });
+      try {
+        await this.applySelectionTransaction(event.selectionId, {
+          persist: false,
+          publish: false,
+          force: true,
+        });
+      } catch (error) {
+        await this.applySelectionTransaction(SYSTEM_APPEARANCE_ID, {
+          persist: false,
+          publish: false,
+          force: true,
+        });
+        this.setSnapshot({
+          ...this.snapshot,
+          status: 'degraded',
+          unavailableSelectionId: event.selectionId === SYSTEM_APPEARANCE_ID
+            ? undefined
+            : event.selectionId,
+          lastError: errorMessage(error),
+        });
+      }
       return;
     }
 
     const appearances = await this.loadCatalog();
     this.setSnapshot({ ...this.snapshot, appearances });
     if (event.kind === 'package-upserted') {
-      if (this.snapshot.selectedAppearanceId === event.packageId) {
+      if (this.snapshot.selectedAppearanceId === event.packageId
+        || (this.persistedSelectionId === event.packageId
+          && this.snapshot.unavailableSelectionId === event.packageId)) {
         await this.applySelectionTransaction(event.packageId, {
           persist: false,
           publish: false,
@@ -720,6 +795,7 @@ export class AppearanceService {
   private setSnapshot(snapshot: AppearanceServiceSnapshot): void {
     this.snapshot = Object.freeze({
       ...snapshot,
+      persistedSelectionId: this.persistedSelectionId,
       appearances: Object.freeze([...snapshot.appearances]),
     });
     this.listeners.forEach(listener => listener(this.snapshot));

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { AlertTriangle, Check, Download, Image, Trash2, Upload, X } from 'lucide-react';
+import { AlertTriangle, Check, Download, Image, Store, Trash2, Upload, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Button, confirmDialog } from '@/component-library';
 import {
@@ -10,6 +10,7 @@ import {
   type AppearanceValidationIssue,
 } from '@/infrastructure/appearance';
 import { notificationService } from '@/shared/notification-system';
+import { AppearanceMarketDialog } from './AppearanceMarketDialog';
 import { ConfigPageSection } from './common';
 
 function downloadArchive(bytes: ArrayBuffer, filename: string): void {
@@ -181,9 +182,11 @@ export function AppearancePackageConfigSection() {
   const { t } = useTranslation('settings/appearance');
   const inputRef = useRef<HTMLInputElement>(null);
   const [loading, setLoading] = useState(false);
+  const [marketOpen, setMarketOpen] = useState(false);
   const [failure, setFailure] = useState<AppearancePackageFailure | null>(null);
   const {
     appearances: appearanceCatalog,
+    unavailableSelectionId,
     selectedAppearanceId,
     getPreviewAsset,
     importPackage,
@@ -282,7 +285,7 @@ export function AppearancePackageConfigSection() {
       data-bf-component="appearance-config"
       data-bf-part="packageSection"
       extra={(
-        <>
+        <div className="appearance-package-config__header-actions">
           <input
             ref={inputRef}
             className="appearance-package-config__file-input"
@@ -290,15 +293,33 @@ export function AppearancePackageConfigSection() {
             accept=".bitfun-appearance,.zip,application/zip"
             onChange={handleImport}
           />
+          <Button variant="secondary" size="small" disabled={busy} onClick={() => setMarketOpen(true)}>
+            <Store size={14} />
+            {t('package.market.open')}
+          </Button>
           <Button variant="secondary" size="small" disabled={busy} onClick={() => inputRef.current?.click()}>
             <Upload size={14} />
             {t('package.import')}
           </Button>
-        </>
+        </div>
       )}
     >
+      <AppearanceMarketDialog isOpen={marketOpen} onClose={() => setMarketOpen(false)} />
       {failure && (
         <AppearancePackageFailurePanel failure={failure} onDismiss={() => setFailure(null)} />
+      )}
+      {unavailableSelectionId && (
+        <div
+          className="appearance-package-config__missing-selection"
+          data-bf-component="appearance-config"
+          data-bf-part="packageMissingSelection"
+        >
+          <AlertTriangle size={16} aria-hidden="true" />
+          <span>{t('package.missingSelection', { id: unavailableSelectionId })}</span>
+          <Button variant="secondary" size="small" onClick={() => setMarketOpen(true)}>
+            {t('package.market.open')}
+          </Button>
+        </div>
       )}
       <div
         className="appearance-package-config__grid"

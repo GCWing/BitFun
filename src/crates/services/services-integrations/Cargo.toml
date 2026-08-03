@@ -170,12 +170,14 @@ miniapp-runtime = [
     "which",
 ]
 miniapp-market = [
+    "bitfun-product-domains/appearance-market",
     "chrono",
     "dep:apple-native-keyring-store",
     "dep:keyring-core",
     "dep:windows-native-keyring-store",
     "dep:zbus-secret-service-keyring-store",
     "hex",
+    "image",
     "miniapp-runtime",
     "reqwest",
     "reqwest/rustls",

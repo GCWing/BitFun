@@ -45,6 +45,7 @@ impl ClawMode {
                 "InitMiniApp".to_string(),
                 "FinalizeMiniApp".to_string(),
                 "PublishMiniApp".to_string(),
+                "PublishAppearance".to_string(),
                 "PageDeploy".to_string(),
                 "PagePublish".to_string(),
             ],

@@ -817,6 +817,7 @@ export function runManifestParserSelfTest({
     'src/apps/desktop/Cargo.toml',
     'src/crates/adapters/ai-adapters/Cargo.toml',
     'src/crates/services/miniapp-market-service/Cargo.toml',
+    'src/crates/services/skin-market-service/Cargo.toml',
   ]) {
     const reqwestRule = requiredContentRules.find((rule) => rule.path === path);
     const reqwestRuleText = reqwestRule?.patterns
@@ -931,6 +932,14 @@ export function runManifestParserSelfTest({
     );
     if (!owner?.ownerFeatures.includes('plugin-source')) {
       throw new Error(`services-integrations plugin-source must own optional dependency ${dep}`);
+    }
+  }
+  for (const dep of ['bitfun-product-domains', 'image']) {
+    const owner = servicesOptionalOwnerRule?.dependencies.find(
+      (dependency) => dependency.depName === dep,
+    );
+    if (!owner?.ownerFeatures.includes('miniapp-market')) {
+      throw new Error(`services-integrations miniapp-market must own optional dependency ${dep}`);
     }
   }
   for (const dep of ['sha2', 'windows']) {

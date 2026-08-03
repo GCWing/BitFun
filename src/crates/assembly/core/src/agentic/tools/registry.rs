@@ -546,6 +546,7 @@ mod tests {
             "InitMiniApp",
             "FinalizeMiniApp",
             "PublishMiniApp",
+            "PublishAppearance",
             "PageDeploy",
             "PagePublish",
             "ControlHub",
@@ -703,6 +704,7 @@ mod tests {
         assert!(!registry.is_tool_deferred("InitMiniApp"));
         assert!(!registry.is_tool_deferred("FinalizeMiniApp"));
         assert!(!registry.is_tool_deferred("PublishMiniApp"));
+        assert!(!registry.is_tool_deferred("PublishAppearance"));
     }
 
     #[test]

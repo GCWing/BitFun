@@ -2,7 +2,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AppearancePackageParser } from '../schema/AppearancePackageParser';
 import { MemoryAppearanceStorage } from '../storage/AppearanceStorage';
 import type { AppearanceCommittedEvent, AppearanceSyncPort } from '../sync/AppearanceSync';
-import type { AppearancePackage, ResolvedAppearance } from '../types';
+import type {
+  AppearanceMarketOrigin,
+  AppearancePackage,
+  ResolvedAppearance,
+  StoredAppearancePackage,
+} from '../types';
 import type { AppearanceRuntime } from './AppearanceRuntime';
 import { AppearanceService } from './AppearanceService';
 
@@ -151,9 +156,128 @@ describe('AppearanceService', () => {
     );
     expect(service.getSnapshot()).toMatchObject({
       selectedAppearanceId: 'system',
+      persistedSelectionId: 'missing-appearance',
+      unavailableSelectionId: 'missing-appearance',
       resolvedAppearanceId: 'bitfun-light',
       status: 'degraded',
     });
+  });
+
+  it('rehydrates a shared selection when its device-local package becomes available', async () => {
+    configMocks.getConfig.mockResolvedValue('market.shared');
+    const storage = new MemoryAppearanceStorage();
+    const stored: StoredAppearancePackage = {
+      manifest: {
+        schema: 'bitfun.appearance', schemaVersion: 1, id: 'market.shared', name: 'Shared',
+        version: '1.0.0', mode: 'dark',
+      },
+      archive: new ArrayBuffer(4),
+      assets: {},
+      importedAt: '2026-08-03T00:00:00.000Z',
+    };
+    const { runtime } = createService();
+    const parser = { parse: vi.fn(async () => stored) } as unknown as AppearancePackageParser;
+    const service = new AppearanceService(runtime, parser, storage);
+
+    await service.initialize();
+    expect(service.getSnapshot()).toMatchObject({
+      status: 'degraded',
+      selectedAppearanceId: 'system',
+    });
+
+    await service.importPackage(new ArrayBuffer(4));
+
+    expect(configMocks.setConfig).not.toHaveBeenCalled();
+    expect(runtime.applyPackage).toHaveBeenLastCalledWith(
+      expect.objectContaining({ id: 'market.shared' }),
+      {},
+    );
+    expect(service.getSnapshot()).toMatchObject({
+      status: 'ready',
+      persistedSelectionId: 'market.shared',
+      selectedAppearanceId: 'market.shared',
+      resolvedAppearanceId: 'market.shared',
+    });
+    expect(service.getSnapshot().unavailableSelectionId).toBeUndefined();
+  });
+
+  it('stores market provenance and marks a later manual replacement as a local override', async () => {
+    configMocks.getConfig.mockResolvedValue('system');
+    const storage = new MemoryAppearanceStorage();
+    const first: StoredAppearancePackage = {
+      manifest: {
+        schema: 'bitfun.appearance', schemaVersion: 1, id: 'market.theme', name: 'Market Theme',
+        version: '1.0.0', mode: 'dark',
+      },
+      archive: new ArrayBuffer(4),
+      assets: {},
+      importedAt: '2026-08-03T00:00:00.000Z',
+    };
+    const replacement: StoredAppearancePackage = {
+      ...first,
+      manifest: { ...first.manifest, version: '1.0.1' },
+      importedAt: '2026-08-03T01:00:00.000Z',
+    };
+    const parser = {
+      parse: vi.fn()
+        .mockResolvedValueOnce(first)
+        .mockResolvedValueOnce(replacement),
+    } as unknown as AppearancePackageParser;
+    const { runtime } = createService();
+    const service = new AppearanceService(runtime, parser, storage);
+    const origin: AppearanceMarketOrigin = {
+      listingId: 'listing-1',
+      slug: 'market-theme',
+      releaseId: 'release-1',
+      releaseNumber: 1,
+      packageId: 'market.theme',
+      packageVersion: '1.0.0',
+      packageSha256: 'a'.repeat(64),
+    };
+    await service.initialize();
+
+    await service.importPackage(new ArrayBuffer(4), { marketOrigin: origin });
+    expect(await storage.get('market.theme')).toMatchObject({
+      marketOrigin: origin,
+      localOverride: false,
+    });
+
+    await service.importPackage(new ArrayBuffer(4));
+    expect(await storage.get('market.theme')).toMatchObject({
+      marketOrigin: origin,
+      localOverride: true,
+    });
+    expect(service.getSnapshot().appearances.find(item => item.id === 'market.theme')).toMatchObject({
+      marketOrigin: origin,
+      localOverride: true,
+    });
+  });
+
+  it('rejects a downloaded package that does not match reviewed market identity', async () => {
+    configMocks.getConfig.mockResolvedValue('system');
+    const storage = new MemoryAppearanceStorage();
+    const parsed: StoredAppearancePackage = {
+      manifest: {
+        schema: 'bitfun.appearance', schemaVersion: 1, id: 'unexpected.theme', name: 'Unexpected',
+        version: '1.0.0', mode: 'dark',
+      },
+      archive: new ArrayBuffer(4),
+      assets: {},
+      importedAt: '2026-08-03T00:00:00.000Z',
+    };
+    const parser = { parse: vi.fn(async () => parsed) } as unknown as AppearancePackageParser;
+    const { runtime } = createService();
+    const service = new AppearanceService(runtime, parser, storage);
+    await service.initialize();
+
+    await expect(service.importPackage(new ArrayBuffer(4), {
+      marketOrigin: {
+        listingId: 'listing-1', slug: 'reviewed-theme', releaseId: 'release-1',
+        releaseNumber: 1, packageId: 'reviewed.theme', packageVersion: '1.0.0',
+        packageSha256: 'b'.repeat(64),
+      },
+    })).rejects.toThrow('does not match the reviewed package');
+    expect(await storage.get('unexpected.theme')).toBeNull();
   });
 
   it('rolls the runtime back when selection persistence fails', async () => {
@@ -291,6 +415,55 @@ describe('AppearanceService', () => {
       status: 'ready',
       resolvedAppearanceId: 'bitfun-dark',
     });
+  });
+
+  it('rehydrates an unavailable shared selection across windows after package import', async () => {
+    configMocks.getConfig.mockResolvedValue('shared.market-theme');
+    const syncPort = new MemoryAppearanceSyncPort();
+    const storage = new MemoryAppearanceStorage();
+    const stored: StoredAppearancePackage = {
+      manifest: {
+        schema: 'bitfun.appearance', schemaVersion: 1, id: 'shared.market-theme',
+        name: 'Shared Market Theme', version: '1.0.0', mode: 'dark',
+      },
+      archive: new ArrayBuffer(4),
+      assets: {},
+      importedAt: '2026-08-03T00:00:00.000Z',
+    };
+    const createWindowService = (parser: AppearancePackageParser) => {
+      let revision = 0;
+      const runtime = {
+        preflight: vi.fn((pkg: AppearancePackage) => resolved(pkg, revision + 1)),
+        initialize: vi.fn(async (pkg: AppearancePackage) => resolved(pkg, ++revision)),
+        applyPackage: vi.fn(async (pkg: AppearancePackage) => resolved(pkg, ++revision)),
+        getSnapshot: vi.fn(() => null),
+        dispose: vi.fn(async () => undefined),
+      } as unknown as AppearanceRuntime;
+      return new AppearanceService(runtime, parser, storage, syncPort);
+    };
+    const first = createWindowService({
+      parse: vi.fn(async () => stored),
+    } as unknown as AppearancePackageParser);
+    const second = createWindowService({} as AppearancePackageParser);
+    await Promise.all([first.initialize(), second.initialize()]);
+
+    expect(second.getSnapshot()).toMatchObject({
+      selectedAppearanceId: 'system',
+      persistedSelectionId: 'shared.market-theme',
+      unavailableSelectionId: 'shared.market-theme',
+    });
+
+    await first.importPackage(new ArrayBuffer(4));
+    await vi.waitFor(() => expect(second.getSnapshot().selectedAppearanceId)
+      .toBe('shared.market-theme'));
+
+    expect(second.getSnapshot()).toMatchObject({
+      status: 'ready',
+      persistedSelectionId: 'shared.market-theme',
+      resolvedAppearanceId: 'shared.market-theme',
+    });
+    expect(second.getSnapshot().unavailableSelectionId).toBeUndefined();
+    expect(configMocks.setConfig).not.toHaveBeenCalled();
   });
 
   it('keeps the previous active package when replacing storage fails', async () => {

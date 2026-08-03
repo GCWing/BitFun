@@ -135,6 +135,7 @@ pub fn shared_coding_mode_tools() -> Vec<String> {
         "InitMiniApp".to_string(),
         "FinalizeMiniApp".to_string(),
         "PublishMiniApp".to_string(),
+        "PublishAppearance".to_string(),
         "PageDeploy".to_string(),
         "PagePublish".to_string(),
     ];

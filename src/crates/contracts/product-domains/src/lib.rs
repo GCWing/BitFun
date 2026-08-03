@@ -6,6 +6,9 @@
 pub mod canvas;
 pub mod tool_permissions;
 
+#[cfg(feature = "appearance-market")]
+pub mod appearance_market;
+
 #[cfg(feature = "external-sources")]
 pub mod external_integration_policy;
 

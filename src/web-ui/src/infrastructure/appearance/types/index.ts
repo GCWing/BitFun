@@ -693,11 +693,32 @@ export interface StoredAppearanceAsset {
   durationSeconds?: number;
 }
 
+/**
+ * Review provenance for a package installed from the public Appearance market.
+ * Package bytes remain device-local; this small sidecar is used to discover
+ * updates and to distinguish a reviewed release from a later local import.
+ */
+export interface AppearanceMarketOrigin {
+  listingId: string;
+  slug: string;
+  releaseId: string;
+  releaseNumber: number;
+  packageId: string;
+  packageVersion: string;
+  packageSha256: string;
+}
+
+export interface AppearanceImportOptions {
+  marketOrigin?: AppearanceMarketOrigin;
+}
+
 export interface StoredAppearancePackage {
   manifest: AppearancePackage;
   archive: ArrayBuffer;
   assets: Record<string, StoredAppearanceAsset>;
   importedAt: string;
+  marketOrigin?: AppearanceMarketOrigin;
+  localOverride?: boolean;
 }
 
 export interface StoredAppearanceCatalogEntry {
@@ -708,6 +729,8 @@ export interface StoredAppearanceCatalogEntry {
   version: string;
   mode: AppearanceMode;
   importedAt: string;
+  marketOrigin?: AppearanceMarketOrigin;
+  localOverride?: boolean;
 }
 
 export interface AppearanceCatalogEntry {
@@ -719,6 +742,8 @@ export interface AppearanceCatalogEntry {
   mode: AppearanceMode;
   source: 'builtin' | 'imported';
   importedAt?: string;
+  marketOrigin?: AppearanceMarketOrigin;
+  localOverride?: boolean;
 }
 
 export interface AppearanceStorage {
@@ -731,6 +756,10 @@ export interface AppearanceStorage {
 export interface AppearanceServiceSnapshot {
   initialized: boolean;
   status: 'initializing' | 'ready' | 'applying' | 'degraded';
+  /** Selection stored in synchronized config, even when its package is absent locally. */
+  persistedSelectionId: AppearanceSelectionId | null;
+  /** Persisted selection that this device cannot currently resolve or apply. */
+  unavailableSelectionId?: AppearanceSelectionId;
   selectedAppearanceId: AppearanceSelectionId;
   pendingSelectionId?: AppearanceSelectionId;
   resolvedAppearanceId: string | null;

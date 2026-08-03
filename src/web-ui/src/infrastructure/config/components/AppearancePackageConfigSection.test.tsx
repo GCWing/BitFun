@@ -47,6 +47,7 @@ describe('AppearancePackageConfigSection', () => {
     expect(html).toContain('aria-pressed="true"');
     expect(html).toContain('aria-label="package.export"');
     expect(html).toContain('aria-label="package.delete"');
+    expect(html).toContain('package.market.open');
     expect(html).toContain('accept=".bitfun-appearance,.zip,application/zip"');
     expect(html).toContain('data-bf-part="packageGrid"');
     expect(html).toContain('data-bf-package-type="native"');

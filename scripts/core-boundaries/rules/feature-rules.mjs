@@ -101,6 +101,7 @@ export const optionalDependencyFeatureOwnerRules = [
       { depName: 'md5', ownerFeatures: ['product-full'] },
       { depName: 'reqwest', ownerFeatures: ['ai-adapter-runtime', 'product-full'] },
       { depName: 'rusqlite', ownerFeatures: ['product-full'] },
+      { depName: 'semver', ownerFeatures: ['product-full'] },
       { depName: 'serde_yaml', ownerFeatures: ['workspace-runtime'] },
       { depName: 'similar', ownerFeatures: ['product-full'] },
       { depName: 'terminal-core', ownerFeatures: ['terminal'] },
@@ -128,7 +129,7 @@ export const optionalDependencyFeatureOwnerRules = [
       },
       { depName: 'bitfun-agent-runtime', ownerFeatures: ['deep-research', 'hook-import'] },
       { depName: 'bitfun-core-types', ownerFeatures: ['speech'] },
-      { depName: 'bitfun-product-domains', ownerFeatures: ['canvas-runtime', 'function-agents', 'hook-import', 'miniapp-runtime', 'plugin-source'] },
+      { depName: 'bitfun-product-domains', ownerFeatures: ['canvas-runtime', 'function-agents', 'hook-import', 'miniapp-market', 'miniapp-runtime', 'plugin-source'] },
       { depName: 'bitfun-runtime-ports', ownerFeatures: ['git', 'remote-connect', 'remote-ssh', 'remote-ssh-concrete', 'script-tool-runtime'] },
       {
         depName: 'bitfun-services-core',
@@ -144,7 +145,7 @@ export const optionalDependencyFeatureOwnerRules = [
       { depName: 'git2', ownerFeatures: ['git'] },
       { depName: 'hex', ownerFeatures: ['hook-import', 'mcp', 'miniapp-market', 'plugin-source', 'remote-connect'] },
       { depName: 'hostname', ownerFeatures: ['remote-connect'] },
-      { depName: 'image', ownerFeatures: ['remote-connect'] },
+      { depName: 'image', ownerFeatures: ['miniapp-market', 'remote-connect'] },
       { depName: 'local-ip-address', ownerFeatures: ['remote-connect'] },
       { depName: 'libc', ownerFeatures: ['plugin-source'] },
       { depName: 'mac_address', ownerFeatures: ['remote-connect'] },
@@ -188,8 +189,8 @@ export const optionalDependencyFeatureOwnerRules = [
     dependencies: [
       { depName: 'dirs', ownerFeatures: ['miniapp'] },
       { depName: 'log', ownerFeatures: ['function-agents'] },
-      { depName: 'hex', ownerFeatures: ['external-sources', 'miniapp', 'plugin-source'] },
-      { depName: 'sha2', ownerFeatures: ['external-sources', 'miniapp', 'plugin-source'] },
+      { depName: 'hex', ownerFeatures: ['appearance-market', 'external-sources', 'miniapp', 'plugin-source'] },
+      { depName: 'sha2', ownerFeatures: ['appearance-market', 'external-sources', 'miniapp', 'plugin-source'] },
       { depName: 'which', ownerFeatures: ['miniapp'] },
     ],
   },
@@ -502,6 +503,6 @@ export const ownerCrateFeatureAssemblyRules = [
   {
     manifestPath: 'src/crates/contracts/product-domains/Cargo.toml',
     reason: 'product-domains must keep product domain feature groups explicit and default-light',
-    requiredProductFullFeatures: ['plugin-source', 'miniapp', 'function-agents', 'external-sources'],
+    requiredProductFullFeatures: ['appearance-market', 'plugin-source', 'miniapp', 'function-agents', 'external-sources'],
   },
 ];

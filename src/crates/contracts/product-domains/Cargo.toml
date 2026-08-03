@@ -55,11 +55,12 @@ url = { workspace = true, optional = true }
 
 [features]
 default = []
+appearance-market = ["hex", "sha2"]
 plugin-source = ["hex", "sha2"]
 miniapp = ["dirs", "hex", "sha2", "which"]
 function-agents = ["log"]
 external-sources = ["hex", "hmac", "sha2", "url"]
-product-full = ["plugin-source", "miniapp", "function-agents", "external-sources"]
+product-full = ["appearance-market", "plugin-source", "miniapp", "function-agents", "external-sources"]
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["macros", "rt"] }

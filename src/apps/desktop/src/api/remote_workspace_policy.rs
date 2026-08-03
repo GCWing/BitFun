@@ -148,6 +148,18 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         RemoteWorkspacePolicy::LocalOnly,
     ),
     (
+        "appearance_market_browse",
+        RemoteWorkspacePolicy::WorkspaceAgnostic,
+    ),
+    (
+        "appearance_market_download_release",
+        RemoteWorkspacePolicy::LocalOnly,
+    ),
+    (
+        "appearance_market_get_listing",
+        RemoteWorkspacePolicy::WorkspaceAgnostic,
+    ),
+    (
         "account_token_expired",
         RemoteWorkspacePolicy::WorkspaceAgnostic,
     ),

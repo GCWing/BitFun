@@ -40,6 +40,7 @@ dashmap = { workspace = true, optional = true }
 indexmap = { workspace = true, optional = true }
 
 reqwest = { workspace = true, optional = true }
+semver = { workspace = true, optional = true }
 
 # Debug Log HTTP Server
 axum = { workspace = true, optional = true }
@@ -151,6 +152,7 @@ product-full = [
     "dep:image",
     "dep:md5",
     "dep:reqwest",
+    "dep:semver",
     "dep:rusqlite",
     "dep:similar",
     "dep:tokio-tungstenite",

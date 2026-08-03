@@ -341,6 +341,16 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     displayMode: 'standard',
     primaryColor: APPEARANCE_DOMAIN_TOKENS.miniApp
   },
+  'PublishAppearance': {
+    toolName: 'PublishAppearance',
+    displayName: 'Publish Skin',
+    icon: 'APP',
+    requiresConfirmation: false,
+    resultDisplayType: 'detailed',
+    description: 'Submit an Appearance package to the Skin market for review',
+    displayMode: 'standard',
+    primaryColor: 'var(--bf-appearance-token-color-accent-600)'
+  },
   'PageDeploy': {
     toolName: 'PageDeploy',
     displayName: 'Deploy Page',

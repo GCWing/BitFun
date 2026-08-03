@@ -18,6 +18,7 @@ export const requiredContentRules = [
     'src/apps/desktop/Cargo.toml',
     'src/crates/adapters/ai-adapters/Cargo.toml',
     'src/crates/services/miniapp-market-service/Cargo.toml',
+    'src/crates/services/skin-market-service/Cargo.toml',
   ].map((path) => ({
     path,
     reason: 'first-party Reqwest client owners must select the repository TLS backend explicitly',

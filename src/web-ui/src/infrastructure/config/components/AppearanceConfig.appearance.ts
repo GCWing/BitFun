@@ -12,6 +12,13 @@ export const appearanceConfigAppearanceDescriptor: AppearanceSurfaceDescriptor =
     { id: 'packageDiagnostics' }, { id: 'packageDiagnosticsHeader' },
     { id: 'packageDiagnosticsGroup' }, { id: 'packageDiagnosticIssue' },
     { id: 'packageDiagnosticAllowedParts' },
+    { id: 'packageMissingSelection' },
+    { id: 'marketDialog' }, { id: 'marketToolbar' }, { id: 'marketGrid' },
+    { id: 'marketCard' }, { id: 'marketPreview' }, { id: 'marketCardBody' },
+    { id: 'marketStatus' }, { id: 'marketEmpty' }, { id: 'marketError' },
+    { id: 'marketDetail' }, { id: 'marketDetailPreview' }, { id: 'marketDetailBody' },
+    { id: 'marketWarning' }, { id: 'marketReleaseList' }, { id: 'marketRelease' },
+    { id: 'marketActions' },
   ],
   facets: [
     { id: 'packageType', attribute: 'data-bf-package-type', values: ['native', 'imported'] },

@@ -23,6 +23,7 @@ export const crateLayoutRules = [
   { crateName: 'services-core', layer: 'services', path: 'src/crates/services/services-core' },
   { crateName: 'services-integrations', layer: 'services', path: 'src/crates/services/services-integrations' },
   { crateName: 'miniapp-market-service', layer: 'services', path: 'src/crates/services/miniapp-market-service' },
+  { crateName: 'skin-market-service', layer: 'services', path: 'src/crates/services/skin-market-service' },
   { crateName: 'relay-service', layer: 'services', path: 'src/crates/services/relay-service' },
   { crateName: 'page-function-runtime', layer: 'services', path: 'src/crates/services/page-function-runtime' },
   { crateName: 'terminal', layer: 'services', path: 'src/crates/services/terminal' },

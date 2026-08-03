@@ -417,6 +417,37 @@ IndexedDB 前完成相同 preflight；覆盖活动包时，存储、目录或后
 情况。配置引用的导入包暂时不可用时，只在当前窗口回退到 `system` 并标记 `degraded`，不能把共享
 配置静默改写为 `system`。
 
+## Skin 市场边界
+
+产品在目录、设置入口和公网 URL 中把 Appearance 包称为 **Skin**；这只是产品文案，不新增
+Skin runtime、manifest 或文件格式。公网入口固定为 `market.openbitfun.com/skin/`，稳定 API 为
+`/skin/api/v1`，下载物仍是 `.bitfun-appearance`，根 manifest 仍是 `appearance.json` 和
+`schema: bitfun.appearance`。
+
+市场稳定 DTO 和发布状态机由 `bitfun-product-domains::appearance_market` 拥有。独立
+`bitfun-skin-market` 服务使用自己的 SQLite、content-addressed package/preview artifacts、审核日志、
+retention 和备份；不与 MiniApp listing/release/submission 表共用 namespace。公开 Web 站只读。
+Desktop 投稿复用 MiniApp 市场系统 keyring 中的 GitHub Desktop token，Skin 服务只把 Bearer token
+转发给受控的 MiniApp `/me` endpoint 做身份和管理员校验，不保存 OAuth secret、refresh token 或
+Cookie。
+
+安装事务固定为：读取 listing 的不可变 release 元数据，下载 package，核对 release SHA-256 和字节
+大小，由 WebView 的 `AppearancePackageParser` 完成完整 schema/registry/media preflight，再调用
+`AppearanceService.importPackage()` 写入 IndexedDB。Rust/Tauri adapter 只负责网络和受限临时文件，
+不能直接激活 Appearance 或复制一套 Style IR validator。市场来源 sidecar 绑定 package ID、listing、
+release、package SHA 和安装时间；本地文件覆盖同 ID 市场包时保留 lineage 但设置 `localOverride`，并在
+UI 明确显示为本地版本，不能继续伪装成已安装的市场 release 或静默自动更新。
+
+`appearance.selection` 随正式 GlobalConfig 跨设备同步，package 字节仍只存在当前设备。snapshot 必须
+同时保留 persisted selection 和当前设备 availability：目标包缺失时本窗口回退 `system`，但不得覆写
+共享 selection；以后从市场安装同 package ID 时立即 rehydrate 并应用 persisted selection。浏览和
+安装是当前设备 UI 行为，与 workspace 本地/远程无关，绝不能把 package 发送到 SSH workspace。
+
+Agent 的 outward-facing `PublishAppearance` 只接受用户明确指定的本机绝对
+`.bitfun-appearance` 路径，在上传前执行本地 package envelope 校验，并复用 Desktop 登录与投稿编排。
+远程 SSH workspace 中它必须 fail closed；Agent Runtime 不得扫描目录、猜测用户许可，或假装能读取
+WebView IndexedDB 中已安装的包。
+
 编译器解析真实 RGB/HSL/hex 颜色并产生对比度诊断。诊断当前不阻止提交，但必须出现在
 snapshot 和结构化日志中；未来可以按产品无障碍策略升级为 gate。
 
@@ -426,7 +457,7 @@ snapshot 和结构化日志中；未来可以按产品无障碍策略升级为 g
 
 导入限制：
 
-- ZIP 最大 96 MiB，解压后最大 128 MiB，最多 64 个文件；
+- ZIP 最大 96 MiB，解压后最大 128 MiB，最多 64 个文件；市场预览还受 4 MiB、1600 万像素解码预算约束；
 - `appearance.json` 最大 256 KiB，静态图片最大 16 MiB，视频最大 64 MiB，preview 图片最大 4 MiB；
 - 只允许 manifest 明确声明的包内图片和背景视频；
 - 图片仅 PNG、JPEG、WebP、GIF，视频仅 MP4、WebM，均按文件头识别 MIME；

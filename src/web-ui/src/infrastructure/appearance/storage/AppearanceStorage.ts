@@ -18,6 +18,8 @@ function catalogEntry(value: StoredAppearancePackage): StoredAppearanceCatalogEn
     version: value.manifest.version,
     mode: value.manifest.mode,
     importedAt: value.importedAt,
+    marketOrigin: value.marketOrigin,
+    localOverride: value.localOverride,
   };
 }
 
