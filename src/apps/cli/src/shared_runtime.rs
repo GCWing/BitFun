@@ -7,14 +7,15 @@ use bitfun_agent_runtime::sdk::{
     PortErrorKind, RuntimeError, SessionTranscriptRequest,
 };
 use bitfun_agent_runtime_ipc::{
-    DiscoveryStore, RuntimeInstanceIdentity, RuntimeIpcClient, RuntimeIpcError,
-    RuntimeIpcErrorCode, RuntimeIpcEvent, RuntimeIpcOperation, RuntimeIpcOperationResult,
-    RuntimeIpcRequestHandler, RuntimeIpcServer, RuntimeIpcServerConfig,
+    DiscoveryStore, RuntimeAgentModeSummary, RuntimeInstanceIdentity, RuntimeIpcClient,
+    RuntimeIpcError, RuntimeIpcErrorCode, RuntimeIpcEvent, RuntimeIpcOperation,
+    RuntimeIpcOperationResult, RuntimeIpcRequestHandler, RuntimeIpcServer, RuntimeIpcServerConfig,
     RuntimeIpcStreamInvalidationReason, RuntimeSessionRenameRequest, PROTOCOL_VERSION,
 };
 use bitfun_core::product_runtime::CoreAgentRuntimeCompatibility;
 use bitfun_core::runtime_ownership::CoreRuntimeOwnership;
 use bitfun_events::{AgenticEvent, ToolEventData};
+use bitfun_runtime_ports::{AgentSessionWorkspaceBinding, AgentSessionWorkspaceRequest};
 use bitfun_services_core::runtime_ownership::RuntimeDeployment;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -223,6 +224,41 @@ impl RuntimeIpcRequestHandler for SharedRuntimeHandler {
         self.validate_workspace(&operation)?;
         match operation {
             RuntimeIpcOperation::Health => unreachable!("Health is owned by the IPC server"),
+            RuntimeIpcOperation::ListAgentModes { session_id } => {
+                let workspace = match session_id {
+                    Some(session_id) => PathBuf::from(
+                        self.session_workspace_binding(&session_id)
+                            .await?
+                            .workspace_path,
+                    ),
+                    None => self.workspace.clone(),
+                };
+                if let Err(error) =
+                    bitfun_core::external_sources::ensure_external_source_workspace_snapshot(Some(
+                        &workspace,
+                    ))
+                    .await
+                {
+                    tracing::warn!(
+                        "Failed to initialize external agent sources for Shared TUI mode catalog: {}",
+                        error
+                    );
+                }
+                let registry = bitfun_core::agentic::agents::get_agent_registry();
+                let modes = registry
+                    .get_modes_info_for_workspace(Some(&workspace), true)
+                    .await
+                    .into_iter()
+                    .map(|mode| RuntimeAgentModeSummary {
+                        id: mode.id,
+                        description: mode.description,
+                        model_id: mode.model,
+                        is_external: mode.source
+                            == bitfun_core::agentic::agents::AgentSource::External,
+                    })
+                    .collect();
+                Ok(RuntimeIpcOperationResult::AgentModes { modes })
+            }
             RuntimeIpcOperation::ListSessions { request } => self
                 .runtime
                 .list_sessions(request)
@@ -268,8 +304,12 @@ impl RuntimeIpcRequestHandler for SharedRuntimeHandler {
                         )
                     })
                     .collect();
+                let workspace_binding = self
+                    .session_workspace_binding(&restored.session.session_id)
+                    .await?;
                 Ok(RuntimeIpcOperationResult::SessionRestored {
                     session: restored.session,
+                    workspace_binding,
                     transcript,
                     pending_permissions,
                 })
@@ -319,8 +359,12 @@ impl RuntimeIpcRequestHandler for SharedRuntimeHandler {
                     })
                     .await
                     .map_err(runtime_ipc_error)?;
+                let workspace_binding = self
+                    .session_workspace_binding(&restored.session.session_id)
+                    .await?;
                 Ok(RuntimeIpcOperationResult::SessionForked {
                     session: restored.session,
+                    workspace_binding,
                     transcript,
                 })
             }
@@ -661,6 +705,19 @@ async fn await_permission_route(
 }
 
 impl SharedRuntimeHandler {
+    async fn session_workspace_binding(
+        &self,
+        session_id: &str,
+    ) -> std::result::Result<AgentSessionWorkspaceBinding, RuntimeIpcError> {
+        self.runtime
+            .resolve_session_workspace_binding(AgentSessionWorkspaceRequest {
+                session_id: session_id.to_string(),
+            })
+            .await
+            .map_err(runtime_ipc_error)?
+            .ok_or_else(workspace_mismatch_error)
+    }
+
     fn validate_workspace(
         &self,
         operation: &RuntimeIpcOperation,

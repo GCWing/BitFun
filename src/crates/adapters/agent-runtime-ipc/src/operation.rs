@@ -6,9 +6,10 @@ use bitfun_runtime_ports::{
     AgentSessionLineageInspection, AgentSessionLineageRequest, AgentSessionLineageSnapshot,
     AgentSessionLineageTranscriptRequest, AgentSessionListRequest, AgentSessionModeUpdateRequest,
     AgentSessionModelUpdateRequest, AgentSessionRevertRequest, AgentSessionRevertResult,
-    AgentSessionSummary, AgentTurnCancellationRequest, AgentTurnCancellationResult,
-    AgentUserShellCommandRequest, AgentWorkspaceReference, AgentWorkspaceReferenceSearchRequest,
-    AgentWorkspaceReferenceSearchResult, SessionTranscript, WorkspaceDiffSnapshot,
+    AgentSessionSummary, AgentSessionWorkspaceBinding, AgentTurnCancellationRequest,
+    AgentTurnCancellationResult, AgentUserShellCommandRequest, AgentWorkspaceReference,
+    AgentWorkspaceReferenceSearchRequest, AgentWorkspaceReferenceSearchResult, SessionTranscript,
+    WorkspaceDiffSnapshot,
 };
 use serde::{Deserialize, Serialize};
 
@@ -44,6 +45,19 @@ pub struct RuntimeUserAnswersRequest {
     pub answers: serde_json::Value,
 }
 
+/// Minimal host-owned main-agent catalog consumed by Shared TUI selectors.
+/// Runtime generation keys and provider-specific source state never cross IPC.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RuntimeAgentModeSummary {
+    pub id: String,
+    pub description: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model_id: Option<String>,
+    #[serde(default)]
+    pub is_external: bool,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(
     tag = "operation",
@@ -53,6 +67,10 @@ pub struct RuntimeUserAnswersRequest {
 )]
 pub enum RuntimeIpcOperation {
     Health,
+    ListAgentModes {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        session_id: Option<String>,
+    },
     ListSessions {
         request: AgentSessionListRequest,
     },
@@ -144,6 +162,9 @@ impl RuntimeIpcOperation {
 
     pub fn session_id(&self) -> Option<&str> {
         match self {
+            Self::ListAgentModes {
+                session_id: Some(session_id),
+            } => Some(session_id),
             Self::RestoreSession { request } => Some(&request.session_id),
             Self::DeleteSession { session_id } => Some(session_id),
             Self::UpdateSessionMode { request } => Some(&request.session_id),
@@ -167,6 +188,7 @@ impl RuntimeIpcOperation {
             | Self::RespondPermission { session_id, .. } => Some(session_id),
             Self::SubmitUserAnswers { request } => Some(&request.session_id),
             Self::Health
+            | Self::ListAgentModes { session_id: None }
             | Self::ListSessions { .. }
             | Self::CreateSession { .. }
             | Self::WorkspaceDiff => None,
@@ -179,9 +201,14 @@ impl RuntimeIpcOperation {
         };
 
         match self {
-            Self::Health | Self::ListSessions { .. } => {
-                RuntimeIpcOperationRules::new(None, false, false, false)
+            Self::Health
+            | Self::ListAgentModes {
+                session_id: std::option::Option::None,
             }
+            | Self::ListSessions { .. } => RuntimeIpcOperationRules::new(None, false, false, false),
+            Self::ListAgentModes {
+                session_id: Some(_),
+            } => RuntimeIpcOperationRules::new(CurrentController, false, false, false),
             Self::WorkspaceDiff => RuntimeIpcOperationRules::new(None, true, false, false),
             Self::CreateSession { .. } => RuntimeIpcOperationRules::new(None, true, true, true),
             Self::RestoreSession { .. } => {
@@ -271,6 +298,9 @@ pub enum RuntimeIpcOperationResult {
         process_id: u32,
     },
     Unit,
+    AgentModes {
+        modes: Vec<RuntimeAgentModeSummary>,
+    },
     Sessions {
         sessions: Vec<AgentSessionSummary>,
     },
@@ -279,11 +309,13 @@ pub enum RuntimeIpcOperationResult {
     },
     SessionRestored {
         session: AgentSessionSummary,
+        workspace_binding: AgentSessionWorkspaceBinding,
         transcript: SessionTranscript,
         pending_permissions: Vec<PermissionRequest>,
     },
     SessionForked {
         session: AgentSessionSummary,
+        workspace_binding: AgentSessionWorkspaceBinding,
         transcript: SessionTranscript,
     },
     SessionReverted {

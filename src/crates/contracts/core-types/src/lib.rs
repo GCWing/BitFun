@@ -20,7 +20,8 @@ pub use ai::{
 };
 pub use errors::{AiErrorDetail, ErrorCategory};
 pub use session::{
-    validate_session_id, SessionContinuationPolicy, SessionKind, SessionModelBindingPolicy,
+    validate_session_id, SessionAgentRouteOwner, SessionContinuationPolicy, SessionKind,
+    SessionModelBindingPolicy,
 };
 pub use session_usage::*;
 pub use speech::*;
@@ -31,6 +32,6 @@ pub use surface::{
 pub use tool_image_attachment::ToolImageAttachment;
 pub use worktree::{
     SessionExecutionTarget, SessionExecutionTargetKind, SessionExecutionTargetRequest,
-    WorktreeError, WorktreeErrorCode, WorktreeLifecycle,
-    WorktreeSessionSummary, WorktreeSettings, WorktreeSummary,
+    WorktreeError, WorktreeErrorCode, WorktreeLifecycle, WorktreeSessionSummary, WorktreeSettings,
+    WorktreeSummary,
 };

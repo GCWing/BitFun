@@ -22,7 +22,6 @@ function findEnabledModel(models: AIModelConfig[], modelRef: string | null | und
     && (model.id === value || model.name === value || model.model_name === value)
   ) ?? null;
 }
-
 function resolveModelForContextWindow(
   modelRef: string | null | undefined,
   models: AIModelConfig[],
@@ -87,22 +86,5 @@ export async function getModelMaxTokens(modelName?: string, agentType?: string):
   } catch (error) {
     log.warn('Failed to get model max tokens', { modelName, agentType, error });
     return 128128;
-  }
-}
-
-export async function resolveModelForSessionCreation(modelName?: string): Promise<string> {
-  const explicitModelName = modelName?.trim();
-  if (explicitModelName) {
-    return explicitModelName;
-  }
-
-  try {
-    const configManager = await import('@/infrastructure/config/services/ConfigManager').then(m => m.configManager);
-    const configData = await configManager.getConfigs(['ai.agent_model_defaults']);
-    const agentModelDefaults = configData['ai.agent_model_defaults'] as AgentModelDefaultsConfig | undefined;
-    return agentModelDefaults?.mode?.trim() || 'auto';
-  } catch (error) {
-    log.warn('Failed to resolve model default during session creation', { error });
-    return 'auto';
   }
 }

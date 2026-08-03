@@ -16,8 +16,8 @@ use crate::agentic::agents::{get_agent_registry, ExternalSubagentModelBinding};
 use crate::agentic::context_profile::ContextProfilePolicy;
 use crate::agentic::core::{
     InternalReminderKind, Message, MessageContent, MessageSemanticKind, ProcessingPhase, Session,
-    SessionConfig, SessionContinuationPolicy, SessionKind, SessionModelBindingPolicy, SessionState,
-    SessionSummary, ToolCall, ToolResult, TurnStats,
+    SessionAgentRouteOwner, SessionConfig, SessionContinuationPolicy, SessionKind,
+    SessionModelBindingPolicy, SessionState, SessionSummary, ToolCall, ToolResult, TurnStats,
 };
 use crate::agentic::events::{
     AgenticEvent, DeepReviewQueueState, EventPriority, EventQueue, EventRouter, EventSubscriber,
@@ -196,6 +196,31 @@ fn snapshot_normal_session_model(config: &mut SessionConfig, defaults: &AgentMod
     config.model_id = trimmed_model_id(config.model_id.as_deref())
         .or_else(|| trimmed_model_id(Some(defaults.mode.as_str())))
         .or_else(|| Some(AgentModelDefaultsConfig::default().mode));
+}
+
+/// Apply an external primary profile's fixed model as a creation-time default.
+/// An explicit user selection always wins; inherited bindings continue through
+/// the existing product default path.
+fn apply_primary_agent_model_default(
+    config: &mut SessionConfig,
+    binding: Option<&ExternalSubagentModelBinding>,
+) {
+    let has_explicit_model = config
+        .model_id
+        .as_deref()
+        .map(str::trim)
+        .is_some_and(|model_id| {
+            !model_id.is_empty()
+                && !model_id.eq_ignore_ascii_case("auto")
+                && !model_id.eq_ignore_ascii_case("default")
+        });
+    if has_explicit_model {
+        return;
+    }
+
+    if let Some(model_id) = binding.and_then(ExternalSubagentModelBinding::fixed_model_id) {
+        config.model_id = Some(model_id.to_string());
+    }
 }
 
 #[cfg(test)]
@@ -1370,6 +1395,106 @@ impl ConversationCoordinator {
         }
     }
 
+    async fn resolve_primary_agent_for_workspace(
+        agent_type: &str,
+        workspace_root: Option<&Path>,
+        external_sources_supported: bool,
+        expected_owner: Option<SessionAgentRouteOwner>,
+    ) -> BitFunResult<crate::agentic::agents::ExternalPrimaryAgentTurnBinding> {
+        let registry = get_agent_registry();
+        registry.load_custom_agents(workspace_root).await;
+        let local_binding = registry.resolve_primary_agent_for_turn(
+            agent_type,
+            workspace_root,
+            false,
+            expected_owner,
+        );
+
+        if !external_sources_supported {
+            return local_binding.ok_or_else(|| {
+                BitFunError::Validation(format!("Unknown session mode: {agent_type}"))
+            });
+        }
+
+        if let Err(error) =
+            crate::external_sources::ensure_external_source_workspace_snapshot(workspace_root).await
+        {
+            if let Some(external_binding) = registry.resolve_primary_agent_for_turn(
+                agent_type,
+                workspace_root,
+                true,
+                expected_owner,
+            ) {
+                warn!(
+                    "External agent source discovery failed; continuing with the existing resolved route: agent_type={}, route_owner={:?}, error_category={}",
+                    agent_type,
+                    external_binding.route_owner,
+                    crate::external_sources::external_integration_error_code(&error),
+                );
+                return Ok(external_binding);
+            }
+            if expected_owner == Some(SessionAgentRouteOwner::External)
+                || registry.is_external_subagent_route(agent_type, workspace_root)
+            {
+                return Err(BitFunError::Validation(format!(
+                    "candidate_unavailable: external main agent {agent_type} could not be refreshed"
+                )));
+            }
+            if let Some(local_binding) = local_binding {
+                warn!(
+                    "External agent source discovery failed; continuing with local mode: agent_type={}, error_category={}",
+                    agent_type,
+                    crate::external_sources::external_integration_error_code(&error),
+                );
+                return Ok(local_binding);
+            }
+            return Err(BitFunError::Service(format!(
+                "External agent source discovery failed: {error}"
+            )));
+        }
+
+        registry
+            .resolve_primary_agent_for_turn(
+                agent_type,
+                workspace_root,
+                true,
+                expected_owner,
+            )
+            .ok_or_else(|| {
+                if expected_owner == Some(SessionAgentRouteOwner::External)
+                    || registry.is_external_subagent_route(agent_type, workspace_root)
+                {
+                    BitFunError::Validation(format!(
+                        "candidate_unavailable: external main agent {agent_type} changed before the turn could start"
+                    ))
+                } else {
+                    BitFunError::Validation(format!("Unknown session mode: {agent_type}"))
+                }
+            })
+    }
+
+    async fn resolve_session_primary_agent(
+        session: &Session,
+        agent_type: &str,
+        workspace: &Option<WorkspaceBinding>,
+    ) -> BitFunResult<crate::agentic::agents::ExternalPrimaryAgentTurnBinding> {
+        let workspace_root =
+            crate::agentic::workspace::session_execution_workspace_root(&session.config);
+        let external_sources_supported = workspace
+            .as_ref()
+            .is_some_and(|workspace| !workspace.is_remote());
+        let expected_owner = agent_type
+            .eq_ignore_ascii_case(&session.agent_type)
+            .then_some(session.config.agent_route_owner);
+        Self::resolve_primary_agent_for_workspace(
+            agent_type,
+            workspace_root,
+            external_sources_supported,
+            expected_owner,
+        )
+        .await
+    }
+
     fn ensure_user_message_metadata_object(
         metadata: Option<serde_json::Value>,
     ) -> serde_json::Value {
@@ -2295,9 +2420,27 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             config.remote_ssh_host.as_deref(),
         )?;
         config.workspace_id = Self::resolve_workspace_id_for_config(&config).await;
+        let agent_type = Self::normalize_agent_type(&agent_type);
+        let workspace_binding = Self::build_workspace_binding(&config).await;
+        let external_workspace_root =
+            crate::agentic::workspace::session_execution_workspace_root(&config);
+        let external_sources_supported = workspace_binding
+            .as_ref()
+            .is_some_and(|workspace| !workspace.is_remote());
+        let primary_agent_binding = Self::resolve_primary_agent_for_workspace(
+            &agent_type,
+            external_workspace_root,
+            external_sources_supported,
+            None,
+        )
+        .await?;
+        config.agent_route_owner = primary_agent_binding.route_owner;
+        apply_primary_agent_model_default(
+            &mut config,
+            primary_agent_binding.model_binding.as_ref(),
+        );
         let defaults = Self::agent_model_defaults().await;
         snapshot_normal_session_model(&mut config, &defaults);
-        let agent_type = Self::normalize_agent_type(&agent_type);
         let session = if transient {
             self.session_manager
                 .create_transient_session_with_id_and_details(
@@ -3324,11 +3467,23 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                     })?;
             }
 
+            let effective_agent_type = Self::normalize_agent_type(agent_type.trim());
+            let session_workspace = Self::build_workspace_binding(&session.config).await;
+            let primary_agent_binding = Self::resolve_session_primary_agent(
+                &session,
+                &effective_agent_type,
+                &session_workspace,
+            )
+            .await?;
+            let primary_runtime_agent_key = primary_agent_binding.runtime_agent_key.clone();
+            let primary_route_owner = primary_agent_binding.route_owner;
+            let primary_agent_generation_lease = primary_agent_binding.lease;
+
             let binding = get_agent_registry()
             .resolve_external_subagent_for_fresh_invocation(
                 &logical_id,
                 &ecosystem_id,
-                Some(Path::new(&project_workspace_path)),
+                Some(Path::new(&execution_workspace_path)),
             )
             .ok_or_else(|| {
                 BitFunError::Validation(format!(
@@ -3342,15 +3497,21 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 )
             })?;
 
-            let effective_agent_type = Self::normalize_agent_type(agent_type.trim());
             let permission_runtime_ceiling =
-                crate::agentic::permission_policy::load_parent_permission_runtime_ceiling(Some(
-                    &effective_agent_type,
-                ))
+                crate::agentic::permission_policy::load_parent_permission_runtime_ceiling(
+                    Some(&primary_runtime_agent_key),
+                    Some(Path::new(&execution_workspace_path)),
+                )
                 .await?;
-            if session.agent_type != effective_agent_type {
+            if session.agent_type != effective_agent_type
+                || session.config.agent_route_owner != primary_route_owner
+            {
                 self.session_manager
-                    .update_session_agent_type(&session_id, &effective_agent_type)
+                    .update_session_agent_binding(
+                        &session_id,
+                        &effective_agent_type,
+                        primary_route_owner,
+                    )
                     .await?;
             }
             let display_input = original_user_input
@@ -3486,6 +3647,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             tokio::spawn(async move {
                 let _execution_lease = execution_lease;
                 let _turn_settlement_registration = turn_settlement_registration;
+                let _primary_agent_generation_lease = primary_agent_generation_lease;
                 let _cancel_guard = CancelTokenGuard {
                     execution_engine: Arc::clone(&coordinator.execution_engine),
                     dialog_turn_id: turn_id.clone(),
@@ -4528,6 +4690,16 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             )));
         }
 
+        let manual_workspace = Self::build_workspace_binding(&initial_session.config).await;
+        let primary_agent_binding = Self::resolve_session_primary_agent(
+            &initial_session,
+            &initial_session.agent_type,
+            &manual_workspace,
+        )
+        .await?;
+        let runtime_agent_type = primary_agent_binding.runtime_agent_key;
+        let external_agent_generation_lease = primary_agent_binding.lease;
+
         self.commit_session_revert_before_persisted_turn_locked(&session_id, "Manual compaction")
             .await?;
         let user_message_metadata = Some(Self::manual_compaction_metadata());
@@ -4591,6 +4763,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
 
         tokio::spawn(async move {
             let _execution_lease = execution_lease;
+            let _external_agent_generation_lease = external_agent_generation_lease;
             let _settlement = settlement;
             let _control_guard = control_guard;
             let result = Self::execute_manual_compaction_task(
@@ -4602,6 +4775,8 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 session_id_for_task,
                 turn_id_for_task,
                 turn_index,
+                runtime_agent_type,
+                manual_workspace,
                 terminal_port,
                 remote_exec_port,
                 cancellation_token,
@@ -4708,18 +4883,19 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         session_id: String,
         turn_id: String,
         turn_index: usize,
+        runtime_agent_type: String,
+        manual_workspace: Option<WorkspaceBinding>,
         terminal_port: Option<Arc<dyn TerminalPort>>,
         remote_exec_port: Option<Arc<dyn RemoteExecPort>>,
         cancellation_token: CancellationToken,
         commit_gate: Arc<ManualCompactionCommitGate>,
     ) -> BitFunResult<()> {
-        let manual_workspace = Self::build_workspace_binding(&session.config).await;
         let manual_workspace_services = Self::build_workspace_services(&manual_workspace).await;
         let manual_execution_context = ExecutionContext {
             session_id: session_id.clone(),
             dialog_turn_id: turn_id.clone(),
             turn_index,
-            agent_type: session.agent_type.clone(),
+            agent_type: runtime_agent_type,
             workspace: manual_workspace,
             context: HashMap::new(),
             subagent_parent_info: None,
@@ -4936,6 +5112,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             }
         };
         self.ensure_session_runtime_ownership(&session_id, None)?;
+        let session_workspace = Self::build_workspace_binding(&session.config).await;
 
         let previous_agent_type = session.last_user_dialog_agent_type.clone();
         let requested_agent_type = agent_type.trim().to_string();
@@ -4947,6 +5124,14 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             "agentic".to_string()
         };
         let effective_agent_type = Self::normalize_agent_type(&provisional_agent_type);
+        let primary_agent_binding = Self::resolve_session_primary_agent(
+            &session,
+            &effective_agent_type,
+            &session_workspace,
+        )
+        .await?;
+        let runtime_agent_type = primary_agent_binding.runtime_agent_key.clone();
+        let external_agent_generation_lease = primary_agent_binding.lease;
 
         Self::track_session_workspace_activity_best_effort(
             &session.config,
@@ -4974,9 +5159,15 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             submission_policy.queue_priority
         );
 
-        if session.agent_type != effective_agent_type {
+        if session.agent_type != effective_agent_type
+            || session.config.agent_route_owner != primary_agent_binding.route_owner
+        {
             self.session_manager
-                .update_session_agent_type(&session_id, &effective_agent_type)
+                .update_session_agent_binding(
+                    &session_id,
+                    &effective_agent_type,
+                    primary_agent_binding.route_owner,
+                )
                 .await?;
         }
 
@@ -5203,8 +5394,6 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             user_message_metadata = Some(metadata);
         }
 
-        let session_workspace = Self::build_workspace_binding(&session.config).await;
-
         // Build WorkspaceServices based on the workspace type
         let workspace_services = Self::build_workspace_services(&session_workspace).await;
 
@@ -5268,7 +5457,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             .wrap_user_input(
                 &session_id,
                 turn_index,
-                &effective_agent_type,
+                &runtime_agent_type,
                 previous_agent_type
                     .as_deref()
                     .map(str::trim)
@@ -5605,10 +5794,15 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         let user_input_for_workspace = effective_user_input.clone();
         let session_storage_path_for_finalize = session_storage_path.clone();
         let effective_agent_type_clone = effective_agent_type.clone();
+        let runtime_agent_type_clone = runtime_agent_type;
         let user_message_metadata_clone = user_message_metadata;
         let scheduler_notify_tx = self.scheduler_notify_tx.get().cloned();
 
         tokio::spawn(async move {
+            // Keep the exact approved external prompt/tool/permission/model
+            // generation alive for the whole turn. Source updates affect only
+            // the next turn.
+            let _external_agent_generation_lease = external_agent_generation_lease;
             // Keep exact turn settlement pending until every tail write in
             // this spawned task has completed.
             let _turn_settlement_registration = turn_settlement_registration;
@@ -5689,11 +5883,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             }
 
             let workspace_turn_status = match execution_engine
-                .execute_dialog_turn(
-                    effective_agent_type_clone.clone(),
-                    messages,
-                    execution_context,
-                )
+                .execute_dialog_turn(runtime_agent_type_clone, messages, execution_context)
                 .await
             {
                 Ok(execution_result) => Some(
@@ -10291,18 +10481,6 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         Ok(normalized)
     }
 
-    pub async fn update_session_agent_type(
-        &self,
-        session_id: &str,
-        agent_type: &str,
-    ) -> BitFunResult<()> {
-        self.ensure_session_runtime_ownership(session_id, None)?;
-        let normalized = Self::normalize_agent_type(agent_type);
-        self.session_manager
-            .update_session_agent_type(session_id, &normalized)
-            .await
-    }
-
     pub async fn update_session_mode(&self, session_id: &str, mode_id: &str) -> BitFunResult<()> {
         self.ensure_session_runtime_ownership(session_id, None)?;
         let mode_id = mode_id.trim();
@@ -10312,19 +10490,26 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             ));
         }
 
-        let mode_exists = get_agent_registry()
-            .get_modes_info()
-            .await
-            .into_iter()
-            .any(|mode| mode.id == mode_id);
-        if !mode_exists {
-            return Err(BitFunError::Validation(format!(
-                "Unknown session mode: {mode_id}"
-            )));
-        }
+        let session = self
+            .session_manager
+            .get_session(session_id)
+            .ok_or_else(|| BitFunError::NotFound(format!("Session not found: {session_id}")))?;
+        let workspace = Self::build_workspace_binding(&session.config).await;
+        let workspace_root =
+            crate::agentic::workspace::session_execution_workspace_root(&session.config);
+        let external_sources_supported = workspace
+            .as_ref()
+            .is_some_and(|workspace| !workspace.is_remote());
+        let binding = Self::resolve_primary_agent_for_workspace(
+            mode_id,
+            workspace_root,
+            external_sources_supported,
+            None,
+        )
+        .await?;
 
         self.session_manager
-            .update_session_agent_type(session_id, mode_id)
+            .update_session_agent_binding(session_id, mode_id, binding.route_owner)
             .await
     }
 
@@ -12401,8 +12586,9 @@ fn merge_prepended_messages_for_turn(
 #[cfg(test)]
 mod tests {
     use super::{
-        btw_session_memory_mode, build_subagent_session_relationship,
-        lineage_active_turn_after_transcript, lineage_post_admission_cancellation_error,
+        apply_primary_agent_model_default, btw_session_memory_mode,
+        build_subagent_session_relationship, lineage_active_turn_after_transcript,
+        lineage_post_admission_cancellation_error,
         lineage_session_is_settling_without_active_state, logical_subagent_type_or_runtime,
         merge_prepended_messages_for_turn, normalize_subagent_max_concurrency,
         resolve_agent_session_create_created_by, resolve_agent_submission_turn_id,
@@ -12421,8 +12607,8 @@ mod tests {
     };
     use crate::agentic::core::{
         InternalReminderKind, Message, MessageContent, MessageRole, MessageSemanticKind,
-        ProcessingPhase, SessionConfig, SessionContinuationPolicy, SessionKind,
-        SessionModelBindingPolicy, SessionState, ToolCall, TurnStats,
+        ProcessingPhase, SessionAgentRouteOwner, SessionConfig, SessionContinuationPolicy,
+        SessionKind, SessionModelBindingPolicy, SessionState, ToolCall, TurnStats,
     };
     use crate::agentic::events::{AgenticEvent, EventQueue, EventQueueConfig, EventRouter};
     use crate::agentic::execution::{
@@ -12449,6 +12635,61 @@ mod tests {
     use bitfun_agent_runtime::permission::PermissionRequestManager;
     use bitfun_runtime_services::test_support::FakeRuntimePort;
     use bitfun_services_core::permission_store::ProjectPermissionSqliteStore;
+
+    #[test]
+    fn external_command_delegation_uses_the_resolved_primary_binding() {
+        let source = include_str!("coordinator.rs").replace("\r\n", "\n");
+        let delegation = source
+            .split_once("pub(crate) fn start_external_subagent_delegation_turn(")
+            .expect("external command delegation entry")
+            .1
+            .split_once("pub async fn start_dialog_turn_with_prepended_messages(")
+            .expect("external command delegation boundary")
+            .0;
+
+        assert!(delegation.contains("Self::resolve_session_primary_agent("));
+        assert!(delegation.contains("Some(&primary_runtime_agent_key)"));
+        assert!(delegation.contains(".update_session_agent_binding("));
+        assert!(!delegation.contains(".update_session_agent_type("));
+        assert!(delegation
+            .contains("let _primary_agent_generation_lease = primary_agent_generation_lease;"));
+    }
+
+    #[test]
+    fn external_primary_fixed_model_is_only_a_creation_default() {
+        let fixed = ExternalSubagentModelBinding::Fixed {
+            model_id: "provider/profile-model".to_string(),
+            configuration_fingerprint: "fingerprint".to_string(),
+        };
+
+        let mut omitted = SessionConfig::default();
+        apply_primary_agent_model_default(&mut omitted, Some(&fixed));
+        assert_eq!(omitted.model_id.as_deref(), Some("provider/profile-model"));
+
+        let mut automatic = SessionConfig {
+            model_id: Some("auto".to_string()),
+            ..SessionConfig::default()
+        };
+        apply_primary_agent_model_default(&mut automatic, Some(&fixed));
+        assert_eq!(
+            automatic.model_id.as_deref(),
+            Some("provider/profile-model")
+        );
+
+        let mut explicit = SessionConfig {
+            model_id: Some("provider/user-model".to_string()),
+            ..SessionConfig::default()
+        };
+        apply_primary_agent_model_default(&mut explicit, Some(&fixed));
+        assert_eq!(explicit.model_id.as_deref(), Some("provider/user-model"));
+
+        let mut inherited = SessionConfig::default();
+        apply_primary_agent_model_default(
+            &mut inherited,
+            Some(&ExternalSubagentModelBinding::InheritParent),
+        );
+        assert_eq!(inherited.model_id, None);
+    }
 
     #[test]
     fn terminal_persisted_turn_is_not_replayed_as_active() {
@@ -12718,6 +12959,110 @@ mod tests {
 
         assert!(gate.try_begin_commit());
         assert!(!gate.try_cancel());
+    }
+
+    #[tokio::test]
+    async fn manual_compaction_fails_closed_before_admission_when_external_agent_is_unavailable() {
+        let (coordinator, session_manager) = test_persistent_coordinator();
+        let workspace = tempfile::tempdir().expect("workspace");
+        let session_id = format!("external-compact-{}", uuid::Uuid::new_v4());
+        let external_agent_id = format!("missing-external-{}", uuid::Uuid::new_v4());
+        session_manager
+            .create_session_with_id(
+                Some(session_id.clone()),
+                "External compaction".to_string(),
+                external_agent_id.clone(),
+                SessionConfig {
+                    workspace_path: Some(workspace.path().to_string_lossy().into_owned()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("create session");
+        session_manager
+            .update_session_agent_binding(
+                &session_id,
+                &external_agent_id,
+                SessionAgentRouteOwner::External,
+            )
+            .await
+            .expect("persist external route owner");
+
+        let error = match coordinator
+            .start_manual_compaction_task(session_id.clone(), None)
+            .await
+        {
+            Ok(_) => panic!("manual compaction must not bypass an unavailable external route"),
+            Err(error) => error,
+        };
+
+        assert!(error.to_string().contains("candidate_unavailable"));
+        let session = session_manager
+            .get_session(&session_id)
+            .expect("session remains loaded");
+        assert!(matches!(session.state, SessionState::Idle));
+        assert!(session.dialog_turn_ids.is_empty());
+    }
+
+    #[tokio::test]
+    async fn explicit_agent_change_switches_owner_but_case_variant_does_not() {
+        let (_coordinator, session_manager) = test_persistent_coordinator();
+        let workspace = tempfile::tempdir().expect("workspace");
+        let session_id = format!("external-to-local-{}", uuid::Uuid::new_v4());
+        let external_agent_id = format!("external-profile-{}", uuid::Uuid::new_v4());
+        session_manager
+            .create_session_with_id(
+                Some(session_id.clone()),
+                "External to local".to_string(),
+                external_agent_id.clone(),
+                SessionConfig {
+                    workspace_path: Some(workspace.path().to_string_lossy().into_owned()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("create session");
+        session_manager
+            .update_session_agent_binding(
+                &session_id,
+                &external_agent_id,
+                SessionAgentRouteOwner::External,
+            )
+            .await
+            .expect("persist external route owner");
+        let session = session_manager
+            .get_session(&session_id)
+            .expect("session remains loaded");
+        let workspace = ConversationCoordinator::build_workspace_binding(&session.config).await;
+
+        let binding =
+            ConversationCoordinator::resolve_session_primary_agent(&session, "agentic", &workspace)
+                .await
+                .expect(
+                    "explicitly selected local mode should resolve independently of the old owner",
+                );
+
+        assert_eq!(binding.runtime_agent_key, "agentic");
+        assert_eq!(binding.route_owner, SessionAgentRouteOwner::Local);
+
+        session_manager
+            .update_session_agent_binding(&session_id, "AGENTIC", SessionAgentRouteOwner::External)
+            .await
+            .expect("persist case-variant external route owner");
+        let case_variant_session = session_manager
+            .get_session(&session_id)
+            .expect("case-variant session remains loaded");
+        let error = match ConversationCoordinator::resolve_session_primary_agent(
+            &case_variant_session,
+            "agentic",
+            &workspace,
+        )
+        .await
+        {
+            Ok(_) => panic!("case variants of the same external identity must remain fail-closed"),
+            Err(error) => error,
+        };
+        assert!(error.to_string().contains("candidate_unavailable"));
     }
 
     #[test]

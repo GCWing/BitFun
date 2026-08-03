@@ -771,14 +771,8 @@ fn materialize_definition(
     let display_name = logical_id.clone();
     let mode = match string_field(fields, "mode", &mut invalid).as_deref() {
         Some("subagent") => ExternalSubagentMode::Subagent,
-        Some("all") | None => {
-            degraded.push("opencode_primary_facet_not_imported".to_string());
-            ExternalSubagentMode::All
-        }
-        Some("primary") => {
-            blocked.push("opencode_primary_agent_not_imported".to_string());
-            ExternalSubagentMode::Primary
-        }
+        Some("all") | None => ExternalSubagentMode::All,
+        Some("primary") => ExternalSubagentMode::Primary,
         Some(_) => {
             invalid.push("opencode_agent_mode_invalid".to_string());
             ExternalSubagentMode::Subagent

@@ -641,10 +641,24 @@ impl DialogScheduler {
         user_message_metadata: Option<serde_json::Value>,
     ) -> Result<(), String> {
         let _operation_guard = self.lock_session_operation(&session_id).await;
+        let session_agent_type = self
+            .resolve_session_agent_type(
+                &session_id,
+                workspace_path.as_deref(),
+                remote_connection_id.as_deref(),
+                remote_ssh_host.as_deref(),
+            )
+            .await?;
+        if session_agent_type != agent_type {
+            debug!(
+                "Background result delivery replaced execution agent key with Session logical route: session_id={}, execution_agent_type={}, session_agent_type={}",
+                session_id, agent_type, session_agent_type
+            );
+        }
         let display = display_content.unwrap_or_else(|| content.clone());
         let delivery = BackgroundResultDelivery {
             session_id: session_id.clone(),
-            agent_type,
+            agent_type: session_agent_type,
             workspace_path,
             remote_connection_id,
             remote_ssh_host,
@@ -2818,6 +2832,40 @@ mod tests {
             .take_pending(session_id, turn_id);
         assert_eq!(pending.len(), 1);
         assert_eq!(scheduler.queue_depth(session_id), 0);
+    }
+
+    #[tokio::test]
+    async fn idle_background_result_uses_the_session_logical_agent_route() {
+        let (scheduler, session_manager, _, root) = test_scheduler();
+        let session_id = "external-parent-session";
+        let workspace = root.path().join("workspace");
+        std::fs::create_dir_all(&workspace).expect("workspace");
+        session_manager
+            .create_session_with_id(
+                Some(session_id.to_string()),
+                "External parent".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.to_string_lossy().into_owned()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("create parent session");
+
+        scheduler
+            .deliver_background_result(
+                session_id.to_string(),
+                "external::opencode::agentic::generation-v1".to_string(),
+                None,
+                None,
+                None,
+                "Background Bash command completed".to_string(),
+                None,
+                None,
+            )
+            .await
+            .expect("lifecycle delivery must follow the persisted logical session route");
     }
 
     fn standard_queued_turn(turn_id: &str) -> QueuedTurn {

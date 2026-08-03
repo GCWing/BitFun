@@ -1278,8 +1278,12 @@ fn safe_subset_is_fail_closed_and_default_tools_are_explicit() {
     );
     assert_eq!(
         find("primaryOnly").compatibility,
-        ExternalSubagentCompatibilityState::Blocked
+        ExternalSubagentCompatibilityState::Blocked,
+        "the source-level ambient permission remains unsupported"
     );
+    assert!(!find("primaryOnly")
+        .diagnostic_codes
+        .contains(&"opencode_primary_agent_not_imported".to_string()));
     assert_eq!(
         find("sampling").compatibility,
         ExternalSubagentCompatibilityState::Blocked
@@ -1288,6 +1292,48 @@ fn safe_subset_is_fail_closed_and_default_tools_are_explicit() {
     assert!(!debug.contains("do-not-leak-this-prompt"));
     assert!(!debug.contains("do-not-leak-value"));
     assert!(!debug.contains("do-not-leak-unknown"));
+}
+
+#[test]
+fn primary_and_all_roles_are_static_agent_profiles_without_role_degradation() {
+    let temp = TempDir::new().unwrap();
+    let workspace = temp.path().join("workspace");
+    fs::create_dir_all(workspace.join(".git")).unwrap();
+    fs::create_dir_all(temp.path().join("user")).unwrap();
+    fs::write(
+        temp.path().join("user/opencode.json"),
+        r#"{
+          "agent": {
+            "primary": { "prompt": "Lead the session", "mode": "primary", "tools": { "read": true } },
+            "both": { "prompt": "Lead or assist", "mode": "all", "tools": { "read": true } },
+            "helper": { "prompt": "Assist only", "mode": "subagent", "tools": { "read": true } }
+          }
+        }"#,
+    )
+    .unwrap();
+
+    let snapshot = discover(&provider(&temp, &workspace), workspace, BTreeSet::new());
+    let find = |id: &str| {
+        snapshot
+            .definitions
+            .iter()
+            .find(|definition| definition.logical_id == id)
+            .unwrap()
+    };
+
+    assert_eq!(find("primary").mode, ExternalSubagentMode::Primary);
+    assert_eq!(find("both").mode, ExternalSubagentMode::All);
+    assert_eq!(find("helper").mode, ExternalSubagentMode::Subagent);
+    for id in ["primary", "both", "helper"] {
+        assert_eq!(
+            find(id).compatibility,
+            ExternalSubagentCompatibilityState::Ready
+        );
+        assert!(!find(id)
+            .diagnostic_codes
+            .iter()
+            .any(|code| code.contains("primary_facet") || code.contains("primary_agent")));
+    }
 }
 
 #[test]

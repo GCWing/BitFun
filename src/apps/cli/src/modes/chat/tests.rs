@@ -49,6 +49,7 @@ mod tests {
         ExternalSourceOperationErrorCode, ExternalSubagentActivationState,
         ExternalToolActivationState,
     };
+
     use bitfun_core::native_hooks::{
         NativeHookFileView, NativeHookHandlerView, NativeHookOverview, NativeHookRuleView,
     };
@@ -58,6 +59,21 @@ mod tests {
     use bitfun_runtime_ports::AgentContextReloadTarget;
     use crossterm::event::Event;
     use std::collections::{BTreeMap, BTreeSet};
+
+    #[test]
+    fn explicit_same_id_agent_selection_rebinds_through_the_runtime_owner() {
+        let source = include_str!("selection.rs").replace("\r\n", "\n");
+        let selection = source
+            .split_once("fn apply_agent_selection(")
+            .expect("agent selection method")
+            .1
+            .split_once("fn poll_session_operation_completion(")
+            .expect("agent selection boundary")
+            .0;
+
+        assert!(selection.contains(".update_session_mode(&task_session_id, &task_mode_id)"));
+        assert!(!selection.contains("selected.id == self.agent_type"));
+    }
 
     #[test]
     fn reload_command_uses_one_closed_optional_target() {
@@ -2652,8 +2668,9 @@ mod tests {
         assert_eq!(steering_unsupported_reason(&plain), None);
 
         let mut referenced = plain.clone();
-        referenced.workspace_references.push(
-            bitfun_agent_runtime::sdk::AgentWorkspaceReference {
+        referenced
+            .workspace_references
+            .push(bitfun_agent_runtime::sdk::AgentWorkspaceReference {
                 path: "src/lib.rs".to_string(),
                 kind: bitfun_agent_runtime::sdk::AgentWorkspaceReferenceKind::File,
                 start_line: None,
@@ -2663,8 +2680,7 @@ mod tests {
                     end: 11,
                     value: "@src/lib.rs".to_string(),
                 },
-            },
-        );
+            });
         assert!(steering_unsupported_reason(&referenced)
             .expect("workspace reference rejection")
             .contains("Workspace references"));

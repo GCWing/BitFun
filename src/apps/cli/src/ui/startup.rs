@@ -56,7 +56,7 @@ use bitfun_core::agentic::tools::implementations::skills::{
 use bitfun_core::product_runtime::CoreAgentRuntimeCompatibility;
 use bitfun_core::service::config::GlobalConfigManager;
 
-use crate::agent::runtime_client::CliAgentRuntimeClient;
+use crate::agent::runtime_client::{CliAgentMode, CliAgentRuntimeClient};
 
 /// Types of popups that can be shown on the startup page
 #[derive(Debug, Clone, PartialEq)]
@@ -213,6 +213,9 @@ pub(crate) struct StartupPage {
     agent_type: String,
     /// Display name of selected model
     model_display_name: String,
+    /// Explicit model chosen for the new Session being composed. Persisted
+    /// defaults and an agent profile remain inputs only until the user chooses.
+    selected_model_id: Option<String>,
     /// Workspace path for display in bottom bar
     workspace_display: String,
     /// Status message (temporarily shown instead of tip)
@@ -293,6 +296,7 @@ impl StartupPage {
             compatibility,
             agent_type: default_agent,
             model_display_name: String::new(),
+            selected_model_id: None,
             workspace_display: workspace.unwrap_or_else(|| {
                 std::env::current_dir()
                     .ok()
@@ -313,6 +317,11 @@ impl StartupPage {
     /// Get the currently selected agent type
     pub(crate) fn agent_type(&self) -> &str {
         &self.agent_type
+    }
+
+    /// Return the model explicitly selected for the new Session, if any.
+    pub(crate) fn selected_model_id(&self) -> Option<&str> {
+        self.selected_model_id.as_deref()
     }
 
     /// Get the current workspace path for this CLI process.
@@ -1576,6 +1585,8 @@ impl StartupPage {
 
     fn show_model_selector(&mut self) {
         self.push_current_popup_to_stack();
+        let profile_model_id = self.selected_agent_mode().and_then(|mode| mode.model_id);
+        let explicitly_selected_model_id = self.selected_model_id.clone();
 
         let result = tokio::task::block_in_place(|| {
             tokio::runtime::Handle::current().block_on(async {
@@ -1585,8 +1596,11 @@ impl StartupPage {
                 let global_config: bitfun_core::service::config::GlobalConfig =
                     config_service.get_config(None).await.ok()?;
 
-                let current_model_id =
-                    crate::model_selection::resolve_mode_model_id(&global_config.ai);
+                let current_model_id = resolve_startup_model_id(
+                    explicitly_selected_model_id,
+                    profile_model_id,
+                    crate::model_selection::resolve_mode_model_id(&global_config.ai),
+                );
 
                 let model_items: Vec<ModelItem> = models
                     .into_iter()
@@ -1616,9 +1630,15 @@ impl StartupPage {
     fn apply_model_selection(&mut self, selected: &ModelItem) {
         let selected_id = selected.id.clone();
         let selected_display_name = format!("{} / {}", selected.model_name, selected.name);
+        let selected_agent_mode = self.selected_agent_mode();
+        let persist_shared_default =
+            should_persist_shared_model_default(selected_agent_mode.as_ref());
 
         let success = tokio::task::block_in_place(|| {
             tokio::runtime::Handle::current().block_on(async {
+                if !persist_shared_default {
+                    return true;
+                }
                 let config_service = match GlobalConfigManager::get_service().await {
                     Ok(s) => s,
                     Err(_) => return false,
@@ -1637,9 +1657,12 @@ impl StartupPage {
         });
 
         if success {
+            self.selected_model_id = Some(selected_id);
             self.model_display_name = selected_display_name.clone();
             self.status = Some(format!("Model switched to: {}", selected_display_name));
-            crate::account_sync::notify_local_settings_changed();
+            if persist_shared_default {
+                crate::account_sync::notify_local_settings_changed();
+            }
         } else {
             self.status = Some("Failed to switch model".to_string());
         }
@@ -2430,12 +2453,21 @@ impl StartupPage {
         self.popup_stack.clear();
     }
 
-    fn get_mode_agents(&self) -> Vec<AgentInfo> {
-        let registry = get_agent_registry();
-        let modes = tokio::task::block_in_place(|| {
-            tokio::runtime::Handle::current().block_on(registry.get_modes_info())
-        });
-        modes
+    fn get_mode_agents(&self) -> Vec<CliAgentMode> {
+        tokio::task::block_in_place(|| {
+            tokio::runtime::Handle::current()
+                .block_on(self.agent.available_agent_modes())
+                .unwrap_or_else(|error| {
+                    tracing::warn!("Failed to load main agent modes: {error}");
+                    Vec::new()
+                })
+        })
+    }
+
+    fn selected_agent_mode(&self) -> Option<CliAgentMode> {
+        self.get_mode_agents()
+            .into_iter()
+            .find(|mode| mode.id == self.agent_type)
     }
 
     fn cycle_agent(&mut self, offset: isize) {
@@ -2458,6 +2490,8 @@ impl StartupPage {
     }
 
     fn load_current_model_name(&mut self) {
+        let explicitly_selected_model_id = self.selected_model_id.clone();
+        let profile_model_id = self.selected_agent_mode().and_then(|mode| mode.model_id);
         let result: Option<String> = tokio::task::block_in_place(|| {
             tokio::runtime::Handle::current().block_on(async {
                 let config_service = GlobalConfigManager::get_service().await.ok()?;
@@ -2466,7 +2500,11 @@ impl StartupPage {
                 let global_config: bitfun_core::service::config::GlobalConfig =
                     config_service.get_config(None).await.ok()?;
 
-                let model_id = crate::model_selection::resolve_mode_model_id(&global_config.ai)?;
+                let model_id = resolve_startup_model_id(
+                    explicitly_selected_model_id,
+                    profile_model_id,
+                    crate::model_selection::resolve_mode_model_id(&global_config.ai),
+                )?;
 
                 fn provider_display_name(
                     model: &bitfun_core::service::config::AIModelConfig,
@@ -2517,10 +2555,66 @@ impl StartupPage {
     }
 }
 
+fn resolve_startup_model_id(
+    explicitly_selected_model_id: Option<String>,
+    profile_model_id: Option<String>,
+    default_model_id: Option<String>,
+) -> Option<String> {
+    explicitly_selected_model_id
+        .or(profile_model_id)
+        .or(default_model_id)
+}
+
+fn should_persist_shared_model_default(mode: Option<&CliAgentMode>) -> bool {
+    mode.is_some_and(|mode| !mode.is_external)
+}
+
 #[cfg(test)]
 mod logo_contract_tests {
     use super::*;
     use ratatui::style::Color;
+
+    #[test]
+    fn explicit_startup_model_overrides_profile_and_default() {
+        assert_eq!(
+            resolve_startup_model_id(
+                Some("explicit".to_string()),
+                Some("profile".to_string()),
+                Some("default".to_string()),
+            )
+            .as_deref(),
+            Some("explicit")
+        );
+        assert_eq!(
+            resolve_startup_model_id(
+                None,
+                Some("profile".to_string()),
+                Some("default".to_string()),
+            )
+            .as_deref(),
+            Some("profile")
+        );
+    }
+
+    #[test]
+    fn external_or_unknown_startup_modes_do_not_change_the_shared_default() {
+        let local = CliAgentMode {
+            id: "agentic".to_string(),
+            description: String::new(),
+            model_id: None,
+            is_external: false,
+        };
+        let external = CliAgentMode {
+            id: "reviewer".to_string(),
+            description: String::new(),
+            model_id: None,
+            is_external: true,
+        };
+
+        assert!(should_persist_shared_model_default(Some(&local)));
+        assert!(!should_persist_shared_model_default(Some(&external)));
+        assert!(!should_persist_shared_model_default(None));
+    }
 
     #[test]
     fn fancy_logo_keeps_line_order_and_color_style_mapping() {

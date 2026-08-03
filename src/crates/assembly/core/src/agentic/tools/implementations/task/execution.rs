@@ -99,6 +99,7 @@ impl TaskTool {
     ) -> BitFunResult<PermissionRuntimeCeiling> {
         crate::agentic::permission_policy::load_parent_permission_runtime_ceiling(
             context.agent_type.as_deref(),
+            context.workspace_root(),
         )
         .await
     }

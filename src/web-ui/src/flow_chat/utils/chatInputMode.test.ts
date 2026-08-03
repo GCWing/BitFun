@@ -463,7 +463,7 @@ describe('resolveAvailableChatInputMode', () => {
     ).toBe('Plan');
   });
 
-  it('falls back to agentic when the current mode is no longer available', () => {
+  it('keeps a persisted unavailable session mode instead of silently replacing its route', () => {
     expect(
       resolveAvailableChatInputMode({
         currentMode: 'PlannerPlus',
@@ -471,10 +471,10 @@ describe('resolveAvailableChatInputMode', () => {
         sessionMode: 'PlannerPlus',
         availableModeIds: ['agentic', 'Team'],
       }),
-    ).toBe('agentic');
+    ).toBeNull();
   });
 
-  it('keeps the current mode when only the session snapshot is stale', () => {
+  it('restores the persisted session mode even while its catalog entry is unavailable', () => {
     expect(
       resolveAvailableChatInputMode({
         currentMode: 'Team',
@@ -482,7 +482,18 @@ describe('resolveAvailableChatInputMode', () => {
         sessionMode: 'PlannerPlus',
         availableModeIds: ['agentic', 'Team'],
       }),
-    ).toBeNull();
+    ).toBe('PlannerPlus');
+  });
+
+  it('restores the persisted session mode while the workspace catalog is loading', () => {
+    expect(
+      resolveAvailableChatInputMode({
+        currentMode: 'agentic',
+        isAssistantWorkspace: false,
+        sessionMode: 'WorkspaceProfile',
+        availableModeIds: [],
+      }),
+    ).toBe('WorkspaceProfile');
   });
 
   it('keeps assistant workspaces pinned to Claw when available', () => {
@@ -507,7 +518,7 @@ describe('resolveAvailableChatInputMode', () => {
     ).toBe('Claw');
   });
 
-  it('falls back to the first available mode when agentic is unavailable', () => {
+  it('does not replace a persisted mode with the first unrelated available mode', () => {
     expect(
       resolveAvailableChatInputMode({
         currentMode: 'PlannerPlus',
@@ -515,7 +526,7 @@ describe('resolveAvailableChatInputMode', () => {
         sessionMode: 'PlannerPlus',
         availableModeIds: ['Team', 'Plan'],
       }),
-    ).toBe('Team');
+    ).toBeNull();
   });
 
   it('uses the user default mode when starting from the internal project default', () => {

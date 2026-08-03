@@ -386,10 +386,15 @@ impl ChatMode {
         chat_view.set_status(Some(format!("Theme set to: {}", theme.id)));
     }
 
-    fn get_mode_agents(&self, rt_handle: &tokio::runtime::Handle) -> Vec<AgentInfo> {
-        let registry = get_agent_registry();
-        let modes = tokio::task::block_in_place(|| rt_handle.block_on(registry.get_modes_info()));
-        modes
+    fn get_mode_agents(&self, rt_handle: &tokio::runtime::Handle) -> Vec<CliAgentMode> {
+        tokio::task::block_in_place(|| {
+            rt_handle
+                .block_on(self.agent.available_agent_modes())
+                .unwrap_or_else(|error| {
+                    tracing::warn!("Failed to load main agent modes: {error}");
+                    Vec::new()
+                })
+        })
     }
 
     fn cycle_agent(
@@ -706,10 +711,6 @@ impl ChatMode {
         chat_state: &mut ChatState,
         rt_handle: &tokio::runtime::Handle,
     ) {
-        if selected.id == self.agent_type {
-            return;
-        }
-
         if self.pending_session_operation.is_some() {
             chat_view.set_status(Some(
                 "A Session operation is already in progress. Please wait.".to_string(),

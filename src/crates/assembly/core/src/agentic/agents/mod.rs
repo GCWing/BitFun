@@ -23,7 +23,7 @@ pub use bitfun_agent_runtime::custom_agent::{
 };
 use bitfun_runtime_ports::PermissionConstraintLayer;
 pub use definitions::custom::{CustomMode, CustomSubagent, CustomSubagentKind};
-pub(crate) use definitions::external::ExternalProvidedSubagent;
+pub(crate) use definitions::external::ExternalProvidedAgent;
 pub use definitions::hidden::{CodeReviewAgent, DeepReviewAgent, GenerateDocAgent};
 pub use definitions::modes::{
     AgenticMode, ClawMode, CoworkMode, DebugMode, DeepResearchMode, MultitaskMode, PlanMode,
@@ -52,8 +52,9 @@ pub use registry::visibility::{
 };
 pub use registry::{
     get_agent_registry, AgentRegistry, CustomAgentDetail, CustomSubagentDetail,
-    ExternalSubagentGenerationLease, ExternalSubagentInvocationBinding,
-    ExternalSubagentModelBinding, ExternalSubagentRegistration, ExternalSubagentRoute,
+    ExternalPrimaryAgentTurnBinding, ExternalSubagentGenerationLease,
+    ExternalSubagentInvocationBinding, ExternalSubagentModelBinding, ExternalSubagentRegistration,
+    ExternalSubagentRoute,
 };
 use std::any::Any;
 

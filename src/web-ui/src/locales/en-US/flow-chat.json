@@ -680,6 +680,7 @@
       }
     },
     "addBoostTooltip": "Agent modes, image, or skills",
+    "modeChangeFailed": "Failed to change the agent mode. Try again.",
     "permissionMode": {
       "menuLabel": "Permission mode",
       "globalScope": "Global",

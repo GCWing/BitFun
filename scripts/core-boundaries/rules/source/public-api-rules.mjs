@@ -1050,6 +1050,7 @@ export const externalSourceCorePublicApiEntries = [
     'set_external_prompt_command_conflict_choice',
     'external_source_snapshot',
     'external_source_read_only_snapshot',
+    'ensure_external_source_workspace_snapshot',
     'set_external_source_enabled',
     'expand_external_prompt_command',
     'sanitize_external_source_operation_error',

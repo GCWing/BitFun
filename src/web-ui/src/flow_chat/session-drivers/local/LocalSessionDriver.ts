@@ -2,9 +2,10 @@
  * Local session driver: the default flavor backed by this machine's (or the
  * attached peer's) agent runtime via `agentAPI`.
  *
- * Bodies were moved verbatim from SessionModule/MessageModule; behavior is
- * unchanged. Peer Device Mode is invisible here by design — it swaps the
- * transport underneath `api.invoke`, so this driver must never consult it.
+ * Peer Device Mode is invisible here by design: it swaps the transport
+ * underneath `api.invoke`, so this driver must never consult it. Session
+ * creation sends only an explicit model selection and projects the Runtime's
+ * authoritative resolved model from the response.
  */
 
 import { agentAPI } from '@/infrastructure/api/service-api/AgentAPI';
@@ -32,7 +33,6 @@ import {
 } from '../../events/flowchatNavigation';
 import {
   getModelMaxTokens,
-  resolveModelForSessionCreation,
 } from '../../utils/modelResolution';
 import { syncSessionModelSelection } from '../../utils/modelSync';
 import { markCurrentTurnItemsAsCancelled } from '../../utils/turnCancellation';
@@ -63,13 +63,7 @@ export const localSessionDriver: SessionDriver = {
       remoteSshHost,
     } = seed;
 
-    const sessionModelName = await resolveModelForSessionCreation(config.modelName);
-    const maxContextTokens = await getModelMaxTokens(sessionModelName, agentType);
-    const mergedConfig: SessionConfig = {
-      ...config,
-      modelName: sessionModelName,
-      workspaceId: workspaceId ?? config.workspaceId,
-    };
+    const explicitModelName = config.modelName?.trim() || undefined;
 
     const response = await agentAPI.createSession({
       sessionName,
@@ -78,20 +72,27 @@ export const localSessionDriver: SessionDriver = {
       projectWorkspacePath,
       executionTarget: config.executionTargetRequest,
       requestId: globalThis.crypto?.randomUUID?.() ?? `worktree-${Date.now()}-${Math.random()}`,
-      workspaceId: mergedConfig.workspaceId,
+      workspaceId: workspaceId ?? config.workspaceId,
       remoteConnectionId,
       remoteSshHost,
       config: {
-        modelName: sessionModelName,
+        modelName: explicitModelName,
         enableTools: true,
         safeMode: true,
         autoCompact: true,
-        maxContextTokens: maxContextTokens,
         enableContextCompression: true,
         remoteConnectionId,
         remoteSshHost,
       }
     });
+
+    const sessionModelName = response.modelId ?? explicitModelName;
+    const maxContextTokens = await getModelMaxTokens(sessionModelName, agentType);
+    const mergedConfig: SessionConfig = {
+      ...config,
+      modelName: sessionModelName,
+      workspaceId: workspaceId ?? config.workspaceId,
+    };
 
     const effectiveWorkspacePath =
       response.workspacePath || response.executionTarget?.rootPath || workspacePath;

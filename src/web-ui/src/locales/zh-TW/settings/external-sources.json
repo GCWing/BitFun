@@ -248,7 +248,11 @@
     "enable": "啟用 Agent",
     "reviewTitle": "查看 {{name}} 的執行設定",
     "approvalWarning": "啟用後，此 Agent 可以讓所選模型呼叫上方工具。其指令、模型、工具或設定來源變更時，BitFun 會要求你再次確認。",
-    "singleRun": "單次執行，不支援追問",
+    "role": {
+      "primary": "主工作階段",
+      "subagent": "單次任務，不支援追問",
+      "all": "主工作階段和單次任務"
+    },
     "modelUnavailable": "無法使用",
     "modelResolvedFromParentAtTaskStart": "任務開始時從父工作階段解析",
     "requestedModel": "來源宣告：{{model}}",

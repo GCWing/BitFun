@@ -1,9 +1,13 @@
 use super::types::{AgentCategory, AgentEntry, AgentInfo, AgentSource, SubAgentSource};
 use super::AgentRegistry;
 use crate::agentic::agents::{Agent, SubagentVisibilityPolicy};
+use crate::agentic::workspace::canonical_local_workspace_path;
 use bitfun_agent_runtime::prompt_cache::prompt_cache_scope_key;
-use bitfun_core_types::{SessionContinuationPolicy, SessionModelBindingPolicy};
+use bitfun_core_types::{
+    SessionAgentRouteOwner, SessionContinuationPolicy, SessionModelBindingPolicy,
+};
 use bitfun_product_domains::external_sources::EcosystemId;
+use bitfun_product_domains::external_subagents::ExternalSubagentMode;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock, Weak};
@@ -50,7 +54,23 @@ pub struct ExternalSubagentRegistration {
     pub provider_label: String,
     pub model_binding: ExternalSubagentModelBinding,
     pub hidden: bool,
+    pub mode: ExternalSubagentMode,
     pub agent: Arc<dyn Agent>,
+}
+
+#[derive(Clone, Copy)]
+enum ExternalAgentProjection {
+    Primary,
+    Subagent,
+}
+
+impl ExternalAgentProjection {
+    fn is_supported_by(self, mode: ExternalSubagentMode) -> bool {
+        match self {
+            Self::Primary => mode.supports_primary(),
+            Self::Subagent => mode.supports_subagent(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -142,12 +162,16 @@ impl ExternalSubagentRegistryState {
         self: &Arc<Self>,
         runtime_key: &str,
         expected_ecosystem_id: Option<&EcosystemId>,
+        projection: ExternalAgentProjection,
     ) -> Option<ExternalSubagentInvocationBinding> {
         let mut generations = self.write_generations();
         let entry = generations.get_mut(runtime_key)?;
         if expected_ecosystem_id
             .is_some_and(|expected| expected != &entry.registration.ecosystem_id)
         {
+            return None;
+        }
+        if !projection.is_supported_by(entry.registration.mode) {
             return None;
         }
         entry.lease_count = entry.lease_count.saturating_add(1);
@@ -166,7 +190,30 @@ impl ExternalSubagentRegistryState {
     }
 
     fn acquire(self: &Arc<Self>, runtime_key: &str) -> Option<ExternalSubagentInvocationBinding> {
-        self.acquire_matching(runtime_key, None)
+        self.acquire_matching(runtime_key, None, ExternalAgentProjection::Subagent)
+    }
+
+    fn acquire_primary(
+        self: &Arc<Self>,
+        runtime_key: &str,
+    ) -> Option<ExternalPrimaryAgentTurnBinding> {
+        let mut generations = self.write_generations();
+        let entry = generations.get_mut(runtime_key)?;
+        if !entry.registration.mode.supports_primary() {
+            return None;
+        }
+        entry.lease_count = entry.lease_count.saturating_add(1);
+        let model_binding = entry.registration.model_binding.clone();
+        Some(ExternalPrimaryAgentTurnBinding {
+            runtime_agent_key: runtime_key.to_string(),
+            model_binding: Some(model_binding.clone()),
+            route_owner: SessionAgentRouteOwner::External,
+            lease: Some(ExternalSubagentGenerationLease {
+                state: Arc::downgrade(self),
+                runtime_key: runtime_key.to_string(),
+                model_binding,
+            }),
+        })
     }
 
     fn release(&self, runtime_key: &str) {
@@ -231,6 +278,13 @@ pub struct ExternalSubagentInvocationBinding {
     pub lease: Option<ExternalSubagentGenerationLease>,
 }
 
+pub struct ExternalPrimaryAgentTurnBinding {
+    pub runtime_agent_key: String,
+    pub model_binding: Option<ExternalSubagentModelBinding>,
+    pub route_owner: SessionAgentRouteOwner,
+    pub lease: Option<ExternalSubagentGenerationLease>,
+}
+
 impl AgentRegistry {
     /// Returns whether the logical id is owned by an external route in the
     /// requested workspace. `Unavailable` remains externally owned so a
@@ -249,8 +303,9 @@ impl AgentRegistry {
             )
         };
         workspace_root.is_some_and(|workspace| {
+            let workspace = canonical_local_workspace_path(workspace);
             routes
-                .get(workspace)
+                .get(&workspace)
                 .and_then(|workspace_routes| workspace_routes.get(&logical_key))
                 .is_some_and(is_external)
         })
@@ -262,6 +317,7 @@ impl AgentRegistry {
         registrations: Vec<ExternalSubagentRegistration>,
         routes: BTreeMap<String, ExternalSubagentRoute>,
     ) {
+        let workspace_root = canonical_local_workspace_path(workspace_root);
         {
             let mut generations = self.external_subagents.write_generations();
             for registration in registrations {
@@ -294,7 +350,7 @@ impl AgentRegistry {
         let previous = self
             .external_subagents
             .read_routes()
-            .get(workspace_root)
+            .get(&workspace_root)
             .cloned()
             .unwrap_or_default();
         // An active external implementation disappearing must never expose a
@@ -313,14 +369,15 @@ impl AgentRegistry {
         }
         self.external_subagents
             .write_routes()
-            .insert(workspace_root.to_path_buf(), routes);
+            .insert(workspace_root, routes);
         self.external_subagents.prune_unrouted_generations();
     }
 
     pub fn release_external_subagent_workspace(&self, workspace_root: &Path) {
+        let workspace_root = canonical_local_workspace_path(workspace_root);
         self.external_subagents
             .write_routes()
-            .remove(workspace_root);
+            .remove(&workspace_root);
         self.external_subagents.prune_unrouted_generations();
     }
 
@@ -333,10 +390,11 @@ impl AgentRegistry {
         let logical_key = normalize_external_logical_id(logical_id);
         if external_sources_supported {
             if let Some(workspace_root) = workspace_root {
+                let workspace_key = canonical_local_workspace_path(workspace_root);
                 if let Some(route) = self
                     .external_subagents
                     .read_routes()
-                    .get(workspace_root)
+                    .get(&workspace_key)
                     .and_then(|routes| routes.get(&logical_key))
                     .cloned()
                 {
@@ -356,6 +414,51 @@ impl AgentRegistry {
             .map(|entry| local_binding(logical_id, entry.agent.id()))
     }
 
+    /// Resolve a user-facing main-agent id to the exact generation that owns
+    /// the next turn. The returned lease keeps prompt, tools, permissions, and
+    /// model metadata stable until that turn settles.
+    pub fn resolve_primary_agent_for_turn(
+        &self,
+        logical_id: &str,
+        workspace_root: Option<&Path>,
+        external_sources_supported: bool,
+        expected_owner: Option<SessionAgentRouteOwner>,
+    ) -> Option<ExternalPrimaryAgentTurnBinding> {
+        let logical_key = normalize_external_logical_id(logical_id);
+        if external_sources_supported {
+            if let Some(workspace_root) = workspace_root {
+                let workspace_key = canonical_local_workspace_path(workspace_root);
+                if let Some(route) = self
+                    .external_subagents
+                    .read_routes()
+                    .get(&workspace_key)
+                    .and_then(|routes| routes.get(&logical_key))
+                    .cloned()
+                {
+                    let binding = match route {
+                        ExternalSubagentRoute::Local => self
+                            .find_agent_entry(logical_id, Some(workspace_root))
+                            .filter(|entry| entry.category == AgentCategory::Mode)
+                            .map(|entry| local_primary_binding(entry.agent.id())),
+                        ExternalSubagentRoute::External(runtime_key) => {
+                            self.external_subagents.acquire_primary(&runtime_key)
+                        }
+                        ExternalSubagentRoute::Unavailable => None,
+                    };
+                    return binding.filter(|binding| {
+                        expected_owner.is_none_or(|owner| binding.route_owner == owner)
+                    });
+                }
+            }
+        }
+        if expected_owner == Some(SessionAgentRouteOwner::External) {
+            return None;
+        }
+        self.find_agent_entry(logical_id, workspace_root)
+            .filter(|entry| entry.category == AgentCategory::Mode)
+            .map(|entry| local_primary_binding(entry.agent.id()))
+    }
+
     /// Resolve only the currently approved external route for an exact
     /// ecosystem. Command delegation must never fall back to a same-name local
     /// agent or cross an ecosystem boundary after the command was expanded.
@@ -366,17 +469,22 @@ impl AgentRegistry {
         workspace_root: Option<&Path>,
     ) -> Option<ExternalSubagentInvocationBinding> {
         let workspace_root = workspace_root?;
+        let workspace_key = canonical_local_workspace_path(workspace_root);
         let logical_key = normalize_external_logical_id(logical_id);
         let route = self
             .external_subagents
             .read_routes()
-            .get(workspace_root)
+            .get(&workspace_key)
             .and_then(|routes| routes.get(&logical_key))
             .cloned()?;
         match route {
-            ExternalSubagentRoute::External(runtime_key) => self
-                .external_subagents
-                .acquire_matching(&runtime_key, Some(ecosystem_id)),
+            ExternalSubagentRoute::External(runtime_key) => {
+                self.external_subagents.acquire_matching(
+                    &runtime_key,
+                    Some(ecosystem_id),
+                    ExternalAgentProjection::Subagent,
+                )
+            }
             ExternalSubagentRoute::Local | ExternalSubagentRoute::Unavailable => None,
         }
     }
@@ -386,10 +494,11 @@ impl AgentRegistry {
         workspace_root: &Path,
         mut local: Vec<AgentInfo>,
     ) -> Vec<AgentInfo> {
+        let workspace_root = canonical_local_workspace_path(workspace_root);
         let routes = self
             .external_subagents
             .read_routes()
-            .get(workspace_root)
+            .get(&workspace_root)
             .cloned()
             .unwrap_or_default();
         let generations = self.external_subagents.read_generations();
@@ -404,10 +513,47 @@ impl AgentRegistry {
                     let Some(entry) = generations.get(&runtime_key) else {
                         continue;
                     };
-                    if entry.registration.hidden {
+                    if entry.registration.hidden || !entry.registration.mode.supports_subagent() {
                         continue;
                     }
-                    local.push(external_agent_info(entry));
+                    local.push(external_agent_info(
+                        entry,
+                        ExternalAgentProjection::Subagent,
+                    ));
+                }
+            }
+        }
+        local
+    }
+
+    pub(super) fn apply_external_routes_to_modes(
+        &self,
+        workspace_root: &Path,
+        mut local: Vec<AgentInfo>,
+    ) -> Vec<AgentInfo> {
+        let workspace_root = canonical_local_workspace_path(workspace_root);
+        let routes = self
+            .external_subagents
+            .read_routes()
+            .get(&workspace_root)
+            .cloned()
+            .unwrap_or_default();
+        let generations = self.external_subagents.read_generations();
+        for (logical_id, route) in routes {
+            match route {
+                ExternalSubagentRoute::Local => {}
+                ExternalSubagentRoute::Unavailable => {
+                    local.retain(|agent| normalize_external_logical_id(&agent.id) != logical_id);
+                }
+                ExternalSubagentRoute::External(runtime_key) => {
+                    local.retain(|agent| normalize_external_logical_id(&agent.id) != logical_id);
+                    let Some(entry) = generations.get(&runtime_key) else {
+                        continue;
+                    };
+                    if entry.registration.hidden || !entry.registration.mode.supports_primary() {
+                        continue;
+                    }
+                    local.push(external_agent_info(entry, ExternalAgentProjection::Primary));
                 }
             }
         }
@@ -430,7 +576,19 @@ fn local_binding(logical_id: &str, runtime_agent_key: &str) -> ExternalSubagentI
     }
 }
 
-fn external_agent_info(entry: &ExternalSubagentGenerationEntry) -> AgentInfo {
+fn local_primary_binding(runtime_agent_key: &str) -> ExternalPrimaryAgentTurnBinding {
+    ExternalPrimaryAgentTurnBinding {
+        runtime_agent_key: runtime_agent_key.to_string(),
+        model_binding: None,
+        route_owner: SessionAgentRouteOwner::Local,
+        lease: None,
+    }
+}
+
+fn external_agent_info(
+    entry: &ExternalSubagentGenerationEntry,
+    projection: ExternalAgentProjection,
+) -> AgentInfo {
     let agent = entry.registration.agent.as_ref();
     let default_tools = agent.default_tools();
     AgentInfo {
@@ -458,7 +616,8 @@ fn external_agent_info(entry: &ExternalSubagentGenerationEntry) -> AgentInfo {
         override_state: None,
         state_reason: None,
         source: AgentSource::External,
-        subagent_source: Some(SubAgentSource::External),
+        subagent_source: matches!(projection, ExternalAgentProjection::Subagent)
+            .then_some(SubAgentSource::External),
         path: None,
         model: entry
             .registration
@@ -466,8 +625,9 @@ fn external_agent_info(entry: &ExternalSubagentGenerationEntry) -> AgentInfo {
             .fixed_model_id()
             .map(str::to_string),
         model_is_explicit: Some(entry.registration.model_binding.fixed_model_id().is_some()),
-        visibility: Some(SubagentVisibilityPolicy::public().summary()),
+        visibility: matches!(projection, ExternalAgentProjection::Subagent)
+            .then(|| SubagentVisibilityPolicy::public().summary()),
         external_provider_label: Some(entry.registration.provider_label.clone()),
-        supports_follow_up: false,
+        supports_follow_up: matches!(projection, ExternalAgentProjection::Primary),
     }
 }

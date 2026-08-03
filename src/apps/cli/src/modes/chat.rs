@@ -35,7 +35,7 @@ use crate::actions::{
     SHARED_TUI_HELP_NOTE,
 };
 use crate::agent::context_reload_client::CliContextReloadClient;
-use crate::agent::runtime_client::{CliAgentRuntimeClient, SessionOperationError};
+use crate::agent::runtime_client::{CliAgentMode, CliAgentRuntimeClient, SessionOperationError};
 use crate::chat_state::{ChatState, ModelTokenUsageSnapshot};
 use crate::config::CliConfig;
 use crate::ui::agent_selector::{AgentItem, AgentSelectorAction};

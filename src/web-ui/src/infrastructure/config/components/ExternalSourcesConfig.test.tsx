@@ -1464,7 +1464,7 @@ describe('ExternalSourcesConfig', () => {
     const details = Array.from(container.querySelectorAll('button')).find((button) =>
       button.textContent?.includes('common.details'));
     await act(async () => details?.click());
-    expect(container.textContent).toContain('agents.singleRun');
+    expect(container.textContent).toContain('agents.role.subagent');
     expect(container.textContent).toContain('fast');
     expect(container.textContent).toContain('Read, Grep');
     expect(container.textContent).toContain('agents.executionDomain');

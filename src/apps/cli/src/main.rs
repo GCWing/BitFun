@@ -899,6 +899,16 @@ async fn run_interactive(
     let compatibility = runtime
         .as_ref()
         .map(|runtime| runtime.compatibility().clone());
+    if !shared {
+        if let Err(error) =
+            bitfun_core::external_sources::ensure_external_source_workspace_snapshot(Some(
+                &workspace_path,
+            ))
+            .await
+        {
+            tracing::warn!("Failed to initialize external agent sources: {error}");
+        }
+    }
     // 3.5 Restore persisted account session (if any)
     if !shared {
         if let Some(user_id) = account::try_restore_session().await {
@@ -950,6 +960,13 @@ async fn run_interactive(
     };
 
     let agent_type = startup_page.agent_type().to_string();
+    if matches!(startup_result, StartupResult::NewSession { .. }) {
+        if let Some(model_id) = startup_page.selected_model_id().map(str::to_string) {
+            agent
+                .ensure_session_with_model(&agent_type, Some(model_id))
+                .await?;
+        }
+    }
     // Use the current project workspace selected at process start.
     let workspace = startup_page.workspace();
     let config = startup_page.config().clone();

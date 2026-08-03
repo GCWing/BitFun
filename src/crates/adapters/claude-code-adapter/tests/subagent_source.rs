@@ -3,7 +3,7 @@ use bitfun_product_domains::external_sources::{
     ExecutionDomainId, ExternalSourceContext, ExternalSourceScope,
 };
 use bitfun_product_domains::external_subagents::{
-    ExternalSubagentCompatibilityState, ExternalSubagentDiscoveryInput,
+    ExternalSubagentCompatibilityState, ExternalSubagentDiscoveryInput, ExternalSubagentMode,
     ExternalSubagentModelProfileRequest, ExternalSubagentModelRequest,
     ExternalSubagentSourceProvider,
 };
@@ -91,6 +91,11 @@ fn nearest_project_agent_overrides_user_agent_without_field_merge() {
     assert_eq!(definition.description, "Nearest");
     assert_eq!(definition.prompt.expose(), "Nearest prompt");
     assert_eq!(definition.provenance.len(), 3);
+    assert_eq!(
+        definition.mode,
+        ExternalSubagentMode::All,
+        "Claude Code agent files can be selected for a main session or delegated as a subagent"
+    );
     assert_eq!(
         definition.requested_model,
         ExternalSubagentModelRequest::Reference {

@@ -7,7 +7,7 @@
 
 use crate::agentic::agents::{
     external_subagent_runtime_key, get_agent_registry, AgentInfo, AgentSource,
-    ExternalProvidedSubagent, ExternalSubagentModelBinding, ExternalSubagentRegistration,
+    ExternalProvidedAgent, ExternalSubagentModelBinding, ExternalSubagentRegistration,
     ExternalSubagentRoute,
 };
 use crate::agentic::tools::registry::get_all_registered_tools;
@@ -16,7 +16,6 @@ use crate::external_sources::safe_external_source_location;
 use crate::external_tools::resolve_external_tool_for_workspace;
 use crate::service::config::global::GlobalConfigManager;
 use crate::service::config::types::{model_runtime_binding_fingerprint, AIConfig, AIModelConfig};
-use crate::service::config::SubagentModelSelection;
 use crate::util::BitFunError;
 use bitfun_external_sources::ExternalSubagentCoordinatorSnapshot;
 use bitfun_product_domains::external_sources::EcosystemId;
@@ -283,7 +282,7 @@ async fn gather_product_facts(
     let registry = get_agent_registry();
     let mut locals = BTreeMap::new();
     for info in registry
-        .get_local_subagents_for_external_resolution(workspace_root)
+        .get_local_agents_for_external_resolution(workspace_root)
         .await
     {
         let logical_key = normalize_logical_id(&info.id);
@@ -293,8 +292,12 @@ async fn gather_product_facts(
             // offering a candidate that the Local route could not execute.
             continue;
         }
-        let model = match ai_config.as_ref() {
-            Some(ai_config) => {
+        let model = match (info.subagent_source, ai_config.as_ref()) {
+            // Main-agent profiles do not own the mutable session model. Their
+            // conflict identity is the profile itself; the user's current
+            // model selection must not invalidate an external-source choice.
+            (None, _) => "main-agent-profile".to_string(),
+            (Some(_), Some(ai_config)) => {
                 let model_selection = registry
                     .get_explicit_subagent_model_selection(&info.id, workspace_root)
                     .unwrap_or_else(|| {
@@ -305,7 +308,7 @@ async fn gather_product_facts(
                 serde_json::to_string(&model_selection)
                     .unwrap_or_else(|_| "unavailable".to_string())
             }
-            None => "configuration-unavailable".to_string(),
+            (Some(_), None) => "configuration-unavailable".to_string(),
         };
         locals.insert(logical_key, local_candidate_fact(&info, &model));
     }
@@ -570,30 +573,6 @@ fn external_model_binding_options(ai_config: &AIConfig) -> Vec<ExternalSubagentM
     options
 }
 
-fn resolve_bitfun_subagent_model(
-    logical_id: &str,
-    ai_config: &AIConfig,
-) -> Option<ResolvedModelFact> {
-    match ai_config
-        .agent_model_defaults
-        .builtin_subagent_selection(logical_id)
-    {
-        SubagentModelSelection::Inherit => None,
-        SubagentModelSelection::Fixed { model_id } => {
-            let requested = model_id.trim();
-            if requested.is_empty() {
-                return None;
-            }
-            let runtime_id = ai_config.resolve_model_selection(requested)?;
-            let model = ai_config
-                .models
-                .iter()
-                .find(|model| model.enabled && model.id == runtime_id)?;
-            Some(resolved_model_fact(model))
-        }
-    }
-}
-
 fn resolve_model_request(
     definition: &ExternalSubagentDefinition,
     ecosystem_id: Option<&EcosystemId>,
@@ -604,11 +583,16 @@ fn resolve_model_request(
     model_bindings: &BTreeMap<String, ExternalSubagentModelBindingTarget>,
 ) -> ResolvedModelRequest {
     let (automatic_model, automatic_method) = match &definition.requested_model {
+        // An omitted external model means "use the caller's current model" in
+        // both OpenCode and Claude Code. It must not be guessed from a
+        // same-name BitFun subagent default: that couples an external profile
+        // to an unrelated local definition and changes behavior on collisions.
         ExternalSubagentModelRequest::Default => (
-            ai_config
-                .and_then(|config| resolve_bitfun_subagent_model(&definition.logical_id, config))
-                .map(ResolvedCandidateModel::Fixed)
-                .unwrap_or(ResolvedCandidateModel::Unavailable),
+            if ai_config.is_some() {
+                ResolvedCandidateModel::InheritParent
+            } else {
+                ResolvedCandidateModel::Unavailable
+            },
             ExternalSubagentModelBindingMethod::Default,
         ),
         ExternalSubagentModelRequest::Inherit => (
@@ -1280,10 +1264,10 @@ fn install_active_candidate(
     // behavior approval. Keep that projection host-owned and stable while the
     // review surface continues to show the source description.
     let runtime_description = format!(
-        "Approved external subagent from {}. Runs as a fresh single-run task.",
+        "Approved external agent profile from {}.",
         candidate.provider_label
     );
-    let agent = Arc::new(ExternalProvidedSubagent::new(
+    let agent = Arc::new(ExternalProvidedAgent::new(
         runtime_key.clone(),
         candidate.definition.display_name.clone(),
         runtime_description,
@@ -1308,6 +1292,7 @@ fn install_active_candidate(
         provider_label: candidate.provider_label.clone(),
         model_binding,
         hidden: candidate.definition.hidden,
+        mode: candidate.definition.mode,
         agent,
     });
     state.routes.insert(
@@ -1330,6 +1315,7 @@ fn summary_for(
         source_keys: candidate.source_keys.clone(),
         source_location_labels: candidate.source_location_labels.clone(),
         source_count: candidate.definition.provenance.len(),
+        mode: candidate.definition.mode,
         requested_model: candidate.definition.requested_model.clone(),
         requested_model_profile: candidate.definition.requested_model_profile.clone(),
         model_binding_method: candidate.model_binding_method,
@@ -1439,6 +1425,7 @@ fn stable_digest(parts: impl IntoIterator<Item = impl AsRef<str>>) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::service::config::SubagentModelSelection;
 
     fn test_active_ecosystems() -> &'static BTreeSet<EcosystemId> {
         static ECOSYSTEMS: std::sync::OnceLock<BTreeSet<EcosystemId>> = std::sync::OnceLock::new();
@@ -1806,35 +1793,42 @@ mod tests {
     }
 
     #[test]
-    fn default_external_model_materializes_an_enabled_authoritative_selection() {
-        let mut config = AIConfig {
-            models: vec![active_model(
-                "model_review",
-                "Anthropic",
-                "anthropic",
-                "claude-sonnet-4",
-            )],
-            ..AIConfig::default()
-        };
-        config.agent_model_defaults.subagents.default_selection =
-            SubagentModelSelection::fixed("model_review");
+    fn omitted_external_model_inherits_without_consulting_local_subagent_defaults() {
+        let mut product_facts = facts();
+        product_facts
+            .ai_config
+            .as_mut()
+            .expect("test AI config")
+            .agent_model_defaults
+            .subagents
+            .default_selection = SubagentModelSelection::fixed("model_fast");
+        let empty_set = BTreeSet::new();
+        let empty_map = BTreeMap::new();
 
-        let resolved = resolve_bitfun_subagent_model("reviewer", &config)
-            .expect("configured subagent default should resolve");
-        assert_eq!(resolved.runtime_id, "model_review");
-        assert_eq!(resolved.display_label, "Anthropic · claude-sonnet-4");
+        let state = reconcile_with_facts(
+            Some(Path::new("C:/repo")),
+            "local-user",
+            &snapshot("behavior-v1", "catalog-v1"),
+            ExternalSubagentDecisions {
+                active_ecosystems: test_active_ecosystems(),
+                approved_envelopes: &empty_set,
+                declined_decisions: &empty_map,
+                conflict_choices: &empty_map,
+                conflict_lineage_current_keys: &empty_map,
+                model_bindings: empty_model_bindings(),
+            },
+            &product_facts,
+        );
 
-        config.agent_model_defaults.subagents.default_selection = SubagentModelSelection::Inherit;
-        assert!(resolve_bitfun_subagent_model("reviewer", &config).is_none());
-
-        config.agent_model_defaults.subagents.default_selection =
-            SubagentModelSelection::fixed("fast");
-        assert!(resolve_bitfun_subagent_model("reviewer", &config).is_none());
-
-        config.agent_model_defaults.subagents.default_selection =
-            SubagentModelSelection::fixed("model_review");
-        config.models[0].enabled = false;
-        assert!(resolve_bitfun_subagent_model("reviewer", &config).is_none());
+        assert_eq!(
+            state.summaries[0].model_binding_method,
+            ExternalSubagentModelBindingMethod::Default
+        );
+        assert_eq!(state.summaries[0].effective_model_label, None);
+        assert_eq!(
+            state.summaries[0].activation_state,
+            ExternalSubagentActivationState::ApprovalRequired
+        );
     }
 
     #[test]
@@ -2420,7 +2414,7 @@ mod tests {
     }
 
     #[test]
-    fn default_model_change_requires_a_new_approval_for_future_invocations() {
+    fn inherited_session_model_changes_do_not_invalidate_source_approval() {
         let empty_set = BTreeSet::new();
         let empty_map = BTreeMap::new();
         let first_facts = facts();
@@ -2464,19 +2458,23 @@ mod tests {
             &updated_facts,
         );
 
-        assert_ne!(
+        assert_eq!(
             first.summaries[0].decision_key,
             updated.summaries[0].decision_key
         );
         assert_eq!(
             updated.summaries[0].activation_state,
-            ExternalSubagentActivationState::ApprovalRequired
+            ExternalSubagentActivationState::Active
         );
-        assert!(updated.registrations.is_empty());
+        assert_eq!(updated.registrations.len(), 1);
+        assert!(matches!(
+            updated.registrations[0].model_binding,
+            ExternalSubagentModelBinding::InheritParent
+        ));
     }
 
     #[test]
-    fn same_model_id_runtime_identity_change_requires_a_new_approval() {
+    fn inherited_model_runtime_identity_changes_do_not_invalidate_source_approval() {
         let empty_set = BTreeSet::new();
         let empty_map = BTreeMap::new();
         let first_facts = facts();
@@ -2516,19 +2514,23 @@ mod tests {
             &updated_facts,
         );
 
-        assert_ne!(
+        assert_eq!(
             first.summaries[0].decision_key,
             updated.summaries[0].decision_key
         );
         assert_eq!(
             updated.summaries[0].activation_state,
-            ExternalSubagentActivationState::ApprovalRequired
+            ExternalSubagentActivationState::Active
         );
-        assert!(updated.registrations.is_empty());
+        assert_eq!(updated.registrations.len(), 1);
+        assert!(matches!(
+            updated.registrations[0].model_binding,
+            ExternalSubagentModelBinding::InheritParent
+        ));
     }
 
     #[test]
-    fn unresolved_default_model_is_blocked_without_exposing_an_internal_placeholder_label() {
+    fn omitted_external_model_remains_inheritable_when_local_subagents_inherit() {
         let empty_set = BTreeSet::new();
         let empty_map = BTreeMap::new();
         let mut unavailable_facts = facts();
@@ -2557,10 +2559,10 @@ mod tests {
 
         assert_eq!(
             state.summaries[0].activation_state,
-            ExternalSubagentActivationState::Blocked
+            ExternalSubagentActivationState::ApprovalRequired
         );
         assert_eq!(state.summaries[0].effective_model_label, None);
-        assert!(state.registrations.is_empty());
+        assert!(state.registrations.is_empty(), "approval is still required");
     }
 
     #[test]

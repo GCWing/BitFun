@@ -83,9 +83,10 @@ pub(crate) async fn dispatch(
         "archive_session" => session::archive_session(state, args).await,
         "touch_session_activity" => session::touch_session_activity(state, args).await,
         "get_session_thread_goal" => session::get_session_thread_goal(state, args).await,
+        "update_session_mode" => session::update_session_mode(state, args).await,
         "update_session_model" => session::update_session_model(state, args).await,
         "ensure_coordinator_session" => session::ensure_coordinator_session(state, args).await,
-        "get_available_modes" => session::get_available_modes().await,
+        "get_available_modes" => session::get_available_modes(state, args).await,
         "get_session_stats" => session::get_session_stats(state, args).await,
         "save_session_turn" => session::save_session_turn(state, args).await,
 

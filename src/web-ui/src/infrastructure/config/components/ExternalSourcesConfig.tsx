@@ -2497,7 +2497,7 @@ const ExternalSourcesConfig: React.FC = () => {
                     <React.Fragment key={agent.candidateId}>
                       <ConfigPageRow
                         label={agent.displayName}
-                        description={`${agent.providerLabel} · ${agent.logicalId} · ${externalAgentEffectiveModelLabel(agent.effectiveModelLabel, agent.modelBindingMethod, t)} · ${t('agents.singleRun')}`}
+                        description={`${agent.providerLabel} · ${agent.logicalId} · ${externalAgentEffectiveModelLabel(agent.effectiveModelLabel, agent.modelBindingMethod, t)} · ${t(`agents.role.${agent.mode ?? 'subagent'}`)}`}
                         align="center"
                       >
                         <div className="bitfun-external-sources-config__source-control" data-bf-component="external-sources-config" data-bf-part="sourceControl">

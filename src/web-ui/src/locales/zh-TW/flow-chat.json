@@ -680,6 +680,7 @@
       }
     },
     "addBoostTooltip": "智能體模式、圖片或 Skill",
+    "modeChangeFailed": "切換智能體模式失敗，請重試。",
     "permissionMode": {
       "menuLabel": "權限模式",
       "globalScope": "全域",

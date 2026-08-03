@@ -1102,6 +1102,8 @@ pub struct AgentSessionCreateResult {
     pub session_name: String,
     pub agent_type: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub workspace_path: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub workspace_id: Option<String>,
@@ -1121,6 +1123,7 @@ impl AgentSessionCreateResult {
             session_id: session_id.into(),
             session_name: session_name.into(),
             agent_type: agent_type.into(),
+            model_id: None,
             workspace_path: None,
             workspace_id: None,
             project_workspace_path: None,
@@ -3204,6 +3207,7 @@ mod tests {
             serde_json::from_value(legacy.clone()).expect("deserialize legacy create result");
 
         assert_eq!(result.workspace_path, None);
+        assert_eq!(result.model_id, None);
         assert_eq!(result.workspace_id, None);
         assert_eq!(result.project_workspace_path, None);
         assert_eq!(result.execution_target, None);
@@ -3219,6 +3223,7 @@ mod tests {
             "sessionId": "session_1",
             "sessionName": "Main",
             "agentType": "agentic",
+            "modelId": "provider/model",
             "workspacePath": "/worktrees/session_1",
             "workspaceId": "workspace_1",
             "projectWorkspacePath": "/workspace/project",
@@ -3238,6 +3243,7 @@ mod tests {
             result.workspace_path.as_deref(),
             Some("/worktrees/session_1")
         );
+        assert_eq!(result.model_id.as_deref(), Some("provider/model"));
         assert_eq!(result.workspace_id.as_deref(), Some("workspace_1"));
         assert_eq!(
             result.project_workspace_path.as_deref(),

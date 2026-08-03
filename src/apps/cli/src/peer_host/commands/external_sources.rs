@@ -76,7 +76,7 @@ fn model_binding_target_field(
     }
 }
 
-async fn workspace_root(
+pub(super) async fn workspace_root(
     state: &PeerHostState,
     request: &Value,
 ) -> ExternalSourceOperationResult<Option<PathBuf>> {

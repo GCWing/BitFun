@@ -15,7 +15,7 @@ import { i18nService } from '@/infrastructure/i18n';
 import { workspaceManager } from '@/infrastructure/services/business/workspaceManager';
 import { isPeerDeviceModeActive } from '@/infrastructure/peer-device/peerModeFlag';
 import { normalizeRemoteWorkspacePath } from '@/shared/utils/pathUtils';
-import { WorkspaceKind, type WorkspaceInfo } from '@/shared/types';
+import { isRemoteWorkspace, WorkspaceKind, type WorkspaceInfo } from '@/shared/types';
 import type {
   FlowChatContext,
   SessionConfig,
@@ -507,7 +507,11 @@ export const resolveAgentTypeForSessionCreation = async (
       return normalizedRequestedMode || 'agentic';
     }
 
-    const availableModes = await agentAPI.getAvailableModes();
+    const availableModes = await agentAPI.getAvailableModes({
+      workspacePath: workspace?.rootPath,
+      remoteConnectionId: isRemoteWorkspace(workspace) ? workspace?.connectionId : undefined,
+      remoteSshHost: isRemoteWorkspace(workspace) ? workspace?.sshHost : undefined,
+    });
     if (availableModes.some(mode => mode.id === configuredDefaultMode)) {
       return configuredDefaultMode;
     }

@@ -248,7 +248,11 @@
     "enable": "Enable agent",
     "reviewTitle": "Review how {{name}} runs",
     "approvalWarning": "Once enabled, this agent can instruct the selected model to use the tools shown above. BitFun asks again if its instructions, model, tools, or configuration sources change.",
-    "singleRun": "One run only; no follow-up",
+    "role": {
+      "primary": "Main sessions",
+      "subagent": "One-run tasks; no follow-up",
+      "all": "Main sessions and one-run tasks"
+    },
     "modelUnavailable": "Unavailable",
     "modelResolvedFromParentAtTaskStart": "Resolved from the parent session when the task starts",
     "requestedModel": "Requested by source: {{model}}",

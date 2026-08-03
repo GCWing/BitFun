@@ -409,21 +409,33 @@ impl ChatMode {
                 // Create new session
                 let agent = self.agent.clone();
                 let agent_type = self.agent_type.clone();
-                let (session_id, workspace_binding) = tokio::task::block_in_place(|| {
-                    rt_handle.block_on(async {
-                        let session_id = agent.ensure_session(&agent_type).await?;
-                        let binding = agent.session_workspace_binding(&session_id).await?;
-                        Ok::<_, anyhow::Error>((session_id, binding))
-                    })
-                })?;
+                let (session_id, workspace_binding, session_summary) =
+                    tokio::task::block_in_place(|| {
+                        rt_handle.block_on(async {
+                            let session_id = agent.ensure_session(&agent_type).await?;
+                            let binding = agent.session_workspace_binding(&session_id).await?;
+                            let summary = agent
+                                .list_sessions()
+                                .await?
+                                .into_iter()
+                                .find(|summary| summary.session_id == session_id)
+                                .ok_or_else(|| {
+                                    anyhow::anyhow!(
+                                        "Created Session is missing from the Runtime catalog"
+                                    )
+                                })?;
+                            Ok::<_, anyhow::Error>((session_id, binding, summary))
+                        })
+                    })?;
                 tracing::info!("Core session ready: {}", session_id);
 
                 let mut state = ChatState::new(
                     session_id.clone(),
-                    "CLI Session".to_string(),
+                    session_summary.session_name,
                     self.agent_type.clone(),
                     Some(workspace_binding.workspace_path.clone()),
                 );
+                state.current_model_id = session_summary.model_id;
                 state.apply_workspace_binding(workspace_binding);
                 (session_id, state, Vec::new())
             };

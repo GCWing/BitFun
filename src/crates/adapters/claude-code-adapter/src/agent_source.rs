@@ -569,7 +569,10 @@ fn materialize_definition(
         display_name: logical_id,
         description,
         prompt: SecretText::new(winner.prompt.clone()),
-        mode: ExternalSubagentMode::Subagent,
+        // Claude Code uses the same agent definition for delegated work and
+        // whole-session `--agent` selection. Keep that role fact in the
+        // provider-neutral definition and let Product Assembly project it.
+        mode: ExternalSubagentMode::All,
         disabled: false,
         hidden: false,
         requested_model,

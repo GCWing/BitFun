@@ -1,4 +1,5 @@
 import { api } from './ApiClient';
+import { globalEventBus } from '@/infrastructure/event-bus';
 
 export type ExternalSourceScope =
   | 'user_global'
@@ -287,6 +288,7 @@ export interface ExternalSubagentSummary {
   sourceKeys: Array<{ providerId: string; sourceId: string }>;
   sourceLocationLabels: string[];
   sourceCount: number;
+  mode: 'primary' | 'subagent' | 'all';
   requestedModel: ExternalSubagentModelRequest;
   requestedModelProfile?: ExternalSubagentModelProfileRequest;
   modelBindingMethod: ExternalSubagentModelBindingMethod;
@@ -992,6 +994,7 @@ function normalizeSnapshot(value: unknown): ExternalSourceCatalogSnapshot {
     })),
     subagents: normalizeOptionalArray<ExternalSubagentSummary>(candidate.subagents).map((subagent) => ({
       ...subagent,
+      mode: subagent.mode ?? 'subagent',
       requestedModel: subagent.requestedModel ?? { kind: 'default' },
       modelBindingMethod: subagent.modelBindingMethod ?? 'default',
       sourceKeys: normalizeOptionalArray(subagent.sourceKeys),
@@ -1311,6 +1314,13 @@ function controlRequest(
   };
 }
 
+function emitExternalAgentCatalogUpdated(workspacePath?: string) {
+  globalEventBus.emit('mode:config:updated', {
+    reason: 'external-agent-catalog-updated',
+    workspacePath: normalizeOptionalWorkspacePath(workspacePath),
+  });
+}
+
 export const externalSourcesAPI = {
   planMcpImport(workspacePath?: string) {
     return invokeExternalSourceCommand<ExternalMcpImportPlanV1>(
@@ -1469,12 +1479,13 @@ export const externalSourcesAPI = {
           ),
         },
       });
+      emitExternalAgentCatalogUpdated(workspacePath);
       return surface.catalog;
     } catch (error) {
       if (!(error instanceof ExternalSourceApiError) || error.code !== 'incompatible_version') {
         throw error;
       }
-      return invokeSnapshot('set_external_source_enabled_command', {
+      const catalog = await invokeSnapshot('set_external_source_enabled_command', {
         request: {
           workspacePath: normalizedWorkspacePath,
           sourceKey,
@@ -1482,6 +1493,8 @@ export const externalSourcesAPI = {
           expectedPreferenceRevision,
         },
       });
+      emitExternalAgentCatalogUpdated(workspacePath);
+      return catalog;
     }
   },
 
@@ -1552,7 +1565,7 @@ export const externalSourcesAPI = {
     });
   },
 
-  setSubagentActivation(
+  async setSubagentActivation(
     workspacePath: string | undefined,
     candidateId: string,
     approved: boolean,
@@ -1560,7 +1573,7 @@ export const externalSourcesAPI = {
     expectedPreferenceRevision: number,
     decisionKey: string,
   ) {
-    return invokeSnapshot('set_external_subagent_activation_command', {
+    const catalog = await invokeSnapshot('set_external_subagent_activation_command', {
       request: {
         workspacePath: normalizeOptionalWorkspacePath(workspacePath),
         candidateId,
@@ -1570,16 +1583,18 @@ export const externalSourcesAPI = {
         decisionKey,
       },
     });
+    emitExternalAgentCatalogUpdated(workspacePath);
+    return catalog;
   },
 
-  setSubagentModelBinding(
+  async setSubagentModelBinding(
     workspacePath: string | undefined,
     bindingKey: string,
     target: ExternalSubagentModelBindingTarget | undefined,
     expectedSubagentGeneration: number,
     expectedPreferenceRevision: number,
   ) {
-    return invokeSnapshot('set_external_subagent_model_binding_command', {
+    const catalog = await invokeSnapshot('set_external_subagent_model_binding_command', {
       request: {
         workspacePath: normalizeOptionalWorkspacePath(workspacePath),
         bindingKey,
@@ -1588,9 +1603,11 @@ export const externalSourcesAPI = {
         expectedPreferenceRevision,
       },
     });
+    emitExternalAgentCatalogUpdated(workspacePath);
+    return catalog;
   },
 
-  chooseSubagentConflict(
+  async chooseSubagentConflict(
     workspacePath: string | undefined,
     conflictKey: string,
     candidateId: string,
@@ -1598,7 +1615,7 @@ export const externalSourcesAPI = {
     expectedSubagentGeneration: number,
     expectedPreferenceRevision: number,
   ) {
-    return invokeSnapshot('choose_external_subagent_conflict_command', {
+    const catalog = await invokeSnapshot('choose_external_subagent_conflict_command', {
       request: {
         workspacePath: normalizeOptionalWorkspacePath(workspacePath),
         conflictKey,
@@ -1608,6 +1625,8 @@ export const externalSourcesAPI = {
         expectedPreferenceRevision,
       },
     });
+    emitExternalAgentCatalogUpdated(workspacePath);
+    return catalog;
   },
 
   setMcpServerDecision(
@@ -1650,13 +1669,15 @@ export const externalSourcesAPI = {
     });
   },
 
-  updateIntegrationPolicy(
+  async updateIntegrationPolicy(
     workspacePath: string | undefined,
     mutation: ExternalIntegrationPolicyMutation,
   ) {
-    return invokeSnapshot(
+    const catalog = await invokeSnapshot(
       'update_external_integration_policy_command',
       { request: { workspacePath: normalizeOptionalWorkspacePath(workspacePath), mutation } },
     );
+    emitExternalAgentCatalogUpdated(workspacePath);
+    return catalog;
   },
 };

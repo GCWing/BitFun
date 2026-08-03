@@ -207,11 +207,11 @@ sequenceDiagram
   end
 ```
 
-当前私有协议（v15）只覆盖 TUI 已有用户旅程需要的窄操作：
+当前私有协议（v16）只覆盖 TUI 已有用户旅程需要的窄操作：
 
 | 已支持 | 明确不支持 |
 |---|---|
-| Health、Session list/create、原子 restore（含 transcript 与 pending Permission）、删除未被控制的空闲 Session、当前 Session fork（含 transcript）、rename、Agent mode/model update、声明式上下文 reload、根 Session lineage 查询与后代 transcript 读取 | Session archive、跨 workspace attach、transcript 分页、模型目录/默认值和 Agent/Subagent 管理 |
+| Health、只读 workspace-scoped main Agent 摘要、Session list/create、原子 restore（含 transcript 与 pending Permission）、删除未被控制的空闲 Session、当前 Session fork（含 transcript）、rename、Agent mode/model update、声明式上下文 reload、根 Session lineage 查询与后代 transcript 读取 | Session archive、跨 workspace attach、transcript 分页、模型目录/默认值和完整 Agent/Subagent 管理 |
 | Turn submit/cancel、当前 Session 手动 context compaction、lineage 成员校验后的单个后代执行子树取消 | replay、cursor、resume event stream、独立的根级批量后代取消 API |
 | pending/respond Permission、submit UserInput answers、只读 workspace diff | observer、通用 controller transfer、多 Session multiplex |
 | 连接断开清理、Session-filtered events | detach/observer/通用 controller transfer、SDK callbacks、GUI/Remote/Peer/ACP/Headless wire |
@@ -233,9 +233,10 @@ sequenceDiagram
 - v12 增加用户显式 Shell Turn；v13 增加活动 Turn steering。两者都复用 Agent Runtime 的原有准入、Tool、权限、持久化和取消 owner，不在 IPC 内复制执行状态机。
 - v14 增加三个 current-root-controller 限定的 lineage operation：查询 Runtime 归一化后的扁平 lineage、读取已验证后代的权威 transcript，以及取消指定后代的活动执行子树。查询和读取可在根 Turn 活动时执行；取消复用现有 Session abort 语义，但不切换 controller，也不引入 observer、detach、分页或通用 Session RPC。
 - v15 为后代 transcript 读取增加 `required_settled_turn_ids` 一致性前置条件：Runtime 必须确认这些 Turn 已由 owner 持久化为终态，否则返回 `outcome_unknown`，由 TUI 在同一绝对期限内退避重试；TUI 只保留事件投影和该读屏障，不合并或重写权威 transcript。后代取消同时携带用户实际看到的 `expected_active_turn_id`，并在 owner 锁内拒绝已经切换的 Turn，避免迟到操作取消后续执行。lineage 查询和 transcript 读取是每连接至多一个的可抢占推测读取；更新的请求会取消旧读取，使后代取消和 Session 切换不会排在慢 transcript I/O 之后。该行为不放宽 controller 校验，不引入 observer 或通用多路复用。
+- v16 增加只读、workspace-scoped main Agent 摘要，用于 Shared TUI 与 Runtime host 的 selector 投影一致。启动页以 Runtime 启动工作区查询且不取得 Session lease；已有 Session 由 Runtime owner 解析其执行工作区并要求当前 controller。响应只包含逻辑 ID、描述、可选固定 model ID 与 ecosystem-neutral 的 external-source 分类；发现、审批、冲突消解、generation 与执行仍由既有 Agent Registry 和 external-source owner 负责，不经 IPC 暴露安装、变更、激活、Subagent 管理或 runtime lifecycle API。
 - 一个连接最多控制一个 Session、同时最多提交一个活动 Turn；一个 Session 同时只有一个 controller。create/restore/fork 在完整结果通过大小检查后才原子切换控制权，失败时保留原 Session。fork 只接受当前 controller 的空闲 Session；无选中 Turn 时复制到最新持久化 Turn，指定 `before_turn_id` 时只复制该 Turn 之前的历史。活动 Turn 期间不能切换或 fork Session，也不能修改其名称、Agent mode 或 model；删除只作用于非当前且未被任何连接控制的 Session。
 - Submit 与手动 context compaction 都使用调用方已有的 `turn_id` 标识不确定结果；若操作超时，返回 `outcome_unknown`、关闭连接并按该 ID 取消。手动 compaction 要求当前 controller 且 Session 空闲，由 Core 通过与普通对话 Turn 共用的原子准入路径创建一个可审计 maintenance Turn，并在取得所有权后读取压缩上下文：planning 阶段允许取消，atomic commit 开始后忽略晚到取消并保持 Processing 直至终态持久化完成。maintenance Turn 保留在权威 transcript 中但不进入模型上下文，live/restored payload 使用同一 compression ID 和 `applied` 事实；commit 后的持久化故障发布明确失败终态而不是遗留 Processing。断连取消只有得到确认后才释放 Session 控制权；无法确认时继续隔离该 Session，直到 Runtime 进程退出。
-- Session delete/rename 和 Agent mode/model update 复用既有 Runtime 端口和校验，Runtime 对最终结果保持权威并拒绝无效目标。它们都是有副作用操作；发送前编码或 frame 上限失败表示请求未执行，连接仍可使用。rename 写入失败时恢复旧 metadata：确认恢复后返回明确失败，无法确认时返回 `outcome_unknown`。Shared Client 在请求写入后响应超时或丢失连接时也返回 `outcome_unknown` 并断开连接。两种情况都不自动重试：rename 由用户恢复 Session 并核对当前值；delete 由用户重新打开 `/sessions` 核对目标是否仍存在。模式与模型目录仍是同版本第一方产品事实，不加入 IPC。
+- Session delete/rename 和 Agent mode/model update 复用既有 Runtime 端口和校验，Runtime 对最终结果保持权威并拒绝无效目标。它们都是有副作用操作；发送前编码或 frame 上限失败表示请求未执行，连接仍可使用。rename 写入失败时恢复旧 metadata：确认恢复后返回明确失败，无法确认时返回 `outcome_unknown`。Shared Client 在请求写入后响应超时或丢失连接时也返回 `outcome_unknown` 并断开连接。两种情况都不自动重试：rename 由用户恢复 Session 并核对当前值；delete 由用户重新打开 `/sessions` 核对目标是否仍存在。模型目录以及完整 Agent/Subagent 管理仍是同版本第一方产品事实，不加入 IPC；v16 的 main Agent 摘要只是 host-owned selector 所需的最小只读投影。
 - 声明式上下文 reload 只失效当前 Session 的 instructions 缓存，并按目标复用 Skill Registry 刷新；它可在活动 Turn 中执行但不改写该 Turn，generation 保护保证下一条消息重建上下文。它不引入 watcher、热替换或第二套 Runtime owner。
 - Shared TUI 的模型选择器复用 Client 已有的只读产品配置来显示同版本模型目录；它只把选中的 model ID 通过 `update current Session model` 交给 Runtime。Client 不持有 Session 写入权，也不通过 IPC 管理模型目录或默认值。
 - Agent 事件流 lag/closed 后 fail closed；Permission lag 先从 Runtime 权威 pending 集合重建，重建失败或流关闭时取消当前 Turn 并退出。路由到父 Session 的嵌套 Permission 与 AskUserQuestion 复用现有 TUI 交互，不新增第二套 UI 状态。

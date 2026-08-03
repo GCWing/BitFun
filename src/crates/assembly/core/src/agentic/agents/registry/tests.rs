@@ -10,6 +10,7 @@ use crate::agentic::agents::registry::visibility::{
     BuiltinSubagentExposure, SubagentVisibilityPolicy,
 };
 use crate::agentic::agents::{resolve_mode_config_profile_id, Agent, UserContextPolicy};
+use crate::agentic::workspace::session_execution_workspace_root;
 use crate::service::config::types::AgentSubagentOverrideState;
 use async_trait::async_trait;
 use bitfun_agent_runtime::custom_agent::{
@@ -17,7 +18,9 @@ use bitfun_agent_runtime::custom_agent::{
     CustomAgentKind, CustomAgentLevel,
 };
 use bitfun_agent_runtime::sdk::{RuntimeAgentRegistry, RuntimeAgentRegistryQuery};
+use bitfun_agent_runtime::session::SessionConfig;
 use bitfun_product_domains::external_sources::EcosystemId;
+use bitfun_product_domains::external_subagents::ExternalSubagentMode;
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -1168,6 +1171,7 @@ async fn external_routes_are_workspace_scoped_fail_closed_and_generation_leased(
                 configuration_fingerprint: "model-config-v1".to_string(),
             },
             hidden: false,
+            mode: ExternalSubagentMode::All,
             agent: agent_v1,
         }],
         [(
@@ -1212,6 +1216,24 @@ async fn external_routes_are_workspace_scoped_fail_closed_and_generation_leased(
     assert_eq!(projected.model.as_deref(), Some("inherit"));
     assert_eq!(projected.model_is_explicit, Some(true));
     assert!(!projected.supports_follow_up);
+    let primary_modes = registry
+        .get_modes_info_for_workspace(Some(&workspace), true)
+        .await;
+    let primary = primary_modes
+        .iter()
+        .find(|agent| agent.id == "Explore")
+        .expect("an all-role external definition is also projected as a main agent");
+    assert_eq!(primary.source, AgentSource::External);
+    assert!(primary.supports_follow_up);
+    let primary_binding = registry
+        .resolve_primary_agent_for_turn("Explore", Some(&workspace), true, None)
+        .expect("the logical main-agent id resolves to an immutable generation");
+    assert_eq!(primary_binding.runtime_agent_key, runtime_v1);
+    assert_eq!(
+        primary_binding.route_owner,
+        bitfun_core_types::SessionAgentRouteOwner::External
+    );
+    drop(primary_binding);
     assert!(registry.is_external_subagent_route("Explore", Some(&workspace)));
     assert!(registry.is_external_subagent_route("EXPLORE", Some(&workspace)));
     assert!(!registry.is_external_subagent_route("Explore", None));
@@ -1272,6 +1294,7 @@ async fn external_routes_are_workspace_scoped_fail_closed_and_generation_leased(
                 configuration_fingerprint: "model-config-v2".to_string(),
             },
             hidden: false,
+            mode: ExternalSubagentMode::All,
             agent: agent_v2,
         }],
         [(
@@ -1312,4 +1335,257 @@ async fn external_routes_are_workspace_scoped_fail_closed_and_generation_leased(
     assert!(registry.is_external_subagent_route("Explore", Some(&workspace)));
     drop(binding);
     assert!(registry.get_agent(runtime_v1, Some(&workspace)).is_none());
+}
+
+#[tokio::test]
+async fn external_routes_use_one_canonical_workspace_identity_for_all_operations() {
+    let registry = AgentRegistry::new();
+    let workspace = tempfile::tempdir().expect("workspace");
+    let alias_component = workspace.path().join("alias-component");
+    std::fs::create_dir(&alias_component).expect("alias component");
+    let workspace_alias = alias_component.join("..");
+    let runtime_key = "external::canonical-workspace";
+    registry.install_external_subagent_routes(
+        workspace.path(),
+        vec![ExternalSubagentRegistration {
+            runtime_key: runtime_key.to_string(),
+            logical_id: "canonical-profile".to_string(),
+            ecosystem_id: EcosystemId::new("opencode").unwrap(),
+            provider_label: "OpenCode".to_string(),
+            model_binding: super::ExternalSubagentModelBinding::InheritParent,
+            hidden: false,
+            mode: ExternalSubagentMode::Primary,
+            agent: Arc::new(TestAgent {
+                id: runtime_key.to_string(),
+            }),
+        }],
+        [(
+            "canonical-profile".to_string(),
+            ExternalSubagentRoute::External(runtime_key.to_string()),
+        )]
+        .into_iter()
+        .collect(),
+    );
+
+    assert!(registry.is_external_subagent_route("canonical-profile", Some(&workspace_alias)));
+    let binding = registry
+        .resolve_primary_agent_for_turn("canonical-profile", Some(&workspace_alias), true, None)
+        .expect("alias path should resolve the installed external generation");
+    assert_eq!(binding.runtime_agent_key, runtime_key);
+    drop(binding);
+    assert!(registry
+        .get_modes_info_for_workspace(Some(&workspace_alias), true)
+        .await
+        .iter()
+        .any(|agent| agent.id == "canonical-profile"));
+
+    registry.release_external_subagent_workspace(&workspace_alias);
+    assert!(!registry.is_external_subagent_route("canonical-profile", Some(workspace.path())));
+}
+
+#[test]
+fn persisted_external_owner_never_falls_back_to_a_same_name_local_mode() {
+    let registry = AgentRegistry::new();
+
+    assert!(registry
+        .resolve_primary_agent_for_turn(
+            "agentic",
+            Some(Path::new("C:/workspace/restarted-external-owner")),
+            true,
+            Some(bitfun_core_types::SessionAgentRouteOwner::External),
+        )
+        .is_none());
+    let local = registry
+        .resolve_primary_agent_for_turn(
+            "agentic",
+            Some(Path::new("C:/workspace/legacy-local-owner")),
+            true,
+            Some(bitfun_core_types::SessionAgentRouteOwner::Local),
+        )
+        .expect("legacy local sessions keep their local route");
+    assert_eq!(
+        local.route_owner,
+        bitfun_core_types::SessionAgentRouteOwner::Local
+    );
+}
+
+#[tokio::test]
+async fn external_agent_role_controls_main_and_task_projection() {
+    let registry = AgentRegistry::new();
+    let workspace = PathBuf::from("C:/workspace/external-agent-roles");
+    let logical_id = "external-role-profile";
+    let registration = |runtime_key: &str, mode| ExternalSubagentRegistration {
+        runtime_key: runtime_key.to_string(),
+        logical_id: logical_id.to_string(),
+        ecosystem_id: EcosystemId::new("opencode").unwrap(),
+        provider_label: "OpenCode".to_string(),
+        model_binding: super::ExternalSubagentModelBinding::InheritParent,
+        hidden: false,
+        mode,
+        agent: Arc::new(TestAgent {
+            id: runtime_key.to_string(),
+        }),
+    };
+    let route = |runtime_key: &str| {
+        [(
+            logical_id.to_string(),
+            ExternalSubagentRoute::External(runtime_key.to_string()),
+        )]
+        .into_iter()
+        .collect()
+    };
+
+    registry.install_external_subagent_routes(
+        &workspace,
+        vec![registration(
+            "external::primary",
+            ExternalSubagentMode::Primary,
+        )],
+        route("external::primary"),
+    );
+    assert!(registry
+        .get_modes_info_for_workspace(Some(&workspace), true)
+        .await
+        .iter()
+        .any(|agent| agent.id == logical_id));
+    assert!(!registry
+        .get_subagents_for_query(&SubagentQueryContext {
+            parent_agent_type: Some("agentic"),
+            workspace_root: Some(&workspace),
+            list_scope: SubagentListScope::TaskVisible,
+            include_disabled: false,
+            external_sources_supported: true,
+        })
+        .await
+        .iter()
+        .any(|agent| agent.id == logical_id));
+
+    registry.install_external_subagent_routes(
+        &workspace,
+        vec![registration(
+            "external::subagent",
+            ExternalSubagentMode::Subagent,
+        )],
+        route("external::subagent"),
+    );
+    assert!(!registry
+        .get_modes_info_for_workspace(Some(&workspace), true)
+        .await
+        .iter()
+        .any(|agent| agent.id == logical_id));
+    assert!(registry
+        .get_subagents_for_query(&SubagentQueryContext {
+            parent_agent_type: Some("agentic"),
+            workspace_root: Some(&workspace),
+            list_scope: SubagentListScope::TaskVisible,
+            include_disabled: false,
+            external_sources_supported: true,
+        })
+        .await
+        .iter()
+        .any(|agent| agent.id == logical_id));
+}
+
+#[test]
+fn persisted_primary_route_owner_rejects_same_name_route_takeover() {
+    let registry = AgentRegistry::new();
+    let workspace = PathBuf::from("D:/workspace/owner-takeover");
+    let logical_id = "agentic";
+    let runtime_key = "external::agentic";
+    registry.install_external_subagent_routes(
+        &workspace,
+        vec![ExternalSubagentRegistration {
+            runtime_key: runtime_key.to_string(),
+            logical_id: logical_id.to_string(),
+            ecosystem_id: EcosystemId::new("opencode").unwrap(),
+            provider_label: "OpenCode".to_string(),
+            model_binding: super::ExternalSubagentModelBinding::InheritParent,
+            hidden: false,
+            mode: ExternalSubagentMode::Primary,
+            agent: Arc::new(TestAgent {
+                id: runtime_key.to_string(),
+            }),
+        }],
+        [(
+            logical_id.to_string(),
+            ExternalSubagentRoute::External(runtime_key.to_string()),
+        )]
+        .into_iter()
+        .collect(),
+    );
+
+    assert!(registry
+        .resolve_primary_agent_for_turn(
+            logical_id,
+            Some(&workspace),
+            true,
+            Some(bitfun_core_types::SessionAgentRouteOwner::Local),
+        )
+        .is_none());
+
+    registry.install_external_subagent_routes(
+        &workspace,
+        Vec::new(),
+        [(logical_id.to_string(), ExternalSubagentRoute::Local)]
+            .into_iter()
+            .collect(),
+    );
+    assert!(registry
+        .resolve_primary_agent_for_turn(
+            logical_id,
+            Some(&workspace),
+            true,
+            Some(bitfun_core_types::SessionAgentRouteOwner::External),
+        )
+        .is_none());
+}
+
+#[test]
+fn external_primary_route_follows_the_session_execution_worktree() {
+    let registry = AgentRegistry::new();
+    let project = PathBuf::from("D:/workspace/project");
+    let worktree = PathBuf::from("D:/workspace/worktrees/feature");
+    let logical_id = "workspace-profile";
+    let registration = |runtime_key: &str| ExternalSubagentRegistration {
+        runtime_key: runtime_key.to_string(),
+        logical_id: logical_id.to_string(),
+        ecosystem_id: EcosystemId::new("opencode").unwrap(),
+        provider_label: "OpenCode".to_string(),
+        model_binding: super::ExternalSubagentModelBinding::InheritParent,
+        hidden: false,
+        mode: ExternalSubagentMode::Primary,
+        agent: Arc::new(TestAgent {
+            id: runtime_key.to_string(),
+        }),
+    };
+    let route = |runtime_key: &str| {
+        [(
+            logical_id.to_string(),
+            ExternalSubagentRoute::External(runtime_key.to_string()),
+        )]
+        .into_iter()
+        .collect()
+    };
+    registry.install_external_subagent_routes(
+        &project,
+        vec![registration("external::project")],
+        route("external::project"),
+    );
+    registry.install_external_subagent_routes(
+        &worktree,
+        vec![registration("external::worktree")],
+        route("external::worktree"),
+    );
+
+    let config = SessionConfig {
+        workspace_path: Some(worktree.to_string_lossy().into_owned()),
+        project_workspace_path: Some(project.to_string_lossy().into_owned()),
+        ..SessionConfig::default()
+    };
+    let route_root = session_execution_workspace_root(&config).expect("execution root");
+    let binding = registry
+        .resolve_primary_agent_for_turn(logical_id, Some(route_root), true, None)
+        .expect("worktree route should resolve");
+
+    assert_eq!(binding.runtime_agent_key, "external::worktree");
 }

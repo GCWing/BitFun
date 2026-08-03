@@ -16,6 +16,42 @@ describe('AgentAPI', () => {
     invokeMock.mockResolvedValue(undefined);
   });
 
+  it('preserves remote identity when querying the workspace mode catalog', async () => {
+    invokeMock.mockResolvedValueOnce([]);
+
+    await agentAPI.getAvailableModes({
+      workspacePath: 'D:/remote/repo',
+      remoteConnectionId: 'remote-1',
+      remoteSshHost: 'build-host',
+    });
+
+    expect(invokeMock).toHaveBeenCalledWith('get_available_modes', {
+      request: {
+        workspacePath: 'D:/remote/repo',
+        remoteConnectionId: 'remote-1',
+        remoteSshHost: 'build-host',
+      },
+    });
+  });
+
+  it('sends an explicit Session mode rebind through the typed selector request', async () => {
+    await agentAPI.updateSessionMode({
+      sessionId: 'session-1',
+      modeId: 'reviewer',
+      workspacePath: 'D:/workspace/BitFun',
+      remoteConnectionId: 'remote-1',
+    });
+
+    expect(invokeMock).toHaveBeenCalledWith('update_session_mode', {
+      request: {
+        sessionId: 'session-1',
+        modeId: 'reviewer',
+        workspacePath: 'D:/workspace/BitFun',
+        remoteConnectionId: 'remote-1',
+      },
+    });
+  });
+
   it('loads a bounded Session Turn window through a structured request', async () => {
     invokeMock.mockResolvedValueOnce({
       status: 'ready',
