@@ -558,11 +558,13 @@ impl CliAgentRuntimeClient {
         &self,
         root_session_id: &str,
         session_id: &str,
+        required_settled_turn_ids: &[String],
     ) -> std::result::Result<AgentSessionLineageInspection, SessionOperationError> {
         let request = AgentSessionLineageTranscriptRequest {
             workspace_path: self.current_workspace_path().to_string_lossy().into_owned(),
             root_session_id: root_session_id.to_string(),
             session_id: session_id.to_string(),
+            required_settled_turn_ids: required_settled_turn_ids.to_vec(),
             remote_connection_id: None,
             remote_ssh_host: None,
         };
@@ -590,11 +592,13 @@ impl CliAgentRuntimeClient {
         &self,
         root_session_id: &str,
         session_id: &str,
+        expected_active_turn_id: &str,
     ) -> Result<bitfun_agent_runtime::sdk::AgentTurnCancellationResult> {
         let request = AgentSessionLineageCancellationRequest {
             workspace_path: self.current_workspace_path().to_string_lossy().into_owned(),
             root_session_id: root_session_id.to_string(),
             session_id: session_id.to_string(),
+            expected_active_turn_id: Some(expected_active_turn_id.to_string()),
             source: Some(AgentSubmissionSource::Cli),
             reason: Some("user_cancelled".to_string()),
             wait_timeout_ms: Some(5_000),

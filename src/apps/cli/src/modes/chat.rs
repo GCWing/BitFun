@@ -23,7 +23,7 @@ use tokio::sync::broadcast::error::TryRecvError;
 use bitfun_agent_runtime::sdk::{
     AgentLocalCommandTurnRecordRequest, AgentSessionComposerUpdate, AgentSessionLineageEntry,
     AgentSessionLineageInspection, AgentSessionLineageSnapshot, AgentSessionUsageRequest,
-    SessionTranscript, SessionUsageReport,
+    AgentTurnCancellationResult, SessionTranscript, SessionUsageReport,
 };
 use bitfun_events::{AgenticEvent, ToolEventData, ToolEventIdentity};
 use resize::ResizeRedrawState;
@@ -367,6 +367,64 @@ struct PendingWorkspaceDiff {
     >,
 }
 
+enum LineageInspectionTaskError {
+    Runtime(SessionOperationError),
+    Deadline,
+}
+
+impl LineageInspectionTaskError {
+    fn outcome_unknown(&self) -> bool {
+        matches!(self, Self::Runtime(error) if error.outcome_unknown())
+    }
+}
+
+impl std::fmt::Display for LineageInspectionTaskError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Runtime(error) => error.fmt(formatter),
+            Self::Deadline => formatter.write_str("the transcript settlement deadline elapsed"),
+        }
+    }
+}
+
+enum PendingLineageOperation {
+    Query {
+        root_session_id: String,
+        handle: tokio::task::JoinHandle<anyhow::Result<Option<AgentSessionLineageSnapshot>>>,
+    },
+    Inspect {
+        entry: AgentSessionLineageEntry,
+        refresh: bool,
+        event_generation: u64,
+        handle: tokio::task::JoinHandle<
+            std::result::Result<AgentSessionLineageInspection, LineageInspectionTaskError>,
+        >,
+    },
+}
+
+impl PendingLineageOperation {
+    fn is_finished(&self) -> bool {
+        match self {
+            Self::Query { handle, .. } => handle.is_finished(),
+            Self::Inspect { handle, .. } => handle.is_finished(),
+        }
+    }
+
+    fn abort(&self) {
+        match self {
+            Self::Query { handle, .. } => handle.abort(),
+            Self::Inspect { handle, .. } => handle.abort(),
+        }
+    }
+}
+
+struct PendingLineageCancellation {
+    root_session_id: String,
+    session_id: String,
+    navigation_generation: u64,
+    handle: tokio::task::JoinHandle<anyhow::Result<AgentTurnCancellationResult>>,
+}
+
 #[derive(Debug, Clone)]
 struct ExternalPromptCommandInvocation {
     command_name: String,
@@ -423,23 +481,12 @@ struct ChatEventContext<'a> {
 struct AgentSessionInspection {
     selected_session_id: String,
     chat_state: ChatState,
-    /// Terminal events invalidate this read model. Live chunks are projected
-    /// directly; Runtime transcript reads reconcile the settled turn.
+    /// Runtime events invalidate this read model. Live chunks are projected
+    /// directly; Runtime transcript reads replace it authoritatively.
     refresh_pending: bool,
     refresh_due_at: Instant,
     refresh_deadline: Option<Instant>,
-    /// A terminal event precedes persistence. An otherwise successful Runtime
-    /// read is stale while it still reports one of these Turns as active.
-    settling_turn_ids: BTreeSet<String>,
-    /// Failed/cancelled persistence omits partial model output, so settlement
-    /// confirmation must retain the already projected terminal view.
-    preserve_live_terminal: bool,
-}
-
-#[derive(Clone)]
-struct LineageSettlement {
-    turn_id: String,
-    preserve_live_terminal: bool,
+    refresh_retry_delay: Duration,
 }
 
 struct BufferedLineageEvent {
@@ -449,7 +496,10 @@ struct BufferedLineageEvent {
 
 const LINEAGE_EVENT_BUFFER_MAX_BYTES: usize = 1024 * 1024;
 const LINEAGE_EVENT_BUFFER_MAX_EVENTS: usize = 4096;
+const LINEAGE_READ_BARRIER_MAX_TURNS_PER_SESSION: usize = 256;
 const LINEAGE_SETTLEMENT_RETRY_WINDOW: Duration = Duration::from_secs(5);
+const LINEAGE_SETTLEMENT_RETRY_MIN: Duration = Duration::from_millis(250);
+const LINEAGE_SETTLEMENT_RETRY_MAX: Duration = Duration::from_secs(1);
 
 pub(crate) struct ChatMode {
     config: CliConfig,
@@ -479,17 +529,31 @@ pub(crate) struct ChatMode {
     pending_workspace_diff: Option<PendingWorkspaceDiff>,
     pending_local_effect: Option<PendingLocalEffect>,
     pending_workspace_reference_search: Option<PendingWorkspaceReferenceSearch>,
+    /// One lineage read in flight. Runtime I/O never blocks the TUI
+    /// event loop, and refresh requests cannot overlap.
+    pending_lineage_operation: Option<PendingLineageOperation>,
+    /// Side-effecting cancellation outlives navigation resets, but its result
+    /// is only surfaced to the lineage generation that initiated it.
+    pending_lineage_cancellation: Option<PendingLineageCancellation>,
     /// Last authoritative flat lineage read. This is a presentation cache only;
     /// Services remains the membership/order owner.
     lineage_snapshot: Option<AgentSessionLineageSnapshot>,
+    /// Presentation-only index for the immutable ordering owned by Services.
+    lineage_session_index: HashMap<String, usize>,
     lineage_inspection: Option<AgentSessionInspection>,
     /// Bounded presentation tail for active descendants. It bridges live
     /// broadcast output until the Runtime-owned transcript settles.
     lineage_event_buffer: VecDeque<BufferedLineageEvent>,
     lineage_event_buffer_bytes: usize,
-    /// At most one Turn can settle per Session before the next Turn starts.
-    /// Keeping this outside the selected inspection closes selector-time races.
-    lineage_settlements: BTreeMap<String, LineageSettlement>,
+    /// Advances whenever a lineage event can make an in-flight transcript read
+    /// stale. Async inspection results are applied only to the generation they
+    /// observed, so a late read cannot erase newer live projection state.
+    lineage_event_generations: HashMap<String, u64>,
+    lineage_navigation_generation: u64,
+    /// Exact terminal Turns observed from Runtime events but not yet reflected
+    /// by an authoritative inspection. These are read-consistency tokens, not
+    /// a second settlement state machine.
+    lineage_required_settled_turns: BTreeMap<String, Vec<String>>,
     workspace_reference_search_generation: u64,
     last_workspace_reference_query: Option<String>,
     /// One explicit native slash-menu choice waiting for its parameterized submission.
@@ -555,11 +619,16 @@ impl ChatMode {
             pending_workspace_diff: None,
             pending_local_effect: None,
             pending_workspace_reference_search: None,
+            pending_lineage_operation: None,
+            pending_lineage_cancellation: None,
             lineage_snapshot: None,
+            lineage_session_index: HashMap::new(),
             lineage_inspection: None,
             lineage_event_buffer: VecDeque::new(),
             lineage_event_buffer_bytes: 0,
-            lineage_settlements: BTreeMap::new(),
+            lineage_event_generations: HashMap::new(),
+            lineage_navigation_generation: 0,
+            lineage_required_settled_turns: BTreeMap::new(),
             workspace_reference_search_generation: 0,
             last_workspace_reference_query: None,
             selected_native_command_once: None,

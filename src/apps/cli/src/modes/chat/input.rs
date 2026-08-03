@@ -524,6 +524,10 @@ impl ChatMode {
             }
         }
 
+        if key.code == KeyCode::Esc && self.cancel_pending_lineage_load(chat_view) {
+            return Ok(None);
+        }
+
         if self.lineage_inspection.is_some() {
             match key.code {
                 KeyCode::Up => self.navigate_lineage_parent(chat_view, rt_handle),
@@ -786,11 +790,9 @@ impl ChatMode {
                 } else {
                     match mouse.kind {
                         MouseEventKind::ScrollUp => {
-                            let total = context
-                                .chat_view
-                                .count_message_lines(
-                                    context.this.displayed_chat_state(context.chat_state),
-                                );
+                            let total = context.chat_view.count_message_lines(
+                                context.this.displayed_chat_state(context.chat_state),
+                            );
                             context.chat_view.scroll_up(3, total);
                         }
                         MouseEventKind::ScrollDown => {

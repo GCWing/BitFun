@@ -313,6 +313,8 @@ async fn run_initialized_connection(
 ) -> Result<(), RuntimeIpcServerError> {
     let mut frames = RuntimeIpcFrameReader::new(MAX_REQUEST_FRAME_BYTES);
     let mut frame_deadline = None;
+    let mut interruptible_lineage_reads = JoinSet::new();
+    let mut interruptible_lineage_request_id = None;
     loop {
         match next_connection_input(
             config.request_timeout,
@@ -321,9 +323,57 @@ async fn run_initialized_connection(
             &mut frame_deadline,
             events.as_mut(),
             availability.as_mut(),
+            &mut interruptible_lineage_reads,
         )
         .await?
         {
+            ConnectionInput::InterruptibleLineageReadCompleted(completed) => {
+                let Some(request_id) = interruptible_lineage_request_id.take() else {
+                    continue;
+                };
+                match completed {
+                    Ok(InterruptibleLineageReadResult::Completed(result)) => match result {
+                        Ok(result) => {
+                            send_operation_result(
+                                config.request_timeout,
+                                stream,
+                                request_id,
+                                result,
+                            )
+                            .await?;
+                        }
+                        Err(error) => {
+                            send_runtime_error(
+                                stream,
+                                config.request_timeout,
+                                Some(request_id),
+                                error,
+                            )
+                            .await?;
+                        }
+                    },
+                    Ok(InterruptibleLineageReadResult::Deadline) => {
+                        send_error(
+                            stream,
+                            config.request_timeout,
+                            Some(request_id),
+                            RuntimeIpcErrorCode::Unavailable,
+                            "runtime lineage read exceeded its deadline",
+                        )
+                        .await?;
+                    }
+                    Err(error) => {
+                        send_error(
+                            stream,
+                            config.request_timeout,
+                            Some(request_id),
+                            RuntimeIpcErrorCode::Internal,
+                            &format!("runtime lineage read task stopped: {error}"),
+                        )
+                        .await?;
+                    }
+                }
+            }
             ConnectionInput::Event(event) => {
                 if matches!(event, RuntimeIpcEvent::StreamInvalidated { .. }) {
                     timeout_write(
@@ -378,6 +428,18 @@ async fn run_initialized_connection(
                 request_id,
                 operation,
             }) => {
+                if let Some(superseded_request_id) = interruptible_lineage_request_id.take() {
+                    interruptible_lineage_reads.abort_all();
+                    while interruptible_lineage_reads.join_next().await.is_some() {}
+                    send_error(
+                        stream,
+                        config.request_timeout,
+                        Some(superseded_request_id),
+                        RuntimeIpcErrorCode::Unavailable,
+                        "runtime lineage read was superseded by a newer request",
+                    )
+                    .await?;
+                }
                 if matches!(operation, RuntimeIpcOperation::Health) {
                     send_operation_result(
                         config.request_timeout,
@@ -460,6 +522,20 @@ async fn run_initialized_connection(
                             continue;
                         }
                     };
+                if operation.is_interruptible_lineage_read() {
+                    let handler = handler.clone();
+                    let request_timeout = config.request_timeout;
+                    interruptible_lineage_reads.spawn(async move {
+                        match tokio::time::timeout(request_timeout, handler.execute(operation))
+                            .await
+                        {
+                            Ok(result) => InterruptibleLineageReadResult::Completed(result),
+                            Err(_) => InterruptibleLineageReadResult::Deadline,
+                        }
+                    });
+                    interruptible_lineage_request_id = Some(request_id);
+                    continue;
+                }
                 let provisional_turn_id = match &operation {
                     RuntimeIpcOperation::SubmitTurn { request } => {
                         let Some(turn_id) = request.turn_id.clone() else {
@@ -706,6 +782,14 @@ enum ConnectionInput {
     EventLagged,
     EventClosed,
     RuntimeUnavailable,
+    InterruptibleLineageReadCompleted(
+        Result<InterruptibleLineageReadResult, tokio::task::JoinError>,
+    ),
+}
+
+enum InterruptibleLineageReadResult {
+    Completed(Result<RuntimeIpcOperationResult, RuntimeIpcError>),
+    Deadline,
 }
 
 async fn next_connection_input(
@@ -715,9 +799,13 @@ async fn next_connection_input(
     frame_deadline: &mut Option<tokio::time::Instant>,
     events: Option<&mut broadcast::Receiver<RuntimeIpcEvent>>,
     availability: Option<&mut watch::Receiver<bool>>,
+    interruptible_lineage_reads: &mut JoinSet<InterruptibleLineageReadResult>,
 ) -> Result<ConnectionInput, RuntimeIpcServerError> {
     tokio::select! {
         frame = read_connected(timeout, stream, frames, frame_deadline) => frame.map(ConnectionInput::Frame),
+        completed = receive_interruptible_lineage_read(interruptible_lineage_reads) => {
+            Ok(ConnectionInput::InterruptibleLineageReadCompleted(completed))
+        },
         event = receive_event(events) => match event {
             None => std::future::pending().await,
             Some(Ok(event)) => Ok(ConnectionInput::Event(event)),
@@ -726,6 +814,18 @@ async fn next_connection_input(
         },
         () = wait_until_unavailable(availability) => Ok(ConnectionInput::RuntimeUnavailable),
     }
+}
+
+async fn receive_interruptible_lineage_read(
+    reads: &mut JoinSet<InterruptibleLineageReadResult>,
+) -> Result<InterruptibleLineageReadResult, tokio::task::JoinError> {
+    if reads.is_empty() {
+        return std::future::pending().await;
+    }
+    reads
+        .join_next()
+        .await
+        .expect("a non-empty lineage read set should yield a task")
 }
 
 async fn receive_event(

@@ -131,6 +131,17 @@ pub enum RuntimeIpcOperation {
 }
 
 impl RuntimeIpcOperation {
+    /// These speculative reads may be superseded by a newer request from the
+    /// same TUI connection. The server keeps their execution outside the
+    /// connection's serial control path so cancellation and Session changes
+    /// are never queued behind transcript I/O.
+    pub(crate) fn is_interruptible_lineage_read(&self) -> bool {
+        matches!(
+            self,
+            Self::GetSessionLineage { .. } | Self::InspectLineageSession { .. }
+        )
+    }
+
     pub fn session_id(&self) -> Option<&str> {
         match self {
             Self::RestoreSession { request } => Some(&request.session_id),
@@ -421,6 +432,7 @@ mod tests {
                 workspace_path: "D:/workspace/project".to_string(),
                 root_session_id: "root-1".to_string(),
                 session_id: "child-1".to_string(),
+                required_settled_turn_ids: Vec::new(),
                 remote_connection_id: None,
                 remote_ssh_host: None,
             },
@@ -430,6 +442,7 @@ mod tests {
                 workspace_path: "D:/workspace/project".to_string(),
                 root_session_id: "root-1".to_string(),
                 session_id: "child-1".to_string(),
+                expected_active_turn_id: Some("turn-child".to_string()),
                 source: None,
                 reason: None,
                 wait_timeout_ms: None,

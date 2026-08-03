@@ -10,35 +10,29 @@ impl ChatMode {
         let Some(event_session_id) = event.session_id() else {
             return false;
         };
-        let Some(lineage_active_turn_id) = self.lineage_snapshot.as_ref().and_then(|snapshot| {
-            snapshot
-                .sessions
-                .iter()
-                .find(|entry| entry.session_id == event_session_id)
-                .map(|entry| entry.active_turn_id.clone())
-        }) else {
+        let Some(entry_index) = self.lineage_session_index.get(event_session_id).copied() else {
+            return false;
+        };
+        if is_buffered_lineage_event(event)
+            || matches!(event, AgenticEvent::SessionHistoryChanged { .. })
+        {
+            let generation = self
+                .lineage_event_generations
+                .entry(event_session_id.to_string())
+                .or_default();
+            *generation = generation.wrapping_add(1);
+        }
+        let Some(lineage_active_turn_id) = self
+            .lineage_snapshot
+            .as_ref()
+            .and_then(|snapshot| snapshot.sessions.get(entry_index))
+            .map(|entry| entry.active_turn_id.clone())
+        else {
             return false;
         };
         match event {
             AgenticEvent::DialogTurnStarted { turn_id, .. } => {
-                if lineage_terminal_reconciliation_pending(
-                    self.lineage_inspection.as_ref(),
-                    event_session_id,
-                ) {
-                    if let Some(inspection) = self.lineage_inspection.as_mut() {
-                        let now = Instant::now();
-                        inspection.refresh_pending = true;
-                        inspection.refresh_due_at = now;
-                        inspection.refresh_deadline = Some(now + LINEAGE_SETTLEMENT_RETRY_WINDOW);
-                    }
-                } else {
-                    self.lineage_settlements.remove(event_session_id);
-                    self.retain_active_lineage_events(event_session_id, Some(turn_id));
-                    clear_lineage_settlement_for_new_turn(
-                        self.lineage_inspection.as_mut(),
-                        event_session_id,
-                    );
-                }
+                self.retain_lineage_events(event_session_id, Some(turn_id));
             }
             AgenticEvent::DialogTurnCompleted { .. }
             | AgenticEvent::DialogTurnFailed { .. }
@@ -55,27 +49,21 @@ impl ChatMode {
                         inspection.selected_session_id == event_session_id
                             && inspection.chat_state.current_turn_id() == Some(turn_id)
                     });
-                let Some(settlement) = lineage_settlement_from_event(
-                    self.lineage_settlements.get(event_session_id),
-                    observed_turn,
-                    event,
-                ) else {
-                    return false;
-                };
-                self.lineage_settlements
-                    .insert(event_session_id.to_string(), settlement);
+                if observed_turn {
+                    record_required_settled_lineage_turn(
+                        &mut self.lineage_required_settled_turns,
+                        event_session_id,
+                        turn_id,
+                    );
+                }
             }
             _ => {}
         }
-        let should_buffer = self.lineage_snapshot.as_ref().is_some_and(|snapshot| {
-            snapshot.sessions.iter().any(|entry| {
-                entry.session_id == event_session_id
-                    && event.turn_id().is_some_and(|turn_id| {
-                        matches!(event, AgenticEvent::DialogTurnStarted { .. })
-                            || entry.active_turn_id.as_deref() == Some(turn_id)
-                    })
-            }) && is_buffered_lineage_event(event)
-        });
+        let should_buffer = matches!(event, AgenticEvent::SystemError { .. })
+            || (event.turn_id().is_some_and(|turn_id| {
+                matches!(event, AgenticEvent::DialogTurnStarted { .. })
+                    || lineage_active_turn_id.as_deref() == Some(turn_id)
+            }) && is_buffered_lineage_event(event));
         if should_buffer {
             push_bounded_lineage_event(
                 &mut self.lineage_event_buffer,
@@ -86,7 +74,7 @@ impl ChatMode {
             );
         }
         if let Some(snapshot) = self.lineage_snapshot.as_mut() {
-            update_lineage_active_turn(snapshot, event);
+            update_lineage_active_turn(snapshot, &self.lineage_session_index, event);
         }
         let Some(inspection) = self
             .lineage_inspection
@@ -107,24 +95,9 @@ impl ChatMode {
         if requires_authoritative_refresh {
             let now = Instant::now();
             inspection.refresh_pending = true;
-            inspection.refresh_due_at = now;
+            inspection.refresh_due_at = now + LINEAGE_SETTLEMENT_RETRY_MIN;
             inspection.refresh_deadline = Some(now + LINEAGE_SETTLEMENT_RETRY_WINDOW);
-            if matches!(
-                event,
-                AgenticEvent::DialogTurnCompleted { .. }
-                    | AgenticEvent::DialogTurnFailed { .. }
-                    | AgenticEvent::DialogTurnCancelled { .. }
-            ) {
-                if let Some(turn_id) = event.turn_id() {
-                    inspection.settling_turn_ids.insert(turn_id.to_string());
-                }
-            }
-            if matches!(
-                event,
-                AgenticEvent::DialogTurnFailed { .. } | AgenticEvent::DialogTurnCancelled { .. }
-            ) {
-                inspection.preserve_live_terminal = true;
-            }
+            inspection.refresh_retry_delay = LINEAGE_SETTLEMENT_RETRY_MIN;
         }
         projection.changed || requires_authoritative_refresh
     }
@@ -135,6 +108,12 @@ impl ChatMode {
         root_chat_state: &ChatState,
         rt_handle: &tokio::runtime::Handle,
     ) {
+        if self.pending_lineage_operation.is_some() {
+            chat_view.set_status(Some(
+                "A subagent Session operation is already in progress".to_string(),
+            ));
+            return;
+        }
         let root_session_id = self
             .lineage_snapshot
             .as_ref()
@@ -142,27 +121,14 @@ impl ChatMode {
             .unwrap_or(&root_chat_state.core_session_id)
             .to_string();
         let agent = self.agent.clone();
-        let result = tokio::task::block_in_place(|| {
-            rt_handle.block_on(agent.session_lineage(&root_session_id))
+        let task_root_session_id = root_session_id.clone();
+        let handle =
+            rt_handle.spawn(async move { agent.session_lineage(&task_root_session_id).await });
+        self.pending_lineage_operation = Some(PendingLineageOperation::Query {
+            root_session_id,
+            handle,
         });
-        match result {
-            Ok(Some(snapshot))
-                if snapshot
-                    .sessions
-                    .iter()
-                    .any(|entry| entry.session_id != snapshot.root_session_id) =>
-            {
-                chat_view.show_session_lineage_selector(&snapshot);
-                chat_view.set_status(Some(
-                    "Select a subagent Session to inspect its transcript".to_string(),
-                ));
-                self.lineage_snapshot = Some(snapshot);
-            }
-            Ok(_) => chat_view.set_status(Some(
-                "No subagent Sessions are available for this conversation".to_string(),
-            )),
-            Err(error) => chat_view.set_status(Some(format!("Could not load subagents: {error}"))),
-        }
+        chat_view.set_status(Some("Loading subagent Sessions...".to_string()));
     }
 
     fn inspect_lineage_session(
@@ -171,14 +137,28 @@ impl ChatMode {
         chat_view: &mut ChatView,
         rt_handle: &tokio::runtime::Handle,
     ) {
+        if matches!(
+            self.pending_lineage_operation,
+            Some(PendingLineageOperation::Inspect { refresh: true, .. })
+        ) {
+            if let Some(pending) = self.pending_lineage_operation.take() {
+                pending.abort();
+            }
+        }
+        if self.pending_lineage_operation.is_some() {
+            chat_view.set_status(Some(
+                "A subagent Session operation is already in progress".to_string(),
+            ));
+            return;
+        }
         let Some(snapshot) = self.lineage_snapshot.as_ref() else {
             chat_view.set_status(Some("Reopen View subagents and try again".to_string()));
             return;
         };
-        let Some(entry) = snapshot
-            .sessions
-            .iter()
-            .find(|entry| entry.session_id == session_id)
+        let Some(entry) = self
+            .lineage_session_index
+            .get(session_id)
+            .and_then(|index| snapshot.sessions.get(*index))
             .cloned()
         else {
             chat_view.set_status(Some(
@@ -191,173 +171,31 @@ impl ChatMode {
             return;
         }
         let root_session_id = snapshot.root_session_id.clone();
+        let required_settled_turn_ids = self
+            .lineage_required_settled_turns
+            .get(&entry.session_id)
+            .cloned()
+            .unwrap_or_default();
         let agent = self.agent.clone();
-        let result = tokio::task::block_in_place(|| {
-            rt_handle.block_on(agent.inspect_lineage_session(&root_session_id, session_id))
+        let task_session_id = entry.session_id.clone();
+        let event_generation = self.lineage_event_generation(&task_session_id);
+        let handle = rt_handle.spawn(async move {
+            agent
+                .inspect_lineage_session(
+                    &root_session_id,
+                    &task_session_id,
+                    &required_settled_turn_ids,
+                )
+                .await
+                .map_err(LineageInspectionTaskError::Runtime)
         });
-        match result {
-            Ok(inspection) => {
-                let active_turn_id = inspection.active_turn_id.clone();
-                let settlement = self.lineage_settlements.get(&entry.session_id).cloned();
-                let stale = settlement.as_ref().is_some_and(|settlement| {
-                    active_turn_id.as_deref() == Some(settlement.turn_id.as_str())
-                });
-                let candidate_settlement = settlement
-                    .as_ref()
-                    .filter(|settlement| stale || settlement.preserve_live_terminal);
-                let replay_turn_id = candidate_settlement
-                    .map(|settlement| settlement.turn_id.as_str())
-                    .or(active_turn_id.as_deref());
-                let replay_events = replay_turn_id
-                    .map(|turn_id| self.buffered_lineage_events(&entry.session_id, turn_id))
-                    .unwrap_or_default();
-                let display_settlement = candidate_settlement.filter(|settlement| {
-                    replay_events
-                        .iter()
-                        .any(|event| is_terminal_lineage_event(event, &settlement.turn_id))
-                });
-                let preserve_cached_terminal =
-                    display_settlement.is_some_and(|settlement| settlement.preserve_live_terminal);
-                let runtime_advanced_past_settlement =
-                    display_settlement.is_some_and(|settlement| {
-                        active_turn_id
-                            .as_deref()
-                            .is_some_and(|active_turn_id| active_turn_id != settlement.turn_id)
-                    });
-                let state = if runtime_advanced_past_settlement {
-                    let runtime_replay_events = active_turn_id
-                        .as_deref()
-                        .map(|turn_id| self.buffered_lineage_events(&entry.session_id, turn_id))
-                        .unwrap_or_default();
-                    let mut runtime_state = build_lineage_chat_state(
-                        &entry,
-                        inspection.clone(),
-                        &runtime_replay_events,
-                    );
-                    let settlement = display_settlement.expect("settlement checked above");
-                    let mut replay_inspection = inspection;
-                    replay_inspection.active_turn_id = Some(settlement.turn_id.clone());
-                    let replayed =
-                        build_lineage_chat_state(&entry, replay_inspection, &replay_events);
-                    merge_live_terminal_into_authoritative(
-                        &mut runtime_state,
-                        &replayed,
-                        None,
-                        &settlement.turn_id,
-                    );
-                    runtime_state
-                } else {
-                    let mut display_inspection = inspection;
-                    if let Some(settlement) = display_settlement {
-                        display_inspection.active_turn_id = Some(settlement.turn_id.clone());
-                    }
-                    build_lineage_chat_state(&entry, display_inspection, &replay_events)
-                };
-                if let Some(snapshot) = self.lineage_snapshot.as_mut() {
-                    if let Some(snapshot_entry) = snapshot
-                        .sessions
-                        .iter_mut()
-                        .find(|candidate| candidate.session_id == entry.session_id)
-                    {
-                        snapshot_entry.active_turn_id =
-                            if stale { None } else { active_turn_id.clone() };
-                    }
-                }
-                let now = Instant::now();
-                self.lineage_inspection = Some(AgentSessionInspection {
-                    selected_session_id: entry.session_id.clone(),
-                    chat_state: state,
-                    refresh_pending: stale,
-                    refresh_due_at: if stale {
-                        now + Duration::from_millis(250)
-                    } else {
-                        now
-                    },
-                    refresh_deadline: stale.then_some(now + LINEAGE_SETTLEMENT_RETRY_WINDOW),
-                    settling_turn_ids: settlement
-                        .as_ref()
-                        .filter(|_| stale)
-                        .map(|settlement| BTreeSet::from([settlement.turn_id.clone()]))
-                        .unwrap_or_default(),
-                    preserve_live_terminal: settlement
-                        .as_ref()
-                        .is_some_and(|_| stale && preserve_cached_terminal),
-                });
-                if runtime_advanced_past_settlement {
-                    self.lineage_settlements.remove(&entry.session_id);
-                    self.retain_active_lineage_events(&entry.session_id, active_turn_id.as_deref());
-                } else if !stale && !preserve_cached_terminal {
-                    self.lineage_settlements.remove(&entry.session_id);
-                    self.retain_active_lineage_events(&entry.session_id, active_turn_id.as_deref());
-                } else if !stale {
-                    self.retain_active_lineage_events(
-                        &entry.session_id,
-                        settlement.as_ref().map(|value| value.turn_id.as_str()),
-                    );
-                }
-                chat_view.set_lineage_inspection(Some(entry.session_name));
-                chat_view.invalidate_lines_cache();
-                chat_view.set_status(Some(
-                    "Read-only subagent transcript; root input remains preserved".to_string(),
-                ));
-            }
-            Err(error) if error.outcome_unknown() => {
-                let now = Instant::now();
-                let settlement = self.lineage_settlements.get(&entry.session_id).cloned();
-                let settlement_turn_id = settlement
-                    .as_ref()
-                    .map(|settlement| settlement.turn_id.as_str());
-                let settlement_events = settlement_turn_id
-                    .map(|turn_id| self.buffered_lineage_events(&entry.session_id, turn_id))
-                    .unwrap_or_default();
-                let has_terminal_event = settlement.as_ref().is_some_and(|settlement| {
-                    settlement_events
-                        .iter()
-                        .any(|event| is_terminal_lineage_event(event, &settlement.turn_id))
-                });
-                let replay_turn_id = provisional_lineage_replay_turn(
-                    settlement_turn_id,
-                    has_terminal_event,
-                    entry.active_turn_id.as_deref(),
-                );
-                let replay_events = replay_turn_id
-                    .map(|turn_id| self.buffered_lineage_events(&entry.session_id, turn_id))
-                    .unwrap_or_default();
-                let state = build_lineage_chat_state(
-                    &entry,
-                    AgentSessionLineageInspection {
-                        transcript: SessionTranscript {
-                            session_id: entry.session_id.clone(),
-                            messages: Vec::new(),
-                        },
-                        active_turn_id: replay_turn_id.map(str::to_string),
-                    },
-                    &replay_events,
-                );
-                self.lineage_inspection = Some(AgentSessionInspection {
-                    selected_session_id: entry.session_id.clone(),
-                    chat_state: state,
-                    refresh_pending: true,
-                    refresh_due_at: now + Duration::from_millis(250),
-                    refresh_deadline: Some(now + LINEAGE_SETTLEMENT_RETRY_WINDOW),
-                    settling_turn_ids: settlement
-                        .as_ref()
-                        .map(|settlement| BTreeSet::from([settlement.turn_id.clone()]))
-                        .unwrap_or_default(),
-                    preserve_live_terminal: settlement.as_ref().is_some_and(|settlement| {
-                        has_terminal_event && settlement.preserve_live_terminal
-                    }),
-                });
-                chat_view.set_lineage_inspection(Some(entry.session_name));
-                chat_view.invalidate_lines_cache();
-                chat_view.set_status(Some(
-                    "Waiting for the subagent transcript to settle".to_string(),
-                ));
-            }
-            Err(error) => {
-                chat_view.set_status(Some(format!("Could not inspect subagent Session: {error}")))
-            }
-        }
+        self.pending_lineage_operation = Some(PendingLineageOperation::Inspect {
+            entry,
+            refresh: false,
+            event_generation,
+            handle,
+        });
+        chat_view.set_status(Some("Loading subagent transcript...".to_string()));
     }
 
     fn refresh_inspected_lineage_if_due(
@@ -365,6 +203,9 @@ impl ChatMode {
         chat_view: &mut ChatView,
         rt_handle: &tokio::runtime::Handle,
     ) -> bool {
+        if self.pending_lineage_operation.is_some() {
+            return false;
+        }
         let now = Instant::now();
         let Some(selected_session_id) = self.lineage_inspection.as_ref().and_then(|inspection| {
             (inspection.refresh_pending && inspection.refresh_due_at <= now)
@@ -376,10 +217,10 @@ impl ChatMode {
             return false;
         };
         let root_session_id = snapshot.root_session_id.clone();
-        let Some(entry) = snapshot
-            .sessions
-            .iter()
-            .find(|entry| entry.session_id == selected_session_id)
+        let Some(entry) = self
+            .lineage_session_index
+            .get(&selected_session_id)
+            .and_then(|index| snapshot.sessions.get(*index))
             .cloned()
         else {
             if let Some(inspection) = self.lineage_inspection.as_mut() {
@@ -390,148 +231,409 @@ impl ChatMode {
             ));
             return true;
         };
-
-        let agent = self.agent.clone();
-        let result = tokio::task::block_in_place(|| {
-            rt_handle
-                .block_on(agent.inspect_lineage_session(&root_session_id, &selected_session_id))
-        });
-        match result {
-            Ok(inspection) => {
-                let active_turn_id = inspection.active_turn_id.clone();
-                let refresh_action = self
-                    .lineage_inspection
-                    .as_ref()
-                    .map(|current| {
-                        lineage_refresh_action(
-                            &current.settling_turn_ids,
-                            active_turn_id.as_deref(),
-                            current.preserve_live_terminal,
-                        )
-                    })
-                    .unwrap_or(LineageRefreshAction::ReplaceFromRuntime);
-                if refresh_action == LineageRefreshAction::RetrySettlement {
-                    if let Some(current) = self.lineage_inspection.as_mut() {
-                        if current
-                            .refresh_deadline
-                            .is_some_and(|deadline| Instant::now() < deadline)
-                        {
-                            current.refresh_pending = true;
-                            current.refresh_due_at = Instant::now() + Duration::from_millis(250);
-                            return false;
-                        }
-                        current.refresh_pending = false;
-                        current.refresh_deadline = None;
-                    }
-                    chat_view.set_status(Some(
-                        "The subagent transcript is still settling; reopen View subagents to retry"
-                            .to_string(),
-                    ));
-                    return true;
-                }
-                let preserved_turn_id = (refresh_action
-                    == LineageRefreshAction::PreserveLiveTerminal)
-                    .then(|| {
-                        self.lineage_settlements
-                            .get(&selected_session_id)
-                            .map(|settlement| settlement.turn_id.clone())
-                            .or_else(|| {
-                                self.lineage_inspection.as_ref().and_then(|current| {
-                                    current.settling_turn_ids.iter().next().cloned()
-                                })
-                            })
-                    })
-                    .flatten();
-                let replay_events = active_turn_id
-                    .as_deref()
-                    .map(|turn_id| self.buffered_lineage_events(&selected_session_id, turn_id))
-                    .unwrap_or_default();
-                let preserved_projection = preserved_turn_id.as_ref().map(|turn_id| {
-                    let preserved_events =
-                        self.buffered_lineage_events(&selected_session_id, turn_id);
-                    let mut preserved_inspection = inspection.clone();
-                    preserved_inspection.active_turn_id = Some(turn_id.clone());
-                    build_lineage_chat_state(&entry, preserved_inspection, &preserved_events)
-                });
-                let mut runtime_state =
-                    build_lineage_chat_state(&entry, inspection, &replay_events);
-                if let Some(snapshot_entry) = self.lineage_snapshot.as_mut().and_then(|snapshot| {
-                    snapshot
-                        .sessions
-                        .iter_mut()
-                        .find(|candidate| candidate.session_id == selected_session_id)
-                }) {
-                    snapshot_entry.active_turn_id = active_turn_id.clone();
-                }
-                if let Some(current) = self
-                    .lineage_inspection
-                    .as_mut()
-                    .filter(|inspection| inspection.selected_session_id == selected_session_id)
-                {
-                    if refresh_action == LineageRefreshAction::PreserveLiveTerminal {
-                        if let Some(turn_id) = preserved_turn_id.as_deref() {
-                            merge_live_terminal_into_authoritative(
-                                &mut runtime_state,
-                                &current.chat_state,
-                                preserved_projection.as_ref(),
-                                turn_id,
-                            );
-                        }
-                    }
-                    current.chat_state = runtime_state;
-                    current.refresh_pending = false;
-                    current.refresh_due_at = now;
-                    current.refresh_deadline = None;
-                    current.settling_turn_ids.clear();
-                    current.preserve_live_terminal = false;
-                }
-                if refresh_action == LineageRefreshAction::PreserveLiveTerminal
-                    && active_turn_id.is_none()
-                {
-                    self.retain_active_lineage_events(
-                        &selected_session_id,
-                        preserved_turn_id.as_deref(),
-                    );
-                } else {
-                    self.lineage_settlements.remove(&selected_session_id);
-                    self.retain_active_lineage_events(
-                        &selected_session_id,
-                        active_turn_id.as_deref(),
-                    );
-                }
-                chat_view.set_status(Some(
-                    "Read-only subagent transcript; root input remains preserved".to_string(),
-                ));
-                true
+        let Some(deadline) = self
+            .lineage_inspection
+            .as_ref()
+            .and_then(|inspection| inspection.refresh_deadline)
+        else {
+            return false;
+        };
+        if now >= deadline {
+            if let Some(inspection) = self.lineage_inspection.as_mut() {
+                inspection.refresh_pending = false;
+                inspection.refresh_deadline = None;
             }
-            Err(error) => {
-                let retryable = error.outcome_unknown();
-                if let Some(current) = self
-                    .lineage_inspection
-                    .as_mut()
-                    .filter(|inspection| inspection.selected_session_id == selected_session_id)
+            chat_view.set_status(Some(
+                "The subagent transcript is still settling; reopen View subagents to retry"
+                    .to_string(),
+            ));
+            return true;
+        }
+        let required_settled_turn_ids = self
+            .lineage_required_settled_turns
+            .get(&selected_session_id)
+            .cloned()
+            .unwrap_or_default();
+        let agent = self.agent.clone();
+        let timeout = deadline.saturating_duration_since(now);
+        let task_session_id = selected_session_id.clone();
+        let handle = rt_handle.spawn(async move {
+            match tokio::time::timeout(
+                timeout,
+                agent.inspect_lineage_session(
+                    &root_session_id,
+                    &task_session_id,
+                    &required_settled_turn_ids,
+                ),
+            )
+            .await
+            {
+                Ok(result) => result.map_err(LineageInspectionTaskError::Runtime),
+                Err(_) => Err(LineageInspectionTaskError::Deadline),
+            }
+        });
+        self.pending_lineage_operation = Some(PendingLineageOperation::Inspect {
+            entry,
+            refresh: true,
+            event_generation: self.lineage_event_generation(&selected_session_id),
+            handle,
+        });
+        false
+    }
+
+    fn poll_lineage_operation_completion(
+        &mut self,
+        chat_view: &mut ChatView,
+        rt_handle: &tokio::runtime::Handle,
+    ) -> bool {
+        let cancellation_changed = self.poll_lineage_cancellation_completion(chat_view, rt_handle);
+        let Some(pending) = self.pending_lineage_operation.as_ref() else {
+            return cancellation_changed;
+        };
+        if !pending.is_finished() {
+            return cancellation_changed;
+        }
+        let pending = self
+            .pending_lineage_operation
+            .take()
+            .expect("finished lineage operation should remain present");
+        match pending {
+            PendingLineageOperation::Query {
+                root_session_id,
+                handle,
+            } => match tokio::task::block_in_place(|| rt_handle.block_on(handle)) {
+                Ok(Ok(Some(snapshot)))
+                    if snapshot.root_session_id == root_session_id
+                        && snapshot
+                            .sessions
+                            .iter()
+                            .any(|entry| entry.session_id != snapshot.root_session_id) =>
                 {
-                    // Only the Runtime's typed settlement uncertainty is
-                    // retryable. Permanent storage/workspace errors stop here.
-                    if retryable
-                        && current
-                            .refresh_deadline
-                            .is_some_and(|deadline| Instant::now() < deadline)
-                    {
-                        current.refresh_pending = true;
-                        current.refresh_due_at = Instant::now() + Duration::from_millis(250);
+                    self.lineage_session_index = lineage_session_index(&snapshot);
+                    chat_view.show_session_lineage_selector(&snapshot);
+                    chat_view.set_status(Some(
+                        "Select a subagent Session to inspect its transcript".to_string(),
+                    ));
+                    self.lineage_snapshot = Some(snapshot);
+                }
+                Ok(Ok(_)) => {
+                    self.lineage_snapshot = None;
+                    self.lineage_session_index.clear();
+                    chat_view.set_status(Some(
+                        "No subagent Sessions are available for this conversation".to_string(),
+                    ));
+                }
+                Ok(Err(error)) => {
+                    chat_view.set_status(Some(format!("Could not load subagents: {error}")))
+                }
+                Err(error) => {
+                    chat_view.set_status(Some(format!("Subagent Session loading stopped: {error}")))
+                }
+            },
+            PendingLineageOperation::Inspect {
+                entry,
+                refresh,
+                event_generation,
+                handle,
+            } => match tokio::task::block_in_place(|| rt_handle.block_on(handle)) {
+                Ok(Ok(inspection)) => self.apply_lineage_inspection(
+                    entry,
+                    inspection,
+                    refresh,
+                    event_generation,
+                    chat_view,
+                ),
+                Ok(Err(error)) => self.apply_lineage_inspection_error(
+                    entry,
+                    refresh,
+                    event_generation,
+                    error,
+                    chat_view,
+                ),
+                Err(error) => {
+                    if !lineage_inspection_result_is_current(
+                        &entry.session_id,
+                        event_generation,
+                        &self.lineage_event_generations,
+                    ) {
+                        self.handle_stale_lineage_inspection(&entry, refresh, chat_view);
                     } else {
-                        current.refresh_pending = false;
-                        current.refresh_deadline = None;
+                        if let Some(current) = self.lineage_inspection.as_mut().filter(|current| {
+                            refresh && current.selected_session_id == entry.session_id
+                        }) {
+                            current.refresh_pending = false;
+                            current.refresh_deadline = None;
+                        }
+                        chat_view.set_status(Some(format!(
+                            "Subagent transcript loading stopped: {error}"
+                        )));
                     }
                 }
-                chat_view.set_status(Some(format!("Could not refresh subagent Session: {error}")));
-                true
+            },
+        }
+        true
+    }
+
+    fn poll_lineage_cancellation_completion(
+        &mut self,
+        chat_view: &mut ChatView,
+        rt_handle: &tokio::runtime::Handle,
+    ) -> bool {
+        let Some(pending) = self.pending_lineage_cancellation.as_ref() else {
+            return false;
+        };
+        if !pending.handle.is_finished() {
+            return false;
+        }
+        let pending = self
+            .pending_lineage_cancellation
+            .take()
+            .expect("finished lineage cancellation should remain present");
+        let result = tokio::task::block_in_place(|| rt_handle.block_on(pending.handle));
+        let belongs_to_current_navigation = lineage_cancellation_result_is_current(
+            pending.navigation_generation,
+            self.lineage_navigation_generation,
+            &pending.root_session_id,
+            self.lineage_snapshot
+                .as_ref()
+                .map(|snapshot| snapshot.root_session_id.as_str()),
+            &pending.session_id,
+            self.lineage_inspection
+                .as_ref()
+                .map(|inspection| inspection.selected_session_id.as_str()),
+        );
+        if !belongs_to_current_navigation {
+            return false;
+        }
+        match result {
+            Ok(Ok(result)) if result.requested => chat_view.set_status(Some(format!(
+                "Interrupt requested for subagent Session {}",
+                pending.session_id
+            ))),
+            Ok(Ok(_)) => chat_view.set_status(Some("The subagent has no active turn".to_string())),
+            Ok(Err(error)) => chat_view.set_status(Some(format!(
+                "Could not interrupt subagent Session: {error}"
+            ))),
+            Err(error) => {
+                chat_view.set_status(Some(format!("Subagent interruption stopped: {error}")))
             }
         }
+        true
+    }
+
+    fn apply_lineage_inspection(
+        &mut self,
+        entry: AgentSessionLineageEntry,
+        inspection: AgentSessionLineageInspection,
+        refresh: bool,
+        event_generation: u64,
+        chat_view: &mut ChatView,
+    ) {
+        if !lineage_inspection_result_is_current(
+            &entry.session_id,
+            event_generation,
+            &self.lineage_event_generations,
+        ) {
+            self.handle_stale_lineage_inspection(&entry, refresh, chat_view);
+            return;
+        }
+        if refresh
+            && self
+                .lineage_inspection
+                .as_ref()
+                .is_none_or(|current| current.selected_session_id != entry.session_id)
+        {
+            return;
+        }
+        let active_turn_id = inspection.active_turn_id.clone();
+        let state = self.build_authoritative_lineage_state(&entry, inspection);
+        if let Some(index) = self.lineage_session_index.get(&entry.session_id).copied() {
+            if let Some(snapshot_entry) = self
+                .lineage_snapshot
+                .as_mut()
+                .and_then(|snapshot| snapshot.sessions.get_mut(index))
+            {
+                snapshot_entry.active_turn_id = active_turn_id.clone();
+            }
+        }
+        self.lineage_required_settled_turns
+            .remove(&entry.session_id);
+        let now = Instant::now();
+        self.lineage_inspection = Some(AgentSessionInspection {
+            selected_session_id: entry.session_id.clone(),
+            chat_state: state,
+            refresh_pending: false,
+            refresh_due_at: now,
+            refresh_deadline: None,
+            refresh_retry_delay: LINEAGE_SETTLEMENT_RETRY_MIN,
+        });
+        self.retain_lineage_events(&entry.session_id, active_turn_id.as_deref());
+        chat_view.set_lineage_inspection(Some(entry.session_name));
+        chat_view.invalidate_lines_cache();
+        chat_view.set_status(Some(
+            "Read-only subagent transcript; root input remains preserved".to_string(),
+        ));
+    }
+
+    fn apply_lineage_inspection_error(
+        &mut self,
+        entry: AgentSessionLineageEntry,
+        refresh: bool,
+        event_generation: u64,
+        error: LineageInspectionTaskError,
+        chat_view: &mut ChatView,
+    ) {
+        if !lineage_inspection_result_is_current(
+            &entry.session_id,
+            event_generation,
+            &self.lineage_event_generations,
+        ) {
+            self.handle_stale_lineage_inspection(&entry, refresh, chat_view);
+            return;
+        }
+        if error.outcome_unknown() {
+            if refresh {
+                self.schedule_lineage_consistency_retry(&entry.session_id, chat_view);
+            } else {
+                self.open_provisional_lineage_inspection(&entry, chat_view);
+            }
+            return;
+        }
+        if let Some(current) = self
+            .lineage_inspection
+            .as_mut()
+            .filter(|current| refresh && current.selected_session_id == entry.session_id)
+        {
+            current.refresh_pending = false;
+            current.refresh_deadline = None;
+        }
+        let operation = if refresh { "refresh" } else { "inspect" };
+        chat_view.set_status(Some(format!(
+            "Could not {operation} subagent Session: {error}"
+        )));
+    }
+
+    fn handle_stale_lineage_inspection(
+        &mut self,
+        entry: &AgentSessionLineageEntry,
+        refresh: bool,
+        chat_view: &mut ChatView,
+    ) {
+        if !refresh {
+            self.open_provisional_lineage_inspection(entry, chat_view);
+            return;
+        }
+        let now = Instant::now();
+        let Some(current) = self
+            .lineage_inspection
+            .as_mut()
+            .filter(|current| current.selected_session_id == entry.session_id)
+        else {
+            return;
+        };
+        current.refresh_pending = true;
+        current.refresh_due_at = now + LINEAGE_SETTLEMENT_RETRY_MIN;
+        current
+            .refresh_deadline
+            .get_or_insert(now + LINEAGE_SETTLEMENT_RETRY_WINDOW);
+        chat_view.set_status(Some(
+            "Waiting for newer subagent transcript state".to_string(),
+        ));
+    }
+
+    fn lineage_event_generation(&self, session_id: &str) -> u64 {
+        self.lineage_event_generations
+            .get(session_id)
+            .copied()
+            .unwrap_or_default()
+    }
+
+    fn schedule_lineage_consistency_retry(&mut self, session_id: &str, chat_view: &mut ChatView) {
+        let now = Instant::now();
+        let Some(current) = self
+            .lineage_inspection
+            .as_mut()
+            .filter(|current| current.selected_session_id == session_id)
+        else {
+            return;
+        };
+        if current
+            .refresh_deadline
+            .is_some_and(|deadline| now < deadline)
+        {
+            let delay = current.refresh_retry_delay;
+            current.refresh_pending = true;
+            current.refresh_due_at = now + delay;
+            current.refresh_retry_delay =
+                std::cmp::min(delay.saturating_mul(2), LINEAGE_SETTLEMENT_RETRY_MAX);
+            return;
+        }
+        current.refresh_pending = false;
+        current.refresh_deadline = None;
+        chat_view.set_status(Some(
+            "The subagent transcript is still settling; reopen View subagents to retry".to_string(),
+        ));
+    }
+
+    fn open_provisional_lineage_inspection(
+        &mut self,
+        entry: &AgentSessionLineageEntry,
+        chat_view: &mut ChatView,
+    ) {
+        let now = Instant::now();
+        let events = self.buffered_lineage_session_events(&entry.session_id);
+        let state = build_provisional_lineage_chat_state(entry, &events);
+        self.lineage_inspection = Some(AgentSessionInspection {
+            selected_session_id: entry.session_id.clone(),
+            chat_state: state,
+            refresh_pending: true,
+            refresh_due_at: now + LINEAGE_SETTLEMENT_RETRY_MIN,
+            refresh_deadline: Some(now + LINEAGE_SETTLEMENT_RETRY_WINDOW),
+            refresh_retry_delay: LINEAGE_SETTLEMENT_RETRY_MIN,
+        });
+        chat_view.set_lineage_inspection(Some(entry.session_name.clone()));
+        chat_view.invalidate_lines_cache();
+        chat_view.set_status(Some(
+            "Waiting for the subagent transcript to settle".to_string(),
+        ));
+    }
+
+    fn build_authoritative_lineage_state(
+        &self,
+        entry: &AgentSessionLineageEntry,
+        inspection: AgentSessionLineageInspection,
+    ) -> ChatState {
+        let active_turn_id = inspection.active_turn_id.clone();
+        let mut active_events = Vec::new();
+        let mut session_events = Vec::new();
+        for buffered in &self.lineage_event_buffer {
+            if buffered.event.session_id() != Some(entry.session_id.as_str()) {
+                continue;
+            }
+            let Some(turn_id) = buffered.event.turn_id() else {
+                session_events.push(buffered.event.clone());
+                continue;
+            };
+            if active_turn_id.as_deref() == Some(turn_id) {
+                active_events.push(buffered.event.clone());
+            }
+        }
+        let mut authoritative = build_lineage_chat_state(entry, inspection, &active_events);
+        for event in &session_events {
+            project_transcript_event(&mut authoritative, event, false);
+        }
+        authoritative
     }
 
     fn leave_lineage_inspection(&mut self, chat_view: &mut ChatView) {
+        if matches!(
+            self.pending_lineage_operation,
+            Some(PendingLineageOperation::Inspect { refresh: true, .. })
+        ) {
+            if let Some(pending) = self.pending_lineage_operation.take() {
+                pending.abort();
+            }
+        }
         if self.lineage_inspection.take().is_some() {
             chat_view.set_lineage_inspection(None);
             chat_view.invalidate_lines_cache();
@@ -539,21 +641,44 @@ impl ChatMode {
         }
     }
 
-    fn buffered_lineage_events(&self, session_id: &str, turn_id: &str) -> Vec<AgenticEvent> {
+    fn cancel_pending_lineage_load(&mut self, chat_view: &mut ChatView) -> bool {
+        let should_cancel = matches!(
+            self.pending_lineage_operation,
+            Some(PendingLineageOperation::Query { .. })
+                | Some(PendingLineageOperation::Inspect { refresh: false, .. })
+        );
+        if !should_cancel {
+            return false;
+        }
+        if let Some(pending) = self.pending_lineage_operation.take() {
+            pending.abort();
+        }
+        chat_view.set_status(Some("Subagent Session loading cancelled".to_string()));
+        true
+    }
+
+    fn buffered_lineage_session_events(&self, session_id: &str) -> Vec<AgenticEvent> {
         self.lineage_event_buffer
             .iter()
-            .filter(|buffered| {
-                buffered.event.session_id() == Some(session_id)
-                    && buffered.event.turn_id() == Some(turn_id)
-            })
+            .filter(|buffered| buffered.event.session_id() == Some(session_id))
             .map(|buffered| buffered.event.clone())
             .collect()
     }
 
-    fn retain_active_lineage_events(&mut self, session_id: &str, active_turn_id: Option<&str>) {
+    fn retain_lineage_events(&mut self, session_id: &str, active_turn_id: Option<&str>) {
+        let retained_turn_ids = self
+            .lineage_required_settled_turns
+            .get(session_id)
+            .into_iter()
+            .flatten()
+            .map(String::as_str)
+            .collect::<BTreeSet<_>>();
         self.lineage_event_buffer.retain(|buffered| {
             buffered.event.session_id() != Some(session_id)
-                || active_turn_id.is_some_and(|turn_id| buffered.event.turn_id() == Some(turn_id))
+                || buffered.event.turn_id().is_none()
+                || buffered.event.turn_id().is_some_and(|turn_id| {
+                    active_turn_id == Some(turn_id) || retained_turn_ids.contains(turn_id)
+                })
         });
         self.lineage_event_buffer_bytes = self
             .lineage_event_buffer
@@ -563,11 +688,23 @@ impl ChatMode {
     }
 
     fn reset_lineage_navigation(&mut self, chat_view: &mut ChatView) {
+        if matches!(
+            self.pending_lineage_operation,
+            Some(PendingLineageOperation::Query { .. })
+                | Some(PendingLineageOperation::Inspect { .. })
+        ) {
+            if let Some(pending) = self.pending_lineage_operation.take() {
+                pending.abort();
+            }
+        }
         self.lineage_snapshot = None;
+        self.lineage_session_index.clear();
         self.lineage_inspection = None;
         self.lineage_event_buffer.clear();
         self.lineage_event_buffer_bytes = 0;
-        self.lineage_settlements.clear();
+        self.lineage_event_generations.clear();
+        self.lineage_navigation_generation = self.lineage_navigation_generation.wrapping_add(1);
+        self.lineage_required_settled_turns.clear();
         chat_view.set_lineage_inspection(None);
     }
 
@@ -626,6 +763,26 @@ impl ChatMode {
         chat_view: &mut ChatView,
         rt_handle: &tokio::runtime::Handle,
     ) {
+        if matches!(
+            self.pending_lineage_operation,
+            Some(PendingLineageOperation::Inspect { refresh: true, .. })
+        ) {
+            if let Some(pending) = self.pending_lineage_operation.take() {
+                pending.abort();
+            }
+        }
+        if self.pending_lineage_operation.is_some() {
+            chat_view.set_status(Some(
+                "A subagent Session operation is already in progress".to_string(),
+            ));
+            return;
+        }
+        if self.pending_lineage_cancellation.is_some() {
+            chat_view.set_status(Some(
+                "A subagent interruption is already in progress".to_string(),
+            ));
+            return;
+        }
         let (Some(snapshot), Some(inspection)) = (
             self.lineage_snapshot.as_ref(),
             self.lineage_inspection.as_ref(),
@@ -634,19 +791,34 @@ impl ChatMode {
         };
         let agent = self.agent.clone();
         let root_session_id = snapshot.root_session_id.clone();
+        let task_root_session_id = root_session_id.clone();
         let session_id = inspection.selected_session_id.clone();
-        let result = tokio::task::block_in_place(|| {
-            rt_handle.block_on(agent.cancel_lineage_session(&root_session_id, &session_id))
+        let Some(expected_active_turn_id) = self
+            .lineage_session_index
+            .get(&session_id)
+            .and_then(|index| snapshot.sessions.get(*index))
+            .and_then(|entry| entry.active_turn_id.clone())
+        else {
+            chat_view.set_status(Some("The subagent has no active turn".to_string()));
+            return;
+        };
+        let task_session_id = session_id.clone();
+        let handle = rt_handle.spawn(async move {
+            agent
+                .cancel_lineage_session(
+                    &task_root_session_id,
+                    &task_session_id,
+                    &expected_active_turn_id,
+                )
+                .await
         });
-        match result {
-            Ok(result) if result.requested => chat_view.set_status(Some(format!(
-                "Interrupt requested for subagent Session {session_id}"
-            ))),
-            Ok(_) => chat_view.set_status(Some("The subagent has no active turn".to_string())),
-            Err(error) => chat_view.set_status(Some(format!(
-                "Could not interrupt subagent Session: {error}"
-            ))),
-        }
+        self.pending_lineage_cancellation = Some(PendingLineageCancellation {
+            root_session_id,
+            session_id,
+            navigation_generation: self.lineage_navigation_generation,
+            handle,
+        });
+        chat_view.set_status(Some("Requesting subagent interruption...".to_string()));
     }
 }
 
@@ -665,100 +837,48 @@ fn is_buffered_lineage_event(event: &AgenticEvent) -> bool {
             | AgenticEvent::ContextCompressionCompleted { .. }
             | AgenticEvent::ContextCompressionFailed { .. }
             | AgenticEvent::TokenUsageUpdated { .. }
+            | AgenticEvent::SystemError { .. }
     )
 }
 
-fn is_terminal_lineage_event(event: &AgenticEvent, turn_id: &str) -> bool {
-    matches!(
-        event,
-        AgenticEvent::DialogTurnCompleted {
-            turn_id: event_turn_id,
-            ..
-        } | AgenticEvent::DialogTurnFailed {
-            turn_id: event_turn_id,
-            ..
-        } | AgenticEvent::DialogTurnCancelled {
-            turn_id: event_turn_id,
-            ..
-        } if event_turn_id == turn_id
-    )
-}
-
-fn lineage_settlement_from_event(
-    existing: Option<&LineageSettlement>,
-    observed_turn: bool,
-    event: &AgenticEvent,
-) -> Option<LineageSettlement> {
-    let turn_id = event.turn_id()?;
-    if !observed_turn
-        || !is_terminal_lineage_event(event, turn_id)
-        || existing.is_some_and(|settlement| settlement.turn_id == turn_id)
-    {
-        return None;
-    }
-    Some(LineageSettlement {
-        turn_id: turn_id.to_string(),
-        preserve_live_terminal: matches!(
-            event,
-            AgenticEvent::DialogTurnFailed { .. } | AgenticEvent::DialogTurnCancelled { .. }
-        ),
-    })
-}
-
-fn clear_lineage_settlement_for_new_turn(
-    inspection: Option<&mut AgentSessionInspection>,
+fn record_required_settled_lineage_turn(
+    required_turns: &mut BTreeMap<String, Vec<String>>,
     session_id: &str,
+    turn_id: &str,
 ) {
-    let Some(inspection) =
-        inspection.filter(|inspection| inspection.selected_session_id == session_id)
-    else {
+    let session_turns = required_turns.entry(session_id.to_string()).or_default();
+    if session_turns.iter().any(|required| required == turn_id) {
         return;
-    };
-    inspection.settling_turn_ids.clear();
-    inspection.preserve_live_terminal = false;
+    }
+    session_turns.push(turn_id.to_string());
+    if session_turns.len() > LINEAGE_READ_BARRIER_MAX_TURNS_PER_SESSION {
+        session_turns.remove(0);
+    }
 }
 
-fn lineage_terminal_reconciliation_pending(
-    inspection: Option<&AgentSessionInspection>,
+fn lineage_inspection_result_is_current(
     session_id: &str,
+    request_generation: u64,
+    current_generations: &HashMap<String, u64>,
 ) -> bool {
-    inspection.is_some_and(|inspection| {
-        inspection.selected_session_id == session_id
-            && (!inspection.settling_turn_ids.is_empty() || inspection.preserve_live_terminal)
-    })
+    request_generation
+        == current_generations
+            .get(session_id)
+            .copied()
+            .unwrap_or_default()
 }
 
-fn provisional_lineage_replay_turn<'a>(
-    settlement_turn_id: Option<&'a str>,
-    has_terminal_event: bool,
-    active_turn_id: Option<&'a str>,
-) -> Option<&'a str> {
-    if has_terminal_event {
-        settlement_turn_id
-    } else {
-        active_turn_id
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum LineageRefreshAction {
-    RetrySettlement,
-    PreserveLiveTerminal,
-    ReplaceFromRuntime,
-}
-
-fn lineage_refresh_action(
-    settling_turn_ids: &BTreeSet<String>,
-    active_turn_id: Option<&str>,
-    preserve_live_terminal: bool,
-) -> LineageRefreshAction {
-    if active_turn_id.is_some_and(|turn_id| settling_turn_ids.contains(turn_id)) {
-        LineageRefreshAction::RetrySettlement
-    } else if preserve_live_terminal {
-        LineageRefreshAction::PreserveLiveTerminal
-    } else {
-        LineageRefreshAction::ReplaceFromRuntime
-    }
+fn lineage_cancellation_result_is_current(
+    request_navigation_generation: u64,
+    current_navigation_generation: u64,
+    request_root_session_id: &str,
+    current_root_session_id: Option<&str>,
+    request_session_id: &str,
+    current_selected_session_id: Option<&str>,
+) -> bool {
+    request_navigation_generation == current_navigation_generation
+        && current_root_session_id == Some(request_root_session_id)
+        && current_selected_session_id == Some(request_session_id)
 }
 
 fn push_bounded_lineage_event(
@@ -787,6 +907,27 @@ fn push_bounded_lineage_event(
         encoded_bytes: event_bytes,
     });
     *encoded_bytes = encoded_bytes.saturating_add(event_bytes);
+}
+
+fn build_provisional_lineage_chat_state(
+    entry: &AgentSessionLineageEntry,
+    replay_events: &[AgenticEvent],
+) -> ChatState {
+    let transcript = SessionTranscript {
+        session_id: entry.session_id.clone(),
+        messages: Vec::new(),
+    };
+    let mut state = ChatState::from_session_transcript(
+        entry.session_id.clone(),
+        entry.session_name.clone(),
+        entry.agent_type.clone(),
+        entry.workspace_path.clone(),
+        &transcript,
+    );
+    for event in replay_events {
+        project_transcript_event(&mut state, event, false);
+    }
+    state
 }
 
 fn build_lineage_chat_state(
@@ -831,111 +972,26 @@ fn build_lineage_chat_state(
     state
 }
 
-fn merge_live_terminal_into_authoritative(
-    authoritative: &mut ChatState,
-    live: &ChatState,
-    replayed: Option<&ChatState>,
-    terminal_turn_id: &str,
-) {
-    let live_terminal_messages = live
-        .messages
+fn lineage_session_index(snapshot: &AgentSessionLineageSnapshot) -> HashMap<String, usize> {
+    snapshot
+        .sessions
         .iter()
-        .filter(|message| message.turn_id.as_deref() == Some(terminal_turn_id))
-        .cloned()
-        .collect::<Vec<_>>();
-    let replayed_terminal_messages = replayed
-        .into_iter()
-        .flat_map(|state| state.messages.iter())
-        .filter(|message| message.turn_id.as_deref() == Some(terminal_turn_id))
-        .cloned()
-        .collect::<Vec<_>>();
-    let has_terminal_marker = |messages: &[crate::chat_state::ChatMessage]| {
-        messages.iter().any(|message| {
-            message.flow_items.iter().any(|item| {
-                matches!(
-                    item,
-                    crate::chat_state::FlowItem::Text { content, .. }
-                        if content == "[Cancelled]" || content.starts_with("[Error: ")
-                )
-            })
-        })
-    };
-    let projected_terminal_messages =
-        if has_terminal_marker(&live_terminal_messages) || replayed_terminal_messages.is_empty() {
-            &live_terminal_messages
-        } else {
-            &replayed_terminal_messages
-        };
-    let authoritative_terminal_messages = authoritative
-        .messages
-        .iter()
-        .filter(|message| message.turn_id.as_deref() == Some(terminal_turn_id))
-        .cloned()
-        .collect::<Vec<_>>();
-    let projected_has_user = projected_terminal_messages
-        .iter()
-        .any(|message| message.role == crate::chat_state::MessageRole::User);
-    let projected_has_assistant = projected_terminal_messages
-        .iter()
-        .any(|message| message.role == crate::chat_state::MessageRole::Assistant);
-    let mut replacement = Vec::new();
-    if !projected_has_user {
-        replacement.extend(
-            authoritative_terminal_messages
-                .iter()
-                .filter(|message| message.role == crate::chat_state::MessageRole::User)
-                .cloned(),
-        );
-    }
-    replacement.extend(projected_terminal_messages.iter().cloned());
-    if !projected_has_assistant {
-        replacement.extend(
-            authoritative_terminal_messages
-                .iter()
-                .filter(|message| message.role == crate::chat_state::MessageRole::Assistant)
-                .cloned(),
-        );
-    }
-
-    let insertion_index = authoritative
-        .messages
-        .iter()
-        .position(|message| message.turn_id.as_deref() == Some(terminal_turn_id))
-        .or_else(|| {
-            authoritative.current_turn_id().and_then(|active_turn_id| {
-                authoritative
-                    .messages
-                    .iter()
-                    .position(|message| message.turn_id.as_deref() == Some(active_turn_id))
-            })
-        })
-        .unwrap_or(authoritative.messages.len());
-    let mut merged = Vec::with_capacity(authoritative.messages.len() + replacement.len());
-    let mut inserted = false;
-    for (index, message) in authoritative.messages.drain(..).enumerate() {
-        if !inserted && index == insertion_index {
-            merged.append(&mut replacement);
-            inserted = true;
-        }
-        if message.turn_id.as_deref() != Some(terminal_turn_id) {
-            merged.push(message);
-        }
-    }
-    if !inserted {
-        merged.append(&mut replacement);
-    }
-    authoritative.messages = merged;
-    authoritative.metadata.message_count = authoritative.messages.len();
+        .enumerate()
+        .map(|(index, entry)| (entry.session_id.clone(), index))
+        .collect()
 }
 
-fn update_lineage_active_turn(snapshot: &mut AgentSessionLineageSnapshot, event: &AgenticEvent) {
+fn update_lineage_active_turn(
+    snapshot: &mut AgentSessionLineageSnapshot,
+    session_index: &HashMap<String, usize>,
+    event: &AgenticEvent,
+) {
     let Some(session_id) = event.session_id() else {
         return;
     };
-    let Some(entry) = snapshot
-        .sessions
-        .iter_mut()
-        .find(|entry| entry.session_id == session_id)
+    let Some(entry) = session_index
+        .get(session_id)
+        .and_then(|index| snapshot.sessions.get_mut(*index))
     else {
         return;
     };
@@ -1005,15 +1061,14 @@ mod session_lineage_tests {
     use bitfun_events::AgenticEvent;
 
     use crate::chat_state::{FlowItem, MessageRole};
-    use std::collections::{BTreeSet, VecDeque};
+    use std::collections::{BTreeMap, HashMap, VecDeque};
 
     use super::{
-        build_lineage_chat_state, clear_lineage_settlement_for_new_turn, lineage_parent_session_id,
-        lineage_refresh_action, lineage_settlement_from_event, lineage_sibling_session_id,
-        lineage_terminal_reconciliation_pending, merge_live_terminal_into_authoritative,
-        project_transcript_event, provisional_lineage_replay_turn, push_bounded_lineage_event,
-        update_lineage_active_turn, AgentSessionInspection, BufferedLineageEvent,
-        LineageRefreshAction, LineageSettlement,
+        build_lineage_chat_state, lineage_cancellation_result_is_current,
+        lineage_inspection_result_is_current, lineage_parent_session_id, lineage_session_index,
+        lineage_sibling_session_id, project_transcript_event, push_bounded_lineage_event,
+        record_required_settled_lineage_turn, update_lineage_active_turn, BufferedLineageEvent,
+        LINEAGE_READ_BARRIER_MAX_TURNS_PER_SESSION,
     };
 
     fn entry(id: &str, parent: Option<&str>) -> AgentSessionLineageEntry {
@@ -1077,10 +1132,93 @@ mod session_lineage_tests {
     }
 
     #[test]
+    fn inspection_freshness_is_scoped_to_the_selected_session() {
+        let generations = HashMap::from([
+            ("selected".to_string(), 4),
+            ("streaming-sibling".to_string(), 99),
+        ]);
+
+        assert!(lineage_inspection_result_is_current(
+            "selected",
+            4,
+            &generations
+        ));
+        assert!(!lineage_inspection_result_is_current(
+            "selected",
+            3,
+            &generations
+        ));
+    }
+
+    #[test]
+    fn cancellation_result_is_hidden_after_switching_to_a_sibling() {
+        assert!(lineage_cancellation_result_is_current(
+            4,
+            4,
+            "root",
+            Some("root"),
+            "child-a",
+            Some("child-a"),
+        ));
+        assert!(!lineage_cancellation_result_is_current(
+            4,
+            4,
+            "root",
+            Some("root"),
+            "child-a",
+            Some("child-b"),
+        ));
+        assert!(!lineage_cancellation_result_is_current(
+            4,
+            4,
+            "root",
+            Some("root"),
+            "child-a",
+            None,
+        ));
+    }
+
+    #[test]
+    fn lineage_runtime_io_is_started_off_the_tui_loop_and_polled_once() {
+        let source = include_str!("session_lineage.rs")
+            .split("#[cfg(test)]")
+            .next()
+            .expect("production lineage source");
+        for method in [
+            "show_session_lineage",
+            "inspect_lineage_session",
+            "refresh_inspected_lineage_if_due",
+            "cancel_inspected_lineage_session",
+        ] {
+            let body = source
+                .split(&format!("fn {method}"))
+                .nth(1)
+                .and_then(|source| source.split("\n    }").next())
+                .expect("lineage operation body");
+            assert!(body.contains("rt_handle.spawn"), "{method} must spawn I/O");
+            assert!(
+                !body.contains("block_in_place"),
+                "{method} must not synchronously wait on Runtime I/O"
+            );
+        }
+        let poll = source
+            .split("fn poll_lineage_operation_completion")
+            .nth(1)
+            .and_then(|source| source.split("fn apply_lineage_inspection").next())
+            .expect("lineage completion polling");
+        assert!(
+            poll.find("is_finished").expect("finished gate")
+                < poll.find("block_in_place").expect("finished join")
+        );
+    }
+
+    #[test]
     fn background_child_events_refresh_the_existing_lineage_snapshot() {
         let mut snapshot = snapshot();
+        let session_index = lineage_session_index(&snapshot);
         update_lineage_active_turn(
             &mut snapshot,
+            &session_index,
             &AgenticEvent::DialogTurnStarted {
                 session_id: "first".to_string(),
                 turn_id: "turn-live".to_string(),
@@ -1097,6 +1235,7 @@ mod session_lineage_tests {
 
         update_lineage_active_turn(
             &mut snapshot,
+            &session_index,
             &AgenticEvent::DialogTurnCancelled {
                 session_id: "first".to_string(),
                 turn_id: "turn-live".to_string(),
@@ -1262,294 +1401,47 @@ mod session_lineage_tests {
     }
 
     #[test]
-    fn stale_terminal_cannot_replace_the_observed_active_turn() {
-        let terminal = AgenticEvent::DialogTurnCancelled {
-            session_id: "first".to_string(),
-            turn_id: "turn-old".to_string(),
-        };
+    fn observed_terminal_turn_is_kept_as_a_runtime_read_barrier() {
+        let mut required_turns = BTreeMap::new();
+        record_required_settled_lineage_turn(&mut required_turns, "first", "turn-old");
 
-        assert!(lineage_settlement_from_event(None, false, &terminal).is_none());
-        let settlement = lineage_settlement_from_event(None, true, &terminal).unwrap();
-        assert_eq!(settlement.turn_id, "turn-old");
-        assert!(settlement.preserve_live_terminal);
+        assert_eq!(required_turns["first"], ["turn-old"]);
     }
 
     #[test]
     fn duplicate_terminal_for_the_same_turn_is_ignored() {
-        let existing = LineageSettlement {
-            turn_id: "turn-live".to_string(),
-            preserve_live_terminal: true,
-        };
-        let duplicate = AgenticEvent::DialogTurnCancelled {
-            session_id: "first".to_string(),
-            turn_id: "turn-live".to_string(),
-        };
+        let mut required_turns = BTreeMap::new();
+        record_required_settled_lineage_turn(&mut required_turns, "first", "turn-live");
+        record_required_settled_lineage_turn(&mut required_turns, "first", "turn-live");
 
-        assert!(lineage_settlement_from_event(Some(&existing), true, &duplicate).is_none());
+        assert_eq!(required_turns["first"], ["turn-live"]);
     }
 
     #[test]
-    fn new_turn_keeps_terminal_reconciliation_until_authoritative_refresh() {
-        let mut inspection = AgentSessionInspection {
-            selected_session_id: "first".to_string(),
-            chat_state: crate::chat_state::ChatState::new(
-                "first".to_string(),
-                "first".to_string(),
-                "explore".to_string(),
-                None,
-            ),
-            refresh_pending: true,
-            refresh_due_at: std::time::Instant::now(),
-            refresh_deadline: Some(std::time::Instant::now()),
-            settling_turn_ids: BTreeSet::from(["turn-old".to_string()]),
-            preserve_live_terminal: true,
-        };
+    fn terminal_read_barriers_have_an_explicit_per_session_bound() {
+        let mut required_turns = BTreeMap::new();
+        for index in 0..=LINEAGE_READ_BARRIER_MAX_TURNS_PER_SESSION {
+            record_required_settled_lineage_turn(
+                &mut required_turns,
+                "first",
+                &format!("turn-{index}"),
+            );
+        }
 
-        assert!(lineage_terminal_reconciliation_pending(
-            Some(&inspection),
-            "first"
-        ));
-        assert!(inspection.refresh_pending);
-        assert!(inspection.refresh_deadline.is_some());
         assert_eq!(
-            inspection.settling_turn_ids,
-            BTreeSet::from(["turn-old".to_string()])
+            required_turns["first"].len(),
+            LINEAGE_READ_BARRIER_MAX_TURNS_PER_SESSION
         );
-        assert!(inspection.preserve_live_terminal);
-        assert_eq!(
-            lineage_refresh_action(
-                &inspection.settling_turn_ids,
-                Some("turn-new"),
-                inspection.preserve_live_terminal,
-            ),
-            LineageRefreshAction::PreserveLiveTerminal
-        );
-
-        inspection.settling_turn_ids.clear();
-        inspection.preserve_live_terminal = false;
-        assert!(!lineage_terminal_reconciliation_pending(
-            Some(&inspection),
-            "first"
-        ));
-        clear_lineage_settlement_for_new_turn(Some(&mut inspection), "first");
-        assert!(inspection.refresh_pending);
+        assert_eq!(required_turns["first"][0], "turn-1");
     }
 
     #[test]
-    fn settled_transcript_fills_provisional_history_without_losing_live_terminal() {
-        let entry = entry("first", Some("root"));
-        let replay_events = vec![
-            AgenticEvent::TextChunk {
-                session_id: "first".to_string(),
-                turn_id: "turn-live".to_string(),
-                round_id: "round-live".to_string(),
-                attempt_id: None,
-                attempt_index: None,
-                text: "partial".to_string(),
-            },
-            AgenticEvent::DialogTurnCancelled {
-                session_id: "first".to_string(),
-                turn_id: "turn-live".to_string(),
-            },
-        ];
-        let live = crate::chat_state::ChatState::new(
-            "first".to_string(),
-            "first".to_string(),
-            "explore".to_string(),
-            None,
-        );
-        let inspection = AgentSessionLineageInspection {
-            transcript: SessionTranscript {
-                session_id: "first".to_string(),
-                messages: vec![TranscriptMessage {
-                    id: Some("persisted-user".to_string()),
-                    role: "user".to_string(),
-                    turn_id: Some("turn-live".to_string()),
-                    timestamp_ms: Some(1),
-                    content: TranscriptContent::Text("continue".to_string()),
-                }],
-            },
-            active_turn_id: None,
-        };
-        let mut authoritative = build_lineage_chat_state(&entry, inspection.clone(), &[]);
-        let mut replay_inspection = inspection;
-        replay_inspection.active_turn_id = Some("turn-live".to_string());
-        let replayed = build_lineage_chat_state(&entry, replay_inspection, &replay_events);
+    fn consecutive_terminal_turns_remain_independent_read_barriers() {
+        let mut required_turns = BTreeMap::new();
+        record_required_settled_lineage_turn(&mut required_turns, "first", "turn-a");
+        record_required_settled_lineage_turn(&mut required_turns, "first", "turn-b");
 
-        merge_live_terminal_into_authoritative(
-            &mut authoritative,
-            &live,
-            Some(&replayed),
-            "turn-live",
-        );
-
-        assert!(authoritative.messages.iter().any(|message| {
-            message.role == MessageRole::User
-                && message.turn_id.as_deref() == Some("turn-live")
-                && message.flow_items.iter().any(
-                    |item| matches!(item, FlowItem::Text { content, .. } if content == "continue"),
-                )
-        }));
-        assert!(authoritative.messages.iter().any(|message| {
-            message.role == MessageRole::Assistant
-                && message.flow_items.iter().any(
-                    |item| matches!(item, FlowItem::Text { content, .. } if content == "partial"),
-                )
-        }));
-        assert_eq!(
-            authoritative
-                .messages
-                .iter()
-                .flat_map(|message| message.flow_items.iter())
-                .filter(|item| {
-                    matches!(item, FlowItem::Text { content, .. } if content == "[Cancelled]")
-                })
-                .count(),
-            1
-        );
-    }
-
-    #[test]
-    fn runtime_active_turn_stays_authoritative_while_previous_live_terminal_is_preserved() {
-        let entry = entry("first", Some("root"));
-        let live_events = vec![
-            AgenticEvent::TextChunk {
-                session_id: "first".to_string(),
-                turn_id: "turn-a".to_string(),
-                round_id: "round-a".to_string(),
-                attempt_id: None,
-                attempt_index: None,
-                text: "partial a".to_string(),
-            },
-            AgenticEvent::DialogTurnCancelled {
-                session_id: "first".to_string(),
-                turn_id: "turn-a".to_string(),
-            },
-        ];
-        let mut live = build_lineage_chat_state(
-            &entry,
-            AgentSessionLineageInspection {
-                transcript: SessionTranscript {
-                    session_id: "first".to_string(),
-                    messages: Vec::new(),
-                },
-                active_turn_id: Some("turn-a".to_string()),
-            },
-            &live_events,
-        );
-        let next_start = AgenticEvent::DialogTurnStarted {
-            session_id: "first".to_string(),
-            turn_id: "turn-b".to_string(),
-            turn_index: 1,
-            user_input: "follow up".to_string(),
-            original_user_input: None,
-            user_message_metadata: None,
-        };
-        assert!(project_transcript_event(&mut live, &next_start, false).changed);
-        let mut authoritative = build_lineage_chat_state(
-            &entry,
-            AgentSessionLineageInspection {
-                transcript: SessionTranscript {
-                    session_id: "first".to_string(),
-                    messages: vec![
-                        TranscriptMessage {
-                            id: Some("user-a".to_string()),
-                            role: "user".to_string(),
-                            turn_id: Some("turn-a".to_string()),
-                            timestamp_ms: Some(1),
-                            content: TranscriptContent::Text("first".to_string()),
-                        },
-                        TranscriptMessage {
-                            id: Some("user-b".to_string()),
-                            role: "user".to_string(),
-                            turn_id: Some("turn-b".to_string()),
-                            timestamp_ms: Some(2),
-                            content: TranscriptContent::Text("follow up".to_string()),
-                        },
-                    ],
-                },
-                active_turn_id: Some("turn-b".to_string()),
-            },
-            &[],
-        );
-
-        merge_live_terminal_into_authoritative(&mut authoritative, &live, None, "turn-a");
-
-        assert_eq!(authoritative.current_turn_id(), Some("turn-b"));
-        assert_eq!(
-            authoritative
-                .messages
-                .iter()
-                .filter_map(|message| message.turn_id.as_deref())
-                .collect::<Vec<_>>(),
-            vec!["turn-a", "turn-a", "turn-b", "turn-b"]
-        );
-        assert!(authoritative.messages.iter().any(|message| {
-            message.role == MessageRole::User
-                && message.turn_id.as_deref() == Some("turn-a")
-                && message.flow_items.iter().any(
-                    |item| matches!(item, FlowItem::Text { content, .. } if content == "first"),
-                )
-        }));
-        assert!(authoritative.messages.iter().any(|message| {
-            message.role == MessageRole::Assistant
-                && message.turn_id.as_deref() == Some("turn-a")
-                && message.flow_items.iter().any(
-                    |item| matches!(item, FlowItem::Text { content, .. } if content == "partial a"),
-                )
-        }));
-        let delayed_start = project_transcript_event(
-            &mut authoritative,
-            &AgenticEvent::DialogTurnStarted {
-                session_id: "first".to_string(),
-                turn_id: "turn-b".to_string(),
-                turn_index: 1,
-                user_input: "follow up".to_string(),
-                original_user_input: None,
-                user_message_metadata: None,
-            },
-            false,
-        );
-        assert!(!delayed_start.changed);
-        assert_eq!(
-            authoritative
-                .messages
-                .iter()
-                .filter(|message| {
-                    message.role == MessageRole::User
-                        && message.turn_id.as_deref() == Some("turn-b")
-                })
-                .count(),
-            1
-        );
-        let chunk = project_transcript_event(
-            &mut authoritative,
-            &AgenticEvent::TextChunk {
-                session_id: "first".to_string(),
-                turn_id: "turn-b".to_string(),
-                round_id: "round-b".to_string(),
-                attempt_id: None,
-                attempt_index: None,
-                text: "live b".to_string(),
-            },
-            false,
-        );
-        assert!(chunk.changed);
-        assert!(authoritative.messages.iter().any(|message| {
-            message.role == MessageRole::Assistant
-                && message.turn_id.as_deref() == Some("turn-b")
-                && message.flow_items.iter().any(
-                    |item| matches!(item, FlowItem::Text { content, .. } if content == "live b"),
-                )
-        }));
-    }
-
-    #[test]
-    fn provisional_replay_uses_the_lineage_active_turn_before_terminal_arrives() {
-        assert_eq!(
-            provisional_lineage_replay_turn(None, false, Some("turn-live")),
-            Some("turn-live")
-        );
+        assert_eq!(required_turns["first"], vec!["turn-a", "turn-b"]);
     }
 
     #[test]
@@ -1581,28 +1473,6 @@ mod session_lineage_tests {
         let oversized = event(&"x".repeat(max_bytes));
         push_bounded_lineage_event(&mut buffer, &mut encoded_bytes, &oversized, max_bytes, 1);
         assert_eq!(buffer.len(), 1);
-    }
-
-    #[test]
-    fn terminal_reconciliation_retries_while_the_settling_turn_is_still_active() {
-        let settling = BTreeSet::from(["turn-terminal".to_string()]);
-
-        assert_eq!(
-            lineage_refresh_action(&settling, Some("turn-terminal"), true),
-            LineageRefreshAction::RetrySettlement
-        );
-        assert_eq!(
-            lineage_refresh_action(&settling, None, true),
-            LineageRefreshAction::PreserveLiveTerminal
-        );
-        assert_eq!(
-            lineage_refresh_action(&settling, Some("turn-new"), true),
-            LineageRefreshAction::PreserveLiveTerminal
-        );
-        assert_eq!(
-            lineage_refresh_action(&settling, None, false),
-            LineageRefreshAction::ReplaceFromRuntime
-        );
     }
 
     #[test]

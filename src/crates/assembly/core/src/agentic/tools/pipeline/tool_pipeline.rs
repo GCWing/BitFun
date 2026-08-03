@@ -2425,6 +2425,18 @@ impl ToolPipeline {
         );
         Ok(())
     }
+
+    #[cfg(test)]
+    pub(crate) async fn insert_tool_task_for_test(&self, task: ToolTask) {
+        self.state_manager.create_task(task).await;
+    }
+
+    #[cfg(test)]
+    pub(crate) fn tool_task_is_cancelled_for_test(&self, tool_id: &str) -> bool {
+        self.state_manager
+            .get_task(tool_id)
+            .is_some_and(|task| matches!(task.state, ToolExecutionState::Cancelled { .. }))
+    }
 }
 
 #[cfg(test)]

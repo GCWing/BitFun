@@ -33,11 +33,12 @@ use bitfun_runtime_services::RuntimeServices;
 use bitfun_services_core::permission_store::ProjectPermissionSqliteStore;
 use bitfun_services_core::session::{
     build_session_lineage_snapshot, normalized_session_relationship, SessionBranchBoundary,
+    SessionRelationshipKind,
 };
 
 use crate::agentic::coordination::{
-    runtime_transcript_messages_from_turns, ConversationCoordinator, DialogScheduler,
-    SessionMaintenancePermit,
+    runtime_transcript_messages_from_turns, validate_required_lineage_turns_settled,
+    ConversationCoordinator, DialogScheduler, SessionMaintenancePermit,
 };
 use crate::agentic::core::Session;
 use crate::agentic::events::EventQueue;
@@ -1329,24 +1330,13 @@ impl CoreSessionOperationsPort {
         root_session_id: &str,
         session_id: &str,
     ) -> PortResult<()> {
-        let metadata = self
-            .persistence
-            .list_session_metadata_including_internal(storage_path)
-            .await
-            .map_err(runtime_port_error)?;
-        let snapshot = build_session_lineage_snapshot(metadata, session_id).ok_or_else(|| {
-            PortError::new(
-                PortErrorKind::NotFound,
-                format!("Session lineage target was not found: {session_id}"),
-            )
-        })?;
-        if snapshot.root_session_id != root_session_id || session_id == root_session_id {
-            return Err(PortError::new(
-                PortErrorKind::InvalidRequest,
-                "Lineage target is not a descendant of the requested root",
-            ));
-        }
-        Ok(())
+        validate_persisted_lineage_descendant(
+            self.persistence.as_ref(),
+            storage_path,
+            root_session_id,
+            session_id,
+        )
+        .await
     }
 
     async fn fork_at_persisted_turn(
@@ -1471,6 +1461,77 @@ impl CoreSessionOperationsPort {
     }
 }
 
+async fn validate_persisted_lineage_descendant(
+    persistence: &PersistenceManager,
+    storage_path: &Path,
+    root_session_id: &str,
+    session_id: &str,
+) -> PortResult<()> {
+    if session_id == root_session_id {
+        return Err(PortError::new(
+            PortErrorKind::InvalidRequest,
+            "Lineage target is not a descendant of the requested root",
+        ));
+    }
+
+    let mut current_session_id = session_id.to_string();
+    let mut visited = std::collections::HashSet::new();
+    loop {
+        if !visited.insert(current_session_id.clone()) {
+            return Err(PortError::new(
+                PortErrorKind::InvalidRequest,
+                "Session lineage contains a parent cycle",
+            ));
+        }
+        let metadata = persistence
+            .load_session_metadata(storage_path, &current_session_id)
+            .await
+            .map_err(runtime_port_error)?
+            .ok_or_else(|| {
+                PortError::new(
+                    if current_session_id == session_id {
+                        PortErrorKind::NotFound
+                    } else {
+                        PortErrorKind::InvalidRequest
+                    },
+                    format!("Session lineage entry was not found: {current_session_id}"),
+                )
+            })?;
+        let parent_session_id = normalized_session_relationship(&metadata)
+            .filter(|relationship| relationship.kind == Some(SessionRelationshipKind::Subagent))
+            .and_then(|relationship| relationship.parent_session_id)
+            .map(|parent_session_id| parent_session_id.trim().to_string())
+            .filter(|parent_session_id| !parent_session_id.is_empty());
+        if current_session_id == root_session_id {
+            let Some(parent_session_id) = parent_session_id else {
+                return Ok(());
+            };
+            // Match `build_session_lineage_snapshot`: a broken parent link
+            // makes the current entry the effective root, while an existing
+            // parent proves that the requested root is only an intermediate
+            // descendant.
+            if persistence
+                .load_session_metadata(storage_path, &parent_session_id)
+                .await
+                .map_err(runtime_port_error)?
+                .is_none()
+            {
+                return Ok(());
+            }
+            return Err(PortError::new(
+                PortErrorKind::InvalidRequest,
+                "Lineage target is not a descendant of the requested root",
+            ));
+        }
+        current_session_id = parent_session_id.ok_or_else(|| {
+            PortError::new(
+                PortErrorKind::InvalidRequest,
+                "Lineage target is not a descendant of the requested root",
+            )
+        })?;
+    }
+}
+
 fn runtime_port_error(error: BitFunError) -> PortError {
     let kind = match &error {
         BitFunError::Validation(_) => PortErrorKind::InvalidRequest,
@@ -1572,6 +1633,7 @@ impl AgentSessionLineagePort for CoreSessionOperationsPort {
                     session_id: request.session_id.clone(),
                     turn_id: None,
                 },
+                &request.required_settled_turn_ids,
             )
             .await?
         {
@@ -1585,6 +1647,7 @@ impl AgentSessionLineagePort for CoreSessionOperationsPort {
             )
             .await
             .map_err(runtime_port_error)?;
+        validate_required_lineage_turns_settled(&turns, &request.required_settled_turn_ids)?;
         Ok(AgentSessionLineageInspection {
             transcript: SessionTranscript {
                 session_id: request.session_id,
@@ -1598,29 +1661,45 @@ impl AgentSessionLineagePort for CoreSessionOperationsPort {
         &self,
         request: AgentSessionLineageCancellationRequest,
     ) -> PortResult<AgentTurnCancellationResult> {
-        validate_persisted_session_id(&request.root_session_id).map_err(runtime_port_error)?;
-        validate_persisted_session_id(&request.session_id).map_err(runtime_port_error)?;
-        let storage_path = self
-            .resolve_session_storage_path(
-                request.workspace_path,
-                request.remote_connection_id,
-                request.remote_ssh_host,
-            )
-            .await?;
-        self.validate_lineage_descendant(
-            &storage_path,
-            &request.root_session_id,
-            &request.session_id,
-        )
-        .await?;
-
-        let session_id = request.session_id;
+        let AgentSessionLineageCancellationRequest {
+            workspace_path,
+            root_session_id,
+            session_id,
+            expected_active_turn_id,
+            wait_timeout_ms,
+            remote_connection_id,
+            remote_ssh_host,
+            ..
+        } = request;
+        validate_persisted_session_id(&root_session_id).map_err(runtime_port_error)?;
+        validate_persisted_session_id(&session_id).map_err(runtime_port_error)?;
+        let wait_timeout = Duration::from_millis(wait_timeout_ms.unwrap_or(1500));
+        let deadline = Instant::now() + wait_timeout;
+        let storage_path = match tokio::time::timeout(wait_timeout, async {
+            let storage_path = self
+                .resolve_session_storage_path(workspace_path, remote_connection_id, remote_ssh_host)
+                .await?;
+            self.validate_lineage_descendant(&storage_path, &root_session_id, &session_id)
+                .await?;
+            Ok(storage_path)
+        })
+        .await
+        {
+            Ok(result) => result?,
+            Err(_) => {
+                return Err(PortError::new(
+                    PortErrorKind::Timeout,
+                    "Subagent Session cancellation validation exceeded its deadline",
+                ))
+            }
+        };
         let cancelled_turn_id = self
             .scheduler
             .cancel_lineage_session_in_storage(
                 &storage_path,
                 &session_id,
-                Duration::from_millis(request.wait_timeout_ms.unwrap_or(1500)),
+                expected_active_turn_id.as_deref(),
+                deadline.saturating_duration_since(Instant::now()),
             )
             .await
             .map_err(runtime_port_error)?;
@@ -2100,16 +2179,131 @@ mod tests {
         assert!(lineage_impl.contains("cancel_lineage_session_in_storage"));
         assert!(lineage_impl.contains("active_turn_id_in_storage_path"));
         assert!(!lineage_impl.contains("SessionTranscriptReader::read_session_transcript"));
+        let cancellation = lineage_impl
+            .split("async fn cancel_lineage_session")
+            .nth(1)
+            .expect("lineage cancellation implementation");
+        let (cancellation_preparation, admitted_cancellation) = cancellation
+            .split_once("let cancelled_turn_id")
+            .expect("lineage cancellation admission boundary");
+        assert!(cancellation_preparation.contains("tokio::time::timeout(wait_timeout"));
+        assert!(admitted_cancellation.contains("cancel_lineage_session_in_storage"));
+        assert!(
+            admitted_cancellation.contains("deadline.saturating_duration_since(Instant::now())")
+        );
+        assert!(!admitted_cancellation.contains("tokio::time::timeout"));
+        assert!(
+            cancellation_preparation
+                .find("tokio::time::timeout")
+                .unwrap()
+                < cancellation_preparation
+                    .find("validate_lineage_descendant")
+                    .unwrap(),
+            "the caller wait budget must include lineage validation"
+        );
         let product_runtime_source = product_source
             .split("#[cfg(test)]")
             .next()
             .expect("production product runtime source");
+        let lineage_validation = product_runtime_source
+            .split("async fn validate_persisted_lineage_descendant")
+            .nth(1)
+            .and_then(|source| source.split("#[async_trait::async_trait]").next())
+            .expect("targeted persisted lineage validation");
+        assert!(lineage_validation.contains("load_session_metadata"));
+        assert!(lineage_validation.contains("normalized_session_relationship"));
+        assert!(!lineage_validation.contains("list_session_metadata_including_internal"));
         assert!(!product_runtime_source.contains("fn lineage_active_turn_id("));
         assert!(coordinator_source.contains("TurnStatus::InProgress"));
         assert!(coordinator_source
             .contains("Session turn settlement changed while its transcript was being inspected"));
         assert!(coordinator_source
             .contains("Session turn is still settling after its active state changed"));
+
+        let inspect_body = coordinator_source
+            .split("fn inspect_loaded_lineage_session_in_storage")
+            .nth(1)
+            .and_then(|source| source.split("\n    }").next())
+            .expect("loaded lineage inspection body");
+        let required_settlement_gate = inspect_body
+            .find("required_settled_turn_ids")
+            .expect("required settlement consistency gate");
+        let transcript_read = inspect_body
+            .find("read_session_transcript_with_turn_status_locked")
+            .expect("authoritative transcript read");
+        assert!(
+            required_settlement_gate < transcript_read,
+            "unsettled required Turns must return before transcript I/O"
+        );
+
+        let signal_body = coordinator_source
+            .split("fn signal_active_subagent_cancellation")
+            .nth(1)
+            .and_then(|source| source.split("\n    }").next())
+            .expect("subagent cancellation signal body");
+        assert!(signal_body.contains("cancel_token.cancel()"));
+        assert!(!signal_body.contains("abort_handle.abort()"));
+        assert!(!signal_body.contains("persist_cancelled_dialog_turn"));
+    }
+
+    #[tokio::test]
+    async fn targeted_lineage_validation_rejects_an_intermediate_root() {
+        let workspace = TestWorkspace::new();
+        let persistence =
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager");
+        let storage_path = workspace.path().join("sessions");
+        std::fs::create_dir_all(&storage_path).expect("session storage");
+
+        let root = SessionMetadata::new(
+            "root".to_string(),
+            "Root".to_string(),
+            "agentic".to_string(),
+            "model".to_string(),
+        );
+        let mut child = SessionMetadata::new(
+            "child".to_string(),
+            "Child".to_string(),
+            "explore".to_string(),
+            "model".to_string(),
+        );
+        child.custom_metadata = Some(serde_json::json!({
+            "kind": "subagent",
+            "parentSessionId": "root"
+        }));
+        let mut grandchild = SessionMetadata::new(
+            "grandchild".to_string(),
+            "Grandchild".to_string(),
+            "explore".to_string(),
+            "model".to_string(),
+        );
+        grandchild.custom_metadata = Some(serde_json::json!({
+            "kind": "subagent",
+            "parentSessionId": "child"
+        }));
+        for metadata in [&root, &child, &grandchild] {
+            persistence
+                .save_session_metadata(&storage_path, metadata)
+                .await
+                .expect("save lineage metadata");
+        }
+
+        super::validate_persisted_lineage_descendant(
+            &persistence,
+            &storage_path,
+            "root",
+            "grandchild",
+        )
+        .await
+        .expect("actual root should validate");
+        let error = super::validate_persisted_lineage_descendant(
+            &persistence,
+            &storage_path,
+            "child",
+            "grandchild",
+        )
+        .await
+        .expect_err("intermediate root must be rejected");
+        assert_eq!(error.kind, PortErrorKind::InvalidRequest);
     }
 
     #[tokio::test]

@@ -92,7 +92,7 @@ fn lineage_points(snapshot: &AgentSessionLineageSnapshot) -> Vec<ConversationPoi
             ConversationPoint::new(
                 entry.session_id.clone(),
                 title,
-                format!("{} · {kind}", lifecycle_label(entry.status)),
+                format!("{} · {kind}", lineage_status_label(entry)),
             )
         })
         .collect()
@@ -116,9 +116,12 @@ fn lineage_depth<'a>(
     depth
 }
 
-fn lifecycle_label(status: AgentSessionLifecycleStatus) -> &'static str {
-    match status {
-        AgentSessionLifecycleStatus::Active => "active",
+fn lineage_status_label(entry: &AgentSessionLineageEntry) -> &'static str {
+    if entry.active_turn_id.is_some() {
+        return "running";
+    }
+    match entry.status {
+        AgentSessionLifecycleStatus::Active => "idle",
         AgentSessionLifecycleStatus::Archived => "archived",
         AgentSessionLifecycleStatus::Completed => "completed",
     }
@@ -145,6 +148,17 @@ mod tests {
             unread_completion: None,
             needs_user_attention: None,
         }
+    }
+
+    #[test]
+    fn active_turn_is_distinct_from_an_idle_active_session() {
+        let mut idle = entry("idle", Some("root"), 1);
+        idle.status = AgentSessionLifecycleStatus::Active;
+        let mut running = idle.clone();
+        running.active_turn_id = Some("turn-live".to_string());
+
+        assert_eq!(lineage_status_label(&idle), "idle");
+        assert_eq!(lineage_status_label(&running), "running");
     }
 
     #[test]

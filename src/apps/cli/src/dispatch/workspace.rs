@@ -751,6 +751,17 @@ fn bundle_commit_in_store(
 /// job's own branch, so a controller that never syncs leaves no trace here.
 pub(crate) fn sync(request: DispatchWorkspaceSyncRequest) -> Result<DispatchWorkspaceSyncResponse> {
     let store = DispatchStore::open_default()?;
+    start_sync_in_store(&store, request, super::runner::spawn_workspace_sync)
+}
+
+fn start_sync_in_store<F>(
+    store: &DispatchStore,
+    request: DispatchWorkspaceSyncRequest,
+    spawn_sync: F,
+) -> Result<DispatchWorkspaceSyncResponse>
+where
+    F: FnOnce(&str) -> Result<u32>,
+{
     super::store::validate_id("jobId", &request.job_id)?;
     super::store::validate_id("operationId", &request.operation_id)?;
     if request
@@ -872,7 +883,7 @@ pub(crate) fn sync(request: DispatchWorkspaceSyncRequest) -> Result<DispatchWork
     operation.failure_reported = false;
     operation.updated_at = chrono::Utc::now().to_rfc3339();
     atomic_write_json(&operation_path, &operation)?;
-    match super::runner::spawn_workspace_sync(&request.job_id) {
+    match spawn_sync(&request.job_id) {
         Ok(pid) => {
             operation.worker_pid = Some(pid);
             operation.updated_at = chrono::Utc::now().to_rfc3339();
@@ -1461,7 +1472,7 @@ fn path_arg(path: &Path) -> Result<&str> {
 }
 
 fn canonical_utf8(path: &Path) -> Result<String> {
-    path.canonicalize()
+    dunce::canonicalize(path)
         .with_context(|| format!("resolve dispatch path {}", path.display()))?
         .to_str()
         .map(ToOwned::to_owned)
@@ -2036,182 +2047,146 @@ mod tests {
 
     #[test]
     fn reported_sync_failure_allows_a_new_operation_to_take_over() {
-        const CHILD_ENV: &str = "BITFUN_DISPATCH_FAILED_SYNC_RETRY_CHILD";
-        if let Some(bitfun_home) = std::env::var_os(CHILD_ENV) {
-            let store = DispatchStore::open_default().expect("open isolated default store");
-            let source = PathBuf::from(bitfun_home).join("source");
-            let base_commit = init_source_repository(&source);
-            provision_from_bundle(&store, &source, &base_commit);
-            let operation_path = store
-                .workspace_upload_dir("job-1")
-                .expect("workspace path")
-                .join(SYNC_OPERATION_FILE);
-            let failed_request = DispatchWorkspaceSyncRequest {
-                job_id: "job-1".to_string(),
-                operation_id: "sync-failed-generation".to_string(),
-                message: None,
-                known_head: Some(base_commit.clone()),
-            };
-            atomic_write_json(
-                &operation_path,
-                &SyncOperationRecord {
-                    request: failed_request.clone(),
-                    state: WorkspaceOperationState::Failed,
-                    worker_pid: None,
-                    response: None,
-                    last_error: Some("transient Git lock".to_string()),
-                    failure_reported: false,
-                    updated_at: chrono::Utc::now().to_rfc3339(),
-                },
-            )
-            .expect("seed failed operation");
+        let temp = tempfile::tempdir().expect("tempdir");
+        let store = DispatchStore::open(temp.path().join("dispatch")).expect("store");
+        let source = temp.path().join("source");
+        let base_commit = init_source_repository(&source);
+        provision_from_bundle(&store, &source, &base_commit);
+        let operation_path = store
+            .workspace_upload_dir("job-1")
+            .expect("workspace path")
+            .join(SYNC_OPERATION_FILE);
+        let failed_request = DispatchWorkspaceSyncRequest {
+            job_id: "job-1".to_string(),
+            operation_id: "sync-failed-generation".to_string(),
+            message: None,
+            known_head: Some(base_commit.clone()),
+        };
+        atomic_write_json(
+            &operation_path,
+            &SyncOperationRecord {
+                request: failed_request.clone(),
+                state: WorkspaceOperationState::Failed,
+                worker_pid: None,
+                response: None,
+                last_error: Some("transient Git lock".to_string()),
+                failure_reported: false,
+                updated_at: chrono::Utc::now().to_rfc3339(),
+            },
+        )
+        .expect("seed failed operation");
 
-            let error = sync(failed_request).expect_err("the failed generation must be reported");
-            assert!(error.to_string().contains("transient Git lock"));
-            let mut retained: SyncOperationRecord =
-                read_json(&operation_path).expect("read reported failure");
-            assert_eq!(retained.state, WorkspaceOperationState::Failed);
-            assert!(retained.failure_reported);
-            assert_eq!(retained.last_error.as_deref(), Some("transient Git lock"));
+        let error = start_sync_in_store(&store, failed_request, |_| {
+            panic!("reporting a retained failure must not spawn a worker")
+        })
+        .expect_err("the failed generation must be reported");
+        assert!(error.to_string().contains("transient Git lock"));
+        let mut retained: SyncOperationRecord =
+            read_json(&operation_path).expect("read reported failure");
+        assert_eq!(retained.state, WorkspaceOperationState::Failed);
+        assert!(retained.failure_reported);
+        assert_eq!(retained.last_error.as_deref(), Some("transient Git lock"));
 
-            let retry = DispatchWorkspaceSyncRequest {
-                job_id: "job-1".to_string(),
-                operation_id: "sync-retry-generation".to_string(),
-                message: None,
-                known_head: Some(base_commit),
-            };
-            retained.worker_pid = Some(std::process::id());
-            retained.updated_at = chrono::Utc::now().to_rfc3339();
-            atomic_write_json(&operation_path, &retained).expect("seed active worker marker");
-            let error =
-                sync(retry.clone()).expect_err("an active generation must retain ownership");
-            assert!(error
-                .to_string()
-                .contains("already bound to a different request"));
+        let retry = DispatchWorkspaceSyncRequest {
+            job_id: "job-1".to_string(),
+            operation_id: "sync-retry-generation".to_string(),
+            message: None,
+            known_head: Some(base_commit),
+        };
+        retained.worker_pid = Some(std::process::id());
+        retained.updated_at = chrono::Utc::now().to_rfc3339();
+        atomic_write_json(&operation_path, &retained).expect("seed active worker marker");
+        let error = start_sync_in_store(&store, retry.clone(), |_| {
+            panic!("an active generation must not spawn a replacement worker")
+        })
+        .expect_err("an active generation must retain ownership");
+        assert!(error
+            .to_string()
+            .contains("already bound to a different request"));
 
-            retained.worker_pid = None;
-            atomic_write_json(&operation_path, &retained).expect("retire failed worker marker");
-            let response = sync(retry.clone()).expect("retry with a new operation id");
-            assert!(response.pending);
-            let replacement: SyncOperationRecord =
-                read_json(&operation_path).expect("read replacement operation");
-            assert_eq!(replacement.request, retry);
-            assert!(matches!(
-                replacement.state,
-                WorkspaceOperationState::Pending | WorkspaceOperationState::Running
-            ));
-            assert!(!replacement.failure_reported);
-            return;
-        }
-
-        let dir = tempfile::tempdir().expect("tempdir");
-        let bitfun_home = dir.path().join("bitfun-home");
-        let user_root = dir.path().join("user-root");
-        let output = std::process::Command::new(std::env::current_exe().expect("test executable"))
-            .args([
-                "--exact",
-                "dispatch::workspace::tests::reported_sync_failure_allows_a_new_operation_to_take_over",
-                "--nocapture",
-            ])
-            .env(CHILD_ENV, &bitfun_home)
-            .env("BITFUN_HOME", &bitfun_home)
-            .env("BITFUN_USER_ROOT", &user_root)
-            .env("BITFUN_E2E_STORAGE_GUARD", "1")
-            .env_remove("BITFUN_E2E_HOME")
-            .env_remove("BITFUN_E2E_USER_ROOT")
-            .output()
-            .expect("run isolated failed-sync retry test");
-        assert!(
-            output.status.success(),
-            "isolated child failed:\nstdout:\n{}\nstderr:\n{}",
-            String::from_utf8_lossy(&output.stdout),
-            String::from_utf8_lossy(&output.stderr)
-        );
+        retained.worker_pid = None;
+        atomic_write_json(&operation_path, &retained).expect("retire failed worker marker");
+        let response = start_sync_in_store(&store, retry.clone(), |job_id| {
+            assert_eq!(job_id, "job-1");
+            Ok(42)
+        })
+        .expect("retry with a new operation id");
+        assert!(response.pending);
+        let replacement: SyncOperationRecord =
+            read_json(&operation_path).expect("read replacement operation");
+        assert_eq!(replacement.request, retry);
+        assert_eq!(replacement.worker_pid, Some(42));
+        assert!(matches!(
+            replacement.state,
+            WorkspaceOperationState::Pending | WorkspaceOperationState::Running
+        ));
+        assert!(!replacement.failure_reported);
     }
 
     #[test]
     fn legacy_sync_failure_without_operation_id_is_reported_then_retryable() {
-        const CHILD_ENV: &str = "BITFUN_DISPATCH_LEGACY_SYNC_RETRY_CHILD";
-        if let Some(bitfun_home) = std::env::var_os(CHILD_ENV) {
-            let store = DispatchStore::open_default().expect("open isolated default store");
-            let source = PathBuf::from(bitfun_home).join("source");
-            let base_commit = init_source_repository(&source);
-            provision_from_bundle(&store, &source, &base_commit);
-            let operation_path = store
-                .workspace_upload_dir("job-1")
-                .expect("workspace path")
-                .join(SYNC_OPERATION_FILE);
-            // Early protocol-v3 development builds wrote neither operationId
-            // nor failureReported. Keep that exact JSON shape readable.
-            atomic_write_json(
-                &operation_path,
-                &serde_json::json!({
-                    "request": {
-                        "jobId": "job-1",
-                        "message": null,
-                        "knownHead": base_commit,
-                    },
-                    "state": "failed",
-                    "workerPid": null,
-                    "response": null,
-                    "lastError": "legacy sync failure",
-                    "updatedAt": chrono::Utc::now().to_rfc3339(),
-                }),
-            )
-            .expect("seed legacy operation");
+        let temp = tempfile::tempdir().expect("tempdir");
+        let store = DispatchStore::open(temp.path().join("dispatch")).expect("store");
+        let source = temp.path().join("source");
+        let base_commit = init_source_repository(&source);
+        provision_from_bundle(&store, &source, &base_commit);
+        let operation_path = store
+            .workspace_upload_dir("job-1")
+            .expect("workspace path")
+            .join(SYNC_OPERATION_FILE);
+        // Early protocol-v3 development builds wrote neither operationId
+        // nor failureReported. Keep that exact JSON shape readable.
+        atomic_write_json(
+            &operation_path,
+            &serde_json::json!({
+                "request": {
+                    "jobId": "job-1",
+                    "message": null,
+                    "knownHead": base_commit,
+                },
+                "state": "failed",
+                "workerPid": null,
+                "response": null,
+                "lastError": "legacy sync failure",
+                "updatedAt": chrono::Utc::now().to_rfc3339(),
+            }),
+        )
+        .expect("seed legacy operation");
 
-            let first_retry = DispatchWorkspaceSyncRequest {
-                job_id: "job-1".to_string(),
-                operation_id: "sync-after-upgrade-1".to_string(),
-                message: None,
-                known_head: Some(base_commit.clone()),
-            };
-            let error = sync(first_retry).expect_err("legacy failure must be surfaced once");
-            assert!(error.to_string().contains("legacy sync failure"));
-            let reported: SyncOperationRecord =
-                read_json(&operation_path).expect("read upgraded legacy operation");
-            assert!(reported.request.operation_id.is_empty());
-            assert_eq!(reported.state, WorkspaceOperationState::Failed);
-            assert!(reported.failure_reported);
+        let first_retry = DispatchWorkspaceSyncRequest {
+            job_id: "job-1".to_string(),
+            operation_id: "sync-after-upgrade-1".to_string(),
+            message: None,
+            known_head: Some(base_commit.clone()),
+        };
+        let error = start_sync_in_store(&store, first_retry, |_| {
+            panic!("reporting a legacy failure must not spawn a worker")
+        })
+        .expect_err("legacy failure must be surfaced once");
+        assert!(error.to_string().contains("legacy sync failure"));
+        let reported: SyncOperationRecord =
+            read_json(&operation_path).expect("read upgraded legacy operation");
+        assert!(reported.request.operation_id.is_empty());
+        assert_eq!(reported.state, WorkspaceOperationState::Failed);
+        assert!(reported.failure_reported);
 
-            let second_retry = DispatchWorkspaceSyncRequest {
-                job_id: "job-1".to_string(),
-                operation_id: "sync-after-upgrade-2".to_string(),
-                message: None,
-                known_head: Some(base_commit),
-            };
-            let response = sync(second_retry.clone()).expect("replace legacy generation");
-            assert!(response.pending);
-            let replacement: SyncOperationRecord =
-                read_json(&operation_path).expect("read replacement operation");
-            assert_eq!(replacement.request, second_retry);
-            assert!(!replacement.failure_reported);
-            return;
-        }
-
-        let dir = tempfile::tempdir().expect("tempdir");
-        let bitfun_home = dir.path().join("bitfun-home");
-        let user_root = dir.path().join("user-root");
-        let output = std::process::Command::new(std::env::current_exe().expect("test executable"))
-            .args([
-                "--exact",
-                "dispatch::workspace::tests::legacy_sync_failure_without_operation_id_is_reported_then_retryable",
-                "--nocapture",
-            ])
-            .env(CHILD_ENV, &bitfun_home)
-            .env("BITFUN_HOME", &bitfun_home)
-            .env("BITFUN_USER_ROOT", &user_root)
-            .env("BITFUN_E2E_STORAGE_GUARD", "1")
-            .env_remove("BITFUN_E2E_HOME")
-            .env_remove("BITFUN_E2E_USER_ROOT")
-            .output()
-            .expect("run isolated legacy-sync retry test");
-        assert!(
-            output.status.success(),
-            "isolated child failed:\nstdout:\n{}\nstderr:\n{}",
-            String::from_utf8_lossy(&output.stdout),
-            String::from_utf8_lossy(&output.stderr)
-        );
+        let second_retry = DispatchWorkspaceSyncRequest {
+            job_id: "job-1".to_string(),
+            operation_id: "sync-after-upgrade-2".to_string(),
+            message: None,
+            known_head: Some(base_commit),
+        };
+        let response = start_sync_in_store(&store, second_retry.clone(), |job_id| {
+            assert_eq!(job_id, "job-1");
+            Ok(43)
+        })
+        .expect("replace legacy generation");
+        assert!(response.pending);
+        let replacement: SyncOperationRecord =
+            read_json(&operation_path).expect("read replacement operation");
+        assert_eq!(replacement.request, second_retry);
+        assert_eq!(replacement.worker_pid, Some(43));
+        assert!(!replacement.failure_reported);
     }
 
     #[test]

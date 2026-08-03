@@ -1532,6 +1532,17 @@ impl PersistenceManager {
         session_id: &str,
         state: &StoredSessionStateFile,
     ) -> BitFunResult<()> {
+        #[cfg(test)]
+        {
+            let mut fault = self
+                .fail_next_session_state_write
+                .lock()
+                .expect("session state fault lock");
+            if fault.as_deref() == Some(session_id) {
+                *fault = None;
+                return Err(BitFunError::io("Injected session state write failure"));
+            }
+        }
         self.write_json_atomic(&self.state_path(workspace_path, session_id), state)
             .await
     }
@@ -2113,17 +2124,6 @@ impl PersistenceManager {
             compression_state: session.compression_state.clone(),
             runtime_state: sanitize_persisted_session_state(&session.state),
         };
-        #[cfg(test)]
-        {
-            let mut fault = self
-                .fail_next_session_state_write
-                .lock()
-                .expect("session state fault lock");
-            if fault.as_deref() == Some(session.session_id.as_str()) {
-                *fault = None;
-                return Err(BitFunError::io("Injected session state write failure"));
-            }
-        }
         self.save_stored_session_state(workspace_path, &session.session_id, &state)
             .await
     }

@@ -1295,10 +1295,15 @@ impl DialogScheduler {
         &self,
         storage_path: &Path,
         request: SessionTranscriptRequest,
+        required_settled_turn_ids: &[String],
     ) -> PortResult<Option<AgentSessionLineageInspection>> {
         let _operation_guard = self.lock_session_operation(&request.session_id).await;
         self.coordinator
-            .inspect_loaded_lineage_session_in_storage(storage_path, request)
+            .inspect_loaded_lineage_session_in_storage(
+                storage_path,
+                request,
+                required_settled_turn_ids,
+            )
             .await
     }
 
@@ -1306,12 +1311,27 @@ impl DialogScheduler {
         &self,
         storage_path: &Path,
         session_id: &str,
+        expected_active_turn_id: Option<&str>,
         wait_timeout: Duration,
     ) -> BitFunResult<Option<String>> {
-        let _operation_guard = self.lock_session_operation(session_id).await;
-        abort_thread_goal_continuation_for_session(session_id);
+        let deadline = Instant::now() + wait_timeout;
+        let _operation_guard = tokio::time::timeout(
+            wait_timeout,
+            self.lock_session_operation(session_id),
+        )
+        .await
+        .map_err(|_| {
+            BitFunError::Timeout(format!(
+                "Timed out acquiring the Session operation lock before lineage cancellation: session_id={session_id}"
+            ))
+        })?;
         self.coordinator
-            .cancel_loaded_lineage_session_in_storage(storage_path, session_id, wait_timeout)
+            .cancel_loaded_lineage_session_in_storage(
+                storage_path,
+                session_id,
+                expected_active_turn_id,
+                deadline.saturating_duration_since(Instant::now()),
+            )
             .await
     }
 

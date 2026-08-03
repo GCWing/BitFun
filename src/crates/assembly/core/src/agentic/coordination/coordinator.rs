@@ -788,7 +788,6 @@ struct ActiveSubagentExecution {
     subagent_session_id: String,
     subagent_dialog_turn_id: String,
     cancel_token: CancellationToken,
-    abort_handle: tokio::task::AbortHandle,
 }
 
 #[derive(Clone)]
@@ -1008,6 +1007,36 @@ fn lineage_session_is_settling_without_active_state(
     in_flight_execution_count: usize,
 ) -> bool {
     active_turn_id.is_none() && in_flight_execution_count > 0
+}
+
+pub(crate) fn validate_required_lineage_turns_settled(
+    turns: &[DialogTurnData],
+    required_settled_turn_ids: &[String],
+) -> bitfun_runtime_ports::PortResult<()> {
+    for required_turn_id in required_settled_turn_ids {
+        let settled = turns
+            .iter()
+            .any(|turn| turn.turn_id == *required_turn_id && turn.status != TurnStatus::InProgress);
+        if !settled {
+            return Err(bitfun_runtime_ports::PortError::new(
+                bitfun_runtime_ports::PortErrorKind::OutcomeUnknown,
+                format!(
+                    "Required terminal Turn is not yet durable in the authoritative transcript: turn_id={required_turn_id}"
+                ),
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn lineage_post_admission_cancellation_error(
+    error: BitFunError,
+    session_id: &str,
+    turn_id: &str,
+) -> BitFunError {
+    BitFunError::OutcomeUnknown(format!(
+        "Subagent cancellation was admitted, but its final outcome was not confirmed: session_id={session_id}, turn_id={turn_id}; {error}"
+    ))
 }
 
 /// Conversation coordinator
@@ -5844,7 +5873,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         )))
     }
 
-    async fn cancel_active_subagents_for_parent_turn(
+    fn cancel_active_subagents_for_parent_turn(
         &self,
         parent_session_id: &str,
         parent_dialog_turn_id: &str,
@@ -5871,14 +5900,13 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         );
 
         for active in active_subagents {
-            self.stop_active_subagent_execution(&active, "Parent dialog turn cancelled")
-                .await;
+            self.signal_active_subagent_cancellation(&active, "Parent dialog turn cancelled");
         }
     }
 
-    async fn stop_active_subagent_execution(&self, active: &ActiveSubagentExecution, reason: &str) {
+    fn signal_active_subagent_cancellation(&self, active: &ActiveSubagentExecution, reason: &str) {
         debug!(
-            "Stopping active subagent execution: subagent_session_id={}, subagent_dialog_turn_id={}, parent_session_id={}, parent_dialog_turn_id={}, reason={}",
+            "Signalling active subagent cancellation: subagent_session_id={}, subagent_dialog_turn_id={}, parent_session_id={}, parent_dialog_turn_id={}, reason={}",
             active.subagent_session_id,
             active.subagent_dialog_turn_id,
             active.parent_session_id,
@@ -5886,48 +5914,12 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             reason
         );
 
+        // The outer subagent execution task is the sole terminal persistence
+        // owner. It observes this token, cancels the engine/tools, waits for
+        // the inner task, and writes exactly one Cancelled outcome. Aborting
+        // and persisting here races that owner and can turn cancellation into
+        // a JoinError/Failed outcome or emit duplicate terminal events.
         active.cancel_token.cancel();
-        active.abort_handle.abort();
-
-        if let Err(error) = self
-            .execution_engine
-            .cancel_dialog_turn(&active.subagent_dialog_turn_id)
-            .await
-        {
-            warn!(
-                "Failed to cancel active subagent dialog turn: subagent_session_id={}, subagent_dialog_turn_id={}, error={}",
-                active.subagent_session_id, active.subagent_dialog_turn_id, error
-            );
-        }
-
-        if let Err(error) = self
-            .tool_pipeline
-            .cancel_dialog_turn_tools(&active.subagent_dialog_turn_id)
-            .await
-        {
-            warn!(
-                "Failed to cancel active subagent tools: subagent_session_id={}, subagent_dialog_turn_id={}, error={}",
-                active.subagent_session_id, active.subagent_dialog_turn_id, error
-            );
-        }
-
-        Self::persist_cancelled_dialog_turn(
-            self.event_queue.as_ref(),
-            self.session_manager.as_ref(),
-            None,
-            &active.subagent_session_id,
-            &active.subagent_dialog_turn_id,
-            true,
-        )
-        .await;
-
-        self.session_manager.reset_session_state_if_processing(
-            &active.subagent_session_id,
-            &active.subagent_dialog_turn_id,
-        );
-
-        self.active_subagent_executions
-            .remove(&active.subagent_session_id);
     }
 
     /// Cancel dialog turn execution
@@ -5937,8 +5929,13 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         session_id: &str,
         dialog_turn_id: &str,
     ) -> BitFunResult<()> {
-        self.cancel_dialog_turn_with_descendant_policy(session_id, dialog_turn_id, true)
-            .await
+        self.cancel_dialog_turn_with_descendant_policy(
+            session_id,
+            dialog_turn_id,
+            true,
+            Duration::from_millis(1500),
+        )
+        .await
     }
 
     async fn cancel_dialog_turn_with_descendant_policy(
@@ -5946,6 +5943,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         session_id: &str,
         dialog_turn_id: &str,
         cancel_descendants: bool,
+        drain_timeout: Duration,
     ) -> BitFunResult<()> {
         info!(
             "Received cancel request: dialog_turn_id={}, session_id={}, cancel_descendants={}",
@@ -5975,14 +5973,35 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         // cancellation still targets the currently processing turn. A delayed
         // cancel request for an older turn must not clear a newer turn.
         debug!("Conditionally updating session state to Idle for cancelled turn");
-        let state_updated = self
+        let state_update_result = self
             .session_manager
             .update_session_state_for_turn_if_processing(
                 session_id,
                 dialog_turn_id,
                 SessionState::Idle,
             )
-            .await?;
+            .await;
+
+        // A persistence failure can occur after SessionManager has already
+        // changed the in-memory state. Cancellation has been admitted at that
+        // point, so it must still reach the engine, tools, and descendants.
+        // Preserve the error for the caller, but never return before sending
+        // those signals.
+        let (state_updated, state_update_error) = match state_update_result {
+            Ok(state_updated) => (state_updated, None),
+            Err(error) => {
+                let updated_in_memory = self
+                    .session_manager
+                    .get_session(session_id)
+                    .map(|session| matches!(session.state, SessionState::Idle))
+                    .unwrap_or(false);
+                warn!(
+                    "Failed to persist cancelled Session state; cancellation signals will still be delivered: session_id={}, dialog_turn_id={}, error={}",
+                    session_id, dialog_turn_id, error
+                );
+                (updated_in_memory, Some(error))
+            }
+        };
 
         let new_state = self
             .session_manager
@@ -6029,20 +6048,18 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         }
 
         if cancel_descendants {
-            self.cancel_active_subagents_for_parent_turn(session_id, dialog_turn_id)
-                .await;
+            self.cancel_active_subagents_for_parent_turn(session_id, dialog_turn_id);
         }
 
         // Step 4: Wait briefly for the spawn task that owns this turn to drain
         // its in-memory message writes before returning. Capped so the RPC
         // never blocks longer than ~1.5s — beyond that we let the new turn
         // proceed and rely on the cancellation token already being signalled.
-        let pending = self
-            .wait_session_drained(session_id, Duration::from_millis(1500))
-            .await;
+        let pending = self.wait_session_drained(session_id, drain_timeout).await;
         if pending > 0 {
             warn!(
-                "Cancelled turn did not fully drain within 1500ms: session_id={}, dialog_turn_id={}, pending={}",
+                "Cancelled turn did not fully drain within {}ms: session_id={}, dialog_turn_id={}, pending={}",
+                drain_timeout.as_millis(),
                 session_id, dialog_turn_id, pending
             );
         } else {
@@ -6050,6 +6067,10 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 "Cancelled turn fully drained: session_id={}, dialog_turn_id={}",
                 session_id, dialog_turn_id
             );
+        }
+
+        if let Some(error) = state_update_error {
+            return Err(error);
         }
 
         Ok(())
@@ -6084,16 +6105,22 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             return Ok(None);
         };
 
+        let deadline = Instant::now() + wait_timeout;
+        let drain_timeout = std::cmp::min(
+            Duration::from_millis(1500),
+            deadline.saturating_duration_since(Instant::now()),
+        );
         self.cancel_dialog_turn_with_descendant_policy(
             session_id,
             &current_turn_id,
             cancel_descendants,
+            drain_timeout,
         )
         .await?;
 
-        let deadline = Instant::now() + wait_timeout;
         while self.execution_engine.has_active_turn(&current_turn_id) {
-            if Instant::now() >= deadline {
+            let remaining = deadline.saturating_duration_since(Instant::now());
+            if remaining.is_zero() {
                 warn!(
                     "Timed out waiting for active turn cancellation: session_id={}, dialog_turn_id={}, timeout_ms={}",
                     session_id,
@@ -6105,7 +6132,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                     wait_timeout.as_millis()
                 )));
             }
-            sleep(Duration::from_millis(50)).await;
+            sleep(std::cmp::min(Duration::from_millis(50), remaining)).await;
         }
 
         Ok(Some(current_turn_id))
@@ -6115,24 +6142,64 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         &self,
         storage_path: &Path,
         session_id: &str,
+        expected_active_turn_id: Option<&str>,
         wait_timeout: Duration,
     ) -> BitFunResult<Option<String>> {
-        let _mutation_guard = self
-            .session_manager
-            .acquire_session_mutation(session_id)
-            .await?;
+        let deadline = Instant::now() + wait_timeout;
+        let _mutation_guard = tokio::time::timeout(
+            wait_timeout,
+            self.session_manager.acquire_session_mutation(session_id),
+        )
+        .await
+        .map_err(|_| {
+            BitFunError::Timeout(format!(
+                "Timed out acquiring the Session lifecycle lease before lineage cancellation: session_id={session_id}"
+            ))
+        })??;
         if !self
             .session_manager
             .is_session_loaded_from_storage_path(storage_path, session_id)?
         {
             return Ok(None);
         }
+        let active_turn_id = self
+            .session_manager
+            .get_session(session_id)
+            .and_then(|session| match session.state {
+                SessionState::Processing {
+                    current_turn_id, ..
+                } => Some(current_turn_id),
+                _ => None,
+            });
+        if active_turn_id.as_deref() != expected_active_turn_id {
+            return Err(BitFunError::OutcomeUnknown(format!(
+                "Subagent Session active Turn changed before cancellation: session_id={session_id}, expected_turn_id={}, active_turn_id={}",
+                expected_active_turn_id.unwrap_or("none"),
+                active_turn_id.as_deref().unwrap_or("none")
+            )));
+        }
+        if active_turn_id.is_none() {
+            return Ok(None);
+        }
         // Match the Session abort semantics used by OpenCode: interrupting an
         // inspected subagent stops the execution subtree rooted at that Session.
         // A running Task is part of the selected Turn, so preserving its child
         // while cancelling the owning Tool would leave the parent Turn unsettled.
-        self.cancel_active_turn_for_session_with_descendant_policy(session_id, wait_timeout, true)
-            .await
+        self.cancel_active_turn_for_session_with_descendant_policy(
+            session_id,
+            deadline.saturating_duration_since(Instant::now()),
+            true,
+        )
+        .await
+        .map_err(|error| {
+            lineage_post_admission_cancellation_error(
+                error,
+                session_id,
+                active_turn_id
+                    .as_deref()
+                    .expect("active turn was checked before cancellation"),
+            )
+        })
     }
 
     /// Delete session
@@ -7983,7 +8050,6 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                     subagent_session_id: session_id.clone(),
                     subagent_dialog_turn_id: dialog_turn_id.clone(),
                     cancel_token: subagent_cancel_token.clone(),
-                    abort_handle: abort_handle.clone(),
                 },
             );
         }
@@ -12005,6 +12071,7 @@ impl ConversationCoordinator {
         &self,
         request: bitfun_runtime_ports::SessionTranscriptRequest,
         status_turn_id: Option<&str>,
+        required_settled_turn_ids: &[String],
     ) -> bitfun_runtime_ports::PortResult<(
         bitfun_runtime_ports::SessionTranscript,
         Option<TurnStatus>,
@@ -12015,29 +12082,40 @@ impl ConversationCoordinator {
             .await
             .map_err(runtime_port_error_preserving_message)?
         {
-            Some(turns) => (
-                runtime_transcript_messages_from_turns(&turns, request.turn_id.as_deref()),
-                status_turn_id.and_then(|turn_id| {
-                    turns
-                        .iter()
-                        .find(|turn| turn.turn_id == turn_id)
-                        .map(|turn| turn.status.clone())
-                }),
-            ),
-            None => (
-                self.session_manager
-                    .get_context_messages(&request.session_id)
-                    .await
-                    .map_err(runtime_port_error_preserving_message)?
-                    .into_iter()
-                    .filter(|message| match request.turn_id.as_ref() {
-                        Some(turn_id) => message.metadata.turn_id.as_ref() == Some(turn_id),
-                        None => true,
-                    })
-                    .map(runtime_transcript_message_from_message)
-                    .collect(),
-                None,
-            ),
+            Some(turns) => {
+                validate_required_lineage_turns_settled(&turns, required_settled_turn_ids)?;
+                (
+                    runtime_transcript_messages_from_turns(&turns, request.turn_id.as_deref()),
+                    status_turn_id.and_then(|turn_id| {
+                        turns
+                            .iter()
+                            .find(|turn| turn.turn_id == turn_id)
+                            .map(|turn| turn.status.clone())
+                    }),
+                )
+            }
+            None => {
+                if !required_settled_turn_ids.is_empty() {
+                    return Err(bitfun_runtime_ports::PortError::new(
+                        bitfun_runtime_ports::PortErrorKind::OutcomeUnknown,
+                        "Required terminal Turns are not yet durable in the authoritative transcript",
+                    ));
+                }
+                (
+                    self.session_manager
+                        .get_context_messages(&request.session_id)
+                        .await
+                        .map_err(runtime_port_error_preserving_message)?
+                        .into_iter()
+                        .filter(|message| match request.turn_id.as_ref() {
+                            Some(turn_id) => message.metadata.turn_id.as_ref() == Some(turn_id),
+                            None => true,
+                        })
+                        .map(runtime_transcript_message_from_message)
+                        .collect(),
+                    None,
+                )
+            }
         };
 
         Ok((
@@ -12053,7 +12131,7 @@ impl ConversationCoordinator {
         &self,
         request: bitfun_runtime_ports::SessionTranscriptRequest,
     ) -> bitfun_runtime_ports::PortResult<bitfun_runtime_ports::SessionTranscript> {
-        self.read_session_transcript_with_turn_status_locked(request, None)
+        self.read_session_transcript_with_turn_status_locked(request, None, &[])
             .await
             .map(|(transcript, _)| transcript)
     }
@@ -12062,6 +12140,7 @@ impl ConversationCoordinator {
         &self,
         storage_path: &Path,
         request: bitfun_runtime_ports::SessionTranscriptRequest,
+        required_settled_turn_ids: &[String],
     ) -> bitfun_runtime_ports::PortResult<Option<bitfun_runtime_ports::AgentSessionLineageInspection>>
     {
         let _mutation_guard = self
@@ -12104,6 +12183,16 @@ impl ConversationCoordinator {
             .get(&request.session_id)
             .map(|counter| counter.load(Ordering::SeqCst))
             .unwrap_or(0);
+        if candidate_active_turn_id.as_deref().is_some_and(|turn_id| {
+            required_settled_turn_ids
+                .iter()
+                .any(|observed| observed == turn_id)
+        }) {
+            return Err(bitfun_runtime_ports::PortError::new(
+                bitfun_runtime_ports::PortErrorKind::OutcomeUnknown,
+                "Session still reports an observed terminal turn as active; retry the inspection",
+            ));
+        }
         if lineage_session_is_settling_without_active_state(
             candidate_active_turn_id.as_deref(),
             in_flight_execution_count,
@@ -12117,6 +12206,7 @@ impl ConversationCoordinator {
             .read_session_transcript_with_turn_status_locked(
                 request.clone(),
                 candidate_active_turn_id.as_deref(),
+                required_settled_turn_ids,
             )
             .await?;
         let current_active_turn_id = self
@@ -12133,6 +12223,7 @@ impl ConversationCoordinator {
                 .read_session_transcript_with_turn_status_locked(
                     request,
                     candidate_active_turn_id.as_deref(),
+                    required_settled_turn_ids,
                 )
                 .await?;
             if settled_turn_status
@@ -12311,16 +12402,18 @@ fn merge_prepended_messages_for_turn(
 mod tests {
     use super::{
         btw_session_memory_mode, build_subagent_session_relationship,
-        lineage_active_turn_after_transcript, lineage_session_is_settling_without_active_state,
-        logical_subagent_type_or_runtime, merge_prepended_messages_for_turn,
-        normalize_subagent_max_concurrency, resolve_agent_session_create_created_by,
-        resolve_agent_submission_turn_id, resolve_subagent_model_selection,
-        runtime_port_error_preserving_message, runtime_session_summary,
-        runtime_tool_restrictions_for_session_lifetime, runtime_transcript_messages_from_turns,
-        session_storage_workspace_locator, turn_review_manifest_for_agent,
-        BackgroundSubagentWaitMode, ContextCompactionOutcome, ConversationCoordinator,
-        ManualCompactionCommitGate, SessionMemoryMode, SessionReferenceLocator,
-        SessionRelationshipKind, SubagentExecutionRequest, TEST_AGENT_MODEL_DEFAULTS,
+        lineage_active_turn_after_transcript, lineage_post_admission_cancellation_error,
+        lineage_session_is_settling_without_active_state, logical_subagent_type_or_runtime,
+        merge_prepended_messages_for_turn, normalize_subagent_max_concurrency,
+        resolve_agent_session_create_created_by, resolve_agent_submission_turn_id,
+        resolve_subagent_model_selection, runtime_port_error_preserving_message,
+        runtime_session_summary, runtime_tool_restrictions_for_session_lifetime,
+        runtime_transcript_messages_from_turns, session_storage_workspace_locator,
+        turn_review_manifest_for_agent, validate_required_lineage_turns_settled,
+        ActiveSubagentExecution, BackgroundSubagentWaitMode, ContextCompactionOutcome,
+        ConversationCoordinator, ManualCompactionCommitGate, SessionMemoryMode,
+        SessionReferenceLocator, SessionRelationshipKind, SubagentExecutionRequest,
+        TEST_AGENT_MODEL_DEFAULTS,
     };
     use crate::agentic::agents::ExternalSubagentModelBinding;
     use crate::agentic::coordination::coordination_store::{
@@ -12328,8 +12421,8 @@ mod tests {
     };
     use crate::agentic::core::{
         InternalReminderKind, Message, MessageContent, MessageRole, MessageSemanticKind,
-        SessionConfig, SessionContinuationPolicy, SessionKind, SessionModelBindingPolicy,
-        SessionState, TurnStats,
+        ProcessingPhase, SessionConfig, SessionContinuationPolicy, SessionKind,
+        SessionModelBindingPolicy, SessionState, ToolCall, TurnStats,
     };
     use crate::agentic::events::{AgenticEvent, EventQueue, EventQueueConfig, EventRouter};
     use crate::agentic::execution::{
@@ -12346,7 +12439,9 @@ mod tests {
     use crate::agentic::tools::framework::{
         PermissionIntent, Tool, ToolResult, ToolUseContext, ValidationResult,
     };
-    use crate::agentic::tools::pipeline::SubagentParentInfo;
+    use crate::agentic::tools::pipeline::{
+        SubagentParentInfo, ToolExecutionContext, ToolExecutionOptions, ToolTask,
+    };
     use crate::agentic::tools::registry::ToolRegistry;
     use crate::agentic::tools::{ToolPipeline, ToolStateManager};
     use crate::agentic::TurnSkillAgentSnapshot;
@@ -12384,6 +12479,172 @@ mod tests {
             1
         ));
         assert!(!lineage_session_is_settling_without_active_state(None, 0));
+    }
+
+    #[test]
+    fn lineage_read_barrier_requires_each_turn_to_be_durably_terminal() {
+        let turn = |turn_id: &str, status| {
+            let mut turn = DialogTurnData::new(
+                turn_id.to_string(),
+                0,
+                "session-1".to_string(),
+                UserMessageData {
+                    id: format!("{turn_id}-user"),
+                    content: "question".to_string(),
+                    timestamp: 1,
+                    metadata: None,
+                },
+            );
+            turn.status = status;
+            turn
+        };
+        let turns = vec![
+            turn("turn-settled", TurnStatus::Cancelled),
+            turn("turn-active", TurnStatus::InProgress),
+        ];
+
+        validate_required_lineage_turns_settled(&turns, &["turn-settled".to_string()])
+            .expect("terminal turn should satisfy the barrier");
+        for required in ["turn-active", "turn-missing"] {
+            let error = validate_required_lineage_turns_settled(&turns, &[required.to_string()])
+                .expect_err("non-terminal or absent turns must keep the read uncertain");
+            assert_eq!(
+                error.kind,
+                bitfun_runtime_ports::PortErrorKind::OutcomeUnknown
+            );
+        }
+    }
+
+    #[test]
+    fn post_admission_cancellation_errors_are_outcome_unknown() {
+        for source_error in [
+            crate::util::errors::BitFunError::Timeout("drain deadline".to_string()),
+            crate::util::errors::BitFunError::Session("state persistence failed".to_string()),
+        ] {
+            let error =
+                lineage_post_admission_cancellation_error(source_error, "session-1", "turn-1");
+
+            assert!(matches!(
+                error,
+                crate::util::errors::BitFunError::OutcomeUnknown(message)
+                    if message.contains("session_id=session-1")
+                        && message.contains("turn_id=turn-1")
+            ));
+        }
+    }
+
+    #[tokio::test]
+    async fn post_admission_state_write_failure_still_delivers_all_cancellation_signals() {
+        let (coordinator, session_manager) = test_persistent_coordinator();
+        let workspace = tempfile::tempdir().expect("workspace");
+        let session_id = format!("lineage-cancel-{}", uuid::Uuid::new_v4());
+        let turn_id = format!("turn-{}", uuid::Uuid::new_v4());
+        session_manager
+            .create_session_with_id(
+                Some(session_id.clone()),
+                "Cancellation fault".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.path().to_string_lossy().into_owned()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("create persistent session");
+        session_manager
+            .update_session_state(
+                &session_id,
+                SessionState::Processing {
+                    current_turn_id: turn_id.clone(),
+                    phase: ProcessingPhase::ToolCalling,
+                },
+            )
+            .await
+            .expect("mark turn active");
+        let storage_path = session_manager
+            .effective_session_storage_path(&session_id)
+            .await
+            .expect("session storage path");
+
+        let engine_token = CancellationToken::new();
+        coordinator
+            .execution_engine
+            .register_cancel_token(&turn_id, engine_token.clone());
+
+        let tool_id = format!("tool-{}", uuid::Uuid::new_v4());
+        coordinator
+            .tool_pipeline
+            .insert_tool_task_for_test(ToolTask::new(
+                ToolCall {
+                    tool_id: tool_id.clone(),
+                    tool_name: "Read".to_string(),
+                    arguments: serde_json::json!({}),
+                    ..Default::default()
+                },
+                ToolExecutionContext {
+                    session_id: session_id.clone(),
+                    dialog_turn_id: turn_id.clone(),
+                    round_id: "round-1".to_string(),
+                    attempt_id: None,
+                    attempt_index: None,
+                    agent_type: "agentic".to_string(),
+                    workspace: None,
+                    primary_model_facts: Default::default(),
+                    context_vars: HashMap::new(),
+                    subagent_parent_info: None,
+                    permission_delegation: None,
+                    delegation_policy: DelegationPolicy::top_level(),
+                    deferred_tools: Vec::new(),
+                    loaded_deferred_tool_specs: Vec::new(),
+                    allowed_tools: Vec::new(),
+                    runtime_tool_restrictions: Default::default(),
+                    steering_interrupt: None,
+                    workspace_services: None,
+                    terminal_port: None,
+                    remote_exec_port: None,
+                },
+                ToolExecutionOptions::default(),
+            ))
+            .await;
+
+        let descendant_token = CancellationToken::new();
+        coordinator.active_subagent_executions.insert(
+            "child-session".to_string(),
+            ActiveSubagentExecution {
+                parent_session_id: session_id.clone(),
+                parent_dialog_turn_id: turn_id.clone(),
+                subagent_session_id: "child-session".to_string(),
+                subagent_dialog_turn_id: "child-turn".to_string(),
+                cancel_token: descendant_token.clone(),
+            },
+        );
+        session_manager
+            .persistence_manager()
+            .fail_next_session_state_write_for_test(&session_id);
+
+        let error = coordinator
+            .cancel_loaded_lineage_session_in_storage(
+                &storage_path,
+                &session_id,
+                Some(&turn_id),
+                Duration::from_secs(1),
+            )
+            .await
+            .expect_err("admitted persistence failure must remain outcome-unknown");
+
+        assert!(matches!(
+            error,
+            crate::util::errors::BitFunError::OutcomeUnknown(message)
+                if message.contains("Injected session state write failure")
+        ));
+        assert!(engine_token.is_cancelled());
+        assert!(
+            coordinator
+                .tool_pipeline
+                .tool_task_is_cancelled_for_test(&tool_id),
+            "tool cancellation must run before the state write error is returned"
+        );
+        assert!(descendant_token.is_cancelled());
     }
 
     #[test]

@@ -207,7 +207,7 @@ sequenceDiagram
   end
 ```
 
-当前私有协议（v14）只覆盖 TUI 已有用户旅程需要的窄操作：
+当前私有协议（v15）只覆盖 TUI 已有用户旅程需要的窄操作：
 
 | 已支持 | 明确不支持 |
 |---|---|
@@ -232,6 +232,7 @@ sequenceDiagram
 - v11 增加无请求体、无 Session lease 的只读 workspace diff operation。它只在当前连接没有活动 Turn 时查询 Runtime 启动时绑定的 canonical workspace，避免单连接请求排序阻塞流事件或 Turn 控制，并返回 Runtime Port DTO；Git 行为仍由 `services-integrations` provider 持有。文本 patch 总量限制为 3 MiB，为 JSON 转义和 envelope 预留既有 8 MiB response frame 的空间；该 operation 不隐式获得 stage/reset/commit、Remote 或公开 SDK 能力。
 - v12 增加用户显式 Shell Turn；v13 增加活动 Turn steering。两者都复用 Agent Runtime 的原有准入、Tool、权限、持久化和取消 owner，不在 IPC 内复制执行状态机。
 - v14 增加三个 current-root-controller 限定的 lineage operation：查询 Runtime 归一化后的扁平 lineage、读取已验证后代的权威 transcript，以及取消指定后代的活动执行子树。查询和读取可在根 Turn 活动时执行；取消复用现有 Session abort 语义，但不切换 controller，也不引入 observer、detach、分页或通用 Session RPC。
+- v15 为后代 transcript 读取增加 `required_settled_turn_ids` 一致性前置条件：Runtime 必须确认这些 Turn 已由 owner 持久化为终态，否则返回 `outcome_unknown`，由 TUI 在同一绝对期限内退避重试；TUI 只保留事件投影和该读屏障，不合并或重写权威 transcript。后代取消同时携带用户实际看到的 `expected_active_turn_id`，并在 owner 锁内拒绝已经切换的 Turn，避免迟到操作取消后续执行。lineage 查询和 transcript 读取是每连接至多一个的可抢占推测读取；更新的请求会取消旧读取，使后代取消和 Session 切换不会排在慢 transcript I/O 之后。该行为不放宽 controller 校验，不引入 observer 或通用多路复用。
 - 一个连接最多控制一个 Session、同时最多提交一个活动 Turn；一个 Session 同时只有一个 controller。create/restore/fork 在完整结果通过大小检查后才原子切换控制权，失败时保留原 Session。fork 只接受当前 controller 的空闲 Session；无选中 Turn 时复制到最新持久化 Turn，指定 `before_turn_id` 时只复制该 Turn 之前的历史。活动 Turn 期间不能切换或 fork Session，也不能修改其名称、Agent mode 或 model；删除只作用于非当前且未被任何连接控制的 Session。
 - Submit 与手动 context compaction 都使用调用方已有的 `turn_id` 标识不确定结果；若操作超时，返回 `outcome_unknown`、关闭连接并按该 ID 取消。手动 compaction 要求当前 controller 且 Session 空闲，由 Core 通过与普通对话 Turn 共用的原子准入路径创建一个可审计 maintenance Turn，并在取得所有权后读取压缩上下文：planning 阶段允许取消，atomic commit 开始后忽略晚到取消并保持 Processing 直至终态持久化完成。maintenance Turn 保留在权威 transcript 中但不进入模型上下文，live/restored payload 使用同一 compression ID 和 `applied` 事实；commit 后的持久化故障发布明确失败终态而不是遗留 Processing。断连取消只有得到确认后才释放 Session 控制权；无法确认时继续隔离该 Session，直到 Runtime 进程退出。
 - Session delete/rename 和 Agent mode/model update 复用既有 Runtime 端口和校验，Runtime 对最终结果保持权威并拒绝无效目标。它们都是有副作用操作；发送前编码或 frame 上限失败表示请求未执行，连接仍可使用。rename 写入失败时恢复旧 metadata：确认恢复后返回明确失败，无法确认时返回 `outcome_unknown`。Shared Client 在请求写入后响应超时或丢失连接时也返回 `outcome_unknown` 并断开连接。两种情况都不自动重试：rename 由用户恢复 Session 并核对当前值；delete 由用户重新打开 `/sessions` 核对目标是否仍存在。模式与模型目录仍是同版本第一方产品事实，不加入 IPC。
@@ -263,7 +264,7 @@ flowchart LR
 | Shared request | Client 将 operation 编码一次并写入一个长度前缀 frame | 请求保持 128 KiB 上限；业务层只接收类型化 operation |
 | Shared response/event | Server 将结果或事件编码一次后写出 | 响应/事件保持 8 MiB 上限；超限使事件流明确失效，不能无界分配 |
 | Shared receive | 每个方向只有一个严格 transport decode 边界 | 未知信封字段和不兼容版本 fail closed；严格校验可以检查规范化 JSON，但不能把动态 JSON 传入 Runtime owner |
-| 多 TUI | 一个 Runtime、最多 64 个连接；每个 Client 的 command channel 容量为 64、event channel 容量为 256 | request gate 使每个 Client 同时只有一个请求进入 channel；事件落后时失效而非无限缓存 |
+| 多 TUI | 一个 Runtime、最多 64 个连接；每个 Client 的 command channel 容量为 64、event channel 容量为 256 | request gate 使每个 Client 同时只有一个控制请求进入 channel；lineage 推测读取写入后释放 gate，Server 同时只保留一个且允许更新请求抢占；Client 使用并发 reader 与单一有序 writer，避免大 transcript 响应和后续大请求互相阻塞；事件落后时失效而非无限缓存 |
 
 协议只承载当前交互所需的小型控制请求、受 3 MiB 文本上限保护的 workspace diff 快照和既有事件。大 transcript 继续受 frame 上限约束；本阶段不为假设场景增加通用分页、二进制 side channel、压缩或批处理协议。
 

@@ -75,7 +75,7 @@ fn protocol_round_trips_reviewed_permission_and_user_input_operations() {
 
 #[test]
 fn protocol_round_trips_exact_turn_steering_without_replacing_turn_admission() {
-    assert_eq!(PROTOCOL_VERSION, 14);
+    assert_eq!(PROTOCOL_VERSION, 15);
     let operation = RuntimeIpcOperation::SteerTurn {
         request: AgentDialogSteerRequest {
             session_id: "session-1".to_string(),
@@ -160,6 +160,7 @@ fn protocol_round_trips_root_scoped_lineage_operations() {
                 workspace_path: "D:/workspace/project".to_string(),
                 root_session_id: "root-1".to_string(),
                 session_id: "child-1".to_string(),
+                required_settled_turn_ids: vec!["turn-terminal".to_string()],
                 remote_connection_id: None,
                 remote_ssh_host: None,
             },
@@ -169,6 +170,7 @@ fn protocol_round_trips_root_scoped_lineage_operations() {
                 workspace_path: "D:/workspace/project".to_string(),
                 root_session_id: "root-1".to_string(),
                 session_id: "child-1".to_string(),
+                expected_active_turn_id: Some("turn-child".to_string()),
                 source: Some(AgentSubmissionSource::Cli),
                 reason: Some("user_cancelled".to_string()),
                 wait_timeout_ms: Some(5_000),
@@ -189,7 +191,7 @@ fn protocol_round_trips_root_scoped_lineage_operations() {
 
 #[test]
 fn protocol_round_trips_workspace_diff_as_a_read_only_workspace_operation() {
-    assert_eq!(PROTOCOL_VERSION, 14);
+    assert_eq!(PROTOCOL_VERSION, 15);
 
     let operation = RuntimeIpcOperation::WorkspaceDiff;
     let encoded = serde_json::to_value(&operation).expect("serialize workspace diff operation");
@@ -310,7 +312,7 @@ fn protocol_round_trips_the_reviewed_session_model_operation() {
 
 #[test]
 fn protocol_round_trips_the_current_session_rename_operation() {
-    assert_eq!(PROTOCOL_VERSION, 14);
+    assert_eq!(PROTOCOL_VERSION, 15);
 
     let operation = RuntimeIpcOperation::RenameSession {
         request: RuntimeSessionRenameRequest {

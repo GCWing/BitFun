@@ -588,8 +588,11 @@ mod tests {
         assert!(summary.untracked.contains(&"untracked.txt".to_string()));
         assert!(summary.included_ignored.contains(&"secret.env".to_string()));
         assert_eq!(
-            fs::read_to_string(target.join("shared.txt")).unwrap(),
-            "staged\nunstaged\n"
+            fs::read_to_string(target.join("shared.txt"))
+                .unwrap()
+                .lines()
+                .collect::<Vec<_>>(),
+            vec!["staged", "unstaged"]
         );
         assert_eq!(
             fs::read(target.join("binary.dat")).unwrap(),

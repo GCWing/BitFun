@@ -2344,6 +2344,11 @@ pub struct AgentSessionLineageTranscriptRequest {
     pub workspace_path: String,
     pub root_session_id: String,
     pub session_id: String,
+    /// Terminal Turns that an authoritative read must prove settled. This is a
+    /// read-consistency precondition; settlement and transcript construction
+    /// remain Runtime-owned.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub required_settled_turn_ids: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub remote_connection_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -2364,6 +2369,10 @@ pub struct AgentSessionLineageCancellationRequest {
     pub workspace_path: String,
     pub root_session_id: String,
     pub session_id: String,
+    /// Exact Turn shown as active when the user requested interruption. The
+    /// Runtime rejects a changed target instead of cancelling a newer Turn.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expected_active_turn_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source: Option<AgentSubmissionSource>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -4003,6 +4012,7 @@ mod tests {
             workspace_path: "/workspace/project".to_string(),
             root_session_id: "root_1".to_string(),
             session_id: "child_1".to_string(),
+            required_settled_turn_ids: vec!["turn-terminal".to_string()],
             remote_connection_id: None,
             remote_ssh_host: None,
         };
@@ -4010,6 +4020,7 @@ mod tests {
             workspace_path: "/workspace/project".to_string(),
             root_session_id: "root_1".to_string(),
             session_id: "child_1".to_string(),
+            expected_active_turn_id: Some("turn-live".to_string()),
             source: Some(AgentSubmissionSource::Cli),
             reason: Some("user_cancelled".to_string()),
             wait_timeout_ms: Some(5_000),
@@ -4044,8 +4055,29 @@ mod tests {
         );
         assert_eq!(transcript_json["sessionId"], "child_1");
         assert_eq!(transcript_json["rootSessionId"], "root_1");
+        assert_eq!(
+            transcript_json["requiredSettledTurnIds"],
+            serde_json::json!(["turn-terminal"])
+        );
+        let legacy_transcript =
+            serde_json::from_value::<AgentSessionLineageTranscriptRequest>(serde_json::json!({
+                "workspacePath": "/workspace/project",
+                "rootSessionId": "root_1",
+                "sessionId": "child_1"
+            }))
+            .expect("deserialize precondition-free lineage transcript request");
+        assert!(legacy_transcript.required_settled_turn_ids.is_empty());
         assert_eq!(cancellation_json["source"], "cli");
         assert_eq!(cancellation_json["waitTimeoutMs"], 5_000);
+        assert_eq!(cancellation_json["expectedActiveTurnId"], "turn-live");
+        let legacy_cancellation =
+            serde_json::from_value::<AgentSessionLineageCancellationRequest>(serde_json::json!({
+                "workspacePath": "/workspace/project",
+                "rootSessionId": "root_1",
+                "sessionId": "child_1"
+            }))
+            .expect("deserialize pre-exact-target lineage cancellation request");
+        assert!(legacy_cancellation.expected_active_turn_id.is_none());
         assert_eq!(inspection_json["transcript"]["sessionId"], "child_1");
         assert_eq!(inspection_json["activeTurnId"], "turn-live");
     }

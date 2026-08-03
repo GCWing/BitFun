@@ -2108,7 +2108,7 @@ mod tests {
                 self,
                 AgentTurnCancellationRequest {
                     session_id: request.session_id,
-                    turn_id: None,
+                    turn_id: request.expected_active_turn_id,
                     source: request.source,
                     requester_session_id: None,
                     reason: request.reason,
@@ -2980,6 +2980,7 @@ mod tests {
                 workspace_path: "/workspace/project".to_string(),
                 root_session_id: "root_1".to_string(),
                 session_id: "child_1".to_string(),
+                required_settled_turn_ids: Vec::new(),
                 remote_connection_id: None,
                 remote_ssh_host: None,
             })
@@ -3007,6 +3008,7 @@ mod tests {
                 workspace_path: "/workspace/project".to_string(),
                 root_session_id: "root_1".to_string(),
                 session_id: "child_1".to_string(),
+                expected_active_turn_id: Some("child_turn".to_string()),
                 source: Some(AgentSubmissionSource::Cli),
                 reason: Some("user_cancelled".to_string()),
                 wait_timeout_ms: Some(5_000),
@@ -3028,6 +3030,7 @@ mod tests {
                 workspace_path: "/workspace/project".to_string(),
                 root_session_id: "root_1".to_string(),
                 session_id: "outside".to_string(),
+                expected_active_turn_id: Some("outside_turn".to_string()),
                 source: None,
                 reason: None,
                 wait_timeout_ms: None,
