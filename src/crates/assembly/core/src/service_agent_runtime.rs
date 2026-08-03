@@ -1197,6 +1197,7 @@ impl CoreServiceAgentRuntime {
         let session_revert = scheduled_session_revert_port(coordinator.clone(), scheduler.clone());
         let session_model: Arc<dyn AgentSessionModelPort> = coordinator.clone();
         let session_compaction: Arc<dyn AgentSessionCompactionPort> = coordinator.clone();
+        let local_command_turn: Arc<dyn AgentLocalCommandTurnPort> = coordinator.clone();
         let interaction_response: Arc<dyn AgentInteractionResponsePort> = coordinator;
         let dialog_turn: Arc<dyn AgentDialogTurnPort> = scheduler.clone();
         let cancellation: Arc<dyn AgentTurnCancellationPort> = scheduler;
@@ -1208,6 +1209,7 @@ impl CoreServiceAgentRuntime {
             .with_session_revert_port(session_revert)
             .with_session_model_port(session_model)
             .with_session_compaction_port(session_compaction)
+            .with_local_command_turn_port(local_command_turn)
             .with_dialog_turn_port(dialog_turn)
             .with_cancellation_port(cancellation)
             .with_interaction_response_port(interaction_response)
@@ -2338,6 +2340,25 @@ mod tests {
         let _ = assert_agent_runtime_with_lifecycle_delivery;
         let _ = assert_agent_runtime_with_scheduler_ports;
         let _ = assert_remote_control_port;
+    }
+
+    #[test]
+    fn session_surface_runtime_registers_local_command_turn_port() {
+        let source = include_str!("service_agent_runtime.rs");
+        let builder = source
+            .split("pub(crate) fn session_surface_agent_runtime")
+            .nth(1)
+            .and_then(|source| {
+                source
+                    .split("pub(crate) fn agent_runtime_with_scheduler_ports")
+                    .next()
+            })
+            .expect("session surface runtime builder");
+
+        assert!(builder.contains(
+            "let local_command_turn: Arc<dyn AgentLocalCommandTurnPort> = coordinator.clone();"
+        ));
+        assert!(builder.contains(".with_local_command_turn_port(local_command_turn)"));
     }
 
     #[test]
