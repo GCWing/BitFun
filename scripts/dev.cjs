@@ -324,27 +324,7 @@ async function runDesktopTargetGc(profile = 'debug') {
   }
 }
 
-async function ensureDesktopOpenSslIfNeeded() {
-  if (process.platform !== 'win32') {
-    return;
-  }
-
-  printInfo('Windows: ensuring prebuilt OpenSSL (cached under .bitfun/cache/)');
-  try {
-    const { ensureOpenSslWindows } = await import(
-      pathToFileURL(path.join(__dirname, 'ensure-openssl-windows.mjs')).href
-    );
-    await ensureOpenSslWindows();
-  } catch (error) {
-    printError('OpenSSL bootstrap failed');
-    printError(error.message || String(error));
-    process.exit(1);
-  }
-}
-
 async function rebuildDesktopDebugBinary() {
-  await ensureDesktopOpenSslIfNeeded();
-
   const buildEnv = {
     ...process.env,
     CARGO_PROFILE_DEV_DEBUG: process.env.CARGO_PROFILE_DEV_DEBUG || '0',
@@ -755,7 +735,6 @@ async function main() {
   
   try {
     if (mode === 'desktop') {
-      await ensureDesktopOpenSslIfNeeded();
       const desktopDir = path.join(ROOT_DIR, 'src/apps/desktop');
       const tauriConfig = path.join(desktopDir, 'tauri.dev.conf.json');
       // Pin the same codegen-unit count the desktop-preview path uses

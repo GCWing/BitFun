@@ -788,6 +788,44 @@ export function runManifestParserSelfTest({
   const servicesOptionalOwnerRule = optionalDependencyFeatureOwnerRules.find(
     (rule) => rule.crateName === 'services-integrations',
   );
+  const workspaceReqwestRule = requiredContentRules.find((rule) => rule.path === 'Cargo.toml');
+  const workspaceReqwestRuleText = workspaceReqwestRule?.patterns
+    .map((pattern) => pattern.regex.source)
+    .join('\n') ?? '';
+  for (const featureName of ['http2', 'json', 'stream', 'multipart', 'query', 'form']) {
+    if (!workspaceReqwestRuleText.includes(featureName)) {
+      throw new Error(`workspace Reqwest boundary must allow only reviewed feature ${featureName}`);
+    }
+  }
+  const workspaceReqwestPattern = workspaceReqwestRule?.patterns[0]?.regex;
+  const reviewedReqwestDeclaration =
+    'reqwest = { version = "0.13.4", default-features = false, features = ["http2", "json", "stream", "multipart", "query", "form"] }';
+  if (!workspaceReqwestPattern?.test(reviewedReqwestDeclaration)) {
+    throw new Error('workspace Reqwest boundary must accept the reviewed transport/data profile');
+  }
+  for (const featureName of ['default-tls', 'http3', '__native-tls']) {
+    const expandedDeclaration = reviewedReqwestDeclaration.replace(
+      '"form"]',
+      `"form", "${featureName}"]`,
+    );
+    if (workspaceReqwestPattern.test(expandedDeclaration)) {
+      throw new Error(`workspace Reqwest boundary must reject TLS-enabling feature ${featureName}`);
+    }
+  }
+  for (const path of [
+    'src/apps/cli/Cargo.toml',
+    'src/apps/desktop/Cargo.toml',
+    'src/crates/adapters/ai-adapters/Cargo.toml',
+    'src/crates/services/miniapp-market-service/Cargo.toml',
+  ]) {
+    const reqwestRule = requiredContentRules.find((rule) => rule.path === path);
+    const reqwestRuleText = reqwestRule?.patterns
+      .map((pattern) => pattern.regex.source)
+      .join('\n') ?? '';
+    if (!reqwestRuleText.includes('rustls')) {
+      throw new Error(`${path} must guard the explicit Reqwest Rustls client dependency`);
+    }
+  }
   const servicesCoreOptionalOwnerRule = optionalDependencyFeatureOwnerRules.find(
     (rule) => rule.crateName === 'services-core',
   );

@@ -2,6 +2,33 @@
 
 export const requiredContentRules = [
   {
+    path: 'Cargo.toml',
+    reason:
+      'workspace Reqwest defaults must stay transport-only so client owners select one TLS backend explicitly',
+    patterns: [
+      {
+        regex: /^reqwest[ \t]*=[ \t]*\{[ \t]*version[ \t]*=[ \t]*"[^"]+",[ \t]*default-features[ \t]*=[ \t]*false,[ \t]*features[ \t]*=[ \t]*\[[ \t]*"http2",[ \t]*"json",[ \t]*"stream",[ \t]*"multipart",[ \t]*"query",[ \t]*"form"[ \t]*\][ \t]*\}[ \t]*$/m,
+        message:
+          'workspace Reqwest dependency must use the reviewed transport/data feature allowlist',
+      },
+    ],
+  },
+  ...[
+    'src/apps/cli/Cargo.toml',
+    'src/apps/desktop/Cargo.toml',
+    'src/crates/adapters/ai-adapters/Cargo.toml',
+    'src/crates/services/miniapp-market-service/Cargo.toml',
+  ].map((path) => ({
+    path,
+    reason: 'first-party Reqwest client owners must select the repository TLS backend explicitly',
+    patterns: [
+      {
+        regex: /^reqwest\s*=\s*\{\s*workspace\s*=\s*true,\s*features\s*=\s*\[\s*"rustls"\s*\]\s*\}/m,
+        message: 'Reqwest client dependency must explicitly enable rustls',
+      },
+    ],
+  })),
+  {
     path: 'src/crates/services/services-core/src/lib.rs',
     reason:
       'services-core must compile concrete service owners only through their declared capability features',

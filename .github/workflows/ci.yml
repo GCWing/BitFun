@@ -147,11 +147,6 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - name: Setup OpenSSL (Windows, prebuilt)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: ./scripts/ci/setup-openssl-windows.ps1
-
       # Tauri code generation only requires its configured resource roots to
       # exist during check/test; distributable assets remain frontend-build's owner.
       - name: Create Tauri resource directories

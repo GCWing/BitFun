@@ -2,6 +2,8 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { isAbsolute, join, relative, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
+import { servicesReqwestOwnerFeatures } from './rules/feature-rules.mjs';
+
 const SKIPPED_DIRECTORIES = new Set([
   '.git',
   '.targets',
@@ -168,6 +170,261 @@ function findOwnedTokioFeatureViolations(pkg, ownerProfiles) {
 export function findServicesIntegrationsTokioFeatureViolations(pkg) {
   return findOwnedTokioFeatureViolations(pkg, SERVICES_INTEGRATIONS_TOKIO_FEATURES);
 }
+
+function reqwestDependencyFeatureReferences(references) {
+  return references.filter(
+    (reference) =>
+      reference === 'reqwest'
+      || reference === 'dep:reqwest'
+      || reference.startsWith('reqwest/')
+      || reference.startsWith('reqwest?/'),
+  );
+}
+
+const REQWEST_TRANSPORT_FEATURES = [
+  'form',
+  'http2',
+  'json',
+  'multipart',
+  'query',
+  'stream',
+];
+const REQWEST_PACKAGE_PROFILES = new Map([
+  ['bitfun-installer', {
+    dependencyFeatures: ['json', 'rustls-tls', 'stream'],
+    optional: false,
+    allowedPackageFeatureRefs: new Set(['reqwest/rustls-tls']),
+  }],
+  ['bitfun-core', { dependencyFeatures: REQWEST_TRANSPORT_FEATURES, optional: true }],
+  ['bitfun-services-integrations', {
+    dependencyFeatures: REQWEST_TRANSPORT_FEATURES,
+    optional: true,
+    servicesOwners: true,
+  }],
+  ...[
+    'bitfun-ai-adapters',
+    'bitfun-cli',
+    'bitfun-desktop',
+    'bitfun-miniapp-market-service',
+  ].map((packageName) => [packageName, {
+    dependencyFeatures: [...REQWEST_TRANSPORT_FEATURES, 'rustls'],
+    optional: false,
+    allowedPackageFeatureRefs: new Set(['reqwest/rustls']),
+  }]),
+]);
+
+function findReqwestPackageProfileViolations(pkg, profile) {
+  const violations = [];
+  const dependencies = (pkg.dependencies ?? []).filter(
+    (dependency) => dependency.name === 'reqwest',
+  );
+  if (dependencies.length !== 1) {
+    violations.push({
+      path: pkg.manifest_path,
+      line: 1,
+      message: `${pkg.name} must declare exactly one normal Reqwest dependency`,
+    });
+    return violations;
+  }
+
+  const dependency = dependencies[0];
+  if (
+    (dependency.kind ?? null) !== null
+    || (dependency.rename ?? null) !== null
+    || (dependency.target ?? null) !== null
+  ) {
+    violations.push({
+      path: pkg.manifest_path,
+      line: 1,
+      message:
+        `${pkg.name} Reqwest dependency must be an unrenamed, non-target-specific normal dependency`,
+    });
+  }
+  if (dependency.uses_default_features !== false) {
+    violations.push({
+      path: pkg.manifest_path,
+      line: 1,
+      message: `${pkg.name} Reqwest dependency must disable default features`,
+    });
+  }
+  if (dependency.optional !== profile.optional) {
+    violations.push({
+      path: pkg.manifest_path,
+      line: 1,
+      message:
+        `${pkg.name} Reqwest dependency optional=${dependency.optional} does not match its owner profile`,
+    });
+  }
+  const actualFeatures = new Set(dependency.features ?? []);
+  const expectedFeatures = new Set(profile.dependencyFeatures);
+  const missing = [...expectedFeatures]
+    .filter((feature) => !actualFeatures.has(feature));
+  const unexpected = [...actualFeatures]
+    .filter((feature) => !expectedFeatures.has(feature));
+  if (missing.length > 0) {
+    violations.push({
+      path: pkg.manifest_path,
+      line: 1,
+      message: `${pkg.name} Reqwest dependency missing features: ${missing.join(', ')}`,
+    });
+  }
+  if (unexpected.length > 0) {
+    violations.push({
+      path: pkg.manifest_path,
+      line: 1,
+      message: `${pkg.name} Reqwest dependency has unexpected dependency features: ${unexpected.join(', ')}`,
+    });
+  }
+
+  if (profile.servicesOwners) {
+    violations.push(...findServicesIntegrationsReqwestFeatureViolations(pkg));
+  } else {
+    for (const [featureName, references] of Object.entries(pkg.features ?? {})) {
+      for (const reference of reqwestDependencyFeatureReferences(references)) {
+        if (
+          (reference.startsWith('reqwest/') || reference.startsWith('reqwest?/'))
+          && !profile.allowedPackageFeatureRefs?.has(reference)
+        ) {
+          violations.push({
+            path: pkg.manifest_path,
+            line: 1,
+            message:
+              `${pkg.name}:${featureName} has unreviewed Reqwest feature reference ${reference}`,
+          });
+        }
+      }
+    }
+  }
+
+  return violations;
+}
+
+function ungovernedReqwestDependencyViolations(pkg) {
+  const hasReqwestDependency = (pkg.dependencies ?? []).some(
+    (dependency) => dependency.name === 'reqwest',
+  );
+  if (!hasReqwestDependency) {
+    return [];
+  }
+  return [
+    {
+      path: pkg.manifest_path,
+      line: 1,
+      message: `${pkg.name} Reqwest dependency is missing a reviewed owner profile`,
+    },
+  ];
+}
+
+export function findReqwestDependencyFeatureViolations(packages) {
+  return packages.flatMap((pkg) => {
+    const profile = REQWEST_PACKAGE_PROFILES.get(pkg.name);
+    if (!profile) {
+      return ungovernedReqwestDependencyViolations(pkg);
+    }
+    return findReqwestPackageProfileViolations(pkg, profile);
+  });
+}
+
+export function findResolvedReqwestNativeTlsViolations(records, { root }) {
+  const reqwestRecords = records.filter((record) => record.name === 'reqwest');
+  if (reqwestRecords.length === 0) {
+    return [{
+      path: join(root, 'Cargo.toml'),
+      line: 1,
+      message: 'resolved Cargo graph is missing Reqwest feature-union evidence',
+    }];
+  }
+
+  return reqwestRecords.flatMap((record) => {
+    const nativeTlsFeatures = (record.features ?? []).filter(
+      (feature) =>
+        feature === 'default-tls'
+        || feature === '__native-tls'
+        || feature.startsWith('__native-tls-')
+        || feature === 'native-tls'
+        || feature.startsWith('native-tls-'),
+    );
+    if (nativeTlsFeatures.length === 0) {
+      return [];
+    }
+    return [{
+      path: join(root, 'Cargo.toml'),
+      line: 1,
+      message:
+        `resolved reqwest ${record.version} feature union enables an unreviewed TLS backend: `
+        + nativeTlsFeatures.join(', '),
+    }];
+  });
+}
+
+export function findServicesIntegrationsReqwestFeatureViolations(pkg) {
+  const violations = [];
+  const featureGraph = pkg.features ?? {};
+  const ownerFeatures = new Set(servicesReqwestOwnerFeatures);
+
+  for (const featureName of servicesReqwestOwnerFeatures) {
+    const references = featureGraph[featureName];
+    if (!references) {
+      violations.push({
+        path: pkg.manifest_path,
+        line: 1,
+        message: `${pkg.name}:${featureName} governed Reqwest owner feature is missing`,
+      });
+      continue;
+    }
+    if (!references.some((reference) => reference === 'reqwest' || reference === 'dep:reqwest')) {
+      violations.push({
+        path: pkg.manifest_path,
+        line: 1,
+        message: `${pkg.name}:${featureName} must explicitly enable reqwest`,
+      });
+    }
+    if (!references.includes('reqwest/rustls')) {
+      violations.push({
+        path: pkg.manifest_path,
+        line: 1,
+        message: `${pkg.name}:${featureName} is missing reqwest/rustls`,
+      });
+    }
+  }
+
+  for (const [featureName, references] of Object.entries(featureGraph)) {
+    const reqwestReferences = reqwestDependencyFeatureReferences(references);
+    const implicitDependencyFeature =
+      featureName === 'reqwest'
+      && reqwestReferences.length === 1
+      && reqwestReferences[0] === 'dep:reqwest';
+    if (implicitDependencyFeature || reqwestReferences.length === 0) {
+      continue;
+    }
+    if (!ownerFeatures.has(featureName)) {
+      violations.push({
+        path: pkg.manifest_path,
+        line: 1,
+        message:
+          `${pkg.name}:${featureName} enables Reqwest outside its reviewed owner features`,
+      });
+      continue;
+    }
+    for (const reference of reqwestReferences) {
+      if (
+        reference !== 'reqwest'
+        && reference !== 'dep:reqwest'
+        && reference !== 'reqwest/rustls'
+      ) {
+        violations.push({
+          path: pkg.manifest_path,
+          line: 1,
+          message:
+            `${pkg.name}:${featureName} has unreviewed Reqwest feature reference ${reference}`,
+        });
+      }
+    }
+  }
+
+  return violations;
+}
+
 
 export function findServicesCoreTokioFeatureViolations(pkg) {
   return findOwnedTokioFeatureViolations(pkg, SERVICES_CORE_TOKIO_FEATURES);
@@ -697,6 +954,22 @@ function resolvedDependencyRecords(metadata, root) {
   return records;
 }
 
+function resolvedPackageFeatureRecords(metadata) {
+  const packageById = new Map((metadata.packages ?? []).map((pkg) => [pkg.id, pkg]));
+  return (metadata.resolve?.nodes ?? []).flatMap((node) => {
+    const pkg = packageById.get(node.id);
+    if (!pkg) {
+      return [];
+    }
+    return [{
+      name: pkg.name,
+      version: pkg.version,
+      source: pkg.source ?? null,
+      features: node.features ?? [],
+    }];
+  });
+}
+
 export function collectCargoMetadataGraph({
   root,
   manifestPaths = discoverCargoManifestPaths(root),
@@ -704,6 +977,7 @@ export function collectCargoMetadataGraph({
 }) {
   const packagesByManifest = new Map();
   const dependenciesByKey = new Map();
+  const resolvedPackageFeaturesByKey = new Map();
   const coveredManifests = new Set();
   const workspaceManifest = normalizedPath(join(root, 'Cargo.toml'));
   const orderedManifests = [...manifestPaths].sort((left, right) => {
@@ -747,11 +1021,16 @@ export function collectCargoMetadataGraph({
       ].join('|');
       dependenciesByKey.set(key, dependency);
     }
+    for (const record of resolvedPackageFeatureRecords(metadata)) {
+      const key = `${record.name}@${record.version}|${record.source ?? ''}`;
+      resolvedPackageFeaturesByKey.set(key, record);
+    }
   }
 
   return {
     packages: [...packagesByManifest.values()],
     resolvedDependencies: [...dependenciesByKey.values()],
+    resolvedPackageFeatures: [...resolvedPackageFeaturesByKey.values()],
   };
 }
 
@@ -781,7 +1060,11 @@ export function checkCargoDependencyLayersSafely({ root, crateLayoutRules }) {
 }
 
 export function checkCargoDependencyBoundaries({ root, crateLayoutRules }) {
-  const { packages, resolvedDependencies } = collectCargoMetadataGraph({ root });
+  const {
+    packages,
+    resolvedDependencies,
+    resolvedPackageFeatures,
+  } = collectCargoMetadataGraph({ root });
   return [
     ...findCargoLayerViolations(
       packages,
@@ -794,6 +1077,8 @@ export function checkCargoDependencyBoundaries({ root, crateLayoutRules }) {
     ),
     ...findFeatureGatedTestTargetViolations(packages),
     ...findTokioDependencyFeatureViolations(packages),
+    ...findReqwestDependencyFeatureViolations(packages),
+    ...findResolvedReqwestNativeTlsViolations(resolvedPackageFeatures, { root }),
     ...findServicesCorePlatformDependencyFeatureViolations(packages),
   ];
 }

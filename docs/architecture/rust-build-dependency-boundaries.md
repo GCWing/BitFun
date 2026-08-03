@@ -62,6 +62,14 @@ Cargo 会统一同一 package 在依赖图中的 feature；workspace dependency 
 - target-specific dependency 放在最接近平台实现的 owner，不因单一平台需求污染跨平台 crate；
 - 修改共享 dependency feature 视为构建影响变更，必须检查真实产品组合的 feature graph。
 
+### 3.4 Reqwest TLS 后端由客户端 owner 选择
+
+- workspace 级 `reqwest` 只统一版本以及跨产品共享的 HTTP、序列化和流能力，不启用 TLS 后端；
+- 真正创建 HTTPS client 的 app、service 或 adapter 必须在自身依赖声明中显式选择 `reqwest/rustls`，只使用 `reqwest::Url` 的 contract/assembly 路径不加载 TLS；
+- capability crate 的每个 Reqwest owner feature 必须独立带齐 `reqwest/rustls`，不能依赖 `product-full` 或其他 feature 的 Cargo feature-union 偶然补齐；
+- 边界检查以 Cargo metadata 的解码结果看护全部直接 consumer，并检查 resolved Reqwest feature union，防止传递依赖重新激活 Native TLS；
+- 不并列启用 native-tls 兼容栈。只有真实产品场景无法由 Rustls 平台证书验证承载时，才以明确行为证据评审替换方案，而不是重新叠加第二后端。
+
 ## 4. 依赖 owner 与准入检查
 
 第三方库应位于调用外部系统或实现具体能力的最低合理 owner：

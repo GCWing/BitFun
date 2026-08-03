@@ -11,6 +11,9 @@ import {
   findCargoLayerViolations,
   findFeatureGatedTestTargetViolations,
   findProductEntrypointCoreFeatureViolations,
+  findReqwestDependencyFeatureViolations,
+  findResolvedReqwestNativeTlsViolations,
+  findServicesIntegrationsReqwestFeatureViolations,
   findServicesIntegrationsTokioFeatureViolations,
   findTokioDependencyFeatureViolations,
 } from './core-boundaries/cargo-dependency-boundaries.mjs';
@@ -350,6 +353,125 @@ test('services integrations Tokio owner contracts reject feature-union masking',
     ).map((violation) => violation.message).join('\n');
     assert.match(messages, expected);
   }
+});
+
+test('services integrations Reqwest policy uses Cargo-decoded feature references', () => {
+  const pkg = servicesIntegrationsPackage(`
+[features]
+reqwest = ["dep:reqwest"]
+announcement = ["reqwest", "reqwest/rustls"]
+file-watch = ["reqwest?/__native-tls"]
+mcp = ["reqwest"]
+speech = ["reqwest", "reqwest/rustls", "reqwest/http3"]
+`);
+
+  const messages = findServicesIntegrationsReqwestFeatureViolations(pkg)
+    .map((violation) => violation.message)
+    .join('\n');
+  assert.match(messages, /file-watch.*outside its reviewed owner features/);
+  assert.match(messages, /mcp.*missing reqwest\/rustls/);
+  assert.match(messages, /speech.*unreviewed Reqwest feature reference reqwest\/http3/);
+});
+
+test('direct Reqwest clients reject extra decoded dependency and package features', () => {
+  const pkg = {
+    ...packageAt('bitfun-cli', 'src/apps/cli/Cargo.toml', [{
+      name: 'reqwest',
+      kind: null,
+      optional: false,
+      uses_default_features: false,
+      features: [
+        'http2',
+        'json',
+        'stream',
+        'multipart',
+        'query',
+        'form',
+        'rustls',
+        '__native-tls',
+      ],
+    }]),
+    features: { default: ['reqwest?/http3'] },
+  };
+
+  const messages = findReqwestDependencyFeatureViolations([pkg])
+    .map((violation) => violation.message)
+    .join('\n');
+  assert.match(messages, /bitfun-cli.*unexpected dependency features: __native-tls/);
+  assert.match(messages, /bitfun-cli:default.*unreviewed Reqwest feature reference reqwest\?\/http3/);
+});
+
+test('Reqwest metadata policy covers URL-only and future dependency owners', () => {
+  const baseFeatures = ['http2', 'json', 'stream', 'multipart', 'query', 'form'];
+  const core = {
+    ...packageAt('bitfun-core', 'src/crates/assembly/core/Cargo.toml', [{
+      name: 'reqwest',
+      kind: null,
+      optional: true,
+      uses_default_features: false,
+      features: baseFeatures,
+    }]),
+    features: { product: ['dep:reqwest', 'reqwest/__native-tls'] },
+  };
+  const future = packageAt('future-client', 'src/crates/services/future-client/Cargo.toml', [{
+    name: 'reqwest',
+    kind: null,
+    optional: false,
+    uses_default_features: false,
+    features: [...baseFeatures, 'rustls'],
+  }]);
+  const duplicate = packageAt(
+    'bitfun-services-integrations',
+    'src/crates/services/services-integrations/Cargo.toml',
+    [
+      {
+        name: 'reqwest',
+        kind: null,
+        optional: true,
+        uses_default_features: false,
+        features: baseFeatures,
+      },
+      {
+        name: 'reqwest',
+        rename: 'windows_reqwest',
+        kind: null,
+        optional: true,
+        target: 'cfg(windows)',
+        uses_default_features: false,
+        features: [...baseFeatures, '__native-tls'],
+      },
+    ],
+  );
+
+  const messages = findReqwestDependencyFeatureViolations([core, future, duplicate])
+    .map((violation) => violation.message)
+    .join('\n');
+  assert.match(messages, /bitfun-core:product.*reqwest\/__native-tls/);
+  assert.match(messages, /future-client.*missing a reviewed owner profile/);
+  assert.match(messages, /bitfun-services-integrations.*exactly one normal Reqwest dependency/);
+});
+
+test('resolved Reqwest feature union rejects every native TLS backend alias', () => {
+  const violations = findResolvedReqwestNativeTlsViolations(
+    [
+      {
+        name: 'reqwest',
+        version: '0.13.4',
+        features: ['rustls', 'rustls-no-provider', '__native-tls', 'native-tls-vendored-no-alpn'],
+      },
+      {
+        name: 'reqwest',
+        version: '0.12.28',
+        features: ['rustls-tls', 'default-tls'],
+      },
+    ],
+    { root: TEST_ROOT },
+  );
+
+  assert.equal(violations.length, 2);
+  const messages = violations.map((violation) => violation.message).join('\n');
+  assert.match(messages, /__native-tls, native-tls-vendored-no-alpn/);
+  assert.match(messages, /reqwest 0\.12\.28.*default-tls/);
 });
 
 test('Cargo metadata Tokio policy catches table-style and renamed full dependencies', () => {

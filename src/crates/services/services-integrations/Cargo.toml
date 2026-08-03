@@ -94,8 +94,8 @@ zbus-secret-service-keyring-store = { workspace = true, optional = true }
 
 [features]
 default = []
-announcement = ["reqwest", "tokio/fs", "tokio/sync"]
-browser-control = ["anyhow", "bitfun-services-core/process-runtime", "dirs", "reqwest", "thiserror", "tokio/time"]
+announcement = ["reqwest", "reqwest/rustls", "tokio/fs", "tokio/sync"]
+browser-control = ["anyhow", "bitfun-services-core/process-runtime", "dirs", "reqwest", "reqwest/rustls", "thiserror", "tokio/time"]
 canvas-runtime = [
     "dep:bitfun-product-domains",
     "oxc",
@@ -104,7 +104,7 @@ canvas-runtime = [
     "urlencoding",
     "uuid",
 ]
-debug-log = ["anyhow", "chrono", "reqwest", "tokio/rt", "uuid"]
+debug-log = ["anyhow", "chrono", "reqwest", "reqwest/rustls", "tokio/rt", "uuid"]
 deep-research = ["bitfun-agent-runtime", "tokio/fs"]
 git = [
     "async-trait",
@@ -136,6 +136,7 @@ mcp = [
     "hex",
     "rand",
     "reqwest",
+    "reqwest/rustls",
     "rmcp",
     "rmcp/transport-streamable-http-client-reqwest",
     "sha2",
@@ -157,6 +158,7 @@ miniapp-runtime = [
     "dep:bitfun-product-domains",
     "dirs",
     "reqwest",
+    "reqwest/rustls",
     "tokio/fs",
     "tokio/io-util",
     "tokio/net",
@@ -176,6 +178,7 @@ miniapp-market = [
     "hex",
     "miniapp-runtime",
     "reqwest",
+    "reqwest/rustls",
     "semver",
     "sha2",
     "thiserror",
@@ -233,6 +236,7 @@ remote-connect = [
     "qrcode",
     "rand",
     "reqwest",
+    "reqwest/rustls",
     "rustls",
     "rustls-native-certs",
     "schannel",
@@ -282,6 +286,7 @@ remote-ssh-concrete = [
     "minisign-verify",
     "rand",
     "reqwest",
+    "reqwest/rustls",
     "russh",
     "russh-sftp",
     "russh-keys",
@@ -297,6 +302,7 @@ review-platform = [
     "chrono",
     "futures",
     "reqwest",
+    "reqwest/rustls",
     "sha2",
     "thiserror",
     "tokio/fs",
@@ -313,6 +319,7 @@ speech = [
     "dep:bitfun-core-types",
     "futures-util",
     "reqwest",
+    "reqwest/rustls",
     "sha2",
     "sherpa-onnx",
     "tar",
@@ -349,7 +356,7 @@ script-tool-runtime = [
     "tokio/time",
     "which",
 ]
-web-tools = ["reqwest", "thiserror"]
+web-tools = ["reqwest", "reqwest/rustls", "thiserror"]
 product-full = [
     "announcement",
     "browser-control",

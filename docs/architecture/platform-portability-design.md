@@ -100,7 +100,7 @@ Cargo package `bitfun-cli` 的 `aarch64-unknown-linux-ohos` 目标依赖解析�
 | 进程与交互终端 | `portable-pty -> termios` 依赖 openpty、shell、信号、进程组和 `/dev` 语义 | 交互 shell、取消和子进程回收不成立 | OHOS 公开进程/PTY 能力与产品可接受的能力范围 |
 | 文件监听 | `notify` 在目标解析中选择 `inotify` | `target_os=linux` 导致错误后端选择；替代实现可能增加延迟和资源消耗 | 真机 watch 语义、性能预算和不可用时的产品状态 |
 | Git 与原生库 | `git2 -> libgit2-sys -> openssl-sys` 带入 CMake、zlib、OpenSSL 等原生构建 | 交叉编译、证书、凭据和行为一致性风险 | Git 能力的支持范围和可维护实现路径 |
-| 网络与 TLS | 当前闭包同时存在 native-tls、rustls、OpenSSL、aws-lc/ring 等路径 | 产物膨胀、证书来源错误、代理或流式响应异常 | OHOS 网络、根证书、代理、流式响应和取消能力 |
+| 网络与 TLS | Reqwest 已收敛为 Rustls + 平台证书验证；Git/libgit2 与其他协议仍有独立原生 TLS/加密路径，aws-lc/ring 选择也尚未针对 OHOS 验证 | 不能把通用客户端单栈误当成 OHOS 网络、证书或代理已适配 | OHOS 网络、根证书、代理、流式响应、取消能力，以及非 Reqwest 协议的 TLS 来源 |
 | 存储与路径 | `rusqlite/libsqlite3-sys`、`dirs` 及多处路径探测依赖桌面/类 Unix 假设 | 会话损坏、凭据泄露、升级后路径漂移 | 配置、数据、缓存、日志、凭据与工作区边界 |
 | Tokio 与平台条件 | `tokio(full)` 打开 process、signal、net、fs；源码存在大量 `cfg(unix)`、`cfg(not(windows))` | 未使用能力扩大闭包；OHOS 错走 Linux 分支 | 实际可达能力、系统调用兼容性和取消/事件语义 |
 | 用户发行与支持 | 普通用户 native CLI 安装、系统终端入口和升级渠道尚未证明 | 开发探针被包装成产品；支持范围无法维护 | 支持的设备、系统、终端、渠道与生命周期 |

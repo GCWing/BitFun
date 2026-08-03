@@ -22,15 +22,6 @@ GitHub Actions 升级使用的是兼容 Node.js 24 的 action runtime，但项�
 默认仍以 Node.js 22.12+ 为基线，除非局部指南另有说明。从旧 Node.js 版本切换
 后，请重新运行 `pnpm install`。
 
-#### Windows：OpenSSL 配置
-
-大多数 Windows 贡献者不需要手动配置 OpenSSL。使用 `pnpm run desktop:dev`
-或常规 `desktop:build*` 脚本即可；脚本会在需要时自动引导预编译的 OpenSSL 包。
-
-只有在自动引导失败、准备 CI 环境，或你明确使用 `pnpm run desktop:dev:raw`
-时才需要手动处理。此时运行 `scripts/ci/setup-openssl-windows.ps1`，或将
-`OPENSSL_DIR` 指向预编译的 x64 OpenSSL 目录，并设置 `OPENSSL_STATIC=1`。
-
 #### 构建前置检查
 
 当 `cargo check --workspace`、`cargo check -p bitfun-desktop` 或 pnpm 构建

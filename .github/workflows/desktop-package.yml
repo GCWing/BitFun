@@ -133,11 +133,6 @@ jobs:
         with:
           ref: ${{ needs.prepare.outputs.checkout_ref }}
 
-      - name: Setup OpenSSL (Windows, prebuilt)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: ./scripts/ci/setup-openssl-windows.ps1
-
       - name: Install NSIS (Windows)
         if: runner.os == 'Windows'
         shell: pwsh

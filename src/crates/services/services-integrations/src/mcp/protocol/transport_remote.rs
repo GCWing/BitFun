@@ -423,7 +423,7 @@ impl RemoteMCPTransport {
         let http_client = reqwest::Client::builder()
             .connect_timeout(Duration::from_secs(10))
             .danger_accept_invalid_certs(false)
-            .use_rustls_tls()
+            .tls_backend_rustls()
             .default_headers(default_headers.clone())
             .build()
             .unwrap_or_else(|e| {

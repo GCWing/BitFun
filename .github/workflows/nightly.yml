@@ -100,11 +100,6 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - name: Setup OpenSSL (Windows, prebuilt)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: ./scripts/ci/setup-openssl-windows.ps1
-
       - name: Install Linux system dependencies (Tauri bundler)
         if: runner.os == 'Linux'
         shell: bash
