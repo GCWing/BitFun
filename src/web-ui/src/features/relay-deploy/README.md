@@ -38,7 +38,7 @@ Desktop Tauri surface: `src/apps/desktop/src/api/relay_deploy_api.rs`
 
 5. **Regional prefixes are transport, not trust roots.** Global mode pulls
    `ghcr.io/gcwing/bitfun-relay-server` directly. China mode tries, in order,
-   `m.daocloud.io/ghcr.io/...`, `ghcr.nju.edu.cn/...`, then official GHCR. Every
+   `ghcr.nju.edu.cn/...`, `m.daocloud.io/ghcr.io/...`, then official GHCR. Every
    route uses the same signed digest and has a bounded attempt before failover.
 
 6. **The release must be publicly pullable.** `desktop-package.yml` builds one

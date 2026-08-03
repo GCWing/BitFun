@@ -34,8 +34,8 @@ customer server. Compose is used only by the explicit
 ### Mainland China hosts
 
 `deploy.sh` (and Desktop one-click deploy) auto-detects mainland China. Image
-pulls try the DaoCloud GHCR accelerator, then the Nanjing University GHCR
-accelerator, then official GHCR, always using the same image digest. Global
+pulls try the verified Nanjing University GHCR accelerator, then DaoCloud, then
+official GHCR, always using the same image digest. Global
 mode goes directly to official GHCR. Docker Engine installation also uses a
 mainland route. The Desktop wizard offers **Auto / Mainland China / Global** so
 an operator can override inaccurate cloud-IP geolocation:

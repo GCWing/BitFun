@@ -2031,8 +2031,8 @@ bitfun_image_docker_with_timeout() {
   shift
   printf '%s\n' "$*" >>"$TRACE"
   case "$*" in
-    *m.daocloud.io*) return 1 ;;
-    *ghcr.nju.edu.cn*) return 0 ;;
+    *ghcr.nju.edu.cn*) return 1 ;;
+    *m.daocloud.io*) return 0 ;;
     *) return 1 ;;
   esac
 }
@@ -2041,7 +2041,7 @@ bitfun_image_docker() {
   return 1
 }
 selected="$(bitfun_pull_relay_image linux/amd64)"
-test "$selected" = "ghcr.nju.edu.cn/gcwing/bitfun-relay-server@$BITFUN_RELAY_IMAGE_DIGEST"
+test "$selected" = "m.daocloud.io/ghcr.io/gcwing/bitfun-relay-server@$BITFUN_RELAY_IMAGE_DIGEST"
 "#,
             )
             .arg("image-route-failover")
@@ -2058,8 +2058,8 @@ test "$selected" = "ghcr.nju.edu.cn/gcwing/bitfun-relay-server@$BITFUN_RELAY_IMA
         let pulls = std::fs::read_to_string(trace_path).expect("read pull trace");
         let routes: Vec<_> = pulls.lines().collect();
         assert_eq!(routes.len(), 2);
-        assert!(routes[0].contains("m.daocloud.io/ghcr.io/gcwing/bitfun-relay-server@sha256:"));
-        assert!(routes[1].contains("ghcr.nju.edu.cn/gcwing/bitfun-relay-server@sha256:"));
+        assert!(routes[0].contains("ghcr.nju.edu.cn/gcwing/bitfun-relay-server@sha256:"));
+        assert!(routes[1].contains("m.daocloud.io/ghcr.io/gcwing/bitfun-relay-server@sha256:"));
     }
 
     #[cfg(unix)]

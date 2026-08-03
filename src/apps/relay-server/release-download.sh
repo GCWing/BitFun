@@ -100,8 +100,8 @@ bitfun_pull_relay_image() {
   routes="$(mktemp)"
   if [ "${BITFUN_MIRROR_MODE:-global}" = "cn" ]; then
     printf '%s\t%s\n' \
-      "DaoCloud GHCR accelerator" "m.daocloud.io/${BITFUN_RELAY_IMAGE}" \
       "NJU GHCR accelerator" "ghcr.nju.edu.cn/${BITFUN_RELAY_IMAGE#ghcr.io/}" \
+      "DaoCloud GHCR accelerator" "m.daocloud.io/${BITFUN_RELAY_IMAGE}" \
       "official GHCR fallback" "$BITFUN_RELAY_IMAGE" >"$routes"
   else
     printf '%s\t%s\n' "official GHCR" "$BITFUN_RELAY_IMAGE" >"$routes"
