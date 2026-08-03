@@ -12,7 +12,7 @@ use bitfun_core::agentic::persistence::{SessionBranchResult, SessionMetadataPage
 use bitfun_core::service::remote_ssh::normalize_remote_workspace_path;
 use bitfun_core::service::session::{
     DialogTurnData, SessionKind, SessionMetadata, SessionStatus, SessionTranscriptExport,
-    SessionTranscriptExportOptions,
+    SessionTranscriptExportOptions, SessionTurnCatalog,
 };
 use bitfun_core::service::session_usage::SessionUsageReport;
 use bitfun_core::service::workspace::WorkspaceKind;
@@ -87,6 +87,25 @@ pub struct SaveSessionTurnRequest {
     pub remote_connection_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub remote_ssh_host: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RecordLocalCommandTurnRequest {
+    pub turn_data: DialogTurnData,
+    pub workspace_path: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_connection_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_ssh_host: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RecordLocalCommandTurnResponse {
+    pub turn_id: String,
+    pub storage_turn_index: usize,
+    pub total_turn_count: usize,
+    pub turn_catalog: SessionTurnCatalog,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -481,6 +500,36 @@ pub async fn save_session_turn(
         &request.workspace_path,
     );
     Ok(())
+}
+
+#[tauri::command]
+pub async fn record_local_command_turn(
+    request: RecordLocalCommandTurnRequest,
+    runtime: State<'_, DesktopRuntimeContext>,
+) -> Result<RecordLocalCommandTurnResponse, String> {
+    let recorded = runtime
+        .session_application()
+        .record_local_command_turn(
+            desktop_session_scope(
+                request.workspace_path.clone(),
+                request.remote_connection_id,
+                request.remote_ssh_host,
+            ),
+            &request.turn_data,
+        )
+        .await
+        .map_err(|error| format!("Failed to record local command turn: {error}"))?;
+
+    crate::api::remote_connect_api::notify_session_changed(
+        &request.turn_data.session_id,
+        &request.workspace_path,
+    );
+    Ok(RecordLocalCommandTurnResponse {
+        turn_id: recorded.turn_id,
+        storage_turn_index: recorded.storage_turn_index,
+        total_turn_count: recorded.total_turn_count,
+        turn_catalog: recorded.turn_catalog,
+    })
 }
 
 #[tauri::command]

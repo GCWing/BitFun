@@ -432,6 +432,7 @@ impl CliAgentRuntimeClient {
         self.embedded_runtime("recording local command turns")?
             .record_completed_local_command_turn(request)
             .await
+            .map(|_| ())
             .map_err(|error| anyhow::anyhow!(error.into_message()))
     }
 

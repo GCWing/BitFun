@@ -13,26 +13,26 @@ use bitfun_runtime_ports::{
     AgentBackgroundResultRequest, AgentDialogSteerRequest, AgentDialogTurnPort,
     AgentDialogTurnRequest, AgentInputAttachment, AgentLifecycleDeliveryPort,
     AgentLocalCommandTurnPort, AgentLocalCommandTurnRecordRequest,
-    AgentMessageWorkspaceReferencesRequest, AgentSessionArchiveRequest,
-    AgentSessionArchiveStateRequest, AgentSessionClosePort, AgentSessionCompactionPort,
-    AgentSessionCompactionRequest, AgentSessionCompactionResult, AgentSessionCreateRequest,
-    AgentSessionCreateResult, AgentSessionDeleteRequest, AgentSessionForkAtTurnRequest,
-    AgentSessionForkBeforeTurnRequest, AgentSessionForkPort, AgentSessionForkRequest,
-    AgentSessionForkResult, AgentSessionLineageCancellationRequest, AgentSessionLineageInspection,
-    AgentSessionLineagePort, AgentSessionLineageRequest, AgentSessionLineageSnapshot,
-    AgentSessionLineageTranscriptRequest, AgentSessionListRequest, AgentSessionManagementPort,
-    AgentSessionModePort, AgentSessionModeUpdateRequest, AgentSessionModelPort,
-    AgentSessionModelUpdateRequest, AgentSessionRenameRequest, AgentSessionRevertPort,
-    AgentSessionRevertRequest, AgentSessionRevertResult, AgentSessionSummary,
-    AgentSessionUsagePort, AgentSessionUsageRequest, AgentSessionWorkspaceBinding,
-    AgentSessionWorkspaceRequest, AgentSubmissionPort, AgentSubmissionRequest,
-    AgentSubmissionResult, AgentSubmissionSource, AgentThreadGoalCreateRequest,
-    AgentThreadGoalDeliveryRequest, AgentThreadGoalGetRequest, AgentThreadGoalManagementPort,
-    AgentThreadGoalUpdateStatusRequest, AgentTransientSessionDiscardRequest,
-    AgentTurnCancellationPort, AgentTurnCancellationRequest, AgentTurnCancellationResult,
-    AgentTurnSettlementPort, AgentTurnSettlementRequest, AgentUserShellCommandPort,
-    AgentUserShellCommandRequest, AgentUserShellCommandResult, AgentWorkspaceReference,
-    AgentWorkspaceReferencePort, AgentWorkspaceReferenceSearchRequest,
+    AgentLocalCommandTurnRecordResult, AgentMessageWorkspaceReferencesRequest,
+    AgentSessionArchiveRequest, AgentSessionArchiveStateRequest, AgentSessionClosePort,
+    AgentSessionCompactionPort, AgentSessionCompactionRequest, AgentSessionCompactionResult,
+    AgentSessionCreateRequest, AgentSessionCreateResult, AgentSessionDeleteRequest,
+    AgentSessionForkAtTurnRequest, AgentSessionForkBeforeTurnRequest, AgentSessionForkPort,
+    AgentSessionForkRequest, AgentSessionForkResult, AgentSessionLineageCancellationRequest,
+    AgentSessionLineageInspection, AgentSessionLineagePort, AgentSessionLineageRequest,
+    AgentSessionLineageSnapshot, AgentSessionLineageTranscriptRequest, AgentSessionListRequest,
+    AgentSessionManagementPort, AgentSessionModePort, AgentSessionModeUpdateRequest,
+    AgentSessionModelPort, AgentSessionModelUpdateRequest, AgentSessionRenameRequest,
+    AgentSessionRevertPort, AgentSessionRevertRequest, AgentSessionRevertResult,
+    AgentSessionSummary, AgentSessionUsagePort, AgentSessionUsageRequest,
+    AgentSessionWorkspaceBinding, AgentSessionWorkspaceRequest, AgentSubmissionPort,
+    AgentSubmissionRequest, AgentSubmissionResult, AgentSubmissionSource,
+    AgentThreadGoalCreateRequest, AgentThreadGoalDeliveryRequest, AgentThreadGoalGetRequest,
+    AgentThreadGoalManagementPort, AgentThreadGoalUpdateStatusRequest,
+    AgentTransientSessionDiscardRequest, AgentTurnCancellationPort, AgentTurnCancellationRequest,
+    AgentTurnCancellationResult, AgentTurnSettlementPort, AgentTurnSettlementRequest,
+    AgentUserShellCommandPort, AgentUserShellCommandRequest, AgentUserShellCommandResult,
+    AgentWorkspaceReference, AgentWorkspaceReferencePort, AgentWorkspaceReferenceSearchRequest,
     AgentWorkspaceReferenceSearchResult, DialogSteerOutcome, DialogSubmitOutcome,
     PermissionAuditRecord, PermissionGrant, PermissionGrantKey, PluginRuntimeBinding, PortError,
     PortErrorKind, PortResult, RuntimeEventEnvelope, SessionTranscript, SessionTranscriptReader,
@@ -1134,7 +1134,7 @@ impl AgentRuntime {
     pub async fn record_completed_local_command_turn(
         &self,
         request: AgentLocalCommandTurnRecordRequest,
-    ) -> Result<(), RuntimeError> {
+    ) -> Result<AgentLocalCommandTurnRecordResult, RuntimeError> {
         let port = self
             .local_command_turn
             .as_ref()
@@ -1932,9 +1932,18 @@ mod tests {
         async fn record_completed_local_command_turn(
             &self,
             request: AgentLocalCommandTurnRecordRequest,
-        ) -> PortResult<()> {
-            self.local_command_turns.lock().unwrap().push(request);
-            Ok(())
+        ) -> PortResult<AgentLocalCommandTurnRecordResult> {
+            let mut turns = self.local_command_turns.lock().unwrap();
+            let storage_turn_index = turns.len();
+            let turn_id = request
+                .turn_id
+                .clone()
+                .unwrap_or_else(|| format!("local-command-{storage_turn_index}"));
+            turns.push(request);
+            Ok(AgentLocalCommandTurnRecordResult {
+                turn_id,
+                storage_turn_index,
+            })
         }
     }
 
@@ -2756,7 +2765,7 @@ mod tests {
         let mut metadata = serde_json::Map::new();
         metadata.insert("kind".to_string(), serde_json::json!("usage_report"));
 
-        runtime
+        let result = runtime
             .record_completed_local_command_turn(AgentLocalCommandTurnRecordRequest {
                 session_id: "session_1".to_string(),
                 content: "report".to_string(),
@@ -2766,6 +2775,9 @@ mod tests {
             })
             .await
             .expect("record local command turn");
+
+        assert_eq!(result.turn_id, "turn_1");
+        assert_eq!(result.storage_turn_index, 0);
 
         let requests = ports.local_command_turns.lock().unwrap();
         assert_eq!(requests.len(), 1);

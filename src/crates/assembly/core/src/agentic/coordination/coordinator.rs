@@ -11302,7 +11302,8 @@ impl bitfun_runtime_ports::AgentLocalCommandTurnPort for ConversationCoordinator
     async fn record_completed_local_command_turn(
         &self,
         request: bitfun_runtime_ports::AgentLocalCommandTurnRecordRequest,
-    ) -> bitfun_runtime_ports::PortResult<()> {
+    ) -> bitfun_runtime_ports::PortResult<bitfun_runtime_ports::AgentLocalCommandTurnRecordResult>
+    {
         self.ensure_session_runtime_ownership(&request.session_id, None)
             .map_err(runtime_port_error_preserving_message)?;
         let mutation_guard = self
@@ -11341,7 +11342,12 @@ impl bitfun_runtime_ports::AgentLocalCommandTurnPort for ConversationCoordinator
             .await;
         drop(mutation_guard);
         result
-            .map(|_| ())
+            .map(
+                |turn| bitfun_runtime_ports::AgentLocalCommandTurnRecordResult {
+                    turn_id: turn.turn_id,
+                    storage_turn_index: turn.turn_index,
+                },
+            )
             .map_err(runtime_port_error_preserving_message)
     }
 }

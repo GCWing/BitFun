@@ -1,7 +1,11 @@
 
 import { api } from './ApiClient';
 import { createTauriCommandError } from '../errors/TauriCommandError';
-import type { SessionMetadata, DialogTurnData } from '@/shared/types/session-history';
+import type {
+  DialogTurnData,
+  SessionMetadata,
+  SessionTurnCatalog,
+} from '@/shared/types/session-history';
 import { normalizeRemoteSessionScope } from '@/shared/utils/remoteSessionScope';
 
 export type UiSessionMetadataField =
@@ -218,6 +222,13 @@ export interface SessionUsageReport {
   };
 }
 
+export interface RecordLocalCommandTurnResponse {
+  turnId: string;
+  storageTurnIndex: number;
+  totalTurnCount: number;
+  turnCatalog: SessionTurnCatalog;
+}
+
 function remoteSessionFields(
   remoteConnectionId?: string,
   remoteSshHost?: string
@@ -372,6 +383,28 @@ export class SessionAPI {
       });
     } catch (error) {
       throw createTauriCommandError('save_session_turn', error, { turnData, workspacePath });
+    }
+  }
+
+  async recordLocalCommandTurn(
+    turnData: DialogTurnData,
+    workspacePath: string,
+    remoteConnectionId?: string,
+    remoteSshHost?: string,
+  ): Promise<RecordLocalCommandTurnResponse> {
+    try {
+      return await api.invoke('record_local_command_turn', {
+        request: {
+          turn_data: turnData,
+          workspace_path: workspacePath,
+          ...remoteSessionFields(remoteConnectionId, remoteSshHost),
+        },
+      });
+    } catch (error) {
+      throw createTauriCommandError('record_local_command_turn', error, {
+        turnData,
+        workspacePath,
+      });
     }
   }
 

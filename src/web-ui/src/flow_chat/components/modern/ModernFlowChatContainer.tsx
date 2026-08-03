@@ -788,7 +788,7 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     const turns = activeSession?.dialogTurns ?? [];
     const result: FlowChatTurnSummary[] = [];
     for (const turn of turns) {
-      if (!turn.userMessage) continue;
+      if (!turn.userMessage || turn.userMessage.metadata?.usageReportProvisional === true) continue;
       result.push({
         turnId: turn.id,
         turnIndex: result.length + 1,
@@ -806,7 +806,7 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
   const renderedTurnSummaries = useMemo<FlowChatTurnSummary[]>(() => {
     const result: FlowChatTurnSummary[] = [];
     for (const turn of renderedTurns) {
-      if (!turn.userMessage) continue;
+      if (!turn.userMessage || turn.userMessage.metadata?.usageReportProvisional === true) continue;
       result.push({
         turnId: turn.id,
         turnIndex: result.length + 1,

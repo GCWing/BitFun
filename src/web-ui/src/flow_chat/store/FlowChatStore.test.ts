@@ -4303,6 +4303,108 @@ describe('FlowChatStore historical session hydration state', () => {
     expect(apiMocks.loadSessionTurnWindow).toHaveBeenCalledTimes(1);
   });
 
+  it('commits a provisional usage report at its authoritative ordinal without corrupting the restored tail', async () => {
+    const catalog = createTurnCatalog(7);
+    apiMocks.restoreSessionView.mockResolvedValueOnce({
+      session: {
+        sessionId: 'history-1',
+        sessionName: 'History 1',
+        agentType: 'agentic',
+        state: 'Idle',
+        turnCount: 7,
+        createdAt: 1,
+      },
+      turns: [4, 5, 6].map(index => createPersistedTurn(index)),
+      turnCatalog: catalog,
+      contextRestoreState: 'pending',
+      isPartial: true,
+      loadedTurnCount: 3,
+      totalTurnCount: 7,
+    });
+    flowChatStore.setState(() => ({
+      sessions: new Map([[
+        'history-1',
+        createSession({
+          sessionId: 'history-1',
+          isHistorical: true,
+          historyState: 'metadata-only',
+        }),
+      ]]),
+      activeSessionId: 'history-1',
+    }));
+
+    await flowChatStore.loadSessionHistory('history-1', 'D:/workspace/BitFun');
+    const provisional = flowChatStore.addLocalUsageReportTurn({
+      sessionId: 'history-1',
+      markdown: '# Session Usage Report',
+      reportId: 'usage-1',
+      schemaVersion: 1,
+      generatedAt: 10,
+    });
+    expect(provisional?.backendTurnIndex).toBeUndefined();
+    expect(provisional?.userMessage.metadata?.usageReportProvisional).toBe(true);
+    expect(flowChatStore.getSessionHistoryViewState('history-1')?.loadedRanges).toMatchObject([{
+      startOrdinal: 4,
+      endOrdinalExclusive: 7,
+    }]);
+
+    const authoritativeCatalog = {
+      ...createTurnCatalog(8, 'catalog-2'),
+      entries: [
+        ...createTurnCatalog(8, 'catalog-2').entries.slice(0, 7),
+        {
+          ordinal: 7,
+          storageTurnIndex: 7,
+          turnId: provisional?.id,
+          preview: 'Session Usage Report',
+          previewTruncated: false,
+        },
+      ],
+    };
+    expect(flowChatStore.commitLocalUsageReportTurn({
+      sessionId: 'history-1',
+      dialogTurnId: provisional!.id,
+      turnId: provisional!.id,
+      storageTurnIndex: 7,
+      totalTurnCount: 8,
+      turnCatalog: authoritativeCatalog,
+    })).toBe(true);
+
+    const session = flowChatStore.getState().sessions.get('history-1');
+    expect(session).toMatchObject({
+      isPartial: true,
+      loadedTurnCount: 4,
+      totalTurnCount: 8,
+    });
+    expect(session?.dialogTurns.find(turn => turn.id === 'turn-4')?.backendTurnIndex).toBe(4);
+    const committedReport = session?.dialogTurns.find(turn => turn.id === provisional?.id);
+    expect(committedReport?.backendTurnIndex).toBe(7);
+    expect(committedReport?.userMessage.metadata).not.toHaveProperty('usageReportProvisional');
+    expect(flowChatStore.getSessionHistoryViewState('history-1')?.loadedRanges).toMatchObject([{
+      startOrdinal: 4,
+      endOrdinalExclusive: 8,
+    }]);
+
+    apiMocks.loadSessionTurnWindow.mockResolvedValueOnce({
+      status: 'ready',
+      catalogRevision: authoritativeCatalog.revision,
+      totalTurnCount: 8,
+      startOrdinal: 0,
+      endOrdinalExclusive: 4,
+      targetTurnId: 'turn-3',
+      turns: [0, 1, 2, 3].map(index => createPersistedTurn(index)),
+    });
+    await expect(flowChatStore.loadSessionTurnWindow('history-1', 3)).resolves.toMatchObject({
+      status: 'ready',
+      isCurrent: true,
+    });
+    expect(flowChatStore.activateSessionHistoryWindowFromTail('history-1', 3)?.range).toMatchObject({
+      startOrdinal: 0,
+      endOrdinalExclusive: 8,
+      mode: 'history-window',
+    });
+  });
+
   it('invalidates cached history and catalog entries after truncating a complete session', async () => {
     const catalog = createTurnCatalog(10);
     const dialogTurns = Array.from({ length: 10 }, (_, index) => createPersistedTurn(index));

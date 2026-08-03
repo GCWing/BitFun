@@ -1224,6 +1224,17 @@ pub struct AgentLocalCommandTurnRecordRequest {
     pub metadata: serde_json::Map<String, serde_json::Value>,
 }
 
+/// The authoritative persisted identity assigned to a completed local command Turn.
+///
+/// The product-facing adapter may use this result to reconcile a provisional UI
+/// projection. Catalog data remains owned by the session persistence boundary.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentLocalCommandTurnRecordResult {
+    pub turn_id: String,
+    pub storage_turn_index: usize,
+}
+
 /// Starts one user-authored shell command as a normal, model-visible tool turn.
 ///
 /// The caller provides the exact turn identity so interactive adapters can
@@ -2440,7 +2451,7 @@ pub trait AgentLocalCommandTurnPort: Send + Sync {
     async fn record_completed_local_command_turn(
         &self,
         request: AgentLocalCommandTurnRecordRequest,
-    ) -> PortResult<()>;
+    ) -> PortResult<AgentLocalCommandTurnRecordResult>;
 }
 
 #[async_trait::async_trait]
@@ -4197,6 +4208,20 @@ mod tests {
         assert_eq!(json["metadata"]["kind"], "usage_report");
         assert!(json.get("turnKind").is_none());
         assert!(json.get("modelVisible").is_none());
+    }
+
+    #[test]
+    fn local_command_turn_result_serializes_authoritative_identity() {
+        let result = AgentLocalCommandTurnRecordResult {
+            turn_id: "turn_8".to_string(),
+            storage_turn_index: 7,
+        };
+
+        let json = serde_json::to_value(result).expect("serialize local command turn result");
+
+        assert_eq!(json["turnId"], "turn_8");
+        assert_eq!(json["storageTurnIndex"], 7);
+        assert_eq!(json.as_object().map(|value| value.len()), Some(2));
     }
 
     #[test]

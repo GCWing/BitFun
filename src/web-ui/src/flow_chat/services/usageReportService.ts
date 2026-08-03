@@ -65,7 +65,7 @@ export async function runUsageReportCommand(
     generatedAt: requestedAt,
     status: 'loading',
   });
-  let finalizedPendingTurn = false;
+  let provisionalTurnId = pendingTurn?.id;
 
   try {
     const rawReport = params.fetchReport
@@ -94,21 +94,28 @@ export async function runUsageReportCommand(
         generatedAt: report.generatedAt,
         report: report as unknown as Record<string, any>,
       });
-    finalizedPendingTurn = !!pendingTurn;
+    provisionalTurnId = turn?.id ?? provisionalTurnId;
 
     if (turn && params.persistTurn !== false) {
-      await sessionAPI.saveSessionTurn(
+      const recorded = await sessionAPI.recordLocalCommandTurn(
         toPersistedLocalReportTurn(turn),
         projectWorkspacePath,
         params.session.remoteConnectionId,
         params.session.remoteSshHost,
       );
+      if (!flowChatStore.commitLocalUsageReportTurn({
+        sessionId: params.session.sessionId,
+        dialogTurnId: turn.id,
+        ...recorded,
+      })) {
+        throw new Error('Failed to reconcile persisted usage report turn');
+      }
     }
 
     return { inserted: !!turn, report };
   } catch (error) {
-    if (pendingTurn && !finalizedPendingTurn) {
-      flowChatStore.deleteDialogTurn(params.session.sessionId, pendingTurn.id);
+    if (provisionalTurnId) {
+      flowChatStore.deleteDialogTurn(params.session.sessionId, provisionalTurnId);
     }
     notificationService.error(
       error instanceof Error ? error.message : params.unknownErrorMessage,
@@ -292,9 +299,12 @@ export function renderUsageReportMarkdown(report: SessionUsageReport): string {
 }
 
 function toPersistedLocalReportTurn(turn: DialogTurn): DialogTurnData {
+  const metadata = { ...turn.userMessage.metadata };
+  delete metadata.usageReportProvisional;
   return {
     turnId: turn.id,
-    turnIndex: turn.backendTurnIndex ?? 0,
+    // Local commands receive their storage identity only after persistence.
+    turnIndex: 0,
     sessionId: turn.sessionId,
     timestamp: turn.startTime,
     kind: 'local_command',
@@ -302,7 +312,7 @@ function toPersistedLocalReportTurn(turn: DialogTurn): DialogTurnData {
       id: turn.userMessage.id,
       content: turn.userMessage.content,
       timestamp: turn.userMessage.timestamp,
-      metadata: turn.userMessage.metadata,
+      metadata,
     },
     modelRounds: [],
     startTime: turn.startTime,

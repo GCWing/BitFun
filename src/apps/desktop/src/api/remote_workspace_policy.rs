@@ -1317,6 +1317,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
     ("read_mcp_resource", RemoteWorkspacePolicy::LegacyUnaudited),
     ("record_file_change", RemoteWorkspacePolicy::LegacyUnaudited),
     (
+        "record_local_command_turn",
+        RemoteWorkspacePolicy::RemoteRouted,
+    ),
+    (
         "refresh_model_client",
         RemoteWorkspacePolicy::LegacyUnaudited,
     ),

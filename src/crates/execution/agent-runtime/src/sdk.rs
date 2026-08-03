@@ -61,13 +61,13 @@ pub use bitfun_runtime_ports::{
     AgentBackgroundResultRequest, AgentDialogSteerRequest, AgentDialogTurnExecution,
     AgentDialogTurnPort, AgentDialogTurnRequest, AgentInputAttachment, AgentLifecycleDeliveryPort,
     AgentLocalCommandTurnPort, AgentLocalCommandTurnRecordRequest,
-    AgentMessageWorkspaceReferencesRequest, AgentSessionArchiveRequest,
-    AgentSessionArchiveStateRequest, AgentSessionClosePort, AgentSessionCompactionPort,
-    AgentSessionCompactionRequest, AgentSessionCompactionResult, AgentSessionComposerUpdate,
-    AgentSessionCreateRequest, AgentSessionCreateResult, AgentSessionDeleteRequest,
-    AgentSessionForkAtTurnRequest, AgentSessionForkBeforeTurnRequest, AgentSessionForkPort,
-    AgentSessionForkRequest, AgentSessionForkResult, AgentSessionLifecycleStatus,
-    AgentSessionLineageCancellationRequest, AgentSessionLineageEntry,
+    AgentLocalCommandTurnRecordResult, AgentMessageWorkspaceReferencesRequest,
+    AgentSessionArchiveRequest, AgentSessionArchiveStateRequest, AgentSessionClosePort,
+    AgentSessionCompactionPort, AgentSessionCompactionRequest, AgentSessionCompactionResult,
+    AgentSessionComposerUpdate, AgentSessionCreateRequest, AgentSessionCreateResult,
+    AgentSessionDeleteRequest, AgentSessionForkAtTurnRequest, AgentSessionForkBeforeTurnRequest,
+    AgentSessionForkPort, AgentSessionForkRequest, AgentSessionForkResult,
+    AgentSessionLifecycleStatus, AgentSessionLineageCancellationRequest, AgentSessionLineageEntry,
     AgentSessionLineageInspection, AgentSessionLineagePort, AgentSessionLineageRequest,
     AgentSessionLineageSnapshot, AgentSessionLineageTranscriptRequest, AgentSessionListRequest,
     AgentSessionManagementPort, AgentSessionModePort, AgentSessionModeUpdateRequest,
@@ -491,7 +491,7 @@ impl AgentRuntime {
     pub async fn record_completed_local_command_turn(
         &self,
         request: AgentLocalCommandTurnRecordRequest,
-    ) -> Result<(), RuntimeError> {
+    ) -> Result<AgentLocalCommandTurnRecordResult, RuntimeError> {
         self.inner
             .record_completed_local_command_turn(request)
             .await

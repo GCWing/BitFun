@@ -976,6 +976,12 @@ function mergeLoadedTurnRanges(
   return merged;
 }
 
+function isProvisionalUsageReportTurn(turn: DialogTurn): boolean {
+  const metadata = turn.userMessage.metadata as LocalCommandMetadata | undefined;
+  return metadata?.localCommandKind === 'usage_report'
+    && metadata.usageReportProvisional === true;
+}
+
 function sliceLoadedTurnRange(
   range: LoadedTurnRange,
   startOrdinal: number,
@@ -1734,6 +1740,12 @@ export class FlowChatStore {
     if (!session || session.dialogTurns.length === 0) {
       return [];
     }
+    const canonicalTailTurns = session.dialogTurns.filter(
+      turn => !isProvisionalUsageReportTurn(turn),
+    );
+    if (canonicalTailTurns.length === 0) {
+      return [];
+    }
 
     const catalog = view?.catalog?.sessionId === sessionId
       ? view.catalog
@@ -1750,7 +1762,7 @@ export class FlowChatStore {
     }
 
     return [{
-      startOrdinal: Math.max(0, totalTurnCount - session.dialogTurns.length),
+      startOrdinal: Math.max(0, totalTurnCount - canonicalTailTurns.length),
       endOrdinalExclusive: totalTurnCount,
     }];
   }
@@ -1978,7 +1990,10 @@ export class FlowChatStore {
     if (catalog) {
       view.catalog = catalog;
     }
-    if (session.dialogTurns.length === 0) {
+    const canonicalTailTurns = session.dialogTurns.filter(
+      turn => !isProvisionalUsageReportTurn(turn),
+    );
+    if (canonicalTailTurns.length === 0) {
       return;
     }
 
@@ -1990,7 +2005,7 @@ export class FlowChatStore {
     const entryByStorageIndex = new Map(
       (catalog?.entries ?? []).map(entry => [entry.storageTurnIndex, entry]),
     );
-    const located = session.dialogTurns
+    const located = canonicalTailTurns
       .map(turn => {
         const entry = entryByTurnId.get(turn.id)
           ?? (typeof turn.backendTurnIndex === 'number'
@@ -2005,7 +2020,7 @@ export class FlowChatStore {
     );
     const now = Date.now();
 
-    if (uniqueLocated.length === session.dialogTurns.length) {
+    if (uniqueLocated.length === canonicalTailTurns.length) {
       let groupStart = 0;
       for (let index = 1; index <= uniqueLocated.length; index += 1) {
         const continues = index < uniqueLocated.length
@@ -2029,13 +2044,13 @@ export class FlowChatStore {
     const totalTurnCount = Math.max(
       catalog?.totalTurnCount ?? 0,
       session.totalTurnCount ?? 0,
-      session.dialogTurns.length,
+      canonicalTailTurns.length,
     );
-    const startOrdinal = Math.max(0, totalTurnCount - session.dialogTurns.length);
+    const startOrdinal = Math.max(0, totalTurnCount - canonicalTailTurns.length);
     this.cacheSessionLoadedTurnRange(sessionId, {
       startOrdinal,
-      endOrdinalExclusive: startOrdinal + session.dialogTurns.length,
-      turns: [...session.dialogTurns],
+      endOrdinalExclusive: startOrdinal + canonicalTailTurns.length,
+      turns: [...canonicalTailTurns],
       lastAccessedAt: now,
       source,
     }, catalog ?? null);
@@ -4715,8 +4730,8 @@ export class FlowChatStore {
       modelVisible: false,
       usageReport: params.report,
       usageReportStatus: params.status ?? 'completed',
+      usageReportProvisional: true,
     };
-    const turnIndex = session.dialogTurns.length;
     const dialogTurn: DialogTurn = {
       id: `local-usage-${params.reportId}`,
       sessionId: params.sessionId,
@@ -4731,7 +4746,6 @@ export class FlowChatStore {
       status: params.status === 'loading' ? 'processing' : 'completed',
       startTime: params.generatedAt,
       endTime: params.generatedAt,
-      backendTurnIndex: turnIndex,
     };
 
     this.setState(prev => {
@@ -4754,6 +4768,104 @@ export class FlowChatStore {
       };
     });
     return dialogTurn;
+  }
+
+  public commitLocalUsageReportTurn(params: {
+    sessionId: string;
+    dialogTurnId: string;
+    turnId: string;
+    storageTurnIndex: number;
+    totalTurnCount: number;
+    turnCatalog: SessionTurnCatalog;
+  }): boolean {
+    if (
+      params.turnCatalog.sessionId !== params.sessionId
+      || params.totalTurnCount !== params.turnCatalog.totalTurnCount
+      || !Number.isInteger(params.storageTurnIndex)
+      || params.storageTurnIndex < 0
+    ) {
+      log.warn('Cannot commit local usage report with an invalid authoritative catalog', {
+        sessionId: params.sessionId,
+        dialogTurnId: params.dialogTurnId,
+        turnId: params.turnId,
+        storageTurnIndex: params.storageTurnIndex,
+      });
+      return false;
+    }
+    const catalogEntry = params.turnCatalog.entries.find(entry =>
+      entry.turnId === params.turnId
+      && entry.storageTurnIndex === params.storageTurnIndex
+    );
+    if (!catalogEntry) {
+      log.warn('Cannot commit local usage report missing from authoritative catalog', {
+        sessionId: params.sessionId,
+        dialogTurnId: params.dialogTurnId,
+        turnId: params.turnId,
+        storageTurnIndex: params.storageTurnIndex,
+      });
+      return false;
+    }
+
+    let committedTurn: DialogTurn | null = null;
+    this.setState(prev => {
+      const session = prev.sessions.get(params.sessionId);
+      const provisionalTurn = session?.dialogTurns.find(turn => turn.id === params.dialogTurnId);
+      if (
+        !session
+        || !provisionalTurn
+        || provisionalTurn.id !== params.turnId
+        || !isProvisionalUsageReportTurn(provisionalTurn)
+      ) {
+        return prev;
+      }
+
+      const dialogTurns = session.dialogTurns.map(turn => {
+        if (turn.id !== params.dialogTurnId) {
+          return turn;
+        }
+        const metadata = { ...turn.userMessage.metadata } as LocalCommandMetadata;
+        delete metadata.usageReportProvisional;
+        committedTurn = {
+          ...turn,
+          backendTurnIndex: params.storageTurnIndex,
+          userMessage: {
+            ...turn.userMessage,
+            metadata,
+          },
+        };
+        return committedTurn;
+      });
+      const newSessions = new Map(prev.sessions);
+      newSessions.set(params.sessionId, {
+        ...session,
+        dialogTurns,
+        turnCatalog: params.turnCatalog,
+        totalTurnCount: params.totalTurnCount,
+        loadedTurnCount: dialogTurns.length,
+      });
+      return {
+        ...prev,
+        sessions: newSessions,
+      };
+    });
+
+    if (!committedTurn) {
+      log.warn('Cannot commit missing provisional local usage report', {
+        sessionId: params.sessionId,
+        dialogTurnId: params.dialogTurnId,
+      });
+      return false;
+    }
+
+    this.ensureSessionHistoryView(params.sessionId, params.turnCatalog).catalog = params.turnCatalog;
+    this.cacheSessionLoadedTurnRange(params.sessionId, {
+      startOrdinal: catalogEntry.ordinal,
+      endOrdinalExclusive: catalogEntry.ordinal + 1,
+      turns: [committedTurn],
+      lastAccessedAt: Date.now(),
+      source: 'live',
+    }, params.turnCatalog, catalogEntry.ordinal);
+    return true;
   }
 
   public deleteDialogTurn(sessionId: string, dialogTurnId: string): void {

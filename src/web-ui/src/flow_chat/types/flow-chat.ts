@@ -328,6 +328,18 @@ export interface Session {
   titleI18nKey?: string;
   titleI18nParams?: Record<string, unknown>;
   titleStatus?: 'generating' | 'generated' | 'failed';
+  /**
+   * In-memory canonical working set for this session.
+   *
+   * Live and fully hydrated sessions normally contain all canonical Turns.
+   * When `isPartial` is true, this contains only the restored live tail;
+   * older paged windows remain in `SessionHistoryViewState.loadedRanges`.
+   *
+   * This array may temporarily contain provisional frontend Turns that have
+   * not been persisted. Never derive a backend storage index from its length
+   * or local array position; use `DialogTurn.backendTurnIndex` and
+   * `turnCatalog` for persisted identity and ordinals.
+   */
   dialogTurns: DialogTurn[];
   
   // Derived status from deriveSessionStatus():

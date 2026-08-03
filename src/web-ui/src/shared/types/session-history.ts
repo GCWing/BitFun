@@ -137,6 +137,8 @@ export interface LocalCommandMetadata {
   modelVisible: false;
   usageReport?: Record<string, any>;
   usageReportStatus?: 'loading' | 'completed';
+  /** Frontend-only until the backend returns its authoritative turn catalog entry. */
+  usageReportProvisional?: boolean;
   threadGoalKickoff?: boolean;
   threadGoalObjectiveUpdated?: boolean;
   threadGoalContinuation?: boolean;
