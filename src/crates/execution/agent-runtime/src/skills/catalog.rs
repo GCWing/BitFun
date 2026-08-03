@@ -6,6 +6,7 @@ pub(super) enum BuiltinSkillGroup {
     ComputerUse,
     Canvas,
     Gstack,
+    HarmonyOS,
 }
 
 impl BuiltinSkillGroup {
@@ -17,6 +18,7 @@ impl BuiltinSkillGroup {
             Self::ComputerUse => "computer-use",
             Self::Canvas => "canvas",
             Self::Gstack => "gstack",
+            Self::HarmonyOS => "harmonyos",
         }
     }
 }
@@ -139,6 +141,30 @@ pub(super) const BUILTIN_SKILL_SPECS: &[BuiltinSkillSpec] = &[
     BuiltinSkillSpec {
         dir_name: "xlsx",
         group: BuiltinSkillGroup::Office,
+    },
+    BuiltinSkillSpec {
+        dir_name: "arkts-error-fixes",
+        group: BuiltinSkillGroup::HarmonyOS,
+    },
+    BuiltinSkillSpec {
+        dir_name: "arkts-grammar-standards",
+        group: BuiltinSkillGroup::HarmonyOS,
+    },
+    BuiltinSkillSpec {
+        dir_name: "arkts-runtime-fix",
+        group: BuiltinSkillGroup::HarmonyOS,
+    },
+    BuiltinSkillSpec {
+        dir_name: "arkui-knowledge",
+        group: BuiltinSkillGroup::HarmonyOS,
+    },
+    BuiltinSkillSpec {
+        dir_name: "deveco-cli",
+        group: BuiltinSkillGroup::HarmonyOS,
+    },
+    BuiltinSkillSpec {
+        dir_name: "deveco-create-project",
+        group: BuiltinSkillGroup::HarmonyOS,
     },
 ];
 

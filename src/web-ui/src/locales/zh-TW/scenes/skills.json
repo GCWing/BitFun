@@ -115,6 +115,7 @@
       "miniapp": "MiniApp",
       "canvas": "畫布",
       "gstack": "gstack",
+      "harmonyos": "鴻蒙",
       "other": "其他"
     },
     "sections": {

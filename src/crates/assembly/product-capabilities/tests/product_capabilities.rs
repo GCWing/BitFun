@@ -93,9 +93,9 @@ fn default_capability_registry_preserves_product_tool_provider_order() {
         vec![
             "core.basic",
             "core.agent",
-            "core.canvas",
             "core.session",
             "core.integration",
+            "core.openharmony",
         ]
     );
 }
@@ -173,7 +173,6 @@ fn capability_packs_describe_service_tool_and_harness_requirements() {
             "deep-review",
             "deep-research",
             "miniapp",
-            "canvas",
             "voice-input"
         ]
     );
@@ -228,14 +227,13 @@ fn product_assembly_plan_keeps_full_capabilities_only_for_core_compatibility_pro
         "deep-review",
         "deep-research",
         "miniapp",
-        "canvas",
     ];
     let expected_tool_groups = vec![
         "core.basic",
         "core.agent",
-        "core.canvas",
         "core.session",
         "core.integration",
+        "core.openharmony",
     ];
 
     for profile in [DeliveryProfile::ProductFull, DeliveryProfile::Desktop] {
@@ -490,7 +488,6 @@ fn product_assembly_plan_exposes_build_feature_groups_explicitly() {
         &[
             ProductFeatureGroup::Basic,
             ProductFeatureGroup::AgentControl,
-            ProductFeatureGroup::Canvas,
             ProductFeatureGroup::BrowserWeb,
             ProductFeatureGroup::Mcp,
             ProductFeatureGroup::Git,
@@ -504,7 +501,6 @@ fn product_assembly_plan_exposes_build_feature_groups_explicitly() {
         vec![
             "basic",
             "agent-control",
-            "canvas",
             "browser-web",
             "mcp",
             "git",
@@ -782,7 +778,6 @@ fn default_capability_assembly_keeps_service_tool_and_harness_facts_together() {
             "deep-review",
             "deep-research",
             "miniapp",
-            "canvas",
             "voice-input"
         ]
     );
@@ -812,9 +807,9 @@ fn default_capability_assembly_keeps_service_tool_and_harness_facts_together() {
         vec![
             "core.basic",
             "core.agent",
-            "core.canvas",
             "core.session",
-            "core.integration"
+            "core.integration",
+            "core.openharmony"
         ]
     );
 

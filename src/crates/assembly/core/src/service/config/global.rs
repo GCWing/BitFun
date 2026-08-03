@@ -254,6 +254,20 @@ pub async fn load_terminal_env_vars() -> std::collections::HashMap<String, Strin
     }
 }
 
+/// Load the user-configured default shell (`terminal.default_shell`) from the
+/// global configuration. Returns `None` when the config service is
+/// unavailable or the setting is empty (meaning "auto-detect"). Consumers use
+/// this to seed the terminal SessionManager and honor the user's default
+/// terminal preference when creating new sessions.
+pub async fn load_terminal_default_shell() -> Option<String> {
+    let config_service = get_global_config_service().await.ok()?;
+    config_service
+        .get_config::<String>(Some("terminal.default_shell"))
+        .await
+        .ok()
+        .filter(|s| !s.trim().is_empty())
+}
+
 /// Convenience helper: initialize the global configuration service.
 pub async fn initialize_global_config() -> BitFunResult<()> {
     GlobalConfigManager::initialize().await

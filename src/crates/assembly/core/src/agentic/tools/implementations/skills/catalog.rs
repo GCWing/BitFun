@@ -25,6 +25,18 @@ mod tests {
         );
         assert_eq!(builtin_skill_group_key("agent-eval-canvas"), Some("canvas"));
         assert_eq!(builtin_skill_group_key("gstack-review"), Some("gstack"));
+        assert_eq!(builtin_skill_group_key("arkts-error-fixes"), Some("harmonyos"));
+        assert_eq!(
+            builtin_skill_group_key("arkts-grammar-standards"),
+            Some("harmonyos")
+        );
+        assert_eq!(builtin_skill_group_key("arkts-runtime-fix"), Some("harmonyos"));
+        assert_eq!(builtin_skill_group_key("arkui-knowledge"), Some("harmonyos"));
+        assert_eq!(builtin_skill_group_key("deveco-cli"), Some("harmonyos"));
+        assert_eq!(
+            builtin_skill_group_key("deveco-create-project"),
+            Some("harmonyos")
+        );
         assert_eq!(builtin_skill_group_key("unknown-skill"), None);
     }
 

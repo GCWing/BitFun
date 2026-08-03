@@ -192,7 +192,18 @@ const PRODUCT_TOOL_PROVIDER_GROUP_PLAN: &[ToolProviderGroupPlan] = &[
     ToolProviderGroupPlan {
         provider_id: "core.openharmony",
         feature_groups: CORE_OPENHARMONY_FEATURE_GROUPS,
-        tool_names: &["Calendar"],
+        tool_names: &[
+            "build_project",
+            "start_app",
+            "hdc_log",
+            "arkts_knowledge_search",
+            "check_arkts_files",
+            "check_cpp_files",
+            "switch_cwd",
+            "verify_ui",
+            "get_ui_verification_log",
+            "save_ui_screenshot",
+        ],
     },
 ];
 
@@ -342,7 +353,8 @@ mod tests {
                 "core.agent",
                 "core.canvas",
                 "core.session",
-                "core.integration"
+                "core.integration",
+                "core.openharmony"
             ]
         );
     }
@@ -408,6 +420,16 @@ mod tests {
                 "ControlHub",
                 "ComputerUse",
                 "Playbook",
+                "build_project",
+                "start_app",
+                "hdc_log",
+                "arkts_knowledge_search",
+                "check_arkts_files",
+                "check_cpp_files",
+                "switch_cwd",
+                "verify_ui",
+                "get_ui_verification_log",
+                "save_ui_screenshot",
             ]
         );
     }
@@ -447,6 +469,7 @@ mod tests {
                         "agent-control",
                     ]
                 ),
+                ("core.openharmony", vec!["basic"]),
             ]
         );
     }

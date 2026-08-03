@@ -30,6 +30,9 @@ impl StaticToolProviderFactory<dyn Tool> for ProductConcreteToolFactory {
             "ExecControl" => Some(Arc::new(ExecControlTool::new())),
             "GetTime" => Some(Arc::new(GetTimeTool::new())),
             "ListModels" => Some(Arc::new(ListModelsTool::new())),
+            "check_arkts_files" => Some(Arc::new(CheckArktsFilesTool::new())),
+            "check_cpp_files" => Some(Arc::new(CheckCppFilesTool::new())),
+            "switch_cwd" => Some(Arc::new(SwitchCwdTool::new())),
             "Task" => Some(Arc::new(TaskTool::new())),
             "AgentWait" => Some(Arc::new(AgentWaitTool::new())),
             "LaunchReviewAgent" => Some(Arc::new(LaunchReviewAgentTool::new())),
@@ -71,6 +74,13 @@ impl StaticToolProviderFactory<dyn Tool> for ProductConcreteToolFactory {
             "ControlHub" => Some(Arc::new(ControlHubTool::new())),
             "ComputerUse" => Some(Arc::new(ComputerUseTool::new())),
             "Playbook" => Some(Arc::new(PlaybookTool::new())),
+            "build_project" => Some(Arc::new(BuildProjectTool::new())),
+            "start_app" => Some(Arc::new(StartAppTool::new())),
+            "hdc_log" => Some(Arc::new(HdcLogTool::new())),
+            "arkts_knowledge_search" => Some(Arc::new(ArktsKnowledgeSearchTool::new())),
+            "verify_ui" => Some(Arc::new(VerifyUiTool::new())),
+            "get_ui_verification_log" => Some(Arc::new(GetUiVerificationLogTool::new())),
+            "save_ui_screenshot" => Some(Arc::new(SaveUiScreenshotTool::new())),
             _ => None,
         }
     }

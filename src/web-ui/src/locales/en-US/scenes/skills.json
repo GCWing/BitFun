@@ -115,6 +115,7 @@
       "miniapp": "MiniApp",
       "canvas": "Canvas",
       "gstack": "gstack",
+      "harmonyos": "HarmonyOS",
       "other": "Other"
     },
     "sections": {
