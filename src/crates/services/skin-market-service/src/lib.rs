@@ -64,7 +64,18 @@ pub async fn build_skin_market_router(config: SkinMarketConfig) -> anyhow::Resul
         .nest("/skin/api/v1", api_router(state))
         .route("/skin/api", any(unknown_api_version))
         .route("/skin/api/{*rest}", any(unknown_api_version))
-        .route_service("/skin/appearances/{slug}", ServeFile::new(index_file))
+        .route_service(
+            "/skin/appearances/{slug}",
+            ServeFile::new(index_file.clone()),
+        )
+        .route_service(
+            "/skin/appearances/{slug}/",
+            ServeFile::new(index_file.clone()),
+        )
+        .route_service("/skin/submissions", ServeFile::new(index_file.clone()))
+        .route_service("/skin/submissions/", ServeFile::new(index_file.clone()))
+        .route_service("/skin/admin", ServeFile::new(index_file.clone()))
+        .route_service("/skin/admin/", ServeFile::new(index_file))
         .nest_service("/skin", static_files)
         .layer(axum::middleware::from_fn(normalize_payload_too_large))
         .layer(axum::middleware::from_fn(security_headers))
@@ -556,6 +567,20 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(deep_link.status(), StatusCode::OK);
+        for workflow_path in [
+            "/skin/appearances/aurora-market/",
+            "/skin/submissions",
+            "/skin/submissions/",
+            "/skin/admin",
+            "/skin/admin/",
+        ] {
+            let response = app
+                .clone()
+                .oneshot(request("GET", workflow_path, None, Body::empty()))
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::OK, "{workflow_path}");
+        }
         let missing_asset = app
             .clone()
             .oneshot(request("GET", "/skin/missing.js", None, Body::empty()))
