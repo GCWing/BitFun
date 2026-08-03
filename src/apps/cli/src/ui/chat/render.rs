@@ -330,15 +330,20 @@ impl ChatView {
                 }
             }
 
-            // Apply hover styling (without invalidating per-message render caches)
-            if let Some(ref hovered_id) = self.hovered_thinking_block_id {
-                for (block_id, y_start, y_end) in &self.thinking_regions {
-                    if block_id == hovered_id && y_start == y_end {
-                        let idx = *y_start as usize;
-                        if idx < messages.len() {
-                            messages[idx] = messages[idx]
-                                .clone()
-                                .style(Style::default().bg(self.theme.block_bg_hover));
+            // Apply hover styling (without invalidating per-message render
+            // caches). Hover is only shown while thinking is interactive
+            // (Hide mode); in fully-expanded (Show) mode blocks are
+            // non-interactive so no hover background is applied.
+            if self.presentation.thinking == crate::config::ThinkingMode::Hide {
+                if let Some(ref hovered_id) = self.hovered_thinking_block_id {
+                    for (block_id, y_start, y_end) in &self.thinking_regions {
+                        if block_id == hovered_id && y_start == y_end {
+                            let idx = *y_start as usize;
+                            if idx < messages.len() {
+                                messages[idx] = messages[idx]
+                                    .clone()
+                                    .style(Style::default().bg(self.theme.block_bg_hover));
+                            }
                         }
                     }
                 }
@@ -630,15 +635,39 @@ impl ChatView {
                         let trimmed = content.trim_end();
                         let clean_content = trimmed.trim_end_matches("<thinking_end>").trim_end();
 
-                        let collapsed = self.thinking_disclosures.is_collapsed(
-                            &thinking_block_id,
-                            self.presentation.thinking == crate::config::ThinkingMode::Hide,
-                        );
-                        let caret = if collapsed { "\u{25b8}" } else { "\u{25be}" }; // ▸ / ▾
+                        // `/thinking` toggles between fully-collapsed and
+                        // fully-expanded. Manual per-block expands are only
+                        // meaningful in collapsed (Hide) mode; in Show mode
+                        // every block is expanded regardless of overrides, so
+                        // manually-expanded blocks survive a full toggle
+                        // round-trip instead of being inverted by XOR.
+                        let collapsed = match self.presentation.thinking {
+                            crate::config::ThinkingMode::Show => false,
+                            crate::config::ThinkingMode::Hide => {
+                                self.thinking_disclosures
+                                    .is_collapsed(&thinking_block_id, true)
+                            }
+                        };
+                        // In Show mode the header is non-interactive: hide the
+                        // caret so users don't expect to click-collapse an
+                        // already fully-expanded block.
+                        let caret = if self.presentation.thinking
+                            == crate::config::ThinkingMode::Show
+                        {
+                            ""
+                        } else if collapsed {
+                            "\u{25b8}"
+                        } else {
+                            "\u{25be}"
+                        };
 
                         let header_y = items.len().min(u16::MAX as usize) as u16;
                         thinking_regions.push((thinking_block_id.clone(), header_y, header_y));
-                        let left_label = format!("{} Thinking", caret);
+                        let left_label = if caret.is_empty() {
+                            "Thinking".to_string()
+                        } else {
+                            format!("{} Thinking", caret)
+                        };
                         if collapsed {
                             let hint = "click to expand";
                             let indent = "  ";
@@ -1158,6 +1187,54 @@ mod shortcut_contract_tests {
         assert!(plain.contains("Thinking"), "{plain}");
         assert!(plain.contains("click to expand"), "{plain}");
         assert!(!plain.contains("private streaming reasoning"), "{plain}");
+    }
+
+    #[test]
+    fn thinking_toggle_keeps_manual_expand_across_round_trip() {
+        let mut view = ChatView::new(Theme::dark(), Vec::new());
+        // Two thinking blocks in one message: block 0 will be manually
+        // expanded, block 1 stays collapsed by default.
+        let message = ChatMessage {
+            id: "assistant-1".to_string(),
+            turn_id: Some("turn-1".to_string()),
+            role: MessageRole::Assistant,
+            timestamp: std::time::SystemTime::now(),
+            flow_items: vec![
+                FlowItem::Thinking {
+                    content: "reasoning-alpha".to_string(),
+                },
+                FlowItem::Thinking {
+                    content: "reasoning-beta".to_string(),
+                },
+            ],
+            is_streaming: false,
+            version: 1,
+        };
+
+        // Default Hide: both collapsed (header only).
+        let plain = view.render_message(&message, 80).plain_lines.join("\n");
+        assert!(plain.contains("click to expand"), "{plain}");
+        assert!(!plain.contains("reasoning-alpha"), "{plain}");
+        assert!(!plain.contains("reasoning-beta"), "{plain}");
+
+        // Manually expand block 0; block 1 stays collapsed.
+        view.toggle_thinking_block_for_test("assistant-1", 0);
+        let plain = view.render_message(&message, 80).plain_lines.join("\n");
+        assert!(plain.contains("reasoning-alpha"), "{plain}");
+        assert!(!plain.contains("reasoning-beta"), "{plain}");
+
+        // `/thinking` → fully expanded: both blocks visible (spec 1).
+        view.toggle_thinking();
+        let plain = view.render_message(&message, 80).plain_lines.join("\n");
+        assert!(plain.contains("reasoning-alpha"), "{plain}");
+        assert!(plain.contains("reasoning-beta"), "{plain}");
+
+        // `/thinking` back → Hide default: manual expand persists for block 0
+        // while block 1 collapses again (spec 2).
+        view.toggle_thinking();
+        let plain = view.render_message(&message, 80).plain_lines.join("\n");
+        assert!(plain.contains("reasoning-alpha"), "{plain}");
+        assert!(!plain.contains("reasoning-beta"), "{plain}");
     }
 
     #[test]

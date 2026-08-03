@@ -271,7 +271,10 @@ pub(crate) struct ChatView {
     focused_block_tool: Option<String>,
 
     // -- Thinking expand/collapse state --
-    /// Per-thinking-block overrides relative to the configured default.
+    /// Per-thinking-block manual-expand overrides. Only consulted while
+    /// thinking defaults to collapsed (Hide); in Show mode all blocks are
+    /// expanded regardless of these overrides so a `/thinking` round-trip
+    /// preserves manual expansions.
     thinking_disclosures: DisclosureOverrides,
     presentation: TranscriptPresentation,
 
@@ -443,6 +446,20 @@ impl ChatView {
     #[cfg(test)]
     pub(crate) fn thinking_mode(&self) -> crate::config::ThinkingMode {
         self.presentation.thinking
+    }
+
+    /// Simulate a mouse click that manually expands/collapses a thinking
+    /// block, identified by the owning message id and the block's index
+    /// within that message. Mirrors the id scheme used by `render_message`.
+    #[cfg(test)]
+    pub(crate) fn toggle_thinking_block_for_test(
+        &mut self,
+        message_id: &str,
+        block_index: usize,
+    ) {
+        let id = format!("{}::thinking:{}", message_id, block_index);
+        self.thinking_disclosures.toggle(&id);
+        self.invalidate_render_cache();
     }
 
     #[cfg(test)]

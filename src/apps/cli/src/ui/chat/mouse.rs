@@ -329,10 +329,14 @@ impl ChatView {
         let list_offset = *self.list_state.offset_mut();
         let absolute_row = list_offset + relative_row;
 
-        for (block_id, y_start, y_end) in &self.thinking_regions {
-            if absolute_row >= *y_start as usize && absolute_row <= *y_end as usize {
-                self.hovered_thinking_block_id = Some(block_id.clone());
-                return;
+        // Hover is only tracked while thinking is interactive (Hide mode);
+        // in fully-expanded (Show) mode blocks are non-interactive.
+        if self.presentation.thinking == crate::config::ThinkingMode::Hide {
+            for (block_id, y_start, y_end) in &self.thinking_regions {
+                if absolute_row >= *y_start as usize && absolute_row <= *y_end as usize {
+                    self.hovered_thinking_block_id = Some(block_id.clone());
+                    return;
+                }
             }
         }
 
@@ -360,9 +364,15 @@ impl ChatView {
         // Check against thinking regions (header line)
         for (block_id, y_start, y_end) in &self.thinking_regions {
             if absolute_row >= *y_start as usize && absolute_row <= *y_end as usize {
-                let block_id = block_id.clone();
-                self.thinking_disclosures.toggle(&block_id);
-                self.invalidate_render_cache();
+                // Per-block expand only applies while thinking defaults to
+                // collapsed; in fully-expanded (Show) mode `/thinking` is the
+                // sole toggle and clicks are a no-op so manual-expand state
+                // is preserved across toggles instead of being polluted.
+                if self.presentation.thinking == crate::config::ThinkingMode::Hide {
+                    let block_id = block_id.clone();
+                    self.thinking_disclosures.toggle(&block_id);
+                    self.invalidate_render_cache();
+                }
                 self.hovered_thinking_block_id = None;
                 return;
             }
