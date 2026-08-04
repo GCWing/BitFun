@@ -1,5 +1,4 @@
 import {
-  abilityAccessCtrl,
   AbilityConstant,
   common,
   Configuration,
@@ -90,18 +89,10 @@ export default class EntryAbility extends RustAbility {
   onWindowStageCreate(windowStage: window.WindowStage): Promise<void> {
     AppGlobal.calendarMgr = calendarManager.getCalendarManager(this.context);
     AppGlobal.mContext = this.context;
-    const permissions: Permissions[] = ['ohos.permission.READ_CALENDAR', 'ohos.permission.WRITE_CALENDAR'];
     const DOMAIN_NUMBER: number = 0xFF00;
     const TAG: string = '[BitfunUIAbilityComponents]';
-
-    let atManager = abilityAccessCtrl.createAtManager();
     AppGlobal.calendarMgr = calendarManager.getCalendarManager(this.context);
 
-    atManager.requestPermissionsFromUser(this.context, permissions).then(() => {
-      AppGlobal.calendarMgr = calendarManager.getCalendarManager(this.context);
-    }).catch((error: BusinessError) => {
-      hilog.info(DOMAIN_NUMBER, TAG, 'get permissions error: ' + error);
-    });
     RustModule.registerArktsFunction('open_dialog_file', async (err: Error, arg: string): Promise<string> => {
       let res = await CommonUtils.open_file_dialog(arg);
       return res;
