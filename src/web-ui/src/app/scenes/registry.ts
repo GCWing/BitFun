@@ -76,6 +76,7 @@ export const SCENE_TAB_REGISTRY: SceneTabDef[] = [
   {
     id: 'file-viewer' as SceneTabId,
     label: 'File Viewer',
+    labelKey: 'scenes.fileViewer',
     Icon: FileCode2,
     pinned: false,
     singleton: true,
