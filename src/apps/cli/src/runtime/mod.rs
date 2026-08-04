@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
-use bitfun_agent_runtime::sdk::AgentRuntime;
+use bitfun_agent_runtime::sdk::{AgentEventSource, AgentRuntime};
 use bitfun_core::agentic::system::AgenticSystem;
 use bitfun_core::product_assembly::{ProductAssemblyPlan, ProductServiceCapabilityAvailability};
 use bitfun_core::product_runtime::{
@@ -126,6 +126,10 @@ impl CliRuntimeContext {
 
     pub(crate) fn agent_runtime(&self) -> &AgentRuntime {
         &self.agent_runtime
+    }
+
+    pub(crate) fn agent_event_source(&self) -> AgentEventSource {
+        self._agent_event_queue_owner.runtime_source()
     }
 
     pub(crate) fn compatibility(&self) -> &CoreAgentRuntimeCompatibility {

@@ -1054,11 +1054,11 @@ fn lineage_sibling_session_id(
 
 #[cfg(test)]
 mod session_lineage_tests {
-    use bitfun_agent_runtime::sdk::{
+    use bitfun_events::AgenticEvent;
+    use bitfun_runtime_ports::{
         AgentSessionLifecycleStatus, AgentSessionLineageEntry, AgentSessionLineageInspection,
         AgentSessionLineageSnapshot, SessionTranscript, TranscriptContent, TranscriptMessage,
     };
-    use bitfun_events::AgenticEvent;
 
     use crate::chat_state::{FlowItem, MessageRole};
     use std::collections::{BTreeMap, HashMap, VecDeque};

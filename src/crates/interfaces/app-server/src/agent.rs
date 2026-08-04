@@ -12,6 +12,7 @@ use std::sync::Arc;
 use agent_client_protocol::{Error, Result};
 use bitfun_agent_runtime::sdk::{AgentEventSource, AgentRuntime, PortErrorKind, RuntimeError};
 use bitfun_core::service::git::GitError;
+use bitfun_runtime_ports::AgentContextReloadPort;
 
 /// Host-injected BitFun agent runtime exposed over the app-server surface.
 ///
@@ -23,6 +24,7 @@ use bitfun_core::service::git::GitError;
 pub struct BitfunAppRuntime {
     runtime: Arc<AgentRuntime>,
     event_source: AgentEventSource,
+    context_reload: Option<Arc<dyn AgentContextReloadPort>>,
 }
 
 impl std::fmt::Debug for BitfunAppRuntime {
@@ -41,7 +43,13 @@ impl BitfunAppRuntime {
         Self {
             runtime: Arc::new(runtime),
             event_source,
+            context_reload: None,
         }
+    }
+
+    pub fn with_context_reload(mut self, context_reload: Arc<dyn AgentContextReloadPort>) -> Self {
+        self.context_reload = Some(context_reload);
+        self
     }
 
     /// Shared reference to the underlying agent runtime, for handlers that
@@ -57,6 +65,10 @@ impl BitfunAppRuntime {
     /// subscribes to the runtime queue directly.
     pub fn event_source(&self) -> AgentEventSource {
         self.event_source.clone()
+    }
+
+    pub fn context_reload(&self) -> Option<&Arc<dyn AgentContextReloadPort>> {
+        self.context_reload.as_ref()
     }
 
     /// Map a `RuntimeError` to a JSON-RPC `Error`, mirroring the ACP runtime
@@ -177,7 +189,10 @@ mod tests {
         );
         // The structured enum still rides along in `data` for callers that
         // inspect it.
-        assert!(mapped.data.is_some(), "data must carry the BitFunError enum");
+        assert!(
+            mapped.data.is_some(),
+            "data must carry the BitFunError enum"
+        );
     }
 
     /// Non-`NotFound` config errors must fall back to the generic `bitfun_error`
@@ -190,8 +205,7 @@ mod tests {
         let mapped = config_get_error(error);
 
         assert_eq!(
-            mapped.message,
-            "Internal error",
+            mapped.message, "Internal error",
             "non-NotFound errors must keep the generic message, got: {mapped:?}"
         );
         assert!(mapped.data.is_some());

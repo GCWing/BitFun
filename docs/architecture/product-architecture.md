@@ -19,7 +19,10 @@
 Headless CLI 与各产品入口的统一心智见
 [`agent-sdk-product-architecture.md`](agent-sdk-product-architecture.md)；多个 GUI/TUI/Remote/CLI/SDK 实例共存时的 Agent Runtime 部署、
 状态共享、隔离、容量与 Plugin Host 关系见
-[`agent-runtime-deployment-design.md`](agent-runtime-deployment-design.md)。详细设计与本文件冲突时，以本文件为准。
+[`agent-runtime-deployment-design.md`](agent-runtime-deployment-design.md)；Desktop GUI、Web UI 和交互式 TUI 的统一产品后端协议、
+Embedded/Shared App Server 边界及迁移约束见
+[`app-server-architecture.md`](app-server-architecture.md)。该专题当前是待评审的目标提案；在决策门槛通过前，当前调用路径和稳定
+owner 边界仍以本文及已接线代码为准。其他已批准的详细设计与本文件冲突时，以本文件为准。
 
 Cargo feature、第三方依赖 owner、测试目标和本地/CI 验证分工见
 [`rust-build-dependency-boundaries.md`](rust-build-dependency-boundaries.md)。该文档补充本架构的构建视图，不改变本文定义的运行时 owner 和分层依赖方向。
@@ -304,7 +307,10 @@ flowchart LR
 
 ### 2.4 Physical View · Level 0
 
-Physical View 展示当前可执行单元到设备、主机和存储的映射。Desktop、CLI、ACP 和 SDK Host 使用 Embedded Runtime；交互式 TUI 可以显式连接 Shared Runtime。当前 Web Server 和 Relay Server 都不承载 Agent Runtime。
+Physical View 展示当前可执行单元到设备、主机和存储的映射。Desktop、CLI、ACP 和 SDK Host 使用 Embedded Runtime；
+Embedded 交互式 TUI 已在同一 CLI 进程内通过私有 App Server 使用 Runtime，交互式 TUI 也可以显式连接当前 Shared Runtime IPC。
+Desktop GUI 的 App Server 迁移尚未完成。当前 loopback Web Server 已承载 Embedded Runtime 和 WebSocket App Server；Relay Server
+不承载 Agent Runtime。
 
 ```mermaid
 flowchart LR
@@ -342,6 +348,9 @@ flowchart LR
   DesktopApp <-->|WebSocket| RelayServer
   CLIApp <-->|WebSocket| RelayServer
   CLIApp -.->|Local IPC| SharedRuntime
+  WebServer --> WorkspaceData
+  WebServer -->|spawn| ToolProcesses
+  WebServer -->|HTTPS| AIProviders
   RelayServer --> RelayDB
   RelayServer --> AssetStore
   EmbeddedNodes --> WorkspaceData
@@ -364,12 +373,12 @@ flowchart LR
 
 | Deployment unit | Main contents |
 |---|---|
-| Desktop App | Web UI、Tauri Host、embedded Agent Runtime |
-| CLI App | TUI、Headless、Peer；默认 Embedded，可显式使用 Shared TUI |
-| Shared Runtime | 私有本机 IPC；当前只有交互式 TUI consumer |
+| Desktop App | Web UI、Tauri Host、embedded Agent Runtime；Rich Client App Server 迁移尚未完成 |
+| CLI App | 交互式 TUI 通过 private in-process App Server 使用 Embedded Runtime；Headless、Peer 保留独立 adapter；可显式使用 Shared TUI |
+| Shared Runtime | 私有本机 IPC；当前只有交互式 TUI consumer；是否迁入 Shared App Server transport 仍待评审与等价证据 |
 | ACP | Embedded Agent Runtime、ACP 协议生命周期 |
 | SDK Host | 私有跨进程 adapter；公开 SDK 产品尚未交付 |
-| Web Server | Health、Info、WebSocket 外壳；不包含 Agent Runtime |
+| Web Server | Embedded Agent Runtime、WebSocket App Server、Health/Info；当前只允许 loopback 单用户模式 |
 | Relay Server | WebSocket/HTTP bridge、账户与同步；不包含 Agent Runtime |
 
 ### 2.5 Scenarios (+1) · Level 0
@@ -412,11 +421,15 @@ flowchart TB
 
 ## 3. 接口边界
 
-BitFun 只保留四个稳定接口边界；工具、事件和权限作为归属子接口被复用，不在插件层重复定义。本文使用“接口”描述可被调用或依赖的能力面；只有描述跨进程消息封装、结构化 schema、序列化对象或强兼容约束时才使用“契约”；只读状态视图表示从权威状态派生出的查询结果。
+BitFun 只保留四个稳定业务接口边界；工具、事件和权限作为归属子接口被复用，不在插件层重复定义。App Server
+是 Agent Runtime API 和其他 owner 接口面向当前 Web/Embedded TUI 以及候选 Rich Client 目标的版本化 wire adapter，不新增第五个
+业务 owner 或能力分类。是否扩大到全部 Rich Client 由 4.2 节所述评审决定。本文使用
+“接口”描述可被调用或依赖的能力面；只有描述跨进程消息封装、结构化 schema、序列化对象或强兼容约束时才使用
+“契约”；只读状态视图表示从权威状态派生出的查询结果。
 
 | 接口边界 | 谁使用 | 提供 | 不包含 |
 |---|---|---|---|
-| Agent Runtime API | GUI、TUI/CLI、Web、ACP、Server、Remote、SDK adapter | Query、Session、Tool/MCP、Permission、Hook、Event、Usage | UI、协议和具体服务实现 |
+| Agent Runtime API | App Server、Headless CLI、ACP、Server、Remote、SDK 等 adapter | Query、Session、Tool/MCP、Permission、Hook、Event、Usage | UI、Rich Client wire、协议和具体服务实现 |
 | BitFun 与插件接口 | `PluginRuntimeClient`、安全模块、产品组装、生态适配器 | 来源、能力、Hook 变换、界面贡献、诊断 | 最终权限、工具结果、审计和内核状态 |
 | 插件运行时接口 | Runtime、执行层、产品组装、`PluginRuntimeClient` | 请求身份、期限、响应校验和诊断 | SDK/UI 对象、生态原始对象和进程句柄 |
 | 外部生态兼容接口 | 来源管理、能力模块、`PluginRuntimeClient`、Plugin Host | 发现、顺序、参数、诊断和明确映射 | 跨生态任意数据、兄弟适配器依赖和外部 CLI 前置依赖 |
@@ -465,16 +478,18 @@ client 或未来 CLI/HarmonyOS 计划，不能证明同名 Rust transport adapte
 ### 3.2 宿主通信契约与 Tauri 薄适配
 
 前后端契约按能力语义归属，不按 Tauri command 名称归属。稳定的请求、响应、状态事实和类型化错误放在对应
-`contracts/*`、Agent Runtime API 或能力归属模块；Tauri、HTTP/WebSocket、CLI/TUI、ACP 与公开 SDK
-Host adapter 只负责把各自协议映射到
-这些类型。该规则降低框架耦合，但不要求把每个 Desktop DTO 都搬进共享 crate。
+`contracts/*`、Agent Runtime API 或能力归属模块。当前 Desktop GUI 仍使用 Tauri adapter，Web UI 使用 loopback WebSocket
+App Server，Embedded TUI 使用 in-process App Server，Shared TUI 通过 `TuiBackend` 映射 private Runtime IPC v17。待评审目标是让
+Desktop GUI、Web UI 和交互式 TUI 复用同一 Rich Client App Server 行为与 wire contract；Tauri 和各 Rich Client Host 负责
+transport、平台能力及生命周期。ACP、Headless CLI、Peer Host 与公开 SDK 继续由各自 adapter 映射到稳定 owner 接口，不因该目标
+复用 App Server wire。该规则降低框架耦合，但不要求把 controller-local Desktop DTO 搬进共享 crate。
 
 | 层 | 允许 | 禁止 |
 |---|---|---|
 | 能力归属模块 / Agent Runtime API | 字段明确的请求和响应、状态事实、权限/取消规则、与框架无关的用例方法 | `tauri::State`、`AppHandle`、窗口/菜单对象、command 宏、HTTP/WebSocket/ACP/SDK Host 消息结构 |
-| Desktop Tauri adapter | 读取宿主状态、构造稳定请求、调用对应 Agent Runtime API 或归属模块接口、把明确错误转换为 Desktop 协议、投递桌面事件 | 复制业务校验、持有第二份权威状态、把 Tauri 类型传入下层 |
+| Desktop Tauri / proposed App Server Host adapter | 当前组装 Tauri adapter；目标组装 transport、注入真实 capability 与平台 provider、管理窗口和桌面生命周期、投递 App Server typed notification 或桌面专属事件 | 复制业务校验、持有第二份权威状态、在目标迁移完成后为同一能力保留第二条 Runtime 旁路、把 Tauri 类型传入下层 |
 | Server / Remote adapter | 路由鉴权、协议消息、连接生命周期、流量控制与取消转换 | 为同一能力另建业务含义不同的 DTO 或 handler |
-| GUI / TUI 消费方 | 依赖入口侧 API interface、稳定读模型或 Agent Runtime API；各自保留渲染状态 | 依赖公开 Python/TypeScript SDK、直接持有平台句柄，或让 React/TUI 状态成为后端契约 |
+| GUI / Web / TUI frontend | 当前依赖各自 infrastructure 或 `TuiBackend`；目标依赖生成的 App Server client、稳定读模型和 Host-local capability adapter；各自保留渲染状态 | 在 UI component/view 中直接依赖 Runtime/Core/Service、公开 Python/TypeScript SDK、Tauri 业务 command 或私有 Shared IPC |
 
 本文其他章节和历史设计中出现的“Runtime SDK”，如果指 `agent-runtime::sdk`，统一称为
 **Rust Runtime SDK（当前 preview）**；它是共享 **Agent Runtime API** 的当前 Rust 入口。只有
@@ -522,24 +537,66 @@ Desktop command 使用的序列化对象继续留在 `src/apps/desktop`；即使
 
 ## 4. 运行协作细节
 
-本节在 Process View Level 0 之下展开产品入口、插件调用和平台能力的当前调用链；这些图描述组件协作，不构成新的 4+1 视图。
+本节在 Process View Level 0 之下展开产品入口、插件调用和平台能力。Current 图只描述当前已接线请求路径；Proposed target 图
+描述待评审方向。两者都只描述组件协作，不构成新的 4+1 视图。
 
-### 4.1 产品入口
+### 4.1 Current product entry paths
 
 ```mermaid
 flowchart LR
-  Products["GUI · TUI · CLI · Web"] --> Adapter["入口适配器"]
-  Protocol["ACP · Server · Remote"] --> Adapter
-  SDK["Agent SDK"] --> SDKHost["SDK Host"]
-  Adapter --> API["Runtime API"]
-  SDKHost --> API
+  Desktop["Desktop GUI"] --> Tauri["Desktop / Tauri adapter"]
+  Web["Web UI"] --> WebHost["loopback WebSocket App Server"]
+  TUI["Interactive TUI"] --> Backend["TuiBackend"]
+  Backend -->|"Embedded"| EmbeddedAS["in-process App Server"]
+  Backend -->|"--shared"| SharedIPC["private Runtime IPC v17"]
+  Other["Headless CLI · ACP · Server · Remote"] --> Adapter["独立入口适配器"]
+  SDK["Rust Runtime SDK / SDK Host preview"] --> SDKAdapter["独立 SDK adapter"]
+  Tauri --> API["Runtime API / owner ports"]
+  WebHost --> API
+  EmbeddedAS --> API
+  SharedIPC --> API
+  Adapter --> API
+  SDKAdapter --> API
   API --> Runtime["共享 Runtime"]
-  Assembly["产品组装"] -. "选择" .-> Runtime
 ```
 
-入口 adapter 消费同一 Runtime API，部署选择不能进入业务 owner：Embedded 使用进程内强类型调用；Shared 或 SDK Host 才在各自私有 adapter 中执行 transport 封装。GUI、TUI、Headless CLI、ACP 和 SDK 不共享 wire、renderer 或生命周期，也不得为了统一接口而让默认 Embedded 路径承担序列化成本。
+当前 Embedded TUI 核心路径经过 App Server，Shared TUI 则由 `TuiBackend` compatibility adapter 映射到 private Runtime IPC v17。
+Desktop GUI 尚未完成 App Server 迁移；当前 loopback Web Host 已通过 WebSocket 承载 App Server。Headless CLI/CI、ACP、Peer Host
+和 SDK Host 保留独立 adapter。所有路径最终消费同一 Runtime API 或 owner port，部署选择不能进入业务 owner。
 
-### 4.2 插件调用
+Server bootstrap 和产品组装只创建对象并注入依赖，不是客户端请求的第二条旁路：
+
+```mermaid
+flowchart LR
+  Assembly["产品组装"] -. "constructs" .-> Host["Host-owned App Server + transport"]
+  Assembly -. "constructs" .-> Runtime["Runtime / owner implementations"]
+  Runtime -. "injects owner ports" .-> Host
+```
+
+图中的虚线全部表示启动期 composition；业务请求仍只沿前一张 Current 图中的实线进入 Runtime API 或 owner port。
+
+### 4.2 Proposed target product entry paths
+
+```mermaid
+flowchart LR
+  Rich["Desktop GUI · Web UI · Interactive TUI"] --> Host["Rich Client Host"]
+  Host --> Client["App Server client"]
+  Client --> Transport["Host-selected transport"]
+  Transport --> AppServer["App Server"]
+  Other["Headless CLI · ACP · Peer Host"] --> Adapter["独立入口适配器"]
+  SDK["Public Agent SDK"] --> SDKHost["SDK Host"]
+  AppServer --> API["Runtime API / owner ports"]
+  Adapter --> API
+  SDKHost --> API
+  API --> Runtime["共享 Runtime"]
+```
+
+提案目标是让 Desktop GUI、Web UI 和交互式 TUI 复用 App Server 行为与 wire contract，并让 Embedded/Shared 只在 Host 与
+transport 层不同。是否用 Shared App Server 替换 v17，仍取决于鉴权、实例身份、controller/lease、事件恢复、取消、限制、性能和
+回滚门槛；目标图不表示这些能力已经交付。各入口仍各自拥有 renderer、平台能力和生命周期。Headless CLI/CI、ACP、Peer Host 和
+公开 SDK 不共享 App Server wire。
+
+### 4.3 插件调用
 
 ```mermaid
 flowchart LR
@@ -556,7 +613,7 @@ flowchart LR
   Adapter["生态 adapter"] --> Provider["能力 Provider"] --> Owner["能力归属模块"]
 ```
 
-### 4.3 平台能力
+### 4.4 平台能力
 
 ```mermaid
 flowchart LR
@@ -567,7 +624,8 @@ flowchart LR
 
 关键规则：
 
-- 产品入口先经过自己的 adapter，再消费 Agent Runtime API 和只读视图；公开 SDK 只多一层 SDK Host 跨进程适配。
+- Current 产品请求遵循 4.1 节；4.2 节的 Rich Client App Server 统一路径只有在相应 Host 完成迁移和验证后才成为当前路径。
+  其他产品入口先经过自己的 adapter，再消费 Agent Runtime API、owner port 和只读视图；公开 SDK 只多一层 SDK Host 跨进程适配。
   Agent Runtime API 是一组小而明确的用例接口，不是必须实例化的总入口；adapter 可以调用对应归属模块的少量接口，
   但不能访问内部状态、绕过既有编排或复制业务规则。任何入口都不直接调用 Plugin Host。
 - 插件只进入扩展贡献接口，不直接写内核状态、工具结果、权限结果或审计事实。
@@ -589,7 +647,7 @@ flowchart LR
   可以选择下层提供方，但不能依赖 app crate；需要同时被独立应用和嵌入式模式复用的实现必须下沉到可复用 owner，
   再由各 app 和 assembly 组合。
 
-### 4.4 名词与定义归属
+### 4.5 名词与定义归属
 
 全仓人工维护文档、AGENTS、README 和代码注释遵守以下规则：
 
@@ -727,7 +785,7 @@ flowchart TB
   CLI["CLI / TUI"] --> CliClosure["Core owner feature closure"]
   ACP["ACP"] --> Parts["Runtime Parts"]
   SDKHost["SDK Host"] --> Parts
-  ServerBootstrap["Server agent bootstrap · dormant"] --> Full
+  ServerBootstrap["Server App Server Host"] --> Full
 
   Full --> Coordinator["ConversationCoordinator"]
   CliClosure --> Coordinator
@@ -735,7 +793,9 @@ flowchart TB
   Ownership["CoreRuntimeOwnership"] -. "first-party composition injects once" .-> Coordinator
 ```
 
-当前公开 HTTP Server 不调用 agent bootstrap，因此不创建 Runtime 或 workspace ownership；图中的 Server 节点只记录已有 agent-enabled composition 边界，不能据此宣称 Server Agent API 已交付。
+当前 HTTP Server 调用 agent bootstrap，创建 Embedded Runtime 和 workspace ownership，并把 `/ws` 连接交给
+`BitfunAppServer::serve`。它固定绑定 loopback，只有 Origin allowlist，没有每连接认证和 user/workspace/execution-domain
+绑定；因此只能视为本机单用户 App Server Host，不能据此宣称远程、多用户或公开 Server Agent API 已交付。
 
 当前 Peer 运行连接：
 
@@ -756,7 +816,7 @@ flowchart LR
 | Desktop | 使用 `product-full`；显示外部来源、审批、冲突、诊断和 Host 能力 | 可执行能力在事实所在 Host 运行；Safe Mode 只阻止新调用，不改来源、不取消正在运行的调用 |
 | CLI / TUI | 使用显式 Core owner feature closure（`agent-runtime`、`canvas-runtime`、`external-sources`、`plugin-runtime`、`ssh-remote`）；提供 `/extensions`、统一 `/hooks`（旧 `/hooks_external` 为别名）、`/tools` 和 `/agents`；Claude Code/Codex 命令 Hook 可经显式审阅复制为原生层 | 保持现有 CLI capability plan，但不自动继承 Desktop 后续加入 `product-full` 的能力；生态解析仍在适配器，不启动第二套 Agent Runtime；OpenCode Hook 仍只静态发现；远程能力未接入时不回退本机 |
 | ACP | 使用 `DeliveryProfile::Acp`、Runtime Parts，以及 `agent-runtime`/`canvas-runtime`/`external-sources`/`ssh-remote` Core owner feature | load 成功后才发布活动状态；close 排空后再卸载；完整历史、Canvas 工具物化、兼容指令来源和配置仍由 Core/ACP 管理 |
-| Peer / Server | Server 提供 control/catalog；Peer Host 执行真实工作区操作；当前 HTTP Server 不装配 Agent Runtime | 控制端不替远端发现或执行；旧 Host 明确降级，SSH Remote 未接入时返回不支持；只读 Server 不声明 Runtime ownership |
+| Peer / Server | Peer Host 执行真实工作区操作；当前 HTTP Server 使用 `product-full` 组装 Embedded Runtime，并通过 `/ws` 暴露 App Server | 控制端不替远端发现或执行；Server 仅限 loopback 单用户，缺少连接级安全绑定时不扩展到远程/多用户；SSH Remote 未接入时返回不支持 |
 | Web / Mobile Web | 依赖现有后端入口 | 不持有插件执行单元，也不能据空 profile 宣称独立能力 |
 | HarmonyOS 手机 Remote | phone-only ArkTS 远程入口 | 不等于 HarmonyOS PC 本地 Runtime、CLI/TUI 或 GUI |
 

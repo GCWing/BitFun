@@ -75,7 +75,7 @@ fn protocol_round_trips_reviewed_permission_and_user_input_operations() {
 
 #[test]
 fn protocol_round_trips_read_only_main_agent_catalog() {
-    assert_eq!(PROTOCOL_VERSION, 16);
+    assert_eq!(PROTOCOL_VERSION, 17);
     let operation = RuntimeIpcOperation::ListAgentModes {
         session_id: Some("session-1".to_string()),
     };
@@ -130,7 +130,7 @@ fn protocol_round_trips_read_only_main_agent_catalog() {
 
 #[test]
 fn protocol_round_trips_exact_turn_steering_without_replacing_turn_admission() {
-    assert_eq!(PROTOCOL_VERSION, 16);
+    assert_eq!(PROTOCOL_VERSION, 17);
     let operation = RuntimeIpcOperation::SteerTurn {
         request: AgentDialogSteerRequest {
             session_id: "session-1".to_string(),
@@ -246,7 +246,7 @@ fn protocol_round_trips_root_scoped_lineage_operations() {
 
 #[test]
 fn protocol_round_trips_workspace_diff_as_a_read_only_workspace_operation() {
-    assert_eq!(PROTOCOL_VERSION, 16);
+    assert_eq!(PROTOCOL_VERSION, 17);
 
     let operation = RuntimeIpcOperation::WorkspaceDiff;
     let encoded = serde_json::to_value(&operation).expect("serialize workspace diff operation");
@@ -367,7 +367,7 @@ fn protocol_round_trips_the_reviewed_session_model_operation() {
 
 #[test]
 fn protocol_round_trips_the_current_session_rename_operation() {
-    assert_eq!(PROTOCOL_VERSION, 16);
+    assert_eq!(PROTOCOL_VERSION, 17);
 
     let operation = RuntimeIpcOperation::RenameSession {
         request: RuntimeSessionRenameRequest {

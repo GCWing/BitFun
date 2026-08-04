@@ -3,13 +3,21 @@
 import { ITransportAdapter } from './base';
 import { createLogger } from '@/shared/utils/logger';
 import type {
+  AgentSessionArchiveStateRequest,
+  AgentSessionForkAtTurnRequest,
+  ConfigUpdate,
+  ForkSessionResponse,
   GitBranch,
   GitRepositoryPathRequest,
   ListSessionsResponse,
   PermissionGrant,
   PermissionReply,
   RemoveProjectPermissionGrantResponse,
+  ResetAgentProfileConfigMessage,
+  ResetAgentProfileConfigResponse,
   RunResponse,
+  SetAgentProfileConfigMessage,
+  SetAgentProfileConfigResponse,
   SubmitDialogTurnBody,
   SubmitDialogTurnResponse,
 } from '@/generated/api';
@@ -19,7 +27,7 @@ const log = createLogger('WebSocketAdapter');
 /**
  * Typed mapping from the frontend's snake_case agent commands to the app-server
  * JSON-RPC method names, carrying the request/response types from the generated
- * schema (`@/generated/api`, source: `bitfun-app-server/schema.rs`).
+ * schema (`@/generated/api`, source: `bitfun-app-server/src/schema/`).
  *
  * The service layer (`AgentAPI` and friends) speaks Tauri command names
  * (`create_session`, `start_dialog_turn`, ...) because that is the desktop
@@ -56,6 +64,19 @@ export const AGENT_COMMAND_SCHEMA = {
     response: null as unknown as ListSessionsResponse,
   },
   delete_session: { method: 'agent/deleteSession' },
+  fork_session: {
+    method: 'session/forkAtTurn',
+    request: null as unknown as AgentSessionForkAtTurnRequest,
+    response: null as unknown as ForkSessionResponse,
+  },
+  archive_session: {
+    method: 'session/setArchived',
+    request: null as unknown as AgentSessionArchiveStateRequest,
+  },
+  unarchive_session: {
+    method: 'session/setArchived',
+    request: null as unknown as AgentSessionArchiveStateRequest,
+  },
   // `start_dialog_turn` maps to `agent/submitDialogTurn`, not `agent/submitTurn`:
   // the dialog-turn body carries `agentType`/`workspacePath`/`policy`, which
   // the bare submission request does not. This mirrors the desktop host, which
@@ -124,7 +145,7 @@ export const AGENT_COMMAND_SCHEMA = {
     request: null as unknown as GitRepositoryPathRequest,
     response: null as unknown as { branches: GitBranch[] },
   },
-  // Config service surface (read-only in this batch). The agent-profile and
+  // Config service surface. The agent-profile and
   // model-config reads reach the global config singletons the Desktop host
   // also uses -- no service injection, mirroring the static `GitService`
   // pattern. `get_config`/`get_configs` carry the not-found -> undefined
@@ -139,7 +160,16 @@ export const AGENT_COMMAND_SCHEMA = {
   get_model_configs: { method: 'config/getModelConfigs' },
   get_config: { method: 'config/getConfig' },
   get_configs: { method: 'config/getConfigs' },
-  // Track B (Batch 1): config write + i18n surface.
+  set_agent_profile_config: {
+    method: 'config/setAgentProfileConfig',
+    request: null as unknown as SetAgentProfileConfigMessage,
+    response: null as unknown as SetAgentProfileConfigResponse,
+  },
+  reset_agent_profile_config: {
+    method: 'config/resetAgentProfileConfig',
+    request: null as unknown as ResetAgentProfileConfigMessage,
+    response: null as unknown as ResetAgentProfileConfigResponse,
+  },
   set_config: { method: 'config/setConfig' },
   i18n_get_current_language: { method: 'i18n/getCurrentLanguage' },
   i18n_set_language: { method: 'i18n/setLanguage' },
@@ -202,6 +232,31 @@ export function encodeRequestBody(action: string, body: any): any {
     case 'respond_permission':
     case 'respond_permission_batch':
       return encodePermissionResponseBody(body);
+    case 'fork_session':
+      return {
+        workspacePath: body.workspace_path,
+        sourceSessionId: body.source_session_id,
+        sourceTurnId: body.source_turn_id,
+        ...(body.remote_connection_id !== undefined
+          ? { remoteConnectionId: body.remote_connection_id }
+          : {}),
+        ...(body.remote_ssh_host !== undefined
+          ? { remoteSshHost: body.remote_ssh_host }
+          : {}),
+      };
+    case 'archive_session':
+    case 'unarchive_session':
+      return {
+        workspacePath: body.workspace_path,
+        sessionId: body.session_id,
+        archived: action === 'archive_session',
+        ...(body.remote_connection_id !== undefined
+          ? { remoteConnectionId: body.remote_connection_id }
+          : {}),
+        ...(body.remote_ssh_host !== undefined
+          ? { remoteSshHost: body.remote_ssh_host }
+          : {}),
+      };
     default:
       return body;
   }
@@ -233,6 +288,10 @@ export function decodeResponseBody(action: string, result: any): any {
       return unwrapArray(result, 'records');
     case 'git_get_branches':
       return unwrapArray(result, 'branches');
+    case 'set_agent_profile_config':
+      return 'Agent profile configuration updated successfully';
+    case 'reset_agent_profile_config':
+      return 'Agent profile configuration reset successfully';
     default:
       return result;
   }
@@ -295,6 +354,28 @@ export function webSocketResponseError(value: unknown): Error {
   error.code = record?.code;
   error.data = record?.data;
   return error;
+}
+
+export interface DecodedWsNotification {
+  event: string;
+  payload: unknown;
+}
+
+/** Project one app-server JSON-RPC notification into the frontend event bus. */
+export function decodeWsNotification(message: any): DecodedWsNotification | null {
+  if (message?.method === 'agent/frontendEvent' && message.params?.event) {
+    return {
+      event: message.params.event,
+      payload: message.params.payload,
+    };
+  }
+  if (message?.method === 'config/event' && message.params) {
+    return {
+      event: 'config://updated',
+      payload: message.params as ConfigUpdate,
+    };
+  }
+  return null;
 }
 
 export class WebSocketTransportAdapter implements ITransportAdapter {
@@ -420,9 +501,10 @@ export class WebSocketTransportAdapter implements ITransportAdapter {
         // The server pushes `agent/frontendEvent` notifications carrying the
         // projected frontend event name and payload, so dispatch on
         // `params.event` exactly like the legacy `WsMessage::Event{event,payload}`.
-        if (message.method === 'agent/frontendEvent' && message.params?.event) {
-          const eventName: string = message.params.event;
-          const payload = message.params.payload;
+        const notification = decodeWsNotification(message);
+        if (notification) {
+          const eventName = notification.event;
+          const payload = notification.payload;
           const listeners = this.eventListeners.get(eventName);
           if (listeners && listeners.size > 0) {
             listeners.forEach(callback => {

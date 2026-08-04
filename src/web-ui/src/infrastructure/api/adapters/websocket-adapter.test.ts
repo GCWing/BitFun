@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   AGENT_COMMAND_SCHEMA,
+  decodeWsNotification,
   decodeResponseBody,
   encodeRequestBody,
   resolveWsMethod,
@@ -20,6 +21,9 @@ describe('resolveWsMethod', () => {
     expect(resolveWsMethod('create_session')).toBe('agent/createSession');
     expect(resolveWsMethod('list_sessions')).toBe('agent/listSessions');
     expect(resolveWsMethod('delete_session')).toBe('agent/deleteSession');
+    expect(resolveWsMethod('fork_session')).toBe('session/forkAtTurn');
+    expect(resolveWsMethod('archive_session')).toBe('session/setArchived');
+    expect(resolveWsMethod('unarchive_session')).toBe('session/setArchived');
     // `start_dialog_turn` -> `agent/submitDialogTurn` (NOT `agent/submitTurn`):
     // the dialog-turn body carries `agentType`/`workspacePath`/`policy`. Mapping
     // it to `submitTurn` would silently drop `agentType` and omit the required
@@ -96,7 +100,12 @@ describe('resolveWsMethod', () => {
     expect(resolveWsMethod('get_model_configs')).toBe('config/getModelConfigs');
     expect(resolveWsMethod('get_config')).toBe('config/getConfig');
     expect(resolveWsMethod('get_configs')).toBe('config/getConfigs');
-    // Track B (Batch 1): config write + i18n surface.
+    expect(resolveWsMethod('set_agent_profile_config')).toBe(
+      'config/setAgentProfileConfig'
+    );
+    expect(resolveWsMethod('reset_agent_profile_config')).toBe(
+      'config/resetAgentProfileConfig'
+    );
     expect(resolveWsMethod('set_config')).toBe('config/setConfig');
     expect(resolveWsMethod('i18n_get_current_language')).toBe(
       'i18n/getCurrentLanguage'
@@ -124,11 +133,11 @@ describe('resolveWsMethod', () => {
     // Runtime sanity: the schema entry carries the method string and the table
     // covers the schema methods (key count is stable; ordering is not pinned
     // because the table is a plain object). Track B Batch 1 added config write +
-    // i18n, raising the count from 20 to 26.
+    // i18n and the P0 Session/Config control plane, raising the count to 31.
     expect(AGENT_COMMAND_SCHEMA.start_dialog_turn.method).toBe(
       'agent/submitDialogTurn'
     );
-    expect(Object.keys(AGENT_COMMAND_SCHEMA).length).toBe(26);
+    expect(Object.keys(AGENT_COMMAND_SCHEMA).length).toBe(31);
 
     // Touch the locals so noUnusedLocals does not flag them under vitest's
     // transformed build (tsc --noEmit is the real gate; this is belt-and-suspenders).
@@ -215,10 +224,71 @@ describe('encodeRequestBody', () => {
     expect(encoded.reply).toEqual({ reply: 'always' });
   });
 
+  it('encodes fork-at-turn and archive state into Session wire DTOs', () => {
+    expect(encodeRequestBody('fork_session', {
+      workspace_path: '/repo',
+      source_session_id: 's1',
+      source_turn_id: 't2',
+      remote_connection_id: 'remote-1',
+    })).toEqual({
+      workspacePath: '/repo',
+      sourceSessionId: 's1',
+      sourceTurnId: 't2',
+      remoteConnectionId: 'remote-1',
+    });
+
+    expect(encodeRequestBody('archive_session', {
+      workspace_path: '/repo',
+      session_id: 's1',
+    })).toEqual({
+      workspacePath: '/repo',
+      sessionId: 's1',
+      archived: true,
+    });
+    expect(encodeRequestBody('unarchive_session', {
+      workspace_path: '/repo',
+      session_id: 's1',
+    })).toEqual({
+      workspacePath: '/repo',
+      sessionId: 's1',
+      archived: false,
+    });
+  });
+
   it('passes unknown actions through unchanged', () => {
     const body = { foo: 'bar' };
     expect(encodeRequestBody('some_unknown_action', body)).toBe(body);
     expect(encodeRequestBody('list_sessions', body)).toBe(body);
+  });
+
+  it('preserves the desktop success-string contract for profile mutations', () => {
+    expect(decodeResponseBody('set_agent_profile_config', { profile_id: 'agentic' }))
+      .toBe('Agent profile configuration updated successfully');
+    expect(decodeResponseBody('reset_agent_profile_config', { profile_id: 'agentic' }))
+      .toBe('Agent profile configuration reset successfully');
+  });
+});
+
+describe('decodeWsNotification', () => {
+  it('projects typed config notifications to a stable frontend event', () => {
+    expect(decodeWsNotification({
+      jsonrpc: '2.0',
+      method: 'config/event',
+      params: { kind: 'modelConfigurationUpdated' },
+    })).toEqual({
+      event: 'config://updated',
+      payload: { kind: 'modelConfigurationUpdated' },
+    });
+  });
+
+  it('keeps projected agent notifications unchanged', () => {
+    expect(decodeWsNotification({
+      method: 'agent/frontendEvent',
+      params: { event: 'agentic://session-created', payload: { sessionId: 's1' } },
+    })).toEqual({
+      event: 'agentic://session-created',
+      payload: { sessionId: 's1' },
+    });
   });
 });
 

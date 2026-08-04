@@ -257,41 +257,55 @@ fn local_workspace_snapshot_port_does_not_expand_the_agent_runtime_sdk() {
 }
 
 #[test]
-fn primary_cli_session_client_uses_only_the_runtime_sdk_boundary() {
+fn interactive_tui_session_client_uses_only_the_app_server_boundary() {
     const AGENT_MODULE: &str = include_str!("../../src/agent/mod.rs");
-    const PRIMARY_CLIENT: &str = include_str!("../../src/agent/runtime_client.rs");
+    const TUI_CLIENT: &str = include_str!("../../src/agent/tui_client.rs");
+    const TUI_BACKEND: &str = include_str!("../../src/tui_backend.rs");
 
     assert!(
         !AGENT_MODULE.contains("trait Agent"),
-        "a one-implementation private trait must not obscure the Runtime SDK client boundary"
+        "a one-implementation private trait must not obscure the TUI backend boundary"
     );
     assert!(
-        !PRIMARY_CLIENT.contains("CoreAgentRuntimeCompatibility")
-            && !PRIMARY_CLIENT.contains("compatibility:")
-            && !PRIMARY_CLIENT.contains("is_turn_processing"),
-        "the primary CLI/TUI session client must not depend on Core compatibility or state polling"
+        TUI_CLIENT.contains("backend: Arc<dyn TuiBackend>")
+            && !TUI_CLIENT.contains("bitfun_agent_runtime::")
+            && !TUI_CLIENT.contains("bitfun_agent_runtime_ipc")
+            && !TUI_CLIENT.contains("CoreAgentRuntimeCompatibility"),
+        "the interactive TUI session client must depend only on TuiBackend contracts"
     );
-    for sdk_operation in [
-        "fork_session",
-        "generate_session_usage",
-        "wait_for_turn_settlement",
+    assert!(
+        TUI_BACKEND.contains("pub(crate) trait TuiBackend")
+            && TUI_BACKEND.contains("AppServerClient")
+            && !TUI_BACKEND.contains("bitfun_agent_runtime")
+            && !TUI_BACKEND.contains("bitfun_core::")
+            && TUI_CLIENT.contains("use crate::tui_backend::{TuiBackend, TuiBackendError};"),
+        "TuiBackend must remain CLI-local and depend only on App Server client contracts"
+    );
+    for backend_operation in [
+        ".sync_session(",
+        ".submit_dialog_turn(",
+        ".respond_permission(",
+        ".fork_session(",
+        ".session_usage(",
+        ".wait_for_settlement(",
     ] {
         assert!(
-            PRIMARY_CLIENT.contains(sdk_operation),
-            "primary session client must route {sdk_operation} through the Runtime SDK"
+            TUI_CLIENT.contains(backend_operation),
+            "interactive session client must route {backend_operation} through TuiBackend"
         );
     }
 }
 
 #[test]
-fn chat_context_reload_keeps_deployment_choice_behind_a_cli_adapter() {
+fn chat_context_reload_uses_the_same_tui_backend_as_session_operations() {
     const CHAT_MODE: &str = include_str!("../../src/modes/chat.rs");
     const CHAT_CAPABILITIES: &str = include_str!("../../src/modes/chat/capabilities.rs");
-    const RELOAD_CLIENT: &str = include_str!("../../src/agent/context_reload_client.rs");
+    const TUI_CLIENT: &str = include_str!("../../src/agent/tui_client.rs");
 
     assert!(
-        CHAT_MODE.contains("context_reload: CliContextReloadClient"),
-        "ChatMode must submit reload through one CLI-owned deployment adapter"
+        !CHAT_MODE.contains("context_reload")
+            && CHAT_CAPABILITIES.contains("self.agent.reload_context(request)"),
+        "ChatMode must submit context reload through its existing TUI session client"
     );
     assert!(
         !CHAT_CAPABILITIES.contains("is_shared()")
@@ -300,16 +314,14 @@ fn chat_context_reload_keeps_deployment_choice_behind_a_cli_adapter() {
         "TUI capability code must not branch context reload by Runtime deployment"
     );
     assert!(
-        RELOAD_CLIENT.contains(".reload_session_context(request)")
-            && RELOAD_CLIENT
-                .contains(".request(RuntimeIpcOperation::ReloadSessionContext { request })"),
-        "the private adapter must delegate directly to the existing Embedded and Shared owners"
+        TUI_CLIENT.contains(".reload_context(ReloadContextRequest(request))"),
+        "the TUI session client must delegate reload to TuiBackend"
     );
 }
 
 #[test]
-fn primary_cli_runtime_client_covers_interactive_permission_and_local_turn_operations() {
-    const PRIMARY_CLIENT: &str = include_str!("../../src/agent/runtime_client.rs");
+fn tui_client_covers_interactive_permission_and_local_turn_operations() {
+    const TUI_CLIENT: &str = include_str!("../../src/agent/tui_client.rs");
 
     for sdk_operation in [
         "subscribe_permission_requests",
@@ -318,21 +330,23 @@ fn primary_cli_runtime_client_covers_interactive_permission_and_local_turn_opera
         "record_completed_local_command_turn",
     ] {
         assert!(
-            PRIMARY_CLIENT.contains(sdk_operation),
-            "interactive TUI operation {sdk_operation} must stay behind the existing runtime client"
+            TUI_CLIENT.contains(sdk_operation),
+            "interactive TUI operation {sdk_operation} must stay behind TuiAgentClient"
         );
     }
 }
 
 #[test]
-fn interactive_tui_agent_operations_stay_behind_cli_runtime_client() {
+fn interactive_tui_agent_operations_stay_behind_app_server_backend() {
     const STARTUP_PAGE: &str = include_str!("../../src/ui/startup.rs");
     const CHAT_MODE: &str = include_str!("../../src/modes/chat.rs");
     const CHAT_RUN: &str = include_str!("../../src/modes/chat/run.rs");
     const CHAT_COMMANDS: &str = include_str!("../../src/modes/chat/commands.rs");
     const CHAT_INPUT: &str = include_str!("../../src/modes/chat/input.rs");
     const CHAT_SELECTION: &str = include_str!("../../src/modes/chat/selection.rs");
-    const RUNTIME_CLIENT: &str = include_str!("../../src/agent/runtime_client.rs");
+    const TUI_CLIENT: &str = include_str!("../../src/agent/tui_client.rs");
+    const SHARED_TUI_BACKEND: &str = include_str!("../../src/shared_tui_backend.rs");
+    const EMBEDDED_APP_SERVER: &str = include_str!("../../src/embedded_app_server.rs");
     const SHARED_RUNTIME: &str = include_str!("../../src/shared_runtime.rs");
     const CLI_MAIN: &str = include_str!("../../src/main.rs");
     const CLI_CARGO: &str = include_str!("../../Cargo.toml");
@@ -352,31 +366,34 @@ fn interactive_tui_agent_operations_stay_behind_cli_runtime_client() {
     ] {
         assert!(
             !source.contains(".agent_runtime()"),
-            "{path} must route Agent operations through CliAgentRuntimeClient"
+            "{path} must route Agent operations through TuiAgentClient"
         );
     }
     assert!(
-        CHAT_MODE.contains("CliAgentRuntimeClient"),
-        "interactive chat must retain the existing app-private runtime client facade"
+        CHAT_MODE.contains("Arc<TuiAgentClient>") && STARTUP_PAGE.contains("Arc<TuiAgentClient>"),
+        "interactive chat and startup must use the backend-neutral TUI session client"
     );
     assert!(
         !CLI_CARGO.contains("bitfun-sdk-host") && CLI_CARGO.contains("bitfun-agent-runtime-ipc"),
         "Shared TUI must use the private Runtime IPC adapter without making CLI depend on SDK Host"
     );
     assert!(
-        RUNTIME_CLIENT.contains("RuntimeIpcClient")
+        SHARED_TUI_BACKEND.contains("RuntimeIpcClient")
+            && !TUI_CLIENT.contains("RuntimeIpcClient")
             && !STARTUP_PAGE.contains("RuntimeIpcClient")
             && !CHAT_MODE.contains("RuntimeIpcClient"),
-        "Shared IPC must remain behind CliAgentRuntimeClient instead of leaking into TUI controllers"
+        "Shared IPC must remain in the CLI Host adapter instead of leaking into TUI clients or controllers"
     );
     assert!(
-        RUNTIME_CLIENT.contains("RuntimeIpcOperation::UpdateSessionMode { request }")
+        SHARED_TUI_BACKEND
+            .contains("RuntimeIpcOperation::UpdateSessionMode { request: request.0 }")
             && SHARED_RUNTIME.contains("RuntimeIpcOperation::UpdateSessionMode { request }")
             && SHARED_RUNTIME.contains(".update_session_mode(request)"),
         "Shared Agent mode updates must reuse the Runtime port through the private IPC adapter"
     );
     assert!(
-        RUNTIME_CLIENT.contains("RuntimeIpcOperation::UpdateSessionModel { request }")
+        SHARED_TUI_BACKEND
+            .contains("RuntimeIpcOperation::UpdateSessionModel { request: request.0 }")
             && SHARED_RUNTIME.contains("RuntimeIpcOperation::UpdateSessionModel { request }")
             && SHARED_RUNTIME.contains(".update_session_model(request)"),
         "Shared model updates must reuse the Runtime port through the private IPC adapter"
@@ -396,7 +413,7 @@ fn interactive_tui_agent_operations_stay_behind_cli_runtime_client() {
     );
     assert!(
         CHAT_COMMANDS.matches("if self.agent.is_shared()").count() >= 3
-            && RUNTIME_CLIENT.contains("Failed to read Embedded session transcript")
+            && EMBEDDED_APP_SERVER.contains("AppServerTuiBackend::new(client)")
             && SHARED_RUNTIME.contains("RuntimeDeployment::Shared")
             && SHARED_RUNTIME.contains("process_manager::contain_current_process_tree"),
         "Shared controls must stay terminal-safe while preserving Embedded recovery and one process Job owner"

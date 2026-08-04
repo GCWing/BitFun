@@ -42,32 +42,37 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use agent_client_protocol::{ConnectionTo, JsonRpcResponse, Result, SentRequest};
 use agent_client_protocol::ConnectTo;
+use agent_client_protocol::{ConnectionTo, JsonRpcResponse, Result, SentRequest};
 use bitfun_events::project_agentic_frontend_event;
 use tokio::sync::{broadcast, oneshot};
 
 use crate::schema::{
     CancelTurnMessage, CancelTurnResponse, ClearProjectPermissionGrantsMessage,
-    ClearProjectPermissionGrantsResponse, CreateSessionMessage, CreateSessionResponse,
-    DeleteSessionMessage, DeleteSessionResponse, GetAgentProfileConfigMessage,
-    GetAgentProfileConfigResponse, GetAgentProfileConfigsMessage,
-    GetAgentProfileConfigsResponse, GetConfigMessage, GetConfigResponse, GetConfigsMessage,
-    GetConfigsResponse, GetModelConfigsMessage, GetModelConfigsResponse, GitBranchesRequest,
-    GitGetBranchesMessage, GitGetBranchesResponse, GitGetStatusMessage, GitGetStatusResponse,
-    GitIsRepositoryMessage, GitIsRepositoryResponse, GitRepositoryPathRequest,
-    I18nGetCurrentLanguageMessage, I18nGetCurrentLanguageResponse, I18nGetConfigMessage,
-    I18nGetSupportedLanguagesMessage, I18nGetSupportedLanguagesResponse, I18nSetConfigMessage,
-    I18nSetConfigResponse, I18nSetLanguageMessage, I18nSetLanguageResponse,
-    ListPendingPermissionRequestsMessage, ListPendingPermissionRequestsResponse,
-    ListProjectPermissionAuditMessage, ListProjectPermissionAuditResponse,
-    ListProjectPermissionGrantsMessage, ListProjectPermissionGrantsResponse,
-    ListSessionsMessage, ListSessionsResponse, PermissionEventNotification,
-    RemoveProjectPermissionGrantMessage, RemoveProjectPermissionGrantResponse,
-    RespondPermissionBatchMessage, RespondPermissionBatchResponse, RespondPermissionMessage,
-    RespondPermissionResponse, RunMessage, RunResponse, SessionEventNotification,
-    SetConfigMessage, SetConfigResponse, SubmitDialogTurnMessage, SubmitTurnMessage,
-    SubmitTurnResponse,
+    ClearProjectPermissionGrantsResponse, ConfigEventNotification, ConfigUpdate,
+    CreateSessionMessage, CreateSessionResponse, DeleteSessionMessage, DeleteSessionResponse,
+    ForkSessionAtTurnMessage, ForkSessionBeforeTurnMessage, ForkSessionMessage,
+    ForkSessionResponse, GetAgentProfileConfigMessage, GetAgentProfileConfigResponse,
+    GetAgentProfileConfigsMessage, GetAgentProfileConfigsResponse, GetConfigMessage,
+    GetConfigResponse, GetConfigsMessage, GetConfigsResponse, GetModelConfigsMessage,
+    GetModelConfigsResponse, GitBranchesRequest, GitGetBranchesMessage, GitGetBranchesResponse,
+    GitGetStatusMessage, GitGetStatusResponse, GitIsRepositoryMessage, GitIsRepositoryResponse,
+    GitRepositoryPathRequest, I18nGetConfigMessage, I18nGetCurrentLanguageMessage,
+    I18nGetCurrentLanguageResponse, I18nGetSupportedLanguagesMessage,
+    I18nGetSupportedLanguagesResponse, I18nSetConfigMessage, I18nSetConfigResponse,
+    I18nSetLanguageMessage, I18nSetLanguageResponse, ListPendingPermissionRequestsMessage,
+    ListPendingPermissionRequestsResponse, ListProjectPermissionAuditMessage,
+    ListProjectPermissionAuditResponse, ListProjectPermissionGrantsMessage,
+    ListProjectPermissionGrantsResponse, ListSessionsMessage, ListSessionsResponse,
+    PermissionEventNotification, RemoveProjectPermissionGrantMessage,
+    RemoveProjectPermissionGrantResponse, RenameSessionMessage, RenameSessionResponse,
+    ResetAgentProfileConfigMessage, ResetAgentProfileConfigResponse, RespondPermissionBatchMessage,
+    RespondPermissionBatchResponse, RespondPermissionMessage, RespondPermissionResponse,
+    RestoreSessionMessage, RunMessage, RunResponse, SessionEventNotification,
+    SetAgentProfileConfigMessage, SetAgentProfileConfigResponse, SetConfigMessage,
+    SetConfigResponse, SetSessionArchivedMessage, SetSessionArchivedResponse,
+    SubmitDialogTurnMessage, SubmitTurnMessage, SubmitTurnResponse, UpdateSessionModeMessage,
+    UpdateSessionModeResponse, UpdateSessionModelMessage, UpdateSessionModelResponse,
 };
 use crate::{AppClient, AppServer};
 
@@ -103,6 +108,7 @@ const CLIENT_STARTUP_TIMEOUT: Duration = Duration::from_secs(5);
 pub struct AppServerClient {
     connection: Arc<ConnectionTo<AppServer>>,
     event_tx: broadcast::Sender<FrontendEvent>,
+    config_event_tx: broadcast::Sender<ConfigUpdate>,
     shutdown_tx: Arc<std::sync::Mutex<Option<oneshot::Sender<()>>>>,
 }
 
@@ -114,6 +120,11 @@ impl AppServerClient {
         self.event_tx.subscribe()
     }
 
+    /// Subscribe to canonical configuration updates from `config/event`.
+    pub fn subscribe_config_updates(&self) -> broadcast::Receiver<ConfigUpdate> {
+        self.config_event_tx.subscribe()
+    }
+
     /// Shut down the in-process app-server client connection. Signals the
     /// parked `connect_task` to resume, which lets the connection's background
     /// actors (task/outgoing/incoming/responder) unwind and close the
@@ -121,7 +132,12 @@ impl AppServerClient {
     /// Hosts that want the connection to live for the process lifetime simply
     /// never call this.
     pub async fn shutdown(&self) {
-        if let Some(tx) = self.shutdown_tx.lock().ok().and_then(|mut guard| guard.take()) {
+        if let Some(tx) = self
+            .shutdown_tx
+            .lock()
+            .ok()
+            .and_then(|mut guard| guard.take())
+        {
             let _ = tx.send(());
         }
     }
@@ -157,6 +173,102 @@ impl AppServerClient {
             .rpc(|cx| cx.send_request(DeleteSessionMessage(request)))
             .await?;
         Ok(())
+    }
+
+    /// Rename a persisted Session through the Runtime Session owner.
+    pub async fn rename_session(
+        &self,
+        request: bitfun_agent_runtime::sdk::AgentSessionRenameRequest,
+    ) -> Result<()> {
+        let RenameSessionResponse {} = self
+            .rpc(|cx| cx.send_request(RenameSessionMessage(request)))
+            .await?;
+        Ok(())
+    }
+
+    /// Set the persisted archive state through the Runtime Session owner.
+    pub async fn set_session_archived(
+        &self,
+        request: bitfun_agent_runtime::sdk::AgentSessionArchiveStateRequest,
+    ) -> Result<()> {
+        let SetSessionArchivedResponse {} = self
+            .rpc(|cx| cx.send_request(SetSessionArchivedMessage(request)))
+            .await?;
+        Ok(())
+    }
+
+    /// Update the selected model for an already loaded Session.
+    pub async fn update_session_model(
+        &self,
+        request: bitfun_agent_runtime::sdk::AgentSessionModelUpdateRequest,
+    ) -> Result<()> {
+        let UpdateSessionModelResponse {} = self
+            .rpc(|cx| cx.send_request(UpdateSessionModelMessage(request)))
+            .await?;
+        Ok(())
+    }
+
+    /// Update the selected mode for an already loaded Session.
+    pub async fn update_session_mode(
+        &self,
+        request: bitfun_agent_runtime::sdk::AgentSessionModeUpdateRequest,
+    ) -> Result<()> {
+        let UpdateSessionModeResponse {} = self
+            .rpc(|cx| cx.send_request(UpdateSessionModeMessage(request)))
+            .await?;
+        Ok(())
+    }
+
+    /// Fork a Session at its latest persisted turn.
+    pub async fn fork_session(
+        &self,
+        request: bitfun_agent_runtime::sdk::AgentSessionForkRequest,
+    ) -> Result<bitfun_agent_runtime::sdk::AgentSessionForkResult> {
+        let ForkSessionResponse(result) = self
+            .rpc(|cx| cx.send_request(ForkSessionMessage(request)))
+            .await?;
+        Ok(result)
+    }
+
+    /// Fork a Session including the selected persisted turn.
+    pub async fn fork_session_at_turn(
+        &self,
+        request: bitfun_agent_runtime::sdk::AgentSessionForkAtTurnRequest,
+    ) -> Result<bitfun_agent_runtime::sdk::AgentSessionForkResult> {
+        let ForkSessionResponse(result) = self
+            .rpc(|cx| cx.send_request(ForkSessionAtTurnMessage(request)))
+            .await?;
+        Ok(result)
+    }
+
+    /// Fork a Session immediately before the selected persisted turn.
+    pub async fn fork_session_before_turn(
+        &self,
+        request: bitfun_agent_runtime::sdk::AgentSessionForkBeforeTurnRequest,
+    ) -> Result<bitfun_agent_runtime::sdk::AgentSessionForkResult> {
+        let ForkSessionResponse(result) = self
+            .rpc(|cx| cx.send_request(ForkSessionBeforeTurnMessage(request)))
+            .await?;
+        Ok(result)
+    }
+
+    /// Restore a persisted Session into the Runtime owner.
+    pub async fn restore_session(
+        &self,
+        request: bitfun_agent_runtime::sdk::AgentSessionRestoreRequest,
+    ) -> Result<bitfun_agent_runtime::sdk::AgentSessionRestoreResult> {
+        let response = self
+            .rpc(|cx| {
+                cx.send_request(RestoreSessionMessage {
+                    workspace_path: request.workspace_path,
+                    session_id: request.session_id,
+                    include_internal: request.include_internal,
+                    remote_connection_id: request.remote_connection_id,
+                    remote_ssh_host: request.remote_ssh_host,
+                })
+            })
+            .await?;
+        Ok(response.into())
     }
 
     /// Submit a turn via `agent/submitTurn`.
@@ -270,10 +382,7 @@ impl AppServerClient {
 
     /// Clear all permission grants for a project via
     /// `agent/clearProjectPermissionGrants`. Returns the count cleared.
-    pub async fn clear_project_permission_grants(
-        &self,
-        project_id: &str,
-    ) -> Result<usize> {
+    pub async fn clear_project_permission_grants(&self, project_id: &str) -> Result<usize> {
         let ClearProjectPermissionGrantsResponse { cleared } = self
             .rpc(|cx| {
                 cx.send_request(ClearProjectPermissionGrantsMessage {
@@ -435,6 +544,38 @@ impl AppServerClient {
         Ok(())
     }
 
+    /// Canonicalize and persist one agent profile, returning the effective view.
+    pub async fn set_agent_profile_config(
+        &self,
+        agent_id: &str,
+        config: serde_json::Value,
+    ) -> Result<bitfun_core::service::config::AgentProfileView> {
+        let SetAgentProfileConfigResponse(view) = self
+            .rpc(|cx| {
+                cx.send_request(SetAgentProfileConfigMessage {
+                    agent_id: agent_id.to_string(),
+                    config,
+                })
+            })
+            .await?;
+        Ok(view)
+    }
+
+    /// Reset one agent profile and return the effective default view.
+    pub async fn reset_agent_profile_config(
+        &self,
+        agent_id: &str,
+    ) -> Result<bitfun_core::service::config::AgentProfileView> {
+        let ResetAgentProfileConfigResponse(view) = self
+            .rpc(|cx| {
+                cx.send_request(ResetAgentProfileConfigMessage {
+                    agent_id: agent_id.to_string(),
+                })
+            })
+            .await?;
+        Ok(view)
+    }
+
     /// Read the current runtime locale id via `i18n/getCurrentLanguage`.
     pub async fn i18n_get_current_language(&self) -> Result<String> {
         let I18nGetCurrentLanguageResponse { language } = self
@@ -458,9 +599,7 @@ impl AppServerClient {
 
     /// Read the i18n config (current/fallback language, autoDetect) via
     /// `i18n/getConfig`.
-    pub async fn i18n_get_config(
-        &self,
-    ) -> Result<crate::schema::I18nGetConfigResponse> {
+    pub async fn i18n_get_config(&self) -> Result<crate::schema::I18nGetConfigResponse> {
         let response = self
             .rpc(|cx| cx.send_request(I18nGetConfigMessage {}))
             .await?;
@@ -542,6 +681,8 @@ pub async fn connect(
     // broadcasts it to consumers.
     let (event_tx, _) = broadcast::channel::<FrontendEvent>(1024);
     let event_tx_for_task = event_tx.clone();
+    let (config_event_tx, _) = broadcast::channel::<ConfigUpdate>(256);
+    let config_event_tx_for_task = config_event_tx.clone();
 
     // Park the connection handle through a oneshot, then await a never-sent
     // shutdown signal so `connect_with`'s main_fn keeps the connection alive.
@@ -556,7 +697,9 @@ pub async fn connect(
                     let event_tx = event_tx_for_task.clone();
                     async move |notification: SessionEventNotification,
                                 _cx: ConnectionTo<AppServer>| {
-                        let SessionEventNotification(envelope) = notification;
+                        let SessionEventNotification {
+                            event: envelope, ..
+                        } = notification;
                         if let Some(projected) = project_agentic_frontend_event(envelope.event) {
                             let _ = event_tx.send(FrontendEvent {
                                 event: projected.event_name,
@@ -569,11 +712,19 @@ pub async fn connect(
                 agent_client_protocol::on_receive_notification!(),
             )
             .on_receive_notification(
+                async move |notification: ConfigEventNotification, _cx: ConnectionTo<AppServer>| {
+                    let ConfigEventNotification { event, .. } = notification;
+                    let _ = config_event_tx_for_task.send(event);
+                    Ok(())
+                },
+                agent_client_protocol::on_receive_notification!(),
+            )
+            .on_receive_notification(
                 {
                     let event_tx = event_tx_for_task;
                     async move |notification: PermissionEventNotification,
                                 _cx: ConnectionTo<AppServer>| {
-                        let PermissionEventNotification(event) = notification;
+                        let PermissionEventNotification { event, .. } = notification;
                         // Project the permission lifecycle event to the frontend
                         // `permission://event` channel the desktop host uses, so
                         // consumers can listen on the same name in web and desktop.
@@ -624,6 +775,7 @@ pub async fn connect(
     Ok(AppServerClient {
         connection: Arc::new(connection),
         event_tx,
+        config_event_tx,
         shutdown_tx: Arc::new(std::sync::Mutex::new(Some(shutdown_tx))),
     })
 }

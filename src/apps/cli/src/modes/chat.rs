@@ -20,12 +20,14 @@ use std::sync::{
 use std::time::{Duration, Instant};
 use tokio::sync::broadcast::error::TryRecvError;
 
-use bitfun_agent_runtime::sdk::{
+use bitfun_core_types::SessionUsageReport;
+use bitfun_events::{AgenticEvent, ToolEventData, ToolEventIdentity};
+use bitfun_runtime_ports::{
     AgentLocalCommandTurnRecordRequest, AgentSessionComposerUpdate, AgentSessionLineageEntry,
     AgentSessionLineageInspection, AgentSessionLineageSnapshot, AgentSessionUsageRequest,
-    AgentTurnCancellationResult, SessionTranscript, SessionUsageReport,
+    AgentTurnCancellationResult, AgentWorkspaceReferenceSearchResult, SessionTranscript,
+    WorkspaceDiffSnapshot,
 };
-use bitfun_events::{AgenticEvent, ToolEventData, ToolEventIdentity};
 use resize::ResizeRedrawState;
 
 use crate::actions::{
@@ -34,8 +36,7 @@ use crate::actions::{
     ActionState, ResolvedKeymap, IMAGE_ATTACHMENTS_REQUIRE_MESSAGE, SHARED_TUI_EMBEDDED_HANDOFF,
     SHARED_TUI_HELP_NOTE,
 };
-use crate::agent::context_reload_client::CliContextReloadClient;
-use crate::agent::runtime_client::{CliAgentMode, CliAgentRuntimeClient, SessionOperationError};
+use crate::agent::tui_client::{SessionOperationError, TuiAgentClient, TuiAgentMode};
 use crate::chat_state::{ChatState, ModelTokenUsageSnapshot};
 use crate::config::CliConfig;
 use crate::ui::agent_selector::{AgentItem, AgentSelectorAction};
@@ -356,15 +357,12 @@ struct PendingSessionOperation {
 struct PendingWorkspaceReferenceSearch {
     generation: u64,
     query: String,
-    handle: tokio::task::JoinHandle<
-        std::result::Result<bitfun_agent_runtime::sdk::AgentWorkspaceReferenceSearchResult, String>,
-    >,
+    handle:
+        tokio::task::JoinHandle<std::result::Result<AgentWorkspaceReferenceSearchResult, String>>,
 }
 
 struct PendingWorkspaceDiff {
-    handle: tokio::task::JoinHandle<
-        std::result::Result<bitfun_agent_runtime::sdk::WorkspaceDiffSnapshot, String>,
-    >,
+    handle: tokio::task::JoinHandle<std::result::Result<WorkspaceDiffSnapshot, String>>,
 }
 
 enum LineageInspectionTaskError {
@@ -455,6 +453,12 @@ enum PendingLocalEffect {
     },
 }
 
+impl crate::tui_backend::TuiEffect for PendingLocalEffect {
+    fn route(&self) -> crate::tui_backend::TuiEffectRoute {
+        crate::tui_backend::TuiEffectRoute::Local
+    }
+}
+
 fn terminal_event_allowed_while_local_effect_pending(event: &Event) -> bool {
     matches!(event, Event::Resize(_, _))
 }
@@ -508,8 +512,7 @@ pub(crate) struct ChatMode {
     agent_type: String,
     workspace: Option<String>,
     local_cwd: std::path::PathBuf,
-    agent: Arc<CliAgentRuntimeClient>,
-    context_reload: CliContextReloadClient,
+    agent: Arc<TuiAgentClient>,
     compatibility: Option<CoreAgentRuntimeCompatibility>,
     /// User-level default resolved from shared config for this TUI run.
     auto_approve_ask_default: bool,
@@ -595,8 +598,7 @@ impl ChatMode {
         config: CliConfig,
         agent_type: String,
         workspace: Option<String>,
-        agent: Arc<CliAgentRuntimeClient>,
-        context_reload: CliContextReloadClient,
+        agent: Arc<TuiAgentClient>,
         compatibility: Option<CoreAgentRuntimeCompatibility>,
     ) -> Self {
         let keymap = ResolvedKeymap::new(&config.shortcuts);
@@ -607,7 +609,6 @@ impl ChatMode {
             workspace,
             local_cwd: std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from(".")),
             agent,
-            context_reload,
             compatibility,
             auto_approve_ask_default: false,
             auto_approve_ask_override: None,

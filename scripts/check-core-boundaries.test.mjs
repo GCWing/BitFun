@@ -32,6 +32,7 @@ const MODULES = [
   './core-boundaries/explicit-test-topology.mjs',
   './core-boundaries/manifest-feature-helpers.mjs',
   './core-boundaries/self-test.mjs',
+  './core-boundaries/tui-boundary-ratchet.mjs',
   './core-boundaries/rules/crate-rules.mjs',
   './core-boundaries/rules/feature-rules.mjs',
   './core-boundaries/rules/source-rules.mjs',

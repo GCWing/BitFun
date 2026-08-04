@@ -151,6 +151,10 @@ impl ChatMode {
         let Some(effect) = self.pending_local_effect.take() else {
             return Ok(false);
         };
+        debug_assert_eq!(
+            crate::tui_backend::TuiEffect::route(&effect),
+            crate::tui_backend::TuiEffectRoute::Local
+        );
         match effect {
             PendingLocalEffect::EditComposer { command, mut draft } => {
                 let cwd = self.local_cwd.clone();
@@ -531,7 +535,7 @@ impl ChatMode {
         let mut event_rx = self
             .agent
             .subscribe_events()
-            .map_err(|error| anyhow::anyhow!(error.into_message()))?;
+            .map_err(|error| anyhow::anyhow!(error.to_string()))?;
         let mut permission_rx = self.agent.subscribe_permission_requests().ok();
         if let Ok(pending) = self.agent.pending_permission_requests() {
             for request in pending.into_iter().filter(|request| {
@@ -646,7 +650,7 @@ impl ChatMode {
             if let Some(receiver) = permission_rx.as_mut() {
                 for _ in 0..4 {
                     match receiver.try_recv() {
-                        Ok(bitfun_agent_runtime::sdk::PermissionRequestEvent::Asked {
+                        Ok(bitfun_product_domains::tool_permissions::PermissionRequestEvent::Asked {
                             request,
                         }) if crate::runtime::approval::permission_request_targets_session(
                             &request,
@@ -661,11 +665,11 @@ impl ChatMode {
                                 needs_redraw = true;
                             }
                         }
-                        Ok(bitfun_agent_runtime::sdk::PermissionRequestEvent::Replied {
+                        Ok(bitfun_product_domains::tool_permissions::PermissionRequestEvent::Replied {
                             request_id,
                             ..
                         })
-                        | Ok(bitfun_agent_runtime::sdk::PermissionRequestEvent::Cancelled {
+                        | Ok(bitfun_product_domains::tool_permissions::PermissionRequestEvent::Cancelled {
                             request_id,
                             ..
                         }) => {
@@ -701,7 +705,7 @@ impl ChatMode {
                                 Err(error) => {
                                     let mut failure = format!(
                                         "Shared Runtime permission state could not be resynchronized: {}",
-                                        error.into_message()
+                                        error
                                     );
                                     let agent = self.agent.clone();
                                     if let Err(error) = tokio::task::block_in_place(|| {

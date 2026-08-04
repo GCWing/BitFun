@@ -9,6 +9,8 @@ members = [
     "src/apps/skin-market-server",
     "src/crates/interfaces/acp",
     "src/crates/interfaces/app-server",
+    "src/crates/interfaces/app-server-client",
+    "src/crates/interfaces/app-server-protocol",
     "src/crates/interfaces/sdk-host",
     "src/crates/adapters/agent-runtime-ipc",
     "src/crates/assembly/agent-content",

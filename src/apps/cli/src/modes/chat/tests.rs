@@ -2670,12 +2670,12 @@ mod tests {
         let mut referenced = plain.clone();
         referenced
             .workspace_references
-            .push(bitfun_agent_runtime::sdk::AgentWorkspaceReference {
+            .push(bitfun_runtime_ports::AgentWorkspaceReference {
                 path: "src/lib.rs".to_string(),
-                kind: bitfun_agent_runtime::sdk::AgentWorkspaceReferenceKind::File,
+                kind: bitfun_runtime_ports::AgentWorkspaceReferenceKind::File,
                 start_line: None,
                 end_line: None,
-                source: bitfun_agent_runtime::sdk::AgentWorkspaceReferenceSourceRange {
+                source: bitfun_runtime_ports::AgentWorkspaceReferenceSourceRange {
                     start: 0,
                     end: 11,
                     value: "@src/lib.rs".to_string(),

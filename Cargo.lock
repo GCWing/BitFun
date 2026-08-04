@@ -878,14 +878,41 @@ dependencies = [
  "anyhow",
  "async-trait",
  "bitfun-agent-runtime",
+ "bitfun-app-server-client",
+ "bitfun-app-server-protocol",
  "bitfun-core",
  "bitfun-events",
+ "bitfun-runtime-ports",
  "futures",
  "log",
  "serde",
  "serde_json",
  "tokio",
  "tokio-util",
+ "ts-rs",
+]
+
+[[package]]
+name = "bitfun-app-server-client"
+version = "0.2.15"
+dependencies = [
+ "agent-client-protocol",
+ "anyhow",
+ "bitfun-app-server-protocol",
+ "tokio",
+]
+
+[[package]]
+name = "bitfun-app-server-protocol"
+version = "0.2.15"
+dependencies = [
+ "agent-client-protocol",
+ "bitfun-core-types",
+ "bitfun-events",
+ "bitfun-product-domains",
+ "bitfun-runtime-ports",
+ "serde",
+ "serde_json",
  "ts-rs",
 ]
 
@@ -920,7 +947,11 @@ dependencies = [
  "bitfun-agent-runtime",
  "bitfun-agent-runtime-ipc",
  "bitfun-agent-tools",
+ "bitfun-app-server",
+ "bitfun-app-server-client",
+ "bitfun-app-server-protocol",
  "bitfun-core",
+ "bitfun-core-types",
  "bitfun-events",
  "bitfun-product-domains",
  "bitfun-runtime-ports",

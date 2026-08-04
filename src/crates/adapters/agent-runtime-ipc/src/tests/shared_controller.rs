@@ -618,6 +618,7 @@ fn summary(session_id: &str) -> AgentSessionSummary {
 fn restored(session_id: &str) -> RuntimeIpcOperationResult {
     RuntimeIpcOperationResult::SessionRestored {
         session: summary(session_id),
+        state: crate::RuntimeSessionState::Idle,
         transcript: SessionTranscript {
             session_id: session_id.to_string(),
             messages: Vec::new(),

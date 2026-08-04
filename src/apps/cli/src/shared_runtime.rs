@@ -10,7 +10,8 @@ use bitfun_agent_runtime_ipc::{
     DiscoveryStore, RuntimeAgentModeSummary, RuntimeInstanceIdentity, RuntimeIpcClient,
     RuntimeIpcError, RuntimeIpcErrorCode, RuntimeIpcEvent, RuntimeIpcOperation,
     RuntimeIpcOperationResult, RuntimeIpcRequestHandler, RuntimeIpcServer, RuntimeIpcServerConfig,
-    RuntimeIpcStreamInvalidationReason, RuntimeSessionRenameRequest, PROTOCOL_VERSION,
+    RuntimeIpcStreamInvalidationReason, RuntimeSessionProcessingPhase, RuntimeSessionRenameRequest,
+    RuntimeSessionState, PROTOCOL_VERSION,
 };
 use bitfun_core::product_runtime::CoreAgentRuntimeCompatibility;
 use bitfun_core::runtime_ownership::CoreRuntimeOwnership;
@@ -309,6 +310,7 @@ impl RuntimeIpcRequestHandler for SharedRuntimeHandler {
                     .await?;
                 Ok(RuntimeIpcOperationResult::SessionRestored {
                     session: restored.session,
+                    state: runtime_session_state(restored.state),
                     workspace_binding,
                     transcript,
                     pending_permissions,
@@ -418,6 +420,19 @@ impl RuntimeIpcRequestHandler for SharedRuntimeHandler {
                 .await
                 .map(|revert| RuntimeIpcOperationResult::SessionReverted { revert })
                 .map_err(runtime_ipc_error),
+            RuntimeIpcOperation::SessionUsage { request } => self
+                .runtime
+                .generate_session_usage(request)
+                .await
+                .map(|usage| RuntimeIpcOperationResult::SessionUsage { usage })
+                .map_err(runtime_ipc_error),
+            RuntimeIpcOperation::WaitForSettlement { request } => {
+                self.runtime
+                    .wait_for_turn_settlement(request)
+                    .await
+                    .map_err(runtime_ipc_error)?;
+                Ok(RuntimeIpcOperationResult::Unit)
+            }
             RuntimeIpcOperation::SearchWorkspaceReferences { request } => self
                 .runtime
                 .search_workspace_references(request)
@@ -578,6 +593,12 @@ impl RuntimeIpcRequestHandler for SharedRuntimeHandler {
                     .remove(&request.tool_id);
                 Ok(RuntimeIpcOperationResult::Unit)
             }
+            RuntimeIpcOperation::RecordLocalCommandTurn { request } => self
+                .runtime
+                .record_completed_local_command_turn(request)
+                .await
+                .map(|record| RuntimeIpcOperationResult::LocalCommandTurnRecorded { record })
+                .map_err(runtime_ipc_error),
         }
     }
 
@@ -586,6 +607,31 @@ impl RuntimeIpcRequestHandler for SharedRuntimeHandler {
         session_id: &str,
     ) -> std::result::Result<broadcast::Receiver<RuntimeIpcEvent>, RuntimeIpcError> {
         subscribe_session_events(&self.events, &self.event_stream_available, session_id)
+    }
+}
+
+fn runtime_session_state(state: bitfun_agent_runtime::sdk::SessionState) -> RuntimeSessionState {
+    use bitfun_agent_runtime::sdk::{ProcessingPhase, SessionState};
+
+    match state {
+        SessionState::Idle => RuntimeSessionState::Idle,
+        SessionState::Processing {
+            current_turn_id,
+            phase,
+        } => RuntimeSessionState::Processing {
+            current_turn_id,
+            phase: match phase {
+                ProcessingPhase::Starting => RuntimeSessionProcessingPhase::Starting,
+                ProcessingPhase::Compacting => RuntimeSessionProcessingPhase::Compacting,
+                ProcessingPhase::Thinking => RuntimeSessionProcessingPhase::Thinking,
+                ProcessingPhase::Streaming => RuntimeSessionProcessingPhase::Streaming,
+                ProcessingPhase::ToolCalling => RuntimeSessionProcessingPhase::ToolCalling,
+                ProcessingPhase::ToolConfirming => RuntimeSessionProcessingPhase::ToolConfirming,
+            },
+        },
+        SessionState::Error { error, recoverable } => {
+            RuntimeSessionState::Error { error, recoverable }
+        }
     }
 }
 

@@ -19,6 +19,7 @@ mod config;
 mod daemon;
 mod diagnostics;
 mod dispatch;
+mod embedded_app_server;
 mod hook_import;
 mod logging;
 mod management;
@@ -34,7 +35,9 @@ mod root_handlers;
 mod runtime;
 mod self_update;
 mod shared_runtime;
+mod shared_tui_backend;
 mod terminal_attention;
+mod tui_backend;
 mod ui;
 
 use anyhow::{anyhow, Result};
@@ -43,8 +46,7 @@ use clap::{CommandFactory, FromArgMatches, Parser, Subcommand, ValueEnum};
 use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::{Arc, OnceLock};
 
-use agent::context_reload_client::CliContextReloadClient;
-use agent::runtime_client::CliAgentRuntimeClient;
+use agent::tui_client::{TuiAgentClient, TuiHostCapabilities};
 use config::CliConfig;
 use hook_import::HookAction;
 use mcp_import::{McpImportCommand, McpImportOutputFormat};
@@ -884,23 +886,51 @@ async fn run_interactive(
             .await?,
         )
     };
-    let (agent, context_reload) = if let Some(runtime) = &runtime {
-        (
-            Arc::new(CliAgentRuntimeClient::new(
-                runtime.as_ref(),
-                Some(workspace_path.clone()),
-            )),
-            CliContextReloadClient::embedded(runtime.compatibility().clone()),
-        )
+    let embedded_app_server = if let Some(runtime) = &runtime {
+        Some(embedded_app_server::EmbeddedAppServerHost::start(runtime).await?)
+    } else {
+        None
+    };
+    let agent = if let Some(runtime) = &runtime {
+        let backend = embedded_app_server
+            .as_ref()
+            .expect("Embedded App Server should be started with the Runtime")
+            .backend();
+        let host: Arc<dyn TuiHostCapabilities> =
+            Arc::new(embedded_app_server::EmbeddedTuiHostCapabilities);
+        Arc::new(TuiAgentClient::new(
+            backend,
+            host,
+            Some(workspace_path.clone()),
+            false,
+            runtime.approval_policy(),
+        ))
     } else {
         let client = shared_runtime::connect_or_start(&workspace_path).await?;
-        (
-            Arc::new(CliAgentRuntimeClient::new_shared(
-                client.clone(),
-                Some(workspace_path.clone()),
-            )),
-            CliContextReloadClient::shared(client),
-        )
+        let backend: Arc<dyn tui_backend::TuiBackend> =
+            Arc::new(shared_tui_backend::SharedTuiBackend::new(client.clone()));
+        let host: Arc<dyn TuiHostCapabilities> =
+            Arc::new(shared_tui_backend::SharedTuiHostCapabilities::new(client));
+        let backend_initialized = backend
+            .initialize(bitfun_app_server_protocol::app::InitializeRequest {
+                protocol_version: bitfun_app_server_protocol::PROTOCOL_VERSION,
+                client: bitfun_app_server_protocol::app::ClientInfo {
+                    name: "bitfun-tui".to_string(),
+                    version: env!("CARGO_PKG_VERSION").to_string(),
+                },
+            })
+            .await?;
+        if backend_initialized.protocol_version != bitfun_app_server_protocol::PROTOCOL_VERSION {
+            anyhow::bail!("Shared TUI Host negotiated an incompatible protocol");
+        }
+        backend.health().await?;
+        Arc::new(TuiAgentClient::new(
+            backend,
+            host,
+            Some(workspace_path.clone()),
+            true,
+            runtime::approval::CliApprovalPolicy::Ask,
+        ))
     };
     let compatibility = runtime
         .as_ref()
@@ -976,14 +1006,7 @@ async fn run_interactive(
     // Use the current project workspace selected at process start.
     let workspace = startup_page.workspace();
     let config = startup_page.config().clone();
-    let mut chat_mode = ChatMode::new(
-        config,
-        agent_type,
-        workspace,
-        agent,
-        context_reload,
-        compatibility,
-    );
+    let mut chat_mode = ChatMode::new(config, agent_type, workspace, agent, compatibility);
     if let Some(session_id) = restore_session_id {
         chat_mode = chat_mode.with_restore_session(session_id);
     }
@@ -1387,12 +1410,17 @@ async fn run_interactive_with_session(
 
     let workspace_path = runtime.workspace_root().to_path_buf();
     let workspace = Some(workspace_path.to_string_lossy().to_string());
-    let agent = Arc::new(CliAgentRuntimeClient::new(
-        runtime.as_ref(),
+    let embedded_app_server = embedded_app_server::EmbeddedAppServerHost::start(&runtime).await?;
+    let host: Arc<dyn TuiHostCapabilities> =
+        Arc::new(embedded_app_server::EmbeddedTuiHostCapabilities);
+    let agent = Arc::new(TuiAgentClient::new(
+        embedded_app_server.backend(),
+        host,
         Some(workspace_path),
+        false,
+        runtime.approval_policy(),
     ));
     let compatibility = runtime.compatibility().clone();
-    let context_reload = CliContextReloadClient::embedded(compatibility.clone());
     let sessions = agent.list_sessions().await?;
     let agent_type = sessions
         .iter()
@@ -1405,15 +1433,8 @@ async fn run_interactive_with_session(
             )
         })?;
 
-    let mut chat_mode = ChatMode::new(
-        config,
-        agent_type,
-        workspace,
-        agent,
-        context_reload,
-        Some(compatibility),
-    )
-    .with_restore_session(session_id);
+    let mut chat_mode = ChatMode::new(config, agent_type, workspace, agent, Some(compatibility))
+        .with_restore_session(session_id);
     let run_result = chat_mode.run(Some(terminal));
 
     shutdown_mcp_servers().await;

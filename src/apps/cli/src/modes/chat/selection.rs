@@ -386,7 +386,7 @@ impl ChatMode {
         chat_view.set_status(Some(format!("Theme set to: {}", theme.id)));
     }
 
-    fn get_mode_agents(&self, rt_handle: &tokio::runtime::Handle) -> Vec<CliAgentMode> {
+    fn get_mode_agents(&self, rt_handle: &tokio::runtime::Handle) -> Vec<TuiAgentMode> {
         tokio::task::block_in_place(|| {
             rt_handle
                 .block_on(self.agent.available_agent_modes())

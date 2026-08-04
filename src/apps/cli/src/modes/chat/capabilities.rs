@@ -22,7 +22,7 @@ impl ChatMode {
             target,
         };
         let outcome =
-            tokio::task::block_in_place(|| rt_handle.block_on(self.context_reload.reload(request)));
+            tokio::task::block_in_place(|| rt_handle.block_on(self.agent.reload_context(request)));
 
         match outcome {
             Ok(_) => {

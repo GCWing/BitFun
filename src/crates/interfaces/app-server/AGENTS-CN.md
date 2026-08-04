@@ -1,73 +1,61 @@
 **中文** | [English](AGENTS.md)
 
-# App-Server 协议接口指南
+# App Server 服务端与接线指南
 
-适用范围：本指南适用于 `src/crates/interfaces/app-server`。
+适用范围：本指南只适用于 `src/crates/interfaces/app-server` 及其服务端生产接线。
 
-`bitfun-app-server` 负责基于 `agent_client_protocol` 自定义角色的协议无关
-JSON-RPC server/client 脚手架。role/transport 层不绑定 schema；使用者自行注册
-`JsonRpcRequest` / `JsonRpcNotification` 类型。可选的 `agent` / `schema` /
-`server` 模块是 Phase 2 接线，通过 host 注入的 `AgentRuntime` 和通用 `AppServer`
-角色暴露一组 agent kernel 操作（与 `bitfun-acp` 使用内置 ACP `Agent` 角色不同）。
+App Server 接口由四个 owner 分工：
+
+| Owner | 职责 |
+|---|---|
+| `app-server-protocol` | method、wire DTO、wire error、事件 envelope 和 schema-free protocol role |
+| `app-server-client` | 类型化请求、类型化事件、连接行为和由 Host 提供的 transport 抽象 |
+| `app-server` | server 生命周期、生产 handler 注册、事件转发、Runtime/domain 到 wire 的转换和错误映射 |
+| `src/apps/*` 下的产品 Host | 具体 transport、认证、连接作用域、capability/limit 构造、平台能力、进程监督和关闭流程 |
+
+不要在本 crate 新增 protocol 或 client 所有权。消费者迁移期间可以保留 compatibility
+module 和 re-export，但新 method、DTO、wire error 和类型化 client 行为必须放入相邻的
+protocol/client crate。
 
 ## 护栏
 
-- role/transport/transport-helper 层保持 schema 无关。不要在 role/transport
-  helper 中硬编码领域方法或业务逻辑。Phase 2 的 `schema` 模块是 agent kernel
-  JSON-RPC 消息的唯一存放处，且只能映射到 `bitfun_agent_runtime` SDK 类型，不能
-  发明新的 kernel 行为。
-- `AppServer` / `AppClient` 是通用对等体；不要在此复用内置 ACP `Agent` /
-  `Client` 角色。`HasPeer` 按角色自身实现，因为
-  `ConnectionTo::send_request` 要求 `Counterpart: HasPeer<Counterpart>`。
-- `client` 模块（`AppServerClient`、`FrontendEvent`、`connect`）是
-  **传输无关**的 app-server client：它驱动 host 提供的 transport 上的
-  `AppClient`，并通过 broadcast channel 扇出投影后的 `agent/event` 通知。它是
-  `BitfunAppServer::serve` 的对等体，后者同样接受 host 提供的 transport。Host 选择
-  transport（内存 pair、stdio、websocket、...）并拥有 server 半连接；`connect` 只
-  拥有一个连接的 client 半连接。不要在此添加构造 server 的 `spawn` — server 构造是
-  host 的职责。Host 特定的扇出、字段归一化和 JSON-RPC error-code 映射属于 host，
-  不属于这里。添加新 host 的方式：依赖本 crate，在 transport 的 server 半连接上
-  serve `BitfunAppServer`，并在 client 半连接上调用
-  `bitfun_app_server::client::connect`。
-- Transport 构造器必须固定 `ByteStreams::new(outgoing, incoming)` 方向；不要暴露
-  易出错的 swap API。
-- 本 crate 在 option C 下拥有**完整后端契约**：app-server schema 是前端面对的单一
-  JSON-RPC 接口，覆盖 agent kernel 操作（委托给 `bitfun-agent-runtime` SDK）和
-  host 服务（git/mcp/config/cron/snapshot/fs/workspace/...）。为覆盖 host 服务，它
-  直接依赖 `assembly/core`（`bitfun-core`，`features = "product-full"`）— 与
-  `bitfun-acp` 已有的模式相同（`bitfun-acp/Cargo.toml`）。Product assembly 构造
-  `AgentRuntime` 和 host 服务单例并通过 `BitfunAppRuntime` 注入两者；host 服务的
-  schema handler 调用 `bitfun_core::service::*`，与 Desktop host 相同（静态/全局
-  访问器），因此 `BitfunAppRuntime` 不需要按服务持有 host-services 字段。不要将本
-  crate 描述为 host 服务操作的 Core 无关；agent-kernel handler 仍由 SDK facade 支持。
-- Handler 将 runtime 调用卸载到后台任务或立即返回；不要在 handler 回调内调用
-  `SentRequest::block_task`（`jsonrpc.rs` 中的上游 `DEADLOCK` 注释）。通过
-  `responder.respond_with_result` 回复。
+- compatibility role 和 transport helper 必须保持 schema-free。不要在 `AppServer` /
+  `AppClient`、流方向 helper 或 in-memory transport constructor 中硬编码领域 method 或业务行为。
+- `AppServer` / `AppClient` 是自定义协议对等角色；不要复用 ACP 内置的 `Agent` /
+  `Client` role，并保留协议要求的逐 role `HasPeer` 实现。
+- Transport constructor 必须固定 `ByteStreams::new(outgoing, incoming)` 的方向；不要暴露
+  容易交换方向的 API。具体 transport 由 Host 选择并持有。
+- 只注册由真实 Runtime、Service 或 Product Domain owner 支持的生产 handler。Handler 负责
+  wire 合同校验和类型转换，不能持有第二份 Session、Permission、Config、capability 或生命周期状态。
+- 本 crate 只能选择已注册 handler 实际需要的最窄 `bitfun-core` owner feature；禁止使用
+  `bitfun-core/product-full`。新增 owner feature 时必须同时增加对应的边界验证。
+- Host 特定的认证、身份、workspace/execution scope、capability availability、transport
+  limits、平台 provider、进程生命周期和连接 fan-out 留在 Host。不要从通用 server 默认值或
+  全局环境推断这些事实。
+- Handler 必须把 Runtime 调用卸载到异步任务或立即返回。不要在 handler callback 中调用
+  `SentRequest::block_task`；通过 `responder.respond_with_result` 回复。
 
 ## 事件投递
 
-Runtime 事件属于 app-server 协议接口，而非 host 侧订阅。流程在 transport 上是
-单向的：
+Runtime 事件通过 App Server connection 交付，不属于 client 侧 Host 订阅：
 
-- **Server** 持有注入的 `AgentEventSource`（由 host coordinator 发布的同一
-  `EventQueue` 构建），其 `serve` main_fn 排空它，将每个 `AgenticEventEnvelope`
-  作为 `agent/event` 通知（`SessionEventNotification`）通过 channel transport 转发
-  给 client。
-- **Client** 注册 `on_receive_notification(SessionEventNotification)` 接收它们，然后
-  投影并扇出给自己的消费者（websocket 连接、Tauri event bridge、...）。
-- Host 不得从 client 侧订阅 runtime `EventQueue`。Client 不触碰
-  `AgentRuntime::subscribe_events` 或 `EventQueue`；这样做会绕过 app-server 接口并
-  破坏"所有 agent 接口经过 app-server"的契约。
+- Server 接收与同一 Runtime owner 关联的注入式 `AgentEventSource`，并通过 connection 转发
+  类型化 Agent、Permission、Config 和 stream-state notification。
+- 类型化 client crate 接收并扇出这些 notification。Host 不得让 App Server client 直接订阅
+  Core `EventQueue`，否则会形成协议旁路。
+- connection-local sequence/cursor 和 sync 行为必须显式保留。在跨连接持久化 replay/resume
+  owner 与合同真正实现前，不得把当前能力描述为跨连接重放或恢复。
 
-## 验证（续）
+## 错误映射
 
-在边界将 `RuntimeError` 映射为 JSON-RPC `Error`（见
-`BitfunAppRuntime::runtime_error` / `session_runtime_error`）；不要通过 wire 泄露
-runtime 内部细节。
+在本 server adapter 中把 Runtime/domain failure 映射到 protocol-owned wire error。保持稳定
+kind 和结构化 data，不泄露 Runtime 内部细节。Host transport/auth/scope failure 仍由 Host
+负责；owner failure 使用 `BitfunAppRuntime::runtime_error`、`session_runtime_error` 等 helper。
 
 ## 验证
 
 ```bash
 cargo check -p bitfun-app-server --offline
 cargo test -p bitfun-app-server --offline
+pnpm run check:core-boundaries
 ```

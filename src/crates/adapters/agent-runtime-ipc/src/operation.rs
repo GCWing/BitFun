@@ -1,14 +1,16 @@
 use bitfun_product_domains::tool_permissions::{PermissionReply, PermissionRequest};
 use bitfun_runtime_ports::{
     AgentContextReloadRequest, AgentDialogSteerRequest, AgentDialogTurnRequest,
+    AgentLocalCommandTurnRecordRequest, AgentLocalCommandTurnRecordResult,
     AgentMessageWorkspaceReferencesRequest, AgentSessionCompactionRequest,
     AgentSessionCreateRequest, AgentSessionCreateResult, AgentSessionLineageCancellationRequest,
     AgentSessionLineageInspection, AgentSessionLineageRequest, AgentSessionLineageSnapshot,
     AgentSessionLineageTranscriptRequest, AgentSessionListRequest, AgentSessionModeUpdateRequest,
     AgentSessionModelUpdateRequest, AgentSessionRevertRequest, AgentSessionRevertResult,
-    AgentSessionSummary, AgentSessionWorkspaceBinding, AgentTurnCancellationRequest,
-    AgentTurnCancellationResult, AgentUserShellCommandRequest, AgentWorkspaceReference,
-    AgentWorkspaceReferenceSearchRequest, AgentWorkspaceReferenceSearchResult, SessionTranscript,
+    AgentSessionSummary, AgentSessionUsageRequest, AgentSessionWorkspaceBinding,
+    AgentTurnCancellationRequest, AgentTurnCancellationResult, AgentTurnSettlementRequest,
+    AgentUserShellCommandRequest, AgentWorkspaceReference, AgentWorkspaceReferenceSearchRequest,
+    AgentWorkspaceReferenceSearchResult, SessionTranscript, SessionUsageReport,
     WorkspaceDiffSnapshot,
 };
 use serde::{Deserialize, Serialize};
@@ -56,6 +58,35 @@ pub struct RuntimeAgentModeSummary {
     pub model_id: Option<String>,
     #[serde(default)]
     pub is_external: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(
+    tag = "kind",
+    rename_all = "snake_case",
+    rename_all_fields = "camelCase"
+)]
+pub enum RuntimeSessionState {
+    Idle,
+    Processing {
+        current_turn_id: String,
+        phase: RuntimeSessionProcessingPhase,
+    },
+    Error {
+        error: String,
+        recoverable: bool,
+    },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RuntimeSessionProcessingPhase {
+    Starting,
+    Compacting,
+    Thinking,
+    Streaming,
+    ToolCalling,
+    ToolConfirming,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -107,6 +138,12 @@ pub enum RuntimeIpcOperation {
     RedoSession {
         request: AgentSessionRevertRequest,
     },
+    SessionUsage {
+        request: AgentSessionUsageRequest,
+    },
+    WaitForSettlement {
+        request: AgentTurnSettlementRequest,
+    },
     SearchWorkspaceReferences {
         request: AgentWorkspaceReferenceSearchRequest,
     },
@@ -146,6 +183,9 @@ pub enum RuntimeIpcOperation {
     SubmitUserAnswers {
         request: RuntimeUserAnswersRequest,
     },
+    RecordLocalCommandTurn {
+        request: AgentLocalCommandTurnRecordRequest,
+    },
 }
 
 impl RuntimeIpcOperation {
@@ -175,6 +215,8 @@ impl RuntimeIpcOperation {
             Self::CompactSession { request } => Some(&request.session_id),
             Self::UndoSession { request } => Some(&request.session_id),
             Self::RedoSession { request } => Some(&request.session_id),
+            Self::SessionUsage { request } => Some(&request.session_id),
+            Self::WaitForSettlement { request } => Some(&request.session_id),
             Self::SearchWorkspaceReferences { request } => Some(&request.session_id),
             Self::WorkspaceReferencesForMessage { request } => Some(&request.session_id),
             Self::GetSessionLineage { request } => Some(&request.anchor_session_id),
@@ -187,6 +229,7 @@ impl RuntimeIpcOperation {
             Self::PendingPermissions { session_id }
             | Self::RespondPermission { session_id, .. } => Some(session_id),
             Self::SubmitUserAnswers { request } => Some(&request.session_id),
+            Self::RecordLocalCommandTurn { request } => Some(&request.session_id),
             Self::Health
             | Self::ListAgentModes { session_id: None }
             | Self::ListSessions { .. }
@@ -237,7 +280,13 @@ impl RuntimeIpcOperation {
             | Self::SubmitUserAnswers { .. } => {
                 RuntimeIpcOperationRules::new(CurrentController, false, false, true)
             }
+            Self::RecordLocalCommandTurn { .. } => {
+                RuntimeIpcOperationRules::new(CurrentController, true, false, true)
+            }
             Self::PendingPermissions { .. } => {
+                RuntimeIpcOperationRules::new(CurrentController, false, false, false)
+            }
+            Self::SessionUsage { .. } | Self::WaitForSettlement { .. } => {
                 RuntimeIpcOperationRules::new(CurrentController, false, false, false)
             }
             Self::SearchWorkspaceReferences { .. } | Self::WorkspaceReferencesForMessage { .. } => {
@@ -309,6 +358,7 @@ pub enum RuntimeIpcOperationResult {
     },
     SessionRestored {
         session: AgentSessionSummary,
+        state: RuntimeSessionState,
         workspace_binding: AgentSessionWorkspaceBinding,
         transcript: SessionTranscript,
         pending_permissions: Vec<PermissionRequest>,
@@ -320,6 +370,9 @@ pub enum RuntimeIpcOperationResult {
     },
     SessionReverted {
         revert: AgentSessionRevertResult,
+    },
+    SessionUsage {
+        usage: SessionUsageReport,
     },
     SessionLineage {
         snapshot: Option<AgentSessionLineageSnapshot>,
@@ -350,6 +403,9 @@ pub enum RuntimeIpcOperationResult {
     },
     WorkspaceDiff {
         snapshot: WorkspaceDiffSnapshot,
+    },
+    LocalCommandTurnRecorded {
+        record: AgentLocalCommandTurnRecordResult,
     },
 }
 

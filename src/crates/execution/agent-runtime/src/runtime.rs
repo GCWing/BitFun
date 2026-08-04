@@ -11,8 +11,8 @@ use bitfun_agent_tools::{ToolRegistry, ToolRegistryItem};
 use bitfun_harness::HarnessRegistry;
 use bitfun_runtime_ports::{
     AgentBackgroundResultRequest, AgentDialogSteerRequest, AgentDialogTurnPort,
-    AgentDialogTurnRequest, AgentInputAttachment, AgentLifecycleDeliveryPort,
-    AgentLocalCommandTurnPort, AgentLocalCommandTurnRecordRequest,
+    AgentDialogTurnRequest, AgentInputAttachment, AgentInteractionResponsePort,
+    AgentLifecycleDeliveryPort, AgentLocalCommandTurnPort, AgentLocalCommandTurnRecordRequest,
     AgentLocalCommandTurnRecordResult, AgentMessageWorkspaceReferencesRequest,
     AgentSessionArchiveRequest, AgentSessionArchiveStateRequest, AgentSessionClosePort,
     AgentSessionCompactionPort, AgentSessionCompactionRequest, AgentSessionCompactionResult,
@@ -31,12 +31,13 @@ use bitfun_runtime_ports::{
     AgentThreadGoalManagementPort, AgentThreadGoalUpdateStatusRequest,
     AgentTransientSessionDiscardRequest, AgentTurnCancellationPort, AgentTurnCancellationRequest,
     AgentTurnCancellationResult, AgentTurnSettlementPort, AgentTurnSettlementRequest,
-    AgentUserShellCommandPort, AgentUserShellCommandRequest, AgentUserShellCommandResult,
-    AgentWorkspaceReference, AgentWorkspaceReferencePort, AgentWorkspaceReferenceSearchRequest,
-    AgentWorkspaceReferenceSearchResult, DialogSteerOutcome, DialogSubmitOutcome,
-    PermissionAuditRecord, PermissionGrant, PermissionGrantKey, PluginRuntimeBinding, PortError,
-    PortErrorKind, PortResult, RuntimeEventEnvelope, SessionTranscript, SessionTranscriptReader,
-    SessionTranscriptRequest, ThreadGoal, WorkspaceDiffSnapshot,
+    AgentUserAnswersRequest, AgentUserShellCommandPort, AgentUserShellCommandRequest,
+    AgentUserShellCommandResult, AgentWorkspaceReference, AgentWorkspaceReferencePort,
+    AgentWorkspaceReferenceSearchRequest, AgentWorkspaceReferenceSearchResult, DialogSteerOutcome,
+    DialogSubmitOutcome, PermissionAuditRecord, PermissionGrant, PermissionGrantKey,
+    PluginRuntimeBinding, PortError, PortErrorKind, PortResult, RuntimeEventEnvelope,
+    SessionTranscript, SessionTranscriptReader, SessionTranscriptRequest, ThreadGoal,
+    WorkspaceDiffSnapshot,
 };
 use bitfun_runtime_services::RuntimeServices;
 
@@ -127,22 +128,6 @@ pub trait AgentSessionRestorePort: Send + Sync {
         &self,
         request: AgentSessionRestoreRequest,
     ) -> PortResult<AgentSessionRestoreResult>;
-}
-
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
-/// Delivers answers to a pending user-question tool call.
-pub struct AgentUserAnswersRequest {
-    pub tool_id: String,
-    pub answers: serde_json::Value,
-}
-
-#[async_trait::async_trait]
-/// Routes product responses to the existing user-input owner.
-///
-/// Implementations do not own approval policy or interaction lifecycle state.
-pub trait AgentInteractionResponsePort: Send + Sync {
-    async fn submit_user_answers(&self, request: AgentUserAnswersRequest) -> PortResult<()>;
 }
 
 #[derive(Clone, Default)]
