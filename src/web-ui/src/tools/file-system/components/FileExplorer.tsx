@@ -1,5 +1,7 @@
 import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import { useShortcut } from '@/infrastructure/hooks/useShortcut';
+import { shortcutManager } from '@/infrastructure/services/ShortcutManager';
+import { FILETREE_SHORTCUTS } from '@/shared/constants/shortcuts';
 import { Folder, ChevronRight, FilePlus, FolderPlus, RefreshCw } from 'lucide-react';
 import { FileTree } from './FileTree';
 import { VirtualFileTree } from './VirtualFileTree';
@@ -46,6 +48,20 @@ function buildFileNodeContext(node: FileSystemNode, workspacePath?: string): Fil
 }
 
 const VIRTUAL_SCROLL_THRESHOLD = 100;
+const getShortcutConfig = (id: string) => {
+  const defaultConfig = FILETREE_SHORTCUTS.find((shortcut) => shortcut.id === id)?.config;
+  if (!defaultConfig) {
+    throw new Error(`Missing file-tree shortcut definition: ${id}`);
+  }
+  return shortcutManager.getEffectiveConfig(id, defaultConfig);
+};
+const NEW_FILE_SHORTCUT = getShortcutConfig('filetree.newFile');
+const NEW_FOLDER_SHORTCUT = getShortcutConfig('filetree.newFolder');
+const REFRESH_SHORTCUT = getShortcutConfig('filetree.refresh');
+
+function withShortcut(label: string, config: typeof NEW_FILE_SHORTCUT): string {
+  return `${label} (${shortcutManager.formatShortcut(config)})`;
+}
 
 interface ScrollBreadcrumbProps {
   containerRef: React.RefObject<HTMLDivElement>;
@@ -367,19 +383,19 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
 
   useShortcut(
     'filetree.refresh',
-    { key: 'F5', scope: 'filetree' },
+    REFRESH_SHORTCUT,
     handleRefresh,
     { enabled: Boolean(onRefresh), description: 'keyboard.shortcuts.filetree.refresh' }
   );
   useShortcut(
     'filetree.newFile',
-    { key: 'N', ctrl: true, scope: 'filetree' },
+    NEW_FILE_SHORTCUT,
     handleNewFile,
     { enabled: Boolean(onNewFile), description: 'keyboard.shortcuts.filetree.newFile' }
   );
   useShortcut(
     'filetree.newFolder',
-    { key: 'N', ctrl: true, shift: true, scope: 'filetree' },
+    NEW_FOLDER_SHORTCUT,
     handleNewFolder,
     { enabled: Boolean(onNewFolder), description: 'keyboard.shortcuts.filetree.newFolder' }
   );
@@ -449,7 +465,7 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
               size="xs"
               variant="ghost"
               onClick={handleNewFile}
-              tooltip={t('fileTree.newFile')}
+              tooltip={withShortcut(t('fileTree.newFile'), NEW_FILE_SHORTCUT)}
               tooltipPlacement="bottom"
             >
               <FilePlus size={14} />
@@ -460,7 +476,7 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
               size="xs"
               variant="ghost"
               onClick={handleNewFolder}
-              tooltip={t('fileTree.newFolder')}
+              tooltip={withShortcut(t('fileTree.newFolder'), NEW_FOLDER_SHORTCUT)}
               tooltipPlacement="bottom"
             >
               <FolderPlus size={14} />
@@ -471,7 +487,7 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
               size="xs"
               variant="ghost"
               onClick={handleRefresh}
-              tooltip={t('fileTree.refresh')}
+              tooltip={withShortcut(t('fileTree.refresh'), REFRESH_SHORTCUT)}
               tooltipPlacement="bottom"
             >
               <RefreshCw size={14} />

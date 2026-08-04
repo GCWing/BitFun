@@ -11,8 +11,21 @@ import { isRemoteWorkspace } from '../../../shared/types';
 import { addFileMentionToChat } from '@/shared/utils/chatContext';
 import { dirnameAbsolutePath } from '@/shared/utils/pathUtils';
 import { isHtmlFilePath } from '@/shared/utils/htmlFilePreview';
+import { shortcutManager } from '@/infrastructure/services/ShortcutManager';
+import { FILETREE_SHORTCUTS } from '@/shared/constants/shortcuts';
 
-const PASTE_SHORTCUT = /Mac|iPhone|iPad|iPod/.test(navigator.userAgent) ? 'Cmd+V' : 'Ctrl+V';
+function fileTreeShortcut(id: string): string {
+  const defaultConfig = FILETREE_SHORTCUTS.find((shortcut) => shortcut.id === id)?.config;
+  if (!defaultConfig) {
+    return '';
+  }
+  return shortcutManager.formatShortcut(shortcutManager.getEffectiveConfig(id, defaultConfig));
+}
+
+const PASTE_SHORTCUT = fileTreeShortcut('filetree.paste');
+const NEW_FILE_SHORTCUT = fileTreeShortcut('filetree.newFile');
+const NEW_FOLDER_SHORTCUT = fileTreeShortcut('filetree.newFolder');
+const DELETE_SHORTCUT = fileTreeShortcut('filetree.delete');
 
 const ARCHIVE_EXTENSIONS = [
   '.zip', '.tar.gz', '.tgz', '.tar',
@@ -62,6 +75,7 @@ export class FileExplorerMenuProvider implements IMenuProvider {
           id: 'file-new-file',
           label: i18nService.t('common:file.newFile'),
           icon: 'FilePlus',
+          shortcut: NEW_FILE_SHORTCUT,
           onClick: () => {
             globalEventBus.emit('file:new-file', { parentPath });
           }
@@ -71,6 +85,7 @@ export class FileExplorerMenuProvider implements IMenuProvider {
           id: 'file-new-folder',
           label: i18nService.t('common:file.newFolder'),
           icon: 'FolderPlus',
+          shortcut: NEW_FOLDER_SHORTCUT,
           onClick: () => {
             globalEventBus.emit('file:new-folder', { parentPath });
           }
@@ -175,6 +190,7 @@ export class FileExplorerMenuProvider implements IMenuProvider {
               id: 'file-new-file',
               label: i18nService.t('common:file.file'),
               icon: 'FilePlus',
+              shortcut: NEW_FILE_SHORTCUT,
               command: 'file.new-file',
               onClick: async (ctx) => {
                 await commandExecutor.execute('file.new-file', ctx);
@@ -184,6 +200,7 @@ export class FileExplorerMenuProvider implements IMenuProvider {
               id: 'file-new-folder',
               label: i18nService.t('common:file.folder'),
               icon: 'FolderPlus',
+              shortcut: NEW_FOLDER_SHORTCUT,
               command: 'file.new-folder',
               onClick: async (ctx) => {
                 await commandExecutor.execute('file.new-folder', ctx);
@@ -210,6 +227,7 @@ export class FileExplorerMenuProvider implements IMenuProvider {
         id: 'file-delete',
         label: i18nService.t('common:file.delete'),
         icon: 'Trash2',
+        shortcut: DELETE_SHORTCUT,
         command: 'file.delete',
         onClick: async (ctx) => {
           await commandExecutor.execute('file.delete', ctx);

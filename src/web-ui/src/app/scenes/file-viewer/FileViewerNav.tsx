@@ -12,9 +12,20 @@ import { useTranslation } from 'react-i18next';
 import { useCurrentWorkspace } from '../../../infrastructure/contexts/WorkspaceContext';
 import { useI18n } from '@/infrastructure/i18n';
 import { IconButton } from '@/component-library';
+import { shortcutManager } from '@/infrastructure/services/ShortcutManager';
+import { FILETREE_SHORTCUTS } from '@/shared/constants/shortcuts';
 import type { FileExplorerToolbarHandlers } from '@/tools/file-system';
 import FilesPanel from '../../components/panels/FilesPanel';
 import './FileViewerNav.scss';
+
+function shortcutTooltip(label: string, id: string): string {
+  const defaultConfig = FILETREE_SHORTCUTS.find((shortcut) => shortcut.id === id)?.config;
+  if (!defaultConfig) {
+    return label;
+  }
+  const config = shortcutManager.getEffectiveConfig(id, defaultConfig);
+  return `${label} (${shortcutManager.formatShortcut(config)})`;
+}
 
 const FileViewerNav: React.FC = () => {
   const { workspace: currentWorkspace } = useCurrentWorkspace();
@@ -45,7 +56,7 @@ const FileViewerNav: React.FC = () => {
                   size="xs"
                   variant="ghost"
                   onClick={explorerToolbar.onNewFile}
-                  tooltip={tTools('fileTree.newFile')}
+                  tooltip={shortcutTooltip(tTools('fileTree.newFile'), 'filetree.newFile')}
                   tooltipPlacement="bottom"
                 >
                   <FilePlus size={14} />
@@ -54,7 +65,7 @@ const FileViewerNav: React.FC = () => {
                   size="xs"
                   variant="ghost"
                   onClick={explorerToolbar.onNewFolder}
-                  tooltip={tTools('fileTree.newFolder')}
+                  tooltip={shortcutTooltip(tTools('fileTree.newFolder'), 'filetree.newFolder')}
                   tooltipPlacement="bottom"
                 >
                   <FolderPlus size={14} />
@@ -63,7 +74,7 @@ const FileViewerNav: React.FC = () => {
                   size="xs"
                   variant="ghost"
                   onClick={explorerToolbar.onRefresh}
-                  tooltip={tTools('fileTree.refresh')}
+                  tooltip={shortcutTooltip(tTools('fileTree.refresh'), 'filetree.refresh')}
                   tooltipPlacement="bottom"
                 >
                   <RefreshCw size={14} />

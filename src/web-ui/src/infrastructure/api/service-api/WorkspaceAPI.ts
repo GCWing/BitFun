@@ -340,10 +340,10 @@ export class WorkspaceAPI {
    * Local workspaces produce `.zip`; remote workspaces try `zip` then `tar.gz`.
    * Returns the path of the created archive.
    */
-  async compressPath(path: string, remoteConnectionId?: string): Promise<string> {
+  async compressPath(path: string, isDirectory: boolean, remoteConnectionId?: string): Promise<string> {
     try {
       return await api.invoke<string>('compress_path', {
-        request: { path, remoteConnectionId }
+        request: { path, isDirectory, remoteConnectionId }
       });
     } catch (error) {
       throw createTauriCommandError('compress_path', error, { path });
@@ -353,7 +353,8 @@ export class WorkspaceAPI {
   /**
    * Decompress an archive into a new folder named after the archive (without
    * extension) in the same parent directory.
-   * Supports `.zip`, `.tar.gz`, `.tgz`, `.tar`.
+   * Supports `.zip`, `.tar.gz`, `.tgz`, `.tar.bz2`, `.tbz2`, `.tar.xz`,
+   * `.txz`, `.tar.zst`, `.tzst`, and `.tar`.
    * Returns the path of the created folder.
    */
   async decompressPath(path: string, remoteConnectionId?: string): Promise<string> {
@@ -414,6 +415,24 @@ export class WorkspaceAPI {
   }
 
    
+  async readFileContentPrefix(
+    filePath: string,
+    maxBytes: number,
+    remoteConnectionId?: string,
+  ): Promise<string> {
+    try {
+      return await api.invoke('read_file_content_prefix', {
+        request: { filePath, maxBytes, remoteConnectionId }
+      });
+    } catch (error) {
+      throw createTauriCommandError('read_file_content_prefix', error, {
+        filePath,
+        maxBytes,
+        remoteConnectionId,
+      });
+    }
+  }
+
   async readFileContent(
     filePath: string,
     encoding?: string,
