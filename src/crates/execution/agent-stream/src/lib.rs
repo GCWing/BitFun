@@ -332,6 +332,10 @@ struct StreamContext {
     /// Provider finish_reason indicating the response was cut by the model's
     /// output token limit (e.g. "length", "max_tokens", "MAX_TOKENS").
     token_limit_finish_reason: Option<String>,
+    /// Whether the provider sent any finish_reason at all during the stream.
+    /// If false after the stream ends, the provider may have closed the
+    /// connection without signalling completion (silent truncation).
+    received_any_finish_reason: bool,
     allow_normal_tool_json_repair: bool,
 }
 
@@ -370,6 +374,7 @@ impl StreamContext {
             has_effective_output: false,
             partial_recovery_reason: None,
             token_limit_finish_reason: None,
+            received_any_finish_reason: false,
             allow_normal_tool_json_repair: options.allow_normal_tool_json_repair,
         }
     }
@@ -1174,6 +1179,7 @@ impl StreamProcessor {
                             ToolCallBoundary::FinishReason,
                             completion,
                         );
+                        ctx.received_any_finish_reason = true;
                         if is_token_limit_finish_reason(&reason) {
                             ctx.token_limit_finish_reason = Some(reason);
                         }
@@ -1207,6 +1213,23 @@ impl StreamProcessor {
                     reason
                 ));
             }
+        }
+
+        // Detect "silent" stream truncation: the provider closed the connection
+        // without ever sending a finish_reason. This happens on provider-side
+        // interruptions, connection drops, or timeout cutoffs that don't
+        // surface as an explicit error. Without this check, the execution
+        // engine treats the incomplete output as a complete final answer.
+        // Tool-call rounds and empty-text rounds are excluded.
+        if ctx.partial_recovery_reason.is_none()
+            && ctx.tool_calls.is_empty()
+            && !ctx.full_text.is_empty()
+            && !ctx.received_any_finish_reason
+        {
+            ctx.partial_recovery_reason = Some(
+                "stream ended without provider finish_reason (possible premature truncation)"
+                    .to_string(),
+            );
         }
 
         // Invalid tool payloads that survive to finalization still need detailed SSE logs for diagnosis.
@@ -1655,6 +1678,77 @@ mod tests {
                 ..Default::default()
             }),
         ])
+        .boxed();
+
+        let result = processor
+            .process_stream(
+                stream,
+                None,
+                None,
+                "session_1".to_string(),
+                "turn_1".to_string(),
+                "round_1".to_string(),
+                "round_1:attempt:1".to_string(),
+                1,
+                &CancellationToken::new(),
+            )
+            .await
+            .expect("stream result");
+
+        assert!(result.partial_recovery_reason.is_none());
+    }
+
+    #[tokio::test]
+    async fn silent_stream_end_without_finish_reason_is_partial_recovery() {
+        let processor = build_processor();
+        // Stream ends with text content but NO finish_reason from the provider.
+        // This simulates a provider-side interruption or connection drop.
+        let stream = iter(vec![Ok(UnifiedResponse {
+            text: Some("partial answer that got cut".to_string()),
+            ..Default::default()
+        })])
+        .boxed();
+
+        let result = processor
+            .process_stream(
+                stream,
+                None,
+                None,
+                "session_1".to_string(),
+                "turn_1".to_string(),
+                "round_1".to_string(),
+                "round_1:attempt:1".to_string(),
+                1,
+                &CancellationToken::new(),
+            )
+            .await
+            .expect("stream result");
+
+        assert!(
+            result
+                .partial_recovery_reason
+                .as_deref()
+                .is_some_and(|reason| reason.contains("premature truncation")),
+            "expected partial recovery reason for silent stream end, got: {:?}",
+            result.partial_recovery_reason
+        );
+    }
+
+    #[tokio::test]
+    async fn silent_stream_end_with_tool_calls_is_not_partial_recovery() {
+        let processor = build_processor();
+        // Stream ends with a tool call but NO finish_reason.
+        // Tool-call rounds continue via the normal round loop.
+        let stream = iter(vec![Ok(UnifiedResponse {
+            tool_call: Some(UnifiedToolCall {
+                tool_call_index: None,
+                id: Some("call_1".to_string()),
+                name: Some("tool_a".to_string()),
+                arguments: Some("{\"a\":1}".to_string()),
+                arguments_is_snapshot: false,
+            }),
+            ..Default::default()
+        })])
         .boxed();
 
         let result = processor
