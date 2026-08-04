@@ -1463,17 +1463,22 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       previousSessionId,
       effectiveTargetSessionId,
       useContextStore.getState().contexts,
+      richTextInputRef.current?.getComposerPresentation?.() ?? null,
     );
     previousComposerSessionIdRef.current = effectiveTargetSessionId;
 
     const nextValue = draft.value;
     const nextContexts = draft.contexts;
+    const nextPresentation = draft.presentation;
     const nextPendingLargePastes = draft.pendingLargePastes;
 
     dispatchLocalInput({ type: 'SET_VALUE', payload: nextValue });
     inputValueRef.current = nextValue;
     pendingLargePastesRef.current = { ...nextPendingLargePastes };
     replaceContexts(nextContexts);
+    if (nextPresentation) {
+      richTextInputRef.current?.restoreComposerPresentation?.(nextPresentation);
+    }
     setHistoryIndex(-1);
     setSavedDraft('');
     setMentionState({ isActive: false, query: '', startOffset: 0 });
