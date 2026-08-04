@@ -15,9 +15,10 @@ pub use bitfun_services_integrations::review_platform::{
     ReviewPlatformCapabilities, ReviewPlatformCiItem, ReviewPlatformCiLog, ReviewPlatformCommit,
     ReviewPlatformCreatePullRequestRequest, ReviewPlatformDetailSection, ReviewPlatformError,
     ReviewPlatformFile, ReviewPlatformIssueComment, ReviewPlatformIssueEvidence,
-    ReviewPlatformKind, ReviewPlatformPullRequest, ReviewPlatformPullRequestDetail,
-    ReviewPlatformPullRequestDetailPage, ReviewPlatformPullRequestFileDiff,
-    ReviewPlatformPullRequestReviewTarget, ReviewPlatformRemote,
+    ReviewPlatformIssuePage, ReviewPlatformIssueState, ReviewPlatformIssueSummary,
+    ReviewPlatformKind, ReviewPlatformListIssuesRequest, ReviewPlatformPullRequest,
+    ReviewPlatformPullRequestDetail, ReviewPlatformPullRequestDetailPage,
+    ReviewPlatformPullRequestFileDiff, ReviewPlatformPullRequestReviewTarget, ReviewPlatformRemote,
     ReviewPlatformReplyToThreadRequest, ReviewPlatformRepositoryRef,
     ReviewPlatformRequestChangesRequest, ReviewPlatformResolveThreadRequest,
     ReviewPlatformSubmitReviewRequest, ReviewPlatformThread, ReviewPlatformThreadKind,
@@ -171,6 +172,12 @@ impl ReviewPlatformService {
                 repository_path,
             )
             .await
+    }
+
+    pub async fn list_issues(
+        request: ReviewPlatformListIssuesRequest<'_>,
+    ) -> Result<ReviewPlatformIssuePage, ReviewPlatformError> {
+        owner_service()?.list_issues(request).await
     }
 
     pub async fn pull_request_review_target_by_identity(
