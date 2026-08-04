@@ -16,16 +16,28 @@ import './AskUserQuestionCard.scss';
 
 const log = createLogger('AskUserQuestionCard');
 
-interface QuestionOption {
+export interface UserQuestionOption {
+  value?: string;
   label: string;
   description: string;
 }
 
-interface QuestionData {
+export interface UserQuestionData {
   question: string;
   header: string;
-  options: QuestionOption[];
+  options: UserQuestionOption[];
   multiSelect: boolean;
+}
+
+export interface UserQuestionItemProps {
+  question: UserQuestionData;
+  inputName: string;
+  value?: string | string[];
+  otherValue?: string;
+  disabled?: boolean;
+  allowOther?: boolean;
+  onValueChange: (value: string | string[]) => void;
+  onOtherValueChange?: (value: string) => void;
 }
 
 /** Renders option description with tooltip for truncated text */
@@ -55,7 +67,161 @@ const OptionDescription: React.FC<{ description: string }> = ({ description }) =
   return descElement;
 };
 
-function normalizeQuestionsFromParams(input: unknown): QuestionData[] {
+const OTHER_VALUE = 'Other';
+
+/** Shared controlled question item used by chat tools and product surfaces. */
+export const UserQuestionItem: React.FC<UserQuestionItemProps> = ({
+  question,
+  inputName,
+  value,
+  otherValue = '',
+  disabled = false,
+  allowOther = true,
+  onValueChange,
+  onOtherValueChange,
+}) => {
+  const { t } = useTranslation('flow-chat');
+  const selectedValues = Array.isArray(value) ? value : [];
+  const isOtherSelected = question.multiSelect
+    ? selectedValues.includes(OTHER_VALUE)
+    : value === OTHER_VALUE;
+
+  const updateMultiValue = (optionValue: string, checked: boolean) => {
+    onValueChange(
+      checked
+        ? [...selectedValues, optionValue]
+        : selectedValues.filter((candidate) => candidate !== optionValue),
+    );
+  };
+
+  return (
+    <div className="ask-question-item">
+      <div className="question-item-header">
+        <span className="question-header-chip">{question.header}</span>
+        <span className="question-text">{question.question}</span>
+      </div>
+
+      <div className="question-options">
+        {question.options.map((option, optionIndex) => {
+          const optionValue = option.value ?? option.label;
+          const checked = question.multiSelect
+            ? selectedValues.includes(optionValue)
+            : value === optionValue;
+          return (
+            <label key={`${optionValue}-${optionIndex}`} className="option-label">
+              {question.multiSelect ? (
+                <>
+                  <input
+                    type="checkbox"
+                    name={inputName}
+                    value={optionValue}
+                    checked={checked}
+                    onChange={(event) => updateMultiValue(optionValue, event.target.checked)}
+                    disabled={disabled}
+                  />
+                  <span className="custom-checkbox" />
+                </>
+              ) : (
+                <>
+                  <input
+                    type="radio"
+                    name={inputName}
+                    value={optionValue}
+                    checked={checked}
+                    onChange={() => onValueChange(optionValue)}
+                    disabled={disabled}
+                  />
+                  <span className="custom-radio" />
+                </>
+              )}
+              <div className="option-content">
+                <div className="option-label-text">{option.label}</div>
+                <OptionDescription description={option.description} />
+              </div>
+            </label>
+          );
+        })}
+
+        {allowOther && !isOtherSelected ? (
+          <label className="option-label option-other">
+            {question.multiSelect ? (
+              <>
+                <input
+                  type="checkbox"
+                  name={inputName}
+                  value={OTHER_VALUE}
+                  checked={false}
+                  onChange={(event) => {
+                    if (event.target.checked) updateMultiValue(OTHER_VALUE, true);
+                  }}
+                  disabled={disabled}
+                />
+                <span className="custom-checkbox" />
+              </>
+            ) : (
+              <>
+                <input
+                  type="radio"
+                  name={inputName}
+                  value={OTHER_VALUE}
+                  checked={false}
+                  onChange={() => onValueChange(OTHER_VALUE)}
+                  disabled={disabled}
+                />
+                <span className="custom-radio" />
+              </>
+            )}
+            <div className="option-content">
+              <div className="option-label-text">{t('toolCards.askUser.other')}</div>
+              <div className="option-description">{t('toolCards.askUser.customInputHint')}</div>
+            </div>
+          </label>
+        ) : allowOther && isOtherSelected ? (
+          <div className="option-other-input">
+            {question.multiSelect ? (
+              <>
+                <input
+                  type="checkbox"
+                  name={inputName}
+                  value={OTHER_VALUE}
+                  checked
+                  onChange={(event) => {
+                    if (!event.target.checked) updateMultiValue(OTHER_VALUE, false);
+                  }}
+                  disabled={disabled}
+                />
+                <span className="custom-checkbox" />
+              </>
+            ) : (
+              <>
+                <input
+                  type="radio"
+                  name={inputName}
+                  value={OTHER_VALUE}
+                  checked
+                  onChange={() => undefined}
+                  disabled={disabled}
+                />
+                <span className="custom-radio" />
+              </>
+            )}
+            <input
+              type="text"
+              className="other-input-inline"
+              placeholder={t('toolCards.askUser.pleaseSpecify')}
+              value={otherValue}
+              onChange={(event) => onOtherValueChange?.(event.target.value)}
+              disabled={disabled}
+              autoFocus
+            />
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+};
+
+function normalizeQuestionsFromParams(input: unknown): UserQuestionData[] {
   if (!input || typeof input !== 'object') return [];
   const raw = input as Record<string, unknown>;
   const qs = raw.questions;
@@ -148,33 +314,6 @@ export const AskUserQuestionCard: React.FC<ToolCardProps> = ({
     return true;
   }, [answers, questions.length]);
 
-  const handleSingleChange = useCallback((questionIndex: number, value: string) => {
-    setAnswers(prev => ({
-      ...prev,
-      [questionIndex]: value
-    }));
-  }, []);
-
-  const handleMultiChange = useCallback((questionIndex: number, value: string, checked: boolean) => {
-    setAnswers(prev => {
-      const current = prev[questionIndex];
-      const currentArray = Array.isArray(current) ? current : [];
-      
-      if (checked) {
-        return { ...prev, [questionIndex]: [...currentArray, value] };
-      } else {
-        return { ...prev, [questionIndex]: currentArray.filter(v => v !== value) };
-      }
-    });
-  }, []);
-
-  const handleOtherInputChange = useCallback((questionIndex: number, value: string) => {
-    setOtherInputs(prev => ({
-      ...prev,
-      [questionIndex]: value
-    }));
-  }, []);
-
   const handleSubmit = useCallback(async () => {
     if (!isAllAnswered() || isSubmitting || isSubmitted) return;
 
@@ -238,138 +377,23 @@ export const AskUserQuestionCard: React.FC<ToolCardProps> = ({
     return undefined;
   }, [answers, status, toolResult]);
 
-  const renderQuestion = (q: QuestionData, questionIndex: number) => {
+  const renderQuestion = (q: UserQuestionData, questionIndex: number) => {
     const answer = getEffectiveAnswer(questionIndex);
-    const otherInput = otherInputs[questionIndex] || '';
-    
-    const isOtherSelected = q.multiSelect 
-      ? Array.isArray(answer) && answer.includes('Other')
-      : answer === 'Other';
-
-    const inputName = `question-${questionIndex}`;
-
     return (
-      <div key={questionIndex} className="ask-question-item">
-        <div className="question-item-header">
-          <span className="question-header-chip">{q.header}</span>
-          <span className="question-text">{q.question}</span>
-        </div>
-        
-        <div className="question-options">
-          {q.options.map((option, optIdx) => (
-            <label key={optIdx} className="option-label">
-              {q.multiSelect ? (
-                <>
-                  <input
-                    type="checkbox"
-                    name={inputName}
-                    value={option.label}
-                    checked={Array.isArray(answer) && answer.includes(option.label)}
-                    onChange={(e) => handleMultiChange(questionIndex, option.label, e.target.checked)}
-                    disabled={isSubmitted || status === 'completed' || Boolean(isParamsStreaming)}
-                  />
-                  <span className="custom-checkbox" />
-                </>
-              ) : (
-                <>
-                  <input
-                    type="radio"
-                    name={inputName}
-                    value={option.label}
-                    checked={answer === option.label}
-                    onChange={(e) => handleSingleChange(questionIndex, e.target.value)}
-                    disabled={isSubmitted || status === 'completed' || Boolean(isParamsStreaming)}
-                  />
-                  <span className="custom-radio" />
-                </>
-              )}
-              <div className="option-content">
-                <div className="option-label-text">{option.label}</div>
-                <OptionDescription description={option.description} />
-              </div>
-            </label>
-          ))}
-          
-          {!isOtherSelected ? (
-            <label className="option-label option-other">
-              {q.multiSelect ? (
-                <>
-                  <input
-                    type="checkbox"
-                    name={inputName}
-                    value="Other"
-                    checked={false}
-                    onChange={(e) => {
-                      if (e.target.checked) {
-                        handleMultiChange(questionIndex, 'Other', true);
-                      }
-                    }}
-                    disabled={isSubmitted || status === 'completed' || Boolean(isParamsStreaming)}
-                  />
-                  <span className="custom-checkbox" />
-                </>
-              ) : (
-                <>
-                  <input
-                    type="radio"
-                    name={inputName}
-                    value="Other"
-                    checked={false}
-                    onChange={() => handleSingleChange(questionIndex, 'Other')}
-                    disabled={isSubmitted || status === 'completed' || Boolean(isParamsStreaming)}
-                  />
-                  <span className="custom-radio" />
-                </>
-              )}
-              <div className="option-content">
-                <div className="option-label-text">{t('toolCards.askUser.other')}</div>
-                <div className="option-description">{t('toolCards.askUser.customInputHint')}</div>
-              </div>
-            </label>
-          ) : (
-            <div className="option-other-input">
-              {q.multiSelect ? (
-                <>
-                  <input
-                    type="checkbox"
-                    name={inputName}
-                    value="Other"
-                    checked={true}
-                    onChange={(e) => {
-                      if (!e.target.checked) {
-                        handleMultiChange(questionIndex, 'Other', false);
-                      }
-                    }}
-                    disabled={isSubmitted || status === 'completed' || Boolean(isParamsStreaming)}
-                  />
-                  <span className="custom-checkbox" />
-                </>
-              ) : (
-                <>
-                  <input
-                    type="radio"
-                    name={inputName}
-                    value="Other"
-                    checked={true}
-                    onChange={() => {}}
-                    disabled={isSubmitted || status === 'completed' || Boolean(isParamsStreaming)}
-                  />
-                  <span className="custom-radio" />
-                </>
-              )}
-              <input
-                type="text"
-                className="other-input-inline"
-                placeholder={t('toolCards.askUser.pleaseSpecify')}
-                value={otherInput}
-                onChange={(e) => handleOtherInputChange(questionIndex, e.target.value)}
-                disabled={isSubmitted || status === 'completed' || Boolean(isParamsStreaming)}
-                autoFocus
-              />
-            </div>
-          )}
-        </div>
-      </div>
+      <UserQuestionItem
+        key={questionIndex}
+        question={q}
+        inputName={`question-${toolId ?? 'ask-user'}-${questionIndex}`}
+        value={answer}
+        otherValue={otherInputs[questionIndex] || ''}
+        disabled={isSubmitted || status === 'completed' || Boolean(isParamsStreaming)}
+        onValueChange={(value) => {
+          setAnswers((current) => ({ ...current, [questionIndex]: value }));
+        }}
+        onOtherValueChange={(value) => {
+          setOtherInputs((current) => ({ ...current, [questionIndex]: value }));
+        }}
+      />
     );
   };
 

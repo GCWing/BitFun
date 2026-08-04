@@ -5,7 +5,7 @@
 
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { Copy, Check, RotateCcw, Loader2, ArrowDownToLine, X, CircleUser, Pencil } from 'lucide-react';
+import { Copy, Check, RotateCcw, Loader2, ArrowDownToLine, X, CircleUser, Pencil, AlarmClock, ChevronDown, ChevronRight } from 'lucide-react';
 import type { DialogTurn, FlowUserSteeringItem } from '../../types/flow-chat';
 import { flowChatManager } from '../../services/FlowChatManager';
 import { useFlowChatContext } from './FlowChatContext';
@@ -99,6 +99,9 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
     const [hasOverflow, setHasOverflow] = useState(false);
     const [isRollingBack, setIsRollingBack] = useState(false);
     const [lightboxImage, setLightboxImage] = useState<string | null>(null);
+    // Scheduled-job turns (e.g. the Issue-Fix heartbeat every 10 minutes)
+    // collapse to a one-line chip; the full prompt stays available on demand.
+    const [scheduledExpanded, setScheduledExpanded] = useState(false);
     // Fine-grained selectors: only the message being edited re-renders on
     // draft keystrokes; other list items subscribe to booleans that rarely flip.
     const isEditing = useMessageEditStore(s => s.editingTurnId === turnId);
@@ -117,6 +120,7 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
     }, [message?.metadata?.composerPresentation]);
     const messageImages = useMemo(() => message?.images ?? [], [message?.images]);
     const isUsageReportMessage = message?.metadata?.localCommandKind === 'usage_report';
+    const isScheduledJobMessage = message?.metadata?.triggerSource === 'scheduled_job';
     const isGoalLoadingMessage = Boolean(message?.metadata?.threadGoalKickoff);
     const isThreadGoalContinuationCheck = Boolean(message?.metadata?.threadGoalContinuation);
     const isThreadGoalSystemMessage = Boolean(
@@ -466,6 +470,39 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
               <h3 className="session-usage-report-card__loading-title">{messageContent}</h3>
             </div>
           </div>
+        </div>
+      );
+    }
+
+    if (isScheduledJobMessage) {
+      return (
+        <div
+          className={`user-message-item user-message-item--scheduled${scheduledExpanded ? ' user-message-item--scheduled-expanded' : ''}`}
+          data-testid="chat-user-message-scheduled"
+          data-turn-id={turnId}
+        >
+          <button
+            type="button"
+            className="user-message-item__scheduled-chip"
+            onClick={() => setScheduledExpanded((current) => !current)}
+            aria-expanded={scheduledExpanded}
+          >
+            {scheduledExpanded
+              ? <ChevronDown size={12} aria-hidden />
+              : <ChevronRight size={12} aria-hidden />}
+            <AlarmClock size={12} aria-hidden />
+            <span className="user-message-item__scheduled-label">
+              {t('message.scheduledHeartbeat', {
+                time: formatDate(new Date(message.timestamp), {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                }),
+              })}
+            </span>
+          </button>
+          {scheduledExpanded ? (
+            <pre className="user-message-item__scheduled-content">{messageContent}</pre>
+          ) : null}
         </div>
       );
     }

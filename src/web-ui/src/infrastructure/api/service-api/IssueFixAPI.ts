@@ -6,101 +6,157 @@ const log = createLogger('IssueFixAPI');
 
 export interface IssueFixAvailability {
   available: boolean;
-  /** Present only when available, for diagnostics. */
   program?: string | null;
 }
 
-export interface IssueFixPlanRequest {
-  /** Public-safe `owner/repo`. */
-  repo: string;
+export interface IssueFixKernelTodo {
   issueRef: string;
   issueUrl: string;
-  /** Local checkout. Only read from — planning never writes. */
+  todoId: string;
+  status: string;
+  selected: boolean;
+}
+
+export interface IssueFixHostLoopState {
+  enabled: boolean;
+  jobId?: string | null;
+  sessionId?: string | null;
+  activeTurnId?: string | null;
+  nextRunAtMs?: number | null;
+  lastRunStatus?: string | null;
+  lastError?: string | null;
+  consecutiveFailures?: number;
+}
+
+export interface IssueFixUserQuestion {
+  todoId: string;
+  prompt: string;
+}
+
+export type IssueFixUserDecision = 'approve' | 'reject' | 'cancel';
+
+export interface IssueFixAutonomousStatusResponse {
+  goalId: string;
+  agentId: string;
+  kernelState: string;
+  shouldRun: boolean;
+  actionRequired: boolean;
+  recommendedAction?: string | null;
+  gatePrompt?: string | null;
+  selectedTodoId?: string | null;
+  issues: IssueFixKernelTodo[];
+  userQuestion?: IssueFixUserQuestion | null;
+  hostLoop: IssueFixHostLoopState;
+}
+
+/** Cheap poll projection: LoopX todo list + host loop, no `quota should-run`. */
+export interface IssueFixAutonomousPollResponse {
+  goalId: string;
+  agentId: string;
+  actionRequired: boolean;
+  issues: IssueFixKernelTodo[];
+  userQuestion?: IssueFixUserQuestion | null;
+  hostLoop: IssueFixHostLoopState;
+}
+
+export interface IssueFixAnswerUserQuestionRequest {
   repositoryPath: string;
-  baseBranch?: string;
+  todoId: string;
+  decision: IssueFixUserDecision;
+  reason?: string | null;
 }
 
-export interface IssueFixPlanResponse {
-  issueRef: string;
-  route: 'fix_pr' | 'comment_only' | 'triage_only';
-  nextStep: 'runnable_successor' | 'monitor_continuation' | 'user_gate' | 'no_followup';
-  contextGrounding: 'grounded' | 'partial' | 'ungrounded' | 'not_provided';
-  /** LoopX's reason codes, verbatim. */
-  reasonCodes: string[];
-  /** Which of change_scope / reproduction / validation are still unresolved. */
-  unresolvedAspects: string[];
-  /** The branch LoopX would use. Never created while planning. */
-  issueBranch?: string | null;
-  branchReady: boolean;
-}
-
-export interface IssueFixExecuteRequest {
-  /** The session whose agent loop should do the fixing. */
+export interface IssueFixStartAutonomousRequest {
   sessionId: string;
-  /** Public-safe `owner/repo`. */
   repo: string;
-  issueRef: string;
-  issueUrl: string;
-  /** Local checkout the agent works in. */
   repositoryPath: string;
-  baseBranch?: string;
-  /** Issue title, included in the task message. */
-  issueTitle?: string;
+  issues: Array<{
+    issueRef: string;
+    issueUrl: string;
+  }>;
 }
 
-export interface IssueFixExecuteResponse {
-  issueRef: string;
-  route: 'fix_pr' | 'comment_only' | 'triage_only';
-  /** Whether the fix task was actually submitted to the agent loop. */
-  submitted: boolean;
-  /** Why nothing was submitted, when `submitted` is false. */
-  notSubmittedReason?: string | null;
-  /** The dialog turn id, when submitted. */
-  turnId?: string | null;
+export interface IssueFixStartAutonomousResponse extends IssueFixAutonomousStatusResponse {
+  addedIssueRefs: string[];
+  immediateTurnId?: string | null;
 }
 
-/**
- * Planning-only access to the issue-fix chain.
- *
- * There is no execute path here by design: nothing this class can reach will
- * create a branch, run a command, or open a pull request.
- */
 class IssueFixAPI {
   async probe(): Promise<IssueFixAvailability> {
     try {
       return await api.invoke('issue_fix_probe', {});
     } catch (error) {
-      // Treat a probe failure as "unavailable" rather than surfacing an error:
-      // the feature simply stays hidden, which is the same outcome as a host
-      // without loopx installed.
       log.warn('Issue-fix probe failed; treating the feature as unavailable', { error });
       return { available: false };
     }
   }
 
-  async planIssue(request: IssueFixPlanRequest): Promise<IssueFixPlanResponse> {
+  async getAutonomousStatus(repositoryPath: string): Promise<IssueFixAutonomousStatusResponse> {
+    const request = { repositoryPath };
     try {
-      return await api.invoke('issue_fix_plan_issue', { request });
+      return await api.invoke('issue_fix_autonomous_status', { request });
     } catch (error) {
-      log.error('Failed to plan an issue fix', {
-        repo: request.repo,
-        issueRef: request.issueRef,
-        error,
-      });
-      throw createTauriCommandError('issue_fix_plan_issue', error, request);
+      log.error('Failed to read continuous Issue-Fix state', { repositoryPath, error });
+      throw createTauriCommandError('issue_fix_autonomous_status', error, request);
     }
   }
 
-  async executeIssue(request: IssueFixExecuteRequest): Promise<IssueFixExecuteResponse> {
+  /**
+   * Background-poll variant of `getAutonomousStatus`: projects issue todos and
+   * open gates from LoopX's todo list only, so an interval poll never invokes
+   * `quota should-run` (which appends a LoopX rollout event per call).
+   */
+  async pollAutonomous(repositoryPath: string): Promise<IssueFixAutonomousPollResponse> {
+    const request = { repositoryPath };
     try {
-      return await api.invoke('issue_fix_execute', { request });
+      return await api.invoke('issue_fix_autonomous_poll', { request });
     } catch (error) {
-      log.error('Failed to execute an issue fix', {
+      log.error('Failed to poll continuous Issue-Fix state', { repositoryPath, error });
+      throw createTauriCommandError('issue_fix_autonomous_poll', error, request);
+    }
+  }
+
+  /**
+   * Disable the host wake loop. LoopX Kernel state is left untouched; a later
+   * start resumes from wherever the Kernel says the work stands.
+   */
+  async stopAutonomous(repositoryPath: string): Promise<IssueFixHostLoopState> {
+    const request = { repositoryPath };
+    try {
+      return await api.invoke('issue_fix_stop_autonomous', { request });
+    } catch (error) {
+      log.error('Failed to stop continuous Issue-Fix', { repositoryPath, error });
+      throw createTauriCommandError('issue_fix_stop_autonomous', error, request);
+    }
+  }
+
+  async startAutonomous(
+    request: IssueFixStartAutonomousRequest,
+  ): Promise<IssueFixStartAutonomousResponse> {
+    try {
+      return await api.invoke('issue_fix_start_autonomous', { request });
+    } catch (error) {
+      log.error('Failed to start continuous Issue-Fix', {
         repo: request.repo,
-        issueRef: request.issueRef,
+        issueRefs: request.issues.map((issue) => issue.issueRef),
         error,
       });
-      throw createTauriCommandError('issue_fix_execute', error, request);
+      throw createTauriCommandError('issue_fix_start_autonomous', error, request);
+    }
+  }
+
+  async answerUserQuestion(
+    request: IssueFixAnswerUserQuestionRequest,
+  ): Promise<IssueFixAutonomousStatusResponse> {
+    try {
+      return await api.invoke('issue_fix_answer_user_question', { request });
+    } catch (error) {
+      log.error('Failed to answer continuous Issue-Fix user question', {
+        todoId: request.todoId,
+        decision: request.decision,
+        error,
+      });
+      throw createTauriCommandError('issue_fix_answer_user_question', error, request);
     }
   }
 }

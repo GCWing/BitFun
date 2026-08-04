@@ -506,7 +506,8 @@
     "editDialogBulletHistory": "Delete this turn and all following dialog records",
     "editDialogBulletRerun": "Start a new turn with the edited message",
     "editSuccess": "Message edited and rerun",
-    "editFailed": "Failed to edit message"
+    "editFailed": "Failed to edit message",
+    "scheduledHeartbeat": "Scheduled heartbeat · {{time}}"
   },
   "contextMenu": {
     "copySelection": "Copy Selection",

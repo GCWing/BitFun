@@ -1,14 +1,21 @@
 //! Bridge to the external `loopx` CLI's `issue-fix` capability.
 //!
 //! LoopX supplies the deterministic decision skeleton (which route to take for an
-//! issue, how to project a PR's lifecycle) and performs no writes of its own. This
-//! crate owns every side effect and every piece of evidence LoopX judges against.
+//! issue, how to project a PR's lifecycle) and owns the durable Issue-Fix control
+//! state. This crate invokes those typed transitions and keeps host concerns out
+//! of LoopX's domain state.
 //!
 //! See `docs/development/loopx-issue-fix-integration.md` for the verified chain.
 
+pub mod autonomous;
+/// Typed packet parsers for LoopX's plan/execute CLI surface. The product path
+/// now drives the lifecycle through the heartbeat agent (see [`autonomous`]),
+/// so `orchestrator` and `repository_context` are exercised only by the
+/// `loopx_issue_fix_contracts` integration tests, kept as executable
+/// documentation of the CLI contract (e.g. `decision.route` vs
+/// `transition.decision`).
 pub mod orchestrator;
 pub mod repository_context;
-pub mod thread_goal_bridge;
 
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
@@ -92,6 +99,36 @@ impl LoopxIssueFix {
         command.args(args);
         command.arg("--format");
         command.arg("json");
+        self.run_json_command(command).await
+    }
+
+    /// Run any LoopX JSON command from the selected project root.
+    ///
+    /// `--format json` is a global LoopX option, so this method places it before
+    /// the supplied subcommand. Autonomous issue fixing uses this path for todo,
+    /// quota, and heartbeat commands while keeping the project-local registry as
+    /// the only control-plane source.
+    pub async fn json_in<I, S>(
+        &self,
+        cwd: &Path,
+        args: I,
+    ) -> Result<serde_json::Value, LoopxIssueFixError>
+    where
+        I: IntoIterator<Item = S>,
+        S: AsRef<OsStr>,
+    {
+        let mut command = Command::new(&self.program);
+        command.arg("--format");
+        command.arg("json");
+        command.args(args);
+        command.current_dir(cwd);
+        self.run_json_command(command).await
+    }
+
+    async fn run_json_command(
+        &self,
+        mut command: Command,
+    ) -> Result<serde_json::Value, LoopxIssueFixError> {
         command.env(PYTHON_UTF8_ENV, "1");
         command.stdin(Stdio::null());
         command.stdout(Stdio::piped());

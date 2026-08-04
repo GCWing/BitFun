@@ -1,156 +1,140 @@
-/**
- * Row state for the issue-fix panel.
- *
- * Kept as pure functions so the mapping from LoopX's decisions onto what a user
- * sees is testable without rendering. The mapping matters: a `user_gate` shown as
- * "done" would hide the one case that needs a person.
- */
+import type {
+  IssueFixAutonomousPollResponse,
+  IssueFixAutonomousStatusResponse,
+} from '@/infrastructure/api';
 
-/** What LoopX says should happen next for an issue. Mirrors the Rust `NextStep`. */
-export type IssueFixNextStep =
-  | 'runnable_successor'
-  | 'monitor_continuation'
-  | 'user_gate'
-  | 'no_followup';
+export type IssueFixRowState = 'idle' | 'queued' | 'fixing' | 'done' | 'blocked';
 
-/** Which resolution LoopX selected. Mirrors the Rust `FixRoute`. */
-export type IssueFixRoute = 'fix_pr' | 'comment_only' | 'triage_only';
-
-/** What a row shows. */
-export type IssueFixRowState =
-  /** Selected, not started. */
-  | 'queued'
-  /** Being worked on now. */
-  | 'fixing'
-  /** Finished, whatever the outcome. */
-  | 'done'
-  /** Stopped, waiting on a person. */
-  | 'blocked'
-  /** Not selected. */
-  | 'idle';
-
-export interface IssueFixRunEntry {
-  issueId: string;
-  route?: IssueFixRoute;
-  nextStep?: IssueFixNextStep;
-  /** LoopX's reason codes, shown verbatim rather than reinterpreted. */
-  reasonCodes?: string[];
-  pullRequestUrl?: string | null;
-  /** Set when the run failed for a reason outside LoopX's decisions. */
-  error?: string | null;
-}
-
-export interface IssueFixRunState {
-  /** Issues the user selected. */
+export interface IssueFixSelectionState {
   selectedIssueIds: Set<string>;
-  /** The issue currently being worked, if any. */
-  activeIssueId?: string | null;
-  /** Per-issue results, keyed by issue id. */
-  entries: Record<string, IssueFixRunEntry>;
 }
 
-export function emptyRunState(): IssueFixRunState {
-  return { selectedIssueIds: new Set(), activeIssueId: null, entries: {} };
+export function emptyRunState(): IssueFixSelectionState {
+  return { selectedIssueIds: new Set() };
 }
 
-/**
- * Whether this step means a person has to act before anything else happens.
- *
- * LoopX raises `user_gate` for semantic ambiguity and for missing write
- * authority. Crossing it automatically would defeat the gate, so the UI must
- * make it visually distinct from a completed row.
- */
-export function requiresHuman(step: IssueFixNextStep | undefined): boolean {
-  return step === 'user_gate';
-}
-
-/** Whether a route can lead to a pull request at all. */
-export function permitsPullRequest(route: IssueFixRoute | undefined): boolean {
-  return route === 'fix_pr';
+/** Drop selected ids that no longer exist in the refreshed issue list. */
+export function pruneSelection(
+  selection: IssueFixSelectionState,
+  issueIds: string[],
+): IssueFixSelectionState {
+  const known = new Set(issueIds);
+  const selectedIssueIds = new Set(
+    [...selection.selectedIssueIds].filter((issueId) => known.has(issueId)),
+  );
+  return selectedIssueIds.size === selection.selectedIssueIds.size
+    ? selection
+    : { selectedIssueIds };
 }
 
 /**
- * Resolve one row's state.
- *
- * Order matters. A blocked entry outranks "active" because a gated issue is not
- * progressing even while it is the current one, and an errored entry outranks a
- * decision because the decision may be stale.
+ * Fold a cheap poll (LoopX todo list + host loop, no quota packet) into the
+ * last full projection. Quota-derived fields (kernelState, shouldRun,
+ * recommendedAction, selectedTodoId) keep their previous values; the selected
+ * flag is re-derived so rows do not flicker between polls.
  */
-export function rowState(state: IssueFixRunState, issueId: string): IssueFixRowState {
-  const entry = state.entries[issueId];
-  if (entry?.error) {
-    return 'blocked';
+export function mergeLightState(
+  control: IssueFixAutonomousStatusResponse,
+  poll: IssueFixAutonomousPollResponse,
+): IssueFixAutonomousStatusResponse {
+  return {
+    ...control,
+    goalId: poll.goalId,
+    agentId: poll.agentId,
+    actionRequired: poll.actionRequired,
+    gatePrompt: poll.userQuestion?.prompt ?? null,
+    userQuestion: poll.userQuestion ?? null,
+    issues: poll.issues.map((issue) => ({
+      ...issue,
+      selected: issue.todoId === control.selectedTodoId,
+    })),
+    hostLoop: poll.hostLoop,
+  };
+}
+
+function kernelTodo(
+  control: IssueFixAutonomousStatusResponse | null,
+  issueId: string,
+) {
+  return control?.issues.find((todo) => todo.issueRef === issueId);
+}
+
+/** Project a row from LoopX Kernel state plus unsaved checkbox selection. */
+export function rowState(
+  selection: IssueFixSelectionState,
+  control: IssueFixAutonomousStatusResponse | null,
+  issueId: string,
+): IssueFixRowState {
+  const todo = kernelTodo(control, issueId);
+  if (!todo) {
+    return selection.selectedIssueIds.has(issueId) ? 'queued' : 'idle';
   }
-  if (requiresHuman(entry?.nextStep)) {
-    return 'blocked';
-  }
-  if (entry?.nextStep) {
+  if (todo.status === 'done') {
     return 'done';
   }
-  if (state.activeIssueId === issueId) {
-    return 'fixing';
+  if (todo.status === 'blocked') {
+    return 'blocked';
   }
-  if (state.selectedIssueIds.has(issueId)) {
-    return 'queued';
+  if (todo.selected) {
+    if (control?.actionRequired || control?.kernelState === 'operator_gate') {
+      return 'blocked';
+    }
+    if (control?.hostLoop.enabled && (control.shouldRun || control.hostLoop.activeTurnId)) {
+      return 'fixing';
+    }
   }
-  return 'idle';
+  return 'queued';
 }
 
-/** Whether a row's checkbox should be locked. */
-export function rowLocked(state: IssueFixRunState, issueId: string): boolean {
-  const row = rowState(state, issueId);
-  return row === 'fixing' || row === 'done' || row === 'blocked';
+/** Persisted LoopX rows cannot be removed from the queue by a checkbox. */
+export function rowLocked(
+  control: IssueFixAutonomousStatusResponse | null,
+  issueId: string,
+): boolean {
+  return Boolean(kernelTodo(control, issueId));
 }
 
-/**
- * A short i18n key suffix describing why a row is in its state.
- *
- * Returns null when there is nothing to explain, so a caller can omit the label
- * rather than render an empty one.
- */
-export function rowStatusKey(state: IssueFixRunState, issueId: string): string | null {
-  const entry = state.entries[issueId];
-  if (entry?.error) {
-    return 'stopped';
-  }
-  if (requiresHuman(entry?.nextStep)) {
-    return 'awaitingDecision';
-  }
-  switch (rowState(state, issueId)) {
+export function rowStatusKey(state: IssueFixRowState): string | null {
+  switch (state) {
+    case 'queued':
+      return 'queued';
     case 'fixing':
       return 'fixing';
     case 'done':
-      return entry?.pullRequestUrl ? 'pullRequestOpened' : 'resolvedWithoutPullRequest';
-    case 'queued':
-      return 'queued';
+      return 'resolvedWithoutPullRequest';
+    case 'blocked':
+      return 'awaitingDecision';
     default:
       return null;
   }
 }
 
-/** Toggle one issue's selection, leaving locked rows alone. */
-export function toggleSelection(state: IssueFixRunState, issueId: string): IssueFixRunState {
-  if (rowLocked(state, issueId)) {
-    return state;
+export function toggleSelection(
+  selection: IssueFixSelectionState,
+  control: IssueFixAutonomousStatusResponse | null,
+  issueId: string,
+): IssueFixSelectionState {
+  if (rowLocked(control, issueId)) {
+    return selection;
   }
-  const selectedIssueIds = new Set(state.selectedIssueIds);
+  const selectedIssueIds = new Set(selection.selectedIssueIds);
   if (selectedIssueIds.has(issueId)) {
     selectedIssueIds.delete(issueId);
   } else {
     selectedIssueIds.add(issueId);
   }
-  return { ...state, selectedIssueIds };
+  return { selectedIssueIds };
 }
 
-/** Select or clear every selectable issue. */
 export function setAllSelected(
-  state: IssueFixRunState,
+  selection: IssueFixSelectionState,
+  control: IssueFixAutonomousStatusResponse | null,
   issueIds: string[],
   selected: boolean,
-): IssueFixRunState {
-  const selectedIssueIds = new Set(state.selectedIssueIds);
+): IssueFixSelectionState {
+  const selectedIssueIds = new Set(selection.selectedIssueIds);
   for (const issueId of issueIds) {
-    if (rowLocked(state, issueId)) {
+    if (rowLocked(control, issueId)) {
       continue;
     }
     if (selected) {
@@ -159,71 +143,36 @@ export function setAllSelected(
       selectedIssueIds.delete(issueId);
     }
   }
-  return { ...state, selectedIssueIds };
+  return { selectedIssueIds };
 }
 
-/** Tri-state for the select-all control. */
 export function selectAllState(
-  state: IssueFixRunState,
+  selection: IssueFixSelectionState,
+  control: IssueFixAutonomousStatusResponse | null,
   issueIds: string[],
 ): 'none' | 'some' | 'all' {
-  const selectable = issueIds.filter((issueId) => !rowLocked(state, issueId));
+  const selectable = issueIds.filter((issueId) => !rowLocked(control, issueId));
   if (selectable.length === 0) {
     return 'none';
   }
-  const selected = selectable.filter((issueId) => state.selectedIssueIds.has(issueId));
+  const selected = selectable.filter((issueId) => selection.selectedIssueIds.has(issueId));
   if (selected.length === 0) {
     return 'none';
   }
   return selected.length === selectable.length ? 'all' : 'some';
 }
 
-/** Record one issue's outcome. */
-export function recordOutcome(
-  state: IssueFixRunState,
-  entry: IssueFixRunEntry,
-): IssueFixRunState {
-  const entries = { ...state.entries, [entry.issueId]: entry };
-  // Clear the active marker when the issue that finished was the active one, so
-  // a completed row does not keep rendering as in-progress.
-  const activeIssueId = state.activeIssueId === entry.issueId ? null : state.activeIssueId;
-  return { ...state, entries, activeIssueId };
-}
-
-/**
- * The next issue to work, in the order given.
- *
- * Returns null when a gate is open: a blocked issue must be resolved by a person
- * before the run continues, so advancing past it would skip the gate.
- */
-export function nextIssueToRun(state: IssueFixRunState, issueIds: string[]): string | null {
-  for (const issueId of issueIds) {
-    const row = rowState(state, issueId);
-    if (row === 'blocked') {
-      return null;
-    }
-    if (row === 'queued') {
-      return issueId;
-    }
-  }
-  return null;
-}
-
-/** Whether the run has stopped because something needs a person. */
-export function isBlockedOnHuman(state: IssueFixRunState, issueIds: string[]): boolean {
-  return issueIds.some((issueId) => rowState(state, issueId) === 'blocked');
-}
-
-/** Counts for the panel's summary line. */
 export function runProgress(
-  state: IssueFixRunState,
+  selection: IssueFixSelectionState,
+  control: IssueFixAutonomousStatusResponse | null,
   issueIds: string[],
-): { total: number; done: number; blocked: number; queued: number } {
+): { total: number; done: number; blocked: number; queued: number; fixing: number } {
   let done = 0;
   let blocked = 0;
   let queued = 0;
+  let fixing = 0;
   for (const issueId of issueIds) {
-    switch (rowState(state, issueId)) {
+    switch (rowState(selection, control, issueId)) {
       case 'done':
         done += 1;
         break;
@@ -231,12 +180,14 @@ export function runProgress(
         blocked += 1;
         break;
       case 'queued':
-      case 'fixing':
         queued += 1;
+        break;
+      case 'fixing':
+        fixing += 1;
         break;
       default:
         break;
     }
   }
-  return { total: issueIds.length, done, blocked, queued };
+  return { total: issueIds.length, done, blocked, queued, fixing };
 }

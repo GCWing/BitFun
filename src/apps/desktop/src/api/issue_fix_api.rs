@@ -1,38 +1,40 @@
-//! Issue-fix Tauri commands.
+//! Continuous Issue-Fix commands.
 //!
-//! Two-step surface: planning is read-only (route projection), execution
-//! hands the actual fix to the agent loop as a dialog turn. Nothing in the
-//! planning path can create a branch, run a validation command, or open a
-//! pull request; execution only submits agent work and returns the outcome,
-//! so PR creation stays behind the existing gates.
+//! LoopX Kernel owns the durable issue todos and lifecycle decisions. BitFun's
+//! persistent Cron service is only the host wake mechanism for one ordinary
+//! Agent session; no BitFun Thread Goal participates in this path.
 
-use bitfun_services_integrations::loopx_issue_fix::orchestrator::{
-    ExecutionMode, FixRoute, IssueFixOrchestrator, IssueFixRequest, ReproductionStatus, ScopeClass,
+use std::path::Path;
+
+use bitfun_core::service::cron::{
+    get_global_cron_service, CreateCronJobRequest, CronJob, CronJobPayload, CronJobRunStatus,
+    CronJobTarget, CronSchedule, CronWorkspaceRef, UpdateCronJobRequest,
 };
-use bitfun_services_integrations::loopx_issue_fix::repository_context::{
-    RepositoryContext, RepositoryContextBuilder,
+use bitfun_services_integrations::loopx_issue_fix::autonomous::{
+    AutonomousControlState, AutonomousIssueFix, AutonomousLightState, IssueSelection, UserDecision,
 };
 use bitfun_services_integrations::loopx_issue_fix::LoopxIssueFix;
-use bitfun_runtime_ports::{
-    AgentDialogTurnRequest, DialogSubmissionPolicy, DialogTriggerSource,
-};
-use log::error;
+use log::{error, warn};
 use serde::{Deserialize, Serialize};
 use tauri::State;
+use tokio::sync::Mutex;
 
 use crate::api::app_state::AppState;
-use crate::runtime::DesktopRuntimeContext;
 
-/// Whether the feature can run on this host.
+const WAKE_INTERVAL_MS: u64 = 10 * 60 * 1_000;
+const JOB_NAME_PREFIX: &str = "LoopX Issue Fix: ";
+
+/// Serializes host-loop mutations so two concurrent starts cannot both pass
+/// the duplicate-job check and create twin cron jobs.
+static HOST_LOOP_LOCK: Mutex<()> = Mutex::const_new(());
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct IssueFixAvailability {
     pub available: bool,
-    /// Present only when available, for diagnostics.
     pub program: Option<String>,
 }
 
-/// Probe for the `loopx` CLI so the UI can hide its entry point when absent.
 #[tauri::command]
 pub async fn issue_fix_probe(_state: State<'_, AppState>) -> Result<IssueFixAvailability, String> {
     match LoopxIssueFix::probe() {
@@ -49,356 +51,512 @@ pub async fn issue_fix_probe(_state: State<'_, AppState>) -> Result<IssueFixAvai
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct IssueFixPlanRequest {
-    /// Public-safe `owner/repo`.
-    pub repo: String,
-    pub issue_ref: String,
-    pub issue_url: String,
-    /// Local checkout. Only read from; never written in dry-run mode.
+pub struct IssueFixAutonomousStatusRequest {
     pub repository_path: String,
-    pub base_branch: Option<String>,
 }
 
-/// One issue's planning result, flattened for the UI.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct IssueFixHostLoopState {
+    pub enabled: bool,
+    pub job_id: Option<String>,
+    pub session_id: Option<String>,
+    pub active_turn_id: Option<String>,
+    pub next_run_at_ms: Option<i64>,
+    pub last_run_status: Option<String>,
+    pub last_error: Option<String>,
+    pub consecutive_failures: u32,
+}
+
+impl Default for IssueFixHostLoopState {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            job_id: None,
+            session_id: None,
+            active_turn_id: None,
+            next_run_at_ms: None,
+            last_run_status: None,
+            last_error: None,
+            consecutive_failures: 0,
+        }
+    }
+}
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct IssueFixPlanResponse {
-    pub issue_ref: String,
-    /// `fix_pr`, `comment_only`, or `triage_only`.
-    pub route: String,
-    /// `runnable_successor`, `monitor_continuation`, `user_gate`, or `no_followup`.
-    pub next_step: String,
-    /// `grounded`, `partial`, `ungrounded`, or `not_provided`.
-    pub context_grounding: String,
-    /// LoopX's reason codes, passed through verbatim rather than paraphrased.
-    pub reason_codes: Vec<String>,
-    /// Which of change_scope / reproduction / validation are still unresolved.
-    pub unresolved_aspects: Vec<String>,
-    /// The branch LoopX would use. Never created in dry-run mode.
-    pub issue_branch: Option<String>,
-    /// Always false here, since a dry run creates nothing.
-    pub branch_ready: bool,
+pub struct IssueFixAutonomousStatusResponse {
+    #[serde(flatten)]
+    pub control: AutonomousControlState,
+    pub host_loop: IssueFixHostLoopState,
 }
 
-/// Ask LoopX which route an issue should take.
-///
-/// Runs `feasibility` and, on a fix route, a dry-run branch projection. Both are
-/// read-only: LoopX reports `external_writes_performed: false` throughout, and
-/// `--no-write-domain-state` keeps it out of goal state as well.
-///
-/// No repository context is supplied yet, because nothing in BitFun generates one.
-/// LoopX therefore reports `not_provided` and declines to open a pull request.
-/// That is the honest current state rather than a limitation of this command —
-/// the reason codes it returns say exactly which evidence is missing.
 #[tauri::command]
-pub async fn issue_fix_plan_issue(
+pub async fn issue_fix_autonomous_status(
     _state: State<'_, AppState>,
-    request: IssueFixPlanRequest,
-) -> Result<IssueFixPlanResponse, String> {
-    let Some(loopx) = LoopxIssueFix::probe() else {
-        return Err("loopx is not installed on this host".to_string());
-    };
-
-    let temp_dir = tempfile::tempdir().map_err(|error| {
-        error!("Failed to create a temp dir for the issue-fix context: {error}");
-        format!("Failed to prepare the issue-fix workspace: {error}")
-    })?;
-
-    let context = empty_repository_context().map_err(|error| {
-        error!("Failed to build a placeholder repository context: {error}");
-        format!("Failed to prepare issue-fix evidence: {error}")
-    })?;
-
-    let base_branch = request.base_branch.as_deref().unwrap_or("main");
-    let issue_request = IssueFixRequest {
-        repo: &request.repo,
-        issue_ref: &request.issue_ref,
-        issue_url: &request.issue_url,
-        context: &context,
-        // Naming a validation surface is what permits `fix_pr` at all. Until
-        // BitFun reads the repository and can name a real one, say so plainly
-        // instead of asserting a surface that was never checked.
-        validation_label: "not yet determined",
-        reproduction_label: "not yet investigated",
-        reproduction_status: ReproductionStatus::Planned,
-        scope_class: ScopeClass::Uncertain,
-        base_branch,
-    };
-
-    let outcome = IssueFixOrchestrator::new(&loopx)
-        .plan_issue(
-            &issue_request,
-            &request.repository_path,
-            temp_dir.path(),
-            ExecutionMode::DryRun,
-        )
+    request: IssueFixAutonomousStatusRequest,
+) -> Result<IssueFixAutonomousStatusResponse, String> {
+    let repository_path = required_repository_path(&request.repository_path)?;
+    let loopx =
+        LoopxIssueFix::probe().ok_or_else(|| "loopx is not installed on this host".to_string())?;
+    let control = AutonomousIssueFix::new(loopx)
+        .inspect(repository_path)
         .await
         .map_err(|error| {
-            error!(
-                "Failed to plan issue-fix: repo={}, issue={}, error={error}",
-                request.repo, request.issue_ref
-            );
-            format!("Failed to plan this issue: {error}")
+            error!("Failed to inspect LoopX Issue-Fix state: {error}");
+            format!("Failed to read LoopX Issue-Fix state: {error}")
         })?;
-
-    Ok(IssueFixPlanResponse {
-        issue_ref: outcome.issue_ref,
-        route: route_label(outcome.feasibility.route),
-        next_step: next_step_label(outcome.feasibility.next_step),
-        context_grounding: grounding_label(outcome.feasibility.context_grounding),
-        reason_codes: outcome.feasibility.reason_codes,
-        unresolved_aspects: outcome.feasibility.unresolved_aspects,
-        issue_branch: outcome
-            .branch
-            .as_ref()
-            .map(|branch| branch.issue_branch.clone()),
-        branch_ready: outcome
-            .branch
-            .as_ref()
-            .is_some_and(|branch| branch.branch_ready),
-    })
+    let host_loop = host_loop_state(&control.goal_id, repository_path).await;
+    Ok(IssueFixAutonomousStatusResponse { control, host_loop })
 }
 
-/// Request to hand one issue's fix to the agent loop.
+/// Background-poll response: LoopX todo projection without `quota should-run`.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct IssueFixAutonomousPollResponse {
+    #[serde(flatten)]
+    pub light: AutonomousLightState,
+    pub host_loop: IssueFixHostLoopState,
+}
+
+/// Cheap status for the panel's poll loop. Unlike `issue_fix_autonomous_status`
+/// this never runs `quota should-run` (which appends a LoopX rollout event per
+/// call), so polling it on an interval does not grow LoopX's event log.
+#[tauri::command]
+pub async fn issue_fix_autonomous_poll(
+    _state: State<'_, AppState>,
+    request: IssueFixAutonomousStatusRequest,
+) -> Result<IssueFixAutonomousPollResponse, String> {
+    let repository_path = required_repository_path(&request.repository_path)?;
+    let loopx =
+        LoopxIssueFix::probe().ok_or_else(|| "loopx is not installed on this host".to_string())?;
+    let light = AutonomousIssueFix::new(loopx)
+        .poll(repository_path)
+        .await
+        .map_err(|error| {
+            error!("Failed to poll LoopX Issue-Fix todos: {error}");
+            format!("Failed to poll LoopX Issue-Fix state: {error}")
+        })?;
+    let host_loop = host_loop_state(&light.goal_id, repository_path).await;
+    Ok(IssueFixAutonomousPollResponse { light, host_loop })
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct IssueFixExecuteRequest {
-    /// The session whose agent loop should do the fixing.
-    pub session_id: String,
-    /// Public-safe `owner/repo`.
-    pub repo: String,
-    pub issue_ref: String,
-    pub issue_url: String,
-    /// Local checkout the agent works in.
+pub struct IssueFixAnswerUserQuestionRequest {
     pub repository_path: String,
-    pub base_branch: Option<String>,
-    /// Issue title, included in the task message so the agent can work
-    /// without an extra metadata fetch.
-    pub issue_title: Option<String>,
+    pub todo_id: String,
+    pub decision: UserDecision,
+    pub reason: Option<String>,
 }
 
-/// Outcome of handing an issue to the agent loop.
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct IssueFixExecuteResponse {
-    pub issue_ref: String,
-    /// `fix_pr`, `comment_only`, or `triage_only` — the route LoopX selected.
-    pub route: String,
-    /// Whether the fix task was actually submitted to the agent loop.
-    pub submitted: bool,
-    /// Why nothing was submitted, when `submitted` is false.
-    pub not_submitted_reason: Option<String>,
-    /// The dialog turn id, when submitted.
-    pub turn_id: Option<String>,
-}
-
-/// Ask LoopX for the route, then hand the fix to the agent loop when it is
-/// a fixable one.
-///
-/// This is the step that actually spends model tokens: the returned dialog
-/// turn drives the session's agent through reading the repository, patching
-/// the issue, and validating the result. Branch creation and PR opening are
-/// still separate gates that follow the agent's work; this command never
-/// performs those itself.
 #[tauri::command]
-pub async fn issue_fix_execute(
-    runtime: State<'_, DesktopRuntimeContext>,
-    request: IssueFixExecuteRequest,
-) -> Result<IssueFixExecuteResponse, String> {
-    let Some(loopx) = LoopxIssueFix::probe() else {
-        return Err("loopx is not installed on this host".to_string());
-    };
-
-    let temp_dir = tempfile::tempdir().map_err(|error| {
-        error!("Failed to create a temp dir for the issue-fix context: {error}");
-        format!("Failed to prepare the issue-fix workspace: {error}")
-    })?;
-
-    let context = empty_repository_context().map_err(|error| {
-        error!("Failed to build a placeholder repository context: {error}");
-        format!("Failed to prepare issue-fix evidence: {error}")
-    })?;
-
-    let base_branch = request.base_branch.as_deref().unwrap_or("main");
-    let issue_request = IssueFixRequest {
-        repo: &request.repo,
-        issue_ref: &request.issue_ref,
-        issue_url: &request.issue_url,
-        context: &context,
-        validation_label: "agent-run validation",
-        reproduction_label: "agent-investigated reproduction",
-        reproduction_status: ReproductionStatus::Planned,
-        scope_class: ScopeClass::Uncertain,
-        base_branch,
-    };
-
-    let outcome = IssueFixOrchestrator::new(&loopx)
-        .plan_issue(
-            &issue_request,
-            &request.repository_path,
-            temp_dir.path(),
-            ExecutionMode::DryRun,
+pub async fn issue_fix_answer_user_question(
+    _state: State<'_, AppState>,
+    request: IssueFixAnswerUserQuestionRequest,
+) -> Result<IssueFixAutonomousStatusResponse, String> {
+    let repository_path = required_repository_path(&request.repository_path)?;
+    let loopx =
+        LoopxIssueFix::probe().ok_or_else(|| "loopx is not installed on this host".to_string())?;
+    let autonomous = AutonomousIssueFix::new(loopx);
+    let control = autonomous
+        .answer_user_question(
+            repository_path,
+            &request.todo_id,
+            request.decision,
+            request.reason.as_deref(),
         )
         .await
         .map_err(|error| {
-            error!(
-                "Failed to plan issue-fix execution: repo={}, issue={}, error={error}",
-                request.repo, request.issue_ref
-            );
-            format!("Failed to plan this issue: {error}")
+            error!("Failed to answer LoopX Issue-Fix user question: {error}");
+            format!("Failed to answer LoopX Issue-Fix user question: {error}")
         })?;
-
-    let route = route_label(outcome.feasibility.route);
-    if outcome.feasibility.route != FixRoute::FixPr {
-        return Ok(IssueFixExecuteResponse {
-            issue_ref: request.issue_ref.clone(),
-            route,
-            submitted: false,
-            not_submitted_reason: Some(
-                "LoopX selected a non-fix route (comment_only or triage_only); nothing was submitted"
-                    .to_string(),
-            ),
-            turn_id: None,
-        });
+    // The wake must not race a concurrent Stop: run_job_now's manual trigger
+    // bypasses enabled=false, so re-read the job state under the same lock
+    // Stop holds while disabling.
+    let _guard = HOST_LOOP_LOCK.lock().await;
+    let mut host_loop = host_loop_state(&control.goal_id, repository_path).await;
+    if host_loop.enabled {
+        if let (Some(cron), Some(job_id)) = (get_global_cron_service(), host_loop.job_id.as_deref())
+        {
+            // The stored heartbeat prompt is a snapshot; a gate answer is a
+            // natural point to re-sync it with the installed LoopX version.
+            match autonomous.heartbeat_prompt(repository_path).await {
+                Ok(prompt) => {
+                    if let Err(error) = cron
+                        .update_job(
+                            job_id,
+                            UpdateCronJobRequest {
+                                payload: Some(CronJobPayload { text: prompt }),
+                                ..UpdateCronJobRequest::default()
+                            },
+                        )
+                        .await
+                    {
+                        warn!("Failed to refresh the Issue-Fix heartbeat prompt: {error}");
+                    }
+                }
+                Err(error) => {
+                    warn!("Failed to regenerate the Issue-Fix heartbeat prompt: {error}")
+                }
+            }
+            match cron.run_job_now(job_id).await {
+                Ok(job) => host_loop = project_host_loop(&job),
+                Err(error) => warn!(
+                    "LoopX Issue-Fix user decision was recorded but the host loop could not be woken immediately: {error}"
+                ),
+            }
+        }
     }
+    Ok(IssueFixAutonomousStatusResponse { control, host_loop })
+}
 
-    let message = issue_fix_task_message(&request);
-    let session_id = request.session_id.trim().to_string();
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct IssueFixAutonomousIssueRequest {
+    pub issue_ref: String,
+    pub issue_url: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct IssueFixStartAutonomousRequest {
+    pub session_id: String,
+    pub repo: String,
+    pub repository_path: String,
+    pub issues: Vec<IssueFixAutonomousIssueRequest>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct IssueFixStartAutonomousResponse {
+    #[serde(flatten)]
+    pub control: AutonomousControlState,
+    pub host_loop: IssueFixHostLoopState,
+    pub added_issue_refs: Vec<String>,
+    pub immediate_turn_id: Option<String>,
+}
+
+#[tauri::command]
+pub async fn issue_fix_start_autonomous(
+    _state: State<'_, AppState>,
+    request: IssueFixStartAutonomousRequest,
+) -> Result<IssueFixStartAutonomousResponse, String> {
+    let repository_path = required_repository_path(&request.repository_path)?;
+    let session_id = request.session_id.trim();
     if session_id.is_empty() {
-        return Err("session_id is required to execute an issue fix".to_string());
+        return Err("session_id is required for continuous issue fixing".to_string());
     }
+    let cron =
+        get_global_cron_service().ok_or_else(|| "Cron service is not initialized".to_string())?;
+    let loopx =
+        LoopxIssueFix::probe().ok_or_else(|| "loopx is not installed on this host".to_string())?;
+    let selections = request
+        .issues
+        .into_iter()
+        .map(|issue| IssueSelection {
+            issue_ref: issue.issue_ref,
+            issue_url: issue.issue_url,
+        })
+        .collect::<Vec<_>>();
 
-    let dialog_request = AgentDialogTurnRequest {
-        session_id: session_id.clone(),
-        message: message.clone(),
-        original_message: None,
-        turn_id: None,
-        // Empty: the coordinator resolves the session's own mode instead of
-        // overriding it with a hard-coded type.
-        agent_type: String::new(),
-        workspace_path: Some(request.repository_path.clone()),
-        remote_connection_id: None,
-        remote_ssh_host: None,
-        policy: DialogSubmissionPolicy::for_source(DialogTriggerSource::DesktopApi),
-        reply_route: None,
-        prepended_reminders: Vec::new(),
-        attachments: Vec::new(),
-        metadata: serde_json::Map::new(),
-    };
-
-    let outcome = runtime
-        .agent_runtime()
-        .submit_dialog_turn(dialog_request)
+    let plan = AutonomousIssueFix::new(loopx)
+        .start(repository_path, request.repo.trim(), &selections)
         .await
         .map_err(|error| {
-            error!(
-                "Failed to submit the issue-fix dialog turn: repo={}, issue={}, error={error}",
-                request.repo, request.issue_ref
-            );
-            format!("Failed to start the fix task: {error}")
+            error!("Failed to start continuous LoopX Issue-Fix: {error}");
+            format!("Failed to start continuous Issue-Fix: {error}")
         })?;
 
-    let turn_id = match &outcome {
-        bitfun_runtime_ports::DialogSubmitOutcome::Started { turn_id, .. }
-        | bitfun_runtime_ports::DialogSubmitOutcome::Queued { turn_id, .. } => {
-            Some(turn_id.clone())
-        }
+    let job_name = job_name(&plan.control.goal_id);
+    let workspace = CronWorkspaceRef {
+        workspace_id: None,
+        workspace_path: repository_path.display().to_string(),
+        project_workspace_path: Some(repository_path.display().to_string()),
+        execution_target: None,
+        remote_connection_id: None,
+        remote_ssh_host: None,
+    };
+    let target = CronJobTarget::Session {
+        session_id: session_id.to_string(),
+        workspace,
+    };
+    let schedule = CronSchedule::Every {
+        every_ms: WAKE_INTERVAL_MS,
+        anchor_ms: None,
+    };
+    let payload = CronJobPayload {
+        text: plan.heartbeat_prompt,
     };
 
-    Ok(IssueFixExecuteResponse {
-        issue_ref: request.issue_ref,
-        route,
-        submitted: true,
-        not_submitted_reason: None,
-        turn_id,
+    let _guard = HOST_LOOP_LOCK.lock().await;
+    let matching = resolve_host_loop_job(&job_name, repository_path).await?;
+    let job = if let Some(existing) = matching {
+        cron.update_job(
+            &existing.id,
+            UpdateCronJobRequest {
+                name: Some(job_name),
+                schedule: Some(schedule),
+                payload: Some(payload),
+                enabled: Some(true),
+                target: Some(target),
+            },
+        )
+        .await
+    } else {
+        cron.create_job(CreateCronJobRequest {
+            name: job_name,
+            schedule,
+            payload,
+            enabled: true,
+            target,
+        })
+        .await
+    }
+    .map_err(|error| {
+        error!("Failed to persist the continuous Issue-Fix host loop: {error}");
+        format!("Failed to persist continuous Issue-Fix host loop: {error}")
+    })?;
+
+    let triggered = cron.run_job_now(&job.id).await.map_err(|error| {
+        error!("Failed to trigger the continuous Issue-Fix host loop: {error}");
+        format!("Failed to trigger continuous Issue-Fix host loop: {error}")
+    })?;
+    let immediate_turn_id = triggered.state.active_turn_id.clone();
+    let host_loop = project_host_loop(&triggered);
+
+    Ok(IssueFixStartAutonomousResponse {
+        control: plan.control,
+        host_loop,
+        added_issue_refs: plan.added_issue_refs,
+        immediate_turn_id,
     })
 }
 
-/// The task message handed to the agent loop for one issue.
-fn issue_fix_task_message(request: &IssueFixExecuteRequest) -> String {
-    let title = request
-        .issue_title
-        .as_deref()
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .unwrap_or("(no title captured)");
-    format!(
-        "Please fix the following repository issue.\n\
-         Issue: {repo}#{issue_ref}\n\
-         Title: {title}\n\
-         URL: {url}\n\n\
-         Instructions:\n\
-         - Read the relevant repository sources first and locate the code that causes the problem.\n\
-         - Make the smallest fix that addresses the reported problem.\n\
-         - Validate the change with the repository's focused checks for the touched surface.\n\
-         - Report what you changed, how you validated it, and any remaining risks.\n\
-         Do not create a branch or open a pull request yourself; report the result here instead.",
-        repo = request.repo,
-        issue_ref = request.issue_ref,
-        title = title,
-        url = request.issue_url,
-    )
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct IssueFixStopAutonomousRequest {
+    pub repository_path: String,
 }
 
-/// A context with one advisory placeholder source.
-///
-/// LoopX rejects a context with no sources, and an advisory memory-retrieval entry
-/// grounds nothing — so this reports "we have not read the repository" without
-/// overstating what is known.
-fn empty_repository_context() -> Result<RepositoryContext, Box<dyn std::error::Error + Send + Sync>>
-{
-    use bitfun_services_integrations::loopx_issue_fix::repository_context::{
-        Freshness, RepositoryContextSource, SourceKind, SupportAspect, Trust,
+/// Disable the host wake loop. LoopX Kernel state (goal, todos, gates) is left
+/// untouched: stopping the heartbeat is a host scheduling concern, and a later
+/// start resumes exactly where the Kernel says the work stands.
+#[tauri::command]
+pub async fn issue_fix_stop_autonomous(
+    _state: State<'_, AppState>,
+    request: IssueFixStopAutonomousRequest,
+) -> Result<IssueFixHostLoopState, String> {
+    let repository_path = required_repository_path(&request.repository_path)?;
+    // Stop is the kill switch: it must work even when the LoopX registry is
+    // broken or the goal identity changed, so a failed lookup only demotes
+    // which job gets projected, never aborts the disable sweep.
+    let current_name = match AutonomousIssueFix::identity(repository_path) {
+        Ok((goal_id, _)) => job_name(&goal_id),
+        Err(error) => {
+            warn!("Stopping Issue-Fix host loops without a resolvable LoopX goal: {error}");
+            String::new()
+        }
     };
+    let cron =
+        get_global_cron_service().ok_or_else(|| "Cron service is not initialized".to_string())?;
 
-    let mut builder = RepositoryContextBuilder::new();
-    builder.push(RepositoryContextSource {
-        source_id: "bitfun-pending-repository-read".to_string(),
-        source_kind: SourceKind::MemoryRetrieval,
-        reference: "bitfun:issue-fix-pending-read".to_string(),
-        trust: Trust::Advisory,
-        freshness: Freshness::Unknown,
-        supports: vec![SupportAspect::ChangeScope],
-        summary: "BitFun has not read repository sources for this issue yet.".to_string(),
-        consultation_state: None,
-    })?;
-    Ok(builder.build()?)
+    let _guard = HOST_LOOP_LOCK.lock().await;
+    // Disable every Issue-Fix loop bound to this repository, not just the
+    // current goal's: this must also catch jobs orphaned by an older goal
+    // identity.
+    let mut stopped: Option<CronJob> = None;
+    for job in cron.list_jobs().await {
+        if !job.name.starts_with(JOB_NAME_PREFIX) || !job_targets_repository(&job, repository_path)
+        {
+            continue;
+        }
+        let disabled = cron
+            .update_job(
+                &job.id,
+                UpdateCronJobRequest {
+                    enabled: Some(false),
+                    ..UpdateCronJobRequest::default()
+                },
+            )
+            .await
+            .map_err(|error| {
+                error!("Failed to stop the continuous Issue-Fix host loop: {error}");
+                format!("Failed to stop continuous Issue-Fix host loop: {error}")
+            })?;
+        if disabled.name == current_name || stopped.is_none() {
+            stopped = Some(disabled);
+        }
+    }
+    Ok(stopped
+        .as_ref()
+        .map(project_host_loop)
+        .unwrap_or_default())
 }
 
-fn route_label(
-    route: bitfun_services_integrations::loopx_issue_fix::orchestrator::FixRoute,
-) -> String {
-    use bitfun_services_integrations::loopx_issue_fix::orchestrator::FixRoute;
-    match route {
-        FixRoute::FixPr => "fix_pr",
-        FixRoute::CommentOnly => "comment_only",
-        FixRoute::TriageOnly => "triage_only",
+fn required_repository_path(raw: &str) -> Result<&Path, String> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return Err("repository_path is required".to_string());
     }
-    .to_string()
+    let path = Path::new(trimmed);
+    if !path.is_dir() {
+        return Err(format!(
+            "Repository path does not exist: {}",
+            path.display()
+        ));
+    }
+    Ok(path)
 }
 
-fn next_step_label(
-    step: bitfun_services_integrations::loopx_issue_fix::orchestrator::NextStep,
-) -> String {
-    use bitfun_services_integrations::loopx_issue_fix::orchestrator::NextStep;
-    match step {
-        NextStep::RunnableSuccessor => "runnable_successor",
-        NextStep::MonitorContinuation => "monitor_continuation",
-        NextStep::UserGate => "user_gate",
-        NextStep::NoFollowup => "no_followup",
-    }
-    .to_string()
+fn job_name(goal_id: &str) -> String {
+    format!("{JOB_NAME_PREFIX}{goal_id}")
 }
 
-fn grounding_label(
-    grounding: bitfun_services_integrations::loopx_issue_fix::orchestrator::ContextGrounding,
-) -> String {
-    use bitfun_services_integrations::loopx_issue_fix::orchestrator::ContextGrounding;
-    match grounding {
-        ContextGrounding::Grounded => "grounded",
-        ContextGrounding::Partial => "partial",
-        ContextGrounding::Ungrounded => "ungrounded",
-        ContextGrounding::NotProvided => "not_provided",
+/// Project the current goal's host loop, tolerating duplicates.
+///
+/// Duplicate jobs (from a concurrent start racing the create) must not brick
+/// every status call: project the most recently updated one and leave the
+/// cleanup to the next start, which holds `HOST_LOOP_LOCK`.
+async fn host_loop_state(goal_id: &str, repository_path: &Path) -> IssueFixHostLoopState {
+    let Some(cron) = get_global_cron_service() else {
+        return IssueFixHostLoopState::default();
+    };
+    let mut matching = matching_jobs(&job_name(goal_id), repository_path, cron.list_jobs().await);
+    if matching.len() > 1 {
+        warn!(
+            "Found {} continuous Issue-Fix host loops for goal {goal_id}; projecting the newest",
+            matching.len()
+        );
+        matching.sort_by_key(|job| std::cmp::Reverse(job.updated_at_ms));
     }
-    .to_string()
+    matching
+        .first()
+        .map(project_host_loop)
+        .unwrap_or_default()
+}
+
+/// Pick the canonical host-loop job for `start`, deleting duplicates and
+/// disabling stale jobs left behind by an older goal identity. Callers must
+/// hold `HOST_LOOP_LOCK`.
+async fn resolve_host_loop_job(
+    name: &str,
+    repository_path: &Path,
+) -> Result<Option<CronJob>, String> {
+    let Some(cron) = get_global_cron_service() else {
+        return Err("Cron service is not initialized".to_string());
+    };
+    let mut canonical: Option<CronJob> = None;
+    for job in cron.list_jobs().await {
+        if !job.name.starts_with(JOB_NAME_PREFIX) || !job_targets_repository(&job, repository_path)
+        {
+            continue;
+        }
+        if job.name != name {
+            // A job from a previous goal identity (e.g. after re-bootstrap)
+            // would keep firing its stale prompt invisibly; park it.
+            if job.enabled {
+                warn!("Disabling stale continuous Issue-Fix host loop {}", job.name);
+                let _ = cron
+                    .update_job(
+                        &job.id,
+                        UpdateCronJobRequest {
+                            enabled: Some(false),
+                            ..UpdateCronJobRequest::default()
+                        },
+                    )
+                    .await;
+            }
+            continue;
+        }
+        match &canonical {
+            Some(kept) if kept.updated_at_ms >= job.updated_at_ms => {
+                warn!("Deleting duplicate continuous Issue-Fix host loop {}", job.id);
+                let _ = cron.delete_job(&job.id).await;
+            }
+            Some(kept) => {
+                warn!("Deleting duplicate continuous Issue-Fix host loop {}", kept.id);
+                let _ = cron.delete_job(&kept.id).await;
+                canonical = Some(job);
+            }
+            None => canonical = Some(job),
+        }
+    }
+    Ok(canonical)
+}
+
+fn matching_jobs(name: &str, repository_path: &Path, jobs: Vec<CronJob>) -> Vec<CronJob> {
+    jobs.into_iter()
+        .filter(|job| job.name == name && job_targets_repository(job, repository_path))
+        .collect()
+}
+
+fn job_targets_repository(job: &CronJob, repository_path: &Path) -> bool {
+    same_path(&job.workspace().workspace_path, repository_path)
+        || job
+            .workspace()
+            .project_workspace_path
+            .as_deref()
+            .is_some_and(|path| same_path(path, repository_path))
+}
+
+fn same_path(candidate: &str, expected: &Path) -> bool {
+    let candidate = candidate.replace('/', "\\");
+    let expected = expected.display().to_string().replace('/', "\\");
+    let candidate = candidate.trim_end_matches('\\');
+    let expected = expected.trim_end_matches('\\');
+    // Case-insensitive comparison is a Windows filesystem property; on other
+    // platforms /repos/Foo and /repos/foo are distinct repositories.
+    #[cfg(windows)]
+    {
+        candidate.eq_ignore_ascii_case(expected)
+    }
+    #[cfg(not(windows))]
+    {
+        candidate == expected
+    }
+}
+
+fn run_status_label(status: CronJobRunStatus) -> &'static str {
+    match status {
+        CronJobRunStatus::Queued => "queued",
+        CronJobRunStatus::Running => "running",
+        CronJobRunStatus::Ok => "ok",
+        CronJobRunStatus::Error => "error",
+        CronJobRunStatus::Cancelled => "cancelled",
+    }
+}
+
+fn project_host_loop(job: &CronJob) -> IssueFixHostLoopState {
+    IssueFixHostLoopState {
+        enabled: job.enabled,
+        job_id: Some(job.id.clone()),
+        session_id: job.session_id().map(str::to_string),
+        active_turn_id: job.state.active_turn_id.clone(),
+        next_run_at_ms: job.state.next_run_at_ms,
+        last_run_status: job
+            .state
+            .last_run_status
+            .map(|status| run_status_label(status).to_string()),
+        last_error: job.state.last_error.clone(),
+        consecutive_failures: job.state.consecutive_failures,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn host_job_name_is_goal_scoped() {
+        assert_eq!(job_name("bitfun-goal"), "LoopX Issue Fix: bitfun-goal");
+    }
+
+    #[test]
+    fn windows_path_matching_is_case_and_separator_insensitive() {
+        assert!(same_path(
+            "C:/codeagent/BitFun/",
+            Path::new("c:\\codeagent\\bitfun")
+        ));
+    }
 }

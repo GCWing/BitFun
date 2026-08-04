@@ -1563,16 +1563,25 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         RemoteWorkspacePolicy::WorkspaceAgnostic,
     ),
     (
-        "issue_fix_execute",
+        "issue_fix_autonomous_status",
         RemoteWorkspacePolicy::RemoteUnsupported,
     ),
     (
-        "issue_fix_plan_issue",
+        "issue_fix_autonomous_poll",
         RemoteWorkspacePolicy::RemoteUnsupported,
     ),
     (
-        "issue_fix_probe",
-        RemoteWorkspacePolicy::WorkspaceAgnostic,
+        "issue_fix_answer_user_question",
+        RemoteWorkspacePolicy::RemoteUnsupported,
+    ),
+    ("issue_fix_probe", RemoteWorkspacePolicy::WorkspaceAgnostic),
+    (
+        "issue_fix_start_autonomous",
+        RemoteWorkspacePolicy::RemoteUnsupported,
+    ),
+    (
+        "issue_fix_stop_autonomous",
+        RemoteWorkspacePolicy::RemoteUnsupported,
     ),
     ("rollback_miniapp", RemoteWorkspacePolicy::LegacyUnaudited),
     ("rollback_session", RemoteWorkspacePolicy::RemoteUnsupported),

@@ -1,29 +1,69 @@
 {
   "noRepository": "開啟一個帶 GitHub 或 GitLab 遠端的工作區，才能列出它的 issue。",
+  "loopxMissing": "未安裝 loopx，無法啟動修復。",
+  "loading": "正在載入 issue…",
   "noIssues": "沒有開放的 issue。",
   "noSelection": "選擇一個 issue 查看詳情。",
-  "loading": "正在載入 issue…",
-  "refresh": "重新載入 issue",
   "issuesLabel": "Issue 清單",
   "detailLabel": "Issue 詳情",
-  "progress": "已完成 {{done}} / {{total}}",
+  "refresh": "重新載入 issue",
   "selectedCount": "已選 {{selected}} / {{total}}",
-  "gateNotice": "已暫停：有 issue 需要你確認後才能繼續。",
+  "autonomous": {
+    "actionRequired": "LoopX 正在等待你的處理。",
+    "hostLoopActive": "持續修復已運行，由 {{agent}} 串行推進。",
+    "hostLoopFailure": "排程心跳執行失敗：{{error}}",
+    "kernelSummary": "{{goal}} · {{state}} · {{queued}} 項排隊",
+    "loadingKernel": "正在讀取 LoopX 狀態…",
+    "missingWorkspace": "目前面板缺少本機工作區路徑。",
+    "openSession": "開啟會話",
+    "sessionTitle": "LoopX 持續 Issue 修復",
+    "start": "啟動持續修復",
+    "starting": "正在啟動…",
+    "stop": "停止",
+    "stopping": "正在停止…",
+    "userQuestion": {
+      "title": "需要你的決定",
+      "header": "LoopX Gate",
+      "options": {
+        "approve": {
+          "label": "同意",
+          "description": "授予此次請求的精確權限並繼續"
+        },
+        "reject": {
+          "label": "不同意",
+          "description": "拒絕此次請求，不執行受保護動作"
+        },
+        "cancel": {
+          "label": "取消請求",
+          "description": "不授予權限，結束本次確認"
+        }
+      },
+      "reasonLabel": "原因（可選）",
+      "reasonPlaceholder": "補充一句簡短原因",
+      "submit": "提交決定",
+      "submitting": "正在提交…",
+      "waiting": "等待你的回答"
+    }
+  },
   "status": {
     "queued": "排隊中",
     "fixing": "正在修",
-    "pullRequestOpened": "已發 PR",
     "resolvedWithoutPullRequest": "已處理",
-    "awaitingDecision": "等你確認",
-    "stopped": "已中止"
+    "awaitingDecision": "等你確認"
   },
   "detail": {
-    "state": "狀態",
     "author": "作者",
+    "body": "Issue 內容",
     "comments": "評論數",
-    "openOnProvider": "在平台上開啟"
-  },
-  "start": "規劃修復",
-  "running": "規劃中…",
-  "loopxMissing": "未安裝 loopx，無法規劃。"
+    "commentsTitle": "評論 {{count}}",
+    "created": "建立",
+    "emptyBody": "這個 issue 沒有正文。",
+    "emptyComment": "這則評論沒有內容。",
+    "loadingEvidence": "正在載入詳情…",
+    "noComments": "暫無評論。",
+    "openOnProvider": "查看原 Issue",
+    "state": "狀態",
+    "unknownAuthor": "未知作者",
+    "updated": "更新"
+  }
 }

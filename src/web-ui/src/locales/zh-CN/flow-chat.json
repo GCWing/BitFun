@@ -506,7 +506,8 @@
     "editDialogBulletHistory": "删除该轮及之后的对话记录",
     "editDialogBulletRerun": "使用编辑后的消息启动新一轮对话",
     "editSuccess": "已编辑消息并重新运行",
-    "editFailed": "编辑消息失败"
+    "editFailed": "编辑消息失败",
+    "scheduledHeartbeat": "定时心跳 · {{time}}"
   },
   "contextMenu": {
     "copySelection": "复制选中内容",

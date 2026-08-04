@@ -611,3 +611,51 @@
     animation: none;
   }
 }
+
+// Scheduled-job turns (issue-fix heartbeat) collapse to a one-line chip.
+.user-message-item--scheduled {
+  padding: 0;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
+
+.user-message-item__scheduled-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border: 1px solid var(--border-primary, rgba(128, 128, 128, 0.25));
+  border-radius: 999px;
+  background: var(--bg-secondary, rgba(128, 128, 128, 0.08));
+  color: var(--text-tertiary, #8a8f98);
+  font-size: 11px;
+  line-height: 16px;
+  cursor: pointer;
+  user-select: none;
+
+  &:hover {
+    color: var(--text-secondary, #6b7280);
+    background: var(--bg-hover, rgba(128, 128, 128, 0.14));
+  }
+}
+
+.user-message-item__scheduled-label {
+  white-space: nowrap;
+}
+
+.user-message-item__scheduled-content {
+  margin: 6px 0 0;
+  padding: 8px 10px;
+  max-height: 260px;
+  overflow: auto;
+  border-radius: 6px;
+  border: 1px solid var(--border-primary, rgba(128, 128, 128, 0.25));
+  background: var(--bg-secondary, rgba(128, 128, 128, 0.06));
+  color: var(--text-secondary, #6b7280);
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}

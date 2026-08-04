@@ -1,29 +1,69 @@
 {
   "noRepository": "Open a workspace with a GitHub or GitLab remote to list its issues.",
+  "loopxMissing": "loopx is not installed, so fixing is unavailable.",
+  "loading": "Loading issues…",
   "noIssues": "No open issues.",
   "noSelection": "Select an issue to see its details.",
-  "loading": "Loading issues…",
-  "refresh": "Refresh issues",
   "issuesLabel": "Issues",
   "detailLabel": "Issue details",
-  "progress": "{{done}} of {{total}} done",
+  "refresh": "Refresh issues",
   "selectedCount": "{{selected}} of {{total}} selected",
-  "gateNotice": "Paused: an issue needs your decision before the run continues.",
+  "autonomous": {
+    "actionRequired": "LoopX is waiting for your action.",
+    "hostLoopActive": "Continuous fixing is active and advances serially as {{agent}}.",
+    "hostLoopFailure": "The scheduled heartbeat is failing: {{error}}",
+    "kernelSummary": "{{goal}} · {{state}} · {{queued}} queued",
+    "loadingKernel": "Reading LoopX state…",
+    "missingWorkspace": "This panel has no local workspace path.",
+    "openSession": "Open session",
+    "sessionTitle": "LoopX continuous issue fixing",
+    "start": "Start continuous fix",
+    "starting": "Starting…",
+    "stop": "Stop",
+    "stopping": "Stopping…",
+    "userQuestion": {
+      "title": "Decision required",
+      "header": "LoopX gate",
+      "options": {
+        "approve": {
+          "label": "Approve",
+          "description": "Grant this exact request and continue"
+        },
+        "reject": {
+          "label": "Reject",
+          "description": "Deny this request and do not perform the protected action"
+        },
+        "cancel": {
+          "label": "Cancel request",
+          "description": "Grant no authority and close this confirmation"
+        }
+      },
+      "reasonLabel": "Reason (optional)",
+      "reasonPlaceholder": "Add a short reason",
+      "submit": "Submit decision",
+      "submitting": "Submitting…",
+      "waiting": "Waiting for your answer"
+    }
+  },
   "status": {
     "queued": "Queued",
     "fixing": "Fixing",
-    "pullRequestOpened": "PR opened",
     "resolvedWithoutPullRequest": "Resolved",
-    "awaitingDecision": "Needs you",
-    "stopped": "Stopped"
+    "awaitingDecision": "Needs you"
   },
   "detail": {
-    "state": "State",
     "author": "Author",
+    "body": "Issue content",
     "comments": "Comments",
-    "openOnProvider": "Open on provider"
-  },
-  "start": "Plan fixes",
-  "running": "Planning…",
-  "loopxMissing": "loopx is not installed, so planning is unavailable."
+    "commentsTitle": "{{count}} comments",
+    "created": "Created",
+    "emptyBody": "This issue has no body.",
+    "emptyComment": "This comment has no content.",
+    "loadingEvidence": "Loading details…",
+    "noComments": "No comments yet.",
+    "openOnProvider": "View original issue",
+    "state": "State",
+    "unknownAuthor": "Unknown author",
+    "updated": "Updated"
+  }
 }

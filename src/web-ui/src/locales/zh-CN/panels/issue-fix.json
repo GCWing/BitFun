@@ -1,29 +1,69 @@
 {
   "noRepository": "打开一个带 GitHub 或 GitLab 远端的工作区，才能列出它的 issue。",
+  "loopxMissing": "未安装 loopx，无法启动修复。",
+  "loading": "正在加载 issue…",
   "noIssues": "没有开放的 issue。",
   "noSelection": "选择一个 issue 查看详情。",
-  "loading": "正在加载 issue…",
-  "refresh": "刷新 issue",
   "issuesLabel": "Issue 列表",
   "detailLabel": "Issue 详情",
-  "progress": "已完成 {{done}} / {{total}}",
+  "refresh": "刷新 issue",
   "selectedCount": "已选 {{selected}} / {{total}}",
-  "gateNotice": "已暂停：有 issue 需要你确认后才能继续。",
+  "autonomous": {
+    "actionRequired": "LoopX 正在等待你的处理。",
+    "hostLoopActive": "持续修复已运行，由 {{agent}} 串行推进。",
+    "hostLoopFailure": "定时心跳执行失败：{{error}}",
+    "kernelSummary": "{{goal}} · {{state}} · {{queued}} 项排队",
+    "loadingKernel": "正在读取 LoopX 状态…",
+    "missingWorkspace": "当前面板缺少本地工作区路径。",
+    "openSession": "打开会话",
+    "sessionTitle": "LoopX 持续 Issue 修复",
+    "start": "启动持续修复",
+    "starting": "正在启动…",
+    "stop": "停止",
+    "stopping": "正在停止…",
+    "userQuestion": {
+      "title": "需要你的决定",
+      "header": "LoopX Gate",
+      "options": {
+        "approve": {
+          "label": "同意",
+          "description": "授予此次请求的精确权限并继续"
+        },
+        "reject": {
+          "label": "不同意",
+          "description": "拒绝此次请求，不执行受保护动作"
+        },
+        "cancel": {
+          "label": "取消请求",
+          "description": "不授予权限，结束本次确认"
+        }
+      },
+      "reasonLabel": "原因（可选）",
+      "reasonPlaceholder": "补充一句简短原因",
+      "submit": "提交决定",
+      "submitting": "正在提交…",
+      "waiting": "等待你的回答"
+    }
+  },
   "status": {
     "queued": "排队中",
     "fixing": "正在修",
-    "pullRequestOpened": "已发 PR",
     "resolvedWithoutPullRequest": "已处理",
-    "awaitingDecision": "等你确认",
-    "stopped": "已中止"
+    "awaitingDecision": "等你确认"
   },
   "detail": {
-    "state": "状态",
     "author": "作者",
+    "body": "Issue 内容",
     "comments": "评论数",
-    "openOnProvider": "在平台上打开"
-  },
-  "start": "规划修复",
-  "running": "规划中…",
-  "loopxMissing": "未安装 loopx，无法规划。"
+    "commentsTitle": "评论 {{count}}",
+    "created": "创建",
+    "emptyBody": "这个 issue 没有正文。",
+    "emptyComment": "这条评论没有内容。",
+    "loadingEvidence": "正在加载详情…",
+    "noComments": "暂无评论。",
+    "openOnProvider": "查看原 Issue",
+    "state": "状态",
+    "unknownAuthor": "未知作者",
+    "updated": "更新"
+  }
 }

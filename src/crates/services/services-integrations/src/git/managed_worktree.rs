@@ -10,7 +10,21 @@ use tokio::io::AsyncWriteExt;
 use tokio::task;
 
 fn normalized_path(path: &Path) -> String {
-    path.to_string_lossy().replace('\\', "/")
+    normalize_git_cli_path(path.to_string_lossy().as_ref())
+}
+
+fn normalize_git_cli_path(value: &str) -> String {
+    let normalized = value.replace('\\', "/");
+    #[cfg(windows)]
+    {
+        if let Some(rest) = normalized.strip_prefix("//?/UNC/") {
+            return format!("//{rest}");
+        }
+        if let Some(rest) = normalized.strip_prefix("//?/") {
+            return rest.to_string();
+        }
+    }
+    normalized
 }
 
 fn parse_nul_paths(bytes: &[u8]) -> Result<Vec<String>, GitError> {
@@ -476,7 +490,7 @@ impl GitService {
 
 #[cfg(test)]
 mod tests {
-    use super::GitService;
+    use super::{normalize_git_cli_path, GitService};
     use std::fs;
     use std::path::Path;
     use std::process::Command;
@@ -512,6 +526,19 @@ mod tests {
         git(&repository, &["add", "."]);
         git(&repository, &["commit", "-m", "base"]);
         (temp, repository)
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn normalized_path_strips_extended_windows_prefix_for_git_cli() {
+        assert_eq!(
+            normalize_git_cli_path(r"\\?\C:\Users\huawei\.bitfun\worktrees\repo"),
+            "C:/Users/huawei/.bitfun/worktrees/repo"
+        );
+        assert_eq!(
+            normalize_git_cli_path(r"\\?\UNC\server\share\repo"),
+            "//server/share/repo"
+        );
     }
 
     #[tokio::test]

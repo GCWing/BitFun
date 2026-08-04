@@ -1656,7 +1656,21 @@ fn path_is_within_root(path: &Path, root: &Path) -> bool {
 }
 
 fn path_string(path: &Path) -> String {
-    path.to_string_lossy().replace('\\', "/")
+    display_path_string(path.to_string_lossy().as_ref())
+}
+
+fn display_path_string(value: &str) -> String {
+    let normalized = value.replace('\\', "/");
+    #[cfg(windows)]
+    {
+        if let Some(rest) = normalized.strip_prefix("//?/UNC/") {
+            return format!("//{rest}");
+        }
+        if let Some(rest) = normalized.strip_prefix("//?/") {
+            return rest.to_string();
+        }
+    }
+    normalized
 }
 
 fn current_unix_ms() -> u64 {
@@ -1788,6 +1802,8 @@ fn map_git_error(git_error: GitError) -> WorktreeError {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(windows)]
+    use super::display_path_string;
     use super::{
         automatic_delete_candidate_ids, managed_target_path, managed_worktree_directory_name,
         path_is_within_root, repository_id, resolve_managed_root, sanitize_worktree_project_label,
@@ -1829,6 +1845,19 @@ mod tests {
         assert_ne!(
             repository_id(Path::new("/repo/.git")),
             repository_id(Path::new("/other/.git"))
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn path_string_strips_extended_windows_prefix_for_ui_contracts() {
+        assert_eq!(
+            display_path_string(r"\\?\C:\Users\huawei\.bitfun\worktrees\repo"),
+            "C:/Users/huawei/.bitfun/worktrees/repo"
+        );
+        assert_eq!(
+            display_path_string(r"\\?\UNC\server\share\repo"),
+            "//server/share/repo"
         );
     }
 

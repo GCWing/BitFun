@@ -822,7 +822,10 @@ mod tests {
     #[cfg(windows)]
     #[test]
     fn windows_validation_commands_are_delegated_through_cmd() {
-        assert_eq!(windows_safe_validation_command("pnpm test"), "cmd /c pnpm test");
+        assert_eq!(
+            windows_safe_validation_command("pnpm test"),
+            "cmd /c pnpm test"
+        );
         assert_eq!(
             windows_safe_validation_command("pnpm --dir src/web-ui run test:run x"),
             "cmd /c pnpm --dir src/web-ui run test:run x"
