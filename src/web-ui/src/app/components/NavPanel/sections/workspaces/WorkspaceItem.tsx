@@ -907,7 +907,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
               </span>
             </span>
           </button>
-          <Tooltip content={workspace.rootPath} placement="right" followCursor>
+          <Tooltip content={workspace.rootPath} placement="right" followCursor disabled={isDragging}>
             <button
               type="button"
               className="bitfun-nav-panel__assistant-item-name-btn"
@@ -1164,7 +1164,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
         <div className="bitfun-nav-panel__workspace-item-name-cluster">
           <div className="bitfun-nav-panel__workspace-item-name-stack">
             <div className="bitfun-nav-panel__workspace-item-name-row">
-              <Tooltip content={workspace.rootPath} placement="right" followCursor>
+              <Tooltip content={workspace.rootPath} placement="right" followCursor disabled={isDragging}>
                 <button
                   type="button"
                   className="bitfun-nav-panel__workspace-item-name-btn"

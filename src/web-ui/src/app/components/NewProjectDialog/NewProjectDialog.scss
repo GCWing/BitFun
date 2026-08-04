@@ -125,27 +125,38 @@
   &__path-input {
     flex: 1;
     min-width: 0;
-    
-    input {
+
+    // Style the container (not the <input>) so the overlay background and dashed
+    // border fill the full width including the container's padding area. The
+    // base Input.scss sets `border: none !important` on the <input>, so a border
+    // on the <input> never applied; putting it on the container restores the
+    // dashed look the design intended. Fills in all themes; only the dark theme
+    // made the unfilled ends visible because the white-04 overlay is invisible
+    // on light backgrounds.
+    .bitfun-input-wrapper .bitfun-input-container {
       width: 100%;
-      cursor: default;
-      user-select: none;
-      font-size: 12px;
-      padding: 10px 12px;
       background: var(--color-overlay-white-04);
       border: 1px dashed var(--border-subtle);
       border-radius: 8px;
+      padding: 10px 12px;
+      transition: border-color 0.2s ease;
+
+      &:focus-within {
+        border-style: solid;
+        border-color: var(--border-base);
+        background: var(--color-overlay-white-04);
+      }
+    }
+
+    input {
+      cursor: default;
+      user-select: none;
+      font-size: 12px;
       color: var(--color-text-primary);
-      
+
       &::placeholder {
         color: var(--color-text-muted);
         font-size: 12px;
-      }
-      
-      &:focus {
-        border-style: solid;
-        border-color: var(--border-base);
-        outline: none;
       }
     }
   }
@@ -194,27 +205,32 @@
   // ==================== Project Name Input ====================
 
   &__name-input {
-    input {
+    // See &__path-input: style the container so the overlay background fills the
+    // full width and the border (here solid) renders as intended.
+    .bitfun-input-wrapper .bitfun-input-container {
       width: 100%;
-      font-size: 12px;
-      padding: 10px 12px;
       background: var(--color-overlay-white-04);
       border: 1px solid var(--border-subtle);
       border-radius: 8px;
+      padding: 10px 12px;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease;
+
+      &:focus-within {
+        border-color: color-mix(in srgb, var(--color-accent-500) 45%, transparent);
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent-500) 10%, transparent);
+        background: var(--color-overlay-white-04);
+      }
+    }
+
+    input {
+      font-size: 12px;
       color: var(--color-text-primary);
-      transition: all 0.2s ease;
-      
+
       &::placeholder {
         color: var(--color-text-muted);
         font-size: 12px;
       }
-      
-      &:focus {
-        border-color: color-mix(in srgb, var(--color-accent-500) 45%, transparent);
-        box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent-500) 10%, transparent);
-        outline: none;
-      }
-      
+
       &:disabled {
         opacity: 0.5;
         cursor: not-allowed;
