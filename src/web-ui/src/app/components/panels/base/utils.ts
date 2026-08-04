@@ -21,6 +21,7 @@ import {
   GitPullRequest,
   Terminal,
   Wrench,
+  Puzzle,
 } from 'lucide-react';
 import { PanelContentType, PanelContentConfig } from './types';
 
@@ -270,6 +271,14 @@ export const PANEL_CONTENT_CONFIGS: Record<PanelContentType, PanelContentConfig>
     type: 'browser',
     displayName: 'Browser',
     icon: Globe,
+    supportsCopy: false,
+    supportsDownload: false,
+    showHeader: false
+  },
+  'miniapp': {
+    type: 'miniapp',
+    displayName: 'MiniApp',
+    icon: Puzzle,
     supportsCopy: false,
     supportsDownload: false,
     showHeader: false

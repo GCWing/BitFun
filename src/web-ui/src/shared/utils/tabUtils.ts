@@ -505,3 +505,30 @@ export function openFileInBestTarget(
     sceneJustOpened,
   });
 }
+
+export function createMiniAppTab(appId: string, appName: string, workspacePath?: string): void {
+  const duplicateCheckKey = `miniapp:${appId}`;
+  const detail = {
+    type: 'miniapp',
+    title: appName,
+    data: { appId, appName, workspacePath },
+    metadata: {
+      workspacePath,
+      duplicateCheckKey,
+    },
+    checkDuplicate: true,
+    duplicateCheckKey,
+    replaceExisting: true,
+  };
+
+  window.dispatchEvent(new CustomEvent(TAB_EVENTS.EXPAND_RIGHT_PANEL));
+
+  if (isRightPanelCollapsed()) {
+    window.setTimeout(() => {
+      window.dispatchEvent(new CustomEvent(TAB_EVENTS.AGENT_CREATE_TAB, { detail }));
+    }, 300);
+    return;
+  }
+
+  window.dispatchEvent(new CustomEvent(TAB_EVENTS.AGENT_CREATE_TAB, { detail }));
+}

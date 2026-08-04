@@ -144,6 +144,10 @@ const IssueFixPanel = React.lazy(() =>
   import('@/app/components/panels/issue-fix/IssueFixPanel')
 );
 
+const MiniAppPanel = React.lazy(() =>
+  import('@/app/components/panels/miniapp/MiniAppPanel')
+);
+
 // CodePreview, ChartRenderer and CodeNode removed - visualization features disabled
 import { 
   FlexiblePanelProps
@@ -964,6 +968,16 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
               workspacePath={content.data?.workspacePath}
               remoteConnectionId={content.data?.remoteConnectionId}
               remoteSshHost={content.data?.remoteSshHost}
+            />
+          </React.Suspense>
+        );
+
+      case 'miniapp':
+        return (
+          <React.Suspense fallback={<div className="bitfun-flexible-panel__loading" data-bf-component="flexible-panel" data-bf-part="loading" data-bf-state="loading">Loading MiniApp...</div>}>
+            <MiniAppPanel
+              appId={content.data?.appId}
+              workspacePath={workspacePath}
             />
           </React.Suspense>
         );
