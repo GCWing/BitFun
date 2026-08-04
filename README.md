@@ -4,107 +4,86 @@
 
 ![BitFun](./png/BitFun_title.png)
 
-</div>
-<div align="center">
+### An open-source desktop AI agent — it ships code in your real repos, and drives your real desktop.
+
+Code Agent · Cowork · Computer Use — local-first, on a Rust runtime.
+
+[**⬇ Download for macOS · Windows · Linux**](https://github.com/GCWing/BitFun/releases/latest)
+
+[Website](https://openbitfun.com/) · [Docs](./docs) · [Discussions](https://github.com/GCWing/BitFun/discussions) · [Contributing](./CONTRIBUTING.md)
+
+[![GitHub release](https://img.shields.io/github/v/release/GCWing/BitFun?style=flat-square&color=blue)](https://github.com/GCWing/BitFun/releases)
+[![Downloads](https://img.shields.io/github/downloads/GCWing/BitFun/total?style=flat-square&color=brightgreen)](https://github.com/GCWing/BitFun/releases)
+[![Stars](https://img.shields.io/github/stars/GCWing/BitFun?style=flat-square&color=yellow)](https://github.com/GCWing/BitFun/stargazers)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow?style=flat-square)](https://github.com/GCWing/BitFun/blob/main/LICENSE)
+[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-blue?style=flat-square)](https://github.com/GCWing/BitFun/releases)
 
 [![Trendshift](https://trendshift.io/api/badge/repositories/44672)](https://trendshift.io/repositories/44672)
 
-[![GitHub release](https://img.shields.io/github/v/release/GCWing/BitFun?style=flat-square&color=blue)](https://github.com/GCWing/BitFun/releases)
-[![Website](https://img.shields.io/badge/Website-openbitfun.com-6f42c1?style=flat-square)](https://openbitfun.com/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow?style=flat-square)](https://github.com/GCWing/BitFun/blob/main/LICENSE)
-[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-blue?style=flat-square)](https://github.com/GCWing/BitFun)
-
 </div>
 
----
+<!-- TODO: replace the screenshot below with a 20-30s demo GIF of a real task running end to end.
+     See scripts/record-demo.sh — this is the single highest-impact asset in this README. -->
 
-## A New-Generation Foundation for Agentic Applications
-
-BitFun puts the engineering capabilities of the Code Agent at its core and brings together Co-work and Claw (Assistant Agent) for coding, office work, and more real-world scenarios—creating a local-first, new-generation foundation for agentic applications, powered by a Rust-built Agent Runtime and a polished desktop app experience.
-
-- **Lights-Out Factory** (In Progress): Design during the day, let tasks flow to the server and run through the night, then review the results in the morning.
-- **Infinite Radius** (In Progress): Extending from desktop and browser to mobile, wearables, and more devices, so work stays accessible and continuous.
-- **App Evolution**: Build tailored workflows with custom Agents, MCP, Skills, Mini Apps, or source-level customization. **Community contributors have already created specialized versions for short-form drama, media, and more**.
-- **Better, Faster, Cheaper**: Pursue greater efficiency, better results, and lower cost.
-- **Ultimate Desktop**: Continuously refine an easier-to-use, more capable, and more beautiful desktop experience.
-
-![readme_hero](./png/readme_hero.png)
+![BitFun desktop app](./png/first_screen_screenshot.png)
 
 ---
 
-## Agent Core Metrics
+## Install
 
-The data below evaluates BitFun's core Agent capabilities. All measurements use **Deepseek-V4-Pro** and are grouped into completion results, token economy, and other experience metrics.
+**Download a build** — grab the latest installer from [Releases](https://github.com/GCWing/BitFun/releases/latest), install it, configure your model, and you are ready to go.
 
-> The current numbers are BitFun's initial evaluation results, with each case run once. Benchmarks can fluctuate with task sampling, model versions, runtime environment, and single-run variance, so these scores are meant as an initial sanity signal that the current Agent is already reasonably capable, not as a fixed ranking claim or final ceiling. We will keep optimizing and release full benchmark details later.
-
-### 1. Completion Results
-
-BitFun leads Open Code and Claude Code on both **SWE-Bench-Pro** and **SWE-Bench-Verified**. SWE-Bench-Pro focuses on complex software engineering, while SWE-Bench-Verified focuses on human-verified GitHub issue fixes.
-
-![Agent benchmark scores](./png/agent_benchmark_scores.svg)
-
-Benchmark references: [SWE-Bench-Pro](https://labs.scale.com/leaderboard/swe_bench_pro_public) / [SWE-Bench-Verified](https://www.swebench.com/verified.html)
-
-### 2. Token Economy
-
-Agent economy needs to be evaluated across end-to-end token consumption, execution time, and KV Cache reuse. The current snapshot first covers KV Cache behavior from the same SWE-Bench-Pro round: BitFun's average KV Cache hit rate was **98.67%**. The follow-up full benchmark report will add the broader cost and latency metrics.
-
-![KV Cache hit rate distribution](./png/kv_cache_hit_rate.png)
-
-### 3. Other Experience Metrics
-
-Beyond cost, Agent experience also depends on how quickly it can retrieve context in very large engineering projects. For tens-of-millions-line repositories such as Chromium, BitFun uses **flashgrep** to reduce search time by up to about **94.6%**, with an average speedup of about **36.1x**.
-
-![flashgrep search speed](./png/flashgrep_search_speed.png)
-
----
-
-## Two Core Scenarios, One Extensible Agent Desktop
-
-You can hand two kinds of complex work to BitFun: shipping code in real repositories and turning source material into office deliverables. When a task needs the browser, desktop apps, the terminal, or a remote environment, it can enter the real workspace; when your workflow needs more, you can extend it with custom Agents, MCP, Skills, and Mini Apps.
-
-### Core Scenarios
-
-| Scenario | Delivery goal | Typical capabilities |
-| --- | --- | --- |
-| **Coding** | Move from a real repository to a mergeable result. | Agentic, Plan, Debug, testing, Git, Deep Review, long-horizon tasks, and benchmarks. |
-| **Office Work** | Move from source material to deliverable documents. | Research, PPT, DOCX, XLSX, PDF, summarization, writing, meeting notes, and reports. |
-
-### Shared Capabilities
-
-- **Desktop execution layer**: Computer Use, browser operation, desktop apps, the filesystem, terminals, remote workspaces, and Mini Apps let the Agent enter real work environments.
-- **Customization layer**: MCP, Skills, custom Agents, Mini Apps, and source-level extension let BitFun keep growing around your tools, roles, and interfaces.
-
-![first_screen_screenshot](./png/first_screen_screenshot.png)
-
----
-
-## Ready Out of the Box
-
-### Download directly
-
-Go to [Releases](https://github.com/GCWing/BitFun/releases) to download the latest desktop installer. After installation, configure your model and start using BitFun.
-
-### Run from source
-
-**Prerequisites:**
-
-- [Node.js](https://nodejs.org/) 22.12+ (LTS recommended)
-- [pnpm](https://pnpm.io/) 10.15.0 via Corepack
-- [Rust toolchain](https://rustup.rs/)
-- [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/)
+**Or run from source:**
 
 ```bash
 pnpm install
 pnpm run desktop:dev
 ```
 
-For more development details, see [CONTRIBUTING.md](./CONTRIBUTING.md).
+Prerequisites: [Node.js](https://nodejs.org/) 22.12+ (LTS recommended), [pnpm](https://pnpm.io/) 10.15.0 via Corepack, the [Rust toolchain](https://rustup.rs/), and the [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/). More detail in [CONTRIBUTING.md](./CONTRIBUTING.md).
 
 ---
 
-## Customize Your BitFun
+## What you can hand to BitFun
+
+Two kinds of complex work: shipping code in real repositories, and turning source material into office deliverables. When a task needs the browser, desktop apps, the terminal, or a remote environment, BitFun can enter the real workspace.
+
+| Scenario | Delivery goal | Typical capabilities |
+| --- | --- | --- |
+| **Coding** | Move from a real repository to a mergeable result. | Agentic, Plan, Debug, testing, Git, Deep Review, long-horizon tasks, and benchmarks. |
+| **Office Work** | Move from source material to deliverable documents. | Research, PPT, DOCX, XLSX, PDF, summarization, writing, meeting notes, and reports. |
+
+**Shared capabilities**
+
+- **Desktop execution layer**: Computer Use, browser operation, desktop apps, the filesystem, terminals, remote workspaces, and Mini Apps let the Agent enter real work environments.
+- **Customization layer**: MCP, Skills, custom Agents, Mini Apps, and source-level extension let BitFun keep growing around your tools, roles, and interfaces.
+
+---
+
+## Agent core metrics
+
+The data below evaluates BitFun's core Agent capabilities, all measured with **Deepseek-V4-Pro**.
+
+> [!NOTE]
+> These are BitFun's initial evaluation results, with each case run once. Benchmarks fluctuate with task sampling, model versions, runtime environment, and single-run variance, so treat these as an initial sanity signal that the Agent is already reasonably capable — not as a fixed ranking claim or a final ceiling. Full benchmark details will follow.
+
+**1. Completion results** — BitFun leads Open Code and Claude Code on both **SWE-Bench-Pro** (complex software engineering) and **SWE-Bench-Verified** (human-verified GitHub issue fixes).
+
+![Agent benchmark scores](./png/agent_benchmark_scores.svg)
+
+Benchmark references: [SWE-Bench-Pro](https://labs.scale.com/leaderboard/swe_bench_pro_public) / [SWE-Bench-Verified](https://www.swebench.com/verified.html)
+
+**2. Token economy** — Agent economy needs to be evaluated across end-to-end token consumption, execution time, and KV Cache reuse. From the same SWE-Bench-Pro round, BitFun's average KV Cache hit rate was **98.67%**. The follow-up report will add broader cost and latency metrics.
+
+![KV Cache hit rate distribution](./png/kv_cache_hit_rate.png)
+
+**3. Context retrieval at scale** — Agent experience also depends on how quickly it retrieves context in very large projects. On tens-of-millions-line repositories such as Chromium, BitFun uses **flashgrep** to cut search time by up to **94.6%**, averaging a **36.1x** speedup.
+
+![flashgrep search speed](./png/flashgrep_search_speed.png)
+
+---
+
+## Customize your BitFun
 
 BitFun's extension paths progress continuously from light to deep customization:
 
@@ -119,7 +98,21 @@ You can use BitFun's Code Agent to extend BitFun itself.
 
 ---
 
-## Contributing
+## Where this is going
+
+- **Lights-Out Factory** (in progress): Design during the day, let tasks flow to the server and run through the night, then review the results in the morning.
+- **Infinite Radius** (in progress): Extending from desktop and browser to mobile, wearables, and more devices, so work stays accessible and continuous.
+- **App Evolution**: Build tailored workflows with custom Agents, MCP, Skills, Mini Apps, or source-level customization. **Community contributors have already created specialized versions for short-form drama, media, and more**.
+- **Better, Faster, Cheaper**: Pursue greater efficiency, better results, and lower cost.
+- **Ultimate Desktop**: Continuously refine an easier-to-use, more capable, and more beautiful desktop experience.
+
+![readme_hero](./png/readme_hero.png)
+
+---
+
+## Community & contributing
+
+Questions, ideas, and bug reports are all welcome in [Discussions](https://github.com/GCWing/BitFun/discussions) and [Issues](https://github.com/GCWing/BitFun/issues).
 
 Stars, Issues, and PRs are welcome. We especially care about:
 
