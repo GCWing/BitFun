@@ -69,6 +69,7 @@ use api::external_sources_api::*;
 use api::git_agent_api::*;
 use api::git_api::*;
 use api::i18n_api::*;
+use api::issue_fix_api::*;
 use api::lsp_api::*;
 use api::lsp_workspace_api::*;
 use api::mcp_api::*;
@@ -1332,6 +1333,13 @@ pub async fn run() {
             review_platform_get_pull_request_detail,
             review_platform_get_pull_request_review_target,
             review_platform_get_issue,
+            review_platform_list_issues,
+            issue_fix_probe,
+            issue_fix_autonomous_status,
+            issue_fix_autonomous_poll,
+            issue_fix_answer_user_question,
+            issue_fix_start_autonomous,
+            issue_fix_stop_autonomous,
             review_platform_get_pull_request_review_target_by_identity,
             review_platform_get_pull_request_detail_page,
             review_platform_get_pull_request_ci_log,

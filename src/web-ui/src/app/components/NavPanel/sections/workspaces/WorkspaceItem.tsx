@@ -2,7 +2,6 @@ import React, { lazy, Suspense, useCallback, useContext, useEffect, useMemo, use
 import { createPortal } from 'react-dom';
 import { Folder, FolderOpen, MoreHorizontal, FolderSearch, Plus, ChevronDown, Trash2, RotateCcw, Copy, FileText, Bot, Link2, ListChecks, Loader2, Clock3, ShieldCheck, Pencil, Server } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { DotMatrixArrowRightIcon } from './DotMatrixArrowRightIcon';
 import { Button, ConfirmDialog, InputDialog, Modal, Tooltip } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
@@ -800,15 +799,9 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
             data-workspace-id={workspace.id}
           >
             <span className="bitfun-nav-panel__assistant-item-avatar" data-bf-component="workspace-item" data-bf-part="icon" aria-hidden="true">
-              {isActive ? (
-                <span className="bitfun-nav-panel__assistant-item-active-icon">
-                  <DotMatrixArrowRightIcon size={14} />
-                </span>
-              ) : (
-                <span className="bitfun-nav-panel__assistant-item-avatar-letter">
-                  {workspaceDisplayName.charAt(0)}
-                </span>
-              )}
+              <span className="bitfun-nav-panel__assistant-item-avatar-letter">
+                {workspaceDisplayName.charAt(0)}
+              </span>
               <span className={`bitfun-nav-panel__assistant-item-icon-toggle${sessionsCollapsed ? ' is-collapsed' : ''}`}>
                 <ChevronDown size={12} />
               </span>
@@ -1095,11 +1088,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
         >
           <span className="bitfun-nav-panel__workspace-item-icon" data-bf-component="workspace-item" data-bf-part="icon" aria-hidden="true">
             <span className="bitfun-nav-panel__workspace-item-icon-default">
-              {isActive ? (
-                <span className="bitfun-nav-panel__workspace-item-active-icon">
-                  <DotMatrixArrowRightIcon size={14} />
-                </span>
-              ) : workspaceIsRemote ? (
+              {workspaceIsRemote ? (
                 <Server size={14} />
               ) : (
                 <FolderOpen size={14} />
