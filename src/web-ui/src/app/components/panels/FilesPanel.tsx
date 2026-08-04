@@ -1335,6 +1335,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
         placeholder={inputDialog.type === 'newFile' ? t('dialog.newFile.placeholder') : t('dialog.newFolder.placeholder')}
         confirmText={inputDialog.type === 'newFile' ? t('dialog.newFile.confirm') : t('dialog.newFolder.confirm')}
         cancelText={inputDialog.type === 'newFile' ? t('dialog.newFile.cancel') : t('dialog.newFolder.cancel')}
+        enableVoiceInput
         validator={(value) => {
           const validPattern = isRemoteCurrentWorkspace
             // eslint-disable-next-line no-control-regex -- filename rules explicitly forbid ASCII control characters.

@@ -567,7 +567,10 @@
       "failed": "语音输入失败",
       "empty": "没有识别到语音",
       "transcribeOnly": "插入转写文本",
-      "transcribeAndSend": "转写并发送"
+      "transcribeAndSend": "转写并发送",
+      "recording": "录音中",
+      "cancel": "取消",
+      "done": "完成"
     }
   },
   "workspaceStrip": {

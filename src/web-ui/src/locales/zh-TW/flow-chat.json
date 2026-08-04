@@ -567,7 +567,10 @@
       "failed": "語音輸入失敗",
       "empty": "沒有辨識到語音",
       "transcribeOnly": "插入轉寫文字",
-      "transcribeAndSend": "轉寫並傳送"
+      "transcribeAndSend": "轉寫並傳送",
+      "recording": "錄音中",
+      "cancel": "取消",
+      "done": "完成"
     }
   },
   "workspaceStrip": {

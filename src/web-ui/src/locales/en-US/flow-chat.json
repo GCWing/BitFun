@@ -567,7 +567,10 @@
       "failed": "Voice input failed",
       "empty": "No speech was recognized",
       "transcribeOnly": "Insert transcription",
-      "transcribeAndSend": "Transcribe and send"
+      "transcribeAndSend": "Transcribe and send",
+      "recording": "Recording",
+      "cancel": "Cancel",
+      "done": "Done"
     }
   },
   "workspaceStrip": {

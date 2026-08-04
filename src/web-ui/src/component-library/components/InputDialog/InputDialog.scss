@@ -16,6 +16,17 @@
     color: var(--bf-appearance-token-color-text-muted);
   }
 
+  &__input-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+
+    .input-dialog__voice-button {
+      flex-shrink: 0;
+      margin-top: 4px;
+    }
+  }
+
   &__actions {
     display: flex;
     justify-content: flex-end;

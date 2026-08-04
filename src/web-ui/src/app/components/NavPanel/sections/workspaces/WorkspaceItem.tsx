@@ -1513,6 +1513,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
         cancelText={t('actions.cancel')}
         validator={validateWorkspaceName}
         required={false}
+        enableVoiceInput
       />
       {relatedPathsDialogOpen && (
         <Suspense fallback={null}>
