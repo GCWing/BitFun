@@ -26,7 +26,9 @@
     "createFolderFailed": "Failed to create folder",
     "renameFailed": "Rename failed",
     "openInBrowserFailed": "在瀏覽器中開啟檔案失敗",
-    "revealFailed": "Failed to open file manager"
+    "revealFailed": "Failed to open file manager",
+    "runScriptFailed": "執行腳本失敗",
+    "runScriptUnsupported": "此檔案類型不支援執行腳本"
   },
   "workspace": {
     "notFound": "工作區未找到",

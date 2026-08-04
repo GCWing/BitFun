@@ -26,7 +26,9 @@
     "createFolderFailed": "Failed to create folder",
     "renameFailed": "Rename failed",
     "openInBrowserFailed": "Failed to open file in browser",
-    "revealFailed": "Failed to open file manager"
+    "revealFailed": "Failed to open file manager",
+    "runScriptFailed": "Failed to run script",
+    "runScriptUnsupported": "This file type is not supported for running scripts"
   },
   "workspace": {
     "notFound": "Workspace not found",

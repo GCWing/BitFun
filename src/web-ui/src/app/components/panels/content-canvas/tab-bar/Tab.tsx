@@ -15,6 +15,7 @@ import { workspaceManager } from '@/infrastructure/services/business/workspaceMa
 import { isRemoteWorkspace } from '@/shared/types';
 import { hasNonFileUriScheme } from '@/shared/utils/pathUtils';
 import { isHtmlFilePath } from '@/shared/utils/htmlFilePreview';
+import { getInterpreterForFile } from '@/shared/context-menu-system/commands/builtin/file/RunScriptCommand';
 import type { CanvasTab, EditorGroupId, TabState } from '../types';
 import './Tab.scss';
 export interface TabProps {
@@ -226,6 +227,19 @@ export const Tab: React.FC<TabProps> = ({
           onClick: () => runCommand('file.reveal-in-explorer', context),
         },
       );
+
+      // Run Script — shown when the file has a known interpreter
+      const interpreter = canUseLocalFileActions && filePath
+        ? getInterpreterForFile(filePath)
+        : undefined;
+      if (interpreter) {
+        items.push({
+          id: 'tab-run-script',
+          label: t('common:file.runScript'),
+          icon: 'Play',
+          onClick: () => runCommand('file.run-script', context),
+        });
+      }
 
       if (isHtmlFilePath(filePath)) {
         items.push({
