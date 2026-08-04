@@ -19,6 +19,7 @@ export const appearanceConfigAppearanceDescriptor: AppearanceSurfaceDescriptor =
     { id: 'marketDetail' }, { id: 'marketDetailPreview' }, { id: 'marketDetailBody' },
     { id: 'marketWarning' }, { id: 'marketReleaseList' }, { id: 'marketRelease' },
     { id: 'marketActions' }, { id: 'marketNav' }, { id: 'marketWorkflow' },
+    { id: 'marketManualSubmit' },
     { id: 'marketSubmissionList' }, { id: 'marketSubmission' },
     { id: 'marketReviewLayout' }, { id: 'marketReviewQueue' },
     { id: 'marketReviewDetail' }, { id: 'marketReviewActions' },
