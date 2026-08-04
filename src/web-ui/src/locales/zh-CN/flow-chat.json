@@ -2371,6 +2371,7 @@
     "fastModeDescription": "1.5 倍速度，消耗更多额度",
     "switchFailed": "切换模型失败",
     "modelNotConfigured": "未配置",
+    "thinkingLevelUpdateFailed": "更新思考层级失败",
     "contextUsage": {
       "agentPrompt": "上次请求输入上下文: {{usage}}",
       "acpContext": "ACP 上报上下文: {{usage}}",
@@ -2379,8 +2380,12 @@
   },
   "reasoningEffort": {
     "title": "推理深度",
-    "tooltip": "调整模型推理深度（仅 Responses API）",
+    "tooltip": "调整模型推理深度",
     "default": "默认",
+    "none": "None",
+    "noneDesc": "不启用推理",
+    "minimal": "Minimal",
+    "minimalDesc": "极简推理",
     "low": "Low",
     "lowDesc": "快速响应，轻度推理",
     "medium": "Medium",
@@ -2388,7 +2393,9 @@
     "high": "High",
     "highDesc": "深度推理",
     "xhigh": "Extra High",
-    "xhighDesc": "最大推理深度（较慢）"
+    "xhighDesc": "最大推理深度（较慢）",
+    "max": "Max",
+    "maxDesc": "最大推理深度"
   },
   "coworkScope": {
     "title": "选择 Cowork 工作区",

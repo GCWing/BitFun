@@ -56,3 +56,56 @@ export function supportsDeepSeekReasoningEffort(
     model_name: config?.model_name,
   }) === 'deepseek';
 }
+
+export interface ReasoningEffortOption {
+  label: string;
+  value: string;
+}
+
+const RESPONSES_EFFORT_OPTIONS: ReasoningEffortOption[] = [
+  { label: 'None', value: 'none' },
+  { label: 'Minimal', value: 'minimal' },
+  { label: 'Low', value: 'low' },
+  { label: 'Medium', value: 'medium' },
+  { label: 'High', value: 'high' },
+  { label: 'Extra High', value: 'xhigh' },
+];
+
+const ANTHROPIC_EFFORT_OPTIONS: ReasoningEffortOption[] = [
+  { label: 'Low', value: 'low' },
+  { label: 'Medium', value: 'medium' },
+  { label: 'High', value: 'high' },
+  { label: 'Max', value: 'max' },
+];
+
+const DEEPSEEK_EFFORT_OPTIONS: ReasoningEffortOption[] = [
+  { label: 'High', value: 'high' },
+  { label: 'Max', value: 'max' },
+];
+
+/**
+ * Returns the reasoning effort options available for a given model config,
+ * or null when the model has no provider-specific effort selector.
+ */
+export function getReasoningEffortOptionsForModel(
+  config?: Partial<Pick<AIModelConfig, 'provider' | 'name' | 'base_url' | 'model_name' | 'reasoning_mode'>> | null,
+): ReasoningEffortOption[] | null {
+  if (!config) return null;
+
+  if (supportsDeepSeekReasoningEffort(config)) {
+    return DEEPSEEK_EFFORT_OPTIONS;
+  }
+
+  if (supportsResponsesReasoning(config.provider)) {
+    return RESPONSES_EFFORT_OPTIONS;
+  }
+
+  if (supportsAnthropicReasoning(config.provider)) {
+    // Adaptive mode uses the effort selector; manual thinking uses budget tokens.
+    if (supportsAnthropicAdaptive(config.model_name) || config.reasoning_mode === 'adaptive') {
+      return ANTHROPIC_EFFORT_OPTIONS;
+    }
+  }
+
+  return null;
+}

@@ -2371,6 +2371,7 @@
     "fastModeDescription": "1.5x speed with higher credit usage",
     "switchFailed": "Failed to switch model",
     "modelNotConfigured": "Not Configured",
+    "thinkingLevelUpdateFailed": "Failed to update thinking level",
     "contextUsage": {
       "agentPrompt": "Last request prompt: {{usage}}",
       "acpContext": "ACP reported context: {{usage}}",
@@ -2379,8 +2380,12 @@
   },
   "reasoningEffort": {
     "title": "Reasoning Effort",
-    "tooltip": "Adjust model reasoning depth (Responses API only)",
+    "tooltip": "Adjust model reasoning depth",
     "default": "Default",
+    "none": "None",
+    "noneDesc": "No reasoning",
+    "minimal": "Minimal",
+    "minimalDesc": "Minimal reasoning",
     "low": "Low",
     "lowDesc": "Fast responses, light reasoning",
     "medium": "Medium",
@@ -2388,7 +2393,9 @@
     "high": "High",
     "highDesc": "Deep reasoning",
     "xhigh": "Extra High",
-    "xhighDesc": "Maximum reasoning depth (slower)"
+    "xhighDesc": "Maximum reasoning depth (slower)",
+    "max": "Max",
+    "maxDesc": "Maximum reasoning depth"
   },
   "coworkScope": {
     "title": "Choose a Cowork workspace",

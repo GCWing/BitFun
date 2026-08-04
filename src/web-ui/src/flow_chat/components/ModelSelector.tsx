@@ -17,7 +17,7 @@ import { configManager } from '@/infrastructure/config/services/ConfigManager';
 import { agentAPI } from '@/infrastructure/api/service-api/AgentAPI';
 import { ACPClientAPI, type AcpSessionOptions } from '@/infrastructure/api/service-api/ACPClientAPI';
 import { getProviderDisplayName } from '@/infrastructure/config/services/modelConfigs';
-import { getEffectiveReasoningMode, isReasoningVisiblyEnabled } from '@/infrastructure/config/utils/reasoning';
+import { getEffectiveReasoningMode, isReasoningVisiblyEnabled, getReasoningEffortOptionsForModel } from '@/infrastructure/config/utils/reasoning';
 import { globalEventBus } from '@/infrastructure/event-bus';
 import type { AIModelConfig, AgentModelDefaultsConfig, DefaultModelsConfig } from '@/infrastructure/config/types';
 import { Switch, Tooltip } from '@/component-library';
@@ -707,6 +707,37 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     sessionId,
   ]);
 
+  const handleSetReasoningEffort = useCallback(async (effort: string) => {
+    const modelId = getCurrentModelId();
+    if (isSpecialModel(modelId)) return;
+
+    const targetModel = allModels.find(m => m.id === modelId);
+    if (!targetModel) return;
+
+    const updatedModels = allModels.map(m =>
+      m.id === modelId ? { ...m, reasoning_effort: effort } : m,
+    );
+
+    try {
+      await configManager.setConfig('ai.models', updatedModels);
+      setAllModels(updatedModels);
+      globalEventBus.emit('mode:config:updated');
+      log.info('Reasoning effort updated', { modelId, effort });
+    } catch (error) {
+      log.error('Failed to update reasoning effort', error);
+      notificationService.error(t('modelSelector.thinkingLevelUpdateFailed'));
+    }
+  }, [allModels, getCurrentModelId, t]);
+
+  const currentModelEffortOptions = useMemo(() => {
+    const modelId = getCurrentModelId();
+    if (isSpecialModel(modelId)) return null;
+    const targetModel = allModels.find(m => m.id === modelId);
+    if (!targetModel) return null;
+    if (!isReasoningVisiblyEnabled(getEffectiveReasoningMode(targetModel))) return null;
+    return getReasoningEffortOptionsForModel(targetModel);
+  }, [allModels, getCurrentModelId]);
+
   const handleTriggerKeyDown = useCallback((event: React.KeyboardEvent<HTMLButtonElement>) => {
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
       event.preventDefault();
@@ -1233,6 +1264,32 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
               );
             })}
           </div>
+
+          {currentModelEffortOptions && currentModelEffortOptions.length > 0 && (
+            <div className="bitfun-model-selector__effort-section" data-bf-component="model-selector" data-bf-part="effortSection">
+              <div className="bitfun-model-selector__effort-header">
+                {t('reasoningEffort.title')}
+              </div>
+              <div className="bitfun-model-selector__effort-options">
+                {currentModelEffortOptions.map(option => {
+                  const isSelected = currentModel?.reasoningEffort === option.value;
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      className={`bitfun-model-selector__effort-btn${isSelected ? ' bitfun-model-selector__effort-btn--active' : ''}`}
+                      onClick={() => handleSetReasoningEffort(option.value)}
+                      data-testid="chat-model-effort-option"
+                      data-effort={option.value}
+                      data-selected={isSelected ? 'true' : 'false'}
+                    >
+                      {t(`reasoningEffort.${option.value}`, { defaultValue: option.label })}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>,
         getAppearanceOverlayHost()
       )}
