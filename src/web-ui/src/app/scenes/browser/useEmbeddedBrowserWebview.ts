@@ -66,7 +66,17 @@ export interface UseEmbeddedBrowserWebviewOptions {
 }
 
 function isTauriEnvironment(): boolean {
-  return typeof window !== 'undefined' && '__TAURI__' in window;
+  // Check __TAURI_INTERNALS__ (what `invoke` actually needs) rather than
+  // __TAURI__ (the global API namespace, only set when withGlobalTauri is
+  // true AND the webview was created via Tauri's WebviewWindowBuilder). On
+  // OHOS the ArkUI Web component is created by @ohos-rs/ability, not Tauri's
+  // builder, so __TAURI__ may be absent even though __TAURI_INTERNALS__
+  // (and thus `invoke`) is available. Mirrors the pattern in
+  // src/infrastructure/runtime/environment.ts `isTauriRuntime`.
+  if (typeof window === 'undefined') return false;
+  const internals = (window as unknown as { __TAURI_INTERNALS__?: { invoke?: unknown } })
+    .__TAURI_INTERNALS__;
+  return typeof internals?.invoke === 'function';
 }
 
 function formatUnknownError(error: unknown): string {
