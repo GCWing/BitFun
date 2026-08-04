@@ -34,6 +34,10 @@ impl CoworkMode {
                 "ListModels".to_string(),
                 "AgentWait".to_string(),
                 "Skill".to_string(),
+                // Goal lifecycle (required to update/close thread goals)
+                "get_goal".to_string(),
+                "create_goal".to_string(),
+                "update_goal".to_string(),
                 // Discovery + editing
                 "LS".to_string(),
                 "Read".to_string(),
@@ -115,5 +119,13 @@ mod tests {
         assert!(tools.contains(&"InitMiniApp".to_string()));
         assert!(tools.contains(&"FinalizeMiniApp".to_string()));
         assert!(tools.contains(&"ListModels".to_string()));
+    }
+
+    #[test]
+    fn cowork_mode_includes_goal_lifecycle_tools_in_defaults() {
+        let tools = CoworkMode::new().default_tools();
+        assert!(tools.contains(&"get_goal".to_string()));
+        assert!(tools.contains(&"create_goal".to_string()));
+        assert!(tools.contains(&"update_goal".to_string()));
     }
 }
