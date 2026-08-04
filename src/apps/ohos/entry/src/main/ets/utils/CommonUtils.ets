@@ -43,7 +43,21 @@ export class CommonUtils {
     try {
       hilog.info(0x0000, 'vnext', `open_file_dialog: multiple=${multiple}, mode=${selectMode}`);
       const documentOptions = new filePicker.DocumentSelectOptions;
-      documentOptions.defaultFilePathUri = 'file://docs/storage/Users/currentUser';
+      // Mirror reveal_in_explorer path→URI conversion so the picker opens at the
+      // caller-supplied path (e.g. the parent directory shown in NewProjectDialog)
+      // instead of the hardcoded default. Fallback keeps legacy behavior.
+      const defaultPathRaw: string = (opts.defaultPath ?? '').trim();
+      let defaultUri: string = 'file://docs/storage/Users/currentUser';
+      if (defaultPathRaw.length > 0) {
+        if (defaultPathRaw.startsWith('file://')) {
+          defaultUri = defaultPathRaw;
+        } else if (defaultPathRaw.startsWith('/data/storage/')) {
+          defaultUri = fileUri.getUriFromPath(defaultPathRaw);
+        } else {
+          defaultUri = 'file://docs' + defaultPathRaw;
+        }
+      }
+      documentOptions.defaultFilePathUri = defaultUri;
       documentOptions.selectMode = selectMode;
       documentOptions.maxSelectNumber = multiple ? 500 : 1;
 
@@ -185,4 +199,5 @@ interface PickerOptions {
   multiple?: boolean;
   directory?: boolean;
   filters?: PickerFilter[];
+  defaultPath?: string;
 }

@@ -41,6 +41,7 @@ export interface OhOpenDialogOptions {
   multiple?: boolean;
   directory?: boolean;
   filters?: OhDialogFilter[];
+  defaultPath?: string;
 }
 
 const FILE_SEARCH_PROGRESS_EVENT = 'file-search://progress';
