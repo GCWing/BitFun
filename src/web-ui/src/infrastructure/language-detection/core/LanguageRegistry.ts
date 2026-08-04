@@ -296,7 +296,7 @@ const BUILTIN_LANGUAGES: Language[] = [
     id: 'xml',
     name: 'XML',
     category: 'markup',
-    extensions: ['xml', 'xsl', 'xslt', 'xsd', 'svg', 'rss', 'atom'],
+    extensions: ['xml', 'xsl', 'xslt', 'xsd', 'rss', 'atom'],
     monacoId: 'xml',
     iconType: 'xml',
     color: BUILTIN_LANGUAGE_ACCENTS.xml,

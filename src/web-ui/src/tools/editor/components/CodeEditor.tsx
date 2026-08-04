@@ -73,6 +73,8 @@ export interface CodeEditorProps {
   language?: string;
   /** Read-only mode */
   readOnly?: boolean;
+  /** Read encoding passed to the workspace file API. */
+  readEncoding?: string;
   /** Show line numbers */
   showLineNumbers?: boolean;
   /** Show minimap */
@@ -170,6 +172,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
   fileName,
   language = 'plaintext',
   readOnly = false,
+  readEncoding,
   showLineNumbers = true,
   showMinimap = true,
   className = '',
@@ -1588,11 +1591,11 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
       let fileSizeBytes = typeof fileInfoBefore?.size === 'number'
         ? fileInfoBefore.size
         : undefined;
-      const shouldPreview = typeof fileSizeBytes === 'number'
+      const shouldPreview = !readEncoding && typeof fileSizeBytes === 'number'
         && fileSizeBytes > LARGE_FILE_FULL_LOAD_LIMIT_BYTES;
       const fileContent = shouldPreview
         ? await workspaceAPI.readFileContentPrefix(filePath, LARGE_FILE_PREVIEW_BYTES)
-        : await workspaceAPI.readFileContent(filePath);
+        : await workspaceAPI.readFileContent(filePath, readEncoding);
       setLargeFilePreview(shouldPreview);
       reportFileMissingFromDisk(false);
       try {
@@ -1665,6 +1668,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
     filePath,
     initialContent,
     isMemoryContent,
+    readEncoding,
     reportFileMissingFromDisk,
     t,
     updateLargeFileMode,
@@ -1672,7 +1676,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
 
   // Save file content
   const saveFileContent = useCallback(async () => {
-    if (!filePath) return;
+    if (!filePath || readOnly) return;
     if (isMemoryContent) return;
     
     // Read latest hasChanges state from ref to avoid closure issues
@@ -1709,7 +1713,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
           confirmDanger: true,
         });
         if (!overwrite) {
-          const diskContent = await workspaceAPI.readFileContent(filePath);
+          const diskContent = await workspaceAPI.readFileContent(filePath, readEncoding);
           const fileInfoAfter = await fetchFileMetadata();
           const vAfter = diskVersionFromMetadata(fileInfoAfter);
           applyDiskSnapshotToEditor(diskContent, vAfter);
@@ -1758,6 +1762,8 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
     filePath,
     isMemoryContent,
     onSave,
+    readEncoding,
+    readOnly,
     reportFileMissingFromDisk,
     t,
     workspacePath,
@@ -1768,7 +1774,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
   }, [saveFileContent]);
 
   useEffect(() => {
-    if (!autoSave || !filePath || !hasChanges || loading || saving) {
+    if (!autoSave || readOnly || !filePath || !hasChanges || loading || saving) {
       return;
     }
 
@@ -1779,7 +1785,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
     return () => {
       window.clearTimeout(timeout);
     };
-  }, [autoSave, autoSaveDelayMs, filePath, hasChanges, loading, saving, content]);
+  }, [autoSave, autoSaveDelayMs, filePath, hasChanges, loading, readOnly, saving, content]);
 
   // Container-level keyboard event handler, solves global conflict issues with multiple editor instances
   const handleContainerKeyDown = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
@@ -1911,7 +1917,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
         return;
       }
 
-      const fileContent = await workspaceAPI.readFileContent(filePath);
+      const fileContent = await workspaceAPI.readFileContent(filePath, readEncoding);
       if (diskContentMatchesEditorForExternalSync(fileContent, editorBuffer)) {
         diskVersionRef.current = currentVersion;
         outcome = 'content-match';
@@ -1962,7 +1968,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
       }
       isCheckingFileRef.current = false;
     }
-  }, [applyDiskSnapshotToEditor, fetchFileMetadata, filePath, isActiveTab, reportFileMissingFromDisk, t]);
+  }, [applyDiskSnapshotToEditor, fetchFileMetadata, filePath, isActiveTab, readEncoding, reportFileMissingFromDisk, t]);
 
   // Initial file load - only run once when filePath changes
   const loadFileContentCalledRef = useRef(false);
@@ -2229,7 +2235,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
           });
         }
 
-        const diskContent = await workspaceAPI.readFileContent(filePath);
+        const diskContent = await workspaceAPI.readFileContent(filePath, readEncoding);
         const editorBuffer = modelRef.current?.getValue();
         if (
           bufferBeforeRead !== undefined &&
@@ -2297,7 +2303,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
     return () => {
       unsubscribers.forEach(unsub => unsub());
     };
-  }, [applyDiskSnapshotToEditor, fetchFileMetadata, monacoReady, filePath, t, workspacePath]);
+  }, [applyDiskSnapshotToEditor, fetchFileMetadata, monacoReady, filePath, readEncoding, t, workspacePath]);
 
   useEffect(() => {
     userLanguageOverrideRef.current = false;

@@ -255,6 +255,14 @@ impl FileSystemService {
             .map_err(map_filesystem_error)
     }
 
+    /// Reads raw file bytes using the shared filesystem access and size checks.
+    pub async fn read_file_bytes(&self, file_path: &str) -> BitFunResult<Vec<u8>> {
+        self.inner
+            .read_file_bytes(file_path)
+            .await
+            .map_err(map_filesystem_error)
+    }
+
     /// Reads a file.
     pub async fn read_file(&self, file_path: &str) -> BitFunResult<FileReadResult> {
         self.inner
