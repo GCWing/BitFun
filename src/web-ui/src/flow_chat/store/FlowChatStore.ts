@@ -7103,15 +7103,27 @@ export class FlowChatStore {
         const session = prev.sessions.get(sessionId);
         if (!session) return prev;
 
+        // Preserve turns that were added to the session during the async
+        // hydration window and are absent from the restored turns.
+        // Without this, the restored dialogTurns would overwrite any
+        // live turns added between the restore request and its response,
+        // causing message action buttons (copy/edit/rollback) to break
+        // because the turn IDs are no longer in the session's dialogTurns.
+        const restoredTurnIds = new Set(dialogTurns.map(turn => turn.id));
+        const turnsAddedDuringHydration = session.dialogTurns.filter(
+          turn => !restoredTurnIds.has(turn.id),
+        );
+        const mergedDialogTurns = [...dialogTurns, ...turnsAddedDuringHydration];
+
         const updatedSession = {
           ...session,
-          dialogTurns,
+          dialogTurns: mergedDialogTurns,
           isHistorical: false,
           historyState: 'ready' as const,
           contextRestoreState,
           isPartial: restoredHistoryPartial,
-          loadedTurnCount: restoredLoadedTurnCount ?? dialogTurns.length,
-          totalTurnCount: restoredTotalTurnCount ?? dialogTurns.length,
+          loadedTurnCount: restoredLoadedTurnCount ?? mergedDialogTurns.length,
+          totalTurnCount: restoredTotalTurnCount ?? mergedDialogTurns.length,
           turnCatalog: selectPreferredTurnCatalog(session.turnCatalog, restoredTurnCatalog),
           error: null,
           config: {
