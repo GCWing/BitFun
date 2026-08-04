@@ -2,6 +2,7 @@ import React, { useCallback, useRef, useState } from 'react';
 import { useI18n } from '@/infrastructure/i18n';
 import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
 import { notificationService } from '@/shared/notification-system';
+import type { WorkspaceInfo } from '@/shared/types';
 import WorkspaceItem from './WorkspaceItem';
 import './WorkspaceListSection.scss';
 
@@ -37,6 +38,12 @@ const WorkspaceListSection: React.FC<WorkspaceListSectionProps> = ({ variant }) 
   // Refs for values that must be read inside event handlers without stale closures
   const draggedWorkspaceIdRef = useRef<string | null>(null);
   const dropTargetRef = useRef<{ workspaceId: string; position: WorkspaceDragPosition } | null>(null);
+  // Custom drag preview (a regular DOM element following the cursor) + a 1x1
+  // transparent element used as the native drag image to hide the default ghost.
+  // The default ghost gets a white webview/OS halo that no CSS on the drag image
+  // can remove; rendering the preview as a normal DOM element avoids it.
+  const dragPreviewRef = useRef<HTMLDivElement | null>(null);
+  const dragHideRef = useRef<HTMLDivElement | null>(null);
 
   const workspaces = variant === 'assistants'
     ? assistantWorkspacesList
@@ -45,17 +52,73 @@ const WorkspaceListSection: React.FC<WorkspaceListSectionProps> = ({ variant }) 
     ? t('nav.workspaces.emptyAssistants')
     : t('nav.workspaces.emptyProjects');
 
-  const handleDragStart = useCallback((workspaceId: string) => (event: React.DragEvent<HTMLDivElement>) => {
-    const payload: WorkspaceDragPayload = { workspaceId, variant };
+  const handleDragStart = useCallback((workspace: WorkspaceInfo) => (event: React.DragEvent<HTMLDivElement>) => {
+    const payload: WorkspaceDragPayload = { workspaceId: workspace.id, variant };
     const serializedPayload = JSON.stringify(payload);
     event.dataTransfer.effectAllowed = 'move';
     event.dataTransfer.setData(WORKSPACE_DRAG_MIME_TYPE, serializedPayload);
     event.dataTransfer.setData('text/plain', serializedPayload);
-    draggedWorkspaceIdRef.current = workspaceId;
-    setDraggedWorkspaceId(workspaceId);
+    draggedWorkspaceIdRef.current = workspace.id;
+    setDraggedWorkspaceId(workspace.id);
+
+    // Hide the native drag ghost with a 1x1 fully-transparent element so the
+    // platform does not render the default item snapshot (which carries a white
+    // webview/OS halo no CSS on the drag image can remove).
+    const hideEl = document.createElement('div');
+    hideEl.style.width = '1px';
+    hideEl.style.height = '1px';
+    hideEl.style.position = 'absolute';
+    hideEl.style.top = '-1000px';
+    hideEl.style.background = 'transparent';
+    document.body.appendChild(hideEl);
+    dragHideRef.current = hideEl;
+    void hideEl.offsetWidth;
+    event.dataTransfer.setDragImage(hideEl, 0, 0);
+
+    // Render the visible drag preview as a regular DOM element following the
+    // cursor. Because it is NOT the native drag image, it has no platform halo,
+    // so rounded corners / borders are safe.
+    const label = variant === 'assistants'
+      ? (workspace.identity?.name?.trim() || workspace.name)
+      : workspace.name;
+    const preview = document.createElement('div');
+    preview.textContent = label;
+    preview.style.position = 'fixed';
+    preview.style.left = `${event.clientX + 12}px`;
+    preview.style.top = `${event.clientY + 8}px`;
+    preview.style.padding = '6px 10px';
+    preview.style.background = 'var(--color-bg-elevated)';
+    preview.style.color = 'var(--color-text-primary)';
+    preview.style.border = '1px solid var(--border-subtle)';
+    preview.style.borderRadius = '6px';
+    preview.style.fontSize = '12px';
+    preview.style.maxWidth = '240px';
+    preview.style.whiteSpace = 'nowrap';
+    preview.style.overflow = 'hidden';
+    preview.style.textOverflow = 'ellipsis';
+    preview.style.pointerEvents = 'none';
+    preview.style.zIndex = '10000';
+    preview.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.3)';
+    document.body.appendChild(preview);
+    dragPreviewRef.current = preview;
   }, [variant]);
 
+  const handleDrag = useCallback((event: React.DragEvent<HTMLDivElement>) => {
+    const preview = dragPreviewRef.current;
+    if (!preview) return;
+    preview.style.left = `${event.clientX + 12}px`;
+    preview.style.top = `${event.clientY + 8}px`;
+  }, []);
+
   const handleDragEnd = useCallback(() => {
+    if (dragPreviewRef.current && document.body.contains(dragPreviewRef.current)) {
+      document.body.removeChild(dragPreviewRef.current);
+    }
+    dragPreviewRef.current = null;
+    if (dragHideRef.current && document.body.contains(dragHideRef.current)) {
+      document.body.removeChild(dragHideRef.current);
+    }
+    dragHideRef.current = null;
     draggedWorkspaceIdRef.current = null;
     dropTargetRef.current = null;
     setDraggedWorkspaceId(null);
@@ -192,7 +255,8 @@ const WorkspaceListSection: React.FC<WorkspaceListSectionProps> = ({ variant }) 
               isSingle={openedWorkspacesList.length === 1}
               draggable={workspaces.length > 1}
               isDragging={draggedWorkspaceId === workspace.id}
-              onDragStart={handleDragStart(workspace.id)}
+              onDragStart={handleDragStart(workspace)}
+              onDrag={handleDrag}
               onDragEnd={handleDragEnd}
             />
             {dropTarget?.workspaceId === workspace.id && dropTarget.position === 'after' ? (

@@ -68,6 +68,7 @@ interface WorkspaceItemProps {
   draggable?: boolean;
   isDragging?: boolean;
   onDragStart?: React.DragEventHandler<HTMLDivElement>;
+  onDrag?: React.DragEventHandler<HTMLDivElement>;
   onDragEnd?: React.DragEventHandler<HTMLDivElement>;
 }
 
@@ -85,6 +86,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
   draggable = false,
   isDragging = false,
   onDragStart,
+  onDrag,
   onDragEnd,
 }) => {
   const { t } = useI18n('common');
@@ -877,6 +879,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
           className="bitfun-nav-panel__assistant-item-card"
           draggable={draggable}
           onDragStart={onDragStart}
+          onDrag={onDrag}
           onDragEnd={onDragEnd}
           onClick={() => { void handleCardNameClick(); }}
           style={{ cursor: 'pointer' }}
@@ -1131,6 +1134,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
         className="bitfun-nav-panel__workspace-item-card"
         draggable={draggable}
         onDragStart={onDragStart}
+        onDrag={onDrag}
         onDragEnd={onDragEnd}
         onClick={() => { void handleCardNameClick(); }}
         style={{ cursor: 'pointer' }}
