@@ -13,6 +13,7 @@ use bitfun_core::service::remote_ssh::{
 };
 use bitfun_core::service::workspace::{WorkspaceInfo, WorkspaceKind};
 use serde::Serialize;
+use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
@@ -237,6 +238,37 @@ pub fn stat_local_path_metadata(
         is_remote: Some(false),
         is_runtime_artifact: is_runtime_artifact.then_some(true),
     })
+}
+
+pub async fn read_text_file_prefix(
+    app_state: &AppState,
+    raw_path: &str,
+    max_bytes: usize,
+    preferred_remote_connection_id: Option<&str>,
+) -> Result<String, String> {
+    let target =
+        resolve_desktop_path_target(app_state, raw_path, preferred_remote_connection_id).await?;
+    let bytes = match &target {
+        DesktopPathTarget::Local { resolved_path, .. } => {
+            let path = resolved_path.clone();
+            tokio::task::spawn_blocking(move || {
+                let file = std::fs::File::open(&path)
+                    .map_err(|e| format!("Failed to open '{}': {}", path.display(), e))?;
+                let mut bytes = Vec::with_capacity(max_bytes.min(1024 * 1024));
+                file.take(max_bytes as u64)
+                    .read_to_end(&mut bytes)
+                    .map_err(|e| format!("Failed to read '{}': {}", path.display(), e))?;
+                Ok::<_, String>(bytes)
+            })
+            .await
+            .map_err(|e| e.to_string())??
+        }
+        DesktopPathTarget::Remote { .. } => {
+            return Err("Large-file preview is not supported for remote workspaces".to_string());
+        }
+    };
+
+    Ok(String::from_utf8_lossy(&bytes).into_owned())
 }
 
 pub async fn read_text_file(
