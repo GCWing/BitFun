@@ -4,6 +4,7 @@ import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MarketAccountControls } from './MarketAccountControls';
+import { calculateMarketAccountMenuPosition } from './marketAccountMenuPosition';
 
 const mocks = vi.hoisted(() => ({
   account: {
@@ -77,6 +78,7 @@ describe('MarketAccountControls', () => {
   afterEach(() => {
     act(() => root.unmount());
     container.remove();
+    document.querySelector('[data-bf-overlay-host="true"]')?.remove();
   });
 
   it('opens the shared GitHub login dialog and starts the vault-backed flow', async () => {
@@ -102,9 +104,28 @@ describe('MarketAccountControls', () => {
 
     const trigger = container.querySelector<HTMLButtonElement>('[aria-haspopup="menu"]');
     await act(async () => trigger?.click());
-    const logout = container.querySelector<HTMLButtonElement>('[role="menuitem"]');
+    const menu = document.querySelector<HTMLElement>('[role="menu"]');
+    expect(menu?.parentElement?.getAttribute('data-bf-overlay-host')).toBe('true');
+    const logout = menu?.querySelector<HTMLButtonElement>('[role="menuitem"]');
     expect(logout?.textContent).toContain('market.signOut');
     await act(async () => logout?.click());
     expect(mocks.logout).toHaveBeenCalledOnce();
+  });
+
+  it('keeps the portalled menu aligned to the trigger and inside the viewport', () => {
+    const position = calculateMarketAccountMenuPosition(
+      { top: 16, right: 218, bottom: 46 },
+      { width: 230, height: 112 },
+      { width: 240, height: 180 },
+    );
+
+    expect(position).toEqual({ top: 52, left: 8 });
+    expect(
+      calculateMarketAccountMenuPosition(
+        { top: 150, right: 218, bottom: 180 },
+        { width: 230, height: 112 },
+        { width: 240, height: 200 },
+      ),
+    ).toEqual({ top: 32, left: 8 });
   });
 });

@@ -1,6 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { ChevronDown, Github, Loader2, LogOut } from 'lucide-react';
 import { Avatar, Button, Modal } from '@/component-library';
+import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { useI18n } from '@/infrastructure/i18n';
 import {
   MarketAccountError,
@@ -8,6 +10,10 @@ import {
   useMarketAccount,
 } from '@/infrastructure/market-account';
 import { useNotification } from '@/shared/notification-system';
+import {
+  calculateMarketAccountMenuPosition,
+  type MarketAccountMenuPosition,
+} from './marketAccountMenuPosition';
 import './MarketAccountControls.scss';
 
 export interface MarketAccountControlsProps {
@@ -28,8 +34,11 @@ export function MarketAccountControls({
   const account = useMarketAccount();
   const [internalLoginOpen, setInternalLoginOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [menuPosition, setMenuPosition] = useState<MarketAccountMenuPosition | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const menuPanelRef = useRef<HTMLDivElement>(null);
   const menuTriggerRef = useRef<HTMLButtonElement>(null);
+  const menuPositionFrameRef = useRef<number | null>(null);
   const startedHere = useRef(false);
   const loginOpen = controlledLoginOpen ?? internalLoginOpen;
 
@@ -38,10 +47,53 @@ export function MarketAccountControls({
     onLoginOpenChange?.(open);
   };
 
+  const updateMenuPosition = useCallback(() => {
+    if (!menuTriggerRef.current || !menuPanelRef.current) return;
+    setMenuPosition(
+      calculateMarketAccountMenuPosition(
+        menuTriggerRef.current.getBoundingClientRect(),
+        menuPanelRef.current.getBoundingClientRect(),
+        { width: window.innerWidth, height: window.innerHeight },
+      ),
+    );
+  }, []);
+
+  const scheduleMenuPositionUpdate = useCallback(() => {
+    if (menuPositionFrameRef.current !== null) return;
+    menuPositionFrameRef.current = requestAnimationFrame(() => {
+      menuPositionFrameRef.current = null;
+      updateMenuPosition();
+    });
+  }, [updateMenuPosition]);
+
+  useLayoutEffect(() => {
+    if (!menuOpen) {
+      return;
+    }
+
+    updateMenuPosition();
+    window.addEventListener('resize', scheduleMenuPositionUpdate, { passive: true });
+    window.addEventListener('scroll', scheduleMenuPositionUpdate, {
+      capture: true,
+      passive: true,
+    });
+    return () => {
+      window.removeEventListener('resize', scheduleMenuPositionUpdate);
+      window.removeEventListener('scroll', scheduleMenuPositionUpdate, { capture: true });
+      if (menuPositionFrameRef.current !== null) {
+        cancelAnimationFrame(menuPositionFrameRef.current);
+        menuPositionFrameRef.current = null;
+      }
+    };
+  }, [menuOpen, scheduleMenuPositionUpdate, updateMenuPosition]);
+
   useEffect(() => {
     if (!menuOpen) return;
     const closeOnOutsideClick = (event: PointerEvent) => {
-      if (!menuRef.current?.contains(event.target as Node)) setMenuOpen(false);
+      const target = event.target as Node;
+      if (!menuRef.current?.contains(target) && !menuPanelRef.current?.contains(target)) {
+        setMenuOpen(false);
+      }
     };
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return;
@@ -126,12 +178,18 @@ export function MarketAccountControls({
             <span>@{account.me.user.login}</span>
             <ChevronDown size={13} aria-hidden="true" />
           </button>
-          {menuOpen && (
+          {menuOpen && createPortal(
             <div
+              ref={menuPanelRef}
               className="market-account-controls__menu"
               role="menu"
               data-bf-component="market-account-controls"
               data-bf-part="menu"
+              style={{
+                top: `${menuPosition?.top ?? 0}px`,
+                left: `${menuPosition?.left ?? 0}px`,
+                visibility: menuPosition ? 'visible' : 'hidden',
+              }}
             >
               <div
                 className="market-account-controls__profile"
@@ -155,7 +213,8 @@ export function MarketAccountControls({
                 <LogOut size={14} aria-hidden="true" />
                 {t('market.signOut')}
               </button>
-            </div>
+            </div>,
+            getAppearanceOverlayHost(),
           )}
         </div>
       ) : (
