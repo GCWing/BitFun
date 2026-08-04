@@ -90,3 +90,5 @@ external/
 /.bitfun/search/flashgrep-index/
 .agents/
 /.flashgrep-index-engine/
+
+.design/
