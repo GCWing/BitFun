@@ -50,6 +50,7 @@ static LOCAL_ONLY_COMMANDS: &[&str] = &[
     "appearance_market_list_review_submissions",
     "appearance_market_list_submissions",
     "appearance_market_review_submission",
+    "appearance_market_submit_package",
     "appearance_market_withdraw_submission",
     // Account identity / peer mode control (stay on controller)
     "account_login",
@@ -467,6 +468,7 @@ mod tests {
             "appearance_market_list_review_submissions",
             "appearance_market_list_submissions",
             "appearance_market_review_submission",
+            "appearance_market_submit_package",
             "appearance_market_withdraw_submission",
         ] {
             assert!(is_local_only_command(command), "{command}");

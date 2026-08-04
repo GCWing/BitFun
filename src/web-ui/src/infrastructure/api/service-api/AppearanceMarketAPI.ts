@@ -115,6 +115,15 @@ export interface AppearanceMarketDownloadRequest {
   packageSize: number;
 }
 
+export interface AppearanceMarketSubmitPackageRequest {
+  packagePath: string;
+  slug?: string;
+  minBitfunVersion?: string;
+  changelog?: string;
+  license: AppearanceMarketLicense;
+  repositoryUrl?: string;
+}
+
 function isolatedArrayBuffer(value: ArrayBuffer | Uint8Array): ArrayBuffer {
   if (value instanceof ArrayBuffer) return value.slice(0);
   if (ArrayBuffer.isView(value)) {
@@ -164,6 +173,34 @@ export class AppearanceMarketAPI {
       return await api.invoke('appearance_market_list_submissions', {});
     } catch (error) {
       throw createTauriCommandError('appearance_market_list_submissions', error);
+    }
+  }
+
+  async chooseSubmissionPackage(title: string): Promise<string | null> {
+    const { open } = await import('@tauri-apps/plugin-dialog');
+    const selected = await open({
+      directory: false,
+      multiple: false,
+      title,
+      filters: [{ name: 'BitFun Appearance', extensions: ['bitfun-appearance'] }],
+    });
+    return typeof selected === 'string' && selected.length > 0 ? selected : null;
+  }
+
+  async submitPackage(
+    request: AppearanceMarketSubmitPackageRequest,
+  ): Promise<AppearanceMarketSubmission> {
+    try {
+      return await api.invoke(
+        'appearance_market_submit_package',
+        { request },
+        { timeout: 300_000 },
+      );
+    } catch (error) {
+      throw createTauriCommandError('appearance_market_submit_package', error, {
+        ...request,
+        packagePath: request.packagePath.split(/[\\/]/).pop() ?? '<selected package>',
+      });
     }
   }
 

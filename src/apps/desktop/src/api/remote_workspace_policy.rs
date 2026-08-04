@@ -172,6 +172,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         RemoteWorkspacePolicy::WorkspaceAgnostic,
     ),
     (
+        "appearance_market_submit_package",
+        RemoteWorkspacePolicy::LocalOnly,
+    ),
+    (
         "appearance_market_review_submission",
         RemoteWorkspacePolicy::WorkspaceAgnostic,
     ),

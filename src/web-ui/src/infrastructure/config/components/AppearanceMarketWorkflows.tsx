@@ -1,13 +1,15 @@
-import { useCallback, useEffect, useState } from 'react';
-import { AlertTriangle, Image, Inbox, RefreshCw, ShieldCheck } from 'lucide-react';
-import { Button, confirmDialog, Textarea } from '@/component-library';
+import { type FormEvent, useCallback, useEffect, useState } from 'react';
+import { AlertTriangle, Image, Inbox, RefreshCw, ShieldCheck, Upload } from 'lucide-react';
+import { Button, confirmDialog, Input, Select, Textarea } from '@/component-library';
 import {
   appearanceMarketAPI,
   type AppearanceAdminSubmissionDetail,
   type AppearanceMarketSubmission,
 } from '@/infrastructure/api/service-api/AppearanceMarketAPI';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
+import { isTauriRuntime } from '@/infrastructure/runtime';
 import { notificationService } from '@/shared/notification-system';
+import { getVersionInfo } from '@/shared/utils/version';
 
 export type AppearanceMarketWorkflow = 'submissions' | 'review';
 
@@ -23,6 +25,30 @@ function canWithdraw(submission: AppearanceMarketSubmission): boolean {
   return submission.status === 'draft' || submission.status === 'submitted';
 }
 
+type ManualLicenseKind = 'spdx' | 'custom';
+
+interface ManualSubmissionDraft {
+  packagePath: string;
+  slug: string;
+  licenseKind: ManualLicenseKind;
+  licenseValue: string;
+  changelog: string;
+  repositoryUrl: string;
+  minBitfunVersion: string;
+}
+
+function createManualSubmissionDraft(): ManualSubmissionDraft {
+  return {
+    packagePath: '',
+    slug: '',
+    licenseKind: 'spdx',
+    licenseValue: '',
+    changelog: '',
+    repositoryUrl: '',
+    minBitfunVersion: getVersionInfo().version,
+  };
+}
+
 export function AppearanceMarketWorkflows({ workflow }: AppearanceMarketWorkflowsProps) {
   const { t, formatDate } = useI18n('settings/appearance');
   const [submissions, setSubmissions] = useState<AppearanceMarketSubmission[]>([]);
@@ -33,6 +59,12 @@ export function AppearanceMarketWorkflows({ workflow }: AppearanceMarketWorkflow
   const [actingId, setActingId] = useState<string | null>(null);
   const [reason, setReason] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [manualSubmitOpen, setManualSubmitOpen] = useState(false);
+  const [manualDraft, setManualDraft] = useState<ManualSubmissionDraft>(
+    createManualSubmissionDraft,
+  );
+  const [submitting, setSubmitting] = useState(false);
+  const manualSubmitAvailable = isTauriRuntime();
 
   const formattedDate = (timestamp: number) => formatDate(timestamp * 1000, {
     dateStyle: 'medium',
@@ -117,6 +149,173 @@ export function AppearanceMarketWorkflows({ workflow }: AppearanceMarketWorkflow
     }
   };
 
+  const choosePackage = async () => {
+    try {
+      const packagePath = await appearanceMarketAPI.chooseSubmissionPackage(
+        t('package.market.submissions.manual.chooseTitle'),
+      );
+      if (packagePath) {
+        setManualDraft(current => ({ ...current, packagePath }));
+      }
+    } catch (chooseError) {
+      setError(errorMessage(chooseError));
+    }
+  };
+
+  const submitPackage = async (event: FormEvent) => {
+    event.preventDefault();
+    const licenseValue = manualDraft.licenseValue.trim();
+    if (!manualDraft.packagePath || !licenseValue) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      const submission = await appearanceMarketAPI.submitPackage({
+        packagePath: manualDraft.packagePath,
+        slug: manualDraft.slug.trim() || undefined,
+        minBitfunVersion: manualDraft.minBitfunVersion.trim() || undefined,
+        changelog: manualDraft.changelog.trim() || undefined,
+        license: manualDraft.licenseKind === 'spdx'
+          ? { spdxExpression: licenseValue }
+          : { customUrl: licenseValue },
+        repositoryUrl: manualDraft.repositoryUrl.trim() || undefined,
+      });
+      setSubmissions(items => [submission, ...items.filter(item => (
+        item.submissionId !== submission.submissionId
+      ))]);
+      setManualDraft(createManualSubmissionDraft());
+      setManualSubmitOpen(false);
+      notificationService.success(t('package.market.submissions.manual.success'));
+    } catch (submitError) {
+      const message = errorMessage(submitError);
+      setError(message);
+      notificationService.error(t('package.market.submissions.manual.failed', { error: message }), {
+        duration: 5000,
+      });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const renderManualSubmit = () => manualSubmitOpen && (
+    <form
+      className="appearance-market__manual-submit"
+      data-bf-component="appearance-config"
+      data-bf-part="marketManualSubmit"
+      onSubmit={event => void submitPackage(event)}
+    >
+      <div className="appearance-market__manual-submit-heading">
+        <div>
+          <strong>{t('package.market.submissions.manual.title')}</strong>
+          <p>{t('package.market.submissions.manual.hint')}</p>
+        </div>
+      </div>
+      <div className="appearance-market__manual-package-row">
+        <Input
+          label={t('package.market.submissions.manual.package')}
+          value={manualDraft.packagePath}
+          placeholder={t('package.market.submissions.manual.packagePlaceholder')}
+          readOnly
+          required
+        />
+        <Button type="button" variant="secondary" onClick={() => void choosePackage()} disabled={submitting}>
+          {t('package.market.submissions.manual.choose')}
+        </Button>
+      </div>
+      <div className="appearance-market__manual-submit-grid">
+        <Input
+          label={t('package.market.submissions.manual.slug')}
+          value={manualDraft.slug}
+          placeholder={t('package.market.submissions.manual.slugPlaceholder')}
+          pattern="[a-z0-9][a-z0-9-]{2,62}"
+          maxLength={63}
+          onChange={event => setManualDraft(current => ({
+            ...current,
+            slug: event.target.value.toLowerCase(),
+          }))}
+        />
+        <Select
+          label={t('package.market.submissions.manual.licenseType')}
+          value={manualDraft.licenseKind}
+          options={[
+            { value: 'spdx', label: t('package.market.submissions.manual.spdx') },
+            { value: 'custom', label: t('package.market.submissions.manual.custom') },
+          ]}
+          onChange={value => setManualDraft(current => ({
+            ...current,
+            licenseKind: value as ManualLicenseKind,
+            licenseValue: '',
+          }))}
+        />
+        <Input
+          label={manualDraft.licenseKind === 'spdx'
+            ? t('package.market.submissions.manual.spdxExpression')
+            : t('package.market.submissions.manual.customLicenseUrl')}
+          value={manualDraft.licenseValue}
+          placeholder={manualDraft.licenseKind === 'spdx'
+            ? 'MIT'
+            : 'https://example.com/license'}
+          type={manualDraft.licenseKind === 'custom' ? 'url' : 'text'}
+          required
+          maxLength={manualDraft.licenseKind === 'spdx' ? 120 : 2048}
+          onChange={event => setManualDraft(current => ({
+            ...current,
+            licenseValue: event.target.value,
+          }))}
+        />
+        <Input
+          label={t('package.market.submissions.manual.minVersion')}
+          value={manualDraft.minBitfunVersion}
+          required
+          onChange={event => setManualDraft(current => ({
+            ...current,
+            minBitfunVersion: event.target.value,
+          }))}
+        />
+      </div>
+      <Input
+        label={t('package.market.submissions.manual.repository')}
+        value={manualDraft.repositoryUrl}
+        placeholder="https://github.com/owner/repository"
+        type="url"
+        onChange={event => setManualDraft(current => ({
+          ...current,
+          repositoryUrl: event.target.value,
+        }))}
+      />
+      <Textarea
+        label={t('package.market.submissions.manual.changelog')}
+        hint={t('package.market.submissions.manual.changelogHint')}
+        value={manualDraft.changelog}
+        rows={3}
+        maxLength={2000}
+        showCount
+        onChange={event => setManualDraft(current => ({
+          ...current,
+          changelog: event.target.value,
+        }))}
+      />
+      <div className="appearance-market__manual-submit-actions">
+        <Button
+          type="button"
+          variant="ghost"
+          disabled={submitting}
+          onClick={() => setManualSubmitOpen(false)}
+        >
+          {t('package.market.submissions.manual.cancel')}
+        </Button>
+        <Button
+          type="submit"
+          variant="primary"
+          isLoading={submitting}
+          disabled={!manualDraft.packagePath || !manualDraft.licenseValue.trim()}
+        >
+          <Upload size={14} aria-hidden="true" />
+          {t('package.market.submissions.manual.submit')}
+        </Button>
+      </div>
+    </form>
+  );
+
   const decide = async (decision: 'approve' | 'reject') => {
     if (!reviewDetail || (decision === 'reject' && !reason.trim())) return;
     const submissionId = reviewDetail.submission.submissionId;
@@ -162,12 +361,26 @@ export function AppearanceMarketWorkflows({ workflow }: AppearanceMarketWorkflow
             <h3 id="appearance-market-submissions-title">{t('package.market.submissions.title')}</h3>
             <p>{t('package.market.submissions.hint')}</p>
           </div>
-          <Button variant="ghost" size="small" onClick={() => void loadSubmissions()} disabled={loading}>
-            <RefreshCw size={14} aria-hidden="true" />
-            {t('package.market.submissions.refresh')}
-          </Button>
+          <div className="appearance-market__workflow-actions">
+            {manualSubmitAvailable && (
+              <Button
+                variant={manualSubmitOpen ? 'secondary' : 'primary'}
+                size="small"
+                onClick={() => setManualSubmitOpen(open => !open)}
+                disabled={submitting}
+              >
+                <Upload size={14} aria-hidden="true" />
+                {t('package.market.submissions.manual.open')}
+              </Button>
+            )}
+            <Button variant="ghost" size="small" onClick={() => void loadSubmissions()} disabled={loading}>
+              <RefreshCw size={14} aria-hidden="true" />
+              {t('package.market.submissions.refresh')}
+            </Button>
+          </div>
         </header>
         {renderError()}
+        {renderManualSubmit()}
         {loading ? <p className="appearance-market__loading">{t('package.market.submissions.loading')}</p>
           : submissions.length === 0 ? (
             <div className="appearance-market__empty">

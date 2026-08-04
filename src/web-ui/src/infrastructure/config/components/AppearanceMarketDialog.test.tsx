@@ -10,6 +10,8 @@ const mocks = vi.hoisted(() => ({
   getListing: vi.fn(),
   downloadRelease: vi.fn(),
   listSubmissions: vi.fn(),
+  chooseSubmissionPackage: vi.fn(),
+  submitPackage: vi.fn(),
   withdrawSubmission: vi.fn(),
   listReviewSubmissions: vi.fn(),
   getReviewSubmission: vi.fn(),
@@ -52,7 +54,10 @@ vi.mock('@/component-library', () => ({
     />
   ),
   Select: () => <div />,
-  Textarea: ({ label, ...props }: any) => <label>{label}<textarea {...props} /></label>,
+  Input: ({ label, ...props }: any) => <label>{label}<input {...props} /></label>,
+  Textarea: ({ label, showCount: _showCount, ...props }: any) => (
+    <label>{label}<textarea {...props} /></label>
+  ),
   confirmDialog: mocks.confirmDialog,
 }));
 
@@ -77,11 +82,17 @@ vi.mock('@/infrastructure/api/service-api/AppearanceMarketAPI', () => ({
     getListing: mocks.getListing,
     downloadRelease: mocks.downloadRelease,
     listSubmissions: mocks.listSubmissions,
+    chooseSubmissionPackage: mocks.chooseSubmissionPackage,
+    submitPackage: mocks.submitPackage,
     withdrawSubmission: mocks.withdrawSubmission,
     listReviewSubmissions: mocks.listReviewSubmissions,
     getReviewSubmission: mocks.getReviewSubmission,
     reviewSubmission: mocks.reviewSubmission,
   },
+}));
+
+vi.mock('@/infrastructure/runtime', () => ({
+  isTauriRuntime: () => true,
 }));
 
 vi.mock('@/infrastructure/appearance', () => ({
@@ -146,6 +157,25 @@ describe('AppearanceMarketDialog', () => {
     });
     mocks.downloadRelease.mockReset().mockResolvedValue(new Uint8Array([1, 2, 3]).buffer);
     mocks.listSubmissions.mockReset().mockResolvedValue([]);
+    mocks.chooseSubmissionPackage.mockReset()
+      .mockResolvedValue('/tmp/ocean-night.bitfun-appearance');
+    mocks.submitPackage.mockReset().mockResolvedValue({
+      submissionId: 'submission-upload',
+      slug: 'ocean-night',
+      releaseNumber: 1,
+      packageId: 'community.ocean-night',
+      name: 'Ocean Night',
+      description: 'A calm blue appearance',
+      mode: 'dark',
+      packageVersion: '1.0.0',
+      minBitfunVersion: '0.2.15',
+      requiredCapabilities: [],
+      changelog: 'Initial release.',
+      license: { spdxExpression: 'MIT' },
+      status: 'submitted',
+      createdAt: 1,
+      updatedAt: 1,
+    });
     mocks.withdrawSubmission.mockReset();
     mocks.listReviewSubmissions.mockReset().mockResolvedValue([]);
     mocks.getReviewSubmission.mockReset();
@@ -264,5 +294,55 @@ describe('AppearanceMarketDialog', () => {
     expect(mocks.listReviewSubmissions).toHaveBeenCalledOnce();
     expect(container.textContent).toContain('package.market.review.approve');
     expect(container.textContent).toContain('package.market.review.reject');
+  });
+
+  it('submits a local Appearance package from the client workflow', async () => {
+    await act(async () => {
+      root.render(<AppearanceMarketDialog isOpen onClose={() => undefined} />);
+      await Promise.resolve();
+    });
+
+    const submissionsTab = [...container.querySelectorAll('button')]
+      .find(button => button.textContent === 'package.market.views.submissions');
+    await act(async () => submissionsTab?.click());
+    await vi.waitFor(() => expect(mocks.listSubmissions).toHaveBeenCalledOnce());
+
+    const openButton = [...container.querySelectorAll('button')]
+      .find(button => button.textContent?.includes('package.market.submissions.manual.open'));
+    await act(async () => openButton?.click());
+
+    const chooseButton = [...container.querySelectorAll('button')]
+      .find(button => button.textContent === 'package.market.submissions.manual.choose');
+    await act(async () => chooseButton?.click());
+    await vi.waitFor(() => expect(mocks.chooseSubmissionPackage).toHaveBeenCalledOnce());
+
+    const licenseLabel = [...container.querySelectorAll('label')]
+      .find(label => label.textContent?.startsWith(
+        'package.market.submissions.manual.spdxExpression',
+      ));
+    const licenseInput = licenseLabel?.querySelector('input');
+    await act(async () => {
+      if (!licenseInput) throw new Error('license input missing');
+      const valueSetter = Object.getOwnPropertyDescriptor(
+        HTMLInputElement.prototype,
+        'value',
+      )?.set;
+      valueSetter?.call(licenseInput, 'MIT');
+      licenseInput.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+
+    const submitButton = [...container.querySelectorAll('button')]
+      .find(button => button.textContent?.includes('package.market.submissions.manual.submit'));
+    await act(async () => submitButton?.click());
+
+    await vi.waitFor(() => expect(mocks.submitPackage).toHaveBeenCalledWith({
+      packagePath: '/tmp/ocean-night.bitfun-appearance',
+      slug: undefined,
+      minBitfunVersion: '0.2.15',
+      changelog: undefined,
+      license: { spdxExpression: 'MIT' },
+      repositoryUrl: undefined,
+    }));
+    expect(container.textContent).toContain('Ocean Night');
   });
 });

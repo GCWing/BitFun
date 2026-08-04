@@ -33,6 +33,7 @@ const LOCAL_ONLY_COMMANDS = new Set([
   'appearance_market_list_review_submissions',
   'appearance_market_list_submissions',
   'appearance_market_review_submission',
+  'appearance_market_submit_package',
   'appearance_market_withdraw_submission',
   'account_login',
   'account_finalize_login',

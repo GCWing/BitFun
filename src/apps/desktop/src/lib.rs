@@ -1694,6 +1694,7 @@ pub async fn run() {
             api::appearance_market_api::appearance_market_get_listing,
             api::appearance_market_api::appearance_market_download_release,
             api::appearance_market_api::appearance_market_list_submissions,
+            api::appearance_market_api::appearance_market_submit_package,
             api::appearance_market_api::appearance_market_withdraw_submission,
             api::appearance_market_api::appearance_market_list_review_submissions,
             api::appearance_market_api::appearance_market_get_review_submission,
