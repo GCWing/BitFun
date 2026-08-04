@@ -20,6 +20,15 @@ import { AppUpdater, UpdateCheckResult } from '../utils/AppUpdater';
 import { CommonUtils } from '../utils/CommonUtils';
 import { runDeveco } from '../utils/DevecoStart';
 import { VoiceInputService } from '../services/VoiceInputService';
+import { FeedbackCredentialStore } from '../utils/FeedbackCredentialStore';
+import {
+  BrowserWebviewService,
+  CreateRequest,
+  EvalRequest,
+  NavigateRequest,
+  BoundsRequest,
+  LabelRequest,
+} from '../services/BrowserWebviewService';
 
 
 const DOMAIN = 0x0000;
@@ -216,6 +225,48 @@ export default class EntryAbility extends RustAbility {
           hilog.info(0x0000, 'vnext', 'rename error: ' + JSON.stringify(err));
         });
       return '';
+    });
+    // Embedded browser webview bridge: each ArkTS callback parses a JSON-string
+    // request from the Rust side (browser_api.rs OHOS branches) and delegates to
+    // BrowserWebviewService, returning a JSON-string envelope. The service owns
+    // a Map<label, BrowserWebviewEntry> and the RustWebviewNodeController
+    // exposed via AppStorage by the vendored DefaultXComponent.
+    const browserService = BrowserWebviewService.getInstance();
+    RustModule.registerArktsFunction('browser_webview_create_ohos', async (err: Error, arg: string): Promise<string> => {
+      const req: CreateRequest = JSON.parse(arg);
+      return await browserService.create(req);
+    });
+    RustModule.registerArktsFunction('browser_webview_eval_ohos', async (err: Error, arg: string): Promise<string> => {
+      const req: EvalRequest = JSON.parse(arg);
+      return await browserService.eval(req);
+    });
+    RustModule.registerArktsFunction('browser_webview_navigate_ohos', async (err: Error, arg: string): Promise<string> => {
+      const req: NavigateRequest = JSON.parse(arg);
+      return await browserService.navigate(req);
+    });
+    RustModule.registerArktsFunction('browser_webview_reload_ohos', async (err: Error, arg: string): Promise<string> => {
+      const req: LabelRequest = JSON.parse(arg);
+      return await browserService.reload(req);
+    });
+    RustModule.registerArktsFunction('browser_webview_set_bounds_ohos', async (err: Error, arg: string): Promise<string> => {
+      const req: BoundsRequest = JSON.parse(arg);
+      return await browserService.setBounds(req);
+    });
+    RustModule.registerArktsFunction('browser_webview_show_ohos', async (err: Error, arg: string): Promise<string> => {
+      const req: LabelRequest = JSON.parse(arg);
+      return await browserService.show(req);
+    });
+    RustModule.registerArktsFunction('browser_webview_hide_ohos', async (err: Error, arg: string): Promise<string> => {
+      const req: LabelRequest = JSON.parse(arg);
+      return await browserService.hide(req);
+    });
+    RustModule.registerArktsFunction('browser_webview_close_ohos', async (err: Error, arg: string): Promise<string> => {
+      const req: LabelRequest = JSON.parse(arg);
+      return await browserService.close(req);
+    });
+    RustModule.registerArktsFunction('browser_webview_set_focus_ohos', async (err: Error, arg: string): Promise<string> => {
+      const req: LabelRequest = JSON.parse(arg);
+      return await browserService.setFocus(req);
     });
     setTimeout(() => {
       windowStage.getMainWindow((err, data) => {

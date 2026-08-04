@@ -1,0 +1,11 @@
+{
+  "module": {
+    "name": "@ohos-rs/ability",
+    "type": "har",
+    "deviceTypes": [
+      "default",
+      "tablet",
+      "2in1"
+    ]
+  }
+}
