@@ -1152,6 +1152,10 @@ pub const REMOTE_WORKSPACE_COMMAND_POLICIES: &[(&str, RemoteWorkspacePolicy)] = 
         RemoteWorkspacePolicy::LegacyUnaudited,
     ),
     ("read_file_content", RemoteWorkspacePolicy::LegacyUnaudited),
+    (
+        "read_file_content_prefix",
+        RemoteWorkspacePolicy::RemoteUnsupported,
+    ),
     ("read_mcp_resource", RemoteWorkspacePolicy::LegacyUnaudited),
     ("record_file_change", RemoteWorkspacePolicy::LegacyUnaudited),
     (

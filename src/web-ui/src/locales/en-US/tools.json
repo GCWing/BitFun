@@ -32,6 +32,7 @@
       "retry": "Retry",
       "loading": "Loading...",
       "loadFailed": "Load failed",
+      "largeFilePreview": "The file is too large; showing the first 8 MB as a read-only preview",
       "fileNotFound": "File not found",
       "permissionDenied": "Permission denied",
       "networkError": "Network error",

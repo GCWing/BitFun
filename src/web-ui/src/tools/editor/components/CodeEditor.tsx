@@ -106,6 +106,8 @@ export interface CodeEditorProps {
 }
 
 const LARGE_FILE_SIZE_THRESHOLD_BYTES = 1 * 1024 * 1024; // 1MB
+const LARGE_FILE_FULL_LOAD_LIMIT_BYTES = 100 * 1024 * 1024;
+const LARGE_FILE_PREVIEW_BYTES = 8 * 1024 * 1024;
 const LARGE_FILE_MAX_LINE_LENGTH = 20000;
 const LARGE_FILE_RENDER_LINE_LIMIT = 10000;
 const LARGE_FILE_MAX_TOKENIZATION_LINE_LENGTH = 2000;
@@ -256,6 +258,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
   const [statusBarAnchorRect, setStatusBarAnchorRect] = useState<AnchorRect | null>(null);
   const [encoding, setEncoding] = useState<string>('UTF-8');
   const [largeFileMode, setLargeFileMode] = useState(false);
+  const [largeFilePreview, setLargeFilePreview] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
   const modelRef = useRef<monaco.editor.ITextModel | null>(null);
@@ -311,7 +314,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
   const editorConfigRuntimeRef = useRef(editorConfig);
 
   workspacePathRuntimeRef.current = workspacePath;
-  readOnlyRuntimeRef.current = readOnly;
+  readOnlyRuntimeRef.current = readOnly || largeFilePreview;
   showLineNumbersRuntimeRef.current = showLineNumbers;
   showMinimapRuntimeRef.current = showMinimap;
   onContentChangeRef.current = onContentChange;
@@ -550,6 +553,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
           insertSpaces,
           wordWrap: (config.word_wrap as any) || 'off',
           lineNumbers: config.line_numbers as any || 'on',
+          readOnly: readOnly || largeFilePreview,
           minimap: { 
             enabled: showMinimap && !largeFileMode,
             side: (config.minimap?.side as any) || 'right',
@@ -604,7 +608,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
     return () => {
       globalEventBus.off('editor:config:changed', handleConfigChange);
     };
-  }, [showMinimap, largeFileMode]);
+  }, [showMinimap, largeFileMode, largeFilePreview, readOnly]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -1577,9 +1581,20 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
     try {
       const { workspaceAPI } = await import('@/infrastructure/api');
 
-      const fileContent = await workspaceAPI.readFileContent(filePath);
+      const fileInfoBefore = await fetchFileMetadata();
+      if (isFileMissingFromMetadata(fileInfoBefore)) {
+        throw new Error('File does not exist');
+      }
+      let fileSizeBytes = typeof fileInfoBefore?.size === 'number'
+        ? fileInfoBefore.size
+        : undefined;
+      const shouldPreview = typeof fileSizeBytes === 'number'
+        && fileSizeBytes > LARGE_FILE_FULL_LOAD_LIMIT_BYTES;
+      const fileContent = shouldPreview
+        ? await workspaceAPI.readFileContentPrefix(filePath, LARGE_FILE_PREVIEW_BYTES)
+        : await workspaceAPI.readFileContent(filePath);
+      setLargeFilePreview(shouldPreview);
       reportFileMissingFromDisk(false);
-      let fileSizeBytes: number | undefined;
       try {
         const fileInfoAfter = await fetchFileMetadata();
         if (isFileMissingFromMetadata(fileInfoAfter)) {
@@ -2345,7 +2360,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
       data-monaco-editor="true"
       data-editor-id={`editor-${filePath.replace(/[^a-zA-Z0-9]/g, '-')}`}
       data-file-path={filePath}
-      data-readonly={readOnly ? 'true' : 'false'}
+      data-readonly={readOnly || largeFilePreview ? 'true' : 'false'}
       onKeyDownCapture={handleContainerKeyDown}
     >
       {showBreadcrumb && (
@@ -2388,6 +2403,12 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
         </div>
       )}
 
+      {largeFilePreview && !loading && !error && (
+        <div className="code-editor-tool__saving-indicator">
+          {t('editor.common.largeFilePreview')}
+        </div>
+      )}
+
       {saving && (
         <div className="code-editor-tool__saving-indicator">
           {t('editor.codeEditor.saving')}
@@ -2401,7 +2422,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
         selectedLines={selection.lines}
         language={detectedLanguage}
         encoding={encoding}
-        isReadOnly={readOnly}
+        isReadOnly={readOnly || largeFilePreview}
         lspStatus={
           enableLsp && lspExtensionRegistry.isFileSupported(filePath)
             ? (lspReady ? 'connected' : 'connecting')
