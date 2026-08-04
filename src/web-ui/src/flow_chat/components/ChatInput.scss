@@ -614,7 +614,7 @@
     position: relative;
     width: 100%;
     height: auto;
-    min-height: 76px;
+    min-height: 56px;
     max-height: 500px;
     display: flex;
     flex-direction: column;
@@ -695,7 +695,7 @@
     &--multi-line {
       // Max ~5 lines: 5 × (14px × 1.45) ≈ 101px + padding + action bar ≈ 160px
       .bitfun-chat-input__input-area {
-        min-height: 56px;
+        min-height: 28px;
 
         .rich-text-input {
           max-height: 102px; // ~5 lines of text
@@ -796,7 +796,7 @@
     flex-direction: column;
     align-items: stretch;
     width: 100%;
-    min-height: 56px;
+    min-height: 28px;
     overflow: visible;
     // Last line descenders + clearance above the action row (send is 28px tall in a short bar)
     padding-bottom: 4px;
