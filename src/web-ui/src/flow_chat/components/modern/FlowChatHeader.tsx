@@ -6,7 +6,7 @@
 
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { ChevronDown, ChevronUp, GitPullRequest, Keyboard, MoreHorizontal, Search, Square, SquareTerminal, Terminal, X } from 'lucide-react';
+import { ChevronDown, ChevronUp, GitPullRequest, Keyboard, MoreHorizontal, Search, Square, SquareTerminal, Terminal, Wrench, X } from 'lucide-react';
 import { Tooltip, IconButton, Input } from '@/component-library';
 import { useTranslation } from 'react-i18next';
 import { SessionFilesBadge } from './SessionFilesBadge';
@@ -15,7 +15,7 @@ import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext'
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance';
 import { computeFixedPopoverPosition } from '@/shared/utils/fixedPopoverViewport';
 import { useAnchoredPopoverPosition } from '@/shared/utils/useAnchoredPopoverPosition';
-import { createReviewPlatformTab } from '@/shared/utils/tabUtils';
+import { createIssueFixTab, createReviewPlatformTab } from '@/shared/utils/tabUtils';
 import './FlowChatHeader.scss';
 
 export interface FlowChatHeaderCommandSummary {
@@ -319,6 +319,11 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
   const handleOpenPullRequests = useCallback(() => {
     createReviewPlatformTab(currentWorkspace?.rootPath);
   }, [currentWorkspace?.rootPath]);
+
+  const handleOpenIssueFix = useCallback(() => {
+    createIssueFixTab({ workspacePath: currentWorkspace?.rootPath });
+  }, [currentWorkspace?.rootPath]);
+
 
   const handleCommandSectionMenuToggle = (event: React.MouseEvent<HTMLButtonElement>) => {
     event.preventDefault();
@@ -676,6 +681,16 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
           data-testid="flowchat-header-pull-requests"
         >
           <GitPullRequest size={14} />
+        </IconButton>
+        <IconButton
+          variant="ghost"
+          size="xs"
+          onClick={handleOpenIssueFix}
+          tooltip={t('flowChatHeader.fixIssues')}
+          aria-label={t('flowChatHeader.fixIssues')}
+          data-testid="flowchat-header-fix-issues"
+        >
+          <Wrench size={14} />
         </IconButton>
         {isSearchOpen ? (
           <div
