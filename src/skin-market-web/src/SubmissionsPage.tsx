@@ -4,6 +4,7 @@ import { sharedMarketLoginUrl } from './account';
 import { skinMarketApi } from './api';
 import { formatMarketDate } from './format';
 import type { Locale, Translate } from './i18n';
+import { marketImageUrl, retryOriginalMarketImage } from './marketImages';
 import type {
   AppearancePublicationStatus,
   AppearanceSubmission,
@@ -137,7 +138,15 @@ export function SubmissionsPage({ account, accountResolved, locale, t }: Submiss
               <article className="submission-card" key={submission.submissionId}>
                 <div className="submission-card__preview">
                   {submission.previewUrl
-                    ? <img src={submission.previewUrl} alt="" />
+                    ? (
+                      <img
+                        src={marketImageUrl(submission.previewUrl, 'compact-v1')}
+                        alt=""
+                        loading="lazy"
+                        decoding="async"
+                        onError={(event) => retryOriginalMarketImage(event.currentTarget, submission.previewUrl!)}
+                      />
+                    )
                     : <Image size={26} weight="regular" aria-hidden="true" />}
                 </div>
                 <div className="submission-card__body">

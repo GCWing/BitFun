@@ -45,6 +45,7 @@ import {
   type MarketListingSummary,
   type MarketSort,
 } from '@/infrastructure/api/service-api/MiniAppMarketAPI';
+import { marketImageUrl, retryOriginalMarketImage } from '@/infrastructure/api/service-api/MarketImage';
 import { MarketAccountControls } from '@/features/market-account';
 import { useMarketAccount } from '@/infrastructure/market-account';
 import { createLogger } from '@/shared/utils/logger';
@@ -360,7 +361,13 @@ const MiniAppMarketView: React.FC = () => {
                     >
                       <div className="miniapp-market-card__visual">
                         {item.screenshotUrls[0] ? (
-                          <img src={item.screenshotUrls[0]} alt="" loading="lazy" />
+                          <img
+                            src={marketImageUrl(item.screenshotUrls[0], 'compact-v1')}
+                            alt=""
+                            loading="lazy"
+                            decoding="async"
+                            onError={(event) => retryOriginalMarketImage(event.currentTarget, item.screenshotUrls[0]!)}
+                          />
                         ) : (
                           <span
                             className="miniapp-market-card__fallback"
@@ -472,7 +479,16 @@ const MiniAppMarketView: React.FC = () => {
               >
             {detail.screenshotUrls.length ? (
               <div className="miniapp-market-detail__screenshots">
-                {detail.screenshotUrls.map((url) => <img key={url} src={url} alt="" />)}
+                {detail.screenshotUrls.map((url, index) => (
+                  <img
+                    key={url}
+                    src={marketImageUrl(url, 'compact-v1')}
+                    alt=""
+                    loading={index === 0 ? 'eager' : 'lazy'}
+                    decoding="async"
+                    onError={(event) => retryOriginalMarketImage(event.currentTarget, url)}
+                  />
+                ))}
               </div>
             ) : null}
             {workspaceUnsupported ? (

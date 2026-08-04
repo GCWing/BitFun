@@ -34,6 +34,7 @@ import { downloadUrl, loginUrl, marketApi, MarketApiError } from './api';
 import { formatCompactNumber, formatMarketDate } from './format';
 import { useLocale, type Locale, type MessageKey } from './i18n';
 import { MiniAppIcon } from './MiniAppIcon';
+import { marketImageSrcSet, marketImageUrl, retryOriginalMarketImage } from './marketImages';
 import { useTheme, type Theme } from './theme';
 import type {
   AdminSubmissionDetail,
@@ -596,7 +597,13 @@ function AppCard({
     >
       <div className="card-visual">
         {app.screenshotUrls[0] ? (
-          <img src={app.screenshotUrls[0]} alt={localized.name} loading="lazy" />
+          <img
+            src={marketImageUrl(app.screenshotUrls[0], 'compact-v1')}
+            alt={localized.name}
+            loading="lazy"
+            decoding="async"
+            onError={(event) => retryOriginalMarketImage(event.currentTarget, app.screenshotUrls[0])}
+          />
         ) : (
           <span className="app-icon-large">
             <MiniAppIcon name={app.icon} />
@@ -808,8 +815,13 @@ function DetailPage({
               {app.screenshotUrls.map((url, index) => (
                 <img
                   key={`${url}-${index}`}
-                  src={url}
+                  src={marketImageUrl(url, 'large-v1')}
+                  srcSet={marketImageSrcSet(url)}
+                  sizes="(max-width: 1040px) calc(100vw - 40px), 520px"
                   alt={`${localized.name} ${t('screenshotLabel')} ${index + 1}`}
+                  loading={index === 0 ? 'eager' : 'lazy'}
+                  decoding="async"
+                  onError={(event) => retryOriginalMarketImage(event.currentTarget, url)}
                 />
               ))}
             </div>
@@ -1330,7 +1342,15 @@ function AdminPage({
               <div className="review-screenshots">
                 {selected.submission.screenshotUrls.map((url, index) => (
                   <figure key={url}>
-                    <img src={url} alt={`${t('submissionScreenshot')} ${index + 1}`} />
+                    <img
+                      src={marketImageUrl(url, 'large-v1')}
+                      srcSet={marketImageSrcSet(url)}
+                      sizes="(max-width: 800px) calc(100vw - 48px), 460px"
+                      alt={`${t('submissionScreenshot')} ${index + 1}`}
+                      loading="lazy"
+                      decoding="async"
+                      onError={(event) => retryOriginalMarketImage(event.currentTarget, url)}
+                    />
                     <figcaption>
                       <span>#{index + 1}</span>
                       <code>{selected.screenshotHashes[index]}</code>

@@ -4,6 +4,7 @@ import { sharedMarketLoginUrl } from './account';
 import { skinMarketApi } from './api';
 import { formatMarketDate } from './format';
 import type { Locale, Translate } from './i18n';
+import { marketImageUrl, retryOriginalMarketImage } from './marketImages';
 import type {
   AppearanceAdminSubmissionDetail,
   AppearanceSubmission,
@@ -161,7 +162,15 @@ export function AdminPage({ account, accountResolved, locale, t }: AdminPageProp
                 <>
                   <header className="review-detail__heading">
                     <div><h2>{detail.submission.name || detail.submission.slug}</h2><p>{detail.submission.description}</p></div>
-                    {detail.submission.previewUrl && <img src={detail.submission.previewUrl} alt="" />}
+                    {detail.submission.previewUrl && (
+                      <img
+                        src={marketImageUrl(detail.submission.previewUrl, 'compact-v1')}
+                        alt=""
+                        loading="lazy"
+                        decoding="async"
+                        onError={(event) => retryOriginalMarketImage(event.currentTarget, detail.submission.previewUrl!)}
+                      />
+                    )}
                   </header>
                   <dl className="review-facts">
                     <div><dt>{t('packageIdentity')}</dt><dd>{detail.submission.packageId || t('notDeclared')}</dd></div>

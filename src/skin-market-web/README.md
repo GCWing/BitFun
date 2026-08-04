@@ -15,6 +15,13 @@ broker. Skin writes use the `/skin`-scoped CSRF alias issued by that broker.
 Local development proxies `/miniapp/api` to `127.0.0.1:9710`; set
 `MINIAPP_MARKET_DEV_API` when the broker runs elsewhere.
 
+Preview endpoints retain the normalized original when no query is present and
+offer bounded, versioned WebP variants: `?variant=compact-v1` (640px maximum
+edge) and `?variant=large-v1` (1280px maximum edge). Catalog and embedded-client
+cards use compact previews; larger web/detail surfaces use responsive candidates.
+The server generates variants lazily, stores them beside the content-addressed
+original, and serves public variants with immutable cache headers.
+
 ```bash
 pnpm --dir src/skin-market-web dev
 pnpm --dir src/skin-market-web type-check

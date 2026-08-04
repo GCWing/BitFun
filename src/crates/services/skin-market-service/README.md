@@ -22,6 +22,9 @@ Key invariants:
   review bundle hash;
 - only declared package-local raster/video assets are accepted; preview output
   is normalized to same-origin WebP;
+- the no-query preview URL remains the normalized original; only the bounded
+  `compact-v1` (640px) and `large-v1` (1280px) query variants are accepted,
+  generated lazily beside the original and removed with it;
 - listing slugs and package IDs cannot be transferred between owners through
   an update submission;
 - upload size, expansion, entry count, media dimensions and MIME are bounded

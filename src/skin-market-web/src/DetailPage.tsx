@@ -165,6 +165,8 @@ export function DetailPage({ catalogSearch, isAdmin, locale, onNavigate, slug, t
               alt={t('previewAlt', { name: detail.name })}
               name={detail.name}
               eager
+              sizes="(max-width: 800px) calc(100vw - 32px), (max-width: 1180px) calc(100vw - 64px), 720px"
+              variant="large-v1"
               t={t}
             />
           </div>

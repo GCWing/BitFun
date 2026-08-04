@@ -1,4 +1,4 @@
-use crate::artifacts::ArtifactStore;
+use crate::artifacts::{ArtifactStore, MarketImageVariant};
 use crate::auth::{
     AuthService, CompletedOAuth, DesktopAuthPollRequest, RefreshTokenRequest, RequestAuth,
     RequestAuthKind,
@@ -65,6 +65,12 @@ struct ListingQuery {
     sort: Option<MarketSort>,
     cursor: Option<String>,
     limit: Option<u32>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ImageVariantQuery {
+    variant: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -439,11 +445,36 @@ async fn download_release(
 async fn get_screenshot(
     State(state): State<Arc<MarketState>>,
     Path(sha256): Path<String>,
+    Query(query): Query<ImageVariantQuery>,
 ) -> MarketResult<Response> {
     if sha256.len() != 64 || !sha256.bytes().all(|byte| byte.is_ascii_hexdigit()) {
         return Err(MarketError::not_found("Screenshot was not found."));
     }
-    let bytes = state.artifacts.read_screenshot(&sha256).await?;
+    let variant = match query.variant.as_deref() {
+        None => None,
+        Some("compact-v1") => Some(MarketImageVariant::CompactV1),
+        Some("large-v1") => Some(MarketImageVariant::LargeV1),
+        Some(_) => {
+            return Err(MarketError::bad_request(
+                "invalid_image_variant",
+                "Image variant must be compact-v1 or large-v1.",
+            ))
+        }
+    };
+    let bytes = match variant {
+        Some(variant) => {
+            state
+                .artifacts
+                .read_screenshot_variant(&sha256, variant)
+                .await?
+        }
+        None => state.artifacts.read_screenshot(&sha256).await?,
+    };
+    let content_length = bytes.len();
+    let etag = match variant {
+        Some(variant) => format!("\"{}-{}\"", sha256, variant.cache_key()),
+        None => format!("\"{sha256}\""),
+    };
     let mut response = Response::new(Body::from(bytes));
     response
         .headers_mut()
@@ -451,6 +482,14 @@ async fn get_screenshot(
     response.headers_mut().insert(
         header::CACHE_CONTROL,
         HeaderValue::from_static("public, max-age=31536000, immutable"),
+    );
+    response.headers_mut().insert(
+        header::ETAG,
+        HeaderValue::from_str(&etag).map_err(MarketError::internal)?,
+    );
+    response.headers_mut().insert(
+        header::CONTENT_LENGTH,
+        HeaderValue::from_str(&content_length.to_string()).map_err(MarketError::internal)?,
     );
     Ok(response)
 }

@@ -22,6 +22,11 @@ import {
   type AppearanceMarketSort,
 } from '@/infrastructure/api/service-api/AppearanceMarketAPI';
 import {
+  marketImageSrcSet,
+  marketImageUrl,
+  retryOriginalMarketImage,
+} from '@/infrastructure/api/service-api/MarketImage';
+import {
   getAppearancePackageValidationError,
   useAppearance,
   type AppearanceCatalogEntry,
@@ -288,7 +293,16 @@ export function AppearanceMarketDialog({ isOpen, onClose }: AppearanceMarketDial
           data-bf-part="marketDetailPreview"
         >
           {detail.previewUrl
-            ? <img src={detail.previewUrl} alt={detail.name} />
+            ? (
+              <img
+                src={marketImageUrl(detail.previewUrl, 'large-v1')}
+                srcSet={marketImageSrcSet(detail.previewUrl)}
+                sizes="(max-width: 900px) calc(100vw - 64px), 420px"
+                alt={detail.name}
+                decoding="async"
+                onError={(event) => retryOriginalMarketImage(event.currentTarget, detail.previewUrl)}
+              />
+            )
             : <Image size={32} aria-hidden="true" />}
         </div>
         <div
@@ -546,7 +560,15 @@ export function AppearanceMarketDialog({ isOpen, onClose }: AppearanceMarketDial
                       data-bf-part="marketPreview"
                     >
                       {item.previewUrl
-                        ? <img src={item.previewUrl} alt="" />
+                        ? (
+                          <img
+                            src={marketImageUrl(item.previewUrl, 'compact-v1')}
+                            alt=""
+                            loading="lazy"
+                            decoding="async"
+                            onError={(event) => retryOriginalMarketImage(event.currentTarget, item.previewUrl)}
+                          />
+                        )
                         : <Image size={25} aria-hidden="true" />}
                       <span>{t(`package.market.mode.${item.mode}`)}</span>
                     </div>

@@ -1,4 +1,4 @@
-use crate::artifacts::ArtifactStore;
+use crate::artifacts::{ArtifactStore, MarketImageVariant};
 use crate::auth::{AuthenticatedIdentity, IdentityVerifier};
 use crate::config::SkinMarketConfig;
 use crate::db::Database;
@@ -52,6 +52,12 @@ struct ListingQuery {
     sort: Option<AppearanceMarketSort>,
     cursor: Option<String>,
     limit: Option<u32>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ImageVariantQuery {
+    variant: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -354,6 +360,7 @@ async fn get_preview(
     State(state): State<Arc<SkinMarketState>>,
     headers: HeaderMap,
     Path(sha256): Path<String>,
+    Query(query): Query<ImageVariantQuery>,
 ) -> SkinMarketResult<Response> {
     validate_sha256(&sha256)?;
     let public_references: i64 = sqlx::query_scalar(
@@ -390,8 +397,31 @@ async fn get_preview(
             ));
         }
     }
-    let bytes = state.artifacts.read_preview(&sha256).await?;
+    let variant = match query.variant.as_deref() {
+        None => None,
+        Some("compact-v1") => Some(MarketImageVariant::CompactV1),
+        Some("large-v1") => Some(MarketImageVariant::LargeV1),
+        Some(_) => {
+            return Err(SkinMarketError::bad_request(
+                "invalid_image_variant",
+                "Image variant must be compact-v1 or large-v1.",
+            ))
+        }
+    };
+    let bytes = match variant {
+        Some(variant) => {
+            state
+                .artifacts
+                .read_preview_variant(&sha256, variant)
+                .await?
+        }
+        None => state.artifacts.read_preview(&sha256).await?,
+    };
     let content_length = bytes.len();
+    let etag = match variant {
+        Some(variant) => format!("\"{}-{}\"", sha256, variant.cache_key()),
+        None => format!("\"{sha256}\""),
+    };
     let mut response = Response::new(Body::from(bytes));
     response
         .headers_mut()
@@ -406,7 +436,7 @@ async fn get_preview(
     );
     response.headers_mut().insert(
         header::ETAG,
-        HeaderValue::from_str(&format!("\"{sha256}\"")).map_err(SkinMarketError::internal)?,
+        HeaderValue::from_str(&etag).map_err(SkinMarketError::internal)?,
     );
     response.headers_mut().insert(
         header::CONTENT_LENGTH,

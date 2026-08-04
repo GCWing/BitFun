@@ -284,6 +284,7 @@ function AppearanceRow({ eager, item, locale, onNavigate, t }: AppearanceRowProp
           alt={t('previewAlt', { name: item.name })}
           name={item.name}
           eager={eager}
+          sizes="(max-width: 800px) calc(100vw - 32px), (max-width: 1180px) calc(100vw - 64px), 720px"
           t={t}
         />
       </a>

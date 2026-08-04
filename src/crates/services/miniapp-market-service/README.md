@@ -46,6 +46,9 @@
 - Release 不可变，新版本审核期间继续提供旧的已批准版本。
 - 批准必须原子绑定 package hash、截图 hash、规范化 metadata 和
   `review_bundle_hash`。
+- 截图 URL 无 query 时保持规范化原图兼容；只允许 `compact-v1`（最大边 640px）
+  和 `large-v1`（最大边 1280px）两个有界变体。变体按需生成到原图旁，不进入
+  审核 hash，删除原图时必须同步删除变体。
 - 市场包只能包含协议白名单文件，必须拒绝 Node、npm、非空 ESM、zip-slip、
   link、重复/大小写冲突路径和超限解压。
 - GitHub token 只用于读取公开 `{id,login,avatar_url}`，随后丢弃，不能下发给

@@ -6,6 +6,7 @@ import {
   type AppearanceAdminSubmissionDetail,
   type AppearanceMarketSubmission,
 } from '@/infrastructure/api/service-api/AppearanceMarketAPI';
+import { marketImageUrl, retryOriginalMarketImage } from '@/infrastructure/api/service-api/MarketImage';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import { isTauriRuntime } from '@/infrastructure/runtime';
 import { notificationService } from '@/shared/notification-system';
@@ -411,7 +412,15 @@ export function AppearanceMarketWorkflows({ workflow }: AppearanceMarketWorkflow
                 >
                   <div className="appearance-market__submission-preview">
                     {submission.previewUrl
-                      ? <img src={submission.previewUrl} alt="" />
+                      ? (
+                        <img
+                          src={marketImageUrl(submission.previewUrl, 'compact-v1')}
+                          alt=""
+                          loading="lazy"
+                          decoding="async"
+                          onError={(event) => retryOriginalMarketImage(event.currentTarget, submission.previewUrl!)}
+                        />
+                      )
                       : <Image size={22} aria-hidden="true" />}
                   </div>
                   <div className="appearance-market__submission-body">
@@ -515,7 +524,13 @@ export function AppearanceMarketWorkflows({ workflow }: AppearanceMarketWorkflow
                     <p>{reviewDetail.submission.description}</p>
                   </div>
                   {reviewDetail.submission.previewUrl && (
-                    <img src={reviewDetail.submission.previewUrl} alt="" />
+                    <img
+                      src={marketImageUrl(reviewDetail.submission.previewUrl, 'compact-v1')}
+                      alt=""
+                      loading="lazy"
+                      decoding="async"
+                      onError={(event) => retryOriginalMarketImage(event.currentTarget, reviewDetail.submission.previewUrl!)}
+                    />
                   )}
                 </div>
                 <dl className="appearance-market__facts">

@@ -114,8 +114,9 @@ async fn security_headers(request: Request, next: Next) -> Response {
 mod tests {
     use super::*;
     use axum::body::{Body, Bytes};
-    use axum::http::{Request, StatusCode};
+    use axum::http::{header, Request, StatusCode};
     use axum::routing::post;
+    use std::io::Cursor;
     use tower::ServiceExt;
 
     #[tokio::test]
@@ -136,6 +137,17 @@ mod tests {
         };
         tokio::fs::create_dir_all(&config.web_dir).await.unwrap();
         tokio::fs::write(config.web_dir.join("index.html"), "<html></html>")
+            .await
+            .unwrap();
+        let screenshot_hash = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        let mut screenshot = Cursor::new(Vec::new());
+        image::DynamicImage::new_rgba8(800, 400)
+            .write_to(&mut screenshot, image::ImageFormat::WebP)
+            .unwrap();
+        ArtifactStore::open(config.artifact_dir.clone())
+            .await
+            .unwrap()
+            .put_screenshot(screenshot_hash, &screenshot.into_inner())
             .await
             .unwrap();
         let app = build_market_router(config).await.unwrap();
@@ -177,6 +189,42 @@ mod tests {
             .unwrap();
         let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert_eq!(body["error"]["code"], "not_found");
+
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri(format!(
+                        "/miniapp/api/v1/screenshots/{screenshot_hash}?variant=compact-v1"
+                    ))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        assert!(response.headers()[header::ETAG]
+            .to_str()
+            .unwrap()
+            .ends_with("-compact-v1\""));
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let decoded = image::load_from_memory_with_format(&body, image::ImageFormat::WebP).unwrap();
+        assert_eq!((decoded.width(), decoded.height()), (640, 320));
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri(format!(
+                        "/miniapp/api/v1/screenshots/{screenshot_hash}?variant=unbounded"
+                    ))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     }
 
     #[tokio::test]

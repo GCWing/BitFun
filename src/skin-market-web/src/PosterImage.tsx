@@ -1,6 +1,12 @@
 import { useEffect, useState } from 'react';
 import { ImageBroken } from '@phosphor-icons/react';
 import type { Translate } from './i18n';
+import {
+  marketImageSrcSet,
+  marketImageUrl,
+  retryOriginalMarketImage,
+  type MarketImageVariant,
+} from './marketImages';
 
 interface PosterImageProps {
   alt: string;
@@ -8,9 +14,19 @@ interface PosterImageProps {
   src: string;
   t: Translate;
   eager?: boolean;
+  sizes?: string;
+  variant?: MarketImageVariant;
 }
 
-export function PosterImage({ alt, name, src, t, eager = false }: PosterImageProps) {
+export function PosterImage({
+  alt,
+  name,
+  src,
+  t,
+  eager = false,
+  sizes,
+  variant = 'compact-v1',
+}: PosterImageProps) {
   const [failed, setFailed] = useState(false);
 
   useEffect(() => setFailed(false), [src]);
@@ -32,12 +48,16 @@ export function PosterImage({ alt, name, src, t, eager = false }: PosterImagePro
   return (
     <img
       className="poster-image"
-      src={src}
+      src={marketImageUrl(src, variant)}
+      srcSet={sizes ? marketImageSrcSet(src) : undefined}
+      sizes={sizes}
       alt={alt}
       loading={eager ? 'eager' : 'lazy'}
       decoding="async"
       referrerPolicy="no-referrer"
-      onError={() => setFailed(true)}
+      onError={(event) => {
+        if (!retryOriginalMarketImage(event.currentTarget, src)) setFailed(true);
+      }}
     />
   );
 }

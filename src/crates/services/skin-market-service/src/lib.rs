@@ -468,6 +468,34 @@ mod tests {
             "public, max-age=31536000, immutable"
         );
 
+        let compact_preview = app
+            .clone()
+            .oneshot(request(
+                "GET",
+                &format!("{private_preview_path}?variant=compact-v1"),
+                None,
+                Body::empty(),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(compact_preview.status(), StatusCode::OK);
+        assert!(compact_preview.headers()[header::ETAG]
+            .to_str()
+            .unwrap()
+            .ends_with("-compact-v1\""));
+
+        let invalid_preview_variant = app
+            .clone()
+            .oneshot(request(
+                "GET",
+                &format!("{private_preview_path}?variant=unbounded"),
+                None,
+                Body::empty(),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(invalid_preview_variant.status(), StatusCode::BAD_REQUEST);
+
         let response = app
             .clone()
             .oneshot(request(
