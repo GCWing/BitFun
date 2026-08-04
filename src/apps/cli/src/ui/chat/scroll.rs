@@ -81,13 +81,17 @@ impl ChatView {
 
     pub(crate) fn scroll_up(&mut self, lines: usize, total_message_lines: usize) {
         self.committed_message_anchor = None;
+        let visible = self
+            .messages_area
+            .map(|a| a.height.max(1) as usize)
+            .unwrap_or(20);
+        let max_offset = total_message_lines.saturating_sub(visible);
         if self.browse_mode {
-            self.scroll_offset =
-                (self.scroll_offset + lines).min(total_message_lines.saturating_sub(1));
+            self.scroll_offset = (self.scroll_offset + lines).min(max_offset);
         } else {
             self.browse_mode = true;
             self.auto_scroll = false;
-            self.scroll_offset = lines;
+            self.scroll_offset = lines.min(max_offset);
         }
     }
 
@@ -107,7 +111,11 @@ impl ChatView {
         self.committed_message_anchor = None;
         self.browse_mode = true;
         self.auto_scroll = false;
-        self.scroll_offset = total_message_lines.saturating_sub(1);
+        let visible = self
+            .messages_area
+            .map(|a| a.height.max(1) as usize)
+            .unwrap_or(20);
+        self.scroll_offset = total_message_lines.saturating_sub(visible);
     }
 
     pub(crate) fn scroll_to_bottom(&mut self) {

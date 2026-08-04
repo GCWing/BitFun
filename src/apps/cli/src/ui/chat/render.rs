@@ -295,6 +295,24 @@ impl ChatView {
                 return;
             }
 
+            // Reconcile scroll_offset against the freshly computed total_lines.
+            // Presentation toggles (e.g. /thinking) invalidate the render cache
+            // and shrink total_lines, but leave scroll_offset stale — clamping
+            // here prevents the view from being pinned to the top with a frozen
+            // scrollbar.
+            if self.browse_mode {
+                if total_lines <= visible_lines {
+                    self.browse_mode = false;
+                    self.auto_scroll = true;
+                    self.scroll_offset = 0;
+                } else {
+                    let max_scroll = total_lines.saturating_sub(visible_lines);
+                    if self.scroll_offset > max_scroll {
+                        self.scroll_offset = max_scroll;
+                    }
+                }
+            }
+
             // prefix_sum[i] = total lines of messages 0..i (exclusive end).
             let prefix_sum = layout.prefix_sum;
 
@@ -397,12 +415,12 @@ impl ChatView {
 
             // ── Scroll indicator ──
             if self.browse_mode {
-                let progress_pct = if self.scroll_offset == 0 {
+                let max_scroll = total_lines.saturating_sub(visible_lines);
+                let progress_pct = if max_scroll == 0 {
                     100
-                } else if self.scroll_offset >= total_lines {
-                    0
                 } else {
-                    ((total_lines - self.scroll_offset) * 100 / total_lines).min(100)
+                    let effective = self.scroll_offset.min(max_scroll);
+                    ((max_scroll - effective) * 100 / max_scroll).min(100)
                 };
 
                 let scroll_indicator = format!("{}%", progress_pct);
@@ -671,23 +689,21 @@ impl ChatView {
                         // round-trip instead of being inverted by XOR.
                         let collapsed = match self.presentation.thinking {
                             crate::config::ThinkingMode::Show => false,
-                            crate::config::ThinkingMode::Hide => {
-                                self.thinking_disclosures
-                                    .is_collapsed(&thinking_block_id, true)
-                            }
+                            crate::config::ThinkingMode::Hide => self
+                                .thinking_disclosures
+                                .is_collapsed(&thinking_block_id, true),
                         };
                         // In Show mode the header is non-interactive: hide the
                         // caret so users don't expect to click-collapse an
                         // already fully-expanded block.
-                        let caret = if self.presentation.thinking
-                            == crate::config::ThinkingMode::Show
-                        {
-                            ""
-                        } else if collapsed {
-                            "\u{25b8}"
-                        } else {
-                            "\u{25be}"
-                        };
+                        let caret =
+                            if self.presentation.thinking == crate::config::ThinkingMode::Show {
+                                ""
+                            } else if collapsed {
+                                "\u{25b8}"
+                            } else {
+                                "\u{25be}"
+                            };
 
                         let header_y = items.len().min(u16::MAX as usize) as u16;
                         thinking_regions.push((thinking_block_id.clone(), header_y, header_y));
@@ -795,10 +811,7 @@ impl ChatView {
                                 };
                                 plain_lines.push(format!("{line_prefix}{wrapped}"));
                                 items.push(ListItem::new(Line::from(vec![
-                                    Span::styled(
-                                        line_prefix,
-                                        self.theme.style(StyleKind::Primary),
-                                    ),
+                                    Span::styled(line_prefix, self.theme.style(StyleKind::Primary)),
                                     Span::raw(wrapped),
                                 ])));
                             }
