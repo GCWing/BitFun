@@ -3229,11 +3229,24 @@ pub async fn compress_path(
         // never serialized as archive member directories. Directory archives
         // contain the selected directory's contents at their root; extraction
         // therefore does not create `<name>/<name>/...`.
-        let zip_out = join_remote_path(&parent, &format!("{}.zip", base_name));
+        let mut zip_suffix = 0;
+        let zip_archive_name = loop {
+            let candidate = archive_name_with_suffix(&base_name, ".zip", zip_suffix);
+            let check_command = build_remote_path_exists_command(&parent, &candidate);
+            let (_, _, code) = manager
+                .execute_command(cid, &check_command)
+                .await
+                .map_err(|e| e.to_string())?;
+            if code != 0 {
+                break candidate;
+            }
+            zip_suffix += 1;
+        };
+        let zip_out = join_remote_path(&parent, &zip_archive_name);
         let zip_cmd = build_remote_compress_command(
             &parent,
             &base_name,
-            &format!("{}.zip", base_name),
+            &zip_archive_name,
             RemoteArchiveFormat::Zip,
         );
 
@@ -3247,11 +3260,24 @@ pub async fn compress_path(
         }
 
         // zip not available or failed — try tar.
-        let tar_out = join_remote_path(&parent, &format!("{}.tar.gz", base_name));
+        let mut tar_suffix = 0;
+        let tar_archive_name = loop {
+            let candidate = archive_name_with_suffix(&base_name, ".tar.gz", tar_suffix);
+            let check_command = build_remote_path_exists_command(&parent, &candidate);
+            let (_, _, code) = manager
+                .execute_command(cid, &check_command)
+                .await
+                .map_err(|e| e.to_string())?;
+            if code != 0 {
+                break candidate;
+            }
+            tar_suffix += 1;
+        };
+        let tar_out = join_remote_path(&parent, &tar_archive_name);
         let tar_cmd = build_remote_compress_command(
             &parent,
             &base_name,
-            &format!("{}.tar.gz", base_name),
+            &tar_archive_name,
             RemoteArchiveFormat::TarGz,
         );
 
@@ -3295,7 +3321,7 @@ pub async fn compress_path(
         .and_then(|n| n.to_str())
         .ok_or_else(|| format!("Cannot determine file name of '{}'", src))?
         .to_string();
-    let zip_path = parent.join(format!("{}.zip", file_name));
+    let zip_path = next_available_local_archive_path(parent, &file_name, ".zip");
 
     let zip_path_clone = zip_path.clone();
     let src_path_clone = src_path.clone();
@@ -3307,6 +3333,39 @@ pub async fn compress_path(
     .map_err(|e| e.to_string())??;
 
     Ok(zip_path.to_string_lossy().to_string())
+}
+
+fn archive_name_with_suffix(base_name: &str, extension: &str, suffix: usize) -> String {
+    if suffix == 0 {
+        format!("{}{}", base_name, extension)
+    } else {
+        format!("{} ({}){}", base_name, suffix, extension)
+    }
+}
+
+fn build_remote_path_exists_command(parent: &str, candidate: &str) -> String {
+    format!(
+        "cd -- {} || exit 2; test -e {} -o -L {}",
+        shell_quote_posix(parent),
+        shell_quote_posix(&format!("./{}", candidate)),
+        shell_quote_posix(&format!("./{}", candidate)),
+    )
+}
+
+fn next_available_local_archive_path(parent: &Path, base_name: &str, extension: &str) -> PathBuf {
+    let initial = parent.join(archive_name_with_suffix(base_name, extension, 0));
+    if !initial.exists() {
+        return initial;
+    }
+
+    for suffix in 1.. {
+        let candidate = parent.join(archive_name_with_suffix(base_name, extension, suffix));
+        if !candidate.exists() {
+            return candidate;
+        }
+    }
+
+    unreachable!("archive suffix search is unbounded")
 }
 
 #[derive(Clone, Copy)]
@@ -3406,7 +3465,7 @@ fn build_remote_compress_command(
 
     format!(
         "cd -- {parent} || exit 1; \
-         rm -f {archive}; \
+         if [ -e {archive} ] || [ -L {archive} ]; then exit 73; fi; \
          {compress}; \
          status=$?; \
          if [ \"$status\" -ne 0 ]; then rm -f {archive}; fi; \
@@ -4052,6 +4111,30 @@ mod archive_tests {
     }
 
     #[test]
+    fn local_archive_path_uses_incrementing_suffixes() {
+        let temp = tempfile::tempdir().expect("create temp dir");
+        std::fs::write(temp.path().join("project.zip"), "first").expect("write first archive");
+        std::fs::write(temp.path().join("project (1).zip"), "second")
+            .expect("write second archive");
+
+        assert_eq!(
+            next_available_local_archive_path(temp.path(), "project", ".zip"),
+            temp.path().join("project (2).zip")
+        );
+    }
+
+    #[test]
+    fn archive_names_with_special_characters_are_shell_quoted() {
+        assert_eq!(
+            archive_name_with_suffix("中 文@!#", ".zip", 2),
+            "中 文@!# (2).zip"
+        );
+        let command = build_remote_path_exists_command("/home/work tree", "中 文@!# (2).zip");
+        assert!(command.contains("cd -- '/home/work tree'"));
+        assert!(command.contains("test -e './中 文@!# (2).zip'"));
+    }
+
+    #[test]
     fn directory_zip_stores_children_at_archive_root() {
         let temp = tempfile::tempdir().expect("create temp dir");
         let source = temp.path().join("project");
@@ -4226,6 +4309,8 @@ mod archive_tests {
         assert!(command.contains("cd -- '/home/developer/work tree'"));
         assert!(command.contains("cd -- ./project"));
         assert!(command.contains("zip -r -q ../project.zip ."));
+        assert!(command.contains("if [ -e ./project.zip ] || [ -L ./project.zip ]"));
+        assert!(command.contains("if [ \"$status\" -ne 0 ]; then rm -f ./project.zip; fi"));
         assert!(
             !command.contains("/home/developer/work tree/project"),
             "absolute source path must not become an archive member path"
@@ -4512,7 +4597,8 @@ pub(crate) fn reveal_local_path_in_explorer(
         } else {
             let normalized_path = path_str.replace("/", "\\");
             bitfun_core::util::process_manager::create_command("explorer")
-                .arg(format!("/select,{}", normalized_path))
+                .arg("/select,")
+                .arg(&normalized_path)
                 .spawn()
                 .map_err(|e| format!("Failed to open explorer: {}", e))?;
         }

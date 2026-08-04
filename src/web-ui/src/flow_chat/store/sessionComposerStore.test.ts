@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import type { ContextItem } from '@/shared/types/context';
+import type { ComposerPresentation } from '../utils/composerPresentation';
 import { sessionComposerStore } from './sessionComposerStore';
 
 function context(id: string): ContextItem {
@@ -60,6 +61,7 @@ describe('sessionComposerStore', () => {
       'session-a',
       'session-b',
       [context('context-a')],
+      null,
     );
 
     expect(sessionComposerStore.getState().getDraft('session-a').contexts).toMatchObject([
@@ -70,6 +72,27 @@ describe('sessionComposerStore', () => {
       contexts: [{ id: 'context-b' }],
       pendingLargePastes: { '[large paste]': 'full text b' },
     });
+  });
+
+  it('saves and restores the rich context presentation on activation', () => {
+    const store = sessionComposerStore.getState();
+    const contextA = context('context-a');
+    const presentation: ComposerPresentation = {
+      version: 1,
+      segments: [{
+        kind: 'context',
+        context: contextA,
+        tag: '#file:context-a.ts',
+        label: 'context-a.ts',
+        title: 'context-a.ts',
+      }],
+    };
+
+    store.setPresentation('session-b', presentation);
+    const nextDraft = store.activateDraft('session-a', 'session-b', [contextA], presentation);
+
+    expect(sessionComposerStore.getState().getDraft('session-a').presentation).toEqual(presentation);
+    expect(nextDraft.presentation).toEqual(presentation);
   });
 
   it('removes drafts for deleted session ids without disturbing others', () => {
