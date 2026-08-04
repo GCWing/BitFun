@@ -1126,12 +1126,12 @@
                 box-shadow $motion-fast $easing-standard;
 
     &:hover {
-      .bitfun-nav-panel__assistant-item-avatar-letter {
+      .bitfun-nav-panel__workspace-item-icon-default {
         opacity: 0;
-        transform: scale(0.6);
+        transform: scale(0.7);
       }
 
-      .bitfun-nav-panel__assistant-item-icon-toggle {
+      .bitfun-nav-panel__workspace-item-icon-toggle {
         opacity: 1;
         transform: scale(1);
       }
@@ -1171,13 +1171,12 @@
     &:hover {
       background: color-mix(in srgb, var(--element-bg-medium) 60%, transparent);
 
-      .bitfun-nav-panel__assistant-item-avatar-letter,
-      .bitfun-nav-panel__assistant-item-active-icon {
+      .bitfun-nav-panel__workspace-item-icon-default {
         opacity: 0;
-        transform: scale(0.6);
+        transform: scale(0.7);
       }
 
-      .bitfun-nav-panel__assistant-item-icon-toggle {
+      .bitfun-nav-panel__workspace-item-icon-toggle {
         opacity: 1;
         transform: scale(1);
       }

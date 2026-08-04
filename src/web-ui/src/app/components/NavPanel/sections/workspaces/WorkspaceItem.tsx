@@ -785,18 +785,20 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
             data-testid="nav-workspace-sessions-toggle"
             data-workspace-id={workspace.id}
           >
-            <span className="bitfun-nav-panel__assistant-item-avatar" aria-hidden="true">
-              {isActive ? (
-                <span className="bitfun-nav-panel__assistant-item-active-icon">
-                  <DotMatrixArrowRightIcon size={14} />
-                </span>
-              ) : (
-                <span className="bitfun-nav-panel__assistant-item-avatar-letter">
-                  {workspaceDisplayName.charAt(0)}
-                </span>
-              )}
-              <span className={`bitfun-nav-panel__assistant-item-icon-toggle${sessionsCollapsed ? ' is-collapsed' : ''}`}>
-                <ChevronDown size={12} />
+            <span className="bitfun-nav-panel__workspace-item-icon" aria-hidden="true">
+              <span className="bitfun-nav-panel__workspace-item-icon-default">
+                {isActive ? (
+                  <span className="bitfun-nav-panel__workspace-item-active-icon">
+                    <DotMatrixArrowRightIcon size={14} />
+                  </span>
+                ) : workspaceIsRemote ? (
+                  <Server size={14} />
+                ) : (
+                  <FolderOpen size={14} />
+                )}
+              </span>
+              <span className={`bitfun-nav-panel__workspace-item-icon-toggle${sessionsCollapsed ? ' is-collapsed' : ''}`}>
+                <ChevronDown size={14} />
               </span>
             </span>
           </button>
