@@ -6,6 +6,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ModelSelector } from './ModelSelector';
+import { configManager } from '@/infrastructure/config/services/ConfigManager';
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -125,5 +126,35 @@ describe('ModelSelector external transport reuse', () => {
       await Promise.resolve();
     });
     expect(onSelect).toHaveBeenCalledWith('model-b');
+  });
+
+  it('uses an external agent profile model without changing the shared mode default', async () => {
+    await act(async () => {
+      root.render(
+        <ModelSelector
+          currentMode="reviewer"
+          modeDefaultModelId="model-a"
+          persistSharedModeDefault={false}
+        />,
+      );
+      await Promise.resolve();
+    });
+
+    const trigger = container.querySelector<HTMLButtonElement>(
+      '[data-testid="chat-model-selector-btn"]',
+    );
+    expect(trigger?.textContent).toContain('friendly-model-a');
+    await act(async () => {
+      trigger?.click();
+    });
+
+    const auto = document.body.querySelector<HTMLButtonElement>(
+      '[data-testid="chat-model-selector-option"][data-model-id="auto"]',
+    );
+    await act(async () => {
+      auto?.click();
+      await Promise.resolve();
+    });
+    expect(configManager.setConfig).not.toHaveBeenCalled();
   });
 });

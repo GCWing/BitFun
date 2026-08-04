@@ -62,18 +62,18 @@ export const ToolCardStatusSlot: React.FC<ToolCardStatusSlotProps> = ({
   const toolFirst = defaultIcon === 'tool' && hasIcon;
 
   return (
-    <div
+    <div data-bf-component="tool-card-status-slot" data-bf-part="root" data-bf-default-icon={defaultIcon}
       className={[
         'tool-card-status-slot',
         hasIcon ? 'tool-card-status-slot--has-icon' : '',
         toolFirst ? 'tool-card-status-slot--tool-first' : '',
       ].filter(Boolean).join(' ')}
     >
-      <div className="tool-card-status-slot__status-layer">
+      <div data-bf-component="tool-card-status-slot" data-bf-part="statusLayer" className="tool-card-status-slot__status-layer">
         <StatusIcon status={status} size={size} />
       </div>
       {hasIcon && (
-        <div className="tool-card-status-slot__icon-layer" aria-hidden>
+        <div data-bf-component="tool-card-status-slot" data-bf-part="iconLayer" className="tool-card-status-slot__icon-layer" aria-hidden>
           {toolIcon}
         </div>
       )}

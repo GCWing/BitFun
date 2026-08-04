@@ -20,11 +20,11 @@
 
   &.non-clickable {
     cursor: default;
-    border-color: var(--color-overlay-white-08);
+    border-color: var(--bf-appearance-token-color-overlay-white-08);
     opacity: 0.85;
 
     &:hover {
-      border-color: var(--border-medium);
+      border-color: var(--bf-appearance-token-border-medium);
       opacity: 1;
 
       .tool-identifier-icon.delete-icon {
@@ -32,13 +32,13 @@
       }
 
       .file-name--muted {
-        color: var(--color-text-primary);
+        color: var(--bf-appearance-token-color-text-primary);
         font-weight: 500;
       }
 
       .delete-file-name {
         text-decoration: line-through;
-        color: var(--color-text-muted);
+        color: var(--bf-appearance-token-color-text-muted);
       }
     }
 
@@ -53,20 +53,20 @@
 
   .tool-identifier-icon {
     &.write-icon {
-      color: var(--color-text-secondary);
+      color: var(--bf-appearance-token-color-text-secondary);
     }
 
     &.edit-icon {
-      color: var(--color-text-secondary);
+      color: var(--bf-appearance-token-color-text-secondary);
     }
 
     &.delete-icon {
-      color: var(--color-text-muted);
+      color: var(--bf-appearance-token-color-text-muted);
       opacity: 0.6;
     }
 
     &.file-icon {
-      color: var(--color-text-secondary);
+      color: var(--bf-appearance-token-color-text-secondary);
     }
   }
 
@@ -95,10 +95,10 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   font-weight: 500;
-  color: var(--color-text-primary);
+  color: var(--bf-appearance-token-color-text-primary);
 
   &--muted {
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
     font-weight: 400;
   }
 }
@@ -107,20 +107,20 @@
 .file-guidance-message-inline {
   min-width: 0;
   overflow: hidden;
-  color: var(--color-text-muted);
+  color: var(--bf-appearance-token-color-text-muted);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .params-streaming-indicator {
-  font-size: var(--flowchat-font-size-xxs);
-  color: color-mix(in srgb, var(--color-purple-500) 75%, transparent);
-  background: var(--color-purple-100);
-  padding: 0.125rem var(--flowchat-inline-gap);
+  font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
+  color: color-mix(in srgb, var(--bf-appearance-token-color-purple-500) 75%, transparent);
+  background: var(--bf-appearance-token-color-purple-100);
+  padding: 0.125rem var(--bf-appearance-token-flowchat-inline-gap);
   border-radius: 3px;
   animation: pulse-subtle 2s ease-in-out infinite;
   flex-shrink: 0;
-  line-height: var(--flowchat-compact-line-height);
+  line-height: var(--bf-appearance-token-flowchat-compact-line-height);
 }
 
 @keyframes pulse-subtle {
@@ -137,32 +137,32 @@
 
 .delete-file-name {
   text-decoration: line-through;
-  color: var(--color-text-muted);
+  color: var(--bf-appearance-token-color-text-muted);
 }
 
 .file-op-diff-pill {
   display: inline-flex;
   align-items: center;
-  gap: var(--flowchat-inline-gap);
+  gap: var(--bf-appearance-token-flowchat-inline-gap);
   flex-shrink: 0;
   margin-left: 2px;
-  padding: 0.125rem var(--flowchat-inline-gap);
+  padding: 0.125rem var(--bf-appearance-token-flowchat-inline-gap);
   border: none;
   border-radius: 999px;
   background: transparent;
-  font-family: var(--tool-card-font-mono);
-  font-size: var(--flowchat-font-size-xxs);
+  font-family: var(--bf-appearance-token-tool-card-font-mono);
+  font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
   font-weight: 600;
-  color: var(--color-text-muted);
-  line-height: var(--flowchat-compact-line-height);
+  color: var(--bf-appearance-token-color-text-muted);
+  line-height: var(--bf-appearance-token-flowchat-compact-line-height);
   cursor: pointer;
   transition:
     background-color 0.15s ease,
     color 0.15s ease;
 
   &:hover:not(.file-op-diff-pill--disabled) {
-    background-color: var(--element-bg-hover);
-    color: var(--color-text-primary);
+    background-color: var(--bf-appearance-token-element-bg-hover);
+    color: var(--bf-appearance-token-color-text-primary);
   }
 
   &--disabled {
@@ -178,11 +178,11 @@
   }
 
   .additions {
-    color: var(--color-success);
+    color: var(--bf-appearance-token-color-success);
   }
 
   .deletions {
-    color: var(--color-error);
+    color: var(--bf-appearance-token-color-error);
   }
 }
 
@@ -193,13 +193,13 @@
   justify-content: center;
   align-self: stretch;
   flex-shrink: 0;
-  width: var(--tool-card-header-icon-slot);
+  width: var(--bf-appearance-token-tool-card-header-icon-slot);
   padding: 0;
   margin-left: 4px;
   border: none;
   border-radius: 0;
   background: transparent;
-  color: var(--color-text-muted);
+  color: var(--bf-appearance-token-color-text-muted);
   cursor: pointer;
   appearance: none;
   font: inherit;
@@ -209,9 +209,9 @@
     content: '';
     position: absolute;
     left: 0;
-    right: calc(-1 * var(--tool-card-header-pad-right));
-    top: calc(-1 * var(--tool-card-header-pad-y));
-    bottom: calc(-1 * var(--tool-card-header-pad-y));
+    right: calc(-1 * var(--bf-appearance-token-tool-card-header-pad-right));
+    top: calc(-1 * var(--bf-appearance-token-tool-card-header-pad-y));
+    bottom: calc(-1 * var(--bf-appearance-token-tool-card-header-pad-y));
     background-color: transparent;
     border-radius: 0;
     transition: background-color 0.15s ease;
@@ -220,27 +220,27 @@
   }
 
   &:hover::before {
-    background-color: var(--element-bg-hover);
+    background-color: var(--bf-appearance-token-element-bg-hover);
   }
 
   &:hover {
-    color: var(--color-text-primary);
+    color: var(--bf-appearance-token-color-text-primary);
   }
 
   &::after {
     content: '';
     position: absolute;
     left: 0;
-    top: calc(-1 * var(--tool-card-header-pad-y));
-    bottom: calc(-1 * var(--tool-card-header-pad-y));
+    top: calc(-1 * var(--bf-appearance-token-tool-card-header-pad-y));
+    bottom: calc(-1 * var(--bf-appearance-token-tool-card-header-pad-y));
     width: 0;
-    border-left: 1px solid var(--border-base);
+    border-left: 1px solid var(--bf-appearance-token-border-base);
     pointer-events: none;
     z-index: 1;
   }
 
   &:focus-visible {
-    outline: 2px solid var(--color-accent-500);
+    outline: 2px solid var(--bf-appearance-token-color-accent-500);
     outline-offset: -2px;
   }
 
@@ -258,7 +258,7 @@
      * Hover-zone center = 44/2 = 22px.  Delta = 5px = pad-right/2.
      * Shift the icon by half the right padding to align with the hover-zone center.
      */
-    transform: translateX(calc(var(--tool-card-header-pad-right) / 2));
+    transform: translateX(calc(var(--bf-appearance-token-tool-card-header-pad-right) / 2));
   }
 }
 
@@ -272,13 +272,13 @@
   display: flex;
   align-items: center;
   gap: 4px;
-  color: var(--color-text-muted);
-  transition: color 180ms ease, opacity 180ms ease, transform 180ms ease;
+  color: var(--bf-appearance-token-color-text-muted);
+  transition: all 0.2s ease;
   flex-shrink: 0;
   cursor: pointer;
 
   &:hover {
-    color: var(--color-accent-500);
+    color: var(--bf-appearance-token-color-accent-500);
   }
 }
 
@@ -324,17 +324,17 @@
       justify-content: center;
       gap: 8px;
       padding: 16px;
-      color: var(--color-text-muted);
-      font-size: var(--tool-card-action-font-size);
+      color: var(--bf-appearance-token-color-text-muted);
+      font-size: var(--bf-appearance-token-tool-card-action-font-size);
     }
 
     >pre {
       margin: 0;
       padding: 0;
       font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', 'Consolas', 'Monaco', 'Courier New', monospace;
-      font-size: var(--tool-card-action-font-size);
-      line-height: var(--flowchat-text-line-height);
-      color: var(--color-text-primary);
+      font-size: var(--bf-appearance-token-tool-card-action-font-size);
+      line-height: var(--bf-appearance-token-flowchat-text-line-height);
+      color: var(--bf-appearance-token-color-text-primary);
       white-space: pre-wrap;
       word-break: break-word;
       background: none !important;
@@ -348,8 +348,8 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  color: var(--color-error);
-  font-size: var(--tool-card-action-font-size);
+  color: var(--bf-appearance-token-color-error);
+  font-size: var(--bf-appearance-token-tool-card-action-font-size);
   font-weight: 600;
   margin-bottom: 6px;
 
@@ -359,20 +359,20 @@
 }
 
 .error-message {
-  font-size: var(--tool-card-action-font-size);
-  line-height: var(--flowchat-support-line-height);
-  color: var(--color-text-muted);
+  font-size: var(--bf-appearance-token-tool-card-action-font-size);
+  line-height: var(--bf-appearance-token-flowchat-support-line-height);
+  color: var(--bf-appearance-token-color-text-muted);
   white-space: pre-wrap;
   word-break: break-word;
 }
 
 .file-operation-card--guidance {
   .base-tool-card.status-error {
-    border-color: var(--border-medium);
-    background: color-mix(in srgb, var(--color-bg-elevated) 92%, var(--color-error-bg));
+    border-color: var(--bf-appearance-token-border-medium);
+    background: color-mix(in srgb, var(--bf-appearance-token-color-bg-elevated) 92%, var(--bf-appearance-token-color-error-bg));
     /* Match wrapper's top corners so the elevated background fills to the rounded border,
        even when backdrop-filter interferes with overflow:hidden clipping. */
-    border-radius: var(--flowchat-card-radius) var(--flowchat-card-radius) 0 0;
+    border-radius: var(--bf-appearance-token-flowchat-card-radius) var(--bf-appearance-token-flowchat-card-radius) 0 0;
   }
 }
 
@@ -384,21 +384,21 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  color: var(--color-text-secondary);
-  font-size: var(--tool-card-action-font-size);
+  color: var(--bf-appearance-token-color-text-secondary);
+  font-size: var(--bf-appearance-token-tool-card-action-font-size);
   font-weight: 600;
   margin-bottom: 6px;
 
   svg {
     flex-shrink: 0;
-    color: var(--color-text-secondary);
+    color: var(--bf-appearance-token-color-text-secondary);
   }
 }
 
 .guidance-message {
-  font-size: var(--tool-card-action-font-size);
-  line-height: var(--flowchat-support-line-height);
-  color: var(--color-text-muted);
+  font-size: var(--bf-appearance-token-tool-card-action-font-size);
+  line-height: var(--bf-appearance-token-flowchat-support-line-height);
+  color: var(--bf-appearance-token-color-text-muted);
   white-space: pre-wrap;
   word-break: break-word;
 }
@@ -413,21 +413,21 @@
 }
 
 .file-op-confirm-btn {
-  color: var(--color-success);
+  color: var(--bf-appearance-token-color-success);
 
   &:hover:not(:disabled) {
-    background: var(--color-success-bg);
-    color: var(--color-success);
-    box-shadow: 0 2px 8px var(--color-success-bg);
+    background: var(--bf-appearance-token-color-success-bg);
+    color: var(--bf-appearance-token-color-success);
+    box-shadow: 0 2px 8px var(--bf-appearance-token-color-success-bg);
   }
 }
 
 .file-op-reject-btn {
-  color: var(--color-error);
+  color: var(--bf-appearance-token-color-error);
 
   &:hover:not(:disabled) {
-    background: var(--color-error-bg);
-    color: var(--color-error);
-    box-shadow: 0 2px 8px var(--color-error-bg);
+    background: var(--bf-appearance-token-color-error-bg);
+    color: var(--bf-appearance-token-color-error);
+    box-shadow: 0 2px 8px var(--bf-appearance-token-color-error-bg);
   }
 }

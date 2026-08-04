@@ -684,6 +684,8 @@ const WorktreesConfig: React.FC = () => {
         {projects.map(project => (
           <section
             className="bitfun-worktrees-config__project"
+            data-bf-component="worktrees-config"
+            data-bf-part="project"
             key={project.projectWorkspacePath}
           >
             <header className="bitfun-worktrees-config__project-header">
@@ -697,7 +699,11 @@ const WorktreesConfig: React.FC = () => {
                 {t('management.worktreeCount', { count: project.worktrees.length })}
               </span>
             </header>
-            <div className="bitfun-worktrees-config__worktree-list">
+            <div
+              className="bitfun-worktrees-config__worktree-list"
+              data-bf-component="worktrees-config"
+              data-bf-part="worktreeList"
+            >
               {project.worktrees.map(worktree => renderWorktree(project, worktree))}
             </div>
           </section>
@@ -724,7 +730,11 @@ const WorktreesConfig: React.FC = () => {
   })();
 
   return (
-    <ConfigPageLayout className="bitfun-worktrees-config">
+    <ConfigPageLayout
+      className="bitfun-worktrees-config"
+      data-bf-component="worktrees-config"
+      data-bf-part="root"
+    >
       <ConfigPageHeader
         icon={<GitBranch size={20} aria-hidden />}
         title={t('settings.title')}
@@ -758,6 +768,8 @@ const WorktreesConfig: React.FC = () => {
           )}
           <div
             ref={projectsResultsRef}
+            data-bf-component="worktrees-config"
+            data-bf-part="results"
             className={[
               'bitfun-worktrees-config__results',
               projectsLoading

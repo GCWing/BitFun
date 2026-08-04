@@ -44,8 +44,8 @@ export const Switch = forwardRef<HTMLInputElement, SwitchProps>(
     ].filter(Boolean).join(' ');
 
     return (
-      <label className={containerClass}>
-        <div className="bitfun-switch__wrapper">
+      <label className={containerClass} data-bf-component="switch" data-bf-part="root" data-bf-size={size} data-bf-state={[checked && 'checked', isDisabled && 'disabled', loading && 'loading'].filter(Boolean).join(' ') || undefined}>
+        <div className="bitfun-switch__wrapper" data-bf-component="switch" data-bf-part="wrapper">
           <input
             {...props}
             ref={ref}
@@ -53,17 +53,19 @@ export const Switch = forwardRef<HTMLInputElement, SwitchProps>(
             className="bitfun-switch__input"
             disabled={isDisabled}
             checked={checked}
-            aria-busy={loading || props['aria-busy'] || undefined}
+            {...props}
+            data-bf-component="switch"
+            data-bf-part="input"
           />
-          <span className={switchClass}>
+          <span className={switchClass} data-bf-component="switch" data-bf-part="track" data-bf-state={checked ? 'checked' : undefined}>
             {(checkedText || uncheckedText) && (
-              <span className="bitfun-switch__text">
+              <span className="bitfun-switch__text" data-bf-component="switch" data-bf-part="text">
                 {checked ? checkedText : uncheckedText}
               </span>
             )}
-            <span className="bitfun-switch__thumb">
+            <span className="bitfun-switch__thumb" data-bf-component="switch" data-bf-part="thumb">
               {loading && (
-                <svg className="bitfun-switch__loading" viewBox="0 0 16 16" aria-hidden="true">
+                <svg className="bitfun-switch__loading" data-bf-component="switch" data-bf-part="loading" viewBox="0 0 16 16">
                   <circle
                     cx="8"
                     cy="8"
@@ -81,9 +83,9 @@ export const Switch = forwardRef<HTMLInputElement, SwitchProps>(
           </span>
         </div>
         {(label || description || children) && (
-          <div className="bitfun-switch__content">
-            {label && <span className="bitfun-switch__label">{label}</span>}
-            {description && <span className="bitfun-switch__description">{description}</span>}
+          <div className="bitfun-switch__content" data-bf-component="switch" data-bf-part="content">
+            {label && <span className="bitfun-switch__label" data-bf-component="switch" data-bf-part="label">{label}</span>}
+            {description && <span className="bitfun-switch__description" data-bf-component="switch" data-bf-part="description">{description}</span>}
             {children}
           </div>
         )}

@@ -31,40 +31,40 @@ html {
 }
 
 body {
-  font-family: var(--font-family-sans);
-  font-size: var(--font-size-base);
+  font-family: var(--bf-appearance-token-font-family-sans);
+  font-size: var(--bf-appearance-token-font-size-base);
   line-height: $line-height-base;
-  color: var(--color-text-primary);
-  background: var(--color-bg-primary);
+  color: var(--bf-appearance-token-color-text-primary);
+  background: var(--bf-appearance-token-color-bg-primary);
   overflow: hidden;
 }
 
 /* Link styles */
 a {
-  color: var(--color-accent-500);
+  color: var(--bf-appearance-token-color-accent-500);
   text-decoration: none;
   transition: color $motion-fast $easing-standard;
 }
 
 a:hover {
-  color: var(--color-accent-400);
+  color: var(--bf-appearance-token-color-accent-400);
   text-decoration: underline;
 }
 
 /* Text selection styles */
 ::selection {
-  background: var(--color-accent-300);
-  color: var(--color-text-primary);
+  background: var(--bf-appearance-token-color-accent-300);
+  color: var(--bf-appearance-token-color-text-primary);
 }
 
 ::-moz-selection {
-  background: var(--color-accent-300);
-  color: var(--color-text-primary);
+  background: var(--bf-appearance-token-color-accent-300);
+  color: var(--bf-appearance-token-color-text-primary);
 }
 
 /* Focus styles */
 :focus-visible {
-  outline: 2px solid var(--color-accent-400);
+  outline: 2px solid var(--bf-appearance-token-color-accent-400);
   outline-offset: 2px;
   border-radius: $size-radius-sm;
 }
@@ -105,13 +105,13 @@ th,
 td {
   text-align: left;
   padding: $size-gap-2 $size-gap-3;
-  border-bottom: 1px solid var(--border-base);
+  border-bottom: 1px solid var(--bf-appearance-token-border-base);
 }
 
 th {
   font-weight: $font-weight-semibold;
-  color: var(--color-text-primary);
-  background: var(--element-bg-base);
+  color: var(--bf-appearance-token-color-text-primary);
+  background: var(--bf-appearance-token-element-bg-base);
 }
 
 /* Code styles */
@@ -119,8 +119,8 @@ code,
 pre {
   font-family: $font-family-mono;
   font-size: 0.9em;
-  background: var(--element-bg-base);
-  border: 1px solid var(--border-base);
+  background: var(--bf-appearance-token-element-bg-base);
+  border: 1px solid var(--bf-appearance-token-border-base);
   border-radius: $size-radius-sm;
 }
 
@@ -144,8 +144,8 @@ pre code {
 blockquote {
   margin: $size-gap-4 0;
   padding: $size-gap-3 $size-gap-4;
-  border-left: 3px solid var(--color-accent-500);
-  background: var(--element-bg-base);
+  border-left: 3px solid var(--bf-appearance-token-color-accent-500);
+  background: var(--bf-appearance-token-element-bg-base);
   border-radius: 0 $size-radius-base $size-radius-base 0;
   font-style: italic;
 }
@@ -154,7 +154,7 @@ blockquote {
 hr:not(:is(.m-editor hr)) {
   border: none;
   height: 1px;
-  background: var(--border-base);
+  background: var(--bf-appearance-token-border-base);
   margin: $size-gap-5 0;
 }
 
@@ -186,20 +186,20 @@ li {
 
 /* Error state */
 .error {
-  color: var(--color-error);
-  border-color: var(--color-error);
+  color: var(--bf-appearance-token-color-error);
+  border-color: var(--bf-appearance-token-color-error);
 }
 
 /* Success state */
 .success {
-  color: var(--color-success);
-  border-color: var(--color-success);
+  color: var(--bf-appearance-token-color-success);
+  border-color: var(--bf-appearance-token-color-success);
 }
 
 /* Warning state */
 .warning {
-  color: var(--color-warning);
-  border-color: var(--color-warning);
+  color: var(--bf-appearance-token-color-warning);
+  border-color: var(--bf-appearance-token-color-warning);
 }
 
 /* Accessibility helpers */
@@ -218,8 +218,8 @@ li {
 /* High-contrast mode */
 @media (prefers-contrast: high) {
   :root {
-    --glass-border-base: rgba(var(--color-static-white-rgb), 0.3);
-    --glass-border-hover: rgba(var(--color-static-white-rgb), 0.5);
+    --bf-appearance-token-glass-border-base: rgba(var(--bf-appearance-token-color-static-white-rgb), 0.3);
+    --bf-appearance-token-glass-border-hover: rgba(var(--bf-appearance-token-color-static-white-rgb), 0.5);
   }
 }
 
@@ -234,11 +234,12 @@ li {
   }
 }
 
-/* Dark theme */
-@media (prefers-color-scheme: dark) {
-  html {
-    color-scheme: dark;
-  }
+:root[data-bf-appearance-mode='light'] {
+  color-scheme: light;
+}
+
+:root[data-bf-appearance-mode='dark'] {
+  color-scheme: dark;
 }
 
 /* Hide window size debug overlays */

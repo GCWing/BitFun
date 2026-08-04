@@ -673,7 +673,8 @@ impl ChatMode {
             return None;
         }
         self.external_agent_notice_key = next_key;
-        if attention.confirmations
+        if attention.bindings
+            + attention.confirmations
             + attention.conflicts
             + attention.unavailable
             + attention.diagnostics
@@ -682,6 +683,9 @@ impl ChatMode {
             None
         } else {
             let mut details = Vec::new();
+            if attention.bindings > 0 {
+                details.push(format!("{} model bindings", attention.bindings));
+            }
             if attention.confirmations > 0 {
                 details.push(format!("{} confirmations", attention.confirmations));
             }
@@ -745,6 +749,7 @@ impl ChatMode {
                 approved: false, ..
             } => "Disabling external agent",
             ExternalAgentReviewAction::Choose { .. } => "Selecting agent source",
+            ExternalAgentReviewAction::Bind { .. } => "Saving agent model binding",
             ExternalAgentReviewAction::Show => unreachable!(),
         };
         let task_action = action.clone();
@@ -783,6 +788,21 @@ impl ChatMode {
                         conflict_key,
                         candidate_id,
                         *approve_external,
+                        *expected_subagent_generation,
+                        *expected_preference_revision,
+                    )
+                    .await
+                }
+                ExternalAgentReviewAction::Bind {
+                    binding_key,
+                    target,
+                    expected_subagent_generation,
+                    expected_preference_revision,
+                } => {
+                    set_external_subagent_model_binding(
+                        Some(&workspace),
+                        binding_key,
+                        target.clone(),
                         *expected_subagent_generation,
                         *expected_preference_revision,
                     )
@@ -838,6 +858,17 @@ impl ChatMode {
                 self.external_agent_notice_key =
                     external_agent_pending_notice_key(Some(&snapshot), &snapshot);
                 let confirmations = snapshot.pending_subagent_approvals.len();
+                let bindings = snapshot
+                    .subagent_model_binding_groups
+                    .iter()
+                    .filter(|binding| {
+                        matches!(
+                            binding.method,
+                            ExternalSubagentModelBindingMethod::BindingRequired
+                                | ExternalSubagentModelBindingMethod::BindingUnavailable
+                        )
+                    })
+                    .count();
                 let conflicts = snapshot
                     .subagent_conflicts
                     .iter()
@@ -845,11 +876,11 @@ impl ChatMode {
                     .count();
                 let result_label = external_agent_mutation_result_label(&outcome.action, &snapshot);
                 self.external_source_snapshot = Some(snapshot);
-                if confirmations + conflicts == 0 {
+                if bindings + confirmations + conflicts == 0 {
                     chat_view.set_status(Some(result_label));
                 } else {
                     chat_view.set_status(Some(format!(
-                        "{result_label}; {confirmations} confirmations and {conflicts} conflicts remain - run /agent refresh"
+                        "{result_label}; {bindings} model bindings, {confirmations} confirmations, and {conflicts} conflicts remain - run /agent refresh"
                     )));
                 }
             }

@@ -26,6 +26,7 @@ import type { DynamicToolInfo } from '@/shared/types/agent-api';
 import { createLogger } from '@/shared/utils/logger';
 import { isUserSelectableToolName } from '@/shared/utils/toolVisibility';
 import { useNurseryStore } from '../nurseryStore';
+import './NurseryView.scss';
 
 const log = createLogger('AssistantDefaultsPage');
 const ASSISTANT_MODE_ID = 'Claw';
@@ -324,15 +325,16 @@ const AssistantDefaultsPage: React.FC = () => {
   // ── Render helpers ───────────────────────────────────────────────────────
 
   const renderToolList = (tools: ToolInfo[], isMcp: boolean) => (
-    <div className="tc-tool-list">
+    <div className="tc-tool-list" data-bf-component="assistant-defaults-page" data-bf-part="toolList">
       {tools.map((tool) => {
         const enabled = assistantModeConfig?.enabled_tools?.includes(tool.name) ?? false;
         const displayName = isMcp ? getMcpShortName(tool) : tool.name;
         const selected = detail?.type === 'tool' && detail.tool.name === tool.name;
         return (
-          <div
+          <div data-bf-component="assistant-defaults-page" data-bf-part="tool"
             key={tool.name}
             className={`tc-tool-row${!enabled ? ' tc-tool-row--off' : ''}${selected ? ' tc-tool-row--selected' : ''}`}
+            data-bf-state={[!enabled && 'disabled', selected && 'selected'].filter(Boolean).join(' ') || undefined}
           >
             <button
               type="button"
@@ -362,7 +364,7 @@ const AssistantDefaultsPage: React.FC = () => {
     disabledList: ToolInfo[],
     isMcp: boolean,
   ) => (
-    <div className="tc-enabled-disabled-split">
+    <div className="tc-enabled-disabled-split" data-bf-component="assistant-defaults-page" data-bf-part="split">
       <div className="tc-enabled-disabled-split__col">
         <p className="tc-enabled-disabled-split__title">{t('nursery.template.colEnabled')}</p>
         {enabledList.length > 0 ? (
@@ -383,7 +385,7 @@ const AssistantDefaultsPage: React.FC = () => {
   );
 
   const renderSkillList = (list: ModeSkillInfo[]) => (
-    <div className="tc-skill-list">
+    <div className="tc-skill-list" data-bf-component="assistant-defaults-page" data-bf-part="skillList">
       {list.map((skill) => {
         const on = skill.effectiveEnabled;
         const selected = detail?.type === 'skill' && detail.skill.key === skill.key;
@@ -396,9 +398,14 @@ const AssistantDefaultsPage: React.FC = () => {
         );
         const runtimeStatusLabel = getSkillRuntimeStatusLabel(skill);
         return (
-          <div
+          <div data-bf-component="assistant-defaults-page" data-bf-part="skill"
             key={skill.key}
             className={`tc-skill-row${!on ? ' tc-skill-row--off' : ''}${runtimeStatus.kind === 'covered' ? ' tc-skill-row--covered' : ''}${selected ? ' tc-skill-row--selected' : ''}`}
+            data-bf-state={[
+              !on && 'disabled',
+              runtimeStatus.kind === 'covered' && 'covered',
+              selected && 'selected',
+            ].filter(Boolean).join(' ') || undefined}
           >
             <button
               type="button"
@@ -425,7 +432,7 @@ const AssistantDefaultsPage: React.FC = () => {
   );
 
   const renderSkillEnabledDisabledSplit = () => (
-    <div className="tc-enabled-disabled-split">
+    <div className="tc-enabled-disabled-split" data-bf-component="assistant-defaults-page" data-bf-part="split">
       <div className="tc-enabled-disabled-split__col">
         <p className="tc-enabled-disabled-split__title">{t('nursery.template.skillEnabledCandidates')}</p>
         {skillsEnabled.length > 0 ? (
@@ -460,7 +467,7 @@ const AssistantDefaultsPage: React.FC = () => {
     const allOn = toolNames.length > 0 && groupEnabled === toolNames.length;
 
     return (
-      <div className="tc-group-header">
+      <div data-bf-component="assistant-defaults-page" data-bf-part="groupHeader" data-bf-state={isCollapsed ? 'collapsed' : undefined} className="tc-group-header">
         {toolNames.length > 0 && (
           <button
             type="button"
@@ -524,8 +531,8 @@ const AssistantDefaultsPage: React.FC = () => {
       const displayName = isMcp ? getMcpShortName(tool) : tool.name;
       const enabled = assistantModeConfig?.enabled_tools?.includes(tool.name) ?? false;
       return (
-        <aside className="tc-template-detail" aria-label={t('nursery.template.detailPanel')}>
-          <div className="tc-template-detail__head tc-template-detail__head--center-line">
+        <aside data-bf-component="assistant-defaults-page" data-bf-part="detail" className="tc-template-detail" aria-label={t('nursery.template.detailPanel')}>
+          <div className="tc-template-detail__head tc-template-detail__head--center-line" data-bf-component="assistant-defaults-page" data-bf-part="detailHeader">
             <span className="tc-template-detail__head-spacer" aria-hidden />
             <div className="tc-template-detail__head-text">
               <div className="tc-template-detail__head-line">
@@ -544,7 +551,7 @@ const AssistantDefaultsPage: React.FC = () => {
               <X size={14} strokeWidth={2} />
             </button>
           </div>
-          <div className="tc-template-detail__body">
+          <div className="tc-template-detail__body" data-bf-component="assistant-defaults-page" data-bf-part="detailBody">
             {tool.is_readonly && (
               <span className="tc-template-detail__badge">{t('nursery.template.readonlyTool')}</span>
             )}
@@ -571,8 +578,8 @@ const AssistantDefaultsPage: React.FC = () => {
       const serverTools = mcpToolsByServer.get(serverId) ?? [];
       const status = serverInfo?.status ?? (serverTools.length > 0 ? 'Connected' : 'Unknown');
       return (
-        <aside className="tc-template-detail" aria-label={t('nursery.template.detailPanel')}>
-          <div className="tc-template-detail__head tc-template-detail__head--center-line">
+        <aside data-bf-component="assistant-defaults-page" data-bf-part="detail" className="tc-template-detail" aria-label={t('nursery.template.detailPanel')}>
+          <div className="tc-template-detail__head tc-template-detail__head--center-line" data-bf-component="assistant-defaults-page" data-bf-part="detailHeader">
             <span className="tc-template-detail__head-spacer" aria-hidden />
             <div className="tc-template-detail__head-text">
               <div className="tc-template-detail__head-line">
@@ -589,7 +596,7 @@ const AssistantDefaultsPage: React.FC = () => {
               <X size={14} strokeWidth={2} />
             </button>
           </div>
-          <div className="tc-template-detail__body">
+          <div className="tc-template-detail__body" data-bf-component="assistant-defaults-page" data-bf-part="detailBody">
             <span className={`tc-template-detail__status tc-group-header__status tc-group-header__status--${status.toLowerCase()}`}>
               {status}
             </span>
@@ -613,8 +620,8 @@ const AssistantDefaultsPage: React.FC = () => {
     const origin = getLocalizedSkillOrigin(skill);
     const runtimeStatusLabel = getSkillRuntimeStatusLabel(skill);
     return (
-      <aside className="tc-template-detail" aria-label={t('nursery.template.detailPanel')}>
-        <div className="tc-template-detail__head tc-template-detail__head--center-line">
+      <aside data-bf-component="assistant-defaults-page" data-bf-part="detail" className="tc-template-detail" aria-label={t('nursery.template.detailPanel')}>
+        <div className="tc-template-detail__head tc-template-detail__head--center-line" data-bf-component="assistant-defaults-page" data-bf-part="detailHeader">
           <span className="tc-template-detail__head-spacer" aria-hidden />
           <div className="tc-template-detail__head-text">
             <div className="tc-template-detail__head-line">
@@ -631,7 +638,7 @@ const AssistantDefaultsPage: React.FC = () => {
             <X size={14} strokeWidth={2} />
           </button>
         </div>
-        <div className="tc-template-detail__body">
+        <div className="tc-template-detail__body" data-bf-component="assistant-defaults-page" data-bf-part="detailBody">
           <p className="tc-template-detail__meta">{t('nursery.template.skillOrigin', { origin })}</p>
           {runtimeStatusLabel ? (
             <p className="tc-template-detail__meta">{runtimeStatusLabel}</p>
@@ -654,8 +661,8 @@ const AssistantDefaultsPage: React.FC = () => {
   };
 
   return (
-    <div className="nursery-page">
-      <div className="nursery-page__bar">
+    <div data-bf-component="assistant-defaults-page" data-bf-part="root" className="nursery-page">
+      <div className="nursery-page__bar" data-bf-component="assistant-defaults-page" data-bf-part="toolbar">
         <button
           type="button"
           className="nursery-page__back"
@@ -666,28 +673,28 @@ const AssistantDefaultsPage: React.FC = () => {
         </button>
       </div>
 
-      <div className="nursery-page__content">
+      <div className="nursery-page__content" data-bf-component="assistant-defaults-page" data-bf-part="content">
         {loading ? (
-          <div className="nursery-page__loading">
+          <div className="nursery-page__loading" data-bf-component="assistant-defaults-page" data-bf-part="loading">
             <RefreshCw size={16} className="nursery-spinning" />
           </div>
         ) : (
-          <div className={`tc-template-shell${detail ? ' tc-template-shell--has-detail' : ''}`}>
-            <div className="tc-template-shell__main">
+          <div className={`tc-template-shell${detail ? ' tc-template-shell--has-detail' : ''}`} data-bf-component="assistant-defaults-page" data-bf-part="shell">
+            <div className="tc-template-shell__main" data-bf-component="assistant-defaults-page" data-bf-part="main">
             <div className="tc-template-main-column">
-            <div className="gallery-page-header tc-template-page-header">
+            <div className="gallery-page-header tc-template-page-header" data-bf-component="assistant-defaults-page" data-bf-part="header">
               <div className="gallery-page-header__identity">
                 <h2 className="gallery-page-header__title">{t('nursery.template.title')}</h2>
                 <div className="gallery-page-header__subtitle">{t('nursery.template.subtitle')}</div>
               </div>
             </div>
 
-            <div className="gallery-zones tc-template-shell__zones">
+            <div className="gallery-zones tc-template-shell__zones" data-bf-component="assistant-defaults-page" data-bf-part="zones">
             <GalleryZone
               title={t('cards.skills')}
             >
               {modeSkills.length === 0 ? (
-                <p className="nursery-empty">{t('empty.skills')}</p>
+                <p className="nursery-empty" data-bf-component="assistant-defaults-page" data-bf-part="empty">{t('empty.skills')}</p>
               ) : (
                 renderSkillEnabledDisabledSplit()
               )}
@@ -734,7 +741,7 @@ const AssistantDefaultsPage: React.FC = () => {
                     const mcpDisabled = serverTools.filter((tool) => !assistantModeConfig?.enabled_tools?.includes(tool.name));
 
                     return (
-                      <div key={serverId} className="tc-tool-block">
+                      <div data-bf-component="assistant-defaults-page" data-bf-part="group" key={serverId} className="tc-tool-block">
                         {renderGroupHeader(
                           groupId,
                           serverInfo?.name ?? serverId,

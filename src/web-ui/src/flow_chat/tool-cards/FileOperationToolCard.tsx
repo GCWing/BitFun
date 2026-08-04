@@ -922,8 +922,8 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
         && newStringContent
       ) {
         return (
-          <div className="streaming-content-preview" data-testid="chat-file-change-preview">
-            <div className="preview-text">
+          <div data-bf-component="file-operation-tool-card" data-bf-part="preview" className="streaming-content-preview" data-testid="chat-file-change-preview">
+            <div className="preview-text" data-bf-component="file-operation-tool-card" data-bf-part="previewText">
               <CodePreview
                 content={editDisplayContent}
                 filePath={currentFilePath}
@@ -946,8 +946,8 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
         && (oldStringContent || newStringContent)
       ) {
         return (
-          <div className="streaming-content-preview" data-testid="chat-file-change-preview">
-            <div className="preview-text">
+          <div data-bf-component="file-operation-tool-card" data-bf-part="preview" className="streaming-content-preview" data-testid="chat-file-change-preview">
+            <div className="preview-text" data-bf-component="file-operation-tool-card" data-bf-part="previewText">
               <InlineDiffPreview
                 originalContent={oldStringContent}
                 modifiedContent={newStringContent}
@@ -970,8 +970,8 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
         && contentPreview
       ) {
         return (
-          <div className="streaming-content-preview" data-testid="chat-file-change-preview">
-            <div className="preview-text">
+          <div data-bf-component="file-operation-tool-card" data-bf-part="preview" className="streaming-content-preview" data-testid="chat-file-change-preview">
+            <div className="preview-text" data-bf-component="file-operation-tool-card" data-bf-part="previewText">
               <CodePreview
                 content={writeDisplayContent}
                 filePath={currentFilePath}
@@ -994,8 +994,8 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
         && contentPreview
       ) {
         return (
-          <div className="streaming-content-preview" data-testid="chat-file-change-preview">
-            <div className="preview-text">
+          <div data-bf-component="file-operation-tool-card" data-bf-part="preview" className="streaming-content-preview" data-testid="chat-file-change-preview">
+            <div className="preview-text" data-bf-component="file-operation-tool-card" data-bf-part="previewText">
               <InlineDiffPreview
                 originalContent=""
                 modifiedContent={contentPreview}
@@ -1016,7 +1016,7 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
   };
 
   const renderGuidanceContent = () => (
-    <div className="guidance-content">
+    <div className="guidance-content" data-bf-component="file-operation-tool-card" data-bf-part="guidance">
       <div className="guidance-title">
         <Info size={14} />
         <span>{t('toolCards.file.guidanceTitle')}</span>
@@ -1026,7 +1026,7 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
   );
 
   const renderErrorContent = () => (
-    <div className="error-content">
+    <div className="error-content" data-bf-component="file-operation-tool-card" data-bf-part="error" data-bf-state="failed">
       <div className="error-title">
         <XCircle size={14} />
         <span>{toolDisplayInfo.name}{t('toolCards.file.failed')}</span>
@@ -1066,11 +1066,11 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
     if (status === 'error') {
       return (
         <>
-          <span data-testid="chat-file-change-action" data-action={fileChangeAction}>
+          <span data-bf-component="file-operation-tool-card" data-bf-part="action" data-bf-action={fileChangeAction} data-testid="chat-file-change-action" data-action={fileChangeAction}>
             {t('toolCards.file.delete')}{t('toolCards.file.failed')}
           </span>
           {': '}
-          <span className="delete-file-name" data-testid="chat-file-change-path" data-path={currentFilePath}>
+          <span data-bf-component="file-operation-tool-card" data-bf-part="path" className="delete-file-name" data-testid="chat-file-change-path" data-path={currentFilePath}>
             {fileName}
           </span>
         </>
@@ -1078,11 +1078,11 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
     }
     return (
       <>
-        <span data-testid="chat-file-change-action" data-action={fileChangeAction}>
+        <span data-bf-component="file-operation-tool-card" data-bf-part="action" data-bf-action={fileChangeAction} data-testid="chat-file-change-action" data-action={fileChangeAction}>
           {t('toolCards.file.delete')}
         </span>
         {': '}
-        <span className="delete-file-name" data-testid="chat-file-change-path" data-path={currentFilePath}>
+        <span data-bf-component="file-operation-tool-card" data-bf-part="path" className="delete-file-name" data-testid="chat-file-change-path" data-path={currentFilePath}>
           {fileName}
         </span>
       </>
@@ -1212,7 +1212,8 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
 
   if (isDeleteTool) {
     return (
-      <div
+      <div data-bf-component="file-operation-tool-card" data-bf-part="root" data-bf-action={fileChangeAction}
+        data-bf-state={isFailed ? 'failed' : undefined}
         ref={cardRootRef}
         data-testid="chat-file-change-card"
         data-tool-card-id={toolId ?? ''}
@@ -1238,7 +1239,11 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
   }
 
   return (
-    <div
+    <div data-bf-component="file-operation-tool-card" data-bf-part="root" data-bf-action={fileChangeAction}
+      data-bf-state={[
+        isCardContentExpanded && 'expanded',
+        isFailed && 'failed',
+      ].filter(Boolean).join(' ') || undefined}
       ref={cardRootRef}
       data-testid="chat-file-change-card"
       data-tool-card-id={toolId ?? ''}

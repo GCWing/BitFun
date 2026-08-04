@@ -4,6 +4,7 @@ import React, { act } from 'react';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createRoot, type Root } from 'react-dom/client';
 import {
+  ConfigPageLayout,
   ConfigPageContent,
   ConfigPageSection,
   ConfigPageSectionStack,
@@ -49,22 +50,34 @@ describe('ConfigPageLayout', () => {
     expect(stack?.querySelectorAll(':scope > .bitfun-config-page-section')).toHaveLength(2);
   });
 
-  it('can omit the mouse glow surface from a borderless section body', () => {
+  it('forwards a feature-owned Appearance contract to the real layout nodes', () => {
     act(() => {
       root.render(
-        <>
-          <ConfigPageSection title="Standard">
-            <div>Standard body</div>
-          </ConfigPageSection>
-          <ConfigPageSection title="Borderless" mouseGlowSurface={false}>
-            <div>Borderless body</div>
-          </ConfigPageSection>
-        </>,
+        <ConfigPageLayout
+          data-testid="feature-root"
+          data-bf-component="ai-model-config"
+          data-bf-part="root"
+        >
+          <ConfigPageContent
+            data-testid="feature-content"
+            data-bf-component="ai-model-config"
+            data-bf-part="providerSelection"
+          >
+            <ConfigPageSection
+              title="Models"
+              data-testid="feature-section"
+              data-bf-component="ai-model-config"
+              data-bf-part="providerGroup"
+            >
+              <div>Body</div>
+            </ConfigPageSection>
+          </ConfigPageContent>
+        </ConfigPageLayout>,
       );
     });
 
-    const bodies = container.querySelectorAll('.bitfun-config-page-section__body');
-    expect(bodies[0]?.hasAttribute('data-mouse-glow-surface')).toBe(true);
-    expect(bodies[1]?.hasAttribute('data-mouse-glow-surface')).toBe(false);
+    expect(container.querySelector('[data-testid="feature-root"]')?.getAttribute('data-bf-component')).toBe('ai-model-config');
+    expect(container.querySelector('[data-testid="feature-content"]')?.getAttribute('data-bf-part')).toBe('providerSelection');
+    expect(container.querySelector('[data-testid="feature-section"]')?.getAttribute('data-bf-part')).toBe('providerGroup');
   });
 });

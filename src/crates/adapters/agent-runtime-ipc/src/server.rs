@@ -313,6 +313,8 @@ async fn run_initialized_connection(
 ) -> Result<(), RuntimeIpcServerError> {
     let mut frames = RuntimeIpcFrameReader::new(MAX_REQUEST_FRAME_BYTES);
     let mut frame_deadline = None;
+    let mut interruptible_lineage_reads = JoinSet::new();
+    let mut interruptible_lineage_request_id = None;
     loop {
         match next_connection_input(
             config.request_timeout,
@@ -321,9 +323,57 @@ async fn run_initialized_connection(
             &mut frame_deadline,
             events.as_mut(),
             availability.as_mut(),
+            &mut interruptible_lineage_reads,
         )
         .await?
         {
+            ConnectionInput::InterruptibleLineageReadCompleted(completed) => {
+                let Some(request_id) = interruptible_lineage_request_id.take() else {
+                    continue;
+                };
+                match completed {
+                    Ok(InterruptibleLineageReadResult::Completed(result)) => match result {
+                        Ok(result) => {
+                            send_operation_result(
+                                config.request_timeout,
+                                stream,
+                                request_id,
+                                result,
+                            )
+                            .await?;
+                        }
+                        Err(error) => {
+                            send_runtime_error(
+                                stream,
+                                config.request_timeout,
+                                Some(request_id),
+                                error,
+                            )
+                            .await?;
+                        }
+                    },
+                    Ok(InterruptibleLineageReadResult::Deadline) => {
+                        send_error(
+                            stream,
+                            config.request_timeout,
+                            Some(request_id),
+                            RuntimeIpcErrorCode::Unavailable,
+                            "runtime lineage read exceeded its deadline",
+                        )
+                        .await?;
+                    }
+                    Err(error) => {
+                        send_error(
+                            stream,
+                            config.request_timeout,
+                            Some(request_id),
+                            RuntimeIpcErrorCode::Internal,
+                            &format!("runtime lineage read task stopped: {error}"),
+                        )
+                        .await?;
+                    }
+                }
+            }
             ConnectionInput::Event(event) => {
                 if matches!(event, RuntimeIpcEvent::StreamInvalidated { .. }) {
                     timeout_write(
@@ -378,6 +428,18 @@ async fn run_initialized_connection(
                 request_id,
                 operation,
             }) => {
+                if let Some(superseded_request_id) = interruptible_lineage_request_id.take() {
+                    interruptible_lineage_reads.abort_all();
+                    while interruptible_lineage_reads.join_next().await.is_some() {}
+                    send_error(
+                        stream,
+                        config.request_timeout,
+                        Some(superseded_request_id),
+                        RuntimeIpcErrorCode::Unavailable,
+                        "runtime lineage read was superseded by a newer request",
+                    )
+                    .await?;
+                }
                 if matches!(operation, RuntimeIpcOperation::Health) {
                     send_operation_result(
                         config.request_timeout,
@@ -424,6 +486,19 @@ async fn run_initialized_connection(
                     .await?;
                     continue;
                 }
+                if let RuntimeIpcOperation::SteerTurn { request } = &operation {
+                    if active_turn_id.as_deref() != Some(request.turn_id.as_str()) {
+                        send_error(
+                            stream,
+                            config.request_timeout,
+                            Some(request_id),
+                            RuntimeIpcErrorCode::SessionInUse,
+                            "steering requires the connection's exact active turn",
+                        )
+                        .await?;
+                        continue;
+                    }
+                }
 
                 // Serialize attachment so a newly visible Session cannot be claimed
                 // before its generated ID returns to the creating connection, or
@@ -447,6 +522,20 @@ async fn run_initialized_connection(
                             continue;
                         }
                     };
+                if operation.is_interruptible_lineage_read() {
+                    let handler = handler.clone();
+                    let request_timeout = config.request_timeout;
+                    interruptible_lineage_reads.spawn(async move {
+                        match tokio::time::timeout(request_timeout, handler.execute(operation))
+                            .await
+                        {
+                            Ok(result) => InterruptibleLineageReadResult::Completed(result),
+                            Err(_) => InterruptibleLineageReadResult::Deadline,
+                        }
+                    });
+                    interruptible_lineage_request_id = Some(request_id);
+                    continue;
+                }
                 let provisional_turn_id = match &operation {
                     RuntimeIpcOperation::SubmitTurn { request } => {
                         let Some(turn_id) = request.turn_id.clone() else {
@@ -463,10 +552,21 @@ async fn run_initialized_connection(
                         *active_turn_id = Some(turn_id.clone());
                         Some(turn_id)
                     }
+                    RuntimeIpcOperation::RunUserShellCommand { request } => {
+                        let turn_id = request.turn_id.clone();
+                        *active_turn_id = Some(turn_id.clone());
+                        Some(turn_id)
+                    }
                     RuntimeIpcOperation::CompactSession { request } => {
                         let turn_id = request.turn_id.clone();
                         *active_turn_id = Some(turn_id.clone());
                         Some(turn_id)
+                    }
+                    _ => None,
+                };
+                let steering_target = match &operation {
+                    RuntimeIpcOperation::SteerTurn { request } => {
+                        Some((request.session_id.clone(), request.turn_id.clone()))
                     }
                     _ => None,
                 };
@@ -526,24 +626,50 @@ async fn run_initialized_connection(
                         continue;
                     }
                 };
+                if matches!(result, RuntimeIpcOperationResult::SessionReverted { .. }) {
+                    // Core has cancelled and drained the owned turn before applying
+                    // the revert, so the connection must drop its provisional view.
+                    *active_turn_id = None;
+                }
                 let response = RuntimeIpcFrame::Response { request_id, result };
-                let response_bytes =
-                    match serialize_frame_with_limit(&response, MAX_RESPONSE_FRAME_BYTES) {
-                        Err(RuntimeIpcIoError::FrameTooLarge { .. }) => {
-                            config.leases.rollback(connection_id, lease_transition);
-                            send_error(
+                let revert_response = matches!(
+                    &response,
+                    RuntimeIpcFrame::Response {
+                        result: RuntimeIpcOperationResult::SessionReverted { .. },
+                        ..
+                    }
+                );
+                let response_bytes = match serialize_frame_with_limit(
+                    &response,
+                    MAX_RESPONSE_FRAME_BYTES,
+                ) {
+                    Err(RuntimeIpcIoError::FrameTooLarge { .. }) if revert_response => {
+                        config.leases.rollback(connection_id, lease_transition);
+                        send_error(
                                 stream,
                                 config.request_timeout,
                                 Some(request_id),
-                                RuntimeIpcErrorCode::FrameTooLarge,
-                                "runtime IPC response exceeds the supported frame size",
+                                RuntimeIpcErrorCode::OutcomeUnknown,
+                                "session revert completed but its authoritative transcript exceeds the Shared TUI response limit; reconnect and restore the Session",
                             )
                             .await?;
-                            continue;
-                        }
-                        Err(error) => return Err(RuntimeIpcServerError::Io(error)),
-                        Ok(bytes) => bytes,
-                    };
+                        return Err(RuntimeIpcServerError::Disconnected);
+                    }
+                    Err(RuntimeIpcIoError::FrameTooLarge { .. }) => {
+                        config.leases.rollback(connection_id, lease_transition);
+                        send_error(
+                            stream,
+                            config.request_timeout,
+                            Some(request_id),
+                            RuntimeIpcErrorCode::FrameTooLarge,
+                            "runtime IPC response exceeds the supported frame size",
+                        )
+                        .await?;
+                        continue;
+                    }
+                    Err(error) => return Err(RuntimeIpcServerError::Io(error)),
+                    Ok(bytes) => bytes,
+                };
 
                 let RuntimeIpcFrame::Response { result, .. } = &response else {
                     unreachable!("response frame was just constructed")
@@ -604,6 +730,27 @@ async fn run_initialized_connection(
                         return Err(RuntimeIpcServerError::Disconnected);
                     }
                 }
+                if let Some((expected_session_id, expected_turn_id)) = steering_target.as_ref() {
+                    let identity_matches = matches!(
+                        result,
+                        RuntimeIpcOperationResult::TurnSteered {
+                            session_id,
+                            turn_id,
+                            ..
+                        } if session_id == expected_session_id && turn_id == expected_turn_id
+                    );
+                    if !identity_matches {
+                        send_error(
+                            stream,
+                            config.request_timeout,
+                            Some(request_id),
+                            RuntimeIpcErrorCode::Internal,
+                            "runtime returned an invalid result for the steering operation",
+                        )
+                        .await?;
+                        return Err(RuntimeIpcServerError::Disconnected);
+                    }
+                }
                 if let Err(error) =
                     timeout_write_serialized(config.request_timeout, stream, &response_bytes).await
                 {
@@ -635,6 +782,14 @@ enum ConnectionInput {
     EventLagged,
     EventClosed,
     RuntimeUnavailable,
+    InterruptibleLineageReadCompleted(
+        Result<InterruptibleLineageReadResult, tokio::task::JoinError>,
+    ),
+}
+
+enum InterruptibleLineageReadResult {
+    Completed(Result<RuntimeIpcOperationResult, RuntimeIpcError>),
+    Deadline,
 }
 
 async fn next_connection_input(
@@ -644,9 +799,13 @@ async fn next_connection_input(
     frame_deadline: &mut Option<tokio::time::Instant>,
     events: Option<&mut broadcast::Receiver<RuntimeIpcEvent>>,
     availability: Option<&mut watch::Receiver<bool>>,
+    interruptible_lineage_reads: &mut JoinSet<InterruptibleLineageReadResult>,
 ) -> Result<ConnectionInput, RuntimeIpcServerError> {
     tokio::select! {
         frame = read_connected(timeout, stream, frames, frame_deadline) => frame.map(ConnectionInput::Frame),
+        completed = receive_interruptible_lineage_read(interruptible_lineage_reads) => {
+            Ok(ConnectionInput::InterruptibleLineageReadCompleted(completed))
+        },
         event = receive_event(events) => match event {
             None => std::future::pending().await,
             Some(Ok(event)) => Ok(ConnectionInput::Event(event)),
@@ -655,6 +814,18 @@ async fn next_connection_input(
         },
         () = wait_until_unavailable(availability) => Ok(ConnectionInput::RuntimeUnavailable),
     }
+}
+
+async fn receive_interruptible_lineage_read(
+    reads: &mut JoinSet<InterruptibleLineageReadResult>,
+) -> Result<InterruptibleLineageReadResult, tokio::task::JoinError> {
+    if reads.is_empty() {
+        return std::future::pending().await;
+    }
+    reads
+        .join_next()
+        .await
+        .expect("a non-empty lineage read set should yield a task")
 }
 
 async fn receive_event(
@@ -721,6 +892,7 @@ async fn cleanup_connection(
                 requester_session_id: None,
                 reason: Some("shared_tui_disconnected".to_string()),
                 wait_timeout_ms: None,
+                cancel_descendants: true,
             },
         });
         let cancelled = matches!(

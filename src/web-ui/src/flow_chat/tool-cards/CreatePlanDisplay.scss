@@ -7,10 +7,10 @@
 .create-plan-display {
   display: flex;
   flex-direction: column;
-  background: var(--color-bg-scene);
-  border: 1px solid var(--border-base);
+  background: var(--bf-appearance-token-color-bg-scene);
+  border: 1px solid var(--bf-appearance-token-border-base);
   border-radius: 8px;
-  margin: var(--flowchat-card-gap) 0;
+  margin: var(--bf-appearance-token-flowchat-card-gap) 0;
   overflow: hidden;
   transition:
     border-color 180ms ease,
@@ -19,27 +19,27 @@
   box-sizing: border-box;
 
   &:hover {
-    border-color: var(--border-medium);
+    border-color: var(--bf-appearance-token-border-medium);
     box-shadow:
-      0 4px 16px var(--color-overlay-black-20),
-      0 2px 8px var(--color-overlay-black-12),
-      inset 0 1px 0 var(--color-overlay-white-04);
+      0 4px 16px var(--bf-appearance-token-color-overlay-black-20),
+      0 2px 8px var(--bf-appearance-token-color-overlay-black-12),
+      inset 0 1px 0 var(--bf-appearance-token-color-overlay-white-04);
     transform: translateY(-1px);
   }
 
   &--loading {
-    padding: var(--flowchat-card-pad-y) var(--flowchat-card-pad-x);
+    padding: var(--bf-appearance-token-flowchat-card-pad-y) var(--bf-appearance-token-flowchat-card-pad-x);
     /* Same chrome as the filled card when params are not ready yet (streaming start). */
-    border: 1px solid var(--border-base);
+    border: 1px solid var(--bf-appearance-token-border-base);
     border-radius: 8px;
-    background: var(--color-bg-scene);
+    background: var(--bf-appearance-token-color-bg-scene);
     box-sizing: border-box;
 
     .create-plan-header {
       justify-content: flex-start;
-      gap: var(--flowchat-inline-gap);
-      color: var(--color-text-muted);
-      font-size: var(--tool-card-action-font-size);
+      gap: var(--bf-appearance-token-flowchat-inline-gap);
+      color: var(--bf-appearance-token-color-text-muted);
+      font-size: var(--bf-appearance-token-tool-card-action-font-size);
       border-bottom: none;
     }
   }
@@ -52,15 +52,15 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: var(--flowchat-inline-gap);
-    padding: var(--flowchat-card-pad-y) var(--flowchat-card-pad-x);
+    gap: var(--bf-appearance-token-flowchat-inline-gap);
+    padding: var(--bf-appearance-token-flowchat-card-pad-y) var(--bf-appearance-token-flowchat-card-pad-x);
     background: linear-gradient(
       90deg,
-      color-mix(in srgb, var(--color-warning) 7%, transparent) 0%,
-      color-mix(in srgb, var(--color-warning) 4%, transparent) 50%,
-      var(--color-overlay-white-04) 100%
+      color-mix(in srgb, var(--bf-appearance-token-color-warning) 7%, transparent) 0%,
+      color-mix(in srgb, var(--bf-appearance-token-color-warning) 4%, transparent) 50%,
+      var(--bf-appearance-token-color-overlay-white-04) 100%
     );
-    border-bottom: 1px solid var(--border-base);
+    border-bottom: 1px solid var(--bf-appearance-token-border-base);
     /* Match parent .create-plan-display top corners (8px) */
     border-radius: 8px 8px 0 0;
 
@@ -90,7 +90,7 @@
 
       &:hover {
         .file-name {
-          color: var(--color-text-primary);
+          color: var(--bf-appearance-token-color-text-primary);
         }
       }
     }
@@ -99,7 +99,7 @@
       display: flex;
       align-items: center;
       min-width: 0;
-      gap: var(--flowchat-inline-gap);
+      gap: var(--bf-appearance-token-flowchat-inline-gap);
     }
 
     .file-icon-wrapper {
@@ -110,7 +110,7 @@
       height: 28px;
       background: transparent;
       border-radius: 4px;
-      color: var(--color-warning);
+      color: var(--bf-appearance-token-color-warning);
 
       svg {
         width: 18px;
@@ -119,9 +119,9 @@
     }
 
     .file-name {
-      font-size: var(--flowchat-font-size-xs);
-      font-family: var(--tool-card-font-mono);
-      color: var(--color-text-secondary);
+      font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+      font-family: var(--bf-appearance-token-tool-card-font-mono);
+      color: var(--bf-appearance-token-color-text-secondary);
       min-width: 0;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -137,7 +137,7 @@
       display: inline-flex;
       align-items: center;
       flex-shrink: 0;
-      gap: var(--flowchat-inline-gap);
+      gap: var(--bf-appearance-token-flowchat-inline-gap);
     }
 
     .create-plan-header-folder-btn {
@@ -151,14 +151,14 @@
       border: 1px solid transparent;
       border-radius: 6px;
       background: transparent;
-      color: var(--color-text-muted);
+      color: var(--bf-appearance-token-color-text-muted);
       cursor: pointer;
       transition: all 0.15s ease;
 
       &:hover:not(:disabled) {
-        border-color: color-mix(in srgb, var(--color-warning) 35%, transparent);
-        background: color-mix(in srgb, var(--color-warning) 7%, transparent);
-        color: var(--color-warning);
+        border-color: color-mix(in srgb, var(--bf-appearance-token-color-warning) 35%, transparent);
+        background: color-mix(in srgb, var(--bf-appearance-token-color-warning) 7%, transparent);
+        color: var(--bf-appearance-token-color-warning);
       }
 
       &:disabled {
@@ -167,10 +167,10 @@
       }
 
       &--success {
-        color: var(--color-success);
+        color: var(--bf-appearance-token-color-success);
 
         &:disabled {
-          color: var(--color-success);
+          color: var(--bf-appearance-token-color-success);
           opacity: 1;
         }
       }
@@ -186,8 +186,8 @@
   .create-plan-content {
     display: flex;
     align-items: flex-start;
-    gap: var(--flowchat-card-gap);
-    padding: var(--flowchat-card-pad-y) var(--flowchat-card-pad-x);
+    gap: var(--bf-appearance-token-flowchat-card-gap);
+    padding: var(--bf-appearance-token-flowchat-card-pad-y) var(--bf-appearance-token-flowchat-card-pad-x);
 
     .plan-content-left {
       flex: 1;
@@ -195,18 +195,18 @@
     }
 
     .plan-title {
-      margin: 0 0 var(--flowchat-inline-gap) 0;
-      font-size: var(--flowchat-font-size-base);
+      margin: 0 0 var(--bf-appearance-token-flowchat-inline-gap) 0;
+      font-size: var(--bf-appearance-token-flowchat-font-size-base);
       font-weight: 600;
-      color: var(--color-text-primary);
-      line-height: var(--flowchat-support-line-height);
+      color: var(--bf-appearance-token-color-text-primary);
+      line-height: var(--bf-appearance-token-flowchat-support-line-height);
     }
 
     .plan-overview {
       margin: 0;
-      font-size: var(--tool-card-action-font-size);
-      color: var(--color-text-secondary);
-      line-height: var(--flowchat-support-line-height);
+      font-size: var(--bf-appearance-token-tool-card-action-font-size);
+      color: var(--bf-appearance-token-color-text-secondary);
+      line-height: var(--bf-appearance-token-flowchat-support-line-height);
     }
 
     .todos-toggle-btn {
@@ -221,7 +221,7 @@
       border: 1px solid transparent;
       border-radius: 6px;
       background: transparent;
-      color: var(--color-text-muted);
+      color: var(--bf-appearance-token-color-text-muted);
       cursor: pointer;
       transition: all 0.15s ease;
 
@@ -231,21 +231,21 @@
       }
 
       &:hover {
-        border-color: color-mix(in srgb, var(--color-warning) 35%, transparent);
-        background: color-mix(in srgb, var(--color-warning) 7%, transparent);
-        color: var(--color-warning);
+        border-color: color-mix(in srgb, var(--bf-appearance-token-color-warning) 35%, transparent);
+        background: color-mix(in srgb, var(--bf-appearance-token-color-warning) 7%, transparent);
+        color: var(--bf-appearance-token-color-warning);
       }
     }
   }
 
   .create-plan-todos {
-    border-top: 1px solid var(--border-base);
-    padding: var(--flowchat-card-pad-y) var(--flowchat-card-pad-x);
+    border-top: 1px solid var(--bf-appearance-token-border-base);
+    padding: var(--bf-appearance-token-flowchat-card-pad-y) var(--bf-appearance-token-flowchat-card-pad-x);
 
     .todos-list {
       display: flex;
       flex-direction: column;
-      gap: var(--flowchat-inline-gap);
+      gap: var(--bf-appearance-token-flowchat-inline-gap);
       max-height: 200px;
       overflow-x: hidden;
       overflow-y: auto;
@@ -255,7 +255,7 @@
     .todo-item {
       display: flex;
       align-items: flex-start;
-      gap: var(--flowchat-inline-gap);
+      gap: var(--bf-appearance-token-flowchat-inline-gap);
       padding: 5px 0;
       transition: background 0.15s ease;
       border-radius: 4px;
@@ -270,41 +270,41 @@
         height: 12px;
 
         &--pending {
-          color: var(--color-text-muted);
+          color: var(--bf-appearance-token-color-text-muted);
           opacity: 0.5;
         }
 
         &--in-progress {
-          color: var(--color-info);
+          color: var(--bf-appearance-token-color-info);
         }
 
         &--completed {
-          color: var(--color-success);
+          color: var(--bf-appearance-token-color-success);
         }
 
         &--cancelled {
-          color: var(--color-error);
+          color: var(--bf-appearance-token-color-error);
           opacity: 0.6;
         }
       }
 
       .todo-content {
-        font-size: var(--tool-card-action-font-size);
-        line-height: var(--flowchat-support-line-height);
-        color: var(--color-text-secondary);
+        font-size: var(--bf-appearance-token-tool-card-action-font-size);
+        line-height: var(--bf-appearance-token-flowchat-support-line-height);
+        color: var(--bf-appearance-token-color-text-secondary);
       }
 
       &.status-pending {
         .todo-content {
-          color: var(--color-text-secondary);
+          color: var(--bf-appearance-token-color-text-secondary);
         }
       }
 
       &.status-in_progress {
-        background: var(--glass-blue-subtle);
+        background: var(--bf-appearance-token-glass-blue-subtle);
         
         .todo-content {
-          color: var(--color-text-primary);
+          color: var(--bf-appearance-token-color-text-primary);
           font-weight: 500;
         }
       }
@@ -312,7 +312,7 @@
       &.status-completed {
         .todo-content {
           text-decoration: line-through;
-          color: var(--color-text-muted);
+          color: var(--bf-appearance-token-color-text-muted);
           opacity: 0.6;
         }
       }
@@ -322,7 +322,7 @@
         
         .todo-content {
           text-decoration: line-through;
-          color: var(--color-text-muted);
+          color: var(--bf-appearance-token-color-text-muted);
         }
       }
     }
@@ -331,23 +331,23 @@
   /* Plan params still streaming: footer actions read as disabled / grayed. */
   &--plan-generating {
     .create-plan-footer {
-      background: color-mix(in srgb, var(--color-bg-scene) 92%, var(--color-text-muted));
+      background: color-mix(in srgb, var(--bf-appearance-token-color-bg-scene) 92%, var(--bf-appearance-token-color-text-muted));
 
       .build-btn:disabled {
         opacity: 1;
         cursor: not-allowed;
-        color: var(--color-text-muted);
-        background: color-mix(in srgb, var(--element-bg-soft) 80%, transparent);
-        border: 1px solid var(--border-base);
+        color: var(--bf-appearance-token-color-text-muted);
+        background: color-mix(in srgb, var(--bf-appearance-token-element-bg-soft) 80%, transparent);
+        border: 1px solid var(--bf-appearance-token-border-base);
         box-shadow: none;
 
         &:hover {
-          background: color-mix(in srgb, var(--element-bg-soft) 80%, transparent);
+          background: color-mix(in srgb, var(--bf-appearance-token-element-bg-soft) 80%, transparent);
           box-shadow: none;
         }
 
         svg {
-          color: var(--color-text-muted);
+          color: var(--bf-appearance-token-color-text-muted);
         }
       }
     }
@@ -357,9 +357,9 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: var(--flowchat-card-pad-y) var(--flowchat-card-pad-x);
-    border-top: 1px solid var(--border-base);
-    background: var(--color-overlay-white-04);
+    padding: var(--bf-appearance-token-flowchat-card-pad-y) var(--bf-appearance-token-flowchat-card-pad-x);
+    border-top: 1px solid var(--bf-appearance-token-border-base);
+    background: var(--bf-appearance-token-color-overlay-white-04);
     /* Match parent .create-plan-display bottom corners (8px) */
     border-radius: 0 0 8px 8px;
 
@@ -370,11 +370,11 @@
     .view-plan-btn {
       display: flex;
       align-items: center;
-      gap: var(--flowchat-inline-gap);
-      padding: var(--flowchat-control-pad-y) var(--flowchat-control-pad-x);
-      font-size: var(--tool-card-action-font-size);
+      gap: var(--bf-appearance-token-flowchat-inline-gap);
+      padding: var(--bf-appearance-token-flowchat-control-pad-y) var(--bf-appearance-token-flowchat-control-pad-x);
+      font-size: var(--bf-appearance-token-tool-card-action-font-size);
       font-weight: 500;
-      color: var(--color-text-secondary);
+      color: var(--bf-appearance-token-color-text-secondary);
       background: transparent;
       border: none;
       border-radius: 4px;
@@ -382,8 +382,8 @@
       transition: all 0.15s ease;
 
       &:hover:not(:disabled) {
-        color: var(--color-text-primary);
-        background: var(--color-overlay-white-08);
+        color: var(--bf-appearance-token-color-text-primary);
+        background: var(--bf-appearance-token-color-overlay-white-08);
       }
 
       &:disabled {
@@ -395,29 +395,29 @@
     .build-btn {
       display: flex;
       align-items: center;
-      gap: var(--flowchat-inline-gap);
-      padding: var(--flowchat-control-pad-y) var(--flowchat-card-pad-x);
-      font-size: var(--tool-card-action-font-size);
+      gap: var(--bf-appearance-token-flowchat-inline-gap);
+      padding: var(--bf-appearance-token-flowchat-control-pad-y) var(--bf-appearance-token-flowchat-card-pad-x);
+      font-size: var(--bf-appearance-token-tool-card-action-font-size);
       font-weight: 500;
-      color: var(--color-static-white);
+      color: var(--bf-appearance-token-color-static-white);
       background: linear-gradient(
         135deg,
-        var(--color-warning) 0%,
-        color-mix(in srgb, var(--color-warning) 82%, var(--color-text-primary)) 100%
+        var(--bf-appearance-token-color-warning) 0%,
+        color-mix(in srgb, var(--bf-appearance-token-color-warning) 82%, var(--bf-appearance-token-color-text-primary)) 100%
       );
       border: none;
       border-radius: 4px;
       cursor: pointer;
       transition: all 0.15s ease;
-      box-shadow: 0 1px 2px var(--color-overlay-black-12);
+      box-shadow: 0 1px 2px var(--bf-appearance-token-color-overlay-black-12);
 
       &:hover:not(:disabled) {
         background: linear-gradient(
           135deg,
-          color-mix(in srgb, var(--color-warning) 90%, var(--color-static-white)) 0%,
-          var(--color-warning) 100%
+          color-mix(in srgb, var(--bf-appearance-token-color-warning) 90%, var(--bf-appearance-token-color-static-white)) 0%,
+          var(--bf-appearance-token-color-warning) 100%
         );
-        box-shadow: 0 2px 4px var(--color-warning-border);
+        box-shadow: 0 2px 4px var(--bf-appearance-token-color-warning-border);
       }
 
       &:active:not(:disabled) {
@@ -438,8 +438,8 @@
       &--building {
         background: linear-gradient(
           135deg,
-          var(--color-warning) 0%,
-          color-mix(in srgb, var(--color-warning) 82%, var(--color-text-primary)) 100%
+          var(--bf-appearance-token-color-warning) 0%,
+          color-mix(in srgb, var(--bf-appearance-token-color-warning) 82%, var(--bf-appearance-token-color-text-primary)) 100%
         );
       }
 
@@ -447,17 +447,17 @@
       &--built {
         background: linear-gradient(
           135deg,
-          var(--color-success) 0%,
-          color-mix(in srgb, var(--color-success) 82%, var(--color-text-primary)) 100%
+          var(--bf-appearance-token-color-success) 0%,
+          color-mix(in srgb, var(--bf-appearance-token-color-success) 82%, var(--bf-appearance-token-color-text-primary)) 100%
         );
         
         &:hover {
           background: linear-gradient(
             135deg,
-            var(--color-success) 0%,
-            color-mix(in srgb, var(--color-success) 82%, var(--color-text-primary)) 100%
+            var(--bf-appearance-token-color-success) 0%,
+            color-mix(in srgb, var(--bf-appearance-token-color-success) 82%, var(--bf-appearance-token-color-text-primary)) 100%
           );
-          box-shadow: 0 1px 2px var(--color-overlay-black-12);
+          box-shadow: 0 1px 2px var(--bf-appearance-token-color-overlay-black-12);
         }
       }
     }

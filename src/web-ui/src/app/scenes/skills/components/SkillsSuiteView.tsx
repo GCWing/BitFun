@@ -406,13 +406,13 @@ const SkillsSuiteView: React.FC = () => {
   }, [currentMode.labelKey, draftEnabledKeys, notification, suiteModeId, t, workspacePath]);
 
   return (
-    <div className="skills-suite">
-      <div className="skills-suite__hero">
-        <div className="skills-suite__hero-copy">
+    <div className="skills-suite" data-bf-scene="skills" data-bf-part="suite" data-bf-mode={suiteModeId}>
+      <div className="skills-suite__hero" data-bf-scene="skills" data-bf-part="suiteHero">
+        <div className="skills-suite__hero-copy" data-bf-scene="skills" data-bf-part="suiteHeroCopy">
           <h2 className="skills-suite__title">{t('suite.title')}</h2>
           <p className="skills-suite__subtitle">{t('suite.subtitle')}</p>
         </div>
-        <div className="skills-suite__hero-actions">
+        <div className="skills-suite__hero-actions" data-bf-scene="skills" data-bf-part="suiteHeroActions">
           <Button
             variant="secondary"
             size="small"
@@ -436,8 +436,8 @@ const SkillsSuiteView: React.FC = () => {
         </div>
       </div>
 
-      <div className="skills-suite__mode-toolbar">
-        <div className="skills-suite__modes" role="tablist" aria-label={t('suite.modeLabel')}>
+      <div className="skills-suite__mode-toolbar" data-bf-scene="skills" data-bf-part="suiteModeToolbar">
+        <div className="skills-suite__modes" role="tablist" aria-label={t('suite.modeLabel')} data-bf-scene="skills" data-bf-part="suiteModes">
         {SUITE_MODES.map((mode) => (
             <button
               key={mode.id}
@@ -450,8 +450,12 @@ const SkillsSuiteView: React.FC = () => {
               onClick={() => handleModeSelect(mode.id)}
               disabled={isSaving}
               title={t(mode.descKey)}
+              data-bf-scene="skills"
+              data-bf-part="suiteModeTab"
+              data-bf-mode={mode.id}
+              data-bf-state={suiteModeId === mode.id ? 'active' : undefined}
             >
-              <span className="skills-suite__mode-tab-label">{t(mode.labelKey)}</span>
+              <span className="skills-suite__mode-tab-label" data-bf-scene="skills" data-bf-part="suiteModeTabLabel">{t(mode.labelKey)}</span>
             </button>
         ))}
         </div>
@@ -471,21 +475,21 @@ const SkillsSuiteView: React.FC = () => {
       </div>
 
       {loading && (
-        <div className="skills-suite__loading" aria-busy="true" aria-label={t('suite.loading')}>
+        <div className="skills-suite__loading" aria-busy="true" aria-label={t('suite.loading')} data-bf-scene="skills" data-bf-part="suiteLoading">
           <RefreshCw size={16} className="skills-suite__loading-icon" />
           <span>{t('suite.loading')}</span>
         </div>
       )}
 
       {!loading && error && (
-        <div className="skills-main__empty skills-main__empty--error">
+        <div className="skills-main__empty skills-main__empty--error" data-bf-scene="skills" data-bf-part="error">
           <Package size={28} strokeWidth={1.2} />
           <span>{error}</span>
         </div>
       )}
 
       {!loading && !error && suiteGroups.length === 0 && (
-        <div className="skills-main__empty">
+        <div className="skills-main__empty" data-bf-scene="skills" data-bf-part="empty">
           <Package size={28} strokeWidth={1.2} />
           <span>{t('suite.empty')}</span>
         </div>
@@ -497,11 +501,14 @@ const SkillsSuiteView: React.FC = () => {
           role="tabpanel"
           aria-labelledby={`skills-suite-tab-${suiteModeId}`}
           className="skills-suite__sections"
+          data-bf-scene="skills"
+          data-bf-part="suiteSections"
+          data-bf-mode={suiteModeId}
         >
           {suiteSections.map(([sectionLabel, sectionGroups]) => (
-            <section key={sectionLabel} className="skills-suite__section">
-              <span className="skills-suite__section-label">{sectionLabel}</span>
-              <div className="skills-suite__grid">
+            <section key={sectionLabel} className="skills-suite__section" data-bf-scene="skills" data-bf-part="suiteSection">
+              <span className="skills-suite__section-label" data-bf-scene="skills" data-bf-part="suiteSectionLabel">{sectionLabel}</span>
+              <div className="skills-suite__grid" data-bf-scene="skills" data-bf-part="suiteGrid">
                 {sectionGroups.map((group) => {
                   const allEnabled = group.enabledCount === group.totalCount;
                   const someEnabled = group.enabledCount > 0;
@@ -518,19 +525,25 @@ const SkillsSuiteView: React.FC = () => {
                       : t('suite.groupState.disabled');
 
                   return (
-                    <section key={group.id} className="skills-suite__group-card">
-                      <div className="skills-suite__group-head">
-                        <div className="skills-suite__group-title-wrap">
-                          <div className="skills-suite__group-title-row">
-                            <span className="skills-suite__group-title">{group.label}</span>
+                    <section
+                      key={group.id}
+                      className="skills-suite__group-card"
+                      data-bf-scene="skills"
+                      data-bf-part="suiteGroupCard"
+                      data-bf-state={allEnabled ? 'enabled' : undefined}
+                    >
+                      <div className="skills-suite__group-head" data-bf-scene="skills" data-bf-part="suiteGroupHead">
+                        <div className="skills-suite__group-title-wrap" data-bf-scene="skills" data-bf-part="suiteGroupTitleWrap">
+                          <div className="skills-suite__group-title-row" data-bf-scene="skills" data-bf-part="suiteGroupTitleRow">
+                            <span className="skills-suite__group-title" data-bf-scene="skills" data-bf-part="suiteGroupTitle">{group.label}</span>
                             <Badge variant={groupStateVariant}>{groupStateLabel}</Badge>
                           </div>
-                          <span className="skills-suite__group-count">
+                          <span className="skills-suite__group-count" data-bf-scene="skills" data-bf-part="suiteGroupCount">
                             {t('suite.groupCount', { total: group.totalCount })}
                           </span>
                         </div>
 
-                        <div className="skills-suite__group-actions">
+                        <div className="skills-suite__group-actions" data-bf-scene="skills" data-bf-part="suiteGroupActions">
                           {showSaveButton ? (
                             <Button
                               variant="primary"
@@ -554,7 +567,7 @@ const SkillsSuiteView: React.FC = () => {
                         </div>
                       </div>
 
-                      <div className="skills-suite__skills">
+                      <div className="skills-suite__skills" data-bf-scene="skills" data-bf-part="suiteSkills">
                         {group.skills.map((skill) => {
                           const draftEnabled = draftEnabledKeySet.has(skill.key);
                           const dirty = committedEnabledKeySet.has(skill.key) !== draftEnabled;
@@ -584,7 +597,14 @@ const SkillsSuiteView: React.FC = () => {
                               title={accessibleStatus}
                               aria-label={`${skill.name}. ${accessibleStatus}`}
                               aria-pressed={draftEnabled}
-                              disabled={isSaving || !skill.globallyEnabled}
+                              disabled={isSaving}
+                              data-bf-scene="skills"
+                              data-bf-part="suiteSkill"
+                              data-bf-state={[
+                                draftEnabled && 'enabled',
+                                shadowed && 'covered',
+                                dirty && 'dirty',
+                              ].filter(Boolean).join(' ') || undefined}
                               onClick={() => {
                                 setDraftEnabledKeys((prev) => {
                                   const next = new Set(prev);
@@ -597,19 +617,19 @@ const SkillsSuiteView: React.FC = () => {
                                 });
                               }}
                             >
-                              <span className="skills-suite__skill-chip-name">{skill.name}</span>
+                              <span className="skills-suite__skill-chip-name" data-bf-scene="skills" data-bf-part="suiteSkillName">{skill.name}</span>
                               {draftEnabled && !shadowed ? (
                                 <ShieldCheck size={11} />
                               ) : (
                                 <ShieldAlert size={11} />
                               )}
                               {shadowed && (
-                                <span className="skills-suite__skill-chip-status">
+                                <span className="skills-suite__skill-chip-status" data-bf-scene="skills" data-bf-part="suiteSkillStatus">
                                   {t('suite.skillState.covered', { source: coverageSource })}
                                 </span>
                               )}
                               {dirty && (
-                                <span className="skills-suite__skill-chip-status">
+                                <span className="skills-suite__skill-chip-status" data-bf-scene="skills" data-bf-part="suiteSkillStatus">
                                   {t('suite.skillState.pending')}
                                 </span>
                               )}

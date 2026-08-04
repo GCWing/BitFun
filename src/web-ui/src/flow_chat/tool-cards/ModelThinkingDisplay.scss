@@ -12,39 +12,39 @@
 
 /* Minimal, borderless layout.
  * WebKit (Tauri/macOS) baseline-quirk fix:
- * — Collapsed summary uses `--flowchat-font-size-sm` + shared support line-height to match
+ * — Collapsed summary uses `--bf-appearance-token-flowchat-font-size-sm` + shared support line-height to match
  *   `.explore-region--collapsible` (e.g. “执行了 N 个命令”).
  * — Make the chevron SVG `display: block` and the label simple `inline` flow
  *   so flex `align-items: center` stays stable. */
 .flow-thinking-item {
   padding: 0;
   /* Match `.flow-text-block` and the tool wrappers so flow items share one visual gap. */
-  margin: 0 0 var(--flowchat-flow-item-gap) 0;
+  margin: 0 0 var(--bf-appearance-token-flowchat-flow-item-gap) 0;
   background: transparent;
   /* Transparent border to match the box-sizing of bordered cards so that thinking
    * items and card content share the same left edge. */
   border: 1px solid transparent;
   box-sizing: border-box;
   /* Collapsed summary line: match `.explore-region--collapsible` (e.g. command count). */
-  font-size: var(--flowchat-font-size-sm);
-  line-height: var(--flowchat-support-line-height);
+  font-size: var(--bf-appearance-token-flowchat-font-size-sm);
+  line-height: var(--bf-appearance-token-flowchat-support-line-height);
   transition: padding 0.2s ease;
 }
 
 .thinking-collapsed-header {
   display: flex;
   align-items: center;
-  gap: var(--flowchat-inline-gap);
+  gap: var(--bf-appearance-token-flowchat-inline-gap);
   padding: 0;
   border-radius: 4px;
   cursor: pointer;
   background: transparent;
-  font-size: var(--flowchat-font-size-sm);
-  line-height: var(--flowchat-support-line-height);
+  font-size: var(--bf-appearance-token-flowchat-font-size-sm);
+  line-height: var(--bf-appearance-token-flowchat-support-line-height);
 
   &:hover {
     .thinking-label {
-      color: var(--color-text-secondary);
+      color: var(--bf-appearance-token-color-text-secondary);
       opacity: 1;
     }
 
@@ -55,7 +55,7 @@
 
   .thinking-chevron {
     flex-shrink: 0;
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
     opacity: 0.6;
     display: block;
     transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.15s ease;
@@ -63,11 +63,11 @@
   }
 
   .thinking-label {
-    font-size: var(--flowchat-font-size-sm);
+    font-size: var(--bf-appearance-token-flowchat-font-size-sm);
     font-weight: normal;
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
     opacity: 0.8;
-    line-height: var(--flowchat-support-line-height);
+    line-height: var(--bf-appearance-token-flowchat-support-line-height);
   }
 }
 
@@ -98,18 +98,13 @@
 }
 
 .thinking-content {
-  font-size: var(--flowchat-font-size-base);
-  line-height: var(--flowchat-text-line-height);
+  font-size: var(--bf-appearance-token-flowchat-font-size-base);
+  line-height: var(--bf-appearance-token-flowchat-text-line-height);
   /* Match FlowChat body text (sans); mono stack + generic monospace yields Songti-like CJK on Windows. */
-  font-family: var(--font-family-sans);
+  font-family: var(--bf-appearance-token-font-family-sans);
   word-break: break-word;
-  color: var(--color-text-muted);
-  // Preserve vertical breathing room without shifting expanded reasoning right.
-  padding:
-    var(--flowchat-card-expanded-pad-y)
-    var(--flowchat-card-expanded-pad-x)
-    var(--flowchat-card-expanded-pad-y)
-    0;
+  color: var(--bf-appearance-token-color-text-muted);
+  padding: var(--bf-appearance-token-flowchat-card-expanded-pad-y) var(--bf-appearance-token-flowchat-card-expanded-pad-x) var(--bf-appearance-token-flowchat-card-expanded-pad-y) 0;
   background: transparent;
   border: none;
   border-radius: 6px;
@@ -137,7 +132,7 @@
    * Use a solid fill + mask fade so we never interpolate theme colors with `transparent` in sRGB
    * (that pulls toward black and looks wrong on near-black themes).
    */
-  --thinking-scroll-fade-base: var(--color-bg-scene);
+  --thinking-scroll-fade-base: var(--bf-appearance-token-color-bg-scene);
 
   /* Top fade */
   &::before {
@@ -153,8 +148,8 @@
     transition: opacity 0.2s ease;
 
     background: var(--thinking-scroll-fade-base);
-    -webkit-mask-image: linear-gradient(to bottom, var(--color-static-black) 0%, var(--color-static-black) 22%, transparent 100%);
-    mask-image: linear-gradient(to bottom, var(--color-static-black) 0%, var(--color-static-black) 22%, transparent 100%);
+    -webkit-mask-image: linear-gradient(to bottom, var(--bf-appearance-token-color-static-black) 0%, var(--bf-appearance-token-color-static-black) 22%, transparent 100%);
+    mask-image: linear-gradient(to bottom, var(--bf-appearance-token-color-static-black) 0%, var(--bf-appearance-token-color-static-black) 22%, transparent 100%);
     -webkit-mask-repeat: no-repeat;
     mask-repeat: no-repeat;
     -webkit-mask-size: 100% 100%;
@@ -175,8 +170,8 @@
     transition: opacity 0.2s ease;
 
     background: var(--thinking-scroll-fade-base);
-    -webkit-mask-image: linear-gradient(to top, var(--color-static-black) 0%, var(--color-static-black) 22%, transparent 100%);
-    mask-image: linear-gradient(to top, var(--color-static-black) 0%, var(--color-static-black) 22%, transparent 100%);
+    -webkit-mask-image: linear-gradient(to top, var(--bf-appearance-token-color-static-black) 0%, var(--bf-appearance-token-color-static-black) 22%, transparent 100%);
+    mask-image: linear-gradient(to top, var(--bf-appearance-token-color-static-black) 0%, var(--bf-appearance-token-color-static-black) 22%, transparent 100%);
     -webkit-mask-repeat: no-repeat;
     mask-repeat: no-repeat;
     -webkit-mask-size: 100% 100%;
@@ -202,26 +197,25 @@
   }
 }
 
-/* Markdown body: same sans as rest of chat; code stays mono via the tool-card font token. */
+/* Markdown body: same sans as rest of chat; code stays mono via Appearance. */
 .thinking-content .markdown-renderer.thinking-markdown {
-  --font-family-mono: var(--tool-card-font-mono);
-  --markdown-font-heading: var(--font-family-sans);
-  --markdown-font-size: var(--flowchat-font-size-base);
-  --markdown-font-size-sm: var(--flowchat-font-size-sm);
-  --markdown-code-font-size: var(--flowchat-font-size-xs);
-  --markdown-line-height: var(--flowchat-text-line-height);
+  --markdown-font-heading: var(--bf-appearance-token-font-family-sans);
+  --markdown-font-size: var(--bf-appearance-token-flowchat-font-size-base);
+  --markdown-font-size-sm: var(--bf-appearance-token-flowchat-font-size-sm);
+  --markdown-code-font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+  --markdown-line-height: var(--bf-appearance-token-flowchat-text-line-height);
   --markdown-block-gap: #{markdown.$block-gap};
   --markdown-paragraph-gap: #{markdown.$paragraph-gap};
 
-  font-family: var(--font-family-sans);
-  font-size: var(--flowchat-font-size-base);
-  line-height: var(--flowchat-text-line-height);
-  color: var(--color-text-muted);
+  font-family: var(--bf-appearance-token-font-family-sans);
+  font-size: var(--bf-appearance-token-flowchat-font-size-base);
+  line-height: var(--bf-appearance-token-flowchat-text-line-height);
+  color: var(--bf-appearance-token-color-text-muted);
   animation: none;
 
   h1, h2, h3, h4, h5, h6,
   strong {
-    color: var(--color-text-secondary);
+    color: var(--bf-appearance-token-color-text-secondary);
   }
 
   p,
@@ -230,35 +224,35 @@
   li,
   blockquote,
   .custom-blockquote {
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
   }
 
   em {
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
   }
 
   hr {
-    background: color-mix(in srgb, var(--color-text-muted) 25%, transparent);
+    background: color-mix(in srgb, var(--bf-appearance-token-color-text-muted) 25%, transparent);
   }
 
   blockquote,
   .custom-blockquote {
-    border-left: 2px solid color-mix(in srgb, var(--color-text-muted) 35%, transparent);
+    border-left: 2px solid color-mix(in srgb, var(--bf-appearance-token-color-text-muted) 35%, transparent);
     background: transparent;
   }
 
   .inline-code {
-    font-family: var(--tool-card-font-mono);
+    font-family: var(--bf-appearance-token-tool-card-font-mono);
     border-radius: 0;
     background: transparent;
     border: none;
-    color: var(--color-text-secondary);
+    color: var(--bf-appearance-token-color-text-secondary);
   }
 
   .code-block-wrapper {
     border-radius: 6px;
-    border: 1px solid color-mix(in srgb, var(--color-text-muted) 18%, transparent);
-    background: color-mix(in srgb, var(--color-text-muted) 8%, transparent);
+    border: 1px solid color-mix(in srgb, var(--bf-appearance-token-color-text-muted) 18%, transparent);
+    background: color-mix(in srgb, var(--bf-appearance-token-color-text-muted) 8%, transparent);
   }
 
   .code-block-toolbar {
@@ -268,13 +262,13 @@
 
   .code-block-lang {
     font-size: 0.6rem;
-    line-height: var(--flowchat-compact-line-height);
+    line-height: var(--bf-appearance-token-flowchat-compact-line-height);
   }
 
   .code-block-wrapper pre[class*='language-'],
   .code-block-wrapper pre[style] {
-    font-size: var(--flowchat-font-size-xs) !important;
-    line-height: var(--flowchat-support-line-height) !important;
+    font-size: var(--bf-appearance-token-flowchat-font-size-xs) !important;
+    line-height: var(--bf-appearance-token-flowchat-support-line-height) !important;
     border-radius: 6px !important;
   }
 
@@ -288,7 +282,7 @@
 
   .code-block-wrapper .copy-button:hover {
     background: transparent !important;
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
     transform: scale(0.93);
   }
 
@@ -298,26 +292,26 @@
   }
 
   .code-block-wrapper .copy-button.copy-success:hover {
-    color: var(--color-success);
+    color: var(--bf-appearance-token-color-success);
     transform: scale(0.93);
   }
 
   .table-wrapper {
-    font-size: var(--flowchat-font-size-base);
+    font-size: var(--bf-appearance-token-flowchat-font-size-base);
   }
 
   .table-wrapper th,
   .table-wrapper td {
-    color: var(--color-text-muted);
-    border-color: color-mix(in srgb, var(--color-text-muted) 22%, transparent);
+    color: var(--bf-appearance-token-color-text-muted);
+    border-color: color-mix(in srgb, var(--bf-appearance-token-color-text-muted) 22%, transparent);
   }
 
   .table-wrapper th {
-    color: var(--color-text-secondary);
-    background: color-mix(in srgb, var(--color-text-muted) 6%, transparent);
+    color: var(--bf-appearance-token-color-text-secondary);
+    background: color-mix(in srgb, var(--bf-appearance-token-color-text-muted) 6%, transparent);
   }
 
   .table-wrapper tbody tr:nth-child(2n) {
-    background: color-mix(in srgb, var(--color-text-muted) 5%, transparent);
+    background: color-mix(in srgb, var(--bf-appearance-token-color-text-muted) 5%, transparent);
   }
 }

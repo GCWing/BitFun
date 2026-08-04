@@ -7,8 +7,8 @@ use bitfun_product_domains::external_subagents::{
     external_subagent_candidate_id, ExternalSubagentBehaviorVersion,
     ExternalSubagentCompatibilityState, ExternalSubagentContributionId,
     ExternalSubagentContributionRole, ExternalSubagentDefinition, ExternalSubagentDiscoveryInput,
-    ExternalSubagentLocalId, ExternalSubagentMode, ExternalSubagentModelRequest,
-    ExternalSubagentProvenanceRef, ExternalSubagentProviderIdentity,
+    ExternalSubagentLocalId, ExternalSubagentMode, ExternalSubagentModelProfileRequest,
+    ExternalSubagentModelRequest, ExternalSubagentProvenanceRef, ExternalSubagentProviderIdentity,
     ExternalSubagentProviderSnapshot, ExternalSubagentSourceProvider, ExternalSubagentToolRequest,
     ExternalSubagentToolSelector, SecretText,
 };
@@ -473,7 +473,6 @@ fn materialize_definition(
         ("hooks", "claude_agent_hooks_not_imported"),
         ("memory", "claude_agent_memory_not_imported"),
         ("background", "claude_agent_background_not_imported"),
-        ("effort", "claude_agent_effort_not_imported"),
         ("isolation", "claude_agent_isolation_not_imported"),
         ("initialPrompt", "claude_agent_initial_prompt_not_imported"),
     ] {
@@ -498,9 +497,9 @@ fn materialize_definition(
     };
     let requested_model = match fields.get("model") {
         None => ExternalSubagentModelRequest::Default,
-        Some(Value::String(value)) if value == "inherit" => ExternalSubagentModelRequest::Default,
+        Some(Value::String(value)) if value == "inherit" => ExternalSubagentModelRequest::Inherit,
         Some(Value::String(value)) if !value.trim().is_empty() => {
-            ExternalSubagentModelRequest::Exact {
+            ExternalSubagentModelRequest::Reference {
                 provider_hint: None,
                 model_name: value.trim().to_string(),
             }
@@ -508,6 +507,20 @@ fn materialize_definition(
         Some(_) => {
             invalid.push("claude_agent_model_type_invalid".to_string());
             ExternalSubagentModelRequest::Default
+        }
+    };
+    let requested_model_profile = match fields.get("effort") {
+        None => None,
+        Some(Value::String(value))
+            if matches!(value.as_str(), "low" | "medium" | "high" | "xhigh" | "max") =>
+        {
+            Some(ExternalSubagentModelProfileRequest::ReasoningEffort {
+                value: value.clone(),
+            })
+        }
+        Some(_) => {
+            invalid.push("claude_agent_effort_invalid".to_string());
+            None
         }
     };
     let requested_tools = tool_request(fields, &mut invalid, &mut degraded);
@@ -536,6 +549,7 @@ fn materialize_definition(
             logical_id.as_str(),
             winner.prompt.as_str(),
             &serde_json::to_string(&requested_model).unwrap_or_default(),
+            &serde_json::to_string(&requested_model_profile).unwrap_or_default(),
             &serde_json::to_string(&requested_tools).unwrap_or_default(),
             &provenance
                 .iter()
@@ -555,10 +569,14 @@ fn materialize_definition(
         display_name: logical_id,
         description,
         prompt: SecretText::new(winner.prompt.clone()),
-        mode: ExternalSubagentMode::Subagent,
+        // Claude Code uses the same agent definition for delegated work and
+        // whole-session `--agent` selection. Keep that role fact in the
+        // provider-neutral definition and let Product Assembly project it.
+        mode: ExternalSubagentMode::All,
         disabled: false,
         hidden: false,
         requested_model,
+        requested_model_profile,
         requested_tools,
         permission_constraints: Default::default(),
         compatibility,

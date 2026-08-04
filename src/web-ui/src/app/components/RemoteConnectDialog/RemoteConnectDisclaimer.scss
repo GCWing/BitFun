@@ -4,7 +4,7 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
-  color: var(--color-text-secondary);
+  color: var(--bf-appearance-token-color-text-secondary);
   padding: 12px 0 14px;
 }
 
@@ -17,12 +17,12 @@
   margin: 0;
   font-size: 12px;
   line-height: 1.4;
-  color: var(--color-text-muted);
+  color: var(--bf-appearance-token-color-text-muted);
 }
 
 .bitfun-remote-disclaimer__section-title {
   margin: 2px 0 0;
-  color: var(--color-text-primary);
+  color: var(--bf-appearance-token-color-text-primary);
   font-size: 13px;
   font-weight: 600;
 }
@@ -37,7 +37,7 @@
   li {
     font-size: 12px;
     line-height: 1.45;
-    color: var(--color-text-secondary);
+    color: var(--bf-appearance-token-color-text-secondary);
   }
 }
 
@@ -46,20 +46,20 @@
 }
 
 .bitfun-remote-disclaimer__details {
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--bf-appearance-token-border-subtle);
   border-radius: 6px;
-  background: var(--element-bg-subtle);
+  background: var(--bf-appearance-token-element-bg-subtle);
 
   summary {
     padding: 9px 12px;
-    color: var(--color-text-primary);
+    color: var(--bf-appearance-token-color-text-primary);
     font-size: 12px;
     font-weight: 500;
     cursor: pointer;
   }
 
   &[open] summary {
-    border-bottom: 1px solid var(--border-subtle);
+    border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
   }
 
   .bitfun-remote-disclaimer__list {
@@ -75,7 +75,7 @@
   gap: 12px;
   margin-top: 6px;
   padding-top: 10px;
-  border-top: 1px solid var(--border-subtle);
+  border-top: 1px solid var(--bf-appearance-token-border-subtle);
 }
 
 .bitfun-remote-disclaimer__btn {
@@ -93,22 +93,22 @@
 }
 
 .bitfun-remote-disclaimer__btn--secondary {
-  background: var(--element-bg-subtle);
-  color: var(--color-text-secondary);
-  border-color: var(--border-subtle);
+  background: var(--bf-appearance-token-element-bg-subtle);
+  color: var(--bf-appearance-token-color-text-secondary);
+  border-color: var(--bf-appearance-token-border-subtle);
 
   &:hover:not(:disabled) {
-    color: var(--color-text-primary);
-    border-color: var(--border-medium);
+    color: var(--bf-appearance-token-color-text-primary);
+    border-color: var(--bf-appearance-token-border-medium);
   }
 }
 
 .bitfun-remote-disclaimer__btn--primary {
-  background: var(--color-accent-600);
-  color: var(--color-static-white);
-  border-color: color-mix(in srgb, var(--color-accent-700) 35%, transparent);
+  background: var(--bf-appearance-token-color-accent-600);
+  color: var(--bf-appearance-token-color-static-white);
+  border-color: color-mix(in srgb, var(--bf-appearance-token-color-accent-700) 35%, transparent);
 
   &:hover:not(:disabled) {
-    background: var(--color-accent-700);
+    background: var(--bf-appearance-token-color-accent-700);
   }
 }

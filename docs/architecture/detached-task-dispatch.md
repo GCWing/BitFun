@@ -15,8 +15,8 @@ dispatch data plane.
 
 There are three roles:
 
-- The **controller** selects a target, prepares an optional workspace snapshot,
-  submits a job, and observes it by cursor.
+- The **controller** selects a target, creates and claims a managed baseline
+  worktree, submits a job, and observes it by cursor.
 - The **target host** owns the job, worker process, local session, workspace
   lease, event log, permission mailbox, and terminal state.
 - A **transport adapter** moves the same narrow JSON protocol over SSH or an
@@ -28,129 +28,154 @@ stores only an outbound observer record under
 controller's normal session store. A target session is an ordinary local
 session on the target and can be resumed there.
 
-The Relay is an opaque router. Device requests, workspace chunks, and responses
-are encrypted with the account master key before the Relay receives them. Relay
-storage is not used for workspace contents.
+The Relay is an opaque router. Device requests, Git bundle chunks, and responses
+are encrypted with the account master key before the Relay receives them.
+Relay storage is not used for repository contents.
 
 ## Workspace delivery
 
-`workspacePath` in a submit request identifies a directory on the target. It
-does not imply that similarly named directories on two machines are related.
-Dispatch therefore supports three explicit delivery modes.
+Dispatch workspace delivery is Git-only. The composer exposes the dispatch
+picker only for a Git repository or managed worktree, and non-UI callers are
+validated again by the controller. A caller cannot nominate an unrelated
+directory on the target as the execution root. Target discovery exposes an SSH
+connection's identity and display metadata, but does not turn its saved
+`defaultWorkspace` into a Dispatch execution directory; every detached job gets
+the managed target worktree described below.
 
-### Existing target directory
+### Controller baseline
 
-`existing` uses a directory that already exists on the target. Probe returns its
-canonical path and Git facts before submit. BitFun never clones, fetches,
-checks out, stashes, or rewrites that directory as part of dispatch.
+After the target protocol is known to be compatible, the controller uses
+`WorktreeService::create` to create a normal managed worktree at the selected
+base revision (`HEAD` by default). The revision is resolved once to an
+immutable commit before delivery. The worktree is job-scoped and receives the branch
+`<branchPrefix>/dispatch/<jobId>`, where `branchPrefix` comes from the shared
+worktree settings.
 
-### One-shot source snapshot
+The outbound record persists the baseline worktree id and path, base commit,
+branch, source repository identity, optional remote URL, and last synchronized
+head. The worktree is claimed by `dispatch:<jobId>`, which exempts it from
+automatic worktree retention while the outbound job still depends on it. Claim
+cleanup is ordered: first release `dispatch:<jobId>`, then delete the outbound
+record. If release fails, the record is retained so cleanup can be retried and
+the claim cannot be orphaned. The worktree remains a normal managed worktree:
+users can inspect it with ordinary Git tools, and the normal worktree retention
+policy resumes after release.
 
-`snapshot-source` captures the controller workspace while honoring repository
-ignore rules. It includes tracked and non-ignored source files, including
-hidden source such as `.github/`, while excluding ignored dependency caches,
-build output, and local secrets. It uses the same verified, one-shot upload,
-materialization, result, and conflict rules as an exact snapshot. The filtered
-input set is carried in the existing exact-snapshot wire envelope, so compatible
-targets do not need a second materialization protocol.
+If `includeUncommitted` is selected, the normal worktree copy-local-changes
+path is used and Git-visible changes are committed inside the baseline
+worktree. The user's checkout is never staged, committed, switched, reset, or
+otherwise changed. Git-ignored runtime inputs such as local `.env` files and
+build output are not delivery inputs.
 
-This is the default snapshot choice for ordinary source workspaces. Users who
-need ignored runtime inputs must choose the exact mode explicitly and confirm
-its wider data boundary.
+### Controller preparation journal
 
-### One-shot exact snapshot
+Setup that can outlive one request is recorded before the outbound submit is
+acknowledged. The controller keeps an owner-only crash journal at
+`~/.bitfun/dispatch/outbound/.preparations/<jobId>.json` and retains it through
+the target's validated submit acknowledgement. Preparation, retry, and recovery
+for the same job are serialized by one per-job run lock, so an expired-entry
+recovery cannot race a live attempt.
 
-`snapshot-exact` captures the controller workspace at submit time and materializes it
-below:
+For automatic SSH CLI setup, audit progress is a fallible durable write rather
+than an in-memory callback. The `cli-install-started` transition is persisted
+before the first remote installer mutation, subsequent success or failure is
+persisted before setup returns, and any audit write failure stops submission.
+Keeping the journal until acknowledgement lets a retry recover setup actions
+that completed remotely even if the controller exited before submit finished.
+
+Before creating the baseline claim, preparation records the stable project
+workspace path that owns the worktree registry rather than relying on a linked
+worktree path that may disappear. An expired preparation lease is necessary but
+not sufficient for recovery to release `dispatch:<jobId>`: no durable outbound
+record may own the same baseline. A matching outbound owner conservatively
+keeps the claim, and an outbound-owner read error is treated as ambiguous and
+also keeps it. Only an expired, provably unowned preparation may release its
+claim; cleanup failures retain recoverable state for a later retry.
+
+### Target repository and worktree
+
+The controller resolves the repository remote URL when one exists and derives
+a stable `repoKey`. The target keeps an owner-only bare repository cache at:
 
 ```text
-~/.bitfun/dispatch/workspaces/<jobId>/current/
+~/.bitfun/dispatch/repos/<repoKey>
 ```
 
-The snapshot includes regular files and empty directories, including hidden and
-ignored files, because the mode promises the workspace's current contents
-rather than a Git checkout. The controller must show that this can include
-`.env`, local credentials, build output, and other ignored data and require
-explicit confirmation.
+`workspace-provision` creates or refreshes that repository, fetches its remote
+without interactive credential prompts, and checks for the requested base
+commit. When the commit is reachable, the target creates the job worktree and
+branch at:
 
-The following entries are not silently copied:
+```text
+~/.bitfun/dispatch/worktrees/<jobId>
+```
 
-- every entry named `.git`, because worktree pointers, nested object stores,
-  hooks, and credentials are repository metadata rather than workspace input;
-- symbolic links, to avoid following data outside the selected root or creating
-  target-dependent aliases;
-- sockets, devices, FIFOs, and other special files;
-- paths that cannot be represented as portable UTF-8 relative paths.
+If the target cannot reach the commit, it returns `needsBundle` and the commits
+it already has. The controller then creates a Git bundle advertised by the
+job's named branch, excluding known target tips where possible. Bundle upload
+is bound to the job, size, and SHA-256; the target verifies the digest, runs
+`git bundle verify`, imports the branch into the bare repository, and retries
+provisioning. This covers unpushed commits and repositories with no usable
+remote without requiring origin write access.
 
-Encountering any unsupported entry fails packaging and names the entry. A
-successful manifest therefore describes every delivered entry; there is no
-best-effort omission.
-
-The archive and manifest are bounded by explicit file-count, per-file, and total
-byte limits: 100,000 files, 100,000 directories, 256 MiB per file, 2 GiB
-uncompressed, and 1 GiB compressed. The controller computes a SHA-256 digest
-and sends immutable upload metadata. The target writes to an owner-only staging
-file, rejects offset mismatches, verifies size and digest, validates every
-archive path and entry type, extracts into a new staging directory, and
-atomically publishes `current`. Materialization runs as a detached target
-process; `workspace-commit` starts or polls it, so a single SSH or Relay RPC
-timeout cannot kill a large extraction. A repeated begin/chunk/commit for the
-same job and digest is idempotent; a different digest for the same job is a
-conflict.
-
-Packaging is one deterministic traversal, not an operating-system filesystem
-snapshot. A file that changes size or modification time while it is read makes
-the package fail, but coordinated edits across multiple files can still span
-the traversal interval. Callers that require an application-consistent source
-must quiesce the source or select a filesystem snapshot as the source path.
-
-The controller retains the latest verified archive for each canonical source
-path and capture mode. Before packaging a later job, it recomputes a lightweight
-fingerprint from the selected paths and their filesystem identity, size,
-executable state, and write/change timestamps. An unchanged fingerprint
-hard-links the cached immutable archive into the new job instead of rereading
-and recompressing every file. Source mode ignores changes below ignored paths;
-exact mode observes them. A selected entry change invalidates and atomically
-replaces the cache. The per-job link remains immutable during submission, so a
-later cache replacement cannot change an in-flight job's bytes.
-
-SSH transports the archive with SFTP after `workspace-begin`. Account-device
-RPC uses bounded base64 chunks inside the existing end-to-end encrypted
-`HostInvoke` envelope. Neither transport puts source bytes in command-line
-arguments, process listings, logs, or the outbound observer record.
-
-After a target has fully verified and materialized a snapshot, it retains one
-owner-only archive keyed by the archive SHA-256. A later job with identical
-metadata attaches that immutable archive and reports the full retained offset,
-so both SSH and account-device controllers skip the source transfer. The
-temporary per-job archive link is removed after materialization; each job still
-gets its own writable `current/` directory, so cache reuse never makes jobs
-share writes. Cache entries expire after 30 days without a hit.
+SSH carries large bundle bytes over the established SFTP channel. Account-device
+delivery uses bounded base64 chunks inside the end-to-end encrypted
+`HostInvoke` envelope. Both transports use the same provision, digest,
+idempotency, branch, and target-path contract. Repository caches that are no
+longer referenced are eligible for retention cleanup after 30 days.
 
 ## Synchronization semantics
 
-A snapshot is an immutable input boundary, not a live shared folder:
+The controller baseline and target worktree start at the same immutable base
+commit. They are not a live shared directory: edits made later in the user's
+checkout are unrelated to the running job, and target writes remain on the
+job branch until the user requests synchronization.
 
-1. The controller captures version `S0`.
-2. The target verifies and publishes `S0`.
-3. The target becomes authoritative for all writes during the job.
-4. Observers pull target events, permissions, and terminal state by cursor.
+The one-click synchronization operation is available while a job is running
+and after it reaches a terminal state:
 
-The controller does not mirror local edits made after `S0`, and target writes
-are not merged automatically into a possibly changed controller workspace.
-Continuous bidirectional synchronization would require conflict detection,
-delete semantics, editor coordination, and a controller that remains online,
-which contradicts detached execution.
+1. The target stages Git-visible changes in its job worktree and creates a
+   commit when necessary.
+2. The target validates that the worktree is still on the job's named branch.
+   For the first synchronization, `knownHead` is the immutable `baseCommit`;
+   afterward it is the last head successfully stored by the controller. The
+   target accepts `knownHead` only when it resolves to a commit and is an
+   ancestor of the current branch head.
+3. The target creates an incremental Git bundle for
+   `<knownHead>..<branch>` and reports its branch, head commit, commit count,
+   changed-file list, size, and SHA-256.
+4. The controller transfers and verifies the bundle, checks that its managed
+   baseline is still on the same job branch, fetches the reported branch into
+   the baseline repository, and advances the baseline worktree with
+   `--ff-only`.
+5. The outbound record stores the synchronized head and the transfer artifact
+   is removed only after that advance succeeds.
 
-Returning code is a separate, explicit result operation. A future result bundle
-may expose an artifact or patch derived from `S0` and the terminal target tree;
-applying it must remain a user-confirmed local operation. Until that operation
-exists, the UI states that snapshot results remain on the target and shows the
-managed target path.
+Each controller-side synchronization invocation carries a fresh `operationId`,
+and every poll for that invocation reuses it. This keeps a completed no-op
+(`headCommit == knownHead`) idempotent for its current poll loop while still
+letting a later click at the same head start a new check for work produced by a
+still-running agent. A changed result remains cached until its head is
+acknowledged, so a failed bundle transfer or local fast-forward can retry safely.
+
+The user's checkout is never changed by synchronization. The baseline
+worktree is the review boundary; the user can test there and then merge or
+rebase the dispatch branch with ordinary Git tools. There is no path-overwrite
+or conflict-resolution mode. If either worktree left the named job branch, or
+if the baseline was deleted or gained divergent commits, synchronization fails
+visibly instead of resetting or rewriting branch metadata. A checkpoint while
+the job is running can collide with a transient Git or index lock held by the
+worker; that failure is retryable, does not advance `knownHead`, and the same
+synchronization request can be retried after the lock clears.
 
 ## Protocol
 
-The target CLI owns the transport-independent protocol and durable store.
+The target CLI owns transport-independent dispatch protocol version 3 and the
+durable store. Version 3 is intentionally incompatible with targets that do
+not implement Git worktree delivery. SSH submission can repair that mismatch
+through signed release installation; an account device must be upgraded as a
+BitFun device.
+
 Public job verbs are:
 
 | Verb | Purpose |
@@ -162,10 +187,28 @@ Public job verbs are:
 | `list` | List durable target jobs. |
 | `answer` | Resolve one persisted permission request for `remote` approval policy. |
 | `append` | Queue an idempotent steering message for the active turn. |
+| `continue` | Queue the next turn for a job whose previous turn has finished. |
 
-Workspace upload uses the internal `workspace-begin`, `workspace-chunk`, and
-`workspace-commit` verbs. They are target data-plane operations and are not
-normal product or Peer Device Mode commands.
+Git delivery and synchronization use these internal data-plane verbs:
+
+| Verb | Purpose |
+| --- | --- |
+| `workspace-provision` | Ensure the shared bare repository contains `baseCommit` and create the job branch and worktree, or return `needsBundle`. |
+| `workspace-bundle-begin` | Bind an owner-only incoming bundle to its job, size, and SHA-256 and report the retained offset. |
+| `workspace-bundle-chunk` | Append one bounded account-device bundle chunk at the expected offset. |
+| `workspace-bundle-commit` | Verify and import the completed base bundle into the target repository. |
+| `workspace-sync` | Commit target changes when needed and create the branch bundle returned to the controller. |
+| `workspace-sync-chunk` | Read one bounded account-device result chunk. |
+
+These verbs are not normal product commands. Account-device transport reserves
+the corresponding `dispatch_target_workspace_*` names and routes them directly
+to the target CLI before the attached Peer Host bridge.
+
+Every compatible target advertises `workspace_git_worktree`,
+`workspace_git_bundle_upload`, and `workspace_git_sync`. These are required
+capabilities, not optional feature detection. `workspace_serialization`
+continues to guarantee that workers sharing one canonical execution path are
+locked correctly.
 
 `dispatch_worker_cli_profile` is a required execution-safety capability. It
 means every dispatch process selects `DeliveryProfile::Cli` before model/config
@@ -173,11 +216,19 @@ inspection can lazily initialize product-full tool state. Controllers must
 check it both during target setup and immediately before submission; package
 version equality is not evidence of this behavior.
 
-CLI installation smoke-tests the same capability before replacing an existing
-target binary. An untagged Desktop development build may, after the normal
-explicit source-build confirmation, archive its clean current Git commit and
-build that exact source on the target. This avoids reinstalling an older
-same-semver release while keeping executable transfer an explicit user action.
+`probe` is read-only and never installs software. Immediately before SSH
+provisioning, submission probes again and automatically installs or upgrades a
+compatible prebuilt `bitfun` release when needed. Release resolution stays
+bound to the expected OS and architecture; the controller verifies the
+checksum sidecar, its publisher signature when present, and the mandatory
+archive signature, pins the SHA-256 passed to the installer, waits with a
+bounded deadline, and probes the installed binary again before continuing.
+
+The signed prebuilt release is the only install path. The controller never
+compiles BitFun on a target, and exposes no command to do so: when no published
+binary can run there — an unsupported platform, a libc floor, a missing `tar`,
+an unreachable release, or a release that predates a required capability — the
+probe reports why and the target cannot be selected.
 
 Account-device transport wraps target verbs in names reserved for detached
 dispatch, such as `dispatch_target_submit`. They are handled before the
@@ -186,11 +237,46 @@ Conversely, controller-side commands such as `dispatch_submit` remain
 local-only in every Peer Device Mode deny table. Disconnecting the last Peer
 controller must not cancel or hide a detached dispatch job.
 
-An account target must have a compatible `bitfun dispatch` runner. A CLI daemon
-already satisfies this. The Desktop account host delegates to an installed
-`bitfun` binary (including a package-manager symlink); if none is available,
-probe reports the missing runner and submission remains disabled rather than
-falling back to local execution.
+An account target must already have a compatible `bitfun dispatch` runner. A
+CLI daemon already satisfies this. The Desktop account host delegates to an
+installed `bitfun` binary (including a package-manager symlink); if none is
+available, probe reports the missing runner and submission remains disabled
+rather than falling back to local execution. Device dispatch never performs
+SSH-style installation through the Relay.
+
+## Conversation model
+
+A dispatch session is a conversation, not a single exchange. One job owns one
+target session, one worktree, and one append-only event log; each user message
+is a turn inside it:
+
+- while a turn is running, a message is an `append` that steers it;
+- once it has finished, a message is a `continue` that queues the next turn.
+
+`continue` rewinds only the job's run state to `queued` and clears the runtime
+turn id, so a fresh detached worker picks it up. The worker restores the target
+session rather than creating it, which is what gives the follow-up turn the
+previous turns as context. Its `turnId` is caller-generated, so a retry after an
+ambiguous response resolves to the same turn instead of starting a second one.
+
+Because the event log is per job rather than per turn, the controller's cursor,
+transcript cache, and projection are unchanged by follow-ups: the observer keeps
+reading one growing transcript.
+
+## Workspace naming
+
+A target checkout lives at:
+
+```text
+~/.bitfun/dispatch/worktrees/<repoKey>/<project>-<short job id>
+```
+
+`repoKey` groups every checkout of one source repository under its shared clone.
+The leaf mirrors the local managed-worktree convention so a target directory is
+recognizable rather than a bare job UUID. The project name is advisory input from
+the controller: the target sanitizes it, falls back to the remote URL's basename
+and then to a constant, and rejects anything that is not a single safe path
+component — the path is never shaped by an untrusted string.
 
 ## Event and observer contract
 
@@ -209,10 +295,26 @@ per observer and the target has no controller lease. Explicitly listing jobs
 for a selected target adopts observer-only routing records on that controller;
 it does not copy sessions or acquire workspace/runtime ownership.
 
-Target and outbound records are retained for 30 days after terminal state.
-Garbage collection never removes queued or running jobs. Removing a terminal
-snapshot also removes only the managed directory bound to that job; an
-arbitrary user-supplied target directory is never a cleanup target.
+A cursor records how far into the event log an observer has read, not what it
+drew, so a cursor on its own cannot restore a projection. The controller
+therefore caches each observer's rendered transcript beside its outbound index,
+one file per job, holding the projected turns together with the cursor that
+produced them and the completeness facts that applied at that point. Storing
+them in one document is what keeps them consistent: a restart resumes from the
+cached cursor rather than any other stored one, because only that pair was
+written together, and a truncated history stays marked as truncated. The cache
+is versioned by the projection rules that wrote it, and anything missing,
+corrupt, mismatched, or above the size ceiling replays the job from byte zero.
+The controller stores the projection verbatim and never interprets it; caching
+it creates no durable session and acquires no runtime ownership.
+
+Target and outbound records are retained for 30 days after terminal state, as
+are the cached transcripts, which are also dropped as soon as a projection is
+deleted or archived. Garbage collection never removes queued or running jobs.
+Target cleanup is limited to the job's managed worktree and private transfer
+state; shared repository caches have their own last-used retention check. On
+the controller, expiring an outbound record releases its baseline worktree
+claim before normal worktree retention can consider that worktree.
 
 ## Approval and supervision
 
@@ -233,6 +335,10 @@ originally submitted the job.
 - A missing or offline target fails submit; the Relay does not queue jobs.
 - A target missing a required behavioral capability fails preflight before a
   durable job is created, even when its CLI package version matches.
+- A signed prebuilt SSH release may be installed automatically. Missing
+  platform support, failed signature or digest verification, installer timeout,
+  or an incompatible post-install probe fails closed before workspace
+  provisioning.
 - A lost submit response leaves `submission_unknown`; status or an idempotent
   retry reconciles the target's durable truth.
 - A live PID that no longer matches the exact worker command is never signaled
@@ -241,7 +347,9 @@ originally submitted the job.
   because replay could duplicate tool side effects. The native target session
   remains available for manual resume.
 - Prompt and event pages remain below the smallest host transport envelope.
-- Workspace digest, archive traversal, unsupported entry, or size failures
-  happen before job submission and leave no executable target workspace.
-  Detached materialization failures are persisted and returned by later commit
-  polls instead of being hidden in a discarded child-process stderr stream.
+- Invalid repository keys, commit ids, branch names, bundle paths, offsets,
+  sizes, digests, prerequisites, or Git verification results fail before job
+  submission. No failure may redirect a transfer outside the managed dispatch
+  directories or silently run against an unrelated target directory.
+- A missing baseline worktree or rejected fast-forward leaves both Git histories
+  intact and returns a visible synchronization error.

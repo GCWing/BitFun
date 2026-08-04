@@ -98,14 +98,17 @@ impl ContextCompressor {
         recent_target_tokens: usize,
     ) -> BitFunResult<Option<CompressionPlan>> {
         let runtime_messages = if runtime_messages.iter().any(|message| {
-            message.internal_reminder_kind() == Some(InternalReminderKind::CompressionContinuation)
+            message
+                .internal_reminder_kind()
+                .is_some_and(InternalReminderKind::should_drop_during_compaction)
         }) {
             Cow::Owned(
                 runtime_messages
                     .iter()
                     .filter(|message| {
-                        message.internal_reminder_kind()
-                            != Some(InternalReminderKind::CompressionContinuation)
+                        !message
+                            .internal_reminder_kind()
+                            .is_some_and(InternalReminderKind::should_drop_during_compaction)
                     })
                     .cloned()
                     .collect(),
@@ -748,6 +751,48 @@ mod tests {
                 .count(),
             1
         );
+    }
+
+    #[test]
+    fn conditional_instruction_reminders_do_not_enter_any_compacted_context() {
+        let compressor = ContextCompressor::new(Default::default());
+        let summarized_reminder = Message::internal_reminder(
+            InternalReminderKind::ConditionalInstructions,
+            "older path rule",
+        );
+        let recent_reminder = Message::internal_reminder(
+            InternalReminderKind::ConditionalInstructions,
+            "recent path rule",
+        );
+        let messages = vec![
+            Message::system("system".to_string()),
+            Message::user("older request".repeat(200)),
+            summarized_reminder.clone(),
+            Message::assistant("older answer".repeat(200)),
+            Message::user("current request".to_string()),
+            recent_reminder.clone(),
+            Message::assistant("current answer".to_string()),
+        ];
+
+        let plan = compressor
+            .plan_compression("session", &messages, 128_000, 100)
+            .expect("planning succeeds")
+            .expect("plan exists");
+
+        for reminder in [summarized_reminder, recent_reminder] {
+            assert!(!plan
+                .summary_request_messages
+                .iter()
+                .any(|message| message.id == reminder.id));
+            assert!(!plan
+                .summary_messages
+                .iter()
+                .any(|message| message.id == reminder.id));
+            assert!(!plan
+                .recent_tail_messages
+                .iter()
+                .any(|message| message.id == reminder.id));
+        }
     }
 
     #[test]

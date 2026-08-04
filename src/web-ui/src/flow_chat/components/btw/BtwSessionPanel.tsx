@@ -89,7 +89,6 @@ const PANEL_CONFIG: FlowChatConfig = {
   showTimestamps: false,
   maxHistoryRounds: 50,
   enableVirtualScroll: false,
-  theme: 'dark',
 };
 
 const resolveSessionTitle = (session?: Session | null, fallback = 'Side thread') =>
@@ -931,6 +930,7 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
     const requestId = btwOrigin?.requestId;
     const request: FlowChatFocusItemRequest = {
       sessionId: resolvedParentSessionId,
+      turnId: btwOrigin?.parentDialogTurnId,
       turnIndex: btwOrigin?.parentTurnIndex,
       itemId: requestId ? `btw_marker_${requestId}` : undefined,
       source: 'btw-back',
@@ -945,8 +945,8 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
 
   if (!childSessionId || !childSession) {
     return (
-      <div className="btw-session-panel btw-session-panel--empty">
-        <div className="btw-session-panel__empty-state">
+      <div className="btw-session-panel btw-session-panel--empty" data-bf-component="btw-session-panel" data-bf-part="root" data-bf-view="empty">
+        <div className="btw-session-panel__empty-state" data-bf-component="btw-session-panel" data-bf-part="empty">
           {t('btw.emptyThreadLabel', { label: t('btw.threadLabel') })}
         </div>
       </div>
@@ -956,21 +956,27 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
   return (
     <FlowChatContext.Provider value={contextValue}>
       <FlowChatVolatileContext.Provider value={volatileContextValue}>
-      <div className={`btw-session-panel${showReviewActionBar ? ' btw-session-panel--has-action-bar' : ''}`}>
-        <div className="btw-session-panel__header">
-          <div className="btw-session-panel__header-left">
-            <span className="btw-session-panel__badge">{childBadgeLabel}</span>
+      <div
+        className={`btw-session-panel${showReviewActionBar ? ' btw-session-panel--has-action-bar' : ''}`}
+        data-bf-component="btw-session-panel"
+        data-bf-part="root"
+        data-bf-view="session"
+        data-bf-state={showReviewActionBar ? 'hasActionBar' : undefined}
+      >
+        <div className="btw-session-panel__header" data-bf-component="btw-session-panel" data-bf-part="header">
+          <div className="btw-session-panel__header-left" data-bf-component="btw-session-panel" data-bf-part="headerMain">
+            <span className="btw-session-panel__badge" data-bf-component="btw-session-panel" data-bf-part="badge">{childBadgeLabel}</span>
           </div>
           <div className="btw-session-panel__header-title-wrap">
-            <span className="btw-session-panel__title">
+            <span className="btw-session-panel__title" data-bf-component="btw-session-panel" data-bf-part="title">
               {displayTitle?.trim() || (viewKind === 'review-check'
                 ? childBadgeLabel
                 : resolveSessionTitle(childSession, childTitleFallback))}
             </span>
           </div>
-          <div className="btw-session-panel__header-right">
+          <div className="btw-session-panel__header-right" data-bf-component="btw-session-panel" data-bf-part="actions">
             {showOriginMeta && (
-              <div className="btw-session-panel__meta">
+              <div className="btw-session-panel__meta" data-bf-component="btw-session-panel" data-bf-part="meta">
                 <span className="btw-session-panel__meta-label">{childOriginLabel}</span>
                 <Link2 size={11} />
                 <span className="btw-session-panel__meta-title">{resolveSessionTitle(parentSession, t('btw.parent'))}</span>
@@ -1021,11 +1027,15 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
         <div
           ref={scrollContainerRef}
           className="btw-session-panel__body"
+          data-bf-component="btw-session-panel"
+          data-bf-part="body"
           style={reviewActionBottomPadding > 0 ? { paddingBottom: `${reviewActionBottomPadding}px` } : undefined}
         >
           {isReviewDetail && reviewDetailNotices.length > 0 && (
             <div
               className={`btw-session-panel__empty-state${virtualItems.length > 0 ? ' btw-session-panel__empty-state--with-content' : ''}`}
+              data-bf-component="btw-session-panel"
+              data-bf-part="empty"
               role={reviewDetailNotices.some(({ state }) =>
                 state === 'load-failed' || state === 'failed' || state === 'timed-out')
                 ? 'alert'
@@ -1048,7 +1058,7 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
           )}
           {virtualItems.length === 0 ? (
             !isReviewDetail || reviewDetailNotices.length === 0 ? (
-              <div className="btw-session-panel__empty-state">{t('session.empty')}</div>
+              <div className="btw-session-panel__empty-state" data-bf-component="btw-session-panel" data-bf-part="empty">{t('session.empty')}</div>
             ) : null
           ) : (
             virtualItems.map((item, index) => (
@@ -1068,9 +1078,11 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
           visible={showScrollToBottom}
           onClick={handleScrollToBottom}
           className="btw-session-panel__scroll-to-bottom"
+          data-bf-component="btw-session-panel"
+          data-bf-part="scrollToBottom"
         />
         {showMinimizedIndicator && (
-          <div className="btw-session-panel__minimized-indicator">
+          <div className="btw-session-panel__minimized-indicator" data-bf-component="btw-session-panel" data-bf-part="minimized" data-bf-state="minimized">
             <button
               type="button"
               onClick={() => useReviewActionBarStore.getState().restore(childSessionId)}
@@ -1093,7 +1105,7 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
         )}
 
         {showReviewActionBar && (
-          <div ref={actionBarRef} className="btw-session-panel__action-bar-wrapper">
+          <div ref={actionBarRef} className="btw-session-panel__action-bar-wrapper" data-bf-component="btw-session-panel" data-bf-part="actionBar">
             <ReviewActionBar childSessionId={childSessionId} />
           </div>
         )}

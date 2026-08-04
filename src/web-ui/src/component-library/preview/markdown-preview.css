@@ -1,19 +1,19 @@
 /* Markdown preview page styles */
 
 .markdown-preview-page {
-  --private-markdown-preview-header-bg: linear-gradient(135deg, color-mix(in srgb, var(--color-indigo-500) 18%, var(--color-static-black)) 0%, color-mix(in srgb, var(--color-accent-600) 18%, var(--color-static-black)) 100%);
-  --private-markdown-preview-header-border: color-mix(in srgb, var(--color-static-white) 16%, var(--color-static-black));
-  --private-markdown-preview-badge-bg: color-mix(in srgb, var(--color-accent-500) 20%, transparent);
-  --private-markdown-preview-badge-border: color-mix(in srgb, var(--color-accent-500) 40%, transparent);
-  --private-markdown-preview-badge-text: var(--color-accent-500);
-  --private-preview-panel-bg: color-mix(in srgb, var(--color-static-black) 96%, var(--color-static-white));
-  --private-preview-border: color-mix(in srgb, var(--color-static-black) 90%, var(--color-static-white));
-  --private-preview-text-primary: color-mix(in srgb, var(--color-static-white) 88%, var(--color-static-black));
-  --private-preview-text-disabled: color-mix(in srgb, var(--color-static-white) 40%, var(--color-static-black));
+  --private-markdown-preview-header-bg: linear-gradient(135deg, color-mix(in srgb, var(--bf-appearance-token-color-indigo-500) 18%, var(--bf-appearance-token-color-static-black)) 0%, color-mix(in srgb, var(--bf-appearance-token-color-accent-600) 18%, var(--bf-appearance-token-color-static-black)) 100%);
+  --private-markdown-preview-header-border: color-mix(in srgb, var(--bf-appearance-token-color-static-white) 16%, var(--bf-appearance-token-color-static-black));
+  --private-markdown-preview-badge-bg: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 20%, transparent);
+  --private-markdown-preview-badge-border: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 40%, transparent);
+  --private-markdown-preview-badge-text: var(--bf-appearance-token-color-accent-500);
+  --private-preview-panel-bg: color-mix(in srgb, var(--bf-appearance-token-color-static-black) 96%, var(--bf-appearance-token-color-static-white));
+  --private-preview-border: color-mix(in srgb, var(--bf-appearance-token-color-static-black) 90%, var(--bf-appearance-token-color-static-white));
+  --private-preview-text-primary: color-mix(in srgb, var(--bf-appearance-token-color-static-white) 88%, var(--bf-appearance-token-color-static-black));
+  --private-preview-text-disabled: color-mix(in srgb, var(--bf-appearance-token-color-static-white) 40%, var(--bf-appearance-token-color-static-black));
 
   min-height: 100vh;
   height: 100vh;
-  background: var(--color-bg-primary);
+  background: var(--bf-appearance-token-color-bg-primary);
   color: var(--private-preview-text-primary);
   display: flex;
   flex-direction: column;
@@ -27,7 +27,7 @@
   padding: 20px 32px;
   background: var(--private-markdown-preview-header-bg);
   border-bottom: 1px solid var(--private-markdown-preview-header-border);
-  box-shadow: 0 2px 8px var(--color-overlay-black-50);
+  box-shadow: 0 2px 8px var(--bf-appearance-token-color-overlay-black-50);
 }
 
 .header-left {
@@ -40,7 +40,7 @@
   margin: 0;
   font-size: 24px;
   font-weight: 600;
-  color: var(--color-static-white);
+  color: var(--bf-appearance-token-color-static-white);
 }
 
 .markdown-preview-page .badge {
@@ -75,7 +75,7 @@
 
 .control-group label {
   font-size: 14px;
-  color: var(--color-text-muted);
+  color: var(--bf-appearance-token-color-text-muted);
   font-weight: 500;
 }
 
@@ -89,7 +89,7 @@
   padding: 32px;
   overflow-y: auto;
   overflow-x: hidden;
-  background: var(--color-bg-primary);
+  background: var(--bf-appearance-token-color-bg-primary);
   min-height: 0;
 }
 
@@ -107,8 +107,8 @@
   width: 100%;
   min-height: 500px;
   padding: 20px;
-  background: var(--color-overlay-white-04);
-  border: 1px solid var(--color-overlay-white-08);
+  background: var(--bf-appearance-token-color-overlay-white-04);
+  border: 1px solid var(--bf-appearance-token-color-overlay-white-08);
   border-radius: 8px;
   color: var(--private-preview-text-primary);
   font-family: 'Courier New', Consolas, Monaco, monospace;
@@ -121,8 +121,8 @@
 }
 
 .markdown-editor:focus {
-  border-color: var(--border-accent);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent-600) 10%, transparent);
+  border-color: var(--bf-appearance-token-border-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--bf-appearance-token-color-accent-600) 10%, transparent);
 }
 
 .markdown-editor::placeholder {
@@ -142,5 +142,5 @@
   margin: 0 0 16px 0;
   font-size: 20px;
   font-weight: 600;
-  color: var(--color-static-white);
+  color: var(--bf-appearance-token-color-static-white);
 }

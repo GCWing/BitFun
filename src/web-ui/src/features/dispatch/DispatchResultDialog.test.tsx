@@ -8,15 +8,12 @@ import { DispatchResultDialog } from './DispatchResultDialog';
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
 const mocks = vi.hoisted(() => ({
-  pullResult: vi.fn(),
-  applyResult: vi.fn(),
-  confirmWarning: vi.fn(),
+  syncResult: vi.fn(),
 }));
 
 vi.mock('./dispatchApi', () => ({
   dispatchApi: {
-    pullResult: mocks.pullResult,
-    applyResult: mocks.applyResult,
+    syncResult: mocks.syncResult,
   },
 }));
 
@@ -37,51 +34,53 @@ vi.mock('@/component-library', () => ({
   ),
   Modal: ({ children, isOpen }: React.PropsWithChildren<{ isOpen: boolean }>) =>
     isOpen ? <div>{children}</div> : null,
-  confirmWarning: mocks.confirmWarning,
 }));
 
-const BUNDLE = {
-  bundlePath: '/root/.bitfun/dispatch/workspaces/job-1/result.tar.gz',
-  localBundlePath: '/home/me/.bitfun/dispatch/outbound/.results/job-1.tar.gz',
-  workspacePath: '/root/.bitfun/dispatch/workspaces/job-1/current',
-  summary: {
-    added: ['new.txt'],
-    modified: ['edit.txt'],
-    deleted: ['gone.txt'],
-    baselineSha256: { 'edit.txt': 'a'.repeat(64), 'gone.txt': 'b'.repeat(64) },
-    archiveSize: 1024,
-    archiveSha256: 'c'.repeat(64),
-  },
+const SYNCED = {
+  changed: true,
+  branch: 'bitfun/dispatch/job-1',
+  baseCommit: '0'.repeat(40),
+  headCommit: '1'.repeat(40),
+  commitCount: 2,
+  changes: [
+    { status: 'A', path: 'new.txt' },
+    { status: 'M', path: 'src/main.ts' },
+  ],
+  truncatedChanges: false,
+  baselineWorktreePath: '/home/me/.bitfun/worktrees/repo/dispatch-job-1',
+  syncedHeadCommit: '1'.repeat(40),
 };
 
-describe('DispatchResultDialog', () => {
+describe('DispatchResultDialog Git sync', () => {
   let container: HTMLDivElement;
   let root: Root;
 
-  const buttons = () => Array.from(container.querySelectorAll('button'));
   const buttonWith = (text: string) =>
-    buttons().find(button => button.textContent?.includes(text));
+    Array.from(container.querySelectorAll('button'))
+      .find(button => button.textContent?.includes(text));
 
-  const render = async (props?: Partial<React.ComponentProps<typeof DispatchResultDialog>>) => {
+  async function render(
+    props: Partial<React.ComponentProps<typeof DispatchResultDialog>> = {},
+  ): Promise<void> {
     await act(async () => {
       root.render(
         <DispatchResultDialog
           open
           jobId="job-1"
-          workspacePath="/home/me/project"
+          branch="bitfun/dispatch/job-1"
+          baselineWorktreePath="/home/me/.bitfun/worktrees/repo/dispatch-job-1"
+          targetLabel="build-host"
           onClose={vi.fn()}
           {...props}
         />,
       );
       await Promise.resolve();
-      await Promise.resolve();
     });
-  };
+  }
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.pullResult.mockResolvedValue(BUNDLE);
-    mocks.confirmWarning.mockResolvedValue(true);
+    mocks.syncResult.mockResolvedValue(SYNCED);
     container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);
@@ -92,111 +91,66 @@ describe('DispatchResultDialog', () => {
     container.remove();
   });
 
-  it('lists every change before anything can be applied', async () => {
-    mocks.applyResult.mockResolvedValue({
-      written: [],
-      removed: [],
-      conflicts: [],
-      aborted: false,
-    });
+  it('keeps branch and save location in collapsed details before syncing', async () => {
     await render();
 
-    expect(mocks.pullResult).toHaveBeenCalledWith('job-1');
+    expect(container.textContent).toContain('bitfun/dispatch/job-1');
+    expect(container.textContent).toContain('/home/me/.bitfun/worktrees/repo/dispatch-job-1');
+    expect(container.querySelector('details')?.open).toBe(false);
+    expect(mocks.syncResult).not.toHaveBeenCalled();
+
+    await act(async () => {
+      buttonWith('dispatch.syncAction')?.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(mocks.syncResult).toHaveBeenCalledWith('job-1');
+    expect(container.textContent).toContain('dispatch.syncSucceeded');
     expect(container.textContent).toContain('new.txt');
-    expect(container.textContent).toContain('edit.txt');
-    expect(container.textContent).toContain('gone.txt');
-    // Pulling alone must never write.
-    expect(mocks.applyResult).not.toHaveBeenCalled();
-
-    await act(async () => {
-      buttonWith('dispatch.resultApply')?.click();
-      await Promise.resolve();
-    });
-    expect(mocks.applyResult).toHaveBeenCalledWith('job-1', '/home/me/project', false);
+    expect(container.textContent).toContain('src/main.ts');
+    expect(container.textContent).toContain('1'.repeat(40));
   });
 
-  it('surfaces conflicts and requires an explicit confirmation to overwrite', async () => {
-    mocks.applyResult.mockResolvedValueOnce({
-      written: [],
-      removed: [],
-      conflicts: [{ path: 'edit.txt', reason: 'locallyModified' }],
-      aborted: true,
+  it('reports a clean target branch without inventing an apply step', async () => {
+    mocks.syncResult.mockResolvedValue({
+      ...SYNCED,
+      changed: false,
+      headCommit: SYNCED.baseCommit,
+      commitCount: 0,
+      changes: [],
     });
     await render();
 
     await act(async () => {
-      buttonWith('dispatch.resultApply')?.click();
-      await Promise.resolve();
-    });
-
-    expect(container.textContent).toContain('dispatch.resultConflictWarning');
-    expect(container.textContent).toContain('dispatch.resultConflictModified');
-    // The plain apply is replaced by an explicit overwrite action.
-    expect(buttonWith('dispatch.resultApply')).toBeUndefined();
-
-    mocks.applyResult.mockResolvedValueOnce({
-      written: ['edit.txt'],
-      removed: [],
-      conflicts: [],
-      aborted: false,
-    });
-    await act(async () => {
-      buttonWith('dispatch.resultOverwriteConfirm')?.click();
+      buttonWith('dispatch.syncAction')?.click();
       await Promise.resolve();
       await Promise.resolve();
     });
 
-    expect(mocks.confirmWarning).toHaveBeenCalled();
-    expect(mocks.applyResult).toHaveBeenLastCalledWith('job-1', '/home/me/project', true);
+    expect(container.textContent).toContain('dispatch.syncNoChanges');
+    expect(container.textContent).not.toContain('dispatch.resultApply');
   });
 
-  it('does not overwrite when the confirmation is declined', async () => {
-    mocks.applyResult.mockResolvedValueOnce({
-      written: [],
-      removed: [],
-      conflicts: [{ path: 'edit.txt', reason: 'locallyModified' }],
-      aborted: true,
-    });
-    await render();
-    await act(async () => {
-      buttonWith('dispatch.resultApply')?.click();
-      await Promise.resolve();
-    });
+  it('fails closed before transport when the managed baseline is missing', async () => {
+    await render({ baselineMissing: true });
 
-    mocks.confirmWarning.mockResolvedValue(false);
-    await act(async () => {
-      buttonWith('dispatch.resultOverwriteConfirm')?.click();
-      await Promise.resolve();
-      await Promise.resolve();
-    });
-
-    expect(mocks.applyResult).toHaveBeenCalledTimes(1);
-    expect(mocks.applyResult).not.toHaveBeenCalledWith('job-1', '/home/me/project', true);
+    expect(container.textContent).toContain('dispatch.syncBaselineMissing');
+    expect(buttonWith('dispatch.syncAction')?.disabled).toBe(true);
+    expect(mocks.syncResult).not.toHaveBeenCalled();
   });
 
-  it('reports a job that changed nothing instead of offering an empty apply', async () => {
-    mocks.pullResult.mockResolvedValue({
-      ...BUNDLE,
-      summary: {
-        added: [],
-        modified: [],
-        deleted: [],
-        baselineSha256: {},
-        archiveSize: 64,
-        archiveSha256: 'd'.repeat(64),
-      },
+  it('shows an actionable sync failure without exposing backend diagnostics', async () => {
+    mocks.syncResult.mockRejectedValue(new Error('target worktree is locked'));
+    await render();
+
+    await act(async () => {
+      buttonWith('dispatch.syncAction')?.click();
+      await Promise.resolve();
+      await Promise.resolve();
     });
-    await render();
 
-    expect(container.textContent).toContain('dispatch.resultNoChanges');
-    expect(buttonWith('dispatch.resultApply')?.disabled).toBe(true);
-  });
-
-  it('shows the pull failure rather than a blank dialog', async () => {
-    mocks.pullResult.mockRejectedValue(new Error('target refused the result request'));
-    await render();
-
-    expect(container.textContent).toContain('target refused the result request');
-    expect(buttonWith('dispatch.resultApply')?.disabled).toBe(true);
+    expect(container.textContent).toContain('dispatch.syncFailed');
+    expect(container.textContent).not.toContain('target worktree is locked');
   });
 });

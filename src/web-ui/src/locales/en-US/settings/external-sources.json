@@ -105,6 +105,7 @@
     "updated": "Saved.",
     "waitForUpdate": "Another change is still being saved. Wait for it to finish before making another choice.",
     "agentUpdated": "Saved changes to {{name}} and refreshed its status.",
+    "modelBindingUpdated": "Saved the agent model binding and refreshed affected agents.",
     "mcpUpdated": "Saved the MCP server choice and refreshed its status."
   },
   "recoveryActions": {
@@ -177,6 +178,7 @@
       "auto": "Use automatically"
     },
     "capability": {
+      "reference": "References",
       "command": "Commands",
       "tool": "Tools",
       "subagent": "Agents",
@@ -246,8 +248,16 @@
     "enable": "Enable agent",
     "reviewTitle": "Review how {{name}} runs",
     "approvalWarning": "Once enabled, this agent can instruct the selected model to use the tools shown above. BitFun asks again if its instructions, model, tools, or configuration sources change.",
-    "singleRun": "One run only; no follow-up",
+    "role": {
+      "primary": "Main sessions",
+      "subagent": "One-run tasks; no follow-up",
+      "all": "Main sessions and one-run tasks"
+    },
     "modelUnavailable": "Unavailable",
+    "modelResolvedFromParentAtTaskStart": "Resolved from the parent session when the task starts",
+    "requestedModel": "Requested by source: {{model}}",
+    "requestedModelProfile": "Requested profile: {{profile}}",
+    "modelBindingMethod": "Resolution: {{method}}",
     "model": "Model: {{model}}",
     "tools": "Tools: {{tools}}",
     "executionDomain": "Runs in: this computer and current workspace",
@@ -256,6 +266,38 @@
     "noTools": "No tools",
     "unavailableToolsUnknown": "Names were not provided by this host",
     "sourceLocations": "Configuration sources ({{count}})"
+  },
+  "agentModelBindings": {
+    "title": "Agent model bindings",
+    "affectedAgents": "Affects {{count}} agents",
+    "effectiveModel": "Uses {{model}}",
+    "configuredEffort": "Configured effort: {{value}}",
+    "selectLabel": "Choose a BitFun model for {{request}}",
+    "automatic": "Matched automatically",
+    "targetUnavailable": "Unavailable: {{target}}",
+    "request": {
+      "default": "BitFun default",
+      "inherit": "Parent session model"
+    },
+    "profile": {
+      "namedVariant": "Named variant {{name}}",
+      "reasoningEffort": "Reasoning effort {{value}}"
+    },
+    "target": {
+      "source": "Use automatic source matching",
+      "unbound": "No model binding",
+      "primary": "Primary model",
+      "fast": "Fast model",
+      "model": "Configured model"
+    },
+    "method": {
+      "default": "BitFun default",
+      "inherit": "Inherited from the parent session",
+      "exact": "Exact configured model",
+      "explicit": "User binding",
+      "binding_required": "Choose a model",
+      "binding_unavailable": "Saved model is unavailable"
+    }
   },
   "agentState": {
     "approval_required": "Confirmation required",
@@ -371,6 +413,11 @@
     "argumentCount": "Command arguments: {{count}}",
     "headerCount": "{{count}} HTTP headers configured",
     "headerNames": "HTTP headers: {{names}}",
+    "timeoutSummary": "Timeout overrides: {{values}}",
+    "timeoutStartup": "startup {{duration}}",
+    "timeoutCatalog": "catalog {{duration}}",
+    "timeoutExecution": "execution {{duration}}",
+    "timeoutMilliseconds": "{{value}} ms",
     "changePolicy": "BitFun asks again before loading a changed server configuration.",
     "runtimeUnavailableGuidance": "Disable this server, fix the source configuration or authentication, then enable it again. Restarting BitFun is usually not required.",
     "unsupportedGuidance": "Change this setting in the source application, then refresh.",
@@ -535,6 +582,11 @@
     "configLocations": "Configuration locations",
     "inherited": "Inherited from overall mode",
     "capability": {
+      "reference": {
+        "description": "Named local directories from OpenCode configuration",
+        "effect": "Shows references in workspace directory views and explicit directory navigation.",
+        "risk": "References do not grant additional file access."
+      },
       "subagent": {
         "description": "{{count}} agents found · from {{scope}}",
         "effect": "Allows calling agents defined in OpenCode.",

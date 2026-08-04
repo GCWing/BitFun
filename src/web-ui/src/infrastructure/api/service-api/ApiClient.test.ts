@@ -185,6 +185,25 @@ describe('ApiClient startup trace classification', () => {
     );
   });
 
+  it('uses the Session response estimate cap for Turn windows', async () => {
+    globalThis.__BITFUN_PERF_TRACE_ENABLED__ = true;
+    adapterMocks.request.mockResolvedValueOnce({ status: 'ready', turns: [] });
+    const client = new ApiClient({ enableLogging: false, retries: 0 });
+
+    await client.invoke('load_session_turn_window', {
+      request: {
+        sessionId: 'history-1',
+        workspacePath: 'D:/workspace/BitFun',
+        targetStorageTurnIndex: 4,
+      },
+    });
+
+    expect(traceMocks.estimateJsonBytes).toHaveBeenCalledWith(
+      { status: 'ready', turns: [] },
+      2 * 1024 * 1024
+    );
+  });
+
   it('records request boundary timings and active request pressure', async () => {
     let releaseFirstRequest!: () => void;
     adapterMocks.request

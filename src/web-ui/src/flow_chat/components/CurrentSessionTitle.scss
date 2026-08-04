@@ -17,9 +17,9 @@
   position: relative;
 
   &__text {
-    font-size: var(--flowchat-font-size-base);
+    font-size: var(--bf-appearance-token-flowchat-font-size-base);
     font-weight: $font-weight-medium;
-    color: var(--color-text-primary);
+    color: var(--bf-appearance-token-color-text-primary);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -39,21 +39,21 @@
     border: none;
     border-radius: $size-radius-sm;
     background: transparent;
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
     cursor: pointer;
     opacity: 1;
     transition: all $motion-fast $easing-standard;
     flex-shrink: 0;
 
     &:hover {
-      background: var(--element-bg-soft);
-      color: var(--color-accent-500);
+      background: var(--bf-appearance-token-element-bg-soft);
+      color: var(--bf-appearance-token-color-accent-500);
       transform: translateY(-1px);
     }
 
     &:active {
       transform: translateY(0);
-      background: var(--element-bg-medium);
+      background: var(--bf-appearance-token-element-bg-medium);
     }
 
     svg {
@@ -63,11 +63,11 @@
 
   &:hover {
     .bitfun-current-session-title__text {
-      color: var(--color-text-primary);
+      color: var(--bf-appearance-token-color-text-primary);
     }
 
     .bitfun-current-session-title__create-btn {
-      color: var(--color-text-secondary);
+      color: var(--bf-appearance-token-color-text-secondary);
     }
   }
 }

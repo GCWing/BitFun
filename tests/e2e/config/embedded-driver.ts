@@ -473,8 +473,9 @@ function sharedAfterTest(): Options.Testrunner['afterTest'] {
     const screenshotName = `failure-${test.title.replace(/\s+/g, '_')}-${timestamp}.png`;
 
     try {
-      const screenshotPath = path.resolve(__dirname, '..', 'reports', 'screenshots', screenshotName);
-      fs.mkdirSync(path.dirname(screenshotPath), { recursive: true });
+      const screenshotDirectory = path.resolve(__dirname, '..', 'reports', 'screenshots');
+      fs.mkdirSync(screenshotDirectory, { recursive: true });
+      const screenshotPath = path.join(screenshotDirectory, screenshotName);
       await browser.saveScreenshot(screenshotPath);
       console.log(`Screenshot saved: ${screenshotName}`);
     } catch (screenshotError) {

@@ -14,6 +14,7 @@ tokio = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 log = { workspace = true }
+ts-rs = { workspace = true, optional = true }
 bitfun-agent-runtime = { path = "../../execution/agent-runtime", optional = true }
 bitfun-agent-tools = { path = "../../execution/tool-contracts", optional = true }
 bitfun-events = { path = "../../contracts/events" }
@@ -94,26 +95,45 @@ zbus-secret-service-keyring-store = { workspace = true, optional = true }
 
 [features]
 default = []
-announcement = ["reqwest"]
-browser-control = ["anyhow", "bitfun-services-core", "dirs", "reqwest", "thiserror"]
+# Derive `ts_rs::TS` on wire types (git/* today). Types that live behind a
+# feature group (e.g. `git`) only derive `TS` when that group is also enabled;
+# app-server's `ts` feature enables `product-full` which pulls `git`.
+ts = ["dep:ts-rs"]
+announcement = ["reqwest", "reqwest/rustls", "tokio/fs", "tokio/sync"]
+browser-control = ["anyhow", "bitfun-services-core/process-runtime", "dirs", "reqwest", "reqwest/rustls", "thiserror", "tokio/time"]
 canvas-runtime = [
     "dep:bitfun-product-domains",
     "oxc",
     "sha2",
+    "tokio/fs",
     "urlencoding",
     "uuid",
 ]
-debug-log = ["anyhow", "chrono", "reqwest", "uuid"]
-deep-research = ["bitfun-agent-runtime"]
-git = ["bitfun-services-core", "chrono", "git2", "thiserror"]
-file-watch = ["notify"]
+debug-log = ["anyhow", "chrono", "reqwest", "reqwest/rustls", "tokio/rt", "uuid"]
+deep-research = ["bitfun-agent-runtime", "tokio/fs"]
+git = [
+    "async-trait",
+    "bitfun-runtime-ports",
+    "bitfun-services-core/process-runtime",
+    "chrono",
+    "git2",
+    "thiserror",
+    "tokio/fs",
+    "tokio/io-util",
+    "tokio/macros",
+    "tokio/rt",
+    "tokio/time",
+]
+file-watch = ["notify", "tokio/rt", "tokio/sync"]
 # Automatic repository issue fixing driven by the external `loopx` CLI.
-# Included in `product-full`; see docs/development/loopx-issue-fix-integration.md.
+# Included in `product-full`.
 loopx-issue-fix = [
     "async-trait",
     "bitfun-runtime-ports",
     "review-platform",
     "thiserror",
+    "tokio/macros",
+    "tokio/process",
     "which",
 ]
 function-agents = [
@@ -127,37 +147,56 @@ mcp = [
     "async-trait",
     "base64",
     "bitfun-agent-tools",
-    "bitfun-services-core",
+    "bitfun-services-core/process-runtime",
     "futures",
     "hex",
     "rand",
     "reqwest",
+    "reqwest/rustls",
     "rmcp",
     "rmcp/transport-streamable-http-client-reqwest",
     "sha2",
     "sse-stream",
+    "tokio/fs",
+    "tokio/io-util",
+    "tokio/net",
+    "tokio/process",
+    "tokio/rt",
+    "tokio/sync",
+    "tokio/time",
     "url",
     "process-tree",
 ]
 miniapp-runtime = [
     "base64",
     "bitfun-product-domains/miniapp",
-    "bitfun-services-core",
+    "bitfun-services-core/process-runtime",
     "dep:bitfun-product-domains",
     "dirs",
     "reqwest",
+    "reqwest/rustls",
+    "tokio/fs",
+    "tokio/io-util",
+    "tokio/net",
+    "tokio/process",
+    "tokio/rt",
+    "tokio/sync",
+    "tokio/time",
     "uuid",
     "which",
 ]
 miniapp-market = [
+    "bitfun-product-domains/appearance-market",
     "chrono",
     "dep:apple-native-keyring-store",
     "dep:keyring-core",
     "dep:windows-native-keyring-store",
     "dep:zbus-secret-service-keyring-store",
     "hex",
+    "image",
     "miniapp-runtime",
     "reqwest",
+    "reqwest/rustls",
     "semver",
     "sha2",
     "thiserror",
@@ -173,17 +212,23 @@ plugin-source = [
     "libc",
     "sha2",
     "thiserror",
+    "tokio/fs",
+    "tokio/rt",
+    "tokio/sync",
+    "tokio/time",
     "uuid",
     "windows",
 ]
 hook-import = [
     "bitfun-agent-runtime",
     "bitfun-product-domains/external-sources",
-    "bitfun-services-core",
+    "bitfun-services-core/local-storage",
     "dep:bitfun-product-domains",
     "hex",
     "sha2",
     "thiserror",
+    "tokio/fs",
+    "tokio/sync",
     "uuid",
 ]
 remote-connect = [
@@ -194,7 +239,8 @@ remote-connect = [
     "async-trait",
     "base64",
     "bitfun-agent-tools",
-    "bitfun-services-core",
+    "bitfun-services-core/local-storage",
+    "bitfun-services-core/process-runtime",
     "bitfun-runtime-ports",
     "chrono",
     "dirs",
@@ -208,10 +254,18 @@ remote-connect = [
     "qrcode",
     "rand",
     "reqwest",
+    "reqwest/rustls",
     "rustls",
     "rustls-native-certs",
     "schannel",
     "sha2",
+    "tokio/fs",
+    "tokio/io-util",
+    "tokio/net",
+    "tokio/process",
+    "tokio/rt",
+    "tokio/sync",
+    "tokio/time",
     "tokio-tungstenite",
     "urlencoding",
     "uuid",
@@ -221,11 +275,21 @@ remote-connect = [
 remote-ssh = [
     "anyhow",
     "async-trait",
+    "bitfun-services-core/filesystem",
+    "bitfun-services-core/process-runtime",
+    "bitfun-services-core/workspace-identity",
     "bitfun-runtime-ports",
-    "dunce",
     "sha2",
     "terminal-core",
     "thiserror",
+    "tokio/fs",
+    "tokio/io-util",
+    "tokio/macros",
+    "tokio/net",
+    "tokio/process",
+    "tokio/rt",
+    "tokio/sync",
+    "tokio/time",
     "tokio-util",
 ]
 remote-ssh-concrete = [
@@ -234,13 +298,13 @@ remote-ssh-concrete = [
     "anyhow",
     "async-trait",
     "base64",
-    "bitfun-services-core",
     "bitfun-runtime-ports",
     "chrono",
     "dirs",
     "minisign-verify",
     "rand",
     "reqwest",
+    "reqwest/rustls",
     "russh",
     "russh-sftp",
     "russh-keys",
@@ -252,12 +316,16 @@ remote-ssh-concrete = [
 ]
 review-platform = [
     "async-trait",
-    "bitfun-services-core",
+    "bitfun-services-core/process-runtime",
     "chrono",
     "futures",
     "reqwest",
+    "reqwest/rustls",
     "sha2",
     "thiserror",
+    "tokio/fs",
+    "tokio/io-util",
+    "tokio/sync",
     "urlencoding",
     "windows",
 ]
@@ -269,23 +337,44 @@ speech = [
     "dep:bitfun-core-types",
     "futures-util",
     "reqwest",
+    "reqwest/rustls",
     "sha2",
     "sherpa-onnx",
     "tar",
     "thiserror",
+    "tokio/fs",
+    "tokio/io-util",
+    "tokio/macros",
+    "tokio/rt",
+    "tokio/sync",
     "tokio-util",
     "uuid",
 ]
 workspace-search = [
     "async-trait",
-    "bitfun-services-core",
+    "bitfun-services-core/filesystem",
+    "bitfun-services-core/process-runtime",
     "dunce",
     "thiserror",
+    "tokio/io-util",
+    "tokio/rt",
+    "tokio/sync",
+    "tokio/time",
     "which",
 ]
-process-tree = ["bitfun-services-core"]
-script-tool-runtime = ["async-trait", "bitfun-runtime-ports", "process-tree", "which"]
-web-tools = ["reqwest", "thiserror"]
+process-tree = ["bitfun-services-core/process-runtime"]
+script-tool-runtime = [
+    "async-trait",
+    "bitfun-runtime-ports",
+    "process-tree",
+    "tokio/io-util",
+    "tokio/process",
+    "tokio/rt",
+    "tokio/sync",
+    "tokio/time",
+    "which",
+]
+web-tools = ["reqwest", "reqwest/rustls", "thiserror"]
 product-full = [
     "announcement",
     "browser-control",
@@ -312,7 +401,7 @@ ssh_config = ["dep:ssh_config"]
 
 [dev-dependencies]
 tempfile = { workspace = true }
-tokio = { workspace = true, features = ["test-util"] }
+tokio = { workspace = true, features = ["macros", "rt", "test-util"] }
 
 [[test]]
 name = "debug_log_owner_contracts"
@@ -323,8 +412,52 @@ name = "script_tool_runtime"
 required-features = ["script-tool-runtime"]
 
 [[test]]
+name = "announcement_contracts"
+required-features = ["announcement"]
+
+[[test]]
+name = "file_watch_contracts"
+required-features = ["file-watch"]
+
+[[test]]
+name = "function_agent_contracts"
+required-features = ["function-agents"]
+
+[[test]]
+name = "git_contracts"
+required-features = ["git"]
+
+[[test]]
 name = "loopx_issue_fix_contracts"
 required-features = ["loopx-issue-fix"]
+
+[[test]]
+name = "mcp_contracts"
+required-features = ["mcp"]
+
+[[test]]
+name = "mcp_streamable_http_contracts"
+required-features = ["mcp"]
+
+[[test]]
+name = "remote_connect_contracts"
+required-features = ["remote-connect"]
+
+[[test]]
+name = "remote_ssh_contracts"
+required-features = ["remote-ssh"]
+
+[[test]]
+name = "remote_ssh_disabled_contracts"
+required-features = ["remote-ssh"]
+
+[[test]]
+name = "remote_workspace_search_disabled_contracts"
+required-features = ["remote-ssh", "workspace-search"]
+
+[[test]]
+name = "workspace_search_contracts"
+required-features = ["workspace-search"]
 
 [lints]
 workspace = true

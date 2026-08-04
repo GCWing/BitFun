@@ -689,6 +689,7 @@ Allowed agent types when creating a session:
                 message: forwarded_message,
                 original_message: Some(params.message.clone()),
                 turn_id: None,
+                execution: Default::default(),
                 agent_type: target_agent_type.clone(),
                 workspace_path: Some(workspace_target.workspace_path.clone()),
                 remote_connection_id: workspace_target.remote_connection_id.clone(),

@@ -10,7 +10,7 @@
 
 .terminal-tool-card {
   .terminal-card-icon {
-    color: var(--color-text-secondary);
+    color: var(--bf-appearance-token-color-text-secondary);
     flex-shrink: 0;
   }
 }
@@ -21,23 +21,23 @@
    * sans + `sm` + line-height 1.5 + normal — not monospace (mono reads “thinner” vs “思考了 N 字”).
    */
   .compact-card-action,
-  .compact-card-content .tool-command-preview.tool-command-preview--compact {
-    font-family: var(--font-family-sans);
-    font-size: var(--flowchat-font-size-sm);
-    line-height: var(--flowchat-support-line-height);
+  .compact-card-content .copyable-text-preview.copyable-text-preview--compact {
+    font-family: var(--bf-appearance-token-font-family-sans);
+    font-size: var(--bf-appearance-token-flowchat-font-size-sm);
+    line-height: var(--bf-appearance-token-flowchat-support-line-height);
     font-weight: normal;
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
   }
 
   .terminal-header-extra {
-    gap: var(--flowchat-inline-gap);
+    gap: var(--bf-appearance-token-flowchat-inline-gap);
   }
 
   .terminal-header-duration .duration-text {
     gap: 0.18rem;
-    font-family: var(--font-family-sans);
-    font-size: var(--flowchat-font-size-sm);
-    line-height: var(--flowchat-support-line-height);
+    font-family: var(--bf-appearance-token-font-family-sans);
+    font-size: var(--bf-appearance-token-flowchat-font-size-sm);
+    line-height: var(--bf-appearance-token-flowchat-support-line-height);
     font-weight: normal;
   }
 
@@ -57,7 +57,7 @@
     display: inline-flex;
     align-items: center;
     height: 1.45em;
-    line-height: var(--flowchat-compact-line-height);
+    line-height: var(--bf-appearance-token-flowchat-compact-line-height);
     margin-right: 2px;
     transform: translateY(-0.5px);
   }
@@ -69,11 +69,11 @@
 
 /* Footer bar: full width + background to bottom inner edge of expanded content (matches .base-tool-card-expanded padding). */
 .base-tool-card-wrapper.terminal-tool-card .terminal-result-footer {
-  margin-left: calc(-1 * var(--flowchat-card-expanded-pad-x));
-  margin-right: calc(-1 * var(--flowchat-card-expanded-pad-x));
-  margin-bottom: calc(-1 * var(--flowchat-card-expanded-pad-y));
-  padding: var(--flowchat-inline-gap) var(--flowchat-card-expanded-pad-x);
-  border-radius: 0 0 var(--flowchat-card-radius) var(--flowchat-card-radius);
+  margin-left: calc(-1 * var(--bf-appearance-token-flowchat-card-expanded-pad-x));
+  margin-right: calc(-1 * var(--bf-appearance-token-flowchat-card-expanded-pad-x));
+  margin-bottom: calc(-1 * var(--bf-appearance-token-flowchat-card-expanded-pad-y));
+  padding: var(--bf-appearance-token-flowchat-inline-gap) var(--bf-appearance-token-flowchat-card-expanded-pad-x);
+  border-radius: 0 0 var(--bf-appearance-token-flowchat-card-radius) var(--bf-appearance-token-flowchat-card-radius);
 }
 
 /* ========== Fix scrollbar visibility on card hover ========== */
@@ -81,15 +81,15 @@
   .terminal-execution-output,
   .terminal-result-output {
     &::-webkit-scrollbar-thumb {
-      background: var(--scrollbar-thumb);
+      background: var(--bf-appearance-token-scrollbar-thumb);
     }
 
     &::-webkit-scrollbar-thumb:hover {
-      background: var(--scrollbar-thumb-hover);
+      background: var(--bf-appearance-token-scrollbar-thumb-hover);
     }
 
     /* Firefox */
-    scrollbar-color: var(--scrollbar-thumb) transparent;
+    scrollbar-color: var(--bf-appearance-token-scrollbar-thumb) transparent;
   }
 }
 
@@ -97,10 +97,10 @@
 .terminal-command {
   flex: 1;
   min-width: 0;
-  font-family: var(--tool-card-font-mono);
-  font-size: var(--flowchat-font-size-sm);
+  font-family: var(--bf-appearance-token-tool-card-font-mono);
+  font-size: var(--bf-appearance-token-flowchat-font-size-sm);
   font-weight: 500;
-  color: var(--color-text-muted);
+  color: var(--bf-appearance-token-color-text-muted);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -111,7 +111,7 @@
    * the monospace font's intrinsic baseline metrics. */
   display: inline-flex;
   align-items: center;
-  line-height: var(--flowchat-support-line-height);
+  line-height: var(--bf-appearance-token-flowchat-support-line-height);
   height: 1.45em;
   background: none !important;
   border: none !important;
@@ -128,7 +128,7 @@
       border: none !important;
       outline: none !important;
       box-shadow: none !important;
-      color: var(--color-text-secondary);
+      color: var(--bf-appearance-token-color-text-secondary);
     }
   }
 
@@ -137,12 +137,12 @@
     transition: color 180ms ease;
     
     &:hover {
-      color: var(--color-accent-500);
+      color: var(--bf-appearance-token-color-accent-500);
     }
   }
   
   .command-empty {
-    color: color-mix(in srgb, var(--color-error) 72%, var(--color-static-white));
+    color: color-mix(in srgb, var(--bf-appearance-token-color-error) 72%, var(--bf-appearance-token-color-static-white));
     font-style: italic;
   }
 }
@@ -153,15 +153,15 @@
   cursor: text;
   background: transparent;
   padding: 0;
-  font-family: var(--tool-card-font-mono);
-  font-size: var(--flowchat-font-size-sm);
+  font-family: var(--bf-appearance-token-tool-card-font-mono);
+  font-size: var(--bf-appearance-token-flowchat-font-size-sm);
   font-weight: 500;
-  color: var(--color-text-primary);
+  color: var(--bf-appearance-token-color-text-primary);
   border: none !important;
   outline: none !important;
   box-shadow: none !important;
-  transition: color 180ms ease;
-  line-height: var(--flowchat-compact-line-height);
+  transition: all 0.2s ease;
+  line-height: var(--bf-appearance-token-flowchat-compact-line-height);
   box-sizing: border-box;
 
   &:focus {
@@ -172,15 +172,15 @@
   }
 
   &::placeholder {
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
     font-style: italic;
   }
 }
 
-:root[data-theme="light"] .terminal-command-input,
-:root[data-theme-type="light"] .terminal-command-input,
+:root[data-bf-appearance-mode="light"] .terminal-command-input,
+:root[data-bf-appearance-mode="light"] .terminal-command-input,
 .light .terminal-command-input {
-  color: var(--color-text-secondary);
+  color: var(--bf-appearance-token-color-text-secondary);
 }
 
 /* ========== Status text styles ========== */
@@ -189,24 +189,24 @@
   align-items: center;
   padding: 0.12rem 0.38rem;
   border-radius: 3px;
-  font-size: var(--flowchat-font-size-xxs);
+  font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
   font-weight: 600;
   flex-shrink: 0;
   margin-right: 4px;
 
   &.status-cancelled {
-    background: var(--color-warning-bg);
-    color: var(--color-warning);
+    background: var(--bf-appearance-token-color-warning-bg);
+    color: var(--bf-appearance-token-color-warning);
   }
 
   &.status-rejected {
-    background: var(--color-error-bg);
-    color: var(--color-error);
+    background: var(--bf-appearance-token-color-error-bg);
+    color: var(--bf-appearance-token-color-error);
   }
 
   &.status-error {
-    background: var(--color-error-bg);
-    color: var(--color-error);
+    background: var(--bf-appearance-token-color-error-bg);
+    color: var(--bf-appearance-token-color-error);
   }
 }
 
@@ -214,7 +214,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: flex-end;
-  gap: var(--flowchat-inline-gap);
+  gap: var(--bf-appearance-token-flowchat-inline-gap);
   min-width: 0;
   line-height: 1;
 }
@@ -223,15 +223,15 @@
   display: inline-flex;
   align-items: center;
   min-width: 0;
-  color: var(--color-text-muted);
+  color: var(--bf-appearance-token-color-text-muted);
 
   &:empty {
     display: none;
   }
 
   .duration-text {
-    font-size: var(--flowchat-font-size-xs);
-    line-height: var(--flowchat-compact-line-height);
+    font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+    line-height: var(--bf-appearance-token-flowchat-compact-line-height);
     font-weight: 500;
   }
 
@@ -265,7 +265,7 @@
   flex: 1;
   gap: 0;
 
-  .tool-command-preview {
+  .copyable-text-preview {
     flex: 0 1 auto;
     max-width: 60%;
   }
@@ -275,14 +275,14 @@
 .terminal-hover-actions {
   display: inline-flex;
   align-items: center;
-  gap: var(--flowchat-inline-gap);
+  gap: var(--bf-appearance-token-flowchat-inline-gap);
 }
 
 /* ========== Always-visible critical actions (compact collapsed state) ========== */
 .terminal-critical-actions {
   display: inline-flex;
   align-items: center;
-  gap: var(--flowchat-inline-gap);
+  gap: var(--bf-appearance-token-flowchat-inline-gap);
   flex-shrink: 0;
 }
 
@@ -296,14 +296,10 @@
   border-radius: 4px;
   border: none !important;
   background: transparent;
-  color: var(--color-text-muted);
+  color: var(--bf-appearance-token-color-text-muted);
   cursor: pointer;
-  font-size: var(--flowchat-font-size-sm);
-  transition:
-    color 180ms ease,
-    background-color 180ms ease,
-    transform 180ms ease,
-    opacity 180ms ease;
+  font-size: var(--bf-appearance-token-flowchat-font-size-sm);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   padding: 0;
   position: relative;
   overflow: hidden;
@@ -323,14 +319,14 @@
     left: 0;
     right: 0;
     bottom: 0;
-    background: linear-gradient(135deg, var(--color-overlay-white-12), transparent);
+    background: linear-gradient(135deg, var(--bf-appearance-token-color-overlay-white-12), transparent);
     opacity: 0;
     transition: opacity 0.2s ease;
     z-index: 0;
   }
 
   &:hover:not(:disabled) {
-    background: var(--color-overlay-white-12);
+    background: var(--bf-appearance-token-color-overlay-white-12);
     transform: scale(1.05);
   }
 
@@ -350,50 +346,50 @@
 }
 
 .execute-btn {
-  color: var(--color-success);
+  color: var(--bf-appearance-token-color-success);
 
   &:hover:not(:disabled) {
-    background: var(--color-success-bg);
-    color: var(--color-success);
-    box-shadow: 0 2px 8px var(--color-success-bg);
+    background: var(--bf-appearance-token-color-success-bg);
+    color: var(--bf-appearance-token-color-success);
+    box-shadow: 0 2px 8px var(--bf-appearance-token-color-success-bg);
   }
 }
 
 .cancel-btn {
-  color: var(--color-error);
+  color: var(--bf-appearance-token-color-error);
 
   &:hover:not(:disabled) {
-    background: var(--color-error-bg);
-    color: var(--color-error);
-    box-shadow: 0 2px 8px var(--color-error-bg);
+    background: var(--bf-appearance-token-color-error-bg);
+    color: var(--bf-appearance-token-color-error);
+    box-shadow: 0 2px 8px var(--bf-appearance-token-color-error-bg);
   }
 }
 
 .interrupt-btn {
-  color: var(--color-warning);
+  color: var(--bf-appearance-token-color-warning);
 
   &:hover:not(:disabled) {
-    background: var(--color-warning-bg);
-    color: var(--color-warning);
-    box-shadow: 0 2px 8px var(--color-warning-bg);
+    background: var(--bf-appearance-token-color-warning-bg);
+    color: var(--bf-appearance-token-color-warning);
+    box-shadow: 0 2px 8px var(--bf-appearance-token-color-warning-bg);
   }
 }
 
 .external-btn {
-  color: var(--color-text-muted);
+  color: var(--bf-appearance-token-color-text-muted);
 
   &:hover:not(:disabled) {
-    background: var(--color-overlay-white-12);
-    color: var(--color-text-secondary);
+    background: var(--bf-appearance-token-color-overlay-white-12);
+    color: var(--bf-appearance-token-color-text-secondary);
     box-shadow: none;
   }
 }
 
 .copy-command-btn {
-  color: var(--color-text-muted);
+  color: var(--bf-appearance-token-color-text-muted);
 
   &.copied {
-    color: var(--color-success);
+    color: var(--bf-appearance-token-color-success);
   }
 }
 
@@ -412,8 +408,8 @@
     min-height: 60px;
 
     .waiting-text {
-      color: var(--color-text-muted);
-      font-size: var(--flowchat-font-size-sm);
+      color: var(--bf-appearance-token-color-text-muted);
+      font-size: var(--bf-appearance-token-flowchat-font-size-sm);
       font-style: italic;
     }
   }
@@ -426,12 +422,12 @@
   border: none !important;
   outline: none !important;
   box-shadow: none !important;
-  font-family: var(--tool-card-font-mono);
-  font-size: var(--flowchat-font-size-sm);
-  line-height: var(--flowchat-code-line-height);
+  font-family: var(--bf-appearance-token-tool-card-font-mono);
+  font-size: var(--bf-appearance-token-flowchat-font-size-sm);
+  line-height: var(--bf-appearance-token-flowchat-code-line-height);
   white-space: pre-wrap;
   word-break: break-word;
-  color: var(--color-text-secondary);
+  color: var(--bf-appearance-token-color-text-secondary);
 }
 
 /* ========== Static result container (after command completion) ========== */
@@ -442,10 +438,10 @@
   
   &.cancelled {
     .terminal-cancelled-text {
-      color: var(--color-warning);
-      font-size: var(--flowchat-font-size-xs);
+      color: var(--bf-appearance-token-color-warning);
+      font-size: var(--bf-appearance-token-flowchat-font-size-xs);
       font-weight: 500;
-      line-height: var(--flowchat-compact-line-height);
+      line-height: var(--bf-appearance-token-flowchat-compact-line-height);
     }
   }
 }
@@ -454,62 +450,62 @@
   display: flex;
   align-items: center;
   align-content: center;
-  gap: var(--flowchat-inline-gap);
+  gap: var(--bf-appearance-token-flowchat-inline-gap);
   flex-wrap: wrap;
-  line-height: var(--flowchat-compact-line-height);
-  background: var(--element-bg-subtle);
+  line-height: var(--bf-appearance-token-flowchat-compact-line-height);
+  background: var(--bf-appearance-token-element-bg-subtle);
   box-sizing: border-box;
 }
 
 .terminal-result-output + .terminal-result-footer {
-  margin-top: var(--flowchat-inline-gap);
-  border-top: 1px solid var(--border-subtle);
+  margin-top: var(--bf-appearance-token-flowchat-inline-gap);
+  border-top: 1px solid var(--bf-appearance-token-border-subtle);
 }
 
 .terminal-result-label {
-  font-size: var(--flowchat-font-size-xxs);
+  font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
   font-weight: 600;
-  color: var(--color-text-muted);
+  color: var(--bf-appearance-token-color-text-muted);
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
 
 .terminal-result-value {
-  font-family: var(--tool-card-font-mono);
-  font-size: var(--flowchat-font-size-xs);
-  color: var(--color-text-primary);
+  font-family: var(--bf-appearance-token-tool-card-font-mono);
+  font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+  color: var(--bf-appearance-token-color-text-primary);
   flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  line-height: var(--flowchat-compact-line-height);
+  line-height: var(--bf-appearance-token-flowchat-compact-line-height);
 }
 
 .terminal-exit-code {
   display: inline-flex;
   align-items: center;
   padding: 0;
-  font-size: var(--flowchat-font-size-xxs);
+  font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
   font-weight: 600;
-  font-family: var(--tool-card-font-mono);
-  line-height: var(--flowchat-compact-line-height);
+  font-family: var(--bf-appearance-token-tool-card-font-mono);
+  line-height: var(--bf-appearance-token-flowchat-compact-line-height);
   margin-left: auto;
   background: transparent;
 
   &.success {
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
   }
 
   &.error {
-    color: var(--color-error);
+    color: var(--bf-appearance-token-color-error);
   }
 }
 
 .terminal-execution-time {
-  font-size: var(--flowchat-font-size-xxs);
-  color: var(--color-text-muted);
-  font-family: var(--tool-card-font-mono);
-  line-height: var(--flowchat-compact-line-height);
+  font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
+  color: var(--bf-appearance-token-color-text-muted);
+  font-family: var(--bf-appearance-token-tool-card-font-mono);
+  line-height: var(--bf-appearance-token-flowchat-compact-line-height);
 }
 
 /* ========== xterm output renderer styles ========== */
@@ -525,7 +521,7 @@
 
     &:not(.allow-transparency) {
       .xterm-viewport {
-        background-color: var(--color-bg-scene);
+        background-color: var(--bf-appearance-token-color-bg-scene);
       }
     }
 
@@ -536,7 +532,7 @@
   }
 }
 .terminal-output-renderer {
-  background: var(--color-bg-scene);
+  background: var(--bf-appearance-token-color-bg-scene);
   border-radius: 4px;
   overflow: hidden;
   
@@ -571,16 +567,16 @@
 .error-content {
   display: flex;
   flex-direction: column;
-  gap: var(--flowchat-inline-gap);
+  gap: var(--bf-appearance-token-flowchat-inline-gap);
   background: none !important;
   border: none !important;
   padding: 0 !important;
 }
 
 .error-message {
-  font-size: var(--flowchat-font-size-sm) !important;
-  line-height: var(--flowchat-support-line-height) !important;
-  color: var(--color-text-muted) !important;
+  font-size: var(--bf-appearance-token-flowchat-font-size-sm) !important;
+  line-height: var(--bf-appearance-token-flowchat-support-line-height) !important;
+  color: var(--bf-appearance-token-color-text-muted) !important;
   white-space: pre-wrap !important;
   word-break: break-word !important;
   text-align: left !important;
@@ -611,28 +607,28 @@
 
     .terminal-command,
     .terminal-command-input {
-      font-size: var(--flowchat-font-size-xs);
+      font-size: var(--bf-appearance-token-flowchat-font-size-xs);
     }
 
     .compact-card-action,
-    .compact-card-content .tool-command-preview--compact {
-      font-size: var(--flowchat-font-size-xs);
-      line-height: var(--flowchat-support-line-height);
+    .compact-card-content .copyable-text-preview--compact {
+      font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+      line-height: var(--bf-appearance-token-flowchat-support-line-height);
       font-weight: normal;
-      font-family: var(--font-family-sans);
+      font-family: var(--bf-appearance-token-font-family-sans);
     }
 
     .terminal-header-duration .duration-text {
-      font-size: var(--flowchat-font-size-xs);
-      line-height: var(--flowchat-support-line-height);
+      font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+      line-height: var(--bf-appearance-token-flowchat-support-line-height);
       font-weight: normal;
-      font-family: var(--font-family-sans);
+      font-family: var(--bf-appearance-token-font-family-sans);
     }
   }
 }
 
 /* ========== Accessibility ========== */
 .terminal-action-btn:focus-visible {
-  outline: 2px solid var(--color-accent-500);
+  outline: 2px solid var(--bf-appearance-token-color-accent-500);
   outline-offset: 2px;
 }

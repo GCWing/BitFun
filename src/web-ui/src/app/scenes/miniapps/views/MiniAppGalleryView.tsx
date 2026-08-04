@@ -32,6 +32,7 @@ import {
 } from '@/app/components';
 import type { SceneTabId } from '@/app/components/SceneBar/types';
 import { getMiniAppIconGradient, renderMiniAppIcon } from '../utils/miniAppIcons';
+import { loadInstalledMarketOrigins } from '../utils/loadInstalledMarketOrigins';
 import { pickLocalizedString, pickLocalizedTags } from '../utils/pickLocalizedString';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
 import { useMiniAppStore } from '../miniAppStore';
@@ -47,8 +48,10 @@ const MiniAppGalleryView: React.FC = () => {
   const loading = useMiniAppStore((state) => state.loading);
   const runningWorkerIds = useMiniAppStore((state) => state.runningWorkerIds);
   const customizingAppIds = useMiniAppStore((state) => state.customizingAppIds);
+  const marketOrigins = useMiniAppStore((state) => state.marketOrigins);
   const setApps = useMiniAppStore((state) => state.setApps);
   const setLoading = useMiniAppStore((state) => state.setLoading);
+  const setMarketOrigins = useMiniAppStore((state) => state.setMarketOrigins);
   const setRunningWorkerIds = useMiniAppStore((state) => state.setRunningWorkerIds);
   const markWorkerStopped = useMiniAppStore((state) => state.markWorkerStopped);
   const { workspacePath } = useCurrentWorkspace();
@@ -160,18 +163,20 @@ const MiniAppGalleryView: React.FC = () => {
   const refetchMiniAppGallery = useCallback(async () => {
     setLoading(true);
     try {
-      const [refreshed, running] = await Promise.all([
+      const [refreshed, running, origins] = await Promise.all([
         miniAppAPI.listMiniApps(),
         miniAppAPI.workerListRunning(),
+        loadInstalledMarketOrigins(),
       ]);
       setApps(refreshed);
       setRunningWorkerIds(running);
+      setMarketOrigins(origins);
     } catch (error) {
       log.error('Failed to refresh miniapp gallery', error);
     } finally {
       setLoading(false);
     }
-  }, [setApps, setLoading, setRunningWorkerIds]);
+  }, [setApps, setLoading, setMarketOrigins, setRunningWorkerIds]);
 
   useGallerySceneAutoRefresh({
     sceneId: 'miniapps',
@@ -294,6 +299,7 @@ const MiniAppGalleryView: React.FC = () => {
             index={index}
             isRunning={runningIdSet.has(app.id)}
             isCustomizing={customizingIdSet.has(app.id)}
+            marketReleaseNumber={marketOrigins[app.id]?.releaseNumber}
             onOpenDetails={setSelectedApp}
             onOpen={handleOpenApp}
             onDelete={handleDeleteRequest}
@@ -304,7 +310,7 @@ const MiniAppGalleryView: React.FC = () => {
   };
 
   return (
-    <GalleryLayout className="miniapp-gallery">
+    <GalleryLayout data-bf-component="miniapp-gallery-view" data-bf-part="root" className="miniapp-gallery">
       <GalleryPageHeader
         title={t('title')}
         subtitle={t('subtitle')}
@@ -333,7 +339,7 @@ const MiniAppGalleryView: React.FC = () => {
         )}
       />
 
-      <div className="gallery-zones">
+      <div data-bf-component="miniapp-gallery-view" data-bf-part="content" className="gallery-zones">
         <GalleryZone
           title={t('running')}
           tools={runningApps.length > 0 ? <span className="gallery-zone-badge">{runningApps.length}</span> : null}
@@ -347,6 +353,7 @@ const MiniAppGalleryView: React.FC = () => {
                   index={index}
                   isRunning
                   isCustomizing={customizingIdSet.has(app.id)}
+                  marketReleaseNumber={marketOrigins[app.id]?.releaseNumber}
                   onOpenDetails={setSelectedApp}
                   onOpen={handleOpenApp}
                   onDelete={handleDeleteRequest}
@@ -366,9 +373,11 @@ const MiniAppGalleryView: React.FC = () => {
           tools={(
             <>
               {categories.length > 1 ? (
-                <div className="gallery-chip-row">
+                <div data-bf-component="miniapp-gallery-view" data-bf-part="categoryFilters" className="gallery-chip-row">
                   {categories.map((category) => (
                     <button
+                      data-bf-component="miniapp-gallery-view"
+                      data-bf-part="categoryFilter"
                       key={category}
                       type="button"
                       className={[
@@ -400,7 +409,9 @@ const MiniAppGalleryView: React.FC = () => {
         title={selectedApp ? pickLocalizedString(selectedApp, currentLanguage, 'name') : ''}
         badges={selectedApp?.category ? <Badge variant="info">{selectedApp.category}</Badge> : null}
         description={selectedApp ? pickLocalizedString(selectedApp, currentLanguage, 'description') : undefined}
-        meta={selectedApp ? <span>v{selectedApp.version}</span> : null}
+        meta={selectedApp ? (
+          <span>v{marketOrigins[selectedApp.id]?.releaseNumber ?? selectedApp.version}</span>
+        ) : null}
         actions={selectedApp ? (
           <>
             {runningIdSet.has(selectedApp.id) ? (
@@ -423,7 +434,7 @@ const MiniAppGalleryView: React.FC = () => {
         {selectedApp ? (() => {
           const detailTags = pickLocalizedTags(selectedApp, currentLanguage);
           return detailTags.length ? (
-            <div className="miniapp-gallery__detail-tags">
+            <div data-bf-component="miniapp-gallery-view" data-bf-part="detailTags" className="miniapp-gallery__detail-tags">
               {detailTags.map((tag) => (
                 <span key={tag} className="miniapp-gallery__detail-tag">
                   <Tag size={11} />

@@ -245,14 +245,16 @@ export const ModelThinkingDisplay: React.FC<ModelThinkingDisplayProps> = ({
       data-streaming={isActive ? 'true' : 'false'}
       data-expanded={isExpanded ? 'true' : 'false'}
       className={wrapperClassName}
-    >
+     data-bf-component="model-thinking-display" data-bf-part="root" data-bf-context={displayContext} data-bf-state={[isExpanded && 'expanded', isVisuallyStreaming && 'streaming'].filter(Boolean).join(' ')}>
       <div
+        data-bf-component="model-thinking-display"
+        data-bf-part="header"
         data-testid="chat-thinking-toggle"
         className="thinking-collapsed-header"
         onClick={handleToggleClick}
       >
-        <ChevronRight size={14} className="thinking-chevron" />
-        <span className="thinking-label">{headerLabel}</span>
+        <ChevronRight size={14} className="thinking-chevron" data-bf-component="model-thinking-display" data-bf-part="chevron" />
+        <span data-bf-component="model-thinking-display" data-bf-part="label" className="thinking-label">{headerLabel}</span>
       </div>
 
       <div
@@ -260,10 +262,14 @@ export const ModelThinkingDisplay: React.FC<ModelThinkingDisplayProps> = ({
           'thinking-expand-container',
           isExpanded ? 'thinking-expand-container--open' : '',
         ].filter(Boolean).join(' ')}
+        data-bf-component="model-thinking-display"
+        data-bf-part="expandContainer"
       >
-        <div className={`thinking-content-wrapper ${scrollState.hasScroll ? 'has-scroll' : ''} ${scrollState.atTop ? 'at-top' : ''} ${scrollState.atBottom ? 'at-bottom' : ''}`}>
+        <div className={`thinking-content-wrapper ${scrollState.hasScroll ? 'has-scroll' : ''} ${scrollState.atTop ? 'at-top' : ''} ${scrollState.atBottom ? 'at-bottom' : ''}`} data-bf-component="model-thinking-display" data-bf-part="contentWrapper">
           <div
             ref={contentRef}
+            data-bf-component="model-thinking-display"
+            data-bf-part="content"
             data-testid="chat-thinking-content"
             data-status={status}
             data-streaming={isActive ? 'true' : 'false'}

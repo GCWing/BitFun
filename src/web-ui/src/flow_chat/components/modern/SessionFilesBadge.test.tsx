@@ -154,6 +154,7 @@ describe('SessionFilesBadge', () => {
     vi.stubGlobal('window', dom.window);
     vi.stubGlobal('document', dom.window.document);
     vi.stubGlobal('HTMLElement', dom.window.HTMLElement);
+    vi.stubGlobal('HTMLDivElement', dom.window.HTMLDivElement);
     vi.stubGlobal('CustomEvent', dom.window.CustomEvent);
 
     container = dom.window.document.getElementById('root') as HTMLDivElement;
@@ -186,6 +187,7 @@ describe('SessionFilesBadge', () => {
     act(() => {
       root.unmount();
     });
+    dom.window.document.querySelector('[data-bf-overlay-host="true"]')?.remove();
     vi.useRealTimers();
     vi.unstubAllGlobals();
   });
@@ -207,7 +209,10 @@ describe('SessionFilesBadge', () => {
       toggle?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
     });
 
-    expect(container.textContent).toContain('2 files');
+    const filesPopover = dom.window.document.querySelector<HTMLElement>('.session-files-badge__popover');
+    expect(filesPopover?.parentElement?.getAttribute('data-bf-overlay-host')).toBe('true');
+    expect(filesPopover?.style.visibility).toBe('visible');
+    expect(dom.window.document.body.textContent).toContain('2 files');
 
     mocks.files = [
       { filePath: 'src/current-session.ts', sessionId: 'session-1' },
@@ -222,8 +227,8 @@ describe('SessionFilesBadge', () => {
       await Promise.resolve();
     });
 
-    expect(container.textContent).toContain('1 files');
-    expect(container.textContent).not.toContain('stale-session.ts');
+    expect(dom.window.document.body.textContent).toContain('1 files');
+    expect(dom.window.document.body.textContent).not.toContain('stale-session.ts');
   });
 
   it('presents one adaptive Review action instead of asking users to choose a depth', async () => {
@@ -243,9 +248,12 @@ describe('SessionFilesBadge', () => {
       actionsButton?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
     });
 
-    expect(container.textContent).toContain('Review');
-    expect(container.textContent).not.toContain('Review: Strict');
-    expect(container.textContent).not.toContain('Deep review');
+    const reviewPopover = dom.window.document.querySelector<HTMLElement>('.session-files-badge__review-menu-popover');
+    expect(reviewPopover?.parentElement?.getAttribute('data-bf-overlay-host')).toBe('true');
+    expect(reviewPopover?.style.visibility).toBe('visible');
+    expect(dom.window.document.body.textContent).toContain('Review');
+    expect(dom.window.document.body.textContent).not.toContain('Review: Strict');
+    expect(dom.window.document.body.textContent).not.toContain('Deep review');
   });
 
   it('shows a localized error when Review cannot be prepared', async () => {
@@ -264,7 +272,7 @@ describe('SessionFilesBadge', () => {
     await act(async () => {
       actionsButton.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
     });
-    const reviewButton = container.querySelector('[role="menuitem"]') as HTMLButtonElement;
+    const reviewButton = dom.window.document.querySelector('[role="menuitem"]') as HTMLButtonElement;
     await act(async () => {
       reviewButton.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
       await Promise.resolve();

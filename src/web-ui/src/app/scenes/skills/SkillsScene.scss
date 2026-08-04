@@ -14,8 +14,8 @@
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  background: var(--color-bg-primary);
-  color: var(--color-text-primary);
+  background: var(--bf-appearance-token-color-bg-primary);
+  color: var(--bf-appearance-token-color-text-primary);
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -27,7 +27,7 @@
   display: flex;
   align-items: center;
   padding: 8px 12px;
-  background: var(--color-bg-primary);
+  background: var(--bf-appearance-token-color-bg-primary);
 }
 
 .skills-tabs-bar__tabs {
@@ -40,7 +40,7 @@
   width: 1px;
   height: 12px;
   margin: 0 6px;
-  background: var(--border-medium);
+  background: var(--bf-appearance-token-border-medium);
   flex-shrink: 0;
 }
 
@@ -52,7 +52,7 @@
   border: none;
   border-radius: 4px;
   background: transparent;
-  color: var(--color-text-muted);
+  color: var(--bf-appearance-token-color-text-muted);
   font-size: 12px;
   font-weight: $font-weight-normal;
   line-height: 1.4;
@@ -60,16 +60,16 @@
   transition: color $motion-fast $easing-standard;
 
   &:hover:not(.is-active) {
-    color: var(--color-text-secondary);
+    color: var(--bf-appearance-token-color-text-secondary);
   }
 
   &.is-active {
-    color: var(--color-text-primary);
+    color: var(--bf-appearance-token-color-text-primary);
     font-weight: $font-weight-medium;
   }
 
   &:focus-visible {
-    outline: 2px solid var(--color-accent-500);
+    outline: 2px solid var(--bf-appearance-token-color-accent-500);
     outline-offset: 2px;
   }
 }
@@ -112,8 +112,8 @@
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  border-right: 1px solid var(--border-subtle);
-  background: var(--color-bg-secondary);
+  border-right: 1px solid var(--bf-appearance-token-border-subtle);
+  background: var(--bf-appearance-token-color-bg-secondary);
   overflow-y: auto;
 }
 
@@ -126,7 +126,7 @@
   margin: 0;
   font-size: 13px;
   font-weight: $font-weight-semibold;
-  color: var(--color-text-primary);
+  color: var(--bf-appearance-token-color-text-primary);
   letter-spacing: -0.01em;
 }
 
@@ -147,32 +147,32 @@
   border: none;
   border-radius: $size-radius-base;
   background: transparent;
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-xs);
+  color: var(--bf-appearance-token-color-text-secondary);
+  font-size: var(--bf-appearance-token-font-size-xs);
   font-weight: $font-weight-normal;
   cursor: pointer;
   text-align: left;
   transition: background $motion-fast $easing-standard, color $motion-fast $easing-standard;
 
   &.is-empty {
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
     opacity: 0.55;
     cursor: default;
   }
 
   &:hover:not(.is-empty):not(.is-active) {
-    background: var(--element-bg-subtle);
-    color: var(--color-text-primary);
+    background: var(--bf-appearance-token-element-bg-subtle);
+    color: var(--bf-appearance-token-color-text-primary);
   }
 
   &.is-active {
-    background: var(--element-bg-medium);
-    color: var(--color-text-primary);
+    background: var(--bf-appearance-token-element-bg-medium);
+    color: var(--bf-appearance-token-color-text-primary);
     font-weight: $font-weight-medium;
   }
 
   &:focus-visible {
-    outline: 2px solid var(--color-accent-500);
+    outline: 2px solid var(--bf-appearance-token-color-accent-500);
     outline-offset: 2px;
   }
 }
@@ -199,13 +199,13 @@
   align-items: center;
   justify-content: center;
   border-radius: 999px;
-  background: var(--element-bg-medium);
-  color: var(--color-text-muted);
+  background: var(--bf-appearance-token-element-bg-medium);
+  color: var(--bf-appearance-token-color-text-muted);
   font-size: 10px;
   font-weight: $font-weight-medium;
 
   .skills-sidebar__item.is-active & {
-    background: var(--element-bg-soft);
+    background: var(--bf-appearance-token-element-bg-soft);
   }
 
   .skills-sidebar__item.is-empty & {
@@ -216,13 +216,13 @@
 .skills-sidebar__footer {
   flex-shrink: 0;
   padding: 12px 16px 16px;
-  border-top: 1px solid var(--border-subtle);
+  border-top: 1px solid var(--bf-appearance-token-border-subtle);
 }
 
 .skills-sidebar__hint {
   margin: 0;
   font-size: 11px;
-  color: var(--color-text-muted);
+  color: var(--bf-appearance-token-color-text-muted);
   opacity: 0.75;
   line-height: 1.45;
 }
@@ -244,7 +244,7 @@
   align-items: center;
   gap: 10px 12px;
   padding: 16px 24px;
-  border-bottom: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
 }
 
 .skills-main__toolbar-search {
@@ -255,8 +255,8 @@
     max-width: 100%;
     border-radius: $size-radius-base;
     min-height: 34px;
-    background: var(--element-bg-subtle);
-    border-color: var(--border-medium);
+    background: var(--bf-appearance-token-element-bg-subtle);
+    border-color: var(--bf-appearance-token-border-medium);
   }
 }
 
@@ -266,11 +266,11 @@
   gap: 6px;
   height: 30px;
   padding: 0 10px;
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--bf-appearance-token-border-subtle);
   border-radius: $size-radius-full;
   background: transparent;
-  color: var(--color-text-muted);
-  font-size: var(--font-size-xs);
+  color: var(--bf-appearance-token-color-text-muted);
+  font-size: var(--bf-appearance-token-font-size-xs);
   font-weight: $font-weight-medium;
   cursor: pointer;
   transition:
@@ -279,18 +279,18 @@
     border-color $motion-fast $easing-standard;
 
   &:hover {
-    color: var(--color-text-primary);
-    background: var(--element-bg-soft);
+    color: var(--bf-appearance-token-color-text-primary);
+    background: var(--bf-appearance-token-element-bg-soft);
   }
 
   &.is-active {
-    color: var(--color-accent-500);
-    background: var(--color-accent-100);
-    border-color: var(--color-accent-300);
+    color: var(--bf-appearance-token-color-accent-500);
+    background: var(--bf-appearance-token-color-accent-100);
+    border-color: var(--bf-appearance-token-color-accent-300);
   }
 
   &:focus-visible {
-    outline: 2px solid var(--color-accent-500);
+    outline: 2px solid var(--bf-appearance-token-color-accent-500);
     outline-offset: 2px;
   }
 }
@@ -301,11 +301,11 @@
   gap: 6px;
   height: 30px;
   padding: 0 12px;
-  border: 1px solid color-mix(in srgb, var(--color-accent-500) 20%, var(--border-subtle));
+  border: 1px solid color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 20%, var(--bf-appearance-token-border-subtle));
   border-radius: $size-radius-full;
-  background: color-mix(in srgb, var(--color-accent-500) 8%, transparent);
-  color: var(--color-accent-600);
-  font-size: var(--font-size-xs);
+  background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 8%, transparent);
+  color: var(--bf-appearance-token-color-accent-600);
+  font-size: var(--bf-appearance-token-font-size-xs);
   font-weight: $font-weight-medium;
   cursor: pointer;
   white-space: nowrap;
@@ -315,13 +315,13 @@
     color $motion-fast $easing-standard;
 
   &:hover {
-    background: color-mix(in srgb, var(--color-accent-500) 14%, transparent);
-    border-color: color-mix(in srgb, var(--color-accent-500) 35%, var(--border-medium));
-    color: var(--color-accent-600);
+    background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 14%, transparent);
+    border-color: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 35%, var(--bf-appearance-token-border-medium));
+    color: var(--bf-appearance-token-color-accent-600);
   }
 
   &:focus-visible {
-    outline: 2px solid var(--color-accent-500);
+    outline: 2px solid var(--bf-appearance-token-color-accent-500);
     outline-offset: 2px;
   }
 }
@@ -344,12 +344,12 @@
   justify-content: space-between;
   gap: 16px;
   padding: 18px 20px;
-  border: 1px solid color-mix(in srgb, var(--color-accent-500) 18%, var(--border-subtle));
+  border: 1px solid color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 18%, var(--bf-appearance-token-border-subtle));
   border-radius: $size-radius-lg;
   background:
-    radial-gradient(circle at top right, color-mix(in srgb, var(--color-accent-500) 12%, transparent), transparent 42%),
-    linear-gradient(180deg, color-mix(in srgb, var(--color-accent-500) 7%, var(--color-bg-secondary)), var(--color-bg-secondary));
-  box-shadow: 0 10px 30px rgba(var(--color-static-black-rgb), 0.05);
+    radial-gradient(circle at top right, color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 12%, transparent), transparent 42%),
+    linear-gradient(180deg, color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 7%, var(--bf-appearance-token-color-bg-secondary)), var(--bf-appearance-token-color-bg-secondary));
+  box-shadow: 0 10px 30px rgba(var(--bf-appearance-token-color-static-black-rgb), 0.05);
 }
 
 .skills-suite__hero-copy {
@@ -371,7 +371,7 @@
   font-weight: $font-weight-semibold;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--color-accent-500);
+  color: var(--bf-appearance-token-color-accent-500);
 }
 
 .skills-suite__title {
@@ -379,14 +379,14 @@
   font-size: 20px;
   font-weight: $font-weight-semibold;
   line-height: $line-height-tight;
-  color: var(--color-text-primary);
+  color: var(--bf-appearance-token-color-text-primary);
 }
 
 .skills-suite__subtitle {
   margin: 0;
   max-width: 720px;
-  color: var(--color-text-muted);
-  font-size: var(--font-size-sm);
+  color: var(--bf-appearance-token-color-text-muted);
+  font-size: var(--bf-appearance-token-font-size-sm);
   line-height: 1.55;
 }
 
@@ -395,7 +395,7 @@
   align-items: flex-end;
   gap: 12px;
   padding: 0 2px 2px;
-  border-bottom: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
 }
 
 .skills-suite__modes {
@@ -418,13 +418,13 @@
   padding: 2px 0 12px;
   border: none;
   background: transparent;
-  color: var(--color-text-muted);
+  color: var(--bf-appearance-token-color-text-muted);
   cursor: pointer;
   white-space: nowrap;
   transition: color $motion-fast $easing-standard;
 
   &:hover:not(:disabled):not(.is-active) {
-    color: var(--color-text-primary);
+    color: var(--bf-appearance-token-color-text-primary);
   }
 
   &::after {
@@ -440,15 +440,15 @@
   }
 
   &.is-active {
-    color: var(--color-text-primary);
+    color: var(--bf-appearance-token-color-text-primary);
 
     &::after {
-      background: var(--color-accent-500);
+      background: var(--bf-appearance-token-color-accent-500);
     }
   }
 
   &:focus-visible {
-    outline: 2px solid var(--color-accent-500);
+    outline: 2px solid var(--bf-appearance-token-color-accent-500);
     outline-offset: 4px;
     border-radius: 4px;
   }
@@ -484,7 +484,7 @@
   align-items: center;
   gap: 7px;
   font-size: 11px;
-  color: var(--color-text-muted);
+  color: var(--bf-appearance-token-color-text-muted);
 }
 
 .skills-suite__loading {
@@ -494,7 +494,7 @@
   align-items: center;
   justify-content: center;
   gap: 10px;
-  color: var(--color-text-muted);
+  color: var(--bf-appearance-token-color-text-muted);
 }
 
 .skills-suite__loading-icon {
@@ -511,7 +511,7 @@
   padding-right: 4px;
 
   &::-webkit-scrollbar { width: 5px; }
-  &::-webkit-scrollbar-thumb { background: var(--border-subtle); border-radius: 3px; }
+  &::-webkit-scrollbar-thumb { background: var(--bf-appearance-token-border-subtle); border-radius: 3px; }
 }
 
 .skills-suite__section {
@@ -521,7 +521,7 @@
 }
 
 .skills-suite__section-label {
-  color: var(--color-text-muted);
+  color: var(--bf-appearance-token-color-text-muted);
   font-size: 11px;
   font-weight: $font-weight-semibold;
   letter-spacing: 0.04em;
@@ -540,10 +540,10 @@
   flex-direction: column;
   gap: 14px;
   padding: 16px 18px;
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--bf-appearance-token-border-subtle);
   border-radius: $size-radius-lg;
-  background: var(--color-bg-secondary);
-  box-shadow: 0 8px 24px rgba(var(--color-static-black-rgb), 0.04);
+  background: var(--bf-appearance-token-color-bg-secondary);
+  box-shadow: 0 8px 24px rgba(var(--bf-appearance-token-color-static-black-rgb), 0.04);
 }
 
 .skills-suite__group-head {
@@ -577,12 +577,12 @@
 .skills-suite__group-title {
   font-size: 13px;
   font-weight: $font-weight-semibold;
-  color: var(--color-text-primary);
+  color: var(--bf-appearance-token-color-text-primary);
 }
 
 .skills-suite__group-count {
   font-size: 11px;
-  color: var(--color-text-muted);
+  color: var(--bf-appearance-token-color-text-muted);
 }
 
 .skills-suite__skills {
@@ -597,10 +597,10 @@
   gap: 6px;
   max-width: 100%;
   padding: 8px 10px;
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--bf-appearance-token-border-subtle);
   border-radius: 999px;
-  background: var(--element-bg-subtle);
-  color: var(--color-text-muted);
+  background: var(--bf-appearance-token-element-bg-subtle);
+  color: var(--bf-appearance-token-color-text-muted);
   font-size: 11px;
   font-weight: $font-weight-medium;
   line-height: 1;
@@ -612,7 +612,7 @@
     opacity $motion-fast $easing-standard;
 
   &:focus-visible {
-    outline: 2px solid var(--color-accent-500);
+    outline: 2px solid var(--bf-appearance-token-color-accent-500);
     outline-offset: 2px;
   }
 
@@ -622,9 +622,9 @@
   }
 
   &.is-enabled {
-    background: color-mix(in srgb, var(--color-success) 12%, var(--element-bg-subtle));
-    border-color: color-mix(in srgb, var(--color-success) 28%, var(--border-subtle));
-    color: var(--color-text-primary);
+    background: color-mix(in srgb, var(--bf-appearance-token-color-success) 12%, var(--bf-appearance-token-element-bg-subtle));
+    border-color: color-mix(in srgb, var(--bf-appearance-token-color-success) 28%, var(--bf-appearance-token-border-subtle));
+    color: var(--bf-appearance-token-color-text-primary);
   }
 
   &.is-disabled {
@@ -632,8 +632,8 @@
   }
 
   &.is-shadowed {
-    background: color-mix(in srgb, var(--color-warning) 10%, var(--element-bg-subtle));
-    border-color: color-mix(in srgb, var(--color-warning) 30%, var(--border-subtle));
+    background: color-mix(in srgb, var(--bf-appearance-token-color-warning) 10%, var(--bf-appearance-token-element-bg-subtle));
+    border-color: color-mix(in srgb, var(--bf-appearance-token-color-warning) 30%, var(--bf-appearance-token-border-subtle));
 
     .skills-suite__skill-chip-name {
       text-decoration: line-through;
@@ -641,13 +641,13 @@
   }
 
   &.is-dirty {
-    border-color: color-mix(in srgb, var(--color-accent-500) 34%, var(--border-subtle));
-    box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-accent-500) 12%, transparent);
+    border-color: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 34%, var(--bf-appearance-token-border-subtle));
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 12%, transparent);
   }
 
   &.is-globally-disabled {
-    border-color: var(--border-subtle);
-    background: var(--element-bg-subtle);
+    border-color: var(--bf-appearance-token-border-subtle);
+    background: var(--bf-appearance-token-element-bg-subtle);
   }
 
   &.is-globally-disabled {
@@ -665,7 +665,7 @@
 }
 
 .skills-suite__skill-chip-status {
-  color: var(--color-warning);
+  color: var(--bf-appearance-token-color-warning);
   font-size: 10px;
   font-weight: $font-weight-medium;
   white-space: nowrap;
@@ -689,7 +689,7 @@
   align-content: start;
 
   &::-webkit-scrollbar { width: 5px; }
-  &::-webkit-scrollbar-thumb { background: var(--border-subtle); border-radius: 3px; }
+  &::-webkit-scrollbar-thumb { background: var(--bf-appearance-token-border-subtle); border-radius: 3px; }
 }
 
 // ── Card ──
@@ -699,9 +699,9 @@
   flex-direction: column;
   gap: 10px;
   padding: 16px 18px;
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--bf-appearance-token-border-subtle);
   border-radius: $size-radius-lg;
-  background: var(--color-bg-secondary);
+  background: var(--bf-appearance-token-color-bg-secondary);
   cursor: pointer;
   animation: skills-card-in 0.18s $easing-decelerate both;
   @include surface-stagger.animation-delay(30ms);
@@ -711,19 +711,19 @@
     transform $motion-fast $easing-standard;
 
   &:hover {
-    border-color: var(--border-medium);
-    box-shadow: 0 4px 16px var(--color-overlay-black-08);
+    border-color: var(--bf-appearance-token-border-medium);
+    box-shadow: 0 4px 16px var(--bf-appearance-token-color-overlay-black-08);
     transform: translateY(-1px);
   }
 
   &:focus-visible {
-    outline: 2px solid var(--color-accent-500);
+    outline: 2px solid var(--bf-appearance-token-color-accent-500);
     outline-offset: -2px;
   }
 
   &.is-shadowed {
     opacity: 0.72;
-    background: var(--element-bg-subtle);
+    background: var(--bf-appearance-token-element-bg-subtle);
 
     .skills-card__name {
       text-decoration: line-through;
@@ -746,9 +746,9 @@
   align-items: center;
   justify-content: center;
   border-radius: 8px;
-  background: var(--element-bg-medium);
-  border: 1px solid var(--border-subtle);
-  color: var(--color-text-secondary);
+  background: var(--bf-appearance-token-element-bg-medium);
+  border: 1px solid var(--bf-appearance-token-border-subtle);
+  color: var(--bf-appearance-token-color-text-secondary);
 }
 
 .skills-card__info {
@@ -768,9 +768,9 @@
 }
 
 .skills-card__name {
-  font-size: var(--font-size-sm);
+  font-size: var(--bf-appearance-token-font-size-sm);
   font-weight: $font-weight-semibold;
-  color: var(--color-text-primary);
+  color: var(--bf-appearance-token-color-text-primary);
   line-height: $line-height-tight;
   white-space: nowrap;
   overflow: hidden;
@@ -778,8 +778,8 @@
 }
 
 .skills-card__desc {
-  font-size: var(--font-size-xs);
-  color: var(--color-text-muted);
+  font-size: var(--bf-appearance-token-font-size-xs);
+  color: var(--bf-appearance-token-color-text-muted);
   opacity: 0.78;
   line-height: $line-height-relaxed;
   display: -webkit-box;
@@ -795,7 +795,7 @@
   align-items: center;
   gap: 8px;
   padding-top: 4px;
-  border-top: 1px solid var(--border-subtle);
+  border-top: 1px solid var(--bf-appearance-token-border-subtle);
 }
 
 .skills-card__actions {
@@ -821,19 +821,19 @@
   border: none;
   border-radius: $size-radius-base;
   background: transparent;
-  color: var(--color-text-muted);
+  color: var(--bf-appearance-token-color-text-muted);
   cursor: pointer;
   transition:
     background $motion-fast $easing-standard,
     color $motion-fast $easing-standard;
 
   &:hover {
-    background: color-mix(in srgb, var(--color-error) 10%, var(--element-bg-medium));
-    color: var(--color-error);
+    background: color-mix(in srgb, var(--bf-appearance-token-color-error) 10%, var(--bf-appearance-token-element-bg-medium));
+    color: var(--bf-appearance-token-color-error);
   }
 
   &:focus-visible {
-    outline: 2px solid var(--color-error);
+    outline: 2px solid var(--bf-appearance-token-color-error);
     outline-offset: 1px;
   }
 }
@@ -852,8 +852,8 @@
 .skills-card-skeleton {
   height: 120px;
   border-radius: $size-radius-lg;
-  background: var(--element-bg-subtle);
-  border: 1px solid var(--border-subtle);
+  background: var(--bf-appearance-token-element-bg-subtle);
+  border: 1px solid var(--bf-appearance-token-border-subtle);
   animation: skills-card-in 0.2s $easing-decelerate both;
   @include surface-stagger.animation-delay(40ms);
 }
@@ -879,16 +879,16 @@
   justify-content: center;
   width: 32px;
   height: 32px;
-  border: 1px solid var(--border-medium);
+  border: 1px solid var(--bf-appearance-token-border-medium);
   border-radius: $size-radius-base;
-  background: var(--element-bg-soft);
-  color: var(--color-text-secondary);
+  background: var(--bf-appearance-token-element-bg-soft);
+  color: var(--bf-appearance-token-color-text-secondary);
   cursor: pointer;
   transition: background $motion-fast $easing-standard, color $motion-fast $easing-standard;
 
   &:hover:not(:disabled) {
-    background: var(--element-bg-medium);
-    color: var(--color-text-primary);
+    background: var(--bf-appearance-token-element-bg-medium);
+    color: var(--bf-appearance-token-color-text-primary);
   }
 
   &:disabled {
@@ -901,8 +901,8 @@
 .skills-discover__page-info {
   min-width: 60px;
   text-align: center;
-  font-size: var(--font-size-sm);
-  color: var(--color-text-secondary);
+  font-size: var(--bf-appearance-token-font-size-sm);
+  color: var(--bf-appearance-token-color-text-secondary);
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -918,12 +918,12 @@
   gap: 12px;
   min-height: 200px;
   padding: 32px;
-  font-size: var(--font-size-sm);
-  color: var(--color-text-muted);
+  font-size: var(--bf-appearance-token-font-size-sm);
+  color: var(--bf-appearance-token-color-text-muted);
   text-align: center;
 
   &--error {
-    color: var(--color-error);
+    color: var(--bf-appearance-token-color-error);
   }
 }
 
@@ -933,7 +933,7 @@
   justify-content: center;
   gap: 12px;
   min-height: 160px;
-  color: var(--color-text-muted);
+  color: var(--bf-appearance-token-color-text-muted);
   text-align: center;
 }
 
@@ -954,8 +954,8 @@
   align-items: center;
   justify-content: center;
   padding: 40px 24px 32px;
-  background: linear-gradient(180deg, var(--color-bg-secondary) 0%, var(--color-bg-primary) 100%);
-  border-bottom: 1px solid var(--border-subtle);
+  background: linear-gradient(180deg, var(--bf-appearance-token-color-bg-secondary) 0%, var(--bf-appearance-token-color-bg-primary) 100%);
+  border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
 }
 
 .skills-discover__hero-content {
@@ -974,8 +974,8 @@
 
 .skills-discover__subtitle {
   margin: 0 0 20px;
-  font-size: var(--font-size-sm);
-  color: var(--color-text-muted);
+  font-size: var(--bf-appearance-token-font-size-sm);
+  color: var(--bf-appearance-token-color-text-muted);
   line-height: 1.55;
 }
 
@@ -989,15 +989,15 @@
   .search__wrapper {
     border-radius: $size-radius-lg;
     min-height: 46px;
-    background: var(--element-bg-soft);
-    border-color: var(--border-medium);
-    box-shadow: 0 2px 12px var(--color-overlay-black-08);
+    background: var(--bf-appearance-token-element-bg-soft);
+    border-color: var(--bf-appearance-token-border-medium);
+    box-shadow: 0 2px 12px var(--bf-appearance-token-color-overlay-black-08);
     transition: border-color $motion-fast $easing-standard, box-shadow $motion-fast $easing-standard;
   }
 
   &.search--focused:not(.search--disabled) .search__wrapper {
-    box-shadow: 0 4px 20px var(--color-overlay-black-12), 0 0 0 3px color-mix(in srgb, var(--color-accent-500) 15%, transparent);
-    border-color: var(--color-accent-500);
+    box-shadow: 0 4px 20px var(--bf-appearance-token-color-overlay-black-12), 0 0 0 3px color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 15%, transparent);
+    border-color: var(--bf-appearance-token-color-accent-500);
   }
 }
 
@@ -1008,13 +1008,13 @@
   padding: 20px 24px;
 
   &::-webkit-scrollbar { width: 6px; }
-  &::-webkit-scrollbar-thumb { background: var(--border-subtle); border-radius: 3px; }
+  &::-webkit-scrollbar-thumb { background: var(--bf-appearance-token-border-subtle); border-radius: 3px; }
 }
 
 .skills-discover__results-info {
   margin-bottom: 14px;
-  font-size: var(--font-size-sm);
-  color: var(--color-text-muted);
+  font-size: var(--bf-appearance-token-font-size-sm);
+  color: var(--bf-appearance-token-color-text-muted);
 }
 
 .skills-discover__grid {
@@ -1031,8 +1031,8 @@
 .skills-discover__skeleton-card {
   height: 150px;
   border-radius: $size-radius-lg;
-  background: var(--element-bg-subtle);
-  border: 1px solid var(--border-subtle);
+  background: var(--bf-appearance-token-element-bg-subtle);
+  border: 1px solid var(--bf-appearance-token-border-subtle);
   animation: skills-card-in 0.18s $easing-decelerate both;
   @include surface-stagger.animation-delay(40ms);
 }
@@ -1046,8 +1046,8 @@
     display: inline-flex;
     align-items: center;
     gap: 4px;
-    font-size: var(--font-size-xs);
-    color: var(--color-text-muted);
+    font-size: var(--bf-appearance-token-font-size-xs);
+    color: var(--bf-appearance-token-color-text-muted);
   }
 
   &__detail-path-btn {
@@ -1063,16 +1063,16 @@
     line-height: $line-height-base;
     text-align: left;
     word-break: break-all;
-    color: var(--color-accent-500);
+    color: var(--bf-appearance-token-color-accent-500);
     text-decoration: underline;
     text-underline-offset: 2px;
     cursor: pointer;
     transition: color $motion-fast $easing-standard;
 
-    &:hover { color: var(--color-accent-600); }
+    &:hover { color: var(--bf-appearance-token-color-accent-600); }
 
     &:focus-visible {
-      outline: 2px solid var(--color-accent-500);
+      outline: 2px solid var(--bf-appearance-token-color-accent-500);
       outline-offset: 2px;
     }
   }
@@ -1085,13 +1085,13 @@
 
   &__detail-label {
     flex-shrink: 0;
-    color: var(--color-text-secondary);
+    color: var(--bf-appearance-token-color-text-secondary);
     font-weight: $font-weight-medium;
   }
 
   &__detail-value,
   &__detail-link {
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
     font-family: $font-family-mono;
     font-size: 11px;
     word-break: break-all;
@@ -1116,30 +1116,30 @@
   &__path-hint,
   &__form-hint,
   &__validating {
-    font-size: var(--font-size-xs);
-    color: var(--color-text-muted);
+    font-size: var(--bf-appearance-token-font-size-xs);
+    color: var(--bf-appearance-token-color-text-muted);
   }
 
   &__validation {
     padding: $size-gap-2 $size-gap-3;
     border-radius: $size-radius-base;
-    font-size: var(--font-size-sm);
+    font-size: var(--bf-appearance-token-font-size-sm);
 
     &.is-valid {
-      background: color-mix(in srgb, var(--color-success) 8%, transparent);
-      border: 1px solid color-mix(in srgb, var(--color-success) 30%, transparent);
-      color: var(--color-success);
+      background: color-mix(in srgb, var(--bf-appearance-token-color-success) 8%, transparent);
+      border: 1px solid color-mix(in srgb, var(--bf-appearance-token-color-success) 30%, transparent);
+      color: var(--bf-appearance-token-color-success);
     }
 
     &.is-invalid {
-      background: color-mix(in srgb, var(--color-error) 8%, transparent);
-      border: 1px solid color-mix(in srgb, var(--color-error) 30%, transparent);
-      color: var(--color-error);
+      background: color-mix(in srgb, var(--bf-appearance-token-color-error) 8%, transparent);
+      border: 1px solid color-mix(in srgb, var(--bf-appearance-token-color-error) 30%, transparent);
+      color: var(--bf-appearance-token-color-error);
     }
   }
 
   &__validation-name  { font-weight: $font-weight-medium; }
-  &__validation-desc  { margin-top: 2px; font-size: var(--font-size-xs); opacity: 0.85; }
+  &__validation-desc  { margin-top: 2px; font-size: var(--bf-appearance-token-font-size-xs); opacity: 0.85; }
   &__validation-error { font-weight: $font-weight-medium; }
 
   &__modal-form {
@@ -1155,7 +1155,7 @@
     gap: $size-gap-2;
     margin-top: $size-gap-1;
     padding-top: $size-gap-3;
-    border-top: 1px solid var(--border-subtle);
+    border-top: 1px solid var(--bf-appearance-token-border-subtle);
   }
 }
 
@@ -1192,7 +1192,7 @@
     flex-direction: row;
     height: auto;
     border-right: none;
-    border-bottom: 1px solid var(--border-subtle);
+    border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
 
     .skills-sidebar__header,
     .skills-sidebar__footer {

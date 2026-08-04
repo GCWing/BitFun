@@ -70,6 +70,10 @@ pub struct MessageMetadata {
     pub compression_payload: Option<CompressionPayload>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub memory_citation: Option<MemoryCitation>,
+    /// Stable source identities carried only by conditional instruction
+    /// reminders so activation can be reconstructed from persisted history.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub activated_instruction_sources: Vec<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -117,6 +121,8 @@ pub enum InternalReminderKind {
     /// Model-visible context contributed by a SessionStart or
     /// UserPromptSubmit hook.
     HookContext,
+    /// Instructions activated after a successful read of a matching file.
+    ConditionalInstructions,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -148,6 +154,7 @@ impl InternalReminderKind {
                 | Self::ThinkingOnlyRescue
                 | Self::FinalizeCacheAnchor
                 | Self::CompressionContinuation
+                | Self::ConditionalInstructions
                 // Mid-turn scaffolding: the Stop hook's feedback matters only
                 // while the reopened turn is still running. HookContext is
                 // deliberately absent — it carries real context a hook asked
@@ -554,6 +561,15 @@ impl Message {
 
     pub fn internal_reminder_kind(&self) -> Option<InternalReminderKind> {
         self.metadata.internal_reminder_kind
+    }
+
+    pub fn with_activated_instruction_sources(mut self, sources: Vec<String>) -> Self {
+        self.metadata.activated_instruction_sources = sources;
+        self
+    }
+
+    pub fn activated_instruction_sources(&self) -> &[String] {
+        &self.metadata.activated_instruction_sources
     }
 
     pub fn with_compression_payload(mut self, compression_payload: CompressionPayload) -> Self {

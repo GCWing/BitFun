@@ -46,7 +46,7 @@ describe('FlowChat collapse spacing', () => {
 
     expect(exploreContent).toContain('padding: 0;');
     expect(thinkingContent).toMatch(
-      /padding:\s*var\(--flowchat-card-expanded-pad-y\)\s*var\(--flowchat-card-expanded-pad-x\)\s*var\(--flowchat-card-expanded-pad-y\)\s*0;/,
+      /padding:\s*var\(--bf-appearance-token-flowchat-card-expanded-pad-y\)\s*var\(--bf-appearance-token-flowchat-card-expanded-pad-x\)\s*var\(--bf-appearance-token-flowchat-card-expanded-pad-y\)\s*0;/,
     );
   });
 
@@ -58,14 +58,14 @@ describe('FlowChat collapse spacing', () => {
     const subagentProjectionStyles = readSource('../subagent/SubagentProjectionView.scss');
     const taskStyles = readSource('../../tool-cards/TaskToolDisplay.scss');
 
-    expect(extractBlock(baseToolStyles, '.base-tool-card-expanded')).toMatch(
-      /padding:\s*var\(--flowchat-card-expanded-pad-y\)\s*var\(--tool-card-expanded-pad-x\)\s*var\(--flowchat-card-expanded-pad-y\)\s*var\(--tool-card-expanded-pad-x\);/,
+    expect(extractBlock(baseToolStyles, '.base-tool-card-expanded')).toContain(
+      'padding: var(--bf-appearance-token-flowchat-card-expanded-pad-y) var(--bf-appearance-token-tool-card-expanded-pad-x);',
     );
     expect(extractBlock(baseToolStyles, '.base-tool-card-error')).toContain(
       'margin-left: 0;',
     );
     expect(extractBlock(baseToolStyles, '.base-tool-card-error')).toMatch(
-      /padding:\s*var\(--flowchat-card-expanded-pad-y\)\s*var\(--flowchat-card-expanded-pad-x\)\s*var\(--flowchat-card-expanded-pad-y\)\s*var\(--flowchat-card-expanded-pad-x\);/,
+      /padding:\s*var\(--bf-appearance-token-flowchat-card-expanded-pad-y\)\s*var\(--bf-appearance-token-flowchat-card-expanded-pad-x\)\s*var\(--bf-appearance-token-flowchat-card-expanded-pad-y\)\s*var\(--bf-appearance-token-flowchat-card-expanded-pad-x\);/,
     );
     expect(extractBlock(compactToolStyles, '.compact-tool-card-expanded')).toContain(
       'margin-left: 0;',
@@ -80,19 +80,19 @@ describe('FlowChat collapse spacing', () => {
       'margin: 8px 0 0;',
     );
     expect(extractBlock(subagentStyles, '.subagent-items-container')).toContain(
-      'padding: var(--flowchat-card-expanded-pad-y) var(--flowchat-card-expanded-pad-x);',
+      'padding: var(--bf-appearance-token-flowchat-card-expanded-pad-y) var(--bf-appearance-token-flowchat-card-expanded-pad-x);',
     );
     expect(
       extractBlock(subagentProjectionStyles, '.subagent-projection-container--expanded'),
     ).toContain(
-      'padding: var(--flowchat-card-expanded-pad-y) var(--flowchat-card-expanded-pad-x);',
+      'padding: var(--bf-appearance-token-flowchat-card-expanded-pad-y) var(--bf-appearance-token-flowchat-card-expanded-pad-x);',
     );
     expect(
       extractBlock(taskStyles, '.task-expanded-content .task-prompt-content'),
     ).toContain('padding: 0;');
-    expect(taskStyles).toContain(
-      '.subagent-projection-container--expanded {\n' +
-      '      padding: var(--flowchat-card-expanded-pad-y) var(--flowchat-card-expanded-pad-x);',
+    expect(taskStyles).toContain('--task-prompt-inline-pad: calc(');
+    expect(taskStyles).toMatch(
+      /\.subagent-projection-container--expanded\s*\{[\s\S]*?padding:\s*8px\s*var\(--task-prompt-inline-pad\)\s*10px\s*var\(--task-prompt-inline-pad\);/,
     );
   });
 
@@ -103,14 +103,24 @@ describe('FlowChat collapse spacing', () => {
     const todoStyles = readSource('../../tool-cards/TodoWriteDisplay.scss');
 
     expect(terminalStyles).toContain(
-      '.base-tool-card-wrapper.terminal-tool-card .terminal-result-footer {\n  margin-left: calc(-1 * var(--flowchat-card-expanded-pad-x));',
+      '.base-tool-card-wrapper.terminal-tool-card .terminal-result-footer {\n  margin-left: calc(-1 * var(--bf-appearance-token-flowchat-card-expanded-pad-x));',
     );
     expect(gitStyles).toMatch(/git-result-footer[\s\S]{0,120}margin-left:\s*-\d/);
     expect(miniAppStyles).toContain(
-      '.base-tool-card-wrapper.miniapp-tool-display .miniapp-result-footer {\n  margin-left: calc(-1 * var(--flowchat-card-expanded-pad-x));',
+      '.base-tool-card-wrapper.miniapp-tool-display .miniapp-result-footer {\n  margin-left: calc(-1 * var(--bf-appearance-token-flowchat-card-expanded-pad-x));',
     );
     expect(extractBlock(todoStyles, '.todo-expanded-body')).toMatch(
-      /margin:\s*calc\(var\(--flowchat-card-expanded-pad-y\) \* -1\)\s*calc\(var\(--tool-card-expanded-pad-x\) \* -1\);/,
+      /margin:\s*calc\(var\(--bf-appearance-token-flowchat-card-expanded-pad-y\) \* -1\)\s*calc\(var\(--bf-appearance-token-tool-card-expanded-pad-x\) \* -1\);/,
+    );
+  });
+});
+
+describe('FlowChat initial projection alignment', () => {
+  it('reserves the Virtuoso scrollbar gutter in the handoff overlay', () => {
+    const stylesheet = readSource('./VirtualMessageList.scss');
+
+    expect(stylesheet).toMatch(
+      /&__projection-handoff-overlay\s*\{[\s\S]*?scrollbar-gutter:\s*stable;/,
     );
   });
 });

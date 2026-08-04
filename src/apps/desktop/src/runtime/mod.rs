@@ -166,18 +166,23 @@ mod tests {
         let session_commands = include_str!("../api/session_api.rs");
         assert_eq!(
             session_commands.matches("PersistenceManager::new").count(),
-            4,
-            "only raw turn save, transcript export, and the two excluded bulk operations keep direct persistence"
+            0,
+            "Tauri Session commands must delegate persistence ownership to the application boundary"
         );
+        let session_application = include_str!("session_application.rs");
+        assert!(session_application.contains("save_persisted_dialog_turn"));
+        assert!(session_application.contains("export_persisted_session_transcript"));
 
         let snapshot_commands = include_str!("../api/snapshot_service.rs");
         assert_eq!(
             snapshot_commands
                 .matches(".local_workspace_snapshot()")
                 .count(),
-            3,
-            "only file listing, typed stats, and workspace rollback use the local owner port"
+            1,
+            "only workspace rollback uses the mutation port; reads use Core's bounded snapshot view"
         );
+        assert!(snapshot_commands.contains("begin_snapshot_history_read"));
+        assert!(snapshot_commands.contains("open_snapshot_manager_for_view"));
         assert!(snapshot_commands.contains("ensure_local_snapshot_mutation_path"));
 
         let rollback_source = &snapshot_commands[snapshot_commands
@@ -186,15 +191,16 @@ mod tests {
         let remote_guard = rollback_source
             .find("ensure_complete_rollback_supported")
             .expect("remote rollback guard must remain host-owned");
-        let cancellation = rollback_source
-            .find("cancel_active_turn_for_session")
-            .expect("active-turn cancellation must precede rollback");
+        let maintenance = rollback_source
+            .find("begin_snapshot_history_mutation")
+            .expect("scheduler maintenance must precede rollback");
         let file_rollback = rollback_source
             .find("rollback_local_workspace_files(")
             .expect("workspace files must be restored through the port adapter");
-        let history_cleanup = rollback_source
-            .find("if request.delete_turns")
-            .expect("history cleanup must remain host-owned");
+        let history_cleanup = file_rollback
+            + rollback_source[file_rollback..]
+                .find("if request.delete_turns")
+                .expect("history cleanup must remain host-owned");
         let history_event = rollback_source
             .find("conversation_turns_deleted")
             .expect("history event must remain host-projected");
@@ -202,12 +208,12 @@ mod tests {
             .find("turn_rolled_back")
             .expect("rollback event must remain host-projected");
         assert!(
-            remote_guard < cancellation
-                && cancellation < file_rollback
+            remote_guard < maintenance
+                && maintenance < file_rollback
                 && file_rollback < history_cleanup
                 && history_cleanup < history_event
                 && history_event < rollback_event,
-            "Desktop rollback must preserve remote, cancellation, files, history, and event order"
+            "Desktop rollback must preserve remote, maintenance, files, history, and event order"
         );
 
         let sdk_source = include_str!("../../../../crates/execution/agent-runtime/src/sdk.rs");

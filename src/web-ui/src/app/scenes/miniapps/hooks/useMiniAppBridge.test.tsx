@@ -8,7 +8,11 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { MiniApp } from '@/infrastructure/api/service-api/MiniAppAPI';
-import { useMiniAppStore } from '../miniAppStore';
+import {
+  MINIAPP_COMPOSER_DRAFT_EVENT,
+  type MiniAppDraftEventDetail,
+  useMiniAppStore,
+} from '../miniAppStore';
 import { useMiniAppBridge } from './useMiniAppBridge';
 
 const mocks = vi.hoisted(() => ({
@@ -183,6 +187,52 @@ describe('useMiniAppBridge floating Agent routing', () => {
     expect(mocks.openMainSession).not.toHaveBeenCalled();
   });
 
+  it('associates a composer draft with the session focused immediately before it', async () => {
+    await act(async () => {
+      root.render(<BridgeHarness />);
+    });
+    const iframe = container.querySelector('iframe') as HTMLIFrameElement;
+    const drafts: MiniAppDraftEventDetail[] = [];
+    const onDraft = (event: Event) => {
+      drafts.push((event as CustomEvent<MiniAppDraftEventDetail>).detail);
+    };
+    window.addEventListener(MINIAPP_COMPOSER_DRAFT_EVENT, onDraft);
+
+    try {
+      await dispatchRpc(iframe, 1, 'chat.claimComposer');
+      await dispatchRpc(iframe, 2, 'agent.ensureSession', {
+        sessionName: 'Market Lens',
+        appDataWorkspace: 'chat',
+      });
+      await dispatchRpc(iframe, 3, 'chat.focusSession', { sessionId: 'session-1' });
+      await dispatchRpc(iframe, 4, 'chat.setComposerDraft', {
+        text: 'Analyze 920130',
+      });
+    } finally {
+      window.removeEventListener(MINIAPP_COMPOSER_DRAFT_EVENT, onDraft);
+    }
+
+    expect(drafts).toEqual([{
+      token: expect.any(String),
+      text: 'Analyze 920130',
+      sessionId: 'session-1',
+    }]);
+  });
+
+  it('refuses to bind the bubble to a session the MiniApp did not create', async () => {
+    await act(async () => {
+      root.render(<BridgeHarness />);
+    });
+    const iframe = container.querySelector('iframe') as HTMLIFrameElement;
+
+    await dispatchRpc(iframe, 1, 'chat.claimComposer');
+    await dispatchRpc(iframe, 2, 'chat.focusSession', {
+      sessionId: 'normal-user-session',
+    });
+
+    expect(useMiniAppStore.getState().composerClaims[app.id]?.sessionId).toBeUndefined();
+  });
+
   it('opens an unbound strict Agent run in the main session scene', async () => {
     await act(async () => {
       root.render(<BridgeHarness />);
@@ -201,5 +251,27 @@ describe('useMiniAppBridge floating Agent routing', () => {
 
     expect(mocks.openMainSession).toHaveBeenCalledWith('session-1');
     expect(mocks.agentRun).toHaveBeenCalledTimes(1);
+  });
+
+  it('leaves the tool loop of a strict Agent run to the backend allowlist', async () => {
+    await act(async () => {
+      root.render(<BridgeHarness />);
+    });
+    const iframe = container.querySelector('iframe') as HTMLIFrameElement;
+
+    await dispatchRpc(iframe, 1, 'agent.ensureSession', {
+      sessionName: 'Market Lens',
+      appDataWorkspace: 'chat',
+    });
+    await dispatchRpc(iframe, 2, 'agent.run', {
+      sessionId: 'session-1',
+      prompt: 'Summarize the market',
+    });
+
+    // The host used to force enableTools=false for marketplace MiniApps, which
+    // also killed WebSearch/WebFetch. Tool access is now scoped by the backend
+    // research allowlist instead, so the bridge must not disable the loop.
+    expect(mocks.agentEnsureSession.mock.calls[0][1].enableTools).toBeUndefined();
+    expect(mocks.agentRun.mock.calls[0][3].enableTools).toBeUndefined();
   });
 });

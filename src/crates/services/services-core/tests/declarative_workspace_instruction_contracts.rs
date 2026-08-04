@@ -1,10 +1,63 @@
-use bitfun_services_core::workspace_instructions::read_workspace_instruction_files;
+#![cfg(feature = "workspace-instructions")]
+
+use bitfun_services_core::workspace_instructions::{
+    read_workspace_conditional_instruction_sources, read_workspace_instruction_files,
+    read_workspace_instruction_sources, WorkspaceInstructionPathMatcher,
+};
 use std::fs;
 
 fn instruction_names(
     files: &[bitfun_services_core::workspace_instructions::WorkspaceInstructionFile],
 ) -> Vec<&str> {
     files.iter().map(|file| file.name.as_str()).collect()
+}
+
+#[tokio::test]
+async fn workspace_instruction_files_reads_agents_then_claude_and_skips_empty_files() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    fs::write(temp.path().join("AGENTS.md"), "agent rules\n").expect("agents");
+    fs::write(temp.path().join("CLAUDE.md"), "claude rules\n").expect("claude");
+
+    let files = read_workspace_instruction_files(temp.path())
+        .await
+        .expect("instruction files");
+
+    assert_eq!(files.len(), 2);
+    assert_eq!(files[0].name, "AGENTS.md");
+    assert_eq!(files[0].content, "agent rules\n");
+    assert_eq!(files[1].name, "CLAUDE.md");
+    assert_eq!(files[1].content, "claude rules\n");
+
+    fs::write(temp.path().join("AGENTS.md"), "").expect("empty agents");
+    let files = read_workspace_instruction_files(temp.path())
+        .await
+        .expect("instruction files");
+    assert_eq!(files.len(), 1);
+    assert_eq!(files[0].name, "CLAUDE.md");
+}
+
+#[tokio::test]
+async fn workspace_instruction_override_replaces_agents_without_hiding_claude() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    fs::write(temp.path().join("AGENTS.override.md"), "override rules\n").expect("override");
+    fs::write(temp.path().join("AGENTS.md"), "base rules\n").expect("agents");
+    fs::write(temp.path().join("CLAUDE.md"), "claude rules\n").expect("claude");
+
+    let files = read_workspace_instruction_files(temp.path())
+        .await
+        .expect("instruction files");
+
+    assert_eq!(files.len(), 2);
+    assert_eq!(files[0].name, "AGENTS.override.md");
+    assert_eq!(files[0].content, "override rules\n");
+    assert_eq!(files[1].name, "CLAUDE.md");
+
+    fs::write(temp.path().join("AGENTS.override.md"), "").expect("empty override");
+    let files = read_workspace_instruction_files(temp.path())
+        .await
+        .expect("instruction files");
+    assert_eq!(files.len(), 1);
+    assert_eq!(files[0].name, "CLAUDE.md");
 }
 
 #[tokio::test]
@@ -44,6 +97,127 @@ async fn claude_project_files_and_unconditional_rules_have_deterministic_order()
     assert_eq!(files[1].content, "root claude\n");
     assert!(!files.iter().any(|file| file.name == ".claude/CLAUDE.md"));
     assert!(!files.iter().any(|file| file.name.contains("path-scoped")));
+}
+
+#[tokio::test]
+async fn claude_project_sources_preserve_path_scoped_rules_for_late_activation() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    fs::create_dir_all(temp.path().join(".claude/rules")).expect("rules dir");
+    fs::write(
+        temp.path().join(".claude/rules/rust.md"),
+        "---\npaths:\n  - src/**/*.rs\n  - tests/**/*.rs\n---\n\nUse the shared error type.\n",
+    )
+    .expect("path scoped rule");
+
+    let files = read_workspace_instruction_sources(temp.path())
+        .await
+        .expect("instruction sources");
+
+    assert_eq!(files.len(), 1);
+    assert_eq!(files[0].name, ".claude/rules/rust.md");
+    assert_eq!(files[0].path_patterns, vec!["src/**/*.rs", "tests/**/*.rs"]);
+    assert_eq!(files[0].content, "Use the shared error type.\n");
+}
+
+#[tokio::test]
+async fn bom_prefixed_path_scoped_rule_is_never_loaded_at_startup() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    fs::create_dir_all(temp.path().join(".claude/rules")).expect("rules dir");
+    fs::write(
+        temp.path().join(".claude/rules/windows.md"),
+        "\u{feff}---\r\npaths:\r\n  - src/**/*.rs\r\n---\r\n\r\nWindows rule\r\n",
+    )
+    .expect("path scoped rule");
+
+    let startup = read_workspace_instruction_files(temp.path())
+        .await
+        .expect("startup instructions");
+    let conditional = read_workspace_conditional_instruction_sources(temp.path())
+        .await
+        .expect("conditional instructions");
+
+    assert!(startup.is_empty());
+    assert_eq!(
+        instruction_names(&conditional),
+        vec![".claude/rules/windows.md"]
+    );
+    assert_eq!(conditional[0].path_patterns, vec!["src/**/*.rs"]);
+    assert_eq!(conditional[0].content, "Windows rule\r\n");
+}
+
+#[tokio::test]
+async fn path_scoped_project_rule_imports_inherit_the_parent_scope() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    fs::create_dir_all(temp.path().join(".claude/shared")).expect("shared dir");
+    fs::create_dir_all(temp.path().join(".claude/rules")).expect("rules dir");
+    fs::write(
+        temp.path().join(".claude/rules/rust.md"),
+        "---\npaths:\n  - src/**/*.rs\n---\nRust rule\n@../shared/base.md\n",
+    )
+    .expect("path scoped rule");
+    fs::write(
+        temp.path().join(".claude/shared/base.md"),
+        "Imported base\n@nested.md\n",
+    )
+    .expect("base import");
+    fs::write(
+        temp.path().join(".claude/shared/nested.md"),
+        "Nested import\n",
+    )
+    .expect("nested import");
+
+    let files = read_workspace_instruction_sources(temp.path())
+        .await
+        .expect("instruction sources");
+    let rule = files
+        .iter()
+        .find(|file| file.name == ".claude/rules/rust.md")
+        .expect("scoped rule");
+
+    assert_eq!(rule.path_patterns, vec!["src/**/*.rs"]);
+    assert!(rule.content.contains("Rust rule"));
+    assert!(rule.content.contains("Imported base"));
+    assert!(rule.content.contains("Nested import"));
+}
+
+#[tokio::test]
+async fn conditional_discovery_skips_unconditional_and_opencode_sources() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    fs::create_dir_all(temp.path().join(".claude/rules")).expect("rules dir");
+    fs::write(temp.path().join("AGENTS.md"), "startup instructions\n").expect("agents");
+    fs::write(
+        temp.path().join("opencode.json"),
+        r#"{"instructions":["missing.md"]}"#,
+    )
+    .expect("OpenCode config");
+    fs::write(
+        temp.path().join(".claude/rules/general.md"),
+        "General rule\n",
+    )
+    .expect("general rule");
+    fs::write(
+        temp.path().join(".claude/rules/rust.md"),
+        "---\npaths:\n  - src/**/*.rs\n---\nRust rule\n",
+    )
+    .expect("scoped rule");
+
+    let files = read_workspace_conditional_instruction_sources(temp.path())
+        .await
+        .expect("conditional sources");
+
+    assert_eq!(instruction_names(&files), vec![".claude/rules/rust.md"]);
+}
+
+#[test]
+fn claude_path_scope_globs_preserve_literal_bracket_escapes() {
+    let matcher = WorkspaceInstructionPathMatcher::compile(
+        &[r"photos \[2024/**".to_string()],
+        ".claude/rules/photos.md",
+    )
+    .expect("escaped pattern must compile");
+
+    assert!(matcher.is_match("photos [2024/a.png"));
+    assert!(!matcher.is_match("photos a/a.png"));
 }
 
 #[tokio::test]

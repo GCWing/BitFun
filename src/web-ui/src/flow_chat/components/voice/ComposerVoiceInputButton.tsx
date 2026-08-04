@@ -84,15 +84,25 @@ export function ComposerVoiceInputButton({ controller }: ComposerVoiceInputButto
     const controlsDisabled = preparing || transcribing;
 
     return (
-      <span className="bitfun-chat-input__voice-cluster bitfun-chat-input__voice-cluster--recording">
+      <span
+        className="bitfun-chat-input__voice-cluster bitfun-chat-input__voice-cluster--recording"
+        data-bf-component="composer-voice-input"
+        data-bf-part="root"
+        data-bf-phase={controller.phase}
+        data-bf-state={['active', controller.lowVolumeWarning && 'low-volume'].filter(Boolean).join(' ')}
+      >
         <span
           aria-label={controller.tooltip}
           aria-busy={preparing || transcribing}
           className="bitfun-chat-input__voice-pill"
+          data-bf-component="composer-voice-input"
+          data-bf-part="pill"
           role="group"
         >
           <span
             className="bitfun-chat-input__voice-pill-status"
+            data-bf-component="composer-voice-input"
+            data-bf-part="status"
             title={controller.lowVolumeWarning ? controller.lowVolumeTooltip : undefined}
             aria-hidden="true"
           >
@@ -108,12 +118,14 @@ export function ComposerVoiceInputButton({ controller }: ComposerVoiceInputButto
             )}
           </span>
 
-          <span className="bitfun-chat-input__voice-pill-time" aria-hidden="true">
+          <span className="bitfun-chat-input__voice-pill-time" data-bf-component="composer-voice-input" data-bf-part="time" aria-hidden="true">
             {formatElapsedTime(elapsedSeconds)}
           </span>
 
           <span
             className={`bitfun-chat-input__voice-pill-timeline${recording ? '' : ' bitfun-chat-input__voice-pill-timeline--paused'}`}
+            data-bf-component="composer-voice-input"
+            data-bf-part="timeline"
             aria-hidden="true"
           >
             {visibleTimelineSamples.map((sample, index) => {
@@ -122,6 +134,8 @@ export function ComposerVoiceInputButton({ controller }: ComposerVoiceInputButto
                 <span
                   key={index}
                   className="bitfun-chat-input__voice-pill-timeline-bar"
+                  data-bf-component="composer-voice-input"
+                  data-bf-part="timelineBar"
                   style={{
                     opacity: sample === 0 ? 0.32 : 0.82,
                     transform: `scaleY(${scale})`,
@@ -131,24 +145,27 @@ export function ComposerVoiceInputButton({ controller }: ComposerVoiceInputButto
             })}
           </span>
 
-          <span className="bitfun-chat-input__voice-pill-divider" aria-hidden="true" />
+          <span className="bitfun-chat-input__voice-pill-divider" data-bf-component="composer-voice-input" data-bf-part="divider" aria-hidden="true" />
 
-          <IconButton
-            aria-label={controller.cancelTooltip}
-            className="bitfun-chat-input__voice-pill-action bitfun-chat-input__voice-pill-action--cancel"
-            variant="ghost"
-            size="xs"
-            disabled={transcribing}
-            tooltip={controller.cancelTooltip}
-            onClick={(event) => {
-              event.stopPropagation();
-              controller.cancel();
-            }}
-          >
-            <X size={16} />
-          </IconButton>
+          <span data-bf-component="composer-voice-input" data-bf-part="action" data-bf-action="cancel" data-bf-state={transcribing ? 'disabled' : undefined}>
+            <IconButton
+              aria-label={controller.cancelTooltip}
+              className="bitfun-chat-input__voice-pill-action bitfun-chat-input__voice-pill-action--cancel"
+              variant="ghost"
+              size="xs"
+              disabled={transcribing}
+              tooltip={controller.cancelTooltip}
+              onClick={(event) => {
+                event.stopPropagation();
+                controller.cancel();
+              }}
+            >
+              <X size={16} />
+            </IconButton>
+          </span>
 
-          <IconButton
+          <span data-bf-component="composer-voice-input" data-bf-part="action" data-bf-action="transcribe" data-bf-state={controlsDisabled ? 'disabled' : undefined}>
+            <IconButton
             aria-label={controlsDisabled ? controller.tooltip : controller.transcribeTooltip}
             className="bitfun-chat-input__voice-pill-action bitfun-chat-input__voice-pill-action--transcribe"
             variant="ghost"
@@ -165,9 +182,11 @@ export function ComposerVoiceInputButton({ controller }: ComposerVoiceInputButto
             ) : (
               <Check size={16} />
             )}
-          </IconButton>
+            </IconButton>
+          </span>
 
-          <IconButton
+          <span data-bf-component="composer-voice-input" data-bf-part="action" data-bf-action="send" data-bf-state={controlsDisabled ? 'disabled' : undefined}>
+            <IconButton
             aria-label={controlsDisabled ? controller.tooltip : controller.sendTooltip}
             className="bitfun-chat-input__voice-pill-send"
             variant="danger"
@@ -184,15 +203,17 @@ export function ComposerVoiceInputButton({ controller }: ComposerVoiceInputButto
             ) : (
               <ArrowUp size={15} strokeWidth={2.5} />
             )}
-          </IconButton>
+            </IconButton>
+          </span>
         </span>
       </span>
     );
   }
 
   return (
-    <span className="bitfun-chat-input__voice-cluster">
-      <IconButton
+    <span className="bitfun-chat-input__voice-cluster" data-bf-component="composer-voice-input" data-bf-part="root" data-bf-phase="idle">
+      <span data-bf-component="composer-voice-input" data-bf-part="control" data-bf-state={controller.disabled ? 'disabled' : undefined}>
+        <IconButton
         aria-label={controller.tooltip}
         className="bitfun-chat-input__voice-control"
         variant="ghost"
@@ -205,7 +226,8 @@ export function ComposerVoiceInputButton({ controller }: ComposerVoiceInputButto
         }}
       >
         <Mic size={14} />
-      </IconButton>
+        </IconButton>
+      </span>
     </span>
   );
 }

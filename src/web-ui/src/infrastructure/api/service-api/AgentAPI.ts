@@ -6,6 +6,7 @@ import type {
   DialogTurnData,
   ModelRoundAttemptDiagnostic,
   SessionRelationship,
+  SessionTurnCatalog,
 } from '@/shared/types/session-history';
 import type { ImageContextData as ImageInputContextData } from './ImageContextTypes';
 import type { AgentSource } from './CustomAgentAPI';
@@ -72,6 +73,7 @@ export interface CreateSessionResponse {
   sessionId: string;
   sessionName: string;
   agentType: string;
+  modelId?: string;
   workspacePath?: string;
   workspaceId?: string;
   projectWorkspacePath?: string;
@@ -84,6 +86,7 @@ export interface StartDialogTurnRequest {
   userInput: string;
   originalUserInput?: string;
   turnId?: string; 
+  execution?: AgentDialogTurnExecution;
   agentType: string; 
   /** Concrete root where this session executes. */
   workspacePath?: string;
@@ -95,6 +98,14 @@ export interface StartDialogTurnRequest {
   imageContexts?: ImageInputContextData[];
   userMessageMetadata?: Record<string, unknown>;
 }
+
+export type AgentDialogTurnExecution =
+  | { kind: 'standard' }
+  | {
+      kind: 'fresh_external_subagent';
+      ecosystemId: string;
+      logicalId: string;
+    };
 
 export interface StartDialogTurnResponse {
   success: boolean;
@@ -214,6 +225,7 @@ export interface SessionViewRestoreTiming {
   visibilityMetadataDurationMs: number;
   loadSessionWithTurnsDurationMs: number;
   normalizeTurnIdsDurationMs: number;
+  turnCatalogDurationMs?: number;
   totalDurationMs: number;
   turnLoad: SessionTurnLoadTiming;
 }
@@ -221,12 +233,45 @@ export interface SessionViewRestoreTiming {
 export interface RestoreSessionViewResponse {
   session: SessionInfo;
   turns: DialogTurnData[];
+  turnCatalog?: SessionTurnCatalog;
   contextRestoreState: 'ready' | 'pending';
   isPartial?: boolean;
   loadedTurnCount?: number;
   totalTurnCount?: number;
   timings?: SessionViewRestoreTiming;
 }
+
+export interface LoadSessionTurnWindowRequest {
+  sessionId: string;
+  workspacePath: string;
+  includeInternal?: boolean;
+  targetStorageTurnIndex: number;
+  expectedTurnId?: string;
+  expectedCatalogRevision?: string;
+  before?: number;
+  after?: number;
+  remoteConnectionId?: string;
+  remoteSshHost?: string;
+}
+
+export type LoadSessionTurnWindowResponse =
+  | {
+      status: 'ready';
+      catalogRevision: string;
+      totalTurnCount: number;
+      startOrdinal: number;
+      endOrdinalExclusive: number;
+      targetTurnId: string;
+      turns: DialogTurnData[];
+    }
+  | {
+      status: 'stale';
+      catalog: SessionTurnCatalog;
+    }
+  | {
+      status: 'not-found';
+      catalog: SessionTurnCatalog;
+    };
 
 export interface EnsureAssistantBootstrapRequest {
   sessionId: string;
@@ -260,6 +305,15 @@ export interface EnsureAssistantBootstrapResponse {
 export interface UpdateSessionModelRequest {
   sessionId: string;
   modelName: string;
+  workspacePath?: string;
+  remoteConnectionId?: string;
+  remoteSshHost?: string;
+  includeInternal?: boolean;
+}
+
+export interface UpdateSessionModeRequest {
+  sessionId: string;
+  modeId: string;
   workspacePath?: string;
   remoteConnectionId?: string;
   remoteSshHost?: string;
@@ -478,9 +532,9 @@ export interface ModelRoundCompletedEvent extends AgenticEvent {
   durationMs?: number;
   providerId?: string;
   /** Resolved AI model configuration ID. */
-  modelConfigId: string;
+  modelConfigId?: string;
   /** Provider model name sent on the request. */
-  effectiveModelName: string;
+  effectiveModelName?: string;
   firstChunkMs?: number;
   firstVisibleOutputMs?: number;
   streamDurationMs?: number;
@@ -501,9 +555,9 @@ export interface ModelRoundStartedEvent extends AgenticEvent {
   roundGroupId?: string;
   roundIndex: number;
   /** Resolved AI model configuration ID. */
-  modelConfigId: string;
+  modelConfigId?: string;
   /** Provider model name sent on the request. */
-  effectiveModelName: string;
+  effectiveModelName?: string;
 }
 
 export interface AcpContextUsageUpdatedEvent extends AgenticEvent {
@@ -837,6 +891,22 @@ export class AgentAPI {
     }
   }
 
+  async loadSessionTurnWindow(
+    request: LoadSessionTurnWindowRequest,
+  ): Promise<LoadSessionTurnWindowResponse> {
+    try {
+      return await api.invoke<LoadSessionTurnWindowResponse>('load_session_turn_window', {
+        request,
+      });
+    } catch (error) {
+      throw createTauriCommandError('load_session_turn_window', error, {
+        sessionId: request.sessionId,
+        workspacePath: request.workspacePath,
+        targetStorageTurnIndex: request.targetStorageTurnIndex,
+      });
+    }
+  }
+
   async setSessionMemoryMode(
     request: SetSessionMemoryModeRequest
   ): Promise<SetSessionMemoryModeResponse> {
@@ -888,6 +958,14 @@ export class AgentAPI {
       await api.invoke<void>('update_session_model', { request });
     } catch (error) {
       throw createTauriCommandError('update_session_model', error, request);
+    }
+  }
+
+  async updateSessionMode(request: UpdateSessionModeRequest): Promise<void> {
+    try {
+      await api.invoke<void>('update_session_mode', { request });
+    } catch (error) {
+      throw createTauriCommandError('update_session_mode', error, request);
     }
   }
 
@@ -1161,16 +1239,25 @@ export class AgentAPI {
     return api.listen<SessionTitleGeneratedEvent>('session_title_generated', callback);
   }
 
-  async cancelSession(sessionId: string): Promise<{
+  async cancelSession(
+    sessionId: string,
+    options?: { cancelDescendants?: boolean },
+  ): Promise<{
     cancelled: boolean;
     dialogTurnId: string | null;
   }> {
     try {
+      const request = {
+        sessionId,
+        ...(options?.cancelDescendants === undefined
+          ? {}
+          : { cancelDescendants: options.cancelDescendants }),
+      };
       return await api.invoke<{
         cancelled: boolean;
         dialogTurnId: string | null;
       }>('cancel_session', {
-        request: { sessionId }
+        request,
       });
     } catch (error) {
       throw createTauriCommandError('cancel_session', error, { sessionId });
@@ -1269,9 +1356,15 @@ export class AgentAPI {
   
 
    
-  async getAvailableModes(): Promise<ModeInfo[]> {
+  async getAvailableModes(request: {
+    workspacePath?: string;
+    remoteConnectionId?: string;
+    remoteSshHost?: string;
+  } = {}): Promise<ModeInfo[]> {
     try {
-      return await api.invoke<ModeInfo[]>('get_available_modes');
+      return await api.invoke<ModeInfo[]>('get_available_modes', {
+        request,
+      });
     } catch (error) {
       throw createTauriCommandError('get_available_modes', error);
     }

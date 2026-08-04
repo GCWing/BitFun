@@ -12,7 +12,7 @@ $modal-edge-gutter-sm: 10px;
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(var(--color-static-black-rgb), 0.55);
+  background: rgba(var(--bf-appearance-token-color-static-black-rgb), 0.55);
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
   display: flex;
@@ -20,7 +20,7 @@ $modal-edge-gutter-sm: 10px;
   justify-content: center;
   padding: 24px;
   z-index: tokens.$z-modal;
-  animation: modal-overlay-fade calc(var(--motion-fast) + 70ms) var(--easing-standard) both;
+  animation: modal-overlay-fade calc(var(--bf-appearance-token-motion-fast) + 70ms) var(--bf-appearance-token-easing-standard) both;
 
   &--bottom-left {
     align-items: flex-end;
@@ -29,7 +29,7 @@ $modal-edge-gutter-sm: 10px;
 
     .modal {
       transform-origin: left bottom;
-      animation: modal-dialog-enter-bottom calc(var(--motion-fast) + 70ms) var(--easing-standard) both;
+      animation: modal-dialog-enter-bottom calc(var(--bf-appearance-token-motion-fast) + 70ms) var(--bf-appearance-token-easing-standard) both;
     }
   }
 
@@ -40,7 +40,7 @@ $modal-edge-gutter-sm: 10px;
 
     .modal {
       transform-origin: right bottom;
-      animation: modal-dialog-enter-bottom calc(var(--motion-fast) + 70ms) var(--easing-standard) both;
+      animation: modal-dialog-enter-bottom calc(var(--bf-appearance-token-motion-fast) + 70ms) var(--bf-appearance-token-easing-standard) both;
     }
   }
 }
@@ -60,14 +60,14 @@ $modal-edge-gutter-sm: 10px;
   position: relative;
   display: flex;
   flex-direction: column;
-  background: var(--color-bg-primary);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--size-radius-base);
-  box-shadow: 0 16px 40px rgba(var(--color-static-black-rgb), 0.45);
+  background: var(--bf-appearance-token-color-bg-primary);
+  border: 1px solid var(--bf-appearance-token-border-subtle);
+  border-radius: 8px;
+  box-shadow: 0 16px 40px rgba(var(--bf-appearance-token-color-static-black-rgb), 0.45);
   max-height: calc(100vh - 48px);
   overflow: hidden;
   transform-origin: center;
-  animation: modal-dialog-enter calc(var(--motion-fast) + 70ms) var(--easing-standard) both;
+  animation: modal-dialog-enter calc(var(--bf-appearance-token-motion-fast) + 70ms) var(--bf-appearance-token-easing-standard) both;
 
 
   &--small {
@@ -95,11 +95,15 @@ $modal-edge-gutter-sm: 10px;
 
   &--draggable {
     cursor: default;
-    transition: box-shadow var(--motion-fast) ease;
+    transition: box-shadow 0.2s ease;
+
+    &:hover {
+      box-shadow: 0 20px 44px var(--bf-appearance-token-color-overlay-black-50);
+    }
   }
 
   &--dragging {
-    box-shadow: 0 20px 48px rgba(var(--color-static-black-rgb), 0.55);
+    box-shadow: 0 20px 48px rgba(var(--bf-appearance-token-color-static-black-rgb), 0.55);
     z-index: tokens.$z-modal-active;
   }
 
@@ -120,13 +124,17 @@ $modal-edge-gutter-sm: 10px;
     justify-content: flex-start;
     gap: 6px;
     padding: 6px $modal-edge-gutter;
-    border-bottom: 1px solid var(--border-subtle);
+    border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
     background: transparent;
 
     &--draggable {
       cursor: move;
       user-select: none;
-      transition: background-color var(--motion-fast) ease;
+      transition: background 0.2s ease;
+
+      &:hover {
+        background: var(--bf-appearance-token-element-bg-subtle);
+      }
     }
 
     &--empty {
@@ -150,7 +158,7 @@ $modal-edge-gutter-sm: 10px;
     margin: 0;
     font-size: 12px;
     font-weight: 500;
-    color: var(--color-text-secondary);
+    color: var(--bf-appearance-token-color-text-secondary);
     min-width: 0;
     flex-shrink: 1;
   }
@@ -178,14 +186,14 @@ $modal-edge-gutter-sm: 10px;
     background: transparent;
     border: 1px solid transparent;
     border-radius: 6px;
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
     cursor: pointer;
     transform: scale(1);
     transition:
-      background-color var(--motion-fast) ease,
-      border-color var(--motion-fast) ease,
-      color var(--motion-fast) ease,
-      transform var(--motion-fast) var(--easing-standard);
+      background-color var(--bf-appearance-token-motion-fast) ease,
+      border-color var(--bf-appearance-token-motion-fast) ease,
+      color var(--bf-appearance-token-motion-fast) ease,
+      transform var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard);
     outline: none;
 
     svg {
@@ -194,12 +202,18 @@ $modal-edge-gutter-sm: 10px;
       height: 12px;
     }
 
+    &:hover {
+      background: var(--bf-appearance-token-element-bg-subtle);
+      border-color: var(--bf-appearance-token-border-subtle);
+      color: var(--bf-appearance-token-color-text-primary);
+    }
+
     &:active {
       transform: scale(0.97);
     }
 
     &:focus-visible {
-      outline: 2px solid var(--color-accent-500);
+      outline: 2px solid var(--bf-appearance-token-color-accent-500);
       outline-offset: 2px;
     }
   }
@@ -211,7 +225,7 @@ $modal-edge-gutter-sm: 10px;
     padding: 0;
     overflow-y: auto;
     overflow-x: hidden;
-    color: var(--color-text-secondary);
+    color: var(--bf-appearance-token-color-text-secondary);
 
     &--inset {
       padding-inline: 28px;
@@ -261,17 +275,17 @@ $modal-edge-gutter-sm: 10px;
 }
 
 .modal-overlay--exiting {
-  animation: modal-overlay-exit calc(var(--motion-fast) + 30ms) var(--easing-standard) both;
+  animation: modal-overlay-exit calc(var(--bf-appearance-token-motion-fast) + 30ms) var(--bf-appearance-token-easing-standard) both;
   pointer-events: none;
 }
 
 .modal.modal--exiting {
-  animation: modal-dialog-exit calc(var(--motion-fast) + 30ms) var(--easing-standard) both;
+  animation: modal-dialog-exit calc(var(--bf-appearance-token-motion-fast) + 30ms) var(--bf-appearance-token-easing-standard) both;
 }
 
 .modal--draggable,
 .modal--resizable {
-  animation: modal-overlay-fade calc(var(--motion-fast) + 70ms) var(--easing-standard) both;
+  animation: modal-overlay-fade calc(var(--bf-appearance-token-motion-fast) + 70ms) var(--bf-appearance-token-easing-standard) both;
 }
 
 
@@ -321,22 +335,14 @@ $modal-edge-gutter-sm: 10px;
   &--sw { bottom: 0; left: 0; cursor: sw-resize; }
   &--se { bottom: 0; right: 0; cursor: se-resize; }
 
-}
-
-@media (hover: hover) and (pointer: fine) {
-  .modal--draggable:hover {
-    box-shadow: 0 20px 44px var(--color-overlay-black-50);
-  }
-
-  .modal__header--draggable:hover,
-  .modal__resize-handle:hover {
-    background-color: var(--element-bg-subtle);
+  &:hover {
+    background-color: var(--bf-appearance-token-element-bg-subtle);
   }
 
   .modal__close:hover {
-    background: var(--element-bg-subtle);
-    border-color: var(--border-subtle);
-    color: var(--color-text-primary);
+    background: var(--bf-appearance-token-element-bg-subtle);
+    border-color: var(--bf-appearance-token-border-subtle);
+    color: var(--bf-appearance-token-color-text-primary);
   }
 }
 
@@ -345,12 +351,12 @@ $modal-edge-gutter-sm: 10px;
   .modal,
   .modal--draggable,
   .modal--resizable {
-    animation: modal-overlay-fade var(--motion-fast) ease both;
+    animation: modal-overlay-fade var(--bf-appearance-token-motion-fast) ease both;
   }
 
   .modal-overlay--exiting,
   .modal.modal--exiting {
-    animation: modal-overlay-exit var(--motion-fast) ease both;
+    animation: modal-overlay-exit var(--bf-appearance-token-motion-fast) ease both;
   }
 
   .modal__close:active {

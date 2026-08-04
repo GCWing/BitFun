@@ -9,7 +9,7 @@ pub(crate) fn create_http_client(
     skip_ssl_verify: bool,
 ) -> Client {
     let mut builder = Client::builder()
-        .use_rustls_tls()
+        .tls_backend_rustls()
         .connect_timeout(std::time::Duration::from_secs(
             AIClient::STREAM_CONNECT_TIMEOUT_SECS,
         ))

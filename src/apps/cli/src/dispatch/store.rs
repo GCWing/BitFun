@@ -7,8 +7,9 @@ use bitfun_agent_runtime::sdk::{PermissionReply, PermissionRequest};
 use serde::{Deserialize, Serialize};
 
 use super::protocol::{
-    DispatchAppendRequest, DispatchEvent, DispatchJobListEntry, DispatchJobState,
-    DispatchSubmitRequest, DISPATCH_PROTOCOL_VERSION,
+    DispatchAppendRequest, DispatchApprovalPolicy, DispatchAttachment, DispatchContinueRequest,
+    DispatchEvent, DispatchJobListEntry, DispatchJobState, DispatchSubmitRequest, DispatchTurnKind,
+    DISPATCH_PROTOCOL_VERSION,
 };
 
 const JOB_RECORD_FILE: &str = "job.json";
@@ -25,6 +26,12 @@ const PERMISSION_ANSWERS_DIR: &str = "permissions/answers";
 const RESOLVED_PERMISSIONS_DIR: &str = "permissions/resolved";
 const PENDING_MESSAGES_DIR: &str = "messages/pending";
 const CONSUMED_MESSAGES_DIR: &str = "messages/consumed";
+/// Follow-up turns queued against a job that has already finished one.
+///
+/// Distinct from the append mailbox: an appended message steers the turn that
+/// is already running, while a follow-up starts the next one.
+const PENDING_TURNS_DIR: &str = "turns/pending";
+const CONSUMED_TURNS_DIR: &str = "turns/consumed";
 const DEFAULT_MAX_EVENTS_BYTES: u64 = 64 * 1024 * 1024;
 // Keep a single projected event and a complete status page comfortably below
 // the server transport's 256 KiB WebSocket frame ceiling.
@@ -39,9 +46,25 @@ const TERMINAL_JOB_RETENTION_DAYS: i64 = 30;
 const RETENTION_GC_INTERVAL_SECONDS: u64 = 24 * 60 * 60;
 const RETENTION_GC_MARKER: &str = ".retention-gc";
 const RETENTION_GC_LOCK: &str = ".retention-gc.lock";
-const WORKSPACE_SNAPSHOT_CACHE_DIR: &str = "workspace-cache";
-pub(super) const WORKSPACE_SNAPSHOT_CACHE_RECORD_FILE: &str = "cache.json";
-const WORKSPACE_SNAPSHOT_CACHE_RETENTION_DAYS: i64 = 30;
+/// Shared bare clones, one per source repository, reused across dispatch jobs.
+const DISPATCH_REPOS_DIR: &str = "repos";
+/// Per-job Git worktrees checked out from those clones.
+const DISPATCH_WORKTREES_DIR: &str = "worktrees";
+pub(super) const REPO_CACHE_RECORD_FILE: &str = "repo.json";
+const REPO_CACHE_RETENTION_DAYS: i64 = 30;
+/// Written by the workspace layer; read here only to find a job's checkout.
+const PROVISION_RECORD_FILE: &str = "provision.json";
+
+/// The one field retention needs from a provision record.
+///
+/// Deliberately not the workspace layer's full record: this only has to survive
+/// that struct gaining fields, and reading fewer fields cannot fail on one.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ProvisionedWorktreeRecord {
+    #[serde(default)]
+    workspace_path: Option<String>,
+}
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -131,9 +154,42 @@ struct StoredAppendMessage {
     created_at: String,
 }
 
+/// One queued follow-up turn.
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct StoredFollowUpTurn {
+    pub(crate) turn_id: String,
+    pub(crate) prompt: String,
+    #[serde(default)]
+    pub(crate) display_content: Option<String>,
+    /// Per-turn overrides. The worker applies them to the job record when it
+    /// claims the turn, so they carry forward to later turns and restarts.
+    #[serde(default)]
+    pub(crate) model: Option<String>,
+    #[serde(default)]
+    pub(crate) approval_policy: Option<DispatchApprovalPolicy>,
+    #[serde(default)]
+    pub(crate) kind: DispatchTurnKind,
+    #[serde(default)]
+    pub(crate) attachments: Vec<DispatchAttachment>,
+    pub(crate) created_at: String,
+}
+
+impl StoredFollowUpTurn {
+    /// A retried turnId must carry the same submission, options included.
+    fn same_submission(&self, other: &Self) -> bool {
+        self.prompt == other.prompt
+            && self.display_content == other.display_content
+            && self.model == other.model
+            && self.approval_policy == other.approval_policy
+            && self.kind == other.kind
+            && self.attachments == other.attachments
+    }
+}
+
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct WorkspaceSnapshotCacheRetentionRecord {
+struct RepoCacheRetentionRecord {
     last_used_at: String,
 }
 
@@ -158,7 +214,8 @@ impl DispatchStore {
         create_private_dir(&root)?;
         create_private_dir(&root.join("jobs"))?;
         create_private_dir(&root.join("workspaces"))?;
-        create_private_dir(&root.join(WORKSPACE_SNAPSHOT_CACHE_DIR))?;
+        create_private_dir(&root.join(DISPATCH_REPOS_DIR))?;
+        create_private_dir(&root.join(DISPATCH_WORKTREES_DIR))?;
         Ok(Self {
             root,
             max_events_bytes: DEFAULT_MAX_EVENTS_BYTES,
@@ -227,6 +284,9 @@ impl DispatchStore {
             &job_dir.join(EVENTS_METADATA_FILE),
             &EventLogMetadata::default(),
         )?;
+        for event in record.request.setup_audit.iter().cloned() {
+            self.append_event_unlocked(&job_dir, &DispatchEvent::setup_audit(event))?;
+        }
         self.append_event_unlocked(
             &job_dir,
             &DispatchEvent::approval_policy_selected(record.request.approval_policy),
@@ -417,17 +477,6 @@ impl DispatchStore {
             &DispatchEvent::job_state(terminal_state, Some(message.to_string())),
         )?;
         Ok(state)
-    }
-
-    pub(crate) fn record_turn_id(&self, job_id: &str, turn_id: &str) -> Result<()> {
-        let job_dir = self.existing_job_dir(job_id)?;
-        let _lock = JobLock::exclusive(&job_dir.join(".lock"))?;
-        let mut state = self.load_state_unlocked(&job_dir)?;
-        if !state.state.is_terminal() && state.turn_id.as_deref() != Some(turn_id) {
-            state.turn_id = Some(turn_id.to_string());
-            atomic_write_json(&job_dir.join(STATE_FILE), &state)?;
-        }
-        Ok(())
     }
 
     pub(crate) fn try_claim_worker_spawn(&self, job_id: &str) -> Result<Option<DispatchLease>> {
@@ -669,6 +718,148 @@ impl DispatchStore {
         }
     }
 
+    /// Queue the next turn for a job whose previous turn has finished.
+    ///
+    /// This is what makes a dispatch session a conversation rather than a
+    /// one-shot: the target session, its worktree, and its event log all stay
+    /// put, and only the job's run state rewinds to `Queued`.
+    pub(crate) fn queue_follow_up_turn(
+        &self,
+        request: &DispatchContinueRequest,
+    ) -> Result<DispatchStateRecord> {
+        validate_id("turnId", &request.turn_id)?;
+        let job_dir = self.existing_job_dir(&request.job_id)?;
+        let _lock = JobLock::exclusive(&job_dir.join(".lock"))?;
+
+        let stored = StoredFollowUpTurn {
+            turn_id: request.turn_id.clone(),
+            prompt: request.prompt.clone(),
+            display_content: request.display_content.clone(),
+            model: request.model.clone(),
+            approval_policy: request.approval_policy,
+            kind: request.kind,
+            attachments: request.attachments.clone(),
+            created_at: chrono::Utc::now().to_rfc3339(),
+        };
+        // A retried request must not start a second turn. Both mailboxes are
+        // checked because the worker may already have claimed this one.
+        let consumed_path = mailbox_path(&job_dir, CONSUMED_TURNS_DIR, &request.turn_id)?;
+        if let Some(existing) = read_optional_regular_json::<StoredFollowUpTurn>(&consumed_path)? {
+            if !existing.same_submission(&stored) {
+                bail!("dispatch turnId is already bound to different content");
+            }
+            return self.load_state_unlocked(&job_dir);
+        }
+        let pending_path = mailbox_path(&job_dir, PENDING_TURNS_DIR, &request.turn_id)?;
+        if let Some(existing) = read_optional_regular_json::<StoredFollowUpTurn>(&pending_path)? {
+            if !existing.same_submission(&stored) {
+                bail!("dispatch turnId is already bound to different content");
+            }
+            return self.load_state_unlocked(&job_dir);
+        }
+
+        let mut state = self.load_state_unlocked(&job_dir)?;
+        if !state.state.is_terminal() {
+            bail!("this dispatch job is still running; steer it with an appended message instead");
+        }
+        write_json_if_absent_or_equal(&pending_path, &stored)?;
+
+        // Rewind only the run state. `started_at` is left alone so the job keeps
+        // reporting when its first turn began.
+        state.state = DispatchJobState::Queued;
+        state.turn_id = None;
+        state.finished_at = None;
+        state.last_error = None;
+        state.cancel_requested_at = None;
+        atomic_write_json(&job_dir.join(STATE_FILE), &state)?;
+        self.append_event_unlocked(
+            &job_dir,
+            &DispatchEvent::job_state(DispatchJobState::Queued, None),
+        )?;
+        Ok(state)
+    }
+
+    /// Read the next queued turn without consuming it.
+    ///
+    /// The worker peeks before initializing the runtime because the approval
+    /// policy is baked into runtime bootstrap; the later claim takes the same
+    /// earliest turn (identical ordering), and nothing can enqueue in between
+    /// — `queue_follow_up_turn` requires a terminal state and the job is
+    /// already Queued/Running by then.
+    pub(crate) fn peek_follow_up_turn(&self, job_id: &str) -> Result<Option<StoredFollowUpTurn>> {
+        let job_dir = self.existing_job_dir(job_id)?;
+        let _lock = JobLock::exclusive(&job_dir.join(".lock"))?;
+        let mut pending =
+            read_json_directory::<StoredFollowUpTurn>(&job_dir.join(PENDING_TURNS_DIR))?;
+        pending.sort_by(|left, right| {
+            left.created_at
+                .cmp(&right.created_at)
+                .then_with(|| left.turn_id.cmp(&right.turn_id))
+        });
+        Ok(pending.into_iter().next())
+    }
+
+    /// Persist the effective per-turn options onto the job record so `list`,
+    /// `status`, and any replacement worker observe the same choices the turn
+    /// runs with. Returns (model_changed, approval_policy_changed).
+    pub(crate) fn update_job_request_options(
+        &self,
+        job_id: &str,
+        model: Option<&str>,
+        approval_policy: DispatchApprovalPolicy,
+    ) -> Result<(bool, bool)> {
+        let job_dir = self.existing_job_dir(job_id)?;
+        let _lock = JobLock::exclusive(&job_dir.join(".lock"))?;
+        let mut job = self.load_job(job_id)?;
+        let model = model.map(str::to_string);
+        let model_changed = job.request.model != model;
+        let policy_changed = job.request.approval_policy != approval_policy;
+        if !model_changed && !policy_changed {
+            return Ok((false, false));
+        }
+        job.request.model = model;
+        job.request.approval_policy = approval_policy;
+        atomic_write_json(&job_dir.join(JOB_RECORD_FILE), &job)?;
+        Ok((model_changed, policy_changed))
+    }
+
+    /// Take the next queued turn and bind it to the runtime turn the worker is
+    /// about to submit.
+    ///
+    /// Consuming and recording the turn id happen under one lock so a crash can
+    /// never leave a turn that looks unclaimed but was already submitted. A
+    /// crash after this point settles the job as failed rather than replaying
+    /// the prompt, which is the same promise the first turn makes.
+    pub(crate) fn claim_follow_up_turn(
+        &self,
+        job_id: &str,
+        runtime_turn_id: &str,
+    ) -> Result<Option<StoredFollowUpTurn>> {
+        let job_dir = self.existing_job_dir(job_id)?;
+        let _lock = JobLock::exclusive(&job_dir.join(".lock"))?;
+        let mut pending =
+            read_json_directory::<StoredFollowUpTurn>(&job_dir.join(PENDING_TURNS_DIR))?;
+        pending.sort_by(|left, right| {
+            left.created_at
+                .cmp(&right.created_at)
+                .then_with(|| left.turn_id.cmp(&right.turn_id))
+        });
+        let claimed = pending.into_iter().next();
+
+        let mut state = self.load_state_unlocked(&job_dir)?;
+        if !state.state.is_terminal() && state.turn_id.as_deref() != Some(runtime_turn_id) {
+            state.turn_id = Some(runtime_turn_id.to_string());
+            atomic_write_json(&job_dir.join(STATE_FILE), &state)?;
+        }
+
+        if let Some(turn) = claimed.as_ref() {
+            let consumed_path = mailbox_path(&job_dir, CONSUMED_TURNS_DIR, &turn.turn_id)?;
+            write_json_if_absent_or_equal(&consumed_path, turn)?;
+            remove_file_if_present(&mailbox_path(&job_dir, PENDING_TURNS_DIR, &turn.turn_id)?);
+        }
+        Ok(claimed)
+    }
+
     pub(crate) fn enqueue_append_message(&self, request: DispatchAppendRequest) -> Result<bool> {
         validate_id("messageId", &request.message_id)?;
         let job_dir = self.existing_job_dir(&request.job_id)?;
@@ -838,8 +1029,25 @@ impl DispatchStore {
             .join(format!("{digest:x}.lock"))
     }
 
-    pub(crate) fn root(&self) -> &Path {
-        &self.root
+    /// Serializes the small JSON state machine used to start and poll one
+    /// detached Git operation. It must never be held while Git itself runs,
+    /// otherwise a status RPC blocks behind the worker it is meant to poll.
+    pub(crate) fn workspace_operation_lock_path(&self, job_id: &str) -> Result<PathBuf> {
+        validate_id("jobId", job_id)?;
+        Ok(self
+            .root
+            .join("workspaces")
+            .join(format!(".{job_id}.workspace.lock")))
+    }
+
+    /// Serializes long-running Git mutations for one managed dispatch
+    /// worktree. Retention uses the same lock before removing its artifacts.
+    pub(crate) fn workspace_git_operation_lock_path(&self, job_id: &str) -> Result<PathBuf> {
+        validate_id("jobId", job_id)?;
+        Ok(self
+            .root
+            .join("workspaces")
+            .join(format!(".{job_id}.git.lock")))
     }
 
     pub(crate) fn workspace_upload_dir(&self, job_id: &str) -> Result<PathBuf> {
@@ -847,8 +1055,55 @@ impl DispatchStore {
         Ok(self.root.join("workspaces").join(job_id))
     }
 
-    pub(crate) fn workspace_snapshot_cache_root(&self) -> PathBuf {
-        self.root.join(WORKSPACE_SNAPSHOT_CACHE_DIR)
+    pub(crate) fn repos_root(&self) -> PathBuf {
+        self.root.join(DISPATCH_REPOS_DIR)
+    }
+
+    /// Directory holding one shared clone. `repo_key` is validated by the
+    /// workspace layer before it ever reaches here, but re-checking costs
+    /// nothing and keeps the path constructor safe on its own.
+    pub(crate) fn repo_dir(&self, repo_key: &str) -> Result<PathBuf> {
+        if repo_key.len() < 8
+            || repo_key.len() > 64
+            || !repo_key.bytes().all(|byte| byte.is_ascii_hexdigit())
+        {
+            bail!("dispatch repoKey must be an 8-64 character hex digest");
+        }
+        Ok(self.repos_root().join(repo_key))
+    }
+
+    /// Cross-process lock for every Git operation that touches one shared
+    /// bare repository. Provision, bundle import, sync, and retention all use
+    /// the same lock so two jobs cannot concurrently mutate refs or race a
+    /// repository-cache deletion.
+    pub(crate) fn repo_lock_path(&self, repo_key: &str) -> Result<PathBuf> {
+        // Reuse the path validation performed by `repo_dir` before deriving a
+        // sibling lock-file name from the key.
+        self.repo_dir(repo_key)?;
+        Ok(self.repos_root().join(format!(".{repo_key}.lock")))
+    }
+
+    pub(crate) fn worktrees_root(&self) -> PathBuf {
+        self.root.join(DISPATCH_WORKTREES_DIR)
+    }
+
+    /// Checkout directory for one job, grouped under its repository's clone.
+    ///
+    /// `directory_name` is built by the workspace layer from a sanitized project
+    /// label; re-check it here so this path constructor is safe on its own and
+    /// cannot be walked out of the worktree root.
+    pub(crate) fn worktree_dir(&self, repo_key: &str, directory_name: &str) -> Result<PathBuf> {
+        self.repo_dir(repo_key)?;
+        if directory_name.is_empty()
+            || directory_name.len() > 128
+            || !directory_name
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.'))
+            || directory_name.starts_with('.')
+        {
+            bail!("dispatch worktree directory name is not a safe path component");
+        }
+        Ok(self.worktrees_root().join(repo_key).join(directory_name))
     }
 
     fn maybe_collect_expired_terminal_jobs(&self) -> Result<()> {
@@ -919,6 +1174,32 @@ impl DispatchStore {
             if now.signed_duration_since(finished_at).num_days() < TERMINAL_JOB_RETENTION_DAYS {
                 continue;
             }
+            let Some(operation_lock) =
+                JobLock::try_exclusive(&self.workspace_operation_lock_path(&job_id)?)?
+            else {
+                continue;
+            };
+            let Some(git_operation_lock) =
+                JobLock::try_exclusive(&self.workspace_git_operation_lock_path(&job_id)?)?
+            else {
+                continue;
+            };
+            let job_record: DispatchJobRecord = match read_json(&job_dir.join(JOB_RECORD_FILE)) {
+                Ok(record) => record,
+                Err(error) => {
+                    tracing::warn!(
+                        "Skipping dispatch job with unreadable workspace binding during retention cleanup: job_id={} error={error:#}",
+                        job_id
+                    );
+                    continue;
+                }
+            };
+            let Some(workspace_runtime_lock) = WorkspaceLock::try_acquire(
+                &self.workspace_lock_path(&job_record.request.workspace_path),
+            )?
+            else {
+                continue;
+            };
             let tombstone = jobs_root.join(format!(
                 ".gc-{}-{}",
                 job_id,
@@ -973,28 +1254,10 @@ impl DispatchStore {
                 Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
                 Err(error) => return Err(error.into()),
             }
-            let upload_lock = self
-                .root
-                .join("workspaces")
-                .join(format!(".{job_id}.upload.lock"));
-            match fs::symlink_metadata(&upload_lock) {
-                Ok(metadata) if !metadata.file_type().is_symlink() && metadata.is_file() => {
-                    fs::remove_file(&upload_lock).with_context(|| {
-                        format!(
-                            "remove expired dispatch workspace lock {}",
-                            upload_lock.display()
-                        )
-                    })?;
-                }
-                Ok(_) => {
-                    tracing::warn!(
-                        "Skipping unsafe expired dispatch workspace lock: {}",
-                        upload_lock.display()
-                    );
-                }
-                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-                Err(error) => return Err(error.into()),
-            }
+            drop(workspace_runtime_lock);
+            drop(git_operation_lock);
+            drop(operation_lock);
+            self.remove_workspace_operation_locks(&job_id)?;
             removed += 1;
         }
         let workspaces_root = self.root.join("workspaces");
@@ -1023,6 +1286,22 @@ impl DispatchStore {
             if !old_enough {
                 continue;
             }
+            let Some(operation_lock) =
+                JobLock::try_exclusive(&self.workspace_operation_lock_path(&job_id)?)?
+            else {
+                continue;
+            };
+            let Some(git_operation_lock) =
+                JobLock::try_exclusive(&self.workspace_git_operation_lock_path(&job_id)?)?
+            else {
+                continue;
+            };
+            // The checkout is named after the project, not the job, so the
+            // provision record is the only link back to it. Remove it before
+            // the record that points at it, or it becomes unreachable.
+            if !self.remove_recorded_worktree(&workspace_dir)? {
+                continue;
+            }
             let tombstone = workspaces_root.join(format!(
                 ".gc-{}-{}",
                 job_id,
@@ -1037,25 +1316,88 @@ impl DispatchStore {
             fs::remove_dir_all(&tombstone).with_context(|| {
                 format!("remove orphaned dispatch workspace {}", tombstone.display())
             })?;
+            drop(git_operation_lock);
+            drop(operation_lock);
+            self.remove_workspace_operation_locks(&job_id)?;
             removed += 1;
         }
-        self.collect_expired_workspace_snapshot_cache(now)?;
+        self.collect_expired_repo_clones(now)?;
         Ok(removed)
     }
 
-    fn collect_expired_workspace_snapshot_cache(
-        &self,
-        now: chrono::DateTime<chrono::Utc>,
-    ) -> Result<()> {
-        let cache_root = self.workspace_snapshot_cache_root();
+    /// Remove the checkout a departing job's provision record points at.
+    ///
+    /// The directory is only the checkout: every commit made in it was fetched
+    /// into the shared clone during sync, so removing it cannot lose work the
+    /// controller pulled. Work the controller never pulled is discarded with the
+    /// job it belonged to, which is the same promise the event log makes.
+    ///
+    /// Returns `false` when the worktree is still busy, so the caller leaves the
+    /// record in place and retries on the next sweep rather than orphaning it.
+    /// Stale worktree administrative entries inside the clone are pruned by the
+    /// next provision, which always runs `git worktree prune` first.
+    fn remove_recorded_worktree(&self, workspace_dir: &Path) -> Result<bool> {
+        let Ok(record) =
+            read_json::<ProvisionedWorktreeRecord>(&workspace_dir.join(PROVISION_RECORD_FILE))
+        else {
+            // No record, or one written before checkouts were recorded: there is
+            // nothing this sweep can safely delete.
+            return Ok(true);
+        };
+        let Some(path) = record.workspace_path else {
+            return Ok(true);
+        };
+        let worktree_dir = PathBuf::from(&path);
+        // Only ever delete inside the managed worktree root, whatever the record
+        // claims. A record is target-owned, but this keeps one corrupt file from
+        // turning into an arbitrary recursive delete.
+        if !worktree_dir.starts_with(self.worktrees_root()) {
+            tracing::warn!("Skipping dispatch worktree outside the managed root: {path}");
+            return Ok(true);
+        }
+        let metadata = match fs::symlink_metadata(&worktree_dir) {
+            Ok(metadata) => metadata,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(true),
+            Err(error) => return Err(error.into()),
+        };
+        if metadata.file_type().is_symlink() || !metadata.is_dir() {
+            return Ok(true);
+        }
+        let canonical = std::fs::canonicalize(&worktree_dir)
+            .unwrap_or_else(|_| worktree_dir.clone())
+            .to_string_lossy()
+            .to_string();
+        let Some(workspace_runtime_lock) =
+            WorkspaceLock::try_acquire(&self.workspace_lock_path(&canonical))?
+        else {
+            return Ok(false);
+        };
+        let tombstone = self
+            .worktrees_root()
+            .join(format!(".gc-{}", uuid::Uuid::new_v4().as_simple()));
+        fs::rename(&worktree_dir, &tombstone).with_context(|| {
+            format!(
+                "quarantine orphaned dispatch worktree {}",
+                worktree_dir.display()
+            )
+        })?;
+        fs::remove_dir_all(&tombstone).with_context(|| {
+            format!("remove orphaned dispatch worktree {}", tombstone.display())
+        })?;
+        drop(workspace_runtime_lock);
+        Ok(true)
+    }
+
+    fn collect_expired_repo_clones(&self, now: chrono::DateTime<chrono::Utc>) -> Result<()> {
+        let cache_root = self.repos_root();
         for entry in fs::read_dir(&cache_root)
-            .with_context(|| format!("read dispatch workspace cache {}", cache_root.display()))?
+            .with_context(|| format!("read dispatch repository cache {}", cache_root.display()))?
         {
             let entry = entry?;
             let Some(digest) = entry.file_name().to_str().map(ToOwned::to_owned) else {
                 continue;
             };
-            if digest.len() != 64 || !digest.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+            if self.repo_dir(&digest).is_err() {
                 continue;
             }
             let cache_dir = entry.path();
@@ -1063,12 +1405,15 @@ impl DispatchStore {
             if metadata.file_type().is_symlink() || !metadata.is_dir() {
                 continue;
             }
-            let lock_path = cache_root.join(format!(".{digest}.lock"));
+            let lock_path = self.repo_lock_path(&digest)?;
             let Some(_lock) = JobLock::try_exclusive(&lock_path)? else {
                 continue;
             };
-            let record = match read_json::<WorkspaceSnapshotCacheRetentionRecord>(
-                &cache_dir.join(WORKSPACE_SNAPSHOT_CACHE_RECORD_FILE),
+            if self.repo_cache_is_referenced(&digest)? {
+                continue;
+            }
+            let record = match read_json::<RepoCacheRetentionRecord>(
+                &cache_dir.join(REPO_CACHE_RECORD_FILE),
             ) {
                 Ok(record) => record,
                 Err(error) => {
@@ -1085,9 +1430,7 @@ impl DispatchStore {
             else {
                 continue;
             };
-            if now.signed_duration_since(last_used_at).num_days()
-                < WORKSPACE_SNAPSHOT_CACHE_RETENTION_DAYS
-            {
+            if now.signed_duration_since(last_used_at).num_days() < REPO_CACHE_RETENTION_DAYS {
                 continue;
             }
             let tombstone = cache_root.join(format!(
@@ -1107,6 +1450,61 @@ impl DispatchStore {
                     tombstone.display()
                 )
             })?;
+        }
+        Ok(())
+    }
+
+    /// A live job keeps its shared bare repository alive even when it has not
+    /// performed a Git operation for longer than the cache retention window.
+    /// Its worktree's Git metadata points into that repository, so collecting
+    /// the clone would otherwise break an in-flight detached task.
+    fn repo_cache_is_referenced(&self, repo_key: &str) -> Result<bool> {
+        let workspaces_root = self.root.join("workspaces");
+        let jobs_root = self.root.join("jobs");
+        for entry in fs::read_dir(&workspaces_root)
+            .with_context(|| format!("read dispatch workspaces {}", workspaces_root.display()))?
+        {
+            let entry = entry?;
+            if !entry.file_type()?.is_dir() {
+                continue;
+            }
+            let Some(job_id) = entry.file_name().to_str().map(ToOwned::to_owned) else {
+                continue;
+            };
+            if validate_id("jobId", &job_id).is_err() || !jobs_root.join(&job_id).is_dir() {
+                continue;
+            }
+            let provision_path = entry.path().join("provision.json");
+            let Ok(value) = read_json::<serde_json::Value>(&provision_path) else {
+                continue;
+            };
+            if value.get("repoKey").and_then(serde_json::Value::as_str) == Some(repo_key) {
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
+
+    fn remove_workspace_operation_locks(&self, job_id: &str) -> Result<()> {
+        validate_id("jobId", job_id)?;
+        for suffix in ["upload", "workspace", "git"] {
+            let path = self
+                .root
+                .join("workspaces")
+                .join(format!(".{job_id}.{suffix}.lock"));
+            match fs::symlink_metadata(&path) {
+                Ok(metadata) if !metadata.file_type().is_symlink() && metadata.is_file() => {
+                    fs::remove_file(&path).with_context(|| {
+                        format!("remove expired dispatch operation lock {}", path.display())
+                    })?;
+                }
+                Ok(_) => tracing::warn!(
+                    "Skipping unsafe expired dispatch operation lock: {}",
+                    path.display()
+                ),
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                Err(error) => return Err(error.into()),
+            }
         }
         Ok(())
     }
@@ -1229,6 +1627,21 @@ impl WorkspaceLock {
         FileLock::exclusive(&file)?;
         Ok(Self { _file: file })
     }
+
+    pub(crate) fn try_acquire(path: &Path) -> Result<Option<Self>> {
+        if let Some(parent) = path.parent() {
+            create_private_dir(parent)?;
+        }
+        let file = OpenOptions::new()
+            .create(true)
+            .read(true)
+            .write(true)
+            .truncate(false)
+            .open(path)
+            .with_context(|| format!("open workspace dispatch lock {}", path.display()))?;
+        set_private_file_permissions(path)?;
+        try_lock_file_exclusive(&file).map(|acquired| acquired.then_some(Self { _file: file }))
+    }
 }
 
 pub(crate) struct DispatchLease {
@@ -1289,6 +1702,14 @@ impl JobLock {
             FileLock::shared(&file)?;
         }
         Ok(Self { _file: file })
+    }
+}
+
+impl Drop for JobLock {
+    fn drop(&mut self) {
+        if let Err(error) = fs2::FileExt::unlock(&self._file) {
+            tracing::warn!("Failed to release dispatch job lock: {error}");
+        }
     }
 }
 
@@ -1682,7 +2103,9 @@ fn retryable_retention_rename_error(error: &std::io::Error) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::dispatch::protocol::{DispatchApprovalPolicy, DispatchSubmitRequest};
+    use crate::dispatch::protocol::{
+        DispatchApprovalPolicy, DispatchSetupAuditEvent, DispatchSubmitRequest,
+    };
     use bitfun_agent_runtime::sdk::{PermissionRequestSource, PermissionRequestSourceKind};
     use serde_json::Map;
 
@@ -1697,6 +2120,8 @@ mod tests {
             approval_policy: DispatchApprovalPolicy::RejectAndReport,
             model: Some("model-1".to_string()),
             title: None,
+            attachments: Vec::new(),
+            setup_audit: Vec::new(),
         }
     }
 
@@ -1799,6 +2224,165 @@ mod tests {
             }
         ));
         assert!(recovered.cursor > initial.cursor);
+    }
+
+    fn continue_request(job_id: &str, turn_id: &str, prompt: &str) -> DispatchContinueRequest {
+        DispatchContinueRequest {
+            protocol_version: DISPATCH_PROTOCOL_VERSION,
+            job_id: job_id.to_string(),
+            turn_id: turn_id.to_string(),
+            prompt: prompt.to_string(),
+            display_content: None,
+            model: None,
+            approval_policy: None,
+            kind: DispatchTurnKind::Prompt,
+            attachments: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn a_follow_up_turn_requeues_a_finished_job_and_is_claimed_once() {
+        let (_dir, store) = store();
+        store
+            .create_job(request("job-1"), "job title".to_string())
+            .expect("create job");
+        store
+            .mark_state("job-1", DispatchJobState::Running, Some("turn-1"), None)
+            .expect("running");
+        store
+            .mark_state("job-1", DispatchJobState::Succeeded, None, None)
+            .expect("succeeded");
+
+        let state = store
+            .queue_follow_up_turn(&continue_request("job-1", "turn-2", "and now this"))
+            .expect("queue follow-up");
+        assert_eq!(state.state, DispatchJobState::Queued);
+        // The previous turn's identity must not survive, or the next worker
+        // would refuse to run believing a turn was already submitted.
+        assert!(state.turn_id.is_none());
+        assert!(state.finished_at.is_none());
+
+        let claimed = store
+            .claim_follow_up_turn("job-1", "runtime-turn-2")
+            .expect("claim")
+            .expect("a queued turn");
+        assert_eq!(claimed.prompt, "and now this");
+        assert_eq!(
+            store.load_state("job-1").expect("state").turn_id.as_deref(),
+            Some("runtime-turn-2")
+        );
+        // A second worker must find nothing left to run.
+        assert!(store
+            .claim_follow_up_turn("job-1", "runtime-turn-3")
+            .expect("second claim")
+            .is_none());
+    }
+
+    #[test]
+    fn per_turn_options_are_peeked_applied_and_kept_idempotent() {
+        let (_dir, store) = store();
+        store
+            .create_job(request("job-1"), "job title".to_string())
+            .expect("create job");
+        store
+            .mark_state("job-1", DispatchJobState::Succeeded, Some("turn-1"), None)
+            .expect("succeeded");
+
+        let mut follow_up = continue_request("job-1", "turn-2", "with new options");
+        follow_up.model = Some("model-2".to_string());
+        follow_up.approval_policy = Some(DispatchApprovalPolicy::Remote);
+        store
+            .queue_follow_up_turn(&follow_up)
+            .expect("queue follow-up");
+
+        // The worker reads the overrides before runtime bootstrap.
+        let peeked = store
+            .peek_follow_up_turn("job-1")
+            .expect("peek")
+            .expect("a queued turn");
+        assert_eq!(peeked.model.as_deref(), Some("model-2"));
+        assert_eq!(peeked.approval_policy, Some(DispatchApprovalPolicy::Remote));
+
+        // A retried turnId bound to different options must be refused.
+        let mut conflicting = follow_up.clone();
+        conflicting.model = Some("model-3".to_string());
+        assert!(store.queue_follow_up_turn(&conflicting).is_err());
+
+        // Applying the effective options rewrites the job record...
+        let (model_changed, policy_changed) = store
+            .update_job_request_options("job-1", Some("model-2"), DispatchApprovalPolicy::Remote)
+            .expect("apply options");
+        assert!(model_changed);
+        assert!(policy_changed);
+        let job = store.load_job("job-1").expect("job");
+        assert_eq!(job.request.model.as_deref(), Some("model-2"));
+        assert_eq!(job.request.approval_policy, DispatchApprovalPolicy::Remote);
+
+        // ...without breaking submit idempotency: the ORIGINAL submit retry
+        // still matches its stored fingerprint after the rewrite.
+        let existing = store
+            .load_existing_job_for_intent(&request("job-1"))
+            .expect("intent lookup")
+            .expect("existing job");
+        assert_eq!(existing.0.request.model.as_deref(), Some("model-2"));
+
+        // Re-applying identical options reports no change.
+        assert_eq!(
+            store
+                .update_job_request_options(
+                    "job-1",
+                    Some("model-2"),
+                    DispatchApprovalPolicy::Remote
+                )
+                .expect("idempotent apply"),
+            (false, false)
+        );
+    }
+
+    #[test]
+    fn a_retried_follow_up_request_never_starts_a_second_turn() {
+        let (_dir, store) = store();
+        store
+            .create_job(request("job-1"), "job title".to_string())
+            .expect("create job");
+        store
+            .mark_state("job-1", DispatchJobState::Succeeded, None, None)
+            .expect("succeeded");
+
+        let queued = continue_request("job-1", "turn-2", "and now this");
+        store.queue_follow_up_turn(&queued).expect("first");
+        store.queue_follow_up_turn(&queued).expect("retry");
+        store
+            .claim_follow_up_turn("job-1", "runtime-turn-2")
+            .expect("claim");
+        // Even a retry that arrives after the worker claimed the turn is a
+        // no-op rather than a duplicate submission.
+        store.queue_follow_up_turn(&queued).expect("late retry");
+        assert!(store
+            .claim_follow_up_turn("job-1", "runtime-turn-3")
+            .expect("claim again")
+            .is_none());
+
+        let conflicting = continue_request("job-1", "turn-2", "something else");
+        assert!(store.queue_follow_up_turn(&conflicting).is_err());
+    }
+
+    #[test]
+    fn a_running_job_refuses_a_follow_up_turn() {
+        let (_dir, store) = store();
+        store
+            .create_job(request("job-1"), "job title".to_string())
+            .expect("create job");
+        store
+            .mark_state("job-1", DispatchJobState::Running, Some("turn-1"), None)
+            .expect("running");
+
+        // Steering a live turn is what `append` is for; starting a second turn
+        // underneath a running one would race the worker.
+        let error = store
+            .queue_follow_up_turn(&continue_request("job-1", "turn-2", "next"))
+            .expect_err("a running job cannot take a follow-up");
+        assert!(error.to_string().contains("still running"));
     }
 
     #[test]
@@ -2118,6 +2702,32 @@ mod tests {
         assert_eq!(action, "approvalPolicySelected");
         assert_eq!(details["approvalPolicy"], "reject-and-report");
         assert!(details.get("prompt").is_none());
+    }
+
+    #[test]
+    fn controller_setup_audit_is_replayed_before_target_job_events() {
+        let (_dir, store) = store();
+        let mut request = request("job-setup-audit");
+        request.setup_audit.push(DispatchSetupAuditEvent {
+            timestamp: "2026-07-31T00:00:00Z".to_string(),
+            action: "cli-install".to_string(),
+            details: serde_json::json!({ "stage": "cli-install-succeeded" }),
+        });
+        store
+            .create_job(request, "Task".to_string())
+            .expect("create job");
+
+        let page = store.read_events("job-setup-audit", 0).expect("events");
+        assert!(matches!(
+            &page.events[0],
+            DispatchEvent::Audit { action, details, .. }
+                if action == "cli-install"
+                    && details["stage"] == "cli-install-succeeded"
+        ));
+        assert!(matches!(
+            &page.events[1],
+            DispatchEvent::Audit { action, .. } if action == "approvalPolicySelected"
+        ));
     }
 
     #[test]
@@ -2467,15 +3077,14 @@ mod tests {
         for (digest, last_used_at) in [
             (
                 &expired_digest,
-                (now - chrono::Duration::days(WORKSPACE_SNAPSHOT_CACHE_RETENTION_DAYS + 1))
-                    .to_rfc3339(),
+                (now - chrono::Duration::days(REPO_CACHE_RETENTION_DAYS + 1)).to_rfc3339(),
             ),
             (&recent_digest, now.to_rfc3339()),
         ] {
-            let cache_dir = store.workspace_snapshot_cache_root().join(digest);
+            let cache_dir = store.repos_root().join(digest);
             create_private_dir(&cache_dir).expect("create cache entry");
             atomic_write_json(
-                &cache_dir.join(WORKSPACE_SNAPSHOT_CACHE_RECORD_FILE),
+                &cache_dir.join(REPO_CACHE_RECORD_FILE),
                 &serde_json::json!({ "lastUsedAt": last_used_at }),
             )
             .expect("write cache record");
@@ -2489,18 +3098,20 @@ mod tests {
         );
         assert!(!store.root.join("jobs/expired").exists());
         assert!(!store.root.join("workspaces/expired").exists());
+        assert!(!store
+            .workspace_operation_lock_path("expired")
+            .expect("operation lock path")
+            .exists());
+        assert!(!store
+            .workspace_git_operation_lock_path("expired")
+            .expect("git operation lock path")
+            .exists());
         assert!(store.root.join("jobs/recent").exists());
         assert!(store.root.join("workspaces/recent").exists());
         assert!(store.root.join("jobs/running").exists());
         assert!(store.root.join("workspaces/running").exists());
-        assert!(!store
-            .workspace_snapshot_cache_root()
-            .join(expired_digest)
-            .exists());
-        assert!(store
-            .workspace_snapshot_cache_root()
-            .join(recent_digest)
-            .exists());
+        assert!(!store.repos_root().join(expired_digest).exists());
+        assert!(store.repos_root().join(recent_digest).exists());
     }
 
     #[test]
@@ -2537,12 +3148,28 @@ mod tests {
             0
         );
         assert!(job_dir.exists());
-        assert_eq!(
-            store
+
+        let released_lock = JobLock::try_exclusive(&job_dir.join(".lock"))
+            .expect("reopen released job lock")
+            .expect("job lock must be released after contention");
+        drop(released_lock);
+
+        let retry_deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        let removed = loop {
+            let removed = store
                 .collect_expired_terminal_jobs(now)
-                .expect("retry expired job"),
-            1
-        );
+                .expect("retry expired job");
+            if removed == 1 {
+                break removed;
+            }
+            assert_eq!(removed, 0, "only the contended job may be removed");
+            assert!(
+                std::time::Instant::now() < retry_deadline,
+                "expired job must be removed after transient Windows file contention clears"
+            );
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        };
+        assert_eq!(removed, 1);
         assert!(!job_dir.exists());
     }
 

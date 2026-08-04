@@ -51,7 +51,7 @@ BitFun uses a 3-tier test classification system:
 | `l0-open-settings.spec.ts` | Settings button visibility, settings panel open/close |
 | `l0-navigation.spec.ts` | Sidebar exists when workspace open, nav items visible and clickable |
 | `l0-tabs.spec.ts` | Tab bar exists when files open, tabs display correctly |
-| `l0-theme.spec.ts` | Theme attributes on root element, theme CSS variables, theme system functional |
+| `l0-appearance.spec.ts` | Appearance attributes on root element, Appearance CSS variables, Appearance system functional |
 | `l0-i18n.spec.ts` | Language configuration, i18n system functional, translated content |
 | `l0-notification.spec.ts` | Notification service available, notification entry visible in header |
 | `l0-observe.spec.ts` | Manual observation test - keeps app window open for 60 seconds for inspection |
@@ -256,7 +256,7 @@ tests/e2e/
 │   ├── l0-open-settings.spec.ts   # L0: Settings interaction
 │   ├── l0-navigation.spec.ts      # L0: Navigation sidebar
 │   ├── l0-tabs.spec.ts            # L0: Tab bar
-│   ├── l0-theme.spec.ts           # L0: Theme system
+│   ├── l0-appearance.spec.ts           # L0: Appearance system
 │   ├── l0-i18n.spec.ts            # L0: Internationalization
 │   ├── l0-notification.spec.ts    # L0: Notification system
 │   ├── l0-observe.spec.ts         # L0: Manual observation
@@ -694,7 +694,7 @@ jobs:
 | `pnpm run test:l0:settings` | Run settings test |
 | `pnpm run test:l0:navigation` | Run navigation test |
 | `pnpm run test:l0:tabs` | Run tabs test |
-| `pnpm run test:l0:theme` | Run theme test |
+| `pnpm run test:l0:appearance` | Run appearance test |
 | `pnpm run test:l0:i18n` | Run i18n test |
 | `pnpm run test:l0:notification` | Run notification test |
 | `pnpm run test:l0:observe` | Run observation test (60s) |

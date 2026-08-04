@@ -43,6 +43,15 @@ static LOCAL_ONLY_COMMANDS: &[&str] = &[
     "restart_app",
     "check_for_updates",
     "install_update",
+    "appearance_market_browse",
+    "appearance_market_download_release",
+    "appearance_market_get_listing",
+    "appearance_market_get_review_submission",
+    "appearance_market_list_review_submissions",
+    "appearance_market_list_submissions",
+    "appearance_market_review_submission",
+    "appearance_market_submit_package",
+    "appearance_market_withdraw_submission",
     // Account identity / peer mode control (stay on controller)
     "account_login",
     "account_finalize_login",
@@ -98,18 +107,19 @@ static LOCAL_ONLY_COMMANDS: &[&str] = &[
     "dispatch_list_targets",
     "dispatch_probe_target",
     "dispatch_install_cli_start",
-    "dispatch_install_cli_source_start",
     "dispatch_install_cli_poll",
     "dispatch_install_cli_cancel",
     "dispatch_sync_model_config",
     "dispatch_submit",
     "dispatch_status",
+    "dispatch_query",
     "dispatch_cancel",
-    "dispatch_pull_result",
-    "dispatch_apply_result",
+    "dispatch_sync_result",
     "dispatch_list_jobs",
     "dispatch_answer",
     "dispatch_append",
+    "dispatch_load_transcript",
+    "dispatch_save_transcript",
     // One-click relay deploy SSHes from the controller to a user host
     "relay_deploy_preflight",
     "relay_deploy_install_docker",
@@ -446,6 +456,23 @@ mod tests {
                 .and_then(Value::as_bool),
             Some(true)
         );
+    }
+
+    #[test]
+    fn appearance_market_stays_on_the_controller_device() {
+        for command in [
+            "appearance_market_browse",
+            "appearance_market_get_listing",
+            "appearance_market_download_release",
+            "appearance_market_get_review_submission",
+            "appearance_market_list_review_submissions",
+            "appearance_market_list_submissions",
+            "appearance_market_review_submission",
+            "appearance_market_submit_package",
+            "appearance_market_withdraw_submission",
+        ] {
+            assert!(is_local_only_command(command), "{command}");
+        }
     }
 
     #[test]

@@ -37,12 +37,19 @@ export const Card = forwardRef<HTMLDivElement, CardProps>(({
     fullWidth && 'v-card--full-width',
     className
   ].filter(Boolean).join(' ');
+  const appearanceState = [interactive && 'interactive', fullWidth && 'fullWidth'].filter(Boolean).join(' ');
 
   return (
     <div
       ref={ref}
       data-mouse-glow-surface=""
       className={classNames}
+      data-bf-component="card"
+      data-bf-part="root"
+      data-bf-variant={variant}
+      data-bf-padding={padding}
+      data-bf-radius={radius}
+      data-bf-state={appearanceState || undefined}
       {...props}
     >
       {children}
@@ -70,13 +77,13 @@ export const CardHeader = forwardRef<HTMLDivElement, CardHeaderProps>(({
   ...props
 }, ref) => {
   return (
-    <div ref={ref} className={`v-card-header ${className}`} {...props}>
-      <div className="v-card-header__content">
-        {title && <div className="v-card-header__title">{title}</div>}
-        {subtitle && <div className="v-card-header__subtitle">{subtitle}</div>}
+    <div ref={ref} className={`v-card-header ${className}`} {...props} data-bf-component="card" data-bf-part="header">
+      <div className="v-card-header__content" data-bf-component="card" data-bf-part="headerContent">
+        {title && <div className="v-card-header__title" data-bf-component="card" data-bf-part="title">{title}</div>}
+        {subtitle && <div className="v-card-header__subtitle" data-bf-component="card" data-bf-part="subtitle">{subtitle}</div>}
         {children}
       </div>
-      {extra && <div className="v-card-header__extra">{extra}</div>}
+      {extra && <div className="v-card-header__extra" data-bf-component="card" data-bf-part="extra">{extra}</div>}
     </div>
   );
 });
@@ -91,7 +98,7 @@ export const CardBody = forwardRef<HTMLDivElement, CardBodyProps>(({
   ...props
 }, ref) => {
   return (
-    <div ref={ref} className={`v-card-body ${className}`} {...props}>
+    <div ref={ref} className={`v-card-body ${className}`} data-bf-component="card" data-bf-part="body" {...props}>
       {children}
     </div>
   );
@@ -115,6 +122,9 @@ export const CardFooter = forwardRef<HTMLDivElement, CardFooterProps>(({
       ref={ref} 
       className={`v-card-footer v-card-footer--${align} ${className}`} 
       {...props}
+      data-bf-component="card"
+      data-bf-part="footer"
+      data-bf-align={align}
     >
       {children}
     </div>

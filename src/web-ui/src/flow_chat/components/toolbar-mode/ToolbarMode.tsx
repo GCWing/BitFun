@@ -11,6 +11,7 @@
  */
 
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import {
@@ -28,6 +29,8 @@ import { projectEffectiveToolItem } from '../../utils/toolInvocationIdentity';
 import { createLogger } from '@/shared/utils/logger';
 import { isMacOSDesktopRuntime } from '@/infrastructure/runtime';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
+import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
+import { useAnchoredPopoverPosition } from '@/shared/utils/useAnchoredPopoverPosition';
 import { SessionMenu, useFlowChatSessions } from '../session-menu';
 
 const log = createLogger('ToolbarMode');
@@ -37,16 +40,25 @@ import './ToolbarMode.scss';
 
 export const ToolbarMode: React.FC = () => {
   const { t } = useTranslation('flow-chat');
-  const { 
+  const {
     isToolbarMode,
     isExpanded,
     disableToolbarMode,
     toggleExpanded,
     toolbarState
   } = useToolbarModeContext();
-  
+
   const [showHeaderOverflowMenu, setShowHeaderOverflowMenu] = useState(false);
+  const headerOverflowTriggerRef = useRef<HTMLButtonElement>(null);
   const headerOverflowRef = useRef<HTMLDivElement>(null);
+  const headerOverflowLayout = useAnchoredPopoverPosition({
+    open: showHeaderOverflowMenu,
+    anchorRef: headerOverflowTriggerRef,
+    popoverRef: headerOverflowRef,
+    preferredPlacement: 'bottom',
+    alignment: 'end',
+    gap: 4,
+  });
 
   const isMacOS = useMemo(() => isMacOSDesktopRuntime(), []);
   const { workspacePath } = useCurrentWorkspace();
@@ -58,7 +70,7 @@ export const ToolbarMode: React.FC = () => {
     }
 
     const lastTurn = activeSession.dialogTurns[activeSession.dialogTurns.length - 1];
-    
+
     // Prefer the last text item in the latest model round.
     if (lastTurn.modelRounds && lastTurn.modelRounds.length > 0) {
       const lastRound = lastTurn.modelRounds[lastTurn.modelRounds.length - 1];
@@ -71,7 +83,7 @@ export const ToolbarMode: React.FC = () => {
         }
       }
     }
-    
+
     // Fallback to the user's latest message.
     return lastTurn.userMessage?.content?.slice(0, 100) || null;
   }, [activeSession]);
@@ -81,26 +93,26 @@ export const ToolbarMode: React.FC = () => {
     if (!activeSession || !activeSession.dialogTurns || activeSession.dialogTurns.length === 0) {
       return { isStreaming: false, toolName: null, content: null };
     }
-    
+
     const lastTurn = activeSession.dialogTurns[activeSession.dialogTurns.length - 1];
-    
+
     const isStreaming =
       lastTurn.status === 'processing' ||
       lastTurn.status === 'finishing' ||
       lastTurn.status === 'image_analyzing';
-    
+
     if (!isStreaming || !lastTurn.modelRounds || lastTurn.modelRounds.length === 0) {
       return { isStreaming, toolName: null, content: null };
     }
-    
+
     const lastRound = lastTurn.modelRounds[lastTurn.modelRounds.length - 1];
-    
+
     let toolName: string | null = null;
     let content: string | null = null;
-    
+
     for (let i = lastRound.items.length - 1; i >= 0; i--) {
       const item = lastRound.items[i];
-      
+
       if (item.type === 'tool' && 'toolName' in item) {
         const effectiveItem = projectEffectiveToolItem(item as FlowToolItem);
         toolName = effectiveItem.toolName;
@@ -112,17 +124,17 @@ export const ToolbarMode: React.FC = () => {
         }
         break;
       }
-      
+
       if (item.type === 'text' && 'content' in item && !toolName) {
         const textContent = (item as any).content as string;
         const lines = textContent.trim().split('\n');
         content = lines[lines.length - 1].trim() || lines[lines.length - 2]?.trim() || textContent.slice(-100);
       }
     }
-    
+
     return { isStreaming, toolName, content };
   }, [activeSession, t]);
-  
+
   useEffect(() => {
     if (!isExpanded) {
       setShowHeaderOverflowMenu(false);
@@ -151,7 +163,7 @@ export const ToolbarMode: React.FC = () => {
       };
     }
   }, [showHeaderOverflowMenu]);
-  
+
   const handleStartDrag = useCallback(async (e: React.MouseEvent) => {
     const target = e.target as HTMLElement;
     // Avoid dragging when interacting with UI controls.
@@ -167,31 +179,31 @@ export const ToolbarMode: React.FC = () => {
       log.error('Failed to start dragging', error);
     }
   }, []);
-  
+
   const handleExpand = useCallback(async () => {
     await disableToolbarMode();
   }, [disableToolbarMode]);
-  
+
   const handleCancel = useCallback(() => {
     window.dispatchEvent(new CustomEvent('toolbar-cancel-task'));
   }, []);
-  
+
   const handleConfirm = useCallback(() => {
     if (toolbarState.pendingToolId) {
-      window.dispatchEvent(new CustomEvent('toolbar-tool-confirm', { 
-        detail: { toolId: toolbarState.pendingToolId } 
+      window.dispatchEvent(new CustomEvent('toolbar-tool-confirm', {
+        detail: { toolId: toolbarState.pendingToolId }
       }));
     }
   }, [toolbarState.pendingToolId]);
-  
+
   const handleReject = useCallback(() => {
     if (toolbarState.pendingToolId) {
-      window.dispatchEvent(new CustomEvent('toolbar-tool-reject', { 
-        detail: { toolId: toolbarState.pendingToolId } 
+      window.dispatchEvent(new CustomEvent('toolbar-tool-reject', {
+        detail: { toolId: toolbarState.pendingToolId }
       }));
     }
   }, [toolbarState.pendingToolId]);
-  
+
   const toggleHeaderOverflowMenu = useCallback(() => {
     if (!isExpanded) return;
     setShowHeaderOverflowMenu(v => !v);
@@ -204,7 +216,7 @@ export const ToolbarMode: React.FC = () => {
   if (!isToolbarMode) {
     return null;
   }
-  
+
   const containerClassName = [
     'bitfun-toolbar-mode',
     isExpanded && 'bitfun-toolbar-mode--expanded',
@@ -213,29 +225,38 @@ export const ToolbarMode: React.FC = () => {
     toolbarState.hasPendingConfirmation && 'bitfun-toolbar-mode--confirm',
     isMacOS && 'bitfun-toolbar-mode--macos',
   ].filter(Boolean).join(' ');
-  
+
   return (
-    <div className={containerClassName} onMouseDown={handleStartDrag}>
-      <div className="bitfun-toolbar-mode__header">
-        <div className="bitfun-toolbar-mode__header-left">
+    <div data-bf-component="toolbar-mode" data-bf-part="root" data-bf-state={[
+      isExpanded && 'expanded',
+      currentStreamState.isStreaming && 'processing',
+      toolbarState.hasError && 'error',
+      toolbarState.hasPendingConfirmation && 'confirm',
+    ].filter(Boolean).join(' ') || undefined} className={containerClassName} onMouseDown={handleStartDrag}>
+      <div className="bitfun-toolbar-mode__header" data-bf-component="toolbar-mode" data-bf-part="header">
+        <div className="bitfun-toolbar-mode__header-left" data-bf-component="toolbar-mode" data-bf-part="headerLeft">
           {isExpanded ? <SessionMenu onOpenChange={handleSessionMenuOpenChange} /> : null}
         </div>
 
-        <div className="bitfun-toolbar-mode__title-wrapper">
+        <div className="bitfun-toolbar-mode__title-wrapper" data-bf-component="toolbar-mode" data-bf-part="title">
           <div className="bitfun-toolbar-mode__title-display" title={sessionTitle}>
             <span className="bitfun-toolbar-mode__title-text">{sessionTitle}</span>
           </div>
         </div>
 
-        <div className="bitfun-toolbar-mode__header-right">
+        <div className="bitfun-toolbar-mode__header-right" data-bf-component="toolbar-mode" data-bf-part="headerActions">
           <div className="bitfun-toolbar-mode__header-drag-area" aria-hidden="true" />
           <div className="bitfun-toolbar-mode__header-overflow">
             {isExpanded ? (
               <>
                 <Tooltip content={t('toolCards.toolbar.moreMenu')}>
                   <button
+                    ref={headerOverflowTriggerRef}
                     type="button"
                     className="toolbar-btn toolbar-btn--overflow bitfun-toolbar-mode__overflow-trigger"
+                    data-bf-component="toolbar-mode"
+                    data-bf-part="overflowTrigger"
+                    data-bf-state={showHeaderOverflowMenu ? 'open' : undefined}
                     onClick={toggleHeaderOverflowMenu}
                     aria-expanded={showHeaderOverflowMenu}
                     aria-haspopup="menu"
@@ -243,16 +264,27 @@ export const ToolbarMode: React.FC = () => {
                     <MoreVertical size={14} />
                   </button>
                 </Tooltip>
-                {showHeaderOverflowMenu && (
+                {showHeaderOverflowMenu && createPortal(
                   <div
                     ref={headerOverflowRef}
                     className="bitfun-toolbar-mode__overflow-menu"
+                    data-bf-component="toolbar-mode"
+                    data-bf-part="overflowMenu"
+                    data-bf-state="open"
+                    data-bf-placement={headerOverflowLayout?.placement ?? 'bottom'}
                     role="menu"
+                    style={{
+                      top: `${headerOverflowLayout?.top ?? 0}px`,
+                      left: `${headerOverflowLayout?.left ?? 0}px`,
+                      visibility: headerOverflowLayout ? 'visible' : 'hidden',
+                    }}
                     onMouseDown={(e) => e.stopPropagation()}
                   >
                     <button
                       type="button"
                       className="bitfun-toolbar-mode__overflow-menu-item"
+                      data-bf-component="toolbar-mode"
+                      data-bf-part="overflowItem"
                       role="menuitem"
                       onClick={() => {
                         void toggleExpanded();
@@ -265,6 +297,8 @@ export const ToolbarMode: React.FC = () => {
                     <button
                       type="button"
                       className="bitfun-toolbar-mode__overflow-menu-item"
+                      data-bf-component="toolbar-mode"
+                      data-bf-part="overflowItem"
                       role="menuitem"
                       onClick={() => {
                         void handleExpand();
@@ -274,11 +308,12 @@ export const ToolbarMode: React.FC = () => {
                       <Maximize2 size={14} />
                       <span>{t('session.restoreMain')}</span>
                     </button>
-                  </div>
+                  </div>,
+                  getAppearanceOverlayHost(),
                 )}
               </>
             ) : (
-              <div className="bitfun-toolbar-mode__header-collapsed-actions">
+              <div className="bitfun-toolbar-mode__header-collapsed-actions" data-bf-component="toolbar-mode" data-bf-part="collapsedActions">
                 <Tooltip content={t('toolCards.toolbar.expandChat')}>
                   <button
                     type="button"
@@ -304,11 +339,11 @@ export const ToolbarMode: React.FC = () => {
           </div>
         </div>
       </div>
-      
+
       {isExpanded ? (
         /* Main window session surface, reused as-is: same conversation view and
            same full composer, so there is nothing extra to maintain here. */
-        <div className="bitfun-toolbar-mode__session-surface">
+        <div className="bitfun-toolbar-mode__session-surface" data-bf-component="toolbar-mode" data-bf-part="sessionSurface">
           <ChatPane
             width={0}
             isFullscreen={false}
@@ -318,30 +353,30 @@ export const ToolbarMode: React.FC = () => {
           />
         </div>
       ) : (
-        <div className="bitfun-toolbar-mode__content-row">
-          <div className="bitfun-toolbar-mode__stream-content" onClick={toggleExpanded}>
+        <div className="bitfun-toolbar-mode__content-row" data-bf-component="toolbar-mode" data-bf-part="content">
+          <div className="bitfun-toolbar-mode__stream-content" onClick={toggleExpanded} data-bf-component="toolbar-mode" data-bf-part="stream" data-bf-content-kind={currentStreamState.toolName ? 'tool' : toolbarState.todoProgress && toolbarState.todoProgress.total > 0 ? 'todo' : 'text'} data-bf-state={currentStreamState.isStreaming ? 'streaming' : undefined}>
             {currentStreamState.toolName ? (
-              <div className="bitfun-toolbar-mode__tool">
-                <span className="bitfun-toolbar-mode__tool-name">{currentStreamState.toolName}</span>
-                <span className="bitfun-toolbar-mode__tool-summary">{currentStreamState.content || t('toolCards.toolbar.executing')}</span>
+              <div className="bitfun-toolbar-mode__tool" data-bf-component="toolbar-mode" data-bf-part="tool">
+                <span className="bitfun-toolbar-mode__tool-name" data-bf-component="toolbar-mode" data-bf-part="toolName">{currentStreamState.toolName}</span>
+                <span className="bitfun-toolbar-mode__tool-summary" data-bf-component="toolbar-mode" data-bf-part="toolSummary">{currentStreamState.content || t('toolCards.toolbar.executing')}</span>
               </div>
             ) : toolbarState.todoProgress && toolbarState.todoProgress.total > 0 ? (
-              <div className="bitfun-toolbar-mode__todo">
-                <span className="bitfun-toolbar-mode__todo-progress">
+              <div className="bitfun-toolbar-mode__todo" data-bf-component="toolbar-mode" data-bf-part="todo">
+                <span className="bitfun-toolbar-mode__todo-progress" data-bf-component="toolbar-mode" data-bf-part="todoProgress">
                   {toolbarState.todoProgress.completed}/{toolbarState.todoProgress.total}
                 </span>
-                <span className="bitfun-toolbar-mode__todo-current">
+                <span className="bitfun-toolbar-mode__todo-current" data-bf-component="toolbar-mode" data-bf-part="todoCurrent">
                   {toolbarState.todoProgress.current || currentStreamState.content}
                 </span>
               </div>
             ) : (
-              <span className={`bitfun-toolbar-mode__text ${currentStreamState.isStreaming ? 'bitfun-toolbar-mode__text--streaming' : ''}`}>
+              <span className={`bitfun-toolbar-mode__text ${currentStreamState.isStreaming ? 'bitfun-toolbar-mode__text--streaming' : ''}`} data-bf-component="toolbar-mode" data-bf-part="streamText">
                 {currentStreamState.content || (currentStreamState.isStreaming ? t('toolCards.toolbar.processing') : (lastMessageContent || t('toolCards.toolbar.startNewChat')))}
               </span>
             )}
           </div>
 
-          <div className="bitfun-toolbar-mode__controls">
+          <div className="bitfun-toolbar-mode__controls" data-bf-component="toolbar-mode" data-bf-part="controls">
             {toolbarState.hasPendingConfirmation && (
               <>
                 <Tooltip content={t('toolCards.common.confirm')}>

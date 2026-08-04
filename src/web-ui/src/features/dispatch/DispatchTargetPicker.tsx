@@ -6,6 +6,7 @@ import React, {
   useRef,
   useState,
 } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Check,
   ChevronDown,
@@ -13,12 +14,15 @@ import {
   Loader2,
   MonitorSmartphone,
   Plus,
+  RefreshCw,
   Server,
 } from 'lucide-react';
 import { Tooltip } from '@/component-library';
 import { SSHConnectionDialog } from '@/features/ssh-remote/SSHConnectionDialog';
 import { useAccountLoginState } from '@/infrastructure/account/useAccountLoginState';
+import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { useI18n } from '@/infrastructure/i18n';
+import { useAnchoredPopoverPosition } from '@/shared/utils/useAnchoredPopoverPosition';
 import { DispatchInstallDialog } from './DispatchInstallDialog';
 import type {
   DispatchSelection,
@@ -51,12 +55,23 @@ export const DispatchTargetPicker: React.FC<DispatchTargetPickerProps> = ({
 }) => {
   const { t } = useI18n('flow-chat');
   const rootRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
   const [configureTarget, setConfigureTarget] = useState<DispatchTargetOption | null>(null);
   const [sshDialogOpen, setSshDialogOpen] = useState(false);
   const [accountDialogOpen, setAccountDialogOpen] = useState(false);
   const { loggedIn } = useAccountLoginState();
   const { targets, loading, error, refresh } = useDispatchTargets(open);
+  const menuLayout = useAnchoredPopoverPosition({
+    open,
+    anchorRef: triggerRef,
+    popoverRef: menuRef,
+    preferredPlacement: 'top',
+    alignment: 'end',
+    gap: 7,
+    layoutRevision: `${targets.length}:${loading}:${error ?? ''}`,
+  });
 
   const displayLabel = target.kind === 'local'
     ? t('chatInput.dispatch.local')
@@ -68,7 +83,11 @@ export const DispatchTargetPicker: React.FC<DispatchTargetPickerProps> = ({
   useEffect(() => {
     if (!open) return;
     const handlePointerDown = (event: PointerEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) {
+      const targetNode = event.target as Node;
+      if (
+        !rootRef.current?.contains(targetNode)
+        && !menuRef.current?.contains(targetNode)
+      ) {
         setOpen(false);
       }
     };
@@ -100,7 +119,16 @@ export const DispatchTargetPicker: React.FC<DispatchTargetPickerProps> = ({
 
   const menu = open ? (
     <div
+      ref={menuRef}
       className="dispatch-target-picker__menu"
+      data-bf-component="dispatch-target-picker"
+      data-bf-part="menu"
+      data-bf-placement={menuLayout?.placement ?? 'top'}
+      style={{
+        top: `${menuLayout?.top ?? 0}px`,
+        left: `${menuLayout?.left ?? 0}px`,
+        visibility: menuLayout ? 'visible' : 'hidden',
+      }}
       role="menu"
       aria-label={t('chatInput.dispatch.menuLabel')}
       data-testid="dispatch-target-menu"
@@ -118,6 +146,8 @@ export const DispatchTargetPicker: React.FC<DispatchTargetPickerProps> = ({
           role="menuitemradio"
           aria-checked={target.kind === 'local'}
           className="dispatch-target-picker__option"
+          data-bf-component="dispatch-target-picker"
+          data-bf-part="option"
           onClick={() => {
             setOpen(false);
             onSelectLocal?.();
@@ -199,9 +229,20 @@ export const DispatchTargetPicker: React.FC<DispatchTargetPickerProps> = ({
             {t('chatInput.dispatch.loading')}
           </div>
         ) : null}
-        {!loading && sshTargets.length === 0 ? (
+        {!loading && error ? (
+          <button
+            type="button"
+            role="menuitem"
+            className="dispatch-target-picker__footer-action"
+            onClick={() => void refresh()}
+          >
+            <RefreshCw size={14} aria-hidden />
+            <span>{t('chatInput.dispatch.targetLoadFailed')}</span>
+          </button>
+        ) : null}
+        {!loading && !error && sshTargets.length === 0 ? (
           <div className="dispatch-target-picker__status">
-            {error || t('chatInput.dispatch.noSshTargets')}
+            {t('chatInput.dispatch.noSshTargets')}
           </div>
         ) : null}
         {sshTargets.map(option => {
@@ -221,7 +262,7 @@ export const DispatchTargetPicker: React.FC<DispatchTargetPickerProps> = ({
               <Server size={15} aria-hidden />
               <span>
                 <strong>{option.displayName}</strong>
-                <small>{option.description || option.defaultWorkspace || t('chatInput.dispatch.sshDescription')}</small>
+                <small>{option.description || t('chatInput.dispatch.sshDescription')}</small>
               </span>
               {selected ? <Check size={14} aria-hidden /> : null}
             </button>
@@ -247,11 +288,19 @@ export const DispatchTargetPicker: React.FC<DispatchTargetPickerProps> = ({
 
   return (
     <>
-      <div ref={rootRef} className="dispatch-target-picker">
+      <div
+        ref={rootRef}
+        className="dispatch-target-picker"
+        data-bf-component="dispatch-target-picker"
+        data-bf-part="root"
+      >
         <Tooltip content={tooltip} placement="top">
           <button
+            ref={triggerRef}
             type="button"
             className="dispatch-target-picker__trigger"
+            data-bf-component="dispatch-target-picker"
+            data-bf-part="trigger"
             aria-haspopup="menu"
             aria-expanded={open}
             aria-label={tooltip}
@@ -278,7 +327,7 @@ export const DispatchTargetPicker: React.FC<DispatchTargetPickerProps> = ({
             ) : null}
           </button>
         </Tooltip>
-        {menu}
+        {menu && createPortal(menu, getAppearanceOverlayHost())}
       </div>
 
       <DispatchInstallDialog

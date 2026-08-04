@@ -1,111 +1,71 @@
-#[cfg(feature = "ssh-remote")]
+#[cfg(feature = "agent-runtime")]
+mod baseline;
+#[cfg(all(feature = "agent-runtime", feature = "ssh-remote"))]
 mod controller;
-#[cfg(feature = "ssh-remote")]
+#[cfg(all(feature = "agent-runtime", feature = "ssh-remote"))]
 mod device_controller;
+#[cfg(feature = "agent-runtime")]
+mod preparation;
 mod target;
 
 use std::path::{Path, PathBuf};
 
 use anyhow::Context as _;
-use bitfun_services_core::dispatch_workspace::{
-    exact_workspace_snapshot_source_fingerprint, prepare_exact_workspace_snapshot,
-    prepare_source_workspace_snapshot, sha256_file, source_workspace_snapshot_source_fingerprint,
-    WorkspaceSnapshotMetadata, WorkspaceSnapshotSourceFingerprint,
-};
 use bitfun_services_core::json_store::{JsonFileStore, JsonFileStoreError};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
+use serde_json::Value;
 use thiserror::Error;
 use tokio::fs;
 
 use crate::infrastructure::PathManager;
 
-/// Result-bundle shapes the desktop layer returns to the renderer.
-#[cfg(feature = "ssh-remote")]
-pub use bitfun_services_core::dispatch_workspace::{
-    WorkspaceResultApplyOutcome, WorkspaceResultConflict, WorkspaceResultConflictReason,
-    WorkspaceResultSummary,
-};
-#[cfg(feature = "ssh-remote")]
+#[cfg(all(feature = "agent-runtime", feature = "ssh-remote"))]
 pub use controller::{
-    answer as answer_dispatch, append as append_dispatch, apply_result as apply_dispatch_result,
-    cancel as cancel_dispatch, install_cli_cancel as cancel_dispatch_cli_install,
-    install_cli_poll as poll_dispatch_cli_install,
-    install_cli_source_start as start_dispatch_cli_source_build,
-    install_cli_start as start_dispatch_cli_install, list_jobs as list_dispatch_jobs,
-    list_targets as list_dispatch_targets, probe_target as probe_dispatch_target,
-    pull_result as pull_dispatch_result, status as get_dispatch_status, submit as submit_dispatch,
-    sync_model_config as sync_dispatch_model_config, DispatchAnswerRequest, DispatchAppendRequest,
-    DispatchApplyResultRequest, DispatchConnectionRequest, DispatchInstallPollRequest,
-    DispatchInstallStartRequest, DispatchJobRequest, DispatchListJobsRequest,
-    DispatchListTargetsRequest, DispatchPermissionReplyKind, DispatchProbeTargetRequest,
-    DispatchStatusRequest, DispatchSubmitRequest, DispatchTargetOption,
+    answer as answer_dispatch, append as append_dispatch, cancel as cancel_dispatch,
+    continue_job as continue_dispatch_job, install_cli_cancel as cancel_dispatch_cli_install,
+    install_cli_poll as poll_dispatch_cli_install, install_cli_start as start_dispatch_cli_install,
+    list_jobs as list_dispatch_jobs, list_targets as list_dispatch_targets,
+    probe_target as probe_dispatch_target, query_job as query_dispatch_job,
+    status as get_dispatch_status, submit as submit_dispatch,
+    sync_model_config as sync_dispatch_model_config, sync_result as sync_dispatch_result,
+    DispatchAnswerRequest, DispatchAppendRequest, DispatchConnectionRequest,
+    DispatchContinueRequest, DispatchInstallPollRequest, DispatchInstallStartRequest,
+    DispatchJobRequest, DispatchListJobsRequest, DispatchListTargetsRequest,
+    DispatchPermissionReplyKind, DispatchProbeTargetRequest, DispatchQueryJobRequest,
+    DispatchStatusRequest, DispatchSubmitRequest, DispatchSyncResultRequest, DispatchTargetOption,
 };
-#[cfg(feature = "ssh-remote")]
+#[cfg(all(feature = "agent-runtime", feature = "ssh-remote"))]
 pub use device_controller::{
     answer_device as answer_device_dispatch, append_device as append_device_dispatch,
-    cancel_device as cancel_device_dispatch, list_device_jobs as list_device_dispatch_jobs,
-    probe_device as probe_device_dispatch_target,
-    pull_device_result as pull_device_dispatch_result, status_device as get_device_dispatch_status,
-    submit_device as submit_device_dispatch, DeviceDispatchRpc,
+    cancel_device as cancel_device_dispatch, continue_device_job as continue_device_dispatch_job,
+    list_device_jobs as list_device_dispatch_jobs, probe_device as probe_device_dispatch_target,
+    query_device_job as query_device_dispatch_job, status_device as get_device_dispatch_status,
+    submit_device as submit_device_dispatch, sync_device_result as sync_device_dispatch_result,
+    DeviceDispatchRpc,
 };
-pub use target::{DispatchTarget, DispatchTargetRequest, DispatchWorkspaceDeliveryRequest};
+pub use target::{DispatchTarget, DispatchTargetRequest, DispatchWorkspaceDelivery};
 
 const PROMPT_PREVIEW_CHARS: usize = 160;
-const OUTBOUND_WORKSPACE_UPLOADS_DIR: &str = ".workspace-uploads";
-const OUTBOUND_WORKSPACE_CACHE_DIR: &str = ".workspace-cache";
-/// Where pulled result bundles are staged before the user applies them.
+/// Where synced result bundles are staged before they are fetched into the
+/// controller's baseline worktree.
 pub(super) const OUTBOUND_RESULTS_DIR: &str = ".results";
+/// Where base bundles are built before being uploaded to a target.
+#[cfg(feature = "agent-runtime")]
+const OUTBOUND_BUNDLES_DIR: &str = ".bundles";
+/// Where the renderer's observer transcript cache lives.
+const OUTBOUND_TRANSCRIPTS_DIR: &str = ".transcripts";
 const TERMINAL_OUTBOUND_RETENTION_DAYS: i64 = 30;
-
-#[derive(Debug, Clone)]
-pub struct PreparedOutboundWorkspaceSnapshot {
-    pub archive_path: PathBuf,
-    pub metadata: WorkspaceSnapshotMetadata,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct OutboundWorkspaceSnapshotRecord {
-    source_workspace_path: String,
-    #[serde(default)]
-    capture_mode: DispatchWorkspaceSnapshotCaptureMode,
-    metadata: WorkspaceSnapshotMetadata,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    source_fingerprint: Option<WorkspaceSnapshotSourceFingerprint>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct OutboundWorkspaceCacheRecord {
-    source_workspace_path: String,
-    capture_mode: DispatchWorkspaceSnapshotCaptureMode,
-    source_fingerprint: WorkspaceSnapshotSourceFingerprint,
-    metadata: WorkspaceSnapshotMetadata,
-    created_at: DateTime<Utc>,
-    last_used_at: DateTime<Utc>,
-}
-
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-pub enum DispatchWorkspaceSnapshotCaptureMode {
-    Source,
-    #[default]
-    Exact,
-}
-
-impl DispatchWorkspaceSnapshotCaptureMode {
-    fn cache_key_label(self) -> &'static [u8] {
-        match self {
-            Self::Source => b"source",
-            Self::Exact => b"exact",
-        }
-    }
-}
+/// Ceiling for one cached observer transcript.
+///
+/// A transcript that outgrows this stops being cached rather than growing
+/// without bound; the observer then replays that job from the beginning, which
+/// is exactly the behavior that existed before the cache.
+const MAX_OUTBOUND_TRANSCRIPT_BYTES: usize = 8 * 1024 * 1024;
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[cfg(feature = "agent-runtime")]
 struct DispatchTargetJobEntry {
     job_id: String,
     session_id: String,
@@ -143,6 +103,31 @@ pub struct OutboundDispatchRecord {
     pub approval_policy: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub model: Option<String>,
+    /// Managed worktree on this controller that this job was branched from.
+    ///
+    /// Recorded so sync-back knows where to fetch the target's branch into, and
+    /// so cleanup can release the worktree's retention claim. A record without
+    /// it predates Git-worktree delivery and can only be observed, not synced.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub baseline_worktree_id: Option<String>,
+    /// Stable main-project path that owns the baseline's worktree registry.
+    /// Unlike `source_workspace_path`, this does not point at a linked
+    /// worktree that may disappear before retention cleanup runs.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub baseline_project_workspace_path: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub baseline_worktree_path: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub base_commit: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub branch: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_url: Option<String>,
+    /// Tip of `branch` the last successful sync fetched.
+    ///
+    /// Lets the UI tell "never synced" from "synced and unchanged since".
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub synced_head_commit: Option<String>,
     pub last_cursor: u64,
     pub last_state: String,
     pub created_at: DateTime<Utc>,
@@ -172,6 +157,13 @@ impl OutboundDispatchRecord {
             agent_type: None,
             approval_policy: None,
             model: None,
+            baseline_worktree_id: None,
+            baseline_project_workspace_path: None,
+            baseline_worktree_path: None,
+            base_commit: None,
+            branch: None,
+            remote_url: None,
+            synced_head_commit: None,
             last_cursor: 0,
             last_state: state.into(),
             created_at: now,
@@ -202,6 +194,48 @@ impl OutboundDispatchRecord {
         self.source_workspace_id = source_workspace_id.filter(|value| !value.trim().is_empty());
         self
     }
+
+    /// Record the Git baseline this job was branched from.
+    ///
+    /// Written before the target is contacted, so a submit whose response is
+    /// lost still leaves a record that names the worktree holding its claim.
+    pub fn with_baseline(
+        mut self,
+        delivery: &DispatchWorkspaceDelivery,
+        worktree_path: &str,
+    ) -> Self {
+        self.baseline_worktree_id = non_empty(&delivery.baseline_worktree_id);
+        self.baseline_project_workspace_path = non_empty(&delivery.project_workspace_path);
+        self.baseline_worktree_path = non_empty(worktree_path);
+        self.base_commit = non_empty(&delivery.base_commit);
+        self.branch = non_empty(&delivery.branch);
+        self.remote_url = delivery.remote_url.as_deref().and_then(non_empty);
+        self
+    }
+}
+
+fn non_empty(value: &str) -> Option<String> {
+    let trimmed = value.trim();
+    (!trimmed.is_empty()).then(|| trimmed.to_string())
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DispatchTranscriptRequest {
+    pub job_id: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DispatchSaveTranscriptRequest {
+    pub job_id: String,
+    /// Stored verbatim. The controller never interprets the renderer's
+    /// projection, so its shape is versioned by the renderer alone.
+    ///
+    /// `null` erases the cached transcript. That is how deleting a projection
+    /// drops its cached content immediately instead of waiting for retention.
+    #[serde(default)]
+    pub transcript: Option<Value>,
 }
 
 #[derive(Debug, Error)]
@@ -212,6 +246,8 @@ pub enum DispatchStoreError {
     Io(#[from] std::io::Error),
     #[error("Failed to persist outbound dispatch index: {0}")]
     Json(#[from] JsonFileStoreError),
+    #[error("Failed to release outbound dispatch baseline claim: {0}")]
+    ClaimRelease(String),
 }
 
 /// Durable observer-only index for jobs submitted to other BitFun processes.
@@ -313,7 +349,43 @@ impl OutboundDispatchStore {
         Ok(record)
     }
 
+    /// Reflect per-turn option overrides in the observer index so a later
+    /// reconciliation cannot revert the UI to the pre-override values.
+    pub async fn update_submission_options(
+        &self,
+        job_id: &str,
+        model: Option<&str>,
+        approval_policy: Option<&str>,
+    ) -> Result<(), DispatchStoreError> {
+        if model.is_none() && approval_policy.is_none() {
+            return Ok(());
+        }
+        let path = self.record_path(job_id)?;
+        let _lock = self.json_store.acquire_cross_process_lock(&path).await?;
+        let Some(mut record) = self
+            .json_store
+            .read_optional::<OutboundDispatchRecord>(&path)
+            .await?
+        else {
+            return Ok(());
+        };
+        if let Some(model) = model {
+            record.model = Some(model.to_string()).filter(|value| !value.trim().is_empty());
+        }
+        if let Some(policy) = approval_policy {
+            record.approval_policy = Some(policy.to_string());
+        }
+        record.updated_at = Utc::now();
+        self.json_store.write_atomic_strict(&path, &record).await?;
+        harden_file_permissions(&path).await?;
+        Ok(())
+    }
+
     pub async fn list(&self) -> Result<Vec<OutboundDispatchRecord>, DispatchStoreError> {
+        #[cfg(feature = "agent-runtime")]
+        if let Err(error) = self.reconcile_expired_preparations().await {
+            log::warn!("Failed to reconcile expired dispatch preparations: {error}");
+        }
         let mut entries = match fs::read_dir(&self.root).await {
             Ok(entries) => entries,
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
@@ -339,30 +411,35 @@ impl OutboundDispatchStore {
                             .num_days()
                             >= TERMINAL_OUTBOUND_RETENTION_DAYS =>
                 {
-                    // Best effort: a stranded bundle is disk waste, not a
-                    // correctness problem, and must not keep the expired record
-                    // alive forever.
-                    if let Err(error) = self.remove_result_bundle(&record.job_id).await {
-                        log::warn!(
-                            "Failed to remove expired dispatch result bundle: job_id={} error={}",
-                            record.job_id,
-                            error
-                        );
-                    }
-                    if let Err(error) = self.remove_workspace_snapshot(&record.job_id).await {
-                        log::warn!(
-                            "Failed to remove expired outbound dispatch snapshot: job_id={} error={}",
-                            record.job_id,
-                            error
-                        );
-                        records.push(record);
-                    } else if let Err(error) = self.remove(&record.job_id).await {
-                        log::warn!(
-                            "Failed to remove expired outbound dispatch record: job_id={} error={}",
-                            record.job_id,
-                            error
-                        );
-                        records.push(record);
+                    match self.remove(&record.job_id).await {
+                        Ok(_) => {
+                            // Result/transcript artifacts are disposable only
+                            // after claim release and durable-record deletion
+                            // succeed. A failed claim release keeps the whole
+                            // cleanup token intact for the next retry.
+                            if let Err(error) = self.remove_result_bundle(&record.job_id).await {
+                                log::warn!(
+                                    "Failed to remove expired dispatch result bundle: job_id={} error={}",
+                                    record.job_id,
+                                    error
+                                );
+                            }
+                            if let Err(error) = self.remove_transcript(&record.job_id).await {
+                                log::warn!(
+                                    "Failed to remove expired dispatch observer transcript: job_id={} error={}",
+                                    record.job_id,
+                                    error
+                                );
+                            }
+                        }
+                        Err(error) => {
+                            log::warn!(
+                                "Failed to remove expired outbound dispatch record: job_id={} error={}",
+                                record.job_id,
+                                error
+                            );
+                            records.push(record);
+                        }
                     }
                 }
                 Ok(Some(record)) => records.push(record),
@@ -386,216 +463,91 @@ impl OutboundDispatchStore {
     }
 
     pub async fn remove(&self, job_id: &str) -> Result<bool, DispatchStoreError> {
+        self.remove_with_claim_releaser(job_id, release_baseline_claim)
+            .await
+    }
+
+    async fn remove_with_claim_releaser<Release, ReleaseFuture>(
+        &self,
+        job_id: &str,
+        release_claim: Release,
+    ) -> Result<bool, DispatchStoreError>
+    where
+        Release: FnOnce(BaselineClaimRelease) -> ReleaseFuture,
+        ReleaseFuture: std::future::Future<Output = Result<(), DispatchStoreError>>,
+    {
         let path = self.record_path(job_id)?;
         let _lock = self.json_store.acquire_cross_process_lock(&path).await?;
-        match fs::remove_file(path).await {
+        let Some(record) = self
+            .json_store
+            .read_optional::<OutboundDispatchRecord>(&path)
+            .await?
+        else {
+            return Ok(false);
+        };
+
+        // The durable record is the retry token for claim cleanup. Keep both it
+        // and its cross-process lock until cleanup succeeds; deleting first
+        // would make a transient registry/path failure strand the claim forever.
+        if let Some(release) = BaselineClaimRelease::for_record(&record) {
+            release_claim(release).await?;
+        }
+        match fs::remove_file(&path).await {
             Ok(()) => Ok(true),
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
             Err(error) => Err(error.into()),
         }
     }
 
-    /// Build or reopen the immutable snapshot bound to one outbound job.
-    ///
-    /// Keeping the verified artifact after an ambiguous submit is essential:
-    /// an idempotent retry must not capture a newer local tree and conflict
-    /// with the snapshot that the target may already have committed.
-    pub async fn prepare_workspace_snapshot(
-        &self,
-        job_id: &str,
-        source_workspace_path: &str,
-        capture_mode: DispatchWorkspaceSnapshotCaptureMode,
-    ) -> anyhow::Result<PreparedOutboundWorkspaceSnapshot> {
-        validate_id(job_id)?;
-        let source = std::path::PathBuf::from(source_workspace_path.trim());
-        if !source.is_absolute() {
-            anyhow::bail!("snapshot sourceWorkspacePath must be absolute");
-        }
-        let source = tokio::task::spawn_blocking(move || source.canonicalize())
-            .await
-            .map_err(|error| anyhow::anyhow!("snapshot path task failed: {error}"))?
-            .map_err(|error| anyhow::anyhow!("resolve snapshot source: {error}"))?;
-        if !source.is_dir() {
-            anyhow::bail!("snapshot source is not a directory");
-        }
-        let source_wire = source
-            .to_str()
-            .map(ToOwned::to_owned)
-            .ok_or_else(|| anyhow::anyhow!("snapshot source path is not valid UTF-8"))?;
-        let uploads = self.root.join(OUTBOUND_WORKSPACE_UPLOADS_DIR);
-        fs::create_dir_all(&uploads).await?;
-        harden_directory_permissions(&uploads).await?;
-        let uploads = tokio::task::spawn_blocking(move || uploads.canonicalize())
-            .await
-            .map_err(|error| anyhow::anyhow!("snapshot staging path task failed: {error}"))?
-            .map_err(|error| anyhow::anyhow!("resolve snapshot staging directory: {error}"))?;
-        if uploads.starts_with(&source) {
-            anyhow::bail!(
-                "snapshot source cannot contain the controller dispatch staging directory"
-            );
-        }
-        let cache = self.root.join(OUTBOUND_WORKSPACE_CACHE_DIR);
-        fs::create_dir_all(&cache).await?;
-        harden_directory_permissions(&cache).await?;
-        let cache = tokio::task::spawn_blocking(move || cache.canonicalize())
-            .await
-            .map_err(|error| anyhow::anyhow!("snapshot cache path task failed: {error}"))?
-            .map_err(|error| anyhow::anyhow!("resolve snapshot cache directory: {error}"))?;
-        if cache.starts_with(&source) {
-            anyhow::bail!("snapshot source cannot contain the controller snapshot cache");
-        }
-        let record_path = uploads.join(format!("{job_id}.json"));
-        let archive_path = uploads.join(format!("{job_id}.tar.gz"));
-        let _lock = self
+    /// Record the branch tip a successful sync fetched into the baseline.
+    pub async fn record_synced_head(&self, job_id: &str, head: &str) -> anyhow::Result<()> {
+        let path = self.record_path(job_id)?;
+        let _lock = self.json_store.acquire_cross_process_lock(&path).await?;
+        let Some(mut record) = self
             .json_store
-            .acquire_cross_process_lock(&record_path)
-            .await?;
-
-        if let Some(record) = self
-            .json_store
-            .read_optional::<OutboundWorkspaceSnapshotRecord>(&record_path)
+            .read_optional::<OutboundDispatchRecord>(&path)
             .await?
-        {
-            if record.source_workspace_path != source_wire || record.capture_mode != capture_mode {
-                anyhow::bail!("dispatch jobId is already bound to another workspace snapshot");
-            }
-            let valid =
-                snapshot_archive_is_valid(archive_path.clone(), record.metadata.clone()).await?;
-            if valid {
-                return Ok(PreparedOutboundWorkspaceSnapshot {
-                    archive_path,
-                    metadata: record.metadata,
-                });
-            }
-            let _ = fs::remove_file(&record_path).await;
-            let _ = fs::remove_file(&archive_path).await;
-        } else {
-            let _ = fs::remove_file(&archive_path).await;
-        }
-
-        let cache_key = outbound_workspace_cache_key(&source_wire, capture_mode);
-        let cache_record_path = cache.join(format!("{cache_key}.json"));
-        let cache_archive_path = cache.join(format!("{cache_key}.tar.gz"));
-        let _cache_lock = self
-            .json_store
-            .acquire_cross_process_lock(&cache_record_path)
-            .await?;
-        let mut cached = match self
-            .json_store
-            .read_optional::<OutboundWorkspaceCacheRecord>(&cache_record_path)
-            .await
-        {
-            Ok(record) => record,
-            Err(error) => {
-                log::warn!(
-                    "Ignoring unreadable outbound workspace cache record: path={} error={}",
-                    cache_record_path.display(),
-                    error
-                );
-                None
-            }
+        else {
+            return Ok(());
         };
-        if cached.as_ref().is_some_and(|record| {
-            record.source_workspace_path != source_wire || record.capture_mode != capture_mode
-        }) {
-            log::warn!(
-                "Ignoring outbound workspace cache identity mismatch: path={}",
-                cache_record_path.display()
-            );
-            cached = None;
-        }
-        if let Some(mut cached) = cached {
-            let current_fingerprint =
-                workspace_source_fingerprint(source.clone(), capture_mode).await?;
-            if current_fingerprint == cached.source_fingerprint
-                && snapshot_archive_is_valid(cache_archive_path.clone(), cached.metadata.clone())
-                    .await?
-            {
-                replace_snapshot_archive(&cache_archive_path, &archive_path).await?;
-                cached.last_used_at = Utc::now();
-                self.json_store
-                    .write_atomic_strict(&cache_record_path, &cached)
-                    .await?;
-                harden_file_permissions(&cache_record_path).await?;
-                let record = OutboundWorkspaceSnapshotRecord {
-                    source_workspace_path: source_wire,
-                    capture_mode,
-                    metadata: cached.metadata.clone(),
-                    source_fingerprint: Some(cached.source_fingerprint),
-                };
-                self.json_store
-                    .write_atomic_strict(&record_path, &record)
-                    .await?;
-                harden_file_permissions(&record_path).await?;
-                return Ok(PreparedOutboundWorkspaceSnapshot {
-                    archive_path,
-                    metadata: cached.metadata,
-                });
-            }
-        }
-
-        remove_file_if_present(&cache_record_path).await?;
-        remove_file_if_present(&cache_archive_path).await?;
-        let package_source = source.clone();
-        let package_archive = archive_path.clone();
-        let prepared = tokio::task::spawn_blocking(move || match capture_mode {
-            DispatchWorkspaceSnapshotCaptureMode::Source => {
-                prepare_source_workspace_snapshot(&package_source, &package_archive)
-            }
-            DispatchWorkspaceSnapshotCaptureMode::Exact => {
-                prepare_exact_workspace_snapshot(&package_source, &package_archive)
-            }
-        })
-        .await
-        .map_err(|error| anyhow::anyhow!("snapshot packaging task failed: {error}"))??;
-        harden_file_permissions(&archive_path).await?;
-        publish_snapshot_cache_archive(
-            &archive_path,
-            &cache_archive_path,
-            &cache,
-            &cache_key,
-            job_id,
-        )
-        .await?;
-        let now = Utc::now();
-        let cache_record = OutboundWorkspaceCacheRecord {
-            source_workspace_path: source_wire.clone(),
-            capture_mode,
-            source_fingerprint: prepared.source_fingerprint.clone(),
-            metadata: prepared.metadata.clone(),
-            created_at: now,
-            last_used_at: now,
-        };
-        self.json_store
-            .write_atomic_strict(&cache_record_path, &cache_record)
-            .await?;
-        harden_file_permissions(&cache_record_path).await?;
-        let record = OutboundWorkspaceSnapshotRecord {
-            source_workspace_path: source_wire,
-            capture_mode,
-            metadata: prepared.metadata.clone(),
-            source_fingerprint: Some(prepared.source_fingerprint),
-        };
-        self.json_store
-            .write_atomic_strict(&record_path, &record)
-            .await?;
-        harden_file_permissions(&record_path).await?;
-        Ok(PreparedOutboundWorkspaceSnapshot {
-            archive_path,
-            metadata: prepared.metadata,
-        })
+        record.synced_head_commit = non_empty(head);
+        record.updated_at = Utc::now();
+        self.json_store.write_atomic(&path, &record).await?;
+        harden_file_permissions(&path).await?;
+        Ok(())
     }
 
-    /// Drop a pulled result bundle and its summary.
+    /// Owner-only staging directory for outbound Git bundles.
     ///
-    /// Separate from `remove_workspace_snapshot` on purpose: that one runs as
-    /// soon as the target durably owns the job, which is long before the user
-    /// has had a chance to look at the results.
+    /// Bundles hold repository contents, so they get the same private treatment
+    /// as everything else the controller writes here.
+    #[cfg(feature = "agent-runtime")]
+    pub(crate) async fn bundles_dir(&self) -> anyhow::Result<PathBuf> {
+        let bundles = self.root.join(OUTBOUND_BUNDLES_DIR);
+        fs::create_dir_all(&bundles).await?;
+        harden_directory_permissions(&bundles).await?;
+        Ok(bundles)
+    }
+
+    /// Owner-only staging directory for bundles fetched back from a target.
+    #[cfg(feature = "agent-runtime")]
+    pub(crate) async fn results_dir(&self) -> anyhow::Result<PathBuf> {
+        let results = self.root.join(OUTBOUND_RESULTS_DIR);
+        fs::create_dir_all(&results).await?;
+        harden_directory_permissions(&results).await?;
+        Ok(results)
+    }
+
+    /// Drop a synced result bundle and its summary.
+    ///
+    /// The bundle is only a transfer artifact: once it has been fetched into
+    /// the baseline worktree the objects live in the repository, so deleting it
+    /// never loses work.
     pub async fn remove_result_bundle(&self, job_id: &str) -> anyhow::Result<()> {
         validate_id(job_id)?;
         let results = self.root.join(OUTBOUND_RESULTS_DIR);
         for path in [
-            results.join(format!("{job_id}.tar.gz")),
+            results.join(format!("{job_id}.bundle")),
             results.join(format!("{job_id}.json")),
         ] {
             match fs::remove_file(&path).await {
@@ -607,23 +559,63 @@ impl OutboundDispatchStore {
         Ok(())
     }
 
-    pub async fn remove_workspace_snapshot(&self, job_id: &str) -> anyhow::Result<()> {
-        validate_id(job_id)?;
-        let uploads = self.root.join(OUTBOUND_WORKSPACE_UPLOADS_DIR);
-        let record_path = uploads.join(format!("{job_id}.json"));
-        let archive_path = uploads.join(format!("{job_id}.tar.gz"));
-        let _lock = self
-            .json_store
-            .acquire_cross_process_lock(&record_path)
-            .await?;
-        for path in [record_path, archive_path] {
-            match fs::remove_file(&path).await {
-                Ok(()) => {}
-                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-                Err(error) => return Err(error.into()),
+    /// Read the renderer's cached observer transcript for one job.
+    ///
+    /// This is the "UI cache" half of the outbound store: it exists so a
+    /// restarted renderer can resume from its persisted cursor instead of
+    /// replaying the target's whole event log. The controller stores it
+    /// verbatim and never interprets it — the target CLI remains the only owner
+    /// of the durable session, and reading this must not create a local one.
+    pub async fn read_transcript(&self, job_id: &str) -> anyhow::Result<Option<Value>> {
+        let path = self.transcript_path(job_id)?;
+        match self.json_store.read_optional::<Value>(&path).await {
+            Ok(value) => Ok(value),
+            Err(error) => {
+                // A damaged cache is not a failure; the observer simply replays
+                // the job from the beginning.
+                log::warn!(
+                    "Ignoring unreadable dispatch observer transcript: job_id={job_id} error={error}"
+                );
+                Ok(None)
             }
         }
-        Ok(())
+    }
+
+    /// Persist the renderer's observer transcript for one job.
+    ///
+    /// Returns `false` when the transcript is too large to cache. The previous
+    /// entry is then left in place: it pairs an older cursor with the turns for
+    /// exactly that cursor, so it stays internally consistent and still saves
+    /// the observer part of the replay.
+    pub async fn write_transcript(&self, job_id: &str, transcript: &Value) -> anyhow::Result<bool> {
+        let path = self.transcript_path(job_id)?;
+        let encoded = serde_json::to_vec(transcript).context("encode observer transcript")?;
+        if encoded.len() > MAX_OUTBOUND_TRANSCRIPT_BYTES {
+            log::debug!(
+                "Skipping dispatch observer transcript above the cache limit: job_id={job_id} bytes={}",
+                encoded.len()
+            );
+            return Ok(false);
+        }
+        let transcripts = self.root.join(OUTBOUND_TRANSCRIPTS_DIR);
+        fs::create_dir_all(&transcripts).await?;
+        harden_directory_permissions(&transcripts).await?;
+        let _lock = self.json_store.acquire_cross_process_lock(&path).await?;
+        self.json_store.write_atomic(&path, transcript).await?;
+        harden_file_permissions(&path).await?;
+        Ok(true)
+    }
+
+    pub async fn remove_transcript(&self, job_id: &str) -> anyhow::Result<()> {
+        remove_file_if_present(&self.transcript_path(job_id)?).await
+    }
+
+    fn transcript_path(&self, job_id: &str) -> Result<PathBuf, DispatchStoreError> {
+        validate_id(job_id)?;
+        Ok(self
+            .root
+            .join(OUTBOUND_TRANSCRIPTS_DIR)
+            .join(format!("{job_id}.json")))
     }
 
     fn record_path(&self, job_id: &str) -> Result<PathBuf, DispatchStoreError> {
@@ -638,91 +630,66 @@ impl OutboundDispatchStore {
     }
 }
 
-fn outbound_workspace_cache_key(
-    source_workspace_path: &str,
-    capture_mode: DispatchWorkspaceSnapshotCaptureMode,
-) -> String {
-    let mut digest = Sha256::new();
-    digest.update(b"bitfun-dispatch-outbound-workspace-cache");
-    digest.update(capture_mode.cache_key_label());
-    digest.update((source_workspace_path.len() as u64).to_le_bytes());
-    digest.update(source_workspace_path.as_bytes());
-    format!("{:x}", digest.finalize())
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct BaselineClaimRelease {
+    job_id: String,
+    project_workspace_path: String,
+    worktree_id: String,
+    claimed_by: String,
 }
 
-async fn workspace_source_fingerprint(
-    source: PathBuf,
-    capture_mode: DispatchWorkspaceSnapshotCaptureMode,
-) -> anyhow::Result<WorkspaceSnapshotSourceFingerprint> {
-    tokio::task::spawn_blocking(move || match capture_mode {
-        DispatchWorkspaceSnapshotCaptureMode::Source => {
-            source_workspace_snapshot_source_fingerprint(&source)
-        }
-        DispatchWorkspaceSnapshotCaptureMode::Exact => {
-            exact_workspace_snapshot_source_fingerprint(&source)
-        }
-    })
-    .await
-    .map_err(|error| anyhow::anyhow!("snapshot fingerprint task failed: {error}"))?
-}
-
-async fn snapshot_archive_is_valid(
-    archive: PathBuf,
-    expected: WorkspaceSnapshotMetadata,
-) -> anyhow::Result<bool> {
-    tokio::task::spawn_blocking(move || -> anyhow::Result<bool> {
-        let metadata = match std::fs::symlink_metadata(&archive) {
-            Ok(metadata) => metadata,
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(false),
-            Err(error) => return Err(error.into()),
-        };
-        if metadata.file_type().is_symlink()
-            || !metadata.is_file()
-            || metadata.len() != expected.archive_size
-        {
-            return Ok(false);
-        }
-        Ok(sha256_file(&archive)?.eq_ignore_ascii_case(&expected.archive_sha256))
-    })
-    .await
-    .map_err(|error| anyhow::anyhow!("snapshot verification task failed: {error}"))?
-}
-
-async fn replace_snapshot_archive(source: &Path, destination: &Path) -> anyhow::Result<()> {
-    remove_file_if_present(destination).await?;
-    if let Err(link_error) = fs::hard_link(source, destination).await {
-        if let Err(copy_error) = fs::copy(source, destination).await {
-            let _ = fs::remove_file(destination).await;
-            anyhow::bail!(
-                "copy snapshot archive {} to {} after hard-link failed ({link_error}): \
-                 {copy_error}",
-                source.display(),
-                destination.display()
-            );
-        }
+impl BaselineClaimRelease {
+    fn for_record(record: &OutboundDispatchRecord) -> Option<Self> {
+        let project_workspace_path = record
+            .baseline_project_workspace_path
+            .as_deref()
+            .or(record.source_workspace_path.as_deref())
+            .map(str::trim)
+            .filter(|path| !path.is_empty())?;
+        let worktree_id = record
+            .baseline_worktree_id
+            .as_deref()
+            .map(str::trim)
+            .filter(|worktree_id| !worktree_id.is_empty())?;
+        Some(Self {
+            job_id: record.job_id.clone(),
+            project_workspace_path: project_workspace_path.to_string(),
+            worktree_id: worktree_id.to_string(),
+            claimed_by: baseline_claim(&record.job_id),
+        })
     }
-    harden_file_permissions(destination).await?;
-    Ok(())
 }
 
-async fn publish_snapshot_cache_archive(
-    source: &Path,
-    destination: &Path,
-    cache_directory: &Path,
-    cache_key: &str,
-    job_id: &str,
-) -> anyhow::Result<()> {
-    let staging = cache_directory.join(format!(".{cache_key}.{job_id}.tmp"));
-    remove_file_if_present(&staging).await?;
-    replace_snapshot_archive(source, &staging).await?;
-    remove_file_if_present(destination).await?;
-    if let Err(error) = fs::rename(&staging, destination).await {
-        let _ = fs::remove_file(&staging).await;
-        return Err(error)
-            .with_context(|| format!("publish snapshot cache archive {}", destination.display()));
-    }
-    harden_file_permissions(destination).await?;
-    Ok(())
+/// Release the worktree retention claim an outbound record was holding.
+///
+/// The caller intentionally keeps the durable outbound record until this
+/// succeeds, so a moved repository or temporary registry error remains
+/// observable and retryable instead of silently stranding a claim.
+#[cfg(feature = "agent-runtime")]
+async fn release_baseline_claim(release: BaselineClaimRelease) -> Result<(), DispatchStoreError> {
+    crate::service::worktree::WorktreeService::release_claim_for_worktree(
+        &release.project_workspace_path,
+        &release.worktree_id,
+        &release.claimed_by,
+    )
+    .await
+    .map(|_| ())
+    .map_err(|error| {
+        DispatchStoreError::ClaimRelease(format!("job_id={} error={error}", release.job_id))
+    })
+}
+
+#[cfg(not(feature = "agent-runtime"))]
+async fn release_baseline_claim(release: BaselineClaimRelease) -> Result<(), DispatchStoreError> {
+    Err(DispatchStoreError::ClaimRelease(format!(
+        "job_id={} error=agent-runtime is required to release the baseline worktree claim",
+        release.job_id
+    )))
+}
+
+/// Claim string a dispatch job holds on its baseline worktree.
+pub fn baseline_claim(job_id: &str) -> String {
+    format!("dispatch:{job_id}")
 }
 
 async fn remove_file_if_present(path: &Path) -> anyhow::Result<()> {
@@ -733,6 +700,7 @@ async fn remove_file_if_present(path: &Path) -> anyhow::Result<()> {
     }
 }
 
+#[cfg(feature = "agent-runtime")]
 async fn adopt_target_jobs(
     store: &OutboundDispatchStore,
     target: &DispatchTarget,
@@ -827,6 +795,7 @@ async fn adopt_target_jobs(
 /// Validate a path returned by the target without applying the controller
 /// process's host path semantics. The target may run POSIX while the controller
 /// runs Windows, or vice versa.
+#[cfg(feature = "agent-runtime")]
 fn target_workspace_path_is_absolute(path: &str) -> bool {
     let path = path.trim();
     if path.starts_with('/') {
@@ -851,6 +820,7 @@ fn target_workspace_path_is_absolute(path: &str) -> bool {
     components.next().is_some() && components.next().is_some()
 }
 
+#[cfg(feature = "agent-runtime")]
 fn same_target_identity_for_store(left: &DispatchTarget, right: &DispatchTarget) -> bool {
     match (left, right) {
         (
@@ -1007,17 +977,172 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn removing_an_outbound_record_releases_its_baseline_claim_once() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let store = OutboundDispatchStore::new_in_root_for_tests(temp.path().to_path_buf());
+        let mut record = OutboundDispatchRecord::new(
+            "job-1".to_string(),
+            target(),
+            "session-1".to_string(),
+            "/srv/app".to_string(),
+            "Summarize the repository",
+            "succeeded",
+        )
+        .expect("record")
+        .with_source_workspace(Some("/linked/repo".to_string()), None);
+        record.baseline_worktree_id = Some("wt-baseline".to_string());
+        record.baseline_project_workspace_path = Some("/stable/repo".to_string());
+        store.bind_if_absent(&record).await.expect("persist");
+
+        let releases = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let captured = std::sync::Arc::clone(&releases);
+        let callback_store = store.clone();
+        assert!(store
+            .remove_with_claim_releaser("job-1", move |release| {
+                assert!(
+                    callback_store.root().join("job-1.json").is_file(),
+                    "the durable record must remain until claim release succeeds"
+                );
+                let captured = std::sync::Arc::clone(&captured);
+                async move {
+                    captured.lock().expect("release capture").push(release);
+                    Ok(())
+                }
+            })
+            .await
+            .expect("remove record"));
+        assert_eq!(
+            releases.lock().expect("releases").as_slice(),
+            &[BaselineClaimRelease {
+                job_id: "job-1".to_string(),
+                project_workspace_path: "/stable/repo".to_string(),
+                worktree_id: "wt-baseline".to_string(),
+                claimed_by: "dispatch:job-1".to_string(),
+            }]
+        );
+        assert!(
+            store
+                .get("job-1")
+                .await
+                .expect("read removed record")
+                .is_none(),
+            "the record is deleted only after claim release succeeds"
+        );
+
+        let called_again = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let called = std::sync::Arc::clone(&called_again);
+        assert!(!store
+            .remove_with_claim_releaser("job-1", move |_| {
+                let called = std::sync::Arc::clone(&called);
+                async move {
+                    called.store(true, std::sync::atomic::Ordering::SeqCst);
+                    Ok(())
+                }
+            })
+            .await
+            .expect("idempotent remove"));
+        assert!(
+            !called_again.load(std::sync::atomic::Ordering::SeqCst),
+            "an absent record has no claim to release"
+        );
+    }
+
+    #[tokio::test]
+    async fn failed_claim_release_keeps_the_outbound_record_retryable() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let store = OutboundDispatchStore::new_in_root_for_tests(temp.path().to_path_buf());
+        let mut record = OutboundDispatchRecord::new(
+            "job-claim-retry".to_string(),
+            target(),
+            "session-1".to_string(),
+            "/srv/app".to_string(),
+            "Summarize the repository",
+            "succeeded",
+        )
+        .expect("record")
+        .with_source_workspace(Some("/linked/repo".to_string()), None);
+        record.baseline_worktree_id = Some("wt-baseline".to_string());
+        record.baseline_project_workspace_path = Some("/stable/repo".to_string());
+        store.bind_if_absent(&record).await.expect("persist");
+
+        let error = store
+            .remove_with_claim_releaser("job-claim-retry", |_| async {
+                Err(DispatchStoreError::ClaimRelease(
+                    "temporary registry failure".to_string(),
+                ))
+            })
+            .await
+            .expect_err("claim failure must stop record deletion");
+        assert!(matches!(error, DispatchStoreError::ClaimRelease(_)));
+        assert!(
+            store
+                .get("job-claim-retry")
+                .await
+                .expect("read retained record")
+                .is_some(),
+            "the durable record is the retry token for claim cleanup"
+        );
+
+        assert!(store
+            .remove_with_claim_releaser("job-claim-retry", |_| async { Ok(()) })
+            .await
+            .expect("retry removal"));
+        assert!(store
+            .get("job-claim-retry")
+            .await
+            .expect("read removed record")
+            .is_none());
+    }
+
+    #[cfg(not(feature = "agent-runtime"))]
+    #[tokio::test]
+    async fn removing_a_claimed_record_without_product_full_fails_closed() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let store = OutboundDispatchStore::new_in_root_for_tests(temp.path().to_path_buf());
+        let mut record = OutboundDispatchRecord::new(
+            "job-no-agent-runtime".to_string(),
+            target(),
+            "session-1".to_string(),
+            "/srv/app".to_string(),
+            "Summarize the repository",
+            "succeeded",
+        )
+        .expect("record")
+        .with_source_workspace(Some("/linked/repo".to_string()), None);
+        record.baseline_worktree_id = Some("wt-baseline".to_string());
+        record.baseline_project_workspace_path = Some("/stable/repo".to_string());
+        store.bind_if_absent(&record).await.expect("persist");
+
+        let error = store
+            .remove("job-no-agent-runtime")
+            .await
+            .expect_err("claim cleanup without the product owner must fail closed");
+        let DispatchStoreError::ClaimRelease(message) = error else {
+            panic!("unexpected dispatch cleanup error: {error}");
+        };
+        assert!(message.contains("agent-runtime"));
+        assert!(
+            store
+                .get("job-no-agent-runtime")
+                .await
+                .expect("read retained record")
+                .is_some(),
+            "the durable record must remain available for an agent-runtime retry"
+        );
+    }
+
+    #[tokio::test]
     async fn expired_jobs_do_not_strand_their_result_bundles() {
         let temp = tempfile::tempdir().expect("temp dir");
         let store = OutboundDispatchStore::new_in_root_for_tests(temp.path().to_path_buf());
         let results = temp.path().join(OUTBOUND_RESULTS_DIR);
         fs::create_dir_all(&results).await.expect("results dir");
-        let bundle = results.join("job-1.tar.gz");
+        let bundle = results.join("job-1.bundle");
         let summary = results.join("job-1.json");
         fs::write(&bundle, b"bundle").await.expect("bundle");
         fs::write(&summary, b"{}").await.expect("summary");
         // A second job's bundle must survive the first job's cleanup.
-        let other = results.join("job-2.tar.gz");
+        let other = results.join("job-2.bundle");
         fs::write(&other, b"other").await.expect("other");
 
         store.remove_result_bundle("job-1").await.expect("remove");
@@ -1038,93 +1163,184 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn workspace_cache_reuses_unchanged_source_across_dispatch_jobs() {
+    async fn observer_transcript_round_trips_and_deletion_is_idempotent() {
         let temp = tempfile::tempdir().expect("temp dir");
-        let root = temp.path().join("outbound");
-        let store = OutboundDispatchStore::new_in_root_for_tests(root.clone());
-        let source = temp.path().join("workspace");
-        std::fs::create_dir_all(source.join(".git")).expect("repository marker");
-        std::fs::create_dir_all(source.join("target")).expect("ignored directory");
-        std::fs::write(source.join(".gitignore"), b"target/\n").expect("gitignore");
-        std::fs::write(source.join("main.rs"), b"fn main() {}").expect("source");
-        std::fs::write(source.join("target/app"), b"first build").expect("ignored output");
-        let source_wire = source
-            .canonicalize()
-            .expect("canonical source")
-            .to_string_lossy()
-            .to_string();
-        let cache_key = outbound_workspace_cache_key(
-            &source_wire,
-            DispatchWorkspaceSnapshotCaptureMode::Source,
-        );
-        let cache_archive = root
-            .join(OUTBOUND_WORKSPACE_CACHE_DIR)
-            .join(format!("{cache_key}.tar.gz"));
+        let store = OutboundDispatchStore::new_in_root_for_tests(temp.path().to_path_buf());
+        let transcript = serde_json::json!({
+            "schemaVersion": 1,
+            "jobId": "job-1",
+            "cursor": 4096,
+            "dialogTurns": [{ "id": "turn-1" }],
+        });
 
-        let first = store
-            .prepare_workspace_snapshot(
-                "job-1",
-                &source_wire,
-                DispatchWorkspaceSnapshotCaptureMode::Source,
-            )
-            .await
-            .expect("first snapshot");
-        let first_cache_metadata = std::fs::metadata(&cache_archive).expect("first cached archive");
-        store
-            .remove_workspace_snapshot("job-1")
-            .await
-            .expect("remove first job snapshot");
         assert!(
-            cache_archive.exists(),
-            "removing a completed job must retain the reusable cache"
+            store
+                .write_transcript("job-1", &transcript)
+                .await
+                .expect("write transcript"),
+            "a small transcript must be cached"
         );
-
-        std::fs::write(source.join("target/app"), b"a different ignored build")
-            .expect("change ignored output");
-        let second = store
-            .prepare_workspace_snapshot(
-                "job-2",
-                &source_wire,
-                DispatchWorkspaceSnapshotCaptureMode::Source,
-            )
-            .await
-            .expect("cached snapshot");
-        let second_cache_metadata =
-            std::fs::metadata(&cache_archive).expect("reused cached archive");
-        assert_eq!(first.metadata, second.metadata);
         assert_eq!(
-            first_cache_metadata.modified().expect("first modified"),
-            second_cache_metadata.modified().expect("second modified"),
-            "a cache hit must not recreate the archive"
+            store
+                .read_transcript("job-1")
+                .await
+                .expect("read transcript"),
+            Some(transcript),
+            "the controller stores the renderer projection verbatim"
+        );
+        assert_eq!(
+            store
+                .read_transcript("job-2")
+                .await
+                .expect("read absent transcript"),
+            None,
+            "an uncached job replays from the beginning"
         );
         #[cfg(unix)]
         {
-            use std::os::unix::fs::MetadataExt;
+            use std::os::unix::fs::PermissionsExt;
+            let path = temp
+                .path()
+                .join(OUTBOUND_TRANSCRIPTS_DIR)
+                .join("job-1.json");
             assert_eq!(
-                second_cache_metadata.ino(),
-                std::fs::metadata(&second.archive_path)
-                    .expect("job archive")
-                    .ino(),
-                "each job should hard-link the immutable cached archive"
+                std::fs::metadata(&path)
+                    .expect("transcript file")
+                    .permissions()
+                    .mode()
+                    & 0o777,
+                0o600
             );
         }
 
-        std::fs::write(
-            source.join("main.rs"),
-            b"fn main() { println!(\"changed\"); }",
-        )
-        .expect("change included source");
-        let third = store
-            .prepare_workspace_snapshot(
-                "job-3",
-                &source_wire,
-                DispatchWorkspaceSnapshotCaptureMode::Source,
-            )
+        store.remove_transcript("job-1").await.expect("remove");
+        assert_eq!(
+            store
+                .read_transcript("job-1")
+                .await
+                .expect("read removed transcript"),
+            None
+        );
+        store
+            .remove_transcript("job-1")
             .await
-            .expect("invalidated snapshot");
-        assert_ne!(
-            second.metadata.archive_sha256, third.metadata.archive_sha256,
-            "an included source change must invalidate the cached archive"
+            .expect("removing an absent transcript is not an error");
+        assert!(
+            store.remove_transcript("../escape").await.is_err(),
+            "job ids must stay validated on this path too"
+        );
+    }
+
+    #[tokio::test]
+    async fn oversized_observer_transcript_keeps_the_previous_cache() {
+        let temp = tempfile::tempdir().expect("temp dir");
+        let store = OutboundDispatchStore::new_in_root_for_tests(temp.path().to_path_buf());
+        let cached = serde_json::json!({ "schemaVersion": 1, "cursor": 128 });
+        store
+            .write_transcript("job-1", &cached)
+            .await
+            .expect("cache the first transcript");
+
+        let oversized = serde_json::json!({
+            "schemaVersion": 1,
+            "cursor": 4096,
+            "dialogTurns": "x".repeat(MAX_OUTBOUND_TRANSCRIPT_BYTES + 1),
+        });
+        assert!(
+            !store
+                .write_transcript("job-1", &oversized)
+                .await
+                .expect("an oversized transcript is not an error"),
+            "a transcript above the ceiling must not be cached"
+        );
+        assert_eq!(
+            store
+                .read_transcript("job-1")
+                .await
+                .expect("read transcript"),
+            Some(cached),
+            "the older entry stays because its cursor and turns still agree"
+        );
+    }
+
+    #[tokio::test]
+    async fn unreadable_observer_transcript_falls_back_to_full_replay() {
+        let temp = tempfile::tempdir().expect("temp dir");
+        let store = OutboundDispatchStore::new_in_root_for_tests(temp.path().to_path_buf());
+        let transcripts = temp.path().join(OUTBOUND_TRANSCRIPTS_DIR);
+        fs::create_dir_all(&transcripts)
+            .await
+            .expect("transcripts dir");
+        fs::write(transcripts.join("job-1.json"), b"{\"dialogTurns\": [")
+            .await
+            .expect("truncated transcript");
+
+        assert_eq!(
+            store
+                .read_transcript("job-1")
+                .await
+                .expect("a damaged cache must not fail the observer"),
+            None
+        );
+    }
+
+    #[tokio::test]
+    async fn expired_jobs_do_not_strand_their_observer_transcripts() {
+        let temp = tempfile::tempdir().expect("temp dir");
+        let store = OutboundDispatchStore::new_in_root_for_tests(temp.path().to_path_buf());
+        let mut expired = OutboundDispatchRecord::new(
+            "job-1".to_string(),
+            target(),
+            "session-1".to_string(),
+            "/srv/app".to_string(),
+            "Summarize the repository",
+            "succeeded",
+        )
+        .expect("record");
+        expired.updated_at = Utc::now() - chrono::Duration::days(TERMINAL_OUTBOUND_RETENTION_DAYS);
+        store.bind_if_absent(&expired).await.expect("persist");
+        let live = OutboundDispatchRecord::new(
+            "job-2".to_string(),
+            target(),
+            "session-2".to_string(),
+            "/srv/app".to_string(),
+            "Still running",
+            "running",
+        )
+        .expect("record");
+        store.bind_if_absent(&live).await.expect("persist");
+        for job_id in ["job-1", "job-2"] {
+            store
+                .write_transcript(job_id, &serde_json::json!({ "schemaVersion": 1 }))
+                .await
+                .expect("cache transcript");
+        }
+
+        let records = store.list().await.expect("list");
+
+        assert_eq!(
+            records
+                .iter()
+                .map(|record| &record.job_id)
+                .collect::<Vec<_>>(),
+            vec!["job-2"],
+            "retention must drop the expired record"
+        );
+        assert_eq!(
+            store
+                .read_transcript("job-1")
+                .await
+                .expect("read expired transcript"),
+            None,
+            "the expired job's transcript must go with its record"
+        );
+        assert!(
+            store
+                .read_transcript("job-2")
+                .await
+                .expect("read live transcript")
+                .is_some(),
+            "a live job must keep its cached transcript"
         );
     }
 
@@ -1186,6 +1402,7 @@ mod tests {
         assert_eq!(record.prompt_preview.chars().count(), PROMPT_PREVIEW_CHARS);
     }
 
+    #[cfg(feature = "agent-runtime")]
     #[test]
     fn target_workspace_paths_use_target_platform_semantics() {
         assert!(target_workspace_path_is_absolute("/srv/app"));
@@ -1200,6 +1417,7 @@ mod tests {
         assert!(!target_workspace_path_is_absolute(r"\\server"));
     }
 
+    #[cfg(feature = "agent-runtime")]
     #[tokio::test]
     async fn listing_a_target_adopts_observer_records_without_runtime_ownership() {
         let temp = tempfile::tempdir().expect("tempdir");

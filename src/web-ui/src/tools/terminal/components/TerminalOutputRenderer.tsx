@@ -6,10 +6,8 @@ import { forwardRef, memo, useCallback, useEffect, useId, useImperativeHandle, u
 import { Terminal as XTerm } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { registerTerminalActions, unregisterTerminalActions } from '../services/TerminalActionManager';
-import { themeService } from '@/infrastructure/theme/core/ThemeService';
+import { xtermAppearanceAdapter } from '@/infrastructure/appearance/adapters/XtermAppearanceAdapter';
 import {
-  buildXtermTheme,
-  getXtermFontWeights,
   DEFAULT_XTERM_MINIMUM_CONTRAST_RATIO,
 } from '../utils';
 import {
@@ -116,8 +114,7 @@ const TerminalOutputRendererComponent = forwardRef<TerminalOutputRendererHandle,
   useLayoutEffect(() => {
     if (!containerRef.current) return;
 
-    const currentTheme = themeService.getCurrentTheme();
-    const fontWeights = getXtermFontWeights(currentTheme.type);
+    const fontWeights = xtermAppearanceAdapter.getFontWeights();
     const terminal = new XTerm({
       disableStdin: true,       // Disable input for read-only rendering.
       cursorBlink: false,
@@ -132,10 +129,7 @@ const TerminalOutputRendererComponent = forwardRef<TerminalOutputRendererHandle,
       scrollback: 5000,
       convertEol: true,
       allowTransparency: false,
-      theme: buildXtermTheme(currentTheme, {
-        cursor: 'transparent',    // Hide cursor in read-only mode.
-        cursorAccent: 'transparent',
-      }),
+      theme: xtermAppearanceAdapter.getColors('output'),
     });
 
     const fitAddon = new FitAddon();
@@ -208,13 +202,9 @@ const TerminalOutputRendererComponent = forwardRef<TerminalOutputRendererHandle,
     if (!terminal) return;
 
     const updateTheme = () => {
-      const theme = themeService.getCurrentTheme();
-      const fontWeights = getXtermFontWeights(theme.type);
+      const fontWeights = xtermAppearanceAdapter.getFontWeights();
 
-      terminal.options.theme = buildXtermTheme(theme, {
-        cursor: 'transparent',
-        cursorAccent: 'transparent',
-      });
+      terminal.options.theme = xtermAppearanceAdapter.getColors('output');
       terminal.options.fontWeight = fontWeights.fontWeight;
       terminal.options.fontWeightBold = fontWeights.fontWeightBold;
       terminal.refresh(0, terminal.rows - 1);
@@ -222,7 +212,7 @@ const TerminalOutputRendererComponent = forwardRef<TerminalOutputRendererHandle,
 
     updateTheme();
 
-    const unsubscribe = themeService.on('theme:after-change', updateTheme);
+    const unsubscribe = xtermAppearanceAdapter.subscribe(updateTheme);
     return () => {
       unsubscribe?.();
     };
@@ -278,6 +268,8 @@ const TerminalOutputRendererComponent = forwardRef<TerminalOutputRendererHandle,
   return (
     <div
       className={`terminal-output-renderer ${className} ${hasScrollableBuffer ? 'terminal-output-renderer--scrollable' : 'terminal-output-renderer--no-scroll'}`}
+      data-bf-component="terminal-tool"
+      data-bf-part="output"
       data-terminal-id={terminalId}
       data-readonly="true"
       style={{

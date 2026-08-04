@@ -5,17 +5,25 @@ import type {
   DispatchCliRelease,
   DispatchInstallPoll,
   DispatchInstallStart,
+  DispatchContinueResponse,
   DispatchJobListEntry,
-  DispatchResultApplyOutcome,
-  DispatchResultBundle,
   DispatchSshProbe,
   DispatchStatusResponse,
   DispatchSubmitResponse,
+  DispatchSyncResult,
   DispatchTargetOption,
   DispatchTargetRequest,
-  DispatchWorkspaceDeliveryRequest,
+  DispatchTranscriptCache,
   OutboundDispatchRecord,
 } from './types';
+
+/** One inline image attachment forwarded to the target with the turn. */
+export interface DispatchInlineAttachment {
+  id: string;
+  name?: string;
+  mimeType: string;
+  dataUrl: string;
+}
 
 export const dispatchApi = {
   async listTargets(): Promise<DispatchTargetOption[]> {
@@ -39,13 +47,6 @@ export const dispatchApi = {
     });
   },
 
-  /** Build the CLI from source on the target, for hosts no binary fits. */
-  async installCliSourceStart(connectionId: string): Promise<DispatchInstallStart> {
-    return api.invoke<DispatchInstallStart>('dispatch_install_cli_source_start', {
-      request: { connectionId },
-    });
-  },
-
   async installCliPoll(connectionId: string, cursor: number): Promise<DispatchInstallPoll> {
     return api.invoke<DispatchInstallPoll>('dispatch_install_cli_poll', {
       request: { connectionId, cursor },
@@ -59,31 +60,15 @@ export const dispatchApi = {
   },
 
   /**
-   * Download what a finished snapshot job changed on its target.
+   * Bring a job's work back into this controller's baseline worktree.
    *
-   * Fetch and report only: the bundle lands in the controller's staging area
-   * and nothing reaches the local workspace until the user reviews the diff
-   * and explicitly applies it.
+   * One call, both halves: the target commits and bundles its branch, then the
+   * controller fast-forwards its baseline onto it. The user's own checkout is
+   * never touched — the baseline worktree is a separate directory.
    */
-  async pullResult(jobId: string): Promise<DispatchResultBundle> {
-    return api.invoke<DispatchResultBundle>('dispatch_pull_result', {
-      request: { jobId },
-    });
-  },
-
-  /**
-   * Apply a pulled bundle to a local workspace.
-   *
-   * Aborts without writing when a path changed on both sides, unless
-   * `overwriteConflicts` says to take the target's version.
-   */
-  async applyResult(
-    jobId: string,
-    workspacePath: string,
-    overwriteConflicts: boolean,
-  ): Promise<DispatchResultApplyOutcome> {
-    return api.invoke<DispatchResultApplyOutcome>('dispatch_apply_result', {
-      request: { jobId, workspacePath, overwriteConflicts },
+  async syncResult(jobId: string, message?: string): Promise<DispatchSyncResult> {
+    return api.invoke<DispatchSyncResult>('dispatch_sync_result', {
+      request: { jobId, message },
     });
   },
 
@@ -95,7 +80,8 @@ export const dispatchApi = {
 
   async submit(request: {
     target: DispatchTargetRequest;
-    workspaceDelivery: DispatchWorkspaceDeliveryRequest;
+    baseRef?: string;
+    includeUncommitted: boolean;
     jobId: string;
     sessionId: string;
     agentType: string;
@@ -105,9 +91,53 @@ export const dispatchApi = {
     title?: string;
     sourceWorkspacePath?: string;
     sourceWorkspaceId?: string;
+    attachments?: DispatchInlineAttachment[];
   }): Promise<DispatchSubmitResponse> {
     return api.invoke<DispatchSubmitResponse>('dispatch_submit', {
       request,
+    });
+  },
+
+  /**
+   * Start the next turn of a dispatch session.
+   *
+   * Distinct from `append`, which steers a turn that is still running: this is
+   * for a job whose previous turn has finished. The target keeps its session,
+   * worktree, and event log, so the projection stays one continuous transcript.
+   */
+  async continueJob(
+    jobId: string,
+    turnId: string,
+    prompt: string,
+    displayContent?: string,
+    options?: {
+      /** Per-turn model override; carries forward as the job's model. */
+      model?: string;
+      /** Per-turn approval-policy override with the same carry-forward rule. */
+      approvalPolicy?: DispatchApprovalPolicy;
+      /** Operation kind; defaults to an ordinary prompt turn. */
+      kind?: 'prompt' | 'compact';
+      attachments?: DispatchInlineAttachment[];
+    },
+  ): Promise<DispatchContinueResponse> {
+    return api.invoke<DispatchContinueResponse>('dispatch_continue', {
+      request: {
+        jobId,
+        turnId,
+        prompt,
+        displayContent,
+        model: options?.model,
+        approvalPolicy: options?.approvalPolicy,
+        kind: options?.kind,
+        attachments: options?.attachments,
+      },
+    });
+  },
+
+  /** Read-only persisted-state question answered without starting a turn. */
+  async query(jobId: string, kind: 'usageReport'): Promise<{ kind: string; report: unknown }> {
+    return api.invoke<{ kind: string; report: unknown }>('dispatch_query', {
+      request: { jobId, kind },
     });
   },
 
@@ -165,6 +195,34 @@ export const dispatchApi = {
   async listTargetJobs(target: DispatchTargetRequest): Promise<DispatchJobListEntry[]> {
     return api.invoke<DispatchJobListEntry[]>('dispatch_list_jobs', {
       request: { target },
+    });
+  },
+
+  /**
+   * Read this controller's cached observer transcript for a job.
+   *
+   * Controller-local only. Returns `null` when nothing is cached, which sends
+   * the observer back to replaying the target's event log from byte zero.
+   */
+  async loadTranscript(jobId: string): Promise<DispatchTranscriptCache | null> {
+    return api.invoke<DispatchTranscriptCache | null>('dispatch_load_transcript', {
+      request: { jobId },
+    });
+  },
+
+  /**
+   * Persist this controller's observer transcript for a job, or pass `null` to
+   * erase it.
+   *
+   * Resolves `false` when the transcript is above the controller's cache
+   * ceiling; the previous entry is kept and observing continues unchanged.
+   */
+  async saveTranscript(
+    jobId: string,
+    transcript: DispatchTranscriptCache | null,
+  ): Promise<boolean> {
+    return api.invoke<boolean>('dispatch_save_transcript', {
+      request: { jobId, transcript },
     });
   },
 };

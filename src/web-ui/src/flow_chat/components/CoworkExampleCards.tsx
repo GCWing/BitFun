@@ -103,6 +103,8 @@ export const CoworkExampleCards: React.FC<CoworkExampleCardsProps> = ({
       return (
         <Card
           key={example.id}
+          data-bf-component="cowork-example-cards"
+          data-bf-part="card"
           className="bitfun-cowork-example-cards__card"
           variant="subtle"
           interactive
@@ -115,23 +117,23 @@ export const CoworkExampleCards: React.FC<CoworkExampleCardsProps> = ({
             handleSelect();
           }}
         >
-          <div className="bitfun-cowork-example-cards__card-header">
-            <div className="bitfun-cowork-example-cards__card-icon">
+          <div data-bf-component="cowork-example-cards" data-bf-part="cardHeader" className="bitfun-cowork-example-cards__card-header">
+            <div data-bf-component="cowork-example-cards" data-bf-part="cardIcon" className="bitfun-cowork-example-cards__card-icon">
               <Icon size={18} />
             </div>
-            <div className="bitfun-cowork-example-cards__card-title">{title}</div>
+            <div data-bf-component="cowork-example-cards" data-bf-part="cardTitle" className="bitfun-cowork-example-cards__card-title">{title}</div>
           </div>
-          <div className="bitfun-cowork-example-cards__card-desc">{description}</div>
+          <div data-bf-component="cowork-example-cards" data-bf-part="cardDescription" className="bitfun-cowork-example-cards__card-desc">{description}</div>
         </Card>
       );
     });
   }, [onSelectPrompt, selected, t]);
 
   return (
-    <div className="bitfun-cowork-example-cards">
-      <div className="bitfun-cowork-example-cards__header">
-        <div className="bitfun-cowork-example-cards__title">{t('coworkExamples.title')}</div>
-        <div className="bitfun-cowork-example-cards__header-actions">
+    <div data-bf-component="cowork-example-cards" data-bf-part="root" className="bitfun-cowork-example-cards">
+      <div data-bf-component="cowork-example-cards" data-bf-part="header" className="bitfun-cowork-example-cards__header">
+        <div data-bf-component="cowork-example-cards" data-bf-part="title" className="bitfun-cowork-example-cards__title">{t('coworkExamples.title')}</div>
+        <div data-bf-component="cowork-example-cards" data-bf-part="actions" className="bitfun-cowork-example-cards__header-actions">
           {onAddPlugin && (
             <Tooltip content={t('coworkExamples.addPlugin')}>
               <IconButton
@@ -168,7 +170,7 @@ export const CoworkExampleCards: React.FC<CoworkExampleCardsProps> = ({
           )}
         </div>
       </div>
-      <div className="bitfun-cowork-example-cards__grid">
+      <div data-bf-component="cowork-example-cards" data-bf-part="grid" className="bitfun-cowork-example-cards__grid">
         {cards}
       </div>
     </div>

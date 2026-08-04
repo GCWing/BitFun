@@ -177,17 +177,17 @@ const WorkspaceManager: React.FC<WorkspaceManagerProps> = ({
       title="Workspace Status"
       size="medium"
     >
-      <div className="workspace-manager">
+      <div className="workspace-manager" data-bf-component="workspace-tool" data-bf-part="root">
         {error && (
-          <div className="error-message">
+          <div className="error-message" data-bf-component="workspace-tool" data-bf-part="error">
             <span>Error: {error}</span>
           </div>
         )}
 
-        <div className="current-workspace-section">
+        <div className="current-workspace-section" data-bf-component="workspace-tool" data-bf-part="currentSection">
           <h3>Current Workspace</h3>
           {currentWorkspace ? (
-            <div className="workspace-card current">
+            <div className="workspace-card current" data-bf-component="workspace-tool" data-bf-part="currentCard">
               <div className="workspace-header">
                 <div className="workspace-icon">
                   {getWorkspaceIcon(currentWorkspace)}
@@ -248,14 +248,14 @@ const WorkspaceManager: React.FC<WorkspaceManagerProps> = ({
               )}
             </div>
           ) : (
-            <div className="no-workspace">
+            <div className="no-workspace" data-bf-component="workspace-tool" data-bf-part="empty">
               <FolderOpen size={48} />
               <p>No workspace is currently open</p>
             </div>
           )}
         </div>
 
-        <div className="recent-workspaces-section">
+        <div className="recent-workspaces-section" data-bf-component="workspace-tool" data-bf-part="recentSection">
           <h3>Recent Workspaces</h3>
           {recentWorkspaces.length > 0 ? (
             <div className="workspace-list">
@@ -268,7 +268,7 @@ const WorkspaceManager: React.FC<WorkspaceManagerProps> = ({
                   aria-label={getWorkspaceDisplayName(workspace)}
                   onClick={() => void handleWorkspaceSelect(workspace)}
                   onKeyDown={(event) => handleWorkspaceCardKeyDown(event, workspace)}
-                >
+                 data-bf-component="workspace-tool" data-bf-part="recentCard">
                   <div className="workspace-header">
                     <div className="workspace-icon">
                       {getWorkspaceIcon(workspace)}
@@ -311,7 +311,7 @@ const WorkspaceManager: React.FC<WorkspaceManagerProps> = ({
           )}
         </div>
 
-        <div className="recent-workspaces-section">
+        <div className="recent-workspaces-section" data-bf-component="workspace-tool" data-bf-part="recentSection">
           <h3>Personal Assistants</h3>
           {otherAssistantWorkspaces.length > 0 ? (
             <div className="workspace-list">
@@ -324,7 +324,7 @@ const WorkspaceManager: React.FC<WorkspaceManagerProps> = ({
                   aria-label={getWorkspaceDisplayName(workspace)}
                   onClick={() => void handleWorkspaceSelect(workspace)}
                   onKeyDown={(event) => handleWorkspaceCardKeyDown(event, workspace)}
-                >
+                 data-bf-component="workspace-tool" data-bf-part="assistantCard">
                   <div className="workspace-header">
                     <div className="workspace-icon">
                       <Bot size={16} />

@@ -42,15 +42,15 @@
 }
 
 .search-card__action {
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-xs);
+  color: var(--bf-appearance-token-color-text-secondary);
+  font-size: var(--bf-appearance-token-font-size-xs);
   font-weight: tokens.$font-weight-medium;
   flex-shrink: 0;
 }
 
 .search-card__pattern {
-  color: var(--color-text-primary);
-  font-size: var(--font-size-xs);
+  color: var(--bf-appearance-token-color-text-primary);
+  font-size: var(--bf-appearance-token-font-size-xs);
   font-weight: tokens.$font-weight-medium;
   font-family: tokens.$font-family-mono;
   flex-shrink: 1;
@@ -61,7 +61,7 @@
 }
 
 .search-card__result {
-  color: var(--color-text-muted);
+  color: var(--bf-appearance-token-color-text-muted);
   font-size: 10px;
   font-weight: tokens.$font-weight-semibold;
   margin-left: auto;
@@ -73,24 +73,24 @@
   align-items: center;
   flex-shrink: 0;
   margin-left: tokens.$size-gap-2;
-  color: var(--color-text-muted);
+  color: var(--bf-appearance-token-color-text-muted);
 }
 
 .search-card__status-spinner {
   animation: spin 1s linear infinite;
-  color: var(--color-info);
+  color: var(--bf-appearance-token-color-info);
 }
 
 .search-card__status-success {
-  color: var(--color-success);
+  color: var(--bf-appearance-token-color-success);
 }
 
 .search-card__status-error {
-  color: var(--color-error);
+  color: var(--bf-appearance-token-color-error);
 }
 
 .search-card__status-pending {
-  color: var(--color-warning);
+  color: var(--bf-appearance-token-color-warning);
 }
 
 @keyframes spin {
@@ -116,18 +116,18 @@
   display: flex;
   align-items: center;
   gap: tokens.$size-gap-2;
-  font-size: var(--font-size-sm);
+  font-size: var(--bf-appearance-token-font-size-sm);
 }
 
 .search-card__label {
-  color: var(--color-text-secondary);
+  color: var(--bf-appearance-token-color-text-secondary);
   font-weight: tokens.$font-weight-medium;
   flex-shrink: 0;
   min-width: 70px;
 }
 
 .search-card__value {
-  color: var(--color-text-primary);
+  color: var(--bf-appearance-token-color-text-primary);
   font-family: tokens.$font-family-mono;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -138,8 +138,8 @@
   display: flex;
   gap: tokens.$size-gap-4;
   padding: tokens.$size-gap-3;
-  background: var(--element-bg-soft);
-  border: 1px solid var(--border-base);
+  background: var(--bf-appearance-token-element-bg-soft);
+  border: 1px solid var(--bf-appearance-token-border-base);
   border-radius: tokens.$size-radius-base;
 }
 
@@ -152,15 +152,15 @@
 }
 
 .search-card__stat-value {
-  font-size: var(--font-size-xl);
+  font-size: var(--bf-appearance-token-font-size-xl);
   font-weight: tokens.$font-weight-bold;
   font-family: tokens.$font-family-mono;
-  color: var(--color-text-primary);
+  color: var(--bf-appearance-token-color-text-primary);
 }
 
 .search-card__stat-label {
-  font-size: var(--font-size-xs);
-  color: var(--color-text-muted);
+  font-size: var(--bf-appearance-token-font-size-xs);
+  color: var(--bf-appearance-token-color-text-muted);
 }
 
 .search-card__top-files {
@@ -173,19 +173,19 @@
   gap: tokens.$size-gap-2;
   width: 100%;
   padding: tokens.$size-gap-2 tokens.$size-gap-3;
-  background: var(--element-bg-base);
-  border: 1px solid var(--border-base);
+  background: var(--bf-appearance-token-element-bg-base);
+  border: 1px solid var(--bf-appearance-token-border-base);
   border-radius: tokens.$size-radius-base;
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-sm);
+  color: var(--bf-appearance-token-color-text-secondary);
+  font-size: var(--bf-appearance-token-font-size-sm);
   font-weight: tokens.$font-weight-medium;
   cursor: pointer;
   transition: all tokens.$motion-base tokens.$easing-standard;
 
   &:hover {
-    background: var(--element-bg-soft);
-    border-color: var(--border-medium);
-    color: var(--color-text-primary);
+    background: var(--bf-appearance-token-element-bg-soft);
+    border-color: var(--bf-appearance-token-border-medium);
+    color: var(--bf-appearance-token-color-text-primary);
   }
 
   svg:first-child {
@@ -198,7 +198,7 @@
   }
 
   svg:last-child {
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
     flex-shrink: 0;
   }
 }
@@ -206,8 +206,8 @@
 .search-card__file-list {
   margin-top: tokens.$size-gap-2;
   padding: tokens.$size-gap-2;
-  background: var(--element-bg-base);
-  border: 1px solid var(--border-base);
+  background: var(--bf-appearance-token-element-bg-base);
+  border: 1px solid var(--bf-appearance-token-border-base);
   border-radius: tokens.$size-radius-base;
 }
 
@@ -220,19 +220,19 @@
   transition: all tokens.$motion-base;
 
   &:hover {
-    background: var(--element-bg-soft);
+    background: var(--bf-appearance-token-element-bg-soft);
   }
 
   svg {
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
     flex-shrink: 0;
   }
 }
 
 .search-card__file-name {
   flex: 1;
-  font-size: var(--font-size-sm);
-  color: var(--color-text-primary);
+  font-size: var(--bf-appearance-token-font-size-sm);
+  color: var(--bf-appearance-token-color-text-primary);
   font-family: tokens.$font-family-mono;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -240,9 +240,9 @@
 }
 
 .search-card__file-count {
-  font-size: var(--font-size-xs);
-  color: var(--color-text-muted);
-  background: var(--element-bg-soft);
+  font-size: var(--bf-appearance-token-font-size-xs);
+  color: var(--bf-appearance-token-color-text-muted);
+  background: var(--bf-appearance-token-element-bg-soft);
   padding: 2px 6px;
   border-radius: tokens.$size-radius-sm;
   flex-shrink: 0;
@@ -252,10 +252,10 @@
   margin-top: tokens.$size-gap-4;
   padding: tokens.$size-gap-4;
   text-align: center;
-  color: var(--color-text-muted);
-  font-size: var(--font-size-sm);
-  background: var(--element-bg-base);
-  border: 1px solid var(--border-base);
+  color: var(--bf-appearance-token-color-text-muted);
+  font-size: var(--bf-appearance-token-font-size-sm);
+  background: var(--bf-appearance-token-element-bg-base);
+  border: 1px solid var(--bf-appearance-token-border-base);
   border-radius: tokens.$size-radius-base;
 }
 

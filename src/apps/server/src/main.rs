@@ -1,3 +1,17 @@
+// The app-server's `Builder::on_receive_request(...)` chain monomorphizes
+// into a deeply nested `ChainedHandler<ChainedHandler<…>>` (~20 request
+// handlers plus a dispatch handler). Computing the resulting connection
+// future's layout pushes the trait solver past the default 128 limit, so bump
+// it. Matches the compiler's own suggestion in the overflow diagnostic.
+#![recursion_limit = "256"]
+
+//! Legacy Web Server entrypoint.
+//!
+//! This host was already deprecated before the current App Server refactor.
+//! Refactor work in this app validates protocol and host boundaries; it is not
+//! expected to preserve or complete every legacy Web/Desktop capability, and
+//! it must not be treated as a production-readiness claim.
+
 use anyhow::Result;
 /// BitFun Server
 ///
@@ -15,6 +29,8 @@ use serde::Serialize;
 use std::{collections::HashSet, net::SocketAddr, path::PathBuf, sync::Arc};
 use tower_http::cors::CorsLayer;
 
+mod app_server;
+mod bootstrap;
 mod routes;
 
 pub(crate) struct DispatchHostState {
@@ -25,6 +41,10 @@ pub(crate) struct DispatchHostState {
 /// Application state
 #[derive(Clone)]
 pub struct AppState {
+    // NOTE(Step 2a): only read by the external_sources dispatch path, which is
+    // temporarily dead under browser-direct ACP-over-WS. Kept for the follow-up
+    // that brings external_sources onto the app-server schema.
+    #[allow(dead_code)]
     external_workspace_root: Option<PathBuf>,
     allowed_browser_origins: Arc<HashSet<String>>,
     dispatch_host: Option<Arc<DispatchHostState>>,
@@ -82,6 +102,43 @@ async fn main() -> Result<()> {
                 .map_err(|error| anyhow::anyhow!("Could not open Server workspace: {error}"))
         })
         .transpose()?;
+
+    // Initialize the full agentic stack (coordinator, scheduler, token usage,
+    // MCP/config/filesystem services, event queue). This binding is held alive
+    // for the lifetime of the server so its services outlive every websocket
+    // connection; the app-server client and spawned tasks hold their own Arc
+    // clones of the coordinator, scheduler, and event queue.
+    let server_state = bootstrap::initialize(
+        external_workspace_root
+            .as_ref()
+            .map(|path| path.to_string_lossy().into_owned()),
+    )
+    .await?;
+
+    // Build the agent runtime the same way the Desktop session application does,
+    // then build an in-process `BitfunAppServer` for it. Each WebSocket
+    // connection is handed straight to `BitfunAppServer::serve` over a WS-bridged
+    // `Lines` transport (browser-direct ACP-over-WS, Step 2), so the browser
+    // connects directly to the in-process app-server over native JSON-RPC — no
+    // shared in-process client, no custom WS envelope.
+    let agent_runtime =
+        bitfun_core::product_runtime::CoreProductAgentRuntime::build_session_surface(
+            server_state.coordinator.clone(),
+            server_state.scheduler.clone(),
+            server_state.token_usage_service.clone(),
+        )
+        .map_err(|error| anyhow::anyhow!("Failed to build agent runtime: {error}"))?;
+    // The event source wraps the same `EventQueue` the coordinator publishes to;
+    // each connection's `serve` main loop subscribes independently and projects
+    // runtime events to the frontend shape before pushing them to the browser.
+    let event_source =
+        bitfun_agent_runtime::sdk::AgentEventSource::new(server_state.event_queue.clone());
+    let bitfun_app_server = app_server::build(agent_runtime, event_source);
+
+    tracing::info!(
+        "App-server ready; each WebSocket connection drives one in-process serve over native JSON-RPC"
+    );
+
     let configured_origins = if args.allowed_origins.is_empty() {
         DEFAULT_ALLOWED_BROWSER_ORIGINS
             .iter()
@@ -139,6 +196,10 @@ async fn main() -> Result<()> {
                 .allow_methods([Method::GET])
                 .allow_origin(cors_origins),
         )
+        // The BitFunAppServer is cloned per WebSocket connection through an axum
+        // Extension (cheap Arc clone); each connection spawns its own `serve`
+        // over a WS-bridged `Lines` transport.
+        .layer(axum::Extension(bitfun_app_server))
         .with_state(app_state);
 
     let addr = SocketAddr::from(([127, 0, 0, 1], 8080));

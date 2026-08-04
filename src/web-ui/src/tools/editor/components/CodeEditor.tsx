@@ -12,11 +12,7 @@ import { monacoInitManager } from '../services/MonacoInitManager';
 import { getMonacoRuntime, monacoApi } from '../services/monacoRuntime';
 import { monacoModelManager } from '../services/MonacoModelManager';
 import { activeEditTargetService, createMonacoEditTarget } from '../services/ActiveEditTargetService';
-import { 
-  forceRegisterTheme,
-  BitFunDarkTheme,
-  BitFunDarkThemeMetadata 
-} from '../themes';
+import { monacoAppearanceAdapter } from '@/infrastructure/appearance/adapters/MonacoAppearanceAdapter';
 import { useMonacoLsp } from '@/tools/lsp/hooks/useMonacoLsp';
 import { lspExtensionRegistry } from '@/tools/lsp/services/LspExtensionRegistry';
 import { globalEventBus } from '@/infrastructure/event-bus';
@@ -79,8 +75,6 @@ export interface CodeEditorProps {
   showLineNumbers?: boolean;
   /** Show minimap */
   showMinimap?: boolean;
-  /** Editor theme */
-  theme?: 'vs-dark' | 'vs-light' | 'hc-black';
   /** CSS class name */
   className?: string;
   /** Content change callback */
@@ -250,7 +244,6 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
     line_numbers: 'on',
     minimap: { enabled: showMinimap, side: 'right', size: 'proportional' }
   });
-  const [_currentThemeId, setCurrentThemeId] = useState<string>(BitFunDarkThemeMetadata.id);
   const isMemoryContent = initialContent !== undefined;
   const [cursorPosition, setCursorPosition] = useState({ line: 1, column: 1 });
   const [selection, setSelection] = useState({ chars: 0, lines: 0 });
@@ -667,7 +660,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
           else if (latestEditorConfigRef.current) applyFontConfig(latestEditorConfigRef.current);
         } catch (_) {}
         
-        await monacoInitManager.initialize();
+        const monacoRuntime = await monacoInitManager.initialize();
 
         model = monacoModelManager.getOrCreateModel(
           filePath,
@@ -705,19 +698,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
           }
         }
 
-        forceRegisterTheme(BitFunDarkThemeMetadata.id, BitFunDarkTheme);
-
-        let themeId = BitFunDarkThemeMetadata.id;
-        try {
-          const { themeService } = await import('@/infrastructure/theme');
-          const currentTheme = themeService.getCurrentTheme();
-          if (currentTheme) {
-            themeId = currentTheme.monaco ? currentTheme.id : (currentTheme.type === 'dark' ? BitFunDarkThemeMetadata.id : 'vs');
-            setCurrentThemeId(themeId);
-          }
-        } catch (error) {
-          log.warn('Failed to get current theme, using default', error);
-        }
+        const themeId = monacoAppearanceAdapter.attachMonaco(monacoRuntime);
         
         const editorOptions: monaco.editor.IStandaloneEditorConstructionOptions = {
           model: model,
@@ -2306,44 +2287,6 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
     }
   }, [fileName, detectedLanguage, detectLanguageFromFileName]);
 
-  useEffect(() => {
-    const editor = editorRef.current;
-    if (!editor || !monacoReady) {
-      return;
-    }
-
-    let unsubscribeThemeService: (() => void) | null = null;
-    
-    (async () => {
-      try {
-        const { themeService } = await import('@/infrastructure/theme');
-        
-        unsubscribeThemeService = themeService.on('theme:after-change', (event) => {
-          if (event.theme) {
-            const newThemeId = event.theme.monaco ? event.theme.id : (event.theme.type === 'dark' ? BitFunDarkThemeMetadata.id : 'vs');
-            
-            setCurrentThemeId(newThemeId);
-            
-            // setTheme is global; updateOptions nudges this editor to re-render.
-            try {
-              editor.updateOptions({});
-            } catch (error) {
-              log.warn('Failed to update editor options', error);
-            }
-          }
-        });
-      } catch (error) {
-        log.warn('Failed to register theme listener', error);
-      }
-    })();
-
-    return () => {
-      if (unsubscribeThemeService) {
-        unsubscribeThemeService();
-      }
-    };
-  }, [monacoReady]);
-
   const loadingOverlayText = monacoReady
     ? t('editor.codeEditor.loadingFile')
     : t('editor.codeEditor.preparingEditor');
@@ -2355,6 +2298,13 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
       data-editor-id={`editor-${filePath.replace(/[^a-zA-Z0-9]/g, '-')}`}
       data-file-path={filePath}
       data-readonly={readOnly ? 'true' : 'false'}
+      data-bf-component="editor-tool"
+      data-bf-part="root"
+      data-bf-state={[
+        loading && showLoadingOverlay && 'loading',
+        error && 'error',
+        largeFileMode && 'large-file',
+      ].filter(Boolean).join(' ') || undefined}
       onKeyDownCapture={handleContainerKeyDown}
     >
       {showBreadcrumb && (
@@ -2364,7 +2314,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
         />
       )}
       
-      <div className="code-editor-tool__content" data-shortcut-scope="editor">
+      <div className="code-editor-tool__content" data-shortcut-scope="editor" data-bf-component="editor-tool" data-bf-part="content">
         <div 
           ref={containerRef} 
           style={{ 
@@ -2378,13 +2328,13 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
       </div>
 
       {loading && showLoadingOverlay && (
-        <div className="code-editor-tool__loading-overlay">
+        <div className="code-editor-tool__loading-overlay" data-bf-component="editor-tool" data-bf-part="loading">
           <CubeLoading size="medium" text={loadingOverlayText} />
         </div>
       )}
 
       {error && (
-        <div className="code-editor-tool__error-overlay">
+        <div className="code-editor-tool__error-overlay" data-bf-component="editor-tool" data-bf-part="error">
           <AlertCircle className="code-editor-tool__error-icon" />
           <p className="code-editor-tool__error-message">{error}</p>
           <button
@@ -2398,7 +2348,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
       )}
 
       {saving && (
-        <div className="code-editor-tool__saving-indicator">
+        <div className="code-editor-tool__saving-indicator" data-bf-component="editor-tool" data-bf-part="saving">
           {t('editor.codeEditor.saving')}
         </div>
       )}

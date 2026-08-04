@@ -232,6 +232,27 @@ describeWithJsdom('AgentsScene', () => {
     expect(stylesheet).toContain('min-width: 0;');
   });
 
+  it('uses the shared responsive gallery grid and lets agent cards fill each track', () => {
+    const sceneSource = readFileSync(
+      fileURLToPath(new URL('./AgentsScene.tsx', import.meta.url)),
+      'utf8',
+    );
+    const agentCardStyles = readFileSync(
+      fileURLToPath(new URL('./components/AgentCard.scss', import.meta.url)),
+      'utf8',
+    );
+    const coreCardSurfaceStyles = readFileSync(
+      fileURLToPath(new URL('./components/_AgentSurfaceCard.scss', import.meta.url)),
+      'utf8',
+    );
+
+    expect(sceneSource.match(/<GalleryGrid\b[^>]*\bminCardWidth=\{360\}[^>]*>/g)).toHaveLength(2);
+    expect(agentCardStyles).toMatch(/\.agent-card \{\s+width: 100%;\s+min-width: 0;/);
+    expect(coreCardSurfaceStyles).toMatch(/width: 100%;\s+min-width: 0;/);
+    expect(agentCardStyles).not.toContain('width: 360px;');
+    expect(coreCardSurfaceStyles).not.toContain('width: 360px;');
+  });
+
   it('shows skill grouping and editing for a custom subagent with the Skill tool', async () => {
     const subagent = {
       key: 'user::skill-worker',

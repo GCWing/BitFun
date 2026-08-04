@@ -280,7 +280,6 @@ describe('usePermissionRequests', () => {
       title: 'Remote task',
       agentType: 'agentic',
       approvalPolicy: 'remote',
-      workspaceDelivery: { kind: 'existing' },
       cursor: 0,
       state: 'running',
       appliedEventIds: [],

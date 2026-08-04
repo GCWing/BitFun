@@ -140,7 +140,7 @@ export const FlowTextBlock = React.memo<FlowTextBlockProps>(({
   const markdownTraceContext = isStartupRenderTraceEnabled() ? traceContext : undefined;
 
   return (
-    <div
+    <div data-bf-component="flow-text-block" data-bf-part="root" data-bf-mode={textItem.isMarkdown ? 'markdown' : 'text'} data-bf-state={isActivelyStreaming ? 'streaming' : ''}
       className={`flow-text-block ${className} ${isActivelyStreaming ? 'streaming flow-text-block--streaming' : ''}`}
       data-testid={testId}
       data-flow-item-id={textItem.id}
@@ -163,7 +163,7 @@ export const FlowTextBlock = React.memo<FlowTextBlockProps>(({
           traceContext={markdownTraceContext}
         />
       ) : (
-        <div className="text-content">
+        <div data-bf-component="flow-text-block" data-bf-part="textContent" className="text-content">
           {displayContent}
         </div>
       )}

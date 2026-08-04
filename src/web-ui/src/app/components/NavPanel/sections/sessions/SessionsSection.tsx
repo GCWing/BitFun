@@ -17,6 +17,7 @@ import { hasPendingAskUserQuestion, resolveTrackedTurn } from '../../../../../fl
 import { useSceneStore } from '../../../../stores/sceneStore';
 import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
 import { createLogger } from '@/shared/utils/logger';
+import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { useAgentCanvasStore } from '@/app/components/panels/content-canvas/stores';
 import {
   openBtwSessionInAuxPane,
@@ -1151,8 +1152,8 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
   if (allTopLevelSessions.length === 0) {
     if (metadataPageState.isLoading) {
       return (
-        <div className="bitfun-nav-panel__inline-list">
-          <div className="bitfun-nav-panel__inline-loading">
+        <div data-bf-component="sessions-section" data-bf-part="root" className="bitfun-nav-panel__inline-list">
+          <div className="bitfun-nav-panel__inline-loading" data-bf-component="sessions-section" data-bf-part="loading" data-bf-state="loading">
             <Loader2 size={12} />
             <span>{t('nav.sessions.loading')}</span>
           </div>
@@ -1161,10 +1162,12 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
     }
     if (metadataPageState.loadError) {
       return (
-        <div className="bitfun-nav-panel__inline-list">
+        <div data-bf-component="sessions-section" data-bf-part="root" className="bitfun-nav-panel__inline-list">
           <button
             type="button"
             className="bitfun-nav-panel__inline-action"
+            data-bf-component="sessions-section"
+            data-bf-part="retry"
             onClick={() => {
               void loadInitialMetadataPage('sessions_nav_manual_retry');
             }}
@@ -1174,7 +1177,13 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
         </div>
       );
     }
-    return null;
+    return (
+      <div className="bitfun-nav-panel__inline-list">
+        <div className="bitfun-nav-panel__inline-empty" aria-disabled="true">
+          {t('nav.sessions.noSessions')}
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -1235,9 +1244,6 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
           const dispatchTransport = session.config.dispatchJobId
             ? dispatchTransportByJobId[session.config.dispatchJobId]
             : undefined;
-          const dispatchTransportError =
-            dispatchTransport?.lastTransportError?.trim()
-            || t('nav.sessions.dispatchTransportErrorFallback');
           const dispatchPresentation = isDispatched
             ? resolveDispatchNavPresentation({
                 targetLabel: dispatchTargetLabel,
@@ -1250,7 +1256,6 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                 unreachableLabel: t('nav.sessions.dispatchUnreachable'),
                 unreachableSummary: t('nav.sessions.dispatchUnreachableDetails', {
                   target: dispatchTargetLabel,
-                  error: dispatchTransportError,
                 }),
               })
             : null;
@@ -1337,6 +1342,13 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
               ]
                 .filter(Boolean)
                 .join(' ')}
+              data-bf-component="sessions-section"
+              data-bf-part="row"
+              data-bf-state={[
+                isRowActive && 'active',
+                isEditing && 'editing',
+                openMenuSessionId === session.sessionId && 'menuOpen',
+              ].filter(Boolean).join(' ') || undefined}
               data-testid="nav-session-item"
               data-session-id={session.sessionId}
               data-session-kind={relationship.kind}
@@ -1410,7 +1422,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
               ) : null}
 
               {isEditing ? (
-                <div className="bitfun-nav-panel__inline-item-edit" onClick={e => e.stopPropagation()}>
+                <div className="bitfun-nav-panel__inline-item-edit" data-bf-component="sessions-section" data-bf-part="edit" onClick={e => e.stopPropagation()}>
                   <Input
                     ref={editInputRef}
                     className="bitfun-nav-panel__inline-item-edit-field"
@@ -1444,7 +1456,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                 </div>
               ) : (
                 <>
-                  <span className="bitfun-nav-panel__inline-item-main">
+                  <span className="bitfun-nav-panel__inline-item-main" data-bf-component="sessions-section" data-bf-part="rowMain">
                     <span className="bitfun-nav-panel__inline-item-label">{sessionTitle}</span>
                     {isChildSession ? (
                       <span className="bitfun-nav-panel__inline-item-btw-badge">{childSessionBadge}</span>
@@ -1493,6 +1505,9 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                   </span>
                   <div
                     className={`bitfun-nav-panel__inline-item-actions${openMenuSessionId === session.sessionId ? ' is-open' : ''}`}
+                    data-bf-component="sessions-section"
+                    data-bf-part="actions"
+                    data-bf-state={openMenuSessionId === session.sessionId ? 'menuOpen' : undefined}
                   >
                     <button
                       type="button"
@@ -1509,6 +1524,9 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                     <div
                       ref={sessionMenuPopoverRef}
                       className="bitfun-nav-panel__inline-item-menu-popover"
+                      data-bf-component="sessions-section"
+                      data-bf-part="menu"
+                      data-bf-state="menuOpen"
                       role="menu"
                       style={{ top: `${sessionMenuPosition.top}px`, left: `${sessionMenuPosition.left}px` }}
                       data-testid="nav-session-menu"
@@ -1626,7 +1644,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                         </>
                       )}
                     </div>,
-                    document.body
+                    getAppearanceOverlayHost()
                   )}
                 </>
               )}
@@ -1668,6 +1686,9 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
         <button
           type="button"
           className={`bitfun-nav-panel__inline-toggle${metadataPageState.isLoading ? ' is-loading' : ''}`}
+          data-bf-component="sessions-section"
+          data-bf-part="toggle"
+          data-bf-state={metadataPageState.isLoading ? 'loading' : undefined}
           data-testid="nav-session-list-toggle"
           data-session-nav-toggle-action={expandToggleState.action}
           disabled={metadataPageState.isLoading}

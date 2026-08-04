@@ -115,17 +115,17 @@ export const ContextCompressionDisplay: React.FC<ContextCompressionDisplayProps>
       iconClassName="compression-icon"
       action={headerAction}
       content={
-        <span className="compression-info">
+        <span data-bf-component="context-compression-display" data-bf-part="info" className="compression-info">
           {data.tokensBefore !== undefined && data.tokensAfter !== undefined ? (
             <>
-              <span className="token-stat">
+              <span data-bf-component="context-compression-display" data-bf-part="tokenStat" className="token-stat">
                 {t('toolCards.contextCompression.tokenChange', {
                   before: formatNumber(data.tokensBefore),
                   after: formatNumber(data.tokensAfter),
                 })}
               </span>
               {savedTokens !== undefined && savedRatio !== undefined && (
-                <span className="savings-tag">
+                <span data-bf-component="context-compression-display" data-bf-part="savings" className="savings-tag">
                   {t('toolCards.contextCompression.savingsTag', {
                     saved: formatNumber(savedTokens),
                     ratio: (savedRatio * 100).toFixed(0),
@@ -134,14 +134,14 @@ export const ContextCompressionDisplay: React.FC<ContextCompressionDisplayProps>
               )}
             </>
           ) : (
-            <span className="processing-text">{t('toolCards.contextCompression.compressingContext')}</span>
+            <span data-bf-component="context-compression-display" data-bf-part="processing" className="processing-text">{t('toolCards.contextCompression.compressingContext')}</span>
           )}
         </span>
       }
       extra={
         <>
           {data.status === 'completed' && data.compressionCount && (
-            <span className="compression-meta">
+            <span data-bf-component="context-compression-display" data-bf-part="meta" className="compression-meta">
               {getTriggerText(data.trigger)} · {t('toolCards.contextCompression.compressionCount', { count: data.compressionCount })}
             </span>
           )}
@@ -152,7 +152,7 @@ export const ContextCompressionDisplay: React.FC<ContextCompressionDisplayProps>
   );
 
   const renderErrorContent = () => (
-    <div className="error-content">
+    <div data-bf-component="context-compression-display" data-bf-part="error" className="error-content">
       <div className="error-message">{data.error || t('toolCards.contextCompression.contextCompressionFailed')}</div>
     </div>
   );
@@ -163,21 +163,23 @@ export const ContextCompressionDisplay: React.FC<ContextCompressionDisplayProps>
     }
 
     return (
-      <div className="compression-detail-note">
+      <div data-bf-component="context-compression-display" data-bf-part="detail" className="compression-detail-note">
         {t('toolCards.contextCompression.noSummaryNotice')}
       </div>
     );
   };
 
   return (
-    <BaseToolCard
-      status={data.status}
-      isExpanded={usedNoSummary}
-      className="context-compression-display"
-      header={renderHeader()}
-      expandedContent={renderExpandedContent()}
-      errorContent={renderErrorContent()}
-      isFailed={isFailed}
-    />
+    <div data-bf-component="context-compression-display" data-bf-part="root" data-bf-state={[isFailed && 'failed', usedLocalFallback && 'fallback'].filter(Boolean).join(' ')}>
+      <BaseToolCard
+        status={data.status}
+        isExpanded={usedNoSummary}
+        className="context-compression-display"
+        header={renderHeader()}
+        expandedContent={renderExpandedContent()}
+        errorContent={renderErrorContent()}
+        isFailed={isFailed}
+      />
+    </div>
   );
 };

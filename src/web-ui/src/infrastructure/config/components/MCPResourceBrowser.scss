@@ -4,15 +4,15 @@
   height: 100%;
   display: flex;
   flex-direction: column;
-  background: var(--color-bg-primary);
-  color: var(--color-text-primary);
+  background: var(--bf-appearance-token-color-bg-primary);
+  color: var(--bf-appearance-token-color-text-primary);
 
   .browser-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
     padding: 1.5rem;
-    border-bottom: 1px solid var(--border-base);
+    border-bottom: 1px solid var(--bf-appearance-token-border-base);
 
     h2 {
       margin: 0;
@@ -28,15 +28,15 @@
 
   .browser-search {
     padding: 1rem 1.5rem;
-    border-bottom: 1px solid var(--border-base);
+    border-bottom: 1px solid var(--bf-appearance-token-border-base);
 
     .search-input {
       width: 100%;
       padding: 0.5rem 0.75rem;
-      background: var(--color-bg-secondary);
-      border: 1px solid var(--border-base);
+      background: var(--bf-appearance-token-color-bg-secondary);
+      border: 1px solid var(--bf-appearance-token-border-base);
       border-radius: 6px;
-      color: var(--color-text-primary);
+      color: var(--bf-appearance-token-color-text-primary);
       font-size: 0.9rem;
       transition:
         border-color 150ms ease,
@@ -45,12 +45,12 @@
 
       &:focus {
         outline: none;
-        border-color: var(--color-accent-500);
-        box-shadow: 0 0 0 2px rgba(var(--color-accent-500-rgb) / 0.1);
+        border-color: var(--bf-appearance-token-color-accent-500);
+        box-shadow: 0 0 0 2px rgba(var(--bf-appearance-token-color-accent-500-rgb) / 0.1);
       }
 
       &::placeholder {
-        color: var(--color-text-muted);
+        color: var(--bf-appearance-token-color-text-muted);
       }
     }
   }
@@ -62,9 +62,9 @@
     overflow: hidden;
 
     .resources-list {
-      border-right: 1px solid var(--border-base);
+      border-right: 1px solid var(--bf-appearance-token-border-base);
       overflow-y: auto;
-      background: var(--color-bg-secondary);
+      background: var(--bf-appearance-token-color-bg-secondary);
 
       .loading-state,
       .empty-state {
@@ -74,7 +74,7 @@
         justify-content: center;
         padding: 3rem 1rem;
         text-align: center;
-        color: var(--color-text-secondary);
+        color: var(--bf-appearance-token-color-text-secondary);
 
         .empty-icon {
           font-size: 3rem;
@@ -93,19 +93,16 @@
         gap: 0.75rem;
         padding: 1rem;
         cursor: pointer;
-        border-bottom: 1px solid var(--border-base);
-        transition:
-          background-color 150ms ease,
-          border-color 150ms ease,
-          color 150ms ease;
+        border-bottom: 1px solid var(--bf-appearance-token-border-base);
+        transition: all 0.2s ease;
 
         &:hover {
-          background: var(--color-bg-tertiary);
+          background: var(--bf-appearance-token-color-bg-tertiary);
         }
 
         &.selected {
-          background: var(--color-bg-tertiary);
-          border-left: 3px solid var(--color-accent-500);
+          background: var(--bf-appearance-token-color-bg-tertiary);
+          border-left: 3px solid var(--bf-appearance-token-color-accent-500);
         }
 
         .resource-icon {
@@ -128,7 +125,7 @@
 
           .resource-description {
             font-size: 0.85rem;
-            color: var(--color-text-secondary);
+            color: var(--bf-appearance-token-color-text-secondary);
             margin-bottom: 0.25rem;
             display: -webkit-box;
             -webkit-line-clamp: 2;
@@ -138,7 +135,7 @@
 
           .resource-uri {
             font-size: 0.75rem;
-            color: var(--color-text-muted);
+            color: var(--bf-appearance-token-color-text-muted);
             font-family: monospace;
             white-space: nowrap;
             overflow: hidden;
@@ -158,8 +155,8 @@
         justify-content: space-between;
         align-items: center;
         padding: 1rem 1.5rem;
-        border-bottom: 1px solid var(--border-base);
-        background: var(--color-bg-secondary);
+        border-bottom: 1px solid var(--bf-appearance-token-border-base);
+        background: var(--bf-appearance-token-color-bg-secondary);
 
         .viewer-title {
           display: flex;
@@ -184,8 +181,8 @@
 
         .viewer-mime-type {
           font-size: 0.8rem;
-          color: var(--color-text-muted);
-          background: var(--color-bg-tertiary);
+          color: var(--bf-appearance-token-color-text-muted);
+          background: var(--bf-appearance-token-color-bg-tertiary);
           padding: 0.25rem 0.5rem;
           border-radius: 4px;
           font-family: monospace;
@@ -204,7 +201,7 @@
           align-items: center;
           justify-content: center;
           height: 100%;
-          color: var(--color-text-secondary);
+          color: var(--bf-appearance-token-color-text-secondary);
         }
 
         .content-pre {
@@ -212,7 +209,7 @@
           padding: 0;
           background: none;
           border: none;
-          color: var(--color-text-primary);
+          color: var(--bf-appearance-token-color-text-primary);
           font-family: 'Courier New', Consolas, monospace;
           font-size: 0.9rem;
           line-height: 1.6;
@@ -227,7 +224,7 @@
         align-items: center;
         justify-content: center;
         height: 100%;
-        color: var(--color-text-secondary);
+        color: var(--bf-appearance-token-color-text-secondary);
 
         .empty-icon {
           font-size: 3rem;

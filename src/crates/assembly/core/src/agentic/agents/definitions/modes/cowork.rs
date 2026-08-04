@@ -56,6 +56,7 @@ impl CoworkMode {
                 "InitMiniApp".to_string(),
                 "FinalizeMiniApp".to_string(),
                 "PublishMiniApp".to_string(),
+                "PublishAppearance".to_string(),
             ],
         }
     }

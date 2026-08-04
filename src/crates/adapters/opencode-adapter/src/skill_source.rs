@@ -1,7 +1,10 @@
-use crate::command_source::{strip_jsonc, OpenCodeCommandProvider, OpenCodeCommandProviderOptions};
-use crate::local_source_paths::find_project_root;
+use crate::command_source::strip_jsonc;
+use crate::local_source_paths::{
+    find_project_root, local_source_plan, LocalConfigDocument, LocalSourcePlanItem,
+    OpenCodeLocalConfigOptions,
+};
 use bitfun_product_domains::external_sources::ExternalSourceScope;
-use bitfun_services_core::bounded_fs::{read_bounded_text, BoundedTextRead};
+use bitfun_services_core::bounded_fs::BoundedTextRead;
 use serde_json::Value;
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
@@ -11,14 +14,14 @@ const MAX_CONFIGURED_SKILL_ROOTS: usize = 64;
 
 #[derive(Debug, Clone)]
 pub struct OpenCodeSkillRootProviderOptions {
-    pub command: OpenCodeCommandProviderOptions,
+    pub config: OpenCodeLocalConfigOptions,
     pub home_dir: Option<PathBuf>,
 }
 
 impl OpenCodeSkillRootProviderOptions {
     pub fn from_environment() -> Self {
         Self {
-            command: OpenCodeCommandProviderOptions::from_environment(),
+            config: OpenCodeLocalConfigOptions::from_environment(),
             home_dir: dirs::home_dir(),
         }
     }
@@ -38,14 +41,14 @@ pub struct OpenCodeConfiguredSkillRoot {
 }
 
 pub struct OpenCodeSkillRootProvider {
-    command_provider: OpenCodeCommandProvider,
+    config: OpenCodeLocalConfigOptions,
     home_dir: Option<PathBuf>,
 }
 
 impl OpenCodeSkillRootProvider {
     pub fn new(options: OpenCodeSkillRootProviderOptions) -> Self {
         Self {
-            command_provider: OpenCodeCommandProvider::new(options.command),
+            config: options.config,
             home_dir: options.home_dir,
         }
     }
@@ -61,14 +64,17 @@ impl OpenCodeSkillRootProvider {
         let mut configured_paths = Vec::new();
         let mut precedence = 0usize;
 
-        for layer in self.command_provider.config_file_layers(workspace_root) {
-            let Some(paths) = read_local_skill_paths(&layer.path) else {
+        for item in local_source_plan(&self.config, workspace_root, None) {
+            let LocalSourcePlanItem::Config(document) = item else {
+                continue;
+            };
+            let Some(paths) = read_local_skill_paths(&document) else {
                 continue;
             };
             for value in paths {
                 let current_precedence = precedence;
                 precedence = precedence.saturating_add(1);
-                configured_paths.push((value, layer.scope, current_precedence));
+                configured_paths.push((value, document.scope, current_precedence));
             }
         }
 
@@ -129,8 +135,8 @@ impl Default for OpenCodeSkillRootProvider {
     }
 }
 
-fn read_local_skill_paths(path: &Path) -> Option<Vec<String>> {
-    let content = match read_bounded_text(path, MAX_CONFIG_FILE_BYTES).ok()? {
+fn read_local_skill_paths(document: &LocalConfigDocument) -> Option<Vec<String>> {
+    let content = match document.read_bounded(MAX_CONFIG_FILE_BYTES).ok()? {
         BoundedTextRead::Content(content) => content,
         BoundedTextRead::TooLarge | BoundedTextRead::InvalidUtf8 => return None,
     };

@@ -2,9 +2,9 @@
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: var(--color-bg-primary);
-  color: var(--color-text-primary);
-  font-family: var(--font-family-sans);
+  background: var(--bf-appearance-token-color-bg-primary);
+  color: var(--bf-appearance-token-color-text-primary);
+  font-family: var(--bf-appearance-token-font-family-sans);
 }
 
 .settings-header {
@@ -12,8 +12,8 @@
   align-items: center;
   justify-content: space-between;
   padding: 16px;
-  border-bottom: 1px solid var(--border-base);
-  background: var(--color-bg-secondary);
+  border-bottom: 1px solid var(--bf-appearance-token-border-base);
+  background: var(--bf-appearance-token-color-bg-secondary);
 }
 
 .header-left {
@@ -26,7 +26,7 @@
   margin: 0;
   font-size: 18px;
   font-weight: 600;
-  color: var(--color-text-primary);
+  color: var(--bf-appearance-token-color-text-primary);
 }
 
 .header-right {
@@ -41,17 +41,17 @@
   justify-content: center;
   width: 32px;
   height: 32px;
-  background: var(--color-bg-tertiary);
-  border: 1px solid var(--border-base);
+  background: var(--bf-appearance-token-color-bg-tertiary);
+  border: 1px solid var(--bf-appearance-token-border-base);
   border-radius: 4px;
-  color: var(--color-text-secondary);
+  color: var(--bf-appearance-token-color-text-secondary);
   cursor: pointer;
   transition: all 0.2s ease;
 }
 
 .refresh-btn:hover:not(:disabled) {
-  background: var(--element-bg-hover);
-  color: var(--color-text-primary);
+  background: var(--bf-appearance-token-element-bg-hover);
+  color: var(--bf-appearance-token-color-text-primary);
 }
 
 .refresh-btn:disabled {
@@ -64,10 +64,10 @@
   align-items: center;
   gap: 6px;
   padding: 8px 12px;
-  background: var(--color-success-bg);
-  border: 1px solid var(--color-success);
+  background: var(--bf-appearance-token-color-success-bg);
+  border: 1px solid var(--bf-appearance-token-color-success);
   border-radius: 4px;
-  color: var(--color-success);
+  color: var(--bf-appearance-token-color-success);
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
@@ -75,7 +75,7 @@
 }
 
 .save-btn:hover:not(:disabled) {
-  background: var(--color-success);
+  background: var(--bf-appearance-token-color-success);
   color: white;
 }
 
@@ -94,15 +94,15 @@
 }
 
 .status-banner.error {
-  background: var(--color-error-bg);
-  color: var(--color-error);
-  border-color: color-mix(in srgb, var(--color-error) 20%, transparent);
+  background: var(--bf-appearance-token-color-error-bg);
+  color: var(--bf-appearance-token-color-error);
+  border-color: color-mix(in srgb, var(--bf-appearance-token-color-error) 20%, transparent);
 }
 
 .status-banner.success {
-  background: var(--color-success-bg);
-  color: var(--color-success);
-  border-color: color-mix(in srgb, var(--color-success) 20%, transparent);
+  background: var(--bf-appearance-token-color-success-bg);
+  color: var(--bf-appearance-token-color-success);
+  border-color: color-mix(in srgb, var(--bf-appearance-token-color-success) 20%, transparent);
 }
 
 .close-btn {
@@ -117,8 +117,8 @@
 
 .settings-tabs {
   display: flex;
-  border-bottom: 1px solid var(--border-base);
-  background: var(--color-bg-secondary);
+  border-bottom: 1px solid var(--bf-appearance-token-border-base);
+  background: var(--bf-appearance-token-color-bg-secondary);
 }
 
 .tab-btn {
@@ -129,7 +129,7 @@
   background: none;
   border: none;
   border-bottom: 2px solid transparent;
-  color: var(--color-text-secondary);
+  color: var(--bf-appearance-token-color-text-secondary);
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
@@ -137,13 +137,13 @@
 }
 
 .tab-btn:hover {
-  color: var(--color-text-primary);
-  background: var(--element-bg-hover);
+  color: var(--bf-appearance-token-color-text-primary);
+  background: var(--bf-appearance-token-element-bg-hover);
 }
 
 .tab-btn.active {
-  color: var(--color-accent-500);
-  border-bottom-color: var(--color-accent-500);
+  color: var(--bf-appearance-token-color-accent-500);
+  border-bottom-color: var(--bf-appearance-token-color-accent-500);
 }
 
 .settings-content {
@@ -159,7 +159,7 @@
 .settings-section {
   margin-bottom: 32px;
   padding-bottom: 24px;
-  border-bottom: 1px solid var(--border-base);
+  border-bottom: 1px solid var(--bf-appearance-token-border-base);
 }
 
 .settings-section:last-child {
@@ -171,20 +171,20 @@
   margin: 0 0 8px;
   font-size: 14px;
   font-weight: 600;
-  color: var(--color-text-primary);
+  color: var(--bf-appearance-token-color-text-primary);
 }
 
 .settings-section h5 {
   margin: 16px 0 8px;
   font-size: 12px;
   font-weight: 600;
-  color: var(--color-text-secondary);
+  color: var(--bf-appearance-token-color-text-secondary);
 }
 
 .section-description {
   margin: 0 0 16px;
   font-size: 12px;
-  color: var(--color-text-secondary);
+  color: var(--bf-appearance-token-color-text-secondary);
   line-height: 1.4;
 }
 
@@ -199,17 +199,17 @@
   margin-bottom: 6px;
   font-size: 12px;
   font-weight: 500;
-  color: var(--color-text-secondary);
+  color: var(--bf-appearance-token-color-text-secondary);
 }
 
 .form-group input,
 .form-group select {
   width: 100%;
   padding: 8px 12px;
-  background: var(--color-bg-tertiary);
-  border: 1px solid var(--border-base);
+  background: var(--bf-appearance-token-color-bg-tertiary);
+  border: 1px solid var(--bf-appearance-token-border-base);
   border-radius: 4px;
-  color: var(--color-text-primary);
+  color: var(--bf-appearance-token-color-text-primary);
   font-size: 12px;
   transition: all 0.2s ease;
 }
@@ -217,18 +217,18 @@
 .form-group input:focus,
 .form-group select:focus {
   outline: none;
-  border-color: var(--color-accent-500);
-  background: var(--element-bg-hover);
+  border-color: var(--bf-appearance-token-color-accent-500);
+  background: var(--bf-appearance-token-element-bg-hover);
 }
 
 .form-group input::placeholder {
-  color: var(--color-text-secondary);
+  color: var(--bf-appearance-token-color-text-secondary);
 }
 
 .checkbox-group {
   padding: 12px;
-  background: var(--color-bg-tertiary);
-  border: 1px solid var(--border-base);
+  background: var(--bf-appearance-token-color-bg-tertiary);
+  border: 1px solid var(--bf-appearance-token-border-base);
   border-radius: 6px;
 }
 
@@ -249,7 +249,7 @@
 .field-description {
   margin: 4px 0 0;
   font-size: 11px;
-  color: var(--color-text-secondary);
+  color: var(--bf-appearance-token-color-text-secondary);
   line-height: 1.3;
 }
 
@@ -261,8 +261,8 @@
 
 .remote-config {
   padding: 16px;
-  background: var(--color-bg-tertiary);
-  border: 1px solid var(--border-base);
+  background: var(--bf-appearance-token-color-bg-tertiary);
+  border: 1px solid var(--bf-appearance-token-border-base);
   border-radius: 6px;
   margin-bottom: 16px;
 }
@@ -270,10 +270,10 @@
 .remote-config h5 {
   margin: 0 0 12px;
   padding: 4px 8px;
-  background: var(--color-accent-100);
-  border: 1px solid var(--color-accent-500);
+  background: var(--bf-appearance-token-color-accent-100);
+  border: 1px solid var(--bf-appearance-token-color-accent-500);
   border-radius: 3px;
-  color: var(--color-accent-500);
+  color: var(--bf-appearance-token-color-accent-500);
   font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
@@ -282,8 +282,8 @@
 
 .branch-config {
   padding: 16px;
-  background: var(--color-bg-tertiary);
-  border: 1px solid var(--border-base);
+  background: var(--bf-appearance-token-color-bg-tertiary);
+  border: 1px solid var(--bf-appearance-token-border-base);
   border-radius: 6px;
   margin-bottom: 16px;
 }
@@ -291,10 +291,10 @@
 .branch-config h5 {
   margin: 0 0 12px;
   padding: 4px 8px;
-  background: var(--color-success-bg);
-  border: 1px solid var(--color-success);
+  background: var(--bf-appearance-token-color-success-bg);
+  border: 1px solid var(--bf-appearance-token-color-success);
   border-radius: 3px;
-  color: var(--color-success);
+  color: var(--bf-appearance-token-color-success);
   font-size: 11px;
   font-weight: 600;
   display: inline-block;
@@ -332,13 +332,13 @@
 
 .error-message {
   font-size: 12px;
-  color: var(--color-text-secondary);
+  color: var(--bf-appearance-token-color-text-secondary);
   margin: 4px 0 16px;
 }
 
 .retry-btn {
   padding: 8px 16px;
-  background: var(--color-accent-500);
+  background: var(--bf-appearance-token-color-accent-500);
   border: none;
   border-radius: 4px;
   color: white;
@@ -348,7 +348,7 @@
 }
 
 .retry-btn:hover {
-  background: var(--color-accent-600);
+  background: var(--bf-appearance-token-color-accent-600);
 }
 
 @media (max-width: 768px) {
@@ -373,7 +373,7 @@
   }
   
   .tab-btn.active {
-    border-right-color: var(--color-accent-500);
+    border-right-color: var(--bf-appearance-token-color-accent-500);
     border-bottom-color: transparent;
   }
   

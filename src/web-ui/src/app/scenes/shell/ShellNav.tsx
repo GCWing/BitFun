@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Plus,
   ChevronDown,
@@ -27,6 +28,8 @@ import { Button } from '@/component-library/components/Button';
 import { Tooltip } from '@/component-library/components/Tooltip';
 import ShellNavEntryItem from './components/ShellNavEntryItem';
 import ShellNavWorkspaceSwitcher from './components/ShellNavWorkspaceSwitcher';
+import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
+import { useAnchoredPopoverPosition } from '@/shared/utils/useAnchoredPopoverPosition';
 import './ShellNav.scss';
 
 function extractShortVersion(version?: string): string {
@@ -73,10 +76,10 @@ const ShellNav: React.FC = () => {
     setWorkspaceMenuOpen,
     workspaceMenuPosition,
     menuRef,
+    menuPopoverRef,
     workspaceMenuRef,
     workspaceTriggerRef,
   } = useShellNavMenuState(hasMultipleWorkspaces);
-
   const loadAvailableShells = useCallback(async () => {
     try {
       const [shells, terminalConfig] = await Promise.all([
@@ -125,6 +128,15 @@ const ShellNav: React.FC = () => {
       })),
     [availableShells, defaultShellType, t],
   );
+  const createMenuLayout = useAnchoredPopoverPosition({
+    open: menuOpen,
+    anchorRef: menuRef,
+    popoverRef: menuPopoverRef,
+    preferredPlacement: 'bottom',
+    alignment: 'end',
+    gap: 6,
+    layoutRevision: shellMenuItems.length,
+  });
 
   const handleToggleWorkspaceMenu = useCallback(() => {
     if (!hasMultipleWorkspaces) {
@@ -244,10 +256,10 @@ const ShellNav: React.FC = () => {
   }, [deleteEntry, t]);
 
   return (
-    <div className="bitfun-shell-nav" data-testid="shell-panel">
-      <div className="bitfun-shell-nav__header">
+    <div data-bf-component="shell-nav" data-bf-part="root" className="bitfun-shell-nav" data-testid="shell-panel">
+      <div data-bf-component="shell-nav" data-bf-part="header" className="bitfun-shell-nav__header">
         <div className="bitfun-shell-nav__title-group">
-          <span className="bitfun-shell-nav__title" data-testid="shell-panel-title">{t('nav.shell.title')}</span>
+          <span data-bf-component="shell-nav" data-bf-part="title" className="bitfun-shell-nav__title" data-testid="shell-panel-title">{t('nav.shell.title')}</span>
           <ShellNavWorkspaceSwitcher
             workspaceName={workspaceName}
             hasMultipleWorkspaces={hasMultipleWorkspaces}
@@ -262,8 +274,8 @@ const ShellNav: React.FC = () => {
             onSelectWorkspace={handleSelectWorkspace}
           />
         </div>
-        <div className="bitfun-shell-nav__header-actions" ref={menuRef}>
-          <div className={`bitfun-shell-nav__split-button${menuOpen ? ' is-active' : ''}`}>
+        <div data-bf-component="shell-nav" data-bf-part="headerActions" className="bitfun-shell-nav__header-actions" ref={menuRef}>
+          <div data-bf-component="shell-nav" data-bf-part="splitButton" data-bf-state={menuOpen ? 'active' : undefined} className={`bitfun-shell-nav__split-button${menuOpen ? ' is-active' : ''}`}>
             <Tooltip content={t('nav.shell.actions.newTerminal')} placement="bottom">
               <button
                 type="button"
@@ -286,10 +298,24 @@ const ShellNav: React.FC = () => {
             </Tooltip>
           </div>
 
-          {menuOpen ? (
-            <div className="bitfun-shell-nav__dropdown-menu" role="menu">
+          {menuOpen ? createPortal(
+            <div
+              ref={menuPopoverRef}
+              data-bf-component="shell-nav"
+              data-bf-part="menu"
+              data-bf-placement={createMenuLayout?.placement ?? 'bottom'}
+              className="bitfun-shell-nav__dropdown-menu"
+              role="menu"
+              style={{
+                top: `${createMenuLayout?.top ?? 0}px`,
+                left: `${createMenuLayout?.left ?? 0}px`,
+                visibility: createMenuLayout ? 'visible' : 'hidden',
+              }}
+            >
               {shellMenuItems.map((shell) => (
                 <button
+                  data-bf-component="shell-nav"
+                  data-bf-part="menuItem"
                   key={shell.key}
                   type="button"
                   className="bitfun-shell-nav__dropdown-item"
@@ -301,20 +327,23 @@ const ShellNav: React.FC = () => {
                 </button>
               ))}
               {shellMenuItems.length > 0 ? <div className="bitfun-shell-nav__dropdown-separator" /> : null}
-              <button type="button" className="bitfun-shell-nav__dropdown-item" role="menuitem" onClick={() => { setMenuOpen(false); void handleRefresh(); }}>
+              <button type="button" data-bf-component="shell-nav" data-bf-part="menuItem" className="bitfun-shell-nav__dropdown-item" role="menuitem" onClick={() => { setMenuOpen(false); void handleRefresh(); }}>
                 <RefreshCw size={14} />
                 <span>{t('nav.shell.actions.refresh')}</span>
               </button>
-            </div>
+            </div>,
+            getAppearanceOverlayHost(),
           ) : null}
         </div>
       </div>
 
       <div
+        data-bf-component="shell-nav"
+        data-bf-part="content"
         className={`bitfun-shell-nav__sections${!hasVisibleContent ? ' bitfun-shell-nav__sections--empty' : ''}`}
       >
         {hasVisibleContent ? (
-          <div className="bitfun-shell-nav__terminal-list" data-testid="shell-command-list">
+          <div data-bf-component="shell-nav" data-bf-part="list" className="bitfun-shell-nav__terminal-list" data-testid="shell-command-list">
             {entries.map((entry) => (
               <ShellNavEntryItem
                 key={entry.sessionId}
@@ -331,7 +360,7 @@ const ShellNav: React.FC = () => {
             ))}
           </div>
         ) : (
-          <div className="bitfun-shell-nav__empty">
+          <div data-bf-component="shell-nav" data-bf-part="empty" className="bitfun-shell-nav__empty">
             <p className="bitfun-shell-nav__empty-message">
               {t('nav.shell.empty.all')}
             </p>

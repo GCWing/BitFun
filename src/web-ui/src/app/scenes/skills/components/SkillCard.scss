@@ -23,7 +23,7 @@
   height: 100%;
   min-height: 150px;
   border-radius: 12px;
-  background: var(--element-bg-soft);
+  background: var(--bf-appearance-token-element-bg-soft);
   display: flex;
   flex-direction: column;
   position: relative;
@@ -52,7 +52,7 @@
 
   &:hover {
     transform: translateY(-3px) scale(1.01);
-    box-shadow: 0 12px 32px var(--color-overlay-black-15);
+    box-shadow: 0 12px 32px var(--bf-appearance-token-color-overlay-black-15);
 
     &::before {
       opacity: 0.25;
@@ -60,7 +60,7 @@
   }
 
   &:focus-visible {
-    outline: 2px solid var(--color-accent-500);
+    outline: 2px solid var(--bf-appearance-token-color-accent-500);
     outline-offset: 2px;
   }
 
@@ -81,12 +81,12 @@
     width: 30px;
     height: 30px;
     border-radius: 8px;
-    background: var(--color-overlay-white-12);
+    background: var(--bf-appearance-token-color-overlay-white-12);
     backdrop-filter: blur(8px);
   }
 
   &__icon {
-    color: var(--color-text-primary);
+    color: var(--bf-appearance-token-color-text-primary);
     animation: skill-card-icon-pop 0.46s $easing-decelerate both;
     @include surface-stagger.animation-delay(35ms, 50ms);
   }
@@ -120,7 +120,7 @@
   &__name {
     font-size: 0.9em;
     font-weight: $font-weight-semibold;
-    color: var(--color-text-primary);
+    color: var(--bf-appearance-token-color-text-primary);
     line-height: $line-height-base;
     min-width: 0;
     flex: 1;
@@ -133,7 +133,7 @@
     margin: 0;
     font-size: 0.78em;
     font-weight: $font-weight-normal;
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
     opacity: 0.72;
     line-height: $line-height-relaxed;
     display: -webkit-box;
@@ -152,8 +152,8 @@
     flex-shrink: 0;
     margin: 0;
     padding: 0;
-    color: var(--color-text-muted);
-    font-size: var(--font-size-xs);
+    color: var(--bf-appearance-token-color-text-muted);
+    font-size: var(--bf-appearance-token-font-size-xs);
     line-height: $line-height-base;
   }
 
@@ -203,15 +203,15 @@
     height: 32px;
     padding: 0;
     border: none;
-    background: var(--color-overlay-white-08);
-    color: var(--color-text-secondary);
+    background: var(--bf-appearance-token-color-overlay-white-08);
+    color: var(--bf-appearance-token-color-text-secondary);
     cursor: pointer;
     transition:
       background 0.25s ease,
       color 0.25s ease;
 
     &:not(:last-child) {
-      border-right: 1px solid var(--color-overlay-white-08);
+      border-right: 1px solid var(--bf-appearance-token-color-overlay-white-08);
     }
 
     &:disabled {
@@ -220,20 +220,20 @@
     }
 
     &:not(:disabled):hover {
-      background: var(--color-overlay-white-15);
-      color: var(--color-text-primary);
+      background: var(--bf-appearance-token-color-overlay-white-15);
+      color: var(--bf-appearance-token-color-text-primary);
     }
 
     &--primary:not(:disabled):hover {
-      color: var(--color-accent-400);
+      color: var(--bf-appearance-token-color-accent-400);
     }
 
     &--success:not(:disabled):hover {
-      color: var(--color-success);
+      color: var(--bf-appearance-token-color-success);
     }
 
     &--danger:not(:disabled):hover {
-      color: var(--color-error);
+      color: var(--bf-appearance-token-color-error);
     }
 
     &--muted {

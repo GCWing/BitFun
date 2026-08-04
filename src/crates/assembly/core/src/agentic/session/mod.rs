@@ -7,6 +7,7 @@ pub mod context_store;
 pub mod evidence_ledger;
 pub mod file_read_state;
 pub mod prompt_cache;
+pub(crate) mod revert;
 pub mod session_manager;
 pub mod session_store_port;
 pub mod token_anchor;

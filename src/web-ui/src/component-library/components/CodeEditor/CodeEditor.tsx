@@ -1,6 +1,6 @@
 /**
  * CodeEditor component
- * Code editor based on MonacoEditorCore with syntax highlighting, themes, and fullscreen toggle
+ * Code editor based on MonacoEditorCore with syntax highlighting and fullscreen toggle
  */
 
 import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react';
@@ -16,8 +16,6 @@ export interface CodeEditorProps {
   value?: string;
   /** Programming language */
   language?: string;
-  /** Theme */
-  theme?: 'vs-dark' | 'vs-light' | 'hc-black' | 'bitfun-dark' | 'bitfun-light';
   /** Read-only */
   readOnly?: boolean;
   /** Show line numbers */
@@ -49,7 +47,6 @@ export interface CodeEditorProps {
 export const CodeEditor: React.FC<CodeEditorProps> = ({
   value = '',
   language = 'typescript',
-  theme = 'bitfun-dark',
   readOnly = false,
   lineNumbers = 'on',
   minimap = true,
@@ -153,14 +150,18 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
   const computedWidth = typeof width === 'number' ? `${width}px` : width;
 
   return (
-    <div className={classNames}>
+    <div className={classNames} data-bf-component="code-editor" data-bf-part="root" data-bf-state={[isFullscreen && 'fullscreen', readOnly && 'readOnly'].filter(Boolean).join(' ') || undefined}>
       <div 
         className="code-editor__wrapper"
+        data-bf-component="code-editor"
+        data-bf-part="wrapper"
         style={{ height: computedHeight, width: computedWidth }}
       >
         {showFullscreenButton && (
           <button
             className="code-editor__fullscreen-btn"
+            data-bf-component="code-editor"
+            data-bf-part="fullscreenButton"
             onClick={toggleFullscreen}
             title={isFullscreen ? t('codeEditor.exitFullscreenHint') : t('codeEditor.enterFullscreen')}
             aria-label={isFullscreen ? t('codeEditor.exitFullscreen') : t('codeEditor.enterFullscreen')}
@@ -176,21 +177,22 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
             )}
           </button>
         )}
-        <MonacoEditorCore
-          ref={editorCoreRef}
-          filePath={filePath}
-          language={language}
-          initialContent={value}
-          preset={readOnly ? 'readonly' : 'standard'}
-          config={config}
-          readOnly={readOnly}
-          theme={theme}
-          showLineNumbers={lineNumbers !== 'off'}
-          showMinimap={minimap}
-          enableLsp={false}
-          onContentChange={handleContentChange}
-          onEditorReady={handleEditorReady}
-        />
+        <div data-bf-component="code-editor" data-bf-part="editor">
+          <MonacoEditorCore
+            ref={editorCoreRef}
+            filePath={filePath}
+            language={language}
+            initialContent={value}
+            preset={readOnly ? 'readonly' : 'standard'}
+            config={config}
+            readOnly={readOnly}
+            showLineNumbers={lineNumbers !== 'off'}
+            showMinimap={minimap}
+            enableLsp={false}
+            onContentChange={handleContentChange}
+            onEditorReady={handleEditorReady}
+          />
+        </div>
       </div>
     </div>
   );

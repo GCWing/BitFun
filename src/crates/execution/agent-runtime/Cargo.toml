@@ -4,6 +4,7 @@ version.workspace = true
 authors.workspace = true
 edition.workspace = true
 description = "Agent runtime contracts and owner decisions for BitFun"
+autotests = false
 
 [lib]
 name = "bitfun_agent_runtime"
@@ -31,10 +32,32 @@ serde_yaml = { workspace = true }
 sha2 = { workspace = true }
 thiserror = { workspace = true }
 uuid = { workspace = true }
-tokio = { workspace = true }
+tokio = { workspace = true, features = ["io-util", "macros", "process", "rt", "sync", "time"] }
 tokio-util = { workspace = true }
 
 [dev-dependencies]
+bitfun-runtime-services = { path = "../runtime-services", features = ["test-support"] }
+tokio = { workspace = true, features = ["rt-multi-thread"] }
+
+[[test]]
+name = "agent_definition_contracts"
+path = "tests/agent_definition_contracts.rs"
+
+[[test]]
+name = "agent_session_contracts"
+path = "tests/agent_session_contracts.rs"
+
+[[test]]
+name = "agent_interaction_contracts"
+path = "tests/agent_interaction_contracts.rs"
+
+[[test]]
+name = "agent_long_horizon_contracts"
+path = "tests/agent_long_horizon_contracts.rs"
+
+[[test]]
+name = "native_hook_execution_contracts"
+path = "tests/native_hook_execution_contracts.rs"
 
 [lints]
 workspace = true

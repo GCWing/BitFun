@@ -85,14 +85,14 @@ const GitScene: React.FC<GitSceneProps> = ({
   }, [activeView, isActive, workspacePath]);
 
   if (!isActive) {
-    return <div className="bitfun-git-scene" aria-hidden="true" />;
+    return <div className="bitfun-git-scene" aria-hidden="true" data-bf-scene="git" data-bf-part="root" data-bf-view="hidden" />;
   }
 
   if (!repoLoading && !isRepository) {
     return (
-      <div className="bitfun-git-scene bitfun-git-scene--not-repository">
-        <div className="bitfun-git-scene__content">
-          <div className="bitfun-git-scene__init-container">
+      <div className="bitfun-git-scene bitfun-git-scene--not-repository" data-bf-scene="git" data-bf-part="root" data-bf-view="not-repository">
+        <div className="bitfun-git-scene__content" data-bf-scene="git" data-bf-part="content">
+          <div className="bitfun-git-scene__init-container" data-bf-scene="git" data-bf-part="empty">
             <div className="bitfun-git-scene__init-decoration">
               <div className="bitfun-git-scene__init-line bitfun-git-scene__init-line--dashed" />
               <div className="bitfun-git-scene__init-dot" />
@@ -127,14 +127,14 @@ const GitScene: React.FC<GitSceneProps> = ({
 
   if ((repoLoading || statusLoading) && !forceReset) {
     return (
-      <div className="bitfun-git-scene bitfun-git-scene--loading">
-        <div className="bitfun-git-scene__content">
+      <div className="bitfun-git-scene bitfun-git-scene--loading" data-bf-scene="git" data-bf-part="root" data-bf-view="loading">
+        <div className="bitfun-git-scene__content" data-bf-scene="git" data-bf-part="content">
           <div className="bitfun-git-scene__loading-actions">
             <IconButton size="xs" variant="ghost" onClick={() => { setForceReset(true); setTimeout(() => { setForceReset(false); handleRefresh(); }, 100); }} tooltip={t('actions.forceRefresh')}>
               <RefreshCw size={14} />
             </IconButton>
           </div>
-          <div className="bitfun-git-scene__loading-state">
+          <div className="bitfun-git-scene__loading-state" data-bf-scene="git" data-bf-part="loading">
             <CubeLoading size="medium" text={t('loading.text')} />
             <p className="bitfun-git-scene__loading-hint">{t('loading.hint')}</p>
           </div>
@@ -143,7 +143,17 @@ const GitScene: React.FC<GitSceneProps> = ({
     );
   }
 
-  return <div className="bitfun-git-scene" data-shortcut-scope="git">{renderView()}</div>;
+  return (
+    <div
+      className="bitfun-git-scene"
+      data-shortcut-scope="git"
+      data-bf-scene="git"
+      data-bf-part="root"
+      data-bf-view="repository"
+    >
+      {renderView()}
+    </div>
+  );
 };
 
 export default GitScene;

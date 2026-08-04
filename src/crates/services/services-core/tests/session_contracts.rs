@@ -1,3 +1,5 @@
+#![cfg(feature = "local-storage")]
+
 use bitfun_services_core::session::{DialogTurnKind, SessionKind, SessionMetadata};
 
 #[test]

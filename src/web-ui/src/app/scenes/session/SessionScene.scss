@@ -18,8 +18,8 @@
   height: 100%;
   overflow: hidden;
   position: relative;
-  background: var(--color-bg-scene);
-  color: var(--color-text-primary);
+  background: var(--bf-appearance-token-color-bg-scene);
+  color: var(--bf-appearance-token-color-text-primary);
 
   &--dragging {
     user-select: none;
@@ -149,12 +149,12 @@
       top: 50%;
       transform: translate(-50%, -50%);
       color: rgba(var(--private-session-pane-resizer-accent-rgb), 0.9);
-      font-size: var(--flowchat-font-size-sm);
+      font-size: var(--bf-appearance-token-flowchat-font-size-sm);
       font-weight: 600;
       pointer-events: none;
       z-index: 101;
       white-space: nowrap;
-      text-shadow: 0 1px 2px var(--color-overlay-black-30);
+      text-shadow: 0 1px 2px var(--bf-appearance-token-color-overlay-black-30);
       animation: pane-collapse-hint 0.3s ease-out;
     }
   }
@@ -168,7 +168,7 @@
   cursor: col-resize;
   user-select: none;
   z-index: $z-sticky;
-  background: var(--border-subtle);
+  background: var(--bf-appearance-token-border-subtle);
 
   &::before {
     content: '';
@@ -298,7 +298,7 @@
   overflow: hidden;
   position: relative;
   box-sizing: border-box;
-  border-top: 1px solid var(--border-subtle);
+  border-top: 1px solid var(--bf-appearance-token-border-subtle);
   transition: height $motion-base $easing-standard,
               opacity $motion-base $easing-standard;
 
@@ -324,11 +324,10 @@
   cursor: row-resize;
   user-select: none;
   z-index: $z-sticky;
-  background: var(--border-subtle);
-  // Explicit property list (no `transition: all`).
-  transition: height $motion-base $easing-standard,
-              opacity $motion-base $easing-standard,
-              background-color $motion-base $easing-standard;
+  background: var(--bf-appearance-token-border-subtle);
+  transition: all $motion-base $easing-standard,
+              height $motion-base $easing-standard,
+              opacity $motion-base $easing-standard;
 
   &::before {
     content: '';

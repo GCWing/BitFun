@@ -1,6 +1,6 @@
 //! Managed plugin composition.
 //!
-//! This is the only product-full root that selects the OpenCode-compatible
+//! This is the only plugin-runtime root that selects the OpenCode-compatible
 //! adapter and PluginRuntimeClient. Workspace identity here scopes source,
 //! approval, and logical client state; it is not a process ownership boundary.
 //! This module projects candidates for product surfaces; it does not register

@@ -752,7 +752,7 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
   };
 
   const renderHeader = () => (
-    <div className="task-header-wrapper">
+    <div className="task-header-wrapper" data-bf-component="task-tool-display" data-bf-part="header">
       <ToolCardIconSlot
         icon={renderToolIcon()}
         iconClassName={`task-icon ${effectiveIsRunning ? 'is-running' : ''}`}
@@ -762,11 +762,11 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
         onAffordanceClick={handleCardClick}
       />
 
-      <div className="task-content-wrapper">
+      <div className="task-content-wrapper" data-bf-component="task-tool-display" data-bf-part="body">
         <div className="task-body-columns">
-          <div className="task-body-main">
-            <div className={`task-header-main ${hasFailedOutcome ? 'task-header-main--failed' : ''}`}>
-              <span className="task-action">
+          <div className="task-body-main" data-bf-component="task-tool-display" data-bf-part="main">
+            <div className={`task-header-main ${isFailed ? 'task-header-main--failed' : ''}`}>
+              <span className="task-action" data-bf-component="task-tool-display" data-bf-part="action">
                 {showSubagentExecModel && resolvedSubagentModel ? (
                   <>
                     {t('toolCards.taskTool.headerLinePrefix', { agentType: taskAgentTypeLabel })}
@@ -775,7 +775,7 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
                   </>
                 ) : taskHeaderLine}
               </span>
-              <div className="task-header-meta">
+              <div className="task-header-meta" data-bf-component="task-tool-display" data-bf-part="meta">
                 <ToolTimeoutIndicator
                   startTime={toolItem.startTime}
                   isRunning={effectiveIsRunning}
@@ -841,7 +841,7 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
             </div>
           </div>
           {!isCancelAction && (
-            <div className="task-header-rail">
+            <div className="task-header-rail" data-bf-component="task-tool-display" data-bf-part="rail">
               <button
                 type="button"
                 className="task-header-rail__hit"
@@ -882,10 +882,10 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
     }
 
     return (
-      <div className="task-expanded-content">
+      <div className="task-expanded-content" data-bf-component="task-tool-display" data-bf-part="expanded" data-bf-state="expanded">
         {interruptionNote && (
           <>
-            <div className="task-interruption-note" role="note">
+            <div className="task-interruption-note" role="note" data-bf-component="task-tool-display" data-bf-part="interruption">
               <AlertTriangle size={14} strokeWidth={2} aria-hidden />
               <span>{interruptionNote}</span>
             </div>
@@ -895,7 +895,7 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
           </>
         )}
         {rc ? (
-          <div className="task-reviewer-context">
+          <div className="task-reviewer-context" data-bf-component="task-tool-display" data-bf-part="reviewer">
             <div className="task-reviewer-context__role" style={{ color: rc.accentColor }}>
               {tAgents(`reviewTeams.members.${rc.definitionKey}.role`, {
                 defaultValue: rc.roleName,
@@ -906,7 +906,7 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
                 defaultValue: rc.description,
               })}
             </div>
-            <ul className="task-reviewer-context__responsibilities">
+            <ul className="task-reviewer-context__responsibilities" data-bf-component="task-tool-display" data-bf-part="responsibilities">
               {rc.responsibilities.map((resp, idx) => (
                 <li key={idx}>
                   {tAgents(`reviewTeams.members.${rc.definitionKey}.responsibilities.${idx}`, {
@@ -922,6 +922,8 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
             className={`thinking-content-wrapper task-prompt-wrapper${promptScrollState.hasScroll ? ' has-scroll' : ''}${
               promptScrollState.atTop ? ' at-top' : ''
             }${promptScrollState.atBottom ? ' at-bottom' : ''}`}
+            data-bf-component="task-tool-display"
+            data-bf-part="prompt"
           >
             <div
               ref={promptContentRef}
@@ -944,22 +946,32 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
   if (isCancelAction) {
     const cancelSessionId = linkedSubagentSessionId || 'Not provided';
     return (
-      <CompactToolCard
-        status={status}
-        isExpanded={false}
-        className="task-cancel-card"
-        header={
-          <CompactToolCardHeader
-            icon={<ToolCardStatusSlot status={status} toolIcon={<Split size={16} />} />}
-            content={t('toolCards.taskTool.cancelSession', { sessionId: cancelSessionId })}
+      <div data-bf-component="task-tool-display" data-bf-part="root">
+        <div data-bf-component="task-tool-display" data-bf-part="cancel">
+          <CompactToolCard
+            status={status}
+            isExpanded={false}
+            className="task-cancel-card"
+            header={
+              <CompactToolCardHeader
+                icon={<ToolCardStatusSlot status={status} toolIcon={<Split size={16} />} />}
+                content={t('toolCards.taskTool.cancelSession', { sessionId: cancelSessionId })}
+              />
+            }
           />
-        }
-      />
+        </div>
+      </div>
     );
   }
 
   return (
-    <div ref={cardRootRef} data-tool-card-id={toolId ?? ''}>
+    <div
+      data-bf-component="task-tool-display"
+      data-bf-part="root"
+      data-bf-state={[isFailed && 'failed', displayIsExpanded && 'expanded'].filter(Boolean).join(' ') || undefined}
+      ref={cardRootRef}
+      data-tool-card-id={toolId ?? ''}
+    >
       <BaseToolCard
         status={displayStatus}
         isExpanded={displayIsExpanded}

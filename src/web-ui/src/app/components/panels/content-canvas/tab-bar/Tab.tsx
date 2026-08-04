@@ -295,7 +295,15 @@ export const Tab: React.FC<TabProps> = ({
 
   return (
     <Tooltip content={tooltipText} placement="bottom">
-      <div
+      <div data-bf-component="canvas-tab" data-bf-part="root" data-bf-group={groupId}
+        data-bf-state={[
+          isActive && 'active',
+          isDragging && 'dragging',
+          tab.isDirty && 'dirty',
+          tab.fileDeletedFromDisk && 'deleted',
+          tab.state === 'pinned' && 'pinned',
+          tab.state === 'preview' && 'preview',
+        ].filter(Boolean).join(' ')}
         className={classNames}
         data-tab-id={tab.id}
         data-tab-title={tab.title}
@@ -315,17 +323,17 @@ export const Tab: React.FC<TabProps> = ({
       >
         {/* Task-detail type icon */}
         {isTaskDetail && (
-          <Split size={12} className="canvas-tab__type-icon" aria-hidden />
+          <Split size={12} data-bf-component="canvas-tab" data-bf-part="typeIcon" className="canvas-tab__type-icon" aria-hidden />
         )}
 
         {/* Title */}
-        <span className="canvas-tab__title">
+        <span data-bf-component="canvas-tab" data-bf-part="title" className="canvas-tab__title">
           {titleDisplay}
         </span>
 
         {/* Dirty state indicator */}
         {tab.isDirty && (
-          <span className="canvas-tab__dirty-indicator" title={t('tabs.unsaved')}>
+          <span data-bf-component="canvas-tab" data-bf-part="dirtyIndicator" className="canvas-tab__dirty-indicator" title={t('tabs.unsaved')}>
             ●
           </span>
         )}
@@ -333,6 +341,8 @@ export const Tab: React.FC<TabProps> = ({
         {/* Close / pinned action */}
         <Tooltip content={isPinned ? t('tabs.unpin') : t('tabs.close')}>
           <button
+            data-bf-component="canvas-tab"
+            data-bf-part="action"
             className={`canvas-tab__action-btn canvas-tab__close-btn ${isPinned ? 'canvas-tab__close-btn--pin' : ''}`}
             onClick={isPinned ? handlePinClick : handleCloseClick}
             tabIndex={-1}

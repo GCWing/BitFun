@@ -19,6 +19,7 @@ pub(crate) enum FileLockError {
 }
 
 impl FileLock {
+    #[cfg(feature = "local-storage")]
     pub(crate) fn acquire(path: &Path, mode: FileLockMode) -> Result<Self, FileLockError> {
         let file = open_lock_file(path)?;
         match mode {

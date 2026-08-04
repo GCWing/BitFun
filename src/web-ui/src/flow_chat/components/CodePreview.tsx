@@ -13,7 +13,7 @@
 
 import React, { useMemo, memo, useRef, useEffect, useState, useCallback, useDeferredValue } from 'react';
 import { getPrismLanguage } from '@/infrastructure/language-detection';
-import { useTheme } from '@/infrastructure/theme';
+import { useAppearance } from '@/infrastructure/appearance';
 import { getLoadedPrismSyntaxHighlighter, loadPrismSyntaxHighlighter } from '@/shared/utils/syntaxHighlighterLoader';
 import { buildCodePreviewPrismStyle, CODE_PREVIEW_FONT_FAMILY } from './codePreviewPrismTheme';
 import './CodePreview.scss';
@@ -126,7 +126,8 @@ export const CodePreview: React.FC<CodePreviewProps> = memo(({
   maxHeight = 400,
   onLineClick,
 }) => {
-  const { isLight } = useTheme();
+  const { current: appearance } = useAppearance();
+  const isLight = appearance?.mode === 'light';
   const prismStyle = useMemo(() => buildCodePreviewPrismStyle(isLight), [isLight]);
   const [SyntaxHighlighter, setSyntaxHighlighter] = useState<React.ComponentType<any> | null>(() => getLoadedPrismSyntaxHighlighter());
 
@@ -206,9 +207,9 @@ export const CodePreview: React.FC<CodePreviewProps> = memo(({
       style: {
         display: 'block',
         backgroundColor: isHighlighted
-          ? 'color-mix(in srgb, var(--color-accent-500) 15%, transparent)'
+          ? 'color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 15%, transparent)'
           : 'transparent',
-        borderLeft: isHighlighted ? '3px solid var(--color-accent-500)' : '3px solid transparent',
+        borderLeft: isHighlighted ? '3px solid var(--bf-appearance-token-color-accent-500)' : '3px solid transparent',
         marginLeft: '-3px',
         paddingLeft: '3px',
         transition: 'background-color 0.15s ease, border-color 0.15s ease',
@@ -220,8 +221,8 @@ export const CodePreview: React.FC<CodePreviewProps> = memo(({
   
   if (!content) {
     return (
-      <div className={`code-preview code-preview--empty ${className}`}>
-        <span className="code-preview__placeholder">No content</span>
+      <div data-bf-component="code-preview" data-bf-part="root" data-bf-state="empty" className={`code-preview code-preview--empty ${className}`}>
+        <span data-bf-component="code-preview" data-bf-part="placeholder" className="code-preview__placeholder">No content</span>
       </div>
     );
   }
@@ -231,9 +232,11 @@ export const CodePreview: React.FC<CodePreviewProps> = memo(({
   };
   
   return (
-    <div className={`code-preview ${isStreaming ? 'code-preview--streaming' : ''} ${className}`}>
+    <div data-bf-component="code-preview" data-bf-part="root" data-bf-state={isStreaming ? 'streaming' : undefined} className={`code-preview ${isStreaming ? 'code-preview--streaming' : ''} ${className}`}>
       <div 
         ref={containerRef}
+        data-bf-component="code-preview"
+        data-bf-part="content"
         className="code-preview__content"
         style={containerStyle}
       >
@@ -265,27 +268,27 @@ export const CodePreview: React.FC<CodePreviewProps> = memo(({
               paddingRight: '1em',
               textAlign: 'right',
               userSelect: 'none',
-              color: 'var(--color-text-muted)',
+              color: 'var(--bf-appearance-token-color-text-muted)',
               opacity: isLight ? 0.88 : 0.6,
             }}
           >
             {displayContent}
           </SyntaxHighlighter>
         ) : (
-          <pre className="code-preview__plain" aria-label="Code preview">
+          <pre data-bf-component="code-preview" data-bf-part="plain" className="code-preview__plain" aria-label="Code preview">
             <code>
               {displayContent.split('\n').map((line, index) => {
                 const lineNumber = displayContentInfo.startingLineNumber + index;
                 return (
-                  <span
+                  <span data-bf-component="code-preview" data-bf-part="line" data-bf-state={highlightedLine === lineNumber ? 'highlighted' : undefined}
                     key={`${lineNumber}-${index}`}
                     className={`code-preview__plain-line${highlightedLine === lineNumber ? ' code-preview__plain-line--highlighted' : ''}`}
                     onClick={() => handleLineClick(lineNumber)}
                   >
                     {showLineNumbers && (
-                      <span className="code-preview__plain-line-number">{lineNumber}</span>
+                      <span data-bf-component="code-preview" data-bf-part="lineNumber" className="code-preview__plain-line-number">{lineNumber}</span>
                     )}
-                    <span className="code-preview__plain-line-content">{line || '\u00A0'}</span>
+                    <span data-bf-component="code-preview" data-bf-part="lineContent" className="code-preview__plain-line-content">{line || '\u00A0'}</span>
                   </span>
                 );
               })}
@@ -295,7 +298,7 @@ export const CodePreview: React.FC<CodePreviewProps> = memo(({
         
         {/* Streaming cursor indicator */}
         {isStreaming && (
-          <span className="code-preview__cursor" />
+          <span data-bf-component="code-preview" data-bf-part="cursor" className="code-preview__cursor" />
         )}
       </div>
     </div>

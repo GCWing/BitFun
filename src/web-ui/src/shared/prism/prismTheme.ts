@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'react';
-import { SHARED_PRISM_COLOR_SCHEME } from '@/shared/theme/syntaxHighlightAccents';
+import { APPEARANCE_PRISM_TOKENS } from '@/infrastructure/appearance/appearanceDomainTokens';
 
 type PrismBlockStyles = {
   pre: CSSProperties;
@@ -14,8 +14,8 @@ export function buildSharedPrismStyle(
   blockStyles: PrismBlockStyles,
 ): Record<string, CSSProperties> {
   const colors = isLight
-    ? SHARED_PRISM_COLOR_SCHEME.light
-    : SHARED_PRISM_COLOR_SCHEME.dark;
+    ? APPEARANCE_PRISM_TOKENS.light
+    : APPEARANCE_PRISM_TOKENS.dark;
 
   return {
     [PRE_KEY]: {

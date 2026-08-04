@@ -10,6 +10,7 @@ mod mcp;
 mod refresh;
 mod subagent;
 mod tool;
+mod workspace_reference;
 
 pub use control_plane::ExternalSourceControlPlane;
 pub use hook::{ExternalHookCatalogCoordinator, ExternalHookDiscoveryResult};
@@ -28,6 +29,10 @@ pub use subagent::{
 pub use tool::{
     ExternalToolCoordinator, ExternalToolCoordinatorSnapshot, ExternalToolDiscoveryRequest,
     ExternalToolDiscoveryResult,
+};
+pub use workspace_reference::{
+    ExternalWorkspaceReferenceCoordinator, ExternalWorkspaceReferenceCoordinatorSnapshot,
+    ExternalWorkspaceReferenceDiscoveryRequest, ExternalWorkspaceReferenceDiscoveryResult,
 };
 
 use bitfun_product_domains::external_sources::{
@@ -215,6 +220,8 @@ impl ExternalSourceCoordinator {
                 subagent_generation: 0,
                 preference_revision: 0,
                 subagents: Vec::new(),
+                subagent_model_binding_groups: Vec::new(),
+                subagent_model_binding_options: Vec::new(),
                 subagent_conflicts: Vec::new(),
                 pending_subagent_approvals: Vec::new(),
                 integration_policy: Default::default(),
@@ -531,7 +538,7 @@ impl ExternalSourceCoordinator {
                     false,
                 )
             })?;
-        provider.provider.expand(command, arguments)
+        provider.provider.expand(&self.context, command, arguments)
     }
 
     fn rebuild_snapshot(&mut self) -> ExternalSourceCatalogSnapshot {
@@ -677,6 +684,7 @@ impl ExternalSourceCoordinator {
                         command_description: command.description.clone(),
                         source_scope: source.record.scope,
                         source_location: source.record.location.clone(),
+                        execution_target: command.execution_target.clone(),
                         availability: command.availability.clone(),
                     })
                 })
@@ -743,6 +751,8 @@ impl ExternalSourceCoordinator {
             subagent_generation: 0,
             preference_revision: 0,
             subagents: Vec::new(),
+            subagent_model_binding_groups: Vec::new(),
+            subagent_model_binding_options: Vec::new(),
             subagent_conflicts: Vec::new(),
             pending_subagent_approvals: Vec::new(),
             integration_policy: Default::default(),

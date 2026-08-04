@@ -2,6 +2,7 @@
 
 import React, { useMemo, useCallback, useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { ChevronRight, File, Folder, Code, Loader2, ArrowLeft } from 'lucide-react';
 import { getFileIconType } from '@/tools/file-system/utils/fileIcons';
 import { workspaceAPI } from '@/infrastructure/api';
@@ -160,6 +161,8 @@ const DropdownMenu: React.FC<DropdownMenuProps> = ({
     <div 
       ref={menuRef} 
       className="editor-breadcrumb-dropdown"
+      data-bf-component="editor-breadcrumb"
+      data-bf-part="menu"
       style={{
         position: 'fixed',
         top: position.top,
@@ -167,9 +170,11 @@ const DropdownMenu: React.FC<DropdownMenuProps> = ({
       }}
     >
       {canGoBack && (
-        <div className="editor-breadcrumb-dropdown__header">
+        <div data-bf-component="editor-breadcrumb" data-bf-part="menuHeader" className="editor-breadcrumb-dropdown__header">
           <Tooltip content="Go to parent directory" placement="top">
             <button 
+              data-bf-component="editor-breadcrumb"
+              data-bf-part="menuBack"
               className="editor-breadcrumb-dropdown__back"
               onClick={(e) => {
                 e.stopPropagation();
@@ -180,7 +185,7 @@ const DropdownMenu: React.FC<DropdownMenuProps> = ({
             </button>
           </Tooltip>
           <Tooltip content={currentDirPath} placement="top">
-            <span className="editor-breadcrumb-dropdown__title">
+            <span data-bf-component="editor-breadcrumb" data-bf-part="menuTitle" className="editor-breadcrumb-dropdown__title">
               {currentDirName}
             </span>
           </Tooltip>
@@ -188,20 +193,23 @@ const DropdownMenu: React.FC<DropdownMenuProps> = ({
       )}
       
       {loading ? (
-        <div className="editor-breadcrumb-dropdown__loading">
+        <div data-bf-component="editor-breadcrumb" data-bf-part="loading" className="editor-breadcrumb-dropdown__loading">
           <Loader2 size={14} className="editor-breadcrumb-dropdown__spinner" />
           <span>Loading...</span>
         </div>
       ) : sortedItems.length === 0 ? (
-        <div className="editor-breadcrumb-dropdown__empty">
+        <div data-bf-component="editor-breadcrumb" data-bf-part="empty" className="editor-breadcrumb-dropdown__empty">
           Empty directory
         </div>
       ) : (
-        <ul className="editor-breadcrumb-dropdown__list">
+        <ul data-bf-component="editor-breadcrumb" data-bf-part="list" className="editor-breadcrumb-dropdown__list">
           {sortedItems.map((item) => {
             const isCurrentFile = item.path.replace(/\\/g, '/') === currentFilePath.replace(/\\/g, '/');
             return (
               <li
+                data-bf-component="editor-breadcrumb"
+                data-bf-part="listItem"
+                data-bf-state={isCurrentFile ? 'selected' : undefined}
                 key={item.path}
                 className={`editor-breadcrumb-dropdown__item ${isCurrentFile ? 'editor-breadcrumb-dropdown__item--current' : ''}`}
                 onClick={(e) => {
@@ -230,7 +238,7 @@ const DropdownMenu: React.FC<DropdownMenuProps> = ({
     </div>
   );
 
-  return createPortal(menuContent, document.body);
+  return createPortal(menuContent, getAppearanceOverlayHost());
 };
 export const EditorBreadcrumb: React.FC<EditorBreadcrumbProps> = ({
   filePath,
@@ -396,7 +404,7 @@ export const EditorBreadcrumb: React.FC<EditorBreadcrumbProps> = ({
   }
 
   return (
-    <nav className={`editor-breadcrumb ${className}`}>
+    <nav className={`editor-breadcrumb ${className}`} data-bf-component="editor-breadcrumb" data-bf-part="root">
       {displaySegments.map((segment, index) => {
         const isEllipsis = 'isEllipsis' in segment && segment.isEllipsis;
         const pathSegment = segment as PathSegment;
@@ -406,18 +414,23 @@ export const EditorBreadcrumb: React.FC<EditorBreadcrumbProps> = ({
           <React.Fragment key={isEllipsis ? 'ellipsis' : pathSegment.fullPath}>
             {index > 0 && (
               <ChevronRight 
+                data-bf-component="editor-breadcrumb"
+                data-bf-part="separator"
                 size={10} 
                 className="editor-breadcrumb__separator" 
               />
             )}
             
             {isEllipsis ? (
-              <span className="editor-breadcrumb__item editor-breadcrumb__item--ellipsis">
+              <span data-bf-component="editor-breadcrumb" data-bf-part="item" className="editor-breadcrumb__item editor-breadcrumb__item--ellipsis">
                 {segment.name}
               </span>
             ) : (
               <Tooltip content={pathSegment.fullPath} placement="bottom">
                 <span
+                  data-bf-component="editor-breadcrumb"
+                  data-bf-part="item"
+                  data-bf-state={isDropdownOpen ? 'active' : undefined}
                   ref={(el) => setItemRef(pathSegment.fullPath, el)}
                   className={`editor-breadcrumb__item ${
                     pathSegment.isFile 
@@ -426,14 +439,14 @@ export const EditorBreadcrumb: React.FC<EditorBreadcrumbProps> = ({
                   } editor-breadcrumb__item--clickable ${isDropdownOpen ? 'editor-breadcrumb__item--active' : ''}`}
                   onClick={(e) => handleSegmentClick(pathSegment, e)}
                 >
-                  <span className="editor-breadcrumb__item-icon">
+                  <span data-bf-component="editor-breadcrumb" data-bf-part="itemIcon" className="editor-breadcrumb__item-icon">
                     {pathSegment.isFile ? (
                       getFileIconComponent(pathSegment.name)
                     ) : (
                       <Folder size={12} />
                     )}
                   </span>
-                  <span className="editor-breadcrumb__item-text">
+                  <span data-bf-component="editor-breadcrumb" data-bf-part="itemText" className="editor-breadcrumb__item-text">
                     {pathSegment.name}
                   </span>
                 </span>

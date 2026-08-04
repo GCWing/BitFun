@@ -4,17 +4,20 @@
  *
  * Safe policy:
  * - incremental: keep latest crate root (+ latest session)
- * - .fingerprint: never mtime-prune (Cargo needs multiple concurrent units)
- * - deps: delete only hashes with no remaining fingerprint directory
+ * - .fingerprint: keep the latest generation per Cargo unit identity, plus a
+ *   short grace window for recently-built feature variants
+ * - deps / build: delete hashes with no remaining fingerprint directory
  *
  * Env:
  *   BITFUN_TARGET_GC=0          disable
  *   BITFUN_TARGET_GC_DRY_RUN=1  report only
+ *   BITFUN_TARGET_GC_MIN_AGE_HOURS=24
  */
 import { execFileSync } from 'node:child_process';
 import {
   existsSync,
   lstatSync,
+  readFileSync,
   readdirSync,
   rmSync,
   statSync,
@@ -27,6 +30,7 @@ const DEFAULT_ROOT = join(__dirname, '..');
 const FINGERPRINT_HASH_RE = /^(.+)-([0-9a-f]{16})$/;
 const DEPS_HASH_RE = /^.+?-([0-9a-f]{16})(?:[.-]|$)/;
 const SESSION_DIR_RE = /^s-/;
+const DEFAULT_FINGERPRINT_MIN_AGE_MS = 24 * 60 * 60 * 1_000;
 
 export function splitIncrementalCrateDir(name) {
   const idx = name.lastIndexOf('-');
@@ -61,6 +65,17 @@ function safeStatMtimeMs(path) {
   } catch {
     return 0;
   }
+}
+
+function fingerprintActivityMtimeMs(fingerprintPath) {
+  // Cargo refreshes invoked.timestamp even when a fingerprint is reused, while
+  // the directory mtime can remain unchanged for days. The stamp is therefore
+  // the authoritative activity signal; the directory time covers incomplete
+  // fingerprints that do not have a stamp yet.
+  return Math.max(
+    safeStatMtimeMs(join(fingerprintPath, 'invoked.timestamp')),
+    safeStatMtimeMs(fingerprintPath)
+  );
 }
 
 function listDirs(dir) {
@@ -149,24 +164,95 @@ export function planIncrementalPrune(incrementalDir, { keepSessions = 1 } = {}) 
   return toDelete;
 }
 
-/**
- * Collect fingerprint metadata hashes that still exist on disk.
- *
- * Important: do NOT delete fingerprint directories by "keep newest N per stem".
- * Cargo routinely keeps multiple concurrent units for one package (lib,
- * build-script, feature variants). mtime is not a valid liveness signal, and
- * deleting a still-referenced fingerprint + its deps forces a cold rebuild of
- * that crate (and often a large share of the graph) on the next desktop:dev.
- */
-export function planFingerprintPrune(fingerprintDir) {
-  const keptHashes = new Set();
-  for (const name of listDirs(fingerprintDir)) {
-    const split = splitFingerprintDir(name);
-    if (split) {
-      keptHashes.add(split.hash);
+function readFingerprintUnitIdentity(fingerprintPath, stem) {
+  const jsonNames = listFiles(fingerprintPath)
+    .filter((name) => name.endsWith('.json'))
+    .sort();
+  if (jsonNames.length === 0) {
+    return null;
+  }
+
+  const units = [];
+  for (const name of jsonNames) {
+    try {
+      const metadata = JSON.parse(readFileSync(join(fingerprintPath, name), 'utf8'));
+      // These fields identify the Cargo unit itself. Intentionally exclude
+      // features, dependency hashes, rustflags and config: changes to those
+      // fields create a new generation of the same unit, which is precisely
+      // the history this GC needs to bound.
+      units.push([
+        name,
+        metadata.target ?? null,
+        metadata.profile ?? null,
+        metadata.path ?? null,
+        metadata.compile_kind ?? null,
+      ]);
+    } catch {
+      // An unreadable fingerprint may be in the middle of being written.
+      // Defer to the caller's age-based incomplete-entry policy.
+      return null;
     }
   }
-  return { toDelete: [], keptHashes };
+
+  return JSON.stringify([stem, units]);
+}
+
+/**
+ * Keep the latest generation of each distinct Cargo unit.
+ *
+ * A package stem alone is unsafe because Cargo can concurrently own lib,
+ * test-lib, bin and build-script units. Cargo's fingerprint JSON supplies a
+ * stable unit identity; feature/dependency changes are treated as generations
+ * of that unit. Recently-created generations stay inside a grace window so a
+ * just-finished multi-command workflow remains warm.
+ */
+export function planFingerprintPrune(
+  fingerprintDir,
+  { now = Date.now(), minAgeMs = DEFAULT_FINGERPRINT_MIN_AGE_MS } = {}
+) {
+  const toDelete = [];
+  const keptHashes = new Set();
+  const groups = new Map();
+
+  for (const name of listDirs(fingerprintDir)) {
+    const split = splitFingerprintDir(name);
+    if (!split) {
+      continue;
+    }
+
+    const path = join(fingerprintDir, name);
+    const mtimeMs = fingerprintActivityMtimeMs(path);
+    const unitIdentity = readFingerprintUnitIdentity(path, split.stem);
+    if (!unitIdentity) {
+      // Incomplete fingerprints are safe to remove once old; unreadable recent
+      // entries may still be in flight and remain protected by the grace period.
+      if (now - mtimeMs >= minAgeMs) {
+        toDelete.push(path);
+      } else {
+        keptHashes.add(split.hash);
+      }
+      continue;
+    }
+
+    const entries = groups.get(unitIdentity) || [];
+    entries.push({ path, hash: split.hash, mtimeMs });
+    groups.set(unitIdentity, entries);
+  }
+
+  for (const entries of groups.values()) {
+    entries.sort((a, b) => b.mtimeMs - a.mtimeMs);
+    entries.forEach((entry, index) => {
+      const isLatest = index === 0;
+      const isRecent = now - entry.mtimeMs < minAgeMs;
+      if (isLatest || isRecent) {
+        keptHashes.add(entry.hash);
+      } else {
+        toDelete.push(entry.path);
+      }
+    });
+  }
+
+  return { toDelete, keptHashes };
 }
 
 export function planDepsOrphanPrune(depsDir, keptHashes) {
@@ -185,6 +271,17 @@ export function planDepsOrphanPrune(depsDir, keptHashes) {
     const hash = extractDepsArtifactHash(name);
     if (hash && !keptHashes.has(hash)) {
       toDelete.push(join(depsDir, name));
+    }
+  }
+  return toDelete;
+}
+
+export function planBuildOrphanPrune(buildDir, keptHashes) {
+  const toDelete = [];
+  for (const name of listDirs(buildDir)) {
+    const split = splitFingerprintDir(name);
+    if (split && !keptHashes.has(split.hash)) {
+      toDelete.push(join(buildDir, name));
     }
   }
   return toDelete;
@@ -242,20 +339,59 @@ export function isCompilerBusy({ exec = execFileSync, platform = process.platfor
   return false;
 }
 
-export function collectGcPlan(profileDir) {
+export function isTargetProfileBusy({
+  profileDir,
+  exec = execFileSync,
+  platform = process.platform,
+} = {}) {
+  if (platform !== 'win32' && profileDir) {
+    const lockPaths = [
+      join(profileDir, '.cargo-lock'),
+      join(profileDir, '.cargo-build-lock'),
+      join(profileDir, '.cargo-artifact-lock'),
+    ].filter((path) => existsSync(path));
+
+    if (lockPaths.length > 0) {
+      try {
+        const output = exec('lsof', ['-t', ...lockPaths], { encoding: 'utf8' });
+        return Boolean(String(output).trim());
+      } catch (error) {
+        // lsof exits 1 when none of the named files are open. That is a scoped,
+        // authoritative "not busy" result even if another worktree is compiling.
+        if (error?.status === 1) {
+          return false;
+        }
+        // lsof is optional; fall through to the conservative global fallback.
+      }
+    }
+  }
+
+  return isCompilerBusy({ exec, platform });
+}
+
+export function collectGcPlan(
+  profileDir,
+  { now = Date.now(), fingerprintMinAgeMs = DEFAULT_FINGERPRINT_MIN_AGE_MS } = {}
+) {
   const incrementalDir = join(profileDir, 'incremental');
   const fingerprintDir = join(profileDir, '.fingerprint');
   const depsDir = join(profileDir, 'deps');
+  const buildDir = join(profileDir, 'build');
 
   const incremental = planIncrementalPrune(incrementalDir);
-  const fingerprintPlan = planFingerprintPrune(fingerprintDir);
+  const fingerprintPlan = planFingerprintPrune(fingerprintDir, {
+    now,
+    minAgeMs: fingerprintMinAgeMs,
+  });
   const deps = planDepsOrphanPrune(depsDir, fingerprintPlan.keptHashes);
+  const build = planBuildOrphanPrune(buildDir, fingerprintPlan.keptHashes);
 
   return {
     incremental,
     fingerprint: fingerprintPlan.toDelete,
     deps,
-    all: [...incremental, ...fingerprintPlan.toDelete, ...deps],
+    build,
+    all: [...incremental, ...fingerprintPlan.toDelete, ...deps, ...build],
   };
 }
 
@@ -267,29 +403,31 @@ export function runCargoTargetGc(options = {}) {
       : join(rootDir, 'target'),
     profile = 'debug',
     triple = null,
-    dryRun = ['1', 'true', 'yes'].includes(
-      String(process.env.BITFUN_TARGET_GC_DRY_RUN || options.dryRun || '').toLowerCase()
-    ),
-    enabled = !['0', 'false', 'no'].includes(
-      String(process.env.BITFUN_TARGET_GC ?? '1').toLowerCase()
-    ),
     skipIfBusy = true,
     logger = console,
   } = options;
+  const dryRun =
+    options.dryRun ??
+    ['1', 'true', 'yes'].includes(
+      String(process.env.BITFUN_TARGET_GC_DRY_RUN ?? '').toLowerCase()
+    );
+  const enabled =
+    options.enabled ??
+    !['0', 'false', 'no'].includes(
+      String(process.env.BITFUN_TARGET_GC ?? '1').toLowerCase()
+    );
+  const configuredMinAgeHours = Number(
+    options.fingerprintMinAgeHours ??
+      process.env.BITFUN_TARGET_GC_MIN_AGE_HOURS ??
+      DEFAULT_FINGERPRINT_MIN_AGE_MS / (60 * 60 * 1_000)
+  );
+  const fingerprintMinAgeMs =
+    Number.isFinite(configuredMinAgeHours) && configuredMinAgeHours >= 0
+      ? configuredMinAgeHours * 60 * 60 * 1_000
+      : DEFAULT_FINGERPRINT_MIN_AGE_MS;
 
   if (!enabled) {
     return { skipped: true, reason: 'disabled', removed: [] };
-  }
-
-  if (skipIfBusy) {
-    const busyDeadline = Date.now() + 15_000;
-    while (isCompilerBusy()) {
-      if (Date.now() >= busyDeadline) {
-        logger.info?.('[target-gc] Skipping: cargo/rustc still running');
-        return { skipped: true, reason: 'compiler-busy', removed: [] };
-      }
-      sleepMs(500);
-    }
   }
 
   const profileDir = resolveProfileDir(targetDir, { profile, triple });
@@ -306,7 +444,18 @@ export function runCargoTargetGc(options = {}) {
     return { skipped: true, reason: 'stat-failed', removed: [], profileDir };
   }
 
-  const plan = collectGcPlan(profileDir);
+  if (skipIfBusy) {
+    const busyDeadline = Date.now() + 15_000;
+    while (isTargetProfileBusy({ profileDir })) {
+      if (Date.now() >= busyDeadline) {
+        logger.info?.(`[target-gc] Skipping: Cargo still uses ${profileDir}`);
+        return { skipped: true, reason: 'compiler-busy', removed: [], profileDir };
+      }
+      sleepMs(500);
+    }
+  }
+
+  const plan = collectGcPlan(profileDir, { fingerprintMinAgeMs });
   const removed = [];
   for (const path of plan.all) {
     try {
@@ -327,6 +476,7 @@ export function runCargoTargetGc(options = {}) {
       incremental: plan.incremental.length,
       fingerprint: plan.fingerprint.length,
       deps: plan.deps.length,
+      build: plan.build.length,
       total: plan.all.length,
     },
   };
@@ -334,7 +484,8 @@ export function runCargoTargetGc(options = {}) {
   if (summary.counts.total > 0) {
     logger.info?.(
       `[target-gc] ${dryRun ? 'Would remove' : 'Removed'} ${summary.counts.total} stale cache path(s) ` +
-        `(incremental=${summary.counts.incremental}, fingerprint=${summary.counts.fingerprint}, deps=${summary.counts.deps}) ` +
+        `(incremental=${summary.counts.incremental}, fingerprint=${summary.counts.fingerprint}, ` +
+        `deps=${summary.counts.deps}, build=${summary.counts.build}) ` +
         `under ${profileDir}`
     );
   } else {
@@ -345,7 +496,7 @@ export function runCargoTargetGc(options = {}) {
 }
 
 export function parseGcArgs(argv) {
-  const args = { profile: 'debug', triple: null, dryRun: false, help: false };
+  const args = { profile: 'debug', triple: null, dryRun: undefined, help: false };
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
     if (arg === '--help' || arg === '-h') {
@@ -375,6 +526,7 @@ Prune stale Cargo incremental / fingerprint / deps caches for one profile.
 Environment:
   BITFUN_TARGET_GC=0           disable
   BITFUN_TARGET_GC_DRY_RUN=1   dry-run
+  BITFUN_TARGET_GC_MIN_AGE_HOURS=24
 `);
 }
 

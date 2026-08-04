@@ -7,8 +7,8 @@
 
   &__optional-label {
     margin-left: 4px;
-    color: var(--color-text-muted);
-    font-size: var(--font-size-xs);
+    color: var(--bf-appearance-token-color-text-muted);
+    font-size: var(--bf-appearance-token-font-size-xs);
     font-weight: $font-weight-normal;
     opacity: 0.75;
   }
@@ -32,7 +32,7 @@
     justify-content: center;
     width: 24px;
     height: 24px;
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
     transition: color $motion-base $easing-standard;
   }
   
@@ -66,11 +66,11 @@
     
     &:hover {
       .default-model-config__expand-text {
-        color: var(--color-text-secondary);
+        color: var(--bf-appearance-token-color-text-secondary);
       }
       
       .default-model-config__expand-line {
-        border-color: var(--border-base);
+        border-color: var(--bf-appearance-token-border-base);
       }
     }
     
@@ -87,14 +87,14 @@
     width: calc(40% - 40px);
     height: 0;
     border: none;
-    border-top: 1px dashed var(--border-subtle);
+    border-top: 1px dashed var(--bf-appearance-token-border-subtle);
     transition: border-color 0.15s ease;
   }
   
   &__expand-text {
     flex-shrink: 0;
     font-size: 12px;
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
     transition: color 0.15s ease;
     white-space: nowrap;
   }
@@ -128,38 +128,38 @@
   }
   
   &__slot-label {
-    font-size: var(--font-size-base);
+    font-size: var(--bf-appearance-token-font-size-base);
     font-weight: $font-weight-semibold;
-    color: var(--color-text-primary);
+    color: var(--bf-appearance-token-color-text-primary);
   }
   
   &__slot-badge {
     display: inline-flex;
     align-items: center;
     padding: 2px 8px;
-    font-size: var(--font-size-xs);
+    font-size: var(--bf-appearance-token-font-size-xs);
     font-weight: $font-weight-medium;
     border-radius: $size-radius-sm;
-    background: var(--color-success-bg);
+    background: var(--bf-appearance-token-color-success-bg);
     border: none;
-    color: var(--color-text-secondary);
+    color: var(--bf-appearance-token-color-text-secondary);
     
     &--optional {
-      background: var(--color-warning-bg);
-      color: var(--color-text-muted);
+      background: var(--bf-appearance-token-color-warning-bg);
+      color: var(--bf-appearance-token-color-text-muted);
     }
   }
   
   &__slot-description {
-    font-size: var(--font-size-sm);
-    color: var(--color-text-secondary);
+    font-size: var(--bf-appearance-token-font-size-sm);
+    color: var(--bf-appearance-token-color-text-secondary);
     line-height: 1.5;
     margin: 0;
   }
   
   &__slot-hint {
-    font-size: var(--font-size-xs);
-    color: var(--color-text-muted);
+    font-size: var(--bf-appearance-token-font-size-xs);
+    color: var(--bf-appearance-token-color-text-muted);
     margin: 0;
     font-style: italic;
   }
@@ -190,7 +190,7 @@
     
     &--configured {
       .default-model-config__capability-status {
-        color: var(--color-accent-500);
+        color: var(--bf-appearance-token-color-accent-500);
         font-weight: $font-weight-medium;
       }
     }
@@ -207,19 +207,19 @@
     display: flex;
     align-items: center;
     gap: $size-gap-2;
-    font-size: var(--font-size-sm);
+    font-size: var(--bf-appearance-token-font-size-sm);
     font-weight: $font-weight-semibold;
-    color: var(--color-text-primary);
+    color: var(--bf-appearance-token-color-text-primary);
     
     svg {
-      color: var(--color-text-secondary);
+      color: var(--bf-appearance-token-color-text-secondary);
       flex-shrink: 0;
     }
   }
   
   &__capability-status {
-    font-size: var(--font-size-xs);
-    color: var(--color-text-muted);
+    font-size: var(--bf-appearance-token-font-size-xs);
+    color: var(--bf-appearance-token-color-text-muted);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -227,8 +227,8 @@
   }
   
   &__capability-description {
-    font-size: var(--font-size-xs);
-    color: var(--color-text-secondary);
+    font-size: var(--bf-appearance-token-font-size-xs);
+    color: var(--bf-appearance-token-color-text-secondary);
     line-height: 1.4;
     margin: 0;
   }
@@ -237,7 +237,7 @@
   
   &__advanced-settings {
     margin-top: $size-gap-4;
-    border-top: 1px dashed var(--border-base);
+    border-top: 1px dashed var(--bf-appearance-token-border-base);
     padding-top: $size-gap-2;
   }
   
@@ -249,8 +249,8 @@
     background: transparent;
     border: none;
     cursor: pointer;
-    color: var(--color-text-secondary);
-    font-size: var(--font-size-sm);
+    color: var(--bf-appearance-token-color-text-secondary);
+    font-size: var(--bf-appearance-token-font-size-sm);
     font-weight: $font-weight-medium;
     transition:
       transform $motion-fast $easing-standard,
@@ -263,8 +263,8 @@
     border-radius: $size-radius-sm;
     
     &:hover {
-      color: var(--color-text-primary);
-      background: var(--element-bg-subtle);
+      color: var(--bf-appearance-token-color-text-primary);
+      background: var(--bf-appearance-token-element-bg-subtle);
     }
     
     svg {
@@ -294,15 +294,15 @@
   }
   
   &__override-title {
-    font-size: var(--font-size-sm);
+    font-size: var(--bf-appearance-token-font-size-sm);
     font-weight: $font-weight-semibold;
-    color: var(--color-text-primary);
+    color: var(--bf-appearance-token-color-text-primary);
     margin: 0 0 $size-gap-1 0;
   }
   
   &__override-description {
-    font-size: var(--font-size-xs);
-    color: var(--color-text-secondary);
+    font-size: var(--bf-appearance-token-font-size-xs);
+    color: var(--bf-appearance-token-color-text-secondary);
     margin: 0 0 $size-gap-3 0;
   }
   
@@ -320,9 +320,9 @@
   
   &__override-name {
     flex: 0 0 140px;
-    font-size: var(--font-size-sm);
+    font-size: var(--bf-appearance-token-font-size-sm);
     font-weight: $font-weight-medium;
-    color: var(--color-text-primary);
+    color: var(--bf-appearance-token-color-text-primary);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -342,17 +342,17 @@
     justify-content: center;
     padding: $size-gap-10 $size-gap-5;
     text-align: center;
-    color: var(--color-text-secondary);
+    color: var(--bf-appearance-token-color-text-secondary);
     
     svg {
       margin-bottom: $size-gap-3;
       opacity: 0.4;
-      color: var(--color-text-muted);
+      color: var(--bf-appearance-token-color-text-muted);
     }
     
     p {
       margin: 0;
-      font-size: var(--font-size-sm);
+      font-size: var(--bf-appearance-token-font-size-sm);
       line-height: 1.5;
     }
   }
@@ -368,8 +368,8 @@
     
     p {
       margin-top: $size-gap-4;
-      color: var(--color-text-secondary);
-      font-size: var(--font-size-sm);
+      color: var(--bf-appearance-token-color-text-secondary);
+      font-size: var(--bf-appearance-token-font-size-sm);
     }
   }
 }
@@ -405,11 +405,11 @@
     }
     
     &__slot-label {
-      font-size: var(--font-size-sm);
+      font-size: var(--bf-appearance-token-font-size-sm);
     }
     
     &__slot-description {
-      font-size: var(--font-size-xs);
+      font-size: var(--bf-appearance-token-font-size-xs);
     }
     
     &__capability-grid {
@@ -429,7 +429,7 @@
     
     &__override-name {
       flex: none;
-      font-size: var(--font-size-xs);
+      font-size: var(--bf-appearance-token-font-size-xs);
     }
   }
 }

@@ -33,7 +33,6 @@ export enum AppStatus {
 
 
 export interface UserSettings {
-  theme: string;
   language: string;
   autoSaveInterval: number;
   maxCachedGraphs: number;
@@ -285,7 +284,6 @@ function mapApiStatus(status: APIAppStatus): AppStatus {
 
 function createDefaultUserSettings(): UserSettings {
   return {
-    theme: 'system',
     language: 'en-US',
     autoSaveInterval: 0,
     maxCachedGraphs: 0,

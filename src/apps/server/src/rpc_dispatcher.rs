@@ -482,9 +482,17 @@ pub async fn dispatch(
         "cancel_session" => {
             let request = extract_request(&params)?;
             let session_id = get_string(&request, "sessionId")?;
+            let cancel_descendants = request
+                .get("cancelDescendants")
+                .and_then(serde_json::Value::as_bool)
+                .unwrap_or(true);
             let dialog_turn_id = state
                 .coordinator
-                .cancel_active_turn_for_session(&session_id, Duration::from_secs(5))
+                .cancel_active_turn_for_session_with_descendant_policy(
+                    &session_id,
+                    Duration::from_secs(5),
+                    cancel_descendants,
+                )
                 .await
                 .map_err(|e| anyhow!("{}", e))?;
             Ok(serde_json::json!({

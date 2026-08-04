@@ -16,8 +16,8 @@
   }
 
   &__saving {
-    font-size: var(--font-size-xs);
-    color: var(--color-text-secondary);
+    font-size: var(--bf-appearance-token-font-size-xs);
+    color: var(--bf-appearance-token-color-text-secondary);
     white-space: nowrap;
   }
 }

@@ -116,7 +116,7 @@ export type StartupPerfBreakdown = {
     tauriSetupDurationMs?: number;
     tauriSetupUntilMainWindowCreatedDurationMs?: number;
     createMainWindowDurationMs?: number;
-    prepareThemeDurationMs?: number;
+    prepareAppearanceDurationMs?: number;
     webviewBuildDurationMs?: number;
     windowsMaximizeDurationMs?: number;
     windowsShowAfterMaximizeWaitMs?: number;
@@ -619,7 +619,7 @@ export function summarizeStartupBreakdown(snapshot: StartupTraceSnapshot): Start
       tauriSetupUntilMainWindowCreatedDurationMs:
         nativeStep('tauri_setup_until_main_window_created')?.durationMs,
       createMainWindowDurationMs: nativeStep('create_main_window')?.durationMs,
-      prepareThemeDurationMs: nativeStep('prepare_theme')?.durationMs,
+      prepareAppearanceDurationMs: nativeStep('prepare_appearance')?.durationMs,
       webviewBuildDurationMs: nativeStep('webview_build')?.durationMs,
       windowsMaximizeDurationMs: nativeStep('windows_maximize')?.durationMs,
       windowsShowAfterMaximizeWaitMs: nativeStep('windows_show_after_maximize_wait')?.durationMs,
@@ -655,8 +655,8 @@ export function summarizeStartupBreakdown(snapshot: StartupTraceSnapshot): Start
         initLogger: numeric(frontendStepDuration('before_render_step_end', 'init_logger')) ?? 0,
         initializeFrontendLogLevelSync:
           numeric(frontendStepDuration('before_render_step_end', 'initialize_frontend_log_level_sync')) ?? 0,
-        themeServiceInitialize:
-          numeric(frontendStepDuration('before_render_step_end', 'theme_service_initialize')) ?? 0,
+        appearanceInitialize:
+          numeric(frontendStepDuration('before_render_step_end', 'appearance_initialize')) ?? 0,
       },
     },
     workspace: {

@@ -86,7 +86,7 @@ function RenderFallback({
           >
             <div
               style={{
-                color: 'var(--color-text-secondary)',
+                color: 'var(--bf-appearance-token-color-text-secondary)',
                 fontSize: 12,
                 lineHeight: 1.5,
               }}
@@ -103,9 +103,9 @@ function RenderFallback({
                   gap: 6,
                   padding: '6px 10px',
                   borderRadius: 8,
-                  border: '1px solid var(--border-base)',
-                  background: 'var(--element-bg-soft)',
-                  color: 'var(--color-text-primary)',
+                  border: '1px solid var(--bf-appearance-token-border-base)',
+                  background: 'var(--bf-appearance-token-element-bg-soft)',
+                  color: 'var(--bf-appearance-token-color-text-primary)',
                   cursor: 'pointer',
                 }}
                 type="button"

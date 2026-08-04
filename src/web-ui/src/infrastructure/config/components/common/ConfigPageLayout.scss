@@ -11,14 +11,9 @@
   height: 100%;
   overflow-y: auto;
   overflow-x: hidden;
-  /*
-   * Keep the content axis fixed when a page gains or loses a vertical scrollbar.
-   * Reserving both edges also keeps the 600px content column visually centered.
-   */
-  scrollbar-gutter: stable both-edges;
-  background: var(--color-bg-scene);
-  color: var(--color-text-primary);
-  font-family: var(--font-family-sans);
+  background: var(--bf-appearance-token-color-bg-scene);
+  color: var(--bf-appearance-token-color-text-primary);
+  font-family: var(--bf-appearance-token-font-family-sans);
   /* Shared layout contract for settings pages in wide scenes. */
   --config-page-content-bottom-padding: 48px;
   /* Vertical gap between top-level sections (ConfigPageSection blocks) inside ConfigPageContent. */
@@ -68,14 +63,14 @@
 .bitfun-config-page-section {
   display: flex;
   flex-direction: column;
-  gap: var(--size-gap-3);
+  gap: var(--bf-appearance-token-size-gap-4);
 }
 
 .bitfun-config-page-section__header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: var(--size-gap-3);
+  gap: var(--bf-appearance-token-size-gap-3);
 }
 
 .bitfun-config-page-section__heading {
@@ -87,57 +82,56 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--size-gap-2);
+  gap: var(--bf-appearance-token-size-gap-2);
   min-width: 0;
 }
 
 .bitfun-config-page-section__title {
   margin: 0;
-  font-size: var(--font-size-lg);
-  font-weight: var(--font-weight-semibold);
-  color: var(--color-text-primary);
-  line-height: var(--line-height-tight);
+  font-size: var(--bf-appearance-token-font-size-base);
+  font-weight: var(--bf-appearance-token-font-weight-semibold);
+  color: var(--bf-appearance-token-color-text-primary);
+  line-height: var(--bf-appearance-token-line-height-tight);
 }
 
 .bitfun-config-page-section__description {
-  margin: var(--size-gap-1) 0 0;
-  font-size: var(--font-size-xs);
-  color: var(--color-text-secondary);
-  line-height: var(--line-height-relaxed);
+  margin: var(--bf-appearance-token-size-gap-1) 0 0;
+  font-size: var(--bf-appearance-token-font-size-xs);
+  color: var(--bf-appearance-token-color-text-secondary);
+  line-height: var(--bf-appearance-token-line-height-relaxed);
 }
 
 .bitfun-config-page-section__extra {
   flex-shrink: 0;
   display: flex;
   align-items: center;
-  gap: var(--size-gap-2);
+  gap: var(--bf-appearance-token-size-gap-2);
 }
 
 .bitfun-config-page-section__body {
   min-width: 0;
-  background: color-mix(in srgb, var(--color-bg-elevated) 78%, var(--element-bg-subtle));
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--size-radius-lg);
+  background: var(--bf-appearance-token-element-bg-subtle);
+  border: 1px solid var(--bf-appearance-token-border-subtle);
+  border-radius: var(--bf-appearance-token-size-radius-md);
   overflow: visible;
-  box-shadow: inset 0 1px 0 var(--color-overlay-white-04);
+  box-shadow: inset 0 1px 0 var(--bf-appearance-token-color-overlay-white-04);
 }
 
 .bitfun-config-page-row {
   --row-grid-cols: minmax(0, 7fr) minmax(0, 3fr);
   display: grid;
   grid-template-columns: var(--row-grid-cols);
-  gap: var(--size-gap-4);
-  padding: 14px var(--size-gap-4);
-  transition: background-color 140ms cubic-bezier(0.23, 1, 0.32, 1);
+  gap: var(--bf-appearance-token-size-gap-4);
+  padding: var(--bf-appearance-token-size-gap-4);
 }
 
 .bitfun-config-page-row + .bitfun-config-page-row {
-  border-top: 1px solid var(--border-subtle);
+  border-top: 1px solid var(--bf-appearance-token-border-subtle);
 }
 
 @media (hover: hover) and (pointer: fine) {
   .bitfun-config-page-row:hover {
-    background: var(--color-overlay-white-04);
+    background: var(--bf-appearance-token-color-overlay-white-04);
   }
 }
 
@@ -151,7 +145,7 @@
 
 .bitfun-config-page-row--multiline {
   --row-grid-cols: 1fr;
-  gap: var(--size-gap-2);
+  gap: var(--bf-appearance-token-size-gap-2);
 
   .bitfun-config-page-row__control {
     justify-content: flex-start;
@@ -167,17 +161,17 @@
 
 .bitfun-config-page-row__label {
   margin: 0;
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-medium);
-  color: var(--color-text-primary);
-  line-height: var(--line-height-base);
+  font-size: var(--bf-appearance-token-font-size-sm);
+  font-weight: var(--bf-appearance-token-font-weight-medium);
+  color: var(--bf-appearance-token-color-text-primary);
+  line-height: var(--bf-appearance-token-line-height-base);
 }
 
 .bitfun-config-page-row__description {
-  margin: var(--size-gap-1) 0 0;
-  font-size: var(--font-size-xs);
-  color: var(--color-text-secondary);
-  line-height: var(--line-height-relaxed);
+  margin: var(--bf-appearance-token-size-gap-1) 0 0;
+  font-size: var(--bf-appearance-token-font-size-xs);
+  color: var(--bf-appearance-token-color-text-secondary);
+  line-height: var(--bf-appearance-token-line-height-relaxed);
 }
 
 .bitfun-config-page-row__control {
@@ -218,17 +212,18 @@
   }
 
   .bitfun-config-page-content {
-    --config-page-section-gap: var(--size-gap-8);
+    --config-page-section-gap: var(--bf-appearance-token-size-gap-8);
+    padding-inline: var(--bf-appearance-token-size-gap-4);
   }
 
   .bitfun-config-page-content__inner {
-    width: calc(100% - (2 * var(--size-gap-4)));
+    width: calc(100% - (2 * var(--bf-appearance-token-size-gap-4)));
   }
 }
 
 @container config-panel (max-width: 520px) {
   .bitfun-config-page-section {
-    gap: var(--size-gap-3);
+    gap: var(--bf-appearance-token-size-gap-3);
   }
 
   .bitfun-config-page-section__header {
@@ -243,8 +238,8 @@
 
   .bitfun-config-page-row {
     grid-template-columns: minmax(0, 1fr);
-    gap: var(--size-gap-2);
-    padding: var(--size-gap-3);
+    gap: var(--bf-appearance-token-size-gap-2);
+    padding: var(--bf-appearance-token-size-gap-3);
   }
 
   .bitfun-config-page-row__control {

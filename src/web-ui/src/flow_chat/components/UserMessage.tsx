@@ -199,16 +199,21 @@ export const UserMessage: React.FC<UserMessageProps> = React.memo(({
   const currentClassName = `user-message ${className} ${isExpanded ? 'user-message--expanded' : 'user-message--collapsed'}`;
   
   return (
-    <div 
+    <div
+      data-bf-component="user-message"
+      data-bf-part="root"
+      data-bf-state={isExpanded ? 'expanded' : 'collapsed'}
       ref={messageRef}
       className={currentClassName}
     >
       <div 
+        data-bf-component="user-message"
+        data-bf-part="content"
         className="message-content" 
         onClick={toggleExpand}
         style={{ cursor: (hasOverflow || isExpanded) ? 'pointer' : 'text' }}
       >
-        <div className="message-inline-content" ref={contentRef}>
+        <div data-bf-component="user-message" data-bf-part="inlineContent" className="message-inline-content" ref={contentRef}>
           {parts.map((part, index) => {
             if (part.type === 'text') {
               return part.content.split('\n').map((line, lineIndex) => (
@@ -230,9 +235,9 @@ export const UserMessage: React.FC<UserMessageProps> = React.memo(({
         </div>
       </div>
       
-      <div className="message-footer">
+      <div data-bf-component="user-message" data-bf-part="footer" className="message-footer">
         {showTimestamp && timestamp && (
-          <div className="message-timestamp">
+          <div data-bf-component="user-message" data-bf-part="timestamp" className="message-timestamp">
             {formatDate(new Date(timestamp), {
               hour: '2-digit',
               minute: '2-digit',
@@ -241,7 +246,7 @@ export const UserMessage: React.FC<UserMessageProps> = React.memo(({
         )}
         
         {showSnapshotButton && sessionId && turnId !== undefined && turnIndex !== undefined && (
-          <div className="message-snapshot-action">
+          <div data-bf-component="user-message" data-bf-part="snapshotAction" className="message-snapshot-action">
             <SnapshotRollbackButton
               sessionId={sessionId}
               turnIndex={turnIndex}

@@ -188,19 +188,23 @@ export const NumberInput = forwardRef<HTMLInputElement, NumberInputProps>(
       .join(' ');
 
     return (
-      <div className={containerClassName}>
-        {label && <label className="bitfun-number-input__label">{label}</label>}
+      <div className={containerClassName} data-bf-component="number-input" data-bf-part="root" data-bf-variant={variant} data-bf-size={size} data-bf-state={[disabled && 'disabled', isEditing && 'editing', isDragging && 'dragging'].filter(Boolean).join(' ') || undefined}>
+        {label && <label className="bitfun-number-input__label" data-bf-component="number-input" data-bf-part="label">{label}</label>}
         <div
           ref={containerRef}
           className="bitfun-number-input__container"
+          data-bf-component="number-input"
+          data-bf-part="container"
           onMouseEnter={() => setIsHovered(true)}
           onMouseLeave={() => setIsHovered(false)}
           onWheel={handleWheel}
         >
-          <div className="bitfun-number-input__glow" />
+          <div className="bitfun-number-input__glow" data-bf-component="number-input" data-bf-part="glow" />
 
           <div
             className="bitfun-number-input__value-area"
+            data-bf-component="number-input"
+            data-bf-part="valueArea"
             onMouseDown={draggable ? handleDragStart : undefined}
             style={{ cursor: draggable && !disabled ? 'ns-resize' : 'text' }}
           >
@@ -222,12 +226,14 @@ export const NumberInput = forwardRef<HTMLInputElement, NumberInputProps>(
               onBlur={handleInputBlur}
               onKeyDown={handleKeyDown}
               disabled={disabled}
+              data-bf-component="number-input"
+              data-bf-part="input"
             />
-            {unit && <span className="bitfun-number-input__unit">{unit}</span>}
+            {unit && <span className="bitfun-number-input__unit" data-bf-component="number-input" data-bf-part="unit">{unit}</span>}
           </div>
 
           {showButtons && variant !== 'compact' && (
-            <div className="bitfun-number-input__buttons">
+            <div className="bitfun-number-input__buttons" data-bf-component="number-input" data-bf-part="buttons">
               {variant === 'stepper' ? (
                 <>
                   <button
@@ -237,6 +243,8 @@ export const NumberInput = forwardRef<HTMLInputElement, NumberInputProps>(
                     disabled={disabled || value <= min}
                     tabIndex={-1}
                     aria-label={t('numberInput.decrease')}
+                    data-bf-component="number-input"
+                    data-bf-part="decrement"
                   >
                     <Minus size={12} strokeWidth={2.5} />
                   </button>
@@ -247,6 +255,8 @@ export const NumberInput = forwardRef<HTMLInputElement, NumberInputProps>(
                     disabled={disabled || value >= max}
                     tabIndex={-1}
                     aria-label={t('numberInput.increase')}
+                    data-bf-component="number-input"
+                    data-bf-part="increment"
                   >
                     <Plus size={12} strokeWidth={2.5} />
                   </button>
@@ -260,6 +270,8 @@ export const NumberInput = forwardRef<HTMLInputElement, NumberInputProps>(
                     disabled={disabled || value >= max}
                     tabIndex={-1}
                     aria-label={t('numberInput.increase')}
+                    data-bf-component="number-input"
+                    data-bf-part="increment"
                   >
                     <ChevronUp size={14} strokeWidth={2.5} />
                   </button>
@@ -270,6 +282,8 @@ export const NumberInput = forwardRef<HTMLInputElement, NumberInputProps>(
                     disabled={disabled || value <= min}
                     tabIndex={-1}
                     aria-label={t('numberInput.decrease')}
+                    data-bf-component="number-input"
+                    data-bf-part="decrement"
                   >
                     <ChevronDown size={14} strokeWidth={2.5} />
                   </button>
@@ -279,9 +293,11 @@ export const NumberInput = forwardRef<HTMLInputElement, NumberInputProps>(
           )}
 
           {min !== -Infinity && max !== Infinity && (
-            <div className="bitfun-number-input__progress">
+            <div className="bitfun-number-input__progress" data-bf-component="number-input" data-bf-part="progress">
               <div
                 className="bitfun-number-input__progress-bar"
+                data-bf-component="number-input"
+                data-bf-part="progressBar"
                 style={{ width: `${((value - min) / (max - min)) * 100}%` }}
               />
             </div>

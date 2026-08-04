@@ -99,12 +99,12 @@ const ExternalMcpDetail: React.FC<{
   value: string;
   code?: boolean;
 }> = ({ label, value, code = false }) => (
-  <div className="bitfun-mcp-tools__server-detail-item">
-    <span className="bitfun-mcp-tools__server-detail-label">{label}:</span>
+  <div className="bitfun-mcp-tools__server-detail-item" data-bf-component="external-mcp-overview" data-bf-part="detailItem">
+    <span className="bitfun-mcp-tools__server-detail-label" data-bf-component="external-mcp-overview" data-bf-part="detailLabel">{label}:</span>
     {code ? (
-      <code className="bitfun-mcp-tools__server-detail-value">{value}</code>
+      <code className="bitfun-mcp-tools__server-detail-value" data-bf-component="external-mcp-overview" data-bf-part="detailValue">{value}</code>
     ) : (
-      <span className="bitfun-mcp-tools__server-detail-value">{value}</span>
+      <span className="bitfun-mcp-tools__server-detail-value" data-bf-component="external-mcp-overview" data-bf-part="detailValue">{value}</span>
     )}
   </div>
 );
@@ -383,14 +383,14 @@ const ExternalMcpOverview: React.FC = () => {
           {scopeLabel(sourceRecord?.scope)}
         </span>
         {sourceStatus ? (
-          <span className={`bitfun-mcp-tools__status-badge ${sourceStatus === 'stale' ? 'is-pending' : 'is-error'}`}>
+          <span className={`bitfun-mcp-tools__status-badge ${sourceStatus === 'stale' ? 'is-pending' : 'is-error'}`} data-bf-component="external-mcp-overview" data-bf-part="statusBadge" data-bf-state={sourceStatus === 'stale' ? 'pending' : 'error'}>
             {t(`external.status.${sourceStatus}`)}
           </span>
         ) : null}
       </>
     );
     const details = (
-      <div className="bitfun-mcp-tools__server-details">
+      <div className="bitfun-mcp-tools__server-details" data-bf-component="external-mcp-overview" data-bf-part="serverDetails">
         <ExternalMcpDetail label={t('external.details.source')} value={sourceRecord?.displayName ?? ecosystemLabel} />
         <ExternalMcpDetail label={t('external.details.scope')} value={scopeLabel(sourceRecord?.scope)} />
         <ExternalMcpDetail
@@ -426,26 +426,28 @@ const ExternalMcpOverview: React.FC = () => {
   return (
     <ConfigPageSection
       className="bitfun-mcp-tools__external-section"
+      data-bf-component="external-mcp-overview"
+      data-bf-part="root"
       title={t('external.title')}
       titleSuffix={snapshot ? (
-        <span className="bitfun-mcp-tools__external-summary">
+        <span className="bitfun-mcp-tools__external-summary" data-bf-component="external-mcp-overview" data-bf-part="summary">
           {snapshot.discoveryPending ? (
-            <span className="bitfun-mcp-tools__status-badge is-pending">
+            <span className="bitfun-mcp-tools__status-badge is-pending" data-bf-component="external-mcp-overview" data-bf-part="statusBadge" data-bf-state="pending">
               {t('external.status.checking')}
             </span>
           ) : null}
           {hostReadOnly ? (
-            <span className="bitfun-mcp-tools__status-badge is-muted">
+            <span className="bitfun-mcp-tools__status-badge is-muted" data-bf-component="external-mcp-overview" data-bf-part="statusBadge" data-bf-state="muted">
               {t('external.status.readOnly')}
             </span>
           ) : null}
           {loadFailed && snapshot ? (
-            <span className="bitfun-mcp-tools__status-badge is-pending">
+            <span className="bitfun-mcp-tools__status-badge is-pending" data-bf-component="external-mcp-overview" data-bf-part="statusBadge" data-bf-state="pending">
               {t('external.status.stale')}
             </span>
           ) : null}
           {hasMcpDiagnostics ? (
-            <span className="bitfun-mcp-tools__status-badge is-error">
+            <span className="bitfun-mcp-tools__status-badge is-error" data-bf-component="external-mcp-overview" data-bf-part="statusBadge" data-bf-state="error">
               {t('external.status.degraded')}
             </span>
           ) : null}
@@ -477,11 +479,11 @@ const ExternalMcpOverview: React.FC = () => {
       )}
     >
       {entries.length > 0 && !hostReadOnly && importSupported ? (
-        <div className="bitfun-mcp-tools__import" data-testid="external-mcp-import">
+        <div className="bitfun-mcp-tools__import" data-bf-component="external-mcp-overview" data-bf-part="import" data-testid="external-mcp-import">
           {importPlan ? (
-            <div className="bitfun-mcp-tools__import-plan">
+            <div className="bitfun-mcp-tools__import-plan" data-bf-component="external-mcp-overview" data-bf-part="importPlan">
               <p>{t('external.import.confirm', { count: selectedImportItems.length })}</p>
-              <ul className="bitfun-mcp-tools__import-list">
+              <ul className="bitfun-mcp-tools__import-list" data-bf-component="external-mcp-overview" data-bf-part="importList">
                 {eligibleImportItems.map((item) => {
                   const catalogEntry = mcpEntryByCandidateId.get(item.candidateId);
                   const source = catalogEntry ? sourceByKey.get(sourceKey(
@@ -494,7 +496,7 @@ const ExternalMcpOverview: React.FC = () => {
                   const candidateScopeLabel = scopeLabel(source?.record.scope);
                   return (
                     <li key={item.candidateId}>
-                      <label className="bitfun-mcp-tools__import-option">
+                      <label className="bitfun-mcp-tools__import-option" data-bf-component="external-mcp-overview" data-bf-part="importOption">
                         <input
                           type="checkbox"
                           checked={selectedImportCandidateIds.has(item.candidateId)}
@@ -502,11 +504,11 @@ const ExternalMcpOverview: React.FC = () => {
                           onChange={() => toggleImportCandidate(item.candidateId)}
                           aria-label={`${item.displayName}, ${ecosystemLabel}, ${candidateScopeLabel}`}
                         />
-                        <span className="bitfun-mcp-tools__import-option-content">
+                        <span className="bitfun-mcp-tools__import-option-content" data-bf-component="external-mcp-overview" data-bf-part="importOptionContent">
                           <span>
                             {item.displayName} → {item.proposedNativeId}
                           </span>
-                          <span className="bitfun-mcp-tools__import-option-meta">
+                          <span className="bitfun-mcp-tools__import-option-meta" data-bf-component="external-mcp-overview" data-bf-part="importOptionMeta">
                             <span className="bitfun-collection-item__badge bitfun-mcp-tools__external-source-badge">
                               {ecosystemLabel}
                             </span>
@@ -520,7 +522,7 @@ const ExternalMcpOverview: React.FC = () => {
                   );
                 })}
               </ul>
-              <div className="bitfun-mcp-tools__import-actions">
+              <div className="bitfun-mcp-tools__import-actions" data-bf-component="external-mcp-overview" data-bf-part="importActions">
                 <button type="button" disabled={importBusy || selectedImportItems.length === 0} onClick={() => void applyImport()}>
                   {t('external.import.apply')}
                 </button>
@@ -538,13 +540,13 @@ const ExternalMcpOverview: React.FC = () => {
         </div>
       ) : null}
       {scopedLoading && !snapshot ? (
-        <div className="bitfun-collection-empty"><p>{t('external.loading')}</p></div>
+        <div className="bitfun-collection-empty" data-bf-component="external-mcp-overview" data-bf-part="empty"><p>{t('external.loading')}</p></div>
       ) : loadFailed && !snapshot ? (
-        <div className="bitfun-collection-empty" role="status"><p>{t('external.unavailable')}</p></div>
+        <div className="bitfun-collection-empty" data-bf-component="external-mcp-overview" data-bf-part="empty" role="status"><p>{t('external.unavailable')}</p></div>
       ) : snapshot?.discoveryPending && entries.length === 0 ? (
-        <div className="bitfun-collection-empty" role="status"><p>{t('external.loading')}</p></div>
+        <div className="bitfun-collection-empty" data-bf-component="external-mcp-overview" data-bf-part="empty" role="status"><p>{t('external.loading')}</p></div>
       ) : entries.length === 0 ? (
-        <div className="bitfun-collection-empty"><p>{t('external.empty')}</p></div>
+        <div className="bitfun-collection-empty" data-bf-component="external-mcp-overview" data-bf-part="empty"><p>{t('external.empty')}</p></div>
       ) : entries.map(renderEntry)}
     </ConfigPageSection>
   );

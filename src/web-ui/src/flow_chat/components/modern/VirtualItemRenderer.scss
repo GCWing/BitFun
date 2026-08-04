@@ -21,25 +21,25 @@
   }
 
   &--search-match {
-    outline: 1px solid color-mix(in srgb, var(--color-accent-500) 35%, transparent);
+    outline: 1px solid color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 35%, transparent);
     outline-offset: -1px;
     border-radius: 6px;
   }
 
   &--search-current {
-    outline: 2px solid color-mix(in srgb, var(--color-accent-500) 75%, transparent);
+    outline: 2px solid color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 75%, transparent);
     outline-offset: -1px;
     border-radius: 6px;
-    background: color-mix(in srgb, var(--color-accent-500) 8%, transparent);
+    background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 8%, transparent);
   }
 }
 
 ::highlight(bitfun-flowchat-search-current) {
   color: inherit;
-  background: color-mix(in srgb, var(--color-accent-500) 42%, transparent);
+  background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 42%, transparent);
 }
 
 ::highlight(bitfun-flowchat-search-match) {
   color: inherit;
-  background: color-mix(in srgb, var(--color-accent-500) 16%, transparent);
+  background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 16%, transparent);
 }

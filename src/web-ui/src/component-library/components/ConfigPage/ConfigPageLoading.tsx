@@ -40,7 +40,7 @@ export const ConfigPageLoading: React.FC<ConfigPageLoadingProps> = ({
   if (!visible) return null;
 
   return (
-    <div className={`bitfun-config-page-loading ${className}`}>
+    <div className={`bitfun-config-page-loading ${className}`} data-bf-component="config-page" data-bf-part="loading">
       {text}
     </div>
   );

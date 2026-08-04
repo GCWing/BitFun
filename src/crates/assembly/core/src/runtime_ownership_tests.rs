@@ -6,6 +6,7 @@ use bitfun_services_core::runtime_ownership::{
 use tempfile::tempdir;
 
 use crate::runtime_ownership::CoreRuntimeOwnership;
+#[cfg(feature = "dispatch-store")]
 use crate::service::dispatch::{DispatchTarget, OutboundDispatchRecord, OutboundDispatchStore};
 
 #[test]
@@ -167,6 +168,7 @@ fn ssh_host_without_connection_id_cannot_bypass_local_ownership() {
     drop(shared);
 }
 
+#[cfg(feature = "dispatch-store")]
 #[tokio::test]
 async fn dispatch_observer_record_never_acquires_local_workspace_ownership() {
     let ownership_root = tempdir().expect("ownership root");

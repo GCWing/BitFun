@@ -12,6 +12,13 @@ fn resolve_focused_review_model_selection(
     }
 }
 
+fn external_subagent_model_override_requested(
+    model_id: Option<&str>,
+    inherit_parent_model: bool,
+) -> bool {
+    model_id.is_some() || inherit_parent_model
+}
+
 fn build_deep_review_subagent_context(
     role: DeepReviewSubagentRole,
     subagent_type: Option<&str>,
@@ -89,17 +96,12 @@ struct BackgroundTaskStartRequest<'a> {
 impl TaskTool {
     async fn derive_parent_permission_runtime_ceiling(
         context: &ToolUseContext,
-    ) -> PermissionRuntimeCeiling {
-        let global: GlobalConfig = match GlobalConfigManager::get_service().await {
-            Ok(service) => service.get_config(None).await.unwrap_or_default(),
-            Err(_) => GlobalConfig::default(),
-        };
-        let agent_profile = context.agent_type.as_deref().and_then(|agent_type| {
-            let profile_id = crate::agentic::agents::resolve_mode_config_profile_id(agent_type);
-            global.ai.agent_profiles.get(profile_id.as_ref())
-        });
-
-        crate::agentic::permission_policy::derive_parent_permission_runtime_ceiling(agent_profile)
+    ) -> BitFunResult<PermissionRuntimeCeiling> {
+        crate::agentic::permission_policy::load_parent_permission_runtime_ceiling(
+            context.agent_type.as_deref(),
+            context.workspace_root(),
+        )
+        .await
     }
 
     pub(super) async fn load_configured_tool_execution_timeout() -> Option<u64> {
@@ -267,7 +269,12 @@ impl TaskTool {
                         )));
                     }
                     supports_follow_up = binding.supports_follow_up;
-                    if !supports_follow_up && model_id.is_some() {
+                    if !supports_follow_up
+                        && external_subagent_model_override_requested(
+                            model_id.as_deref(),
+                            inherit_parent_model,
+                        )
+                    {
                         return Err(BitFunError::tool(
                             "external_subagent_model_override_unsupported: external subagents use the approved model binding"
                                 .to_string(),
@@ -664,7 +671,7 @@ impl TaskTool {
         forward_subagent_invocation_context(context, &mut subagent_context);
         let subagent_context = (!subagent_context.is_empty()).then_some(subagent_context);
         let permission_runtime_ceiling =
-            Self::derive_parent_permission_runtime_ceiling(context).await;
+            Self::derive_parent_permission_runtime_ceiling(context).await?;
         let prepared_prompt = prompt;
         if run_in_background {
             return Self::start_background_task(BackgroundTaskStartRequest {
@@ -1144,15 +1151,17 @@ impl TaskTool {
         };
 
         let (mut data, mut result_for_assistant) =
-            deep_review_task_adapter::deep_review_task_completion_result(
-                &delegate_target_label,
-                &result.text,
-                context_mode.as_str(),
-                duration,
-                result.is_partial_timeout(),
-                result.reason.as_deref(),
-                result.ledger_event_id(),
-                &retry_hint,
+            bitfun_agent_runtime::subagent_task::subagent_task_completion_result(
+                bitfun_agent_runtime::subagent_task::SubagentTaskCompletionResultInput {
+                    delegate_target_label: &delegate_target_label,
+                    result_text: &result.text,
+                    context_mode: context_mode.as_str(),
+                    duration_ms: duration,
+                    is_partial_timeout: result.is_partial_timeout(),
+                    reason: result.reason.as_deref(),
+                    ledger_event_id: result.ledger_event_id(),
+                    partial_timeout_suffix: &retry_hint,
+                },
             );
         if supports_follow_up {
             if let Some(subagent_session_id) = result.session_id() {
@@ -1224,6 +1233,16 @@ mod target_context_tests {
             resolve_focused_review_model_selection(None, true, None),
             (None, true),
         );
+    }
+
+    #[test]
+    fn external_subagent_rejects_fixed_and_inherited_caller_model_overrides() {
+        assert!(external_subagent_model_override_requested(
+            Some("caller-model"),
+            false
+        ));
+        assert!(external_subagent_model_override_requested(None, true));
+        assert!(!external_subagent_model_override_requested(None, false));
     }
 
     #[test]

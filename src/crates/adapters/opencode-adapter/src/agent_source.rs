@@ -1,7 +1,7 @@
 use crate::local_source_paths::{
-    find_project_root, local_watch_roots, ordered_local_config_directories,
-    project_asset_directories, project_config_directories, user_config_dir, LocalConfigDirectory,
-    LocalConfigDirectoryKind,
+    local_source_plan, local_source_watch_roots, LocalConfigDirectory, LocalConfigDirectoryKind,
+    LocalConfigDocument, LocalConfigDocumentKind, LocalConfigDocumentSource, LocalSourcePlanItem,
+    OpenCodeLocalConfigOptions,
 };
 use bitfun_product_domains::external_sources::{
     EcosystemId, ExternalSourceAssetKind, ExternalSourceContext, ExternalSourceDiagnostic,
@@ -12,8 +12,8 @@ use bitfun_product_domains::external_subagents::{
     external_subagent_candidate_id, ExternalSubagentBehaviorVersion,
     ExternalSubagentCompatibilityState, ExternalSubagentContributionId,
     ExternalSubagentContributionRole, ExternalSubagentDefinition, ExternalSubagentDiscoveryInput,
-    ExternalSubagentLocalId, ExternalSubagentMode, ExternalSubagentModelRequest,
-    ExternalSubagentProvenanceRef, ExternalSubagentProviderIdentity,
+    ExternalSubagentLocalId, ExternalSubagentMode, ExternalSubagentModelProfileRequest,
+    ExternalSubagentModelRequest, ExternalSubagentProvenanceRef, ExternalSubagentProviderIdentity,
     ExternalSubagentProviderSnapshot, ExternalSubagentSourceProvider, ExternalSubagentToolRequest,
     ExternalSubagentToolSelector, SecretText,
 };
@@ -103,11 +103,7 @@ const NATIVE_AGENT_IDS: &[&str] = &[
 
 #[derive(Debug, Clone)]
 pub struct OpenCodeSubagentProviderOptions {
-    pub user_config_dir: PathBuf,
-    pub legacy_user_config_dir: Option<PathBuf>,
-    pub explicit_config_file: Option<PathBuf>,
-    pub explicit_config_dir: Option<PathBuf>,
-    pub project_config_enabled: bool,
+    pub config: OpenCodeLocalConfigOptions,
     /// A test/product-host override for workspaces whose project boundary is
     /// already known. Normal environment discovery leaves this unset.
     pub project_root_override: Option<PathBuf>,
@@ -115,17 +111,8 @@ pub struct OpenCodeSubagentProviderOptions {
 
 impl OpenCodeSubagentProviderOptions {
     pub fn from_environment() -> Self {
-        let home = dirs::home_dir();
-        let user_config_dir = user_config_dir(
-            std::env::var_os("XDG_CONFIG_HOME").map(PathBuf::from),
-            home.clone(),
-        );
         Self {
-            user_config_dir,
-            legacy_user_config_dir: home.map(|home| home.join(".opencode")),
-            explicit_config_file: std::env::var_os("OPENCODE_CONFIG").map(PathBuf::from),
-            explicit_config_dir: std::env::var_os("OPENCODE_CONFIG_DIR").map(PathBuf::from),
-            project_config_enabled: !environment_truthy("OPENCODE_DISABLE_PROJECT_CONFIG"),
+            config: OpenCodeLocalConfigOptions::from_environment(),
             project_root_override: None,
         }
     }
@@ -146,15 +133,9 @@ impl OpenCodeSubagentProvider {
         Self { options }
     }
 
-    fn project_root(&self, workspace_root: &Path) -> PathBuf {
-        self.options
-            .project_root_override
-            .clone()
-            .unwrap_or_else(|| find_project_root(workspace_root))
-    }
-
     fn home_dir(&self) -> Option<&Path> {
         self.options
+            .config
             .legacy_user_config_dir
             .as_deref()
             .and_then(Path::parent)
@@ -165,89 +146,34 @@ impl OpenCodeSubagentProvider {
         context: &ExternalSourceContext,
     ) -> Result<Vec<AgentLayer>, ExternalSourceProviderError> {
         let mut layers = Vec::new();
-        push_config_file(
-            &mut layers,
-            &self.options.user_config_dir.join("config.json"),
-            ExternalSourceScope::UserGlobal,
-            "OpenCode user configuration",
-        );
-        push_config_files(
-            &mut layers,
-            &self.options.user_config_dir,
-            ExternalSourceScope::UserGlobal,
-            "OpenCode user configuration",
-        );
-        if let Some(path) = &self.options.explicit_config_file {
-            push_config_file(
-                &mut layers,
-                path,
-                ExternalSourceScope::UserGlobal,
-                "OpenCode OPENCODE_CONFIG",
-            );
-        }
-        if self.options.project_config_enabled {
-            if let Some(workspace_root) = &context.workspace_root {
-                let project_root = self.project_root(workspace_root);
-                for directory in project_config_directories(&project_root, workspace_root) {
-                    push_config_files(
-                        &mut layers,
-                        &directory,
-                        ExternalSourceScope::Project,
-                        "OpenCode project configuration",
-                    );
+        for item in local_source_plan(
+            &self.options.config,
+            context.workspace_root.as_deref(),
+            self.options.project_root_override.as_deref(),
+        ) {
+            match item {
+                LocalSourcePlanItem::Config(document) => {
+                    push_config_document(&mut layers, document)
+                }
+                LocalSourcePlanItem::Directory(directory) => {
+                    push_agent_directory_layer(&mut layers, &directory)?
                 }
             }
-        }
-        let project_directories = if self.options.project_config_enabled {
-            context
-                .workspace_root
-                .as_ref()
-                .map(|workspace_root| {
-                    project_asset_directories(&self.project_root(workspace_root), workspace_root)
-                })
-                .unwrap_or_default()
-        } else {
-            Vec::new()
-        };
-        for directory in ordered_local_config_directories(
-            &self.options.user_config_dir,
-            self.options.legacy_user_config_dir.as_deref(),
-            self.options.explicit_config_dir.as_deref(),
-            &project_directories,
-        ) {
-            push_local_directory_layers(&mut layers, &directory)?;
         }
         Ok(deduplicate_layers_keep_last(layers))
     }
 }
 
-fn push_local_directory_layers(
+fn push_agent_directory_layer(
     layers: &mut Vec<AgentLayer>,
     directory: &LocalConfigDirectory,
 ) -> Result<(), ExternalSourceProviderError> {
-    let (config_name, agent_name, include_config) = match directory.kind {
-        LocalConfigDirectoryKind::User => {
-            ("OpenCode user configuration", "OpenCode user agents", false)
-        }
-        LocalConfigDirectoryKind::Project => (
-            "OpenCode project agent configuration",
-            "OpenCode project agents",
-            true,
-        ),
-        LocalConfigDirectoryKind::Legacy => (
-            "OpenCode legacy user configuration",
-            "OpenCode legacy user agents",
-            true,
-        ),
-        LocalConfigDirectoryKind::Explicit => (
-            "OpenCode OPENCODE_CONFIG_DIR",
-            "OpenCode explicit agents",
-            true,
-        ),
+    let agent_name = match directory.kind {
+        LocalConfigDirectoryKind::User => "OpenCode user agents",
+        LocalConfigDirectoryKind::Project => "OpenCode project agents",
+        LocalConfigDirectoryKind::Legacy => "OpenCode legacy user agents",
+        LocalConfigDirectoryKind::Explicit => "OpenCode explicit agents",
     };
-    if include_config {
-        push_config_files(layers, &directory.path, directory.scope, config_name);
-    }
     push_agent_files(layers, &directory.path, directory.scope, agent_name)
 }
 
@@ -392,23 +318,10 @@ impl ExternalSubagentSourceProvider for OpenCodeSubagentProvider {
     }
 
     fn watch_roots(&self, context: &ExternalSourceContext) -> Vec<ExternalWatchRoot> {
-        let project_directories = if self.options.project_config_enabled {
-            context
-                .workspace_root
-                .as_ref()
-                .map(|workspace_root| {
-                    project_config_directories(&self.project_root(workspace_root), workspace_root)
-                })
-                .unwrap_or_default()
-        } else {
-            Vec::new()
-        };
-        local_watch_roots(
-            &self.options.user_config_dir,
-            self.options.legacy_user_config_dir.as_deref(),
-            self.options.explicit_config_file.as_deref(),
-            self.options.explicit_config_dir.as_deref(),
-            &project_directories,
+        local_source_watch_roots(
+            &self.options.config,
+            context.workspace_root.as_deref(),
+            self.options.project_root_override.as_deref(),
         )
     }
 }
@@ -423,8 +336,8 @@ struct AgentLayer {
 
 impl AgentLayer {
     fn source_kind(&self) -> &'static str {
-        match self.kind {
-            AgentLayerKind::Config => "opencode_agent_config",
+        match &self.kind {
+            AgentLayerKind::Config(_) => "opencode_agent_config",
             AgentLayerKind::Markdown { legacy: false, .. } => "opencode_agent_markdown",
             AgentLayerKind::Markdown { legacy: true, .. } => "opencode_legacy_mode_markdown",
         }
@@ -433,7 +346,7 @@ impl AgentLayer {
 
 #[derive(Debug, Clone)]
 enum AgentLayerKind {
-    Config,
+    Config(LocalConfigDocument),
     Markdown { logical_id: String, legacy: bool },
 }
 
@@ -456,34 +369,63 @@ struct AgentPatch {
 }
 
 fn parse_layer(layer: &AgentLayer) -> Result<ParsedAgentLayer, ExternalSourceProviderError> {
-    let metadata = fs::metadata(&layer.path).map_err(|error| {
-        ExternalSourceProviderError::new(
-            "opencode.agent.source_unreadable",
-            format!("Failed to inspect OpenCode agent source: {error}"),
-            true,
-        )
-    })?;
-    let limit = match layer.kind {
-        AgentLayerKind::Config => MAX_CONFIG_FILE_BYTES,
-        AgentLayerKind::Markdown { .. } => MAX_AGENT_FILE_BYTES,
+    let (content, identity) = match &layer.kind {
+        AgentLayerKind::Config(document) => {
+            let content = match document
+                .read_bounded(MAX_CONFIG_FILE_BYTES as usize)
+                .map_err(|error| {
+                    ExternalSourceProviderError::new(
+                        "opencode.agent.source_unreadable",
+                        format!("Failed to read OpenCode agent source: {error}"),
+                        true,
+                    )
+                })? {
+                bitfun_services_core::bounded_fs::BoundedTextRead::Content(content) => content,
+                bitfun_services_core::bounded_fs::BoundedTextRead::TooLarge => {
+                    return Err(ExternalSourceProviderError::new(
+                        "opencode.agent.source_too_large",
+                        "OpenCode agent source exceeds the compatibility size limit",
+                        false,
+                    ));
+                }
+                bitfun_services_core::bounded_fs::BoundedTextRead::InvalidUtf8 => {
+                    return Err(ExternalSourceProviderError::new(
+                        "opencode.agent.source_unreadable",
+                        "OpenCode agent source must be valid UTF-8",
+                        false,
+                    ));
+                }
+            };
+            (content, document.identity())
+        }
+        AgentLayerKind::Markdown { .. } => {
+            let metadata = fs::metadata(&layer.path).map_err(|error| {
+                ExternalSourceProviderError::new(
+                    "opencode.agent.source_unreadable",
+                    format!("Failed to inspect OpenCode agent source: {error}"),
+                    true,
+                )
+            })?;
+            if metadata.len() > MAX_AGENT_FILE_BYTES {
+                return Err(ExternalSourceProviderError::new(
+                    "opencode.agent.source_too_large",
+                    "OpenCode agent source exceeds the compatibility size limit",
+                    false,
+                ));
+            }
+            let content = fs::read_to_string(&layer.path).map_err(|error| {
+                ExternalSourceProviderError::new(
+                    "opencode.agent.source_unreadable",
+                    format!("Failed to read OpenCode agent source: {error}"),
+                    true,
+                )
+            })?;
+            (content, layer.path.to_string_lossy().into_owned())
+        }
     };
-    if metadata.len() > limit {
-        return Err(ExternalSourceProviderError::new(
-            "opencode.agent.source_too_large",
-            "OpenCode agent source exceeds the compatibility size limit",
-            false,
-        ));
-    }
-    let content = fs::read_to_string(&layer.path).map_err(|error| {
-        ExternalSourceProviderError::new(
-            "opencode.agent.source_unreadable",
-            format!("Failed to read OpenCode agent source: {error}"),
-            true,
-        )
-    })?;
-    let content_version = digest([layer.path.to_string_lossy().as_ref(), content.as_str()]);
+    let content_version = digest([identity.as_str(), content.as_str()]);
     match &layer.kind {
-        AgentLayerKind::Config => parse_config_layer(&content, content_version),
+        AgentLayerKind::Config(_) => parse_config_layer(&content, content_version),
         AgentLayerKind::Markdown { logical_id, legacy } => {
             parse_markdown_layer(logical_id, *legacy, &content, content_version)
         }
@@ -795,14 +737,7 @@ fn materialize_definition(
     {
         blocked.push("opencode_agent_request_not_imported".to_string());
     }
-    for field in [
-        "variant",
-        "temperature",
-        "top_p",
-        "steps",
-        "maxSteps",
-        "color",
-    ] {
+    for field in ["temperature", "top_p", "steps", "maxSteps", "color"] {
         if fields.contains_key(field) {
             degraded.push(format!("opencode_agent_{field}_not_imported"));
         }
@@ -836,14 +771,8 @@ fn materialize_definition(
     let display_name = logical_id.clone();
     let mode = match string_field(fields, "mode", &mut invalid).as_deref() {
         Some("subagent") => ExternalSubagentMode::Subagent,
-        Some("all") | None => {
-            degraded.push("opencode_primary_facet_not_imported".to_string());
-            ExternalSubagentMode::All
-        }
-        Some("primary") => {
-            blocked.push("opencode_primary_agent_not_imported".to_string());
-            ExternalSubagentMode::Primary
-        }
+        Some("all") | None => ExternalSubagentMode::All,
+        Some("primary") => ExternalSubagentMode::Primary,
         Some(_) => {
             invalid.push("opencode_agent_mode_invalid".to_string());
             ExternalSubagentMode::Subagent
@@ -866,7 +795,7 @@ fn materialize_definition(
                 .split_once('/')
                 .map(|(provider, model_name)| (Some(provider.to_string()), model_name.to_string()))
                 .unwrap_or_else(|| (None, model.to_string()));
-            ExternalSubagentModelRequest::Exact {
+            ExternalSubagentModelRequest::Reference {
                 provider_hint,
                 model_name,
             }
@@ -876,6 +805,33 @@ fn materialize_definition(
             ExternalSubagentModelRequest::Default
         }
     };
+    let has_explicit_model = matches!(
+        &requested_model,
+        ExternalSubagentModelRequest::Reference { .. }
+    );
+    let requested_model_profile = match fields.get("variant") {
+        None => None,
+        Some(Value::String(_)) if !has_explicit_model => None,
+        Some(Value::String(value)) => {
+            let profile = ExternalSubagentModelProfileRequest::NamedVariant {
+                name: value.clone(),
+            };
+            if profile.validate().is_ok() {
+                Some(profile)
+            } else {
+                invalid.push("opencode_agent_variant_invalid".to_string());
+                None
+            }
+        }
+        Some(_) => {
+            invalid.push("opencode_agent_variant_type_invalid".to_string());
+            None
+        }
+    };
+    // OpenCode applies an agent variant only when that agent declares a model
+    // and the active model matches it. A variant on a default-model agent is
+    // inert, so importing it as an active profile would add behavior that the
+    // source does not have.
     let requested_tools = tool_request(fields, &mut invalid, &mut blocked, &mut degraded);
     let permission_constraints = permission_constraints(
         fields,
@@ -915,6 +871,8 @@ fn materialize_definition(
             if disabled { "disabled" } else { "enabled" },
             if hidden { "hidden" } else { "visible" },
             &serde_json::to_string(&requested_model).expect("model request serializes"),
+            &serde_json::to_string(&requested_model_profile)
+                .expect("model profile request serializes"),
             &serde_json::to_string(&requested_tools).expect("tool request serializes"),
             &serde_json::to_string(&permission_constraints)
                 .expect("permission constraints serialize"),
@@ -940,6 +898,7 @@ fn materialize_definition(
         disabled,
         hidden,
         requested_model,
+        requested_model_profile,
         requested_tools,
         permission_constraints,
         compatibility,
@@ -1525,31 +1484,35 @@ fn mode_label(mode: ExternalSubagentMode) -> &'static str {
     }
 }
 
-fn push_config_files(
-    layers: &mut Vec<AgentLayer>,
-    directory: &Path,
-    scope: ExternalSourceScope,
-    display_name: &str,
-) {
-    for name in ["opencode.json", "opencode.jsonc"] {
-        push_config_file(layers, &directory.join(name), scope, display_name);
-    }
-}
-
-fn push_config_file(
-    layers: &mut Vec<AgentLayer>,
-    path: &Path,
-    scope: ExternalSourceScope,
-    display_name: &str,
-) {
-    if path.is_file() {
-        layers.push(AgentLayer {
-            path: path.to_path_buf(),
-            scope,
-            display_name: display_name.to_string(),
-            kind: AgentLayerKind::Config,
-        });
-    }
+fn push_config_document(layers: &mut Vec<AgentLayer>, document: LocalConfigDocument) {
+    let display_name = match document.kind {
+        LocalConfigDocumentKind::User => "OpenCode user configuration",
+        LocalConfigDocumentKind::ExplicitFile => "OpenCode OPENCODE_CONFIG",
+        LocalConfigDocumentKind::Project
+        | LocalConfigDocumentKind::Directory(LocalConfigDirectoryKind::Project) => {
+            "OpenCode project agent configuration"
+        }
+        LocalConfigDocumentKind::Directory(LocalConfigDirectoryKind::Legacy) => {
+            "OpenCode legacy user configuration"
+        }
+        LocalConfigDocumentKind::Directory(LocalConfigDirectoryKind::Explicit) => {
+            "OpenCode OPENCODE_CONFIG_DIR"
+        }
+        LocalConfigDocumentKind::Directory(LocalConfigDirectoryKind::User) => {
+            "OpenCode user configuration"
+        }
+        LocalConfigDocumentKind::Inline => "OpenCode OPENCODE_CONFIG_CONTENT",
+    };
+    let path = match &document.source {
+        LocalConfigDocumentSource::File(path) => path.clone(),
+        LocalConfigDocumentSource::Inline(_) => PathBuf::from(document.location()),
+    };
+    layers.push(AgentLayer {
+        path,
+        scope: document.scope,
+        display_name: display_name.to_string(),
+        kind: AgentLayerKind::Config(document),
+    });
 }
 
 fn push_agent_files(
@@ -1670,15 +1633,17 @@ fn normalize_logical_id(value: &str) -> String {
 }
 
 fn source_key(layer: &AgentLayer) -> SourceKey {
-    let identity_path =
-        dunce::canonicalize(&layer.path).unwrap_or_else(|_| normalize_path_lexically(&layer.path));
+    let identity = match &layer.kind {
+        AgentLayerKind::Config(document) => document.identity(),
+        AgentLayerKind::Markdown { .. } => dunce::canonicalize(&layer.path)
+            .unwrap_or_else(|_| normalize_path_lexically(&layer.path))
+            .to_string_lossy()
+            .into_owned(),
+    };
     let source_id = format!(
         "{}-{}",
         layer.source_kind(),
-        &digest([
-            layer.source_kind(),
-            identity_path.to_string_lossy().as_ref()
-        ])[..24]
+        &digest([layer.source_kind(), identity.as_str()])[..24]
     );
     SourceKey::new(PROVIDER_ID, source_id).expect("hashed OpenCode agent source id must be valid")
 }
@@ -1721,10 +1686,4 @@ fn digest(parts: impl IntoIterator<Item = impl AsRef<str>>) -> String {
         hasher.update(value.as_bytes());
     }
     hex::encode(hasher.finalize())
-}
-
-fn environment_truthy(key: &str) -> bool {
-    std::env::var(key)
-        .ok()
-        .is_some_and(|value| matches!(value.to_ascii_lowercase().as_str(), "true" | "1"))
 }

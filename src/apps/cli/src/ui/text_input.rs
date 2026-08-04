@@ -106,19 +106,6 @@ impl TextInput {
         }
     }
 
-    pub(super) fn move_cursor_left(&mut self) {
-        if self.cursor > 0 {
-            self.cursor -= 1;
-        }
-    }
-
-    pub(super) fn move_cursor_right(&mut self) {
-        let char_count = self.input.chars().count();
-        if self.cursor < char_count {
-            self.cursor += 1;
-        }
-    }
-
     /// Returns (logical_line, col_in_line, char_offset_of_line_start)
     fn cursor_line_col(&self) -> (usize, usize, usize) {
         let mut line = 0;
@@ -185,6 +172,23 @@ impl TextInput {
     pub(crate) fn set_text(&mut self, text: &str) {
         self.input = text.to_string();
         self.cursor = self.input.chars().count();
+        self.scroll_offset = 0;
+    }
+
+    pub(super) fn set_text_and_cursor(&mut self, text: &str, cursor: usize) {
+        self.input = text.to_string();
+        self.cursor = cursor.min(self.input.chars().count());
+        self.scroll_offset = 0;
+    }
+
+    pub(super) fn replace_char_range(&mut self, start: usize, end: usize, replacement: &str) {
+        let char_count = self.input.chars().count();
+        let start = start.min(char_count);
+        let end = end.clamp(start, char_count);
+        let start_byte = self.char_pos_to_byte_pos(start);
+        let end_byte = self.char_pos_to_byte_pos(end);
+        self.input.replace_range(start_byte..end_byte, replacement);
+        self.cursor = start + replacement.chars().count();
         self.scroll_offset = 0;
     }
 

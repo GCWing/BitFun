@@ -15,7 +15,7 @@ import { systemAPI } from '@/infrastructure/api/service-api/SystemAPI';
 import { globalEventBus } from '@/infrastructure/event-bus';
 import { isMcpToolName } from '@/infrastructure/mcp/toolName';
 import { getCachedToolInfo } from '@/infrastructure/mcp/toolInfoCache';
-import { UI_EXCEPTION_ACCENTS } from '@/shared/theme/uiExceptionAccents';
+import { APPEARANCE_DOMAIN_TOKENS } from '@/infrastructure/appearance/appearanceDomainTokens';
 import type { ToolInfo } from '@/shared/types/agent-api';
 import { useToolCardHeightContract } from './useToolCardHeightContract';
 import './MCPToolDisplay.scss';
@@ -629,7 +629,7 @@ export const MCPToolDisplay: React.FC<ToolCardProps> = ({
       iconClassName="mcp-icon"
       action={isFailed ? t('toolCards.mcp.failedLabel') : t('toolCards.mcp.actionLabel')}
       content={
-        <span className="mcp-tool-info">
+        <span className="mcp-tool-info" data-bf-component="mcp-tool-display" data-bf-part="info">
           <span className="tool-name">{toolName}</span>
         </span>
       }
@@ -675,18 +675,18 @@ export const MCPToolDisplay: React.FC<ToolCardProps> = ({
     }
 
     return (
-      <div className="mcp-expanded-content">
+      <div data-bf-component="mcp-tool-display" data-bf-part="expanded" data-bf-state="expanded" className="mcp-expanded-content">
         {/* MCP App: sandboxed iframe for ui:// resources */}
         {mcpAppState && (
-          <div className="content-item content-item-mcp-app">
+          <div className="content-item content-item-mcp-app" data-bf-component="mcp-tool-display" data-bf-part="item">
             {mcpAppState.loading && (
-              <div className="mcp-app-loading">
+              <div className="mcp-app-loading" data-bf-component="mcp-tool-display" data-bf-part="loading" data-bf-state="loading">
                 <CubeLoading size="small" />
                 <span>{t('toolCards.mcp.loadingApp')}</span>
               </div>
             )}
             {mcpAppState.error && (
-              <div className="mcp-app-error">
+              <div className="mcp-app-error" data-bf-component="mcp-tool-display" data-bf-part="error" data-bf-state="error">
                 <span>{t('toolCards.mcp.appLoadError')}: {mcpAppState.error}</span>
               </div>
             )}
@@ -694,6 +694,8 @@ export const MCPToolDisplay: React.FC<ToolCardProps> = ({
               <iframe
                 ref={mcpAppIframeRef}
                 className="mcp-app-iframe"
+                data-bf-component="mcp-tool-display"
+                data-bf-part="iframe"
                 sandbox="allow-scripts allow-forms"
                 title="MCP App"
                 srcDoc={mcpAppState.html}
@@ -708,19 +710,19 @@ export const MCPToolDisplay: React.FC<ToolCardProps> = ({
           const isUiResource = item.type === 'resource' && item.resource?.uri?.startsWith('ui://');
           if (isUiResource && mcpAppState) return null;
           return (
-            <div key={index} className={`content-item content-item-${item.type}`}>
+            <div data-bf-component="mcp-tool-display" data-bf-part="item" key={index} className={`content-item content-item-${item.type}`}>
               {item.type === 'text' && (
-                <div className="text-content">
+                <div className="text-content" data-bf-component="mcp-tool-display" data-bf-part="text">
                   <pre>{item.text}</pre>
                 </div>
               )}
               {item.type === 'image' && item.data && (
-                <div className="image-content">
+                <div className="image-content" data-bf-component="mcp-tool-display" data-bf-part="image">
                   <img src={`data:${item.mime_type ?? 'image/png'};base64,${item.data}`} alt="" />
                 </div>
               )}
               {item.type === 'resource' && item.resource && (
-                <div className="resource-content">
+                <div className="resource-content" data-bf-component="mcp-tool-display" data-bf-part="resource">
                   <div className="resource-name">{item.resource.name || 'Resource'}</div>
                   <div className="resource-uri">{item.resource.uri}</div>
                   {item.resource.description && (
@@ -736,16 +738,17 @@ export const MCPToolDisplay: React.FC<ToolCardProps> = ({
   };
 
   const renderErrorContent = () => (
-    <div className="error-content">
+    <div className="error-content" data-bf-component="mcp-tool-display" data-bf-part="error" data-bf-state="error">
       <div className="error-message">{getErrorMessage()}</div>
     </div>
   );
 
   return (
-    <div
+    <div data-bf-component="mcp-tool-display" data-bf-part="root"
+      data-bf-state={[isExpanded && 'expanded', isFailed && 'error'].filter(Boolean).join(' ') || undefined}
       ref={cardRootRef}
       data-tool-card-id={toolId ?? ''}
-      style={{ '--private-mcp-tool-identity-color': UI_EXCEPTION_ACCENTS.toolIdentity.mcp } as React.CSSProperties}
+      style={{ '--private-mcp-tool-identity-color': APPEARANCE_DOMAIN_TOKENS.toolIdentity.mcp } as React.CSSProperties}
     >
       <BaseToolCard
         status={status}

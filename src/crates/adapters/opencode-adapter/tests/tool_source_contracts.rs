@@ -209,10 +209,22 @@ fn explicit_config_directory_is_appended_to_the_default_global_directory() {
             .collect::<Vec<_>>(),
         vec!["default", "explicit"]
     );
-    assert!(snapshot
-        .sources
-        .iter()
-        .all(|source| source.scope == ExternalSourceScope::UserGlobal));
+    assert_eq!(
+        snapshot
+            .sources
+            .iter()
+            .filter(|source| source.scope == ExternalSourceScope::UserGlobal)
+            .count(),
+        2
+    );
+    assert_eq!(
+        snapshot
+            .sources
+            .iter()
+            .filter(|source| source.scope == ExternalSourceScope::WorkspaceLocal)
+            .count(),
+        0
+    );
 }
 
 #[test]

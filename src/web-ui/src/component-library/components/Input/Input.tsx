@@ -45,28 +45,38 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(({
   ]
     .filter(Boolean)
     .join(' ');
+  const appearanceState = [error && 'error', disabled && 'disabled'].filter(Boolean).join(' ');
 
   return (
-    <div className={classNames}>
-      {label && <label className="bitfun-input-label" htmlFor={inputId}>{label}</label>}
-      <div className="bitfun-input-container">
-        {prefix && <span className="bitfun-input-prefix">{prefix}</span>}
+    <div
+      className={classNames}
+      data-bf-component="input"
+      data-bf-part="root"
+      data-bf-variant={variant}
+      data-bf-size={resolvedInputSize}
+      data-bf-state={appearanceState || undefined}
+    >
+      {label && <label className="bitfun-input-label" htmlFor={inputId} data-bf-component="input" data-bf-part="label">{label}</label>}
+      <div className="bitfun-input-container" data-bf-component="input" data-bf-part="container">
+        {prefix && <span className="bitfun-input-prefix" data-bf-component="input" data-bf-part="prefix">{prefix}</span>}
         <input
           {...props}
           ref={ref}
           id={inputId}
           className="bitfun-input"
+          data-bf-component="input"
+          data-bf-part="control"
           disabled={disabled}
           aria-invalid={error || undefined}
           aria-describedby={(error && errorMessage) || (!error && hint) ? supportId : props['aria-describedby']}
         />
-        {suffix && <span className="bitfun-input-suffix">{suffix}</span>}
+        {suffix && <span className="bitfun-input-suffix" data-bf-component="input" data-bf-part="suffix">{suffix}</span>}
       </div>
       {!error && hint && (
-        <span id={supportId} className="bitfun-input-hint">{hint}</span>
+        <span id={supportId} className="bitfun-input-hint" data-bf-component="input" data-bf-part="message">{hint}</span>
       )}
       {error && errorMessage && (
-        <span id={supportId} className="bitfun-input-error-message" role="alert">{errorMessage}</span>
+        <span id={supportId} className="bitfun-input-error-message" role="alert" data-bf-component="input" data-bf-part="message">{errorMessage}</span>
       )}
     </div>
   );

@@ -45,6 +45,10 @@ pub(super) const BUILTIN_SKILL_SPECS: &[BuiltinSkillSpec] = &[
         group: BuiltinSkillGroup::Canvas,
     },
     BuiltinSkillSpec {
+        dir_name: "create-bitfun-skin",
+        group: BuiltinSkillGroup::Meta,
+    },
+    BuiltinSkillSpec {
         dir_name: "docx",
         group: BuiltinSkillGroup::Office,
     },

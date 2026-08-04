@@ -309,10 +309,10 @@ export class MiniAppAPI {
     }
   }
 
-  async getMiniApp(appId: string, theme?: string, workspacePath?: string): Promise<MiniApp> {
+  async getMiniApp(appId: string, appearanceMode?: string, workspacePath?: string): Promise<MiniApp> {
     try {
       const raw = await api.invoke<MiniApp & { compiledHtml?: string }>('get_miniapp', {
-        request: { appId, theme: theme ?? undefined, workspacePath }
+        request: { appId, appearanceMode: appearanceMode ?? undefined, workspacePath }
       });
       const normalized = normalizeMiniApp(raw);
       return normalized;
@@ -431,10 +431,10 @@ export class MiniAppAPI {
     }
   }
 
-  async recompile(appId: string, theme?: string, workspacePath?: string): Promise<RecompileResult> {
+  async recompile(appId: string, appearanceMode?: string, workspacePath?: string): Promise<RecompileResult> {
     try {
       return await api.invoke('miniapp_recompile', {
-        request: { appId, theme: theme ?? undefined, workspacePath }
+        request: { appId, appearanceMode: appearanceMode ?? undefined, workspacePath }
       });
     } catch (error) {
       throw createTauriCommandError('miniapp_recompile', error, { appId, workspacePath });
@@ -451,10 +451,10 @@ export class MiniAppAPI {
     }
   }
 
-  async syncFromFs(appId: string, theme?: string, workspacePath?: string): Promise<MiniApp> {
+  async syncFromFs(appId: string, appearanceMode?: string, workspacePath?: string): Promise<MiniApp> {
     try {
       return await api.invoke('miniapp_sync_from_fs', {
-        request: { appId, theme: theme ?? undefined, workspacePath }
+        request: { appId, appearanceMode: appearanceMode ?? undefined, workspacePath }
       });
     } catch (error) {
       throw createTauriCommandError('miniapp_sync_from_fs', error, { appId, workspacePath });
@@ -463,10 +463,10 @@ export class MiniAppAPI {
 
   // ─── Draft commands ─────────────────────────────────────────────────────────
 
-  async createDraft(appId: string, theme?: string, workspacePath?: string): Promise<MiniAppDraft> {
+  async createDraft(appId: string, appearanceMode?: string, workspacePath?: string): Promise<MiniAppDraft> {
     try {
       return await api.invoke('miniapp_create_draft', {
-        request: { appId, theme: theme ?? undefined, workspacePath }
+        request: { appId, appearanceMode: appearanceMode ?? undefined, workspacePath }
       });
     } catch (error) {
       throw createTauriCommandError('miniapp_create_draft', error, { appId, workspacePath });
@@ -486,12 +486,12 @@ export class MiniAppAPI {
   async syncDraftFromFs(
     appId: string,
     draftId: string,
-    theme?: string,
+    appearanceMode?: string,
     workspacePath?: string,
   ): Promise<MiniAppDraft> {
     try {
       return await api.invoke('miniapp_sync_draft_from_fs', {
-        request: { appId, draftId, theme: theme ?? undefined, workspacePath }
+        request: { appId, draftId, appearanceMode: appearanceMode ?? undefined, workspacePath }
       });
     } catch (error) {
       throw createTauriCommandError('miniapp_sync_draft_from_fs', error, { appId, draftId, workspacePath });
@@ -502,12 +502,12 @@ export class MiniAppAPI {
     appId: string,
     draftId: string,
     permissions: MiniAppPermissions,
-    theme?: string,
+    appearanceMode?: string,
     workspacePath?: string,
   ): Promise<MiniAppDraft> {
     try {
       return await api.invoke('miniapp_set_draft_permissions', {
-        request: { appId, draftId, permissions, theme: theme ?? undefined, workspacePath }
+        request: { appId, draftId, permissions, appearanceMode: appearanceMode ?? undefined, workspacePath }
       });
     } catch (error) {
       throw createTauriCommandError('miniapp_set_draft_permissions', error, { appId, draftId, workspacePath });
@@ -527,12 +527,12 @@ export class MiniAppAPI {
   async applyDraft(
     appId: string,
     draftId: string,
-    theme?: string,
+    appearanceMode?: string,
     workspacePath?: string,
   ): Promise<MiniApp> {
     try {
       return await api.invoke('miniapp_apply_draft', {
-        request: { appId, draftId, theme: theme ?? undefined, workspacePath }
+        request: { appId, draftId, appearanceMode: appearanceMode ?? undefined, workspacePath }
       });
     } catch (error) {
       throw createTauriCommandError('miniapp_apply_draft', error, { appId, draftId, workspacePath });

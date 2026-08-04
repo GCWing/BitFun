@@ -2,14 +2,14 @@
 @use '../../../styles/surface-stagger';
 
 .miniapp-card {
-  --miniapp-card-action-bg: color-mix(in srgb, var(--color-static-white) 30%, transparent);
-  --miniapp-card-action-hover-bg: color-mix(in srgb, var(--color-static-white) 60%, transparent);
+  --miniapp-card-action-bg: color-mix(in srgb, var(--bf-appearance-token-color-static-white) 30%, transparent);
+  --miniapp-card-action-hover-bg: color-mix(in srgb, var(--bf-appearance-token-color-static-white) 60%, transparent);
 
   width: 100%;
   min-width: 0;
   min-height: 200px;
   border-radius: 15px;
-  background: var(--element-bg-soft);
+  background: var(--bf-appearance-token-element-bg-soft);
   display: flex;
   flex-direction: column;
   position: relative;
@@ -38,7 +38,7 @@
 
   &:hover {
     transform: translateY(-4px) scale(1.02);
-    box-shadow: 0 16px 40px var(--color-overlay-black-20);
+    box-shadow: 0 16px 40px var(--bf-appearance-token-color-overlay-black-20);
 
     &::before {
       opacity: 0.4;
@@ -51,7 +51,7 @@
   }
 
   &:focus-visible {
-    outline: 2px solid var(--color-accent-500);
+    outline: 2px solid var(--bf-appearance-token-color-accent-500);
     outline-offset: 2px;
   }
 
@@ -60,7 +60,7 @@
   }
 
   &--customizing {
-    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-accent-500) 28%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 28%, transparent);
   }
 
   // ── Header with icon and title ──
@@ -90,12 +90,12 @@
     width: 40px;
     height: 40px;
     border-radius: 10px;
-    background: var(--color-overlay-white-12);
+    background: var(--bf-appearance-token-color-overlay-white-12);
     backdrop-filter: blur(8px);
   }
 
   &__icon {
-    color: var(--color-text-primary);
+    color: var(--bf-appearance-token-color-text-primary);
     animation: miniapp-icon-pop 0.5s $easing-decelerate both;
     @include surface-stagger.animation-delay(35ms, 60ms);
     transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
@@ -118,14 +118,14 @@
   }
 
   &__run-dot {
-    background: var(--color-success);
-    box-shadow: 0 0 6px color-mix(in srgb, var(--color-success) 65%, transparent);
+    background: var(--bf-appearance-token-color-success);
+    box-shadow: 0 0 6px color-mix(in srgb, var(--bf-appearance-token-color-success) 65%, transparent);
     animation: pulse 2s ease-in-out infinite;
   }
 
   &__customize-dot {
-    background: var(--color-accent-500);
-    box-shadow: 0 0 6px color-mix(in srgb, var(--color-accent-500) 68%, transparent);
+    background: var(--bf-appearance-token-color-accent-500);
+    box-shadow: 0 0 6px color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 68%, transparent);
   }
 
   // ── Body ──
@@ -143,7 +143,7 @@
   &__name {
     font-size: 1.2em;
     font-weight: 900;
-    color: var(--color-text-primary);
+    color: var(--bf-appearance-token-color-text-primary);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -154,7 +154,7 @@
 
   &__version {
     font-size: 10px;
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
     font-family: $font-family-mono;
     letter-spacing: 0.02em;
     white-space: nowrap;
@@ -169,7 +169,7 @@
   &__desc-inner {
     font-size: 0.85em;
     font-weight: 300;
-    color: color-mix(in srgb, var(--color-text-secondary) 85%, transparent);
+    color: color-mix(in srgb, var(--bf-appearance-token-color-text-secondary) 85%, transparent);
     line-height: $line-height-relaxed;
     display: -webkit-box;
     -webkit-line-clamp: 2;
@@ -193,9 +193,9 @@
     padding: 0 $size-gap-2;
     border-radius: $size-radius-full;
     font-size: 10px;
-    color: var(--color-text-secondary);
-    background: var(--color-overlay-white-08);
-    border: 1px solid var(--color-overlay-white-08);
+    color: var(--bf-appearance-token-color-text-secondary);
+    background: var(--bf-appearance-token-color-overlay-white-08);
+    border: 1px solid var(--bf-appearance-token-color-overlay-white-08);
     white-space: nowrap;
   }
 
@@ -246,7 +246,7 @@
     border-radius: $size-radius-sm;
     border: none;
     background: var(--miniapp-card-action-bg);
-    color: var(--color-text-secondary);
+    color: var(--bf-appearance-token-color-text-secondary);
     cursor: pointer;
     transition:
       background $motion-fast $easing-standard,
@@ -258,17 +258,17 @@
 
     &--primary:hover {
       background: var(--miniapp-card-action-hover-bg);
-      color: var(--color-accent-400);
+      color: var(--bf-appearance-token-color-accent-400);
     }
 
     &--danger:hover {
       background: var(--miniapp-card-action-hover-bg);
-      color: var(--color-error);
+      color: var(--bf-appearance-token-color-error);
     }
 
     &--stop:hover {
       background: var(--miniapp-card-action-hover-bg);
-      color: var(--color-success);
+      color: var(--bf-appearance-token-color-success);
     }
   }
 }

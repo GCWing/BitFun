@@ -12,7 +12,7 @@ pub use bitfun_product_domains::external_hook_catalog::{
 pub use bitfun_product_domains::external_sources::{ExecutionDomainId, ExternalSourceContext};
 
 use crate::external_sources::{host_execution_domain_id, normalize_workspace_root};
-#[cfg(feature = "service-integrations")]
+#[cfg(feature = "git")]
 use crate::service::workspace::{global_worktree_topology_service, WorktreeTopologyFreshness};
 use bitfun_claude_code_adapter::{ClaudeCodeHookProvider, ClaudeCodeHookProviderOptions};
 use bitfun_codex_adapter::{CodexHookProvider, CodexHookProviderOptions};
@@ -297,7 +297,7 @@ pub(crate) struct HookProjectTopology {
     pub(crate) primary_root: Option<PathBuf>,
 }
 
-#[cfg(feature = "service-integrations")]
+#[cfg(feature = "git")]
 async fn hook_project_topology(
     workspace_root: Option<&std::path::Path>,
 ) -> Option<HookProjectTopology> {
@@ -315,7 +315,7 @@ async fn hook_project_topology(
     )
 }
 
-#[cfg(not(feature = "service-integrations"))]
+#[cfg(not(feature = "git"))]
 async fn hook_project_topology(
     _workspace_root: Option<&std::path::Path>,
 ) -> Option<HookProjectTopology> {

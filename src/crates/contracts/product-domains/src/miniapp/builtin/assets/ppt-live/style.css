@@ -132,8 +132,7 @@
   --studio-slide-tip-text: #475569;
 }
 
-[data-theme="light"],
-[data-theme-type="light"] {
+[data-bf-appearance-mode="light"] {
   color-scheme: light;
   --studio-bg: var(--bitfun-bg, #f6f7fb);
   --studio-surface: var(--bitfun-bg-elevated, #ffffff);
@@ -168,8 +167,7 @@
    2. DARK THEME OVERRIDE
    ============================================ */
 
-[data-theme="dark"],
-[data-theme-type="dark"] {
+[data-bf-appearance-mode="dark"] {
   color-scheme: dark;
   --studio-bg: #0a0a0a;
   --studio-surface: #141414;
@@ -215,7 +213,7 @@
 }
 
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme]):not([data-theme-type]) {
+  :root:not([data-bf-appearance-mode]) {
     color-scheme: dark;
     --studio-bg: #0a0a0a;
     --studio-surface: #141414;

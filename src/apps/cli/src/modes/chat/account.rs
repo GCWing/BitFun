@@ -187,7 +187,11 @@ impl ChatMode {
             || chat_view.model_selector_visible()
             || chat_view.agent_selector_visible()
             || chat_view.session_selector_visible()
+            || chat_view.session_lineage_selector_visible()
             || chat_view.fork_selector_visible()
+            || chat_view.timeline_selector_visible()
+            || chat_view.prompt_stash_selector_visible()
+            || chat_view.export_dialog_visible()
             || chat_view.skill_selector_visible()
             || chat_view.subagent_selector_visible()
             || chat_view.mcp_selector_visible()
@@ -197,10 +201,12 @@ impl ChatMode {
             || chat_view.login_form_visible()
             || chat_view.theme_selector_visible()
             || chat_view.info_popup_visible()
+            || chat_view.prompt_command_shell_review_visible()
+            || chat_view.workspace_diff_visible()
     }
 
     /// Close all popups and clear the navigation stack
-    fn close_all_popups(&self, chat_view: &mut ChatView) {
+    fn close_all_popups(&mut self, chat_view: &mut ChatView) {
         // Cancel theme preview if active
         if chat_view.theme_selector_visible() {
             chat_view.cancel_theme_preview();
@@ -209,7 +215,11 @@ impl ChatMode {
         chat_view.hide_model_selector();
         chat_view.hide_agent_selector();
         chat_view.hide_session_selector();
+        chat_view.hide_session_lineage_selector();
         chat_view.hide_fork_selector();
+        chat_view.hide_timeline_selector();
+        chat_view.hide_prompt_stash_selector();
+        chat_view.hide_export_dialog();
         chat_view.hide_skill_selector();
         chat_view.hide_subagent_selector();
         chat_view.hide_mcp_selector();
@@ -219,6 +229,9 @@ impl ChatMode {
         chat_view.hide_login_form();
         chat_view.hide_theme_selector();
         chat_view.dismiss_info_popup();
+        chat_view.hide_prompt_command_shell_review();
+        self.pending_prompt_command_shell_invocation = None;
+        chat_view.hide_workspace_diff();
         chat_view.popup_stack.clear();
     }
 
@@ -232,7 +245,15 @@ impl ChatMode {
                 crate::ui::chat::PopupType::ModelSelector => chat_view.hide_model_selector(),
                 crate::ui::chat::PopupType::AgentSelector => chat_view.hide_agent_selector(),
                 crate::ui::chat::PopupType::SessionSelector => chat_view.hide_session_selector(),
+                crate::ui::chat::PopupType::SessionLineageSelector => {
+                    chat_view.hide_session_lineage_selector()
+                }
                 crate::ui::chat::PopupType::ForkSelector => chat_view.hide_fork_selector(),
+                crate::ui::chat::PopupType::TimelineSelector => chat_view.hide_timeline_selector(),
+                crate::ui::chat::PopupType::PromptStashSelector => {
+                    chat_view.hide_prompt_stash_selector()
+                }
+                crate::ui::chat::PopupType::ExportDialog => chat_view.hide_export_dialog(),
                 crate::ui::chat::PopupType::SkillSelector => chat_view.hide_skill_selector(),
                 crate::ui::chat::PopupType::SubagentSelector => chat_view.hide_subagent_selector(),
                 crate::ui::chat::PopupType::McpSelector => chat_view.hide_mcp_selector(),
@@ -245,6 +266,7 @@ impl ChatMode {
                     chat_view.cancel_theme_preview();
                 }
                 crate::ui::chat::PopupType::InfoPopup => chat_view.dismiss_info_popup(),
+                crate::ui::chat::PopupType::WorkspaceDiff => chat_view.hide_workspace_diff(),
             }
 
             // If there's a previous popup in the stack, re-show it
@@ -258,7 +280,17 @@ impl ChatMode {
                     crate::ui::chat::PopupType::SessionSelector => {
                         chat_view.reshow_session_selector()
                     }
+                    crate::ui::chat::PopupType::SessionLineageSelector => {
+                        chat_view.reshow_session_lineage_selector()
+                    }
                     crate::ui::chat::PopupType::ForkSelector => chat_view.reshow_fork_selector(),
+                    crate::ui::chat::PopupType::TimelineSelector => {
+                        chat_view.reshow_timeline_selector()
+                    }
+                    crate::ui::chat::PopupType::PromptStashSelector => {
+                        chat_view.reshow_prompt_stash_selector()
+                    }
+                    crate::ui::chat::PopupType::ExportDialog => {}
                     crate::ui::chat::PopupType::SkillSelector => chat_view.reshow_skill_selector(),
                     crate::ui::chat::PopupType::SubagentSelector => {
                         chat_view.reshow_subagent_selector()
@@ -274,6 +306,7 @@ impl ChatMode {
                     crate::ui::chat::PopupType::LoginForm => chat_view.reshow_login_form(),
                     crate::ui::chat::PopupType::ThemeSelector => chat_view.reshow_theme_selector(),
                     crate::ui::chat::PopupType::InfoPopup => {}
+                    crate::ui::chat::PopupType::WorkspaceDiff => chat_view.reshow_workspace_diff(),
                 }
             }
         }

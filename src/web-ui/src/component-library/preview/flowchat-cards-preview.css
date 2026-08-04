@@ -2,11 +2,9 @@
  * FlowChat Cards preview styles
  */
 
-/* Preview-only tool card typography override. */
 :root {
-  --tool-card-font-mono: 'SF Mono', 'Monaco', 'Cascadia Code', 'Cascadia Mono', Consolas, 'Inconsolata', 'Fira Code', 'Fira Mono', 'Droid Sans Mono', 'Source Code Pro', 'Lucida Console', 'Courier New', monospace;
-  --private-flowchat-preview-border: color-mix(in srgb, var(--color-static-black) 90%, var(--color-static-white));
-  --private-flowchat-preview-text-muted: color-mix(in srgb, var(--color-static-white) 63%, var(--color-static-black));
+  --private-flowchat-preview-border: color-mix(in srgb, var(--bf-appearance-token-color-static-black) 90%, var(--bf-appearance-token-color-static-white));
+  --private-flowchat-preview-text-muted: color-mix(in srgb, var(--bf-appearance-token-color-static-white) 63%, var(--bf-appearance-token-color-static-black));
 }
 
 .column-item-preview {

@@ -17,7 +17,6 @@ export interface MonacoEditorCoreProps {
   preset?: EditorPresetName;
   config?: EditorConfigPartial;
   readOnly?: boolean;
-  theme?: string;
   
   // Features
   enableLsp?: boolean;
@@ -55,7 +54,6 @@ export interface MonacoDiffCoreProps {
   config?: EditorConfigPartial;
   /** ReadOnly for modified editor */
   readOnly?: boolean;
-  theme?: string;
   
   // Diff specific
   /** Side-by-side (false = inline) */

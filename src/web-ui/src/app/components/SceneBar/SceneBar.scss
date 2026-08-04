@@ -16,14 +16,17 @@
   user-select: none;
 
   &__tabs {
-    --scene-tab-count: 1;
-    --scene-tab-gap: 3px;
+    --bf-appearance-token-scene-tab-count: 1;
+    --bf-appearance-token-scene-tab-gap: 3px;
 
     display: flex;
     align-items: stretch;
     flex: 1;
-    gap: var(--scene-tab-gap);
-    min-width: 0;
+    gap: $size-gap-1;
+    --bf-appearance-token-scene-tab-gap: #{$size-gap-1};
+    --bf-appearance-token-scene-tab-count: 1;
+    // Keep horizontal breathing room so edge tabs don't have
+    // their rounded corners visually clipped at container bounds.
     padding: 5px 2px;
     overflow: hidden;
   }
@@ -49,12 +52,28 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  position: relative;
+  cursor: pointer;
+  color: var(--bf-appearance-token-color-text-muted);
+  font-size: var(--bf-appearance-token-font-size-sm);
+  font-weight: 400;
+  white-space: nowrap;
+  // Slightly lift off --bf-appearance-token-color-bg-primary so tabs never disappear into the chrome
+  // (dark presets often set tertiary === primary; mixing secondary fixes that).
+  background: color-mix(in srgb, var(--bf-appearance-token-color-bg-secondary) 44%, var(--bf-appearance-token-color-bg-primary));
+  // Full radius — tab floats symmetrically inside the bar
+  border-radius: $size-radius-sm;
+  transition: color $motion-fast $easing-standard,
+              background $motion-fast $easing-standard,
+              flex-basis 360ms cubic-bezier(0.22, 1, 0.36, 1),
+              max-width 360ms cubic-bezier(0.22, 1, 0.36, 1);
+  outline: none;
   flex: 0 1 auto;
   flex-basis: calc(
-    (100% - (var(--scene-tab-count) - 1) * var(--scene-tab-gap)) / var(--scene-tab-count)
+    (100% - (var(--bf-appearance-token-scene-tab-count) - 1) * var(--bf-appearance-token-scene-tab-gap)) / var(--bf-appearance-token-scene-tab-count)
   );
   max-width: calc(
-    (100% - (var(--scene-tab-count) - 1) * var(--scene-tab-gap)) / var(--scene-tab-count)
+    (100% - (var(--bf-appearance-token-scene-tab-count) - 1) * var(--bf-appearance-token-scene-tab-gap)) / var(--bf-appearance-token-scene-tab-count)
   );
   min-width: 0;
   overflow: hidden;
@@ -62,8 +81,8 @@
   border-radius: $size-radius-sm;
   outline: none;
   background: transparent;
-  color: var(--color-text-muted);
-  font-size: var(--font-size-sm);
+  color: var(--bf-appearance-token-color-text-muted);
+  font-size: var(--bf-appearance-token-font-size-sm);
   font-weight: $font-weight-normal;
   white-space: nowrap;
   cursor: pointer;
@@ -73,19 +92,40 @@
     background 120ms ease,
     border-color 120ms ease;
 
+  &:hover {
+    color: var(--bf-appearance-token-color-text-secondary);
+    background: color-mix(in srgb, var(--bf-appearance-token-color-bg-secondary) 68%, var(--bf-appearance-token-color-bg-primary));
+
+    .bitfun-scene-tab__close {
+      opacity: 1;
+    }
+  }
+
+  // Active state — same fill as .bitfun-nav-panel__item.is-active (no left rail on horizontal tabs)
   &--active {
-    border-color: color-mix(in srgb, var(--border-subtle) 72%, transparent);
-    background: var(--element-bg-soft);
-    color: var(--color-text-primary);
-    font-weight: $font-weight-medium;
+    color: var(--bf-appearance-token-color-text-primary);
+    font-weight: 500;
+    background: var(--bf-appearance-token-element-bg-soft);
 
     .bitfun-scene-tab__icon {
-      color: var(--color-text-primary);
+      color: var(--bf-appearance-token-color-text-primary);
       opacity: 1;
     }
 
-    .bitfun-scene-tab__subtitle {
-      color: var(--color-text-secondary);
+    &:hover .bitfun-scene-tab__close {
+      opacity: 1;
+    }
+  }
+
+  // Single tab: no pill background (same whether active or not).
+  &:only-child {
+    cursor: default;
+    background: transparent;
+    box-shadow: none;
+
+    &:hover {
+      background: transparent;
+      color: var(--bf-appearance-token-color-text-secondary);
     }
 
     .bitfun-scene-tab__close {
@@ -95,11 +135,11 @@
 
   &:active {
     transform: scale(0.985);
-    background: var(--element-bg-medium);
+    background: var(--bf-appearance-token-element-bg-medium);
   }
 
   &:focus-visible {
-    outline: 2px solid var(--color-accent-500);
+    outline: 2px solid var(--bf-appearance-token-color-accent-500);
     outline-offset: -2px;
   }
 
@@ -139,20 +179,24 @@
   }
 
   &__sep {
+    color: var(--bf-appearance-token-color-text-disabled);
+    font-size: var(--bf-appearance-token-font-size-xs);
     flex-shrink: 0;
-    color: var(--color-text-disabled);
-    font-size: var(--font-size-xs);
   }
 
   &__subtitle {
-    min-width: 0;
+    color: var(--bf-appearance-token-color-text-muted);
+    font-size: var(--bf-appearance-token-font-size-xs);
     overflow: hidden;
-    color: var(--color-text-muted);
-    font-size: var(--font-size-xs);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
+  &--active &__subtitle {
+    color: var(--bf-appearance-token-color-text-secondary);
+  }
+
+  // Quick action icon inside tab content (e.g. new session for AI Agent tab)
   &__action {
     display: flex;
     align-items: center;
@@ -162,7 +206,7 @@
     height: 18px;
     margin-left: 2px;
     border-radius: $size-radius-sm;
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
     cursor: pointer;
     transition:
       transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
@@ -171,7 +215,7 @@
 
     &:active {
       transform: scale(0.94);
-      background: var(--element-bg-medium);
+      background: var(--bf-appearance-token-element-bg-medium);
     }
   }
 
@@ -188,25 +232,31 @@
     border: none;
     border-radius: $size-radius-sm;
     background: transparent;
-    color: inherit;
+    color: var(--bf-appearance-token-color-text-muted);
     opacity: 0;
     transform: translateY(-50%);
     cursor: pointer;
-    transition:
-      opacity 120ms ease,
-      background 120ms ease;
+    flex-shrink: 0;
+    transition: opacity $motion-fast $easing-standard,
+                color $motion-fast $easing-standard,
+                background $motion-fast $easing-standard;
+
+    &:hover {
+      color: var(--bf-appearance-token-color-accent-500);
+      background: var(--bf-appearance-token-element-bg-soft);
+    }
 
     &:active {
-      background: var(--element-bg-medium);
+      background: var(--bf-appearance-token-element-bg-medium);
     }
   }
 }
 
 @media (hover: hover) and (pointer: fine) {
   .bitfun-scene-tab:not(:only-child):hover {
-    border-color: color-mix(in srgb, var(--border-subtle) 54%, transparent);
-    background: color-mix(in srgb, var(--element-bg-soft) 72%, transparent);
-    color: var(--color-text-secondary);
+    border-color: color-mix(in srgb, var(--bf-appearance-token-border-subtle) 54%, transparent);
+    background: color-mix(in srgb, var(--bf-appearance-token-element-bg-soft) 72%, transparent);
+    color: var(--bf-appearance-token-color-text-secondary);
 
     .bitfun-scene-tab__close {
       opacity: 1;
@@ -214,29 +264,82 @@
   }
 
   .bitfun-scene-tab--active:not(:only-child):hover {
-    border-color: var(--border-subtle);
-    background: var(--element-bg-medium);
-    color: var(--color-text-primary);
+    border-color: var(--bf-appearance-token-border-subtle);
+    background: var(--bf-appearance-token-element-bg-medium);
+    color: var(--bf-appearance-token-color-text-primary);
   }
 
   .bitfun-scene-tab__action:hover {
-    background: var(--element-bg-soft);
-    color: var(--color-text-primary);
+    background: var(--bf-appearance-token-element-bg-soft);
+    color: var(--bf-appearance-token-color-text-primary);
   }
 
   .bitfun-scene-tab__close:hover {
-    background: var(--element-bg-medium);
+    background: var(--bf-appearance-token-element-bg-medium);
     opacity: 1;
   }
 }
 
-[data-theme='bitfun-slate'] .bitfun-scene-tab__icon {
-  opacity: 0.9;
+[data-bf-appearance='bitfun-slate'] .bitfun-scene-tab__icon {
+  opacity: 0.94;
 }
 
-:root[data-theme-type='light'] .bitfun-scene-tab--active {
-  border-color: var(--border-subtle);
-  background: var(--color-bg-secondary);
+// Light themes: inactive = former active (soft tint on chrome); active = former inactive (lifted pill + edge).
+:root[data-bf-appearance-mode='light'] .bitfun-scene-tab {
+  background: var(--bf-appearance-token-element-bg-soft);
+  color: var(--bf-appearance-token-color-text-primary);
+  box-shadow: none;
+
+  &:hover {
+    background: var(--bf-appearance-token-element-bg-medium);
+    color: var(--bf-appearance-token-color-text-primary);
+    box-shadow: none;
+  }
+
+  .bitfun-scene-tab__icon {
+    opacity: 1;
+  }
+
+  &--active {
+    background: var(--bf-appearance-token-color-bg-secondary);
+    color: color-mix(in srgb, var(--bf-appearance-token-color-text-primary) 86%, var(--bf-appearance-token-color-text-muted));
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--bf-appearance-token-border-subtle) 38%, transparent);
+
+    &:hover {
+      background: color-mix(in srgb, var(--bf-appearance-token-color-bg-secondary) 82%, var(--bf-appearance-token-element-bg-medium));
+      color: color-mix(in srgb, var(--bf-appearance-token-color-text-primary) 90%, var(--bf-appearance-token-color-text-muted));
+      box-shadow: 0 0 0 1px color-mix(in srgb, var(--bf-appearance-token-border-subtle) 48%, transparent);
+    }
+
+    .bitfun-scene-tab__icon {
+      color: inherit;
+    }
+
+    .bitfun-scene-tab__subtitle {
+      color: var(--bf-appearance-token-color-text-muted);
+    }
+  }
+
+  &:only-child {
+    background: transparent;
+    box-shadow: none;
+    color: color-mix(in srgb, var(--bf-appearance-token-color-text-primary) 86%, var(--bf-appearance-token-color-text-muted));
+
+    &:hover {
+      background: transparent;
+      color: color-mix(in srgb, var(--bf-appearance-token-color-text-primary) 90%, var(--bf-appearance-token-color-text-muted));
+    }
+
+    &.bitfun-scene-tab--active {
+      background: transparent;
+      box-shadow: none;
+      color: var(--bf-appearance-token-color-text-primary);
+
+      &:hover {
+        background: transparent;
+      }
+    }
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

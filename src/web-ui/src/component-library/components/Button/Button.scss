@@ -6,53 +6,51 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: var(--size-gap-2);
-  font-weight: var(--font-weight-medium);
-  font-family: var(--font-family-sans);
+  gap: var(--bf-appearance-token-size-gap-2);
+  font-weight: var(--bf-appearance-token-font-weight-medium);
+  font-family: var(--bf-appearance-token-font-family-sans);
   text-decoration: none;
   cursor: pointer;
   position: relative;
   outline: none;
   user-select: none;
 
-  background: var(--element-bg-base);
-  color: var(--color-text-secondary);
-  border: 1px solid transparent;
-  border-radius: var(--size-radius-sm);
-  transform: scale(1);
-  transition:
-    background-color var(--motion-fast) ease,
-    color var(--motion-fast) ease,
-    border-color var(--motion-fast) ease,
-    box-shadow var(--motion-fast) ease,
-    transform var(--motion-fast) var(--easing-standard);
+  background: var(--bf-appearance-token-element-bg-base);
+  color: var(--bf-appearance-token-color-text-secondary);
+  border: none;
+  border-radius: var(--bf-appearance-token-size-radius-sm);
+  transition: all var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard);
 
   &:focus-visible {
-    outline: 2px solid color-mix(in srgb, var(--color-accent-500) 50%, transparent);
+    outline: 2px solid color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 50%, transparent);
     outline-offset: 1px;
   }
 
   &-sm {
     height: 32px;
-    padding: 0 var(--size-gap-3);
-    font-size: var(--font-size-sm);
+    padding: 0 var(--bf-appearance-token-size-gap-3);
+    font-size: var(--bf-appearance-token-font-size-sm);
   }
 
   &-base {
     height: 40px;
-    padding: 0 var(--size-gap-4);
-    font-size: var(--font-size-base);
+    padding: 0 var(--bf-appearance-token-size-gap-4);
+    font-size: var(--bf-appearance-token-font-size-base);
   }
 
   &-lg {
     height: 48px;
-    padding: 0 var(--size-gap-6);
-    font-size: var(--font-size-lg);
+    padding: 0 var(--bf-appearance-token-size-gap-6);
+    font-size: var(--bf-appearance-token-font-size-lg);
+  }
+
+  &:hover:not(:disabled) {
+    background: var(--bf-appearance-token-element-bg-medium);
+    color: var(--bf-appearance-token-color-text-primary);
   }
 
   &:active:not(:disabled) {
-    background: var(--element-bg-soft);
-    transform: scale(0.98);
+    background: var(--bf-appearance-token-element-bg-soft);
   }
 
   &:disabled,
@@ -72,38 +70,55 @@
     &:focus-visible {
       outline-color: color-mix(
         in srgb,
-        var(--btn-primary-color) 55%,
+        var(--bf-appearance-token-btn-primary-color) 55%,
         transparent
       );
     }
   }
 
   &-secondary {
-    background: var(--element-bg-base);
-    color: var(--color-text-secondary);
+    background: var(--bf-appearance-token-element-bg-base);
+    color: var(--bf-appearance-token-color-text-secondary);
+
+    &:hover:not(:disabled) {
+      background: var(--bf-appearance-token-element-bg-medium);
+      color: var(--bf-appearance-token-color-text-primary);
+    }
 
     &:active:not(:disabled) {
-      background: var(--element-bg-soft);
+      background: var(--bf-appearance-token-element-bg-soft);
     }
   }
 
   &-ghost {
     background: transparent;
-    color: var(--color-text-secondary);
+    color: var(--bf-appearance-token-color-text-secondary);
+
+    &:hover:not(:disabled) {
+      background: var(--bf-appearance-token-element-bg-soft);
+      color: var(--bf-appearance-token-color-text-primary);
+    }
 
     &:active:not(:disabled) {
-      background: var(--element-bg-base);
+      background: var(--bf-appearance-token-element-bg-base);
     }
   }
 
   &-dashed {
     background: transparent;
-    color: var(--color-text-secondary);
-    border: 1px dashed var(--border-base);
+    color: var(--bf-appearance-token-color-text-secondary);
+    border: 1px dashed var(--bf-appearance-token-border-base);
+
+    &:hover:not(:disabled) {
+      background: var(--bf-appearance-token-element-bg-subtle);
+      color: var(--bf-appearance-token-color-text-primary);
+      border-style: solid;
+      border-color: var(--bf-appearance-token-border-medium);
+    }
 
     &:active:not(:disabled) {
-      background: var(--element-bg-base);
-      border-color: var(--border-strong);
+      background: var(--bf-appearance-token-element-bg-base);
+      border-color: var(--bf-appearance-token-border-strong);
     }
   }
 
@@ -144,50 +159,69 @@
 .btn-action {
   display: inline-flex;
   align-items: center;
-  gap: var(--size-gap-2);
-  padding: 12px var(--size-gap-4);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-medium);
-  font-family: var(--font-family-sans);
+  gap: var(--bf-appearance-token-size-gap-2);
+  padding: 12px var(--bf-appearance-token-size-gap-4);
+  font-size: var(--bf-appearance-token-font-size-sm);
+  font-weight: var(--bf-appearance-token-font-weight-medium);
+  font-family: var(--bf-appearance-token-font-family-sans);
   cursor: pointer;
   position: relative;
   outline: none;
   border: none;
-  border-radius: var(--size-radius-sm);
-  transform: scale(1);
-  transition:
-    background-color var(--motion-fast) ease,
-    color var(--motion-fast) ease,
-    box-shadow var(--motion-fast) ease,
-    transform var(--motion-fast) var(--easing-standard);
+  border-radius: var(--bf-appearance-token-size-radius-sm);
+  transition: all var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard);
 
-  background: var(--element-bg-base);
-  color: var(--color-text-secondary);
+  background: var(--bf-appearance-token-element-bg-base);
+  color: var(--bf-appearance-token-color-text-secondary);
+
+  &:hover {
+    background: var(--bf-appearance-token-element-bg-medium);
+    color: var(--bf-appearance-token-color-text-primary);
+  }
 
   &-ai {
-    background: color-mix(in srgb, var(--color-purple-500) 18%, transparent);
-    color: var(--color-purple-500);
+    background: color-mix(in srgb, var(--bf-appearance-token-color-purple-500) 18%, transparent);
+    color: var(--bf-appearance-token-color-purple-500);
+
+    &:hover {
+      background: color-mix(in srgb, var(--bf-appearance-token-color-purple-500) 28%, transparent);
+      color: var(--bf-appearance-token-color-static-white);
+
+      svg {
+        color: var(--bf-appearance-token-color-purple-500);
+      }
+    }
 
     &:active {
-      background: color-mix(in srgb, var(--color-purple-500) 22%, transparent);
+      background: color-mix(in srgb, var(--bf-appearance-token-color-purple-500) 22%, transparent);
     }
   }
 
   &-danger {
-    background: color-mix(in srgb, var(--color-error) 18%, transparent);
-    color: var(--color-error);
+    background: color-mix(in srgb, var(--bf-appearance-token-color-error) 18%, transparent);
+    color: var(--bf-appearance-token-color-error);
+
+    &:hover {
+      background: color-mix(in srgb, var(--bf-appearance-token-color-error) 28%, transparent);
+      color: var(--bf-appearance-token-color-static-white);
+    }
 
     &:active {
-      background: color-mix(in srgb, var(--color-error) 22%, transparent);
+      background: color-mix(in srgb, var(--bf-appearance-token-color-error) 22%, transparent);
     }
   }
 
   &-success {
-    background: color-mix(in srgb, var(--color-success) 18%, transparent);
-    color: var(--color-success);
+    background: color-mix(in srgb, var(--bf-appearance-token-color-success) 18%, transparent);
+    color: var(--bf-appearance-token-color-success);
+
+    &:hover {
+      background: color-mix(in srgb, var(--bf-appearance-token-color-success) 28%, transparent);
+      color: var(--bf-appearance-token-color-static-white);
+    }
 
     &:active {
-      background: color-mix(in srgb, var(--color-success) 22%, transparent);
+      background: color-mix(in srgb, var(--bf-appearance-token-color-success) 22%, transparent);
     }
   }
 
@@ -205,8 +239,8 @@
 @media (hover: hover) and (pointer: fine) {
   .btn {
     &:hover:not(:disabled) {
-      background: var(--element-bg-medium);
-      color: var(--color-text-primary);
+      background: var(--bf-appearance-token-element-bg-medium);
+      color: var(--bf-appearance-token-color-text-primary);
     }
 
     &-primary:hover:not(:disabled) {
@@ -214,32 +248,32 @@
     }
 
     &-ghost:hover:not(:disabled) {
-      background: var(--element-bg-soft);
+      background: var(--bf-appearance-token-element-bg-soft);
     }
 
     &-dashed:hover:not(:disabled) {
-      background: var(--element-bg-subtle);
+      background: var(--bf-appearance-token-element-bg-subtle);
       border-style: solid;
-      border-color: var(--border-medium);
+      border-color: var(--bf-appearance-token-border-medium);
     }
   }
 
   .btn-action {
     &:hover:not(:disabled) {
-      background: var(--element-bg-medium);
-      color: var(--color-text-primary);
+      background: var(--bf-appearance-token-element-bg-medium);
+      color: var(--bf-appearance-token-color-text-primary);
     }
 
     &-ai:hover:not(:disabled) {
-      background: color-mix(in srgb, var(--color-purple-500) 28%, transparent);
+      background: color-mix(in srgb, var(--bf-appearance-token-color-purple-500) 28%, transparent);
     }
 
     &-danger:hover:not(:disabled) {
-      background: color-mix(in srgb, var(--color-error) 28%, transparent);
+      background: color-mix(in srgb, var(--bf-appearance-token-color-error) 28%, transparent);
     }
 
     &-success:hover:not(:disabled) {
-      background: color-mix(in srgb, var(--color-success) 28%, transparent);
+      background: color-mix(in srgb, var(--bf-appearance-token-color-success) 28%, transparent);
     }
   }
 }
@@ -248,9 +282,9 @@
   .btn,
   .btn-action {
     transition:
-      background-color var(--motion-fast) ease,
-      color var(--motion-fast) ease,
-      border-color var(--motion-fast) ease;
+      background-color var(--bf-appearance-token-motion-fast) ease,
+      color var(--bf-appearance-token-motion-fast) ease,
+      border-color var(--bf-appearance-token-motion-fast) ease;
 
     &:active:not(:disabled) {
       transform: none;

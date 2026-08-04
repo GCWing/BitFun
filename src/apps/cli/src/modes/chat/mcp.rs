@@ -9,6 +9,20 @@ fn bounded_mcp_terminal_text(value: &str) -> String {
     }
 }
 
+fn external_mcp_timeout_detail(
+    timeouts: &bitfun_product_domains::external_sources::ExternalMcpTimeouts,
+) -> Option<String> {
+    let phases = [
+        ("startup", timeouts.startup_ms),
+        ("catalog", timeouts.catalog_ms),
+        ("execution", timeouts.execution_ms),
+    ]
+    .into_iter()
+    .filter_map(|(phase, timeout)| timeout.map(|timeout| format!("{phase} {timeout} ms")))
+    .collect::<Vec<_>>();
+    (!phases.is_empty()).then(|| format!("timeouts: {}", phases.join(", ")))
+}
+
 fn external_mcp_state_label(
     state: &bitfun_core::external_sources::ExternalMcpActivationState,
 ) -> &'static str {
@@ -306,6 +320,12 @@ impl ChatMode {
                             ),
                             _ => "unsupported external MCP transport".to_string(),
                         };
+                        if let Some(timeouts) =
+                            external_mcp_timeout_detail(&entry.definition.timeouts)
+                        {
+                            detail.push_str("; ");
+                            detail.push_str(&timeouts);
+                        }
                         if let bitfun_core::external_sources::ExternalMcpActivationState::RuntimeUnavailable { reason } = &entry.activation_state {
                             detail.push_str(&format!(
                                 "; unavailable reason: {}; next step: disable this server, fix its source configuration or authentication, then enable it",
@@ -772,6 +792,7 @@ impl ChatMode {
                     .get("xaa")
                     .cloned()
                     .and_then(|value| serde_json::from_value(value).ok()),
+                timeouts: Default::default(),
             };
 
             mcp_service.server_manager().add_server(config).await?;
@@ -895,5 +916,24 @@ impl ChatMode {
                 );
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod external_mcp_timeout_tests {
+    use super::external_mcp_timeout_detail;
+    use bitfun_product_domains::external_sources::ExternalMcpTimeouts;
+
+    #[test]
+    fn external_mcp_timeout_detail_lists_only_explicit_phases() {
+        let detail = external_mcp_timeout_detail(&ExternalMcpTimeouts {
+            startup_ms: Some(1_000),
+            catalog_ms: None,
+            execution_ms: Some(30_000),
+        })
+        .expect("explicit timeouts should be visible");
+
+        assert_eq!(detail, "timeouts: startup 1000 ms, execution 30000 ms");
+        assert!(external_mcp_timeout_detail(&ExternalMcpTimeouts::default()).is_none());
     }
 }

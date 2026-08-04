@@ -1,0 +1,301 @@
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { ChevronDown, Github, Loader2, LogOut } from 'lucide-react';
+import { Avatar, Button, Modal } from '@/component-library';
+import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
+import { useI18n } from '@/infrastructure/i18n';
+import {
+  MarketAccountError,
+  marketAccountService,
+  useMarketAccount,
+} from '@/infrastructure/market-account';
+import { useNotification } from '@/shared/notification-system';
+import {
+  calculateMarketAccountMenuPosition,
+  type MarketAccountMenuPosition,
+} from './marketAccountMenuPosition';
+import './MarketAccountControls.scss';
+
+export interface MarketAccountControlsProps {
+  className?: string;
+  loginOpen?: boolean;
+  onLoginOpenChange?: (open: boolean) => void;
+  onIdentityChanged?: () => void | Promise<void>;
+}
+
+export function MarketAccountControls({
+  className,
+  loginOpen: controlledLoginOpen,
+  onLoginOpenChange,
+  onIdentityChanged,
+}: MarketAccountControlsProps) {
+  const { t } = useI18n('scenes/miniapp');
+  const notification = useNotification();
+  const account = useMarketAccount();
+  const [internalLoginOpen, setInternalLoginOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [menuPosition, setMenuPosition] = useState<MarketAccountMenuPosition | null>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const menuPanelRef = useRef<HTMLDivElement>(null);
+  const menuTriggerRef = useRef<HTMLButtonElement>(null);
+  const menuPositionFrameRef = useRef<number | null>(null);
+  const startedHere = useRef(false);
+  const loginOpen = controlledLoginOpen ?? internalLoginOpen;
+
+  const setLoginOpen = (open: boolean) => {
+    if (controlledLoginOpen === undefined) setInternalLoginOpen(open);
+    onLoginOpenChange?.(open);
+  };
+
+  const updateMenuPosition = useCallback(() => {
+    if (!menuTriggerRef.current || !menuPanelRef.current) return;
+    setMenuPosition(
+      calculateMarketAccountMenuPosition(
+        menuTriggerRef.current.getBoundingClientRect(),
+        menuPanelRef.current.getBoundingClientRect(),
+        { width: window.innerWidth, height: window.innerHeight },
+      ),
+    );
+  }, []);
+
+  const scheduleMenuPositionUpdate = useCallback(() => {
+    if (menuPositionFrameRef.current !== null) return;
+    menuPositionFrameRef.current = requestAnimationFrame(() => {
+      menuPositionFrameRef.current = null;
+      updateMenuPosition();
+    });
+  }, [updateMenuPosition]);
+
+  useLayoutEffect(() => {
+    if (!menuOpen) {
+      return;
+    }
+
+    updateMenuPosition();
+    window.addEventListener('resize', scheduleMenuPositionUpdate, { passive: true });
+    window.addEventListener('scroll', scheduleMenuPositionUpdate, {
+      capture: true,
+      passive: true,
+    });
+    return () => {
+      window.removeEventListener('resize', scheduleMenuPositionUpdate);
+      window.removeEventListener('scroll', scheduleMenuPositionUpdate, { capture: true });
+      if (menuPositionFrameRef.current !== null) {
+        cancelAnimationFrame(menuPositionFrameRef.current);
+        menuPositionFrameRef.current = null;
+      }
+    };
+  }, [menuOpen, scheduleMenuPositionUpdate, updateMenuPosition]);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const closeOnOutsideClick = (event: PointerEvent) => {
+      const target = event.target as Node;
+      if (!menuRef.current?.contains(target) && !menuPanelRef.current?.contains(target)) {
+        setMenuOpen(false);
+      }
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      setMenuOpen(false);
+      menuTriggerRef.current?.focus();
+    };
+    document.addEventListener('pointerdown', closeOnOutsideClick);
+    document.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.removeEventListener('pointerdown', closeOnOutsideClick);
+      document.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [menuOpen]);
+
+  useEffect(() => {
+    if (account.me && loginOpen) setLoginOpen(false);
+    // Only identity changes should close the dialog. The controlled callback is
+    // intentionally excluded to avoid reopening on callback identity churn.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [account.me, loginOpen]);
+
+  const closeLogin = () => {
+    if (startedHere.current) marketAccountService.cancelSignIn();
+    startedHere.current = false;
+    setLoginOpen(false);
+  };
+
+  const signIn = async () => {
+    startedHere.current = true;
+    try {
+      await marketAccountService.signIn();
+      startedHere.current = false;
+      setLoginOpen(false);
+      await onIdentityChanged?.();
+      notification.success(t('market.messages.signedIn'));
+    } catch (error) {
+      if (error instanceof MarketAccountError && error.code === 'cancelled') return;
+      notification.error(error instanceof MarketAccountError && error.code === 'expired'
+        ? t('market.messages.authExpired')
+        : t('market.messages.authFailed', { error: String(error) }));
+    }
+  };
+
+  const signOut = async () => {
+    setMenuOpen(false);
+    try {
+      await marketAccountService.logout();
+      await onIdentityChanged?.();
+      notification.success(t('market.messages.signedOut'));
+    } catch (error) {
+      notification.error(t('market.messages.actionFailed', { error: String(error) }));
+    }
+  };
+
+  const errorText = account.lastError
+    ? account.lastError.code === 'expired'
+      ? t('market.messages.authExpired')
+      : t('market.messages.authFailed', { error: account.lastError.message })
+    : undefined;
+
+  return (
+    <div
+      className={['market-account-controls', className].filter(Boolean).join(' ')}
+      data-bf-component="market-account-controls"
+      data-bf-part="root"
+      data-bf-state={account.status}
+    >
+      {account.me ? (
+        <div className="market-account-controls__menu-root" ref={menuRef}>
+          <button
+            ref={menuTriggerRef}
+            type="button"
+            className="market-account-controls__identity-trigger"
+            data-bf-component="market-account-controls"
+            data-bf-part="identityTrigger"
+            aria-haspopup="menu"
+            aria-expanded={menuOpen}
+            aria-label={t('market.account.menuLabel', { login: account.me.user.login })}
+            onClick={() => setMenuOpen(open => !open)}
+          >
+            <Avatar size={22} src={account.me.user.avatarUrl} alt={account.me.user.login} />
+            <span>@{account.me.user.login}</span>
+            <ChevronDown size={13} aria-hidden="true" />
+          </button>
+          {menuOpen && createPortal(
+            <div
+              ref={menuPanelRef}
+              className="market-account-controls__menu"
+              role="menu"
+              data-bf-component="market-account-controls"
+              data-bf-part="menu"
+              style={{
+                top: `${menuPosition?.top ?? 0}px`,
+                left: `${menuPosition?.left ?? 0}px`,
+                visibility: menuPosition ? 'visible' : 'hidden',
+              }}
+            >
+              <div
+                className="market-account-controls__profile"
+                data-bf-component="market-account-controls"
+                data-bf-part="profile"
+              >
+                <Avatar size={30} src={account.me.user.avatarUrl} alt={account.me.user.login} />
+                <div>
+                  <strong>@{account.me.user.login}</strong>
+                  <span>{t('market.account.githubAccount')}</span>
+                </div>
+              </div>
+              <button
+                type="button"
+                role="menuitem"
+                className="market-account-controls__menu-item"
+                data-bf-component="market-account-controls"
+                data-bf-part="menuItem"
+                onClick={() => void signOut()}
+              >
+                <LogOut size={14} aria-hidden="true" />
+                {t('market.signOut')}
+              </button>
+            </div>,
+            getAppearanceOverlayHost(),
+          )}
+        </div>
+      ) : (
+        <Button
+          size="small"
+          variant="secondary"
+          disabled={!account.resolved || account.status === 'authorizing'}
+          onClick={() => setLoginOpen(true)}
+        >
+          {!account.resolved || account.status === 'authorizing'
+            ? <Loader2 size={14} className="market-account-controls__spinner" />
+            : <Github size={14} />}
+          {t('market.signIn')}
+        </Button>
+      )}
+
+      <Modal
+        isOpen={loginOpen && !account.me}
+        onClose={closeLogin}
+        title={t('market.account.dialogTitle')}
+        size="small"
+        contentInset
+        closeOnOverlayClick={account.status !== 'authorizing'}
+        testId="market-account-login-dialog"
+      >
+        <div
+          className="market-account-login"
+          data-bf-component="market-account-controls"
+          data-bf-part="login"
+        >
+          <div className="market-account-login__mark" aria-hidden="true">
+            <Github size={28} />
+          </div>
+          <div className="market-account-login__copy">
+            <strong>{t('market.account.dialogHeading')}</strong>
+            <p>{t('market.account.dialogDescription')}</p>
+          </div>
+          {account.status === 'authorizing' && (
+            <div
+              className="market-account-login__waiting"
+              role="status"
+              data-bf-component="market-account-controls"
+              data-bf-part="waiting"
+            >
+              <Loader2 size={16} className="market-account-controls__spinner" />
+              <span>{t('market.account.waiting')}</span>
+            </div>
+          )}
+          {errorText && account.status !== 'authorizing' && (
+            <p
+              className="market-account-login__error"
+              role="alert"
+              data-bf-component="market-account-controls"
+              data-bf-part="error"
+            >
+              {errorText}
+            </p>
+          )}
+          <div
+            className="market-account-login__actions"
+            data-bf-component="market-account-controls"
+            data-bf-part="actions"
+          >
+            <Button variant="ghost" onClick={closeLogin}>
+              {t('market.account.cancel')}
+            </Button>
+            <Button
+              variant="primary"
+              disabled={account.status === 'authorizing'}
+              onClick={() => void signIn()}
+            >
+              {account.status === 'authorizing'
+                ? <Loader2 size={14} className="market-account-controls__spinner" />
+                : <Github size={14} />}
+              {account.status === 'authorizing'
+                ? t('market.account.authorizing')
+                : t('market.account.continue')}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+    </div>
+  );
+}

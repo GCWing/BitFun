@@ -447,6 +447,7 @@ impl SdkHostConnection {
                             requester_session_id: None,
                             reason: Some("sdk_host_connection_shutdown".to_string()),
                             wait_timeout_ms: Some(2_000),
+                            cancel_descendants: true,
                         }),
                     )
                     .await
@@ -984,6 +985,7 @@ impl SdkHostConnection {
                 message: params.prompt,
                 original_message: None,
                 turn_id: None,
+                execution: Default::default(),
                 agent_type,
                 workspace_path: Some(session.workspace_path.clone()),
                 remote_connection_id: session.remote_connection_id.clone(),
@@ -1251,6 +1253,7 @@ impl SdkHostConnection {
                     requester_session_id: None,
                     reason: Some("sdk_query_cancel".to_string()),
                     wait_timeout_ms: Some(2_000),
+                    cancel_descendants: true,
                 }),
         )
         .await
@@ -1811,6 +1814,7 @@ impl SdkHostConnection {
                     requester_session_id: None,
                     reason: Some("sdk_host_fail_closed".to_string()),
                     wait_timeout_ms: Some(2_000),
+                    cancel_descendants: true,
                 }),
         )
         .await;
@@ -2200,9 +2204,11 @@ fn runtime_error_kind(error: &RuntimeError) -> &'static str {
         RuntimeError::MissingDialogTurnPort
         | RuntimeError::MissingLifecycleDeliveryPort
         | RuntimeError::MissingCancellationPort
+        | RuntimeError::MissingSessionLineagePort
         | RuntimeError::MissingSessionManagementPort
         | RuntimeError::MissingSessionRestorePort
         | RuntimeError::MissingLocalCommandTurnPort
+        | RuntimeError::MissingWorkspaceReferencePort
         | RuntimeError::MissingSessionTranscriptReader
         | RuntimeError::MissingThreadGoalManagementPort
         | RuntimeError::MissingInteractionResponsePort
@@ -2245,5 +2251,16 @@ mod runtime_error_tests {
             (ErrorCode::ActionRequired, false, None)
         );
         assert_eq!(runtime_error_kind(&error), "outcome_unknown");
+    }
+
+    #[test]
+    fn missing_workspace_reference_port_uses_capability_unavailable_contract() {
+        let error = RuntimeError::MissingWorkspaceReferencePort;
+
+        assert_eq!(
+            runtime_error_facts(&error),
+            (ErrorCode::CapabilityUnavailable, false, None)
+        );
+        assert_eq!(runtime_error_kind(&error), "capability_unavailable");
     }
 }

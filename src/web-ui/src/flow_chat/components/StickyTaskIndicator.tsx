@@ -29,25 +29,26 @@ export const StickyTaskIndicator: React.FC<StickyTaskIndicatorProps> = ({
   const tooltip = t('stickyTaskIndicator.tooltip');
 
   return (
-    <div
+    <div data-bf-component="sticky-task-indicator" data-bf-part="root" data-bf-state={visible ? 'visible' : ''}
       className={`sticky-task-indicator ${visible ? 'sticky-task-indicator--visible' : ''}`}
       aria-hidden={!visible}
     >
-      <div className="sticky-task-indicator__gradient" />
-      <div className="sticky-task-indicator__content">
+      <div data-bf-component="sticky-task-indicator" data-bf-part="gradient" className="sticky-task-indicator__gradient" />
+      <div data-bf-component="sticky-task-indicator" data-bf-part="content" className="sticky-task-indicator__content">
         <Tooltip content={tooltip} placement="bottom">
           <button
-            type="button"
+            data-bf-component="sticky-task-indicator"
+            data-bf-part="button"
             className="sticky-task-indicator__btn"
             onClick={onClick}
             aria-label={tooltip}
             tabIndex={visible ? 0 : -1}
           >
-            <Split size={12} className="sticky-task-indicator__icon" />
-            <span className="sticky-task-indicator__label" title={label}>
+            <Split size={12} data-bf-component="sticky-task-indicator" data-bf-part="icon" className="sticky-task-indicator__icon" />
+            <span data-bf-component="sticky-task-indicator" data-bf-part="label" className="sticky-task-indicator__label" title={label}>
               {label}
             </span>
-            <ChevronUp size={12} className="sticky-task-indicator__arrow" />
+            <ChevronUp size={12} data-bf-component="sticky-task-indicator" data-bf-part="arrow" className="sticky-task-indicator__arrow" />
           </button>
         </Tooltip>
       </div>

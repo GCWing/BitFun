@@ -1,0 +1,10 @@
+# ts-rs (Rust -> TypeScript) export configuration.
+# `cargo test --features ts` (or the frontend `gen:types` script) emits `.ts`
+# files into the directory below. Generated types are NOT committed (see
+# `.gitignore`); the `prebuild` step regenerates them locally and in CI.
+# See docs/plans/step1-ts-rs-integration.md.
+[env]
+TS_RS_EXPORT_DIR = { value = "src/web-ui/src/generated/api", relative = true }
+# Map i64/u64 to `number` (not `bigint`) so generated types match the existing
+# frontend convention (timestamps are `number` ms throughout the web UI).
+TS_RS_LARGE_INT = "number"

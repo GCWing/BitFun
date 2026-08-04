@@ -102,6 +102,14 @@ pub enum AgenticEvent {
         new_state: String,
     },
 
+    /// The authoritative visible history for a session changed outside the
+    /// append-only turn lifecycle (for example, after restoring a checkpoint).
+    /// Consumers should invalidate cached transcript projections for this
+    /// session and reload them from the owning runtime.
+    SessionHistoryChanged {
+        session_id: String,
+    },
+
     SessionDeleted {
         session_id: String,
     },
@@ -599,6 +607,7 @@ impl AgenticEvent {
         match self {
             Self::SessionCreated { session_id, .. }
             | Self::SessionStateChanged { session_id, .. }
+            | Self::SessionHistoryChanged { session_id }
             | Self::SessionDeleted { session_id }
             | Self::SessionTitleGenerated { session_id, .. }
             | Self::ImageAnalysisStarted { session_id, .. }
@@ -626,6 +635,29 @@ impl AgenticEvent {
         }
     }
 
+    /// Get the dialog Turn identity carried by a Turn-scoped event.
+    pub fn turn_id(&self) -> Option<&str> {
+        match self {
+            Self::DialogTurnStarted { turn_id, .. }
+            | Self::DialogTurnCompleted { turn_id, .. }
+            | Self::DialogTurnCancelled { turn_id, .. }
+            | Self::DialogTurnFailed { turn_id, .. }
+            | Self::TokenUsageUpdated { turn_id, .. }
+            | Self::ContextCompressionStarted { turn_id, .. }
+            | Self::ContextCompressionCompleted { turn_id, .. }
+            | Self::ContextCompressionFailed { turn_id, .. }
+            | Self::ModelRoundStarted { turn_id, .. }
+            | Self::ModelRoundAttemptSuperseded { turn_id, .. }
+            | Self::ModelRoundCompleted { turn_id, .. }
+            | Self::TextChunk { turn_id, .. }
+            | Self::ThinkingChunk { turn_id, .. }
+            | Self::ToolEvent { turn_id, .. }
+            | Self::DeepReviewQueueStateChanged { turn_id, .. }
+            | Self::UserSteeringInjected { turn_id, .. } => Some(turn_id),
+            _ => None,
+        }
+    }
+
     /// Get the default priority
     pub fn default_priority(&self) -> AgenticEventPriority {
         match self {
@@ -634,6 +666,7 @@ impl AgenticEvent {
             | Self::DialogTurnCancelled { .. } => AgenticEventPriority::Critical,
 
             Self::SessionStateChanged { .. }
+            | Self::SessionHistoryChanged { .. }
             | Self::SessionTitleGenerated { .. }
             | Self::SessionModelAutoMigrated { .. }
             | Self::SubagentSessionLinked { .. }

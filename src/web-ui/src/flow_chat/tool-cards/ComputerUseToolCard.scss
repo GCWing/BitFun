@@ -2,8 +2,8 @@
   font-size: 11px;
   padding: 1px 6px;
   border-radius: 4px;
-  background: color-mix(in srgb, var(--color-bg-elevated) 88%, transparent);
-  color: var(--color-text-secondary);
+  background: color-mix(in srgb, var(--bf-appearance-token-color-bg-elevated) 88%, transparent);
+  color: var(--bf-appearance-token-color-text-secondary);
   white-space: nowrap;
 }
 
@@ -18,20 +18,20 @@
   align-items: baseline;
   gap: 8px;
   font-size: 12px;
-  color: var(--color-text-secondary);
+  color: var(--bf-appearance-token-color-text-secondary);
 
   code {
     font-size: 11px;
     padding: 1px 6px;
     border-radius: 4px;
-    background: color-mix(in srgb, var(--color-bg-elevated) 88%, transparent);
+    background: color-mix(in srgb, var(--bf-appearance-token-color-bg-elevated) 88%, transparent);
   }
 }
 
 .computer-use-tool-card__row-label {
   flex-shrink: 0;
   min-width: 64px;
-  color: var(--color-text-muted);
+  color: var(--bf-appearance-token-color-text-muted);
 }
 
 .computer-use-tool-card__loop-warning {
@@ -40,8 +40,8 @@
   gap: 6px;
   padding: 6px 8px;
   border-radius: 6px;
-  background: color-mix(in srgb, var(--color-warning) 12%, transparent);
-  color: var(--color-warning);
+  background: color-mix(in srgb, var(--bf-appearance-token-color-warning) 12%, transparent);
+  color: var(--bf-appearance-token-color-warning);
   font-size: 12px;
 
   svg {
@@ -59,7 +59,7 @@
   flex-direction: column;
   gap: 10px;
   font-size: 12px;
-  color: var(--color-text-secondary);
+  color: var(--bf-appearance-token-color-text-secondary);
 
   p {
     margin: 0;
@@ -73,14 +73,14 @@
   gap: 6px;
   align-self: flex-start;
   padding: 4px 10px;
-  border: 1px solid color-mix(in srgb, var(--color-accent-600) 35%, transparent);
+  border: 1px solid color-mix(in srgb, var(--bf-appearance-token-color-accent-600) 35%, transparent);
   border-radius: 6px;
-  background: color-mix(in srgb, var(--color-accent-600) 8%, transparent);
-  color: var(--color-accent-600);
+  background: color-mix(in srgb, var(--bf-appearance-token-color-accent-600) 8%, transparent);
+  color: var(--bf-appearance-token-color-accent-600);
   font-size: 12px;
   cursor: pointer;
 
   &:hover {
-    background: color-mix(in srgb, var(--color-accent-600) 14%, transparent);
+    background: color-mix(in srgb, var(--bf-appearance-token-color-accent-600) 14%, transparent);
   }
 }

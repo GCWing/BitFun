@@ -7,8 +7,8 @@ describe('scheduleMonacoStartupWarmup', () => {
     const initializeMonaco = vi.fn(async () => {
       order.push('monaco');
     });
-    const initializeThemeSync = vi.fn(async () => {
-      order.push('theme');
+    const initializeAppearanceSync = vi.fn(async () => {
+      order.push('appearance');
     });
     const preloadEditorSurfaceStages = [
       { name: 'code_editor', run: vi.fn(async () => { order.push('code'); }) },
@@ -29,7 +29,7 @@ describe('scheduleMonacoStartupWarmup', () => {
     const handle = scheduleMonacoStartupWarmup({
       scheduler: { schedule },
       initializeMonaco,
-      initializeThemeSync,
+      initializeAppearanceSync,
       preloadEditorSurfaceStages,
       waitForIdle,
       trace,
@@ -50,7 +50,7 @@ describe('scheduleMonacoStartupWarmup', () => {
     expect(preloadEditorSurfaceStages[2].run).toHaveBeenCalledTimes(1);
     expect(waitForIdle).toHaveBeenCalledTimes(4);
     expect(initializeMonaco).toHaveBeenCalledTimes(1);
-    expect(initializeThemeSync).toHaveBeenCalledTimes(1);
+    expect(initializeAppearanceSync).toHaveBeenCalledTimes(1);
     expect(order).toEqual([
       'code',
       'idle',
@@ -60,14 +60,14 @@ describe('scheduleMonacoStartupWarmup', () => {
       'idle',
       'monaco',
       'idle',
-      'theme',
+      'appearance',
     ]);
     expect(trace.markPhase).toHaveBeenCalledWith('editor_startup_warmup_end');
   });
 
   it('skips editor warmup work when cancelled before execution', async () => {
     const initializeMonaco = vi.fn(async () => undefined);
-    const initializeThemeSync = vi.fn(async () => undefined);
+    const initializeAppearanceSync = vi.fn(async () => undefined);
     const preloadEditorSurfaceStages = [
       { name: 'code_editor', run: vi.fn(async () => undefined) },
     ];
@@ -82,7 +82,7 @@ describe('scheduleMonacoStartupWarmup', () => {
     const handle = scheduleMonacoStartupWarmup({
       scheduler: { schedule },
       initializeMonaco,
-      initializeThemeSync,
+      initializeAppearanceSync,
       preloadEditorSurfaceStages,
       waitForIdle,
       trace: { markPhase: vi.fn() },
@@ -92,6 +92,6 @@ describe('scheduleMonacoStartupWarmup', () => {
     expect(preloadEditorSurfaceStages[0].run).not.toHaveBeenCalled();
     expect(waitForIdle).not.toHaveBeenCalled();
     expect(initializeMonaco).not.toHaveBeenCalled();
-    expect(initializeThemeSync).not.toHaveBeenCalled();
+    expect(initializeAppearanceSync).not.toHaveBeenCalled();
   });
 });

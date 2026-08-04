@@ -19,11 +19,11 @@ $_section-gap: 12px;
   justify-content: space-between;
   height: $_statusbar-height;
   padding: $_statusbar-padding;
-  background: var(--color-bg-scene);
-  border-top: 1px solid var(--border-subtle);
+  background: var(--bf-appearance-token-color-bg-scene);
+  border-top: 1px solid var(--bf-appearance-token-border-subtle);
   font-size: $_statusbar-font-size;
   font-family: $font-family-mono;
-  color: var(--color-text-muted);
+  color: var(--bf-appearance-token-color-text-muted);
   user-select: none;
   flex-shrink: 0;
   
@@ -52,12 +52,12 @@ $_section-gap: 12px;
       cursor: pointer;
       
       &:hover {
-        background: var(--element-bg-subtle);
-        color: var(--color-text-secondary);
+        background: var(--bf-appearance-token-element-bg-subtle);
+        color: var(--bf-appearance-token-color-text-secondary);
       }
       
       &:active {
-        background: var(--element-bg-medium);
+        background: var(--bf-appearance-token-element-bg-medium);
       }
     }
   }
@@ -66,21 +66,21 @@ $_section-gap: 12px;
   &__separator {
     width: 1px;
     height: 12px;
-    background: var(--border-subtle);
+    background: var(--bf-appearance-token-border-subtle);
     flex-shrink: 0;
   }
 
   // Selection Info
   &__selection {
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
     opacity: 0.7;
     margin-left: 4px;
   }
 
   // Read-only Badge
   &__readonly {
-    background: color-mix(in srgb, var(--color-warning) 15%, transparent);
-    color: var(--color-warning);
+    background: color-mix(in srgb, var(--bf-appearance-token-color-warning) 15%, transparent);
+    color: var(--bf-appearance-token-color-warning);
     padding: 1px 6px;
     border-radius: 3px;
     font-size: 10px;
@@ -94,15 +94,15 @@ $_section-gap: 12px;
     padding: 2px 4px;
     
     &--connected {
-      color: var(--color-success);
+      color: var(--bf-appearance-token-color-success);
     }
     
     &--connecting {
-      color: var(--color-warning);
+      color: var(--bf-appearance-token-color-warning);
     }
     
     &--disconnected {
-      color: var(--color-text-muted);
+      color: var(--bf-appearance-token-color-text-muted);
       opacity: 0.6;
     }
   }
@@ -145,12 +145,12 @@ $_section-gap: 12px;
     border-top-width: 2px;
     
     &__indicator--modified {
-      fill: var(--color-warning);
-      color: var(--color-warning);
+      fill: var(--bf-appearance-token-color-warning);
+      color: var(--bf-appearance-token-color-warning);
     }
     
     &__indicator--saved {
-      color: var(--color-success);
+      color: var(--bf-appearance-token-color-success);
     }
   }
 }

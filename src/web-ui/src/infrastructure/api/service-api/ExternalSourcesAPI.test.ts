@@ -3,6 +3,7 @@ import { ExternalSourceApiError, externalSourcesAPI } from './ExternalSourcesAPI
 import { webSocketResponseError } from '../adapters/websocket-adapter';
 import { PeerProductCommandError } from '../adapters/peer-device-adapter';
 import { ApiClient } from './ApiClient';
+import { globalEventBus } from '@/infrastructure/event-bus';
 
 const invokeMock = vi.hoisted(() => vi.fn());
 const adapterMocks = vi.hoisted(() => ({
@@ -76,6 +77,28 @@ describe('ExternalSourcesAPI', () => {
     });
   });
 
+  it('keeps the execution root and workspace metadata identity in reference discovery', async () => {
+    invokeMock.mockResolvedValueOnce({
+      generation: 3,
+      discoveryPending: false,
+      references: [],
+    });
+
+    await externalSourcesAPI.getWorkspaceReferences(
+      'D:/workspace/project/.bitfun/worktrees/task',
+      'workspace-1',
+      true,
+    );
+
+    expect(invokeMock).toHaveBeenCalledWith('get_workspace_reference_snapshot', {
+      request: {
+        workspacePath: 'D:/workspace/project/.bitfun/worktrees/task',
+        workspaceId: 'workspace-1',
+        forceRefresh: true,
+      },
+    });
+  });
+
   it('treats an empty workspace path as the global scope', async () => {
     await externalSourcesAPI.getSnapshot('', false);
 
@@ -124,9 +147,17 @@ describe('ExternalSourcesAPI', () => {
   });
 
   it('expands a prompt command only with the selected candidate and behavior version', async () => {
-    invokeMock.mockResolvedValueOnce({ content: 'expanded prompt' });
+    invokeMock.mockResolvedValueOnce({
+      state: 'ready',
+      content: 'expanded prompt',
+      executionTarget: {
+        kind: 'fresh_external_subagent',
+        ecosystemId: 'opencode',
+        logicalId: 'reviewer',
+      },
+    });
 
-    await externalSourcesAPI.expandPromptCommand(
+    const outcome = await externalSourcesAPI.expandPromptCommand(
       'D:/workspace/project',
       'review',
       'focus on auth',
@@ -141,7 +172,21 @@ describe('ExternalSourcesAPI', () => {
         conflictKey: 'native:prompt_command:local-user:review:v1',
         expectedPreferenceRevision: 7,
       },
+      {
+        planFingerprint: 'sha256:shell-plan',
+        mode: 'run_once',
+        expectedPreferenceRevision: 7,
+      },
     );
+
+    expect(outcome).toMatchObject({
+      state: 'ready',
+      executionTarget: {
+        kind: 'fresh_external_subagent',
+        ecosystemId: 'opencode',
+        logicalId: 'reviewer',
+      },
+    });
 
     expect(invokeMock).toHaveBeenCalledWith('expand_external_prompt_command_command', {
       request: {
@@ -157,7 +202,35 @@ describe('ExternalSourcesAPI', () => {
         expectedContentVersion: 'behavior-v1',
         expectedNativeConflictKey: 'native:prompt_command:local-user:review:v1',
         expectedPreferenceRevision: 7,
+        shellReviewDecision: {
+          planFingerprint: 'sha256:shell-plan',
+          mode: 'run_once',
+          expectedPreferenceRevision: 7,
+        },
       },
+    });
+  });
+
+  it.each([
+    ['a missing execution target', { state: 'ready', content: 'expanded prompt' }],
+    ['an unknown execution target', {
+      state: 'ready',
+      content: 'expanded prompt',
+      executionTarget: { kind: 'future_target' },
+    }],
+  ])('rejects prompt command expansion with %s', async (_label, response) => {
+    invokeMock.mockResolvedValueOnce(response);
+
+    await expect(externalSourcesAPI.expandPromptCommand(
+      'D:/workspace/project',
+      'review',
+      '',
+      'opencode.commands:project:review',
+      'behavior-v1',
+      [],
+    )).rejects.toMatchObject({
+      code: 'invalid_response',
+      retryable: false,
     });
   });
 
@@ -362,6 +435,9 @@ describe('ExternalSourcesAPI', () => {
   });
 
   it('sends policy scope and optimistic revision as one atomic mutation', async () => {
+    const catalogUpdated = vi.fn();
+    const unsubscribe = globalEventBus.on('mode:config:updated', catalogUpdated);
+
     await externalSourcesAPI.updateIntegrationPolicy('D:/workspace/project', {
       expectedPreferenceRevision: 8,
       scope: 'workspace',
@@ -388,6 +464,11 @@ describe('ExternalSourcesAPI', () => {
         },
       },
     });
+    expect(catalogUpdated).toHaveBeenCalledWith({
+      reason: 'external-agent-catalog-updated',
+      workspacePath: 'D:/workspace/project',
+    });
+    unsubscribe();
   });
 
   it('normalizes typed host errors without matching user-visible strings', async () => {
@@ -499,6 +580,90 @@ describe('ExternalSourcesAPI', () => {
     );
   });
 
+  it('normalizes legacy subagent role and model-binding fields at the API boundary', async () => {
+    invokeMock.mockResolvedValue(surface({
+      generation: 2,
+      discoveryPending: false,
+      sources: [],
+      commands: [],
+      subagents: [{
+        candidateId: 'opencode-review',
+        logicalId: 'review',
+        displayName: 'Review',
+        description: 'Review changes',
+        providerLabel: 'OpenCode',
+        scope: 'project',
+        sourceKeys: [],
+        sourceLocationLabels: [],
+        sourceCount: 1,
+        effectiveToolLabels: [],
+        unavailableToolLabels: [],
+        supportsFollowUp: false,
+        compatibilityState: 'ready',
+        diagnostics: [],
+        activationState: { state: 'approval_required' },
+        decisionKey: 'decision-v1',
+      }],
+    }));
+
+    const result = await externalSourcesAPI.getSnapshot();
+
+    expect(result.subagentModelBindingGroups).toEqual([]);
+    expect(result.subagentModelBindingOptions).toEqual([]);
+    expect(result.subagents?.[0]).toMatchObject({
+      mode: 'subagent',
+      requestedModel: { kind: 'default' },
+      modelBindingMethod: 'default',
+    });
+  });
+
+  it('sends typed subagent model bindings and clears them through the same command', async () => {
+    await externalSourcesAPI.setSubagentModelBinding(
+      'D:/workspace/project',
+      'external_subagent_model_binding:review',
+      { kind: 'model', modelId: 'anthropic/claude-sonnet-4' },
+      5,
+      8,
+    );
+
+    expect(invokeMock).toHaveBeenNthCalledWith(
+      1,
+      'set_external_subagent_model_binding_command',
+      {
+        request: {
+          workspacePath: 'D:/workspace/project',
+          bindingKey: 'external_subagent_model_binding:review',
+          target: { kind: 'model', modelId: 'anthropic/claude-sonnet-4' },
+          expectedSubagentGeneration: 5,
+          expectedPreferenceRevision: 8,
+        },
+      },
+    );
+
+    invokeMock.mockClear();
+    await externalSourcesAPI.setSubagentModelBinding(
+      'D:/workspace/project',
+      'external_subagent_model_binding:review',
+      undefined,
+      6,
+      9,
+    );
+
+    expect(invokeMock).toHaveBeenNthCalledWith(
+      1,
+      'set_external_subagent_model_binding_command',
+      {
+        request: {
+          workspacePath: 'D:/workspace/project',
+          bindingKey: 'external_subagent_model_binding:review',
+          target: undefined,
+          expectedSubagentGeneration: 6,
+          expectedPreferenceRevision: 9,
+        },
+      },
+    );
+  });
+
   it('restores omitted empty MCP collections at the API boundary', async () => {
     invokeMock.mockResolvedValue(surface({
       generation: 3,
@@ -532,6 +697,12 @@ describe('ExternalSourcesAPI', () => {
           name: 'docs',
           transport: 'streamable_http',
           argumentCount: 0,
+          timeouts: {
+            startupMs: 9007199254740992,
+            catalogMs: 'invalid',
+            executionMs: 3000,
+            futurePhaseMs: 4000,
+          },
           sourceEnabled: true,
           behaviorVersion: '1',
           staticStatus: { state: 'ready' },
@@ -547,7 +718,9 @@ describe('ExternalSourcesAPI', () => {
       environmentKeys: [],
       environmentReferenceNames: [],
       headerNames: [],
+      timeouts: { executionMs: 3000 },
     });
+    expect(result.mcpServers?.[0].definition.timeouts).toEqual({ executionMs: 3000 });
     expect(result.mcpApprovalRequests).toEqual([]);
     expect(result.toolConflicts).toEqual([]);
     expect(result.pendingSubagentApprovals).toEqual([]);

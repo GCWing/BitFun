@@ -1029,7 +1029,9 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
   }, [onExplorerToolbarApi]);
 
   return (
-    <div 
+    <div
+      data-bf-component="files-panel"
+      data-bf-part="root"
       ref={panelRef}
       className="bitfun-files-panel"
       tabIndex={-1}
@@ -1054,9 +1056,9 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
         />
       )}
       
-      <div className="bitfun-files-panel__content">
+      <div className="bitfun-files-panel__content" data-bf-component="files-panel" data-bf-part="content">
         {workspacePath && viewMode === 'search' && (
-          <div className="bitfun-files-panel__search">
+          <div className="bitfun-files-panel__search" data-bf-component="files-panel" data-bf-part="search" data-bf-search-mode={searchMode}>
             <Search
               placeholder={t('search.placeholder')}
               value={searchQuery}
@@ -1066,7 +1068,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
               size="small"
               loading={isSearching}
             />
-            <div className="bitfun-files-panel__search-toolbar">
+            <div className="bitfun-files-panel__search-toolbar" data-bf-component="files-panel" data-bf-part="searchToolbar">
               <div className="bitfun-files-panel__search-modes">
                 <button
                   type="button"
@@ -1120,9 +1122,11 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
           className={`bitfun-files-panel__main-content${
             fileDropHighlight ? ' bitfun-files-panel__main-content--drop-target' : ''
           }`}
+          data-bf-component="files-panel"
+          data-bf-part="main"
         >
         {!workspacePath ? (
-          <div className="bitfun-files-panel__placeholder">
+          <div className="bitfun-files-panel__placeholder" data-bf-component="files-panel" data-bf-part="placeholder">
             <div className="bitfun-files-panel__placeholder-icon">
               <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                 <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
@@ -1171,7 +1175,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
               )}
 
               {searchError && (
-                <div className="bitfun-files-panel__error">
+                <div className="bitfun-files-panel__error" data-bf-component="files-panel" data-bf-part="error">
                   <p>❌ {searchError}</p>
                   <button 
                     className="bitfun-files-panel__retry-button"
@@ -1193,7 +1197,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
                 />
               ) : (
                 !isSearching && !searchError && (
-                  <div className="bitfun-files-panel__placeholder">
+                  <div className="bitfun-files-panel__placeholder" data-bf-component="files-panel" data-bf-part="placeholder">
                     <div className="bitfun-files-panel__placeholder-icon">
                       <SearchIcon size={32} />
                     </div>
@@ -1203,7 +1207,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
               )}
             </div>
           ) : (
-            <div className="bitfun-files-panel__placeholder">
+            <div className="bitfun-files-panel__placeholder" data-bf-component="files-panel" data-bf-part="placeholder">
               <div className="bitfun-files-panel__placeholder-icon">
                 <SearchIcon size={32} />
               </div>
@@ -1216,7 +1220,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
               <CubeLoading size="medium" text={t('status.loadingFileTree')} />
             </div>
           ) : error ? (
-            <div className="bitfun-files-panel__error">
+            <div className="bitfun-files-panel__error" data-bf-component="files-panel" data-bf-part="error">
               <p>❌ {error}</p>
               <button 
                 className="bitfun-files-panel__retry-button"
@@ -1252,9 +1256,9 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
       </div>
 
       {transfers.size > 0 && (
-        <div className="bitfun-files-panel__transfers">
+        <div className="bitfun-files-panel__transfers" data-bf-component="files-panel" data-bf-part="transfers">
           {Array.from(transfers.entries()).map(([id, tp]) => (
-            <div className="bitfun-files-panel__transfer" role="status" key={id}>
+            <div className="bitfun-files-panel__transfer" data-bf-component="files-panel" data-bf-part="transfer" role="status" key={id}>
               <div className="bitfun-files-panel__transfer-label">
                 <span className="bitfun-files-panel__transfer-label-text">
                   {tp.phase === 'download'
@@ -1282,9 +1286,13 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
                 className={`bitfun-files-panel__transfer-track${
                   tp.indeterminate ? ' bitfun-files-panel__transfer-track--indeterminate' : ''
                 }`}
+                data-bf-component="files-panel"
+                data-bf-part="transferTrack"
               >
                 <div
                   className="bitfun-files-panel__transfer-fill"
+                  data-bf-component="files-panel"
+                  data-bf-part="transferFill"
                   style={
                     tp.indeterminate || !tp.total
                       ? undefined

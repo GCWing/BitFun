@@ -2,6 +2,16 @@ fn shared_session_change_is_blocked(is_shared: bool, session_update_pending: boo
     is_shared && session_update_pending
 }
 
+fn session_switch_targets_pending_delete(
+    target_session_id: &str,
+    pending: Option<(&str, &PendingSessionOperationKind)>,
+) -> bool {
+    pending.is_some_and(|(pending_session_id, kind)| {
+        pending_session_id == target_session_id
+            && matches!(kind, PendingSessionOperationKind::Delete { .. })
+    })
+}
+
 impl ChatMode {
     fn handle_key_event(
         &mut self,
@@ -11,6 +21,49 @@ impl ChatMode {
         rt_handle: &tokio::runtime::Handle,
     ) -> Result<Option<ChatExitReason>> {
         if key.kind != KeyEventKind::Press && key.kind != KeyEventKind::Repeat {
+            return Ok(None);
+        }
+        if self.pending_local_effect.is_some() {
+            return Ok(None);
+        }
+
+        if chat_view.prompt_command_shell_review_visible() {
+            let action = chat_view.prompt_command_shell_review_handle_key(key);
+            match action {
+                PromptCommandShellReviewAction::None => {}
+                PromptCommandShellReviewAction::Cancel => {
+                    self.pending_prompt_command_shell_invocation = None;
+                    chat_view.hide_prompt_command_shell_review();
+                    chat_view.set_status(Some(
+                        "External prompt command cancelled before running local commands"
+                            .to_string(),
+                    ));
+                }
+                PromptCommandShellReviewAction::RunOnce
+                | PromptCommandShellReviewAction::Remember => {
+                    let Some(pending) = self.pending_prompt_command_shell_invocation.take() else {
+                        chat_view.hide_prompt_command_shell_review();
+                        return Ok(None);
+                    };
+                    chat_view.hide_prompt_command_shell_review();
+                    let decision = PromptCommandShellReviewDecision {
+                        plan_fingerprint: pending.review.plan_fingerprint,
+                        mode: if matches!(action, PromptCommandShellReviewAction::Remember) {
+                            PromptCommandShellReviewMode::Remember
+                        } else {
+                            PromptCommandShellReviewMode::RunOnce
+                        },
+                        expected_preference_revision: pending.review.preference_revision,
+                    };
+                    return self.invoke_external_prompt_command(
+                        pending.invocation,
+                        Some(decision),
+                        chat_view,
+                        chat_state,
+                        rt_handle,
+                    );
+                }
+            }
             return Ok(None);
         }
 
@@ -78,14 +131,56 @@ impl ChatMode {
             return Ok(None);
         }
 
-        // ── Normal key handling ──
-
-        // Host recovery keys win over configured actions while a popup is open.
+        // Host recovery keys win over popup-specific input handling.
         if self.any_popup_visible(chat_view) {
             let state = self.action_state(chat_state.is_processing, true);
             if let Some(action) = self.keymap.resolve_reserved(key, state) {
                 return self.dispatch_action(action, state, chat_view, chat_state, rt_handle);
             }
+        }
+
+        if chat_view.export_dialog_visible() {
+            match chat_view.export_dialog_handle_key(key) {
+                crate::ui::export_dialog::ExportDialogAction::Confirm(request) => {
+                    let markdown = transcript::render_session_markdown(
+                        self.displayed_chat_state(chat_state),
+                        transcript::MarkdownTranscriptOptions {
+                            include_reasoning: request.include_reasoning,
+                            include_tool_details: request.include_tool_details,
+                        },
+                    );
+                    self.prepare_transcript_export(request, false, chat_view, markdown);
+                }
+                crate::ui::export_dialog::ExportDialogAction::ConfirmOverwrite(request) => {
+                    let markdown = transcript::render_session_markdown(
+                        self.displayed_chat_state(chat_state),
+                        transcript::MarkdownTranscriptOptions {
+                            include_reasoning: request.include_reasoning,
+                            include_tool_details: request.include_tool_details,
+                        },
+                    );
+                    self.prepare_transcript_export(request, true, chat_view, markdown);
+                }
+                crate::ui::export_dialog::ExportDialogAction::Cancel => {
+                    self.close_all_popups(chat_view);
+                    chat_view.set_status(Some("Transcript export cancelled".to_string()));
+                }
+                crate::ui::export_dialog::ExportDialogAction::None => {}
+            }
+            return Ok(None);
+        }
+
+        // ── Normal key handling ──
+
+        // Workspace diff viewer intercepts all keys when visible
+        if chat_view.workspace_diff_visible() {
+            if matches!(
+                chat_view.workspace_diff_handle_key(key),
+                crate::ui::workspace_diff::WorkspaceDiffAction::Close
+            ) {
+                self.navigate_back(chat_view);
+            }
+            return Ok(None);
         }
 
         // Info popup intercepts all keys when visible
@@ -195,12 +290,53 @@ impl ChatMode {
             return Ok(None);
         }
 
+        if chat_view.session_lineage_selector_visible() {
+            match chat_view.session_lineage_selector_handle_key(key) {
+                SessionLineageAction::Select(session_id) => {
+                    self.close_all_popups(chat_view);
+                    self.inspect_lineage_session(&session_id, chat_view, rt_handle);
+                }
+                SessionLineageAction::Close => self.navigate_back(chat_view),
+                SessionLineageAction::Move(_) | SessionLineageAction::None => {}
+            }
+            return Ok(None);
+        }
+
         if chat_view.fork_selector_visible() {
             match chat_view.fork_selector_handle_key(key) {
                 ForkAction::Select(target) => {
                     return Ok(Some(ChatExitReason::ForkSession(target)));
                 }
                 ForkAction::Close | ForkAction::None => {}
+            }
+            return Ok(None);
+        }
+
+        if chat_view.timeline_selector_visible() {
+            match chat_view.timeline_selector_handle_key(key) {
+                crate::ui::timeline_selector::TimelineAction::Move(message_id) => {
+                    chat_view.scroll_to_message(self.displayed_chat_state(chat_state), &message_id);
+                }
+                crate::ui::timeline_selector::TimelineAction::Select(message_id) => {
+                    chat_view
+                        .commit_message_jump(self.displayed_chat_state(chat_state), &message_id);
+                    self.navigate_back(chat_view);
+                }
+                crate::ui::timeline_selector::TimelineAction::Close => {
+                    self.navigate_back(chat_view);
+                }
+                crate::ui::timeline_selector::TimelineAction::None => {}
+            }
+            return Ok(None);
+        }
+
+        if chat_view.prompt_stash_selector_visible() {
+            match chat_view.prompt_stash_selector_handle_key(key) {
+                PromptStashAction::Select(id) => {
+                    self.restore_prompt_stash(&id, chat_view);
+                }
+                PromptStashAction::Close => self.navigate_back(chat_view),
+                PromptStashAction::None => {}
             }
             return Ok(None);
         }
@@ -346,6 +482,82 @@ impl ChatMode {
             return self.handle_login_form_action(action, chat_view, chat_state, rt_handle);
         }
 
+        if chat_view.workspace_reference_popup_visible() {
+            match (key.code, key.modifiers) {
+                (KeyCode::Up, _) | (KeyCode::Char('p'), KeyModifiers::CONTROL) => {
+                    chat_view.workspace_reference_up();
+                    return Ok(None);
+                }
+                (KeyCode::Down, _) | (KeyCode::Char('n'), KeyModifiers::CONTROL) => {
+                    chat_view.workspace_reference_down();
+                    return Ok(None);
+                }
+                (KeyCode::Enter, _) => {
+                    chat_view.apply_workspace_reference_selection(false);
+                    return Ok(None);
+                }
+                (KeyCode::Tab, _) => {
+                    chat_view.apply_workspace_reference_selection(true);
+                    return Ok(None);
+                }
+                (KeyCode::Esc, _) => {
+                    chat_view.hide_workspace_reference_popup();
+                    return Ok(None);
+                }
+                _ => {}
+            }
+        }
+
+        if chat_view.is_shell_mode() {
+            match key.code {
+                KeyCode::Esc => {
+                    chat_view.exit_shell_mode();
+                    self.selected_native_command_once = None;
+                    return Ok(None);
+                }
+                KeyCode::Backspace if chat_view.input_text().is_empty() => {
+                    chat_view.exit_shell_mode();
+                    self.selected_native_command_once = None;
+                    return Ok(None);
+                }
+                _ => {}
+            }
+        }
+
+        if key.code == KeyCode::Esc && self.cancel_pending_lineage_load(chat_view) {
+            return Ok(None);
+        }
+
+        if self.lineage_inspection.is_some() {
+            match key.code {
+                KeyCode::Up => self.navigate_lineage_parent(chat_view, rt_handle),
+                KeyCode::Left => self.navigate_lineage_sibling(-1, chat_view, rt_handle),
+                KeyCode::Right => self.navigate_lineage_sibling(1, chat_view, rt_handle),
+                KeyCode::Esc => self.leave_lineage_inspection(chat_view),
+                _ => {
+                    if let Some(action) = self.keymap.resolve(
+                        key,
+                        self.action_state(
+                            self.displayed_chat_state(chat_state).is_processing,
+                            false,
+                        ),
+                    ) {
+                        return self.dispatch_action(
+                            action,
+                            self.action_state(
+                                self.displayed_chat_state(chat_state).is_processing,
+                                false,
+                            ),
+                            chat_view,
+                            chat_state,
+                            rt_handle,
+                        );
+                    }
+                }
+            }
+            return Ok(None);
+        }
+
         if let Some(action) = self
             .keymap
             .resolve(key, self.action_state(chat_state.is_processing, false))
@@ -362,6 +574,10 @@ impl ChatMode {
         match (key.code, key.modifiers) {
             (KeyCode::Backspace, _) => {
                 chat_view.handle_backspace();
+                self.sync_selected_native_command(chat_view);
+            }
+            (KeyCode::Delete, _) => {
+                chat_view.handle_delete();
                 self.sync_selected_native_command(chat_view);
             }
 
@@ -385,6 +601,12 @@ impl ChatMode {
                     chat_view.scroll_to_bottom();
                     chat_view.set_status(Some("Exited browse mode".to_string()));
                 }
+            }
+
+            (KeyCode::Char('!'), KeyModifiers::NONE | KeyModifiers::SHIFT)
+                if !chat_state.is_processing && chat_view.try_enter_shell_mode() =>
+            {
+                self.selected_native_command_once = None;
             }
 
             (KeyCode::Char(c), KeyModifiers::NONE | KeyModifiers::SHIFT)
@@ -411,6 +633,19 @@ impl ChatMode {
             should_quit,
             exit_reason,
         } = context;
+        if let ChatExitReason::SwitchSession(target_session_id) = &reason {
+            let pending = this
+                .pending_session_operation
+                .as_ref()
+                .map(|operation| (operation.session_id.as_str(), &operation.kind));
+            if session_switch_targets_pending_delete(target_session_id, pending) {
+                chat_view.set_status(Some(
+                    "Wait for this Session's pending deletion to finish before opening it."
+                        .to_string(),
+                ));
+                return;
+            }
+        }
         if matches!(
             &reason,
             ChatExitReason::SwitchSession(_)
@@ -555,7 +790,9 @@ impl ChatMode {
                 } else {
                     match mouse.kind {
                         MouseEventKind::ScrollUp => {
-                            let total = context.chat_view.count_message_lines(context.chat_state);
+                            let total = context.chat_view.count_message_lines(
+                                context.this.displayed_chat_state(context.chat_state),
+                            );
                             context.chat_view.scroll_up(3, total);
                         }
                         MouseEventKind::ScrollDown => {
@@ -637,7 +874,12 @@ impl ChatMode {
                 outcome.request_redraw = true;
             }
             Event::Paste(text) => {
-                if context.chat_view.mcp_add_dialog_visible() {
+                if context.this.lineage_inspection.is_some() {
+                    // The root composer is deliberately hidden and immutable while a
+                    // descendant transcript is being inspected.
+                } else if context.chat_view.export_dialog_visible() {
+                    context.chat_view.export_dialog_handle_paste(&text);
+                } else if context.chat_view.mcp_add_dialog_visible() {
                     context.chat_view.mcp_add_dialog_handle_paste(&text);
                 } else if context.chat_view.login_form_visible() {
                     context.chat_view.login_form_insert_paste(&text);
@@ -645,8 +887,7 @@ impl ChatMode {
                     && context.chat_state.question_prompt.is_none()
                     && !context.this.any_popup_visible(context.chat_view)
                 {
-                    context.chat_view.insert_paste(&text);
-                    context.this.sync_selected_native_command(context.chat_view);
+                    context.this.paste_terminal_text(&text, context.chat_view);
                 }
                 outcome.request_redraw = true;
             }

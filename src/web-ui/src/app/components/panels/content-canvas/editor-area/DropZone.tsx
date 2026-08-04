@@ -138,16 +138,20 @@ export const DropZone: React.FC<DropZoneProps> = ({
   };
 
   return (
-    <div className={`canvas-drop-zone-container ${showOverlay ? 'is-dragging' : ''}`}>
-      <div className="canvas-drop-zone-container__content">
+    <div data-bf-component="content-canvas" data-bf-part="dropZone" data-bf-state={showOverlay ? 'dragging' : ''} className={`canvas-drop-zone-container ${showOverlay ? 'is-dragging' : ''}`}>
+      <div className="canvas-drop-zone-container__content" data-bf-component="content-canvas" data-bf-part="dropContent">
         {children}
       </div>
 
       {showOverlay && zones.length > 0 && (
-        <div className="canvas-drop-zone-overlay">
+        <div className="canvas-drop-zone-overlay" data-bf-component="content-canvas" data-bf-part="dropOverlay" data-bf-state="dragging">
           {zones.filter(z => z.show).map(({ position, label }) => (
             <div
               key={position}
+              data-bf-component="content-canvas"
+              data-bf-part="dropTarget"
+              data-bf-position={position}
+              data-bf-state={activeZone === position ? 'active' : ''}
               className={`canvas-drop-zone canvas-drop-zone--${position} ${activeZone === position ? 'is-active' : ''}`}
               style={getZoneStyle(position)}
               onDragEnter={handleDragEnter(position)}
@@ -155,7 +159,7 @@ export const DropZone: React.FC<DropZoneProps> = ({
               onDragOver={handleDragOver}
               onDrop={handleDrop(position)}
             >
-              <div className="canvas-drop-zone__indicator">
+              <div className="canvas-drop-zone__indicator" data-bf-component="content-canvas" data-bf-part="dropIndicator" data-bf-position={position}>
                 <span>{label}</span>
               </div>
             </div>

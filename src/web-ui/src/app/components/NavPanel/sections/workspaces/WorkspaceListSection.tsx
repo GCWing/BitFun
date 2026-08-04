@@ -171,13 +171,15 @@ const WorkspaceListSection: React.FC<WorkspaceListSectionProps> = ({ variant }) 
   }, [reorderOpenedWorkspacesInSection, t, variant]);
 
   return (
-    <div
+    <div data-bf-component="workspace-list-section" data-bf-part="root" data-bf-state={draggedWorkspaceId ? 'dragging' : undefined}
       className={`bitfun-nav-panel__workspace-list${draggedWorkspaceId ? ' is-dragging' : ''}`}
       data-testid="nav-workspace-list"
       data-workspace-list={variant}
     >
       {workspaces.length === 0 ? (
         <div
+          data-bf-component="workspace-list-section"
+          data-bf-part="empty"
           className="bitfun-nav-panel__workspace-list-empty"
           data-testid="nav-workspace-list-empty"
           data-workspace-list={variant}
@@ -187,6 +189,9 @@ const WorkspaceListSection: React.FC<WorkspaceListSectionProps> = ({ variant }) 
       ) : (
         workspaces.map(workspace => (
           <div
+            data-bf-component="workspace-list-section"
+            data-bf-part="item"
+            data-bf-state={workspace.id === activeWorkspaceId ? 'selected' : undefined}
             key={workspace.id}
             className={[
               'bitfun-nav-panel__workspace-drop-target',
@@ -203,7 +208,7 @@ const WorkspaceListSection: React.FC<WorkspaceListSectionProps> = ({ variant }) 
             onDrop={(event) => { void handleDrop(workspace.id)(event); }}
           >
             {dropTarget?.workspaceId === workspace.id && dropTarget.position === 'before' ? (
-              <div className="bitfun-nav-panel__workspace-drop-line" aria-hidden="true" />
+              <div data-bf-component="workspace-list-section" data-bf-part="dropLine" className="bitfun-nav-panel__workspace-drop-line" aria-hidden="true" />
             ) : null}
             <WorkspaceItem
               workspace={workspace}
@@ -218,7 +223,7 @@ const WorkspaceListSection: React.FC<WorkspaceListSectionProps> = ({ variant }) 
               onDragEnd={handleDragEnd}
             />
             {dropTarget?.workspaceId === workspace.id && dropTarget.position === 'after' ? (
-              <div className="bitfun-nav-panel__workspace-drop-line" aria-hidden="true" />
+              <div data-bf-component="workspace-list-section" data-bf-part="dropLine" className="bitfun-nav-panel__workspace-drop-line" aria-hidden="true" />
             ) : null}
           </div>
         ))

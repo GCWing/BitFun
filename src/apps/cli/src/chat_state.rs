@@ -155,6 +155,12 @@ pub(crate) enum FlowItem {
     Text { content: String, is_streaming: bool },
     /// AI thinking/reasoning block
     Thinking { content: String },
+    /// User steering injected between model-round flow items.
+    UserSteering {
+        steering_id: String,
+        content: String,
+        is_pending: bool,
+    },
     /// Tool call block
     Tool { tool_state: ToolDisplayState },
 }
@@ -288,9 +294,31 @@ impl ChatMessage {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct SessionForkPoint {
+    pub message_id: String,
     pub turn_id: String,
     pub prompt: String,
     pub timestamp: SystemTime,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct SessionTimelinePoint {
+    pub message_id: String,
+    pub prompt: String,
+    pub timestamp: SystemTime,
+}
+
+fn visible_message_text(message: &ChatMessage) -> String {
+    message
+        .flow_items
+        .iter()
+        .filter_map(|item| match item {
+            FlowItem::Text { content, .. } => Some(content.as_str()),
+            FlowItem::Thinking { .. } | FlowItem::UserSteering { .. } | FlowItem::Tool { .. } => {
+                None
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 // ============ Chat Metadata ============
@@ -319,6 +347,12 @@ pub(crate) struct ModelTokenUsageSnapshot {
 }
 
 // ============ ChatState ============
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(crate) struct PermissionReconcileOutcome {
+    pub(crate) changed: bool,
+    pub(crate) added: bool,
+}
 
 /// Complete UI state for the chat interface.
 /// This is the single source of truth for rendering — but NOT for persistence.
@@ -358,6 +392,9 @@ pub(crate) struct ChatState {
     // -- Streaming state (transient, not persisted) --
     /// Current turn ID being processed
     current_turn_id: Option<String>,
+    /// Turns retired by authoritative Session operations. Their already queued
+    /// events are fenced from the rebuilt visible transcript.
+    ignored_turn_ids: HashSet<String>,
     /// Ordered flow items for the current streaming message.
     /// Text, thinking, and tool blocks are interleaved in chronological order,
     /// matching the actual conversation flow (inspired by opencode's Part model).
@@ -414,6 +451,7 @@ impl ChatState {
             metadata: ChatMetadata::default(),
             last_primary_model_usage: None,
             current_turn_id: None,
+            ignored_turn_ids: HashSet::new(),
             current_flow_items: Vec::new(),
             tool_index: HashMap::new(),
             is_processing: false,
@@ -478,22 +516,40 @@ impl ChatState {
             .filter(|message| message.role == MessageRole::User)
             .filter_map(|message| {
                 let turn_id = message.turn_id.clone()?;
-                let prompt = message
-                    .flow_items
-                    .iter()
-                    .filter_map(|item| match item {
-                        FlowItem::Text { content, .. } => Some(content.as_str()),
-                        FlowItem::Thinking { .. } | FlowItem::Tool { .. } => None,
-                    })
-                    .collect::<Vec<_>>()
-                    .join("\n");
+                let prompt = visible_message_text(message);
                 (!prompt.is_empty()).then_some(SessionForkPoint {
+                    message_id: message.id.clone(),
                     turn_id,
                     prompt,
                     timestamp: message.timestamp,
                 })
             })
             .collect()
+    }
+
+    /// User messages eligible for OpenCode-compatible `/timeline`, newest first.
+    pub(crate) fn session_timeline_points(&self) -> Vec<SessionTimelinePoint> {
+        self.messages
+            .iter()
+            .rev()
+            .filter(|message| message.role == MessageRole::User)
+            .filter_map(|message| {
+                let prompt = visible_message_text(message);
+                (!prompt.is_empty()).then_some(SessionTimelinePoint {
+                    message_id: message.id.clone(),
+                    prompt,
+                    timestamp: message.timestamp,
+                })
+            })
+            .collect()
+    }
+
+    pub(crate) fn latest_user_message_id(&self) -> Option<String> {
+        self.messages
+            .iter()
+            .rev()
+            .find(|message| message.role == MessageRole::User)
+            .map(|message| message.id.clone())
     }
 
     pub(crate) fn set_worktree_control_available(&mut self, available: bool) {
@@ -647,7 +703,7 @@ impl ChatState {
     pub(crate) fn reconcile_permission_requests(
         &mut self,
         requests: Vec<PermissionRequest>,
-    ) -> bool {
+    ) -> PermissionReconcileOutcome {
         let expected = requests
             .iter()
             .map(|request| request.request_id.clone())
@@ -663,14 +719,16 @@ impl ChatState {
             )
             .filter(|request_id| !expected.contains(request_id))
             .collect::<Vec<_>>();
-        let mut changed = false;
+        let mut outcome = PermissionReconcileOutcome::default();
         for request_id in stale {
-            changed |= self.resolve_permission_request(&request_id);
+            outcome.changed |= self.resolve_permission_request(&request_id);
         }
         for request in requests {
-            changed |= self.enqueue_permission_request(request);
+            let added = self.enqueue_permission_request(request);
+            outcome.changed |= added;
+            outcome.added |= added;
         }
-        changed
+        outcome
     }
 
     /// Load historical messages from the portable runtime transcript.
@@ -743,6 +801,75 @@ impl ChatState {
         state
     }
 
+    /// Continue projecting live events onto an authoritative transcript read
+    /// without inserting a duplicate user/assistant turn.
+    pub(crate) fn resume_transcript_turn(&mut self, turn_id: &str) {
+        self.current_turn_id = Some(turn_id.to_string());
+        self.is_processing = true;
+        self.current_flow_items.clear();
+        self.tool_index.clear();
+
+        if let Some(message) = self.messages.iter_mut().rev().find(|message| {
+            message.role == MessageRole::Assistant && message.turn_id.as_deref() == Some(turn_id)
+        }) {
+            message.is_streaming = true;
+            self.current_flow_items = message.flow_items.clone();
+            for (index, item) in self.current_flow_items.iter().enumerate() {
+                if let FlowItem::Tool { tool_state } = item {
+                    self.tool_index.insert(tool_state.tool_id.clone(), index);
+                }
+            }
+        } else {
+            self.push_streaming_assistant_message(turn_id);
+        }
+    }
+
+    /// Ignore delayed lifecycle events for turns already represented by an
+    /// authoritative transcript, while allowing one active turn to continue.
+    pub(crate) fn reconcile_transcript_turn_events(&mut self, active_turn_id: Option<&str>) {
+        self.ignored_turn_ids.extend(
+            self.messages
+                .iter()
+                .filter_map(|message| message.turn_id.as_deref())
+                .filter(|turn_id| Some(*turn_id) != active_turn_id)
+                .map(str::to_string),
+        );
+        if let Some(turn_id) = active_turn_id {
+            self.ignored_turn_ids.remove(turn_id);
+        }
+    }
+
+    /// Replace the render projection from the Runtime-owned transcript while
+    /// retaining Session/workspace/product settings owned by the TUI shell.
+    pub(crate) fn replace_from_authoritative_transcript(
+        &mut self,
+        transcript: &SessionTranscript,
+        retired_turn_ids: &[String],
+    ) {
+        debug_assert_eq!(transcript.session_id, self.core_session_id);
+        let projected = Self::from_session_transcript(
+            self.core_session_id.clone(),
+            self.session_name.clone(),
+            self.agent_type.clone(),
+            self.workspace.clone(),
+            transcript,
+        );
+        self.messages = projected.messages;
+        self.metadata = projected.metadata;
+        self.last_primary_model_usage = None;
+        if let Some(turn_id) = self.current_turn_id.take() {
+            self.ignored_turn_ids.insert(turn_id);
+        }
+        self.ignored_turn_ids
+            .extend(retired_turn_ids.iter().cloned());
+        self.current_flow_items.clear();
+        self.tool_index.clear();
+        self.is_processing = false;
+        self.permission_prompt = None;
+        self.permission_queue.clear();
+        self.question_prompt = None;
+    }
+
     // ============ Event Handlers ============
 
     /// Handle the start of a new dialog turn
@@ -768,7 +895,11 @@ impl ChatState {
         });
         self.metadata.message_count += 1;
 
-        // Add empty assistant message (will be filled by streaming)
+        self.push_streaming_assistant_message(turn_id);
+    }
+
+    fn push_streaming_assistant_message(&mut self, turn_id: &str) {
+        // Add an empty assistant message that incoming chunks can rebuild.
         self.messages.push(ChatMessage {
             id: uuid::Uuid::new_v4().to_string(),
             turn_id: Some(turn_id.to_string()),
@@ -821,6 +952,50 @@ impl ChatState {
             });
         }
         self.rebuild_streaming_message();
+    }
+
+    /// Add an optimistic steering item or upgrade it when the runtime emits
+    /// the authoritative injection event. Returns true only for a new item.
+    pub(crate) fn handle_user_steering(
+        &mut self,
+        steering_id: &str,
+        content: &str,
+        is_pending: bool,
+    ) -> bool {
+        if !self.is_processing || self.current_turn_id.is_none() {
+            return false;
+        }
+        if let Some(existing) = self.current_flow_items.iter_mut().find(|item| {
+            matches!(
+                item,
+                FlowItem::UserSteering {
+                    steering_id: existing_id,
+                    ..
+                } if existing_id == steering_id
+            )
+        }) {
+            if let FlowItem::UserSteering {
+                content: existing_content,
+                is_pending: existing_pending,
+                ..
+            } = existing
+            {
+                *existing_content = content.to_string();
+                if !is_pending {
+                    *existing_pending = false;
+                }
+            }
+            self.rebuild_streaming_message();
+            return false;
+        }
+
+        self.current_flow_items.push(FlowItem::UserSteering {
+            steering_id: steering_id.to_string(),
+            content: content.to_string(),
+            is_pending,
+        });
+        self.rebuild_streaming_message();
+        true
     }
 
     /// Handle a tool event.
@@ -1201,6 +1376,17 @@ impl ChatState {
         self.question_prompt = None;
     }
 
+    pub(crate) fn should_apply_turn_cancelled(&mut self, turn_id: &str) -> bool {
+        if self.should_ignore_turn_event(turn_id) {
+            return false;
+        }
+        self.current_turn_id.is_none() || self.current_turn_id.as_deref() == Some(turn_id)
+    }
+
+    pub(crate) fn should_ignore_turn_event(&self, turn_id: &str) -> bool {
+        self.ignored_turn_ids.contains(turn_id)
+    }
+
     /// Record the latest primary-model request observed by this TUI.
     pub(crate) fn handle_primary_model_usage(&mut self, usage: ModelTokenUsageSnapshot) {
         self.last_primary_model_usage = Some(usage);
@@ -1427,7 +1613,9 @@ fn truncate_string(s: &str, max_len: usize) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{ChatState, FlowItem, ModelTokenUsageSnapshot, ToolDisplayStatus};
+    use super::{
+        ChatState, FlowItem, ModelTokenUsageSnapshot, PermissionReconcileOutcome, ToolDisplayStatus,
+    };
     use bitfun_agent_runtime::sdk::{
         PermissionDelegationContext, PermissionRequest, PermissionRequestSource,
         PermissionRequestSourceKind, SessionTranscript, TranscriptContent, TranscriptMessage,
@@ -1654,13 +1842,19 @@ mod tests {
         assert!(state.permission_prompt.is_none());
 
         assert!(state.enqueue_permission_request(first));
-        assert!(state.reconcile_permission_requests(vec![third]));
+        let outcome = state.reconcile_permission_requests(vec![third.clone()]);
+        assert!(outcome.changed);
+        assert!(outcome.added);
         assert_eq!(
             state
                 .permission_prompt
                 .as_ref()
                 .map(|prompt| prompt.request.request_id.as_str()),
             Some("request-m")
+        );
+        assert_eq!(
+            state.reconcile_permission_requests(vec![third]),
+            PermissionReconcileOutcome::default()
         );
     }
 
@@ -1746,6 +1940,47 @@ mod tests {
     }
 
     #[test]
+    fn user_steering_is_deduplicated_and_preserves_stream_order() {
+        let mut state = ChatState::new(
+            "session-1".to_string(),
+            "Session".to_string(),
+            "agentic".to_string(),
+            None,
+        );
+        state.handle_turn_started("turn-1", "Start the task");
+        state.handle_text_chunk("Before steering");
+
+        assert!(state.handle_user_steering("steer-1", "Also check tests", true));
+        assert!(!state.handle_user_steering("steer-1", "Also check tests", false));
+        state.handle_text_chunk("After steering");
+
+        assert!(matches!(
+            state.current_flow_items.as_slice(),
+            [
+                FlowItem::Text { content: before, .. },
+                FlowItem::UserSteering {
+                    steering_id,
+                    content,
+                    is_pending: false,
+                },
+                FlowItem::Text { content: after, .. },
+            ] if before == "Before steering"
+                && steering_id == "steer-1"
+                && content == "Also check tests"
+                && after == "After steering"
+        ));
+        assert_eq!(
+            state.current_flow_items.len(),
+            state
+                .messages
+                .last()
+                .expect("assistant message")
+                .flow_items
+                .len()
+        );
+    }
+
+    #[test]
     fn deferred_history_projects_effective_view_without_mutating_wire_message() {
         let wire_input = deferred_input();
         let transcript = SessionTranscript {
@@ -1793,6 +2028,80 @@ mod tests {
     }
 
     #[test]
+    fn authoritative_transcript_replaces_only_session_projection_and_clears_active_turn() {
+        let mut state = ChatState::new(
+            "session-1".to_string(),
+            "Session".to_string(),
+            "agentic".to_string(),
+            Some("D:/workspace/project".to_string()),
+        );
+        state.current_model_id = Some("model-1".to_string());
+        state.handle_turn_started("turn-2", "Hidden prompt");
+        let transcript = SessionTranscript {
+            session_id: "session-1".to_string(),
+            messages: vec![TranscriptMessage {
+                id: Some("user-1".to_string()),
+                role: "user".to_string(),
+                turn_id: Some("turn-1".to_string()),
+                timestamp_ms: Some(1_000),
+                content: TranscriptContent::Text("Visible prompt".to_string()),
+            }],
+        };
+
+        state.replace_from_authoritative_transcript(&transcript, &[]);
+
+        assert_eq!(state.messages.len(), 1);
+        assert_eq!(state.messages[0].turn_id.as_deref(), Some("turn-1"));
+        assert_eq!(state.current_model_id.as_deref(), Some("model-1"));
+        assert_eq!(state.workspace.as_deref(), Some("D:/workspace/project"));
+        assert!(!state.is_processing);
+        assert!(state.current_turn_id().is_none());
+        assert!(!state.should_apply_turn_cancelled("turn-2"));
+    }
+
+    #[test]
+    fn authoritative_transcript_fences_a_turn_start_that_arrives_after_revert() {
+        let mut state = ChatState::new(
+            "session-1".to_string(),
+            "Session".to_string(),
+            "agentic".to_string(),
+            None,
+        );
+        let transcript = SessionTranscript {
+            session_id: "session-1".to_string(),
+            messages: vec![TranscriptMessage {
+                id: Some("assistant-visible".to_string()),
+                role: "assistant".to_string(),
+                turn_id: Some("turn-visible".to_string()),
+                timestamp_ms: Some(1_000),
+                content: TranscriptContent::Text("Visible answer".to_string()),
+            }],
+        };
+
+        state.replace_from_authoritative_transcript(
+            &transcript,
+            &["retired-turn".to_string(), "queued-turn".to_string()],
+        );
+
+        assert!(state.should_ignore_turn_event("retired-turn"));
+        assert!(state.should_ignore_turn_event("queued-turn"));
+        if !state.should_ignore_turn_event("retired-turn") {
+            state.handle_turn_started("retired-turn", "late prompt");
+        }
+        assert_eq!(state.messages.len(), 1);
+        assert!(!state.is_processing);
+        assert!(!state.should_apply_turn_cancelled("retired-turn"));
+        assert!(!state.should_apply_turn_cancelled("queued-turn"));
+        if state.should_apply_turn_cancelled("queued-turn") {
+            state.handle_turn_cancelled();
+        }
+        assert!(matches!(
+            state.messages[0].flow_items.as_slice(),
+            [FlowItem::Text { content, .. }] if content == "Visible answer"
+        ));
+    }
+
+    #[test]
     fn session_fork_points_keep_stable_turn_ids_and_newest_prompt_first() {
         let transcript = SessionTranscript {
             session_id: "session-1".to_string(),
@@ -1835,6 +2144,54 @@ mod tests {
         assert_eq!(points[0].prompt, "Second\nprompt");
         assert_eq!(points[1].turn_id, "turn-1");
         assert_eq!(points[1].prompt, "First prompt");
+    }
+
+    #[test]
+    fn timeline_points_match_opencode_user_message_order_without_needing_turn_ids() {
+        let transcript = SessionTranscript {
+            session_id: "session-1".to_string(),
+            messages: vec![
+                TranscriptMessage {
+                    id: Some("user-1".to_string()),
+                    role: "user".to_string(),
+                    turn_id: None,
+                    timestamp_ms: Some(1_000),
+                    content: TranscriptContent::Text("First\nprompt".to_string()),
+                },
+                TranscriptMessage {
+                    id: Some("assistant-1".to_string()),
+                    role: "assistant".to_string(),
+                    turn_id: Some("turn-1".to_string()),
+                    timestamp_ms: Some(2_000),
+                    content: TranscriptContent::Text("Answer".to_string()),
+                },
+                TranscriptMessage {
+                    id: Some("user-2".to_string()),
+                    role: "user".to_string(),
+                    turn_id: Some("turn-2".to_string()),
+                    timestamp_ms: Some(3_000),
+                    content: TranscriptContent::Multimodal {
+                        text: "Second prompt".to_string(),
+                        image_count: 1,
+                    },
+                },
+            ],
+        };
+        let state = ChatState::from_session_transcript(
+            "session-1".to_string(),
+            "Session".to_string(),
+            "agentic".to_string(),
+            None,
+            &transcript,
+        );
+
+        let points = state.session_timeline_points();
+
+        assert_eq!(points.len(), 2);
+        assert_eq!(points[0].message_id, "user-2");
+        assert_eq!(points[0].prompt, "Second prompt");
+        assert_eq!(points[1].message_id, "user-1");
+        assert_eq!(points[1].prompt, "First\nprompt");
     }
 
     #[test]
@@ -1892,5 +2249,77 @@ mod tests {
             tool_state.metadata,
             Some(json!({ "display_summary": "README contents" }))
         );
+    }
+
+    #[test]
+    fn active_transcript_resume_reuses_the_existing_assistant_message() {
+        let transcript = SessionTranscript {
+            session_id: "child-1".to_string(),
+            messages: vec![
+                TranscriptMessage {
+                    id: Some("user-1".to_string()),
+                    role: "user".to_string(),
+                    turn_id: Some("turn-1".to_string()),
+                    timestamp_ms: Some(1_000),
+                    content: TranscriptContent::Text("Investigate".to_string()),
+                },
+                TranscriptMessage {
+                    id: Some("assistant-1".to_string()),
+                    role: "assistant".to_string(),
+                    turn_id: Some("turn-1".to_string()),
+                    timestamp_ms: Some(1_100),
+                    content: TranscriptContent::Text("Working".to_string()),
+                },
+            ],
+        };
+        let mut state = ChatState::from_session_transcript(
+            "child-1".to_string(),
+            "Explore".to_string(),
+            "explore".to_string(),
+            None,
+            &transcript,
+        );
+
+        state.resume_transcript_turn("turn-1");
+
+        assert!(state.is_processing);
+        assert_eq!(state.current_turn_id(), Some("turn-1"));
+        assert_eq!(state.messages.len(), 2);
+        assert!(state.messages[1].is_streaming);
+        assert!(matches!(
+            state.current_flow_items.as_slice(),
+            [FlowItem::Text { content, .. }] if content == "Working"
+        ));
+    }
+
+    #[test]
+    fn active_transcript_resume_creates_streaming_target_before_first_assistant_content() {
+        let transcript = SessionTranscript {
+            session_id: "child-1".to_string(),
+            messages: vec![TranscriptMessage {
+                id: Some("user-1".to_string()),
+                role: "user".to_string(),
+                turn_id: Some("turn-1".to_string()),
+                timestamp_ms: Some(1_000),
+                content: TranscriptContent::Text("Investigate".to_string()),
+            }],
+        };
+        let mut state = ChatState::from_session_transcript(
+            "child-1".to_string(),
+            "Explore".to_string(),
+            "explore".to_string(),
+            None,
+            &transcript,
+        );
+
+        state.resume_transcript_turn("turn-1");
+        state.handle_text_chunk("First chunk");
+
+        assert_eq!(state.messages.len(), 2);
+        assert!(state.messages[1].is_streaming);
+        assert!(matches!(
+            state.messages[1].flow_items.as_slice(),
+            [FlowItem::Text { content, .. }] if content == "First chunk"
+        ));
     }
 }

@@ -180,7 +180,7 @@ impl MiniAppCompilePort for CompilePortStub {
         app_id: String,
         source: MiniAppSource,
         _permissions: MiniAppPermissions,
-        theme: String,
+        appearance_mode: String,
         workspace_root: Option<PathBuf>,
     ) -> MiniAppPortFuture<'_, String> {
         let calls = self.calls.clone();
@@ -189,13 +189,13 @@ impl MiniAppCompilePort for CompilePortStub {
                 "{}|{}|{}|{}",
                 app_id,
                 source.html,
-                theme,
+                appearance_mode,
                 workspace_root
                     .as_deref()
                     .map(Path::to_string_lossy)
                     .unwrap_or_else(|| "".into())
             ));
-            Ok(format!("<html>{app_id}:{theme}</html>"))
+            Ok(format!("<html>{app_id}:{appearance_mode}</html>"))
         })
     }
 }
@@ -637,7 +637,7 @@ fn miniapp_compiler_preserves_head_injection_contract() {
     .unwrap();
 
     assert!(out.contains("<meta charset=\"utf-8\">"));
-    assert!(out.contains("data-theme-type=\"dark\""));
+    assert!(out.contains("data-bf-appearance-mode=\"dark\""));
     assert!(out.contains("<script type=\"module\">"));
     assert!(out.contains("console.log('ready')"));
 }
@@ -2012,7 +2012,7 @@ fn miniapp_runtime_facade_owns_import_bundle_recompile_and_runtime_state_workflo
         MiniAppImportFromPathRequest {
             source_path: PathBuf::from("fixtures/imported"),
             app_id: "imported-id".to_string(),
-            theme: "dark".to_string(),
+            appearance_mode: "dark".to_string(),
             workspace_root: Some(PathBuf::from("workspace/project")),
             imported_at: 5000,
             recompiled_at: 6000,

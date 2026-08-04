@@ -62,18 +62,20 @@ const SubagentProjectionTextBlock = React.memo<{ textItem: FlowTextItem; classNa
   };
 
   return (
-    <div className="subagent-projection-text--truncated">
+    <div data-bf-component="subagent-projection" data-bf-part="truncated" className="subagent-projection-text--truncated">
       <FlowTextBlock
         textItem={truncatedItem}
         className={className}
         replayStreamingOnMount={false}
       />
-      <div className="subagent-projection-text__hint">
-        <span className="subagent-projection-text__message">
+      <div data-bf-component="subagent-projection" data-bf-part="hint" className="subagent-projection-text__hint">
+        <span data-bf-component="subagent-projection" data-bf-part="message" className="subagent-projection-text__message">
           {t('subagent.showingLines', { shown: SUBAGENT_TEXT_TRUNCATE_LINES, total: lines.length })}
         </span>
         <button
           type="button"
+          data-bf-component="subagent-projection"
+          data-bf-part="expandAction"
           className="subagent-projection-text__expand-btn"
           onClick={() => setIsExpanded(true)}
         >
@@ -111,7 +113,7 @@ function renderProjectedItem(
       );
     case 'tool':
       return (
-        <div key={item.id} className="flowchat-flow-item" data-flow-item-id={item.id} data-flow-item-type="tool">
+        <div data-bf-component="subagent-projection" data-bf-part="item" key={item.id} className="flowchat-flow-item" data-flow-item-id={item.id} data-flow-item-type="tool">
           <FlowToolCard
             toolItem={item as FlowToolItem}
             sessionId={sessionId}
@@ -332,7 +334,7 @@ export const SubagentProjectionView: React.FC<SubagentProjectionViewProps> = ({
   }
 
   return (
-    <div
+    <div data-bf-component="subagent-projection" data-bf-part="root" data-bf-state={isCollapsed ? 'collapsed' : 'expanded'}
       className={`subagent-projection-wrapper ${isCollapsed ? 'subagent-projection-wrapper--collapsed' : 'subagent-projection-wrapper--expanded'} ${className}`.trim()}
       data-subagent-session-id={resolvedSubagentSessionId}
     >
@@ -340,13 +342,15 @@ export const SubagentProjectionView: React.FC<SubagentProjectionViewProps> = ({
         isOpen={!isCollapsed}
         className="subagent-projection-collapse"
         durationMs={FLOWCHAT_COLLAPSE_DURATION_MS}
-      >
+       data-bf-component="subagent-projection" data-bf-part="collapse">
         <div
           ref={containerRef}
+          data-bf-component="subagent-projection"
+          data-bf-part="container"
           className={`subagent-projection-container ${isCollapsed ? 'subagent-projection-container--collapsed' : 'subagent-projection-container--expanded'}`}
           data-parent-tool-id={parentTaskToolId}
         >
-          <div className="subagent-projection-content">
+          <div data-bf-component="subagent-projection" data-bf-part="content" className="subagent-projection-content">
             {items.map(item => renderProjectedItem(
               item,
               sessionId ?? resolvedSubagentSessionId,

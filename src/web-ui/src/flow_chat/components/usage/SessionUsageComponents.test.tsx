@@ -12,9 +12,7 @@ import zhCnFlowChat from '@/locales/zh-CN/flow-chat.json';
 import zhTwFlowChat from '@/locales/zh-TW/flow-chat.json';
 import {
   FLOWCHAT_FOCUS_ITEM_EVENT,
-  FLOWCHAT_PIN_TURN_TO_TOP_EVENT,
   type FlowChatFocusItemRequest,
-  type FlowChatPinTurnToTopRequest,
 } from '../../events/flowchatNavigation';
 import { SessionRuntimeStatusEntry } from './SessionRuntimeStatusEntry';
 import { SessionUsagePanel } from './SessionUsagePanel';
@@ -1063,6 +1061,7 @@ describe('Session usage report UI components', () => {
           successCount: 1,
           errorCount: 0,
           durationMs: 2_000,
+          sampleTurnId: 'turn-3',
           sampleTurnIndex: 2,
           sampleItemId: 'tool-3',
           redacted: false,
@@ -1076,6 +1075,7 @@ describe('Session usage report UI components', () => {
           {
             label: 'write_file',
             count: 1,
+            sampleTurnId: 'turn-4',
             sampleTurnIndex: 3,
             sampleItemId: 'tool-4',
             redacted: false,
@@ -1127,17 +1127,20 @@ describe('Session usage report UI components', () => {
     expect(focusEvents).toEqual([
       {
         sessionId: 'session-1',
+        turnId: 'turn-2',
         turnIndex: 2,
         source: 'usage-report',
       },
       {
         sessionId: 'session-1',
+        turnId: 'turn-3',
         turnIndex: 3,
         itemId: 'tool-3',
         source: 'usage-report',
       },
       {
         sessionId: 'session-1',
+        turnId: 'turn-4',
         turnIndex: 4,
         itemId: 'tool-4',
         source: 'usage-report',
@@ -1442,10 +1445,10 @@ describe('Session usage report UI components', () => {
       ],
     });
 
-    const pinEvents: FlowChatPinTurnToTopRequest[] = [];
-    const unsubscribe = globalEventBus.on<FlowChatPinTurnToTopRequest>(
-      FLOWCHAT_PIN_TURN_TO_TOP_EVENT,
-      event => pinEvents.push(event),
+    const focusEvents: FlowChatFocusItemRequest[] = [];
+    const unsubscribe = globalEventBus.on<FlowChatFocusItemRequest>(
+      FLOWCHAT_FOCUS_ITEM_EVENT,
+      event => focusEvents.push(event),
     );
 
     render(<SessionUsagePanel report={report} markdown="## Session Usage" sessionId="session-1" />);
@@ -1468,12 +1471,11 @@ describe('Session usage report UI components', () => {
       turnLink?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
     });
 
-    expect(pinEvents).toEqual([
+    expect(focusEvents).toEqual([
       {
         sessionId: 'session-1',
         turnId: 'turn-2',
-        behavior: 'smooth',
-        pinMode: 'transient',
+        turnIndex: 3,
         source: 'usage-report',
       },
     ]);
@@ -1535,7 +1537,8 @@ describe('Session usage report UI components', () => {
     expect(focusEvents).toEqual([
       {
         sessionId: 'session-1',
-        turnIndex: 2,
+        turnId: 'turn-2',
+        turnIndex: 3,
         itemId: 'tool-slow',
         source: 'usage-report',
       },
@@ -1557,10 +1560,10 @@ describe('Session usage report UI components', () => {
       ],
     });
 
-    const pinEvents: FlowChatPinTurnToTopRequest[] = [];
-    const unsubscribe = globalEventBus.on<FlowChatPinTurnToTopRequest>(
-      FLOWCHAT_PIN_TURN_TO_TOP_EVENT,
-      event => pinEvents.push(event),
+    const focusEvents: FlowChatFocusItemRequest[] = [];
+    const unsubscribe = globalEventBus.on<FlowChatFocusItemRequest>(
+      FLOWCHAT_FOCUS_ITEM_EVENT,
+      event => focusEvents.push(event),
     );
 
     render(<SessionUsagePanel report={report} markdown="## Session Usage" sessionId="session-1" />);
@@ -1582,12 +1585,11 @@ describe('Session usage report UI components', () => {
       turnLink?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
     });
 
-    expect(pinEvents).toEqual([
+    expect(focusEvents).toEqual([
       {
         sessionId: 'session-1',
         turnId: 'turn-4',
-        behavior: 'smooth',
-        pinMode: 'transient',
+        turnIndex: 5,
         source: 'usage-report',
       },
     ]);
@@ -1648,10 +1650,10 @@ describe('Session usage report i18n and theme guards', () => {
       .map(stylePath => fs.readFileSync(path.resolve(stylePath), 'utf8'))
       .join('\n');
 
-    expect(styleText).toContain('var(--color-text-primary)');
+    expect(styleText).toContain('var(--bf-appearance-token-color-text-primary)');
     expect(styleText).toContain('width: auto;');
     expect(styleText).toContain('margin: 0.12rem 3rem');
-    expect(styleText).toContain('border: 1px solid color-mix(in srgb, var(--border-base)');
+    expect(styleText).toContain('border: 1px solid color-mix(in srgb, var(--bf-appearance-token-border-base)');
     expect(styleText).toContain('grid-template-columns: repeat(3, minmax(116px, 1fr));');
     expect(styleText).toContain('width: clamp(180px, 26vw, 280px);');
     expect(styleText).toContain('max-width: 280px;');

@@ -55,18 +55,18 @@
     height: 20px;
     padding: 2px;
     background: transparent;
-    border: 1px solid var(--border-subtle);
+    border: 1px solid var(--bf-appearance-token-border-subtle);
     border-radius: 10px;
     transform: scale(1);
     transition:
-      background-color var(--motion-fast) ease,
-      border-color var(--motion-fast) ease,
-      transform var(--motion-fast) var(--easing-standard);
+      background-color var(--bf-appearance-token-motion-fast) ease,
+      border-color var(--bf-appearance-token-motion-fast) ease,
+      transform var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard);
     pointer-events: none;
 
     &--checked {
-      background: var(--color-accent-200);
-      border-color: var(--color-accent-400);
+      background: var(--bf-appearance-token-color-accent-200);
+      border-color: var(--bf-appearance-token-color-accent-400);
     }
   }
 
@@ -74,10 +74,10 @@
     position: absolute;
     font-size: 9px;
     font-weight: tokens.$font-weight-semibold;
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    transition: opacity var(--motion-fast) ease;
+    transition: opacity var(--bf-appearance-token-motion-fast) ease;
   }
 
   &__thumb {
@@ -85,14 +85,14 @@
     left: 2px;
     width: 16px;
     height: 16px;
-    background: var(--element-bg-subtle);
-    border: 1px solid var(--border-base);
+    background: var(--bf-appearance-token-element-bg-subtle);
+    border: 1px solid var(--bf-appearance-token-border-base);
     border-radius: 50%;
     transform: translateX(0);
     transition:
-      transform var(--motion-fast) var(--easing-standard),
-      background-color var(--motion-fast) ease,
-      border-color var(--motion-fast) ease;
+      transform var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard),
+      background-color var(--bf-appearance-token-motion-fast) ease,
+      border-color var(--bf-appearance-token-motion-fast) ease;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -102,23 +102,23 @@
   &__loading {
     width: 10px;
     height: 10px;
-    color: var(--color-accent-500);
+    color: var(--bf-appearance-token-color-accent-500);
     animation: bitfun-switch-spin 1s linear infinite;
   }
 
   &__input:checked + &__track &__thumb {
     transform: translateX(16px);
-    background: var(--btn-primary-bg);
-    border-color: var(--btn-primary-bg);
+    background: var(--bf-appearance-token-color-accent-500);
+    border-color: var(--bf-appearance-token-color-accent-600);
   }
 
-  :root[data-theme-type='dark'] &__input:checked + &__track &__thumb {
-    background: var(--color-accent-500);
-    border-color: var(--color-accent-600);
+  :root[data-bf-appearance-mode='dark'] &__input:checked + &__track &__thumb {
+    background: var(--bf-appearance-token-color-accent-500);
+    border-color: var(--bf-appearance-token-color-accent-600);
   }
 
   &__input:focus-visible + &__track {
-    outline: 2px solid var(--color-accent-400);
+    outline: 2px solid var(--bf-appearance-token-color-accent-400);
     outline-offset: 2px;
   }
 
@@ -126,8 +126,32 @@
     outline: none;
   }
 
+  &:hover:not(&--disabled):not(&--loading) &__track {
+    border-color: var(--bf-appearance-token-border-base);
+  }
+
+  &:hover:not(&--disabled):not(&--loading) &__thumb {
+    background: var(--bf-appearance-token-element-bg-base);
+    border-color: var(--bf-appearance-token-border-base);
+  }
+
+  &:hover:not(&--disabled):not(&--loading) &__input:checked + &__track {
+    background: var(--bf-appearance-token-color-accent-300);
+    border-color: var(--bf-appearance-token-color-accent-500);
+  }
+
+  &:hover:not(&--disabled):not(&--loading) &__input:checked + &__track &__thumb {
+    background: var(--bf-appearance-token-color-accent-600);
+    border-color: var(--bf-appearance-token-color-accent-600);
+  }
+
+  :root[data-bf-appearance-mode='dark'] &:hover:not(&--disabled):not(&--loading) &__input:checked + &__track &__thumb {
+    background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 88%, white);
+    border-color: var(--bf-appearance-token-color-accent-500);
+  }
+
   &__input:checked + &__track &__loading {
-    color: var(--color-overlay-white-95);
+    color: var(--bf-appearance-token-color-overlay-white-95);
   }
 
   &__input:active:not(:disabled) + &__track {
@@ -141,15 +165,15 @@
   }
 
   &__label {
-    font-size: var(--font-size-sm);
+    font-size: var(--bf-appearance-token-font-size-sm);
     font-weight: tokens.$font-weight-medium;
-    color: var(--color-text-primary);
+    color: var(--bf-appearance-token-color-text-primary);
     line-height: tokens.$line-height-base;
   }
 
   &__description {
-    font-size: var(--font-size-xs);
-    color: var(--color-text-muted);
+    font-size: var(--bf-appearance-token-font-size-xs);
+    color: var(--bf-appearance-token-color-text-muted);
     line-height: tokens.$line-height-base;
   }
 
@@ -179,7 +203,7 @@
     }
 
     .bitfun-switch__label {
-      font-size: var(--font-size-xs);
+      font-size: var(--bf-appearance-token-font-size-xs);
     }
 
     .bitfun-switch__description {
@@ -216,11 +240,11 @@
     }
 
     .bitfun-switch__label {
-      font-size: var(--font-size-base);
+      font-size: var(--bf-appearance-token-font-size-base);
     }
 
     .bitfun-switch__description {
-      font-size: var(--font-size-xs);
+      font-size: var(--bf-appearance-token-font-size-xs);
     }
   }
 }
@@ -228,39 +252,39 @@
 @media (hover: hover) and (pointer: fine) {
   .bitfun-switch:not(.bitfun-switch--disabled):not(.bitfun-switch--loading) {
     &:hover .bitfun-switch__track {
-      border-color: var(--border-base);
+      border-color: var(--bf-appearance-token-border-base);
     }
 
     &:hover .bitfun-switch__thumb {
-      background: var(--element-bg-base);
-      border-color: var(--border-base);
+      background: var(--bf-appearance-token-element-bg-base);
+      border-color: var(--bf-appearance-token-border-base);
     }
 
     &:hover .bitfun-switch__input:checked + .bitfun-switch__track {
-      background: var(--color-accent-300);
-      border-color: var(--color-accent-500);
+      background: var(--bf-appearance-token-color-accent-300);
+      border-color: var(--bf-appearance-token-color-accent-500);
     }
 
     &:hover .bitfun-switch__input:checked + .bitfun-switch__track .bitfun-switch__thumb {
-      background: var(--btn-primary-hover-bg);
-      border-color: var(--btn-primary-hover-bg);
+      background: var(--bf-appearance-token-color-accent-600);
+      border-color: var(--bf-appearance-token-color-accent-600);
     }
   }
 
-  :root[data-theme-type='dark']
+  :root[data-bf-appearance-mode='dark']
     .bitfun-switch:not(.bitfun-switch--disabled):not(.bitfun-switch--loading):hover
     .bitfun-switch__input:checked + .bitfun-switch__track
     .bitfun-switch__thumb {
-    background: color-mix(in srgb, var(--color-accent-500) 88%, white);
-    border-color: var(--color-accent-500);
+    background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 88%, white);
+    border-color: var(--bf-appearance-token-color-accent-500);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .bitfun-switch__track {
     transition:
-      background-color var(--motion-fast) ease,
-      border-color var(--motion-fast) ease;
+      background-color var(--bf-appearance-token-motion-fast) ease,
+      border-color var(--bf-appearance-token-motion-fast) ease;
   }
 
   .bitfun-switch__input:active:not(:disabled) + .bitfun-switch__track {

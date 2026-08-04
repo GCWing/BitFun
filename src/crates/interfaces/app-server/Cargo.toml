@@ -1,0 +1,43 @@
+[package]
+name = "bitfun-app-server"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+description = "BitFun generic JSON-RPC app-server surface over agent_client_protocol custom roles"
+
+[lib]
+name = "bitfun_app_server"
+
+[dependencies]
+agent-client-protocol = { workspace = true }
+# Host services (git/mcp/config/cron/snapshot/fs/workspace/...) live in
+# `bitfun-core`. The app-server surface owns the full backend contract under
+# option C, so it depends on core directly -- mirroring `bitfun-acp`, which
+# already does the same (`bitfun-acp/Cargo.toml`). Product assembly constructs
+# the `AgentRuntime` and the host service singletons and injects both via
+# `BitfunAppRuntime`; the schema handlers call `bitfun_core::service::*` the
+# same way the Desktop host does (static/global accessors, no extra injection).
+bitfun-core = { path = "../../assembly/core", default-features = false, features = ["product-full"] }
+bitfun-agent-runtime = { path = "../../execution/agent-runtime" }
+bitfun-events = { path = "../../contracts/events" }
+tokio = { workspace = true, features = ["macros", "rt", "sync", "time"] }
+tokio-util = { workspace = true, features = ["compat"] }
+futures = { workspace = true }
+async-trait = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+log = { workspace = true }
+ts-rs = { workspace = true, optional = true }
+
+[features]
+default = []
+# Schema-first TypeScript binding export. Derives `ts_rs::TS` (via
+# `cfg_attr`) on the wire types in `schema.rs` and propagates the `ts` feature
+# to the upstream contract/service crates so every type the schema references
+# also implements `TS`. Run `cargo test --features ts export_types` (or the
+# frontend `gen:types` script) to emit `.ts` into `TS_RS_EXPORT_DIR`.
+ts = ["dep:ts-rs", "bitfun-core/ts"]
+
+[lints]
+workspace = true

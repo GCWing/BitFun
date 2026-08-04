@@ -127,7 +127,7 @@ pub struct UpdateMiniAppRequest {
 #[serde(rename_all = "camelCase")]
 pub struct GetMiniAppRequest {
     pub app_id: String,
-    pub theme: Option<String>,
+    pub appearance_mode: Option<String>,
     #[serde(default)]
     pub workspace_path: Option<String>,
 }
@@ -157,7 +157,7 @@ pub struct MiniAppHostCallRequest {
 #[serde(rename_all = "camelCase")]
 pub struct MiniAppRecompileRequest {
     pub app_id: String,
-    pub theme: Option<String>,
+    pub appearance_mode: Option<String>,
     #[serde(default)]
     pub workspace_path: Option<String>,
 }
@@ -174,7 +174,7 @@ pub struct MiniAppImportFromPathRequest {
 #[serde(rename_all = "camelCase")]
 pub struct MiniAppSyncFromFsRequest {
     pub app_id: String,
-    pub theme: Option<String>,
+    pub appearance_mode: Option<String>,
     #[serde(default)]
     pub workspace_path: Option<String>,
 }
@@ -183,7 +183,7 @@ pub struct MiniAppSyncFromFsRequest {
 #[serde(rename_all = "camelCase")]
 pub struct MiniAppDraftCreateRequest {
     pub app_id: String,
-    pub theme: Option<String>,
+    pub appearance_mode: Option<String>,
     #[serde(default)]
     pub workspace_path: Option<String>,
 }
@@ -193,7 +193,7 @@ pub struct MiniAppDraftCreateRequest {
 pub struct MiniAppDraftRequest {
     pub app_id: String,
     pub draft_id: String,
-    pub theme: Option<String>,
+    pub appearance_mode: Option<String>,
     #[serde(default)]
     pub workspace_path: Option<String>,
 }
@@ -204,7 +204,7 @@ pub struct MiniAppDraftPermissionsRequest {
     pub app_id: String,
     pub draft_id: String,
     pub permissions: MiniAppPermissions,
-    pub theme: Option<String>,
+    pub appearance_mode: Option<String>,
     #[serde(default)]
     pub workspace_path: Option<String>,
 }
@@ -367,30 +367,15 @@ pub async fn get_miniapp(
         .await
         .map_err(|e| e.to_string())?;
 
-    let theme_type = request.theme.as_deref().unwrap_or("dark");
+    let appearance_mode = request.appearance_mode.as_deref().unwrap_or("dark");
     let workspace_root = workspace_root_from_input(request.workspace_path.as_deref());
-    let compiled = if state
-        .miniapp_manager
-        .uses_market_strict_runtime(&request.app_id)
-        .await
-    {
-        state.miniapp_manager.compile_market_source(
-            &request.app_id,
-            &app.source,
-            &app.permissions,
-            theme_type,
-            workspace_root.as_deref(),
-        )
-    } else {
-        state.miniapp_manager.compile_source(
-            &request.app_id,
-            &app.source,
-            &app.permissions,
-            theme_type,
-            workspace_root.as_deref(),
-        )
-    };
-    match compiled {
+    match state.miniapp_manager.compile_source(
+        &request.app_id,
+        &app.source,
+        &app.permissions,
+        appearance_mode,
+        workspace_root.as_deref(),
+    ) {
         Ok(html) => app.compiled_html = html,
         Err(e) => log::warn!("get_miniapp: recompile failed, using cached: {}", e),
     }
@@ -769,11 +754,11 @@ pub async fn miniapp_recompile(
     state: State<'_, AppState>,
     request: MiniAppRecompileRequest,
 ) -> Result<RecompileResult, String> {
-    let theme_type = request.theme.as_deref().unwrap_or("dark");
+    let appearance_mode = request.appearance_mode.as_deref().unwrap_or("dark");
     let workspace_root = workspace_root_from_input(request.workspace_path.as_deref());
     let app = state
         .miniapp_manager
-        .recompile(&request.app_id, theme_type, workspace_root.as_deref())
+        .recompile(&request.app_id, appearance_mode, workspace_root.as_deref())
         .await
         .map_err(|e| e.to_string())?;
     emit_miniapp_event(
@@ -829,11 +814,11 @@ pub async fn miniapp_sync_from_fs(
     state: State<'_, AppState>,
     request: MiniAppSyncFromFsRequest,
 ) -> Result<MiniApp, String> {
-    let theme_type = request.theme.as_deref().unwrap_or("dark");
+    let appearance_mode = request.appearance_mode.as_deref().unwrap_or("dark");
     let workspace_root = workspace_root_from_input(request.workspace_path.as_deref());
     let app = state
         .miniapp_manager
-        .sync_from_fs(&request.app_id, theme_type, workspace_root.as_deref())
+        .sync_from_fs(&request.app_id, appearance_mode, workspace_root.as_deref())
         .await
         .map_err(|e| e.to_string())?;
     maybe_stop_worker(&state, &app).await;
@@ -850,11 +835,11 @@ pub async fn miniapp_create_draft(
     state: State<'_, AppState>,
     request: MiniAppDraftCreateRequest,
 ) -> Result<MiniAppDraft, String> {
-    let theme_type = request.theme.as_deref().unwrap_or("dark");
+    let appearance_mode = request.appearance_mode.as_deref().unwrap_or("dark");
     let workspace_root = workspace_root_from_input(request.workspace_path.as_deref());
     let draft = state
         .miniapp_manager
-        .create_draft(&request.app_id, theme_type, workspace_root.as_deref())
+        .create_draft(&request.app_id, appearance_mode, workspace_root.as_deref())
         .await
         .map_err(|e| e.to_string())?;
     emit_miniapp_event(
@@ -887,14 +872,14 @@ pub async fn miniapp_sync_draft_from_fs(
     state: State<'_, AppState>,
     request: MiniAppDraftRequest,
 ) -> Result<MiniAppDraft, String> {
-    let theme_type = request.theme.as_deref().unwrap_or("dark");
+    let appearance_mode = request.appearance_mode.as_deref().unwrap_or("dark");
     let workspace_root = workspace_root_from_input(request.workspace_path.as_deref());
     state
         .miniapp_manager
         .sync_draft_from_fs(
             &request.app_id,
             &request.draft_id,
-            theme_type,
+            appearance_mode,
             workspace_root.as_deref(),
         )
         .await
@@ -906,7 +891,7 @@ pub async fn miniapp_set_draft_permissions(
     state: State<'_, AppState>,
     request: MiniAppDraftPermissionsRequest,
 ) -> Result<MiniAppDraft, String> {
-    let theme_type = request.theme.as_deref().unwrap_or("dark");
+    let appearance_mode = request.appearance_mode.as_deref().unwrap_or("dark");
     let workspace_root = workspace_root_from_input(request.workspace_path.as_deref());
     state
         .miniapp_manager
@@ -914,7 +899,7 @@ pub async fn miniapp_set_draft_permissions(
             &request.app_id,
             &request.draft_id,
             request.permissions,
-            theme_type,
+            appearance_mode,
             workspace_root.as_deref(),
         )
         .await
@@ -938,14 +923,14 @@ pub async fn miniapp_apply_draft(
     state: State<'_, AppState>,
     request: MiniAppDraftRequest,
 ) -> Result<MiniApp, String> {
-    let theme_type = request.theme.as_deref().unwrap_or("dark");
+    let appearance_mode = request.appearance_mode.as_deref().unwrap_or("dark");
     let workspace_root = workspace_root_from_input(request.workspace_path.as_deref());
     let app = state
         .miniapp_manager
         .apply_draft(
             &request.app_id,
             &request.draft_id,
-            theme_type,
+            appearance_mode,
             workspace_root.as_deref(),
         )
         .await

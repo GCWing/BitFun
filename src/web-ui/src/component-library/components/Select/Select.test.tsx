@@ -33,7 +33,7 @@ describe('Select', () => {
     });
 
     getBoundingClientRectSpy = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function () {
-      if (this instanceof HTMLElement && this.classList.contains('select')) {
+      if (this instanceof HTMLElement && this.classList.contains('select__trigger')) {
         return {
           top: 700,
           bottom: 740,
@@ -76,6 +76,7 @@ describe('Select', () => {
       root.unmount();
     });
     container.remove();
+    document.querySelector('[data-bf-overlay-host="true"]')?.remove();
     getBoundingClientRectSpy.mockRestore();
     offsetHeightSpy.mockRestore();
     vi.restoreAllMocks();
@@ -103,15 +104,19 @@ describe('Select', () => {
     });
 
     const selectRoot = container.querySelector('.select');
-    const dropdown = container.querySelector('.select__dropdown');
+    const dropdown = document.querySelector<HTMLElement>('.select__dropdown');
 
     expect(selectRoot?.className).toContain('select--placement-top');
     expect(dropdown?.className).toContain('select__dropdown--top');
+    expect(dropdown?.parentElement?.getAttribute('data-bf-overlay-host')).toBe('true');
+    expect(dropdown?.style.position).toBe('fixed');
+    expect(dropdown?.style.top).toBe('480px');
+    expect(dropdown?.style.width).toBe('240px');
   });
 
   it('keeps the dropdown downward when there is enough room below', async () => {
     getBoundingClientRectSpy.mockImplementation(function () {
-      if (this instanceof HTMLElement && this.classList.contains('select')) {
+      if (this instanceof HTMLElement && this.classList.contains('select__trigger')) {
         return {
           top: 100,
           bottom: 140,
@@ -161,10 +166,56 @@ describe('Select', () => {
     });
 
     const selectRoot = container.querySelector('.select');
-    const dropdown = container.querySelector('.select__dropdown');
+    const dropdown = document.querySelector<HTMLElement>('.select__dropdown');
 
     expect(selectRoot?.className).toContain('select--placement-bottom');
     expect(dropdown?.className).toContain('select__dropdown--bottom');
+  });
+
+  it('repositions a portalled dropdown when an ancestor scrolls', async () => {
+    let triggerTop = 100;
+    getBoundingClientRectSpy.mockImplementation(function () {
+      if (this instanceof HTMLElement && this.classList.contains('select__trigger')) {
+        return {
+          top: triggerTop,
+          bottom: triggerTop + 40,
+          left: 80,
+          right: 320,
+          width: 240,
+          height: 40,
+          x: 80,
+          y: triggerTop,
+          toJSON() { return this; },
+        } as DOMRect;
+      }
+      return {
+        top: 0,
+        bottom: 0,
+        left: 0,
+        right: 0,
+        width: 0,
+        height: 0,
+        x: 0,
+        y: 0,
+        toJSON() { return this; },
+      } as DOMRect;
+    });
+
+    await act(async () => {
+      root.render(<Select options={[{ value: 'one', label: 'One' }]} />);
+    });
+    const trigger = container.querySelector<HTMLElement>('.select__trigger');
+    await act(async () => trigger?.click());
+    const dropdown = document.querySelector<HTMLElement>('.select__dropdown');
+    expect(dropdown?.style.top).toBe('140px');
+
+    triggerTop = 300;
+    await act(async () => {
+      window.dispatchEvent(new Event('scroll'));
+      await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+    });
+
+    expect(dropdown?.style.top).toBe('340px');
   });
 
   it('keeps grouped order stable and skips disabled options during keyboard navigation', async () => {
@@ -192,8 +243,8 @@ describe('Select', () => {
       await Promise.resolve();
     });
 
-    const listbox = container.querySelector('[role="listbox"]') as HTMLElement;
-    const options = Array.from(container.querySelectorAll<HTMLElement>('[role="option"]'));
+    const listbox = document.querySelector('[role="listbox"]') as HTMLElement;
+    const options = Array.from(document.querySelectorAll<HTMLElement>('[role="option"]'));
     expect(options.map((option) => option.textContent)).toEqual([
       'Disabled ungrouped',
       'Group A choice',
@@ -202,7 +253,7 @@ describe('Select', () => {
     expect(trigger.getAttribute('aria-controls')).toBe(listbox.id);
     expect(trigger.getAttribute('aria-activedescendant')).toBe(options[1].id);
     expect(options[1].className).toContain('select__option--highlighted');
-    expect(container.querySelector('[role="group"]')?.getAttribute('aria-label')).toBe('Group A');
+    expect(document.querySelector('[role="group"]')?.getAttribute('aria-label')).toBe('Group A');
 
     await act(async () => {
       trigger.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
@@ -229,8 +280,8 @@ describe('Select', () => {
     });
     const trigger = container.querySelector('.select__trigger') as HTMLElement;
     await act(async () => trigger.click());
-    const input = container.querySelector('.select__search-input') as HTMLInputElement;
-    const listbox = container.querySelector('[role="listbox"]') as HTMLElement;
+    const input = document.querySelector('.select__search-input') as HTMLInputElement;
+    const listbox = document.querySelector('[role="listbox"]') as HTMLElement;
 
     await act(async () => {
       input.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
@@ -240,7 +291,44 @@ describe('Select', () => {
     expect(input.getAttribute('aria-controls')).toBe(listbox.id);
     expect(input.getAttribute('aria-label')).toBe('Find a choice');
     expect(input.getAttribute('aria-activedescendant')).toBe(
-      container.querySelectorAll<HTMLElement>('[role="option"]')[1].id,
+      document.querySelectorAll<HTMLElement>('[role="option"]')[1].id,
     );
+  });
+
+  it('keeps portalled interactions inside the Select and closes on a true outside press', async () => {
+    await act(async () => {
+      root.render(<Select options={[{ value: 'one', label: 'One' }]} />);
+    });
+    const trigger = container.querySelector<HTMLElement>('.select__trigger');
+    await act(async () => trigger?.click());
+
+    const dropdown = document.querySelector<HTMLElement>('.select__dropdown');
+    await act(async () => {
+      dropdown?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+    });
+    expect(document.querySelector('.select__dropdown')).not.toBeNull();
+
+    await act(async () => {
+      document.body.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+    });
+    expect(document.querySelector('.select__dropdown')).toBeNull();
+  });
+
+  it('retains the explicit inline mode for layout-expanding selectors', async () => {
+    await act(async () => {
+      root.render(
+        <Select
+          dropdownMode="inline"
+          options={[{ value: 'one', label: 'One' }]}
+        />,
+      );
+    });
+    const trigger = container.querySelector<HTMLElement>('.select__trigger');
+    await act(async () => trigger?.click());
+
+    const dropdown = container.querySelector<HTMLElement>('.select__dropdown');
+    expect(dropdown).not.toBeNull();
+    expect(dropdown?.className).toContain('select__dropdown--inline');
+    expect(dropdown?.style.position).toBe('');
   });
 });

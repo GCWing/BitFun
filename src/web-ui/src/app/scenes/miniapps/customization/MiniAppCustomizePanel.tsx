@@ -46,7 +46,7 @@ interface MiniAppCustomizePanelProps {
   open: boolean;
   app: MiniApp;
   appName: string;
-  themeType?: string;
+  appearanceMode?: string;
   workspacePath?: string;
   remoteConnectionId?: string;
   remoteSshHost?: string;
@@ -60,7 +60,7 @@ export const MiniAppCustomizePanel: React.FC<MiniAppCustomizePanelProps> = ({
   open,
   app,
   appName,
-  themeType,
+  appearanceMode,
   workspacePath,
   remoteConnectionId,
   remoteSshHost,
@@ -77,7 +77,7 @@ export const MiniAppCustomizePanel: React.FC<MiniAppCustomizePanelProps> = ({
   const [refreshing, setRefreshing] = useState(false);
   const [dismissingBuiltinUpdate, setDismissingBuiltinUpdate] = useState(false);
   const [customizationMetadata, setCustomizationMetadata] = useState<MiniAppCustomizationMetadata | null>(null);
-  const theme = themeType ?? 'dark';
+  const resolvedAppearanceMode = appearanceMode ?? 'dark';
   const subscribeToFlowChat = useCallback(
     (onStoreChange: () => void) => flowChatStore.subscribe(() => onStoreChange()),
     [],
@@ -187,7 +187,7 @@ export const MiniAppCustomizePanel: React.FC<MiniAppCustomizePanelProps> = ({
 
     setState((prev) => ({ ...prev, stage: 'drafting', error: null }));
     try {
-      const draft = state.draft ?? await miniAppAPI.createDraft(app.id, theme, workspacePath);
+      const draft = state.draft ?? await miniAppAPI.createDraft(app.id, resolvedAppearanceMode, workspacePath);
       setState((prev) => ({
         ...prev,
         stage: 'drafting',
@@ -206,7 +206,7 @@ export const MiniAppCustomizePanel: React.FC<MiniAppCustomizePanelProps> = ({
         error: t('customize.launchFailed', { error: formatError(error) }),
       }));
     }
-  }, [app.id, busy, launchEditor, state.customizationSessionId, state.draft, t, theme, trimmedRequest, workspacePath]);
+  }, [app.id, busy, launchEditor, resolvedAppearanceMode, state.customizationSessionId, state.draft, t, trimmedRequest, workspacePath]);
 
   const handleRefreshPreview = useCallback(async () => {
     if (!state.draft || refreshing) {
@@ -218,7 +218,7 @@ export const MiniAppCustomizePanel: React.FC<MiniAppCustomizePanelProps> = ({
       const draft = await miniAppAPI.syncDraftFromFs(
         app.id,
         state.draft.draftId,
-        theme,
+        resolvedAppearanceMode,
         workspacePath,
       );
       setState((prev) => ({ ...prev, draft, stage: 'preview', error: null }));
@@ -238,7 +238,7 @@ export const MiniAppCustomizePanel: React.FC<MiniAppCustomizePanelProps> = ({
     } finally {
       setRefreshing(false);
     }
-  }, [app.id, onPreviewChange, previewOpen, refreshing, state.draft, t, theme, workspacePath]);
+  }, [app.id, onPreviewChange, previewOpen, refreshing, resolvedAppearanceMode, state.draft, t, workspacePath]);
 
   const applyDraft = useCallback(async () => {
     if (!state.draft) {
@@ -250,7 +250,7 @@ export const MiniAppCustomizePanel: React.FC<MiniAppCustomizePanelProps> = ({
       const updated = await miniAppAPI.applyDraft(
         app.id,
         state.draft.draftId,
-        theme,
+        resolvedAppearanceMode,
         workspacePath,
       );
       cleanupMiniAppCustomizationSession(state.customizationSessionId);
@@ -266,7 +266,7 @@ export const MiniAppCustomizePanel: React.FC<MiniAppCustomizePanelProps> = ({
         error: t('customize.applyFailed', { error: formatError(error) }),
       }));
     }
-  }, [app.id, onApplied, onClose, onPreviewChange, state.customizationSessionId, state.draft, t, theme, workspacePath]);
+  }, [app.id, onApplied, onClose, onPreviewChange, resolvedAppearanceMode, state.customizationSessionId, state.draft, t, workspacePath]);
 
   const handleApply = useCallback(async () => {
     if (!state.draft || busy) {
@@ -395,8 +395,15 @@ export const MiniAppCustomizePanel: React.FC<MiniAppCustomizePanelProps> = ({
   }
 
   return (
-    <aside className="miniapp-customize-panel" aria-label={t('customize.title')}>
-      <div className="miniapp-customize-panel__header">
+    <aside
+      className="miniapp-customize-panel"
+      data-bf-component="miniapp-customize-panel"
+      data-bf-part="root"
+      data-bf-stage={state.stage}
+      data-bf-state={[busy && 'busy', state.error && 'error', previewOpen && 'preview-open'].filter(Boolean).join(' ')}
+      aria-label={t('customize.title')}
+    >
+      <div className="miniapp-customize-panel__header" data-bf-component="miniapp-customize-panel" data-bf-part="header">
         <div>
           <h3>{t('customize.title')}</h3>
           <span>{appName}</span>
@@ -413,7 +420,7 @@ export const MiniAppCustomizePanel: React.FC<MiniAppCustomizePanelProps> = ({
         </IconButton>
       </div>
 
-      <div className="miniapp-customize-panel__notice">
+      <div className="miniapp-customize-panel__notice" data-bf-component="miniapp-customize-panel" data-bf-part="notice">
         <AlertTriangle size={18} />
         <div>
           <strong>{t('customize.riskTitle')}</strong>
@@ -422,13 +429,13 @@ export const MiniAppCustomizePanel: React.FC<MiniAppCustomizePanelProps> = ({
       </div>
 
       {builtinUpdateNotice && (
-        <div className="miniapp-customize-panel__notice miniapp-customize-panel__notice--update">
+        <div className="miniapp-customize-panel__notice miniapp-customize-panel__notice--update" data-bf-component="miniapp-customize-panel" data-bf-part="notice">
           <AlertTriangle size={18} />
           <div>
             <strong>{t('customize.builtinUpdateTitle', { version: builtinUpdateNotice.builtinVersion })}</strong>
             <p>{t('customize.builtinUpdateBody')}</p>
             {builtinUpdateNotice.sourceHash && (
-              <div className="miniapp-customize-panel__notice-actions">
+              <div className="miniapp-customize-panel__notice-actions" data-bf-component="miniapp-customize-panel" data-bf-part="noticeActions">
                 <Button
                   variant="secondary"
                   size="small"
@@ -445,7 +452,7 @@ export const MiniAppCustomizePanel: React.FC<MiniAppCustomizePanelProps> = ({
         </div>
       )}
 
-      <label className="miniapp-customize-panel__request">
+      <label className="miniapp-customize-panel__request" data-bf-component="miniapp-customize-panel" data-bf-part="request">
         <span>{t('customize.requestLabel')}</span>
         <textarea
           value={userRequest}
@@ -463,7 +470,7 @@ export const MiniAppCustomizePanel: React.FC<MiniAppCustomizePanelProps> = ({
         />
       </label>
 
-      <div className="miniapp-customize-panel__actions">
+      <div className="miniapp-customize-panel__actions" data-bf-component="miniapp-customize-panel" data-bf-part="actions">
         <Button
           variant="primary"
           size="small"
@@ -500,23 +507,23 @@ export const MiniAppCustomizePanel: React.FC<MiniAppCustomizePanelProps> = ({
       </div>
 
       {state.error && (
-        <div className="miniapp-customize-panel__error" role="alert">
+        <div className="miniapp-customize-panel__error" data-bf-component="miniapp-customize-panel" data-bf-part="error" role="alert">
           {state.error}
         </div>
       )}
 
       {editorStatus && (
-        <div className="miniapp-customize-panel__status">
+        <div className="miniapp-customize-panel__status" data-bf-component="miniapp-customize-panel" data-bf-part="status">
           <Check size={14} />
           <span>{editorStatus}</span>
         </div>
       )}
 
       {state.customizationSessionId && (
-        <div className="miniapp-customize-panel__chat">
+        <div className="miniapp-customize-panel__chat" data-bf-component="miniapp-customize-panel" data-bf-part="chat">
           <React.Suspense
             fallback={(
-              <div className="miniapp-customize-panel__chat-loading">
+              <div className="miniapp-customize-panel__chat-loading" data-bf-component="miniapp-customize-panel" data-bf-part="chatLoading">
                 <Loader2 size={16} className="miniapp-scene__spinning" />
                 <span>{t('customize.chatLoading')}</span>
               </div>
@@ -530,7 +537,7 @@ export const MiniAppCustomizePanel: React.FC<MiniAppCustomizePanelProps> = ({
         </div>
       )}
 
-      <div className="miniapp-customize-panel__footer">
+      <div className="miniapp-customize-panel__footer" data-bf-component="miniapp-customize-panel" data-bf-part="footer">
         <Button
           variant="secondary"
           size="small"
@@ -553,7 +560,7 @@ export const MiniAppCustomizePanel: React.FC<MiniAppCustomizePanelProps> = ({
       </div>
 
       {state.stage === 'applying' && (
-        <div className="miniapp-customize-panel__busy">
+        <div className="miniapp-customize-panel__busy" data-bf-component="miniapp-customize-panel" data-bf-part="busy">
           <Loader2 size={16} className="miniapp-scene__spinning" />
           <span>{t('customize.applying')}</span>
         </div>

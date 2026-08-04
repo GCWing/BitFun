@@ -8,6 +8,7 @@
 
 | Crate | 职责 | 本地文档 |
 |---|---|---|
+| `agent-content` | 不依赖第三方库，归属不可变、随版本发布的内置 Agent prompt 字节及稳定兼容 key | [AGENTS.md](agent-content/AGENTS.md) |
 | `core` | `bitfun-core` 兼容门面与 product-full 组装 | [AGENTS.md](core/AGENTS.md) |
 | `external-sources` | 基于能力专属 provider 契约的生态中立来源生命周期协调 | 继承本指南 |
 | `product-capabilities` | 产品能力 profile、tool group facts、service requirements 与 harness selection | [AGENTS.md](product-capabilities/AGENTS.md) |
@@ -19,6 +20,8 @@
 - 稳定 owner 逻辑下移到 `contracts`，可移植执行逻辑下移到 `execution`，协议适配下移到 `adapters`，可复用实现下移到 `services`。
 - 保持现有 public import path，除非迁移明确移除并补充兼容说明和测试。
 - 组装层新增内容必须小而可追溯；如果功能持续在此扩张，说明所有权还没有下移到合适 owner。
+- 内置 Agent 静态内容必须与选择、渲染、运行时状态、用户/项目 prompt、产品定制和插件发现分离。内容查询只是
+  product-full 的内部实现细节，不得扩张为通用运行时注册表或新的扩展 API。
 
 ## 依赖边界
 

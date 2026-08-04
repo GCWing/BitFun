@@ -163,9 +163,9 @@ MiniApp 里可用的是 `window.app`。
 - `app.dialog.*`
 - `app.clipboard.*`
 - `app.ai.*`
-- `app.theme`
+- `app.appearanceMode`
 - `app.locale`
-- `app.onThemeChange`
+- `app.onAppearanceChange`
 - `app.onLocaleChange`
 - `app.t(...)`
 - `app.call(...)` 仅在 `node.enabled = true` 时
@@ -293,6 +293,10 @@ await app.fs.readFile(...)
 
 - 传 `app_id` 和 1–5 张截图路径（PNG/JPEG/WebP，单张 ≤ 5 MiB）。
   没有截图时先向用户要，或请用户在「市场 → 我的投稿」用「截取当前画面」生成。
+- **截图比例用 16:9，推荐 1920×1080**。市场网页和 BitFun 桌面端都按 16:9
+  居中裁剪显示，非 16:9 的图会被切掉边缘。第一张是列表卡片封面，选最能说明
+  用途的那张，关键信息放画面中部不要贴边。超过 2560px 的边会被服务端缩到
+  2560，所以 2560×1440 是有效上限。
 - 名称、描述、图标、分类、标签自动取自 `meta.json`；slug 和版本号自动推导。
   发布前确认 `meta.json` 的 `description` 非空、权限是最小集
   （市场会拒绝 `node.enabled=true`、宽泛 fs scope 等）。

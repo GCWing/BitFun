@@ -6,7 +6,7 @@ export const forbiddenContentRules = [
     reason: 'agent-runtime-ipc operation scope is frozen to the reviewed Shared TUI slice',
     patterns: [
       {
-        regex: /^\s+(?!(?:Health|ListSessions|CreateSession|RestoreSession|DeleteSession|ForkSession|RenameSession|UpdateSessionMode|UpdateSessionModel|ReloadSessionContext|CompactSession|SubmitTurn|CancelTurn|PendingPermissions|RespondPermission|SubmitUserAnswers|Unit|Sessions|SessionCreated|SessionRestored|SessionForked|TurnAccepted|TurnCancelled|None|CurrentController|AttachExisting|UncontrolledTarget|Self|RuntimeIpcSessionRequirement|RuntimeIpcOperationRules|RuntimeSessionForkRequest|AgentContextReloadRequest|AgentDialogTurnRequest|AgentSessionCompactionRequest|AgentSessionCreateRequest|AgentSessionCreateResult|AgentSessionListRequest|AgentSessionModeUpdateRequest|AgentSessionModelUpdateRequest|AgentSessionSummary|AgentTurnCancellationRequest|AgentTurnCancellationResult|SessionTranscript)\b)[A-Z][A-Za-z0-9_]*\b/,
+        regex: /^\s+(?!(?:Health|ListAgentModes|ListSessions|CreateSession|RestoreSession|DeleteSession|ForkSession|RenameSession|UpdateSessionMode|UpdateSessionModel|ReloadSessionContext|CompactSession|UndoSession|RedoSession|SearchWorkspaceReferences|WorkspaceReferencesForMessage|GetSessionLineage|InspectLineageSession|CancelLineageSession|WorkspaceDiff|SubmitTurn|SteerTurn|RunUserShellCommand|CancelTurn|PendingPermissions|RespondPermission|SubmitUserAnswers|Unit|AgentModes|Sessions|SessionCreated|SessionRestored|SessionForked|SessionReverted|SessionLineage|LineageSessionInspection|WorkspaceReferenceSearch|WorkspaceReferences|TurnAccepted|TurnSteered|TurnCancelled|None|CurrentController|AttachExisting|UncontrolledTarget|Self|RuntimeIpcSessionRequirement|RuntimeIpcOperationRules|RuntimeSessionForkRequest|AgentContextReloadRequest|AgentDialogSteerRequest|AgentDialogTurnRequest|AgentMessageWorkspaceReferencesRequest|AgentSessionCompactionRequest|AgentSessionCreateRequest|AgentSessionCreateResult|AgentSessionLineageCancellationRequest|AgentSessionLineageInspection|AgentSessionLineageRequest|AgentSessionLineageSnapshot|AgentSessionLineageTranscriptRequest|AgentSessionListRequest|AgentSessionModeUpdateRequest|AgentSessionModelUpdateRequest|AgentSessionRevertRequest|AgentSessionRevertResult|AgentSessionSummary|AgentTurnCancellationRequest|AgentTurnCancellationResult|AgentUserShellCommandRequest|AgentWorkspaceReference|AgentWorkspaceReferenceSearchRequest|AgentWorkspaceReferenceSearchResult|SessionTranscript|WorkspaceDiffSnapshot)\b)[A-Z][A-Za-z0-9_]*\b/,
         message:
           'agent-runtime-ipc may not add archive, replay, observer, general controller-transfer, or other operations beyond the reviewed Shared TUI slice',
       },
@@ -139,7 +139,7 @@ export const forbiddenContentRules = [
     ],
   },
   {
-    path: 'src/crates/execution/agent-runtime/tests/sdk_smoke.rs',
+    path: 'src/crates/execution/agent-runtime/tests/agent_session_contracts/sdk_smoke.rs',
     patterns: [
       {
         regex: /\bbitfun_runtime_services::test_support\b/,
@@ -4119,6 +4119,7 @@ export const forbiddenContentUnderRules = [
           'src/crates/adapters/opencode-adapter/tests/opencode_source_adapter.rs',
           'src/crates/adapters/opencode-adapter/tests/opencode_command_adapter.rs',
           'src/crates/adapters/opencode-adapter/tests/opencode_skill_roots.rs',
+          'src/crates/adapters/opencode-adapter/tests/opencode_workspace_references.rs',
           'src/crates/adapters/opencode-adapter/tests/tool_source_contracts.rs',
           'src/crates/adapters/opencode-adapter/tests/opencode_subagent_adapter.rs',
           'src/crates/adapters/opencode-adapter/tests/opencode_mcp_adapter.rs',
@@ -4126,6 +4127,7 @@ export const forbiddenContentUnderRules = [
           'src/crates/assembly/core/src/plugin_runtime.rs',
           'src/crates/assembly/core/src/external_sources.rs',
           'src/crates/assembly/core/src/external_hooks.rs',
+          'src/crates/assembly/core/src/instruction_sources.rs',
         ],
         message:
           'only a reviewed product composition root may import bitfun-opencode-adapter through a capability-specific provider boundary',
@@ -4157,6 +4159,7 @@ export const forbiddenContentUnderRules = [
         'src/crates/adapters/claude-code-adapter/tests/mcp_source.rs',
         'src/crates/assembly/core/src/external_sources.rs',
         'src/crates/assembly/core/src/external_hooks.rs',
+        'src/crates/assembly/core/src/instruction_sources.rs',
       ],
       message: 'Claude Code declarative source adapter may only be imported by its fixtures and reviewed composition roots',
     }],
@@ -4172,6 +4175,7 @@ export const forbiddenContentUnderRules = [
         'src/crates/adapters/codex-adapter/tests/mcp_source.rs',
         'src/crates/assembly/core/src/external_sources.rs',
         'src/crates/assembly/core/src/external_hooks.rs',
+        'src/crates/assembly/core/src/instruction_sources.rs',
       ],
       message: 'Codex declarative source adapter may only be imported by its fixtures and reviewed composition roots',
     }],

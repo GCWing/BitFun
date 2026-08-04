@@ -549,14 +549,22 @@ async fn engine_for(
         .iter()
         .map(|(_, path)| fingerprint(path.clone()))
         .collect::<Vec<_>>();
-    let imported_generation =
-        match crate::external_hook_import::imported_hook_generation(workspace_root).await {
-            Ok(generation) => generation,
-            Err(error) => {
-                warn!("Imported Hook state is unavailable: {error}");
-                0
+    let imported_generation = {
+        #[cfg(feature = "external-sources")]
+        {
+            match crate::external_hook_import::imported_hook_generation(workspace_root).await {
+                Ok(generation) => generation,
+                Err(error) => {
+                    warn!("Imported Hook state is unavailable: {error}");
+                    0
+                }
             }
-        };
+        }
+        #[cfg(not(feature = "external-sources"))]
+        {
+            0
+        }
+    };
     {
         let cache = engine_cache().lock().await;
         if let Some(cached) = cache.get(&key) {
@@ -571,14 +579,22 @@ async fn engine_for(
         }
     }
 
-    let imported_layers =
-        match crate::external_hook_import::enabled_imported_hook_layers(workspace_root).await {
-            Ok(layers) => layers,
-            Err(error) => {
-                warn!("Imported Hook layers are unavailable: {error}");
-                Vec::new()
+    let imported_layers = {
+        #[cfg(feature = "external-sources")]
+        {
+            match crate::external_hook_import::enabled_imported_hook_layers(workspace_root).await {
+                Ok(layers) => layers,
+                Err(error) => {
+                    warn!("Imported Hook layers are unavailable: {error}");
+                    Vec::new()
+                }
             }
-        };
+        }
+        #[cfg(not(feature = "external-sources"))]
+        {
+            Vec::new()
+        }
+    };
     let (manual_layers, skipped) = read_layers(&paths);
     for message in &skipped {
         warn!("{message}");
@@ -699,9 +715,16 @@ pub async fn overview(workspace_root: Option<&Path>) -> NativeHookOverview {
     // actually load, so the view can show a gated-off project file.
     let config = hooks_config().await;
     let imported_layers = if config.enabled {
-        crate::external_hook_import::enabled_imported_hook_layers(workspace_root)
-            .await
-            .unwrap_or_default()
+        #[cfg(feature = "external-sources")]
+        {
+            crate::external_hook_import::enabled_imported_hook_layers(workspace_root)
+                .await
+                .unwrap_or_default()
+        }
+        #[cfg(not(feature = "external-sources"))]
+        {
+            Vec::new()
+        }
     } else {
         Vec::new()
     };

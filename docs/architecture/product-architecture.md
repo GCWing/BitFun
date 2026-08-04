@@ -21,6 +21,9 @@ Headless CLI 与各产品入口的统一心智见
 状态共享、隔离、容量与 Plugin Host 关系见
 [`agent-runtime-deployment-design.md`](agent-runtime-deployment-design.md)。详细设计与本文件冲突时，以本文件为准。
 
+Cargo feature、第三方依赖 owner、测试目标和本地/CI 验证分工见
+[`rust-build-dependency-boundaries.md`](rust-build-dependency-boundaries.md)。该文档补充本架构的构建视图，不改变本文定义的运行时 owner 和分层依赖方向。
+
 本文件只约束稳定边界，不记录单次 PR 进度，也不把未来可能支持的生态能力提前声明为公开接口。
 
 ## 1. 架构目标
@@ -200,7 +203,7 @@ flowchart TB
 
   subgraph AssemblyLayer[" "]
     direction LR
-    AssemblyTitle["2 · Assembly"] ~~~ CoreAssembly["Core Assembly"] ~~~ ExternalSources["External Sources"] ~~~ ProductCaps["Product Capabilities"]
+    AssemblyTitle["2 · Assembly"] ~~~ AgentContent["Built-in Agent Content"] ~~~ CoreAssembly["Core Assembly"] ~~~ ExternalSources["External Sources"] ~~~ ProductCaps["Product Capabilities"]
   end
 
   subgraph AdaptersLayer[" "]
@@ -228,7 +231,7 @@ flowchart TB
   classDef header fill:#fafafa,stroke:#404040,stroke-width:1.6px,color:#171717;
   classDef module fill:#ffffff,stroke:#737373,stroke-width:1.3px,color:#171717;
   class AppsTitle,AssemblyTitle,AdaptersTitle,ServicesTitle,ExecutionTitle,ContractsTitle header;
-  class Desktop,CLI,Server,Relay,WebUI,MobileUI,ACP,SDKHost,CoreAssembly,ExternalSources,ProductCaps,RuntimeIPC,ModelAdapters,SourceAdapters,Transport,WebDriver,CoreServices,Integrations,MiniAppMarket,RelayService,Terminal,PageRuntime,AgentRuntime,AgentStream,ToolRuntime,PluginClient,Harness,RuntimeServices,CoreTypes,Events,RuntimePorts,ProductDomains module;
+  class Desktop,CLI,Server,Relay,WebUI,MobileUI,ACP,SDKHost,AgentContent,CoreAssembly,ExternalSources,ProductCaps,RuntimeIPC,ModelAdapters,SourceAdapters,Transport,WebDriver,CoreServices,Integrations,MiniAppMarket,RelayService,Terminal,PageRuntime,AgentRuntime,AgentStream,ToolRuntime,PluginClient,Harness,RuntimeServices,CoreTypes,Events,RuntimePorts,ProductDomains module;
   style AppsLayer fill:#ffffff,stroke:#a3a3a3;
   style AssemblyLayer fill:#ffffff,stroke:#a3a3a3;
   style AdaptersLayer fill:#ffffff,stroke:#a3a3a3;
@@ -249,6 +252,10 @@ flowchart TB
 | Contracts | `contracts/*` | Stable Contracts、Security Control、Service Ports |
 
 Assembly 是唯一组装根，只选择下层能力和实现，不能反向依赖 app。每个生态 adapter 独立保留外部格式和顺序语义，再映射到 BitFun owner；生态 adapter 之间不能形成兄弟依赖。
+
+`assembly/agent-content` 只持有随产品发布的不可变内置 Agent prompt 字节和兼容 key；选择、渲染、模式策略、
+Memory/Insights 工作流与运行时状态仍由 Core 的既有 owner 持有。该 crate 不是通用 prompt registry，也不加载
+用户、项目、产品定制或插件内容。
 
 ### 2.3 Process View · Level 0
 
@@ -717,12 +724,13 @@ flowchart LR
 ```mermaid
 flowchart TB
   Desktop["Desktop"] --> Full["product-full"]
-  CLI["CLI / TUI"] --> Full
+  CLI["CLI / TUI"] --> CliClosure["Core owner feature closure"]
   ACP["ACP"] --> Parts["Runtime Parts"]
   SDKHost["SDK Host"] --> Parts
   ServerBootstrap["Server agent bootstrap · dormant"] --> Full
 
   Full --> Coordinator["ConversationCoordinator"]
+  CliClosure --> Coordinator
   Parts --> Coordinator
   Ownership["CoreRuntimeOwnership"] -. "first-party composition injects once" .-> Coordinator
 ```
@@ -746,8 +754,8 @@ flowchart LR
 | 当前入口 | 已有能力 | 明确边界 |
 |---|---|---|
 | Desktop | 使用 `product-full`；显示外部来源、审批、冲突、诊断和 Host 能力 | 可执行能力在事实所在 Host 运行；Safe Mode 只阻止新调用，不改来源、不取消正在运行的调用 |
-| CLI / TUI | 使用 `product-full`；提供 `/extensions`、统一 `/hooks`（旧 `/hooks_external` 为别名）、`/tools` 和 `/agents`；Claude Code/Codex 命令 Hook 可经显式审阅复制为原生层 | 生态解析仍在适配器，不启动第二套 Agent Runtime；OpenCode Hook 仍只静态发现；远程能力未接入时不回退本机 |
-| ACP | 使用 `DeliveryProfile::Acp` 和 Runtime Parts | load 成功后才发布活动状态；close 排空后再卸载；完整历史和配置仍由 Core/ACP 管理 |
+| CLI / TUI | 使用显式 Core owner feature closure（`agent-runtime`、`canvas-runtime`、`external-sources`、`plugin-runtime`、`ssh-remote`）；提供 `/extensions`、统一 `/hooks`（旧 `/hooks_external` 为别名）、`/tools` 和 `/agents`；Claude Code/Codex 命令 Hook 可经显式审阅复制为原生层 | 保持现有 CLI capability plan，但不自动继承 Desktop 后续加入 `product-full` 的能力；生态解析仍在适配器，不启动第二套 Agent Runtime；OpenCode Hook 仍只静态发现；远程能力未接入时不回退本机 |
+| ACP | 使用 `DeliveryProfile::Acp`、Runtime Parts，以及 `agent-runtime`/`canvas-runtime`/`external-sources`/`ssh-remote` Core owner feature | load 成功后才发布活动状态；close 排空后再卸载；完整历史、Canvas 工具物化、兼容指令来源和配置仍由 Core/ACP 管理 |
 | Peer / Server | Server 提供 control/catalog；Peer Host 执行真实工作区操作；当前 HTTP Server 不装配 Agent Runtime | 控制端不替远端发现或执行；旧 Host 明确降级，SSH Remote 未接入时返回不支持；只读 Server 不声明 Runtime ownership |
 | Web / Mobile Web | 依赖现有后端入口 | 不持有插件执行单元，也不能据空 profile 宣称独立能力 |
 | HarmonyOS 手机 Remote | phone-only ArkTS 远程入口 | 不等于 HarmonyOS PC 本地 Runtime、CLI/TUI 或 GUI |

@@ -1,8 +1,12 @@
 #![cfg(feature = "mcp")]
 
 use async_trait::async_trait;
+use bitfun_services_integrations::mcp::auth::rmcp_compat::{
+    AuthorizationManager, CredentialStore, StoredCredentials,
+};
 use bitfun_services_integrations::mcp::auth::{
-    MCPRemoteOAuthCredentialVault, MCPRemoteOAuthSessionSnapshot, MCPRemoteOAuthStatus,
+    MCPRemoteOAuthCredentialStore, MCPRemoteOAuthCredentialVault, MCPRemoteOAuthSessionSnapshot,
+    MCPRemoteOAuthStatus,
 };
 use bitfun_services_integrations::mcp::config::ConfigLocation;
 use bitfun_services_integrations::mcp::config::{
@@ -25,8 +29,9 @@ use bitfun_services_integrations::mcp::server::{
     compute_mcp_backoff_delay, detect_mcp_list_changed_kind, is_mcp_auth_error_message,
     mcp_reconnect_runtime_decision, mcp_server_is_running, mcp_should_start_after_config_update,
     merge_mcp_remote_headers, MCPCatalogCache, MCPConnectionPool, MCPListChangedKind,
-    MCPReconnectRuntimeDecision, MCPRuntimeErrorKind, MCPRuntimeResult, MCPServerConfig,
-    MCPServerProcess, MCPServerRuntimeState, MCPServerStatus, MCPServerTransport, MCPServerType,
+    MCPProcessStartContext, MCPReconnectRuntimeDecision, MCPRuntimeErrorKind, MCPRuntimeResult,
+    MCPServerConfig, MCPServerRuntimeState, MCPServerStatus, MCPServerTimeouts, MCPServerTransport,
+    MCPServerType,
 };
 use bitfun_services_integrations::mcp::{
     build_mcp_tool_descriptor, build_mcp_tool_name, normalize_name_for_mcp,
@@ -35,7 +40,6 @@ use bitfun_services_integrations::mcp::{
     PromptAdapter, ResourceAdapter, MCP_TOOL_DELIMITER, MCP_TOOL_PREFIX,
 };
 use rmcp::model::{AnnotateAble, Annotations, Content, Icon, Meta, RawResource, ResourceContents};
-use rmcp::transport::auth::StoredCredentials;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -67,6 +71,7 @@ fn make_mcp_config(
         oauth: None,
         oauth_enabled: None,
         xaa: None,
+        timeouts: MCPServerTimeouts::default(),
     }
 }
 
@@ -210,6 +215,42 @@ fn mcp_protocol_capability_contract_matches_existing_default() {
             }
         })
     );
+}
+
+#[test]
+fn mcp_server_timeout_config_is_optional_positive_milliseconds() {
+    let timeouts = MCPServerTimeouts {
+        startup_ms: Some(250),
+        catalog_ms: Some(1_000),
+        execution_ms: Some(30_000),
+    };
+    timeouts.validate().expect("positive timeouts are valid");
+    assert_eq!(
+        serde_json::to_value(&timeouts).unwrap(),
+        serde_json::json!({
+            "startupMs": 250,
+            "catalogMs": 1_000,
+            "executionMs": 30_000,
+        })
+    );
+    assert!(MCPServerTimeouts {
+        execution_ms: Some(0),
+        ..Default::default()
+    }
+    .validate()
+    .is_err());
+    assert!(MCPServerTimeouts {
+        execution_ms: Some(9_007_199_254_740_991),
+        ..Default::default()
+    }
+    .validate()
+    .is_ok());
+    assert!(MCPServerTimeouts {
+        execution_ms: Some(9_007_199_254_740_992),
+        ..Default::default()
+    }
+    .validate()
+    .is_err());
 }
 
 #[test]
@@ -1283,7 +1324,7 @@ async fn mcp_dynamic_tool_provider_preserves_manifest_order_and_metadata_snapsho
 }
 
 #[tokio::test]
-async fn mcp_server_process_owner_preserves_unsupported_remote_transport_contract() {
+async fn mcp_runtime_state_owner_preserves_unsupported_remote_transport_contract() {
     let mut config = make_mcp_config(
         "remote-sse",
         ConfigLocation::User,
@@ -1293,23 +1334,37 @@ async fn mcp_server_process_owner_preserves_unsupported_remote_transport_contrac
     );
     config.transport = Some(MCPServerTransport::Sse);
 
-    let mut process = MCPServerProcess::new(
-        "remote-sse".to_string(),
-        "Remote SSE".to_string(),
-        MCPServerType::Remote,
+    let runtime = MCPServerRuntimeState::new();
+    runtime.register(&config).await.expect("register process");
+    assert_eq!(
+        runtime
+            .process_status("remote-sse")
+            .await
+            .expect("registered process status"),
+        MCPServerStatus::Uninitialized
     );
-    assert_eq!(process.status().await, MCPServerStatus::Uninitialized);
-    assert_eq!(process.server_type(), MCPServerType::Remote);
 
-    let error = process
-        .start_remote(std::env::temp_dir(), &config)
+    let error = runtime
+        .start_process(
+            &config,
+            MCPProcessStartContext::Remote {
+                data_dir: std::env::temp_dir(),
+            },
+        )
         .await
         .unwrap_err();
     assert_eq!(error.kind(), MCPRuntimeErrorKind::NotImplemented);
     assert!(error
         .to_string()
         .contains("Remote MCP transport 'sse' is not yet supported"));
-    assert_eq!(process.status().await, MCPServerStatus::Uninitialized);
+    assert_eq!(
+        runtime
+            .process_status("remote-sse")
+            .await
+            .expect("registered process status"),
+        MCPServerStatus::Uninitialized
+    );
+    assert!(runtime.process_connection("remote-sse").await.is_none());
 
     let pool = MCPConnectionPool::new();
     assert!(pool.get_all_server_ids().await.is_empty());
@@ -1546,6 +1601,20 @@ async fn mcp_runtime_state_owns_registry_runtime_config_and_reconnect_state() {
     config.auto_start = false;
 
     assert!(runtime.is_empty().await);
+    let error = runtime
+        .start_process(
+            &config,
+            MCPProcessStartContext::Remote {
+                data_dir: std::env::temp_dir(),
+            },
+        )
+        .await
+        .expect_err("local config must reject remote start context");
+    assert_eq!(error.kind(), MCPRuntimeErrorKind::Configuration);
+    assert!(error
+        .to_string()
+        .contains("does not match server type 'local'"));
+    assert!(runtime.is_empty().await);
 
     runtime
         .insert_runtime_config(config.clone())
@@ -1558,7 +1627,14 @@ async fn mcp_runtime_state_owns_registry_runtime_config_and_reconnect_state() {
 
     assert!(runtime.contains("runtime-only").await);
     assert_eq!(runtime.get_all_server_ids().await, vec!["runtime-only"]);
-    assert!(runtime.get_process("runtime-only").await.is_some());
+    assert_eq!(
+        runtime
+            .process_status("runtime-only")
+            .await
+            .expect("registered process status"),
+        MCPServerStatus::Uninitialized
+    );
+    assert!(runtime.process_connection("runtime-only").await.is_none());
     assert_eq!(
         runtime.get_all_statuses().await,
         vec![("runtime-only".to_string(), MCPServerStatus::Uninitialized)]
@@ -1717,6 +1793,7 @@ fn mcp_server_config_preserves_transport_defaults_and_validation_contract() {
         oauth: None,
         oauth_enabled: None,
         xaa: None,
+        timeouts: MCPServerTimeouts::default(),
     };
     assert_eq!(local.resolved_transport(), MCPServerTransport::Stdio);
     local.validate().expect("local stdio config is valid");
@@ -1843,6 +1920,15 @@ fn mcp_oauth_session_snapshot_preserves_camel_case_status_contract() {
     );
 }
 
+#[test]
+fn mcp_oauth_owner_exports_the_auth_primitives_needed_by_compatibility_facades() {
+    fn assert_credential_store<T: CredentialStore>() {}
+
+    assert_credential_store::<MCPRemoteOAuthCredentialStore>();
+    let _: Option<AuthorizationManager> = None;
+    let _: Option<StoredCredentials> = None;
+}
+
 #[tokio::test]
 async fn mcp_oauth_credential_vault_uses_injected_data_dir_and_roundtrips_credentials() {
     let unique = SystemTime::now()
@@ -1909,6 +1995,7 @@ fn mcp_cursor_format_helpers_preserve_cursor_compatibility_contract() {
         oauth: None,
         oauth_enabled: None,
         xaa: None,
+        timeouts: MCPServerTimeouts::default(),
     };
 
     assert_eq!(

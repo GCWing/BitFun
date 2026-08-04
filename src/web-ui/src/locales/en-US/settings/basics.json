@@ -3,46 +3,46 @@
   "subtitle": "Power, logging, terminal, notifications, and launch at login",
   "appearance": {
     "title": "Appearance",
-    "hint": "Interface language and visual theme",
+    "hint": "Interface language and visual appearance",
     "language": "Language",
-    "themes": "Themes",
+    "appearances": "Appearances",
     "builtIn": "Built-in",
     "custom": "Custom",
     "export": "Export",
     "delete": "Delete",
-    "confirmDelete": "Are you sure you want to delete theme \"{{name}}\"?",
+    "confirmDelete": "Are you sure you want to delete appearance \"{{name}}\"?",
     "languageRowHint": "Choose one language pack as the active UI language.",
-    "themeRowHint": "Choose the interface color theme.",
-    "systemTheme": "Match system",
-    "systemThemeDescription": "Use light or dark theme based on your OS appearance. Updates when the system switches.",
+    "appearanceRowHint": "Choose the interface appearance.",
+    "systemAppearance": "Match system",
+    "systemAppearanceDescription": "Use a light or dark appearance based on your OS setting. Updates when the system switches.",
     "presets": {
       "bitfun-dark": {
         "name": "Dark",
-        "description": "Default dark theme"
+        "description": "Default dark appearance"
       },
       "bitfun-light": {
         "name": "Light",
-        "description": "Light theme - Elegant and refined, soft blue-gray tones"
+        "description": "Light appearance - Elegant and refined, soft blue-gray tones"
       },
       "bitfun-midnight": {
         "name": "Midnight",
-        "description": "Midnight gray dark theme - Professional and elegant, inspired by JetBrains IDE"
+        "description": "Midnight gray dark appearance - Professional and elegant, inspired by JetBrains IDE"
       },
       "bitfun-china-style": {
         "name": "Ink Charm",
-        "description": "Chinese style theme - Rice paper and ink, blue and vermilion, warm and elegant"
+        "description": "Chinese style appearance - Rice paper and ink, blue and vermilion, warm and elegant"
       },
       "bitfun-china-night": {
         "name": "Ink Night",
-        "description": "Chinese dark theme - Starlit ink night, moonlight like water, serene and elegant"
+        "description": "Chinese dark appearance - Starlit ink night, moonlight like water, serene and elegant"
       },
       "bitfun-cyber": {
         "name": "Cyber",
-        "description": "Tech-style theme - Deep black hole, neon future, ultimate tech aesthetics"
+        "description": "Tech-style appearance - Deep black hole, neon future, ultimate tech aesthetics"
       },
       "bitfun-slate": {
         "name": "Slate",
-        "description": "Slate gray geometric theme - Deep immersion, high contrast grayscale aesthetics"
+        "description": "Slate gray geometric appearance - Deep immersion, high contrast grayscale aesthetics"
       },
       "bitfun-tokyo-night": {
         "name": "Tokyo Night",

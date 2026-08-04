@@ -8,10 +8,10 @@
   justify-content: space-between;
   gap: $size-gap-1;
   padding: 0 $size-gap-3;
-  border-bottom: 1px dashed var(--border-base);
+  border-bottom: 1px dashed var(--bf-appearance-token-border-base);
 
   // Frosted glass effect.
-  background: color-mix(in srgb, var(--color-bg-elevated) 45%, transparent);
+  background: color-mix(in srgb, var(--bf-appearance-token-color-bg-elevated) 45%, transparent);
   backdrop-filter: blur(20px) saturate(1.3);
   -webkit-backdrop-filter: blur(20px) saturate(1.3);
   
@@ -34,9 +34,9 @@
     
     background: linear-gradient(
       to bottom,
-      color-mix(in srgb, var(--color-bg-elevated) 35%, transparent) 0%,
-      color-mix(in srgb, var(--color-bg-elevated) 20%, transparent) 35%,
-      color-mix(in srgb, var(--color-bg-elevated) 8%, transparent) 65%,
+      color-mix(in srgb, var(--bf-appearance-token-color-bg-elevated) 35%, transparent) 0%,
+      color-mix(in srgb, var(--bf-appearance-token-color-bg-elevated) 20%, transparent) 35%,
+      color-mix(in srgb, var(--bf-appearance-token-color-bg-elevated) 8%, transparent) 65%,
       transparent 100%
     );
 
@@ -51,93 +51,77 @@
     flex: 0 0 auto;
 
     &:not(:disabled):hover {
-      background: color-mix(in srgb, var(--element-bg-soft) 82%, transparent);
+      background: color-mix(in srgb, var(--bf-appearance-token-element-bg-soft) 82%, transparent);
     }
   }
 
-  &__turn-nav {
-    position: relative;
-    display: flex;
-    align-items: center;
-    gap: 0;
-  }
-
-  &__background-activity-nav {
+  &__background-command-nav {
     position: relative;
     display: flex;
     align-items: center;
   }
 
-  &__turn-nav-button {
+  &__background-command-nav-button {
     flex: 0 0 auto;
 
     &:not(:disabled):hover,
     &--active {
-      background: color-mix(in srgb, var(--element-bg-soft) 82%, transparent);
-    }
-  }
-
-  &__background-activity-nav-button {
-    flex: 0 0 auto;
-
-    &:not(:disabled):hover,
-    &--active {
-      background: color-mix(in srgb, var(--element-bg-soft) 82%, transparent);
+      background: color-mix(in srgb, var(--bf-appearance-token-element-bg-soft) 82%, transparent);
     }
 
-    &--has-activity {
-      color: color-mix(in srgb, var(--color-success) 86%, var(--color-text-primary));
+    &--has-commands {
+      color: color-mix(in srgb, var(--bf-appearance-token-color-success) 86%, var(--bf-appearance-token-color-text-primary));
 
       &:not(:disabled):hover,
-      &.flowchat-header__background-activity-nav-button--active {
-        color: var(--color-success);
-        background: color-mix(in srgb, var(--color-success) 12%, transparent);
+      &.flowchat-header__background-command-nav-button--active {
+        color: var(--bf-appearance-token-color-success);
+        background: color-mix(in srgb, var(--bf-appearance-token-color-success) 12%, transparent);
       }
     }
   }
 
-  &__background-activity-nav-button-inner {
+  &__background-command-nav-button-inner {
     position: relative;
     display: inline-flex;
     align-items: center;
     justify-content: center;
   }
 
-  &__background-activity-status-dot {
+  &__background-command-status-dot {
     position: absolute;
     right: -2px;
     bottom: -1px;
     width: 4px;
     height: 4px;
     border-radius: 999px;
-    background: color-mix(in srgb, var(--color-success) 92%, white 8%);
+    background: color-mix(in srgb, var(--bf-appearance-token-color-success) 92%, white 8%);
     box-shadow:
-      0 0 0 1px var(--color-bg-elevated),
-      0 0 0 0 color-mix(in srgb, var(--color-success) 42%, transparent);
-    animation: flowchat-header-background-activity-pulse 1.45s ease-out infinite;
+      0 0 0 1px var(--bf-appearance-token-color-bg-elevated),
+      0 0 0 0 color-mix(in srgb, var(--bf-appearance-token-color-success) 42%, transparent);
+    animation: flowchat-header-background-command-pulse 1.45s ease-out infinite;
   }
 
-  @keyframes flowchat-header-background-activity-pulse {
+  @keyframes flowchat-header-background-command-pulse {
     0%,
     100% {
       transform: scale(1);
       opacity: 0.9;
       box-shadow:
-        0 0 0 1px var(--color-bg-elevated),
-        0 0 0 0 color-mix(in srgb, var(--color-success) 40%, transparent);
+        0 0 0 1px var(--bf-appearance-token-color-bg-elevated),
+        0 0 0 0 color-mix(in srgb, var(--bf-appearance-token-color-success) 40%, transparent);
     }
 
     50% {
       transform: scale(1.22);
       opacity: 1;
       box-shadow:
-        0 0 0 1px var(--color-bg-elevated),
-        0 0 0 5px color-mix(in srgb, var(--color-success) 0%, transparent);
+        0 0 0 1px var(--bf-appearance-token-color-bg-elevated),
+        0 0 0 5px color-mix(in srgb, var(--bf-appearance-token-color-success) 0%, transparent);
     }
   }
 
   @media (prefers-reduced-motion: reduce) {
-    &__background-activity-status-dot {
+    &__background-command-status-dot {
       animation: none;
     }
   }
@@ -148,7 +132,7 @@
     flex: 0 0 auto;
 
     &:not(:disabled):hover {
-      background: color-mix(in srgb, var(--element-bg-soft) 82%, transparent);
+      background: color-mix(in srgb, var(--bf-appearance-token-element-bg-soft) 82%, transparent);
     }
   }
 
@@ -181,7 +165,7 @@
 
   &__search-prefix-icon {
     flex-shrink: 0;
-    color: var(--color-text-secondary);
+    color: var(--bf-appearance-token-color-text-secondary);
     opacity: 0.75;
   }
 
@@ -191,14 +175,14 @@
     gap: 0;
     padding-left: 2px;
     margin-left: 2px;
-    border-left: 1px solid var(--border-subtle);
+    border-left: 1px solid var(--bf-appearance-token-border-subtle);
   }
 
   &__search-count {
     flex-shrink: 0;
     padding: 0 3px;
-    color: var(--color-text-secondary);
-    font-size: var(--flowchat-font-size-xs);
+    color: var(--bf-appearance-token-color-text-secondary);
+    font-size: var(--bf-appearance-token-flowchat-font-size-xs);
     white-space: nowrap;
 
     &:empty {
@@ -223,7 +207,7 @@
     padding: 0;
     border: none;
     background: transparent;
-    color: var(--color-text-secondary);
+    color: var(--bf-appearance-token-color-text-secondary);
     cursor: pointer;
     opacity: 0.8;
     transition: opacity $motion-base $easing-standard, background $motion-base $easing-standard;
@@ -231,7 +215,7 @@
 
     &:hover:not(:disabled) {
       opacity: 1;
-      background: var(--element-bg-soft);
+      background: var(--bf-appearance-token-element-bg-soft);
     }
 
     &:disabled {
@@ -240,74 +224,43 @@
     }
   }
 
-  &__turn-list-panel {
-    position: absolute;
-    top: calc(100% + 8px);
-    right: 0;
-    width: min(360px, calc(100vw - 32px));
-    max-height: min(420px, calc(100vh - 96px));
+  &__background-command-panel {
+    position: fixed;
+    width: min(340px, calc(100vw - 16px));
+    max-height: min(360px, calc(100vh - 16px));
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    border: 1px solid var(--border-base);
+    border: 1px solid var(--bf-appearance-token-border-base);
     border-radius: $size-radius-lg;
-    background: color-mix(in srgb, var(--color-bg-elevated) 94%, transparent);
-    box-shadow: var(--shadow-lg);
+    background: color-mix(in srgb, var(--bf-appearance-token-color-bg-elevated) 94%, transparent);
+    box-shadow: var(--bf-appearance-token-shadow-lg);
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
-    z-index: 30;
+    z-index: $z-popover;
+    color: var(--bf-appearance-token-color-text-primary);
+    font-family: var(--bf-appearance-token-font-family-sans);
   }
 
-  &__background-activity-panel {
-    position: absolute;
-    top: calc(100% + 8px);
-    right: 0;
-    width: min(340px, calc(100vw - 32px));
-    max-height: min(360px, calc(100vh - 96px));
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    border: 1px solid var(--border-base);
-    border-radius: $size-radius-lg;
-    background: color-mix(in srgb, var(--color-bg-elevated) 94%, transparent);
-    box-shadow: var(--shadow-lg);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
-    z-index: 30;
-  }
-
-  &__turn-list-header {
+  &__background-command-panel-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: $size-gap-2;
     padding: $size-gap-2 $size-gap-3;
-    border-bottom: 1px solid var(--border-base);
-    font-size: var(--flowchat-font-size-xs);
-    color: var(--color-text-secondary);
+    border-bottom: 1px solid var(--bf-appearance-token-border-base);
+    font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+    color: var(--bf-appearance-token-color-text-secondary);
   }
 
-  &__background-activity-panel-header {
+  &__background-command-panel-header-actions {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: $size-gap-2;
-    padding: $size-gap-2 $size-gap-3;
-    border-bottom: 1px solid var(--border-base);
-    font-size: var(--flowchat-font-size-xs);
-    color: var(--color-text-secondary);
+    gap: $size-gap-1;
+    flex: 0 0 auto;
   }
 
-  &__turn-list {
-    display: flex;
-    flex-direction: column;
-    overflow-y: auto;
-    padding: $size-gap-1;
-    max-height: calc(7 * 40px);
-    scrollbar-gutter: stable;
-  }
-
-  &__background-activity-list {
+  &__background-command-list {
     display: flex;
     flex-direction: column;
     overflow-y: auto;
@@ -316,105 +269,18 @@
     scrollbar-gutter: stable;
   }
 
-  &__background-section {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-
-    & + & {
-      margin-top: $size-gap-1;
-      padding-top: $size-gap-1;
-      border-top: 1px solid var(--border-base);
-    }
-  }
-
-  &__background-section-title {
+  &__background-command-empty-state {
+    min-height: 48px;
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: $size-gap-1;
-    padding: 2px 2px 2px $size-gap-2;
-      color: var(--color-text-muted);
-    font-size: var(--flowchat-font-size-xs);
+    justify-content: center;
+    padding: $size-gap-3;
+    color: var(--bf-appearance-token-color-text-secondary);
+    font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+    text-align: center;
   }
 
-  &__background-section-title-label {
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  &__background-section-actions {
-    position: relative;
-    flex: 0 0 auto;
-  }
-
-  &__background-section-action {
-    flex: 0 0 auto;
-    color: var(--color-text-secondary);
-
-    &:not(:disabled):hover {
-      color: var(--color-text-primary);
-      background: color-mix(in srgb, var(--element-bg-soft) 88%, transparent);
-    }
-
-    &--danger:not(:disabled):hover {
-      color: var(--color-error);
-      background: color-mix(in srgb, var(--color-error) 12%, transparent);
-
-      svg {
-        color: var(--color-error);
-      }
-    }
-  }
-
-  &__turn-list-item {
-    display: flex;
-    align-items: center;
-    gap: $size-gap-2;
-    width: 100%;
-    padding: $size-gap-2;
-    border: 0;
-    border-radius: $size-radius-base;
-    background: transparent;
-    color: var(--color-text-primary);
-    min-height: 40px;
-    text-align: left;
-    cursor: pointer;
-    transition: background $motion-base $easing-standard;
-
-    &:hover {
-      background: color-mix(in srgb, var(--element-bg-soft) 88%, transparent);
-    }
-
-    &--active {
-      background: color-mix(in srgb, var(--color-accent-500) 12%, var(--element-bg-soft));
-    }
-  }
-
-  &__turn-list-badge {
-    flex: 0 0 auto;
-    padding: 2px 8px;
-    border-radius: 999px;
-    background: color-mix(in srgb, var(--element-bg-soft) 82%, transparent);
-    color: var(--color-text-secondary);
-    font-size: var(--flowchat-font-size-xs);
-    line-height: 1;
-    white-space: nowrap;
-  }
-
-  &__turn-list-title {
-    min-width: 0;
-    flex: 1;
-    font-size: var(--flowchat-font-size-sm);
-    color: inherit;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  &__background-activity-list-item {
+  &__background-command-list-item-button {
     display: flex;
     flex-direction: column;
     align-items: flex-start;
@@ -424,13 +290,13 @@
     border: 0;
     border-radius: $size-radius-base;
     background: transparent;
-    color: var(--color-text-primary);
+    color: var(--bf-appearance-token-color-text-primary);
     text-align: left;
     cursor: pointer;
     transition: background $motion-base $easing-standard;
 
     &:hover {
-      background: color-mix(in srgb, var(--element-bg-soft) 88%, transparent);
+      background: color-mix(in srgb, var(--bf-appearance-token-element-bg-soft) 88%, transparent);
     }
   }
 
@@ -443,11 +309,11 @@
     transition: background $motion-base $easing-standard;
 
     &:hover {
-      background: color-mix(in srgb, var(--element-bg-soft) 88%, transparent);
+      background: color-mix(in srgb, var(--bf-appearance-token-element-bg-soft) 88%, transparent);
     }
   }
 
-  &__background-command-list-item &__background-activity-list-item {
+  &__background-command-list-item &__background-command-list-item-button {
     &:hover {
       background: transparent;
     }
@@ -477,11 +343,11 @@
 
   &__background-command-menu-button {
     flex: 0 0 auto;
-    color: var(--color-text-secondary);
+    color: var(--bf-appearance-token-color-text-secondary);
 
     &:not(:disabled):hover {
-      color: var(--color-text-primary);
-      background: color-mix(in srgb, var(--element-bg-soft) 88%, transparent);
+      color: var(--bf-appearance-token-color-text-primary);
+      background: color-mix(in srgb, var(--bf-appearance-token-element-bg-soft) 88%, transparent);
     }
   }
 
@@ -496,10 +362,10 @@
     flex-direction: column;
     gap: 2px;
     padding: 4px;
-    border: 1px solid var(--border-base);
+    border: 1px solid var(--bf-appearance-token-border-base);
     border-radius: $size-radius-base;
-    background: color-mix(in srgb, var(--color-bg-elevated) 98%, transparent);
-    box-shadow: var(--shadow-base);
+    background: color-mix(in srgb, var(--bf-appearance-token-color-bg-elevated) 98%, transparent);
+    box-shadow: var(--bf-appearance-token-shadow-base);
     z-index: 40;
 
     &--compact {
@@ -511,6 +377,10 @@
       top: auto;
       right: auto;
       z-index: 10000;
+      max-height: calc(100vh - 16px);
+      overflow-y: auto;
+      color: var(--bf-appearance-token-color-text-primary);
+      font-family: var(--bf-appearance-token-font-family-sans);
     }
   }
 
@@ -523,19 +393,19 @@
     border: 0;
     border-radius: calc($size-radius-base - 2px);
     background: transparent;
-    color: var(--color-text-primary);
-    font-size: var(--flowchat-font-size-xs);
+    color: var(--bf-appearance-token-color-text-primary);
+    font-size: var(--bf-appearance-token-flowchat-font-size-xs);
     text-align: left;
     white-space: nowrap;
     cursor: pointer;
 
     svg {
       flex: 0 0 auto;
-      color: var(--color-text-secondary);
+      color: var(--bf-appearance-token-color-text-secondary);
     }
 
     &:hover:not(:disabled) {
-      background: color-mix(in srgb, var(--element-bg-soft) 88%, transparent);
+      background: color-mix(in srgb, var(--bf-appearance-token-element-bg-soft) 88%, transparent);
     }
 
     &:disabled {
@@ -544,21 +414,21 @@
     }
 
     &--danger:hover:not(:disabled) {
-      color: var(--color-error);
-      background: color-mix(in srgb, var(--color-error) 12%, transparent);
+      color: var(--bf-appearance-token-color-error);
+      background: color-mix(in srgb, var(--bf-appearance-token-color-error) 12%, transparent);
 
       svg {
-        color: var(--color-error);
+        color: var(--bf-appearance-token-color-error);
       }
     }
   }
 
-  &__background-activity-list-title {
+  &__background-command-list-title {
     display: flex;
     align-items: center;
     gap: $size-gap-1;
     width: 100%;
-    font-size: var(--flowchat-font-size-sm);
+    font-size: var(--bf-appearance-token-flowchat-font-size-sm);
     color: inherit;
     white-space: nowrap;
     overflow: hidden;
@@ -566,7 +436,7 @@
 
     svg {
       flex: 0 0 auto;
-      color: var(--color-text-secondary);
+      color: var(--bf-appearance-token-color-text-secondary);
       opacity: 0.82;
     }
 
@@ -577,10 +447,10 @@
     }
   }
 
-  &__background-activity-list-meta {
+  &__background-command-list-meta {
     width: 100%;
-    font-size: var(--flowchat-font-size-xs);
-    color: var(--color-text-secondary);
+    font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+    color: var(--bf-appearance-token-color-text-secondary);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -589,8 +459,8 @@
   // ==================== Center message ====================
   &__message {
     position: absolute;
-    left: calc(var(--flowchat-header-side-width) + #{$size-gap-5});
-    right: calc(var(--flowchat-header-side-width) + #{$size-gap-5});
+    left: calc(var(--bf-appearance-token-flowchat-header-side-width) + #{$size-gap-5});
+    right: calc(var(--bf-appearance-token-flowchat-header-side-width) + #{$size-gap-5});
     min-width: 0;
     padding: 0 $size-gap-3;
     display: flex;
@@ -603,13 +473,13 @@
     transition: background $motion-base $easing-standard;
 
     &:hover {
-      background: color-mix(in srgb, var(--element-bg-soft) 70%, transparent);
+      background: color-mix(in srgb, var(--bf-appearance-token-element-bg-soft) 70%, transparent);
     }
 
     &:focus-visible {
       outline: none;
-      background: color-mix(in srgb, var(--element-bg-soft) 82%, transparent);
-      box-shadow: 0 0 0 1.5px var(--border-strong);
+      background: color-mix(in srgb, var(--bf-appearance-token-element-bg-soft) 82%, transparent);
+      box-shadow: 0 0 0 1.5px var(--bf-appearance-token-border-strong);
     }
   }
 
@@ -620,17 +490,17 @@
     max-width: 100%;
     padding: 2px 8px;
     border-radius: 999px;
-    background: color-mix(in srgb, var(--element-bg-soft) 82%, transparent);
-    color: var(--color-text-secondary);
-    font-size: var(--flowchat-font-size-xs);
+    background: color-mix(in srgb, var(--bf-appearance-token-element-bg-soft) 82%, transparent);
+    color: var(--bf-appearance-token-color-text-secondary);
+    font-size: var(--bf-appearance-token-flowchat-font-size-xs);
     line-height: 1;
     white-space: nowrap;
   }
 
   &__message-text {
     min-width: 0;
-    font-size: var(--flowchat-font-size-sm);
-    color: var(--color-text-primary);
+    font-size: var(--bf-appearance-token-flowchat-font-size-sm);
+    color: var(--bf-appearance-token-color-text-primary);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;

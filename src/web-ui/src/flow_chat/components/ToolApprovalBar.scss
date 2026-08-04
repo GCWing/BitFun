@@ -4,12 +4,12 @@
   align-items: stretch;
   justify-content: flex-start;
   gap: 6px;
-  margin: 0 0 var(--flowchat-card-gap);
-  padding: 8px var(--tool-card-expanded-pad-x);
-  border: 1px solid color-mix(in srgb, var(--color-warning) 42%, var(--border-base));
-  border-radius: calc(var(--flowchat-card-radius) + 1px);
-  background: color-mix(in srgb, var(--color-warning) 6%, var(--color-bg-scene));
-  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--color-warning) 72%, transparent);
+  margin: 0 0 var(--bf-appearance-token-flowchat-card-gap);
+  padding: 7px var(--bf-appearance-token-tool-card-expanded-pad-x);
+  border: 1px solid var(--bf-appearance-token-color-warning);
+  border-radius: var(--bf-appearance-token-flowchat-card-radius);
+  background: color-mix(in srgb, var(--bf-appearance-token-color-warning) 7%, var(--bf-appearance-token-color-bg-scene));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--bf-appearance-token-color-warning) 12%, transparent);
   box-sizing: border-box;
 }
 
@@ -17,21 +17,21 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--flowchat-inline-gap);
+  gap: var(--bf-appearance-token-flowchat-inline-gap);
 }
 
 .tool-approval-bar__message {
   min-width: 0;
-  color: var(--color-text-secondary);
-  font-size: var(--flowchat-font-size-sm);
-  line-height: var(--flowchat-support-line-height);
+  color: var(--bf-appearance-token-color-text-secondary);
+  font-size: var(--bf-appearance-token-flowchat-font-size-sm);
+  line-height: var(--bf-appearance-token-flowchat-support-line-height);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .tool-approval-bar__countdown {
-  color: var(--color-text-muted);
+  color: var(--bf-appearance-token-color-text-muted);
 }
 
 .tool-approval-bar__actions,
@@ -39,7 +39,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: flex-end;
-  gap: var(--flowchat-inline-gap);
+  gap: var(--bf-appearance-token-flowchat-inline-gap);
   flex-shrink: 0;
 }
 
@@ -52,27 +52,27 @@
   height: 16px;
   margin: 0 2px;
   flex-shrink: 0;
-  background: color-mix(in srgb, var(--border-subtle) 80%, transparent);
+  background: color-mix(in srgb, var(--bf-appearance-token-border-subtle) 80%, transparent);
 }
 
 .tool-approval-bar__auto-execute-button {
-  color: var(--color-text-secondary);
+  color: var(--bf-appearance-token-color-text-secondary);
 }
 
 .tool-approval-bar__auto-execute-button:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--color-success) 18%, transparent);
-  color: var(--color-success);
+  background: color-mix(in srgb, var(--bf-appearance-token-color-success) 18%, transparent);
+  color: var(--bf-appearance-token-color-success);
 }
 
 .tool-approval-bar__auto-execute-button:active:not(:disabled) {
-  background: color-mix(in srgb, var(--color-success) 24%, transparent);
-  color: var(--color-success);
+  background: color-mix(in srgb, var(--bf-appearance-token-color-success) 24%, transparent);
+  color: var(--bf-appearance-token-color-success);
 }
 
 .tool-approval-bar__instruction {
   display: flex;
   align-items: center;
-  gap: var(--flowchat-inline-gap);
+  gap: var(--bf-appearance-token-flowchat-inline-gap);
   min-width: 0;
 }
 
@@ -83,30 +83,30 @@
   min-width: 0;
   height: 28px;
   padding: 0 8px;
-  border: 1px solid var(--border-base);
+  border: 1px solid var(--bf-appearance-token-border-subtle);
   border-radius: 6px;
-  background: var(--color-bg-primary);
-  color: var(--color-text-primary);
-  font-size: var(--flowchat-font-size-sm);
+  background: var(--bf-appearance-token-color-bg-primary);
+  color: var(--bf-appearance-token-color-text-primary);
+  font-size: var(--bf-appearance-token-flowchat-font-size-sm);
   outline: none;
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-warning) 12%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--bf-appearance-token-color-warning) 12%, transparent);
 }
 
 .tool-approval-bar__instruction-submit {
   flex-shrink: 0;
   height: 28px;
   padding: 0 10px;
-  border: 1px solid color-mix(in srgb, var(--color-error) 45%, transparent);
+  border: 1px solid color-mix(in srgb, var(--bf-appearance-token-color-error) 45%, transparent);
   border-radius: 6px;
-  background: color-mix(in srgb, var(--color-error) 10%, transparent);
-  color: var(--color-error);
-  font-size: var(--flowchat-font-size-sm);
+  background: color-mix(in srgb, var(--bf-appearance-token-color-error) 10%, transparent);
+  color: var(--bf-appearance-token-color-error);
+  font-size: var(--bf-appearance-token-flowchat-font-size-sm);
   cursor: pointer;
   transition: transform 120ms cubic-bezier(0.23, 1, 0.32, 1);
 }
 
 .tool-approval-bar__instruction-submit:hover {
-  background: color-mix(in srgb, var(--color-error) 16%, transparent);
+  background: color-mix(in srgb, var(--bf-appearance-token-color-error) 16%, transparent);
 }
 
 .tool-approval-bar__instruction-submit:active:not(:disabled),
@@ -118,7 +118,7 @@
 .tool-approval-bar__instruction-submit:focus-visible,
 .tool-approval-bar__icon-button:focus-visible,
 .tool-approval-bar__auto-execute-button:focus-visible {
-  outline: 2px solid var(--border-accent);
+  outline: 2px solid var(--bf-appearance-token-border-accent);
   outline-offset: 1px;
 }
 

@@ -34,21 +34,24 @@ export const AcpPlanPanel: React.FC<AcpPlanPanelProps> = ({ entries }) => {
   const done = entries.filter((entry) => entry.status === 'completed').length;
 
   return (
-    <div className="bitfun-acp-plan" data-testid="acp-plan-panel">
-      <div className="bitfun-acp-plan__header">
-        <span className="bitfun-acp-plan__title">{t('chatInput.acpPlan.title')}</span>
-        <span className="bitfun-acp-plan__progress">
+    <div data-bf-component="acp-plan-panel" data-bf-part="root" className="bitfun-acp-plan" data-testid="acp-plan-panel">
+      <div data-bf-component="acp-plan-panel" data-bf-part="header" className="bitfun-acp-plan__header">
+        <span data-bf-component="acp-plan-panel" data-bf-part="title" className="bitfun-acp-plan__title">{t('chatInput.acpPlan.title')}</span>
+        <span data-bf-component="acp-plan-panel" data-bf-part="progress" className="bitfun-acp-plan__progress">
           {done}/{entries.length}
         </span>
       </div>
-      <ul className="bitfun-acp-plan__list">
+      <ul data-bf-component="acp-plan-panel" data-bf-part="list" className="bitfun-acp-plan__list">
         {entries.map((entry, index) => (
           <li
             key={`${index}-${entry.content}`}
+            data-bf-component="acp-plan-panel"
+            data-bf-part="item"
+            data-bf-status={entry.status}
             className={`bitfun-acp-plan__item bitfun-acp-plan__item--${entry.status}`}
           >
             {statusIcon(entry.status)}
-            <span className="bitfun-acp-plan__content">{entry.content}</span>
+            <span data-bf-component="acp-plan-panel" data-bf-part="content" className="bitfun-acp-plan__content">{entry.content}</span>
           </li>
         ))}
       </ul>

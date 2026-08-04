@@ -6,7 +6,7 @@
   }
 
   .review-session-summary-card__icon {
-    color: color-mix(in srgb, var(--color-accent-400) 76%, var(--color-text-primary));
+    color: color-mix(in srgb, var(--bf-appearance-token-color-accent-400) 76%, var(--bf-appearance-token-color-text-primary));
   }
 
   .review-session-summary-card__file-count {
@@ -14,8 +14,8 @@
     align-items: center;
     gap: 5px;
     margin-right: 2px;
-    color: var(--color-text-muted);
-    font-size: var(--flowchat-font-size-sm);
+    color: var(--bf-appearance-token-color-text-muted);
+    font-size: var(--bf-appearance-token-flowchat-font-size-sm);
   }
 }
 
@@ -24,23 +24,23 @@
   flex-direction: column;
   gap: 10px;
   padding: 12px;
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--bf-appearance-token-border-subtle);
   border-radius: 12px;
-  background: color-mix(in srgb, var(--color-bg-elevated) 82%, transparent);
+  background: color-mix(in srgb, var(--bf-appearance-token-color-bg-elevated) 82%, transparent);
 }
 
 .review-session-summary-card__summary {
   margin: 0;
-  color: var(--color-text-secondary);
-  font-size: var(--tool-card-action-font-size);
-  line-height: var(--flowchat-text-line-height);
+  color: var(--bf-appearance-token-color-text-secondary);
+  font-size: var(--bf-appearance-token-tool-card-action-font-size);
+  line-height: var(--bf-appearance-token-flowchat-text-line-height);
 }
 
 .review-session-summary-card__section-label {
   display: inline-flex;
   margin-bottom: 6px;
-  color: var(--color-text-muted);
-  font-size: var(--flowchat-font-size-xs);
+  color: var(--bf-appearance-token-color-text-muted);
+  font-size: var(--bf-appearance-token-flowchat-font-size-xs);
   font-weight: 650;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -52,24 +52,24 @@
     gap: 5px;
     margin: 0;
     padding-left: 16px;
-    color: var(--color-text-secondary);
-    font-size: var(--tool-card-action-font-size);
-    line-height: var(--flowchat-support-line-height);
+    color: var(--bf-appearance-token-color-text-secondary);
+    font-size: var(--bf-appearance-token-tool-card-action-font-size);
+    line-height: var(--bf-appearance-token-flowchat-support-line-height);
   }
 }
 
 .review-session-summary-card__open {
   align-self: flex-start;
   padding: 5px 10px;
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--bf-appearance-token-border-subtle);
   border-radius: 8px;
-  background: var(--element-bg-soft);
-  color: var(--color-text-primary);
-  font-size: var(--tool-card-action-font-size);
+  background: var(--bf-appearance-token-element-bg-soft);
+  color: var(--bf-appearance-token-color-text-primary);
+  font-size: var(--bf-appearance-token-tool-card-action-font-size);
   cursor: pointer;
 
   &:hover {
-    border-color: var(--border-medium);
-    background: var(--element-bg-base);
+    border-color: var(--bf-appearance-token-border-medium);
+    background: var(--bf-appearance-token-element-bg-base);
   }
 }

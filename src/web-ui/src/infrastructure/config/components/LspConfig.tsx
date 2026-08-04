@@ -101,12 +101,12 @@ const LspConfig: React.FC = () => {
   ) : null;
 
   return (
-    <ConfigPageLayout className="bitfun-lsp-config">
+    <ConfigPageLayout className="bitfun-lsp-config" data-bf-component="lsp-config" data-bf-part="root">
       <ConfigPageHeader title={t('title')} subtitle={t('subtitle')} />
 
       <ConfigPageContent>
         {installMessage && (
-          <div className="bitfun-lsp-config__message-container">
+          <div className="bitfun-lsp-config__message-container" data-bf-component="lsp-config" data-bf-part="message">
             <Alert type={installMessage.type === 'success' ? 'success' : 'error'} message={installMessage.text} />
           </div>
         )}
@@ -162,7 +162,7 @@ const LspConfig: React.FC = () => {
             </>
           }
         >
-          <div className="bitfun-lsp-config__plugins">
+          <div className="bitfun-lsp-config__plugins" data-bf-component="lsp-config" data-bf-part="plugins">
             <LspPluginList
               onInitialize={handleInitialize}
               onInstallPlugin={handleInstallPlugin}

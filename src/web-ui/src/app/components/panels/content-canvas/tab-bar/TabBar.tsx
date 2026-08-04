@@ -298,14 +298,16 @@ export const TabBar: React.FC<TabBarProps> = ({
   }, [onTabClose, visibleTabs]);
 
   return (
-    <div
+    <div data-bf-component="canvas-tab-bar" data-bf-part="root" data-bf-group={groupId} data-bf-state={isActiveGroup ? 'active' : ''}
       ref={containerRef}
       className={`canvas-tab-bar ${isActiveGroup ? 'is-active-group' : ''}`}
     >
       {/* Tab list */}
-      <div ref={tabsListRef} className="canvas-tab-bar__tabs">
+      <div ref={tabsListRef} className="canvas-tab-bar__tabs" data-bf-component="canvas-tab-bar" data-bf-part="list" data-bf-group={groupId}>
         {displayedTabs.map((tab, index) => (
           <div
+            data-bf-component="canvas-tab-bar"
+            data-bf-part="tabWrapper"
             key={tab.id}
             className="canvas-tab-bar__tab-wrapper"
             onDragOver={(e) => handleDragOver(e, index)}
@@ -314,7 +316,7 @@ export const TabBar: React.FC<TabBarProps> = ({
           >
             {/* Drop indicator */}
             {dragOverIndex === index && draggingTabId && (
-              <div className="canvas-tab-drop-indicator" />
+              <div data-bf-component="canvas-tab-bar" data-bf-part="dropIndicator" className="canvas-tab-drop-indicator" />
             )}
             
             <Tab
@@ -337,7 +339,7 @@ export const TabBar: React.FC<TabBarProps> = ({
       </div>
 
       {/* Actions area */}
-      <div ref={actionsRef} className="canvas-tab-bar__actions">
+      <div ref={actionsRef} className="canvas-tab-bar__actions" data-bf-component="canvas-tab-bar" data-bf-part="actions" data-bf-group={groupId}>
         {/* Overflow menu (all groups; mission control only in primary) */}
         {visibleTabs.length > 0 && layoutReady && (
           <TabOverflowMenu
@@ -354,6 +356,8 @@ export const TabBar: React.FC<TabBarProps> = ({
         {onCloseAllTabs && visibleTabs.length > 0 && (
           <Tooltip content={t('tabs.closeAll')} placement="bottom">
             <button
+              data-bf-component="canvas-tab-bar"
+              data-bf-part="action"
               className="canvas-tab-bar__action-btn canvas-tab-bar__action-btn--close-all"
               onClick={async (e) => {
                 e.stopPropagation();

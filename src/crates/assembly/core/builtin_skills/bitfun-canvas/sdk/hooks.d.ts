@@ -1,24 +1,24 @@
 import type { CanvasPalette, CanvasTokens } from "./canvas-tokens.js";
 /**
- * Host theme for the current canvas. Semantic color groups (`text`, `bg`,
+ * Host appearance for the current canvas. Semantic color groups (`text`, `bg`,
  * `fill`, `stroke`, `accent`, `diff`) live at the top level for ergonomic
  * inline-style access; `tokens` is also present as a self-reference for
  * callers that prefer a namespaced form.
  */
-export interface CanvasHostTheme extends CanvasTokens {
+export interface CanvasHostAppearance extends CanvasTokens {
     readonly kind: string;
     readonly tokens: CanvasTokens;
     readonly palette: CanvasPalette;
 }
 /**
- * Returns the current host theme. Falls back to dark mode when no host
+ * Returns the current host appearance. Falls back to dark mode when no host
  * state is available.
  *
  * Semantic color groups are available directly on the returned object —
  * `accent`, `text`, `bg`, `fill`, `stroke`, `diff` — as well as `kind`
  * (`"dark"` | `"light"` | …) and `palette` (the flat color palette).
  *
- * Call `useHostTheme()` inside each component that needs theme access —
+ * Call `useHostAppearance()` inside each component that needs appearance access —
  * the returned object is scoped to that component, not shared across
  * function boundaries.
  *
@@ -38,16 +38,16 @@ export interface CanvasHostTheme extends CanvasTokens {
  * @example
  * ```tsx
  * function Overview() {
- *   const theme = useHostTheme();
+ *   const appearance = useHostAppearance();
  *   return (
- *     <div style={{ background: theme.fill.tertiary, color: theme.text.secondary, padding: 8 }}>
- *       <span style={{ color: theme.accent.primary }}>Accent text</span>
+ *     <div style={{ background: appearance.fill.tertiary, color: appearance.text.secondary, padding: 8 }}>
+ *       <span style={{ color: appearance.accent.primary }}>Accent text</span>
  *     </div>
  *   );
  * }
  * ```
  */
-export declare function useHostTheme(): CanvasHostTheme;
+export declare function useHostAppearance(): CanvasHostAppearance;
 /**
  * Setter for `useCanvasState`. Accepts either a new value or an updater
  * function that receives the previous value.

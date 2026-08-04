@@ -19,7 +19,7 @@ const MiniAppGalleryScene: React.FC = () => {
   const [activeTab, setActiveTab] = useState<MiniAppGalleryTab>('installed');
 
   return (
-    <div className="miniapp-gallery-scene">
+    <div className="miniapp-gallery-scene" data-bf-scene="miniapp-gallery" data-bf-part="root">
       <Tabs
         className="miniapp-gallery-scene__tabs"
         type="line"

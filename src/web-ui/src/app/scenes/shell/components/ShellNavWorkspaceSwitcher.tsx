@@ -1,5 +1,6 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
+import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { Check, ChevronDown } from 'lucide-react';
 import { Tooltip } from '@/component-library/components/Tooltip';
 import { WorkspaceKind, type WorkspaceInfo } from '@/shared/types';
@@ -102,7 +103,7 @@ const ShellNavWorkspaceSwitcher: React.FC<ShellNavWorkspaceSwitcherProps> = ({
                 );
               })}
             </div>,
-            document.body,
+            getAppearanceOverlayHost(),
           )
         : null}
     </div>

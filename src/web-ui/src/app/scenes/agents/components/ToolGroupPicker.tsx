@@ -270,9 +270,9 @@ const GroupManagerModal: React.FC<GroupManagerModalProps> = ({
       contentInset
       testId="tool-group-manager"
     >
-      <div className="tool-group-manager">
+      <div className="tool-group-manager" data-bf-component="tool-group-picker" data-bf-part="manager">
         {isEditing ? (
-          <div className="tool-group-manager__editor">
+          <div className="tool-group-manager__editor" data-bf-component="tool-group-picker" data-bf-part="managerEditor">
             <div className="tool-group-manager__field">
               <label htmlFor="tool-group-name">{t('agentsOverview.toolGroups.groupName')}</label>
               <Input
@@ -292,7 +292,7 @@ const GroupManagerModal: React.FC<GroupManagerModalProps> = ({
             </div>
             <div className="tool-group-manager__field">
               <span>{t('agentsOverview.toolGroups.groupTools')}</span>
-              <div className="tool-group-manager__token-grid">
+              <div className="tool-group-manager__token-grid" data-bf-component="tool-group-picker" data-bf-part="tokenGrid">
                 {selectableTools.map((tool) => {
                   const selected = toolNames.has(tool.name);
                   const tooltipFields = toolTooltipFields(tool, t);
@@ -308,6 +308,9 @@ const GroupManagerModal: React.FC<GroupManagerModalProps> = ({
                       <button
                         type="button"
                         className={`tool-group-manager__token${selected ? ' is-on' : ''}`}
+                        data-bf-component="tool-group-picker"
+                        data-bf-part="token"
+                        data-bf-state={selected ? 'selected' : undefined}
                         onClick={() => toggleTool(tool.name)}
                         disabled={saving}
                         aria-label={capabilityTooltipAriaLabel(tool.name, tool.description, tooltipFields)}
@@ -343,11 +346,11 @@ const GroupManagerModal: React.FC<GroupManagerModalProps> = ({
             {groups.length === 0 ? (
               <p className="tool-group-manager__empty">{t('agentsOverview.toolGroups.noUserGroups')}</p>
             ) : (
-              <div className="tool-group-manager__list">
+              <div className="tool-group-manager__list" data-bf-component="tool-group-picker" data-bf-part="managerList">
                 {groups.map((group, index) => {
                   const unavailable = unavailableUserToolNames(group, tools);
                   return (
-                    <div key={group.id} className="tool-group-manager__group-row">
+                    <div data-bf-component="tool-group-picker" data-bf-part="managerGroup" key={group.id} className="tool-group-manager__group-row">
                       <div className="tool-group-manager__group-copy">
                         <span className="tool-group-manager__group-name">{group.name}</span>
                         <span className="tool-group-manager__group-meta">
@@ -357,7 +360,7 @@ const GroupManagerModal: React.FC<GroupManagerModalProps> = ({
                             : ''}
                         </span>
                       </div>
-                      <div className="tool-group-manager__group-actions">
+                      <div className="tool-group-manager__group-actions" data-bf-component="tool-group-picker" data-bf-part="groupActions">
                         <IconButton
                           type="button"
                           size="small"
@@ -441,8 +444,8 @@ export const ToolGroupPicker: React.FC<ToolGroupPickerProps> = ({
   }, [groups, t]);
 
   return (
-    <div className="tool-group-picker" data-testid={testId}>
-      <div className="tool-group-picker__head">
+    <div data-bf-component="tool-group-picker" data-bf-part="root" className="tool-group-picker" data-testid={testId}>
+      <div className="tool-group-picker__head" data-bf-component="tool-group-picker" data-bf-part="head">
         <span className="tool-group-picker__selected-count">
           {t('agentsOverview.toolGroups.selectedCount', { count: selectedCount })}
         </span>
@@ -456,23 +459,23 @@ export const ToolGroupPicker: React.FC<ToolGroupPickerProps> = ({
           {t('agentsOverview.toolGroups.manageGroups')}
         </Button>
       </div>
-      <div className="tool-group-picker__sections">
+      <div className="tool-group-picker__sections" data-bf-component="tool-group-picker" data-bf-part="sections">
         {sections.map(([sectionLabel, sectionGroups]) => (
-          <section key={sectionLabel} className="tool-group-picker__section">
+          <section key={sectionLabel} className="tool-group-picker__section" data-bf-component="tool-group-picker" data-bf-part="section">
             <span className="tool-group-picker__section-label">{sectionLabel}</span>
             {sectionGroups.map((group) => {
               const selectedInGroup = selectedGroupToolCount(group, selectedToolNames);
               const allSelected = isGroupEnabled(group, selectedToolNames);
               return (
-                <div key={group.id} className="tool-group-picker__group">
-                  <div className="tool-group-picker__group-head">
+                <div data-bf-component="tool-group-picker" data-bf-part="group" key={group.id} className="tool-group-picker__group">
+                  <div className="tool-group-picker__group-head" data-bf-component="tool-group-picker" data-bf-part="groupHeader">
                     <div className="tool-group-picker__group-title-wrap">
                       <span className="tool-group-picker__group-name">{group.label}</span>
                       <span className="tool-group-picker__group-count">
                         {selectedInGroup}/{group.tools.length}
                       </span>
                     </div>
-                    <div className="tool-group-picker__group-actions">
+                    <div className="tool-group-picker__group-actions" data-bf-component="tool-group-picker" data-bf-part="groupActions">
                       {selectedInGroup > 0 && !allSelected ? (
                         <Button
                           variant="ghost"
@@ -502,7 +505,7 @@ export const ToolGroupPicker: React.FC<ToolGroupPickerProps> = ({
                       />
                     </div>
                   </div>
-                  <div className="tool-group-picker__token-grid">
+                  <div className="tool-group-picker__token-grid" data-bf-component="tool-group-picker" data-bf-part="tokenGrid">
                     {group.tools.map((tool) => {
                       const selected = selectedToolNames.includes(tool.name);
                       const tooltipFields = toolTooltipFields(tool, t);
@@ -518,6 +521,9 @@ export const ToolGroupPicker: React.FC<ToolGroupPickerProps> = ({
                           <button
                             type="button"
                             className={`tool-group-picker__token${selected ? ' is-on' : ''}`}
+                            data-bf-component="tool-group-picker"
+                            data-bf-part="token"
+                            data-bf-state={selected ? 'selected' : undefined}
                             onClick={() => onSelectionChange(
                               toggleToolSelection(selectedToolNames, tool.name),
                             )}
@@ -559,13 +565,13 @@ export const ToolGroupSummary: React.FC<ToolGroupSummaryProps> = ({
   );
 
   if (groups.length === 0) {
-    return <span className="agent-card__empty-inline">{t('agentsOverview.toolGroups.noEnabledTools')}</span>;
+    return <span data-bf-component="tool-group-picker" data-bf-part="empty" className="agent-card__empty-inline">{t('agentsOverview.toolGroups.noEnabledTools')}</span>;
   }
 
   return (
-    <div className="tool-group-summary">
+    <div data-bf-component="tool-group-picker" data-bf-part="summary" className="tool-group-summary">
       {groups.map((group) => (
-        <div key={group.id} className="tool-group-summary__group">
+        <div key={group.id} className="tool-group-summary__group" data-bf-component="tool-group-picker" data-bf-part="summaryGroup">
           <span className="tool-group-summary__label">{group.label}</span>
           <div className="tool-group-summary__tools">
             {group.tools.map((tool) => {

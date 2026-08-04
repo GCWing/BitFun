@@ -8,7 +8,7 @@ import { useTranslation } from 'react-i18next';
 import { Tooltip } from '@/component-library';
 import './ScrollToBottomButton.scss';
 
-interface ScrollToBottomButtonProps {
+interface ScrollToBottomButtonProps extends Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, 'onClick'> {
   visible: boolean;
   onClick: () => void;
   unreadCount?: number; // Optional: show unread message count.
@@ -19,7 +19,8 @@ export const ScrollToBottomButton: React.FC<ScrollToBottomButtonProps> = ({
   visible,
   onClick,
   unreadCount,
-  className = ''
+  className = '',
+  ...buttonProps
 }) => {
   const { t } = useTranslation('flow-chat');
   
@@ -27,13 +28,15 @@ export const ScrollToBottomButton: React.FC<ScrollToBottomButtonProps> = ({
 
   return (
     <Tooltip content={t('scroll.toBottom')}>
-      <button
-        type="button"
+      <button data-bf-component="scroll-to-bottom-button" data-bf-part="root"
         className={`scroll-to-bottom-button ${className}`}
         onClick={onClick}
         aria-label={unreadCount ? t('scroll.toBottomWithCount', { count: unreadCount }) : t('scroll.toBottom')}
+        {...buttonProps}
       >
         <svg
+          data-bf-component="scroll-to-bottom-button"
+          data-bf-part="icon"
           className="scroll-icon"
           width="20"
           height="20"
@@ -47,7 +50,7 @@ export const ScrollToBottomButton: React.FC<ScrollToBottomButtonProps> = ({
           <polyline points="6 9 12 15 18 9" />
         </svg>
         {unreadCount !== undefined && unreadCount > 0 && (
-          <span className="unread-badge">{unreadCount > 99 ? '99+' : unreadCount}</span>
+          <span data-bf-component="scroll-to-bottom-button" data-bf-part="badge" className="unread-badge">{unreadCount > 99 ? '99+' : unreadCount}</span>
         )}
       </button>
     </Tooltip>

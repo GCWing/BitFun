@@ -9,61 +9,80 @@
   font-weight: tokens.$font-weight-medium;
   border: 1px solid transparent;
   transition:
-    background-color var(--motion-fast) ease,
-    border-color var(--motion-fast) ease,
-    color var(--motion-fast) ease;
+    background-color var(--bf-appearance-token-motion-fast) ease,
+    border-color var(--bf-appearance-token-motion-fast) ease,
+    color var(--bf-appearance-token-motion-fast) ease;
   position: relative;
 
   &--small {
-    font-size: var(--font-size-xs);
+    font-size: var(--bf-appearance-token-font-size-xs);
     padding: 2px tokens.$size-gap-2;
     gap: tokens.$size-gap-1;
   }
 
   &--medium {
-    font-size: var(--font-size-xs);
+    font-size: var(--bf-appearance-token-font-size-xs);
     padding: tokens.$size-gap-1 tokens.$size-gap-3;
   }
 
   &--large {
-    font-size: var(--font-size-sm);
+    font-size: var(--bf-appearance-token-font-size-sm);
     padding: tokens.$size-gap-2 tokens.$size-gap-4;
   }
 
   &--blue {
-    background: var(--color-accent-200);
-    color: var(--color-text-secondary);
+    background: var(--bf-appearance-token-color-accent-200);
+    color: var(--bf-appearance-token-color-text-secondary);
 
+    &:hover {
+      background: var(--bf-appearance-token-color-accent-300);
+    }
   }
 
   &--green {
-    background: color-mix(in srgb, var(--color-success) 14%, transparent);
-    color: var(--color-success);
+    background: color-mix(in srgb, var(--bf-appearance-token-color-success) 14%, transparent);
+    color: var(--bf-appearance-token-color-success);
 
+    &:hover {
+      background: color-mix(in srgb, var(--bf-appearance-token-color-success) 20%, transparent);
+    }
   }
 
   &--red {
-    background: color-mix(in srgb, var(--color-error) 14%, transparent);
-    color: var(--color-error);
+    background: color-mix(in srgb, var(--bf-appearance-token-color-error) 14%, transparent);
+    color: var(--bf-appearance-token-color-error);
 
+    &:hover {
+      background: color-mix(in srgb, var(--bf-appearance-token-color-error) 20%, transparent);
+    }
   }
 
   &--yellow {
-    background: color-mix(in srgb, var(--color-warning) 14%, transparent);
-    color: var(--color-warning);
+    background: color-mix(in srgb, var(--bf-appearance-token-color-warning) 14%, transparent);
+    color: var(--bf-appearance-token-color-warning);
 
+    &:hover {
+      background: color-mix(in srgb, var(--bf-appearance-token-color-warning) 20%, transparent);
+    }
   }
 
   &--purple {
-    background: var(--color-purple-200);
-    color: var(--color-purple-500);
+    background: var(--bf-appearance-token-color-purple-200);
+    color: var(--bf-appearance-token-color-purple-500);
 
+    &:hover {
+      background: color-mix(in srgb, var(--bf-appearance-token-color-purple-500) 20%, transparent);
+    }
   }
 
   &--gray {
-    background: var(--element-bg-medium);
-    color: var(--color-text-secondary);
+    background: var(--bf-appearance-token-element-bg-medium);
+    color: var(--bf-appearance-token-color-text-secondary);
 
+    &:hover {
+      background: var(--bf-appearance-token-element-bg-strong);
+      color: var(--bf-appearance-token-color-text-primary);
+    }
   }
 
   &--rounded {
@@ -88,12 +107,12 @@
     transform: scale(1);
     color: currentColor;
     transition:
-      background-color var(--motion-fast) ease,
-      color var(--motion-fast) ease,
-      transform var(--motion-fast) var(--easing-standard);
+      background-color var(--bf-appearance-token-motion-fast) ease,
+      color var(--bf-appearance-token-motion-fast) ease,
+      transform var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard);
 
-    &:active {
-      transform: scale(0.97);
+    &:hover {
+      background: var(--bf-appearance-token-color-overlay-black-15);
     }
 
     svg {
@@ -105,32 +124,32 @@
 
 @media (hover: hover) and (pointer: fine) {
   .tag--blue:hover {
-    background: var(--color-accent-300);
+    background: var(--bf-appearance-token-color-accent-300);
   }
 
   .tag--green:hover {
-    background: color-mix(in srgb, var(--color-success) 20%, transparent);
+    background: color-mix(in srgb, var(--bf-appearance-token-color-success) 20%, transparent);
   }
 
   .tag--red:hover {
-    background: color-mix(in srgb, var(--color-error) 20%, transparent);
+    background: color-mix(in srgb, var(--bf-appearance-token-color-error) 20%, transparent);
   }
 
   .tag--yellow:hover {
-    background: color-mix(in srgb, var(--color-warning) 20%, transparent);
+    background: color-mix(in srgb, var(--bf-appearance-token-color-warning) 20%, transparent);
   }
 
   .tag--purple:hover {
-    background: color-mix(in srgb, var(--color-purple-500) 20%, transparent);
+    background: color-mix(in srgb, var(--bf-appearance-token-color-purple-500) 20%, transparent);
   }
 
   .tag--gray:hover {
-    background: var(--element-bg-strong);
-    color: var(--color-text-primary);
+    background: var(--bf-appearance-token-element-bg-strong);
+    color: var(--bf-appearance-token-color-text-primary);
   }
 
   .tag__close:hover {
-    background: var(--color-overlay-black-15);
+    background: var(--bf-appearance-token-color-overlay-black-15);
   }
 }
 

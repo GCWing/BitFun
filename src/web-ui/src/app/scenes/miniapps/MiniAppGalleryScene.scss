@@ -23,8 +23,8 @@ $scene-gutter: clamp(28px, 4vw, 64px);
     > .bitfun-tabs__nav {
       flex: 0 0 auto;
       padding: $size-gap-1 $scene-gutter 0;
-      background: var(--color-bg-primary);
-      border-bottom-color: var(--border-subtle);
+      background: var(--bf-appearance-token-color-bg-primary);
+      border-bottom-color: var(--bf-appearance-token-border-subtle);
     }
 
     > .bitfun-tabs__content {

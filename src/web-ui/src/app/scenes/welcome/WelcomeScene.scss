@@ -16,7 +16,7 @@
   padding: clamp(#{$size-gap-6}, 6vh, #{$size-gap-12}) $size-gap-8;
   overflow-y: auto;
   overscroll-behavior: contain;
-  background: var(--color-bg-scene);
+  background: var(--bf-appearance-token-color-bg-scene);
   animation: welcome-scene-reveal 180ms cubic-bezier(0.23, 1, 0.32, 1) both;
 
   &__content {
@@ -37,35 +37,40 @@
 
   &__title {
     margin: 0;
-    color: var(--color-text-primary);
-    font-size: clamp(var(--font-size-2xl), 3vw, 32px);
+    font-size: var(--bf-appearance-token-font-size-2xl);
+    line-height: $line-height-tight;
+    letter-spacing: -0.02em;
+    color: var(--bf-appearance-token-color-text-primary);
     font-weight: $font-weight-semibold;
     line-height: 1.08;
     letter-spacing: -0.025em;
   }
 
   &__greeting-label {
-    max-width: 560px;
+    font-size: var(--bf-appearance-token-font-size-lg);
+    line-height: 1.5;
+    color: var(--bf-appearance-token-color-text-primary);
     margin: 0;
-    color: var(--color-text-secondary);
-    font-size: var(--font-size-base);
+    color: var(--bf-appearance-token-color-text-secondary);
+    font-size: var(--bf-appearance-token-font-size-base);
     line-height: 1.55;
   }
 
   &__divider {
-    display: none;
+    height: 1px;
+    background: var(--bf-appearance-token-border-subtle);
   }
 
   &__switch {
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    border: 1px solid var(--border-subtle);
+    border: 1px solid var(--bf-appearance-token-border-subtle);
     border-radius: $size-radius-lg;
-    background: color-mix(in srgb, var(--color-bg-secondary) 54%, var(--color-bg-scene));
+    background: color-mix(in srgb, var(--bf-appearance-token-color-bg-secondary) 54%, var(--bf-appearance-token-color-bg-scene));
     box-shadow:
-      0 1px 0 color-mix(in srgb, var(--color-static-white) 4%, transparent) inset,
-      0 12px 30px -20px var(--color-overlay-black-30);
+      0 1px 0 color-mix(in srgb, var(--bf-appearance-token-color-static-white) 4%, transparent) inset,
+      0 12px 30px -20px var(--bf-appearance-token-color-overlay-black-30);
   }
 
   &__switch-header {
@@ -75,23 +80,21 @@
     gap: $size-gap-3;
     min-height: 46px;
     padding: $size-gap-2 $size-gap-3;
-    border-bottom: 1px solid var(--border-subtle);
+    border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
   }
 
   &__section-label {
     display: flex;
     align-items: center;
-    gap: 6px;
-    min-width: 0;
-    color: var(--color-text-secondary);
-    font-size: var(--font-size-xs);
-    font-weight: $font-weight-semibold;
-    letter-spacing: 0.045em;
+    gap: $size-gap-1;
+    font-size: var(--bf-appearance-token-font-size-sm);
+    color: var(--bf-appearance-token-color-text-muted);
+    font-weight: $font-weight-medium;
     text-transform: uppercase;
 
     svg {
       flex-shrink: 0;
-      color: var(--color-text-muted);
+      color: var(--bf-appearance-token-color-text-muted);
     }
   }
 
@@ -111,19 +114,17 @@
     border: none;
     border-radius: $size-radius-sm;
     background: transparent;
-    color: var(--color-text-muted);
-    font: inherit;
-    font-size: var(--font-size-xs);
-    white-space: nowrap;
+    color: var(--bf-appearance-token-color-text-muted);
+    font-size: var(--bf-appearance-token-font-size-sm);
     cursor: pointer;
     transition:
       transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
       background 120ms ease,
       color 120ms ease;
 
-    &:active:not(:disabled) {
-      transform: scale(0.97);
-      background: var(--element-bg-medium);
+    &:hover:not(:disabled) {
+      background: var(--bf-appearance-token-element-bg-soft);
+      color: var(--bf-appearance-token-color-text-secondary);
     }
 
     &:disabled {
@@ -148,8 +149,34 @@
     align-items: stretch;
     min-height: 38px;
     overflow: hidden;
-    border-radius: $size-radius-base;
-    transition: background 120ms ease;
+    transition: background $motion-fast $easing-standard;
+
+    &:hover {
+      background: var(--bf-appearance-token-element-bg-soft);
+
+      .welcome-scene__recent-item {
+        color: var(--bf-appearance-token-color-text-primary);
+
+        svg { color: var(--bf-appearance-token-color-text-secondary); }
+      }
+
+      .welcome-scene__recent-time-btn__label {
+        opacity: 0;
+      }
+
+      .welcome-scene__recent-time-btn__icon {
+        opacity: 1;
+        color: var(--bf-appearance-token-color-text-secondary);
+      }
+    }
+
+    &:hover .welcome-scene__recent-time-btn:hover {
+      background: var(--bf-appearance-token-element-bg-subtle);
+
+      .welcome-scene__recent-time-btn__icon svg {
+        transform: scale(1.12);
+      }
+    }
   }
 
   &__recent-item {
@@ -158,12 +185,12 @@
     gap: $size-gap-2;
     flex: 1;
     min-width: 0;
-    padding: 0 $size-gap-2;
+    padding: calc(#{$size-gap-1} + 2px) $size-gap-2;
     border: none;
     background: transparent;
-    color: var(--color-text-secondary);
-    font: inherit;
-    font-size: var(--font-size-sm);
+    color: var(--bf-appearance-token-color-text-secondary);
+    font-size: var(--bf-appearance-token-font-size-base);
+    cursor: pointer;
     text-align: left;
     cursor: pointer;
     transition:
@@ -172,12 +199,8 @@
 
     svg {
       flex-shrink: 0;
-      color: var(--color-text-muted);
-      transition: color 120ms ease;
-    }
-
-    &:active {
-      transform: scale(0.99);
+      color: var(--bf-appearance-token-color-text-muted);
+      transition: color $motion-fast $easing-standard;
     }
   }
 
@@ -191,9 +214,8 @@
     border: none;
     border-radius: $size-radius-sm;
     background: transparent;
-    color: var(--color-text-muted);
-    font: inherit;
-    font-size: var(--font-size-xs);
+    color: var(--bf-appearance-token-color-text-muted);
+    font-size: var(--bf-appearance-token-font-size-sm);
     cursor: pointer;
     transition:
       transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
@@ -216,7 +238,7 @@
       justify-content: flex-end;
       padding-right: $size-gap-2;
       opacity: 0;
-      color: var(--color-text-muted);
+      color: var(--bf-appearance-token-color-text-muted);
       pointer-events: none;
       transition:
         opacity 100ms ease,
@@ -228,8 +250,8 @@
     }
 
     &:focus-visible {
-      z-index: 1;
-      outline: 2px solid var(--color-accent-500);
+      color: var(--bf-appearance-token-color-text-primary);
+      outline: 2px solid var(--bf-appearance-token-color-accent-500);
       outline-offset: -2px;
     }
 
@@ -239,7 +261,7 @@
 
     &:focus-visible &__icon {
       opacity: 1;
-      color: var(--color-text-primary);
+      color: var(--bf-appearance-token-color-text-secondary);
     }
   }
 
@@ -258,40 +280,42 @@
     flex-shrink: 0;
     max-width: 40%;
     overflow: hidden;
-    color: var(--color-text-muted);
-    font-size: var(--font-size-xs);
     text-overflow: ellipsis;
+    color: var(--bf-appearance-token-color-text-muted);
+    font-size: var(--bf-appearance-token-font-size-sm);
   }
 
   &__recent-host-sep {
     flex-shrink: 0;
-    color: var(--color-text-disabled);
-    font-size: var(--font-size-xs);
+    color: var(--bf-appearance-token-color-text-muted);
+    opacity: 0.6;
+    font-size: var(--bf-appearance-token-font-size-sm);
   }
 
   &__no-recent {
-    min-height: 72px;
+    font-size: var(--bf-appearance-token-font-size-xs);
+    color: var(--bf-appearance-token-color-text-muted);
     margin: 0;
     padding: $size-gap-4;
-    color: var(--color-text-muted);
-    font-size: var(--font-size-sm);
+    color: var(--bf-appearance-token-color-text-muted);
+    font-size: var(--bf-appearance-token-font-size-sm);
   }
 }
 
 @media (hover: hover) and (pointer: fine) {
   .welcome-scene__link-btn:hover:not(:disabled) {
-    background: var(--element-bg-soft);
-    color: var(--color-text-primary);
+    background: var(--bf-appearance-token-element-bg-soft);
+    color: var(--bf-appearance-token-color-text-primary);
   }
 
   .welcome-scene__recent-row:hover {
-    background: var(--element-bg-soft);
+    background: var(--bf-appearance-token-element-bg-soft);
 
     .welcome-scene__recent-item {
-      color: var(--color-text-primary);
+      color: var(--bf-appearance-token-color-text-primary);
 
       svg {
-        color: var(--color-text-secondary);
+        color: var(--bf-appearance-token-color-text-secondary);
       }
     }
 
@@ -301,21 +325,21 @@
 
     .welcome-scene__recent-time-btn__icon {
       opacity: 1;
-      color: var(--color-text-secondary);
+      color: var(--bf-appearance-token-color-text-secondary);
     }
   }
 
   .welcome-scene__recent-time-btn:hover {
-    background: var(--element-bg-medium);
-    color: var(--color-text-primary);
+    background: var(--bf-appearance-token-element-bg-medium);
+    color: var(--bf-appearance-token-color-text-primary);
   }
 }
 
-:root[data-theme-type='light'] .welcome-scene__switch {
-  border-color: var(--border-medium);
+:root[data-bf-appearance-mode='light'] .welcome-scene__switch {
+  border-color: var(--bf-appearance-token-border-medium);
   box-shadow:
-    0 1px 0 color-mix(in srgb, var(--color-static-white) 46%, transparent) inset,
-    0 14px 32px -24px var(--color-overlay-black-30);
+    0 1px 0 color-mix(in srgb, var(--bf-appearance-token-color-static-white) 46%, transparent) inset,
+    0 14px 32px -24px var(--bf-appearance-token-color-overlay-black-30);
 }
 
 @keyframes welcome-scene-reveal {

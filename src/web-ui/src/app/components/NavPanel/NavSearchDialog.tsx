@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { FolderOpen, User, MessageSquare } from 'lucide-react';
 import { Search } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
@@ -321,23 +322,23 @@ const NavSearchDialog: React.FC<NavSearchDialogProps> = ({ open, onClose }) => {
     const startIndex = globalIndex;
     globalIndex += items.length;
     return (
-      <div className="bitfun-nav-search-dialog__group" key={groupLabel}>
-        <div className="bitfun-nav-search-dialog__group-label">{groupLabel}</div>
+      <div data-bf-component="nav-search-dialog" data-bf-part="group" className="bitfun-nav-search-dialog__group" key={groupLabel}>
+        <div data-bf-component="nav-search-dialog" data-bf-part="groupLabel" className="bitfun-nav-search-dialog__group-label">{groupLabel}</div>
         {items.map((item, i) => {
           const idx = startIndex + i;
           return (
-            <button
+            <button data-bf-component="nav-search-dialog" data-bf-part="item" data-bf-state={idx === activeIndex ? 'active' : undefined}
               key={item.id}
               type="button"
               className={`bitfun-nav-search-dialog__item${idx === activeIndex ? ' bitfun-nav-search-dialog__item--active' : ''}`}
               onMouseEnter={() => setActiveIndex(idx)}
               onClick={() => void handleSelect(item)}
             >
-              <span className="bitfun-nav-search-dialog__item-icon">{icon(item)}</span>
-              <span className="bitfun-nav-search-dialog__item-content">
-                <span className="bitfun-nav-search-dialog__item-label">{item.label}</span>
+              <span data-bf-component="nav-search-dialog" data-bf-part="itemIcon" className="bitfun-nav-search-dialog__item-icon">{icon(item)}</span>
+              <span data-bf-component="nav-search-dialog" data-bf-part="itemContent" className="bitfun-nav-search-dialog__item-content">
+                <span data-bf-component="nav-search-dialog" data-bf-part="itemLabel" className="bitfun-nav-search-dialog__item-label">{item.label}</span>
                 {item.sublabel && (
-                  <span className="bitfun-nav-search-dialog__item-sublabel">{item.sublabel}</span>
+                  <span data-bf-component="nav-search-dialog" data-bf-part="itemSublabel" className="bitfun-nav-search-dialog__item-sublabel">{item.sublabel}</span>
                 )}
               </span>
             </button>
@@ -348,16 +349,12 @@ const NavSearchDialog: React.FC<NavSearchDialogProps> = ({ open, onClose }) => {
   };
 
   const dialog = (
-    <div className="bitfun-nav-search-dialog__overlay" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div
-        className="bitfun-nav-search-dialog__card"
-        ref={cardRef}
-        role="dialog"
-        aria-modal="true"
-        aria-label={t('nav.search.triggerTooltip')}
-      >
-        <div className="bitfun-nav-search-dialog__input-row">
+    <div data-bf-component="nav-search-dialog" data-bf-part="root" className="bitfun-nav-search-dialog__overlay" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div data-bf-component="nav-search-dialog" data-bf-part="card" className="bitfun-nav-search-dialog__card" ref={cardRef}>
+        <div data-bf-component="nav-search-dialog" data-bf-part="inputRow" className="bitfun-nav-search-dialog__input-row">
           <Search
+            data-bf-component="nav-search-dialog"
+            data-bf-part="search"
             ref={inputRef}
             className="bitfun-nav-search-dialog__search"
             placeholder={t('nav.search.inputPlaceholder')}
@@ -370,17 +367,17 @@ const NavSearchDialog: React.FC<NavSearchDialogProps> = ({ open, onClose }) => {
             autoFocus
           />
         </div>
-        <div className="bitfun-nav-search-dialog__results" ref={listRef}>
+        <div data-bf-component="nav-search-dialog" data-bf-part="results" className="bitfun-nav-search-dialog__results" ref={listRef}>
           {results.length === 0 && !showDefaultSessionColumn ? (
-            <div className="bitfun-nav-search-dialog__empty">{t('nav.search.empty')}</div>
+            <div data-bf-component="nav-search-dialog" data-bf-part="empty" className="bitfun-nav-search-dialog__empty">{t('nav.search.empty')}</div>
           ) : (
             <>
               {renderGroup(t('nav.search.groupWorkspaces'), workspaceItems, () => <FolderOpen size={14} />)}
               {renderGroup(t('nav.search.groupAssistants'), assistantItems, () => <User size={14} />)}
               {showDefaultSessionColumn ? (
-                <div className="bitfun-nav-search-dialog__group" key="nav-search-sessions-default">
-                  <div className="bitfun-nav-search-dialog__group-label">{t('nav.search.groupSessions')}</div>
-                  <div className="bitfun-nav-search-dialog__session-hint" role="status">
+                <div data-bf-component="nav-search-dialog" data-bf-part="group" className="bitfun-nav-search-dialog__group" key="nav-search-sessions-default">
+                  <div data-bf-component="nav-search-dialog" data-bf-part="groupLabel" className="bitfun-nav-search-dialog__group-label">{t('nav.search.groupSessions')}</div>
+                  <div data-bf-component="nav-search-dialog" data-bf-part="sessionHint" className="bitfun-nav-search-dialog__session-hint" role="status">
                     {t('nav.search.sessionSearchHintDefault')}
                   </div>
                 </div>
@@ -394,7 +391,7 @@ const NavSearchDialog: React.FC<NavSearchDialogProps> = ({ open, onClose }) => {
     </div>
   );
 
-  return createPortal(dialog, document.body);
+  return createPortal(dialog, getAppearanceOverlayHost());
 };
 
 export default NavSearchDialog;

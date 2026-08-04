@@ -79,7 +79,7 @@ Publishing is an outward-facing action: only call this when the user explicitly 
                     "items": { "type": "string" },
                     "minItems": 1,
                     "maxItems": 5,
-                    "description": "1-5 absolute paths to PNG/JPEG/WebP screenshots of the running app, each <= 5 MiB"
+                    "description": "1-5 absolute paths to PNG/JPEG/WebP screenshots of the running app, each <= 5 MiB. Use a 16:9 aspect ratio (1920x1080 recommended, 2560x1440 max useful): both the web market and the BitFun desktop client crop screenshots to 16:9, so other ratios lose their edges. The first screenshot is the listing card cover — pick the one that best shows what the app does, and keep key content away from the edges."
                 },
                 "changelog": {
                     "type": "string",

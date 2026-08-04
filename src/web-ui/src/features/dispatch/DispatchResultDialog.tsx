@@ -1,129 +1,72 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, Button, Modal, confirmWarning } from '@/component-library';
+import { Alert, Button, Modal } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import { createLogger } from '@/shared/utils/logger';
-import { FileDiff, FilePlus, FileX, Loader2 } from 'lucide-react';
+import { GitCommitHorizontal, Loader2 } from 'lucide-react';
 import { dispatchApi } from './dispatchApi';
-import type {
-  DispatchResultApplyOutcome,
-  DispatchResultBundle,
-} from './types';
+import type { DispatchSyncResult } from './types';
 import './DispatchResultDialog.scss';
 
-const log = createLogger('DispatchResultDialog');
-const DIALOG_TITLE_ID = 'dispatch-result-dialog-title';
+const log = createLogger('DispatchSyncDialog');
+const DIALOG_TITLE_ID = 'dispatch-sync-dialog-title';
 
 interface DispatchResultDialogProps {
   open: boolean;
   jobId: string;
-  /** Local workspace an applied bundle would be written into. */
-  workspacePath: string;
+  branch?: string;
+  baselineWorktreePath?: string;
+  baselineMissing?: boolean;
   targetLabel?: string;
   onClose: () => void;
 }
 
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
 /**
- * Review what a finished dispatch job changed on its target, then decide
- * whether any of it reaches the local workspace.
- *
- * The target and the local tree diverged independently after the snapshot, so
- * nothing is written until the user has seen the list and said so. When a path
- * moved on both sides the apply aborts rather than picking a winner.
+ * Commit the target worktree and fast-forward the controller's managed
+ * baseline worktree from a Git bundle. The user's checkout is never touched.
  */
 export const DispatchResultDialog: React.FC<DispatchResultDialogProps> = ({
   open,
   jobId,
-  workspacePath,
+  branch,
+  baselineWorktreePath,
+  baselineMissing = false,
   targetLabel,
   onClose,
 }) => {
   const { t } = useI18n('common');
-  const [bundle, setBundle] = useState<DispatchResultBundle | null>(null);
-  const [outcome, setOutcome] = useState<DispatchResultApplyOutcome | null>(null);
-  const [pulling, setPulling] = useState(false);
-  const [applying, setApplying] = useState(false);
+  const [result, setResult] = useState<DispatchSyncResult | null>(null);
+  const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // Discards results of requests that resolve after the dialog moved on.
   const generationRef = useRef(0);
 
   useEffect(() => {
-    if (!open) {
-      generationRef.current += 1;
-      setBundle(null);
-      setOutcome(null);
-      setError(null);
-      setPulling(false);
-      setApplying(false);
-    }
-  }, [open]);
-
-  const pull = useCallback(async () => {
-    if (!jobId) return;
-    const generation = ++generationRef.current;
-    setPulling(true);
+    generationRef.current += 1;
+    setResult(null);
     setError(null);
-    setOutcome(null);
-    try {
-      const result = await dispatchApi.pullResult(jobId);
-      if (generation !== generationRef.current) return;
-      setBundle(result);
-    } catch (nextError) {
-      if (generation !== generationRef.current) return;
-      setError(errorMessage(nextError));
-      log.warn('Failed to pull dispatch result', { jobId, error: nextError });
-    } finally {
-      if (generation === generationRef.current) setPulling(false);
-    }
-  }, [jobId]);
+    setSyncing(false);
+  }, [jobId, open]);
 
-  useEffect(() => {
-    if (open && jobId) void pull();
-  }, [open, jobId, pull]);
-
-  const apply = useCallback(async (overwriteConflicts: boolean) => {
-    if (!jobId || !workspacePath) return;
+  const sync = useCallback(async () => {
+    if (!jobId || baselineMissing) return;
     const generation = ++generationRef.current;
-    if (overwriteConflicts) {
-      const confirmed = await confirmWarning(
-        t('dispatch.resultOverwriteTitle'),
-        t('dispatch.resultOverwriteMessage'),
-        {
-          confirmText: t('dispatch.resultOverwriteConfirm'),
-          cancelText: t('dispatch.cancel'),
-        },
-      );
-      if (!confirmed || generation !== generationRef.current) return;
-    }
-    setApplying(true);
+    setSyncing(true);
     setError(null);
     try {
-      const applied = await dispatchApi.applyResult(jobId, workspacePath, overwriteConflicts);
+      const synced = await dispatchApi.syncResult(jobId);
       if (generation !== generationRef.current) return;
-      setOutcome(applied);
+      setResult(synced);
     } catch (nextError) {
       if (generation !== generationRef.current) return;
-      setError(errorMessage(nextError));
-      log.warn('Failed to apply dispatch result', { jobId, error: nextError });
+      setError(t('dispatch.syncFailed'));
+      log.warn('Failed to sync dispatch result', { jobId, error: nextError });
     } finally {
-      if (generation === generationRef.current) setApplying(false);
+      if (generation === generationRef.current) setSyncing(false);
     }
-  }, [jobId, t, workspacePath]);
+  }, [baselineMissing, jobId, t]);
 
-  const summary = bundle?.summary;
-  const changeCount =
-    (summary?.added.length ?? 0) + (summary?.modified.length ?? 0) + (summary?.deleted.length ?? 0);
-  const busy = pulling || applying;
-  const applied = !!outcome && !outcome.aborted;
-
-  const groups: Array<{ key: string; icon: React.ReactNode; label: string; paths: string[] }> = [
-    { key: 'added', icon: <FilePlus size={14} />, label: t('dispatch.resultAdded'), paths: summary?.added ?? [] },
-    { key: 'modified', icon: <FileDiff size={14} />, label: t('dispatch.resultModified'), paths: summary?.modified ?? [] },
-    { key: 'deleted', icon: <FileX size={14} />, label: t('dispatch.resultDeleted'), paths: summary?.deleted ?? [] },
-  ];
+  const resolvedBranch = result?.branch || branch;
+  const resolvedBaselinePath = result?.baselineWorktreePath || baselineWorktreePath;
+  const resolvedHeadCommit = result?.headCommit;
 
   return (
     <Modal
@@ -133,126 +76,134 @@ export const DispatchResultDialog: React.FC<DispatchResultDialogProps> = ({
       closeOnOverlayClick
       showCloseButton
       ariaLabelledBy={DIALOG_TITLE_ID}
-      testId="dispatch-result-dialog"
+      testId="dispatch-sync-dialog"
     >
-      <div className="dispatch-result-dialog">
-        <div className="dispatch-result-dialog__header">
+      <div
+        className="dispatch-result-dialog"
+        data-bf-component="dispatch-result-dialog"
+        data-bf-part="root"
+      >
+        <div
+          className="dispatch-result-dialog__header"
+          data-bf-component="dispatch-result-dialog"
+          data-bf-part="header"
+        >
           <h2 id={DIALOG_TITLE_ID} className="dispatch-result-dialog__title">
-            {t('dispatch.resultTitle')}
+            {t('dispatch.syncTitle')}
           </h2>
           <span className="dispatch-result-dialog__subtitle">
             {targetLabel
-              ? t('dispatch.resultSubtitleWithTarget', { target: targetLabel })
-              : t('dispatch.resultSubtitle')}
+              ? t('dispatch.syncSubtitleWithTarget', { target: targetLabel })
+              : t('dispatch.syncSubtitle')}
           </span>
         </div>
 
-        <div className="dispatch-result-dialog__body">
+        <div
+          className="dispatch-result-dialog__body"
+          data-bf-component="dispatch-result-dialog"
+          data-bf-part="body"
+        >
           {error ? (
             <Alert type="error" message={error} closable onClose={() => setError(null)} />
           ) : null}
+          {baselineMissing ? (
+            <Alert type="error" message={t('dispatch.syncBaselineMissing')} />
+          ) : null}
 
-          {pulling ? (
+          {resolvedBranch || resolvedBaselinePath || resolvedHeadCommit ? (
+            <details className="dispatch-result-dialog__details">
+              <summary>{t('dispatch.syncDetails')}</summary>
+              <div className="dispatch-result-dialog__details-body">
+                {resolvedBranch ? (
+                  <div className="dispatch-result-dialog__field">
+                    <span className="dispatch-result-dialog__field-label">
+                      {t('dispatch.syncBranch')}
+                    </span>
+                    <code>{resolvedBranch}</code>
+                  </div>
+                ) : null}
+                {resolvedBaselinePath ? (
+                  <div className="dispatch-result-dialog__field">
+                    <span className="dispatch-result-dialog__field-label">
+                      {t('dispatch.syncBaselineWorktree')}
+                    </span>
+                    <code>{resolvedBaselinePath}</code>
+                  </div>
+                ) : null}
+                {resolvedHeadCommit ? (
+                  <div className="dispatch-result-dialog__field">
+                    <span className="dispatch-result-dialog__field-label">
+                      {t('dispatch.syncHeadCommit')}
+                    </span>
+                    <code>{resolvedHeadCommit}</code>
+                  </div>
+                ) : null}
+              </div>
+            </details>
+          ) : null}
+
+          {syncing ? (
             <div className="dispatch-result-dialog__pending">
               <Loader2 size={14} className="dispatch-result-dialog__spin" />
-              {t('dispatch.resultPulling')}
+              {t('dispatch.syncingResult')}
             </div>
           ) : null}
 
-          {summary && !pulling ? (
-            changeCount === 0 ? (
-              <Alert type="info" message={t('dispatch.resultNoChanges')} />
-            ) : (
+          {result && !syncing ? (
+            result.changed ? (
               <>
-                <div className="dispatch-result-dialog__field">
-                  <span className="dispatch-result-dialog__field-label">
-                    {t('dispatch.resultTargetWorkspace')}
-                  </span>
-                  <code>{bundle?.workspacePath}</code>
-                </div>
-                {groups
-                  .filter(group => group.paths.length > 0)
-                  .map(group => (
-                    <section key={group.key} className="dispatch-result-dialog__group">
-                      <div className="dispatch-result-dialog__group-header">
-                        {group.icon}
-                        <strong>{group.label}</strong>
-                        <span>{group.paths.length}</span>
-                      </div>
-                      <ul data-kind={group.key}>
-                        {group.paths.map(path => (
-                          <li key={path}>{path}</li>
-                        ))}
-                      </ul>
-                    </section>
-                  ))}
+                <Alert
+                  type="success"
+                  message={t('dispatch.syncSucceeded', { count: result.commitCount })}
+                />
+                <section className="dispatch-result-dialog__group">
+                  <div className="dispatch-result-dialog__group-header">
+                    <GitCommitHorizontal size={14} />
+                    <strong>{t('dispatch.syncChangedFiles')}</strong>
+                    <span>{result.changes.length}</span>
+                  </div>
+                  {result.changes.length > 0 ? (
+                    <ul>
+                      {result.changes.map(change => (
+                        <li key={`${change.status}:${change.path}`}>
+                          <strong>{change.status}</strong>
+                          <span>{change.path}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <div className="dispatch-result-dialog__empty">
+                      {t('dispatch.syncNoFileList')}
+                    </div>
+                  )}
+                </section>
+                {result.truncatedChanges ? (
+                  <Alert type="info" message={t('dispatch.syncChangesTruncated')} />
+                ) : null}
               </>
+            ) : (
+              <Alert type="info" message={t('dispatch.syncNoChanges')} />
             )
-          ) : null}
-
-          {outcome?.aborted ? (
-            <Alert
-              type="warning"
-              message={t('dispatch.resultConflictWarning', { count: outcome.conflicts.length })}
-            />
-          ) : null}
-          {outcome?.aborted ? (
-            <section className="dispatch-result-dialog__group" data-conflict="true">
-              <div className="dispatch-result-dialog__group-header">
-                <strong>{t('dispatch.resultConflicts')}</strong>
-                <span>{outcome.conflicts.length}</span>
-              </div>
-              <ul>
-                {outcome.conflicts.map(conflict => (
-                  <li key={conflict.path}>
-                    {conflict.path}
-                    <em>
-                      {conflict.reason === 'locallyModified'
-                        ? t('dispatch.resultConflictModified')
-                        : t('dispatch.resultConflictMissing')}
-                    </em>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          ) : null}
-
-          {applied ? (
-            <Alert
-              type="success"
-              message={t('dispatch.resultApplied', {
-                written: outcome.written.length,
-                removed: outcome.removed.length,
-              })}
-            />
           ) : null}
         </div>
 
-        <div className="dispatch-result-dialog__actions">
+        <div
+          className="dispatch-result-dialog__actions"
+          data-bf-component="dispatch-result-dialog"
+          data-bf-part="actions"
+        >
           <Button variant="secondary" size="small" onClick={onClose}>
-            {applied ? t('dispatch.resultClose') : t('dispatch.cancel')}
+            {t('dispatch.syncClose')}
           </Button>
-          {outcome?.aborted ? (
-            <Button
-              variant="primary"
-              size="small"
-              disabled={busy}
-              onClick={() => void apply(true)}
-            >
-              {applying ? <Loader2 size={14} className="dispatch-result-dialog__spin" /> : null}
-              {t('dispatch.resultOverwriteConfirm')}
-            </Button>
-          ) : (
-            <Button
-              variant="primary"
-              size="small"
-              disabled={busy || !summary || changeCount === 0 || applied || !workspacePath}
-              onClick={() => void apply(false)}
-            >
-              {applying ? <Loader2 size={14} className="dispatch-result-dialog__spin" /> : null}
-              {t('dispatch.resultApply')}
-            </Button>
-          )}
+          <Button
+            variant="primary"
+            size="small"
+            disabled={syncing || baselineMissing || !jobId}
+            onClick={() => void sync()}
+          >
+            {syncing ? <Loader2 size={14} className="dispatch-result-dialog__spin" /> : null}
+            {t('dispatch.syncAction')}
+          </Button>
         </div>
       </div>
     </Modal>

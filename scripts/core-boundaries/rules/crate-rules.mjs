@@ -39,6 +39,7 @@ const agentRuntimeIpcForbiddenDeps = [
 ];
 
 export const noCoreDependencyCrates = [
+  'agent-content',
   'core-types',
   'events',
   'ai-adapters',
@@ -69,6 +70,17 @@ export const noCoreDependencyCrates = [
 ];
 
 export const forbiddenManifestDependencyRules = [
+  {
+    dependencyNames: ['rmcp'],
+    scanRoots: ['src/apps', 'src/crates', 'BitFun-Installer/src-tauri'],
+    workspaceManifestPath: 'Cargo.toml',
+    forbidWorkspaceAliases: false,
+    allowManifestPaths: [
+      'src/crates/services/services-integrations/Cargo.toml',
+    ],
+    reason: 'the RMCP SDK is a concrete MCP integration service dependency',
+    message: 'rmcp must stay in services-integrations and be consumed through its MCP owner facade',
+  },
   {
     dependencyNames: ['bitfun-agent-runtime-ipc'],
     scanRoots: ['src/apps', 'src/crates', 'BitFun-Installer/src-tauri'],
@@ -408,6 +420,7 @@ export const dependencyProfileRules = [
     forbiddenNonOptionalDeps: [
       'aes',
       'aes-gcm',
+      'bitfun-services-integrations',
       'bitfun-product-capabilities',
       'bitfun-product-domains',
       'bitfun-relay-service',
@@ -431,16 +444,53 @@ export const dependencyProfileRules = [
       'local-ip-address',
       'mac_address',
       'md5',
+      'notify',
       'qrcode',
       'rand',
       'readability-js',
       'rmcp',
+      'rusqlite',
       'russh',
+      'rustls',
+      'rustls-native-certs',
+      'schannel',
       'sse-stream',
       'similar',
+      'serde_yaml',
+      'terminal-core',
       'tool-runtime',
       'tokio-tungstenite',
+      'win32job',
       'x25519-dalek',
+    ],
+  },
+  {
+    crateName: 'services-core',
+    profileName: 'default reusable service profile',
+    reason:
+      'services-core default profile must not compile capability-specific native or runtime implementations',
+    forbiddenNonOptionalDeps: [
+      'anyhow',
+      'async-trait',
+      'base64',
+      'bitfun-core-types',
+      'bitfun-events',
+      'bitfun-runtime-ports',
+      'chrono',
+      'dunce',
+      'fs2',
+      'git2',
+      'globset',
+      'ignore',
+      'libc',
+      'notify',
+      'rusqlite',
+      'serde_yaml',
+      'sha2',
+      'which',
+      'win32job',
+      'windows',
+      'zip',
     ],
   },
   {

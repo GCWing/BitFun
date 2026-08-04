@@ -19,10 +19,10 @@
     gap: 4px;
     padding: 4px 10px;
     border-radius: $size-radius-full;
-    background: var(--element-bg-medium);
-    border: 1px solid var(--border-subtle);
-    font-size: var(--font-size-xs);
-    color: var(--color-text-secondary);
+    background: var(--bf-appearance-token-element-bg-medium);
+    border: 1px solid var(--bf-appearance-token-border-subtle);
+    font-size: var(--bf-appearance-token-font-size-xs);
+    color: var(--bf-appearance-token-color-text-secondary);
   }
 }
 

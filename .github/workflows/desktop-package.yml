@@ -15,9 +15,15 @@ on:
         required: false
         default: false
         type: boolean
+      relay_image_only:
+        description: "Publish only the Relay Server image and signed descriptor (no Desktop packages)."
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: write
+  packages: write
 
 concurrency:
   group: desktop-package-${{ github.event.release.tag_name || inputs.tag_name || github.sha }}
@@ -33,6 +39,7 @@ jobs:
       release_tag: ${{ steps.meta.outputs.release_tag }}
       upload_to_release: ${{ steps.meta.outputs.upload_to_release }}
       checkout_ref: ${{ steps.meta.outputs.checkout_ref }}
+      relay_image_only: ${{ steps.meta.outputs.relay_image_only }}
     steps:
       - uses: actions/checkout@v5
 
@@ -45,6 +52,7 @@ jobs:
           RELEASE_TAG_NAME: ${{ github.event.release.tag_name }}
           INPUT_TAG_NAME: ${{ inputs.tag_name }}
           INPUT_UPLOAD_TO_RELEASE: ${{ inputs.upload_to_release }}
+          INPUT_RELAY_IMAGE_ONLY: ${{ inputs.relay_image_only }}
         run: |
           set -euo pipefail
 
@@ -56,7 +64,13 @@ jobs:
           elif [[ -n "${INPUT_TAG_NAME}" ]]; then
             TAG="${INPUT_TAG_NAME}"
             VERSION="${TAG#v}"
-            CHECKOUT_REF="${TAG}"
+            # A one-off image backfill must use the workflow branch: an older
+            # tag does not contain Dockerfile.release or this publishing job.
+            if [[ "${INPUT_RELAY_IMAGE_ONLY}" == "true" ]]; then
+              CHECKOUT_REF="${GITHUB_SHA}"
+            else
+              CHECKOUT_REF="${TAG}"
+            fi
             if [[ "${INPUT_UPLOAD_TO_RELEASE}" == "true" ]]; then
               UPLOAD="true"
             else
@@ -73,12 +87,14 @@ jobs:
           echo "release_tag=$TAG"          >> "$GITHUB_OUTPUT"
           echo "upload_to_release=$UPLOAD" >> "$GITHUB_OUTPUT"
           echo "checkout_ref=$CHECKOUT_REF" >> "$GITHUB_OUTPUT"
+          echo "relay_image_only=${INPUT_RELAY_IMAGE_ONLY:-false}" >> "$GITHUB_OUTPUT"
 
   # ── Build per platform ─────────────────────────────────────────────
   package:
     name: Package (${{ matrix.platform.name }})
     runs-on: ${{ matrix.platform.os }}
     needs: prepare
+    if: needs.prepare.outputs.relay_image_only != 'true'
     env:
       NODE_OPTIONS: --max-old-space-size=6144
       BITFUN_ENABLE_UPDATER_ARTIFACTS: ${{ needs.prepare.outputs.upload_to_release }}
@@ -132,11 +148,6 @@ jobs:
         uses: actions/checkout@v5
         with:
           ref: ${{ needs.prepare.outputs.checkout_ref }}
-
-      - name: Setup OpenSSL (Windows, prebuilt)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: ./scripts/ci/setup-openssl-windows.ps1
 
       - name: Install NSIS (Windows)
         if: runner.os == 'Windows'
@@ -244,6 +255,7 @@ jobs:
   linux-binaries:
     name: Linux CLI and Relay Server
     needs: prepare
+    if: needs.prepare.outputs.relay_image_only != 'true'
     uses: ./.github/workflows/linux-binaries.yml
     secrets:
       release_signing_key: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
@@ -254,11 +266,208 @@ jobs:
       version: ${{ needs.prepare.outputs.version }}
       artifact_prefix: ${{ needs.prepare.outputs.release_tag }}
 
+  # Publish the Relay once, as a multi-platform image. User servers only pull
+  # this image; they no longer download an archive and build a runtime image.
+  publish-relay-image:
+    name: Publish Relay Server Image
+    needs: [prepare, linux-binaries]
+    if: >-
+      always() &&
+      (needs.prepare.outputs.upload_to_release == 'true' ||
+       needs.prepare.outputs.relay_image_only == 'true') &&
+      (needs.prepare.outputs.relay_image_only == 'true' ||
+       needs.linux-binaries.result == 'success')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+    env:
+      IMAGE: ghcr.io/gcwing/bitfun-relay-server
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.prepare.outputs.checkout_ref }}
+
+      - name: Download Relay archives from this release run
+        if: needs.prepare.outputs.relay_image_only != 'true'
+        uses: actions/download-artifact@v7
+        with:
+          pattern: bitfun-linux-${{ needs.prepare.outputs.release_tag }}-*
+          path: linux-release-assets
+          merge-multiple: true
+
+      - name: Download Relay archives from the existing release (image-only backfill)
+        if: needs.prepare.outputs.relay_image_only == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.prepare.outputs.release_tag }}
+        run: |
+          set -euo pipefail
+          mkdir -p linux-release-assets
+          gh release download "${RELEASE_TAG}" \
+            --repo GCWing/BitFun \
+            --dir linux-release-assets \
+            --pattern 'bitfun-relay-server-*.tar.gz' \
+            --pattern 'bitfun-relay-server-*.tar.gz.sha256'
+
+      - name: Verify image inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f linux-release-assets/bitfun-relay-server-x86_64-unknown-linux-gnu.tar.gz
+          test -f linux-release-assets/bitfun-relay-server-aarch64-unknown-linux-gnu.tar.gz
+          for archive in linux-release-assets/bitfun-relay-server-*.tar.gz; do
+            (cd linux-release-assets && sha256sum --check "$(basename "${archive}").sha256")
+          done
+          cp src/apps/relay-server/Dockerfile.release linux-release-assets/Dockerfile.release
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Resolve image tags
+        id: image-tags
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.prepare.outputs.release_tag }}
+          RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
+          IMAGE_ONLY: ${{ needs.prepare.outputs.relay_image_only }}
+          RELEASE_PRERELEASE: ${{ github.event.release.prerelease }}
+        run: |
+          set -euo pipefail
+          asset_version="${RELEASE_VERSION%%+*}"
+          {
+            echo 'value<<EOF'
+            echo "${IMAGE}:${RELEASE_TAG}"
+            echo "${IMAGE}:${asset_version}"
+            if [[ "${IMAGE_ONLY}" == "true" ]]; then
+              # Backfilling an older release must not roll the floating tag
+              # backwards. GitHub's latest endpoint excludes prereleases.
+              latest_release="$(gh api repos/GCWing/BitFun/releases/latest --jq .tag_name)"
+              if [[ "${RELEASE_TAG}" == "${latest_release}" ]]; then
+                echo "${IMAGE}:latest"
+              fi
+            elif [[ "${RELEASE_PRERELEASE:-false}" != "true" ]]; then
+              # The normal release workflow can create the GitHub Release only
+              # after packaging, so it cannot rely on /releases/latest yet.
+              echo "${IMAGE}:latest"
+            fi
+            echo EOF
+          } >>"$GITHUB_OUTPUT"
+
+      - name: Build and push multi-platform image
+        id: image
+        uses: docker/build-push-action@v7
+        with:
+          context: linux-release-assets
+          file: linux-release-assets/Dockerfile.release
+          platforms: linux/amd64,linux/arm64
+          push: true
+          provenance: false
+          sbom: false
+          build-args: |
+            VERSION=${{ needs.prepare.outputs.version }}
+            REVISION=${{ needs.prepare.outputs.release_tag }}
+          tags: ${{ steps.image-tags.outputs.value }}
+
+      - name: Smoke-test published image on both platforms
+        shell: bash
+        env:
+          IMAGE_DIGEST: ${{ steps.image.outputs.digest }}
+        run: bash scripts/relay/smoke-image.sh "${IMAGE}@${IMAGE_DIGEST}"
+
+      - name: Verify manifest and generate signed descriptor
+        shell: bash
+        env:
+          IMAGE_DIGEST: ${{ steps.image.outputs.digest }}
+          RELEASE_TAG: ${{ needs.prepare.outputs.release_tag }}
+          RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
+          BITFUN_SIGNING_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          BITFUN_SIGNING_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          BITFUN_SIGNING_PUBKEY: ${{ secrets.TAURI_UPDATER_PUBKEY }}
+        run: |
+          set -euo pipefail
+          [[ "${IMAGE_DIGEST}" =~ ^sha256:[0-9a-f]{64}$ ]]
+          docker buildx imagetools inspect "${IMAGE}@${IMAGE_DIGEST}" --raw >relay-image-manifest.json
+          jq -e '
+            [.manifests[].platform | .os + "/" + .architecture] as $platforms
+            | ($platforms | index("linux/amd64")) != null
+            and ($platforms | index("linux/arm64")) != null
+          ' relay-image-manifest.json >/dev/null
+          jq -n \
+            --arg image "${IMAGE}" \
+            --arg tag "${RELEASE_TAG}" \
+            --arg version "${RELEASE_VERSION}" \
+            --arg digest "${IMAGE_DIGEST}" \
+            '{
+              schema_version: 1,
+              image: $image,
+              tag: $tag,
+              version: $version,
+              digest: $digest,
+              platforms: ["linux/amd64", "linux/arm64"]
+            }' >relay-image.json
+          bash scripts/sign-release-assets.sh relay-image.json
+          test -s relay-image.json.sig
+
+      - name: Upload signed image descriptor
+        uses: actions/upload-artifact@v6
+        with:
+          name: bitfun-relay-image-${{ needs.prepare.outputs.release_tag }}
+          if-no-files-found: error
+          retention-days: 7
+          path: |
+            relay-image.json
+            relay-image.json.sig
+
+      # The package is private on first creation. This deliberately fails until
+      # its visibility is changed to public, preventing an apparently green
+      # release that anonymous customer servers cannot pull.
+      - name: Verify anonymous pull access
+        shell: bash
+        env:
+          IMAGE_DIGEST: ${{ steps.image.outputs.digest }}
+        run: |
+          set -euo pipefail
+          docker logout ghcr.io >/dev/null 2>&1 || true
+          clean_config="$(mktemp -d)"
+          trap 'rm -rf "$clean_config"' EXIT
+          DOCKER_CONFIG="$clean_config" docker buildx imagetools inspect \
+            "${IMAGE}@${IMAGE_DIGEST}" >/dev/null
+
+      - name: Attach descriptor to an existing release (image-only backfill)
+        if: needs.prepare.outputs.relay_image_only == 'true'
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ needs.prepare.outputs.release_tag }}
+          files: |
+            relay-image.json
+            relay-image.json.sig
+          fail_on_unmatched_files: true
+
   # ── Upload assets to GitHub Release ────────────────────────────────
   upload-release-assets:
     name: Upload Release Assets
-    needs: [prepare, package, linux-binaries]
-    if: needs.prepare.outputs.upload_to_release == 'true'
+    needs: [prepare, package, linux-binaries, publish-relay-image]
+    if: >-
+      always() &&
+      needs.prepare.outputs.upload_to_release == 'true' &&
+      needs.package.result == 'success' &&
+      needs.linux-binaries.result == 'success' &&
+      needs.publish-relay-image.result == 'success'
     runs-on: ubuntu-latest
     env:
       REQUIRED_UPDATER_PLATFORMS: windows-x86_64,darwin-x86_64,darwin-aarch64,linux-x86_64,linux-aarch64
@@ -281,12 +490,20 @@ jobs:
           path: linux-release-assets
           merge-multiple: true
 
+      - name: Download Relay image descriptor
+        uses: actions/download-artifact@v7
+        with:
+          name: bitfun-relay-image-${{ needs.prepare.outputs.release_tag }}
+          path: relay-image-assets
+
       - name: List release assets
         run: |
           echo "Release assets:"
           find release-assets -type f | sort
           echo "Linux CLI and Relay Server assets:"
           find linux-release-assets -type f | sort
+          echo "Relay image descriptor:"
+          find relay-image-assets -type f | sort
 
       - name: Collect updater assets
         run: |
@@ -321,9 +538,6 @@ jobs:
             --tag "${{ needs.prepare.outputs.release_tag }}" \
             --repo "GCWing/BitFun" \
             --out linux-release-assets/linux-binaries.json
-
-      - name: Setup Rust toolchain (minisign fallback)
-        uses: dtolnay/rust-toolchain@stable
 
       # The Tauri bundler signs the five updater artifacts during `tauri build`,
       # but the installers people download by hand from the release page — dmg,
@@ -375,6 +589,8 @@ jobs:
             linux-release-assets/*.tar.gz.sig
             linux-release-assets/*.tar.gz.sha256.sig
             linux-release-assets/linux-binaries.json
+            relay-image-assets/relay-image.json
+            relay-image-assets/relay-image.json.sig
           fail_on_unmatched_files: true
 
       - name: Verify published updater manifest
@@ -398,6 +614,18 @@ jobs:
             curl -fsSL --retry 5 --retry-delay 3 "${cli_url}.sig" -o /dev/null
             curl -fsSL --retry 5 --retry-delay 3 "${cli_url}.sha256.sig" -o /dev/null
           done < <(jq -r '.platforms[].cli.url' linux-binaries.published.json)
+
+      - name: Verify published Relay image descriptor
+        run: |
+          curl -fsSL --retry 5 --retry-delay 3 \
+            "https://github.com/GCWing/BitFun/releases/download/${{ needs.prepare.outputs.release_tag }}/relay-image.json" \
+            -o relay-image.published.json
+          test "$(jq -r '.tag' relay-image.published.json)" = "${{ needs.prepare.outputs.release_tag }}"
+          test "$(jq -r '.image' relay-image.published.json)" = "ghcr.io/gcwing/bitfun-relay-server"
+          jq -e '.digest | test("^sha256:[0-9a-f]{64}$")' relay-image.published.json >/dev/null
+          curl -fsSL --retry 5 --retry-delay 3 \
+            "https://github.com/GCWing/BitFun/releases/download/${{ needs.prepare.outputs.release_tag }}/relay-image.json.sig" \
+            -o /dev/null
 
       # Nudge the openbitfun.com mirror to sync now instead of on its next
       # 10-minute cron tick. Until the mirror has these bytes, CN clients have

@@ -81,7 +81,7 @@ export const PushButton: React.FC<PushButtonProps> = ({
   };
 
   return (
-    <div className={`bitfun-push-button ${className}`} ref={dropdownRef}>
+    <div className={`bitfun-push-button ${className}`} ref={dropdownRef} data-bf-component="git-tool" data-bf-part="pushButton">
       <div className="bitfun-push-button__wrapper" ref={wrapperRef}>
         {iconOnly ? (
           <IconButton

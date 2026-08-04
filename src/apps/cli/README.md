@@ -1,241 +1,11 @@
 # BitFun CLI
 
-Terminal UI for BitFun (chat, tools, `/login` account + Peer Host).
+BitFun CLI provides an interactive terminal UI, non-interactive Agent runs,
+session management, and machine-owned background tasks. Use `bitfun` for all
+new scripts and integrations; `bitfun-cli` is a deprecated compatibility
+entrypoint.
 
-The local Agent paths build the CLI product profile once per invocation. Interactive chat, `exec`,
-session commands, and usage reports use that invocation-scoped runtime context and event source.
-Local management queries do not start Peer Host or MCP; `exec` starts MCP but not Peer Host.
-Core remains the compatibility owner for execution and persistence operations not yet covered by the
-Agent Runtime SDK. When interactive mode enables Peer Host, Peer dialog submission, cancellation,
-and agent-event fan-out reuse the same runtime context; Peer Host does not construct another
-scheduler, persistence manager, or event queue. Plugin execution is not enabled by this assembly path.
-
-## Common commands
-
-```bash
-bitfun                                  # interactive TUI
-bitfun exec "summarize this project"   # non-interactive, rejects permission requests
-bitfun exec "run tests" --auto         # approve tool requests for this invocation
-bitfun sessions list
-bitfun usage
-bitfun doctor
-bitfun health
-bitfun mcp import                       # preview safe OpenCode / Claude Code / Codex MCP declarations
-bitfun mcp import --apply               # copy eligible declarations as disabled native entries
-bitfun mcp import --apply --candidate <candidate-id>  # repeat to select a subset
-bitfun mcp import --apply --candidate <candidate-id> --native-id <native-id>
-bitfun mcp import --format json         # versioned machine-readable plan/result
-bitfun update                           # GitHub first, openbitfun.com fallback
-bitfun update --check                   # report only; do not install
-```
-
-`bitfun mcp import` is an explicit snapshot operation, not continuous sync. It
-does not copy credentials, headers, environment values, or explicit working
-directories. Apply revalidates the preview and never overwrites an existing
-native entry; imported entries remain disabled until reviewed and enabled
-through the existing MCP manager. Use `--format json` for the versioned
-machine-readable plan or result.
-
-Official Linux archive installations check for updates before interactive TUI
-startup at most once every six hours. That check only fetches the release
-manifest — a few KB, bounded at ten seconds — and hands the actual archive to a
-detached background process, so launch never waits on a download. Set
-`behavior.auto_update = false` in the CLI config or export
-`BITFUN_CLI_DISABLE_AUTO_UPDATE=1` to disable automatic checks. Development and
-nightly binaries are never replaced by the stable automatic updater.
-
-Both GitHub and `https://openbitfun.com/release/linux-binaries.json` are read,
-and whichever advertises the newer version decides what gets installed. When
-both carry it, each is probed with a short ranged request and the archive is
-downloaded from whichever is measurably faster — a source that is merely slow
-rather than broken no longer holds the update hostage. Downloads resume rather
-than restart, across a switch of source and across runs (a background install
-killed at 90% picks up where it stopped). Concurrent updates are serialised by
-`update.lock` in the CLI config directory.
-
-Two checks run before anything is replaced:
-
-- **Checksum**, fetched from the canonical GitHub URL even when the archive came
-  from a mirror. A `.sha256` served by the same host as the archive only proves
-  the transfer was intact — whoever serves one serves the other. Falling back to
-  the origin's own checksum happens only when GitHub is wholly unreachable, and
-  says so.
-- **Signature** (`.sig`, minisign), verified against the release key compiled
-  into official builds — the same trust root the Desktop updater uses. This is
-  the check a mirror or third-party proxy cannot forge. Official builds refuse
-  to install an unsigned release; builds without the key (local, forks) fall
-  back to checksum-only.
-
-`bitfun-cli` is a deprecated compatibility entrypoint. It writes
-`Warning: \`bitfun-cli\` is deprecated; use \`bitfun\` instead.` to stderr; new scripts and
-integrations must use `bitfun`. Official installers and archives ship both commands as a pair; a
-standalone legacy launcher is an incomplete installation and reports how to reinstall the pair.
-The naming change is limited to the shell command: the Cargo package, archive prefix, service
-identifiers, and persistent paths retain the `bitfun-cli` name.
-
-The TUI asks before protected tool calls and offers `Allow once`, `Allow always`, and `Reject`.
-`Allow always` applies only to matching tools in the current runtime context; it does not update the
-global configuration. Non-interactive `exec` rejects permission requests by default. Use `--auto`
-only when the current invocation may approve tool requests. Non-interactive `exec` does not expose
-`AskUserQuestion`; provide all required input in the initial prompt. The hidden legacy `--confirm`
-flag maps to the safe default and should not be used in new automation.
-
-### Interactive session and context commands
-
-The Embedded and Shared TUI use the same session command names:
-
-- `/sessions` opens the session browser; `/resume`, `/continue`, and `/history` are aliases.
-- `/new` starts a fresh conversation session; `/clear` is its OpenCode-compatible alias and does not
-  merely clear the terminal display.
-- `/fork` opens an OpenCode-compatible fork dialog. `Full session` copies through the latest
-  persisted turn; choosing a previous user prompt forks immediately before that turn and copies the
-  prompt into the composer without sending it. Forking requires an idle session.
-- `/status` opens a transient view of current session, runtime, workspace, approval, and latest
-  primary-model request facts observed by this TUI. It is not a cumulative usage report; use
-  `/usage` for cumulative session usage in Embedded TUI.
-- `/compact` compacts the current session's model context without deleting saved conversation
-  history; `/summarize` is its OpenCode-compatible alias. Compaction is available only while the
-  session is idle.
-
-The interactive TUI supports per-session worktree isolation through `/worktree`. Run the command
-without arguments to toggle it, or use `/worktree on`, `/worktree off`, and `/worktree status`.
-The header shows the active branch and `Worktree: on|off`; detached managed worktrees use their base
-commit as the branch label. The existing session lifecycle owner creates, persists, restores, and
-releases the managed worktree. Isolation can only be changed before the session's first message, and
-a released worktree with local or unpublished work is retained with its path reported in the chat.
-This command is TUI-only and does not change the non-interactive `exec` contract.
-
-### Structured output
-
-| Format | stdout contract |
-|---|---|
-| `text` | Assistant text. Progress, tool status, logs, and diagnostics use stderr. |
-| `json` | One final result object with status and result, plus session/turn identity once established, turn-accumulated usage, and available Patch facts. A Session writer conflict adds `error_code: "session_in_use"`. |
-| `stream-json` | JSONL containing existing Agent event values; no separate CLI event schema. A Session writer conflict reuses `SystemError` with `error: "session_in_use"` and `recoverable: true`. |
-
-Select a format with `--output-format text|json|stream-json`. When `--output-patch -` is used with
-`json`, the Patch is included in the final object. For `stream-json`, write the Patch to an explicit
-file path so protocol stdout remains valid JSONL. A Patch is the repository's `HEAD`-relative
-workspace snapshot captured before an explicit Patch artifact is written. It includes staged,
-unstaged, untracked, and pre-existing changes, excludes the output artifact itself, and does not
-attribute changes to this invocation.
-
-`Ctrl+C` requests cancellation of the active turn and briefly drains its terminal events before
-returning. Cancellation, an unsuccessful completion event,
-and a requested Patch that cannot be generated or written are error outcomes. An explicit Patch
-file is created even when the diff is empty.
-
-If another BitFun process is writing the requested Session, `exec` exits non-zero without waiting
-or taking over. Close that Session in the other instance and run the command again. `recoverable`
-describes that later retry; it does not mean the current command retries automatically.
-
-`doctor` and `health` validate product assembly and required capability registrations. They are not
-live probes for Network, Git, or MCP integrations that are currently represented by compatibility
-registrations.
-
-## Detached task dispatch
-
-`bitfun dispatch` is the target-side, machine-readable interface used by
-Desktop, Server Host, SSH, and encrypted account-device RPC. Requests are JSON
-on stdin and responses are one JSON value on stdout:
-
-```bash
-printf '%s' '{"workspacePath":"/srv/app"}' | bitfun dispatch probe
-printf '%s' '{"jobId":"job-123","cursor":0}' | bitfun dispatch status
-printf '%s' '{}' | bitfun dispatch list
-printf '%s' '{"jobId":"job-123"}' | bitfun dispatch cancel
-```
-
-`submit` additionally requires `protocolVersion`, `sessionId`,
-`workspacePath`, `agentType`, `prompt`, and an explicit `approvalPolicy`:
-`auto`, `reject-and-report`, or `remote`. With `remote`, `status` returns
-`pendingPermissions`; answer one with `dispatch answer`. `dispatch append`
-adds a steering message to a queued or running job. Call `probe` first and
-honor its protocol version and capability list rather than assuming that
-different BitFun releases are compatible.
-
-Jobs and their event logs live under `~/.bitfun/dispatch/jobs/`. The detached
-worker and target-side session remain authoritative after the submitting
-client disconnects. Each target workspace is serialized so two jobs do not
-modify it concurrently. Terminal jobs and managed snapshots are retained for
-30 days. Event history is bounded; `status` reports cursor resets, truncation,
-and omitted-event counts so clients never mistake a partial transcript for a
-complete one.
-
-Workspace transfer is a separate controller operation. An exact snapshot
-includes hidden and ignored regular files, excludes `.git`, rejects links and
-special files, verifies an archive and manifest digest, and publishes into the
-target-managed dispatch directory atomically. It is a one-time input snapshot,
-not live or bidirectional synchronization; target changes are not copied back
-automatically. See
-[`docs/architecture/detached-task-dispatch.md`](../../../docs/architecture/detached-task-dispatch.md)
-for the ownership and transport contract.
-
-## Always-on account device host (daemon)
-
-Account multi-device access requires the target device to hold a live relay connection. On a
-server that is usually not true while no interactive CLI is running. The daemon solves this: it is
-a headless Peer Host process that restores the persisted account session and holds the relay
-device-routing connection, so other devices on the account can reach this machine whenever it is
-up.
-
-Full setup flow on a server:
-
-```bash
-pnpm run cli:install       # build + install both entrypoints (see below)
-bitfun                     # start the TUI, then /login with your account
-bitfun daemon install      # register auto-start; device stays reachable after exit/reboot
-bitfun daemon status       # verify: daemon running + service installed/active
-```
-
-```bash
-bitfun daemon status      # daemon liveness + auto-start service status
-bitfun daemon install     # register and start the auto-start service (requires /login first)
-bitfun daemon uninstall   # stop and remove the auto-start service
-bitfun daemon run         # foreground mode (used by the service manager; also for debugging)
-```
-
-- Prerequisites: a persisted account session (`/login` inside the TUI first), and on Linux a
-  working systemd user session (`systemctl --user`). Containers, WSL, and some minimal images do
-  not have one; there `daemon install` reports a clear error and you can instead run
-  `bitfun daemon run` under your own supervisor (tmux, nohup, a custom unit, ...).
-- Linux: installs a systemd user unit (`~/.config/systemd/user/bitfun-cli-daemon.service`) and
-  enables linger, so the daemon starts at boot and keeps running without an interactive login
-  session. macOS: installs a LaunchAgent. Windows is not supported for auto-start; use
-  `daemon run` instead.
-- The interactive CLI detects a running daemon and skips its own relay connection (same-machine
-  processes share one `device_id`; last AuthConnect wins). Without a daemon, the interactive CLI
-  connects by itself as before.
-- Logging out (`/logout`) signals the daemon to shut down so the device goes offline immediately;
-  a daemon whose token is rejected by the relay exits on its own instead of staying "online" with
-  a doomed token.
-- Logs land in `~/.config/bitfun/cli-logs/<session-timestamp>/app.log` (the daemon starts a new
-  session directory per process start).
-
-### Account settings sync
-
-Both the interactive CLI and the daemon continuously sync account settings (model configs,
-default model, agent preferences, ...) with the account cloud:
-
-- Local changes (TUI model picker / model forms, `bitfun models set-default`, or a peer
-  controller's `set_config`) upload after a ~5s debounce, deduped by content hash.
-- Cloud changes from other devices are pulled right after process start, then every ~30s, and
-  applied to the running process (AI client cache invalidated, config reloaded).
-- While a desktop controller is attached (Peer Device Mode), the host fans out
-  `account://settings-applied` after applying or uploading settings, so the controller's
-  model list / settings UI refreshes without reconnecting.
-- The sync cursor persists at `~/.bitfun/account_sync/<user>.settings.json`, so restarts do not
-  re-apply unchanged settings.
-
-### Upgrading
-
-Re-run `pnpm run cli:install`, or use the direct Bash/PowerShell command below for your platform.
-The installer stages and verifies both entrypoints before replacing an existing pair; a failed
-replacement restores the previous pair. It also restarts the daemon's auto-start service when one
-is installed (a running daemon otherwise keeps executing the old binary). If you supervise the
-daemon yourself (`daemon run` under tmux/nohup/a custom unit), restart it manually after upgrading.
-
-## One-click install (Windows / macOS / Linux)
+## Install
 
 From the repository root:
 
@@ -243,101 +13,215 @@ From the repository root:
 pnpm run cli:install
 ```
 
-The dispatcher selects PowerShell on Windows and Bash on macOS/Linux. Direct platform commands are:
+The installer builds and installs both entrypoints for the current platform.
+The default install directory is `~/.local/bin` on macOS/Linux and
+`%LOCALAPPDATA%\BitFun\bin` on Windows. Open a new terminal after installation
+so the updated `PATH` is visible.
+
+Official release archives contain both executables. Keep them together when
+extracting an archive; the compatibility launcher requires its sibling
+`bitfun` executable.
+
+Prerequisites for a source install are a Rust toolchain and this repository.
+See the repository [contribution guide](../../../CONTRIBUTING.md) for development
+setup and build commands.
+
+## Quick start
 
 ```bash
-# macOS / Linux (amd64 + arm64)
-bash src/apps/cli/install.sh
-
-# Windows x64
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File src/apps/cli/install.ps1
+bitfun                                  # interactive TUI
+bitfun exec "summarize this project"   # one non-interactive Agent run
+bitfun exec "run tests" --auto         # approve interactive tool asks for this run
+bitfun sessions list
+bitfun doctor
 ```
 
-Both installers:
+The interactive TUI asks before protected Agent tool calls. Non-interactive
+`exec` rejects permission requests by default; use `--auto` only when the
+current invocation may approve them.
 
-1. `cargo build -p bitfun-cli --release` (native host CPU)
-2. Install `bitfun` and the deprecated `bitfun-cli` compatibility entrypoint
-3. Verify the primary command and the exact compatibility warning
-4. Add the install directory to PATH idempotently unless requested otherwise
+Run `bitfun --help` or `bitfun <command> --help` for the complete command and
+option reference.
 
-The Unix default directory is `~/.local/bin`; the Windows default is
-`%LOCALAPPDATA%\BitFun\bin`. Unix updates managed blocks in `~/.bashrc` and `~/.zshrc`;
-Windows updates the current user's PATH.
+## Interactive TUI
 
-The installer process cannot update the shell that launched it. Open a new terminal, then run:
+The most frequently used commands follow established OpenCode names where an
+equivalent exists:
+
+| Input | Effect |
+| --- | --- |
+| `/sessions` | Browse and restore sessions. |
+| `/new` or `/clear` | Start a new session. |
+| `/timeline` | Navigate persisted user messages without changing the session. |
+| `/fork` | Fork the full session or fork immediately before a selected prompt. |
+| `/compact` or `/summarize` | Compact model context without deleting the saved transcript. |
+| `/undo` / `/redo` | Move the persisted session timeline backward or forward. |
+| `/diff` | Review staged, unstaged, and untracked workspace changes. |
+| `/editor` | Edit the current draft with `VISUAL`, then `EDITOR`. |
+| `/copy` / `/export` | Copy or export the visible transcript as Markdown. |
+| `/status` / `/usage` | Inspect current-session status or cumulative usage. |
+| `/reload [skills\|instructions]` | Refresh declarative context for the next message. |
+
+The command palette and shortcut help show the bindings active in the current
+configuration. The OpenCode-compatible **View subagents** palette action has no
+slash alias or default shortcut. It opens the current conversation's child
+Session tree without replacing the root Session or its draft. The selected
+transcript is read-only: use `Up` for its parent, `Left`/`Right` for siblings,
+`Esc` for the root conversation, and the normal interrupt action to cancel the
+selected child Session's active execution subtree.
+
+`/editor` does not install or guess an editor. For GUI editors,
+configure a command that waits until the file is closed; missing commands,
+non-zero exits, and empty editor output leave the current draft unchanged.
+
+### Prompt continuity
+
+Unsent drafts stay with their session while the TUI remains open. Switching,
+creating, or forking a session swaps the existing composer state, including
+structured `@` references, image attachments, and Shell/Chat mode, instead of
+putting UI drafts into Runtime session persistence.
+
+The command palette also follows OpenCode's prompt-stash entrypoints: **Stash
+prompt**, **Stash pop**, and **Stash list**. They intentionally have no slash
+aliases or default key bindings. Stashes are shared across CLI processes in a
+bounded `prompt-stash.jsonl` file and preserve text plus structured workspace
+references. Image drafts are rejected with an explicit message because the
+persistent stash does not copy image bytes. When a stash is restored from a
+different workspace, its text is kept but structured references are detached
+with a visible warning so a relative path cannot silently bind another file.
+
+### Terminal notifications
+
+Terminal attention notifications are off by default. Enable them in the CLI
+config when completed turns, failures, permission requests, and question
+prompts should emit a terminal notification:
+
+```toml
+[ui]
+notifications = true
+notification_method = "auto" # auto, osc9, or bel
+```
+
+`auto` uses OSC 9 for terminals known to support it and falls back to the
+terminal bell. Notification text is bounded and strips terminal control
+characters.
+
+### Shell mode
+
+With an empty composer, type `!` to enter **SHELL** mode, matching OpenCode's
+entry flow. The `!` marker becomes the input label and is not part of the
+command. Press `Esc`, or press `Backspace` while the command is empty, to return
+to chat mode. Shell and chat keep separate input histories.
+
+Press Enter to run the command in the session workspace. Shell mode is
+non-interactive: it does not allocate a PTY and does not accept image or
+structured `@` attachments. A leading `/` is shell text, not a BitFun slash
+command. The command uses the shared Agent Runtime, normal `ExecCommand` tool,
+workspace binding, cancellation, audit, and static permission rules. Because
+the command was explicitly typed by the user, an interactive `ask` is approved
+without a second prompt; a configured `deny` still blocks execution.
+
+The command and tool result are saved as a standard turn. Restoring the session
+therefore shows the same tool card in CLI and Desktop instead of a CLI-only
+transcript item.
+
+### Image attachments
+
+In Embedded TUI, use the configured paste action (`Ctrl+V` by default) or
+terminal bracketed paste to attach a clipboard image or a local PNG, JPEG, GIF,
+or WebP path. Quoted paths, `file://` URLs, and POSIX shell-escaped paths are
+accepted. A message may contain up to five images, each no larger than 20 MiB.
+
+Images are read when pasted, so later file changes do not alter the submitted
+turn and local absolute paths are not sent to the Runtime. Slash commands and
+Shell mode do not accept images. Shared TUI currently reports image paste as
+unsupported and keeps the draft unchanged.
+
+### Shared TUI
 
 ```bash
-bitfun
+bitfun chat --shared
 ```
 
-For the current shell, either invoke the printed direct path or temporarily prepend the install
-directory to `PATH` using the copyable command printed by the installer.
+Shared TUI lets multiple terminal processes reuse one workspace Runtime. Each
+TUI controls at most one session and a session has one controller. Core chat,
+Shell mode, session navigation, read-only subagent transcript inspection,
+model/mode selection, permissions, and transcript events use the same behavior
+as Embedded TUI. Some local management and attachment capabilities remain
+Embedded-only and report that limitation instead of silently falling back.
 
-### Release archives
+Exit all Shared TUI clients and wait briefly before returning to the default
+Embedded mode for the same workspace.
 
-Official macOS/Linux archives contain `bitfun`, deprecated `bitfun-cli`, `README.md`, and
-`PROJECT-README.md`; the Windows x64 ZIP contains the matching `.exe` pair and documents. Extract
-the whole archive and keep the two executables together in the same directory. Run `./bitfun` on
-macOS/Linux or `.\bitfun.exe` in PowerShell, then add that directory to `PATH` if desired.
+## Non-interactive output
 
-Do not copy only `bitfun-cli` from an archive. The deprecated command is intentionally a thin
-launcher for its sibling `bitfun`; if the sibling is missing, it reports an incomplete installation
-with recovery guidance instead of attempting another lookup.
+Select output with `--output-format text|json|stream-json`:
 
-Every archive ships an adjacent `<archive>.sha256` — the complete verification surface across all
-platforms and both the stable and nightly channels. The release also carries a `SHA256SUMS`
-aggregate, but it covers only the macOS and Windows archives: Linux archives are published by
-`.github/workflows/linux-binaries.yml` in a separate workflow run (the only producer that also
-covers nightly, and the one that must hold the CLI and Relay archives together to emit
-`linux-binaries.json`), so they cannot be folded into that file deterministically. Verify Linux
-downloads with their `.sha256` sidecar.
+| Format | stdout contract |
+| --- | --- |
+| `text` | Final Assistant text. Progress and diagnostics use stderr. |
+| `json` | One final result object, including session/turn identity and usage when available. |
+| `stream-json` | JSONL containing existing Agent events. |
 
-On a server that should stay reachable for account multi-device access, continue with the
-[daemon section](#always-on-account-device-host-daemon) above after `/login`.
+`Ctrl+C` requests cancellation of the active turn. Session writer conflicts,
+unsuccessful completion, an invalid event stream, and requested Patch failures
+produce a non-zero result instead of reporting partial success.
 
-### Options / environment
-
-| Variable | Meaning |
-|----------|---------|
-| `BITFUN_CLI_BIN_DIR` | Install directory (default `~/.local/bin`) |
-| `BITFUN_CLI_SKIP_SHELLRC` | Set `1` to skip bashrc/zshrc edits |
-| `CARGO_TARGET_DIR` | Cargo target dir (e.g. `$HOME/bitfun-build/target` on shared mounts) |
-| `CARGO_BUILD_JOBS` | Limit rustc parallelism on small VPS |
-
-Windows accepts `-BinDir <path>` and `-SkipPathUpdate` arguments. Unix accepts the environment
-variables above.
-
-Example on a small arm64 VPS:
+## Other command groups
 
 ```bash
-CARGO_BUILD_JOBS=1 bash src/apps/cli/install.sh
+bitfun agents --help
+bitfun models --help
+bitfun mcp --help
+bitfun plugins --help
+bitfun hooks --help
+bitfun config --help
+bitfun acp --help
 ```
 
-### Prerequisites
+`bitfun mcp import` is an explicit preview/apply snapshot. It does not copy
+credentials, headers, environment values, or explicit working directories, and
+new native entries remain disabled until reviewed.
 
-- Rust toolchain (`rustup` / `cargo`)
-- Repository checked out with workspace `Cargo.toml` at the root
+### Persistent tasks
 
-## Dev commands (from repo root)
+`bitfun dispatch` is the machine-readable target-side interface used by other
+BitFun surfaces. Jobs remain owned by this machine after the submitting client
+disconnects. Controllers should call `dispatch probe` and honor the returned
+protocol version before submitting or inspecting jobs. See the
+[detached task architecture](../../../docs/architecture/detached-task-dispatch.md)
+for the transport and workspace-snapshot contract.
+
+### Always-on account device host
+
+After signing in with `/login`, a server can keep its account device route
+online without an interactive TUI:
 
 ```bash
-pnpm run cli:dev      # cargo run
-pnpm run cli:build    # cargo build --release
-pnpm run cli:install  # dispatch to install.ps1 on Windows or install.sh on macOS/Linux
+bitfun daemon install
+bitfun daemon status
 ```
 
-Default builds require no product argument. Product-author and CI builds may
-select one validated definition explicitly:
+Linux uses a systemd user service and macOS uses a LaunchAgent. Windows does not
+currently install an auto-start service; use `bitfun daemon run` under a
+supervisor instead. Run `bitfun daemon --help` for lifecycle commands and
+platform diagnostics.
+
+## Updates and troubleshooting
 
 ```bash
-pnpm run cli:build -- --product-config path/to/product.jsonc
+bitfun update --check
+bitfun update
+bitfun doctor
+bitfun health
 ```
 
-Standard Cargo `--target` triples are supported. The wrapper owns the final
-target-directory layout; set `CARGO_TARGET_DIR` before invoking the build rather
-than passing `--target-dir` or `--config build.target-dir=...`.
+Official Linux archive installations perform a small, rate-limited update check
+before interactive startup. Set `behavior.auto_update = false` in CLI config or
+`BITFUN_CLI_DISABLE_AUTO_UPDATE=1` to disable it. Stable updates verify the
+published checksum and, in official builds, the compiled release signing key
+before replacing either entrypoint.
 
-The current customization slice changes only the localized CLI name, binary
-name, and build-output isolation. It does not customize installation, user-data
-paths, layouts, themes, bundled plugins, updates, or signing; see the
-[product customization architecture](../../../docs/architecture/product-customization-blueprint.md).
+Use `doctor` for product/runtime assembly diagnostics and `health` for required
+capability registration. They do not claim that external Network, Git, or MCP
+services are currently reachable.

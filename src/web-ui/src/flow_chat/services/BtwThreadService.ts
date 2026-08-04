@@ -10,6 +10,7 @@ import type {
   ReviewTeamRunManifest,
 } from '@/shared/services/reviewTeamService';
 import type { ImagePayload } from '../utils/imagePayload';
+import { absoluteSessionTurnIndexForId } from '../utils/flowChatTurnOrdinal';
 
 export function createBtwRequestId(prefix = 'btw'): string {
   try {
@@ -49,8 +50,10 @@ function getParentInterruptionContext(parentSessionId: string): { parentDialogTu
   const parentDialogTurnId = machineTurnId || session.dialogTurns[session.dialogTurns.length - 1]?.id;
   if (!parentDialogTurnId) return { parentDialogTurnId: undefined, parentTurnIndex: undefined };
 
-  const idx = session.dialogTurns.findIndex(t => t.id === parentDialogTurnId);
-  return { parentDialogTurnId, parentTurnIndex: idx >= 0 ? idx + 1 : undefined };
+  return {
+    parentDialogTurnId,
+    parentTurnIndex: absoluteSessionTurnIndexForId(session, parentDialogTurnId),
+  };
 }
 
 function requireSession(sessionId: string): Session {

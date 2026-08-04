@@ -30,7 +30,7 @@ $_diff-error-max-width: 400px;
   flex-direction: column;
   width: 100%;
   height: 100%;
-  background: var(--color-bg-primary);
+  background: var(--bf-appearance-token-color-bg-primary);
   position: relative;
   overflow: hidden;
 }
@@ -41,8 +41,8 @@ $_diff-error-max-width: 400px;
   justify-content: space-between;
   align-items: center;
   padding: 0 $size-gap-3;
-  background: var(--color-bg-primary);
-  border-bottom: 1px solid var(--border-base);
+  background: var(--bf-appearance-token-color-bg-primary);
+  border-bottom: 1px solid var(--bf-appearance-token-border-base);
   flex-shrink: 0;
   height: $_diff-toolbar-height;
   min-height: $_diff-toolbar-height;
@@ -54,8 +54,8 @@ $_diff-error-max-width: 400px;
     display: flex;
     align-items: center;
     gap: $size-gap-4;
-    color: var(--color-text-secondary);
-    font-size: var(--font-size-sm);
+    color: var(--bf-appearance-token-color-text-secondary);
+    font-size: var(--bf-appearance-token-font-size-sm);
     font-family: $font-family-mono;
   }
 
@@ -69,16 +69,16 @@ $_diff-error-max-width: 400px;
     font-weight: $font-weight-semibold;
     padding: 2px 6px;
     border-radius: $size-radius-sm;
-    font-size: var(--font-size-xs);
+    font-size: var(--bf-appearance-token-font-size-xs);
     
     &--add {
-      color: var(--git-color-staged);
+      color: var(--bf-appearance-token-git-color-staged);
       background: var(--diff-editor-added-soft-bg);
       border: 1px solid var(--diff-editor-added-border);
     }
     
     &--del {
-      color: var(--git-color-deleted);
+      color: var(--bf-appearance-token-git-color-deleted);
       background: var(--diff-editor-deleted-soft-bg);
       border: 1px solid var(--diff-editor-deleted-border);
     }
@@ -86,14 +86,14 @@ $_diff-error-max-width: 400px;
 
   &__changes-count {
     font-weight: $font-weight-medium;
-    color: var(--color-text-secondary);
-    font-size: var(--font-size-xs);
+    color: var(--bf-appearance-token-color-text-secondary);
+    font-size: var(--bf-appearance-token-font-size-xs);
   }
 
   &__file-path {
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
     font-family: $font-family-mono;
-    font-size: var(--font-size-xs);
+    font-size: var(--bf-appearance-token-font-size-xs);
   }
 
   &__actions {
@@ -108,11 +108,11 @@ $_diff-error-max-width: 400px;
     min-width: 32px;
     height: 32px;
     padding: 0 $size-gap-3;
-    background: var(--element-bg-base);
-    border: 1px solid var(--border-base);
+    background: var(--bf-appearance-token-element-bg-base);
+    border: 1px solid var(--bf-appearance-token-border-base);
     border-radius: $size-radius-base;
-    color: var(--color-text-secondary);
-    font-size: var(--font-size-lg);
+    color: var(--bf-appearance-token-color-text-secondary);
+    font-size: var(--bf-appearance-token-font-size-lg);
     line-height: 1;
     cursor: pointer;
     transition:
@@ -123,13 +123,13 @@ $_diff-error-max-width: 400px;
       box-shadow $motion-fast $easing-standard;
 
     &:hover:not(:disabled) {
-      background: var(--element-bg-medium);
-      border-color: var(--color-accent-500);
-      color: var(--color-accent-500);
+      background: var(--bf-appearance-token-element-bg-medium);
+      border-color: var(--bf-appearance-token-color-accent-500);
+      color: var(--bf-appearance-token-color-accent-500);
       transform: translateY(-1px);
       box-shadow: 
-        0 2px 8px color-mix(in srgb, var(--color-accent-500) 20%, transparent),
-        0 0 20px var(--color-accent-100);
+        0 2px 8px color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 20%, transparent),
+        0 0 20px var(--bf-appearance-token-color-accent-100);
     }
 
     &:active:not(:disabled) {
@@ -144,7 +144,7 @@ $_diff-error-max-width: 400px;
     }
 
     &:focus-visible {
-      outline: 2px solid var(--color-accent-500);
+      outline: 2px solid var(--bf-appearance-token-color-accent-500);
       outline-offset: 2px;
     }
   }
@@ -174,7 +174,7 @@ $_diff-error-max-width: 400px;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  background: color-mix(in srgb, var(--color-bg-primary) 85%, transparent);
+  background: color-mix(in srgb, var(--bf-appearance-token-color-bg-primary) 85%, transparent);
   backdrop-filter: blur(4px);
   z-index: 100;
   animation: diff-editor-fade-in 0.2s ease-out;
@@ -198,8 +198,8 @@ $_diff-error-max-width: 400px;
   transform: translate(-50%, -50%);
   text-align: center;
   padding: $size-gap-6;
-  background: var(--color-bg-primary);
-  border: 1px solid var(--border-subtle);
+  background: var(--bf-appearance-token-color-bg-primary);
+  border: 1px solid var(--bf-appearance-token-border-subtle);
   border-radius: $size-radius-lg;
   max-width: $_diff-error-max-width;
   z-index: 100;
@@ -209,21 +209,21 @@ $_diff-error-max-width: 400px;
   gap: $size-gap-3;
 
   &__icon {
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
     opacity: 0.6;
   }
 
   &__message {
-    color: var(--color-text-secondary);
-    font-size: var(--font-size-sm);
+    color: var(--bf-appearance-token-color-text-secondary);
+    font-size: var(--bf-appearance-token-font-size-sm);
     font-weight: $font-weight-medium;
     margin: 0;
     line-height: $line-height-relaxed;
   }
 
   &__path {
-    color: var(--color-text-muted);
-    font-size: var(--font-size-xs);
+    color: var(--bf-appearance-token-color-text-muted);
+    font-size: var(--bf-appearance-token-font-size-xs);
     font-family: $font-family-mono;
     margin: 0;
     max-width: 100%;
@@ -237,20 +237,20 @@ $_diff-error-max-width: 400px;
 .diff-editor-container {
   :global {
     .monaco-diff-editor {
-      background-color: var(--color-bg-primary) !important;
+      background-color: var(--bf-appearance-token-color-bg-primary) !important;
     }
 
     .monaco-diff-editor .editor.original,
     .monaco-diff-editor .editor.modified {
-      background-color: var(--color-bg-primary) !important;
+      background-color: var(--bf-appearance-token-color-bg-primary) !important;
     }
 
     .monaco-diff-editor .monaco-editor {
-      background-color: var(--color-bg-primary) !important;
+      background-color: var(--bf-appearance-token-color-bg-primary) !important;
     }
 
     .monaco-diff-editor .monaco-editor-background {
-      background-color: var(--color-bg-primary) !important;
+      background-color: var(--bf-appearance-token-color-bg-primary) !important;
     }
 
     .monaco-diff-editor .monaco-editor .view-overlays {
@@ -260,17 +260,17 @@ $_diff-error-max-width: 400px;
     .monaco-diff-editor .monaco-editor .margin,
     .monaco-diff-editor .editor.original .margin,
     .monaco-diff-editor .editor.modified .margin {
-      background-color: var(--color-bg-primary) !important;
+      background-color: var(--bf-appearance-token-color-bg-primary) !important;
     }
 
     .monaco-diff-editor .monaco-editor .margin-view-overlays,
     .monaco-diff-editor .editor.original .margin-view-overlays,
     .monaco-diff-editor .editor.modified .margin-view-overlays {
-      background-color: var(--color-bg-primary) !important;
+      background-color: var(--bf-appearance-token-color-bg-primary) !important;
     }
 
     .monaco-diff-editor .monaco-editor .gutter-background {
-      background-color: var(--color-bg-primary) !important;
+      background-color: var(--bf-appearance-token-color-bg-primary) !important;
     }
 
     // Gutter Styles
@@ -289,10 +289,10 @@ $_diff-error-max-width: 400px;
       border: none !important;
       box-shadow: none !important;
       background: transparent !important;
-      color: var(--color-text-muted) !important;
+      color: var(--bf-appearance-token-color-text-muted) !important;
       
       &:hover {
-        color: var(--color-text-secondary) !important;
+        color: var(--bf-appearance-token-color-text-secondary) !important;
       }
       
       &:focus {
@@ -322,23 +322,23 @@ $_diff-error-max-width: 400px;
     }
     
     .monaco-diff-editor.side-by-side .editor.original {
-      border-right: 1px dashed var(--border-medium) !important;
+      border-right: 1px dashed var(--bf-appearance-token-border-medium) !important;
       transition: border-color 0.2s ease;
     }
     
     .monaco-diff-editor.side-by-side .editor.modified {
-      border-left: 1px dashed var(--border-medium) !important;
+      border-left: 1px dashed var(--bf-appearance-token-border-medium) !important;
       transition: border-color 0.2s ease;
     }
     
     .monaco-diff-editor.side-by-side:hover .editor.original {
       border-right-style: solid !important;
-      border-right-color: var(--color-overlay-white-15) !important;
+      border-right-color: var(--bf-appearance-token-color-overlay-white-15) !important;
     }
     
     .monaco-diff-editor.side-by-side:hover .editor.modified {
       border-left-style: solid !important;
-      border-left-color: var(--color-overlay-white-15) !important;
+      border-left-color: var(--bf-appearance-token-color-overlay-white-15) !important;
     }
 
     .monaco-diff-editor .monaco-editor .view-lines {
@@ -351,7 +351,7 @@ $_diff-error-max-width: 400px;
 
     .monaco-diff-editor .monaco-editor .line-numbers {
       background-color: transparent !important;
-      color: var(--color-text-muted) !important;
+      color: var(--bf-appearance-token-color-text-muted) !important;
     }
 
     .monaco-diff-editor .monaco-editor .view-line {
@@ -363,28 +363,26 @@ $_diff-error-max-width: 400px;
     }
 
     .monaco-diff-editor .diffViewport {
-      background-color: var(--color-overlay-white-04) !important;
-      border-left: 1px dashed var(--border-medium) !important;
-      border-right: 1px dashed var(--border-medium) !important;
-      transition:
-        background-color 150ms ease,
-        border-color 150ms ease;
+      background-color: var(--bf-appearance-token-color-overlay-white-04) !important;
+      border-left: 1px dashed var(--bf-appearance-token-border-medium) !important;
+      border-right: 1px dashed var(--bf-appearance-token-border-medium) !important;
+      transition: all 0.2s ease;
       
       &:hover {
-        background-color: var(--color-overlay-white-08) !important;
+        background-color: var(--bf-appearance-token-color-overlay-white-08) !important;
         border-left-style: solid !important;
         border-right-style: solid !important;
       }
     }
 
     .monaco-diff-editor .diagonal-fill {
-      background-color: var(--color-bg-secondary) !important;
+      background-color: var(--bf-appearance-token-color-bg-secondary) !important;
       background-image: repeating-linear-gradient(
         45deg,
         transparent,
         transparent 4px,
-        var(--color-overlay-white-04) 4px,
-        var(--color-overlay-white-04) 8px
+        var(--bf-appearance-token-color-overlay-white-04) 4px,
+        var(--bf-appearance-token-color-overlay-white-04) 8px
       ) !important;
     }
 
@@ -419,15 +417,15 @@ $_diff-error-max-width: 400px;
       width: 8px !important;
       
       .insert {
-        background: var(--color-success);
+        background: var(--bf-appearance-token-color-success);
       }
 
       .delete {
-        background: var(--color-error);
+        background: var(--bf-appearance-token-color-error);
       }
 
       .modified {
-        background: var(--color-warning);
+        background: var(--bf-appearance-token-color-warning);
       }
     }
     
@@ -467,16 +465,16 @@ $_diff-error-max-width: 400px;
         background: transparent;
 
         .slider {
-          background: var(--color-overlay-white-08);
+          background: var(--bf-appearance-token-color-overlay-white-08);
           border-radius: 4px;
           transition: background $motion-base $easing-standard;
 
           &:hover {
-            background: var(--color-overlay-white-15);
+            background: var(--bf-appearance-token-color-overlay-white-15);
           }
 
           &.active {
-            background: rgba(var(--color-static-white-rgb), 0.25);
+            background: rgba(var(--bf-appearance-token-color-static-white-rgb), 0.25);
           }
         }
       }
@@ -526,7 +524,7 @@ $_diff-error-max-width: 400px;
     max-width: 280px;
 
     &__message {
-      font-size: var(--font-size-xs);
+      font-size: var(--bf-appearance-token-font-size-xs);
     }
 
     &__path {
@@ -538,7 +536,7 @@ $_diff-error-max-width: 400px;
 // High Contrast Mode
 @media (prefers-contrast: high) {
   .diff-editor-container {
-    border: 2px solid var(--border-base);
+    border: 2px solid var(--bf-appearance-token-border-base);
   }
 
   .diff-editor-toolbar {
@@ -548,7 +546,7 @@ $_diff-error-max-width: 400px;
       border-width: 2px;
 
       &:hover:not(:disabled) {
-        border-color: var(--color-accent-500);
+        border-color: var(--bf-appearance-token-color-accent-500);
       }
     }
 
@@ -570,12 +568,12 @@ $_diff-error-max-width: 400px;
       .monaco-diff-editor {
         .line-insert {
           background-color: var(--diff-editor-added-emphasis-bg) !important;
-          border-left: 3px solid var(--git-color-staged);
+          border-left: 3px solid var(--bf-appearance-token-git-color-staged);
         }
 
         .line-delete {
           background-color: var(--diff-editor-deleted-emphasis-bg) !important;
-          border-left: 3px solid var(--git-color-deleted);
+          border-left: 3px solid var(--bf-appearance-token-git-color-deleted);
         }
       }
     }
@@ -586,12 +584,12 @@ $_diff-error-max-width: 400px;
 :global {
   .diff-editor-container .monaco-diff-editor .monaco-editor-background,
   .diff-editor-container .monaco-diff-editor .monaco-editor .monaco-editor-background {
-    background-color: var(--color-bg-primary) !important;
+    background-color: var(--bf-appearance-token-color-bg-primary) !important;
   }
 
   .diff-editor-container .monaco-diff-editor .editor.original .monaco-editor,
   .diff-editor-container .monaco-diff-editor .editor.modified .monaco-editor {
-    background-color: var(--color-bg-primary) !important;
+    background-color: var(--bf-appearance-token-color-bg-primary) !important;
   }
 
   .monaco-diff-editor .gutter {

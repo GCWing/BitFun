@@ -4,11 +4,7 @@ import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import type * as monaco from 'monaco-editor';
 import { monacoInitManager } from '../services/MonacoInitManager';
 import { monacoApi } from '../services/monacoRuntime';
-import { 
-  forceRegisterTheme,
-  BitFunDarkTheme,
-  BitFunDarkThemeMetadata 
-} from '../themes';
+import { monacoAppearanceAdapter } from '@/infrastructure/appearance/adapters/MonacoAppearanceAdapter';
 import { configManager } from '@/infrastructure/config/services/ConfigManager';
 import { EditorConfig as EditorConfigType } from '@/infrastructure/config/types';
 import { useMonacoLsp } from '@/tools/lsp/hooks/useMonacoLsp';
@@ -102,7 +98,6 @@ export const DiffEditor: React.FC<DiffEditorProps> = ({
     line_numbers: 'on',
     minimap: { enabled: showMinimap, side: 'right', size: 'proportional' }
   });
-  const [_currentThemeId, setCurrentThemeId] = useState<string>(BitFunDarkThemeMetadata.id);
   const containerRef = useRef<HTMLDivElement>(null);
   const originalModelRef = useRef<monaco.editor.ITextModel | null>(null);
   const modifiedModelRef = useRef<monaco.editor.ITextModel | null>(null);
@@ -183,7 +178,7 @@ export const DiffEditor: React.FC<DiffEditorProps> = ({
 
     const initDiffEditor = async () => {
       try {
-        await monacoInitManager.initialize();
+        const monacoRuntime = await monacoInitManager.initialize();
 
         const timestamp = Date.now();
         const originalUri = monacoApi.Uri.parse(`inmemory://diff-original/${timestamp}/${filePath || 'untitled'}`);
@@ -215,19 +210,7 @@ export const DiffEditor: React.FC<DiffEditorProps> = ({
         originalModelRef.current = originalModel;
         modifiedModelRef.current = modifiedModel;
 
-        let themeId = BitFunDarkThemeMetadata.id;
-        try {
-          const { themeService } = await import('@/infrastructure/theme');
-          const currentTheme = themeService.getCurrentTheme();
-          if (currentTheme) {
-            themeId = currentTheme.monaco ? currentTheme.id : (currentTheme.type === 'dark' ? BitFunDarkThemeMetadata.id : 'vs');
-            setCurrentThemeId(themeId);
-          }
-        } catch (error) {
-          log.warn('Failed to get current theme, using default', error);
-        }
-        
-        forceRegisterTheme(BitFunDarkThemeMetadata.id, BitFunDarkTheme);
+        const themeId = monacoAppearanceAdapter.attachMonaco(monacoRuntime);
         
         const editorOptions: monaco.editor.IStandaloneDiffEditorConstructionOptions = {
           renderSideBySide: renderSideBySide,
@@ -323,7 +306,7 @@ export const DiffEditor: React.FC<DiffEditorProps> = ({
               const elements = container.querySelectorAll(selector);
               elements.forEach((element) => {
                 const htmlElement = element as HTMLElement;
-                htmlElement.style.backgroundColor = 'var(--color-bg-primary)';
+                htmlElement.style.backgroundColor = 'var(--bf-appearance-token-color-bg-primary)';
               });
             });
             
@@ -441,42 +424,6 @@ export const DiffEditor: React.FC<DiffEditorProps> = ({
     }
   }, [diffEditor, revealLine]);
 
-  useEffect(() => {
-    if (!diffEditor) {
-      return;
-    }
-
-    let unsubscribeThemeService: (() => void) | null = null;
-    
-    (async () => {
-      try {
-        const { themeService } = await import('@/infrastructure/theme');
-        
-        unsubscribeThemeService = themeService.on('theme:after-change', (event) => {
-          if (event.theme) {
-            const newThemeId = event.theme.monaco ? event.theme.id : (event.theme.type === 'dark' ? BitFunDarkThemeMetadata.id : 'vs');
-            
-            setCurrentThemeId(newThemeId);
-            
-            try {
-              diffEditor.updateOptions({});
-            } catch (error) {
-              log.warn('Failed to update diff editor options', error);
-            }
-          }
-        });
-      } catch (error) {
-        log.warn('Failed to register theme listener', error);
-      }
-    })();
-
-    return () => {
-      if (unsubscribeThemeService) {
-        unsubscribeThemeService();
-      }
-    };
-  }, [diffEditor]);
-
   const navigateToNextChange = useCallback(() => {
     if (!diffEditor) return;
     
@@ -564,8 +511,8 @@ export const DiffEditor: React.FC<DiffEditorProps> = ({
     if (!enableCustomToolbar) return null;
 
     return (
-      <div className="diff-editor-toolbar">
-        <div className="diff-editor-toolbar__info">
+      <div className="diff-editor-toolbar" data-bf-component="diff-editor" data-bf-part="toolbar">
+        <div className="diff-editor-toolbar__info" data-bf-component="diff-editor" data-bf-part="toolbarInfo">
           <span className="diff-editor-toolbar__stats">
             {diffStats.additions > 0 && (
               <span className="diff-editor-toolbar__stat diff-editor-toolbar__stat--add">
@@ -586,7 +533,7 @@ export const DiffEditor: React.FC<DiffEditorProps> = ({
           )}
         </div>
         
-        <div className="diff-editor-toolbar__actions">
+        <div className="diff-editor-toolbar__actions" data-bf-component="diff-editor" data-bf-part="toolbarActions">
           <Tooltip content={t('editor.diffEditor.prevChange')} placement="top">
             <button
               className="diff-editor-toolbar__btn"
@@ -622,10 +569,10 @@ export const DiffEditor: React.FC<DiffEditorProps> = ({
   };
 
   return (
-    <div className={`diff-editor-container ${className}`}>
+    <div className={`diff-editor-container ${className}`} data-bf-component="diff-editor" data-bf-part="root">
       {renderToolbar()}
       
-      <div className="diff-editor-wrapper">
+      <div className="diff-editor-wrapper" data-bf-component="diff-editor" data-bf-part="content">
         <div 
           ref={containerRef} 
           className="diff-editor-content"
@@ -640,13 +587,13 @@ export const DiffEditor: React.FC<DiffEditorProps> = ({
       </div>
 
       {loading && (
-        <div className="diff-editor-loading-overlay">
+        <div className="diff-editor-loading-overlay" data-bf-component="diff-editor" data-bf-part="loading" data-bf-state="loading">
           <CubeLoading size="medium" text={t('editor.diffEditor.loading')} />
         </div>
       )}
 
       {error && (
-        <div className="diff-editor-error">
+        <div className="diff-editor-error" data-bf-component="diff-editor" data-bf-part="error" data-bf-state="error">
           <AlertCircle size={32} className="diff-editor-error__icon" />
           <p className="diff-editor-error__message">{error}</p>
           {filePath && (

@@ -31,9 +31,9 @@
 
     background: linear-gradient(
       to bottom,
-      var(--color-bg-scene) 0%,
-      color-mix(in srgb, var(--color-bg-scene) 80%, transparent) 40%,
-      color-mix(in srgb, var(--color-bg-scene) 40%, transparent) 70%,
+      var(--bf-appearance-token-color-bg-scene) 0%,
+      color-mix(in srgb, var(--bf-appearance-token-color-bg-scene) 80%, transparent) 40%,
+      color-mix(in srgb, var(--bf-appearance-token-color-bg-scene) 40%, transparent) 70%,
       transparent 100%
     );
   }
@@ -59,10 +59,9 @@
     width: 30px;
     height: 30px;
     border-radius: 50%;
-    border: 1px solid var(--border-medium);
-    background: color-mix(in srgb, var(--color-bg-elevated) 92%, transparent);
-    color: var(--color-text-secondary);
-    box-shadow: 0 6px 16px var(--color-overlay-black-15);
+    border: 1.5px solid var(--bf-appearance-token-border-base);
+    background: var(--bf-appearance-token-color-bg-scene);
+    color: var(--bf-appearance-token-color-text-muted);
     cursor: pointer;
     padding: 0;
 
@@ -71,8 +70,8 @@
       opacity 120ms ease;
 
     &:hover {
-      border-color: var(--border-medium);
-      color: var(--color-text-primary);
+      border-color: var(--bf-appearance-token-border-medium);
+      color: var(--bf-appearance-token-color-text-primary);
       transform: translateY(-1px);
     }
 
@@ -81,10 +80,9 @@
     }
 
     &:focus-visible {
-      outline: 2px solid var(--border-accent);
-      outline-offset: 2px;
-      border-color: var(--border-medium);
-      color: var(--color-text-primary);
+      outline: none;
+      border-color: var(--bf-appearance-token-border-strong);
+      color: var(--bf-appearance-token-color-text-primary);
     }
   }
 }

@@ -27,8 +27,20 @@ const BrowserScene: React.FC = () => {
   }, [browser]);
 
   return (
-    <div className="browser-scene" data-testid="browser-panel">
-      <form className="browser-scene__toolbar" onSubmit={handleSubmit} data-testid="browser-panel-title">
+    <div
+      className="browser-scene"
+      data-testid="browser-panel"
+      data-bf-scene="browser"
+      data-bf-part="root"
+      data-bf-state={browser.isLoading ? 'loading' : undefined}
+    >
+      <form
+        className="browser-scene__toolbar"
+        onSubmit={handleSubmit}
+        data-testid="browser-panel-title"
+        data-bf-scene="browser"
+        data-bf-part="toolbar"
+      >
         <IconButton
           type="button"
           variant="ghost"
@@ -78,13 +90,13 @@ const BrowserScene: React.FC = () => {
       </form>
 
       {browser.error ? (
-        <div className="browser-scene__error" data-testid="browser-error-message">
+        <div className="browser-scene__error" data-testid="browser-error-message" data-bf-scene="browser" data-bf-part="error">
           <AlertTriangle size={16} />
           <span>{browser.error}</span>
         </div>
       ) : null}
 
-      <div className="browser-scene__content" data-testid="browser-page-frame">
+      <div className="browser-scene__content" data-testid="browser-page-frame" data-bf-scene="browser" data-bf-part="content">
         {!browser.isTauri ? (
           <iframe
             className="browser-scene__iframe"

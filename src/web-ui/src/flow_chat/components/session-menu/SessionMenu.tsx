@@ -9,9 +9,12 @@
  */
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { Plus } from 'lucide-react';
 import { Tooltip } from '@/component-library';
+import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
+import { useAnchoredPopoverPosition } from '@/shared/utils/useAnchoredPopoverPosition';
 import { activateMainSession } from '../../services/sessionActivation';
 import { useFlowChatSessions, resolveDisplayTitle } from './useFlowChatSessions';
 import './SessionMenu.scss';
@@ -25,7 +28,17 @@ export const SessionMenu: React.FC<SessionMenuProps> = ({ onOpenChange }) => {
   const { t } = useTranslation('flow-chat');
   const { activeSessionId, sessions } = useFlowChatSessions();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const dropdownLayout = useAnchoredPopoverPosition({
+    open: isMenuOpen,
+    anchorRef: triggerRef,
+    popoverRef: dropdownRef,
+    preferredPlacement: 'bottom',
+    gap: 4,
+    layoutRevision: sessions.length,
+  });
 
   const setOpen = useCallback((open: boolean) => {
     setIsMenuOpen(open);
@@ -53,8 +66,8 @@ export const SessionMenu: React.FC<SessionMenuProps> = ({ onOpenChange }) => {
     const handleClickOutside = (e: MouseEvent) => {
       const target = e.target as HTMLElement | null;
       if (!target) return;
+      if (rootRef.current?.contains(target)) return;
       if (dropdownRef.current?.contains(target)) return;
-      if (target.closest?.('.bitfun-session-menu__trigger')) return;
       setOpen(false);
     };
 
@@ -76,14 +89,24 @@ export const SessionMenu: React.FC<SessionMenuProps> = ({ onOpenChange }) => {
   }, [isMenuOpen, setOpen]);
 
   return (
-    <div className="bitfun-session-menu" onKeyDown={handleKeyDown}>
+    <div
+      ref={rootRef}
+      className="bitfun-session-menu"
+      data-bf-component="session-menu"
+      data-bf-part="root"
+      data-bf-state={isMenuOpen ? 'open' : undefined}
+      onKeyDown={handleKeyDown}
+    >
       <Tooltip content={t('toolCards.toolbar.openSessionMenu')}>
         <button
+          ref={triggerRef}
           type="button"
           className={[
             'bitfun-session-menu__trigger',
             isMenuOpen ? 'bitfun-session-menu__trigger--open' : '',
           ].filter(Boolean).join(' ')}
+          data-bf-component="session-menu"
+          data-bf-part="trigger"
           onClick={toggleMenu}
           aria-expanded={isMenuOpen}
           aria-haspopup="listbox"
@@ -92,50 +115,68 @@ export const SessionMenu: React.FC<SessionMenuProps> = ({ onOpenChange }) => {
         </button>
       </Tooltip>
 
-      {isMenuOpen && (
+      {isMenuOpen && createPortal(
         <div
           className="bitfun-session-menu__dropdown"
+          data-bf-component="session-menu"
+          data-bf-part="dropdown"
+          data-bf-placement={dropdownLayout?.placement ?? 'bottom'}
           ref={dropdownRef}
+          style={{
+            top: `${dropdownLayout?.top ?? 0}px`,
+            left: `${dropdownLayout?.left ?? 0}px`,
+            visibility: dropdownLayout ? 'visible' : 'hidden',
+          }}
           onMouseDown={(e) => e.stopPropagation()}
         >
-          <div className="bitfun-session-menu__actions">
+          <div className="bitfun-session-menu__actions" data-bf-component="session-menu" data-bf-part="actions">
             <button
               type="button"
               className="bitfun-session-menu__item bitfun-session-menu__item--new"
+              data-bf-component="session-menu"
+              data-bf-part="item"
+              data-bf-item-kind="create"
+              data-bf-session-kind="code"
               onMouseDown={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
                 createSession('code');
               }}
             >
-              <span className="bitfun-session-menu__item-icon" aria-hidden>
+              <span className="bitfun-session-menu__item-icon" data-bf-component="session-menu" data-bf-part="itemIcon" aria-hidden>
                 <Plus size={13} strokeWidth={2.25} />
               </span>
-              <span className="bitfun-session-menu__item-label">
+              <span className="bitfun-session-menu__item-label" data-bf-component="session-menu" data-bf-part="itemLabel">
                 {t('toolCards.toolbar.newCodeSessionItem')}
               </span>
             </button>
             <button
               type="button"
               className="bitfun-session-menu__item bitfun-session-menu__item--new"
+              data-bf-component="session-menu"
+              data-bf-part="item"
+              data-bf-item-kind="create"
+              data-bf-session-kind="cowork"
               onMouseDown={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
                 createSession('cowork');
               }}
             >
-              <span className="bitfun-session-menu__item-icon" aria-hidden>
+              <span className="bitfun-session-menu__item-icon" data-bf-component="session-menu" data-bf-part="itemIcon" aria-hidden>
                 <Plus size={13} strokeWidth={2.25} />
               </span>
-              <span className="bitfun-session-menu__item-label">
+              <span className="bitfun-session-menu__item-label" data-bf-component="session-menu" data-bf-part="itemLabel">
                 {t('toolCards.toolbar.newCoworkSessionItem')}
               </span>
             </button>
-            <div className="bitfun-session-menu__divider" role="separator" />
+            <div className="bitfun-session-menu__divider" data-bf-component="session-menu" data-bf-part="divider" role="separator" />
           </div>
 
           <div
             className="bitfun-session-menu__scroll"
+            data-bf-component="session-menu"
+            data-bf-part="scroll"
             role="listbox"
             aria-label={t('session.switchSession')}
           >
@@ -147,13 +188,18 @@ export const SessionMenu: React.FC<SessionMenuProps> = ({ onOpenChange }) => {
                   'bitfun-session-menu__item',
                   session.sessionId === activeSessionId ? 'bitfun-session-menu__item--active' : '',
                 ].filter(Boolean).join(' ')}
+                data-bf-component="session-menu"
+                data-bf-part="item"
+                data-bf-item-kind="session"
+                data-bf-state={session.sessionId === activeSessionId ? 'active' : undefined}
                 onMouseDown={(e) => switchSession(e, session.sessionId)}
               >
                 {resolveDisplayTitle(session)}
               </button>
             ))}
           </div>
-        </div>
+        </div>,
+        getAppearanceOverlayHost(),
       )}
     </div>
   );

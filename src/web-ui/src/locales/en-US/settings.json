@@ -16,7 +16,7 @@
     },
     "tabDescriptions": {
       "basics": "Logging, terminal shell, notifications, and launch at login.",
-      "appearance": "Language, theme, and UI font size.",
+      "appearance": "Language, visual appearance, and UI font size.",
       "models": "AI models, API keys, providers, proxy, and session title.",
       "worktrees": "Defaults for isolated Git worktrees and parallel sessions.",
       "sessionPersonalization": "Agent companion.",
@@ -69,9 +69,9 @@
       "description": "Select interface language",
       "auto": "Auto Detect"
     },
-    "theme": {
-      "title": "Theme",
-      "description": "Select interface theme",
+    "appearance": {
+      "title": "Appearance",
+      "description": "Select interface appearance",
       "light": "Light",
       "dark": "Dark",
       "system": "Follow System"
@@ -539,11 +539,11 @@
       "subtitle": "Configure and manage agents, including function agents and super agents",
       "create": "Create Agent"
     },
-    "theme": {
-      "title": "Theme Settings",
-      "subtitle": "Customize the app appearance and theme colors",
-      "import": "Import Theme",
-      "export": "Export Current Theme"
+    "appearance": {
+      "title": "Appearance Settings",
+      "subtitle": "Customize the app appearance and colors",
+      "import": "Import Appearance",
+      "export": "Export Current Appearance"
     }
   }
 }

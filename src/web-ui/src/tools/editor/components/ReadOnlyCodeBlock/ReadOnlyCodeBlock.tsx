@@ -27,8 +27,6 @@ export interface ReadOnlyCodeBlockProps {
   minHeight?: number | string;
   /** Auto-adjust height based on content */
   autoHeight?: boolean;
-  /** Theme ID */
-  theme?: string;
   /** CSS class name */
   className?: string;
   /** Inline styles */
@@ -49,7 +47,6 @@ export const ReadOnlyCodeBlock: React.FC<ReadOnlyCodeBlockProps> = ({
   maxHeight = 400,
   minHeight = 50,
   autoHeight = true,
-  theme,
   className = '',
   style,
   config,
@@ -106,6 +103,8 @@ export const ReadOnlyCodeBlock: React.FC<ReadOnlyCodeBlockProps> = ({
   return (
     <div
       className={`readonly-code-block ${className}`}
+      data-bf-component="editor-tool"
+      data-bf-part="readOnlyCodeBlock"
       style={{
         height: computedHeight,
         ...style,
@@ -122,7 +121,6 @@ export const ReadOnlyCodeBlock: React.FC<ReadOnlyCodeBlockProps> = ({
         readOnly={true}
         showLineNumbers={showLineNumbers}
         showMinimap={false}
-        theme={theme}
         onEditorReady={handleEditorReady}
       />
     </div>

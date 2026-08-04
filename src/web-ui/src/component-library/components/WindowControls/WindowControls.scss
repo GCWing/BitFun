@@ -16,8 +16,8 @@
     padding: 0;
     background: transparent;
     border: 1px solid transparent;
-    border-radius: var(--size-radius-sm);
-    color: var(--btn-ghost-color);
+    border-radius: var(--bf-appearance-token-size-radius-sm);
+    color: var(--bf-appearance-token-btn-ghost-color);
     cursor: pointer;
     transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
     position: relative;
@@ -44,9 +44,9 @@
     }
 
     &:hover {
-      background: var(--btn-ghost-hover-bg);
-      color: var(--btn-ghost-hover-color);
-      border-color: var(--btn-ghost-hover-border);
+      background: var(--bf-appearance-token-btn-ghost-hover-bg);
+      color: var(--bf-appearance-token-btn-ghost-hover-color);
+      border-color: var(--bf-appearance-token-btn-ghost-hover-border);
     }
 
     &:active {
@@ -54,55 +54,55 @@
     }
 
     &:focus-visible {
-      outline: 2px solid var(--color-accent-400);
+      outline: 2px solid var(--bf-appearance-token-color-accent-400);
       outline-offset: 2px;
     }
 
     &--minimize {
       &:hover {
-        background: var(--btn-ghost-hover-bg);
-        color: var(--btn-ghost-hover-color);
-        border-color: var(--btn-ghost-hover-border);
+        background: var(--bf-appearance-token-btn-ghost-hover-bg);
+        color: var(--bf-appearance-token-btn-ghost-hover-color);
+        border-color: var(--bf-appearance-token-btn-ghost-hover-border);
       }
 
       &:focus-visible {
-        outline-color: var(--color-accent-400);
+        outline-color: var(--bf-appearance-token-color-accent-400);
       }
     }
 
     &--maximize {
       &:hover {
-        background: var(--btn-ghost-hover-bg);
-        color: var(--btn-ghost-hover-color);
-        border-color: var(--btn-ghost-hover-border);
+        background: var(--bf-appearance-token-btn-ghost-hover-bg);
+        color: var(--bf-appearance-token-btn-ghost-hover-color);
+        border-color: var(--bf-appearance-token-btn-ghost-hover-border);
       }
 
       &:focus-visible {
-        outline-color: var(--color-accent-400);
+        outline-color: var(--bf-appearance-token-color-accent-400);
       }
     }
 
     &--close {
       &:hover {
-        background: var(--btn-ghost-hover-bg);
-        color: var(--color-error);
-        border-color: var(--btn-ghost-hover-border);
+        background: var(--bf-appearance-token-btn-ghost-hover-bg);
+        color: var(--bf-appearance-token-color-error);
+        border-color: var(--bf-appearance-token-btn-ghost-hover-border);
 
       }
 
       &:focus-visible {
-        outline-color: var(--color-error);
+        outline-color: var(--bf-appearance-token-color-error);
       }
     }
 
     &:disabled {
-      opacity: var(--opacity-disabled);
+      opacity: var(--bf-appearance-token-opacity-disabled);
       cursor: default;
       pointer-events: none;
 
       &:hover {
         background: transparent;
-        color: var(--btn-ghost-color);
+        color: var(--bf-appearance-token-btn-ghost-color);
         border-color: transparent;
       }
     }
@@ -116,7 +116,7 @@
     &__btn {
       width: 28px;
       height: 28px;
-      border-radius: var(--size-radius-sm);
+      border-radius: var(--bf-appearance-token-size-radius-sm);
 
       svg {
         width: 12px;

@@ -14,6 +14,7 @@ use bitfun_runtime_ports::{
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::SystemTime;
+use tokio_util::sync::CancellationToken;
 pub use tool_runtime::context::PrimaryModelFacts;
 pub use tool_runtime::pipeline::SubagentBatchExecutionPolicy;
 
@@ -29,6 +30,9 @@ pub struct ToolExecutionOptions {
     pub permission_policy: ResolvedPermissionPolicy,
     /// Automatically reply `once` to `ask` requests through the permission manager.
     pub auto_approve_ask: bool,
+    /// Optional owner-provided token that latches cancellation before tool
+    /// validation and permission preflight have registered pipeline state.
+    pub parent_cancellation_token: Option<CancellationToken>,
 }
 
 impl Default for ToolExecutionOptions {
@@ -40,6 +44,7 @@ impl Default for ToolExecutionOptions {
             timeout_secs: None, // Default no timeout (infinite waiting)
             permission_policy: ResolvedPermissionPolicy::default(),
             auto_approve_ask: false,
+            parent_cancellation_token: None,
         }
     }
 }

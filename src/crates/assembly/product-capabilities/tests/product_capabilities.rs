@@ -359,7 +359,7 @@ fn product_delivery_profile_matrix_documents_current_core_dependency_shape() {
             ),
             (
                 DeliveryProfile::Cli,
-                ProductCoreDependencyMode::ProductFullCompatibility,
+                ProductCoreDependencyMode::ExplicitCoreCapabilityClosure,
             ),
             (
                 DeliveryProfile::Server,
@@ -371,7 +371,7 @@ fn product_delivery_profile_matrix_documents_current_core_dependency_shape() {
             ),
             (
                 DeliveryProfile::Acp,
-                ProductCoreDependencyMode::ProductFullCompatibility,
+                ProductCoreDependencyMode::ExplicitCoreCapabilityClosure,
             ),
             (
                 DeliveryProfile::Web,
@@ -400,10 +400,11 @@ fn product_assembly_plan_follows_core_dependency_matrix() {
         let plan = product_assembly_plan_for_profile(entry.profile());
 
         match entry.core_dependency_mode() {
-            ProductCoreDependencyMode::ProductFullCompatibility => {
+            ProductCoreDependencyMode::ProductFullCompatibility
+            | ProductCoreDependencyMode::ExplicitCoreCapabilityClosure => {
                 assert!(
                     !plan.capability_set().ids().is_empty(),
-                    "{} must retain product-full capabilities",
+                    "{} must retain runtime capabilities",
                     entry.profile()
                 );
                 assert!(
@@ -411,12 +412,12 @@ fn product_assembly_plan_follows_core_dependency_matrix() {
                         .capability_assembly()
                         .tool_provider_group_plan()
                         .is_empty(),
-                    "{} must retain product-full tool groups",
+                    "{} must retain runtime tool groups",
                     entry.profile()
                 );
                 assert!(
                     !plan.feature_groups().is_empty(),
-                    "{} must retain product-full feature groups",
+                    "{} must retain runtime feature groups",
                     entry.profile()
                 );
             }

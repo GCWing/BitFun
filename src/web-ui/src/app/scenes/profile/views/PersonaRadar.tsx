@@ -81,8 +81,8 @@ export const PersonaRadar: React.FC<Props> = ({ dims, size = 148, onDimClick, on
           key={`ring-${i}`}
           d={d}
           style={{
-            fill: i === RING_FRACTIONS.length - 1 ? 'var(--element-bg-subtle)' : 'none',
-            stroke: 'var(--border-subtle)',
+            fill: i === RING_FRACTIONS.length - 1 ? 'var(--bf-appearance-token-element-bg-subtle)' : 'none',
+            stroke: 'var(--bf-appearance-token-border-subtle)',
             strokeWidth: 0.7,
           }}
         />
@@ -93,7 +93,7 @@ export const PersonaRadar: React.FC<Props> = ({ dims, size = 148, onDimClick, on
         <line
           key={`axis-${i}`}
           x1={cx} y1={cy} x2={v.x} y2={v.y}
-          style={{ stroke: 'var(--border-subtle)', strokeWidth: 0.7 }}
+          style={{ stroke: 'var(--bf-appearance-token-border-subtle)', strokeWidth: 0.7 }}
         />
       ))}
 
@@ -101,9 +101,9 @@ export const PersonaRadar: React.FC<Props> = ({ dims, size = 148, onDimClick, on
       <path
         d={scorePath}
         style={{
-          fill: 'var(--color-accent-500)',
+          fill: 'var(--bf-appearance-token-color-accent-500)',
           fillOpacity: 0.12,
-          stroke: 'var(--color-accent-500)',
+          stroke: 'var(--bf-appearance-token-color-accent-500)',
           strokeWidth: 1.2,
           strokeLinejoin: 'round',
         }}
@@ -111,7 +111,7 @@ export const PersonaRadar: React.FC<Props> = ({ dims, size = 148, onDimClick, on
 
       {/* Score dots */}
       {dots.map((p, i) => (
-        <circle key={`dot-${i}`} cx={p.x} cy={p.y} r={2.2} style={{ fill: 'var(--color-accent-500)' }} />
+        <circle key={`dot-${i}`} cx={p.x} cy={p.y} r={2.2} style={{ fill: 'var(--bf-appearance-token-color-accent-500)' }} />
       ))}
 
       {/* Chart hit area: only this area triggers "expand" */}
@@ -149,8 +149,8 @@ export const PersonaRadar: React.FC<Props> = ({ dims, size = 148, onDimClick, on
               dominantBaseline="middle"
               style={{
                 fontSize: '9px',
-                fill: hasClick ? 'var(--color-text-secondary)' : 'var(--color-text-muted)',
-                fontFamily: 'var(--font-family-sans)',
+                fill: hasClick ? 'var(--bf-appearance-token-color-text-secondary)' : 'var(--bf-appearance-token-color-text-muted)',
+                fontFamily: 'var(--bf-appearance-token-font-family-sans)',
                 userSelect: 'none',
                 cursor: hasClick ? 'pointer' : 'default',
                 transition: 'fill 0.15s',

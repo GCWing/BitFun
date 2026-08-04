@@ -33,6 +33,7 @@ describe('isPeerLocalOnlyCommand', () => {
 describe('peerInvokePriorityFor', () => {
   it('ranks session hydrate commands high', () => {
     expect(peerInvokePriorityFor('restore_session_view')).toBe('high');
+    expect(peerInvokePriorityFor('load_session_turn_window')).toBe('high');
     expect(peerInvokePriorityFor('list_persisted_sessions_page')).toBe('high');
     expect(peerInvokePriorityFor('initialize_workspace_startup_state')).toBe('high');
     expect(peerInvokePriorityFor('start_dialog_turn')).toBe('high');
@@ -87,6 +88,7 @@ describe('peerInvokePriorityFor', () => {
     expect(isPeerRetryableReadCommand('list_persisted_sessions_page')).toBe(true);
     expect(isPeerRetryableReadCommand('get_opened_workspaces')).toBe(true);
     expect(isPeerRetryableReadCommand('restore_session_view')).toBe(true);
+    expect(isPeerRetryableReadCommand('load_session_turn_window')).toBe(true);
     expect(isPeerRetryableReadCommand('start_dialog_turn')).toBe(false);
     expect(isPeerRetryableReadCommand('delete_session')).toBe(false);
     expect(isPeerRetryableReadCommand('respond_permission')).toBe(false);

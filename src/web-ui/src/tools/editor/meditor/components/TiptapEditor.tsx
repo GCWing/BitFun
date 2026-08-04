@@ -1198,11 +1198,13 @@ export const TiptapEditor = React.forwardRef<TiptapEditorHandle, TiptapEditorPro
   const canSubmitInlinePrompt = !!inlineAiState?.query.trim() && !isInlineBusy;
 
   return (
-    <div ref={rootRef} className="m-editor-tiptap">
-      <EditorContent editor={editor} />
+    <div ref={rootRef} className="m-editor-tiptap" data-bf-component="tiptap-editor" data-bf-part="root">
+      <EditorContent editor={editor} data-bf-component="tiptap-editor" data-bf-part="content" />
       {inlineAiState?.isOpen && inlineAiState.status === 'idle' && (
         <div
           className="m-editor-inline-ai"
+          data-bf-component="tiptap-editor"
+          data-bf-part="inlineAi"
           data-testid="md-inline-ai-panel"
           style={{
             top: `${inlineAiState.anchorTop}px`,
@@ -1212,9 +1214,21 @@ export const TiptapEditor = React.forwardRef<TiptapEditorHandle, TiptapEditorPro
             event.stopPropagation();
           }}
         >
-          <div className="m-editor-inline-ai__surface">
-            <div className="m-editor-inline-ai__panel">
-              <div className="m-editor-inline-ai__composer">
+          <div
+            className="m-editor-inline-ai__surface"
+            data-bf-component="tiptap-editor"
+            data-bf-part="inlineAiSurface"
+          >
+            <div
+              className="m-editor-inline-ai__panel"
+              data-bf-component="tiptap-editor"
+              data-bf-part="inlineAiPanel"
+            >
+              <div
+                className="m-editor-inline-ai__composer"
+                data-bf-component="tiptap-editor"
+                data-bf-part="composer"
+              >
                 <Input
                   ref={inlineAiInputRef}
                   variant="filled"
@@ -1284,10 +1298,16 @@ export const TiptapEditor = React.forwardRef<TiptapEditorHandle, TiptapEditorPro
                 {t('editor.meditor.inlineAi.suggestionSection')}
               </div>
 
-              <div className="m-editor-inline-ai__quick-actions">
+              <div
+                className="m-editor-inline-ai__quick-actions"
+                data-bf-component="tiptap-editor"
+                data-bf-part="quickActions"
+              >
                 <button
                   type="button"
                   className="m-editor-inline-ai__quick-action m-editor-inline-ai__quick-action--primary"
+                  data-bf-component="tiptap-editor"
+                  data-bf-part="quickAction"
                   data-testid="md-inline-ai-continue"
                   onClick={() => {
                     handleInlineAiQuickAction('continue', '');
@@ -1301,6 +1321,8 @@ export const TiptapEditor = React.forwardRef<TiptapEditorHandle, TiptapEditorPro
                 <button
                   type="button"
                   className="m-editor-inline-ai__quick-action"
+                  data-bf-component="tiptap-editor"
+                  data-bf-part="quickAction"
                   data-testid="md-inline-ai-summary"
                   onClick={() => {
                     handleInlineAiQuickAction('summary', t('editor.meditor.inlineAi.summaryDirection'));
@@ -1314,6 +1336,8 @@ export const TiptapEditor = React.forwardRef<TiptapEditorHandle, TiptapEditorPro
                 <button
                   type="button"
                   className="m-editor-inline-ai__quick-action"
+                  data-bf-component="tiptap-editor"
+                  data-bf-part="quickAction"
                   data-testid="md-inline-ai-todo"
                   onClick={() => {
                     handleInlineAiQuickAction('todo', t('editor.meditor.inlineAi.todoDirection'));
@@ -1326,7 +1350,11 @@ export const TiptapEditor = React.forwardRef<TiptapEditorHandle, TiptapEditorPro
                 </button>
               </div>
 
-              <div className="m-editor-inline-ai__footer">
+              <div
+                className="m-editor-inline-ai__footer"
+                data-bf-component="tiptap-editor"
+                data-bf-part="footer"
+              >
                 <button
                   type="button"
                   className="m-editor-inline-ai__footer-dismiss"

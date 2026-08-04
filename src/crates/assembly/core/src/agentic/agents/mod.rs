@@ -23,7 +23,7 @@ pub use bitfun_agent_runtime::custom_agent::{
 };
 use bitfun_runtime_ports::PermissionConstraintLayer;
 pub use definitions::custom::{CustomMode, CustomSubagent, CustomSubagentKind};
-pub(crate) use definitions::external::ExternalProvidedSubagent;
+pub(crate) use definitions::external::ExternalProvidedAgent;
 pub use definitions::hidden::{CodeReviewAgent, DeepReviewAgent, GenerateDocAgent};
 pub use definitions::modes::{
     AgenticMode, ClawMode, CoworkMode, DebugMode, DeepResearchMode, MultitaskMode, PlanMode,
@@ -52,13 +52,24 @@ pub use registry::visibility::{
 };
 pub use registry::{
     get_agent_registry, AgentRegistry, CustomAgentDetail, CustomSubagentDetail,
-    ExternalSubagentGenerationLease, ExternalSubagentInvocationBinding,
-    ExternalSubagentModelBinding, ExternalSubagentRegistration, ExternalSubagentRoute,
+    ExternalPrimaryAgentTurnBinding, ExternalSubagentGenerationLease,
+    ExternalSubagentInvocationBinding, ExternalSubagentModelBinding, ExternalSubagentRegistration,
+    ExternalSubagentRoute,
 };
 use std::any::Any;
 
-// Include embedded prompts generated at compile time
-include!(concat!(env!("OUT_DIR"), "/embedded_agents_prompt.rs"));
+pub use bitfun_agent_content::EMBEDDED_PROMPTS;
+
+/// Returns a built-in Agent prompt by its stable compatibility key.
+pub fn get_embedded_prompt(prompt_name: &str) -> Option<&'static str> {
+    bitfun_agent_content::agent_prompt(prompt_name)
+}
+
+/// Returns all built-in Agent prompt keys.
+#[allow(dead_code)]
+pub fn get_all_embedded_prompt_names() -> Vec<&'static str> {
+    bitfun_agent_content::agent_prompt_names()
+}
 
 pub type AgentToolPolicyOverrides = IndexMap<String, ToolExposure>;
 
@@ -135,6 +146,7 @@ pub fn shared_coding_mode_tools() -> Vec<String> {
         "InitMiniApp".to_string(),
         "FinalizeMiniApp".to_string(),
         "PublishMiniApp".to_string(),
+        "PublishAppearance".to_string(),
         "PageDeploy".to_string(),
         "PagePublish".to_string(),
     ];
@@ -259,10 +271,18 @@ pub trait Agent: Send + Sync + 'static {
 #[cfg(test)]
 mod tests {
     use super::{
-        shared_coding_mode_tool_exposure_overrides, shared_coding_mode_tools,
+        get_embedded_prompt, shared_coding_mode_tool_exposure_overrides, shared_coding_mode_tools,
         shared_coding_mode_user_context_policy, Agent, AgenticMode, DebugMode, MultitaskMode,
-        PlanMode,
+        PlanMode, EMBEDDED_PROMPTS,
     };
+
+    #[test]
+    fn embedded_prompt_catalog_compatibility_export_matches_lookup() {
+        assert_eq!(
+            EMBEDDED_PROMPTS.get("agentic_mode").copied(),
+            get_embedded_prompt("agentic_mode")
+        );
+    }
 
     #[test]
     fn shared_template_modes_share_system_prompt_cache_identity() {

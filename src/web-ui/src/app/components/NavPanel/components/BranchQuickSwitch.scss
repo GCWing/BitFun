@@ -8,29 +8,28 @@
 .branch-quick-switch {
   position: fixed;
   z-index: $z-popover;
-  background: var(--color-bg-elevated);
-  border: 1px solid var(--border-medium);
-  border-radius: $size-radius-lg;
-  box-shadow: 0 14px 42px -12px var(--color-overlay-black-30);
+  background: var(--bf-appearance-token-color-bg-primary);
+  border: 1px solid var(--bf-appearance-token-border-subtle);
+  border-radius: 8px;
+  box-shadow: 0 8px 32px var(--bf-appearance-token-color-overlay-black-30);
   overflow: hidden;
 }
 
 // ── Search ──────────────────────────────────────────────
 
 .branch-quick-switch__search {
-  padding: $size-gap-2;
-  border-bottom: 1px solid var(--border-subtle);
+  padding: 8px;
+  border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
 }
 
 .branch-quick-switch__input {
   width: 100%;
-  height: 32px;
-  padding: 0 $size-gap-2;
-  font-size: var(--font-size-xs);
-  border: 1px solid var(--border-subtle);
-  border-radius: $size-radius-sm;
-  background: var(--color-bg-primary);
-  color: var(--color-text-primary);
+  padding: 6px 10px;
+  font-size: var(--bf-appearance-token-font-size-xs);
+  border: 1px solid var(--bf-appearance-token-border-subtle);
+  border-radius: 4px;
+  background: var(--bf-appearance-token-color-bg-secondary);
+  color: var(--bf-appearance-token-color-text-primary);
   outline: none !important;
   transition:
     border-color 120ms ease,
@@ -38,12 +37,12 @@
 
   &:focus,
   &:focus-visible {
-    border-color: var(--color-accent-500);
+    border-color: var(--bf-appearance-token-color-accent-500);
     outline: none !important;
     box-shadow: none !important;
   }
 
-  &::placeholder { color: var(--color-text-muted); }
+  &::placeholder { color: var(--bf-appearance-token-color-text-muted); }
 }
 
 // ── List ────────────────────────────────────────────────
@@ -57,7 +56,7 @@
   &::-webkit-scrollbar { width: 4px; }
   &::-webkit-scrollbar-track { background: transparent; }
   &::-webkit-scrollbar-thumb {
-    background: var(--color-text-muted);
+    background: var(--bf-appearance-token-color-text-muted);
     border-radius: 2px;
     opacity: 0.3;
   }
@@ -70,8 +69,8 @@
   align-items: center;
   justify-content: center;
   gap: 8px;
-  color: var(--color-text-muted);
-  font-size: var(--font-size-xs);
+  color: var(--bf-appearance-token-color-text-muted);
+  font-size: var(--bf-appearance-token-font-size-xs);
 }
 
 // ── Item ────────────────────────────────────────────────
@@ -90,15 +89,15 @@
 
   &:hover:not(.branch-quick-switch__item--current),
   &--selected:not(.branch-quick-switch__item--current) {
-    background: var(--element-bg-soft);
+    background: var(--bf-appearance-token-element-bg-soft);
   }
 
   &--current {
-    background: var(--element-bg-medium);
+    background: var(--bf-appearance-token-color-accent-100);
     cursor: default;
 
-    .branch-quick-switch__item-icon { color: var(--color-text-secondary); }
-    .branch-quick-switch__item-name { color: var(--color-text-primary); font-weight: 500; }
+    .branch-quick-switch__item-icon { color: var(--bf-appearance-token-color-text-secondary); }
+    .branch-quick-switch__item-name { color: var(--bf-appearance-token-color-text-primary); font-weight: 500; }
   }
 
   &--switching {
@@ -111,9 +110,9 @@
   }
 }
 
-.branch-quick-switch__item-icon  { flex-shrink: 0; color: var(--color-text-primary); }
-.branch-quick-switch__item-name  { flex: 1; font-size: var(--font-size-xs); color: var(--color-text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.branch-quick-switch__item-check { flex-shrink: 0; color: var(--color-text-primary); }
+.branch-quick-switch__item-icon  { flex-shrink: 0; color: var(--bf-appearance-token-color-text-primary); }
+.branch-quick-switch__item-name  { flex: 1; font-size: var(--bf-appearance-token-font-size-xs); color: var(--bf-appearance-token-color-text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.branch-quick-switch__item-check { flex-shrink: 0; color: var(--bf-appearance-token-color-text-primary); }
 
 .branch-quick-switch__spinner {
   animation: branch-quick-switch-spin 1s linear infinite;

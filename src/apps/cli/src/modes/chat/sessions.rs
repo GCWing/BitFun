@@ -7,10 +7,28 @@ impl ChatMode {
         chat_view: &mut ChatView,
         rt_handle: &tokio::runtime::Handle,
     ) -> Result<()> {
-        let (before_turn_id, prefill) = match target {
-            ForkTarget::FullSession => (None, None),
-            ForkTarget::BeforeTurn { turn_id, prompt } => (Some(turn_id), Some(prompt)),
+        let source_session_id = chat_state.core_session_id.clone();
+        let (before_turn_id, prefill, prefill_message_id) = match target {
+            ForkTarget::FullSession => (None, None, None),
+            ForkTarget::BeforeTurn {
+                turn_id,
+                message_id,
+                prompt,
+            } => (Some(turn_id), Some(prompt), Some(message_id)),
         };
+        let prefill_references =
+            prefill_message_id
+                .map(|message_id| {
+                    let agent = self.agent.clone();
+                    tokio::task::block_in_place(|| {
+                        rt_handle.block_on(agent.workspace_references_for_message(
+                            source_session_id.clone(),
+                            message_id,
+                        ))
+                    })
+                })
+                .transpose()?
+                .unwrap_or_default();
         chat_view.set_status(Some("Forking session...".to_string()));
         self.close_all_popups(chat_view);
         let agent = self.agent.clone();
@@ -29,6 +47,9 @@ impl ChatMode {
         new_state.current_model_id = summary.model_id;
         new_state.apply_workspace_binding(workspace_binding);
 
+        self.reset_lineage_navigation(chat_view);
+        clear_selected_native_command_prefill(&mut self.selected_native_command_once, chat_view);
+        chat_view.activate_session_composer(&source_session_id, &new_session_id);
         *session_id = new_session_id.clone();
         *chat_state = new_state;
         chat_state.set_worktree_control_available(!self.agent.is_shared());
@@ -36,7 +57,6 @@ impl ChatMode {
         self.workspace = chat_state.workspace.clone();
         self.refresh_workspace_git_status(chat_state, rt_handle);
         self.auto_approve_ask_override = None;
-        clear_selected_native_command_prefill(&mut self.selected_native_command_once, chat_view);
         chat_state.auto_approve_ask = self.auto_approve_ask_default;
         self.agent
             .set_approval_policy(crate::runtime::approval::CliApprovalPolicy::Ask);
@@ -45,7 +65,11 @@ impl ChatMode {
         chat_view.clear_screen();
         chat_view.scroll_to_bottom();
         if let Some(prompt) = prefill {
-            chat_view.set_input(&prompt);
+            chat_view.set_draft(crate::ui::composer::ComposerDraft {
+                text: prompt,
+                workspace_references: prefill_references,
+                ..crate::ui::composer::ComposerDraft::default()
+            });
             chat_view.set_status(Some(
                 "Forked before the selected prompt; review the copied input before sending."
                     .to_string(),
@@ -65,6 +89,7 @@ impl ChatMode {
         chat_view: &mut ChatView,
         rt_handle: &tokio::runtime::Handle,
     ) -> Result<()> {
+        let previous_session_id = chat_state.core_session_id.clone();
         let agent = self.agent.clone();
         let sid = new_session_id.to_string();
 
@@ -91,6 +116,9 @@ impl ChatMode {
             })?;
 
         // Update session state
+        self.reset_lineage_navigation(chat_view);
+        clear_selected_native_command_prefill(&mut self.selected_native_command_once, chat_view);
+        chat_view.activate_session_composer(&previous_session_id, new_session_id);
         *session_id = new_session_id.to_string();
         *chat_state = new_state;
         chat_state.set_worktree_control_available(!self.agent.is_shared());
@@ -98,7 +126,6 @@ impl ChatMode {
         self.workspace = chat_state.workspace.clone();
         self.refresh_workspace_git_status(chat_state, rt_handle);
         self.auto_approve_ask_override = None;
-        clear_selected_native_command_prefill(&mut self.selected_native_command_once, chat_view);
         chat_state.auto_approve_ask = self.auto_approve_ask_default;
         self.agent
             .set_approval_policy(crate::runtime::approval::CliApprovalPolicy::Ask);
@@ -125,6 +152,7 @@ impl ChatMode {
         chat_view: &mut ChatView,
         rt_handle: &tokio::runtime::Handle,
     ) -> Result<()> {
+        let previous_session_id = chat_state.core_session_id.clone();
         let agent = self.agent.clone();
         let agent_type = self.agent_type.clone();
 
@@ -144,13 +172,15 @@ impl ChatMode {
         );
         new_state.apply_workspace_binding(workspace_binding);
 
+        self.reset_lineage_navigation(chat_view);
+        clear_selected_native_command_prefill(&mut self.selected_native_command_once, chat_view);
+        chat_view.activate_session_composer(&previous_session_id, &new_session_id);
         *session_id = new_session_id;
         *chat_state = new_state;
         chat_state.set_worktree_control_available(!self.agent.is_shared());
         self.workspace = chat_state.workspace.clone();
         self.refresh_workspace_git_status(chat_state, rt_handle);
         self.auto_approve_ask_override = None;
-        clear_selected_native_command_prefill(&mut self.selected_native_command_once, chat_view);
         chat_state.auto_approve_ask = self.auto_approve_ask_default;
         self.agent
             .set_approval_policy(crate::runtime::approval::CliApprovalPolicy::Ask);
@@ -175,6 +205,41 @@ impl ChatMode {
         chat_state: &mut ChatState,
         rt_handle: &tokio::runtime::Handle,
     ) {
+        self.send_draft_to_agent(
+            crate::ui::composer::ComposerDraft {
+                text: message,
+                workspace_references: Vec::new(),
+                ..crate::ui::composer::ComposerDraft::default()
+            },
+            chat_view,
+            chat_state,
+            rt_handle,
+        );
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn send_external_subagent_command_to_agent(
+        &mut self,
+        prompt: String,
+        original_command: String,
+        ecosystem_id: String,
+        logical_id: String,
+        chat_view: &mut ChatView,
+        chat_state: &mut ChatState,
+        rt_handle: &tokio::runtime::Handle,
+    ) {
+        let submitted_draft = crate::ui::composer::ComposerDraft {
+            text: original_command.clone(),
+            ..crate::ui::composer::ComposerDraft::default()
+        };
+        if self.agent.is_shared() {
+            chat_view.set_status(Some(
+                "External subagent commands require Embedded TUI; Shared TUI does not transport delegated command submissions"
+                    .to_string(),
+            ));
+            chat_view.set_draft(submitted_draft);
+            return;
+        }
         if self
             .pending_session_operation
             .as_ref()
@@ -183,10 +248,72 @@ impl ChatMode {
             chat_view.set_status(Some(
                 "Waiting for the pending Session operation to finish before sending.".to_string(),
             ));
+            chat_view.set_draft(submitted_draft);
             return;
         }
         if chat_state.is_processing {
             chat_state.add_system_message("Already processing, please wait.".to_string());
+            chat_view.set_draft(submitted_draft);
+            return;
+        }
+        if let Err(error) = self.materialize_requested_worktree(chat_view, chat_state, rt_handle) {
+            tracing::error!("Failed to prepare worktree for delegated command: {error}");
+            chat_view.set_status(Some(format!("Error: {error}")));
+            chat_view.set_draft(submitted_draft);
+            return;
+        }
+
+        let display_name = agent_display_name(&self.agent_type);
+        chat_view.set_status(Some(format!("{} is delegating...", display_name)));
+        let agent = self.agent.clone();
+        let agent_type = self.agent_type.clone();
+        match tokio::task::block_in_place(|| {
+            rt_handle.block_on(agent.send_external_subagent_command(
+                prompt,
+                original_command,
+                ecosystem_id,
+                logical_id,
+                &agent_type,
+            ))
+        }) {
+            Ok(turn_id) => {
+                tracing::info!("Started delegated command turn: {}", turn_id);
+                chat_view.remember_submitted_draft(&chat_state.core_session_id, &submitted_draft);
+            }
+            Err(error) => {
+                tracing::error!("Failed to delegate external command: {}", error);
+                chat_view.set_status(Some(format!("Error: {error}")));
+                chat_view.set_draft(submitted_draft);
+            }
+        }
+    }
+
+    fn send_draft_to_agent(
+        &mut self,
+        draft: crate::ui::composer::ComposerDraft,
+        chat_view: &mut ChatView,
+        chat_state: &mut ChatState,
+        rt_handle: &tokio::runtime::Handle,
+    ) {
+        if draft.has_images() && self.agent.is_shared() {
+            chat_view.set_status(Some(crate::actions::shared_tui_image_attachment_error()));
+            chat_view.set_draft(draft);
+            return;
+        }
+        if self
+            .pending_session_operation
+            .as_ref()
+            .is_some_and(|pending| pending.session_id == chat_state.core_session_id)
+        {
+            chat_view.set_status(Some(
+                "Waiting for the pending Session operation to finish before sending.".to_string(),
+            ));
+            chat_view.set_draft(draft);
+            return;
+        }
+        if chat_state.is_processing {
+            chat_state.add_system_message("Already processing, please wait.".to_string());
+            chat_view.set_draft(draft);
             return;
         }
 
@@ -194,6 +321,7 @@ impl ChatMode {
             tracing::error!("Failed to prepare worktree for submitted prompt: {error}");
             chat_view.set_status(Some(format!("Error: {error}")));
             chat_state.add_system_message(error);
+            chat_view.set_draft(draft);
             return;
         }
 
@@ -202,15 +330,23 @@ impl ChatMode {
 
         let agent = self.agent.clone();
         let agent_type = self.agent_type.clone();
+        let attachments = draft.runtime_attachments();
         match tokio::task::block_in_place(|| {
-            rt_handle.block_on(agent.send_message(message, &agent_type))
+            rt_handle.block_on(agent.send_message_with_context(
+                draft.text.clone(),
+                draft.workspace_references.clone(),
+                attachments,
+                &agent_type,
+            ))
         }) {
             Ok(turn_id) => {
                 tracing::info!("Started turn: {}", turn_id);
+                chat_view.remember_submitted_draft(&chat_state.core_session_id, &draft);
             }
             Err(e) => {
                 tracing::error!("Failed to send message: {}", e);
                 chat_view.set_status(Some(format!("Error: {}", e)));
+                chat_view.set_draft(draft);
             }
         }
     }

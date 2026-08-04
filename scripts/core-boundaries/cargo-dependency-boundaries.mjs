@@ -1,6 +1,8 @@
-import { readdirSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { isAbsolute, join, relative, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
+
+import { servicesReqwestOwnerFeatures } from './rules/feature-rules.mjs';
 
 const SKIPPED_DIRECTORIES = new Set([
   '.git',
@@ -55,6 +57,616 @@ function dependencyDescription(dependency) {
   const optional = dependency.optional ? ' optional' : '';
   const target = dependency.target ? ` for ${dependency.target}` : '';
   return `${kind}${optional} dependency${target}`;
+}
+
+function expandedLocalFeatures(featureGraph, selectedFeatures, useDefaultFeatures) {
+  const pending = [...selectedFeatures];
+  if (useDefaultFeatures && Object.hasOwn(featureGraph, 'default')) {
+    pending.push('default');
+  }
+  const active = new Set();
+  const references = new Set();
+
+  while (pending.length > 0) {
+    const feature = pending.pop();
+    if (active.has(feature)) {
+      continue;
+    }
+    active.add(feature);
+    for (const reference of featureGraph[feature] ?? []) {
+      references.add(reference);
+      if (Object.hasOwn(featureGraph, reference)) {
+        pending.push(reference);
+      }
+    }
+  }
+
+  return { active, references };
+}
+
+function dependencyAlias(dependency) {
+  return dependency.rename ?? dependency.name;
+}
+
+function dependencyActivation(dependency, sourceFeatureState) {
+  const alias = dependencyAlias(dependency);
+  const forwarded = [];
+  let explicitlyActivated = false;
+  for (const reference of sourceFeatureState.references) {
+    if (reference === `dep:${alias}`) {
+      explicitlyActivated = true;
+      continue;
+    }
+    const match = reference.match(/^([^/?]+)(\?)?\/(.+)$/);
+    if (match?.[1] !== alias) {
+      continue;
+    }
+    if (!match[2]) {
+      explicitlyActivated = true;
+    }
+    forwarded.push(match[3]);
+  }
+
+  if (dependency.optional && !explicitlyActivated) {
+    return null;
+  }
+  return {
+    features: [...new Set([...(dependency.features ?? []), ...forwarded])],
+    useDefaultFeatures: dependency.uses_default_features !== false,
+  };
+}
+
+function isProcMacroPackage(pkg) {
+  return (pkg.targets ?? []).some((target) =>
+    (target.kind ?? []).includes('proc-macro'));
+}
+
+const SERVICES_INTEGRATIONS_TOKIO_FEATURES = new Map([
+  ['announcement', ['fs', 'sync']],
+  ['browser-control', ['time']],
+  ['canvas-runtime', ['fs']],
+  ['debug-log', ['rt']],
+  ['deep-research', ['fs']],
+  ['git', ['fs', 'io-util', 'macros', 'rt', 'time']],
+  ['file-watch', ['rt', 'sync']],
+  ['function-agents', ['fs', 'io-util', 'macros', 'rt', 'time']],
+  ['mcp', ['fs', 'io-util', 'net', 'process', 'rt', 'sync', 'time']],
+  ['miniapp-runtime', ['fs', 'io-util', 'net', 'process', 'rt', 'sync', 'time']],
+  ['miniapp-market', ['fs', 'io-util', 'net', 'process', 'rt', 'sync', 'time']],
+  ['plugin-source', ['fs', 'rt', 'sync', 'time']],
+  ['hook-import', ['fs', 'sync']],
+  ['loopx-issue-fix', ['fs', 'io-util', 'macros', 'process', 'sync']],
+  ['remote-connect', ['fs', 'io-util', 'net', 'process', 'rt', 'sync', 'time']],
+  ['remote-ssh', ['fs', 'io-util', 'macros', 'net', 'process', 'rt', 'sync', 'time']],
+  ['remote-ssh-concrete', ['fs', 'io-util', 'macros', 'net', 'process', 'rt', 'sync', 'time']],
+  ['review-platform', ['fs', 'io-util', 'sync']],
+  ['speech', ['fs', 'io-util', 'macros', 'rt', 'sync']],
+  ['workspace-search', ['io-util', 'rt', 'sync', 'time']],
+  ['script-tool-runtime', ['io-util', 'process', 'rt', 'sync', 'time']],
+]);
+
+const SERVICES_CORE_TOKIO_FEATURES = new Map([
+  ['filesystem', ['fs']],
+  ['local-storage', ['fs', 'sync']],
+  ['process-runtime', ['io-util', 'process']],
+  ['workspace-instructions', ['fs', 'io-util']],
+  ['lsp', ['fs', 'io-util', 'process', 'sync']],
+  ['workspace-runtime', ['fs', 'io-util', 'process', 'sync']],
+]);
+const SERVICES_CORE_BASE_TOKIO_FEATURES = ['rt', 'time'];
+
+// The installer is an excluded standalone workspace with its own Rust checks
+// and packaging lifecycle; this policy governs the root product workspace.
+const TOKIO_DEPENDENCY_POLICY_EXCLUDED_PACKAGES = new Set(['bitfun-installer']);
+
+function effectiveTokioCapabilities(feature, featureGraph, visiting = new Set()) {
+  if (visiting.has(feature)) {
+    return new Set();
+  }
+  visiting.add(feature);
+
+  const capabilities = new Set();
+  for (const value of featureGraph[feature] ?? []) {
+    if (value.startsWith('tokio/')) {
+      capabilities.add(value.slice('tokio/'.length));
+    } else if (Object.hasOwn(featureGraph, value)) {
+      for (const capability of effectiveTokioCapabilities(value, featureGraph, visiting)) {
+        capabilities.add(capability);
+      }
+    }
+  }
+
+  visiting.delete(feature);
+  return capabilities;
+}
+
+function findOwnedTokioFeatureViolations(pkg, ownerProfiles) {
+  const violations = [];
+  const featureGraph = pkg.features ?? {};
+
+  for (const [feature, expectedCapabilities] of ownerProfiles) {
+    if (!Object.hasOwn(featureGraph, feature)) {
+      violations.push({
+        path: pkg.manifest_path,
+        line: 1,
+        message: `${pkg.name}:${feature} governed Tokio feature is missing`,
+      });
+      continue;
+    }
+
+    const actualCapabilities = [...effectiveTokioCapabilities(feature, featureGraph)].sort();
+    const expected = [...expectedCapabilities].sort();
+    const missing = expected.filter((capability) => !actualCapabilities.includes(capability));
+    const unexpected = actualCapabilities.filter((capability) => !expected.includes(capability));
+    if (missing.length > 0) {
+      violations.push({
+        path: pkg.manifest_path,
+        line: 1,
+        message: `${pkg.name}:${feature} missing effective Tokio capabilities: ${missing.join(', ')}`,
+      });
+    }
+    if (unexpected.length > 0) {
+      violations.push({
+        path: pkg.manifest_path,
+        line: 1,
+        message: `${pkg.name}:${feature} has unexpected effective Tokio capabilities: ${unexpected.join(', ')}`,
+      });
+    }
+  }
+
+  for (const [feature, values] of Object.entries(featureGraph)) {
+    if (ownerProfiles.has(feature)) {
+      continue;
+    }
+    if (values.some((value) => value.startsWith('tokio/'))) {
+      violations.push({
+        path: pkg.manifest_path,
+        line: 1,
+        message: `${pkg.name}:${feature} Tokio capabilities require an explicit owner contract`,
+      });
+    }
+  }
+
+  return violations;
+}
+
+export function findServicesIntegrationsTokioFeatureViolations(pkg) {
+  return findOwnedTokioFeatureViolations(pkg, SERVICES_INTEGRATIONS_TOKIO_FEATURES);
+}
+
+function reqwestDependencyFeatureReferences(references) {
+  return references.filter(
+    (reference) =>
+      reference === 'reqwest'
+      || reference === 'dep:reqwest'
+      || reference.startsWith('reqwest/')
+      || reference.startsWith('reqwest?/'),
+  );
+}
+
+const REQWEST_TRANSPORT_FEATURES = [
+  'form',
+  'http2',
+  'json',
+  'multipart',
+  'query',
+  'stream',
+];
+const REQWEST_PACKAGE_PROFILES = new Map([
+  ['bitfun-installer', {
+    dependencyFeatures: ['json', 'rustls-tls', 'stream'],
+    optional: false,
+    allowedPackageFeatureRefs: new Set(['reqwest/rustls-tls']),
+  }],
+  ['bitfun-core', { dependencyFeatures: REQWEST_TRANSPORT_FEATURES, optional: true }],
+  ['bitfun-services-integrations', {
+    dependencyFeatures: REQWEST_TRANSPORT_FEATURES,
+    optional: true,
+    servicesOwners: true,
+  }],
+  ...[
+    'bitfun-ai-adapters',
+    'bitfun-cli',
+    'bitfun-desktop',
+    'bitfun-miniapp-market-service',
+    'bitfun-skin-market-service',
+  ].map((packageName) => [packageName, {
+    dependencyFeatures: [...REQWEST_TRANSPORT_FEATURES, 'rustls'],
+    optional: false,
+    allowedPackageFeatureRefs: new Set(['reqwest/rustls']),
+  }]),
+]);
+
+function findReqwestPackageProfileViolations(pkg, profile) {
+  const violations = [];
+  const dependencies = (pkg.dependencies ?? []).filter(
+    (dependency) => dependency.name === 'reqwest',
+  );
+  if (dependencies.length !== 1) {
+    violations.push({
+      path: pkg.manifest_path,
+      line: 1,
+      message: `${pkg.name} must declare exactly one normal Reqwest dependency`,
+    });
+    return violations;
+  }
+
+  const dependency = dependencies[0];
+  if (
+    (dependency.kind ?? null) !== null
+    || (dependency.rename ?? null) !== null
+    || (dependency.target ?? null) !== null
+  ) {
+    violations.push({
+      path: pkg.manifest_path,
+      line: 1,
+      message:
+        `${pkg.name} Reqwest dependency must be an unrenamed, non-target-specific normal dependency`,
+    });
+  }
+  if (dependency.uses_default_features !== false) {
+    violations.push({
+      path: pkg.manifest_path,
+      line: 1,
+      message: `${pkg.name} Reqwest dependency must disable default features`,
+    });
+  }
+  if (dependency.optional !== profile.optional) {
+    violations.push({
+      path: pkg.manifest_path,
+      line: 1,
+      message:
+        `${pkg.name} Reqwest dependency optional=${dependency.optional} does not match its owner profile`,
+    });
+  }
+  const actualFeatures = new Set(dependency.features ?? []);
+  const expectedFeatures = new Set(profile.dependencyFeatures);
+  const missing = [...expectedFeatures]
+    .filter((feature) => !actualFeatures.has(feature));
+  const unexpected = [...actualFeatures]
+    .filter((feature) => !expectedFeatures.has(feature));
+  if (missing.length > 0) {
+    violations.push({
+      path: pkg.manifest_path,
+      line: 1,
+      message: `${pkg.name} Reqwest dependency missing features: ${missing.join(', ')}`,
+    });
+  }
+  if (unexpected.length > 0) {
+    violations.push({
+      path: pkg.manifest_path,
+      line: 1,
+      message: `${pkg.name} Reqwest dependency has unexpected dependency features: ${unexpected.join(', ')}`,
+    });
+  }
+
+  if (profile.servicesOwners) {
+    violations.push(...findServicesIntegrationsReqwestFeatureViolations(pkg));
+  } else {
+    for (const [featureName, references] of Object.entries(pkg.features ?? {})) {
+      for (const reference of reqwestDependencyFeatureReferences(references)) {
+        if (
+          (reference.startsWith('reqwest/') || reference.startsWith('reqwest?/'))
+          && !profile.allowedPackageFeatureRefs?.has(reference)
+        ) {
+          violations.push({
+            path: pkg.manifest_path,
+            line: 1,
+            message:
+              `${pkg.name}:${featureName} has unreviewed Reqwest feature reference ${reference}`,
+          });
+        }
+      }
+    }
+  }
+
+  return violations;
+}
+
+function ungovernedReqwestDependencyViolations(pkg) {
+  const hasReqwestDependency = (pkg.dependencies ?? []).some(
+    (dependency) => dependency.name === 'reqwest',
+  );
+  if (!hasReqwestDependency) {
+    return [];
+  }
+  return [
+    {
+      path: pkg.manifest_path,
+      line: 1,
+      message: `${pkg.name} Reqwest dependency is missing a reviewed owner profile`,
+    },
+  ];
+}
+
+export function findReqwestDependencyFeatureViolations(packages) {
+  return packages.flatMap((pkg) => {
+    const profile = REQWEST_PACKAGE_PROFILES.get(pkg.name);
+    if (!profile) {
+      return ungovernedReqwestDependencyViolations(pkg);
+    }
+    return findReqwestPackageProfileViolations(pkg, profile);
+  });
+}
+
+export function findRuntimeServicesTestSupportFeatureViolations(packages) {
+  const violations = [];
+
+  const pathToFeature = (featureGraph, start, target, visiting = new Set()) => {
+    if (start === target) {
+      return [target];
+    }
+    if (visiting.has(start)) {
+      return null;
+    }
+    visiting.add(start);
+    for (const reference of featureGraph[start] ?? []) {
+      if (!Object.hasOwn(featureGraph, reference)) {
+        continue;
+      }
+      const suffix = pathToFeature(featureGraph, reference, target, visiting);
+      if (suffix) {
+        visiting.delete(start);
+        return [start, ...suffix];
+      }
+    }
+    visiting.delete(start);
+    return null;
+  };
+
+  for (const pkg of packages) {
+    const runtimeServiceAliases = new Set(['bitfun-runtime-services']);
+    for (const dependency of pkg.dependencies ?? []) {
+      if (dependency.name !== 'bitfun-runtime-services') {
+        continue;
+      }
+      runtimeServiceAliases.add(dependency.rename ?? dependency.name);
+      if (
+        (dependency.features ?? []).includes('test-support')
+        && dependency.kind !== 'dev'
+      ) {
+        violations.push({
+          path: pkg.manifest_path,
+          line: 1,
+          message:
+            `${pkg.name} must not enable bitfun-runtime-services/test-support for its `
+            + dependencyDescription(dependency),
+        });
+      }
+    }
+
+    for (const [featureName, references] of Object.entries(pkg.features ?? {})) {
+      const testSupportReference = references.find((reference) =>
+        [...runtimeServiceAliases].some(
+          (alias) =>
+            reference === `${alias}/test-support`
+            || reference === `${alias}?/test-support`,
+        ));
+      if (!testSupportReference) {
+        continue;
+      }
+      violations.push({
+        path: pkg.manifest_path,
+        line: 1,
+        message:
+          `${pkg.name}:${featureName} must not expose bitfun-runtime-services/test-support `
+          + 'through a package feature',
+      });
+    }
+
+    if (pkg.name === 'bitfun-runtime-services') {
+      for (const featureName of Object.keys(pkg.features ?? {})) {
+        if (featureName === 'test-support') {
+          continue;
+        }
+        const path = pathToFeature(pkg.features, featureName, 'test-support');
+        if (!path) {
+          continue;
+        }
+        violations.push({
+          path: pkg.manifest_path,
+          line: 1,
+          message:
+            `bitfun-runtime-services:${featureName} must not expose test-support; `
+            + `reachable via ${path.join(' -> ')}`,
+        });
+      }
+    }
+  }
+
+  return violations;
+}
+
+export function findResolvedReqwestNativeTlsViolations(records, { root }) {
+  const reqwestRecords = records.filter((record) => record.name === 'reqwest');
+  if (reqwestRecords.length === 0) {
+    return [{
+      path: join(root, 'Cargo.toml'),
+      line: 1,
+      message: 'resolved Cargo graph is missing Reqwest feature-union evidence',
+    }];
+  }
+
+  return reqwestRecords.flatMap((record) => {
+    const nativeTlsFeatures = (record.features ?? []).filter(
+      (feature) =>
+        feature === 'default-tls'
+        || feature === '__native-tls'
+        || feature.startsWith('__native-tls-')
+        || feature === 'native-tls'
+        || feature.startsWith('native-tls-'),
+    );
+    if (nativeTlsFeatures.length === 0) {
+      return [];
+    }
+    return [{
+      path: join(root, 'Cargo.toml'),
+      line: 1,
+      message:
+        `resolved reqwest ${record.version} feature union enables an unreviewed TLS backend: `
+        + nativeTlsFeatures.join(', '),
+    }];
+  });
+}
+
+export function findServicesIntegrationsReqwestFeatureViolations(pkg) {
+  const violations = [];
+  const featureGraph = pkg.features ?? {};
+  const ownerFeatures = new Set(servicesReqwestOwnerFeatures);
+
+  for (const featureName of servicesReqwestOwnerFeatures) {
+    const references = featureGraph[featureName];
+    if (!references) {
+      violations.push({
+        path: pkg.manifest_path,
+        line: 1,
+        message: `${pkg.name}:${featureName} governed Reqwest owner feature is missing`,
+      });
+      continue;
+    }
+    if (!references.some((reference) => reference === 'reqwest' || reference === 'dep:reqwest')) {
+      violations.push({
+        path: pkg.manifest_path,
+        line: 1,
+        message: `${pkg.name}:${featureName} must explicitly enable reqwest`,
+      });
+    }
+    if (!references.includes('reqwest/rustls')) {
+      violations.push({
+        path: pkg.manifest_path,
+        line: 1,
+        message: `${pkg.name}:${featureName} is missing reqwest/rustls`,
+      });
+    }
+  }
+
+  for (const [featureName, references] of Object.entries(featureGraph)) {
+    const reqwestReferences = reqwestDependencyFeatureReferences(references);
+    const implicitDependencyFeature =
+      featureName === 'reqwest'
+      && reqwestReferences.length === 1
+      && reqwestReferences[0] === 'dep:reqwest';
+    if (implicitDependencyFeature || reqwestReferences.length === 0) {
+      continue;
+    }
+    if (!ownerFeatures.has(featureName)) {
+      violations.push({
+        path: pkg.manifest_path,
+        line: 1,
+        message:
+          `${pkg.name}:${featureName} enables Reqwest outside its reviewed owner features`,
+      });
+      continue;
+    }
+    for (const reference of reqwestReferences) {
+      if (
+        reference !== 'reqwest'
+        && reference !== 'dep:reqwest'
+        && reference !== 'reqwest/rustls'
+      ) {
+        violations.push({
+          path: pkg.manifest_path,
+          line: 1,
+          message:
+            `${pkg.name}:${featureName} has unreviewed Reqwest feature reference ${reference}`,
+        });
+      }
+    }
+  }
+
+  return violations;
+}
+
+
+export function findServicesCoreTokioFeatureViolations(pkg) {
+  return findOwnedTokioFeatureViolations(pkg, SERVICES_CORE_TOKIO_FEATURES);
+}
+
+export function findServicesCorePlatformDependencyFeatureViolations(packages) {
+  const violations = [];
+
+  for (const pkg of packages) {
+    if (pkg.name !== 'bitfun-services-core') {
+      continue;
+    }
+    for (const dependency of pkg.dependencies ?? []) {
+      if (dependency.name !== 'windows' || (dependency.features ?? []).length === 0) {
+        continue;
+      }
+      violations.push({
+        path: pkg.manifest_path,
+        line: 1,
+        message:
+          'windows API capabilities must be selected by services-core owner features, not the dependency declaration',
+      });
+    }
+  }
+
+  return violations;
+}
+
+export function findTokioDependencyFeatureViolations(packages) {
+  const violations = [];
+
+  for (const pkg of packages) {
+    if (TOKIO_DEPENDENCY_POLICY_EXCLUDED_PACKAGES.has(pkg.name)) {
+      continue;
+    }
+    for (const dependency of pkg.dependencies ?? []) {
+      if (dependency.name !== 'tokio') {
+        continue;
+      }
+      const features = dependency.features ?? [];
+      if (features.includes('full')) {
+        violations.push({
+          path: pkg.manifest_path,
+          line: 1,
+          message: `${pkg.name} must not enable tokio/full for its ${dependencyDescription(dependency)}`,
+        });
+      }
+      const featureOwnedIntegrationRuntime =
+        pkg.name === 'bitfun-services-integrations'
+        && (dependency.kind ?? null) === null;
+      const featureOwnedServicesCoreRuntime =
+        pkg.name === 'bitfun-services-core'
+        && (dependency.kind ?? null) === null;
+      if (featureOwnedServicesCoreRuntime) {
+        const actual = [...features].sort();
+        const expected = [...SERVICES_CORE_BASE_TOKIO_FEATURES].sort();
+        const missing = expected.filter((feature) => !actual.includes(feature));
+        const unexpected = actual.filter((feature) => !expected.includes(feature));
+        if (missing.length > 0) {
+          violations.push({
+            path: pkg.manifest_path,
+            line: 1,
+            message: `${pkg.name} missing base Tokio capabilities: ${missing.join(', ')}`,
+          });
+        }
+        if (unexpected.length > 0) {
+          violations.push({
+            path: pkg.manifest_path,
+            line: 1,
+            message: `${pkg.name} has unexpected base Tokio capabilities: ${unexpected.join(', ')}`,
+          });
+        }
+      } else if (features.length === 0 && !featureOwnedIntegrationRuntime) {
+        violations.push({
+          path: pkg.manifest_path,
+          line: 1,
+          message: `${pkg.name} must declare explicit Tokio capabilities for its ${dependencyDescription(dependency)}`,
+        });
+      }
+    }
+
+    if (pkg.name === 'bitfun-services-integrations') {
+      violations.push(...findServicesIntegrationsTokioFeatureViolations(pkg));
+    }
+    if (pkg.name === 'bitfun-services-core') {
+      violations.push(...findServicesCoreTokioFeatureViolations(pkg));
+    }
+  }
+
+  return violations;
 }
 
 export function findCargoLayerViolations(
@@ -155,6 +767,474 @@ export function findCargoLayerViolations(
   return violations;
 }
 
+export function findProductEntrypointCoreFeatureViolations(
+  packages,
+  { root, crateLayoutRules },
+) {
+  const reviewedCoreFeatureClosures = new Map([
+    ['bitfun-cli', [
+      'agent-runtime',
+      'canvas-runtime',
+      'external-sources',
+      'plugin-runtime',
+      'ssh-remote',
+    ]],
+    ['bitfun-acp', [
+      'agent-runtime',
+      'canvas-runtime',
+      'external-sources',
+      'ssh-remote',
+    ]],
+  ]);
+  const acpActiveCoreFeatures = [
+    'agent-runtime',
+    'ai-adapter-runtime',
+    'canvas-runtime',
+    'external-sources',
+    'file-watch',
+    'filesystem',
+    'git',
+    'lsp',
+    'local-storage',
+    'plugin-source',
+    'process-runtime',
+    'product-capabilities',
+    'product-domains',
+    'remote-workspace',
+    'review-platform',
+    'runtime-services',
+    'ssh-remote',
+    'terminal',
+    'tool-packs',
+    'workspace-runtime',
+    'workspace-watch',
+  ];
+  const reviewedActiveCoreFeatureClosures = new Map([
+    ['bitfun-cli', [...acpActiveCoreFeatures, 'plugin-runtime']],
+    ['bitfun-acp', acpActiveCoreFeatures],
+  ]);
+  const packageByManifest = new Map(
+    packages.map((pkg) => [normalizedPath(pkg.manifest_path), pkg]),
+  );
+  const violations = [];
+
+  for (const sourcePackage of packages) {
+    const sourceLayer = layerForManifest(sourcePackage.manifest_path, {
+      root,
+      crateLayoutRules,
+    });
+    if (sourceLayer !== 'apps' && sourceLayer !== 'interfaces') {
+      continue;
+    }
+
+    for (const dependency of sourcePackage.dependencies ?? []) {
+      if (!dependency.path || repositoryPath(root, dependency.path) === null) {
+        continue;
+      }
+      const targetPackage = packageByManifest.get(
+        normalizedPath(join(dependency.path, 'Cargo.toml')),
+      );
+      if (targetPackage?.name !== 'bitfun-core') {
+        continue;
+      }
+      if (dependency.uses_default_features !== false) {
+        violations.push({
+          path: sourcePackage.manifest_path,
+          line: 1,
+          message: `product entrypoint ${sourcePackage.name} must set default-features = false for its bitfun-core ${dependencyDescription(dependency)}`,
+        });
+      }
+      if (!Array.isArray(dependency.features) || dependency.features.length === 0) {
+        violations.push({
+          path: sourcePackage.manifest_path,
+          line: 1,
+          message: `product entrypoint ${sourcePackage.name} must select at least one explicit feature for its bitfun-core ${dependencyDescription(dependency)}`,
+        });
+      }
+      const reviewedClosure = reviewedCoreFeatureClosures.get(sourcePackage.name);
+      if (reviewedClosure) {
+        const selectedFeatures = new Set(dependency.features ?? []);
+        for (const requiredFeature of reviewedClosure) {
+          if (!selectedFeatures.has(requiredFeature)) {
+            violations.push({
+              path: sourcePackage.manifest_path,
+              line: 1,
+              message: `${sourcePackage.name} Core capability closure must include ${requiredFeature}`,
+            });
+          }
+        }
+        for (const selectedFeature of selectedFeatures) {
+          if (!reviewedClosure.includes(selectedFeature)) {
+            violations.push({
+              path: sourcePackage.manifest_path,
+              line: 1,
+              message: `${sourcePackage.name} Core capability closure must not include unreviewed feature ${selectedFeature}`,
+            });
+          }
+        }
+      }
+    }
+  }
+
+  const corePackage = packages.find((pkg) => pkg.name === 'bitfun-core');
+  if (corePackage) {
+    const forbiddenCoreFeatures = [
+      'product-full',
+      'announcement',
+      'debug-log',
+      'dispatch-store',
+    ];
+    const reportedUnexpectedFeatures = new Set();
+
+    for (const [rootName, reviewedClosure] of reviewedCoreFeatureClosures) {
+      const rootPackage = packages.find((pkg) => pkg.name === rootName);
+      if (!rootPackage) {
+        continue;
+      }
+      const allowedCoreFeatures = new Set(
+        reviewedActiveCoreFeatureClosures.get(rootName) ?? [],
+      );
+      const rootSelectedFeatures = Object.keys(rootPackage.features ?? {})
+        .filter((feature) => feature !== 'default');
+      const rootLabel = rootName === 'bitfun-cli' ? 'CLI' : 'ACP';
+
+      const packageStates = new Map();
+      const pending = [];
+      const queued = new Set();
+
+      const mergePackageState = (
+        pkg,
+        dependencyKindContext,
+        selectedFeatures,
+        useDefaultFeatures,
+        packagePath,
+      ) => {
+        const key = [
+          normalizedPath(pkg.manifest_path),
+          dependencyKindContext,
+        ].join('|');
+        let state = packageStates.get(key);
+        if (!state) {
+          state = {
+            pkg,
+            dependencyKindContext,
+            selectedFeatures: new Set(),
+            useDefaultFeatures: false,
+            featureState: { active: new Set(), references: new Set() },
+            packagePath,
+            initialized: false,
+          };
+          packageStates.set(key, state);
+        }
+
+        let changed = false;
+        for (const feature of selectedFeatures) {
+          if (!state.selectedFeatures.has(feature)) {
+            state.selectedFeatures.add(feature);
+            changed = true;
+          }
+        }
+        if (useDefaultFeatures && !state.useDefaultFeatures) {
+          state.useDefaultFeatures = true;
+          changed = true;
+        }
+        if (!changed && state.initialized) {
+          return state;
+        }
+
+        state.featureState = expandedLocalFeatures(
+          pkg.features ?? {},
+          state.selectedFeatures,
+          state.useDefaultFeatures,
+        );
+        state.initialized = true;
+        if (!queued.has(key)) {
+          pending.push(key);
+          queued.add(key);
+        }
+        return state;
+      };
+
+      // This is an architecture declaration check, not a target simulator.
+      // Cargo target cfg facts are multi-valued and evolve with rustc. Treating
+      // every declared target edge as reachable prevents a platform-only path
+      // from hiding an unreviewed Core owner. Products that genuinely need
+      // different owners must express that difference through package/module
+      // boundaries. Cargo features are additive, so all root features form the
+      // strongest buildable profile.
+      mergePackageState(
+        rootPackage,
+        'normal',
+        rootSelectedFeatures,
+        true,
+        [rootPackage.name],
+      );
+
+      while (pending.length > 0) {
+        const stateKey = pending.shift();
+        queued.delete(stateKey);
+        const {
+          pkg: sourcePackage,
+          dependencyKindContext,
+          featureState,
+          packagePath,
+        } = packageStates.get(stateKey);
+
+        for (const dependency of sourcePackage.dependencies ?? []) {
+          const kind = dependency.kind ?? 'normal';
+          if (
+            !dependency.path
+            || (kind !== 'normal' && kind !== 'build')
+            || repositoryPath(root, dependency.path) === null
+          ) {
+            continue;
+          }
+          const activation = dependencyActivation(dependency, featureState);
+          if (!activation) {
+            continue;
+          }
+          const targetPackage = packageByManifest.get(
+            normalizedPath(join(dependency.path, 'Cargo.toml')),
+          );
+          if (!targetPackage) {
+            continue;
+          }
+          const targetDependencyKindContext =
+            dependencyKindContext === 'build'
+              || kind === 'build'
+              || isProcMacroPackage(targetPackage)
+              ? 'build'
+              : 'normal';
+          const targetPath = [...packagePath, targetPackage.name];
+          const targetState = mergePackageState(
+            targetPackage,
+            targetDependencyKindContext,
+            activation.features,
+            activation.useDefaultFeatures,
+            targetPath,
+          );
+
+          if (targetPackage.name === 'bitfun-core') {
+            const activeCoreFeatures = targetState.featureState.active;
+            const unexpected = forbiddenCoreFeatures.find((feature) =>
+              activeCoreFeatures.has(feature))
+              ?? [...activeCoreFeatures]
+                .filter((feature) => !allowedCoreFeatures.has(feature))
+                .sort()[0];
+            const reportKey = [rootName, targetDependencyKindContext, unexpected].join('|');
+            if (unexpected && !reportedUnexpectedFeatures.has(reportKey)) {
+              reportedUnexpectedFeatures.add(reportKey);
+              violations.push({
+                path: sourcePackage.manifest_path,
+                line: 1,
+                message: `${rootLabel} dependency closure must not enable ${unexpected}: ${[
+                  ...packagePath,
+                  `${targetPackage.name}/${unexpected}`,
+                ].join(' -> ')}`,
+              });
+            }
+            continue;
+          }
+        }
+      }
+    }
+  }
+
+  return violations;
+}
+
+function matchingClosingDelimiter(
+  source,
+  openingIndex,
+  openingCharacter,
+  closingCharacter,
+) {
+  let depth = 0;
+  let quote = null;
+  let escaped = false;
+
+  for (let index = openingIndex; index < source.length; index += 1) {
+    const character = source[index];
+    if (quote !== null) {
+      if (escaped) {
+        escaped = false;
+      } else if (character === '\\') {
+        escaped = true;
+      } else if (character === quote) {
+        quote = null;
+      }
+      continue;
+    }
+    if (character === '"' || character === "'") {
+      quote = character;
+    } else if (character === openingCharacter) {
+      depth += 1;
+    } else if (character === closingCharacter) {
+      depth -= 1;
+      if (depth === 0) {
+        return index;
+      }
+    }
+  }
+
+  return -1;
+}
+
+function matchingClosingParenthesis(source, openingIndex) {
+  return matchingClosingDelimiter(source, openingIndex, '(', ')');
+}
+
+function crateCfgBodies(source) {
+  const bodies = [];
+  let index = source.charCodeAt(0) === 0xFEFF ? 1 : 0;
+
+  while (index < source.length) {
+    if (/\s/.test(source[index])) {
+      index += 1;
+      continue;
+    }
+    if (source.startsWith('//', index)) {
+      const lineEnd = source.indexOf('\n', index + 2);
+      index = lineEnd === -1 ? source.length : lineEnd + 1;
+      continue;
+    }
+    if (source.startsWith('/*', index)) {
+      let depth = 1;
+      index += 2;
+      while (index < source.length && depth > 0) {
+        if (source.startsWith('/*', index)) {
+          depth += 1;
+          index += 2;
+        } else if (source.startsWith('*/', index)) {
+          depth -= 1;
+          index += 2;
+        } else {
+          index += 1;
+        }
+      }
+      continue;
+    }
+    if (!source.startsWith('#![', index)) {
+      break;
+    }
+
+    const closingBracket = matchingClosingDelimiter(source, index + 2, '[', ']');
+    if (closingBracket === -1) {
+      break;
+    }
+    const attribute = source.slice(index, closingBracket + 1);
+    const cfgStart = /^#!\s*\[\s*cfg\s*\(/.exec(attribute);
+    if (cfgStart !== null) {
+      const openingIndex = cfgStart[0].length - 1;
+      const closingIndex = matchingClosingParenthesis(attribute, openingIndex);
+      if (closingIndex !== -1) {
+        bodies.push(attribute.slice(openingIndex + 1, closingIndex));
+      }
+    }
+    index = closingBracket + 1;
+  }
+
+  return bodies;
+}
+
+function removeCfgBranches(expression, branchName) {
+  const branchStart = new RegExp(`\\b${branchName}\\s*\\(`, 'g');
+  let result = expression;
+  for (let match = branchStart.exec(result); match !== null; match = branchStart.exec(result)) {
+    const openingIndex = branchStart.lastIndex - 1;
+    const closingIndex = matchingClosingParenthesis(result, openingIndex);
+    if (closingIndex === -1) {
+      break;
+    }
+    result = `${result.slice(0, match.index)}${' '.repeat(closingIndex + 1 - match.index)}${result.slice(closingIndex + 1)}`;
+    branchStart.lastIndex = match.index;
+  }
+  return result;
+}
+
+function containsFeatureAny(expression) {
+  const anyStart = /\bany\s*\(/g;
+  for (let match = anyStart.exec(expression); match !== null; match = anyStart.exec(expression)) {
+    const openingIndex = anyStart.lastIndex - 1;
+    const closingIndex = matchingClosingParenthesis(expression, openingIndex);
+    if (closingIndex === -1) {
+      return false;
+    }
+    const body = expression.slice(openingIndex + 1, closingIndex);
+    if (/\bfeature\s*=\s*"[^"]+"/.test(body)) {
+      return true;
+    }
+    anyStart.lastIndex = closingIndex + 1;
+  }
+  return false;
+}
+
+function crateFeatureCfgFacts(source) {
+  const positiveFeatures = new Set();
+  let unsupportedAny = false;
+
+  for (const body of crateCfgBodies(source)) {
+    const positiveExpression = removeCfgBranches(body, 'not');
+    unsupportedAny ||= containsFeatureAny(positiveExpression);
+    for (const match of positiveExpression.matchAll(/\bfeature\s*=\s*"([^"]+)"/g)) {
+      positiveFeatures.add(match[1]);
+    }
+  }
+
+  return { positiveFeatures, unsupportedAny };
+}
+
+export function findFeatureGatedTestTargetViolations(
+  packages,
+  { readSource = (path) => readFileSync(path, 'utf8') } = {},
+) {
+  const violations = [];
+
+  for (const pkg of packages) {
+    for (const target of pkg.targets ?? []) {
+      if (!(target.kind ?? []).includes('test')) {
+        continue;
+      }
+      const cfgFacts = crateFeatureCfgFacts(readSource(target.src_path));
+      if (cfgFacts.unsupportedAny) {
+        violations.push({
+          path: target.src_path,
+          line: 1,
+          message: `integration test target ${pkg.name}:${target.name} uses feature any(...), which Cargo required-features cannot express; split the target`,
+        });
+        continue;
+      }
+      const declared = new Set(target['required-features'] ?? []);
+      const missing = [...cfgFacts.positiveFeatures]
+        .filter((feature) => !declared.has(feature));
+      const unexpected = cfgFacts.positiveFeatures.size === 0
+        ? []
+        : [...declared].filter((feature) => !cfgFacts.positiveFeatures.has(feature));
+      if (missing.length > 0 && unexpected.length > 0) {
+        violations.push({
+          path: target.src_path,
+          line: 1,
+          message: `feature-gated integration test target ${pkg.name}:${target.name} must align required-features with crate-level cfg; missing: ${missing.join(', ')}; unexpected: ${unexpected.join(', ')}`,
+        });
+      } else if (missing.length > 0) {
+        violations.push({
+          path: target.src_path,
+          line: 1,
+          message: `feature-gated integration test target ${pkg.name}:${target.name} must declare required-features for: ${missing.join(', ')}`,
+        });
+      } else if (unexpected.length > 0) {
+        violations.push({
+          path: target.src_path,
+          line: 1,
+          message: `feature-gated integration test target ${pkg.name}:${target.name} has unexpected required-features: ${unexpected.join(', ')}`,
+        });
+      }
+    }
+  }
+
+  return violations;
+}
+
 export function discoverCargoManifestPaths(root) {
   const manifests = [];
 
@@ -185,10 +1265,15 @@ export function discoverCargoManifestPaths(root) {
   });
 }
 
-function loadCargoMetadata(manifestPath, root) {
+function loadCargoMetadata(manifestPath, root, { noDeps = false } = {}) {
+  const args = ['metadata', '--format-version', '1', '--all-features'];
+  if (noDeps) {
+    args.push('--no-deps');
+  }
+  args.push('--manifest-path', manifestPath);
   const result = spawnSync(
     'cargo',
-    ['metadata', '--format-version', '1', '--all-features', '--manifest-path', manifestPath],
+    args,
     {
       cwd: root,
       encoding: 'utf8',
@@ -249,13 +1334,30 @@ function resolvedDependencyRecords(metadata, root) {
   return records;
 }
 
+function resolvedPackageFeatureRecords(metadata) {
+  const packageById = new Map((metadata.packages ?? []).map((pkg) => [pkg.id, pkg]));
+  return (metadata.resolve?.nodes ?? []).flatMap((node) => {
+    const pkg = packageById.get(node.id);
+    if (!pkg) {
+      return [];
+    }
+    return [{
+      name: pkg.name,
+      version: pkg.version,
+      source: pkg.source ?? null,
+      features: node.features ?? [],
+    }];
+  });
+}
+
 export function collectCargoMetadataGraph({
   root,
   manifestPaths = discoverCargoManifestPaths(root),
-  loadMetadata = (manifestPath) => loadCargoMetadata(manifestPath, root),
+  loadMetadata = (manifestPath, options) => loadCargoMetadata(manifestPath, root, options),
 }) {
   const packagesByManifest = new Map();
   const dependenciesByKey = new Map();
+  const resolvedPackageFeaturesByKey = new Map();
   const coveredManifests = new Set();
   const workspaceManifest = normalizedPath(join(root, 'Cargo.toml'));
   const orderedManifests = [...manifestPaths].sort((left, right) => {
@@ -274,7 +1376,9 @@ export function collectCargoMetadataGraph({
       continue;
     }
 
-    const metadata = loadMetadata(manifestPath);
+    const metadata = loadMetadata(manifestPath, {
+      noDeps: manifestKey !== workspaceManifest,
+    });
     const workspaceMemberIds = new Set(metadata.workspace_members ?? []);
     for (const pkg of metadata.packages ?? []) {
       if (repositoryPath(root, pkg.manifest_path) === null) {
@@ -297,11 +1401,16 @@ export function collectCargoMetadataGraph({
       ].join('|');
       dependenciesByKey.set(key, dependency);
     }
+    for (const record of resolvedPackageFeatureRecords(metadata)) {
+      const key = `${record.name}@${record.version}|${record.source ?? ''}`;
+      resolvedPackageFeaturesByKey.set(key, record);
+    }
   }
 
   return {
     packages: [...packagesByManifest.values()],
     resolvedDependencies: [...dependenciesByKey.values()],
+    resolvedPackageFeatures: [...resolvedPackageFeaturesByKey.values()],
   };
 }
 
@@ -326,6 +1435,43 @@ export function checkCargoDependencyLayersSafely({ root, crateLayoutRules }) {
       path: join(root, 'Cargo.toml'),
       line: 1,
       message: `cargo dependency layer check failed to run: ${error.message}`,
+    }];
+  }
+}
+
+export function checkCargoDependencyBoundaries({ root, crateLayoutRules }) {
+  const {
+    packages,
+    resolvedDependencies,
+    resolvedPackageFeatures,
+  } = collectCargoMetadataGraph({ root });
+  return [
+    ...findCargoLayerViolations(
+      packages,
+      { root, crateLayoutRules },
+      resolvedDependencies,
+    ),
+    ...findProductEntrypointCoreFeatureViolations(
+      packages,
+      { root, crateLayoutRules },
+    ),
+    ...findFeatureGatedTestTargetViolations(packages),
+    ...findRuntimeServicesTestSupportFeatureViolations(packages),
+    ...findTokioDependencyFeatureViolations(packages),
+    ...findReqwestDependencyFeatureViolations(packages),
+    ...findResolvedReqwestNativeTlsViolations(resolvedPackageFeatures, { root }),
+    ...findServicesCorePlatformDependencyFeatureViolations(packages),
+  ];
+}
+
+export function checkCargoDependencyBoundariesSafely({ root, crateLayoutRules }) {
+  try {
+    return checkCargoDependencyBoundaries({ root, crateLayoutRules });
+  } catch (error) {
+    return [{
+      path: join(root, 'Cargo.toml'),
+      line: 1,
+      message: `cargo dependency boundary check failed to run: ${error.message}`,
     }];
   }
 }

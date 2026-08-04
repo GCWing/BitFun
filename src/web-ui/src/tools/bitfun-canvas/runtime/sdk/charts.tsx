@@ -22,14 +22,14 @@ function pieLegend(slices: PieSlice[]): Array<{ name: string; color: string }> {
 }
 
 const chartColors = [
-  'var(--color-accent-500)',
-  'var(--color-success)',
-  'var(--color-warning)',
-  'var(--color-info)',
-  'var(--color-accent-600)',
-  'var(--color-error)',
-  'var(--color-text-muted)',
-  'var(--color-accent-400)',
+  'var(--bf-appearance-token-color-accent-500)',
+  'var(--bf-appearance-token-color-success)',
+  'var(--bf-appearance-token-color-warning)',
+  'var(--bf-appearance-token-color-info)',
+  'var(--bf-appearance-token-color-accent-600)',
+  'var(--bf-appearance-token-color-error)',
+  'var(--bf-appearance-token-color-text-muted)',
+  'var(--bf-appearance-token-color-accent-400)',
 ];
 
 function finiteNumber(value: unknown): number | null {
@@ -154,8 +154,8 @@ function chartGrid(left: number, top: number, plotWidth: number, plotHeight: num
     const label = Math.round((max * index) / 4);
     return (
       <g key={`grid-${index}`}>
-        <line x1={left} y1={y} x2={left + plotWidth} y2={y} stroke="var(--border-subtle)" strokeWidth={1} />
-        <text x={left - 8} y={y + 4} textAnchor="end" fill="var(--color-text-muted)" fontSize={10}>
+        <line x1={left} y1={y} x2={left + plotWidth} y2={y} stroke="var(--bf-appearance-token-border-subtle)" strokeWidth={1} />
+        <text x={left - 8} y={y + 4} textAnchor="end" fill="var(--bf-appearance-token-color-text-muted)" fontSize={10}>
           {label}
         </text>
       </g>
@@ -193,7 +193,7 @@ export function BarChart(props: CanvasChartProps = {}) {
           }),
         )}
         {labels.map((label, index) => (
-          <text key={`label-${index}`} x={left + index * groupWidth + groupWidth / 2} y={height - 10} textAnchor="middle" fill="var(--color-text-muted)" fontSize={10}>
+          <text key={`label-${index}`} x={left + index * groupWidth + groupWidth / 2} y={height - 10} textAnchor="middle" fill="var(--bf-appearance-token-color-text-muted)" fontSize={10}>
             {String(label).slice(0, 14)}
           </text>
         ))}
@@ -227,11 +227,11 @@ export function LineChart(props: CanvasChartProps = {}) {
         })}
         {series.flatMap(item =>
           item.values.map((value, index) => (
-            <circle key={`point-${item.name}-${index}`} cx={xFor(index)} cy={yFor(value)} r={3} fill={item.color} stroke="var(--color-bg-secondary)" strokeWidth={1.5} />
+            <circle key={`point-${item.name}-${index}`} cx={xFor(index)} cy={yFor(value)} r={3} fill={item.color} stroke="var(--bf-appearance-token-color-bg-secondary)" strokeWidth={1.5} />
           )),
         )}
         {labels.map((label, index) => (
-          <text key={`label-${index}`} x={xFor(index)} y={height - 10} textAnchor="middle" fill="var(--color-text-muted)" fontSize={10}>
+          <text key={`label-${index}`} x={xFor(index)} y={height - 10} textAnchor="middle" fill="var(--bf-appearance-token-color-text-muted)" fontSize={10}>
             {String(label).slice(0, 14)}
           </text>
         ))}
@@ -293,7 +293,7 @@ export function PieChart(props: CanvasChartProps = {}) {
     const nextAngle = angle + (item.value / total) * Math.PI * 2;
     const path = arcPath(cx, cy, radius, angle, nextAngle);
     angle = nextAngle;
-    return <path key={item.label + index} d={path} fill={item.color} stroke="var(--color-bg-secondary)" strokeWidth={1.5} />;
+    return <path key={item.label + index} d={path} fill={item.color} stroke="var(--bf-appearance-token-color-bg-secondary)" strokeWidth={1.5} />;
   });
   return (
     <ChartShell title={props.title} legend={pieLegend(slices)} height={height} style={props.style}>
@@ -302,10 +302,10 @@ export function PieChart(props: CanvasChartProps = {}) {
         {slices.slice(0, 6).map((item, index) => (
           <g key={`label-${index}`} transform={`translate(225 ${52 + index * 23})`}>
             <rect x={0} y={-8} width={9} height={9} rx={2} fill={item.color} />
-            <text x={16} y={0} fill="var(--color-text-secondary)" fontSize={11}>
+            <text x={16} y={0} fill="var(--bf-appearance-token-color-text-secondary)" fontSize={11}>
               {String(item.label).slice(0, 20)}
             </text>
-            <text x={118} y={0} fill="var(--color-text-muted)" fontSize={11} textAnchor="end">
+            <text x={118} y={0} fill="var(--bf-appearance-token-color-text-muted)" fontSize={11} textAnchor="end">
               {Math.round((item.value / total) * 100)}%
             </text>
           </g>

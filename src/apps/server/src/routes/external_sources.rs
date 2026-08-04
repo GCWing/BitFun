@@ -6,6 +6,16 @@ use std::path::PathBuf;
 
 use crate::AppState;
 
+// NOTE(Step 2a): these host-local external-source dispatch helpers were wired
+// through the old `websocket.rs::handle_command` path. Under browser-direct
+// ACP-over-WS the browser connects straight to the in-process app-server, so
+// `external_sources` commands now hit the ACP `method_not_found` fallback
+// (the desktop/Server Host external-source surface is temporarily unavailable
+// in web mode -- tracked for a later batch that brings them onto the app-server
+// schema). Kept here so the host capability plumbing stays intact for that
+// follow-up; silenced as dead code in the meantime.
+
+#[allow(dead_code)]
 pub(crate) fn supports(method: &str) -> bool {
     matches!(
         method,
@@ -25,6 +35,7 @@ pub(crate) fn supports(method: &str) -> bool {
     )
 }
 
+#[allow(dead_code)]
 pub(crate) async fn dispatch(
     method: &str,
     params: serde_json::Value,
@@ -76,6 +87,7 @@ pub(crate) async fn dispatch(
     })
 }
 
+#[allow(dead_code)]
 fn external_workspace_root(
     state: &AppState,
     request: &serde_json::Value,
@@ -119,6 +131,7 @@ fn external_workspace_root(
     Ok(Some(requested))
 }
 
+#[allow(dead_code)]
 fn optional_bool_field(
     request: &serde_json::Value,
     key: &str,

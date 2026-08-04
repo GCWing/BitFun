@@ -1,3 +1,4 @@
+use crate::agentic::coordination::get_global_coordinator;
 use crate::agentic::core::{Message, MessageContent, MessageRole, ToolCall, ToolResult};
 use crate::agentic::insights::session_paths::collect_effective_session_storage_targets;
 use crate::agentic::insights::types::*;
@@ -11,7 +12,7 @@ use crate::service::session_usage::{
     build_session_usage_report_from_turns, SessionUsageReportRequest,
 };
 use crate::service::snapshot::get_snapshot_manager_for_workspace;
-use crate::util::errors::BitFunResult;
+use crate::util::errors::{BitFunError, BitFunResult};
 use bitfun_agent_tools::ResolvedToolInvocation;
 use chrono::{DateTime, Local, Utc};
 use log::{debug, warn};
@@ -46,6 +47,9 @@ impl InsightsCollector {
     pub async fn collect(days: u32) -> BitFunResult<(BaseStats, Vec<SessionTranscript>)> {
         let path_manager = get_path_manager_arc();
         let pm = PersistenceManager::new(path_manager)?;
+        let coordinator = get_global_coordinator().ok_or_else(|| {
+            BitFunError::service("Core coordinator is unavailable for Insights history reads")
+        })?;
         let now = SystemTime::now();
         let now_ms = system_time_to_unix_ms(now);
         let cutoff_ms = now_ms.saturating_sub(days as u64 * 86_400_000);
@@ -85,10 +89,7 @@ impl InsightsCollector {
                     continue;
                 }
 
-                let (session, parent_turns) = match pm
-                    .load_session_with_turns(ws_path, &summary.session_id)
-                    .await
-                {
+                let mut session = match pm.load_session(ws_path, &summary.session_id).await {
                     Ok(value) => value,
                     Err(e) => {
                         warn!(
@@ -98,6 +99,23 @@ impl InsightsCollector {
                         continue;
                     }
                 };
+                let parent_turns = match coordinator
+                    .load_visible_persisted_session_turns(ws_path, &summary.session_id)
+                    .await
+                {
+                    Ok(value) => value,
+                    Err(e) => {
+                        warn!(
+                            "Skipping session {}: visible history load failed: {}",
+                            summary.session_id, e
+                        );
+                        continue;
+                    }
+                };
+                session.dialog_turn_ids = parent_turns
+                    .iter()
+                    .map(|turn| turn.turn_id.clone())
+                    .collect();
 
                 let parent_turn_ids = parent_turns
                     .iter()
@@ -136,7 +154,10 @@ impl InsightsCollector {
                 );
                 let mut selected_turns = selected_parent_turns.clone();
                 for hidden_session_id in hidden_session_ids {
-                    match pm.load_session_turns(ws_path, &hidden_session_id).await {
+                    match coordinator
+                        .load_visible_persisted_session_turns(ws_path, &hidden_session_id)
+                        .await
+                    {
                         Ok(turns) => {
                             selected_turns
                                 .extend(filter_turns_for_window(&turns, cutoff_ms, now_ms));

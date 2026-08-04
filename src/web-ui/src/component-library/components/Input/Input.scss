@@ -38,42 +38,54 @@
   &--default {
     .bitfun-input-container {
       background: transparent;
-      border: 1px solid var(--border-base);
+      border: 1px solid var(--bf-appearance-token-border-base);
     }
   }
 
   &--filled {
     .bitfun-input-container {
-      background: var(--element-bg-subtle);
+      background: var(--bf-appearance-token-element-bg-subtle);
       border: 1px solid transparent;
 
+      &:hover:not(.bitfun-input-wrapper--disabled &) {
+        background: var(--bf-appearance-token-element-bg-soft);
+        border-color: var(--bf-appearance-token-border-base);
+      }
+
       &:focus-within {
-        background: var(--element-bg-soft);
+        background: var(--bf-appearance-token-element-bg-soft);
         border-color: transparent;
       }
 
+      &:hover:focus-within {
+        border-color: var(--bf-appearance-token-color-accent-500);
+      }
     }
   }
 
   &--outlined {
     .bitfun-input-container {
       background: transparent;
-      border: 1px solid var(--border-medium);
+      border: 1px solid var(--bf-appearance-token-border-medium);
     }
   }
 
   &--error {
     .bitfun-input-container {
-      border-color: var(--color-error-border) !important;
+      border-color: var(--bf-appearance-token-color-error-border) !important;
+
+      &:hover:not(.bitfun-input-wrapper--disabled &) {
+        border-color: var(--bf-appearance-token-color-error) !important;
+      }
 
       &:focus-within {
-        border-color: var(--color-error) !important;
+        border-color: var(--bf-appearance-token-color-error) !important;
       }
     }
   }
 
   &--disabled {
-    opacity: var(--opacity-disabled);
+    opacity: var(--bf-appearance-token-opacity-disabled);
     cursor: default;
 
     .bitfun-input-container {
@@ -83,31 +95,33 @@
 }
 
 .bitfun-input-label {
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-medium);
-  color: var(--color-text-secondary);
+  font-size: var(--bf-appearance-token-font-size-sm);
+  font-weight: var(--bf-appearance-token-font-weight-medium);
+  color: var(--bf-appearance-token-color-text-secondary);
   letter-spacing: 0.2px;
 }
 
 .bitfun-input-container {
   display: flex;
   align-items: center;
-  gap: var(--size-gap-2);
-  padding: 0 var(--size-gap-3);
-  border-radius: var(--size-radius-sm);
-  transition:
-    background-color var(--motion-fast) ease,
-    border-color var(--motion-fast) ease,
-    box-shadow var(--motion-fast) ease;
+  gap: var(--bf-appearance-token-size-gap-2);
+  padding: 0 var(--bf-appearance-token-size-gap-3);
+  border-radius: 4px;
+  transition: all var(--bf-appearance-token-motion-base) var(--bf-appearance-token-easing-standard);
   position: relative;
   min-width: 0;
   overflow: hidden;
 
+  &:hover:not(.bitfun-input-wrapper--disabled &) {
+    background: var(--bf-appearance-token-element-bg-subtle);
+    border-color: var(--bf-appearance-token-border-strong);
+  }
+
   &:focus-within {
     background: transparent;
-    border-color: var(--color-accent-500);
+    border-color: var(--bf-appearance-token-color-accent-500);
     outline: none;
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent-500) 14%, transparent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 14%, transparent);
   }
 }
 
@@ -119,24 +133,24 @@
   border: none !important;
   outline: none !important;
   box-shadow: none !important;
-  color: var(--color-text-primary);
+  color: var(--bf-appearance-token-color-text-primary);
   font-family: inherit;
   position: relative;
   z-index: 1;
 
   // Blend muted text toward page background so placeholders read as hints, not as user input
-  // (same token pair is set for light/dark in ThemeService).
+  // The active appearance supplies the same token pair for both modes.
   &::placeholder {
     color: color-mix(
       in srgb,
-      var(--color-text-muted) 40%,
-      var(--color-bg-primary)
+      var(--bf-appearance-token-color-text-muted) 40%,
+      var(--bf-appearance-token-color-bg-primary)
     );
   }
 
   &::selection {
     border-radius: 2px;
-    background: var(--color-accent-300);
+    background: var(--bf-appearance-token-color-accent-300);
   }
 
   &:focus,
@@ -154,7 +168,7 @@
 
 .bitfun-input-prefix,
 .bitfun-input-suffix {
-  color: var(--color-text-muted);
+  color: var(--bf-appearance-token-color-text-muted);
   display: flex;
   align-items: center;
   flex-shrink: 0;
@@ -167,52 +181,52 @@
   border: none;
   padding: 2px;
   cursor: pointer;
-  color: var(--color-text-muted);
+  color: var(--bf-appearance-token-color-text-muted);
   display: flex;
   align-items: center;
   justify-content: center;
   border-radius: 4px;
   transition:
-    color var(--motion-fast) ease,
-    transform var(--motion-fast) var(--easing-standard);
+    color var(--bf-appearance-token-motion-fast) ease,
+    transform var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard);
 
-  &:active {
-    transform: scale(0.97);
+  &:hover {
+    color: var(--bf-appearance-token-color-text-secondary);
   }
 }
 
 .bitfun-input-hint,
 .bitfun-input-error-message {
-  font-size: var(--font-size-xs);
-  color: var(--color-error);
+  font-size: var(--bf-appearance-token-font-size-xs);
+  color: var(--bf-appearance-token-color-error);
   margin-top: -2px;
 }
 
 .bitfun-input-hint {
-  color: var(--color-text-muted);
+  color: var(--bf-appearance-token-color-text-muted);
 }
 
 @media (hover: hover) and (pointer: fine) {
   .bitfun-input-wrapper:not(.bitfun-input-wrapper--disabled) .bitfun-input-container:hover {
-    background: var(--element-bg-subtle);
-    border-color: var(--border-strong);
+    background: var(--bf-appearance-token-element-bg-subtle);
+    border-color: var(--bf-appearance-token-border-strong);
   }
 
   .bitfun-input-wrapper--filled:not(.bitfun-input-wrapper--disabled) .bitfun-input-container:hover {
-    background: var(--element-bg-soft);
-    border-color: var(--border-base);
+    background: var(--bf-appearance-token-element-bg-soft);
+    border-color: var(--bf-appearance-token-border-base);
   }
 
   .bitfun-input-wrapper--filled .bitfun-input-container:hover:focus-within {
-    border-color: var(--color-accent-500);
+    border-color: var(--bf-appearance-token-color-accent-500);
   }
 
   .bitfun-input-wrapper--error:not(.bitfun-input-wrapper--disabled) .bitfun-input-container:hover {
-    border-color: var(--color-error) !important;
+    border-color: var(--bf-appearance-token-color-error) !important;
   }
 
   .bitfun-input-toggle:hover {
-    color: var(--color-text-secondary);
+    color: var(--bf-appearance-token-color-text-secondary);
   }
 }
 

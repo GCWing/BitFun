@@ -18,12 +18,12 @@ use bitfun_product_domains::external_sources::{
     ExternalMcpConflictCandidate, ExternalMcpDiscoveryInput, ExternalMcpImportApplyRequestV1,
     ExternalMcpImportSelectionV1, ExternalMcpProviderIdentity, ExternalMcpProviderSnapshot,
     ExternalMcpRevisionKey, ExternalMcpServerDefinition, ExternalMcpStaticStatus,
-    ExternalMcpTransportKind, ExternalSourceAssetKind, ExternalSourceCatalogEntry,
-    ExternalSourceCatalogSnapshot, ExternalSourceContext, ExternalSourceDiagnostic,
-    ExternalSourceHealth, ExternalSourceHostCapabilities, ExternalSourceLifecycleState,
-    ExternalSourceOperationError, ExternalSourceOperationErrorCode, ExternalSourceProviderError,
-    ExternalSourcePublicSnapshot, ExternalSourceRecord, ExternalSourceScope,
-    ExternalToolCapability, ExternalToolDefinition, ExternalToolRuntimeKind,
+    ExternalMcpTimeouts, ExternalMcpTransportKind, ExternalSourceAssetKind,
+    ExternalSourceCatalogEntry, ExternalSourceCatalogSnapshot, ExternalSourceContext,
+    ExternalSourceDiagnostic, ExternalSourceHealth, ExternalSourceHostCapabilities,
+    ExternalSourceLifecycleState, ExternalSourceOperationError, ExternalSourceOperationErrorCode,
+    ExternalSourceProviderError, ExternalSourcePublicSnapshot, ExternalSourceRecord,
+    ExternalSourceScope, ExternalToolCapability, ExternalToolDefinition, ExternalToolRuntimeKind,
     ExternalToolStaticStatus, ExternalWatchRoot, NativePromptCommandDescriptor,
     PreparedExternalMcpImportServer, PreparedExternalMcpImportTransport, PreparedExternalMcpServer,
     PreparedExternalMcpTransport, PromptCommandAvailability, PromptCommandCatalogEntry,
@@ -34,10 +34,13 @@ use bitfun_product_domains::external_sources::{
 };
 use bitfun_product_domains::external_subagents::{
     external_subagent_approval_key, external_subagent_candidate_id, external_subagent_conflict_key,
-    ExternalSubagentBehaviorVersion, ExternalSubagentCandidateId,
-    ExternalSubagentCompatibilityState, ExternalSubagentContributionId,
-    ExternalSubagentContributionRole, ExternalSubagentDefinition, ExternalSubagentDiscoveryInput,
-    ExternalSubagentLocalId, ExternalSubagentMode, ExternalSubagentModelRequest,
+    external_subagent_model_binding_key, ExternalSubagentBehaviorVersion,
+    ExternalSubagentCandidateId, ExternalSubagentCompatibilityState,
+    ExternalSubagentContributionId, ExternalSubagentContributionRole, ExternalSubagentDefinition,
+    ExternalSubagentDiscoveryInput, ExternalSubagentLocalId, ExternalSubagentMode,
+    ExternalSubagentModelBindingGroup, ExternalSubagentModelBindingMethod,
+    ExternalSubagentModelBindingOption, ExternalSubagentModelBindingTarget,
+    ExternalSubagentModelProfileRequest, ExternalSubagentModelRequest,
     ExternalSubagentProvenanceRef, ExternalSubagentProviderIdentity,
     ExternalSubagentProviderSnapshot, ExternalSubagentToolRequest, ExternalSubagentToolSelector,
     SecretText,
@@ -145,6 +148,8 @@ fn command(provider_id: &str, source_id: &str, precedence: i32) -> PromptCommand
         name: "review".to_string(),
         description: format!("Review from {provider_id}"),
         template: format!("{provider_id}: $ARGUMENTS"),
+        shell_preference: None,
+        execution_target: Default::default(),
         availability: PromptCommandAvailability::Available,
         content_version: format!("command-v{precedence}"),
     }
@@ -231,6 +236,8 @@ fn prompt_commands_use_a_typed_contract_instead_of_an_arbitrary_asset_payload() 
         name: "review".to_string(),
         description: "Review the current change".to_string(),
         template: "Review $ARGUMENTS".to_string(),
+        shell_preference: None,
+        execution_target: Default::default(),
         availability: PromptCommandAvailability::Restricted {
             reason: "Shell expansion is not supported yet".to_string(),
             required_capabilities: vec!["command.shell".to_string()],
@@ -284,12 +291,14 @@ impl PromptCommandSourceProvider for FakeProvider {
 
     fn expand(
         &self,
+        _context: &ExternalSourceContext,
         command: &PromptCommandDefinition,
         arguments: &str,
     ) -> Result<PromptCommandExpansion, ExternalSourceProviderError> {
         Ok(PromptCommandExpansion {
             content: command.template.replace("$ARGUMENTS", arguments),
             workspace_file_references: vec!["src/lib.rs".to_string()],
+            shell: None,
         })
     }
 
@@ -314,7 +323,7 @@ fn capability_provider_contract_does_not_require_core_or_an_ecosystem_enum() {
     assert_eq!(snapshot.provider.ecosystem_id.as_str(), "fake.ecosystem");
     assert_eq!(provider.watch_roots(&context()).len(), 1);
     let expansion = provider
-        .expand(&snapshot.commands[0], "change")
+        .expand(&context(), &snapshot.commands[0], "change")
         .expect("prepare fake command expansion");
     assert_eq!(expansion.content, "fake-provider: change");
     assert_eq!(expansion.workspace_file_references, ["src/lib.rs"]);
@@ -387,6 +396,7 @@ fn external_subagent_identity_preserves_ordered_provenance_and_separate_revision
         disabled: false,
         hidden: false,
         requested_model: ExternalSubagentModelRequest::Default,
+        requested_model_profile: None,
         requested_tools: ExternalSubagentToolRequest {
             selectors: vec![ExternalSubagentToolSelector {
                 source_name: "read".to_string(),
@@ -409,7 +419,7 @@ fn external_subagent_identity_preserves_ordered_provenance_and_separate_revision
     assert!(!format!("{definition:?}").contains("C:/sensitive/private"));
 
     let mut invalid_model = definition.clone();
-    invalid_model.requested_model = ExternalSubagentModelRequest::Exact {
+    invalid_model.requested_model = ExternalSubagentModelRequest::Reference {
         provider_hint: Some("fake\nprovider".to_string()),
         model_name: "model".to_string(),
     };
@@ -569,6 +579,263 @@ fn external_subagent_identity_preserves_ordered_provenance_and_separate_revision
 }
 
 #[test]
+fn external_subagent_model_contract_preserves_control_and_opaque_reference_semantics() {
+    let requests = [
+        ExternalSubagentModelRequest::Default,
+        ExternalSubagentModelRequest::Inherit,
+        ExternalSubagentModelRequest::Reference {
+            provider_hint: Some("openrouter".to_string()),
+            model_name: "anthropic/claude-sonnet-4".to_string(),
+        },
+        ExternalSubagentModelRequest::Reference {
+            provider_hint: None,
+            model_name: "gpt-5.6-codex".to_string(),
+        },
+        ExternalSubagentModelRequest::Reference {
+            provider_hint: None,
+            model_name: "glm-5".to_string(),
+        },
+        ExternalSubagentModelRequest::Reference {
+            provider_hint: None,
+            model_name: "deepseek-v4".to_string(),
+        },
+        ExternalSubagentModelRequest::Reference {
+            provider_hint: None,
+            model_name: "future-model-that-does-not-exist-yet".to_string(),
+        },
+    ];
+
+    for request in requests {
+        let encoded = serde_json::to_value(&request).unwrap();
+        if let ExternalSubagentModelRequest::Reference {
+            provider_hint,
+            model_name,
+        } = &request
+        {
+            assert_eq!(encoded["modelName"], model_name.as_str());
+            assert!(encoded.get("model_name").is_none());
+            if let Some(provider_hint) = provider_hint {
+                assert_eq!(encoded["providerHint"], provider_hint.as_str());
+                assert!(encoded.get("provider_hint").is_none());
+            }
+        }
+        let decoded: ExternalSubagentModelRequest = serde_json::from_value(encoded).unwrap();
+        assert_eq!(decoded, request);
+    }
+
+    assert_ne!(
+        ExternalSubagentModelRequest::Inherit,
+        ExternalSubagentModelRequest::Reference {
+            provider_hint: None,
+            model_name: "inherit".to_string(),
+        }
+    );
+}
+
+#[test]
+fn external_subagent_model_profile_contract_keeps_variant_and_effort_semantics_distinct() {
+    let profiles = [
+        ExternalSubagentModelProfileRequest::NamedVariant {
+            name: "high".to_string(),
+        },
+        ExternalSubagentModelProfileRequest::ReasoningEffort {
+            value: "high".to_string(),
+        },
+    ];
+
+    let encoded = profiles
+        .iter()
+        .map(|profile| serde_json::to_value(profile).unwrap())
+        .collect::<Vec<_>>();
+    assert_eq!(
+        encoded[0],
+        serde_json::json!({ "kind": "named_variant", "name": "high" })
+    );
+    assert_eq!(
+        encoded[1],
+        serde_json::json!({ "kind": "reasoning_effort", "value": "high" })
+    );
+    assert_ne!(profiles[0], profiles[1]);
+
+    for (profile, encoded) in profiles.into_iter().zip(encoded) {
+        let decoded: ExternalSubagentModelProfileRequest = serde_json::from_value(encoded).unwrap();
+        assert_eq!(decoded, profile);
+    }
+
+    assert!(ExternalSubagentModelProfileRequest::NamedVariant {
+        name: "x".repeat(4097),
+    }
+    .validate()
+    .is_err());
+    assert!(ExternalSubagentModelProfileRequest::ReasoningEffort {
+        value: "bad\u{0001}".to_string(),
+    }
+    .validate()
+    .is_err());
+}
+
+#[test]
+fn external_subagent_model_binding_contract_groups_only_matching_scope_identity() {
+    let ecosystem = EcosystemId::new("opencode").unwrap();
+    let request = ExternalSubagentModelRequest::Reference {
+        provider_hint: Some("openrouter".to_string()),
+        model_name: "vendor/model".to_string(),
+    };
+    let global_a = external_subagent_model_binding_key(
+        &ecosystem,
+        &request,
+        None,
+        "local-user",
+        ExternalSourceScope::UserGlobal,
+        "D:/workspace/a",
+    )
+    .unwrap();
+    assert_eq!(
+        global_a,
+        "external_subagent_model_binding:408ebedb7c2644acda3b4c0c5a78e8eb83fb2ece8b3a1671a866ed0d6cc08f56",
+        "profile-free bindings must retain their pre-profile persisted identity"
+    );
+    let global_b = external_subagent_model_binding_key(
+        &ecosystem,
+        &request,
+        None,
+        "local-user",
+        ExternalSourceScope::UserGlobal,
+        "D:/workspace/b",
+    )
+    .unwrap();
+    assert_eq!(
+        global_a, global_b,
+        "user bindings belong to the execution domain"
+    );
+
+    let project_a = external_subagent_model_binding_key(
+        &ecosystem,
+        &request,
+        None,
+        "local-user",
+        ExternalSourceScope::Project,
+        "D:/workspace/a",
+    )
+    .unwrap();
+    let project_b = external_subagent_model_binding_key(
+        &ecosystem,
+        &request,
+        None,
+        "local-user",
+        ExternalSourceScope::Project,
+        "D:/workspace/b",
+    )
+    .unwrap();
+    assert_ne!(
+        project_a, project_b,
+        "project bindings stay workspace-scoped"
+    );
+    assert_ne!(
+        global_a, project_a,
+        "global and project bindings never alias"
+    );
+    let remote_global = external_subagent_model_binding_key(
+        &ecosystem,
+        &request,
+        None,
+        "remote:user@example",
+        ExternalSourceScope::RemoteUser,
+        "D:/workspace/a",
+    )
+    .unwrap();
+    assert_ne!(
+        global_a, remote_global,
+        "remote and local execution domains never share bindings"
+    );
+
+    let option = ExternalSubagentModelBindingOption {
+        target: ExternalSubagentModelBindingTarget::Primary,
+        effective_model_label: "Provider / Model".to_string(),
+        configured_reasoning_effort: Some("high".to_string()),
+    };
+    let group = ExternalSubagentModelBindingGroup {
+        binding_key: project_a,
+        request,
+        profile_request: Some(ExternalSubagentModelProfileRequest::ReasoningEffort {
+            value: "high".to_string(),
+        }),
+        scope: ExternalSourceScope::Project,
+        method: ExternalSubagentModelBindingMethod::Explicit,
+        selected_target: Some(option.target.clone()),
+        effective_model_label: Some(option.effective_model_label.clone()),
+        affected_candidate_ids: vec!["candidate-a".to_string(), "candidate-b".to_string()],
+    };
+    let encoded = serde_json::to_value((&option, &group)).unwrap();
+    let decoded: (
+        ExternalSubagentModelBindingOption,
+        ExternalSubagentModelBindingGroup,
+    ) = serde_json::from_value(encoded).unwrap();
+    assert_eq!(decoded, (option, group));
+}
+
+#[test]
+fn external_subagent_profile_binding_identity_extends_existing_model_binding_scope() {
+    let ecosystem = EcosystemId::new("opencode").unwrap();
+    let default_request = ExternalSubagentModelRequest::Default;
+    assert!(external_subagent_model_binding_key(
+        &ecosystem,
+        &default_request,
+        None,
+        "local-user",
+        ExternalSourceScope::Project,
+        "D:/workspace/a",
+    )
+    .is_none());
+
+    let variant = ExternalSubagentModelProfileRequest::NamedVariant {
+        name: "high".to_string(),
+    };
+    let effort = ExternalSubagentModelProfileRequest::ReasoningEffort {
+        value: "high".to_string(),
+    };
+    let variant_key = external_subagent_model_binding_key(
+        &ecosystem,
+        &default_request,
+        Some(&variant),
+        "local-user",
+        ExternalSourceScope::Project,
+        "D:/workspace/a",
+    )
+    .unwrap();
+    let effort_key = external_subagent_model_binding_key(
+        &ecosystem,
+        &default_request,
+        Some(&effort),
+        "local-user",
+        ExternalSourceScope::Project,
+        "D:/workspace/a",
+    )
+    .unwrap();
+    assert_ne!(variant_key, effort_key);
+    let delimited_provider = ExternalSubagentModelRequest::Reference {
+        provider_hint: Some("a:b".to_string()),
+        model_name: "c".to_string(),
+    };
+    let delimited_model = ExternalSubagentModelRequest::Reference {
+        provider_hint: Some("a".to_string()),
+        model_name: "b:c".to_string(),
+    };
+    let key_for = |request| {
+        external_subagent_model_binding_key(
+            &ecosystem,
+            request,
+            Some(&effort),
+            "local-user",
+            ExternalSourceScope::Project,
+            "D:/workspace/a",
+        )
+        .unwrap()
+    };
+    assert_ne!(key_for(&delimited_provider), key_for(&delimited_model));
+}
+
+#[test]
 fn external_subagent_decision_keys_bind_behavior_but_not_catalog_copy() {
     let candidate = ExternalSubagentCandidateId::new("candidate-v1").unwrap();
     let behavior = ExternalSubagentBehaviorVersion::new("behavior-v1").unwrap();
@@ -715,6 +982,17 @@ fn legacy_public_snapshot_downprojects_new_tool_review_variants() {
             "sourceKeys": [],
             "sourceLocationLabels": [],
             "sourceCount": 1,
+            "requestedModel": {
+                "kind": "reference",
+                "providerHint": "anthropic",
+                "modelName": "claude-sonnet-4"
+            },
+            "requestedModelProfile": {
+                "kind": "reasoning_effort",
+                "value": "high"
+            },
+            "modelBindingMethod": "binding_required",
+            "modelBindingKey": "external_subagent_model_binding:review",
             "effectiveToolLabels": ["Read"],
             "unavailableToolLabels": ["Shell"],
             "supportsFollowUp": false,
@@ -725,6 +1003,19 @@ fn legacy_public_snapshot_downprojects_new_tool_review_variants() {
             }],
             "activationState": { "state": "blocked" },
             "decisionKey": "agent-decision-v1"
+        }],
+        "subagentModelBindingGroups": [{
+            "bindingKey": "external_subagent_model_binding:review",
+            "request": { "kind": "reference", "modelName": "claude-sonnet-4" },
+            "profileRequest": { "kind": "reasoning_effort", "value": "high" },
+            "scope": "project",
+            "method": "binding_required",
+            "affectedCandidateIds": ["external-review"]
+        }],
+        "subagentModelBindingOptions": [{
+            "target": { "kind": "fast" },
+            "effectiveModelLabel": "Fast",
+            "configuredReasoningEffort": "high"
         }]
     }))
     .expect("new public snapshot");
@@ -736,6 +1027,14 @@ fn legacy_public_snapshot_downprojects_new_tool_review_variants() {
     assert!(legacy["subagents"][0]
         .get("unavailableToolLabels")
         .is_none());
+    assert!(legacy["subagents"][0].get("requestedModel").is_none());
+    assert!(legacy["subagents"][0]
+        .get("requestedModelProfile")
+        .is_none());
+    assert!(legacy["subagents"][0].get("modelBindingMethod").is_none());
+    assert!(legacy["subagents"][0].get("modelBindingKey").is_none());
+    assert!(legacy.get("subagentModelBindingGroups").is_none());
+    assert!(legacy.get("subagentModelBindingOptions").is_none());
 }
 
 #[test]
@@ -859,6 +1158,7 @@ fn external_mcp_contract_keeps_runtime_secrets_out_of_static_snapshots() {
         environment_reference_names: Vec::new(),
         remote_url_preview: Some("https://mcp.example.com/mcp".to_string()),
         header_names: vec!["Authorization".to_string()],
+        timeouts: ExternalMcpTimeouts::default(),
         source_enabled: true,
         behavior_version: "sha256:behavior-v1".to_string(),
         static_status: ExternalMcpStaticStatus::Ready,
@@ -882,6 +1182,7 @@ fn external_mcp_contract_keeps_runtime_secrets_out_of_static_snapshots() {
     let prepared = PreparedExternalMcpServer {
         id: definition.id,
         behavior_version: definition.behavior_version,
+        timeouts: ExternalMcpTimeouts::default(),
         transport: PreparedExternalMcpTransport::Remote {
             url: "https://mcp.example.com/mcp?token=url-secret".to_string(),
             headers: [(
@@ -899,6 +1200,43 @@ fn external_mcp_contract_keeps_runtime_secrets_out_of_static_snapshots() {
     );
     assert!(!format!("{prepared:?}").contains("Bearer secret"));
     assert!(!format!("{prepared:?}").contains("url-secret"));
+}
+
+#[test]
+fn external_mcp_timeouts_are_positive_optional_millisecond_facts() {
+    let timeouts = ExternalMcpTimeouts {
+        startup_ms: Some(2_000),
+        catalog_ms: None,
+        execution_ms: Some(30_000),
+    };
+
+    timeouts.validate().expect("positive timeouts are valid");
+    assert_eq!(
+        serde_json::to_value(&timeouts).unwrap(),
+        serde_json::json!({
+            "startupMs": 2_000,
+            "executionMs": 30_000,
+        })
+    );
+    assert!(ExternalMcpTimeouts {
+        startup_ms: Some(0),
+        ..Default::default()
+    }
+    .validate()
+    .is_err());
+    assert!(ExternalMcpTimeouts {
+        execution_ms: Some(9_007_199_254_740_991),
+        ..Default::default()
+    }
+    .validate()
+    .is_ok());
+    assert!(ExternalMcpTimeouts {
+        execution_ms: Some(9_007_199_254_740_992),
+        ..Default::default()
+    }
+    .validate()
+    .is_err());
+    assert!(ExternalMcpTimeouts::default().is_empty());
 }
 
 #[test]
@@ -951,6 +1289,7 @@ fn external_mcp_snapshot_rejects_cross_provider_and_duplicate_servers() {
         environment_reference_names: Vec::new(),
         remote_url_preview: None,
         header_names: Vec::new(),
+        timeouts: ExternalMcpTimeouts::default(),
         source_enabled: true,
         behavior_version: "sha256:behavior-v1".to_string(),
         static_status: ExternalMcpStaticStatus::Ready,
@@ -1051,6 +1390,7 @@ fn external_mcp_product_view_is_version_guarded_and_contains_only_disclosed_fiel
         environment_reference_names: Vec::new(),
         remote_url_preview: None,
         header_names: Vec::new(),
+        timeouts: ExternalMcpTimeouts::default(),
         source_enabled: true,
         behavior_version: "sha256:behavior-v1".to_string(),
         static_status: ExternalMcpStaticStatus::Ready,
@@ -1458,6 +1798,24 @@ fn public_snapshot_never_exposes_executable_prompt_templates() {
         subagent_generation: 0,
         preference_revision: 0,
         subagents: Vec::new(),
+        subagent_model_binding_groups: vec![ExternalSubagentModelBindingGroup {
+            binding_key: "external_subagent_model_binding:review".to_string(),
+            request: ExternalSubagentModelRequest::Reference {
+                provider_hint: Some("anthropic".to_string()),
+                model_name: "claude-sonnet-4".to_string(),
+            },
+            profile_request: None,
+            scope: ExternalSourceScope::Project,
+            method: ExternalSubagentModelBindingMethod::BindingRequired,
+            selected_target: None,
+            effective_model_label: None,
+            affected_candidate_ids: vec!["opencode-review".to_string()],
+        }],
+        subagent_model_binding_options: vec![ExternalSubagentModelBindingOption {
+            target: ExternalSubagentModelBindingTarget::Fast,
+            effective_model_label: "GLM-4.5-Air".to_string(),
+            configured_reasoning_effort: None,
+        }],
         subagent_conflicts: Vec::new(),
         pending_subagent_approvals: Vec::new(),
         integration_policy: Default::default(),
@@ -1471,6 +1829,14 @@ fn public_snapshot_never_exposes_executable_prompt_templates() {
     assert!(encoded["commands"][0]["definition"]
         .get("template")
         .is_none());
+    assert_eq!(
+        encoded["subagentModelBindingGroups"][0]["bindingKey"],
+        "external_subagent_model_binding:review"
+    );
+    assert_eq!(
+        encoded["subagentModelBindingOptions"][0]["effectiveModelLabel"],
+        "GLM-4.5-Air"
+    );
 }
 
 #[test]
@@ -1498,6 +1864,8 @@ fn control_projection_keeps_lifecycle_facts_orthogonal() {
         subagent_generation: 3,
         preference_revision: 11,
         subagents: Vec::new(),
+        subagent_model_binding_groups: Vec::new(),
+        subagent_model_binding_options: Vec::new(),
         subagent_conflicts: Vec::new(),
         pending_subagent_approvals: Vec::new(),
         integration_policy: Default::default(),
@@ -1545,6 +1913,7 @@ fn control_projection_does_not_infer_review_facts_from_runtime_activation() {
         environment_reference_names: Vec::new(),
         remote_url_preview: Some("https://mcp.example.com".to_string()),
         header_names: Vec::new(),
+        timeouts: ExternalMcpTimeouts::default(),
         source_enabled: true,
         behavior_version: "behavior-v1".to_string(),
         static_status: ExternalMcpStaticStatus::Ready,
@@ -1577,6 +1946,8 @@ fn control_projection_does_not_infer_review_facts_from_runtime_activation() {
         subagent_generation: 1,
         preference_revision: 1,
         subagents: Vec::new(),
+        subagent_model_binding_groups: Vec::new(),
+        subagent_model_binding_options: Vec::new(),
         subagent_conflicts: Vec::new(),
         pending_subagent_approvals: Vec::new(),
         integration_policy: Default::default(),

@@ -44,8 +44,8 @@ export default function Canvas() {
         assert!(html.contains("h(Text"));
         assert!(html.contains("bitfun-canvas-save-state"));
         assert!(html.contains("bitfun-canvas-state"));
-        assert!(html.contains("bitfun-canvas-theme"));
-        assert!(html.contains("applyHostTheme"));
+        assert!(html.contains("bitfun-canvas-appearance"));
+        assert!(html.contains("applyHostAppearance"));
         assert!(html.contains("bitfun-canvas-design-mode"));
         assert!(html.contains("bitfun-canvas-element-selected"));
         assert!(html.contains("data-bitfun-canvas-node"));
@@ -263,14 +263,14 @@ export default Canvas;
     }
 
     #[test]
-    fn canvas_compiler_reports_invalid_host_theme_tokens() {
+    fn canvas_compiler_reports_invalid_host_appearance_tokens() {
         let result = compile_canvas_source(
             &source(
                 r#"
-import { Stack, useHostTheme } from 'bitfun/canvas';
+import { Stack, useHostAppearance } from 'bitfun/canvas';
 export default function Canvas() {
-  const theme = useHostTheme();
-  return <Stack style={{ background: theme.surface.primary, color: theme.interactive.accent }}>Body</Stack>;
+  const appearance = useHostAppearance();
+  return <Stack style={{ background: appearance.surface.primary, color: appearance.interactive.accent }}>Body</Stack>;
 }
 "#,
             ),
@@ -282,20 +282,24 @@ export default function Canvas() {
             .diagnostics
             .iter()
             .filter(|diagnostic| {
-                diagnostic.code.as_deref() == Some("canvas.sdk.invalid_theme_token")
+                diagnostic.code.as_deref() == Some("canvas.sdk.invalid_appearance_token")
             })
             .collect::<Vec<_>>();
         assert_eq!(diagnostics.len(), 2, "{:?}", result.diagnostics);
-        assert!(diagnostics[0].message.contains("theme.surface.primary"));
+        assert!(diagnostics[0]
+            .message
+            .contains("appearance.surface.primary"));
         assert!(diagnostics[0]
             .suggested_fix
             .as_deref()
-            .is_some_and(|fix| fix.contains("theme.bg.editor")));
-        assert!(diagnostics[1].message.contains("theme.interactive.accent"));
+            .is_some_and(|fix| fix.contains("appearance.bg.editor")));
+        assert!(diagnostics[1]
+            .message
+            .contains("appearance.interactive.accent"));
         assert!(diagnostics[1]
             .suggested_fix
             .as_deref()
-            .is_some_and(|fix| fix.contains("theme.accent.primary")));
+            .is_some_and(|fix| fix.contains("appearance.accent.primary")));
     }
 
     #[test]
@@ -418,11 +422,10 @@ import {
   TodoListCard,
   UsageBar,
   canvasTokens,
-  colorPalette,
   computeDAGLayout,
   mergeStyle,
   useCanvasState,
-  useHostTheme,
+  useHostAppearance,
 } from 'bitfun/canvas';
 
 const lines = [
@@ -431,7 +434,7 @@ const lines = [
 ];
 
 export default function Canvas() {
-  const theme = useHostTheme();
+  const appearance = useHostAppearance();
   const [note, setNote] = useCanvasState('note', '');
   const merged = mergeStyle({ maxWidth: 900 }, { padding: 4 });
   const layout = computeDAGLayout({
@@ -444,7 +447,7 @@ nodeHeight: 40,
 <Stack gap={16}>
   <H1>Cursor-style canvas</H1>
   <Grid columns={2}>
-    <Text style={{ color: theme.text.primary }}>{layout.width}</Text>
+    <Text style={{ color: appearance.text.primary }}>{layout.width}</Text>
     <Pill active size="sm">OPEN</Pill>
   </Grid>
   <Alert type="warning" title="Risk" message="Check runtime boundaries" />
@@ -454,7 +457,7 @@ nodeHeight: 40,
   <ProgressBar value={75} max={100} label="Coverage" tone="success" />
   <Row style={merged}>
     <Swatch color="purple" title="Runtime" />
-    <Text style={{ color: canvasTokens.textSecondary }}>{colorPalette.length} palette colors</Text>
+    <Text style={{ color: canvasTokens.textSecondary }}>8 palette colors</Text>
   </Row>
   <UsageBar
     topLeftLabel="Context"
@@ -484,7 +487,7 @@ nodeHeight: 40,
     <TextArea value={note} onChange={setNote} rows={4} />
     <Spacer />
   </Row>
-  <Table headers={['A', 'B']} rows={[[theme.bg.elevated, 'ok']]} striped rowTone={['success']} />
+  <Table headers={['A', 'B']} rows={[[appearance.bg.elevated, 'ok']]} striped rowTone={['success']} />
   <Empty description="No remaining gaps" />
 </Stack>
   );
@@ -515,19 +518,19 @@ nodeHeight: 40,
         assert!(html.contains("const Empty"));
         assert!(html.contains("const TextArea"));
         assert!(html.contains("const Spacer"));
-        assert!(html.contains("theme.text.primary"));
+        assert!(html.contains("appearance.text.primary"));
     }
 
     #[test]
-    fn canvas_runtime_supports_cursor_canvas_compat_hooks_and_theme_tokens() {
+    fn canvas_runtime_supports_cursor_canvas_compat_hooks_and_appearance_tokens() {
         let result = compile_canvas_source(
             &source(
                 r#"
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Button, Stack, Text, useHostTheme } from 'cursor/canvas';
+import { Button, Stack, Text, useHostAppearance } from 'cursor/canvas';
 
 export default function Canvas() {
-  const theme = useHostTheme();
+  const appearance = useHostAppearance();
   const rowRef = useRef<HTMLDivElement | null>(null);
   const [open, setOpen] = useState(false);
   const label = useMemo(() => open ? 'Open' : 'Closed', [open]);
@@ -537,8 +540,8 @@ return () => rowRef.current?.removeAttribute('data-effect');
   }, [label]);
   return (
 <Stack gap={8}>
-  <div ref={rowRef} style={{ color: theme.category.gray, background: theme.bg.editor }}>
-    <Text style={{ color: theme.text.quaternary }}>{label}</Text>
+  <div ref={rowRef} style={{ color: appearance.category.gray, background: appearance.bg.editor }}>
+    <Text style={{ color: appearance.text.quaternary }}>{label}</Text>
   </div>
   <Button onClick={() => setOpen(value => !value)}>Toggle</Button>
 </Stack>
@@ -554,7 +557,7 @@ return () => rowRef.current?.removeAttribute('data-effect');
         assert!(html.contains("useState, useRef, useEffect, useCallback, useMemo"));
         assert!(html.contains("category:"));
         assert!(html.contains("gray: '#7a8087'"));
-        assert!(html.contains("tokens: theme"));
+        assert!(html.contains("tokens: appearance"));
         assert!(html.contains("key === 'ref'"));
         assert!(html.contains("function flushEffects()"));
         assert!(html.contains("h(Stack"));

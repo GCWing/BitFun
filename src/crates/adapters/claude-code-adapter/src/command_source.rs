@@ -2,11 +2,13 @@ use bitfun_product_domains::external_sources::{
     EcosystemId, ExternalSourceAssetKind, ExternalSourceContext, ExternalSourceDiagnostic,
     ExternalSourceHealth, ExternalSourceProviderError, ExternalSourceRecord, ExternalSourceScope,
     ExternalWatchRoot, PromptCommandAvailability, PromptCommandDefinition, PromptCommandExpansion,
-    PromptCommandProviderIdentity, PromptCommandProviderSnapshot, PromptCommandSourceProvider,
+    PromptCommandProviderIdentity, PromptCommandProviderSnapshot, PromptCommandShellExpansion,
+    PromptCommandShellInvocation, PromptCommandShellPreference, PromptCommandSourceProvider,
     SourceKey, SourceQualifiedCommandId,
 };
 use bitfun_services_core::markdown::{
-    expand_prompt_template_arguments, prompt_template_expansion_upper_bound, FrontMatterMarkdown,
+    expand_prompt_template_arguments, parse_prompt_shell_directives,
+    prompt_template_expansion_upper_bound, FrontMatterMarkdown,
 };
 use bitfun_services_core::workspace_text::normalize_workspace_relative_path;
 use bitfun_static_hook_support::{
@@ -222,6 +224,7 @@ impl PromptCommandSourceProvider for ClaudeCodeCommandProvider {
 
     fn expand(
         &self,
+        context: &ExternalSourceContext,
         command: &PromptCommandDefinition,
         arguments: &str,
     ) -> Result<PromptCommandExpansion, ExternalSourceProviderError> {
@@ -243,9 +246,50 @@ impl PromptCommandSourceProvider for ClaudeCodeCommandProvider {
                         false,
                     ));
                 }
+                let expanded = expand_prompt_template_arguments(&command.template, arguments);
+                let parsed = parse_prompt_shell_directives(&command.template, &expanded).map_err(
+                    |error| {
+                        ExternalSourceProviderError::new(
+                            "claude.command.shell_structure_invalid",
+                            error,
+                            false,
+                        )
+                    },
+                )?;
+                let shell = if parsed.directives.is_empty() {
+                    None
+                } else {
+                    let workspace = context.workspace_root.as_deref().ok_or_else(|| {
+                        ExternalSourceProviderError::new(
+                            "claude.command.shell_workspace_required",
+                            "Claude Code shell-backed commands require a local workspace",
+                            false,
+                        )
+                    })?;
+                    Some(PromptCommandShellExpansion {
+                        working_directory: self.project_root(workspace),
+                        preference: command
+                            .shell_preference
+                            .clone()
+                            .unwrap_or(claude_shell_preference(None)),
+                        invocations: parsed
+                            .directives
+                            .iter()
+                            .map(|directive| PromptCommandShellInvocation {
+                                range_start: directive.range.start,
+                                range_end: directive.range.end,
+                                command: directive.command.clone(),
+                                can_remember: directive.can_remember,
+                            })
+                            .collect(),
+                    })
+                };
                 Ok(PromptCommandExpansion {
-                    content: expand_prompt_template_arguments(&command.template, arguments),
-                    workspace_file_references: literal_file_references(&command.template),
+                    content: parsed.content,
+                    workspace_file_references: literal_file_references(
+                        &parsed.template_without_directives,
+                    ),
+                    shell,
                 })
             }
             PromptCommandAvailability::Restricted { reason, .. }
@@ -338,6 +382,7 @@ struct ClaudeCommandInput {
     name: String,
     description: String,
     template: String,
+    shell: Option<String>,
     unsupported_fields: Vec<String>,
 }
 
@@ -597,6 +642,7 @@ fn parse_markdown_command(name: &str, content: &str) -> Result<ClaudeCommandInpu
     }
     let mut description = String::new();
     let mut unsupported_fields = Vec::new();
+    let mut shell = None;
     if let Some(metadata) = metadata {
         let mapping = metadata
             .as_mapping()
@@ -623,6 +669,34 @@ fn parse_markdown_command(name: &str, content: &str) -> Result<ClaudeCommandInpu
                         );
                     }
                 }
+                // Claude Code treats this as a permission preapproval hint.
+                // BitFun keeps its own permission policy authoritative, so the
+                // hint is validated but intentionally not projected into the
+                // executable command definition or behavior version.
+                "allowed-tools" => {
+                    if value.as_str().is_none()
+                        && !value
+                            .as_sequence()
+                            .is_some_and(|items| items.iter().all(|item| item.as_str().is_some()))
+                    {
+                        return Err(
+                            "Claude Code command allowed-tools must be a string or string list"
+                                .to_string(),
+                        );
+                    }
+                }
+                "shell" => {
+                    let value = value
+                        .as_str()
+                        .ok_or_else(|| "Claude Code command shell must be a string".to_string())?
+                        .to_ascii_lowercase();
+                    if !matches!(value.as_str(), "bash" | "powershell") {
+                        return Err(
+                            "Claude Code command shell must be 'bash' or 'powershell'".to_string()
+                        );
+                    }
+                    shell = Some(value);
+                }
                 other => unsupported_fields.push(other.to_string()),
             }
         }
@@ -631,6 +705,7 @@ fn parse_markdown_command(name: &str, content: &str) -> Result<ClaudeCommandInpu
         name: name.to_string(),
         description,
         template,
+        shell,
         unsupported_fields,
     })
 }
@@ -640,9 +715,9 @@ fn command_definition(
     input: ClaudeCommandInput,
 ) -> Result<PromptCommandDefinition, ExternalSourceProviderError> {
     let mut required_capabilities = Vec::new();
-    if shell_regex().is_match(&input.template) {
-        required_capabilities.push("command.shell".to_string());
-    }
+    let shell_preference = shell_regex()
+        .is_match(&input.template)
+        .then(|| claude_shell_preference(input.shell.as_deref()));
     if dynamic_variable_regex().is_match(&input.template) {
         required_capabilities.push("command.dynamic_variable".to_string());
     }
@@ -650,7 +725,6 @@ fn command_definition(
     for field in input.unsupported_fields {
         let capability = match field.as_str() {
             "model" => "command.model".to_string(),
-            "allowed-tools" => "command.allowed_tools".to_string(),
             "disallowed-tools" => "command.disallowed_tools".to_string(),
             "context" | "fork" => "command.context".to_string(),
             "hooks" => "command.hooks".to_string(),
@@ -675,9 +749,11 @@ fn command_definition(
         }
     };
     let availability_label = serde_json::to_string(&availability).unwrap_or_default();
+    let shell_preference_label = serde_json::to_string(&shell_preference).unwrap_or_default();
     let content_version = digest([
         input.name.as_str(),
         input.template.as_str(),
+        shell_preference_label.as_str(),
         availability_label.as_str(),
     ]);
     let definition = PromptCommandDefinition {
@@ -687,6 +763,8 @@ fn command_definition(
         name: input.name,
         description: input.description,
         template: input.template,
+        shell_preference,
+        execution_target: Default::default(),
         availability,
         content_version: format!("sha256:{content_version}"),
     };
@@ -698,6 +776,18 @@ fn command_definition(
         )
     })?;
     Ok(definition)
+}
+
+fn claude_shell_preference(shell: Option<&str>) -> PromptCommandShellPreference {
+    if shell == Some("powershell") {
+        PromptCommandShellPreference::RequiredOneOf {
+            executables: vec!["pwsh".to_string(), "powershell".to_string()],
+        }
+    } else {
+        PromptCommandShellPreference::Required {
+            executable: "bash".to_string(),
+        }
+    }
 }
 
 fn shell_regex() -> &'static Regex {

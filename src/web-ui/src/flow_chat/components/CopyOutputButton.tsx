@@ -143,31 +143,37 @@ export const CopyOutputButton: React.FC<CopyOutputButtonProps> = ({
   }
 
   return (
-    <div className={`copy-output-button-group ${className}`}>
+    <div data-bf-component="copy-output-button" data-bf-part="root" data-bf-state={copied ? 'copied' : ''} className={`copy-output-button-group ${className}`}>
       <button
+        data-bf-component="copy-output-button"
+        data-bf-part="action"
+        data-bf-action="copy"
         className={`copy-output-button ${copied ? 'copied' : ''}`}
         onClick={handleCopy}
         title={copied ? t('copyOutput.copiedOutputContent') : t('copyOutput.copyOutputContent')}
         aria-label={copied ? t('copyOutput.copiedOutputContent') : t('copyOutput.copyOutputContent')}
       >
-        <span className="button-icon">
+        <span data-bf-component="copy-output-button" data-bf-part="icon" className="button-icon">
           {copied ? <Check size={14} /> : <Copy size={14} />}
         </span>
-        <span className="button-text">
+        <span data-bf-component="copy-output-button" data-bf-part="text" className="button-text">
           {copied ? t('copyOutput.copied') : t('copyOutput.copy')}
         </span>
       </button>
       
       <Tooltip content={t('copyOutput.openInEditor')}>
         <button
+          data-bf-component="copy-output-button"
+          data-bf-part="action"
+          data-bf-action="edit"
           className="copy-output-button edit-button"
           onClick={handleOpenInEditor}
           aria-label={t('copyOutput.openInEditor')}
         >
-          <span className="button-icon">
+          <span data-bf-component="copy-output-button" data-bf-part="icon" className="button-icon">
             <Edit size={14} />
           </span>
-          <span className="button-text">
+          <span data-bf-component="copy-output-button" data-bf-part="text" className="button-text">
             {t('copyOutput.edit')}
           </span>
         </button>

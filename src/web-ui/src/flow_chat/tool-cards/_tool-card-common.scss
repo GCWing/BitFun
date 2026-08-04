@@ -6,9 +6,9 @@
 .tool-display-compact {
   display: flex;
   align-items: center;
-  gap: var(--flowchat-control-gap);
-  font-size: var(--flowchat-font-size-base);
-  line-height: var(--flowchat-text-line-height);
+  gap: var(--bf-appearance-token-flowchat-control-gap);
+  font-size: var(--bf-appearance-token-flowchat-font-size-base);
+  line-height: var(--bf-appearance-token-flowchat-text-line-height);
   position: relative;
 }
 
@@ -55,13 +55,6 @@
   }
 }
 
-/* ========== Shared header icon variables ========== */
-:root {
-  /* Shared icon & text sizing — dense-command variants only override spacing, not these */
-  --tool-card-action-font-size: var(--flowchat-font-size-sm);
-  --tool-card-action-line-height: var(--flowchat-support-line-height);
-}
-
 /* ========== Shared icon-slot (left rail) ========== */
 .tool-card-icon-slot {
   position: relative;
@@ -70,7 +63,7 @@
   justify-content: center;
   flex-shrink: 0;
   align-self: stretch;
-  width: var(--tool-card-header-icon-slot);
+  width: var(--bf-appearance-token-tool-card-header-icon-slot);
   margin-right: 8px;
   box-sizing: border-box;
   min-height: 0;
@@ -79,10 +72,10 @@
     content: '';
     position: absolute;
     right: 0;
-    top: calc(-1 * var(--tool-card-header-pad-y));
-    bottom: calc(-1 * var(--tool-card-header-pad-y));
+    top: calc(-1 * var(--bf-appearance-token-tool-card-header-pad-y));
+    bottom: calc(-1 * var(--bf-appearance-token-tool-card-header-pad-y));
     width: 0;
-    border-right: 1px solid var(--border-base);
+    border-right: 1px solid var(--bf-appearance-token-border-base);
     pointer-events: none;
     z-index: 0;
   }
@@ -104,7 +97,7 @@
   appearance: none;
 
   &:focus-visible {
-    outline: 2px solid var(--color-accent-500);
+    outline: 2px solid var(--bf-appearance-token-color-accent-500);
     outline-offset: 2px;
     border-radius: 6px;
   }
@@ -147,7 +140,7 @@
   padding: 0;
   opacity: 0;
   pointer-events: none;
-  color: var(--color-text-secondary);
+  color: var(--bf-appearance-token-color-text-secondary);
   transition: opacity 0.18s ease;
 
   svg {
@@ -173,7 +166,7 @@
   transition: color 180ms ease, opacity 180ms ease, transform 180ms ease;
 
   &.tool-card-status-icon--with-divider {
-    border-left: 1px solid var(--border-base);
+    border-left: 1px solid var(--bf-appearance-token-border-base);
   }
 
   svg {
@@ -192,15 +185,15 @@
     width: 16px !important;
     height: 16px !important;
     border-width: 2px !important;
-    box-shadow: 0 0 8px var(--color-accent-100) !important;
+    box-shadow: 0 0 8px var(--bf-appearance-token-color-accent-100) !important;
   }
 
   .icon-completed {
-    color: var(--color-success);
+    color: var(--bf-appearance-token-color-success);
   }
 
   .icon-error {
-    color: var(--color-error);
-    filter: drop-shadow(0 0 4px color-mix(in srgb, var(--color-error) 40%, transparent));
+    color: var(--bf-appearance-token-color-error);
+    filter: drop-shadow(0 0 4px color-mix(in srgb, var(--bf-appearance-token-color-error) 40%, transparent));
   }
 }

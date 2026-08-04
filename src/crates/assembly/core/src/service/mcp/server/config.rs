@@ -4,7 +4,8 @@ use crate::util::errors::BitFunError;
 
 use bitfun_services_integrations::mcp::server::MCPServerConfigValidationError;
 pub use bitfun_services_integrations::mcp::server::{
-    MCPServerConfig, MCPServerOAuthConfig, MCPServerTransport, MCPServerXaaConfig,
+    MCPServerConfig, MCPServerOAuthConfig, MCPServerTimeouts, MCPServerTransport,
+    MCPServerXaaConfig,
 };
 
 impl From<MCPServerConfigValidationError> for BitFunError {

@@ -53,6 +53,22 @@ jobs:
           done < <(git ls-files -z '*.sh' '*.bash')
           exit "$rc"
 
+      - name: Verify minisign download fallback
+        run: |
+          set -euo pipefail
+          test_root="$(mktemp -d)"
+          trap 'rm -rf "$test_root"' EXIT
+          mkdir -p "$test_root/stubs"
+          printf '#!/usr/bin/env bash\nexit 1\n' >"$test_root/stubs/sudo"
+          chmod +x "$test_root/stubs/sudo"
+
+          PATH="$test_root/stubs:/usr/bin:/bin" \
+            RUNNER_TEMP="$test_root" \
+            BITFUN_SIGNING_KEY="YQ==" \
+            bash scripts/sign-release-assets.sh "$test_root/missing-asset"
+
+          "$test_root/bitfun-minisign-0.12/bin/minisign" -v
+
   # ── CLI: independent tests ─────────────────────────────────────────
   cli-test:
     name: CLI Tests (${{ matrix.os }})
@@ -85,14 +101,13 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
 
-      - name: Generate dependency lockfile
-        run: cargo generate-lockfile
-
       - uses: swatinem/rust-cache@v2
         with:
           shared-key: "cli-ci-v2-${{ matrix.cache_key }}"
           cache-bin: false
-          save-if: ${{ github.event_name != 'pull_request' }}
+          # PRs restore trusted caches but never publish merge-ref artifacts.
+          save-if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+          cache-on-failure: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
 
       - name: Run CLI and ACP tests on macOS
         if: runner.os == 'macOS'
@@ -117,7 +132,6 @@ jobs:
   rust-build-check:
     name: Rust Build Check (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
-    needs: frontend-build
     env:
       # Keep the workspace check plus desktop test profiles within hosted-runner disk limits.
       CARGO_INCREMENTAL: "0"
@@ -133,20 +147,11 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - name: Setup OpenSSL (Windows, prebuilt)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: ./scripts/ci/setup-openssl-windows.ps1
-
-      - name: Download frontend build artifacts
-        uses: actions/download-artifact@v7
-        with:
-          name: frontend-dist
-          path: dist
-
-      - name: Create mobile-web dist directory (workaround for Tauri)
+      # Tauri code generation only requires its configured resource roots to
+      # exist during check/test; distributable assets remain frontend-build's owner.
+      - name: Create Tauri resource directories
         shell: bash
-        run: mkdir -p src/mobile-web/dist
+        run: mkdir -p dist src/mobile-web/dist
 
       - name: Install Linux system dependencies (Tauri)
         if: runner.os == 'Linux'
@@ -181,21 +186,20 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
 
-      - name: Generate dependency lockfile
-        run: cargo generate-lockfile
-
       - uses: swatinem/rust-cache@v2
         with:
           shared-key: "ci-check-v3-${{ runner.os }}-no-cargo-bin-v1"
           cache-bin: false
-          # PR caches are scoped to merge refs; main pushes own shared cache refreshes.
-          save-if: ${{ github.event_name != 'pull_request' }}
+          # PR caches are scoped to merge refs; trusted main pushes own shared
+          # refreshes and retain completed dependency builds after late test failures.
+          save-if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+          cache-on-failure: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
 
       - name: Check compilation
         run: cargo check --locked --workspace
 
-      - name: Run core and desktop Rust tests
-        run: cargo test --locked -p bitfun-core -p bitfun-desktop
+      - name: Run core and desktop library tests
+        run: cargo test --locked -p bitfun-core -p bitfun-desktop --lib
 
       # These crates own platform-sensitive behavior that is not exercised by
       # testing bitfun-core/bitfun-desktop alone. Keep their focused contract
@@ -208,7 +212,7 @@ jobs:
         run: cargo test --locked -p bitfun-relay-service
 
       - name: Run subscription authentication tests
-        run: cargo test --locked -p bitfun-ai-adapters --features subscription-auth subscription_auth
+        run: cargo test --locked -p bitfun-ai-adapters --features subscription-auth --lib subscription_auth
 
       # File watching is backed by a different OS API on every platform
       # (ReadDirectoryChangesW / FSEvents / inotify), so watch registration
@@ -221,14 +225,14 @@ jobs:
       # blocking unrelated work.
       - name: Run file watch contract tests
         if: runner.os != 'macOS'
-        run: cargo test --locked -p bitfun-services-integrations --features file-watch
+        run: cargo test --locked -p bitfun-services-integrations --no-default-features --features file-watch --test file_watch_contracts
 
       # Search tools resolve paths and symlinks directly, which also differs
       # across platforms. Scoped to the search module: the glob tests in this
       # crate fail on Windows independently of this branch (walk-root
       # derivation treats separators differently) and need their own fix.
       - name: Run search tool tests
-        run: "cargo test --locked -p tool-runtime search::"
+        run: "cargo test --locked -p tool-runtime --lib search::"
 
   # ── Frontend: build ────────────────────────────────────────────────
   frontend-build:
@@ -301,10 +305,3 @@ jobs:
 
       - name: Build mobile web
         run: pnpm run build:mobile-web
-
-      - name: Upload frontend build artifacts
-        uses: actions/upload-artifact@v6
-        with:
-          name: frontend-dist
-          path: dist
-          retention-days: 1

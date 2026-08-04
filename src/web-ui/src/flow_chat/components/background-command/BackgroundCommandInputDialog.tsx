@@ -63,12 +63,12 @@ export const BackgroundCommandInputDialog: React.FC<BackgroundCommandInputDialog
       closeOnOverlayClick={!isSending}
       contentClassName="background-command-input-dialog__modal"
     >
-      <form className="background-command-input-dialog" onSubmit={handleSubmit}>
-        <div className="background-command-input-dialog__summary">
-          <span className="background-command-input-dialog__summary-label">
+      <form data-bf-component="background-command-input-dialog" data-bf-part="root" data-bf-state={[isSending && 'sending', maskInput && 'masked'].filter(Boolean).join(' ')} className="background-command-input-dialog" onSubmit={handleSubmit}>
+        <div data-bf-component="background-command-input-dialog" data-bf-part="summary" className="background-command-input-dialog__summary">
+          <span data-bf-component="background-command-input-dialog" data-bf-part="summaryLabel" className="background-command-input-dialog__summary-label">
             {t('backgroundCommandInput.commandLabel')}
           </span>
-          <code>{command.command || command.title}</code>
+          <code data-bf-component="background-command-input-dialog" data-bf-part="command">{command.command || command.title}</code>
         </div>
 
         <Textarea
@@ -84,7 +84,7 @@ export const BackgroundCommandInputDialog: React.FC<BackgroundCommandInputDialog
           spellCheck={false}
         />
 
-        <div className="background-command-input-dialog__options">
+        <div data-bf-component="background-command-input-dialog" data-bf-part="options" className="background-command-input-dialog__options">
           <Checkbox
             checked={appendEnter}
             onChange={(event) => setAppendEnter(event.target.checked)}
@@ -99,11 +99,11 @@ export const BackgroundCommandInputDialog: React.FC<BackgroundCommandInputDialog
           />
         </div>
 
-        <p className="background-command-input-dialog__note">
+        <p data-bf-component="background-command-input-dialog" data-bf-part="note" className="background-command-input-dialog__note">
           {t('backgroundCommandInput.privacyNote')}
         </p>
 
-        <div className="background-command-input-dialog__actions">
+        <div data-bf-component="background-command-input-dialog" data-bf-part="actions" className="background-command-input-dialog__actions">
           <Button
             type="button"
             variant="secondary"

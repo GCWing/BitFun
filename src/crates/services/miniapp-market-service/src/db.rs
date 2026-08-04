@@ -158,9 +158,9 @@ impl Database {
     pub(crate) async fn web_session_user(
         &self,
         token: &str,
-    ) -> MarketResult<Option<(AuthenticatedUser, String)>> {
+    ) -> MarketResult<Option<(AuthenticatedUser, String, i64)>> {
         let row = sqlx::query(
-            "SELECT u.id, u.github_id, u.login, u.avatar_url, s.csrf_hash
+            "SELECT u.id, u.github_id, u.login, u.avatar_url, s.csrf_hash, s.expires_at
              FROM web_sessions s
              JOIN users u ON u.id = s.user_id
              WHERE s.token_hash = ? AND s.expires_at > ?",
@@ -172,7 +172,8 @@ impl Database {
         .map_err(MarketError::internal)?;
         Ok(row.map(|row| {
             let csrf_hash = row.get::<String, _>("csrf_hash");
-            (user_from_row(row), csrf_hash)
+            let expires_at = row.get::<i64, _>("expires_at");
+            (user_from_row(row), csrf_hash, expires_at)
         }))
     }
 

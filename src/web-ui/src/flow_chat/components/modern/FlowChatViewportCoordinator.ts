@@ -14,11 +14,14 @@ export interface FlowChatViewportRangeHost {
   }): boolean;
 }
 
+export type FlowChatElementAnchorLease = number;
+
 type ElementAnchor = {
   element: HTMLElement;
   scroller: HTMLElement;
   offsetFromScrollerTop: number;
   preservationPhase: 'active' | 'retained' | null;
+  lease: FlowChatElementAnchorLease;
 };
 
 type PendingElementAnchorRestore = {
@@ -76,6 +79,7 @@ export class FlowChatViewportCoordinator {
   private anchorGuardFrame: number | null = null;
   private pendingElementAnchorRestore: PendingElementAnchorRestore | null = null;
   private rangeHost: FlowChatViewportRangeHost | null = null;
+  private nextElementAnchorLease = 0;
 
   setRangeHost(host: FlowChatViewportRangeHost | null): void {
     this.rangeHost = host;
@@ -110,7 +114,7 @@ export class FlowChatViewportCoordinator {
   }
 
   pinElement(element: HTMLElement | null | undefined): boolean {
-    return this.captureElement(element, 'pinned-item');
+    return this.captureElement(element, 'pinned-item') !== null;
   }
 
   followTail(options?: { force?: boolean }): boolean {
@@ -151,6 +155,12 @@ export class FlowChatViewportCoordinator {
   }
 
   preserveElement(element: HTMLElement | null | undefined): boolean {
+    return this.preserveElementWithLease(element) !== null;
+  }
+
+  preserveElementWithLease(
+    element: HTMLElement | null | undefined,
+  ): FlowChatElementAnchorLease | null {
     this.validateElementAnchor('preserve-element');
     if (!element || this.mode === 'following-tail' || this.mode === 'pinned-item') {
       if (flowChatDiagnostics.isEnabled()) {
@@ -161,13 +171,29 @@ export class FlowChatViewportCoordinator {
           data: () => ({ hasElement: Boolean(element), mode: this.mode }),
         });
       }
-      return false;
+      return null;
     }
 
     return this.captureElement(
       element,
       'preserving-element',
     );
+  }
+
+  releaseElementPreservationLease(
+    lease: FlowChatElementAnchorLease,
+    reason = 'unspecified',
+  ): boolean {
+    this.validateElementAnchor(`release-element-preservation-lease:${reason}`);
+    if (
+      this.mode !== 'preserving-element'
+      || this.elementAnchor?.lease !== lease
+    ) {
+      return false;
+    }
+
+    this.release(reason);
+    return true;
   }
 
   settleElementPreservation(source = 'unspecified'): boolean {
@@ -195,9 +221,9 @@ export class FlowChatViewportCoordinator {
   private captureElement(
     element: HTMLElement | null | undefined,
     mode: 'pinned-item' | 'preserving-element',
-  ): boolean {
+  ): FlowChatElementAnchorLease | null {
     if (!element) {
-      return false;
+      return null;
     }
 
     const scroller = element.closest<HTMLElement>('[data-virtuoso-scroller="true"]');
@@ -210,17 +236,19 @@ export class FlowChatViewportCoordinator {
           data: () => ({ mode }),
         });
       }
-      return false;
+      return null;
     }
 
     const elementRect = element.getBoundingClientRect();
     const scrollerRect = scroller.getBoundingClientRect();
+    const lease = ++this.nextElementAnchorLease;
     this.cancelElementAnchorRestoreWork();
     this.elementAnchor = {
       element,
       scroller,
       offsetFromScrollerTop: elementRect.top - scrollerRect.top,
       preservationPhase: mode === 'preserving-element' ? 'active' : null,
+      lease,
     };
     this.mode = mode;
     this.startAnchorGuard();
@@ -232,6 +260,7 @@ export class FlowChatViewportCoordinator {
         data: () => ({
           mode,
           preservationPhase: this.elementAnchor?.preservationPhase ?? null,
+          lease,
           elementConnected: element.isConnected,
           offsetFromScrollerTop: this.elementAnchor?.offsetFromScrollerTop ?? null,
           scrollTop: scroller.scrollTop,
@@ -240,7 +269,7 @@ export class FlowChatViewportCoordinator {
         }),
       });
     }
-    return true;
+    return lease;
   }
 
   restoreElementAnchor(scroller: HTMLElement, source = 'external'): boolean {
@@ -385,6 +414,11 @@ export class FlowChatViewportCoordinator {
   private validateElementAnchor(source: string): void {
     const anchor = this.elementAnchor;
     if (anchor && (!anchor.element.isConnected || !anchor.scroller.isConnected)) {
+      if (this.mode === 'pinned-item' && anchor.scroller.isConnected) {
+        this.cancelElementAnchorRestoreWork();
+        this.elementAnchor = null;
+        return;
+      }
       this.release(`element-anchor-disconnected:${source}`);
     }
   }

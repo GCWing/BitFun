@@ -36,6 +36,7 @@ import { useSessionModeStore } from '../stores/sessionModeStore';
 import { isMacOSDesktopRuntime } from '@/infrastructure/runtime';
 import { flowChatSessionConfigForWorkspace } from '../utils/projectSessionWorkspace';
 import { notificationService } from '@/shared/notification-system';
+import { AppearanceBackgroundMediaLayer, appearanceRuntime, useAppearance } from '@/infrastructure/appearance';
 import './AppLayout.scss';
 
 type TransitionDirection = 'entering' | 'returning' | null;
@@ -78,6 +79,8 @@ interface WindowModeHint {
 const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
   const { t } = useI18n('components');
   const { t: tCommon } = useI18n('common');
+  const currentAppearance = useAppearance().current;
+  const backgroundMedia = currentAppearance?.backgroundMedia;
   usePermissionRequestNotify();
   const {
     currentWorkspace,
@@ -702,9 +705,23 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
     return (
       <>
         <DailyAppUpdateGate />
-        <Suspense fallback={null}>
-          <ToolbarMode />
-        </Suspense>
+        <div
+          className={`${containerClassName} bitfun-app-layout--toolbar-mode`}
+          data-testid="app-layout"
+          data-bf-component="app-layout"
+          data-bf-part="root"
+          data-bf-state="toolbar"
+          data-bf-background-media={backgroundMedia?.url ? 'video' : undefined}
+        >
+          <AppearanceBackgroundMediaLayer
+            media={backgroundMedia}
+            revision={currentAppearance?.revision}
+            retainRevision={appearanceRuntime.retainAssetRevision}
+          />
+          <Suspense fallback={null}>
+            <ToolbarMode />
+          </Suspense>
+        </div>
       </>
     );
   }
@@ -712,21 +729,35 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
   return (
     <>
       <DailyAppUpdateGate />
-      <div className={containerClassName} data-testid="app-layout">
+      <div
+        className={containerClassName}
+        data-testid="app-layout"
+        data-bf-component="app-layout"
+        data-bf-part="root"
+        data-bf-state={isFullscreen ? 'fullscreen' : undefined}
+        data-bf-background-media={backgroundMedia?.url ? 'video' : undefined}
+      >
+        <AppearanceBackgroundMediaLayer
+          media={backgroundMedia}
+          revision={currentAppearance?.revision}
+          retainRevision={appearanceRuntime.retainAssetRevision}
+        />
         {windowModeHint && (
           <div
             key={windowModeHint.id}
             className="bitfun-window-mode-hint"
+            data-bf-component="app-layout"
+            data-bf-part="windowModeHint"
             role="status"
             aria-live="polite"
           >
-            <span className="bitfun-window-mode-hint__title">{windowModeHint.title}</span>
-            <span className="bitfun-window-mode-hint__detail">{windowModeHint.detail}</span>
+            <span className="bitfun-window-mode-hint__title" data-bf-component="app-layout" data-bf-part="windowModeTitle">{windowModeHint.title}</span>
+            <span className="bitfun-window-mode-hint__detail" data-bf-component="app-layout" data-bf-part="windowModeDetail">{windowModeHint.detail}</span>
           </div>
         )}
 
         {/* Main content — always render WorkspaceBody; WelcomeScene in viewport handles no-workspace state */}
-        <main className="bitfun-app-main-workspace" data-testid="app-main-content">
+        <main className="bitfun-app-main-workspace" data-testid="app-main-content" data-bf-component="app-layout" data-bf-part="main">
           <WorkspaceBody
             onMinimize={canUseNativeWindowControls && !isMacOS ? handleMinimize : undefined}
             onMaximize={canUseNativeWindowControls ? handleMaximize : undefined}

@@ -110,6 +110,17 @@ impl std::error::Error for BoundedDirectoryWalkError {
 pub fn collect_bounded_regular_files(
     root: &Path,
     limits: BoundedDirectoryWalkLimits,
+    matches: impl FnMut(&Path) -> bool,
+) -> Result<Vec<PathBuf>, BoundedDirectoryWalkError> {
+    collect_bounded_regular_files_with_prune(root, limits, |_| true, matches)
+}
+
+/// Iteratively collects matching regular files while allowing callers to prune
+/// known-unrelated directories before they consume traversal limits.
+pub fn collect_bounded_regular_files_with_prune(
+    root: &Path,
+    limits: BoundedDirectoryWalkLimits,
+    mut should_descend: impl FnMut(&Path) -> bool,
     mut matches: impl FnMut(&Path) -> bool,
 ) -> Result<Vec<PathBuf>, BoundedDirectoryWalkError> {
     let metadata = match std::fs::symlink_metadata(root) {
@@ -142,6 +153,9 @@ pub fn collect_bounded_regular_files(
                 continue;
             }
             if metadata.is_dir() {
+                if !should_descend(&path) {
+                    continue;
+                }
                 let next_depth = depth.saturating_add(1);
                 if next_depth > limits.max_depth {
                     return Err(BoundedDirectoryWalkError::LimitExceeded(

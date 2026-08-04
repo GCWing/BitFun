@@ -6,7 +6,7 @@ import type {
   ReviewTokenBudgetMode,
 } from './types';
 import { REVIEW_STRATEGY_PROFILES } from './strategy';
-import { UI_EXCEPTION_ACCENTS } from '@/shared/theme/uiExceptionAccents';
+import { APPEARANCE_DOMAIN_TOKENS } from '@/infrastructure/appearance/appearanceDomainTokens';
 
 export const DEFAULT_REVIEW_TEAM_ID = 'default-review-team';
 export const DEFAULT_REVIEW_TEAM_CONFIG_PATH = 'ai.review_teams.default';
@@ -88,7 +88,7 @@ export const PREDICTIVE_TIMEOUT_BASE_SECONDS: Record<ReviewStrategyLevel, number
   normal: 300,
   deep: 600,
 };
-export const REVIEW_TEAM_MEMBER_ACCENT_DEFAULT = UI_EXCEPTION_ACCENTS.reviewTeam.memberDefault;
+export const REVIEW_TEAM_MEMBER_ACCENT_DEFAULT = APPEARANCE_DOMAIN_TOKENS.reviewTeam.memberDefault;
 
 export const EXTRA_MEMBER_DEFAULTS = {
   roleName: 'User-requested check',
@@ -122,7 +122,7 @@ export const DEFAULT_REVIEW_TEAM_CORE_ROLES: ReviewTeamCoreRoleDefinition[] = [
       'Stay within the selected scope and support conclusions with concrete evidence.',
       'Do not modify files or repeat work already completed by the main review.',
     ],
-    accentColor: UI_EXCEPTION_ACCENTS.reviewTeam.worker,
+    accentColor: APPEARANCE_DOMAIN_TOKENS.reviewTeam.worker,
   },
   {
     key: 'judge',
@@ -136,7 +136,7 @@ export const DEFAULT_REVIEW_TEAM_CORE_ROLES: ReviewTeamCoreRoleDefinition[] = [
       'Check only the claims that need independent validation.',
       'Make sure each retained issue has a safe, practical next step.',
     ],
-    accentColor: UI_EXCEPTION_ACCENTS.reviewTeam.judge,
+    accentColor: APPEARANCE_DOMAIN_TOKENS.reviewTeam.judge,
   },
 ];
 

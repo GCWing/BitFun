@@ -12,6 +12,9 @@ use tokio::sync::RwLock;
 
 use bitfun_core::product_runtime::CoreAgentRuntimeCompatibility;
 use bitfun_core::service::config::get_global_config_service;
+use bitfun_core::service::remote_connect::account::{
+    ensure_relay_session_history_exportable, relay_session_export_metadata,
+};
 use bitfun_core::service::remote_connect::settings_sync;
 use bitfun_core::service::remote_connect::{sync_state, AccountClient};
 
@@ -95,8 +98,7 @@ pub(crate) async fn push_settings_after_local_change() {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub(crate) enum SyncStatus {
     #[default]
     Idle,
@@ -104,7 +106,6 @@ pub(crate) enum SyncStatus {
     Done,
     Failed,
 }
-
 
 #[derive(Debug, Clone)]
 pub(crate) struct SyncProgress {
@@ -317,12 +318,17 @@ pub(crate) async fn run_auto_sync(
         if !account_context_is_current(generation) {
             return Err(anyhow!("account sync cancelled"));
         }
+        if let Err(error) = ensure_relay_session_history_exportable(meta) {
+            tracing::debug!("Skipping CLI account session export: {error}");
+            continue;
+        }
         let turns = compatibility
             .load_persisted_session_turns(&storage_path, &meta.session_id, None)
             .await
             .map_err(|e| anyhow!("load turns: {e}"))?;
+        let metadata = relay_session_export_metadata(meta, turns.len());
         let metadata_json =
-            serde_json::to_value(meta).map_err(|e| anyhow!("serialize metadata: {e}"))?;
+            serde_json::to_value(metadata).map_err(|e| anyhow!("serialize metadata: {e}"))?;
         let turns_json: Vec<serde_json::Value> = turns
             .iter()
             .map(|t| serde_json::to_value(t).unwrap_or(serde_json::Value::Null))
@@ -481,5 +487,21 @@ mod tests {
         .unwrap_err()
         .to_string()
         .contains("HTTP 507"));
+    }
+
+    #[test]
+    fn cli_session_backup_uses_the_shared_import_guard_and_visible_count() {
+        let source = include_str!("account_sync.rs").replace("\r\n", "\n");
+        let export_loop = source
+            .split_once("for meta in local_sessions.iter()")
+            .expect("CLI account Session export loop")
+            .1
+            .split_once("let upload_total = pending_uploads.len()")
+            .expect("CLI account Session export loop boundary")
+            .0;
+
+        assert!(export_loop.contains("ensure_relay_session_history_exportable(meta)"));
+        assert!(export_loop.contains("relay_session_export_metadata(meta, turns.len())"));
+        assert!(export_loop.contains("pending_uploads.push"));
     }
 }

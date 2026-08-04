@@ -1,5 +1,12 @@
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
+import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -8,6 +15,10 @@ import { fileURLToPath } from 'node:url';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const scriptPath = path.join(repoRoot, 'scripts/check-github-config.mjs');
+const requireFromWebUi = createRequire(
+  path.join(repoRoot, 'src/web-ui/package.json'),
+);
+const yaml = requireFromWebUi('yaml');
 
 function createRepo({ workflow, nodeVersionFile }) {
   const root = mkdtempSync(path.join(tmpdir(), 'bitfun-github-config-'));
@@ -190,4 +201,69 @@ jobs:
 
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /GitHub YAML config check passed/);
+});
+
+test('keeps Rust CI independent, restore-only on PRs, and target-focused', () => {
+  const workflow = yaml.parse(
+    readFileSync(path.join(repoRoot, '.github/workflows/ci.yml'), 'utf8'),
+  );
+  const rustJob = workflow.jobs['rust-build-check'];
+  const frontendJob = workflow.jobs['frontend-build'];
+  const trustedMain =
+    "${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}";
+
+  assert.equal(
+    rustJob.needs,
+    undefined,
+    'Rust validation must not wait for the frontend build',
+  );
+  assert.equal(
+    rustJob.steps.some((step) => step.uses?.startsWith('actions/download-artifact@')),
+    false,
+    'Rust validation must not download frontend artifacts',
+  );
+  assert.match(
+    rustJob.steps.find((step) => step.name === 'Create Tauri resource directories')
+      ?.run ?? '',
+    /mkdir -p dist src\/mobile-web\/dist/,
+  );
+  assert.equal(
+    frontendJob.steps.some(
+      (step) =>
+        step.uses?.startsWith('actions/upload-artifact@') &&
+        step.with?.name === 'frontend-dist',
+    ),
+    false,
+    'The frontend build must not upload an artifact with no consumer',
+  );
+
+  for (const jobName of ['cli-test', 'rust-build-check']) {
+    const job = workflow.jobs[jobName];
+    const cache = job.steps.find((step) =>
+      step.uses?.startsWith('swatinem/rust-cache@'),
+    );
+    assert.equal(
+      job.steps.some((step) => step.run?.includes('cargo generate-lockfile')),
+      false,
+      `${jobName} must consume the committed Cargo.lock`,
+    );
+    assert.equal(cache?.with?.['save-if'], trustedMain);
+    assert.equal(cache?.with?.['cache-on-failure'], trustedMain);
+  }
+
+  const commandByStep = new Map(
+    rustJob.steps.map((step) => [step.name, step.run]),
+  );
+  assert.equal(
+    commandByStep.get('Run subscription authentication tests'),
+    'cargo test --locked -p bitfun-ai-adapters --features subscription-auth --lib subscription_auth',
+  );
+  assert.equal(
+    commandByStep.get('Run file watch contract tests'),
+    'cargo test --locked -p bitfun-services-integrations --no-default-features --features file-watch --test file_watch_contracts',
+  );
+  assert.equal(
+    commandByStep.get('Run search tool tests'),
+    'cargo test --locked -p tool-runtime --lib search::',
+  );
 });

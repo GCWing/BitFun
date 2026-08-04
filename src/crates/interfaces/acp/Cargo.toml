@@ -9,14 +9,19 @@ description = "BitFun Agent Client Protocol surface"
 name = "bitfun_acp"
 
 [dependencies]
-bitfun-core = { path = "../../assembly/core", default-features = false, features = ["product-full"] }
+bitfun-core = { path = "../../assembly/core", default-features = false, features = [
+    "agent-runtime",
+    "canvas-runtime",
+    "external-sources",
+    "ssh-remote",
+] }
 bitfun-agent-runtime = { path = "../../execution/agent-runtime" }
 bitfun-agent-tools = { path = "../../execution/tool-contracts" }
 bitfun-events = { path = "../../contracts/events" }
 bitfun-core-types = { path = "../../contracts/core-types" }
 
 agent-client-protocol = { workspace = true }
-tokio = { workspace = true }
+tokio = { workspace = true, features = ["fs", "io-std", "io-util", "macros", "process", "rt", "sync", "time"] }
 tokio-util = { workspace = true, features = ["compat"] }
 futures = { workspace = true }
 async-trait = { workspace = true }
@@ -27,6 +32,9 @@ dashmap = { workspace = true }
 log = { workspace = true }
 uuid = { workspace = true }
 sha2 = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt-multi-thread"] }
 
 [lints]
 workspace = true

@@ -11,7 +11,7 @@ $_diff-padding-desktop: 32px;
   flex-direction: column;
   height: 100%;
   width: 100%;
-  background: var(--color-bg-primary);
+  background: var(--bf-appearance-token-color-bg-primary);
   overflow: hidden;
   position: relative;
 
@@ -20,19 +20,19 @@ $_diff-padding-desktop: 32px;
     align-items: center;
     gap: $size-gap-2;
     padding: $size-gap-3 $size-gap-4;
-    background: var(--color-bg-primary);
-    border: 1px solid var(--color-error-border);
+    background: var(--bf-appearance-token-color-bg-primary);
+    border: 1px solid var(--bf-appearance-token-color-error-border);
     border-radius: 0;
-    border-bottom: 1px solid color-mix(in srgb, var(--color-error) 50%, transparent);
-    color: var(--color-error);
-    font-size: var(--font-size-sm);
+    border-bottom: 1px solid color-mix(in srgb, var(--bf-appearance-token-color-error) 50%, transparent);
+    color: var(--bf-appearance-token-color-error);
+    font-size: var(--bf-appearance-token-font-size-sm);
     font-weight: $font-weight-medium;
     font-family: $font-family-mono;
     animation: git-diff-editor-error-slide-in 0.3s ease-out;
 
     svg {
       flex-shrink: 0;
-      filter: drop-shadow(0 0 8px color-mix(in srgb, var(--color-error) 40%, transparent));
+      filter: drop-shadow(0 0 8px color-mix(in srgb, var(--bf-appearance-token-color-error) 40%, transparent));
     }
   }
 
@@ -47,12 +47,12 @@ $_diff-padding-desktop: 32px;
     border-radius: 6px;
     
     box-shadow: 
-      inset 0 1px 3px var(--color-overlay-black-20),
-      0 0 0 1px var(--color-overlay-white-04);
+      inset 0 1px 3px var(--bf-appearance-token-color-overlay-black-20),
+      0 0 0 1px var(--bf-appearance-token-color-overlay-white-04);
     
     background: linear-gradient(
       180deg,
-      color-mix(in srgb, var(--color-static-white) 1%, transparent) 0%,
+      color-mix(in srgb, var(--bf-appearance-token-color-static-white) 1%, transparent) 0%,
       transparent 100%
     );
     
@@ -83,10 +83,10 @@ $_diff-padding-desktop: 32px;
         outline: none !important;
         border: none !important;
         box-shadow: none !important;
-        color: var(--color-text-muted) !important;
+        color: var(--bf-appearance-token-color-text-muted) !important;
         
         &:hover {
-          color: var(--color-text-secondary) !important;
+          color: var(--bf-appearance-token-color-text-secondary) !important;
           background: transparent !important;
         }
         
@@ -166,21 +166,19 @@ $_diff-padding-desktop: 32px;
           bottom: 0;
           left: 50%;
           width: 1px;
-          background: var(--border-medium);
-          border-left: 1px dashed var(--border-medium);
-          transition:
-            background-color 150ms ease,
-            border-color 150ms ease;
+          background: var(--bf-appearance-token-border-medium);
+          border-left: 1px dashed var(--bf-appearance-token-border-medium);
+          transition: all 0.2s ease;
         }
         
         &:hover::before {
           border-left-style: solid;
-          border-left-color: var(--color-overlay-white-20);
+          border-left-color: var(--bf-appearance-token-color-overlay-white-20);
         }
       }
       
       .monaco-diff-editor.side-by-side .editor.original {
-        border-right: 1px dashed var(--border-medium) !important;
+        border-right: 1px dashed var(--bf-appearance-token-border-medium) !important;
         
         &:hover {
           border-right-style: solid !important;
@@ -188,7 +186,7 @@ $_diff-padding-desktop: 32px;
       }
       
       .monaco-diff-editor.side-by-side .editor.modified {
-        border-left: 1px dashed var(--border-medium) !important;
+        border-left: 1px dashed var(--bf-appearance-token-border-medium) !important;
         
         &:hover {
           border-left-style: solid !important;
@@ -196,17 +194,17 @@ $_diff-padding-desktop: 32px;
       }
       
       .monaco-diff-editor .diffViewport {
-        background: var(--color-overlay-white-04) !important;
+        background: var(--bf-appearance-token-color-overlay-white-04) !important;
       }
       
       .monaco-diff-editor .diagonal-fill {
-        background-color: var(--color-bg-secondary) !important;
+        background-color: var(--bf-appearance-token-color-bg-secondary) !important;
         background-image: repeating-linear-gradient(
           45deg,
           transparent,
           transparent 3px,
-          color-mix(in srgb, var(--color-static-white) 1.5%, transparent) 3px,
-          color-mix(in srgb, var(--color-static-white) 1.5%, transparent) 6px
+          color-mix(in srgb, var(--bf-appearance-token-color-static-white) 1.5%, transparent) 3px,
+          color-mix(in srgb, var(--bf-appearance-token-color-static-white) 1.5%, transparent) 6px
         ) !important;
       }
     }
@@ -217,16 +215,16 @@ $_diff-padding-desktop: 32px;
     top: $size-gap-3;
     right: $size-gap-3;
     padding: $size-gap-2 $size-gap-4;
-    background: var(--color-overlay-black-80);
-    border: 1px solid var(--color-overlay-white-12);
+    background: var(--bf-appearance-token-color-overlay-black-80);
+    border: 1px solid var(--bf-appearance-token-color-overlay-white-12);
     border-radius: $size-radius-base;
-    color: var(--color-text-secondary);
-    font-size: var(--font-size-sm);
+    color: var(--bf-appearance-token-color-text-secondary);
+    font-size: var(--bf-appearance-token-font-size-sm);
     font-family: $font-family-mono;
     z-index: $z-overlay;
     animation: git-diff-editor-fade-in 0.2s ease-out;
     backdrop-filter: blur(4px);
-    box-shadow: 0 2px 8px var(--color-overlay-black-30);
+    box-shadow: 0 2px 8px var(--bf-appearance-token-color-overlay-black-30);
   }
 
   &__processing-overlay {
@@ -235,7 +233,7 @@ $_diff-padding-desktop: 32px;
     left: 0;
     right: 0;
     bottom: 0;
-    background: var(--color-overlay-black-80);
+    background: var(--bf-appearance-token-color-overlay-black-80);
     backdrop-filter: blur(8px);
     display: flex;
     flex-direction: column;
@@ -246,10 +244,10 @@ $_diff-padding-desktop: 32px;
     animation: git-diff-editor-fade-in 0.2s ease-out;
 
     p {
-      font-size: var(--font-size-base);
+      font-size: var(--bf-appearance-token-font-size-base);
       font-weight: $font-weight-medium;
       font-family: $font-family-mono;
-      color: var(--color-text-primary);
+      color: var(--bf-appearance-token-color-text-primary);
       animation: git-diff-editor-pulse $motion-slow ease-in-out infinite;
     }
   }
@@ -257,13 +255,13 @@ $_diff-padding-desktop: 32px;
   &__spinner {
     width: $_diff-spinner-size;
     height: $_diff-spinner-size;
-    border: $_diff-spinner-border solid var(--color-accent-200);
-    border-top-color: var(--color-accent-500);
+    border: $_diff-spinner-border solid var(--bf-appearance-token-color-accent-200);
+    border-top-color: var(--bf-appearance-token-color-accent-500);
     border-radius: $size-radius-full;
     animation: git-diff-editor-spin $motion-lazy $easing-standard infinite;
     box-shadow: 
-      0 0 20px color-mix(in srgb, var(--color-accent-500) 30%, transparent),
-      0 0 40px var(--color-accent-200);
+      0 0 20px color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 30%, transparent),
+      0 0 40px var(--bf-appearance-token-color-accent-200);
   }
 
   &__completed-message {
@@ -285,41 +283,41 @@ $_diff-padding-desktop: 32px;
     height: $_diff-icon-size;
     border-radius: $size-radius-full;
     margin-bottom: $size-gap-6;
-    animation: git-diff-editor-scale-bounce 220ms cubic-bezier(0.23, 1, 0.32, 1);
-    box-shadow: 0 8px 24px var(--color-overlay-black-30);
+    animation: git-diff-editor-scale-bounce 0.5s $easing-standard;
+    box-shadow: 0 8px 24px var(--bf-appearance-token-color-overlay-black-30);
 
     &--accepted {
       background: linear-gradient(135deg, 
-        color-mix(in srgb, var(--color-success) 85%, var(--color-static-white)) 0%,
-        var(--color-success) 100%
+        color-mix(in srgb, var(--bf-appearance-token-color-success) 85%, var(--bf-appearance-token-color-static-white)) 0%,
+        var(--bf-appearance-token-color-success) 100%
       );
-      color: var(--color-static-white);
+      color: var(--bf-appearance-token-color-static-white);
       box-shadow: 
-        0 8px 24px color-mix(in srgb, var(--git-color-staged) 40%, transparent),
-        0 0 40px color-mix(in srgb, var(--git-color-staged) 20%, transparent);
+        0 8px 24px color-mix(in srgb, var(--bf-appearance-token-git-color-staged) 40%, transparent),
+        0 0 40px color-mix(in srgb, var(--bf-appearance-token-git-color-staged) 20%, transparent);
     }
 
     &--rejected {
       background: linear-gradient(135deg, 
-        color-mix(in srgb, var(--color-error) 85%, var(--color-static-white)) 0%,
-        var(--color-error) 100%
+        color-mix(in srgb, var(--bf-appearance-token-color-error) 85%, var(--bf-appearance-token-color-static-white)) 0%,
+        var(--bf-appearance-token-color-error) 100%
       );
-      color: var(--color-static-white);
+      color: var(--bf-appearance-token-color-static-white);
       box-shadow: 
-        0 8px 24px color-mix(in srgb, var(--color-error) 40%, transparent),
-        0 0 40px color-mix(in srgb, var(--color-error) 20%, transparent);
+        0 8px 24px color-mix(in srgb, var(--bf-appearance-token-color-error) 40%, transparent),
+        0 0 40px color-mix(in srgb, var(--bf-appearance-token-color-error) 20%, transparent);
     }
 
     svg {
-      filter: drop-shadow(0 2px 8px var(--color-overlay-black-30));
+      filter: drop-shadow(0 2px 8px var(--bf-appearance-token-color-overlay-black-30));
     }
   }
 
   &__completed-title {
-    font-size: var(--font-size-2xl);
+    font-size: var(--bf-appearance-token-font-size-2xl);
     font-weight: $font-weight-semibold;
     font-family: $font-family-mono;
-    color: var(--color-text-primary);
+    color: var(--bf-appearance-token-color-text-primary);
     margin-bottom: $size-gap-4;
     animation: git-diff-editor-slide-up 220ms cubic-bezier(0.23, 1, 0.32, 1) 40ms both;
   }
@@ -331,24 +329,24 @@ $_diff-padding-desktop: 32px;
     animation: git-diff-editor-slide-up 220ms cubic-bezier(0.23, 1, 0.32, 1) 70ms both;
 
     .git-diff-editor__file-path {
-      font-size: var(--font-size-base);
+      font-size: var(--bf-appearance-token-font-size-base);
       font-family: $font-family-mono;
-      color: var(--color-text-muted);
+      color: var(--bf-appearance-token-color-text-muted);
     }
   }
 
   &__result-text {
-    font-size: var(--font-size-base);
+    font-size: var(--bf-appearance-token-font-size-base);
     font-weight: $font-weight-medium;
     font-family: $font-family-mono;
     margin-top: $size-gap-3;
 
     &--success {
-      color: var(--color-success);
+      color: var(--bf-appearance-token-color-success);
     }
 
     &--warning {
-      color: var(--color-warning);
+      color: var(--bf-appearance-token-color-warning);
     }
   }
 }
@@ -436,7 +434,7 @@ $_diff-padding-desktop: 32px;
     }
 
     &__completed-title {
-      font-size: var(--font-size-xl);
+      font-size: var(--bf-appearance-token-font-size-xl);
     }
 
     &__spinner {
@@ -450,8 +448,8 @@ $_diff-padding-desktop: 32px;
 @media (prefers-contrast: high) {
   .git-diff-editor {
     &__spinner {
-      border-color: var(--color-text-muted);
-      border-top-color: var(--color-text-primary);
+      border-color: var(--bf-appearance-token-color-text-muted);
+      border-top-color: var(--bf-appearance-token-color-text-primary);
     }
 
     &__completed-icon {

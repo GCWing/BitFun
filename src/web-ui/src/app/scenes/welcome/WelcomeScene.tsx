@@ -108,102 +108,116 @@ const WelcomeScene: React.FC = () => {
     }
   }, [formatLocaleDate, t]);
 
-  return (
-    <div className="welcome-scene" data-testid="welcome-scene">
-      <div className="welcome-scene__content">
-        <div className="welcome-scene__greeting">
-          <h1 className="welcome-scene__title">{t('welcomeScene.firstTime.title')}</h1>
-          <p className="welcome-scene__greeting-label">{welcomeMessage}</p>
+  const recentWorkspaceSection = (
+    <section className="welcome-scene__switch" data-bf-scene="welcome" data-bf-part="recentSection">
+      <div className="welcome-scene__switch-header" data-bf-scene="welcome" data-bf-part="sectionHeader">
+        <span className="welcome-scene__section-label" data-bf-scene="welcome" data-bf-part="sectionLabel">
+          <Clock size={12} />
+          {t('welcomeScene.recentWorkspaces')}
+        </span>
+        <div className="welcome-scene__switch-actions" data-bf-scene="welcome" data-bf-part="actions">
+          <button
+            className="welcome-scene__link-btn"
+            onClick={() => void handleOpenFolder()}
+            disabled={isSelecting}
+            data-testid="welcome-open-project-btn"
+            data-bf-scene="welcome"
+            data-bf-part="action"
+          >
+            <FolderOpen size={12} />
+            {t('welcomeScene.openOtherProject')}
+          </button>
+          <button
+            className="welcome-scene__link-btn"
+            onClick={handleNewProject}
+            data-testid="welcome-new-project-btn"
+            data-bf-scene="welcome"
+            data-bf-part="action"
+          >
+            <FolderPlus size={12} />
+            {t('welcomeScene.newProject')}
+          </button>
         </div>
+      </div>
 
-        <div className="welcome-scene__divider" />
-
-        <section className="welcome-scene__switch">
-          <div className="welcome-scene__switch-header">
-            <span className="welcome-scene__section-label">
-              <Clock size={12} />
-              {t('welcomeScene.recentWorkspaces')}
-            </span>
-            <div className="welcome-scene__switch-actions">
-              <button
-                className="welcome-scene__link-btn"
-                onClick={() => void handleOpenFolder()}
-                disabled={isSelecting}
-                data-testid="welcome-open-project-btn"
+      {displayRecentWorkspaces.length > 0 ? (
+        <div className="welcome-scene__recent-list" data-testid="welcome-recent-workspace-list" data-bf-scene="welcome" data-bf-part="recentList">
+          {displayRecentWorkspaces.map(ws => {
+            const { hostPrefix, folderLabel, tooltip } = getRecentWorkspaceLineParts(ws);
+            return (
+              <div
+                key={ws.id}
+                className="welcome-scene__recent-row"
+                data-testid="welcome-recent-workspace-row"
+                data-workspace-id={ws.id}
+                data-bf-scene="welcome"
+                data-bf-part="recentRow"
               >
-                <FolderOpen size={12} />
-                {t('welcomeScene.openOtherProject')}
-              </button>
-              <button
-                className="welcome-scene__link-btn"
-                onClick={handleNewProject}
-                data-testid="welcome-new-project-btn"
-              >
-                <FolderPlus size={12} />
-                {t('welcomeScene.newProject')}
-              </button>
-            </div>
-          </div>
-
-          {displayRecentWorkspaces.length > 0 ? (
-            <div className="welcome-scene__recent-list" data-testid="welcome-recent-workspace-list">
-              {displayRecentWorkspaces.map(ws => {
-                const { hostPrefix, folderLabel, tooltip } = getRecentWorkspaceLineParts(ws);
-                return (
-                <div
-                  key={ws.id}
-                  className="welcome-scene__recent-row"
-                  data-testid="welcome-recent-workspace-row"
-                  data-workspace-id={ws.id}
-                >
-                  <Tooltip content={tooltip} placement="right" followCursor>
-                    <button
-                      type="button"
-                      className="welcome-scene__recent-item"
-                      onClick={() => { void handleSwitchWorkspace(ws); }}
-                      data-testid="welcome-recent-workspace-open"
-                      data-workspace-id={ws.id}
-                    >
-                      <FolderOpen size={13} />
-                      <span className="welcome-scene__recent-name">
-                        {hostPrefix ? (
-                          <>
-                            <span className="welcome-scene__recent-host">{hostPrefix}</span>
-                            <span className="welcome-scene__recent-host-sep" aria-hidden>
-                              {' · '}
-                            </span>
-                          </>
-                        ) : null}
-                        {folderLabel}
-                      </span>
-                    </button>
-                  </Tooltip>
+                <Tooltip content={tooltip} placement="right" followCursor>
                   <button
                     type="button"
-                    className="welcome-scene__recent-time-btn"
-                    title={t('welcomeScene.removeFromRecent')}
-                    aria-label={t('welcomeScene.removeFromRecent')}
-                    onClick={() => { void handleRemoveFromRecent(ws.id); }}
-                    data-testid="welcome-recent-workspace-remove"
+                    className="welcome-scene__recent-item"
+                    onClick={() => { void handleSwitchWorkspace(ws); }}
+                    data-testid="welcome-recent-workspace-open"
                     data-workspace-id={ws.id}
+                    data-bf-scene="welcome"
+                    data-bf-part="recentItem"
                   >
-                    <span className="welcome-scene__recent-time-btn__label">
-                      {formatDate(ws.lastAccessed)}
-                    </span>
-                    <span className="welcome-scene__recent-time-btn__icon" aria-hidden>
-                      <Trash2 size={15} strokeWidth={2} />
+                    <FolderOpen size={13} />
+                    <span className="welcome-scene__recent-name" data-bf-scene="welcome" data-bf-part="recentName">
+                      {hostPrefix ? (
+                        <>
+                          <span className="welcome-scene__recent-host">{hostPrefix}</span>
+                          <span className="welcome-scene__recent-host-sep" aria-hidden>
+                            {' · '}
+                          </span>
+                        </>
+                      ) : null}
+                      {folderLabel}
                     </span>
                   </button>
-                </div>
-                );
-              })}
-            </div>
-          ) : (
-            <p className="welcome-scene__no-recent" data-testid="welcome-recent-workspace-empty">
-              {t('welcomeScene.noRecentWorkspaces')}
-            </p>
-          )}
-        </section>
+                </Tooltip>
+                <button
+                  type="button"
+                  className="welcome-scene__recent-time-btn"
+                  title={t('welcomeScene.removeFromRecent')}
+                  aria-label={t('welcomeScene.removeFromRecent')}
+                  onClick={() => { void handleRemoveFromRecent(ws.id); }}
+                  data-testid="welcome-recent-workspace-remove"
+                  data-workspace-id={ws.id}
+                  data-bf-scene="welcome"
+                  data-bf-part="recentMeta"
+                >
+                  <span className="welcome-scene__recent-time-btn__label">
+                    {formatDate(ws.lastAccessed)}
+                  </span>
+                  <span className="welcome-scene__recent-time-btn__icon" aria-hidden>
+                    <Trash2 size={15} strokeWidth={2} />
+                  </span>
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <p className="welcome-scene__no-recent" data-testid="welcome-recent-workspace-empty" data-bf-scene="welcome" data-bf-part="empty">
+          {t('welcomeScene.noRecentWorkspaces')}
+        </p>
+      )}
+    </section>
+  );
+
+  return (
+    <div className="welcome-scene" data-testid="welcome-scene" data-bf-scene="welcome" data-bf-part="root">
+      <div className="welcome-scene__content" data-bf-scene="welcome" data-bf-part="content">
+        <div className="welcome-scene__greeting" data-bf-scene="welcome" data-bf-part="greeting">
+          <h1 className="welcome-scene__title" data-bf-scene="welcome" data-bf-part="title">{t('welcomeScene.firstTime.title')}</h1>
+          <p className="welcome-scene__greeting-label" data-bf-scene="welcome" data-bf-part="subtitle">{welcomeMessage}</p>
+        </div>
+
+        <div className="welcome-scene__divider" data-bf-scene="welcome" data-bf-part="divider" />
+
+        {recentWorkspaceSection}
 
       </div>
     </div>

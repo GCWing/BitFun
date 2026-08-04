@@ -1,5 +1,9 @@
 use crate::{
-    command_source::strip_jsonc, local_source_paths::user_config_dir,
+    command_source::strip_jsonc,
+    local_source_paths::{
+        local_source_plan, LocalConfigDirectoryKind, LocalConfigDocument, LocalConfigDocumentKind,
+        LocalSourcePlanItem, OpenCodeLocalConfigOptions,
+    },
     source_adapter::statically_discover_hook_events,
 };
 use bitfun_product_domains::external_hook_catalog::{
@@ -14,14 +18,12 @@ use bitfun_product_domains::external_sources::{
     ExternalSourceDiagnosticSeverity, ExternalSourceHealth, ExternalSourceProviderError,
     ExternalSourceScope, SourceKey,
 };
-use bitfun_static_hook_support::{
-    bounded_project_ancestors, read_bounded_file, regular_file_exists, BoundedFileRead,
-};
+use bitfun_services_core::bounded_fs::BoundedTextRead;
+use bitfun_static_hook_support::{read_bounded_file, BoundedFileRead};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
-use std::collections::BTreeSet;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 const PROVIDER_ID: &str = "opencode.hooks";
 const ECOSYSTEM_ID: &str = "opencode";
@@ -31,9 +33,6 @@ const MAX_HOOK_ENTRIES: usize = 2048;
 const MAX_PLUGIN_FILE_BYTES: usize = 512 * 1024;
 const MAX_CONFIG_FILE_BYTES: usize = 1024 * 1024;
 const MAX_PACKAGE_DECLARATIONS: usize = 128;
-const MAX_PROJECT_ANCESTORS: usize = 32;
-const GLOBAL_CONFIG_NAMES: &[&str] = &["config.json", "opencode.json", "opencode.jsonc"];
-const DIRECTORY_CONFIG_NAMES: &[&str] = &["opencode.json", "opencode.jsonc"];
 
 #[derive(Debug, Clone)]
 pub struct OpenCodeHookProviderOptions {
@@ -46,16 +45,12 @@ pub struct OpenCodeHookProviderOptions {
 
 impl OpenCodeHookProviderOptions {
     pub fn from_environment() -> Self {
-        let home = dirs::home_dir();
-        let user_config_dir = user_config_dir(
-            std::env::var_os("XDG_CONFIG_HOME").map(PathBuf::from),
-            home.clone(),
-        );
+        let config = OpenCodeLocalConfigOptions::from_environment();
         Self {
-            user_config_dir,
-            legacy_user_config_dir: home.map(|home| home.join(".opencode")),
-            explicit_config_dir: std::env::var_os("OPENCODE_CONFIG_DIR").map(PathBuf::from),
-            project_config_enabled: !environment_truthy("OPENCODE_DISABLE_PROJECT_CONFIG"),
+            user_config_dir: config.user_config_dir,
+            legacy_user_config_dir: config.legacy_user_config_dir,
+            explicit_config_dir: config.explicit_config_dir,
+            project_config_enabled: config.project_config_enabled,
             project_root_override: None,
         }
     }
@@ -74,15 +69,6 @@ pub struct OpenCodeHookProvider {
 impl OpenCodeHookProvider {
     pub fn new(options: OpenCodeHookProviderOptions) -> Self {
         Self { options }
-    }
-
-    fn project_roots(&self, workspace_root: &Path) -> Vec<PathBuf> {
-        let boundary = self
-            .options
-            .project_root_override
-            .as_deref()
-            .unwrap_or(workspace_root);
-        bounded_project_ancestors(workspace_root, boundary, MAX_PROJECT_ANCESTORS)
     }
 }
 
@@ -114,59 +100,19 @@ impl ExternalHookSourceProvider for OpenCodeHookProvider {
             ));
         }
 
-        let mut layers = vec![HookLayer::new(
-            self.options.user_config_dir.clone(),
-            ExternalSourceScope::UserGlobal,
-            "OpenCode user configuration",
-            "OpenCode user plugins",
-            GLOBAL_CONFIG_NAMES,
-            true,
-        )];
-        if let Some(path) = &self.options.legacy_user_config_dir {
-            layers.push(HookLayer::new(
-                path.clone(),
-                ExternalSourceScope::UserGlobal,
-                "OpenCode legacy configuration",
-                "OpenCode legacy plugins",
-                GLOBAL_CONFIG_NAMES,
-                true,
-            ));
-        }
-        if self.options.project_config_enabled {
-            if let Some(workspace_root) = &context.workspace_root {
-                for project_root in self.project_roots(workspace_root) {
-                    layers.push(HookLayer::new(
-                        project_root.clone(),
-                        ExternalSourceScope::Project,
-                        "OpenCode project configuration",
-                        "OpenCode project plugins",
-                        DIRECTORY_CONFIG_NAMES,
-                        false,
-                    ));
-                    layers.push(HookLayer::new(
-                        project_root.join(".opencode"),
-                        ExternalSourceScope::Project,
-                        "OpenCode project directory configuration",
-                        "OpenCode project plugins",
-                        DIRECTORY_CONFIG_NAMES,
-                        true,
-                    ));
-                }
-            }
-        }
-        // OpenCode applies OPENCODE_CONFIG_DIR after automatically discovered
-        // project directories, so preserve that precedence in the projection.
-        if let Some(path) = &self.options.explicit_config_dir {
-            layers.push(HookLayer::new(
-                path.clone(),
-                ExternalSourceScope::WorkspaceLocal,
-                "OpenCode explicit configuration",
-                "OpenCode explicit plugins",
-                DIRECTORY_CONFIG_NAMES,
-                true,
-            ));
-        }
-        deduplicate_layers(&mut layers);
+        let config = OpenCodeLocalConfigOptions {
+            user_config_dir: self.options.user_config_dir.clone(),
+            legacy_user_config_dir: self.options.legacy_user_config_dir.clone(),
+            explicit_config_file: None,
+            explicit_config_dir: self.options.explicit_config_dir.clone(),
+            inline_config_content: None,
+            project_config_enabled: self.options.project_config_enabled,
+        };
+        let layers = local_source_plan(
+            &config,
+            context.workspace_root.as_deref(),
+            self.options.project_root_override.as_deref(),
+        );
 
         let mut sources = Vec::new();
         let mut entries = Vec::new();
@@ -179,27 +125,34 @@ impl ExternalHookSourceProvider for OpenCodeHookProvider {
         let mut directory_limit_reported = false;
         let mut entry_limit_reported = false;
         for layer in layers {
-            discover_package_declarations(
-                &layer,
-                &mut remaining_packages,
-                &mut package_limit_reported,
-                &mut sources,
-                &mut diagnostics,
-            )?;
-            if layer.scan_plugin_dirs {
-                for directory_name in ["plugin", "plugins"] {
-                    discover_plugin_files(
-                        &layer,
-                        directory_name,
-                        &mut remaining_files,
-                        &mut remaining_entries,
-                        &mut file_limit_reported,
-                        &mut directory_limit_reported,
-                        &mut entry_limit_reported,
-                        &mut sources,
-                        &mut entries,
-                        &mut diagnostics,
-                    )?;
+            match layer {
+                LocalSourcePlanItem::Config(document) => discover_package_declarations(
+                    &document,
+                    &mut remaining_packages,
+                    &mut package_limit_reported,
+                    &mut sources,
+                    &mut diagnostics,
+                )?,
+                LocalSourcePlanItem::Directory(directory) => {
+                    let layer = HookLayer::new(
+                        directory.path,
+                        directory.scope,
+                        plugin_label(directory.kind),
+                    );
+                    for directory_name in ["plugin", "plugins"] {
+                        discover_plugin_files(
+                            &layer,
+                            directory_name,
+                            &mut remaining_files,
+                            &mut remaining_entries,
+                            &mut file_limit_reported,
+                            &mut directory_limit_reported,
+                            &mut entry_limit_reported,
+                            &mut sources,
+                            &mut entries,
+                            &mut diagnostics,
+                        )?;
+                    }
                 }
             }
         }
@@ -226,126 +179,140 @@ impl ExternalHookSourceProvider for OpenCodeHookProvider {
 struct HookLayer {
     root: PathBuf,
     scope: ExternalSourceScope,
-    config_label: &'static str,
     plugin_label: &'static str,
-    config_names: &'static [&'static str],
-    scan_plugin_dirs: bool,
 }
 
 impl HookLayer {
-    fn new(
-        root: PathBuf,
-        scope: ExternalSourceScope,
-        config_label: &'static str,
-        plugin_label: &'static str,
-        config_names: &'static [&'static str],
-        scan_plugin_dirs: bool,
-    ) -> Self {
+    fn new(root: PathBuf, scope: ExternalSourceScope, plugin_label: &'static str) -> Self {
         Self {
             root,
             scope,
-            config_label,
             plugin_label,
-            config_names,
-            scan_plugin_dirs,
         }
     }
 }
 
-fn deduplicate_layers(layers: &mut Vec<HookLayer>) {
-    let mut seen = BTreeSet::new();
-    layers.retain(|layer| seen.insert(layer.root.clone()));
+fn plugin_label(kind: LocalConfigDirectoryKind) -> &'static str {
+    match kind {
+        LocalConfigDirectoryKind::User => "OpenCode user plugins",
+        LocalConfigDirectoryKind::Project => "OpenCode project plugins",
+        LocalConfigDirectoryKind::Legacy => "OpenCode legacy plugins",
+        LocalConfigDirectoryKind::Explicit => "OpenCode explicit plugins",
+    }
 }
 
 fn discover_package_declarations(
-    layer: &HookLayer,
+    document: &LocalConfigDocument,
     remaining_packages: &mut usize,
     package_limit_reported: &mut bool,
     sources: &mut Vec<ExternalHookSource>,
     diagnostics: &mut Vec<ExternalSourceDiagnostic>,
 ) -> Result<(), ExternalSourceProviderError> {
-    for config_name in layer.config_names {
-        let config_path = layer.root.join(config_name);
-        match regular_file_exists(&config_path) {
-            Ok(true) => {}
-            Ok(false) => continue,
-            Err(error) => {
-                return Err(ExternalSourceProviderError::new(
-                    "opencode.hook.config_metadata_failed",
-                    format!("OpenCode Hook configuration metadata is unavailable: {error}"),
-                    true,
-                ))
-            }
-        }
-        let bytes = match read_bounded_file(&config_path, MAX_CONFIG_FILE_BYTES) {
-            Ok(BoundedFileRead::Content(bytes)) => bytes,
-            Ok(BoundedFileRead::TooLarge) => {
-                diagnostics.push(hook_warning(
-                    "opencode.hook.config_too_large",
-                    "OpenCode Hook configuration exceeds the 1 MiB inspection limit",
-                    None,
-                ));
-                continue;
-            }
-            Err(error) => {
-                return Err(ExternalSourceProviderError::new(
-                    "opencode.hook.config_unreadable",
-                    format!("OpenCode Hook configuration could not be read: {error}"),
-                    true,
-                ))
-            }
-        };
-        let value = std::str::from_utf8(&bytes)
-            .ok()
-            .and_then(|source| serde_json::from_str::<Value>(&strip_jsonc(source)).ok());
-        let Some(value) = value else {
+    let content = match document.read_bounded(MAX_CONFIG_FILE_BYTES) {
+        Ok(BoundedTextRead::Content(content)) => content,
+        Ok(BoundedTextRead::TooLarge) => {
             diagnostics.push(hook_warning(
-                "opencode.hook.config_parse_failed",
-                "OpenCode Hook configuration is not valid JSON or JSONC",
+                "opencode.hook.config_too_large",
+                "OpenCode Hook configuration exceeds the 1 MiB inspection limit",
                 None,
             ));
-            continue;
-        };
-        let Some(packages) = value.get("plugin").and_then(Value::as_array) else {
-            continue;
-        };
-        for (index, package) in packages.iter().enumerate() {
-            if *remaining_packages == 0 {
-                if !*package_limit_reported {
-                    diagnostics.push(hook_warning(
-                        "opencode.hook.package_limit",
-                        "Additional OpenCode plugin declarations were omitted after the 128 item inspection limit",
-                        None,
-                    ));
-                    *package_limit_reported = true;
-                }
-                return Ok(());
-            }
-            *remaining_packages -= 1;
-            let Some(_specifier) = plugin_specifier(package) else {
-                continue;
-            };
-            let source_key = source_key("package", &format!("{}:{index}", config_path.display()));
-            let diagnostic = hook_info(
-                "opencode.hook.package_declared_only",
-                "OpenCode plugin is declared, but its Hook exports are not inspected until a separate runtime host resolves the declaration",
-                Some(source_key.clone()),
-            );
-            sources.push(ExternalHookSource {
-                key: source_key.clone(),
-                ecosystem_id: ecosystem_id(),
-                display_name: "OpenCode configured plugin".to_string(),
-                source_kind: ExternalHookSourceKind::PackageDeclaration,
-                scope: layer.scope,
-                location_hint: format!("{}/{}", layer.config_label, config_name),
-                health: ExternalSourceHealth::Partial,
-                content_version: content_hash(b"package-declaration:redacted"),
-                diagnostics: vec![diagnostic.clone()],
-            });
-            diagnostics.push(diagnostic);
+            return Ok(());
         }
+        Ok(BoundedTextRead::InvalidUtf8) => {
+            diagnostics.push(hook_warning(
+                "opencode.hook.config_parse_failed",
+                "OpenCode Hook configuration is not valid UTF-8",
+                None,
+            ));
+            return Ok(());
+        }
+        Err(error) => {
+            return Err(ExternalSourceProviderError::new(
+                "opencode.hook.config_unreadable",
+                format!("OpenCode Hook configuration could not be read: {error}"),
+                true,
+            ))
+        }
+    };
+    let value = serde_json::from_str::<Value>(&strip_jsonc(&content));
+    let Ok(value) = value else {
+        diagnostics.push(hook_warning(
+            "opencode.hook.config_parse_failed",
+            "OpenCode Hook configuration is not valid JSON or JSONC",
+            None,
+        ));
+        return Ok(());
+    };
+    let Some(packages) = value.get("plugin").and_then(Value::as_array) else {
+        return Ok(());
+    };
+    for (index, package) in packages.iter().enumerate() {
+        if *remaining_packages == 0 {
+            if !*package_limit_reported {
+                diagnostics.push(hook_warning(
+                    "opencode.hook.package_limit",
+                    "Additional OpenCode plugin declarations were omitted after the 128 item inspection limit",
+                    None,
+                ));
+                *package_limit_reported = true;
+            }
+            return Ok(());
+        }
+        *remaining_packages -= 1;
+        let Some(_specifier) = plugin_specifier(package) else {
+            continue;
+        };
+        let source_key = source_key("package", &format!("{}:{index}", document.identity()));
+        let diagnostic = hook_info(
+            "opencode.hook.package_declared_only",
+            "OpenCode plugin is declared, but its Hook exports are not inspected until a separate runtime host resolves the declaration",
+            Some(source_key.clone()),
+        );
+        sources.push(ExternalHookSource {
+            key: source_key.clone(),
+            ecosystem_id: ecosystem_id(),
+            display_name: "OpenCode configured plugin".to_string(),
+            source_kind: ExternalHookSourceKind::PackageDeclaration,
+            scope: document.scope,
+            location_hint: config_location_hint(document),
+            health: ExternalSourceHealth::Partial,
+            content_version: content_hash(b"package-declaration:redacted"),
+            diagnostics: vec![diagnostic.clone()],
+        });
+        diagnostics.push(diagnostic);
     }
     Ok(())
+}
+
+fn config_label(kind: LocalConfigDocumentKind) -> &'static str {
+    match kind {
+        LocalConfigDocumentKind::User => "OpenCode user configuration",
+        LocalConfigDocumentKind::ExplicitFile => "OpenCode explicit configuration",
+        LocalConfigDocumentKind::Project
+        | LocalConfigDocumentKind::Directory(LocalConfigDirectoryKind::Project) => {
+            "OpenCode project configuration"
+        }
+        LocalConfigDocumentKind::Directory(LocalConfigDirectoryKind::Legacy) => {
+            "OpenCode legacy configuration"
+        }
+        LocalConfigDocumentKind::Directory(LocalConfigDirectoryKind::Explicit) => {
+            "OpenCode explicit directory configuration"
+        }
+        LocalConfigDocumentKind::Directory(LocalConfigDirectoryKind::User) => {
+            "OpenCode user configuration"
+        }
+        LocalConfigDocumentKind::Inline => "OpenCode inline configuration",
+    }
+}
+
+fn config_location_hint(document: &LocalConfigDocument) -> String {
+    let label = config_label(document.kind);
+    document
+        .file_path()
+        .and_then(|path| path.file_name())
+        .and_then(|name| name.to_str())
+        .map(|name| format!("{label}/{name}"))
+        .unwrap_or_else(|| label.to_string())
 }
 
 fn plugin_specifier(value: &Value) -> Option<&str> {
@@ -762,10 +729,4 @@ fn hook_info(code: &str, message: &str, source: Option<SourceKey>) -> ExternalSo
         message: message.to_string(),
         source,
     }
-}
-
-fn environment_truthy(name: &str) -> bool {
-    std::env::var(name)
-        .map(|value| matches!(value.to_ascii_lowercase().as_str(), "1" | "true" | "yes"))
-        .unwrap_or(false)
 }

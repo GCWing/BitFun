@@ -3,8 +3,8 @@
   flex-direction: column;
   height: 100%;
   width: 100%;
-  background: var(--color-bg-primary);
-  color: var(--color-text-primary);
+  background: var(--bf-appearance-token-color-bg-primary);
+  color: var(--bf-appearance-token-color-text-primary);
 
   &--loading,
   &--error,
@@ -24,13 +24,13 @@
 
     p {
       margin: 0;
-      color: var(--color-text-secondary);
+      color: var(--bf-appearance-token-color-text-secondary);
     }
 
     button {
       padding: 8px 16px;
-      background: var(--color-accent-500);
-      color: var(--color-static-white);
+      background: var(--bf-appearance-token-color-accent-500);
+      color: var(--bf-appearance-token-color-static-white);
       border: none;
       border-radius: 4px;
       cursor: pointer;
@@ -45,8 +45,8 @@
   &__spinner {
     width: 32px;
     height: 32px;
-    border: 3px solid var(--color-overlay-white-12);
-    border-top-color: var(--color-accent-500);
+    border: 3px solid var(--bf-appearance-token-color-overlay-white-12);
+    border-top-color: var(--bf-appearance-token-color-accent-500);
     border-radius: 50%;
     animation: spin 0.8s linear infinite;
   }
@@ -56,8 +56,8 @@
     align-items: center;
     justify-content: space-between;
     padding: 12px 16px;
-    border-bottom: 1px solid var(--border-base);
-    background: var(--color-bg-secondary);
+    border-bottom: 1px solid var(--bf-appearance-token-border-base);
+    background: var(--bf-appearance-token-color-bg-secondary);
     flex-shrink: 0;
   }
 
@@ -78,8 +78,8 @@
     align-items: center;
     gap: 4px;
     padding: 4px 8px;
-    background: var(--color-accent-500);
-    color: var(--color-static-white);
+    background: var(--bf-appearance-token-color-accent-500);
+    color: var(--bf-appearance-token-color-static-white);
     border-radius: 4px;
     font-size: 12px;
     font-weight: 500;
@@ -99,13 +99,13 @@
 
   &__search-count {
     font-size: 12px;
-    color: var(--color-text-secondary);
+    color: var(--bf-appearance-token-color-text-secondary);
     white-space: nowrap;
     padding: 0 8px;
     font-family: 'SF Mono', 'Monaco', 'Courier New', monospace;
 
     &--no-results {
-      color: var(--color-text-muted);
+      color: var(--bf-appearance-token-color-text-muted);
     }
   }
 
@@ -119,7 +119,7 @@
     background: transparent;
     border: none;
     border-radius: 4px;
-    color: var(--color-text-secondary);
+    color: var(--bf-appearance-token-color-text-secondary);
     cursor: pointer;
     transition:
       transform 140ms cubic-bezier(0.23, 1, 0.32, 1),
@@ -127,8 +127,8 @@
       color 140ms ease;
 
     &:hover:not(:disabled) {
-      background: var(--element-bg-hover);
-      color: var(--color-text-primary);
+      background: var(--bf-appearance-token-element-bg-hover);
+      color: var(--bf-appearance-token-color-text-primary);
     }
 
     &:active:not(:disabled) {
@@ -160,55 +160,55 @@
     transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
     
     &:hover {
-      background: var(--color-overlay-white-04);
+      background: var(--bf-appearance-token-color-overlay-white-04);
     }
 
     &--selected {
-      background: var(--color-accent-100);
-      border-left: 2px solid var(--color-accent-500);
+      background: var(--bf-appearance-token-color-accent-100);
+      border-left: 2px solid var(--bf-appearance-token-color-accent-500);
       z-index: 2;
 
       &:hover {
-        background: var(--color-accent-200);
+        background: var(--bf-appearance-token-color-accent-200);
       }
     }
 
     &--search-match {
-      background: color-mix(in srgb, var(--color-warning) 6%, transparent);
-      border-left: 2px solid color-mix(in srgb, var(--color-warning) 40%, transparent);
+      background: color-mix(in srgb, var(--bf-appearance-token-color-warning) 6%, transparent);
+      border-left: 2px solid color-mix(in srgb, var(--bf-appearance-token-color-warning) 40%, transparent);
 
       &:hover {
-        background: color-mix(in srgb, var(--color-warning) 10%, transparent);
+        background: color-mix(in srgb, var(--bf-appearance-token-color-warning) 10%, transparent);
       }
     }
 
     &--current-search-match {
-      background: color-mix(in srgb, var(--color-warning) 15%, transparent);
-      border-left: 3px solid var(--color-warning);
-      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-warning) 30%, transparent);
+      background: color-mix(in srgb, var(--bf-appearance-token-color-warning) 15%, transparent);
+      border-left: 3px solid var(--bf-appearance-token-color-warning);
+      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--bf-appearance-token-color-warning) 30%, transparent);
       animation: search-highlight 0.4s ease-out;
       z-index: 3;
 
       &:hover {
-        background: color-mix(in srgb, var(--color-warning) 20%, transparent);
+        background: color-mix(in srgb, var(--bf-appearance-token-color-warning) 20%, transparent);
       }
 
       &.git-graph-view__hit-area--selected {
         background: linear-gradient(
           90deg,
-          color-mix(in srgb, var(--color-warning) 20%, transparent),
-          var(--color-accent-200)
+          color-mix(in srgb, var(--bf-appearance-token-color-warning) 20%, transparent),
+          var(--bf-appearance-token-color-accent-200)
         );
-        border-left: 3px solid var(--color-warning);
+        border-left: 3px solid var(--bf-appearance-token-color-warning);
         box-shadow:
-          inset 0 0 0 1px color-mix(in srgb, var(--color-warning) 30%, transparent),
-          inset 3px 0 0 0 var(--color-accent-500);
+          inset 0 0 0 1px color-mix(in srgb, var(--bf-appearance-token-color-warning) 30%, transparent),
+          inset 3px 0 0 0 var(--bf-appearance-token-color-accent-500);
 
         &:hover {
           background: linear-gradient(
             90deg,
-            color-mix(in srgb, var(--color-warning) 25%, transparent),
-            var(--color-accent-200)
+            color-mix(in srgb, var(--bf-appearance-token-color-warning) 25%, transparent),
+            var(--bf-appearance-token-color-accent-200)
           );
         }
       }
@@ -221,19 +221,19 @@
     gap: 12px;
     padding: 0 16px;
     cursor: pointer;
-    border-bottom: 1px solid var(--border-base);
+    border-bottom: 1px solid var(--bf-appearance-token-border-base);
     transition: background 0.15s, box-shadow 0.15s;
-    background: var(--color-bg-primary);
+    background: var(--bf-appearance-token-color-bg-primary);
 
     &:hover {
-      background: var(--element-bg-hover);
-      box-shadow: 0 1px 3px var(--color-overlay-black-12);
+      background: var(--bf-appearance-token-element-bg-hover);
+      box-shadow: 0 1px 3px var(--bf-appearance-token-color-overlay-black-12);
       z-index: 1;
     }
 
     &--selected {
-      background: var(--color-accent-100) !important;
-      box-shadow: 0 2px 4px var(--color-overlay-black-15);
+      background: var(--bf-appearance-token-color-accent-100) !important;
+      box-shadow: 0 2px 4px var(--bf-appearance-token-color-overlay-black-15);
       z-index: 2;
     }
 
@@ -268,26 +268,26 @@
 
     &:hover {
       transform: scale(1.05);
-      box-shadow: 0 2px 4px var(--color-overlay-black-20);
+      box-shadow: 0 2px 4px var(--bf-appearance-token-color-overlay-black-20);
     }
 
     &--branch {
-      background: var(--color-accent-600);
-      color: var(--color-static-white);
+      background: var(--bf-appearance-token-color-accent-600);
+      color: var(--bf-appearance-token-color-static-white);
     }
 
     &--remote {
-      background: var(--color-purple-600);
-      color: var(--color-static-white);
+      background: var(--bf-appearance-token-color-purple-600);
+      color: var(--bf-appearance-token-color-static-white);
     }
 
     &--tag {
-      background: var(--git-color-changes);
-      color: var(--color-static-white);
+      background: var(--bf-appearance-token-git-color-changes);
+      color: var(--bf-appearance-token-color-static-white);
     }
 
     &--current {
-      box-shadow: 0 0 0 2px var(--color-bg-primary),
+      box-shadow: 0 0 0 2px var(--bf-appearance-token-color-bg-primary),
                   0 0 0 4px currentColor;
       animation: pulse 2s ease-in-out infinite;
     }
@@ -311,7 +311,7 @@
     align-items: center;
     gap: 12px;
     font-size: 12px;
-    color: var(--color-text-secondary);
+    color: var(--bf-appearance-token-color-text-secondary);
     flex-shrink: 0;
   }
 
@@ -329,7 +329,7 @@
   &__commit-hash {
     font-family: 'Courier New', monospace;
     padding: 2px 6px;
-    background: var(--color-bg-tertiary);
+    background: var(--bf-appearance-token-color-bg-tertiary);
     border-radius: 4px;
     white-space: nowrap;
   }
@@ -349,15 +349,15 @@
       padding: 4px;
       background: transparent;
       border: none;
-      color: var(--color-text-secondary);
+      color: var(--bf-appearance-token-color-text-secondary);
       cursor: pointer;
       display: flex;
       align-items: center;
       border-radius: 4px;
 
       &:hover {
-        background: var(--element-bg-hover);
-        color: var(--color-text-primary);
+        background: var(--bf-appearance-token-element-bg-hover);
+        color: var(--bf-appearance-token-color-text-primary);
       }
     }
   }
@@ -380,11 +380,11 @@
 
 @keyframes search-highlight {
   0% {
-    background: color-mix(in srgb, var(--color-warning) 40%, transparent);
+    background: color-mix(in srgb, var(--bf-appearance-token-color-warning) 40%, transparent);
     transform: scaleY(1.05);
   }
   100% {
-    background: color-mix(in srgb, var(--color-warning) 15%, transparent);
+    background: color-mix(in srgb, var(--bf-appearance-token-color-warning) 15%, transparent);
     transform: scaleY(1);
   }
 }

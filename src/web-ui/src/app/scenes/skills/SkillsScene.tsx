@@ -229,33 +229,41 @@ const SkillsScene: React.FC = () => {
   }, [installedTotalPages]);
 
   return (
-    <div className="bitfun-skills-scene" data-testid="agent-skill-panel">
-      <div className="skills-tabs-bar" data-testid="skills-tabs">
-        <div className="skills-tabs-bar__tabs">
+    <div className="bitfun-skills-scene" data-testid="agent-skill-panel" data-bf-scene="skills" data-bf-part="root" data-bf-tab={activeTab}>
+      <div className="skills-tabs-bar" data-testid="skills-tabs" data-bf-scene="skills" data-bf-part="header" data-bf-tab={activeTab}>
+        <div className="skills-tabs-bar__tabs" data-bf-scene="skills" data-bf-part="tabs">
           <button
             type="button"
             className={`skills-tabs-bar__tab ${activeTab === 'installed' ? 'is-active' : ''}`}
             onClick={() => setActiveTab('installed')}
+            data-bf-scene="skills"
+            data-bf-part="tab"
+            data-bf-tab="installed"
+            data-bf-state={activeTab === 'installed' ? 'active' : undefined}
           ><span>{t('installed.titleAll')}</span></button>
-          <span className="skills-tabs-bar__divider" />
+          <span className="skills-tabs-bar__divider" data-bf-scene="skills" data-bf-part="tabDivider" />
           <button
             type="button"
             className={`skills-tabs-bar__tab ${activeTab === 'discover' ? 'is-active' : ''}`}
             disabled={!desktopConfigAvailable}
             onClick={() => setActiveTab('discover')}
+            data-bf-scene="skills"
+            data-bf-part="tab"
+            data-bf-tab="discover"
+            data-bf-state={activeTab === 'discover' ? 'active' : undefined}
           ><span>{t('market.title')}</span></button>
         </div>
       </div>
 
-      <div className="skills-page">
+      <div className="skills-page" data-bf-scene="skills" data-bf-part="content" data-bf-tab={activeTab}>
 
         {activeTab === 'installed' && (
-          <div className="skills-installed">
-            {desktopConfigAvailable && <aside className="skills-sidebar">
-              <div className="skills-sidebar__header">
-                <h2 className="skills-sidebar__title">{t('installed.titleAll')}</h2>
+          <div className="skills-installed" data-bf-scene="skills" data-bf-part="installed">
+            {desktopConfigAvailable && <aside className="skills-sidebar" data-bf-scene="skills" data-bf-part="sidebar">
+              <div className="skills-sidebar__header" data-bf-scene="skills" data-bf-part="sidebarHeader">
+                <h2 className="skills-sidebar__title" data-bf-scene="skills" data-bf-part="sidebarTitle">{t('installed.titleAll')}</h2>
               </div>
-              <nav className="skills-sidebar__nav">
+              <nav className="skills-sidebar__nav" data-bf-scene="skills" data-bf-part="sidebarNav">
                 {CATEGORIES.map((cat) => {
                   const count = installed.counts[cat.id];
                   const isEmpty = count === 0;
@@ -265,24 +273,31 @@ const SkillsScene: React.FC = () => {
                       type="button"
                       className={`skills-sidebar__item ${installedFilter === cat.id ? 'is-active' : ''} ${isEmpty ? 'is-empty' : ''}`}
                       onClick={() => setInstalledFilter(cat.id)}
+                      data-bf-scene="skills"
+                      data-bf-part="sidebarItem"
+                      data-bf-category={cat.id}
+                      data-bf-state={[
+                        installedFilter === cat.id && 'active',
+                        isEmpty && 'empty',
+                      ].filter(Boolean).join(' ') || undefined}
                     >
-                      <span className="skills-sidebar__item-icon">{cat.icon}</span>
-                      <span className="skills-sidebar__item-label">{t(cat.labelKey)}</span>
-                      <span className="skills-sidebar__item-count">{isEmpty ? '—' : count}</span>
+                      <span className="skills-sidebar__item-icon" data-bf-scene="skills" data-bf-part="sidebarItemIcon">{cat.icon}</span>
+                      <span className="skills-sidebar__item-label" data-bf-scene="skills" data-bf-part="sidebarItemLabel">{t(cat.labelKey)}</span>
+                      <span className="skills-sidebar__item-count" data-bf-scene="skills" data-bf-part="sidebarItemCount">{isEmpty ? '—' : count}</span>
                     </button>
                   );
                 })}
               </nav>
-              <div className="skills-sidebar__footer">
-                <p className="skills-sidebar__hint">
+              <div className="skills-sidebar__footer" data-bf-scene="skills" data-bf-part="sidebarFooter">
+                <p className="skills-sidebar__hint" data-bf-scene="skills" data-bf-part="sidebarHint">
                   {t(CATEGORIES.find((c) => c.id === installedFilter)?.descKey ?? 'categories.all')}
                 </p>
               </div>
             </aside>}
 
-            <div className="skills-main">
+            <div className="skills-main" data-bf-scene="skills" data-bf-part="main">
               {!desktopConfigAvailable ? (
-                <div className="skills-main__empty" data-testid="skills-management-unavailable">
+                <div className="skills-main__empty" data-testid="skills-management-unavailable" data-bf-scene="skills" data-bf-part="empty">
                   <Package size={28} strokeWidth={1.2} />
                   <span>{t(remoteConnectionActive ? 'list.remoteUnavailable' : 'list.desktopUnavailable')}</span>
                 </div>
@@ -290,7 +305,7 @@ const SkillsScene: React.FC = () => {
                 <SkillsSuiteView />
               ) : (
                 <>
-                  <div className="skills-main__toolbar">
+                  <div className="skills-main__toolbar" data-bf-scene="skills" data-bf-part="toolbar">
                     <Search
                       className="skills-main__toolbar-search"
                       value={installedSearch}
@@ -304,30 +319,41 @@ const SkillsScene: React.FC = () => {
                       type="button"
                       className={`skills-main__chip-btn${hideDuplicates ? ' is-active' : ''}`}
                       onClick={() => setHideDuplicates(!hideDuplicates)}
+                      data-bf-scene="skills"
+                      data-bf-part="filterAction"
+                      data-bf-state={hideDuplicates ? 'active' : undefined}
                     >
                       <Filter size={13} />
                       <span>{t('toolbar.hideDuplicates')}</span>
                     </button>
-                    <button type="button" className="skills-main__add-btn" onClick={toggleAddForm}>
+                    <button
+                      type="button"
+                      className="skills-main__add-btn"
+                      onClick={toggleAddForm}
+                      data-bf-scene="skills"
+                      data-bf-part="addAction"
+                    >
                       <Plus size={13} />
                       <span>{t('toolbar.addTooltip')}</span>
                     </button>
                   </div>
 
                   {installed.loading && (
-                    <div className="skills-main__loading" aria-busy="true" aria-label={t('list.loading')}>
+                    <div className="skills-main__loading" aria-busy="true" aria-label={t('list.loading')} data-bf-scene="skills" data-bf-part="loading">
                       {Array.from({ length: 8 }).map((_, i) => (
                         <div
                           key={`ins-sk-${i}`}
                           className="skills-card-skeleton"
                           style={{ '--surface-stagger-index': i } as React.CSSProperties}
+                          data-bf-scene="skills"
+                          data-bf-part="skeleton"
                         />
                       ))}
                     </div>
                   )}
 
                   {!installed.loading && installed.error && (
-                    <div className="skills-main__empty skills-main__empty--error">
+                    <div className="skills-main__empty skills-main__empty--error" data-bf-scene="skills" data-bf-part="error">
                       <Package size={28} strokeWidth={1.2} />
                       <span>{t('list.loadFailed')}</span>
                       <Button
@@ -341,7 +367,7 @@ const SkillsScene: React.FC = () => {
                   )}
 
                   {!installed.loading && !installed.error && installedFiltered.length === 0 && (
-                    <div className="skills-main__empty" data-testid="skill-list-empty">
+                    <div className="skills-main__empty" data-testid="skill-list-empty" data-bf-scene="skills" data-bf-part="empty">
                       <Package size={28} strokeWidth={1.2} />
                       <span>
                         {installed.skills.length === 0
@@ -353,7 +379,7 @@ const SkillsScene: React.FC = () => {
 
                   {!installed.loading && !installed.error && (
                     <>
-                      <div className="skills-main__grid" data-testid="skill-list">
+                      <div className="skills-main__grid" data-testid="skill-list" data-bf-scene="skills" data-bf-part="list">
                         {pagedInstalledSkills.map((skill, index) => (
                           <div
                             key={skill.key}
@@ -381,15 +407,22 @@ const SkillsScene: React.FC = () => {
                             data-skill-name={skill.name}
                             data-skill-level={skill.level}
                             data-skill-builtin={skill.isBuiltin ? 'true' : 'false'}
+                            data-bf-scene="skills"
+                            data-bf-part="installedCard"
+                            data-bf-level={skill.level}
+                            data-bf-state={[
+                              skill.isShadowed && 'shadowed',
+                              skill.isBuiltin && 'builtin',
+                            ].filter(Boolean).join(' ') || undefined}
                           >
-                            <div className="skills-card__top">
-                              <div className="skills-card__icon">
+                            <div className="skills-card__top" data-bf-scene="skills" data-bf-part="installedCardTop">
+                              <div className="skills-card__icon" data-bf-scene="skills" data-bf-part="installedCardIcon">
                                 <Puzzle size={18} strokeWidth={1.6} />
                               </div>
-                              <div className="skills-card__info">
-                                <span className="skills-card__name" data-testid="skill-list-item-title">{skill.name}</span>
+                              <div className="skills-card__info" data-bf-scene="skills" data-bf-part="installedCardInfo">
+                                <span className="skills-card__name" data-testid="skill-list-item-title" data-bf-scene="skills" data-bf-part="installedCardName">{skill.name}</span>
                                 {skill.description?.trim() && (
-                                  <span className="skills-card__desc" data-testid="skill-list-item-description">{skill.description}</span>
+                                  <span className="skills-card__desc" data-testid="skill-list-item-description" data-bf-scene="skills" data-bf-part="installedCardDescription">{skill.description}</span>
                                 )}
                               </div>
                               <div className="skills-card__status-badges">
@@ -408,7 +441,7 @@ const SkillsScene: React.FC = () => {
                               </div>
                             </div>
 
-                            <div className="skills-card__meta">
+                            <div className="skills-card__meta" data-bf-scene="skills" data-bf-part="installedCardMeta">
                               <Badge variant="neutral">
                                 {getSkillSourceLabel(skill, t('list.item.unknownSource'))}
                               </Badge>
@@ -443,6 +476,8 @@ const SkillsScene: React.FC = () => {
                               className="skills-card__actions"
                               onClick={(e) => e.stopPropagation()}
                               onKeyDown={(e) => e.stopPropagation()}
+                              data-bf-scene="skills"
+                              data-bf-part="installedCardActions"
                             >
                               {skill.level === 'user' && (
                                 <div className="skills-card__global-toggle">
@@ -473,6 +508,8 @@ const SkillsScene: React.FC = () => {
                                   onClick={() => setDeleteTarget(skill)}
                                   aria-label={t('list.item.deleteTooltip')}
                                   title={t('list.item.deleteTooltip')}
+                                  data-bf-scene="skills"
+                                  data-bf-part="installedCardDelete"
                                 >
                                   <Trash2 size={13} />
                                 </button>
@@ -483,17 +520,19 @@ const SkillsScene: React.FC = () => {
                       </div>
 
                       {installedFiltered.length > 0 && installedTotalPages > 1 && (
-                        <div className="skills-installed__pagination">
+                        <div className="skills-installed__pagination" data-bf-scene="skills" data-bf-part="pagination">
                           <button
                             type="button"
                             className="skills-installed__page-btn"
                             onClick={() => setInstalledListPage((p) => Math.max(0, p - 1))}
                             disabled={currentInstalledPage === 0}
                             aria-label={t('market.pagination.prev')}
+                            data-bf-scene="skills"
+                            data-bf-part="pageButton"
                           >
                             <ChevronLeft size={14} />
                           </button>
-                          <span className="skills-installed__page-info">
+                          <span className="skills-installed__page-info" data-bf-scene="skills" data-bf-part="pageInfo">
                             {t('market.pagination.info', {
                               current: currentInstalledPage + 1,
                               total: installedTotalPages,
@@ -505,6 +544,8 @@ const SkillsScene: React.FC = () => {
                             onClick={() => setInstalledListPage((p) => Math.min(installedTotalPages - 1, p + 1))}
                             disabled={currentInstalledPage >= installedTotalPages - 1}
                             aria-label={t('market.pagination.next')}
+                            data-bf-scene="skills"
+                            data-bf-part="pageButton"
                           >
                             <ChevronRight size={14} />
                           </button>
@@ -519,14 +560,14 @@ const SkillsScene: React.FC = () => {
         )}
 
         {desktopConfigAvailable && activeTab === 'discover' && (
-          <div className="skills-discover">
-            <div className="skills-discover__hero">
-              <div className="skills-discover__hero-content">
-                <h1 className="skills-discover__title">{t('market.title')}</h1>
-                <p className="skills-discover__subtitle">
+          <div className="skills-discover" data-bf-scene="skills" data-bf-part="discover">
+            <div className="skills-discover__hero" data-bf-scene="skills" data-bf-part="discoverHero">
+              <div className="skills-discover__hero-content" data-bf-scene="skills" data-bf-part="discoverHeroContent">
+                <h1 className="skills-discover__title" data-bf-scene="skills" data-bf-part="discoverTitle">{t('market.title')}</h1>
+                <p className="skills-discover__subtitle" data-bf-scene="skills" data-bf-part="discoverSubtitle">
                   {t('market.subtitle')}
                 </p>
-                <div className="skills-discover__search-wrapper">
+                <div className="skills-discover__search-wrapper" data-bf-scene="skills" data-bf-part="discoverSearch">
                   <Search
                     className="skills-discover__search"
                     value={searchDraft}
@@ -542,40 +583,44 @@ const SkillsScene: React.FC = () => {
               </div>
             </div>
 
-            <div className="skills-discover__content">
+            <div className="skills-discover__content" data-bf-scene="skills" data-bf-part="discoverContent">
               {market.marketLoading && (
-                <div className="skills-discover__grid" aria-busy="true" aria-label={t('list.loading')}>
+                <div className="skills-discover__grid" aria-busy="true" aria-label={t('list.loading')} data-bf-scene="skills" data-bf-part="loading">
                   {Array.from({ length: 12 }).map((_, i) => (
                     <div
                       key={`mkt-sk-${i}`}
                       className="skills-discover__skeleton-card"
                       style={{ '--surface-stagger-index': i } as React.CSSProperties}
+                      data-bf-scene="skills"
+                      data-bf-part="skeleton"
                     />
                   ))}
                 </div>
               )}
 
               {!market.marketLoading && market.marketError && (
-                <div className="skills-discover__empty skills-discover__empty--error">
+                <div className="skills-discover__empty skills-discover__empty--error" data-bf-scene="skills" data-bf-part="error">
                   <Package size={28} strokeWidth={1.5} />
                   <span>{market.marketError}</span>
                 </div>
               )}
 
               {!market.marketLoading && !market.marketError && market.loadingMore && (
-                <div className="skills-discover__grid" aria-busy="true" aria-label={t('list.loading')}>
+                <div className="skills-discover__grid" aria-busy="true" aria-label={t('list.loading')} data-bf-scene="skills" data-bf-part="loading">
                   {Array.from({ length: 12 }).map((_, i) => (
                     <div
                       key={`mkt-page-sk-${i}`}
                       className="skills-discover__skeleton-card"
                       style={{ '--surface-stagger-index': i } as React.CSSProperties}
+                      data-bf-scene="skills"
+                      data-bf-part="skeleton"
                     />
                   ))}
                 </div>
               )}
 
               {!market.marketLoading && !market.marketError && !market.loadingMore && market.marketSkills.length === 0 && (
-                <div className="skills-discover__empty" data-testid="skill-list-empty">
+                <div className="skills-discover__empty" data-testid="skill-list-empty" data-bf-scene="skills" data-bf-part="empty">
                   <Package size={28} strokeWidth={1.5} />
                   <span>{marketQuery ? t('market.empty.noMatch') : t('market.empty.noSkills')}</span>
                 </div>
@@ -584,14 +629,14 @@ const SkillsScene: React.FC = () => {
               {!market.marketLoading && !market.marketError && !market.loadingMore && market.marketSkills.length > 0 && (
                 <>
                   {marketQuery && (
-                    <div className="skills-discover__results-info">
+                    <div className="skills-discover__results-info" data-bf-scene="skills" data-bf-part="resultsInfo">
                       <span>
                         {t('market.resultsInfo', { query: marketQuery, count: market.totalLoaded })}
                       </span>
                     </div>
                   )}
 
-                  <div className="skills-discover__grid" data-testid="skill-list">
+                  <div className="skills-discover__grid" data-testid="skill-list" data-bf-scene="skills" data-bf-part="list">
                     {market.marketSkills.map((skill, index) => {
                       const isInstalled = installedSkillNames.has(skill.name);
                       const isDownloading = market.downloadingPackage === skill.installId;
@@ -644,17 +689,19 @@ const SkillsScene: React.FC = () => {
                   </div>
 
                   {(market.totalPages > 1 || market.hasMore) && (
-                    <div className="skills-discover__pagination">
+                    <div className="skills-discover__pagination" data-bf-scene="skills" data-bf-part="pagination">
                       <button
                         type="button"
                         className="skills-discover__page-btn"
                         onClick={market.goToPrevPage}
                         disabled={market.currentPage === 0 || market.loadingMore}
                         aria-label={t('market.pagination.prev')}
+                        data-bf-scene="skills"
+                        data-bf-part="pageButton"
                       >
                         <ChevronLeft size={14} />
                       </button>
-                      <span className="skills-discover__page-info">
+                      <span className="skills-discover__page-info" data-bf-scene="skills" data-bf-part="pageInfo">
                         {market.hasMore
                           ? t('market.pagination.infoMore', { current: market.currentPage + 1 })
                           : t('market.pagination.info', { current: market.currentPage + 1, total: market.totalPages })}
@@ -665,6 +712,8 @@ const SkillsScene: React.FC = () => {
                         onClick={() => void market.goToNextPage()}
                         disabled={(!market.hasMore && market.currentPage >= market.totalPages - 1) || market.loadingMore}
                         aria-label={t('market.pagination.next')}
+                        data-bf-scene="skills"
+                        data-bf-part="pageButton"
                       >
                         <ChevronRight size={14} />
                       </button>

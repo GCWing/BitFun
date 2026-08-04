@@ -136,6 +136,99 @@ describe('sessionToVirtualItems explore grouping', () => {
     expect(items.map(item => item.type)).toEqual(['user-message', 'explore-group']);
   });
 
+  it('projects the absolute Turn index for a sparse history-window message', () => {
+    const session = makeSession({
+      sessionId: 'history-window-session',
+      isPartial: true,
+      loadedTurnCount: 1,
+      totalTurnCount: 20,
+      dialogTurns: [{
+        id: 'turn-5',
+        sessionId: 'history-window-session',
+        backendTurnIndex: 40,
+        userMessage: {
+          id: 'user-5',
+          content: 'Older window prompt',
+          timestamp: 900,
+        },
+        modelRounds: [],
+        status: 'error',
+        startTime: 900,
+      }],
+      turnCatalog: {
+        schemaVersion: 1,
+        sessionId: 'history-window-session',
+        revision: 'catalog-1',
+        totalTurnCount: 20,
+        complete: false,
+        entries: [{
+          ordinal: 4,
+          storageTurnIndex: 40,
+          preview: 'Older window prompt',
+          previewTruncated: false,
+        }],
+      },
+    });
+
+    const userMessage = sessionToVirtualItems(session).find(item => item.type === 'user-message');
+
+    expect(userMessage).toMatchObject({
+      type: 'user-message',
+      turnId: 'turn-5',
+      absoluteTurnIndex: 5,
+      turnStatus: 'error',
+    });
+  });
+
+  it('invalidates a cached Turn projection when catalog ordinals are repaired', () => {
+    const dialogTurns = [{
+      id: 'turn-5',
+      sessionId: 'catalog-repair-session',
+      backendTurnIndex: 40,
+      userMessage: {
+        id: 'user-5',
+        content: 'Older window prompt',
+        timestamp: 900,
+      },
+      modelRounds: [],
+      status: 'completed' as const,
+      startTime: 900,
+    }];
+    const initialSession = makeSession({
+      sessionId: 'catalog-repair-session',
+      isPartial: true,
+      loadedTurnCount: 1,
+      totalTurnCount: 20,
+      dialogTurns,
+    });
+    const repairedSession = makeSession({
+      ...initialSession,
+      dialogTurns,
+      turnCatalog: {
+        schemaVersion: 1,
+        sessionId: 'catalog-repair-session',
+        revision: 'catalog-2',
+        totalTurnCount: 20,
+        complete: false,
+        entries: [{
+          ordinal: 4,
+          storageTurnIndex: 40,
+          turnId: 'turn-5',
+          preview: 'Older window prompt',
+          previewTruncated: false,
+        }],
+      },
+    });
+
+    const initialUserMessage = sessionToVirtualItems(initialSession)
+      .find(item => item.type === 'user-message');
+    const repairedUserMessage = sessionToVirtualItems(repairedSession)
+      .find(item => item.type === 'user-message');
+
+    expect(initialUserMessage).toMatchObject({ absoluteTurnIndex: 41 });
+    expect(repairedUserMessage).toMatchObject({ absoluteTurnIndex: 5 });
+  });
+
   it('keeps trailing assistant text visible after collapsible tool history', () => {
     const round = makeRound({
       id: 'round-with-trailing-answer',

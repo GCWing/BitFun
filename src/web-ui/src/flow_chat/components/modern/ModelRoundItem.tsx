@@ -8,6 +8,7 @@
  */
 
 import React, { useMemo, useState, useCallback, useEffect, useLayoutEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { Copy, Check, CircleAlert } from 'lucide-react';
 import type { ModelRound, ModelRoundAttempt, ModelRoundAttemptDiagnostic, FlowItem, FlowTextItem, FlowToolItem, FlowThinkingItem, TokenUsage, ToolRejectOptions } from '../../types/flow-chat';
@@ -41,6 +42,8 @@ import { buildModelRoundUsageMeta } from '../../utils/tokenUsageDisplay';
 import { buildDialogTurnCopyText } from '../../utils/dialogTurnCopy';
 import type { TranscriptExportScope } from '../../utils/dialogTranscriptExport';
 import { buildTranscriptExportLabels } from '../../utils/transcriptExportLabels';
+import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
+import { useAnchoredPopoverPosition } from '@/shared/utils/useAnchoredPopoverPosition';
 import './ModelRoundItem.scss';
 import './SubagentItems.scss';
 
@@ -176,6 +179,9 @@ const AttemptDiagnosticDetails: React.FC<{ diagnostic: ModelRoundAttemptDiagnost
       <button
         type="button"
         className="model-round-item__attempt-diagnostic-copy"
+        data-bf-component="model-round-item"
+        data-bf-part="action"
+        data-bf-state={copiedValue === valueKey ? 'copied' : undefined}
         onClick={() => void copyValue(value, valueKey)}
         aria-label={t('modelRound.attemptDiagnostics.copy')}
       >
@@ -192,6 +198,9 @@ const AttemptDiagnosticDetails: React.FC<{ diagnostic: ModelRoundAttemptDiagnost
         <button
           type="button"
           className="model-round-item__attempt-diagnostic-toggle"
+          data-bf-component="model-round-item"
+          data-bf-part="diagnosticToggle"
+          data-bf-state={isOpen ? 'expanded' : undefined}
           onClick={() => setIsOpen(current => !current)}
           aria-expanded={isOpen}
           aria-controls={detailsId}
@@ -202,13 +211,22 @@ const AttemptDiagnosticDetails: React.FC<{ diagnostic: ModelRoundAttemptDiagnost
       </Tooltip>
 
       {isOpen && (
-        <div id={detailsId} className="model-round-item__attempt-diagnostic-details">
-          <div className="model-round-item__attempt-diagnostic-category">
+        <div
+          id={detailsId}
+          className="model-round-item__attempt-diagnostic-details"
+          data-bf-component="model-round-item"
+          data-bf-part="diagnosticDetails"
+        >
+          <div
+            className="model-round-item__attempt-diagnostic-category"
+            data-bf-component="model-round-item"
+            data-bf-part="diagnosticSection"
+          >
             {attemptDiagnosticCategoryLabel(diagnostic, t)}
           </div>
 
           {diagnostic.rawError && (
-            <div className="model-round-item__attempt-diagnostic-section">
+            <div className="model-round-item__attempt-diagnostic-section" data-bf-component="model-round-item" data-bf-part="diagnosticSection">
               <div className="model-round-item__attempt-diagnostic-section-header">
                 <span>{t('modelRound.attemptDiagnostics.providerError')}</span>
                 {renderCopyButton(diagnostic.rawError, 'raw-error')}
@@ -220,7 +238,12 @@ const AttemptDiagnosticDetails: React.FC<{ diagnostic: ModelRoundAttemptDiagnost
           {(diagnostic.toolCalls ?? []).map((toolCall, index) => {
             const toolLabel = toolCall.toolName || toolCall.toolId || t('modelRound.attemptDiagnostics.unknownTool');
             return (
-              <div key={`${toolCall.toolId ?? toolCall.toolName ?? 'tool'}:${index}`} className="model-round-item__attempt-diagnostic-section">
+              <div
+                key={`${toolCall.toolId ?? toolCall.toolName ?? 'tool'}:${index}`}
+                className="model-round-item__attempt-diagnostic-section"
+                data-bf-component="model-round-item"
+                data-bf-part="diagnosticSection"
+              >
                 <div className="model-round-item__attempt-diagnostic-tool-title">
                   {t('modelRound.attemptDiagnostics.toolArguments', { name: toolLabel })}
                 </div>
@@ -304,7 +327,12 @@ const TaskWithSubagentWrapper: React.FC<TaskWithSubagentWrapperProps> = React.me
   ].filter(Boolean).join(' ');
 
   return (
-    <div className={className}>
+    <div
+      className={className}
+      data-bf-component="model-round-item"
+      data-bf-part="subagent"
+      data-bf-state={!isCollapsed ? 'expanded' : undefined}
+    >
       <FlowItemRenderer
         item={taskItem}
         turnId={turnId}
@@ -346,6 +374,14 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
     const [isCopyMenuOpen, setIsCopyMenuOpen] = useState(false);
     const copyButtonRef = useRef<HTMLButtonElement>(null);
     const copyMenuRef = useRef<HTMLDivElement>(null);
+    const copyMenuLayout = useAnchoredPopoverPosition({
+      open: isCopyMenuOpen,
+      anchorRef: copyButtonRef,
+      popoverRef: copyMenuRef,
+      preferredPlacement: 'top',
+      alignment: 'end',
+      gap: 4,
+    });
     const renderTraceEnabled = isStartupRenderTraceEnabled();
     const renderTraceStartedAtMs = renderTraceEnabled ? performance.now() : null;
 
@@ -414,7 +450,7 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
       () => activeAttempt?.items ?? (attempts.length === 0 ? round.items : []),
       [activeAttempt?.items, attempts.length, round.items]
     );
-    
+
     // Group items in two passes:
     // 1) group subagent items
     // 2) group normal items into explore/critical via anchor tool
@@ -511,7 +547,7 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
       }
     }, [t, turnId]);
 
-    const hasContent = sortedItems.some(item => 
+    const hasContent = sortedItems.some(item =>
       (item.type === 'text' && (item as FlowTextItem).content.trim()) ||
       (item.type === 'tool' && (item as FlowToolItem).toolCall)
     );
@@ -543,13 +579,17 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
       !round.isStreaming &&
       (hasContent || usageMetaItems.length > 0);
     const shouldRevealFooter = shouldReserveFooter && !typewriterRevealGate.isAnyRevealing;
-    
+
     return (
       <TypewriterRevealGateProvider value={typewriterRevealGate}>
-      <div 
+      <div
         className={getModelRoundItemClassName({
           isVisuallyStreaming,
         })}
+        data-bf-component="model-round-item"
+        data-bf-part="root"
+        data-bf-status={round.status}
+        data-bf-state={isVisuallyStreaming ? 'streaming' : undefined}
         data-testid="chat-assistant-message"
         data-turn-id={turnId}
         data-round-id={round.id}
@@ -570,10 +610,13 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
         )}
 
         {historyRounds.length > 0 && (
-          <div className="model-round-item__retry-history">
+          <div className="model-round-item__retry-history" data-bf-component="model-round-item" data-bf-part="retryHistory">
             <button
               type="button"
               className="model-round-item__retry-toggle"
+              data-bf-component="model-round-item"
+              data-bf-part="retryToggle"
+              data-bf-state={showRoundHistory ? 'expanded' : undefined}
               onClick={() => setShowRoundHistory(current => !current)}
             >
               {showRoundHistory
@@ -598,15 +641,18 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
               });
 
               return (
-                <div key={historyRound.id} className="model-round-item__retry-attempt">
-                  <div className="model-round-item__retry-attempt-label">
+                <div key={historyRound.id} className="model-round-item__retry-attempt" data-bf-component="model-round-item" data-bf-part="retryAttempt">
+                  <div className="model-round-item__retry-attempt-label" data-bf-component="model-round-item" data-bf-part="attemptLabel">
                     {t('modelRound.roundRetryLabel', { index: historyIndex + 1 })}
                   </div>
                   {historyOlderAttempts.length > 0 && (
-                    <div className="model-round-item__retry-history">
+                    <div className="model-round-item__retry-history" data-bf-component="model-round-item" data-bf-part="retryHistory">
                       <button
                         type="button"
                         className="model-round-item__retry-toggle"
+                        data-bf-component="model-round-item"
+                        data-bf-part="retryToggle"
+                        data-bf-state={showHistoryRoundAttempts ? 'expanded' : undefined}
                         onClick={() => toggleHistoryRoundAttempts(historyRound.id)}
                       >
                         {showHistoryRoundAttempts
@@ -623,8 +669,8 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
                         });
 
                         return (
-                          <div key={attempt.id} className="model-round-item__retry-attempt">
-                            <div className="model-round-item__retry-attempt-label">
+                          <div key={attempt.id} className="model-round-item__retry-attempt" data-bf-component="model-round-item" data-bf-part="retryAttempt">
+                            <div className="model-round-item__retry-attempt-label" data-bf-component="model-round-item" data-bf-part="attemptLabel">
                               <span>{t('modelRound.attemptLabel', { index: attempt.index })}</span>
                               {attempt.diagnostic && <AttemptDiagnosticDetails diagnostic={attempt.diagnostic} />}
                             </div>
@@ -650,10 +696,13 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
         )}
 
         {historicalAttempts.length > 0 && (
-          <div className="model-round-item__retry-history">
+          <div className="model-round-item__retry-history" data-bf-component="model-round-item" data-bf-part="retryHistory">
             <button
               type="button"
               className="model-round-item__retry-toggle"
+              data-bf-component="model-round-item"
+              data-bf-part="retryToggle"
+              data-bf-state={showRetryHistory ? 'expanded' : undefined}
               onClick={() => setShowRetryHistory(current => !current)}
             >
               {showRetryHistory
@@ -670,8 +719,8 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
               });
 
               return (
-                <div key={attempt.id} className="model-round-item__retry-attempt">
-                  <div className="model-round-item__retry-attempt-label">
+                <div key={attempt.id} className="model-round-item__retry-attempt" data-bf-component="model-round-item" data-bf-part="retryAttempt">
+                  <div className="model-round-item__retry-attempt-label" data-bf-component="model-round-item" data-bf-part="attemptLabel">
                     <span>{t('modelRound.attemptLabel', { index: attempt.index })}</span>
                     {attempt.diagnostic && <AttemptDiagnosticDetails diagnostic={attempt.diagnostic} />}
                   </div>
@@ -695,15 +744,20 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
         {shouldReserveFooter && (
           <div
             className={`model-round-item__footer${shouldRevealFooter ? '' : ' model-round-item__footer--pending'}`}
+            data-bf-component="model-round-item"
+            data-bf-part="footer"
+            data-bf-state={shouldRevealFooter ? undefined : 'pending'}
             aria-hidden={!shouldRevealFooter}
           >
             {usageMetaItems.length > 0 && (
               <div
                 className="model-round-item__meta"
+                data-bf-component="model-round-item"
+                data-bf-part="meta"
                 aria-label={t('modelRound.meta.label')}
               >
                 {usageMetaItems.map(item => (
-                  <span key={item.key} className="model-round-item__meta-item">
+                  <span key={item.key} className="model-round-item__meta-item" data-bf-component="model-round-item" data-bf-part="metaItem">
                     <span className="model-round-item__meta-label">{item.label}</span>
                     <span className="model-round-item__meta-value">{item.value}</span>
                   </span>
@@ -725,17 +779,23 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
                   aria-expanded={isCopyMenuOpen}
                   aria-label={copied ? t('modelRound.copiedDialog') : t('modelRound.copyDialog')}
                   data-testid="model-round-copy-btn"
-                >
+                 data-bf-component="model-round-item" data-bf-part="action" data-bf-state={copied ? 'copied' : undefined}>
                   {copied ? <Check size={14} /> : <Copy size={14} />}
                 </button>
               </Tooltip>
 
-              {isCopyMenuOpen && (
+              {isCopyMenuOpen && createPortal(
                 <div
                   ref={copyMenuRef}
                   className="model-round-item__copy-menu"
                   role="menu"
                   data-testid="model-round-copy-menu"
+                  data-bf-placement={copyMenuLayout?.placement ?? 'top'}
+                  style={{
+                    top: `${copyMenuLayout?.top ?? 0}px`,
+                    left: `${copyMenuLayout?.left ?? 0}px`,
+                    visibility: copyMenuLayout ? 'visible' : 'hidden',
+                  }}
                 >
                   <button
                     type="button"
@@ -755,7 +815,8 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
                   >
                     {t('transcriptExport.copyResult')}
                   </button>
-                </div>
+                </div>,
+                getAppearanceOverlayHost(),
               )}
             </div>}
 
@@ -771,7 +832,7 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
     if (next.round.isStreaming || prev.round.isStreaming) {
       return false;
     }
-    
+
     // In complete state, compare items array reference to detect tool state changes.
     return (
       prev.round.id === next.round.id &&
@@ -815,7 +876,7 @@ const FlowItemRenderer: React.FC<FlowItemRendererProps> = ({
     onTabOpen,
     sessionId,
   } = useFlowChatContext();
-  
+
   switch (item.type) {
     case 'text':
       return (
@@ -834,17 +895,17 @@ const FlowItemRenderer: React.FC<FlowItemRendererProps> = ({
           }}
         />
       );
-    
+
     case 'thinking':
       return (
         <ModelThinkingDisplay thinkingItem={item as FlowThinkingItem} isLastItem={isLastItem} />
       );
-    
+
     case 'tool': {
       const toolItem = item as FlowToolItem;
 
       return (
-        <div className="flowchat-flow-item" data-flow-item-id={item.id} data-flow-item-type="tool">
+        <div className="flowchat-flow-item" data-flow-item-id={item.id} data-flow-item-type="tool" data-bf-component="model-round-item" data-bf-part="toolItem">
           <FlowToolCard
             toolItem={toolItem}
             isLastItem={isLastItem}

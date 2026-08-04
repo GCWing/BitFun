@@ -113,10 +113,10 @@ export const InputDialog: React.FC<InputDialogProps> = ({
       size="small"
       showCloseButton={true}
     >
-      <div className="input-dialog">
-        <div className="input-dialog__body">
+      <div className="input-dialog" data-bf-component="input-dialog" data-bf-part="root">
+        <div className="input-dialog__body" data-bf-component="input-dialog" data-bf-part="body">
           {description && (
-            <p className="input-dialog__description">{description}</p>
+            <p className="input-dialog__description" data-bf-component="input-dialog" data-bf-part="description">{description}</p>
           )}
           <Input
             ref={inputRef}
@@ -132,7 +132,7 @@ export const InputDialog: React.FC<InputDialogProps> = ({
           />
         </div>
 
-        <div className="input-dialog__actions">
+        <div className="input-dialog__actions" data-bf-component="input-dialog" data-bf-part="actions">
           <Button
             variant="secondary"
             size="small"

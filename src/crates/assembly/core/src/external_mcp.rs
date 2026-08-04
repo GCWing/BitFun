@@ -1,6 +1,6 @@
 use crate::service::mcp::{
-    get_global_mcp_service, ConfigLocation, MCPServerConfig, MCPServerStatus, MCPServerTransport,
-    MCPServerType,
+    get_global_mcp_service, ConfigLocation, MCPServerConfig, MCPServerStatus, MCPServerTimeouts,
+    MCPServerTransport, MCPServerType,
 };
 use async_trait::async_trait;
 use bitfun_external_sources::ExternalMcpCoordinatorSnapshot;
@@ -179,6 +179,11 @@ pub(super) fn prepared_mcp_config(
     candidate: &ActiveExternalMcpCandidate,
     prepared: PreparedExternalMcpServer,
 ) -> Result<MCPServerConfig, String> {
+    let timeouts = MCPServerTimeouts {
+        startup_ms: prepared.timeouts.startup_ms,
+        catalog_ms: prepared.timeouts.catalog_ms,
+        execution_ms: prepared.timeouts.execution_ms,
+    };
     let (
         server_type,
         transport,
@@ -248,6 +253,7 @@ pub(super) fn prepared_mcp_config(
         oauth: None,
         oauth_enabled,
         xaa: None,
+        timeouts,
     };
     config.validate().map_err(|_| {
         "The external MCP configuration is not valid for the BitFun runtime".to_string()
@@ -260,7 +266,6 @@ struct CandidateGroup<'a> {
     native: Vec<&'a NativeMcpCandidate>,
     external: Vec<&'a ExternalMcpServerDefinition>,
 }
-
 
 /// Produces the source-neutral product decision for external MCP candidates.
 /// This function is pure: no provider preparation, process launch, credential
@@ -314,9 +319,7 @@ pub(super) fn reconcile_external_mcp_catalog(
         group
             .native
             .sort_by(|left, right| left.candidate_id.cmp(&right.candidate_id));
-        group
-            .external
-            .sort_by_key(|left| left.candidate_id());
+        group.external.sort_by_key(|left| left.candidate_id());
         let active_external = group
             .external
             .iter()

@@ -566,6 +566,7 @@ impl CronService {
                 message: enqueue_input.user_input.clone(),
                 original_message: Some(enqueue_input.user_input.clone()),
                 turn_id: Some(enqueue_input.turn_id.clone()),
+                execution: Default::default(),
                 agent_type: resolved.agent_type,
                 workspace_path: Some(resolved.workspace_path),
                 remote_connection_id: resolved.remote_connection_id,

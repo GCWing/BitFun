@@ -12,8 +12,10 @@ The CLI-hosted ACP server consumes `DeliveryProfile::Acp` through
 `ProductAssembler` and uses the Agent Runtime SDK for session creation/listing,
 active session model/mode updates, dialog submission/cancellation, interaction
 responses, and agent event subscription. `bitfun-acp` still depends directly on
-`bitfun-core` with `product-full` for single-pass full persisted-history restore,
-model/mode catalog and provider configuration reads, MCP provisioning, and the
+the `bitfun-core` `agent-runtime`, `canvas-runtime`, `external-sources`, and
+`ssh-remote` owner features for single-pass full persisted-history restore,
+model/mode catalog, Canvas tool materialization, provider and compatible
+instruction-source reads, MCP provisioning, remote workspace support, and the
 ACP client half of this crate. Do not describe the crate as Core-independent
 until those production paths have separately proven portable replacements.
 

@@ -67,7 +67,7 @@ pub struct MiniAppInstallDepsRequest {
 pub struct MiniAppImportFromPathRequest {
     pub source_path: PathBuf,
     pub app_id: String,
-    pub theme: String,
+    pub appearance_mode: String,
     pub workspace_root: Option<PathBuf>,
     pub imported_at: i64,
     pub recompiled_at: i64,
@@ -149,7 +149,7 @@ pub trait MiniAppCompilePort: Send + Sync {
         app_id: String,
         source: MiniAppSource,
         permissions: MiniAppPermissions,
-        theme: String,
+        appearance_mode: String,
         workspace_root: Option<PathBuf>,
     ) -> MiniAppPortFuture<'_, String>;
 }

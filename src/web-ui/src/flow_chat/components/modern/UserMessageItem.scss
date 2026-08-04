@@ -7,23 +7,32 @@
 .user-message-item {
   box-sizing: border-box;
   /*
+   * Height of the first text line. The action cluster collapses to this box so
+   * its taller hit targets never drive the row height — see
+   * `.user-message-item__actions`. Variants that restyle the text (e.g.
+   * `--failed`) re-point it to their own line box.
+   */
+  --user-message-line-box: calc(
+    var(--bf-appearance-token-flowchat-font-size-base) * var(--bf-appearance-token-flowchat-text-line-height)
+  );
+  /*
    * Fills the reading column instead of hugging its text: the bubble shares the
    * exact leading and trailing edge as the tool-call bars and body text below
    * it, so a turn reads as one column rather than a right-floating chat bubble.
    */
   width: auto;
   padding: 0.46rem 0.68rem;
-  background: color-mix(in srgb, var(--element-bg-medium) 90%, var(--color-bg-scene));
-  border: 1px solid color-mix(in srgb, var(--border-base) 72%, transparent);
-  border-radius: calc(var(--flowchat-card-radius) + 2px);
+  background: color-mix(in srgb, var(--bf-appearance-token-element-bg-medium) 90%, var(--bf-appearance-token-color-bg-scene));
+  border: 1px solid color-mix(in srgb, var(--bf-appearance-token-border-base) 72%, transparent);
+  border-radius: calc(var(--bf-appearance-token-flowchat-card-radius) + 2px);
   margin:
     0.06rem
-    var(--flowchat-content-inline-pad)
-    var(--flowchat-turn-gap)
-    var(--flowchat-content-inline-pad);
+    var(--bf-appearance-token-flowchat-content-inline-pad)
+    var(--bf-appearance-token-flowchat-turn-gap)
+    var(--bf-appearance-token-flowchat-content-inline-pad);
   box-shadow:
-    0 1px 0 color-mix(in srgb, var(--color-static-white) 5%, transparent) inset,
-    0 2px 8px var(--color-overlay-black-08);
+    0 1px 0 color-mix(in srgb, var(--bf-appearance-token-color-static-white) 5%, transparent) inset,
+    0 2px 8px var(--bf-appearance-token-color-overlay-black-08);
   transition: opacity 140ms ease;
   /*
    * No enter animation: the message list is virtualized, so a mount-triggered
@@ -33,8 +42,8 @@
   position: relative;
   
   &:hover {
-    background: color-mix(in srgb, var(--element-bg-medium) 92%, var(--color-bg-scene));
-    border-color: color-mix(in srgb, var(--border-subtle) 56%, transparent);
+    background: color-mix(in srgb, var(--bf-appearance-token-element-bg-medium) 92%, var(--bf-appearance-token-color-bg-scene));
+    border-color: color-mix(in srgb, var(--bf-appearance-token-border-subtle) 56%, transparent);
 
     .user-message-item__copy-btn {
       opacity: 1;
@@ -51,7 +60,7 @@
   }
 
   &:focus-within {
-    border-color: color-mix(in srgb, var(--border-accent) 68%, var(--border-base));
+    border-color: color-mix(in srgb, var(--bf-appearance-token-border-accent) 68%, var(--bf-appearance-token-border-base));
 
     .user-message-item__copy-btn,
     .user-message-item__rollback-btn {
@@ -61,23 +70,23 @@
   
   // Responsive: reduce margins on smaller screens.
   @media (max-width: 768px) {
-    margin-left: var(--flowchat-content-inline-pad-mobile);
-    margin-right: var(--flowchat-content-inline-pad-mobile);
+    margin-left: var(--bf-appearance-token-flowchat-content-inline-pad-mobile);
+    margin-right: var(--bf-appearance-token-flowchat-content-inline-pad-mobile);
   }
 }
 
 .user-message-item__timestamp {
-  font-size: var(--flowchat-font-size-xxs);
-  color: var(--color-text-muted);
+  font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
+  color: var(--bf-appearance-token-color-text-muted);
   font-weight: 400;
   margin-bottom: 0.12rem;
-  line-height: var(--flowchat-compact-line-height);
+  line-height: var(--bf-appearance-token-flowchat-compact-line-height);
 }
 
 .user-message-item__main {
   display: flex;
   align-items: flex-start;
-  gap: var(--flowchat-inline-gap);
+  gap: var(--bf-appearance-token-flowchat-inline-gap);
 }
 
 // Bridges children to `.user-message-item__main` flex without an extra layout box.
@@ -92,17 +101,17 @@
   width: fit-content;
   padding: 0.12rem 0.44rem;
   border-radius: 999px;
-  font-size: var(--flowchat-font-size-xxs);
+  font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
   font-weight: 600;
-  line-height: var(--flowchat-compact-line-height);
+  line-height: var(--bf-appearance-token-flowchat-compact-line-height);
   letter-spacing: 0;
   user-select: none;
 }
 
 .user-message-item__steering-tag--pending {
-  color: var(--color-warning);
-  background: color-mix(in srgb, var(--color-warning) 12%, transparent);
-  border: 1px solid color-mix(in srgb, var(--color-warning) 28%, transparent);
+  color: var(--bf-appearance-token-color-warning);
+  background: color-mix(in srgb, var(--bf-appearance-token-color-warning) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--bf-appearance-token-color-warning) 28%, transparent);
 }
 
 .user-message-item__actions {
@@ -110,18 +119,30 @@
   align-items: center;
   gap: 0.125rem;
   flex-shrink: 0;
+  /*
+   * The 28px hit targets are taller than the first-line box, and they keep that
+   * layout box while idle at `opacity: 0`. Left alone the cluster becomes the
+   * tallest item in `.user-message-item__main`, so `align-items: flex-start`
+   * pins a single-line message to the top of an over-tall row and the text
+   * reads as sitting above the bubble's centre. Collapsing the cluster to the
+   * first-line box hands the row height back to the text — restoring the
+   * bubble's symmetric vertical padding — and centres the buttons on the first
+   * line for taller messages.
+   */
+  margin-top: calc((var(--user-message-line-box) - 28px) / 2);
+  margin-bottom: calc((var(--user-message-line-box) - 28px) / 2);
 }
 
 .user-message-item__blocks {
-  margin-top: var(--flowchat-flow-item-gap);
+  margin-top: var(--bf-appearance-token-flowchat-flow-item-gap);
 }
 
 .user-message-item__content {
   flex: 1;
-  font-size: var(--flowchat-font-size-base);
+  font-size: var(--bf-appearance-token-flowchat-font-size-base);
   font-weight: 500;
-  line-height: var(--flowchat-text-line-height);
-  color: var(--color-text-primary);
+  line-height: var(--bf-appearance-token-flowchat-text-line-height);
+  color: var(--bf-appearance-token-color-text-primary);
   white-space: pre-wrap;
   display: -webkit-box;
   -webkit-line-clamp: 3;
@@ -144,11 +165,11 @@
   margin: 0.08rem 0.14rem;
   padding: 0.08rem 0.38rem;
   vertical-align: text-bottom;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--size-radius-sm);
-  background: var(--element-bg-hover);
-  color: var(--color-text-secondary);
-  font-size: calc(var(--flowchat-font-size-base) * 0.9);
+  border: 1px solid var(--bf-appearance-token-border-subtle);
+  border-radius: var(--bf-appearance-token-size-radius-sm);
+  background: var(--bf-appearance-token-element-bg-hover);
+  color: var(--bf-appearance-token-color-text-secondary);
+  font-size: calc(var(--bf-appearance-token-flowchat-font-size-base) * 0.9);
   font-weight: 500;
   line-height: 1.35;
   white-space: nowrap;
@@ -160,7 +181,7 @@
 }
 
 .user-message-item__reference--session-reference {
-  color: var(--color-text-primary);
+  color: var(--bf-appearance-token-color-text-primary);
 }
 
 .user-message-item__reference-label {
@@ -177,11 +198,13 @@
 // Failed state: no bubble. Icons/actions align to the first text line (not flex baseline:
 // `-webkit-box` line-clamp does not expose a reliable baseline for `align-items: baseline`).
 .user-message-item--failed {
-  --user-message-failed-font-size: calc(var(--flowchat-font-size-base) * 0.86);
+  --user-message-failed-font-size: calc(var(--bf-appearance-token-flowchat-font-size-base) * 0.86);
   --user-message-failed-line-height: 1.55;
   --user-message-failed-line-box: calc(
     var(--user-message-failed-font-size) * var(--user-message-failed-line-height)
   );
+  /* Smaller text than the default bubble, so the shared line box follows it. */
+  --user-message-line-box: var(--user-message-failed-line-box);
 
   background: transparent;
   border: none;
@@ -190,7 +213,7 @@
 
   .user-message-item__main {
     align-items: flex-start;
-    gap: var(--flowchat-flow-item-gap);
+    gap: var(--bf-appearance-token-flowchat-flow-item-gap);
   }
 
   // Text column + actions row: actions sit beside text; optional vertical nudge vs first line.
@@ -198,7 +221,7 @@
     display: flex;
     flex-flow: row wrap;
     align-items: flex-start;
-    column-gap: var(--flowchat-inline-gap);
+    column-gap: var(--bf-appearance-token-flowchat-inline-gap);
     row-gap: 0.28em;
     flex: 1;
     min-width: 0;
@@ -210,7 +233,7 @@
     display: flex;
     flex-direction: column;
     align-items: flex-start;
-    gap: var(--flowchat-inline-gap);
+    gap: var(--bf-appearance-token-flowchat-inline-gap);
   }
 
   .user-message-item__failed-avatar {
@@ -222,7 +245,7 @@
     box-sizing: border-box;
     height: var(--user-message-failed-line-box);
     min-height: var(--user-message-failed-line-box);
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
     opacity: 0.9;
 
     svg {
@@ -236,20 +259,20 @@
     flex: 0 1 auto;
     width: max-content;
     max-width: 100%;
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
     font-size: var(--user-message-failed-font-size);
     font-weight: 400;
     font-style: italic;
     line-height: var(--user-message-failed-line-height);
     text-decoration: line-through;
-    text-decoration-color: color-mix(in srgb, var(--color-text-muted) 72%, transparent);
+    text-decoration-color: color-mix(in srgb, var(--bf-appearance-token-color-text-muted) 72%, transparent);
   }
 
   .user-message-item__actions {
     flex: 0 0 auto;
     align-items: center;
-    /* Match `.user-message-item__copy-btn` height (28px) to first-line box. */
-    margin-top: calc((var(--user-message-failed-line-box) - 28px) / 2);
+    /* Vertical centring on the first line comes from the base rule, which reads
+       the `--user-message-line-box` override above. */
   }
 
   .user-message-item__failed-body .user-message-item__steering-tag {
@@ -282,8 +305,8 @@
   padding: 0;
   background: transparent;
   border: none;
-  border-radius: var(--size-radius-sm);
-  color: var(--color-text-secondary);
+  border-radius: var(--bf-appearance-token-size-radius-sm);
+  color: var(--bf-appearance-token-color-text-secondary);
   cursor: pointer;
   transition:
     opacity 140ms ease,
@@ -296,7 +319,7 @@
   
   &:hover {
     background: transparent;
-    color: var(--color-text-primary);
+    color: var(--bf-appearance-token-color-text-primary);
     box-shadow: none;
   }
   
@@ -306,7 +329,7 @@
 
   &:focus-visible {
     opacity: 1;
-    outline: 2px solid var(--border-accent);
+    outline: 2px solid var(--bf-appearance-token-border-accent);
     outline-offset: 1px;
   }
 
@@ -324,8 +347,8 @@
 }
 
 .user-message-item__copy-btn.copied {
-  color: var(--color-success);
-  background: var(--color-success-bg);
+  color: var(--bf-appearance-token-color-success);
+  background: var(--bf-appearance-token-color-success-bg);
   opacity: 1;
 }
 
@@ -336,7 +359,7 @@
 .user-message-edit-composer {
   display: flex;
   flex-direction: column;
-  gap: var(--flowchat-inline-gap);
+  gap: var(--bf-appearance-token-flowchat-inline-gap);
   width: 100%;
 }
 
@@ -346,8 +369,8 @@
   .bitfun-textarea__field {
     min-height: 5.5rem;
     max-height: 45vh;
-    font-size: var(--flowchat-font-size-base);
-    line-height: var(--flowchat-text-line-height);
+    font-size: var(--bf-appearance-token-flowchat-font-size-base);
+    line-height: var(--bf-appearance-token-flowchat-text-line-height);
     resize: vertical;
   }
 }
@@ -358,9 +381,9 @@
   max-height: 45vh;
   overflow-y: auto;
   padding: 0.45rem 0.6rem;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--size-radius-sm);
-  background: var(--element-bg-subtle);
+  border: 1px solid var(--bf-appearance-token-border-subtle);
+  border-radius: var(--bf-appearance-token-size-radius-sm);
+  background: var(--bf-appearance-token-element-bg-subtle);
 
   .rich-text-input {
     min-height: 4.4rem;
@@ -368,13 +391,13 @@
     border: none;
     background: transparent;
     box-shadow: none;
-    font-size: var(--flowchat-font-size-base);
-    line-height: var(--flowchat-text-line-height);
+    font-size: var(--bf-appearance-token-flowchat-font-size-base);
+    line-height: var(--bf-appearance-token-flowchat-text-line-height);
   }
 
   &:focus-within {
-    border-color: var(--color-accent-500);
-    box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-accent-500) 14%, transparent);
+    border-color: var(--bf-appearance-token-color-accent-500);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 14%, transparent);
   }
 }
 
@@ -393,15 +416,15 @@
   height: 26px;
   padding: 0;
   border: none;
-  border-radius: var(--size-radius-sm);
+  border-radius: var(--bf-appearance-token-size-radius-sm);
   background: transparent;
-  color: var(--color-text-secondary);
+  color: var(--bf-appearance-token-color-text-secondary);
   cursor: pointer;
   transition: transform 120ms cubic-bezier(0.23, 1, 0.32, 1);
 
   &:hover:not(:disabled) {
-    color: var(--color-text-primary);
-    background: color-mix(in srgb, var(--element-bg-hover) 10%, transparent);
+    color: var(--bf-appearance-token-color-text-primary);
+    background: color-mix(in srgb, var(--bf-appearance-token-element-bg-hover) 10%, transparent);
   }
 
   &:active:not(:disabled) {
@@ -409,7 +432,7 @@
   }
 
   &:focus-visible {
-    outline: 2px solid var(--border-accent);
+    outline: 2px solid var(--bf-appearance-token-border-accent);
     outline-offset: 1px;
   }
 
@@ -420,11 +443,11 @@
 }
 
 .user-message-edit-composer__icon-button--confirm {
-  color: var(--color-success);
+  color: var(--bf-appearance-token-color-success);
 
   &:hover:not(:disabled) {
-    color: var(--color-success);
-    background: color-mix(in srgb, var(--color-success) 12%, transparent);
+    color: var(--bf-appearance-token-color-success);
+    background: color-mix(in srgb, var(--bf-appearance-token-color-success) 12%, transparent);
   }
 }
 
@@ -443,8 +466,8 @@
   padding: 0;
   background: transparent;
   border: none;
-  border-radius: var(--size-radius-sm);
-  color: var(--color-text-secondary);
+  border-radius: var(--bf-appearance-token-size-radius-sm);
+  color: var(--bf-appearance-token-color-text-secondary);
   cursor: pointer;
   transition:
     opacity 140ms ease,
@@ -457,7 +480,7 @@
 
   &:hover:not(:disabled) {
     background: transparent;
-    color: var(--color-text-primary);
+    color: var(--bf-appearance-token-color-text-primary);
     box-shadow: none;
   }
 
@@ -467,7 +490,7 @@
 
   &:focus-visible {
     opacity: 1;
-    outline: 2px solid var(--border-accent);
+    outline: 2px solid var(--bf-appearance-token-border-accent);
     outline-offset: 1px;
   }
 
@@ -512,14 +535,12 @@
   border-radius: 5px;
   overflow: hidden;
   cursor: pointer;
-  border: 1px solid var(--border-base);
-  transition:
-    transform 140ms cubic-bezier(0.23, 1, 0.32, 1),
-    opacity 140ms ease;
+  border: 1px solid var(--bf-appearance-token-border-base);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
 
   &:hover {
     transform: scale(1.03);
-    box-shadow: 0 4px 12px var(--color-overlay-black-30);
+    box-shadow: 0 4px 12px var(--bf-appearance-token-color-overlay-black-30);
   }
 
   img {
@@ -535,7 +556,7 @@
   position: fixed;
   inset: 0;
   z-index: tokens.$z-fullscreen;
-  background: var(--color-overlay-black-80);
+  background: var(--bf-appearance-token-color-overlay-black-80);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -545,7 +566,7 @@
     max-width: 90vw;
     max-height: 85vh;
     border-radius: 8px;
-    box-shadow: 0 8px 32px var(--color-overlay-black-50);
+    box-shadow: 0 8px 32px var(--bf-appearance-token-color-overlay-black-50);
     object-fit: contain;
   }
 }
@@ -554,7 +575,7 @@
   position: absolute;
   top: 16px;
   right: 16px;
-  background: var(--color-overlay-white-15);
+  background: var(--bf-appearance-token-color-overlay-white-15);
   border: none;
   border-radius: 50%;
   width: 36px;
@@ -562,12 +583,12 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--color-static-white);
+  color: var(--bf-appearance-token-color-static-white);
   cursor: pointer;
   transition: transform 120ms cubic-bezier(0.23, 1, 0.32, 1);
 
   &:hover {
-    background: rgba(var(--color-static-white-rgb), 0.3);
+    background: rgba(var(--bf-appearance-token-color-static-white-rgb), 0.3);
   }
 
   &:active {
@@ -575,7 +596,7 @@
   }
 
   &:focus-visible {
-    outline: 2px solid var(--color-static-white);
+    outline: 2px solid var(--bf-appearance-token-color-static-white);
     outline-offset: 2px;
   }
 }

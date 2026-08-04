@@ -153,10 +153,13 @@ const SceneViewport: React.FC<SceneViewportProps> = ({ workspacePath, isEntering
   // All tabs closed — show empty state
   if (openTabs.length === 0) {
     return (
-      <div className="bitfun-scene-viewport" data-testid="scene-viewport">
+      <div className="bitfun-scene-viewport" data-testid="scene-viewport" data-bf-scene="workbench" data-bf-part="viewport" data-bf-state="empty">
         <div
           className="bitfun-scene-viewport__clip bitfun-scene-viewport__clip--empty"
           data-testid="scene-viewport-empty"
+          data-bf-scene="workbench"
+          data-bf-part="empty"
+          data-bf-state="empty"
         >
           <p className="bitfun-scene-viewport__empty-hint">{t('welcomeScene.emptyHint')}</p>
         </div>
@@ -165,8 +168,8 @@ const SceneViewport: React.FC<SceneViewportProps> = ({ workspacePath, isEntering
   }
 
   return (
-    <div className="bitfun-scene-viewport" data-testid="scene-viewport">
-      <div className="bitfun-scene-viewport__clip" data-testid="scene-viewport-clip">
+    <div className="bitfun-scene-viewport" data-testid="scene-viewport" data-bf-scene="workbench" data-bf-part="viewport">
+      <div className="bitfun-scene-viewport__clip" data-testid="scene-viewport-clip" data-bf-scene="workbench" data-bf-part="viewportClip">
         {renderedTabIds.map(tabId => {
           const isActive = tabId === activeTabId;
           const isOutgoing = !isActive && tabId === outgoingTabId;
@@ -185,6 +188,10 @@ const SceneViewport: React.FC<SceneViewportProps> = ({ workspacePath, isEntering
               data-scene-id={tabId}
               data-scene-active={isActive ? 'true' : 'false'}
               data-scene-transition={isExiting ? 'exit' : undefined}
+              data-bf-scene="workbench"
+              data-bf-part="scene"
+              data-bf-scene-id={tabId}
+              data-bf-state={isActive ? 'active' : undefined}
             >
               <Suspense
                 fallback={
@@ -194,6 +201,8 @@ const SceneViewport: React.FC<SceneViewportProps> = ({ workspacePath, isEntering
                       role="status"
                       aria-busy="true"
                       aria-label={t('loading.scenes')}
+                      data-bf-scene="workbench"
+                      data-bf-part="loading"
                     >
                       <DotMatrixLoader size="medium" />
                     </div>

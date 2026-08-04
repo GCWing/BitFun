@@ -549,7 +549,6 @@ export interface EditorConfig {
   word_wrap: string;
   line_numbers: string;
   minimap: MinimapConfig;
-  theme: string;
   auto_save: string;
   auto_save_delay: number;
   format_on_save: boolean;
@@ -579,7 +578,6 @@ export interface TerminalConfig {
   cursor_style: string;
   cursor_blink: boolean;
   scrollback_lines: number;
-  theme: string;
   transparency: number;
   bell_style: string;
   copy_on_select: boolean;
@@ -672,7 +670,6 @@ export type ConfigPath =
   | 'app.sidebar.collapsed'
   | 'editor'
   | 'editor.font_size'
-  | 'editor.theme'
   | 'terminal'
   | 'terminal.default_shell'
   | 'terminal.terminal_panel_position'

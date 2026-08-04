@@ -251,7 +251,7 @@ export const ExploreGroupRenderer: React.FC<ExploreGroupRendererProps> = React.m
     scrollState.atBottom ? 'explore-region--at-bottom' : null,
   ].filter(Boolean).join(' ');
   return (
-    <div
+    <div data-bf-component="explore-group" data-bf-part="root" data-bf-state={isExpanded ? 'expanded' : undefined}
       ref={cardRootRef}
       data-testid="chat-explore-group"
       data-tool-card-id={groupId}
@@ -264,6 +264,8 @@ export const ExploreGroupRenderer: React.FC<ExploreGroupRendererProps> = React.m
     >
       {allowManualToggle && (
         <div
+          data-bf-component="explore-group"
+          data-bf-part="header"
           className="explore-region__header"
           onClick={handleToggle}
           data-testid="chat-explore-group-toggle"
@@ -271,17 +273,21 @@ export const ExploreGroupRenderer: React.FC<ExploreGroupRendererProps> = React.m
           data-expanded={isExpanded ? 'true' : 'false'}
         >
           <ChevronRight size={14} className="explore-region__icon" />
-          <span className="explore-region__summary">{displaySummary}</span>
+          <span data-bf-component="explore-group" data-bf-part="summary" className="explore-region__summary">{displaySummary}</span>
         </div>
       )}
       <SmoothHeightCollapse
         isOpen={isExpanded}
+        data-bf-component="explore-group"
+        data-bf-part="contentWrapper"
         className="explore-region__content-wrapper"
         innerClassName="explore-region__content-inner"
         durationMs={FLOWCHAT_COLLAPSE_DURATION_MS}
       >
         <div
           ref={containerRef}
+          data-bf-component="explore-group"
+          data-bf-part="content"
           className="explore-region__content"
           onScroll={handleContentScroll}
           data-testid="chat-explore-group-content"
@@ -362,7 +368,7 @@ const ExploreItemRenderer = React.memo<ExploreItemRendererProps>(({ item, turnId
     
     case 'tool':
       return (
-        <div className="flowchat-flow-item" data-flow-item-id={item.id} data-flow-item-type="tool">
+        <div data-bf-component="explore-group" data-bf-part="item" className="flowchat-flow-item" data-flow-item-id={item.id} data-flow-item-type="tool">
           <FlowToolCard
             toolItem={item as FlowToolItem}
             isLastItem={isLastItem}

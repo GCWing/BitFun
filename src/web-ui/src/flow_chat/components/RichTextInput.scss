@@ -10,9 +10,9 @@
   background: transparent;
   border: none !important;
   outline: none !important;
-  color: var(--color-text-primary);
-  font-size: var(--flowchat-font-size-base);
-  line-height: var(--flowchat-text-line-height);
+  color: var(--bf-appearance-token-color-text-primary);
+  font-size: var(--bf-appearance-token-flowchat-font-size-base);
+  line-height: $line-height-base;
   padding: 0;
   vertical-align: top;
   min-height: 24px;
@@ -24,7 +24,7 @@
   word-break: break-word;
   cursor: text;
   box-shadow: none !important;
-  caret-color: var(--color-accent-500);
+  caret-color: var(--bf-appearance-token-color-accent-500);
 
   // Hide scrollbars while keeping scroll functionality
   scrollbar-width: none; // Firefox
@@ -37,7 +37,7 @@
   // Fallback placeholder via CSS :empty (may not work after browser inserts a <br>)
   &:empty::before {
     content: attr(data-placeholder);
-    color: color-mix(in srgb, var(--color-text-muted) 52%, transparent);
+    color: color-mix(in srgb, var(--bf-appearance-token-color-text-muted) 52%, transparent);
     pointer-events: none;
   }
 
@@ -62,11 +62,11 @@
 }
 
 // Light theme: placeholder slightly softer than body text.
-:root[data-theme="light"] .rich-text-input,
-:root[data-theme-type="light"] .rich-text-input,
+:root[data-bf-appearance-mode="light"] .rich-text-input,
+:root[data-bf-appearance-mode="light"] .rich-text-input,
 .light .rich-text-input {
   &:empty::before {
-    color: color-mix(in srgb, var(--color-text-secondary) 48%, transparent);
+    color: color-mix(in srgb, var(--bf-appearance-token-color-text-secondary) 48%, transparent);
   }
 }
 
@@ -76,47 +76,40 @@
   display: inline-block;
   padding: 2px 8px;
   margin: 0 2px;
-  background: color-mix(in srgb, var(--color-accent-500) 10%, transparent);
-  border: 1px dashed color-mix(in srgb, var(--color-accent-500) 35%, transparent);
+  background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 10%, transparent);
+  border: 1px dashed color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 35%, transparent);
   border-radius: 6px;
-  font-size: var(--flowchat-font-size-sm);
+  font-size: var(--bf-appearance-token-flowchat-font-size-sm);
   font-weight: 500;
-  color: var(--color-accent-400);
+  color: var(--bf-appearance-token-color-accent-400);
   cursor: pointer;
   user-select: text;
   vertical-align: middle;
-  line-height: var(--flowchat-support-line-height);
-  transition:
-    transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
-    opacity 120ms ease;
+  line-height: var(--bf-appearance-token-flowchat-support-line-height);
+  transition: all 0.2s ease;
   white-space: nowrap;
   
   &:hover {
-    background: color-mix(in srgb, var(--color-accent-500) 15%, transparent);
-    border-color: color-mix(in srgb, var(--color-accent-500) 50%, transparent);
+    background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 15%, transparent);
+    border-color: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 50%, transparent);
   }
   
   &--active {
-    background: color-mix(in srgb, var(--color-accent-500) 15%, transparent);
-    border: 1px solid color-mix(in srgb, var(--color-accent-500) 50%, transparent);
-    color: var(--color-accent-400);
+    background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 15%, transparent);
+    border: 1px solid color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 50%, transparent);
+    color: var(--bf-appearance-token-color-accent-400);
     
     &:hover {
-      background: color-mix(in srgb, var(--color-accent-500) 20%, transparent);
-      border-color: color-mix(in srgb, var(--color-accent-500) 60%, transparent);
+      background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 20%, transparent);
+      border-color: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 60%, transparent);
     }
   }
   
   &:focus,
   &:focus-visible {
     outline: none;
-    background: color-mix(in srgb, var(--color-accent-500) 18%, transparent);
-    border-color: color-mix(in srgb, var(--color-accent-500) 60%, transparent);
-    box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-accent-500) 18%, transparent);
-  }
-
-  &:active {
-    transform: scale(0.98);
+    background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 18%, transparent);
+    border-color: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 60%, transparent);
   }
 }
 
@@ -140,31 +133,29 @@
   gap: 4px;
   padding: 2px 6px 2px 8px;
   margin: 0 3px;
-  background: color-mix(in srgb, var(--color-accent-500) 12%, transparent);
+  background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 12%, transparent);
   border: none;
   border-radius: 10px;
-  font-size: var(--flowchat-font-size-sm);
+  font-size: var(--bf-appearance-token-flowchat-font-size-sm);
   font-weight: 500;
-  color: color-mix(in srgb, var(--color-accent-500) 95%, transparent);
+  color: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 95%, transparent);
   cursor: default;
   user-select: none;
   vertical-align: middle;
-  line-height: var(--flowchat-support-line-height);
-  transition:
-    transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
-    opacity 120ms ease;
+  line-height: var(--bf-appearance-token-flowchat-support-line-height);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   
   &:hover {
-    background: color-mix(in srgb, var(--color-accent-500) 18%, transparent);
+    background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 18%, transparent);
   }
   
   // Context type colors.
   &[data-context-type="file"] {
-    background: color-mix(in srgb, var(--color-accent-500) 12%, transparent);
-    color: color-mix(in srgb, var(--color-accent-500) 95%, transparent);
+    background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 12%, transparent);
+    color: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 95%, transparent);
     
     &:hover {
-      background: color-mix(in srgb, var(--color-accent-500) 18%, transparent);
+      background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 18%, transparent);
     }
   }
   
@@ -219,26 +210,26 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  line-height: var(--flowchat-support-line-height);
+  line-height: var(--bf-appearance-token-flowchat-support-line-height);
   font-family: $font-family-mono;
   font-size: 0.85em;
 }
 
 .rich-text-tag-pill--widget-ref {
-  background: color-mix(in srgb, var(--color-success) 14%, transparent);
-  color: color-mix(in srgb, var(--color-success) 96%, var(--color-text-primary));
+  background: color-mix(in srgb, var(--bf-appearance-token-color-success) 14%, transparent);
+  color: color-mix(in srgb, var(--bf-appearance-token-color-success) 96%, var(--bf-appearance-token-color-text-primary));
 
   &:hover {
-    background: color-mix(in srgb, var(--color-success) 22%, transparent);
+    background: color-mix(in srgb, var(--bf-appearance-token-color-success) 22%, transparent);
   }
 }
 
 .rich-text-tag-pill--skill-ref {
-  background: color-mix(in srgb, var(--color-warning) 16%, transparent);
-  color: color-mix(in srgb, var(--color-warning) 96%, var(--color-text-primary));
+  background: color-mix(in srgb, var(--bf-appearance-token-color-warning) 16%, transparent);
+  color: color-mix(in srgb, var(--bf-appearance-token-color-warning) 96%, var(--bf-appearance-token-color-text-primary));
 
   &:hover {
-    background: color-mix(in srgb, var(--color-warning) 24%, transparent);
+    background: color-mix(in srgb, var(--bf-appearance-token-color-warning) 24%, transparent);
   }
 }
 
@@ -250,9 +241,9 @@
   height: 16px;
   padding: 0 5px;
   border-radius: 999px;
-  background: var(--color-overlay-white-15);
+  background: var(--bf-appearance-token-color-overlay-white-15);
   color: inherit;
-  font-size: var(--flowchat-font-size-xxs);
+  font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -297,7 +288,7 @@
   background: transparent;
   color: currentColor;
   opacity: 0.6;
-  font-size: var(--flowchat-font-size-2xl);
+  font-size: var(--bf-appearance-token-flowchat-font-size-2xl);
   line-height: 1;
   cursor: pointer;
   border-radius: 50%;
@@ -306,7 +297,7 @@
     opacity 120ms ease;
   
   &:hover {
-    background: var(--color-overlay-white-20);
+    background: var(--bf-appearance-token-color-overlay-white-20);
     opacity: 1;
   }
   
@@ -315,7 +306,7 @@
   }
 
   &:focus-visible {
-    outline: 2px solid var(--border-accent);
+    outline: 2px solid var(--bf-appearance-token-border-accent);
     outline-offset: 1px;
     opacity: 1;
   }

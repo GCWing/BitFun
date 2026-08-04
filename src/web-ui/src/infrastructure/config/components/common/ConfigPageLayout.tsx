@@ -3,7 +3,7 @@
 import React from 'react';
 import './ConfigPageLayout.scss';
 
-export interface ConfigPageLayoutProps {
+export interface ConfigPageLayoutProps extends React.HTMLAttributes<HTMLDivElement> {
    
   children: React.ReactNode;
    
@@ -14,9 +14,10 @@ export interface ConfigPageLayoutProps {
 export const ConfigPageLayout: React.FC<ConfigPageLayoutProps> = ({
   children,
   className = '',
+  ...props
 }) => {
   return (
-    <div className={`bitfun-config-page-layout ${className}`}>
+    <div className={`bitfun-config-page-layout ${className}`} data-bf-component="config" data-bf-part="root" {...props}>
       {children}
       {/* Real DOM spacer: keeps a guaranteed blank tail at the end of the scroll range. */}
       <div className="bitfun-config-page-layout__scroll-end-spacer" aria-hidden="true" />
@@ -24,7 +25,7 @@ export const ConfigPageLayout: React.FC<ConfigPageLayoutProps> = ({
   );
 };
 
-export interface ConfigPageContentProps {
+export interface ConfigPageContentProps extends React.HTMLAttributes<HTMLDivElement> {
    
   children: React.ReactNode;
    
@@ -37,10 +38,11 @@ export const ConfigPageContent: React.FC<ConfigPageContentProps> = ({
   children,
   className = '',
   id,
+  ...props
 }) => {
   return (
-    <div id={id} className={`bitfun-config-page-content ${className}`}>
-      <div className="bitfun-config-page-content__inner">
+    <div id={id} className={`bitfun-config-page-content ${className}`} data-bf-component="config" data-bf-part="content" {...props}>
+      <div className="bitfun-config-page-content__inner" data-bf-component="config" data-bf-part="contentInner">
         {children}
       </div>
     </div>
@@ -64,13 +66,15 @@ export const ConfigPageSectionStack: React.FC<ConfigPageSectionStackProps> = ({
     <div
       {...props}
       className={`bitfun-config-page-section-stack ${className}`.trim()}
+      data-bf-component="config"
+      data-bf-part="sectionStack"
     >
       {children}
     </div>
   );
 };
 
-export interface ConfigPageSectionProps {
+export interface ConfigPageSectionProps extends Omit<React.HTMLAttributes<HTMLElement>, 'title'> {
   title: string;
   /** Renders inline after the title (e.g. status badge). */
   titleSuffix?: React.ReactNode;
@@ -89,18 +93,18 @@ export const ConfigPageSection: React.FC<ConfigPageSectionProps> = ({
   extra,
   children,
   className = '',
-  mouseGlowSurface = true,
+  ...props
 }) => {
   return (
-    <section className={`bitfun-config-page-section ${className}`}>
-      <div className="bitfun-config-page-section__header">
+    <section className={`bitfun-config-page-section ${className}`} data-bf-component="config" data-bf-part="section" {...props}>
+      <div className="bitfun-config-page-section__header" data-bf-component="config" data-bf-part="sectionHeader">
         <div className="bitfun-config-page-section__heading">
           <div className="bitfun-config-page-section__title-row">
-            <h3 className="bitfun-config-page-section__title">{title}</h3>
+            <h3 className="bitfun-config-page-section__title" data-bf-component="config" data-bf-part="sectionTitle">{title}</h3>
             {titleSuffix}
           </div>
           {description && (
-            <p className="bitfun-config-page-section__description">{description}</p>
+            <p className="bitfun-config-page-section__description" data-bf-component="config" data-bf-part="sectionDescription">{description}</p>
           )}
         </div>
         {extra && (
@@ -109,10 +113,7 @@ export const ConfigPageSection: React.FC<ConfigPageSectionProps> = ({
           </div>
         )}
       </div>
-      <div
-        className="bitfun-config-page-section__body"
-        data-mouse-glow-surface={mouseGlowSurface ? '' : undefined}
-      >
+      <div className="bitfun-config-page-section__body" data-bf-component="config" data-bf-part="sectionBody">
         {children}
       </div>
     </section>
@@ -164,15 +165,22 @@ export const ConfigPageRow: React.FC<ConfigPageRowProps> = ({
     : undefined;
 
   return (
-    <div className={cls} style={gridStyle}>
+    <div
+      className={cls}
+      style={gridStyle}
+      data-bf-component="config"
+      data-bf-part="row"
+      data-bf-align={align}
+      data-bf-layout={wide ? 'wide' : balanced ? 'balanced' : multiline ? 'multiline' : 'default'}
+    >
       <div className="bitfun-config-page-row__meta">
         {/* div (not p): label may contain buttons; button-in-p freezes React event path */}
-        <div className="bitfun-config-page-row__label">{label}</div>
+        <div className="bitfun-config-page-row__label" data-bf-component="config" data-bf-part="rowLabel">{label}</div>
         {description ? (
-          <div className="bitfun-config-page-row__description">{description}</div>
+          <div className="bitfun-config-page-row__description" data-bf-component="config" data-bf-part="rowDescription">{description}</div>
         ) : null}
       </div>
-      <div className="bitfun-config-page-row__control">
+      <div className="bitfun-config-page-row__control" data-bf-component="config" data-bf-part="rowControl">
         {children}
       </div>
     </div>

@@ -383,7 +383,7 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
     setLocalError(null);
     try {
       await connect(config.id, config, { browseAfterConnect: true });
-      // Don't call onClose() here - connect() handles closing the dialog via context
+      onClose();
     } catch (e) {
       setLocalError(e instanceof Error ? e.message : 'Connection failed');
     } finally {
@@ -449,6 +449,7 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
           },
           { browseAfterConnect: true }
         );
+        onClose();
       } catch {
         setCredentialsPrompt(conn);
       } finally {
@@ -484,6 +485,7 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
           },
           { browseAfterConnect: true }
         );
+        onClose();
       } catch {
         setCredentialsPrompt(conn);
       } finally {
@@ -553,6 +555,7 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
       };
       await connect(conn.id, full, { browseAfterConnect: true });
       setCredentialsPrompt(null);
+      onClose();
     } catch (e) {
       setLocalError(e instanceof Error ? e.message : 'Connection failed');
     } finally {
@@ -721,9 +724,9 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
         overlayClassName="ssh-connection-dialog__modal-overlay"
         contentClassName="modal__content--fill-flex"
       >
-        <div className="ssh-connection-dialog">
+        <div className="ssh-connection-dialog" data-bf-component="ssh-remote" data-bf-part="connection">
           {error && (
-            <div className="ssh-connection-dialog__error-banner">
+            <div className="ssh-connection-dialog__error-banner" data-bf-component="ssh-remote" data-bf-part="connectionError">
               <Alert
                 type="error"
                 message={error}
@@ -734,10 +737,10 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
             </div>
           )}
 
-          <div className="ssh-connection-dialog__scroll">
+          <div className="ssh-connection-dialog__scroll" data-bf-component="ssh-remote" data-bf-part="connectionContent">
           {/* Saved connections section */}
           {savedConnections.length > 0 && (
-            <div className="ssh-connection-dialog__section">
+            <div className="ssh-connection-dialog__section" data-bf-component="ssh-remote" data-bf-part="connectionSection">
               <div className="ssh-connection-dialog__section-header">
                 <h3 className="ssh-connection-dialog__section-title">
                   {t('ssh.remote.savedConnections')}
@@ -751,7 +754,7 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
                   size="small"
                 />
               </div>
-              <div className="ssh-connection-dialog__saved-list">
+              <div className="ssh-connection-dialog__saved-list" data-bf-component="ssh-remote" data-bf-part="connectionList">
                 {filteredSavedConnections.map((conn) => (
                   <div
                     key={conn.id}
@@ -831,6 +834,8 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
                   <div
                     key={configHost.host}
                     className="ssh-connection-dialog__saved-item ssh-connection-dialog__saved-item--config"
+                    data-bf-component="ssh-remote"
+                    data-bf-part="connectionItem"
                     onClick={() => !isConnecting && handleFillFromConfig(configHost)}
                     role="button"
                     tabIndex={0}
@@ -880,6 +885,8 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
               'ssh-connection-dialog__form',
               formHighlighted ? 'ssh-connection-dialog__form--highlighted' : '',
             ].filter(Boolean).join(' ')}
+            data-bf-component="ssh-remote"
+            data-bf-part="connectionForm"
           >
             <div className="ssh-connection-dialog__field">
               <label className="ssh-connection-dialog__label">
@@ -1319,7 +1326,7 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
           </div>
 
           {/* Actions */}
-          <div className="ssh-connection-dialog__actions">
+          <div className="ssh-connection-dialog__actions" data-bf-component="ssh-remote" data-bf-part="connectionActions">
             <Button
               variant="secondary"
               size="small"

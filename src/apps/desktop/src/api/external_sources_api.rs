@@ -7,25 +7,45 @@ use bitfun_core::external_sources::{
     get_external_source_control_snapshot as core_get_external_source_control_snapshot,
     native_prompt_command_conflicts, set_external_mcp_server_decision,
     set_external_prompt_command_conflict_choice, set_external_source_enabled,
-    set_external_subagent_activation, set_external_tool_conflict_choice,
-    set_external_tool_target_decision, set_native_prompt_command_conflict_choice,
-    update_external_integration_policy, ExpandedPromptCommand, ExternalIntegrationPolicyMutation,
+    set_external_subagent_activation, set_external_subagent_model_binding,
+    set_external_tool_conflict_choice, set_external_tool_target_decision,
+    set_native_prompt_command_conflict_choice, update_external_integration_policy,
+    workspace_reference_snapshot, ExternalIntegrationPolicyMutation,
     ExternalSourceControlRequestV1, ExternalSourceHostCapabilities, ExternalSourceOperationError,
     ExternalSourceOperationErrorCode, ExternalSourceOperationResult, ExternalSourcePublicSnapshot,
-    ExternalSourceSurfaceSnapshotV1, NativePromptCommandConflictSnapshot,
-    NativePromptCommandDescriptor,
+    ExternalSourceSurfaceSnapshotV1, ExternalSubagentModelBindingTarget,
+    NativePromptCommandConflictSnapshot, NativePromptCommandDescriptor,
+    PromptCommandInvocationOutcome, PromptCommandShellReviewDecision,
 };
 use bitfun_core::service::remote_ssh::workspace_state::is_remote_path;
+use bitfun_core::service::remote_ssh::workspace_state::{
+    canonicalize_local_workspace_root, local_workspace_roots_equal,
+};
+use bitfun_core::service::workspace::manager::WorkspaceKind;
 use bitfun_product_domains::external_sources::{
     ExternalMcpImportApplyRequestV1, ExternalMcpImportApplyResultV1, ExternalMcpImportPlanV1,
 };
+use bitfun_product_domains::workspace_references::WorkspaceReferenceSnapshot;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
+use tauri::State;
+
+use super::AppState;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ExternalSourceSnapshotRequest {
     pub workspace_path: Option<String>,
+    #[serde(default)]
+    pub force_refresh: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct WorkspaceReferenceSnapshotRequest {
+    pub workspace_path: String,
+    #[serde(default)]
+    pub workspace_id: Option<String>,
     #[serde(default)]
     pub force_refresh: bool,
 }
@@ -99,6 +119,8 @@ pub struct ExpandExternalPromptCommandRequest {
     pub expected_native_conflict_key: Option<String>,
     #[serde(default)]
     pub expected_preference_revision: Option<u64>,
+    #[serde(default)]
+    pub shell_review_decision: Option<PromptCommandShellReviewDecision>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -129,6 +151,16 @@ pub struct SetExternalSubagentActivationRequest {
     pub expected_subagent_generation: u64,
     pub expected_preference_revision: u64,
     pub decision_key: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SetExternalSubagentModelBindingRequest {
+    pub workspace_path: Option<String>,
+    pub binding_key: String,
+    pub target: Option<ExternalSubagentModelBindingTarget>,
+    pub expected_subagent_generation: u64,
+    pub expected_preference_revision: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -181,8 +213,9 @@ pub struct ApplyExternalMcpImportRequest {
 
 pub type ExternalSourceSnapshotResponse = ExternalSourcePublicSnapshot;
 pub type ExternalSourceControlResponse = ExternalSourceSurfaceSnapshotV1;
-pub type ExpandExternalPromptCommandResponse = ExpandedPromptCommand;
+pub type ExpandExternalPromptCommandResponse = PromptCommandInvocationOutcome;
 pub type NativePromptCommandConflictsResponse = NativePromptCommandConflictSnapshot;
+pub type WorkspaceReferenceResponse = WorkspaceReferenceSnapshot;
 
 #[tauri::command]
 pub async fn plan_external_mcp_import_command(
@@ -247,6 +280,98 @@ pub async fn get_external_source_snapshot(
         .await
         .map(|snapshot| ExternalSourcePublicSnapshot::from(snapshot).into_legacy_v0_compatible())
         .map_err(bitfun_core::external_sources::sanitize_external_source_operation_error)
+}
+
+#[tauri::command]
+pub async fn get_workspace_reference_snapshot(
+    state: State<'_, AppState>,
+    request: WorkspaceReferenceSnapshotRequest,
+) -> ExternalSourceOperationResult<WorkspaceReferenceResponse> {
+    let requested_workspace = Path::new(&request.workspace_path);
+    if !requested_workspace.is_absolute() {
+        return Err(ExternalSourceOperationError::invalid_request(
+            "Workspace references require an absolute workspace path",
+        ));
+    }
+    let workspace_id = request
+        .workspace_id
+        .as_deref()
+        .map(str::trim)
+        .filter(|workspace_id| !workspace_id.is_empty());
+    let workspace_info = match workspace_id {
+        Some(workspace_id) => state.workspace_service.get_workspace(workspace_id).await,
+        None => {
+            state
+                .workspace_service
+                .get_workspace_by_path(requested_workspace)
+                .await
+        }
+    };
+    ensure_registered_workspace_reference_kind(
+        workspace_info
+            .as_ref()
+            .map(|workspace| &workspace.workspace_kind),
+    )?;
+    let workspace_info = workspace_info.expect("registered workspace was validated above");
+    let path_matches_registered_workspace = if workspace_reference_path_matches_registered_root(
+        &workspace_info.root_path,
+        requested_workspace,
+    ) {
+        true
+    } else {
+        state
+            .workspace_service
+            .is_live_worktree_root_in_same_repository(
+                &workspace_info.root_path,
+                requested_workspace,
+            )
+            .await
+            .unwrap_or(false)
+    };
+    if !path_matches_registered_workspace {
+        return Err(ExternalSourceOperationError::invalid_request(
+            "Workspace reference path does not match the registered workspace or one of its Git worktrees",
+        ));
+    }
+    let workspace = require_local_workspace(Some(&request.workspace_path))
+        .await?
+        .ok_or_else(|| {
+            ExternalSourceOperationError::invalid_request(
+                "Workspace references require a local workspace path",
+            )
+        })?;
+    let native_related_paths = workspace_info.related_paths;
+    workspace_reference_snapshot(workspace, &native_related_paths, request.force_refresh)
+        .await
+        .map_err(bitfun_core::external_sources::sanitize_external_source_operation_error)
+}
+
+fn ensure_registered_workspace_reference_kind(
+    workspace_kind: Option<&WorkspaceKind>,
+) -> ExternalSourceOperationResult<()> {
+    match workspace_kind {
+        None => Err(ExternalSourceOperationError::new(
+            ExternalSourceOperationErrorCode::NotFound,
+            "Workspace references require a registered workspace",
+            false,
+        )),
+        Some(WorkspaceKind::Remote) => Err(ExternalSourceOperationError::new(
+            ExternalSourceOperationErrorCode::HostUnavailable,
+            "The remote workspace is not running the external compatibility service",
+            true,
+        )),
+        Some(WorkspaceKind::Normal | WorkspaceKind::Assistant) => Ok(()),
+    }
+}
+
+fn workspace_reference_path_matches_registered_root(
+    registered_root: &Path,
+    requested_path: &Path,
+) -> bool {
+    let Ok((requested_path, _)) = canonicalize_local_workspace_root(requested_path) else {
+        return false;
+    };
+    local_workspace_roots_equal(registered_root, &requested_path)
 }
 
 #[tauri::command]
@@ -353,6 +478,7 @@ pub async fn expand_external_prompt_command_command(
         Some(&request.expected_content_version),
         request.expected_native_conflict_key.as_deref(),
         request.expected_preference_revision,
+        request.shell_review_decision.as_ref(),
     )
     .await
     .map_err(bitfun_core::external_sources::sanitize_external_source_operation_error)
@@ -403,6 +529,23 @@ pub async fn set_external_subagent_activation_command(
         request.expected_subagent_generation,
         request.expected_preference_revision,
         &request.decision_key,
+    )
+    .await
+    .map(Into::into)
+    .map_err(bitfun_core::external_sources::sanitize_external_source_operation_error)
+}
+
+#[tauri::command]
+pub async fn set_external_subagent_model_binding_command(
+    request: SetExternalSubagentModelBindingRequest,
+) -> ExternalSourceOperationResult<ExternalSourceSnapshotResponse> {
+    let workspace = require_local_workspace(request.workspace_path.as_deref()).await?;
+    set_external_subagent_model_binding(
+        workspace,
+        &request.binding_key,
+        request.target,
+        request.expected_subagent_generation,
+        request.expected_preference_revision,
     )
     .await
     .map(Into::into)
@@ -471,6 +614,47 @@ mod tests {
     };
 
     #[test]
+    fn workspace_references_fail_closed_without_registered_local_metadata() {
+        let missing = ensure_registered_workspace_reference_kind(None).unwrap_err();
+        assert_eq!(missing.code, ExternalSourceOperationErrorCode::NotFound);
+
+        let remote =
+            ensure_registered_workspace_reference_kind(Some(&WorkspaceKind::Remote)).unwrap_err();
+        assert_eq!(
+            remote.code,
+            ExternalSourceOperationErrorCode::HostUnavailable
+        );
+
+        assert!(ensure_registered_workspace_reference_kind(Some(&WorkspaceKind::Normal)).is_ok());
+        assert!(
+            ensure_registered_workspace_reference_kind(Some(&WorkspaceKind::Assistant)).is_ok()
+        );
+    }
+
+    #[test]
+    fn workspace_reference_paths_do_not_accept_unrelated_or_stale_local_paths() {
+        let directory = tempfile::tempdir().unwrap();
+        let registered_root = directory.path().join("registered");
+        let unrelated_root = directory.path().join("unrelated");
+        for path in [&registered_root, &unrelated_root] {
+            std::fs::create_dir_all(path).unwrap();
+        }
+
+        assert!(workspace_reference_path_matches_registered_root(
+            &registered_root,
+            &registered_root
+        ));
+        assert!(!workspace_reference_path_matches_registered_root(
+            &registered_root,
+            &unrelated_root
+        ));
+        assert!(!workspace_reference_path_matches_registered_root(
+            &registered_root,
+            Path::new("/stale/remote/workspace")
+        ));
+    }
+
+    #[test]
     fn desktop_snapshot_never_serializes_prompt_templates() {
         let snapshot: ExternalSourceCatalogSnapshot = serde_json::from_value(serde_json::json!({
             "generation": 1,
@@ -525,6 +709,36 @@ mod tests {
     }
 
     #[test]
+    fn desktop_subagent_model_binding_request_keeps_the_target_typed_and_nullable() {
+        let set: SetExternalSubagentModelBindingRequest =
+            serde_json::from_value(serde_json::json!({
+                "workspacePath": "D:/workspace/project",
+                "bindingKey": "external_subagent_model_binding:review",
+                "target": { "kind": "model", "modelId": "glm-project" },
+                "expectedSubagentGeneration": 5,
+                "expectedPreferenceRevision": 8
+            }))
+            .unwrap();
+        assert_eq!(
+            set.target,
+            Some(ExternalSubagentModelBindingTarget::Model {
+                model_id: "glm-project".to_string(),
+            })
+        );
+
+        let clear: SetExternalSubagentModelBindingRequest =
+            serde_json::from_value(serde_json::json!({
+                "workspacePath": null,
+                "bindingKey": "external_subagent_model_binding:review",
+                "target": null,
+                "expectedSubagentGeneration": 5,
+                "expectedPreferenceRevision": 8
+            }))
+            .unwrap();
+        assert_eq!(clear.target, None);
+    }
+
+    #[test]
     fn desktop_prompt_expansion_request_requires_guarded_candidate_identity() {
         let request: ExpandExternalPromptCommandRequest =
             serde_json::from_value(serde_json::json!({
@@ -545,6 +759,30 @@ mod tests {
         assert_eq!(request.arguments, "focus on auth");
         assert_eq!(request.native_commands.len(), 1);
         assert_eq!(request.candidate_id, "claude-code.commands:project:review");
+        assert!(request.shell_review_decision.is_none());
+
+        let approved: ExpandExternalPromptCommandRequest =
+            serde_json::from_value(serde_json::json!({
+                "workspacePath": "D:/workspace/project",
+                "name": "review",
+                "arguments": "",
+                "nativeCommands": [],
+                "candidateId": "opencode.commands:project:review",
+                "expectedContentVersion": "behavior-v2",
+                "shellReviewDecision": {
+                    "planFingerprint": "sha256:plan-v2",
+                    "mode": "run_once",
+                    "expectedPreferenceRevision": 9
+                }
+            }))
+            .unwrap();
+        assert_eq!(
+            approved
+                .shell_review_decision
+                .as_ref()
+                .map(|decision| decision.plan_fingerprint.as_str()),
+            Some("sha256:plan-v2")
+        );
         assert!(
             serde_json::from_value::<ExpandExternalPromptCommandRequest>(serde_json::json!({
                 "name": "review",

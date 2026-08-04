@@ -5,8 +5,8 @@
 .canvas-anchor-zone {
   display: flex;
   flex-direction: column;
-  background: var(--color-bg-primary);
-  border: 1px solid var(--border-base);
+  background: var(--bf-appearance-token-color-bg-primary);
+  border: 1px solid var(--bf-appearance-token-border-base);
   overflow: hidden;
 
   // Bottom position
@@ -56,7 +56,7 @@
   // Resizing state
   &.is-resizing {
     .canvas-anchor-zone__resizer-line {
-      background: var(--color-accent-500);
+      background: var(--bf-appearance-token-color-accent-500);
     }
   }
 
@@ -89,13 +89,13 @@
 
     &:hover {
       .canvas-anchor-zone__resizer-line {
-        background: var(--color-accent-500);
+        background: var(--bf-appearance-token-color-accent-500);
       }
     }
   }
 
   &__resizer-line {
-    background: var(--border-base);
+    background: var(--bf-appearance-token-border-base);
     transition: background-color 0.15s ease;
   }
 
@@ -105,8 +105,8 @@
     align-items: center;
     justify-content: space-between;
     padding: 6px 12px;
-    background: var(--color-bg-secondary);
-    border-bottom: 1px solid var(--border-base);
+    background: var(--bf-appearance-token-color-bg-secondary);
+    border-bottom: 1px solid var(--bf-appearance-token-border-base);
     flex-shrink: 0;
   }
 
@@ -116,10 +116,10 @@
     gap: 8px;
     font-size: 12px;
     font-weight: 500;
-    color: var(--color-text-primary);
+    color: var(--bf-appearance-token-color-text-primary);
 
     svg {
-      color: var(--color-text-secondary);
+      color: var(--bf-appearance-token-color-text-secondary);
     }
   }
 
@@ -138,19 +138,19 @@
     padding: 0;
     background: none;
     border: none;
-    color: var(--color-text-secondary);
+    color: var(--bf-appearance-token-color-text-secondary);
     cursor: pointer;
     border-radius: 4px;
     transition: background-color 0.15s ease, color 0.15s ease;
 
     &:hover {
-      background: var(--element-bg-hover);
-      color: var(--color-text-primary);
+      background: var(--bf-appearance-token-element-bg-hover);
+      color: var(--bf-appearance-token-color-text-primary);
     }
   }
 
   &__close-btn:hover {
-    color: var(--color-error);
+    color: var(--bf-appearance-token-color-error);
   }
 
   // Content area

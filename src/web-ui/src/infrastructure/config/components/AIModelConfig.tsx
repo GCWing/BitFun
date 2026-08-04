@@ -1853,14 +1853,14 @@ const AIModelConfig: React.FC = () => {
   
   if (creationMode === 'selection') {
     return (
-      <ConfigPageLayout className="bitfun-ai-model-config">
+      <ConfigPageLayout className="bitfun-ai-model-config" data-bf-component="ai-model-config" data-bf-part="root" data-bf-view="selection">
         <ConfigPageHeader
           title={t('providerSelection.title')}
           subtitle={t('providerSelection.subtitle')}
         />
 
         <ConfigPageContent className="bitfun-ai-model-config__content bitfun-ai-model-config__content--selection">
-          <div className="bitfun-ai-model-config__provider-selection">
+          <div className="bitfun-ai-model-config__provider-selection" data-bf-component="ai-model-config" data-bf-part="providerSelection">
             
             <Card
               data-testid="settings-model-custom-config-btn"
@@ -1871,22 +1871,22 @@ const AIModelConfig: React.FC = () => {
               className="bitfun-ai-model-config__custom-option"
               onClick={handleSelectCustom}
             >
-              <div className="bitfun-ai-model-config__custom-option-content">
+              <div className="bitfun-ai-model-config__custom-option-content" data-bf-component="ai-model-config" data-bf-part="customOption">
                 <Settings size={24} />
                 <div>
-                  <div className="bitfun-ai-model-config__custom-option-title">{t('providerSelection.customTitle')}</div>
-                  <div className="bitfun-ai-model-config__custom-option-description">{t('providerSelection.customDescription')}</div>
+                  <div className="bitfun-ai-model-config__custom-option-title" data-bf-component="ai-model-config" data-bf-part="customOptionTitle">{t('providerSelection.customTitle')}</div>
+                  <div className="bitfun-ai-model-config__custom-option-description" data-bf-component="ai-model-config" data-bf-part="customOptionDescription">{t('providerSelection.customDescription')}</div>
                 </div>
               </div>
             </Card>
 
             
-            <div className="bitfun-ai-model-config__selection-divider">
+            <div className="bitfun-ai-model-config__selection-divider" data-bf-component="ai-model-config" data-bf-part="selectionDivider">
               <span>{t('providerSelection.orSelectProvider')}</span>
             </div>
 
             
-            <div className="bitfun-ai-model-config__provider-grid">
+            <div className="bitfun-ai-model-config__provider-grid" data-bf-component="ai-model-config" data-bf-part="providerGrid">
               {providers.map(provider => (
                 <Card
                   key={provider.id}
@@ -1898,15 +1898,15 @@ const AIModelConfig: React.FC = () => {
                   className="bitfun-ai-model-config__provider-card"
                   onClick={() => handleSelectProvider(provider.id)}
                 >
-                  <div className="bitfun-ai-model-config__provider-card-content">
-                    <div className="bitfun-ai-model-config__provider-name">{provider.name}</div>
-                    <div className="bitfun-ai-model-config__provider-description">{provider.description}</div>
-                    <div className="bitfun-ai-model-config__provider-models">
+                  <div className="bitfun-ai-model-config__provider-card-content" data-bf-component="ai-model-config" data-bf-part="providerCard">
+                    <div className="bitfun-ai-model-config__provider-name" data-bf-component="ai-model-config" data-bf-part="providerName">{provider.name}</div>
+                    <div className="bitfun-ai-model-config__provider-description" data-bf-component="ai-model-config" data-bf-part="providerDescription">{provider.description}</div>
+                    <div className="bitfun-ai-model-config__provider-models" data-bf-component="ai-model-config" data-bf-part="providerModels">
                       {provider.models.slice(0, 3).map(model => (
-                        <span key={model} className="bitfun-ai-model-config__provider-model-tag">{model}</span>
+                        <span key={model} className="bitfun-ai-model-config__provider-model-tag" data-bf-component="ai-model-config" data-bf-part="providerTag">{model}</span>
                       ))}
                       {provider.models.length > 3 && (
-                        <span className="bitfun-ai-model-config__provider-model-tag bitfun-ai-model-config__provider-model-tag--more">
+                        <span className="bitfun-ai-model-config__provider-model-tag bitfun-ai-model-config__provider-model-tag--more" data-bf-component="ai-model-config" data-bf-part="providerTag">
                           +{provider.models.length - 3}
                         </span>
                       )}
@@ -1937,7 +1937,7 @@ const AIModelConfig: React.FC = () => {
             </div>
 
             
-            <div className="bitfun-ai-model-config__selection-actions">
+            <div className="bitfun-ai-model-config__selection-actions" data-bf-component="ai-model-config" data-bf-part="selectionActions">
               <Button variant="secondary" onClick={() => setCreationMode(null)}>
                 {t('actions.cancel')}
               </Button>
@@ -2198,6 +2198,8 @@ const AIModelConfig: React.FC = () => {
                         options={categoryOptions}
                         size="small"
                         className="bitfun-ai-model-config__selected-model-category-select"
+                        dropdownClassName="bitfun-ai-model-config__selected-model-category-dropdown"
+                        dropdownMatchTriggerWidth={false}
                         renderValue={(option) => {
                           if (!option || Array.isArray(option)) {
                             return null;
@@ -2351,8 +2353,8 @@ const AIModelConfig: React.FC = () => {
 
     return (
       <>
-        <div className="bitfun-ai-model-config__form bitfun-ai-model-config__form--modal">
-          <div className="bitfun-ai-model-config__form-scrollable">
+        <div className="bitfun-ai-model-config__form bitfun-ai-model-config__form--modal" data-bf-component="ai-model-config" data-bf-part="form">
+          <div className="bitfun-ai-model-config__form-scrollable" data-bf-component="ai-model-config" data-bf-part="formBody">
             <ConfigPageSection
               title={isProviderScopedEditing ? t('editProviderSubtitle') : t('editSubtitle')}
               className="bitfun-ai-model-config__edit-section"
@@ -2789,7 +2791,7 @@ const AIModelConfig: React.FC = () => {
                   className="bitfun-ai-model-config__custom-request-body-row"
                 >
                   <div className="bitfun-ai-model-config__row-control--stack">
-                    <Textarea value={editingConfig.custom_request_body || ''} onChange={(e) => setEditingConfig(prev => ({ ...prev, custom_request_body: e.target.value }))} placeholder={t('advancedSettings.customRequestBody.placeholder')} rows={8} style={{ fontFamily: 'var(--font-family-mono)', fontSize: '13px' }} />
+                    <Textarea value={editingConfig.custom_request_body || ''} onChange={(e) => setEditingConfig(prev => ({ ...prev, custom_request_body: e.target.value }))} placeholder={t('advancedSettings.customRequestBody.placeholder')} rows={8} style={{ fontFamily: 'var(--bf-appearance-token-font-family-mono)', fontSize: '13px' }} />
                     {editingConfig.custom_request_body && editingConfig.custom_request_body.trim() !== '' && (() => {
                       try { JSON.parse(editingConfig.custom_request_body); return <small className="bitfun-ai-model-config__json-status bitfun-ai-model-config__json-status--success">{t('advancedSettings.customRequestBody.validJson')}</small>; }
                       catch { return <small className="bitfun-ai-model-config__json-status bitfun-ai-model-config__json-status--error">{t('advancedSettings.customRequestBody.invalidJson')}</small>; }
@@ -2801,7 +2803,7 @@ const AIModelConfig: React.FC = () => {
           </ConfigPageSection>
           </div>
 
-          <div className="bitfun-ai-model-config__form-actions bitfun-ai-model-config__form-actions--sticky">
+          <div className="bitfun-ai-model-config__form-actions bitfun-ai-model-config__form-actions--sticky" data-bf-component="ai-model-config" data-bf-part="formActions">
             <Button variant="secondary" onClick={closeEditingModal}>{t('actions.cancel')}</Button>
             <Button data-testid="settings-model-save-btn" variant="primary" onClick={handleSave}>{t('actions.save')}</Button>
           </div>
@@ -2820,7 +2822,11 @@ const AIModelConfig: React.FC = () => {
 
     const badge = (
       <>
-        <span className="bitfun-ai-model-config__meta-tag">
+        <span
+          className="bitfun-ai-model-config__meta-tag"
+          data-bf-component="ai-model-config"
+          data-bf-part="modelMeta"
+        >
           {t(`category.${config.category}`)}
         </span>
         {testResult && (
@@ -2838,7 +2844,11 @@ const AIModelConfig: React.FC = () => {
     );
 
     const details = (
-      <div className="bitfun-ai-model-config__details">
+      <div
+        className="bitfun-ai-model-config__details"
+        data-bf-component="ai-model-config"
+        data-bf-part="modelDetails"
+      >
         <div className="bitfun-ai-model-config__details-section">
           <div className="bitfun-ai-model-config__details-section-title">
             {t('details.basicInfo')}
@@ -2888,7 +2898,11 @@ const AIModelConfig: React.FC = () => {
     );
 
     const control = (
-      <>
+      <div
+        className="bitfun-ai-model-config__model-actions"
+        data-bf-component="ai-model-config"
+        data-bf-part="modelActions"
+      >
         <Switch
           checked={config.enabled}
           onChange={(e) => {
@@ -2921,7 +2935,7 @@ const AIModelConfig: React.FC = () => {
         >
           <Trash2 size={14} />
         </IconButton>
-      </>
+      </div>
     );
 
     return (
@@ -2938,6 +2952,9 @@ const AIModelConfig: React.FC = () => {
         data-config-id={config.id || ''}
         data-model-id={config.model_name}
         data-model-name={config.model_name}
+        data-bf-component="ai-model-config"
+        data-bf-part="modelItem"
+        data-bf-state={[isExpanded && 'expanded', !config.enabled && 'disabled'].filter(Boolean).join(' ') || undefined}
       />
     );
   };
@@ -2976,7 +2993,7 @@ const AIModelConfig: React.FC = () => {
 
   
   return (
-    <ConfigPageLayout className="bitfun-ai-model-config">
+    <ConfigPageLayout className="bitfun-ai-model-config" data-bf-component="ai-model-config" data-bf-part="root" data-bf-view="settings">
       <ConfigPageHeader
         title={t('title')}
         subtitle={t('subtitle')}
@@ -3011,9 +3028,9 @@ const AIModelConfig: React.FC = () => {
             </IconButton>
           )}
         >
-          <div className="bitfun-ai-model-config__cli-discovery">
+          <div className="bitfun-ai-model-config__cli-discovery" data-bf-component="ai-model-config" data-bf-part="subscriptionArea">
             {showSubscriptionMigrationNotice && (
-              <div className="bitfun-ai-model-config__subscription-migration-notice" role="status">
+              <div className="bitfun-ai-model-config__subscription-migration-notice" data-bf-component="ai-model-config" data-bf-part="subscriptionNotice" role="status">
                 <Info size={16} aria-hidden="true" />
                 <span>{t('subscriptionAuth.secureStoreMigrationNotice')}</span>
                 <Button
@@ -3136,9 +3153,12 @@ const AIModelConfig: React.FC = () => {
                   {loginPanel && (
                     <div
                       className={`bitfun-ai-model-config__subscription-login-panel bitfun-ai-model-config__subscription-login-panel--${loginPanel.status}`}
+                      data-bf-component="ai-model-config"
+                      data-bf-part="subscriptionPanel"
+                      data-bf-status={loginPanel.status}
                       role={loginPanel.status === 'failed' ? 'alert' : 'status'}
                     >
-                      <div className="bitfun-ai-model-config__subscription-login-summary">
+                      <div className="bitfun-ai-model-config__subscription-login-summary" data-bf-component="ai-model-config" data-bf-part="subscriptionSummary">
                         <strong>
                           {loginPanel.status === 'failed'
                             ? t('subscriptionAuth.loginNeedsRetry')
@@ -3155,14 +3175,14 @@ const AIModelConfig: React.FC = () => {
                       </div>
 
                       {loginPanel.status === 'pending' && loginPanel.userCode && (
-                        <div className="bitfun-ai-model-config__subscription-code">
+                        <div className="bitfun-ai-model-config__subscription-code" data-bf-component="ai-model-config" data-bf-part="subscriptionCode">
                           <span>{t('subscriptionAuth.verificationCode')}</span>
                           <code>{loginPanel.userCode}</code>
                         </div>
                       )}
 
                       {(loginPanel.status === 'pending' || loginPanel.status === 'failed') && (
-                        <div className="bitfun-ai-model-config__subscription-login-actions">
+                        <div className="bitfun-ai-model-config__subscription-login-actions" data-bf-component="ai-model-config" data-bf-part="subscriptionActions">
                           {loginPanel.status === 'pending' && loginPanel.userCode && (
                             <Button
                               size="small"
@@ -3217,7 +3237,7 @@ const AIModelConfig: React.FC = () => {
           )}
         >
           {aiModels.length === 0 ? (
-            <div className="bitfun-ai-model-config__empty">
+            <div className="bitfun-ai-model-config__empty" data-bf-component="ai-model-config" data-bf-part="empty">
               <Wifi size={36} />
               <p>{t('empty.noModels')}</p>
               <Button data-testid="settings-model-create-first-config-btn" variant="primary" size="small" onClick={handleCreateNew}>
@@ -3226,18 +3246,18 @@ const AIModelConfig: React.FC = () => {
               </Button>
             </div>
           ) : (
-            <div className="bitfun-ai-model-config__collection" data-testid="settings-model-list">
+            <div className="bitfun-ai-model-config__collection" data-bf-component="ai-model-config" data-bf-part="collection" data-testid="settings-model-list">
               {providerGroups.map(group => (
-                <div key={group.key} className="bitfun-ai-model-config__provider-group">
-                  <div className="bitfun-ai-model-config__provider-group-header">
-                    <div className="bitfun-ai-model-config__provider-group-title">
+                <div key={group.key} className="bitfun-ai-model-config__provider-group" data-bf-component="ai-model-config" data-bf-part="providerGroup">
+                  <div className="bitfun-ai-model-config__provider-group-header" data-bf-component="ai-model-config" data-bf-part="providerGroupHeader">
+                    <div className="bitfun-ai-model-config__provider-group-title" data-bf-component="ai-model-config" data-bf-part="providerGroupTitle">
                       <span>{group.providerName}</span>
                       <span className="bitfun-ai-model-config__provider-group-count">{group.models.length}</span>
                       <span className="bitfun-ai-model-config__meta-tag">
                         {requestFormatLabelMap[group.models[0]?.provider || 'openai'] || (group.models[0]?.provider || 'openai')}
                       </span>
                     </div>
-                    <div className="bitfun-ai-model-config__provider-group-actions">
+                    <div className="bitfun-ai-model-config__provider-group-actions" data-bf-component="ai-model-config" data-bf-part="providerGroupActions">
                       <IconButton
                         variant="ghost"
                         size="small"
@@ -3248,7 +3268,7 @@ const AIModelConfig: React.FC = () => {
                       </IconButton>
                     </div>
                   </div>
-                  <div className="bitfun-ai-model-config__provider-group-list">
+                  <div className="bitfun-ai-model-config__provider-group-list" data-bf-component="ai-model-config" data-bf-part="providerGroupList">
                     {group.models.map(config => renderModelCollectionItem(config))}
                   </div>
                 </div>
@@ -3376,7 +3396,7 @@ const AIModelConfig: React.FC = () => {
         size="small"
         closeOnOverlayClick={false}
       >
-        <div className="bitfun-ai-model-config__subscription-logout-confirm">
+        <div className="bitfun-ai-model-config__subscription-logout-confirm" data-bf-component="ai-model-config" data-bf-part="logoutConfirm">
           <p>
             {subscriptionLogoutRequest?.affectedModels.length
               ? t('subscriptionAuth.logoutAffectedModels', {
@@ -3392,7 +3412,7 @@ const AIModelConfig: React.FC = () => {
             </ul>
           )}
           <p>{t('subscriptionAuth.logoutConsequence')}</p>
-          <div className="bitfun-ai-model-config__subscription-logout-actions">
+          <div className="bitfun-ai-model-config__subscription-logout-actions" data-bf-component="ai-model-config" data-bf-part="logoutActions">
             <Button
               size="small"
               variant="secondary"

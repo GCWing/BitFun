@@ -38,7 +38,13 @@ import './SettingsScene.scss';
 
 function SettingsSceneLoading() {
   return (
-    <div className="bitfun-settings-scene__loading" aria-busy="true" aria-hidden="true">
+    <div
+      className="bitfun-settings-scene__loading"
+      aria-busy="true"
+      aria-hidden="true"
+      data-bf-scene="settings"
+      data-bf-part="loading"
+    >
       <div className="bitfun-settings-scene__loading-line bitfun-settings-scene__loading-line--title" />
       <div className="bitfun-settings-scene__loading-line" />
       <div className="bitfun-settings-scene__loading-line" />
@@ -113,22 +119,28 @@ const SettingsScene: React.FC = () => {
   const Content = firstPaintReady ? resolveSettingsContent(resolvedTab) : null;
 
   return (
-    <div className="bitfun-settings-scene" data-testid="settings-scene" data-settings-tab={resolvedTab}>
-      <div className="bitfun-settings-scene__content-stack">
-        {Content ? (
-          <div
-            key={resolvedTab}
-            className="bitfun-settings-scene__content-wrapper"
-            data-testid="settings-scene-content"
-            data-settings-panel={resolvedTab}
-            data-settings-panel-active="true"
-          >
-            <Suspense fallback={<SettingsSceneLoading />}>
-              <Content />
-            </Suspense>
-          </div>
-        ) : null}
-      </div>
+    <div
+      className="bitfun-settings-scene"
+      data-testid="settings-scene"
+      data-settings-tab={resolvedTab}
+      data-bf-scene="settings"
+      data-bf-part="root"
+      data-bf-tab={resolvedTab}
+    >
+      {Content && (
+        <div
+          key={resolvedTab}
+          className="bitfun-settings-scene__content-wrapper"
+          data-testid="settings-scene-content"
+          data-bf-scene="settings"
+          data-bf-part="content"
+          data-bf-tab={resolvedTab}
+        >
+          <Suspense fallback={<SettingsSceneLoading />}>
+            <Content />
+          </Suspense>
+        </div>
+      )}
     </div>
   );
 };

@@ -138,9 +138,10 @@ describe('SettingsScene lazy tab routing', () => {
       await Promise.resolve();
     });
 
-    const activePanel = container.querySelector('[data-settings-panel-active="true"]');
-    expect(activePanel?.getAttribute('data-settings-panel')).toBe('appearance');
-    expect(container.querySelector('[data-settings-panel="basics"]')).toBeNull();
-    expect(container.querySelectorAll('[data-settings-panel-active="true"]')).toHaveLength(1);
+    const scene = container.querySelector('[data-testid="settings-scene"]');
+    expect(scene?.getAttribute('data-settings-tab')).toBe('appearance');
+    expect(container.querySelector('[data-testid="appearance-config"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="basics-config"]')).toBeNull();
+    expect(container.querySelectorAll('[data-testid="settings-scene-content"]')).toHaveLength(1);
   });
 });

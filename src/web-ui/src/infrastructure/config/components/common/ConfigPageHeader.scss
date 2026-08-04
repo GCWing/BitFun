@@ -6,15 +6,8 @@
 
 .bitfun-config-page-header {
   flex-shrink: 0;
-  position: sticky;
-  top: 0;
-  z-index: $z-header;
-  padding: 32px 0 20px;
-  margin-bottom: var(--size-gap-5);
-  background: color-mix(in srgb, var(--color-bg-scene) 94%, transparent);
-  border-bottom: 1px solid color-mix(in srgb, var(--border-subtle) 76%, transparent);
-  backdrop-filter: blur(16px) saturate(1.08);
-  -webkit-backdrop-filter: blur(16px) saturate(1.08);
+  padding: 48px configLayout.$config-page-content-inline-padding 0;
+  margin-bottom: var(--bf-appearance-token-size-gap-6);
 }
 
 .bitfun-config-page-header__inner {
@@ -26,13 +19,13 @@
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  gap: var(--size-gap-4);
+  gap: var(--bf-appearance-token-size-gap-4);
 }
 
 .bitfun-config-page-header__left {
   display: flex;
   align-items: center;
-  gap: var(--size-gap-4);
+  gap: var(--bf-appearance-token-size-gap-4);
   flex: 1;
   min-width: 0;
 }
@@ -43,21 +36,21 @@
 }
 
 .bitfun-config-page-header__title {
-  margin: 0 0 3px;
-  font-size: var(--font-size-3xl);
-  font-weight: var(--font-weight-semibold);
-  color: var(--color-text-primary);
-  line-height: var(--line-height-tight);
-  font-family: var(--font-family-sans);
+  margin: 0 0 4px 0;
+  font-size: calc(var(--bf-appearance-token-font-size-xl) * 1.5);
+  font-weight: var(--bf-appearance-token-font-weight-semibold);
+  color: var(--bf-appearance-token-color-text-primary);
+  line-height: var(--bf-appearance-token-line-height-tight);
+  font-family: var(--bf-appearance-token-font-family-sans);
 }
 
 .bitfun-config-page-header__subtitle {
   margin: 0;
   margin-top: 2px;
-  font-size: var(--font-size-sm);
-  color: var(--color-text-secondary);
-  line-height: var(--line-height-relaxed);
-  font-family: var(--font-family-sans);
+  font-size: var(--bf-appearance-token-font-size-sm);
+  color: var(--bf-appearance-token-color-text-secondary);
+  line-height: var(--bf-appearance-token-line-height-relaxed);
+  font-family: var(--bf-appearance-token-font-family-sans);
   max-width: 100%;
 }
 
@@ -65,7 +58,7 @@
   flex-shrink: 0;
   display: flex;
   align-items: center;
-  gap: var(--size-gap-2);
+  gap: var(--bf-appearance-token-size-gap-2);
 }
 
 @media (max-width: 768px) {
@@ -86,15 +79,15 @@
 
 @media (max-width: 600px) {
   .bitfun-config-page-header__left {
-    gap: var(--size-gap-3);
+    gap: var(--bf-appearance-token-size-gap-3);
   }
 
   .bitfun-config-page-header__title {
-    font-size: calc(var(--font-size-lg) * 1.5);
+    font-size: calc(var(--bf-appearance-token-font-size-lg) * 1.5);
   }
 
   .bitfun-config-page-header__subtitle {
-    font-size: var(--font-size-xs);
+    font-size: var(--bf-appearance-token-font-size-xs);
   }
 }
 
@@ -102,22 +95,26 @@
 .bitfun-config-page-header-divider {
   flex-shrink: 0;
   height: 1px;
-  background: var(--border-subtle);
+  background: var(--bf-appearance-token-border-subtle);
   width: min(
     calc(100% - (2 * #{configLayout.$config-page-content-inline-padding})),
     #{configLayout.$config-page-content-max-width}
   );
-  margin: var(--size-gap-4) auto;
+  margin: var(--bf-appearance-token-size-gap-4) auto;
   display: none;
 }
 
 @container config-panel (max-width: 900px) {
+  .bitfun-config-page-header {
+    padding-inline: var(--bf-appearance-token-size-gap-4);
+  }
+
   .bitfun-config-page-header__inner {
-    width: calc(100% - (2 * var(--size-gap-4)));
+    width: calc(100% - (2 * var(--bf-appearance-token-size-gap-4)));
   }
 
   .bitfun-config-page-header-divider {
-    width: calc(100% - (2 * var(--size-gap-4)));
+    width: calc(100% - (2 * var(--bf-appearance-token-size-gap-4)));
   }
 }
 
@@ -126,27 +123,27 @@
 
 @container config-panel (max-width: 520px) {
   .bitfun-config-page-header {
-    padding: var(--size-gap-4) 0 var(--size-gap-3);
+    padding-top: var(--bf-appearance-token-size-gap-5);
   }
 
   .bitfun-config-page-header__inner {
-    gap: var(--size-gap-3);
+    gap: var(--bf-appearance-token-size-gap-3);
     flex-direction: column;
     align-items: flex-start;
   }
 
   .bitfun-config-page-header__left {
-    gap: var(--size-gap-3);
+    gap: var(--bf-appearance-token-size-gap-3);
     width: 100%;
   }
 
   .bitfun-config-page-header__title {
-    font-size: calc(var(--font-size-lg) * 1.5);
+    font-size: calc(var(--bf-appearance-token-font-size-lg) * 1.5);
     margin-bottom: 2px;
   }
 
   .bitfun-config-page-header__subtitle {
-    font-size: var(--font-size-xs);
+    font-size: var(--bf-appearance-token-font-size-xs);
     max-width: 100%;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -156,17 +153,17 @@
   .bitfun-config-page-header__extra {
     width: 100%;
     justify-content: flex-start;
-    margin-top: var(--size-gap-2);
+    margin-top: var(--bf-appearance-token-size-gap-2);
   }
 
   .bitfun-config-page-header-divider {
-    margin: var(--size-gap-3) auto;
+    margin: var(--bf-appearance-token-size-gap-3) auto;
   }
 }
 
 @media (prefers-reduced-transparency: reduce) {
   .bitfun-config-page-header {
-    background: var(--color-bg-scene);
+    background: var(--bf-appearance-token-color-bg-scene);
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
   }

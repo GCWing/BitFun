@@ -9,7 +9,7 @@ const REQUIRED_SURFACE_KEYS = [
   'terminal',
   'markdown-mermaid',
   'generated-widget',
-  'theme-settings',
+  'appearance-settings',
   'mobile-web-shell',
   'installer-shell',
 ];

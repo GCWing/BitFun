@@ -5,15 +5,18 @@
 //! workspaces, sessions, transcripts, process detachment, supervision, and
 //! cancellation semantics.
 //!
-//! Installing the CLI is a separate, explicit operation. `probe` never installs
-//! anything; `install_cli_start` downloads an official archive locally, verifies
-//! its SHA256 sidecar (signed, when the release ships `.sha256.sig`) and the
-//! mandatory archive minisign signature, then stages it under the SSH user's
-//! home before starting an owner-only installer.
+//! `probe` is read-only. Submission may automatically install a matching
+//! prebuilt release when the target is missing a compatible CLI;
+//! `install_cli_start` still verifies the signed SHA256 sidecar and mandatory
+//! archive minisign signature before staging an owner-only installer. Source
+//! builds remain a separate, explicitly confirmed operation.
 
 use anyhow::{anyhow, Context, Result};
+use base64::Engine as _;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use sha2::{Digest, Sha256};
+use std::future::Future;
 use std::time::Duration;
 
 use super::manager::SSHConnectionManager;
@@ -32,47 +35,66 @@ const INSTALL_STEM: &str = "install-cli";
 const INSTALL_DONE_MARKER: &str = "BITFUN_DISPATCH_CLI_INSTALL_DONE";
 const INSTALL_PREPARE_GRACE_SECONDS: u64 = 30;
 const COMMAND_TIMEOUT_MS: u64 = 30_000;
+const WORKSPACE_OPERATION_WAIT: Duration = Duration::from_secs(30 * 60);
+const WORKSPACE_OPERATION_POLL_INTERVAL: Duration = Duration::from_millis(750);
 /// A release archive is tens of megabytes and the target's uplink is unknown,
 /// so this is far longer than an ordinary setup command.
 const TARGET_DOWNLOAD_TIMEOUT_MS: u64 = 10 * 60 * 1000;
-const WORKSPACE_COMMIT_POLL_INTERVAL: Duration = Duration::from_millis(750);
-const WORKSPACE_COMMIT_WAIT: Duration = Duration::from_secs(15 * 60);
+const CLI_INSTALL_POLL_INTERVAL: Duration = Duration::from_millis(750);
+/// A source-free release install is a download plus an unpack; anything past
+/// this is a hung target rather than a slow one.
+const CLI_INSTALL_WAIT: Duration = Duration::from_secs(15 * 60);
 const RELEASE_READ_TIMEOUT_SECONDS: u64 = 30;
 const MAX_ARCHIVE_BYTES: usize = 512 * 1024 * 1024;
-/// A result bundle carries only changed files, so it is bounded well below a
-/// full workspace snapshot.
+/// A result bundle carries only commits since the dispatch baseline, so it is
+/// bounded well below a full repository clone in the usual case.
 const MAX_RESULT_BUNDLE_BYTES: u64 = 1024 * 1024 * 1024;
+const RESULT_BUNDLE_CHUNK_BYTES: u64 = 256 * 1024;
+const MAX_RESULT_BUNDLE_CHUNK_BASE64_BYTES: usize = 384 * 1024;
+
+struct UnverifiedResultBundle {
+    path: std::path::PathBuf,
+    verified: bool,
+}
+
+impl UnverifiedResultBundle {
+    fn new(path: &std::path::Path) -> Self {
+        Self {
+            path: path.to_path_buf(),
+            verified: false,
+        }
+    }
+
+    fn retain(&mut self) {
+        self.verified = true;
+    }
+}
+
+impl Drop for UnverifiedResultBundle {
+    fn drop(&mut self) {
+        if !self.verified {
+            let _ = std::fs::remove_file(&self.path);
+        }
+    }
+}
 /// Oldest glibc the published Linux binaries run against. Kept in step with
 /// `scripts/ci/check-glibc-floor.sh`, which enforces it at release time.
 const GLIBC_FLOOR: &str = "2.35";
-/// A release build of the workspace needs roughly this much scratch space.
-/// Same figure the relay source build uses.
-const SOURCE_BUILD_FREE_KB: u64 = 6 * 1024 * 1024;
-const REPO_GIT_URL: &str = "https://github.com/GCWing/BitFun.git";
-const DISPATCH_PROTOCOL_VERSION: u64 = 2;
-const DISPATCH_WORKER_CLI_PROFILE_CAPABILITY: &str = "dispatch_worker_cli_profile";
+const DISPATCH_PROTOCOL_VERSION: u64 =
+    bitfun_services_core::dispatch_contract::DISPATCH_PROTOCOL_VERSION as u64;
 /// First stable release whose CLI is known to contain every capability below.
 ///
 /// Development builds can require capabilities before their next stable
 /// version is published. In that window `CARGO_PKG_VERSION` still names the
 /// previous release, so comparing only the installed and controller version
 /// strings is not a sound compatibility test.
-const FIRST_COMPATIBLE_STABLE_DISPATCH_RELEASE: (u64, u64, u64) = (0, 2, 15);
-const REQUIRED_DISPATCH_CAPABILITIES: [&str; 13] = [
-    "persistent_jobs",
-    "cursor_events",
-    "detached_worker",
-    "workspace_serialization",
-    "frontend_event_projection",
-    "approval_auto",
-    "approval_reject_and_report",
-    "approval_remote",
-    "append_message",
-    "event_log_completeness",
-    "workspace_snapshot_exact",
-    "workspace_snapshot_chunked",
-    DISPATCH_WORKER_CLI_PROFILE_CAPABILITY,
-];
+const FIRST_COMPATIBLE_STABLE_DISPATCH_RELEASE: (u64, u64, u64) = (0, 2, 16);
+/// Derived once from the shared contract: the unconditional target surface
+/// plus the platform-conditional detached worker.
+static REQUIRED_DISPATCH_CAPABILITIES: std::sync::LazyLock<Vec<&'static str>> =
+    std::sync::LazyLock::new(|| {
+        bitfun_services_core::dispatch_contract::dispatch_required_target_capabilities().collect()
+    });
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -98,8 +120,6 @@ pub struct DispatchSshProbe {
     /// Present only when the published binaries cannot run here, so the UI can
     /// explain why instead of offering an install that would fail the same way.
     pub prebuilt_incompatible: Option<String>,
-    /// Offered as the way forward when a prebuilt install cannot work.
-    pub source_build: Option<DispatchSourceBuild>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -145,10 +165,6 @@ struct RemoteTarget {
     libc: Option<RemoteLibc>,
     /// glibc version, when the target reported one.
     libc_version: Option<String>,
-    cargo_version: Option<String>,
-    git_available: bool,
-    cc_available: bool,
-    free_kb: Option<u64>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -246,9 +262,15 @@ pub async fn probe(
                 Some("remote target has no tar executable; install tar and retry".to_string()),
             )
         } else if !published_release_supports_required_dispatch_protocol(RELEASE_VERSION) {
-            // The controller is ahead of the latest stable artifact. Avoid an
-            // unnecessary release request and offer its exact source instead.
-            (None, None)
+            // The controller is ahead of the latest stable artifact, so no
+            // published binary carries the capabilities it needs. Skip the
+            // release request and say so.
+            (
+                None,
+                Some(format!(
+                    "no published BitFun CLI yet carries the dispatch capabilities this controller requires (controller {RELEASE_VERSION})"
+                )),
+            )
         } else {
             match resolve_release(&target.os, &target.arch).await {
                 // Capability support is a fact about the published artifact,
@@ -262,12 +284,13 @@ pub async fn probe(
                 {
                     (Some(release.public), None)
                 }
-                // Before the first compatible stable release exists, the exact
-                // controller source is the only deterministic repair path. Do
-                // not show a speculative "same version means same binary"
-                // warning; the readiness row already names the missing
-                // capability and the source-build action explains the remedy.
-                Ok(_) => (None, None),
+                Ok(release) => (
+                    None,
+                    Some(format!(
+                        "published BitFun CLI {} does not carry the dispatch capabilities this controller requires",
+                        release.public.version
+                    )),
+                ),
                 Err(error) => (None, Some(error.to_string())),
             }
         }
@@ -275,13 +298,6 @@ pub async fn probe(
         (None, None)
     };
     let install_supported = release.is_some();
-    // Offer the source build whenever the target needs a CLI but no prebuilt
-    // install can deliver one — an unsupported platform, a libc floor, a
-    // missing tar, an unreachable release, or a release that does not carry
-    // dispatch. Gating this on platform incompatibility alone left the last
-    // case with a warning and no way forward.
-    let source_build =
-        (needs_install && release.is_none()).then(|| source_build_availability(&target));
 
     Ok(DispatchSshProbe {
         cli_installed: target.cli_path.is_some(),
@@ -296,15 +312,13 @@ pub async fn probe(
         prebuilt_incompatible: incompatibility
             .as_ref()
             .map(PrebuiltIncompatibility::describe),
-        source_build,
     })
 }
 
 /// Why the published binaries cannot run on this target.
 ///
 /// Kept structured rather than a flat string so the UI can say what is actually
-/// wrong — and, when a source build could fix it, offer that instead of leaving
-/// the user with an unexplained failure.
+/// wrong instead of leaving the user with an unexplained failure.
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum PrebuiltIncompatibility {
     UnsupportedPlatform { os: String, arch: String },
@@ -326,19 +340,6 @@ impl PrebuiltIncompatibility {
             ),
         }
     }
-}
-
-/// Whether a source build could produce a working CLI on this target.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct DispatchSourceBuild {
-    /// Whether a build could start right now.
-    pub supported: bool,
-    /// What the user must install or free up first, when it cannot.
-    pub blockers: Vec<String>,
-    pub cargo_version: Option<String>,
-    /// The git ref that would be built.
-    pub git_ref: String,
 }
 
 /// Detect an incompatibility that no amount of reinstalling can fix.
@@ -390,39 +391,6 @@ fn compare_versions(left: &str, right: &str) -> std::cmp::Ordering {
     std::cmp::Ordering::Equal
 }
 
-fn source_build_availability(target: &RemoteTarget) -> DispatchSourceBuild {
-    let mut blockers = Vec::new();
-    if target.cargo_version.is_none() {
-        blockers.push(
-            "no cargo on the target; install a Rust toolchain (https://rustup.rs) and retry"
-                .to_string(),
-        );
-    }
-    if !target.git_available {
-        blockers.push("no git on the target".to_string());
-    }
-    if !target.cc_available {
-        blockers.push(
-            "no C compiler on the target (install build-essential or equivalent)".to_string(),
-        );
-    }
-    if let Some(free_kb) = target.free_kb {
-        if free_kb < SOURCE_BUILD_FREE_KB {
-            blockers.push(format!(
-                "needs about {} GB free under $HOME, found {} GB",
-                SOURCE_BUILD_FREE_KB / 1024 / 1024,
-                free_kb / 1024 / 1024
-            ));
-        }
-    }
-    DispatchSourceBuild {
-        supported: blockers.is_empty(),
-        blockers,
-        cargo_version: target.cargo_version.clone(),
-        git_ref: release_tag_for_version(RELEASE_VERSION),
-    }
-}
-
 /// Whether a published artifact is expected to implement the controller's
 /// required protocol.
 ///
@@ -472,37 +440,25 @@ pub fn validate_dispatch_protocol(protocol: &Value, approval_policy: Option<&str
     let Some(capabilities) = protocol.get("capabilities").and_then(Value::as_array) else {
         return Err(anyhow!("dispatch target returned no capability list"));
     };
-    let required: &[&str] = match approval_policy {
-        Some("auto") => &[
-            "persistent_jobs",
-            "cursor_events",
-            "detached_worker",
-            "workspace_serialization",
-            "frontend_event_projection",
-            "approval_auto",
-            DISPATCH_WORKER_CLI_PROFILE_CAPABILITY,
-        ],
-        Some("reject-and-report") => &[
-            "persistent_jobs",
-            "cursor_events",
-            "detached_worker",
-            "workspace_serialization",
-            "frontend_event_projection",
-            "approval_reject_and_report",
-            DISPATCH_WORKER_CLI_PROFILE_CAPABILITY,
-        ],
-        Some("remote") => &[
-            "persistent_jobs",
-            "cursor_events",
-            "detached_worker",
-            "workspace_serialization",
-            "frontend_event_projection",
-            "approval_remote",
-            DISPATCH_WORKER_CLI_PROFILE_CAPABILITY,
-        ],
+    // One source list: submission narrows the approval_* entries to the
+    // selected policy; probing (None) requires the complete surface.
+    let mut required: Vec<&'static str> = REQUIRED_DISPATCH_CAPABILITIES
+        .iter()
+        .copied()
+        .filter(|capability| !capability.starts_with("approval_"))
+        .collect();
+    match approval_policy {
+        Some("auto") => required.push("approval_auto"),
+        Some("reject-and-report") => required.push("approval_reject_and_report"),
+        Some("remote") => required.push("approval_remote"),
         Some(_) => return Err(anyhow!("unsupported dispatch approval policy")),
-        None => &REQUIRED_DISPATCH_CAPABILITIES,
-    };
+        None => required.extend(
+            REQUIRED_DISPATCH_CAPABILITIES
+                .iter()
+                .copied()
+                .filter(|capability| capability.starts_with("approval_")),
+        ),
+    }
     let missing = required
         .iter()
         .copied()
@@ -541,7 +497,7 @@ pub async fn install_cli_start(
     let release = resolve_release(&target.os, &target.arch).await?;
     if !published_release_supports_required_dispatch_protocol(&release.public.version) {
         return Err(anyhow!(
-            "published BitFun CLI {} does not contain the dispatch capabilities required by this controller; build from the controller source instead",
+            "published BitFun CLI {} does not contain the dispatch capabilities required by this controller",
             release.public.version
         ));
     }
@@ -613,7 +569,7 @@ pub async fn install_cli_start(
         manager,
         connection_id,
         &dir,
-        Some(&archive_path),
+        &archive_path,
         &body_path,
         &script_path,
         &body,
@@ -766,14 +722,14 @@ trap - EXIT
 
 /// Stage the installer scripts and launch the detached body.
 ///
-/// Shared by the release and source-build paths so both get the same token
-/// handshake, log truncation, and channel-leak-free launch.
+/// Kept separate from `install_cli_start` so the token handshake, log
+/// truncation, and channel-leak-free launch stay in one place.
 #[allow(clippy::too_many_arguments)]
 async fn stage_and_launch_installer(
     manager: &SSHConnectionManager,
     connection_id: &str,
     dir: &str,
-    archive_path: Option<&str>,
+    archive_path: &str,
     body_path: &str,
     script_path: &str,
     body: &str,
@@ -833,190 +789,6 @@ async fn stage_and_launch_installer(
         while channel.wait().await.is_some() {}
     });
     Ok(())
-}
-
-/// Build and install the CLI from source on the target.
-///
-/// The way forward when no published binary can run there. Shares the install
-/// driver, log, and poll/cancel machinery with the release path, so progress
-/// reporting and cancellation behave identically.
-pub async fn install_cli_source_start(
-    manager: &SSHConnectionManager,
-    connection_id: &str,
-) -> Result<DispatchInstallStart> {
-    ensure_plain_ssh_target(manager, connection_id).await?;
-    let target = probe_remote_target(manager, connection_id).await?;
-    let availability = source_build_availability(&target);
-    if !availability.supported {
-        return Err(anyhow!(
-            "target cannot build BitFun from source: {}",
-            availability.blockers.join("; ")
-        ));
-    }
-
-    install_cli_cancel(manager, connection_id)
-        .await
-        .context("stop an earlier BitFun CLI installation")?;
-
-    let dir = format!("{}/{}", target.home, INSTALL_STATE_DIR);
-    let body_path = format!("{dir}/{INSTALL_STEM}-body.sh");
-    let script_path = format!("{dir}/{INSTALL_STEM}.sh");
-    let install_token = format!("bitfun-install-{}", uuid::Uuid::new_v4().as_simple());
-    let version = RELEASE_VERSION
-        .split('+')
-        .next()
-        .unwrap_or(RELEASE_VERSION)
-        .to_string();
-
-    exec_ok(
-        manager,
-        connection_id,
-        &format!(
-            "mkdir -p {dir} && chmod 700 {root} {dispatch} {dir}",
-            root = shell_quote_posix(&format!("{}/.bitfun", target.home)),
-            dispatch = shell_quote_posix(&format!("{}/.bitfun/dispatch", target.home)),
-            dir = shell_quote_posix(&dir),
-        ),
-    )
-    .await?;
-
-    let body = to_unix_script(&source_build_body_script(
-        &dir,
-        &version,
-        &availability.git_ref,
-    ));
-    let driver = to_unix_script(&install_driver_script(&dir, &body_path, &install_token));
-    stage_and_launch_installer(
-        manager,
-        connection_id,
-        &dir,
-        None,
-        &body_path,
-        &script_path,
-        &body,
-        &driver,
-        &install_token,
-    )
-    .await?;
-
-    Ok(DispatchInstallStart {
-        script_path,
-        version,
-        target: format!("{} {}", target.os, target.arch),
-        url: REPO_GIT_URL.to_string(),
-        sha256: String::new(),
-    })
-}
-
-/// Build and install the CLI from an exact controller-provided source archive.
-///
-/// Development Desktop builds use this after the same explicit source-build
-/// confirmation as the repository-clone path. It prevents an untagged
-/// controller from "updating" a same-semver target back to an older release
-/// whose dispatch protocol is missing required behavioral capabilities.
-pub async fn install_cli_source_archive_start(
-    manager: &SSHConnectionManager,
-    connection_id: &str,
-    source_archive: &[u8],
-    revision: &str,
-) -> Result<DispatchInstallStart> {
-    ensure_plain_ssh_target(manager, connection_id).await?;
-    if source_archive.is_empty() {
-        return Err(anyhow!("controller source archive is empty"));
-    }
-    if source_archive.len() > MAX_ARCHIVE_BYTES {
-        return Err(anyhow!(
-            "controller source archive exceeds the {} MB safety limit",
-            MAX_ARCHIVE_BYTES / (1024 * 1024)
-        ));
-    }
-    let revision = revision.trim();
-    if revision.is_empty()
-        || revision.len() > 80
-        || !revision.chars().all(|character| {
-            character.is_ascii_alphanumeric() || matches!(character, '.' | '-' | '_')
-        })
-    {
-        return Err(anyhow!("controller source revision is invalid"));
-    }
-
-    let target = probe_remote_target(manager, connection_id).await?;
-    let mut availability = source_build_availability(&target);
-    // The controller supplied a complete archive, so the target does not need
-    // git. It still needs tar to unpack that archive.
-    availability
-        .blockers
-        .retain(|blocker| blocker != "no git on the target");
-    if !target.tar_available {
-        availability
-            .blockers
-            .push("no tar executable on the target".to_string());
-    }
-    if !availability.blockers.is_empty() {
-        return Err(anyhow!(
-            "target cannot build BitFun from controller source: {}",
-            availability.blockers.join("; ")
-        ));
-    }
-
-    install_cli_cancel(manager, connection_id)
-        .await
-        .context("stop an earlier BitFun CLI installation")?;
-
-    let dir = format!("{}/{}", target.home, INSTALL_STATE_DIR);
-    let archive_path = format!("{dir}/controller-source.tar.gz");
-    let body_path = format!("{dir}/{INSTALL_STEM}-body.sh");
-    let script_path = format!("{dir}/{INSTALL_STEM}.sh");
-    let install_token = format!("bitfun-install-{}", uuid::Uuid::new_v4().as_simple());
-    let version = RELEASE_VERSION
-        .split('+')
-        .next()
-        .unwrap_or(RELEASE_VERSION)
-        .to_string();
-
-    exec_ok(
-        manager,
-        connection_id,
-        &format!(
-            "mkdir -p {dir} && chmod 700 {root} {dispatch} {dir}",
-            root = shell_quote_posix(&format!("{}/.bitfun", target.home)),
-            dispatch = shell_quote_posix(&format!("{}/.bitfun/dispatch", target.home)),
-            dir = shell_quote_posix(&dir),
-        ),
-    )
-    .await?;
-    manager
-        .sftp_write(connection_id, &archive_path, source_archive)
-        .await
-        .context("stage controller BitFun source archive")?;
-
-    let body = to_unix_script(&source_archive_build_body_script(
-        &dir,
-        &archive_path,
-        &version,
-        revision,
-    ));
-    let driver = to_unix_script(&install_driver_script(&dir, &body_path, &install_token));
-    stage_and_launch_installer(
-        manager,
-        connection_id,
-        &dir,
-        Some(&archive_path),
-        &body_path,
-        &script_path,
-        &body,
-        &driver,
-        &install_token,
-    )
-    .await?;
-
-    Ok(DispatchInstallStart {
-        script_path,
-        version,
-        target: format!("{} {}", target.os, target.arch),
-        url: format!("controller-source:{revision}"),
-        sha256: String::new(),
-    })
 }
 
 fn ensure_confirmed_release(
@@ -1353,50 +1125,82 @@ pub async fn append(
     invoke_json(manager, connection_id, "append", request).await
 }
 
-/// Ask the target what a finished job changed, and fetch the bundle.
+/// Start the next turn of a dispatch session that has already finished one.
+pub async fn continue_job(
+    manager: &SSHConnectionManager,
+    connection_id: &str,
+    request: &Value,
+) -> Result<Value> {
+    invoke_json(manager, connection_id, "continue", request).await
+}
+
+pub async fn query(
+    manager: &SSHConnectionManager,
+    connection_id: &str,
+    request: &Value,
+) -> Result<Value> {
+    invoke_json(manager, connection_id, "query", request).await
+}
+
+/// Commit the target's worktree and fetch the Git bundle it produced.
 ///
-/// Downloads only; nothing is written into the user's workspace here. Applying
-/// the bundle is a separate operation the user confirms after seeing the diff,
-/// because the local tree may have moved on since the snapshot was taken.
-pub async fn pull_result(
+/// Downloads only. The controller decides separately whether to fast-forward
+/// its baseline worktree onto the fetched branch, so nothing in the user's
+/// repository moves as a side effect of asking.
+pub async fn sync_workspace(
     manager: &SSHConnectionManager,
     connection_id: &str,
     job_id: &str,
+    message: Option<&str>,
+    known_head: Option<&str>,
     destination: &std::path::Path,
 ) -> Result<Value> {
     ensure_plain_ssh_target(manager, connection_id).await?;
     let target = probe_remote_target(manager, connection_id).await?;
     let cli_path = target.cli_path.as_deref().ok_or_else(|| {
-        anyhow!("BitFun CLI is not installed on the SSH target; confirm installation first")
+        anyhow!("BitFun CLI is not installed on the SSH target; install it before syncing")
     })?;
 
-    // Returning results is an optional capability, so a target that predates it
-    // is a normal situation rather than a fault. Ask before invoking the verb:
-    // otherwise the only signal is clap's `unrecognized subcommand`, which says
-    // nothing about what the user should do.
-    let protocol = invoke_json_at_path(
-        manager,
-        connection_id,
-        &target.home,
-        cli_path,
-        "probe",
-        &serde_json::json!({}),
-    )
-    .await
-    .context("probe the dispatch target before pulling results")?;
-    ensure_result_bundle_capability(&protocol)?;
+    // A clean incremental sync has `headCommit == knownHead`. Without an
+    // invocation identity, the target cannot distinguish this call's poll
+    // from a later click that intentionally checks for newer work, and would
+    // restart the completed no-op forever.
+    let mut request = serde_json::json!({
+        "jobId": job_id,
+        "operationId": uuid::Uuid::new_v4().as_simple().to_string(),
+    });
+    if let Some(message) = message.map(str::trim).filter(|value| !value.is_empty()) {
+        request["message"] = Value::String(message.to_string());
+    }
+    if let Some(head) = known_head.map(str::trim).filter(|value| !value.is_empty()) {
+        request["knownHead"] = Value::String(head.to_string());
+    }
+    let deadline = tokio::time::Instant::now() + WORKSPACE_OPERATION_WAIT;
+    let response = loop {
+        let response = invoke_json_at_path(
+            manager,
+            connection_id,
+            &target.home,
+            cli_path,
+            "__workspace_sync",
+            &request,
+        )
+        .await?;
+        if response.get("pending").and_then(Value::as_bool) != Some(true) {
+            break response;
+        }
+        if tokio::time::Instant::now() >= deadline {
+            return Err(anyhow!(
+                "Git workspace sync did not finish within {} minutes",
+                WORKSPACE_OPERATION_WAIT.as_secs() / 60
+            ));
+        }
+        tokio::time::sleep(WORKSPACE_OPERATION_POLL_INTERVAL).await;
+    };
 
-    let response = invoke_json_at_path(
-        manager,
-        connection_id,
-        &target.home,
-        cli_path,
-        // The target CLI exposes workspace data-plane verbs under reserved
-        // names, matching `__workspace_begin` and `__workspace_commit` above.
-        "__workspace_result",
-        &serde_json::json!({ "jobId": job_id }),
-    )
-    .await?;
+    if response.get("changed").and_then(Value::as_bool) != Some(true) {
+        return Ok(response);
+    }
 
     let bundle_path = response
         .get("bundlePath")
@@ -1405,26 +1209,97 @@ pub async fn pull_result(
     // The path comes from the target, so bound it to the managed job directory
     // before reading it, exactly as the upload path is bounded.
     validate_managed_result_path(&target.home, job_id, bundle_path)?;
-
-    let bytes = manager
-        .sftp_read(connection_id, bundle_path)
-        .await
-        .context("download dispatch result bundle")?;
-    if bytes.len() as u64 > MAX_RESULT_BUNDLE_BYTES {
+    let expected_size = response
+        .get("bundleSize")
+        .and_then(Value::as_u64)
+        .ok_or_else(|| anyhow!("dispatch target returned no result bundle size"))?;
+    if expected_size == 0 || expected_size > MAX_RESULT_BUNDLE_BYTES {
         return Err(anyhow!(
             "dispatch result bundle exceeds the {} MB safety limit",
             MAX_RESULT_BUNDLE_BYTES / (1024 * 1024)
         ));
     }
-    // The bundle carries the user's source, including the ignored files the
-    // snapshot deliberately shipped. The outbound root is already owner-only,
-    // but harden this level too rather than relying on a parent one layer up.
+    let expected_digest = response
+        .get("bundleSha256")
+        .and_then(Value::as_str)
+        .ok_or_else(|| anyhow!("dispatch target returned no result bundle digest"))?;
+
+    // The bundle carries repository history. The outbound root is already
+    // owner-only, but harden this level too rather than relying on a parent.
     if let Some(parent) = destination.parent() {
         std::fs::create_dir_all(parent)
             .with_context(|| format!("create result staging {}", parent.display()))?;
         harden_result_directory(parent)?;
     }
-    write_private_file(destination, &bytes)?;
+    let mut staged_bundle = UnverifiedResultBundle::new(destination);
+    write_private_file(destination, &[])?;
+    let mut output = std::fs::OpenOptions::new()
+        .append(true)
+        .open(destination)
+        .with_context(|| format!("open result staging {}", destination.display()))?;
+    let mut digest = Sha256::new();
+    let mut received = 0_u64;
+    while received < expected_size {
+        let chunk = invoke_json_at_path(
+            manager,
+            connection_id,
+            &target.home,
+            cli_path,
+            "__workspace_sync_chunk",
+            &serde_json::json!({
+                "jobId": job_id,
+                "offset": received,
+                "length": RESULT_BUNDLE_CHUNK_BYTES,
+            }),
+        )
+        .await?;
+        let encoded = chunk
+            .get("dataBase64")
+            .and_then(Value::as_str)
+            .ok_or_else(|| anyhow!("dispatch target returned no result chunk data"))?;
+        if encoded.len() > MAX_RESULT_BUNDLE_CHUNK_BASE64_BYTES {
+            return Err(anyhow!(
+                "dispatch target returned an oversized result chunk"
+            ));
+        }
+        let decoded = base64::engine::general_purpose::STANDARD
+            .decode(encoded)
+            .context("decode dispatch result chunk")?;
+        if decoded.is_empty() || decoded.len() as u64 > RESULT_BUNDLE_CHUNK_BYTES {
+            return Err(anyhow!(
+                "dispatch result bundle ended at {received} of {expected_size} bytes"
+            ));
+        }
+        let next_offset = received.saturating_add(decoded.len() as u64);
+        if next_offset > expected_size {
+            return Err(anyhow!(
+                "dispatch target returned more result bytes than it declared"
+            ));
+        }
+        if chunk.get("offset").and_then(Value::as_u64) != Some(next_offset) {
+            return Err(anyhow!(
+                "dispatch target returned a mismatched result chunk offset"
+            ));
+        }
+        std::io::Write::write_all(&mut output, &decoded)
+            .with_context(|| format!("write result staging {}", destination.display()))?;
+        digest.update(&decoded);
+        received = next_offset;
+        let eof = chunk.get("eof").and_then(Value::as_bool) == Some(true);
+        if eof != (received == expected_size) {
+            return Err(anyhow!(
+                "dispatch target returned an inconsistent result end marker"
+            ));
+        }
+    }
+    output
+        .sync_all()
+        .with_context(|| format!("flush result staging {}", destination.display()))?;
+    let actual_digest = format!("{:x}", digest.finalize());
+    if !actual_digest.eq_ignore_ascii_case(expected_digest) {
+        return Err(anyhow!("dispatch result bundle SHA-256 mismatch"));
+    }
+    staged_bundle.retain();
 
     let mut response = response;
     if let Some(object) = response.as_object_mut() {
@@ -1466,33 +1341,11 @@ pub fn write_private_file(path: &std::path::Path, bytes: &[u8]) -> Result<()> {
     Ok(())
 }
 
-/// Optional capability: a target without it still runs jobs, it just cannot
-/// hand their results back. Deliberately absent from
-/// `REQUIRED_DISPATCH_CAPABILITIES` so an older CLI stays fully usable.
-pub const WORKSPACE_RESULT_CAPABILITY: &str = "workspace_result_bundle";
-
-fn ensure_result_bundle_capability(protocol: &Value) -> Result<()> {
-    let advertises = protocol
-        .get("capabilities")
-        .and_then(Value::as_array)
-        .is_some_and(|capabilities| {
-            capabilities
-                .iter()
-                .any(|capability| capability.as_str() == Some(WORKSPACE_RESULT_CAPABILITY))
-        });
-    if !advertises {
-        return Err(anyhow!(
-            "this target's BitFun CLI cannot return job results; update it to a release that supports {WORKSPACE_RESULT_CAPABILITY}"
-        ));
-    }
-    Ok(())
-}
-
 /// A result bundle may only be read from the managed directory of the job it
 /// belongs to.
 fn validate_managed_result_path(home: &str, job_id: &str, bundle_path: &str) -> Result<()> {
     let expected = format!(
-        "{}/.bitfun/dispatch/workspaces/{job_id}/result.tar.gz",
+        "{}/.bitfun/dispatch/workspaces/{job_id}/result.bundle",
         home.trim_end_matches('/')
     );
     if bundle_path != expected {
@@ -1503,29 +1356,111 @@ fn validate_managed_result_path(home: &str, job_id: &str, bundle_path: &str) -> 
     Ok(())
 }
 
-/// Stage and atomically materialize a controller-created workspace snapshot.
+/// The upload path for a delivered base bundle, bounded to the job directory.
+fn validate_managed_bundle_upload_path(home: &str, job_id: &str, upload_path: &str) -> Result<()> {
+    let expected = format!(
+        "{}/.bitfun/dispatch/workspaces/{job_id}/incoming.bundle",
+        home.trim_end_matches('/')
+    );
+    if upload_path != expected {
+        return Err(anyhow!(
+            "dispatch target returned an invalid managed bundle upload path"
+        ));
+    }
+    Ok(())
+}
+
+/// Ask the target to check out this dispatch's baseline commit.
 ///
-/// The target CLI chooses the owner-only upload path. This adapter validates
-/// that the returned path stays under the target's managed dispatch root before
-/// allowing SFTP to write it.
-pub async fn upload_workspace_snapshot(
+/// Returns the target's raw response so the controller can react to
+/// `needsBundle` — the target is the only side that knows what its own clone
+/// can reach, so the decision to ship objects belongs to it, not to a guess
+/// made from this machine's remote-tracking refs.
+pub async fn provision_workspace(
     manager: &SSHConnectionManager,
     connection_id: &str,
-    begin_request: &Value,
-    archive_path: &std::path::Path,
+    request: &Value,
+) -> Result<Value> {
+    invoke_workspace_operation(
+        manager,
+        connection_id,
+        "__workspace_provision",
+        request,
+        "Git workspace provisioning",
+    )
+    .await
+}
+
+/// Poll an idempotent target verb whose expensive Git work runs in a detached
+/// CLI child. Every SSH command returns quickly, so losing one channel cannot
+/// kill clone/fetch/bundle work that the next poll can observe.
+async fn invoke_workspace_operation(
+    manager: &SSHConnectionManager,
+    connection_id: &str,
+    verb: &'static str,
+    request: &Value,
+    operation: &str,
 ) -> Result<Value> {
     ensure_plain_ssh_target(manager, connection_id).await?;
     let target = probe_remote_target(manager, connection_id).await?;
     let cli_path = target.cli_path.as_deref().ok_or_else(|| {
-        anyhow!("BitFun CLI is not installed on the SSH target; confirm installation first")
+        anyhow!("BitFun CLI is not installed on the SSH target; install it before dispatching")
     })?;
+    let deadline = tokio::time::Instant::now() + WORKSPACE_OPERATION_WAIT;
+    loop {
+        let response = invoke_json_at_path(
+            manager,
+            connection_id,
+            &target.home,
+            cli_path,
+            verb,
+            request,
+        )
+        .await?;
+        if response.get("pending").and_then(Value::as_bool) != Some(true) {
+            return Ok(response);
+        }
+        if tokio::time::Instant::now() >= deadline {
+            return Err(anyhow!(
+                "{operation} did not finish within {} minutes",
+                WORKSPACE_OPERATION_WAIT.as_secs() / 60
+            ));
+        }
+        tokio::time::sleep(WORKSPACE_OPERATION_POLL_INTERVAL).await;
+    }
+}
+
+/// Upload a Git bundle carrying the objects the target reported missing.
+///
+/// The target CLI chooses the owner-only upload path. This adapter validates
+/// that the returned path stays under the target's managed dispatch root before
+/// allowing SFTP to write it.
+pub async fn upload_bundle(
+    manager: &SSHConnectionManager,
+    connection_id: &str,
+    job_id: &str,
+    sha256: &str,
+    size: u64,
+    bundle_path: &std::path::Path,
+) -> Result<Value> {
+    ensure_plain_ssh_target(manager, connection_id).await?;
+    let target = probe_remote_target(manager, connection_id).await?;
+    let cli_path = target.cli_path.as_deref().ok_or_else(|| {
+        anyhow!("BitFun CLI is not installed on the SSH target; install it before dispatching")
+    })?;
+
     let begin = invoke_json_at_path(
         manager,
         connection_id,
         &target.home,
         cli_path,
-        "__workspace_begin",
-        begin_request,
+        "__workspace_bundle_begin",
+        &serde_json::json!({
+            "protocolVersion": DISPATCH_PROTOCOL_VERSION,
+            "jobId": job_id,
+            "sha256": sha256,
+            "size": size,
+        }),
     )
     .await?;
     if begin
@@ -1536,122 +1471,245 @@ pub async fn upload_workspace_snapshot(
         return Ok(begin);
     }
     if begin.get("accepted").and_then(Value::as_bool) != Some(true) {
-        return Err(anyhow!(
-            "dispatch target did not accept the workspace upload"
-        ));
+        return Err(anyhow!("dispatch target did not accept the bundle upload"));
     }
-    let upload_path = begin
-        .get("uploadPath")
-        .and_then(Value::as_str)
-        .ok_or_else(|| anyhow!("dispatch target returned no workspace upload path"))?;
-    validate_managed_workspace_upload_path(&target.home, upload_path)?;
-    let archive_size = begin_request
-        .pointer("/metadata/archiveSize")
-        .and_then(Value::as_u64)
-        .ok_or_else(|| anyhow!("workspace upload request has no archiveSize"))?;
-    let local_size = std::fs::symlink_metadata(archive_path)
-        .with_context(|| format!("inspect workspace snapshot {}", archive_path.display()))?
+
+    let upload_path = format!(
+        "{}/.bitfun/dispatch/workspaces/{job_id}/incoming.bundle",
+        target.home.trim_end_matches('/')
+    );
+    validate_managed_bundle_upload_path(&target.home, job_id, &upload_path)?;
+    let local_size = std::fs::symlink_metadata(bundle_path)
+        .with_context(|| format!("inspect dispatch bundle {}", bundle_path.display()))?
         .len();
-    if local_size != archive_size {
+    if local_size != size {
         return Err(anyhow!(
-            "workspace snapshot changed before SSH upload: expected {archive_size} bytes, found {local_size}"
+            "dispatch bundle changed before SSH upload: expected {size} bytes, found {local_size}"
         ));
     }
     let retained_offset = begin
         .get("offset")
         .and_then(Value::as_u64)
-        .ok_or_else(|| anyhow!("dispatch target returned no workspace upload offset"))?;
-    if retained_offset > archive_size {
+        .ok_or_else(|| anyhow!("dispatch target returned no bundle upload offset"))?;
+    if retained_offset > size {
         return Err(anyhow!(
-            "dispatch target returned an invalid workspace upload offset"
+            "dispatch target returned an invalid bundle upload offset"
         ));
     }
-    if retained_offset < archive_size {
+    if retained_offset < size {
         let written = manager
-            .sftp_write_from_file(connection_id, upload_path, archive_path, archive_size)
+            .sftp_write_from_file(connection_id, &upload_path, bundle_path, size)
             .await
-            .context("upload workspace snapshot over SFTP")?;
-        if written != archive_size {
+            .context("upload dispatch bundle over SFTP")?;
+        if written != size {
             return Err(anyhow!(
-                "workspace snapshot SFTP upload ended at {written} of {archive_size} bytes"
+                "dispatch bundle SFTP upload ended at {written} of {size} bytes"
             ));
         }
     }
-    let job_id = begin_request
-        .get("jobId")
-        .and_then(Value::as_str)
-        .ok_or_else(|| anyhow!("workspace upload request has no jobId"))?;
-    let expected_digest = begin_request
-        .pointer("/metadata/archiveSha256")
-        .and_then(Value::as_str)
-        .ok_or_else(|| anyhow!("workspace upload request has no archiveSha256"))?;
-    let deadline = tokio::time::Instant::now() + WORKSPACE_COMMIT_WAIT;
+
+    let commit_request = serde_json::json!({ "jobId": job_id });
+    let deadline = tokio::time::Instant::now() + WORKSPACE_OPERATION_WAIT;
     loop {
-        let committed = invoke_json_at_path(
+        let response = invoke_json_at_path(
             manager,
             connection_id,
             &target.home,
             cli_path,
-            "__workspace_commit",
-            &serde_json::json!({ "jobId": job_id }),
+            "__workspace_bundle_commit",
+            &commit_request,
         )
         .await?;
-        if committed
-            .pointer("/metadata/archiveSha256")
-            .and_then(Value::as_str)
-            != Some(expected_digest)
-        {
-            return Err(anyhow!(
-                "dispatch target returned mismatched workspace snapshot metadata"
-            ));
-        }
-        if committed
-            .get("committed")
-            .and_then(Value::as_bool)
-            .unwrap_or(false)
-        {
-            if committed
-                .get("workspacePath")
-                .and_then(Value::as_str)
-                .is_none_or(|path| path.trim().is_empty())
-            {
-                return Err(anyhow!(
-                    "dispatch target committed no materialized workspace path"
-                ));
+        if response.get("pending").and_then(Value::as_bool) != Some(true) {
+            if response.get("committed").and_then(Value::as_bool) == Some(true) {
+                return Ok(response);
             }
-            return Ok(committed);
+            return Err(anyhow!(
+                "dispatch target did not commit the delivered bundle"
+            ));
         }
         if tokio::time::Instant::now() >= deadline {
             return Err(anyhow!(
-                "dispatch target workspace materialization did not finish within 15 minutes"
+                "Git bundle import did not finish within {} minutes",
+                WORKSPACE_OPERATION_WAIT.as_secs() / 60
             ));
         }
-        tokio::time::sleep(WORKSPACE_COMMIT_POLL_INTERVAL).await;
+        tokio::time::sleep(WORKSPACE_OPERATION_POLL_INTERVAL).await;
     }
 }
 
-fn validate_managed_workspace_upload_path(home: &str, upload_path: &str) -> Result<()> {
-    let prefix = format!(
-        "{}/.bitfun/dispatch/workspaces/",
-        home.trim_end_matches('/')
-    );
-    let Some(relative) = upload_path.strip_prefix(&prefix) else {
+/// Make sure the target runs a CLI this controller can dispatch to.
+///
+/// Installing is automatic because a dispatch is useless without it and the
+/// user already authorized this SSH connection. What the confirmation dialog
+/// used to guarantee is preserved by other means: the archive is still verified
+/// against a signed SHA-256 and a mandatory minisign signature before it is
+/// staged, and every step is reported through `progress` so the install is
+/// visible in the dispatch session rather than silent.
+///
+/// Source builds are deliberately not automatic. They upload the user's own
+/// repository and compile it on the target, which is a different kind of act
+/// from fetching a signed release.
+pub async fn ensure_target_cli<Progress, ProgressFuture>(
+    manager: &SSHConnectionManager,
+    connection_id: &str,
+    mut progress: Progress,
+) -> Result<DispatchSshProbe>
+where
+    Progress: FnMut(&str, Value) -> ProgressFuture,
+    ProgressFuture: Future<Output = Result<()>>,
+{
+    let probed = probe(manager, connection_id, None).await?;
+    if let Some(protocol) = probed.protocol.as_ref() {
+        if validate_dispatch_protocol(protocol, None).is_ok() {
+            return Ok(probed);
+        }
+    }
+    if !probed.install_supported {
         return Err(anyhow!(
-            "dispatch target returned an upload path outside its managed workspace root"
-        ));
-    };
-    let components = relative.split('/').collect::<Vec<_>>();
-    if components.len() != 2
-        || components[0].is_empty()
-        || components[0] == "."
-        || components[0] == ".."
-        || components[1] != "workspace.tar.gz"
-    {
-        return Err(anyhow!(
-            "dispatch target returned an invalid managed workspace upload path"
+            "{}",
+            probed
+                .install_error
+                .as_deref()
+                .or(probed.protocol_error.as_deref())
+                .unwrap_or("this SSH target cannot run the BitFun CLI")
         ));
     }
-    Ok(())
+    if let Some(reason) = probed.prebuilt_incompatible.as_deref() {
+        return Err(anyhow!(
+            "no published BitFun CLI can run on this target ({reason}); install BitFun there manually and retry"
+        ));
+    }
+    let release = probed.release.clone().ok_or_else(|| {
+        anyhow!("could not resolve a BitFun CLI release for this target's platform")
+    })?;
+
+    progress(
+        "cli-install-started",
+        serde_json::json!({
+            "version": release.version,
+            "target": release.target,
+            "url": release.url,
+            "sha256": release.sha256,
+            "reason": probed
+                .protocol_error
+                .clone()
+                .unwrap_or_else(|| "the target has no compatible BitFun CLI".to_string()),
+        }),
+    )
+    .await
+    .context("persist the CLI install started audit event")?;
+    if let Err(error) = install_cli_start(manager, connection_id, &release).await {
+        emit_cli_install_failure(&mut progress, "install-start", &error).await?;
+        return Err(error);
+    }
+
+    let deadline = tokio::time::Instant::now() + CLI_INSTALL_WAIT;
+    let mut cursor = 0_u64;
+    loop {
+        let poll = match install_cli_poll(manager, connection_id, cursor).await {
+            Ok(poll) => poll,
+            Err(error) => {
+                emit_cli_install_failure(&mut progress, "install-poll", &error).await?;
+                return Err(error);
+            }
+        };
+        cursor = poll.cursor;
+        match poll.status {
+            DispatchInstallStatus::Succeeded => break,
+            DispatchInstallStatus::Failed => {
+                let error = anyhow!(
+                    "BitFun CLI installation failed on the SSH target: {}",
+                    bounded_detail(&poll.output)
+                );
+                emit_cli_install_failure(&mut progress, "install-status", &error).await?;
+                return Err(error);
+            }
+            _ => {}
+        }
+        if tokio::time::Instant::now() >= deadline {
+            let _ = install_cli_cancel(manager, connection_id).await;
+            let error = anyhow!(
+                "BitFun CLI installation did not finish within {} minutes",
+                CLI_INSTALL_WAIT.as_secs() / 60
+            );
+            emit_cli_install_failure(&mut progress, "install-timeout", &error).await?;
+            return Err(error);
+        }
+        tokio::time::sleep(CLI_INSTALL_POLL_INTERVAL).await;
+    }
+
+    let reprobed = match probe(manager, connection_id, None).await {
+        Ok(probed) => probed,
+        Err(error) => {
+            emit_cli_install_failure(&mut progress, "reprobe", &error).await?;
+            return Err(error);
+        }
+    };
+    let protocol = match reprobed.protocol.as_ref() {
+        Some(protocol) => protocol,
+        None => {
+            let error = anyhow!(
+                "{}",
+                reprobed.protocol_error.as_deref().unwrap_or(
+                    "the installed BitFun CLI still does not answer the dispatch protocol"
+                )
+            );
+            emit_cli_install_failure(&mut progress, "protocol-validation", &error).await?;
+            return Err(error);
+        }
+    };
+    // Fail closed: an install that "succeeded" but left an incompatible binary
+    // must not be treated as a usable target.
+    if let Err(error) = validate_dispatch_protocol(protocol, None) {
+        emit_cli_install_failure(&mut progress, "protocol-validation", &error).await?;
+        return Err(error);
+    }
+    progress(
+        "cli-install-succeeded",
+        serde_json::json!({
+            "version": release.version,
+            "cliPath": reprobed.cli_path,
+        }),
+    )
+    .await
+    .context("persist the CLI install succeeded audit event")?;
+    Ok(reprobed)
+}
+
+async fn emit_cli_install_failure<Progress, ProgressFuture>(
+    progress: &mut Progress,
+    phase: &str,
+    error: &anyhow::Error,
+) -> Result<()>
+where
+    Progress: FnMut(&str, Value) -> ProgressFuture,
+    ProgressFuture: Future<Output = Result<()>>,
+{
+    progress(
+        "cli-install-failed",
+        cli_install_failure_details(phase, &error.to_string()),
+    )
+    .await
+    .map_err(|audit_error| {
+        anyhow!(
+            "persist the CLI install failed audit event for phase '{}': {}; original failure: {}",
+            bounded_detail(phase),
+            bounded_detail(&audit_error.to_string()),
+            bounded_detail(&error.to_string())
+        )
+    })
+}
+
+fn cli_install_failure_details(phase: &str, error: &str) -> Value {
+    let error = bounded_detail(error);
+    serde_json::json!({
+        "phase": bounded_detail(phase),
+        "error": error,
+        // Keep the existing audit/UI projection useful while `phase` and
+        // `error` provide the structured durable form.
+        "output": error,
+    })
 }
 
 async fn invoke_json(
@@ -1853,10 +1911,6 @@ async fn probe_remote_target(
             _ => None,
         },
         libc_version: (!get("libcversion").is_empty()).then(|| get("libcversion")),
-        cargo_version: (!get("cargo").is_empty()).then(|| get("cargo")),
-        git_available: get("git") == "1",
-        cc_available: get("cc") == "1",
-        free_kb: get("freekb").parse().ok(),
     })
 }
 
@@ -1887,16 +1941,6 @@ if [ "$(uname -s 2>/dev/null || true)" = "Linux" ]; then
     printf 'libcversion=%s\n' "$(getconf GNU_LIBC_VERSION 2>/dev/null | awk '{print $NF}' || true)"
   fi
 fi
-if command -v cargo >/dev/null 2>&1; then
-  printf 'cargo=%s\n' "$(cargo --version 2>/dev/null | awk '{print $2}' || true)"
-fi
-if command -v git >/dev/null 2>&1; then printf 'git=1\n'; else printf 'git=0\n'; fi
-if command -v cc >/dev/null 2>&1 || command -v gcc >/dev/null 2>&1; then
-  printf 'cc=1\n'
-else
-  printf 'cc=0\n'
-fi
-printf 'freekb=%s\n' "$(df -Pk "$HOME" 2>/dev/null | awk 'NR==2 {print $4}' || true)"
 "#
 }
 
@@ -2189,7 +2233,7 @@ COMMITTED=1
 echo "Installed $installed at $HOME/.local/bin/bitfun"
 echo {INSTALL_DONE_MARKER}
 "#,
-        worker_profile_capability = DISPATCH_WORKER_CLI_PROFILE_CAPABILITY,
+        worker_profile_capability = "dispatch_worker_cli_profile",
     )
 }
 
@@ -2235,82 +2279,6 @@ done
         "{preamble}{extract}{commit}",
         preamble = install_preamble_fragment(dir, expected_version),
         commit = install_commit_fragment(r#"rm -f "$ARCHIVE""#),
-    )
-}
-
-/// Build the CLI from source on the target, for hosts no published binary fits.
-///
-/// Deliberately does not install a Rust toolchain: fetching and running an
-/// installer script on someone's server is a bigger decision than this flow
-/// should make silently. A missing toolchain is reported as a blocker instead.
-fn source_build_body_script(dir: &str, expected_version: &str, git_ref: &str) -> String {
-    let build = format!(
-        r#"SRC="$D/source"
-GIT_REF={git_ref}
-echo "Building BitFun CLI {git_ref_plain} from source on the target. This can take a while."
-FREE_KB="$(df -Pk "$HOME" 2>/dev/null | awk 'NR==2 {{print $4}}' || echo 0)"
-if [ "${{FREE_KB:-0}}" -lt {free_kb} ]; then
-  echo "ERROR: source build needs about {free_gb} GB free under $HOME, found $((FREE_KB / 1024 / 1024)) GB" >&2
-  exit 1
-fi
-rm -rf "$SRC"
-git clone --depth 1 --branch "$GIT_REF" {repo} "$SRC"
-echo ">>> cargo build --release (bitfun, bitfun-cli)"
-( cd "$SRC" && cargo build --release --locked -p bitfun-cli --bin bitfun --bin bitfun-cli )
-PRIMARY="$SRC/target/release/bitfun"
-LEGACY="$SRC/target/release/bitfun-cli"
-[ -f "$PRIMARY" ] || {{ echo "ERROR: source build produced no bitfun binary" >&2; exit 1; }}
-[ -f "$LEGACY" ] || {{ echo "ERROR: source build produced no bitfun-cli binary" >&2; exit 1; }}
-"#,
-        git_ref = shell_quote_posix(git_ref),
-        git_ref_plain = git_ref,
-        repo = shell_quote_posix(REPO_GIT_URL),
-        free_kb = SOURCE_BUILD_FREE_KB,
-        free_gb = SOURCE_BUILD_FREE_KB / 1024 / 1024,
-    );
-    format!(
-        "{preamble}{build}{commit}",
-        preamble = install_preamble_fragment(dir, expected_version),
-        // The checkout is many gigabytes; leaving it behind would silently fill
-        // the target's home directory after a few installs.
-        commit = install_commit_fragment(r#"rm -rf "$SRC""#),
-    )
-}
-
-fn source_archive_build_body_script(
-    dir: &str,
-    archive_path: &str,
-    expected_version: &str,
-    revision: &str,
-) -> String {
-    let build = format!(
-        r#"SRC="$D/source"
-SOURCE_ARCHIVE={archive}
-echo "Building BitFun CLI controller source {revision_plain} on the target. This can take a while."
-FREE_KB="$(df -Pk "$HOME" 2>/dev/null | awk 'NR==2 {{print $4}}' || echo 0)"
-if [ "${{FREE_KB:-0}}" -lt {free_kb} ]; then
-  echo "ERROR: source build needs about {free_gb} GB free under $HOME, found $((FREE_KB / 1024 / 1024)) GB" >&2
-  exit 1
-fi
-rm -rf "$SRC"
-mkdir -p "$SRC"
-tar -xzf "$SOURCE_ARCHIVE" -C "$SRC"
-echo ">>> cargo build --release (bitfun, bitfun-cli)"
-( cd "$SRC" && cargo build --release --locked -p bitfun-cli --bin bitfun --bin bitfun-cli )
-PRIMARY="$SRC/target/release/bitfun"
-LEGACY="$SRC/target/release/bitfun-cli"
-[ -f "$PRIMARY" ] || {{ echo "ERROR: source build produced no bitfun binary" >&2; exit 1; }}
-[ -f "$LEGACY" ] || {{ echo "ERROR: source build produced no bitfun-cli binary" >&2; exit 1; }}
-"#,
-        archive = shell_quote_posix(archive_path),
-        revision_plain = revision,
-        free_kb = SOURCE_BUILD_FREE_KB,
-        free_gb = SOURCE_BUILD_FREE_KB / 1024 / 1024,
-    );
-    format!(
-        "{preamble}{build}{commit}",
-        preamble = install_preamble_fragment(dir, expected_version),
-        commit = install_commit_fragment(r#"rm -rf "$SRC"; rm -f "$SOURCE_ARCHIVE""#),
     )
 }
 
@@ -2370,8 +2338,7 @@ exit 0
 
 #[allow(clippy::too_many_arguments)]
 fn stage_install_command(
-    // Absent for a source build, which has no archive to protect.
-    archive_path: Option<&str>,
+    archive_path: &str,
     body_path: &str,
     script_path: &str,
     log_path: &str,
@@ -2381,14 +2348,12 @@ fn stage_install_command(
     exit_path: &str,
     install_token: &str,
 ) -> String {
-    let archive = archive_path
-        .map(|path| format!("chmod 600 {} && ", shell_quote_posix(path)))
-        .unwrap_or_default();
     format!(
-        "{archive}chmod 700 {body} {script} \
+        "chmod 600 {archive} && chmod 700 {body} {script} \
          && rm -f {pid} {driver_pid} {exit} \
          && : > {log} && chmod 600 {log} \
          && printf '%s\\n' {token} > {prepare} && chmod 600 {prepare}",
+        archive = shell_quote_posix(archive_path),
         body = shell_quote_posix(body_path),
         script = shell_quote_posix(script_path),
         pid = shell_quote_posix(pid_path),
@@ -2668,9 +2633,7 @@ mod tests {
             "/home/user/.bitfun/dispatch/install/install-cli-body.sh",
             "bitfun-install-test-token",
         );
-        let source =
-            source_build_body_script("/home/user/.bitfun/dispatch/install", "1.2.3", "v1.2.3");
-        for (name, script) in [("body", body), ("driver", driver), ("source", source)] {
+        for (name, script) in [("body", body), ("driver", driver)] {
             let script = to_unix_script(&script);
             assert!(!script.contains('\r'), "{name} must be LF-only");
             assert!(
@@ -2712,44 +2675,21 @@ mod tests {
             digest_tool,
             libc: Some(RemoteLibc::Glibc),
             libc_version: Some("2.39".to_string()),
-            cargo_version: None,
-            git_available: true,
-            cc_available: true,
-            free_kb: Some(SOURCE_BUILD_FREE_KB * 2),
         }
     }
 
     #[test]
-    fn a_target_without_the_result_capability_is_told_what_to_do() {
-        // Optional capability: the failure must name the fix, not surface
-        // clap's "unrecognized subcommand" from the verb invocation.
-        let without = serde_json::json!({
-            "capabilities": ["persistent_jobs", "cursor_events"]
-        });
-        let error = ensure_result_bundle_capability(&without)
-            .expect_err("a target that cannot return results must say so");
-        assert!(
-            error.to_string().contains("cannot return job results"),
-            "{error}"
-        );
-
-        let with = serde_json::json!({
-            "capabilities": ["persistent_jobs", WORKSPACE_RESULT_CAPABILITY]
-        });
-        assert!(ensure_result_bundle_capability(&with).is_ok());
-
-        // A malformed probe must fail closed rather than assume support.
-        assert!(ensure_result_bundle_capability(&serde_json::json!({})).is_err());
-    }
-
-    #[test]
-    fn the_optional_result_capability_is_never_required_for_ordinary_dispatch() {
-        // Requiring it would make every older target unusable for jobs it can
-        // still run perfectly well.
-        assert!(
-            !REQUIRED_DISPATCH_CAPABILITIES.contains(&WORKSPACE_RESULT_CAPABILITY),
-            "returning results must stay optional"
-        );
+    fn git_worktree_delivery_capabilities_are_required() {
+        for capability in [
+            "workspace_git_worktree",
+            "workspace_git_bundle_upload",
+            "workspace_git_sync",
+        ] {
+            assert!(
+                REQUIRED_DISPATCH_CAPABILITIES.contains(&capability),
+                "{capability} must fail closed because snapshot delivery no longer exists"
+            );
+        }
     }
 
     #[cfg(unix)]
@@ -2800,18 +2740,37 @@ mod tests {
     }
 
     #[test]
+    fn unverified_result_bundles_are_removed_but_verified_ones_are_retained() {
+        let temp = tempfile::tempdir().expect("temp dir");
+        let rejected = temp.path().join("rejected.bundle");
+        std::fs::write(&rejected, b"tampered").expect("write rejected bundle");
+        drop(UnverifiedResultBundle::new(&rejected));
+        assert!(!rejected.exists());
+
+        let accepted = temp.path().join("accepted.bundle");
+        std::fs::write(&accepted, b"verified").expect("write accepted bundle");
+        let mut guard = UnverifiedResultBundle::new(&accepted);
+        guard.retain();
+        drop(guard);
+        assert_eq!(
+            std::fs::read(&accepted).expect("read accepted"),
+            b"verified"
+        );
+    }
+
+    #[test]
     fn a_result_bundle_is_only_read_from_its_own_managed_directory() {
         // The path is chosen by the target, so a compromised or buggy one must
         // not be able to point this at an arbitrary file to exfiltrate.
         assert!(validate_managed_result_path(
             "/home/user",
             "job-1",
-            "/home/user/.bitfun/dispatch/workspaces/job-1/result.tar.gz"
+            "/home/user/.bitfun/dispatch/workspaces/job-1/result.bundle"
         )
         .is_ok());
         for hostile in [
             "/home/user/.ssh/id_ed25519",
-            "/home/user/.bitfun/dispatch/workspaces/job-2/result.tar.gz",
+            "/home/user/.bitfun/dispatch/workspaces/job-2/result.bundle",
             "/home/user/.bitfun/dispatch/workspaces/job-1/../../../.ssh/id_ed25519",
             "/home/user/.bitfun/dispatch/workspaces/job-1/current/secret",
         ] {
@@ -2877,108 +2836,48 @@ mod tests {
     }
 
     #[test]
-    fn source_build_reports_every_missing_prerequisite() {
-        let mut target = test_target(None, None);
-        target.cargo_version = None;
-        target.git_available = false;
-        target.cc_available = false;
-        target.free_kb = Some(1024);
-
-        let availability = source_build_availability(&target);
-        assert!(!availability.supported);
-        assert_eq!(
-            availability.blockers.len(),
-            4,
-            "every prerequisite must be listed at once, not one per retry: {:?}",
-            availability.blockers
-        );
-        assert!(
-            availability
-                .blockers
-                .iter()
-                .any(|b| b.contains("rustup.rs")),
-            "a missing toolchain must say where to get one"
-        );
-
-        target.cargo_version = Some("1.90.0".to_string());
-        target.git_available = true;
-        target.cc_available = true;
-        target.free_kb = Some(SOURCE_BUILD_FREE_KB * 2);
-        let availability = source_build_availability(&target);
-        assert!(availability.supported, "{:?}", availability.blockers);
-        assert!(availability.git_ref.starts_with('v') || availability.git_ref == "nightly");
-    }
-
-    #[test]
-    fn both_install_paths_share_one_staging_and_commit_implementation() {
+    fn the_install_path_uses_the_shared_staging_and_commit_implementation() {
         let release = install_body_script(
             "/home/user/.bitfun/dispatch/install",
             "/home/user/.bitfun/dispatch/install/archive.tar.gz",
             "1.2.3",
             &ArchiveSource::TargetDownload,
         );
-        let source =
-            source_build_body_script("/home/user/.bitfun/dispatch/install", "1.2.3", "v1.2.3");
-        let controller_source = source_archive_build_body_script(
-            "/home/user/.bitfun/dispatch/install",
-            "/home/user/.bitfun/dispatch/install/controller-source.tar.gz",
-            "1.2.3",
-            "abc123",
-        );
-        // The atomic-replace and rollback semantics must not be able to drift
-        // between the two paths.
+        // Installing a signed release is the only way a target gets a CLI, so
+        // its atomic-replace and rollback semantics must come from the shared
+        // fragment rather than being restated inline.
         let commit = install_commit_fragment(r#"rm -f "$ARCHIVE""#);
         let shared = commit
             .lines()
             .find(|line| line.contains("mv -f \"$PRIMARY_NEW\""))
             .expect("commit fragment swaps the primary");
-        for (name, script) in [
-            ("release", &release),
-            ("source", &source),
-            ("controller source", &controller_source),
-        ] {
-            assert!(script.contains(shared), "{name} must use the shared commit");
-            assert!(
-                script.contains(r#"PRIMARY_NEW="$STAGE/bitfun""#),
-                "{name} must stage under real filenames"
-            );
-            assert!(
-                script.contains("rollback_install"),
-                "{name} must keep rollback"
-            );
-            assert!(
-                script.contains(DISPATCH_WORKER_CLI_PROFILE_CAPABILITY),
-                "{name} must reject a CLI whose detached worker can select the wrong profile"
-            );
-        }
+        assert!(release.contains(shared), "release must use the shared commit");
         assert!(
-            source.contains("cargo build --release --locked"),
-            "source build must be reproducible"
+            release.contains(r#"PRIMARY_NEW="$STAGE/bitfun""#),
+            "release must stage under real filenames"
         );
         assert!(
-            !source.contains("rustup") && !source.contains("sudo"),
-            "source build must not install a toolchain or escalate"
+            release.contains("rollback_install"),
+            "release must keep rollback"
         );
         assert!(
-            source.contains(r#"rm -rf "$SRC""#),
-            "the checkout must be cleaned up after a successful build"
+            release.contains("dispatch_worker_cli_profile"),
+            "release must reject a CLI whose detached worker can select the wrong profile"
         );
         assert!(
-            controller_source.contains("tar -xzf \"$SOURCE_ARCHIVE\"")
-                && controller_source.contains("controller source abc123")
-                && !controller_source.contains("git clone"),
-            "a controller archive must build exactly the confirmed local revision"
+            !release.contains("cargo build"),
+            "no install path may compile BitFun on the target"
         );
     }
 
     #[test]
     fn release_compatibility_uses_capability_floor_not_installed_version() {
         assert!(
-            !published_release_supports_required_dispatch_protocol("0.2.14"),
-            "the last release without the worker profile must use the exact controller source"
+            !published_release_supports_required_dispatch_protocol("0.2.15"),
+            "the last snapshot-delivery release cannot satisfy protocol v3"
         );
         assert!(
-            published_release_supports_required_dispatch_protocol("0.2.15"),
+            published_release_supports_required_dispatch_protocol("0.2.16"),
             "the first compatible stable release must be installable"
         );
         assert!(published_release_supports_required_dispatch_protocol(
@@ -3385,13 +3284,6 @@ mod tests {
                 "/home/user/.bitfun/dispatch/install/install-cli-body.sh",
                 "bitfun-install-test-token",
             ),
-            source_build_body_script("/home/user/.bitfun/dispatch/install", "1.2.3", "v1.2.3"),
-            source_archive_build_body_script(
-                "/home/user/.bitfun/dispatch/install",
-                "/home/user/.bitfun/dispatch/install/controller-source.tar.gz",
-                "1.2.3",
-                "abc123",
-            ),
             target_download_script(
                 RemoteDownloader::Curl,
                 RemoteDigestTool::Sha256Sum,
@@ -3713,8 +3605,34 @@ mod tests {
     }
 
     #[test]
+    fn cli_install_failure_audit_details_are_structured_and_bounded() {
+        let details = cli_install_failure_details(&"p".repeat(700), &"e".repeat(700));
+
+        assert_eq!(
+            details
+                .get("phase")
+                .and_then(Value::as_str)
+                .expect("phase")
+                .chars()
+                .count(),
+            500
+        );
+        assert_eq!(
+            details
+                .get("error")
+                .and_then(Value::as_str)
+                .expect("error")
+                .chars()
+                .count(),
+            500
+        );
+        assert_eq!(details.get("output"), details.get("error"));
+        assert_eq!(details.as_object().expect("details").len(), 3);
+    }
+
+    #[test]
     fn incompatible_dispatch_protocols_require_an_upgrade() {
-        let capabilities = REQUIRED_DISPATCH_CAPABILITIES;
+        let capabilities = REQUIRED_DISPATCH_CAPABILITIES.clone();
         let compatible = serde_json::json!({
             "protocolVersion": DISPATCH_PROTOCOL_VERSION,
             "capabilities": capabilities,
@@ -3733,39 +3651,36 @@ mod tests {
         });
         assert!(!dispatch_protocol_is_compatible(&missing));
 
+        let mut reject_capabilities: Vec<&str> = REQUIRED_DISPATCH_CAPABILITIES
+            .iter()
+            .copied()
+            .filter(|capability| !capability.starts_with("approval_"))
+            .collect();
+        reject_capabilities.push("approval_reject_and_report");
         let reject_only = serde_json::json!({
             "protocolVersion": DISPATCH_PROTOCOL_VERSION,
-            "capabilities": [
-                "persistent_jobs",
-                "cursor_events",
-                "detached_worker",
-                "workspace_serialization",
-                "frontend_event_projection",
-                "approval_reject_and_report",
-                DISPATCH_WORKER_CLI_PROFILE_CAPABILITY
-            ],
+            "capabilities": reject_capabilities,
         });
         validate_dispatch_protocol(&reject_only, Some("reject-and-report"))
             .expect("selected policy is supported");
         assert!(validate_dispatch_protocol(&reject_only, Some("auto")).is_err());
 
+        let mut unsafe_capabilities: Vec<&str> = REQUIRED_DISPATCH_CAPABILITIES
+            .iter()
+            .copied()
+            .filter(|capability| {
+                !capability.starts_with("approval_") && *capability != "dispatch_worker_cli_profile"
+            })
+            .collect();
+        unsafe_capabilities.push("approval_reject_and_report");
         let unsafe_worker = serde_json::json!({
             "protocolVersion": DISPATCH_PROTOCOL_VERSION,
-            "capabilities": [
-                "persistent_jobs",
-                "cursor_events",
-                "detached_worker",
-                "workspace_serialization",
-                "frontend_event_projection",
-                "approval_reject_and_report"
-            ],
+            "capabilities": unsafe_capabilities,
         });
         let error = validate_dispatch_protocol(&unsafe_worker, Some("reject-and-report"))
             .expect_err("a worker that can select product-full first must be rejected");
         assert!(
-            error
-                .to_string()
-                .contains(DISPATCH_WORKER_CLI_PROFILE_CAPABILITY),
+            error.to_string().contains("dispatch_worker_cli_profile"),
             "{error}"
         );
     }

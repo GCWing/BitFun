@@ -2,7 +2,7 @@
 
 # OpenCode Adapter
 
-The current crate owns the static OpenCode source preview used by the existing
+The current crate owns OpenCode user Instruction path/config precedence, the static OpenCode source preview used by the existing
 managed-package path, the OpenCode-specific implementations of command,
 standalone-tool, subagent, and MCP provider contracts, the bounded projection of
 configured local Skill roots, and runtime-free mapping
@@ -70,6 +70,13 @@ Product-source boundary:
   expansion inside this crate. Cross-crate outputs use typed source snapshots,
   adapter bindings, and PluginRuntimeClient DTOs; do not expose raw OpenCode JSON
   or source syntax as product contracts.
+- `local_source_paths` owns the adapter-private local source plan: user config,
+  `OPENCODE_CONFIG`, project files, ordered config directories, and
+  `OPENCODE_CONFIG_CONTENT`. Capability providers consume only the plan items
+  they understand and retain their field-specific merge and validation rules;
+  do not introduce a generic merged OpenCode config contract. Inline content is
+  bounded, uses a redacted virtual source identity, has no watch root, and may
+  resolve relative paths only from an explicit workspace context.
 - Current source inspection recognizes only the tested declarative subset. The
   adapter may reuse the workspace-pinned parse-only OXC profile for syntax-safe static
   projection, but it is not a general JavaScript/TypeScript semantic analyzer or
@@ -94,7 +101,8 @@ Product-source boundary:
   import the adapter directly. The composition layer does not
   discover dynamic sources, prepare dependencies, or import plugin modules.
 - Product Assembly may consume this crate only from reviewed composition modules
-  such as `bitfun-core/plugin_runtime` or `bitfun-core/external_sources`; boundary
+  such as `bitfun-core/plugin_runtime`, `bitfun-core/external_sources`, or
+  `bitfun-core/instruction_sources`; boundary
   guards and focused assembly-path tests must change with any additional consumer.
 - This crate must not depend on Codex, Claude Code, or another ecosystem adapter.
   New ecosystems are sibling adapters registered by Product Assembly, not modes of

@@ -1,7 +1,7 @@
 use bitfun_claude_code_adapter::{ClaudeCodeCommandProvider, ClaudeCodeCommandProviderOptions};
 use bitfun_product_domains::external_sources::{
     ExecutionDomainId, ExternalSourceContext, PromptCommandAvailability,
-    PromptCommandProviderSnapshot, PromptCommandSourceProvider,
+    PromptCommandProviderSnapshot, PromptCommandShellPreference, PromptCommandSourceProvider,
 };
 use std::collections::BTreeSet;
 use std::fs;
@@ -167,11 +167,75 @@ fn nested_command_uses_claude_codes_native_namespace() {
 }
 
 #[test]
+fn allowed_tools_hints_are_accepted_without_changing_command_behavior() {
+    let fixture = Fixture::new();
+    let path = fixture.user_claude.join("commands/review.md");
+    write(
+        &path,
+        "---\ndescription: Review\nallowed-tools: Read, Bash(git:*)\n---\nReview $ARGUMENTS",
+    );
+
+    let provider = fixture.provider();
+    let first = provider.discover(&fixture.context()).unwrap();
+    let first_command = &first.commands[0];
+    assert!(matches!(
+        first_command.availability,
+        PromptCommandAvailability::Available
+    ));
+    let behavior_version = first_command.content_version.clone();
+    assert_eq!(
+        provider
+            .expand(&fixture.context(), first_command, "this change")
+            .unwrap()
+            .content,
+        "Review this change"
+    );
+
+    write(
+        &path,
+        "---\ndescription: Review\nallowed-tools: [\"Read\", \"Grep\", \"Bash\"]\n---\nReview $ARGUMENTS",
+    );
+    let updated = provider.discover(&fixture.context()).unwrap();
+    assert!(matches!(
+        updated.commands[0].availability,
+        PromptCommandAvailability::Available
+    ));
+    assert_eq!(updated.commands[0].content_version, behavior_version);
+}
+
+#[test]
+fn malformed_allowed_tools_hints_fail_closed() {
+    let fixture = Fixture::new();
+    write(
+        fixture.user_claude.join("commands/scalar.md"),
+        "---\nallowed-tools: 42\n---\nReview the change",
+    );
+    write(
+        fixture.user_claude.join("commands/list.md"),
+        "---\nallowed-tools: [Read, false]\n---\nReview the change",
+    );
+
+    let snapshot = fixture.provider().discover(&fixture.context()).unwrap();
+
+    assert!(snapshot.commands.is_empty());
+    assert_eq!(snapshot.unavailable_command_ids.len(), 2);
+    let invalid_metadata = snapshot
+        .diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code == "claude.command.markdown_invalid")
+        .collect::<Vec<_>>();
+    assert_eq!(invalid_metadata.len(), 2);
+    assert!(invalid_metadata.iter().all(|diagnostic| diagnostic
+        .message
+        .contains("allowed-tools must be a string or string list")));
+}
+
+#[test]
 fn dynamic_and_behavioral_commands_are_visible_but_restricted() {
     let fixture = Fixture::new();
     write(
         fixture.user_claude.join("commands/shell.md"),
-        "---\ndescription: Shell\nallowed-tools: Bash\nmodel: sonnet\n---\nInspect !`git status`, @README.md, and ${CLAUDE_SESSION_ID}",
+        "---\ndescription: Shell\nallowed-tools: Bash\ndisallowed-tools: Write\nmodel: sonnet\n---\nInspect !`git status`, @README.md, and ${CLAUDE_SESSION_ID}",
     );
 
     let provider = fixture.provider();
@@ -184,12 +248,77 @@ fn dynamic_and_behavioral_commands_are_visible_but_restricted() {
     else {
         panic!("dynamic Claude command must be restricted")
     };
-    assert!(required_capabilities.contains(&"command.shell".to_string()));
+    assert!(!required_capabilities.contains(&"command.shell".to_string()));
     assert!(!required_capabilities.contains(&"command.file_reference".to_string()));
     assert!(required_capabilities.contains(&"command.model".to_string()));
-    assert!(required_capabilities.contains(&"command.allowed_tools".to_string()));
+    assert!(!required_capabilities.contains(&"command.allowed_tools".to_string()));
+    assert!(required_capabilities.contains(&"command.disallowed_tools".to_string()));
     assert!(required_capabilities.contains(&"command.dynamic_variable".to_string()));
-    assert!(provider.expand(command, "now").is_err());
+    assert!(provider.expand(&fixture.context(), command, "now").is_err());
+}
+
+#[test]
+fn shell_directives_are_reviewable_with_claude_shell_and_project_root_semantics() {
+    let fixture = Fixture::new();
+    write(
+        fixture.user_claude.join("commands/static.md"),
+        "Inspect !`git status` and !`cat @README.md`",
+    );
+    write(
+        fixture.user_claude.join("commands/dynamic.md"),
+        "---\ndescription: Dynamic\nshell: powershell\n---\nInspect !`Write-Output $ARGUMENTS`",
+    );
+
+    let provider = fixture.provider();
+    let snapshot = provider.discover(&fixture.context()).unwrap();
+    let static_command = snapshot
+        .commands
+        .iter()
+        .find(|command| command.name == "static")
+        .unwrap();
+    assert!(matches!(
+        static_command.availability,
+        PromptCommandAvailability::Available
+    ));
+    assert_eq!(
+        static_command.shell_preference,
+        Some(PromptCommandShellPreference::Required {
+            executable: "bash".to_string()
+        })
+    );
+    let static_expansion = provider
+        .expand(&fixture.context(), static_command, "")
+        .unwrap();
+    assert!(static_expansion.workspace_file_references.is_empty());
+    let static_shell = static_expansion.shell.unwrap();
+    assert_eq!(static_shell.working_directory, fixture.project);
+    assert_eq!(static_shell.invocations.len(), 2);
+    assert!(static_shell
+        .invocations
+        .iter()
+        .all(|invocation| invocation.can_remember));
+
+    let dynamic_command = snapshot
+        .commands
+        .iter()
+        .find(|command| command.name == "dynamic")
+        .unwrap();
+    assert_eq!(
+        dynamic_command.shell_preference,
+        Some(PromptCommandShellPreference::RequiredOneOf {
+            executables: vec!["pwsh".to_string(), "powershell".to_string()]
+        })
+    );
+    let dynamic_shell = provider
+        .expand(&fixture.context(), dynamic_command, "hello world")
+        .unwrap()
+        .shell
+        .unwrap();
+    assert_eq!(
+        dynamic_shell.invocations[0].command,
+        "Write-Output hello world"
+    );
+    assert!(!dynamic_shell.invocations[0].can_remember);
 }
 
 #[test]
@@ -209,7 +338,7 @@ fn literal_file_references_are_prepared_without_scanning_arguments() {
     ));
 
     let expansion = provider
-        .expand(command, "@arguments/are-not-files.md")
+        .expand(&fixture.context(), command, "@arguments/are-not-files.md")
         .unwrap();
     assert_eq!(
         expansion.workspace_file_references,
@@ -252,7 +381,7 @@ fn dynamic_and_unsafe_file_references_are_visible_but_restricted() {
             panic!("{name} file reference must be restricted")
         };
         assert!(required_capabilities.contains(&capability.to_string()));
-        assert!(provider.expand(command, "").is_err());
+        assert!(provider.expand(&fixture.context(), command, "").is_err());
     }
 }
 
@@ -270,7 +399,7 @@ fn safe_arguments_expand_and_description_only_changes_keep_behavior_version() {
     let version = first_command.content_version.clone();
     assert_eq!(
         provider
-            .expand(first_command, "src/lib.rs carefully")
+            .expand(&fixture.context(), first_command, "src/lib.rs carefully")
             .unwrap()
             .content,
         "Review src/lib.rs then carefully and src/lib.rs carefully"
@@ -300,7 +429,9 @@ fn rejects_argument_expansion_before_repeated_placeholders_can_overallocate() {
         .find(|command| command.name == "large")
         .unwrap();
 
-    let error = provider.expand(command, &"x".repeat(2048)).unwrap_err();
+    let error = provider
+        .expand(&fixture.context(), command, &"x".repeat(2048))
+        .unwrap_err();
 
     assert_eq!(error.code, "claude.command.expansion_too_large");
 }
@@ -318,7 +449,7 @@ fn arguments_without_a_placeholder_use_claude_codes_arguments_section() {
 
     assert_eq!(
         provider
-            .expand(&snapshot.commands[0], "focus on auth")
+            .expand(&fixture.context(), &snapshot.commands[0], "focus on auth",)
             .unwrap()
             .content,
         "Summarize this change\n\nARGUMENTS: focus on auth"
@@ -338,7 +469,7 @@ fn missing_and_escaped_argument_placeholders_remain_literal() {
 
     assert_eq!(
         provider
-            .expand(&snapshot.commands[0], "alpha beta")
+            .expand(&fixture.context(), &snapshot.commands[0], "alpha beta")
             .unwrap()
             .content,
         "Use alpha, keep $ARGUMENTS[3], and show $ARGUMENTS plus $1"
@@ -402,6 +533,29 @@ fn invalid_higher_layer_command_masks_lower_layer_until_source_is_disabled() {
         .unwrap();
     assert_eq!(fallback.len(), 1);
     assert_eq!(fallback[0].template, "Project review");
+}
+
+#[test]
+fn malformed_higher_layer_frontmatter_masks_lower_layer_command() {
+    let fixture = Fixture::new();
+    write(
+        fixture.project.join(".claude/commands/review.md"),
+        "Project review",
+    );
+    write(
+        fixture.user_claude.join("commands/review.md"),
+        "---\nallowed-tools: [Read\n---\nPersonal review",
+    );
+
+    let provider = fixture.provider();
+    let snapshot = provider.discover(&fixture.context()).unwrap();
+
+    assert!(resolve(&provider, &snapshot).is_empty());
+    assert_eq!(snapshot.unavailable_command_ids.len(), 1);
+    assert!(snapshot
+        .diagnostics
+        .iter()
+        .any(|diagnostic| diagnostic.code == "claude.command.markdown_invalid"));
 }
 
 #[test]

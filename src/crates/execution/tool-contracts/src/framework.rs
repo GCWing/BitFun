@@ -2229,6 +2229,7 @@ pub struct ToolRuntimeRestrictions {
 
 const MINIAPP_HEADLESS_AGENT_SURFACE: &str = "miniapp_agent";
 const MINIAPP_HEADLESS_AGENT_OWNER_PREFIX: &str = "miniapp-agent:";
+const MINIAPP_MARKET_STRICT_METADATA_KEY: &str = "marketStrict";
 
 /// MiniApp agent runs execute inside a MiniApp iframe without Flow Chat tool
 /// cards or AskUserQuestion UI. Treat those sessions as headless even on
@@ -2245,6 +2246,18 @@ pub fn is_miniapp_headless_agent_run(
         return true;
     }
     created_by.is_some_and(|owner| owner.starts_with(MINIAPP_HEADLESS_AGENT_OWNER_PREFIX))
+}
+
+/// Marketplace MiniApps run under the strict runtime profile, so their agent
+/// turns carry `marketStrict` in the submission metadata. Built-in and
+/// locally authored MiniApps omit the flag and keep the compatibility tool set.
+pub fn is_miniapp_market_strict_agent_run(
+    user_message_metadata: Option<&serde_json::Value>,
+) -> bool {
+    user_message_metadata
+        .and_then(|metadata| metadata.get(MINIAPP_MARKET_STRICT_METADATA_KEY))
+        .and_then(|value| value.as_bool())
+        .unwrap_or(false)
 }
 
 pub fn miniapp_headless_agent_tool_restrictions() -> ToolRuntimeRestrictions {
@@ -2299,6 +2312,49 @@ pub fn miniapp_headless_agent_tool_restrictions() -> ToolRuntimeRestrictions {
         denied_tool_messages,
         ..Default::default()
     }
+}
+
+/// Tool set for a marketplace MiniApp agent turn.
+///
+/// Marketplace MiniApps are third-party code, so their hidden agent sessions
+/// must not reach the filesystem, the shell, or any host control surface. They
+/// do need to answer questions about the live world, so the allowlist keeps
+/// read-only web research and the clock that dates it. The deferred gateway pair
+/// stays allowed because the execution gate matches the effective tool name, so
+/// an allowlisted tool that resolves as deferred still has to pass this list.
+/// An allowlist (rather than a longer deny list) keeps newly registered tools
+/// closed by default.
+pub fn miniapp_market_strict_agent_tool_restrictions() -> ToolRuntimeRestrictions {
+    const ALLOWED_TOOLS: &[&str] = &[
+        "WebSearch",
+        "WebFetch",
+        "GetToolSpec",
+        "CallDeferredTool",
+        "GetTime",
+    ];
+
+    let mut restrictions = miniapp_headless_agent_tool_restrictions();
+    restrictions.allowed_tool_names = ALLOWED_TOOLS
+        .iter()
+        .map(|name| (*name).to_string())
+        .collect();
+    restrictions
+}
+
+/// Restrictions for one agent turn, keyed on whether it belongs to a MiniApp.
+///
+/// Turns outside the MiniApp agent bridge keep the unrestricted default set.
+pub fn miniapp_agent_run_tool_restrictions(
+    user_message_metadata: Option<&serde_json::Value>,
+    session_created_by: Option<&str>,
+) -> ToolRuntimeRestrictions {
+    if !is_miniapp_headless_agent_run(user_message_metadata, session_created_by) {
+        return ToolRuntimeRestrictions::default();
+    }
+    if is_miniapp_market_strict_agent_run(user_message_metadata) {
+        return miniapp_market_strict_agent_tool_restrictions();
+    }
+    miniapp_headless_agent_tool_restrictions()
 }
 
 pub fn tool_restrictions_for_delegation_policy(
@@ -2668,5 +2724,80 @@ mod tests {
             .expect("provider entries should materialize");
 
         assert_eq!(registry.get_tool_names(), vec!["Read", "Write"]);
+    }
+
+    #[test]
+    fn market_strict_miniapp_runs_keep_web_research_and_drop_host_reach() {
+        let restrictions = miniapp_market_strict_agent_tool_restrictions();
+
+        assert!(restrictions.is_tool_allowed("WebSearch"));
+        assert!(restrictions.is_tool_allowed("WebFetch"));
+        assert!(restrictions.is_tool_allowed("GetToolSpec"));
+
+        for denied in ["Read", "Write", "Edit", "ExecCommand", "Task", "Skill"] {
+            assert!(
+                !restrictions.is_tool_allowed(denied),
+                "{denied} must stay closed for marketplace MiniApp agent runs"
+            );
+        }
+
+        // The headless denials still apply on top of the allowlist.
+        assert!(!restrictions.is_tool_allowed("AskUserQuestion"));
+        assert!(matches!(
+            restrictions.ensure_tool_allowed("ComputerUse"),
+            Err(ToolRestrictionError::Denied { .. })
+        ));
+        assert!(matches!(
+            restrictions.ensure_tool_allowed("Write"),
+            Err(ToolRestrictionError::NotAllowed { .. })
+        ));
+    }
+
+    #[test]
+    fn builtin_miniapp_runs_keep_the_compatibility_tool_set() {
+        let restrictions = miniapp_headless_agent_tool_restrictions();
+
+        assert!(restrictions.is_tool_allowed("WebSearch"));
+        assert!(restrictions.is_tool_allowed("WebFetch"));
+        assert!(restrictions.is_tool_allowed("Write"));
+        assert!(!restrictions.is_tool_allowed("AskUserQuestion"));
+    }
+
+    #[test]
+    fn market_strict_detection_reads_the_turn_metadata_flag() {
+        assert!(is_miniapp_market_strict_agent_run(Some(&json!({
+            "surface": "miniapp_agent",
+            "marketStrict": true,
+        }))));
+        assert!(!is_miniapp_market_strict_agent_run(Some(&json!({
+            "surface": "miniapp_agent",
+        }))));
+        assert!(!is_miniapp_market_strict_agent_run(None));
+    }
+
+    #[test]
+    fn miniapp_run_restrictions_follow_the_runtime_profile_of_the_turn() {
+        let created_by = Some("miniapp-agent:app-1:run-1");
+        let market_strict = json!({
+            "surface": "miniapp_agent",
+            "marketStrict": true,
+        });
+        let builtin = json!({ "surface": "miniapp_agent" });
+
+        assert!(
+            !miniapp_agent_run_tool_restrictions(Some(&market_strict), created_by)
+                .is_tool_allowed("Write")
+        );
+        assert!(
+            miniapp_agent_run_tool_restrictions(Some(&builtin), created_by)
+                .is_tool_allowed("Write")
+        );
+        // A turn outside the MiniApp bridge keeps the unrestricted default set,
+        // even when some other surface happens to carry the strict flag.
+        let other_surface = json!({ "surface": "chat", "marketStrict": true });
+        assert!(
+            miniapp_agent_run_tool_restrictions(Some(&other_surface), None)
+                .is_tool_allowed("Write")
+        );
     }
 }

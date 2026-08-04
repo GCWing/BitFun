@@ -61,8 +61,8 @@ vi.mock('@/infrastructure/i18n', () => ({
   }),
 }));
 
-vi.mock('@/infrastructure/theme/hooks/useTheme', () => ({
-  useTheme: () => ({ isLight: false }),
+vi.mock('@/infrastructure/appearance', () => ({
+  useAppearance: () => ({ current: { mode: 'dark' } }),
 }));
 
 vi.mock('@/shared/utils/logger', () => ({

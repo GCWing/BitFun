@@ -10,13 +10,13 @@ pub fn build_bridge_script(
     app_id: &str,
     app_data_dir: &str,
     workspace_dir: &str,
-    theme: &str,
+    appearance_mode: &str,
     platform: &str,
 ) -> String {
     let app_id_esc = escape_js_str(app_id);
     let app_data_esc = escape_js_str(app_data_dir);
     let workspace_esc = escape_js_str(workspace_dir);
-    let theme_esc = escape_js_str(theme);
+    let appearance_mode_esc = escape_js_str(appearance_mode);
     let platform_esc = escape_js_str(platform);
 
     format!(
@@ -38,19 +38,19 @@ pub fn build_bridge_script(
 
   const _call = (method, params) => _rpc('worker.call', {{ method, params: params || {{}} }});
 
-  function _applyThemeVars(vars) {{
+  function _applyAppearanceVars(vars) {{
     if (!vars || typeof vars !== 'object') return;
     const root = document.documentElement.style;
     for (const k of Object.keys(vars)) root.setProperty(k, vars[k]);
   }}
 
-  let _theme = {theme_esc};
+  let _appearanceMode = {appearance_mode_esc};
   // Default to en-US until the host pushes the real locale via 'bitfun:event'.
   // The script below proactively requests it on startup.
   let _locale = 'en-US';
 
   const app = {{
-    get theme() {{ return _theme; }},
+    get appearanceMode() {{ return _appearanceMode; }},
     get locale() {{ return _locale; }},
     appId: {app_id_esc},
     appDataDir: {app_data_esc},
@@ -172,10 +172,10 @@ pub fn build_bridge_script(
       system: (title, body) => _rpc('notifications.system', {{ title, body }}),
     }},
 
-    _lifecycleHandlers: {{ activate: [], deactivate: [], themeChange: [], localeChange: [] }},
+    _lifecycleHandlers: {{ activate: [], deactivate: [], appearanceChange: [], localeChange: [] }},
     onActivate:    (fn) => app._lifecycleHandlers.activate.push(fn),
     onDeactivate:  (fn) => app._lifecycleHandlers.deactivate.push(fn),
-    onThemeChange: (fn) => app._lifecycleHandlers.themeChange.push(fn),
+    onAppearanceChange: (fn) => app._lifecycleHandlers.appearanceChange.push(fn),
     /// Subscribe to host locale changes. Callback receives the locale id (e.g. "zh-CN").
     onLocaleChange: (fn) => app._lifecycleHandlers.localeChange.push(fn),
 
@@ -206,12 +206,13 @@ pub fn build_bridge_script(
       const {{ event, payload }} = e.data;
       if (event === 'activate')    app._lifecycleHandlers.activate.forEach(f => f());
       if (event === 'deactivate')  app._lifecycleHandlers.deactivate.forEach(f => f());
-      if (event === 'themeChange') {{
+      if (event === 'appearanceChange') {{
         if (payload && typeof payload === 'object') {{
-          if (payload.vars) _applyThemeVars(payload.vars);
-          if (payload.type) {{ _theme = payload.type; document.documentElement.setAttribute('data-theme-type', _theme); }}
+          if (payload.vars) _applyAppearanceVars(payload.vars);
+          if (payload.id) document.documentElement.setAttribute('data-bf-appearance', payload.id);
+          if (payload.mode) {{ _appearanceMode = payload.mode; document.documentElement.setAttribute('data-bf-appearance-mode', _appearanceMode); }}
         }}
-        app._lifecycleHandlers.themeChange.forEach(f => f(payload));
+        app._lifecycleHandlers.appearanceChange.forEach(f => f(payload));
         (app._eventHandlers[event] || []).forEach(f => f(payload));
       }} else if (event === 'localeChange') {{
         if (payload && typeof payload === 'object' && typeof payload.locale === 'string') {{
@@ -250,15 +251,15 @@ pub fn build_bridge_script(
   }});
 
   window.app = app;
-  document.documentElement.setAttribute('data-theme-type', _theme);
-  window.parent.postMessage({{ method: 'bitfun/request-theme' }}, '*');
+  document.documentElement.setAttribute('data-bf-appearance-mode', _appearanceMode);
+  window.parent.postMessage({{ method: 'bitfun/request-appearance' }}, '*');
   window.parent.postMessage({{ method: 'bitfun/request-locale' }}, '*');
 }})();
 "#,
         app_id_esc = app_id_esc,
         app_data_esc = app_data_esc,
         workspace_esc = workspace_esc,
-        theme_esc = theme_esc,
+        appearance_mode_esc = appearance_mode_esc,
         platform_esc = platform_esc
     )
 }
@@ -342,7 +343,7 @@ pub fn scroll_boundary_script() -> &'static str {
     r#"<script>(()=>{const s=(e)=>{for(let n=e.target;n;n=n.parentNode){if(!(n instanceof Element))continue;if(n===document.documentElement||n===document.body)continue;const o=window.getComputedStyle(n).overflowY;if(o==='hidden'||o==='visible')continue;if(e.deltaY<0&&n.scrollTop>0)return false;if(e.deltaY>0&&n.scrollTop+n.clientHeight<n.scrollHeight)return false;}return true};window.addEventListener('wheel',e=>{if(!e.defaultPrevented&&s(e))window.parent.postMessage({jsonrpc:'2.0',method:'bitfun/sandbox-wheel',params:{deltaX:e.deltaX,deltaY:e.deltaY,deltaZ:e.deltaZ,deltaMode:e.deltaMode}},'*')},{passive:true});})();</script>"#
 }
 
-/// Default dark theme CSS variables for MiniApp iframe (avoids flash before host sends theme).
-pub fn build_miniapp_default_theme_css() -> &'static str {
-    r#"<style id="bitfun-theme-default">:root{--bitfun-bg:#121214;--bitfun-bg-secondary:#18181a;--bitfun-bg-tertiary:#121214;--bitfun-bg-elevated:#18181a;--bitfun-text:#e8e8e8;--bitfun-text-secondary:#b0b0b0;--bitfun-text-muted:#858585;--bitfun-accent:#60a5fa;--bitfun-accent-hover:#3b82f6;--bitfun-success:#34d399;--bitfun-warning:#f59e0b;--bitfun-error:#ef4444;--bitfun-info:#E1AB80;--bitfun-border:#2e2e32;--bitfun-border-subtle:#27272a;--bitfun-element-bg:#27272a;--bitfun-element-hover:#3f3f46;--bitfun-radius:6px;--bitfun-radius-lg:10px;--bitfun-font-sans:-apple-system,BlinkMacSystemFont,'PingFang SC','Hiragino Sans GB','Segoe UI','Microsoft YaHei UI','Microsoft YaHei','Helvetica Neue',Helvetica,Arial,sans-serif;--bitfun-font-mono:ui-monospace,SFMono-Regular,'SF Mono',Menlo,Monaco,'Cascadia Mono','Cascadia Code',Consolas,'Liberation Mono','Courier New',monospace;--bitfun-scrollbar-thumb:rgba(255,255,255,0.12);}</style>"#
+/// Minimal MiniApp iframe first-paint contract before the host sends Appearance variables.
+pub fn build_miniapp_default_appearance_css() -> &'static str {
+    r#"<style id="bitfun-appearance-default">:root{color-scheme:light dark;background:transparent;}</style>"#
 }

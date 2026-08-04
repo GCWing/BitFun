@@ -537,6 +537,21 @@ mod tests {
     }
 
     #[test]
+    fn create_bitfun_skin_embeds_authoring_contract_and_example() {
+        let skill = embedded_skill_text("create-bitfun-skin/SKILL.md");
+        assert!(skill.contains("name: create-bitfun-skin"));
+
+        let registry =
+            embedded_skill_text("create-bitfun-skin/references/appearance-registry.json");
+        assert!(registry.contains("schemaVersion"));
+
+        let example = embedded_skill_text(
+            "create-bitfun-skin/examples/cinematic-animated-wallpaper/SKILL.md",
+        );
+        assert!(example.contains("cinematic animated-wallpaper"));
+    }
+
+    #[test]
     fn office_helpers_use_validated_archive_extraction() {
         for skill in ["docx", "pptx", "xlsx"] {
             let helper_path = format!("{skill}/scripts/office/helpers/__init__.py");

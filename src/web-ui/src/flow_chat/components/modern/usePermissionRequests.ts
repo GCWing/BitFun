@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import {
   agentAPI,
   type PermissionReplyKind,
@@ -11,30 +11,43 @@ import {
   selectActivePermissionBatch,
   selectPermissionRequestsForSession,
 } from './permissionRequestRouting';
-import { dispatchApi } from '@/features/dispatch/dispatchApi';
-import { useDispatchJobStore } from '@/features/dispatch/dispatchJobStore';
-import { requestDispatchJobRefresh } from '@/features/dispatch/DispatchJobObserver';
+import { FlowChatStore } from '../../store/FlowChatStore';
+import { driverForSession } from '../../session-drivers/registry';
 
-const EMPTY_DISPATCH_PERMISSIONS: Array<Record<string, unknown>> = [];
+const EMPTY_EXTERNAL_REQUESTS: PermissionRequest[] = [];
+const noopSubscribe = () => () => {};
+const emptyExternalSnapshot = () => EMPTY_EXTERNAL_REQUESTS;
 
-export function usePermissionRequests(sessionId?: string, dispatchJobId?: string) {
-  const [requests, setRequests] = useState<PermissionRequest[]>([]);
+export function usePermissionRequests(sessionId?: string) {
+  const [liveRequests, setLiveRequests] = useState<PermissionRequest[]>([]);
   const resolvedIds = useRef(new Set<string>());
-  const dispatchRequests = useDispatchJobStore(state => (
-    dispatchJobId
-      ? state.jobs[dispatchJobId]?.pendingPermissions ?? EMPTY_DISPATCH_PERMISSIONS
-      : EMPTY_DISPATCH_PERMISSIONS
-  )) as unknown as PermissionRequest[];
+
+  // Driver resolution is per-render: the caller re-renders on any session
+  // change, so a projection whose dispatch config binds late is picked up.
+  const session = sessionId
+    ? FlowChatStore.getInstance().getState().sessions.get(sessionId)
+    : undefined;
+  const driver = driverForSession(sessionId ?? '', session);
+  const source = useMemo(
+    () => driver.permissionRequestSource(sessionId ?? ''),
+    [driver, sessionId],
+  );
+  const isLiveSource = source === 'live';
+
+  const externalRequests = useSyncExternalStore(
+    isLiveSource ? noopSubscribe : source.subscribe,
+    isLiveSource ? emptyExternalSnapshot : source.getSnapshot,
+  ) as unknown as PermissionRequest[];
 
   useEffect(() => {
-    if (dispatchJobId) {
-      setRequests([]);
+    if (!isLiveSource) {
+      setLiveRequests([]);
       return undefined;
     }
     let disposed = false;
     const unlisten = agentAPI.onPermissionRequestEvent((event: PermissionRequestEvent) => {
       if (disposed) return;
-      setRequests((current) => {
+      setLiveRequests((current) => {
         if (event.event === 'asked') {
           resolvedIds.current.delete(event.request.requestId);
         } else {
@@ -49,12 +62,12 @@ export function usePermissionRequests(sessionId?: string, dispatchJobId?: string
         await agentAPI.subscribePermissionRequests();
         const pending = await agentAPI.listPendingPermissionRequests();
         if (!disposed) {
-          setRequests((current) =>
+          setLiveRequests((current) =>
             reconcilePermissionRequestSnapshot(current, pending, resolvedIds.current),
           );
         }
       } catch {
-        if (!disposed) setRequests([]);
+        if (!disposed) setLiveRequests([]);
       }
     })();
 
@@ -62,47 +75,37 @@ export function usePermissionRequests(sessionId?: string, dispatchJobId?: string
       disposed = true;
       unlisten();
     };
-  }, [dispatchJobId]);
+  }, [isLiveSource]);
 
   const respond = useCallback(
     async (requestId: string, reply: PermissionReplyKind, feedback?: string) => {
-      if (dispatchJobId) {
-        await dispatchApi.answerPermission(dispatchJobId, requestId, reply, feedback);
-        requestDispatchJobRefresh(dispatchJobId);
-        return;
+      await driver.respondPermission(sessionId ?? '', requestId, reply, feedback);
+      if (isLiveSource) {
+        resolvedIds.current.add(requestId);
+        setLiveRequests((current) => current.filter((request) => request.requestId !== requestId));
       }
-      await agentAPI.respondPermission(requestId, reply, feedback);
-      resolvedIds.current.add(requestId);
-      setRequests((current) => current.filter((request) => request.requestId !== requestId));
     },
-    [dispatchJobId],
+    [driver, sessionId, isLiveSource],
   );
 
   const respondBatch = useCallback(
     async (requestId: string, reply: PermissionReplyKind, feedback?: string) => {
-      if (dispatchJobId) {
-        const batch = selectActivePermissionBatch(dispatchRequests as PermissionRequest[], sessionId);
-        const requestIds = batch?.requests.map(request => request.requestId) ?? [requestId];
-        for (const pendingRequestId of requestIds) {
-          await dispatchApi.answerPermission(
-            dispatchJobId,
-            pendingRequestId,
-            reply,
-            feedback,
-          );
-        }
-        requestDispatchJobRefresh(dispatchJobId);
-        return;
+      const resolvedRequestIds = await driver.respondPermissionBatch(
+        sessionId ?? '',
+        requestId,
+        reply,
+        feedback,
+      );
+      if (isLiveSource) {
+        const resolved = new Set(resolvedRequestIds);
+        resolvedRequestIds.forEach((id) => resolvedIds.current.add(id));
+        setLiveRequests((current) => current.filter((request) => !resolved.has(request.requestId)));
       }
-      const resolvedRequestIds = await agentAPI.respondPermissionBatch(requestId, reply, feedback);
-      const resolved = new Set(resolvedRequestIds);
-      resolvedRequestIds.forEach((id) => resolvedIds.current.add(id));
-      setRequests((current) => current.filter((request) => !resolved.has(request.requestId)));
     },
-    [dispatchJobId, dispatchRequests, sessionId],
+    [driver, sessionId, isLiveSource],
   );
 
-  const effectiveRequests = dispatchJobId ? dispatchRequests : requests;
+  const effectiveRequests = isLiveSource ? liveRequests : externalRequests;
   const sessionRequests = useMemo(
     () => selectPermissionRequestsForSession(effectiveRequests, sessionId),
     [effectiveRequests, sessionId],

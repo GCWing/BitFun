@@ -43,13 +43,13 @@ $config-input-height: 32px;
 
 
 .bitfun-config-form__label {
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-medium);
-  color: var(--color-text-secondary);
+  font-size: var(--bf-appearance-token-font-size-sm);
+  font-weight: var(--bf-appearance-token-font-weight-medium);
+  color: var(--bf-appearance-token-color-text-secondary);
   display: flex;
   align-items: center;
-  gap: var(--size-gap-2);
-  margin-bottom: var(--size-gap-1);
+  gap: var(--bf-appearance-token-size-gap-2);
+  margin-bottom: var(--bf-appearance-token-size-gap-1);
   user-select: none;
   list-style: none;
   
@@ -62,16 +62,16 @@ $config-input-height: 32px;
   &--required::after {
     display: inline-block !important;
     content: " *" !important;
-    color: var(--color-error);
-    font-weight: var(--font-weight-semibold);
+    color: var(--bf-appearance-token-color-error);
+    font-weight: var(--bf-appearance-token-font-weight-semibold);
   }
 }
 
 .bitfun-config-form__hint {
-  font-size: var(--font-size-xs);
-  color: var(--color-text-muted);
-  margin-top: var(--size-gap-1);
-  line-height: var(--line-height-base);
+  font-size: var(--bf-appearance-token-font-size-xs);
+  color: var(--bf-appearance-token-color-text-muted);
+  margin-top: var(--bf-appearance-token-size-gap-1);
+  line-height: var(--bf-appearance-token-line-height-base);
 }
 
 
@@ -83,37 +83,37 @@ $config-input-height: 32px;
   padding: 0 12px !important;
   font-size: 13px !important;
   line-height: $config-input-height !important;
-  color: var(--color-text-primary) !important;
+  color: var(--bf-appearance-token-color-text-primary) !important;
   background: transparent !important;
-  border: 1px solid var(--border-base) !important;
-  border-radius: var(--size-radius-sm) !important;
+  border: 1px solid var(--bf-appearance-token-border-base) !important;
+  border-radius: var(--bf-appearance-token-size-radius-sm) !important;
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
-  transition: border-color var(--motion-fast) var(--easing-standard), 
-              background-color var(--motion-fast) var(--easing-standard) !important;
+  transition: border-color var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard),
+              background-color var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard) !important;
   outline: none !important;
-  font-family: var(--font-family-sans) !important;
+  font-family: var(--bf-appearance-token-font-family-sans) !important;
   transform: none !important;
   box-shadow: none !important;
 
   &:focus {
-    border-color: var(--color-accent-500) !important;
+    border-color: var(--bf-appearance-token-color-accent-500) !important;
     background: transparent !important;
     box-shadow: none !important;
     transform: none !important;
   }
 
   &:hover:not(:focus):not(:disabled) {
-    border-color: var(--border-medium) !important;
+    border-color: var(--bf-appearance-token-border-medium) !important;
     background: transparent !important;
     transform: none !important;
   }
 
   &:disabled {
-    opacity: var(--opacity-disabled) !important;
+    opacity: var(--bf-appearance-token-opacity-disabled) !important;
     cursor: default !important;
-    background: var(--color-overlay-white-04) !important;
-    border-color: var(--border-subtle) !important;
+    background: var(--bf-appearance-token-color-overlay-white-04) !important;
+    border-color: var(--bf-appearance-token-border-subtle) !important;
   }
 }
 
@@ -123,14 +123,14 @@ $config-input-height: 32px;
   height: $config-input-height;
 
   &::placeholder {
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
     opacity: 0.6;
     font-style: italic;
   }
 
   
   &[type="password"] {
-    font-family: var(--font-family-mono);
+    font-family: var(--bf-appearance-token-font-family-mono);
     letter-spacing: 0.1em;
   }
 
@@ -180,8 +180,8 @@ $config-input-height: 32px;
   vertical-align: middle !important;
 
   option {
-    background: var(--color-bg-secondary) !important;
-    color: var(--color-text-primary) !important;
+    background: var(--bf-appearance-token-color-bg-secondary) !important;
+    color: var(--bf-appearance-token-color-text-primary) !important;
     padding: 6px 10px !important;
     font-size: 13px !important;
     line-height: 1.5 !important;
@@ -193,10 +193,10 @@ $config-input-height: 32px;
 .bitfun-config-form__textarea {
   min-height: 80px;
   resize: vertical;
-  font-family: var(--font-family-sans);
+  font-family: var(--bf-appearance-token-font-family-sans);
 
   &::placeholder {
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
     opacity: 0.8;
   }
 }
@@ -240,7 +240,7 @@ $config-input-height: 32px;
   width: 16px;
   height: 16px;
   background: transparent;
-  border: 1.5px solid var(--border-medium);
+  border: 1.5px solid var(--bf-appearance-token-border-medium);
   border-radius: 3px;
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
@@ -269,8 +269,8 @@ $config-input-height: 32px;
 }
 
 .bitfun-config-form__checkbox-input:checked + .bitfun-config-form__checkbox-mark {
-  background: var(--color-accent-500);
-  border-color: var(--color-accent-500);
+  background: var(--bf-appearance-token-color-accent-500);
+  border-color: var(--bf-appearance-token-color-accent-500);
   box-shadow: none;
 
   &::after {
@@ -280,17 +280,17 @@ $config-input-height: 32px;
 }
 
 .bitfun-config-form__checkbox-input:focus + .bitfun-config-form__checkbox-mark {
-  border-color: var(--color-accent-500);
+  border-color: var(--bf-appearance-token-color-accent-500);
   box-shadow: none;
 }
 
 .bitfun-config-form__checkbox:hover .bitfun-config-form__checkbox-mark {
-  border-color: var(--border-strong);
+  border-color: var(--bf-appearance-token-border-strong);
 }
 
 .bitfun-config-form__checkbox:hover .bitfun-config-form__checkbox-input:checked + .bitfun-config-form__checkbox-mark {
-  background: var(--color-accent-600);
-  border-color: var(--color-accent-600);
+  background: var(--bf-appearance-token-color-accent-600);
+  border-color: var(--bf-appearance-token-color-accent-600);
   box-shadow: none;
 }
 
@@ -303,14 +303,14 @@ $config-input-height: 32px;
 
 .bitfun-config-form__checkbox-title {
   font-size: 13px;
-  font-weight: var(--font-weight-medium);
-  color: var(--color-text-primary);
+  font-weight: var(--bf-appearance-token-font-weight-medium);
+  color: var(--bf-appearance-token-color-text-primary);
   line-height: 1.4;
 }
 
 .bitfun-config-form__checkbox-description {
   font-size: 12px;
-  color: var(--color-text-muted);
+  color: var(--bf-appearance-token-color-text-muted);
   line-height: 1.5;
 }
 
@@ -318,11 +318,11 @@ $config-input-height: 32px;
 
 .bitfun-config-form__actions {
   display: flex;
-  gap: var(--size-gap-3);
+  gap: var(--bf-appearance-token-size-gap-3);
   justify-content: flex-end;
-  margin-top: var(--size-gap-5);
-  padding-top: var(--size-gap-4);
-  border-top: 1px solid var(--border-accent-soft);
+  margin-top: var(--bf-appearance-token-size-gap-5);
+  padding-top: var(--bf-appearance-token-size-gap-4);
+  border-top: 1px solid var(--bf-appearance-token-border-accent-soft);
 
   &--start {
     justify-content: flex-start;
@@ -342,37 +342,37 @@ $config-input-height: 32px;
 .bitfun-config-form__status {
   display: flex;
   align-items: flex-start;
-  gap: var(--size-gap-3);
-  padding: var(--size-gap-3) var(--size-gap-4);
-  border-radius: var(--size-radius-base);
-  font-size: var(--font-size-sm);
-  line-height: var(--line-height-base);
+  gap: var(--bf-appearance-token-size-gap-3);
+  padding: var(--bf-appearance-token-size-gap-3) var(--bf-appearance-token-size-gap-4);
+  border-radius: var(--bf-appearance-token-size-radius-base);
+  font-size: var(--bf-appearance-token-font-size-sm);
+  line-height: var(--bf-appearance-token-line-height-base);
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
-  margin-top: var(--size-gap-4);
+  margin-top: var(--bf-appearance-token-size-gap-4);
 
   &--success {
-    background: var(--color-success-bg);
-    border: 1px solid var(--color-success-border);
-    color: var(--color-success);
+    background: var(--bf-appearance-token-color-success-bg);
+    border: 1px solid var(--bf-appearance-token-color-success-border);
+    color: var(--bf-appearance-token-color-success);
   }
 
   &--error {
-    background: var(--color-error-bg);
-    border: 1px solid var(--color-error-border);
-    color: var(--color-error);
+    background: var(--bf-appearance-token-color-error-bg);
+    border: 1px solid var(--bf-appearance-token-color-error-border);
+    color: var(--bf-appearance-token-color-error);
   }
 
   &--warning {
-    background: var(--color-warning-bg);
-    border: 1px solid var(--color-warning-border);
-    color: var(--color-warning);
+    background: var(--bf-appearance-token-color-warning-bg);
+    border: 1px solid var(--bf-appearance-token-color-warning-border);
+    color: var(--bf-appearance-token-color-warning);
   }
 
   &--info {
-    background: var(--color-info-bg);
-    border: 1px solid var(--color-info-border);
-    color: var(--color-info);
+    background: var(--bf-appearance-token-color-info-bg);
+    border: 1px solid var(--bf-appearance-token-color-info-border);
+    color: var(--bf-appearance-token-color-info);
   }
 }
 
@@ -381,7 +381,7 @@ $config-input-height: 32px;
 .bitfun-config-form__section {
   display: flex;
   flex-direction: column;
-  gap: var(--size-gap-5);
+  gap: var(--bf-appearance-token-size-gap-5);
   padding: 0;
   background: transparent;
   border: none;
@@ -396,24 +396,24 @@ $config-input-height: 32px;
 .bitfun-config-form__section-content {
   display: flex;
   flex-direction: column;
-  gap: var(--size-gap-4);
+  gap: var(--bf-appearance-token-size-gap-4);
 }
 
 .bitfun-config-form__section-title {
-  font-size: var(--font-size-lg);
-  font-weight: var(--font-weight-semibold);
-  color: var(--color-text-primary);
-  margin: 0 0 var(--size-gap-3) 0;
+  font-size: var(--bf-appearance-token-font-size-lg);
+  font-weight: var(--bf-appearance-token-font-weight-semibold);
+  color: var(--bf-appearance-token-color-text-primary);
+  margin: 0 0 var(--bf-appearance-token-size-gap-3) 0;
   display: flex;
   align-items: center;
-  gap: var(--size-gap-2);
+  gap: var(--bf-appearance-token-size-gap-2);
 }
 
 .bitfun-config-form__section-description {
-  font-size: var(--font-size-sm);
-  color: var(--color-text-muted);
-  margin: 0 0 var(--size-gap-5) 0;
-  line-height: var(--line-height-base);
+  font-size: var(--bf-appearance-token-font-size-sm);
+  color: var(--bf-appearance-token-color-text-muted);
+  margin: 0 0 var(--bf-appearance-token-size-gap-5) 0;
+  line-height: var(--bf-appearance-token-line-height-base);
 }
 
 
@@ -421,7 +421,7 @@ $config-input-height: 32px;
 @media (max-width: 768px) {
   .bitfun-config-form__row {
     grid-template-columns: 1fr;
-    gap: var(--size-gap-3);
+    gap: var(--bf-appearance-token-size-gap-3);
   }
   
   .bitfun-config-form__actions {
@@ -454,12 +454,12 @@ $config-input-height: 32px;
 .bitfun-config-form__input:focus-visible,
 .bitfun-config-form__select:focus-visible,
 .bitfun-config-form__textarea:focus-visible {
-  outline: 2px solid var(--color-accent-500);
+  outline: 2px solid var(--bf-appearance-token-color-accent-500);
   outline-offset: 2px;
 }
 
 .bitfun-config-form__checkbox-input:focus-visible + .bitfun-config-form__checkbox-mark {
-  outline: 2px solid var(--color-accent-500);
+  outline: 2px solid var(--bf-appearance-token-color-accent-500);
   outline-offset: 2px;
 }
 

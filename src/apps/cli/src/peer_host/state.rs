@@ -1063,6 +1063,7 @@ fn spawn_turn_cancellation(
                 requester_session_id: None,
                 reason: Some(reason.to_string()),
                 wait_timeout_ms: Some(1_500),
+                cancel_descendants: true,
             })
             .await;
         (turn, result.map(|_| ()).map_err(|error| error.to_string()))

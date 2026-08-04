@@ -17,7 +17,7 @@ import { buildMarkdownPrismStyle } from './markdownPrismTheme';
 import { Tooltip } from '../Tooltip';
 import { globalAPI, systemAPI, workspaceAPI } from '../../../infrastructure/api';
 import { getPrismLanguageFromAlias } from '@/infrastructure/language-detection';
-import { useTheme } from '@/infrastructure/theme';
+import { useAppearance } from '@/infrastructure/appearance';
 import { contextMenuController } from '@/shared/context-menu-system/core/ContextMenuController';
 import { ContextType, type CustomContext, type MenuItem } from '@/shared/context-menu-system/types';
 import { createTab } from '@/shared/utils/tabUtils';
@@ -170,7 +170,7 @@ class MarkdownErrorBoundary extends Component<
   render() {
     if (this.state.hasError) {
       return (
-        <div className="markdown-renderer markdown-renderer--fallback" style={{ whiteSpace: 'pre-wrap' }}>
+        <div className="markdown-renderer markdown-renderer--fallback" style={{ whiteSpace: 'pre-wrap' }} data-bf-component="markdown" data-bf-part="fallback" data-bf-state="fallback">
           {this.props.fallbackContent}
         </div>
       );
@@ -697,8 +697,14 @@ const CodeBlockFallback: React.FC<FlowCodeBlockFallbackProps> = ({
     <pre
       className={`language-${language} code-block-fallback code-block-fallback--linenumbers`}
       style={bodyStyle}
+      data-bf-component="markdown"
+      data-bf-part="codePre"
     >
-      <code style={{ ...codeTagStyle, display: 'flex' }}>
+      <code
+        style={{ ...codeTagStyle, display: 'flex' }}
+        data-bf-component="markdown"
+        data-bf-part="codeContent"
+      >
         <span
           aria-hidden="true"
           style={{
@@ -796,7 +802,8 @@ export const Markdown = React.memo<MarkdownProps>(({
   onReproductionProceed,
   traceContext,
 }) => {
-  const { isLight } = useTheme();
+  const { current: appearance } = useAppearance();
+  const isLight = appearance?.mode === 'light';
   const [currentWorkspacePath, setCurrentWorkspacePath] = useState('');
   // Keep streaming flag out of `components` memo deps so flipping streaming
   // mode does not rebuild the entire ReactMarkdown component map (that remount
@@ -1092,19 +1099,19 @@ export const Markdown = React.memo<MarkdownProps>(({
         lineHeight: '1.55',
       };
       const codeTagStyle: React.CSSProperties = {
-        fontFamily: 'var(--font-family-mono)',
+        fontFamily: 'var(--bf-appearance-token-font-family-mono)',
       };
       const gutterColor = isLight
-        ? 'color-mix(in srgb, var(--color-static-black) 40%, var(--color-static-white))'
-        : 'color-mix(in srgb, var(--color-static-white) 40%, var(--color-static-black))';
+        ? 'color-mix(in srgb, var(--bf-appearance-token-color-static-black) 40%, var(--bf-appearance-token-color-static-white))'
+        : 'color-mix(in srgb, var(--bf-appearance-token-color-static-white) 40%, var(--bf-appearance-token-color-static-black))';
 
       return (
-        <div className={`code-block-wrapper${hasMultipleLines ? '' : ' code-block-wrapper--single-line'}`}>
-          <div className="code-block-toolbar">
+        <div className={`code-block-wrapper${hasMultipleLines ? '' : ' code-block-wrapper--single-line'}`} data-bf-component="markdown" data-bf-part="codeBlock" data-bf-state={streaming ? 'streaming' : undefined}>
+          <div className="code-block-toolbar" data-bf-component="markdown" data-bf-part="codeToolbar">
             <span className="code-block-lang">{formatCodeLanguageLabel(normalizedLang)}</span>
             <CopyButton code={code} />
           </div>
-          <div className="code-block-body">
+          <div className="code-block-body" data-bf-component="markdown" data-bf-part="codeBody">
             {/*
               Always mount AsyncPrismSyntaxHighlighter. While streaming,
               preferFallback keeps the lightweight line-numbered pre so we do
@@ -1193,6 +1200,8 @@ export const Markdown = React.memo<MarkdownProps>(({
           const fileLinkButton = (
             <button
               className="file-link"
+              data-bf-component="markdown"
+              data-bf-part="fileLink"
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
@@ -1234,6 +1243,8 @@ export const Markdown = React.memo<MarkdownProps>(({
         return (
           <button
             className="visualization-link"
+            data-bf-component="markdown"
+            data-bf-part="visualizationLink"
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
@@ -1257,6 +1268,8 @@ export const Markdown = React.memo<MarkdownProps>(({
         return (
           <button
             className="tab-link"
+            data-bf-component="markdown"
+            data-bf-part="tabLink"
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
@@ -1335,7 +1348,7 @@ export const Markdown = React.memo<MarkdownProps>(({
     
     table({ children }: any) {
       return (
-        <div className="table-wrapper">
+        <div className="table-wrapper" data-bf-component="markdown" data-bf-part="table">
           <table>{children}</table>
         </div>
       );
@@ -1360,7 +1373,7 @@ export const Markdown = React.memo<MarkdownProps>(({
     },
     
     blockquote({ children }: any) {
-      return <blockquote className="custom-blockquote">{children}</blockquote>;
+      return <blockquote className="custom-blockquote" data-bf-component="markdown" data-bf-part="blockquote">{children}</blockquote>;
     },
     
     ul({ children, ...props }: any) {
@@ -1418,7 +1431,7 @@ export const Markdown = React.memo<MarkdownProps>(({
   );
 
   return (
-    <div className={wrapperClassName}>
+    <div className={wrapperClassName} data-bf-component="markdown" data-bf-part="root" data-bf-state={isStreaming ? 'streaming' : undefined}>
       {renderTraceEnabled && renderTraceStartedAtMs !== null && (
         <MarkdownRenderTrace
           startedAtMs={renderTraceStartedAtMs}

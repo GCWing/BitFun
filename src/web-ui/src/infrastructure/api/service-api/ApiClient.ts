@@ -25,6 +25,7 @@ const SESSION_RESPONSE_ESTIMATE_MAX_BYTES = 2 * 1024 * 1024;
 function responseEstimateMaxBytes(command: string): number | undefined {
   return command === 'restore_session_view' ||
     command === 'restore_session_with_turns' ||
+    command === 'load_session_turn_window' ||
     command === 'load_session_turns'
     ? SESSION_RESPONSE_ESTIMATE_MAX_BYTES
     : undefined;

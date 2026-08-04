@@ -26,10 +26,11 @@ port-backed `sdk` / `AgentRuntime` facade that can be built and tested without
   through `bitfun_agent_runtime::runtime`; those surfaces must use `sdk` or
   projected Server/API DTOs.
 - Keep concrete scheduler/session lifecycle execution, session metadata IO,
-  event emitter wiring, permission UI presentation, and product `Tool` adapter
-  execution in `bitfun-core` until a reviewed owner migration proves behavior
-  equivalence. Provider-neutral confirmation gate/wait-channel and user-question state
-  may live here.
+  event emitter wiring, workspace/remote permission-scope projection, native
+  permission Hook ordering, permission UI presentation, and product `Tool`
+  adapter execution in `bitfun-core` until a reviewed owner migration proves
+  behavior equivalence. Provider-neutral permission policy/grant planning,
+  confirmation gate/wait-channel, and user-question state may live here.
 - Prefer pure facts and decisions first: queue policy, background delivery,
   dialog-turn queue state, active-turn facts, cancellation routing and
   suppression state, background running-turn injection construction, steering action
@@ -61,10 +62,43 @@ port-backed `sdk` / `AgentRuntime` facade that can be built and tested without
   outside this crate until a reviewed migration proves behavior equivalence.
 - Add focused tests before moving any runtime decision into this crate.
 
+## Test Target Layout
+
+Integration contracts use five explicit Cargo targets so package-level checks
+do not relink the same feature-free dependency closure for every source file,
+while platform-specific process tests retain executable-level isolation:
+
+| Target | Owns |
+|---|---|
+| `agent_definition_contracts` | Agent definitions, discovery, prompts, prompt cache, and skills |
+| `agent_session_contracts` | Events, scheduling, sessions, SDK behavior, and workspace-reference ports |
+| `agent_interaction_contracts` | Permissions, questions, and hook execution |
+| `agent_long_horizon_contracts` | DeepResearch, DeepReview, and long-running thread-goal behavior |
+| `native_hook_execution_contracts` | Unix-only native process execution, timeout, and cleanup behavior |
+
+Add a contract to the nearest existing target. Do not add another top-level
+integration target unless it requires a genuinely different feature,
+platform, process, or dependency boundary. Use `--lib <filter>` for a focused
+library test, or `--test <target> <module>::<filter>` for a focused public
+contract test.
+
+Grouped target roots stay flat: apart from module documentation, they contain
+only direct `#[path = "..."]` / `mod ...;` pairs, and every leaf `.rs` file is
+referenced exactly once. Isolated platform or process targets keep their test
+implementation in the root file. The core-boundary check enforces this shape
+so `autotests = false` cannot silently omit a new contract.
+
 ## Verification
 
+Use the focused contract form by default. Run the package-wide form only when a
+change crosses several runtime targets:
+
 ```bash
-cargo test -p bitfun-agent-runtime
-node scripts/check-core-boundaries.mjs
-cargo check -p bitfun-core --features product-full
+cargo test --locked -p bitfun-agent-runtime --test <target> <module>::<test>
+cargo test --locked -p bitfun-agent-runtime
 ```
+
+Run `pnpm run check:core-boundaries` only when Cargo dependencies, explicit test
+targets, or grouped-root layout changed. Core product assembly and
+`product-full` verification belong to Core or the consuming product guide, not
+to this module's default checklist.

@@ -55,6 +55,7 @@ fn snapshot(source_id: &str, version: &str) -> ExternalMcpProviderSnapshot {
             environment_reference_names: Vec::new(),
             remote_url_preview: Some("https://example.test/mcp".to_string()),
             header_names: Vec::new(),
+            timeouts: Default::default(),
             source_enabled: true,
             behavior_version: version.to_string(),
             static_status: ExternalMcpStaticStatus::Ready,
@@ -81,6 +82,7 @@ fn merged_snapshot() -> ExternalMcpProviderSnapshot {
             environment_reference_names: Vec::new(),
             remote_url_preview: Some("https://example.test/mcp".to_string()),
             header_names: Vec::new(),
+            timeouts: Default::default(),
             source_enabled: true,
             behavior_version: "behavior-v1".to_string(),
             static_status: ExternalMcpStaticStatus::Ready,
@@ -132,6 +134,7 @@ impl ExternalMcpSourceProvider for FakeProvider {
         Ok(PreparedExternalMcpServer {
             id: server_id.clone(),
             behavior_version: expected_behavior_version.to_string(),
+            timeouts: Default::default(),
             transport: PreparedExternalMcpTransport::Remote {
                 url: "https://example.test/mcp".to_string(),
                 headers: BTreeMap::new(),

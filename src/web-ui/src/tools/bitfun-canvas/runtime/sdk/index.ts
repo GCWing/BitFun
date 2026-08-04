@@ -49,7 +49,7 @@ export {
   useCanvasAction,
   useCanvasState,
   useEffect,
-  useHostTheme,
+  useHostAppearance,
   useMemo,
   useRef,
   useState,
@@ -69,7 +69,6 @@ export {
   canvasTokensLight,
   categoryPaletteDark,
   categoryPaletteLight,
-  colorPalette,
   mergeStyle,
   usageColorSequence,
 } from './style';

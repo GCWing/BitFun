@@ -115,25 +115,25 @@ export const NewProjectDialog: React.FC<NewProjectDialogProps> = ({
       size="small"
       showCloseButton={true}
     >
-      <div className="new-project-dialog">
+      <div data-bf-component="new-project-dialog" data-bf-part="root" className="new-project-dialog">
         {/* Hero section */}
-        <div className="new-project-dialog__hero">
+        <div data-bf-component="new-project-dialog" data-bf-part="hero" className="new-project-dialog__hero">
           <div className="new-project-dialog__icon-wrapper">
             <FolderPlus size={24} />
           </div>
-          <h2 className="new-project-dialog__title">{t('newProject.title')}</h2>
+          <h2 data-bf-component="new-project-dialog" data-bf-part="title" className="new-project-dialog__title">{t('newProject.title')}</h2>
           <p className="new-project-dialog__subtitle">{t('newProject.subtitle')}</p>
         </div>
 
         {/* Form content */}
-        <div className="new-project-dialog__content">
+        <div data-bf-component="new-project-dialog" data-bf-part="content" className="new-project-dialog__content">
           {/* Parent directory */}
-          <div className="new-project-dialog__field">
+          <div data-bf-component="new-project-dialog" data-bf-part="field" className="new-project-dialog__field">
             <label className="new-project-dialog__label">
               <FolderOpen size={14} />
               {t('newProject.parentDirectory')}
             </label>
-            <div className="new-project-dialog__path-selector">
+            <div data-bf-component="new-project-dialog" data-bf-part="pathSelector" className="new-project-dialog__path-selector">
               <div className="new-project-dialog__path-input">
                 <Input
                   type="text"
@@ -156,7 +156,7 @@ export const NewProjectDialog: React.FC<NewProjectDialogProps> = ({
           </div>
 
           {/* Project name */}
-          <div className="new-project-dialog__field">
+          <div data-bf-component="new-project-dialog" data-bf-part="field" className="new-project-dialog__field">
             <label className="new-project-dialog__label">
               <FileText size={14} />
               {t('newProject.projectName')}
@@ -175,7 +175,7 @@ export const NewProjectDialog: React.FC<NewProjectDialogProps> = ({
 
           {/* Full path display */}
           {fullPath && (
-            <div className="new-project-dialog__preview">
+            <div data-bf-component="new-project-dialog" data-bf-part="preview" className="new-project-dialog__preview">
               <div className="new-project-dialog__preview-icon">
                 <FolderTree size={14} />
               </div>
@@ -188,7 +188,7 @@ export const NewProjectDialog: React.FC<NewProjectDialogProps> = ({
 
           {/* Error message */}
           {error && (
-            <div className="new-project-dialog__error">
+            <div data-bf-component="new-project-dialog" data-bf-part="error" className="new-project-dialog__error">
               <AlertCircle size={14} />
               <span>{error}</span>
             </div>
@@ -196,7 +196,7 @@ export const NewProjectDialog: React.FC<NewProjectDialogProps> = ({
         </div>
 
         {/* Footer buttons */}
-        <div className="new-project-dialog__footer">
+        <div data-bf-component="new-project-dialog" data-bf-part="footer" className="new-project-dialog__footer">
           <Button
             type="button"
             className="new-project-dialog__btn new-project-dialog__btn--cancel"

@@ -12,24 +12,24 @@
     .search__wrapper {
       background: transparent;
       // Use the same border variable as the left file tree search
-      border: 1px solid var(--border-base);
+      border: 1px solid var(--bf-appearance-token-border-base);
       
       &:hover {
-        border-color: var(--border-medium);
+        border-color: var(--bf-appearance-token-border-medium);
         border-style: solid;
       }
     }
 
     &.search--focused .search__wrapper {
       border-style: solid;
-      border-color: var(--color-accent-500);
-      background: var(--color-accent-50);
+      border-color: var(--bf-appearance-token-color-accent-500);
+      background: var(--bf-appearance-token-color-accent-50);
     }
   }
 
   &__count {
     font-size: 11px;
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
     white-space: nowrap;
     padding: 0 8px;
   }

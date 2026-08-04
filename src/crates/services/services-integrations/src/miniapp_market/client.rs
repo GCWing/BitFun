@@ -254,6 +254,17 @@ impl MarketClient {
         Ok(Some(decode_json(checked_response(response).await?).await?))
     }
 
+    /// Returns the shared marketplace access token after applying the normal
+    /// refresh and expiry policy. Appearance Market uses the same desktop
+    /// identity without creating a second credential vault.
+    pub(crate) async fn access_token(&mut self) -> Result<Option<String>, MarketClientError> {
+        self.refresh_if_needed().await?;
+        Ok(self
+            .credentials
+            .as_ref()
+            .map(|credentials| credentials.access_token.clone()))
+    }
+
     pub async fn set_rating(
         &mut self,
         slug: &str,

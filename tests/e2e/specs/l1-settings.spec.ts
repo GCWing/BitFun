@@ -262,16 +262,16 @@ describe('L1 Settings', () => {
   });
 
   describe('Settings categories', () => {
-    it('should have theme settings', async function () {
+    it('should have appearance settings', async function () {
       if (!hasWorkspace) {
         this.skip();
         return;
       }
 
-      const themeSection = await $('[class*="theme-config"], [class*="theme-settings"], [data-tab="theme"]');
-      const exists = await themeSection.isExisting();
+      const appearanceSection = await $('.appearance-settings');
+      const exists = await appearanceSection.isExisting();
 
-      console.log('[L1] Theme settings section exists:', exists);
+      console.log('[L1] Appearance settings section exists:', exists);
       expect(typeof exists).toBe('boolean');
     });
 

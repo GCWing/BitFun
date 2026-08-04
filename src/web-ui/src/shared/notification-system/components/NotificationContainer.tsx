@@ -21,7 +21,7 @@ export const NotificationContainer: React.FC = () => {
   }
 
   return (
-    <div className="notification-container">
+    <div className="notification-container" data-bf-component="notification" data-bf-part="container">
       {visibleNotifications.map((notification) => {
         
         if (notification.variant === 'progress') {

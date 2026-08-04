@@ -7,10 +7,10 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: var(--size-gap-4);
-  padding: var(--size-gap-10) var(--size-gap-5);
+  gap: var(--bf-appearance-token-size-gap-4);
+  padding: var(--bf-appearance-token-size-gap-10) var(--bf-appearance-token-size-gap-5);
   text-align: center;
-  animation: bitfun-empty-fade-in calc(var(--motion-fast) + 70ms) var(--easing-standard);
+  animation: bitfun-empty-fade-in calc(var(--bf-appearance-token-motion-fast) + 70ms) var(--bf-appearance-token-easing-standard);
 
   &__image {
     opacity: 0.8;
@@ -21,10 +21,14 @@
   }
 
   &__description {
-    max-width: 36ch;
-    font-size: var(--font-size-sm);
-    line-height: var(--line-height-base);
-    color: var(--color-text-muted);
+    font-size: 14px;
+    color: var(--bf-appearance-token-color-overlay-white-60);
+    margin-bottom: 16px;
+    animation: bitfun-empty-fade-in 0.5s ease-out 0.1s both;
+  }
+
+  &__footer {
+    animation: bitfun-empty-fade-in 0.5s ease-out 0.2s both;
   }
 }
 
@@ -41,7 +45,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .bitfun-empty {
-    animation: bitfun-empty-fade-only var(--motion-fast) ease;
+    animation: bitfun-empty-fade-only var(--bf-appearance-token-motion-fast) ease;
   }
 }
 

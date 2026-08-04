@@ -37,7 +37,7 @@
     },
     "tabDescriptions": {
       "basics": "日志、终端 Shell、通知与开机启动。",
-      "appearance": "语言、主题与界面字体大小。",
+      "appearance": "语言、视觉外观与界面字体大小。",
       "models": "AI 模型、API 密钥、供应商、代理与会话标题。",
       "worktrees": "隔离 Git Worktree 与并行会话的默认设置。",
       "sessionPersonalization": "Agent 伙伴。",
@@ -90,9 +90,9 @@
       "description": "选择界面显示语言",
       "auto": "自动检测"
     },
-    "theme": {
-      "title": "主题",
-      "description": "选择界面主题",
+    "appearance": {
+      "title": "外观",
+      "description": "选择界面外观",
       "light": "浅色",
       "dark": "深色",
       "system": "跟随系统"
@@ -560,11 +560,11 @@
       "subtitle": "配置和管理系统中的智能体，包括功能代理、超级代理等",
       "create": "创建智能体"
     },
-    "theme": {
-      "title": "主题配置",
-      "subtitle": "自定义应用的外观和主题色彩",
-      "import": "导入主题",
-      "export": "导出当前主题"
+    "appearance": {
+      "title": "外观配置",
+      "subtitle": "自定义应用的外观和色彩",
+      "import": "导入外观",
+      "export": "导出当前外观"
     }
   }
 }

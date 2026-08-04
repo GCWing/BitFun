@@ -30,7 +30,7 @@ pub use runtime_policy::{
     mcp_server_is_running, mcp_server_is_starting_or_running, mcp_should_start_after_config_update,
     MCPListChangedKind, MCPReconnectRuntimeDecision,
 };
-pub use runtime_state::MCPServerRuntimeState;
+pub use runtime_state::{MCPProcessStartContext, MCPProcessStartOutcome, MCPServerRuntimeState};
 
 /// MCP server type.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -102,6 +102,40 @@ pub struct MCPServerXaaConfig {
     pub scopes: Vec<String>,
 }
 
+// Keep serialized values exact for JavaScript product surfaces.
+const MAX_MCP_TIMEOUT_MS: u64 = 9_007_199_254_740_991;
+
+/// Optional phase-specific MCP timeout overrides in milliseconds.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MCPServerTimeouts {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub startup_ms: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub catalog_ms: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub execution_ms: Option<u64>,
+}
+
+impl MCPServerTimeouts {
+    pub fn is_empty(&self) -> bool {
+        self.startup_ms.is_none() && self.catalog_ms.is_none() && self.execution_ms.is_none()
+    }
+
+    pub fn validate(&self) -> Result<(), MCPServerConfigValidationError> {
+        if [self.startup_ms, self.catalog_ms, self.execution_ms]
+            .into_iter()
+            .flatten()
+            .any(|timeout| timeout == 0 || timeout > MAX_MCP_TIMEOUT_MS)
+        {
+            return Err(MCPServerConfigValidationError::new(
+                "MCP timeout must be a positive exactly representable JSON integer",
+            ));
+        }
+        Ok(())
+    }
+}
+
 /// MCP server configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -147,6 +181,8 @@ pub struct MCPServerConfig {
     pub oauth_enabled: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub xaa: Option<MCPServerXaaConfig>,
+    #[serde(default, skip_serializing_if = "MCPServerTimeouts::is_empty")]
+    pub timeouts: MCPServerTimeouts,
 }
 
 fn default_true() -> bool {
@@ -202,6 +238,7 @@ impl MCPServerConfig {
                 "MCP server name cannot be empty",
             ));
         }
+        self.timeouts.validate()?;
 
         let transport = self.resolved_transport();
         match self.server_type {

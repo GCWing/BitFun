@@ -363,7 +363,6 @@ export const EVENT_NAMES = {
   PLUGIN_ERROR: 'plugin:error',
   
   // UI
-  THEME_CHANGED: 'ui:theme:changed',
   NOTIFICATION: 'ui:notification',
   MODAL_OPENED: 'ui:modal:opened',
   MODAL_CLOSED: 'ui:modal:closed'

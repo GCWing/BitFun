@@ -1,3 +1,3 @@
-import { UI_EXCEPTION_ACCENTS } from '@/shared/theme/uiExceptionAccents';
+import { APPEARANCE_DOMAIN_TOKENS } from '@/infrastructure/appearance/appearanceDomainTokens';
 
-export const INSPECTOR_OVERLAY_THEME = UI_EXCEPTION_ACCENTS.inspectorOverlay;
+export const INSPECTOR_OVERLAY_THEME = APPEARANCE_DOMAIN_TOKENS.inspectorOverlay;

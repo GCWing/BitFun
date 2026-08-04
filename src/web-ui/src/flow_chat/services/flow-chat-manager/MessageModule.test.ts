@@ -345,6 +345,32 @@ describe('MessageModule session writer conflict', () => {
     retryAction.onClick();
     expect(mockEnsureBackendSession).toHaveBeenCalledTimes(1);
   });
+
+  it('does not turn external command delegation into a pending queue item', async () => {
+    const sessionId = 'session-delegated-command';
+    const { context } = conflictContext(sessionId);
+    mockGetCurrentState.mockReturnValue('processing');
+
+    await expect(sendMessage(
+      context,
+      'expanded prompt',
+      sessionId,
+      '/review',
+      undefined,
+      undefined,
+      {
+        execution: {
+          kind: 'fresh_external_subagent',
+          ecosystemId: 'opencode',
+          logicalId: 'reviewer',
+        },
+      },
+    )).rejects.toThrow('requires an idle session');
+
+    expect(mockPendingEnqueue).not.toHaveBeenCalled();
+    expect(mockEnsureBackendSession).not.toHaveBeenCalled();
+    expect(mockStartDialogTurn).not.toHaveBeenCalled();
+  });
 });
 
 describe('MessageModule cancellation', () => {
@@ -474,10 +500,7 @@ describe('MessageModule detached dispatch', () => {
 
   it('projects the user message immediately while the target is still queued', async () => {
     const { context, session } = createDispatchContext('reject-and-report');
-    (session.config as any).dispatchWorkspaceDelivery = {
-      kind: 'snapshot-source',
-      sourceWorkspacePath: '/controller/repo',
-    };
+    session.config.dispatchIncludeUncommitted = true;
     let resolveSubmit!: (value: {
       accepted: boolean;
       jobId: string;
@@ -529,10 +552,8 @@ describe('MessageModule detached dispatch', () => {
         connectionId: 'ssh-1',
         workspacePath: '/target/repo',
       },
-      workspaceDelivery: {
-        kind: 'snapshot-source',
-        sourceWorkspacePath: '/controller/repo',
-      },
+      includeUncommitted: true,
+      baseRef: 'HEAD',
       jobId: 'job-1',
       sessionId: 'dispatch-session',
       agentType: 'agentic',
@@ -564,6 +585,24 @@ describe('MessageModule detached dispatch', () => {
       sendMessage(context, 'run remote checks', 'dispatch-session'),
     ).resolves.toBeUndefined();
     expect(mockDispatchSubmit).toHaveBeenCalledTimes(1);
+  });
+
+  it('steers a busy running dispatch instead of queueing the message', async () => {
+    const { context, session } = createDispatchContext('remote');
+    session.config.dispatchJobState = 'running';
+    // Busy state machine + non-empty queue would normally enqueue; a running
+    // dispatch must steer instead, because queued items only drain for
+    // sessions that drive the local state machine.
+    mockGetCurrentState.mockReturnValue('processing');
+    mockPendingList.mockReturnValue([{ id: 'queued-1' }]);
+
+    await expect(
+      sendMessage(context, 'steer the remote turn', 'dispatch-session'),
+    ).resolves.toBeUndefined();
+
+    expect(mockDispatchAppend).toHaveBeenCalledTimes(1);
+    expect(mockPendingEnqueue).not.toHaveBeenCalled();
+    expect(mockDispatchSubmit).not.toHaveBeenCalled();
   });
 
   it('reuses the append message id after an ambiguous transport failure', async () => {

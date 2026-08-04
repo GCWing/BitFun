@@ -59,6 +59,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(({
     disabled && 'btn-disabled',
     className
   ].filter(Boolean).join(' ');
+  const appearanceState = [isLoading && 'loading', disabled && 'disabled'].filter(Boolean).join(' ');
 
   return (
     <button
@@ -66,12 +67,17 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(({
       className={classNames}
       disabled={disabled || isLoading}
       {...props}
-      aria-busy={isLoading || props['aria-busy'] || undefined}
+      data-bf-component="button"
+      data-bf-part="root"
+      data-bf-variant={variant}
+      data-bf-size={size}
+      data-bf-icon-only={iconOnly ? 'true' : undefined}
+      data-bf-state={appearanceState || undefined}
     >
       {isLoading ? (
         <>
-          <span className="btn-loading-icon" aria-hidden="true"></span>
-          <span className="btn-loading-text">Loading...</span>
+          <span className="btn-loading-icon" data-bf-component="button" data-bf-part="loadingIcon"></span>
+          <span className="btn-loading-text" data-bf-component="button" data-bf-part="loadingText">Loading...</span>
         </>
       ) : (
         children

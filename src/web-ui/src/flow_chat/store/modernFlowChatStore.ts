@@ -20,6 +20,7 @@ import {
   getTurnCompletionNotice,
   type TurnCompletionNotice,
 } from '../utils/turnCompletionNotice';
+import { createAbsoluteSessionTurnIndexResolver } from '../utils/flowChatTurnOrdinal';
 
 /**
  * Explore group statistics (merged computed stats)
@@ -55,7 +56,13 @@ export interface ExploreGroupData {
  * Used for virtual scrolling, flattens DialogTurn into renderable items
  */
 export type VirtualItem =
-  | { type: 'user-message'; data: DialogTurn['userMessage']; turnId: string }
+  | {
+      type: 'user-message';
+      data: DialogTurn['userMessage'];
+      turnId: string;
+      absoluteTurnIndex?: number;
+      turnStatus?: DialogTurn['status'];
+    }
   | {
       type: 'user-steering-message';
       data: NonNullable<DialogTurn['userMessage']>;
@@ -94,6 +101,7 @@ export interface VisibleTurnInfo {
   totalTurns: number;
   userMessage: string;
   turnId: string;
+  visibleTurnIds: string[];
 }
 
 interface ModernFlowChatState {
@@ -254,10 +262,13 @@ function isStableTurnProjection(turn: DialogTurn): boolean {
 
 let cachedSession: Session | null = null;
 let cachedDialogTurnsRef: DialogTurn[] | null = null;
+let cachedTurnCatalogRef: Session['turnCatalog'] | undefined;
+let cachedIsPartial: boolean | undefined;
+let cachedTotalTurnCount: number | undefined;
 let cachedVirtualItems: VirtualItem[] = [];
 let cachedTurnItems = new WeakMap<
   DialogTurn,
-  { items: VirtualItem[]; hasNewerDialogTurn: boolean }
+  { items: VirtualItem[]; hasNewerDialogTurn: boolean; absoluteTurnIndex: number }
 >();
 
 /**
@@ -274,6 +285,9 @@ export function sessionToVirtualItems(session: Session | null): VirtualItem[] {
     if (cachedSession !== null) {
       cachedSession = null;
       cachedDialogTurnsRef = null;
+      cachedTurnCatalogRef = undefined;
+      cachedIsPartial = undefined;
+      cachedTotalTurnCount = undefined;
       cachedVirtualItems = [];
       cachedTurnItems = new WeakMap();
     }
@@ -282,22 +296,31 @@ export function sessionToVirtualItems(session: Session | null): VirtualItem[] {
   
   if (
     cachedSession?.sessionId === session.sessionId && 
-    cachedDialogTurnsRef === session.dialogTurns
+    cachedDialogTurnsRef === session.dialogTurns &&
+    cachedTurnCatalogRef === session.turnCatalog &&
+    cachedIsPartial === session.isPartial &&
+    cachedTotalTurnCount === session.totalTurnCount
   ) {
     return cachedVirtualItems;
   }
   
   cachedSession = session;
   cachedDialogTurnsRef = session.dialogTurns;
+  cachedTurnCatalogRef = session.turnCatalog;
+  cachedIsPartial = session.isPartial;
+  cachedTotalTurnCount = session.totalTurnCount;
 
   const items: VirtualItem[] = [];
+  const resolveAbsoluteTurnIndex = createAbsoluteSessionTurnIndexResolver(session);
 
   session.dialogTurns.forEach((turn, turnIndex) => {
     const hasNewerDialogTurn = turnIndex < session.dialogTurns.length - 1;
+    const absoluteTurnIndex = resolveAbsoluteTurnIndex(turnIndex);
     const cachedItems = cachedTurnItems.get(turn);
     if (
       cachedItems &&
       cachedItems.hasNewerDialogTurn === hasNewerDialogTurn &&
+      cachedItems.absoluteTurnIndex === absoluteTurnIndex &&
       isStableTurnProjection(turn)
     ) {
       items.push(...cachedItems.items);
@@ -310,6 +333,8 @@ export function sessionToVirtualItems(session: Session | null): VirtualItem[] {
         type: 'user-message',
         data: turn.userMessage,
         turnId: turn.id,
+        absoluteTurnIndex,
+        turnStatus: turn.status,
       });
     }
 
@@ -540,6 +565,7 @@ export function sessionToVirtualItems(session: Session | null): VirtualItem[] {
       cachedTurnItems.set(turn, {
         items: items.slice(turnItemStart),
         hasNewerDialogTurn,
+        absoluteTurnIndex,
       });
     }
   });
@@ -594,6 +620,9 @@ export const useModernFlowChatStore = create<ModernFlowChatState>()(
     clear: () => {
       cachedSession = null;
       cachedDialogTurnsRef = null;
+      cachedTurnCatalogRef = undefined;
+      cachedIsPartial = undefined;
+      cachedTotalTurnCount = undefined;
       cachedVirtualItems = [];
       cachedTurnItems = new WeakMap();
 

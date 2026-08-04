@@ -279,8 +279,8 @@ export const GitBranchHistoryView: React.FC<GitBranchHistoryViewProps> = ({
 
   if (loading) {
     return (
-      <div className={`git-branch-history-view git-branch-history-view--loading ${className}`}>
-        <div className="git-branch-history-view__loading">
+      <div className={`git-branch-history-view git-branch-history-view--loading ${className}`} data-bf-component="git-branch-history" data-bf-part="root" data-bf-state="loading">
+        <div data-bf-component="git-branch-history" data-bf-part="loading" className="git-branch-history-view__loading">
           <div className="git-branch-history-view__spinner" />
           <p>{t('branchHistory.loading', { branch: branchName })}</p>
         </div>
@@ -290,8 +290,8 @@ export const GitBranchHistoryView: React.FC<GitBranchHistoryViewProps> = ({
 
   if (error) {
     return (
-      <div className={`git-branch-history-view git-branch-history-view--error ${className}`}>
-        <div className="git-branch-history-view__error">
+      <div className={`git-branch-history-view git-branch-history-view--error ${className}`} data-bf-component="git-branch-history" data-bf-part="root" data-bf-state="error">
+        <div data-bf-component="git-branch-history" data-bf-part="error" className="git-branch-history-view__error">
           <p>{t('branchHistory.loadFailedWithMessage', { error })}</p>
           <Button variant="secondary" size="small" onClick={loadCommits}>
             {t('branchHistory.retry')}
@@ -302,9 +302,9 @@ export const GitBranchHistoryView: React.FC<GitBranchHistoryViewProps> = ({
   }
 
   return (
-    <div className={`git-branch-history-view ${className}`}>
-      <div className="git-branch-history-view__header">
-        <div className="git-branch-history-view__header-left">
+    <div className={`git-branch-history-view ${className}`} data-bf-component="git-branch-history" data-bf-part="root">
+      <div data-bf-component="git-branch-history" data-bf-part="header" className="git-branch-history-view__header">
+        <div data-bf-component="git-branch-history" data-bf-part="headerLeft" className="git-branch-history-view__header-left">
           {canCherryPick && (
             <div 
               className="git-branch-history-view__select-all"
@@ -328,6 +328,8 @@ export const GitBranchHistoryView: React.FC<GitBranchHistoryViewProps> = ({
           )}
           
           <Search
+            data-bf-component="git-branch-history"
+            data-bf-part="search"
             value={searchQuery}
             onChange={setSearchQuery}
             placeholder={t('search.commits')}
@@ -353,7 +355,7 @@ export const GitBranchHistoryView: React.FC<GitBranchHistoryViewProps> = ({
           )}
         </div>
         
-        <div className="git-branch-history-view__header-right">
+        <div data-bf-component="git-branch-history" data-bf-part="headerRight" className="git-branch-history-view__header-right">
           {canCherryPick && (
             <Button
               size="small"
@@ -388,23 +390,28 @@ export const GitBranchHistoryView: React.FC<GitBranchHistoryViewProps> = ({
         </div>
       </div>
 
-      <div className="git-branch-history-view__content">
+      <div data-bf-component="git-branch-history" data-bf-part="content" className="git-branch-history-view__content">
         {filteredCommits.length === 0 ? (
-          <div className="git-branch-history-view__empty">
+          <div data-bf-component="git-branch-history" data-bf-part="empty" className="git-branch-history-view__empty">
             <p>{searchQuery ? t('empty.noMatchingCommits') : t('empty.noCommits')}</p>
           </div>
         ) : (
-          <div className="git-branch-history-view__commits">
+          <div data-bf-component="git-branch-history" data-bf-part="commits" className="git-branch-history-view__commits">
             {filteredCommits.map((commit, index) => {
               const isExpanded = expandedCommits.has(commit.hash);
               const isSelected = selectedCommits.has(commit.hash);
               
               return (
                 <div 
+                  data-bf-component="git-branch-history"
+                  data-bf-part="commit"
+                  data-bf-state={[isExpanded && 'expanded', isSelected && 'selected'].filter(Boolean).join(' ') || undefined}
                   key={commit.hash}
                   className={`git-branch-history-view__commit ${isExpanded ? 'git-branch-history-view__commit--expanded' : ''} ${isSelected ? 'git-branch-history-view__commit--selected' : ''}`}
                 >
                   <div 
+                    data-bf-component="git-branch-history"
+                    data-bf-part="commitMain"
                     className="git-branch-history-view__commit-main"
                     onClick={() => toggleCommitExpand(commit.hash)}
                   >
@@ -421,7 +428,7 @@ export const GitBranchHistoryView: React.FC<GitBranchHistoryViewProps> = ({
                       </div>
                     )}
                     
-                    <div className="git-branch-history-view__timeline">
+                    <div data-bf-component="git-branch-history" data-bf-part="timeline" className="git-branch-history-view__timeline">
                       <div className="git-branch-history-view__timeline-node" title={commit.author}>
                         {commit.author.charAt(0).toUpperCase()}
                       </div>
@@ -430,7 +437,7 @@ export const GitBranchHistoryView: React.FC<GitBranchHistoryViewProps> = ({
                       )}
                     </div>
                     
-                    <div className="git-branch-history-view__commit-info">
+                    <div data-bf-component="git-branch-history" data-bf-part="commitInfo" className="git-branch-history-view__commit-info">
                       <div className="git-branch-history-view__commit-message">
                         {commit.message}
                       </div>
@@ -462,7 +469,7 @@ export const GitBranchHistoryView: React.FC<GitBranchHistoryViewProps> = ({
                   </div>
                   
                   {isExpanded && (
-                    <div className="git-branch-history-view__commit-details">
+                    <div data-bf-component="git-branch-history" data-bf-part="commitDetails" className="git-branch-history-view__commit-details">
                       <div className="git-branch-history-view__detail-row">
                         <span className="git-branch-history-view__detail-label">
                           {t('branchHistory.details.fullHash')}

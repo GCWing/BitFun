@@ -30,22 +30,22 @@
     position: absolute;
     inset: 0;
     pointer-events: none;
-    background: var(--color-bg-scene);
+    background: var(--bf-appearance-token-color-bg-scene);
 
     mask-image: linear-gradient(
       to bottom,
       transparent 0%,
-      var(--color-overlay-black-20) 20%,
-      var(--color-overlay-black-50) 40%,
-      var(--color-overlay-black-80) 60%,
+      var(--bf-appearance-token-color-overlay-black-20) 20%,
+      var(--bf-appearance-token-color-overlay-black-50) 40%,
+      var(--bf-appearance-token-color-overlay-black-80) 60%,
       black 85%
     );
     -webkit-mask-image: linear-gradient(
       to bottom,
       transparent 0%,
-      var(--color-overlay-black-20) 20%,
-      var(--color-overlay-black-50) 40%,
-      var(--color-overlay-black-80) 60%,
+      var(--bf-appearance-token-color-overlay-black-20) 20%,
+      var(--bf-appearance-token-color-overlay-black-50) 40%,
+      var(--bf-appearance-token-color-overlay-black-80) 60%,
       black 85%
     );
   }
@@ -74,10 +74,9 @@
     width: 30px;
     height: 30px;
     border-radius: 50%;
-    border: 1px solid var(--border-medium);
-    background: color-mix(in srgb, var(--color-bg-elevated) 92%, transparent);
-    color: var(--color-text-secondary);
-    box-shadow: 0 6px 16px var(--color-overlay-black-15);
+    border: 1.5px solid var(--bf-appearance-token-border-base);
+    background: var(--bf-appearance-token-color-bg-scene);
+    color: var(--bf-appearance-token-color-text-muted);
     cursor: pointer;
     pointer-events: none;
     padding: 0;
@@ -90,9 +89,9 @@
   // ========== Hover state ==========
   &:hover {
     .scroll-to-latest-bar__btn {
-      border-color: var(--border-medium);
-      color: var(--color-text-primary);
-      transform: translateY(-1px);
+      border-color: var(--bf-appearance-token-border-medium);
+      color: var(--bf-appearance-token-color-text-primary);
+      transform: translateY(1px);
     }
   }
   
@@ -108,8 +107,8 @@
     outline: none;
     
     .scroll-to-latest-bar__btn {
-      border-color: var(--border-strong);
-      color: var(--color-text-primary);
+      border-color: var(--bf-appearance-token-border-strong);
+      color: var(--bf-appearance-token-color-text-primary);
     }
   }
 }

@@ -476,14 +476,14 @@ const CreateAgentPage: React.FC = () => {
     : t('agentsOverview.form.submit');
   if (isEdit && detailLoading) {
     return (
-      <div className="tv">
-        <div className="tv__editor-bar">
-          <button className="tv__back-btn" onClick={openHome} type="button">
+      <div className="tv" data-bf-component="create-agent-page" data-bf-part="root" data-bf-state="loading">
+        <div className="tv__editor-bar" data-bf-component="create-agent-page" data-bf-part="editorBar">
+          <button className="tv__back-btn" onClick={openHome} type="button" data-bf-component="create-agent-page" data-bf-part="back">
             <ArrowLeft size={14} />
             <span>{t('agentsOverview.backToOverview')}</span>
           </button>
         </div>
-        <div className="th__list-body">
+        <div className="th__list-body" data-bf-component="create-agent-page" data-bf-part="body">
           <div className="th__list-inner">
             <p className="th__title-sub">{t('agentsOverview.form.loadingDetail')}</p>
           </div>
@@ -494,16 +494,16 @@ const CreateAgentPage: React.FC = () => {
 
   if (isEdit && detailError) {
     return (
-      <div className="tv">
-        <div className="tv__editor-bar">
-          <button className="tv__back-btn" onClick={openHome} type="button">
+      <div className="tv" data-bf-component="create-agent-page" data-bf-part="root" data-bf-state="error">
+        <div className="tv__editor-bar" data-bf-component="create-agent-page" data-bf-part="editorBar">
+          <button className="tv__back-btn" onClick={openHome} type="button" data-bf-component="create-agent-page" data-bf-part="back">
             <ArrowLeft size={14} />
             <span>{t('agentsOverview.backToOverview')}</span>
           </button>
         </div>
-        <div className="th__list-body">
+        <div className="th__list-body" data-bf-component="create-agent-page" data-bf-part="body">
           <div className="th__list-inner">
-            <p className="th-create-panel__error">{detailError}</p>
+            <p className="th-create-panel__error" data-bf-component="create-agent-page" data-bf-part="error">{detailError}</p>
             <Button variant="secondary" size="small" onClick={openHome}>
               {t('agentsOverview.form.cancel')}
             </Button>
@@ -514,22 +514,22 @@ const CreateAgentPage: React.FC = () => {
   }
 
   return (
-    <div className="tv">
-      <div className="tv__editor-bar">
-        <button className="tv__back-btn" onClick={openHome} type="button">
+    <div className="tv" data-bf-component="create-agent-page" data-bf-part="root">
+      <div className="tv__editor-bar" data-bf-component="create-agent-page" data-bf-part="editorBar">
+        <button className="tv__back-btn" onClick={openHome} type="button" data-bf-component="create-agent-page" data-bf-part="back">
           <ArrowLeft size={14} />
           <span>{t('agentsOverview.backToOverview')}</span>
         </button>
       </div>
 
-      <div className="th__list-body">
+      <div className="th__list-body" data-bf-component="create-agent-page" data-bf-part="body">
         <div className="th__list-inner">
-          <div className="th-create-page__head">
+          <div className="th-create-page__head" data-bf-component="create-agent-page" data-bf-part="heading">
             <div className="th-create-page__heading">
               <h2 className="th__title">{formTitle}</h2>
               <p className="th__title-sub">{formSubtitle}</p>
             </div>
-            <div className="th-create-page__actions">
+            <div className="th-create-page__actions" data-bf-component="create-agent-page" data-bf-part="actions">
               <Button variant="secondary" size="small" onClick={openHome} disabled={submitting}>
                 {t('agentsOverview.form.cancel')}
               </Button>
@@ -544,15 +544,17 @@ const CreateAgentPage: React.FC = () => {
             </div>
           </div>
 
-          <div className="th-create-page__form">
-            <div className="th-create-page__columns">
+          <div className="th-create-page__form" data-bf-component="create-agent-page" data-bf-part="form">
+            <div className="th-create-page__columns" data-bf-component="create-agent-page" data-bf-part="columns">
               <div
                 ref={definitionColumnRef}
                 className="th-create-page__column th-create-page__column--definition"
+                data-bf-component="create-agent-page"
+                data-bf-part="column"
               >
-                <div className="th-create-panel__field">
+                <div className="th-create-panel__field" data-bf-component="create-agent-page" data-bf-part="field">
                   <label className="th-create-panel__label">{t('agentsOverview.form.kind')}</label>
-                  <div className="th-create-panel__level-group">
+                  <div className="th-create-panel__level-group" data-bf-component="create-agent-page" data-bf-part="levelGroup">
                     {(['mode', 'subagent'] as CustomAgentKind[]).map((candidateKind) => (
                       <Tooltip
                         key={candidateKind}
@@ -567,6 +569,9 @@ const CreateAgentPage: React.FC = () => {
                           type="button"
                           disabled={isEdit}
                           className={`th-create-panel__level-btn${kind === candidateKind ? ' is-active' : ''}`}
+                          data-bf-component="create-agent-page"
+                          data-bf-part="levelOption"
+                          data-bf-state={kind === candidateKind ? 'active' : undefined}
                           onClick={() => setKind(candidateKind)}
                         >
                           {candidateKind === 'mode'
@@ -594,7 +599,7 @@ const CreateAgentPage: React.FC = () => {
                       disabled={isEdit}
                     />
                     {agentIdError ? (
-                      <span className="th-create-panel__error">{agentIdError}</span>
+                      <span className="th-create-panel__error" data-bf-component="create-agent-page" data-bf-part="error">{agentIdError}</span>
                     ) : null}
                   </div>
 
@@ -612,7 +617,7 @@ const CreateAgentPage: React.FC = () => {
                       error={!!nameError}
                     />
                     {nameError ? (
-                      <span className="th-create-panel__error">{nameError}</span>
+                      <span className="th-create-panel__error" data-bf-component="create-agent-page" data-bf-part="error">{nameError}</span>
                     ) : null}
                   </div>
                 </div>
@@ -632,16 +637,17 @@ const CreateAgentPage: React.FC = () => {
                 {kind === 'subagent' ? (
                   <div className="th-create-panel__field">
                     <label className="th-create-panel__label">{t('agentsOverview.form.level')}</label>
-                    <div className="th-create-panel__level-group">
+                    <div className="th-create-panel__level-group" data-bf-component="create-agent-page" data-bf-part="levelGroup">
                       {(['user', 'project'] as CustomAgentLevel[]).map((candidateLevel) => {
                         const disabled =
                           (candidateLevel === 'project' && !hasWorkspace) || isEdit;
                         return (
-                          <button
+                          <button data-bf-component="create-agent-page" data-bf-part="levelOption"
                             key={candidateLevel}
                             type="button"
                             disabled={disabled}
                             className={`th-create-panel__level-btn${level === candidateLevel ? ' is-active' : ''}`}
+                            data-bf-state={level === candidateLevel ? 'active' : undefined}
                             onClick={() => setLevel(candidateLevel)}
                             title={
                               disabled && !isEdit && candidateLevel === 'project'
@@ -770,6 +776,8 @@ const CreateAgentPage: React.FC = () => {
               <div
                 ref={capabilitiesColumnRef}
                 className="th-create-page__column th-create-page__column--capabilities"
+                data-bf-component="create-agent-page"
+                data-bf-part="column"
               >
                 <div className="th-create-panel__field">
                   <label className="th-create-panel__label">
@@ -778,7 +786,7 @@ const CreateAgentPage: React.FC = () => {
                       {t('agentsOverview.form.contextPolicyHint')}
                     </span>
                   </label>
-                  <div className="th-create-panel__tools">
+                  <div className="th-create-panel__tools" data-bf-component="create-agent-page" data-bf-part="tools">
                     {VISIBLE_CONTEXT_SECTIONS.map((section) => {
                       const label = contextSectionLabels[section];
                       const tooltipContent = contextSectionTooltips[section];
@@ -793,6 +801,9 @@ const CreateAgentPage: React.FC = () => {
                           <button
                             type="button"
                             className={`th-list__tool-item${userContextPolicy.has(section) ? ' is-on' : ''}`}
+                            data-bf-component="create-agent-page"
+                            data-bf-part="tool"
+                            data-bf-state={userContextPolicy.has(section) ? 'active' : undefined}
                             onClick={() => toggleContextSection(section)}
                             aria-label={`${label}: ${tooltipContent}`}
                           >
@@ -810,6 +821,8 @@ const CreateAgentPage: React.FC = () => {
                   <label className="th-create-panel__label">{t('agentsOverview.form.prompt')}</label>
                   <Textarea
                     className="th-create-panel__prompt-textarea"
+                    data-bf-component="create-agent-page"
+                    data-bf-part="prompt"
                     value={prompt}
                     onChange={(event) => setPrompt(event.target.value)}
                     placeholder={t('agentsOverview.form.promptPlaceholder')}

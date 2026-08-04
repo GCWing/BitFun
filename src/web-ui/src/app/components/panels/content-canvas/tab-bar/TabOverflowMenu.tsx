@@ -8,6 +8,7 @@
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
+import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { LayoutGrid, ChevronDown, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Tooltip } from '@/component-library';
@@ -163,9 +164,11 @@ export const TabOverflowMenu: React.FC<TabOverflowMenuProps> = ({
       : '';
 
   return (
-    <div ref={wrapperRef} className="canvas-tab-panorama-wrapper">
+    <div data-bf-component="canvas-tab-overflow" data-bf-part="root" data-bf-state={isOpen ? 'open' : ''} ref={wrapperRef} className="canvas-tab-panorama-wrapper">
       <Tooltip content={tooltipContent} placement="bottom">
         <button
+          data-bf-component="canvas-tab-overflow"
+          data-bf-part="trigger"
           className={`canvas-tab-panorama-btn ${hasOverflow ? 'has-overflow' : ''} ${isOpen ? 'is-open' : ''} ${!hasMissionControl ? 'overflow-only' : ''}`}
           onClick={handleButtonClick}
         >
@@ -175,7 +178,7 @@ export const TabOverflowMenu: React.FC<TabOverflowMenuProps> = ({
             <ChevronDown size={14} />
           )}
           {hasOverflow && (
-            <span className="canvas-tab-panorama-btn__badge">
+            <span data-bf-component="canvas-tab-overflow" data-bf-part="badge" className="canvas-tab-panorama-btn__badge">
               +{overflowTabs.length}
             </span>
           )}
@@ -185,6 +188,8 @@ export const TabOverflowMenu: React.FC<TabOverflowMenuProps> = ({
       {isOpen && hasOverflow && createPortal(
         <div
           ref={menuRef}
+          data-bf-component="canvas-tab-overflow"
+          data-bf-part="menu"
           className="canvas-tab-overflow-menu"
           style={{
             position: 'fixed',
@@ -196,6 +201,8 @@ export const TabOverflowMenu: React.FC<TabOverflowMenuProps> = ({
           {hasMissionControl && (
             <>
               <div
+                data-bf-component="canvas-tab-overflow"
+                data-bf-part="missionControl"
                 className="canvas-tab-overflow-menu__mission-control"
                 onClick={handleMissionControlClick}
               >
@@ -205,17 +212,22 @@ export const TabOverflowMenu: React.FC<TabOverflowMenuProps> = ({
               </div>
 
               {/* Divider */}
-              <div className="canvas-tab-overflow-menu__divider" />
+              <div data-bf-component="canvas-tab-overflow" data-bf-part="divider" className="canvas-tab-overflow-menu__divider" />
             </>
           )}
 
           {/* Overflow tab list */}
-          <div className="canvas-tab-overflow-menu__list">
+          <div data-bf-component="canvas-tab-overflow" data-bf-part="list" className="canvas-tab-overflow-menu__list">
             {overflowTabs.map((tab) => {
               const deletedSuffix = tab.fileDeletedFromDisk ? ` - ${t('tabs.fileDeleted')}` : '';
               const titleWithDeleted = `${tab.title}${deletedSuffix}`;
               return (
-              <div
+              <div data-bf-component="canvas-tab-overflow" data-bf-part="item"
+                data-bf-state={[
+                  activeTabId === tab.id && 'active',
+                  tab.isDirty && 'dirty',
+                  tab.fileDeletedFromDisk && 'deleted',
+                ].filter(Boolean).join(' ')}
                 key={tab.id}
                 className={`canvas-tab-overflow-menu__item ${
                   activeTabId === tab.id ? 'is-active' : ''
@@ -224,7 +236,7 @@ export const TabOverflowMenu: React.FC<TabOverflowMenuProps> = ({
                 onMouseDown={(e) => handleItemMiddleMouseDown(e, tab)}
                 onAuxClick={(e) => void handleItemAuxClick(e, tab)}
               >
-                <span className="canvas-tab-overflow-menu__item-title">
+                <span data-bf-component="canvas-tab-overflow" data-bf-part="itemTitle" className="canvas-tab-overflow-menu__item-title">
                   {tab.state === 'preview' && <em>{titleWithDeleted}</em>}
                   {tab.state !== 'preview' && titleWithDeleted}
                 </span>
@@ -234,6 +246,8 @@ export const TabOverflowMenu: React.FC<TabOverflowMenuProps> = ({
                 )}
                 
                 <button
+                  data-bf-component="canvas-tab-overflow"
+                  data-bf-part="itemClose"
                   className="canvas-tab-overflow-menu__item-close"
                   onClick={(e) => handleCloseClick(e, tab.id)}
                 >
@@ -244,7 +258,7 @@ export const TabOverflowMenu: React.FC<TabOverflowMenuProps> = ({
             })}
           </div>
         </div>,
-        document.body
+        getAppearanceOverlayHost()
       )}
     </div>
   );

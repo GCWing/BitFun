@@ -1,0 +1,75 @@
+# syntax=docker/dockerfile:1.7
+
+FROM node:22-bookworm-slim AS web-builder
+
+WORKDIR /build
+RUN corepack enable && corepack prepare pnpm@10.15.0 --activate
+
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
+COPY src/skin-market-web/package.json src/skin-market-web/package.json
+RUN --mount=type=cache,id=bitfun-skin-market-pnpm,target=/root/.local/share/pnpm/store,sharing=locked \
+    pnpm install --frozen-lockfile --ignore-scripts --filter bitfun-skin-market-web
+
+COPY src/skin-market-web/ src/skin-market-web/
+COPY src/shared/appearance-market-contract-fixtures/ src/shared/appearance-market-contract-fixtures/
+RUN pnpm --dir src/skin-market-web build
+
+FROM rust:1.96-bookworm AS rust-builder
+
+WORKDIR /build
+ARG CARGO_BUILD_JOBS=
+ENV CARGO_REGISTRIES_CRATES_IO_PROTOCOL=sparse \
+    CARGO_TERM_COLOR=always
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        build-essential \
+        ca-certificates \
+        cmake \
+        libssl-dev \
+        pkg-config \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY Cargo.toml Cargo.lock ./
+COPY src/ src/
+
+RUN --mount=type=cache,id=bitfun-skin-market-cargo-registry,target=/usr/local/cargo/registry,sharing=locked \
+    --mount=type=cache,id=bitfun-skin-market-cargo-git,target=/usr/local/cargo/git,sharing=locked \
+    --mount=type=cache,id=bitfun-skin-market-target,target=/build/target,sharing=locked \
+    { [ -n "${CARGO_BUILD_JOBS:-}" ] || unset CARGO_BUILD_JOBS; } \
+    && cargo build --locked --release -p bitfun-skin-market-server \
+    && cp target/release/bitfun-skin-market-server /tmp/bitfun-skin-market-server \
+    && strip /tmp/bitfun-skin-market-server
+
+FROM debian:bookworm-slim AS runtime
+
+ARG MARKET_GIT_COMMIT=unknown
+LABEL org.opencontainers.image.title="BitFun Skin Market" \
+      org.opencontainers.image.revision="${MARKET_GIT_COMMIT}"
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates curl libssl3 \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd --gid 10002 market \
+    && useradd --uid 10002 --gid 10002 --no-create-home --shell /usr/sbin/nologin market
+
+WORKDIR /app
+COPY --from=rust-builder /tmp/bitfun-skin-market-server /app/bitfun-skin-market-server
+COPY --from=web-builder /build/src/skin-market-web/dist/ /app/web/
+
+RUN mkdir -p /app/data /app/artifacts \
+    && chown -R market:market /app/data /app/artifacts
+
+USER 10002:10002
+
+ENV SKIN_MARKET_BIND=0.0.0.0:9720 \
+    SKIN_MARKET_DATABASE_PATH=/app/data/market.sqlite \
+    SKIN_MARKET_ARTIFACT_DIR=/app/artifacts \
+    SKIN_MARKET_WEB_DIR=/app/web
+
+EXPOSE 9720
+
+HEALTHCHECK --interval=20s --timeout=5s --start-period=15s --retries=5 \
+  CMD curl -fsS http://127.0.0.1:9720/skin/api/v1/health || exit 1
+
+ENTRYPOINT ["/app/bitfun-skin-market-server"]

@@ -1,0 +1,2 @@
+import type { AppearanceSurfaceDescriptor } from '@/infrastructure/appearance';
+export const miniAppCardAppearanceDescriptor: AppearanceSurfaceDescriptor = { id: 'mini-app-card', parts: [{ id: 'root' }, { id: 'header' }, { id: 'iconArea' }, { id: 'icon' }, { id: 'title' }, { id: 'name' }, { id: 'version' }, { id: 'status' }, { id: 'body' }, { id: 'description' }, { id: 'tags' }, { id: 'footer' }, { id: 'actions' }] };

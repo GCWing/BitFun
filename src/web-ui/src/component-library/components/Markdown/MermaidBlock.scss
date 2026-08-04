@@ -5,31 +5,31 @@
 @use '../../styles/markdown-layout' as markdown;
 
 .mermaid-block {
-  --mermaid-block-shadow-color: var(--color-overlay-black-40);
+  --mermaid-block-shadow-color: var(--bf-appearance-token-color-overlay-black-40);
 
   margin: markdown.$block-gap 0;
   border-radius: 6px;
   overflow: hidden;
-  background: var(--color-bg-primary);
-  border: 1px solid var(--element-bg-base);
+  background: var(--bf-appearance-token-color-bg-primary);
+  border: 1px solid var(--bf-appearance-token-element-bg-base);
   transition: all 0.3s ease;
 
   &:hover {
     box-shadow:
       0 8px 24px var(--mermaid-block-shadow-color),
-      inset 0 1px 0 var(--element-bg-medium),
-      inset 0 -1px 0 var(--element-bg-subtle);
-    border-color: var(--element-bg-strong);
+      inset 0 1px 0 var(--bf-appearance-token-element-bg-medium),
+      inset 0 -1px 0 var(--bf-appearance-token-element-bg-subtle);
+    border-color: var(--bf-appearance-token-element-bg-strong);
   }
 
   &--streaming {
     .mermaid-block__streaming {
-      padding: var(--flowchat-code-block-pad-y) var(--flowchat-code-block-pad-x);
+      padding: var(--bf-appearance-token-flowchat-code-block-pad-y) var(--bf-appearance-token-flowchat-code-block-pad-x);
     }
 
     .streaming-cursor {
       display: inline-block;
-      color: var(--color-accent-500);
+      color: var(--bf-appearance-token-color-accent-500);
       animation: blink 1s infinite;
       margin-left: 2px;
     }
@@ -44,12 +44,12 @@
     .mermaid-block__hint {
       display: flex;
       align-items: center;
-      gap: var(--flowchat-inline-gap);
-      padding: var(--flowchat-card-pad-y) var(--flowchat-card-pad-x);
-      background: var(--color-warning-bg);
-      border-top: 1px solid var(--color-warning-border);
-      color: var(--color-warning);
-      font-size: var(--flowchat-font-size-xs);
+      gap: var(--bf-appearance-token-flowchat-inline-gap);
+      padding: var(--bf-appearance-token-flowchat-card-pad-y) var(--bf-appearance-token-flowchat-card-pad-x);
+      background: var(--bf-appearance-token-color-warning-bg);
+      border-top: 1px solid var(--bf-appearance-token-color-warning-border);
+      color: var(--bf-appearance-token-color-warning);
+      font-size: var(--bf-appearance-token-flowchat-font-size-xs);
 
       svg {
         flex-shrink: 0;
@@ -60,7 +60,7 @@
   &--waiting,
   &--rendering {
     .mermaid-block__loading {
-      padding: var(--flowchat-card-pad-y) var(--flowchat-card-pad-x);
+      padding: var(--bf-appearance-token-flowchat-card-pad-y) var(--bf-appearance-token-flowchat-card-pad-x);
       text-align: center;
     }
 
@@ -68,10 +68,10 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: var(--flowchat-inline-gap);
-      color: var(--color-accent-500);
-      font-size: var(--tool-card-action-font-size);
-      margin-bottom: var(--flowchat-card-gap);
+      gap: var(--bf-appearance-token-flowchat-inline-gap);
+      color: var(--bf-appearance-token-color-accent-500);
+      font-size: var(--bf-appearance-token-tool-card-action-font-size);
+      margin-bottom: var(--bf-appearance-token-flowchat-card-gap);
 
       .spinning {
         animation: spin 1s linear infinite;
@@ -88,7 +88,7 @@
     position: relative;
 
     .mermaid-block__diagram {
-      padding: var(--flowchat-card-pad-y) var(--flowchat-card-pad-x);
+      padding: var(--bf-appearance-token-flowchat-card-pad-y) var(--bf-appearance-token-flowchat-card-pad-x);
       background: transparent;
       overflow-x: auto;
       animation: fadeIn 0.4s ease;
@@ -127,8 +127,8 @@
     }
 
     .mermaid-block__source {
-      padding: var(--flowchat-code-block-pad-y) var(--flowchat-code-block-pad-x);
-      border-top: 1px solid var(--element-bg-base);
+      padding: var(--bf-appearance-token-flowchat-code-block-pad-y) var(--bf-appearance-token-flowchat-code-block-pad-x);
+      border-top: 1px solid var(--bf-appearance-token-element-bg-base);
       background: transparent;
 
       .mermaid-code {
@@ -142,17 +142,17 @@
   }
 
   &--error {
-    border-color: var(--color-error-border);
+    border-color: var(--bf-appearance-token-color-error-border);
 
     .mermaid-block__error-message {
       display: flex;
       align-items: center;
-      gap: var(--flowchat-inline-gap);
-      padding: var(--flowchat-card-pad-y) var(--flowchat-card-pad-x);
-      background: var(--color-error-bg);
-      border-bottom: 1px solid var(--color-error-border);
-      color: var(--color-error);
-      font-size: var(--tool-card-action-font-size);
+      gap: var(--bf-appearance-token-flowchat-inline-gap);
+      padding: var(--bf-appearance-token-flowchat-card-pad-y) var(--bf-appearance-token-flowchat-card-pad-x);
+      background: var(--bf-appearance-token-color-error-bg);
+      border-bottom: 1px solid var(--bf-appearance-token-color-error-border);
+      color: var(--bf-appearance-token-color-error);
+      font-size: var(--bf-appearance-token-tool-card-action-font-size);
 
       svg {
         flex-shrink: 0;
@@ -161,16 +161,16 @@
 
     .mermaid-block__actions {
       display: flex;
-      gap: var(--flowchat-inline-gap);
-      padding: var(--flowchat-card-pad-y) var(--flowchat-card-pad-x);
-      background: var(--color-bg-secondary);
-      border-top: 1px solid var(--element-bg-base);
+      gap: var(--bf-appearance-token-flowchat-inline-gap);
+      padding: var(--bf-appearance-token-flowchat-card-pad-y) var(--bf-appearance-token-flowchat-card-pad-x);
+      background: var(--bf-appearance-token-color-bg-secondary);
+      border-top: 1px solid var(--bf-appearance-token-element-bg-base);
     }
   }
 
 
   .mermaid-block__code-preview {
-    padding: var(--flowchat-code-block-pad-y) var(--flowchat-code-block-pad-x);
+    padding: var(--bf-appearance-token-flowchat-code-block-pad-y) var(--bf-appearance-token-flowchat-code-block-pad-x);
     background: transparent;
 
     .mermaid-code {
@@ -179,10 +179,10 @@
       background: transparent;
       border: none;
       border-radius: 0;
-      font-family: var(--font-family-mono);
-      font-size: var(--flowchat-code-font-size);
-      line-height: var(--flowchat-code-line-height);
-      color: var(--color-text-primary);
+      font-family: var(--bf-appearance-token-font-family-mono);
+      font-size: var(--bf-appearance-token-flowchat-code-font-size);
+      line-height: var(--bf-appearance-token-flowchat-code-line-height);
+      color: var(--bf-appearance-token-color-text-primary);
       overflow-x: auto;
       white-space: pre;
 
@@ -215,13 +215,13 @@
     background: transparent;
     border: none;
     border-radius: 4px;
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
     cursor: pointer;
     transition: all 0.15s ease;
 
     &:hover {
-      background: var(--element-bg-medium);
-      color: var(--color-text-primary);
+      background: var(--bf-appearance-token-element-bg-medium);
+      color: var(--bf-appearance-token-color-text-primary);
     }
 
     &:active {
@@ -233,7 +233,7 @@
     }
 
     &.copied {
-      color: var(--color-success);
+      color: var(--bf-appearance-token-color-success);
     }
   }
 
@@ -243,17 +243,17 @@
     gap: 0.375rem;
     padding: 0.5rem 0.875rem;
     background: transparent;
-    border: 1px solid var(--element-bg-medium);
+    border: 1px solid var(--bf-appearance-token-element-bg-medium);
     border-radius: 4px;
-    color: var(--color-text-secondary);
+    color: var(--bf-appearance-token-color-text-secondary);
     font-size: 0.8125rem;
     cursor: pointer;
     transition: all 0.2s ease;
 
     &:hover {
-      background: var(--element-bg-subtle);
-      border-color: var(--element-bg-strong);
-      color: var(--color-text-primary);
+      background: var(--bf-appearance-token-element-bg-subtle);
+      border-color: var(--bf-appearance-token-element-bg-strong);
+      color: var(--bf-appearance-token-color-text-primary);
     }
 
     &:active {
@@ -277,7 +277,7 @@
 
 .mermaid-block__diagram {
   svg {
-    font-family: var(--font-family-sans);
+    font-family: var(--bf-appearance-token-font-family-sans);
 
     .node {
       rect, circle, ellipse, polygon {
@@ -296,7 +296,7 @@
     }
 
     .edgeLabel {
-      background-color: var(--color-bg-secondary);
+      background-color: var(--bf-appearance-token-color-bg-secondary);
     }
   }
 }
@@ -304,7 +304,7 @@
 @media print {
   .mermaid-block {
     break-inside: avoid;
-    border: 1px solid var(--color-static-black);
+    border: 1px solid var(--bf-appearance-token-color-static-black);
 
     .mermaid-block__actions {
       display: none;

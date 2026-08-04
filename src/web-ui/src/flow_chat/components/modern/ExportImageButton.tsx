@@ -16,7 +16,7 @@ import type { DialogTurn, FlowTextItem, FlowToolItem, FlowThinkingItem } from '.
 import { i18nService } from '@/infrastructure/i18n';
 import { workspaceAPI } from '@/infrastructure/api';
 import { createLogger } from '@/shared/utils/logger';
-import { FLOWCHAT_CAPTURE_FALLBACK_COLOR } from '@/shared/theme/themeBoundaryFallbacks';
+import { getBuiltinAppearanceCssToken } from '@/infrastructure/appearance/builtins/catalog';
 import { withTimeout } from '@/shared/utils/timing';
 import { downloadDir, join } from '@tauri-apps/api/path';
 import { writeFile } from '@tauri-apps/plugin-fs';
@@ -41,7 +41,7 @@ const PER_ROUND_WAIT_MS = 80;
 const MAX_RENDER_WAIT_MS = 2_000;
 
 /** Collect ALL CSS custom properties from document :root so the offscreen
- *  render inherits the full theme (fonts, radii, shadows, spacing, etc.).
+ *  render inherits the full appearance (fonts, radii, shadows, spacing, etc.).
  *  modern-screenshot resolves var() by cloning computed styles, but
  *  variables used inside the captured subtree must still be available on
  *  the wrapper element for correct initial layout. */
@@ -82,36 +82,38 @@ const LOGO_PLACEHOLDER_CLASS = 'export-content__logo-placeholder';
 
 const ExportContent: React.FC<ExportContentProps> = ({ dialogTurn }) => {
   return (
-    <div className="export-content">
-      <div className="export-content__header">
+    <div data-bf-component="export-image" data-bf-part="root" className="export-content">
+      <div className="export-content__header" data-bf-component="export-image" data-bf-part="header">
         {/* Placeholder reserves space for the logo. The actual logo is drawn
             onto the final image via canvas compositing to avoid issues with
             embedding <img>/data URLs inside an SVG foreignObject. */}
         <div
           className={`export-content__logo ${LOGO_PLACEHOLDER_CLASS}`}
+          data-bf-component="export-image"
+          data-bf-part="logo"
           aria-label="BitFun"
         />
-        <div className="export-content__title-group">
+        <div className="export-content__title-group" data-bf-component="export-image" data-bf-part="title">
           <div className="export-content__title">BitFun</div>
           <div className="export-content__subtitle">{i18nService.t('flow-chat:exportImage.subtitle').replace(/ /g, '\u00A0')}</div>
         </div>
-        <div className="export-content__timestamp">
+        <div className="export-content__timestamp" data-bf-component="export-image" data-bf-part="timestamp">
           {i18nService.formatDate(new Date())}
         </div>
       </div>
 
       {dialogTurn.userMessage?.content && (
-        <div className="export-content__user-section">
+        <div className="export-content__user-section" data-bf-component="export-image" data-bf-part="user">
           <div className="export-content__user-bubble">
             {dialogTurn.userMessage.content}
           </div>
         </div>
       )}
 
-      <div className="export-content__ai-section">
+      <div className="export-content__ai-section" data-bf-component="export-image" data-bf-part="assistant">
         
         {dialogTurn.modelRounds.map((modelRound) => (
-          <div key={modelRound.id} className="export-content__model-round">
+          <div key={modelRound.id} className="export-content__model-round" data-bf-component="export-image" data-bf-part="round">
             {[...modelRound.items]
               .sort((a, b) => a.timestamp - b.timestamp)
               .map((item) => {
@@ -119,7 +121,7 @@ const ExportContent: React.FC<ExportContentProps> = ({ dialogTurn }) => {
                   const textItem = item as FlowTextItem;
                   if (textItem.content && textItem.content.trim()) {
                     return (
-                      <div key={item.id} className="export-content__text-item">
+                      <div data-bf-component="export-image" data-bf-part="text" key={item.id} className="export-content__text-item">
                         <FlowTextBlock 
                           textItem={{
                             ...textItem,
@@ -132,7 +134,7 @@ const ExportContent: React.FC<ExportContentProps> = ({ dialogTurn }) => {
                 } else if (item.type === 'thinking') {
                   const thinkingItem = item as FlowThinkingItem;
                   return (
-                    <div key={item.id} className="export-content__thinking-item">
+                    <div data-bf-component="export-image" data-bf-part="thinking" key={item.id} className="export-content__thinking-item">
                       <ModelThinkingDisplay 
                         thinkingItem={{
                           ...thinkingItem,
@@ -145,7 +147,7 @@ const ExportContent: React.FC<ExportContentProps> = ({ dialogTurn }) => {
                 } else if (item.type === 'tool') {
                   const toolItem = item as FlowToolItem;
                   return (
-                    <div key={item.id} className="export-content__tool-item">
+                    <div data-bf-component="export-image" data-bf-part="tool" key={item.id} className="export-content__tool-item">
                       <FlowToolCard toolItem={toolItem} />
                     </div>
                   );
@@ -156,7 +158,7 @@ const ExportContent: React.FC<ExportContentProps> = ({ dialogTurn }) => {
         ))}
       </div>
 
-      <div className="export-content__footer">
+      <div className="export-content__footer" data-bf-component="export-image" data-bf-part="footer">
         <span>{i18nService.t('flow-chat:exportImage.poweredBy').replace(/ /g, '\u00A0')}</span>
         <span className="export-content__footer-brand">BitFun</span>
         <span>•</span>
@@ -217,9 +219,10 @@ export const ExportImageButton: React.FC<ExportImageButtonProps> = ({
       
       const { turn: dialogTurn, sessionTitle } = result;
       
-      // Get theme background color.
+      // Read the resolved appearance background color.
       const computedStyle = getComputedStyle(document.documentElement);
-      const bgColor = computedStyle.getPropertyValue('--color-bg-scene').trim() || FLOWCHAT_CAPTURE_FALLBACK_COLOR.background;
+      const bgColor = computedStyle.getPropertyValue('--bf-appearance-token-color-bg-scene').trim()
+        || getBuiltinAppearanceCssToken('--bf-appearance-token-color-bg-scene');
 
       // Pre-load the logo as an HTMLImageElement. We do NOT try to embed it
       // inside the captured DOM (unreliable with <img>/data URLs inside an
@@ -539,6 +542,9 @@ export const ExportImageButton: React.FC<ExportImageButtonProps> = ({
     <Tooltip content={isExporting ? i18nService.t('flow-chat:exportImage.exporting') : i18nService.t('flow-chat:exportImage.exportToImage')} placement="top">
       <button
         className={`model-round-item__action-btn model-round-item__export-btn ${className}`}
+        data-bf-component="export-image"
+        data-bf-part="trigger"
+        data-bf-state={isExporting ? 'exporting' : undefined}
         onClick={handleExport}
         disabled={isExporting}
         aria-label={isExporting

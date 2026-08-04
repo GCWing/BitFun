@@ -501,7 +501,11 @@ const VoiceInputConfig: React.FC = () => {
 
   if (!speechRuntimeSupported) {
     return (
-      <ConfigPageLayout className="voice-input-config">
+      <ConfigPageLayout
+        className="voice-input-config"
+        data-bf-component="voice-input-config"
+        data-bf-part="root"
+      >
         <ConfigPageHeader title={t('title')} subtitle={t('subtitle')} />
         <ConfigPageContent>
           <ConfigPageMessage message={{ type: 'info', text: t('messages.unsupported') }} />
@@ -512,7 +516,11 @@ const VoiceInputConfig: React.FC = () => {
 
   if (loading || settingsLoading) {
     return (
-      <ConfigPageLayout className="voice-input-config">
+      <ConfigPageLayout
+        className="voice-input-config"
+        data-bf-component="voice-input-config"
+        data-bf-part="root"
+      >
         <ConfigPageHeader title={t('title')} subtitle={t('subtitle')} />
         <ConfigPageContent>
           <ConfigPageLoading text={t('loading')} />
@@ -523,7 +531,11 @@ const VoiceInputConfig: React.FC = () => {
 
   if (settingsError || !settings || !voiceInput) {
     return (
-      <ConfigPageLayout className="voice-input-config">
+      <ConfigPageLayout
+        className="voice-input-config"
+        data-bf-component="voice-input-config"
+        data-bf-part="root"
+      >
         <ConfigPageHeader title={t('title')} subtitle={t('subtitle')} />
         <ConfigPageContent>
           <ConfigPageMessage message={{ type: 'error', text: t('messages.loadFailed') }} />
@@ -533,7 +545,11 @@ const VoiceInputConfig: React.FC = () => {
   }
 
   return (
-    <ConfigPageLayout className="voice-input-config">
+    <ConfigPageLayout
+      className="voice-input-config"
+      data-bf-component="voice-input-config"
+      data-bf-part="root"
+    >
       <ConfigPageHeader title={t('title')} subtitle={t('subtitle')} />
 
       <ConfigPageContent className="voice-input-config__content">
@@ -775,7 +791,11 @@ const VoiceInputConfig: React.FC = () => {
           )}
         >
           {models.length > 0 ? (
-            <div className="voice-input-config__model-list">
+            <div
+              className="voice-input-config__model-list"
+              data-bf-component="voice-input-config"
+              data-bf-part="modelList"
+            >
               {models.map(model => {
                 const isUsable = model.state === 'installed';
                 const isSelected = model.modelId === selectedLocalModelId && selectedProvider === 'local' && isUsable;
@@ -787,6 +807,8 @@ const VoiceInputConfig: React.FC = () => {
                 return (
                   <div
                     className={`voice-input-config__model-card${isSelected ? ' voice-input-config__model-card--selected' : ''}`}
+                    data-bf-component="voice-input-config"
+                    data-bf-part="modelCard"
                     key={model.modelId}
                   >
                     <div className="voice-input-config__model-main">
@@ -835,7 +857,11 @@ const VoiceInputConfig: React.FC = () => {
                       </div>
                     ) : null}
 
-                    <div className="voice-input-config__model-actions">
+                    <div
+                      className="voice-input-config__model-actions"
+                      data-bf-component="voice-input-config"
+                      data-bf-part="modelActions"
+                    >
                       <Button
                         variant={isSelected ? 'secondary' : 'ghost'}
                         size="small"

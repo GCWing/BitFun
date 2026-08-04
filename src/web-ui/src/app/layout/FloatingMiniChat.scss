@@ -60,16 +60,16 @@ $panel-height: 680px;
   width: $button-size;
   height: $button-size;
   border-radius: 50%;
-  border: 1px solid var(--border-medium);
+  border: 1px solid var(--bf-appearance-token-border-base);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--color-text-secondary);
-  background: var(--color-bg-elevated);
+  color: var(--bf-appearance-token-color-text-secondary);
+  background: var(--bf-appearance-token-color-bg-tertiary);
   box-shadow:
-    0 8px 24px -10px var(--color-overlay-black-30),
-    inset 0 1px 0 var(--color-overlay-white-04);
+    0 2px 8px rgba(var(--bf-appearance-token-color-static-black-rgb), 0.35),
+    inset 0 1px 0 var(--bf-appearance-token-color-overlay-white-04);
   transition:
     transform 120ms $fmc-ease,
     background 120ms ease,
@@ -78,10 +78,13 @@ $panel-height: 680px;
     opacity $fmc-close-duration $fmc-ease;
 
   &:hover {
-    background: var(--element-bg-hover);
-    border-color: var(--border-strong);
-    color: var(--color-text-primary);
-    box-shadow: 0 10px 28px -10px var(--color-overlay-black-30);
+    background: var(--bf-appearance-token-color-bg-elevated);
+    border-color: var(--bf-appearance-token-border-medium);
+    color: var(--bf-appearance-token-color-text-primary);
+    box-shadow:
+      0 4px 16px rgba(var(--bf-appearance-token-color-static-black-rgb), 0.45),
+      0 0 12px color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 8%, transparent);
+    transform: scale(1.06);
   }
 
   &:active {
@@ -104,19 +107,19 @@ $panel-height: 680px;
 }
 
 .bitfun-fmc__button--miniapp {
-  color: var(--color-text-primary);
-  background: var(--color-bg-elevated);
-  border-color: var(--border-medium);
+  color: var(--bf-appearance-token-color-text-primary);
+  background: var(--bf-appearance-token-color-bg-elevated);
+  border-color: var(--bf-appearance-token-border-medium);
 
   &:hover {
-    color: var(--color-text-primary);
-    background: var(--element-bg-hover);
-    border-color: var(--border-strong);
+    color: var(--bf-appearance-token-color-text-primary);
+    background: var(--bf-appearance-token-element-bg-hover);
+    border-color: var(--bf-appearance-token-border-strong);
   }
 }
 
 .bitfun-fmc__button--processing {
-  border-color: var(--border-strong);
+  border-color: var(--bf-appearance-token-border-strong);
 }
 
 .bitfun-fmc__miniapp-trigger-icon {
@@ -146,11 +149,11 @@ $panel-height: 680px;
   }
 
   &::before {
-    border: 2px solid color-mix(in srgb, var(--color-text-muted) 24%, transparent);
-    border-top-color: var(--color-text-primary);
-    border-right-color: color-mix(in srgb, var(--color-text-primary) 62%, transparent);
+    border: 2px solid color-mix(in srgb, var(--bf-appearance-token-color-text-muted) 24%, transparent);
+    border-top-color: var(--bf-appearance-token-color-text-primary);
+    border-right-color: color-mix(in srgb, var(--bf-appearance-token-color-text-primary) 62%, transparent);
     filter: drop-shadow(
-      0 0 4px color-mix(in srgb, var(--color-text-primary) 38%, transparent)
+      0 0 4px color-mix(in srgb, var(--bf-appearance-token-color-text-primary) 38%, transparent)
     );
     animation: fmc-button-activity-spin 1.1s linear infinite;
     will-change: transform;
@@ -159,8 +162,8 @@ $panel-height: 680px;
   &::after {
     inset: 4px;
     box-shadow:
-      0 0 10px color-mix(in srgb, var(--color-text-primary) 18%, transparent),
-      0 0 18px color-mix(in srgb, var(--color-text-muted) 12%, transparent);
+      0 0 10px color-mix(in srgb, var(--bf-appearance-token-color-text-primary) 18%, transparent),
+      0 0 18px color-mix(in srgb, var(--bf-appearance-token-color-text-muted) 12%, transparent);
     animation: fmc-button-activity-glow 1.6s $fmc-ease infinite;
     will-change: opacity, transform;
   }
@@ -209,12 +212,12 @@ $panel-height: 680px;
   height: $panel-height;
   max-width: calc(100vw - 32px);
   max-height: calc(100vh - 80px);
-  background: var(--color-bg-primary);
-  border: 1px solid var(--border-medium);
-  border-radius: $size-radius-lg;
+  background: var(--bf-appearance-token-color-bg-primary);
+  border: 1px solid var(--bf-appearance-token-border-subtle);
+  border-radius: 8px;
   box-shadow:
-    0 1px 0 var(--color-overlay-white-04) inset,
-    0 20px 60px -16px var(--color-overlay-black-30);
+    0 4px 12px var(--bf-appearance-token-color-overlay-black-30),
+    0 0 1px var(--bf-appearance-token-color-overlay-white-08);
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -246,7 +249,7 @@ $panel-height: 680px;
 
   // ── State borders ──
   &--processing {
-    border-color: var(--color-accent-300);
+    border-color: var(--bf-appearance-token-color-accent-300);
 
     &::before {
       content: '';
@@ -258,9 +261,9 @@ $panel-height: 680px;
       border-radius: $size-radius-lg $size-radius-lg 0 0;
       background: linear-gradient(
         90deg,
-        var(--color-accent-600),
-        var(--color-purple-500),
-        var(--color-accent-600)
+        var(--bf-appearance-token-color-accent-600),
+        var(--bf-appearance-token-color-purple-500),
+        var(--bf-appearance-token-color-accent-600)
       );
       background-size: 200% 100%;
       animation: fmc-progress 2s linear infinite;
@@ -268,11 +271,30 @@ $panel-height: 680px;
     }
   }
 
+  &--error {
+    border-color: var(--bf-appearance-token-color-error-border);
+  }
+
+  &--confirm {
+    border-color: var(--bf-appearance-token-color-warning-border);
+    animation: fmc-pulse 1s ease-in-out infinite;
+  }
 }
 
 @keyframes fmc-progress {
   0% { background-position: 200% 0; }
   100% { background-position: -200% 0; }
+}
+
+@keyframes fmc-pulse {
+  0%, 100% {
+    box-shadow: 0 4px 12px var(--bf-appearance-token-color-overlay-black-30),
+      0 0 0 1px var(--bf-appearance-token-color-warning-border);
+  }
+  50% {
+    box-shadow: 0 4px 12px var(--bf-appearance-token-color-overlay-black-30),
+      0 0 0 2px var(--bf-appearance-token-color-warning);
+  }
 }
 
 // ─── Header ────────────────────────────────────────────────
@@ -283,8 +305,7 @@ $panel-height: 680px;
   align-items: center;
   padding: 0 $size-gap-2;
   gap: 4px;
-  border-bottom: 1px solid var(--border-subtle);
-  background: color-mix(in srgb, var(--color-bg-elevated) 78%, var(--color-bg-primary));
+  border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
 }
 
 .bitfun-fmc__header-btn {
@@ -296,7 +317,7 @@ $panel-height: 680px;
   justify-content: center;
   border: none;
   background: transparent;
-  color: var(--color-text-muted);
+  color: var(--bf-appearance-token-color-text-muted);
   border-radius: 6px;
   cursor: pointer;
   transition:
@@ -305,17 +326,32 @@ $panel-height: 680px;
     color 120ms ease;
 
   &:hover {
-    background: var(--element-bg-base);
-    color: var(--color-text-primary);
+    background: var(--bf-appearance-token-element-bg-base);
+    color: var(--bf-appearance-token-color-text-primary);
   }
 
   &:active {
-    transform: scale(0.94);
+    transform: scale(0.92);
+  }
+
+  &--confirm {
+    color: var(--bf-appearance-token-color-success);
+    &:hover { background: var(--bf-appearance-token-color-success-bg); }
+  }
+
+  &--reject {
+    color: var(--bf-appearance-token-color-error);
+    &:hover { background: var(--bf-appearance-token-color-error-bg); }
+  }
+
+  &--stop {
+    color: var(--bf-appearance-token-color-error);
+    &:hover { background: var(--bf-appearance-token-color-error-bg); }
   }
 
   &--close:hover {
-    background: var(--color-error-bg);
-    color: var(--color-error);
+    background: var(--bf-appearance-token-color-error-bg);
+    color: var(--bf-appearance-token-color-error);
   }
 }
 
@@ -326,10 +362,10 @@ $panel-height: 680px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--color-text-secondary);
+  color: var(--bf-appearance-token-color-text-secondary);
   border-radius: 7px;
-  border: 1px solid var(--border-subtle);
-  background: var(--element-bg-subtle);
+  border: 1px solid var(--bf-appearance-token-border-subtle);
+  background: var(--bf-appearance-token-element-bg-subtle);
 }
 
 // ─── Title ─────────────────────────────────────────────────
@@ -346,11 +382,23 @@ $panel-height: 680px;
   display: flex;
   align-items: center;
   padding: 4px 8px;
-  box-sizing: border-box;
-  color: var(--color-text-primary);
-  font-size: var(--flowchat-font-size-xs);
-  font-weight: var(--font-weight-medium);
-  border-radius: var(--size-radius-sm);
+  border: none;
+  background: transparent;
+  color: var(--bf-appearance-token-color-text-primary);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: background 0.15s ease;
+
+  &:hover {
+    background: var(--bf-appearance-token-element-bg-base);
+  }
+
+  svg {
+    flex-shrink: 0;
+    color: var(--bf-appearance-token-color-text-muted);
+  }
 }
 
 .bitfun-fmc__title-text {
@@ -401,8 +449,8 @@ $panel-height: 680px;
   justify-content: center;
   gap: 8px;
   padding: 24px;
-  color: var(--color-text-muted);
-  font-size: var(--flowchat-font-size-sm);
+  color: var(--bf-appearance-token-color-text-muted);
+  font-size: var(--bf-appearance-token-flowchat-font-size-sm);
   text-align: center;
 }
 
@@ -411,11 +459,10 @@ $panel-height: 680px;
   height: 44px;
   display: flex;
   align-items: center;
-  justify-content: center;
-  color: var(--color-text-primary);
-  border-radius: 12px;
-  border: 1px solid var(--border-subtle);
-  background: var(--element-bg-subtle);
+  gap: 6px;
+  padding: 8px 10px;
+  border-top: 1px solid var(--bf-appearance-token-border-subtle);
+  background: var(--bf-appearance-token-element-bg-subtle);
 }
 
 // MiniApps describe this empty state as bounded data through
@@ -431,13 +478,13 @@ $panel-height: 680px;
   box-sizing: border-box;
   padding: 36px 32px;
   overflow-y: auto;
-  color: var(--color-text-primary);
+  color: var(--bf-appearance-token-color-text-primary);
 
   h2 {
     max-width: 420px;
     margin: 8px 0 0;
     font-size: 23px;
-    font-weight: var(--font-weight-semibold);
+    font-weight: var(--bf-appearance-token-font-weight-semibold);
     line-height: 1.25;
     letter-spacing: -0.02em;
   }
@@ -449,26 +496,26 @@ $panel-height: 680px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--color-text-primary);
+  color: var(--bf-appearance-token-color-text-primary);
   border-radius: $size-radius-lg;
-  border: 1px solid var(--border-subtle);
-  background: var(--element-bg-subtle);
-  box-shadow: 0 12px 28px -18px var(--color-overlay-black-30);
+  border: 1px solid var(--bf-appearance-token-border-subtle);
+  background: var(--bf-appearance-token-element-bg-subtle);
+  box-shadow: 0 12px 28px -18px var(--bf-appearance-token-color-overlay-black-30);
 }
 
 .bitfun-fmc__miniapp-welcome-eyebrow {
   margin-top: 18px;
-  color: var(--color-text-muted);
-  font-size: var(--flowchat-font-size-xs);
-  font-weight: var(--font-weight-medium);
+  color: var(--bf-appearance-token-color-text-muted);
+  font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+  font-weight: var(--bf-appearance-token-font-weight-medium);
   letter-spacing: 0.04em;
 }
 
 .bitfun-fmc__miniapp-welcome-description {
   max-width: 420px;
   margin: 12px 0 0;
-  color: var(--color-text-secondary);
-  font-size: var(--flowchat-font-size-sm);
+  color: var(--bf-appearance-token-color-text-secondary);
+  font-size: var(--bf-appearance-token-flowchat-font-size-sm);
   line-height: 1.6;
 }
 
@@ -480,11 +527,11 @@ $panel-height: 680px;
   margin-top: 16px;
   padding: 6px 9px;
   box-sizing: border-box;
-  border: 1px solid var(--border-subtle);
-  border-radius: $size-radius-base;
-  background: var(--element-bg-subtle);
-  color: var(--color-text-muted);
-  font-size: var(--flowchat-font-size-xs);
+  border: 1px solid var(--bf-appearance-token-border-subtle);
+  border-radius: var(--bf-appearance-token-size-radius-base);
+  background: var(--bf-appearance-token-element-bg-subtle);
+  color: var(--bf-appearance-token-color-text-muted);
+  font-size: var(--bf-appearance-token-flowchat-font-size-xs);
 
   span {
     min-width: 0;
@@ -501,8 +548,8 @@ $panel-height: 680px;
 
 .bitfun-fmc__miniapp-suggestions-label {
   margin-bottom: 8px;
-  color: var(--color-text-muted);
-  font-size: var(--flowchat-font-size-xs);
+  color: var(--bf-appearance-token-color-text-muted);
+  font-size: var(--bf-appearance-token-flowchat-font-size-xs);
 }
 
 .bitfun-fmc__miniapp-suggestions-list {
@@ -519,12 +566,12 @@ $panel-height: 680px;
   justify-content: space-between;
   gap: 12px;
   padding: 9px 11px;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--size-radius-sm);
-  background: var(--element-bg-subtle);
-  color: var(--color-text-secondary);
+  border: 1px solid var(--bf-appearance-token-border-subtle);
+  border-radius: var(--bf-appearance-token-size-radius-sm);
+  background: var(--bf-appearance-token-element-bg-subtle);
+  color: var(--bf-appearance-token-color-text-secondary);
   font: inherit;
-  font-size: var(--flowchat-font-size-sm);
+  font-size: var(--bf-appearance-token-flowchat-font-size-sm);
   line-height: 1.35;
   text-align: left;
   cursor: pointer;
@@ -540,22 +587,22 @@ $panel-height: 680px;
 
   svg {
     flex: 0 0 auto;
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
   }
 
   &:hover {
-    border-color: var(--border-medium);
-    background: var(--element-bg-hover);
-    color: var(--color-text-primary);
+    border-color: var(--bf-appearance-token-border-medium);
+    background: var(--bf-appearance-token-element-bg-hover);
+    color: var(--bf-appearance-token-color-text-primary);
   }
 
   &:active {
     transform: scale(0.985);
-    background: var(--element-bg-medium);
+    background: var(--bf-appearance-token-element-bg-medium);
   }
 
   &:focus-visible {
-    outline: 2px solid var(--color-accent-500);
+    outline: 2px solid var(--bf-appearance-token-color-accent-500);
     outline-offset: 2px;
   }
 }

@@ -5,8 +5,8 @@
   justify-content: center;
   // Unified header height: IconButton(xs=24px) + padding(6px*2)=36px
   padding: 6px 12px;
-  background: var(--color-bg-primary);
-  border-bottom: 1px solid var(--border-base);
+  background: var(--bf-appearance-token-color-bg-primary);
+  border-bottom: 1px solid var(--bf-appearance-token-border-base);
   flex-shrink: 0;
   min-height: 36px;
 
@@ -14,7 +14,7 @@
     margin: 0;
     font-size: 12px;
     font-weight: 500;
-    color: var(--color-text-primary);
+    color: var(--bf-appearance-token-color-text-primary);
     text-align: center;
     overflow: hidden;
     text-overflow: ellipsis;

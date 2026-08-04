@@ -13,6 +13,7 @@
 
 import React, { useCallback, useState, useMemo, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
+import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { Plus, FolderOpen, FolderPlus, History, Check, User, Users, Puzzle, Blocks, ChevronDown, Search } from 'lucide-react';
 // import { PanelsTopLeft } from 'lucide-react'; // temporarily hidden: Pages nav entry
 import { Tooltip } from '@/component-library';
@@ -404,12 +405,17 @@ const MainNav: React.FC<MainNavProps> = ({
     <div
       ref={workspaceMenuRef}
       className={`bitfun-nav-panel__workspace-menu${workspaceMenuClosing ? ' is-closing' : ''}`}
+      data-bf-component="nav-panel"
+      data-bf-part="workspaceMenu"
+      data-bf-state={workspaceMenuClosing ? 'closing' : 'open'}
       role="menu"
       style={{ top: workspaceMenuPos.top, left: workspaceMenuPos.left }}
     >
       <button
         type="button"
         className="bitfun-nav-panel__workspace-menu-item"
+        data-bf-component="nav-panel"
+        data-bf-part="workspaceMenuItem"
         role="menuitem"
         onClick={() => { closeWorkspaceMenu(); void handleOpenProject(); }}
       >
@@ -419,6 +425,8 @@ const MainNav: React.FC<MainNavProps> = ({
       <button
         type="button"
         className="bitfun-nav-panel__workspace-menu-item"
+        data-bf-component="nav-panel"
+        data-bf-part="workspaceMenuItem"
         role="menuitem"
         onClick={() => { closeWorkspaceMenu(); handleNewProject(); }}
       >
@@ -428,6 +436,8 @@ const MainNav: React.FC<MainNavProps> = ({
       <button
         type="button"
         className="bitfun-nav-panel__workspace-menu-item"
+        data-bf-component="nav-panel"
+        data-bf-part="workspaceMenuItem"
         role="menuitem"
         onClick={handleOpenRemoteSSH}
       >
@@ -436,13 +446,13 @@ const MainNav: React.FC<MainNavProps> = ({
         </svg>
         <span>{t('ssh.remote.connect')}</span>
       </button>
-      <div className="bitfun-nav-panel__workspace-menu-divider" role="separator" />
-      <div className="bitfun-nav-panel__workspace-menu-section-title">
+      <div className="bitfun-nav-panel__workspace-menu-divider" data-bf-component="nav-panel" data-bf-part="workspaceMenuDivider" role="separator" />
+      <div className="bitfun-nav-panel__workspace-menu-section-title" data-bf-component="nav-panel" data-bf-part="workspaceMenuTitle">
         <History size={12} aria-hidden="true" />
         <span>{t('header.recentWorkspaces')}</span>
       </div>
       {recentWorkspaces.length === 0 ? (
-        <div className="bitfun-nav-panel__workspace-menu-empty">
+        <div className="bitfun-nav-panel__workspace-menu-empty" data-bf-component="nav-panel" data-bf-part="workspaceMenuEmpty" data-bf-state="empty">
           <span>{t('header.noRecentWorkspaces')}</span>
         </div>
       ) : (
@@ -450,7 +460,7 @@ const MainNav: React.FC<MainNavProps> = ({
           {recentWorkspaces.map((workspace) => {
             const { hostPrefix, folderLabel, tooltip } = getRecentWorkspaceLineParts(workspace);
             return (
-            <button
+            <button data-bf-component="nav-panel" data-bf-part="workspaceMenuItem"
               key={workspace.id}
               type="button"
               className="bitfun-nav-panel__workspace-menu-item bitfun-nav-panel__workspace-menu-item--workspace"
@@ -479,7 +489,7 @@ const MainNav: React.FC<MainNavProps> = ({
         </div>
       )}
     </div>,
-    document.body
+    getAppearanceOverlayHost()
   ) : null;
 
   const createCodeTooltip = t('nav.sessions.newCodeSession');
@@ -494,12 +504,14 @@ const MainNav: React.FC<MainNavProps> = ({
   return (
     <>
       {/* ── Workspace search ───────────────────────── */}
-      <div className="bitfun-nav-panel__brand-header">
-        <div className="bitfun-nav-panel__brand-search">
+      <div data-bf-component="nav-panel" data-bf-part="brandHeader" className="bitfun-nav-panel__brand-header">
+        <div className="bitfun-nav-panel__brand-search" data-bf-component="nav-panel" data-bf-part="search">
           <Tooltip content={t('nav.search.triggerTooltip')} placement="right" followCursor>
             <button
               type="button"
               className="bitfun-nav-panel__search-trigger"
+              data-bf-component="nav-panel"
+              data-bf-part="searchTrigger"
               onClick={() => setSearchOpen(true)}
               aria-label={t('nav.search.triggerTooltip')}
               data-testid="nav-search-trigger"
@@ -519,11 +531,14 @@ const MainNav: React.FC<MainNavProps> = ({
       </div>
 
       {/* ── Top action strip ────────────────────────── */}
-      <div className="bitfun-nav-panel__top-actions">
+      <div data-bf-component="nav-panel" data-bf-part="topActions" className="bitfun-nav-panel__top-actions">
         <Tooltip content={createCodeTooltip} placement="right" followCursor>
           <button
             type="button"
             className="bitfun-nav-panel__top-action-btn"
+            data-bf-component="nav-panel"
+            data-bf-part="topAction"
+            data-bf-action="code"
             onClick={handleCreateCodeSession}
             aria-label={createCodeTooltip}
             data-testid="nav-new-code-session-btn"
@@ -539,6 +554,9 @@ const MainNav: React.FC<MainNavProps> = ({
           <button
             type="button"
             className="bitfun-nav-panel__top-action-btn"
+            data-bf-component="nav-panel"
+            data-bf-part="topAction"
+            data-bf-action="cowork"
             onClick={handleCreateCoworkSession}
             aria-label={createCoworkTooltip}
             data-testid="nav-new-cowork-session-btn"
@@ -554,6 +572,10 @@ const MainNav: React.FC<MainNavProps> = ({
           <button
             type="button"
             className={`bitfun-nav-panel__top-action-btn${isAssistantActive ? ' is-active' : ''}`}
+            data-bf-component="nav-panel"
+            data-bf-part="topAction"
+            data-bf-action="assistant"
+            data-bf-state={isAssistantActive ? 'active' : ''}
             onClick={handleOpenAssistant}
             aria-label={assistantTooltip}
             data-testid="nav-assistant-btn"
@@ -565,7 +587,7 @@ const MainNav: React.FC<MainNavProps> = ({
           </button>
         </Tooltip>
 
-        <div className="bitfun-nav-panel__top-action-expand" data-testid="agent-skill-panel">
+        <div className="bitfun-nav-panel__top-action-expand" data-bf-component="nav-panel" data-bf-part="extensionGroup" data-bf-state={isExtensionsOpen ? 'open' : ''} data-testid="agent-skill-panel">
           <Tooltip content={extensionsLabel} placement="right" followCursor>
             <button
               type="button"
@@ -574,6 +596,10 @@ const MainNav: React.FC<MainNavProps> = ({
                 'bitfun-nav-panel__top-action-btn--expand',
                 isExtensionsOpen ? 'is-open' : '',
               ].filter(Boolean).join(' ')}
+              data-bf-component="nav-panel"
+              data-bf-part="topAction"
+              data-bf-action="extensions"
+              data-bf-state={isExtensionsOpen ? 'open' : ''}
               onClick={() => setIsExtensionsOpen(v => !v)}
               aria-expanded={isExtensionsOpen}
               aria-label={extensionsLabel}
@@ -605,6 +631,10 @@ const MainNav: React.FC<MainNavProps> = ({
                   'bitfun-nav-panel__top-action-btn--sub',
                   isAgentsActive ? 'is-active' : '',
                 ].filter(Boolean).join(' ')}
+                data-bf-component="nav-panel"
+                data-bf-part="topAction"
+                data-bf-action="agents"
+                data-bf-state={isAgentsActive ? 'active' : ''}
                 onClick={handleOpenAgents}
                 aria-label={agentsTooltip}
                 data-testid="agent-tab"
@@ -624,6 +654,10 @@ const MainNav: React.FC<MainNavProps> = ({
                   'bitfun-nav-panel__top-action-btn--sub',
                   isSkillsActive ? 'is-active' : '',
                 ].filter(Boolean).join(' ')}
+                data-bf-component="nav-panel"
+                data-bf-part="topAction"
+                data-bf-action="skills"
+                data-bf-state={isSkillsActive ? 'active' : ''}
                 onClick={handleOpenSkills}
                 aria-label={skillsTooltip}
                 data-testid="skill-tab"
@@ -639,10 +673,10 @@ const MainNav: React.FC<MainNavProps> = ({
       </div>
 
       {/* ── Sections ────────────────────────────────── */}
-      <div className="bitfun-nav-panel__sections" data-testid="nav-sections">
+      <div data-bf-component="nav-panel" data-bf-part="sections" className="bitfun-nav-panel__sections" data-testid="nav-sections">
 
         {/* Assistant sessions */}
-        <div className="bitfun-nav-panel__section">
+        <div className="bitfun-nav-panel__section" data-bf-component="nav-panel" data-bf-part="section" data-bf-section="assistant-sessions">
           <SectionHeader
             label={t('nav.sections.assistantSessions')}
             collapsible
@@ -662,7 +696,7 @@ const MainNav: React.FC<MainNavProps> = ({
               </Tooltip>
             }
           />
-          <div className={`bitfun-nav-panel__collapsible${expandedSections.has('assistant-sessions') ? '' : ' is-collapsed'}`}>
+          <div className={`bitfun-nav-panel__collapsible${expandedSections.has('assistant-sessions') ? '' : ' is-collapsed'}`} data-bf-component="nav-panel" data-bf-part="sectionContent" data-bf-state={expandedSections.has('assistant-sessions') ? 'open' : ''}>
             <div className="bitfun-nav-panel__collapsible-inner">
               <div className="bitfun-nav-panel__items bitfun-nav-panel__items--session-blocks">
                 {assistantWorkspacesList.map(workspace => {
@@ -688,7 +722,7 @@ const MainNav: React.FC<MainNavProps> = ({
         </div>
 
         {/* Workspace */}
-        <div className="bitfun-nav-panel__section">
+        <div className="bitfun-nav-panel__section" data-bf-component="nav-panel" data-bf-part="section" data-bf-section="workspace">
           <SectionHeader
             label={t('shared:features.workspace')}
             collapsible
@@ -712,7 +746,7 @@ const MainNav: React.FC<MainNavProps> = ({
               </div>
             }
           />
-          <div className={`bitfun-nav-panel__collapsible${expandedSections.has('workspace') ? '' : ' is-collapsed'}`}>
+          <div className={`bitfun-nav-panel__collapsible${expandedSections.has('workspace') ? '' : ' is-collapsed'}`} data-bf-component="nav-panel" data-bf-part="sectionContent" data-bf-state={expandedSections.has('workspace') ? 'open' : ''}>
             <div className="bitfun-nav-panel__collapsible-inner">
               <div className="bitfun-nav-panel__items">
                 <WorkspaceListSection variant="projects" />
@@ -724,7 +758,7 @@ const MainNav: React.FC<MainNavProps> = ({
       </div>
 
       {/* ── Bottom: MiniApp ───────────────────────── */}
-      <div className="bitfun-nav-panel__bottom-bar" data-testid="nav-bottom-bar">
+      <div data-bf-component="nav-panel" data-bf-part="bottomBar" className="bitfun-nav-panel__bottom-bar" data-testid="nav-bottom-bar">
         {/* Temporarily hide Pages entry
         <button
           type="button"
@@ -737,7 +771,7 @@ const MainNav: React.FC<MainNavProps> = ({
           <span>{tPages('navLabel')}</span>
         </button>
         */}
-        <div className="bitfun-nav-panel__miniapp-footer">
+        <div className="bitfun-nav-panel__miniapp-footer" data-bf-component="nav-panel" data-bf-part="miniAppFooter">
           <MiniAppEntry
             isActive={activeTabId === 'miniapps' || !!activeMiniAppId}
             activeMiniAppId={activeMiniAppId}

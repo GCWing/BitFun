@@ -22,7 +22,6 @@ import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext'
 import { WorkspaceKind } from '@/shared/types';
 import { useMyAgentStore } from '@/app/scenes/my-agent/myAgentStore';
 import { useAgentIdentityDocument } from '@/app/scenes/my-agent/useAgentIdentityDocument';
-import { useTheme } from '@/infrastructure/theme/hooks/useTheme';
 import { EditArea, MEditor } from '@/tools/editor/meditor';
 import { analyzeMarkdownEditability } from '@/tools/editor/meditor/utils/tiptapMarkdown';
 import {
@@ -33,6 +32,7 @@ import SessionsSection from '@/app/components/NavPanel/sections/sessions/Session
 import AssistantAvatarPicker from './AssistantAvatarPicker';
 import AssistantQuickInput from './AssistantQuickInput';
 import { useNurseryStore } from '../nurseryStore';
+import './NurseryView.scss';
 
 const log = createLogger('AssistantConfigPage');
 
@@ -97,7 +97,6 @@ const AutoResizeTextarea: React.FC<AutoResizeTextareaProps> = ({
 
 const AssistantConfigPage: React.FC = () => {
   const { t } = useTranslation('scenes/profile');
-  const { isLight } = useTheme();
   const { openGallery, activeWorkspaceId } = useNurseryStore();
   const selectedAssistantWorkspaceId = useMyAgentStore((s) => s.selectedAssistantWorkspaceId);
   const { assistantWorkspacesList, currentWorkspace } = useWorkspaceContext();
@@ -343,14 +342,14 @@ const AssistantConfigPage: React.FC = () => {
   // ── Right panel: identity info ──────────────────────────────────────────
 
   const renderInfoPanel = () => (
-    <div className="acp-right-info">
+    <div className="acp-right-info" data-bf-component="assistant-config-page" data-bf-part="details">
       <div className="acp-right-shell">
         {/* Persona docs */}
         <div className="acp-section acp-section--nested">
           <div className="acp-section__head">
             <span className="acp-section__title">{t('nursery.assistant.personaDocsTitle')}</span>
           </div>
-          <div className="acp-persona-doc-list">
+          <div className="acp-persona-doc-list" data-bf-component="assistant-config-page" data-bf-part="personaList">
             {PERSONA_DOC_FILES.map((fileName) => {
               const selected = personaDoc?.fileName === fileName && rightView === 'personaDoc';
               const labelKey = fileName.replace(/\.md$/i, '') as 'SOUL' | 'USER' | 'IDENTITY';
@@ -361,6 +360,9 @@ const AssistantConfigPage: React.FC = () => {
                   variant="ghost"
                   size="small"
                   className={`acp-persona-doc-row${selected ? ' acp-persona-doc-row--selected' : ''}`}
+                  data-bf-component="assistant-config-page"
+                  data-bf-part="persona"
+                  data-bf-state={selected ? 'selected' : undefined}
                   onClick={() => openPersonaDoc(fileName)}
                 >
                   <span className="acp-persona-doc-row__icon"><FileText size={12} /></span>
@@ -382,7 +384,7 @@ const AssistantConfigPage: React.FC = () => {
             ) : (
               <Suspense
                 fallback={(
-                  <div className="acp-loading">
+                  <div className="acp-loading" data-bf-component="assistant-config-page" data-bf-part="loading">
                     <RefreshCw size={14} className="nursery-spinning" />
                   </div>
                 )}
@@ -413,10 +415,10 @@ const AssistantConfigPage: React.FC = () => {
     const usesHybridEditor = sections.hasFrontmatter;
     const usesSourceBodyEditor = bodyEditability.mode === 'unsafe';
     return (
-      <div className="acp-right-info">
+      <div className="acp-right-info" data-bf-component="assistant-config-page" data-bf-part="details">
         <div className="acp-right-shell acp-right-shell--editor">
-          <div className="acp-persona-editor">
-            <div className="acp-persona-editor__head">
+          <div className="acp-persona-editor" data-bf-component="assistant-config-page" data-bf-part="editor">
+            <div className="acp-persona-editor__head" data-bf-component="assistant-config-page" data-bf-part="editorHeader">
               <IconButton
                 type="button"
                 size="xs"
@@ -440,13 +442,13 @@ const AssistantConfigPage: React.FC = () => {
                 <X size={13} />
               </IconButton>
             </div>
-            <div className="acp-persona-editor__body">
-              {error && <p className="acp-persona-editor__error">{t('nursery.assistant.personaDocLoadFailed')}: {error}</p>}
+            <div className="acp-persona-editor__body" data-bf-component="assistant-config-page" data-bf-part="editorBody">
+              {error && <p className="acp-persona-editor__error" data-bf-component="assistant-config-page" data-bf-part="error">{t('nursery.assistant.personaDocLoadFailed')}: {error}</p>}
               {loading ? (
-                <div className="acp-loading"><RefreshCw size={14} className="nursery-spinning" /></div>
+                <div className="acp-loading" data-bf-component="assistant-config-page" data-bf-part="loading"><RefreshCw size={14} className="nursery-spinning" /></div>
               ) : usesHybridEditor ? (
                 <div className="acp-persona-editor__hybrid">
-                  <section className="acp-persona-editor__frontmatter">
+                  <section className="acp-persona-editor__frontmatter" data-bf-component="assistant-config-page" data-bf-part="frontmatter">
                     <AutoResizeTextarea
                       key={`${fileName}-frontmatter`}
                       value={sections.frontmatter}
@@ -455,7 +457,7 @@ const AssistantConfigPage: React.FC = () => {
                     />
                   </section>
                   <div className="acp-persona-editor__divider" aria-hidden="true" />
-                  <section className="acp-persona-editor__body-editor">
+                  <section className="acp-persona-editor__body-editor" data-bf-component="assistant-config-page" data-bf-part="bodyEditor">
                       {usesSourceBodyEditor ? (
                         <EditArea
                           key={`${fileName}-body-source`}
@@ -467,7 +469,6 @@ const AssistantConfigPage: React.FC = () => {
                           key={`${fileName}-body`}
                           value={sections.body}
                           onChange={handlePersonaDocBodyChange}
-                          theme={isLight ? 'light' : 'dark'}
                           toolbar={false}
                           mode="ir"
                           height="100%"
@@ -487,7 +488,6 @@ const AssistantConfigPage: React.FC = () => {
                     key={fileName}
                     value={content}
                     onChange={handlePersonaDocBodyChange}
-                    theme={isLight ? 'light' : 'dark'}
                     toolbar={false}
                     mode="ir"
                     height="100%"
@@ -502,13 +502,19 @@ const AssistantConfigPage: React.FC = () => {
   };
 
   return (
-    <div className="nursery-page acp-page">
+    <div
+      className="nursery-page acp-page"
+      data-bf-component="assistant-config-page"
+      data-bf-part="root"
+    >
       {/* Top bar — back only */}
-      <div className="nursery-page__bar acp-page__bar">
+      <div className="nursery-page__bar acp-page__bar" data-bf-component="assistant-config-page" data-bf-part="toolbar">
         <IconButton
           type="button"
           size="small"
           className="nursery-page__back"
+          data-bf-component="assistant-config-page"
+          data-bf-part="back"
           onClick={openGallery}
           aria-label={t('nursery.backToGallery')}
           tooltip={t('nursery.backToGallery')}
@@ -518,11 +524,11 @@ const AssistantConfigPage: React.FC = () => {
       </div>
 
       {/* Two-column layout */}
-      <div className="acp-layout">
+      <div className="acp-layout" data-bf-component="assistant-config-page" data-bf-part="layout">
         {/* Left: identity header + quick input + sessions */}
         <div className="acp-layout__left">
           {/* Identity header above the input */}
-          <div className="acp-left-header">
+          <div className="acp-left-header" data-bf-component="assistant-config-page" data-bf-part="identity">
             <AssistantAvatarPicker
               value={displayIdentity.emoji}
               saveStatus={identitySaveStatus}
@@ -606,7 +612,7 @@ const AssistantConfigPage: React.FC = () => {
             workspaceId={workspace?.id}
             assistantName={identityName}
           />
-          <div className="acp-sessions-area">
+          <div className="acp-sessions-area" data-bf-component="assistant-config-page" data-bf-part="sessions">
             <h2 className="acp-sessions-area__title">{t('nursery.assistant.sessionsSectionTitle')}</h2>
             <SessionsSection
               workspaceId={workspace?.id}

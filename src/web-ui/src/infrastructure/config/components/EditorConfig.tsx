@@ -127,7 +127,6 @@ function convertToSnakeCase(config: EditorConfigPartial): Record<string, any> {
   if (config.insertSpaces !== undefined) result.insert_spaces = config.insertSpaces;
   if (config.wordWrap !== undefined) result.word_wrap = config.wordWrap;
   if (config.lineNumbers !== undefined) result.line_numbers = config.lineNumbers;
-  if (config.theme !== undefined) result.theme = config.theme;
   if (config.autoSave !== undefined) result.auto_save = config.autoSave;
   if (config.autoSaveDelay !== undefined) result.auto_save_delay = config.autoSaveDelay;
   if (config.formatOnSave !== undefined) result.format_on_save = config.formatOnSave;
@@ -165,7 +164,6 @@ function convertToCamelCase(config: Record<string, any>): EditorConfigPartial {
   if (config.insert_spaces !== undefined) result.insertSpaces = config.insert_spaces;
   if (config.word_wrap !== undefined) result.wordWrap = config.word_wrap;
   if (config.line_numbers !== undefined) result.lineNumbers = config.line_numbers;
-  if (config.theme !== undefined) result.theme = config.theme;
   if (config.auto_save !== undefined) result.autoSave = config.auto_save;
   if (config.auto_save_delay !== undefined) result.autoSaveDelay = config.auto_save_delay;
   if (config.format_on_save !== undefined) result.formatOnSave = config.format_on_save;
@@ -343,7 +341,7 @@ const EditorConfig: React.FC<EditorConfigProps> = () => {
 
   if (isLoading) {
     return (
-      <ConfigPageLayout className="bitfun-editor-config">
+      <ConfigPageLayout className="bitfun-editor-config" data-bf-component="editor-config" data-bf-part="root" data-bf-state="loading">
         <ConfigPageHeader
           title={t('title')}
           subtitle={t('subtitle')}
@@ -356,13 +354,13 @@ const EditorConfig: React.FC<EditorConfigProps> = () => {
   }
 
   return (
-    <ConfigPageLayout className="bitfun-editor-config">
+    <ConfigPageLayout className="bitfun-editor-config" data-bf-component="editor-config" data-bf-part="root">
       <ConfigPageHeader
         title={t('title')}
         subtitle={t('subtitle')}
       />
 
-      <ConfigPageContent className="bitfun-editor-config__content">
+      <ConfigPageContent className="bitfun-editor-config__content" data-bf-component="editor-config" data-bf-part="content">
         <ConfigPageSection
           title={t('sections.appearance.title')}
           description={t('sections.appearance.description')}
@@ -572,7 +570,7 @@ const EditorConfig: React.FC<EditorConfigProps> = () => {
           description={t('actions.saveDesc')}
         >
           <ConfigPageRow label={t('actions.reset')} description={t('messages.confirmReset')} align="center">
-            <div className="bitfun-editor-config__actions">
+            <div className="bitfun-editor-config__actions" data-bf-component="editor-config" data-bf-part="actions">
               <Button
                 variant="secondary"
                 size="small"
@@ -582,7 +580,7 @@ const EditorConfig: React.FC<EditorConfigProps> = () => {
                 {t('actions.reset')}
               </Button>
               {isSaving && (
-                <span className="bitfun-editor-config__saving">{t('messages.saving')}</span>
+                <span className="bitfun-editor-config__saving" data-bf-component="editor-config" data-bf-part="saving" data-bf-state="saving">{t('messages.saving')}</span>
               )}
             </div>
           </ConfigPageRow>

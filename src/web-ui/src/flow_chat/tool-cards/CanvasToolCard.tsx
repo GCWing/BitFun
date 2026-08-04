@@ -185,16 +185,16 @@ export const CanvasToolCard: React.FC<ToolCardProps> = ({ toolItem, sessionId })
       icon={<Paintbrush size={16} />}
       iconClassName="canvas-tool-card__icon"
       action={toolDisplayName}
-      content={<span className="canvas-tool-card__title">{title}</span>}
+      content={<span data-bf-component="canvas-tool-card" data-bf-part="title" className="canvas-tool-card__title">{title}</span>}
       extra={(
-        <div className="canvas-tool-card__extra">
+        <div data-bf-component="canvas-tool-card" data-bf-part="extra" className="canvas-tool-card__extra">
           {diagnostics.length > 0 && (
-            <span className="canvas-tool-card__diagnostics">
+            <span data-bf-component="canvas-tool-card" data-bf-part="diagnostics" className="canvas-tool-card__diagnostics">
               <AlertTriangle size={13} />
               {diagnostics.length}
             </span>
           )}
-          <span className="canvas-tool-card__status">
+          <span data-bf-component="canvas-tool-card" data-bf-part="status" className="canvas-tool-card__status">
             {isLoading
               ? (isSourceVisuallyStreaming ? 'Writing source' : 'Rendering')
               : resultData?.compiled ? 'Preview ready' : canvasStatus || 'Saved'}
@@ -207,9 +207,9 @@ export const CanvasToolCard: React.FC<ToolCardProps> = ({ toolItem, sessionId })
   );
 
   const body = (
-    <div className="canvas-tool-card__body">
+    <div data-bf-component="canvas-tool-card" data-bf-part="body" className="canvas-tool-card__body">
       {showSourcePreview && (
-        <div className="canvas-tool-card__source-preview">
+        <div data-bf-component="canvas-tool-card" data-bf-part="sourcePreview" className="canvas-tool-card__source-preview">
           <CodePreview
             content={sourceDisplayContent}
             language="tsx"
@@ -220,11 +220,11 @@ export const CanvasToolCard: React.FC<ToolCardProps> = ({ toolItem, sessionId })
           />
         </div>
       )}
-      <div className="canvas-tool-card__meta">
+      <div data-bf-component="canvas-tool-card" data-bf-part="meta" className="canvas-tool-card__meta">
         <span>{metaText}</span>
       </div>
       {diagnostics.length > 0 && (
-        <ul className="canvas-tool-card__diagnostic-list">
+        <ul data-bf-component="canvas-tool-card" data-bf-part="diagnosticList" className="canvas-tool-card__diagnostic-list">
           {diagnostics.slice(0, 3).map((diagnostic, index) => (
             <li key={`${diagnostic.code || diagnostic.message || 'diagnostic'}-${index}`}>
               {diagnostic.message || diagnostic.code || 'Canvas diagnostic'}
@@ -236,18 +236,24 @@ export const CanvasToolCard: React.FC<ToolCardProps> = ({ toolItem, sessionId })
   );
 
   return (
-    <BaseToolCard
-      status={status}
-      isExpanded={!isOpenable || diagnostics.length > 0 || isFailed}
-      onClick={isOpenable ? handleOpenPanel : undefined}
-      className={`canvas-tool-card ${isOpenable ? 'clickable' : ''}`.trim()}
-      header={header}
-      expandedContent={body}
-      errorContent={isFailed ? body : undefined}
-      isFailed={isFailed}
-      headerExpandAffordance={isOpenable}
-      headerAffordanceKind="open-panel-right"
-    />
+    <div
+      data-bf-component="canvas-tool-card"
+      data-bf-part="root"
+      data-bf-state={[isOpenable && 'clickable', isFailed && 'failed', isLoading && 'loading'].filter(Boolean).join(' ')}
+    >
+      <BaseToolCard
+        status={status}
+        isExpanded={!isOpenable || diagnostics.length > 0 || isFailed}
+        onClick={isOpenable ? handleOpenPanel : undefined}
+        className={`canvas-tool-card ${isOpenable ? 'clickable' : ''}`.trim()}
+        header={header}
+        expandedContent={body}
+        errorContent={isFailed ? body : undefined}
+        isFailed={isFailed}
+        headerExpandAffordance={isOpenable}
+        headerAffordanceKind="open-panel-right"
+      />
+    </div>
   );
 };
 

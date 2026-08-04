@@ -4,20 +4,17 @@
  */
 
 import React, { useEffect, useRef, useCallback, useState, forwardRef, useImperativeHandle } from 'react';
-import type { ITheme } from '@xterm/xterm';
 import { Terminal as XTerm } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { WebLinksAddon } from '@xterm/addon-web-links';
 import { WebglAddon } from '@xterm/addon-webgl';
 import {
   TerminalResizeDebouncer,
-  buildXtermTheme,
-  getXtermFontWeights,
   DEFAULT_XTERM_MINIMUM_CONTRAST_RATIO,
 } from '../utils';
 import type { TerminalPasteDecision } from '../utils';
 import { systemAPI } from '@/infrastructure/api/service-api/SystemAPI';
-import { themeService } from '@/infrastructure/theme/core/ThemeService';
+import { xtermAppearanceAdapter } from '@/infrastructure/appearance/adapters/XtermAppearanceAdapter';
 import { createLogger } from '@/shared/utils/logger';
 import { sendDebugProbe } from '@/shared/utils/debugProbe';
 import { nowMs } from '@/shared/utils/timing';
@@ -83,31 +80,6 @@ export interface TerminalOptions {
   /** Initial columns to avoid early wrapping. */
   cols?: number;
   rows?: number;
-  theme?: {
-    background?: string;
-    foreground?: string;
-    cursor?: string;
-    cursorAccent?: string;
-    selectionBackground?: string;
-    selectionForeground?: string;
-    selectionInactiveBackground?: string;
-    black?: string;
-    red?: string;
-    green?: string;
-    yellow?: string;
-    blue?: string;
-    magenta?: string;
-    cyan?: string;
-    white?: string;
-    brightBlack?: string;
-    brightRed?: string;
-    brightGreen?: string;
-    brightYellow?: string;
-    brightBlue?: string;
-    brightMagenta?: string;
-    brightCyan?: string;
-    brightWhite?: string;
-  };
 }
 
 export interface TerminalProps {
@@ -172,12 +144,12 @@ export interface TerminalRef {
 }
 
 /**
- * Build an xterm.js theme object from the current ThemeService state synchronously.
+ * Read the current xterm appearance synchronously.
  * Calling this at XTerm construction time prevents the initial black-background flash
  * that occurs when the theme is applied asynchronously via useEffect.
  */
-function getInitialXtermTheme(overrides: TerminalOptions['theme'] = {}): ITheme {
-  return buildXtermTheme(themeService.getCurrentTheme(), overrides);
+function getInitialXtermColors() {
+  return xtermAppearanceAdapter.getColors('terminal');
 }
 
 function normalizePasteDecision(
@@ -250,19 +222,15 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(({
   // _keyPressHandled, to avoid duplicates in the safety net.
   const keyPressHandledRef = useRef(false);
   const [isReady, setIsReady] = useState(false);
-  const currentTheme = themeService.getCurrentTheme();
-  const initialFontWeights = getXtermFontWeights(currentTheme.type);
+  const initialFontWeights = xtermAppearanceAdapter.getFontWeights();
 
-  // Merge options. Theme is resolved from ThemeService at render time so that the
+  // Merge options. Appearance is resolved at render time so that the
   // initial XTerm instance is created with the correct background color and avoids
   // the black-background flash that occurs when a light theme is active.
   const mergedOptions = {
     ...DEFAULT_OPTIONS,
     ...options,
-    theme: {
-      ...getInitialXtermTheme(),
-      ...options.theme,
-    },
+    theme: getInitialXtermColors(),
   };
   const mergedOptionsRef = useRef(mergedOptions);
   const initialFontWeightsRef = useRef(initialFontWeights);
@@ -542,6 +510,17 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(({
     terminal.loadAddon(webLinksAddon);
 
     terminal.open(container);
+
+    const xtermViewport = container.querySelector<HTMLElement>('.xterm-viewport');
+    if (xtermViewport) {
+      xtermViewport.dataset.bfComponent = 'terminal-tool';
+      xtermViewport.dataset.bfPart = 'output';
+    }
+    const xtermScreen = container.querySelector<HTMLElement>('.xterm-screen');
+    if (xtermScreen) {
+      xtermScreen.dataset.bfComponent = 'terminal-tool';
+      xtermScreen.dataset.bfPart = 'screen';
+    }
 
     terminalRef.current = terminal;
     fitAddonRef.current = fitAddon;
@@ -869,13 +848,8 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(({
 
     const updateXtermTheme = () => {
       (() => {
-        const theme = themeService.getCurrentTheme();
-        terminal.options.theme = buildXtermTheme(theme, options.theme);
-
-        // Light-on-dark text appears bolder due to irradiation (optical illusion);
-        // dark-on-light text looks thinner in comparison. Bump fontWeight in light
-        // mode to compensate.
-        const fontWeights = getXtermFontWeights(theme.type);
+        terminal.options.theme = xtermAppearanceAdapter.getColors('terminal');
+        const fontWeights = xtermAppearanceAdapter.getFontWeights();
         terminal.options.fontWeight = fontWeights.fontWeight;
         terminal.options.fontWeightBold = fontWeights.fontWeightBold;
 
@@ -885,15 +859,17 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(({
 
     updateXtermTheme();
 
-    const unsubscribe = themeService.on('theme:after-change', updateXtermTheme);
+    const unsubscribe = xtermAppearanceAdapter.subscribe(updateXtermTheme);
     return () => {
       unsubscribe?.();
     };
-  }, [isReady, forceRefresh, options.theme]);
+  }, [isReady, forceRefresh]);
 
   return (
     <div 
       className={`bitfun-terminal ${className}`}
+      data-bf-component="terminal-tool"
+      data-bf-part="root"
       data-shortcut-scope="terminal"
       data-terminal-id={terminalId}
       data-session-id={sessionId}
@@ -903,6 +879,8 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(({
       <div 
         ref={containerRef} 
         className="bitfun-terminal__container"
+        data-bf-component="terminal-tool"
+        data-bf-part="terminal"
         data-testid="shell-command-output"
       />
     </div>

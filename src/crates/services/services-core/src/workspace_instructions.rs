@@ -1,10 +1,11 @@
-use globset::GlobBuilder;
+use globset::{GlobBuilder, GlobMatcher};
 use serde_json::Value;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use tokio::fs;
 use tokio::io::AsyncReadExt;
 
+use crate::instruction_scope::{parse_instruction_path_scope, InstructionPathScope};
 use crate::jsonc::strip_jsonc;
 
 pub const WORKSPACE_INSTRUCTION_FILE_NAMES: [&str; 5] = [
@@ -37,6 +38,68 @@ const RECURSIVE_SCAN_IGNORED_DIRECTORIES: &[&str] =
 pub struct WorkspaceInstructionFile {
     pub name: String,
     pub content: String,
+    /// Empty means startup context; non-empty patterns defer the document
+    /// until a matching workspace file is read.
+    pub path_patterns: Vec<String>,
+}
+
+/// Compiled workspace-relative path scope owned alongside declarative
+/// instruction glob expansion. Consumers do not need a direct glob dependency.
+pub struct WorkspaceInstructionPathMatcher {
+    matchers: Vec<GlobMatcher>,
+}
+
+impl WorkspaceInstructionPathMatcher {
+    pub fn compile(patterns: &[String], source_name: &str) -> Option<Self> {
+        let matchers = patterns
+            .iter()
+            .filter_map(|pattern| {
+                let Some(pattern) = normalize_instruction_scope_glob(pattern) else {
+                    log::warn!(
+                        "Ignoring non-relative conditional instruction pattern in {source_name}: {pattern}"
+                    );
+                    return None;
+                };
+                match GlobBuilder::new(&pattern)
+                    .literal_separator(true)
+                    .backslash_escape(true)
+                    .build()
+                {
+                    Ok(glob) => Some(glob.compile_matcher()),
+                    Err(error) => {
+                        log::warn!(
+                            "Ignoring invalid conditional instruction pattern in {source_name}: {error}"
+                        );
+                        None
+                    }
+                }
+            })
+            .collect::<Vec<_>>();
+        (!matchers.is_empty()).then_some(Self { matchers })
+    }
+
+    pub fn is_match(&self, workspace_relative_path: &str) -> bool {
+        self.matchers
+            .iter()
+            .any(|matcher| matcher.is_match(workspace_relative_path))
+    }
+}
+
+/// Keeps the first physical local file across a preceding source set and the
+/// workspace-relative files resolved by this owner.
+pub fn retain_distinct_local_workspace_instruction_files(
+    workspace_root: &Path,
+    preceding_canonical_paths: impl IntoIterator<Item = PathBuf>,
+    files: &mut Vec<WorkspaceInstructionFile>,
+) {
+    let mut seen = preceding_canonical_paths
+        .into_iter()
+        .collect::<HashSet<_>>();
+    files.retain(|file| {
+        std::fs::canonicalize(workspace_root.join(&file.name))
+            .map(|path| seen.insert(path))
+            .unwrap_or(true)
+    });
 }
 
 #[derive(Debug, Clone)]
@@ -280,6 +343,22 @@ impl<'a> WorkspaceInstructionResolver<'a> {
                 .await?;
         }
 
+        self.append_claude_rules(false).await?;
+
+        for config_path in OPENCODE_PROJECT_CONFIG_FILES {
+            self.append_opencode_config_instructions(config_path)
+                .await?;
+        }
+
+        Ok(self.files)
+    }
+
+    async fn resolve_conditional(mut self) -> Result<Vec<WorkspaceInstructionFile>, String> {
+        self.append_claude_rules(true).await?;
+        Ok(self.files)
+    }
+
+    async fn append_claude_rules(&mut self, conditional_only: bool) -> Result<(), String> {
         let rules = self.collect_files(CLAUDE_RULES_DIRECTORY).await?;
         for rule in rules
             .into_iter()
@@ -291,19 +370,32 @@ impl<'a> WorkspaceInstructionResolver<'a> {
             let Some(content) = self.read_instruction_text(&rule).await? else {
                 continue;
             };
-            if claude_rule_has_paths_frontmatter(&content) {
-                continue;
+            match parse_instruction_path_scope(&content) {
+                Ok(InstructionPathScope::Unscoped) if !conditional_only => {
+                    self.append_source_tree_with_content(rule, true, Some(content))
+                        .await?;
+                }
+                Ok(InstructionPathScope::Unscoped) => {
+                    self.seen.insert(rule);
+                }
+                Ok(InstructionPathScope::Scoped { paths, body }) => {
+                    self.seen.insert(rule.clone());
+                    let content = self.expand_scoped_rule_imports(&rule, body).await?;
+                    if !content.trim().is_empty() {
+                        self.files.push(WorkspaceInstructionFile {
+                            name: rule,
+                            content,
+                            path_patterns: paths,
+                        });
+                    }
+                }
+                Err(error) => {
+                    self.seen.insert(rule);
+                    log::warn!("Ignoring invalid Claude Code rule front matter: {error}");
+                }
             }
-            self.append_source_tree_with_content(rule, true, Some(content))
-                .await?;
         }
-
-        for config_path in OPENCODE_PROJECT_CONFIG_FILES {
-            self.append_opencode_config_instructions(config_path)
-                .await?;
-        }
-
-        Ok(self.files)
+        Ok(())
     }
 
     async fn first_existing(&self, candidates: &[&str]) -> Result<Option<String>, String> {
@@ -395,6 +487,7 @@ impl<'a> WorkspaceInstructionResolver<'a> {
                 self.files.push(WorkspaceInstructionFile {
                     name: path.clone(),
                     content,
+                    path_patterns: Vec::new(),
                 });
             }
 
@@ -406,6 +499,41 @@ impl<'a> WorkspaceInstructionResolver<'a> {
             );
         }
         Ok(())
+    }
+
+    async fn expand_scoped_rule_imports(
+        &mut self,
+        rule_path: &str,
+        body: String,
+    ) -> Result<String, String> {
+        let mut expanded = body;
+        let mut seen = HashSet::from([rule_path.to_string()]);
+        let mut pending = claude_import_paths(rule_path, &expanded)
+            .into_iter()
+            .rev()
+            .map(|path| (path, 1usize))
+            .collect::<Vec<_>>();
+
+        while let Some((path, depth)) = pending.pop() {
+            if !seen.insert(path.clone()) {
+                continue;
+            }
+            let Some(content) = self.read_instruction_text(&path).await? else {
+                continue;
+            };
+            let imports = if depth < MAX_CLAUDE_IMPORT_DEPTH {
+                claude_import_paths(&path, &content)
+            } else {
+                Vec::new()
+            };
+            if !content.trim().is_empty() {
+                expanded.push_str("\n\n");
+                expanded.push_str(content.trim());
+                expanded.push('\n');
+            }
+            pending.extend(imports.into_iter().rev().map(|import| (import, depth + 1)));
+        }
+        Ok(expanded)
     }
 
     async fn append_opencode_config_instructions(
@@ -527,8 +655,26 @@ impl<'a> WorkspaceInstructionResolver<'a> {
 pub async fn read_workspace_instruction_files(
     workspace_root: &Path,
 ) -> Result<Vec<WorkspaceInstructionFile>, String> {
+    Ok(read_workspace_instruction_sources(workspace_root)
+        .await?
+        .into_iter()
+        .filter(|file| file.path_patterns.is_empty())
+        .collect())
+}
+
+pub async fn read_workspace_instruction_sources(
+    workspace_root: &Path,
+) -> Result<Vec<WorkspaceInstructionFile>, String> {
     WorkspaceInstructionResolver::new(InstructionIo::Local(workspace_root))
         .resolve()
+        .await
+}
+
+pub async fn read_workspace_conditional_instruction_sources(
+    workspace_root: &Path,
+) -> Result<Vec<WorkspaceInstructionFile>, String> {
+    WorkspaceInstructionResolver::new(InstructionIo::Local(workspace_root))
+        .resolve_conditional()
         .await
 }
 
@@ -537,11 +683,38 @@ pub async fn read_workspace_instruction_files_with_fs(
     fs: &dyn bitfun_runtime_ports::WorkspaceFileSystem,
     workspace_root: &str,
 ) -> Result<Vec<WorkspaceInstructionFile>, String> {
+    Ok(
+        read_workspace_instruction_sources_with_fs(fs, workspace_root)
+            .await?
+            .into_iter()
+            .filter(|file| file.path_patterns.is_empty())
+            .collect(),
+    )
+}
+
+#[cfg(feature = "workspace-runtime")]
+pub async fn read_workspace_instruction_sources_with_fs(
+    fs: &dyn bitfun_runtime_ports::WorkspaceFileSystem,
+    workspace_root: &str,
+) -> Result<Vec<WorkspaceInstructionFile>, String> {
     WorkspaceInstructionResolver::new(InstructionIo::Port {
         fs,
         root: workspace_root,
     })
     .resolve()
+    .await
+}
+
+#[cfg(feature = "workspace-runtime")]
+pub async fn read_workspace_conditional_instruction_sources_with_fs(
+    fs: &dyn bitfun_runtime_ports::WorkspaceFileSystem,
+    workspace_root: &str,
+) -> Result<Vec<WorkspaceInstructionFile>, String> {
+    WorkspaceInstructionResolver::new(InstructionIo::Port {
+        fs,
+        root: workspace_root,
+    })
+    .resolve_conditional()
     .await
 }
 
@@ -744,6 +917,23 @@ fn normalize_glob_pattern(value: &str) -> Option<String> {
     Some(components.join("/"))
 }
 
+fn normalize_instruction_scope_glob(value: &str) -> Option<String> {
+    let value = value.trim();
+    let value = value.strip_prefix("./").unwrap_or(value);
+    if value.is_empty()
+        || value.starts_with("http://")
+        || value.starts_with("https://")
+        || value.starts_with('~')
+        || value.starts_with('/')
+        || value.starts_with("\\\\")
+        || has_windows_drive_component(value)
+        || value.split('/').any(|component| component == "..")
+    {
+        return None;
+    }
+    Some(value.to_string())
+}
+
 fn has_glob_meta(value: &str) -> bool {
     value.contains(['*', '?', '[', '{'])
 }
@@ -762,26 +952,6 @@ fn recursive_scan_ignores(relative_path: &str) -> bool {
             .iter()
             .any(|ignored| name.eq_ignore_ascii_case(ignored))
     })
-}
-
-fn claude_rule_has_paths_frontmatter(content: &str) -> bool {
-    let mut lines = content.lines();
-    if lines.next().map(str::trim) != Some("---") {
-        return false;
-    }
-    for line in lines {
-        let trimmed = line.trim();
-        if trimmed == "---" {
-            return false;
-        }
-        if trimmed
-            .split_once(':')
-            .is_some_and(|(key, _)| key.trim() == "paths")
-        {
-            return true;
-        }
-    }
-    false
 }
 
 fn claude_import_paths(source_path: &str, content: &str) -> Vec<String> {

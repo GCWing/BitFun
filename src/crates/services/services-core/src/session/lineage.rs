@@ -1,5 +1,6 @@
 //! Session lineage and branch metadata mutation rules.
 
+use super::normalized_session_relationship;
 use super::types::{
     DialogTurnData, SessionMetadata, SessionRelationship, SessionRelationshipKind, SessionStatus,
 };
@@ -25,6 +26,13 @@ struct SubagentRelationshipFacts {
     kind: SessionRelationshipKind,
     parent_session_id: String,
     parent_dialog_turn_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionLineageSnapshot {
+    pub root_session_id: String,
+    pub sessions: Vec<SessionMetadata>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -155,38 +163,10 @@ fn strip_lineage_custom_metadata(value: Option<JsonValue>) -> Option<JsonValue> 
 }
 
 fn extract_subagent_relationship(metadata: &SessionMetadata) -> Option<SubagentRelationshipFacts> {
-    let relationship = metadata.relationship.as_ref();
-    let custom_metadata = metadata.custom_metadata.as_ref();
-
-    let kind = relationship
-        .and_then(|value| value.kind.clone())
-        .or_else(|| {
-            custom_metadata
-                .and_then(|value| value.get("kind"))
-                .and_then(|value| value.as_str())
-                .and_then(|value| match value {
-                    "subagent" => Some(SessionRelationshipKind::Subagent),
-                    _ => None,
-                })
-        })?;
-
-    let parent_session_id = relationship
-        .and_then(|value| value.parent_session_id.clone())
-        .or_else(|| {
-            custom_metadata
-                .and_then(|value| value.get("parentSessionId"))
-                .and_then(|value| value.as_str())
-                .map(str::to_string)
-        })?;
-
-    let parent_dialog_turn_id = relationship
-        .and_then(|value| value.parent_dialog_turn_id.clone())
-        .or_else(|| {
-            custom_metadata
-                .and_then(|value| value.get("parentDialogTurnId"))
-                .and_then(|value| value.as_str())
-                .map(str::to_string)
-        })?;
+    let relationship = normalized_session_relationship(metadata)?;
+    let kind = relationship.kind?;
+    let parent_session_id = relationship.parent_session_id?;
+    let parent_dialog_turn_id = relationship.parent_dialog_turn_id?;
 
     Some(SubagentRelationshipFacts {
         kind,
@@ -241,6 +221,123 @@ pub fn collect_hidden_subagent_cascade(
     }
 
     ordered_session_ids
+}
+
+/// Builds the complete subagent Session tree containing `anchor_session_id`.
+///
+/// The snapshot stays flat so callers can project it for their own surface
+/// without making recursive serialization depth part of the contract.
+pub fn build_session_lineage_snapshot(
+    metadata_list: impl IntoIterator<Item = SessionMetadata>,
+    anchor_session_id: &str,
+) -> Option<SessionLineageSnapshot> {
+    let anchor_session_id = anchor_session_id.trim();
+    if anchor_session_id.is_empty() {
+        return None;
+    }
+
+    let metadata_by_id = metadata_list
+        .into_iter()
+        .map(|metadata| (metadata.session_id.clone(), metadata))
+        .collect::<HashMap<_, _>>();
+    if !metadata_by_id.contains_key(anchor_session_id) {
+        return None;
+    }
+
+    let mut root_session_id = anchor_session_id.to_string();
+    let mut ancestor_ids = HashSet::from([root_session_id.clone()]);
+    while let Some(parent_session_id) = metadata_by_id
+        .get(&root_session_id)
+        .and_then(subagent_parent_session_id)
+        .filter(|parent_session_id| metadata_by_id.contains_key(parent_session_id))
+    {
+        if !ancestor_ids.insert(parent_session_id.clone()) {
+            root_session_id = anchor_session_id.to_string();
+            break;
+        }
+        root_session_id = parent_session_id;
+    }
+
+    let mut children_by_parent = HashMap::<String, Vec<String>>::new();
+    for metadata in metadata_by_id.values() {
+        let Some(parent_session_id) = subagent_parent_session_id(metadata) else {
+            continue;
+        };
+        if metadata_by_id.contains_key(&parent_session_id) {
+            children_by_parent
+                .entry(parent_session_id)
+                .or_default()
+                .push(metadata.session_id.clone());
+        }
+    }
+    for child_session_ids in children_by_parent.values_mut() {
+        child_session_ids.sort_by(|left, right| {
+            let left_metadata = metadata_by_id
+                .get(left)
+                .expect("lineage child metadata should exist");
+            let right_metadata = metadata_by_id
+                .get(right)
+                .expect("lineage child metadata should exist");
+            left_metadata
+                .created_at
+                .cmp(&right_metadata.created_at)
+                .then_with(|| left.cmp(right))
+        });
+    }
+
+    let mut visited = HashSet::new();
+    let mut ordered_session_ids = Vec::new();
+    collect_subagent_pre_order(
+        &root_session_id,
+        &children_by_parent,
+        &mut visited,
+        &mut ordered_session_ids,
+    );
+
+    Some(SessionLineageSnapshot {
+        root_session_id,
+        sessions: ordered_session_ids
+            .into_iter()
+            .filter_map(|session_id| metadata_by_id.get(&session_id).cloned())
+            .collect(),
+    })
+}
+
+fn subagent_parent_session_id(metadata: &SessionMetadata) -> Option<String> {
+    let relationship = normalized_session_relationship(metadata)?;
+    if relationship.kind != Some(SessionRelationshipKind::Subagent) {
+        return None;
+    }
+
+    relationship
+        .parent_session_id
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string)
+}
+
+fn collect_subagent_pre_order(
+    session_id: &str,
+    child_session_ids_by_parent: &HashMap<String, Vec<String>>,
+    visited: &mut HashSet<String>,
+    ordered_session_ids: &mut Vec<String>,
+) {
+    if !visited.insert(session_id.to_string()) {
+        return;
+    }
+
+    ordered_session_ids.push(session_id.to_string());
+    if let Some(child_session_ids) = child_session_ids_by_parent.get(session_id) {
+        for child_session_id in child_session_ids {
+            collect_subagent_pre_order(
+                child_session_id,
+                child_session_ids_by_parent,
+                visited,
+                ordered_session_ids,
+            );
+        }
+    }
 }
 
 fn collect_subagent_post_order(
@@ -571,6 +668,87 @@ mod tests {
             cascade,
             vec!["grandchild".to_string(), "child-root".to_string()]
         );
+    }
+
+    #[test]
+    fn session_lineage_snapshot_resolves_root_and_orders_descendants() {
+        let root = metadata("root");
+        let mut later_child = metadata("child-b");
+        later_child.created_at = 30;
+        later_child.relationship = Some(SessionRelationship {
+            kind: Some(SessionRelationshipKind::Subagent),
+            parent_session_id: Some("root".to_string()),
+            ..Default::default()
+        });
+        let mut earlier_child = metadata("child-a");
+        earlier_child.created_at = 20;
+        earlier_child.relationship = Some(SessionRelationship {
+            kind: Some(SessionRelationshipKind::Subagent),
+            parent_session_id: Some("root".to_string()),
+            ..Default::default()
+        });
+        let mut grandchild = metadata("grandchild");
+        grandchild.created_at = 40;
+        grandchild.relationship = Some(SessionRelationship {
+            kind: Some(SessionRelationshipKind::Subagent),
+            parent_session_id: Some("child-a".to_string()),
+            ..Default::default()
+        });
+
+        let snapshot = build_session_lineage_snapshot(
+            vec![later_child, grandchild, root, earlier_child],
+            "grandchild",
+        )
+        .expect("lineage should exist");
+
+        assert_eq!(snapshot.root_session_id, "root");
+        assert_eq!(
+            snapshot
+                .sessions
+                .iter()
+                .map(|metadata| metadata.session_id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["root", "child-a", "grandchild", "child-b"]
+        );
+    }
+
+    #[test]
+    fn session_lineage_snapshot_keeps_non_subagent_children_out() {
+        let root = metadata("root");
+        let mut review = metadata("review");
+        review.relationship = Some(SessionRelationship {
+            kind: Some(SessionRelationshipKind::Review),
+            parent_session_id: Some("root".to_string()),
+            ..Default::default()
+        });
+
+        let snapshot =
+            build_session_lineage_snapshot(vec![root, review], "root").expect("root should exist");
+
+        assert_eq!(snapshot.sessions.len(), 1);
+        assert_eq!(snapshot.sessions[0].session_id, "root");
+    }
+
+    #[test]
+    fn session_lineage_snapshot_tolerates_cycles() {
+        let mut first = metadata("first");
+        first.relationship = Some(SessionRelationship {
+            kind: Some(SessionRelationshipKind::Subagent),
+            parent_session_id: Some("second".to_string()),
+            ..Default::default()
+        });
+        let mut second = metadata("second");
+        second.relationship = Some(SessionRelationship {
+            kind: Some(SessionRelationshipKind::Subagent),
+            parent_session_id: Some("first".to_string()),
+            ..Default::default()
+        });
+
+        let snapshot = build_session_lineage_snapshot(vec![first, second], "first")
+            .expect("cyclic lineage should remain inspectable");
+
+        assert_eq!(snapshot.root_session_id, "first");
+        assert_eq!(snapshot.sessions.len(), 2);
     }
 
     #[test]

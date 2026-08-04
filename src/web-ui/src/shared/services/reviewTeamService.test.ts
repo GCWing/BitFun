@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { configAPI } from '@/infrastructure/api/service-api/ConfigAPI';
+import { APPEARANCE_DOMAIN_TOKENS } from '@/infrastructure/appearance/appearanceDomainTokens';
 import {
   DEFAULT_REVIEW_TEAM_CONCURRENCY_POLICY,
   DEFAULT_REVIEW_TEAM_EXECUTION_POLICY,
@@ -481,8 +482,14 @@ describe('reviewTeamService', () => {
       description:
         'One review that can add checks when a specific concern needs more evidence.',
       coreRoles: [
-        expect.objectContaining({ subagentId: 'ReviewWorker', accentColor: '#3b82f6' }),
-        expect.objectContaining({ subagentId: 'ReviewJudge', accentColor: '#8b5cf6' }),
+        expect.objectContaining({
+          subagentId: 'ReviewWorker',
+          accentColor: APPEARANCE_DOMAIN_TOKENS.reviewTeam.worker,
+        }),
+        expect.objectContaining({
+          subagentId: 'ReviewJudge',
+          accentColor: APPEARANCE_DOMAIN_TOKENS.reviewTeam.judge,
+        }),
       ],
       strategyProfiles: {
         normal: expect.objectContaining({ label: 'Normal' }),

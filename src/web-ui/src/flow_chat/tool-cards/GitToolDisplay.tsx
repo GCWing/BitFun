@@ -9,7 +9,7 @@ import { CubeLoading } from '../../component-library';
 import type { ToolCardProps } from '../types/flow-chat';
 import { BaseToolCard, ToolCardHeader } from './BaseToolCard';
 import { ToolCardCopyAction, ToolCardHeaderActions } from './ToolCardHeaderActions';
-import { ToolCommandPreview } from './ToolCommandPreview';
+import { CopyableTextPreview } from '../components/CopyableTextPreview';
 import { createLogger } from '@/shared/utils/logger';
 import { useToolCardHeightContract } from './useToolCardHeightContract';
 import './GitToolDisplay.scss';
@@ -152,13 +152,13 @@ export const GitToolDisplay: React.FC<ToolCardProps> = ({
   };
 
   const renderCommandPreview = (variant: 'expanded' | 'compact') => (
-    <ToolCommandPreview
-      command={commandText}
+    <CopyableTextPreview
+      text={commandText}
       emptyText={t('toolCards.terminal.noCommand')}
       as={variant === 'compact' ? 'span' : 'code'}
       className={
         variant === 'compact'
-          ? 'git-command-preview tool-command-preview--compact'
+          ? 'git-command-preview copyable-text-preview--compact'
           : 'git-command-preview terminal-command'
       }
     />
@@ -166,9 +166,9 @@ export const GitToolDisplay: React.FC<ToolCardProps> = ({
 
   // Used only for the expanded header (BaseToolCard layout)
   const expandedHeaderExtra = () => (
-    <span className="terminal-header-extra git-header-extra">
+    <span data-bf-component="git-tool-display" data-bf-part="headerExtra" className="terminal-header-extra git-header-extra">
       {!isFailed && outputSummary && status === 'completed' && (
-        <span className="output-summary">{outputSummary}</span>
+        <span className="output-summary" data-bf-component="git-tool-display" data-bf-part="info">{outputSummary}</span>
       )}
       {isFailed && (
         <span className="error-indicator">
@@ -211,12 +211,12 @@ export const GitToolDisplay: React.FC<ToolCardProps> = ({
       Boolean(working_directory?.trim());
 
     return (
-      <div className="git-result-container">
+      <div data-bf-component="git-tool-display" data-bf-part="result" className="git-result-container">
         {(hasStdout || hasStderr) && (
-          <div className="git-result-output">
+          <div data-bf-component="git-tool-display" data-bf-part="output" className="git-result-output">
             {hasStdout && <pre className="git-output-block git-output-stdout">{stdout}</pre>}
             {hasStderr && (
-              <div className="git-stderr-block">
+              <div data-bf-component="git-tool-display" data-bf-part="stderr" className="git-stderr-block">
                 <div className="git-output-label">
                   {resultData.success ? t('toolCards.git.warning') : t('toolCards.git.error')}
                 </div>
@@ -231,7 +231,7 @@ export const GitToolDisplay: React.FC<ToolCardProps> = ({
         )}
 
         {showFooter && (
-          <div className="git-result-footer">
+          <div data-bf-component="git-tool-display" data-bf-part="footer" className="git-result-footer">
             {working_directory?.trim() && (
               <>
                 <span className="git-result-label">{t('toolCards.terminal.workingDirectory')}</span>
@@ -259,7 +259,7 @@ export const GitToolDisplay: React.FC<ToolCardProps> = ({
   };
 
   const renderErrorContent = () => (
-    <div className="error-content">
+    <div data-bf-component="git-tool-display" data-bf-part="error" className="error-content">
       <div className="error-message">{getErrorMessage()}</div>
       {inputData?.operation && (
         <div className="error-meta">
@@ -289,7 +289,7 @@ export const GitToolDisplay: React.FC<ToolCardProps> = ({
   const expandedBody = isExpanded ? renderDetailsWhenExpanded() : null;
 
   return (
-    <div ref={cardRootRef} data-tool-card-id={toolId ?? ''}>
+    <div ref={cardRootRef} data-tool-card-id={toolId ?? ''} data-bf-component="git-tool-display" data-bf-part="root" data-bf-state={isFailed ? 'failed' : undefined}>
       <BaseToolCard
         status={status}
         isExpanded={isExpanded}

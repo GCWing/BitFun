@@ -51,7 +51,7 @@ BitFun 使用三级测试分类系统：
 | `l0-open-settings.spec.ts` | 设置按钮可见性、设置面板打开/关闭 |
 | `l0-navigation.spec.ts` | 工作区打开时侧边栏存在、导航项可见可点击 |
 | `l0-tabs.spec.ts` | 文件打开时标签栏存在、标签页正确显示 |
-| `l0-theme.spec.ts` | 根元素主题属性、主题CSS变量、主题系统功能 |
+| `l0-appearance.spec.ts` | 根元素 Appearance 属性、Appearance CSS 变量、Appearance 系统功能 |
 | `l0-i18n.spec.ts` | 语言配置、国际化系统功能、翻译内容 |
 | `l0-notification.spec.ts` | 通知服务可用、通知入口在header中可见 |
 | `l0-observe.spec.ts` | 手动观察测试 - 保持窗口打开60秒用于检查 |
@@ -209,7 +209,7 @@ tests/e2e/
 │   ├── l0-open-settings.spec.ts   # L0: 设置交互
 │   ├── l0-navigation.spec.ts      # L0: 导航侧边栏
 │   ├── l0-tabs.spec.ts            # L0: 标签栏
-│   ├── l0-theme.spec.ts           # L0: 主题系统
+│   ├── l0-appearance.spec.ts           # L0: Appearance 系统
 │   ├── l0-i18n.spec.ts            # L0: 国际化
 │   ├── l0-notification.spec.ts    # L0: 通知系统
 │   ├── l0-observe.spec.ts         # L0: 手动观察
@@ -647,7 +647,7 @@ jobs:
 | `pnpm run test:l0:settings` | 运行设置测试 |
 | `pnpm run test:l0:navigation` | 运行导航测试 |
 | `pnpm run test:l0:tabs` | 运行标签测试 |
-| `pnpm run test:l0:theme` | 运行主题测试 |
+| `pnpm run test:l0:appearance` | 运行主题测试 |
 | `pnpm run test:l0:i18n` | 运行国际化测试 |
 | `pnpm run test:l0:notification` | 运行通知测试 |
 | `pnpm run test:l0:observe` | 运行观察测试 (60秒) |

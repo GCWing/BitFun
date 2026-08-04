@@ -74,12 +74,16 @@ impl MiniAppManager {
         app_id: &str,
         source: &MiniAppSource,
         permissions: &MiniAppPermissions,
-        theme: &str,
+        appearance_mode: &str,
         workspace_root: Option<&Path>,
     ) -> BitFunResult<String> {
         let app_data_dir = self.path_manager.miniapp_dir(app_id);
-        let request =
-            MiniAppCompileRequest::from_paths(app_id, &app_data_dir, workspace_root, theme);
+        let request = MiniAppCompileRequest::from_paths(
+            app_id,
+            &app_data_dir,
+            workspace_root,
+            appearance_mode,
+        );
         compile_with_request(source, permissions, &request)
     }
 
@@ -103,11 +107,15 @@ impl MiniAppManager {
         app_data_dir: &Path,
         source: &MiniAppSource,
         permissions: &MiniAppPermissions,
-        theme: &str,
+        appearance_mode: &str,
         workspace_root: Option<&Path>,
     ) -> BitFunResult<String> {
-        let request =
-            MiniAppCompileRequest::from_paths(app_id, app_data_dir, workspace_root, theme);
+        let request = MiniAppCompileRequest::from_paths(
+            app_id,
+            app_data_dir,
+            workspace_root,
+            appearance_mode,
+        );
         compile_with_request(source, permissions, &request)
     }
 
@@ -367,32 +375,20 @@ impl MiniAppManager {
     pub async fn create_draft(
         &self,
         app_id: &str,
-        theme: &str,
+        appearance_mode: &str,
         workspace_root: Option<&Path>,
     ) -> BitFunResult<MiniAppDraft> {
         let app = self.get(app_id).await?;
         let now = Utc::now().timestamp_millis();
         let draft_id = Uuid::new_v4().to_string();
-        let draft_dir = self.storage.draft_dir(app_id, &draft_id);
-        let compiled_html = if self.uses_market_strict_runtime(app_id).await {
-            self.compile_market_source_with_app_data_dir(
-                app_id,
-                &draft_dir,
-                &app.source,
-                &app.permissions,
-                theme,
-                workspace_root,
-            )?
-        } else {
-            self.compile_source_with_app_data_dir(
-                app_id,
-                &draft_dir,
-                &app.source,
-                &app.permissions,
-                theme,
-                workspace_root,
-            )?
-        };
+        let compiled_html = self.compile_source_with_app_data_dir(
+            app_id,
+            &self.storage.draft_dir(app_id, &draft_id),
+            &app.source,
+            &app.permissions,
+            appearance_mode,
+            workspace_root,
+        )?;
         let draft_root = self
             .storage
             .draft_dir(app_id, &draft_id)
@@ -426,31 +422,19 @@ impl MiniAppManager {
         &self,
         app_id: &str,
         draft_id: &str,
-        theme: &str,
+        appearance_mode: &str,
         workspace_root: Option<&Path>,
     ) -> BitFunResult<MiniAppDraft> {
         let draft = self.get_draft(app_id, draft_id).await?;
         let now = Utc::now().timestamp_millis();
-        let draft_dir = self.storage.draft_dir(app_id, draft_id);
-        let compiled_html = if self.uses_market_strict_runtime(app_id).await {
-            self.compile_market_source_with_app_data_dir(
-                app_id,
-                &draft_dir,
-                &draft.app.source,
-                &draft.app.permissions,
-                theme,
-                workspace_root,
-            )?
-        } else {
-            self.compile_source_with_app_data_dir(
-                app_id,
-                &draft_dir,
-                &draft.app.source,
-                &draft.app.permissions,
-                theme,
-                workspace_root,
-            )?
-        };
+        let compiled_html = self.compile_source_with_app_data_dir(
+            app_id,
+            &self.storage.draft_dir(app_id, draft_id),
+            &draft.app.source,
+            &draft.app.permissions,
+            appearance_mode,
+            workspace_root,
+        )?;
         self.runtime_facade()
             .persist_draft_source_sync_result(draft, compiled_html, now)
             .await
@@ -462,31 +446,19 @@ impl MiniAppManager {
         app_id: &str,
         draft_id: &str,
         permissions: MiniAppPermissions,
-        theme: &str,
+        appearance_mode: &str,
         workspace_root: Option<&Path>,
     ) -> BitFunResult<MiniAppDraft> {
         let draft = self.get_draft(app_id, draft_id).await?;
         let now = Utc::now().timestamp_millis();
-        let draft_dir = self.storage.draft_dir(app_id, draft_id);
-        let compiled_html = if self.uses_market_strict_runtime(app_id).await {
-            self.compile_market_source_with_app_data_dir(
-                app_id,
-                &draft_dir,
-                &draft.app.source,
-                &permissions,
-                theme,
-                workspace_root,
-            )?
-        } else {
-            self.compile_source_with_app_data_dir(
-                app_id,
-                &draft_dir,
-                &draft.app.source,
-                &permissions,
-                theme,
-                workspace_root,
-            )?
-        };
+        let compiled_html = self.compile_source_with_app_data_dir(
+            app_id,
+            &self.storage.draft_dir(app_id, draft_id),
+            &draft.app.source,
+            &permissions,
+            appearance_mode,
+            workspace_root,
+        )?;
         self.runtime_facade()
             .persist_draft_permission_update_result(draft, permissions, compiled_html, now)
             .await
@@ -508,29 +480,19 @@ impl MiniAppManager {
         &self,
         app_id: &str,
         draft_id: &str,
-        theme: &str,
+        appearance_mode: &str,
         workspace_root: Option<&Path>,
     ) -> BitFunResult<MiniApp> {
         let current = self.get(app_id).await?;
         let draft_app = self.storage.load_draft_app(app_id, draft_id).await?;
         let now = Utc::now().timestamp_millis();
-        let compiled_html = if self.uses_market_strict_runtime(app_id).await {
-            self.compile_market_source(
-                app_id,
-                &draft_app.source,
-                &draft_app.permissions,
-                theme,
-                workspace_root,
-            )?
-        } else {
-            self.compile_source(
-                app_id,
-                &draft_app.source,
-                &draft_app.permissions,
-                theme,
-                workspace_root,
-            )?
-        };
+        let compiled_html = self.compile_source(
+            app_id,
+            &draft_app.source,
+            &draft_app.permissions,
+            appearance_mode,
+            workspace_root,
+        )?;
         self.runtime_facade()
             .apply_draft_app(
                 current,
@@ -665,25 +627,21 @@ impl MiniAppManager {
             .map_err(map_miniapp_port_error)
     }
 
-    /// Recompile app (e.g. after workspace or theme change). Updates compiled_html and saves.
+    /// Recompile app after workspace or appearance changes. Updates compiled_html and saves.
     pub async fn recompile(
         &self,
         app_id: &str,
-        theme: &str,
+        appearance_mode: &str,
         workspace_root: Option<&Path>,
     ) -> BitFunResult<MiniApp> {
         let app = self.storage.load(app_id).await?;
-        let compiled_html = if self.uses_market_strict_runtime(app_id).await {
-            self.compile_market_source(
-                app_id,
-                &app.source,
-                &app.permissions,
-                theme,
-                workspace_root,
-            )?
-        } else {
-            self.compile_source(app_id, &app.source, &app.permissions, theme, workspace_root)?
-        };
+        let compiled_html = self.compile_source(
+            app_id,
+            &app.source,
+            &app.permissions,
+            appearance_mode,
+            workspace_root,
+        )?;
         self.runtime_facade()
             .persist_recompile_result_for_app(app, compiled_html, Utc::now().timestamp_millis())
             .await
@@ -693,28 +651,18 @@ impl MiniAppManager {
     pub async fn sync_from_fs(
         &self,
         app_id: &str,
-        theme: &str,
+        appearance_mode: &str,
         workspace_root: Option<&Path>,
     ) -> BitFunResult<MiniApp> {
         let previous_app = self.storage.load(app_id).await?;
         let source = self.storage.load_source_only(app_id).await?;
-        let compiled_html = if self.uses_market_strict_runtime(app_id).await {
-            self.compile_market_source(
-                app_id,
-                &source,
-                &previous_app.permissions,
-                theme,
-                workspace_root,
-            )?
-        } else {
-            self.compile_source(
-                app_id,
-                &source,
-                &previous_app.permissions,
-                theme,
-                workspace_root,
-            )?
-        };
+        let compiled_html = self.compile_source(
+            app_id,
+            &source,
+            &previous_app.permissions,
+            appearance_mode,
+            workspace_root,
+        )?;
         self.runtime_facade()
             .persist_sync_from_fs_result_for_app(
                 app_id.to_string(),
@@ -742,7 +690,7 @@ impl MiniAppManager {
                 MiniAppImportFromPathRequest {
                     source_path,
                     app_id: id,
-                    theme: "dark".to_string(),
+                    appearance_mode: "dark".to_string(),
                     workspace_root: workspace_root.map(Path::to_path_buf),
                     imported_at,
                     recompiled_at: Utc::now().timestamp_millis(),
@@ -817,7 +765,7 @@ impl MiniAppCompilePort for MiniAppManager {
         app_id: String,
         source: MiniAppSource,
         permissions: MiniAppPermissions,
-        theme: String,
+        appearance_mode: String,
         workspace_root: Option<PathBuf>,
     ) -> MiniAppPortFuture<'_, String> {
         Box::pin(async move {
@@ -825,7 +773,7 @@ impl MiniAppCompilePort for MiniAppManager {
                 &app_id,
                 &source,
                 &permissions,
-                &theme,
+                &appearance_mode,
                 workspace_root.as_deref(),
             )
             .map_err(map_bitfun_error_to_miniapp_port_error)

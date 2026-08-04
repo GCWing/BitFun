@@ -1,4 +1,8 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+
+vi.mock('../../../infrastructure/config/components/BasicsConfig', () => ({
+  default: () => null,
+}));
 
 import { i18nService } from '@/infrastructure/i18n/core/I18nService';
 import { SETTINGS_TAB_I18N_NAMESPACES, preloadSettingsShellI18n } from './settingsTabI18n';

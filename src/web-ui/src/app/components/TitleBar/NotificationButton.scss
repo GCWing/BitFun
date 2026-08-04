@@ -10,11 +10,11 @@
   gap: $size-gap-1;
   border: none;
   background: transparent;
-  color: var(--color-text-muted);
+  color: var(--bf-appearance-token-color-text-muted);
   cursor: pointer;
   padding: 4px 6px;
   border-radius: $size-radius-sm;
-  font-size: var(--font-size-xs);
+  font-size: var(--bf-appearance-token-font-size-xs);
   flex-shrink: 0;
   position: relative;
   transition:
@@ -23,13 +23,13 @@
     background 120ms ease;
 
   &:hover {
-    color: var(--color-text-primary);
-    background: var(--element-bg-soft);
+    color: var(--bf-appearance-token-color-text-primary);
+    background: var(--bf-appearance-token-element-bg-soft);
   }
 
   &:active {
     transform: scale(0.94);
-    background: var(--element-bg-medium);
+    background: var(--bf-appearance-token-element-bg-medium);
   }
 
   svg {
@@ -37,7 +37,7 @@
   }
 
   &__icon--has-message {
-    color: var(--color-accent-400);
+    color: var(--bf-appearance-token-color-accent-400);
   }
 
   // ── Progress state ──────────────────────────────
@@ -48,8 +48,8 @@
   }
 
   &__progress-text {
-    font-size: var(--font-size-xs);
-    color: var(--color-text-secondary);
+    font-size: var(--bf-appearance-token-font-size-xs);
+    color: var(--bf-appearance-token-color-text-secondary);
     white-space: nowrap;
   }
 
@@ -75,13 +75,13 @@
   }
 
   &__tooltip-content {
-    background: var(--color-bg-elevated);
-    border: 1px solid var(--border-medium);
+    background: var(--bf-appearance-token-color-bg-elevated);
+    border: 1px solid var(--bf-appearance-token-border-medium);
     border-radius: $size-radius-sm;
     padding: 4px 8px;
-    font-size: var(--font-size-xs);
-    color: var(--color-text-primary);
-    box-shadow: var(--shadow-base);
+    font-size: var(--bf-appearance-token-font-size-xs);
+    color: var(--bf-appearance-token-color-text-primary);
+    box-shadow: var(--bf-appearance-token-shadow-base);
     max-width: 300px;
     overflow: hidden;
     text-overflow: ellipsis;

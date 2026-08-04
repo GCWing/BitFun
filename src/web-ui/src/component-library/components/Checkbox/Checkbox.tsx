@@ -50,19 +50,23 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(
     ].filter(Boolean).join(' ');
 
     return (
-      <label className={containerClass}>
-        <div className="bitfun-checkbox__wrapper">
+      <label className={containerClass} data-bf-component="checkbox" data-bf-part="root" data-bf-size={size} data-bf-state={[indeterminate && 'indeterminate', disabled && 'disabled', error && 'error'].filter(Boolean).join(' ') || undefined}>
+        <div className="bitfun-checkbox__wrapper" data-bf-component="checkbox" data-bf-part="wrapper">
           <input
             {...props}
             ref={checkboxRef}
             type="checkbox"
             className="bitfun-checkbox__input"
             disabled={disabled}
-            aria-checked={indeterminate ? 'mixed' : props.checked}
+            {...props}
+            data-bf-component="checkbox"
+            data-bf-part="input"
           />
-          <span className="bitfun-checkbox__box">
+          <span className="bitfun-checkbox__box" data-bf-component="checkbox" data-bf-part="box">
             <svg
               className="bitfun-checkbox__icon"
+              data-bf-component="checkbox"
+              data-bf-part="icon"
               viewBox="0 0 16 16"
               fill="none"
               xmlns="http://www.w3.org/2000/svg"
@@ -83,9 +87,9 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(
           </span>
         </div>
         {(label || description || children) && (
-          <div className="bitfun-checkbox__content">
-            {label && <span className="bitfun-checkbox__label">{label}</span>}
-            {description && <span className="bitfun-checkbox__description">{description}</span>}
+          <div className="bitfun-checkbox__content" data-bf-component="checkbox" data-bf-part="content">
+            {label && <span className="bitfun-checkbox__label" data-bf-component="checkbox" data-bf-part="label">{label}</span>}
+            {description && <span className="bitfun-checkbox__description" data-bf-component="checkbox" data-bf-part="description">{description}</span>}
             {children}
           </div>
         )}

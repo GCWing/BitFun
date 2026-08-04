@@ -13,6 +13,7 @@ const setConflictChoiceMock = vi.hoisted(() => vi.fn());
 const setToolTargetDecisionMock = vi.hoisted(() => vi.fn());
 const setToolConflictChoiceMock = vi.hoisted(() => vi.fn());
 const setSubagentActivationMock = vi.hoisted(() => vi.fn());
+const setSubagentModelBindingMock = vi.hoisted(() => vi.fn());
 const chooseSubagentConflictMock = vi.hoisted(() => vi.fn());
 const setMcpServerDecisionMock = vi.hoisted(() => vi.fn());
 const chooseMcpConflictMock = vi.hoisted(() => vi.fn());
@@ -74,6 +75,7 @@ vi.mock('@/infrastructure/api/service-api/ExternalSourcesAPI', () => ({
     setToolTargetDecision: setToolTargetDecisionMock,
     setToolConflictChoice: setToolConflictChoiceMock,
     setSubagentActivation: setSubagentActivationMock,
+    setSubagentModelBinding: setSubagentModelBindingMock,
     chooseSubagentConflict: chooseSubagentConflictMock,
     setMcpServerDecision: setMcpServerDecisionMock,
     chooseMcpConflict: chooseMcpConflictMock,
@@ -267,6 +269,7 @@ describe('ExternalSourcesConfig', () => {
     setToolTargetDecisionMock.mockResolvedValue(snapshot);
     setToolConflictChoiceMock.mockResolvedValue(snapshot);
     setSubagentActivationMock.mockResolvedValue(snapshot);
+    setSubagentModelBindingMock.mockResolvedValue(snapshot);
     chooseSubagentConflictMock.mockResolvedValue(snapshot);
     setMcpServerDecisionMock.mockResolvedValue(snapshot);
     chooseMcpConflictMock.mockResolvedValue(snapshot);
@@ -757,6 +760,7 @@ describe('ExternalSourcesConfig', () => {
           environmentKeys: ['GITHUB_TOKEN'],
           environmentReferenceNames: ['OPENCODE_TOKEN'],
           headerNames: [],
+          timeouts: { startupMs: 1000, catalogMs: 2000, executionMs: 3000 },
           sourceEnabled: true,
           behaviorVersion: 'behavior-v1',
           staticStatus: { state: 'ready' },
@@ -781,6 +785,7 @@ describe('ExternalSourcesConfig', () => {
           environmentKeys: ['GITHUB_TOKEN'],
           environmentReferenceNames: ['OPENCODE_TOKEN'],
           headerNames: [],
+          timeouts: { startupMs: 1000, catalogMs: 2000, executionMs: 3000 },
           sourceEnabled: true,
           behaviorVersion: 'behavior-v1',
           staticStatus: { state: 'ready' },
@@ -850,45 +855,39 @@ describe('ExternalSourcesConfig', () => {
     expect(container.textContent).toContain('mcp.workingDirectory:{"location":"<workspace>"}');
     expect(container.textContent).toContain('GITHUB_TOKEN');
     expect(container.textContent).toContain('OPENCODE_TOKEN');
+    expect(container.textContent).toContain('mcp.timeoutSummary');
+    expect(container.textContent).toContain('mcp.timeoutStartup');
+    expect(container.textContent).toContain('mcp.timeoutCatalog');
+    expect(container.textContent).toContain('mcp.timeoutExecution');
 
-    const approvalDetails = container.querySelector(
-      '.bitfun-external-sources-config__review-details',
-    ) as HTMLDetailsElement;
-    const approvalCard = approvalDetails.closest(
+    const approvalCard = Array.from(container.querySelectorAll(
       '.bitfun-external-sources-config__tool-card',
+    )).find((candidate) => (
+      candidate.textContent?.includes('github')
+      && candidate.textContent?.includes('mcpApprovals.enable')
+    )) as HTMLElement;
+    const approvalDetail = approvalCard.querySelector(
+      '.bitfun-external-sources-config__tool-detail',
     ) as HTMLElement;
-    const alwaysVisibleSummary = approvalCard.querySelector(
-      '.bitfun-external-sources-config__review-summary',
+    const approvalRisk = approvalCard.querySelector(
+      '.bitfun-external-sources-config__tool-warning',
     ) as HTMLElement;
-    const alwaysVisibleRisk = approvalCard.querySelector(
-      '.bitfun-external-sources-config__review-risk',
-    ) as HTMLElement;
-    expect(approvalDetails.open).toBe(false);
-    expect(alwaysVisibleSummary.textContent).toContain('mcp.command:{"command":"npx"}');
-    expect(alwaysVisibleRisk.textContent).toContain('mcpApprovals.compactWarning');
-    expect(approvalDetails.contains(alwaysVisibleSummary)).toBe(false);
-    expect(approvalDetails.contains(alwaysVisibleRisk)).toBe(false);
+    expect(approvalDetail.textContent).toContain('mcp.command:{"command":"npx"}');
+    expect(approvalDetail.textContent).toContain('mcp.workingDirectory:{"location":"<workspace>"}');
+    expect(approvalDetail.textContent).toContain('GITHUB_TOKEN');
+    expect(approvalDetail.textContent).toContain('OPENCODE_TOKEN');
+    expect(approvalRisk.textContent).toContain('mcpApprovals.warning');
     const approvalEnable = Array.from(approvalCard.querySelectorAll('button')).find((button) =>
       button.textContent?.includes('mcpApprovals.enable')) as HTMLButtonElement;
-    expect(alwaysVisibleRisk.id).toBe('mcp-review-risk-mcp-decision-v1');
-    expect(approvalEnable.getAttribute('aria-describedby')).toBe(alwaysVisibleRisk.id);
-    const remoteSummary = Array.from(approvalCard.parentElement?.querySelectorAll(
-      '.bitfun-external-sources-config__review-summary',
-    ) ?? []).find((candidate) => candidate.textContent?.includes('mcp.url')) as HTMLElement;
-    const remoteDetails = remoteSummary.closest(
+    expect(approvalRisk.id).toBe('mcp-review-risk-mcp-decision-v1');
+    expect(approvalEnable.getAttribute('aria-describedby')).toBe(approvalRisk.id);
+    const remoteCard = Array.from(container.querySelectorAll(
       '.bitfun-external-sources-config__tool-card',
-    )?.querySelector('.bitfun-external-sources-config__review-details') as HTMLDetailsElement;
-    expect(remoteSummary.textContent).toContain(
+    )).find((candidate) => candidate.textContent?.includes('mcp.url')) as HTMLElement;
+    expect(remoteCard.textContent).toContain(
       'mcp.url:{"url":"https://mcp.example.test"}',
     );
-    expect(remoteDetails.textContent).not.toContain(
-      'mcp.url:{"url":"https://mcp.example.test"}',
-    );
-    expect(approvalDetails.querySelector('summary')?.textContent)
-      .toContain('mcpApprovals.showDetails');
     expect(container.textContent).toContain('mcpApprovals.enable');
-    await act(async () => approvalDetails.querySelector('summary')?.click());
-    expect(approvalDetails.open).toBe(true);
 
     const externalConflictCandidate = Array.from(
       container.querySelectorAll('.bitfun-external-sources-config__candidate'),
@@ -1465,7 +1464,7 @@ describe('ExternalSourcesConfig', () => {
     const details = Array.from(container.querySelectorAll('button')).find((button) =>
       button.textContent?.includes('common.details'));
     await act(async () => details?.click());
-    expect(container.textContent).toContain('agents.singleRun');
+    expect(container.textContent).toContain('agents.role.subagent');
     expect(container.textContent).toContain('fast');
     expect(container.textContent).toContain('Read, Grep');
     expect(container.textContent).toContain('agents.executionDomain');
@@ -1513,6 +1512,160 @@ describe('ExternalSourcesConfig', () => {
       true,
       4,
       7,
+    );
+  });
+
+  it('shows one model binding for matching agent requests and applies a typed target', async () => {
+    Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
+      configurable: true,
+      value: vi.fn(),
+    });
+    const bindingSnapshot = {
+      ...snapshot,
+      subagentGeneration: 5,
+      preferenceRevision: 8,
+      subagents: [{
+        candidateId: 'opencode-review',
+        logicalId: 'review',
+        displayName: 'OpenCode Review',
+        description: 'Review changes',
+        providerLabel: 'OpenCode',
+        scope: 'project',
+        sourceKeys: [],
+        sourceLocationLabels: [],
+        sourceCount: 1,
+        requestedModel: {
+          kind: 'reference',
+          providerHint: 'anthropic',
+          modelName: 'claude-sonnet-4',
+        },
+        requestedModelProfile: { kind: 'named_variant', name: 'high' },
+        modelBindingMethod: 'binding_required',
+        modelBindingKey: 'external_subagent_model_binding:review',
+        effectiveToolLabels: ['Read'],
+        unavailableToolLabels: [],
+        supportsFollowUp: false,
+        compatibilityState: 'blocked',
+        diagnostics: [],
+        activationState: { state: 'unavailable' },
+        decisionKey: 'decision-v1',
+      }],
+      subagentModelBindingGroups: [{
+        bindingKey: 'external_subagent_model_binding:review',
+        request: {
+          kind: 'reference',
+          providerHint: 'anthropic',
+          modelName: 'claude-sonnet-4',
+        },
+        profileRequest: { kind: 'named_variant', name: 'high' },
+        scope: 'project',
+        method: 'binding_required',
+        affectedCandidateIds: ['opencode-review', 'claude-review'],
+      }],
+      subagentModelBindingOptions: [{
+        target: { kind: 'primary' },
+        effectiveModelLabel: 'GPT-5',
+        configuredReasoningEffort: 'high',
+      }, {
+        target: { kind: 'fast' },
+        effectiveModelLabel: 'GLM-4.5-Air',
+      }],
+      subagentConflicts: [],
+      pendingSubagentApprovals: [],
+    };
+    const updatedSnapshot = {
+      ...bindingSnapshot,
+      subagentGeneration: 6,
+      preferenceRevision: 9,
+      subagentModelBindingGroups: [{
+        ...bindingSnapshot.subagentModelBindingGroups[0],
+        method: 'explicit',
+        selectedTarget: { kind: 'fast' },
+        effectiveModelLabel: 'GLM-4.5-Air',
+      }],
+    };
+    getSnapshotMock
+      .mockResolvedValueOnce(bindingSnapshot)
+      .mockResolvedValue(updatedSnapshot);
+    setSubagentModelBindingMock.mockResolvedValue(updatedSnapshot);
+
+    await act(async () => {
+      root.render(<ExternalSourcesConfig />);
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toContain('agentModelBindings.title');
+    expect(container.textContent).toContain('anthropic/claude-sonnet-4');
+    expect(container.textContent).toContain(
+      'agentModelBindings.profile.namedVariant:{"name":"high"}',
+    );
+    expect(container.textContent).toContain('agentModelBindings.affectedAgents:{"count":2}');
+    expect(container.textContent).toContain('agentModelBindings.method.binding_required');
+    expect(container.textContent).toContain('agentModelBindings.target.unbound');
+
+    const trigger = container.querySelector<HTMLElement>(
+      '[aria-label^="agentModelBindings.selectLabel"]',
+    );
+    await act(async () => trigger?.click());
+    const fastOption = Array.from(document.querySelectorAll<HTMLElement>('[role="option"]'))
+      .find((option) => option.textContent?.includes('GLM-4.5-Air'));
+    await act(async () => fastOption?.click());
+
+    expect(setSubagentModelBindingMock).toHaveBeenCalledWith(
+      'D:/workspace/project',
+      'external_subagent_model_binding:review',
+      { kind: 'fast' },
+      5,
+      8,
+    );
+    expect(container.textContent).toContain('agentModelBindings.method.explicit');
+  });
+
+  it('shows inherited models as resolved when the task starts instead of unavailable', async () => {
+    getSnapshotMock.mockResolvedValue({
+      ...snapshot,
+      commandConflicts: [],
+      subagentGeneration: 5,
+      preferenceRevision: 8,
+      subagents: [{
+        candidateId: 'claude-review',
+        logicalId: 'review',
+        displayName: 'Claude Review',
+        description: 'Review changes',
+        providerLabel: 'Claude Code',
+        scope: 'project',
+        sourceKeys: [],
+        sourceLocationLabels: [],
+        sourceCount: 1,
+        requestedModel: { kind: 'inherit' },
+        modelBindingMethod: 'inherit',
+        effectiveToolLabels: ['Read'],
+        unavailableToolLabels: [],
+        supportsFollowUp: false,
+        compatibilityState: 'ready',
+        diagnostics: [],
+        activationState: { state: 'approval_required' },
+        decisionKey: 'decision-inherit-v1',
+      }],
+      subagentModelBindingGroups: [],
+      subagentModelBindingOptions: [],
+      subagentConflicts: [],
+      pendingSubagentApprovals: ['claude-review'],
+    });
+
+    await act(async () => {
+      root.render(<ExternalSourcesConfig />);
+      await Promise.resolve();
+    });
+    const details = Array.from(container.querySelectorAll('button')).find((button) =>
+      button.textContent?.includes('common.details'));
+    await act(async () => details?.click());
+
+    expect(container.textContent).toContain(
+      'agents.model:{"model":"agents.modelResolvedFromParentAtTaskStart"}',
+    );
+    expect(container.textContent).not.toContain(
+      'agents.model:{"model":"agents.modelUnavailable"}',
     );
   });
 
@@ -2286,8 +2439,9 @@ describe('ExternalSourcesConfig', () => {
     expect(updateIntegrationPolicyMock).not.toHaveBeenCalled();
     expect(document.body.textContent).toContain('policy.resetConfirmTitle');
 
-    const confirm = Array.from(document.body.querySelectorAll('button')).filter((button) =>
-      button.textContent === 'policy.backupAndReset').at(-1);
+    const dialog = document.body.querySelector('[role="dialog"]');
+    const confirm = Array.from(dialog?.querySelectorAll('button') ?? []).find((button) =>
+      button.textContent === 'policy.backupAndReset');
     await act(async () => confirm?.click());
     expect(updateIntegrationPolicyMock).toHaveBeenCalledWith('D:/workspace/project', {
       expectedPreferenceRevision: 9,

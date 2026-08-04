@@ -1,15 +1,22 @@
 import { describe, expect, it } from 'vitest';
-import { isDispatchWorkspaceReady } from './dispatchPreflight';
+import {
+  BASE_DISPATCH_CAPABILITIES,
+  DISPATCH_PROTOCOL_VERSION,
+} from './dispatchPreflight';
 
 describe('dispatch preflight', () => {
-  it('accepts only the exact probed target workspace', () => {
-    const workspace = {
-      path: '/srv/app',
-      exists: true,
-      isDirectory: true,
-      isGitRepository: true,
-    };
-    expect(isDispatchWorkspaceReady('/srv/app', workspace)).toBe(true);
-    expect(isDispatchWorkspaceReady('/srv/other', workspace)).toBe(false);
+  it('requires protocol v4 Git worktree delivery without a snapshot fallback', () => {
+    expect(DISPATCH_PROTOCOL_VERSION).toBe(4);
+    expect(BASE_DISPATCH_CAPABILITIES).toEqual(expect.arrayContaining([
+      'workspace_git_worktree',
+      'workspace_git_bundle_upload',
+      'workspace_git_sync',
+    ]));
+    expect(BASE_DISPATCH_CAPABILITIES).not.toEqual(expect.arrayContaining([
+      'workspace_snapshot_exact',
+      'workspace_snapshot_chunked',
+      'workspace_snapshot_cache',
+      'workspace_result_bundle',
+    ]));
   });
 });

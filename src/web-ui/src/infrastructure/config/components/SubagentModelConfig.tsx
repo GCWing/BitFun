@@ -102,7 +102,7 @@ export const SubagentModelConfig: React.FC = () => {
     <ConfigPageRow
       className="subagent-model-config__row"
       label={(
-        <span className="subagent-model-config__label">
+        <span className="subagent-model-config__label" data-bf-component="config" data-bf-part="subagentModel">
           <span>{t('subagentModels.default.label')}</span>
           <IconButton
             type="button"
@@ -126,6 +126,7 @@ export const SubagentModelConfig: React.FC = () => {
         size="small"
         searchable
         className="model-select-presentation__select"
+        dropdownClassName="model-select-presentation__dropdown"
         options={modelOptions}
         value={selectionValue(selection)}
         onChange={(value) => void handleChange(value)}

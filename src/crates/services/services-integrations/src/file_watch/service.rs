@@ -3,23 +3,91 @@ use log::{debug, error};
 use notify::{Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
+use std::future::Future;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex as StdMutex, RwLock as StdRwLock};
-use tokio::sync::{broadcast, Mutex};
+use tokio::sync::{broadcast, mpsc, Mutex};
 
 use super::types::{FileWatchEvent, FileWatchEventKind, FileWatcherConfig};
 
-type WatchedPaths = StdRwLock<HashMap<PathBuf, FileWatcherConfig>>;
+#[derive(Clone)]
+struct WatchedPath {
+    config: FileWatcherConfig,
+    /// Native backends may report canonical paths even when callers register a
+    /// logical alias (notably `/private/var` for `/var` on macOS).
+    backend_root: PathBuf,
+}
+
+impl WatchedPath {
+    fn new(path: &Path, config: FileWatcherConfig) -> Self {
+        Self {
+            config,
+            backend_root: std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf()),
+        }
+    }
+}
+
+type WatchedPaths = StdRwLock<HashMap<PathBuf, WatchedPath>>;
+type EmitterDispatch = StdRwLock<Option<mpsc::Sender<Vec<FileWatchEvent>>>>;
+
+const EVENT_CHANNEL_CAPACITY: usize = 64;
+
+struct FileWatchHealth {
+    healthy: AtomicBool,
+    sender: broadcast::Sender<()>,
+}
+
+impl FileWatchHealth {
+    fn new() -> Self {
+        let (sender, _) = broadcast::channel(8);
+        Self {
+            healthy: AtomicBool::new(true),
+            sender,
+        }
+    }
+
+    fn is_healthy(&self) -> bool {
+        self.healthy.load(Ordering::Acquire)
+    }
+
+    fn subscribe(&self) -> broadcast::Receiver<()> {
+        self.sender.subscribe()
+    }
+
+    fn mark_healthy(&self) {
+        self.healthy.store(true, Ordering::Release);
+    }
+
+    fn mark_unhealthy(&self) {
+        if self.healthy.swap(false, Ordering::AcqRel) {
+            let _ = self.sender.send(());
+        }
+    }
+}
 
 fn read_watched_paths(
     lock: &WatchedPaths,
-) -> std::sync::RwLockReadGuard<'_, HashMap<PathBuf, FileWatcherConfig>> {
+) -> std::sync::RwLockReadGuard<'_, HashMap<PathBuf, WatchedPath>> {
     lock.read().unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
 fn write_watched_paths(
     lock: &WatchedPaths,
-) -> std::sync::RwLockWriteGuard<'_, HashMap<PathBuf, FileWatcherConfig>> {
+) -> std::sync::RwLockWriteGuard<'_, HashMap<PathBuf, WatchedPath>> {
+    lock.write()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+fn read_emitter_dispatch(
+    lock: &EmitterDispatch,
+) -> std::sync::RwLockReadGuard<'_, Option<mpsc::Sender<Vec<FileWatchEvent>>>> {
+    lock.read().unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+fn write_emitter_dispatch(
+    lock: &EmitterDispatch,
+) -> std::sync::RwLockWriteGuard<'_, Option<mpsc::Sender<Vec<FileWatchEvent>>>> {
     lock.write()
         .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
@@ -37,14 +105,17 @@ impl From<&EventKind> for FileWatchEventKind {
 }
 
 pub struct FileWatchService {
-    emitter: Arc<Mutex<Option<Arc<dyn EventEmitter>>>>,
+    emitter_dispatch: Arc<EmitterDispatch>,
     watcher: Arc<Mutex<Option<RecommendedWatcher>>>,
+    registration_gate: Mutex<()>,
     /// Path table shared with the watcher event thread. Uses a synchronous
     /// RwLock so per-event filtering never needs `block_on` into the async
     /// runtime; guards are only held for short, await-free sections.
     watched_paths: Arc<WatchedPaths>,
     event_buffer: Arc<StdMutex<Vec<FileWatchEvent>>>,
     event_sender: broadcast::Sender<Vec<FileWatchEvent>>,
+    health: Arc<FileWatchHealth>,
+    active_watcher_instance: Arc<AtomicU64>,
     config: FileWatcherConfig,
 }
 
@@ -62,13 +133,16 @@ fn lock_event_buffer(
 
 impl FileWatchService {
     pub fn new(config: FileWatcherConfig) -> Self {
-        let (event_sender, _) = broadcast::channel(64);
+        let (event_sender, _) = broadcast::channel(EVENT_CHANNEL_CAPACITY);
         Self {
-            emitter: Arc::new(Mutex::new(None)),
+            emitter_dispatch: Arc::new(StdRwLock::new(None)),
             watcher: Arc::new(Mutex::new(None)),
+            registration_gate: Mutex::new(()),
             watched_paths: Arc::new(StdRwLock::new(HashMap::new())),
             event_buffer: Arc::new(StdMutex::new(Vec::new())),
             event_sender,
+            health: Arc::new(FileWatchHealth::new()),
+            active_watcher_instance: Arc::new(AtomicU64::new(0)),
             config,
         }
     }
@@ -78,9 +152,36 @@ impl FileWatchService {
         self.event_sender.subscribe()
     }
 
+    /// Reports failures from the native watcher thread separately from file
+    /// events so cache owners can stop publishing snapshots until re-registration
+    /// succeeds.
+    pub fn subscribe_health_failures(&self) -> broadcast::Receiver<()> {
+        self.health.subscribe()
+    }
+
+    pub fn is_healthy(&self) -> bool {
+        self.health.is_healthy()
+    }
+
     pub async fn set_emitter(&self, emitter: Arc<dyn EventEmitter>) {
-        let mut e = self.emitter.lock().await;
-        *e = Some(emitter);
+        self.set_emitter_dispatch(move |events| {
+            let emitter = emitter.clone();
+            async move { Self::emit_events(&emitter, &events).await }
+        });
+    }
+
+    fn set_emitter_dispatch<F, Fut>(&self, mut emit: F)
+    where
+        F: FnMut(Vec<FileWatchEvent>) -> Fut + Send + 'static,
+        Fut: Future<Output = ()> + Send + 'static,
+    {
+        let (sender, mut receiver) = mpsc::channel::<Vec<FileWatchEvent>>(EVENT_CHANNEL_CAPACITY);
+        *write_emitter_dispatch(&self.emitter_dispatch) = Some(sender);
+        tokio::spawn(async move {
+            while let Some(events) = receiver.recv().await {
+                emit(events).await;
+            }
+        });
     }
 
     pub async fn watch_path(
@@ -88,34 +189,46 @@ impl FileWatchService {
         path: &str,
         config: Option<FileWatcherConfig>,
     ) -> Result<(), String> {
+        let _registration_guard = self.registration_gate.lock().await;
         let path_buf = PathBuf::from(path);
 
         if !path_buf.exists() {
             return Err("Path does not exist".to_string());
         }
 
+        let registration =
+            WatchedPath::new(&path_buf, config.unwrap_or_else(|| self.config.clone()));
         let (recursive, is_new) = {
             let mut watched_paths = write_watched_paths(&self.watched_paths);
-            let config = config.unwrap_or_else(|| self.config.clone());
+            let config = registration.config;
+            let backend_root = registration.backend_root;
             match watched_paths.entry(path_buf.clone()) {
                 Entry::Occupied(mut entry) => {
                     // Multiple product services may share a root. Registering a
                     // narrower observer must not silently downgrade an existing
                     // recursive or hidden-file-aware watch.
                     let existing = entry.get_mut();
-                    existing.watch_recursively |= config.watch_recursively;
-                    existing.ignore_hidden_files &= config.ignore_hidden_files;
-                    existing.debounce_interval_ms = existing
+                    existing.config.watch_recursively |= config.watch_recursively;
+                    existing.config.ignore_hidden_files &= config.ignore_hidden_files;
+                    existing.config.ignore_common_build_directories &=
+                        config.ignore_common_build_directories;
+                    existing.config.debounce_interval_ms = existing
+                        .config
                         .debounce_interval_ms
                         .min(config.debounce_interval_ms);
-                    existing.max_events_per_interval = existing
+                    existing.config.max_events_per_interval = existing
+                        .config
                         .max_events_per_interval
                         .max(config.max_events_per_interval);
-                    (existing.watch_recursively, false)
+                    existing.backend_root = backend_root;
+                    (existing.config.watch_recursively, false)
                 }
                 Entry::Vacant(entry) => {
                     let recursive = config.watch_recursively;
-                    entry.insert(config);
+                    entry.insert(WatchedPath {
+                        config,
+                        backend_root,
+                    });
                     (recursive, true)
                 }
             }
@@ -133,9 +246,9 @@ impl FileWatchService {
                 };
                 // A repeat registration must always re-register with the OS
                 // watcher, not just when the recursion mode changed: the path
-                // may have been absent when the watcher was built (missing
-                // paths are skipped), or removed and recreated since, leaving a
-                // stale/absent OS-level watch. `ensure_watch_roots` relies on
+                // may have failed a prior registration, or been removed and
+                // recreated since, leaving a stale/absent OS-level watch.
+                // `ensure_watch_roots` relies on
                 // exactly this to resume watching a root that reappeared, and
                 // the pre-incremental implementation got it for free by
                 // rebuilding the whole watcher on every call.
@@ -143,9 +256,14 @@ impl FileWatchService {
                     // May never have been registered; ignore unwatch failures.
                     let _ = watcher.unwatch(&path_buf);
                 }
-                watcher
-                    .watch(&path_buf, mode)
-                    .map_err(|e| format!("Failed to watch path {}: {}", path_buf.display(), e))?;
+                if let Err(error) = watcher.watch(&path_buf, mode) {
+                    self.health.mark_unhealthy();
+                    return Err(format!(
+                        "Failed to watch path {}: {}",
+                        path_buf.display(),
+                        error
+                    ));
+                }
                 Ok(())
             }
             None => {
@@ -156,6 +274,7 @@ impl FileWatchService {
     }
 
     pub async fn unwatch_path(&self, path: &str) -> Result<(), String> {
+        let _registration_guard = self.registration_gate.lock().await;
         let path_buf = PathBuf::from(path);
 
         let (removed, is_empty) = {
@@ -168,7 +287,9 @@ impl FileWatchService {
         if is_empty {
             // Dropping the watcher disconnects its channel; the event thread
             // exits on its own.
+            self.active_watcher_instance.fetch_add(1, Ordering::AcqRel);
             *watcher_guard = None;
+            self.health.mark_healthy();
         } else if removed {
             if let Some(watcher) = watcher_guard.as_mut() {
                 // The path may never have been registered (e.g. it was missing
@@ -180,90 +301,127 @@ impl FileWatchService {
         Ok(())
     }
 
+    /// Recreates the native watcher and re-registers the complete current path
+    /// table. A backend failure is only considered recovered after this succeeds.
+    pub async fn rebuild_watcher(&self) -> Result<(), String> {
+        let _registration_guard = self.registration_gate.lock().await;
+        self.create_watcher().await
+    }
+
     async fn create_watcher(&self) -> Result<(), String> {
         // Keep the sync read guard scopes free of awaits: check emptiness with
         // a short-lived guard before touching the async watcher mutex.
         if read_watched_paths(&self.watched_paths).is_empty() {
             let mut watcher_guard = self.watcher.lock().await;
+            self.active_watcher_instance.fetch_add(1, Ordering::AcqRel);
             *watcher_guard = None;
+            self.health.mark_healthy();
             return Ok(());
         }
 
         let (tx, rx) = std::sync::mpsc::channel();
-        let mut watcher = RecommendedWatcher::new(tx, Config::default())
-            .map_err(|e| format!("Failed to create watcher: {}", e))?;
+        let mut watcher = match RecommendedWatcher::new(tx, Config::default()) {
+            Ok(watcher) => watcher,
+            Err(error) => {
+                self.health.mark_unhealthy();
+                return Err(format!("Failed to create watcher: {}", error));
+            }
+        };
 
-        {
-            let watched_paths = read_watched_paths(&self.watched_paths);
+        for (path, config) in refresh_watch_registrations(&self.watched_paths) {
+            let mode = if config.watch_recursively {
+                RecursiveMode::Recursive
+            } else {
+                RecursiveMode::NonRecursive
+            };
 
-            for (path, config) in watched_paths.iter() {
-                // A watched source directory may be removed between events. Its
-                // stable parent watch remains active and the missing path will be
-                // re-registered when it reappears.
-                if !path.exists() {
-                    continue;
-                }
-                let mode = if config.watch_recursively {
-                    RecursiveMode::Recursive
-                } else {
-                    RecursiveMode::NonRecursive
-                };
-
-                watcher
-                    .watch(path, mode)
-                    .map_err(|e| format!("Failed to watch path {}: {}", path.display(), e))?;
+            if let Err(error) = watcher.watch(&path, mode) {
+                self.health.mark_unhealthy();
+                return Err(format!(
+                    "Failed to watch path {}: {}",
+                    path.display(),
+                    error
+                ));
             }
         }
 
+        let watcher_instance;
         {
             let mut watcher_guard = self.watcher.lock().await;
+            watcher_instance = self
+                .active_watcher_instance
+                .fetch_add(1, Ordering::AcqRel)
+                .saturating_add(1);
             *watcher_guard = Some(watcher);
         }
+        self.health.mark_healthy();
 
         let event_buffer = self.event_buffer.clone();
-        let emitter_arc = self.emitter.clone();
+        let emitter_dispatch = self.emitter_dispatch.clone();
         let default_debounce_ms = self.config.debounce_interval_ms;
         let watched_paths = self.watched_paths.clone();
         let event_sender = self.event_sender.clone();
+        let health = self.health.clone();
+        let active_watcher_instance = self.active_watcher_instance.clone();
+        // The native receiver lives for as long as its OS watcher. Keeping that
+        // process-lifetime loop in Tokio's blocking pool would make short-lived
+        // runtimes wait forever during shutdown. Emitter delivery is handed to
+        // the runtime-owned dispatch queue configured by `set_emitter`.
+        let worker = std::thread::Builder::new()
+            .name("bitfun-file-watch".to_string())
+            .spawn(move || {
+                let poll = std::time::Duration::from_millis(50);
+                let mut last_event_time: Option<std::time::Instant> = None;
 
-        tokio::task::spawn_blocking(move || {
-            let rt = tokio::runtime::Handle::current();
-            let poll = std::time::Duration::from_millis(50);
-            let mut last_event_time: Option<std::time::Instant> = None;
-
-            loop {
-                match rx.recv_timeout(poll) {
-                    Ok(Ok(event)) => {
-                        // Synchronous path-table snapshot: no block_on needed
-                        // per event.
-                        let file_events = Self::convert_events(&event, &watched_paths);
-                        if !file_events.is_empty() {
-                            lock_event_buffer(&event_buffer).extend(file_events);
-                            last_event_time = Some(std::time::Instant::now());
+                loop {
+                    match rx.recv_timeout(poll) {
+                        Ok(Ok(event)) => {
+                            // Synchronous path-table snapshot: no block_on needed
+                            // per event.
+                            let file_events = Self::convert_events(&event, &watched_paths);
+                            if !file_events.is_empty() {
+                                lock_event_buffer(&event_buffer).extend(file_events);
+                                last_event_time = Some(std::time::Instant::now());
+                            }
+                        }
+                        Ok(Err(error)) => {
+                            error!("File watch error: {}", error);
+                            if active_watcher_instance.load(Ordering::Acquire) == watcher_instance {
+                                health.mark_unhealthy();
+                            }
+                        }
+                        Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {}
+                        Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                            if active_watcher_instance.load(Ordering::Acquire) == watcher_instance {
+                                health.mark_unhealthy();
+                            }
+                            break;
                         }
                     }
-                    Ok(Err(e)) => error!("File watch error: {}", e),
-                    Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {}
-                    Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break,
-                }
 
-                if let Some(t) = last_event_time {
-                    let debounce_ms = read_watched_paths(&watched_paths)
-                        .values()
-                        .map(|config| config.debounce_interval_ms)
-                        .min()
-                        .unwrap_or(default_debounce_ms);
-                    if t.elapsed() >= std::time::Duration::from_millis(debounce_ms) {
-                        rt.block_on(Self::flush_events_static(
-                            &event_buffer,
-                            &emitter_arc,
-                            &event_sender,
-                        ));
-                        last_event_time = None;
+                    if let Some(t) = last_event_time {
+                        let debounce_ms = read_watched_paths(&watched_paths)
+                            .values()
+                            .map(|registration| registration.config.debounce_interval_ms)
+                            .min()
+                            .unwrap_or(default_debounce_ms);
+                        if t.elapsed() >= std::time::Duration::from_millis(debounce_ms) {
+                            Self::flush_events_static(
+                                &event_buffer,
+                                &emitter_dispatch,
+                                &event_sender,
+                            );
+                            last_event_time = None;
+                        }
                     }
                 }
-            }
-        });
+            });
+        if let Err(error) = worker {
+            self.active_watcher_instance.fetch_add(1, Ordering::AcqRel);
+            *self.watcher.lock().await = None;
+            self.health.mark_unhealthy();
+            return Err(format!("Failed to start file watch worker: {error}"));
+        }
 
         Ok(())
     }
@@ -274,22 +432,22 @@ impl FileWatchService {
             .paths
             .iter()
             .filter_map(|event_path| {
-                let config = paths
-                    .iter()
-                    .filter(|(watch_path, _)| event_path.starts_with(watch_path))
-                    .max_by_key(|(watch_path, _)| watch_path.components().count())
-                    .map(|(_, config)| config)?;
-                if Self::is_in_excluded_directory(event_path)
-                    || Self::is_temporary_file(event_path)
-                    || config.ignore_hidden_files
-                        && event_path
+                let (registered_root, registration) =
+                    preferred_event_registration(event_path, &paths)?;
+                let projected_path =
+                    project_event_path(registered_root, &registration.backend_root, event_path);
+                if registration.config.ignore_common_build_directories
+                    && Self::is_in_excluded_directory(&projected_path)
+                    || Self::is_temporary_file(&projected_path)
+                    || registration.config.ignore_hidden_files
+                        && projected_path
                             .file_name()
                             .and_then(|name| name.to_str())
                             .is_some_and(|name| name.starts_with('.'))
                 {
                     return None;
                 }
-                Self::convert_event(&event.kind, event_path)
+                Self::convert_event(&event.kind, &projected_path)
             })
             .collect()
     }
@@ -380,9 +538,9 @@ impl FileWatchService {
         })
     }
 
-    async fn flush_events_static(
+    fn flush_events_static(
         event_buffer: &Arc<StdMutex<Vec<FileWatchEvent>>>,
-        emitter_arc: &Arc<Mutex<Option<Arc<dyn EventEmitter>>>>,
+        emitter_dispatch: &Arc<EmitterDispatch>,
         event_sender: &broadcast::Sender<Vec<FileWatchEvent>>,
     ) {
         let events = {
@@ -397,45 +555,55 @@ impl FileWatchService {
         // may still consume this batch.
         let _ = event_sender.send(events.clone());
 
-        let emitter_guard = emitter_arc.lock().await;
-        if let Some(emitter) = emitter_guard.as_ref() {
-            let mut event_array = Vec::new();
+        match read_emitter_dispatch(emitter_dispatch).as_ref() {
+            Some(dispatch) => match dispatch.try_send(events) {
+                Ok(()) => {}
+                Err(mpsc::error::TrySendError::Full(_)) => {
+                    debug!("EventEmitter queue full, skipping file watch events");
+                }
+                Err(mpsc::error::TrySendError::Closed(_)) => {
+                    debug!("EventEmitter runtime unavailable, skipping file watch events");
+                }
+            },
+            None => debug!("EventEmitter not configured, skipping file watch events"),
+        }
+    }
 
-            for event in &events {
-                let kind = match event.kind {
-                    FileWatchEventKind::Create => "create",
-                    FileWatchEventKind::Modify => "modify",
-                    FileWatchEventKind::Remove => "remove",
-                    FileWatchEventKind::Rename { ref from, ref to } => {
-                        event_array.push(serde_json::json!({
-                            "path": to,
-                            "kind": "rename",
-                            "from": from,
-                            "to": to,
-                            "timestamp": event.timestamp
-                        }));
-                        continue;
-                    }
-                    FileWatchEventKind::Other => "other",
-                };
+    async fn emit_events(emitter: &Arc<dyn EventEmitter>, events: &[FileWatchEvent]) {
+        let mut event_array = Vec::new();
 
-                event_array.push(serde_json::json!({
-                    "path": event.path,
-                    "kind": kind,
-                    "timestamp": event.timestamp
-                }));
-            }
+        for event in events {
+            let kind = match event.kind {
+                FileWatchEventKind::Create => "create",
+                FileWatchEventKind::Modify => "modify",
+                FileWatchEventKind::Remove => "remove",
+                FileWatchEventKind::Rename { ref from, ref to } => {
+                    event_array.push(serde_json::json!({
+                        "path": to,
+                        "kind": "rename",
+                        "from": from,
+                        "to": to,
+                        "timestamp": event.timestamp
+                    }));
+                    continue;
+                }
+                FileWatchEventKind::Other => "other",
+            };
 
-            if let Err(e) = emitter
-                .emit("file-system-changed", serde_json::json!(event_array))
-                .await
-            {
-                error!("Failed to emit file-system-changed events: {}", e);
-            } else {
-                debug!("Emitted {} file system change events", event_array.len());
-            }
+            event_array.push(serde_json::json!({
+                "path": event.path,
+                "kind": kind,
+                "timestamp": event.timestamp
+            }));
+        }
+
+        if let Err(error) = emitter
+            .emit("file-system-changed", serde_json::json!(event_array))
+            .await
+        {
+            error!("Failed to emit file-system-changed events: {}", error);
         } else {
-            debug!("EventEmitter not configured, skipping file watch events");
+            debug!("Emitted {} file system change events", event_array.len());
         }
     }
 
@@ -445,6 +613,320 @@ impl FileWatchService {
             .keys()
             .map(|path| path.to_string_lossy().to_string())
             .collect()
+    }
+}
+
+fn refresh_watch_registrations(watched_paths: &WatchedPaths) -> Vec<(PathBuf, FileWatcherConfig)> {
+    let roots = read_watched_paths(watched_paths)
+        .keys()
+        .cloned()
+        .collect::<Vec<_>>();
+    let refreshed_roots = roots
+        .into_iter()
+        .map(|root| {
+            let backend_root = std::fs::canonicalize(&root).unwrap_or_else(|_| root.clone());
+            (root, backend_root)
+        })
+        .collect::<HashMap<_, _>>();
+
+    let mut paths = write_watched_paths(watched_paths);
+    for (root, registration) in paths.iter_mut() {
+        if let Some(backend_root) = refreshed_roots.get(root) {
+            registration.backend_root.clone_from(backend_root);
+        }
+    }
+    let mut registrations = paths
+        .iter()
+        .map(|(root, registration)| (root.clone(), registration.config.clone()))
+        .collect::<Vec<_>>();
+    registrations.sort_by(|(left, _), (right, _)| left.cmp(right));
+    registrations
+}
+
+fn preferred_event_registration<'a>(
+    event_path: &Path,
+    paths: &'a HashMap<PathBuf, WatchedPath>,
+) -> Option<(&'a PathBuf, &'a WatchedPath)> {
+    paths
+        .iter()
+        .filter_map(|(registered_root, registration)| {
+            let registered_depth = event_path
+                .starts_with(registered_root)
+                .then(|| registered_root.components().count());
+            let backend_depth = event_path
+                .starts_with(&registration.backend_root)
+                .then(|| registration.backend_root.components().count());
+            let matched_depth = registered_depth.into_iter().chain(backend_depth).max()?;
+            let direct_at_matched_depth = registered_depth == Some(matched_depth);
+            Some((
+                registered_root,
+                registration,
+                matched_depth,
+                direct_at_matched_depth,
+            ))
+        })
+        .max_by(|left, right| {
+            left.2
+                .cmp(&right.2)
+                .then_with(|| left.3.cmp(&right.3))
+                // Keep canonical aliases deterministic when neither registration
+                // directly matches the backend event namespace.
+                .then_with(|| right.0.cmp(left.0))
+        })
+        .map(|(registered_root, registration, _, _)| (registered_root, registration))
+}
+
+fn project_event_path(registered_root: &Path, backend_root: &Path, event_path: &Path) -> PathBuf {
+    event_path
+        .strip_prefix(backend_root)
+        .map(|relative| registered_root.join(relative))
+        .unwrap_or_else(|_| event_path.to_path_buf())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        preferred_event_registration, read_watched_paths, refresh_watch_registrations,
+        write_watched_paths, FileWatchService, WatchedPath,
+    };
+    use crate::file_watch::FileWatcherConfig;
+    use notify::event::CreateKind;
+    use notify::{Event, EventKind};
+    use std::collections::HashMap;
+    use std::fs;
+    use std::path::Path;
+    use std::sync::RwLock as StdRwLock;
+    use std::time::Duration;
+
+    #[test]
+    fn backend_canonical_paths_are_projected_to_the_registered_namespace() {
+        let registered_root = Path::new("/var/folders/bitfun-skills").to_path_buf();
+        let backend_root = Path::new("/private/var/folders/bitfun-skills").to_path_buf();
+        let backend_event = backend_root.join("example/SKILL.md");
+        let watched_paths = StdRwLock::new(HashMap::from([(
+            registered_root.clone(),
+            WatchedPath {
+                config: FileWatcherConfig::default(),
+                backend_root,
+            },
+        )]));
+        let event = Event::new(EventKind::Create(CreateKind::File)).add_path(backend_event);
+
+        let converted = FileWatchService::convert_events(&event, &watched_paths);
+
+        assert_eq!(converted.len(), 1);
+        assert_eq!(
+            converted[0].path,
+            registered_root.join("example/SKILL.md").to_string_lossy()
+        );
+    }
+
+    #[test]
+    fn a_direct_registered_path_wins_a_canonical_alias_at_equal_depth() {
+        let alias_root = Path::new("/var/folders/bitfun-skills").to_path_buf();
+        let direct_root = Path::new("/private/var/folders/bitfun-skills").to_path_buf();
+        let watched_paths = HashMap::from([
+            (
+                alias_root,
+                WatchedPath {
+                    config: FileWatcherConfig::default(),
+                    backend_root: direct_root.clone(),
+                },
+            ),
+            (
+                direct_root.clone(),
+                WatchedPath {
+                    config: FileWatcherConfig::default(),
+                    backend_root: direct_root.clone(),
+                },
+            ),
+        ]);
+
+        let (registered_root, _) =
+            preferred_event_registration(&direct_root.join("example/SKILL.md"), &watched_paths)
+                .expect("matching registration");
+
+        assert_eq!(registered_root, &direct_root);
+    }
+
+    #[test]
+    fn canonical_alias_fallback_is_deterministic() {
+        let first_alias = Path::new("/aliases/first/bitfun-skills").to_path_buf();
+        let second_alias = Path::new("/aliases/second/bitfun-skills").to_path_buf();
+        let backend_root = Path::new("/private/var/folders/bitfun-skills").to_path_buf();
+        let watched_paths = HashMap::from([
+            (
+                second_alias,
+                WatchedPath {
+                    config: FileWatcherConfig::default(),
+                    backend_root: backend_root.clone(),
+                },
+            ),
+            (
+                first_alias.clone(),
+                WatchedPath {
+                    config: FileWatcherConfig::default(),
+                    backend_root: backend_root.clone(),
+                },
+            ),
+        ]);
+
+        let (registered_root, _) =
+            preferred_event_registration(&backend_root.join("example/SKILL.md"), &watched_paths)
+                .expect("matching registration");
+
+        assert_eq!(registered_root, &first_alias);
+    }
+
+    #[test]
+    fn watcher_rebuild_refreshes_the_native_backend_root() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let root = temp.path().join("skills");
+        fs::create_dir_all(&root).expect("skill root");
+        let expected = std::fs::canonicalize(&root).expect("canonical skill root");
+        let watched_paths = StdRwLock::new(HashMap::from([(
+            root.clone(),
+            WatchedPath {
+                config: FileWatcherConfig::default(),
+                backend_root: Path::new("/stale/backend/root").to_path_buf(),
+            },
+        )]));
+
+        let registrations = refresh_watch_registrations(&watched_paths);
+
+        assert_eq!(registrations.len(), 1);
+        assert_eq!(
+            read_watched_paths(&watched_paths)[&root].backend_root,
+            expected
+        );
+    }
+
+    #[tokio::test]
+    async fn backend_health_recovers_only_after_a_full_rebuild() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let first = temp.path().join("first");
+        let second = temp.path().join("second");
+        fs::create_dir_all(&first).expect("first root");
+        fs::create_dir_all(&second).expect("second root");
+        let mut config = FileWatcherConfig::default();
+        config.debounce_interval_ms = 0;
+        let service = FileWatchService::new(config.clone());
+        let mut events = service.subscribe();
+        let mut failures = service.subscribe_health_failures();
+        service
+            .watch_path(&first.to_string_lossy(), Some(config.clone()))
+            .await
+            .expect("initial watch");
+
+        service.health.mark_unhealthy();
+
+        failures.recv().await.expect("health failure notification");
+        service
+            .watch_path(&second.to_string_lossy(), Some(config))
+            .await
+            .expect("incremental registration");
+        assert!(!service.is_healthy());
+
+        service.rebuild_watcher().await.expect("full rebuild");
+        assert!(service.is_healthy());
+        fs::write(second.join("SKILL.md"), "updated").expect("watched update");
+
+        let batch = tokio::time::timeout(Duration::from_secs(5), events.recv())
+            .await
+            .expect("event after rebuild")
+            .expect("watch event batch");
+        assert!(batch.iter().any(|event| event.path.ends_with("SKILL.md")));
+    }
+
+    #[tokio::test]
+    async fn rebuild_does_not_report_a_missing_registered_path_as_healthy() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let missing = temp.path().join("missing");
+        let service = FileWatchService::new(FileWatcherConfig::default());
+        write_watched_paths(&service.watched_paths).insert(
+            missing.clone(),
+            WatchedPath::new(&missing, FileWatcherConfig::default()),
+        );
+
+        let error = service
+            .rebuild_watcher()
+            .await
+            .expect_err("missing registered path must fail rebuild");
+
+        assert!(error.contains("Failed to watch path"));
+        assert!(!service.is_healthy());
+    }
+
+    #[test]
+    fn emitter_dispatch_can_rebind_after_runtime_shutdown() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let mut config = FileWatcherConfig::default();
+        config.debounce_interval_ms = 0;
+        config.ignore_hidden_files = false;
+        let service = FileWatchService::new(config.clone());
+
+        let first_runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("first runtime");
+        first_runtime.block_on(async {
+            service.set_emitter_dispatch(|_| async {
+                tokio::time::sleep(Duration::from_millis(1)).await;
+            });
+            service
+                .watch_path(temp.path().to_str().unwrap(), Some(config))
+                .await
+                .expect("watch temp directory");
+        });
+        drop(first_runtime);
+
+        let second_runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("second runtime");
+        second_runtime.block_on(async {
+            let (observed, mut emitted) = tokio::sync::mpsc::unbounded_channel();
+            service.set_emitter_dispatch(move |events| {
+                let observed = observed.clone();
+                async move {
+                    tokio::time::sleep(Duration::from_millis(1)).await;
+                    let _ = observed.send(events);
+                }
+            });
+
+            let first_file = temp.path().join("first.md");
+            fs::write(&first_file, "first").expect("first watched update");
+            let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
+            loop {
+                let events = tokio::time::timeout_at(deadline, emitted.recv())
+                    .await
+                    .expect("dispatch after runtime rebind")
+                    .expect("emitter dispatch remains open");
+                if events
+                    .iter()
+                    .any(|event| event.path == first_file.to_string_lossy())
+                {
+                    break;
+                }
+            }
+
+            tokio::time::sleep(Duration::from_millis(50)).await;
+            let second_file = temp.path().join("second.md");
+            fs::write(&second_file, "second").expect("second watched update");
+            let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
+            loop {
+                let events = tokio::time::timeout_at(deadline, emitted.recv())
+                    .await
+                    .expect("watch worker survives the first runtime shutdown")
+                    .expect("emitter dispatch remains open");
+                if events
+                    .iter()
+                    .any(|event| event.path == second_file.to_string_lossy())
+                {
+                    break;
+                }
+            }
+        });
     }
 }
 

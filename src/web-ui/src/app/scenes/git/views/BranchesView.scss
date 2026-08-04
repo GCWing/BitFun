@@ -10,7 +10,7 @@
     min-width: 0;
     display: flex;
     flex-direction: column;
-    border-right: 1px solid var(--border-subtle);
+    border-right: 1px solid var(--bf-appearance-token-border-subtle);
   }
 
   &__right {
@@ -24,7 +24,7 @@
   &__toolbar {
     flex-shrink: 0;
     padding: 8px;
-    border-bottom: 1px solid var(--border-subtle);
+    border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
     display: flex;
     align-items: center;
     gap: 8px;
@@ -64,16 +64,16 @@
     cursor: pointer;
 
     &:hover {
-      background: var(--element-bg-soft);
+      background: var(--bf-appearance-token-element-bg-soft);
     }
 
     &--current {
-      background: color-mix(in srgb, var(--color-accent-500) 10%, transparent);
+      background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 10%, transparent);
     }
 
     &--selected {
-      background: var(--element-bg-soft);
-      outline: 1px solid var(--border-subtle);
+      background: var(--bf-appearance-token-element-bg-soft);
+      outline: 1px solid var(--bf-appearance-token-border-subtle);
     }
   }
 
@@ -86,7 +86,7 @@
 
   &__name {
     font-size: 13px;
-    color: var(--color-text-primary);
+    color: var(--bf-appearance-token-color-text-primary);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -96,7 +96,7 @@
     flex-shrink: 0;
     font-size: 10px;
     font-weight: 600;
-    color: var(--color-accent-500);
+    color: var(--bf-appearance-token-color-accent-500);
     text-transform: uppercase;
   }
 
@@ -108,7 +108,7 @@
   &__empty {
     padding: 16px;
     text-align: center;
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
     font-size: 13px;
   }
 
@@ -119,7 +119,7 @@
     justify-content: center;
     flex: 1;
     gap: 8px;
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
     font-size: 14px;
   }
 
@@ -132,7 +132,7 @@
   &__history-toolbar {
     flex-shrink: 0;
     padding: 8px;
-    border-bottom: 1px solid var(--border-subtle);
+    border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
     display: flex;
     align-items: center;
     gap: 8px;
@@ -142,7 +142,7 @@
   &__history-title {
     font-size: 13px;
     font-weight: 600;
-    color: var(--color-text-primary);
+    color: var(--bf-appearance-token-color-text-primary);
     margin-right: auto;
   }
 
@@ -158,8 +158,8 @@
     border: 1px solid transparent;
 
     &--expanded {
-      background: var(--element-bg-soft);
-      border-color: var(--border-subtle);
+      background: var(--bf-appearance-token-element-bg-soft);
+      border-color: var(--bf-appearance-token-border-subtle);
     }
   }
 
@@ -177,7 +177,7 @@
     background: none;
     cursor: pointer;
     padding: 0;
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
   }
 
   &__commit-info {
@@ -187,7 +187,7 @@
 
   &__commit-message {
     font-size: 13px;
-    color: var(--color-text-primary);
+    color: var(--bf-appearance-token-color-text-primary);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -195,7 +195,7 @@
 
   &__commit-meta {
     font-size: 11px;
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
     margin-top: 2px;
   }
 
@@ -206,7 +206,7 @@
 
   &__commit-detail {
     padding: 8px 10px 10px 34px;
-    border-top: 1px solid var(--border-subtle);
+    border-top: 1px solid var(--bf-appearance-token-border-subtle);
     font-size: 12px;
   }
 
@@ -214,13 +214,13 @@
     margin: 0 0 8px;
     white-space: pre-wrap;
     word-break: break-word;
-    color: var(--color-text-secondary);
+    color: var(--bf-appearance-token-color-text-secondary);
     font-size: 11px;
   }
 
   &__files {
     font-size: 11px;
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
 
     ul {
       margin: 4px 0 0;

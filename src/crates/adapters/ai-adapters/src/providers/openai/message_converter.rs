@@ -314,9 +314,6 @@ impl OpenAIMessageConverter {
                     if let Some(id) = msg.tool_call_id {
                         openai_msg["tool_call_id"] = Value::String(id);
                     }
-                    if let Some(name) = msg.name {
-                        openai_msg["name"] = Value::String(name);
-                    }
                     return openai_msg;
                 }
             }
@@ -331,8 +328,7 @@ impl OpenAIMessageConverter {
         if let Some(content) = msg.content {
             if content.trim().is_empty() {
                 if msg.role == "assistant" && has_tool_calls {
-                    // OpenAI requires the content field; use a space for tool-call cases.
-                    openai_msg["content"] = Value::String(" ".to_string());
+                    openai_msg["content"] = Value::String(content);
                 } else if msg.role == "tool" {
                     openai_msg["content"] = Value::String("Tool execution completed".to_string());
                     warn!(
@@ -354,8 +350,6 @@ impl OpenAIMessageConverter {
             }
         } else {
             if msg.role == "assistant" && has_tool_calls {
-                // OpenAI requires the content field; use a space for tool-call cases.
-                openai_msg["content"] = Value::String(" ".to_string());
             } else if msg.role == "tool" {
                 openai_msg["content"] = Value::String("Tool execution completed".to_string());
 
@@ -403,8 +397,10 @@ impl OpenAIMessageConverter {
             openai_msg["tool_call_id"] = Value::String(tool_call_id);
         }
 
-        if let Some(name) = msg.name {
-            openai_msg["name"] = Value::String(name);
+        if msg.role != "tool" {
+            if let Some(name) = msg.name {
+                openai_msg["name"] = Value::String(name);
+            }
         }
 
         openai_msg
@@ -594,6 +590,7 @@ mod tests {
         assert_eq!(content[0]["type"], json!("image_url"));
         assert_eq!(content[1]["type"], json!("text"));
         assert_eq!(content[1]["text"], json!("ok"));
+        assert!(openai[0].get("name").is_none());
     }
 
     #[test]
@@ -621,6 +618,7 @@ mod tests {
         let openai = OpenAIMessageConverter::convert_messages(vec![msg]);
 
         assert_eq!(openai[0]["content"], json!(raw_json));
+        assert!(openai[0].get("name").is_none());
     }
 
     #[test]
@@ -756,6 +754,46 @@ mod tests {
         let openai = OpenAIMessageConverter::convert_messages(vec![msg]);
 
         assert_eq!(openai[0]["reasoning_content"], json!(""));
+    }
+
+    #[test]
+    fn preserves_empty_assistant_content_for_tool_calls() {
+        let msg = Message {
+            role: "assistant".to_string(),
+            content: Some(String::new()),
+            reasoning_content: Some("thinking".to_string()),
+            thinking_signature: None,
+            tool_calls: Some(vec![ToolCall {
+                id: "call_1".to_string(),
+                name: "get_weather".to_string(),
+                arguments: json!({"city": "Beijing"}),
+                raw_arguments: None,
+            }]),
+            tool_call_id: None,
+            name: None,
+            is_error: None,
+            tool_image_attachments: None,
+        };
+
+        let openai = OpenAIMessageConverter::convert_messages(vec![msg]);
+
+        assert_eq!(openai[0]["content"], json!(""));
+        assert_eq!(openai[0]["reasoning_content"], json!("thinking"));
+    }
+
+    #[test]
+    fn omits_missing_assistant_content_for_tool_calls() {
+        let openai =
+            OpenAIMessageConverter::convert_messages(vec![Message::assistant_with_tools(vec![
+                ToolCall {
+                    id: "call_1".to_string(),
+                    name: "get_weather".to_string(),
+                    arguments: json!({"city": "Beijing"}),
+                    raw_arguments: None,
+                },
+            ])]);
+
+        assert!(openai[0].get("content").is_none());
     }
 
     #[test]

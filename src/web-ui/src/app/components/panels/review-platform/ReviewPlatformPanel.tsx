@@ -1287,7 +1287,7 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
   ) => {
     if (itemCount <= 0 || (page.totalPages <= 1 && !page.hasNext && page.pageIndex === 0)) return null;
     return (
-      <div className="review-platform__pagination review-platform__detail-pagination">
+      <div data-bf-component="review-platform" data-bf-part="pagination" className="review-platform__pagination review-platform__detail-pagination">
         <IconButton
           className="review-platform__icon-button"
           size="xs"
@@ -1316,7 +1316,7 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
   }, []);
 
   const renderDetailLoading = useCallback((message: string, refreshing = false) => (
-    <div className={`review-platform__thread-loading${refreshing ? ' review-platform__thread-loading--refreshing' : ''}`} aria-live="polite">
+    <div data-bf-component="review-platform" data-bf-part="loadingState" className={`review-platform__thread-loading${refreshing ? ' review-platform__thread-loading--refreshing' : ''}`} aria-live="polite">
       <Loader2 size={14} />
       <span>{message}</span>
     </div>
@@ -1733,17 +1733,17 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
   const renderAuthGate = useCallback((mode: 'inline' | 'detail' = 'inline') => {
     if (!authChallenge || !selectedRemote || selectedRemote.platform === 'unknown') return null;
     return (
-      <div className={`review-platform__auth-gate review-platform__auth-gate--${mode}`}>
+      <div data-bf-component="review-platform" data-bf-part="authGate" className={`review-platform__auth-gate review-platform__auth-gate--${mode}`}>
         <div className="review-platform__auth-gate-icon">
           <KeyRound size={18} />
         </div>
-        <div className="review-platform__auth-gate-copy">
+        <div className="review-platform__auth-gate-copy" data-bf-component="review-platform" data-bf-part="authCopy">
           <strong>{authChallengeTitle(authChallenge)}</strong>
           <span>{authChallenge.message}</span>
           <span>{authChallenge.host} · {authChallenge.projectPath}</span>
           <span>{selectedRemote.platform === 'github' ? 'CLI authorization' : 'Required scopes'}: {authChallengeScopes(authChallenge)}</span>
         </div>
-        <div className="review-platform__auth-gate-actions">
+        <div className="review-platform__auth-gate-actions" data-bf-component="review-platform" data-bf-part="authActions">
           <Button className="review-platform__panel-button" size="small" variant="primary" onClick={handleOpenAuthModal} disabled={authSaving}>
             <KeyRound size={13} />
             {selectedRemote.platform === 'github' ? 'Authenticate' : authChallenge.state === 'missing' ? 'Add token' : 'Update token'}
@@ -1858,18 +1858,18 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
   };
 
   return (
-    <div className={`review-platform${detailOnly ? ' review-platform--detail-only' : ''}`}>
+    <div data-bf-component="review-platform" data-bf-part="root" data-bf-layout={detailOnly ? 'detail' : 'full'} className={`review-platform${detailOnly ? ' review-platform--detail-only' : ''}`}>
       {!detailOnly && (
-        <div className="review-platform__topbar">
-          <div className="review-platform__brand">
+        <div className="review-platform__topbar" data-bf-component="review-platform" data-bf-part="chrome">
+          <div className="review-platform__brand" data-bf-component="review-platform" data-bf-part="brand">
             <span className="review-platform__brand-icon"><GitPullRequest size={17} /></span>
             <div className="review-platform__brand-copy">
-              <span className="review-platform__title">{panelTitle}</span>
-              <span className="review-platform__subtitle">{headerLabel}</span>
+              <span className="review-platform__title" data-bf-component="review-platform" data-bf-part="title">{panelTitle}</span>
+              <span className="review-platform__subtitle" data-bf-component="review-platform" data-bf-part="subtitle">{headerLabel}</span>
             </div>
           </div>
 
-          <div className="review-platform__topbar-actions">
+          <div className="review-platform__topbar-actions" data-bf-component="review-platform" data-bf-part="actions">
             <div className="review-platform__remote-select">
               <Select
                 size="small"
@@ -1926,8 +1926,8 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
       )}
 
       {!detailOnly && (
-      <div className="review-platform__subbar">
-        <div className="review-platform__status-line">
+      <div className="review-platform__subbar" data-bf-component="review-platform" data-bf-part="statusBar">
+        <div className="review-platform__status-line" data-bf-component="review-platform" data-bf-part="statusLine">
           <span><CircleDot size={12} /> {summary.open} open on page</span>
           {!isGithubUserList && <span><GitPullRequestClosed size={12} /> {summary.merged} merged on page</span>}
           <span><Sparkles size={12} /> {summary.reviewRequired} review on page</span>
@@ -1944,10 +1944,10 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
 
       {authChallenge && !detailOnly && renderAuthGate('inline')}
 
-      <div className="review-platform__body">
+      <div className="review-platform__body" data-bf-component="review-platform" data-bf-part="body">
         {!detailOnly && (
-        <aside className="review-platform__list" aria-label="Pull request list">
-          <div className="review-platform__list-toolbar">
+        <aside className="review-platform__list" data-bf-component="review-platform" data-bf-part="listPane" aria-label="Pull request list">
+          <div className="review-platform__list-toolbar" data-bf-component="review-platform" data-bf-part="listToolbar">
             <Input
               inputSize="small"
               value={query}
@@ -1957,7 +1957,7 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
               suffix={query ? <IconButton className="review-platform__icon-button" size="xs" variant="ghost" onClick={() => setQuery('')}><XCircle size={14} /></IconButton> : undefined}
             />
             {!isGithubUserList && (
-              <div className="review-platform__state-filters">
+              <div className="review-platform__state-filters" data-bf-component="review-platform" data-bf-part="filters">
                 {(['all', 'open', 'draft', 'merged', 'closed'] as ListStateFilter[]).map(state => (
                   <button
                     key={state}
@@ -1972,12 +1972,12 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
             )}
           </div>
 
-          <div className="review-platform__list-scroll">
+          <div className="review-platform__list-scroll" data-bf-component="review-platform" data-bf-part="listScroll">
             {loading && (
-              <div className="review-platform__empty-state">Loading pull requests...</div>
+              <div className="review-platform__empty-state" data-bf-component="review-platform" data-bf-part="emptyState">Loading pull requests...</div>
             )}
             {error && (
-              <div className="review-platform__error-state">
+              <div className="review-platform__error-state" data-bf-component="review-platform" data-bf-part="errorState">
                 <XCircle size={16} />
                 <span>{error}</span>
                 <Button className="review-platform__panel-button" size="small" variant="secondary" onClick={() => void loadSnapshot(listRemoteId, { force: true, page: currentPageIndex + 1 })}>
@@ -1986,7 +1986,7 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
               </div>
             )}
             {!loading && !error && !authChallenge && !visiblePullRequests.length && (
-              <div className="review-platform__empty-state">
+              <div className="review-platform__empty-state" data-bf-component="review-platform" data-bf-part="emptyState">
                 <GitPullRequest size={18} />
                 <span>{emptyStateMessage}</span>
               </div>
@@ -1997,7 +1997,8 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
                   ? snapshot.remotes.find(remote => remote.id === pr.providerId)
                   : selectedRemote;
                 return (
-                  <button
+                  <button data-bf-component="review-platform" data-bf-part="listItem"
+                    data-bf-state={selectedPrId === pr.id && (!pr.providerId || pr.providerId === selectedRemoteId) ? 'selected' : ''}
                     key={`${pr.providerId ?? selectedRemoteId ?? 'remote'}:${pr.id}`}
                     type="button"
                     className={`review-platform__pr-row${selectedPrId === pr.id && (!pr.providerId || pr.providerId === selectedRemoteId) ? ' is-selected' : ''}`}
@@ -2010,16 +2011,16 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
                     }}
                   >
                     <span className="review-platform__pr-icon">{getPrIcon(pr)}</span>
-                    <span className="review-platform__pr-main">
-                      <span className="review-platform__pr-title">{pr.title}</span>
-                      <span className="review-platform__pr-meta">
+                    <span className="review-platform__pr-main" data-bf-component="review-platform" data-bf-part="listItemMain">
+                      <span className="review-platform__pr-title" data-bf-component="review-platform" data-bf-part="listItemTitle">{pr.title}</span>
+                      <span className="review-platform__pr-meta" data-bf-component="review-platform" data-bf-part="listItemMeta">
                         {pullRequestRemote?.projectPath ? `${pullRequestRemote.projectPath} · ` : ''}#{pr.number} · {pr.sourceBranch} → {pr.targetBranch}
                       </span>
                       <span className="review-platform__pr-meta review-platform__pr-meta--secondary">
                         {pr.author} · {formatRelativeTime(pr.updatedAt)}
                       </span>
                     </span>
-                    <span className="review-platform__pr-stats">
+                    <span className="review-platform__pr-stats" data-bf-component="review-platform" data-bf-part="listItemStats">
                       <span className={`review-platform__decision review-platform__decision--${pr.reviewDecision}`}>
                         {decisionLabel(pr.reviewDecision)}
                       </span>
@@ -2035,7 +2036,7 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
             ))}
           </div>
           {!loading && !error && (totalPages > 1 || pagination.hasNext) && (
-            <div className="review-platform__pagination">
+            <div className="review-platform__pagination" data-bf-component="review-platform" data-bf-part="pagination">
               <IconButton
                 className="review-platform__icon-button"
                 size="xs"
@@ -2064,7 +2065,7 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
         </aside>
         )}
 
-        <main className="review-platform__detail">
+        <main className="review-platform__detail" data-bf-component="review-platform" data-bf-part="detailPane">
           {!selectedPr && detailOnly && (loading || detailLoading) && (
             <div className="review-platform__detail-empty">
               <Loader2 size={20} className="review-platform__loading-inline review-platform__loading-inline--icon" />
@@ -2136,21 +2137,21 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
 
           {selectedPr && (
             <>
-              <div className="review-platform__detail-header">
-                <div className="review-platform__detail-title-block">
+              <div className="review-platform__detail-header" data-bf-component="review-platform" data-bf-part="detailHeader">
+                <div className="review-platform__detail-title-block" data-bf-component="review-platform" data-bf-part="detailTitle">
                   <div className="review-platform__detail-title-row">
                     {getPrIcon(selectedPr)}
                     <h3>{selectedPr.title}</h3>
-                    <span className={`review-platform__detail-state review-platform__detail-state--${displayPr?.state ?? selectedPr.state}`}>
+                    <span className={`review-platform__detail-state review-platform__detail-state--${displayPr?.state ?? selectedPr.state}`} data-bf-component="review-platform" data-bf-part="detailState">
                       {stateLabel(displayPr?.state ?? selectedPr.state)}
                     </span>
                   </div>
-                  <div className="review-platform__detail-meta">
+                  <div className="review-platform__detail-meta" data-bf-component="review-platform" data-bf-part="detailMeta">
                     <span>#{selectedPr.number}</span>
                     <span><Clock3 size={12} /> {formatAbsoluteTime(selectedPr.updatedAt) || formatRelativeTime(selectedPr.updatedAt)}</span>
                   </div>
                 </div>
-                <div className="review-platform__detail-actions">
+                <div className="review-platform__detail-actions" data-bf-component="review-platform" data-bf-part="detailActions">
                   <Tooltip content={!parentSession ? 'Open or create a chat first' : 'Start Review'}>
                     <span>
                       <Button
@@ -2203,7 +2204,7 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
                 </div>
               </div>
 
-              <div className="review-platform__fact-list">
+              <div className="review-platform__fact-list" data-bf-component="review-platform" data-bf-part="facts">
                 <div className="review-platform__fact-row">
                   <span className="review-platform__fact-label"><Code2 size={14} /> Branches</span>
                   <div className="review-platform__fact-value review-platform__fact-value--branch">
@@ -2253,9 +2254,9 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
                 className="review-platform__tabs"
               >
                 <TabPane tabKey="overview" label="Overview">
-                  <div className="review-platform__tab-content review-platform__overview-scroll">
-                    <section className="review-platform__detail-section">
-                      <div className="review-platform__detail-section-heading">
+                  <div className="review-platform__tab-content review-platform__overview-scroll" data-bf-component="review-platform" data-bf-part="tabContent">
+                    <section className="review-platform__detail-section" data-bf-component="review-platform" data-bf-part="section">
+                      <div className="review-platform__detail-section-heading" data-bf-component="review-platform" data-bf-part="sectionHeading">
                         <span>Description</span>
                         <Button className="review-platform__panel-button" size="small" variant="ghost" onClick={handleFillPrContext} disabled={!selectedPr}>
                           <MessageSquareText size={13} />
@@ -2281,10 +2282,10 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
                       )}
                     </section>
 
-                    <section className="review-platform__detail-section review-platform__ci-list">
-                      <div className="review-platform__detail-section-heading">
+                    <section className="review-platform__detail-section review-platform__ci-list" data-bf-component="review-platform" data-bf-part="section">
+                      <div className="review-platform__detail-section-heading" data-bf-component="review-platform" data-bf-part="sectionHeading">
                         <span>Checks</span>
-                        <div className="review-platform__detail-section-actions">
+                        <div className="review-platform__detail-section-actions" data-bf-component="review-platform" data-bf-part="sectionActions">
                           <span className="review-platform__section-count">
                             {ciTotal ? `${ciTotal} items · ${checksText}` : checksStatusText}
                           </span>
@@ -2304,14 +2305,14 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
                         const logAvailable = canLoadCiLog(selectedRemote, item);
                         const expandable = canExpandCiItem(selectedRemote, item);
                         return (
-                          <article key={item.id} className={`review-platform__ci-item review-platform__ci-item--${tone}`}>
-                            <div className="review-platform__ci-head">
+                          <article data-bf-component="review-platform" data-bf-part="ciItem" key={item.id} className={`review-platform__ci-item review-platform__ci-item--${tone}`}>
+                            <div className="review-platform__ci-head" data-bf-component="review-platform" data-bf-part="ciHead">
                               <div className="review-platform__ci-main">
                                 <strong>{item.name}</strong>
                                 <span>{[item.detail, item.stage].filter(Boolean).join(' · ')}</span>
                               </div>
                               <div className="review-platform__ci-actions">
-                                <span className={`review-platform__ci-status review-platform__ci-status--${tone}`}>
+                                <span className={`review-platform__ci-status review-platform__ci-status--${tone}`} data-bf-component="review-platform" data-bf-part="ciStatus">
                                   {ciItemStatusText(item)}
                                 </span>
                                 {expandable && (
@@ -2351,7 +2352,7 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
                               </div>
                             </div>
                             {isCiExpanded && (
-                              <div className="review-platform__ci-log-panel">
+                              <div className="review-platform__ci-log-panel" data-bf-component="review-platform" data-bf-part="ciLog">
                                 <div className="review-platform__ci-detail-grid">
                                   {item.stage && <div><span>Stage</span><strong>{item.stage}</strong></div>}
                                   {item.detail && <div><span>Detail</span><strong>{item.detail}</strong></div>}
@@ -2376,10 +2377,10 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
                       {renderDetailPagination('Checks', ciPage, ciTotal, setCiPageIndex)}
                     </section>
 
-                    <section className="review-platform__detail-section review-platform__threads">
-                      <div className="review-platform__detail-section-heading">
+                    <section className="review-platform__detail-section review-platform__threads" data-bf-component="review-platform" data-bf-part="section">
+                      <div className="review-platform__detail-section-heading" data-bf-component="review-platform" data-bf-part="sectionHeading">
                         <span>Comments</span>
-                        <div className="review-platform__detail-section-actions">
+                        <div className="review-platform__detail-section-actions" data-bf-component="review-platform" data-bf-part="sectionActions">
                           <span className="review-platform__section-count">{reviewItemCount}</span>
                           <Button className="review-platform__panel-button" size="small" variant="ghost" onClick={handleAddReviewsContext} disabled={!selectedPr || !detail}>
                             <MessageSquareText size={13} />
@@ -2393,7 +2394,7 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
                           ? reviewThreadByCommentId.get(thread.replyToProviderCommentId)
                           : null;
                         return (
-                          <article
+                          <article data-bf-component="review-platform" data-bf-part="thread"
                             key={thread.id}
                             className={[
                               'review-platform__thread',
@@ -2402,7 +2403,7 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
                               parent ? 'review-platform__thread--reply' : '',
                             ].filter(Boolean).join(' ')}
                           >
-                            <div className="review-platform__thread-head">
+                            <div className="review-platform__thread-head" data-bf-component="review-platform" data-bf-part="threadHead">
                               <div className="review-platform__thread-tags">
                                 <span className={`review-platform__thread-tag review-platform__thread-tag--${thread.kind}`}>
                                   {thread.kind === 'review' ? 'Review' : 'Comment'}
@@ -2423,7 +2424,7 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
                                 <div className="review-platform__thread-reply-body"><MarkdownRenderer content={parent.body} basePath={workspacePath} /></div>
                               </div>
                             )}
-                            <div className="review-platform__thread-body"><MarkdownRenderer content={thread.body} basePath={workspacePath} /></div>
+                            <div className="review-platform__thread-body" data-bf-component="review-platform" data-bf-part="threadBody"><MarkdownRenderer content={thread.body} basePath={workspacePath} /></div>
                             {thread.filePath && <span className="review-platform__thread-anchor">{thread.filePath}{thread.line ? `:${thread.line}` : ''}</span>}
                           </article>
                         );
@@ -2435,7 +2436,7 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
                 </TabPane>
 
                 <TabPane tabKey="changes" label="Changes">
-                  <section className="review-platform__tab-content review-platform__file-list">
+                  <section className="review-platform__tab-content review-platform__file-list" data-bf-component="review-platform" data-bf-part="fileList">
                     {detailError && (
                       <div className="review-platform__detail-error">
                         <XCircle size={14} />
@@ -2450,22 +2451,24 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
                       const key = fileKey(file);
                       const isExpanded = expandedFileKeys.has(key);
                       return (
-                        <article key={key} className="review-platform__file-card">
-                          <div className="review-platform__file-row">
+                        <article data-bf-component="review-platform" data-bf-part="fileCard" key={key} className="review-platform__file-card">
+                          <div className="review-platform__file-row" data-bf-component="review-platform" data-bf-part="fileRow">
                             <button
                               type="button"
                               className="review-platform__file-main"
+                              data-bf-component="review-platform"
+                              data-bf-part="fileMain"
                               aria-expanded={isExpanded}
                               onClick={() => toggleFileExpanded(key)}
                             >
                               <span className="review-platform__file-toggle">
                                 {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                               </span>
-                              <span className={`review-platform__file-status review-platform__file-status--${file.status}`}>
+                              <span className={`review-platform__file-status review-platform__file-status--${file.status}`} data-bf-component="review-platform" data-bf-part="fileStatus">
                                 {file.status}
                               </span>
-                              <span className="review-platform__file-path">{file.path}</span>
-                              <span className="review-platform__file-delta">
+                              <span className="review-platform__file-path" data-bf-component="review-platform" data-bf-part="filePath">{file.path}</span>
+                              <span className="review-platform__file-delta" data-bf-component="review-platform" data-bf-part="fileDelta">
                                 <span className="review-platform__additions">+{file.additions}</span>
                                 <span className="review-platform__deletions">-{file.deletions}</span>
                               </span>
@@ -2477,7 +2480,7 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
                           </div>
                           {isExpanded && (
                             file.patch ? (
-                              <pre className="review-platform__diff-block" aria-label={`Diff for ${file.path}`}>
+                              <pre className="review-platform__diff-block" data-bf-component="review-platform" data-bf-part="diff" aria-label={`Diff for ${file.path}`}>
                                 {file.patch.split('\n').map((line, index) => (
                                   <span key={`${file.path}-${index}`} className={diffLineClass(line)}>
                                     {line || ' '}

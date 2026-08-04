@@ -4,17 +4,20 @@ use std::time::Duration;
 
 use anyhow::{anyhow, bail, Context, Result};
 use bitfun_agent_runtime::sdk::{
-    AgentDialogTurnRequest, AgentSessionCreateRequest, AgentTurnCancellationRequest,
-    AgentTurnSettlementRequest, PermissionReply, PermissionReplySource, PermissionRequest,
-    PermissionRequestEvent,
+    AgentDialogSteerRequest, AgentDialogTurnRequest, AgentSessionCreateRequest,
+    AgentSessionRestoreRequest, AgentTurnCancellationRequest, AgentTurnSettlementRequest,
+    PermissionReply, PermissionReplySource, PermissionRequest, PermissionRequestEvent,
 };
 use bitfun_events::{project_agentic_frontend_event, AgenticEvent};
-use bitfun_runtime_ports::{AgentSubmissionSource, DialogSubmissionPolicy, SessionExecutionTarget};
+use bitfun_runtime_ports::{
+    AgentSessionModelUpdateRequest, AgentSubmissionSource, DialogSubmissionPolicy,
+    SessionExecutionTarget,
+};
 
 use crate::{shutdown_mcp_servers, BootstrapProfile};
 
 use super::permissions::{self, REJECT_AND_REPORT_REASON};
-use super::protocol::{DispatchApprovalPolicy, DispatchEvent, DispatchJobState};
+use super::protocol::{DispatchApprovalPolicy, DispatchEvent, DispatchJobState, DispatchTurnKind};
 use super::store::{DispatchStore, WorkspaceLock};
 
 const TURN_SETTLEMENT_TIMEOUT_MS: u64 = 5_000;
@@ -77,7 +80,20 @@ async fn run_inner(store: &DispatchStore, job_id: &str) -> Result<()> {
             workspace.display()
         );
     }
-    super::ensure_selected_model_ready(job.request.model.as_deref()).await?;
+    // Per-turn overrides are read before runtime bootstrap because the
+    // approval policy is baked into initialize_core_services. Nothing can
+    // enqueue another turn between this peek and the claim below: queueing
+    // requires a terminal state and the job is already non-terminal here.
+    let pending_turn = store.peek_follow_up_turn(job_id)?;
+    let effective_model = pending_turn
+        .as_ref()
+        .and_then(|turn| turn.model.clone())
+        .or_else(|| job.request.model.clone());
+    let effective_policy = pending_turn
+        .as_ref()
+        .and_then(|turn| turn.approval_policy)
+        .unwrap_or(job.request.approval_policy);
+    super::ensure_selected_model_ready(effective_model.as_deref()).await?;
 
     // Every detached worker takes the same stable lock for a canonical target
     // workspace. Waiting workers remain Queued and are visible/cancellable.
@@ -98,9 +114,26 @@ async fn run_inner(store: &DispatchStore, job_id: &str) -> Result<()> {
     }
     store.mark_state(job_id, DispatchJobState::Running, None, None)?;
 
+    // Persist the effective options before execution so `list`/`status` and
+    // any replacement worker observe the same choices this turn runs with.
+    let (model_changed, policy_changed) =
+        store.update_job_request_options(job_id, effective_model.as_deref(), effective_policy)?;
+    if policy_changed {
+        store.append_event(
+            job_id,
+            &DispatchEvent::approval_policy_selected(effective_policy),
+        )?;
+    }
+    if model_changed {
+        store.append_event(
+            job_id,
+            &DispatchEvent::model_selected(effective_model.as_deref()),
+        )?;
+    }
+
     let runtime = crate::initialize_core_services(
         workspace,
-        permissions::cli_policy(job.request.approval_policy),
+        permissions::cli_policy(effective_policy),
         BootstrapProfile::Execution,
     )
     .await?;
@@ -114,51 +147,116 @@ async fn run_inner(store: &DispatchStore, job_id: &str) -> Result<()> {
         .map_err(|error| anyhow!(error.into_message()))?;
 
     let workspace_path = job.request.workspace_path.clone();
-    agent_runtime
-        .create_session_with_id(
-            job.request.session_id.clone(),
-            AgentSessionCreateRequest {
-                session_name: job.title.clone(),
-                agent_type: job.request.agent_type.clone(),
-                workspace_path: Some(workspace_path.clone()),
-                project_workspace_path: Some(workspace_path.clone()),
-                execution_target: Some(SessionExecutionTarget::local(workspace_path.clone())),
-                workspace_id: None,
-                remote_connection_id: None,
-                remote_ssh_host: None,
-                model_id: job.request.model.clone(),
-                metadata: serde_json::Map::new(),
-            },
-        )
-        .await
-        .map_err(|error| anyhow!(error.into_message()))
-        .context("create target-owned dispatch session")?;
-
-    let turn_id = uuid::Uuid::new_v4().to_string();
-    // Persist the deterministic turn id before submission. A crash after the
-    // Runtime accepts the turn must never make a replacement worker submit the
-    // prompt a second time.
-    store.record_turn_id(job_id, &turn_id)?;
-    agent_runtime
-        .submit_dialog_turn(AgentDialogTurnRequest {
+    // A follow-up turn runs against the session the previous turn built, so its
+    // history is the agent's context. Restoring first is what makes a dispatch
+    // session a conversation; creating unconditionally would fail on the second
+    // turn because the persisted id already exists.
+    let restore_error = agent_runtime
+        .restore_session(AgentSessionRestoreRequest {
+            workspace_path: workspace_path.clone(),
             session_id: job.request.session_id.clone(),
-            message: job.request.prompt.clone(),
-            original_message: None,
-            turn_id: Some(turn_id.clone()),
-            agent_type: job.request.agent_type.clone(),
-            workspace_path: Some(workspace_path),
+            include_internal: false,
             remote_connection_id: None,
             remote_ssh_host: None,
-            policy: DialogSubmissionPolicy::for_source(AgentSubmissionSource::Cli),
-            reply_route: None,
-            prepended_reminders: Vec::new(),
-            attachments: Vec::new(),
-            metadata: permissions::metadata(job.request.approval_policy),
         })
         .await
-        .map_err(|error| anyhow!(error.into_message()))
-        .context("submit dispatch dialog turn")?;
+        .err();
+    if let Some(error) = restore_error.as_ref() {
+        // Expected on the first turn — there is nothing to restore yet.
+        tracing::debug!("Dispatch session restore did not apply: {error}");
+    }
+    if restore_error.is_some() {
+        agent_runtime
+            .create_session_with_id(
+                job.request.session_id.clone(),
+                AgentSessionCreateRequest {
+                    session_name: job.title.clone(),
+                    agent_type: job.request.agent_type.clone(),
+                    workspace_path: Some(workspace_path.clone()),
+                    project_workspace_path: Some(workspace_path.clone()),
+                    execution_target: Some(SessionExecutionTarget::local(workspace_path.clone())),
+                    workspace_id: None,
+                    remote_connection_id: None,
+                    remote_ssh_host: None,
+                    model_id: effective_model.clone(),
+                    metadata: serde_json::Map::new(),
+                },
+            )
+            .await
+            .map_err(|error| anyhow!(error.into_message()))
+            // A follow-up turn reaches this only when its restore failed, and
+            // creating then fails on the existing persisted id. Carry the
+            // restore error so the report names the real cause instead of the
+            // "already exists" symptom.
+            .with_context(|| match restore_error {
+                Some(restore) => {
+                    format!("create target-owned dispatch session after restore failed: {restore}")
+                }
+                None => "create target-owned dispatch session".to_string(),
+            })?;
+    } else if let Some(model) = effective_model.clone() {
+        // A restored session keeps the model of its previous turn; apply this
+        // turn's effective choice before submitting.
+        agent_runtime
+            .update_session_model(AgentSessionModelUpdateRequest {
+                session_id: job.request.session_id.clone(),
+                model_id: model,
+            })
+            .await
+            .map_err(|error| anyhow!(error.into_message()))
+            .context("apply dispatch turn model to restored session")?;
+    }
 
+    let turn_id = uuid::Uuid::new_v4().to_string();
+    // Claim the queued follow-up and persist the turn id in one step. A crash
+    // after the Runtime accepts the turn must never make a replacement worker
+    // submit the prompt a second time.
+    let follow_up = store.claim_follow_up_turn(job_id, &turn_id)?;
+    let turn_kind = follow_up.as_ref().map(|turn| turn.kind).unwrap_or_default();
+    match turn_kind {
+        DispatchTurnKind::Prompt => {
+            let prompt = follow_up
+                .as_ref()
+                .map(|turn| turn.prompt.clone())
+                .unwrap_or_else(|| job.request.prompt.clone());
+            let turn_attachments = follow_up
+                .as_ref()
+                .map(|turn| runtime_attachments(&turn.attachments))
+                .unwrap_or_else(|| runtime_attachments(&job.request.attachments));
+            agent_runtime
+                .submit_dialog_turn(AgentDialogTurnRequest {
+                    session_id: job.request.session_id.clone(),
+                    message: prompt,
+                    original_message: None,
+                    turn_id: Some(turn_id.clone()),
+                    execution: Default::default(),
+                    agent_type: job.request.agent_type.clone(),
+                    workspace_path: Some(workspace_path),
+                    remote_connection_id: None,
+                    remote_ssh_host: None,
+                    policy: DialogSubmissionPolicy::for_source(AgentSubmissionSource::Cli),
+                    reply_route: None,
+                    prepended_reminders: Vec::new(),
+                    attachments: turn_attachments,
+                    metadata: permissions::metadata(effective_policy),
+                })
+                .await
+                .map_err(|error| anyhow!(error.into_message()))
+                .context("submit dispatch dialog turn")?;
+        }
+        DispatchTurnKind::Compact => {
+            // The compaction runs as a turn with this worker's turn id, so
+            // its DialogTurn/ContextCompression events flow through the same
+            // event loop and settle the job like any other turn.
+            compatibility
+                .start_manual_compaction(job.request.session_id.clone(), turn_id.clone())
+                .await
+                .map_err(anyhow::Error::msg)
+                .context("start dispatch manual compaction")?;
+        }
+    }
+
+    let mut event_scope = JobEventScope::new(job.request.session_id.clone(), turn_id.clone());
     let mut initial_permissions = agent_runtime
         .pending_permission_requests()
         .unwrap_or_default()
@@ -170,7 +268,7 @@ async fn run_inner(store: &DispatchStore, job_id: &str) -> Result<()> {
 
     let (terminal_state, terminal_error) = loop {
         if let Some(request) = initial_permissions.pop_front() {
-            if permission_targets_job(&request, &job.request.session_id)
+            if event_scope.permission_targets_job(&request)
                 && handled_permissions.insert(request.request_id.clone())
             {
                 if let Some(reason) = handle_permission(
@@ -180,7 +278,7 @@ async fn run_inner(store: &DispatchStore, job_id: &str) -> Result<()> {
                     &job.request.session_id,
                     &turn_id,
                     request,
-                    job.request.approval_policy,
+                    effective_policy,
                 )
                 .await?
                 {
@@ -209,7 +307,7 @@ async fn run_inner(store: &DispatchStore, job_id: &str) -> Result<()> {
                         );
                     }
                 };
-                if !event_belongs_to_job(&envelope.event, &job.request.session_id, &turn_id) {
+                if !event_scope.admit(&envelope.event) {
                     continue;
                 }
                 let projection = project_agentic_frontend_event(envelope.event.clone())
@@ -245,7 +343,7 @@ async fn run_inner(store: &DispatchStore, job_id: &str) -> Result<()> {
                 let PermissionRequestEvent::Asked { request } = event else {
                     continue;
                 };
-                if !permission_targets_job(&request, &job.request.session_id)
+                if !event_scope.permission_targets_job(&request)
                     || !handled_permissions.insert(request.request_id.clone())
                 {
                     continue;
@@ -257,7 +355,7 @@ async fn run_inner(store: &DispatchStore, job_id: &str) -> Result<()> {
                     &job.request.session_id,
                     &turn_id,
                     request,
-                    job.request.approval_policy,
+                    effective_policy,
                 )
                 .await?
                 {
@@ -269,7 +367,6 @@ async fn run_inner(store: &DispatchStore, job_id: &str) -> Result<()> {
                     store,
                     job_id,
                     &agent_runtime,
-                    &compatibility,
                     &job.request.session_id,
                     &turn_id,
                 ).await? {
@@ -352,7 +449,6 @@ async fn process_mailboxes(
     store: &DispatchStore,
     job_id: &str,
     runtime: &bitfun_agent_runtime::sdk::AgentRuntime,
-    compatibility: &bitfun_core::product_runtime::CoreAgentRuntimeCompatibility,
     session_id: &str,
     turn_id: &str,
 ) -> Result<Option<(DispatchJobState, Option<String>)>> {
@@ -388,15 +484,15 @@ async fn process_mailboxes(
     }
 
     for request in store.list_pending_append_messages(job_id)? {
-        compatibility
-            .submit_steering(
-                session_id.to_string(),
-                turn_id.to_string(),
-                request.content.clone(),
-                request.display_content.clone(),
-            )
+        runtime
+            .steer_dialog_turn(AgentDialogSteerRequest {
+                session_id: session_id.to_string(),
+                turn_id: turn_id.to_string(),
+                content: request.content.clone(),
+                display_content: request.display_content.clone(),
+            })
             .await
-            .map_err(anyhow::Error::msg)
+            .map_err(|error| anyhow!(error.into_message()))
             .with_context(|| {
                 format!(
                     "append message {} to running dispatch turn",
@@ -426,6 +522,7 @@ async fn cancel_turn(
             requester_session_id: None,
             reason: Some(reason.to_string()),
             wait_timeout_ms: None,
+            cancel_descendants: true,
         })
         .await
     {
@@ -433,24 +530,74 @@ async fn cancel_turn(
     }
 }
 
-fn permission_targets_job(request: &PermissionRequest, session_id: &str) -> bool {
-    crate::runtime::approval::permission_request_targets_session(request, session_id)
+fn runtime_attachments(
+    attachments: &[super::protocol::DispatchAttachment],
+) -> Vec<bitfun_runtime_ports::AgentInputAttachment> {
+    attachments
+        .iter()
+        .map(|attachment| {
+            bitfun_runtime_ports::AgentInputAttachment::remote_image(
+                attachment.id.clone(),
+                attachment
+                    .name
+                    .clone()
+                    .unwrap_or_else(|| attachment.id.clone()),
+                attachment.data_url.clone(),
+            )
+        })
+        .collect()
 }
 
-fn event_belongs_to_job(event: &AgenticEvent, session_id: &str, turn_id: &str) -> bool {
-    if matches!(event, AgenticEvent::SubagentSessionLinked { .. }) {
-        // Detached dispatch has no child-session observer or dispatch marker. Publishing
-        // this link would create an empty local-looking child in the Web UI,
-        // while every later child event is correctly outside the parent scope.
-        return false;
+/// Which sessions' events belong in this job's log.
+///
+/// The job session's turn-scoped events must match the worker's turn, and any
+/// subagent session linked under it (recursively) is admitted wholesale so
+/// the controller can project child transcripts.
+struct JobEventScope {
+    session_id: String,
+    turn_id: String,
+    children: std::collections::HashSet<String>,
+}
+
+impl JobEventScope {
+    fn new(session_id: String, turn_id: String) -> Self {
+        Self {
+            session_id,
+            turn_id,
+            children: std::collections::HashSet::new(),
+        }
     }
-    if event
-        .session_id()
-        .is_some_and(|event_session| event_session != session_id)
-    {
-        return false;
+
+    fn admit(&mut self, event: &AgenticEvent) -> bool {
+        if let AgenticEvent::SubagentSessionLinked {
+            session_id: child_session,
+            parent_session_id,
+            ..
+        } = event
+        {
+            if parent_session_id == &self.session_id || self.children.contains(parent_session_id) {
+                self.children.insert(child_session.clone());
+                return true;
+            }
+            return false;
+        }
+        match event.session_id() {
+            Some(event_session) if event_session == self.session_id => {
+                event_turn_id(event).is_none_or(|event_turn| event_turn == self.turn_id)
+            }
+            Some(event_session) => self.children.contains(event_session),
+            None => true,
+        }
     }
-    event_turn_id(event).is_none_or(|event_turn| event_turn == turn_id)
+
+    fn permission_targets_job(&self, request: &PermissionRequest) -> bool {
+        if crate::runtime::approval::permission_request_targets_session(request, &self.session_id) {
+            return true;
+        }
+        self.children.iter().any(|child| {
+            crate::runtime::approval::permission_request_targets_session(request, child)
+        })
+    }
 }
 
 fn event_turn_id(event: &AgenticEvent) -> Option<&str> {
@@ -525,6 +672,21 @@ mod tests {
     use super::*;
 
     #[test]
+    fn dispatch_append_reuses_the_runtime_steering_port() {
+        let source = include_str!("worker.rs").replace("\r\n", "\n");
+        let mailboxes = source
+            .split_once("async fn process_mailboxes(")
+            .expect("mailbox processor")
+            .1
+            .split_once("async fn cancel_turn(")
+            .expect("mailbox processor boundary")
+            .0;
+
+        assert!(mailboxes.contains(".steer_dialog_turn(AgentDialogSteerRequest"));
+        assert!(!mailboxes.contains("compatibility.submit_steering"));
+    }
+
+    #[test]
     fn terminal_events_map_to_persistent_job_states() {
         let completed = AgenticEvent::DialogTurnCompleted {
             session_id: "session-1".to_string(),
@@ -556,7 +718,20 @@ mod tests {
     }
 
     #[test]
-    fn dispatch_does_not_publish_subagent_sessions_before_child_observers_exist() {
+    fn linked_subagent_sessions_flow_into_the_job_event_scope() {
+        let mut scope = JobEventScope::new("session-1".to_string(), "turn-1".to_string());
+
+        let child_chunk = AgenticEvent::TextChunk {
+            session_id: "child-session".to_string(),
+            turn_id: "child-turn".to_string(),
+            round_id: "round-1".to_string(),
+            attempt_id: None,
+            attempt_index: None,
+            text: "child output".to_string(),
+        };
+        // A child that was never linked stays outside the scope.
+        assert!(!scope.admit(&child_chunk));
+
         let linked = AgenticEvent::SubagentSessionLinked {
             session_id: "child-session".to_string(),
             subagent_dialog_turn_id: "child-turn".to_string(),
@@ -567,18 +742,36 @@ mod tests {
             model_id: None,
             focused_review_display_label: None,
         };
-        assert!(!event_belongs_to_job(&linked, "session-1", "turn-1"));
+        assert!(scope.admit(&linked));
+        assert!(scope.admit(&child_chunk));
 
-        let child_chunk = AgenticEvent::TextChunk {
-            session_id: "child-session".to_string(),
-            turn_id: "child-turn".to_string(),
-            round_id: "round-1".to_string(),
-            attempt_id: None,
-            attempt_index: None,
-            text: "child output".to_string(),
+        // Grandchildren link recursively through an admitted child.
+        let grandchild_link = AgenticEvent::SubagentSessionLinked {
+            session_id: "grandchild-session".to_string(),
+            subagent_dialog_turn_id: "grandchild-turn".to_string(),
+            parent_session_id: "child-session".to_string(),
+            parent_dialog_turn_id: "child-turn".to_string(),
+            parent_tool_call_id: "tool-2".to_string(),
+            agent_type: None,
+            model_id: None,
+            focused_review_display_label: None,
         };
-        assert!(!event_belongs_to_job(&child_chunk, "session-1", "turn-1"));
+        assert!(scope.admit(&grandchild_link));
 
+        // A link from an unrelated parent is refused.
+        let foreign_link = AgenticEvent::SubagentSessionLinked {
+            session_id: "other-child".to_string(),
+            subagent_dialog_turn_id: "t".to_string(),
+            parent_session_id: "unrelated-session".to_string(),
+            parent_dialog_turn_id: "t".to_string(),
+            parent_tool_call_id: "tool-3".to_string(),
+            agent_type: None,
+            model_id: None,
+            focused_review_display_label: None,
+        };
+        assert!(!scope.admit(&foreign_link));
+
+        // Parent turn discipline is unchanged.
         let parent_chunk = AgenticEvent::TextChunk {
             session_id: "session-1".to_string(),
             turn_id: "turn-1".to_string(),
@@ -587,6 +780,15 @@ mod tests {
             attempt_index: None,
             text: "parent output".to_string(),
         };
-        assert!(event_belongs_to_job(&parent_chunk, "session-1", "turn-1"));
+        assert!(scope.admit(&parent_chunk));
+        let stale_parent_chunk = AgenticEvent::TextChunk {
+            session_id: "session-1".to_string(),
+            turn_id: "turn-0".to_string(),
+            round_id: "round-1".to_string(),
+            attempt_id: None,
+            attempt_index: None,
+            text: "stale output".to_string(),
+        };
+        assert!(!scope.admit(&stale_parent_chunk));
     }
 }

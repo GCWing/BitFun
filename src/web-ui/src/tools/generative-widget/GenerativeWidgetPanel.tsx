@@ -96,7 +96,7 @@ export const GenerativeWidgetPanel: React.FC<GenerativeWidgetPanelProps> = ({
 
   if (!draftCode) {
     return (
-      <div className="bitfun-generative-widget-panel bitfun-generative-widget-panel--empty">
+      <div className="bitfun-generative-widget-panel bitfun-generative-widget-panel--empty" data-bf-component="generative-widget" data-bf-part="empty" data-bf-state="empty">
         <div className="bitfun-generative-widget-panel__empty-copy">
           {t('toolCards.generativeUI.empty')}
         </div>
@@ -105,14 +105,14 @@ export const GenerativeWidgetPanel: React.FC<GenerativeWidgetPanelProps> = ({
   }
 
   return (
-    <div className="bitfun-generative-widget-panel">
-      <div className="bitfun-generative-widget-panel__toolbar">
-        <div className="bitfun-generative-widget-panel__toolbar-meta">
+    <div className="bitfun-generative-widget-panel" data-bf-component="generative-widget" data-bf-part="root">
+      <div className="bitfun-generative-widget-panel__toolbar" data-bf-component="generative-widget" data-bf-part="toolbar">
+        <div className="bitfun-generative-widget-panel__toolbar-meta" data-bf-component="generative-widget" data-bf-part="toolbarMeta">
           <span className={`bitfun-generative-widget-panel__save-state bitfun-generative-widget-panel__save-state--${saveState}`}>
             {saveLabel}
           </span>
         </div>
-        <div className="bitfun-generative-widget-panel__toolbar-actions">
+        <div className="bitfun-generative-widget-panel__toolbar-actions" data-bf-component="generative-widget" data-bf-part="toolbarActions">
           <button
             type="button"
             className="bitfun-generative-widget-panel__button"
@@ -134,9 +134,9 @@ export const GenerativeWidgetPanel: React.FC<GenerativeWidgetPanelProps> = ({
         </div>
       </div>
 
-      <div className="bitfun-generative-widget-panel__workspace">
-        <section className="bitfun-generative-widget-panel__pane bitfun-generative-widget-panel__pane--editor">
-          <div className="bitfun-generative-widget-panel__pane-header">
+      <div className="bitfun-generative-widget-panel__workspace" data-bf-component="generative-widget" data-bf-part="workspace">
+        <section className="bitfun-generative-widget-panel__pane bitfun-generative-widget-panel__pane--editor" data-bf-component="generative-widget" data-bf-part="editorPane">
+          <div className="bitfun-generative-widget-panel__pane-header" data-bf-component="generative-widget" data-bf-part="paneHeader">
             <span className="bitfun-generative-widget-panel__pane-title">
               <Code2 size={14} />
               <span>{t('toolCards.generativeUI.source')}</span>
@@ -144,6 +144,8 @@ export const GenerativeWidgetPanel: React.FC<GenerativeWidgetPanelProps> = ({
           </div>
           <textarea
             className="bitfun-generative-widget-panel__editor"
+            data-bf-component="generative-widget"
+            data-bf-part="editor"
             value={draftCode}
             onChange={(event) => {
               setDraftCode(event.target.value);
@@ -159,7 +161,7 @@ export const GenerativeWidgetPanel: React.FC<GenerativeWidgetPanelProps> = ({
       </div>
 
       {saveError && (
-        <div className="bitfun-generative-widget-panel__error">
+        <div className="bitfun-generative-widget-panel__error" data-bf-component="generative-widget" data-bf-part="error">
           {saveError}
         </div>
       )}

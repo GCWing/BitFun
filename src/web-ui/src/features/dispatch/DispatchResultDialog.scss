@@ -1,14 +1,14 @@
 @use '../../component-library/styles/tokens' as *;
 
-// Same type scale and shell as DispatchInstallDialog, so the two dispatch
+// Same type scale and shell as the dispatch target setup dialog, so the two
 // dialogs read as one feature.
 .dispatch-result-dialog {
   display: flex;
   min-height: 0;
   max-height: min(78vh, 720px);
   flex-direction: column;
-  color: var(--color-text-primary);
-  font-size: var(--font-size-sm);
+  color: var(--bf-appearance-token-color-text-primary);
+  font-size: var(--bf-appearance-token-font-size-sm);
 
   &__header {
     display: flex;
@@ -25,8 +25,8 @@
   }
 
   &__subtitle {
-    color: var(--color-text-secondary);
-    font-size: var(--font-size-xs);
+    color: var(--bf-appearance-token-color-text-secondary);
+    font-size: var(--bf-appearance-token-font-size-xs);
   }
 
   &__body {
@@ -49,8 +49,8 @@
     display: flex;
     align-items: center;
     gap: $size-gap-2;
-    color: var(--color-text-secondary);
-    font-size: var(--font-size-xs);
+    color: var(--bf-appearance-token-color-text-secondary);
+    font-size: var(--bf-appearance-token-font-size-xs);
   }
 
   &__field {
@@ -60,27 +60,53 @@
 
     code {
       overflow-wrap: anywhere;
-      color: var(--color-text-secondary);
-      font-family: var(--font-family-mono);
-      font-size: var(--font-size-xs);
+      color: var(--bf-appearance-token-color-text-secondary);
+      font-family: var(--bf-appearance-token-font-family-mono);
+      font-size: var(--bf-appearance-token-font-size-xs);
     }
   }
 
   &__field-label {
-    color: var(--color-text-secondary);
-    font-size: var(--font-size-xs);
+    color: var(--bf-appearance-token-color-text-secondary);
+    font-size: var(--bf-appearance-token-font-size-xs);
     font-weight: 600;
+  }
+
+  &__details {
+    color: var(--bf-appearance-token-color-text-secondary);
+    font-size: var(--bf-appearance-token-font-size-xs);
+
+    summary {
+      width: fit-content;
+      cursor: pointer;
+      user-select: none;
+
+      &:hover,
+      &:focus-visible {
+        color: var(--bf-appearance-token-color-text-primary);
+      }
+    }
+  }
+
+  &__details-body {
+    display: grid;
+    gap: $size-gap-2;
+    margin-top: $size-gap-2;
+    padding: $size-gap-3;
+    border: 1px solid var(--bf-appearance-token-border-subtle);
+    border-radius: $size-radius-base;
+    background: var(--bf-appearance-token-element-bg-subtle);
   }
 
   &__group {
     display: flex;
     flex-direction: column;
-    border: 1px solid var(--border-subtle);
+    border: 1px solid var(--bf-appearance-token-border-subtle);
     border-radius: $size-radius-base;
     overflow: hidden;
 
     &[data-conflict='true'] {
-      border-color: var(--color-warning-border);
+      border-color: var(--bf-appearance-token-color-warning-border);
     }
   }
 
@@ -89,18 +115,18 @@
     align-items: center;
     gap: $size-gap-2;
     padding: $size-gap-2 $size-gap-3;
-    border-bottom: 1px solid var(--border-subtle);
-    background: var(--element-bg-subtle);
-    font-size: var(--font-size-sm);
+    border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
+    background: var(--bf-appearance-token-element-bg-subtle);
+    font-size: var(--bf-appearance-token-font-size-sm);
 
     > svg {
-      color: var(--color-text-muted);
+      color: var(--bf-appearance-token-color-text-muted);
     }
 
     > span {
       margin-left: auto;
-      color: var(--color-text-muted);
-      font-size: var(--font-size-xs);
+      color: var(--bf-appearance-token-color-text-muted);
+      font-size: var(--bf-appearance-token-font-size-xs);
       font-variant-numeric: tabular-nums;
     }
   }
@@ -118,26 +144,42 @@
       gap: $size-gap-2;
       padding: 2px 0;
       overflow-wrap: anywhere;
-      color: var(--color-text-secondary);
-      font-family: var(--font-family-mono);
-      font-size: var(--font-size-xs);
+      color: var(--bf-appearance-token-color-text-secondary);
+      font-family: var(--bf-appearance-token-font-family-mono);
+      font-size: var(--bf-appearance-token-font-size-xs);
+
+      > strong {
+        min-width: 2ch;
+        color: var(--bf-appearance-token-color-text-muted);
+        font-weight: 600;
+      }
+
+      > span {
+        overflow-wrap: anywhere;
+      }
     }
 
     // Deletions read as removals, not as ordinary paths.
     &[data-kind='deleted'] li {
       text-decoration: line-through;
-      color: var(--color-text-muted);
+      color: var(--bf-appearance-token-color-text-muted);
     }
 
     em {
       margin-left: auto;
-      color: var(--color-warning);
+      color: var(--bf-appearance-token-color-warning);
       // The list is monospaced for paths; this annotation is prose.
-      font-family: var(--font-family-sans);
-      font-size: var(--font-size-xs);
+      font-family: var(--bf-appearance-token-font-family-sans);
+      font-size: var(--bf-appearance-token-font-size-xs);
       font-style: normal;
       white-space: nowrap;
     }
+  }
+
+  &__empty {
+    padding: $size-gap-3;
+    color: var(--bf-appearance-token-color-text-muted);
+    font-size: var(--bf-appearance-token-font-size-xs);
   }
 
   &__actions {
@@ -145,8 +187,8 @@
     justify-content: flex-end;
     gap: $size-gap-2;
     padding: $size-gap-3 $size-gap-4;
-    border-top: 1px solid var(--border-subtle);
-    background: var(--color-bg-primary);
+    border-top: 1px solid var(--bf-appearance-token-border-subtle);
+    background: var(--bf-appearance-token-color-bg-primary);
   }
 
   &__spin {

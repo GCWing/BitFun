@@ -17,7 +17,7 @@ MiniApp **能且只能**用以下 API，没有任何"通用 BitFun 后端通道"
 - `app.dialog.open/save/message` —— 文件对话框
 - `app.clipboard.readText/writeText` —— 剪贴板
 - `app.call('xxx', ...)` + `worker.js` —— 自定义 Node 后端（仅 `node.enabled = true` 时）
-- `app.theme / locale / on*` —— 主题与 i18n
+- `app.appearanceMode / locale / on*` —— 主题与 i18n
 
 **框架不暴露**的 BitFun 后端能力（截至当前版本）：WorkspaceService（结构化搜索 / 索引）、GitService（结构化 status/diff/blame）、TerminalService、Session/AgenticSystem、LSP / Snapshot / Mermaid / Skills / Browser / Computer Use / Config 等。需要这些能力时：
 
@@ -108,7 +108,7 @@ MiniApp 中所有与宿主通信的 API 均通过 `window.app` 暴露。
 app.appId        // string — 当前 MiniApp 的 ID
 app.appDataDir   // string — 应用数据目录绝对路径
 app.workspaceDir // string — 当前工作区路径
-app.theme        // 'dark' | 'light' — 当前主题
+app.appearanceMode        // 'dark' | 'light' — 当前主题
 app.locale       // string — 当前语言 ID（如 'zh-CN' / 'en-US'），随宿主切换更新
 app.platform     // 'win32' | 'darwin' | 'linux'
 app.mode         // 'hosted'
@@ -289,8 +289,8 @@ const text = await app.clipboard.readText();
 ```javascript
 app.onActivate(() => { /* Tab 变为活跃状态 */ });
 app.onDeactivate(() => { /* Tab 切走 */ });
-app.onThemeChange((payload) => {
-  // payload: { type: 'dark'|'light', vars: { '--bitfun-bg': '...', ... } }
+app.onAppearanceChange((payload) => {
+  // payload: { mode: 'dark'|'light', vars: { '--bitfun-bg': '...', ... } }
 });
 app.onLocaleChange((locale) => {
   // locale: 新的语言 ID 字符串（如 'zh-CN' / 'en-US'）

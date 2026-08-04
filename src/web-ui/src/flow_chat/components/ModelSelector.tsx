@@ -10,6 +10,7 @@
 
 import React, { useState, useEffect, useId, useRef, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
+import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { Brain, ChevronDown, Check, Zap } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { configManager } from '@/infrastructure/config/services/ConfigManager';
@@ -20,6 +21,7 @@ import { getEffectiveReasoningMode, isReasoningVisiblyEnabled } from '@/infrastr
 import { globalEventBus } from '@/infrastructure/event-bus';
 import type { AIModelConfig, AgentModelDefaultsConfig, DefaultModelsConfig } from '@/infrastructure/config/types';
 import { Switch, Tooltip } from '@/component-library';
+import { notificationService } from '@/shared/notification-system';
 import { FlowChatStore } from '../store/FlowChatStore';
 import { getModelMaxTokens } from '../services/flow-chat-manager/SessionModule';
 import { acpClientIdFromAgentType } from '../utils/acpSession';
@@ -66,6 +68,10 @@ interface ModelSelectorProps {
   onLoadingChange?: (loading: boolean) => void;
   /** Target-owned model catalog for transports that do not have a local backend session. */
   externalSelection?: ExternalModelSelection;
+  /** Agent-profile model used only when the session has no explicit selection. */
+  modeDefaultModelId?: string;
+  /** Whether a selection also changes BitFun's shared built-in mode default. */
+  persistSharedModeDefault?: boolean;
 }
 
 interface ModelInfo {
@@ -185,6 +191,8 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
   contextUsageSource,
   onLoadingChange,
   externalSelection,
+  modeDefaultModelId,
+  persistSharedModeDefault = true,
 }) => {
   const { t } = useTranslation('flow-chat');
   const [allModels, setAllModels] = useState<AIModelConfig[]>([]);
@@ -492,7 +500,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
 
     // Legacy sessions created without a model selector fall back to the current
     // mode default until they are migrated by the send path.
-    const configuredModelId = modeModel;
+    const configuredModelId = modeDefaultModelId?.trim() || modeModel;
     if (configuredModelId === 'auto') return 'auto';
     if (configuredModelId === 'primary' || configuredModelId === 'fast') {
       const actualModelId = defaultModels[configuredModelId];
@@ -501,7 +509,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     }
     const model = allModels.find(m => m.id === configuredModelId);
     return model ? configuredModelId : 'auto';
-  }, [allModels, modeModel, defaultModels, activeSession?.config.modelName, targetIsSubagent]);
+  }, [allModels, modeDefaultModelId, modeModel, defaultModels, activeSession?.config.modelName, targetIsSubagent]);
 
   const currentModel = useMemo((): ModelInfo | null => {
     const modelId = getCurrentModelId();
@@ -570,6 +578,15 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     setLoading(true);
     setDropdownOpen(false);
 
+    // The optimistic session write below must be undone when the backend
+    // rejects the switch; otherwise the selector keeps showing a model the
+    // session never adopted, and the next send pushes it to the backend.
+    const store = FlowChatStore.getInstance();
+    const previousSessionModelName = sessionId
+      ? store.getState().sessions.get(sessionId)?.config.modelName
+      : undefined;
+    let sessionModelWrittenOptimistically = false;
+
     try {
       if (externalSelection) {
         await externalSelection.onSelect(modelId);
@@ -586,7 +603,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
         });
         setAcpOptions(options);
         syncAcpContextUsageToStore(sessionId, options);
-        FlowChatStore.getInstance().updateSessionModelName(sessionId, modelId);
+        store.updateSessionModelName(sessionId, modelId);
         log.info('ACP session model updated', { sessionId, acpClientId, modelId });
         return;
       }
@@ -594,10 +611,10 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
       const updateTargetSessionModel = async () => {
         if (!sessionId) return;
 
-        const store = FlowChatStore.getInstance();
         // Update the frontend session model immediately so the UI reflects the
         // switch without waiting for the backend IPC round-trip.
         store.updateSessionModelName(sessionId, modelId);
+        sessionModelWrittenOptimistically = true;
         const maxContextTokens = await getModelMaxTokens(modelId, currentMode);
         store.updateSessionMaxContextTokens(sessionId, maxContextTokens);
         const session = store.getState().sessions.get(sessionId);
@@ -619,15 +636,23 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
         return;
       }
 
-      await configManager.setConfig('ai.agent_model_defaults.mode', modelId);
-      setModeModel(modelId);
+      if (persistSharedModeDefault) {
+        await configManager.setConfig('ai.agent_model_defaults.mode', modelId);
+        setModeModel(modelId);
+        globalEventBus.emit('mode:config:updated');
+      }
       await updateTargetSessionModel();
 
       log.info('Mode model updated', { mode: currentMode, modelId });
-
-      globalEventBus.emit('mode:config:updated');
     } catch (error) {
       log.error('Failed to switch model', error);
+      // Only a previously pinned selection can be restored: the store has no
+      // way to express "never pinned", and forcing 'auto' there would claim a
+      // binding the session does not have either.
+      if (sessionId && sessionModelWrittenOptimistically && previousSessionModelName) {
+        store.updateSessionModelName(sessionId, previousSessionModelName);
+      }
+      notificationService.error(t('modelSelector.switchFailed'));
     } finally {
       setLoading(false);
     }
@@ -641,7 +666,9 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     externalSelection,
     isAcpSession,
     loading,
+    persistSharedModeDefault,
     sessionId,
+    t,
     targetIsSubagent,
   ]);
 
@@ -869,7 +896,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     });
 
     return (
-      <div
+      <div data-bf-component="model-selector" data-bf-part="root" data-bf-state={dropdownOpen ? 'open' : undefined}
         ref={dropdownRef}
         className={`bitfun-model-selector ${className}`}
       >
@@ -892,15 +919,15 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
               }
             }}
             disabled={loading}
-          >
-            <span className="bitfun-model-selector__name">
+           data-bf-component="model-selector" data-bf-part="trigger" data-bf-state={dropdownOpen ? 'open' : undefined}>
+            <span className="bitfun-model-selector__name" data-bf-component="model-selector" data-bf-part="name">
               {getModelDisplayLabel(acpCurrentModel, currentAcpModelId)}
             </span>
             {acpFastMode?.enabled && (
               <Zap size={9} className="bitfun-model-selector__fast-icon" />
             )}
             {tokenPercentage > 0 && (
-              <span className={`bitfun-model-selector__ctx-usage${tokenStatusClass ? ` bitfun-model-selector__ctx-usage--${tokenStatusClass}` : ''}`}>
+              <span className={`bitfun-model-selector__ctx-usage${tokenStatusClass ? ` bitfun-model-selector__ctx-usage--${tokenStatusClass}` : ''}`} data-bf-component="model-selector" data-bf-part="contextUsage">
                 · {tokenPercentage}%
               </span>
             )}
@@ -912,6 +939,8 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
           <div
             id={menuId}
             className="bitfun-model-selector__dropdown"
+            data-bf-component="model-selector"
+            data-bf-part="dropdown"
             ref={portalDropdownRef}
             style={dropdownStyle}
             data-testid="chat-model-selector-menu"
@@ -921,14 +950,14 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
             aria-label="ACP model"
             onKeyDown={handleDropdownKeyDown}
           >
-            <div className="bitfun-model-selector__dropdown-header">
+            <div className="bitfun-model-selector__dropdown-header" data-bf-component="model-selector" data-bf-part="dropdownHeader">
               <span>ACP model</span>
               <span className="bitfun-model-selector__dropdown-hint">
                 {acpClientId}
               </span>
             </div>
 
-            <div className="bitfun-model-selector__list">
+            <div className="bitfun-model-selector__list" data-bf-component="model-selector" data-bf-part="list">
               {acpAvailableModels.map(model => {
                 const isSelected = currentAcpModelId === model.id;
 
@@ -943,9 +972,12 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                       data-model-name={model.modelName}
                       data-selected={isSelected ? 'true' : 'false'}
                       className={`bitfun-model-selector__option ${isSelected ? 'bitfun-model-selector__option--selected' : ''}`}
+                      data-bf-component="model-selector"
+                      data-bf-part="option"
+                      data-bf-state={isSelected ? 'selected' : undefined}
                       onClick={() => handleSelectModel(model.id)}
                     >
-                      <div className="bitfun-model-selector__option-main">
+                      <div className="bitfun-model-selector__option-main" data-bf-component="model-selector" data-bf-part="optionMain">
                         <span className="bitfun-model-selector__option-name">
                           {model.modelName}
                         </span>
@@ -964,7 +996,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
             {acpFastMode && (
               <>
                 <div className="bitfun-model-selector__divider" />
-                <div className="bitfun-model-selector__config-row">
+                <div className="bitfun-model-selector__config-row" data-bf-component="model-selector" data-bf-part="configRow">
                   <div className="bitfun-model-selector__config-copy">
                     <span className="bitfun-model-selector__config-name">
                       {t('modelSelector.fastMode')}
@@ -984,7 +1016,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
               </>
             )}
           </div>,
-          document.body
+          getAppearanceOverlayHost()
         )}
       </div>
     );
@@ -1009,7 +1041,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
   });
 
   return (
-    <div
+    <div data-bf-component="model-selector" data-bf-part="root" data-bf-state={dropdownOpen ? 'open' : undefined}
       ref={dropdownRef}
       className={`bitfun-model-selector ${className}`}
     >
@@ -1029,8 +1061,8 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
             setDropdownOpen(nextOpen);
           }}
           disabled={loading}
-        >
-          <span className="bitfun-model-selector__name">
+         data-bf-component="model-selector" data-bf-part="trigger" data-bf-state={dropdownOpen ? 'open' : undefined}>
+          <span className="bitfun-model-selector__name" data-bf-component="model-selector" data-bf-part="name">
             {getModelDisplayLabel(currentModel, t('modelSelector.autoModel'))}
           </span>
           {currentModel?.enableThinking && (
@@ -1042,7 +1074,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
             </span>
           )}
           {tokenPercentage > 0 && (
-            <span className={`bitfun-model-selector__ctx-usage${tokenStatusClass ? ` bitfun-model-selector__ctx-usage--${tokenStatusClass}` : ''}`}>
+            <span className={`bitfun-model-selector__ctx-usage${tokenStatusClass ? ` bitfun-model-selector__ctx-usage--${tokenStatusClass}` : ''}`} data-bf-component="model-selector" data-bf-part="contextUsage">
               · {tokenPercentage}%
             </span>
           )}
@@ -1054,6 +1086,8 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
         <div
           id={menuId}
           className="bitfun-model-selector__dropdown"
+          data-bf-component="model-selector"
+          data-bf-part="dropdown"
           ref={portalDropdownRef}
           style={dropdownStyle}
           data-testid="chat-model-selector-menu"
@@ -1063,7 +1097,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
           aria-label={t('modelSelector.modelSelection')}
           onKeyDown={handleDropdownKeyDown}
         >
-          <div className="bitfun-model-selector__dropdown-header">
+          <div className="bitfun-model-selector__dropdown-header" data-bf-component="model-selector" data-bf-part="dropdownHeader">
             <span>{t('modelSelector.modelSelection')}</span>
           </div>
 
@@ -1077,9 +1111,12 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
               data-model-name="auto"
               data-selected={currentModelId === 'auto' ? 'true' : 'false'}
               className={`bitfun-model-selector__option bitfun-model-selector__option--special ${currentModelId === 'auto' ? 'bitfun-model-selector__option--selected' : ''}`}
+              data-bf-component="model-selector"
+              data-bf-part="option"
+              data-bf-state={currentModelId === 'auto' ? 'selected' : undefined}
               onClick={() => handleSelectModel('auto')}
             >
-              <div className="bitfun-model-selector__option-main">
+              <div className="bitfun-model-selector__option-main" data-bf-component="model-selector" data-bf-part="optionMain">
                 <span className="bitfun-model-selector__option-name">{t('modelSelector.autoModel')}</span>
               </div>
               {currentModelId === 'auto' && (
@@ -1107,9 +1144,12 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                   data-model-name={primaryModel?.model_name || 'primary'}
                   data-selected={currentModelId === 'primary' ? 'true' : 'false'}
                   className={`bitfun-model-selector__option bitfun-model-selector__option--special ${currentModelId === 'primary' ? 'bitfun-model-selector__option--selected' : ''}`}
+                  data-bf-component="model-selector"
+                  data-bf-part="option"
+                  data-bf-state={currentModelId === 'primary' ? 'selected' : undefined}
                   onClick={() => handleSelectModel('primary')}
                 >
-                  <div className="bitfun-model-selector__option-main">
+                  <div className="bitfun-model-selector__option-main" data-bf-component="model-selector" data-bf-part="optionMain">
                     <span className="bitfun-model-selector__option-name">{t('modelSelector.primaryModel')}</span>
                   </div>
                   {currentModelId === 'primary' && (
@@ -1139,9 +1179,12 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                   data-model-name={fastModel?.model_name || 'fast'}
                   data-selected={currentModelId === 'fast' ? 'true' : 'false'}
                   className={`bitfun-model-selector__option bitfun-model-selector__option--special ${currentModelId === 'fast' ? 'bitfun-model-selector__option--selected' : ''}`}
+                  data-bf-component="model-selector"
+                  data-bf-part="option"
+                  data-bf-state={currentModelId === 'fast' ? 'selected' : undefined}
                   onClick={() => handleSelectModel('fast')}
                 >
-                  <div className="bitfun-model-selector__option-main">
+                  <div className="bitfun-model-selector__option-main" data-bf-component="model-selector" data-bf-part="optionMain">
                     <span className="bitfun-model-selector__option-name">{t('modelSelector.fastModel')}</span>
                   </div>
                   {currentModelId === 'fast' && (
@@ -1154,7 +1197,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
 
           <div className="bitfun-model-selector__divider" />
 
-          <div className="bitfun-model-selector__list">
+          <div className="bitfun-model-selector__list" data-bf-component="model-selector" data-bf-part="list">
             {availableModels.map(model => {
               const isSelected = currentModelId === model.id;
 
@@ -1169,9 +1212,12 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                     data-model-name={model.modelName}
                     data-selected={isSelected ? 'true' : 'false'}
                     className={`bitfun-model-selector__option ${isSelected ? 'bitfun-model-selector__option--selected' : ''}`}
+                    data-bf-component="model-selector"
+                    data-bf-part="option"
+                    data-bf-state={isSelected ? 'selected' : undefined}
                     onClick={() => handleSelectModel(model.id)}
                   >
-                    <div className="bitfun-model-selector__option-main">
+                    <div className="bitfun-model-selector__option-main" data-bf-component="model-selector" data-bf-part="optionMain">
                       <span className="bitfun-model-selector__option-name">
                         {model.modelName}
                         {model.enableThinking && (
@@ -1188,7 +1234,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
             })}
           </div>
         </div>,
-        document.body
+        getAppearanceOverlayHost()
       )}
     </div>
   );

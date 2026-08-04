@@ -46,12 +46,12 @@ export const TurnHistoryPanel: React.FC<TurnHistoryPanelProps> = ({ sessionId })
   };
 
   if (loading) {
-    return <div className="turn-history-panel-loading">Loading...</div>;
+    return <div data-bf-component="turn-history-panel" data-bf-part="loading" className="turn-history-panel-loading">Loading...</div>;
   }
 
   if (turns.length === 0) {
     return (
-      <div className="turn-history-panel-empty">
+      <div data-bf-component="turn-history-panel" data-bf-part="empty" className="turn-history-panel-empty">
         <p>No turn history available.</p>
         <p className="hint">A snapshot is created after each AI response.</p>
       </div>
@@ -59,19 +59,22 @@ export const TurnHistoryPanel: React.FC<TurnHistoryPanelProps> = ({ sessionId })
   }
 
   return (
-    <div className="turn-history-panel">
-      <div className="turn-history-header">
+    <div data-bf-component="turn-history-panel" data-bf-part="root" className="turn-history-panel">
+      <div data-bf-component="turn-history-panel" data-bf-part="header" className="turn-history-header">
         <h3>Session history</h3>
-        <span className="turn-count">{turns.length} turns</span>
+        <span data-bf-component="turn-history-panel" data-bf-part="count" className="turn-count">{turns.length} turns</span>
       </div>
 
-      <div className="turn-history-list">
+      <div data-bf-component="turn-history-panel" data-bf-part="list" className="turn-history-list">
         {turns.map((turn, index) => (
           <div 
             key={`${turn.sessionId}-${turn.turnIndex}`} 
+            data-bf-component="turn-history-panel"
+            data-bf-part="item"
+            data-bf-state={index === currentTurnIndex ? 'current' : ''}
             className={`turn-history-item ${index === currentTurnIndex ? 'current' : ''}`}
           >
-            <div className="turn-item-header">
+            <div data-bf-component="turn-history-panel" data-bf-part="itemHeader" className="turn-item-header">
               <span className="turn-index">Turn {index + 1}</span>
               <TurnRollbackButton
                 sessionId={turn.sessionId}
@@ -82,9 +85,9 @@ export const TurnHistoryPanel: React.FC<TurnHistoryPanelProps> = ({ sessionId })
             </div>
             
             {turn.modifiedFiles.length > 0 && (
-              <div className="turn-item-files">
+              <div data-bf-component="turn-history-panel" data-bf-part="files" className="turn-item-files">
                 <span className="files-label">Modified files:</span>
-                <ul className="files-list">
+                <ul data-bf-component="turn-history-panel" data-bf-part="filesList" className="files-list">
                   {turn.modifiedFiles.slice(0, 3).map((file: string, fileIndex: number) => (
                     <li key={fileIndex} className="file-item">{file}</li>
                   ))}
@@ -97,7 +100,7 @@ export const TurnHistoryPanel: React.FC<TurnHistoryPanelProps> = ({ sessionId })
               </div>
             )}
 
-            <div className="turn-item-time">
+            <div data-bf-component="turn-history-panel" data-bf-part="time" className="turn-item-time">
               {formatDate(new Date(turn.timestamp * 1000), {
                 dateStyle: 'medium',
                 timeStyle: 'short',

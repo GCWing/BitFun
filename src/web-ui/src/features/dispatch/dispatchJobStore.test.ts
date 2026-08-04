@@ -24,7 +24,6 @@ function registerJob(state: 'running' | 'succeeded' = 'running'): void {
     title: 'Dispatch test',
     agentType: 'agentic',
     approvalPolicy: 'reject-and-report',
-    workspaceDelivery: { kind: 'existing' },
     cursor: 10,
     state,
     terminalDrained: state === 'succeeded',
@@ -95,6 +94,34 @@ describe('dispatchJobStore', () => {
     });
   });
 
+  it('reopens the drain gate when the target accepts a follow-up turn', () => {
+    registerJob('succeeded');
+
+    dispatchJobStore.getState().markFollowUpAccepted('job-1', 'queued');
+
+    // The follow-up resumes the event log rather than replaying it, so the
+    // cursor and applied events survive while the terminal pin does not.
+    expect(dispatchJobStore.getState().jobs['job-1']).toMatchObject({
+      state: 'queued',
+      cursor: 10,
+      terminalDrained: false,
+    });
+  });
+
+  it('reopens the drain gate even when a retried follow-up already finished', () => {
+    registerJob('succeeded');
+
+    // A retried continue can report a terminal state when the turn ran to
+    // completion before the retry resolved. The reported state applies as-is,
+    // but the gate must still reopen so the missed pages get drained.
+    dispatchJobStore.getState().markFollowUpAccepted('job-1', 'succeeded');
+
+    expect(dispatchJobStore.getState().jobs['job-1']).toMatchObject({
+      state: 'succeeded',
+      terminalDrained: false,
+    });
+  });
+
   it('keeps the renderer cursor independent from controller-wide observer progress', () => {
     registerJob();
     dispatchJobStore.getState().mergeOutboundRecords([{
@@ -141,6 +168,12 @@ describe('dispatchJobStore', () => {
       model: 'configured-model',
       sourceWorkspacePath: '/controller/repo',
       sourceWorkspaceId: 'workspace-1',
+      baselineWorktreeId: 'worktree-1',
+      baselineWorktreePath: '/controller/.bitfun/worktrees/baseline',
+      baseCommit: 'abc123',
+      branch: 'bitfun/dispatch/job-rest',
+      remoteUrl: 'git@example.test:team/repo.git',
+      syncedHeadCommit: 'def456',
       lastCursor: 900,
       lastState: 'running',
       createdAt: '2026-07-28T00:00:00Z',
@@ -154,7 +187,52 @@ describe('dispatchJobStore', () => {
       model: 'configured-model',
       sourceWorkspacePath: '/controller/repo',
       sourceWorkspaceId: 'workspace-1',
+      branch: 'bitfun/dispatch/job-rest',
+      baselineWorktreePath: '/controller/.bitfun/worktrees/baseline',
+      syncedHeadCommit: 'def456',
       cursor: 0,
+    });
+  });
+
+  it('hydrates Git sync metadata into an existing pre-ack job', () => {
+    registerJob();
+
+    dispatchJobStore.getState().mergeOutboundRecords([{
+      jobId: 'job-1',
+      sessionId: 'session-1',
+      target: {
+        kind: 'ssh',
+        connectionId: 'ssh-1',
+        workspacePath: '/target/repo',
+        displayName: 'build-host',
+      },
+      sourceWorkspacePath: '/source',
+      baselineWorktreePath: '/source/.bitfun/worktrees/baseline',
+      branch: 'bitfun/dispatch/job-1',
+      syncedHeadCommit: 'def456',
+      workspacePath: '/target/repo',
+      promptPreview: 'Dispatch test',
+      lastCursor: 0,
+      lastState: 'running',
+      createdAt: '2026-07-28T00:00:00Z',
+      updatedAt: '2026-07-28T00:00:01Z',
+    }]);
+
+    expect(dispatchJobStore.getState().jobs['job-1']).toMatchObject({
+      branch: 'bitfun/dispatch/job-1',
+      baselineWorktreePath: '/source/.bitfun/worktrees/baseline',
+      syncedHeadCommit: 'def456',
+    });
+  });
+
+  it('marks a missing baseline worktree without changing job execution state', () => {
+    registerJob();
+
+    dispatchJobStore.getState().setBaselineWorktreeMissing('job-1', true);
+
+    expect(dispatchJobStore.getState().jobs['job-1']).toMatchObject({
+      state: 'running',
+      baselineWorktreeMissing: true,
     });
   });
 
@@ -190,7 +268,6 @@ describe('dispatchJobStore', () => {
       title: 'Prompt preview',
       agentType: 'agentic',
       approvalPolicy: 'reject-and-report',
-      workspaceDelivery: { kind: 'existing' },
       cursor: 0,
       state: 'running',
       appliedEventIds: [],
@@ -207,6 +284,35 @@ describe('dispatchJobStore', () => {
     expect(
       dispatchJobStore.getState().transportByJobId['job-restored'],
     ).toBeUndefined();
+  });
+
+  it('uses the stable baseline project when a linked source checkout is unavailable', () => {
+    const record = {
+      jobId: 'job-stable-project',
+      sessionId: 'session-stable-project',
+      target: {
+        kind: 'ssh' as const,
+        connectionId: 'ssh-1',
+        workspacePath: '/target/repo',
+        displayName: 'build-host',
+      },
+      baselineProjectWorkspacePath: '/controller/main-project',
+      baselineWorktreeId: 'worktree-1',
+      baselineWorktreePath: '/controller/baselines/job-stable-project',
+      branch: 'bitfun/dispatch/job-stable-project',
+      workspacePath: '/target/repo',
+      promptPreview: 'Prompt preview',
+      lastCursor: 0,
+      lastState: 'running' as const,
+      createdAt: '2026-07-28T00:00:00Z',
+      updatedAt: '2026-07-28T00:00:01Z',
+    };
+
+    dispatchJobStore.getState().mergeOutboundRecords([record]);
+
+    expect(
+      dispatchJobStore.getState().jobs['job-stable-project']?.sourceWorkspacePath,
+    ).toBe('/controller/main-project');
   });
 
   it('drops acknowledged renderer cache missing from the controller index', () => {
@@ -240,6 +346,7 @@ describe('dispatchJobStore', () => {
         workspacePath: '/repo',
         displayName: 'build-host',
       },
+      sourceWorkspacePath: '/source',
       workspacePath: '/repo',
       promptPreview: 'Dispatch test',
       lastCursor: 10,
@@ -250,6 +357,31 @@ describe('dispatchJobStore', () => {
 
     expect(dispatchJobStore.getState().jobs['job-1']).toBeUndefined();
     expect(dispatchJobStore.getState().dismissedJobIds).toContain('job-1');
+    expect(dispatchJobStore.getState().dismissedSessionIds).toContain('session-1');
+  });
+
+  it('uses a session tombstone when deletion happens before the job id is known', () => {
+    dispatchJobStore.getState().dismissSession('session-late');
+    dispatchJobStore.getState().mergeOutboundRecords([{
+      jobId: 'job-late',
+      sessionId: 'session-late',
+      target: {
+        kind: 'ssh',
+        connectionId: 'ssh-1',
+        workspacePath: '/repo',
+        displayName: 'build-host',
+      },
+      sourceWorkspacePath: '/source',
+      workspacePath: '/repo',
+      promptPreview: 'Dispatch test',
+      lastCursor: 0,
+      lastState: 'running',
+      createdAt: '2026-07-28T00:00:00Z',
+      updatedAt: '2026-07-28T00:00:01Z',
+    }]);
+
+    expect(dispatchJobStore.getState().jobs['job-late']).toBeUndefined();
+    expect(dispatchJobStore.getState().dismissedSessionIds).toContain('session-late');
   });
 
   it('keeps transport reachability transient and separate from authoritative job state', () => {
@@ -271,5 +403,6 @@ describe('dispatchJobStore', () => {
       dispatchJobStore.getState(),
     ) as Record<string, unknown> | undefined;
     expect(persistedState?.transportByJobId).toBeUndefined();
+    expect(persistedState?.dismissedSessionIds).toEqual([]);
   });
 });

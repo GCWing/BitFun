@@ -7,6 +7,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BitfunCanvasPanel } from './BitfunCanvasPanel';
+import { canvasAppearanceAdapter } from '@/infrastructure/appearance/adapters/CanvasAppearanceAdapter';
 
 const canvasApiMock = vi.hoisted(() => ({
   loadArtifact: vi.fn(() => Promise.resolve({ canvas: null })),
@@ -62,8 +63,8 @@ vi.mock('@/shared/services/FileTabManager', () => ({
   },
 }));
 
-vi.mock('@/tools/generative-widget/themePayload', () => ({
-  readWidgetThemePayload: vi.fn(() => null),
+vi.mock('@/tools/generative-widget/appearancePayload', () => ({
+  readWidgetAppearancePayload: vi.fn(() => null),
 }));
 
 vi.mock('@/tools/editor/components/CodeEditor', () => ({
@@ -75,6 +76,24 @@ describe('BitfunCanvasPanel message boundary', () => {
   let root: Root;
 
   beforeEach(() => {
+    canvasAppearanceAdapter.apply(
+      {
+        id: 'test.canvas',
+        mode: 'dark',
+        bg: '#111111',
+        panel: '#222222',
+        fg: '#eeeeee',
+        muted: '#aaaaaa',
+        border: '#444444',
+        accent: '#6699ff',
+        success: '#33aa77',
+        warning: '#ddaa33',
+        danger: '#dd4455',
+        info: '#5599dd',
+      },
+      undefined,
+      { revision: 1, appearanceId: 'test', mode: 'dark', globals: {}, assets: {} },
+    );
     container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);
@@ -169,7 +188,7 @@ describe('BitfunCanvasPanel message boundary', () => {
       window.dispatchEvent(new MessageEvent('message', {
         data: {
           type: 'bitfun-canvas-runtime-error',
-          message: "undefined is not an object (evaluating 'theme.surface.primary')",
+          message: "undefined is not an object (evaluating 'appearance.surface.primary')",
           name: 'TypeError',
           stack: 'LayerDiagram@blob:test:1:1',
         },
@@ -186,13 +205,13 @@ describe('BitfunCanvasPanel message boundary', () => {
     expect(sendMessageMock).toHaveBeenCalledTimes(1);
     expect(sendMessageMock.mock.calls[0][1]).toBe('session_1');
     expect(sendMessageMock.mock.calls[0][0]).toContain('Read this Canvas artifact with ReadCanvas');
-    expect(sendMessageMock.mock.calls[0][0]).toContain('theme.surface.primary');
+    expect(sendMessageMock.mock.calls[0][0]).toContain('appearance.surface.primary');
 
     await act(async () => {
       window.dispatchEvent(new MessageEvent('message', {
         data: {
           type: 'bitfun-canvas-runtime-error',
-          message: "undefined is not an object (evaluating 'theme.surface.primary')",
+          message: "undefined is not an object (evaluating 'appearance.surface.primary')",
           name: 'TypeError',
           stack: 'LayerDiagram@blob:test:1:1',
         },

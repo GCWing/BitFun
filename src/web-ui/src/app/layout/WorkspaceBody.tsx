@@ -131,9 +131,14 @@ const WorkspaceBody: React.FC<WorkspaceBodyProps> = ({
   }, [isNavCollapsed, navWidth, toggleLeftPanel]);
 
   return (
-    <div className={`bitfun-workspace-body${isEntering ? ' is-entering' : ''}${isExiting ? ' is-exiting' : ''} ${className}`}>
+    <div
+      className={`bitfun-workspace-body${isEntering ? ' is-entering' : ''}${isExiting ? ' is-exiting' : ''} ${className}`}
+      data-bf-scene="workbench"
+      data-bf-part="workspace"
+      data-bf-state={isNavCollapsed ? 'collapsed' : undefined}
+    >
       {isNavCollapsed && (
-        <div className="bitfun-workspace-body__collapsed-nav">
+        <div className="bitfun-workspace-body__collapsed-nav" data-bf-scene="workbench" data-bf-part="collapsedNav">
           <NavBar isCollapsed onExpandNav={toggleLeftPanel} onMaximize={onMaximize} />
         </div>
       )}
@@ -143,6 +148,9 @@ const WorkspaceBody: React.FC<WorkspaceBodyProps> = ({
         ref={navAreaRef}
         className={`bitfun-workspace-body__nav-area${isNavCollapsed ? ' is-collapsed' : ''}`}
         style={isNavCollapsed ? undefined : { '--nav-width': `${navWidth}px` } as React.CSSProperties}
+        data-bf-scene="workbench"
+        data-bf-part="navArea"
+        data-bf-state={isNavCollapsed ? 'collapsed' : undefined}
       >
         <NavBar onExpandNav={toggleLeftPanel} onMaximize={onMaximize} />
         <NavPanel className="bitfun-workspace-body__nav-panel" />
@@ -157,11 +165,13 @@ const WorkspaceBody: React.FC<WorkspaceBodyProps> = ({
           onMouseDown={handleNavCollapseDragStart}
           role="separator"
           aria-hidden="true"
+          data-bf-scene="workbench"
+          data-bf-part="navDivider"
         />
       )}
 
       {/* Right: scene tab bar + scene content */}
-      <div className="bitfun-workspace-body__scene-area">
+      <div className="bitfun-workspace-body__scene-area" data-bf-scene="workbench" data-bf-part="sceneArea">
         <SceneBar
           onMinimize={onMinimize}
           onMaximize={onMaximize}

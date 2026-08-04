@@ -33,4 +33,17 @@ describe('Nursery gallery panda presentation', () => {
     expect(reducedMotionSection).toContain('.nursery-defaults__avatar-image--wink');
     expect(reducedMotionSection).toContain('animation: none;');
   });
+
+  it('keeps assistant card content and actions in bounded regions', () => {
+    const stylesheet = readSibling('./NurseryView.scss');
+    const cardStart = stylesheet.indexOf('.assistant-card {');
+    const cardEnd = stylesheet.indexOf('// ── Sub-page chrome', cardStart);
+    const cardSection = stylesheet.slice(cardStart, cardEnd);
+
+    expect(cardSection).toContain('&__main {');
+    expect(cardSection).toContain('padding: $size-gap-4;');
+    expect(cardSection).toContain('padding: 6px $size-gap-3;');
+    expect(cardSection).toContain('border-top: 1px solid var(--bf-appearance-token-border-subtle);');
+    expect(cardSection).not.toContain('height: 100%;');
+  });
 });

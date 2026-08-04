@@ -175,12 +175,14 @@ export const ComputerUseToolCard: React.FC<ToolCardProps> = ({ toolItem, onExpan
   const renderExpandedContent = () => {
     if (status === 'error') {
       return (
-        <div className="compact-result-content computer-use-tool-card__content">
+        <div data-bf-component="computer-use-tool-card" data-bf-part="content" className="compact-result-content computer-use-tool-card__content">
           {permissionDenied ? (
-            <div className="computer-use-tool-card__permission-denied">
+            <div data-bf-component="computer-use-tool-card" data-bf-part="permissionDenied" className="computer-use-tool-card__permission-denied">
               <p>{t('toolCards.computerUse.permissionDeniedHint')}</p>
               <button
                 type="button"
+                data-bf-component="computer-use-tool-card"
+                data-bf-part="settingsButton"
                 className="computer-use-tool-card__settings-button"
                 onClick={(event) => void handleOpenSettings(event)}
               >
@@ -196,25 +198,25 @@ export const ComputerUseToolCard: React.FC<ToolCardProps> = ({ toolItem, onExpan
     }
 
     return (
-      <div className="computer-use-tool-card__expanded">
-        <div className="computer-use-tool-card__row">
+      <div data-bf-component="computer-use-tool-card" data-bf-part="expanded" className="computer-use-tool-card__expanded">
+        <div data-bf-component="computer-use-tool-card" data-bf-part="row" className="computer-use-tool-card__row">
           <span className="computer-use-tool-card__row-label">{t('toolCards.computerUse.actionLabel')}</span>
           <code>{parsed.action}</code>
         </div>
         {parsed.appName && (
-          <div className="computer-use-tool-card__row">
+          <div data-bf-component="computer-use-tool-card" data-bf-part="row" className="computer-use-tool-card__row">
             <span className="computer-use-tool-card__row-label">{t('toolCards.computerUse.appLabel')}</span>
             <span>{parsed.appName}</span>
           </div>
         )}
         {parsed.target && (
-          <div className="computer-use-tool-card__row">
+          <div data-bf-component="computer-use-tool-card" data-bf-part="row" className="computer-use-tool-card__row">
             <span className="computer-use-tool-card__row-label">{t('toolCards.computerUse.targetLabel')}</span>
             <span>{parsed.target}</span>
           </div>
         )}
         {parsed.loopWarningSuggestion && (
-          <div className="computer-use-tool-card__loop-warning">
+          <div data-bf-component="computer-use-tool-card" data-bf-part="loopWarning" className="computer-use-tool-card__loop-warning">
             <AlertTriangle size={12} />
             <span>{parsed.loopWarningSuggestion}</span>
           </div>
@@ -224,7 +226,7 @@ export const ComputerUseToolCard: React.FC<ToolCardProps> = ({ toolItem, onExpan
   };
 
   return (
-    <div ref={cardRootRef} data-tool-card-id={toolId ?? ''}>
+    <div data-bf-component="computer-use-tool-card" data-bf-part="root" data-bf-state={[isExpanded && 'expanded', status === 'error' && 'failed'].filter(Boolean).join(' ')} ref={cardRootRef} data-tool-card-id={toolId ?? ''}>
       <CompactToolCard
         status={status}
         isExpanded={isExpanded}
@@ -240,7 +242,7 @@ export const ComputerUseToolCard: React.FC<ToolCardProps> = ({ toolItem, onExpan
                 defaultIcon={status === 'completed' || status === 'error' ? 'tool' : 'status'}
               />
             )}
-            action={<code className="computer-use-tool-card__action-code">{parsed.action}</code>}
+            action={<code data-bf-component="computer-use-tool-card" data-bf-part="actionCode" className="computer-use-tool-card__action-code">{parsed.action}</code>}
             content={renderContent()}
           />
         )}

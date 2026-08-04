@@ -195,6 +195,7 @@ impl fmt::Display for DeliveryProfile {
 #[non_exhaustive]
 pub enum ProductCoreDependencyMode {
     ProductFullCompatibility,
+    ExplicitCoreCapabilityClosure,
     NoDirectCoreDependency,
 }
 
@@ -235,7 +236,7 @@ const PRODUCT_DELIVERY_PROFILE_ENTRIES: &[ProductDeliveryProfileEntry] = &[
     ),
     ProductDeliveryProfileEntry::new(
         DeliveryProfile::Cli,
-        ProductCoreDependencyMode::ProductFullCompatibility,
+        ProductCoreDependencyMode::ExplicitCoreCapabilityClosure,
     ),
     ProductDeliveryProfileEntry::new(
         DeliveryProfile::Server,
@@ -247,7 +248,7 @@ const PRODUCT_DELIVERY_PROFILE_ENTRIES: &[ProductDeliveryProfileEntry] = &[
     ),
     ProductDeliveryProfileEntry::new(
         DeliveryProfile::Acp,
-        ProductCoreDependencyMode::ProductFullCompatibility,
+        ProductCoreDependencyMode::ExplicitCoreCapabilityClosure,
     ),
     ProductDeliveryProfileEntry::new(
         DeliveryProfile::Web,

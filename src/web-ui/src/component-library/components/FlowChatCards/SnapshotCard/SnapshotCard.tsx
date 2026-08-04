@@ -46,10 +46,10 @@ export const SnapshotCard: React.FC<SnapshotCardProps> = ({
 
   const getOperationInfo = () => {
     const operationMap = {
-      'write': { name: t('flowChatCards.snapshotCard.writeFile'), color: 'var(--color-success)' },
-      'edit': { name: t('flowChatCards.snapshotCard.editFile'), color: 'var(--color-warning)' },
-      'delete': { name: t('flowChatCards.snapshotCard.deleteFile'), color: 'var(--color-error)' },
-      'multi-edit': { name: t('flowChatCards.snapshotCard.multiEdit'), color: 'var(--color-warning)' }
+      'write': { name: t('flowChatCards.snapshotCard.writeFile'), color: 'var(--bf-appearance-token-color-success)' },
+      'edit': { name: t('flowChatCards.snapshotCard.editFile'), color: 'var(--bf-appearance-token-color-warning)' },
+      'delete': { name: t('flowChatCards.snapshotCard.deleteFile'), color: 'var(--bf-appearance-token-color-error)' },
+      'multi-edit': { name: t('flowChatCards.snapshotCard.multiEdit'), color: 'var(--bf-appearance-token-color-warning)' }
     };
     return operationMap[operationType] || operationMap['edit'];
   };
@@ -80,6 +80,10 @@ export const SnapshotCard: React.FC<SnapshotCardProps> = ({
     return (
       <div 
         className={`snapshot-card snapshot-card--compact snapshot-card--${snapshotStatus} status-${status}`}
+        data-bf-component="flow-chat-card"
+        data-bf-part="compact"
+        data-bf-display="compact"
+        data-bf-status={status}
         style={{ '--snapshot-card-operation-color': operationInfo.color } as React.CSSProperties}
         onClick={onViewDetails}
       >
@@ -104,7 +108,7 @@ export const SnapshotCard: React.FC<SnapshotCardProps> = ({
 
         <span className="snapshot-card__status">{getStatusIcon()}</span>
         
-        <div className="snapshot-card__actions" onClick={(e) => e.stopPropagation()}>
+        <div className="snapshot-card__actions" onClick={(e) => e.stopPropagation()} data-bf-component="flow-chat-card" data-bf-part="actions">
           <button
             className="snapshot-card__action-btn snapshot-card__action-btn--accept"
             onClick={onAccept}
@@ -204,14 +208,14 @@ export const SnapshotCard: React.FC<SnapshotCardProps> = ({
       )}
 
       {(status === 'running' || status === 'streaming') && (
-        <div className="snapshot-card__processing">
+        <div className="snapshot-card__processing" data-bf-component="flow-chat-card" data-bf-part="processing">
           <Loader2 className="snapshot-card__processing-icon" size={14} />
           <span>{t('flowChatCards.snapshotCard.processing')}</span>
         </div>
       )}
 
       {status === 'error' && result?.error && (
-        <div className="snapshot-card__error">
+        <div className="snapshot-card__error" data-bf-component="flow-chat-card" data-bf-part="error">
           <XCircle size={14} />
           <span>{result.error}</span>
         </div>

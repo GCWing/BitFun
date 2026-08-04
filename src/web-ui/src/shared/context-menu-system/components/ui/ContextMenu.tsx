@@ -383,7 +383,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
   
   const renderMenuItem = (item: ContextMenuItem, index: number) => {
     if (item.separator) {
-      return <div key={`separator-${index}`} className="context-menu-separator" />;
+      return <div key={`separator-${index}`} className="context-menu-separator" data-bf-component="context-menu" data-bf-part="separator" />;
     }
 
     const itemId = item.id || `item-${index}`;
@@ -398,27 +398,32 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
         onMouseEnter={(event) => handleMenuItemMouseEnter(item, index, event)}
         onMouseLeave={(event) => handleMenuItemMouseLeave(item, index, event)}
         onContextMenu={(event) => event.preventDefault()}
+        data-bf-component="context-menu"
+        data-bf-part="item"
+        data-bf-state={[item.disabled && 'disabled', isSubmenuActive && 'submenu-active'].filter(Boolean).join(' ') || undefined}
       >
         {item.icon && (
-          <span className="context-menu-item-icon">
+          <span className="context-menu-item-icon" data-bf-component="context-menu" data-bf-part="icon">
             {typeof item.icon === 'string' ? <i className={item.icon} /> : item.icon}
           </span>
         )}
-        <span className="context-menu-item-label">
+        <span className="context-menu-item-label" data-bf-component="context-menu" data-bf-part="label">
           {item.label}
         </span>
         {item.shortcut && (
-          <span className="context-menu-item-shortcut">
+          <span className="context-menu-item-shortcut" data-bf-component="context-menu" data-bf-part="shortcut">
             {item.shortcut}
           </span>
         )}
         {hasSubmenu && (
           <>
-            <span className="context-menu-submenu-arrow">▶</span>
+            <span className="context-menu-submenu-arrow" data-bf-component="context-menu" data-bf-part="submenuArrow">▶</span>
             <div 
               className={`context-menu-submenu ${isSubmenuActive ? 'visible' : ''}`}
               onMouseEnter={handleSubmenuMouseEnter}
               onMouseLeave={handleSubmenuMouseLeave}
+              data-bf-component="context-menu"
+              data-bf-part="submenu"
             >
               <ContextMenu
                 items={item.submenu!}
@@ -448,6 +453,8 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
         top: position.y
       }}
       onContextMenu={(event) => event.preventDefault()}
+      data-bf-component="context-menu"
+      data-bf-part="root"
     >
       {items.map(renderMenuItem)}
     </div>

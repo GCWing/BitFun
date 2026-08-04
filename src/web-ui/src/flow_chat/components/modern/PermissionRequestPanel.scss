@@ -25,14 +25,13 @@
   display: grid;
   gap: 9px;
   padding: 12px;
-  border: 1px solid color-mix(in srgb, var(--color-warning) 48%, var(--border-base));
+  border: 1px solid color-mix(in srgb, var(--bf-appearance-token-color-warning) 48%, var(--bf-appearance-token-border-base));
   border-radius: 10px;
-  background: color-mix(in srgb, var(--color-bg-elevated) 96%, var(--color-warning));
+  background: color-mix(in srgb, var(--bf-appearance-token-color-bg-elevated) 96%, var(--bf-appearance-token-color-warning));
   box-shadow:
-    0 16px 40px var(--color-overlay-black-30),
-    0 3px 10px var(--color-overlay-black-12),
-    inset 3px 0 0 color-mix(in srgb, var(--color-warning) 76%, transparent);
-  color: var(--color-text-primary);
+    0 16px 40px var(--bf-appearance-token-color-overlay-black-30),
+    0 3px 10px var(--bf-appearance-token-color-overlay-black-12);
+  color: var(--bf-appearance-token-color-text-primary);
   transform-origin: center bottom;
   animation: permission-request-panel-in 180ms cubic-bezier(0.23, 1, 0.32, 1);
 }
@@ -42,7 +41,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  color: var(--color-warning);
+  color: var(--bf-appearance-token-color-warning);
 }
 
 .permission-request-panel__heading h2 {
@@ -64,13 +63,13 @@
 }
 
 .permission-request-panel__heading h2 {
-  font-size: var(--flowchat-font-size-base);
+  font-size: var(--bf-appearance-token-flowchat-font-size-base);
 }
 
 .permission-request-panel__count,
 .permission-request-panel__risk {
-  color: var(--color-text-secondary);
-  font-size: var(--flowchat-font-size-sm);
+  color: var(--bf-appearance-token-color-text-secondary);
+  font-size: var(--bf-appearance-token-flowchat-font-size-sm);
 }
 
 .permission-request-panel__count {
@@ -83,9 +82,9 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid var(--color-warning);
-  color: var(--color-warning);
-  background: var(--color-bg-primary);
+  border: 1px solid var(--bf-appearance-token-color-warning);
+  color: var(--bf-appearance-token-color-warning);
+  background: var(--bf-appearance-token-color-bg-primary);
   cursor: pointer;
   transition:
     transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
@@ -97,16 +96,22 @@
   height: 30px;
   padding: 0;
   border-radius: 5px;
+  border-color: transparent;
+  background: transparent;
 }
 
 .permission-request-panel__collapse:hover,
 .permission-request-panel__collapsed-trigger:hover {
-  background: color-mix(in srgb, var(--color-warning) 14%, var(--color-bg-primary));
+  background: color-mix(in srgb, var(--bf-appearance-token-color-warning) 14%, var(--bf-appearance-token-color-bg-primary));
+}
+
+.permission-request-panel__collapse:hover {
+  background: transparent;
 }
 
 .permission-request-panel__collapse:focus-visible,
 .permission-request-panel__collapsed-trigger:focus-visible {
-  outline: 2px solid var(--color-warning);
+  outline: 2px solid var(--bf-appearance-token-color-warning);
   outline-offset: 2px;
 }
 
@@ -121,7 +126,7 @@
   height: 44px;
   padding: 0;
   border-radius: 50%;
-  box-shadow: var(--shadow-lg);
+  box-shadow: var(--bf-appearance-token-shadow-lg);
 }
 
 .permission-request-panel__collapsed-badge {
@@ -131,11 +136,11 @@
   min-width: 18px;
   box-sizing: border-box;
   padding: 2px 5px;
-  border: 1px solid var(--color-bg-secondary);
+  border: 1px solid var(--bf-appearance-token-color-bg-secondary);
   border-radius: 10px;
-  color: var(--color-static-white);
-  background: var(--color-error);
-  font-size: var(--flowchat-font-size-xs);
+  color: var(--bf-appearance-token-color-static-white);
+  background: var(--bf-appearance-token-color-error);
+  font-size: var(--bf-appearance-token-flowchat-font-size-xs);
   font-weight: 700;
   line-height: 1.15;
   text-align: center;
@@ -152,17 +157,15 @@
   display: grid;
   gap: 3px;
   padding: 7px 9px;
-  border: 1px solid var(--border-base);
-  border-radius: 6px;
-  background: color-mix(in srgb, var(--element-bg-subtle) 58%, transparent);
-  color: var(--color-text-secondary);
-  font-size: var(--flowchat-font-size-sm);
+  border: 1px solid var(--bf-appearance-token-border-base);
+  border-radius: 5px;
+  color: var(--bf-appearance-token-color-text-secondary);
+  font-size: var(--bf-appearance-token-flowchat-font-size-sm);
 }
 
 .permission-request-panel__request--active {
-  border-color: color-mix(in srgb, var(--color-warning) 58%, var(--border-base));
-  background: color-mix(in srgb, var(--color-warning) 7%, var(--element-bg-subtle));
-  color: var(--color-text-primary);
+  border-color: var(--bf-appearance-token-color-warning);
+  color: var(--bf-appearance-token-color-text-primary);
 }
 
 .permission-request-panel__request-heading {
@@ -174,8 +177,8 @@
 
 .permission-request-panel__request-heading span {
   flex: none;
-  color: var(--color-text-secondary);
-  font-size: var(--flowchat-font-size-xs);
+  color: var(--bf-appearance-token-color-text-secondary);
+  font-size: var(--bf-appearance-token-flowchat-font-size-xs);
 }
 
 .permission-request-panel__tool-identity {
@@ -190,7 +193,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--color-text-secondary);
+  color: var(--bf-appearance-token-color-text-secondary);
 }
 
 .permission-request-panel__tool-identity strong {
@@ -210,7 +213,7 @@
 }
 
 .permission-request-panel__detail-separator {
-  color: var(--color-text-secondary);
+  color: var(--bf-appearance-token-color-text-secondary);
 }
 
 .permission-request-panel__resource-summary {
@@ -222,23 +225,23 @@
 
 .permission-request-panel__risk {
   margin: 0;
-  color: var(--color-warning);
+  color: var(--bf-appearance-token-color-warning);
 }
 
 .permission-request-panel textarea {
   width: 100%;
   resize: vertical;
-  border: 1px solid var(--border-base);
+  border: 1px solid var(--bf-appearance-token-border-base);
   border-radius: 6px;
   padding: 7px 9px;
-  color: var(--color-text-primary);
-  background: var(--color-bg-primary);
+  font-family: var(--bf-appearance-token-font-family-sans);
+  color: var(--bf-appearance-token-color-text-primary);
+  background: var(--bf-appearance-token-color-bg-primary);
 }
 
 .permission-request-panel textarea:focus {
   outline: none;
-  border-color: var(--color-warning);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-warning) 14%, transparent);
+  border-color: var(--bf-appearance-token-color-warning);
 }
 
 .permission-request-panel__actions {
@@ -265,10 +268,10 @@
   gap: 5px;
   min-height: 30px;
   padding: 5px 9px;
-  border: 1px solid var(--color-warning);
+  border: 1px solid var(--bf-appearance-token-color-warning);
   border-radius: 5px;
-  color: var(--color-text-primary);
-  background: var(--color-bg-primary);
+  color: var(--bf-appearance-token-color-text-primary);
+  background: var(--bf-appearance-token-color-bg-primary);
   cursor: pointer;
   transition: transform 120ms cubic-bezier(0.23, 1, 0.32, 1);
 }
@@ -279,16 +282,16 @@
   gap: 5px;
   min-height: 30px;
   padding: 5px 9px;
-  border: 1px solid var(--border-base);
+  border: 1px solid var(--bf-appearance-token-border-base);
   border-radius: 5px;
-  color: var(--color-text-primary);
-  background: var(--color-bg-primary);
+  color: var(--bf-appearance-token-color-text-primary);
+  background: var(--bf-appearance-token-color-bg-primary);
   cursor: pointer;
   transition: transform 120ms cubic-bezier(0.23, 1, 0.32, 1);
 }
 
 .permission-request-panel__actions button:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--color-warning) 10%, var(--color-bg-primary));
+  background: color-mix(in srgb, var(--bf-appearance-token-color-warning) 10%, var(--bf-appearance-token-color-bg-primary));
 }
 
 .permission-request-panel__actions button:active:not(:disabled) {
@@ -296,22 +299,24 @@
 }
 
 .permission-request-panel__actions button:focus-visible {
-  outline: 2px solid var(--color-warning);
+  outline: 2px solid var(--bf-appearance-token-color-warning);
   outline-offset: 2px;
 }
 
 .permission-request-panel__actions button:disabled {
-  cursor: wait;
   opacity: 0.6;
 }
 
-.permission-request-panel__batch-actions button:disabled {
+.permission-request-panel__actions button:disabled:not(.permission-request-panel__feedback-disabled) {
   cursor: wait;
-  opacity: 0.6;
+}
+
+.permission-request-panel__actions button.permission-request-panel__feedback-disabled {
+  cursor: not-allowed;
 }
 
 .permission-request-panel .permission-request-panel__reject {
-  color: var(--color-error);
+  color: var(--bf-appearance-token-color-error);
 }
 
 @keyframes permission-request-panel-in {

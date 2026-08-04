@@ -1,6 +1,8 @@
 use super::agent_selector::{AgentItem, AgentSelectorAction, AgentSelectorState};
 use super::command_menu::CommandMenuState;
 use super::command_palette::{CommandPaletteState, PaletteAction};
+use super::composer::{ComposerDraft, ComposerImageAttachment};
+use super::image_paste::{self, ImagePaste};
 use super::login_form::{LoginFormAction, LoginFormState};
 use super::model_config_form::{ModelConfigFormState, ModelFormAction, ModelFormResult};
 use super::model_selector::{ModelItem, ModelSelectorState};
@@ -16,7 +18,8 @@ use super::theme::{
 use super::theme_selector::{ThemeItem, ThemeSelectorState};
 use crate::actions::{
     action_by_id, action_for_alias, removed_management_command_hint, ActionContext, ActionHandler,
-    ActionSpec, ActionState, ResolvedKeymap, SHARED_TUI_EMBEDDED_HANDOFF, SHARED_TUI_HELP_NOTE,
+    ActionSpec, ActionState, ResolvedKeymap, IMAGE_ATTACHMENTS_REQUIRE_MESSAGE,
+    SHARED_TUI_EMBEDDED_HANDOFF, SHARED_TUI_HELP_NOTE,
 };
 use crate::config::CliConfig;
 /// Startup page module
@@ -53,7 +56,7 @@ use bitfun_core::agentic::tools::implementations::skills::{
 use bitfun_core::product_runtime::CoreAgentRuntimeCompatibility;
 use bitfun_core::service::config::GlobalConfigManager;
 
-use crate::agent::runtime_client::CliAgentRuntimeClient;
+use crate::agent::runtime_client::{CliAgentMode, CliAgentRuntimeClient};
 
 /// Types of popups that can be shown on the startup page
 #[derive(Debug, Clone, PartialEq)]
@@ -104,7 +107,7 @@ impl PopupStack {
 #[derive(Debug, Clone)]
 pub(crate) enum StartupResult {
     /// Start a new session with an optional initial prompt
-    NewSession { prompt: Option<String> },
+    NewSession { prompt: Option<ComposerDraft> },
     /// Continue last session (session ID)
     ContinueSession(String),
     /// User cancelled exit
@@ -173,6 +176,7 @@ fn append_styled_logo_lines(
 pub(crate) struct StartupPage {
     /// Multiline text input component
     text_input: TextInput,
+    image_attachments: Vec<ComposerImageAttachment>,
     /// Theme
     theme: Theme,
     /// CLI config, including persisted theme preference.
@@ -209,6 +213,9 @@ pub(crate) struct StartupPage {
     agent_type: String,
     /// Display name of selected model
     model_display_name: String,
+    /// Explicit model chosen for the new Session being composed. Persisted
+    /// defaults and an agent profile remain inputs only until the user chooses.
+    selected_model_id: Option<String>,
     /// Workspace path for display in bottom bar
     workspace_display: String,
     /// Status message (temporarily shown instead of tip)
@@ -268,6 +275,7 @@ impl StartupPage {
         let action_state = ActionState::startup(false).with_shared_tui(agent.is_shared());
         let mut page = Self {
             text_input: TextInput::new(),
+            image_attachments: Vec::new(),
             theme,
             config,
             keymap,
@@ -288,6 +296,7 @@ impl StartupPage {
             compatibility,
             agent_type: default_agent,
             model_display_name: String::new(),
+            selected_model_id: None,
             workspace_display: workspace.unwrap_or_else(|| {
                 std::env::current_dir()
                     .ok()
@@ -308,6 +317,11 @@ impl StartupPage {
     /// Get the currently selected agent type
     pub(crate) fn agent_type(&self) -> &str {
         &self.agent_type
+    }
+
+    /// Return the model explicitly selected for the new Session, if any.
+    pub(crate) fn selected_model_id(&self) -> Option<&str> {
+        self.selected_model_id.as_deref()
     }
 
     /// Get the current workspace path for this CLI process.
@@ -408,7 +422,11 @@ impl StartupPage {
                     }
                 } else if self.command_menu.captures_mouse(&mouse) {
                     if let Some(action_id) = self.command_menu.handle_mouse_event(&mouse) {
-                        self.text_input.clear();
+                        if !self.image_attachments.is_empty() {
+                            self.status = Some(IMAGE_ATTACHMENTS_REQUIRE_MESSAGE.to_string());
+                            return Ok(None);
+                        }
+                        self.clear_composer();
                         self.refresh_command_menu();
                         return Ok(self.handle_palette_action(&action_id));
                     }
@@ -418,8 +436,7 @@ impl StartupPage {
                 if self.login_form.is_visible() {
                     self.login_form.insert_paste(&text);
                 } else if self.info_popup.is_none() && !self.any_popup_visible() {
-                    self.text_input.insert_paste(&text);
-                    self.refresh_command_menu();
+                    self.paste_terminal_text(&text);
                 }
             }
             Event::Resize(_, _) => {
@@ -936,7 +953,7 @@ impl StartupPage {
         match (key.code, key.modifiers) {
             (KeyCode::Esc, _) => {
                 if !self.text_input.is_empty() {
-                    self.text_input.clear();
+                    self.clear_composer();
                     self.refresh_command_menu();
                 }
             }
@@ -944,31 +961,30 @@ impl StartupPage {
                 if !self.text_input.move_cursor_up() {
                     self.text_input.set_cursor_home();
                 }
+                self.snap_cursor_out_of_image();
                 self.refresh_command_menu();
             }
             (KeyCode::Down, KeyModifiers::NONE) => {
                 if !self.text_input.move_cursor_down() {
                     self.text_input.set_cursor_end();
                 }
+                self.snap_cursor_out_of_image();
                 self.refresh_command_menu();
             }
             (KeyCode::Char(c), _) => {
-                self.text_input.handle_char(c);
-                self.refresh_command_menu();
+                self.handle_composer_char(c);
             }
             (KeyCode::Backspace, _) => {
-                self.text_input.handle_backspace();
-                self.refresh_command_menu();
+                self.handle_composer_backspace();
             }
             (KeyCode::Delete, _) => {
-                self.text_input.handle_delete();
-                self.refresh_command_menu();
+                self.handle_composer_delete();
             }
             (KeyCode::Left, _) => {
-                self.text_input.move_cursor_left();
+                self.text_input.cursor = self.draft_snapshot().cursor_left(self.text_input.cursor);
             }
             (KeyCode::Right, _) => {
-                self.text_input.move_cursor_right();
+                self.text_input.cursor = self.draft_snapshot().cursor_right(self.text_input.cursor);
             }
             (KeyCode::Home, _) => {
                 self.text_input.set_cursor_home();
@@ -1026,12 +1042,12 @@ impl StartupPage {
             ActionHandler::Skills => self.show_skill_selector(),
             ActionHandler::McpServers => {
                 return Some(StartupResult::NewSession {
-                    prompt: Some("/mcp".to_string()),
+                    prompt: Some(ComposerDraft::from_text("/mcp")),
                 });
             }
             ActionHandler::AcpHelp => {
                 return Some(StartupResult::NewSession {
-                    prompt: Some("/acp".to_string()),
+                    prompt: Some(ComposerDraft::from_text("/acp")),
                 });
             }
             ActionHandler::Login => self.show_login_form(),
@@ -1042,7 +1058,7 @@ impl StartupPage {
             ActionHandler::Init => match crate::prompts::get_cli_prompt("init") {
                 Some(prompt) => {
                     return Some(StartupResult::NewSession {
-                        prompt: Some(prompt.to_string()),
+                        prompt: Some(ComposerDraft::from_text(prompt)),
                     });
                 }
                 None => self.status = Some("Init prompt not found".to_string()),
@@ -1053,28 +1069,34 @@ impl StartupPage {
             }
             ActionHandler::SubmitInput => return self.submit_input(),
             ActionHandler::InsertNewline => {
-                self.text_input.handle_newline();
-                self.refresh_command_menu();
+                self.handle_composer_newline();
             }
-            ActionHandler::Paste => {
-                if let Ok(mut clipboard) = arboard::Clipboard::new() {
-                    if let Ok(text) = clipboard.get_text() {
-                        self.text_input.insert_paste(&text);
-                        self.refresh_command_menu();
-                    }
-                }
-            }
+            ActionHandler::Paste => self.paste_clipboard(),
             ActionHandler::ClosePopups => self.close_all_popups(),
             ActionHandler::NavigateBack => self.navigate_back(),
             ActionHandler::RenameSession
+            | ActionHandler::ViewSubagents
+            | ActionHandler::Timeline
             | ActionHandler::ForkSession
+            | ActionHandler::UndoSession
+            | ActionHandler::RedoSession
             | ActionHandler::Reload
             | ActionHandler::Tools
             | ActionHandler::Extensions
             | ActionHandler::NativeHooks
             | ActionHandler::ExternalHooks
             | ActionHandler::Status
+            | ActionHandler::WorkspaceDiff
             | ActionHandler::CompactSession
+            | ActionHandler::Editor
+            | ActionHandler::PromptStash
+            | ActionHandler::PromptStashPop
+            | ActionHandler::PromptStashList
+            | ActionHandler::ToggleTimestamps
+            | ActionHandler::ToggleThinking
+            | ActionHandler::ToggleToolDetails
+            | ActionHandler::CopyTranscript
+            | ActionHandler::ExportTranscript
             | ActionHandler::ToggleAutoApprove
             | ActionHandler::ToggleWorktree
             | ActionHandler::Interrupt
@@ -1095,9 +1117,144 @@ impl StartupPage {
         None
     }
 
+    fn draft_snapshot(&self) -> ComposerDraft {
+        ComposerDraft {
+            text: self.text_input.text().to_string(),
+            workspace_references: Vec::new(),
+            image_attachments: self.image_attachments.clone(),
+        }
+    }
+
+    fn apply_draft_at_cursor(&mut self, draft: ComposerDraft, cursor: usize) {
+        self.text_input.set_text_and_cursor(&draft.text, cursor);
+        self.image_attachments = draft.image_attachments;
+        self.refresh_command_menu();
+    }
+
+    fn clear_composer(&mut self) {
+        self.text_input.clear();
+        self.image_attachments.clear();
+    }
+
+    fn snap_cursor_out_of_image(&mut self) {
+        self.text_input.cursor = self
+            .draft_snapshot()
+            .safe_insertion_cursor(self.text_input.cursor);
+    }
+
+    fn reconcile_composer_edit(
+        &mut self,
+        edit_start: usize,
+        removed_chars: usize,
+        inserted_chars: usize,
+    ) {
+        let cursor = self.text_input.cursor;
+        let mut draft = self.draft_snapshot();
+        draft.reconcile_edit(edit_start, removed_chars, inserted_chars);
+        draft.retain_valid_sources();
+        self.apply_draft_at_cursor(draft, cursor);
+    }
+
+    fn handle_composer_char(&mut self, character: char) {
+        self.snap_cursor_out_of_image();
+        let cursor = self.text_input.cursor;
+        self.text_input.handle_char(character);
+        let inserted = self.text_input.cursor.saturating_sub(cursor);
+        self.reconcile_composer_edit(cursor, 0, inserted);
+    }
+
+    fn handle_composer_newline(&mut self) {
+        self.snap_cursor_out_of_image();
+        let cursor = self.text_input.cursor;
+        self.text_input.handle_newline();
+        self.reconcile_composer_edit(cursor, 0, 1);
+    }
+
+    fn handle_composer_backspace(&mut self) {
+        let cursor = self.text_input.cursor;
+        if cursor > 0 {
+            let mut draft = self.draft_snapshot();
+            if let Some(cursor) = draft.remove_image_overlapping_edit(cursor - 1, 1) {
+                self.apply_draft_at_cursor(draft, cursor);
+                return;
+            }
+        }
+        self.text_input.handle_backspace();
+        if self.text_input.cursor < cursor {
+            self.reconcile_composer_edit(cursor - 1, 1, 0);
+        } else {
+            self.refresh_command_menu();
+        }
+    }
+
+    fn handle_composer_delete(&mut self) {
+        let mut draft = self.draft_snapshot();
+        if let Some(cursor) = draft.remove_image_overlapping_edit(self.text_input.cursor, 1) {
+            self.apply_draft_at_cursor(draft, cursor);
+            return;
+        }
+        let cursor = self.text_input.cursor;
+        let before = self.text_input.text().chars().count();
+        self.text_input.handle_delete();
+        if self.text_input.text().chars().count() < before {
+            self.reconcile_composer_edit(cursor, 1, 0);
+        } else {
+            self.refresh_command_menu();
+        }
+    }
+
+    fn paste_clipboard(&mut self) {
+        match image_paste::read_clipboard(&self.workspace_path_buf()) {
+            Ok(Some(paste)) => self.apply_composer_paste(paste),
+            Ok(None) => {}
+            Err(error) => self.status = Some(error.to_string()),
+        }
+    }
+
+    fn paste_terminal_text(&mut self, text: &str) {
+        match image_paste::classify_pasted_text(text, &self.workspace_path_buf()) {
+            Ok(paste) => self.apply_composer_paste(paste),
+            Err(error) => self.status = Some(error.to_string()),
+        }
+    }
+
+    fn apply_composer_paste(&mut self, paste: ImagePaste) {
+        match paste {
+            ImagePaste::Text(text) => {
+                self.snap_cursor_out_of_image();
+                let cursor = self.text_input.cursor;
+                self.text_input.insert_paste(&text);
+                let inserted = self.text_input.cursor.saturating_sub(cursor);
+                self.reconcile_composer_edit(cursor, 0, inserted);
+            }
+            ImagePaste::Image(_image) if self.agent.is_shared() => {
+                self.status = Some(crate::actions::shared_tui_image_attachment_error());
+                return;
+            }
+            ImagePaste::Image(image) => {
+                let name = image.name.clone();
+                let mut draft = self.draft_snapshot();
+                let cursor = draft.safe_insertion_cursor(self.text_input.cursor);
+                match draft.insert_image(cursor, image) {
+                    Ok(cursor) => self.apply_draft_at_cursor(draft, cursor),
+                    Err(error) => {
+                        self.status = Some(error.to_string());
+                        return;
+                    }
+                }
+                self.status = Some(format!("Attached image: {name}"));
+            }
+        }
+        self.refresh_command_menu();
+    }
+
     fn submit_input(&mut self) -> Option<StartupResult> {
+        if !self.image_attachments.is_empty() && self.command_menu.is_visible() {
+            self.status = Some(IMAGE_ATTACHMENTS_REQUIRE_MESSAGE.to_string());
+            return None;
+        }
         if let Some(action_id) = self.command_menu.apply_selection() {
-            self.text_input.clear();
+            self.clear_composer();
             self.refresh_command_menu();
             return self.handle_palette_action(&action_id);
         }
@@ -1110,10 +1267,16 @@ impl StartupPage {
             return Some(StartupResult::Exit);
         }
         if trimmed.starts_with('/') {
+            if !self.image_attachments.is_empty() {
+                self.status = Some(IMAGE_ATTACHMENTS_REQUIRE_MESSAGE.to_string());
+                return None;
+            }
             return self.handle_command(&trimmed);
         }
+        let mut draft = self.draft_snapshot();
+        draft.replace_text_from_external_editor(trimmed);
         Some(StartupResult::NewSession {
-            prompt: Some(trimmed),
+            prompt: Some(draft),
         })
     }
 
@@ -1140,7 +1303,7 @@ impl StartupPage {
     fn handle_command(&mut self, command: &str) -> Option<StartupResult> {
         let cmd = command.split_whitespace().next().unwrap_or("");
 
-        self.text_input.clear();
+        self.clear_composer();
         self.refresh_command_menu();
         let Some(action) = action_for_alias(cmd, ActionContext::Startup) else {
             self.status = Some(
@@ -1422,6 +1585,8 @@ impl StartupPage {
 
     fn show_model_selector(&mut self) {
         self.push_current_popup_to_stack();
+        let profile_model_id = self.selected_agent_mode().and_then(|mode| mode.model_id);
+        let explicitly_selected_model_id = self.selected_model_id.clone();
 
         let result = tokio::task::block_in_place(|| {
             tokio::runtime::Handle::current().block_on(async {
@@ -1431,8 +1596,11 @@ impl StartupPage {
                 let global_config: bitfun_core::service::config::GlobalConfig =
                     config_service.get_config(None).await.ok()?;
 
-                let current_model_id =
-                    crate::model_selection::resolve_mode_model_id(&global_config.ai);
+                let current_model_id = resolve_startup_model_id(
+                    explicitly_selected_model_id,
+                    profile_model_id,
+                    crate::model_selection::resolve_mode_model_id(&global_config.ai),
+                );
 
                 let model_items: Vec<ModelItem> = models
                     .into_iter()
@@ -1462,9 +1630,15 @@ impl StartupPage {
     fn apply_model_selection(&mut self, selected: &ModelItem) {
         let selected_id = selected.id.clone();
         let selected_display_name = format!("{} / {}", selected.model_name, selected.name);
+        let selected_agent_mode = self.selected_agent_mode();
+        let persist_shared_default =
+            should_persist_shared_model_default(selected_agent_mode.as_ref());
 
         let success = tokio::task::block_in_place(|| {
             tokio::runtime::Handle::current().block_on(async {
+                if !persist_shared_default {
+                    return true;
+                }
                 let config_service = match GlobalConfigManager::get_service().await {
                     Ok(s) => s,
                     Err(_) => return false,
@@ -1483,9 +1657,12 @@ impl StartupPage {
         });
 
         if success {
+            self.selected_model_id = Some(selected_id);
             self.model_display_name = selected_display_name.clone();
             self.status = Some(format!("Model switched to: {}", selected_display_name));
-            crate::account_sync::notify_local_settings_changed();
+            if persist_shared_default {
+                crate::account_sync::notify_local_settings_changed();
+            }
         } else {
             self.status = Some("Failed to switch model".to_string());
         }
@@ -1891,9 +2068,10 @@ impl StartupPage {
 
     fn apply_theme_selection(&mut self, theme: &ThemeItem) {
         let (base, appearance, scheme) = self.current_base_theme();
-        self.config.ui.theme_id = theme.id.clone();
-
-        match self.config.save() {
+        match self
+            .config
+            .update(|config| config.ui.theme_id = theme.id.clone())
+        {
             Ok(()) => {
                 self.status = Some(format!("Theme set to: {}", theme.id));
             }
@@ -2275,12 +2453,21 @@ impl StartupPage {
         self.popup_stack.clear();
     }
 
-    fn get_mode_agents(&self) -> Vec<AgentInfo> {
-        let registry = get_agent_registry();
-        let modes = tokio::task::block_in_place(|| {
-            tokio::runtime::Handle::current().block_on(registry.get_modes_info())
-        });
-        modes
+    fn get_mode_agents(&self) -> Vec<CliAgentMode> {
+        tokio::task::block_in_place(|| {
+            tokio::runtime::Handle::current()
+                .block_on(self.agent.available_agent_modes())
+                .unwrap_or_else(|error| {
+                    tracing::warn!("Failed to load main agent modes: {error}");
+                    Vec::new()
+                })
+        })
+    }
+
+    fn selected_agent_mode(&self) -> Option<CliAgentMode> {
+        self.get_mode_agents()
+            .into_iter()
+            .find(|mode| mode.id == self.agent_type)
     }
 
     fn cycle_agent(&mut self, offset: isize) {
@@ -2303,6 +2490,8 @@ impl StartupPage {
     }
 
     fn load_current_model_name(&mut self) {
+        let explicitly_selected_model_id = self.selected_model_id.clone();
+        let profile_model_id = self.selected_agent_mode().and_then(|mode| mode.model_id);
         let result: Option<String> = tokio::task::block_in_place(|| {
             tokio::runtime::Handle::current().block_on(async {
                 let config_service = GlobalConfigManager::get_service().await.ok()?;
@@ -2311,7 +2500,11 @@ impl StartupPage {
                 let global_config: bitfun_core::service::config::GlobalConfig =
                     config_service.get_config(None).await.ok()?;
 
-                let model_id = crate::model_selection::resolve_mode_model_id(&global_config.ai)?;
+                let model_id = resolve_startup_model_id(
+                    explicitly_selected_model_id,
+                    profile_model_id,
+                    crate::model_selection::resolve_mode_model_id(&global_config.ai),
+                )?;
 
                 fn provider_display_name(
                     model: &bitfun_core::service::config::AIModelConfig,
@@ -2362,10 +2555,66 @@ impl StartupPage {
     }
 }
 
+fn resolve_startup_model_id(
+    explicitly_selected_model_id: Option<String>,
+    profile_model_id: Option<String>,
+    default_model_id: Option<String>,
+) -> Option<String> {
+    explicitly_selected_model_id
+        .or(profile_model_id)
+        .or(default_model_id)
+}
+
+fn should_persist_shared_model_default(mode: Option<&CliAgentMode>) -> bool {
+    mode.is_some_and(|mode| !mode.is_external)
+}
+
 #[cfg(test)]
 mod logo_contract_tests {
     use super::*;
     use ratatui::style::Color;
+
+    #[test]
+    fn explicit_startup_model_overrides_profile_and_default() {
+        assert_eq!(
+            resolve_startup_model_id(
+                Some("explicit".to_string()),
+                Some("profile".to_string()),
+                Some("default".to_string()),
+            )
+            .as_deref(),
+            Some("explicit")
+        );
+        assert_eq!(
+            resolve_startup_model_id(
+                None,
+                Some("profile".to_string()),
+                Some("default".to_string()),
+            )
+            .as_deref(),
+            Some("profile")
+        );
+    }
+
+    #[test]
+    fn external_or_unknown_startup_modes_do_not_change_the_shared_default() {
+        let local = CliAgentMode {
+            id: "agentic".to_string(),
+            description: String::new(),
+            model_id: None,
+            is_external: false,
+        };
+        let external = CliAgentMode {
+            id: "reviewer".to_string(),
+            description: String::new(),
+            model_id: None,
+            is_external: true,
+        };
+
+        assert!(should_persist_shared_model_default(Some(&local)));
+        assert!(!should_persist_shared_model_default(Some(&external)));
+        assert!(!should_persist_shared_model_default(None));
+    }
 
     #[test]
     fn fancy_logo_keeps_line_order_and_color_style_mapping() {

@@ -40,7 +40,7 @@ export function useModelSelectPresentation() {
     const modelOption = option as ModelSelectOption;
 
     return (
-      <div className="model-select-presentation__option">
+      <div className="model-select-presentation__option" data-bf-component="config" data-bf-part="modelOption">
         <div className="model-select-presentation__option-title">
           <span className="model-select-presentation__option-name">{modelOption.label}</span>
           {modelOption.enableThinking && (
@@ -66,6 +66,8 @@ export function useModelSelectPresentation() {
           'model-select-presentation__value',
           !modelOption.meta && 'model-select-presentation__value--single-line',
         ].filter(Boolean).join(' ')}
+        data-bf-component="config"
+        data-bf-part="modelOption"
       >
         <span className="model-select-presentation__value-text">
           <span className="model-select-presentation__value-title">

@@ -28,13 +28,19 @@ pub use bitfun_product_domains::external_sources::{
     ExternalToolRuntimeKind, NativePromptCommandConflictProjection,
     NativePromptCommandConflictSnapshot, NativePromptCommandDescriptor,
     NativePromptCommandReconfirmationProjection, PromptCommandAvailability,
-    PromptCommandCatalogEntry, PromptCommandDefinition, SourceKey,
+    PromptCommandCatalogEntry, PromptCommandDefinition, PromptCommandExecutionTarget,
+    PromptCommandInvocationOutcome, PromptCommandShellReviewDecision, PromptCommandShellReviewMode,
+    PromptCommandShellReviewPlan, SourceKey,
 };
 pub use bitfun_product_domains::external_subagents::{
     ExternalSubagentActivationState, ExternalSubagentCompatibilityState, ExternalSubagentConflict,
-    ExternalSubagentConflictCandidate, ExternalSubagentSummary,
+    ExternalSubagentConflictCandidate, ExternalSubagentModelBindingGroup,
+    ExternalSubagentModelBindingMethod, ExternalSubagentModelBindingOption,
+    ExternalSubagentModelBindingTarget, ExternalSubagentModelProfileRequest,
+    ExternalSubagentModelRequest, ExternalSubagentSummary,
 };
 
+use crate::agentic::workspace::workspace_route_key;
 use crate::external_mcp::{
     reconcile_external_mcp_catalog, BitFunExternalMcpRuntime, ExternalMcpDecision,
     ExternalMcpDecisions, ExternalMcpProductState, ExternalMcpRuntimePort,
@@ -48,8 +54,8 @@ use crate::external_tools::{
     begin_external_tool_workspace_recovery, external_tool_workspace_requires_recovery,
     invalidate_external_tool_runtime_availability, merge_tool_state,
     project_external_tools_read_only, reconcile_external_tools, release_external_tool_workspace,
-    reset_external_tool_workspace_recovery_budget, workspace_route_key, ExternalToolDecisions,
-    ExternalToolProductState, TOOL_CONFLICT_RESELECTION_REQUIRED, UNRESOLVED_TOOL_CONFLICT_CHOICE,
+    reset_external_tool_workspace_recovery_budget, ExternalToolDecisions, ExternalToolProductState,
+    TOOL_CONFLICT_RESELECTION_REQUIRED, UNRESOLVED_TOOL_CONFLICT_CHOICE,
 };
 use crate::service::config::{subscribe_config_updates, ConfigUpdateEvent};
 use bitfun_claude_code_adapter::{
@@ -59,11 +65,11 @@ use bitfun_codex_adapter::{CodexMcpProvider, CodexSubagentProvider};
 use bitfun_external_sources::{
     DeferredDiscovery, ExternalMcpDiscoveryResult, ExternalSourceControlPlane,
     ExternalSourceCoordinator, ExternalSourceDiscoveryResult, ExternalSubagentDiscoveryResult,
-    ExternalToolDiscoveryResult,
+    ExternalToolDiscoveryResult, ExternalWorkspaceReferenceDiscoveryResult,
 };
 use bitfun_opencode_adapter::{
     OpenCodeCommandProvider, OpenCodeMcpProvider, OpenCodeSkillRootProvider,
-    OpenCodeSubagentProvider, OpenCodeToolProvider,
+    OpenCodeSubagentProvider, OpenCodeToolProvider, OpenCodeWorkspaceReferenceProvider,
 };
 #[cfg(test)]
 use bitfun_opencode_adapter::{
@@ -78,10 +84,15 @@ use bitfun_product_domains::external_integration_policy::{
 };
 use bitfun_product_domains::external_sources::{
     ExecutionDomainId, ExternalMcpRevisionKey, ExternalMcpSourceProvider, ExternalMcpStaticStatus,
-    ExternalSourceContext, ExternalSourceScope, ExternalToolSourceProvider, PromptCommandExpansion,
+    ExternalSourceContext, ExternalSourceScope, ExternalToolSourceProvider, PromptCommandConflict,
+    PromptCommandExpansion, PromptCommandShellInvocation, PromptCommandShellPreference,
     PromptCommandSourceProvider,
 };
 use bitfun_product_domains::external_subagents::ExternalSubagentSourceProvider;
+use bitfun_product_domains::workspace_references::{
+    ExternalWorkspaceReferenceSourceProvider, WorkspaceReferenceCatalogEntry,
+    WorkspaceReferenceOrigin, WorkspaceReferenceSnapshot,
+};
 use bitfun_services_core::json_store::JsonFileStore;
 use bitfun_services_core::workspace_text::read_workspace_relative_text_bounded;
 use bitfun_services_integrations::file_watch::{FileWatchService, FileWatcherConfig};
@@ -94,7 +105,15 @@ use std::future::Future;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex as StdMutex, MutexGuard, OnceLock, Weak};
+use terminal_core::exec::{ExecControlAction, ExecControlOrigin, ExecControlRequest};
+use terminal_core::{
+    resolve_local_exec_shell_without_probe, ExecProcessManager, LocalExecCommandRequest,
+    ShellDetector, ShellType,
+};
 use tokio::sync::broadcast;
+use tool_runtime::exec_command::{
+    exec_command_argv_for_isolated_shell, exec_command_noninteractive_env, ExecCommandShellKind,
+};
 
 const PROVIDER_DISCOVERY_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
 const EXTERNAL_SOURCE_PREFERENCES_FILE: &str = "external-sources.json";
@@ -106,11 +125,415 @@ pub const EXTERNAL_CAPABILITY_COMMAND: &str = "command";
 pub const EXTERNAL_CAPABILITY_TOOL: &str = "tool";
 pub const EXTERNAL_CAPABILITY_SUBAGENT: &str = "subagent";
 pub const EXTERNAL_CAPABILITY_MCP: &str = "mcp";
+pub const EXTERNAL_CAPABILITY_REFERENCE: &str = "reference";
 const EXTERNAL_ADAPTER_CONTRACT_MAJOR: u32 = 1;
 const MAX_PROMPT_COMMAND_FILE_REFERENCES: usize = 8;
 const MAX_PROMPT_COMMAND_FILE_BYTES: usize = 64 * 1024;
 const MAX_PROMPT_COMMAND_TOTAL_FILE_BYTES: usize = 128 * 1024;
 const MAX_EXPANDED_PROMPT_COMMAND_BYTES: usize = 1024 * 1024;
+const PROMPT_COMMAND_SHELL_REVIEW_SCHEMA_VERSION: u32 = 1;
+const MAX_PROMPT_COMMAND_SHELL_INVOCATIONS: usize = 8;
+const MAX_PROMPT_COMMAND_SHELL_COMMAND_BYTES: usize = 64 * 1024;
+const MAX_PROMPT_COMMAND_SHELL_TOTAL_BYTES: usize = 128 * 1024;
+const MAX_PROMPT_COMMAND_SHELL_OUTPUT_CHARS: usize = 256 * 1024;
+const PROMPT_COMMAND_SHELL_TIMEOUT_MS: u64 = 30_000;
+const PROMPT_COMMAND_SHELL_KILL_YIELD_MS: u64 = 5_000;
+const MAX_APPROVED_PROMPT_COMMAND_SHELL_PLANS: usize = 512;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ResolvedPromptCommandShell {
+    display_name: String,
+    path: PathBuf,
+    kind: ExecCommandShellKind,
+}
+
+#[derive(Debug, Clone)]
+struct PreparedPromptCommandShellPlan {
+    expansion: PromptCommandExpansion,
+    invocations: Vec<PromptCommandShellInvocation>,
+    working_directory: PathBuf,
+    resolved_shell: ResolvedPromptCommandShell,
+    review: PromptCommandShellReviewPlan,
+}
+
+fn prepare_prompt_command_shell_plan(
+    expansion: PromptCommandExpansion,
+    source_display_name: &str,
+    execution_domain_id: &str,
+    candidate_id: &str,
+    content_version: &str,
+    preference_revision: u64,
+    resolved_shell: ResolvedPromptCommandShell,
+) -> Result<PreparedPromptCommandShellPlan, String> {
+    let shell = expansion
+        .shell
+        .as_ref()
+        .ok_or_else(|| "prompt command does not contain shell directives".to_string())?;
+    if !shell.working_directory.is_absolute() {
+        return Err("prompt command shell working directory must be absolute".to_string());
+    }
+    if shell.invocations.is_empty()
+        || shell.invocations.len() > MAX_PROMPT_COMMAND_SHELL_INVOCATIONS
+    {
+        return Err(format!(
+            "prompt commands may contain at most {MAX_PROMPT_COMMAND_SHELL_INVOCATIONS} shell directives"
+        ));
+    }
+    let mut previous_end = 0usize;
+    let mut total_bytes = 0usize;
+    for invocation in &shell.invocations {
+        let directive = expansion
+            .content
+            .get(invocation.range_start..invocation.range_end)
+            .ok_or_else(|| "prompt command shell directive range is invalid".to_string())?;
+        if invocation.range_start < previous_end
+            || !directive.starts_with("!`")
+            || !directive.ends_with('`')
+            || directive.get(2..directive.len().saturating_sub(1))
+                != Some(invocation.command.as_str())
+        {
+            return Err("prompt command shell directive range is inconsistent".to_string());
+        }
+        if invocation.command.len() > MAX_PROMPT_COMMAND_SHELL_COMMAND_BYTES {
+            return Err(format!(
+                "a prompt command shell directive exceeds the {MAX_PROMPT_COMMAND_SHELL_COMMAND_BYTES} byte limit"
+            ));
+        }
+        total_bytes = total_bytes
+            .checked_add(invocation.command.len())
+            .ok_or_else(|| {
+                "prompt command shell directives exceed the total byte limit".to_string()
+            })?;
+        previous_end = invocation.range_end;
+    }
+    if total_bytes > MAX_PROMPT_COMMAND_SHELL_TOTAL_BYTES {
+        return Err(format!(
+            "prompt command shell directives exceed the {MAX_PROMPT_COMMAND_SHELL_TOTAL_BYTES} byte total limit"
+        ));
+    }
+
+    let plan_fingerprint = prompt_command_shell_plan_fingerprint(
+        execution_domain_id,
+        candidate_id,
+        content_version,
+        &shell.working_directory,
+        &resolved_shell,
+        &shell.invocations,
+    );
+    let review = PromptCommandShellReviewPlan {
+        schema_version: PROMPT_COMMAND_SHELL_REVIEW_SCHEMA_VERSION,
+        plan_fingerprint,
+        source_display_name: source_display_name.to_string(),
+        working_directory: shell.working_directory.to_string_lossy().to_string(),
+        shell_display_name: resolved_shell.display_name.clone(),
+        shell_executable: resolved_shell
+            .path
+            .to_str()
+            .ok_or_else(|| "prompt command shell executable path is not valid Unicode".to_string())?
+            .to_string(),
+        commands: shell
+            .invocations
+            .iter()
+            .map(|invocation| invocation.command.clone())
+            .collect(),
+        can_remember: shell
+            .invocations
+            .iter()
+            .all(|invocation| invocation.can_remember),
+        preference_revision,
+    };
+    Ok(PreparedPromptCommandShellPlan {
+        invocations: shell.invocations.clone(),
+        working_directory: shell.working_directory.clone(),
+        expansion,
+        resolved_shell,
+        review,
+    })
+}
+
+fn prompt_command_shell_plan_fingerprint(
+    execution_domain_id: &str,
+    candidate_id: &str,
+    content_version: &str,
+    working_directory: &Path,
+    shell: &ResolvedPromptCommandShell,
+    invocations: &[PromptCommandShellInvocation],
+) -> String {
+    let mut hasher = Sha256::new();
+    for part in [
+        PROMPT_COMMAND_SHELL_REVIEW_SCHEMA_VERSION.to_string(),
+        execution_domain_id.to_string(),
+        candidate_id.to_string(),
+        content_version.to_string(),
+        prompt_command_shell_kind_id(&shell.kind),
+    ] {
+        update_prompt_command_shell_fingerprint(&mut hasher, part.as_bytes());
+    }
+    update_prompt_command_shell_fingerprint(
+        &mut hasher,
+        &prompt_command_shell_path_bytes(working_directory),
+    );
+    update_prompt_command_shell_fingerprint(
+        &mut hasher,
+        &prompt_command_shell_path_bytes(&shell.path),
+    );
+    for invocation in invocations {
+        update_prompt_command_shell_fingerprint(&mut hasher, invocation.command.as_bytes());
+    }
+    format!("sha256:{}", hex::encode(hasher.finalize()))
+}
+
+fn update_prompt_command_shell_fingerprint(hasher: &mut Sha256, value: &[u8]) {
+    hasher.update((value.len() as u64).to_be_bytes());
+    hasher.update(value);
+}
+
+fn prompt_command_shell_path_bytes(path: &Path) -> Vec<u8> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::ffi::OsStrExt;
+        return path.as_os_str().as_bytes().to_vec();
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::ffi::OsStrExt;
+        return path
+            .as_os_str()
+            .encode_wide()
+            .flat_map(u16::to_le_bytes)
+            .collect();
+    }
+    #[cfg(not(any(unix, windows)))]
+    path.to_string_lossy().as_bytes().to_vec()
+}
+
+fn prompt_command_shell_kind_id(kind: &ExecCommandShellKind) -> String {
+    match kind {
+        ExecCommandShellKind::Bash => "bash".to_string(),
+        ExecCommandShellKind::Zsh => "zsh".to_string(),
+        ExecCommandShellKind::Fish => "fish".to_string(),
+        ExecCommandShellKind::PowerShell => "powershell".to_string(),
+        ExecCommandShellKind::PowerShellCore => "powershell_core".to_string(),
+        ExecCommandShellKind::Cmd => "cmd".to_string(),
+        ExecCommandShellKind::Sh => "sh".to_string(),
+        ExecCommandShellKind::Ksh => "ksh".to_string(),
+        ExecCommandShellKind::Csh => "csh".to_string(),
+        ExecCommandShellKind::Custom(name) => format!("custom:{name}"),
+    }
+}
+
+fn apply_prompt_command_shell_outputs(
+    content: &str,
+    invocations: &[PromptCommandShellInvocation],
+    outputs: &[String],
+) -> Result<String, String> {
+    if invocations.len() != outputs.len() {
+        return Err("prompt command shell output count is inconsistent".to_string());
+    }
+    let output_bytes = outputs.iter().map(String::len).sum::<usize>();
+    let removed_bytes = invocations
+        .iter()
+        .map(|invocation| invocation.range_end.saturating_sub(invocation.range_start))
+        .sum::<usize>();
+    let capacity = content
+        .len()
+        .saturating_sub(removed_bytes)
+        .saturating_add(output_bytes);
+    if capacity > MAX_EXPANDED_PROMPT_COMMAND_BYTES {
+        return Err(format!(
+            "expanded external prompt command exceeds the {MAX_EXPANDED_PROMPT_COMMAND_BYTES} byte limit"
+        ));
+    }
+    let mut expanded = String::with_capacity(capacity);
+    let mut cursor = 0usize;
+    for (invocation, output) in invocations.iter().zip(outputs) {
+        let prefix = content
+            .get(cursor..invocation.range_start)
+            .ok_or_else(|| "prompt command shell directive range is invalid".to_string())?;
+        expanded.push_str(prefix);
+        expanded.push_str(output);
+        cursor = invocation.range_end;
+    }
+    expanded.push_str(
+        content
+            .get(cursor..)
+            .ok_or_else(|| "prompt command shell directive range is invalid".to_string())?,
+    );
+    Ok(expanded)
+}
+
+fn resolve_prompt_command_shell(
+    preference: &PromptCommandShellPreference,
+) -> Result<ResolvedPromptCommandShell, String> {
+    let resolved = match preference {
+        PromptCommandShellPreference::HostDefault => {
+            let shell = resolve_local_exec_shell_without_probe(None);
+            return finalize_resolved_prompt_command_shell(
+                shell.display_name,
+                shell.path,
+                shell.shell_type,
+            );
+        }
+        PromptCommandShellPreference::Preferred { executable } => {
+            if let Some(shell) = ShellDetector::resolve_configured_shell_without_probe(executable) {
+                return finalize_resolved_prompt_command_shell(
+                    shell.display_name,
+                    shell.path,
+                    shell.shell_type,
+                );
+            }
+            let fallback = resolve_local_exec_shell_without_probe(None);
+            return finalize_resolved_prompt_command_shell(
+                fallback.display_name,
+                fallback.path,
+                fallback.shell_type,
+            );
+        }
+        PromptCommandShellPreference::Required { executable } => {
+            ShellDetector::resolve_configured_shell_without_probe(executable).ok_or_else(|| {
+                format!("required prompt command shell '{executable}' is unavailable")
+            })?
+        }
+        PromptCommandShellPreference::RequiredOneOf { executables } => {
+            let mut resolved = None;
+            for executable in executables {
+                if let Some(shell) =
+                    ShellDetector::resolve_configured_shell_without_probe(executable)
+                {
+                    resolved = Some(shell);
+                    break;
+                }
+            }
+            resolved.ok_or_else(|| {
+                "none of the required prompt command shell candidates are available".to_string()
+            })?
+        }
+    };
+    finalize_resolved_prompt_command_shell(
+        resolved.display_name,
+        resolved.path,
+        resolved.shell_type,
+    )
+}
+
+fn finalize_resolved_prompt_command_shell(
+    display_name: String,
+    path: PathBuf,
+    shell_type: ShellType,
+) -> Result<ResolvedPromptCommandShell, String> {
+    let path = dunce::canonicalize(&path)
+        .map_err(|_| "prompt command shell executable is unavailable".to_string())?;
+    if path.to_str().is_none() {
+        return Err("prompt command shell executable path is not valid Unicode".to_string());
+    }
+    Ok(ResolvedPromptCommandShell {
+        display_name,
+        path,
+        kind: prompt_command_shell_kind(&shell_type),
+    })
+}
+
+fn prompt_command_shell_kind(shell_type: &ShellType) -> ExecCommandShellKind {
+    match shell_type {
+        ShellType::Bash => ExecCommandShellKind::Bash,
+        ShellType::Zsh => ExecCommandShellKind::Zsh,
+        ShellType::Fish => ExecCommandShellKind::Fish,
+        ShellType::PowerShell => ExecCommandShellKind::PowerShell,
+        ShellType::PowerShellCore => ExecCommandShellKind::PowerShellCore,
+        ShellType::Cmd => ExecCommandShellKind::Cmd,
+        ShellType::Sh => ExecCommandShellKind::Sh,
+        ShellType::Ksh => ExecCommandShellKind::Ksh,
+        ShellType::Csh => ExecCommandShellKind::Csh,
+        ShellType::Custom(name) => ExecCommandShellKind::Custom(name.clone()),
+    }
+}
+
+async fn execute_prompt_command_shell_plan(
+    plan: PreparedPromptCommandShellPlan,
+) -> Result<PromptCommandExpansion, String> {
+    if !plan.working_directory.is_dir() {
+        return Err("prompt command shell working directory is unavailable".to_string());
+    }
+    let manager = Arc::new(ExecProcessManager::default());
+    let tasks = plan
+        .invocations
+        .iter()
+        .enumerate()
+        .map(|(index, invocation)| {
+            let manager = Arc::clone(&manager);
+            let argv = exec_command_argv_for_isolated_shell(
+                plan.resolved_shell
+                    .path
+                    .to_str()
+                    .expect("prepared prompt command shell paths are valid Unicode")
+                    .to_string(),
+                plan.resolved_shell.kind.clone(),
+                &invocation.command,
+            );
+            let cwd = plan.working_directory.clone();
+            async move {
+                let response = manager
+                    .exec_command_stdout(LocalExecCommandRequest {
+                        argv,
+                        cwd,
+                        env: exec_command_noninteractive_env(),
+                        tty: false,
+                        yield_time_ms: Some(PROMPT_COMMAND_SHELL_TIMEOUT_MS),
+                        max_output_chars: Some(MAX_PROMPT_COMMAND_SHELL_OUTPUT_CHARS),
+                        lifecycle_tx: None,
+                        output_capture_tx: None,
+                    })
+                    .await
+                    .map_err(|error| {
+                        format!(
+                            "prompt command shell directive {} failed to start: {error}",
+                            index + 1
+                        )
+                    })?;
+                if let Some(session_id) = response.session_id {
+                    let _ = manager
+                        .control_session(ExecControlRequest {
+                            session_id,
+                            action: ExecControlAction::Kill,
+                            origin: ExecControlOrigin::OutOfBand,
+                            yield_time_ms: Some(PROMPT_COMMAND_SHELL_KILL_YIELD_MS),
+                            max_output_chars: Some(MAX_PROMPT_COMMAND_SHELL_OUTPUT_CHARS),
+                        })
+                        .await;
+                    if response.original_output_chars >= MAX_PROMPT_COMMAND_SHELL_OUTPUT_CHARS {
+                        return Err(format!(
+                            "prompt command shell directive {} exceeded the output limit",
+                            index + 1
+                        ));
+                    }
+                    return Err(format!(
+                        "prompt command shell directive {} exceeded the {} second timeout",
+                        index + 1,
+                        PROMPT_COMMAND_SHELL_TIMEOUT_MS / 1000
+                    ));
+                }
+                if response.original_output_chars > MAX_PROMPT_COMMAND_SHELL_OUTPUT_CHARS {
+                    return Err(format!(
+                        "prompt command shell directive {} exceeded the output limit",
+                        index + 1
+                    ));
+                }
+                Ok(response.output)
+            }
+        })
+        .collect::<Vec<_>>();
+    let outputs = join_all(tasks)
+        .await
+        .into_iter()
+        .collect::<Result<Vec<_>, _>>()?;
+    let content =
+        apply_prompt_command_shell_outputs(&plan.expansion.content, &plan.invocations, &outputs)?;
+    Ok(PromptCommandExpansion {
+        content,
+        workspace_file_references: plan.expansion.workspace_file_references,
+        shell: None,
+    })
+}
 
 #[derive(Debug, Clone)]
 pub(crate) struct LocalConfiguredSkillRootContribution {
@@ -252,6 +675,7 @@ struct ExternalEcosystemRegistration {
     tool_provider: Option<Arc<dyn ExternalToolSourceProvider>>,
     subagent_provider: Option<Arc<dyn ExternalSubagentSourceProvider>>,
     mcp_provider: Option<Arc<dyn ExternalMcpSourceProvider>>,
+    workspace_reference_provider: Option<Arc<dyn ExternalWorkspaceReferenceSourceProvider>>,
 }
 
 impl ExternalEcosystemRegistration {
@@ -291,6 +715,12 @@ impl ExternalEcosystemRegistration {
             (
                 EXTERNAL_CAPABILITY_MCP,
                 self.mcp_provider
+                    .as_ref()
+                    .map(|provider| provider.identity().ecosystem_id),
+            ),
+            (
+                EXTERNAL_CAPABILITY_REFERENCE,
+                self.workspace_reference_provider
                     .as_ref()
                     .map(|provider| provider.identity().ecosystem_id),
             ),
@@ -343,6 +773,11 @@ fn default_external_integration_registry() -> Vec<ExternalEcosystemRegistration>
                         ExternalIntegrationAccess::AskBeforeUse,
                         ExternalIntegrationAccess::AskBeforeUse,
                     ),
+                    external_capability_descriptor(
+                        EXTERNAL_CAPABILITY_REFERENCE,
+                        ExternalIntegrationAccess::Auto,
+                        ExternalIntegrationAccess::Auto,
+                    ),
                 ],
             },
             contract_major: EXTERNAL_ADAPTER_CONTRACT_MAJOR,
@@ -351,6 +786,9 @@ fn default_external_integration_registry() -> Vec<ExternalEcosystemRegistration>
             tool_provider: Some(Arc::new(OpenCodeToolProvider::default())),
             subagent_provider: Some(Arc::new(OpenCodeSubagentProvider::default())),
             mcp_provider: Some(Arc::new(OpenCodeMcpProvider::default())),
+            workspace_reference_provider: Some(Arc::new(
+                OpenCodeWorkspaceReferenceProvider::default(),
+            )),
         },
         ExternalEcosystemRegistration {
             descriptor: ExternalIntegrationEcosystemDescriptor {
@@ -382,6 +820,7 @@ fn default_external_integration_registry() -> Vec<ExternalEcosystemRegistration>
             tool_provider: None,
             subagent_provider: Some(Arc::new(ClaudeCodeSubagentProvider::default())),
             mcp_provider: Some(Arc::new(ClaudeCodeMcpProvider::default())),
+            workspace_reference_provider: None,
         },
         ExternalEcosystemRegistration {
             descriptor: ExternalIntegrationEcosystemDescriptor {
@@ -408,6 +847,7 @@ fn default_external_integration_registry() -> Vec<ExternalEcosystemRegistration>
             tool_provider: None,
             subagent_provider: Some(Arc::new(CodexSubagentProvider::default())),
             mcp_provider: Some(Arc::new(CodexMcpProvider::default())),
+            workspace_reference_provider: None,
         },
     ]
 }
@@ -460,6 +900,8 @@ struct ExternalSourcesConfig {
     conflicted_candidate_ids: BTreeSet<String>,
     #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
     approved_tool_targets: BTreeSet<String>,
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    approved_prompt_command_shell_plans: BTreeSet<String>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     declined_tool_decisions: BTreeMap<String, String>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
@@ -474,6 +916,8 @@ struct ExternalSourcesConfig {
     subagent_conflict_choices: BTreeMap<String, String>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     subagent_conflict_lineage_current_keys: BTreeMap<String, String>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    subagent_model_bindings: BTreeMap<String, ExternalSubagentModelBindingTarget>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     mcp_server_decisions: BTreeMap<String, ExternalMcpDecision>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
@@ -504,6 +948,10 @@ impl std::fmt::Debug for ExternalSourcesConfig {
             )
             .field("conflicted_candidate_ids", &self.conflicted_candidate_ids)
             .field("approved_tool_targets", &self.approved_tool_targets)
+            .field(
+                "approved_prompt_command_shell_plans",
+                &self.approved_prompt_command_shell_plans.len(),
+            )
             .field("declined_tool_decisions", &self.declined_tool_decisions)
             .field("tool_conflict_choices", &self.tool_conflict_choices)
             .field("preference_revision", &self.preference_revision)
@@ -520,6 +968,7 @@ impl std::fmt::Debug for ExternalSourcesConfig {
                 "subagent_conflict_lineage_current_keys",
                 &self.subagent_conflict_lineage_current_keys,
             )
+            .field("subagent_model_bindings", &self.subagent_model_bindings)
             .field("mcp_server_decisions", &self.mcp_server_decisions)
             .field("mcp_conflict_choices", &self.mcp_conflict_choices)
             .field("extensions", &self.extensions)
@@ -872,6 +1321,67 @@ fn source_ecosystem_id(
         })
 }
 
+fn restrict_prompt_commands_without_active_subagents(
+    commands: &mut [PromptCommandCatalogEntry],
+    conflicts: &mut [PromptCommandConflict],
+    active_subagents: &BTreeSet<(EcosystemId, String)>,
+) {
+    for command in commands {
+        if !matches!(
+            command.definition.availability,
+            PromptCommandAvailability::Available
+        ) {
+            continue;
+        }
+        let PromptCommandExecutionTarget::FreshExternalSubagent {
+            ecosystem_id,
+            logical_id,
+        } = &command.definition.execution_target
+        else {
+            continue;
+        };
+        let key = (ecosystem_id.clone(), logical_id.to_ascii_lowercase());
+        if !active_subagents.contains(&key) {
+            command.definition.availability = PromptCommandAvailability::Restricted {
+                reason: format!(
+                    "External command subagent '{}' is not currently approved and available",
+                    logical_id
+                ),
+                required_capabilities: vec!["command.external_subagent".to_string()],
+            };
+        }
+    }
+    for conflict in conflicts {
+        for candidate in &mut conflict.candidates {
+            if !matches!(candidate.availability, PromptCommandAvailability::Available) {
+                continue;
+            }
+            let PromptCommandExecutionTarget::FreshExternalSubagent {
+                ecosystem_id,
+                logical_id,
+            } = &candidate.execution_target
+            else {
+                continue;
+            };
+            let key = (ecosystem_id.clone(), logical_id.to_ascii_lowercase());
+            if !active_subagents.contains(&key) {
+                candidate.availability = PromptCommandAvailability::Restricted {
+                    reason: format!(
+                        "External command subagent '{}' is not currently approved and available",
+                        logical_id
+                    ),
+                    required_capabilities: vec!["command.external_subagent".to_string()],
+                };
+                if conflict.selected_candidate_id.as_deref()
+                    == Some(candidate.candidate_id.as_str())
+                {
+                    conflict.selected_candidate_id = None;
+                }
+            }
+        }
+    }
+}
+
 fn ensure_source_capability_active(
     snapshot: &ExternalSourceCatalogSnapshot,
     source_key: &SourceKey,
@@ -984,6 +1494,16 @@ impl WorkspaceExternalSourceService {
             .iter()
             .filter_map(|registration| registration.mcp_provider.as_ref().map(Arc::clone))
             .collect();
+        let workspace_reference_providers: Vec<Arc<dyn ExternalWorkspaceReferenceSourceProvider>> =
+            registrations
+                .iter()
+                .filter_map(|registration| {
+                    registration
+                        .workspace_reference_provider
+                        .as_ref()
+                        .map(Arc::clone)
+                })
+                .collect();
         let (preferences, mcp_revision_key) =
             external_sources_config_with_mcp_revision_key().await?;
         let control_plane = Arc::new(ExternalSourceControlPlane::new(
@@ -993,6 +1513,7 @@ impl WorkspaceExternalSourceService {
             tool_providers,
             subagent_providers,
             mcp_providers,
+            workspace_reference_providers,
         )?);
         let suppressed_sources = preferences
             .suppressed_source_keys
@@ -1054,6 +1575,57 @@ impl WorkspaceExternalSourceService {
     async fn refresh(self: &Arc<Self>) -> Result<ExternalSourceCatalogSnapshot, String> {
         self.refresh_with_worker_recovery(WorkerRecoveryPolicy::ResetAndAttempt)
             .await
+    }
+
+    async fn refresh_workspace_references(self: &Arc<Self>, force: bool) -> Result<(), String> {
+        sync_service_preferences(self).await?;
+        let _refresh_guard = self.refresh_gate.lock().await;
+        if !force
+            && !lock_workspace_reference_coordinator(&self.control_plane)
+                .snapshot()
+                .discovery_pending
+        {
+            return Ok(());
+        }
+        let preferences = read_external_sources_config().await?;
+        let policy = integration_policy_snapshot(&preferences, self.workspace_root.as_deref())?;
+        let mut requests = Vec::new();
+        let mut disabled_results = Vec::new();
+        for request in
+            lock_workspace_reference_coordinator(&self.control_plane).discovery_requests()
+        {
+            if integration_capability_is_discoverable(
+                &policy,
+                request.ecosystem_id().as_str(),
+                EXTERNAL_CAPABILITY_REFERENCE,
+            ) {
+                requests.push(request);
+            } else {
+                disabled_results.push(request.disabled());
+            }
+        }
+        let mut batch = self
+            .control_plane
+            .discover_workspace_references(requests, PROVIDER_DISCOVERY_TIMEOUT)
+            .await;
+        batch.immediate.append(&mut disabled_results);
+        lock_workspace_reference_coordinator(&self.control_plane)
+            .apply_discovery_results(batch.immediate);
+        for deferred in batch.deferred {
+            self.schedule_deferred_workspace_reference_discovery(deferred);
+        }
+        self.ensure_watch_roots(&policy).await;
+        Ok(())
+    }
+
+    async fn ensure_workspace_reference_refresh(self: &Arc<Self>) -> Result<(), String> {
+        let pending = lock_workspace_reference_coordinator(&self.control_plane)
+            .snapshot()
+            .discovery_pending;
+        if pending {
+            self.refresh_workspace_references(false).await?;
+        }
+        Ok(())
     }
 
     async fn refresh_with_runtime_invalidation(
@@ -1157,7 +1729,22 @@ impl WorkspaceExternalSourceService {
                 disabled_mcp_results.push(request.disabled());
             }
         }
-        let (command_batch, tool_batch, subagent_batch, mcp_batch) = tokio::join!(
+        let mut workspace_reference_requests = Vec::new();
+        let mut disabled_workspace_reference_results = Vec::new();
+        for request in
+            lock_workspace_reference_coordinator(&self.control_plane).discovery_requests()
+        {
+            if integration_capability_is_discoverable(
+                &policy,
+                request.ecosystem_id().as_str(),
+                EXTERNAL_CAPABILITY_REFERENCE,
+            ) {
+                workspace_reference_requests.push(request);
+            } else {
+                disabled_workspace_reference_results.push(request.disabled());
+            }
+        }
+        let (command_batch, tool_batch, subagent_batch, mcp_batch, workspace_reference_batch) = tokio::join!(
             self.control_plane
                 .discover_commands(requests, PROVIDER_DISCOVERY_TIMEOUT),
             self.control_plane
@@ -1166,6 +1753,10 @@ impl WorkspaceExternalSourceService {
                 .discover_subagents(subagent_requests, PROVIDER_DISCOVERY_TIMEOUT),
             self.control_plane
                 .discover_mcp(mcp_requests, PROVIDER_DISCOVERY_TIMEOUT),
+            self.control_plane.discover_workspace_references(
+                workspace_reference_requests,
+                PROVIDER_DISCOVERY_TIMEOUT,
+            ),
         );
         let mut results = command_batch.immediate;
         results.append(&mut disabled_command_results);
@@ -1175,12 +1766,16 @@ impl WorkspaceExternalSourceService {
         subagent_results.append(&mut disabled_subagent_results);
         let mut mcp_results = mcp_batch.immediate;
         mcp_results.append(&mut disabled_mcp_results);
+        let mut workspace_reference_results = workspace_reference_batch.immediate;
+        workspace_reference_results.append(&mut disabled_workspace_reference_results);
         let command_snapshot =
             lock_coordinator(&self.control_plane).apply_discovery_results(results);
         lock_tool_coordinator(&self.control_plane).apply_discovery_results(tool_results);
         let subagent_snapshot = lock_subagent_coordinator(&self.control_plane)
             .apply_discovery_results(subagent_results);
         lock_mcp_coordinator(&self.control_plane).apply_discovery_results(mcp_results);
+        lock_workspace_reference_coordinator(&self.control_plane)
+            .apply_discovery_results(workspace_reference_results);
         for deferred in command_batch.deferred {
             self.schedule_deferred_command_discovery(deferred);
         }
@@ -1192,6 +1787,9 @@ impl WorkspaceExternalSourceService {
         }
         for deferred in mcp_batch.deferred {
             self.schedule_deferred_mcp_discovery(deferred);
+        }
+        for deferred in workspace_reference_batch.deferred {
+            self.schedule_deferred_workspace_reference_discovery(deferred);
         }
         self.schedule_subagent_last_valid_expiry(&subagent_snapshot);
         self.ensure_watch_roots(&policy).await;
@@ -1362,6 +1960,7 @@ impl WorkspaceExternalSourceService {
                 declined_decisions: &preferences.declined_subagent_decisions,
                 conflict_choices: &preferences.subagent_conflict_choices,
                 conflict_lineage_current_keys: &preferences.subagent_conflict_lineage_current_keys,
+                model_bindings: &preferences.subagent_model_bindings,
             },
         )
         .await;
@@ -1395,6 +1994,7 @@ impl WorkspaceExternalSourceService {
                                 conflict_choices: &preferences.subagent_conflict_choices,
                                 conflict_lineage_current_keys: &preferences
                                     .subagent_conflict_lineage_current_keys,
+                                model_bindings: &preferences.subagent_model_bindings,
                             },
                         )
                         .await;
@@ -1416,6 +2016,21 @@ impl WorkspaceExternalSourceService {
             &subagent_snapshot,
             &subagent_state,
             preferences.preference_revision,
+        );
+        let active_subagents = subagent_state
+            .registrations
+            .iter()
+            .map(|registration| {
+                (
+                    registration.ecosystem_id.clone(),
+                    registration.logical_id.to_ascii_lowercase(),
+                )
+            })
+            .collect::<BTreeSet<_>>();
+        restrict_prompt_commands_without_active_subagents(
+            &mut snapshot.commands,
+            &mut snapshot.command_conflicts,
+            &active_subagents,
         );
         if let Some(workspace_root) = self.workspace_root.as_deref() {
             crate::agentic::agents::get_agent_registry().install_external_subagent_routes(
@@ -1581,6 +2196,7 @@ impl WorkspaceExternalSourceService {
                 declined_decisions: &preferences.declined_subagent_decisions,
                 conflict_choices: &preferences.subagent_conflict_choices,
                 conflict_lineage_current_keys: &preferences.subagent_conflict_lineage_current_keys,
+                model_bindings: &preferences.subagent_model_bindings,
             },
         );
         merge_subagent_state(
@@ -1888,6 +2504,47 @@ impl WorkspaceExternalSourceService {
         });
     }
 
+    fn schedule_deferred_workspace_reference_discovery(
+        self: &Arc<Self>,
+        deferred: DeferredDiscovery<ExternalWorkspaceReferenceDiscoveryResult>,
+    ) {
+        let weak = Arc::downgrade(self);
+        let control_plane = Arc::clone(&self.control_plane);
+        tokio::spawn(async move {
+            let mut deferred = deferred;
+            loop {
+                let Some((completed, observer)) =
+                    control_plane.complete_workspace_reference(deferred).await
+                else {
+                    return;
+                };
+                {
+                    let Some(service) = weak.upgrade() else {
+                        return;
+                    };
+                    let _refresh_guard = service.refresh_gate.lock().await;
+                    let Some(result) = control_plane.finalize_workspace_reference(completed).await
+                    else {
+                        return;
+                    };
+                    service
+                        .complete_deferred_workspace_reference_discovery(result)
+                        .await;
+                }
+                let Some(observer) = observer else {
+                    return;
+                };
+                let Some(next) = control_plane
+                    .resume_abandoned_workspace_reference(observer)
+                    .await
+                else {
+                    return;
+                };
+                deferred = next;
+            }
+        });
+    }
+
     async fn complete_deferred_discovery(&self, result: ExternalSourceDiscoveryResult) {
         let provider_id = result.provider_id().clone();
         let Ok(preferences) = read_external_sources_config().await else {
@@ -2006,6 +2663,34 @@ impl WorkspaceExternalSourceService {
         if let Ok(snapshot) = self.rebuild_product_snapshot(command_snapshot).await {
             let _ = self.updates.send(snapshot);
         }
+    }
+
+    async fn complete_deferred_workspace_reference_discovery(
+        &self,
+        result: ExternalWorkspaceReferenceDiscoveryResult,
+    ) {
+        let provider_id = result.provider_id().clone();
+        let Ok(preferences) = read_external_sources_config().await else {
+            return;
+        };
+        let Ok(policy) = integration_policy_snapshot(&preferences, self.workspace_root.as_deref())
+        else {
+            return;
+        };
+        let ecosystem_id = lock_workspace_reference_coordinator(&self.control_plane)
+            .ecosystem_for_provider(&provider_id);
+        if ecosystem_id.is_none_or(|ecosystem_id| {
+            !integration_capability_is_discoverable(
+                &policy,
+                ecosystem_id.as_str(),
+                EXTERNAL_CAPABILITY_REFERENCE,
+            )
+        }) {
+            self.ensure_watch_roots(&policy).await;
+            return;
+        }
+        lock_workspace_reference_coordinator(&self.control_plane).apply_discovery_result(result);
+        self.ensure_watch_roots(&policy).await;
     }
 
     fn schedule_subagent_last_valid_expiry(
@@ -2368,7 +3053,18 @@ impl WorkspaceExternalSourceService {
             let known = coordinator.set_source_enabled(stable_key, enabled).is_ok();
             (previous, known)
         };
-        if !command_known && !tool_known && !subagent_known && !mcp_known {
+        let (previous_workspace_references, workspace_reference_known) = {
+            let mut coordinator = lock_workspace_reference_coordinator(&self.control_plane);
+            let previous = coordinator.suppressed_sources().clone();
+            let known = coordinator.set_source_enabled(stable_key, enabled).is_ok();
+            (previous, known)
+        };
+        if !command_known
+            && !tool_known
+            && !subagent_known
+            && !mcp_known
+            && !workspace_reference_known
+        {
             return Err(missing_candidate_error(format!(
                 "External source '{stable_key}' is no longer available"
             )));
@@ -2387,6 +3083,8 @@ impl WorkspaceExternalSourceService {
                         .replace_suppressed_sources(previous_subagents);
                     lock_mcp_coordinator(&self.control_plane)
                         .replace_suppressed_sources(previous_mcps);
+                    lock_workspace_reference_coordinator(&self.control_plane)
+                        .replace_suppressed_sources(previous_workspace_references);
                     return Err(error);
                 }
             };
@@ -2396,6 +3094,8 @@ impl WorkspaceExternalSourceService {
         lock_subagent_coordinator(&self.control_plane)
             .replace_suppressed_sources(authoritative.clone());
         lock_mcp_coordinator(&self.control_plane).replace_suppressed_sources(authoritative.clone());
+        lock_workspace_reference_coordinator(&self.control_plane)
+            .replace_suppressed_sources(authoritative.clone());
         propagate_suppressed_sources(&authoritative, self);
         // Refresh acquires the same gate. Release the mutation critical section
         // after the preference and in-memory coordinators agree, then refresh
@@ -2782,6 +3482,30 @@ impl WorkspaceExternalSourceService {
         self.rebuild_product_snapshot(command_snapshot).await
     }
 
+    async fn set_subagent_model_binding(
+        &self,
+        binding_key: &str,
+        target: Option<ExternalSubagentModelBindingTarget>,
+        expected_subagent_generation: u64,
+        expected_preference_revision: u64,
+    ) -> Result<ExternalSourceCatalogSnapshot, String> {
+        let _refresh_guard = self.refresh_gate.lock().await;
+        let snapshot = self.snapshot();
+        validate_subagent_model_binding_mutation(
+            &snapshot,
+            binding_key,
+            target.as_ref(),
+            expected_subagent_generation,
+            expected_preference_revision,
+        )?;
+        let preferences =
+            persist_subagent_model_binding(binding_key, target, expected_preference_revision)
+                .await?;
+        propagate_subagent_preferences(&preferences);
+        let command_snapshot = lock_coordinator(&self.control_plane).snapshot();
+        self.rebuild_product_snapshot(command_snapshot).await
+    }
+
     async fn choose_subagent_conflict(
         &self,
         conflict_key: &str,
@@ -2865,7 +3589,8 @@ impl WorkspaceExternalSourceService {
         expected_content_version: Option<&str>,
         expected_native_conflict_key: Option<&str>,
         expected_preference_revision: Option<u64>,
-    ) -> Result<ExpandedPromptCommand, String> {
+        shell_review_decision: Option<&PromptCommandShellReviewDecision>,
+    ) -> Result<PromptCommandInvocationOutcome, String> {
         // Explicit invocation refreshes first, so a stable deletion cannot be
         // bypassed by an old menu projection.
         let snapshot = self.refresh_preserving_worker_recovery().await?;
@@ -2889,15 +3614,23 @@ impl WorkspaceExternalSourceService {
             expected_native_conflict_key,
             expected_preference_revision,
         )?;
-        let source_key = snapshot
+        let selected_command = snapshot
             .commands
             .iter()
             .find(|entry| entry.definition.name.eq_ignore_ascii_case(name))
-            .map(|entry| entry.definition.id.source.clone())
+            .map(|entry| entry.definition.clone())
             .ok_or_else(|| {
                 missing_candidate_error(format!("External prompt command '{name}' was not found"))
             })?;
+        let source_key = selected_command.id.source.clone();
+        let execution_target = selected_command.execution_target.clone();
         ensure_source_capability_active(&snapshot, &source_key, EXTERNAL_CAPABILITY_COMMAND)?;
+        let source_display_name = snapshot
+            .sources
+            .iter()
+            .find(|source| source.record.key == source_key)
+            .map(|source| source.record.display_name.clone())
+            .unwrap_or_else(|| "External prompt command".to_string());
         let coordinator = Arc::clone(&self.control_plane);
         let name = name.to_string();
         let arguments = arguments.to_string();
@@ -2915,7 +3648,76 @@ impl WorkspaceExternalSourceService {
         })
         .await
         .map_err(|error| format!("external command expansion task failed: {error}"))??;
-        finalize_prompt_command_expansion(self.workspace_root.as_deref(), expansion).await
+        let Some(shell_expansion) = expansion.shell.as_ref() else {
+            let expanded =
+                finalize_prompt_command_expansion(self.workspace_root.as_deref(), expansion)
+                    .await?;
+            return Ok(PromptCommandInvocationOutcome::Ready {
+                content: expanded.content,
+                execution_target,
+            });
+        };
+        if self.safe_mode_enabled() {
+            return Err(policy_limited_error(
+                "Shell-backed external prompt commands are disabled while External Sources safe mode is active",
+            ));
+        }
+        let resolved_shell = resolve_prompt_command_shell(&shell_expansion.preference)?;
+        let plan = prepare_prompt_command_shell_plan(
+            expansion,
+            &source_display_name,
+            self.execution_domain_id.as_str(),
+            &selected_command.id.stable_key(),
+            &selected_command.content_version,
+            preferences.preference_revision,
+            resolved_shell,
+        )?;
+        let approved = preferences
+            .approved_prompt_command_shell_plans
+            .contains(&plan.review.plan_fingerprint);
+        let run = if approved {
+            true
+        } else if let Some(decision) = shell_review_decision {
+            if decision.plan_fingerprint != plan.review.plan_fingerprint
+                || decision.expected_preference_revision != preferences.preference_revision
+            {
+                return Ok(PromptCommandInvocationOutcome::ReviewRequired {
+                    review: plan.review,
+                });
+            }
+            match decision.mode {
+                PromptCommandShellReviewMode::RunOnce => true,
+                PromptCommandShellReviewMode::Remember => {
+                    if !plan.review.can_remember {
+                        return Err(
+                            "argument-dependent prompt command shell directives cannot be remembered"
+                                .to_string(),
+                        );
+                    }
+                    let updated = persist_prompt_command_shell_plan_approval(
+                        &plan.review.plan_fingerprint,
+                        decision.expected_preference_revision,
+                    )
+                    .await?;
+                    propagate_prompt_command_preferences(&updated);
+                    true
+                }
+            }
+        } else {
+            false
+        };
+        if !run {
+            return Ok(PromptCommandInvocationOutcome::ReviewRequired {
+                review: plan.review,
+            });
+        }
+        let expansion = execute_prompt_command_shell_plan(plan).await?;
+        let expanded =
+            finalize_prompt_command_expansion(self.workspace_root.as_deref(), expansion).await?;
+        Ok(PromptCommandInvocationOutcome::Ready {
+            content: expanded.content,
+            execution_target,
+        })
     }
 
     async fn start_watching(self: &Arc<Self>) {
@@ -3083,6 +3885,12 @@ impl WorkspaceExternalSourceService {
         provider_roots.extend(
             lock_mcp_coordinator(&self.control_plane).watch_roots_for_ecosystems(&mcp_ecosystems),
         );
+        let workspace_reference_ecosystems =
+            ecosystems_with_discoverable_capability(policy, EXTERNAL_CAPABILITY_REFERENCE);
+        provider_roots.extend(
+            lock_workspace_reference_coordinator(&self.control_plane)
+                .watch_roots_for_ecosystems(&workspace_reference_ecosystems),
+        );
         for root in provider_roots {
             roots
                 .entry(root.path)
@@ -3128,6 +3936,12 @@ fn lock_mcp_coordinator(
     control_plane: &ExternalSourceControlPlane,
 ) -> MutexGuard<'_, bitfun_external_sources::ExternalMcpCoordinator> {
     control_plane.lock_mcp()
+}
+
+fn lock_workspace_reference_coordinator(
+    control_plane: &ExternalSourceControlPlane,
+) -> MutexGuard<'_, bitfun_external_sources::ExternalWorkspaceReferenceCoordinator> {
+    control_plane.lock_workspace_references()
 }
 
 fn lock_snapshot(
@@ -3186,7 +4000,7 @@ pub(crate) fn normalize_workspace_root(
         return Err("external source workspace root must be absolute".to_string());
     }
     Ok(Some(
-        dunce::canonicalize(workspace_root).unwrap_or_else(|_| workspace_root.to_path_buf()),
+        crate::agentic::workspace::canonical_local_workspace_path(workspace_root),
     ))
 }
 
@@ -3765,6 +4579,43 @@ async fn read_external_sources_config() -> Result<ExternalSourcesConfig, String>
     ExternalSourcePreferenceStore::global()?.read().await
 }
 
+async fn persist_prompt_command_shell_plan_approval(
+    fingerprint: &str,
+    expected_preference_revision: u64,
+) -> Result<ExternalSourcesConfig, String> {
+    let fingerprint = fingerprint.to_string();
+    ExternalSourcePreferenceStore::global()?
+        .update(move |config| {
+            if config.preference_revision != expected_preference_revision {
+                return false;
+            }
+            if config
+                .approved_prompt_command_shell_plans
+                .contains(&fingerprint)
+            {
+                return true;
+            }
+            if config.approved_prompt_command_shell_plans.len()
+                >= MAX_APPROVED_PROMPT_COMMAND_SHELL_PLANS
+            {
+                return false;
+            }
+            config
+                .approved_prompt_command_shell_plans
+                .insert(fingerprint);
+            config.preference_revision = config.preference_revision.saturating_add(1);
+            true
+        })
+        .await
+        .and_then(|(applied, config)| {
+            applied.then_some(config).ok_or_else(|| {
+                stale_operation_error(
+                    "Prompt command shell approvals changed or reached their storage limit; refresh before retrying",
+                )
+            })
+        })
+}
+
 pub(crate) async fn external_tool_invocation_is_authorized(
     ecosystem_id: &str,
     approval_key: &str,
@@ -3922,6 +4773,8 @@ fn merge_subagent_state(
     snapshot.subagent_generation = coordinator_snapshot.generation;
     snapshot.preference_revision = preference_revision;
     snapshot.subagents = state.summaries.clone();
+    snapshot.subagent_model_binding_groups = state.model_binding_groups.clone();
+    snapshot.subagent_model_binding_options = state.model_binding_options.clone();
     snapshot.subagent_conflicts = state.conflicts.clone();
     snapshot.pending_subagent_approvals = state.pending_approvals.clone();
     snapshot
@@ -4195,6 +5048,99 @@ async fn persist_subagent_conflict_choice_with_store(
                     .approved_subagent_envelopes
                     .insert(approval_key.clone());
                 config.declined_subagent_decisions.remove(&approval_key);
+            }
+            config.preference_revision = config.preference_revision.saturating_add(1);
+            true
+        })
+        .await
+        .and_then(|(applied, config)| {
+            applied.then_some(config).ok_or_else(|| {
+                stale_operation_error(
+                    "External subagent preferences changed; refresh before retrying",
+                )
+            })
+        })
+}
+
+fn validate_subagent_model_binding_mutation(
+    snapshot: &ExternalSourceCatalogSnapshot,
+    binding_key: &str,
+    target: Option<&ExternalSubagentModelBindingTarget>,
+    expected_subagent_generation: u64,
+    expected_preference_revision: u64,
+) -> Result<(), String> {
+    if snapshot.subagent_generation != expected_subagent_generation
+        || snapshot.preference_revision != expected_preference_revision
+    {
+        return Err(stale_operation_error(
+            "External subagent catalog changed; refresh before retrying",
+        ));
+    }
+    let group = snapshot
+        .subagent_model_binding_groups
+        .iter()
+        .find(|group| group.binding_key == binding_key)
+        .ok_or_else(|| {
+            missing_candidate_error("External subagent model binding is no longer available")
+        })?;
+    if !matches!(
+        group.method,
+        ExternalSubagentModelBindingMethod::BindingRequired
+            | ExternalSubagentModelBindingMethod::Explicit
+            | ExternalSubagentModelBindingMethod::BindingUnavailable
+    ) {
+        return Err(unavailable_operation_error(
+            "External subagent model binding is read-only in its current state",
+        ));
+    }
+    if let Some(target) = target {
+        if !snapshot
+            .subagent_model_binding_options
+            .iter()
+            .any(|option| &option.target == target)
+        {
+            return Err(unavailable_operation_error(
+                "External subagent model binding target is unavailable",
+            ));
+        }
+    }
+    Ok(())
+}
+
+async fn persist_subagent_model_binding(
+    binding_key: &str,
+    target: Option<ExternalSubagentModelBindingTarget>,
+    expected_preference_revision: u64,
+) -> Result<ExternalSourcesConfig, String> {
+    let store = ExternalSourcePreferenceStore::global()?;
+    persist_subagent_model_binding_with_store(
+        &store,
+        binding_key,
+        target,
+        expected_preference_revision,
+    )
+    .await
+}
+
+async fn persist_subagent_model_binding_with_store(
+    store: &ExternalSourcePreferenceStore,
+    binding_key: &str,
+    target: Option<ExternalSubagentModelBindingTarget>,
+    expected_preference_revision: u64,
+) -> Result<ExternalSourcesConfig, String> {
+    let binding_key = binding_key.to_string();
+    store
+        .update(move |config| {
+            if config.preference_revision != expected_preference_revision {
+                return false;
+            }
+            match target {
+                Some(target) => {
+                    config.subagent_model_bindings.insert(binding_key, target);
+                }
+                None => {
+                    config.subagent_model_bindings.remove(&binding_key);
+                }
             }
             config.preference_revision = config.preference_revision.saturating_add(1);
             true
@@ -4585,6 +5531,8 @@ fn propagate_suppressed_sources(
         lock_subagent_coordinator(&service.control_plane)
             .replace_suppressed_sources(sources.clone());
         lock_mcp_coordinator(&service.control_plane).replace_suppressed_sources(sources.clone());
+        lock_workspace_reference_coordinator(&service.control_plane)
+            .replace_suppressed_sources(sources.clone());
         tokio::spawn(async move {
             if let Err(error) = service.refresh_preserving_worker_recovery().await {
                 log::warn!(
@@ -4621,6 +5569,14 @@ fn propagate_conflict_preferences(preferences: &ExternalSourcesConfig) {
 }
 
 fn propagate_tool_preferences(_preferences: &ExternalSourcesConfig) {
+    propagate_runtime_preference_revision();
+}
+
+fn propagate_prompt_command_preferences(_preferences: &ExternalSourcesConfig) {
+    propagate_runtime_preference_revision();
+}
+
+fn propagate_runtime_preference_revision() {
     for service in workspace_services().iter() {
         let Some(service) = service.value().upgrade() else {
             continue;
@@ -4635,31 +5591,11 @@ fn propagate_tool_preferences(_preferences: &ExternalSourcesConfig) {
 }
 
 fn propagate_subagent_preferences(_preferences: &ExternalSourcesConfig) {
-    for service in workspace_services().iter() {
-        let Some(service) = service.value().upgrade() else {
-            continue;
-        };
-        tokio::spawn(async move {
-            let command_snapshot = lock_coordinator(&service.control_plane).snapshot();
-            if let Ok(snapshot) = service.rebuild_product_snapshot(command_snapshot).await {
-                let _ = service.updates.send(snapshot);
-            }
-        });
-    }
+    propagate_runtime_preference_revision();
 }
 
 fn propagate_mcp_preferences(_preferences: &ExternalSourcesConfig) {
-    for service in workspace_services().iter() {
-        let Some(service) = service.value().upgrade() else {
-            continue;
-        };
-        tokio::spawn(async move {
-            let command_snapshot = lock_coordinator(&service.control_plane).snapshot();
-            if let Ok(snapshot) = service.rebuild_product_snapshot(command_snapshot).await {
-                let _ = service.updates.send(snapshot);
-            }
-        });
-    }
+    propagate_runtime_preference_revision();
 }
 
 fn propagate_integration_policy_preferences(
@@ -4781,6 +5717,15 @@ async fn sync_service_preferences(service: &WorkspaceExternalSourceService) -> R
             false
         }
     };
+    let workspace_reference_changed = {
+        let mut coordinator = lock_workspace_reference_coordinator(&service.control_plane);
+        if coordinator.suppressed_sources() != &suppressed_sources {
+            coordinator.replace_suppressed_sources(suppressed_sources.clone());
+            true
+        } else {
+            false
+        }
+    };
     let subagent_preferences_changed =
         service.snapshot().preference_revision != preferences.preference_revision;
     let policy_changed = service.snapshot().integration_policy != policy;
@@ -4788,6 +5733,7 @@ async fn sync_service_preferences(service: &WorkspaceExternalSourceService) -> R
         || tool_changed
         || subagent_changed
         || mcp_changed
+        || workspace_reference_changed
         || subagent_preferences_changed
         || policy_changed
     {
@@ -5442,6 +6388,24 @@ pub async fn set_external_subagent_activation(
         .await
 }
 
+pub async fn set_external_subagent_model_binding(
+    workspace_root: Option<&Path>,
+    binding_key: &str,
+    target: Option<ExternalSubagentModelBindingTarget>,
+    expected_subagent_generation: u64,
+    expected_preference_revision: u64,
+) -> Result<ExternalSourceCatalogSnapshot, String> {
+    service_for(workspace_root)
+        .await?
+        .set_subagent_model_binding(
+            binding_key,
+            target,
+            expected_subagent_generation,
+            expected_preference_revision,
+        )
+        .await
+}
+
 pub async fn choose_external_subagent_conflict(
     workspace_root: Option<&Path>,
     conflict_key: &str,
@@ -5473,6 +6437,85 @@ pub async fn external_source_snapshot(
         service.ensure_background_refresh();
         Ok(service.snapshot())
     }
+}
+
+pub async fn workspace_reference_snapshot(
+    workspace_root: &Path,
+    native_related_paths: &[crate::service::workspace::RelatedPath],
+    force_refresh: bool,
+) -> Result<WorkspaceReferenceSnapshot, String> {
+    let service = service_for(Some(workspace_root)).await?;
+    sync_service_preferences(&service).await?;
+    if force_refresh {
+        service.refresh_workspace_references(true).await?;
+    } else {
+        service.ensure_workspace_reference_refresh().await?;
+    }
+    let active_ecosystems = ecosystems_with_active_capability(
+        &service.snapshot().integration_policy,
+        EXTERNAL_CAPABILITY_REFERENCE,
+    );
+    let external = lock_workspace_reference_coordinator(&service.control_plane).snapshot();
+    Ok(compose_workspace_reference_snapshot(
+        native_related_paths,
+        external,
+        &active_ecosystems,
+    ))
+}
+
+fn compose_workspace_reference_snapshot(
+    native_related_paths: &[crate::service::workspace::RelatedPath],
+    external: bitfun_external_sources::ExternalWorkspaceReferenceCoordinatorSnapshot,
+    active_ecosystems: &BTreeSet<EcosystemId>,
+) -> WorkspaceReferenceSnapshot {
+    let external_sources = external
+        .sources
+        .iter()
+        .filter(|source| active_ecosystems.contains(&source.record.ecosystem_id))
+        .map(|source| (source.record.key.clone(), &source.record))
+        .collect::<BTreeMap<_, _>>();
+    let mut references = native_related_paths
+        .iter()
+        .map(|related_path| WorkspaceReferenceCatalogEntry {
+            stable_key: native_workspace_reference_key(related_path),
+            alias: None,
+            path: PathBuf::from(&related_path.path),
+            description: related_path.description.clone(),
+            hidden: false,
+            origin: WorkspaceReferenceOrigin::Native,
+            ecosystem_id: None,
+            source_display_name: None,
+            source_scope: None,
+        })
+        .collect::<Vec<_>>();
+    references.extend(external.references.into_iter().filter_map(|reference| {
+        let source = external_sources.get(&reference.source)?;
+        Some(WorkspaceReferenceCatalogEntry {
+            stable_key: reference.stable_key(),
+            alias: Some(reference.alias),
+            path: reference.path,
+            description: reference.description,
+            hidden: reference.hidden,
+            origin: WorkspaceReferenceOrigin::External,
+            ecosystem_id: Some(source.ecosystem_id.clone()),
+            source_display_name: Some(source.display_name.clone()),
+            source_scope: Some(source.scope),
+        })
+    }));
+    WorkspaceReferenceSnapshot {
+        generation: external.generation,
+        discovery_pending: external.discovery_pending,
+        references,
+        diagnostics: external.diagnostics,
+    }
+}
+
+fn native_workspace_reference_key(related_path: &crate::service::workspace::RelatedPath) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(related_path.path.as_bytes());
+    hasher.update([0]);
+    hasher.update(related_path.description.as_deref().unwrap_or("").as_bytes());
+    format!("native:{}", hex::encode(hasher.finalize()))
 }
 
 /// Resolves an opaque source identity to its host-local location for a host
@@ -5748,10 +6791,29 @@ fn incompatible_policy_error(detail: impl Into<String>) -> String {
     )
 }
 
-fn external_integration_error_code(error: &str) -> String {
+pub(crate) fn external_integration_error_code(error: &str) -> String {
     ExternalSourceOperationError::decode(error)
         .map(|error| error.code.as_str().to_string())
         .unwrap_or_else(|| "internal".to_string())
+}
+
+/// Ensure the workspace-scoped static source snapshot has been published once.
+/// This is the shared discovery gate for selectors and execution routing; it
+/// does not start or recover any executable extension runtime.
+pub async fn ensure_external_source_workspace_snapshot(
+    workspace_root: Option<&Path>,
+) -> Result<(), String> {
+    ensure_initial_external_source_workspace_service(workspace_root)
+        .await
+        .map(|_| ())
+}
+
+async fn ensure_initial_external_source_workspace_service(
+    workspace_root: Option<&Path>,
+) -> Result<Arc<WorkspaceExternalSourceService>, String> {
+    let service = service_for(workspace_root).await?;
+    service.ensure_initial_refresh().await?;
+    Ok(service)
 }
 
 /// Keep the external-source runtime aligned with an actively assembled product
@@ -5760,25 +6822,17 @@ fn external_integration_error_code(error: &str) -> String {
 /// exposed to the model. Existing services are only touched; file watchers and
 /// explicit refreshes remain responsible for later source changes.
 pub(crate) async fn ensure_external_source_workspace_runtime(workspace_root: Option<&Path>) {
-    let service = match service_for(workspace_root).await {
+    let service = match ensure_initial_external_source_workspace_service(workspace_root).await {
         Ok(service) => service,
         Err(error) => {
             log::warn!(
-                "Could not retain external source workspace runtime scope={} error_category={}",
+                "Could not initialize external source workspace runtime scope={} error_category={}",
                 external_log_scope(workspace_root),
                 external_log_error_category(&error),
             );
             return;
         }
     };
-    if let Err(error) = service.ensure_initial_refresh().await {
-        log::warn!(
-            "Could not initialize external source workspace runtime scope={} error_category={}",
-            external_log_scope(workspace_root),
-            external_log_error_category(&error),
-        );
-        return;
-    }
     if external_tool_workspace_requires_recovery(workspace_root).await {
         if let Err(error) = service.refresh_worker_loss_once().await {
             log::warn!(
@@ -5811,7 +6865,8 @@ pub async fn expand_external_prompt_command(
     expected_content_version: Option<&str>,
     expected_native_conflict_key: Option<&str>,
     expected_preference_revision: Option<u64>,
-) -> Result<ExpandedPromptCommand, String> {
+    shell_review_decision: Option<&PromptCommandShellReviewDecision>,
+) -> Result<PromptCommandInvocationOutcome, String> {
     service_for(workspace_root)
         .await?
         .expand_command(
@@ -5822,6 +6877,7 @@ pub async fn expand_external_prompt_command(
             expected_content_version,
             expected_native_conflict_key,
             expected_preference_revision,
+            shell_review_decision,
         )
         .await
 }
@@ -5860,9 +6916,12 @@ mod tests {
     use crate::service::mcp::{ConfigLocation, MCPServerConfig, MCPServerType};
     use bitfun_product_domains::external_sources::{
         EcosystemId, ExternalSourceProviderError, ExternalSourceRecord, ExternalSourceScope,
-        PromptCommandAvailability, PromptCommandDefinition, PromptCommandProviderIdentity,
-        PromptCommandProviderSnapshot, SourceQualifiedCommandId,
+        PromptCommandAvailability, PromptCommandCatalogEntry, PromptCommandConflict,
+        PromptCommandConflictCandidate, PromptCommandDefinition, PromptCommandExecutionTarget,
+        PromptCommandProviderIdentity, PromptCommandProviderSnapshot, PromptCommandShellExpansion,
+        PromptCommandShellInvocation, PromptCommandShellPreference, SourceQualifiedCommandId,
     };
+    use bitfun_product_domains::workspace_references::ExternalWorkspaceReferenceDefinition;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
     fn native_mcp_config_with_pin(pin: &str) -> MCPServerConfig {
@@ -5886,7 +6945,321 @@ mod tests {
             oauth: None,
             oauth_enabled: None,
             xaa: None,
+            timeouts: Default::default(),
         }
+    }
+
+    fn prompt_shell_expansion(command: &str, can_remember: bool) -> PromptCommandExpansion {
+        let content = format!("Before !`{command}` after");
+        PromptCommandExpansion {
+            content: content.clone(),
+            workspace_file_references: Vec::new(),
+            shell: Some(PromptCommandShellExpansion {
+                working_directory: std::env::current_dir()
+                    .expect("the test process should have an absolute working directory"),
+                preference: PromptCommandShellPreference::HostDefault,
+                invocations: vec![PromptCommandShellInvocation {
+                    range_start: 7,
+                    range_end: content.len() - 6,
+                    command: command.to_string(),
+                    can_remember,
+                }],
+            }),
+        }
+    }
+
+    fn resolved_test_shell() -> ResolvedPromptCommandShell {
+        ResolvedPromptCommandShell {
+            display_name: "Bash".to_string(),
+            path: PathBuf::from("/bin/bash"),
+            kind: tool_runtime::exec_command::ExecCommandShellKind::Bash,
+        }
+    }
+
+    #[test]
+    fn prompt_shell_review_fingerprint_covers_command_cwd_shell_and_content_version() {
+        let plan = prepare_prompt_command_shell_plan(
+            prompt_shell_expansion("git status", true),
+            "OpenCode",
+            "local-user",
+            "candidate-v1",
+            "content-v1",
+            4,
+            resolved_test_shell(),
+        )
+        .unwrap();
+        assert!(plan.review.can_remember);
+        assert_eq!(plan.review.commands, ["git status"]);
+        assert_eq!(plan.review.shell_executable, "/bin/bash");
+
+        let changed_command = prepare_prompt_command_shell_plan(
+            prompt_shell_expansion("git diff", true),
+            "OpenCode",
+            "local-user",
+            "candidate-v1",
+            "content-v1",
+            4,
+            resolved_test_shell(),
+        )
+        .unwrap();
+        let changed_content = prepare_prompt_command_shell_plan(
+            prompt_shell_expansion("git status", true),
+            "OpenCode",
+            "local-user",
+            "candidate-v1",
+            "content-v2",
+            4,
+            resolved_test_shell(),
+        )
+        .unwrap();
+
+        assert_ne!(
+            plan.review.plan_fingerprint,
+            changed_command.review.plan_fingerprint
+        );
+        assert_ne!(
+            plan.review.plan_fingerprint,
+            changed_content.review.plan_fingerprint
+        );
+    }
+
+    #[test]
+    fn prompt_shell_preference_falls_back_only_when_the_ecosystem_allows_it() {
+        let host =
+            resolve_prompt_command_shell(&PromptCommandShellPreference::HostDefault).unwrap();
+        let preferred = resolve_prompt_command_shell(&PromptCommandShellPreference::Preferred {
+            executable: "bitfun-missing-shell-for-test".to_string(),
+        })
+        .unwrap();
+
+        assert_eq!(preferred.path, host.path);
+        assert!(
+            resolve_prompt_command_shell(&PromptCommandShellPreference::Required {
+                executable: "bitfun-missing-shell-for-test".to_string(),
+            })
+            .is_err()
+        );
+        let required_one_of =
+            resolve_prompt_command_shell(&PromptCommandShellPreference::RequiredOneOf {
+                executables: vec![
+                    "bitfun-missing-shell-for-test".to_string(),
+                    host.path.to_string_lossy().to_string(),
+                ],
+            })
+            .unwrap();
+        assert_eq!(required_one_of.path, host.path);
+    }
+
+    #[test]
+    fn prompt_shell_executable_is_canonical_before_review_and_execution() {
+        let directory = tempfile::tempdir().unwrap();
+        let executable = directory.path().join("reviewed-shell");
+        std::fs::write(&executable, "test").unwrap();
+
+        let resolved = finalize_resolved_prompt_command_shell(
+            "Reviewed shell".to_string(),
+            executable.clone(),
+            ShellType::Custom("reviewed-shell".to_string()),
+        )
+        .unwrap();
+
+        assert!(resolved.path.is_absolute());
+        assert_eq!(resolved.path, dunce::canonicalize(executable).unwrap());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn prompt_shell_fingerprint_keeps_non_utf8_path_identity() {
+        use std::ffi::OsString;
+        use std::os::unix::ffi::OsStringExt;
+
+        let first = PathBuf::from(OsString::from_vec(b"/tmp/bitfun-\x80".to_vec()));
+        let second = PathBuf::from(OsString::from_vec(b"/tmp/bitfun-\x81".to_vec()));
+        assert_ne!(
+            prompt_command_shell_path_bytes(&first),
+            prompt_command_shell_path_bytes(&second)
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn prompt_shell_fingerprint_keeps_non_unicode_windows_path_identity() {
+        use std::ffi::OsString;
+        use std::os::windows::ffi::OsStringExt;
+
+        let first = PathBuf::from(OsString::from_wide(&[b'C' as u16, b':' as u16, 0xd800]));
+        let second = PathBuf::from(OsString::from_wide(&[b'C' as u16, b':' as u16, 0xd801]));
+        assert_ne!(
+            prompt_command_shell_path_bytes(&first),
+            prompt_command_shell_path_bytes(&second)
+        );
+    }
+
+    #[test]
+    fn dynamic_shell_plans_cannot_be_remembered_and_outputs_replace_in_template_order() {
+        let mut expansion = prompt_shell_expansion("first $ARGUMENTS", false);
+        let second_start = expansion.content.len();
+        expansion.content.push_str(" then !`second`");
+        expansion
+            .shell
+            .as_mut()
+            .unwrap()
+            .invocations
+            .push(PromptCommandShellInvocation {
+                range_start: second_start + 6,
+                range_end: expansion.content.len(),
+                command: "second".to_string(),
+                can_remember: true,
+            });
+        let plan = prepare_prompt_command_shell_plan(
+            expansion,
+            "Claude Code",
+            "local-user",
+            "candidate-v1",
+            "content-v1",
+            1,
+            resolved_test_shell(),
+        )
+        .unwrap();
+
+        assert!(!plan.review.can_remember);
+        assert_eq!(
+            apply_prompt_command_shell_outputs(
+                &plan.expansion.content,
+                &plan.invocations,
+                &["one".to_string(), "two".to_string()],
+            )
+            .unwrap(),
+            "Before one after then two"
+        );
+    }
+
+    #[tokio::test]
+    async fn prompt_shell_plan_uses_stdout_even_after_nonzero_exit_and_preserves_template_order() {
+        let resolved = resolve_prompt_command_shell(&PromptCommandShellPreference::HostDefault)
+            .expect("the host default shell should resolve");
+        let (first, second) = match resolved.kind {
+            ExecCommandShellKind::PowerShell | ExecCommandShellKind::PowerShellCore => (
+                "Write-Output first; [Console]::Error.WriteLine('not-prompt'); exit 7",
+                "Write-Output second",
+            ),
+            ExecCommandShellKind::Cmd => (
+                "echo first & echo not-prompt 1>&2 & exit /b 7",
+                "echo second",
+            ),
+            _ => (
+                "printf first; printf not-prompt >&2; exit 7",
+                "printf second",
+            ),
+        };
+        let content = format!("Before !`{first}` middle !`{second}` after");
+        let invocations = [first, second]
+            .into_iter()
+            .map(|command| {
+                let marker = format!("!`{command}`");
+                let range_start = content.find(&marker).unwrap();
+                PromptCommandShellInvocation {
+                    range_start,
+                    range_end: range_start + marker.len(),
+                    command: command.to_string(),
+                    can_remember: true,
+                }
+            })
+            .collect();
+        let expansion = PromptCommandExpansion {
+            content,
+            workspace_file_references: Vec::new(),
+            shell: Some(PromptCommandShellExpansion {
+                working_directory: tempfile::tempdir().unwrap().keep(),
+                preference: PromptCommandShellPreference::HostDefault,
+                invocations,
+            }),
+        };
+        let plan = prepare_prompt_command_shell_plan(
+            expansion,
+            "OpenCode",
+            "local-user",
+            "candidate-v1",
+            "content-v1",
+            1,
+            resolved,
+        )
+        .unwrap();
+
+        let expanded = execute_prompt_command_shell_plan(plan).await.unwrap();
+
+        assert!(!expanded.content.contains("not-prompt"));
+        let first_index = expanded.content.find("first").unwrap();
+        let second_index = expanded.content.find("second").unwrap();
+        assert!(first_index < second_index);
+        assert!(expanded.content.starts_with("Before "));
+        assert!(expanded.content.ends_with(" after"));
+    }
+
+    #[test]
+    fn effective_workspace_references_keep_native_order_before_external_aliases() {
+        let native = vec![crate::service::workspace::RelatedPath {
+            path: "D:/native-docs".to_string(),
+            description: Some("BitFun workspace setting".to_string()),
+        }];
+        let source_key = SourceKey::new("opencode.references", "project-config").unwrap();
+        let external = bitfun_external_sources::ExternalWorkspaceReferenceCoordinatorSnapshot {
+            generation: 7,
+            discovery_pending: false,
+            sources: vec![ExternalSourceCatalogEntry {
+                stable_key: source_key.stable_key(),
+                presentation_group_id: None,
+                record: ExternalSourceRecord {
+                    key: source_key.clone(),
+                    ecosystem_id: EcosystemId::new("opencode").unwrap(),
+                    display_name: "OpenCode project references".to_string(),
+                    source_kind: "opencode_config".to_string(),
+                    scope: ExternalSourceScope::Project,
+                    location: "D:/workspace/opencode.json".to_string(),
+                    execution_domain_id: ExecutionDomainId::new("local-user").unwrap(),
+                    health:
+                        bitfun_product_domains::external_sources::ExternalSourceHealth::Available,
+                    content_version: "source-v1".to_string(),
+                    diagnostics: Vec::new(),
+                },
+                lifecycle: ExternalSourceLifecycleState::Available,
+            }],
+            references: vec![ExternalWorkspaceReferenceDefinition {
+                source: source_key,
+                alias: "docs".to_string(),
+                path: PathBuf::from("D:/external-docs"),
+                description: Some("OpenCode reference".to_string()),
+                hidden: false,
+                content_version: "reference-v1".to_string(),
+            }],
+            diagnostics: Vec::new(),
+        };
+
+        let inactive =
+            compose_workspace_reference_snapshot(&native, external.clone(), &BTreeSet::new());
+        assert_eq!(inactive.references.len(), 1);
+        assert_eq!(
+            inactive.references[0].origin,
+            WorkspaceReferenceOrigin::Native
+        );
+
+        let active_ecosystems = [EcosystemId::new("opencode").unwrap()]
+            .into_iter()
+            .collect();
+        let snapshot = compose_workspace_reference_snapshot(&native, external, &active_ecosystems);
+
+        assert_eq!(snapshot.generation, 7);
+        assert_eq!(snapshot.references.len(), 2);
+        assert_eq!(
+            snapshot.references[0].origin,
+            WorkspaceReferenceOrigin::Native
+        );
+        assert_eq!(snapshot.references[0].alias, None);
+        assert_eq!(
+            snapshot.references[1].origin,
+            WorkspaceReferenceOrigin::External
+        );
+        assert_eq!(snapshot.references[1].alias.as_deref(), Some("docs"));
     }
 
     #[test]
@@ -5937,14 +7310,203 @@ mod tests {
         assert!(!debug.contains("private-revision-secret"));
     }
 
+    #[tokio::test]
+    async fn external_subagent_model_bindings_share_the_existing_atomic_preference_owner() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("external-sources.json");
+        let process_a = ExternalSourcePreferenceStore::new(path.clone());
+        let process_b = ExternalSourcePreferenceStore::new(path);
+        let workspace_a = "external_subagent_model_binding:workspace-a";
+        let workspace_b = "external_subagent_model_binding:workspace-b";
+
+        let first = persist_subagent_model_binding_with_store(
+            &process_a,
+            workspace_a,
+            Some(ExternalSubagentModelBindingTarget::Primary),
+            0,
+        )
+        .await
+        .unwrap();
+        assert_eq!(first.preference_revision, 1);
+        assert_eq!(
+            first.subagent_model_bindings.get(workspace_a),
+            Some(&ExternalSubagentModelBindingTarget::Primary)
+        );
+
+        let merged = persist_subagent_model_binding_with_store(
+            &process_b,
+            workspace_b,
+            Some(ExternalSubagentModelBindingTarget::Model {
+                model_id: "glm-project".to_string(),
+            }),
+            first.preference_revision,
+        )
+        .await
+        .unwrap();
+        assert_eq!(merged.preference_revision, 2);
+        assert_eq!(merged.subagent_model_bindings.len(), 2);
+
+        let error = persist_subagent_model_binding_with_store(
+            &process_a,
+            workspace_a,
+            Some(ExternalSubagentModelBindingTarget::Fast),
+            first.preference_revision,
+        )
+        .await
+        .expect_err("a stale process must not overwrite a newer workspace binding");
+        assert_eq!(
+            ExternalSourceOperationError::decode(&error)
+                .expect("stale binding writes use the typed error contract")
+                .code,
+            ExternalSourceOperationErrorCode::StaleRevision
+        );
+
+        let replaced = persist_subagent_model_binding_with_store(
+            &process_a,
+            workspace_a,
+            Some(ExternalSubagentModelBindingTarget::Fast),
+            merged.preference_revision,
+        )
+        .await
+        .unwrap();
+        assert_eq!(replaced.preference_revision, 3);
+        assert_eq!(
+            replaced.subagent_model_bindings.get(workspace_a),
+            Some(&ExternalSubagentModelBindingTarget::Fast)
+        );
+
+        let cleared = persist_subagent_model_binding_with_store(
+            &process_b,
+            workspace_a,
+            None,
+            replaced.preference_revision,
+        )
+        .await
+        .unwrap();
+        assert_eq!(cleared.preference_revision, 4);
+        assert!(!cleared.subagent_model_bindings.contains_key(workspace_a));
+        assert!(cleared.subagent_model_bindings.contains_key(workspace_b));
+    }
+
+    #[test]
+    fn external_subagent_model_binding_mutation_fails_closed_against_the_current_snapshot() {
+        let binding_key = "external_subagent_model_binding:known";
+        let mut snapshot = ExternalSourceCatalogSnapshot {
+            generation: 0,
+            discovery_pending: false,
+            sources: Vec::new(),
+            commands: Vec::new(),
+            command_conflicts: Vec::new(),
+            tools: Vec::new(),
+            tool_approval_requests: Vec::new(),
+            tool_conflicts: Vec::new(),
+            mcp_generation: 0,
+            mcp_servers: Vec::new(),
+            mcp_approval_requests: Vec::new(),
+            mcp_conflicts: Vec::new(),
+            subagent_generation: 7,
+            preference_revision: 11,
+            subagents: Vec::new(),
+            subagent_model_binding_groups: vec![ExternalSubagentModelBindingGroup {
+                binding_key: binding_key.to_string(),
+                request: ExternalSubagentModelRequest::Reference {
+                    provider_hint: Some("openai".to_string()),
+                    model_name: "gpt-project".to_string(),
+                },
+                profile_request: None,
+                scope: ExternalSourceScope::Project,
+                method: ExternalSubagentModelBindingMethod::BindingRequired,
+                selected_target: None,
+                effective_model_label: None,
+                affected_candidate_ids: vec!["review".to_string()],
+            }],
+            subagent_model_binding_options: vec![ExternalSubagentModelBindingOption {
+                target: ExternalSubagentModelBindingTarget::Primary,
+                effective_model_label: "Primary model".to_string(),
+                configured_reasoning_effort: None,
+            }],
+            subagent_conflicts: Vec::new(),
+            pending_subagent_approvals: Vec::new(),
+            integration_policy: Default::default(),
+            diagnostics: Vec::new(),
+        };
+
+        assert!(validate_subagent_model_binding_mutation(
+            &snapshot,
+            binding_key,
+            Some(&ExternalSubagentModelBindingTarget::Primary),
+            7,
+            11,
+        )
+        .is_ok());
+        assert!(
+            validate_subagent_model_binding_mutation(&snapshot, binding_key, None, 7, 11,).is_ok()
+        );
+
+        for (key, target, generation, revision, expected_code) in [
+            (
+                "external_subagent_model_binding:missing",
+                None,
+                7,
+                11,
+                ExternalSourceOperationErrorCode::NotFound,
+            ),
+            (
+                binding_key,
+                Some(&ExternalSubagentModelBindingTarget::Fast),
+                7,
+                11,
+                ExternalSourceOperationErrorCode::Unavailable,
+            ),
+            (
+                binding_key,
+                None,
+                8,
+                11,
+                ExternalSourceOperationErrorCode::StaleRevision,
+            ),
+            (
+                binding_key,
+                None,
+                7,
+                12,
+                ExternalSourceOperationErrorCode::StaleRevision,
+            ),
+        ] {
+            let error = validate_subagent_model_binding_mutation(
+                &snapshot, key, target, generation, revision,
+            )
+            .expect_err("invalid binding mutations must fail closed");
+            assert_eq!(
+                ExternalSourceOperationError::decode(&error).unwrap().code,
+                expected_code
+            );
+        }
+
+        snapshot.subagent_model_binding_groups[0].method =
+            ExternalSubagentModelBindingMethod::Exact;
+        let error = validate_subagent_model_binding_mutation(
+            &snapshot,
+            binding_key,
+            Some(&ExternalSubagentModelBindingTarget::Primary),
+            7,
+            11,
+        )
+        .expect_err("exact source matches are read-only");
+        assert_eq!(
+            ExternalSourceOperationError::decode(&error).unwrap().code,
+            ExternalSourceOperationErrorCode::Unavailable
+        );
+    }
+
     #[test]
     fn only_model_configuration_events_refresh_external_model_bindings() {
         assert!(config_update_refreshes_external_model_bindings(
             &ConfigUpdateEvent::ModelConfigurationUpdated
         ));
         assert!(!config_update_refreshes_external_model_bindings(
-            &ConfigUpdateEvent::ThemeUpdated {
-                theme_id: "dark".to_string(),
+            &ConfigUpdateEvent::AppearanceUpdated {
+                appearance_id: "bitfun-dark".to_string(),
             }
         ));
     }
@@ -5967,6 +7529,8 @@ mod tests {
             name: "review".to_string(),
             description: "Review changes".to_string(),
             template: "Review changes".to_string(),
+            shell_preference: None,
+            execution_target: Default::default(),
             availability: PromptCommandAvailability::Available,
             content_version: "external-v1".to_string(),
         };
@@ -6005,6 +7569,8 @@ mod tests {
             subagents: Vec::new(),
             subagent_conflicts: Vec::new(),
             pending_subagent_approvals: Vec::new(),
+            subagent_model_binding_groups: Vec::new(),
+            subagent_model_binding_options: Vec::new(),
             integration_policy: Default::default(),
             diagnostics: Vec::new(),
         };
@@ -6099,6 +7665,74 @@ mod tests {
             first_conflict.conflict_key
         );
         assert_eq!(changed.conflicts[0].selected_candidate_id, None);
+    }
+
+    #[test]
+    fn delegated_prompt_commands_require_an_active_same_ecosystem_subagent() {
+        let source = SourceKey::new("opencode.commands", "project").unwrap();
+        let definition = |logical_id: &str| PromptCommandDefinition {
+            id: SourceQualifiedCommandId::new(source.clone(), logical_id).unwrap(),
+            name: logical_id.to_string(),
+            description: logical_id.to_string(),
+            template: "Review changes".to_string(),
+            shell_preference: None,
+            execution_target: PromptCommandExecutionTarget::FreshExternalSubagent {
+                ecosystem_id: EcosystemId::new("opencode").unwrap(),
+                logical_id: logical_id.to_string(),
+            },
+            availability: PromptCommandAvailability::Available,
+            content_version: "command-v1".to_string(),
+        };
+        let mut commands = vec![
+            PromptCommandCatalogEntry {
+                definition: definition("reviewer"),
+            },
+            PromptCommandCatalogEntry {
+                definition: definition("missing"),
+            },
+        ];
+        let active = BTreeSet::from([(
+            EcosystemId::new("opencode").unwrap(),
+            "reviewer".to_string(),
+        )]);
+        let missing_candidate_id = commands[1].definition.id.stable_key();
+        let mut conflicts = vec![PromptCommandConflict {
+            conflict_key: "prompt-command-conflict".to_string(),
+            command_name: "missing".to_string(),
+            candidates: vec![PromptCommandConflictCandidate {
+                candidate_id: missing_candidate_id.clone(),
+                source: source.clone(),
+                source_display_name: "OpenCode".to_string(),
+                ecosystem_id: EcosystemId::new("opencode").unwrap(),
+                content_version: "command-v1".to_string(),
+                command_description: "missing".to_string(),
+                source_scope: ExternalSourceScope::Project,
+                source_location: ".opencode/commands/missing.md".to_string(),
+                execution_target: commands[1].definition.execution_target.clone(),
+                availability: PromptCommandAvailability::Available,
+            }],
+            selected_candidate_id: Some(missing_candidate_id),
+        }];
+
+        restrict_prompt_commands_without_active_subagents(&mut commands, &mut conflicts, &active);
+
+        assert_eq!(
+            commands[0].definition.availability,
+            PromptCommandAvailability::Available
+        );
+        let PromptCommandAvailability::Restricted {
+            required_capabilities,
+            ..
+        } = &commands[1].definition.availability
+        else {
+            panic!("missing delegated subagent must restrict the command");
+        };
+        assert_eq!(required_capabilities, &["command.external_subagent"]);
+        assert!(matches!(
+            conflicts[0].candidates[0].availability,
+            PromptCommandAvailability::Restricted { .. }
+        ));
+        assert_eq!(conflicts[0].selected_candidate_id, None);
     }
 
     #[test]
@@ -6314,6 +7948,8 @@ mod tests {
             subagents: Vec::new(),
             subagent_conflicts: Vec::new(),
             pending_subagent_approvals: Vec::new(),
+            subagent_model_binding_groups: Vec::new(),
+            subagent_model_binding_options: Vec::new(),
             integration_policy: Default::default(),
             diagnostics: vec![ExternalSourceDiagnostic::warning(
                 "future.tool.file_read_failed",
@@ -6402,6 +8038,8 @@ mod tests {
             subagents: Vec::new(),
             subagent_conflicts: Vec::new(),
             pending_subagent_approvals: Vec::new(),
+            subagent_model_binding_groups: Vec::new(),
+            subagent_model_binding_options: Vec::new(),
             integration_policy: Default::default(),
             diagnostics: Vec::new(),
         };
@@ -6463,6 +8101,7 @@ mod tests {
         source: SourceKey,
         command_name: String,
         delay: std::time::Duration,
+        release: Option<Arc<StdMutex<std::sync::mpsc::Receiver<()>>>>,
         calls: Arc<AtomicUsize>,
     }
 
@@ -6476,7 +8115,16 @@ mod tests {
             context: &ExternalSourceContext,
         ) -> Result<PromptCommandProviderSnapshot, ExternalSourceProviderError> {
             self.calls.fetch_add(1, Ordering::SeqCst);
-            std::thread::sleep(self.delay);
+            if let Some(release) = &self.release {
+                // A disconnected channel also releases the provider, so a
+                // panicking test cannot strand the blocking worker.
+                let _ = release
+                    .lock()
+                    .expect("provider release gate remains available")
+                    .recv();
+            } else {
+                std::thread::sleep(self.delay);
+            }
             let record = ExternalSourceRecord {
                 key: self.source.clone(),
                 ecosystem_id: self.identity.ecosystem_id.clone(),
@@ -6501,6 +8149,8 @@ mod tests {
                     name: self.command_name.clone(),
                     description: self.command_name.clone(),
                     template: self.command_name.clone(),
+                    shell_preference: None,
+                    execution_target: Default::default(),
                     availability: PromptCommandAvailability::Available,
                     content_version: "command-v1".to_string(),
                 }],
@@ -6511,12 +8161,14 @@ mod tests {
 
         fn expand(
             &self,
+            _context: &ExternalSourceContext,
             command: &PromptCommandDefinition,
             _arguments: &str,
         ) -> Result<PromptCommandExpansion, ExternalSourceProviderError> {
             Ok(PromptCommandExpansion {
                 content: command.template.clone(),
                 workspace_file_references: Vec::new(),
+                shell: None,
             })
         }
 
@@ -6538,8 +8190,30 @@ mod tests {
             source: SourceKey::new(id, "global").unwrap(),
             command_name: id.to_string(),
             delay,
+            release: None,
             calls,
         })
+    }
+
+    fn blocked_provider(
+        id: &str,
+        calls: Arc<AtomicUsize>,
+    ) -> (
+        Arc<dyn PromptCommandSourceProvider>,
+        std::sync::mpsc::Sender<()>,
+    ) {
+        let (release, wait_for_release) = std::sync::mpsc::channel();
+        (
+            Arc::new(DelayedProvider {
+                identity: PromptCommandProviderIdentity::new(id, id, id).unwrap(),
+                source: SourceKey::new(id, "global").unwrap(),
+                command_name: id.to_string(),
+                delay: std::time::Duration::ZERO,
+                release: Some(Arc::new(StdMutex::new(wait_for_release))),
+                calls,
+            }),
+            release,
+        )
     }
 
     fn test_service(
@@ -6555,6 +8229,7 @@ mod tests {
                 context,
                 ExternalMcpRevisionKey::new([7; 32]),
                 providers,
+                Vec::new(),
                 Vec::new(),
                 Vec::new(),
                 Vec::new(),
@@ -6594,6 +8269,22 @@ mod tests {
         })
     }
 
+    async fn refresh_test_commands(
+        service: &Arc<WorkspaceExternalSourceService>,
+    ) -> ExternalSourceCatalogSnapshot {
+        let requests = lock_coordinator(&service.control_plane).discovery_requests();
+        let batch = service
+            .control_plane
+            .discover_commands(requests, std::time::Duration::from_millis(25))
+            .await;
+        let snapshot =
+            lock_coordinator(&service.control_plane).apply_discovery_results(batch.immediate);
+        for deferred in batch.deferred {
+            service.schedule_deferred_command_discovery(deferred);
+        }
+        snapshot
+    }
+
     #[test]
     fn composition_projects_opencode_configured_skill_roots_without_leaking_adapter_types() {
         let temp = tempfile::tempdir().unwrap();
@@ -6609,11 +8300,12 @@ mod tests {
         )
         .unwrap();
         let provider = OpenCodeSkillRootProvider::new(OpenCodeSkillRootProviderOptions {
-            command: OpenCodeCommandProviderOptions {
+            config: OpenCodeCommandProviderOptions {
                 user_config_dir: user_config,
                 legacy_user_config_dir: Some(home.join(".opencode")),
                 explicit_config_file: None,
                 explicit_config_dir: None,
+                inline_config_content: None,
                 project_config_enabled: true,
             },
             home_dir: Some(home),
@@ -6645,6 +8337,7 @@ mod tests {
             PromptCommandExpansion {
                 content: "plain prompt".to_string(),
                 workspace_file_references: Vec::new(),
+                shell: None,
             },
         )
         .await
@@ -6660,6 +8353,7 @@ mod tests {
                     "README.md".to_string(),
                     "src/lib.rs".to_string(),
                 ],
+                shell: None,
             },
         )
         .await
@@ -6698,6 +8392,7 @@ mod tests {
             PromptCommandExpansion {
                 content: "prompt".to_string(),
                 workspace_file_references: vec!["0.txt".to_string()],
+                shell: None,
             },
         )
         .await
@@ -6711,6 +8406,7 @@ mod tests {
                 workspace_file_references: (0..=MAX_PROMPT_COMMAND_FILE_REFERENCES)
                     .map(|index| format!("{index}.txt"))
                     .collect(),
+                shell: None,
             },
         )
         .await
@@ -6722,6 +8418,7 @@ mod tests {
             PromptCommandExpansion {
                 content: "prompt".to_string(),
                 workspace_file_references: vec!["large.txt".to_string()],
+                shell: None,
             },
         )
         .await
@@ -6735,6 +8432,7 @@ mod tests {
                 workspace_file_references: (0..3)
                     .map(|index| format!("total-{index}.txt"))
                     .collect(),
+                shell: None,
             },
         )
         .await
@@ -6746,6 +8444,7 @@ mod tests {
             PromptCommandExpansion {
                 content: "x".repeat(MAX_EXPANDED_PROMPT_COMMAND_BYTES),
                 workspace_file_references: vec!["0.txt".to_string()],
+                shell: None,
             },
         )
         .await
@@ -6757,6 +8456,7 @@ mod tests {
             PromptCommandExpansion {
                 content: "x".repeat(MAX_EXPANDED_PROMPT_COMMAND_BYTES + 1),
                 workspace_file_references: Vec::new(),
+                shell: None,
             },
         )
         .await
@@ -6768,6 +8468,7 @@ mod tests {
             PromptCommandExpansion {
                 content: "must not be returned partially".to_string(),
                 workspace_file_references: vec!["0.txt".to_string(), "missing.txt".to_string()],
+                shell: None,
             },
         )
         .await
@@ -7059,6 +8760,11 @@ mod tests {
                 ExternalIntegrationAccess::AskBeforeUse,
                 ExternalIntegrationAccess::AskBeforeUse,
             ),
+            (
+                EXTERNAL_CAPABILITY_REFERENCE,
+                ExternalIntegrationAccess::Auto,
+                ExternalIntegrationAccess::Auto,
+            ),
         ] {
             let capability = descriptor
                 .capabilities
@@ -7087,6 +8793,7 @@ mod tests {
                     EXTERNAL_CAPABILITY_TOOL,
                     EXTERNAL_CAPABILITY_SUBAGENT,
                     EXTERNAL_CAPABILITY_MCP,
+                    EXTERNAL_CAPABILITY_REFERENCE,
                 ]),
             ),
             (
@@ -7117,7 +8824,10 @@ mod tests {
             assert_eq!(capabilities, expected[ecosystem]);
             for capability in &registration.descriptor.capabilities {
                 let expected_access = if ecosystem == "opencode"
-                    && capability.capability_id.as_str() == EXTERNAL_CAPABILITY_COMMAND
+                    && matches!(
+                        capability.capability_id.as_str(),
+                        EXTERNAL_CAPABILITY_COMMAND | EXTERNAL_CAPABILITY_REFERENCE
+                    )
                     || ecosystem == "claude-code"
                         && capability.capability_id.as_str() == EXTERNAL_CAPABILITY_COMMAND
                 {
@@ -7176,6 +8886,7 @@ mod tests {
             EXTERNAL_CAPABILITY_TOOL,
             EXTERNAL_CAPABILITY_SUBAGENT,
             EXTERNAL_CAPABILITY_MCP,
+            EXTERNAL_CAPABILITY_REFERENCE,
         ] {
             assert_eq!(
                 ecosystems_with_discoverable_capability(&policy, capability),
@@ -7782,12 +9493,10 @@ mod tests {
     async fn slow_provider_is_not_respawned_while_healthy_sibling_updates() {
         let slow_calls = Arc::new(AtomicUsize::new(0));
         let healthy_calls = Arc::new(AtomicUsize::new(0));
+        let (slow_provider, release_slow_provider) =
+            blocked_provider("slow", Arc::clone(&slow_calls));
         let service = test_service(vec![
-            delayed_provider(
-                "slow",
-                std::time::Duration::from_millis(250),
-                Arc::clone(&slow_calls),
-            ),
+            slow_provider,
             delayed_provider(
                 "healthy",
                 std::time::Duration::ZERO,
@@ -7795,35 +9504,42 @@ mod tests {
             ),
         ]);
 
-        let requests = lock_coordinator(&service.control_plane).discovery_requests();
-        let batch = service
-            .control_plane
-            .discover_commands(requests, std::time::Duration::from_millis(25))
-            .await;
-        let snapshot =
-            lock_coordinator(&service.control_plane).apply_discovery_results(batch.immediate);
-        for deferred in batch.deferred {
-            service.schedule_deferred_command_discovery(deferred);
-        }
-        assert!(snapshot
-            .commands
-            .iter()
-            .any(|command| command.definition.name == "healthy"));
+        tokio::time::timeout(std::time::Duration::from_secs(2), async {
+            loop {
+                let snapshot = refresh_test_commands(&service).await;
+                if slow_calls.load(Ordering::SeqCst) == 1
+                    && snapshot
+                        .commands
+                        .iter()
+                        .any(|command| command.definition.name == "healthy")
+                {
+                    break;
+                }
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("slow and healthy providers must both start");
 
-        let requests = lock_coordinator(&service.control_plane).discovery_requests();
-        let batch = service
-            .control_plane
-            .discover_commands(requests, std::time::Duration::from_millis(25))
-            .await;
-        let snapshot =
-            lock_coordinator(&service.control_plane).apply_discovery_results(batch.immediate);
+        let healthy_calls_before_refresh = healthy_calls.load(Ordering::SeqCst);
+        let snapshot = tokio::time::timeout(std::time::Duration::from_secs(2), async {
+            loop {
+                let snapshot = refresh_test_commands(&service).await;
+                if healthy_calls.load(Ordering::SeqCst) > healthy_calls_before_refresh {
+                    break snapshot;
+                }
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("healthy provider must refresh while the slow provider is blocked");
 
         assert_eq!(slow_calls.load(Ordering::SeqCst), 1);
-        assert!(healthy_calls.load(Ordering::SeqCst) >= 2);
         assert!(snapshot
             .commands
             .iter()
             .any(|command| command.definition.name == "healthy"));
+        let _ = release_slow_provider.send(());
     }
 
     #[tokio::test]

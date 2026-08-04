@@ -89,24 +89,24 @@ describe('startup performance contract', () => {
   it('does not block first React render on frontend log-level config reads', () => {
     const mainSource = readSource('../../main.tsx');
     const loggerSource = readSource('../../shared/utils/logger.ts');
-    const themeSource = readSource('../../../../apps/desktop/src/theme.rs');
+    const appearanceSource = readSource('../../../../apps/desktop/src/appearance.rs');
 
     expect(mainSource).not.toContain("before_render_step', 'initialize_frontend_log_level_sync'");
     expect(mainSource).not.toContain('before_render_step", "initialize_frontend_log_level_sync"');
     expect(mainSource).toContain('initializeFrontendLogLevelSync');
     expect(mainSource).toContain('installFrontendLogLevelConfigWatcher');
     expect(loggerSource).toContain('__BITFUN_BOOTSTRAP_LOG_LEVEL__');
-    expect(themeSource).toContain('__BITFUN_BOOTSTRAP_LOG_LEVEL__');
+    expect(appearanceSource).toContain('__BITFUN_BOOTSTRAP_LOG_LEVEL__');
   });
 
   it('keeps startup keybindings on the bootstrap path instead of a first-window IPC', () => {
     const configManagerSource = readSource('../../infrastructure/config/services/ConfigManager.ts');
-    const themeSource = readSource('../../../../apps/desktop/src/theme.rs');
+    const appearanceSource = readSource('../../../../apps/desktop/src/appearance.rs');
 
-    expect(themeSource).toContain('__BITFUN_BOOTSTRAP_KEYBINDINGS__');
-    expect(themeSource).toContain('keybindings: global_config.app.keybindings');
-    expect(themeSource).toContain('MAX_BOOTSTRAP_KEYBINDINGS_JSON_BYTES');
-    expect(themeSource).toContain('.filter(|json| json.len() <= MAX_BOOTSTRAP_KEYBINDINGS_JSON_BYTES)');
+    expect(appearanceSource).toContain('__BITFUN_BOOTSTRAP_KEYBINDINGS__');
+    expect(appearanceSource).toContain('keybindings: global_config.app.keybindings');
+    expect(appearanceSource).toContain('MAX_BOOTSTRAP_KEYBINDINGS_JSON_BYTES');
+    expect(appearanceSource).toContain('.filter(|json| json.len() <= MAX_BOOTSTRAP_KEYBINDINGS_JSON_BYTES)');
     expect(configManagerSource).toContain('consumeBootstrapOptionalConfig');
     expect(configManagerSource).toContain('__BITFUN_BOOTSTRAP_KEYBINDINGS__');
     expect(configManagerSource).toContain("path !== 'app.keybindings'");
@@ -115,12 +115,12 @@ describe('startup performance contract', () => {
 
   it('keeps workspace startup state on the bootstrap path with command fallback', () => {
     const globalStateSource = readSource('../../shared/types/global-state.ts');
-    const desktopThemeSource = readSource('../../../../apps/desktop/src/theme.rs');
+    const desktopAppearanceSource = readSource('../../../../apps/desktop/src/appearance.rs');
     const desktopLibSource = readSource('../../../../apps/desktop/src/lib.rs');
     const desktopCommandsSource = readSource('../../../../apps/desktop/src/api/commands.rs');
 
-    expect(desktopThemeSource).toContain('__BITFUN_BOOTSTRAP_WORKSPACE_STARTUP_STATE__');
-    expect(desktopThemeSource).toContain('MAX_BOOTSTRAP_WORKSPACE_STATE_JSON_BYTES');
+    expect(desktopAppearanceSource).toContain('__BITFUN_BOOTSTRAP_WORKSPACE_STARTUP_STATE__');
+    expect(desktopAppearanceSource).toContain('MAX_BOOTSTRAP_WORKSPACE_STATE_JSON_BYTES');
     expect(desktopLibSource).toContain('prepare_workspace_startup_bootstrap_snapshot');
     expect(desktopLibSource).toContain('tokio::task::block_in_place');
     expect(desktopLibSource).not.toContain('tauri::async_runtime::block_on(prepare_workspace_startup_bootstrap_snapshot');
@@ -148,28 +148,22 @@ describe('startup performance contract', () => {
     expect(resourceTimingSource).not.toContain('createLogger');
   });
 
-  it('keeps built-in theme startup on the bootstrap path without pre-render config writes', () => {
+  it('initializes the appearance runtime before the first React render', () => {
     const mainSource = readSource('../../main.tsx');
-    const themeServiceSource = readSource('../../infrastructure/theme/core/ThemeService.ts');
-    const desktopThemeSource = readSource('../../../../apps/desktop/src/theme.rs');
-
-    expect(desktopThemeSource).toContain('__BITFUN_BOOTSTRAP_THEME_ID__');
-    expect(desktopThemeSource).toContain('__BITFUN_BOOTSTRAP_THEME_SELECTION__');
-    expect(desktopThemeSource).toContain('include_str!("generated/startup_theme_bootstrap.json")');
-    expect(desktopThemeSource).not.toContain('"bitfun-slate" => Some(Self');
-    expect(mainSource).toContain("before_render_step', 'theme_service_initialize'");
-    expect(themeServiceSource).toContain('getBootstrapThemeSelection');
-    expect(themeServiceSource).toContain('applyThemeSelection(bootstrapSelection, { persist: false })');
-    expect(themeServiceSource).toContain('applyThemeSelection(saved, { persist: false })');
-    expect(themeServiceSource).toContain('ensureUserThemesLoaded');
-    expect(mainSource).toContain('themeService.ensureUserThemesLoaded()');
-    expect(mainSource.indexOf('themeService.ensureUserThemesLoaded()')).toBeGreaterThan(
-      mainSource.indexOf('async function initializeAfterRender()'),
+    const appearanceServiceSource = readSource(
+      '../../infrastructure/appearance/runtime/AppearanceService.ts',
     );
+
+    expect(mainSource).toContain("before_render_step', 'appearance_initialize'");
+    expect(mainSource).toContain('await appearanceService.initialize()');
+    expect(mainSource).not.toContain('themeService');
+    expect(appearanceServiceSource).toContain('selectedAppearanceId');
+    expect(appearanceServiceSource).toContain('getSystemAppearanceId()');
+    expect(appearanceServiceSource).not.toContain('themes.current');
   });
 
-  it('restores only normal main-window geometry and repairs legacy floating sizes', () => {
-    const desktopThemeSource = readSource('../../../../apps/desktop/src/theme.rs');
+  it('centers the first main window and persists geometry before close handling', () => {
+    const desktopAppearanceSource = readSource('../../../../apps/desktop/src/appearance.rs');
     const desktopLibSource = readSource('../../../../apps/desktop/src/lib.rs');
     const toolbarModeProviderSource = readSource(
       '../../flow_chat/components/toolbar-mode/ToolbarModeProvider.tsx'
@@ -178,9 +172,16 @@ describe('startup performance contract', () => {
     const invokeHandlerStart = desktopLibSource.indexOf('.invoke_handler(', windowEventStart);
     const windowEventSource = desktopLibSource.slice(windowEventStart, invokeHandlerStart);
 
-    expect(desktopThemeSource).toContain('crate::MAIN_WINDOW_DEFAULT_WIDTH');
-    expect(desktopThemeSource).toContain('crate::restore_main_window_state(&window)');
-    expect(desktopThemeSource).not.toContain('windows_maximize_show_wait_action');
+    const mainWindowSizeStart = desktopAppearanceSource.indexOf('.inner_size(');
+    const mainWindowCenter = desktopAppearanceSource.indexOf('.center()', mainWindowSizeStart);
+    const mainWindowSizeSource = desktopAppearanceSource.slice(mainWindowSizeStart, mainWindowCenter);
+    expect(mainWindowSizeStart).toBeGreaterThanOrEqual(0);
+    expect(mainWindowCenter).toBeGreaterThan(mainWindowSizeStart);
+    expect(mainWindowSizeSource).toContain('crate::MAIN_WINDOW_DEFAULT_WIDTH');
+    expect(mainWindowSizeSource).toContain('crate::MAIN_WINDOW_DEFAULT_HEIGHT');
+    expect(desktopLibSource).toContain('MAIN_WINDOW_DEFAULT_WIDTH: f64 = 1200.0');
+    expect(desktopLibSource).toContain('MAIN_WINDOW_DEFAULT_HEIGHT: f64 = 800.0');
+    expect(desktopAppearanceSource).not.toContain('windows_maximize_show_wait_action');
     expect(desktopLibSource).toContain('tauri_plugin_window_state::Builder::default()');
     expect(desktopLibSource).toContain('.with_state_flags(StateFlags::empty())');
     expect(desktopLibSource).toContain('.with_filter(|label| label == "main")');
@@ -473,8 +474,8 @@ describe('startup performance contract', () => {
     );
   });
 
-  it('keeps theme startup from importing the Monaco runtime', () => {
-    const source = readSource('../../infrastructure/theme/integrations/MonacoThemeSync.ts');
+  it('keeps appearance startup from importing the Monaco runtime', () => {
+    const source = readSource('../../infrastructure/appearance/adapters/MonacoAppearanceAdapter.ts');
 
     expect(source).not.toMatch(/import\s+\*\s+as\s+monaco\s+from\s+['"]monaco-editor['"]/);
     expect(source).toMatch(/import\s+type\s+\*\s+as\s+Monaco\s+from\s+['"]monaco-editor['"]/);

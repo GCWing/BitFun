@@ -13,28 +13,49 @@
   align-items: flex-start;
   justify-content: center;
   padding: clamp(56px, 9vh, 92px) $size-gap-4 $size-gap-4;
-  background: var(--color-overlay-black-12);
+  background: var(--bf-appearance-token-color-overlay-black-12);
 }
 
+// ── Card — matches .bitfun-scene-viewport surface (--bf-appearance-token-color-bg-scene)
+
 .bitfun-nav-search-dialog__card {
+  width: 520px;
+  max-width: calc(100vw - 32px);
+  background: var(--bf-appearance-token-color-bg-scene);
+  border-radius: calc(#{$size-radius-base} + 2px);
+  border: 1px solid var(--bf-appearance-token-border-subtle);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--bf-appearance-token-color-text-primary) 4%, transparent),
+    0 2px 4px var(--bf-appearance-token-color-overlay-slate-04),
+    0 8px 24px var(--bf-appearance-token-color-overlay-slate-08),
+    0 24px 56px -12px rgba(var(--bf-appearance-token-color-overlay-slate-rgb), 0.22),
+    0 48px 80px -24px var(--bf-appearance-token-color-overlay-slate-12);
+  overflow: hidden;
   display: flex;
   flex-direction: column;
-  width: min(560px, 100%);
-  max-height: min(640px, calc(100vh - 112px));
-  overflow: hidden;
-  border: 1px solid var(--border-medium);
-  border-radius: $size-radius-lg;
-  background: var(--color-bg-elevated);
+  max-height: calc(100vh - 120px);
+  animation: bitfun-nav-search-card-in 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+:root[data-bf-appearance-mode='light'] .bitfun-nav-search-dialog__card {
+  border-color: var(--bf-appearance-token-border-medium);
+}
+
+:root[data-bf-appearance-mode='dark'] .bitfun-nav-search-dialog__card {
   box-shadow:
-    0 1px 0 color-mix(in srgb, var(--color-static-white) 5%, transparent) inset,
-    0 18px 56px -12px var(--color-overlay-black-30);
+    0 0 0 1px color-mix(in srgb, var(--bf-appearance-token-color-static-white) 6%, transparent),
+    0 1px 0 color-mix(in srgb, var(--bf-appearance-token-color-static-white) 5%, transparent),
+    0 4px 12px rgba(var(--bf-appearance-token-color-static-black-rgb), 0.35),
+    0 20px 48px -8px rgba(var(--bf-appearance-token-color-static-black-rgb), 0.65),
+    0 40px 72px -20px rgba(var(--bf-appearance-token-color-static-black-rgb), 0.45);
 }
 
 .bitfun-nav-search-dialog__input-row {
   flex-shrink: 0;
   padding: $size-gap-2;
-  border-bottom: 1px solid var(--border-subtle);
-  background: var(--color-bg-elevated);
+  border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
+  flex-shrink: 0;
+  background: var(--bf-appearance-token-color-bg-scene);
 }
 
 .bitfun-nav-search-dialog__search {
@@ -44,33 +65,34 @@
     min-height: 36px;
     height: 36px;
     gap: $size-gap-2;
-    padding: 0 $size-gap-2;
-    border: 1px solid var(--border-subtle);
-    border-radius: $size-radius-base;
-    background: var(--color-bg-primary);
-    box-shadow: none;
+    border: none;
+    border-radius: $size-radius-full;
+    background: var(--bf-appearance-token-color-bg-scene);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--bf-appearance-token-border-subtle) 65%, transparent);
     transition:
       border-color 120ms ease,
       background 120ms ease;
 
     &:hover {
-      border-color: var(--border-medium);
-      background: color-mix(in srgb, var(--color-bg-primary) 88%, var(--element-bg-soft));
-      box-shadow: none;
+      background: color-mix(in srgb, var(--bf-appearance-token-color-bg-scene) 88%, var(--bf-appearance-token-element-bg-medium));
+      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--bf-appearance-token-border-medium) 55%, transparent);
     }
 
     &:focus-within {
-      border-color: color-mix(in srgb, var(--color-accent-500) 72%, var(--border-medium));
-      background: var(--color-bg-primary);
-      box-shadow: none;
+      background: color-mix(in srgb, var(--bf-appearance-token-color-bg-scene) 82%, var(--bf-appearance-token-element-bg-medium));
+      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--bf-appearance-token-border-medium) 68%, transparent);
     }
   }
 
   &.search .search__input {
-    font-size: var(--font-size-sm);
+    font-size: var(--bf-appearance-token-font-size-sm);
 
     &::placeholder {
-      color: var(--color-text-disabled);
+      color: var(--bf-appearance-token-color-text-disabled);
+    }
+
+    &:focus::placeholder {
+      color: color-mix(in srgb, var(--bf-appearance-token-color-text-disabled) 72%, transparent);
     }
   }
 }
@@ -86,8 +108,8 @@
   }
 
   &::-webkit-scrollbar-thumb {
-    border-radius: $size-radius-full;
-    background: var(--border-medium);
+    background: var(--bf-appearance-token-border-subtle);
+    border-radius: 2px;
   }
 
   &::-webkit-scrollbar-track {
@@ -96,10 +118,11 @@
 }
 
 .bitfun-nav-search-dialog__empty {
-  padding: $size-gap-6 $size-gap-3;
-  color: var(--color-text-muted);
-  font-size: var(--font-size-sm);
+  padding: $size-gap-4 $size-gap-2;
   text-align: center;
+  color: var(--bf-appearance-token-color-text-muted);
+  font-size: var(--bf-appearance-token-font-size-sm);
+  animation: bitfun-nav-search-fade-rise 0.32s cubic-bezier(0.22, 1, 0.36, 1) 0.06s both;
 }
 
 .bitfun-nav-search-dialog__group {
@@ -107,26 +130,26 @@
 
   & + & {
     margin-top: $size-gap-1;
+    border-top: 1px solid var(--bf-appearance-token-border-subtle);
     padding-top: $size-gap-1;
-    border-top: 1px solid var(--border-subtle);
+    border-top: 1px solid var(--bf-appearance-token-border-subtle);
   }
 }
 
 .bitfun-nav-search-dialog__group-label {
-  padding: 5px $size-gap-2 4px;
-  color: var(--color-text-muted);
-  font-size: var(--font-size-xxs);
-  font-weight: $font-weight-semibold;
-  letter-spacing: 0.055em;
+  padding: $size-gap-1 $size-gap-1 $size-gap-1 2px;
+  font-size: var(--bf-appearance-token-font-size-xxs);
+  font-weight: 700;
+  color: var(--bf-appearance-token-color-text-muted);
   text-transform: uppercase;
   user-select: none;
 }
 
 .bitfun-nav-search-dialog__session-hint {
-  padding: $size-gap-2;
-  color: var(--color-text-muted);
-  font-size: var(--font-size-xs);
-  line-height: 1.5;
+  padding: $size-gap-2 $size-gap-2 $size-gap-1 2px;
+  font-size: var(--bf-appearance-token-font-size-xs);
+  line-height: 1.45;
+  color: var(--bf-appearance-token-color-text-muted);
   user-select: none;
 }
 
@@ -140,31 +163,28 @@
   border: none;
   border-radius: $size-radius-base;
   background: transparent;
-  color: var(--color-text-primary);
-  font: inherit;
-  text-align: left;
   cursor: pointer;
-  transition:
-    transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
-    background 120ms ease;
+  text-align: left;
+  color: var(--bf-appearance-token-color-text-primary);
+  transition: background 0.2s cubic-bezier(0.22, 1, 0.36, 1);
 
   &--active,
   &:hover {
-    background: var(--element-bg-soft);
+    background: var(--bf-appearance-token-element-bg-soft);
   }
 
-  &:active {
-    transform: scale(0.99);
-    background: var(--element-bg-medium);
+  &--active {
+    background: var(--bf-appearance-token-element-bg-medium);
   }
 
   &:focus-visible {
-    outline: 2px solid var(--color-accent-500);
+    outline: 2px solid var(--bf-appearance-token-color-accent-500);
     outline-offset: -2px;
   }
 }
 
 .bitfun-nav-search-dialog__item-icon {
+  color: var(--bf-appearance-token-color-text-primary);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -172,11 +192,11 @@
   width: 26px;
   height: 26px;
   border-radius: $size-radius-sm;
-  background: var(--element-bg-subtle);
-  color: var(--color-text-muted);
+  background: var(--bf-appearance-token-element-bg-subtle);
+  color: var(--bf-appearance-token-color-text-muted);
 
   .bitfun-nav-search-dialog__item--active & {
-    color: var(--color-text-primary);
+    color: var(--bf-appearance-token-color-text-primary);
   }
 }
 
@@ -196,15 +216,19 @@
 }
 
 .bitfun-nav-search-dialog__item-label {
-  color: var(--color-text-primary);
-  font-size: var(--font-size-sm);
-  line-height: 1.25;
+  font-size: var(--bf-appearance-token-font-size-sm);
+  color: var(--bf-appearance-token-color-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .bitfun-nav-search-dialog__item-sublabel {
-  color: var(--color-text-muted);
-  font-size: var(--font-size-xs);
-  line-height: 1.2;
+  font-size: var(--bf-appearance-token-font-size-xs);
+  color: var(--bf-appearance-token-color-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .bitfun-nav-panel__search-trigger {
@@ -215,30 +239,34 @@
   min-height: 34px;
   height: 34px;
   padding: 0 $size-gap-2;
-  border: 1px solid var(--border-subtle);
-  border-radius: $size-radius-base;
-  background: var(--element-bg-subtle);
-  color: var(--color-text-secondary);
-  box-shadow: none;
-  font: inherit;
-  font-size: var(--font-size-sm);
+  border: none;
+  border-radius: $size-radius-full;
+  background: var(--bf-appearance-token-color-bg-scene);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--bf-appearance-token-border-subtle) 65%, transparent);
+  cursor: text;
+  color: var(--bf-appearance-token-color-text-primary);
+  font-size: var(--bf-appearance-token-font-size-sm);
   font-weight: 500;
   text-align: left;
   cursor: text;
   transition:
-    transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
-    border-color 120ms ease,
-    background 120ms ease,
-    color 120ms ease;
+    background $motion-fast $easing-standard,
+    box-shadow $motion-fast $easing-standard,
+    color $motion-fast $easing-standard;
+
+  &:hover {
+    background: color-mix(in srgb, var(--bf-appearance-token-color-bg-scene) 88%, var(--bf-appearance-token-element-bg-medium));
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--bf-appearance-token-border-medium) 55%, transparent);
+    color: var(--bf-appearance-token-color-text-primary);
+  }
 
   &:active {
-    transform: scale(0.985);
-    border-color: var(--border-medium);
-    background: var(--element-bg-medium);
+    background: color-mix(in srgb, var(--bf-appearance-token-color-bg-scene) 82%, var(--bf-appearance-token-element-bg-medium));
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--bf-appearance-token-border-medium) 68%, transparent);
   }
 
   &:focus-visible {
-    outline: 2px solid var(--color-accent-500);
+    outline: 1px solid var(--bf-appearance-token-color-accent-500);
     outline-offset: 1px;
   }
 
@@ -250,7 +278,7 @@
     width: 22px;
     min-width: 22px;
     height: 22px;
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
   }
 
   &__icon-inner {
@@ -266,15 +294,7 @@
   overflow: hidden;
   color: inherit;
   text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-@media (hover: hover) and (pointer: fine) {
-  .bitfun-nav-panel__search-trigger:hover {
-    border-color: var(--border-medium);
-    background: var(--element-bg-soft);
-    color: var(--color-text-primary);
-  }
+  color: var(--bf-appearance-token-color-text-primary);
 }
 
 @media (prefers-reduced-motion: reduce) {

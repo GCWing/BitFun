@@ -124,14 +124,14 @@ export const GlobalPermissionRulesDialog: React.FC<GlobalPermissionRulesDialogPr
       contentClassName="global-permission-rules-dialog__modal"
       overlayClassName="global-permission-rules-dialog-overlay"
     >
-      <div className="global-permission-rules-dialog">
-        <div className="global-permission-rules-dialog__intro">
+      <div className="global-permission-rules-dialog" data-bf-component="global-permission-rules-dialog" data-bf-part="root">
+        <div data-bf-component="global-permission-rules-dialog" data-bf-part="intro" className="global-permission-rules-dialog__intro">
           <ShieldCheck size={18} aria-hidden="true" />
           <p>{t('permissionPolicy.globalRulesDialogDescription')}</p>
         </div>
 
-        <section className="global-permission-rules-dialog__section">
-          <div className="global-permission-rules-dialog__section-header">
+        <section data-bf-component="global-permission-rules-dialog" data-bf-part="section" className="global-permission-rules-dialog__section">
+          <div data-bf-component="global-permission-rules-dialog" data-bf-part="sectionHeader" className="global-permission-rules-dialog__section-header">
             <span>{t('permissionPolicy.globalRulesTitle')}</span>
             <Button
               size="small"
@@ -148,11 +148,11 @@ export const GlobalPermissionRulesDialog: React.FC<GlobalPermissionRulesDialogPr
           </div>
 
           {draftRules.length === 0 ? (
-            <div className="global-permission-rules-dialog__empty">
+            <div data-bf-component="global-permission-rules-dialog" data-bf-part="empty" className="global-permission-rules-dialog__empty">
               {t('permissionPolicy.globalRulesEmpty')}
             </div>
           ) : (
-            <div className="global-permission-rules-dialog__rules">
+            <div data-bf-component="global-permission-rules-dialog" data-bf-part="rules" className="global-permission-rules-dialog__rules">
               <div className="global-permission-rules-dialog__rule-heading" aria-hidden="true">
                 <span>{t('permissionPolicy.globalRulesEffect')}</span>
                 <span>{t('permissionPolicy.globalRulesAction')}</span>
@@ -160,7 +160,7 @@ export const GlobalPermissionRulesDialog: React.FC<GlobalPermissionRulesDialogPr
                 <span />
               </div>
               {draftRules.map((rule, index) => (
-                <div key={rule.localId} className="global-permission-rules-dialog__rule-row">
+                <div data-bf-component="global-permission-rules-dialog" data-bf-part="rule" key={rule.localId} className="global-permission-rules-dialog__rule-row">
                   <Select
                     size="small"
                     value={rule.effect}
@@ -188,7 +188,7 @@ export const GlobalPermissionRulesDialog: React.FC<GlobalPermissionRulesDialogPr
                     error={!rule.resource.trim()}
                     onChange={(event) => updateDraftRule(rule.localId, { resource: event.target.value })}
                   />
-                  <div className="global-permission-rules-dialog__rule-actions">
+                  <div data-bf-component="global-permission-rules-dialog" data-bf-part="ruleActions" className="global-permission-rules-dialog__rule-actions">
                     <IconButton
                       type="button"
                       size="small"
@@ -231,7 +231,7 @@ export const GlobalPermissionRulesDialog: React.FC<GlobalPermissionRulesDialogPr
           )}
 
           {rulesDirty ? (
-            <div className="global-permission-rules-dialog__footer">
+            <div data-bf-component="global-permission-rules-dialog" data-bf-part="footer" className="global-permission-rules-dialog__footer">
               <Button
                 type="button"
                 variant="ghost"

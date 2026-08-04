@@ -82,7 +82,7 @@ export const AcpPermissionActions: React.FC<AcpPermissionActionsProps> = ({
   }
 
   return (
-    <span className={`acp-permission-actions acp-permission-actions--${presentation} ${className}`}>
+    <span data-bf-component="acp-permission-actions" data-bf-part="root" data-bf-presentation={presentation} className={`acp-permission-actions acp-permission-actions--${presentation} ${className}`}>
       {options.map((option) => {
         const approve = isApprovalKind(option.kind);
         const label = fallbackLabel(option.kind, t);
@@ -100,7 +100,7 @@ export const AcpPermissionActions: React.FC<AcpPermissionActionsProps> = ({
 
         if (presentation === 'text') {
           return (
-            <button
+            <button data-bf-component="acp-permission-actions" data-bf-part="action" data-bf-decision={approve ? 'allow' : 'reject'}
               key={option.optionId}
               type="button"
               className={`acp-permission-actions__text-button acp-permission-actions__text-button--${approve ? 'allow' : 'reject'} ${buttonClassName}`}
@@ -117,6 +117,9 @@ export const AcpPermissionActions: React.FC<AcpPermissionActionsProps> = ({
         return (
           <IconButton
             key={option.optionId}
+            data-bf-component="acp-permission-actions"
+            data-bf-part="action"
+            data-bf-decision={approve ? 'allow' : 'reject'}
             className={`tool-card-header-action acp-permission-actions__icon-button acp-permission-actions__icon-button--${option.kind} ${buttonClassName}`}
             variant={buttonVariant(option.kind)}
             size="xs"

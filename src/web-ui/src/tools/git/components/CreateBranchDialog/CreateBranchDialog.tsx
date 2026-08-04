@@ -120,7 +120,7 @@ export const CreateBranchDialog: React.FC<CreateBranchDialogProps> = ({
 
   return (
     <Modal isOpen={isOpen} onClose={handleCancel} title={t('dialog.createNewBranch.title')} size="small">
-      <div className="bitfun-create-branch-dialog" onKeyDown={handleKeyDown}>
+      <div className="bitfun-create-branch-dialog" onKeyDown={handleKeyDown} data-bf-component="git-tool" data-bf-part="createBranchDialog">
         <div className="bitfun-create-branch-dialog__base-info">
           <div className="bitfun-create-branch-dialog__base-label">
             <GitBranch size={14} />

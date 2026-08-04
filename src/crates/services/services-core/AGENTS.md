@@ -4,7 +4,7 @@ Scope: this guide applies to `src/crates/services/services-core`.
 
 `bitfun-services-core` owns cross-platform service DTOs and helpers that compile
 without the full product runtime. This includes generic filesystem/search/JSON
-IO helpers, LSP package/protocol/watch/process primitives, session metadata
+IO helpers, bounded local Instruction file reads, LSP package/protocol/watch/process primitives, session metadata
 storage helpers, and local OS action primitives such as command lookup,
 clipboard, file/url opening, script execution, workspace runtime FS/shell
 providers, managed process-tree lifecycle, process-level Agent Runtime ownership locks, and system facts. Product crates may layer routing, policy,
@@ -17,8 +17,19 @@ crate.
   runtime crates.
 - Prefer `bitfun-core-types` for shared DTOs and `bitfun-runtime-ports` for
   cross-layer traits.
-- Keep dependency features explicit. Non-LSP consumers should use
-  `default-features = false`; LSP consumers must enable the `lsp` feature.
+- Keep dependency features explicit and keep `default = []`. The coarse service
+  capability owners are `filesystem` (local file operations/search),
+  `local-storage` (JSON/session/usage persistence), `process-runtime` (command
+  lookup and supervised child lifecycle), and `workspace-instructions`
+  (declarative instruction discovery). Consumers enable those or the narrower
+  `lsp`, `workspace-runtime`, `workspace-identity`, `runtime-ownership`,
+  `permission`, `dispatch-workspace`, `markdown`, and `session-git` extensions
+  only for behavior they use. In particular, session metadata consumers must
+  not compile libgit2 unless they use the memory-workspace baseline/diff API.
+  Keep Tokio and platform API capabilities owner-scoped too: the empty profile
+  carries only Tokio runtime/time support, `lsp` and `workspace-runtime`
+  explicitly compose `process-runtime`, and Windows storage/process bindings
+  must not be enabled from one shared dependency feature union.
 - LSP manifest and protocol DTOs belong in `bitfun-core-types`; reusable LSP
   package, protocol, detection, debounce, watch, and process-manager helpers
   belong in `services-core`; product workspace state, event emission, global
@@ -30,6 +41,10 @@ crate.
 - `runtime_ownership` owns only canonical identity plus Embedded shared-lock and
   Shared exclusive-lock primitives. It must not select workspaces, start or
   cache Runtime instances, or define Session/Turn ownership.
+- `workspace_identity` owns canonical local roots plus stable local/remote
+  workspace and session-storage identifiers. It has no SSH registry, transport,
+  authentication, SFTP, PTY, or remote lifecycle responsibility; integrations
+  may preserve old paths through re-exports.
 - Do not add remote SSH, MiniApp storage, tool-result persistence, `PathManager`
   globals, or product runtime bindings to `filesystem`; keep those in core or a
   reviewed adapter/provider.
@@ -46,9 +61,16 @@ crate.
 ## Verification
 
 ```bash
-cargo test -p bitfun-services-core --features lsp
-cargo test -p bitfun-services-core --features workspace-runtime workspace
-cargo test -p bitfun-services-core --features runtime-ownership --test runtime_ownership_contracts
+cargo check -p bitfun-services-core --no-default-features
+cargo check -p bitfun-services-core --no-default-features --features filesystem
+cargo test -p bitfun-services-core --no-default-features --features local-storage --test session_metadata_contracts
+cargo test -p bitfun-services-core --no-default-features --features process-runtime --test process_runtime_contracts
+cargo test -p bitfun-services-core --no-default-features --features workspace-instructions --test declarative_workspace_instruction_contracts
+cargo test -p bitfun-services-core --no-default-features --features lsp --test lsp_plugin_registry_contracts
+cargo test -p bitfun-services-core --no-default-features --features session-git memory_workspace
+cargo check -p bitfun-services-core --no-default-features --features workspace-identity
+cargo test -p bitfun-services-core --no-default-features --features workspace-runtime workspace
+cargo test -p bitfun-services-core --no-default-features --features runtime-ownership --test runtime_ownership_contracts
 node scripts/check-core-boundaries.mjs
 cargo check -p bitfun-core --features product-full
 ```

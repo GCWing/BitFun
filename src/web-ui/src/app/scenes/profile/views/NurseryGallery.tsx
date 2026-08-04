@@ -30,6 +30,7 @@ import { useNotification } from '@/shared/notification-system';
 import { createLogger } from '@/shared/utils/logger';
 import AssistantCard from './AssistantCard';
 import { useNurseryStore } from '../nurseryStore';
+import './NurseryView.scss';
 
 const log = createLogger('NurseryGallery');
 const ASSISTANT_MODE_ID = 'Claw';
@@ -42,7 +43,7 @@ interface TemplateStats {
 type TemplateStatsStatus = 'loading' | 'ready' | 'error';
 
 const NurseryPandaAvatar: React.FC = () => (
-  <div className="nursery-defaults__avatar" aria-hidden="true">
+  <div className="nursery-defaults__avatar" aria-hidden="true" data-bf-component="nursery-gallery" data-bf-part="avatar">
     <span className="nursery-defaults__avatar-art">
       <img
         className="nursery-defaults__avatar-image"
@@ -188,7 +189,11 @@ const NurseryGallery: React.FC = () => {
   );
 
   return (
-    <GalleryLayout className="nursery-gallery">
+    <GalleryLayout
+      className="nursery-gallery"
+      data-bf-component="nursery-gallery"
+      data-bf-part="root"
+    >
       <GalleryPageHeader
         title={t('nursery.gallery.title')}
         subtitle={t('nursery.gallery.subtitle')}
@@ -214,11 +219,11 @@ const NurseryGallery: React.FC = () => {
         )}
       />
 
-      <div className="gallery-zones">
-        <section className="nursery-defaults" aria-labelledby="nursery-defaults-title">
+      <div className="gallery-zones" data-bf-component="nursery-gallery" data-bf-part="content">
+        <section className="nursery-defaults" aria-labelledby="nursery-defaults-title" data-bf-component="nursery-gallery" data-bf-part="defaults">
           <NurseryPandaAvatar />
 
-          <div className="nursery-defaults__content">
+          <div className="nursery-defaults__content" data-bf-component="nursery-gallery" data-bf-part="defaultsContent">
             <h3 className="nursery-defaults__title" id="nursery-defaults-title">
               {t('nursery.template.title')}
             </h3>
@@ -226,6 +231,8 @@ const NurseryGallery: React.FC = () => {
 
             <div
               className="nursery-defaults__stats"
+              data-bf-component="nursery-gallery"
+              data-bf-part="stats"
               aria-live="polite"
               aria-busy={templateStatsStatus === 'loading'}
             >

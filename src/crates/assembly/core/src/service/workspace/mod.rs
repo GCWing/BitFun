@@ -3,11 +3,12 @@
 //! Full workspace management system: open, manage, scan, statistics, etc.
 
 pub mod factory;
+#[cfg(feature = "workspace-watch")]
 pub mod identity_watch;
 pub mod manager;
 pub mod provider;
 pub mod service;
-#[cfg(feature = "service-integrations")]
+#[cfg(feature = "git")]
 pub mod worktree_topology;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -18,6 +19,7 @@ pub enum WorktreeTopologyFreshness {
 
 // Re-export main components
 pub use factory::WorkspaceFactory;
+#[cfg(feature = "workspace-watch")]
 pub use identity_watch::WorkspaceIdentityWatchService;
 pub use manager::{
     GitInfo, RelatedPath, ScanOptions, WorkspaceIdentity, WorkspaceInfo, WorkspaceKind,
@@ -31,5 +33,5 @@ pub use service::{
     WorkspaceHealthStatus, WorkspaceIdentityChangedEvent, WorkspaceImportResult,
     WorkspaceInfoUpdates, WorkspaceQuickSummary, WorkspaceService,
 };
-#[cfg(feature = "service-integrations")]
+#[cfg(feature = "git")]
 pub use worktree_topology::{global_worktree_topology_service, WorktreeTopologyService};

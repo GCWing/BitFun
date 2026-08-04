@@ -3,46 +3,46 @@
   "subtitle": "電源、日誌、終端、通知與登入時啟動",
   "appearance": {
     "title": "外觀",
-    "hint": "界面語言與視覺主題",
+    "hint": "界面語言與視覺外觀",
     "language": "語言",
-    "themes": "主題",
+    "appearances": "外觀",
     "builtIn": "內置",
     "custom": "自定義",
     "export": "導出",
     "delete": "刪除",
-    "confirmDelete": "確定刪除主題 \"{{name}}\" 嗎？",
+    "confirmDelete": "確定刪除外觀 \"{{name}}\" 嗎？",
     "languageRowHint": "選擇一個語言包作為目前界面語言。",
-    "themeRowHint": "選擇界面配色主題。",
-    "systemTheme": "跟隨系統",
-    "systemThemeDescription": "根據系統淺色/深色外觀自動在亮暗主題間切換，並隨系統切換而更新。",
+    "appearanceRowHint": "選擇界面外觀。",
+    "systemAppearance": "跟隨系統",
+    "systemAppearanceDescription": "根據系統設定自動使用亮色或暗色外觀，並隨系統切換而更新。",
     "presets": {
       "bitfun-dark": {
         "name": "暗色",
-        "description": "默認暗色主題"
+        "description": "默認暗色外觀"
       },
       "bitfun-light": {
         "name": "亮色",
-        "description": "亮色主題 - 素雅高級，淡藍灰調"
+        "description": "亮色外觀 - 素雅高級，淡藍灰調"
       },
       "bitfun-midnight": {
         "name": "午夜",
-        "description": "午夜灰暗色主題 - 專業優雅，靈感來自 JetBrains IDE"
+        "description": "午夜灰暗色外觀 - 專業優雅，靈感來自 JetBrains IDE"
       },
       "bitfun-china-style": {
         "name": "墨韻",
-        "description": "中國風主題 - 宣紙墨香，青花硃砂，溫潤典雅"
+        "description": "中國風外觀 - 宣紙墨香，青花硃砂，溫潤典雅"
       },
       "bitfun-china-night": {
         "name": "墨夜",
-        "description": "中國風暗色主題 - 墨夜星辰，月華如水，沉靜典雅"
+        "description": "中國風暗色外觀 - 墨夜星辰，月華如水，沉靜典雅"
       },
       "bitfun-cyber": {
         "name": "賽博",
-        "description": "科技感主題 - 深邃黑洞，霓虹未來，極致科技美學"
+        "description": "科技感外觀 - 深邃黑洞，霓虹未來，極致科技美學"
       },
       "bitfun-slate": {
         "name": "石板灰",
-        "description": "石板灰幾何主題 - 極深沉浸，高對比度灰度美學"
+        "description": "石板灰幾何外觀 - 極深沉浸，高對比度灰度美學"
       },
       "bitfun-tokyo-night": {
         "name": "東京夜",

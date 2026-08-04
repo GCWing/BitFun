@@ -198,6 +198,7 @@ pub fn project_agentic_frontend_event(event: AgenticEvent) -> Option<AgenticFron
         AgenticEvent::DialogTurnCompleted {
             session_id,
             turn_id,
+            duration_ms,
             partial_recovery_reason,
             success,
             finish_reason,
@@ -208,6 +209,7 @@ pub fn project_agentic_frontend_event(event: AgenticEvent) -> Option<AgenticFron
             json!({
                 "sessionId": session_id,
                 "turnId": turn_id,
+                "durationMs": duration_ms,
                 "partialRecoveryReason": partial_recovery_reason,
                 "success": success,
                 "finishReason": finish_reason,
@@ -357,6 +359,10 @@ pub fn project_agentic_frontend_event(event: AgenticEvent) -> Option<AgenticFron
                 "sessionId": session_id,
                 "newState": new_state,
             }),
+        )),
+        AgenticEvent::SessionHistoryChanged { session_id } => Some(AgenticFrontendEvent::new(
+            "agentic://session-history-changed",
+            json!({ "sessionId": session_id }),
         )),
         AgenticEvent::SessionModelAutoMigrated {
             session_id,
@@ -543,6 +549,25 @@ mod tests {
         .expect("projected");
 
         assert_eq!(projected.payload["applied"], false);
+    }
+
+    #[test]
+    fn dialog_turn_completion_projects_duration() {
+        let projected = project_agentic_frontend_event(AgenticEvent::DialogTurnCompleted {
+            session_id: "session-1".to_string(),
+            turn_id: "turn-1".to_string(),
+            total_rounds: 2,
+            total_tools: 1,
+            duration_ms: 21_206,
+            partial_recovery_reason: None,
+            success: Some(true),
+            finish_reason: Some("stop".to_string()),
+            has_final_response: Some(true),
+        })
+        .expect("projected");
+
+        assert_eq!(projected.event_name, "agentic://dialog-turn-completed");
+        assert_eq!(projected.payload["durationMs"], 21_206);
     }
 
     #[test]

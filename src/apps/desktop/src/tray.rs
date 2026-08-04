@@ -159,9 +159,9 @@ async fn tray_toggle_desktop_pet(app: &AppHandle) -> Result<(), String> {
 
     let show = desktop_pet_should_show(&exp);
     if show {
-        crate::theme::show_agent_companion_desktop_pet(app.clone()).await?;
+        crate::appearance::show_agent_companion_desktop_pet(app.clone()).await?;
     } else {
-        crate::theme::hide_agent_companion_desktop_pet(app.clone()).await?;
+        crate::appearance::hide_agent_companion_desktop_pet(app.clone()).await?;
     }
 
     Ok(())

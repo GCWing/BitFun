@@ -6,6 +6,9 @@
 #[cfg(feature = "announcement")]
 pub mod announcement;
 
+#[cfg(feature = "miniapp-market")]
+pub mod appearance_market;
+
 #[cfg(feature = "browser-control")]
 pub mod browser_control;
 

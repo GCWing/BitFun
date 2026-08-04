@@ -4,15 +4,15 @@
   .task-header-wrapper {
     display: flex;
     align-items: stretch;
-    gap: var(--flowchat-inline-gap);
+    gap: var(--bf-appearance-token-flowchat-inline-gap);
     width: 100%;
   }
 
   .task-icon {
-    color: var(--color-text-secondary);
+    color: var(--bf-appearance-token-color-text-secondary);
 
     &.is-running {
-      color: var(--color-accent-500);
+      color: var(--bf-appearance-token-color-accent-500);
     }
   }
 
@@ -67,7 +67,7 @@
     justify-content: center;
     align-self: stretch;
     flex-shrink: 0;
-    width: var(--tool-card-header-icon-slot);
+    width: var(--bf-appearance-token-tool-card-header-icon-slot);
     padding: 0;
     margin-left: 4px;
 
@@ -76,9 +76,9 @@
       content: '';
       position: absolute;
       left: 0;
-      right: calc(-1 * var(--tool-card-header-pad-right));
-      top: calc(-1 * var(--tool-card-header-pad-y));
-      bottom: calc(-1 * var(--tool-card-header-pad-y));
+      right: calc(-1 * var(--bf-appearance-token-tool-card-header-pad-right));
+      top: calc(-1 * var(--bf-appearance-token-tool-card-header-pad-y));
+      bottom: calc(-1 * var(--bf-appearance-token-tool-card-header-pad-y));
       background-color: transparent;
       border-radius: 0;
       transition: background-color 0.15s ease;
@@ -87,21 +87,21 @@
     }
 
     &:hover::before {
-      background-color: var(--element-bg-hover);
+      background-color: var(--bf-appearance-token-element-bg-hover);
     }
 
     &:hover .task-header-rail__visual {
-      color: var(--color-text-primary);
+      color: var(--bf-appearance-token-color-text-primary);
     }
 
     &::after {
       content: '';
       position: absolute;
       left: 0;
-      top: calc(-1 * var(--tool-card-header-pad-y));
-      bottom: calc(-1 * var(--tool-card-header-pad-y));
+      top: calc(-1 * var(--bf-appearance-token-tool-card-header-pad-y));
+      bottom: calc(-1 * var(--bf-appearance-token-tool-card-header-pad-y));
       width: 0;
-      border-left: 1px solid var(--border-base);
+      border-left: 1px solid var(--bf-appearance-token-border-base);
       pointer-events: none;
       z-index: 1;
     }
@@ -110,9 +110,9 @@
   .task-header-rail__hit {
     position: absolute;
     left: 0;
-    top: calc(-1 * var(--tool-card-header-pad-y));
-    right: calc(-1 * var(--tool-card-header-pad-right));
-    bottom: calc(-1 * var(--tool-card-header-pad-y));
+    top: calc(-1 * var(--bf-appearance-token-tool-card-header-pad-y));
+    right: calc(-1 * var(--bf-appearance-token-tool-card-header-pad-right));
+    bottom: calc(-1 * var(--bf-appearance-token-tool-card-header-pad-y));
     z-index: 2;
     margin: 0;
     padding: 0;
@@ -123,7 +123,7 @@
     font: inherit;
 
     &:focus-visible {
-      outline: 2px solid var(--color-accent-500);
+      outline: 2px solid var(--bf-appearance-token-color-accent-500);
       outline-offset: -2px;
     }
   }
@@ -132,7 +132,7 @@
    * Rail icons: fill exactly the same rectangle as ::before (hover tint) and __hit (click zone).
    *
    * Root cause of "偏左":
-   *   - The hover/hit area extends right: calc(-1 * --tool-card-header-pad-right) = -10px
+   *   - The hover/hit area extends right: calc(-1 * --bf-appearance-token-tool-card-header-pad-right) = -10px
    *     into the card's right padding, so its total width is rail(34px) + padding(10px) = 44px.
    *   - Previously __visual used right: 0, giving only 33px. Icon center was at 17.5px from
    *     the divider; hover center was at 22px — a 4.5px leftward offset, visible to the eye.
@@ -144,7 +144,7 @@
     /* Start after the 1px divider line (::after sits at left: 0). */
     left: 1px;
     /* Match hover fill (::before) and hit area right edge — both extend into right padding. */
-    right: calc(-1 * var(--tool-card-header-pad-right));
+    right: calc(-1 * var(--bf-appearance-token-tool-card-header-pad-right));
     top: 0;
     bottom: 0;
     display: flex;
@@ -156,11 +156,11 @@
     padding: 0;
     line-height: 0;
     font-size: 0;
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
     pointer-events: none;
 
     > * + * {
-      margin-top: var(--flowchat-inline-gap);
+      margin-top: var(--bf-appearance-token-flowchat-inline-gap);
     }
 
     > svg {
@@ -190,16 +190,16 @@
   .task-header-main {
     display: flex;
     align-items: center;
-    gap: var(--flowchat-inline-gap);
+    gap: var(--bf-appearance-token-flowchat-inline-gap);
     width: 100%;
     min-height: 20px;
   }
 
 
   .task-action {
-    font-size: var(--tool-card-action-font-size);
+    font-size: var(--bf-appearance-token-tool-card-action-font-size);
     font-weight: 500;
-    color: var(--color-text-primary);
+    color: var(--bf-appearance-token-color-text-primary);
     flex-shrink: 1;
     min-width: 0;
     overflow: hidden;
@@ -207,16 +207,16 @@
     white-space: nowrap;
 
     &__model-tag {
-      font-size: var(--flowchat-font-size-xxs);
+      font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
       font-weight: 400;
-      color: var(--color-text-secondary);
+      color: var(--bf-appearance-token-color-text-secondary);
       vertical-align: baseline;
     }
   }
 
   .task-header-main--failed {
     .task-action {
-      color: var(--color-text-muted);
+      color: var(--bf-appearance-token-color-text-muted);
     }
 
     
@@ -230,33 +230,33 @@
 
     display: inline-flex;
     align-items: center;
-    padding: 0.1rem var(--flowchat-inline-gap);
+    padding: 0.1rem var(--bf-appearance-token-flowchat-inline-gap);
     border-radius: 3px;
-    font-size: var(--flowchat-font-size-xxs);
+    font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
     font-weight: 500;
     flex-shrink: 0;
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
     background: rgba(var(--task-failed-badge-rgb), 0.15);
   }
 
   .task-review-outcome {
     display: inline-flex;
     align-items: center;
-    padding: 0.1rem var(--flowchat-inline-gap);
+    padding: 0.1rem var(--bf-appearance-token-flowchat-inline-gap);
     border-radius: 3px;
-    font-size: var(--flowchat-font-size-xxs);
+    font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
     font-weight: 500;
     flex-shrink: 0;
-    color: var(--color-text-muted);
-    background: var(--element-bg-soft);
+    color: var(--bf-appearance-token-color-text-muted);
+    background: var(--bf-appearance-token-element-bg-soft);
 
     &--partial-timeout {
-      color: var(--color-warning);
-      background: var(--color-warning-bg);
+      color: var(--bf-appearance-token-color-warning);
+      background: var(--bf-appearance-token-color-warning-bg);
     }
 
     &--timed-out {
-      color: var(--color-error);
+      color: var(--bf-appearance-token-color-error);
     }
   }
 
@@ -268,10 +268,10 @@
     justify-content: center;
     flex-shrink: 0;
     padding: 0;
-    border: 1px solid var(--border-base);
+    border: 1px solid var(--bf-appearance-token-border-base);
     border-radius: 4px;
-    color: var(--color-text-secondary);
-    background: var(--element-bg-soft);
+    color: var(--bf-appearance-token-color-text-secondary);
+    background: var(--bf-appearance-token-element-bg-soft);
     cursor: pointer;
     transition:
       color 0.15s ease,
@@ -279,13 +279,13 @@
       border-color 0.15s ease;
 
     &:hover:not(:disabled) {
-      color: var(--color-error);
-      background: var(--element-bg-hover);
-      border-color: var(--color-error);
+      color: var(--bf-appearance-token-color-error);
+      background: var(--bf-appearance-token-element-bg-hover);
+      border-color: var(--bf-appearance-token-color-error);
     }
 
     &:focus-visible {
-      outline: 2px solid var(--color-accent-500);
+      outline: 2px solid var(--bf-appearance-token-color-accent-500);
       outline-offset: 2px;
     }
 
@@ -307,20 +307,20 @@
   .agent-type-badge {
     display: inline-flex;
     align-items: center;
-    padding: 0.125rem var(--flowchat-inline-gap);
+    padding: 0.125rem var(--bf-appearance-token-flowchat-inline-gap);
     border-radius: 4px;
-    font-size: var(--flowchat-font-size-xxs);
+    font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
     font-weight: 500;
     flex-shrink: 0;
-    color: var(--color-text-secondary);
-    background: var(--color-overlay-white-12);
+    color: var(--bf-appearance-token-color-text-secondary);
+    background: var(--bf-appearance-token-color-overlay-white-12);
     letter-spacing: 0.02em;
   }
 
   .task-header-meta {
     display: flex;
     align-items: center;
-    gap: var(--flowchat-inline-gap);
+    gap: var(--bf-appearance-token-flowchat-inline-gap);
     margin-left: auto;
     margin-right: 10px;
     flex-shrink: 0;
@@ -355,22 +355,22 @@
   .task-interruption-note {
     display: flex;
     align-items: flex-start;
-    gap: var(--flowchat-inline-gap);
-    color: var(--color-text-secondary);
-    font-size: var(--tool-card-action-font-size);
-    line-height: var(--flowchat-support-line-height);
+    gap: var(--bf-appearance-token-flowchat-inline-gap);
+    color: var(--bf-appearance-token-color-text-secondary);
+    font-size: var(--bf-appearance-token-tool-card-action-font-size);
+    line-height: var(--bf-appearance-token-flowchat-support-line-height);
 
     svg {
       flex-shrink: 0;
       margin-top: 0.15em;
-      color: var(--color-warning);
+      color: var(--bf-appearance-token-color-warning);
     }
   }
 
   .task-interruption-divider {
     height: 1px;
-    background: var(--border-base);
-    margin: -2px calc(-1 * var(--tool-card-expanded-pad-x)) 0;
+    background: var(--bf-appearance-token-border-base);
+    margin: -2px calc(-1 * var(--bf-appearance-token-tool-card-expanded-pad-x)) 0;
   }
 
   .task-expanded-content .task-prompt-markdown {
@@ -395,12 +395,12 @@
   .duration-text {
     display: flex;
     align-items: center;
-    gap: var(--flowchat-inline-gap);
-    color: var(--color-text-secondary);
-    font-size: var(--flowchat-font-size-xs);
+    gap: var(--bf-appearance-token-flowchat-inline-gap);
+    color: var(--bf-appearance-token-color-text-secondary);
+    font-size: var(--bf-appearance-token-flowchat-font-size-xs);
     font-weight: 600;
     letter-spacing: 0.01em;
-    line-height: var(--flowchat-compact-line-height);
+    line-height: var(--bf-appearance-token-flowchat-compact-line-height);
 
     svg {
       flex-shrink: 0;
@@ -409,29 +409,29 @@
   }
 
   .duration-text--completed-success {
-    color: var(--color-success);
+    color: var(--bf-appearance-token-color-success);
   }
 
   .duration-text--completed-error,
   .duration-text--completed-cancelled {
-    color: var(--color-error);
+    color: var(--bf-appearance-token-color-error);
   }
 
   .section-header {
     display: flex;
     align-items: center;
-    gap: var(--flowchat-inline-gap);
-    margin-bottom: var(--flowchat-card-gap);
-    font-size: var(--flowchat-font-size-xs);
+    gap: var(--bf-appearance-token-flowchat-inline-gap);
+    margin-bottom: var(--bf-appearance-token-flowchat-card-gap);
+    font-size: var(--bf-appearance-token-flowchat-font-size-xs);
     font-weight: 600;
-    color: var(--color-text-secondary);
+    color: var(--bf-appearance-token-color-text-secondary);
     text-transform: uppercase;
     letter-spacing: 0.5px;
     opacity: 0.8;
   }
 
   .section-icon {
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
     flex-shrink: 0;
   }
 
@@ -442,28 +442,28 @@
   .task-expanded-content {
     display: flex;
     flex-direction: column;
-    gap: var(--flowchat-card-gap);
+    gap: var(--bf-appearance-token-flowchat-card-gap);
   }
 
 
   .error-content {
     display: flex;
     flex-direction: column;
-    gap: var(--flowchat-card-gap);
+    gap: var(--bf-appearance-token-flowchat-card-gap);
   }
 
   .error-message {
-    font-size: var(--tool-card-action-font-size);
-    color: var(--color-error);
-    line-height: var(--flowchat-support-line-height);
+    font-size: var(--bf-appearance-token-tool-card-action-font-size);
+    color: var(--bf-appearance-token-color-error);
+    line-height: var(--bf-appearance-token-flowchat-support-line-height);
   }
 
   .error-meta {
     display: flex;
     align-items: center;
-    gap: var(--flowchat-inline-gap);
-    font-size: var(--flowchat-font-size-xs);
-    color: var(--color-text-muted);
+    gap: var(--bf-appearance-token-flowchat-inline-gap);
+    font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+    color: var(--bf-appearance-token-color-text-muted);
   }
 
   .error-task,
@@ -472,20 +472,20 @@
   }
 
   .error-separator {
-    color: var(--border-base);
+    color: var(--bf-appearance-token-border-base);
   }
 
   .tool-actions {
     display: flex;
-    gap: var(--flowchat-inline-gap);
-    margin-top: var(--flowchat-card-gap);
+    gap: var(--bf-appearance-token-flowchat-inline-gap);
+    margin-top: var(--bf-appearance-token-flowchat-card-gap);
   }
 
   .confirm-button,
   .reject-button {
-    padding: var(--flowchat-control-pad-y) var(--flowchat-control-pad-x);
+    padding: var(--bf-appearance-token-flowchat-control-pad-y) var(--bf-appearance-token-flowchat-control-pad-x);
     border-radius: 4px;
-    font-size: var(--tool-card-action-font-size);
+    font-size: var(--bf-appearance-token-tool-card-action-font-size);
     font-weight: 500;
     cursor: pointer;
     transition: all 0.2s ease;
@@ -498,23 +498,23 @@
   }
 
   .confirm-button {
-    background: var(--color-accent-500);
-    color: var(--color-static-white);
+    background: var(--bf-appearance-token-color-accent-500);
+    color: var(--bf-appearance-token-color-static-white);
 
     &:hover:not(:disabled) {
-      background: var(--color-accent-600);
+      background: var(--bf-appearance-token-color-accent-600);
     }
   }
 
   .reject-button {
-    background: var(--element-bg-soft);
-    color: var(--color-text-primary);
-    border: 1px solid var(--border-base);
+    background: var(--bf-appearance-token-element-bg-soft);
+    color: var(--bf-appearance-token-color-text-primary);
+    border: 1px solid var(--bf-appearance-token-border-base);
 
     &:hover:not(:disabled) {
-      background: var(--element-bg-hover);
-      border-color: var(--color-error);
-      color: var(--color-error);
+      background: var(--bf-appearance-token-element-bg-hover);
+      border-color: var(--bf-appearance-token-color-error);
+      color: var(--bf-appearance-token-color-error);
     }
   }
 }
@@ -558,19 +558,20 @@
   // Keep expand/collapse press feedback subtle inside grouped subagent cards.
   .flow-tool-card-wrapper .base-tool-card-wrapper.task-tool-display:active {
     box-shadow:
-      0 1px 3px rgba(var(--color-static-black-rgb), 0.14),
-      inset 0 1px 2px rgba(var(--color-static-black-rgb), 0.18);
+      0 1px 3px rgba(var(--bf-appearance-token-color-static-black-rgb), 0.14),
+      inset 0 1px 2px rgba(var(--bf-appearance-token-color-static-black-rgb), 0.18);
   }
 
   // Expanded state: the wrapper becomes the unified visual container.
   &.task-with-subagent-wrapper--expanded {
     // The wrapper itself provides the unified card appearance.
-    background: var(--color-bg-scene);
-    border: 1px solid var(--border-base);
+    background: var(--bf-appearance-token-color-bg-scene);
+    border: 1px solid var(--bf-appearance-token-border-base);
+    backdrop-filter: blur(10px);
     overflow: hidden;
     box-shadow:
-      0 2px 6px var(--color-overlay-black-15),
-      0 1px 3px var(--color-overlay-black-12);
+      0 2px 6px var(--bf-appearance-token-color-overlay-black-15),
+      0 1px 3px var(--bf-appearance-token-color-overlay-black-12);
 
     // Strip the BaseToolCard's own border/background/shadow so it merges
     // into the wrapper; the wrapper provides the unified card chrome.
@@ -607,13 +608,20 @@
 
     &.task-with-subagent-wrapper--has-prompt .subagent-items-container,
     &.task-with-subagent-wrapper--has-prompt .subagent-projection-container--expanded {
-      border-top: 1px solid var(--border-base);
+      border-top: 1px solid var(--bf-appearance-token-border-base);
     }
 
     // Keep the subagent body aligned with the task card while preserving the
     // same internal inset on every side.
     .subagent-projection-container--expanded {
-      padding: var(--flowchat-card-expanded-pad-y) var(--flowchat-card-expanded-pad-x);
+      --task-prompt-inline-pad: calc(
+        var(--bf-appearance-token-flowchat-card-expanded-pad-x) + var(--bf-appearance-token-flowchat-card-pad-x)
+      );
+      padding:
+        8px
+        var(--task-prompt-inline-pad)
+        10px
+        var(--task-prompt-inline-pad);
     }
 
     // Hide the header top accent line — the wrapper border already frames
@@ -627,10 +635,10 @@
   // Hover over expanded card: stronger elevation.
   &.task-with-subagent-wrapper--expanded:hover {
     box-shadow:
-      0 2px 8px rgba(var(--color-static-black-rgb), 0.18),
-      0 1px 4px var(--color-overlay-black-12),
-      inset 0 1px 0 var(--color-overlay-white-04);
-    border-color: var(--border-medium);
+      0 2px 8px rgba(var(--bf-appearance-token-color-static-black-rgb), 0.18),
+      0 1px 4px var(--bf-appearance-token-color-overlay-black-12),
+      inset 0 1px 0 var(--bf-appearance-token-color-overlay-white-04);
+    border-color: var(--bf-appearance-token-border-medium);
   }
 }
 
@@ -648,19 +656,19 @@
 .task-reviewer-context {
   display: flex;
   flex-direction: column;
-  gap: var(--flowchat-inline-gap);
-  padding: var(--flowchat-inline-gap) 0;
-  font-size: var(--tool-card-action-font-size);
-  line-height: var(--flowchat-support-line-height);
-  color: var(--color-text-secondary);
+  gap: var(--bf-appearance-token-flowchat-inline-gap);
+  padding: var(--bf-appearance-token-flowchat-inline-gap) 0;
+  font-size: var(--bf-appearance-token-tool-card-action-font-size);
+  line-height: var(--bf-appearance-token-flowchat-support-line-height);
+  color: var(--bf-appearance-token-color-text-secondary);
 
   &__role {
     font-weight: 600;
-    font-size: var(--tool-card-action-font-size);
+    font-size: var(--bf-appearance-token-tool-card-action-font-size);
   }
 
   &__description {
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
   }
 
   &__responsibilities {
@@ -669,7 +677,7 @@
     list-style: disc;
 
     li {
-      color: var(--color-text-secondary);
+      color: var(--bf-appearance-token-color-text-secondary);
     }
   }
 }

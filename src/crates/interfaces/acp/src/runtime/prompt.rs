@@ -106,6 +106,7 @@ fn dialog_turn_request(session: &AcpSessionState, prompt: ParsedPrompt) -> Agent
         message: prompt.user_message,
         original_message: prompt.original_user_message,
         turn_id: None,
+        execution: Default::default(),
         agent_type: session.mode_id.clone(),
         workspace_path: Some(session.cwd.clone()),
         remote_connection_id: None,
@@ -139,6 +140,7 @@ pub(super) fn turn_cancellation_request(
         requester_session_id: None,
         reason: Some(reason.to_string()),
         wait_timeout_ms: Some(5_000),
+        cancel_descendants: true,
     }
 }
 

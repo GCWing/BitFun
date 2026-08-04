@@ -2,6 +2,6 @@
 
 pub use bitfun_agent_runtime::session::{
     sanitize_persisted_session_state, CompressionState, PersistedSessionStateFile, Session,
-    SessionConfig, SessionContinuationPolicy, SessionKind, SessionModelBindingPolicy,
-    SessionSummary,
+    SessionAgentRouteOwner, SessionConfig, SessionContinuationPolicy, SessionKind,
+    SessionModelBindingPolicy, SessionSummary,
 };

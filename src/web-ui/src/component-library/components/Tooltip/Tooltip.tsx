@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback, useId } from 'react';
 import { createPortal } from 'react-dom';
+import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import './Tooltip.scss';
 
 export type TooltipPlacement = 'top' | 'bottom' | 'left' | 'right';
@@ -436,10 +437,18 @@ export const Tooltip: React.FC<TooltipProps> = ({
             left: `${layout.left}px`,
             zIndex: 9999,
           }}
+          data-bf-component="tooltip"
+          data-bf-part="root"
+          data-bf-placement={layout.placement}
+          data-bf-interactive={String(interactive)}
+          data-bf-state={visible && layout.ready ? 'visible' : undefined}
         >
-          <div className="bitfun-tooltip__content">{content}</div>
+          <div className="bitfun-tooltip__arrow" data-bf-component="tooltip" data-bf-part="arrow" aria-hidden="true" />
+          <div className="bitfun-tooltip__content" data-bf-component="tooltip" data-bf-part="content">
+            <div className="bitfun-tooltip__body" data-bf-component="tooltip" data-bf-part="body">{content}</div>
+          </div>
         </div>,
-        document.body
+        getAppearanceOverlayHost()
       )}
     </>
   );

@@ -185,18 +185,18 @@ export const MissionControl: React.FC<MissionControlProps> = ({
   }
 
   return (
-    <div
+    <div data-bf-component="mission-control" data-bf-part="root" data-bf-state="open"
       ref={rootRef}
       className="canvas-mission-control"
       data-shortcut-scope="canvas"
       tabIndex={-1}
       onClick={handleBackdropClick}
     >
-      <div className="canvas-mission-control__content">
+      <div className="canvas-mission-control__content" data-bf-component="mission-control" data-bf-part="content">
         {/* Header */}
-        <div className="canvas-mission-control__header">
+        <div data-bf-component="mission-control" data-bf-part="header" className="canvas-mission-control__header">
           <h2 className="canvas-mission-control__title">{t('tabs.missionControl')}</h2>
-          <div className="canvas-mission-control__header-actions">
+          <div data-bf-component="mission-control" data-bf-part="headerActions" className="canvas-mission-control__header-actions">
             {hasMultipleGroups && (
               <button
                 className="canvas-mission-control__merge-btn"
@@ -217,9 +217,9 @@ export const MissionControl: React.FC<MissionControlProps> = ({
         </div>
 
         {/* Search and filter area */}
-        <div className="canvas-mission-control__filters">
+        <div data-bf-component="mission-control" data-bf-part="filters" className="canvas-mission-control__filters">
           <div className="canvas-mission-control__filters-row">
-            <div className="canvas-mission-control__search-wrapper">
+            <div data-bf-component="mission-control" data-bf-part="search" className="canvas-mission-control__search-wrapper">
               <SearchFilter
                 value={searchQuery}
                 onChange={setSearchQuery}
@@ -230,7 +230,7 @@ export const MissionControl: React.FC<MissionControlProps> = ({
             
             {/* Group filters - compact icon buttons */}
             {hasMultipleGroups && (
-              <div className="canvas-mission-control__group-filters">
+              <div data-bf-component="mission-control" data-bf-part="groupFilters" className="canvas-mission-control__group-filters">
                 {[
                   { id: 'primary' as EditorGroupId, labelKey: 'canvas.groupPrimaryFull', shortLabelKey: 'canvas.groupPrimary' },
                   { id: 'secondary' as EditorGroupId, labelKey: 'canvas.groupSecondaryFull', shortLabelKey: 'canvas.groupSecondary' },
@@ -240,7 +240,7 @@ export const MissionControl: React.FC<MissionControlProps> = ({
                   if (!hasTabs) return null;
                   
                   return (
-                    <button
+                    <button data-bf-component="mission-control" data-bf-part="filter" data-bf-group={id} data-bf-state={selectedGroups.has(id) ? 'active' : ''}
                       key={id}
                       className={`canvas-mission-control__group-filter canvas-mission-control__group-filter--${id} ${selectedGroups.has(id) ? 'is-active' : ''}`}
                       onClick={() => toggleGroupFilter(id)}
@@ -257,7 +257,7 @@ export const MissionControl: React.FC<MissionControlProps> = ({
         </div>
 
         {/* Thumbnail grid - unified display */}
-        <div className="canvas-mission-control__grid">
+        <div data-bf-component="mission-control" data-bf-part="grid" className="canvas-mission-control__grid">
           {filteredTabs.length > 0 ? (
             filteredTabs.map(({ tab, groupId }) => (
               <ThumbnailCard
@@ -273,7 +273,7 @@ export const MissionControl: React.FC<MissionControlProps> = ({
               />
             ))
           ) : (
-            <div className="canvas-mission-control__empty">
+            <div data-bf-component="mission-control" data-bf-part="empty" className="canvas-mission-control__empty">
               {searchQuery || selectedGroups.size < 3 ? (
                 <span>{t('canvas.noMatchingFiles')}</span>
               ) : (
@@ -284,9 +284,9 @@ export const MissionControl: React.FC<MissionControlProps> = ({
         </div>
 
         {/* Footer hint */}
-        <div className="canvas-mission-control__footer">
+        <div data-bf-component="mission-control" data-bf-part="footer" className="canvas-mission-control__footer">
           <span>{t('canvas.clickToSwitch')}</span>
-          <div className="canvas-mission-control__separator" />
+          <div data-bf-component="mission-control" data-bf-part="separator" className="canvas-mission-control__separator" />
           <span><kbd>Esc</kbd> {t('canvas.exit')}</span>
         </div>
       </div>

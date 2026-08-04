@@ -160,26 +160,31 @@ impl ConfigProvider for AIConfigProvider {
     }
 }
 
-/// Theme system configuration provider (new, supports theme management).
-pub struct ThemesConfigProvider;
+/// Web UI appearance selection provider.
+pub struct AppearanceConfigProvider;
 
 #[async_trait]
-impl ConfigProvider for ThemesConfigProvider {
+impl ConfigProvider for AppearanceConfigProvider {
     fn name(&self) -> &str {
-        "themes"
+        "appearance"
     }
 
     fn get_default_config(&self) -> serde_json::Value {
-        serialize_default_config("themes", ThemesConfig::default())
+        serialize_default_config("appearance", AppearanceConfig::default())
     }
 
     async fn validate_config(&self, config: &serde_json::Value) -> BitFunResult<Vec<String>> {
         let warnings = Vec::new();
 
-        if let Ok(_themes_config) = serde_json::from_value::<ThemesConfig>(config.clone()) {
+        if let Ok(appearance_config) = serde_json::from_value::<AppearanceConfig>(config.clone()) {
+            if appearance_config.selection.trim().is_empty() {
+                return Err(BitFunError::validation(
+                    "Appearance selection must not be empty".to_string(),
+                ));
+            }
         } else {
             return Err(BitFunError::validation(
-                "Invalid themes config format".to_string(),
+                "Invalid appearance config format".to_string(),
             ));
         }
 
@@ -191,10 +196,12 @@ impl ConfigProvider for ThemesConfigProvider {
         _old_config: &serde_json::Value,
         new_config: &serde_json::Value,
     ) -> BitFunResult<()> {
-        if let Ok(themes_config) = serde_json::from_value::<ThemesConfig>(new_config.clone()) {
+        if let Ok(appearance_config) =
+            serde_json::from_value::<AppearanceConfig>(new_config.clone())
+        {
             info!(
-                "Themes config changed: current theme = {}",
-                themes_config.current
+                "Appearance config changed: selection = {}",
+                appearance_config.selection
             );
         }
         Ok(())
@@ -253,8 +260,8 @@ impl ConfigProvider for EditorConfigProvider {
     ) -> BitFunResult<()> {
         if let Ok(editor_config) = serde_json::from_value::<EditorConfig>(new_config.clone()) {
             info!(
-                "Editor config changed: font_size={}, theme={}",
-                editor_config.font_size, editor_config.theme
+                "Editor config changed: font_size={}",
+                editor_config.font_size
             );
         }
         Ok(())
@@ -471,7 +478,7 @@ impl ConfigProviderRegistry {
         };
 
         registry.register(Box::new(AIConfigProvider));
-        registry.register(Box::new(ThemesConfigProvider));
+        registry.register(Box::new(AppearanceConfigProvider));
         registry.register(Box::new(EditorConfigProvider));
         registry.register(Box::new(TerminalConfigProvider));
         registry.register(Box::new(WorkspaceConfigProvider));
@@ -565,7 +572,7 @@ impl ConfigProviderRegistry {
     ) -> BitFunResult<serde_json::Value> {
         match section {
             "app" => Ok(serde_json::to_value(&config.app)?),
-            "themes" => Ok(serde_json::to_value(&config.themes)?),
+            "appearance" => Ok(serde_json::to_value(&config.appearance)?),
             "editor" => Ok(serde_json::to_value(&config.editor)?),
             "terminal" => Ok(serde_json::to_value(&config.terminal)?),
             "workspace" => Ok(serde_json::to_value(&config.workspace)?),

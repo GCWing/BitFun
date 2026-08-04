@@ -11,10 +11,10 @@
     gap: 12px;
     margin-bottom: 16px;
     padding: 14px;
-    background: var(--color-error-bg);
-    border: 1px solid var(--color-error-border);
+    background: var(--bf-appearance-token-color-error-bg);
+    border: 1px solid var(--bf-appearance-token-color-error-border);
     border-radius: 8px;
-    color: var(--color-error);
+    color: var(--bf-appearance-token-color-error);
 
     svg {
       flex-shrink: 0;
@@ -28,7 +28,7 @@
 
   &__message {
     font-size: 14px;
-    color: var(--color-text-secondary);
+    color: var(--bf-appearance-token-color-text-secondary);
     margin: 0 0 20px 0;
     line-height: 1.5;
   }

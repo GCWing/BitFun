@@ -71,9 +71,8 @@ pub struct GlobalConfig {
     /// ACP client configuration (stored as `{ "acpClients": { ... } }`).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub acp_clients: Option<serde_json::Value>,
-    /// Theme system configuration.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub themes: Option<ThemesConfig>,
+    /// Web UI appearance selection. The full package contract is owned by the frontend.
+    pub appearance: AppearanceConfig,
     /// Web UI font size preferences (`get_config` / `set_config` path `font`).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub font: Option<FontPreferenceSnapshot>,
@@ -424,23 +423,18 @@ pub struct NotificationConfig {
     pub enable_startup_tips: bool,
 }
 
-/// Theme system configuration. The full GUI theme contract is owned by TS/web-ui;
-/// Rust stores only the selected theme id and opaque custom-theme payloads.
+/// Web UI appearance configuration. Rust stores only the selected package id.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
-pub struct ThemesConfig {
-    /// Currently active theme ID.
-    pub current: String,
-    /// User-defined themes (stored as JSON).
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub custom: Option<serde_json::Value>,
+pub struct AppearanceConfig {
+    /// Selected appearance package ID or `system`.
+    pub selection: String,
 }
 
-impl Default for ThemesConfig {
+impl Default for AppearanceConfig {
     fn default() -> Self {
         Self {
-            current: "bitfun-light".to_string(),
-            custom: None,
+            selection: "system".to_string(),
         }
     }
 }
@@ -457,7 +451,6 @@ pub struct EditorConfig {
     pub word_wrap: String,
     pub line_numbers: String,
     pub minimap: MinimapConfig,
-    pub theme: String,
     pub auto_save: String,
     pub auto_save_delay: u32,
     pub format_on_save: bool,
@@ -486,34 +479,6 @@ pub struct TerminalConfig {
     pub cursor_blink: bool,
     pub cursor_style: String,
     pub scrollback: u32,
-    /// Terminal ANSI palette/defaults. This keeps the historical
-    /// `terminal.theme` config key but is not the GUI theme contract.
-    pub theme: TerminalThemeConfig,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(default)]
-pub struct TerminalThemeConfig {
-    pub background: String,
-    pub foreground: String,
-    pub cursor: String,
-    pub selection: String,
-    pub black: String,
-    pub red: String,
-    pub green: String,
-    pub yellow: String,
-    pub blue: String,
-    pub magenta: String,
-    pub cyan: String,
-    pub white: String,
-    pub bright_black: String,
-    pub bright_red: String,
-    pub bright_green: String,
-    pub bright_yellow: String,
-    pub bright_blue: String,
-    pub bright_magenta: String,
-    pub bright_cyan: String,
-    pub bright_white: String,
 }
 
 /// Workspace configuration.
@@ -604,7 +569,9 @@ pub struct DefaultModelsConfig {
 #[serde(tag = "kind", rename_all = "snake_case")]
 #[derive(Default)]
 pub enum SubagentModelSelection {
-    Fixed { model_id: String },
+    Fixed {
+        model_id: String,
+    },
     #[default]
     Inherit,
 }
@@ -623,7 +590,6 @@ impl SubagentModelSelection {
         }
     }
 }
-
 
 /// Model defaults for subagents created through user-visible delegation.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -996,6 +962,7 @@ pub struct SkillSettingsConfig {
 
 /// API view of a mode configuration.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS), ts(export))]
 #[serde(default)]
 pub struct AgentProfileView {
     pub profile_id: String,
@@ -1673,7 +1640,7 @@ impl Default for GlobalConfig {
             tool_permissions: ToolPermissionConfig::default(),
             mcp_servers: None,
             acp_clients: None,
-            themes: Some(ThemesConfig::default()),
+            appearance: AppearanceConfig::default(),
             font: None,
             version: "1.0.0".to_string(),
             last_modified: chrono::Utc::now(),
@@ -1772,7 +1739,6 @@ impl Default for EditorConfig {
                 side: "right".to_string(),
                 size: "proportional".to_string(),
             },
-            theme: "vs".to_string(),
             auto_save: "afterDelay".to_string(),
             auto_save_delay: 1000,
             format_on_save: true,
@@ -1792,34 +1758,6 @@ impl Default for TerminalConfig {
             cursor_blink: true,
             cursor_style: "block".to_string(),
             scrollback: 1000,
-            theme: TerminalThemeConfig::default(),
-        }
-    }
-}
-
-impl Default for TerminalThemeConfig {
-    fn default() -> Self {
-        Self {
-            background: "#1e1e1e".to_string(),
-            foreground: "#d4d4d4".to_string(),
-            cursor: "#d4d4d4".to_string(),
-            selection: "#264f78".to_string(),
-            black: "#000000".to_string(),
-            red: "#cd3131".to_string(),
-            green: "#0dbc79".to_string(),
-            yellow: "#e5e510".to_string(),
-            blue: "#2472c8".to_string(),
-            magenta: "#bc3fbc".to_string(),
-            cyan: "#11a8cd".to_string(),
-            white: "#e5e5e5".to_string(),
-            bright_black: "#666666".to_string(),
-            bright_red: "#f14c4c".to_string(),
-            bright_green: "#23d18b".to_string(),
-            bright_yellow: "#f5f543".to_string(),
-            bright_blue: "#3b8eea".to_string(),
-            bright_magenta: "#d670d6".to_string(),
-            bright_cyan: "#29b8db".to_string(),
-            bright_white: "#e5e5e5".to_string(),
         }
     }
 }
@@ -2325,7 +2263,7 @@ mod tests {
     }
 
     #[test]
-    fn global_config_serialization_omits_legacy_theme_section() {
+    fn global_config_serialization_uses_appearance_selection() {
         let serialized =
             serde_json::to_value(GlobalConfig::default()).expect("config should serialize");
 
@@ -2333,10 +2271,8 @@ mod tests {
             serialized.get("theme").is_none(),
             "Rust config must not export the removed GUI theme schema"
         );
-        assert_eq!(
-            serialized["themes"]["current"], "bitfun-light",
-            "theme selection remains in the TS-owned themes contract"
-        );
+        assert!(serialized.get("themes").is_none());
+        assert_eq!(serialized["appearance"]["selection"], "system");
     }
 
     #[test]

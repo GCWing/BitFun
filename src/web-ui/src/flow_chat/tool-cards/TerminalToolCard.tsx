@@ -27,7 +27,7 @@ import { useToolCardCompletionGracePeriod } from './useToolCardCompletionGracePe
 import { getTerminalViewState, type TerminalViewState } from './terminalToolCardState';
 import { ToolTimeoutIndicator } from './ToolTimeoutIndicator';
 import { ToolCardCopyAction, ToolCardHeaderActions } from './ToolCardHeaderActions';
-import { ToolCommandPreview } from './ToolCommandPreview';
+import { CopyableTextPreview } from '../components/CopyableTextPreview';
 import { formatSessionViewPreviewText } from '../utils/sessionViewPreview';
 import './TerminalToolCard.scss';
 
@@ -117,7 +117,7 @@ function renderTerminalExpandedContent(params: {
   return (
     <>
       {viewState.displayPhase === 'live_output' && (
-        <div className="terminal-execution-output" data-testid="chat-shell-command-output">
+        <div className="terminal-execution-output" data-testid="chat-shell-command-output" data-bf-component="terminal-tool-card" data-bf-part="output">
           <LazyTerminalOutputRenderer
             content={liveOutput}
             className="terminal-xterm-output"
@@ -127,15 +127,15 @@ function renderTerminalExpandedContent(params: {
       )}
 
       {(viewState.displayPhase === 'receiving_params' || viewState.displayPhase === 'executing') && waitingMessage && (
-        <div className="terminal-execution-output terminal-waiting" data-testid="chat-shell-command-output">
+        <div className="terminal-execution-output terminal-waiting" data-testid="chat-shell-command-output" data-bf-component="terminal-tool-card" data-bf-part="waiting">
           <span className="waiting-text">{waitingMessage}</span>
         </div>
       )}
 
       {viewState.showCompletedResult && (
-        <div className="terminal-result-container">
+        <div className="terminal-result-container" data-bf-component="terminal-tool-card" data-bf-part="result">
           {parsedResult.output && (
-            <div className="terminal-result-output" data-testid="chat-shell-command-output">
+            <div className="terminal-result-output" data-testid="chat-shell-command-output" data-bf-component="terminal-tool-card" data-bf-part="output">
               <LazyTerminalOutputRenderer
                 content={parsedResult.output}
                 className="terminal-xterm-output"
@@ -143,7 +143,7 @@ function renderTerminalExpandedContent(params: {
               />
             </div>
           )}
-          <div className="terminal-result-footer">
+          <div className="terminal-result-footer" data-bf-component="terminal-tool-card" data-bf-part="footer">
             {parsedResult.workingDir && (
               <>
                 <span className="terminal-result-label">{t('toolCards.terminal.workingDirectory')}</span>
@@ -168,15 +168,15 @@ function renderTerminalExpandedContent(params: {
       )}
 
       {viewState.showCancelledResult && (
-        <div className="terminal-result-container cancelled">
-          <div className="terminal-result-output" data-testid="chat-shell-command-output">
+        <div className="terminal-result-container cancelled" data-bf-component="terminal-tool-card" data-bf-part="result" data-bf-state="cancelled">
+          <div className="terminal-result-output" data-testid="chat-shell-command-output" data-bf-component="terminal-tool-card" data-bf-part="output">
             <LazyTerminalOutputRenderer
               content={liveOutput}
               className="terminal-xterm-output"
               maxRows={maxRows}
             />
           </div>
-          <div className="terminal-result-footer">
+          <div className="terminal-result-footer" data-bf-component="terminal-tool-card" data-bf-part="footer">
             <span className="terminal-cancelled-text">{t('toolCards.terminal.commandInterrupted')}</span>
           </div>
         </div>
@@ -187,7 +187,7 @@ function renderTerminalExpandedContent(params: {
 
 function renderTerminalErrorContent(errorMessage: string): React.ReactNode {
   return (
-    <div className="error-content">
+    <div data-bf-component="terminal-tool-card" data-bf-part="error" data-bf-state="error" className="error-content">
       <div className="error-message">{errorMessage}</div>
     </div>
   );
@@ -524,14 +524,14 @@ export const TerminalToolCard: React.FC<TerminalToolCardProps> = ({
     }
 
     return (
-      <span className={`terminal-status-text ${viewState.statusClassName}`}>
+      <span data-bf-component="terminal-tool-card" data-bf-part="status" className={`terminal-status-text ${viewState.statusClassName}`}>
         {t(`toolCards.terminal.${viewState.statusLabel}`)}
       </span>
     );
   };
 
   const renderHeaderExtra = (includeInterrupt: boolean) => (
-    <span className="terminal-header-extra">
+    <span className="terminal-header-extra" data-bf-component="terminal-tool-card" data-bf-part="actions">
       {/* Always visible while running: interrupt */}
       {includeInterrupt && viewState.showInterruptButton && (
         <span className="terminal-critical-actions">
@@ -566,14 +566,14 @@ export const TerminalToolCard: React.FC<TerminalToolCardProps> = ({
     const emptyText = t(showConfirmButtons ? 'toolCards.terminal.commandEmpty' : 'toolCards.terminal.noCommand');
 
     return (
-      <ToolCommandPreview
+      <CopyableTextPreview
         ref={commandRef}
         as={variant === 'compact' ? 'span' : 'code'}
-        command={commandText}
+        text={commandText}
         emptyText={emptyText}
         className={
           variant === 'compact'
-            ? 'terminal-command-compact tool-command-preview--compact'
+            ? 'terminal-command-compact copyable-text-preview--compact'
             : 'terminal-command'
         }
         tooltipContent={commandText && isCommandTruncated ? commandText : undefined}
@@ -612,7 +612,9 @@ export const TerminalToolCard: React.FC<TerminalToolCardProps> = ({
     : null;
 
   return (
-    <div
+    <div data-bf-component="terminal-tool-card" data-bf-part="root"
+      data-bf-status={status}
+      data-bf-state={[isExpanded && 'expanded', viewState.isFailed && 'error'].filter(Boolean).join(' ') || undefined}
       ref={cardRootRef}
       data-testid="chat-shell-command-card"
       data-tool-card-id={toolId ?? ''}

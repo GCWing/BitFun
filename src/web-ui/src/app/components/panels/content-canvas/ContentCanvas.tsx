@@ -153,9 +153,9 @@ export const ContentCanvas: React.FC<ContentCanvasProps> = ({
     }
 
     return (
-      <div className="canvas-content-canvas__main">
+      <div data-bf-component="content-canvas" data-bf-part="main" className="canvas-content-canvas__main">
         {/* Editor area */}
-        <div className="canvas-content-canvas__editor">
+        <div className="canvas-content-canvas__editor" data-bf-component="content-canvas" data-bf-part="editor">
           <EditorArea
             workspacePath={workspacePath}
             isSceneActive={isSceneActive}
@@ -178,7 +178,7 @@ export const ContentCanvas: React.FC<ContentCanvasProps> = ({
             onClose={handleAnchorClose}
           >
             {/* Anchor content (e.g., terminal) renders here */}
-            <div className="canvas-content-canvas__anchor-content">
+            <div className="canvas-content-canvas__anchor-content" data-bf-component="content-canvas" data-bf-part="anchorContent">
             </div>
           </AnchorZone>
         )}
@@ -187,8 +187,11 @@ export const ContentCanvas: React.FC<ContentCanvasProps> = ({
   };
 
   return (
-    <div
+    <div data-bf-component="content-canvas" data-bf-part="root"
       className={`canvas-content-canvas ${layout.isMaximized ? 'is-maximized' : ''}`}
+      data-canvas-mode={mode}
+      data-bf-mode={mode}
+      data-bf-state={layout.isMaximized ? 'maximized' : ''}
       data-shortcut-scope="canvas"
     >
       {/* Main content */}

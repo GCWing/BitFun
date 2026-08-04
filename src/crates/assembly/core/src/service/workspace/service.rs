@@ -13,16 +13,20 @@ use crate::infrastructure::{try_get_path_manager_arc, PathManager};
 use crate::service::bootstrap::{
     ensure_workspace_gitignore_ignores_bitfun, initialize_workspace_persona_files,
 };
-#[cfg(feature = "service-integrations")]
+#[cfg(feature = "git")]
 use crate::service::git::{GitError, GitWorktreeInfo};
+#[cfg(feature = "remote-workspace")]
 use crate::service::remote_ssh::workspace_state::{
-    canonicalize_local_workspace_root, get_remote_workspace_manager, init_remote_workspace_manager,
-    local_workspace_roots_equal, normalize_remote_workspace_path, remote_workspace_stable_id,
+    get_remote_workspace_manager, init_remote_workspace_manager,
 };
 use crate::service::workspace_runtime::{
     try_get_workspace_runtime_service_arc, WorkspaceRuntimeService,
 };
 use crate::util::errors::*;
+use bitfun_services_core::workspace_identity::{
+    canonicalize_local_workspace_root, local_workspace_roots_equal,
+    normalize_remote_workspace_path, remote_workspace_stable_id,
+};
 use log::{info, warn};
 
 use serde::{Deserialize, Serialize};
@@ -284,7 +288,7 @@ impl WorkspaceService {
         Ok(service)
     }
 
-    #[cfg(test)]
+    #[cfg(all(test, feature = "agent-runtime"))]
     pub(crate) async fn new_for_test_path_manager(path_manager: Arc<PathManager>) -> Self {
         path_manager
             .initialize_user_directories()
@@ -384,6 +388,12 @@ impl WorkspaceService {
         options: WorkspaceCreateOptions,
     ) -> BitFunResult<WorkspaceInfo> {
         let options = self.normalize_workspace_options_for_path(&path, options);
+        #[cfg(not(feature = "remote-workspace"))]
+        if options.workspace_kind == WorkspaceKind::Remote {
+            return Err(BitFunError::service(
+                "Remote workspace support is not compiled into this product profile",
+            ));
+        }
         let worktree =
             WorkspaceInfo::resolve_worktree_info(&path, WorktreeTopologyFreshness::Cached).await;
         let result = {
@@ -402,6 +412,7 @@ impl WorkspaceService {
                 .await;
             self.ensure_workspace_runtime_best_effort(workspace, "opened")
                 .await;
+            #[cfg(feature = "remote-workspace")]
             if workspace.workspace_kind == WorkspaceKind::Remote {
                 self.register_remote_workspace_runtime(workspace).await;
             }
@@ -528,6 +539,7 @@ impl WorkspaceService {
         Ok(opened)
     }
 
+    #[cfg(feature = "remote-workspace")]
     async fn register_remote_workspace_runtime(&self, workspace: &WorkspaceInfo) {
         let Some(connection_id) = workspace.remote_ssh_connection_id() else {
             warn!(
@@ -617,7 +629,7 @@ impl WorkspaceService {
         result
     }
 
-    #[cfg(feature = "service-integrations")]
+    #[cfg(feature = "git")]
     pub async fn list_worktrees(
         &self,
         path: &Path,
@@ -628,7 +640,18 @@ impl WorkspaceService {
             .await
     }
 
-    #[cfg(feature = "service-integrations")]
+    #[cfg(feature = "git")]
+    pub async fn is_live_worktree_root_in_same_repository(
+        &self,
+        registered_path: &Path,
+        candidate: &Path,
+    ) -> Result<bool, GitError> {
+        super::worktree_topology::global_worktree_topology_service()
+            .is_live_worktree_root_in_same_repository(registered_path, candidate)
+            .await
+    }
+
+    #[cfg(feature = "git")]
     pub async fn invalidate_worktree_topology(&self, path: &Path) {
         super::worktree_topology::global_worktree_topology_service()
             .invalidate(path)
@@ -883,7 +906,6 @@ impl WorkspaceService {
         connection_id: &str,
         remote_workspace_path: &str,
     ) -> Option<String> {
-        use crate::service::remote_ssh::normalize_remote_workspace_path;
         let cid = connection_id.trim();
         if cid.is_empty() {
             return None;
@@ -1266,6 +1288,7 @@ impl WorkspaceService {
         let mut seen_paths = HashSet::new();
 
         match workspace.workspace_kind {
+            #[cfg(feature = "remote-workspace")]
             WorkspaceKind::Remote => {
                 let connection_id = workspace
                     .remote_ssh_connection_id()
@@ -1336,6 +1359,12 @@ impl WorkspaceService {
 
                     normalized.push(RelatedPath { path, description });
                 }
+            }
+            #[cfg(not(feature = "remote-workspace"))]
+            WorkspaceKind::Remote => {
+                return Err(BitFunError::service(
+                    "Remote workspace related paths require the remote-workspace feature",
+                ));
             }
             _ => {
                 for related_path in related_paths {
@@ -2366,7 +2395,7 @@ pub fn get_global_workspace_service() -> Option<Arc<WorkspaceService>> {
     GLOBAL_WORKSPACE_SERVICE.get().cloned()
 }
 
-#[cfg(all(test, feature = "product-full"))]
+#[cfg(all(test, feature = "agent-runtime"))]
 mod tests {
     use super::*;
     use crate::agentic::persistence::PersistenceManager;

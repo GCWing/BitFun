@@ -40,10 +40,20 @@ fn discovery_replacement_never_exposes_partial_json() {
     let reader = std::thread::spawn(move || {
         let reader_store = DiscoveryStore::new(&reader_root, reader_identity);
         while reader_running.load(Ordering::Acquire) {
-            assert!(reader_store
-                .read()
-                .expect("discovery remains valid")
-                .is_some());
+            let observation = reader_store.read();
+            #[cfg(windows)]
+            match &observation {
+                // ReplaceFileW keeps the target contents atomic but may make
+                // the path briefly unavailable while a replacement commits.
+                Ok(None) => continue,
+                Err(crate::RuntimeIpcDiscoveryError::ReadDiscovery { source, .. })
+                    if matches!(source.raw_os_error(), Some(32 | 33)) =>
+                {
+                    continue;
+                }
+                _ => {}
+            }
+            assert!(observation.expect("discovery remains valid").is_some());
         }
     });
 

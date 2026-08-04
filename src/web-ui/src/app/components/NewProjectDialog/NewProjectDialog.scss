@@ -34,7 +34,7 @@
     animation: new-project-icon-enter 0.4s ease-out;
 
     svg {
-      color: var(--color-accent-500);
+      color: var(--bf-appearance-token-color-accent-500);
     }
   }
 
@@ -52,7 +52,7 @@
   &__title {
     font-size: 18px;
     font-weight: 600;
-    color: var(--color-text-primary);
+    color: var(--bf-appearance-token-color-text-primary);
     margin: 0 0 6px 0;
     position: relative;
     z-index: 1;
@@ -60,7 +60,7 @@
 
   &__subtitle {
     font-size: 12px;
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
     margin: 0;
     position: relative;
     z-index: 1;
@@ -104,13 +104,13 @@
     gap: 6px;
     font-size: 12px;
     font-weight: 500;
-    color: var(--color-text-secondary);
+    color: var(--bf-appearance-token-color-text-secondary);
     margin: 0;
     
     svg {
       width: 14px;
       height: 14px;
-      color: var(--color-text-muted);
+      color: var(--bf-appearance-token-color-text-muted);
     }
   }
 
@@ -132,19 +132,19 @@
       user-select: none;
       font-size: 12px;
       padding: 10px 12px;
-      background: var(--color-overlay-white-04);
-      border: 1px dashed var(--border-subtle);
+      background: var(--bf-appearance-token-color-overlay-white-04);
+      border: 1px dashed var(--bf-appearance-token-border-subtle);
       border-radius: 8px;
-      color: var(--color-text-primary);
+      color: var(--bf-appearance-token-color-text-primary);
       
       &::placeholder {
-        color: var(--color-text-muted);
+        color: var(--bf-appearance-token-color-text-muted);
         font-size: 12px;
       }
       
       &:focus {
         border-style: solid;
-        border-color: var(--border-base);
+        border-color: var(--bf-appearance-token-border-base);
         outline: none;
       }
     }
@@ -160,9 +160,9 @@
     white-space: nowrap;
     flex-shrink: 0;
     background: transparent;
-    border: 1px dashed var(--border-subtle);
+    border: 1px dashed var(--bf-appearance-token-border-subtle);
     border-radius: 8px;
-    color: var(--color-text-secondary);
+    color: var(--bf-appearance-token-color-text-secondary);
     font-size: 12px;
     font-weight: 500;
     cursor: pointer;
@@ -176,18 +176,18 @@
     svg {
       width: 14px;
       height: 14px;
-      color: var(--color-text-muted);
+      color: var(--bf-appearance-token-color-text-muted);
       transition: color 0.2s ease;
     }
     
     &:hover {
-      background: var(--element-bg-subtle);
+      background: var(--bf-appearance-token-element-bg-subtle);
       border-style: solid;
-      border-color: var(--border-base);
-      color: var(--color-text-primary);
+      border-color: var(--bf-appearance-token-border-base);
+      color: var(--bf-appearance-token-color-text-primary);
       
       svg {
-        color: var(--color-accent-500);
+        color: var(--bf-appearance-token-color-accent-500);
       }
     }
     
@@ -203,24 +203,20 @@
       width: 100%;
       font-size: 12px;
       padding: 10px 12px;
-      background: var(--color-overlay-white-04);
-      border: 1px solid var(--border-subtle);
+      background: var(--bf-appearance-token-color-overlay-white-04);
+      border: 1px solid var(--bf-appearance-token-border-subtle);
       border-radius: 8px;
-      color: var(--color-text-primary);
-      transition:
-        transform 150ms cubic-bezier(0.23, 1, 0.32, 1),
-        background-color 150ms ease,
-        border-color 150ms ease,
-        color 150ms ease;
+      color: var(--bf-appearance-token-color-text-primary);
+      transition: all 0.2s ease;
       
       &::placeholder {
-        color: var(--color-text-muted);
+        color: var(--bf-appearance-token-color-text-muted);
         font-size: 12px;
       }
       
       &:focus {
-        border-color: color-mix(in srgb, var(--color-accent-500) 45%, transparent);
-        box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent-500) 10%, transparent);
+        border-color: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 45%, transparent);
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 10%, transparent);
         outline: none;
       }
       
@@ -238,8 +234,8 @@
     align-items: center;
     gap: 8px;
     padding: 10px 12px;
-    background: color-mix(in srgb, var(--color-accent-500) 8%, transparent);
-    border: 1px solid color-mix(in srgb, var(--color-accent-500) 16%, transparent);
+    background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 8%, transparent);
+    border: 1px solid color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 16%, transparent);
     border-radius: 8px;
     animation: new-project-preview-enter 0.3s ease-out;
   }
@@ -264,7 +260,7 @@
     svg {
       width: 14px;
       height: 14px;
-      color: var(--color-accent-500);
+      color: var(--bf-appearance-token-color-accent-500);
     }
   }
 
@@ -278,7 +274,7 @@
 
   &__preview-label {
     font-size: 10px;
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
     text-transform: uppercase;
     letter-spacing: 0.5px;
   }
@@ -286,7 +282,7 @@
   &__preview-path {
     font-size: 11px;
     font-family: 'Consolas', 'Monaco', monospace;
-    color: var(--color-text-secondary);
+    color: var(--bf-appearance-token-color-text-secondary);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -299,8 +295,8 @@
     align-items: center;
     gap: 8px;
     padding: 10px 12px;
-    background: var(--glass-red-base);
-    border: 1px solid color-mix(in srgb, var(--color-error) 20%, transparent);
+    background: var(--bf-appearance-token-glass-red-base);
+    border: 1px solid color-mix(in srgb, var(--bf-appearance-token-color-error) 20%, transparent);
     border-radius: 8px;
     animation: new-project-error-shake 0.4s ease-out;
     
@@ -308,12 +304,12 @@
       flex-shrink: 0;
       width: 14px;
       height: 14px;
-      color: var(--color-error);
+      color: var(--bf-appearance-token-color-error);
     }
     
     span {
       font-size: 12px;
-      color: var(--color-error);
+      color: var(--bf-appearance-token-color-error);
     }
   }
 
@@ -332,7 +328,7 @@
     justify-content: flex-end;
     gap: 8px;
     padding: 8px 16px;
-    border-top: 1px solid var(--border-subtle);
+    border-top: 1px solid var(--bf-appearance-token-border-subtle);
     background: transparent;
 
     .btn.btn-sm {
@@ -365,23 +361,23 @@
     
     &--cancel {
       background: transparent;
-      border: 1px solid var(--border-subtle);
-      color: var(--color-text-secondary);
+      border: 1px solid var(--bf-appearance-token-border-subtle);
+      color: var(--bf-appearance-token-color-text-secondary);
       
       &:hover:not(:disabled) {
-        background: var(--element-bg-subtle);
-        border-color: var(--border-base);
-        color: var(--color-text-primary);
+        background: var(--bf-appearance-token-element-bg-subtle);
+        border-color: var(--bf-appearance-token-border-base);
+        color: var(--bf-appearance-token-color-text-primary);
       }
     }
     
     &--confirm {
       @include btn-primary.btn-primary-surface-default;
-      border: 1px solid color-mix(in srgb, var(--color-accent-500) 32%, transparent);
+      border: 1px solid color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 32%, transparent);
 
       &:hover:not(:disabled) {
         @include btn-primary.btn-primary-surface-hover;
-        border-color: color-mix(in srgb, var(--color-accent-500) 42%, transparent);
+        border-color: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 42%, transparent);
       }
 
       &:active:not(:disabled) {
@@ -407,8 +403,8 @@
   &__btn-spinner {
     width: 12px;
     height: 12px;
-    border: 2px solid color-mix(in srgb, var(--color-accent-500) 28%, transparent);
-    border-top-color: var(--color-accent-500);
+    border: 2px solid color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 28%, transparent);
+    border-top-color: var(--bf-appearance-token-color-accent-500);
     border-radius: 50%;
     animation: new-project-spin 0.8s linear infinite;
   }

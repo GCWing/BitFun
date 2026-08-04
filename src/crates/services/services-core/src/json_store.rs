@@ -19,6 +19,13 @@ use tokio::sync::Mutex;
 const JSON_WRITE_MAX_RETRIES: usize = 5;
 const JSON_WRITE_RETRY_BASE_DELAY_MS: u64 = 30;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AtomicWritePolicy {
+    BestEffortReplace,
+    StrictReplace,
+    CreateNew,
+}
+
 static JSON_FILE_WRITE_LOCKS: OnceLock<Mutex<HashMap<PathBuf, Weak<Mutex<()>>>>> = OnceLock::new();
 
 #[derive(Debug, thiserror::Error)]
@@ -91,6 +98,10 @@ impl JsonFileStoreError {
 
     pub fn is_serialization(&self) -> bool {
         matches!(self, Self::Serialize { .. })
+    }
+
+    pub fn is_already_exists(&self) -> bool {
+        matches!(self, Self::Replace { source } if source.kind() == ErrorKind::AlreadyExists)
     }
 }
 
@@ -193,7 +204,8 @@ impl JsonFileStore {
         path: &Path,
         value: &T,
     ) -> Result<(), JsonFileStoreError> {
-        self.write_atomic_with_policy(path, value, false).await
+        self.write_atomic_with_policy(path, value, AtomicWritePolicy::BestEffortReplace)
+            .await
     }
 
     /// Writes JSON using a same-volume atomic replacement and never deletes or
@@ -203,20 +215,21 @@ impl JsonFileStore {
         path: &Path,
         value: &T,
     ) -> Result<(), JsonFileStoreError> {
-        self.write_atomic_with_policy(path, value, true).await
+        self.write_atomic_with_policy(path, value, AtomicWritePolicy::StrictReplace)
+            .await
     }
 
     async fn write_atomic_with_policy<T: Serialize>(
         &self,
         path: &Path,
         value: &T,
-        strict: bool,
+        policy: AtomicWritePolicy,
     ) -> Result<(), JsonFileStoreError> {
         // Compact serialization: pretty output is 30-50% larger and hot files
         // (turn context snapshots) are rewritten on every message append.
         let json =
             serde_json::to_vec(value).map_err(|source| JsonFileStoreError::Serialize { source })?;
-        self.write_bytes_atomic_with_policy(path, json, strict)
+        self.write_bytes_atomic_with_policy(path, json, policy)
             .await
     }
 
@@ -229,15 +242,49 @@ impl JsonFileStore {
         path: &Path,
         text: &str,
     ) -> Result<(), JsonFileStoreError> {
-        self.write_bytes_atomic_with_policy(path, text.as_bytes().to_vec(), false)
-            .await
+        self.write_bytes_atomic_with_policy(
+            path,
+            text.as_bytes().to_vec(),
+            AtomicWritePolicy::BestEffortReplace,
+        )
+        .await
+    }
+
+    /// Atomically replace a UTF-8 text file without falling back to a direct
+    /// overwrite when another process temporarily blocks replacement.
+    pub async fn write_text_atomic_strict(
+        &self,
+        path: &Path,
+        text: &str,
+    ) -> Result<(), JsonFileStoreError> {
+        self.write_bytes_atomic_with_policy(
+            path,
+            text.as_bytes().to_vec(),
+            AtomicWritePolicy::StrictReplace,
+        )
+        .await
+    }
+
+    /// Atomically publish a new UTF-8 text file, failing without changing the
+    /// target when another process creates it first.
+    pub async fn write_text_atomic_create_new(
+        &self,
+        path: &Path,
+        text: &str,
+    ) -> Result<(), JsonFileStoreError> {
+        self.write_bytes_atomic_with_policy(
+            path,
+            text.as_bytes().to_vec(),
+            AtomicWritePolicy::CreateNew,
+        )
+        .await
     }
 
     async fn write_bytes_atomic_with_policy(
         &self,
         path: &Path,
         bytes: Vec<u8>,
-        strict: bool,
+        policy: AtomicWritePolicy,
     ) -> Result<(), JsonFileStoreError> {
         let parent = path
             .parent()
@@ -260,16 +307,23 @@ impl JsonFileStore {
                 return Err(JsonFileStoreError::WriteTemp { source });
             }
 
-            let replacement = if strict {
-                Self::replace_file_from_temp_strict(path, &tmp_path).await
-            } else {
-                Self::replace_file_from_temp(path, &tmp_path).await
+            let replacement = match policy {
+                AtomicWritePolicy::BestEffortReplace => {
+                    Self::replace_file_from_temp(path, &tmp_path).await
+                }
+                AtomicWritePolicy::StrictReplace => {
+                    Self::replace_file_from_temp_strict(path, &tmp_path).await
+                }
+                AtomicWritePolicy::CreateNew => {
+                    Self::publish_file_from_temp_new(path, &tmp_path).await
+                }
             };
             match replacement {
                 Ok(()) => return Ok(()),
                 Err(error) => {
-                    let should_retry =
-                        Self::is_retryable_write_error(&error) && attempt < JSON_WRITE_MAX_RETRIES;
+                    let should_retry = policy != AtomicWritePolicy::CreateNew
+                        && Self::is_retryable_write_error(&error)
+                        && attempt < JSON_WRITE_MAX_RETRIES;
                     last_replace_error = Some(error);
                     let _ = fs::remove_file(&tmp_path).await;
 
@@ -288,7 +342,9 @@ impl JsonFileStore {
             // non-shareable handle, making delete/rename fail with
             // PermissionDenied. Fallback to direct write to avoid losing session
             // persistence while keeping best-effort atomic behavior.
-            if !strict && error.kind() == ErrorKind::PermissionDenied {
+            if policy == AtomicWritePolicy::BestEffortReplace
+                && error.kind() == ErrorKind::PermissionDenied
+            {
                 warn!(
                     "Atomic JSON replace permission denied for {}, fallback to direct overwrite",
                     path.display()
@@ -407,6 +463,24 @@ impl JsonFileStore {
         fs::rename(tmp_path, target_path).await
     }
 
+    async fn publish_file_from_temp_new(
+        target_path: &Path,
+        tmp_path: &Path,
+    ) -> std::io::Result<()> {
+        // A same-directory hard link publishes the fully written inode in one
+        // step and fails with AlreadyExists instead of replacing a racing file.
+        fs::hard_link(tmp_path, target_path).await?;
+        if let Err(error) = fs::remove_file(tmp_path).await {
+            warn!(
+                "Published new file {} but could not remove temporary link {}: {}",
+                target_path.display(),
+                tmp_path.display(),
+                error
+            );
+        }
+        Ok(())
+    }
+
     #[cfg(windows)]
     async fn replace_file_from_temp_strict(
         target_path: &Path,
@@ -510,5 +584,45 @@ mod tests {
             .expect_err("missing replacement must fail");
 
         assert_eq!(tokio::fs::read(&target).await.unwrap(), b"old preferences");
+    }
+
+    #[tokio::test]
+    async fn strict_text_write_creates_parents_and_replaces_complete_utf8() {
+        let root = tempfile::tempdir().unwrap();
+        let target = root.path().join("exports").join("session.md");
+        let store = JsonFileStore;
+
+        store
+            .write_text_atomic_strict(&target, "first")
+            .await
+            .unwrap();
+        store
+            .write_text_atomic_strict(&target, "second 你好")
+            .await
+            .unwrap();
+
+        assert_eq!(
+            tokio::fs::read_to_string(target).await.unwrap(),
+            "second 你好"
+        );
+    }
+
+    #[tokio::test]
+    async fn create_new_text_write_never_replaces_a_racing_target() {
+        let root = tempfile::tempdir().unwrap();
+        let target = root.path().join("exports").join("session.md");
+        let store = JsonFileStore;
+
+        store
+            .write_text_atomic_create_new(&target, "first")
+            .await
+            .unwrap();
+        let error = store
+            .write_text_atomic_create_new(&target, "second")
+            .await
+            .unwrap_err();
+
+        assert!(error.is_already_exists(), "{error}");
+        assert_eq!(tokio::fs::read_to_string(target).await.unwrap(), "first");
     }
 }

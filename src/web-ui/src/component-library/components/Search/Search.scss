@@ -14,33 +14,32 @@
     gap: $size-gap-2;
     padding: $size-gap-2 $size-gap-3;
     background: transparent;
-    border: 1px solid var(--border-base);
+    border: 1px solid var(--bf-appearance-token-border-base);
     border-radius: $size-radius-sm;
     transition:
-      background-color var(--motion-fast) ease,
-      border-color var(--motion-fast) ease,
-      box-shadow var(--motion-fast) ease;
+      background-color var(--bf-appearance-token-motion-fast) ease,
+      border-color var(--bf-appearance-token-motion-fast) ease,
+      box-shadow var(--bf-appearance-token-motion-fast) ease;
     min-height: 36px;
   }
 
   &--hovered:not(.search--disabled) &__wrapper {
-    border-color: var(--border-medium);
+    border-color: var(--bf-appearance-token-border-medium);
   }
 
   &--focused:not(.search--disabled) &__wrapper {
-    border-color: var(--color-accent-500);
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent-500) 14%, transparent);
+    border-color: var(--bf-appearance-token-color-accent-500);
   }
 
   &--focused:not(.search--disabled) &__prefix {
     .search__icon {
-      color: var(--color-accent-500);
+      color: var(--bf-appearance-token-color-accent-500);
     }
   }
 
   &--expandable:not(.search--focused) &__wrapper {
     width: 200px;
-    transition: width var(--motion-fast) var(--easing-standard);
+    transition: width var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard);
   }
 
   &--expandable.search--focused &__wrapper {
@@ -52,18 +51,18 @@
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
-    color: var(--color-text-muted);
-    transition: color var(--motion-fast) ease;
+    color: var(--bf-appearance-token-color-text-muted);
+    transition: color $motion-base $easing-standard;
   }
 
   &__icon {
     display: block;
-    transition: color var(--motion-fast) ease;
+    transition: color var(--bf-appearance-token-motion-fast) ease;
   }
 
   &__loading-icon {
     display: block;
-    color: var(--color-accent-500);
+    color: var(--bf-appearance-token-color-accent-500);
     animation: search-spin 0.85s linear infinite;
     transform-origin: center;
     will-change: transform;
@@ -83,16 +82,16 @@
     outline: none !important;
     box-shadow: none !important;
     background: transparent;
-    color: var(--color-text-primary);
-    font-size: var(--font-size-sm);
+    color: var(--bf-appearance-token-color-text-primary);
+    font-size: var(--bf-appearance-token-font-size-sm);
     font-family: $font-family-sans;
     line-height: $line-height-base;
     padding: 0;
     min-width: 0;
 
     &::placeholder {
-      color: var(--color-text-muted);
-      transition: color var(--motion-fast) ease;
+      color: var(--bf-appearance-token-color-text-muted);
+      transition: color $motion-base $easing-standard;
     }
 
     &:focus {
@@ -101,7 +100,7 @@
       box-shadow: none !important;
 
       &::placeholder {
-        color: var(--color-text-disabled);
+        color: var(--bf-appearance-token-color-text-disabled);
       }
     }
 
@@ -115,7 +114,7 @@
     &:-webkit-autofill:focus,
     &:-webkit-autofill:active {
       -webkit-box-shadow: 0 0 0 30px transparent inset !important;
-      -webkit-text-fill-color: var(--color-text-primary) !important;
+      -webkit-text-fill-color: var(--bf-appearance-token-color-text-primary) !important;
       border: none !important;
       outline: none !important;
     }
@@ -132,18 +131,17 @@
     border: none;
     border-radius: 50%;
     background: transparent;
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
     cursor: pointer;
-    transform: scale(1);
-    transition:
-      color var(--motion-fast) ease,
-      background-color var(--motion-fast) ease,
-      transform var(--motion-fast) var(--easing-standard);
-    animation: search-fade-in var(--motion-fast) var(--easing-standard) forwards;
+    transition: color $motion-base $easing-standard;
+    animation: search-fade-in 0.2s ease forwards;
+
+    &:hover {
+      color: var(--bf-appearance-token-color-text-secondary);
+    }
 
     &:active {
-      color: var(--color-text-primary);
-      transform: scale(0.97);
+      color: var(--bf-appearance-token-color-text-primary);
     }
   }
 
@@ -161,21 +159,26 @@
     justify-content: center;
     flex-shrink: 0;
     padding: $size-gap-2 $size-gap-4;
-    border: 1px solid var(--color-accent-500);
+    border: 1px solid var(--bf-appearance-token-color-accent-500);
     border-radius: $size-radius-sm;
     background: transparent;
-    color: var(--color-accent-500);
-    font-size: var(--font-size-sm);
+    color: var(--bf-appearance-token-color-accent-500);
+    font-size: var(--bf-appearance-token-font-size-sm);
     font-weight: $font-weight-medium;
     font-family: $font-family-sans;
     cursor: pointer;
     transform: scale(1);
     transition:
-      background-color var(--motion-fast) ease,
-      border-color var(--motion-fast) ease,
-      color var(--motion-fast) ease,
-      transform var(--motion-fast) var(--easing-standard);
+      background-color var(--bf-appearance-token-motion-fast) ease,
+      border-color var(--bf-appearance-token-motion-fast) ease,
+      color var(--bf-appearance-token-motion-fast) ease,
+      transform var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard);
     white-space: nowrap;
+
+    &:hover:not(:disabled) {
+      background: var(--bf-appearance-token-color-accent-100);
+      color: var(--bf-appearance-token-color-accent-400);
+    }
 
     &:active:not(:disabled) {
       transform: scale(0.98);
@@ -198,22 +201,22 @@
 
   &--error {
     .search__wrapper {
-      border-color: var(--color-error);
+      border-color: var(--bf-appearance-token-color-error);
     }
 
     .search__prefix {
-      color: var(--color-error);
+      color: var(--bf-appearance-token-color-error);
     }
   }
 
   &__error-message {
     margin-top: $size-gap-2;
-    font-size: var(--font-size-xs);
-    color: var(--color-error);
+    font-size: var(--bf-appearance-token-font-size-xs);
+    color: var(--bf-appearance-token-color-error);
     display: flex;
     align-items: center;
     gap: $size-gap-1;
-    animation: search-slide-down var(--motion-fast) var(--easing-standard);
+    animation: search-slide-down var(--bf-appearance-token-motion-fast) var(--bf-appearance-token-easing-standard);
   }
 
   &--small {
@@ -224,7 +227,7 @@
     }
 
     .search__input {
-      font-size: var(--font-size-xs);
+      font-size: var(--bf-appearance-token-font-size-xs);
     }
 
     .search__icon,
@@ -245,7 +248,7 @@
 
     .search__button {
       padding: $size-gap-1 $size-gap-2;
-      font-size: var(--font-size-xs);
+      font-size: var(--bf-appearance-token-font-size-xs);
     }
   }
 
@@ -257,7 +260,7 @@
     }
 
     .search__input {
-      font-size: var(--font-size-base);
+      font-size: var(--bf-appearance-token-font-size-base);
     }
 
     .search__icon,
@@ -278,7 +281,7 @@
 
     .search__button {
       padding: $size-gap-2 $size-gap-5;
-      font-size: var(--font-size-base);
+      font-size: var(--bf-appearance-token-font-size-base);
     }
   }
 
@@ -318,13 +321,13 @@
 
 @media (hover: hover) and (pointer: fine) {
   .search__clear:hover {
-    color: var(--color-text-primary);
-    background: var(--element-bg-subtle);
+    color: var(--bf-appearance-token-color-text-primary);
+    background: var(--bf-appearance-token-element-bg-subtle);
   }
 
   .search__button:hover:not(:disabled) {
-    background: var(--color-accent-100);
-    color: var(--color-accent-400);
+    background: var(--bf-appearance-token-color-accent-100);
+    color: var(--bf-appearance-token-color-accent-400);
   }
 }
 
@@ -333,9 +336,9 @@
   .search__clear,
   .search__button {
     transition:
-      background-color var(--motion-fast) ease,
-      border-color var(--motion-fast) ease,
-      color var(--motion-fast) ease;
+      background-color var(--bf-appearance-token-motion-fast) ease,
+      border-color var(--bf-appearance-token-motion-fast) ease,
+      color var(--bf-appearance-token-motion-fast) ease;
   }
 
   .search__clear,

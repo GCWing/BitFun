@@ -26,32 +26,64 @@ const TRANSLATIONS: Record<string, string> = {
   'permission.actions.other': 'Other action',
 };
 
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({
-    t: (key: string, values?: Record<string, string>) => {
-      if (key === 'permission.subagentOwner') {
-        return `${values?.subagent} subagent`;
-      }
-      if (key === 'permission.allowAlwaysTooltip') {
-        return `Always allow saves matching access for ${values?.projectPath}`;
-      }
-      if (key === 'permission.risks.pageSave') {
-        return `Save ${values?.slug} as ${values?.visibility} without deploying.`;
-      }
-      if (key === 'permission.collapsePanel') {
-        return 'Collapse permission requests';
-      }
-      if (key === 'permission.expandPanel') {
-        return `Expand ${values?.count} pending permission requests`;
-      }
-      return TRANSLATIONS[key] ?? key;
-    },
-  }),
-}));
+vi.mock('react-i18next', async () => {
+  const actual = await vi.importActual<typeof import('react-i18next')>('react-i18next');
+  return {
+    ...actual,
+    useTranslation: () => ({
+      t: (key: string, values?: Record<string, string>) => {
+        if (key === 'permission.subagentOwner') {
+          return `${values?.subagent} subagent`;
+        }
+        if (key === 'permission.allowAlwaysTooltip') {
+          return `Always allow saves matching access for ${values?.projectPath}`;
+        }
+        if (key === 'permission.risks.pageSave') {
+          return `Save ${values?.slug} as ${values?.visibility} without deploying.`;
+        }
+        if (key === 'permission.collapsePanel') {
+          return 'Collapse permission requests';
+        }
+        if (key === 'permission.expandPanel') {
+          return `Expand ${values?.count} pending permission requests`;
+        }
+        return TRANSLATIONS[key] ?? key;
+      },
+    }),
+  };
+});
 
 vi.mock('@/component-library', () => ({
-  Tooltip: ({ content, children }: { content: string; children: React.ReactElement }) => (
-    <span data-tooltip={content}>{children}</span>
+  Tooltip: ({
+    content,
+    children,
+    interactive,
+  }: {
+    content: React.ReactNode;
+    children: React.ReactElement;
+    interactive?: boolean;
+  }) => {
+    const textContent = (node: React.ReactNode): string => {
+      if (typeof node === 'string' || typeof node === 'number') return String(node);
+      if (Array.isArray(node)) return node.map(textContent).join('');
+      if (React.isValidElement<{ children?: React.ReactNode }>(node)) {
+        return textContent(node.props.children);
+      }
+      return '';
+    };
+    const tooltipText = textContent(content);
+    return (
+      <span data-tooltip={tooltipText} data-tooltip-interactive={interactive || undefined}>
+        {children}
+      </span>
+    );
+  },
+  IconButton: ({
+    children,
+    tooltip: _tooltip,
+    ...props
+  }: React.ButtonHTMLAttributes<HTMLButtonElement> & { tooltip?: string }) => (
+    <button type="button" {...props}>{children}</button>
   ),
 }));
 
@@ -136,7 +168,7 @@ describe('PermissionRequestPanel', () => {
     expect(tooltips).not.toContain('project-1');
   });
 
-  it('keeps resources to one ellipsized summary with the complete value in a tooltip', () => {
+  it('keeps resources to one ellipsized summary with an interactive multiline tooltip', () => {
     const longResource = 'src/a-very-long-directory-name/another-long-directory/file-with-a-long-name.ts';
     const bashRequest = {
       ...request(false),
@@ -155,8 +187,10 @@ describe('PermissionRequestPanel', () => {
 
     const resourceSummary = container.querySelector('.permission-request-panel__resource-summary');
     expect(resourceSummary?.textContent).toBe(`${longResource}, pnpm run type-check:web`);
+    expect(resourceSummary?.classList.contains('copyable-text-preview--theme-font')).toBe(true);
     expect(resourceSummary?.parentElement?.getAttribute('data-tooltip'))
-      .toBe(`${longResource}, pnpm run type-check:web`);
+      .toBe(`${longResource}\npnpm run type-check:web`);
+    expect(resourceSummary?.parentElement?.getAttribute('data-tooltip-interactive')).toBe('true');
     expect(container.textContent).toContain('Run command');
   });
 
@@ -251,6 +285,71 @@ describe('PermissionRequestPanel', () => {
 
     expect(onRespondBatch).toHaveBeenCalledWith(first.requestId, 'once', undefined);
     expect(container.querySelectorAll('[role="listitem"]')).toHaveLength(2);
+  });
+
+  it('shows batch controls for a single request and responds through the batch handler', async () => {
+    const first = request(false);
+    const onRespondBatch = vi.fn(() => Promise.resolve());
+    await act(async () => {
+      root.render(
+        <PermissionRequestPanel
+          requests={[first]}
+          onRespond={vi.fn()}
+          onRespondBatch={onRespondBatch}
+        />,
+      );
+    });
+
+    const batchButton = [...container.querySelectorAll('button')].find(
+      (button) => button.textContent?.includes('permission.allowCurrentAndFollowing'),
+    );
+    expect(batchButton).toBeDefined();
+    expect([...container.querySelectorAll('button')]
+      .some((button) => button.textContent?.includes('permission.rejectCurrentAndFollowing'))).toBe(true);
+
+    await act(async () => {
+      batchButton?.click();
+      await Promise.resolve();
+    });
+
+    expect(onRespondBatch).toHaveBeenCalledWith(first.requestId, 'once', undefined);
+  });
+
+  it('disables allow actions while rejection feedback is present', () => {
+    act(() => {
+      root.render(
+        <PermissionRequestPanel
+          requests={[request(false)]}
+          onRespond={vi.fn()}
+          onRespondBatch={vi.fn()}
+        />,
+      );
+    });
+
+    const feedbackInput = container.querySelector<HTMLTextAreaElement>('textarea');
+    const valueSetter = Object.getOwnPropertyDescriptor(
+      HTMLTextAreaElement.prototype,
+      'value',
+    )?.set;
+    act(() => {
+      valueSetter?.call(feedbackInput, 'Use a safer command instead.');
+      feedbackInput?.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+
+    const buttonWithLabel = (label: string) => [...container.querySelectorAll('button')].find(
+      (button) => button.textContent?.includes(label),
+    );
+    const allowOnce = buttonWithLabel('permission.allowOnce');
+    const allowAlways = buttonWithLabel('permission.allowAlways');
+    const allowAll = buttonWithLabel('permission.allowCurrentAndFollowing');
+    expect(allowOnce?.disabled).toBe(true);
+    expect(allowAlways?.disabled).toBe(true);
+    expect(allowAll?.disabled).toBe(true);
+    expect(allowOnce?.classList.contains('permission-request-panel__feedback-disabled')).toBe(true);
+    expect(allowAlways?.classList.contains('permission-request-panel__feedback-disabled')).toBe(true);
+    expect(allowAll?.classList.contains('permission-request-panel__feedback-disabled')).toBe(true);
+    expect(buttonWithLabel('permission.reject')?.disabled).toBe(false);
+    expect(buttonWithLabel('permission.rejectCurrentAndFollowing')?.disabled).toBe(false);
   });
 
   it('collapses to an anchored permission indicator and reopens it with the session pending count', () => {

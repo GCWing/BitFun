@@ -208,22 +208,22 @@ test('FlowChat heading scale derives from runtime typography without static 4xl 
 
   assert.doesNotMatch(
     tokens,
-    /^\s*--flowchat-font-size-4xl:\s*var\(--font-size-4xl\);$/m,
-    'static root --flowchat-font-size-4xl should not be reintroduced',
+    /^\s*--bf-appearance-token-flowchat-font-size-4xl:\s*var\(--bf-appearance-token-font-size-4xl\);$/m,
+    'static root --bf-appearance-token-flowchat-font-size-4xl should not be reintroduced',
   );
   assert.doesNotMatch(
     tokens,
-    /^\s*--font-size-4xl:/m,
-    'static root --font-size-4xl should not be reintroduced',
+    /^\s*--bf-appearance-token-font-size-4xl:/m,
+    'static root --bf-appearance-token-font-size-4xl should not be reintroduced',
   );
   assert.match(
     welcomePanel,
-    /font-size:\s*calc\(var\(--flowchat-font-size-3xl\) \+ 4px\);/,
+    /font-size:\s*calc\(var\(--bf-appearance-token-flowchat-font-size-3xl\) \+ 4px\);/,
     'Welcome heading should preserve the 4xl visual size by deriving from FlowChat 3xl',
   );
   assert.match(
     navScope,
-    /--font-size-4xl:\s*max\(24px, calc\(var\(--flowchat-font-size-3xl\) \+ 3px\)\);/,
+    /--bf-appearance-token-font-size-4xl:\s*max\(24px, calc\(var\(--bf-appearance-token-flowchat-font-size-3xl\) \+ 3px\)\);/,
     'Nav scope should preserve its old 4xl-minus-one behavior from FlowChat 3xl',
   );
 });
@@ -258,11 +258,11 @@ test('repository dynamic CSS var families match the registered contract', () => 
   }
 });
 
-test('plugin theme projection stays compact and isolated from runtime/widget contracts', () => {
-  const projectionSource = readText(path.join(root, 'src/web-ui/src/infrastructure/theme/pluginThemeProjection.ts'));
-  const publicIndexSource = readText(path.join(root, 'src/web-ui/src/infrastructure/theme/index.ts'));
-  const keyListMatch = projectionSource.match(/PLUGIN_THEME_COLOR_KEYS\s*=\s*\[([\s\S]*?)\]\s+as const;/);
-  assert.ok(keyListMatch, 'plugin projection must declare PLUGIN_THEME_COLOR_KEYS');
+test('plugin appearance projection stays compact and isolated from runtime/widget contracts', () => {
+  const projectionSource = readText(path.join(root, 'src/web-ui/src/infrastructure/appearance/adapters/PluginAppearanceProjection.ts'));
+  const publicIndexSource = readText(path.join(root, 'src/web-ui/src/infrastructure/appearance/index.ts'));
+  const keyListMatch = projectionSource.match(/PLUGIN_APPEARANCE_COLOR_KEYS\s*=\s*\[([\s\S]*?)\]\s+as const;/);
+  assert.ok(keyListMatch, 'plugin projection must declare PLUGIN_APPEARANCE_COLOR_KEYS');
   const keyMatches = Array.from(
     keyListMatch[1].matchAll(/'([a-z]+)'/g),
     match => match[1],
@@ -280,14 +280,14 @@ test('plugin theme projection stays compact and isolated from runtime/widget con
   assert.equal(keyMatches.length, 7, 'plugin projection must stay within the documented key cap');
   assert.doesNotMatch(
     projectionSource,
-    /ThemeService|themePayload|WIDGET_THEME|getComputedStyle|setProperty|--[a-z0-9-]+/i,
+    /ThemeService|appearancePayload|WIDGET_APPEARANCE|getComputedStyle|setProperty|--[a-z0-9-]+/i,
     'plugin projection must not become a runtime CSS var or generated widget schema',
   );
-  assert.match(publicIndexSource, /createPluginThemeColorProjection/);
+  assert.match(publicIndexSource, /PluginAppearanceProjection/);
   assert.doesNotMatch(
     publicIndexSource,
-    /themePayload|WIDGET_THEME/i,
-    'theme public index must not expose generated widget payload as plugin theme API',
+    /appearancePayload|WIDGET_APPEARANCE/i,
+    'Appearance public index must not expose generated widget payload as plugin API',
   );
 });
 
@@ -324,124 +324,12 @@ test('repository specialized near color pairs have explicit decisions', () => {
   }
 });
 
-test('generated widget iframe compatibility aliases stay outside root/runtime contracts', () => {
-  const source = readText(path.join(root, 'src/web-ui/src/tools/generative-widget/themePayloadCompatibility.ts'));
-  const aliasEntries = Array.from(source.matchAll(/'([^']+)': '([^']+)'/g))
-    .map(([, key, canonical]) => [key, canonical]);
-  const aliasKeys = new Set(aliasEntries.map(([key]) => key));
-  const explicitContractKeys = new Set(TOKEN_COMPATIBILITY_ALIAS_CONTRACTS.map(contract => contract.key));
-  const resolveFamilyContract = (key) => {
-    const family = TOKEN_COMPATIBILITY_ALIAS_FAMILY_CONTRACTS.find(contract => (
-      key.startsWith(contract.prefix) && key.length > contract.prefix.length
-    ));
-    if (!family) {
-      return null;
-    }
-    return {
-      key,
-      canonical: `${family.canonicalPrefix}${key.slice(family.prefix.length)}`,
-    };
-  };
-
-  assert.ok(aliasEntries.length > 0, 'widget iframe compatibility aliases must be explicit');
-  assert.equal(aliasKeys.size, aliasEntries.length, 'widget iframe compatibility aliases must be unique');
-  assert.equal(explicitContractKeys.size, 0, 'explicit root/runtime compatibility alias contracts must remain retired');
-  for (const [key, canonical] of aliasEntries) {
-    const familyContract = resolveFamilyContract(key);
-    if (familyContract) {
-      assert.equal(canonical, familyContract.canonical, `${key} must point to the registered family canonical token`);
-    } else {
-      assert.ok(!explicitContractKeys.has(key), `${key} must not re-enter root/runtime compatibility alias contracts`);
-      assert.match(canonical, /^--[a-z0-9-]+$/);
-      assert.notEqual(key, canonical, `${key} must point to a different canonical token`);
-    }
-  }
-});
-
-test('retired explicit iframe aliases do not reappear outside the compatibility boundary', () => {
-  const source = readText(path.join(root, 'src/web-ui/src/tools/generative-widget/themePayloadCompatibility.ts'));
-  const retiredExplicitAliases = Array.from(source.matchAll(/'([^']+)': '([^']+)'/g))
-    .map(([, key]) => key)
-    .filter(key => !TOKEN_COMPATIBILITY_ALIAS_FAMILY_CONTRACTS.some(contract => (
-      key.startsWith(contract.prefix) && key.length > contract.prefix.length
-    )));
-  const allowedFiles = new Set([
-    'docs/architecture/theme-token-optimization.md',
-    'src/web-ui/src/tools/generative-widget/themePayloadCompatibility.ts',
-    'src/web-ui/src/tools/generative-widget/themePayload.test.ts',
-  ]);
-  const allowedExtensions = new Set(['.ts', '.tsx', '.scss', '.css', '.mjs', '.json']);
-  const searchRoots = ['docs', 'scripts', 'src/web-ui/src'];
-  const hits = [];
-
-  const scanFile = (filePath) => {
-    const relativePath = path.relative(root, filePath).replace(/\\/g, '/');
-    if (allowedFiles.has(relativePath) || !allowedExtensions.has(path.extname(filePath))) {
-      return;
-    }
-    const text = readText(filePath);
-    for (const key of retiredExplicitAliases) {
-      let index = text.indexOf(key);
-      while (index !== -1) {
-        const before = text[index - 1] || '';
-        const after = text[index + key.length] || '';
-        if (!/[a-zA-Z0-9_-]/.test(before) && !/[a-zA-Z0-9_-]/.test(after)) {
-          const line = text.slice(0, index).split(/\r?\n/).length;
-          hits.push(`${relativePath}:${line}: ${key}`);
-        }
-        index = text.indexOf(key, index + key.length);
-      }
-    }
-  };
-
-  const walk = (dir) => {
-    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-      if (entry.name === 'node_modules' || entry.name === '.git' || entry.name === 'dist' || entry.name === 'target') {
-        continue;
-      }
-      const entryPath = path.join(dir, entry.name);
-      if (entry.isDirectory()) {
-        walk(entryPath);
-      } else {
-        scanFile(entryPath);
-      }
-    }
-  };
-
-  for (const searchRoot of searchRoots) {
-    walk(path.join(root, searchRoot));
-  }
-
-  assert.deepEqual(hits, []);
-});
-
-test('theme color audit reports alias family usages whose exact canonical key is missing', (t) => {
-  const { dir, sourceRoot } = createFixture({
-    'component-library/styles/tokens.scss': [
-      ':root {',
-      '  --size-radius-sm: 6px;',
-      '  --radius-sm: var(--size-radius-sm);',
-      '  --radius-ghost: 10px;',
-      '}',
-      '',
-    ].join('\n'),
-    'app/App.scss': [
-      '.app {',
-      '  border-radius: var(--radius-ghost);',
-      '}',
-      '',
-    ].join('\n'),
-  });
-  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
-
-  const result = runAudit(['--root', sourceRoot, '--json', '--no-baseline']);
-  assert.equal(result.status, 0, result.stderr || result.stdout);
-
-  const report = JSON.parse(result.stdout);
-  assert.equal(report.compatibilityAliases.missingCanonicalUnique, 1);
-  assert.deepEqual(
-    report.missingCompatibilityAliasCanonicals.map(row => [row.key, row.canonical]),
-    [['--radius-ghost', '--size-radius-ghost']],
+test('generated widget iframe has no compatibility alias module or contracts', () => {
+  assert.equal(TOKEN_COMPATIBILITY_ALIAS_CONTRACTS.length, 0);
+  assert.equal(TOKEN_COMPATIBILITY_ALIAS_FAMILY_CONTRACTS.length, 0);
+  assert.equal(
+    fs.existsSync(path.join(root, 'src/web-ui/src/tools/generative-widget/appearancePayloadCompatibility.ts')),
+    false,
   );
 });
 
@@ -449,12 +337,12 @@ test('theme color audit emits scoped machine-readable reports', (t) => {
   const { dir, sourceRoot } = createFixture({
     'component-library/styles/tokens.scss': [
       ':root {',
-      '  --color-text-primary: #111111;',
+      '  --bf-appearance-token-color-text-primary: #111111;',
       '  --static-only: #222222;',
       '}',
       '',
     ].join('\n'),
-    'infrastructure/theme/core/ThemeService.ts': [
+    'infrastructure/appearance/adapters/CssTokenAppearanceAdapter.ts': [
       "document.documentElement.style.setProperty('--runtime-only', '#333333');",
       '',
     ].join('\n'),
@@ -476,7 +364,7 @@ test('theme color audit emits scoped machine-readable reports', (t) => {
 
   const report = readJson(reportPath);
   assert.equal(report.colorScopes.appUi.uniqueColors, 2);
-  assert.equal(report.colorScopes.token.uniqueColors, 3);
+  assert.equal(report.colorScopes.token.uniqueColors, 2);
   assert.equal(report.colorScopes.exception.uniqueColors, 1);
   assert.equal(report.tokenAliasLiterals.occurrences, 0);
   assert.equal(report.tokenAliasLiterals.uniqueColors, 0);
@@ -491,7 +379,7 @@ test('theme color audit reports static contract token external consumption', (t)
   const { dir, sourceRoot } = createFixture({
     'component-library/styles/tokens.scss': [
       ':root {',
-      '  --color-text-primary: #111111;',
+      '  --bf-appearance-token-color-text-primary: #111111;',
       '  --private-helper-rgb: 17, 17, 17;',
       '  --derived-from-helper: rgb(var(--private-helper-rgb));',
       '  --payload-export: #333333;',
@@ -501,17 +389,15 @@ test('theme color audit reports static contract token external consumption', (t)
     ].join('\n'),
     'app/App.scss': [
       '.app {',
-      '  color: var(--color-text-primary);',
+      '  color: var(--bf-appearance-token-color-text-primary);',
       '  background: var(--derived-from-helper);',
       '}',
       '',
     ].join('\n'),
-    'tools/generative-widget/themePayload.ts': [
-      'const WIDGET_THEME_VAR_GROUPS = {',
-      '  core: [',
-      "    '--payload-export',",
-      '  ],',
-      '} as const;',
+    'infrastructure/appearance/adapters/widgetAppearanceVariables.ts': [
+      'export const WIDGET_APPEARANCE_VARIABLE_NAMES = [',
+      "  '--payload-export',",
+      '] as const;',
       '',
     ].join('\n'),
   });
@@ -527,7 +413,7 @@ test('theme color audit reports static contract token external consumption', (t)
     report.staticContractLowExternalUsageVars
       .filter(row => row.key === '--payload-export')
       .map(row => [row.key, row.count, row.externalUsageFileCount, row.usageFiles]),
-    [['--payload-export', 1, 1, ['tools/generative-widget/themePayload.ts']]],
+    [['--payload-export', 1, 1, ['infrastructure/appearance/adapters/widgetAppearanceVariables.ts']]],
   );
   assert.deepEqual(
     report.staticContractInternalOnlyVars.map(row => [row.key, row.definitionFiles, row.internalUsageCount]),
@@ -584,111 +470,31 @@ test('theme color audit reports deprecated surface-local token names', (t) => {
   );
 });
 
-test('theme color audit reports compatibility alias family usage without treating it as raw color debt', (t) => {
+test('theme color audit counts only the generated widget variable contract', (t) => {
   const { dir, sourceRoot } = createFixture({
     'component-library/styles/tokens.scss': [
       ':root {',
-      '  --size-radius-sm: 6px;',
-      '  --radius-sm: var(--size-radius-sm);',
+      '  --bf-appearance-token-color-bg-primary: #121214;',
+      '  --bf-appearance-token-color-bg-secondary: #1c1c1f;',
+      '  --bf-appearance-token-font-family-mono: monospace;',
       '}',
       '',
     ].join('\n'),
-    'app/App.scss': [
-      '.app {',
-      '  border-radius: var(--radius-sm);',
-      '}',
-      '',
-    ].join('\n'),
-  });
-  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
-
-  const result = runAudit(['--root', sourceRoot, '--json', '--no-baseline']);
-  assert.equal(result.status, 0, result.stderr || result.stdout);
-
-  const report = JSON.parse(result.stdout);
-  assert.equal(report.compatibilityAliases.usedUnique, 1);
-  assert.equal(report.compatibilityAliases.occurrences, 1);
-  assert.equal(report.compatibilityAliases.familyUsedUnique, 1);
-  assert.equal(report.compatibilityAliases.familyOccurrences, 1);
-  assert.equal(report.compatibilityAliases.missingCanonicalUnique, 0);
-  assert.deepEqual(
-    report.compatibilityAliases.top.map(row => [row.key, row.canonical]),
-    [['--radius-sm', '--size-radius-sm']],
-  );
-  assert.equal(report.colorScopes.appUi.occurrences, 0);
-});
-
-test('theme color audit budgets generated widget payload compatibility families separately', (t) => {
-  const { dir, sourceRoot } = createFixture({
-    'component-library/styles/tokens.scss': [
-      ':root {',
-      '  --size-radius-sm: 6px;',
-      '  --radius-sm: var(--size-radius-sm);',
-      '}',
-      '',
-    ].join('\n'),
-    'tools/generative-widget/themePayload.ts': [
-      "export const payloadVars = ['--size-radius-sm', '--radius-sm'];",
-      '',
-    ].join('\n'),
-  });
-  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
-
-  const result = runAudit(['--root', sourceRoot, '--json', '--no-baseline']);
-  assert.equal(result.status, 0, result.stderr || result.stdout);
-
-  const report = JSON.parse(result.stdout);
-  assert.equal(report.compatibilityAliases.usedUnique, 0);
-  assert.equal(report.compatibilityAliases.familyUsedUnique, 0);
-  assert.equal(report.generatedWidgetPayload.varUnique, 2);
-  assert.equal(report.generatedWidgetPayload.compatibilityAliasUnique, 0);
-  assert.equal(report.generatedWidgetPayload.compatibilityAliasFamilyUnique, 1);
-  assert.equal(report.generatedWidgetPayload.externalOnlyCompatibilityUnique, 1);
-  assert.equal(report.generatedWidgetPayload.undefinedUnique, 0);
-  assert.equal(report.generatedWidgetPayload.missingCompatibilityCanonicalUnique, 0);
-  assert.equal(report.generatedWidgetPayload.unexportedCompatibilityCanonicalUnique, 0);
-  assert.deepEqual(
-    report.generatedWidgetPayload.topCompatibilityAliases.map(row => [row.key, row.canonical]),
-    [],
-  );
-  assert.deepEqual(
-    report.generatedWidgetPayload.topCompatibilityFamilies.map(row => [row.key, row.canonical]),
-    [['--radius-sm', '--size-radius-sm']],
-  );
-  assert.deepEqual(
-    report.generatedWidgetPayload.externalOnlyCompatibility.map(row => [row.key, row.canonical, row.familyPrefix]),
-    [['--radius-sm', '--size-radius-sm', '--radius-']],
-  );
-  assert.match(report.generatedWidgetPayload.externalOnlyCompatibility[0].removal, /Retire/);
-});
-
-test('theme color audit counts only generated widget payload groups', (t) => {
-  const { dir, sourceRoot } = createFixture({
-    'component-library/styles/tokens.scss': [
-      ':root {',
-      '  --color-bg-primary: #121214;',
-      '  --color-bg-secondary: #1c1c1f;',
-      '  --font-family-mono: monospace;',
-      '}',
-      '',
-    ].join('\n'),
-    'tools/generative-widget/themePayload.ts': [
+    'infrastructure/appearance/adapters/widgetAppearanceVariables.ts': [
       'const FALLBACK_VAR = {',
-      "  bgPrimary: '--color-bg-primary',",
-      "  bgSecondary: '--color-bg-secondary',",
+      "  bgPrimary: '--bf-appearance-token-color-bg-primary',",
+      "  bgSecondary: '--bf-appearance-token-color-bg-secondary',",
       '} as const;',
       '',
-      'const WIDGET_THEME_STATIC_SHELL_VARS = {',
-      "  '--btn-primary-bg': 'var(--color-bg-primary)',",
+      'const WIDGET_APPEARANCE_STATIC_SHELL_VARS = {',
+      "  '--bf-appearance-token-btn-primary-bg': 'var(--bf-appearance-token-color-bg-primary)',",
       '} as const;',
       '',
-      'const WIDGET_THEME_VAR_GROUPS = {',
-      '  background: [',
-      '    FALLBACK_VAR.bgPrimary,',
-      '    FALLBACK_VAR.bgSecondary,',
-      "    '--font-family-mono',",
-      '  ],',
-      '} as const;',
+      'export const WIDGET_APPEARANCE_VARIABLE_NAMES = [',
+      "  '--bf-appearance-token-color-bg-primary',",
+      "  '--bf-appearance-token-color-bg-secondary',",
+      "  '--bf-appearance-token-font-family-mono',",
+      '] as const;',
       '',
     ].join('\n'),
   });
@@ -703,22 +509,22 @@ test('theme color audit counts only generated widget payload groups', (t) => {
   assert.equal(report.generatedWidgetPayload.externalOnlyCompatibilityUnique, 0);
 });
 
-test('theme color audit fails closed when generated widget payload groups are not parseable', (t) => {
+test('theme color audit fails closed when the generated widget variable contract is not parseable', (t) => {
   const { dir, sourceRoot } = createFixture({
     'component-library/styles/tokens.scss': [
       ':root {',
-      '  --color-bg-primary: #121214;',
+      '  --bf-appearance-token-color-bg-primary: #121214;',
       '}',
       '',
     ].join('\n'),
-    'tools/generative-widget/themePayload.ts': [
+    'infrastructure/appearance/adapters/widgetAppearanceVariables.ts': [
       'const FALLBACK_VAR = {',
-      "  bgPrimary: '--color-bg-primary',",
+      "  bgPrimary: '--bf-appearance-token-color-bg-primary',",
       '} as const;',
       '',
-      'const WIDGET_THEME_VAR_GROUPS = Object.freeze({',
-      '  background: [FALLBACK_VAR.bgPrimary],',
-      '});',
+      'export const WIDGET_APPEARANCE_VARIABLE_NAMES = Object.freeze([',
+      '  FALLBACK_VAR.bgPrimary,',
+      ']);',
       '',
     ].join('\n'),
   });
@@ -726,73 +532,14 @@ test('theme color audit fails closed when generated widget payload groups are no
 
   const result = runAudit(['--root', sourceRoot, '--json', '--no-baseline']);
   assert.notEqual(result.status, 0);
-  assert.match(result.stderr, /Unable to parse generated widget WIDGET_THEME_VAR_GROUPS/);
-});
-
-test('theme color audit reports generated widget payload compatibility aliases without canonicals', (t) => {
-  const { dir, sourceRoot } = createFixture({
-    'component-library/styles/tokens.scss': [
-      ':root {',
-      '  --radius-ghost: 10px;',
-      '}',
-      '',
-    ].join('\n'),
-    'tools/generative-widget/themePayload.ts': [
-      "export const payloadVars = ['--radius-ghost'];",
-      '',
-    ].join('\n'),
-  });
-  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
-
-  const result = runAudit(['--root', sourceRoot, '--json', '--no-baseline']);
-  assert.equal(result.status, 0, result.stderr || result.stdout);
-
-  const report = JSON.parse(result.stdout);
-  assert.equal(report.generatedWidgetPayload.undefinedUnique, 0);
-  assert.equal(report.generatedWidgetPayload.compatibilityAliasFamilyUnique, 1);
-  assert.equal(report.generatedWidgetPayload.missingCompatibilityCanonicalUnique, 1);
-  assert.equal(report.generatedWidgetPayload.unexportedCompatibilityCanonicalUnique, 0);
-  assert.deepEqual(
-    report.generatedWidgetPayload.missingCompatibilityCanonicals.map(row => [row.key, row.canonical]),
-    [['--radius-ghost', '--size-radius-ghost']],
-  );
-});
-
-test('theme color audit reports generated widget payload family aliases whose canonicals are not exported', (t) => {
-  const { dir, sourceRoot } = createFixture({
-    'component-library/styles/tokens.scss': [
-      ':root {',
-      '  --size-radius-sm: 6px;',
-      '  --radius-sm: var(--size-radius-sm);',
-      '}',
-      '',
-    ].join('\n'),
-    'tools/generative-widget/themePayload.ts': [
-      "export const payloadVars = ['--radius-sm'];",
-      '',
-    ].join('\n'),
-  });
-  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
-
-  const result = runAudit(['--root', sourceRoot, '--json', '--no-baseline']);
-  assert.equal(result.status, 0, result.stderr || result.stdout);
-
-  const report = JSON.parse(result.stdout);
-  assert.equal(report.generatedWidgetPayload.undefinedUnique, 0);
-  assert.equal(report.generatedWidgetPayload.compatibilityAliasFamilyUnique, 1);
-  assert.equal(report.generatedWidgetPayload.missingCompatibilityCanonicalUnique, 0);
-  assert.equal(report.generatedWidgetPayload.unexportedCompatibilityCanonicalUnique, 1);
-  assert.deepEqual(
-    report.generatedWidgetPayload.unexportedCompatibilityCanonicals.map(row => [row.key, row.canonical]),
-    [['--radius-sm', '--size-radius-sm']],
-  );
+  assert.match(result.stderr, /Unable to parse WIDGET_APPEARANCE_VARIABLE_NAMES/);
 });
 
 test('theme color audit reports fallback tokens that lack a boundary contract', (t) => {
   const { dir, sourceRoot } = createFixture({
     'app/App.scss': [
       '.app {',
-      '  color: var(--runtime-accent, var(--color-accent-500));',
+      '  color: var(--runtime-accent, var(--bf-appearance-token-color-accent-500));',
       '}',
       '',
     ].join('\n'),
@@ -809,17 +556,15 @@ test('theme color audit reports fallback tokens that lack a boundary contract', 
 
 test('theme color audit reports specialized color domains separately from app UI', (t) => {
   const { dir, sourceRoot } = createFixture({
-    'component-library/styles/tokens.scss': ':root { --color-text-primary: #111111; }\n',
-    'infrastructure/theme/presets/dark-theme.ts': "export const bg = '#222222';\n",
+    'component-library/styles/tokens.scss': ':root { --bf-appearance-token-color-text-primary: #111111; }\n',
+    'infrastructure/appearance/builtins/dark.ts': "export const bg = '#222222';\n",
     'tools/mermaid-editor/theme/mermaidTheme.ts': "export const node = '#333333';\n",
-    'tools/editor/themes/bitfun-dark.theme.ts': "export const editorBg = '#444444';\n",
+    'component-library/components/CodeEditor/editorColor.ts': "export const editorBg = '#444444';\n",
     'shared/prism/prismTheme.ts': "export const prism = { keyword: '#555555' };\n",
     'tools/terminal/utils/xtermTheme.ts': "export const cursor = '#c0c0c0';\n",
-    'tools/generative-widget/themePayload.ts': "export const fallback = { '--color-text-primary': '#666666' };\n",
-    'shared/theme/themeBoundaryFallbacks.ts': "export const fallback = { text: '#999000' };\n",
+    'tools/generative-widget/appearancePayload.ts': "export const fallback = { '--bf-appearance-token-color-text-primary': '#666666' };\n",
     'shared/inspector/inspectorOverlayTheme.ts': "export const overlay = { activeBorder: '#777777' };\n",
-    'shared/theme/uiExceptionAccents.ts': "export const accents = { tool: '#dddddd' };\n",
-    'shared/theme/languageIdentityAccents.ts': "export const accents = { rust: '#aa5500' };\n",
+    'infrastructure/appearance/appearanceDomainTokens.ts': "export const accents = { tool: '#dddddd' };\n",
     'infrastructure/language-detection/core/LanguageRegistry.ts': "export const rust = '#888888';\n",
     'component-library/components/TextStrokeEffect/TextStrokeEffect.tsx': "export const stroke = '#999999';\n",
     'component-library/components/StreamText/StreamText.scss': ".stream { color: #bbbbbb; }\n",
@@ -840,10 +585,9 @@ test('theme color audit reports specialized color domains separately from app UI
   assert.equal(report.colorDomainScopes.syntax.uniqueColors, 1);
   assert.equal(report.colorDomainScopes.terminal.uniqueColors, 1);
   assert.equal(report.colorDomainScopes.generatedWidget.uniqueColors, 1);
-  assert.equal(report.colorDomainScopes.boundaryFallback.uniqueColors, 1);
   assert.equal(report.colorDomainScopes.debugOverlay.uniqueColors, 1);
-  assert.equal(report.colorDomainScopes.uiException.uniqueColors, 1);
-  assert.equal(report.colorDomainScopes.languageIdentity.uniqueColors, 2);
+  assert.equal(report.colorDomainScopes.appearanceDomain.uniqueColors, 1);
+  assert.equal(report.colorDomainScopes.languageIdentity.uniqueColors, 1);
   assert.equal(report.colorDomainScopes.visualEffect.uniqueColors, 2);
   assert.equal(report.colorDomainScopes.appUi.uniqueColors, 2);
 });
@@ -923,7 +667,7 @@ test('theme color audit counts full CSS var governance debt before row truncatio
     (_, index) => `.loose-${index} { color: var(--loose-${index}); }`,
   );
   const { dir, sourceRoot } = createFixture({
-    'infrastructure/theme/core/ThemeService.ts': `${runtimeDefinitions.join('\n')}\n`,
+    'infrastructure/appearance/adapters/CssTokenAppearanceAdapter.ts': `${runtimeDefinitions.join('\n')}\n`,
     'app/App.scss': `${missingRules.join('\n')}\n${fallbackRules.join('\n')}\n${runtimeRules.join('\n')}\n`,
     'app/LooseVar.tsx': [
       'export function LooseVar() {',
@@ -1062,7 +806,7 @@ test('theme color audit reports near color pairs inside specialized color domain
 
 test('theme color audit excludes test files from production color budgets', (t) => {
   const { dir, sourceRoot } = createFixture({
-    'component-library/styles/tokens.scss': ':root { --color-error: #ef4444; }\n',
+    'component-library/styles/tokens.scss': ':root { --bf-appearance-token-color-error: #ef4444; }\n',
     'app/App.scss': '.app { color: #ef4444; }\n',
     'app/App.test.tsx': "expect(button).toHaveStyle({ color: '#ef4444' });\n",
     'app/__tests__/Fixture.tsx': "export const visualLock = '#ef4444';\n",
@@ -1111,7 +855,7 @@ test('theme color audit fails when fallback tokens lack a boundary contract', (t
   const { dir, sourceRoot } = createFixture({
     'app/App.scss': [
       '.app {',
-      '  color: var(--runtime-accent, var(--color-accent-500));',
+      '  color: var(--runtime-accent, var(--bf-appearance-token-color-accent-500));',
       '}',
       '',
     ].join('\n'),
@@ -1136,7 +880,7 @@ test('theme color audit fails when fallback tokens lack a boundary contract', (t
 
 test('theme color audit requires dynamic CSS var families to be registered', (t) => {
   const { dir, sourceRoot } = createFixture({
-    'infrastructure/theme/core/ThemeService.ts': [
+    'infrastructure/appearance/adapters/CssTokenAppearanceAdapter.ts': [
       "for (const [key, value] of Object.entries(theme.extra)) {",
       "  document.documentElement.style.setProperty(`--unregistered-${key}`, value);",
       '}',
@@ -1163,9 +907,9 @@ test('theme color audit requires dynamic CSS var families to be registered', (t)
 
 test('theme color audit accepts registered dynamic CSS var families', (t) => {
   const { dir, sourceRoot } = createFixture({
-    'infrastructure/theme/core/ThemeService.ts': [
-      "for (const [key, value] of Object.entries(theme.motion.duration)) {",
-      "  document.documentElement.style.setProperty(`--motion-${key}`, value);",
+    'infrastructure/appearance/adapters/CssTokenAppearanceAdapter.ts': [
+      "for (const [key, value] of Object.entries(appearance.typography.size)) {",
+      "  document.documentElement.style.setProperty(`--bf-appearance-token-font-size-${key}`, value);",
       '}',
       '',
     ].join('\n'),
@@ -1187,19 +931,19 @@ test('theme color audit requires exact exports for dynamic-family CSS var usages
   const { dir, sourceRoot } = createFixture({
     'component-library/styles/tokens.scss': [
       ':root {',
-      '  --color-purple-200: rgba(139, 92, 246, 0.15);',
+      '  --bf-appearance-token-color-purple-200: rgba(139, 92, 246, 0.15);',
       '}',
       '',
     ].join('\n'),
-    'infrastructure/theme/core/ThemeService.ts': [
+    'infrastructure/appearance/adapters/CssTokenAppearanceAdapter.ts': [
       "for (const [key, value] of Object.entries(theme.colors.purple)) {",
-      "  document.documentElement.style.setProperty(`--color-purple-${key}`, value);",
+      "  document.documentElement.style.setProperty(`--bf-appearance-token-color-purple-${key}`, value);",
       '}',
       '',
     ].join('\n'),
     'component-library/components/Tabs/Tabs.scss': [
       '.tabs {',
-      '  border-color: var(--color-purple-300);',
+      '  border-color: var(--bf-appearance-token-color-purple-300);',
       '}',
       '',
     ].join('\n'),
@@ -1219,7 +963,7 @@ test('theme color audit requires exact exports for dynamic-family CSS var usages
   assert.equal(report.cssVarDefinitions.dynamicFamilyUnexportedUnique, 1);
   assert.deepEqual(
     report.dynamicFamilyUnexportedVars.map(row => [row.key, row.prefix]),
-    [['--color-purple-300', '--color-purple-']],
+    [['--bf-appearance-token-color-purple-300', '--bf-appearance-token-color-purple-']],
   );
 
   const blocked = runAudit(['--root', sourceRoot, '--baseline', baselinePath]);
@@ -1228,7 +972,7 @@ test('theme color audit requires exact exports for dynamic-family CSS var usages
     `${blocked.stdout}\n${blocked.stderr}`,
     /cssVarDefinitions\.dynamicFamilyUnexportedUnique has 1 candidate\(s\), baseline is 0/,
   );
-  assert.match(`${blocked.stdout}\n${blocked.stderr}`, /--color-purple-300/);
+  assert.match(`${blocked.stdout}\n${blocked.stderr}`, /--bf-appearance-token-color-purple-300/);
 });
 
 test('theme color audit requires non-contract cross-file vars to be explicitly allowlisted', (t) => {

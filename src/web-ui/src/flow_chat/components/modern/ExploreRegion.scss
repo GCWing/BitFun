@@ -8,36 +8,36 @@
   box-sizing: border-box;
   width: min(100%, 900px);
   margin: 0 auto;
-  padding: 0 var(--flowchat-content-inline-pad);
+  padding: 0 var(--bf-appearance-token-flowchat-content-inline-pad);
 
   @media (max-width: 768px) {
-    padding: 0 var(--flowchat-content-inline-pad-mobile);
+    padding: 0 var(--bf-appearance-token-flowchat-content-inline-pad-mobile);
   }
 }
 
 // ==================== Collapsible (header + animated content) ====================
 
 .explore-region--collapsible {
-  margin: 0 0 0.3rem;
-  font-size: var(--flowchat-font-size-sm);
-  line-height: var(--flowchat-support-line-height);
+  margin: 0 0 0.3rem 0;
+  font-size: var(--bf-appearance-token-flowchat-font-size-sm);
+  line-height: var(--bf-appearance-token-flowchat-support-line-height);
 
   .explore-region__header {
     display: flex;
     align-items: center;
     gap: 4px;
     padding: 0;
-    color: var(--color-text-muted);
-    font-size: var(--flowchat-font-size-sm);
-    line-height: var(--flowchat-support-line-height);
+    color: var(--bf-appearance-token-color-text-muted);
+    font-size: var(--bf-appearance-token-flowchat-font-size-sm);
+    line-height: var(--bf-appearance-token-flowchat-support-line-height);
     cursor: pointer;
     user-select: none;
-    border-radius: var(--size-radius-sm);
+    border-radius: var(--bf-appearance-token-size-radius-sm);
     transition: color 0.15s ease, background 0.15s ease;
 
     &:hover {
-    background: var(--element-bg-hover);
-      color: var(--color-text-secondary);
+    background: var(--bf-appearance-token-element-bg-hover);
+      color: var(--bf-appearance-token-color-text-secondary);
     }
   }
 
@@ -50,8 +50,8 @@
   }
 
   .explore-region__summary {
-    font-size: var(--flowchat-font-size-sm);
-    line-height: var(--flowchat-support-line-height);
+    font-size: var(--bf-appearance-token-flowchat-font-size-sm);
+    line-height: var(--bf-appearance-token-flowchat-support-line-height);
     opacity: 0.8;
   }
 
@@ -79,11 +79,11 @@
     }
 
     &::-webkit-scrollbar-thumb {
-      background: var(--border-base);
+      background: var(--bf-appearance-token-border-base);
       border-radius: 2px;
 
       &:hover {
-        background: var(--border-medium);
+        background: var(--bf-appearance-token-border-medium);
       }
     }
   }
@@ -117,8 +117,8 @@
     z-index: 3;
     background: linear-gradient(
       to bottom,
-      var(--color-bg-scene) 0%,
-      color-mix(in srgb, var(--color-bg-scene) 60%, transparent) 50%,
+      var(--bf-appearance-token-color-bg-scene) 0%,
+      color-mix(in srgb, var(--bf-appearance-token-color-bg-scene) 60%, transparent) 50%,
       transparent 100%
     );
   }
@@ -136,8 +136,8 @@
     z-index: 3;
     background: linear-gradient(
       to top,
-      var(--color-bg-scene) 0%,
-      color-mix(in srgb, var(--color-bg-scene) 60%, transparent) 50%,
+      var(--bf-appearance-token-color-bg-scene) 0%,
+      color-mix(in srgb, var(--bf-appearance-token-color-bg-scene) 60%, transparent) 50%,
       transparent 100%
     );
   }

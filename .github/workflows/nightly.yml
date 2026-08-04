@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: write
+  packages: write
 
 concurrency:
   group: nightly
@@ -99,11 +100,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v5
-
-      - name: Setup OpenSSL (Windows, prebuilt)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: ./scripts/ci/setup-openssl-windows.ps1
 
       - name: Install Linux system dependencies (Tauri bundler)
         if: runner.os == 'Linux'
@@ -293,6 +289,109 @@ jobs:
           path: linux-release-assets
           merge-multiple: true
 
+      - name: Verify Relay image inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f linux-release-assets/bitfun-relay-server-x86_64-unknown-linux-gnu.tar.gz
+          test -f linux-release-assets/bitfun-relay-server-aarch64-unknown-linux-gnu.tar.gz
+          for archive in linux-release-assets/bitfun-relay-server-*.tar.gz; do
+            (cd linux-release-assets && sha256sum --check "$(basename "${archive}").sha256")
+          done
+          cp src/apps/relay-server/Dockerfile.release linux-release-assets/Dockerfile.release
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Resolve nightly image metadata
+        id: nightly-image-meta
+        shell: bash
+        env:
+          NIGHTLY_VERSION: ${{ needs.check-changes.outputs.nightly_version }}
+        run: echo "asset_version=${NIGHTLY_VERSION%%+*}" >>"$GITHUB_OUTPUT"
+
+      - name: Build and push multi-platform Relay image
+        id: relay-image
+        uses: docker/build-push-action@v7
+        with:
+          context: linux-release-assets
+          file: linux-release-assets/Dockerfile.release
+          platforms: linux/amd64,linux/arm64
+          push: true
+          provenance: false
+          sbom: false
+          build-args: |
+            VERSION=${{ needs.check-changes.outputs.nightly_version }}
+            REVISION=${{ github.sha }}
+          tags: |
+            ghcr.io/gcwing/bitfun-relay-server:${{ env.NIGHTLY_TAG }}
+            ghcr.io/gcwing/bitfun-relay-server:${{ steps.nightly-image-meta.outputs.asset_version }}
+
+      - name: Smoke-test published Relay image on both platforms
+        shell: bash
+        env:
+          IMAGE_DIGEST: ${{ steps.relay-image.outputs.digest }}
+        run: bash scripts/relay/smoke-image.sh \
+          "ghcr.io/gcwing/bitfun-relay-server@${IMAGE_DIGEST}"
+
+      - name: Generate signed Relay image descriptor
+        shell: bash
+        env:
+          IMAGE_DIGEST: ${{ steps.relay-image.outputs.digest }}
+          NIGHTLY_VERSION: ${{ needs.check-changes.outputs.nightly_version }}
+          BITFUN_SIGNING_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          BITFUN_SIGNING_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          BITFUN_SIGNING_PUBKEY: ${{ secrets.TAURI_UPDATER_PUBKEY }}
+        run: |
+          set -euo pipefail
+          asset_version="${NIGHTLY_VERSION%%+*}"
+          [[ "${IMAGE_DIGEST}" =~ ^sha256:[0-9a-f]{64}$ ]]
+          docker buildx imagetools inspect \
+            "ghcr.io/gcwing/bitfun-relay-server@${IMAGE_DIGEST}" \
+            --raw >relay-image-manifest.json
+          jq -e '
+            [.manifests[].platform | .os + "/" + .architecture] as $platforms
+            | ($platforms | index("linux/amd64")) != null
+            and ($platforms | index("linux/arm64")) != null
+          ' relay-image-manifest.json >/dev/null
+          jq -n \
+            --arg image "ghcr.io/gcwing/bitfun-relay-server" \
+            --arg tag "${NIGHTLY_TAG}" \
+            --arg version "${asset_version}" \
+            --arg digest "${IMAGE_DIGEST}" \
+            '{
+              schema_version: 1,
+              image: $image,
+              tag: $tag,
+              version: $version,
+              digest: $digest,
+              platforms: ["linux/amd64", "linux/arm64"]
+            }' >relay-image.json
+          bash scripts/sign-release-assets.sh relay-image.json
+          test -s relay-image.json.sig
+
+      - name: Verify anonymous Relay image access
+        shell: bash
+        env:
+          IMAGE_DIGEST: ${{ steps.relay-image.outputs.digest }}
+        run: |
+          set -euo pipefail
+          docker logout ghcr.io >/dev/null 2>&1 || true
+          clean_config="$(mktemp -d)"
+          trap 'rm -rf "$clean_config"' EXIT
+          DOCKER_CONFIG="$clean_config" docker buildx imagetools inspect \
+            "ghcr.io/gcwing/bitfun-relay-server@${IMAGE_DIGEST}" >/dev/null
+
       - name: List release assets
         run: |
           echo "Nightly assets:"
@@ -318,9 +417,6 @@ jobs:
             --tag "${{ env.NIGHTLY_TAG }}" \
             --repo "GCWing/BitFun" \
             --out linux-release-assets/linux-binaries.json
-
-      - name: Setup Rust toolchain (minisign fallback)
-        uses: dtolnay/rust-toolchain@stable
 
       # The Tauri bundler signs the five updater artifacts during `tauri build`,
       # but the installers people download by hand from the release page — dmg,
@@ -382,6 +478,8 @@ jobs:
             linux-release-assets/*.tar.gz.sig
             linux-release-assets/*.tar.gz.sha256.sig
             linux-release-assets/linux-binaries.json
+            relay-image.json
+            relay-image.json.sig
 
       - name: Verify published Linux CLI signatures
         shell: bash
@@ -391,6 +489,23 @@ jobs:
             curl -fsSL --retry 5 --retry-delay 3 "${cli_url}.sig" -o /dev/null
             curl -fsSL --retry 5 --retry-delay 3 "${cli_url}.sha256.sig" -o /dev/null
           done < <(jq -r '.platforms[].cli.url' linux-release-assets/linux-binaries.json)
+
+      - name: Verify published Relay image descriptor
+        shell: bash
+        env:
+          NIGHTLY_VERSION: ${{ needs.check-changes.outputs.nightly_version }}
+        run: |
+          set -euo pipefail
+          curl -fsSL --retry 5 --retry-delay 3 \
+            "https://github.com/GCWing/BitFun/releases/download/${NIGHTLY_TAG}/relay-image.json" \
+            -o relay-image.published.json
+          test "$(jq -r '.tag' relay-image.published.json)" = "${NIGHTLY_TAG}"
+          test "$(jq -r '.version' relay-image.published.json)" = "${NIGHTLY_VERSION%%+*}"
+          test "$(jq -r '.image' relay-image.published.json)" = "ghcr.io/gcwing/bitfun-relay-server"
+          jq -e '.digest | test("^sha256:[0-9a-f]{64}$")' relay-image.published.json >/dev/null
+          curl -fsSL --retry 5 --retry-delay 3 \
+            "https://github.com/GCWing/BitFun/releases/download/${NIGHTLY_TAG}/relay-image.json.sig" \
+            -o /dev/null
 
       - name: Verify published macOS CLI assets
         shell: bash

@@ -137,8 +137,12 @@ export const MCPInteractionDialog: React.FC = () => {
       showCloseButton={false}
     >
       {currentRequest && (
-        <div className="mcp-interaction-dialog">
-          <div className="mcp-interaction-dialog__meta">
+        <div
+          className="mcp-interaction-dialog"
+          data-bf-component="mcp-interaction-dialog"
+          data-bf-part="root"
+        >
+          <div className="mcp-interaction-dialog__meta" data-bf-component="mcp-interaction-dialog" data-bf-part="meta">
             <span className="mcp-interaction-dialog__server">
               Server: {currentRequest.serverName || currentRequest.serverId}
             </span>
@@ -147,15 +151,17 @@ export const MCPInteractionDialog: React.FC = () => {
             )}
           </div>
 
-          <div className="mcp-interaction-dialog__section">
-            <div className="mcp-interaction-dialog__label">Request Params</div>
-            <pre className="mcp-interaction-dialog__params">{paramsPreview}</pre>
+          <div className="mcp-interaction-dialog__section" data-bf-component="mcp-interaction-dialog" data-bf-part="section">
+            <div className="mcp-interaction-dialog__label" data-bf-component="mcp-interaction-dialog" data-bf-part="label">Request Params</div>
+            <pre className="mcp-interaction-dialog__params" data-bf-component="mcp-interaction-dialog" data-bf-part="params">{paramsPreview}</pre>
           </div>
 
-          <div className="mcp-interaction-dialog__section">
-            <div className="mcp-interaction-dialog__label">Response JSON</div>
+          <div className="mcp-interaction-dialog__section" data-bf-component="mcp-interaction-dialog" data-bf-part="section">
+            <div className="mcp-interaction-dialog__label" data-bf-component="mcp-interaction-dialog" data-bf-part="label">Response JSON</div>
             <textarea
               className="mcp-interaction-dialog__editor"
+              data-bf-component="mcp-interaction-dialog"
+              data-bf-part="editor"
               value={editorValue}
               onChange={(e) => setEditorValue(e.target.value)}
               placeholder="{}"
@@ -163,7 +169,7 @@ export const MCPInteractionDialog: React.FC = () => {
             />
           </div>
 
-          <div className="mcp-interaction-dialog__actions">
+          <div className="mcp-interaction-dialog__actions" data-bf-component="mcp-interaction-dialog" data-bf-part="actions">
             <Button
               variant="secondary"
               size="small"

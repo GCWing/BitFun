@@ -16,17 +16,17 @@
   background: transparent;
   padding: 0;
   font-size: 12px;
-  color: var(--color-text-muted);
+  color: var(--bf-appearance-token-color-text-muted);
   text-decoration: underline;
   cursor: pointer;
   transition: color 0.15s ease, opacity 0.15s ease;
 
   &:hover {
-    color: var(--color-text-primary);
+    color: var(--bf-appearance-token-color-text-primary);
   }
 
   &:focus-visible {
-    outline: 2px solid color-mix(in srgb, var(--color-accent-500) 55%, transparent);
+    outline: 2px solid color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 55%, transparent);
     outline-offset: 2px;
     border-radius: 4px;
   }
@@ -48,7 +48,7 @@
   padding: 6px 20px;
   font-size: 13px;
   font-weight: 500;
-  color: var(--color-text-muted);
+  color: var(--bf-appearance-token-color-text-muted);
   cursor: pointer;
   transition: color 0.15s ease;
   white-space: nowrap;
@@ -57,11 +57,11 @@
   gap: 6px;
 
   &:hover:not(.is-active):not(:disabled) {
-    color: var(--color-text-secondary);
+    color: var(--bf-appearance-token-color-text-secondary);
   }
 
   &.is-active {
-    color: var(--color-text-primary);
+    color: var(--bf-appearance-token-color-text-primary);
     font-weight: 600;
   }
 
@@ -74,7 +74,7 @@
 .bitfun-remote-connect__group-divider {
   width: 1px;
   height: 16px;
-  background: var(--border-subtle);
+  background: var(--bf-appearance-token-border-subtle);
   flex-shrink: 0;
 }
 
@@ -83,7 +83,7 @@
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: var(--color-success);
+  background: var(--bf-appearance-token-color-success);
   flex-shrink: 0;
 }
 
@@ -103,7 +103,7 @@
   padding: 4px 10px;
   font-size: 12px;
   font-weight: 500;
-  color: var(--color-text-muted);
+  color: var(--bf-appearance-token-color-text-muted);
   cursor: pointer;
   transition: color 0.15s ease;
   white-space: nowrap;
@@ -112,16 +112,16 @@
   gap: 4px;
 
   &:hover:not(.is-active):not(:disabled) {
-    color: var(--color-text-secondary);
+    color: var(--bf-appearance-token-color-text-secondary);
   }
 
   &.is-active {
-    color: var(--color-text-primary);
+    color: var(--bf-appearance-token-color-text-primary);
     font-weight: 600;
   }
 
   &.is-connected {
-    color: var(--color-success);
+    color: var(--bf-appearance-token-color-success);
     font-weight: 600;
   }
 
@@ -134,7 +134,7 @@
 .bitfun-remote-connect__subtab-divider {
   width: 1px;
   height: 12px;
-  background: var(--border-subtle);
+  background: var(--bf-appearance-token-border-subtle);
   flex-shrink: 0;
 }
 
@@ -143,7 +143,7 @@
   width: 5px;
   height: 5px;
   border-radius: 50%;
-  background: var(--color-success);
+  background: var(--bf-appearance-token-color-success);
   flex-shrink: 0;
 }
 
@@ -164,8 +164,8 @@
   width: 200px;
   height: 200px;
   border-radius: 10px;
-  border: 1px solid var(--border-subtle);
-  background: var(--color-static-white);
+  border: 1px solid var(--bf-appearance-token-border-subtle);
+  background: var(--bf-appearance-token-color-static-white);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -174,16 +174,16 @@
   transition: transform 0.15s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.15s ease;
 
   &:hover {
-    box-shadow: 0 2px 8px var(--color-overlay-black-12);
+    box-shadow: 0 2px 8px var(--bf-appearance-token-color-overlay-black-12);
   }
 
   &:active {
     transform: scale(0.95);
-    box-shadow: 0 1px 2px var(--color-overlay-black-08);
+    box-shadow: 0 1px 2px var(--bf-appearance-token-color-overlay-black-08);
   }
 
   &:focus-visible {
-    outline: 2px solid var(--color-accent-500);
+    outline: 2px solid var(--bf-appearance-token-color-accent-500);
     outline-offset: 3px;
   }
 
@@ -207,11 +207,11 @@
   font-weight: 700;
   letter-spacing: 8px;
   font-family: 'Fira Code', 'Courier New', monospace;
-  color: var(--color-text-primary);
+  color: var(--bf-appearance-token-color-text-primary);
   padding: 16px 24px;
   border-radius: 10px;
-  border: 2px dashed var(--border-subtle);
-  background: var(--element-bg-subtle);
+  border: 2px dashed var(--bf-appearance-token-border-subtle);
+  background: var(--bf-appearance-token-element-bg-subtle);
   user-select: all;
 }
 
@@ -225,7 +225,7 @@
 
 .bitfun-remote-connect__peer-username {
   font-size: 12px;
-  color: var(--color-text-secondary);
+  color: var(--bf-appearance-token-color-text-secondary);
 }
 
 // ==================== Ngrok usage link ====================
@@ -252,7 +252,7 @@
 .bitfun-remote-connect__hint,
 .bitfun-remote-connect__description {
   font-size: 12px;
-  color: var(--color-text-muted);
+  color: var(--bf-appearance-token-color-text-muted);
   line-height: 1.6;
   margin: 0;
   width: 100%;
@@ -272,16 +272,16 @@
   max-width: 360px;
   margin: 0 auto;
   padding: 14px 16px;
-  border: 1px dashed var(--border-subtle);
+  border: 1px dashed var(--bf-appearance-token-border-subtle);
   border-radius: 4px;
-  background: color-mix(in srgb, var(--element-bg-subtle) 84%, transparent);
+  background: color-mix(in srgb, var(--bf-appearance-token-element-bg-subtle) 84%, transparent);
   box-sizing: border-box;
 }
 
 .bitfun-remote-connect__info-text,
 .bitfun-remote-connect__info-meta {
   font-size: 12px;
-  color: var(--color-text-muted);
+  color: var(--bf-appearance-token-color-text-muted);
   line-height: 1.7;
   margin: 0;
   text-align: left;
@@ -293,7 +293,7 @@
   gap: 4px;
   margin-bottom: 10px;
   padding-bottom: 10px;
-  border-bottom: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
 }
 
 .bitfun-remote-connect__lan-ip-select {
@@ -304,7 +304,7 @@
 
 .bitfun-remote-connect__info-meta-label {
   font-size: 12px;
-  color: var(--color-text-muted);
+  color: var(--bf-appearance-token-color-text-muted);
   white-space: nowrap;
 }
 
@@ -315,18 +315,18 @@
 
 .bitfun-remote-connect__description-link,
 .bitfun-remote-connect__step-link {
-  color: var(--color-text-secondary);
+  color: var(--bf-appearance-token-color-text-secondary);
   text-decoration: underline;
   cursor: pointer;
   text-underline-offset: 2px;
   transition: color 0.15s ease, opacity 0.15s ease;
 
   &:hover {
-    color: var(--color-text-primary);
+    color: var(--bf-appearance-token-color-text-primary);
   }
 
   &:focus-visible {
-    outline: 2px solid color-mix(in srgb, var(--color-accent-500) 55%, transparent);
+    outline: 2px solid color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 55%, transparent);
     outline-offset: 2px;
     border-radius: 4px;
   }
@@ -334,7 +334,7 @@
 
 .bitfun-remote-connect__error {
   font-size: 12px;
-  color: var(--color-error);
+  color: var(--bf-appearance-token-color-error);
   text-align: center;
   margin: 0;
 }
@@ -351,7 +351,7 @@
   border: none;
   padding: 0;
   font-size: 12px;
-  color: var(--color-accent-500);
+  color: var(--bf-appearance-token-color-accent-500);
   text-decoration: underline;
   cursor: pointer;
 
@@ -368,7 +368,7 @@
 
   .bitfun-input-label {
     font-size: 12px;
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
     margin-bottom: 0;
   }
 
@@ -387,7 +387,7 @@
 
 .bitfun-remote-connect__field-prefix {
   min-width: 96px;
-  color: var(--color-text-secondary);
+  color: var(--bf-appearance-token-color-text-secondary);
   text-align: left;
   flex-shrink: 0;
 }
@@ -408,16 +408,16 @@
     color 140ms ease;
 
   &--connect {
-    background: var(--color-accent-600);
-    color: var(--color-static-white);
-    border: 1px solid color-mix(in srgb, var(--color-accent-700) 35%, transparent);
+    background: var(--bf-appearance-token-color-accent-600);
+    color: var(--bf-appearance-token-color-static-white);
+    border: 1px solid color-mix(in srgb, var(--bf-appearance-token-color-accent-700) 35%, transparent);
 
     &:hover:not(:disabled) {
-      background: var(--color-accent-700);
+      background: var(--bf-appearance-token-color-accent-700);
     }
 
     &:focus-visible {
-      outline: 2px solid color-mix(in srgb, var(--color-accent-500) 55%, transparent);
+      outline: 2px solid color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 55%, transparent);
       outline-offset: 1px;
     }
 
@@ -429,13 +429,13 @@
 
   &--disconnect,
   &--cancel {
-    background: var(--element-bg-subtle);
-    color: var(--color-text-secondary);
-    border: 1px solid var(--border-subtle);
+    background: var(--bf-appearance-token-element-bg-subtle);
+    color: var(--bf-appearance-token-color-text-secondary);
+    border: 1px solid var(--bf-appearance-token-border-subtle);
 
     &:hover {
-      color: var(--color-text-primary);
-      border-color: var(--color-text-muted);
+      color: var(--bf-appearance-token-color-text-primary);
+      border-color: var(--bf-appearance-token-color-text-muted);
     }
   }
 }
@@ -476,7 +476,7 @@
 
 .bitfun-remote-connect__step {
   font-size: 12px;
-  color: var(--color-text-muted);
+  color: var(--bf-appearance-token-color-text-muted);
   line-height: 1.6;
   margin: 0;
   text-align: left;
@@ -489,16 +489,16 @@
   display: inline-flex;
   align-items: center;
   padding: 3px;
-  background: var(--element-bg-base);
-  border: 1px solid var(--border-subtle);
+  background: var(--bf-appearance-token-element-bg-base);
+  border: 1px solid var(--bf-appearance-token-border-subtle);
   border-radius: 20px;
 }
 
 .bitfun-remote-connect__mode-btn {
   padding: 5px 14px;
-  font-size: var(--font-size-xs);
+  font-size: var(--bf-appearance-token-font-size-xs);
   font-weight: $font-weight-medium;
-  color: var(--color-text-muted);
+  color: var(--bf-appearance-token-color-text-muted);
   background: transparent;
   border: none;
   border-radius: 17px;
@@ -510,20 +510,20 @@
     color $motion-fast $easing-standard;
 
   &:hover:not(.is-active) {
-    color: var(--color-text-primary);
-    background: var(--element-bg-subtle);
+    color: var(--bf-appearance-token-color-text-primary);
+    background: var(--bf-appearance-token-element-bg-subtle);
   }
 
   &.is-active {
-    color: var(--color-static-white);
-    background: var(--color-success);
+    color: var(--bf-appearance-token-color-static-white);
+    background: var(--bf-appearance-token-color-success);
     font-weight: $font-weight-semibold;
-    box-shadow: 0 1px 4px color-mix(in srgb, var(--color-success) 35%, transparent);
+    box-shadow: 0 1px 4px color-mix(in srgb, var(--bf-appearance-token-color-success) 35%, transparent);
     cursor: default;
   }
 
   &:focus-visible {
-    outline: 2px solid color-mix(in srgb, var(--color-success) 50%, transparent);
+    outline: 2px solid color-mix(in srgb, var(--bf-appearance-token-color-success) 50%, transparent);
     outline-offset: 1px;
   }
 }
@@ -531,6 +531,16 @@
 .bitfun-remote-connect__weixin-qr {
   margin-top: 12px;
   text-align: center;
+}
+
+.bitfun-remote-connect__weixin-verify {
+  display: flex;
+  width: 100%;
+  max-width: 360px;
+  margin: 0 auto;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
 }
 
 .bitfun-remote-connect__weixin-qr-img {
@@ -545,7 +555,7 @@
   display: inline-block;
   margin: 0 auto 8px;
   padding: 10px;
-  background: var(--color-static-white);
+  background: var(--bf-appearance-token-color-static-white);
   border-radius: 8px;
   box-sizing: border-box;
 

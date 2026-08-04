@@ -84,11 +84,13 @@ const NavBar: React.FC<NavBarProps> = ({
 
   if (isCollapsed) {
     return (
-      <div className={rootClassName} role="toolbar" aria-label={t('nav.aria.navControl')} onMouseDown={handleBarMouseDown} onDoubleClick={handleBarDoubleClick}>
+      <div data-bf-component="nav-bar" data-bf-part="root" data-bf-state="collapsed" className={rootClassName} role="toolbar" aria-label={t('nav.aria.navControl')} onMouseDown={handleBarMouseDown} onDoubleClick={handleBarDoubleClick}>
         <Tooltip content={t('header.expandLeftPanel')} placement="bottom" followCursor>
           <button
             type="button"
             className="bitfun-nav-bar__panel-toggle"
+            data-bf-component="nav-bar"
+            data-bf-part="panelToggle"
             onClick={onExpandNav}
             aria-label={t('header.expandLeftPanel')}
           >
@@ -100,11 +102,13 @@ const NavBar: React.FC<NavBarProps> = ({
   }
 
   return (
-    <div className={rootClassName} role="toolbar" aria-label={t('nav.aria.navControl')} onMouseDown={handleBarMouseDown} onDoubleClick={handleBarDoubleClick}>
+    <div data-bf-component="nav-bar" data-bf-part="root" className={rootClassName} role="toolbar" aria-label={t('nav.aria.navControl')} onMouseDown={handleBarMouseDown} onDoubleClick={handleBarDoubleClick}>
       <Tooltip content={t('header.collapseLeftPanel')} placement="bottom" followCursor>
         <button
           type="button"
           className="bitfun-nav-bar__panel-toggle"
+          data-bf-component="nav-bar"
+          data-bf-part="panelToggle"
           onClick={onExpandNav}
           aria-label={t('header.collapseLeftPanel')}
         >
@@ -117,6 +121,8 @@ const NavBar: React.FC<NavBarProps> = ({
         <button
           type="button"
           className={`bitfun-nav-bar__btn${!canGoBack ? ' is-inactive' : ''}`}
+          data-bf-component="nav-bar"
+          data-bf-part="back"
           onClick={canGoBack ? goBack : undefined}
           aria-disabled={!canGoBack}
           aria-label={t('nav.back')}
@@ -129,6 +135,8 @@ const NavBar: React.FC<NavBarProps> = ({
         <button
           type="button"
           className={`bitfun-nav-bar__btn${!canGoForward ? ' is-inactive' : ''}`}
+          data-bf-component="nav-bar"
+          data-bf-part="forward"
           onClick={canGoForward ? goForward : undefined}
           aria-disabled={!canGoForward}
           aria-label={t('nav.forward')}

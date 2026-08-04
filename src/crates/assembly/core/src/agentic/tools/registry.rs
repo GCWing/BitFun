@@ -16,6 +16,46 @@ use std::sync::Arc;
 pub(in crate::agentic::tools) type ToolRef = Arc<dyn Tool>;
 pub(in crate::agentic::tools) type ProductToolDecoratorRef = ToolDecoratorRef<dyn Tool>;
 
+fn route_external_tool_registration(tool: ToolRef) -> ToolRef {
+    #[cfg(feature = "external-sources")]
+    {
+        return crate::external_tools::intercept_external_tool_registry_registration(tool);
+    }
+    #[cfg(not(feature = "external-sources"))]
+    {
+        tool
+    }
+}
+
+fn detach_external_mcp_routes(server_id: &str) -> Vec<ToolRef> {
+    #[cfg(feature = "external-sources")]
+    {
+        return crate::external_tools::detach_external_tool_mcp_server(server_id);
+    }
+    #[cfg(not(feature = "external-sources"))]
+    {
+        let _ = server_id;
+        Vec::new()
+    }
+}
+
+fn retain_external_tool_muxes(prefix: &str) -> Vec<ToolRef> {
+    #[cfg(feature = "external-sources")]
+    {
+        return crate::external_tools::retain_external_tool_muxes_for_prefix(prefix);
+    }
+    #[cfg(not(feature = "external-sources"))]
+    {
+        let _ = prefix;
+        Vec::new()
+    }
+}
+
+fn notify_external_tool_registry_changed() {
+    #[cfg(feature = "external-sources")]
+    crate::external_sources::notify_external_tool_registry_changed();
+}
+
 pub use bitfun_agent_tools::GET_TOOL_SPEC_TOOL_NAME;
 
 /// Tool registry - manages all available tools (using IndexMap to maintain registration order)
@@ -77,13 +117,13 @@ impl ToolRegistry {
                 );
             }
 
-            let routed = crate::external_tools::intercept_external_tool_registry_registration(tool);
+            let routed = route_external_tool_registration(tool);
             self.inner.register_tool(routed);
             debug!("MCP tool registered: tool_name={}", name);
         }
 
         if tool_count > 0 {
-            crate::external_sources::notify_external_tool_registry_changed();
+            notify_external_tool_registry_changed();
         }
 
         let after_count = self.get_tool_names().len();
@@ -97,8 +137,7 @@ impl ToolRegistry {
 
     /// Remove all tools from the MCP server
     pub fn unregister_mcp_server_tools(&mut self, server_id: &str) {
-        let retained_external_routes =
-            crate::external_tools::detach_external_tool_mcp_server(server_id);
+        let retained_external_routes = detach_external_mcp_routes(server_id);
         let removed_tool_names = self
             .get_tool_names()
             .into_iter()
@@ -116,7 +155,7 @@ impl ToolRegistry {
         }
 
         if !retained_external_routes.is_empty() {
-            crate::external_sources::notify_external_tool_registry_changed();
+            notify_external_tool_registry_changed();
         }
 
         for key in removed_tool_names {
@@ -126,7 +165,7 @@ impl ToolRegistry {
 
     /// Remove all tools whose registry name starts with the given prefix.
     pub fn unregister_tools_by_prefix(&mut self, prefix: &str) -> usize {
-        let retained_muxes = crate::external_tools::retain_external_tool_muxes_for_prefix(prefix);
+        let retained_muxes = retain_external_tool_muxes(prefix);
         let retained_names = retained_muxes
             .iter()
             .map(|tool| tool.name().to_string())
@@ -149,7 +188,7 @@ impl ToolRegistry {
         }
 
         if !retained_muxes.is_empty() {
-            crate::external_sources::notify_external_tool_registry_changed();
+            notify_external_tool_registry_changed();
         }
 
         for key in removed_tool_names {
@@ -168,10 +207,10 @@ impl ToolRegistry {
     /// Register a single tool
     pub fn register_tool(&mut self, tool: ToolRef) {
         let is_router = tool.dynamic_provider_id() == Some("external-source-router");
-        let routed = crate::external_tools::intercept_external_tool_registry_registration(tool);
+        let routed = route_external_tool_registration(tool);
         self.inner.register_tool(routed);
         if !is_router {
-            crate::external_sources::notify_external_tool_registry_changed();
+            notify_external_tool_registry_changed();
         }
     }
 
@@ -546,6 +585,7 @@ mod tests {
             "InitMiniApp",
             "FinalizeMiniApp",
             "PublishMiniApp",
+            "PublishAppearance",
             "PageDeploy",
             "PagePublish",
             "ControlHub",
@@ -703,6 +743,7 @@ mod tests {
         assert!(!registry.is_tool_deferred("InitMiniApp"));
         assert!(!registry.is_tool_deferred("FinalizeMiniApp"));
         assert!(!registry.is_tool_deferred("PublishMiniApp"));
+        assert!(!registry.is_tool_deferred("PublishAppearance"));
     }
 
     #[test]

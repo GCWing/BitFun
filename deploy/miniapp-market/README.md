@@ -28,6 +28,11 @@ MiniApp 市场网页源码在 `src/miniapp-market-web/`，后端入口在
 
 不要单独上传 `dist/`，也不要在服务器上直接改源码。
 
+Skin 市场复用本服务的 GitHub OAuth、桌面 token 和 Web 会话别名。修改
+`miniapp-market-service/src/auth.rs`、`routes.rs` 或 OAuth 回跳参数时，必须同时
+验证 Skin 的“我的投稿”和“审核”接口；Skin 容器只能通过它自己的部署手册和
+专用 checkout 更新，不能从 MiniApp Compose 项目重建。
+
 ## 生产边界
 
 本目录只能部署 MiniApp 市场。不得修改、清理或重启现有 Relay、New API、官网

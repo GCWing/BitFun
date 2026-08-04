@@ -264,6 +264,23 @@ async fn load_and_validate_miniapp_agent_session(
     Ok(Some(session))
 }
 
+/// Align a reused hidden session with the tool policy of the current run.
+///
+/// `enable_tools` is baked into the session config at creation time, so sessions
+/// created by older builds (which disabled tools for marketplace MiniApps) would
+/// stay tool-less forever. Marketplace runs are now constrained by the backend
+/// research allowlist instead, so the session config is repaired on reuse.
+async fn sync_agent_session_tool_enablement(
+    coordinator: &ConversationCoordinator,
+    session_id: &str,
+    submission_plan: &MiniAppAgentSubmissionPlan,
+) -> Result<(), String> {
+    coordinator
+        .update_session_tool_enablement(session_id, submission_plan.enable_tools)
+        .await
+        .map_err(|e| format!("Failed to update MiniApp agent session tools: {}", e))
+}
+
 /// Ensure that one MiniApp topic has a dedicated hidden Agent session before
 /// the user opens its floating chat surface. This command intentionally accepts
 /// only an appdata-relative workspace, so it remains a local-host capability
@@ -298,6 +315,10 @@ pub async fn miniapp_agent_ensure_session(
         request.session_id.as_deref(),
         &workspace_plan.workspace_path,
         request.enable_tools,
+        state
+            .miniapp_manager
+            .uses_market_strict_runtime(&request.app_id)
+            .await,
     );
     let requested_model = request
         .model
@@ -324,6 +345,12 @@ pub async fn miniapp_agent_ensure_session(
                     .await
                     .map_err(|e| format!("Failed to update MiniApp agent session model: {}", e))?;
             }
+            sync_agent_session_tool_enablement(
+                coordinator.inner().as_ref(),
+                &existing_session_id,
+                &submission_plan,
+            )
+            .await?;
             (existing_session_id, false)
         } else {
             check_agent_rate_limit(
@@ -412,6 +439,10 @@ pub async fn miniapp_agent_run(
         request.session_id.as_deref(),
         &workspace_path,
         request.enable_tools,
+        state
+            .miniapp_manager
+            .uses_market_strict_runtime(&request.app_id)
+            .await,
     );
 
     let requested_model = request
@@ -439,6 +470,12 @@ pub async fn miniapp_agent_run(
                 .await
                 .map_err(|e| format!("Failed to update MiniApp agent session model: {}", e))?;
         }
+        sync_agent_session_tool_enablement(
+            coordinator.inner().as_ref(),
+            &existing_session_id,
+            &submission_plan,
+        )
+        .await?;
         existing_session_id
     } else {
         // One hidden session per task keeps MiniApp work isolated and out of

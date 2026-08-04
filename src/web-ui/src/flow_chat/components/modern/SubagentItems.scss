@@ -27,13 +27,12 @@
 
 // Subagent container for items under the same parent task.
 .subagent-items-container {
-  // Keep projected output clear of every card edge while the outer container
-  // stays aligned with the task header.
-  padding: var(--flowchat-card-expanded-pad-y) var(--flowchat-card-expanded-pad-x);
+  // Keep the expanded body on the card edge while preserving internal spacing.
+  padding: var(--bf-appearance-token-flowchat-card-expanded-pad-y) var(--bf-appearance-token-flowchat-card-expanded-pad-x);
 
   // Continue the task card border on left/right/bottom; top border is hidden.
-  background: var(--color-bg-scene);
-  border: 1px solid var(--border-base);
+  background: var(--bf-appearance-token-color-bg-scene);
+  border: 1px solid var(--bf-appearance-token-border-base);
   border-top: none;
   // Top corners are square to merge with the header card above.
   border-radius: 0 0 8px 8px;
@@ -46,11 +45,11 @@
 
   .flow-text-block--subagent-compact {
     margin-bottom: 0.15rem;
-    line-height: var(--flowchat-support-line-height);
+    line-height: var(--bf-appearance-token-flowchat-support-line-height);
 
     .markdown-renderer,
     .text-content {
-      line-height: var(--flowchat-support-line-height);
+      line-height: var(--bf-appearance-token-flowchat-support-line-height);
     }
 
     .markdown-renderer {
@@ -76,16 +75,16 @@
     align-items: center;
     gap: 8px;
     padding: 6px 0;
-    font-size: var(--flowchat-font-size-sm);
-    color: var(--color-text-muted);
+    font-size: var(--bf-appearance-token-flowchat-font-size-sm);
+    color: var(--bf-appearance-token-color-text-muted);
   }
 
   .subagent-text-block__expand-btn {
     background: none;
     border: none;
-    color: var(--flowchat-link-color);
+    color: var(--bf-appearance-token-flowchat-link-color);
     cursor: pointer;
-    font-size: var(--flowchat-font-size-sm);
+    font-size: var(--bf-appearance-token-flowchat-font-size-sm);
     padding: 0;
 
     &:hover {

@@ -18,26 +18,26 @@ export const RemoteConnectDisclaimerContent: React.FC<RemoteConnectDisclaimerCon
   const canAgree = !!onAgree && !agreed;
 
   return (
-    <div className="bitfun-remote-disclaimer">
-      <div className="bitfun-remote-disclaimer__meta">
+    <div data-bf-component="remote-connect-disclaimer" data-bf-part="root" className="bitfun-remote-disclaimer">
+      <div className="bitfun-remote-disclaimer__meta" data-bf-component="remote-connect-disclaimer" data-bf-part="meta">
         <Badge variant={agreed ? 'success' : 'warning'}>
           {t(agreed ? 'remoteConnect.disclaimerStatusAgreed' : 'remoteConnect.disclaimerStatusPending')}
         </Badge>
       </div>
 
-      <p className="bitfun-remote-disclaimer__text">{t('remoteConnect.disclaimerIntro')}</p>
+      <p className="bitfun-remote-disclaimer__text" data-bf-component="remote-connect-disclaimer" data-bf-part="intro">{t('remoteConnect.disclaimerIntro')}</p>
 
-      <h3 className="bitfun-remote-disclaimer__section-title">
+      <h3 className="bitfun-remote-disclaimer__section-title" data-bf-component="remote-connect-disclaimer" data-bf-part="title">
         {t('remoteConnect.disclaimerKeyRisks')}
       </h3>
-      <ol className="bitfun-remote-disclaimer__list bitfun-remote-disclaimer__list--key">
+      <ol className="bitfun-remote-disclaimer__list bitfun-remote-disclaimer__list--key" data-bf-component="remote-connect-disclaimer" data-bf-part="riskList">
         <li>{t('remoteConnect.disclaimerItemGeneralRisk')}</li>
         <li>{t('remoteConnect.disclaimerItemSecurity')}</li>
         <li>{t('remoteConnect.disclaimerItemEncryption')}</li>
         <li>{t('remoteConnect.disclaimerItemPrivacy')}</li>
       </ol>
 
-      <details className="bitfun-remote-disclaimer__details">
+      <details className="bitfun-remote-disclaimer__details" data-bf-component="remote-connect-disclaimer" data-bf-part="details">
         <summary>{t('remoteConnect.disclaimerFullDetails')}</summary>
         <ol className="bitfun-remote-disclaimer__list" start={5}>
           <li>{t('remoteConnect.disclaimerItemOpenSource')}</li>
@@ -55,7 +55,7 @@ export const RemoteConnectDisclaimerContent: React.FC<RemoteConnectDisclaimerCon
         </ol>
       </details>
 
-      <div className="bitfun-remote-disclaimer__actions">
+      <div className="bitfun-remote-disclaimer__actions" data-bf-component="remote-connect-disclaimer" data-bf-part="actions">
         <button
           type="button"
           className="bitfun-remote-disclaimer__btn bitfun-remote-disclaimer__btn--secondary"

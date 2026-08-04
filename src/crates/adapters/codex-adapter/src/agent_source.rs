@@ -7,8 +7,8 @@ use bitfun_product_domains::external_subagents::{
     external_subagent_candidate_id, ExternalSubagentBehaviorVersion,
     ExternalSubagentCompatibilityState, ExternalSubagentContributionId,
     ExternalSubagentContributionRole, ExternalSubagentDefinition, ExternalSubagentDiscoveryInput,
-    ExternalSubagentLocalId, ExternalSubagentMode, ExternalSubagentModelRequest,
-    ExternalSubagentProvenanceRef, ExternalSubagentProviderIdentity,
+    ExternalSubagentLocalId, ExternalSubagentMode, ExternalSubagentModelProfileRequest,
+    ExternalSubagentModelRequest, ExternalSubagentProvenanceRef, ExternalSubagentProviderIdentity,
     ExternalSubagentProviderSnapshot, ExternalSubagentSourceProvider, ExternalSubagentToolRequest,
     SecretText,
 };
@@ -42,7 +42,8 @@ const AGENTS_CONTROL_FIELDS: &[&str] = &[
 ];
 
 const DISPLAY_FIELDS: &[&str] = &["name", "description", "nickname_candidates"];
-const SUPPORTED_BEHAVIOR_FIELDS: &[&str] = &["developer_instructions", "model"];
+const SUPPORTED_BEHAVIOR_FIELDS: &[&str] =
+    &["developer_instructions", "model", "model_reasoning_effort"];
 
 #[derive(Debug, Clone)]
 pub struct CodexSubagentProviderOptions {
@@ -689,9 +690,7 @@ fn materialize_definition(
             continue;
         }
         let code = match key.as_str() {
-            "model_reasoning_effort" | "model_reasoning_summary" | "model_verbosity" => {
-                "codex_agent_reasoning_not_imported"
-            }
+            "model_reasoning_summary" | "model_verbosity" => "codex_agent_reasoning_not_imported",
             "sandbox_mode" | "sandbox_workspace_write" | "permissions" => {
                 "codex_agent_sandbox_not_imported"
             }
@@ -709,10 +708,32 @@ fn materialize_definition(
         .filter(|value| !value.is_empty());
     let requested_model = match effective_behavior.model.as_deref().or(default_model) {
         None | Some("") => ExternalSubagentModelRequest::Default,
-        Some(model) => ExternalSubagentModelRequest::Exact {
+        Some(model) => ExternalSubagentModelRequest::Reference {
             provider_hint: None,
             model_name: model.trim().to_string(),
         },
+    };
+    let requested_effort = effective_behavior
+        .behavior_fields
+        .get("model_reasoning_effort")
+        .or_else(|| controls.get("default_subagent_reasoning_effort"));
+    let requested_model_profile = match requested_effort {
+        None => None,
+        Some(Value::String(value)) => {
+            let profile = ExternalSubagentModelProfileRequest::ReasoningEffort {
+                value: value.clone(),
+            };
+            if profile.validate().is_ok() {
+                Some(profile)
+            } else {
+                invalid.push("codex_agent_reasoning_effort_invalid".to_string());
+                None
+            }
+        }
+        Some(_) => {
+            invalid.push("codex_agent_reasoning_effort_invalid".to_string());
+            None
+        }
     };
     let disabled = match controls.get("enabled") {
         None | Some(Value::Boolean(true)) => false,
@@ -724,10 +745,10 @@ fn materialize_definition(
     };
     for key in controls.keys() {
         match key.as_str() {
-            "enabled" | "default_subagent_model" | "job_max_runtime_seconds" => {}
-            "default_subagent_reasoning_effort" => {
-                blocked.push("codex_agent_default_reasoning_not_imported".to_string());
-            }
+            "enabled"
+            | "default_subagent_model"
+            | "default_subagent_reasoning_effort"
+            | "job_max_runtime_seconds" => {}
             "max_concurrent_threads_per_session" | "max_threads" | "max_depth" => {
                 blocked.push("codex_agent_concurrency_not_imported".to_string());
             }
@@ -764,6 +785,7 @@ fn materialize_definition(
             logical_id.as_str(),
             effective_behavior.prompt.as_str(),
             &serde_json::to_string(&requested_model).unwrap_or_default(),
+            &serde_json::to_string(&requested_model_profile).unwrap_or_default(),
             &serde_json::to_string(controls).unwrap_or_default(),
             &diagnostic_codes.join("|"),
         ])
@@ -782,6 +804,7 @@ fn materialize_definition(
         disabled,
         hidden: false,
         requested_model,
+        requested_model_profile,
         requested_tools,
         permission_constraints: Default::default(),
         compatibility,

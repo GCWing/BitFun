@@ -8,7 +8,7 @@ import {
 } from '@/tools/terminal/components/LazyTerminalOutputRenderer';
 import { BaseToolCard, ToolCardHeader } from './BaseToolCard';
 import { ToolCardCopyAction, ToolCardHeaderActions } from './ToolCardHeaderActions';
-import { ToolCommandPreview } from './ToolCommandPreview';
+import { CopyableTextPreview } from '../components/CopyableTextPreview';
 import { ToolTimeoutIndicator } from './ToolTimeoutIndicator';
 import { DotMatrixLoader } from '../../component-library';
 import { useToolCardHeightContract, type ToolCardCollapseReason } from './useToolCardHeightContract';
@@ -120,7 +120,7 @@ function renderFooter(model: ExecProcessCardModel, t: (key: string, options?: Re
   }
 
   return (
-    <div className="terminal-result-footer exec-process-result-footer">
+    <div data-bf-component="exec-process-tool-card" data-bf-part="footer" className="terminal-result-footer exec-process-result-footer">
       {model.workdir && (
         <span className="exec-process-footer-group exec-process-footer-group--workdir">
           <span className="terminal-result-label">{t('toolCards.terminal.workingDirectory')}</span>
@@ -304,15 +304,15 @@ export const ExecProcessToolCardView: React.FC<ExecProcessToolCardViewProps> = (
     : undefined;
 
   const renderPrimaryText = (variant: 'default' | 'compact' = 'default') => (
-    <ToolCommandPreview
+    <CopyableTextPreview
       ref={commandRef}
       as={variant === 'compact' ? 'span' : 'code'}
-      command={model.primaryText}
+      text={model.primaryText}
       emptyText={model.emptyText}
       className={
         variant === 'compact'
-          ? 'terminal-command-compact tool-command-preview--compact'
-          : 'terminal-command'
+          ? 'terminal-command-compact copyable-text-preview--compact copyable-text-preview--theme-font'
+          : 'terminal-command copyable-text-preview--theme-font'
       }
       tooltipContent={model.primaryText && isPrimaryTextTruncated ? model.primaryText : undefined}
     />
@@ -370,8 +370,8 @@ export const ExecProcessToolCardView: React.FC<ExecProcessToolCardViewProps> = (
     output: string,
     options?: { formatSessionPreview?: boolean },
   ) => (
-    <div className="exec-process-output-copy-region">
-      <div className="exec-process-output-copy-actions">
+    <div className="exec-process-output-copy-region" data-bf-component="exec-process-tool-card" data-bf-part="output">
+      <div className="exec-process-output-copy-actions" data-bf-component="exec-process-tool-card" data-bf-part="actions">
         {renderCopyOutputButton()}
       </div>
       <LazyTerminalOutputRenderer
@@ -401,10 +401,10 @@ export const ExecProcessToolCardView: React.FC<ExecProcessToolCardViewProps> = (
   );
 
   const renderHeaderExtra = () => (
-    <span className="terminal-header-extra">
+    <span className="terminal-header-extra" data-bf-component="exec-process-tool-card" data-bf-part="actions">
       {renderTimeoutIndicator()}
       {rejectedOrCancelled && (
-        <span className={`terminal-status-text ${cancelledStatusClassName}`}>
+        <span className={`terminal-status-text ${cancelledStatusClassName}`} data-bf-component="exec-process-tool-card" data-bf-part="status">
           {t(cancelledStatusLabelKey)}
         </span>
       )}
@@ -425,17 +425,17 @@ export const ExecProcessToolCardView: React.FC<ExecProcessToolCardViewProps> = (
 
     if (status === 'completed') {
       return (
-        <div className="terminal-result-container">
+        <div data-bf-component="exec-process-tool-card" data-bf-part="result" className="terminal-result-container">
           {model.resultOutput ? (
-            <div className="terminal-result-output">
+            <div className="terminal-result-output" data-bf-component="exec-process-tool-card" data-bf-part="output">
               {renderOutputWithCopyAction(model.resultOutput, { formatSessionPreview: true })}
             </div>
           ) : model.resultNoticeText ? (
-            <div className="terminal-execution-output terminal-waiting exec-process-result-notice">
+            <div className="terminal-execution-output terminal-waiting exec-process-result-notice" data-bf-component="exec-process-tool-card" data-bf-part="waiting" data-bf-state="waiting">
               <span className="waiting-text">{model.resultNoticeText}</span>
             </div>
           ) : (
-            <div className="terminal-execution-output terminal-waiting exec-process-empty-output">
+            <div className="terminal-execution-output terminal-waiting exec-process-empty-output" data-bf-component="exec-process-tool-card" data-bf-part="waiting" data-bf-state="waiting">
               <span className="waiting-text">{model.noOutputText}</span>
             </div>
           )}
@@ -446,13 +446,13 @@ export const ExecProcessToolCardView: React.FC<ExecProcessToolCardViewProps> = (
 
     if (rejectedOrCancelled) {
       return (
-        <div className="terminal-result-container cancelled">
+        <div data-bf-component="exec-process-tool-card" data-bf-part="result" data-bf-state="cancelled" className="terminal-result-container cancelled">
           {liveOutput && (
-            <div className="terminal-result-output">
+            <div className="terminal-result-output" data-bf-component="exec-process-tool-card" data-bf-part="output">
               {renderOutputWithCopyAction(liveOutput)}
             </div>
           )}
-          <div className="terminal-result-footer">
+          <div className="terminal-result-footer" data-bf-component="exec-process-tool-card" data-bf-part="footer">
             <span className="terminal-cancelled-text">
               {t(cancelledStatusLabelKey)}
             </span>
@@ -463,7 +463,7 @@ export const ExecProcessToolCardView: React.FC<ExecProcessToolCardViewProps> = (
 
     if (status === 'pending_confirmation') {
       return (
-        <div className="terminal-execution-output terminal-waiting">
+        <div data-bf-component="exec-process-tool-card" data-bf-part="waiting" data-bf-state="waiting" className="terminal-execution-output terminal-waiting">
           <span className="waiting-text">{t('toolCards.approval.waiting')}</span>
         </div>
       );
@@ -471,7 +471,7 @@ export const ExecProcessToolCardView: React.FC<ExecProcessToolCardViewProps> = (
 
     if (liveOutput && isRunning) {
       return (
-        <div className="terminal-execution-output">
+        <div data-bf-component="exec-process-tool-card" data-bf-part="output" className="terminal-execution-output">
           {renderOutputWithCopyAction(liveOutput)}
         </div>
       );
@@ -479,7 +479,7 @@ export const ExecProcessToolCardView: React.FC<ExecProcessToolCardViewProps> = (
 
     if (isRunning || isParamsStreaming) {
       return (
-        <div className="terminal-execution-output terminal-waiting">
+        <div data-bf-component="exec-process-tool-card" data-bf-part="waiting" data-bf-state="waiting" className="terminal-execution-output terminal-waiting">
           <span className="waiting-text">{isParamsStreaming ? t('toolCards.terminal.receivingParams') : model.waitingText}</span>
         </div>
       );
@@ -494,7 +494,7 @@ export const ExecProcessToolCardView: React.FC<ExecProcessToolCardViewProps> = (
     }
 
     return (
-      <div className="error-content">
+      <div data-bf-component="exec-process-tool-card" data-bf-part="error" data-bf-state="error" className="error-content">
         <div className="error-message">
           {toolItem.toolResult?.error || t('toolCards.terminal.executionFailed')}
         </div>
@@ -513,7 +513,7 @@ export const ExecProcessToolCardView: React.FC<ExecProcessToolCardViewProps> = (
   );
 
   return (
-    <div ref={cardRootRef} data-tool-card-id={toolId ?? ''}>
+    <div ref={cardRootRef} data-tool-card-id={toolId ?? ''} data-bf-component="exec-process-tool-card" data-bf-part="root">
       <BaseToolCard
         status={status}
         isExpanded={isExpanded}

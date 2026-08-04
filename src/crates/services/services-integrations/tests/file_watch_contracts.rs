@@ -4,6 +4,7 @@ use bitfun_services_integrations::file_watch::{
     FileWatchEventKind, FileWatchService, FileWatcherConfig,
 };
 use std::fs;
+use std::sync::Arc;
 use std::time::Duration;
 
 #[tokio::test]
@@ -26,6 +27,36 @@ fn file_watch_event_kind_serializes_snake_case() {
     let value = serde_json::to_value(FileWatchEventKind::Modify).expect("serialize event kind");
 
     assert_eq!(value, "modify");
+}
+
+#[test]
+fn file_watch_worker_does_not_extend_tokio_runtime_lifetime() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let service = Arc::new(FileWatchService::new(FileWatcherConfig::default()));
+    let worker_service = service.clone();
+    let watched_path = temp.path().to_string_lossy().into_owned();
+    let (finished_tx, finished_rx) = std::sync::mpsc::sync_channel(1);
+
+    let runtime_owner = std::thread::spawn(move || {
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("test runtime");
+        runtime.block_on(async move {
+            worker_service
+                .watch_path(&watched_path, None)
+                .await
+                .expect("watch temp directory");
+        });
+        drop(runtime);
+        finished_tx.send(()).expect("report runtime shutdown");
+    });
+
+    finished_rx
+        .recv_timeout(Duration::from_secs(3))
+        .expect("file-watch worker must not keep a short-lived runtime alive");
+    drop(service);
+    runtime_owner.join().expect("runtime owner thread");
 }
 
 #[tokio::test]
@@ -52,6 +83,44 @@ async fn file_watch_publishes_debounced_batches_to_backend_subscribers() {
     assert!(batch
         .iter()
         .any(|event| event.path == file.to_string_lossy()));
+}
+
+#[tokio::test]
+async fn file_watch_can_include_build_named_directories_for_semantic_sources() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let build_skill = temp.path().join("build");
+    fs::create_dir_all(&build_skill).expect("build-named skill directory");
+    let mut config = FileWatcherConfig::default();
+    config.debounce_interval_ms = 40;
+    config.ignore_hidden_files = false;
+    config.ignore_common_build_directories = false;
+    let service = FileWatchService::new(config.clone());
+    let mut events = service.subscribe();
+    service
+        .watch_path(temp.path().to_str().unwrap(), Some(config))
+        .await
+        .expect("watch semantic source root");
+
+    let file = build_skill.join("SKILL.md");
+    fs::write(
+        &file,
+        "---\nname: build\ndescription: Build workflow\n---\n",
+    )
+    .expect("write skill file");
+
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
+    loop {
+        let batch = tokio::time::timeout_at(deadline, events.recv())
+            .await
+            .expect("build-named semantic source should emit events")
+            .expect("watch broadcast remains open");
+        if batch
+            .iter()
+            .any(|event| event.path == file.to_string_lossy())
+        {
+            break;
+        }
+    }
 }
 
 #[tokio::test]

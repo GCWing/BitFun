@@ -18,6 +18,8 @@
 #
 # Sets / exports (when mode=cn):
 #   BITFUN_MIRROR_MODE=cn|global
+#   BITFUN_MIRROR_REQUESTED_MODE=auto|cn|global
+#   BITFUN_MIRROR_REASON=<human-readable-resolution-reason>
 #   BITFUN_USE_CN_MIRROR=0|1
 #   BITFUN_GITHUB_GIT_URL / BITFUN_GITHUB_TARBALL_URL
 #   BITFUN_DOCKER_GET_URL
@@ -217,16 +219,21 @@ bitfun_mirror_resolve_mode() {
   forced="$(echo "$forced" | tr '[:upper:]' '[:lower:]')"
   case "$forced" in
     cn|china|zh|zh-cn|zh_cn|1|true|yes)
+      export BITFUN_MIRROR_REQUESTED_MODE=cn
       export BITFUN_MIRROR_MODE=cn
+      export BITFUN_MIRROR_REASON=forced-cn
       export BITFUN_USE_CN_MIRROR=1
       return 0
       ;;
     global|intl|international|off|0|false|no|overseas)
+      export BITFUN_MIRROR_REQUESTED_MODE=global
       export BITFUN_MIRROR_MODE=global
+      export BITFUN_MIRROR_REASON=forced-global
       export BITFUN_USE_CN_MIRROR=0
       return 0
       ;;
   esac
+  export BITFUN_MIRROR_REQUESTED_MODE=auto
 
   # Already resolved in this shell (or exported by the caller). Detection costs
   # up to four HTTP lookups plus two 4s probes, and mirror.sh is initialised at
@@ -234,10 +241,12 @@ bitfun_mirror_resolve_mode() {
   # because a network blip mid-deploy could flip the mode between steps.
   case "${BITFUN_MIRROR_MODE:-}" in
     cn)
+      export BITFUN_MIRROR_REASON="${BITFUN_MIRROR_REASON:-cached-cn}"
       export BITFUN_USE_CN_MIRROR=1
       return 0
       ;;
     global)
+      export BITFUN_MIRROR_REASON="${BITFUN_MIRROR_REASON:-cached-global}"
       export BITFUN_USE_CN_MIRROR=0
       return 0
       ;;
@@ -248,6 +257,7 @@ bitfun_mirror_resolve_mode() {
   if [ "$country" = "CN" ]; then
     echo ">>> Region detect: public IP country=CN → China mirrors"
     export BITFUN_MIRROR_MODE=cn
+    export BITFUN_MIRROR_REASON=public-ip-cn
     export BITFUN_USE_CN_MIRROR=1
     return 0
   fi
@@ -260,6 +270,7 @@ bitfun_mirror_resolve_mode() {
   if [ -n "$country" ]; then
     echo ">>> Region detect: public IP country=${country} → global mirrors"
     export BITFUN_MIRROR_MODE=global
+    export BITFUN_MIRROR_REASON="public-ip-${country}"
     export BITFUN_USE_CN_MIRROR=0
     return 0
   fi
@@ -267,6 +278,7 @@ bitfun_mirror_resolve_mode() {
   if bitfun_mirror_timezone_suggests_cn; then
     echo ">>> Region detect: timezone suggests mainland China → China mirrors"
     export BITFUN_MIRROR_MODE=cn
+    export BITFUN_MIRROR_REASON=timezone-cn
     export BITFUN_USE_CN_MIRROR=1
     return 0
   fi
@@ -274,12 +286,14 @@ bitfun_mirror_resolve_mode() {
   if bitfun_mirror_connectivity_suggests_cn; then
     echo ">>> Region detect: GitHub unreachable + Aliyun reachable → China mirrors"
     export BITFUN_MIRROR_MODE=cn
+    export BITFUN_MIRROR_REASON=connectivity-cn
     export BITFUN_USE_CN_MIRROR=1
     return 0
   fi
 
   echo ">>> Region detect: inconclusive → global mirrors"
   export BITFUN_MIRROR_MODE=global
+  export BITFUN_MIRROR_REASON=inconclusive-global
   export BITFUN_USE_CN_MIRROR=0
   return 0
 }
@@ -1224,7 +1238,7 @@ bitfun_mirror_init() {
   bitfun_mirror_parse_args "$@"
   bitfun_mirror_resolve_mode
   bitfun_mirror_export_urls
-  echo ">>> Mirror mode: ${BITFUN_MIRROR_MODE} (BITFUN_USE_CN_MIRROR=${BITFUN_USE_CN_MIRROR})"
+  echo ">>> Mirror mode: ${BITFUN_MIRROR_MODE} (requested=${BITFUN_MIRROR_REQUESTED_MODE:-auto}, reason=${BITFUN_MIRROR_REASON:-unknown}, BITFUN_USE_CN_MIRROR=${BITFUN_USE_CN_MIRROR})"
   if [ "${BITFUN_MIRROR_MODE}" = "cn" ]; then
     echo ">>> GitHub git URL:     ${BITFUN_GITHUB_GIT_URL}"
     echo ">>> GitHub tarball URL: ${BITFUN_GITHUB_TARBALL_URL}"

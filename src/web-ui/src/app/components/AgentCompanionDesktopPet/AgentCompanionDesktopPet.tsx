@@ -854,6 +854,8 @@ export const AgentCompanionDesktopPet: React.FC = () => {
     <main
       className={`bitfun-agent-companion-window${isMenuOverlay ? ' bitfun-agent-companion-window--menu-open' : ''}${IS_WINDOWS_WEBVIEW ? ' bitfun-agent-companion-window--native-hover' : ''}`}
       onContextMenu={onContextMenu}
+      data-bf-component="agent-companion-desktop-pet"
+      data-bf-part="root"
     >
       {overlay && (
         <div
@@ -887,14 +889,14 @@ export const AgentCompanionDesktopPet: React.FC = () => {
         <div
           ref={dockRef}
           className="bitfun-agent-companion-window__dock"
-        >
+         data-bf-component="agent-companion-desktop-pet" data-bf-part="dock">
           {visibleTasks.length > 0 && (
             <div
               ref={bubblesRef}
               className={`bitfun-agent-companion-window__bubbles${isSingleTask ? ' bitfun-agent-companion-window__bubbles--single' : ''}`}
               aria-live="polite"
               onDoubleClick={event => event.stopPropagation()}
-            >
+             data-bf-component="agent-companion-desktop-pet" data-bf-part="bubbles">
               {displayTasks.map(task => {
                 const isComposingTask = overlay?.kind === 'composer'
                   && overlay.sessionId === task.sessionId;
@@ -902,10 +904,10 @@ export const AgentCompanionDesktopPet: React.FC = () => {
                 const bubbleClassName = `bitfun-agent-companion-window__bubble bitfun-agent-companion-window__bubble--${task.state}${isSingleTask ? ' bitfun-agent-companion-window__bubble--single' : ''}${isComposingTask ? ' bitfun-agent-companion-window__bubble--composing' : ''}`;
                 const bubbleBody = (
                   <>
-                    <span className="bitfun-agent-companion-window__bubble-title">
+                    <span className="bitfun-agent-companion-window__bubble-title" data-bf-component="agent-companion-desktop-pet" data-bf-part="bubbleTitle">
                       {task.title}
                     </span>
-                    <span className="bitfun-agent-companion-window__bubble-status">
+                    <span className="bitfun-agent-companion-window__bubble-status" data-bf-component="agent-companion-desktop-pet" data-bf-part="bubbleStatus">
                       {t(task.labelKey, { defaultValue: task.defaultLabel })}
                     </span>
                     {isSingleTask && task.latestOutput && (() => {
@@ -925,7 +927,7 @@ export const AgentCompanionDesktopPet: React.FC = () => {
                             }
                           }}
                           className={`bitfun-agent-companion-window__bubble-output${isTyping ? ' bitfun-agent-companion-window__bubble-output--typing' : ''}`}
-                        >
+                         data-bf-component="agent-companion-desktop-pet" data-bf-part="bubbleOutput" data-bf-state={isTyping ? 'typing' : undefined}>
                           {visibleOutput}
                         </span>
                       );
@@ -943,7 +945,7 @@ export const AgentCompanionDesktopPet: React.FC = () => {
                     {isComposingTask ? (
                       // The bubble itself becomes the composer: no extra panel,
                       // and the window keeps its size.
-                      <div className={bubbleClassName}>
+                      <div className={bubbleClassName} data-bf-component="agent-companion-desktop-pet" data-bf-part="bubble">
                         {bubbleBody}
                         <div className="bitfun-agent-companion-window__bubble-composer">
                           <input
@@ -1000,6 +1002,8 @@ export const AgentCompanionDesktopPet: React.FC = () => {
                         type="button"
                         className={bubbleClassName}
                         onClick={() => void openTaskSession(task)}
+                        data-bf-component="agent-companion-desktop-pet"
+                        data-bf-part="bubble"
                       >
                         {bubbleBody}
                       </button>
@@ -1038,7 +1042,7 @@ export const AgentCompanionDesktopPet: React.FC = () => {
             onPointerUp={onPetPointerUp}
             onPointerCancel={onPetPointerCancel}
             onContextMenu={onPetContextMenu}
-          >
+           data-bf-component="agent-companion-desktop-pet" data-bf-part="hitbox" data-bf-state={hasAttentionTask ? 'attention' : undefined}>
             <ChatInputPixelPet
               mood={displayMood}
               pet={pet}
@@ -1046,7 +1050,7 @@ export const AgentCompanionDesktopPet: React.FC = () => {
               petdexScale={PETDEX_DESKTOP_SCALE}
               onPetFrameSizeChange={handlePetFrameSizeChange}
               className="bitfun-agent-companion-window__pet"
-            />
+             data-bf-component="agent-companion-desktop-pet" data-bf-part="pet"/>
           </div>
         </div>
       </div>

@@ -10,8 +10,9 @@ use std::time::Instant;
 
 use async_trait::async_trait;
 use bitfun_agent_runtime::sdk::{
-    AgentRuntime, AgentSessionArchiveStateRequest, AgentSessionDeleteRequest,
-    AgentSessionForkAtTurnRequest, AgentSessionRenameRequest, AgentSessionUsageRequest,
+    AgentLocalCommandTurnRecordRequest, AgentRuntime, AgentSessionArchiveStateRequest,
+    AgentSessionDeleteRequest, AgentSessionForkAtTurnRequest, AgentSessionLineageRequest,
+    AgentSessionLineageSnapshot, AgentSessionRenameRequest, AgentSessionUsageRequest,
     PortErrorKind, RuntimeError,
 };
 use bitfun_core::agentic::coordination::{ConversationCoordinator, DialogScheduler};
@@ -19,14 +20,19 @@ use bitfun_core::agentic::core::Session;
 use bitfun_core::agentic::persistence::{SessionBranchResult, SessionMetadataPage};
 use bitfun_core::agentic::session::SessionViewRestoreTiming;
 use bitfun_core::product_runtime::{CoreAgentRuntimeCompatibility, CoreProductAgentRuntime};
-use bitfun_core::service::remote_ssh::workspace_state::get_effective_session_path;
+use bitfun_core::service::remote_ssh::workspace_state::{
+    get_effective_session_path, LOCAL_WORKSPACE_SSH_HOST,
+};
 use bitfun_core::service::remote_ssh::SSHConnectionManager;
-use bitfun_core::service::session::{DialogTurnData, SessionMetadata, SessionStatus};
+use bitfun_core::service::session::{
+    DialogTurnData, DialogTurnKind, SessionMetadata, SessionStatus, SessionTranscriptExport,
+    SessionTranscriptExportOptions, SessionTurnCatalog, SessionTurnWindowResponse,
+};
 use bitfun_core::service::session_usage::SessionUsageReport;
 use bitfun_core::service::token_usage::TokenUsageService;
 use bitfun_core::service::workspace::WorkspaceService;
 use bitfun_core::util::errors::BitFunError;
-use bitfun_runtime_ports::AgentContextReloadRequest;
+use bitfun_runtime_ports::{AgentContextReloadRequest, SessionTurnWindowRequest};
 use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
 
@@ -90,12 +96,45 @@ fn desktop_runtime_session_error(error: RuntimeError) -> DesktopSessionApplicati
     }
 }
 
+fn local_command_turn_record_request(
+    turn: &DialogTurnData,
+) -> DesktopSessionApplicationResult<Option<AgentLocalCommandTurnRecordRequest>> {
+    if turn.kind != DialogTurnKind::LocalCommand {
+        return Ok(None);
+    }
+    let metadata = match turn.user_message.metadata.clone() {
+        None => serde_json::Map::new(),
+        Some(serde_json::Value::Object(metadata)) => metadata,
+        Some(_) => {
+            return Err(DesktopSessionApplicationError::Validation(
+                "Local command Turn metadata must be an object".to_string(),
+            ));
+        }
+    };
+    Ok(Some(AgentLocalCommandTurnRecordRequest {
+        session_id: turn.session_id.clone(),
+        content: turn.user_message.content.clone(),
+        turn_id: Some(turn.turn_id.clone()),
+        timestamp_ms: Some(turn.timestamp),
+        metadata,
+    }))
+}
+
 #[derive(Debug)]
 pub(crate) struct DesktopSessionViewRestore {
     pub session: Session,
     pub turns: Vec<DialogTurnData>,
     pub total_turn_count: usize,
+    pub turn_catalog: SessionTurnCatalog,
     pub timings: SessionViewRestoreTiming,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct DesktopRecordedLocalCommandTurn {
+    pub turn_id: String,
+    pub storage_turn_index: usize,
+    pub total_turn_count: usize,
+    pub turn_catalog: SessionTurnCatalog,
 }
 
 #[derive(Debug)]
@@ -138,7 +177,10 @@ struct DesktopSessionScopeResolver {
 impl DesktopSessionScopeResolver {
     async fn resolve(&self, request: DesktopSessionScopeRequest) -> ResolvedDesktopSessionScope {
         let remote_connection_id = normalized_optional(request.remote_connection_id.as_deref());
-        let requested_remote_ssh_host = normalized_optional(request.remote_ssh_host.as_deref());
+        let requested_remote_ssh_host = normalized_remote_ssh_host(
+            remote_connection_id.as_deref(),
+            request.remote_ssh_host.as_deref(),
+        );
         let registered_remote_ssh_host =
             if let Some(connection_id) = remote_connection_id.as_deref() {
                 self.workspace_service
@@ -194,6 +236,28 @@ fn normalized_optional(value: Option<&str>) -> Option<String> {
         .map(str::trim)
         .filter(|value| !value.is_empty())
         .map(ToOwned::to_owned)
+}
+
+fn normalized_remote_ssh_host(
+    remote_connection_id: Option<&str>,
+    remote_ssh_host: Option<&str>,
+) -> Option<String> {
+    let host = normalized_optional(remote_ssh_host)?;
+    if remote_connection_id.is_none() && is_local_workspace_host(&host) {
+        return None;
+    }
+    Some(host)
+}
+
+fn is_local_workspace_host(host: &str) -> bool {
+    let host = host.to_ascii_lowercase();
+    host == LOCAL_WORKSPACE_SSH_HOST
+        || host.starts_with("localhost:")
+        || host == "127.0.0.1"
+        || host.starts_with("127.0.0.1:")
+        || host == "::1"
+        || host == "[::1]"
+        || host.starts_with("[::1]:")
 }
 
 fn choose_remote_ssh_host(
@@ -252,6 +316,10 @@ impl DesktopSessionApplication {
 
     pub(crate) fn agent_runtime(&self) -> &AgentRuntime {
         &self.agent_runtime
+    }
+
+    pub(crate) fn compatibility(&self) -> &CoreAgentRuntimeCompatibility {
+        &self.compatibility
     }
 
     pub(crate) async fn reload_session_context(
@@ -333,6 +401,23 @@ impl DesktopSessionApplication {
             .map_err(|error| DesktopSessionApplicationError::Core(error.to_string()))
     }
 
+    pub(crate) async fn get_session_lineage(
+        &self,
+        request: DesktopSessionScopeRequest,
+        anchor_session_id: &str,
+    ) -> DesktopSessionApplicationResult<Option<AgentSessionLineageSnapshot>> {
+        let scope = self.resolved_scope(request).await;
+        self.agent_runtime
+            .get_session_lineage(AgentSessionLineageRequest {
+                workspace_path: scope.workspace_path,
+                anchor_session_id: anchor_session_id.to_string(),
+                remote_connection_id: scope.remote_connection_id,
+                remote_ssh_host: scope.resolved_remote_ssh_host,
+            })
+            .await
+            .map_err(|error| DesktopSessionApplicationError::Runtime(error.into_message()))
+    }
+
     pub(crate) async fn list_archived_sessions(
         &self,
         request: DesktopSessionScopeRequest,
@@ -342,6 +427,20 @@ impl DesktopSessionApplication {
             .into_iter()
             .filter(|session| session.status == SessionStatus::Archived)
             .collect())
+    }
+
+    pub(crate) async fn export_session_transcript(
+        &self,
+        request: DesktopSessionScopeRequest,
+        session_id: &str,
+        options: &SessionTranscriptExportOptions,
+    ) -> DesktopSessionApplicationResult<SessionTranscriptExport> {
+        let scope = self.resolved_scope(request).await;
+        self.ensure_runtime_ownership(&scope)?;
+        self.compatibility
+            .export_persisted_session_transcript(&self.storage_path(&scope), session_id, options)
+            .await
+            .map_err(desktop_core_session_error)
     }
 
     pub(crate) async fn load_session_turns(
@@ -358,6 +457,20 @@ impl DesktopSessionApplication {
             .map_err(|error| DesktopSessionApplicationError::Core(error.to_string()))
     }
 
+    pub(crate) async fn load_session_turn_window(
+        &self,
+        scope_request: DesktopSessionScopeRequest,
+        mut request: SessionTurnWindowRequest,
+    ) -> DesktopSessionApplicationResult<SessionTurnWindowResponse> {
+        let scope = self.resolved_scope(scope_request).await;
+        let storage_path = self.storage_path(&scope);
+        request.workspace_path = storage_path.clone();
+        self.compatibility
+            .load_session_turn_window_from_storage_path(&storage_path, request)
+            .await
+            .map_err(|error| DesktopSessionApplicationError::Core(error.to_string()))
+    }
+
     pub(crate) async fn load_session_metadata(
         &self,
         request: DesktopSessionScopeRequest,
@@ -369,6 +482,86 @@ impl DesktopSessionApplication {
             .load_persisted_session_metadata(&storage_path, session_id)
             .await
             .map_err(|error| DesktopSessionApplicationError::Core(error.to_string()))
+    }
+
+    pub(crate) async fn save_session_turn(
+        &self,
+        request: DesktopSessionScopeRequest,
+        turn: &DialogTurnData,
+    ) -> DesktopSessionApplicationResult<()> {
+        let scope = self.resolved_scope(request).await;
+        self.ensure_runtime_ownership(&scope)?;
+        let storage_path = self.storage_path(&scope);
+        self.compatibility
+            .ensure_session_loaded_from_storage_path(&storage_path, &turn.session_id, false)
+            .await
+            .map_err(desktop_core_session_error)?;
+        if let Some(local_command) = local_command_turn_record_request(turn)? {
+            return self
+                .agent_runtime
+                .record_completed_local_command_turn(local_command)
+                .await
+                .map(|_| ())
+                .map_err(desktop_runtime_session_error);
+        }
+        let mutation = self
+            .compatibility
+            .begin_persisted_session_mutation(&storage_path, &turn.session_id)
+            .await
+            .map_err(desktop_core_session_error)?;
+        self.compatibility
+            .save_persisted_dialog_turn(&mutation, turn)
+            .await
+            .map_err(desktop_core_session_error)
+    }
+
+    pub(crate) async fn record_local_command_turn(
+        &self,
+        request: DesktopSessionScopeRequest,
+        turn: &DialogTurnData,
+    ) -> DesktopSessionApplicationResult<DesktopRecordedLocalCommandTurn> {
+        let scope = self.resolved_scope(request).await;
+        self.ensure_runtime_ownership(&scope)?;
+        let storage_path = self.storage_path(&scope);
+        self.compatibility
+            .ensure_session_loaded_from_storage_path(&storage_path, &turn.session_id, false)
+            .await
+            .map_err(desktop_core_session_error)?;
+        let local_command = local_command_turn_record_request(turn)?.ok_or_else(|| {
+            DesktopSessionApplicationError::Validation(
+                "record_local_command_turn accepts only local_command Turns".to_string(),
+            )
+        })?;
+        let recorded = self
+            .agent_runtime
+            .record_completed_local_command_turn(local_command)
+            .await
+            .map_err(desktop_runtime_session_error)?;
+        let (_, _, total_turn_count, turn_catalog, _) = self
+            .compatibility
+            .restore_session_view_from_storage_path(&storage_path, &turn.session_id, false, Some(1))
+            .await
+            .map_err(desktop_core_session_error)?;
+        let catalog_entry = turn_catalog
+            .entries
+            .iter()
+            .find(|entry| {
+                entry.turn_id.as_deref() == Some(recorded.turn_id.as_str())
+                    && entry.storage_turn_index == recorded.storage_turn_index
+            })
+            .ok_or_else(|| {
+                DesktopSessionApplicationError::OutcomeUnknown(format!(
+                    "Recorded local command Turn is missing from the authoritative catalog: {}",
+                    recorded.turn_id
+                ))
+            })?;
+
+        Ok(DesktopRecordedLocalCommandTurn {
+            turn_id: recorded.turn_id,
+            storage_turn_index: catalog_entry.storage_turn_index,
+            total_turn_count,
+            turn_catalog,
+        })
     }
 
     pub(crate) async fn touch_session(
@@ -614,7 +807,7 @@ impl DesktopSessionApplication {
         let resolve_storage_path_duration_ms =
             path_started_at.elapsed().as_millis().min(u64::MAX as u128) as u64;
         on_storage_path_resolved(resolve_storage_path_duration_ms);
-        let (mut session, turns, total_turn_count, mut timings) = self
+        let (mut session, turns, total_turn_count, turn_catalog, mut timings) = self
             .compatibility
             .restore_session_view_from_storage_path(
                 &storage_path,
@@ -634,6 +827,7 @@ impl DesktopSessionApplication {
             session,
             turns,
             total_turn_count,
+            turn_catalog,
             timings,
         })
     }
@@ -791,6 +985,39 @@ mod tests {
         );
     }
 
+    #[test]
+    fn desktop_local_usage_turn_maps_to_the_fixed_runtime_append_contract() {
+        let mut turn = DialogTurnData::new_with_kind(
+            DialogTurnKind::LocalCommand,
+            "local-usage-report-1".to_string(),
+            2,
+            "session-1".to_string(),
+            None,
+            bitfun_core::service::session::UserMessageData {
+                id: "local-usage-user-report-1".to_string(),
+                content: "# Usage".to_string(),
+                timestamp: 42,
+                metadata: Some(json!({
+                    "localCommandKind": "usage_report",
+                    "reportId": "report-1"
+                })),
+            },
+        );
+        turn.timestamp = 42;
+
+        let request = local_command_turn_record_request(&turn)
+            .expect("valid local command")
+            .expect("local command request");
+        assert_eq!(request.session_id, "session-1");
+        assert_eq!(request.turn_id.as_deref(), Some("local-usage-report-1"));
+        assert_eq!(request.content, "# Usage");
+        assert_eq!(request.timestamp_ms, Some(42));
+        assert_eq!(request.metadata["localCommandKind"], "usage_report");
+
+        let source = include_str!("session_application.rs");
+        assert!(source.contains("record_completed_local_command_turn(local_command)"));
+    }
+
     struct RecordingDeletePort {
         events: Arc<Mutex<Vec<&'static str>>>,
         workspace_path: Arc<Mutex<Option<String>>>,
@@ -908,6 +1135,29 @@ mod tests {
         );
         assert_eq!(normalized_optional(Some("  ")), None);
         assert_eq!(normalized_optional(None), None);
+    }
+
+    #[test]
+    fn local_host_sentinels_require_a_remote_connection_id() {
+        for host in [
+            "localhost",
+            "LOCALHOST:22",
+            "127.0.0.1",
+            "127.0.0.1:22",
+            "::1",
+            "[::1]:22",
+        ] {
+            assert_eq!(normalized_remote_ssh_host(None, Some(host)), None);
+        }
+
+        assert_eq!(
+            normalized_remote_ssh_host(Some("connection-1"), Some(" localhost ")),
+            Some("localhost".to_string())
+        );
+        assert_eq!(
+            normalized_remote_ssh_host(None, Some(" legacy.example ")),
+            Some("legacy.example".to_string())
+        );
     }
 
     #[test]

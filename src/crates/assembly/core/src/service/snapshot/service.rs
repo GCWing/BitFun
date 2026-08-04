@@ -201,10 +201,26 @@ impl SnapshotService {
         file_path: &Path,
         anchor_operation_id: Option<&str>,
     ) -> SnapshotResult<(String, String, Option<usize>)> {
+        self.get_file_diff_with_anchor_before(session_id, file_path, anchor_operation_id, None)
+            .await
+    }
+
+    pub async fn get_file_diff_with_anchor_before(
+        &self,
+        session_id: &str,
+        file_path: &Path,
+        anchor_operation_id: Option<&str>,
+        max_turn_exclusive: Option<usize>,
+    ) -> SnapshotResult<(String, String, Option<usize>)> {
         self.ensure_initialized().await?;
         let snapshot_core = self.snapshot_core.read().await;
         snapshot_core
-            .get_file_diff_with_anchor(file_path, session_id, anchor_operation_id)
+            .get_file_diff_with_anchor_before(
+                file_path,
+                session_id,
+                anchor_operation_id,
+                max_turn_exclusive,
+            )
             .await
     }
 
@@ -213,10 +229,20 @@ impl SnapshotService {
         session_id: &str,
         file_path: &Path,
     ) -> SnapshotResult<crate::service::snapshot::types::SessionFileDiffStats> {
+        self.get_session_file_diff_stats_before(session_id, file_path, None)
+            .await
+    }
+
+    pub async fn get_session_file_diff_stats_before(
+        &self,
+        session_id: &str,
+        file_path: &Path,
+        max_turn_exclusive: Option<usize>,
+    ) -> SnapshotResult<crate::service::snapshot::types::SessionFileDiffStats> {
         self.ensure_initialized().await?;
         let snapshot_core = self.snapshot_core.read().await;
         snapshot_core
-            .get_session_file_diff_stats(session_id, file_path)
+            .get_session_file_diff_stats_before(session_id, file_path, max_turn_exclusive)
             .await
     }
 
@@ -225,9 +251,19 @@ impl SnapshotService {
         session_id: &str,
         operation_id: &str,
     ) -> SnapshotResult<crate::service::snapshot::types::FileOperation> {
+        self.get_operation_summary_before(session_id, operation_id, None)
+            .await
+    }
+
+    pub async fn get_operation_summary_before(
+        &self,
+        session_id: &str,
+        operation_id: &str,
+        max_turn_exclusive: Option<usize>,
+    ) -> SnapshotResult<crate::service::snapshot::types::FileOperation> {
         self.ensure_initialized().await?;
         let snapshot_core = self.snapshot_core.read().await;
-        snapshot_core.get_operation(session_id, operation_id)
+        snapshot_core.get_operation_before(session_id, operation_id, max_turn_exclusive)
     }
 
     /// Complete a file modification (after snapshot + diff summary).
@@ -321,6 +357,57 @@ impl SnapshotService {
         snapshot_core.rollback_to_turn(session_id, turn_index).await
     }
 
+    pub(crate) async fn prepare_workspace_revert(
+        &self,
+        session_id: &str,
+        state: &mut crate::agentic::session::revert::SessionRevertState,
+    ) -> SnapshotResult<()> {
+        self.ensure_writable().await?;
+        self.snapshot_core
+            .write()
+            .await
+            .prepare_workspace_revert(session_id, state)
+            .await
+    }
+
+    pub(crate) async fn apply_workspace_revert(
+        &self,
+        session_id: &str,
+        state: &crate::agentic::session::revert::SessionRevertState,
+    ) -> SnapshotResult<Vec<PathBuf>> {
+        self.ensure_writable().await?;
+        self.snapshot_core
+            .read()
+            .await
+            .apply_workspace_revert(session_id, state)
+            .await
+    }
+
+    pub(crate) async fn commit_workspace_revert(
+        &self,
+        session_id: &str,
+        state: &crate::agentic::session::revert::SessionRevertState,
+    ) -> SnapshotResult<()> {
+        self.ensure_writable().await?;
+        self.snapshot_core
+            .write()
+            .await
+            .commit_workspace_revert(session_id, state)
+            .await
+    }
+
+    pub(crate) async fn delete_workspace_revert_checkpoint(
+        &self,
+        state: &crate::agentic::session::revert::SessionRevertState,
+    ) -> SnapshotResult<()> {
+        self.ensure_writable().await?;
+        self.snapshot_core
+            .write()
+            .await
+            .delete_workspace_revert_checkpoint(state)
+            .await
+    }
+
     pub async fn accept_session(&self, session_id: &str) -> SnapshotResult<()> {
         self.ensure_writable().await?;
         info!("Accepting session changes: session_id={}", session_id);
@@ -379,15 +466,31 @@ impl SnapshotService {
     }
 
     pub async fn get_session_files(&self, session_id: &str) -> SnapshotResult<Vec<PathBuf>> {
+        self.get_session_files_before(session_id, None).await
+    }
+
+    pub async fn get_session_files_before(
+        &self,
+        session_id: &str,
+        max_turn_exclusive: Option<usize>,
+    ) -> SnapshotResult<Vec<PathBuf>> {
         self.ensure_initialized().await?;
         let snapshot_core = self.snapshot_core.read().await;
-        Ok(snapshot_core.get_session_files(session_id))
+        Ok(snapshot_core.get_session_files_before(session_id, max_turn_exclusive))
     }
 
     pub async fn get_session_turns(&self, session_id: &str) -> SnapshotResult<Vec<usize>> {
+        self.get_session_turns_before(session_id, None).await
+    }
+
+    pub async fn get_session_turns_before(
+        &self,
+        session_id: &str,
+        max_turn_exclusive: Option<usize>,
+    ) -> SnapshotResult<Vec<usize>> {
         self.ensure_initialized().await?;
         let snapshot_core = self.snapshot_core.read().await;
-        Ok(snapshot_core.get_session_turns(session_id))
+        Ok(snapshot_core.get_session_turns_before(session_id, max_turn_exclusive))
     }
 
     pub async fn get_turn_files(
@@ -395,9 +498,19 @@ impl SnapshotService {
         session_id: &str,
         turn_index: usize,
     ) -> SnapshotResult<Vec<PathBuf>> {
+        self.get_turn_files_before(session_id, turn_index, None)
+            .await
+    }
+
+    pub async fn get_turn_files_before(
+        &self,
+        session_id: &str,
+        turn_index: usize,
+        max_turn_exclusive: Option<usize>,
+    ) -> SnapshotResult<Vec<PathBuf>> {
         self.ensure_initialized().await?;
         let snapshot_core = self.snapshot_core.read().await;
-        Ok(snapshot_core.get_turn_files(session_id, turn_index))
+        Ok(snapshot_core.get_turn_files_before(session_id, turn_index, max_turn_exclusive))
     }
 
     pub async fn get_file_diff(
@@ -411,9 +524,17 @@ impl SnapshotService {
     }
 
     pub async fn get_session_stats(&self, session_id: &str) -> SnapshotResult<SessionStats> {
+        self.get_session_stats_before(session_id, None).await
+    }
+
+    pub async fn get_session_stats_before(
+        &self,
+        session_id: &str,
+        max_turn_exclusive: Option<usize>,
+    ) -> SnapshotResult<SessionStats> {
         self.ensure_initialized().await?;
         let snapshot_core = self.snapshot_core.read().await;
-        Ok(snapshot_core.get_session_stats(session_id))
+        Ok(snapshot_core.get_session_stats_before(session_id, max_turn_exclusive))
     }
 
     pub async fn get_system_stats(&self) -> SnapshotResult<SystemStats> {
@@ -450,9 +571,18 @@ impl SnapshotService {
     }
 
     pub async fn get_session(&self, session_id: &str) -> SnapshotResult<SessionInfo> {
+        self.get_session_before(session_id, None).await
+    }
+
+    pub async fn get_session_before(
+        &self,
+        session_id: &str,
+        max_turn_exclusive: Option<usize>,
+    ) -> SnapshotResult<SessionInfo> {
         self.ensure_initialized().await?;
         let snapshot_core = self.snapshot_core.read().await;
-        let operations = snapshot_core.get_session_operations(session_id);
+        let operations =
+            snapshot_core.get_session_operations_before(session_id, max_turn_exclusive);
         Ok(SessionInfo {
             session_id: session_id.to_string(),
             operations,

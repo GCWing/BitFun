@@ -61,10 +61,12 @@ pub(super) async fn local_snapshot_session_files(
     port: &dyn LocalWorkspaceSnapshotPort,
     workspace_path: PathBuf,
     session_id: String,
+    max_turn_exclusive: Option<usize>,
 ) -> Result<Vec<PathBuf>, String> {
     port.get_session_files(LocalWorkspaceSnapshotSessionRequest {
         workspace_path,
         session_id,
+        max_turn_exclusive,
     })
     .await
     .map_err(|error| {
@@ -79,10 +81,12 @@ pub(super) async fn local_snapshot_session_stats(
     port: &dyn LocalWorkspaceSnapshotPort,
     workspace_path: PathBuf,
     session_id: String,
+    max_turn_exclusive: Option<usize>,
 ) -> Result<LocalWorkspaceSnapshotStats, String> {
     port.get_session_stats(LocalWorkspaceSnapshotSessionRequest {
         workspace_path,
         session_id,
+        max_turn_exclusive,
     })
     .await
     .map_err(|error| {
@@ -160,10 +164,18 @@ pub(crate) async fn get_session_files(
 
     bitfun_agent_runtime::session_control::validate_session_id(&session_id)?;
     require_local_snapshot_workspace(request, &workspace_path).await?;
+    let scope = ensure_session_workspace_runtime_ownership(state, request)?;
+    let storage_path = resolved_session_storage_scope(state, scope).await?;
+    let read = state
+        .compatibility
+        .begin_persisted_session_read(&storage_path, &session_id)
+        .await
+        .map_err(|error| format!("Failed to open a consistent snapshot view: {error}"))?;
     let files = local_snapshot_session_files(
         state.local_workspace_snapshot.as_ref(),
         PathBuf::from(&workspace_path),
         session_id,
+        read.visible_turn_end(),
     )
     .await?;
 
@@ -185,13 +197,11 @@ pub(crate) async fn rollback_to_turn(state: &PeerHostState, args: &Value) -> Res
     let workspace = PathBuf::from(&workspace_path);
     let scope = ensure_session_workspace_runtime_ownership(state, request)?;
     let session_storage_path = resolved_session_storage_scope(state, scope).await?;
-    if delete_turns {
-        state
-            .compatibility
-            .ensure_session_loaded_from_storage_path(&session_storage_path, &session_id, false)
-            .await
-            .map_err(|error| format!("Failed to load session before rollback: {error}"))?;
-    }
+    state
+        .compatibility
+        .ensure_session_loaded_from_storage_path(&session_storage_path, &session_id, false)
+        .await
+        .map_err(|error| format!("Failed to load session before rollback: {error}"))?;
     let maintenance = state
         .compatibility
         .begin_session_maintenance(&session_storage_path, &session_id, 2_000)
@@ -207,32 +217,28 @@ pub(crate) async fn rollback_to_turn(state: &PeerHostState, args: &Value) -> Res
         .map_err(|error| format!("Failed to cancel Peer descendants before rollback: {error}"))?;
     state.turns.drain_session_turns(&session_id);
 
-    let mutation = if delete_turns {
-        Some(
-            state
-                .compatibility
-                .begin_persisted_session_mutation(&session_storage_path, &session_id)
-                .await
-                .map_err(|error| format!("Failed to lock session rollback: {error}"))?,
-        )
-    } else {
-        None
-    };
+    let mutation = state
+        .compatibility
+        .begin_persisted_session_mutation(&session_storage_path, &session_id)
+        .await
+        .map_err(|error| format!("Failed to lock session rollback: {error}"))?;
+    state
+        .compatibility
+        .commit_session_revert_before_snapshot_mutation(&mutation)
+        .await
+        .map_err(|error| {
+            format!("Failed to commit the staged Session undo before rollback: {error}")
+        })?;
 
     let rolled_back_parent_turn_ids = if delete_turns {
         let turns = state
             .compatibility
-            .load_persisted_session_turns(&session_storage_path, &session_id, None)
+            .load_persisted_session_turns_for_mutation(&mutation, None)
             .await
             .map_err(|error| format!("Failed to load turns before rollback: {error}"))?;
         state
             .compatibility
-            .validate_persisted_session_context_rollback(
-                mutation
-                    .as_ref()
-                    .expect("mutation exists when deleting turns"),
-                turn_index,
-            )
+            .validate_persisted_session_context_rollback(&mutation, turn_index)
             .await
             .map_err(|error| format!("Failed to validate session rollback: {error}"))?;
         turns
@@ -261,12 +267,7 @@ pub(crate) async fn rollback_to_turn(state: &PeerHostState, args: &Value) -> Res
     if delete_turns {
         if let Err(error) = state
             .compatibility
-            .rollback_persisted_session_context_to_turn_start(
-                mutation
-                    .as_ref()
-                    .expect("mutation exists when deleting turns"),
-                turn_index,
-            )
+            .rollback_persisted_session_context_to_turn_start(&mutation, turn_index)
             .await
         {
             return Err(history_rollback_partial_failure(error));
@@ -414,6 +415,9 @@ mod tests {
         let cancellation = rollback_source
             .find("cancel_peer_turns")
             .expect("descendant cancellation must remain in the rollback flow");
+        let revert_commit = rollback_source
+            .find("commit_session_revert_before_snapshot_mutation")
+            .expect("staged Session undo must be committed before legacy rollback");
         let file_rollback = rollback_source
             .find("rollback_local_workspace_files(")
             .expect("workspace-file rollback must remain in the rollback flow");
@@ -426,7 +430,8 @@ mod tests {
         assert!(
             remote_guard < maintenance
                 && maintenance < cancellation
-                && cancellation < file_rollback
+                && cancellation < revert_commit
+                && revert_commit < file_rollback
                 && file_rollback < history_rollback
                 && history_rollback < event_projection,
             "rollback must preserve remote guard, maintenance, cancellation, files, history, and event order"
@@ -438,12 +443,22 @@ mod tests {
         let port = RecordingSnapshotPort::default();
         let workspace = PathBuf::from("workspace");
 
-        let files = local_snapshot_session_files(&port, workspace.clone(), "session-1".to_string())
-            .await
-            .expect("file projection should succeed");
-        let stats = local_snapshot_session_stats(&port, workspace.clone(), "session-1".to_string())
-            .await
-            .expect("stats projection should succeed");
+        let files = local_snapshot_session_files(
+            &port,
+            workspace.clone(),
+            "session-1".to_string(),
+            Some(2),
+        )
+        .await
+        .expect("file projection should succeed");
+        let stats = local_snapshot_session_stats(
+            &port,
+            workspace.clone(),
+            "session-1".to_string(),
+            Some(2),
+        )
+        .await
+        .expect("stats projection should succeed");
         let restored =
             rollback_local_workspace_files(&port, workspace.clone(), "session-1".to_string(), 4)
                 .await
@@ -463,6 +478,15 @@ mod tests {
                 .expect("file request")
                 .workspace_path,
             workspace
+        );
+        assert_eq!(
+            port.file_request
+                .lock()
+                .expect("file request lock")
+                .as_ref()
+                .expect("file request")
+                .max_turn_exclusive,
+            Some(2)
         );
         assert_eq!(
             port.rollback_request

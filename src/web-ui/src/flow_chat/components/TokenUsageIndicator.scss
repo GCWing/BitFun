@@ -11,7 +11,7 @@
   justify-content: center;
   padding: 0;
   border-radius: 8px;
-  font-size: var(--flowchat-font-size-xxs);
+  font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
   font-weight: 600;
   transition: all 0.25s ease;
   cursor: default;
@@ -35,7 +35,7 @@
     left: 0;
     right: 0;
     bottom: 0;
-    background: var(--color-overlay-white-08);
+    background: var(--bf-appearance-token-color-overlay-white-08);
     border-radius: 8px;
     overflow: hidden;
   }
@@ -69,9 +69,9 @@
   }
   
   &__percentage {
-    line-height: var(--flowchat-compact-line-height);
+    line-height: var(--bf-appearance-token-flowchat-compact-line-height);
     font-weight: 600;
-    font-size: var(--flowchat-font-size-xxs);
+    font-size: var(--bf-appearance-token-flowchat-font-size-xxs);
   }
   
   // Hover behavior
@@ -85,27 +85,27 @@
   
   // Normal state (0-69%)
   &--normal {
-    background: var(--glass-blue-subtle);
-    color: var(--color-accent-500);
-    border: 1px solid color-mix(in srgb, var(--color-accent-600) 25%, transparent);
+    background: var(--bf-appearance-token-glass-blue-subtle);
+    color: var(--bf-appearance-token-color-accent-500);
+    border: 1px solid color-mix(in srgb, var(--bf-appearance-token-color-accent-600) 25%, transparent);
     
     .bitfun-token-usage__progress-fill {
       background: linear-gradient(
         90deg,
-        var(--border-accent-soft),
-        color-mix(in srgb, var(--color-accent-500) 50%, transparent)
+        var(--bf-appearance-token-border-accent-soft),
+        color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 50%, transparent)
       );
     }
     
     &:hover {
-      background: color-mix(in srgb, var(--color-accent-600) 12%, transparent);
-      border-color: var(--color-accent-400);
+      background: color-mix(in srgb, var(--bf-appearance-token-color-accent-600) 12%, transparent);
+      border-color: var(--bf-appearance-token-color-accent-400);
       
       .bitfun-token-usage__progress-fill {
         background: linear-gradient(
           90deg,
-          var(--border-accent),
-          color-mix(in srgb, var(--color-accent-500) 60%, transparent)
+          var(--bf-appearance-token-border-accent),
+          color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 60%, transparent)
         );
       }
     }
@@ -113,29 +113,29 @@
   
   // Warning state (80%+)
   &--warning {
-    background: color-mix(in srgb, var(--color-warning) 8%, transparent);
-    color: var(--color-warning);
-    border: 1px solid color-mix(in srgb, var(--color-warning) 25%, transparent);
+    background: color-mix(in srgb, var(--bf-appearance-token-color-warning) 8%, transparent);
+    color: var(--bf-appearance-token-color-warning);
+    border: 1px solid color-mix(in srgb, var(--bf-appearance-token-color-warning) 25%, transparent);
     animation: pulse-warning 2s ease-in-out infinite;
     
     .bitfun-token-usage__progress-fill {
       background: linear-gradient(
         90deg,
-        color-mix(in srgb, var(--color-warning) 30%, transparent),
-        color-mix(in srgb, var(--color-warning) 50%, transparent)
+        color-mix(in srgb, var(--bf-appearance-token-color-warning) 30%, transparent),
+        color-mix(in srgb, var(--bf-appearance-token-color-warning) 50%, transparent)
       );
       animation: progress-pulse 2s ease-in-out infinite;
     }
     
     &:hover {
-      background: color-mix(in srgb, var(--color-warning) 12%, transparent);
-      border-color: color-mix(in srgb, var(--color-warning) 40%, transparent);
+      background: color-mix(in srgb, var(--bf-appearance-token-color-warning) 12%, transparent);
+      border-color: color-mix(in srgb, var(--bf-appearance-token-color-warning) 40%, transparent);
       
       .bitfun-token-usage__progress-fill {
         background: linear-gradient(
           90deg,
-          color-mix(in srgb, var(--color-warning) 40%, transparent),
-          color-mix(in srgb, var(--color-warning) 60%, transparent)
+          color-mix(in srgb, var(--bf-appearance-token-color-warning) 40%, transparent),
+          color-mix(in srgb, var(--bf-appearance-token-color-warning) 60%, transparent)
         );
       }
     }
@@ -145,10 +145,10 @@
 // Warning pulse animation
 @keyframes pulse-warning {
   0%, 100% {
-    box-shadow: 0 0 0 color-mix(in srgb, var(--color-warning) 0%, transparent);
+    box-shadow: 0 0 0 color-mix(in srgb, var(--bf-appearance-token-color-warning) 0%, transparent);
   }
   50% {
-    box-shadow: 0 0 8px color-mix(in srgb, var(--color-warning) 40%, transparent);
+    box-shadow: 0 0 8px color-mix(in srgb, var(--bf-appearance-token-color-warning) 40%, transparent);
   }
 }
 

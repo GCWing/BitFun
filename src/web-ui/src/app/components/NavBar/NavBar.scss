@@ -10,9 +10,9 @@
   align-items: center;
   height: 38px;
   flex-shrink: 0;
-  padding: 0 6px;
-  gap: 2px;
-  background: var(--color-bg-primary);
+  padding: 0 $size-gap-2;
+  gap: $size-gap-1;
+  background: var(--bf-appearance-token-color-bg-primary);
   user-select: none;
 
   &--collapsed {
@@ -42,12 +42,16 @@
     border: none;
     border-radius: $size-radius-sm;
     background: transparent;
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
     cursor: pointer;
-    transition:
-      transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
-      color 120ms ease,
-      background 120ms ease;
+    flex-shrink: 0;
+    transition: color $motion-fast $easing-standard,
+                background $motion-fast $easing-standard;
+
+    &:hover:not(.is-inactive) {
+      color: var(--bf-appearance-token-color-text-primary);
+      background: var(--bf-appearance-token-element-bg-soft);
+    }
 
     &.is-inactive {
       opacity: 0.32;
@@ -56,20 +60,38 @@
 
     &:active:not(.is-inactive) {
       transform: scale(0.96);
-      background: var(--element-bg-medium);
+      background: var(--bf-appearance-token-element-bg-medium);
     }
 
     &:focus-visible {
-      outline: 2px solid var(--color-accent-500);
-      outline-offset: -2px;
+      outline: 2px solid var(--bf-appearance-token-color-accent-500);
+      outline-offset: -1px;
     }
   }
 
-  @media (hover: hover) and (pointer: fine) {
-    &__btn:hover:not(.is-inactive),
-    &__panel-toggle:hover {
-      color: var(--color-text-primary);
-      background: var(--element-bg-soft);
+  &__panel-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    border: none;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--bf-appearance-token-color-text-muted);
+    cursor: pointer;
+    transition: color $motion-fast $easing-standard,
+                background $motion-fast $easing-standard;
+
+    &:hover {
+      color: var(--bf-appearance-token-color-text-primary);
+      background: var(--bf-appearance-token-element-bg-soft);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--bf-appearance-token-color-accent-500);
+      outline-offset: -1px;
     }
   }
 

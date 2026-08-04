@@ -87,16 +87,16 @@ const ActionFormModal: React.FC<ActionFormModalProps> = ({ isOpen, target, onClo
       size="medium"
       contentInset
     >
-      <div className="quick-actions-config__modal-body" onKeyDown={handleKeyDown}>
+      <div className="quick-actions-config__modal-body" onKeyDown={handleKeyDown} data-bf-component="quick-actions-config" data-bf-part="dialog">
         {target && (
-          <div className="quick-actions-config__modal-icon-preview">
+          <div data-bf-component="quick-actions-config" data-bf-part="dialogIcon" className="quick-actions-config__modal-icon-preview">
             <div className="quick-actions-config__modal-action-icon">
               {getActionIcon(target.id, 18)}
             </div>
           </div>
         )}
 
-        <div className="quick-actions-config__modal-field">
+        <div data-bf-component="quick-actions-config" data-bf-part="field" className="quick-actions-config__modal-field">
           <label className="quick-actions-config__modal-label" htmlFor="qa-label">
             {t('modal.labelField')}
           </label>
@@ -109,7 +109,7 @@ const ActionFormModal: React.FC<ActionFormModalProps> = ({ isOpen, target, onClo
           />
         </div>
 
-        <div className="quick-actions-config__modal-field">
+        <div data-bf-component="quick-actions-config" data-bf-part="field" className="quick-actions-config__modal-field">
           <label className="quick-actions-config__modal-label" htmlFor="qa-prompt">
             {t('modal.promptField')}
           </label>
@@ -125,7 +125,7 @@ const ActionFormModal: React.FC<ActionFormModalProps> = ({ isOpen, target, onClo
           <p className="quick-actions-config__modal-hint">{t('modal.promptHint')}</p>
         </div>
 
-        <div className="quick-actions-config__modal-footer">
+        <div data-bf-component="quick-actions-config" data-bf-part="dialogFooter" className="quick-actions-config__modal-footer">
           <Button variant="ghost" size="small" onClick={onClose}>
             {t('modal.cancel')}
           </Button>
@@ -159,17 +159,17 @@ const ActionRow: React.FC<ActionRowProps> = ({ action, onToggle, onEdit, onDelet
   const actionText = resolveQuickActionText(action, t);
 
   return (
-    <div className="quick-actions-config__row">
-      <div className="quick-actions-config__row-icon">
+    <div className="quick-actions-config__row" data-bf-component="quick-actions-config" data-bf-part="row">
+      <div data-bf-component="quick-actions-config" data-bf-part="rowIcon" className="quick-actions-config__row-icon">
         {getActionIcon(action.id)}
       </div>
 
-      <div className="quick-actions-config__row-body">
+      <div data-bf-component="quick-actions-config" data-bf-part="rowBody" className="quick-actions-config__row-body">
         <div className="quick-actions-config__row-label">{actionText.label}</div>
         <div className="quick-actions-config__row-prompt">{actionText.prompt}</div>
       </div>
 
-      <div className="quick-actions-config__row-controls">
+      <div data-bf-component="quick-actions-config" data-bf-part="rowControls" className="quick-actions-config__row-controls">
         <Switch
           checked={action.enabled}
           onChange={() => onToggle(action.id)}
@@ -271,7 +271,7 @@ const QuickActionsConfig: React.FC = () => {
 
   if (loading) {
     return (
-      <ConfigPageLayout className="quick-actions-config">
+      <ConfigPageLayout className="quick-actions-config" data-bf-component="quick-actions-config" data-bf-part="root">
         <ConfigPageHeader title={t('page.title')} subtitle={t('page.subtitle')} />
         <ConfigPageContent>
           <ConfigPageLoading text={t('loading')} />
@@ -284,17 +284,17 @@ const QuickActionsConfig: React.FC = () => {
   const customActions = actions.filter(a => !BUILTIN_IDS.has(a.id));
 
   return (
-    <ConfigPageLayout className="quick-actions-config">
+    <ConfigPageLayout className="quick-actions-config" data-bf-component="quick-actions-config" data-bf-part="root">
       <ConfigPageHeader title={t('page.title')} subtitle={t('page.subtitle')} />
 
-      <ConfigPageContent className="quick-actions-config__content">
+      <ConfigPageContent data-bf-component="quick-actions-config" data-bf-part="content" className="quick-actions-config__content">
 
         {/* ── Built-in actions ──────────────────────────────────────────── */}
         <ConfigPageSection
           title={t('sections.builtin.title')}
           description={t('sections.builtin.description')}
         >
-          <div className="quick-actions-config__list">
+          <div data-bf-component="quick-actions-config" data-bf-part="list" className="quick-actions-config__list">
             {builtinActions.map(action => (
               <ActionRow
                 key={action.id}
@@ -324,9 +324,9 @@ const QuickActionsConfig: React.FC = () => {
             </Button>
           }
         >
-          <div className="quick-actions-config__list">
+          <div data-bf-component="quick-actions-config" data-bf-part="list" className="quick-actions-config__list">
             {customActions.length === 0 ? (
-              <div className="quick-actions-config__empty">
+              <div data-bf-component="quick-actions-config" data-bf-part="empty" data-bf-state="empty" className="quick-actions-config__empty">
                 <Zap size={20} className="quick-actions-config__empty-icon" />
                 <p>{t('sections.custom.empty')}</p>
                 <Button

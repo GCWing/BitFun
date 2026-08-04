@@ -46,8 +46,8 @@ export const ContextList: React.FC<ContextListProps> = ({
   
   if (contexts.length === 0) {
     return (
-      <div className={`bitfun-context-list bitfun-context-list--empty ${className}`}>
-        <div className="bitfun-context-list__empty-state">
+      <div className={`bitfun-context-list bitfun-context-list--empty ${className}`} data-bf-component="context-list" data-bf-part="root" data-bf-state="empty">
+        <div className="bitfun-context-list__empty-state" data-bf-component="context-list" data-bf-part="empty">
           <AlertCircle size={24} className="bitfun-context-list__empty-icon" />
           <p className="bitfun-context-list__empty-text">
             {t('contextSystem.contextList.emptyTitle')}
@@ -61,12 +61,12 @@ export const ContextList: React.FC<ContextListProps> = ({
   }
   
   return (
-    <div className={`bitfun-context-list ${className}`}>
+    <div className={`bitfun-context-list ${className}`} data-bf-component="context-list" data-bf-part="root">
       
-      <div className="bitfun-context-list__header">
-        <div className="bitfun-context-list__title">
+      <div className="bitfun-context-list__header" data-bf-component="context-list" data-bf-part="header">
+        <div className="bitfun-context-list__title" data-bf-component="context-list" data-bf-part="title">
           {t('contextSystem.contextList.title')}
-          <span className="bitfun-context-list__count">
+          <span className="bitfun-context-list__count" data-bf-component="context-list" data-bf-part="count">
             {contexts.length}
           </span>
         </div>
@@ -75,6 +75,8 @@ export const ContextList: React.FC<ContextListProps> = ({
           className="bitfun-context-list__clear-btn"
           onClick={handleClearAll}
           title={t('contextSystem.contextList.clearAllTitle')}
+          data-bf-component="context-list"
+          data-bf-part="clear"
         >
           <X size={14} />
           <span>{t('contextSystem.contextList.clearAll')}</span>
@@ -85,12 +87,16 @@ export const ContextList: React.FC<ContextListProps> = ({
       <div 
         className="bitfun-context-list__items"
         style={{ maxHeight }}
+        data-bf-component="context-list"
+        data-bf-part="items"
       >
         {contexts.map((context) => (
           <div
             key={context.id}
             className="bitfun-context-list__item"
             onClick={() => handleCardClick(context.id)}
+            data-bf-component="context-list"
+            data-bf-part="item"
           >
             <ContextCard
               context={context}

@@ -49,8 +49,9 @@ const stateMachineMocks = vi.hoisted(() => ({
 }));
 
 const dispatchStoreMocks = vi.hoisted(() => ({
+  jobs: {} as Record<string, { sessionId: string }>,
   registerJob: vi.fn(),
-  dismissJob: vi.fn(),
+  dismissSession: vi.fn(),
   updateTitle: vi.fn(),
 }));
 
@@ -341,7 +342,7 @@ describe('createChatSession', () => {
     expect(agentApiMocks.createSession).toHaveBeenCalledTimes(1);
   });
 
-  it('snapshots the current mode model into a newly created session', async () => {
+  it('projects the runtime-resolved model for a newly created session', async () => {
     configManagerMocks.getConfigs.mockImplementation(async (paths: string[]) => {
       if (paths.length === 1 && paths[0] === 'ai.agent_model_defaults') {
         return { 'ai.agent_model_defaults': { mode: 'model-b' } };
@@ -355,13 +356,16 @@ describe('createChatSession', () => {
     const { context, flowChatStore } = createContext(createSession({
       workspacePath: '/home/wsp/projects/Test',
     }));
+    agentApiMocks.createSession.mockResolvedValueOnce({
+      sessionId: 'created-1',
+      modelId: 'model-b',
+    });
 
     await createChatSession(context, { workspacePath: '/home/wsp/projects/Test' }, 'agentic');
 
     expect(agentApiMocks.createSession).toHaveBeenCalledWith(expect.objectContaining({
       config: expect.objectContaining({
-        modelName: 'model-b',
-        maxContextTokens: 64000,
+        modelName: undefined,
       }),
     }));
     expect(flowChatStore.createSession).toHaveBeenCalledWith(
@@ -390,6 +394,10 @@ describe('createChatSession', () => {
     const { context, flowChatStore } = createContext(createSession({
       workspacePath: '/home/wsp/projects/Test',
     }));
+    agentApiMocks.createSession.mockResolvedValueOnce({
+      sessionId: 'created-1',
+      modelId: 'model-a',
+    });
 
     await createChatSession(context, {
       workspacePath: '/home/wsp/projects/Test',
@@ -399,7 +407,6 @@ describe('createChatSession', () => {
     expect(agentApiMocks.createSession).toHaveBeenCalledWith(expect.objectContaining({
       config: expect.objectContaining({
         modelName: 'model-a',
-        maxContextTokens: 32000,
       }),
     }));
     expect(flowChatStore.createSession).toHaveBeenCalledWith(
@@ -513,6 +520,7 @@ describe('reloadSessionTitle', () => {
 describe('SessionModule historical session coordination', () => {
   beforeEach(() => {
     vi.useFakeTimers();
+    dispatchStoreMocks.jobs = {};
   });
 
   afterEach(async () => {
@@ -1055,7 +1063,36 @@ describe('SessionModule historical session coordination', () => {
 
     await deleteChatSession(context, session.sessionId);
 
-    expect(dispatchStoreMocks.dismissJob).toHaveBeenCalledWith('job-1');
+    expect(dispatchStoreMocks.dismissSession).toHaveBeenCalledWith(
+      session.sessionId,
+      'job-1',
+    );
+    expect(flowChatStore.removeSession).toHaveBeenCalledWith(
+      session.sessionId,
+      { nextActiveSessionId: null },
+    );
+    expect(flowChatStore.deleteSession).not.toHaveBeenCalled();
+  });
+
+  it('deletes a dispatch projection found only through the observer job index', async () => {
+    const session = createSession({
+      sessionId: 'dispatch-session',
+      isHistorical: false,
+      config: { agentType: 'agentic' },
+    });
+    dispatchStoreMocks.jobs = {
+      'job-1': { sessionId: session.sessionId },
+    };
+    const { context, flowChatStore } = createContext(session, {
+      activeSessionId: session.sessionId,
+    });
+
+    await deleteChatSession(context, session.sessionId);
+
+    expect(dispatchStoreMocks.dismissSession).toHaveBeenCalledWith(
+      session.sessionId,
+      undefined,
+    );
     expect(flowChatStore.removeSession).toHaveBeenCalledWith(
       session.sessionId,
       { nextActiveSessionId: null },

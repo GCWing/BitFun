@@ -1,47 +1,8 @@
-use bitfun_services_integrations::mcp::server::{
-    compute_mcp_backoff_delay, detect_mcp_list_changed_kind, MCPListChangedKind,
-};
+use std::sync::Arc;
 use std::time::Duration;
 
-#[test]
-fn backoff_delay_grows_exponentially_and_caps() {
-    let base = Duration::from_secs(2);
-    let max = Duration::from_secs(60);
-
-    assert_eq!(
-        compute_mcp_backoff_delay(base, max, 1),
-        Duration::from_secs(2)
-    );
-    assert_eq!(
-        compute_mcp_backoff_delay(base, max, 2),
-        Duration::from_secs(4)
-    );
-    assert_eq!(
-        compute_mcp_backoff_delay(base, max, 5),
-        Duration::from_secs(32)
-    );
-    assert_eq!(
-        compute_mcp_backoff_delay(base, max, 10),
-        Duration::from_secs(60)
-    );
-}
-
-#[test]
-fn detect_list_changed_kind_supports_three_catalogs() {
-    assert_eq!(
-        detect_mcp_list_changed_kind("notifications/tools/list_changed"),
-        Some(MCPListChangedKind::Tools)
-    );
-    assert_eq!(
-        detect_mcp_list_changed_kind("notifications/prompts/list_changed"),
-        Some(MCPListChangedKind::Prompts)
-    );
-    assert_eq!(
-        detect_mcp_list_changed_kind("notifications/resources/list_changed"),
-        Some(MCPListChangedKind::Resources)
-    );
-    assert_eq!(detect_mcp_list_changed_kind("notifications/unknown"), None);
-}
+use bitfun_services_integrations::mcp::auth::rmcp_compat::StoredCredentials;
+use bitfun_services_integrations::mcp::auth::MCPRemoteOAuthCredentialVault;
 
 #[test]
 fn ephemeral_retirement_waits_for_in_flight_connection_users_but_is_bounded() {
@@ -77,4 +38,59 @@ fn superseded_external_start_token_cannot_clean_up_current_instance() {
         &first
     ));
     assert!(!super::external_start_token_is_current(None, &first));
+}
+
+#[tokio::test]
+async fn oauth_credentials_follow_the_manager_injected_data_dir() {
+    let root = tempfile::tempdir().expect("tempdir");
+    let path_manager = Arc::new(
+        crate::infrastructure::PathManager::with_user_root_for_tests(root.path().join("config")),
+    );
+    let config_service = Arc::new(
+        crate::service::config::ConfigService::with_settings(
+            crate::service::config::ConfigManagerSettings {
+                path_manager: Some(path_manager),
+                auto_save: false,
+                backup_count: 0,
+            },
+        )
+        .await
+        .expect("config service"),
+    );
+    let mcp_config_service = Arc::new(
+        crate::service::mcp::config::MCPConfigService::new(config_service)
+            .expect("MCP config service"),
+    );
+    let oauth_data_dir = root.path().join("oauth");
+    let manager =
+        super::MCPServerManager::assemble(mcp_config_service, Some(oauth_data_dir.clone()));
+    let vault = MCPRemoteOAuthCredentialVault::new(oauth_data_dir);
+    let credentials: StoredCredentials = serde_json::from_value(serde_json::json!({
+        "client_id": "client-123",
+        "token_response": {
+            "access_token": "access-token",
+            "token_type": "bearer"
+        }
+    }))
+    .expect("stored credentials");
+
+    vault
+        .store("server-a", &credentials)
+        .await
+        .expect("store credentials");
+
+    assert!(manager
+        .has_remote_oauth_credentials("server-a")
+        .await
+        .expect("query credentials"));
+
+    manager
+        .clear_remote_oauth_credentials("server-a")
+        .await
+        .expect("clear credentials");
+    assert!(vault
+        .load("server-a")
+        .await
+        .expect("load credentials after clear")
+        .is_none());
 }

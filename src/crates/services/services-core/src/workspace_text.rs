@@ -11,6 +11,18 @@ pub struct WorkspaceTextFile {
     pub byte_len: usize,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WorkspaceEntryKind {
+    File,
+    Directory,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WorkspaceEntry {
+    pub relative_path: String,
+    pub kind: WorkspaceEntryKind,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum WorkspaceTextReadError {
     #[error("workspace root must be an absolute local directory")]
@@ -66,9 +78,36 @@ pub async fn read_workspace_relative_text_bounded(
     })
 }
 
+/// Resolves a local file or directory without reading its content.
+///
+/// Every path component is checked with `symlink_metadata`, so callers cannot
+/// turn a structured workspace reference into a symlink or reparse-point
+/// escape after it was selected by the UI.
+pub async fn resolve_workspace_relative_entry(
+    workspace_root: &Path,
+    relative_path: &str,
+) -> Result<WorkspaceEntry, WorkspaceTextReadError> {
+    let normalized_path = normalize_workspace_relative_path(relative_path)?;
+    let components = normalized_path
+        .split('/')
+        .map(str::to_string)
+        .collect::<Vec<_>>();
+    let workspace_root = workspace_root.to_path_buf();
+    let (_, kind) =
+        tokio::task::spawn_blocking(move || resolve_workspace_entry(&workspace_root, &components))
+            .await
+            .map_err(|error| WorkspaceTextReadError::Io(error.to_string()))??;
+    Ok(WorkspaceEntry {
+        relative_path: normalized_path,
+        kind,
+    })
+}
+
 pub fn normalize_workspace_relative_path(value: &str) -> Result<String, WorkspaceTextReadError> {
     if value.is_empty()
-        || value.contains('\0')
+        || value
+            .chars()
+            .any(|character| character.is_control() || matches!(character, '\u{2028}' | '\u{2029}'))
         || value.starts_with('~')
         || value.starts_with('/')
         || value.starts_with('\\')
@@ -99,6 +138,17 @@ fn resolve_workspace_file(
     workspace_root: &Path,
     components: &[String],
 ) -> Result<PathBuf, WorkspaceTextReadError> {
+    let (path, kind) = resolve_workspace_entry(workspace_root, components)?;
+    if kind != WorkspaceEntryKind::File {
+        return Err(WorkspaceTextReadError::NotRegularFile);
+    }
+    Ok(path)
+}
+
+fn resolve_workspace_entry(
+    workspace_root: &Path,
+    components: &[String],
+) -> Result<(PathBuf, WorkspaceEntryKind), WorkspaceTextReadError> {
     if !workspace_root.is_absolute() {
         return Err(WorkspaceTextReadError::InvalidWorkspaceRoot);
     }
@@ -130,25 +180,31 @@ fn resolve_workspace_file(
             return Err(WorkspaceTextReadError::Symlink);
         }
         let is_last = index + 1 == components.len();
-        if is_last && !metadata.is_file() {
-            return Err(WorkspaceTextReadError::NotRegularFile);
-        }
         if !is_last && !metadata.is_dir() {
             return Err(WorkspaceTextReadError::NotFound);
         }
     }
 
-    let canonical_file = std::fs::canonicalize(&current).map_err(|error| {
+    let canonical_entry = std::fs::canonicalize(&current).map_err(|error| {
         if error.kind() == std::io::ErrorKind::NotFound {
             WorkspaceTextReadError::NotFound
         } else {
             WorkspaceTextReadError::Io(error.to_string())
         }
     })?;
-    if !canonical_file.starts_with(&canonical_root) {
+    if !canonical_entry.starts_with(&canonical_root) {
         return Err(WorkspaceTextReadError::OutsideWorkspace);
     }
-    Ok(canonical_file)
+    let metadata = std::fs::metadata(&canonical_entry)
+        .map_err(|error| WorkspaceTextReadError::Io(error.to_string()))?;
+    let kind = if metadata.is_file() {
+        WorkspaceEntryKind::File
+    } else if metadata.is_dir() {
+        WorkspaceEntryKind::Directory
+    } else {
+        return Err(WorkspaceTextReadError::NotRegularFile);
+    };
+    Ok((canonical_entry, kind))
 }
 
 fn map_read_error(error: std::io::Error) -> WorkspaceTextReadError {
@@ -161,7 +217,10 @@ fn map_read_error(error: std::io::Error) -> WorkspaceTextReadError {
 
 #[cfg(test)]
 mod tests {
-    use super::{read_workspace_relative_text_bounded, WorkspaceTextReadError};
+    use super::{
+        read_workspace_relative_text_bounded, resolve_workspace_relative_entry, WorkspaceEntryKind,
+        WorkspaceTextReadError,
+    };
     use std::fs;
     use std::path::Path;
 
@@ -182,6 +241,50 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn resolves_safe_file_and_directory_entries_without_reading_contents() {
+        let temp = tempfile::tempdir().unwrap();
+        let directory = temp.path().join("src");
+        let file = directory.join("lib.rs");
+        fs::create_dir_all(&directory).unwrap();
+        fs::write(&file, "pub fn answer() -> u8 { 42 }").unwrap();
+
+        let resolved_directory = resolve_workspace_relative_entry(temp.path(), "src")
+            .await
+            .unwrap();
+        let resolved_file = resolve_workspace_relative_entry(temp.path(), "src/lib.rs")
+            .await
+            .unwrap();
+
+        assert_eq!(resolved_directory.kind, WorkspaceEntryKind::Directory);
+        assert_eq!(resolved_file.kind, WorkspaceEntryKind::File);
+        assert_eq!(resolved_file.relative_path, "src/lib.rs");
+    }
+
+    #[tokio::test]
+    async fn workspace_entry_resolution_rejects_escape_and_symlink_components() {
+        let temp = tempfile::tempdir().unwrap();
+        assert_eq!(
+            resolve_workspace_relative_entry(temp.path(), "../outside")
+                .await
+                .unwrap_err(),
+            WorkspaceTextReadError::InvalidRelativePath
+        );
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::symlink;
+            let outside = tempfile::tempdir().unwrap();
+            symlink(outside.path(), temp.path().join("escape")).unwrap();
+            assert_eq!(
+                resolve_workspace_relative_entry(temp.path(), "escape")
+                    .await
+                    .unwrap_err(),
+                WorkspaceTextReadError::Symlink
+            );
+        }
+    }
+
+    #[tokio::test]
     async fn rejects_non_workspace_relative_syntax() {
         let temp = tempfile::tempdir().unwrap();
         let invalid = [
@@ -196,6 +299,11 @@ mod tests {
             "http://example.test/secret.md",
             "file:///secret.md",
             "src/bad\0name.md",
+            "src/bad\nname.md",
+            "src/bad\rname.md",
+            "src/bad\u{0007}name.md",
+            "src/bad\u{2028}name.md",
+            "src/bad\u{2029}name.md",
         ];
 
         for path in invalid {

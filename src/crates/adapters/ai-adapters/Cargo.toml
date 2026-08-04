@@ -24,11 +24,11 @@ futures = { workspace = true }
 fs2 = { workspace = true, optional = true }
 libc = { workspace = true, optional = true }
 log = { workspace = true }
-reqwest = { workspace = true }
+reqwest = { workspace = true, features = ["rustls"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true, optional = true }
-tokio = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt", "sync", "time"] }
 tokio-stream = { workspace = true }
 tokio-util = { workspace = true }
 urlencoding = { workspace = true }
@@ -47,12 +47,15 @@ zbus-secret-service-keyring-store = { workspace = true, optional = true }
 subscription-auth = [
     "dep:apple-native-keyring-store",
     "dep:base64",
-    "dep:bitfun-services-core",
+    "bitfun-services-core/process-runtime",
     "dep:dirs",
     "dep:fs2",
     "dep:keyring-core",
     "dep:libc",
     "dep:sha2",
+    "tokio/fs",
+    "tokio/io-util",
+    "tokio/net",
     "dep:uuid",
     "dep:windows-native-keyring-store",
     "dep:zbus-secret-service-keyring-store",
@@ -61,6 +64,7 @@ subscription-auth = [
 [dev-dependencies]
 axum = { workspace = true }
 bitfun-events = { path = "../../contracts/events" }
+tokio = { workspace = true, features = ["io-util", "net", "rt-multi-thread"] }
 
 [lints]
 workspace = true

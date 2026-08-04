@@ -209,7 +209,7 @@ document.addEventListener(
   true
 );
 
-/** Logger, theme, and minimal deps — must finish before first React paint (F5 / webview reload does not re-run Tauri init script). */
+/** Logger, appearance, and minimal deps must finish before the first React paint. */
 async function initializeBeforeRender(): Promise<void> {
   const phaseStartedAt = nowMs();
   startupTrace.markPhase('before_render_start');
@@ -221,12 +221,12 @@ async function initializeBeforeRender(): Promise<void> {
 
   log.info('Initializing BitFun');
 
-  await traceStartupStep('before_render_step', 'theme_service_initialize', async () => {
+  await traceStartupStep('before_render_step', 'appearance_initialize', async () => {
     await measureAsyncAndLog(log, 'Startup step completed', async () => {
-      const { themeService } = await import('./infrastructure/theme');
-      await themeService.initialize();
+      const { appearanceService } = await import('./infrastructure/appearance');
+      await appearanceService.initialize();
     }, {
-      data: { step: 'themeService.initialize' },
+      data: { step: 'appearanceService.initialize' },
     });
   });
   log.info('Theme system initialized');
@@ -275,10 +275,6 @@ async function initializeAfterRender(): Promise<void> {
       ensureSettingsAppliedListener();
     })(),
     (async () => {
-      const { themeService } = await import('./infrastructure/theme');
-      await themeService.ensureUserThemesLoaded();
-    })(),
-    (async () => {
       const { registerDefaultContextTypes } = await import('./shared/context-system/core/registerDefaultTypes');
       registerDefaultContextTypes();
     })(),
@@ -308,7 +304,6 @@ async function initializeAfterRender(): Promise<void> {
       'EditorConfigPreload',
       'LogLevelConfigWatcher',
       'SettingsAppliedListener',
-      'UserThemes',
       'DefaultContextTypes',
       'RecommendationProviders',
       'Tools',

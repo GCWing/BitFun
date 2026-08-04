@@ -31,7 +31,20 @@ async fn ensure_global_config_service(
 
 pub(crate) async fn print_agents(workspace: Option<&Path>) -> Result<()> {
     let registry = get_agent_registry();
-    let modes = registry.get_modes_info().await;
+    if workspace.is_some() {
+        if let Err(error) =
+            bitfun_core::external_sources::ensure_external_source_workspace_snapshot(workspace)
+                .await
+        {
+            eprintln!(
+                "Warning: external agent sources could not be refreshed: {}",
+                crate::plugin_diagnostics::escape_terminal_text(&error)
+            );
+        }
+    }
+    let modes = registry
+        .get_modes_info_for_workspace(workspace, workspace.is_some())
+        .await;
     let subagents = registry.get_subagents_info(workspace).await;
 
     println!("Agent modes");
@@ -628,7 +641,13 @@ pub(crate) async fn print_doctor(product_runtime: &ProductRuntimeParts) -> Resul
     let config_service = ensure_global_config_service().await?;
     let models = config_service.get_ai_models().await?;
     let agent_registry = get_agent_registry();
-    let modes = agent_registry.get_modes_info().await;
+    let external_source_error =
+        bitfun_core::external_sources::ensure_external_source_workspace_snapshot(Some(&workspace))
+            .await
+            .err();
+    let modes = agent_registry
+        .get_modes_info_for_workspace(Some(&workspace), true)
+        .await;
     let subagents = agent_registry
         .get_subagents_info(Some(workspace.as_path()))
         .await;
@@ -690,6 +709,14 @@ pub(crate) async fn print_doctor(product_runtime: &ProductRuntimeParts) -> Resul
     println!("[ok] Config directory: {}", config_dir.display());
     println!("[ok] Agent modes: {}", modes.len());
     println!("[ok] Subagents: {}", subagents.len());
+    if let Some(error) = external_source_error.as_deref() {
+        println!(
+            "[warn] External agent sources were not refreshed: {}",
+            crate::plugin_diagnostics::escape_terminal_text(error)
+        );
+    } else {
+        println!("[ok] External agent sources: refreshed");
+    }
     println!(
         "[ok] AI models: {} total, {} enabled",
         models.len(),
@@ -725,14 +752,17 @@ pub(crate) async fn print_doctor(product_runtime: &ProductRuntimeParts) -> Resul
         );
     }
     println!();
+    let doctor_checks_ready = external_source_error.is_none() && plugin_sources_ready;
     if !plugin_sources_ready {
         println!("Doctor checks found plugin source errors.");
+    } else if external_source_error.is_some() {
+        println!("Doctor checks completed with an external agent source warning.");
     } else if plugin_warning_count > 0 {
         println!("Doctor checks completed with plugin warnings.");
     } else {
         println!("Doctor checks passed.");
     }
-    Ok(plugin_sources_ready)
+    Ok(doctor_checks_ready)
 }
 
 #[cfg(test)]

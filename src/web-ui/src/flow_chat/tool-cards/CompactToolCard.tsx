@@ -77,10 +77,13 @@ export const CompactToolCard: React.FC<CompactToolCardProps> = ({
   }
 
   return (
-    <div
+    <div data-bf-component="compact-tool-card" data-bf-part="root" data-bf-status={status}
+      data-bf-state={[loadingShimmer && 'loading', clickable && 'clickable', isExpanded && 'expanded'].filter(Boolean).join(' ')}
       className={`compact-tool-card-wrapper compact-tool-card-wrapper--dense-command${loadingShimmer ? ' compact-tool-card-wrapper--loading-shimmer' : ''} ${className}`.trim()}
     >
       <div
+        data-bf-component="compact-tool-card"
+        data-bf-part="surface"
         className={`compact-tool-card status-${status} ${clickable ? 'clickable' : ''} ${isExpanded ? 'expanded' : ''}`}
         data-testid={clickable || Boolean(onClick) ? toggleTestId : undefined}
         onClick={handleWrapperClick}
@@ -90,7 +93,7 @@ export const CompactToolCard: React.FC<CompactToolCardProps> = ({
       </div>
 
       <SmoothHeightCollapse isOpen={Boolean(isExpanded && expandedContent)} className="compact-tool-card-expanded-collapse">
-        <div className="compact-tool-card-expanded">
+        <div data-bf-component="compact-tool-card" data-bf-part="expanded" className="compact-tool-card-expanded">
           {expandedContent}
         </div>
       </SmoothHeightCollapse>
@@ -152,9 +155,9 @@ export const CompactToolCardHeader: React.FC<CompactToolCardHeaderProps> = ({
           showDivider={showDivider}
         />
       )}
-      {action && <span className="compact-card-action">{action}</span>}
-      {content && <span className="compact-card-content">{content}</span>}
-      {extra && <span className="compact-card-extra">{extra}</span>}
+      {action && <span data-bf-component="compact-tool-card" data-bf-part="action" className="compact-card-action">{action}</span>}
+      {content && <span data-bf-component="compact-tool-card" data-bf-part="content" className="compact-card-content">{content}</span>}
+      {extra && <span data-bf-component="compact-tool-card" data-bf-part="extra" className="compact-card-extra">{extra}</span>}
       {rightStatusIcon && (
         <ToolCardStatusIcon
           icon={rightStatusIcon}

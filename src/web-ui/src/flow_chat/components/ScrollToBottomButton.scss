@@ -16,18 +16,19 @@
   padding: 0;
 
   // Theme-aware surface so the control separates from the transcript; icon uses primary text (SVG stroke)
-  background: color-mix(in srgb, var(--color-bg-elevated) 92%, transparent);
-  color: var(--color-text-primary);
+  background: color-mix(in srgb, var(--bf-appearance-token-color-bg-elevated) 92%, transparent);
+  color: var(--bf-appearance-token-color-text-primary);
 
-  border: 1px solid var(--border-medium);
-  border-radius: 50%;
+  border: 2px solid var(--bf-appearance-token-color-text-primary);
+  border-radius: 10px;
 
   backdrop-filter: blur(14px) saturate(1.15);
   -webkit-backdrop-filter: blur(14px) saturate(1.15);
 
   box-shadow:
-    0 8px 20px rgba(var(--color-static-black-rgb), 0.24),
-    inset 0 1px 0 color-mix(in srgb, var(--color-text-primary) 10%, transparent);
+    0 4px 18px rgba(var(--bf-appearance-token-color-static-black-rgb), 0.38),
+    0 0 0 1px color-mix(in srgb, var(--bf-appearance-token-color-text-primary) 28%, transparent),
+    inset 0 1px 0 color-mix(in srgb, var(--bf-appearance-token-color-text-primary) 12%, transparent);
   
   cursor: pointer;
   transition:
@@ -37,14 +38,15 @@
   z-index: 10;
 
   &:hover {
-    background: color-mix(in srgb, var(--color-bg-elevated) 98%, transparent);
-    color: var(--color-text-primary);
-    border-color: var(--border-strong);
-    transform: translateY(-1px);
+    background: color-mix(in srgb, var(--bf-appearance-token-color-bg-elevated) 98%, transparent);
+    color: var(--bf-appearance-token-color-text-primary);
+    border-color: var(--bf-appearance-token-color-text-primary);
+    transform: translateY(-2px);
 
     box-shadow:
-      0 10px 24px rgba(var(--color-static-black-rgb), 0.28),
-      inset 0 1px 0 color-mix(in srgb, var(--color-text-primary) 16%, transparent);
+      0 8px 22px rgba(var(--bf-appearance-token-color-static-black-rgb), 0.42),
+      0 0 0 1px color-mix(in srgb, var(--bf-appearance-token-color-text-primary) 40%, transparent),
+      inset 0 1px 0 color-mix(in srgb, var(--bf-appearance-token-color-text-primary) 16%, transparent);
   }
 
   &:active {
@@ -52,8 +54,8 @@
   }
 
   &:focus-visible {
-    outline: 2px solid var(--border-accent);
-    outline-offset: 2px;
+    outline: 3px solid var(--bf-appearance-token-color-text-primary);
+    outline-offset: 3px;
   }
 
   .scroll-icon {
@@ -74,22 +76,22 @@
     justify-content: center;
     
     // Glass-like badge
-    background: color-mix(in srgb, var(--color-accent-600) 92%, var(--color-static-black));
+    background: color-mix(in srgb, var(--bf-appearance-token-color-accent-600) 92%, var(--bf-appearance-token-color-static-black));
     color: white;
     border-radius: 8px;
-    border: 1px solid color-mix(in srgb, var(--color-accent-500) 30%, transparent);
+    border: 1px solid color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 30%, transparent);
     
     // Frosted effect
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
     
-    font-size: var(--flowchat-font-size-2xs);
+    font-size: var(--bf-appearance-token-flowchat-font-size-2xs);
     font-weight: 600;
     line-height: 1;
     
     box-shadow: 
-      0 2px 8px var(--border-accent),
-      inset 0 1px 0 var(--color-overlay-white-20);
+      0 2px 8px var(--bf-appearance-token-border-accent),
+      inset 0 1px 0 var(--bf-appearance-token-color-overlay-white-20);
   }
 }
 

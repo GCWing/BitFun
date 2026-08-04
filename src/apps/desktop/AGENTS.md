@@ -40,17 +40,15 @@ product wiring and compatibility bridges in `src/crates/assembly/core`.
 - Keep desktop-only integrations here; do not move them into shared core
 - Window lifecycle behavior, including close/minimize-to-tray defaults, is a
   desktop surface concern. Preserve saved user preferences when changing it.
-- For packaging or release asks, see the top-level `AGENTS.md`
 
 ## Commands
+
+Use these for the desktop development loop. Verification commands are kept in
+the Verification section below.
 
 ```bash
 pnpm run desktop:dev
 pnpm run desktop:preview:debug
-cargo check -p bitfun-desktop
-cargo test -p bitfun-desktop
-cargo build -p bitfun-desktop
-pnpm run desktop:build:fast
 ```
 
 ## Fast builds
@@ -61,9 +59,12 @@ pnpm run desktop:build:fast
 | `pnpm run desktop:build:release-fast` | Release-like build with reduced LTO; use when you need release behavior but can't wait for full LTO |
 | `pnpm run desktop:build:nsis:fast` | Windows installer using `release-fast` profile; for quick installer validation |
 
+Set `CARGO_PROFILE_DEV_DEBUG=2` when full breakpoint debug information is
+required. The default dev profile keeps line tables while reducing PDB size.
+
 ## Target cache GC
 
-`desktop:dev` (on exit), `desktop:preview:debug` (on shutdown), and `desktop:build*` prune stale `target/<profile>/incremental` roots (keep latest per crate) and true-orphan `deps` hashes with no matching `.fingerprint` directory. Fingerprints are never mtime-pruned (that forced cold rebuilds). Manual: `pnpm run target:gc -- --profile debug`. Disable with `BITFUN_TARGET_GC=0`; dry-run with `BITFUN_TARGET_GC_DRY_RUN=1`.
+`desktop:dev` (on exit), `desktop:preview:debug` (on shutdown), and `desktop:build*` prune stale `target/<profile>` cache generations. Incremental roots keep the latest crate/session. Cargo fingerprint JSON identifies distinct lib, test, bin, and build-script units; GC keeps the latest generation of each unit plus every generation whose Cargo-managed `invoked.timestamp` was refreshed within the last 24 hours, then removes orphaned `deps` files and `build` directories. Busy detection is scoped to Cargo lock files in the selected profile, so an unrelated worktree build does not suppress GC. Manual: `pnpm run target:gc -- --profile debug`. Disable with `BITFUN_TARGET_GC=0`; dry-run with `BITFUN_TARGET_GC_DRY_RUN=1`; adjust the grace window with `BITFUN_TARGET_GC_MIN_AGE_HOURS`.
 
 `release-fast` profile (`Cargo.toml`): inherits `release` but disables LTO, increases `codegen-units` to 16, enables incremental compilation. Significantly faster at the cost of binary size and marginal runtime performance.
 

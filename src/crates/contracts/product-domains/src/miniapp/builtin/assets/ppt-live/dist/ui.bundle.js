@@ -40671,7 +40671,7 @@ function bindEvents() {
   bindFloatingToolbar();
   bindPropertyPanels();
   bindExportModal();
-  bindHostTheme();
+  bindHostAppearance();
 }
 var currentZoom = 1;
 var ZOOM_STEP = 0.25;
@@ -41064,38 +41064,31 @@ function bindExportModal() {
     }
   }
 }
-var THEME_STORAGE_KEY = "pptLiveTheme";
-function resolveTheme(theme) {
-  if (theme === "dark" || theme === "light") return theme;
+function resolveAppearanceMode(mode) {
+  if (mode === "dark" || mode === "light") return mode;
   if (window.matchMedia?.("(prefers-color-scheme: dark)")?.matches) return "dark";
   return "light";
 }
-function getHostTheme() {
-  const attrTheme = document.documentElement.getAttribute("data-theme-type") || document.documentElement.getAttribute("data-theme");
-  if (attrTheme === "dark" || attrTheme === "light") return attrTheme;
-  const hostTheme = runtime().theme;
-  if (hostTheme === "dark" || hostTheme === "light") return hostTheme;
-  return resolveTheme();
+function getHostAppearanceMode() {
+  const attributeMode = document.documentElement.getAttribute("data-bf-appearance-mode");
+  if (attributeMode === "dark" || attributeMode === "light") return attributeMode;
+  const runtimeMode = runtime().appearanceMode;
+  if (runtimeMode === "dark" || runtimeMode === "light") return runtimeMode;
+  return resolveAppearanceMode();
 }
-function applyTheme(theme) {
-  const resolved = resolveTheme(theme);
+function applyAppearanceMode(mode) {
+  const resolved = resolveAppearanceMode(mode);
   const root = document.documentElement;
-  root.setAttribute("data-theme", resolved);
-  root.setAttribute("data-theme-type", resolved);
+  root.setAttribute("data-bf-appearance-mode", resolved);
   root.style.colorScheme = resolved;
   ensureCanvasFitted();
   rerender();
 }
-function bindHostTheme() {
-  try {
-    localStorage.removeItem(THEME_STORAGE_KEY);
-  } catch {
-    memoryStorage.delete(THEME_STORAGE_KEY);
-  }
-  applyTheme(getHostTheme());
-  runtime().onThemeChange?.((payload) => {
-    const next = payload?.type === "dark" ? "dark" : "light";
-    applyTheme(next);
+function bindHostAppearance() {
+  applyAppearanceMode(getHostAppearanceMode());
+  runtime().onAppearanceChange?.((payload) => {
+    const next = payload?.mode === "dark" ? "dark" : "light";
+    applyAppearanceMode(next);
   });
 }
 async function recoverFromRestart() {

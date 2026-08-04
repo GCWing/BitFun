@@ -21,6 +21,7 @@
 //! attribute is touched.
 
 pub mod api;
+pub mod appearance;
 pub mod computer_use;
 pub mod crash_diagnostics;
 mod embedded_relay_host;
@@ -29,7 +30,6 @@ pub mod macos_menubar;
 pub mod runtime;
 pub mod sleep_prevention;
 pub mod startup_trace;
-pub mod theme;
 pub mod tray;
 
 use bitfun_core::agentic::tools::computer_use_capability::set_computer_use_desktop_available;
@@ -908,7 +908,7 @@ pub async fn run() {
             };
             let window_started = Instant::now();
             startup_trace.record_phase("main_window_create_start", "native_window");
-            theme::create_main_window(
+            appearance::create_main_window(
                 &app_handle,
                 &startup_trace_id,
                 &startup_trace,
@@ -1118,9 +1118,10 @@ pub async fn run() {
             }
         })
         .invoke_handler(tauri::generate_handler![
-            theme::show_main_window,
+            appearance::show_main_window,
             hide_main_window_after_close_request,
             api::agentic_api::create_session,
+            api::agentic_api::update_session_mode,
             api::agentic_api::update_session_model,
             api::agentic_api::reload_session_context,
             api::agentic_api::update_session_title,
@@ -1146,6 +1147,7 @@ pub async fn run() {
             api::agentic_api::delete_session,
             api::agentic_api::restore_session,
             api::agentic_api::restore_session_view,
+            api::agentic_api::load_session_turn_window,
             api::agentic_api::restore_session_with_turns,
             api::agentic_api::reset_memory,
             api::agentic_api::get_memory_paths,
@@ -1177,6 +1179,7 @@ pub async fn run() {
             apply_external_hook_import_command,
             mutate_external_hook_import_command,
             get_external_source_snapshot,
+            get_workspace_reference_snapshot,
             plan_external_mcp_import_command,
             apply_external_mcp_import_command,
             reveal_external_source_location,
@@ -1191,6 +1194,7 @@ pub async fn run() {
             set_external_tool_target_decision_command,
             set_external_tool_conflict_choice_command,
             set_external_subagent_activation_command,
+            set_external_subagent_model_binding_command,
             choose_external_subagent_conflict_command,
             set_external_mcp_server_decision_command,
             choose_external_mcp_conflict_command,
@@ -1220,9 +1224,9 @@ pub async fn run() {
             get_app_state,
             update_app_status,
             update_workspace_info,
-            theme::show_agent_companion_desktop_pet,
-            theme::hide_agent_companion_desktop_pet,
-            theme::resize_agent_companion_desktop_pet,
+            appearance::show_agent_companion_desktop_pet,
+            appearance::hide_agent_companion_desktop_pet,
+            appearance::resize_agent_companion_desktop_pet,
             list_agent_companion_pets,
             import_agent_companion_pet_package,
             delete_agent_companion_pet_package,
@@ -1418,9 +1422,11 @@ pub async fn run() {
             list_persisted_sessions,
             search_referenceable_sessions,
             list_persisted_sessions_page,
+            get_session_lineage,
             load_session_turns,
             get_session_usage_report,
             save_session_turn,
+            record_local_command_turn,
             save_session_metadata,
             export_session_transcript,
             delete_persisted_session,
@@ -1687,10 +1693,20 @@ pub async fn run() {
             api::miniapp_market_api::miniapp_market_list_submissions,
             api::miniapp_market_api::miniapp_market_withdraw_submission,
             api::miniapp_market_api::miniapp_market_installed_status,
+            api::miniapp_market_api::miniapp_market_installed_origins,
             api::miniapp_market_api::miniapp_market_install,
             api::miniapp_market_api::miniapp_market_import_package,
             api::miniapp_market_api::miniapp_market_inspect_package,
             api::miniapp_market_api::miniapp_market_submit_installed,
+            api::appearance_market_api::appearance_market_browse,
+            api::appearance_market_api::appearance_market_get_listing,
+            api::appearance_market_api::appearance_market_download_release,
+            api::appearance_market_api::appearance_market_list_submissions,
+            api::appearance_market_api::appearance_market_submit_package,
+            api::appearance_market_api::appearance_market_withdraw_submission,
+            api::appearance_market_api::appearance_market_list_review_submissions,
+            api::appearance_market_api::appearance_market_get_review_submission,
+            api::appearance_market_api::appearance_market_review_submission,
             api::miniapp_api::miniapp_ai_complete,
             api::miniapp_api::miniapp_ai_chat,
             api::miniapp_api::miniapp_ai_cancel,
@@ -1754,18 +1770,20 @@ pub async fn run() {
             api::dispatch_api::dispatch_list_targets,
             api::dispatch_api::dispatch_probe_target,
             api::dispatch_api::dispatch_install_cli_start,
-            api::dispatch_api::dispatch_install_cli_source_start,
             api::dispatch_api::dispatch_install_cli_poll,
             api::dispatch_api::dispatch_install_cli_cancel,
             api::dispatch_api::dispatch_sync_model_config,
             api::dispatch_api::dispatch_submit,
             api::dispatch_api::dispatch_status,
             api::dispatch_api::dispatch_cancel,
-            api::dispatch_api::dispatch_pull_result,
-            api::dispatch_api::dispatch_apply_result,
+            api::dispatch_api::dispatch_sync_result,
             api::dispatch_api::dispatch_list_jobs,
             api::dispatch_api::dispatch_answer,
             api::dispatch_api::dispatch_append,
+            api::dispatch_api::dispatch_continue,
+            api::dispatch_api::dispatch_query,
+            api::dispatch_api::dispatch_load_transcript,
+            api::dispatch_api::dispatch_save_transcript,
             // Relay self-deploy API
             api::relay_deploy_api::relay_deploy_preflight,
             api::relay_deploy_api::relay_deploy_install_docker,

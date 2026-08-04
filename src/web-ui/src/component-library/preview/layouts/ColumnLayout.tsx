@@ -22,8 +22,8 @@ export const ColumnLayout: React.FC<ColumnLayoutProps> = ({ components }) => {
   };
 
   return (
-    <div className="column-layout">
-      <div className="column-nav">
+    <div className="column-layout" data-bf-component="component-preview" data-bf-part="columnRoot">
+      <div className="column-nav" data-bf-component="component-preview" data-bf-part="columnNavigation">
         <div className="column-nav-title">{t('componentLibrary.layouts.quickJump')}</div>
         <div className="column-nav-items">
           {components.map((component) => (
@@ -45,13 +45,15 @@ export const ColumnLayout: React.FC<ColumnLayoutProps> = ({ components }) => {
             key={component.id} 
             id={`component-${component.id}`}
             className="column-item"
+            data-bf-component="component-preview"
+            data-bf-part="columnItem"
           >
             <div className="column-item-header">
               <h3 className="column-item-title">{component.name}</h3>
               <p className="column-item-description">{component.description}</p>
             </div>
             
-            <div className="column-item-preview">
+            <div className="column-item-preview" data-bf-component="component-preview" data-bf-part="columnPreview">
               <component.component />
             </div>
           </div>

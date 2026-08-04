@@ -48,6 +48,7 @@ pub(crate) async fn dispatch(
         | "set_external_tool_target_decision_command"
         | "set_external_tool_conflict_choice_command"
         | "set_external_subagent_activation_command"
+        | "set_external_subagent_model_binding_command"
         | "choose_external_subagent_conflict_command"
         | "set_external_mcp_server_decision_command"
         | "choose_external_mcp_conflict_command"
@@ -71,6 +72,7 @@ pub(crate) async fn dispatch(
         "list_persisted_sessions_count" => {
             session::list_persisted_sessions_count(state, args).await
         }
+        "load_session_turn_window" => session::load_session_turn_window(state, args).await,
         "load_session_turns" => session::load_session_turns(state, args).await,
         "restore_session_view" => session::restore_session_view(state, args).await,
         "restore_session_with_turns" => session::restore_session_with_turns(state, args).await,
@@ -81,9 +83,10 @@ pub(crate) async fn dispatch(
         "archive_session" => session::archive_session(state, args).await,
         "touch_session_activity" => session::touch_session_activity(state, args).await,
         "get_session_thread_goal" => session::get_session_thread_goal(state, args).await,
+        "update_session_mode" => session::update_session_mode(state, args).await,
         "update_session_model" => session::update_session_model(state, args).await,
         "ensure_coordinator_session" => session::ensure_coordinator_session(state, args).await,
-        "get_available_modes" => session::get_available_modes().await,
+        "get_available_modes" => session::get_available_modes(state, args).await,
         "get_session_stats" => session::get_session_stats(state, args).await,
         "save_session_turn" => session::save_session_turn(state, args).await,
 

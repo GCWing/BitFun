@@ -391,6 +391,52 @@ enabled = false
 }
 
 #[test]
+fn codex_timeout_fields_map_to_their_native_mcp_phases() {
+    let fixture = Fixture::new();
+    write(
+        fixture.codex_home.join("config.toml"),
+        r#"[mcp_servers.docs]
+command = "docs-server"
+startup_timeout_sec = 1.25
+startup_timeout_ms = 9000
+tool_timeout_sec = 2.5
+"#,
+    );
+    let provider = fixture.provider();
+    let input = fixture.input();
+
+    let snapshot = provider.discover(&input).unwrap();
+    let server = &snapshot.servers[0];
+    assert_eq!(server.static_status, ExternalMcpStaticStatus::Ready);
+    assert_eq!(server.timeouts.startup_ms, Some(1_250));
+    assert_eq!(server.timeouts.catalog_ms, Some(1_250));
+    assert_eq!(server.timeouts.execution_ms, Some(2_500));
+
+    let prepared = provider
+        .prepare_server(&input, &server.id, &server.behavior_version)
+        .unwrap();
+    assert_eq!(prepared.timeouts, server.timeouts);
+}
+
+#[test]
+fn codex_timeout_that_cannot_cross_product_surfaces_losslessly_is_unsupported() {
+    let fixture = Fixture::new();
+    write(
+        fixture.codex_home.join("config.toml"),
+        r#"[mcp_servers.docs]
+command = "docs-server"
+startup_timeout_ms = 9007199254740992
+"#,
+    );
+
+    let snapshot = fixture.provider().discover(&fixture.input()).unwrap();
+    assert!(matches!(
+        snapshot.servers[0].static_status,
+        ExternalMcpStaticStatus::Unsupported { .. }
+    ));
+}
+
+#[test]
 fn diagnostic_only_required_does_not_change_behavior_version() {
     let fixture = Fixture::new();
     let config = fixture.codex_home.join("config.toml");

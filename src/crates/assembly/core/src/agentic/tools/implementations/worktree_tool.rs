@@ -373,6 +373,8 @@ The tool cannot remove or rebind the worktree in which it is running. Use Sessio
                     source_workspace_path: Some(source_workspace_path),
                     base_ref: input.base_ref,
                     copy_local_changes: input.copy_local_changes,
+                    // The session this operation creates is the claim.
+                    claimed_by: None,
                 })
                 .await
                 .map_err(|error| BitFunError::tool(error.to_string()))?;

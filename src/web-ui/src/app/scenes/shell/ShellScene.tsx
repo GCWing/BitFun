@@ -8,8 +8,8 @@ interface ShellSceneProps {
 }
 
 const ShellScene: React.FC<ShellSceneProps> = ({ isActive = true }) => (
-  <div className="bitfun-shell-scene" data-testid="shell-panel">
-    <Suspense fallback={<div className="bitfun-shell-scene__loading" />}>
+  <div className="bitfun-shell-scene" data-testid="shell-panel" data-bf-scene="shell" data-bf-part="root" data-bf-state={isActive ? 'active' : undefined}>
+    <Suspense fallback={<div className="bitfun-shell-scene__loading" data-bf-scene="shell" data-bf-part="loading" />}>
       <TerminalScene isActive={isActive} />
     </Suspense>
   </div>

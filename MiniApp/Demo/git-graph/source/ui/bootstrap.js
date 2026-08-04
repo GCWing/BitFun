@@ -1,5 +1,5 @@
 /**
- * Git Graph MiniApp — bootstrap: bind events, init resizer, restore last repo, theme subscription.
+ * Git Graph MiniApp — bootstrap: bind events, init resizer, restore last repo, appearance subscription.
  */
 (function () {
   window.__GG = window.__GG || {};
@@ -55,8 +55,8 @@
       });
     }
 
-    if (window.app && typeof window.app.onThemeChange === 'function') {
-      window.app.onThemeChange(function () {
+    if (window.app && typeof window.app.onAppearanceChange === 'function') {
+      window.app.onAppearanceChange(function () {
         if (state.cwd && $('commit-list').children.length) {
           window.__GG.renderCommitList();
         }

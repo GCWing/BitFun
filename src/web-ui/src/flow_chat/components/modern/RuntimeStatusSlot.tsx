@@ -39,12 +39,24 @@ export const RuntimeStatusSlot: React.FC<RuntimeStatusSlotProps> = ({
   return (
     <div
       className={`runtime-status-slot runtime-status-slot--${placement} ${visible ? 'runtime-status-slot--visible' : ''} ${className}`.trim()}
+      data-bf-component="runtime-status-slot"
+      data-bf-part="root"
       aria-hidden={!visible}
       data-runtime-status-visible={visible ? 'true' : 'false'}
     >
-      <div className="runtime-status-slot__content">
+      <div
+        className="runtime-status-slot__content"
+        data-bf-component="runtime-status-slot"
+        data-bf-part="content"
+      >
         <DotMatrixLoader size="small" />
-        <span className="runtime-status-slot__hint">{hint}</span>
+        <span
+          className="runtime-status-slot__hint"
+          data-bf-component="runtime-status-slot"
+          data-bf-part="hint"
+        >
+          {hint}
+        </span>
       </div>
     </div>
   );

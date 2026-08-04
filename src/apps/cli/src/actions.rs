@@ -22,6 +22,7 @@ pub(crate) struct ActionState {
     pub is_processing: bool,
     pub popup_open: bool,
     shared_tui: bool,
+    lineage_inspection: bool,
 }
 
 impl ActionState {
@@ -31,6 +32,7 @@ impl ActionState {
             is_processing: false,
             popup_open,
             shared_tui: false,
+            lineage_inspection: false,
         }
     }
 
@@ -40,11 +42,17 @@ impl ActionState {
             is_processing,
             popup_open,
             shared_tui: false,
+            lineage_inspection: false,
         }
     }
 
     pub(crate) const fn with_shared_tui(mut self, shared_tui: bool) -> Self {
         self.shared_tui = shared_tui;
+        self
+    }
+
+    pub(crate) const fn with_lineage_inspection(mut self, lineage_inspection: bool) -> Self {
+        self.lineage_inspection = lineage_inspection;
         self
     }
 
@@ -74,7 +82,11 @@ pub(crate) enum ActionHandler {
     AddModel,
     NewSession,
     Sessions,
+    ViewSubagents,
+    Timeline,
     ForkSession,
+    UndoSession,
+    RedoSession,
     RenameSession,
     Skills,
     Reload,
@@ -86,8 +98,18 @@ pub(crate) enum ActionHandler {
     AcpHelp,
     Init,
     Status,
+    WorkspaceDiff,
     CompactSession,
     Usage,
+    Editor,
+    PromptStash,
+    PromptStashPop,
+    PromptStashList,
+    ToggleTimestamps,
+    ToggleThinking,
+    ToggleToolDetails,
+    CopyTranscript,
+    ExportTranscript,
     ToggleAutoApprove,
     ToggleWorktree,
     Exit,
@@ -115,8 +137,13 @@ pub(crate) enum ActionHandler {
 
 pub(crate) const SHARED_TUI_EMBEDDED_HANDOFF: &str =
     "Exit all Shared TUI clients, wait up to 30 seconds for their Runtime to stop, then use default Embedded `bitfun chat`";
+pub(crate) const IMAGE_ATTACHMENTS_REQUIRE_MESSAGE: &str =
+    "Remove image attachments before running a slash command.";
+pub(crate) fn shared_tui_image_attachment_error() -> String {
+    format!("Image attachments are unavailable in Shared TUI. {SHARED_TUI_EMBEDDED_HANDOFF}.")
+}
 pub(crate) const SHARED_TUI_HELP_NOTE: &str =
-    "Shared TUI: start with `bitfun chat --shared`. Multiple TUI processes reuse one workspace Runtime, while each TUI controls at most one Session and each Session has one controller. Use `/sessions` and Ctrl+D to delete an idle, non-current Session; use `/fork` to branch the current idle Session, `/rename <name>` to rename it, `/compact` to compact its context, `/agent`, Tab, or Shift+Tab to change its Agent mode, `/models` to change its model, and `/reload [skills|instructions]` to refresh declarative context for the next message. Model configuration, Agent/Subagent management, MCP, extension, account-sync, usage, and other management remain Embedded. Exit all Shared TUI clients and wait up to 30 seconds before returning to default Embedded `bitfun chat`.";
+    "Shared TUI: start with `bitfun chat --shared`. Multiple TUI processes reuse one workspace Runtime, while each TUI controls at most one Session and each Session has one controller. Use `/sessions` and Ctrl+D to delete an idle, non-current Session; use `View subagents` in the command palette to inspect this Session's subagents; use `/timeline` to navigate user messages, `/fork` to branch the current idle Session, `/rename <name>` to rename it, `/compact` to compact its context, `/diff` to review workspace changes, `/agent`, Tab, or Shift+Tab to change its Agent mode, `/models` to change its model, and `/reload [skills|instructions]` to refresh declarative context for the next message. Model configuration, Agent/Subagent management, MCP, extension, account-sync, usage, and other management remain Embedded. Exit all Shared TUI clients and wait up to 30 seconds before returning to default Embedded `bitfun chat`.";
 
 impl ActionHandler {
     pub(crate) const fn available_in_shared_tui(self, context: ActionContext) -> bool {
@@ -127,12 +154,26 @@ impl ActionHandler {
                     | Self::SelectTheme
                     | Self::NewSession
                     | Self::Sessions
+                    | Self::ViewSubagents
+                    | Self::Timeline
                     | Self::ForkSession
+                    | Self::UndoSession
+                    | Self::RedoSession
                     | Self::RenameSession
                     | Self::AcpHelp
                     | Self::Init
                     | Self::Status
+                    | Self::WorkspaceDiff
                     | Self::CompactSession
+                    | Self::Editor
+                    | Self::PromptStash
+                    | Self::PromptStashPop
+                    | Self::PromptStashList
+                    | Self::ToggleTimestamps
+                    | Self::ToggleThinking
+                    | Self::ToggleToolDetails
+                    | Self::CopyTranscript
+                    | Self::ExportTranscript
                     | Self::ToggleAutoApprove
                     | Self::OpenAgentSelector
                     | Self::SwitchAgent
@@ -158,6 +199,35 @@ impl ActionHandler {
                     | Self::ScrollUp
                     | Self::ScrollDown
             )
+    }
+
+    const fn available_in_lineage_inspection(self) -> bool {
+        matches!(
+            self,
+            Self::Help
+                | Self::Sessions
+                | Self::ViewSubagents
+                | Self::Timeline
+                | Self::SelectTheme
+                | Self::ToggleTimestamps
+                | Self::ToggleThinking
+                | Self::ToggleToolDetails
+                | Self::CopyTranscript
+                | Self::ExportTranscript
+                | Self::Exit
+                | Self::OpenPalette
+                | Self::Interrupt
+                | Self::ClosePopups
+                | Self::NavigateBack
+                | Self::ToggleFocusedTool
+                | Self::PreviousTool
+                | Self::NextTool
+                | Self::JumpTop
+                | Self::JumpBottom
+                | Self::ToggleBrowse
+                | Self::ScrollUp
+                | Self::ScrollDown
+        )
     }
 }
 
@@ -362,6 +432,36 @@ static ACTION_SPECS: &[ActionSpec] = &[
         slash_on_startup: true,
     },
     ActionSpec {
+        id: "timeline",
+        name: "Timeline",
+        aliases: &["/timeline"],
+        description: "Jump to a user message in the current session",
+        contexts: CHAT,
+        availability: ActionAvailability::Always,
+        handler: ActionHandler::Timeline,
+        default_bindings: &[],
+        fallback_bindings: &[],
+        shortcut_field: None,
+        palette: palette("Session", false),
+        shortcut_label: None,
+        slash_on_startup: false,
+    },
+    ActionSpec {
+        id: "view_subagents",
+        name: "View subagents",
+        aliases: &[],
+        description: "Inspect child agent sessions",
+        contexts: CHAT,
+        availability: ActionAvailability::Always,
+        handler: ActionHandler::ViewSubagents,
+        default_bindings: &[],
+        fallback_bindings: &[],
+        shortcut_field: None,
+        palette: palette("Session", false),
+        shortcut_label: None,
+        slash_on_startup: false,
+    },
+    ActionSpec {
         id: "rename_session",
         name: "Rename session",
         aliases: &["/rename"],
@@ -388,6 +488,36 @@ static ACTION_SPECS: &[ActionSpec] = &[
         fallback_bindings: &[],
         shortcut_field: None,
         palette: palette("Session", false),
+        shortcut_label: None,
+        slash_on_startup: false,
+    },
+    ActionSpec {
+        id: "undo_session",
+        name: "Undo session",
+        aliases: &["/undo"],
+        description: "Undo the latest user prompt and restore it to the composer",
+        contexts: CHAT,
+        availability: ActionAvailability::Always,
+        handler: ActionHandler::UndoSession,
+        default_bindings: &[],
+        fallback_bindings: &[],
+        shortcut_field: None,
+        palette: None,
+        shortcut_label: None,
+        slash_on_startup: false,
+    },
+    ActionSpec {
+        id: "redo_session",
+        name: "Redo session",
+        aliases: &["/redo"],
+        description: "Redo the most recently undone session history",
+        contexts: CHAT,
+        availability: ActionAvailability::Always,
+        handler: ActionHandler::RedoSession,
+        default_bindings: &[],
+        fallback_bindings: &[],
+        shortcut_field: None,
+        palette: None,
         shortcut_label: None,
         slash_on_startup: false,
     },
@@ -542,6 +672,21 @@ static ACTION_SPECS: &[ActionSpec] = &[
         slash_on_startup: false,
     },
     ActionSpec {
+        id: "workspace_diff",
+        name: "Workspace diff",
+        aliases: &["/diff"],
+        description: "Review current workspace changes",
+        contexts: CHAT,
+        availability: ActionAvailability::Idle,
+        handler: ActionHandler::WorkspaceDiff,
+        default_bindings: &[],
+        fallback_bindings: &[],
+        shortcut_field: None,
+        palette: palette("Session", false),
+        shortcut_label: None,
+        slash_on_startup: false,
+    },
+    ActionSpec {
         id: "compact_session",
         name: "Compact context",
         aliases: &["/compact", "/summarize"],
@@ -570,6 +715,141 @@ static ACTION_SPECS: &[ActionSpec] = &[
         palette: palette("Session", true),
         shortcut_label: None,
         slash_on_startup: true,
+    },
+    ActionSpec {
+        id: "editor",
+        name: "Open editor",
+        aliases: &["/editor"],
+        description: "Compose the current prompt in an external editor",
+        contexts: CHAT,
+        availability: ActionAvailability::Idle,
+        handler: ActionHandler::Editor,
+        default_bindings: &[],
+        fallback_bindings: &[],
+        shortcut_field: None,
+        palette: palette("Prompt", false),
+        shortcut_label: None,
+        slash_on_startup: false,
+    },
+    ActionSpec {
+        id: "prompt_stash",
+        name: "Stash prompt",
+        aliases: &[],
+        description: "Save the current prompt for later",
+        contexts: CHAT,
+        availability: ActionAvailability::Always,
+        handler: ActionHandler::PromptStash,
+        default_bindings: &[],
+        fallback_bindings: &[],
+        shortcut_field: None,
+        palette: palette("Prompt", false),
+        shortcut_label: None,
+        slash_on_startup: false,
+    },
+    ActionSpec {
+        id: "prompt_stash_pop",
+        name: "Stash pop",
+        aliases: &[],
+        description: "Restore the most recently stashed prompt",
+        contexts: CHAT,
+        availability: ActionAvailability::Always,
+        handler: ActionHandler::PromptStashPop,
+        default_bindings: &[],
+        fallback_bindings: &[],
+        shortcut_field: None,
+        palette: palette("Prompt", false),
+        shortcut_label: None,
+        slash_on_startup: false,
+    },
+    ActionSpec {
+        id: "prompt_stash_list",
+        name: "Stash list",
+        aliases: &[],
+        description: "Browse and restore stashed prompts",
+        contexts: CHAT,
+        availability: ActionAvailability::Always,
+        handler: ActionHandler::PromptStashList,
+        default_bindings: &[],
+        fallback_bindings: &[],
+        shortcut_field: None,
+        palette: palette("Prompt", false),
+        shortcut_label: None,
+        slash_on_startup: false,
+    },
+    ActionSpec {
+        id: "toggle_timestamps",
+        name: "Timestamps",
+        aliases: &["/timestamps", "/toggle-timestamps"],
+        description: "Toggle message timestamps",
+        contexts: CHAT,
+        availability: ActionAvailability::Always,
+        handler: ActionHandler::ToggleTimestamps,
+        default_bindings: &[],
+        fallback_bindings: &[],
+        shortcut_field: None,
+        palette: palette("Session", false),
+        shortcut_label: None,
+        slash_on_startup: false,
+    },
+    ActionSpec {
+        id: "toggle_thinking",
+        name: "Thinking blocks",
+        aliases: &["/thinking", "/toggle-thinking"],
+        description: "Toggle thinking block visibility",
+        contexts: CHAT,
+        availability: ActionAvailability::Always,
+        handler: ActionHandler::ToggleThinking,
+        default_bindings: &[],
+        fallback_bindings: &[],
+        shortcut_field: None,
+        palette: palette("Session", false),
+        shortcut_label: None,
+        slash_on_startup: false,
+    },
+    ActionSpec {
+        id: "toggle_tool_details",
+        name: "Tool details",
+        aliases: &[],
+        description: "Toggle tool detail visibility",
+        contexts: CHAT,
+        availability: ActionAvailability::Always,
+        handler: ActionHandler::ToggleToolDetails,
+        default_bindings: &[],
+        fallback_bindings: &[],
+        shortcut_field: None,
+        palette: palette("Session", false),
+        shortcut_label: None,
+        slash_on_startup: false,
+    },
+    ActionSpec {
+        id: "copy_transcript",
+        name: "Copy transcript",
+        aliases: &["/copy"],
+        description: "Copy the current session as Markdown",
+        contexts: CHAT,
+        availability: ActionAvailability::Idle,
+        handler: ActionHandler::CopyTranscript,
+        default_bindings: &[],
+        fallback_bindings: &[],
+        shortcut_field: None,
+        palette: palette("Session", false),
+        shortcut_label: None,
+        slash_on_startup: false,
+    },
+    ActionSpec {
+        id: "export_transcript",
+        name: "Export transcript",
+        aliases: &["/export"],
+        description: "Export the current session as Markdown",
+        contexts: CHAT,
+        availability: ActionAvailability::Idle,
+        handler: ActionHandler::ExportTranscript,
+        default_bindings: &[],
+        fallback_bindings: &[],
+        shortcut_field: None,
+        palette: palette("Session", false),
+        shortcut_label: None,
+        slash_on_startup: false,
     },
     ActionSpec {
         id: "toggle_auto_approve",
@@ -740,7 +1020,7 @@ static ACTION_SPECS: &[ActionSpec] = &[
         id: "paste",
         name: "Paste",
         aliases: &[],
-        description: "Paste clipboard text",
+        description: "Paste clipboard text or image",
         contexts: BOTH,
         availability: ActionAvailability::Always,
         handler: ActionHandler::Paste,
@@ -930,6 +1210,9 @@ impl ActionSpec {
         if state.shared_tui && !self.handler.available_in_shared_tui(state.context) {
             return false;
         }
+        if state.lineage_inspection && !self.handler.available_in_lineage_inspection() {
+            return false;
+        }
         match self.availability {
             ActionAvailability::Always => true,
             ActionAvailability::Idle => !state.is_processing,
@@ -957,6 +1240,9 @@ impl ActionSpec {
                 "{} is unavailable in Shared TUI preview. {}",
                 self.name, SHARED_TUI_EMBEDDED_HANDOFF
             );
+        }
+        if state.lineage_inspection && !self.handler.available_in_lineage_inspection() {
+            return format!("{} is unavailable while inspecting a subagent.", self.name);
         }
         match self.availability {
             ActionAvailability::Idle if state.is_processing => format!(
@@ -1855,6 +2141,7 @@ mod tests {
         assert!(SHARED_TUI_HELP_NOTE.contains("bitfun chat --shared"));
         assert!(SHARED_TUI_HELP_NOTE.contains("one Session"));
         assert!(SHARED_TUI_HELP_NOTE.contains("`/models`"));
+        assert!(SHARED_TUI_HELP_NOTE.contains("`View subagents`"));
         assert!(SHARED_TUI_HELP_NOTE.contains("`/fork`"));
         assert!(SHARED_TUI_HELP_NOTE.contains("`/rename <name>`"));
         assert!(SHARED_TUI_HELP_NOTE.contains("`/reload [skills|instructions]`"));
@@ -1908,6 +2195,51 @@ mod tests {
         assert!(!action.available(ActionState::chat(true, false)));
         assert!(action_by_id("fork_session", ActionContext::Startup).is_none());
         assert!(action_for_alias("/branch", ActionContext::Chat).is_none());
+    }
+
+    #[test]
+    fn diff_uses_only_the_opencode_command_in_both_deployments() {
+        let action = action_by_id("workspace_diff", ActionContext::Chat)
+            .expect("OpenCode-compatible workspace diff action");
+
+        assert_eq!(action.aliases, &["/diff"]);
+        assert_eq!(action.handler, ActionHandler::WorkspaceDiff);
+        assert_eq!(action.availability, ActionAvailability::Idle);
+        assert!(action.default_bindings.is_empty());
+        assert!(action.available(ActionState::chat(false, false)));
+        assert!(!action.available(ActionState::chat(true, false)));
+        assert!(action.available(ActionState::chat(false, false).for_shared_tui()));
+        assert!(action_by_id("workspace_diff", ActionContext::Startup).is_none());
+        assert!(action_for_alias("/changes", ActionContext::Chat).is_none());
+    }
+
+    #[test]
+    fn undo_and_redo_use_only_the_opencode_commands_in_both_deployments() {
+        let undo = action_by_id("undo_session", ActionContext::Chat)
+            .expect("OpenCode-compatible session undo action");
+        let redo = action_by_id("redo_session", ActionContext::Chat)
+            .expect("OpenCode-compatible session redo action");
+
+        assert_eq!(undo.aliases, &["/undo"]);
+        assert_eq!(undo.handler, ActionHandler::UndoSession);
+        assert_eq!(undo.availability, ActionAvailability::Always);
+        assert!(undo.default_bindings.is_empty());
+        assert!(undo.fallback_bindings.is_empty());
+        assert!(undo.available(ActionState::chat(false, false).for_shared_tui()));
+        assert!(undo.available(ActionState::chat(true, false).for_shared_tui()));
+
+        assert_eq!(redo.aliases, &["/redo"]);
+        assert_eq!(redo.handler, ActionHandler::RedoSession);
+        assert_eq!(redo.availability, ActionAvailability::Always);
+        assert!(redo.default_bindings.is_empty());
+        assert!(redo.fallback_bindings.is_empty());
+        assert!(redo.available(ActionState::chat(false, false).for_shared_tui()));
+        assert!(redo.available(ActionState::chat(true, false).for_shared_tui()));
+
+        assert!(action_for_alias("/rewind", ActionContext::Chat).is_none());
+        assert!(action_for_alias("/revert", ActionContext::Chat).is_none());
+        assert!(action_by_id("undo_session", ActionContext::Startup).is_none());
+        assert!(action_by_id("redo_session", ActionContext::Startup).is_none());
     }
 
     #[test]
@@ -2728,5 +3060,122 @@ mod tests {
         assert!(!help.contains("more shortcut notices"), "{help}");
         assert!(help.lines().count() <= 19, "{help}");
         assert!(help.lines().all(|line| line.chars().count() <= 74));
+    }
+
+    #[test]
+    fn opencode_transcript_actions_use_exact_command_names_and_availability() {
+        let editor = action_for_alias("/editor", ActionContext::Chat).expect("/editor action");
+        let copy = action_for_alias("/copy", ActionContext::Chat).expect("/copy action");
+        let export = action_for_alias("/export", ActionContext::Chat).expect("/export action");
+
+        assert_eq!(editor.aliases, ["/editor"]);
+        assert_eq!(copy.aliases, ["/copy"]);
+        assert_eq!(export.aliases, ["/export"]);
+        assert_eq!(editor.handler, ActionHandler::Editor);
+        assert_eq!(copy.handler, ActionHandler::CopyTranscript);
+        assert_eq!(export.handler, ActionHandler::ExportTranscript);
+        assert!(!editor.available(ActionState::chat(true, false)));
+        assert!(!copy.available(ActionState::chat(true, false)));
+        assert!(!export.available(ActionState::chat(true, false)));
+        assert!(editor.default_bindings.is_empty());
+        assert!(copy.default_bindings.is_empty());
+        assert!(export.default_bindings.is_empty());
+        assert!(editor.handler.available_in_shared_tui(ActionContext::Chat));
+        assert!(copy.handler.available_in_shared_tui(ActionContext::Chat));
+        assert!(export.handler.available_in_shared_tui(ActionContext::Chat));
+    }
+
+    #[test]
+    fn opencode_view_subagents_is_palette_only_and_read_only() {
+        let action = action_by_id("view_subagents", ActionContext::Chat)
+            .expect("View subagents palette action");
+        let inspection = ActionState::chat(true, false).with_lineage_inspection(true);
+
+        assert_eq!(action.name, "View subagents");
+        assert_eq!(action.handler, ActionHandler::ViewSubagents);
+        assert!(action.aliases.is_empty());
+        assert!(action.default_bindings.is_empty());
+        assert_eq!(action.palette.map(|palette| palette.group), Some("Session"));
+        assert!(action.available(inspection));
+        assert!(action.handler.available_in_shared_tui(ActionContext::Chat));
+        assert!(action_for_alias("/subagents", ActionContext::Chat).is_none());
+
+        for handler in [
+            ActionHandler::SubmitInput,
+            ActionHandler::InsertNewline,
+            ActionHandler::Paste,
+            ActionHandler::UndoSession,
+            ActionHandler::RedoSession,
+            ActionHandler::ForkSession,
+            ActionHandler::CompactSession,
+        ] {
+            assert!(!handler.available_in_lineage_inspection());
+        }
+    }
+
+    #[test]
+    fn opencode_prompt_stash_uses_palette_only_entrypoints_without_default_bindings() {
+        let state = ActionState::chat(false, false);
+        let expected = [
+            ("prompt_stash", "Stash prompt", ActionHandler::PromptStash),
+            (
+                "prompt_stash_pop",
+                "Stash pop",
+                ActionHandler::PromptStashPop,
+            ),
+            (
+                "prompt_stash_list",
+                "Stash list",
+                ActionHandler::PromptStashList,
+            ),
+        ];
+
+        for (id, name, handler) in expected {
+            let action = action_by_id(id, ActionContext::Chat).expect("stash action");
+            assert_eq!(action.name, name);
+            assert_eq!(action.handler, handler);
+            assert!(action.aliases.is_empty());
+            assert!(action.default_bindings.is_empty());
+            assert_eq!(action.palette.map(|palette| palette.group), Some("Prompt"));
+            assert!(action.handler.available_in_shared_tui(ActionContext::Chat));
+        }
+
+        let slash_ids = slash_actions(state)
+            .into_iter()
+            .map(|action| action.id)
+            .collect::<Vec<_>>();
+        assert!(!slash_ids.iter().any(|id| id.starts_with("prompt_stash")));
+    }
+
+    #[test]
+    fn opencode_navigation_and_presentation_actions_keep_exact_entrypoints() {
+        let timeline =
+            action_for_alias("/timeline", ActionContext::Chat).expect("/timeline action");
+        let timestamps =
+            action_for_alias("/timestamps", ActionContext::Chat).expect("/timestamps action");
+        let timestamps_alias = action_for_alias("/toggle-timestamps", ActionContext::Chat)
+            .expect("/toggle-timestamps action");
+        let thinking =
+            action_for_alias("/thinking", ActionContext::Chat).expect("/thinking action");
+        let thinking_alias = action_for_alias("/toggle-thinking", ActionContext::Chat)
+            .expect("/toggle-thinking action");
+        let tool_details = action_by_id("toggle_tool_details", ActionContext::Chat)
+            .expect("tool details palette action");
+
+        assert_eq!(timeline.id, "timeline");
+        assert_eq!(timeline.aliases, ["/timeline"]);
+        assert_eq!(timestamps.id, "toggle_timestamps");
+        assert_eq!(timestamps.aliases, ["/timestamps", "/toggle-timestamps"]);
+        assert_eq!(timestamps.id, timestamps_alias.id);
+        assert_eq!(thinking.id, "toggle_thinking");
+        assert_eq!(thinking.aliases, ["/thinking", "/toggle-thinking"]);
+        assert_eq!(thinking.id, thinking_alias.id);
+        assert!(tool_details.aliases.is_empty());
+        for action in [timeline, timestamps, thinking, tool_details] {
+            assert_eq!(action.palette.map(|palette| palette.group), Some("Session"));
+            assert!(action.available(ActionState::chat(false, false)));
+            assert!(action.available(ActionState::chat(true, false)));
+            assert!(action.handler.available_in_shared_tui(ActionContext::Chat));
+        }
     }
 }

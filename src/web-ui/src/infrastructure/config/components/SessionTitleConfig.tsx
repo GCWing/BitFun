@@ -110,11 +110,13 @@ export const SessionTitleConfig: React.FC = () => {
   return (
     <ConfigPageSection
       className="bitfun-func-agent-config"
+      data-bf-component="session-title-config"
+      data-bf-part="root"
       title={t('sessionTitle.title')}
       description={t('sessionTitle.subtitle')}
     >
       <ConfigPageRow label={t('sessionTitle.enable')} align="center">
-        <div className="bitfun-func-agent-config__row-control">
+        <div className="bitfun-func-agent-config__row-control" data-bf-component="session-title-config" data-bf-part="enableControl">
           <Switch
             checked={settings?.enable_session_title_generation ?? false}
             onChange={(e) => void updateEnabled(e.target.checked)}
@@ -129,7 +131,7 @@ export const SessionTitleConfig: React.FC = () => {
         description={enabledModels.length === 0 ? t('sessionTitle.models.empty') : undefined}
         align="center"
       >
-        <div className="bitfun-func-agent-config__row-control bitfun-func-agent-config__row-control--model">
+        <div className="bitfun-func-agent-config__row-control bitfun-func-agent-config__row-control--model" data-bf-component="session-title-config" data-bf-part="modelControl">
           <ModelSelectionRadio
             value={sessionTitleModelId}
             models={enabledModels}

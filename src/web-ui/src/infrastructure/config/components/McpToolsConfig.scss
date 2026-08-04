@@ -19,22 +19,22 @@
   &__json-editor-header {
     h3 {
       margin: 0 0 $size-gap-1;
-      font-size: var(--font-size-sm);
+      font-size: var(--bf-appearance-token-font-size-sm);
       font-weight: $font-weight-semibold;
-      color: var(--color-text-primary);
+      color: var(--bf-appearance-token-color-text-primary);
     }
   }
 
   &__json-hint {
     margin: 0;
-    font-size: var(--font-size-xs);
-    color: var(--color-text-muted);
+    font-size: var(--bf-appearance-token-font-size-xs);
+    color: var(--bf-appearance-token-color-text-muted);
     line-height: $line-height-relaxed;
   }
 
   &__json-textarea {
     font-family: $font-family-mono;
-    font-size: var(--font-size-xs);
+    font-size: var(--bf-appearance-token-font-size-xs);
     line-height: 1.6;
   }
 
@@ -46,13 +46,13 @@
 
   &__json-examples {
     padding-top: $size-gap-3;
-    border-top: 1px solid var(--border-subtle);
+    border-top: 1px solid var(--bf-appearance-token-border-subtle);
 
     h4 {
       margin: 0 0 $size-gap-2;
-      font-size: var(--font-size-xs);
+      font-size: var(--bf-appearance-token-font-size-xs);
       font-weight: $font-weight-semibold;
-      color: var(--color-text-muted);
+      color: var(--bf-appearance-token-color-text-muted);
       text-transform: uppercase;
       letter-spacing: 0.05em;
     }
@@ -65,20 +65,20 @@
 
     h5 {
       margin: 0 0 $size-gap-1;
-      font-size: var(--font-size-xs);
+      font-size: var(--bf-appearance-token-font-size-xs);
       font-weight: $font-weight-medium;
-      color: var(--color-text-secondary);
+      color: var(--bf-appearance-token-color-text-secondary);
     }
 
     pre {
       margin: 0;
       padding: $size-gap-2 $size-gap-3;
-      background: var(--element-bg-medium);
-      border: 1px solid var(--border-subtle);
+      background: var(--bf-appearance-token-element-bg-medium);
+      border: 1px solid var(--bf-appearance-token-border-subtle);
       border-radius: $size-radius-sm;
       font-family: $font-family-mono;
-      font-size: var(--font-size-xs);
-      color: var(--color-text-primary);
+      font-size: var(--bf-appearance-token-font-size-xs);
+      color: var(--bf-appearance-token-color-text-primary);
       line-height: 1.6;
       white-space: pre-wrap;
       overflow-x: auto;
@@ -93,40 +93,40 @@
     flex-shrink: 0;
     padding: 1px 7px;
     border-radius: $size-radius-sm;
-    font-size: var(--font-size-xs);
+    font-size: var(--bf-appearance-token-font-size-xs);
     font-weight: $font-weight-medium;
     white-space: nowrap;
     border: 1px solid transparent;
 
     &.is-healthy {
-      background: color-mix(in srgb, var(--color-success) 10%, transparent);
-      color: var(--color-success);
-      border-color: color-mix(in srgb, var(--color-success) 25%, transparent);
+      background: color-mix(in srgb, var(--bf-appearance-token-color-success) 10%, transparent);
+      color: var(--bf-appearance-token-color-success);
+      border-color: color-mix(in srgb, var(--bf-appearance-token-color-success) 25%, transparent);
     }
 
     &.is-pending {
-      background: color-mix(in srgb, var(--color-warning) 10%, transparent);
-      color: var(--color-warning);
-      border-color: color-mix(in srgb, var(--color-warning) 25%, transparent);
+      background: color-mix(in srgb, var(--bf-appearance-token-color-warning) 10%, transparent);
+      color: var(--bf-appearance-token-color-warning);
+      border-color: color-mix(in srgb, var(--bf-appearance-token-color-warning) 25%, transparent);
     }
 
     &.is-error {
-      background: color-mix(in srgb, var(--color-error) 10%, transparent);
-      color: var(--color-error);
-      border-color: color-mix(in srgb, var(--color-error) 25%, transparent);
+      background: color-mix(in srgb, var(--bf-appearance-token-color-error) 10%, transparent);
+      color: var(--bf-appearance-token-color-error);
+      border-color: color-mix(in srgb, var(--bf-appearance-token-color-error) 25%, transparent);
     }
 
     &.is-muted {
-      background: var(--element-bg-medium);
-      color: var(--color-text-muted);
-      border-color: var(--border-subtle);
+      background: var(--bf-appearance-token-element-bg-medium);
+      color: var(--bf-appearance-token-color-text-muted);
+      border-color: var(--bf-appearance-token-border-subtle);
     }
   }
 
   &__external-source-badge {
-    color: var(--color-accent-500);
-    border-color: color-mix(in srgb, var(--color-accent-500) 24%, transparent);
-    background: color-mix(in srgb, var(--color-accent-500) 8%, transparent);
+    color: var(--bf-appearance-token-color-accent-500);
+    border-color: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 24%, transparent);
+    background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 8%, transparent);
   }
 
   &__external-summary {
@@ -141,15 +141,15 @@
   }
 
   &__runtime-badge--ok {
-    background: color-mix(in srgb, var(--color-success) 10%, transparent);
-    color: var(--color-success);
-    border-color: color-mix(in srgb, var(--color-success) 25%, transparent);
+    background: color-mix(in srgb, var(--bf-appearance-token-color-success) 10%, transparent);
+    color: var(--bf-appearance-token-color-success);
+    border-color: color-mix(in srgb, var(--bf-appearance-token-color-success) 25%, transparent);
   }
 
   &__runtime-badge--error {
-    background: color-mix(in srgb, var(--color-error) 10%, transparent);
-    color: var(--color-error);
-    border-color: color-mix(in srgb, var(--color-error) 25%, transparent);
+    background: color-mix(in srgb, var(--bf-appearance-token-color-error) 10%, transparent);
+    color: var(--bf-appearance-token-color-error);
+    border-color: color-mix(in srgb, var(--bf-appearance-token-color-error) 25%, transparent);
   }
 
   &__server-details {
@@ -166,14 +166,14 @@
   }
 
   &__server-detail-label {
-    font-size: var(--font-size-xs);
-    color: var(--color-text-muted);
+    font-size: var(--bf-appearance-token-font-size-xs);
+    color: var(--bf-appearance-token-color-text-muted);
   }
 
   &__server-detail-value {
     font-family: $font-family-mono;
-    font-size: var(--font-size-xs);
-    color: var(--color-text-secondary);
+    font-size: var(--bf-appearance-token-font-size-xs);
+    color: var(--bf-appearance-token-color-text-secondary);
     word-break: break-all;
   }
 }
@@ -197,7 +197,7 @@
   padding: 10px 12px;
   /* Inset callout: keeps the import prompt clear of the section card border. */
   margin: $size-gap-3 $size-gap-4;
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--bf-appearance-token-border-subtle);
   border-radius: 8px;
 
   p {

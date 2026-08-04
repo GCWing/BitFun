@@ -95,20 +95,20 @@ export const UserQuestionItem: React.FC<UserQuestionItemProps> = ({
   };
 
   return (
-    <div className="ask-question-item">
-      <div className="question-item-header">
+    <div data-bf-component="ask-user-question-card" data-bf-part="question" className="ask-question-item">
+      <div className="question-item-header" data-bf-component="ask-user-question-card" data-bf-part="header">
         <span className="question-header-chip">{question.header}</span>
         <span className="question-text">{question.question}</span>
       </div>
 
-      <div className="question-options">
+      <div className="question-options" data-bf-component="ask-user-question-card" data-bf-part="options">
         {question.options.map((option, optionIndex) => {
           const optionValue = option.value ?? option.label;
           const checked = question.multiSelect
             ? selectedValues.includes(optionValue)
             : value === optionValue;
           return (
-            <label key={`${optionValue}-${optionIndex}`} className="option-label">
+            <label key={`${optionValue}-${optionIndex}`} className="option-label" data-bf-component="ask-user-question-card" data-bf-part="option">
               {question.multiSelect ? (
                 <>
                   <input
@@ -143,7 +143,7 @@ export const UserQuestionItem: React.FC<UserQuestionItemProps> = ({
         })}
 
         {allowOther && !isOtherSelected ? (
-          <label className="option-label option-other">
+          <label className="option-label option-other" data-bf-component="ask-user-question-card" data-bf-part="option">
             {question.multiSelect ? (
               <>
                 <input
@@ -177,7 +177,7 @@ export const UserQuestionItem: React.FC<UserQuestionItemProps> = ({
             </div>
           </label>
         ) : allowOther && isOtherSelected ? (
-          <div className="option-other-input">
+          <div className="option-other-input" data-bf-component="ask-user-question-card" data-bf-part="customInput">
             {question.multiSelect ? (
               <>
                 <input
@@ -424,7 +424,7 @@ export const AskUserQuestionCard: React.FC<ToolCardProps> = ({
     
     if (result.status === 'timeout') {
       return (
-        <div className="result-timeout">
+        <div data-bf-component="ask-user-question-card" data-bf-part="status" className="result-timeout">
           <AlertCircle size={16} />
           <span>{t('toolCards.askUser.timeout')}</span>
         </div>
@@ -436,7 +436,7 @@ export const AskUserQuestionCard: React.FC<ToolCardProps> = ({
 
   if (awaitingPayload) {
     return (
-      <div
+      <div data-bf-component="ask-user-question-card" data-bf-part="loading" data-bf-state="loading"
         ref={cardRootRef}
         data-tool-card-id={toolId ?? ''}
         className={`ask-user-question-card params-loading status-${status}`}
@@ -451,31 +451,32 @@ export const AskUserQuestionCard: React.FC<ToolCardProps> = ({
 
   if (questions.length === 0) {
     return (
-      <div className="ask-user-question-card status-error">
-        <div className="error-message">{t('toolCards.askUser.parseError')}</div>
+      <div data-bf-component="ask-user-question-card" data-bf-part="root" data-bf-state="error" className="ask-user-question-card status-error">
+        <div className="error-message" data-bf-component="ask-user-question-card" data-bf-part="error">{t('toolCards.askUser.parseError')}</div>
       </div>
     );
   }
 
   return (
-    <div
+    <div data-bf-component="ask-user-question-card" data-bf-part="root"
+      data-bf-state={status === 'completed' ? 'completed' : undefined}
       ref={cardRootRef}
       data-tool-card-id={toolId ?? ''}
       className={`ask-user-question-card status-${status}`}
     >
       {!showCompletedSummary ? (
         <>
-          <div className="card-header-row">
+          <div className="card-header-row" data-bf-component="ask-user-question-card" data-bf-part="header">
             <div className="card-title">
               <span className="questions-count">{t('toolCards.askUser.questionsCount', { count: questions.length })}</span>
             </div>
           </div>
 
-          <div className="questions-container">
+          <div className="questions-container" data-bf-component="ask-user-question-card" data-bf-part="questions">
             {questions.map((q, idx) => renderQuestion(q, idx))}
           </div>
 
-          <div className="card-footer-row">
+          <div className="card-footer-row" data-bf-component="ask-user-question-card" data-bf-part="footer">
             <div className="footer-actions">
               <Button
                 variant="primary"
@@ -495,7 +496,7 @@ export const AskUserQuestionCard: React.FC<ToolCardProps> = ({
                   </>
                 )}
               </Button>
-              <div className="tool-status">
+              <div className="tool-status" data-bf-component="ask-user-question-card" data-bf-part="status">
                 {getStatusIcon()}
                 <span className="status-text">{getStatusText()}</span>
               </div>
@@ -506,6 +507,8 @@ export const AskUserQuestionCard: React.FC<ToolCardProps> = ({
         <>
           <div 
             className="completed-summary"
+            data-bf-component="ask-user-question-card"
+            data-bf-part="summary"
             onClick={() => applyExpandedState(isExpanded, !isExpanded, setIsExpanded)}
           >
             <div className="summary-content">
@@ -524,7 +527,7 @@ export const AskUserQuestionCard: React.FC<ToolCardProps> = ({
             isOpen={isExpanded}
             className="ask-user-question-card__answers-collapse"
           >
-            <div className="questions-container expanded">
+            <div className="questions-container expanded" data-bf-component="ask-user-question-card" data-bf-part="questions">
               {questions.map((q, idx) => renderQuestion(q, idx))}
             </div>
           </SmoothHeightCollapse>

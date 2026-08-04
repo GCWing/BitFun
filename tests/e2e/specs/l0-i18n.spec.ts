@@ -96,7 +96,7 @@ describe('L0 Internationalization', () => {
       }
 
       // Check for language selector in settings
-      const langSelect = await $('.theme-config__language-select');
+      const langSelect = await $('.appearance-settings__language-select');
       const selectExists = await langSelect.isExisting();
 
       console.log('[L0] Language selector found:', selectExists);

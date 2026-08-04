@@ -7,11 +7,11 @@
   &__box {
     display: flex;
     flex-direction: column;
-    border: 1px solid var(--border-medium);
+    border: 1px solid var(--bf-appearance-token-border-medium);
     border-radius: $size-radius-xl;
-    background: color-mix(in srgb, var(--element-bg-subtle) 94%, transparent);
+    background: color-mix(in srgb, var(--bf-appearance-token-element-bg-subtle) 94%, transparent);
     // Large blur + negative spread: diffuse “pool” under the card, softer at side clips
-    box-shadow: 0 2px 16px -6px color-mix(in srgb, var(--color-text-primary) 8%, transparent);
+    box-shadow: 0 2px 16px -6px color-mix(in srgb, var(--bf-appearance-token-color-text-primary) 8%, transparent);
     transition: border-color $motion-fast $easing-standard,
       background $motion-fast $easing-standard,
       box-shadow $motion-fast $easing-standard,
@@ -19,20 +19,20 @@
 
     &:hover:not(:has(.bitfun-textarea__field:disabled)) {
       transform: translateY(-2px);
-      border-color: var(--border-strong);
-      background: color-mix(in srgb, var(--element-bg-base) 90%, transparent);
+      border-color: var(--bf-appearance-token-border-strong);
+      background: color-mix(in srgb, var(--bf-appearance-token-element-bg-base) 90%, transparent);
       box-shadow:
-        0 20px 48px -14px color-mix(in srgb, var(--color-text-primary) 14%, transparent),
-        0 10px 28px -10px color-mix(in srgb, var(--color-text-primary) 9%, transparent);
+        0 20px 48px -14px color-mix(in srgb, var(--bf-appearance-token-color-text-primary) 14%, transparent),
+        0 10px 28px -10px color-mix(in srgb, var(--bf-appearance-token-color-text-primary) 9%, transparent);
     }
 
     &:focus-within {
       transform: translateY(-2px);
-      border-color: var(--border-strong);
-      background: var(--element-bg-soft);
+      border-color: var(--bf-appearance-token-border-strong);
+      background: var(--bf-appearance-token-element-bg-soft);
       box-shadow:
-        0 22px 52px -12px color-mix(in srgb, var(--color-accent-500) 18%, transparent),
-        0 12px 32px -10px color-mix(in srgb, var(--color-text-primary) 10%, transparent);
+        0 22px 52px -12px color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 18%, transparent),
+        0 12px 32px -10px color-mix(in srgb, var(--bf-appearance-token-color-text-primary) 10%, transparent);
     }
   }
 
@@ -53,9 +53,9 @@
       border: none !important;
       border-radius: #{$size-radius-xl} #{$size-radius-xl} 0 0;
       background: transparent !important;
-      color: var(--color-text-primary);
+      color: var(--bf-appearance-token-color-text-primary);
       font-family: $font-family-sans;
-      font-size: var(--font-size-base);
+      font-size: var(--bf-appearance-token-font-size-base);
       line-height: $line-height-relaxed;
       resize: none;
       box-sizing: border-box;
@@ -63,7 +63,7 @@
       box-shadow: none !important;
 
       &::placeholder {
-        color: var(--color-text-muted);
+        color: var(--bf-appearance-token-color-text-muted);
       }
 
       &:hover:not(:disabled),
@@ -78,7 +78,7 @@
       }
 
       &::-webkit-scrollbar-thumb {
-        background: var(--border-subtle);
+        background: var(--bf-appearance-token-border-subtle);
         border-radius: 2px;
       }
     }
@@ -105,8 +105,8 @@
   }
 
   &__hint {
-    font-size: var(--font-size-2xs);
-    color: var(--color-text-muted);
+    font-size: var(--bf-appearance-token-font-size-2xs);
+    color: var(--bf-appearance-token-color-text-muted);
     opacity: 0.72;
     user-select: none;
     white-space: nowrap;
@@ -119,12 +119,12 @@
     border-radius: 7px !important;
 
     &.icon-btn--success:not(:disabled) {
-      background: var(--color-accent-500);
-      color: var(--color-static-white);
+      background: var(--bf-appearance-token-color-accent-500);
+      color: var(--bf-appearance-token-color-static-white);
 
       &:hover {
-        background: var(--color-accent-600);
-        color: var(--color-static-white);
+        background: var(--bf-appearance-token-color-accent-600);
+        color: var(--bf-appearance-token-color-static-white);
       }
     }
   }

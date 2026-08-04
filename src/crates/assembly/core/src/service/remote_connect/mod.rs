@@ -62,7 +62,7 @@ pub use remote_server::RemoteServer;
 use anyhow::Result;
 use bitfun_services_integrations::remote_connect::upload_mobile_web_to_relay;
 use embedded_relay_host::EmbeddedRelayHost;
-use log::{debug, error, info};
+use log::{debug, error, info, warn};
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
@@ -1330,6 +1330,11 @@ impl RemoteConnectService {
                         if let Some(handle) = self.bot_weixin_handle.write().await.take() {
                             handle.stop();
                         }
+                        if let Some(previous_bot) = self.weixin_bot.write().await.take() {
+                            if let Err(err) = previous_bot.notify_stop().await {
+                                warn!("Weixin notify-stop failed during replacement: {err}");
+                            }
+                        }
 
                         let wx_cfg = bot::weixin::WeixinConfig {
                             ilink_token: ilink_token.clone(),
@@ -1363,6 +1368,9 @@ impl RemoteConnectService {
                         *wx_bot_ref.write().await = Some(wx_bot.clone());
 
                         tokio::spawn(async move {
+                            if let Err(err) = bot_for_pair.notify_start().await {
+                                warn!("Weixin notify-start failed; continuing: {err}");
+                            }
                             let mut stop_rx = stop_rx;
                             match bot_for_pair.wait_for_pairing(&mut stop_rx).await {
                                 Ok(peer_id) => {
@@ -1379,6 +1387,11 @@ impl RemoteConnectService {
                                 }
                                 Err(e) => {
                                     info!("Weixin pairing ended: {e}");
+                                }
+                            }
+                            if bot_slot.is_current(generation) {
+                                if let Err(err) = bot_for_pair.notify_stop().await {
+                                    warn!("Weixin notify-stop failed: {err}");
                                 }
                             }
                         });
@@ -1503,6 +1516,11 @@ impl RemoteConnectService {
                 if let Some(handle) = self.bot_weixin_handle.write().await.take() {
                     handle.stop();
                 }
+                if let Some(previous_bot) = self.weixin_bot.write().await.take() {
+                    if let Err(err) = previous_bot.notify_stop().await {
+                        warn!("Weixin notify-stop failed during restore replacement: {err}");
+                    }
+                }
 
                 let wx_cfg = bot::weixin::WeixinConfig {
                     ilink_token: ilink_token.clone(),
@@ -1533,9 +1551,19 @@ impl RemoteConnectService {
                 *self.bot_connected_info.write().await = Some(format!("Weixin({cid})"));
 
                 let bot_for_loop = wx_bot.clone();
+                let bot_for_notify = wx_bot.clone();
+                let bot_slot = self.bot_weixin_slot.clone();
                 tokio::spawn(async move {
+                    if let Err(err) = bot_for_notify.notify_start().await {
+                        warn!("Weixin notify-start failed during restore; continuing: {err}");
+                    }
                     info!("Weixin bot restored from persistence, starting message loop");
                     bot_for_loop.run_message_loop(stop_rx).await;
+                    if bot_slot.is_current(generation) {
+                        if let Err(err) = bot_for_notify.notify_stop().await {
+                            warn!("Weixin notify-stop failed after restored loop: {err}");
+                        }
+                    }
                 });
 
                 *self.bot_weixin_handle.write().await = Some(BotHandle { stop_tx });
@@ -1598,7 +1626,11 @@ impl RemoteConnectService {
         if let Some(handle) = self.bot_weixin_handle.write().await.take() {
             handle.stop();
         }
-        *self.weixin_bot.write().await = None;
+        if let Some(weixin_bot) = self.weixin_bot.write().await.take() {
+            if let Err(err) = weixin_bot.notify_stop().await {
+                warn!("Weixin notify-stop failed during bot shutdown: {err}");
+            }
+        }
         *self.bot_connected_info.write().await = None;
 
         info!("Bot connections stopped");
@@ -1935,6 +1967,9 @@ impl RemoteConnectService {
         self.pairing.read().await.shared_secret().copied()
     }
 }
+
+#[cfg(test)]
+mod host_lifecycle_tests;
 
 #[cfg(test)]
 mod tests {

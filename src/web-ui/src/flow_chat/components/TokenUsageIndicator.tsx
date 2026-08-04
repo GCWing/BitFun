@@ -33,19 +33,24 @@ export const TokenUsageIndicator: React.FC<TokenUsageIndicatorProps> = ({
   const statusClass = getStatusClass(percentage);
 
   return (
-    <div 
+    <div
+      data-bf-component="token-usage-indicator"
+      data-bf-part="root"
+      data-bf-level={statusClass}
       className={`bitfun-token-usage ${className} bitfun-token-usage--${statusClass}`}
       title={`Token usage: ${formatNumber(currentTokens)} / ${formatNumber(maxTokens)}`}
     >
-      <div className="bitfun-token-usage__progress-track">
+      <div data-bf-component="token-usage-indicator" data-bf-part="track" className="bitfun-token-usage__progress-track">
         <div 
+          data-bf-component="token-usage-indicator"
+          data-bf-part="fill"
           className="bitfun-token-usage__progress-fill"
           style={{ width: `${percentage}%` }}
         />
       </div>
       
-      <div className="bitfun-token-usage__hover-content">
-        <span className="bitfun-token-usage__percentage">{percentage}%</span>
+      <div data-bf-component="token-usage-indicator" data-bf-part="hover" className="bitfun-token-usage__hover-content">
+        <span data-bf-component="token-usage-indicator" data-bf-part="percentage" className="bitfun-token-usage__percentage">{percentage}%</span>
       </div>
     </div>
   );

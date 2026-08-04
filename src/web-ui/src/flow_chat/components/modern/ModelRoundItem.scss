@@ -1,5 +1,7 @@
 /* Model round item styles (BEM). */
 
+@use '../../../component-library/styles/tokens.scss' as *;
+
 .model-round-item {
   /*
    * No bottom margin — the inter-round gap is covered by the same line-height rhythm
@@ -11,10 +13,8 @@
    * view, and any animation keyed off `--streaming` → `--complete` replays when
    * the typewriter finishes. Both read as the whole chat refreshing.
    */
-  box-sizing: border-box;
-  width: min(100%, 900px);
-  margin: 0 auto;
-  padding: 0 var(--flowchat-content-inline-pad);
+  margin-bottom: 0;
+  padding: 0 var(--bf-appearance-token-flowchat-content-inline-pad);
   position: relative;
   opacity: 1;
 
@@ -31,15 +31,15 @@
   }
 
   @media (max-width: 768px) {
-    padding: 0 var(--flowchat-content-inline-pad-mobile);
+    padding: 0 var(--bf-appearance-token-flowchat-content-inline-pad-mobile);
   }
 }
 
 .model-round-item__header {
   display: flex;
   justify-content: flex-end;
-  margin-bottom: var(--flowchat-inline-gap);
-  padding: 0 var(--flowchat-control-gap);
+  margin-bottom: var(--bf-appearance-token-flowchat-inline-gap);
+  padding: 0 var(--bf-appearance-token-flowchat-control-gap);
 }
 
 // Action button container (bottom-right of last round).
@@ -48,10 +48,9 @@
   align-items: center;
   justify-content: flex-end;
   flex-wrap: wrap;
-  gap: var(--flowchat-inline-gap);
-  padding: var(--flowchat-inline-gap) 0;
-  margin-top: calc(var(--flowchat-inline-gap) + 1px);
-  border-top: 1px solid color-mix(in srgb, var(--border-subtle) 56%, transparent);
+  gap: var(--bf-appearance-token-flowchat-inline-gap);
+  padding: var(--bf-appearance-token-flowchat-inline-gap) 0;
+  margin-top: var(--bf-appearance-token-flowchat-inline-gap);
 
   // Reserve layout while typewriter catch-up finishes; reveal without resize.
   &--pending {
@@ -70,8 +69,8 @@
   margin-right: auto;
   color: color-mix(
     in srgb,
-    var(--color-text-secondary) 50%,
-    var(--color-text-muted)
+    var(--bf-appearance-token-color-text-secondary) 50%,
+    var(--bf-appearance-token-color-text-muted)
   );
   font-size: 11px;
   line-height: 16px;
@@ -93,8 +92,8 @@
 .model-round-item__meta-label {
   color: color-mix(
     in srgb,
-    var(--color-text-secondary) 38%,
-    var(--color-text-muted)
+    var(--bf-appearance-token-color-text-secondary) 38%,
+    var(--bf-appearance-token-color-text-muted)
   );
 }
 
@@ -102,12 +101,19 @@
   min-width: 0;
   color: color-mix(
     in srgb,
-    var(--color-text-secondary) 68%,
-    var(--color-text-muted)
+    var(--bf-appearance-token-color-text-secondary) 68%,
+    var(--bf-appearance-token-color-text-muted)
   );
   overflow: hidden;
   overflow-wrap: anywhere;
   text-overflow: ellipsis;
+}
+
+.model-round-item__history-loader {
+  color: var(--bf-appearance-token-color-text-muted);
+  font-size: 12px;
+  line-height: 18px;
+  padding: var(--bf-appearance-token-flowchat-inline-gap) 0;
 }
 
 .model-round-item__retry-history {
@@ -122,14 +128,14 @@
   padding: 0;
   background: transparent;
   border: none;
-  color: var(--color-text-secondary);
+  color: var(--bf-appearance-token-color-text-secondary);
   font-size: 12px;
   line-height: 18px;
   cursor: pointer;
   transition: transform 120ms cubic-bezier(0.23, 1, 0.32, 1);
 
   &:hover {
-    color: var(--color-text-primary);
+    color: var(--bf-appearance-token-color-text-primary);
   }
 
   &:active {
@@ -137,7 +143,7 @@
   }
 
   &:focus-visible {
-    outline: 2px solid var(--border-accent);
+    outline: 2px solid var(--bf-appearance-token-border-accent);
     outline-offset: 2px;
     border-radius: 3px;
   }
@@ -145,7 +151,7 @@
 
 .model-round-item__retry-attempt {
   padding: 0.35rem 0 0.15rem;
-  border-top: 1px solid color-mix(in srgb, var(--border-base) 62%, transparent);
+  border-top: 1px solid color-mix(in srgb, var(--bf-appearance-token-border-base) 62%, transparent);
 }
 
 .model-round-item__retry-attempt-label {
@@ -154,7 +160,7 @@
   flex-wrap: wrap;
   gap: 0.25rem;
   margin-bottom: 0.35rem;
-  color: var(--color-text-muted);
+  color: var(--bf-appearance-token-color-text-muted);
   font-size: 11px;
   line-height: 16px;
   text-transform: uppercase;
@@ -172,22 +178,22 @@
   border: 0;
   border-radius: 4px;
   background: transparent;
-  color: var(--color-text-muted);
+  color: var(--bf-appearance-token-color-text-muted);
   cursor: pointer;
 
   &:hover {
-    background: var(--color-overlay-white-08);
-    color: var(--color-text-primary);
+    background: var(--bf-appearance-token-color-overlay-white-08);
+    color: var(--bf-appearance-token-color-text-primary);
   }
 
   &:focus-visible {
-    outline: 2px solid var(--border-accent);
+    outline: 2px solid var(--bf-appearance-token-border-accent);
     outline-offset: 1px;
   }
 }
 
 .model-round-item__attempt-diagnostic-toggle {
-  color: var(--color-warning);
+  color: var(--bf-appearance-token-color-warning);
 }
 
 .model-round-item__attempt-diagnostic-details {
@@ -196,10 +202,10 @@
   width: min(100%, 48rem);
   margin: 0.2rem 0 0.45rem;
   padding: 0.55rem 0.65rem;
-  border: 1px solid color-mix(in srgb, var(--border-base) 72%, transparent);
+  border: 1px solid color-mix(in srgb, var(--bf-appearance-token-border-base) 72%, transparent);
   border-radius: 4px;
-  background: var(--color-bg-secondary);
-  color: var(--color-text-secondary);
+  background: var(--bf-appearance-token-color-bg-secondary);
+  color: var(--bf-appearance-token-color-text-secondary);
   font-size: 12px;
   font-weight: 400;
   letter-spacing: 0;
@@ -215,7 +221,7 @@
 
 .model-round-item__attempt-diagnostic-category {
   margin-bottom: 0.35rem;
-  color: var(--color-text-primary);
+  color: var(--bf-appearance-token-color-text-primary);
   font-weight: 600;
 }
 
@@ -225,7 +231,7 @@
 
 .model-round-item__attempt-diagnostic-tool-title {
   margin-bottom: 0.2rem;
-  color: var(--color-text-primary);
+  color: var(--bf-appearance-token-color-text-primary);
   font-weight: 600;
 }
 
@@ -235,7 +241,7 @@
   justify-content: space-between;
   gap: 0.5rem;
   min-width: 0;
-  color: var(--color-text-muted);
+  color: var(--bf-appearance-token-color-text-muted);
   font-size: 11px;
 }
 
@@ -245,9 +251,9 @@
   padding: 0.45rem;
   overflow: auto;
   border-radius: 3px;
-  background: var(--color-bg-tertiary);
-  color: var(--color-text-primary);
-  font-family: var(--font-family-mono);
+  background: var(--bf-appearance-token-color-bg-tertiary);
+  color: var(--bf-appearance-token-color-text-primary);
+  font-family: var(--bf-appearance-token-font-family-mono);
   font-size: 11px;
   line-height: 16px;
   white-space: pre-wrap;
@@ -264,7 +270,7 @@
   background: transparent;
   border: none;
   border-radius: 4px;
-  color: var(--color-text-muted);
+  color: var(--bf-appearance-token-color-text-muted);
   cursor: pointer;
   transition:
     transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
@@ -272,8 +278,8 @@
   opacity: 1;
   
   &:hover {
-    background: var(--color-overlay-white-08);
-    color: var(--color-text-primary);
+    background: var(--bf-appearance-token-color-overlay-white-08);
+    color: var(--bf-appearance-token-color-text-primary);
   }
 
   &:active {
@@ -281,7 +287,7 @@
   }
 
   &:focus-visible {
-    outline: 2px solid var(--border-accent);
+    outline: 2px solid var(--bf-appearance-token-border-accent);
     outline-offset: 1px;
   }
 
@@ -300,8 +306,8 @@
 // Copy button
 .model-round-item__copy-btn {
   &.copied {
-    color: var(--color-success);
-    background: var(--color-success-bg);
+    color: var(--bf-appearance-token-color-success);
+    background: var(--bf-appearance-token-color-success-bg);
   }
 }
 
@@ -312,21 +318,21 @@
 }
 
 .model-round-item__copy-menu {
-  position: absolute;
-  right: 0;
-  bottom: calc(100% + 4px);
-  z-index: 20;
+  position: fixed;
+  z-index: $z-popover;
   display: flex;
   flex-direction: column;
   min-width: 140px;
   max-width: min(240px, calc(100vw - 24px));
   padding: 4px 0;
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--bf-appearance-token-border-subtle);
   border-radius: 8px;
-  background: var(--color-bg-elevated);
+  background: var(--bf-appearance-token-color-bg-elevated);
+  color: var(--bf-appearance-token-color-text-primary);
+  font-family: var(--bf-appearance-token-font-family-sans);
   box-shadow:
-    0 12px 28px var(--color-overlay-black-30),
-    0 2px 8px var(--color-overlay-black-12);
+    0 12px 28px var(--bf-appearance-token-color-overlay-black-30),
+    0 2px 8px var(--bf-appearance-token-color-overlay-black-12);
   transform-origin: right bottom;
   animation: model-round-copy-menu-in 180ms cubic-bezier(0.23, 1, 0.32, 1);
 }
@@ -339,7 +345,7 @@
   padding: 0 10px;
   border: none;
   background: transparent;
-  color: var(--color-text-secondary);
+  color: var(--bf-appearance-token-color-text-secondary);
   font-size: 12px;
   line-height: 18px;
   text-align: left;
@@ -348,15 +354,15 @@
   transition: transform 120ms cubic-bezier(0.23, 1, 0.32, 1);
 
   &:hover {
-    background: var(--color-overlay-white-08);
-    color: var(--color-text-primary);
+    background: var(--bf-appearance-token-color-overlay-white-08);
+    color: var(--bf-appearance-token-color-text-primary);
   }
 
   &:focus-visible {
     outline: none;
-    background: var(--color-overlay-white-08);
-    box-shadow: inset 0 0 0 1px var(--border-accent);
-    color: var(--color-text-primary);
+    background: var(--bf-appearance-token-color-overlay-white-08);
+    box-shadow: inset 0 0 0 1px var(--bf-appearance-token-border-accent);
+    color: var(--bf-appearance-token-color-text-primary);
   }
 
   &:active {
@@ -413,14 +419,40 @@
   }
 }
 
-// ==================== Explore region adjustments ====================
+@keyframes flow-tool-completed-exit {
+  0% {
+    opacity: 1;
+    transform: translateY(0);
+    max-height: 96px;
+    margin-bottom: var(--bf-appearance-token-flowchat-flow-item-gap);
+  }
+  55% {
+    opacity: 0.72;
+    transform: translateY(-1px);
+    max-height: 96px;
+    margin-bottom: var(--bf-appearance-token-flowchat-flow-item-gap);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-4px);
+    max-height: 0;
+    margin-bottom: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .flowchat-flow-item--tool-active,
+  .flowchat-flow-item--tool-completed {
+    animation: none;
+  }
+}
 
 /* Focus highlight for programmatic "jump to marker" navigation. */
 .flowchat-flow-item.flowchat-flow-item--focused {
-  outline: 2px solid var(--border-accent);
+  outline: 2px solid var(--bf-appearance-token-border-accent);
   outline-offset: 2px;
-  border-radius: var(--flowchat-card-radius);
-  box-shadow: var(--glow-shadow-blue);
+  border-radius: var(--bf-appearance-token-flowchat-card-radius);
+  box-shadow: var(--bf-appearance-token-glow-shadow-blue);
 }
 
 @media (prefers-reduced-motion: reduce) {

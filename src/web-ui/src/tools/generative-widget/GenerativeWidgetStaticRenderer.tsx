@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef } from 'react';
 import { GENERATIVE_WIDGET_SHELL_HTML } from './GenerativeWidgetFrame';
-import { readWidgetThemePayload } from './themePayload';
+import { readWidgetAppearancePayload } from './appearancePayload';
 
 export interface GenerativeWidgetStaticRendererProps {
   widgetCode: string;
@@ -42,7 +42,7 @@ export const GenerativeWidgetStaticRenderer: React.FC<GenerativeWidgetStaticRend
     () => extractShellCss(GENERATIVE_WIDGET_SHELL_HTML),
     [],
   );
-  const themePayload = useMemo(() => readWidgetThemePayload(), []);
+  const appearancePayload = useMemo(() => readWidgetAppearancePayload(), []);
 
   useEffect(() => {
     const root = rootRef.current;
@@ -74,26 +74,26 @@ export const GenerativeWidgetStaticRenderer: React.FC<GenerativeWidgetStaticRend
     };
   }, [widgetCode]);
 
-  const themeStyle = useMemo(() => {
+  const appearanceStyle = useMemo(() => {
     const style: React.CSSProperties & Record<string, string> = {
       background: 'transparent',
-      color: 'var(--color-text-primary)',
+      color: 'var(--bf-appearance-token-color-text-primary)',
       width: '100%',
     };
 
-    Object.entries(themePayload?.vars ?? {}).forEach(([key, value]) => {
+    Object.entries(appearancePayload?.vars ?? {}).forEach(([key, value]) => {
       style[key] = value;
     });
 
     return style;
-  }, [themePayload]);
+  }, [appearancePayload]);
 
   return (
     <div
       className={`bitfun-generative-widget-static-renderer ${className}`.trim()}
-      style={themeStyle}
-      data-theme={themePayload?.id ?? 'unknown'}
-      data-theme-type={themePayload?.type ?? 'dark'}
+      style={appearanceStyle}
+      data-bf-appearance={appearancePayload?.id ?? 'unknown'}
+      data-bf-appearance-mode={appearancePayload?.mode ?? 'dark'}
     >
       <style>{shellCss}</style>
       <div ref={rootRef} className="bitfun-generative-widget-static-renderer__root" />

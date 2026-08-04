@@ -7,10 +7,10 @@
   align-items: flex-start;
   gap: $size-gap-2;
   padding: $size-gap-3;
-  background: var(--color-bg-primary);
+  background: var(--bf-appearance-token-color-bg-primary);
   border-radius: $size-radius-base;
-  box-shadow: 0 2px 6px var(--color-overlay-black-08);
-  border: 1px solid var(--border-base);
+  box-shadow: 0 2px 6px var(--bf-appearance-token-color-overlay-black-08);
+  border: 1px solid var(--bf-appearance-token-border-base);
   min-width: 280px;
   max-width: 320px;
   animation: slideIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
@@ -20,29 +20,29 @@
   &--success {
     
     .notification-item__icon {
-      color: var(--color-success);
-      background: var(--color-success-bg);
+      color: var(--bf-appearance-token-color-success);
+      background: var(--bf-appearance-token-color-success-bg);
     }
   }
 
   &--error {
     .notification-item__icon {
-      color: var(--color-error);
-      background: var(--color-error-bg);
+      color: var(--bf-appearance-token-color-error);
+      background: var(--bf-appearance-token-color-error-bg);
     }
   }
 
   &--warning {
     .notification-item__icon {
-      color: var(--color-warning);
-      background: var(--color-warning-bg);
+      color: var(--bf-appearance-token-color-warning);
+      background: var(--bf-appearance-token-color-warning-bg);
     }
   }
 
   &--info {
     .notification-item__icon {
-      color: var(--color-warning);
-      background: color-mix(in srgb, var(--color-warning) 18%, transparent);
+      color: var(--bf-appearance-token-color-warning);
+      background: color-mix(in srgb, var(--bf-appearance-token-color-warning) 18%, transparent);
     }
   }
 
@@ -69,15 +69,15 @@
   }
 
   &__title {
-    font-size: var(--font-size-xs);
+    font-size: var(--bf-appearance-token-font-size-xs);
     font-weight: $font-weight-semibold;
-    color: var(--color-text-primary);
+    color: var(--bf-appearance-token-color-text-primary);
     line-height: 1.3;
   }
 
   &__message {
-    font-size: var(--font-size-xs);
-    color: var(--color-text-secondary);
+    font-size: var(--bf-appearance-token-font-size-xs);
+    color: var(--bf-appearance-token-color-text-secondary);
     line-height: 1.4;
     word-break: break-word;
   }
@@ -89,14 +89,14 @@
     border: none;
     background: none;
     font: inherit;
-    color: var(--color-accent-500);
+    color: var(--bf-appearance-token-color-accent-500);
     text-decoration: underline;
     text-align: left;
     cursor: pointer;
     word-break: break-all;
 
     &:hover {
-      color: var(--color-accent-500);
+      color: var(--bf-appearance-token-color-accent-500);
     }
   }
 
@@ -117,11 +117,11 @@
     transition: all $motion-base $easing-standard;
 
     &--primary {
-      background: var(--color-accent-600);
-      color: var(--color-text-primary);
+      background: var(--bf-appearance-token-color-accent-600);
+      color: var(--bf-appearance-token-color-text-primary);
 
       &:hover {
-        background: var(--color-accent-500);
+        background: var(--bf-appearance-token-color-accent-500);
       }
       
       &:active {
@@ -130,12 +130,12 @@
     }
 
     &--secondary {
-      background: var(--element-bg-base);
-      color: var(--color-text-secondary);
+      background: var(--bf-appearance-token-element-bg-base);
+      color: var(--bf-appearance-token-color-text-secondary);
 
       &:hover {
-        background: var(--element-bg-medium);
-        color: var(--color-text-primary);
+        background: var(--bf-appearance-token-element-bg-medium);
+        color: var(--bf-appearance-token-color-text-primary);
       }
       
       &:active {
@@ -144,11 +144,11 @@
     }
 
     &--danger {
-      background: var(--color-error);
-      color: var(--color-text-primary);
+      background: var(--bf-appearance-token-color-error);
+      color: var(--bf-appearance-token-color-text-primary);
 
       &:hover {
-        background: var(--git-color-deleted);
+        background: var(--bf-appearance-token-git-color-deleted);
       }
       
       &:active {
@@ -168,13 +168,13 @@
     background: transparent;
     border: none;
     border-radius: $size-radius-sm;
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
     cursor: pointer;
     transition: all $motion-base $easing-standard;
 
     &:hover {
-      background: var(--element-bg-base);
-      color: var(--color-text-primary);
+      background: var(--bf-appearance-token-element-bg-base);
+      color: var(--bf-appearance-token-color-text-primary);
     }
     
     &:active {

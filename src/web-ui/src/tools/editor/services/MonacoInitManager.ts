@@ -5,7 +5,7 @@
  * configuration, custom language registration (TOML), and EditorOpener registration
  * for cross-file navigation.
  *
- * Theme logic is in ThemeManager.
+ * Visual settings are attached by MonacoAppearanceAdapter.
  */
 
 import { loader } from '@monaco-editor/react';
@@ -14,8 +14,8 @@ import { registerMermaidLanguage } from '../languages/mermaid.language';
 import { registerTomlLanguage } from '../languages/toml.language';
 import { getMonacoPath, getMonacoWorkerPath, logMonacoResourceCheck } from '../utils/monacoPathHelper';
 import { setMonacoRuntime } from './monacoRuntime';
-import { themeManager } from './ThemeManager';
 import { createLogger } from '@/shared/utils/logger';
+import { monacoAppearanceAdapter } from '@/infrastructure/appearance/adapters/MonacoAppearanceAdapter';
 
 const log = createLogger('MonacoInitManager');
 
@@ -76,7 +76,7 @@ class MonacoInitManager {
       setMonacoRuntime(monaco);
 
       this.configureTypeScriptLanguage(monaco);
-      themeManager.initialize();
+      monacoAppearanceAdapter.attachMonaco(monaco);
       this.registerCustomLanguages(monaco);
       this.registerEditorOpener(monaco);
       this.overrideEditorService(monaco);

@@ -11,6 +11,8 @@ export interface TextareaProps extends React.TextareaHTMLAttributes<HTMLTextArea
   maxLength?: number;
   variant?: 'default' | 'filled' | 'outlined';
   className?: string;
+  'data-bf-component'?: string;
+  'data-bf-part'?: string;
 }
 
 export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
@@ -28,6 +30,8 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
       value,
       onChange,
       style,
+      'data-bf-component': rootAppearanceComponent = 'textarea',
+      'data-bf-part': rootAppearancePart = 'root',
       ...props
     },
     ref
@@ -70,16 +74,19 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
       props.disabled && 'bitfun-textarea--disabled',
       className
     ].filter(Boolean).join(' ');
+    const rootAppearanceProps: Record<string, string> = {};
+    rootAppearanceProps['data-bf-component'] = rootAppearanceComponent;
+    rootAppearanceProps['data-bf-part'] = rootAppearancePart;
 
     return (
-      <div className={containerClass}>
+      <div className={containerClass} data-bf-component="textarea" data-bf-part="root" data-bf-variant={variant} data-bf-state={[error && 'error', props.disabled && 'disabled', autoResize && 'autoResize'].filter(Boolean).join(' ') || undefined} {...rootAppearanceProps}>
         {label && (
-          <label className="bitfun-textarea__label" htmlFor={textareaId}>
+          <label className="bitfun-textarea__label" data-bf-component="textarea" data-bf-part="label">
             {label}
-            {props.required && <span className="bitfun-textarea__required">*</span>}
+            {props.required && <span className="bitfun-textarea__required" data-bf-component="textarea" data-bf-part="required">*</span>}
           </label>
         )}
-        <div className="bitfun-textarea__wrapper">
+        <div className="bitfun-textarea__wrapper" data-bf-component="textarea" data-bf-part="wrapper">
           <textarea
             {...props}
             ref={textareaRef}
@@ -93,20 +100,23 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
               ? supportId
               : props['aria-describedby']}
             style={style}
+            {...props}
+            data-bf-component="textarea"
+            data-bf-part="field"
           />
         </div>
         {(hint || errorMessage || showCount) && (
-          <div className="bitfun-textarea__footer" id={supportId}>
+          <div className="bitfun-textarea__footer" data-bf-component="textarea" data-bf-part="footer">
             <div className="bitfun-textarea__hint-wrapper">
               {error && errorMessage && (
-                <span className="bitfun-textarea__error-message" role="alert">{errorMessage}</span>
+                <span className="bitfun-textarea__error-message" data-bf-component="textarea" data-bf-part="message">{errorMessage}</span>
               )}
               {!error && hint && (
-                <span className="bitfun-textarea__hint">{hint}</span>
+                <span className="bitfun-textarea__hint" data-bf-component="textarea" data-bf-part="message">{hint}</span>
               )}
             </div>
             {showCount && (
-              <span className="bitfun-textarea__count" aria-live="polite">
+              <span className="bitfun-textarea__count" data-bf-component="textarea" data-bf-part="count">
                 {charCount}{maxLength && ` / ${maxLength}`}
               </span>
             )}

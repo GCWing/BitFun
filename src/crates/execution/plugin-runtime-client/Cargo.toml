@@ -12,7 +12,10 @@ crate-type = ["rlib"]
 [dependencies]
 async-trait = { workspace = true }
 bitfun-runtime-ports = { path = "../../contracts/runtime-ports" }
-tokio = { workspace = true }
+tokio = { workspace = true, features = ["sync", "time"] }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt"] }
 
 [lints]
 workspace = true

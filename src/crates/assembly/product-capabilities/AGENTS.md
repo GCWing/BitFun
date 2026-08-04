@@ -19,6 +19,10 @@ concrete runtime execution.
   selection.
 - `ProductAssembler` may validate explicit profile input and return immutable
   runtime parts; it must not create concrete services or product state.
+- `ProductCoreDependencyMode::ExplicitCoreCapabilityClosure` records that an
+  entrypoint selects reviewed Cargo owner capabilities; it is not a feature
+  list, runtime availability result, or permission to introduce a profile-named
+  umbrella feature.
 - Do not encode product UI behavior, permission decisions, session lifecycle,
   filesystem/process IO, Git/AI provider acquisition, or feature defaults here.
 - Preserve default product tool provider order and legacy harness provider ids

@@ -117,7 +117,7 @@ function BasicsLaunchAtLoginSection() {
   }
 
   return (
-    <div className="bitfun-launch-at-login-config">
+    <div className="bitfun-launch-at-login-config" data-bf-component="basics-config" data-bf-part="launchAtLogin">
       <div className="bitfun-launch-at-login-config__content">
         <ConfigPageMessage message={message} />
         <ConfigPageSection
@@ -214,7 +214,7 @@ function BasicsAutoUpdateSection() {
   }
 
   return (
-    <div className="bitfun-auto-update-config">
+    <div className="bitfun-auto-update-config" data-bf-component="basics-config" data-bf-part="autoUpdate">
       <div className="bitfun-auto-update-config__content">
         <ConfigPageMessage message={message} />
         <ConfigPageSection
@@ -470,7 +470,7 @@ function BasicsLoggingSection() {
   }
 
   return (
-    <div className="bitfun-logging-config">
+    <div className="bitfun-logging-config" data-bf-component="basics-config" data-bf-part="logging">
       <div className="bitfun-logging-config__content">
         <ConfigPageMessage message={message} />
 
@@ -526,7 +526,7 @@ function BasicsLoggingSection() {
             description={t('logging.path.description')}
             multiline
           >
-            <div className="bitfun-logging-config__path-row">
+            <div className="bitfun-logging-config__path-row" data-bf-component="basics-config" data-bf-part="logPath">
               <div className="bitfun-logging-config__path-box">
                 {runtimeInfo?.sessionLogDir || '-'}
               </div>
@@ -679,12 +679,12 @@ function BasicsTerminalSection() {
   const renderShellOption = useCallback((option: SelectOption) => {
     const shellOption = option as TerminalShellOption;
     if (!shellOption.shell) {
-      return <div className="bitfun-terminal-config__shell-option-name">{option.label}</div>;
+      return <div className="bitfun-terminal-config__shell-option-name" data-bf-component="basics-config" data-bf-part="shellOption">{option.label}</div>;
     }
 
     const { shell } = shellOption;
     const content = (
-      <div className="bitfun-terminal-config__shell-option">
+      <div className="bitfun-terminal-config__shell-option" data-bf-component="basics-config" data-bf-part="shellOption">
         <div className="bitfun-terminal-config__shell-option-name">{formatShellLabel(shell)}</div>
       </div>
     );
@@ -724,7 +724,7 @@ function BasicsTerminalSection() {
   }
 
   return (
-    <div className="bitfun-terminal-config">
+    <div className="bitfun-terminal-config" data-bf-component="basics-config" data-bf-part="terminal">
       <div className="bitfun-terminal-config__content">
         <ConfigPageMessage message={message} />
 
@@ -848,7 +848,7 @@ function BasicsWindowBehaviorSection() {
   }
 
   return (
-    <div className="bitfun-window-behavior-config">
+    <div className="bitfun-window-behavior-config" data-bf-component="basics-config" data-bf-part="windowBehavior">
       <div className="bitfun-window-behavior-config__content">
         <ConfigPageMessage message={message} />
         <ConfigPageSection
@@ -943,6 +943,8 @@ function BasicsNotificationsSection() {
     <ConfigPageSection
       title={t('notifications.title')}
       description={t('notifications.hint')}
+      data-bf-component="basics-config"
+      data-bf-part="notifications"
     >
       <ConfigPageMessage message={message} />
       <ConfigPageRow
@@ -986,9 +988,9 @@ const BasicsConfig: React.FC = () => {
   const { t } = useTranslation('settings/basics');
 
   return (
-    <ConfigPageLayout className="bitfun-basics-config">
+    <ConfigPageLayout className="bitfun-basics-config" data-bf-component="basics-config" data-bf-part="root">
       <ConfigPageHeader title={t('title')} subtitle={t('subtitle')} />
-      <ConfigPageContent className="bitfun-basics-config__content">
+      <ConfigPageContent className="bitfun-basics-config__content" data-bf-component="basics-config" data-bf-part="content">
         <BasicsLaunchAtLoginSection />
         <BasicsPreventSleepSection />
         <BasicsAutoUpdateSection />

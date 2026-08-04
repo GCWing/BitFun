@@ -129,6 +129,204 @@ fn context_compression_tool_event(
 }
 
 impl ChatMode {
+    fn emit_terminal_attention(&self, terminal: &mut TerminalGuard, message: &str) {
+        if !self.config.ui.notifications {
+            return;
+        }
+        if let Err(error) = crate::terminal_attention::notify(
+            terminal.backend_mut(),
+            self.config.ui.notification_method,
+            message,
+        ) {
+            tracing::warn!("Failed to emit terminal notification: {error}");
+        }
+    }
+
+    fn execute_pending_local_effect(
+        &mut self,
+        terminal: &mut TerminalGuard,
+        chat_view: &mut ChatView,
+        rt_handle: &tokio::runtime::Handle,
+    ) -> Result<bool> {
+        let Some(effect) = self.pending_local_effect.take() else {
+            return Ok(false);
+        };
+        match effect {
+            PendingLocalEffect::EditComposer { command, mut draft } => {
+                let cwd = self.local_cwd.clone();
+                let result = terminal.with_restored(|| {
+                    external_editor::run_external_editor(&command, &draft.text, Some(&cwd))
+                })?;
+                match result {
+                    Ok(edit) => {
+                        let warning = edit
+                            .cleanup_warning
+                            .map(|warning| format!("; warning: {warning}"))
+                            .unwrap_or_default();
+                        match edit.outcome {
+                            external_editor::ExternalEditOutcome::Changed(text) => {
+                                let reconcile = draft.replace_text_from_external_editor(text);
+                                chat_view.set_draft(draft);
+                                let references_dropped = reconcile.workspace_references.dropped;
+                                let images_dropped = reconcile.images.dropped;
+                                chat_view.set_status(Some(if references_dropped == 0
+                                    && images_dropped == 0
+                                {
+                                    format!("Draft updated from external editor{warning}")
+                                } else {
+                                    format!(
+                                        "Draft updated; dropped metadata for {references_dropped} workspace reference(s) and {images_dropped} image(s) removed or made ambiguous by the edit{warning}"
+                                    )
+                                }));
+                            }
+                            external_editor::ExternalEditOutcome::Unchanged => {
+                                chat_view.set_draft(draft);
+                                chat_view.set_status(Some(format!(
+                                    "Editor closed without changes. If it returned immediately, add its wait flag to VISUAL or EDITOR{warning}"
+                                )));
+                            }
+                            external_editor::ExternalEditOutcome::Empty => {
+                                chat_view.set_draft(draft);
+                                chat_view.set_status(Some(format!(
+                                    "Editor returned an empty file; the existing draft was preserved{warning}"
+                                )));
+                            }
+                        }
+                    }
+                    Err(error) => {
+                        chat_view.set_draft(draft);
+                        chat_view.set_status(Some(format!(
+                            "External editor failed; the draft was preserved: {error}"
+                        )));
+                    }
+                }
+            }
+            PendingLocalEffect::ExportTranscript {
+                markdown,
+                target,
+                editor_command,
+                editor_error,
+                overwrite_confirmed,
+            } => {
+                let store = bitfun_services_core::json_store::JsonFileStore;
+                if let Some(path) = target.as_deref() {
+                    let write_result = tokio::task::block_in_place(|| {
+                        if overwrite_confirmed {
+                            rt_handle.block_on(store.write_text_atomic_strict(path, &markdown))
+                        } else {
+                            rt_handle.block_on(store.write_text_atomic_create_new(path, &markdown))
+                        }
+                    });
+                    if let Err(error) = write_result {
+                        if !overwrite_confirmed && error.is_already_exists() {
+                            chat_view.export_dialog_confirm_overwrite(path.display().to_string());
+                            chat_view.set_status(Some(format!(
+                                "{} appeared before the export was written; confirm before overwriting it",
+                                path.display()
+                            )));
+                        } else {
+                            let message = format!(
+                                "Could not export the transcript to {}: {error}",
+                                path.display()
+                            );
+                            chat_view.export_dialog_set_error(message.clone());
+                            chat_view.set_status(Some(message));
+                        }
+                        return Ok(true);
+                    }
+                }
+
+                self.close_all_popups(chat_view);
+
+                if let Some(error) = editor_error {
+                    let saved = target
+                        .as_deref()
+                        .map(|path| format!("Transcript saved to {}", path.display()))
+                        .unwrap_or_else(|| "Transcript was not saved".to_string());
+                    chat_view.set_status(Some(format!("{saved}; editor unavailable: {error}")));
+                    return Ok(true);
+                }
+
+                if let Some(command) = editor_command {
+                    let cwd = self.local_cwd.clone();
+                    let edit = terminal.with_restored(|| {
+                        external_editor::run_external_editor(&command, &markdown, Some(&cwd))
+                    })?;
+                    match edit {
+                        Ok(edit) => {
+                            let warning = edit
+                                .cleanup_warning
+                                .map(|warning| format!("; warning: {warning}"))
+                                .unwrap_or_default();
+                            match edit.outcome {
+                                external_editor::ExternalEditOutcome::Changed(edited) => {
+                                    if let Some(path) = target.as_deref() {
+                                        match tokio::task::block_in_place(|| {
+                                            rt_handle.block_on(
+                                                store.write_text_atomic_strict(path, &edited),
+                                            )
+                                        }) {
+                                            Ok(()) => chat_view.set_status(Some(format!(
+                                                "Transcript exported and editor changes saved to {}{warning}",
+                                                path.display()
+                                            ))),
+                                            Err(error) => chat_view.set_status(Some(format!(
+                                                "The original transcript remains at {}; editor changes could not be saved atomically: {error}{warning}",
+                                                path.display()
+                                            ))),
+                                        }
+                                    } else {
+                                        chat_view.set_status(Some(format!(
+                                            "Unsaved transcript editor closed; no file was created{warning}"
+                                        )));
+                                    }
+                                }
+                                external_editor::ExternalEditOutcome::Unchanged => {
+                                    let saved = target
+                                        .as_deref()
+                                        .map(|path| {
+                                            format!("Transcript saved to {}", path.display())
+                                        })
+                                        .unwrap_or_else(|| "No file was created".to_string());
+                                    chat_view.set_status(Some(format!(
+                                        "{saved}; editor closed without changes. Add its wait flag to VISUAL or EDITOR if it returned immediately{warning}"
+                                    )));
+                                }
+                                external_editor::ExternalEditOutcome::Empty => {
+                                    let saved = target
+                                        .as_deref()
+                                        .map(|path| {
+                                            format!(
+                                                "The original export remains at {}",
+                                                path.display()
+                                            )
+                                        })
+                                        .unwrap_or_else(|| "No file was created".to_string());
+                                    chat_view.set_status(Some(format!(
+                                        "{saved}; empty editor content was ignored{warning}"
+                                    )));
+                                }
+                            }
+                        }
+                        Err(error) => {
+                            let saved = target
+                                .as_deref()
+                                .map(|path| format!("Transcript saved to {}", path.display()))
+                                .unwrap_or_else(|| "No file was created".to_string());
+                            chat_view.set_status(Some(format!(
+                                "{saved}; external editor failed: {error}"
+                            )));
+                        }
+                    }
+                } else if let Some(path) = target.as_deref() {
+                    chat_view
+                        .set_status(Some(format!("Transcript exported to {}", path.display())));
+                }
+            }
+        }
+        Ok(true)
+    }
+
     pub(crate) fn run(
         &mut self,
         existing_terminal: Option<TerminalGuard>,
@@ -156,6 +354,7 @@ impl ChatMode {
         let theme = self.resolve_configured_theme(base, appearance, scheme);
         let shortcut_hints = self.keymap.compact_hints(self.action_state(false, false));
         let mut chat_view = ChatView::new(theme, shortcut_hints);
+        chat_view.apply_presentation_config(&self.config.ui);
 
         // Create or restore core session
         let rt_handle = tokio::runtime::Handle::current();
@@ -210,21 +409,33 @@ impl ChatMode {
                 // Create new session
                 let agent = self.agent.clone();
                 let agent_type = self.agent_type.clone();
-                let (session_id, workspace_binding) = tokio::task::block_in_place(|| {
-                    rt_handle.block_on(async {
-                        let session_id = agent.ensure_session(&agent_type).await?;
-                        let binding = agent.session_workspace_binding(&session_id).await?;
-                        Ok::<_, anyhow::Error>((session_id, binding))
-                    })
-                })?;
+                let (session_id, workspace_binding, session_summary) =
+                    tokio::task::block_in_place(|| {
+                        rt_handle.block_on(async {
+                            let session_id = agent.ensure_session(&agent_type).await?;
+                            let binding = agent.session_workspace_binding(&session_id).await?;
+                            let summary = agent
+                                .list_sessions()
+                                .await?
+                                .into_iter()
+                                .find(|summary| summary.session_id == session_id)
+                                .ok_or_else(|| {
+                                    anyhow::anyhow!(
+                                        "Created Session is missing from the Runtime catalog"
+                                    )
+                                })?;
+                            Ok::<_, anyhow::Error>((session_id, binding, summary))
+                        })
+                    })?;
                 tracing::info!("Core session ready: {}", session_id);
 
                 let mut state = ChatState::new(
                     session_id.clone(),
-                    "CLI Session".to_string(),
+                    session_summary.session_name,
                     self.agent_type.clone(),
                     Some(workspace_binding.workspace_path.clone()),
                 );
+                state.current_model_id = session_summary.model_id;
                 state.apply_workspace_binding(workspace_binding);
                 (session_id, state, Vec::new())
             };
@@ -335,34 +546,19 @@ impl ChatMode {
         }
 
         // Send initial prompt if provided (from startup page input)
-        if let Some(prompt) = self.initial_prompt.take() {
+        if let Some(draft) = self.initial_prompt.take() {
             if !migration_notices.is_empty() {
-                chat_view.text_input.set_text(&prompt);
+                chat_view.set_draft(draft);
                 chat_view.set_status(Some(
                     "The restored session uses fallback settings. Review them, then send the preserved input explicitly."
                         .to_string(),
                 ));
-            } else if prompt.starts_with('/') {
+            } else if draft.text.starts_with('/') {
                 // Slash commands will be handled in the main loop
-                chat_view.text_input.set_text(&prompt);
+                chat_view.set_draft(draft);
             } else {
-                tracing::info!("Sending initial prompt: {}", prompt);
-                let display_name = agent_display_name(&self.agent_type);
-                chat_view.set_status(Some(format!("{} is thinking...", display_name)));
-
-                let agent = self.agent.clone();
-                let agent_type = self.agent_type.clone();
-                match tokio::task::block_in_place(|| {
-                    rt_handle.block_on(agent.send_message(prompt, &agent_type))
-                }) {
-                    Ok(turn_id) => {
-                        tracing::info!("Started initial turn: {}", turn_id);
-                    }
-                    Err(e) => {
-                        tracing::error!("Failed to send initial prompt: {}", e);
-                        chat_view.set_status(Some(format!("Error: {}", e)));
-                    }
-                }
+                tracing::info!("Sending initial prompt: {}", draft.text);
+                self.send_draft_to_agent(draft, &mut chat_view, &mut chat_state, &rt_handle);
             }
         }
 
@@ -378,8 +574,21 @@ impl ChatMode {
         let mut resize_redraw = ResizeRedrawState::new(resize_redraw_debounce);
 
         while !should_quit {
+            if self.refresh_workspace_reference_search(&mut chat_view) {
+                needs_redraw = true;
+            }
+            if self.poll_workspace_reference_search(&mut chat_view) {
+                needs_redraw = true;
+            }
+            if self.poll_workspace_diff(&mut chat_view) {
+                needs_redraw = true;
+            }
+            if self.poll_lineage_operation_completion(&mut chat_view, &rt_handle) {
+                chat_view.invalidate_lines_cache();
+                needs_redraw = true;
+            }
             chat_view.set_action_state(
-                self.action_state(chat_state.is_processing, false),
+                self.action_state(self.displayed_chat_state(&chat_state).is_processing, false),
                 &self.keymap,
             );
             chat_view.set_agent_mode_switch_allowed(session_update_allowed(
@@ -445,6 +654,10 @@ impl ChatMode {
                         ) =>
                         {
                             if chat_state.enqueue_permission_request(request) {
+                                self.emit_terminal_attention(
+                                    &mut terminal,
+                                    "BitFun requires permission",
+                                );
                                 needs_redraw = true;
                             }
                         }
@@ -473,7 +686,15 @@ impl ChatMode {
                                             )
                                         })
                                         .collect();
-                                    if chat_state.reconcile_permission_requests(requests) {
+                                    let outcome =
+                                        chat_state.reconcile_permission_requests(requests);
+                                    if outcome.added {
+                                        self.emit_terminal_attention(
+                                            &mut terminal,
+                                            "BitFun requires permission",
+                                        );
+                                    }
+                                    if outcome.changed {
                                         needs_redraw = true;
                                     }
                                 }
@@ -592,8 +813,9 @@ impl ChatMode {
 
             let mut did_render_this_loop = false;
             if needs_redraw && resize_redraw.can_render() {
+                let displayed_chat_state = self.displayed_chat_state(&chat_state);
                 terminal.draw(|frame| {
-                    chat_view.render(frame, &chat_state);
+                    chat_view.render(frame, displayed_chat_state);
                 })?;
                 needs_redraw = false;
                 did_render_this_loop = true;
@@ -601,10 +823,15 @@ impl ChatMode {
 
             // 1.5. Execute pending MCP operations (after render so loading state is visible)
             if resize_redraw.can_render() {
+                if self.execute_pending_local_effect(&mut terminal, &mut chat_view, &rt_handle)? {
+                    needs_redraw = true;
+                    did_render_this_loop = true;
+                }
                 if let Some(op) = self.pending_mcp_op.take() {
                     if !did_render_this_loop {
+                        let displayed_chat_state = self.displayed_chat_state(&chat_state);
                         terminal.draw(|frame| {
-                            chat_view.render(frame, &chat_state);
+                            chat_view.render(frame, displayed_chat_state);
                         })?;
                     }
                     match op {
@@ -680,7 +907,6 @@ impl ChatMode {
             }
             for envelope in events {
                 let event = &envelope.event;
-
                 if let AgenticEvent::SubagentSessionLinked {
                     session_id: subagent_session_id,
                     parent_session_id,
@@ -697,6 +923,9 @@ impl ChatMode {
 
                 // Check if this is a subagent event that belongs to our session
                 if event.session_id() != Some(&session_id) {
+                    if self.project_inspected_lineage_event(event) {
+                        needs_redraw = true;
+                    }
                     // Check if this event was emitted by a subagent whose parent is in our session
                     if let Some(parent_tool_call_id) = event
                         .session_id()
@@ -713,143 +942,6 @@ impl ChatMode {
                 tracing::debug!("Processing core event: {:?}", event);
 
                 match event {
-                    AgenticEvent::DialogTurnStarted {
-                        turn_id,
-                        user_input,
-                        ..
-                    } => {
-                        chat_state.handle_turn_started(turn_id, user_input);
-                        chat_view.invalidate_lines_cache();
-                        needs_redraw = true;
-                    }
-
-                    AgenticEvent::TextChunk { turn_id, text, .. } => {
-                        if chat_state.current_turn_id() == Some(turn_id.as_str()) {
-                            chat_state.handle_text_chunk(text);
-                            chat_view.invalidate_lines_cache();
-                            needs_redraw = true;
-                        } else {
-                            tracing::debug!(
-                                "Ignoring TextChunk for non-active turn: active={:?}, event={}",
-                                chat_state.current_turn_id(),
-                                turn_id
-                            );
-                        }
-                    }
-
-                    AgenticEvent::ThinkingChunk {
-                        turn_id, content, ..
-                    } => {
-                        if chat_state.current_turn_id() == Some(turn_id.as_str()) {
-                            chat_state.handle_thinking_chunk(content);
-                            chat_view.invalidate_lines_cache();
-                            needs_redraw = true;
-                        } else {
-                            tracing::debug!(
-                                "Ignoring ThinkingChunk for non-active turn: active={:?}, event={}",
-                                chat_state.current_turn_id(),
-                                turn_id
-                            );
-                        }
-                    }
-
-                    AgenticEvent::ToolEvent {
-                        turn_id,
-                        tool_event,
-                        ..
-                    } => {
-                        if chat_state.current_turn_id() != Some(turn_id.as_str()) {
-                            tracing::debug!(
-                                "Ignoring ToolEvent for non-active turn: active={:?}, event={}",
-                                chat_state.current_turn_id(),
-                                turn_id
-                            );
-                            continue;
-                        }
-                        chat_state.handle_tool_event(tool_event);
-                        chat_view.invalidate_lines_cache();
-                        needs_redraw = true;
-                    }
-
-                    AgenticEvent::ContextCompressionStarted { .. }
-                    | AgenticEvent::ContextCompressionCompleted { .. }
-                    | AgenticEvent::ContextCompressionFailed { .. } => {
-                        if let Some(tool_event) = context_compression_tool_event(event, &chat_state)
-                        {
-                            if matches!(event, AgenticEvent::ContextCompressionStarted { .. }) {
-                                chat_view.set_status(Some("Compacting context...".to_string()));
-                            }
-                            chat_state.handle_tool_event(&tool_event);
-                            chat_view.invalidate_lines_cache();
-                            needs_redraw = true;
-                        }
-                    }
-
-                    AgenticEvent::DialogTurnCompleted {
-                        turn_id,
-                        total_rounds,
-                        total_tools,
-                        ..
-                    } => {
-                        if chat_state.current_turn_id() == Some(turn_id.as_str()) {
-                            chat_state.handle_turn_completed(*total_rounds, *total_tools);
-                            self.refresh_workspace_git_status(&mut chat_state, &rt_handle);
-                            chat_view.invalidate_lines_cache();
-                            chat_view.set_status(None);
-                            needs_redraw = true;
-                            tracing::info!("Dialog turn completed");
-                        } else {
-                            tracing::debug!(
-                                "Ignoring DialogTurnCompleted for non-active turn: active={:?}, event={}",
-                                chat_state.current_turn_id(),
-                                turn_id
-                            );
-                        }
-                    }
-
-                    AgenticEvent::DialogTurnFailed { turn_id, error, .. } => {
-                        if chat_state.current_turn_id() == Some(turn_id.as_str()) {
-                            chat_state.handle_turn_failed(error);
-                            self.refresh_workspace_git_status(&mut chat_state, &rt_handle);
-                            chat_view.invalidate_lines_cache();
-                            chat_view.set_status(Some(format!("Error: {}", error)));
-                            needs_redraw = true;
-                            tracing::error!("Dialog turn failed: {}", error);
-                        } else {
-                            tracing::debug!(
-                                "Ignoring DialogTurnFailed for non-active turn: active={:?}, event={}",
-                                chat_state.current_turn_id(),
-                                turn_id
-                            );
-                        }
-                    }
-
-                    AgenticEvent::DialogTurnCancelled { turn_id, .. } => {
-                        let active_turn_id = chat_state.current_turn_id();
-                        if active_turn_id.is_none() || active_turn_id == Some(turn_id.as_str()) {
-                            chat_state.handle_turn_cancelled();
-                            self.refresh_workspace_git_status(&mut chat_state, &rt_handle);
-                            chat_view.invalidate_lines_cache();
-                            chat_view.set_status(Some("Cancelled".to_string()));
-                            needs_redraw = true;
-                            tracing::info!("Dialog turn cancelled");
-                        } else {
-                            tracing::debug!(
-                                "Ignoring DialogTurnCancelled for non-active turn: active={:?}, event={}",
-                                chat_state.current_turn_id(),
-                                turn_id
-                            );
-                        }
-                    }
-
-                    AgenticEvent::TokenUsageUpdated { .. } => {
-                        if let Some(usage) = primary_model_usage_for_active_turn(event, &chat_state)
-                        {
-                            chat_state.handle_primary_model_usage(usage);
-                            needs_redraw = true;
-                        }
-                    }
-
                     AgenticEvent::SessionModelAutoMigrated {
                         session_id,
                         previous_model_id,
@@ -869,23 +961,66 @@ impl ChatMode {
                             needs_redraw = true;
                         }
                     }
-
-                    AgenticEvent::SystemError { error, .. } => {
-                        chat_state.add_system_message(format!("[System error: {}]", error));
-                        chat_view.invalidate_lines_cache();
-                        chat_view.set_status(Some(format!("System error: {}", error)));
-                        needs_redraw = true;
-                        tracing::error!("System error: {}", error);
+                    _ => {
+                        let projection = project_transcript_event(&mut chat_state, event, true);
+                        if projection.changed {
+                            chat_view.invalidate_lines_cache();
+                            needs_redraw = true;
+                        }
+                        if projection.requested_input {
+                            self.emit_terminal_attention(
+                                &mut terminal,
+                                "BitFun requires your input",
+                            );
+                        }
+                        if matches!(event, AgenticEvent::ContextCompressionStarted { .. })
+                            && projection.changed
+                        {
+                            chat_view.set_status(Some("Compacting context...".to_string()));
+                        }
+                        match projection.terminal {
+                            Some(TranscriptTerminalOutcome::Completed) => {
+                                self.refresh_workspace_git_status(&mut chat_state, &rt_handle);
+                                chat_view.set_status(None);
+                                self.emit_terminal_attention(
+                                    &mut terminal,
+                                    "BitFun finished the current turn",
+                                );
+                                tracing::info!("Dialog turn completed");
+                            }
+                            Some(TranscriptTerminalOutcome::Failed(error)) => {
+                                self.refresh_workspace_git_status(&mut chat_state, &rt_handle);
+                                chat_view.set_status(Some(format!("Error: {error}")));
+                                self.emit_terminal_attention(&mut terminal, "BitFun turn failed");
+                                tracing::error!("Dialog turn failed: {error}");
+                            }
+                            Some(TranscriptTerminalOutcome::Cancelled) => {
+                                self.refresh_workspace_git_status(&mut chat_state, &rt_handle);
+                                chat_view.set_status(Some("Cancelled".to_string()));
+                                tracing::info!("Dialog turn cancelled");
+                            }
+                            Some(TranscriptTerminalOutcome::SystemError(error)) => {
+                                chat_view.set_status(Some(format!("System error: {error}")));
+                                tracing::error!("System error: {error}");
+                            }
+                            None => {}
+                        }
                     }
-
-                    // Other events we don't need to handle in the UI
-                    _ => {}
                 }
+            }
+            if self.refresh_inspected_lineage_if_due(&mut chat_view, &rt_handle) {
+                chat_view.invalidate_lines_cache();
+                needs_redraw = true;
             }
 
             // 3. Process terminal input
             if let Some(events) = event_reader.read_event_batch(Duration::from_millis(16))? {
                 for event in events {
+                    if self.pending_local_effect.is_some()
+                        && !terminal_event_allowed_while_local_effect_pending(&event)
+                    {
+                        continue;
+                    }
                     match event {
                         Event::Key(key) => {
                             if let Some(reason) = self.handle_key_event(

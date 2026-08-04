@@ -7,7 +7,7 @@
 
 import type { FlowItem, FlowToolItem, ToolCardConfig } from '../types/flow-chat';
 import { isMcpToolName, parseMcpToolName } from '@/infrastructure/mcp/toolName';
-import { UI_EXCEPTION_ACCENTS } from '@/shared/theme/uiExceptionAccents';
+import { APPEARANCE_DOMAIN_TOKENS } from '@/infrastructure/appearance/appearanceDomainTokens';
 import { getEffectiveToolName } from '../utils/toolInvocationIdentity';
 
 // Tool card config map - uses backend tool names
@@ -21,7 +21,7 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'summary',
     description: 'Read file contents',
     displayMode: 'compact',
-    primaryColor: 'var(--color-accent-600)'
+    primaryColor: 'var(--bf-appearance-token-color-accent-600)'
   },
   'Write': {
     toolName: 'Write',
@@ -31,7 +31,7 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'summary',
     description: 'Write or create a file',
     displayMode: 'standard',
-    primaryColor: 'var(--color-success)'
+    primaryColor: 'var(--bf-appearance-token-color-success)'
   },
   'Edit': {
     toolName: 'Edit',
@@ -41,7 +41,7 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'detailed',
     description: 'Edit file contents',
     displayMode: 'standard',
-    primaryColor: 'var(--color-warning)'
+    primaryColor: 'var(--bf-appearance-token-color-warning)'
   },
   'Delete': {
     toolName: 'Delete',
@@ -51,7 +51,7 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'summary',
     description: 'Delete a file',
     displayMode: 'detailed',
-    primaryColor: 'var(--color-error)'
+    primaryColor: 'var(--bf-appearance-token-color-error)'
   },
   'LS': {
     toolName: 'LS',
@@ -61,7 +61,7 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'summary',
     description: 'List directory contents',
     displayMode: 'compact',
-    primaryColor: 'var(--color-indigo-500)'
+    primaryColor: 'var(--bf-appearance-token-color-indigo-500)'
   },
 
   // Search tools
@@ -73,7 +73,7 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'detailed',
     description: 'Search text in files',
     displayMode: 'compact',
-    primaryColor: UI_EXCEPTION_ACCENTS.toolIdentity.search
+    primaryColor: APPEARANCE_DOMAIN_TOKENS.toolIdentity.search
   },
   'Glob': {
     toolName: 'Glob',
@@ -83,7 +83,7 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'summary',
     description: 'Search files by pattern',
     displayMode: 'compact',
-    primaryColor: UI_EXCEPTION_ACCENTS.toolIdentity.search
+    primaryColor: APPEARANCE_DOMAIN_TOKENS.toolIdentity.search
   },
 
   // Web tools
@@ -95,7 +95,7 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'detailed',
     description: 'Search the web',
     displayMode: 'compact',
-    primaryColor: UI_EXCEPTION_ACCENTS.toolIdentity.reviewSummary
+    primaryColor: APPEARANCE_DOMAIN_TOKENS.toolIdentity.reviewSummary
   },
   'WebFetch': {
     toolName: 'WebFetch',
@@ -105,7 +105,7 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'detailed',
     description: 'Fetch webpage content',
     displayMode: 'standard',
-    primaryColor: UI_EXCEPTION_ACCENTS.toolIdentity.webSearch
+    primaryColor: APPEARANCE_DOMAIN_TOKENS.toolIdentity.webSearch
   },
 
   // Advanced tools
@@ -117,7 +117,7 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'detailed',
     description: 'Run a specialized AI task',
     displayMode: 'detailed',
-    primaryColor: UI_EXCEPTION_ACCENTS.toolIdentity.assistantAction
+    primaryColor: APPEARANCE_DOMAIN_TOKENS.toolIdentity.assistantAction
   },
   'TodoWrite': {
     toolName: 'TodoWrite',
@@ -127,7 +127,7 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'summary',
     description: 'Manage task lists',
     displayMode: 'standard',
-    primaryColor: UI_EXCEPTION_ACCENTS.todo
+    primaryColor: APPEARANCE_DOMAIN_TOKENS.todo
   },
   'submit_code_review': {
     toolName: 'submit_code_review',
@@ -137,7 +137,7 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'detailed',
     description: 'Submit code review results',
     displayMode: 'compact',
-    primaryColor: UI_EXCEPTION_ACCENTS.toolIdentity.assistantAction
+    primaryColor: APPEARANCE_DOMAIN_TOKENS.toolIdentity.assistantAction
   },
   'ContextCompression': {
     toolName: 'ContextCompression',
@@ -147,7 +147,7 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'detailed',
     description: 'Compress conversation context to reduce tokens',
     displayMode: 'compact',
-    primaryColor: UI_EXCEPTION_ACCENTS.contextCompression
+    primaryColor: APPEARANCE_DOMAIN_TOKENS.contextCompression
   },
   'GetToolSpec': {
     toolName: 'GetToolSpec',
@@ -157,7 +157,7 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'detailed',
     description: 'Read usage instructions and schema for a deferred tool',
     displayMode: 'compact',
-    primaryColor: UI_EXCEPTION_ACCENTS.tealAction
+    primaryColor: APPEARANCE_DOMAIN_TOKENS.tealAction
   },
 
   // Skill tool
@@ -169,7 +169,7 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'detailed',
     description: 'Load and run skills',
     displayMode: 'compact',
-    primaryColor: UI_EXCEPTION_ACCENTS.toolIdentity.assistantAction
+    primaryColor: APPEARANCE_DOMAIN_TOKENS.toolIdentity.assistantAction
   },
 
   // AskUserQuestion tool
@@ -181,7 +181,7 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'detailed',
     description: 'Ask the user a question and wait for a reply',
     displayMode: 'detailed',
-    primaryColor: UI_EXCEPTION_ACCENTS.toolIdentity.assistantAction
+    primaryColor: APPEARANCE_DOMAIN_TOKENS.toolIdentity.assistantAction
   },
 
   'ReviewSessionSummary': {
@@ -192,7 +192,7 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'hidden',
     description: 'Review session summary marker',
     displayMode: 'detailed',
-    primaryColor: UI_EXCEPTION_ACCENTS.toolIdentity.reviewSummary
+    primaryColor: APPEARANCE_DOMAIN_TOKENS.toolIdentity.reviewSummary
   },
 
   // Git version control tool
@@ -204,7 +204,7 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'detailed',
     description: 'Run Git commands',
     displayMode: 'compact',
-    primaryColor: UI_EXCEPTION_ACCENTS.toolIdentity.git
+    primaryColor: APPEARANCE_DOMAIN_TOKENS.toolIdentity.git
   },
 
   // GetFileDiff tool
@@ -216,7 +216,7 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'detailed',
     description: 'Get file diffs (Baseline/Git/Full)',
     displayMode: 'compact',
-    primaryColor: UI_EXCEPTION_ACCENTS.toolIdentity.git
+    primaryColor: APPEARANCE_DOMAIN_TOKENS.toolIdentity.git
   },
 
   // CreatePlan tool
@@ -228,7 +228,7 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'detailed',
     description: 'Create and manage project plans',
     displayMode: 'detailed',
-    primaryColor: 'var(--color-warning)'
+    primaryColor: 'var(--bf-appearance-token-color-warning)'
   },
 
   // TerminalControl tool
@@ -240,7 +240,7 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'summary',
     description: 'Kill or interrupt a terminal session',
     displayMode: 'compact',
-    primaryColor: 'var(--color-error)'
+    primaryColor: 'var(--bf-appearance-token-color-error)'
   },
 
   'SessionControl': {
@@ -251,7 +251,7 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'summary',
     description: 'Create, delete, or list sessions',
     displayMode: 'compact',
-    primaryColor: 'var(--color-accent-600)'
+    primaryColor: 'var(--bf-appearance-token-color-accent-600)'
   },
 
   'SessionMessage': {
@@ -262,7 +262,7 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'summary',
     description: 'Send a message to another session',
     displayMode: 'compact',
-    primaryColor: UI_EXCEPTION_ACCENTS.toolIdentity.assistantAction
+    primaryColor: APPEARANCE_DOMAIN_TOKENS.toolIdentity.assistantAction
   },
 
   // Bash terminal tool
@@ -274,7 +274,7 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'detailed',
     description: 'Run commands in the terminal',
     displayMode: 'standard',
-    primaryColor: UI_EXCEPTION_ACCENTS.toolIdentity.terminal
+    primaryColor: APPEARANCE_DOMAIN_TOKENS.toolIdentity.terminal
   },
 
   'ExecCommand': {
@@ -285,7 +285,7 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'detailed',
     description: 'Run a command in a fresh process',
     displayMode: 'standard',
-    primaryColor: UI_EXCEPTION_ACCENTS.toolIdentity.terminal
+    primaryColor: APPEARANCE_DOMAIN_TOKENS.toolIdentity.terminal
   },
 
   'WriteStdin': {
@@ -296,7 +296,7 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'detailed',
     description: 'Write to or poll a running command process',
     displayMode: 'standard',
-    primaryColor: UI_EXCEPTION_ACCENTS.toolIdentity.terminal
+    primaryColor: APPEARANCE_DOMAIN_TOKENS.toolIdentity.terminal
   },
 
   'ExecControl': {
@@ -307,7 +307,7 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'detailed',
     description: 'Interrupt or kill a running command process',
     displayMode: 'standard',
-    primaryColor: 'var(--color-error)'
+    primaryColor: 'var(--bf-appearance-token-color-error)'
   },
 
   // MiniApp tool
@@ -319,7 +319,7 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'detailed',
     description: 'Create Mini App skeleton for editing',
     displayMode: 'standard',
-    primaryColor: UI_EXCEPTION_ACCENTS.miniApp
+    primaryColor: APPEARANCE_DOMAIN_TOKENS.miniApp
   },
   'FinalizeMiniApp': {
     toolName: 'FinalizeMiniApp',
@@ -329,7 +329,7 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'detailed',
     description: 'Compile Mini App edits and refresh open runtimes',
     displayMode: 'standard',
-    primaryColor: UI_EXCEPTION_ACCENTS.miniApp
+    primaryColor: APPEARANCE_DOMAIN_TOKENS.miniApp
   },
   'PublishMiniApp': {
     toolName: 'PublishMiniApp',
@@ -339,7 +339,17 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'detailed',
     description: 'Submit a Mini App to the market for review',
     displayMode: 'standard',
-    primaryColor: UI_EXCEPTION_ACCENTS.miniApp
+    primaryColor: APPEARANCE_DOMAIN_TOKENS.miniApp
+  },
+  'PublishAppearance': {
+    toolName: 'PublishAppearance',
+    displayName: 'Publish Skin',
+    icon: 'APP',
+    requiresConfirmation: false,
+    resultDisplayType: 'detailed',
+    description: 'Submit an Appearance package to the Skin market for review',
+    displayMode: 'standard',
+    primaryColor: 'var(--bf-appearance-token-color-accent-600)'
   },
   'PageDeploy': {
     toolName: 'PageDeploy',
@@ -349,7 +359,7 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'detailed',
     description: 'Deploy a saved BitFun Page version to production',
     displayMode: 'standard',
-    primaryColor: UI_EXCEPTION_ACCENTS.toolIdentity.terminal
+    primaryColor: APPEARANCE_DOMAIN_TOKENS.toolIdentity.terminal
   },
   'PagePublish': {
     toolName: 'PagePublish',
@@ -359,7 +369,7 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'detailed',
     description: 'Publish BitFun Page content (upload, save version, deploy)',
     displayMode: 'standard',
-    primaryColor: UI_EXCEPTION_ACCENTS.toolIdentity.terminal
+    primaryColor: APPEARANCE_DOMAIN_TOKENS.toolIdentity.terminal
   },
   'GenerativeUI': {
     toolName: 'GenerativeUI',
@@ -369,7 +379,7 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'detailed',
     description: 'Render interactive widget previews inline in FlowChat',
     displayMode: 'detailed',
-    primaryColor: UI_EXCEPTION_ACCENTS.generativeUi
+    primaryColor: APPEARANCE_DOMAIN_TOKENS.generativeUi
   },
   // Computer use (desktop automation)
   'ComputerUse': {
@@ -380,7 +390,7 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'summary',
     description: 'Screen capture, mouse/keyboard, and accessibility control of the desktop',
     displayMode: 'compact',
-    primaryColor: 'var(--color-accent-600)'
+    primaryColor: 'var(--bf-appearance-token-color-accent-600)'
   },
 
   'view_image': {
@@ -391,7 +401,7 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'detailed',
     description: '',
     displayMode: 'compact',
-    primaryColor: 'var(--color-accent-600)'
+    primaryColor: 'var(--bf-appearance-token-color-accent-600)'
   },
 
   // BitFun Canvas tools
@@ -403,7 +413,7 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'detailed',
     description: 'Create a BitFun Canvas artifact',
     displayMode: 'detailed',
-    primaryColor: UI_EXCEPTION_ACCENTS.generativeUi
+    primaryColor: APPEARANCE_DOMAIN_TOKENS.generativeUi
   },
   'ReadCanvas': {
     toolName: 'ReadCanvas',
@@ -413,7 +423,7 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'detailed',
     description: 'Read a BitFun Canvas artifact',
     displayMode: 'detailed',
-    primaryColor: UI_EXCEPTION_ACCENTS.generativeUi
+    primaryColor: APPEARANCE_DOMAIN_TOKENS.generativeUi
   },
   'UpdateCanvas': {
     toolName: 'UpdateCanvas',
@@ -423,7 +433,7 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'detailed',
     description: 'Update a BitFun Canvas artifact',
     displayMode: 'detailed',
-    primaryColor: UI_EXCEPTION_ACCENTS.generativeUi
+    primaryColor: APPEARANCE_DOMAIN_TOKENS.generativeUi
   },
   'PatchCanvas': {
     toolName: 'PatchCanvas',
@@ -433,7 +443,7 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'detailed',
     description: 'Patch a BitFun Canvas artifact',
     displayMode: 'detailed',
-    primaryColor: UI_EXCEPTION_ACCENTS.generativeUi
+    primaryColor: APPEARANCE_DOMAIN_TOKENS.generativeUi
   },
 };
 
@@ -454,7 +464,7 @@ export function getToolCardConfig(toolName: string): ToolCardConfig {
       resultDisplayType: 'detailed',
       description: 'MCP',
       displayMode: 'compact',
-      primaryColor: UI_EXCEPTION_ACCENTS.toolIdentity.mcp
+      primaryColor: APPEARANCE_DOMAIN_TOKENS.toolIdentity.mcp
     };
   }
 
@@ -467,7 +477,7 @@ export function getToolCardConfig(toolName: string): ToolCardConfig {
     resultDisplayType: 'summary',
     description: `Run ${toolName} tool`,
     displayMode: 'standard',
-    primaryColor: 'var(--color-text-muted)'
+    primaryColor: 'var(--bf-appearance-token-color-text-muted)'
   };
 }
 

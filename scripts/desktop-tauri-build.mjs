@@ -1,8 +1,5 @@
 #!/usr/bin/env node
-/**
- * Runs `tauri build` from src/apps/desktop with CI=true.
- * On Windows: shared OpenSSL bootstrap (see ensure-openssl-windows.mjs).
- */
+/** Runs `tauri build` from src/apps/desktop with CI=true. */
 import { spawnSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'path';
@@ -14,7 +11,6 @@ import {
   statSync,
   writeFileSync,
 } from 'fs';
-import { ensureOpenSslWindows } from './ensure-openssl-windows.mjs';
 import { ensureFlashgrepBinary } from './prepare-flashgrep-resource.mjs';
 import { extractProductConfigArg } from './product-customization/cli.mjs';
 import { productBuildEnvironment } from './product-customization/projections.mjs';
@@ -45,7 +41,6 @@ async function main() {
   Object.assign(process.env, productBuildEnvironment(resolution));
   console.log(`[product] ${resolution.assembly.member} ${resolution.assembly.assemblyDigest}`);
 
-  await ensureOpenSslWindows();
   const flashgrepBinary = ensureFlashgrepBinary();
   process.env.FLASHGREP_DAEMON_BIN = flashgrepBinary;
 

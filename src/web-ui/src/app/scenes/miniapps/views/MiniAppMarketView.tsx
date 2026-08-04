@@ -1,19 +1,20 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
+  ArrowUpRight,
   Check,
+  ChevronDown,
+  ChevronUp,
   Download,
   ExternalLink,
   Heart,
   Loader2,
-  LogOut,
   PackageCheck,
   RefreshCw,
   ShieldCheck,
   Star,
 } from 'lucide-react';
 import {
-  Avatar,
   Badge,
   Button,
   ConfirmDialog,
@@ -42,14 +43,17 @@ import {
   type MarketInstalledStatus,
   type MarketListingDetail,
   type MarketListingSummary,
-  type MarketMe,
   type MarketSort,
 } from '@/infrastructure/api/service-api/MiniAppMarketAPI';
+import { marketImageUrl, retryOriginalMarketImage } from '@/infrastructure/api/service-api/MarketImage';
+import { MarketAccountControls } from '@/features/market-account';
+import { useMarketAccount } from '@/infrastructure/market-account';
 import { createLogger } from '@/shared/utils/logger';
 import { useNotification } from '@/shared/notification-system';
 import { getMiniAppIconGradient, renderMiniAppIcon } from '../utils/miniAppIcons';
 import { useMiniAppStore } from '../miniAppStore';
 import { pickLocalizedString } from '../utils/pickLocalizedString';
+import { buildReleaseHistory } from './miniAppReleaseHistory';
 import './MiniAppMarketView.scss';
 
 const log = createLogger('MiniAppMarketView');
@@ -71,6 +75,8 @@ const MiniAppMarketView: React.FC = () => {
   const { workspace } = useCurrentWorkspace();
   const { openScene, activateScene, openTabs } = useSceneManager();
   const upsertApp = useMiniAppStore((state) => state.upsertApp);
+  const setMarketOrigin = useMiniAppStore((state) => state.setMarketOrigin);
+  const { me } = useMarketAccount();
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState<(typeof CATEGORIES)[number]>('all');
   const [sort, setSort] = useState<MarketSort>('newest');
@@ -82,12 +88,24 @@ const MiniAppMarketView: React.FC = () => {
   const [detail, setDetail] = useState<MarketListingDetail>();
   const [detailLoading, setDetailLoading] = useState(false);
   const [installed, setInstalled] = useState<MarketInstalledStatus | null>(null);
-  const [me, setMe] = useState<MarketMe | null>(null);
-  const [authBusy, setAuthBusy] = useState(false);
+  const [loginOpen, setLoginOpen] = useState(false);
   const [actionBusy, setActionBusy] = useState(false);
   const [installPrompt, setInstallPrompt] = useState(false);
+  const [releasesExpanded, setReleasesExpanded] = useState(false);
 
   const openTabIds = useMemo(() => new Set(openTabs.map((tab) => tab.id)), [openTabs]);
+
+  /** Focuses the installed MiniApp's scene tab, opening it when absent. */
+  const openInstalledApp = useCallback((appId: string) => {
+    setDetail(undefined);
+    setInstalled(null);
+    const tabId: SceneTabId = `miniapp:${appId}`;
+    if (openTabIds.has(tabId)) {
+      activateScene(tabId);
+    } else {
+      openScene(tabId);
+    }
+  }, [activateScene, openScene, openTabIds]);
 
   const loadCatalog = useCallback(async (append = false) => {
     if (append) {
@@ -122,14 +140,11 @@ const MiniAppMarketView: React.FC = () => {
     return () => window.clearTimeout(timeout);
   }, [category, query, sort]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => {
-    void miniAppMarketAPI.me().then(setMe).catch(() => setMe(null));
-  }, []);
-
   const openDetail = async (summary: MarketListingSummary) => {
     setDetailLoading(true);
     setDetail(undefined);
     setInstalled(null);
+    setReleasesExpanded(false);
     try {
       const loaded = await miniAppMarketAPI.getListing(summary.slug);
       setDetail(loaded);
@@ -141,56 +156,17 @@ const MiniAppMarketView: React.FC = () => {
     }
   };
 
-  const signIn = async () => {
-    setAuthBusy(true);
-    try {
-      const transaction = await miniAppMarketAPI.authStart();
-      await systemAPI.openExternal(transaction.authorizationUrl);
-      const deadline = transaction.expiresAt * 1000;
-      while (Date.now() < deadline) {
-        await new Promise((resolve) =>
-          window.setTimeout(resolve, transaction.pollIntervalSeconds * 1000),
-        );
-        const status = await miniAppMarketAPI.authPoll(transaction);
-        if (status === 'authorized') {
-          const profile = await miniAppMarketAPI.me();
-          setMe(profile);
-          if (detail) {
-            setDetail(await miniAppMarketAPI.getListing(detail.slug));
-          }
-          notification.success(t('market.messages.signedIn'));
-          return;
-        }
-        if (status === 'expired') break;
-      }
-      notification.error(t('market.messages.authExpired'));
-    } catch (authError) {
-      notification.error(t('market.messages.authFailed', { error: String(authError) }));
-    } finally {
-      setAuthBusy(false);
-    }
-  };
-
-  const signOut = async () => {
-    setAuthBusy(true);
-    try {
-      await miniAppMarketAPI.logout();
-      setMe(null);
-      if (detail) {
-        setDetail(await miniAppMarketAPI.getListing(detail.slug));
-      }
-      notification.success(t('market.messages.signedOut'));
-    } catch (authError) {
-      notification.error(t('market.messages.actionFailed', { error: String(authError) }));
-    } finally {
-      setAuthBusy(false);
-    }
+  const refreshPersonalizedDetail = () => {
+    if (!detail) return;
+    void miniAppMarketAPI.getListing(detail.slug)
+      .then(setDetail)
+      .catch(error => log.warn('Failed to refresh MiniApp market detail after account change', error));
   };
 
   const toggleFavorite = async () => {
     if (!detail) return;
     if (!me) {
-      await signIn();
+      setLoginOpen(true);
       return;
     }
     setActionBusy(true);
@@ -211,7 +187,7 @@ const MiniAppMarketView: React.FC = () => {
   const rate = async (value: number) => {
     if (!detail) return;
     if (!me) {
-      await signIn();
+      setLoginOpen(true);
       return;
     }
     setActionBusy(true);
@@ -241,17 +217,11 @@ const MiniAppMarketView: React.FC = () => {
         confirmOverwrite: Boolean(installed?.localOverride),
       });
       upsertApp(result.app);
-      setDetail(undefined);
-      setInstalled(null);
+      setMarketOrigin(result.app.id, result.origin);
       notification.success(
         t(result.updated ? 'market.messages.updated' : 'market.messages.installed'),
       );
-      const tabId: SceneTabId = `miniapp:${result.app.id}`;
-      if (openTabIds.has(tabId)) {
-        activateScene(tabId);
-      } else {
-        openScene(tabId);
-      }
+      openInstalledApp(result.app.id);
     } catch (installError) {
       notification.error(t('market.messages.installFailed', { error: String(installError) }));
     } finally {
@@ -282,12 +252,10 @@ const MiniAppMarketView: React.FC = () => {
       && isRemoteWorkspace(workspace)
       && requiresWorkspace(detail.permissions),
   );
+  const releaseHistory = buildReleaseHistory(detail?.releases ?? [], releasesExpanded);
   const canUpdate = Boolean(installed && detail && detail.latestRelease > installed.origin.releaseNumber);
-  const installLabel = installed
-    ? canUpdate
-      ? t('market.detail.update')
-      : t('market.detail.installed')
-    : t('market.detail.install');
+  // The install button only renders for the actionable states: fresh install or update.
+  const installLabel = canUpdate ? t('market.detail.update') : t('market.detail.install');
   const detailName = detail
     ? pickLocalizedString(detail, currentLanguage, 'name')
     : '';
@@ -306,40 +274,31 @@ const MiniAppMarketView: React.FC = () => {
         title={t('market.title')}
         subtitle={t('market.subtitle')}
         actions={(
-          <div className="miniapp-market-native__header-actions">
+          <div
+            className="miniapp-market-native__header-actions"
+            data-bf-component="miniapp-market-view"
+            data-bf-part="headerActions"
+          >
             <Search
               value={query}
               onChange={setQuery}
               placeholder={t('market.search')}
               size="small"
             />
-            {me ? (
-              <div className="miniapp-market-native__identity">
-                <Avatar size={22} src={me.user.avatarUrl} alt={me.user.login} />
-                <span>@{me.user.login}</span>
-                <Button
-                  size="small"
-                  variant="ghost"
-                  iconOnly
-                  onClick={() => void signOut()}
-                  disabled={authBusy}
-                  title={t('market.signOut')}
-                  aria-label={t('market.signOut')}
-                >
-                  {authBusy ? <Loader2 size={14} className="gallery-spinning" /> : <LogOut size={14} />}
-                </Button>
-              </div>
-            ) : (
-              <Button size="small" variant="secondary" onClick={() => void signIn()} disabled={authBusy}>
-                {authBusy ? <Loader2 size={14} className="gallery-spinning" /> : null}
-                {t('market.signIn')}
-              </Button>
-            )}
+            <MarketAccountControls
+              loginOpen={loginOpen}
+              onLoginOpenChange={setLoginOpen}
+              onIdentityChanged={refreshPersonalizedDetail}
+            />
           </div>
         )}
       />
 
-      <div className="gallery-zones">
+      <div
+        className="gallery-zones"
+        data-bf-component="miniapp-market-view"
+        data-bf-part="root"
+      >
         <GalleryZone
           title={t('market.catalog')}
           tools={(
@@ -396,11 +355,19 @@ const MiniAppMarketView: React.FC = () => {
                       key={item.listingId}
                       type="button"
                       className="miniapp-market-card"
+                      data-bf-component="miniapp-market-view"
+                      data-bf-part="card"
                       onClick={() => void openDetail(item)}
                     >
                       <div className="miniapp-market-card__visual">
                         {item.screenshotUrls[0] ? (
-                          <img src={item.screenshotUrls[0]} alt="" loading="lazy" />
+                          <img
+                            src={marketImageUrl(item.screenshotUrls[0], 'compact-v1')}
+                            alt=""
+                            loading="lazy"
+                            decoding="async"
+                            onError={(event) => retryOriginalMarketImage(event.currentTarget, item.screenshotUrls[0]!)}
+                          />
                         ) : (
                           <span
                             className="miniapp-market-card__fallback"
@@ -472,23 +439,56 @@ const MiniAppMarketView: React.FC = () => {
               <Heart size={14} fill={detail.isFavorited ? 'currentColor' : 'none'} />
               {formatNumber(detail.favoriteCount)}
             </Button>
-            <Button
-              size="small"
-              variant="primary"
-              disabled={actionBusy || Boolean(installed && !canUpdate) || workspaceUnsupported}
-              onClick={() => setInstallPrompt(true)}
-            >
-              {actionBusy ? <Loader2 size={14} className="gallery-spinning" /> : installed ? <RefreshCw size={14} /> : <Download size={14} />}
-              {installLabel}
-            </Button>
+            {/* Installed and up to date: nothing left to install, so say so and let "Open" lead. */}
+            {installed && !canUpdate ? (
+              <span className="miniapp-market-detail__installed-state">
+                <Check size={14} />
+                {t('market.detail.installed')}
+              </span>
+            ) : null}
+            {installed ? (
+              <Button
+                size="small"
+                variant={canUpdate ? 'secondary' : 'primary'}
+                disabled={actionBusy || workspaceUnsupported}
+                onClick={() => openInstalledApp(installed.appId)}
+              >
+                <ArrowUpRight size={14} />
+                {t('market.detail.open')}
+              </Button>
+            ) : null}
+            {!installed || canUpdate ? (
+              <Button
+                size="small"
+                variant="primary"
+                disabled={actionBusy || workspaceUnsupported}
+                onClick={() => setInstallPrompt(true)}
+              >
+                {actionBusy ? <Loader2 size={14} className="gallery-spinning" /> : canUpdate ? <RefreshCw size={14} /> : <Download size={14} />}
+                {installLabel}
+              </Button>
+            ) : null}
           </>
         ) : null}
       >
         {detail ? (
-          <div className="miniapp-market-detail">
+              <div
+                className="miniapp-market-detail"
+                data-bf-component="miniapp-market-view"
+                data-bf-part="detail"
+              >
             {detail.screenshotUrls.length ? (
               <div className="miniapp-market-detail__screenshots">
-                {detail.screenshotUrls.map((url) => <img key={url} src={url} alt="" />)}
+                {detail.screenshotUrls.map((url, index) => (
+                  <img
+                    key={url}
+                    src={marketImageUrl(url, 'compact-v1')}
+                    alt=""
+                    loading={index === 0 ? 'eager' : 'lazy'}
+                    decoding="async"
+                    onError={(event) => retryOriginalMarketImage(event.currentTarget, url)}
+                  />
+                ))}
               </div>
             ) : null}
             {workspaceUnsupported ? (
@@ -538,7 +538,7 @@ const MiniAppMarketView: React.FC = () => {
             <section>
               <h4>{t('market.detail.releases')}</h4>
               <div className="miniapp-market-detail__releases">
-                {detail.releases.map((release) => (
+                {releaseHistory.visible.map((release) => (
                   <div key={release.releaseId}>
                     <span>v{release.releaseNumber}</span>
                     <span>{release.minBitfunVersion}+</span>
@@ -546,6 +546,19 @@ const MiniAppMarketView: React.FC = () => {
                   </div>
                 ))}
               </div>
+              {detail.releases.length > 1 ? (
+                <button
+                  type="button"
+                  className="miniapp-market-detail__releases-toggle"
+                  aria-expanded={releasesExpanded}
+                  onClick={() => setReleasesExpanded((current) => !current)}
+                >
+                  {releasesExpanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+                  {releasesExpanded
+                    ? t('market.detail.releasesCollapse')
+                    : t('market.detail.releasesExpand', { count: releaseHistory.hiddenCount })}
+                </button>
+              ) : null}
             </section>
             {detail.repositoryUrl ? (
               <Button

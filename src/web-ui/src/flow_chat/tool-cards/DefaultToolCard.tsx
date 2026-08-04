@@ -231,7 +231,7 @@ export const DefaultToolCard: React.FC<ToolCardProps> = ({
   const showConfirmationHighlight = needsConfirmation;
 
   return (
-    <div ref={cardRootRef} data-tool-card-id={toolId ?? ''}>
+    <div data-bf-component="default-tool-card" data-bf-part="root" data-bf-state={[isExpanded && 'expanded', showConfirmationHighlight && 'confirmation', hasError && 'failed'].filter(Boolean).join(' ')} ref={cardRootRef} data-tool-card-id={toolId ?? ''}>
       <CompactToolCard
         status={status}
         isExpanded={isExpanded}
@@ -247,28 +247,28 @@ export const DefaultToolCard: React.FC<ToolCardProps> = ({
           />
         }
         expandedContent={canExpand ? (
-          <div className="default-tool-card__expanded">
-            <div className="default-tool-card__meta">
-              <span className="default-tool-card__meta-label">{config.toolName}</span>
+          <div data-bf-component="default-tool-card" data-bf-part="expanded" className="default-tool-card__expanded">
+            <div data-bf-component="default-tool-card" data-bf-part="meta" className="default-tool-card__meta">
+              <span data-bf-component="default-tool-card" data-bf-part="metaLabel" className="default-tool-card__meta-label">{config.toolName}</span>
               {config.description && (
-                <span className="default-tool-card__meta-description">{config.description}</span>
+                <span data-bf-component="default-tool-card" data-bf-part="metaDescription" className="default-tool-card__meta-description">{config.description}</span>
               )}
             </div>
 
             {hasInput && (
-              <div className="default-tool-card__section">
-                <div className="default-tool-card__section-label">{t('toolCards.common.inputParams')}</div>
-                <pre className="default-tool-card__code-block">{inputPreview}</pre>
+              <div data-bf-component="default-tool-card" data-bf-part="section" className="default-tool-card__section">
+                <div data-bf-component="default-tool-card" data-bf-part="sectionLabel" className="default-tool-card__section-label">{t('toolCards.common.inputParams')}</div>
+                <pre data-bf-component="default-tool-card" data-bf-part="code" className="default-tool-card__code-block">{inputPreview}</pre>
               </div>
             )}
 
             {hasResult && (
-              <div className="default-tool-card__section">
-                <div className="default-tool-card__section-label">{t('toolCards.common.executionResult')}</div>
+              <div data-bf-component="default-tool-card" data-bf-part="section" className="default-tool-card__section">
+                <div data-bf-component="default-tool-card" data-bf-part="sectionLabel" className="default-tool-card__section-label">{t('toolCards.common.executionResult')}</div>
                 {toolResult?.success === false ? (
-                  <div className="default-tool-card__error-message">{errorMessage}</div>
+                  <div data-bf-component="default-tool-card" data-bf-part="error" className="default-tool-card__error-message">{errorMessage}</div>
                 ) : (
-                  <pre className="default-tool-card__code-block">{resultPreview}</pre>
+                  <pre data-bf-component="default-tool-card" data-bf-part="code" className="default-tool-card__code-block">{resultPreview}</pre>
                 )}
               </div>
             )}

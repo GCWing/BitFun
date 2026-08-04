@@ -7,9 +7,9 @@
 }
 
 .deep-review-consent {
-  --deep-review-accent: var(--color-accent-600);
-  --deep-review-accent-strong: var(--color-accent-600);
-  --deep-review-warm: var(--color-warning);
+  --deep-review-accent: var(--bf-appearance-token-color-accent-600);
+  --deep-review-accent-strong: var(--bf-appearance-token-color-accent-600);
+  --deep-review-warm: var(--bf-appearance-token-color-warning);
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -17,7 +17,7 @@
   background:
     radial-gradient(circle at 4% 0%, color-mix(in srgb, var(--deep-review-accent) 13%, transparent), transparent 34%),
     radial-gradient(circle at 96% 8%, color-mix(in srgb, var(--deep-review-warm) 9%, transparent), transparent 30%),
-    var(--color-bg-primary);
+    var(--bf-appearance-token-color-bg-primary);
 }
 
 .deep-review-consent__header {
@@ -32,13 +32,13 @@
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  color: color-mix(in srgb, var(--deep-review-accent) 78%, var(--color-text-primary));
+  color: color-mix(in srgb, var(--deep-review-accent) 78%, var(--bf-appearance-token-color-text-primary));
   background: color-mix(in srgb, var(--deep-review-accent) 12%, transparent);
   border: 1px solid color-mix(in srgb, var(--deep-review-accent) 22%, transparent);
 }
 
 .deep-review-consent__fact-icon--warning {
-  color: color-mix(in srgb, var(--deep-review-warm) 82%, var(--color-text-primary));
+  color: color-mix(in srgb, var(--deep-review-warm) 82%, var(--bf-appearance-token-color-text-primary));
   background: color-mix(in srgb, var(--deep-review-warm) 12%, transparent);
   border-color: color-mix(in srgb, var(--deep-review-warm) 24%, transparent);
 }
@@ -48,17 +48,17 @@
 
   h3 {
     margin: 4px 0 0;
-    color: var(--color-text-primary);
+    color: var(--bf-appearance-token-color-text-primary);
     font-size: 21px;
     font-weight: 680;
     letter-spacing: 0;
-    line-height: var(--flowchat-compact-line-height);
+    line-height: var(--bf-appearance-token-flowchat-compact-line-height);
   }
 }
 
 .deep-review-consent__eyebrow {
-  color: color-mix(in srgb, var(--deep-review-accent) 58%, var(--color-text-muted));
-  font-size: var(--flowchat-font-size-xs);
+  color: color-mix(in srgb, var(--deep-review-accent) 58%, var(--bf-appearance-token-color-text-muted));
+  font-size: var(--bf-appearance-token-flowchat-font-size-xs);
   font-weight: 720;
   letter-spacing: 0;
   text-transform: uppercase;
@@ -67,9 +67,9 @@
 .deep-review-consent__body {
   margin: 8px 0 0;
   max-width: 640px;
-  color: var(--color-text-secondary);
-  font-size: var(--tool-card-action-font-size);
-  line-height: var(--flowchat-support-line-height);
+  color: var(--bf-appearance-token-color-text-secondary);
+  font-size: var(--bf-appearance-token-tool-card-action-font-size);
+  line-height: var(--bf-appearance-token-flowchat-support-line-height);
 }
 
 .deep-review-consent__close {
@@ -81,7 +81,7 @@
   border: 1px solid transparent;
   border-radius: 8px;
   background: transparent;
-  color: var(--color-text-muted);
+  color: var(--bf-appearance-token-color-text-muted);
   cursor: pointer;
   transition:
     background 160ms ease,
@@ -90,9 +90,9 @@
     transform 160ms ease;
 
   &:hover {
-    background: var(--element-bg-hover);
-    border-color: var(--border-subtle);
-    color: var(--color-text-primary);
+    background: var(--bf-appearance-token-element-bg-hover);
+    border-color: var(--bf-appearance-token-border-subtle);
+    color: var(--bf-appearance-token-color-text-primary);
   }
 
   &:active {
@@ -106,17 +106,17 @@
   align-items: flex-start;
   gap: 12px;
   padding: 12px 14px;
-  border: 1px solid color-mix(in srgb, var(--deep-review-warm) 30%, var(--border-subtle));
+  border: 1px solid color-mix(in srgb, var(--deep-review-warm) 30%, var(--bf-appearance-token-border-subtle));
   border-radius: 8px;
   background:
     linear-gradient(90deg, color-mix(in srgb, var(--deep-review-warm) 10%, transparent), transparent 72%),
-    color-mix(in srgb, var(--deep-review-warm) 5%, var(--color-bg-elevated));
+    color-mix(in srgb, var(--deep-review-warm) 5%, var(--bf-appearance-token-color-bg-elevated));
 
   p {
     margin: 4px 0 0;
-    color: color-mix(in srgb, var(--color-text-secondary) 72%, var(--color-text-primary));
-    font-size: var(--tool-card-action-font-size);
-    line-height: var(--flowchat-text-line-height);
+    color: color-mix(in srgb, var(--bf-appearance-token-color-text-secondary) 72%, var(--bf-appearance-token-color-text-primary));
+    font-size: var(--bf-appearance-token-tool-card-action-font-size);
+    line-height: var(--bf-appearance-token-flowchat-text-line-height);
   }
 }
 
@@ -135,9 +135,9 @@
 
   p {
     margin: 4px 0 0;
-    color: var(--color-text-secondary);
-    font-size: var(--tool-card-action-font-size);
-    line-height: var(--flowchat-support-line-height);
+    color: var(--bf-appearance-token-color-text-secondary);
+    font-size: var(--bf-appearance-token-tool-card-action-font-size);
+    line-height: var(--bf-appearance-token-flowchat-support-line-height);
   }
 }
 
@@ -151,15 +151,15 @@
     align-items: center;
     min-height: 20px;
     padding: 0;
-    color: color-mix(in srgb, var(--color-text-secondary) 70%, var(--color-text-primary));
-    font-size: var(--tool-card-action-font-size);
+    color: color-mix(in srgb, var(--bf-appearance-token-color-text-secondary) 70%, var(--bf-appearance-token-color-text-primary));
+    font-size: var(--bf-appearance-token-tool-card-action-font-size);
     font-weight: 650;
-    line-height: var(--flowchat-support-line-height);
+    line-height: var(--bf-appearance-token-flowchat-support-line-height);
   }
 }
 
 .deep-review-consent__summary-stats .deep-review-consent__summary-stat--warning {
-  color: color-mix(in srgb, var(--deep-review-warm) 78%, var(--color-text-primary));
+  color: color-mix(in srgb, var(--deep-review-warm) 78%, var(--bf-appearance-token-color-text-primary));
 }
 
 .deep-review-consent__impact-grid {
@@ -180,18 +180,46 @@
   }
 
   span {
-    color: var(--color-text-muted);
-    font-size: var(--flowchat-font-size-xs);
+    color: var(--bf-appearance-token-color-text-muted);
+    font-size: var(--bf-appearance-token-flowchat-font-size-xs);
     font-weight: 700;
-    line-height: var(--flowchat-compact-line-height);
+    line-height: var(--bf-appearance-token-flowchat-compact-line-height);
   }
 
   strong {
     margin-top: 3px;
-    color: var(--color-text-primary);
-    font-size: var(--tool-card-action-font-size);
+    color: var(--bf-appearance-token-color-text-primary);
+    font-size: var(--bf-appearance-token-tool-card-action-font-size);
     font-weight: 680;
-    line-height: var(--flowchat-support-line-height);
+    line-height: var(--bf-appearance-token-flowchat-support-line-height);
+  }
+}
+
+.deep-review-consent__token-estimate {
+  display: grid;
+  gap: 3px;
+  padding: 9px 10px;
+  border: 1px solid color-mix(in srgb, var(--deep-review-accent) 18%, var(--bf-appearance-token-border-subtle));
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--deep-review-accent) 6%, var(--bf-appearance-token-color-bg-elevated));
+
+  strong,
+  span {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  strong {
+    color: var(--bf-appearance-token-color-text-primary);
+    font-size: var(--bf-appearance-token-tool-card-action-font-size);
+    font-weight: 720;
+    line-height: var(--bf-appearance-token-flowchat-compact-line-height);
+  }
+
+  span {
+    color: var(--bf-appearance-token-color-text-secondary);
+    font-size: var(--bf-appearance-token-flowchat-font-size-xs);
+    line-height: var(--bf-appearance-token-flowchat-support-line-height);
   }
 }
 
@@ -206,13 +234,13 @@
   flex-direction: column;
   gap: 10px;
   padding: 10px 0 0;
-  border-top: 1px solid var(--border-subtle);
+  border-top: 1px solid var(--bf-appearance-token-border-subtle);
 
   p {
     margin: 4px 0 0;
-    color: var(--color-text-secondary);
-    font-size: var(--tool-card-action-font-size);
-    line-height: var(--flowchat-support-line-height);
+    color: var(--bf-appearance-token-color-text-secondary);
+    font-size: var(--bf-appearance-token-tool-card-action-font-size);
+    line-height: var(--bf-appearance-token-flowchat-support-line-height);
   }
 }
 
@@ -222,16 +250,16 @@
   text-align: left;
 
   strong {
-    color: var(--color-text-primary);
-    font-size: var(--tool-card-action-font-size);
+    color: var(--bf-appearance-token-color-text-primary);
+    font-size: var(--bf-appearance-token-tool-card-action-font-size);
     font-weight: 780;
-    line-height: var(--flowchat-compact-line-height);
+    line-height: var(--bf-appearance-token-flowchat-compact-line-height);
   }
 
   span {
-    color: color-mix(in srgb, var(--color-text-secondary) 70%, var(--color-text-primary));
-    font-size: var(--tool-card-action-font-size);
-    line-height: var(--flowchat-support-line-height);
+    color: color-mix(in srgb, var(--bf-appearance-token-color-text-secondary) 70%, var(--bf-appearance-token-color-text-primary));
+    font-size: var(--bf-appearance-token-tool-card-action-font-size);
+    line-height: var(--bf-appearance-token-flowchat-support-line-height);
     text-align: left;
   }
 }
@@ -240,14 +268,14 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  color: color-mix(in srgb, var(--color-text-secondary) 72%, var(--color-text-primary));
-  font-size: var(--flowchat-font-size-xs);
+  color: color-mix(in srgb, var(--bf-appearance-token-color-text-secondary) 72%, var(--bf-appearance-token-color-text-primary));
+  font-size: var(--bf-appearance-token-flowchat-font-size-xs);
   font-weight: 720;
   text-transform: uppercase;
 }
 
 .deep-review-consent__reviewer-group-title--warning {
-  color: color-mix(in srgb, var(--deep-review-warm) 78%, var(--color-text-primary));
+  color: color-mix(in srgb, var(--deep-review-warm) 78%, var(--bf-appearance-token-color-text-primary));
 }
 
 .deep-review-consent__skipped-list {
@@ -265,22 +293,22 @@
     align-items: center;
     min-height: 28px;
     padding: 6px 8px;
-    border: 1px solid color-mix(in srgb, var(--deep-review-warm) 20%, var(--border-subtle));
+    border: 1px solid color-mix(in srgb, var(--deep-review-warm) 20%, var(--bf-appearance-token-border-subtle));
     border-radius: 6px;
     background: color-mix(in srgb, var(--deep-review-warm) 6%, transparent);
-    color: color-mix(in srgb, var(--color-text-secondary) 72%, var(--color-text-primary));
-    font-size: var(--tool-card-action-font-size);
-    line-height: var(--flowchat-compact-line-height);
+    color: color-mix(in srgb, var(--bf-appearance-token-color-text-secondary) 72%, var(--bf-appearance-token-color-text-primary));
+    font-size: var(--bf-appearance-token-tool-card-action-font-size);
+    line-height: var(--bf-appearance-token-flowchat-compact-line-height);
 
     span {
       min-width: 0;
-      color: var(--color-text-primary);
+      color: var(--bf-appearance-token-color-text-primary);
       overflow-wrap: anywhere;
     }
 
     strong {
-      color: color-mix(in srgb, var(--deep-review-warm) 72%, var(--color-text-primary));
-      font-size: var(--flowchat-font-size-xs);
+      color: color-mix(in srgb, var(--deep-review-warm) 72%, var(--bf-appearance-token-color-text-primary));
+      font-size: var(--bf-appearance-token-flowchat-font-size-xs);
       font-weight: 720;
       text-align: right;
       white-space: normal;
@@ -290,8 +318,8 @@
 
 li.deep-review-consent__skipped-more {
   grid-template-columns: minmax(0, 1fr);
-  background: color-mix(in srgb, var(--color-bg-primary) 82%, transparent);
-  color: var(--color-text-muted);
+  background: color-mix(in srgb, var(--bf-appearance-token-color-bg-primary) 82%, transparent);
+  color: var(--bf-appearance-token-color-text-muted);
 }
 
 .deep-review-consent__fact-icon {
@@ -299,18 +327,18 @@ li.deep-review-consent__skipped-more {
   height: 22px;
   border: 0;
   background: transparent;
-  color: color-mix(in srgb, var(--deep-review-accent) 72%, var(--color-text-primary));
+  color: color-mix(in srgb, var(--deep-review-accent) 72%, var(--bf-appearance-token-color-text-primary));
 }
 
 .deep-review-consent__fact-icon--warning {
-  color: color-mix(in srgb, var(--deep-review-warm) 82%, var(--color-text-primary));
+  color: color-mix(in srgb, var(--deep-review-warm) 82%, var(--bf-appearance-token-color-text-primary));
 }
 
 .deep-review-consent__fact-title {
-  color: var(--color-text-primary);
-  font-size: var(--tool-card-action-font-size);
+  color: var(--bf-appearance-token-color-text-primary);
+  font-size: var(--bf-appearance-token-tool-card-action-font-size);
   font-weight: 680;
-  line-height: var(--flowchat-compact-line-height);
+  line-height: var(--bf-appearance-token-flowchat-compact-line-height);
 }
 
 .deep-review-consent__footer {
@@ -319,7 +347,7 @@ li.deep-review-consent__skipped-more {
   justify-content: flex-end;
   gap: 16px;
   padding-top: 16px;
-  border-top: 1px solid var(--border-subtle);
+  border-top: 1px solid var(--bf-appearance-token-border-subtle);
 }
 
 .deep-review-consent__actions {

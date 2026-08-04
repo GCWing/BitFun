@@ -201,6 +201,36 @@ describe('FlowChatViewportCoordinator', () => {
     expect(coordinator.getMode()).toBe('idle');
   });
 
+  it('does not let a stale element-anchor lease release a newer preservation transaction', () => {
+    const scroller = document.createElement('div');
+    scroller.dataset.virtuosoScroller = 'true';
+    const firstCard = document.createElement('div');
+    const secondCard = document.createElement('div');
+    scroller.append(firstCard, secondCard);
+    document.body.append(scroller);
+    setScrollerGeometry(scroller, 900);
+    setRect(scroller, 0);
+    setRect(firstCard, 120);
+    setRect(secondCard, 180);
+
+    const coordinator = new FlowChatViewportCoordinator();
+    const firstLease = coordinator.preserveElementWithLease(firstCard);
+    const secondLease = coordinator.preserveElementWithLease(secondCard);
+
+    expect(firstLease).not.toBeNull();
+    expect(secondLease).not.toBeNull();
+    expect(coordinator.releaseElementPreservationLease(
+      firstLease!,
+      'stale-request-finished',
+    )).toBe(false);
+    expect(coordinator.ownsElementAnchor()).toBe(true);
+    expect(coordinator.releaseElementPreservationLease(
+      secondLease!,
+      'current-request-finished',
+    )).toBe(true);
+    expect(coordinator.getMode()).toBe('idle');
+  });
+
   it('keeps a pinned item anchored until follow mode takes ownership', () => {
     const scroller = document.createElement('div');
     scroller.dataset.virtuosoScroller = 'true';
@@ -222,6 +252,27 @@ describe('FlowChatViewportCoordinator', () => {
     coordinator.followTail({ force: true });
     setRect(item, 117);
     expect(coordinator.restoreElementAnchor(scroller)).toBe(false);
+  });
+
+  it('retains logical pin ownership while Virtuoso rematerializes a disconnected item', () => {
+    const scroller = document.createElement('div');
+    scroller.dataset.virtuosoScroller = 'true';
+    const item = document.createElement('div');
+    scroller.append(item);
+    document.body.append(scroller);
+    setScrollerGeometry(scroller, 700);
+    setRect(scroller, 0);
+    setRect(item, 57);
+
+    const coordinator = new FlowChatViewportCoordinator();
+    expect(coordinator.pinElement(item)).toBe(true);
+
+    item.remove();
+    expect(coordinator.ownsElementAnchor()).toBe(false);
+    expect(coordinator.getMode()).toBe('pinned-item');
+
+    coordinator.release('test-cleanup');
+    expect(coordinator.getMode()).toBe('idle');
   });
 
   it('does not let a tool-card collapse replace an active pinned-item anchor', () => {

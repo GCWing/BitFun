@@ -22,14 +22,27 @@ GitHub Actions 升级使用的是兼容 Node.js 24 的 action runtime，但项�
 默认仍以 Node.js 22.12+ 为基线，除非局部指南另有说明。从旧 Node.js 版本切换
 后，请重新运行 `pnpm install`。
 
-#### Windows：OpenSSL 配置
+#### 构建前置检查
 
-大多数 Windows 贡献者不需要手动配置 OpenSSL。使用 `pnpm run desktop:dev`
-或常规 `desktop:build*` 脚本即可；脚本会在需要时自动引导预编译的 OpenSSL 包。
+当 `cargo check --workspace`、`cargo check -p bitfun-desktop` 或 pnpm 构建
+命令报出难以理解的错误（如 "resource path doesn't exist" 或 sherpa-onnx
+下载失败）时，运行前置检查以识别缺失的依赖并获取可操作的修复命令：
 
-只有在自动引导失败、准备 CI 环境，或你明确使用 `pnpm run desktop:dev:raw`
-时才需要手动处理。此时运行 `scripts/ci/setup-openssl-windows.ps1`，或将
-`OPENSSL_DIR` 指向预编译的 x64 OpenSSL 目录，并设置 `OPENSSL_STATIC=1`。
+```bash
+pnpm run check:build-prereqs           # 仅检查
+pnpm run check:build-prereqs -- --fix  # 尝试自动修复缺失的前置依赖
+```
+
+检查项包括：
+
+- 缺少 `node_modules`（修复：`pnpm install`）
+- 缺少 `src/mobile-web/dist`（修复：`pnpm run prepare:mobile-web` —
+  bitfun-desktop 的 Tauri 构建脚本将该目录作为资源引用，缺失时
+  `cargo check -p bitfun-desktop` 和 `cargo check --workspace` 会失败）
+- 缺少 sherpa-onnx 预编译库（sherpa-onnx-sys 构建脚本会在构建时从
+  GitHub 下载；若网络连通性差导致下载失败，设置
+  `SHERPA_ONNX_LIB_DIR` 指向 `target/sherpa-onnx-prebuilt/` 下的预编译
+  lib 目录以使用本地副本）
 
 ### 安装依赖
 

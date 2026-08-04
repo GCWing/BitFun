@@ -1084,7 +1084,7 @@ const McpToolsConfig: React.FC = () => {
       {serverLoadFailed && !showJsonEditor ? (
         <>
           {servers.length > 0 ? (
-            <span className="bitfun-mcp-tools__status-badge is-pending">
+            <span className="bitfun-mcp-tools__status-badge is-pending" data-bf-component="mcp-tools-config" data-bf-part="statusBadge">
               {tMcp('external.status.stale')}
             </span>
           ) : null}
@@ -1112,7 +1112,7 @@ const McpToolsConfig: React.FC = () => {
   );
 
   const renderServerBadge = (server: MCPServerInfo) => (
-    <span className={`bitfun-mcp-tools__status-badge ${getStatusClass(server.status)}`}>
+    <span className={`bitfun-mcp-tools__status-badge ${getStatusClass(server.status)}`} data-bf-component="mcp-tools-config" data-bf-part="statusBadge">
       {getStatusIcon(server.status)}
       {getServerStatusLabel(server.status)}
     </span>
@@ -1193,57 +1193,57 @@ const McpToolsConfig: React.FC = () => {
     if (!server.statusMessage && !isCommandDrivenServer(server) && !isRemoteServer(server)) return null;
 
     return (
-      <div className="bitfun-mcp-tools__server-details">
-        <div className="bitfun-mcp-tools__server-detail-item">
-          <span className="bitfun-mcp-tools__server-detail-label">
+      <div className="bitfun-mcp-tools__server-details" data-bf-component="mcp-tools-config" data-bf-part="serverDetails">
+        <div className="bitfun-mcp-tools__server-detail-item" data-bf-component="mcp-tools-config" data-bf-part="detailItem">
+          <span className="bitfun-mcp-tools__server-detail-label" data-bf-component="mcp-tools-config" data-bf-part="detailLabel">
             {tMcp('server.transport')}:
           </span>
-          <code className="bitfun-mcp-tools__server-detail-value">{server.transport}</code>
+          <code className="bitfun-mcp-tools__server-detail-value" data-bf-component="mcp-tools-config" data-bf-part="detailValue">{server.transport}</code>
         </div>
         {server.statusMessage && (
-          <div className="bitfun-mcp-tools__server-detail-item">
-            <span className="bitfun-mcp-tools__server-detail-label">
+          <div className="bitfun-mcp-tools__server-detail-item" data-bf-component="mcp-tools-config" data-bf-part="detailItem">
+            <span className="bitfun-mcp-tools__server-detail-label" data-bf-component="mcp-tools-config" data-bf-part="detailLabel">
               {tMcp('server.statusDetail')}:
             </span>
-            <span className="bitfun-mcp-tools__server-detail-value">
+            <span className="bitfun-mcp-tools__server-detail-value" data-bf-component="mcp-tools-config" data-bf-part="detailValue">
               {server.statusMessage}
             </span>
           </div>
         )}
         {server.startDisabledReason && (
-          <div className="bitfun-mcp-tools__server-detail-item">
-            <span className="bitfun-mcp-tools__server-detail-label">
+          <div className="bitfun-mcp-tools__server-detail-item" data-bf-component="mcp-tools-config" data-bf-part="detailItem">
+            <span className="bitfun-mcp-tools__server-detail-label" data-bf-component="mcp-tools-config" data-bf-part="detailLabel">
               {tMcp('server.runtime.unsupportedReason')}:
             </span>
-            <span className="bitfun-mcp-tools__server-detail-value">
+            <span className="bitfun-mcp-tools__server-detail-value" data-bf-component="mcp-tools-config" data-bf-part="detailValue">
               {getStartDisabledReasonLabel(server)}
             </span>
           </div>
         )}
         {isRemoteServer(server) && (
           <>
-            <div className="bitfun-mcp-tools__server-detail-item">
-              <span className="bitfun-mcp-tools__server-detail-label">
+            <div className="bitfun-mcp-tools__server-detail-item" data-bf-component="mcp-tools-config" data-bf-part="detailItem">
+              <span className="bitfun-mcp-tools__server-detail-label" data-bf-component="mcp-tools-config" data-bf-part="detailLabel">
                 {tMcp('server.remoteUrl')}:
               </span>
-              <code className="bitfun-mcp-tools__server-detail-value">
+              <code className="bitfun-mcp-tools__server-detail-value" data-bf-component="mcp-tools-config" data-bf-part="detailValue">
                 {server.url || '-'}
               </code>
             </div>
-            <div className="bitfun-mcp-tools__server-detail-item">
-              <span className="bitfun-mcp-tools__server-detail-label">
+            <div className="bitfun-mcp-tools__server-detail-item" data-bf-component="mcp-tools-config" data-bf-part="detailItem">
+              <span className="bitfun-mcp-tools__server-detail-label" data-bf-component="mcp-tools-config" data-bf-part="detailLabel">
                 {tMcp('server.remoteAuth')}:
               </span>
-              <span className="bitfun-mcp-tools__server-detail-value">
+              <span className="bitfun-mcp-tools__server-detail-value" data-bf-component="mcp-tools-config" data-bf-part="detailValue">
                 {getRemoteAuthSummary(server)}
               </span>
             </div>
             {(server.oauthEnabled || server.xaaEnabled) && (
-              <div className="bitfun-mcp-tools__server-detail-item">
-                <span className="bitfun-mcp-tools__server-detail-label">
+              <div className="bitfun-mcp-tools__server-detail-item" data-bf-component="mcp-tools-config" data-bf-part="detailItem">
+                <span className="bitfun-mcp-tools__server-detail-label" data-bf-component="mcp-tools-config" data-bf-part="detailLabel">
                   {tMcp('server.remoteAuthMethod')}:
                 </span>
-                <span className="bitfun-mcp-tools__server-detail-value">
+                <span className="bitfun-mcp-tools__server-detail-value" data-bf-component="mcp-tools-config" data-bf-part="detailValue">
                   {getRemoteAuthMethodLabel(server)}
                 </span>
               </div>
@@ -1252,28 +1252,28 @@ const McpToolsConfig: React.FC = () => {
         )}
         {!isCommandDrivenServer(server) ? null : (
           <>
-        <div className="bitfun-mcp-tools__server-detail-item">
-          <span className="bitfun-mcp-tools__server-detail-label">
+        <div className="bitfun-mcp-tools__server-detail-item" data-bf-component="mcp-tools-config" data-bf-part="detailItem">
+          <span className="bitfun-mcp-tools__server-detail-label" data-bf-component="mcp-tools-config" data-bf-part="detailLabel">
             {tMcp('server.command')}:
           </span>
-          <code className="bitfun-mcp-tools__server-detail-value">
+          <code className="bitfun-mcp-tools__server-detail-value" data-bf-component="mcp-tools-config" data-bf-part="detailValue">
             {server.command || '-'}
           </code>
         </div>
-        <div className="bitfun-mcp-tools__server-detail-item">
-          <span className="bitfun-mcp-tools__server-detail-label">
+        <div className="bitfun-mcp-tools__server-detail-item" data-bf-component="mcp-tools-config" data-bf-part="detailItem">
+          <span className="bitfun-mcp-tools__server-detail-label" data-bf-component="mcp-tools-config" data-bf-part="detailLabel">
             {tMcp('server.runtime.source')}:
           </span>
-          <span className="bitfun-mcp-tools__server-detail-value">
+          <span className="bitfun-mcp-tools__server-detail-value" data-bf-component="mcp-tools-config" data-bf-part="detailValue">
             {getRuntimeSourceLabel(server)}
           </span>
         </div>
         {server.commandResolvedPath && (
-          <div className="bitfun-mcp-tools__server-detail-item">
-            <span className="bitfun-mcp-tools__server-detail-label">
+          <div className="bitfun-mcp-tools__server-detail-item" data-bf-component="mcp-tools-config" data-bf-part="detailItem">
+            <span className="bitfun-mcp-tools__server-detail-label" data-bf-component="mcp-tools-config" data-bf-part="detailLabel">
               {tMcp('server.runtime.path')}:
             </span>
-            <code className="bitfun-mcp-tools__server-detail-value">
+            <code className="bitfun-mcp-tools__server-detail-value" data-bf-component="mcp-tools-config" data-bf-part="detailValue">
               {server.commandResolvedPath}
             </code>
           </div>
@@ -1285,19 +1285,19 @@ const McpToolsConfig: React.FC = () => {
   };
 
   return (
-    <ConfigPageLayout className="bitfun-mcp-tools">
+    <ConfigPageLayout className="bitfun-mcp-tools" data-bf-component="mcp-tools-config" data-bf-part="root" data-bf-view={showJsonEditor ? 'json' : 'list'}>
       <ConfigPageHeader
         title={tPage('title')}
         subtitle={desktopConfigAvailable ? tPage('subtitle') : tMcp('subtitleReadOnly')}
       />
 
-      <ConfigPageContent>
+      <ConfigPageContent data-bf-component="mcp-tools-config" data-bf-part="content">
         <ConfigPageSection
           title={tMcp('section.serverList.title')}
           extra={desktopConfigAvailable ? mcpSectionExtra : undefined}
         >
           {!desktopConfigAvailable && (
-            <div className="bitfun-collection-empty" data-testid="mcp-management-unavailable">
+            <div className="bitfun-collection-empty" data-bf-component="mcp-tools-config" data-bf-part="empty" data-testid="mcp-management-unavailable">
               <p>{tMcp(remoteConnectionActive
                 ? 'section.serverList.remoteUnavailable'
                 : 'section.serverList.desktopUnavailable')}</p>
@@ -1305,13 +1305,13 @@ const McpToolsConfig: React.FC = () => {
           )}
 
           {desktopConfigAvailable && showJsonEditor && jsonLoading && (
-            <div className="bitfun-collection-empty">
+            <div className="bitfun-collection-empty" data-bf-component="mcp-tools-config" data-bf-part="empty">
               <p>{tMcp('loading')}</p>
             </div>
           )}
 
           {desktopConfigAvailable && showJsonEditor && !jsonLoading && jsonLoadFailed && (
-            <div className="bitfun-collection-empty" role="status">
+            <div className="bitfun-collection-empty" data-bf-component="mcp-tools-config" data-bf-part="empty" role="status">
               <p>{tMcp('jsonEditor.loadFailed')}</p>
               <IconButton
                 variant="ghost"
@@ -1326,11 +1326,11 @@ const McpToolsConfig: React.FC = () => {
           )}
 
           {desktopConfigAvailable && showJsonEditor && !jsonLoading && !jsonLoadFailed && (
-            <div className="bitfun-mcp-tools__json-editor">
-              <div className="bitfun-mcp-tools__json-editor-header">
+            <div className="bitfun-mcp-tools__json-editor" data-bf-component="mcp-tools-config" data-bf-part="jsonEditor">
+              <div className="bitfun-mcp-tools__json-editor-header" data-bf-component="mcp-tools-config" data-bf-part="jsonHeader">
                 <h3>{tMcp('jsonEditor.title')}</h3>
-                <p className="bitfun-mcp-tools__json-hint">{tMcp('jsonEditor.hint1')}</p>
-                <p className="bitfun-mcp-tools__json-hint">{tMcp('jsonEditor.hint2')}</p>
+                <p className="bitfun-mcp-tools__json-hint" data-bf-component="mcp-tools-config" data-bf-part="jsonHint">{tMcp('jsonEditor.hint1')}</p>
+                <p className="bitfun-mcp-tools__json-hint" data-bf-component="mcp-tools-config" data-bf-part="jsonHint">{tMcp('jsonEditor.hint2')}</p>
               </div>
               <Textarea
                 ref={jsonEditorRef}
@@ -1342,6 +1342,8 @@ const McpToolsConfig: React.FC = () => {
                 placeholder={`{\n  "mcpServers": {\n    "server-name": {\n      "command": "npx",\n      "args": ["-y", "@package/name"],\n      "env": {}\n    }\n  }\n}`}
                 variant="outlined"
                 className="bitfun-mcp-tools__json-textarea"
+                data-bf-component="mcp-tools-config"
+                data-bf-part="jsonTextarea"
                 spellCheck={false}
                 error={!!jsonLintError}
                 errorMessage={
@@ -1359,7 +1361,7 @@ const McpToolsConfig: React.FC = () => {
                     : undefined
                 }
               />
-              <div className="bitfun-mcp-tools__json-actions">
+              <div className="bitfun-mcp-tools__json-actions" data-bf-component="mcp-tools-config" data-bf-part="jsonActions">
                 <Button variant="secondary" onClick={() => setShowJsonEditor(false)}>
                   {tMcp('actions.cancel')}
                 </Button>
@@ -1367,13 +1369,13 @@ const McpToolsConfig: React.FC = () => {
                   {tMcp('actions.saveConfig')}
                 </Button>
               </div>
-              <div className="bitfun-mcp-tools__json-examples">
+              <div className="bitfun-mcp-tools__json-examples" data-bf-component="mcp-tools-config" data-bf-part="examples">
                 <h4>{tMcp('jsonEditor.exampleTitle')}</h4>
-                <div className="bitfun-mcp-tools__example">
+                <div className="bitfun-mcp-tools__example" data-bf-component="mcp-tools-config" data-bf-part="example">
                   <h5>{tMcp('jsonEditor.localProcess')}</h5>
                   <pre>{`{\n  "mcpServers": {\n    "zai-mcp-server": {\n      "command": "npx",\n      "args": ["-y", "@z_ai/mcp-server"],\n      "env": { "Z_AI_API_KEY": "your_api_key" }\n    }\n  }\n}`}</pre>
                 </div>
-                <div className="bitfun-mcp-tools__example">
+                <div className="bitfun-mcp-tools__example" data-bf-component="mcp-tools-config" data-bf-part="example">
                   <h5>{tMcp('jsonEditor.remoteService')}</h5>
                   <pre>{`{\n  "mcpServers": {\n    "remote-mcp": {\n      "url": "http://localhost:3000/sse"\n    }\n  }\n}`}</pre>
                 </div>
@@ -1382,21 +1384,21 @@ const McpToolsConfig: React.FC = () => {
           )}
 
           {desktopConfigAvailable && !showJsonEditor && mcpLoading && (
-            <div className="bitfun-collection-empty">
+            <div className="bitfun-collection-empty" data-bf-component="mcp-tools-config" data-bf-part="empty">
               <p>{tMcp('loading')}</p>
             </div>
           )}
 
           {desktopConfigAvailable && !showJsonEditor && !mcpLoading
             && serverLoadFailed && servers.length === 0 && (
-            <div className="bitfun-collection-empty" role="status">
+            <div className="bitfun-collection-empty" data-bf-component="mcp-tools-config" data-bf-part="empty" role="status">
               <p>{tMcp('section.serverList.loadFailed')}</p>
             </div>
           )}
 
           {desktopConfigAvailable && !showJsonEditor && !mcpLoading
             && !serverLoadFailed && servers.length === 0 && (
-            <div className="bitfun-collection-empty">
+            <div className="bitfun-collection-empty" data-bf-component="mcp-tools-config" data-bf-part="empty">
               <Button variant="dashed" size="small" onClick={() => setShowJsonEditor(true)}>
                 <FileJson size={14} />
                 {tMcp('actions.jsonConfig')}
@@ -1430,33 +1432,33 @@ const McpToolsConfig: React.FC = () => {
         showCloseButton={!authSubmitting && !oauthCancelling}
       >
         {authDialogServer && (
-          <div className="bitfun-mcp-tools__json-editor">
+          <div className="bitfun-mcp-tools__json-editor" data-bf-component="mcp-tools-config" data-bf-part="authEditor">
             {authDialogServer.oauthEnabled && (
               <>
-                <p className="bitfun-mcp-tools__json-hint">
+                <p className="bitfun-mcp-tools__json-hint" data-bf-component="mcp-tools-config" data-bf-part="jsonHint">
                   {tMcp('modal.remoteOAuthHint')}
                 </p>
-                <p className="bitfun-mcp-tools__json-hint">
+                <p className="bitfun-mcp-tools__json-hint" data-bf-component="mcp-tools-config" data-bf-part="jsonHint">
                   {tMcp('modal.remoteOAuthCurrentStatus', {
                     status: getOAuthStatusLabel(oauthSession),
                   })}
                 </p>
                 {oauthSession?.redirectUri && (
-                  <p className="bitfun-mcp-tools__json-hint">
+                  <p className="bitfun-mcp-tools__json-hint" data-bf-component="mcp-tools-config" data-bf-part="jsonHint">
                     {tMcp('modal.remoteOAuthRedirectUri', {
                       redirectUri: oauthSession.redirectUri,
                     })}
                   </p>
                 )}
                 {oauthSession?.message && (
-                  <p className="bitfun-mcp-tools__json-hint">
+                  <p className="bitfun-mcp-tools__json-hint" data-bf-component="mcp-tools-config" data-bf-part="jsonHint">
                     {tMcp('modal.remoteOAuthStatus', {
                       status: getOAuthStatusLabel(oauthSession),
                       message: oauthSession.message,
                     })}
                   </p>
                 )}
-                <div className="bitfun-mcp-tools__json-actions">
+                <div className="bitfun-mcp-tools__json-actions" data-bf-component="mcp-tools-config" data-bf-part="jsonActions">
                   <Button
                     variant="primary"
                     onClick={handleStartRemoteOAuth}
@@ -1468,11 +1470,11 @@ const McpToolsConfig: React.FC = () => {
                 </div>
               </>
             )}
-            <p className="bitfun-mcp-tools__json-hint">
+            <p className="bitfun-mcp-tools__json-hint" data-bf-component="mcp-tools-config" data-bf-part="jsonHint">
               {tMcp('modal.remoteAuthHint')}
             </p>
             {authDialogServer.url && (
-              <p className="bitfun-mcp-tools__json-hint">
+              <p className="bitfun-mcp-tools__json-hint" data-bf-component="mcp-tools-config" data-bf-part="jsonHint">
                 {tMcp('modal.remoteAuthServerUrl', {
                   url: authDialogServer.url,
                 })}
@@ -1485,9 +1487,11 @@ const McpToolsConfig: React.FC = () => {
               placeholder={tMcp('modal.remoteAuthPlaceholder')}
               variant="outlined"
               className="bitfun-mcp-tools__json-textarea"
+              data-bf-component="mcp-tools-config"
+              data-bf-part="jsonTextarea"
               spellCheck={false}
             />
-            <div className="bitfun-mcp-tools__json-actions">
+            <div className="bitfun-mcp-tools__json-actions" data-bf-component="mcp-tools-config" data-bf-part="jsonActions">
               <Button
                 variant="secondary"
                 onClick={handleCloseAuthDialog}

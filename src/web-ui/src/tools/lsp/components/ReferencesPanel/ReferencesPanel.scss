@@ -24,13 +24,13 @@
   max-width: 90vw;
   min-width: 300px;
   
-  background: var(--color-bg-primary);
-  border: 1px solid var(--border-prominent);
+  background: var(--bf-appearance-token-color-bg-primary);
+  border: 1px solid var(--bf-appearance-token-border-prominent);
   border-radius: $size-radius-base;
   
   box-shadow: 
-    var(--shadow-xl),
-    0 0 0 1px var(--color-overlay-black-80),
+    var(--bf-appearance-token-shadow-xl),
+    0 0 0 1px var(--bf-appearance-token-color-overlay-black-80),
     $inner-glow-top;
   
   backdrop-filter: $blur-medium;
@@ -40,7 +40,7 @@
   pointer-events: all;
   
   font-family: $font-family-sans;
-  font-size: var(--font-size-sm);
+  font-size: var(--bf-appearance-token-font-size-sm);
   line-height: $line-height-base;
   
   opacity: 0;
@@ -65,28 +65,28 @@
   align-items: center;
   justify-content: space-between;
   padding: $size-gap-3 $size-gap-4;
-  background: var(--element-bg-soft);
-  border-bottom: 1px solid var(--border-base);
+  background: var(--bf-appearance-token-element-bg-soft);
+  border-bottom: 1px solid var(--bf-appearance-token-border-base);
 }
 
 .references-panel__title {
   display: flex;
   align-items: center;
   gap: $size-gap-2;
-  font-size: var(--font-size-sm);
+  font-size: var(--bf-appearance-token-font-size-sm);
   font-weight: $font-weight-semibold;
-  color: var(--color-text-secondary);
+  color: var(--bf-appearance-token-color-text-secondary);
 
   svg {
-    color: var(--color-accent-500);
+    color: var(--bf-appearance-token-color-accent-500);
   }
 }
 
 .references-panel__count {
   margin-left: $size-gap-2;
-  font-size: var(--font-size-xs);
+  font-size: var(--bf-appearance-token-font-size-xs);
   font-weight: $font-weight-normal;
-  color: var(--color-text-muted);
+  color: var(--bf-appearance-token-color-text-muted);
 }
 
 .references-panel__close {
@@ -99,7 +99,7 @@
   background: transparent;
   border: none;
   border-radius: $size-radius-sm;
-  color: var(--color-text-muted);
+  color: var(--bf-appearance-token-color-text-muted);
   cursor: pointer;
   transition:
     transform $motion-fast cubic-bezier(0.23, 1, 0.32, 1),
@@ -107,13 +107,13 @@
     color $motion-fast ease;
 
   &:hover {
-    background: var(--element-bg-base);
-    color: var(--color-text-secondary);
+    background: var(--bf-appearance-token-element-bg-base);
+    color: var(--bf-appearance-token-color-text-secondary);
   }
 
   &:active {
     transform: scale(0.95);
-    background: var(--element-bg-medium);
+    background: var(--bf-appearance-token-element-bg-medium);
   }
 }
 
@@ -130,8 +130,8 @@
 .references-panel__empty {
   padding: $size-gap-8 $size-gap-4;
   text-align: center;
-  font-size: var(--font-size-sm);
-  color: var(--color-text-muted);
+  font-size: var(--bf-appearance-token-font-size-sm);
+  color: var(--bf-appearance-token-color-text-muted);
 }
 
 // File groups
@@ -139,7 +139,7 @@
   margin-bottom: $size-gap-2;
   border-radius: $size-radius-sm;
   overflow: hidden;
-  background: var(--element-bg-subtle);
+  background: var(--bf-appearance-token-element-bg-subtle);
 
   &:last-child {
     margin-bottom: 0;
@@ -151,8 +151,8 @@
   align-items: center;
   gap: $size-gap-2;
   padding: $size-gap-2 $size-gap-3;
-  background: var(--element-bg-soft);
-  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bf-appearance-token-element-bg-soft);
+  border-bottom: 1px solid var(--bf-appearance-token-border-subtle);
   cursor: default;
   
   svg {
@@ -167,9 +167,9 @@
 .references-panel__file-path {
   flex: 1;
   min-width: 0;
-  font-size: var(--font-size-xs);
+  font-size: var(--bf-appearance-token-font-size-xs);
   font-weight: $font-weight-medium;
-  color: var(--color-text-secondary);
+  color: var(--bf-appearance-token-color-text-secondary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -178,11 +178,11 @@
 .references-panel__file-count {
   flex-shrink: 0;
   padding: 2px $size-gap-2;
-  background: var(--color-accent-100);
+  background: var(--bf-appearance-token-color-accent-100);
   border-radius: $size-radius-full;
   font-size: 11px;
   font-weight: $font-weight-semibold;
-  color: var(--color-accent-500);
+  color: var(--bf-appearance-token-color-accent-500);
 }
 
 // Reference list
@@ -206,15 +206,15 @@
   user-select: none;
   position: relative;
   min-height: 32px;
-  color: var(--color-text-secondary);
+  color: var(--bf-appearance-token-color-text-secondary);
 
   &:hover {
     background: linear-gradient(135deg,
-      var(--color-accent-200) 0%,
-      var(--color-accent-100) 50%,
-      var(--color-accent-200) 100%
+      var(--bf-appearance-token-color-accent-200) 0%,
+      var(--bf-appearance-token-color-accent-100) 50%,
+      var(--bf-appearance-token-color-accent-200) 100%
     );
-    color: var(--color-text-primary);
+    color: var(--bf-appearance-token-color-text-primary);
     
     box-shadow: 
       inset 0 0 0 1px rgba(var(--references-panel-accent-shadow-rgb), 0.2),
@@ -222,16 +222,16 @@
 
     .references-panel__reference-icon {
       opacity: 1;
-      color: var(--color-accent-500);
+      color: var(--bf-appearance-token-color-accent-500);
     }
 
     .references-panel__reference-preview {
-      color: var(--color-text-primary);
+      color: var(--bf-appearance-token-color-text-primary);
     }
   }
 
   &:active {
-    background: var(--color-accent-300);
+    background: var(--bf-appearance-token-color-accent-300);
     transform: scale(0.98);
   }
 }
@@ -243,7 +243,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--color-text-muted);
+  color: var(--bf-appearance-token-color-text-muted);
   opacity: 0.7;
   transition:
     transform $motion-instant ease,
@@ -256,7 +256,7 @@
   width: 40px;
   font-size: 11px;
   font-family: $font-family-mono;
-  color: var(--color-text-muted);
+  color: var(--bf-appearance-token-color-text-muted);
   text-align: right;
   user-select: none;
   opacity: 0.8;
@@ -264,9 +264,9 @@
 
 .references-panel__reference-preview {
   flex: 1;
-  font-size: var(--font-size-xs);
+  font-size: var(--bf-appearance-token-font-size-xs);
   font-family: $font-family-mono;
-  color: var(--color-text-secondary);
+  color: var(--bf-appearance-token-color-text-secondary);
   line-height: $line-height-base;
   white-space: nowrap;
   overflow: hidden;
@@ -284,7 +284,7 @@
 @media (max-width: 768px) {
   .references-panel {
     min-width: 280px;
-    font-size: var(--font-size-lg);
+    font-size: var(--bf-appearance-token-font-size-lg);
   }
   
   .references-panel__reference-item {
@@ -297,14 +297,14 @@
 @media (prefers-contrast: high) {
   .references-panel {
     border-width: 2px;
-    border-color: rgba(var(--color-static-white-rgb), 0.5);
+    border-color: rgba(var(--bf-appearance-token-color-static-white-rgb), 0.5);
     box-shadow: 
-      var(--shadow-xl),
-      0 0 0 2px rgba(var(--color-static-black-rgb), 0.9);
+      var(--bf-appearance-token-shadow-xl),
+      0 0 0 2px rgba(var(--bf-appearance-token-color-static-black-rgb), 0.9);
   }
   
   .references-panel__reference-item:hover {
-    background: var(--color-accent-300);
+    background: var(--bf-appearance-token-color-accent-300);
     border: 1px solid rgba(var(--references-panel-accent-shadow-rgb), 0.5);
   }
 }
@@ -326,7 +326,7 @@
 }
 
 .references-panel__reference-item:focus-visible {
-  outline: 2px solid var(--color-accent-500);
+  outline: 2px solid var(--bf-appearance-token-color-accent-500);
   outline-offset: -2px;
   border-radius: $size-radius-sm;
 }

@@ -31,6 +31,14 @@ impl ChatView {
 
     pub(crate) fn handle_mouse_event(&mut self, mouse: &crossterm::event::MouseEvent) -> bool {
         // Popups take priority when visible
+        if self.fork_selector.is_visible()
+            || self.timeline_selector.is_visible()
+            || self.prompt_stash_selector.is_visible()
+        {
+            // These conversation-point dialogs are keyboard-driven. Do not let mouse gestures
+            // mutate the transcript hidden underneath them.
+            return true;
+        }
         if self.model_selector.captures_mouse(mouse) {
             self.model_selector.handle_mouse_event(mouse);
             return true;
@@ -70,6 +78,10 @@ impl ChatView {
             return true;
         }
         if self.command_menu.captures_mouse(mouse) {
+            if self.draft_snapshot().has_images() {
+                self.status = Some(crate::actions::IMAGE_ATTACHMENTS_REQUIRE_MESSAGE.to_string());
+                return true;
+            }
             if let Some(cmd) = self.command_menu.handle_mouse_event_with_name(mouse) {
                 self.text_input.clear();
                 self.refresh_command_menu();
@@ -317,10 +329,14 @@ impl ChatView {
         let list_offset = *self.list_state.offset_mut();
         let absolute_row = list_offset + relative_row;
 
-        for (block_id, y_start, y_end) in &self.thinking_regions {
-            if absolute_row >= *y_start as usize && absolute_row <= *y_end as usize {
-                self.hovered_thinking_block_id = Some(block_id.clone());
-                return;
+        // Hover is only tracked while thinking is interactive (Hide mode);
+        // in fully-expanded (Show) mode blocks are non-interactive.
+        if self.presentation.thinking == crate::config::ThinkingMode::Hide {
+            for (block_id, y_start, y_end) in &self.thinking_regions {
+                if absolute_row >= *y_start as usize && absolute_row <= *y_end as usize {
+                    self.hovered_thinking_block_id = Some(block_id.clone());
+                    return;
+                }
             }
         }
 
@@ -348,14 +364,15 @@ impl ChatView {
         // Check against thinking regions (header line)
         for (block_id, y_start, y_end) in &self.thinking_regions {
             if absolute_row >= *y_start as usize && absolute_row <= *y_end as usize {
-                let block_id = block_id.clone();
-                if self.collapsed_thinking.contains(&block_id) {
-                    self.collapsed_thinking.remove(&block_id);
-                } else {
-                    self.collapsed_thinking.insert(block_id.clone());
+                // Per-block expand only applies while thinking defaults to
+                // collapsed; in fully-expanded (Show) mode `/thinking` is the
+                // sole toggle and clicks are a no-op so manual-expand state
+                // is preserved across toggles instead of being polluted.
+                if self.presentation.thinking == crate::config::ThinkingMode::Hide {
+                    let block_id = block_id.clone();
+                    self.thinking_disclosures.toggle(&block_id);
+                    self.invalidate_render_cache();
                 }
-                self.thinking_user_overrides.insert(block_id);
-                self.invalidate_render_cache();
                 self.hovered_thinking_block_id = None;
                 return;
             }
@@ -365,15 +382,41 @@ impl ChatView {
         for (tool_id, y_start, y_end) in &self.block_tool_regions {
             if absolute_row >= *y_start as usize && absolute_row <= *y_end as usize {
                 let tool_id = tool_id.clone();
-                if self.collapsed_tools.contains(&tool_id) {
-                    self.collapsed_tools.remove(&tool_id);
-                } else {
-                    self.collapsed_tools.insert(tool_id.clone());
-                }
+                self.tool_disclosures.toggle(&tool_id);
                 self.focused_block_tool = Some(tool_id);
                 self.invalidate_render_cache();
                 break;
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod prompt_stash_mouse_tests {
+    use super::*;
+    use crossterm::event::{KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
+
+    #[test]
+    fn prompt_stash_selector_captures_mouse_before_the_transcript() {
+        let directory = tempfile::tempdir().unwrap();
+        let store =
+            crate::prompt_stash::PromptStashStore::new(directory.path().join("prompt-stash.jsonl"));
+        store
+            .push(
+                &ComposerDraft::from_text("saved prompt"),
+                Some("workspace-a"),
+                1,
+            )
+            .unwrap();
+        let mut view = ChatView::new(Theme::dark(), Vec::new());
+        view.show_prompt_stash_selector(store.list().unwrap());
+        let mouse = MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: 1,
+            row: 1,
+            modifiers: KeyModifiers::NONE,
+        };
+
+        assert!(view.handle_mouse_event(&mouse));
     }
 }

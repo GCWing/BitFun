@@ -8,34 +8,34 @@
 
 .acp-permission-actions--text {
   flex-wrap: wrap;
-  gap: var(--flowchat-inline-gap);
+  gap: var(--bf-appearance-token-flowchat-inline-gap);
 }
 
 .acp-permission-actions__text-button {
   min-height: 26px;
-  padding: 0 var(--flowchat-card-expanded-pad-x);
-  border: 1px solid var(--border-base);
+  padding: 0 var(--bf-appearance-token-flowchat-card-expanded-pad-x);
+  border: 1px solid var(--bf-appearance-token-border-base);
   border-radius: 6px;
   background: transparent;
-  color: var(--color-text-primary);
-  font-size: var(--flowchat-font-size-sm);
-  line-height: var(--flowchat-compact-line-height);
+  color: var(--bf-appearance-token-color-text-primary);
+  font-size: var(--bf-appearance-token-flowchat-font-size-sm);
+  line-height: var(--bf-appearance-token-flowchat-compact-line-height);
   cursor: pointer;
   white-space: nowrap;
 }
 
 .acp-permission-actions__text-button:hover:not(:disabled) {
-  background: var(--color-bg-tertiary);
+  background: var(--bf-appearance-token-color-bg-tertiary);
 }
 
 .acp-permission-actions__text-button--allow {
-  border-color: color-mix(in srgb, var(--color-success) 55%, var(--border-base));
-  color: var(--color-success);
+  border-color: color-mix(in srgb, var(--bf-appearance-token-color-success) 55%, var(--bf-appearance-token-border-base));
+  color: var(--bf-appearance-token-color-success);
 }
 
 .acp-permission-actions__text-button--reject {
-  border-color: color-mix(in srgb, var(--color-error) 55%, var(--border-base));
-  color: var(--color-error);
+  border-color: color-mix(in srgb, var(--bf-appearance-token-color-error) 55%, var(--bf-appearance-token-border-base));
+  color: var(--bf-appearance-token-color-error);
 }
 
 .acp-permission-actions__text-button:disabled {

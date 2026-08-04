@@ -1,5 +1,5 @@
 import { useRef, useCallback, useState } from 'react'
-import type { EditorInstance, EditorMode, EditorTheme } from '../types'
+import type { EditorInstance, EditorMode } from '../types'
 
 /**
  * Core editor hook.
@@ -10,7 +10,6 @@ export function useEditor(
 ) {
   const [value, setValue] = useState(initialValue)
   const [mode, setMode] = useState<EditorMode>('ir')
-  const [theme, setTheme] = useState<EditorTheme>('dark')
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   const handleChange = useCallback((newValue: string) => {
@@ -83,7 +82,6 @@ export function useEditor(
     focus,
     blur,
     setMode,
-    setTheme,
     getSelection,
     destroy
   }
@@ -93,8 +91,6 @@ export function useEditor(
     setValue: handleChange,
     mode,
     setMode,
-    theme,
-    setTheme,
     textareaRef,
     editorInstance
   }

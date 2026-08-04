@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { UI_EXCEPTION_ACCENTS } from '@/shared/theme/uiExceptionAccents';
+import { APPEARANCE_DOMAIN_TOKENS } from '@/infrastructure/appearance/appearanceDomainTokens';
 import { FALLBACK_REVIEW_TEAM_DEFINITION } from './reviewTeamService';
 import { EXTRA_MEMBER_DEFAULTS } from './review-team/defaults';
 
@@ -270,7 +270,7 @@ describe('review team locale completeness', () => {
   );
 
   it('keeps review accent semantics limited to active generic roles', () => {
-    expect(Object.keys(UI_EXCEPTION_ACCENTS.reviewTeam).sort()).toEqual([
+    expect(Object.keys(APPEARANCE_DOMAIN_TOKENS.reviewTeam).sort()).toEqual([
       'judge',
       'memberDefault',
       'worker',

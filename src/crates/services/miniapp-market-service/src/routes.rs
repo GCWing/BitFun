@@ -1,4 +1,4 @@
-use crate::artifacts::ArtifactStore;
+use crate::artifacts::{ArtifactStore, MarketImageVariant};
 use crate::auth::{
     AuthService, CompletedOAuth, DesktopAuthPollRequest, RefreshTokenRequest, RequestAuth,
     RequestAuthKind,
@@ -69,7 +69,14 @@ struct ListingQuery {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+struct ImageVariantQuery {
+    variant: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct OAuthStartQuery {
+    #[serde(alias = "return_to")]
     return_to: Option<String>,
 }
 
@@ -164,7 +171,7 @@ pub(crate) fn api_router(state: Arc<MarketState>) -> Router {
         .route("/auth/desktop/poll", post(poll_desktop_auth))
         .route("/auth/refresh", post(refresh_tokens))
         .route("/auth/logout", post(logout))
-        .route("/me", get(me))
+        .route("/me", get(me).post(verify_write_identity))
         .route(
             "/submissions",
             post(create_submission).get(list_my_submissions),
@@ -438,11 +445,36 @@ async fn download_release(
 async fn get_screenshot(
     State(state): State<Arc<MarketState>>,
     Path(sha256): Path<String>,
+    Query(query): Query<ImageVariantQuery>,
 ) -> MarketResult<Response> {
     if sha256.len() != 64 || !sha256.bytes().all(|byte| byte.is_ascii_hexdigit()) {
         return Err(MarketError::not_found("Screenshot was not found."));
     }
-    let bytes = state.artifacts.read_screenshot(&sha256).await?;
+    let variant = match query.variant.as_deref() {
+        None => None,
+        Some("compact-v1") => Some(MarketImageVariant::CompactV1),
+        Some("large-v1") => Some(MarketImageVariant::LargeV1),
+        Some(_) => {
+            return Err(MarketError::bad_request(
+                "invalid_image_variant",
+                "Image variant must be compact-v1 or large-v1.",
+            ))
+        }
+    };
+    let bytes = match variant {
+        Some(variant) => {
+            state
+                .artifacts
+                .read_screenshot_variant(&sha256, variant)
+                .await?
+        }
+        None => state.artifacts.read_screenshot(&sha256).await?,
+    };
+    let content_length = bytes.len();
+    let etag = match variant {
+        Some(variant) => format!("\"{}-{}\"", sha256, variant.cache_key()),
+        None => format!("\"{sha256}\""),
+    };
     let mut response = Response::new(Body::from(bytes));
     response
         .headers_mut()
@@ -450,6 +482,14 @@ async fn get_screenshot(
     response.headers_mut().insert(
         header::CACHE_CONTROL,
         HeaderValue::from_static("public, max-age=31536000, immutable"),
+    );
+    response.headers_mut().insert(
+        header::ETAG,
+        HeaderValue::from_str(&etag).map_err(MarketError::internal)?,
+    );
+    response.headers_mut().insert(
+        header::CONTENT_LENGTH,
+        HeaderValue::from_str(&content_length.to_string()).map_err(MarketError::internal)?,
     );
     Ok(response)
 }
@@ -525,15 +565,34 @@ async fn refresh_tokens(
     ))
 }
 
-async fn me(
+async fn me(State(state): State<Arc<MarketState>>, headers: HeaderMap) -> MarketResult<Response> {
+    let auth = state.auth.require_auth(&headers).await?;
+    let mut response = identity_response(&state, &auth);
+    state
+        .auth
+        .append_shared_account_cookies(response.headers_mut(), &headers, &auth)?;
+    Ok(response)
+}
+
+async fn verify_write_identity(
     State(state): State<Arc<MarketState>>,
     headers: HeaderMap,
-) -> MarketResult<Json<MeResponse>> {
+) -> MarketResult<Response> {
     let auth = state.auth.require_auth(&headers).await?;
-    Ok(Json(MeResponse {
+    state.auth.require_csrf(&headers, &auth)?;
+    Ok(identity_response(&state, &auth))
+}
+
+fn identity_response(state: &MarketState, auth: &RequestAuth) -> Response {
+    let mut response = Json(MeResponse {
         is_admin: state.auth.is_admin(&auth.user),
-        user: auth.user.profile,
-    }))
+        user: auth.user.profile.clone(),
+    })
+    .into_response();
+    response
+        .headers_mut()
+        .insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+    response
 }
 
 async fn logout(
@@ -2033,6 +2092,17 @@ mod tests {
     use super::*;
     use axum::http::HeaderValue;
     use std::collections::HashSet;
+
+    #[test]
+    fn oauth_start_query_accepts_canonical_and_legacy_return_target_names() {
+        for parameter in ["returnTo", "return_to"] {
+            let uri = format!("/auth/github/start?{parameter}=%2Fskin%2Fadmin")
+                .parse()
+                .unwrap();
+            let Query(query) = Query::<OAuthStartQuery>::try_from_uri(&uri).unwrap();
+            assert_eq!(query.return_to.as_deref(), Some("/skin/admin"));
+        }
+    }
 
     #[test]
     fn review_diff_covers_added_changed_and_removed_files() {

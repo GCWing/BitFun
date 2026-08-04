@@ -25,15 +25,16 @@ export const ScrollToTurnHeaderButton: React.FC<ScrollToTurnHeaderButtonProps> =
   const { t } = useTranslation('flow-chat');
 
   return (
-    <div
+    <div data-bf-component="scroll-to-turn-header-button" data-bf-part="root" data-bf-state={visible ? 'visible' : ''}
       className={`scroll-to-turn-header-trigger ${visible ? 'scroll-to-turn-header-trigger--visible' : ''} ${className}`}
       aria-hidden={!visible}
     >
-      <div className="scroll-to-turn-header-trigger__gradient" />
-      <div className="scroll-to-turn-header-trigger__content">
+      <div data-bf-component="scroll-to-turn-header-button" data-bf-part="gradient" className="scroll-to-turn-header-trigger__gradient" />
+      <div data-bf-component="scroll-to-turn-header-button" data-bf-part="content" className="scroll-to-turn-header-trigger__content">
         <Tooltip content={turnLabel || t('scroll.toCurrentTurn')}>
           <button
-            type="button"
+            data-bf-component="scroll-to-turn-header-button"
+            data-bf-part="button"
             className="scroll-to-turn-header-trigger__btn"
             onClick={onClick}
             aria-label={turnLabel || t('scroll.toCurrentTurn')}

@@ -117,7 +117,7 @@ export const TodoWriteDisplay: React.FC<ToolCardProps> = ({
   }, [applyExpandedState, isExpanded, todosToDisplay.length]);
 
   const renderTodoItem = (todo: TodoLike, key: string) => (
-    <div key={key} className={`todo-item status-${todo.status}`}>
+    <div key={key} data-bf-component="todo-write-display" data-bf-part="item" className={`todo-item status-${todo.status}`}>
       <div className="todo-item-left">
         {todo.status === 'completed' && (
           <CheckCircle2 size={12} className="todo-status-icon todo-status-icon--completed" />
@@ -131,7 +131,7 @@ export const TodoWriteDisplay: React.FC<ToolCardProps> = ({
         {todo.status === 'cancelled' && (
           <XCircle size={12} className="todo-status-icon todo-status-icon--cancelled" />
         )}
-        <span className="todo-content">{todo.content}</span>
+        <span data-bf-component="todo-write-display" data-bf-part="itemContent" className="todo-content">{todo.content}</span>
       </div>
     </div>
   );
@@ -140,8 +140,8 @@ export const TodoWriteDisplay: React.FC<ToolCardProps> = ({
 
   if (displayMode === 'compact') {
     return (
-      <div className={`tool-display-compact todo-write-compact status-${status}`}>
-        <span className="tool-icon">
+      <div data-bf-component="todo-write-display" data-bf-part="root" data-bf-mode="compact" data-bf-state={[isLoading && 'loading', isAllCompleted && 'completed'].filter(Boolean).join(' ')} className={`tool-display-compact todo-write-compact status-${status}`}>
+        <span data-bf-component="todo-write-display" data-bf-part="compactIcon" className="tool-icon">
           {isLoading ? (
             <TaskRunningIndicator size="sm" className="todo-compact-loading-icon" />
           ) : (
@@ -150,10 +150,10 @@ export const TodoWriteDisplay: React.FC<ToolCardProps> = ({
         </span>
         {todosToDisplay.length > 0 && (
           <>
-            <span className="todo-count">
+            <span data-bf-component="todo-write-display" data-bf-part="count" className="todo-count">
               {t('toolCards.todoWrite.tasksCount', { count: todosToDisplay.length })}
             </span>
-            <span className="todo-progress">
+            <span data-bf-component="todo-write-display" data-bf-part="progress" className="todo-progress">
               {t('toolCards.todoWrite.progress', {
                 completed: taskStats.completed,
                 total: taskStats.total,
@@ -192,12 +192,12 @@ export const TodoWriteDisplay: React.FC<ToolCardProps> = ({
   const headerContent = (() => {
     if (!hasTodos && isLoading) {
       return (
-        <span className="todo-header-content todo-header-content--muted">{tasksLabel}…</span>
+        <span data-bf-component="todo-write-display" data-bf-part="headerContent" className="todo-header-content todo-header-content--muted">{tasksLabel}…</span>
       );
     }
     if (isAllCompleted) {
       return (
-        <span className="todo-header-content todo-header-content--success">
+        <span data-bf-component="todo-write-display" data-bf-part="headerContent" className="todo-header-content todo-header-content--success">
           {t('toolCards.todoWrite.allCompleted')}
           {headerExpanded ? statsSuffix : null}
         </span>
@@ -205,7 +205,7 @@ export const TodoWriteDisplay: React.FC<ToolCardProps> = ({
     }
     if (currentDisplayTask) {
       return (
-        <span className="todo-header-content">
+        <span data-bf-component="todo-write-display" data-bf-part="headerContent" className="todo-header-content">
           <span className="todo-header-current">{currentDisplayTask.content}</span>
           {inProgressTasks.length > 1 && (
             <span className="todo-header-more">+{inProgressTasks.length - 1}</span>
@@ -216,7 +216,7 @@ export const TodoWriteDisplay: React.FC<ToolCardProps> = ({
     }
     if (hasTodos) {
       return (
-        <span className="todo-header-content todo-header-content--muted">
+        <span data-bf-component="todo-write-display" data-bf-part="headerContent" className="todo-header-content todo-header-content--muted">
           {t('toolCards.todoWrite.tasksCount', { count: todosToDisplay.length })}
           {headerExpanded ? statsSuffix : null}
         </span>
@@ -228,15 +228,16 @@ export const TodoWriteDisplay: React.FC<ToolCardProps> = ({
   const headerAction = headerExpanded ? undefined : headerActionCollapsed;
 
   const expandedContent = hasTodos ? (
-    <div className="todo-expanded-body">
-      <div className="todo-full-list">
+    <div data-bf-component="todo-write-display" data-bf-part="expanded" className="todo-expanded-body">
+      <div data-bf-component="todo-write-display" data-bf-part="list" className="todo-full-list">
         {todoRenderItems.map(({ todo, key }) => renderTodoItem(todo, key))}
       </div>
     </div>
   ) : undefined;
 
   return (
-    <div
+    <div data-bf-component="todo-write-display" data-bf-part="root" data-bf-mode="standard"
+      data-bf-state={[isExpanded && 'expanded', isLoading && 'loading', isAllCompleted && 'completed'].filter(Boolean).join(' ')}
       ref={cardRootRef}
       data-tool-card-id={toolId ?? ''}
       className={`todo-write-host mode-${displayMode} status-${status}`}

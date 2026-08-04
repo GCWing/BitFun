@@ -82,7 +82,7 @@ export const TerminalEditModal: React.FC<TerminalEditModalProps> = ({
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={t('dialog.editTerminal.title')} size="small">
-      <div className="terminal-edit-dialog__content">
+      <div data-bf-component="terminal-edit-modal" data-bf-part="content" className="terminal-edit-dialog__content">
         <Input
           ref={nameInputRef}
           label={t('dialog.editTerminal.nameLabel')}
@@ -115,7 +115,7 @@ export const TerminalEditModal: React.FC<TerminalEditModalProps> = ({
         ) : null}
       </div>
 
-      <div className="terminal-edit-dialog__footer">
+      <div data-bf-component="terminal-edit-modal" data-bf-part="footer" className="terminal-edit-dialog__footer">
         <Button variant="secondary" onClick={onClose}>
           {t('dialog.editTerminal.cancel')}
         </Button>

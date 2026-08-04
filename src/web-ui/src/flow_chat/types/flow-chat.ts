@@ -7,6 +7,7 @@ import type {
   DialogTurnKind,
   SessionKind,
   SessionTitleSource,
+  SessionTurnCatalog,
 } from '@/shared/types/session-history';
 import type { AiErrorDetail } from '@/shared/ai-errors/aiErrorPresenter';
 import type { ReviewTargetEvidence, ReviewTeamRunManifest } from '@/shared/services/reviewTeamService';
@@ -280,6 +281,36 @@ export type SessionHistoryState =
   | 'ready'
   | 'failed';
 
+export type LoadedTurnRangeSource = 'initial-tail' | 'target' | 'prefetch' | 'live';
+
+export interface LoadedTurnRange {
+  startOrdinal: number;
+  endOrdinalExclusive: number;
+  turns: DialogTurn[];
+  lastAccessedAt: number;
+  source: LoadedTurnRangeSource;
+}
+
+export interface ActiveTurnRenderRange {
+  startOrdinal: number;
+  endOrdinalExclusive: number;
+  targetTurnId: string | null;
+  mode: 'tail' | 'history-window';
+}
+
+export interface SessionHistoryViewState {
+  catalog: SessionTurnCatalog | null;
+  loadedRanges: LoadedTurnRange[];
+  activeRange: ActiveTurnRenderRange | null;
+  pendingTargetOrdinal: number | null;
+  navigationGeneration: number;
+}
+
+export interface SessionHistoryPresentation {
+  range: ActiveTurnRenderRange;
+  turns: DialogTurn[];
+}
+
 export type SessionContextRestoreState =
   | 'ready'
   | 'pending'
@@ -297,6 +328,18 @@ export interface Session {
   titleI18nKey?: string;
   titleI18nParams?: Record<string, unknown>;
   titleStatus?: 'generating' | 'generated' | 'failed';
+  /**
+   * In-memory canonical working set for this session.
+   *
+   * Live and fully hydrated sessions normally contain all canonical Turns.
+   * When `isPartial` is true, this contains only the restored live tail;
+   * older paged windows remain in `SessionHistoryViewState.loadedRanges`.
+   *
+   * This array may temporarily contain provisional frontend Turns that have
+   * not been persisted. Never derive a backend storage index from its length
+   * or local array position; use `DialogTurn.backendTurnIndex` and
+   * `turnCatalog` for persisted identity and ordinals.
+   */
   dialogTurns: DialogTurn[];
   
   // Derived status from deriveSessionStatus():
@@ -344,6 +387,7 @@ export interface Session {
   isPartial?: boolean;
   loadedTurnCount?: number;
   totalTurnCount?: number;
+  turnCatalog?: SessionTurnCatalog;
   
   todos?: TodoItem[];
   
@@ -383,6 +427,9 @@ export interface Session {
 
   /** SSH config host for `~/.bitfun/remote_ssh/{host}/...` session paths when disconnected. */
   remoteSshHost?: string;
+
+  /** Persisted workspace identity host; `localhost` is the local-workspace sentinel. */
+  workspaceHostname?: string;
 
   /**
    * Optional parent session id for hierarchical sessions.
@@ -501,8 +548,10 @@ export interface SessionConfig {
   dispatchJobId?: string;
   /** Explicit unattended permission behavior selected before submission. */
   dispatchApprovalPolicy?: import('@/features/dispatch/types').DispatchApprovalPolicy;
-  /** Explicit code delivery mode selected before submission. */
-  dispatchWorkspaceDelivery?: import('@/features/dispatch/types').DispatchWorkspaceDeliveryRequest;
+  /** Carry the baseline worktree's uncommitted changes into the base commit. */
+  dispatchIncludeUncommitted?: boolean;
+  /** Git revision used to create the immutable dispatch baseline. */
+  dispatchBaseRef?: string;
   /** Target model explicitly selected during preflight; omitted to use the target default. */
   dispatchModel?: string;
   /** Model ids reported by the selected target during dispatch preflight. */
@@ -648,5 +697,4 @@ export interface FlowChatConfig {
   showTimestamps: boolean;
   maxHistoryRounds: number;
   enableVirtualScroll: boolean;
-  theme: 'light' | 'dark' | 'auto';
 }

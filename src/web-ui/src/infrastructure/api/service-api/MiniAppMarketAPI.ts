@@ -86,7 +86,6 @@ export interface MarketMe {
 
 export interface DesktopAuthStart {
   transactionId: string;
-  transactionSecret: string;
   authorizationUrl: string;
   expiresAt: number;
   pollIntervalSeconds: number;
@@ -200,7 +199,6 @@ export class MiniAppMarketAPI {
         {
           request: {
             transactionId: transaction.transactionId,
-            transactionSecret: transaction.transactionSecret,
           },
         },
       );
@@ -281,6 +279,20 @@ export class MiniAppMarketAPI {
     }
   }
 
+  /**
+   * Marketplace origins of every installed MiniApp, keyed by local app id.
+   * Installed apps carry a local version counter that is independent from the
+   * marketplace release number, so surfaces that want to name the installed
+   * release read it from here.
+   */
+  async installedOrigins(): Promise<Record<string, InstalledMarketOrigin>> {
+    try {
+      return await api.invoke('miniapp_market_installed_origins', {});
+    } catch (error) {
+      throw createTauriCommandError('miniapp_market_installed_origins', error);
+    }
+  }
+
   async install(
     slug: string,
     releaseNumber: number,
@@ -347,6 +359,10 @@ export class MiniAppMarketAPI {
 
   onUploadProgress(handler: (progress: MarketUploadProgress) => void): () => void {
     return api.listen<MarketUploadProgress>('miniapp-market-upload-progress', handler);
+  }
+
+  onAccountChanged(handler: () => void): () => void {
+    return api.listen('miniapp-market-account-changed', handler);
   }
 }
 

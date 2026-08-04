@@ -25,23 +25,20 @@ One-click Docker deploy (`bash deploy.sh`) targets:
 | Linux | **amd64** (`x86_64`) |
 | Linux | **arm64** (`aarch64`) |
 
-Requirements: Docker Engine + Compose V2 (`docker compose`) **or** legacy
-`docker-compose`, plus permission to talk to the Docker daemon.
-
-Build natively on the server (do **not** set `DOCKER_DEFAULT_PLATFORM` to a
-foreign arch unless you intentionally cross-build with qemu). On small
-memory VPS (common on arm64), use:
-
-```bash
-RELAY_CARGO_BUILD_JOBS=1 bash deploy.sh
-```
+The default path requires Docker Engine plus permission to talk to its daemon.
+BitFun Desktop installs Docker automatically when the SSH user has root/sudo.
+Docker Compose, Cargo, git, tar, and build toolchains are not required on the
+customer server. Compose is used only by the explicit
+`deploy.sh --build-from-source` maintenance path.
 
 ### Mainland China hosts
 
-`deploy.sh` (and Desktop one-click deploy) auto-detects mainland China and
-configures host mirrors for apt, Docker Hub, and GitHub source retrieval plus
-a build-local Cargo/crates.io mirror. Docker Engine installation also uses a
-mainland mirror. Override when needed:
+`deploy.sh` (and Desktop one-click deploy) auto-detects mainland China. Image
+pulls try the verified Nanjing University GHCR accelerator, then DaoCloud, then
+official GHCR, always using the same image digest. Global
+mode goes directly to official GHCR. Docker Engine installation also uses a
+mainland route. The Desktop wizard offers **Auto / Mainland China / Global** so
+an operator can override inaccurate cloud-IP geolocation:
 
 ```bash
 BITFUN_MIRROR=cn bash deploy.sh          # force China mirrors
@@ -50,22 +47,11 @@ bash deploy.sh --cn-mirror
 bash deploy.sh --global-mirror
 ```
 
-Defaults (overridable via env): Aliyun apt, Docker registry mirrors
-(`docker.1ms.run` / `dockerproxy.net` / `docker.m.daocloud.io`),
-rsproxy Cargo sparse index, `ghfast.top` GitHub prefix, Aliyun docker-ce
-for Engine install (fallback: jsDelivr docker-install). See `mirror.sh`
-for the full list (`BITFUN_APT_MIRROR`, `BITFUN_DOCKER_REGISTRY_MIRRORS`,
-`BITFUN_CARGO_SPARSE_URL`, `BITFUN_GITHUB_PROXY`, …).
-
-China mode does not modify the SSH user's global `~/.cargo/config.toml`; Cargo
-mirroring is scoped to the relay image build. Switching to `global` restores
-apt files disabled by BitFun and removes only Docker registry mirrors recorded
-as BitFun additions.
-
-`deploy.sh` enables Docker BuildKit so the Dockerfile can reuse Cargo
-registry/git/`target` cache mounts across redeploys. Keep BuildKit enabled
-(`DOCKER_BUILDKIT=1`, the deploy default) and avoid `docker builder prune`
-unless you intentionally want a cold rebuild.
+Engine installation defaults to Aliyun docker-ce and mirrored get.docker.com.
+The daemon's Docker Hub mirrors remain useful for explicit source builds, but
+they do not accelerate GHCR; `release-download.sh` therefore uses GHCR-specific
+repository prefixes. Switching to global restores only BitFun-managed host
+mirror entries. See `mirror.sh` for the installer/source-build knobs.
 
 ## Two operating modes
 
@@ -94,31 +80,34 @@ Use this checklist on a machine you control (VPS, LAN server, or localhost).
 
 ### Desktop one-click deploy (preferred for end users)
 
-BitFun Desktop can SSH to your host and run the same Docker path without a
-manual clone. It first downloads the matching checksum-verified GitHub Release
-archive for Linux amd64/arm64, falls back to the versioned openbitfun.com mirror,
-and builds only a small runtime image around the published binaries. If both
-binary sources, checksum verification, image creation, startup, or health
-validation fail, it restores the previous healthy container and automatically
-falls back to the source Docker build. Entry points: Account Login →
-“一键部署到自己的服务器”, or
+BitFun Desktop can SSH to your host without a manual clone. One click installs
+Docker when necessary, verifies the signed release image descriptor locally,
+pulls the matching amd64/arm64 image through the selected regional route, and
+starts it by immutable digest. It never builds on the customer server and never
+silently falls back to source compilation. Pull completes before an existing
+Relay is stopped; startup or health failure restores the previous container.
+Entry points: Account Login → “一键部署到自己的服务器”, or
 Remote Connect → Network Relay → Self-Hosted → the same action.
 
 - Orchestration: `src/crates/services/services-integrations/src/remote_ssh/relay_deploy.rs`
 - Wizard + invariants: `src/web-ui/src/features/relay-deploy/README.md`
 
-Release runtime state lives under `~/.bitfun/relay-release`; fallback source
-checkout is always `~/.bitfun/relay-src` (never `$HOME/BitFun`). Closing the
-wizard cancels the remote task. Account passwords are provisioned locally and
-imported via `relay-admin import-user`.
+Task state lives under `~/.bitfun/relay-deploy`; no repository checkout is
+created. Closing the wizard cancels the remote task and restores a staged
+previous container. Account passwords are provisioned locally and imported via
+`relay-admin import-user`.
 
 ### Release artifact verification
 
-Every published archive carries a `.sha256` and a `.sig` (minisign, base64 of the
-signature file — the same key and format the Desktop updater uses). The `.sha256`
-files are signed as well, which is what lets the one-click deploy verify a
-signature on the user's own machine and hand the server a trusted hash: a relay
-host has no minisign and no trust root of its own.
+Every release publishes `relay-image.json` plus `relay-image.json.sig`
+(minisign, in the same base64-wrapped format as the Desktop updater). The
+descriptor fixes the canonical GHCR repository, release tag, amd64/arm64
+platform set, and multi-platform manifest digest. Desktop verifies it on the
+user's machine and sends the digest to the server; Docker then verifies every
+manifest and layer while pulling, even through a third-party accelerator.
+
+The raw Relay archives still carry `.sha256` and `.sig` files for direct binary
+use and for constructing the release image in CI.
 
 Verifying an archive by hand:
 
@@ -145,7 +134,9 @@ bash deploy.sh
 ```
 
 `deploy.sh` must run **on the target server** (it does not SSH elsewhere).
-Requires Docker and Docker Compose on **linux/amd64** or **linux/arm64**.
+Its default path requires Docker on **linux/amd64** or **linux/arm64** and pulls
+`ghcr.io/gcwing/bitfun-relay-server:latest`; it does not compile locally.
+Use `--build-from-source` only when deliberately exercising the source path.
 
 Clone on the server, as above, rather than uploading a Windows checkout. Git for
 Windows rewrites these scripts to CRLF by default, and bash then fails on the
@@ -169,19 +160,19 @@ Verify:
 
 ```bash
 curl -fsS http://127.0.0.1:9700/health
-docker compose ps
+docker ps --filter name=bitfun-relay
 ```
 
 ### 2. Confirm account database is on
 
-Compose sets:
+The published image deploy and the Compose source path both set:
 
 ```yaml
 RELAY_DB_PATH=/app/data/bitfun_relay.db
 ```
 
-Data lives in the `relay-db` Docker volume. If you run the binary without
-Compose, export a persistent path first:
+Data lives in the `relay-server_relay-db` Docker volume. If you run the binary
+without Docker, export a persistent path first:
 
 ```bash
 export RELAY_DB_PATH=/var/lib/bitfun/bitfun_relay.db

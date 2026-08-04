@@ -1,4 +1,6 @@
+use crate::service::config::global::GlobalConfigManager;
 use crate::service::config::types::{AgentProfileConfig, GlobalConfig};
+use crate::util::errors::BitFunResult;
 use bitfun_runtime_ports::{
     resolve_child_permission_policy, resolve_permission_policy, ChildPermissionPolicyLayers,
     PermissionConstraintLayer, PermissionEffect, PermissionPolicyLayers, PermissionRule,
@@ -7,8 +9,9 @@ use bitfun_runtime_ports::{
 
 pub(crate) fn derive_parent_permission_runtime_ceiling(
     agent_profile: Option<&AgentProfileConfig>,
+    agent_definition_constraints: Option<&PermissionConstraintLayer>,
 ) -> PermissionRuntimeCeiling {
-    let rules = agent_profile
+    let mut rules: Vec<PermissionRule> = agent_profile
         .into_iter()
         .flat_map(|profile| profile.tool_permission_rules.iter())
         .filter(|rule| {
@@ -17,9 +20,37 @@ pub(crate) fn derive_parent_permission_runtime_ceiling(
         })
         .cloned()
         .collect();
+    rules.extend(
+        agent_definition_constraints
+            .into_iter()
+            .flat_map(PermissionConstraintLayer::rules)
+            .filter(|rule| rule.effect != PermissionEffect::Allow)
+            .cloned(),
+    );
 
     PermissionRuntimeCeiling::try_new(rules)
         .expect("parent permission ceiling extraction must exclude allow rules")
+}
+
+pub(crate) async fn load_parent_permission_runtime_ceiling(
+    agent_type: Option<&str>,
+    workspace_root: Option<&std::path::Path>,
+) -> BitFunResult<PermissionRuntimeCeiling> {
+    let service = GlobalConfigManager::get_service().await?;
+    let global: GlobalConfig = service.get_config(None).await?;
+    let profile = agent_type.and_then(|agent_type| {
+        let profile_id = crate::agentic::agents::resolve_mode_config_profile_id(agent_type);
+        global.ai.agent_profiles.get(profile_id.as_ref())
+    });
+    let definition_constraints = agent_type.and_then(|agent_type| {
+        crate::agentic::agents::get_agent_registry()
+            .get_agent(agent_type, workspace_root)
+            .map(|agent| agent.permission_constraints().clone())
+    });
+    Ok(derive_parent_permission_runtime_ceiling(
+        profile,
+        definition_constraints.as_ref(),
+    ))
 }
 
 pub(crate) fn resolve_effective_permission_policy(
@@ -73,7 +104,7 @@ mod tests {
     }
 
     #[test]
-    fn parent_ceiling_keeps_only_profile_denies_and_external_directory_asks() {
+    fn parent_ceiling_combines_profile_and_agent_constraints_without_allows() {
         let profile = AgentProfileConfig {
             tool_permission_rules: vec![
                 rule("read", "*", PermissionEffect::Allow),
@@ -86,7 +117,13 @@ mod tests {
             ..AgentProfileConfig::default()
         };
 
-        let ceiling = derive_parent_permission_runtime_ceiling(Some(&profile));
+        let definition_constraints = PermissionConstraintLayer::new(vec![
+            rule("bash", "git push *", PermissionEffect::Ask),
+            rule("bash", "git status", PermissionEffect::Allow),
+            rule("edit", "secrets/*", PermissionEffect::Deny),
+        ]);
+        let ceiling =
+            derive_parent_permission_runtime_ceiling(Some(&profile), Some(&definition_constraints));
 
         assert_eq!(
             ceiling.rules(),
@@ -94,6 +131,8 @@ mod tests {
                 rule("bash", "rm *", PermissionEffect::Deny),
                 rule("external_directory", "*", PermissionEffect::Ask),
                 rule("external_directory", "C:/blocked", PermissionEffect::Deny),
+                rule("bash", "git push *", PermissionEffect::Ask),
+                rule("edit", "secrets/*", PermissionEffect::Deny),
             ]
         );
         assert!(ceiling

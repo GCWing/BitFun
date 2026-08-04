@@ -62,16 +62,12 @@ impl RemoteFetcher {
 
     async fn current_locale() -> String {
         use crate::service::config::get_global_config_service;
-        get_global_config_service()
+        let Ok(service) = get_global_config_service().await else {
+            return "en-US".to_string();
+        };
+        service
+            .get_config::<String>(Some("general.language"))
             .await
-            .ok()
-            .and_then(|svc| {
-                tokio::task::block_in_place(|| {
-                    tokio::runtime::Handle::current()
-                        .block_on(svc.get_config::<String>(Some("general.language")))
-                        .ok()
-                })
-            })
-            .unwrap_or_else(|| "en-US".to_string())
+            .unwrap_or_else(|_| "en-US".to_string())
     }
 }

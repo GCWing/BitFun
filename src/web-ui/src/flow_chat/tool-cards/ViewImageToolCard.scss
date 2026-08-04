@@ -15,13 +15,13 @@
   padding: 0;
   overflow: hidden;
   appearance: none;
-  background: var(--color-bg-secondary);
-  border: 1px solid var(--border-base);
+  background: var(--bf-appearance-token-color-bg-secondary);
+  border: 1px solid var(--bf-appearance-token-border-base);
   border-radius: 8px;
   cursor: zoom-in;
 
   &:focus-visible {
-    outline: 2px solid var(--color-accent-600);
+    outline: 2px solid var(--bf-appearance-token-color-accent-600);
     outline-offset: 2px;
   }
 
@@ -36,8 +36,8 @@
 .view-image-tool-card__error {
   width: 100%;
   padding: 12px;
-  color: var(--color-error);
-  font-size: var(--flowchat-font-size-base);
+  color: var(--bf-appearance-token-color-error);
+  font-size: var(--bf-appearance-token-flowchat-font-size-base);
   text-align: center;
 }
 

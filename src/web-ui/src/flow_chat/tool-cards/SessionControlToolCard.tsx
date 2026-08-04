@@ -229,10 +229,10 @@ export const SessionControlToolCard: React.FC<ToolCardProps> = React.memo(({
                 gap: 2,
                 padding: '8px 10px',
                 borderRadius: 8,
-                background: 'var(--element-bg-subtle)'
+                background: 'var(--bf-appearance-token-element-bg-subtle)'
               }}
             >
-              <span style={{ fontFamily: 'var(--tool-card-font-mono)', wordBreak: 'break-all' }}>
+              <span style={{ fontFamily: 'var(--bf-appearance-token-tool-card-font-mono)', wordBreak: 'break-all' }}>
                 {item.session_id || t('toolCards.sessionControl.unknownSession')}
               </span>
               <span>{item.session_name || t('toolCards.sessionControl.defaultSessionName')}</span>
@@ -249,7 +249,7 @@ export const SessionControlToolCard: React.FC<ToolCardProps> = React.memo(({
       )}
 
       {toolResult?.error && (
-        <div style={{ color: 'var(--color-error)', whiteSpace: 'pre-wrap' }}>
+        <div style={{ color: 'var(--bf-appearance-token-color-error)', whiteSpace: 'pre-wrap' }}>
           {toolResult.error}
         </div>
       )}

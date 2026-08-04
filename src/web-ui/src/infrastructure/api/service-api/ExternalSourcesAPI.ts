@@ -1,4 +1,5 @@
 import { api } from './ApiClient';
+import { globalEventBus } from '@/infrastructure/event-bus';
 
 export type ExternalSourceScope =
   | 'user_global'
@@ -115,7 +116,7 @@ export interface ExternalSourceRecord {
   contentVersion: string;
   diagnostics?: Array<{
     severity: string;
-    assetKind?: 'source' | 'command' | 'tool' | 'subagent' | 'mcp';
+    assetKind?: 'source' | 'command' | 'tool' | 'subagent' | 'mcp' | 'reference';
     code: string;
     message: string;
   }>;
@@ -166,6 +167,7 @@ export interface ExternalSourceCatalogSnapshot {
       commandDescription: string;
       sourceScope: ExternalSourceScope;
       sourceLocation: string;
+      executionTarget?: PromptCommandExecutionTarget;
       availability: PromptCommandAvailability;
     }>;
   }>;
@@ -179,12 +181,14 @@ export interface ExternalSourceCatalogSnapshot {
   subagentGeneration?: number;
   preferenceRevision?: number;
   subagents?: ExternalSubagentSummary[];
+  subagentModelBindingGroups?: ExternalSubagentModelBindingGroup[];
+  subagentModelBindingOptions?: ExternalSubagentModelBindingOption[];
   subagentConflicts?: ExternalSubagentConflict[];
   pendingSubagentApprovals?: string[];
   integrationPolicy: ExternalIntegrationPolicySnapshot;
   diagnostics?: Array<{
     severity: string;
-    assetKind?: 'source' | 'command' | 'tool' | 'subagent' | 'mcp';
+    assetKind?: 'source' | 'command' | 'tool' | 'subagent' | 'mcp' | 'reference';
     code: string;
     message: string;
   }>;
@@ -192,9 +196,39 @@ export interface ExternalSourceCatalogSnapshot {
   control?: ExternalSourceControlSnapshot;
 }
 
-export interface ExpandedExternalPromptCommand {
-  content: string;
+export interface PromptCommandShellReviewPlan {
+  schemaVersion: number;
+  planFingerprint: string;
+  sourceDisplayName: string;
+  workingDirectory: string;
+  shellDisplayName: string;
+  shellExecutable: string;
+  commands: string[];
+  canRemember: boolean;
+  preferenceRevision: number;
 }
+
+export interface PromptCommandShellReviewDecision {
+  planFingerprint: string;
+  mode: 'run_once' | 'remember';
+  expectedPreferenceRevision: number;
+}
+
+export type PromptCommandExecutionTarget =
+  | { kind: 'inline' }
+  | {
+      kind: 'fresh_external_subagent';
+      ecosystemId: string;
+      logicalId: string;
+    };
+
+export type ExternalPromptCommandInvocationOutcome =
+  | {
+      state: 'ready';
+      content: string;
+      executionTarget: PromptCommandExecutionTarget;
+    }
+  | { state: 'review_required'; review: PromptCommandShellReviewPlan };
 
 export type ExternalSubagentActivation =
   | { state: 'approval_required' }
@@ -204,6 +238,45 @@ export type ExternalSubagentActivation =
   | { state: 'conflict' }
   | { state: 'blocked' }
   | { state: 'unavailable' };
+
+export type ExternalSubagentModelRequest =
+  | { kind: 'default' }
+  | { kind: 'inherit' }
+  | { kind: 'reference'; providerHint?: string; modelName: string };
+
+export type ExternalSubagentModelProfileRequest =
+  | { kind: 'named_variant'; name: string }
+  | { kind: 'reasoning_effort'; value: string };
+
+export type ExternalSubagentModelBindingTarget =
+  | { kind: 'primary' }
+  | { kind: 'fast' }
+  | { kind: 'model'; modelId: string };
+
+export type ExternalSubagentModelBindingMethod =
+  | 'default'
+  | 'inherit'
+  | 'exact'
+  | 'explicit'
+  | 'binding_required'
+  | 'binding_unavailable';
+
+export interface ExternalSubagentModelBindingOption {
+  target: ExternalSubagentModelBindingTarget;
+  effectiveModelLabel: string;
+  configuredReasoningEffort?: string;
+}
+
+export interface ExternalSubagentModelBindingGroup {
+  bindingKey: string;
+  request: ExternalSubagentModelRequest;
+  profileRequest?: ExternalSubagentModelProfileRequest;
+  scope: ExternalSourceScope;
+  method: ExternalSubagentModelBindingMethod;
+  selectedTarget?: ExternalSubagentModelBindingTarget;
+  effectiveModelLabel?: string;
+  affectedCandidateIds: string[];
+}
 
 export interface ExternalSubagentSummary {
   candidateId: string;
@@ -215,6 +288,11 @@ export interface ExternalSubagentSummary {
   sourceKeys: Array<{ providerId: string; sourceId: string }>;
   sourceLocationLabels: string[];
   sourceCount: number;
+  mode: 'primary' | 'subagent' | 'all';
+  requestedModel: ExternalSubagentModelRequest;
+  requestedModelProfile?: ExternalSubagentModelProfileRequest;
+  modelBindingMethod: ExternalSubagentModelBindingMethod;
+  modelBindingKey?: string;
   effectiveModelLabel?: string;
   effectiveToolLabels: string[];
   unavailableToolLabels: string[];
@@ -321,6 +399,12 @@ export type ExternalMcpActivation =
   | { state: 'runtime_unavailable'; reason: string }
   | { state: 'removed' };
 
+export interface ExternalMcpTimeouts {
+  startupMs?: number;
+  catalogMs?: number;
+  executionMs?: number;
+}
+
 export interface ExternalMcpDefinition {
   id: {
     source: { providerId: string; sourceId: string };
@@ -336,6 +420,7 @@ export interface ExternalMcpDefinition {
   environmentReferenceNames?: string[];
   remoteUrlPreview?: string;
   headerNames: string[];
+  timeouts?: ExternalMcpTimeouts;
   sourceEnabled: boolean;
   behaviorVersion: string;
   staticStatus:
@@ -537,6 +622,52 @@ export class ExternalSourceApiError extends Error {
   }
 }
 
+function normalizePromptCommandInvocationOutcome(
+  value: unknown,
+): ExternalPromptCommandInvocationOutcome {
+  if (!value || typeof value !== 'object') {
+    throw new ExternalSourceApiError(
+      'invalid_response',
+      'Prompt command expansion response was invalid',
+      false,
+    );
+  }
+  const outcome = value as Record<string, unknown>;
+  if (outcome.state === 'review_required' && outcome.review && typeof outcome.review === 'object') {
+    return value as ExternalPromptCommandInvocationOutcome;
+  }
+  if (outcome.state !== 'ready' || typeof outcome.content !== 'string') {
+    throw new ExternalSourceApiError(
+      'invalid_response',
+      'Prompt command expansion response was invalid',
+      false,
+    );
+  }
+  const target = outcome.executionTarget;
+  if (!target || typeof target !== 'object') {
+    throw new ExternalSourceApiError(
+      'invalid_response',
+      'Prompt command expansion execution target was invalid',
+      false,
+    );
+  }
+  const targetRecord = target as Record<string, unknown>;
+  const validInline = targetRecord.kind === 'inline';
+  const validExternalSubagent = targetRecord.kind === 'fresh_external_subagent'
+    && typeof targetRecord.ecosystemId === 'string'
+    && targetRecord.ecosystemId.trim().length > 0
+    && typeof targetRecord.logicalId === 'string'
+    && targetRecord.logicalId.trim().length > 0;
+  if (!validInline && !validExternalSubagent) {
+    throw new ExternalSourceApiError(
+      'invalid_response',
+      'Prompt command expansion execution target was invalid',
+      false,
+    );
+  }
+  return value as ExternalPromptCommandInvocationOutcome;
+}
+
 export interface NativePromptCommandDescriptor {
   commandName: string;
   candidateId: string;
@@ -554,6 +685,30 @@ export interface NativePromptCommandConflictSnapshot {
   reconfirmations?: Array<{
     commandName: string;
     nativeCandidateId: string;
+  }>;
+}
+
+export interface WorkspaceReferenceEntry {
+  stableKey: string;
+  alias?: string;
+  path: string;
+  description?: string;
+  hidden: boolean;
+  origin: 'native' | 'external';
+  ecosystemId?: string;
+  sourceDisplayName?: string;
+  sourceScope?: ExternalSourceScope;
+}
+
+export interface WorkspaceReferenceSnapshot {
+  generation: number;
+  discoveryPending: boolean;
+  references: WorkspaceReferenceEntry[];
+  diagnostics?: Array<{
+    severity: string;
+    assetKind?: 'reference';
+    code: string;
+    message: string;
   }>;
 }
 
@@ -766,12 +921,21 @@ function normalizePolicySnapshot(value: unknown): ExternalIntegrationPolicySnaps
 }
 
 function normalizeMcpDefinition(definition: ExternalMcpDefinition): ExternalMcpDefinition {
+  const rawTimeouts = definition.timeouts;
+  const timeouts = rawTimeouts && typeof rawTimeouts === 'object'
+    ? Object.fromEntries(
+      (['startupMs', 'catalogMs', 'executionMs'] as const)
+        .map((key) => [key, rawTimeouts[key]] as const)
+        .filter(([, value]) => Number.isSafeInteger(value) && (value ?? 0) > 0),
+    ) as ExternalMcpTimeouts
+    : undefined;
   return {
     ...definition,
     provenance: normalizeOptionalArray(definition.provenance),
     environmentKeys: normalizeOptionalArray(definition.environmentKeys),
     environmentReferenceNames: normalizeOptionalArray(definition.environmentReferenceNames),
     headerNames: normalizeOptionalArray(definition.headerNames),
+    timeouts: timeouts && Object.keys(timeouts).length > 0 ? timeouts : undefined,
   };
 }
 
@@ -830,12 +994,24 @@ function normalizeSnapshot(value: unknown): ExternalSourceCatalogSnapshot {
     })),
     subagents: normalizeOptionalArray<ExternalSubagentSummary>(candidate.subagents).map((subagent) => ({
       ...subagent,
+      mode: subagent.mode ?? 'subagent',
+      requestedModel: subagent.requestedModel ?? { kind: 'default' },
+      modelBindingMethod: subagent.modelBindingMethod ?? 'default',
       sourceKeys: normalizeOptionalArray(subagent.sourceKeys),
       sourceLocationLabels: normalizeOptionalArray(subagent.sourceLocationLabels),
       effectiveToolLabels: normalizeOptionalArray(subagent.effectiveToolLabels),
       unavailableToolLabels: normalizeOptionalArray(subagent.unavailableToolLabels),
       diagnostics: normalizeOptionalArray(subagent.diagnostics),
     })),
+    subagentModelBindingGroups: normalizeOptionalArray<ExternalSubagentModelBindingGroup>(
+      candidate.subagentModelBindingGroups,
+    ).map((group) => ({
+      ...group,
+      affectedCandidateIds: normalizeOptionalArray(group.affectedCandidateIds),
+    })),
+    subagentModelBindingOptions: normalizeOptionalArray<ExternalSubagentModelBindingOption>(
+      candidate.subagentModelBindingOptions,
+    ),
     subagentConflicts: normalizeOptionalArray<ExternalSubagentConflict>(candidate.subagentConflicts).map((conflict) => ({
       ...conflict,
       candidates: normalizeOptionalArray(conflict.candidates),
@@ -1138,6 +1314,13 @@ function controlRequest(
   };
 }
 
+function emitExternalAgentCatalogUpdated(workspacePath?: string) {
+  globalEventBus.emit('mode:config:updated', {
+    reason: 'external-agent-catalog-updated',
+    workspacePath: normalizeOptionalWorkspacePath(workspacePath),
+  });
+}
+
 export const externalSourcesAPI = {
   planMcpImport(workspacePath?: string) {
     return invokeExternalSourceCommand<ExternalMcpImportPlanV1>(
@@ -1187,7 +1370,31 @@ export const externalSourcesAPI = {
     })).catalog;
   },
 
-  expandPromptCommand(
+  async getWorkspaceReferences(
+    workspacePath: string,
+    workspaceId?: string,
+    forceRefresh = false,
+  ) {
+    const snapshot = await invokeExternalSourceCommand<WorkspaceReferenceSnapshot>(
+      'get_workspace_reference_snapshot',
+      {
+        request: {
+          workspacePath: normalizeOptionalWorkspacePath(workspacePath),
+          workspaceId: workspaceId?.trim() || undefined,
+          forceRefresh,
+        },
+      },
+    );
+    return {
+      ...snapshot,
+      references: normalizeOptionalArray<WorkspaceReferenceEntry>(snapshot.references),
+      diagnostics: normalizeOptionalArray<NonNullable<WorkspaceReferenceSnapshot['diagnostics']>[number]>(
+        snapshot.diagnostics,
+      ),
+    };
+  },
+
+  async expandPromptCommand(
     workspacePath: string | undefined,
     name: string,
     argumentsText: string,
@@ -1198,8 +1405,9 @@ export const externalSourcesAPI = {
       conflictKey: string;
       expectedPreferenceRevision: number;
     },
+    shellReviewDecision?: PromptCommandShellReviewDecision,
   ) {
-    return invokeExternalSourceCommand<ExpandedExternalPromptCommand>(
+    const outcome = await invokeExternalSourceCommand<unknown>(
       'expand_external_prompt_command_command',
       {
         request: {
@@ -1213,9 +1421,11 @@ export const externalSourcesAPI = {
             expectedNativeConflictKey: nativeConflictGuard.conflictKey,
             expectedPreferenceRevision: nativeConflictGuard.expectedPreferenceRevision,
           } : {}),
+          ...(shellReviewDecision ? { shellReviewDecision } : {}),
         },
       },
     );
+    return normalizePromptCommandInvocationOutcome(outcome);
   },
 
   getNativePromptCommandConflicts(
@@ -1269,12 +1479,13 @@ export const externalSourcesAPI = {
           ),
         },
       });
+      emitExternalAgentCatalogUpdated(workspacePath);
       return surface.catalog;
     } catch (error) {
       if (!(error instanceof ExternalSourceApiError) || error.code !== 'incompatible_version') {
         throw error;
       }
-      return invokeSnapshot('set_external_source_enabled_command', {
+      const catalog = await invokeSnapshot('set_external_source_enabled_command', {
         request: {
           workspacePath: normalizedWorkspacePath,
           sourceKey,
@@ -1282,6 +1493,8 @@ export const externalSourcesAPI = {
           expectedPreferenceRevision,
         },
       });
+      emitExternalAgentCatalogUpdated(workspacePath);
+      return catalog;
     }
   },
 
@@ -1352,7 +1565,7 @@ export const externalSourcesAPI = {
     });
   },
 
-  setSubagentActivation(
+  async setSubagentActivation(
     workspacePath: string | undefined,
     candidateId: string,
     approved: boolean,
@@ -1360,7 +1573,7 @@ export const externalSourcesAPI = {
     expectedPreferenceRevision: number,
     decisionKey: string,
   ) {
-    return invokeSnapshot('set_external_subagent_activation_command', {
+    const catalog = await invokeSnapshot('set_external_subagent_activation_command', {
       request: {
         workspacePath: normalizeOptionalWorkspacePath(workspacePath),
         candidateId,
@@ -1370,9 +1583,31 @@ export const externalSourcesAPI = {
         decisionKey,
       },
     });
+    emitExternalAgentCatalogUpdated(workspacePath);
+    return catalog;
   },
 
-  chooseSubagentConflict(
+  async setSubagentModelBinding(
+    workspacePath: string | undefined,
+    bindingKey: string,
+    target: ExternalSubagentModelBindingTarget | undefined,
+    expectedSubagentGeneration: number,
+    expectedPreferenceRevision: number,
+  ) {
+    const catalog = await invokeSnapshot('set_external_subagent_model_binding_command', {
+      request: {
+        workspacePath: normalizeOptionalWorkspacePath(workspacePath),
+        bindingKey,
+        target,
+        expectedSubagentGeneration,
+        expectedPreferenceRevision,
+      },
+    });
+    emitExternalAgentCatalogUpdated(workspacePath);
+    return catalog;
+  },
+
+  async chooseSubagentConflict(
     workspacePath: string | undefined,
     conflictKey: string,
     candidateId: string,
@@ -1380,7 +1615,7 @@ export const externalSourcesAPI = {
     expectedSubagentGeneration: number,
     expectedPreferenceRevision: number,
   ) {
-    return invokeSnapshot('choose_external_subagent_conflict_command', {
+    const catalog = await invokeSnapshot('choose_external_subagent_conflict_command', {
       request: {
         workspacePath: normalizeOptionalWorkspacePath(workspacePath),
         conflictKey,
@@ -1390,6 +1625,8 @@ export const externalSourcesAPI = {
         expectedPreferenceRevision,
       },
     });
+    emitExternalAgentCatalogUpdated(workspacePath);
+    return catalog;
   },
 
   setMcpServerDecision(
@@ -1432,13 +1669,15 @@ export const externalSourcesAPI = {
     });
   },
 
-  updateIntegrationPolicy(
+  async updateIntegrationPolicy(
     workspacePath: string | undefined,
     mutation: ExternalIntegrationPolicyMutation,
   ) {
-    return invokeSnapshot(
+    const catalog = await invokeSnapshot(
       'update_external_integration_policy_command',
       { request: { workspacePath: normalizeOptionalWorkspacePath(workspacePath), mutation } },
     );
+    emitExternalAgentCatalogUpdated(workspacePath);
+    return catalog;
   },
 };

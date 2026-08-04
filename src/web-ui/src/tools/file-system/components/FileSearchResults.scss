@@ -12,7 +12,7 @@ $_icon-size: 16px;
   height: 100%;
   min-height: 0;
   overflow: hidden;
-  background: var(--color-bg-primary);
+  background: var(--bf-appearance-token-color-bg-primary);
 
   &--empty {
     justify-content: center;
@@ -22,7 +22,7 @@ $_icon-size: 16px;
 
 .bitfun-search-results__empty {
   text-align: center;
-  color: var(--color-text-muted);
+  color: var(--bf-appearance-token-color-text-muted);
   padding: $size-gap-8;
 
   &-icon {
@@ -31,7 +31,7 @@ $_icon-size: 16px;
   }
 
   &-hint {
-    font-size: var(--font-size-xs);
+    font-size: var(--bf-appearance-token-font-size-xs);
     opacity: 0.7;
     margin-top: $size-gap-2;
   }
@@ -39,14 +39,14 @@ $_icon-size: 16px;
 
 .bitfun-search-results__header {
   padding: $size-gap-2 $size-gap-3;
-  border-bottom: 1px solid var(--border-base);
-  background: var(--color-bg-primary);
+  border-bottom: 1px solid var(--bf-appearance-token-border-base);
+  background: var(--bf-appearance-token-color-bg-primary);
   flex-shrink: 0;
 }
 
 .bitfun-search-results__count {
-  font-size: var(--font-size-xs);
-  color: var(--color-text-muted);
+  font-size: var(--bf-appearance-token-font-size-xs);
+  color: var(--bf-appearance-token-color-text-muted);
   font-weight: $font-weight-medium;
 }
 
@@ -84,22 +84,19 @@ $_icon-size: 16px;
     border: none;
     border-radius: $size-radius-sm;
     background: transparent;
-    transition:
-      transform $motion-fast $easing-standard,
-      background-color $motion-fast $easing-standard,
-      color $motion-fast $easing-standard;
-    color: var(--color-text-secondary);
+    transition: all $motion-base $easing-standard;
+    color: var(--bf-appearance-token-color-text-secondary);
     text-align: left;
     font: inherit;
     appearance: none;
 
     &:hover {
-      background: var(--element-bg-base);
-      color: var(--color-text-primary);
+      background: var(--bf-appearance-token-element-bg-base);
+      color: var(--bf-appearance-token-color-text-primary);
     }
 
     &:focus-visible {
-      outline: 1px solid var(--color-accent-500);
+      outline: 1px solid var(--bf-appearance-token-color-accent-500);
       outline-offset: 1px;
     }
   }
@@ -111,11 +108,11 @@ $_icon-size: 16px;
     width: 20px;
     height: 20px;
     border-radius: $size-radius-sm;
-    color: var(--color-text-muted);
+    color: var(--bf-appearance-token-color-text-muted);
 
     &--directory {
-      background: var(--color-warning-bg);
-      color: var(--color-warning);
+      background: var(--bf-appearance-token-color-warning-bg);
+      color: var(--bf-appearance-token-color-warning);
     }
   }
 
@@ -126,7 +123,7 @@ $_icon-size: 16px;
   }
 
   &-name {
-    font-size: var(--font-size-sm);
+    font-size: var(--bf-appearance-token-font-size-sm);
     font-weight: $font-weight-medium;
     color: inherit;
     @include mixins.text-ellipsis;
@@ -134,8 +131,8 @@ $_icon-size: 16px;
   }
 
   &-path {
-    font-size: var(--font-size-xs);
-    color: var(--color-text-muted);
+    font-size: var(--bf-appearance-token-font-size-xs);
+    color: var(--bf-appearance-token-color-text-muted);
     opacity: 0.6;
     @include mixins.text-ellipsis;
     width: 100%;
@@ -148,8 +145,8 @@ $_icon-size: 16px;
     min-height: 20px;
     border: none;
     border-radius: 10px;
-    background: var(--git-color-branch-bg);
-    color: var(--git-color-branch);
+    background: var(--bf-appearance-token-git-color-branch-bg);
+    color: var(--bf-appearance-token-git-color-branch);
     cursor: pointer;
     transition:
       transform $motion-fast $easing-standard,
@@ -159,7 +156,7 @@ $_icon-size: 16px;
     appearance: none;
 
     &:hover {
-      background: var(--git-color-branch-bg-hover);
+      background: var(--bf-appearance-token-git-color-branch-bg-hover);
     }
 
     &:active {
@@ -167,7 +164,7 @@ $_icon-size: 16px;
     }
 
     &:focus-visible {
-      outline: 1px solid var(--color-accent-500);
+      outline: 1px solid var(--bf-appearance-token-color-accent-500);
       outline-offset: 1px;
     }
 
@@ -177,7 +174,7 @@ $_icon-size: 16px;
   }
 
   &-toggle-count {
-    font-size: var(--font-size-xs);
+    font-size: var(--bf-appearance-token-font-size-xs);
     font-weight: $font-weight-medium;
     line-height: 1;
   }
@@ -210,15 +207,15 @@ $_icon-size: 16px;
   appearance: none;
 
   &:hover {
-    background: var(--element-bg-base);
+    background: var(--bf-appearance-token-element-bg-base);
   }
 
   &:active {
-    background: var(--element-bg-soft);
+    background: var(--bf-appearance-token-element-bg-soft);
   }
 
   &:focus-visible {
-    outline: 1px solid var(--color-accent-500);
+    outline: 1px solid var(--bf-appearance-token-color-accent-500);
     outline-offset: 1px;
   }
   &-content {
@@ -227,9 +224,9 @@ $_icon-size: 16px;
     
     code {
       display: block;
-      font-size: var(--font-size-xs);
+      font-size: var(--bf-appearance-token-font-size-xs);
       font-family: $font-family-mono;
-      color: var(--color-text-secondary);
+      color: var(--bf-appearance-token-color-text-secondary);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -239,15 +236,15 @@ $_icon-size: 16px;
 }
 
 .bitfun-search-results__highlight {
-  background: color-mix(in srgb, var(--color-accent-500) 25%, transparent);
-  color: var(--color-accent-500);
+  background: color-mix(in srgb, var(--bf-appearance-token-color-accent-500) 25%, transparent);
+  color: var(--bf-appearance-token-color-accent-500);
   padding: 1px 2px;
   border-radius: 2px;
   font-weight: $font-weight-medium;
 }
 
 .bitfun-search-results__showing {
-  color: var(--color-text-muted);
+  color: var(--bf-appearance-token-color-text-muted);
   font-weight: $font-weight-normal;
   opacity: 0.7;
 }
@@ -256,10 +253,10 @@ $_icon-size: 16px;
   @include mixins.flex-layout(row, center, center, $size-gap-1);
   padding: $size-gap-1 $size-gap-2;
   flex-shrink: 0;
-  border-top: 1px solid var(--border-base);
-  background: var(--element-bg-subtle);
-  color: var(--color-text-muted);
-  font-size: var(--font-size-xs);
+  border-top: 1px solid var(--bf-appearance-token-border-base);
+  background: var(--bf-appearance-token-element-bg-subtle);
+  color: var(--bf-appearance-token-color-text-muted);
+  font-size: var(--bf-appearance-token-font-size-xs);
   cursor: pointer;
   transition:
     transform $motion-fast $easing-standard,
@@ -268,12 +265,12 @@ $_icon-size: 16px;
   user-select: none;
 
   &:hover {
-    background: var(--element-bg-soft);
-    color: var(--color-accent-600);
+    background: var(--bf-appearance-token-element-bg-soft);
+    color: var(--bf-appearance-token-color-accent-600);
   }
 
   &:active {
-    background: var(--element-bg-medium);
+    background: var(--bf-appearance-token-element-bg-medium);
   }
 
   svg {

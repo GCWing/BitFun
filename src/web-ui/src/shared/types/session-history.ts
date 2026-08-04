@@ -137,6 +137,8 @@ export interface LocalCommandMetadata {
   modelVisible: false;
   usageReport?: Record<string, any>;
   usageReportStatus?: 'loading' | 'completed';
+  /** Frontend-only until the backend returns its authoritative turn catalog entry. */
+  usageReportProvisional?: boolean;
   threadGoalKickoff?: boolean;
   threadGoalObjectiveUpdated?: boolean;
   threadGoalContinuation?: boolean;
@@ -151,6 +153,23 @@ export interface SessionList {
   sessions: SessionMetadata[];
   lastUpdated: number;
   version: string;
+}
+
+export interface SessionTurnCatalogEntry {
+  ordinal: number;
+  storageTurnIndex: number;
+  turnId?: string;
+  preview?: string;
+  previewTruncated: boolean;
+}
+
+export interface SessionTurnCatalog {
+  schemaVersion: number;
+  sessionId: string;
+  revision: string;
+  totalTurnCount: number;
+  complete: boolean;
+  entries: SessionTurnCatalogEntry[];
 }
 
 export interface DialogTurnData {

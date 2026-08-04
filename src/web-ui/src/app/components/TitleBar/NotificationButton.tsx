@@ -49,7 +49,7 @@ const NotificationButton: React.FC<NotificationButtonProps> = ({
 
   return (
     <Tooltip content={t('nav.notifications')} placement="right" disabled={!!activeNotification}>
-    <button
+    <button data-bf-component="notification-button" data-bf-part="root"
       ref={buttonRef}
       className={[
         'bitfun-notification-btn',
@@ -65,9 +65,9 @@ const NotificationButton: React.FC<NotificationButtonProps> = ({
     >
       {activeNotification ? (
         <>
-          <div className="bitfun-notification-btn__progress">
+          <div className="bitfun-notification-btn__progress" data-bf-component="notification-button" data-bf-part="progress">
             {activeNotification.variant === 'loading' ? (
-              <div className="bitfun-notification-btn__loading-icon">
+              <div className="bitfun-notification-btn__loading-icon" data-bf-component="notification-button" data-bf-part="loadingIcon">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
                   stroke="currentColor" strokeWidth="2.5"
                   className="bitfun-notification-btn__spinner">
@@ -75,7 +75,7 @@ const NotificationButton: React.FC<NotificationButtonProps> = ({
                 </svg>
               </div>
             ) : (
-              <div className="bitfun-notification-btn__progress-icon">
+              <div className="bitfun-notification-btn__progress-icon" data-bf-component="notification-button" data-bf-part="progressIcon">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
                   stroke="currentColor" strokeWidth="2">
                   <circle cx="12" cy="12" r="10" opacity="0.2" />
@@ -89,7 +89,7 @@ const NotificationButton: React.FC<NotificationButtonProps> = ({
                 </svg>
               </div>
             )}
-            <span className="bitfun-notification-btn__progress-text">
+            <span className="bitfun-notification-btn__progress-text" data-bf-component="notification-button" data-bf-part="progressText">
               {activeNotification.variant === 'loading'
                 ? activeNotification.message
                 : (() => {
@@ -106,10 +106,14 @@ const NotificationButton: React.FC<NotificationButtonProps> = ({
           </div>
           <div
             className="bitfun-notification-btn__tooltip"
+            data-bf-component="notification-button"
+            data-bf-part="tooltip"
             style={{ transform: `translateX(calc(-50% + ${tooltipOffset}px))` }}
           >
             <div
               className="bitfun-notification-btn__tooltip-content"
+              data-bf-component="notification-button"
+              data-bf-part="tooltipContent"
               style={{ '--tooltip-offset': `${tooltipOffset}px` } as React.CSSProperties}
             >
               {activeNotification.title}

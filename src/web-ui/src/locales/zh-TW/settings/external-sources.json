@@ -105,6 +105,7 @@
     "updated": "已儲存。",
     "waitForUpdate": "另一項變更仍在儲存，請等待完成後再做選擇。",
     "agentUpdated": "已儲存「{{name}}」的變更並重新整理狀態。",
+    "modelBindingUpdated": "已儲存 Agent 模型綁定並重新整理受影響的 Agent。",
     "mcpUpdated": "已儲存 MCP 伺服器選擇並重新整理狀態。"
   },
   "recoveryActions": {
@@ -177,6 +178,7 @@
       "auto": "自動使用"
     },
     "capability": {
+      "reference": "引用目錄",
       "command": "命令",
       "tool": "工具",
       "subagent": "Agent",
@@ -246,8 +248,16 @@
     "enable": "啟用 Agent",
     "reviewTitle": "查看 {{name}} 的執行設定",
     "approvalWarning": "啟用後，此 Agent 可以讓所選模型呼叫上方工具。其指令、模型、工具或設定來源變更時，BitFun 會要求你再次確認。",
-    "singleRun": "單次執行，不支援追問",
+    "role": {
+      "primary": "主工作階段",
+      "subagent": "單次任務，不支援追問",
+      "all": "主工作階段和單次任務"
+    },
     "modelUnavailable": "無法使用",
+    "modelResolvedFromParentAtTaskStart": "任務開始時從父工作階段解析",
+    "requestedModel": "來源宣告：{{model}}",
+    "requestedModelProfile": "來源 Profile：{{profile}}",
+    "modelBindingMethod": "解析方式：{{method}}",
     "model": "模型：{{model}}",
     "tools": "工具：{{tools}}",
     "executionDomain": "執行位置：本機與目前工作區",
@@ -256,6 +266,38 @@
     "noTools": "無工具",
     "unavailableToolsUnknown": "目前 Host 未提供工具名稱",
     "sourceLocations": "設定來源（{{count}} 個）"
+  },
+  "agentModelBindings": {
+    "title": "Agent 模型綁定",
+    "affectedAgents": "影響 {{count}} 個 Agent",
+    "effectiveModel": "實際使用 {{model}}",
+    "configuredEffort": "已設定推理強度：{{value}}",
+    "selectLabel": "為 {{request}} 選擇 BitFun 模型",
+    "automatic": "已自動比對",
+    "targetUnavailable": "已無法使用：{{target}}",
+    "request": {
+      "default": "BitFun 預設模型",
+      "inherit": "父工作階段模型"
+    },
+    "profile": {
+      "namedVariant": "命名變體 {{name}}",
+      "reasoningEffort": "推理強度 {{value}}"
+    },
+    "target": {
+      "source": "使用來源自動比對",
+      "unbound": "未綁定模型",
+      "primary": "主要模型",
+      "fast": "快速模型",
+      "model": "已設定模型"
+    },
+    "method": {
+      "default": "BitFun 預設模型",
+      "inherit": "繼承父工作階段模型",
+      "exact": "精確比對已設定模型",
+      "explicit": "使用者綁定",
+      "binding_required": "需要選擇模型",
+      "binding_unavailable": "已儲存的模型無法使用"
+    }
   },
   "agentState": {
     "approval_required": "待確認",
@@ -371,6 +413,11 @@
     "argumentCount": "命令參數數量：{{count}}",
     "headerCount": "已設定 {{count}} 個 HTTP 標頭",
     "headerNames": "HTTP 標頭：{{names}}",
+    "timeoutSummary": "逾時覆寫：{{values}}",
+    "timeoutStartup": "啟動 {{duration}}",
+    "timeoutCatalog": "目錄讀取 {{duration}}",
+    "timeoutExecution": "執行 {{duration}}",
+    "timeoutMilliseconds": "{{value}} 毫秒",
     "changePolicy": "伺服器設定變更後，BitFun 會在再次載入前請你確認。",
     "runtimeUnavailableGuidance": "請先停用此伺服器，修正來源設定或驗證後再啟用，通常不需要重新啟動 BitFun。",
     "unsupportedGuidance": "請在來源應用程式中修改此設定，然後重新整理。",
@@ -535,6 +582,11 @@
     "configLocations": "設定位置",
     "inherited": "繼承自整體模式",
     "capability": {
+      "reference": {
+        "description": "OpenCode 設定中的具名本機目錄",
+        "effect": "在工作空間目錄檢視與明確目錄導覽中顯示引用。",
+        "risk": "引用不會授予額外的檔案存取權限。"
+      },
       "subagent": {
         "description": "發現 {{count}} 個 Agent · 來自{{scope}}",
         "effect": "啟用後允許呼叫 OpenCode 中定義的 Agent。",

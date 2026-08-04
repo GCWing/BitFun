@@ -40,6 +40,8 @@ fn command_named(
         name: name.to_string(),
         description: format!("Review from {provider_id}"),
         template: format!("{provider_id}: $ARGUMENTS"),
+        shell_preference: None,
+        execution_target: Default::default(),
         availability: PromptCommandAvailability::Available,
         content_version: format!("command-v{version}"),
     }
@@ -111,12 +113,14 @@ impl PromptCommandSourceProvider for FakeProvider {
 
     fn expand(
         &self,
+        _context: &ExternalSourceContext,
         command: &PromptCommandDefinition,
         arguments: &str,
     ) -> Result<PromptCommandExpansion, ExternalSourceProviderError> {
         Ok(PromptCommandExpansion {
             content: command.template.replace("$ARGUMENTS", arguments),
             workspace_file_references: vec!["src/lib.rs".to_string()],
+            shell: None,
         })
     }
 

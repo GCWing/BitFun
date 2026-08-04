@@ -24,6 +24,7 @@ import {
   composerPresentationSessionReferences,
   type ComposerPresentation,
 } from '../utils/composerPresentation';
+import type { AgentDialogTurnExecution } from '@/infrastructure/api/service-api/AgentAPI';
 
 const log = createLogger('FlowChat');
 
@@ -61,6 +62,7 @@ interface UseMessageSenderReturn {
     options?: {
       displayMessage?: string;
       composerPresentation?: ComposerPresentation | null;
+      execution?: AgentDialogTurnExecution;
     }
   ) => Promise<void>;
   /** Whether a send is in progress */
@@ -84,6 +86,7 @@ export function useMessageSender(props: UseMessageSenderProps): UseMessageSender
     options?: {
       displayMessage?: string;
       composerPresentation?: ComposerPresentation | null;
+      execution?: AgentDialogTurnExecution;
     }
   ) => {
     if (!message.trim()) {
@@ -115,6 +118,9 @@ export function useMessageSender(props: UseMessageSenderProps): UseMessageSender
     try {
       const flowChatManager = FlowChatManager.getInstance();
       let agentTypeForSend = currentAgentType || 'agentic';
+      if (options?.execution?.kind === 'fresh_external_subagent' && contexts.length > 0) {
+        throw new Error('External subagent command delegation does not accept composer context');
+      }
 
       if (!sessionId) {
         const agentType = currentAgentType || 'agentic';
@@ -197,6 +203,7 @@ export function useMessageSender(props: UseMessageSenderProps): UseMessageSender
         {
           ...(imagePayload ?? {}),
           ...(userMessageMetadata ? { userMessageMetadata } : {}),
+          ...(options?.execution ? { execution: options.execution } : {}),
           onSessionConflictRetryStart: () => {
             onSessionConflictRetryStart?.({
               sessionId: sessionId!,

@@ -75,7 +75,6 @@ export const SETTINGS_CATEGORIES: ConfigCategoryDef[] = [
           'language',
           'locale',
           'i18n',
-          'theme',
           'appearance',
           'font',
           'fonts',
@@ -323,9 +322,9 @@ export const DEFAULT_SETTINGS_TAB: ConfigTab = 'basics';
 
 const KNOWN_TABS: ConfigTab[] = SETTINGS_CATEGORIES.flatMap((c) => c.tabs.map((t) => t.id));
 
-/** Map removed or renamed tabs; used by deep links and IDE actions. */
+/** Normalize supported settings deep links and IDE actions. */
 export function normalizeSettingsTab(section: string): ConfigTab {
-  if (section === 'theme' || section === 'font' || section === 'fonts') return 'appearance';
+  if (section === 'font' || section === 'fonts') return 'appearance';
   if (section === 'logging' || section === 'terminal') return 'basics';
   if (section === 'lsp') return DEFAULT_SETTINGS_TAB;
   if (section === 'session-config') return 'session-personalization';

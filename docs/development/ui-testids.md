@@ -264,7 +264,7 @@ Avoid adding IDs to these surfaces unless there is a clear automated workflow.
 | Appearance language select | `appearance-language-select` | Language select trigger in Appearance settings. |
 | Appearance language option | `appearance-language-option` | Repeated language dropdown option. Includes `data-locale-id` and Select-provided `data-selected`. |
 | Appearance theme select | `appearance-theme-select` | Theme select trigger in Appearance settings. |
-| Appearance theme option | `appearance-theme-option` | Repeated theme dropdown option. Includes `data-theme-id` and Select-provided `data-selected`. |
+| Appearance palette option | `appearance-palette-option` | Repeated appearance dropdown option. Includes `data-appearance-id` and Select-provided `data-selected`. |
 | Appearance UI font level group | `appearance-ui-font-level-group` | UI font preset button group root. |
 | Appearance UI font level button | `appearance-ui-font-level-btn` | Repeated preset button. Includes `data-font-level` and `data-selected`. |
 | Appearance UI font custom controls | `appearance-ui-font-custom-controls` | Custom UI font px controls root, rendered when custom is active. |

@@ -18,6 +18,10 @@ use crate::agentic::core::{
     MessageRole, MessageSemanticKind, RequestReasoningTokenPolicy, Session,
 };
 use crate::agentic::events::{AgenticEvent, EventPriority, EventQueue};
+#[cfg(feature = "agent-runtime")]
+use crate::agentic::execution::conditional_instructions::{
+    build_conditional_instruction_reminder, successful_workspace_read_paths,
+};
 use crate::agentic::execution::types::FinishReason;
 use crate::agentic::image_analysis::{
     build_multimodal_message_with_images, process_image_contexts_for_provider, ImageContextData,
@@ -43,7 +47,9 @@ use crate::service::config::types::{
     automatic_max_output_tokens, model_runtime_binding_fingerprint, ModelCapability, ModelCategory,
 };
 use crate::service::instruction_context::{
-    build_workspace_instruction_files_context, build_workspace_instruction_files_context_with_fs,
+    build_local_workspace_instruction_files_context_with_fs_detailed,
+    build_workspace_instruction_files_context_detailed,
+    build_workspace_instruction_files_context_with_fs, InstructionContextBuild,
 };
 use crate::util::errors::{BitFunError, BitFunResult};
 use crate::util::token_counter::TokenCounter;
@@ -143,6 +149,60 @@ fn manual_compaction_terminal_error(error: BitFunError) -> BitFunError {
     match error {
         error @ BitFunError::Cancelled(_) => error,
         error => BitFunError::Session(error.to_string()),
+    }
+}
+
+#[cfg(feature = "agent-runtime")]
+async fn activate_conditional_instructions_after_round(
+    session_manager: &SessionManager,
+    context: &ExecutionContext,
+    round_result: &RoundResult,
+    messages: &mut Vec<Message>,
+) {
+    let Some(workspace) = context.workspace.as_ref() else {
+        return;
+    };
+    let read_paths = successful_workspace_read_paths(&round_result.tool_result_messages, workspace);
+    if read_paths.is_empty() {
+        return;
+    }
+
+    let reminder_round_id = round_result
+        .tool_result_messages
+        .first()
+        .and_then(|message| message.metadata.round_id.as_deref())
+        .unwrap_or("conditional-instructions");
+    let reminder = build_conditional_instruction_reminder(
+        workspace,
+        context.workspace_services.as_ref(),
+        &read_paths,
+        messages,
+        &context.dialog_turn_id,
+        reminder_round_id,
+    )
+    .await;
+    let Some(reminder) = (match reminder {
+        Ok(reminder) => reminder,
+        Err(error) => {
+            warn!(
+                "Failed to load conditional instructions; retrying after a later matching read: {}",
+                error
+            );
+            None
+        }
+    }) else {
+        return;
+    };
+
+    messages.push(reminder.clone());
+    if let Err(error) = session_manager
+        .add_message(&context.session_id, reminder)
+        .await
+    {
+        warn!(
+            "Failed to persist conditional instruction reminder: {}",
+            error
+        );
     }
 }
 
@@ -1061,25 +1121,51 @@ impl ExecutionEngine {
     ) -> (Option<String>, bool) {
         let mut cacheable = true;
         if policy.includes(UserContextSection::WorkspaceInstructions) {
-            let instruction_context: BitFunResult<Option<String>> =
+            let instruction_context: BitFunResult<InstructionContextBuild> =
                 if let Some(workspace) = workspace {
-                    if let Some(services) = workspace_services {
-                        build_workspace_instruction_files_context_with_fs(
-                            services.fs.as_ref(),
-                            &workspace.root_path_string(),
-                        )
-                        .await
-                    } else if workspace.is_remote() {
-                        cacheable = false;
-                        Ok(None)
+                    if workspace.is_remote() {
+                        if let Some(services) = workspace_services {
+                            build_workspace_instruction_files_context_with_fs(
+                                services.fs.as_ref(),
+                                &workspace.root_path_string(),
+                            )
+                            .await
+                            .map(|content| InstructionContextBuild {
+                                content,
+                                cacheable: true,
+                            })
+                        } else {
+                            Ok(InstructionContextBuild {
+                                content: None,
+                                cacheable: false,
+                            })
+                        }
                     } else {
-                        build_workspace_instruction_files_context(workspace.root_path()).await
+                        if let Some(services) = workspace_services {
+                            build_local_workspace_instruction_files_context_with_fs_detailed(
+                                workspace.root_path(),
+                                services.fs.as_ref(),
+                                &workspace.root_path_string(),
+                            )
+                            .await
+                        } else {
+                            build_workspace_instruction_files_context_detailed(
+                                workspace.root_path(),
+                            )
+                            .await
+                        }
                     }
                 } else {
-                    Ok(None)
+                    Ok(InstructionContextBuild {
+                        content: None,
+                        cacheable: true,
+                    })
                 };
             let instruction_context = match instruction_context {
-                Ok(instruction_context) => instruction_context,
+                Ok(instruction_context) => {
+                    cacheable &= instruction_context.cacheable;
+                    instruction_context.content
+                }
                 Err(error) => {
                     cacheable = false;
                     warn!(
@@ -3770,6 +3856,15 @@ impl ExecutionEngine {
                 }
             }
 
+            #[cfg(feature = "agent-runtime")]
+            activate_conditional_instructions_after_round(
+                self.session_manager.as_ref(),
+                &context,
+                &round_result,
+                &mut messages,
+            )
+            .await;
+
             debug!(
                 "Updated round messages in memory: round_index={}, assistant + {} tool results",
                 round_index,
@@ -4358,7 +4453,7 @@ impl ExecutionEngine {
         // successfully, renumber `cit_XXX` references in the final report
         // into consecutive `[N]` display IDs. Two gates apply (agent type +
         // dialog success) so other agents and failed turns are unaffected.
-        #[cfg(feature = "product-full")]
+        #[cfg(feature = "agent-runtime")]
         {
             if bitfun_agent_runtime::deep_research::should_post_process_research_report(
                 &agent_type,
@@ -4492,16 +4587,23 @@ impl ExecutionEngine {
 #[cfg(test)]
 mod tests {
     use super::{
-        manual_compaction_terminal_error, ContextHealthSnapshot, ExecutionEngine,
-        TurnPromptScaffold,
+        activate_conditional_instructions_after_round, manual_compaction_terminal_error,
+        ContextHealthSnapshot, ExecutionEngine, RoundResult, TurnPromptScaffold,
     };
     use crate::agentic::agents::{
         PrependedPromptReminders, PromptBuilderContext, UserContextPolicy,
     };
     use crate::agentic::core::{InternalReminderKind, Message, MessageRole, ToolCall, ToolResult};
-    use crate::agentic::session::{TokenAnchor, TokenAnchorInput};
+    use crate::agentic::persistence::PersistenceManager;
+    use crate::agentic::session::{
+        ContextCompressor, PromptCachePolicy, SessionContextStore, SessionManager,
+        SessionManagerConfig, TokenAnchor, TokenAnchorInput,
+    };
     use crate::agentic::tools::ToolRuntimeRestrictions;
     use crate::agentic::workspace::{local_workspace_services, WorkspaceBinding};
+    use crate::infrastructure::PathManager;
+    #[cfg(feature = "external-sources")]
+    use crate::instruction_sources::test_support::{lock_environment, EnvironmentGuard};
     use crate::service::config::types::AIConfig;
     use crate::service::config::types::AIModelConfig;
     use crate::service::remote_ssh::workspace_state::workspace_session_identity;
@@ -4513,6 +4615,7 @@ mod tests {
     use std::path::PathBuf;
     use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
     use std::sync::Arc;
+    use std::time::Duration;
 
     #[test]
     fn manual_compaction_preserves_cancellation_as_a_terminal_cancellation() {
@@ -4534,6 +4637,13 @@ mod tests {
             Self {
                 operation_count: Arc::new(AtomicUsize::new(0)),
                 fail_next_probe: Arc::new(AtomicBool::new(true)),
+            }
+        }
+
+        fn stable() -> Self {
+            Self {
+                operation_count: Arc::new(AtomicUsize::new(0)),
+                fail_next_probe: Arc::new(AtomicBool::new(false)),
             }
         }
 
@@ -4614,8 +4724,17 @@ mod tests {
         let mut workspace_services =
             local_workspace_services(workspace_root.to_string_lossy().to_string());
         workspace_services.fs = fs;
+        let identity =
+            workspace_session_identity("/workspace", Some("instruction-test"), Some("remote-host"))
+                .expect("remote test identity");
         (
-            WorkspaceBinding::new(None, workspace_root),
+            WorkspaceBinding::new_remote(
+                None,
+                workspace_root,
+                "instruction-test".to_string(),
+                "Instruction test".to_string(),
+                identity,
+            ),
             workspace_services,
         )
     }
@@ -4699,6 +4818,313 @@ mod tests {
             .as_deref()
             .unwrap_or_default()
             .contains("Recovered workspace instructions."));
+    }
+
+    #[cfg(feature = "external-sources")]
+    #[tokio::test]
+    async fn local_workspace_services_still_include_local_user_instruction_sources() {
+        let _environment = lock_environment();
+        let temp = tempfile::tempdir().expect("tempdir");
+        let workspace_root = temp.path().join("workspace");
+        let xdg = temp.path().join("xdg");
+        let codex = temp.path().join("codex");
+        let claude = temp.path().join("claude");
+        std::fs::create_dir_all(xdg.join("opencode")).expect("OpenCode config directory");
+        std::fs::create_dir_all(&codex).expect("Codex config directory");
+        std::fs::create_dir_all(&claude).expect("Claude config directory");
+        std::fs::create_dir_all(&workspace_root).expect("workspace directory");
+        std::fs::write(xdg.join("opencode/AGENTS.md"), "Local engine user\n")
+            .expect("OpenCode instructions");
+        std::fs::write(workspace_root.join("AGENTS.md"), "Local engine project\n")
+            .expect("workspace instructions");
+        let _guard = EnvironmentGuard::set(&[
+            ("XDG_CONFIG_HOME", &xdg),
+            ("CODEX_HOME", &codex),
+            ("CLAUDE_CONFIG_DIR", &claude),
+        ]);
+        let workspace = WorkspaceBinding::new(None, workspace_root.clone());
+        let workspace_services =
+            local_workspace_services(workspace_root.to_string_lossy().to_string());
+        let policy = UserContextPolicy::empty().with_workspace_instructions();
+
+        let (context, cacheable) = ExecutionEngine::build_user_context_for_cache_miss(
+            Some(&workspace),
+            Some(&workspace_services),
+            PromptBuilderContext::new(
+                workspace_root.to_string_lossy().to_string(),
+                Some("session".to_string()),
+                Some("model".to_string()),
+            ),
+            &policy,
+        )
+        .await;
+        let context = context.expect("user context");
+
+        assert!(cacheable);
+        assert!(context.contains("Local engine user"));
+        assert!(context.contains("Local engine project"));
+    }
+
+    #[cfg(feature = "external-sources")]
+    #[tokio::test]
+    async fn local_workspace_services_remain_the_project_instruction_io_owner() {
+        let _environment = lock_environment();
+        let temp = tempfile::tempdir().expect("tempdir");
+        let workspace_root = temp.path().join("workspace");
+        let xdg = temp.path().join("xdg");
+        let codex = temp.path().join("codex");
+        let claude = temp.path().join("claude");
+        std::fs::create_dir_all(xdg.join("opencode")).expect("OpenCode config directory");
+        std::fs::create_dir_all(&codex).expect("Codex config directory");
+        std::fs::create_dir_all(&claude).expect("Claude config directory");
+        std::fs::create_dir_all(&workspace_root).expect("workspace directory");
+        std::fs::write(xdg.join("opencode/AGENTS.md"), "Local user source\n")
+            .expect("OpenCode instructions");
+        std::fs::write(workspace_root.join("AGENTS.md"), "Disk project source\n")
+            .expect("disk instructions");
+        let _guard = EnvironmentGuard::set(&[
+            ("XDG_CONFIG_HOME", &xdg),
+            ("CODEX_HOME", &codex),
+            ("CLAUDE_CONFIG_DIR", &claude),
+        ]);
+        let workspace = WorkspaceBinding::new(None, workspace_root.clone());
+        let mut workspace_services =
+            local_workspace_services(workspace_root.to_string_lossy().to_string());
+        workspace_services.fs = Arc::new(InstructionWorkspaceFs::stable());
+        let policy = UserContextPolicy::empty().with_workspace_instructions();
+
+        let (context, cacheable) = ExecutionEngine::build_user_context_for_cache_miss(
+            Some(&workspace),
+            Some(&workspace_services),
+            PromptBuilderContext::new(
+                workspace_root.to_string_lossy().to_string(),
+                Some("session".to_string()),
+                Some("model".to_string()),
+            ),
+            &policy,
+        )
+        .await;
+        let context = context.expect("user context");
+
+        assert!(cacheable);
+        assert!(context.contains("Local user source"));
+        assert!(context.contains("Recovered workspace instructions."));
+        assert!(!context.contains("Disk project source"));
+    }
+
+    #[cfg(feature = "external-sources")]
+    #[tokio::test]
+    async fn conditional_rules_persist_once_and_reload_after_compaction() {
+        let _environment = lock_environment();
+        let temp = tempfile::tempdir().expect("tempdir");
+        let workspace_root = temp.path().join("workspace");
+        let claude = temp.path().join("claude");
+        let xdg = temp.path().join("xdg");
+        let codex = temp.path().join("codex");
+        std::fs::create_dir_all(workspace_root.join(".claude/rules")).expect("workspace rules");
+        std::fs::create_dir_all(&claude).expect("Claude config");
+        std::fs::create_dir_all(xdg.join("opencode")).expect("OpenCode config");
+        std::fs::create_dir_all(&codex).expect("Codex config");
+        let rule_path = workspace_root.join(".claude/rules/rust.md");
+        std::fs::write(&rule_path, "---\npaths:\n  - src/**/*.rs\n---\nOld rule\n")
+            .expect("old rule");
+        let _guard = EnvironmentGuard::set(&[
+            ("XDG_CONFIG_HOME", &xdg),
+            ("CODEX_HOME", &codex),
+            ("CLAUDE_CONFIG_DIR", &claude),
+        ]);
+
+        let session_manager = SessionManager::new(
+            Arc::new(SessionContextStore::new()),
+            Arc::new(
+                PersistenceManager::new(Arc::new(PathManager::with_user_root_for_tests(
+                    temp.path().join("user-root"),
+                )))
+                .expect("persistence manager"),
+            ),
+            SessionManagerConfig {
+                max_active_sessions: 4,
+                session_idle_timeout: Duration::from_secs(3600),
+                auto_save_interval: Duration::from_secs(300),
+                enable_persistence: false,
+                prompt_cache_policy: PromptCachePolicy::default(),
+            },
+        );
+        let workspace = WorkspaceBinding::new(None, workspace_root.clone());
+        let context = crate::agentic::execution::types::ExecutionContext {
+            session_id: "session".to_string(),
+            dialog_turn_id: "turn".to_string(),
+            turn_index: 0,
+            agent_type: "agentic".to_string(),
+            workspace: Some(workspace),
+            context: HashMap::new(),
+            subagent_parent_info: None,
+            permission_delegation: None,
+            permission_runtime_ceiling: None,
+            delegation_policy: bitfun_runtime_ports::DelegationPolicy::top_level(),
+            runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
+            workspace_services: Some(local_workspace_services(
+                workspace_root.to_string_lossy().to_string(),
+            )),
+            terminal_port: None,
+            remote_exec_port: None,
+            round_injection: None,
+            emit_lifecycle_events: false,
+            recover_partial_on_cancel: false,
+        };
+        let mut messages = vec![
+            Message::system("system".to_string()),
+            Message::user("older request".repeat(200)),
+        ];
+        for message in messages.iter().cloned() {
+            session_manager
+                .add_message(&context.session_id, message)
+                .await
+                .expect("seed context");
+        }
+
+        let first_round = conditional_read_round(&workspace_root, "round-1");
+        append_round_messages(
+            &session_manager,
+            &context.session_id,
+            &first_round,
+            &mut messages,
+        )
+        .await;
+        activate_conditional_instructions_after_round(
+            &session_manager,
+            &context,
+            &first_round,
+            &mut messages,
+        )
+        .await;
+        activate_conditional_instructions_after_round(
+            &session_manager,
+            &context,
+            &first_round,
+            &mut messages,
+        )
+        .await;
+
+        assert_eq!(conditional_reminders(&messages).len(), 1);
+        let persisted = session_manager
+            .get_context_messages(&context.session_id)
+            .await
+            .expect("persisted context");
+        assert_eq!(conditional_reminders(&persisted).len(), 1);
+        assert!(conditional_reminders(&persisted)[0]
+            .content
+            .to_string()
+            .contains("Old rule"));
+
+        let compressor = ContextCompressor::new(Default::default());
+        let plan = compressor
+            .plan_compression(&context.session_id, &persisted, 128_000, 100)
+            .expect("compression plan")
+            .expect("compressible context");
+        let compressed = compressor
+            .compress_plan_with_contract(
+                &context.session_id,
+                128_000,
+                plan,
+                None,
+                Some("summary".to_string()),
+            )
+            .expect("compression result")
+            .messages;
+        session_manager
+            .replace_context_messages(&context.session_id, compressed.clone())
+            .await;
+        assert!(conditional_reminders(&compressed).is_empty());
+        assert!(conditional_reminders(
+            &session_manager
+                .get_context_messages(&context.session_id)
+                .await
+                .expect("compacted context")
+        )
+        .is_empty());
+
+        std::fs::write(&rule_path, "---\npaths:\n  - src/**/*.rs\n---\nNew rule\n")
+            .expect("new rule");
+        messages = compressed;
+        let second_round = conditional_read_round(&workspace_root, "round-2");
+        append_round_messages(
+            &session_manager,
+            &context.session_id,
+            &second_round,
+            &mut messages,
+        )
+        .await;
+        activate_conditional_instructions_after_round(
+            &session_manager,
+            &context,
+            &second_round,
+            &mut messages,
+        )
+        .await;
+
+        let reloaded = conditional_reminders(&messages);
+        assert_eq!(reloaded.len(), 1);
+        assert!(reloaded[0].content.to_string().contains("New rule"));
+        assert!(!reloaded[0].content.to_string().contains("Old rule"));
+    }
+
+    fn conditional_read_round(workspace_root: &std::path::Path, round_id: &str) -> RoundResult {
+        let assistant = Message::assistant("Reading source".to_string())
+            .with_turn_id("turn".to_string())
+            .with_round_id(round_id.to_string());
+        let tool_result = Message::tool_result(ToolResult {
+            tool_id: format!("{round_id}-read"),
+            tool_name: bitfun_agent_tools::CALL_DEFERRED_TOOL_NAME.to_string(),
+            effective_tool_name: Some("Read".to_string()),
+            result: json!({ "file_path": workspace_root.join("src/lib.rs") }),
+            result_for_assistant: Some("source".to_string()),
+            is_error: false,
+            duration_ms: Some(1),
+            image_attachments: None,
+        })
+        .with_turn_id("turn".to_string())
+        .with_round_id(round_id.to_string());
+        RoundResult {
+            assistant_message: assistant,
+            tool_calls: Vec::new(),
+            tool_result_messages: vec![tool_result],
+            has_more_rounds: true,
+            finish_reason: crate::agentic::execution::types::FinishReason::Complete,
+            usage: None,
+            provider_metadata: None,
+            partial_recovery_reason: None,
+            had_assistant_text: false,
+            had_thinking_content: false,
+        }
+    }
+
+    async fn append_round_messages(
+        session_manager: &SessionManager,
+        session_id: &str,
+        round: &RoundResult,
+        messages: &mut Vec<Message>,
+    ) {
+        for message in std::iter::once(&round.assistant_message)
+            .chain(round.tool_result_messages.iter())
+            .cloned()
+        {
+            messages.push(message.clone());
+            session_manager
+                .add_message(session_id, message)
+                .await
+                .expect("persist round message");
+        }
+    }
+
+    fn conditional_reminders(messages: &[Message]) -> Vec<&Message> {
+        messages
+            .iter()
+            .filter(|message| {
+                message.internal_reminder_kind()
+                    == Some(InternalReminderKind::ConditionalInstructions)
+            })
+            .collect()
     }
 
     #[tokio::test]

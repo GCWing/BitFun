@@ -4,7 +4,7 @@
  */
 
 import { i18nService } from '@/infrastructure/i18n';
-import { UI_EXCEPTION_ACCENTS } from '@/shared/theme/uiExceptionAccents';
+import { APPEARANCE_DOMAIN_TOKENS } from '@/infrastructure/appearance/appearanceDomainTokens';
 
 export { BaseToolCard } from './BaseToolCard';
 export type { BaseToolCardProps } from './BaseToolCard';
@@ -50,7 +50,7 @@ export const FLOWCHAT_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'summary',
     description: i18nService.t('components:flowChatCards.toolConfig.read.description'),
     displayMode: 'compact',
-    primaryColor: 'var(--color-accent-600)'
+    primaryColor: 'var(--bf-appearance-token-color-accent-600)'
   },
   'Write': {
     toolName: 'Write',
@@ -60,7 +60,7 @@ export const FLOWCHAT_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'summary',
     description: i18nService.t('components:flowChatCards.toolConfig.write.description'),
     displayMode: 'standard',
-    primaryColor: 'var(--color-success)'
+    primaryColor: 'var(--bf-appearance-token-color-success)'
   },
   'Edit': {
     toolName: 'Edit',
@@ -70,7 +70,7 @@ export const FLOWCHAT_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'detailed',
     description: i18nService.t('components:flowChatCards.toolConfig.edit.description'),
     displayMode: 'standard',
-    primaryColor: 'var(--color-warning)'
+    primaryColor: 'var(--bf-appearance-token-color-warning)'
   },
   'Delete': {
     toolName: 'Delete',
@@ -80,7 +80,7 @@ export const FLOWCHAT_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'summary',
     description: i18nService.t('components:flowChatCards.toolConfig.delete.description'),
     displayMode: 'detailed',
-    primaryColor: 'var(--color-error)'
+    primaryColor: 'var(--bf-appearance-token-color-error)'
   },
 
   'Grep': {
@@ -91,7 +91,7 @@ export const FLOWCHAT_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'detailed',
     description: i18nService.t('components:flowChatCards.toolConfig.grep.description'),
     displayMode: 'compact',
-    primaryColor: UI_EXCEPTION_ACCENTS.toolIdentity.search
+    primaryColor: APPEARANCE_DOMAIN_TOKENS.toolIdentity.search
   },
   'Glob': {
     toolName: 'Glob',
@@ -101,7 +101,7 @@ export const FLOWCHAT_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'summary',
     description: i18nService.t('components:flowChatCards.toolConfig.glob.description'),
     displayMode: 'compact',
-    primaryColor: UI_EXCEPTION_ACCENTS.toolIdentity.search
+    primaryColor: APPEARANCE_DOMAIN_TOKENS.toolIdentity.search
   },
 
   'WebSearch': {
@@ -112,7 +112,7 @@ export const FLOWCHAT_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'detailed',
     description: i18nService.t('components:flowChatCards.toolConfig.webSearch.description'),
     displayMode: 'compact',
-    primaryColor: UI_EXCEPTION_ACCENTS.toolIdentity.webSearch
+    primaryColor: APPEARANCE_DOMAIN_TOKENS.toolIdentity.webSearch
   },
   'WebFetch': {
     toolName: 'WebFetch',
@@ -122,7 +122,7 @@ export const FLOWCHAT_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'detailed',
     description: i18nService.t('components:flowChatCards.toolConfig.webFetch.description'),
     displayMode: 'standard',
-    primaryColor: UI_EXCEPTION_ACCENTS.toolIdentity.webSearch
+    primaryColor: APPEARANCE_DOMAIN_TOKENS.toolIdentity.webSearch
   },
 
   'Task': {
@@ -133,7 +133,7 @@ export const FLOWCHAT_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'detailed',
     description: i18nService.t('components:flowChatCards.toolConfig.task.description'),
     displayMode: 'detailed',
-    primaryColor: UI_EXCEPTION_ACCENTS.toolIdentity.assistantAction
+    primaryColor: APPEARANCE_DOMAIN_TOKENS.toolIdentity.assistantAction
   },
   'TodoWrite': {
     toolName: 'TodoWrite',
@@ -143,7 +143,7 @@ export const FLOWCHAT_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'summary',
     description: i18nService.t('components:flowChatCards.toolConfig.todoWrite.description'),
     displayMode: 'standard',
-    primaryColor: UI_EXCEPTION_ACCENTS.todo
+    primaryColor: APPEARANCE_DOMAIN_TOKENS.todo
   },
   'ContextCompression': {
     toolName: 'ContextCompression',
@@ -153,7 +153,7 @@ export const FLOWCHAT_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'detailed',
     description: i18nService.t('components:flowChatCards.toolConfig.contextCompression.description'),
     displayMode: 'standard',
-    primaryColor: UI_EXCEPTION_ACCENTS.contextCompression
+    primaryColor: APPEARANCE_DOMAIN_TOKENS.contextCompression
   }
 };
 
@@ -166,7 +166,7 @@ export function getFlowChatCardConfig(toolName: string): ToolCardConfig {
     resultDisplayType: 'summary',
     description: i18nService.t('components:flowChatCards.toolConfig.default.description', { toolName }),
     displayMode: 'standard',
-    primaryColor: 'var(--color-text-muted)'
+    primaryColor: 'var(--bf-appearance-token-color-text-muted)'
   };
 }
 

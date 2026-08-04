@@ -11,6 +11,8 @@ use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 use super::agent_selector::{AgentItem, AgentSelectorAction, AgentSelectorState};
 use super::command_menu::{CommandMenuSelection, CommandMenuState};
 use super::command_palette::{CommandPaletteState, PaletteAction};
+use super::composer::{ComposerDraft, ComposerImageAttachment};
+use super::export_dialog::ExportDialogState;
 use super::fork_selector::{ForkAction, ForkSelectorState};
 use super::login_form::{LoginFormAction, LoginFormState};
 use super::markdown::MarkdownRenderer;
@@ -19,17 +21,54 @@ use super::mcp_selector::{McpAction, McpItem, McpSelectorState};
 use super::model_config_form::{ModelConfigFormState, ModelFormAction};
 use super::model_selector::{ModelItem, ModelSelectorState};
 use super::permission::render_permission_overlay;
+use super::prompt_stash_selector::PromptStashSelectorState;
 use super::provider_selector::{ProviderSelection, ProviderSelectorState};
 use super::question::render_question_overlay;
 use super::session_selector::{SessionAction, SessionItem, SessionSelectorState};
+use super::session_lineage_selector::{SessionLineageAction, SessionLineageSelectorState};
 use super::skill_selector::{SkillItem, SkillSelectorAction, SkillSelectorState};
 use super::subagent_selector::{SubagentItem, SubagentSelectorAction, SubagentSelectorState};
 use super::text_input::TextInput;
 use super::theme::{StyleKind, Theme};
 use super::theme_selector::{ThemeItem, ThemeSelectorState};
+use super::timeline_selector::{TimelineAction, TimelineSelectorState};
 use super::widgets::Spinner;
+use super::workspace_diff::WorkspaceDiffViewState;
+use super::workspace_reference::{WorkspaceReferencePopupState, WorkspaceReferenceQuery};
 use crate::actions::{ActionState, ResolvedKeymap};
 use crate::chat_state::{ChatMessage, ChatState, FlowItem, MessageRole};
+
+#[derive(Debug)]
+struct SubmittedDraftRecord {
+    sequence: u64,
+    draft: ComposerDraft,
+    mode: ComposerMode,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(crate) enum ComposerMode {
+    #[default]
+    Chat,
+    Shell,
+}
+
+#[derive(Debug, Default)]
+struct InactiveSessionComposer {
+    draft: ComposerDraft,
+    mode: ComposerMode,
+}
+
+#[derive(Debug, Default)]
+struct SessionSubmittedDraftHistory {
+    active: Vec<SubmittedDraftRecord>,
+    undone: Vec<SubmittedDraftRecord>,
+}
+
+#[derive(Debug, Default)]
+struct SubmittedDraftHistory {
+    sessions: HashMap<String, SessionSubmittedDraftHistory>,
+    next_sequence: u64,
+}
 
 /// Types of popups that can be shown in the ChatView
 #[derive(Debug, Clone, PartialEq)]
@@ -38,7 +77,11 @@ pub(crate) enum PopupType {
     ModelSelector,
     AgentSelector,
     SessionSelector,
+    SessionLineageSelector,
     ForkSelector,
+    TimelineSelector,
+    PromptStashSelector,
+    ExportDialog,
     SkillSelector,
     SubagentSelector,
     McpSelector,
@@ -48,6 +91,7 @@ pub(crate) enum PopupType {
     LoginForm,
     ThemeSelector,
     InfoPopup,
+    WorkspaceDiff,
 }
 
 /// Navigation stack for managing popup hierarchy
@@ -105,6 +149,44 @@ struct MessageRenderResult {
     plain_lines: Vec<String>,
 }
 
+#[derive(Debug, Default)]
+struct DisclosureOverrides {
+    flipped: HashSet<String>,
+}
+
+impl DisclosureOverrides {
+    fn is_collapsed(&self, id: &str, default_collapsed: bool) -> bool {
+        default_collapsed ^ self.flipped.contains(id)
+    }
+
+    fn toggle(&mut self, id: &str) {
+        if !self.flipped.remove(id) {
+            self.flipped.insert(id.to_string());
+        }
+    }
+
+    fn clear(&mut self) {
+        self.flipped.clear();
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct TranscriptPresentation {
+    timestamps: bool,
+    thinking: crate::config::ThinkingMode,
+    tool_details: bool,
+}
+
+impl Default for TranscriptPresentation {
+    fn default() -> Self {
+        Self {
+            timestamps: false,
+            thinking: crate::config::ThinkingMode::Hide,
+            tool_details: true,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct TextSelectionPoint {
     line: usize,
@@ -132,7 +214,19 @@ pub(crate) struct ChatView {
     /// Status message
     status: Option<String>,
     /// Input history (for up/down arrows)
-    input_history: VecDeque<String>,
+    input_history: VecDeque<ComposerDraft>,
+    /// Shell command history is intentionally isolated from chat prompts.
+    shell_input_history: VecDeque<ComposerDraft>,
+    composer_mode: ComposerMode,
+    /// Unsent composer state for inactive Sessions. The active Session remains
+    /// represented by the existing composer fields, so rich drafts are never
+    /// duplicated between two UI owners.
+    inactive_session_composers: HashMap<String, InactiveSessionComposer>,
+    /// Drafts accepted by the Runtime, isolated by Session for local undo/redo identity.
+    submitted_drafts: SubmittedDraftHistory,
+    workspace_references: Vec<bitfun_agent_runtime::sdk::AgentWorkspaceReference>,
+    image_attachments: Vec<ComposerImageAttachment>,
+    workspace_reference_popup: WorkspaceReferencePopupState,
     /// History position
     history_index: Option<usize>,
     /// Markdown renderer
@@ -141,14 +235,22 @@ pub(crate) struct ChatView {
     pub(crate) browse_mode: bool,
     /// Message scroll offset (from bottom up)
     scroll_offset: usize,
+    /// Message pinned by an accepted timeline jump while the transcript grows.
+    committed_message_anchor: Option<String>,
     /// Model selector popup state
     model_selector: ModelSelectorState,
     /// Agent selector popup state
     agent_selector: AgentSelectorState,
     /// Session selector popup state
     session_selector: SessionSelectorState,
+    session_lineage_selector: SessionLineageSelectorState,
     /// OpenCode-compatible session fork-point selector.
     fork_selector: ForkSelectorState,
+    /// OpenCode-compatible user-message timeline selector.
+    timeline_selector: TimelineSelectorState,
+    lineage_inspection_label: Option<String>,
+    prompt_stash_selector: PromptStashSelectorState,
+    export_dialog: ExportDialogState,
     /// Skill selector popup state
     skill_selector: SkillSelectorState,
     /// Subagent selector popup state
@@ -167,18 +269,18 @@ pub(crate) struct ChatView {
     theme_selector: ThemeSelectorState,
 
     // -- Tool card expand/collapse state --
-    /// Set of collapsed tool IDs (block tools default to expanded; this tracks manually collapsed ones)
-    collapsed_tools: HashSet<String>,
+    /// Per-tool overrides relative to the configured default.
+    tool_disclosures: DisclosureOverrides,
     /// Currently focused block tool ID (for Ctrl+O toggle)
     focused_block_tool: Option<String>,
 
     // -- Thinking expand/collapse state --
-    /// Set of assistant message IDs whose thinking blocks are collapsed
-    collapsed_thinking: HashSet<String>,
-    /// Tracks which messages have been auto-collapsed (so user re-expands won't be overridden)
-    thinking_auto_collapsed: HashSet<String>,
-    /// Tracks user manual toggles (auto-collapse won't override user intent)
-    thinking_user_overrides: HashSet<String>,
+    /// Per-thinking-block manual-expand overrides. Only consulted while
+    /// thinking defaults to collapsed (Hide); in Show mode all blocks are
+    /// expanded regardless of these overrides so a `/thinking` round-trip
+    /// preserves manual expansions.
+    thinking_disclosures: DisclosureOverrides,
+    presentation: TranscriptPresentation,
 
     // -- Mouse click tracking --
     /// Pending command from mouse click on command menu (consumed by caller)
@@ -201,6 +303,9 @@ pub(crate) struct ChatView {
     info_popup: Option<String>,
     info_popup_scroll: u16,
     info_popup_max_scroll: u16,
+    prompt_command_shell_review:
+        Option<crate::ui::prompt_command_shell_review::PromptCommandShellReviewPrompt>,
+    workspace_diff: WorkspaceDiffViewState,
 
     /// Hovered thinking block (message_id) for mouse-over highlight
     hovered_thinking_block_id: Option<String>,
@@ -258,13 +363,26 @@ impl ChatView {
             auto_scroll: true,
             status: None,
             input_history: VecDeque::with_capacity(50),
+            shell_input_history: VecDeque::with_capacity(50),
+            composer_mode: ComposerMode::Chat,
+            inactive_session_composers: HashMap::new(),
+            submitted_drafts: SubmittedDraftHistory::default(),
+            workspace_references: Vec::new(),
+            image_attachments: Vec::new(),
+            workspace_reference_popup: WorkspaceReferencePopupState::default(),
             history_index: None,
             browse_mode: false,
             scroll_offset: 0,
+            committed_message_anchor: None,
             model_selector: ModelSelectorState::new(),
             agent_selector: AgentSelectorState::new(),
             session_selector: SessionSelectorState::new(),
+            session_lineage_selector: SessionLineageSelectorState::new(),
             fork_selector: ForkSelectorState::new(),
+            timeline_selector: TimelineSelectorState::new(),
+            lineage_inspection_label: None,
+            prompt_stash_selector: PromptStashSelectorState::new(),
+            export_dialog: ExportDialogState::new(),
             skill_selector: SkillSelectorState::new(),
             subagent_selector: SubagentSelectorState::new(),
             mcp_selector: McpSelectorState::new(),
@@ -283,12 +401,13 @@ impl ChatView {
             info_popup: None,
             info_popup_scroll: 0,
             info_popup_max_scroll: 0,
+            prompt_command_shell_review: None,
+            workspace_diff: WorkspaceDiffViewState::new(),
             hovered_thinking_block_id: None,
-            collapsed_tools: HashSet::new(),
+            tool_disclosures: DisclosureOverrides::default(),
             focused_block_tool: None,
-            collapsed_thinking: HashSet::new(),
-            thinking_auto_collapsed: HashSet::new(),
-            thinking_user_overrides: HashSet::new(),
+            thinking_disclosures: DisclosureOverrides::default(),
+            presentation: TranscriptPresentation::default(),
             block_tool_regions: Vec::new(),
             thinking_regions: Vec::new(),
             messages_area: None,
@@ -312,8 +431,106 @@ impl ChatView {
             .set_mode_switch_allowed(!state.is_processing);
         self.command_palette.set_action_state(state);
         if self.command_menu.set_action_state(state) {
-            self.command_menu
-                .update(&self.text_input.input, self.text_input.cursor);
+            self.refresh_command_menu();
         }
+    }
+
+    pub(crate) fn apply_presentation_config(&mut self, config: &crate::config::UiConfig) {
+        self.presentation = TranscriptPresentation {
+            timestamps: config.timestamps,
+            thinking: config.thinking,
+            tool_details: config.tool_details,
+        };
+        self.invalidate_render_cache();
+    }
+
+    #[cfg(test)]
+    pub(crate) fn timestamps_visible(&self) -> bool {
+        self.presentation.timestamps
+    }
+
+    #[cfg(test)]
+    pub(crate) fn thinking_mode(&self) -> crate::config::ThinkingMode {
+        self.presentation.thinking
+    }
+
+    /// Simulate a mouse click that manually expands/collapses a thinking
+    /// block, identified by the owning message id and the block's index
+    /// within that message. Mirrors the id scheme used by `render_message`.
+    #[cfg(test)]
+    pub(crate) fn toggle_thinking_block_for_test(
+        &mut self,
+        message_id: &str,
+        block_index: usize,
+    ) {
+        let id = format!("{}::thinking:{}", message_id, block_index);
+        self.thinking_disclosures.toggle(&id);
+        self.invalidate_render_cache();
+    }
+
+    #[cfg(test)]
+    pub(crate) fn tool_details_visible(&self) -> bool {
+        self.presentation.tool_details
+    }
+
+    pub(crate) fn toggle_timestamps(&mut self) -> bool {
+        self.presentation.timestamps = !self.presentation.timestamps;
+        self.invalidate_render_cache();
+        self.presentation.timestamps
+    }
+
+    pub(crate) fn toggle_thinking(&mut self) -> crate::config::ThinkingMode {
+        self.presentation.thinking = match self.presentation.thinking {
+            crate::config::ThinkingMode::Show => crate::config::ThinkingMode::Hide,
+            crate::config::ThinkingMode::Hide => crate::config::ThinkingMode::Show,
+        };
+        self.invalidate_render_cache();
+        self.presentation.thinking
+    }
+
+    pub(crate) fn toggle_tool_details(&mut self) -> bool {
+        self.presentation.tool_details = !self.presentation.tool_details;
+        self.invalidate_render_cache();
+        self.presentation.tool_details
+    }
+}
+
+#[cfg(test)]
+mod presentation_state_tests {
+    use super::{ChatView, DisclosureOverrides};
+    use crate::config::{ThinkingMode, UiConfig};
+    use crate::ui::theme::Theme;
+
+    #[test]
+    fn one_disclosure_override_model_serves_thinking_and_tool_defaults() {
+        let mut overrides = DisclosureOverrides::default();
+
+        assert!(overrides.is_collapsed("block-1", true));
+        assert!(!overrides.is_collapsed("block-1", false));
+
+        overrides.toggle("block-1");
+        assert!(!overrides.is_collapsed("block-1", true));
+        assert!(overrides.is_collapsed("block-1", false));
+
+        overrides.toggle("block-1");
+        assert!(!overrides.is_collapsed("block-1", false));
+    }
+
+    #[test]
+    fn presentation_state_projects_config_and_toggles_exact_open_code_modes() {
+        let mut view = ChatView::new(Theme::dark(), Vec::new());
+        let mut config = UiConfig::default();
+        config.timestamps = true;
+        config.thinking = ThinkingMode::Show;
+        config.tool_details = false;
+
+        view.apply_presentation_config(&config);
+        assert!(view.timestamps_visible());
+        assert_eq!(view.thinking_mode(), ThinkingMode::Show);
+        assert!(!view.tool_details_visible());
+
+        assert!(!view.toggle_timestamps());
+        assert_eq!(view.toggle_thinking(), ThinkingMode::Hide);
+        assert!(view.toggle_tool_details());
     }
 }

@@ -10,7 +10,7 @@ use bitfun_runtime_ports::PermissionConstraintLayer;
 /// Immutable, generation-keyed projection of an approved external definition.
 /// Prompt text remains backend-only and the type deliberately implements no
 /// serialization or content-bearing debug representation.
-pub(crate) struct ExternalProvidedSubagent {
+pub(crate) struct ExternalProvidedAgent {
     runtime_key: String,
     name: String,
     description: String,
@@ -21,7 +21,7 @@ pub(crate) struct ExternalProvidedSubagent {
     behavior_version: String,
 }
 
-impl ExternalProvidedSubagent {
+impl ExternalProvidedAgent {
     pub(crate) fn new(
         runtime_key: String,
         name: String,
@@ -46,7 +46,7 @@ impl ExternalProvidedSubagent {
 }
 
 #[async_trait]
-impl Agent for ExternalProvidedSubagent {
+impl Agent for ExternalProvidedAgent {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
@@ -68,10 +68,7 @@ impl Agent for ExternalProvidedSubagent {
     }
 
     fn system_prompt_cache_identity(&self, _model_name: Option<&str>) -> SystemPromptCacheIdentity {
-        SystemPromptCacheIdentity::new(format!(
-            "external_subagent_behavior:{}",
-            self.behavior_version
-        ))
+        SystemPromptCacheIdentity::new(format!("external_agent_behavior:{}", self.behavior_version))
     }
 
     async fn build_prompt(&self, context: &PromptBuilderContext) -> BitFunResult<String> {

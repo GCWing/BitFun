@@ -114,7 +114,7 @@ export const WebFetchCard: React.FC<ToolCardProps> = ({
   const renderContent = () => {
     if (status === 'completed') {
       return (
-        <span
+        <span data-bf-component="web-fetch-card" data-bf-part="headerUrl"
           className="web-fetch-card__header-url"
           title={headerTitle || url}
         >
@@ -149,16 +149,16 @@ export const WebFetchCard: React.FC<ToolCardProps> = ({
 
     if (status === 'error') {
       return (
-        <div className="compact-result-content web-fetch-card__content">
+        <div data-bf-component="web-fetch-card" data-bf-part="content" className="compact-result-content web-fetch-card__content">
           <pre>{errorMessage}</pre>
         </div>
       );
     }
 
     return (
-      <div className="web-fetch-card__expanded">
+      <div data-bf-component="web-fetch-card" data-bf-part="expanded" className="web-fetch-card__expanded">
         {parsedResult?.url && (
-          <div className="compact-expanded-result-item web-fetch-card__meta-card">
+          <div data-bf-component="web-fetch-card" data-bf-part="meta" className="compact-expanded-result-item web-fetch-card__meta-card">
             <Tooltip content={t('toolCards.webFetch.clickToOpenLink')}>
               <div
                 className="compact-expanded-result-title"
@@ -175,34 +175,36 @@ export const WebFetchCard: React.FC<ToolCardProps> = ({
         )}
 
         {(details.length > 0 || hasContent) && (
-          <div className="web-fetch-card__details-row">
+          <div data-bf-component="web-fetch-card" data-bf-part="detailsRow" className="web-fetch-card__details-row">
             {details.length > 0 && (
-              <div className="web-fetch-card__details" aria-label="web-fetch-details">
+              <div data-bf-component="web-fetch-card" data-bf-part="details" className="web-fetch-card__details" aria-label="web-fetch-details">
                 {details.map((detail) => (
-                  <span key={detail} className="web-fetch-card__detail-pill">
+                  <span key={detail} data-bf-component="web-fetch-card" data-bf-part="detail" className="web-fetch-card__detail-pill">
                     {detail}
                   </span>
                 ))}
               </div>
             )}
             {hasContent && (
-              <ToolCardHeaderActions className="web-fetch-card__actions">
-                <ToolCardCopyAction
-                  className="web-fetch-card__copy-action"
-                  getText={() => parsedResult?.content ?? ''}
-                  tooltip={t('toolCards.webFetch.copyResult')}
-                  copiedTooltip={t('toolCards.webFetch.resultCopied')}
-                  successMessage={t('toolCards.webFetch.resultCopied')}
-                  failureMessage={t('toolCards.webFetch.copyResultFailed')}
-                  ariaLabel={t('toolCards.webFetch.copyResult')}
-                  showSuccessNotification={false}
-                />
-              </ToolCardHeaderActions>
+              <span data-bf-component="web-fetch-card" data-bf-part="actions">
+                <ToolCardHeaderActions className="web-fetch-card__actions">
+                  <ToolCardCopyAction
+                    className="web-fetch-card__copy-action"
+                    getText={() => parsedResult?.content ?? ''}
+                    tooltip={t('toolCards.webFetch.copyResult')}
+                    copiedTooltip={t('toolCards.webFetch.resultCopied')}
+                    successMessage={t('toolCards.webFetch.resultCopied')}
+                    failureMessage={t('toolCards.webFetch.copyResultFailed')}
+                    ariaLabel={t('toolCards.webFetch.copyResult')}
+                    showSuccessNotification={false}
+                  />
+                </ToolCardHeaderActions>
+              </span>
             )}
           </div>
         )}
 
-        <div className="compact-result-content web-fetch-card__content">
+        <div data-bf-component="web-fetch-card" data-bf-part="result" className="compact-result-content web-fetch-card__content">
           <pre>{hasContent ? parsedResult?.content : t('toolCards.webFetch.noContent')}</pre>
         </div>
       </div>
@@ -210,7 +212,7 @@ export const WebFetchCard: React.FC<ToolCardProps> = ({
   };
 
   return (
-    <div ref={cardRootRef} data-tool-card-id={toolId ?? ''}>
+    <div data-bf-component="web-fetch-card" data-bf-part="root" data-bf-state={[isExpanded && 'expanded', status === 'error' && 'failed'].filter(Boolean).join(' ')} ref={cardRootRef} data-tool-card-id={toolId ?? ''}>
       <CompactToolCard
         status={status}
         isExpanded={isExpanded}

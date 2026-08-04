@@ -1,10 +1,13 @@
-use bitfun_opencode_adapter::{OpenCodeSubagentProvider, OpenCodeSubagentProviderOptions};
+use bitfun_opencode_adapter::{
+    OpenCodeCommandProviderOptions, OpenCodeSubagentProvider, OpenCodeSubagentProviderOptions,
+};
 use bitfun_product_domains::external_sources::{
     ExecutionDomainId, ExternalSourceContext, ExternalSourceScope,
 };
 use bitfun_product_domains::external_subagents::{
     ExternalSubagentCompatibilityState, ExternalSubagentDiscoveryInput, ExternalSubagentMode,
-    ExternalSubagentModelRequest, ExternalSubagentSourceProvider,
+    ExternalSubagentModelProfileRequest, ExternalSubagentModelRequest,
+    ExternalSubagentSourceProvider,
 };
 use bitfun_product_domains::tool_permissions::{
     PermissionEffect, PermissionEvaluator, PermissionRule,
@@ -23,11 +26,14 @@ fn context(workspace: PathBuf) -> ExternalSourceContext {
 
 fn provider(temp: &TempDir, workspace: &std::path::Path) -> OpenCodeSubagentProvider {
     OpenCodeSubagentProvider::new(OpenCodeSubagentProviderOptions {
-        user_config_dir: temp.path().join("user"),
-        legacy_user_config_dir: Some(temp.path().join("legacy")),
-        explicit_config_file: None,
-        explicit_config_dir: None,
-        project_config_enabled: true,
+        config: OpenCodeCommandProviderOptions {
+            user_config_dir: temp.path().join("user"),
+            legacy_user_config_dir: Some(temp.path().join("legacy")),
+            explicit_config_file: None,
+            explicit_config_dir: None,
+            inline_config_content: None,
+            project_config_enabled: true,
+        },
         project_root_override: Some(workspace.to_path_buf()),
     })
 }
@@ -87,6 +93,235 @@ fn omo_oracle_flat_permissions_become_provider_neutral_constraints() {
     assert!(!definition
         .diagnostic_codes
         .contains(&"opencode_agent_permission_not_imported".to_string()));
+}
+
+#[test]
+fn model_named_inherit_remains_an_opaque_opencode_reference() {
+    let temp = TempDir::new().unwrap();
+    let workspace = temp.path().join("workspace");
+    fs::create_dir_all(workspace.join(".git")).unwrap();
+    fs::create_dir_all(temp.path().join("user")).unwrap();
+    fs::write(
+        temp.path().join("user/opencode.json"),
+        r#"{
+          "agent": {
+            "named": {
+              "description": "Named model",
+              "prompt": "Use the configured model",
+              "mode": "subagent",
+              "model": "inherit"
+            }
+          }
+        }"#,
+    )
+    .unwrap();
+
+    let definition =
+        &discover(&provider(&temp, &workspace), workspace, BTreeSet::new()).definitions[0];
+    assert_eq!(
+        definition.requested_model,
+        ExternalSubagentModelRequest::Reference {
+            provider_hint: None,
+            model_name: "inherit".to_string(),
+        }
+    );
+}
+
+#[test]
+fn named_variant_is_preserved_as_a_profile_instead_of_guessed_as_reasoning_effort() {
+    let temp = TempDir::new().unwrap();
+    let workspace = temp.path().join("workspace");
+    fs::create_dir_all(workspace.join(".git")).unwrap();
+    fs::create_dir_all(temp.path().join("user")).unwrap();
+    fs::write(
+        temp.path().join("user/opencode.json"),
+        r#"{
+          "agent": {
+            "review": {
+              "description": "Variant reviewer",
+              "prompt": "Review carefully",
+              "mode": "subagent",
+              "model": "openrouter/vendor/model",
+              "variant": "high"
+            }
+          }
+        }"#,
+    )
+    .unwrap();
+
+    let definition =
+        &discover(&provider(&temp, &workspace), workspace, BTreeSet::new()).definitions[0];
+    assert_eq!(
+        definition.requested_model_profile,
+        Some(ExternalSubagentModelProfileRequest::NamedVariant {
+            name: "high".to_string(),
+        })
+    );
+    assert!(!definition
+        .diagnostic_codes
+        .contains(&"opencode_agent_variant_not_imported".to_string()));
+    assert!(
+        !matches!(
+            definition.compatibility,
+            ExternalSubagentCompatibilityState::Blocked
+                | ExternalSubagentCompatibilityState::Invalid
+        ),
+        "variant support must not block an otherwise usable agent: {:?}",
+        definition.diagnostic_codes
+    );
+}
+
+#[test]
+fn named_variant_without_an_agent_model_remains_inert_like_opencode() {
+    let temp = TempDir::new().unwrap();
+    let workspace = temp.path().join("workspace");
+    fs::create_dir_all(workspace.join(".git")).unwrap();
+    fs::create_dir_all(temp.path().join("user")).unwrap();
+    fs::write(
+        temp.path().join("user/opencode.json"),
+        r#"{
+          "agent": {
+            "review": {
+              "description": "Default-model reviewer",
+              "prompt": "Review carefully",
+              "mode": "subagent",
+              "variant": "high"
+            }
+          }
+        }"#,
+    )
+    .unwrap();
+
+    let definition =
+        &discover(&provider(&temp, &workspace), workspace, BTreeSet::new()).definitions[0];
+    assert_eq!(
+        definition.requested_model,
+        ExternalSubagentModelRequest::Default
+    );
+    assert_eq!(definition.requested_model_profile, None);
+    assert!(!matches!(
+        definition.compatibility,
+        ExternalSubagentCompatibilityState::Blocked | ExternalSubagentCompatibilityState::Invalid
+    ));
+    assert!(!definition
+        .diagnostic_codes
+        .iter()
+        .any(|code| code.contains("variant")));
+}
+
+#[test]
+fn empty_or_whitespace_variant_without_an_agent_model_is_also_inert() {
+    let temp = TempDir::new().unwrap();
+    let workspace = temp.path().join("workspace");
+    fs::create_dir_all(workspace.join(".git")).unwrap();
+    fs::create_dir_all(temp.path().join("user")).unwrap();
+    fs::write(
+        temp.path().join("user/opencode.json"),
+        r#"{
+          "agent": {
+            "empty": {
+              "prompt": "Review carefully",
+              "mode": "subagent",
+              "variant": ""
+            },
+            "spaced": {
+              "prompt": "Review carefully",
+              "mode": "subagent",
+              "variant": " custom "
+            }
+          }
+        }"#,
+    )
+    .unwrap();
+
+    let snapshot = discover(&provider(&temp, &workspace), workspace, BTreeSet::new());
+    assert_eq!(snapshot.definitions.len(), 2);
+    assert!(snapshot.definitions.iter().all(|definition| {
+        definition.requested_model_profile.is_none()
+            && !matches!(
+                definition.compatibility,
+                ExternalSubagentCompatibilityState::Blocked
+                    | ExternalSubagentCompatibilityState::Invalid
+            )
+            && !definition
+                .diagnostic_codes
+                .iter()
+                .any(|code| code.contains("variant"))
+    }));
+}
+
+#[test]
+fn named_variant_with_surrounding_whitespace_is_not_rewritten() {
+    let temp = TempDir::new().unwrap();
+    let workspace = temp.path().join("workspace");
+    fs::create_dir_all(workspace.join(".git")).unwrap();
+    fs::create_dir_all(temp.path().join("user")).unwrap();
+    fs::write(
+        temp.path().join("user/opencode.json"),
+        r#"{
+          "agent": {
+            "review": {
+              "prompt": "Review carefully",
+              "mode": "subagent",
+              "model": "openrouter/vendor/model",
+              "variant": " high "
+            }
+          }
+        }"#,
+    )
+    .unwrap();
+
+    let definition =
+        &discover(&provider(&temp, &workspace), workspace, BTreeSet::new()).definitions[0];
+    assert_eq!(definition.requested_model_profile, None);
+    assert_eq!(
+        definition.compatibility,
+        ExternalSubagentCompatibilityState::Invalid
+    );
+    assert!(definition
+        .diagnostic_codes
+        .contains(&"opencode_agent_variant_invalid".to_string()));
+}
+
+#[test]
+fn invalid_variant_text_isolated_to_its_agent_instead_of_failing_discovery() {
+    let temp = TempDir::new().unwrap();
+    let workspace = temp.path().join("workspace");
+    fs::create_dir_all(workspace.join(".git")).unwrap();
+    fs::create_dir_all(temp.path().join("user")).unwrap();
+    fs::write(
+        temp.path().join("user/opencode.json"),
+        r#"{
+          "agent": {
+            "bad": {
+              "prompt": "Review carefully",
+              "mode": "subagent",
+              "model": "openrouter/vendor/model",
+              "variant": "bad\u0001value"
+            },
+            "good": {
+              "prompt": "Review carefully",
+              "mode": "subagent"
+            }
+          }
+        }"#,
+    )
+    .unwrap();
+
+    let snapshot = discover(&provider(&temp, &workspace), workspace, BTreeSet::new());
+    assert_eq!(snapshot.definitions.len(), 2);
+    let bad = snapshot
+        .definitions
+        .iter()
+        .find(|definition| definition.logical_id == "bad")
+        .unwrap();
+    assert_eq!(
+        bad.compatibility,
+        ExternalSubagentCompatibilityState::Invalid
+    );
+    assert!(bad
+        .diagnostic_codes
+        .contains(&"opencode_agent_variant_invalid".to_string()));
 }
 
 #[test]
@@ -198,11 +433,14 @@ fn current_path_permission_resources_expand_like_opencode() {
     )
     .unwrap();
     let provider = OpenCodeSubagentProvider::new(OpenCodeSubagentProviderOptions {
-        user_config_dir: home.join(".opencode"),
-        legacy_user_config_dir: Some(home.join(".opencode")),
-        explicit_config_file: None,
-        explicit_config_dir: None,
-        project_config_enabled: true,
+        config: OpenCodeCommandProviderOptions {
+            user_config_dir: home.join(".opencode"),
+            legacy_user_config_dir: Some(home.join(".opencode")),
+            explicit_config_file: None,
+            explicit_config_dir: None,
+            inline_config_content: None,
+            project_config_enabled: true,
+        },
         project_root_override: Some(workspace.clone()),
     });
 
@@ -245,11 +483,14 @@ fn v2_relative_path_permissions_use_the_opened_location_coordinate() {
     )
     .unwrap();
     let provider = OpenCodeSubagentProvider::new(OpenCodeSubagentProviderOptions {
-        user_config_dir: temp.path().join("user"),
-        legacy_user_config_dir: None,
-        explicit_config_file: None,
-        explicit_config_dir: None,
-        project_config_enabled: true,
+        config: OpenCodeCommandProviderOptions {
+            user_config_dir: temp.path().join("user"),
+            legacy_user_config_dir: None,
+            explicit_config_file: None,
+            explicit_config_dir: None,
+            inline_config_content: None,
+            project_config_enabled: true,
+        },
         project_root_override: Some(project.clone()),
     });
 
@@ -739,11 +980,14 @@ fn explicit_alias_keeps_project_opencode_directory_position() {
     )
     .unwrap();
     let provider = OpenCodeSubagentProvider::new(OpenCodeSubagentProviderOptions {
-        user_config_dir: temp.path().join("user"),
-        legacy_user_config_dir: Some(temp.path().join("legacy")),
-        explicit_config_file: None,
-        explicit_config_dir: Some(project_opencode),
-        project_config_enabled: true,
+        config: OpenCodeCommandProviderOptions {
+            user_config_dir: temp.path().join("user"),
+            legacy_user_config_dir: Some(temp.path().join("legacy")),
+            explicit_config_file: None,
+            explicit_config_dir: Some(project_opencode),
+            inline_config_content: None,
+            project_config_enabled: true,
+        },
         project_root_override: Some(workspace.clone()),
     });
 
@@ -898,7 +1142,7 @@ fn global_and_project_agent_fields_deep_merge_with_ordered_provenance() {
     assert_eq!(definition.mode, ExternalSubagentMode::Subagent);
     assert_eq!(
         definition.requested_model,
-        ExternalSubagentModelRequest::Exact {
+        ExternalSubagentModelRequest::Reference {
             provider_hint: Some("openrouter".to_string()),
             model_name: "anthropic/claude-sonnet-4".to_string(),
         }
@@ -1034,8 +1278,12 @@ fn safe_subset_is_fail_closed_and_default_tools_are_explicit() {
     );
     assert_eq!(
         find("primaryOnly").compatibility,
-        ExternalSubagentCompatibilityState::Blocked
+        ExternalSubagentCompatibilityState::Blocked,
+        "the source-level ambient permission remains unsupported"
     );
+    assert!(!find("primaryOnly")
+        .diagnostic_codes
+        .contains(&"opencode_primary_agent_not_imported".to_string()));
     assert_eq!(
         find("sampling").compatibility,
         ExternalSubagentCompatibilityState::Blocked
@@ -1044,6 +1292,48 @@ fn safe_subset_is_fail_closed_and_default_tools_are_explicit() {
     assert!(!debug.contains("do-not-leak-this-prompt"));
     assert!(!debug.contains("do-not-leak-value"));
     assert!(!debug.contains("do-not-leak-unknown"));
+}
+
+#[test]
+fn primary_and_all_roles_are_static_agent_profiles_without_role_degradation() {
+    let temp = TempDir::new().unwrap();
+    let workspace = temp.path().join("workspace");
+    fs::create_dir_all(workspace.join(".git")).unwrap();
+    fs::create_dir_all(temp.path().join("user")).unwrap();
+    fs::write(
+        temp.path().join("user/opencode.json"),
+        r#"{
+          "agent": {
+            "primary": { "prompt": "Lead the session", "mode": "primary", "tools": { "read": true } },
+            "both": { "prompt": "Lead or assist", "mode": "all", "tools": { "read": true } },
+            "helper": { "prompt": "Assist only", "mode": "subagent", "tools": { "read": true } }
+          }
+        }"#,
+    )
+    .unwrap();
+
+    let snapshot = discover(&provider(&temp, &workspace), workspace, BTreeSet::new());
+    let find = |id: &str| {
+        snapshot
+            .definitions
+            .iter()
+            .find(|definition| definition.logical_id == id)
+            .unwrap()
+    };
+
+    assert_eq!(find("primary").mode, ExternalSubagentMode::Primary);
+    assert_eq!(find("both").mode, ExternalSubagentMode::All);
+    assert_eq!(find("helper").mode, ExternalSubagentMode::Subagent);
+    for id in ["primary", "both", "helper"] {
+        assert_eq!(
+            find(id).compatibility,
+            ExternalSubagentCompatibilityState::Ready
+        );
+        assert!(!find(id)
+            .diagnostic_codes
+            .iter()
+            .any(|code| code.contains("primary_facet") || code.contains("primary_agent")));
+    }
 }
 
 #[test]

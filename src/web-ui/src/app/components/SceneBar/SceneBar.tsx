@@ -46,7 +46,7 @@ const SceneBar: React.FC<SceneBarProps> = ({
   const canDragWindow = supportsNativeWindowDragging();
   const tabCount = Math.max(openTabs.length, 1);
   const tabsStyle = {
-    ['--scene-tab-count' as string]: tabCount,
+    ['--bf-appearance-token-scene-tab-count' as string]: tabCount,
   } as React.CSSProperties;
   const lastMouseDownTimeRef = useRef<number>(0);
 
@@ -83,14 +83,14 @@ const SceneBar: React.FC<SceneBarProps> = ({
   }, [isSingleTab, onMaximize]);
 
   return (
-    <div
+    <div data-bf-component="scene-bar" data-bf-part="root"
       className={sceneBarClassName}
       role="tablist"
       aria-label="Scene tabs"
       onMouseDown={handleBarMouseDown}
       onDoubleClick={handleBarDoubleClick}
     >
-      <div className="bitfun-scene-bar__tabs" style={tabsStyle}>
+      <div className="bitfun-scene-bar__tabs" style={tabsStyle} data-bf-component="scene-bar" data-bf-part="tabs">
         {openTabs.map(tab => {
           const def = tabDefs.find(d => d.id === tab.id);
           if (!def) return null;
@@ -113,7 +113,7 @@ const SceneBar: React.FC<SceneBarProps> = ({
       </div>
 
       {hasWindowControls && (
-        <div className="bitfun-scene-bar__controls">
+        <div className="bitfun-scene-bar__controls" data-bf-component="scene-bar" data-bf-part="controls">
           <WindowControls
             onMinimize={onMinimize!}
             onMaximize={onMaximize!}

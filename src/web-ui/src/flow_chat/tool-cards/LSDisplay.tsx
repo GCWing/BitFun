@@ -137,17 +137,17 @@ export const LSDisplay: React.FC<ToolCardProps> = ({
             gap: '6px', 
             padding: '4px 0', 
             fontSize: '11px',
-            color: 'var(--color-text-secondary)'
+            color: 'var(--bf-appearance-token-color-text-secondary)'
           }}>
             {entry.is_dir ? (
-              <Folder size={12} style={{ flexShrink: 0, color: 'var(--color-text-muted)' }} />
+              <Folder size={12} style={{ flexShrink: 0, color: 'var(--bf-appearance-token-color-text-muted)' }} />
             ) : (
-              <File size={12} style={{ flexShrink: 0, color: 'var(--color-text-muted)' }} />
+              <File size={12} style={{ flexShrink: 0, color: 'var(--bf-appearance-token-color-text-muted)' }} />
             )}
-            <span style={{ flex: 1, fontFamily: 'var(--tool-card-font-mono)', wordBreak: 'break-all' }}>
+            <span style={{ flex: 1, fontFamily: 'var(--bf-appearance-token-tool-card-font-mono)', wordBreak: 'break-all' }}>
               {entry.name}
             </span>
-            <span style={{ color: 'var(--color-text-muted)', fontSize: '10px', flexShrink: 0 }}>
+            <span style={{ color: 'var(--bf-appearance-token-color-text-muted)', fontSize: '10px', flexShrink: 0 }}>
               {entry.modified_time}
             </span>
           </div>
@@ -156,7 +156,7 @@ export const LSDisplay: React.FC<ToolCardProps> = ({
           <div style={{ 
             textAlign: 'center', 
             padding: '8px 0', 
-            color: 'var(--color-text-muted)', 
+            color: 'var(--bf-appearance-token-color-text-muted)',
             fontSize: '11px', 
             fontStyle: 'italic' 
           }}>

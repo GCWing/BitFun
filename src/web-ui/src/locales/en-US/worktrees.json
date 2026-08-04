@@ -9,6 +9,7 @@
     "togglePendingOnDescription": "Worktree isolation is armed. The worktree will be created after you send the first message.",
     "togglePendingOffDescription": "Worktree isolation will be turned off after you send the first message.",
     "toggleLocked": "Worktree isolation can only be changed before the session's first message.",
+    "dispatchBaseline": "Remote tasks run in an isolated copy. This cannot be changed after you select a target.",
     "retained": "The worktree still held local work and was kept at {{path}}."
   },
   "settings": {

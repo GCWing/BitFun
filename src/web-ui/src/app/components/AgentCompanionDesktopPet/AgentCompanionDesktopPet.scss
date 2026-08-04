@@ -88,13 +88,13 @@
     display: flex;
     flex-direction: column;
     gap: 3px;
-    border: 1px solid var(--color-overlay-slate-12);
+    border: 1px solid var(--bf-appearance-token-color-overlay-slate-12);
     border-radius: 10px;
     /* Intentionally no backdrop-filter: adding a blurred layer on right-click
        re-composites the other blurred surfaces and flashes the whole window. */
-    background: var(--color-overlay-white-95);
+    background: var(--bf-appearance-token-color-overlay-white-95);
     color: var(--bitfun-agent-companion-bubble-fg);
-    box-shadow: 0 6px 18px rgba(var(--color-overlay-slate-rgb), 0.18);
+    box-shadow: 0 6px 18px rgba(var(--bf-appearance-token-color-overlay-slate-rgb), 0.18);
     pointer-events: auto;
 
     /* Context menus are placed at the cursor. */
@@ -129,11 +129,11 @@
     cursor: pointer;
 
     &:hover {
-      background: var(--color-overlay-slate-08);
+      background: var(--bf-appearance-token-color-overlay-slate-08);
     }
 
     &:focus-visible {
-      outline: 2px solid color-mix(in srgb, var(--color-accent-600) 70%, transparent);
+      outline: 2px solid color-mix(in srgb, var(--bf-appearance-token-color-accent-600) 70%, transparent);
       outline-offset: -2px;
     }
   }
@@ -158,9 +158,9 @@
     height: 21px;
     box-sizing: border-box;
     padding: 2px 5px;
-    border: 1px solid var(--color-overlay-slate-12);
+    border: 1px solid var(--bf-appearance-token-color-overlay-slate-12);
     border-radius: 5px;
-    background: var(--color-overlay-white-95);
+    background: var(--bf-appearance-token-color-overlay-white-95);
     color: inherit;
     font: inherit;
     font-size: 10px;
@@ -185,14 +185,14 @@
     padding: 0;
     display: grid;
     place-items: center;
-    border: 1px solid var(--color-overlay-slate-12);
+    border: 1px solid var(--bf-appearance-token-color-overlay-slate-12);
     border-radius: 5px;
-    background: var(--color-overlay-slate-04);
+    background: var(--bf-appearance-token-color-overlay-slate-04);
     color: inherit;
     cursor: pointer;
 
     &:hover:not(:disabled) {
-      background: var(--color-overlay-slate-08);
+      background: var(--bf-appearance-token-color-overlay-slate-08);
     }
 
     &:disabled {
@@ -201,7 +201,7 @@
     }
 
     &:focus-visible {
-      outline: 2px solid color-mix(in srgb, var(--color-accent-600) 70%, transparent);
+      outline: 2px solid color-mix(in srgb, var(--bf-appearance-token-color-accent-600) 70%, transparent);
       outline-offset: 1px;
     }
   }
@@ -278,7 +278,7 @@
 
     &::-webkit-scrollbar-thumb {
       border-radius: 999px;
-      background: color-mix(in srgb, rgb(var(--color-overlay-slate-rgb)) 18%, transparent);
+      background: color-mix(in srgb, rgb(var(--bf-appearance-token-color-overlay-slate-rgb)) 18%, transparent);
     }
   }
 
@@ -307,9 +307,9 @@
     padding: 0;
     display: grid;
     place-items: center;
-    border: 1px solid var(--color-overlay-slate-12);
+    border: 1px solid var(--bf-appearance-token-color-overlay-slate-12);
     border-radius: 50%;
-    background: var(--color-overlay-white-95);
+    background: var(--bf-appearance-token-color-overlay-white-95);
     color: var(--bitfun-agent-companion-bubble-fg);
     opacity: 0;
     visibility: hidden;
@@ -320,11 +320,11 @@
     cursor: pointer;
 
     &:hover {
-      background: var(--color-overlay-slate-08);
+      background: var(--bf-appearance-token-color-overlay-slate-08);
     }
 
     &:focus-visible {
-      outline: 2px solid color-mix(in srgb, var(--color-accent-600) 70%, transparent);
+      outline: 2px solid color-mix(in srgb, var(--bf-appearance-token-color-accent-600) 70%, transparent);
       outline-offset: 1px;
     }
   }
@@ -345,9 +345,9 @@
     max-width: 100%;
     box-sizing: border-box;
     padding: 7px 10px;
-    border: 1px solid var(--color-overlay-slate-12);
+    border: 1px solid var(--bf-appearance-token-color-overlay-slate-12);
     border-radius: 10px 10px 2px 10px;
-    background: var(--color-overlay-white-95);
+    background: var(--bf-appearance-token-color-overlay-white-95);
     color: var(--bitfun-agent-companion-bubble-fg);
     backdrop-filter: blur(10px);
     cursor: pointer;
@@ -359,7 +359,7 @@
     }
 
     &:focus-visible {
-      outline: 2px solid color-mix(in srgb, var(--color-accent-600) 70%, transparent);
+      outline: 2px solid color-mix(in srgb, var(--bf-appearance-token-color-accent-600) 70%, transparent);
       outline-offset: 2px;
     }
 

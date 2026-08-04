@@ -25,24 +25,25 @@ vi.mock('@/component-library', async () => {
     Tooltip: ({ children }: { children: React.ReactNode }) => (
       <ReactModule.Fragment>{children}</ReactModule.Fragment>
     ),
-    IconButton: ({
+    IconButton: ReactModule.forwardRef<HTMLButtonElement, React.ButtonHTMLAttributes<HTMLButtonElement> & {
+      size?: string;
+      tooltip?: string;
+      variant?: string;
+    }>(({
       children,
       size,
       tooltip,
       variant,
       ...props
-    }: React.ButtonHTMLAttributes<HTMLButtonElement> & {
-      size?: string;
-      tooltip?: string;
-      variant?: string;
-    }) => (
-      <button type="button" title={tooltip} {...props}>
+    }, ref) => (
+      <button ref={ref} type="button" title={tooltip} {...props}>
         {children}
       </button>
-    ),
+    )),
     Input: ReactModule.forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTMLInputElement>>((props, ref) => (
       <input ref={ref} {...props} />
     )),
+    DotMatrixLoader: () => <span data-testid="dot-matrix-loader" />,
   };
 });
 
@@ -60,17 +61,20 @@ vi.mock('./SessionFilesBadge', () => ({
   SessionFilesBadge: () => <div data-testid="session-files-badge" />,
 }));
 
+vi.mock('./SessionTreePopover', () => ({
+  SessionTreePopover: () => (
+    <div className="session-tree-popover">
+      <button type="button" data-testid="flowchat-header-session-tree" />
+    </div>
+  ),
+}));
+
 function createProps(overrides: Partial<FlowChatHeaderProps> = {}): FlowChatHeaderProps {
   return {
     currentTurn: 1,
     totalTurns: 2,
     currentUserMessage: 'First prompt',
     visible: true,
-    turns: [
-      { turnId: 'turn-1', turnIndex: 1, title: 'First prompt' },
-      { turnId: 'turn-2', turnIndex: 2, title: 'Second prompt' },
-    ],
-    onJumpToTurn: vi.fn(),
     ...overrides,
   };
 }
@@ -89,6 +93,7 @@ describe('FlowChatHeader', () => {
     act(() => {
       root.unmount();
     });
+    document.querySelector('[data-bf-overlay-host="true"]')?.remove();
     container.remove();
     vi.restoreAllMocks();
   });
@@ -127,87 +132,55 @@ describe('FlowChatHeader', () => {
     });
 
     const header = container.querySelector<HTMLElement>('.flowchat-header');
-    expect(header?.style.getPropertyValue('--flowchat-header-side-width')).toBe('196px');
+    expect(header?.style.getPropertyValue('--bf-appearance-token-flowchat-header-side-width')).toBe('196px');
   });
 
-  it('closes the turn list as soon as a different turn selection is accepted', () => {
-    const onJumpToTurn = vi.fn(() => true);
-    const initialProps = createProps({ onJumpToTurn });
-
+  it('omits the list, previous-turn, and next-turn navigation controls', () => {
     act(() => {
-      root.render(<FlowChatHeader {...initialProps} />);
+      root.render(<FlowChatHeader {...createProps()} />);
     });
 
-    const turnListButton = container.querySelector<HTMLButtonElement>('[data-testid="flowchat-header-turn-list"]');
-    expect(turnListButton).not.toBeNull();
-
-    act(() => {
-      turnListButton?.click();
-    });
-
-    expect(container.querySelector('[role="dialog"]')).not.toBeNull();
-
-    const turnItems = Array.from(container.querySelectorAll<HTMLButtonElement>('.flowchat-header__turn-list-item'));
-    expect(turnItems).toHaveLength(2);
-
-    act(() => {
-      turnItems[1]?.click();
-    });
-
-    expect(onJumpToTurn).toHaveBeenCalledWith('turn-2');
-    expect(container.querySelector('[role="dialog"]')).toBeNull();
-
-    act(() => {
-      root.render(<FlowChatHeader {...initialProps} currentTurn={2} />);
-    });
-
-    expect(container.querySelector('[role="dialog"]')).toBeNull();
+    expect(container.querySelector('[data-testid="flowchat-header-turn-list"]')).toBeNull();
+    expect(container.querySelector('[data-testid="flowchat-header-turn-prev"]')).toBeNull();
+    expect(container.querySelector('[data-testid="flowchat-header-turn-next"]')).toBeNull();
   });
 
-  it('closes the turn list and notifies the container when selecting the current turn', () => {
-    const onJumpToTurn = vi.fn(() => true);
-
+  it('places the Agent tree entry immediately before background commands', () => {
     act(() => {
-      root.render(<FlowChatHeader {...createProps({ onJumpToTurn })} />);
+      root.render(<FlowChatHeader {...createProps({ sessionId: 'session-1' })} />);
     });
 
-    const turnListButton = container.querySelector<HTMLButtonElement>('[data-testid="flowchat-header-turn-list"]');
-    act(() => {
-      turnListButton?.click();
-    });
+    const treeButton = container.querySelector('[data-testid="flowchat-header-session-tree"]');
+    const commandButton = container.querySelector('[data-testid="flowchat-header-background-commands"]');
+    const treeContainer = treeButton?.closest('.session-tree-popover');
+    const commandContainer = commandButton?.closest('.flowchat-header__background-command-nav');
 
-    const currentTurnItem = container.querySelector<HTMLButtonElement>('.flowchat-header__turn-list-item');
-    act(() => {
-      currentTurnItem?.click();
-    });
-
-    expect(onJumpToTurn).toHaveBeenCalledWith('turn-1');
-    expect(container.querySelector('[role="dialog"]')).toBeNull();
+    expect(treeContainer?.nextElementSibling).toBe(commandContainer);
   });
 
-  it('keeps the turn list open when the container rejects the selection', () => {
-    const onJumpToTurn = vi.fn(() => false);
-
+  it('opens the background command panel when no commands exist', () => {
     act(() => {
-      root.render(<FlowChatHeader {...createProps({ onJumpToTurn })} />);
+      root.render(<FlowChatHeader {...createProps()} />);
     });
 
-    const turnListButton = container.querySelector<HTMLButtonElement>('[data-testid="flowchat-header-turn-list"]');
+    const commandButton = container.querySelector<HTMLButtonElement>(
+      '[data-testid="flowchat-header-background-commands"]',
+    );
+    expect(commandButton?.disabled).toBe(false);
+
     act(() => {
-      turnListButton?.click();
+      commandButton?.click();
     });
 
-    const turnItems = Array.from(container.querySelectorAll<HTMLButtonElement>('.flowchat-header__turn-list-item'));
-    act(() => {
-      turnItems[1]?.click();
-    });
-
-    expect(onJumpToTurn).toHaveBeenCalledWith('turn-2');
-    expect(container.querySelector('[role="dialog"]')).not.toBeNull();
+    const panel = document.querySelector<HTMLElement>('.flowchat-header__background-command-panel');
+    expect(panel?.textContent).toContain('flowChatHeader.backgroundCommandEmpty');
+    expect(panel?.parentElement?.getAttribute('data-bf-overlay-host')).toBe('true');
+    expect(panel?.style.visibility).toBe('visible');
   });
 
-  it('renders background activity menus in a portal outside the scrollable panel', () => {
+  it('renders background command menus in a portal outside the scrollable panel', () => {
     const onStopBackgroundCommand = vi.fn();
+    const onStopAllBackgroundCommands = vi.fn();
 
     act(() => {
       root.render(
@@ -221,22 +194,25 @@ describe('FlowChatHeader', () => {
               status: 'running',
             }],
             onStopBackgroundCommand,
+            onStopAllBackgroundCommands,
           })}
         />,
       );
     });
 
-    const activityButton = container.querySelector<HTMLButtonElement>(
-      '[data-testid="flowchat-header-background-activities"]',
+    const commandButton = container.querySelector<HTMLButtonElement>(
+      '[data-testid="flowchat-header-background-commands"]',
     );
     act(() => {
-      activityButton?.click();
+      commandButton?.click();
     });
 
-    const panel = container.querySelector('.flowchat-header__background-activity-panel');
+    const panel = document.querySelector('.flowchat-header__background-command-panel');
     const menuButton = panel?.querySelector<HTMLButtonElement>(
-      '[aria-label="flowChatHeader.backgroundCommandActions"]',
+      '.flowchat-header__background-command-panel-header-actions [aria-label="flowChatHeader.backgroundCommandActions"]',
     );
+    expect(panel?.querySelector('.flowchat-header__background-section-title')).toBeNull();
+    expect(menuButton?.closest('.flowchat-header__background-command-panel-header')).not.toBeNull();
     act(() => {
       menuButton?.click();
     });
@@ -244,17 +220,18 @@ describe('FlowChatHeader', () => {
     const menu = document.querySelector<HTMLDivElement>('[data-testid="flowchat-header-background-menu"]');
     expect(menu).not.toBeNull();
     expect(panel?.contains(menu ?? null)).toBe(false);
+    expect(menu?.classList.contains('flowchat-header__background-command-menu--portal')).toBe(true);
 
     act(() => {
       menu?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
     });
-    expect(container.querySelector('.flowchat-header__background-activity-panel')).not.toBeNull();
+    expect(document.querySelector('.flowchat-header__background-command-panel')).not.toBeNull();
 
     const stopButton = menu?.querySelector<HTMLButtonElement>('[role="menuitem"]');
     act(() => {
       stopButton?.click();
     });
 
-    expect(onStopBackgroundCommand).toHaveBeenCalledTimes(1);
+    expect(onStopAllBackgroundCommands).toHaveBeenCalledTimes(1);
   });
 });

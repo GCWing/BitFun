@@ -109,6 +109,12 @@ OpenCode 当前版本的真实合并/去重语义，不用 BitFun 常规配置�
 不移动到末尾。`OPENCODE_DISABLE_PROJECT_CONFIG` 会关闭项目配置、项目目录资产和对应监听根；显式目录不替换
 XDG 用户根，并在 BitFun 来源标签中保持 `WorkspaceLocal`。
 
+当前 References 切片按审计时 OpenCode Core V2 `e4bd9757` 的配置插件顺序独立组装：
+`OPENCODE_CONFIG_DIR` 存在时替换默认全局配置根，而不是追加更高优先级目录；随后依次应用 project direct config
+（root-to-nearest）和 project `.opencode` config（root-to-nearest）。该生产路径不读取 `OPENCODE_CONFIG`、旧用户目录
+或 `config.json`，也不复用 Command/Subagent 的目录资产顺序。相同 alias 由后出现的有效声明覆盖；不同 alias 即使指向
+同一路径也保留。若总量超过 1024，先完成全部覆盖，再保留最高优先级声明，不能让低优先级填满限额而屏蔽项目声明。
+
 `OPENCODE_CONFIG_CONTENT`、远程、组织、系统管理员与 MDM 来源尚未接入，不能因三类本地候选可运行就把目标来源
 序列标记为完整实现。
 
@@ -190,7 +196,8 @@ OpenCode 来源顺序决定兼容输入如何合并；BitFun 产品能力上限�
 
 ## 5. 声明式资产映射
 
-下表的“默认行为”是对应交付阶段完成后的目标行为。当前已接入本地 prompt-only Command 和 Subagent 安全子集。
+下表的“默认行为”是对应交付阶段完成后的目标行为。当前已接入本地 Prompt Command（含静态文件与经审阅的 shell
+上下文）和 Subagent 安全子集。
 OpenCode adapter 在来源发现、解析和审批前不 import module、不读取来源凭据、不主动联网；用户确认模型、工具和
 执行位置后，Subagent 归属模块才通过现有 Task 执行链发起 fresh single-run 调用。激活后的模型、工具、权限与凭据
 使用仍由对应归属模块按用户已经确认的运行条件控制。除已完整流程的 standalone Tool 外，其余尚未完整流程的远程或可执行资产仍只
@@ -198,12 +205,12 @@ OpenCode adapter 在来源发现、解析和审批前不 import module、不读�
 
 | 资产 | OpenCode 输入 | BitFun 归属模块 / 适配方式 | 默认行为 | 降级条件 |
 |---|---|---|---|---|
-| Rules / Instructions | 项目/全局 `AGENTS.md`、Claude fallback、`instructions` glob、本地文件、远程 URL | Workspace Instructions 归属模块保存有序来源引用 | 当前实现项目根与 `.opencode` 配置中的本地精确文件/glob；全局与远程 URL 仍是目标 | 无效 JSONC 或 glob 只排除对应配置项；文件 I/O 失败时当前构建不缓存并在下一条消息重试。 |
-| Agents / Modes | 当前生产 V1 `agent/prompt/disable/permission`、Core V2 `agents/system/disabled/permissions` 输入形状，以及 Markdown、description、mode、model、variant、temperature、top_p、steps、deprecated `maxSteps`、deprecated `tools`、options、hidden、color | Agent 归属模块创建兼容定义和使用范围视图；OpenCode adapter 只翻译来源语义 | 当前支持 Subagent 安全子集和 Agent-local 权限约束；V1 是生产兼容主路径，Core V2 字段只按已验证安全子集解析；首次按行为、来源、模型、工具与权限范围确认，fresh single-run 调用 | primary/mode、variant/options、采样、steps 与续接保持诊断或阻断；root ambient 权限和 V1 嵌套 resource map 尚不激活，不影响其他 Agent。 |
+| Rules / Instructions | 项目/全局 `AGENTS.md`、Claude fallback、`instructions` glob、本地文件、远程 URL | 各生态 adapter 保留原生用户来源语义；Workspace Instructions owner 解析项目来源；Product Assembly 有序合成 | 当前支持 OpenCode 用户 `AGENTS.md`/Claude fallback、三份全局配置的最终本地 `instructions`，以及既有项目根与 `.opencode` 本地精确文件/glob；不获取远程 URL | 单个用户生态的无效配置、glob 或文件 I/O 失败会隔离该生态，保留其他用户生态与项目来源，并使本次构建不可缓存；项目配置继续按项目解析器的逐项降级语义处理。 |
+| Agents / Modes | 当前生产 V1 `agent/prompt/disable/permission`、Core V2 `agents/system/disabled/permissions` 输入形状，以及 Markdown、description、mode、model、variant、temperature、top_p、steps、deprecated `maxSteps`、deprecated `tools`、options、hidden、color | Agent 归属模块创建兼容定义和使用范围视图；OpenCode adapter 只翻译来源语义 | 当前支持静态 Agent 安全子集、`primary/subagent/all` role 投影、Agent-local 权限约束和不透明 `variant` profile；V1 是生产兼容主路径，Core V2 字段只按已验证安全子集解析；variant 不映射为 reasoning 或请求 options，需显式绑定现有模型配置；首次按行为、来源、模型/profile、工具与权限范围确认，主 Turn 与 fresh Task 共用 generation lease | legacy mode、options、采样、steps、Task target 过滤与续接保持诊断或阻断；root ambient 权限和 V1 嵌套 resource map 尚不激活，不影响其他 Agent。 |
 | Skills | `.opencode/.claude/.agents` 项目与用户根、`SKILL.md`、`skills.paths/urls` | OpenCode adapter 只由 `bitfun-core/external_sources` 组合并投影有序本地配置根；Skill 归属模块负责有界递归、解析、覆盖与按需加载 | 标准根及 V1 `skills.paths`/当前本地字符串数组可用；项目配置限项目根，用户配置限项目根或用户目录；配置根最多 64 个、每根 512 个 Skill、单文件 256 KiB、可选策略 64 KiB，实际加载再次执行有界非链接读取；配置根在同 scope 覆盖标准 OpenCode 根，但不重排更早的 BitFun/Claude/Codex/Cursor 来源 | URL、下载/缓存、脚本与外部依赖不加载；无效根不影响标准 Skill。 |
-| References | `references` / 旧 `reference`，本地 path 或 Git repository/branch/description/hidden | **基础能力缺失**：先补 Workspace Reference 的异步准备与 `@alias` 消费接口 | 本地引用保留相对来源；Git 拉取按 L2 确认并保留缓存/隐藏语义 | 拉取失败不阻止项目，外部目录仍遵守工具权限。 |
-| Commands | JSON/JSONC、Markdown、`$ARGUMENTS`、位置参数、`@file`、`!shell`、agent/model/variant/subtask | Prompt Command 专属契约；adapter 提取静态文件引用，Product Assembly 经共享本地文本服务完成有界装配 | prompt-only 与静态 workspace 相对 UTF-8 `@file` 可发送；动态/绝对/越界文件、shell、agent/model/variant/subtask 整体受限 | 任一文件失败则本次调用原子失败；最多 8 文件、单文件 64 KiB、文件总量 128 KiB、最终命令 1 MiB。 |
-| MCP | local 的 command/environment/cwd/timeout，remote 的 URL/headers/oauth/timeout，Agent 选择 | MCP 归属模块创建兼容配置视图 | 当前支持 local stdio 和 HTTPS remote 的静态发现、首次/行为变化审批、冲突选择与 workspace 隔离的运行期接纳；C0a 快照导入只复制无 env/cwd 的 local command/args 或无 header/query/fragment 的 HTTPS remote，并保持 disabled | `{env:NAME}` 当前只允许用于运行期兼容来源的 environment/Header 值，不进入 C0a 快照；SSE、OpenCode OAuth client 配置、完整 timeout/Agent 范围与 Remote 执行域保持明确不支持；凭据或网络失败只影响单个 Server。 |
+| References | `references` / 旧 `reference`，本地 path 或 Git repository/branch/description/hidden | OpenCode adapter 输出来源无关的 Reference provider snapshot；Product Assembly 生命周期协调器与 BitFun 原生关联目录合成唯一有效引用目录；关联目录视图和既有目录选择器消费 | 当前支持本地声明路径、description/hidden、异步刷新和 `@alias` 展示；原生关联目录始终在 OpenCode 引用之前，外部引用只读、不自动进入 Prompt 且不改变权限 | Git 引用、Remote 发现和下载/缓存不实现；无效高优先级 entry 阻断同 alias 的旧值并给出诊断，不回退到更宽松来源。 |
+| Commands | JSON/JSONC、Markdown、`$ARGUMENTS`、位置参数、`@file`、`!shell`、agent/model/variant/subtask | Prompt Command 专属契约；adapter 提取静态文件引用与 shell 计划，Product Assembly 负责审批指纹和装配，Terminal owner 负责进程执行 | prompt 与静态 workspace 相对 UTF-8 `@file` 可发送；`!shell` 展示精确命令、工作目录与绝对 shell 路径，经重新校验后以不加载 profile 的隔离式 argv 执行，并仅把 stdout 按模板顺序加入 Prompt。为保持 OpenCode 语义，正常退出后的非零退出码仍使用 stdout。静态计划可记住，参数相关计划仅可单次运行；显式 agent 加缺省/true subtask 可走 approved fresh Subagent，其余 agent/model/variant/subtask 组合以及 shell 与委派的组合整体受限 | 任一文件读取、进程启动、超时或超限失败时不发送部分 Prompt；进程副作用不可回滚。最多 8 文件、单文件 64 KiB、文件总量 128 KiB；最多 8 条 shell 指令、单条 64 KiB、总计 128 KiB、每条 stdout 256 Ki 字符、30 秒；最终命令 1 MiB。安全模式禁用，Remote 不回退到本机。 |
+| MCP | local 的 command/environment/cwd/timeout，remote 的 URL/headers/oauth/timeout，Agent 选择 | MCP 归属模块创建兼容配置视图 | 当前支持 local stdio 和 HTTPS remote 的静态发现、首次/行为变化审批、冲突选择与 workspace 隔离的运行期接纳；显式 V1 `timeout` 作为毫秒值约束启动、目录读取和执行，并在 GUI/TUI 审阅详情中可见；C0a 快照导入只复制无 env/cwd/timeout 的 local command/args 或无 header/query/fragment/timeout 的 HTTPS remote，并保持 disabled | `{env:NAME}` 当前只允许用于运行期兼容来源的 environment/Header 值，不进入 C0a 快照；SSE、OpenCode OAuth client 配置、Agent 范围、Remote 执行域与 V2 分阶段 timeout 配置格式保持明确不支持；凭据、超时或网络失败只影响单个 Server。 |
 | LSP | command、extensions、env、initialization | LSP 归属模块注册兼容实例 | 首次确认外部进程和使用范围后按文件类型启动 | 自定义 Server 缺少 extensions 或启动失败时只禁用该项。 |
 | Formatters | command、environment、extensions、`$FILE` | **基础能力缺失**：先补文件写入后的 Formatter 执行消费点，再做格式转换 | 首次确认命令后执行匹配 Formatter | 超时后标记未格式化，文件写入结果保留。 |
 | Themes | builtin/user/project/cwd JSON | **部分已有**：GUI Theme 已有；TUI 主题消费边界在终端阶段补齐 | 保留覆盖顺序和语义角色 | 颜色能力不支持时做可见降级。 |
@@ -217,18 +224,26 @@ OpenCode adapter 在来源发现、解析和审批前不 import module、不读�
 规则内容尽量原地引用，不复制成第二份文件。组合结果保留原始段落来源和顺序。OpenCode 与 BitFun 原生规则
 同时存在时，配置视图展示实际进入模型的顺序；不能把冲突文本自动改写成“合并后的真相”。
 
-当前 runtime-free 子集不建立通用配置来源图：Workspace Instructions owner 在每个 Session 首次需要 user context 时读取
-项目根 `opencode.json`、`opencode.jsonc`、`.opencode/opencode.json` 和 `.opencode/opencode.jsonc` 中的
-`instructions` 数组，只接受工作区内相对精确文件与 glob，确定性排序后追加到既有 `AGENTS`/Claude 来源之后。
-绝对路径、`~`、越出工作区的路径、符号链接和 URL 都不会加载。文件变更不启动 watcher；用户通过统一的
-`/reload instructions`（或默认 `/reload`）失效当前 Session 的 `UserContext` 缓存，下一条消息重新读取。
+当前 runtime-free 子集不建立通用配置来源图，也不进入 `ExternalSourceControlPlane`。OpenCode adapter 负责用户级原生
+来源语义：先选 `$XDG_CONFIG_HOME/opencode/AGENTS.md`（默认 `~/.config/opencode/AGENTS.md`），不存在时回退
+`~/.claude/CLAUDE.md`；再按 `config.json`、`opencode.json`、`opencode.jsonc` 顺序合并，后出现的 `instructions`
+数组覆盖前者。最终数组支持 workspace 相对、`~/`、绝对本地精确文件和有界 glob；HTTP/HTTPS 项直接拒绝，不下载、
+缓存或探测网络。Product Assembly 依次合成 OpenCode、Codex、Claude Code 用户来源，再追加项目来源，并按 canonical path
+保留首项。非递归 glob 只遍历模式所需层级；递归 glob 超出固定扫描预算时只跳过该项，保留此前已读取的用户来源。
+用户与项目来源最终进入模型前还共享既有 256 文件、2 MiB 渲染上限，避免两个独立来源预算叠加扩大固定提示词。
+
+Workspace Instructions owner 继续读取项目根 `opencode.json`、`opencode.jsonc`、`.opencode/opencode.json` 和
+`.opencode/opencode.jsonc` 中的 `instructions` 数组，只接受工作区内相对精确文件与 glob，确定性排序后追加到既有
+项目 `AGENTS`/Claude 来源之后。Remote 只执行这条端口可见的项目路径，不读取控制端的用户目录。文件变更不启动
+watcher；用户通过统一的 `/reload instructions`（或默认 `/reload`）失效当前 Session 的 `UserContext` 缓存，下一条
+消息重新读取。用户生态失败不会吞掉项目 instructions，但会阻止本次 user context 写入缓存，因而下一条消息自动重试。
 
 ### 5.2 Agents、Modes 与 Skills
 
 兼容定义进入现有 Agent 归属模块，而不是新建 OpenCode Agent Runtime。当前已实现范围按是否能保持行为等价划分：
 
-- 可等价映射并激活：名称、description、生产 V1 `prompt/disable` 与 Core V2 `system/disabled` 安全子集、`subagent|all`、隐藏状态、
-  可精确解析的 model，以及能映射到当前有效 Tool route 的明确工具选择；缺省工具使用 BitFun 保守 Subagent
+- 可等价映射并激活：名称、description、生产 V1 `prompt/disable` 与 Core V2 `system/disabled` 安全子集、`primary|subagent|all`、隐藏状态、
+  可精确解析的 model，以及能映射到当前有效 Tool route 的明确工具选择；缺省工具使用 BitFun 保守 Agent
   默认集并展示在确认摘要中。
 - Agent-local 权限：Core V2 有序 `permissions: [{ action, resource, effect }]` 保留顺序；生产 V1 扁平精确 action map
   `permission: { action: allow|ask|deny }` 转换为 `resource="*"`，并把 `write/edit/patch/apply_patch` 归一为
@@ -240,8 +255,11 @@ OpenCode adapter 在来源发现、解析和审批前不 import module、不读�
   resource 保留原始命令文本。若 action pattern 同时跨越路径与非路径工具、workspace/home 坐标不可得，或前导
   wildcard 可能同时匹配 OpenCode 的相对 workspace 与绝对 external resource，则阻断 Agent，不以“未命中即 Allow”继续。
 - action pattern 保持 OpenCode 的平台大小写语义：Windows 导入时归一为小写 BitFun action，其他平台保持大小写
-  敏感。外部 Agent 当前不开放 `Task`，因为现有子委派 ceiling 尚不携带该 Agent 的外部约束；不能让显式工具名绕过此边界。
-- 可识别但不激活：`primary`/legacy mode、root ambient permission、V1 action pattern 或嵌套 resource pattern、variant/options、
+  敏感。主 Agent 委派时会把外部定义的 ask/deny 约束并入现有 parent runtime ceiling；外部 Agent 仍不开放 `Task`，
+  因为 OpenCode 的 task target 过滤和委派权限尚未等价映射，不能把工具名存在误当成完整委派语义。
+- 仅当 Agent 显式声明 `model` 时，`variant` 才保留为不透明模型 profile；未声明模型的 variant 与 OpenCode 一样不生效。
+  保留的 variant 不能映射为 reasoning effort 或任意请求 options，并要求用户显式绑定到现有模型配置。
+  可识别但不激活的仍包括 legacy mode、root ambient permission、V1 action pattern 或嵌套 resource pattern、options、
   temperature/top_p、steps/deprecated maxSteps，以及不能精确解析的模型或工具。当前不能把这些字段静默忽略后宣称兼容。
 - 展示映射：color 等只影响来源 Surface，不进入运行时权威事实。
 - 未知字段：进入来源限定诊断，不作为任意数据传给 core；后续版本支持时由 OpenCode adapter 更新解释。
@@ -261,11 +279,11 @@ Core 只消费来源无关候选，按当前
 变化后不静默回退。
 
 OpenCode adapter 负责把 `provider/model` 语法解析成来源无关的 provider 提示与模型名；Core 不解释 OpenCode 字符串
-格式。进入审批前，Subagent 归属模块必须把该请求或 BitFun 的固定 Subagent 默认项解析成唯一、已启用的具体模型，并把
-具体模型的配置 ID 与运行配置内容摘要写入决策和版本内容摘要。`inherit`、`primary`、`fast`、`auto`、`default` 在已经固定的
-绑定中只可能是普通配置 ID，不得再次解释成继承或默认选择；未配置的默认项、歧义匹配或已停用模型保持不可用并
-给出诊断，不能用运行时回退绕过审批。同一 ID 下的 provider、模型名、endpoint 或其他运行身份变化也会异步重建后续
-调用使用的版本并要求重新确认。运行中的旧调用继续使用其启动时的绑定；执行时若内容摘要已不匹配则拒绝执行，不静默改变模型。
+格式。未声明 model 的 `Default` 与显式 `inherit` 都保留为继承意图：主 Agent 使用当前 Session 模型，Subagent 在调用开始时
+继承父 Session 模型，不根据同名 BitFun Agent 猜测默认值。显式引用必须在审批前解析为唯一、已启用的具体模型，并把
+配置 ID 与运行配置内容摘要写入决策和版本内容摘要；歧义匹配或已停用模型保持不可用。同一 ID 下的 provider、模型名、
+endpoint 或其他运行身份变化会异步重建后续调用使用的版本并要求重新确认。运行中的旧调用继续使用其启动时的绑定；
+执行时若内容摘要已不匹配则拒绝执行，不静默改变模型。
 
 通用诊断携带 `Source / Command / Tool / Subagent` 资源类型，产品入口只按该类型路由；`opencode.*` 诊断码仅用于技术详情，
 不能成为 Core、GUI 或 TUI 的业务分支条件。能力 provider 契约限制来源、定义、provenance 和诊断集合，校验诊断码、
@@ -273,9 +291,14 @@ OpenCode adapter 负责把 `provider/model` 语法解析成来源无关的 provi
 位置及诊断中的已知路径统一转换为 `<workspace>/…`、`~/…`、`<remote>/…` 等安全标签，`.opencode` 路径识别仍只属于
 本 adapter。
 
-Subagent 归属模块仍通过现有 Task 执行链完成调用。新的调用在执行前取得现有运行租约，固定
-`runtime_agent_key` 与模型绑定，并由前台或后台任务持有到结束；当前不支持外部 session follow-up、primary agent 替换、
-OpenCode 会话内核、完整 permission DSL 或 package plugin。Desktop/TUI 摘要不包含 prompt
+Agent Registry 按 role 从同一个 workspace route 和 generation registry 投影主 Agent 选择器与 Task 列表。主 Session、Turn
+和界面只保存稳定 logical id；Session 额外持久化 provider-neutral 的 `Local|External` route owner，避免重启后缺失的外部定义被
+同名本地模式静默接管，但不持久化 provider、generation 或 `runtime_agent_key`。每个主 Turn 或 fresh Task 在执行前取得运行租约，
+固定 `runtime_agent_key`、prompt、工具、权限与模型绑定直到结束，更新和撤下只影响下一次调用；外部 route 不可用时保持失败关闭，
+只有用户显式选择当前冲突候选才会改变 route owner。显式模型只作为新 Session 无显式选择时的 profile 默认值，后续用户模型
+选择仍归 Session owner。Shared TUI 通过既有私有 Agent Runtime IPC 读取执行宿主的同一主 Agent 投影视图，协议只携带选择器所需
+摘要，不携带来源状态或 prompt；Embedded TUI、Desktop 和 Peer Host 仍消费同一个 Agent Registry owner。当前不支持外部 session
+follow-up、OpenCode 会话内核、完整 permission DSL 或 package plugin。Desktop/TUI 摘要不包含 prompt
 正文，静态 system prompt 也不因该适配而改写。来源 `description` 只进入审批和管理界面；已批准 Agent
 进入现有 `<available_agents>` 动态视图时使用 BitFun 生成的稳定摘要，避免只改目录文案就绕过行为重批并改变模型上下文。
 
@@ -290,12 +313,50 @@ V1 `skills.paths` 和当前 `skills: string[]`；字段类型错误只拒绝该�
 拒绝符号链接/reparse point；加载时重新校验规范化根及其稳定 source slot，防止目录整体替换改变已发现来源身份。同 scope
 内配置根位于标准 OpenCode 根之前，较后的不同配置根覆盖同名 Skill，但不重排更早的 BitFun/Claude/Codex/Cursor 来源。
 
+Skill Registry 只为与 workspace 无关的标准用户根维护进程级版本化候选快照，具体文件观察复用 File Watch Service。
+相关文件变化只使快照失效，下一次 Agent/Skill 查询重建，不改变正在执行的 Turn；瞬时读取失败或观察器无法覆盖任一目标根时
+不发布缓存，后续查询保持原有重扫行为。OpenCode 配置根的作用域取决于当前 workspace，因此继续在每次请求中按完整配置来源
+顺序统一发现和扫描，避免把项目内绝对路径误缓存为用户来源，也保证 64 根上限只计算一次。标准项目根与 Remote 项目来源同样
+按请求读取，后者继续通过 `WorkspaceFileSystem` 访问且不回退到控制端同名目录。
+
+### 5.2.1 References
+
+Workspace Reference 不是第二套 Workspace，也不是文件权限入口。OpenCode adapter 只解析有界 JSON/JSONC 配置，
+把相对 path 固定到声明它的配置文档目录；`~/` 与绝对路径保留 OpenCode 语义。与 OpenCode 相同，声明路径不要求
+发现时已经存在：存在路径用规范身份，尚未创建的路径保留词法绝对路径，因此目标目录创建/删除不需要另一套生命周期。
+Provider snapshot 经过 `ExternalSourceControlPlane` 的独立 Reference 生命周期通道发布。配置文件临时 I/O 失败可保留
+上一代结果；稳定的 JSON/UTF-8/大小错误按本次静态诊断处理，明确删除、策略禁用或不支持的 Git entry 不借旧值放宽结果。
+配置枚举阶段只有 `NotFound` 表示来源不存在，权限或其他元数据错误同样按临时 I/O 失败处理。Provider 最多发布
+256 条诊断（含一条截断汇总），避免单个有界配置文件放大为无界 IPC/DOM 内容。
+
+Product Assembly 生成唯一的有效引用目录：BitFun `WorkspaceInfo.related_paths` 按用户顺序在前，OpenCode 引用按其
+最终 alias 顺序在后。工作树以会话实际根发现 OpenCode 配置，同时用稳定 workspace id 取得主工作空间的原生关联目录；
+会话根必须等于已注册根，或由服务端现有 Git worktree owner 实时解析为同一 repository 的 live worktree 根；缓存中的
+prunable 路径不能授权扫描。缺少注册元数据、id 失效、
+路径不匹配或元数据标记为 Remote 时整体 fail closed，不按前缀或同名控制端路径猜测本地工作空间。不同 alias
+指向同一路径不会去重，因为 alias 本身是用户可见身份。只有策略为 `Auto`/`AskBeforeUse` 的生态进入有效快照；
+`DiscoverOnly` 可以刷新来源但不能投影为可用目录。关联目录弹窗只读展示可见外部项，现有 `@` 目录选择器直接导航
+同一快照；`hidden` 项不进入这些消费点。
+
+本切片不下载 Git repository、不创建缓存目录、不接入 Remote workspace，也不启动任何 plugin host runtime。
+Git/裸 repository 形状返回稳定的 `git_unsupported` 诊断；本地引用只提供目录发现和用户显式导航，不自动写入
+Agent Prompt，不把配置声明解释成工作区外文件授权。只有用户在现有目录选择器中显式选择后，才沿用既有 context/tool
+权限裁决。
+
 ### 5.3 Commands
 
 当前 Prompt Command 子集展开 `$ARGUMENTS` 与 `$1`、`$2` 等位置参数，并支持模板中可静态确认的 workspace 相对 UTF-8
 `@file`。OpenCode adapter 只从原模板提取引用，不扫描用户参数；Product Assembly 在 stale/冲突校验后通过共享本地文本服务
-原子读取并追加内容。动态占位、绝对/`~`/URL/越界路径仍进入目录但整体受限。包含 `!shell`、`{env:...}`、`{file:...}`、
-agent/model/variant/subtask 的命令同样保持受限，不能删除不支持的部分后继续发送。
+原子读取并追加内容。动态占位、绝对/`~`/URL/越界路径仍进入目录但整体受限。包含 `{env:...}`、`{file:...}`、
+`model`、`variant`、`subtask: false` 或仅有 `subtask: true` 而没有显式 `agent` 的命令同样保持受限，不能删除不支持的部分后继续发送。
+
+显式 `agent` 且 `subtask` 缺省或为 `true` 的命令携带来源无关的 fresh external subagent 执行目标；该字段只描述本次
+Prompt Command 的执行意图，不公开新的 Subagent API。Product Assembly 仅在同 workspace 存在同 OpenCode 生态、逻辑 ID
+精确匹配、已审批且当前 generation 有效的 External route 时保留命令可用性。提交后，Scheduler 要求本地 Session 处于 Idle，
+Coordinator 复用既有 Task、Subagent Registry、generation lease、权限上限、取消、事件与会话持久化链路创建一次 fresh child；
+任何失配或状态竞争都整次失败，不回退到当前 Agent、其他生态同名 Agent、旧 generation、Remote 或本机替代执行。包含
+`!shell` 的委派命令在目录阶段整体受限，避免在 Session/界面准入失败前产生不可回滚的进程副作用。GUI 的附件/
+引用上下文与 Shared TUI 在该路径明确拒绝，因为当前 Task 输入契约不能无损表达它们；普通 inline command 行为不变。
 
 每次调用最多接纳 8 个不同文件，单文件 64 KiB、文件总量 128 KiB、最终命令 1 MiB。共享服务对每级路径执行
 workspace 规范化包含校验并拒绝符号链接/reparse point；任一引用缺失、越界、超限或不是 UTF-8 时整次调用失败，不返回
@@ -329,8 +390,10 @@ OpenCode 生态内部仍按其规则覆盖同名内置命令，但跨独立 prov
   `enabled`，并在批准后按 workspace 交给现有 MCP 归属模块；工具在调用前复核 workspace route，Remote 不回退到本机实例。
   远端静态摘要只展示 HTTPS origin，环境引用只展示变量名；为避免审批后通过环境变量改变已经确认的运行条件，`{env:NAME}` 仅
   支持 environment/Header 值，展开后重新校验大小和协议。未配置 `cwd` 时遵循 OpenCode，使用当前 workspace。
-  外部本地进程默认不继承 BitFun 的完整父进程环境。SSE、OpenCode
-  `clientId/clientSecret/scope/callbackPort/redirectUri`、完整超时和 Agent 范围仍需后续接入，不能静默忽略。
+  外部本地进程默认不继承 BitFun 的完整父进程环境。显式 V1 `timeout` 通过现有 MCP runtime owner 分别约束启动、目录读取
+  和执行；缺省值继续使用 BitFun 既有行为。当前是每次请求的硬期限，不因 progress 重置；超时只停止 BitFun 的当前等待，
+  不承诺服务端工作已经取消，也不自动重放或重启。SSE、OpenCode
+  `clientId/clientSecret/scope/callbackPort/redirectUri`、V2 分阶段 timeout 配置格式和 Agent 范围仍需后续接入，不能静默忽略。
 - LSP 必须覆盖 initialization、扩展名匹配、环境变量和工作区生命周期。
 - Formatter 必须覆盖写入后时机、`$FILE` 替换、`environment`、多个 Formatter 顺序和失败行为。
 

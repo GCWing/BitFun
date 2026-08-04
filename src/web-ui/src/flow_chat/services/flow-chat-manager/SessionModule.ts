@@ -15,16 +15,14 @@ import { i18nService } from '@/infrastructure/i18n';
 import { workspaceManager } from '@/infrastructure/services/business/workspaceManager';
 import { isPeerDeviceModeActive } from '@/infrastructure/peer-device/peerModeFlag';
 import { normalizeRemoteWorkspacePath } from '@/shared/utils/pathUtils';
-import { WorkspaceKind, type WorkspaceInfo } from '@/shared/types';
-import type { AIModelConfig, AgentModelDefaultsConfig, DefaultModelsConfig } from '@/infrastructure/config/types';
+import { isRemoteWorkspace, WorkspaceKind, type WorkspaceInfo } from '@/shared/types';
 import type {
   FlowChatContext,
   SessionConfig,
   SessionHistoryHydrationLocation,
 } from './types';
 import type { Session } from '../../types/flow-chat';
-import { touchSessionActivity, cleanupSaveState } from './PersistenceModule';
-import { cleanupSessionBuffers } from './TextChunkModule';
+import { touchSessionActivity } from './PersistenceModule';
 import {
   createTextSessionTitleDescriptor,
   createDefaultSessionTitleDescriptor,
@@ -50,15 +48,10 @@ import {
   requireSessionProjectWorkspacePath,
   sessionProjectWorkspacePath,
 } from '../../utils/sessionWorkspace';
-import {
-  isNonLocalDispatchTarget,
-  type DispatchTarget,
-} from '@/features/dispatch/types';
-import { dispatchJobStore } from '@/features/dispatch/dispatchJobStore';
+import { driverForCreation, driverForSession } from '../../session-drivers/registry';
 
 const log = createLogger('SessionModule');
 const pendingSessionCreations = new Map<string, Promise<string>>();
-const DISPATCH_OBSERVER_MAX_CONTEXT_TOKENS = 128128;
 
 const getHydrationLocationKey = (
   location: SessionHistoryHydrationLocation | undefined,
@@ -514,7 +507,11 @@ export const resolveAgentTypeForSessionCreation = async (
       return normalizedRequestedMode || 'agentic';
     }
 
-    const availableModes = await agentAPI.getAvailableModes();
+    const availableModes = await agentAPI.getAvailableModes({
+      workspacePath: workspace?.rootPath,
+      remoteConnectionId: isRemoteWorkspace(workspace) ? workspace?.connectionId : undefined,
+      remoteSshHost: isRemoteWorkspace(workspace) ? workspace?.sshHost : undefined,
+    });
     if (availableModes.some(mode => mode.id === configuredDefaultMode)) {
       return configuredDefaultMode;
     }
@@ -541,101 +538,7 @@ function requireSessionWorkspacePath(
   return workspacePath;
 }
 
-/**
- * Get model's maximum token count
- */
-function findEnabledModel(models: AIModelConfig[], modelRef: string | null | undefined): AIModelConfig | null {
-  const value = modelRef?.trim();
-  if (!value) return null;
-  return models.find(model =>
-    model.enabled !== false
-    && (model.id === value || model.name === value || model.model_name === value)
-  ) ?? null;
-}
-
-function resolveModelForContextWindow(
-  modelRef: string | null | undefined,
-  models: AIModelConfig[],
-  defaultModels: DefaultModelsConfig,
-): AIModelConfig | null {
-  const value = modelRef?.trim();
-  if (!value) return null;
-
-  if (value === 'primary') {
-    return findEnabledModel(models, defaultModels.primary);
-  }
-
-  if (value === 'fast') {
-    return findEnabledModel(models, defaultModels.fast) ?? findEnabledModel(models, defaultModels.primary);
-  }
-
-  if (value === 'auto' || value === 'default') {
-    return null;
-  }
-
-  return findEnabledModel(models, value);
-}
-
-export async function getModelMaxTokens(modelName?: string, agentType?: string): Promise<number> {
-  try {
-    const configManager = await import('@/infrastructure/config/services/ConfigManager').then(m => m.configManager);
-    const configData = await configManager.getConfigs([
-      'ai.models',
-      'ai.default_models',
-      'ai.agent_model_defaults',
-    ]);
-    const models = (configData['ai.models'] as AIModelConfig[] | undefined) || [];
-    const defaultModels = (configData['ai.default_models'] as DefaultModelsConfig | undefined) || {};
-    const agentModelDefaults = configData['ai.agent_model_defaults'] as AgentModelDefaultsConfig | undefined;
-
-    const normalizedModelName = modelName?.trim();
-    const explicitModel = resolveModelForContextWindow(modelName, models, defaultModels);
-    if (explicitModel?.context_window) {
-      return explicitModel.context_window;
-    }
-
-    // Only legacy sessions without a model selector inherit the current mode
-    // default. Explicit symbolic selectors such as "auto" remain session-owned.
-    if (!normalizedModelName) {
-      const modeModel = resolveModelForContextWindow(
-        agentModelDefaults?.mode,
-        models,
-        defaultModels,
-      );
-      if (modeModel?.context_window) {
-        return modeModel.context_window;
-      }
-    }
-
-    const primaryModel = resolveModelForContextWindow('primary', models, defaultModels);
-    if (primaryModel?.context_window) {
-      return primaryModel.context_window;
-    }
-    
-    log.debug('Model context_window config not found, using default', { modelName, agentType });
-    return 128128;
-  } catch (error) {
-    log.warn('Failed to get model max tokens', { modelName, agentType, error });
-    return 128128;
-  }
-}
-
-async function resolveModelForSessionCreation(modelName?: string): Promise<string> {
-  const explicitModelName = modelName?.trim();
-  if (explicitModelName) {
-    return explicitModelName;
-  }
-
-  try {
-    const configManager = await import('@/infrastructure/config/services/ConfigManager').then(m => m.configManager);
-    const configData = await configManager.getConfigs(['ai.agent_model_defaults']);
-    const agentModelDefaults = configData['ai.agent_model_defaults'] as AgentModelDefaultsConfig | undefined;
-    return agentModelDefaults?.mode?.trim() || 'auto';
-  } catch (error) {
-    log.warn('Failed to resolve model default during session creation', { error });
-    return 'auto';
-  }
-}
+export { getModelMaxTokens } from '../../utils/modelResolution';
 
 /**
  * Create new chat session (managed by backend)
@@ -699,147 +602,17 @@ export async function createChatSession(
       );
       const sessionName = titleDescriptor.text;
 
-      if (isNonLocalDispatchTarget(config.dispatchTargetRequest)) {
-        const dispatchTarget: DispatchTarget = config.dispatchTarget
-          ?? (
-            config.dispatchTargetRequest.kind === 'ssh'
-              ? {
-                  ...config.dispatchTargetRequest,
-                  displayName: config.dispatchTargetRequest.connectionId,
-                }
-              : {
-                  ...config.dispatchTargetRequest,
-                  displayName: config.dispatchTargetRequest.deviceId,
-                }
-          );
-        const sessionId =
-          globalThis.crypto?.randomUUID?.()
-          ?? `dispatch-session-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-        const jobId =
-          config.dispatchJobId?.trim()
-          || `dispatch-${globalThis.crypto?.randomUUID?.()
-            ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`}`;
-        const approvalPolicy = config.dispatchApprovalPolicy;
-        if (!approvalPolicy) {
-          throw new Error('Dispatch approval policy must be selected before creating a session');
-        }
-        const workspaceDelivery = config.dispatchWorkspaceDelivery ?? { kind: 'existing' as const };
-        const resolvedConfig: SessionConfig = {
-          ...config,
-          // A dispatch projection must not inherit or resolve a controller-side
-          // provider. The target selection, when explicit, lives in dispatchModel.
-          modelName: undefined,
-          workspaceId: workspace?.id ?? config.workspaceId,
-          workspacePath,
-          projectWorkspacePath,
-          dispatchTargetRequest: config.dispatchTargetRequest,
-          dispatchTarget,
-          dispatchJobId: jobId,
-          dispatchApprovalPolicy: approvalPolicy,
-          dispatchWorkspaceDelivery: workspaceDelivery,
-          dispatchJobState: 'submitting',
-          dispatchCursor: 0,
-        };
-
-        // This is an observer projection only. In particular, do not call
-        // agentAPI.createSession: the target CLI owns the durable session.
-        context.flowChatStore.createSession(
-          sessionId,
-          resolvedConfig,
-          undefined,
-          sessionName,
-          DISPATCH_OBSERVER_MAX_CONTEXT_TOKENS,
-          agentType,
-          workspacePath,
-          remoteConnectionId,
-          remoteSshHost,
-          titleDescriptor,
-        );
-        dispatchJobStore.getState().registerJob({
-          jobId,
-          sessionId,
-          targetRequest: config.dispatchTargetRequest,
-          target: dispatchTarget,
-          sourceWorkspacePath: workspacePath,
-          sourceWorkspaceId: resolvedConfig.workspaceId,
-          title: sessionName,
-          agentType,
-          approvalPolicy,
-          workspaceDelivery,
-          // Do not inherit the controller's model selector. An omitted target
-          // model lets the probed target use its own configured default.
-          model: config.dispatchModel?.trim() || undefined,
-          availableModels: config.dispatchAvailableModels,
-          defaultModel: config.dispatchDefaultModel,
-          cursor: 0,
-          state: 'submitting',
-          appliedEventIds: [],
-          pendingPermissions: [],
-          eventLogComplete: true,
-          historyTruncated: false,
-          omittedEventCount: 0,
-          createdAt: Date.now(),
-          updatedAt: Date.now(),
-        });
-        return sessionId;
-      }
-
-      const sessionModelName = await resolveModelForSessionCreation(config.modelName);
-      const maxContextTokens = await getModelMaxTokens(sessionModelName, agentType);
-      const mergedConfig: SessionConfig = {
-        ...config,
-        modelName: sessionModelName,
-        workspaceId: workspace?.id ?? config.workspaceId,
-      };
-
-      const response = await agentAPI.createSession({
-        sessionName,
+      return driverForCreation(config).createSession(context, {
+        config,
         agentType,
+        sessionName,
+        titleDescriptor,
         workspacePath,
         projectWorkspacePath,
-        executionTarget: config.executionTargetRequest,
-        requestId: globalThis.crypto?.randomUUID?.() ?? `worktree-${Date.now()}-${Math.random()}`,
-        workspaceId: mergedConfig.workspaceId,
+        workspaceId: workspace?.id,
         remoteConnectionId,
         remoteSshHost,
-        config: {
-          modelName: sessionModelName,
-          enableTools: true,
-          safeMode: true,
-          autoCompact: true,
-          maxContextTokens: maxContextTokens,
-          enableContextCompression: true,
-          remoteConnectionId,
-          remoteSshHost,
-        }
       });
-
-      const effectiveWorkspacePath =
-        response.workspacePath || response.executionTarget?.rootPath || workspacePath;
-      const effectiveProjectWorkspacePath =
-        response.projectWorkspacePath || projectWorkspacePath || workspacePath;
-      const resolvedConfig: SessionConfig = {
-        ...mergedConfig,
-        workspacePath: effectiveWorkspacePath,
-        projectWorkspacePath: effectiveProjectWorkspacePath,
-        workspaceId: response.workspaceId ?? mergedConfig.workspaceId,
-        executionTarget: response.executionTarget,
-      };
-
-      context.flowChatStore.createSession(
-        response.sessionId, 
-        resolvedConfig,
-        undefined,
-        sessionName,
-        maxContextTokens,
-        agentType,
-        effectiveWorkspacePath,
-        remoteConnectionId,
-        remoteSshHost,
-        titleDescriptor,
-      );
-
-      return response.sessionId;
     });
 
     pendingSessionCreations.set(creationKey, createPromise);
@@ -886,7 +659,7 @@ export async function switchChatSession(
     });
 
     const touchActiveSessionInBackground = () => {
-      if (isNonLocalDispatchTarget(session?.config.dispatchTarget)) {
+      if (driverForSession(sessionId, session).id === 'dispatch') {
         return;
       }
       scheduleSessionActivityTouch(() => {
@@ -993,29 +766,9 @@ export async function deleteChatSession(
       && removedSessionIdSet.has(stateBeforeDelete.activeSessionId)
     );
     const session = stateBeforeDelete.sessions.get(sessionId);
-    if (isNonLocalDispatchTarget(session?.config.dispatchTarget)) {
-      if (session?.config.dispatchJobId) {
-        dispatchJobStore.getState().dismissJob(session.config.dispatchJobId);
-      }
-      context.flowChatStore.removeSession(
-        sessionId,
-        removedActiveSession ? { nextActiveSessionId: null } : undefined,
-      );
-      removedSessionIds.forEach(id => {
-        context.processingManager.clearSessionStatus(id);
-        cleanupSaveState(context, id);
-        cleanupSessionBuffers(context, id);
-      });
-      return;
-    }
-    await context.flowChatStore.deleteSession(
-      sessionId,
-      removedActiveSession ? { nextActiveSessionId: null } : undefined,
-    );
-
-    removedSessionIds.forEach(id => {
-      context.processingManager.clearSessionStatus(id);
-      cleanupSaveState(context, id);
+    await driverForSession(sessionId, session).deleteSession(context, sessionId, {
+      removedSessionIds,
+      removedActiveSession,
     });
   } catch (error) {
     log.error('Failed to delete chat session', { sessionId, error });
@@ -1044,40 +797,9 @@ export async function archiveChatSession(
       && removedSessionIdSet.has(stateBeforeArchive.activeSessionId)
     );
 
-    if (isNonLocalDispatchTarget(session.config.dispatchTarget)) {
-      if (session.config.dispatchJobId) {
-        dispatchJobStore.getState().dismissJob(session.config.dispatchJobId);
-      }
-      context.flowChatStore.removeSession(
-        sessionId,
-        removedActiveSession ? { nextActiveSessionId: null } : undefined,
-      );
-      removedSessionIds.forEach(id => {
-        context.processingManager.clearSessionStatus(id);
-        cleanupSaveState(context, id);
-        cleanupSessionBuffers(context, id);
-      });
-      return;
-    }
-
-    await sessionAPI.archiveSession(
-      sessionId,
-      requireSessionProjectWorkspacePath(session, sessionId),
-      session.remoteConnectionId,
-      session.remoteSshHost,
-    );
-
-    const { stateMachineManager } = await import('../../state-machine');
-    context.flowChatStore.removeSession(
-      sessionId,
-      removedActiveSession ? { nextActiveSessionId: null } : undefined,
-    );
-
-    removedSessionIds.forEach(id => {
-      stateMachineManager.delete(id);
-      context.processingManager.clearSessionStatus(id);
-      cleanupSaveState(context, id);
-      cleanupSessionBuffers(context, id);
+    await driverForSession(sessionId, session).archiveSession(context, sessionId, {
+      removedSessionIds,
+      removedActiveSession,
     });
   } catch (error) {
     log.error('Failed to archive chat session', { sessionId, error });
@@ -1106,24 +828,7 @@ export async function renameChatSessionTitle(
     await context.flowChatStore.updateSessionTitle(sessionId, trimmedTitle, 'generated');
     return trimmedTitle;
   }
-  if (isNonLocalDispatchTarget(session.config.dispatchTarget)) {
-    await context.flowChatStore.updateSessionTitle(sessionId, trimmedTitle, 'generated');
-    if (session.config.dispatchJobId) {
-      dispatchJobStore.getState().updateTitle(session.config.dispatchJobId, trimmedTitle);
-    }
-    return trimmedTitle;
-  }
-
-  const updatedTitle = await agentAPI.updateSessionTitle({
-    sessionId,
-    title: trimmedTitle,
-    workspacePath: sessionProjectWorkspacePath(session),
-    remoteConnectionId: session.remoteConnectionId,
-    remoteSshHost: session.remoteSshHost,
-  });
-
-  await context.flowChatStore.updateSessionTitle(sessionId, updatedTitle, 'generated');
-  return updatedTitle;
+  return driverForSession(sessionId, session).renameSession(context, sessionId, trimmedTitle);
 }
 
 export async function reloadSessionTitle(
@@ -1165,7 +870,7 @@ export async function forkChatSession(
   if (!sourceSession) {
     throw new Error(`Session does not exist: ${sourceSessionId}`);
   }
-  if (isNonLocalDispatchTarget(sourceSession.config.dispatchTarget)) {
+  if (driverForSession(sourceSessionId, sourceSession).id === 'dispatch') {
     throw new Error('Forking a detached dispatch session is not supported');
   }
 
@@ -1238,7 +943,7 @@ export async function ensureBackendSession(
   if (session.isTransient) {
     return;
   }
-  if (isNonLocalDispatchTarget(session.config.dispatchTarget)) {
+  if (driverForSession(sessionId, session).id === 'dispatch') {
     return;
   }
 

@@ -9,7 +9,7 @@
   justify-content: center;
   width: 100%;
   height: 100%;
-  padding: clamp(var(--size-gap-6), 6vh, var(--size-gap-10)) var(--size-gap-6);
+  padding: var(--bf-appearance-token-size-gap-8) var(--bf-appearance-token-size-gap-6);
   box-sizing: border-box;
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -19,7 +19,7 @@
 .welcome-panel__content {
   display: flex;
   flex-direction: column;
-  gap: var(--size-gap-5);
+  gap: var(--bf-appearance-token-size-gap-6);
   width: 100%;
   max-width: 640px;
 }
@@ -29,20 +29,20 @@
 .welcome-panel__greeting {
   display: flex;
   flex-direction: column;
-  gap: var(--flowchat-inline-gap);
+  gap: var(--bf-appearance-token-flowchat-inline-gap);
 }
 
 .welcome-panel__greeting-inner {
   display: flex;
   flex-direction: row;
-  align-items: center;
-  gap: var(--size-gap-4);
+  align-items: flex-end;
+  gap: var(--bf-appearance-token-size-gap-4);
 }
 
 .welcome-panel__greeting-text {
   display: flex;
   flex-direction: column;
-  gap: var(--flowchat-inline-gap);
+  gap: var(--bf-appearance-token-flowchat-inline-gap);
   min-width: 0;
 }
 
@@ -86,26 +86,25 @@
 
 .welcome-panel__heading {
   margin: 0;
-  font-size: calc(var(--flowchat-font-size-3xl) + 4px);
-  font-weight: 650;
-  color: var(--color-text-primary);
-  line-height: var(--flowchat-compact-line-height);
+  font-size: calc(var(--bf-appearance-token-flowchat-font-size-3xl) + 4px);
+  font-weight: 700;
+  color: var(--bf-appearance-token-color-text-primary);
+  line-height: var(--bf-appearance-token-flowchat-compact-line-height);
   letter-spacing: -0.02em;
 }
 
 .welcome-panel__tagline {
-  margin: 4px 0 0;
-  max-width: 52ch;
-  font-size: var(--flowchat-font-size-base);
-  color: var(--color-text-secondary);
-  line-height: var(--flowchat-support-line-height);
+  margin: 6px 0 0;
+  font-size: var(--bf-appearance-token-flowchat-font-size-lg);
+  color: var(--bf-appearance-token-color-text-muted);
+  line-height: var(--bf-appearance-token-flowchat-support-line-height);
 }
 
 /* ── Divider ── */
 
 .welcome-panel__divider {
   height: 1px;
-  background: linear-gradient(90deg, var(--border-base), transparent 82%);
+  background: var(--bf-appearance-token-border-subtle);
 }
 
 /* ── Narrative ── */
@@ -116,9 +115,9 @@
 
 .welcome-panel__narrative-text {
   margin: 0;
-  font-size: var(--flowchat-font-size-base);
-  line-height: var(--flowchat-text-line-height);
-  color: var(--color-text-muted);
+  font-size: var(--bf-appearance-token-flowchat-font-size-lg);
+  line-height: var(--bf-appearance-token-flowchat-text-line-height);
+  color: var(--bf-appearance-token-color-text-muted);
 }
 
 /* Lead text, chips, and trail text share one typographic line (baseline-aligned) */
@@ -144,7 +143,7 @@
   background: none;
   border: none;
   border-radius: 5px;
-  color: var(--color-text-primary);
+  color: var(--bf-appearance-token-color-text-primary);
   font-size: inherit;
   font-family: inherit;
   font-weight: 600;
@@ -159,11 +158,11 @@
 }
 
 .welcome-panel__inline-btn--interactive:hover:not(:disabled) {
-  background: var(--element-bg-subtle);
+  background: var(--bf-appearance-token-element-bg-subtle);
 }
 
 .welcome-panel__inline-btn:focus-visible {
-  outline: 2px solid var(--border-accent);
+  outline: 2px solid var(--bf-appearance-token-border-accent);
   outline-offset: 1px;
 }
 
@@ -172,7 +171,7 @@
 }
 
 .welcome-panel__inline-btn--active {
-  background: var(--element-bg-subtle);
+  background: var(--bf-appearance-token-element-bg-subtle);
 }
 
 .welcome-panel__inline-btn:disabled {
@@ -197,7 +196,7 @@
 }
 
 .welcome-panel__narrative-clean {
-  color: var(--color-text-secondary);
+  color: var(--bf-appearance-token-color-text-secondary);
 }
 
 /* ── Context row: workspace + branch always on the same line ── */
@@ -212,7 +211,7 @@
 .welcome-panel__context-sep {
   padding: 0 2px;
   line-height: inherit;
-  color: var(--color-text-muted);
+  color: var(--bf-appearance-token-color-text-muted);
   opacity: 0.4;
   font-weight: 400;
   user-select: none;
@@ -235,20 +234,19 @@
 /* ── Dropdown ── */
 
 .welcome-panel__dropdown {
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 0;
-  z-index: 100;
+  position: fixed;
+  z-index: 360;
   min-width: 210px;
-  max-width: 300px;
-  background: var(--color-bg-elevated);
-  border: 1px solid var(--border-base);
-  border-radius: calc(var(--flowchat-card-radius) + 3px);
-  box-shadow:
-    0 14px 34px var(--color-overlay-black-20),
-    0 2px 8px var(--color-overlay-black-12),
-    inset 0 1px 0 var(--color-overlay-white-08);
-  overflow: hidden;
+  max-width: min(300px, calc(100vw - 16px));
+  max-height: calc(100vh - 16px);
+  background: var(--bf-appearance-token-color-bg-elevated);
+  border: 1px solid var(--bf-appearance-token-border-base);
+  border-radius: calc(var(--bf-appearance-token-flowchat-card-radius) + 2px);
+  box-shadow: 0 8px 24px var(--bf-appearance-token-color-overlay-black-15);
+  overflow-y: auto;
+  color: var(--bf-appearance-token-color-text-primary);
+  font-family: var(--bf-appearance-token-font-family-sans);
+  font-size: var(--bf-appearance-token-flowchat-font-size-sm);
   transform-origin: left top;
   animation: wp-dropdownIn 180ms cubic-bezier(0.23, 1, 0.32, 1);
 }
@@ -256,50 +254,50 @@
 .welcome-panel__dropdown-current {
   display: flex;
   align-items: center;
-  gap: var(--flowchat-control-gap);
-  padding: var(--flowchat-card-expanded-pad-y) var(--flowchat-card-expanded-pad-x);
-  font-size: var(--flowchat-font-size-sm);
+  gap: var(--bf-appearance-token-flowchat-control-gap);
+  padding: var(--bf-appearance-token-flowchat-card-expanded-pad-y) var(--bf-appearance-token-flowchat-card-expanded-pad-x);
+  font-size: var(--bf-appearance-token-flowchat-font-size-sm);
   font-weight: 600;
-  color: var(--color-text-primary);
+  color: var(--bf-appearance-token-color-text-primary);
 }
 
 .welcome-panel__dropdown-current svg:first-child {
-  color: var(--color-accent-500);
+  color: var(--bf-appearance-token-color-accent-500);
 }
 
 .welcome-panel__dropdown-sep {
   height: 1px;
   margin: 2px 0;
-  background: var(--border-subtle);
+  background: var(--bf-appearance-token-border-subtle);
 }
 
 .welcome-panel__dropdown-item {
   display: flex;
   align-items: center;
-  gap: var(--flowchat-control-gap);
+  gap: var(--bf-appearance-token-flowchat-control-gap);
   width: 100%;
-  padding: var(--flowchat-card-expanded-pad-y) var(--flowchat-card-expanded-pad-x);
+  padding: var(--bf-appearance-token-flowchat-card-expanded-pad-y) var(--bf-appearance-token-flowchat-card-expanded-pad-x);
   box-sizing: border-box;
   background: transparent;
   border: 0;
-  color: var(--color-text-secondary);
+  color: var(--bf-appearance-token-color-text-secondary);
   font: inherit;
-  font-size: var(--flowchat-font-size-sm);
+  font-size: var(--bf-appearance-token-flowchat-font-size-sm);
   text-align: left;
   cursor: pointer;
   transition: transform 120ms cubic-bezier(0.23, 1, 0.32, 1);
 }
 
 .welcome-panel__dropdown-item:hover {
-  background: var(--element-bg-soft);
-  color: var(--color-text-primary);
+  background: var(--bf-appearance-token-element-bg-soft);
+  color: var(--bf-appearance-token-color-text-primary);
 }
 
 .welcome-panel__dropdown-item:focus-visible {
   outline: none;
-  background: var(--element-bg-soft);
-  box-shadow: inset 0 0 0 1px var(--border-accent);
-  color: var(--color-text-primary);
+  background: var(--bf-appearance-token-element-bg-soft);
+  box-shadow: inset 0 0 0 1px var(--bf-appearance-token-border-accent);
+  color: var(--bf-appearance-token-color-text-primary);
 }
 
 .welcome-panel__dropdown-item:active:not(:disabled) {
@@ -312,12 +310,12 @@
 }
 
 .welcome-panel__dropdown-item--accent {
-  color: var(--color-accent-500);
+  color: var(--bf-appearance-token-color-accent-500);
 }
 
 .welcome-panel__dropdown-item--accent:hover {
-  background: var(--color-accent-100);
-  color: var(--color-accent-600);
+  background: var(--bf-appearance-token-color-accent-100);
+  color: var(--bf-appearance-token-color-accent-600);
 }
 
 .welcome-panel__dropdown-name {
@@ -350,11 +348,11 @@
 
 @media (max-width: 480px) {
   .welcome-panel {
-    padding: var(--size-gap-5) var(--size-gap-4);
+    padding: var(--bf-appearance-token-size-gap-5) var(--bf-appearance-token-size-gap-4);
   }
 
   .welcome-panel__heading {
-    font-size: var(--flowchat-font-size-3xl);
+    font-size: var(--bf-appearance-token-flowchat-font-size-3xl);
   }
 
   .welcome-panel__dropdown {

@@ -18,7 +18,6 @@
     "snapshotCreated": "快照已建立",
     "snapshotRestored": "快照已恢復",
     "languageChanged": "語言已切換",
-    "themeChanged": "主題已切換",
     "connectionEstablished": "連接已建立"
   },
   "error": {

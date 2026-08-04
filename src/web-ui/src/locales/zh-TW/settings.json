@@ -37,7 +37,7 @@
     },
     "tabDescriptions": {
       "basics": "日誌、終端 Shell、通知與開機啟動。",
-      "appearance": "語言、主題與介面字體大小。",
+      "appearance": "語言、視覺外觀與介面字體大小。",
       "models": "AI 模型、API 密鑰、供應商、代理與會話標題。",
       "worktrees": "隔離 Git Worktree 與平行工作階段的預設設定。",
       "sessionPersonalization": "Agent 夥伴。",
@@ -90,9 +90,9 @@
       "description": "選擇界面顯示語言",
       "auto": "自動檢測"
     },
-    "theme": {
-      "title": "主題",
-      "description": "選擇界面主題",
+    "appearance": {
+      "title": "外觀",
+      "description": "選擇界面外觀",
       "light": "淺色",
       "dark": "深色",
       "system": "跟隨系統"
@@ -560,11 +560,11 @@
       "subtitle": "設定和管理系統中的智能體，包括功能代理、超級代理等",
       "create": "建立智能體"
     },
-    "theme": {
-      "title": "主題設定",
-      "subtitle": "自定義應用的外觀和主題色彩",
-      "import": "匯入主題",
-      "export": "導出目前主題"
+    "appearance": {
+      "title": "外觀設定",
+      "subtitle": "自定義應用的外觀和色彩",
+      "import": "匯入外觀",
+      "export": "導出目前外觀"
     }
   }
 }

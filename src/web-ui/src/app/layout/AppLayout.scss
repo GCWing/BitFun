@@ -18,7 +18,7 @@ html, body {
   padding: 0;
   height: 100vh;
   width: 100vw;
-  background: var(--color-bg-primary);
+  background: var(--bf-appearance-token-color-bg-primary);
   overflow: hidden;
 }
 
@@ -37,11 +37,21 @@ html, body {
   flex-direction: column;
   width: 100vw;
   height: 100vh;
+  overflow: hidden;
+
+  // Use theme background
+  background: var(--bf-appearance-token-color-bg-primary);
+
+  color: var(--bf-appearance-token-color-text-primary);
+  font-family: $font-family-sans;
+  position: relative;
+
+  // Ensure layout stability
   min-height: 100vh;
   max-height: 100vh;
   overflow: hidden;
-  background: var(--color-bg-primary);
-  color: var(--color-text-primary);
+  background: var(--bf-appearance-token-color-bg-primary);
+  color: var(--bf-appearance-token-color-text-primary);
   font-family: $font-family-sans;
 
   -webkit-font-smoothing: antialiased;
@@ -52,21 +62,25 @@ html, body {
     outline: none;
   }
 
+  &[data-bf-background-media='video'] {
+    background: transparent;
+  }
+
   * {
     box-sizing: border-box;
   }
 
   *:focus-visible {
-    outline: 2px solid var(--color-accent-500);
+    outline: 2px solid var(--bf-appearance-token-color-accent-500);
     outline-offset: 2px;
     border-radius: $size-radius-sm;
   }
-  
+
   // ==================== Startup mode ====================
   &--startup-mode {
-    background: var(--color-bg-primary);
+    background: var(--bf-appearance-token-color-bg-primary);
   }
-  
+
   // ==================== Modifier - loading ====================
   &--loading {
     pointer-events: none;
@@ -76,10 +90,10 @@ html, body {
   // ==================== Modifier - error ====================
   &--error {
     .bitfun-app-header {
-      border-bottom-color: var(--color-error);
-      background: linear-gradient(135deg, 
-        var(--color-error-bg) 0%, 
-        var(--element-bg-base) 100%);
+      border-bottom-color: var(--bf-appearance-token-color-error);
+      background: linear-gradient(135deg,
+        var(--bf-appearance-token-color-error-bg) 0%,
+        var(--bf-appearance-token-element-bg-base) 100%);
     }
   }
 
@@ -98,6 +112,7 @@ html, body {
 // ==================== Main content area (full height, no TitleBar) ====================
 .bitfun-app-main-workspace {
   position: relative;
+  z-index: 1;
   display: flex;
   flex: 1;
   flex-direction: column;
@@ -106,7 +121,33 @@ html, body {
   width: 100%;
   margin-top: 0;
   overflow: hidden;
-  background: var(--color-bg-primary);
+  background: var(--bf-appearance-token-color-bg-scene);
+}
+
+.bitfun-app-layout--toolbar-mode > [data-bf-component='toolbar-mode'][data-bf-part='root'] {
+  position: relative;
+  z-index: 1;
+}
+
+.bitfun-appearance-background-media {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  background-repeat: no-repeat;
+  pointer-events: none;
+}
+
+.bitfun-appearance-background-media__video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  pointer-events: none;
+
+  &[data-media-ready='true'] {
+    opacity: 1;
+  }
 }
 
 .bitfun-window-mode-hint {
@@ -118,15 +159,13 @@ html, body {
   align-items: center;
   gap: $size-gap-2;
   max-width: min(560px, calc(100vw - 32px));
-  min-height: 36px;
-  padding: $size-gap-1 $size-gap-2 $size-gap-1 $size-gap-3;
-  border: 1px solid var(--border-subtle);
-  border-radius: $size-radius-lg;
-  background: color-mix(in srgb, var(--color-bg-elevated) 94%, transparent);
-  box-shadow:
-    0 1px 0 color-mix(in srgb, var(--color-static-white) 5%, transparent) inset,
-    0 12px 32px var(--color-overlay-black-30);
-  color: var(--color-text-primary);
+  min-height: 34px;
+  padding: $size-gap-1 $size-gap-3;
+  border: 1px solid var(--bf-appearance-token-border-subtle);
+  border-radius: $size-radius-base;
+  background: color-mix(in srgb, var(--bf-appearance-token-color-bg-elevated) 90%, transparent);
+  box-shadow: 0 12px 28px var(--bf-appearance-token-color-overlay-black-30);
+  color: var(--bf-appearance-token-color-text-primary);
   pointer-events: none;
   transform: translateX(-50%);
   backdrop-filter: blur(12px);
@@ -134,7 +173,7 @@ html, body {
   &__title {
     flex: 0 0 auto;
     min-width: 0;
-    font-size: var(--font-size-sm);
+    font-size: var(--bf-appearance-token-font-size-sm);
     font-weight: $font-weight-semibold;
     line-height: 1.35;
     white-space: nowrap;
@@ -142,8 +181,8 @@ html, body {
 
   &__detail {
     min-width: 0;
-    color: var(--color-text-muted);
-    font-size: var(--font-size-xs);
+    color: var(--bf-appearance-token-color-text-muted);
+    font-size: var(--bf-appearance-token-font-size-xs);
     line-height: 1.35;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -170,17 +209,10 @@ html, body {
   }
 }
 
-// ==================== Dark theme tweaks ====================
-@media (prefers-color-scheme: dark) {
-  .bitfun-app-layout {
-    background: var(--color-bg-primary);
-  }
-}
-
 // ==================== High-contrast mode ====================
 @media (prefers-contrast: high) {
   .bitfun-app-layout {
-    background: var(--color-bg-primary);
+    background: var(--bf-appearance-token-color-bg-scene);
   }
 }
 
@@ -189,6 +221,10 @@ html, body {
   .bitfun-app-layout * {
     transition: none;
     animation: none;
+  }
+
+  .bitfun-appearance-background-media__video {
+    display: none;
   }
 
 }

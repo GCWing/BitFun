@@ -11,10 +11,10 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: var(--color-bg-scene);
+  background: var(--bf-appearance-token-color-bg-scene);
   position: relative;
-  font-family: var(--font-family-sans);
-  font-size: var(--flowchat-font-size-base);
+  font-family: var(--bf-appearance-token-font-family-sans);
+  font-size: var(--bf-appearance-token-flowchat-font-size-base);
 }
 
 .bitfun-chat-pane__chat-container {

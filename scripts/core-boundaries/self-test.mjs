@@ -7,11 +7,8 @@ export function runManifestParserSelfTest({
   parseManifestDependencies,
   manifestDependencyMatches,
   matchingForbiddenDependency,
-  manifestDependencyDisablesDefaultFeatures,
-  parseManifestDependencyFeatureNames,
-  productCoreFeatureAssemblyRules,
+  coreClosedFeatureProfileRules,
   coreProductFullFeatureAssemblyRule,
-  collectProductCoreDependencyManifestPaths,
   ownerCrateFeatureAssemblyRules,
   parseManifestFeatures,
   optionalDependencyFeatureOwnerRules,
@@ -32,6 +29,8 @@ export function runManifestParserSelfTest({
   hasPluginWildcardReexport,
   createFacadeLineChecker,
   escapeRegex,
+  validateExplicitIntegrationTestTopology,
+  agentRuntimeIntegrationTestTargets,
 }) {
   const positiveCases = [
     'bitfun-core = { path = "../core" }',
@@ -56,6 +55,88 @@ export function runManifestParserSelfTest({
     if (isManifestDependencyDeclaration(line, 'bitfun-core')) {
       throw new Error(`manifest parser matched non-dependency declaration: ${line}`);
     }
+  }
+
+  const explicitTestManifest = [
+    '[package]',
+    'autotests = false',
+    ...agentRuntimeIntegrationTestTargets.flatMap(({ name, path }) => [
+      '[[test]]',
+      `name = "${name}"`,
+      `path = "${path}"`,
+    ]),
+    '[lints]',
+  ].join('\n');
+  const explicitTestRoots = new Map(
+    agentRuntimeIntegrationTestTargets.map(({ path }) => [path, '']),
+  );
+  explicitTestRoots.set(
+    'tests/agent_definition_contracts.rs',
+    '#[path = "agent_definition_contracts/prompt_contracts.rs"]\nmod prompt_contracts;',
+  );
+  const explicitTestFixture = {
+    manifestText: explicitTestManifest,
+    expectedTargets: agentRuntimeIntegrationTestTargets,
+    topLevelRustFiles: agentRuntimeIntegrationTestTargets.map(({ path }) => path),
+    rootSources: explicitTestRoots,
+    leafRustFiles: ['tests/agent_definition_contracts/prompt_contracts.rs'],
+  };
+  const topologyErrors = validateExplicitIntegrationTestTopology(explicitTestFixture);
+  if (topologyErrors.length > 0) {
+    throw new Error(`valid explicit integration-test topology failed: ${topologyErrors.join('; ')}`);
+  }
+  const orphanErrors = validateExplicitIntegrationTestTopology({
+    ...explicitTestFixture,
+    leafRustFiles: [
+      ...explicitTestFixture.leafRustFiles,
+      'tests/agent_definition_contracts/orphan_contracts.rs',
+    ],
+  });
+  if (!orphanErrors.some((error) => error.includes('orphan_contracts.rs'))) {
+    throw new Error('explicit integration-test topology must reject an orphan leaf test');
+  }
+  const wrongSectionErrors = validateExplicitIntegrationTestTopology({
+    ...explicitTestFixture,
+    manifestText: explicitTestManifest.replace(
+      '[package]\nautotests = false',
+      '[package]\n[package.metadata.test-topology]\nautotests = false',
+    ),
+  });
+  if (!wrongSectionErrors.some((error) => error.includes('[package]'))) {
+    throw new Error('explicit integration-test topology must read autotests from [package] only');
+  }
+  const commentedReferenceErrors = validateExplicitIntegrationTestTopology({
+    ...explicitTestFixture,
+    rootSources: new Map([
+      ...explicitTestRoots,
+      [
+        'tests/agent_definition_contracts.rs',
+        '/*\n#[path = "agent_definition_contracts/prompt_contracts.rs"]\nmod prompt_contracts;\n*/',
+      ],
+    ]),
+  });
+  if (!commentedReferenceErrors.some((error) => error.includes('prompt_contracts.rs'))) {
+    throw new Error('explicit integration-test topology must reject a commented-out leaf reference');
+  }
+  const duplicateReferenceErrors = validateExplicitIntegrationTestTopology({
+    ...explicitTestFixture,
+    rootSources: new Map([
+      ...explicitTestRoots,
+      [
+        'tests/agent_definition_contracts.rs',
+        `${explicitTestRoots.get('tests/agent_definition_contracts.rs')}\n${explicitTestRoots.get('tests/agent_definition_contracts.rs')}`,
+      ],
+    ]),
+  });
+  if (!duplicateReferenceErrors.some((error) => error.includes('found 2'))) {
+    throw new Error('explicit integration-test topology must reject a duplicate leaf reference');
+  }
+  const unexpectedRootErrors = validateExplicitIntegrationTestTopology({
+    ...explicitTestFixture,
+    topLevelRustFiles: [...explicitTestFixture.topLevelRustFiles, 'tests/unregistered.rs'],
+  });
+  if (!unexpectedRootErrors.some((error) => error.includes('top-level test roots'))) {
+    throw new Error('explicit integration-test topology must reject an unregistered test root');
   }
 
   const parsedDeps = parseManifestDependencies([
@@ -105,29 +186,6 @@ export function runManifestParserSelfTest({
   ) {
     throw new Error('dependency profile parser must detect single-quoted package aliases');
   }
-  const parsedCoreDep = parsedByName.get('bitfun-core');
-  if (!manifestDependencyDisablesDefaultFeatures(parsedCoreDep)) {
-    throw new Error('dependency profile parser must detect default-features = false');
-  }
-  if (!parseManifestDependencyFeatureNames(parsedCoreDep).has('product-full')) {
-    throw new Error('dependency profile parser must detect inline dependency features');
-  }
-  const parsedCoreTableDeps = parseManifestDependencies([
-    '[dependencies."bitfun-core"]',
-    'path = "../core"',
-    'default-features = false',
-    'features = [',
-    '  "product-full",',
-    '  "ssh-remote",',
-    ']',
-  ]);
-  const parsedCoreTableDep = parsedCoreTableDeps.find((dep) => dep.name === 'bitfun-core');
-  if (!manifestDependencyDisablesDefaultFeatures(parsedCoreTableDep)) {
-    throw new Error('dependency profile parser must detect table default-features = false');
-  }
-  if (!parseManifestDependencyFeatureNames(parsedCoreTableDep).has('ssh-remote')) {
-    throw new Error('dependency profile parser must detect table dependency features');
-  }
   if (parsedByName.has('image')) {
     throw new Error('dependency profile parser must ignore feature entries named like dependencies');
   }
@@ -170,58 +228,183 @@ export function runManifestParserSelfTest({
     throw new Error('forbidden dependency checks must reject Cargo package aliases');
   }
 
-  const productCoreRulePaths = new Set(
-    productCoreFeatureAssemblyRules.map((rule) => rule.manifestPath),
-  );
-  for (const manifestPath of [
-    'src/apps/desktop/Cargo.toml',
-    'src/apps/cli/Cargo.toml',
-    'src/apps/server/Cargo.toml',
-    'src/crates/interfaces/acp/Cargo.toml',
-  ]) {
-    if (!productCoreRulePaths.has(manifestPath)) {
-      throw new Error(`product core feature assembly rule must cover ${manifestPath}`);
-    }
-  }
-  for (const rule of productCoreFeatureAssemblyRules) {
-    if (!rule.requiredFeatures.includes('product-full')) {
-      throw new Error(`${rule.manifestPath} must require bitfun-core product-full`);
-    }
-  }
   for (const featureName of [
+    'agent-runtime',
+    'announcement',
+    'canvas-runtime',
+    'debug-log',
+    'dispatch-store',
+    'file-watch',
+    'filesystem',
+    'git',
+    'lsp',
+    'local-storage',
+    'process-runtime',
+    'external-sources',
+    'plugin-runtime',
+    'remote-workspace',
+    'review-platform',
     'ssh-remote',
+    'terminal',
+    'workspace-runtime',
+    'workspace-watch',
     'product-capabilities',
     'product-domains',
-    'service-integrations',
     'tool-packs',
   ]) {
     if (!coreProductFullFeatureAssemblyRule.requiredFeatureRefs.includes(featureName)) {
       throw new Error(`core product-full assembly rule must require ${featureName}`);
     }
   }
-  const discoveredProductCoreManifests = collectProductCoreDependencyManifestPaths([
-    {
-      manifestPath: 'src/apps/desktop/Cargo.toml',
-      text:
-        '[dependencies]\nbitfun-core = { path = "../../crates/assembly/core", default-features = false, features = ["product-full"] }',
-    },
-    {
-      manifestPath: 'src/apps/server/Cargo.toml',
-      text:
-        '[dependencies]\nbitfun-core = { path = "../../crates/assembly/core", default-features = false, features = ["product-full"] }',
-    },
-    {
-      manifestPath: 'src/crates/interfaces/acp/Cargo.toml',
-      text: '[dependencies."bitfun-core"]\npath = "../../assembly/core"\ndefault-features = false\nfeatures = ["product-full"]',
-    },
-  ]);
-  if (
-    discoveredProductCoreManifests.join(',') !==
-    'src/apps/desktop/Cargo.toml,src/apps/server/Cargo.toml,src/crates/interfaces/acp/Cargo.toml'
-  ) {
-    throw new Error(
-      'product core dependency scanner must discover only manifests that depend on bitfun-core',
-    );
+  const closedProfileKey = (manifestPath, featureName) => `${manifestPath}:${featureName}`;
+  const closedCoreProfiles = new Map(
+    coreClosedFeatureProfileRules.map((rule) => [
+      closedProfileKey(rule.manifestPath, rule.featureName),
+      rule,
+    ]),
+  );
+  const coreManifest = 'src/crates/assembly/core/Cargo.toml';
+  const servicesCoreManifest = 'src/crates/services/services-core/Cargo.toml';
+  const expectedClosedCoreProfiles = [
+    [servicesCoreManifest, 'default', []],
+    [
+      servicesCoreManifest,
+      'filesystem',
+      ['dep:base64', 'dep:chrono', 'dep:ignore', 'dep:sha2', 'tokio/fs'],
+    ],
+    [
+      servicesCoreManifest,
+      'local-storage',
+      [
+        'dep:bitfun-core-types',
+        'dep:bitfun-events',
+        'dep:chrono',
+        'dep:fs2',
+        'dep:libc',
+        'dep:sha2',
+        'dep:windows',
+        'tokio/fs',
+        'tokio/sync',
+        'windows/Win32_Foundation',
+        'windows/Win32_Storage_FileSystem',
+      ],
+    ],
+    [
+      servicesCoreManifest,
+      'process-runtime',
+      [
+        'dep:libc',
+        'dep:which',
+        'dep:win32job',
+        'dep:windows',
+        'tokio/io-util',
+        'tokio/process',
+        'windows/Win32_Foundation',
+        'windows/Win32_System_Diagnostics_ToolHelp',
+        'windows/Win32_System_Threading',
+      ],
+    ],
+    [
+      servicesCoreManifest,
+      'workspace-instructions',
+      ['dep:globset', 'dep:serde_yaml', 'tokio/fs', 'tokio/io-util'],
+    ],
+    [
+      servicesCoreManifest,
+      'lsp',
+      [
+        'dep:anyhow',
+        'dep:bitfun-core-types',
+        'dep:notify',
+        'dep:zip',
+        'process-runtime',
+        'tokio/fs',
+        'tokio/io-util',
+        'tokio/sync',
+      ],
+    ],
+    [
+      servicesCoreManifest,
+      'workspace-runtime',
+      [
+        'dep:anyhow',
+        'dep:async-trait',
+        'dep:bitfun-runtime-ports',
+        'dep:dunce',
+        'process-runtime',
+        'tokio/fs',
+        'tokio/io-util',
+        'tokio/sync',
+      ],
+    ],
+    [servicesCoreManifest, 'session-git', ['local-storage', 'dep:git2']],
+    [servicesCoreManifest, 'workspace-identity', ['dep:dunce', 'dep:sha2']],
+    [coreManifest, 'dispatch-store', ['local-storage']],
+    [coreManifest, 'filesystem', ['bitfun-services-core/filesystem']],
+    [coreManifest, 'local-storage', ['bitfun-services-core/local-storage']],
+    [coreManifest, 'process-runtime', ['bitfun-services-core/process-runtime']],
+    [coreManifest, 'lsp', ['dep:notify', 'bitfun-services-core/lsp']],
+    [coreManifest, 'terminal', ['dep:terminal-core']],
+    [
+      coreManifest,
+      'workspace-runtime',
+      [
+        'dep:serde_yaml',
+        'filesystem',
+        'local-storage',
+        'process-runtime',
+        'bitfun-services-core/markdown',
+        'bitfun-services-core/workspace-identity',
+        'bitfun-services-core/workspace-instructions',
+        'bitfun-services-core/workspace-runtime',
+      ],
+    ],
+    [coreManifest, 'workspace-watch', ['workspace-runtime', 'dep:notify']],
+    [
+      coreManifest,
+      'remote-workspace',
+      [
+        'workspace-runtime',
+        'dep:bitfun-services-integrations',
+        'bitfun-services-integrations/remote-ssh',
+      ],
+    ],
+    [
+      coreManifest,
+      'canvas-runtime',
+      ['product-domains', 'bitfun-services-integrations/canvas-runtime'],
+    ],
+    [coreManifest, 'announcement', ['bitfun-services-integrations/announcement']],
+    [coreManifest, 'file-watch', ['bitfun-services-integrations/file-watch']],
+    [coreManifest, 'git', ['bitfun-services-integrations/git']],
+    [coreManifest, 'review-platform', ['bitfun-services-integrations/review-platform']],
+    [coreManifest, 'service-integrations', ['announcement', 'file-watch', 'git', 'review-platform']],
+    [
+      coreManifest,
+      'ssh-remote',
+      ['remote-workspace', 'bitfun-services-integrations/remote-ssh-concrete'],
+    ],
+  ];
+  for (const [manifestPath, featureName, expectedReferences] of expectedClosedCoreProfiles) {
+    const rule = closedCoreProfiles.get(closedProfileKey(manifestPath, featureName));
+    if (!rule?.exact) {
+      throw new Error(`core closed feature profile must cover ${featureName} exactly`);
+    }
+    if (
+      rule.requiredFeatureRefs.length !== expectedReferences.length
+      || expectedReferences.some((reference) => !rule.requiredFeatureRefs.includes(reference))
+    ) {
+      throw new Error(`core closed feature profile has stale references for ${featureName}`);
+    }
+    if (rule.requiredFeatureRefs.some((reference) => reference.includes('product-full'))) {
+      throw new Error(`core closed feature profile must not hide product-full in ${featureName}`);
+    }
+    if (
+      (rule.allowedTransitiveFeatureRefs ?? [])
+        .some((reference) => reference.includes('product-full'))
+    ) {
+      throw new Error(`core closed feature profile must not reach product-full in ${featureName}`);
+    }
   }
   const ownerFeatureRulePaths = new Set(
     ownerCrateFeatureAssemblyRules.map((rule) => rule.manifestPath),
@@ -252,12 +435,25 @@ export function runManifestParserSelfTest({
     'default = ["product-full"]',
     'product-full = [',
     '    "dep:tool-runtime",',
-    '    "service-integrations",',
+    '    "announcement",',
+    '    "file-watch",',
+    '    "git",',
+    '    "review-platform",',
     ']',
-    'service-integrations = ["dep:git2", "dep:rmcp"]',
+    'announcement = ["bitfun-services-integrations/announcement"]',
+    'file-watch = ["bitfun-services-integrations/file-watch"]',
+    'git = ["bitfun-services-integrations/git"]',
+    'review-platform = ["bitfun-services-integrations/review-platform"]',
+    'service-integrations = ["announcement", "file-watch", "git", "review-platform"]',
+    'workspace-runtime = ["dep:serde_yaml", "bitfun-services-core/workspace-runtime"]',
+    'remote-workspace = [',
+    '    "workspace-runtime",',
+    '    "dep:bitfun-services-integrations",',
+    '    "bitfun-services-integrations/remote-ssh",',
+    ']',
     'ssh-remote = [',
+    '    "remote-workspace",',
     '    "bitfun-services-integrations/remote-ssh-concrete",',
-    '    "russh",',
     ']',
     '[dependencies]',
     'git2 = { workspace = true, optional = true }',
@@ -268,11 +464,18 @@ export function runManifestParserSelfTest({
   if (!parsedFeatures.get('product-full')?.refs.includes('dep:tool-runtime')) {
     throw new Error('feature parser must detect multiline dependency feature references');
   }
-  if (!parsedFeatures.get('service-integrations')?.refs.includes('dep:rmcp')) {
+  if (!parsedFeatures.get('service-integrations')?.refs.includes('git')) {
     throw new Error('feature parser must detect inline dependency feature references');
   }
-  if (!parsedFeatures.get('ssh-remote')?.refs.includes('russh')) {
-    throw new Error('feature parser must detect implicit optional dependency feature references');
+  if (
+    !parsedFeatures
+      .get('ssh-remote')
+      ?.refs.includes('bitfun-services-integrations/remote-ssh-concrete')
+  ) {
+    throw new Error('feature parser must detect dependency capability feature references');
+  }
+  if (!parsedFeatures.get('ssh-remote')?.refs.includes('remote-workspace')) {
+    throw new Error('feature parser must detect local capability feature references');
   }
 
   const acceptsGitFacadeLine = createFacadeLineChecker('bitfun_services_integrations::git');
@@ -619,6 +822,10 @@ export function runManifestParserSelfTest({
     'rmcp',
     'image',
     'tool-runtime',
+    'rustls',
+    'rustls-native-certs',
+    'schannel',
+    'win32job',
     'bitfun-relay-service',
     'htmd',
     'legible',
@@ -636,14 +843,27 @@ export function runManifestParserSelfTest({
   );
   const coreFullyMigratedDeps = new Set([
     'aes',
+    'aes-gcm',
     'bitfun-relay-service',
+    'eventsource-stream',
+    'git2',
+    'glob',
+    'globset',
     'hostname',
     'htmd',
     'legible',
     'local-ip-address',
     'mac_address',
     'qrcode',
+    'rand',
     'readability-js',
+    'rmcp',
+    'russh',
+    'rustls',
+    'rustls-native-certs',
+    'schannel',
+    'sse-stream',
+    'win32job',
     'x25519-dalek',
   ]);
   for (const dep of coreProfile?.forbiddenNonOptionalDeps ?? []) {
@@ -654,29 +874,113 @@ export function runManifestParserSelfTest({
       throw new Error(`core optional dependency owner rule must cover forbidden dependency ${dep}`);
     }
   }
-  for (const dep of ['git2', 'rmcp', 'image', 'tool-runtime']) {
+  for (const dep of ['image', 'tool-runtime']) {
     if (!coreOptionalOwnerDeps.has(dep)) {
       throw new Error(`core optional dependency owner rule must cover ${dep}`);
     }
   }
-  const coreGit2Owner = coreOptionalOwnerRule?.dependencies.find(
-    (dependency) => dependency.depName === 'git2',
-  );
-  if (!coreGit2Owner?.ownerFeatures.includes('service-integrations')) {
-    throw new Error('core optional dependency owner rule must keep git2 under service-integrations');
-  }
   const servicesOptionalOwnerRule = optionalDependencyFeatureOwnerRules.find(
     (rule) => rule.crateName === 'services-integrations',
   );
+  const workspaceReqwestRule = requiredContentRules.find((rule) => rule.path === 'Cargo.toml');
+  const workspaceReqwestRuleText = workspaceReqwestRule?.patterns
+    .map((pattern) => pattern.regex.source)
+    .join('\n') ?? '';
+  for (const featureName of ['http2', 'json', 'stream', 'multipart', 'query', 'form']) {
+    if (!workspaceReqwestRuleText.includes(featureName)) {
+      throw new Error(`workspace Reqwest boundary must allow only reviewed feature ${featureName}`);
+    }
+  }
+  const workspaceReqwestPattern = workspaceReqwestRule?.patterns[0]?.regex;
+  const reviewedReqwestDeclaration =
+    'reqwest = { version = "0.13.4", default-features = false, features = ["http2", "json", "stream", "multipart", "query", "form"] }';
+  if (!workspaceReqwestPattern?.test(reviewedReqwestDeclaration)) {
+    throw new Error('workspace Reqwest boundary must accept the reviewed transport/data profile');
+  }
+  for (const featureName of ['default-tls', 'http3', '__native-tls']) {
+    const expandedDeclaration = reviewedReqwestDeclaration.replace(
+      '"form"]',
+      `"form", "${featureName}"]`,
+    );
+    if (workspaceReqwestPattern.test(expandedDeclaration)) {
+      throw new Error(`workspace Reqwest boundary must reject TLS-enabling feature ${featureName}`);
+    }
+  }
+  for (const path of [
+    'src/apps/cli/Cargo.toml',
+    'src/apps/desktop/Cargo.toml',
+    'src/crates/adapters/ai-adapters/Cargo.toml',
+    'src/crates/services/miniapp-market-service/Cargo.toml',
+    'src/crates/services/skin-market-service/Cargo.toml',
+  ]) {
+    const reqwestRule = requiredContentRules.find((rule) => rule.path === path);
+    const reqwestRuleText = reqwestRule?.patterns
+      .map((pattern) => pattern.regex.source)
+      .join('\n') ?? '';
+    if (!reqwestRuleText.includes('rustls')) {
+      throw new Error(`${path} must guard the explicit Reqwest Rustls client dependency`);
+    }
+  }
   const servicesCoreOptionalOwnerRule = optionalDependencyFeatureOwnerRules.find(
     (rule) => rule.crateName === 'services-core',
   );
   const servicesCoreDunceOwner = servicesCoreOptionalOwnerRule?.dependencies.find(
     (dependency) => dependency.depName === 'dunce',
   );
-  for (const feature of ['runtime-ownership', 'workspace-runtime']) {
+  for (const feature of ['runtime-ownership', 'workspace-identity', 'workspace-runtime']) {
     if (!servicesCoreDunceOwner?.ownerFeatures.includes(feature)) {
       throw new Error(`services-core ${feature} must own optional dependency dunce`);
+    }
+  }
+  const expectedServicesCoreOwners = new Map([
+    ['base64', ['filesystem']],
+    ['bitfun-core-types', ['local-storage', 'lsp']],
+    ['bitfun-events', ['local-storage']],
+    ['chrono', ['filesystem', 'local-storage']],
+    ['fs2', ['local-storage', 'runtime-ownership']],
+    ['git2', ['session-git']],
+    ['globset', ['workspace-instructions']],
+    ['ignore', ['filesystem']],
+    ['libc', ['local-storage', 'process-runtime']],
+    ['notify', ['lsp']],
+    ['rusqlite', ['permission']],
+    ['serde_yaml', ['markdown', 'workspace-instructions']],
+    [
+      'sha2',
+      [
+        'dispatch-workspace',
+        'filesystem',
+        'local-storage',
+        'runtime-ownership',
+        'workspace-identity',
+      ],
+    ],
+    ['which', ['process-runtime']],
+    ['win32job', ['process-runtime']],
+    ['windows', ['local-storage', 'process-runtime']],
+    ['zip', ['lsp']],
+  ]);
+  for (const [dependencyName, ownerFeatures] of expectedServicesCoreOwners) {
+    const dependency = servicesCoreOptionalOwnerRule?.dependencies.find(
+      (candidate) => candidate.depName === dependencyName,
+    );
+    for (const featureName of ownerFeatures) {
+      if (!dependency?.ownerFeatures.includes(featureName)) {
+        throw new Error(`services-core ${featureName} must own optional dependency ${dependencyName}`);
+      }
+    }
+  }
+  const servicesCoreOptionalOwnerDeps = new Set(
+    servicesCoreOptionalOwnerRule?.dependencies.map((dependency) => dependency.depName) ?? [],
+  );
+  const servicesCoreDefaultProfile = dependencyProfileRules.find(
+    (rule) => rule.crateName === 'services-core',
+  );
+  for (const dep of servicesCoreDefaultProfile?.forbiddenNonOptionalDeps ?? []) {
+    if (!servicesCoreOptionalOwnerDeps.has(dep)) {
+      throw new Error(
+        `services-core optional dependency owner rule must cover forbidden dependency ${dep}`,
+      );
     }
   }
   const servicesOptionalOwnerDeps = new Set(
@@ -724,6 +1028,14 @@ export function runManifestParserSelfTest({
       throw new Error(`services-integrations plugin-source must own optional dependency ${dep}`);
     }
   }
+  for (const dep of ['bitfun-product-domains', 'image']) {
+    const owner = servicesOptionalOwnerRule?.dependencies.find(
+      (dependency) => dependency.depName === dep,
+    );
+    if (!owner?.ownerFeatures.includes('miniapp-market')) {
+      throw new Error(`services-integrations miniapp-market must own optional dependency ${dep}`);
+    }
+  }
   for (const dep of ['sha2', 'windows']) {
     const owner = servicesOptionalOwnerRule?.dependencies.find(
       (dependency) => dependency.depName === dep,
@@ -738,6 +1050,14 @@ export function runManifestParserSelfTest({
     );
     if (!owner?.ownerFeatures.includes('process-tree')) {
       throw new Error(`services-integrations process-tree must delegate to ${dep}`);
+    }
+  }
+  for (const dep of ['async-trait', 'bitfun-runtime-ports']) {
+    const owner = servicesOptionalOwnerRule?.dependencies.find(
+      (dependency) => dependency.depName === dep,
+    );
+    if (!owner?.ownerFeatures.includes('git')) {
+      throw new Error(`services-integrations git must own optional dependency ${dep}`);
     }
   }
   const productDomainsOptionalOwnerRule = optionalDependencyFeatureOwnerRules.find(
@@ -901,6 +1221,9 @@ export function runManifestParserSelfTest({
   const staticHookSupportPublicApiRule = publicApiAllowlistRules.find(
     (rule) => rule.path === 'src/crates/adapters/static-hook-support/src/lib.rs',
   );
+  const userInstructionSourceServicePublicApiRule = publicApiAllowlistRules.find(
+    (rule) => rule.path === 'src/crates/services/services-core/src/local_instructions.rs',
+  );
   const externalSubagentPublicApiRule = publicApiAllowlistRules.find(
     (rule) => rule.path === 'src/crates/contracts/product-domains/src/external_subagents.rs',
   );
@@ -909,6 +1232,9 @@ export function runManifestParserSelfTest({
   );
   const externalHookCatalogPublicApiRule = publicApiAllowlistRules.find(
     (rule) => rule.path === 'src/crates/contracts/product-domains/src/external_hook_catalog.rs',
+  );
+  const workspaceReferencePublicApiRule = publicApiAllowlistRules.find(
+    (rule) => rule.path === 'src/crates/contracts/product-domains/src/workspace_references.rs',
   );
   const externalSourcePublicApiRule = publicApiAllowlistRules.find(
     (rule) => rule.path === 'src/crates/contracts/product-domains/src/external_sources.rs',
@@ -1034,23 +1360,74 @@ export function runManifestParserSelfTest({
   ).map((entry) => entry.symbol);
   if (
     opencodeAdapterPublicApiSymbols.join(',') !==
-    'load_opencode_package_adapter,OpenCodeCommandProvider,OpenCodeCommandProviderOptions,OpenCodeConfiguredSkillRoot,OpenCodeSkillRootProvider,OpenCodeSkillRootProviderOptions,OpenCodeToolProvider,OpenCodeToolProviderOptions,OpenCodeSubagentProvider,OpenCodeSubagentProviderOptions,OpenCodeMcpProvider,OpenCodeMcpProviderOptions,OpenCodeHookProvider,OpenCodeHookProviderOptions'
+    'load_opencode_package_adapter,OpenCodeCommandProvider,OpenCodeCommandProviderOptions,OpenCodeConfiguredSkillRoot,OpenCodeSkillRootProvider,OpenCodeSkillRootProviderOptions,OpenCodeToolProvider,OpenCodeToolProviderOptions,OpenCodeSubagentProvider,OpenCodeSubagentProviderOptions,OpenCodeMcpProvider,OpenCodeMcpProviderOptions,OpenCodeHookProvider,OpenCodeHookProviderOptions,OpenCodeWorkspaceReferenceProvider,OpenCodeWorkspaceReferenceProviderOptions,load_opencode_user_instructions,OpenCodeInstructionSourceOptions'
   ) {
     throw new Error(
-      'OpenCode adapter public API budget must stay limited to the reviewed package factory and capability-specific command, configured Skill root, tool, subagent, MCP, and static Hook providers',
+      'OpenCode adapter public API budget must stay limited to the reviewed package factory and capability-specific command, configured Skill root, tool, subagent, MCP, static Hook, workspace Reference, and user Instruction providers',
     );
   }
+  const opencodeInstructionSymbols = new Set([
+    'load_opencode_user_instructions',
+    'OpenCodeInstructionSourceOptions',
+  ]);
   for (const entry of opencodeAdapterPublicApiRule.allowedSymbolEntries) {
     for (const field of ['owner', 'consumer', 'verification', 'p0', 'contractSlice', 'rationale', 'exit']) {
       if (!entry[field]) {
         throw new Error(`OpenCode adapter public API entry must declare ${field}: ${entry.symbol}`);
       }
     }
-    if (entry.contractSlice !== 'opencode-adapter-boundary') {
+    const expectedContractSlice = opencodeInstructionSymbols.has(entry.symbol)
+      ? 'user-instruction-source-boundary'
+      : 'opencode-adapter-boundary';
+    if (entry.contractSlice !== expectedContractSlice) {
       throw new Error(`OpenCode adapter public API entry uses wrong contractSlice: ${entry.symbol}`);
     }
     if (entry.wireImpact !== false) {
       throw new Error(`OpenCode adapter public API entry must not claim wire impact: ${entry.symbol}`);
+    }
+  }
+  if (!publicApiContractSlices.includes('user-instruction-source-boundary')) {
+    throw new Error('user Instruction sources must have an independent contract slice');
+  }
+  for (const [label, rule, requiredSymbols] of [
+    ['OpenCode Instruction adapter', opencodeAdapterPublicApiRule, ['load_opencode_user_instructions', 'OpenCodeInstructionSourceOptions']],
+    ['Claude Code Instruction adapter', claudeHookAdapterPublicApiRule, ['load_claude_code_user_instructions', 'ClaudeCodeInstructionSourceOptions']],
+    ['Codex Instruction adapter', codexHookAdapterPublicApiRule, ['load_codex_user_instructions', 'CodexInstructionSourceOptions']],
+  ]) {
+    if (!rule || requiredSymbols.some((symbol) => !rule.allowedSymbolEntries.some(
+      (entry) => entry.symbol === symbol
+        && entry.contractSlice === 'user-instruction-source-boundary'
+        && entry.wireImpact === false,
+    ))) {
+      throw new Error(`${label} must have a narrow consumer-backed public API budget`);
+    }
+  }
+  const expectedUserInstructionSourceServiceSymbols = [
+    'MAX_LOCAL_INSTRUCTION_FILE_BYTES',
+    'MAX_LOCAL_INSTRUCTION_FILES',
+    'MAX_LOCAL_INSTRUCTION_TOTAL_BYTES',
+    'LocalInstructionFile',
+    'LocalInstructionFiles',
+    'local_instruction_path_exists',
+    'read_local_instruction_file',
+    'read_local_text_file',
+  ];
+  if (
+    !userInstructionSourceServicePublicApiRule
+    || (userInstructionSourceServicePublicApiRule.allowedSymbolEntries || [])
+      .map((entry) => entry.symbol)
+      .join(',') !== expectedUserInstructionSourceServiceSymbols.join(',')
+  ) {
+    throw new Error('services-core user Instruction support must have an exact public API budget');
+  }
+  for (const entry of userInstructionSourceServicePublicApiRule.allowedSymbolEntries) {
+    for (const field of ['owner', 'consumer', 'verification', 'p0', 'contractSlice', 'rationale', 'exit']) {
+      if (!entry[field]) {
+        throw new Error(`services-core user Instruction public API entry must declare ${field}: ${entry.symbol}`);
+      }
+    }
+    if (entry.contractSlice !== 'user-instruction-source-boundary' || entry.wireImpact !== false) {
+      throw new Error(`services-core user Instruction public API entry has the wrong boundary: ${entry.symbol}`);
     }
   }
   for (const [label, rule, requiredSymbols] of [
@@ -1072,6 +1449,9 @@ export function runManifestParserSelfTest({
   }
   if (!externalHookCatalogPublicApiRule) {
     throw new Error('external Hook catalog contracts must have an independent public API budget rule');
+  }
+  if (!workspaceReferencePublicApiRule) {
+    throw new Error('workspace Reference contracts must have an independent public API budget rule');
   }
   if (!publicApiContractSlices.includes('external-source-hook-contract')) {
     throw new Error('external Hook contracts must have an independent contract slice');
@@ -1119,6 +1499,26 @@ export function runManifestParserSelfTest({
   if (!publicApiContractSlices.includes('external-source-control-contract')) {
     throw new Error('external source control contracts must have an independent contract slice');
   }
+  if (!publicApiContractSlices.includes('external-source-reference-contract')) {
+    throw new Error('workspace Reference contracts must have an independent contract slice');
+  }
+  for (const requiredSymbol of [
+    'ExternalWorkspaceReferenceProviderIdentity',
+    'ExternalWorkspaceReferenceDefinition',
+    'ExternalWorkspaceReferenceSourceProvider',
+    'WorkspaceReferenceCatalogEntry',
+    'WorkspaceReferenceSnapshot',
+  ]) {
+    if (!workspaceReferencePublicApiRule.allowedSymbolEntries.some(
+      (entry) => entry.symbol === requiredSymbol
+        && entry.contractSlice === 'external-source-reference-contract'
+        && entry.wireImpact === true
+        && entry.consumer
+        && entry.verification,
+    )) {
+      throw new Error(`workspace Reference public API budget is missing a consumer-backed symbol: ${requiredSymbol}`);
+    }
+  }
   for (const requiredSymbol of [
     'EXTERNAL_SOURCE_CONTROL_SCHEMA_V1',
     'ExternalSourceControlSnapshotV1',
@@ -1159,6 +1559,20 @@ export function runManifestParserSelfTest({
     throw new Error('external source coordinator public API budget is missing the typed Hook discovery result');
   }
   for (const requiredSymbol of [
+    'ExternalWorkspaceReferenceCoordinator',
+    'ExternalWorkspaceReferenceCoordinatorSnapshot',
+    'ExternalWorkspaceReferenceDiscoveryRequest',
+    'ExternalWorkspaceReferenceDiscoveryResult',
+  ]) {
+    if (!externalSourceCoordinatorPublicApiRule.allowedSymbolEntries.some(
+      (entry) => entry.symbol === requiredSymbol
+        && entry.contractSlice === 'external-source-reference-contract'
+        && entry.wireImpact === false,
+    )) {
+      throw new Error(`external source coordinator public API budget is missing workspace Reference symbol: ${requiredSymbol}`);
+    }
+  }
+  for (const requiredSymbol of [
     'ExternalSourceControlSnapshotV1',
     'ExternalSourceControlRequestV1',
     'get_external_source_control_snapshot',
@@ -1171,7 +1585,18 @@ export function runManifestParserSelfTest({
       throw new Error(`external source core public API budget is missing control symbol: ${requiredSymbol}`);
     }
   }
+  for (const requiredSymbol of ['EXTERNAL_CAPABILITY_REFERENCE', 'workspace_reference_snapshot']) {
+    if (!externalSourceCorePublicApiRule?.allowedSymbolEntries.some(
+      (entry) => entry.symbol === requiredSymbol
+        && entry.consumer
+        && entry.verification,
+    )) {
+      throw new Error(`external source core public API budget is missing workspace Reference symbol: ${requiredSymbol}`);
+    }
+  }
   for (const requiredSymbol of [
+    'ExternalMcpTimeouts',
+    'MAX_EXTERNAL_MCP_TIMEOUT_MS',
     'ExternalMcpServerDefinition',
     'ExternalMcpSourceProvider',
     'PreparedExternalMcpServer',
@@ -1248,6 +1673,14 @@ export function runManifestParserSelfTest({
     'src/crates/services/services-integrations/Cargo.toml',
   )) {
     throw new Error('speech engine manifest guard must allow only its integration service owner');
+  }
+  const rmcpManifestRule = forbiddenManifestDependencyRules.find((rule) =>
+    rule.dependencyNames?.includes('rmcp'),
+  );
+  if (!rmcpManifestRule?.allowManifestPaths?.includes(
+    'src/crates/services/services-integrations/Cargo.toml',
+  )) {
+    throw new Error('RMCP manifest guard must allow only its integration service owner');
   }
   const coreSpeechOwnerRule = forbiddenContentUnderRules.find(
     (rule) => rule.path === 'src/crates/assembly/core/src/service',
@@ -1337,6 +1770,12 @@ export function runManifestParserSelfTest({
   }
   if (!noCoreDependencyCrates.includes('plugin-runtime-client')) {
     throw new Error('plugin-runtime-client must be covered by the no-core dependency guard');
+  }
+  if (
+    crateLayoutRules.find((rule) => rule.crateName === 'agent-content')?.layer !== 'assembly'
+    || !noCoreDependencyCrates.includes('agent-content')
+  ) {
+    throw new Error('agent-content must stay an assembly-owned leaf independent from bitfun-core');
   }
   for (const adapterCrate of ['claude-code-adapter', 'codex-adapter', 'static-hook-support']) {
     if (crateLayoutRules.find((rule) => rule.crateName === adapterCrate)?.layer !== 'adapters') {
@@ -1924,7 +2363,7 @@ export function runManifestParserSelfTest({
       contracts: ['project_agentic_frontend_event', 'projected.event_name.as_str()'],
     },
     {
-      path: 'src/crates/execution/runtime-services/tests/runtime_services_contracts.rs',
+      path: 'src/crates/execution/runtime-services/src/runtime_services_contracts.rs',
       contracts: [
         'builder_requires_mandatory_runtime_services',
         'fake_provider_registers_required_and_remote_services_through_registry',
@@ -2037,7 +2476,7 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/execution/agent-runtime/tests/sdk_smoke.rs',
+      path: 'src/crates/execution/agent-runtime/tests/agent_session_contracts/sdk_smoke.rs',
       contracts: [
         'sdk_facade_exposes_versioned_preview_compatibility_contract',
         'sdk_facade_runs_with_fake_provider_and_local_event_stream',
@@ -2075,7 +2514,7 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/execution/agent-runtime/tests/agent_registry_contracts.rs',
+      path: 'src/crates/execution/agent-runtime/tests/agent_definition_contracts/agent_registry_contracts.rs',
       contracts: [
         'visibility_policy_supports_public_restricted_hidden_and_denied_parents',
         'availability_preserves_builtin_project_and_user_override_layering',
@@ -2118,14 +2557,14 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/execution/agent-runtime/tests/custom_subagent_discovery_contracts.rs',
+      path: 'src/crates/execution/agent-runtime/tests/agent_definition_contracts/custom_subagent_discovery_contracts.rs',
       contracts: [
         'custom_subagent_discovery_preserves_bitfun_priority_and_ignores_foreign_agent_dirs',
         'custom_subagent_discovery_reports_parse_errors_without_dropping_valid_files',
       ],
     },
     {
-      path: 'src/crates/execution/agent-runtime/tests/custom_subagent_contracts.rs',
+      path: 'src/crates/execution/agent-runtime/tests/agent_definition_contracts/custom_subagent_contracts.rs',
       contracts: [
         'custom_subagent_defaults_match_existing_front_matter_contract',
         'custom_subagent_tool_front_matter_keeps_existing_comma_format',
@@ -2151,7 +2590,7 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/execution/agent-runtime/tests/post_call_hook_contracts.rs',
+      path: 'src/crates/execution/agent-runtime/tests/agent_interaction_contracts/post_call_hook_contracts.rs',
       contracts: [
         'successful_tool_call_routes_to_shared_context_measurement_hook',
         'runtime_hook_registry_preserves_order_timeout_and_error_policy',
@@ -2160,7 +2599,7 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/execution/agent-runtime/tests/post_call_hook_execution_contracts.rs',
+      path: 'src/crates/execution/agent-runtime/tests/agent_interaction_contracts/post_call_hook_execution_contracts.rs',
       contracts: ['successful_tool_post_call_executor_runs_deep_review_measurement_route'],
     },
     {
@@ -2336,7 +2775,7 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/execution/agent-runtime/tests/scheduler_contracts.rs',
+      path: 'src/crates/execution/agent-runtime/tests/agent_session_contracts/scheduler_contracts.rs',
       contracts: [
         'background_delivery_injects_when_session_is_processing',
         'background_delivery_starts_agent_session_follow_up_when_session_is_not_processing',
@@ -2374,7 +2813,7 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/execution/agent-runtime/tests/thread_goal_contracts.rs',
+      path: 'src/crates/execution/agent-runtime/tests/agent_long_horizon_contracts/thread_goal_contracts.rs',
       contracts: [
         'set_thread_goal_creates_new_active_goal_with_trimmed_objective',
         'continuation_outcome_increments_active_goal_and_builds_plan',
@@ -2456,7 +2895,7 @@ export function runManifestParserSelfTest({
       contracts: ['DialogTurnCancellationTokenStore', 'get_or_insert_new', 'is_cancelled'],
     },
     {
-      path: 'src/crates/execution/agent-runtime/tests/prompt_cache_contracts.rs',
+      path: 'src/crates/execution/agent-runtime/tests/agent_definition_contracts/prompt_cache_contracts.rs',
       contracts: [
         'prompt_cache_policy_keeps_existing_default_persistence_ttl',
         'prompt_cache_lookup_preserves_identity_and_expiry_semantics',
@@ -2464,7 +2903,7 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/execution/agent-runtime/tests/prompt_contracts.rs',
+      path: 'src/crates/execution/agent-runtime/tests/agent_definition_contracts/prompt_contracts.rs',
       contracts: [
         'user_context_policy_preserves_order_and_deduplicates_sections',
         'tool_listing_sections_render_only_present_sections',
@@ -2476,7 +2915,7 @@ export function runManifestParserSelfTest({
       contracts: ['FinishReason', 'session_state_label', 'turn_outcome_kind'],
     },
     {
-      path: 'src/crates/execution/agent-runtime/tests/events_contracts.rs',
+      path: 'src/crates/execution/agent-runtime/tests/agent_session_contracts/events_contracts.rs',
       contracts: [
         'finish_reason_display_preserves_wire_labels',
         'session_state_labels_match_existing_event_wire_values',
@@ -2542,7 +2981,7 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/execution/agent-runtime/tests/scheduled_job_contracts.rs',
+      path: 'src/crates/execution/agent-runtime/tests/agent_session_contracts/scheduled_job_contracts.rs',
       contracts: [
         'manual_trigger_coalesces_existing_pending_run',
         'due_scheduled_trigger_coalesces_when_active_or_pending',
@@ -2944,6 +3383,7 @@ export function runManifestParserSelfTest({
         'RemoteControlStatePort',
         'generic attachments',
         'DialogTriggerSource',
+        'bitfun_agent_runtime::subagent_task::subagent_task_completion_result',
       ],
     },
     {
@@ -3202,7 +3642,7 @@ export function runManifestParserSelfTest({
         'remote_connect_cancel_and_restore_policy_preserve_runtime_decisions',
         'remote_connect_dialog_submit_outcome_builder_preserves_scheduler_shape',
         'remote_chat_history_assembly_preserves_message_shape_and_item_order',
-        'remote_chat_history_assembly_skips_in_progress_assistant_history',
+        'remote_chat_history_assembly_preserves_in_progress_assistant_history',
         'remote_connect_file_transfer_policy_preserves_limits_and_chunk_ranges',
         'remote_connect_file_transfer_policy_preserves_name_fallback',
         'remote_connect_tracker_keeps_finished_turn_snapshot_until_persistence_finalizes',
@@ -3589,9 +4029,17 @@ export function runManifestParserSelfTest({
       ],
     },
     {
+      path: 'src/crates/execution/agent-runtime/src/subagent_task.rs',
+      contracts: [
+        'SubagentTaskCompletionResultInput',
+        'subagent_task_completion_result',
+      ],
+    },
+    {
       path: 'src/crates/execution/agent-runtime/src/deep_review/task_execution.rs',
       contracts: [
         'deep_review_task_completion_result',
+        'crate::subagent_task::subagent_task_completion_result',
         'deep_review_cancelled_reviewer_result',
         'should_emit_deep_review_retry_guidance',
         'deep_review_retry_guidance',
@@ -3615,7 +4063,6 @@ export function runManifestParserSelfTest({
     {
       path: 'src/crates/assembly/core/src/agentic/deep_review/task_adapter.rs',
       contracts: [
-        'runtime_task_execution::deep_review_task_completion_result',
         'runtime_task_execution::deep_review_cancelled_reviewer_result',
         'runtime_task_execution::should_emit_deep_review_retry_guidance',
         'runtime_task_execution::deep_review_retry_guidance',
@@ -3640,7 +4087,7 @@ export function runManifestParserSelfTest({
       path: 'src/crates/assembly/core/src/agentic/tools/implementations/task/execution.rs',
       contracts: [
         'deep_review_task_adapter::deep_review_retry_guidance',
-        'deep_review_task_adapter::deep_review_task_completion_result',
+        'bitfun_agent_runtime::subagent_task::subagent_task_completion_result',
         'DeepReviewProviderCapacityRetryRuntime::default',
         'DeepReviewProviderCapacityRetryDecision::WaitForCapacity',
       ],
@@ -3654,7 +4101,7 @@ export function runManifestParserSelfTest({
       contracts: ['renumber_research_report', 'ResearchCitationRenumberOutput', 'ResearchCitationDisplayMapEntry', 'rejected_index_rows_dropped', 'should_post_process_research_report'],
     },
     {
-      path: 'src/crates/execution/agent-runtime/tests/deep_research_contracts.rs',
+      path: 'src/crates/execution/agent-runtime/tests/agent_long_horizon_contracts/deep_research_contracts.rs',
       contracts: ['deep_research_citation_renumber_owner_preserves_report_and_display_map_contracts', 'deep_research_citation_renumber_owner_is_idempotent_without_citations'],
     },
     {
@@ -3714,7 +4161,7 @@ export function runManifestParserSelfTest({
         'bitfun-product-capabilities = \\{ path = "\\.\\.\\/product-capabilities", default-features = false, optional = true \\}',
         'bitfun-ai-adapters = \\{ path = "\\.\\.\\/\\.\\.\\/adapters\\/ai-adapters", optional = true \\}',
         'bitfun-tool-packs = \\{ path = "\\.\\.\\/\\.\\.\\/execution\\/tool-provider-groups", default-features = false, optional = true \\}',
-        'bitfun-services-integrations = \\{ path = "\\.\\.\\/\\.\\.\\/services\\/services-integrations", default-features = false, features = \\["remote-ssh"\\] \\}',
+        'bitfun-services-integrations = \\{ path = "\\.\\.\\/\\.\\.\\/services\\/services-integrations", default-features = false, optional = true \\}',
         'bitfun-product-domains = \\{ path = "\\.\\.\\/\\.\\.\\/contracts\\/product-domains", default-features = false, optional = true \\}',
         'dep:bitfun-ai-adapters',
         'ai-adapter-runtime',
@@ -3725,7 +4172,10 @@ export function runManifestParserSelfTest({
         'dep:bitfun-product-capabilities',
         'dep:bitfun-tool-packs',
         'bitfun-tool-packs\\/product-full',
-        'bitfun-services-integrations\\/product-full',
+        'agent-runtime',
+        'bitfun-services-integrations\\/mcp',
+        'bitfun-services-integrations\\/remote-connect',
+        'bitfun-services-integrations\\/workspace-search',
         'dep:bitfun-product-domains',
         'bitfun-product-domains\\/product-full',
       ],
@@ -3733,12 +4183,14 @@ export function runManifestParserSelfTest({
     {
       path: 'src/crates/assembly/core/src/lib.rs',
       contracts: [
-        'feature = "product-full"',
+        'feature = "agent-runtime"',
         'pub mod agentic',
+        'feature = "external-sources"',
+        'mod external_subagents',
         'feature = "product-domains"',
         'pub mod function_agents',
         'pub mod miniapp',
-        'feature = "service-integrations"',
+        'feature = "agent-runtime"',
         'service_agent_runtime',
       ],
     },
@@ -3748,7 +4200,7 @@ export function runManifestParserSelfTest({
         'feature = "ai-adapter-runtime"',
         'pub mod ai',
         'pub mod subscription_auth',
-        'feature = "product-full"',
+        'feature = "debug-log"',
         'pub mod debug_log',
       ],
     },
@@ -3764,24 +4216,32 @@ export function runManifestParserSelfTest({
     {
       path: 'src/crates/assembly/core/src/service/mod.rs',
       contracts: [
-        'feature = "service-integrations"',
+        'feature = "announcement"',
+        'pub mod announcement',
+        'feature = "file-watch"',
+        'file_watch',
+        'feature = "git"',
         'pub mod git',
+        'feature = "agent-runtime"',
         'pub mod mcp',
+        'feature = "agent-runtime"',
         'pub mod remote_connect',
+        'feature = "review-platform"',
         'pub mod review_platform',
-        'feature = "product-full"',
+        'feature = "agent-runtime"',
         'pub mod search',
+        'feature = "agent-runtime"',
         'pub mod snapshot',
       ],
     },
     {
       path: 'src/crates/assembly/core/src/service/config/mod.rs',
-      contracts: ['feature = "product-full"', 'mode_config_canonicalizer'],
+      contracts: ['feature = "agent-runtime"', 'mode_config_canonicalizer'],
     },
     {
       path: 'src/crates/assembly/core/src/service/workspace/manager.rs',
       contracts: [
-        'feature = "service-integrations"',
+        'feature = "git"',
         'global_worktree_topology_service',
         'return None',
       ],
@@ -3789,12 +4249,21 @@ export function runManifestParserSelfTest({
     {
       path: 'src/crates/assembly/core/src/service/workspace_runtime/service.rs',
       contracts: [
-        'feature = "product-full"',
+        'feature = "agent-runtime"',
         'WorkspaceBinding',
         'ensure_runtime_for_workspace_binding',
         'merge_legacy_session_store',
         'move_legacy_path',
         'session_store_migration_error',
+      ],
+    },
+    {
+      path: 'src/crates/assembly/core/src/service/dispatch/mod.rs',
+      contracts: [
+        'feature = "agent-runtime"',
+        'not\\(feature = "agent-runtime"\\)',
+        'release_baseline_claim',
+        'DispatchStoreError::ClaimRelease',
       ],
     },
     {
@@ -4066,7 +4535,7 @@ export function runManifestParserSelfTest({
       contracts: ['RemoteTerminalManager', 'PtyCommand', 'channel.window_change'],
     },
     {
-      path: 'src/crates/services/services-integrations/src/remote_ssh/paths.rs',
+      path: 'src/crates/services/services-core/src/workspace_identity.rs',
       contracts: [
         'WorkspaceSessionIdentity',
         'workspace_session_identity',
@@ -4369,6 +4838,30 @@ export function runManifestParserSelfTest({
     }
   }
 
+  const dispatchClaimReleaseRule = requiredContentRules
+    .find((rule) => rule.path === 'src/crates/assembly/core/src/service/dispatch/mod.rs')
+    ?.patterns.find((pattern) => pattern.message === 'no-default dispatch claim release must fail closed');
+  if (!dispatchClaimReleaseRule) {
+    throw new Error('missing no-default dispatch claim release boundary rule');
+  }
+  const failClosedDispatchRelease = `
+#[cfg(not(feature = "agent-runtime"))]
+async fn release_baseline_claim(release: BaselineClaimRelease) -> Result<(), DispatchStoreError> {
+    Err(DispatchStoreError::ClaimRelease(format!("job_id={}", release.job_id)))
+}`;
+  const unsafeDispatchRelease = `
+#[cfg(not(feature = "agent-runtime"))]
+async fn release_baseline_claim(release: BaselineClaimRelease) -> Result<(), DispatchStoreError> {
+    let _ignored = DispatchStoreError::ClaimRelease(format!("job_id={}", release.job_id));
+    Ok(())
+}`;
+  if (!dispatchClaimReleaseRule.regex.test(failClosedDispatchRelease)) {
+    throw new Error('no-default dispatch claim release rule must accept a direct fail-closed return');
+  }
+  if (dispatchClaimReleaseRule.regex.test(unsafeDispatchRelease)) {
+    throw new Error('no-default dispatch claim release rule must reject a discarded error followed by success');
+  }
+
   const sessionControlRuleText = forbiddenRuleTextForPath(
     'src/crates/assembly/core/src/agentic/tools/implementations/session_control_tool.rs',
   );
@@ -4377,7 +4870,7 @@ export function runManifestParserSelfTest({
   }
 
   const sdkSmokeRuleText = forbiddenRuleTextForPath(
-    'src/crates/execution/agent-runtime/tests/sdk_smoke.rs',
+    'src/crates/execution/agent-runtime/tests/agent_session_contracts/sdk_smoke.rs',
   );
   for (const forbiddenSdkSmokeImport of [
     'bitfun_runtime_services::test_support',
@@ -4856,6 +5349,7 @@ export function runManifestParserSelfTest({
       'DetachSession',
       'ManageModels',
       'ManageAgents',
+      'LineageSessionTranscript',
     ].every((name) => runtimeIpcOperationPattern.test(`    ${name},`)) ||
     runtimeIpcOperationPattern.test('    Health,') ||
     runtimeIpcOperationPattern.test('    DeleteSession {') ||
@@ -4863,8 +5357,31 @@ export function runManifestParserSelfTest({
     runtimeIpcOperationPattern.test('    RenameSession {') ||
     runtimeIpcOperationPattern.test('    UpdateSessionMode {') ||
     runtimeIpcOperationPattern.test('    UpdateSessionModel {') ||
+    runtimeIpcOperationPattern.test('    UndoSession {') ||
+    runtimeIpcOperationPattern.test('    RedoSession {') ||
+    runtimeIpcOperationPattern.test('    SearchWorkspaceReferences {') ||
+    runtimeIpcOperationPattern.test('    WorkspaceReferencesForMessage {') ||
+    runtimeIpcOperationPattern.test('    GetSessionLineage {') ||
+    runtimeIpcOperationPattern.test('    InspectLineageSession {') ||
+    runtimeIpcOperationPattern.test('    CancelLineageSession {') ||
+    runtimeIpcOperationPattern.test('    SessionLineage {') ||
+    runtimeIpcOperationPattern.test('    LineageSessionInspection {') ||
+    runtimeIpcOperationPattern.test('    AgentSessionLineageCancellationRequest,') ||
+    runtimeIpcOperationPattern.test('    AgentSessionLineageRequest,') ||
+    runtimeIpcOperationPattern.test('    AgentSessionLineageSnapshot,') ||
+    runtimeIpcOperationPattern.test('    AgentSessionLineageTranscriptRequest,') ||
+    runtimeIpcOperationPattern.test('    WorkspaceReferenceSearch {') ||
+    runtimeIpcOperationPattern.test('    WorkspaceReferences {') ||
+    runtimeIpcOperationPattern.test('    WorkspaceDiff {') ||
+    runtimeIpcOperationPattern.test('    WorkspaceDiffSnapshot,') ||
     runtimeIpcOperationPattern.test('    SubmitTurn {') ||
-    runtimeIpcOperationPattern.test('    SessionForked {')
+    runtimeIpcOperationPattern.test('    SteerTurn {') ||
+    runtimeIpcOperationPattern.test('    AgentDialogSteerRequest {') ||
+    runtimeIpcOperationPattern.test('    RunUserShellCommand {') ||
+    runtimeIpcOperationPattern.test('    AgentUserShellCommandRequest {') ||
+    runtimeIpcOperationPattern.test('    SessionForked {') ||
+    runtimeIpcOperationPattern.test('    SessionReverted {') ||
+    runtimeIpcOperationPattern.test('    TurnSteered {')
   ) {
     throw new Error('agent-runtime-ipc operation guard must preserve the Shared TUI operation budget');
   }

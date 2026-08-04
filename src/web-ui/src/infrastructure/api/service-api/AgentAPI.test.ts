@@ -16,6 +16,78 @@ describe('AgentAPI', () => {
     invokeMock.mockResolvedValue(undefined);
   });
 
+  it('preserves remote identity when querying the workspace mode catalog', async () => {
+    invokeMock.mockResolvedValueOnce([]);
+
+    await agentAPI.getAvailableModes({
+      workspacePath: 'D:/remote/repo',
+      remoteConnectionId: 'remote-1',
+      remoteSshHost: 'build-host',
+    });
+
+    expect(invokeMock).toHaveBeenCalledWith('get_available_modes', {
+      request: {
+        workspacePath: 'D:/remote/repo',
+        remoteConnectionId: 'remote-1',
+        remoteSshHost: 'build-host',
+      },
+    });
+  });
+
+  it('sends an explicit Session mode rebind through the typed selector request', async () => {
+    await agentAPI.updateSessionMode({
+      sessionId: 'session-1',
+      modeId: 'reviewer',
+      workspacePath: 'D:/workspace/BitFun',
+      remoteConnectionId: 'remote-1',
+    });
+
+    expect(invokeMock).toHaveBeenCalledWith('update_session_mode', {
+      request: {
+        sessionId: 'session-1',
+        modeId: 'reviewer',
+        workspacePath: 'D:/workspace/BitFun',
+        remoteConnectionId: 'remote-1',
+      },
+    });
+  });
+
+  it('loads a bounded Session Turn window through a structured request', async () => {
+    invokeMock.mockResolvedValueOnce({
+      status: 'ready',
+      catalogRevision: 'catalog-1',
+      totalTurnCount: 20,
+      startOrdinal: 4,
+      endOrdinalExclusive: 20,
+      targetTurnId: 'turn-8',
+      turns: [],
+    });
+
+    await agentAPI.loadSessionTurnWindow({
+      sessionId: 'session-1',
+      workspacePath: 'D:/workspace/BitFun',
+      targetStorageTurnIndex: 8,
+      expectedTurnId: 'turn-8',
+      expectedCatalogRevision: 'catalog-1',
+      before: 4,
+      after: 12,
+      remoteConnectionId: 'remote-1',
+    });
+
+    expect(invokeMock).toHaveBeenCalledWith('load_session_turn_window', {
+      request: {
+        sessionId: 'session-1',
+        workspacePath: 'D:/workspace/BitFun',
+        targetStorageTurnIndex: 8,
+        expectedTurnId: 'turn-8',
+        expectedCatalogRevision: 'catalog-1',
+        before: 4,
+        after: 12,
+        remoteConnectionId: 'remote-1',
+      },
+    });
+  });
+
   it('sends subagent timeout controls with the desktop command request shape', async () => {
     await agentAPI.setSubagentTimeout('subagent-session', { type: 'disable' });
 
@@ -66,6 +138,22 @@ describe('AgentAPI', () => {
     await expect(agentAPI.cancelSession('idle-session')).resolves.toEqual({
       cancelled: false,
       dialogTurnId: null,
+    });
+  });
+
+  it('can cancel a session without cancelling its descendants', async () => {
+    invokeMock.mockResolvedValueOnce({
+      cancelled: true,
+      dialogTurnId: 'turn-parent',
+    });
+
+    await agentAPI.cancelSession('parent-session', { cancelDescendants: false });
+
+    expect(invokeMock).toHaveBeenCalledWith('cancel_session', {
+      request: {
+        sessionId: 'parent-session',
+        cancelDescendants: false,
+      },
     });
   });
 

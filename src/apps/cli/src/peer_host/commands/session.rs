@@ -13,8 +13,8 @@ use bitfun_core::agentic::get_agent_registry;
 use bitfun_core::util::errors::BitFunError;
 use bitfun_runtime_ports::{
     AgentSessionArchiveRequest, AgentSessionCreateRequest, AgentSessionDeleteRequest,
-    AgentSessionModelUpdateRequest, AgentSessionRenameRequest, AgentThreadGoalGetRequest,
-    SessionStoragePathRequest,
+    AgentSessionModeUpdateRequest, AgentSessionModelUpdateRequest, AgentSessionRenameRequest,
+    AgentThreadGoalGetRequest, SessionStoragePathRequest, SessionTurnWindowRequest,
 };
 
 use crate::diagnostics::{OUTCOME_UNKNOWN_ERROR_CODE, SESSION_IN_USE_ERROR_CODE};
@@ -200,6 +200,37 @@ pub(crate) async fn load_session_turns(
     serde_json::to_value(turns).map_err(|e| format!("serialize turns: {e}"))
 }
 
+pub(crate) async fn load_session_turn_window(
+    state: &PeerHostState,
+    args: &Value,
+) -> Result<Value, String> {
+    let request = request_value(args);
+    let session_id = validated_session_id(request)?;
+    let workspace_path = resolved_session_storage_path(state, request).await?;
+    let response = state
+        .compatibility
+        .load_session_turn_window_from_storage_path(
+            &workspace_path,
+            SessionTurnWindowRequest {
+                workspace_path: workspace_path.clone(),
+                session_id,
+                include_internal: optional_bool(request, "includeInternal").unwrap_or(false),
+                target_storage_turn_index: request
+                    .get("targetStorageTurnIndex")
+                    .and_then(Value::as_u64)
+                    .ok_or_else(|| "targetStorageTurnIndex is required".to_string())?
+                    as usize,
+                expected_turn_id: optional_string(request, "expectedTurnId"),
+                expected_catalog_revision: optional_string(request, "expectedCatalogRevision"),
+                before: request.get("before").and_then(Value::as_u64).unwrap_or(4) as usize,
+                after: request.get("after").and_then(Value::as_u64).unwrap_or(12) as usize,
+            },
+        )
+        .await
+        .map_err(|e| format!("Failed to load session Turn window: {e}"))?;
+    serde_json::to_value(response).map_err(|e| format!("serialize Turn window: {e}"))
+}
+
 pub(crate) async fn restore_session_view(
     state: &PeerHostState,
     args: &Value,
@@ -218,7 +249,7 @@ pub(crate) async fn restore_session_view(
         .filter(|n| *n > 0)
         .map(|n| n.min(16));
 
-    let (mut session, turns, total_turn_count, timings) = state
+    let (mut session, turns, total_turn_count, turn_catalog, timings) = state
         .compatibility
         .restore_session_view_for_workspace(
             storage_request,
@@ -239,6 +270,7 @@ pub(crate) async fn restore_session_view(
     Ok(json!({
         "session": session_to_json(session, total_turn_count),
         "turns": turns,
+        "turnCatalog": turn_catalog,
         "contextRestoreState": "pending",
         "isPartial": is_partial,
         "loadedTurnCount": loaded_turn_count,
@@ -481,6 +513,31 @@ pub(crate) async fn update_session_model(
     Ok(Value::Null)
 }
 
+pub(crate) async fn update_session_mode(
+    state: &PeerHostState,
+    args: &Value,
+) -> Result<Value, String> {
+    let request = request_value(args);
+    let session_id = validated_session_id(request)?;
+    let mode_id = get_string(request, "modeId")?;
+    if request
+        .get("workspacePath")
+        .and_then(Value::as_str)
+        .is_some_and(|path| !path.trim().is_empty())
+    {
+        ensure_coordinator_session(state, args).await?;
+    }
+    state
+        .agent_runtime
+        .update_session_mode(AgentSessionModeUpdateRequest {
+            session_id,
+            mode_id,
+        })
+        .await
+        .map_err(|error| format!("Failed to update session mode: {}", error.into_message()))?;
+    Ok(Value::Null)
+}
+
 pub(crate) async fn ensure_coordinator_session(
     state: &PeerHostState,
     args: &Value,
@@ -506,8 +563,29 @@ pub(crate) async fn ensure_coordinator_session(
         .map_err(|error| peer_core_session_error("Failed to ensure session", error))
 }
 
-pub(crate) async fn get_available_modes() -> Result<Value, String> {
-    let mode_infos = get_agent_registry().get_modes_info().await;
+pub(crate) async fn get_available_modes(
+    state: &PeerHostState,
+    args: &Value,
+) -> Result<Value, String> {
+    let request = request_value(args);
+    let workspace = super::external_sources::workspace_root(state, request)
+        .await
+        .map_err(|error| error.encode())?;
+    if let Some(workspace) = workspace.as_deref() {
+        if let Err(error) =
+            bitfun_core::external_sources::ensure_external_source_workspace_snapshot(Some(
+                workspace,
+            ))
+            .await
+        {
+            tracing::warn!(
+                "Failed to initialize external agent sources for Peer mode catalog: {error}"
+            );
+        }
+    }
+    let mode_infos = get_agent_registry()
+        .get_modes_info_for_workspace(workspace.as_deref(), workspace.is_some())
+        .await;
     let dtos: Vec<Value> = mode_infos
         .into_iter()
         .map(|info| {
@@ -546,10 +624,19 @@ pub(crate) async fn get_session_stats(
         .map_err(session_stats_validation_error)?;
     require_local_snapshot_workspace(request, &workspace_path).await?;
 
+    let scope = ensure_session_workspace_runtime_ownership(state, request)?;
+    let storage_path = resolved_session_storage_scope(state, scope).await?;
+    let read = state
+        .compatibility
+        .begin_persisted_session_read(&storage_path, &session_id)
+        .await
+        .map_err(|error| format!("Failed to open a consistent snapshot view: {error}"))?;
+
     let stats = local_snapshot_session_stats(
         state.local_workspace_snapshot.as_ref(),
         PathBuf::from(&workspace_path),
         session_id,
+        read.visible_turn_end(),
     )
     .await?;
 
@@ -587,7 +674,12 @@ pub(crate) async fn save_session_turn(
             return Err("turn_data session_id does not match request session_id".to_string());
         }
     }
-    let _mutation = state
+    state
+        .compatibility
+        .ensure_session_loaded_from_storage_path(&workspace_path, &turn.session_id, false)
+        .await
+        .map_err(|error| format!("Failed to load session before saving a Turn: {error}"))?;
+    let mutation = state
         .compatibility
         .begin_persisted_session_mutation(&workspace_path, &turn.session_id)
         .await
@@ -595,7 +687,7 @@ pub(crate) async fn save_session_turn(
 
     state
         .compatibility
-        .save_persisted_dialog_turn(&workspace_path, &turn)
+        .save_persisted_dialog_turn(&mutation, &turn)
         .await
         .map_err(|e| format!("Failed to save session turn: {e}"))?;
     Ok(Value::Null)

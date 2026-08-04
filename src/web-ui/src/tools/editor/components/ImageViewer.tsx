@@ -147,9 +147,14 @@ export const ImageViewer: React.FC<ImageViewerProps> = ({
   }, []);
 
   return (
-    <div className={`bitfun-image-viewer ${className} ${isFullscreen ? 'fullscreen' : ''}`}>
-      <div className="bitfun-image-viewer__toolbar">
-        <div className="bitfun-image-viewer__info">
+    <div
+      className={`bitfun-image-viewer ${className} ${isFullscreen ? 'fullscreen' : ''}`}
+      data-bf-component="image-viewer"
+      data-bf-part="root"
+      data-bf-state={isFullscreen ? 'fullscreen' : undefined}
+    >
+      <div data-bf-component="image-viewer" data-bf-part="toolbar" className="bitfun-image-viewer__toolbar">
+        <div data-bf-component="image-viewer" data-bf-part="info" className="bitfun-image-viewer__info">
           <span className="bitfun-image-viewer__filename">{fileName || filePath.split(/[/\\]/).pop()}</span>
           {imageDimensions && (
             <span className="bitfun-image-viewer__dimensions">
@@ -162,9 +167,11 @@ export const ImageViewer: React.FC<ImageViewerProps> = ({
             </span>
           )}
         </div>
-        <div className="bitfun-image-viewer__controls">
+        <div data-bf-component="image-viewer" data-bf-part="controls" className="bitfun-image-viewer__controls">
           <Tooltip content={t('editor.imageViewer.zoomOut')} placement="top">
             <button
+              data-bf-component="image-viewer"
+              data-bf-part="action"
               className="bitfun-image-viewer__btn"
               onClick={handleZoomOut}
               disabled={zoom <= 25}
@@ -174,6 +181,8 @@ export const ImageViewer: React.FC<ImageViewerProps> = ({
           </Tooltip>
           <Tooltip content={t('editor.imageViewer.zoomReset')} placement="top">
             <button
+              data-bf-component="image-viewer"
+              data-bf-part="action"
               className="bitfun-image-viewer__btn bitfun-image-viewer__btn--zoom-display"
               onClick={handleZoomReset}
             >
@@ -182,6 +191,8 @@ export const ImageViewer: React.FC<ImageViewerProps> = ({
           </Tooltip>
           <Tooltip content={t('editor.imageViewer.zoomIn')} placement="top">
             <button
+              data-bf-component="image-viewer"
+              data-bf-part="action"
               className="bitfun-image-viewer__btn"
               onClick={handleZoomIn}
               disabled={zoom >= 500}
@@ -192,6 +203,8 @@ export const ImageViewer: React.FC<ImageViewerProps> = ({
           <div className="bitfun-image-viewer__divider" />
           <Tooltip content={t('editor.imageViewer.rotate90')} placement="top">
             <button
+              data-bf-component="image-viewer"
+              data-bf-part="action"
               className="bitfun-image-viewer__btn"
               onClick={handleRotate}
             >
@@ -200,6 +213,8 @@ export const ImageViewer: React.FC<ImageViewerProps> = ({
           </Tooltip>
           <Tooltip content={t('editor.imageViewer.download')} placement="top">
             <button
+              data-bf-component="image-viewer"
+              data-bf-part="action"
               className="bitfun-image-viewer__btn"
               onClick={handleDownload}
             >
@@ -211,6 +226,8 @@ export const ImageViewer: React.FC<ImageViewerProps> = ({
             placement="top"
           >
             <button
+              data-bf-component="image-viewer"
+              data-bf-part="action"
               className="bitfun-image-viewer__btn"
               onClick={handleToggleFullscreen}
             >
@@ -220,27 +237,29 @@ export const ImageViewer: React.FC<ImageViewerProps> = ({
         </div>
       </div>
 
-      <div className="bitfun-image-viewer__container">
+      <div data-bf-component="image-viewer" data-bf-part="container" className="bitfun-image-viewer__container">
         {loading && (
-          <div className="bitfun-image-viewer__loading">
+          <div data-bf-component="image-viewer" data-bf-part="loading" className="bitfun-image-viewer__loading">
             <div className="bitfun-image-viewer__spinner" />
             <p>{t('editor.common.loading')}</p>
           </div>
         )}
 
         {error && (
-          <div className="bitfun-image-viewer__error">
+          <div data-bf-component="image-viewer" data-bf-part="error" className="bitfun-image-viewer__error">
             <p>{error}</p>
             <p className="bitfun-image-viewer__error-path">{filePath}</p>
           </div>
         )}
 
         {!loading && !error && imageUrl && (
-          <div className="bitfun-image-viewer__image-wrapper">
+          <div data-bf-component="image-viewer" data-bf-part="imageWrapper" className="bitfun-image-viewer__image-wrapper">
             <img
               src={imageUrl}
               alt={fileName || filePath}
               className="bitfun-image-viewer__image"
+              data-bf-component="image-viewer"
+              data-bf-part="image"
               style={{
                 transform: `scale(${zoom / 100}) rotate(${rotation}deg)`,
               }}
@@ -251,7 +270,7 @@ export const ImageViewer: React.FC<ImageViewerProps> = ({
         )}
         
         {!loading && !error && !imageUrl && (
-          <div className="bitfun-image-viewer__error">
+          <div data-bf-component="image-viewer" data-bf-part="error" className="bitfun-image-viewer__error">
             <p>{t('editor.imageViewer.imageUrlEmpty')}</p>
           </div>
         )}

@@ -6,7 +6,7 @@ import { buildSharedPrismStyle } from '@/shared/prism/prismTheme';
 
 /** Match `.markdown-renderer` code blocks. */
 export const CODE_PREVIEW_FONT_FAMILY =
-  'var(--font-family-mono)';
+  'var(--bf-appearance-token-font-family-mono)';
 
 export function buildCodePreviewPrismStyle(isLight: boolean): Record<string, CSSProperties> {
   return buildSharedPrismStyle(isLight, {

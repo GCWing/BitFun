@@ -15,12 +15,15 @@ use serde::de::DeserializeOwned;
 
 use protocol::{
     DispatchAnswerRequest, DispatchAnswerResponse, DispatchAppendRequest, DispatchAppendResponse,
-    DispatchCancelRequest, DispatchCancelResponse, DispatchJobListEntry, DispatchJobState,
-    DispatchListRequest, DispatchProbeRequest, DispatchProbeResponse, DispatchStatusRequest,
-    DispatchStatusResponse, DispatchSubmitRequest, DispatchSubmitResponse,
-    DispatchWorkspaceBeginRequest, DispatchWorkspaceChunkRequest, DispatchWorkspaceCommitRequest,
-    DispatchWorkspaceProbe, DispatchWorkspaceResultChunkRequest, DispatchWorkspaceResultRequest,
-    DISPATCH_PROTOCOL_VERSION, MAX_DISPATCH_TEXT_BYTES,
+    DispatchCancelRequest, DispatchCancelResponse, DispatchContinueRequest,
+    DispatchContinueResponse, DispatchJobListEntry, DispatchJobState, DispatchListRequest,
+    DispatchProbeRequest, DispatchProbeResponse, DispatchQueryKind, DispatchQueryRequest,
+    DispatchStatusRequest, DispatchStatusResponse,
+    DispatchSubmitRequest, DispatchSubmitResponse, DispatchTurnKind,
+    DispatchWorkspaceBundleBeginRequest, DispatchWorkspaceBundleChunkRequest,
+    DispatchWorkspaceBundleCommitRequest, DispatchWorkspaceProbe,
+    DispatchWorkspaceProvisionRequest, DispatchWorkspaceSyncChunkRequest,
+    DispatchWorkspaceSyncRequest, DISPATCH_PROTOCOL_VERSION, MAX_DISPATCH_TEXT_BYTES,
 };
 use store::{CreateJobOutcome, DispatchStateRecord, DispatchStore};
 
@@ -60,28 +63,39 @@ pub(crate) async fn run_dispatch_verb(
             serde_json::to_value(answer(parse(input)?)?).context("encode permission answer")
         }
         "append" => serde_json::to_value(append(parse(input)?)?).context("encode appended message"),
-        "workspace-begin" => serde_json::to_value(workspace::begin(parse::<
-            DispatchWorkspaceBeginRequest,
+        "continue" => serde_json::to_value(continue_job(parse(input)?)?)
+            .context("encode follow-up turn response"),
+        "query" => query(parse(input)?).await.context("encode query response"),
+        "workspace-provision" => serde_json::to_value(workspace::provision(parse::<
+            DispatchWorkspaceProvisionRequest,
         >(input)?)?)
-        .context("encode workspace begin response"),
-        "workspace-chunk" => serde_json::to_value(workspace::chunk(parse::<
-            DispatchWorkspaceChunkRequest,
-        >(input)?)?)
-        .context("encode workspace chunk response"),
-        "workspace-commit" => serde_json::to_value(workspace::commit(parse::<
-            DispatchWorkspaceCommitRequest,
-        >(input)?)?)
-        .context("encode workspace commit response"),
-        "workspace-result" => serde_json::to_value(workspace::result(parse::<
-            DispatchWorkspaceResultRequest,
-        >(input)?)?)
-        .context("encode workspace result response"),
-        "workspace-result-chunk" => {
-            serde_json::to_value(workspace::result_chunk(parse::<
-                DispatchWorkspaceResultChunkRequest,
+        .context("encode workspace provision response"),
+        "workspace-bundle-begin" => {
+            serde_json::to_value(workspace::bundle_begin(parse::<
+                DispatchWorkspaceBundleBeginRequest,
             >(input)?)?)
-            .context("encode workspace result chunk response")
+            .context("encode workspace bundle begin response")
         }
+        "workspace-bundle-chunk" => {
+            serde_json::to_value(workspace::bundle_chunk(parse::<
+                DispatchWorkspaceBundleChunkRequest,
+            >(input)?)?)
+            .context("encode workspace bundle chunk response")
+        }
+        "workspace-bundle-commit" => {
+            serde_json::to_value(workspace::bundle_commit(parse::<
+                DispatchWorkspaceBundleCommitRequest,
+            >(input)?)?)
+            .context("encode workspace bundle commit response")
+        }
+        "workspace-sync" => serde_json::to_value(workspace::sync(parse::<
+            DispatchWorkspaceSyncRequest,
+        >(input)?)?)
+        .context("encode workspace sync response"),
+        "workspace-sync-chunk" => serde_json::to_value(workspace::sync_chunk(parse::<
+            DispatchWorkspaceSyncChunkRequest,
+        >(input)?)?)
+        .context("encode workspace sync chunk response"),
         _ => bail!("unsupported dispatch verb: {verb}"),
     }
 }
@@ -90,8 +104,16 @@ pub(crate) async fn run_worker(job_id: String) -> Result<()> {
     worker::run(job_id).await
 }
 
-pub(crate) fn run_workspace_materializer(job_id: String) -> Result<()> {
-    workspace::materialize(job_id)
+pub(crate) fn run_workspace_provision(job_id: String) -> Result<()> {
+    workspace::run_provision(job_id)
+}
+
+pub(crate) fn run_workspace_bundle_commit(job_id: String) -> Result<()> {
+    workspace::run_bundle_commit(job_id)
+}
+
+pub(crate) fn run_workspace_sync(job_id: String) -> Result<()> {
+    workspace::run_sync(job_id)
 }
 
 async fn probe(request: DispatchProbeRequest) -> Result<DispatchProbeResponse> {
@@ -101,32 +123,16 @@ async fn probe(request: DispatchProbeRequest) -> Result<DispatchProbeResponse> {
         .as_deref()
         .map(inspect_workspace)
         .transpose()?;
-    let mut capabilities = vec![
-        "persistent_jobs".to_string(),
-        "cursor_events".to_string(),
-        "workspace_serialization".to_string(),
-        "approval_auto".to_string(),
-        "approval_reject_and_report".to_string(),
-        "approval_remote".to_string(),
-        "frontend_event_projection".to_string(),
-        "append_message".to_string(),
-        "event_log_completeness".to_string(),
-        "workspace_snapshot_exact".to_string(),
-        "workspace_snapshot_chunked".to_string(),
-        // A target may share the same package version while predating the
-        // dispatch entrypoint's early CLI-profile selection. Such a binary can
-        // accept a job but every detached worker then fails before execution.
-        // Advertise the behavioral fix explicitly so controllers fail closed.
-        "dispatch_worker_cli_profile".to_string(),
-        // Optional on purpose: controllers must feature-detect this rather than
-        // require it, so an older target stays usable for everything else.
-        "workspace_result_bundle".to_string(),
-        // Identical snapshots from different jobs reuse one verified archive
-        // on the target. Jobs still receive independent writable workspaces.
-        "workspace_snapshot_cache".to_string(),
-    ];
+    let mut capabilities: Vec<String> =
+        bitfun_services_core::dispatch_contract::DISPATCH_BASE_TARGET_CAPABILITIES
+            .iter()
+            .map(|capability| capability.to_string())
+            .collect();
     if runner::is_supported() {
-        capabilities.push("detached_worker".to_string());
+        capabilities.push(
+            bitfun_services_core::dispatch_contract::DISPATCH_DETACHED_WORKER_CAPABILITY
+                .to_string(),
+        );
     }
     Ok(DispatchProbeResponse {
         protocol_version: DISPATCH_PROTOCOL_VERSION,
@@ -149,7 +155,11 @@ async fn submit(mut request: DispatchSubmitRequest) -> Result<DispatchSubmitResp
     }
     bitfun_agent_runtime::session_control::validate_session_id(&request.session_id)
         .map_err(anyhow::Error::msg)?;
-    let intent = request.clone();
+    let mut intent = request.clone();
+    // Setup audit is observational metadata. A retry after an ambiguous SSH
+    // response will not repeat an installation, so including it in the intent
+    // fingerprint would incorrectly turn that safe retry into a conflict.
+    intent.setup_audit.clear();
     let store = DispatchStore::open_default()?;
     if let Some((record, state)) = store.load_existing_job_for_intent(&intent)? {
         ensure_worker_spawned(&store, &record.request.job_id, state.state)?;
@@ -188,6 +198,104 @@ async fn submit(mut request: DispatchSubmitRequest) -> Result<DispatchSubmitResp
         session_id: request.session_id,
         state: state.state,
     })
+}
+
+/// Start the next turn in an existing dispatch session.
+///
+/// The job keeps its identity, workspace, and event log; only its run state
+/// rewinds so a fresh worker can pick up the queued prompt. That is what makes
+/// the controller's projection a continuous transcript instead of one job per
+/// message.
+fn continue_job(request: DispatchContinueRequest) -> Result<DispatchContinueResponse> {
+    if request.protocol_version != DISPATCH_PROTOCOL_VERSION {
+        bail!(
+            "unsupported dispatch protocolVersion {}; target requires {}",
+            request.protocol_version,
+            DISPATCH_PROTOCOL_VERSION
+        );
+    }
+    match request.kind {
+        DispatchTurnKind::Prompt => {
+            if request.prompt.trim().is_empty() {
+                bail!("dispatch follow-up requires a prompt");
+            }
+        }
+        DispatchTurnKind::Compact => {
+            if !request.prompt.trim().is_empty() {
+                bail!("dispatch compact turns do not take a prompt");
+            }
+            if !request.attachments.is_empty() {
+                bail!("dispatch compact turns do not take attachments");
+            }
+        }
+    }
+    validate_attachments(&request.attachments)?;
+    if request.prompt.len() > MAX_DISPATCH_TEXT_BYTES {
+        bail!("dispatch follow-up prompt exceeds the 32 KiB safety limit");
+    }
+    if let Some(model) = &request.model {
+        if model.trim().is_empty() {
+            bail!("dispatch model override cannot be empty");
+        }
+        if model.len() > 256 {
+            bail!("dispatch model override exceeds the 256 byte limit");
+        }
+    }
+    if !runner::is_supported() {
+        bail!("dispatch detached workers are supported only on Linux and macOS");
+    }
+    let store = DispatchStore::open_default()?;
+    let job = store.load_job(&request.job_id)?;
+    // A worker may still be settling the previous turn's terminal state.
+    reconcile_worker_liveness(&store, &request.job_id)?;
+    let state = store.queue_follow_up_turn(&request)?;
+    ensure_worker_spawned(&store, &request.job_id, state.state)?;
+    Ok(DispatchContinueResponse {
+        accepted: true,
+        job_id: request.job_id,
+        session_id: job.request.session_id,
+        turn_id: request.turn_id,
+        state: state.state,
+    })
+}
+
+/// Answer a read-only session question from persisted state.
+///
+/// Deliberately runtime-free: `PersistenceManager` reads the session's
+/// on-disk turns directly, so the query can run while a detached worker owns
+/// the live session without contending for anything.
+async fn query(request: DispatchQueryRequest) -> Result<serde_json::Value> {
+    let store = DispatchStore::open_default()?;
+    let job = store.load_job(&request.job_id)?;
+    match request.kind {
+        DispatchQueryKind::UsageReport => {
+            let path_manager = bitfun_core::infrastructure::PathManager::new()
+                .map_err(|error| anyhow::anyhow!("resolve BitFun storage root: {error}"))?;
+            let persistence = bitfun_core::agentic::persistence::PersistenceManager::new(
+                std::sync::Arc::new(path_manager),
+            )
+            .map_err(|error| anyhow::anyhow!("open session persistence: {error}"))?;
+            let report = bitfun_core::service::session_usage::generate_session_usage_report(
+                &persistence,
+                None,
+                bitfun_core::service::session_usage::SessionUsageReportRequest {
+                    session_id: job.request.session_id.clone(),
+                    workspace_path: Some(job.request.workspace_path.clone()),
+                    remote_connection_id: None,
+                    remote_ssh_host: None,
+                    include_hidden_subagents: false,
+                },
+            )
+            .await
+            .map_err(|error| anyhow::anyhow!("generate dispatch usage report: {error}"))?;
+            serde_json::to_value(serde_json::json!({
+                "kind": "usageReport",
+                "sessionId": job.request.session_id,
+                "report": report,
+            }))
+            .context("encode dispatch usage report")
+        }
+    }
 }
 
 fn ensure_worker_spawned(
@@ -647,6 +755,10 @@ fn canonical_workspace(workspace_path: &str) -> Result<PathBuf> {
     Ok(canonical)
 }
 
+fn validate_attachments(attachments: &[protocol::DispatchAttachment]) -> Result<()> {
+    protocol::validate_dispatch_attachments(attachments).map_err(anyhow::Error::msg)
+}
+
 fn validate_submit_request(request: &DispatchSubmitRequest) -> Result<()> {
     if request.protocol_version != DISPATCH_PROTOCOL_VERSION {
         bail!(
@@ -669,6 +781,20 @@ fn validate_submit_request(request: &DispatchSubmitRequest) -> Result<()> {
     }
     if request.prompt.len() > MAX_DISPATCH_TEXT_BYTES {
         bail!("dispatch prompt exceeds the 32 KiB request limit");
+    }
+    validate_attachments(&request.attachments)?;
+    if request.setup_audit.len() > 32 {
+        bail!("dispatch setup audit exceeds the 32-event safety limit");
+    }
+    for event in &request.setup_audit {
+        if event.action != "cli-install" {
+            bail!("dispatch setup audit contains an unsupported action");
+        }
+        if event.timestamp.trim().is_empty()
+            || serde_json::to_vec(&event.details)?.len() > MAX_DISPATCH_TEXT_BYTES
+        {
+            bail!("dispatch setup audit event is invalid or too large");
+        }
     }
     Ok(())
 }
@@ -703,6 +829,8 @@ mod tests {
             approval_policy: DispatchApprovalPolicy::RejectAndReport,
             model: Some("model-1".to_string()),
             title: Some("Task".to_string()),
+            attachments: Vec::new(),
+            setup_audit: Vec::new(),
         }
     }
 

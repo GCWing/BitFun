@@ -141,6 +141,22 @@ mod tests {
     }
 
     #[test]
+    fn product_tool_runtime_can_consume_acp_product_assembly_plan() {
+        let runtime = ProductToolRuntime::for_profile(DeliveryProfile::Acp);
+        let owner_registry = runtime.create_registry();
+        let compatibility_registry = create_tool_registry();
+
+        assert_eq!(
+            owner_registry.get_tool_names(),
+            compatibility_registry.get_tool_names()
+        );
+        assert_eq!(
+            owner_registry.get_deferred_tool_names(),
+            compatibility_registry.get_deferred_tool_names()
+        );
+    }
+
+    #[test]
     fn sdk_and_cli_profiles_current_tool_plan_ceilings_match_without_sharing_identity() {
         let sdk = ProductToolRuntime::for_profile(DeliveryProfile::Sdk).create_registry();
         let cli = ProductToolRuntime::for_profile(DeliveryProfile::Cli).create_registry();
