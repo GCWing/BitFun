@@ -63,7 +63,153 @@
     "recentWorkspaces": "最近工作区",
     "noRecentWorkspaces": "暂无最近工作区",
     "noWorkspaceOpen": "选择工作区",
-    "remoteConnectRequiresWorkspace": "请先打开工作区再使用远程控制。"
+    "remoteConnectRequiresWorkspace": "请先打开工作区再使用远程控制。",
+    "moreOptionsAttention": "更多选项，有未读提醒"
+  },
+  "privacy": {
+    "title": "隐私声明",
+    "effectiveAt": "生效日期 {{date}}",
+    "updatedAt": "更新时间 {{date}}",
+    "materialChange": "实质变更，需要重新同意",
+    "editorialChange": "文字修订，不影响现有同意",
+    "updated": "已更新",
+    "aboutEntryUpdated": "关于，隐私声明有更新",
+    "fullMode": "完整模式",
+    "fullModeDescription": "当前已启用需要联网和数据处理的完整功能。",
+    "notAcceptedMode": "当前未同意",
+    "notAcceptedModeDescription": "本地工作区和功能可继续使用；AI、Remote、自动更新、遥测和后台业务请求保持关闭。",
+    "consentCheckbox": "我已阅读并同意《隐私声明》",
+    "enableFull": "同意并启用完整模式",
+    "retryFullMode": "重试启用完整模式",
+    "acceptSaveFailed": "同意未能保存，当前仍按未同意规则运行。",
+    "applyFailed": "同意已保存，但完整模式未能启用。当前仍按未同意规则运行，可直接重试。",
+    "withdraw": "撤回同意",
+    "withdrawConfirmTitle": "撤回隐私同意？",
+    "withdrawConfirmMessage": "应用会立即停止新的收集和上传，但不会退出或重启，也不会删除项目、会话、配置或反馈访问状态。已经到达服务端的在途请求无法撤销。",
+    "withdrawConfirmAction": "撤回同意",
+    "withdrawFailed": "未同意状态未能保存；本次运行仍已停止收集，请重试。",
+    "markViewedFailed": "查看状态未能保存，下次可能仍显示“已更新”。",
+    "cancel": "取消"
+  },
+  "feedback": {
+    "views": {
+      "create": "提交反馈",
+      "inbox": "反馈记录"
+    },
+    "category": "反馈分类",
+    "categoryPlaceholder": "请选择分类",
+    "content": "反馈内容",
+    "contentPlaceholder": "请描述你遇到的问题、建议或疑问",
+    "contentTruncated": "已保留前 2000 字",
+    "categories": {
+      "runtimeError": "运行错误",
+      "featureRequest": "功能建议",
+      "usageQuestion": "使用问题",
+      "other": "其他"
+    },
+    "correlation": {
+      "label": "关联当前会话",
+      "description": "发送当前会话的不可逆哈希，用于定位本次反馈。",
+      "unavailable": "当前没有可关联的会话。"
+    },
+    "privacyConsent": "我已阅读并同意《隐私声明》",
+    "privacyConsentPrefix": "我已阅读并同意《",
+    "privacyStatement": "隐私声明",
+    "privacyConsentSuffix": "》",
+    "actions": {
+      "cancel": "取消",
+      "submit": "提交反馈",
+      "retry": "重试提交",
+      "gitcode": "前往 GitCode"
+    },
+    "complete": {
+      "title": "反馈已提交",
+      "description": "反馈访问凭据已安全保存。"
+    },
+    "inbox": {
+      "title": "反馈记录",
+      "count": "{{count}} 条记录",
+      "refresh": "刷新",
+      "loading": "正在加载反馈记录…",
+      "emptyTitle": "暂无反馈记录",
+      "emptyDescription": "提交后的反馈会显示在这里。",
+      "loadMore": "加载更多",
+      "updated": "更新于 {{time}}",
+      "newReply": "有新回复",
+      "entryUnread": "反馈，有新回复",
+      "selectRecord": "请选择一条反馈记录",
+      "detailTitle": "反馈详情",
+      "back": "返回反馈记录",
+      "reference": "反馈编号",
+      "inaccessibleTitle": "当前会话不可访问",
+      "inaccessibleDescription": "本机保存的访问凭据缺失或已失效。",
+      "accessUnavailable": "反馈访问状态不可用，已保留现有摘要。",
+      "refreshFailed": "刷新反馈记录失败，已保留现有记录。",
+      "status": {
+        "submitted": "已提交",
+        "inProgress": "处理中",
+        "waitingUser": "等待用户",
+        "resolved": "已解决"
+      }
+    },
+    "conversation": {
+      "messages": "会话消息",
+      "refresh": "刷新会话",
+      "loading": "正在加载会话…",
+      "loadingEarlier": "正在加载更早消息…",
+      "empty": "当前会话暂无消息。",
+      "admin": "支持人员",
+      "you": "你",
+      "syncFailed": "新消息同步失败，已保留现有消息。",
+      "cacheFailed": "加密消息缓存更新失败，请重试。",
+      "ackFailed": "未能更新已读状态，未读标记会继续保留。",
+      "resolvedReadonly": "该会话已解决，当前为只读状态。"
+    },
+    "reply": {
+      "input": "回复内容",
+      "placeholder": "输入对该反馈的回复",
+      "send": "发送回复",
+      "retry": "重试发送",
+      "consentTitle": "同意后发送",
+      "consentPrefix": "需要同意《",
+      "consentSuffix": "》方可发送回复。",
+      "consentConfirm": "同意并发送",
+      "consentSaveFailed": "隐私同意未能保存，回复尚未发送。你可以重试或取消。",
+      "privacySaveFailed": "隐私同意未能保存，回复尚未发送。当前仍按未同意规则运行。",
+      "resolved": "该会话已解决，不能继续回复。",
+      "rateLimited": "发送过于频繁，请在 {{seconds}} 秒后重试。",
+      "timeout": "反馈服务响应超时，回复草稿已保留。",
+      "network": "暂时无法连接反馈服务，回复草稿已保留。",
+      "failed": "回复发送失败（{{code}}），草稿已保留。",
+      "discardTitle": "放弃回复？",
+      "discardMessage": "回复尚未发送，离开详情后不会保留。",
+      "discardConfirm": "放弃回复",
+      "continueEditing": "继续编辑"
+    },
+    "exit": {
+      "title": "反馈仍在提交",
+      "message": "继续等待可保留本次提交结果；仍然退出不会承诺取消已经发出的请求。",
+      "quit": "仍然退出",
+      "wait": "继续等待"
+    },
+    "discard": {
+      "title": "放弃本次反馈？",
+      "message": "分类、正文、关联选项或隐私勾选尚未提交。关闭后这些内容不会保留。",
+      "confirm": "放弃反馈",
+      "continue": "继续填写"
+    },
+    "errors": {
+      "contentRequired": "请输入反馈内容",
+      "privacySave": "隐私同意未能保存，反馈尚未发送。当前仍按未同意规则运行。",
+      "capabilitySave": "反馈已由服务端接收，但访问凭据未能安全保存。请直接重试，不要修改内容。",
+      "rateLimited": "提交过于频繁，请在 {{seconds}} 秒后重试。",
+      "quotaExceeded": "已达到反馈提交限额，请稍后再试。",
+      "notConfigured": "当前版本未配置正式反馈服务，可前往 GitCode。",
+      "timeout": "反馈服务响应超时，请重试。",
+      "network": "暂时无法连接反馈服务，请检查网络后重试。",
+      "gitcode": "未能打开 GitCode，请重试。表单内容仍会保留。",
+      "generic": "反馈提交失败（{{code}}），请重试或前往 GitCode。"
+    }
   },
   "nav": {
     "aria": {
@@ -782,6 +928,7 @@
     "openSourceDesc": "BitFun 使用了以下开源组件：",
     "openSourceFootnote": "点击组件名称可打开其官方页面获取更多信息。",
     "userAgreement": "隐私协议",
+    "privacyStatement": "隐私声明",
     "openSourceFrontend": "前端",
     "openSourceBackend": "后端",
     "openSourceTagFE": "前端",

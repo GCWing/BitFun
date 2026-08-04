@@ -197,8 +197,13 @@ pub struct SystemInfoResponse {
 pub async fn get_system_info() -> Result<SystemInfoResponse, String> {
     let info = system::get_system_info();
 
+    #[cfg(target_env = "ohos")]
+    let platform = "openharmony".to_string();
+    #[cfg(not(target_env = "ohos"))]
+    let platform = info.platform;
+
     Ok(SystemInfoResponse {
-        platform: info.platform,
+        platform,
         arch: info.arch,
         os_version: info.os_version,
     })

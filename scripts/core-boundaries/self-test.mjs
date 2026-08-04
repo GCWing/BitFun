@@ -669,6 +669,34 @@ export function runManifestParserSelfTest({
   const servicesOptionalOwnerDeps = new Set(
     servicesOptionalOwnerRule?.dependencies.map((dependency) => dependency.depName) ?? [],
   );
+
+  const expectedFeatureDependencies = {
+    feedback: [
+      'aes-gcm',
+      'anyhow',
+      'async-trait',
+      'base64',
+      'bitfun-product-domains',
+      'chrono',
+      'rand',
+      'reqwest',
+      'sha2',
+      'uuid',
+    ],
+    privacy: ['bitfun-product-domains', 'chrono', 'sha2'],
+  };
+  for (const [featureName, dependencies] of Object.entries(expectedFeatureDependencies)) {
+    for (const dep of dependencies) {
+      const owner = servicesOptionalOwnerRule?.dependencies.find(
+        (dependency) => dependency.depName === dep,
+      );
+      if (!owner?.ownerFeatures.includes(featureName)) {
+        throw new Error(
+          `services-integrations ${featureName} must own optional dependency ${dep}`,
+        );
+      }
+    }
+  }
   for (const dep of servicesIntegrationsDefaultProfile?.forbiddenNonOptionalDeps ?? []) {
     if (!servicesOptionalOwnerDeps.has(dep)) {
       throw new Error(

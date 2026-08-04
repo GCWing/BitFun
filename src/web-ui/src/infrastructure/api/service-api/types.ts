@@ -14,6 +14,9 @@ export interface ApiError {
   code: string;
   message: string;
   details?: Record<string, any>;
+  retryable?: boolean;
+  requestId?: string;
+  retryAfterSeconds?: number;
   stack?: string;
 }
 
@@ -88,4 +91,3 @@ export interface ApiConfig {
   enableLogging: boolean;
   middleware: ApiMiddleware[];
 }
-

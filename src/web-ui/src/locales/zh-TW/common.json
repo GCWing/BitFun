@@ -63,7 +63,153 @@
     "recentWorkspaces": "最近工作區",
     "noRecentWorkspaces": "暫無最近工作區",
     "noWorkspaceOpen": "選擇工作區",
-    "remoteConnectRequiresWorkspace": "請先開啟工作區再使用遠端控制。"
+    "remoteConnectRequiresWorkspace": "請先開啟工作區再使用遠端控制。",
+    "moreOptionsAttention": "更多選項，有未讀提醒"
+  },
+  "privacy": {
+    "title": "隱私聲明",
+    "effectiveAt": "生效日期 {{date}}",
+    "updatedAt": "更新時間 {{date}}",
+    "materialChange": "實質變更，需要重新同意",
+    "editorialChange": "文字修訂，不影響現有同意",
+    "updated": "已更新",
+    "aboutEntryUpdated": "關於，隱私聲明有更新",
+    "fullMode": "完整模式",
+    "fullModeDescription": "目前已啟用需要連網和資料處理的完整功能。",
+    "notAcceptedMode": "目前未同意",
+    "notAcceptedModeDescription": "本機工作區和功能可繼續使用；AI、Remote、自動更新、遙測和背景業務請求保持關閉。",
+    "consentCheckbox": "我已閱讀並同意《隱私聲明》",
+    "enableFull": "同意並啟用完整模式",
+    "retryFullMode": "重試啟用完整模式",
+    "acceptSaveFailed": "同意未能儲存，目前仍按未同意規則執行。",
+    "applyFailed": "同意已儲存，但完整模式未能啟用。目前仍按未同意規則執行，可直接重試。",
+    "withdraw": "撤回同意",
+    "withdrawConfirmTitle": "撤回隱私同意？",
+    "withdrawConfirmMessage": "應用程式會立即停止新的收集和上傳，但不會退出或重新啟動，也不會刪除專案、工作階段、設定或意見存取狀態。已經到達服務端的在途請求無法撤銷。",
+    "withdrawConfirmAction": "撤回同意",
+    "withdrawFailed": "未同意狀態未能儲存；本次執行仍已停止收集，請重試。",
+    "markViewedFailed": "查看狀態未能儲存，下次可能仍顯示「已更新」。",
+    "cancel": "取消"
+  },
+  "feedback": {
+    "views": {
+      "create": "提交反饋",
+      "inbox": "反饋記錄"
+    },
+    "category": "反饋分類",
+    "categoryPlaceholder": "請選擇分類",
+    "content": "反饋內容",
+    "contentPlaceholder": "請描述你遇到的問題、建議或疑問",
+    "contentTruncated": "已保留前 2000 字",
+    "categories": {
+      "runtimeError": "執行錯誤",
+      "featureRequest": "功能建議",
+      "usageQuestion": "使用問題",
+      "other": "其他"
+    },
+    "correlation": {
+      "label": "關聯目前工作階段",
+      "description": "傳送目前工作階段的不可逆雜湊，用於定位本次反饋。",
+      "unavailable": "目前沒有可關聯的工作階段。"
+    },
+    "privacyConsent": "我已閱讀並同意《隱私聲明》",
+    "privacyConsentPrefix": "我已閱讀並同意《",
+    "privacyStatement": "隱私聲明",
+    "privacyConsentSuffix": "》",
+    "actions": {
+      "cancel": "取消",
+      "submit": "提交反饋",
+      "retry": "重試提交",
+      "gitcode": "前往 GitCode"
+    },
+    "complete": {
+      "title": "反饋已提交",
+      "description": "反饋存取憑證已安全儲存。"
+    },
+    "inbox": {
+      "title": "反饋記錄",
+      "count": "{{count}} 條記錄",
+      "refresh": "重新整理",
+      "loading": "正在載入反饋記錄…",
+      "emptyTitle": "暫無反饋記錄",
+      "emptyDescription": "提交後的反饋會顯示在這裡。",
+      "loadMore": "載入更多",
+      "updated": "更新於 {{time}}",
+      "newReply": "有新回覆",
+      "entryUnread": "反饋，有新回覆",
+      "selectRecord": "請選擇一條反饋記錄",
+      "detailTitle": "反饋詳情",
+      "back": "返回反饋記錄",
+      "reference": "反饋編號",
+      "inaccessibleTitle": "目前會話無法存取",
+      "inaccessibleDescription": "本機儲存的存取憑證缺失或已失效。",
+      "accessUnavailable": "反饋存取狀態無法使用，已保留現有摘要。",
+      "refreshFailed": "重新整理反饋記錄失敗，已保留現有記錄。",
+      "status": {
+        "submitted": "已提交",
+        "inProgress": "處理中",
+        "waitingUser": "等待使用者",
+        "resolved": "已解決"
+      }
+    },
+    "conversation": {
+      "messages": "會話訊息",
+      "refresh": "重新整理會話",
+      "loading": "正在載入會話…",
+      "loadingEarlier": "正在載入更早訊息…",
+      "empty": "目前會話暫無訊息。",
+      "admin": "支援人員",
+      "you": "你",
+      "syncFailed": "新訊息同步失敗，已保留現有訊息。",
+      "cacheFailed": "加密訊息快取更新失敗，請重試。",
+      "ackFailed": "未能更新已讀狀態，未讀標記會繼續保留。",
+      "resolvedReadonly": "該會話已解決，目前為唯讀狀態。"
+    },
+    "reply": {
+      "input": "回覆內容",
+      "placeholder": "輸入對該反饋的回覆",
+      "send": "傳送回覆",
+      "retry": "重試傳送",
+      "consentTitle": "同意後傳送",
+      "consentPrefix": "需要同意《",
+      "consentSuffix": "》方可傳送回覆。",
+      "consentConfirm": "同意並傳送",
+      "consentSaveFailed": "隱私同意未能儲存，回覆尚未傳送。你可以重試或取消。",
+      "privacySaveFailed": "隱私同意未能儲存，回覆尚未傳送。目前仍按未同意規則執行。",
+      "resolved": "該會話已解決，不能繼續回覆。",
+      "rateLimited": "傳送過於頻繁，請在 {{seconds}} 秒後重試。",
+      "timeout": "反饋服務回應逾時，回覆草稿已保留。",
+      "network": "暫時無法連線反饋服務，回覆草稿已保留。",
+      "failed": "回覆傳送失敗（{{code}}），草稿已保留。",
+      "discardTitle": "放棄回覆？",
+      "discardMessage": "回覆尚未傳送，離開詳情後不會保留。",
+      "discardConfirm": "放棄回覆",
+      "continueEditing": "繼續編輯"
+    },
+    "exit": {
+      "title": "反饋仍在提交",
+      "message": "繼續等待可保留本次提交結果；仍然退出不會承諾取消已經送出的請求。",
+      "quit": "仍然退出",
+      "wait": "繼續等待"
+    },
+    "discard": {
+      "title": "放棄本次反饋？",
+      "message": "分類、正文、關聯選項或隱私勾選尚未提交。關閉後這些內容不會保留。",
+      "confirm": "放棄反饋",
+      "continue": "繼續填寫"
+    },
+    "errors": {
+      "contentRequired": "請輸入反饋內容",
+      "privacySave": "隱私同意未能儲存，反饋尚未傳送。目前仍按未同意規則執行。",
+      "capabilitySave": "反饋已由服務端接收，但存取憑證未能安全儲存。請直接重試，不要修改內容。",
+      "rateLimited": "提交過於頻繁，請在 {{seconds}} 秒後重試。",
+      "quotaExceeded": "已達到反饋提交限額，請稍後再試。",
+      "notConfigured": "目前版本未設定正式反饋服務，可前往 GitCode。",
+      "timeout": "反饋服務回應逾時，請重試。",
+      "network": "暫時無法連線反饋服務，請檢查網路後重試。",
+      "gitcode": "未能開啟 GitCode，請重試。表單內容仍會保留。",
+      "generic": "反饋提交失敗（{{code}}），請重試或前往 GitCode。"
+    }
   },
   "nav": {
     "aria": {
@@ -782,6 +928,7 @@
     "openSourceDesc": "BitFun 使用了以下開源組件：",
     "openSourceFootnote": "點擊組件名稱可打開其官方頁面獲取更多資訊。",
     "userAgreement": "隱私協議",
+    "privacyStatement": "隱私聲明",
     "openSourceFrontend": "前端",
     "openSourceBackend": "後端",
     "openSourceTagFE": "前端",
