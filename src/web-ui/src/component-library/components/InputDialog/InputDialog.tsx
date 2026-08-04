@@ -3,8 +3,9 @@
  * Replaces the browser's native prompt()
  */
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useI18n } from '@/infrastructure/i18n';
+import { VoiceInputButton } from '@/infrastructure/speech/VoiceInputButton';
 import { Modal } from '../Modal/Modal';
 import { Input } from '../Input/Input';
 import { Button } from '../Button/Button';
@@ -23,6 +24,7 @@ export interface InputDialogProps {
   validator?: (value: string) => string | null;
   required?: boolean;
   inputType?: 'text' | 'password' | 'email' | 'number';
+  enableVoiceInput?: boolean;
 }
 
 export const InputDialog: React.FC<InputDialogProps> = ({
@@ -38,6 +40,7 @@ export const InputDialog: React.FC<InputDialogProps> = ({
   validator,
   required = true,
   inputType = 'text',
+  enableVoiceInput = false,
 }) => {
   const { t } = useI18n('components');
   
@@ -105,6 +108,19 @@ export const InputDialog: React.FC<InputDialogProps> = ({
     }
   };
 
+  const handleVoiceTranscript = useCallback((text: string) => {
+    setValue(prev => {
+      const trimmed = prev.trim();
+      if (!trimmed) {
+        return text;
+      }
+      return `${trimmed} ${text}`;
+    });
+    if (error) {
+      setError(null);
+    }
+  }, [error]);
+
   return (
     <Modal
       isOpen={isOpen}
@@ -118,18 +134,26 @@ export const InputDialog: React.FC<InputDialogProps> = ({
           {description && (
             <p className="input-dialog__description" data-bf-component="input-dialog" data-bf-part="description">{description}</p>
           )}
-          <Input
-            ref={inputRef}
-            type={inputType}
-            value={value}
-            onChange={handleChange}
-            onKeyDown={handleKeyDown}
-            placeholder={resolvedPlaceholder}
-            error={!!error}
-            errorMessage={error || undefined}
-            inputSize="medium"
-            autoFocus
-          />
+          <div className="input-dialog__input-row">
+            <Input
+              ref={inputRef}
+              type={inputType}
+              value={value}
+              onChange={handleChange}
+              onKeyDown={handleKeyDown}
+              placeholder={resolvedPlaceholder}
+              error={!!error}
+              errorMessage={error || undefined}
+              inputSize="medium"
+              autoFocus
+            />
+            {enableVoiceInput && (
+              <VoiceInputButton
+                onTranscript={handleVoiceTranscript}
+                className="input-dialog__voice-button"
+              />
+            )}
+          </div>
         </div>
 
         <div className="input-dialog__actions" data-bf-component="input-dialog" data-bf-part="actions">

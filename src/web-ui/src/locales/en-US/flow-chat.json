@@ -506,7 +506,8 @@
     "editDialogBulletHistory": "Delete this turn and all following dialog records",
     "editDialogBulletRerun": "Start a new turn with the edited message",
     "editSuccess": "Message edited and rerun",
-    "editFailed": "Failed to edit message"
+    "editFailed": "Failed to edit message",
+    "scheduledHeartbeat": "Scheduled heartbeat · {{time}}"
   },
   "contextMenu": {
     "copySelection": "Copy Selection",
@@ -566,7 +567,10 @@
       "failed": "Voice input failed",
       "empty": "No speech was recognized",
       "transcribeOnly": "Insert transcription",
-      "transcribeAndSend": "Transcribe and send"
+      "transcribeAndSend": "Transcribe and send",
+      "recording": "Recording",
+      "cancel": "Cancel",
+      "done": "Done"
     }
   },
   "workspaceStrip": {
@@ -1269,7 +1273,8 @@
     "backgroundCommandStopping": "Stopping command",
     "backgroundCommandStopAll": "Stop all",
     "backgroundCommandStopFailed": "Failed to stop background command.",
-    "pullRequests": "Pull requests"
+    "pullRequests": "Pull requests",
+    "fixIssues": "Fix issues"
   },
   "backgroundCommandInput": {
     "title": "Send command input",

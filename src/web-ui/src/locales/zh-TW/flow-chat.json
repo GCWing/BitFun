@@ -506,7 +506,8 @@
     "editDialogBulletHistory": "刪除該輪及之後的對話記錄",
     "editDialogBulletRerun": "使用編輯後的消息啟動新一輪對話",
     "editSuccess": "已編輯消息並重新執行",
-    "editFailed": "編輯消息失敗"
+    "editFailed": "編輯消息失敗",
+    "scheduledHeartbeat": "排程心跳 · {{time}}"
   },
   "contextMenu": {
     "copySelection": "複製選中內容",
@@ -566,7 +567,10 @@
       "failed": "語音輸入失敗",
       "empty": "沒有辨識到語音",
       "transcribeOnly": "插入轉寫文字",
-      "transcribeAndSend": "轉寫並傳送"
+      "transcribeAndSend": "轉寫並傳送",
+      "recording": "錄音中",
+      "cancel": "取消",
+      "done": "完成"
     }
   },
   "workspaceStrip": {
@@ -1269,7 +1273,8 @@
     "backgroundCommandStopping": "正在終止命令",
     "backgroundCommandStopAll": "全部終止",
     "backgroundCommandStopFailed": "終止背景命令失敗。",
-    "pullRequests": "拉取請求"
+    "pullRequests": "拉取請求",
+    "fixIssues": "修復 Issue"
   },
   "backgroundCommandInput": {
     "title": "輸入命令內容",

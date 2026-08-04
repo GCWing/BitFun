@@ -262,6 +262,49 @@ export interface ReviewPlatformIssueRequest {
   repositoryPath?: string | null;
 }
 
+export type ReviewPlatformIssueState = 'open' | 'closed' | 'all';
+
+export interface ReviewPlatformListIssuesRequest {
+  platform: ReviewPlatformKind;
+  host: string;
+  projectPath: string;
+  /** Defaults to open issues. */
+  state?: ReviewPlatformIssueState;
+  page?: number;
+  perPage?: number;
+  repositoryPath?: string | null;
+}
+
+/**
+ * One row of an issue list. Lighter than ReviewPlatformIssueEvidence: no body and
+ * no comments, so enumerating a repository does not pull all of that.
+ */
+export interface ReviewPlatformIssueSummary {
+  issueId: string;
+  number: number;
+  title: string;
+  state: string;
+  author?: string | null;
+  labels: string[];
+  commentsCount: number;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+  webUrl: string;
+}
+
+export interface ReviewPlatformIssuePage {
+  platform: ReviewPlatformKind;
+  host: string;
+  projectPath: string;
+  items: ReviewPlatformIssueSummary[];
+  pagination: {
+    page: number;
+    perPage: number;
+    total?: number | null;
+    hasNext: boolean;
+  };
+}
+
 export interface ReviewPlatformPullRequestIdentityRequest {
   platform: ReviewPlatformKind;
   host: string;
@@ -393,6 +436,23 @@ export class ReviewPlatformAPI {
         error,
       });
       throw createTauriCommandError('review_platform_get_issue', error, request);
+    }
+  }
+
+  async listIssues(request: ReviewPlatformListIssuesRequest): Promise<ReviewPlatformIssuePage> {
+    try {
+      return await api.invoke('review_platform_list_issues', { request });
+    } catch (error) {
+      log.error('Failed to list review platform Issues', {
+        platform: request.platform,
+        host: request.host,
+        projectPath: request.projectPath,
+        state: request.state,
+        page: request.page,
+        perPage: request.perPage,
+        error,
+      });
+      throw createTauriCommandError('review_platform_list_issues', error, request);
     }
   }
 
