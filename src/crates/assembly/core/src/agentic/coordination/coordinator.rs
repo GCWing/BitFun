@@ -1401,6 +1401,8 @@ impl ConversationCoordinator {
         external_sources_supported: bool,
         expected_owner: Option<SessionAgentRouteOwner>,
     ) -> BitFunResult<crate::agentic::agents::ExternalPrimaryAgentTurnBinding> {
+        let external_sources_supported =
+            cfg!(feature = "external-sources") && external_sources_supported;
         let registry = get_agent_registry();
         registry.load_custom_agents(workspace_root).await;
         let local_binding = registry.resolve_primary_agent_for_turn(
@@ -1416,6 +1418,7 @@ impl ConversationCoordinator {
             });
         }
 
+        #[cfg(feature = "external-sources")]
         if let Err(error) =
             crate::external_sources::ensure_external_source_workspace_snapshot(workspace_root).await
         {

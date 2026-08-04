@@ -9,9 +9,9 @@ BitFun 是一个由 Rust workspace 与 React 前端组成的项目。
 ## 快速开始
 
 1. 在修改架构敏感代码前，先阅读 `README.md` 和 `CONTRIBUTING.md`。
-2. 桌面端开发优先使用 `pnpm run desktop:dev` — 提供完整热更新（Vite HMR + Rust 自动重编译并重启）。仅在需要更快冷启动且只迭代前端时使用 `pnpm run desktop:preview:debug`（Rust 改动不会自动重编译）。
+2. 日常开发使用下方主要产品循环；surface 专属的替代命令由最近的应用指南维护。
 3. 修改 Rust 文件后，优先使用 `pnpm run fmt:rs`，只格式化已改动或已暂存的 `.rs` 文件。只有在你明确需要更大范围格式化时才使用 `cargo fmt`。
-4. 改完后按下方表格执行与改动范围匹配的最小验证。
+4. 改完后从离改动最近的 `AGENTS.md` 选择 focused 验证命令；下方仓库级验证章节只维护跨模块检查原则。
 5. Rust workspace 依赖应在根清单中统一版本，而由消费 crate 按自身职责声明所需 feature；仅测试所需的 feature 应放入 `dev-dependencies`，受 crate feature 控制的服务能力应只在对应 feature 中启用。禁止使用 `tokio/full` 绕过依赖边界设计。
 
 ## 分层模块索引
@@ -44,61 +44,23 @@ Stable Contracts and Security Control Plane 的边界以
 
 ## 常用命令
 
-这些是命令参考，不是 PR 前置检查清单。预检请按下方“验证”表选择最小本地检查；
-大范围测试和构建主要用于复现 CI 或验证构建相关改动。
+这里只保留稳定的仓库级入口。具体 surface/crate 的测试命令由最近的本地 `AGENTS.md` 维护，
+不要在根文档重复抄写。
 
 ```bash
-# 安装
+# 安装与主要产品开发循环
 pnpm install
-
-# 开发
 pnpm run desktop:dev               # 完整热更新：Vite HMR + Rust 自动重编译并重启
-pnpm run desktop:preview:debug     # 复用预构建二进制 + Vite HMR；无 Rust 自动重编译
-pnpm run dev:web                   # 纯浏览器前端
-pnpm run cli:dev                   # CLI 运行时
-pnpm run cli:install               # release 编译并安装 bitfun（Windows/macOS/Linux；含废弃兼容入口 bitfun-cli）
 
-# 检查
-pnpm run fmt:rs                     # 只格式化已改动 / 已暂存的 Rust 文件
-pnpm run lint:web
-pnpm run type-check:web
-pnpm --dir src/mobile-web run type-check
-pnpm run i18n:contract:test          # 仅 i18n contract / resources
-pnpm run i18n:audit                  # 仅 i18n contract / resources
-pnpm run product:check               # 默认产品定义
-pnpm run check:repo-hygiene
-pnpm run check:github-config
-cargo check --workspace
-
-# 测试（本地优先用精确测试路径；大范围测试由 CI 兜底）
-pnpm run product:test
-pnpm --dir src/web-ui run test:run      # 大范围测试；本地优先用精确测试路径
-cargo test --workspace                  # 大范围测试；CI 兜底
-
-# 构建（仅构建相关改动或复现 CI 时运行）
-cargo build -p bitfun-desktop           # 构建相关改动 / 复现 CI
-pnpm run build:web                      # 构建相关改动 / 复现 CI
-pnpm run build:mobile-web               # 构建相关改动 / 复现 CI
-
-# 快速构建（手动构建 / 调试流程）
-pnpm run desktop:build:fast           # debug 构建，不打包
-pnpm run desktop:build:release-fast   # release 但降低 LTO
-pnpm run desktop:build:nsis:fast      # Windows 安装器，release-fast profile
+# 仓库级检查
+pnpm run fmt:rs                    # 只格式化已改动 / 已暂存的 Rust 文件
+pnpm run check:repo-hygiene        # 仓库内容与文件名规则
+pnpm run check:github-config       # GitHub workflow / 配置规则
+pnpm run check:core-boundaries     # Cargo / 模块 owner 边界
 ```
 
-完整脚本列表见 [`package.json`](package.json)。
-
-### 构建逃生口
-
-开发/构建链路以一部分灵活性换取速度,必要时可覆盖:
-
-| 变量 / 参数 | 使用场景 |
-| --- | --- |
-| `CARGO_PROFILE_DEV_DEBUG=2` | 需要完整调试信息打断点。dev profile 默认 `line-tables-only`(panic 回溯仍带行号,PDB 体积大幅减小)。 |
-| `BITFUN_MOBILE_WEB_FORCE_BUILD=1` 或 `node scripts/mobile-web-build.cjs --force` | 源码看起来没变但需要强制重建 mobile-web。当 `src/mobile-web/dist` 新于所有输入时构建会被跳过。 |
-| `VITE_USE_POLLING=1` | Vite dev 监听不到文件变化——通常发生在网络盘或 WSL 挂载上。默认使用原生文件事件。 |
-
-`pnpm run build:web` 会并发执行类型检查与 Vite 构建,因此类型错误与打包错误出现的先后顺序不固定;两者的输出都带前缀(`[type-check]` / `[vite-build]`)。
+Web UI、mobile、CLI、Desktop、Installer、打包及 focused test 命令由最近的本地指南维护；
+完整脚本注册表仍见 [`package.json`](package.json)。
 
 ## 全局规则
 
@@ -248,24 +210,18 @@ OpenCode 兼容或目标项目治理的变更，先阅读
 
 ## 验证
 
-按触及文件选择最小本地预检。完整构建和大范围测试默认由 CI 保护；只有改动直接影响构建、
-打包，或 CI 无法覆盖对应路径时，才在本地运行更重的命令。
+验证范围由 owner 决定，不在根文档维护全仓测试矩阵：
 
-| 改动类型 | 最低验证要求 |
-|---|---|
-| 不涉及 i18n 资源/契约的前端 UI、状态或适配层 | `pnpm run type-check:web`；行为变化时再加最近的 focused test |
-| 仅 locale 资源改动 | `pnpm run i18n:audit` |
-| Locale contract 或 shared terms | `pnpm run i18n:generate && pnpm run i18n:contract:test && pnpm run i18n:audit` |
-| Web UI i18n runtime、namespace loading 或直接 `i18nService.t(...)` 调用 | `pnpm run i18n:contract:test && pnpm run type-check:web && pnpm --dir src/web-ui run test:run src/infrastructure/i18n/core/I18nService.test.ts` |
-| Mobile web UI、状态、配对、断开或重连行为 | `pnpm --dir src/mobile-web run type-check`；行为变化还需要在 PR 中说明手动配对 / 重连验证 |
-| 产品定义、schema、resolver 或 Desktop/CLI 产品构建 adapter | `pnpm run product:test`，并对默认定义运行 `pnpm run product:check` |
-| `core`、`transport`、adapter 或共享服务中的 Rust 逻辑 | `cargo check --workspace`；行为变化时再加最近的 focused `cargo test` |
-| 桌面端集成、Tauri API、browser/computer-use 或桌面专属行为 | `cargo check -p bitfun-desktop`；行为变化时再加 focused desktop tests |
-| 被桌面端 smoke/functional 流覆盖的行为 | 优先运行最近的 focused E2E/smoke check；除非改动影响构建，否则 broad build/test 交给 CI |
-| `src/crates/adapters/ai-adapters` | 运行上面相关 Rust 检查；只有 stream contract 改动时再加 `cargo test -p bitfun-agent-stream` |
-| 不涉及打包的安装器前端或 i18n runtime | `pnpm --dir BitFun-Installer run type-check` |
-| 安装器 Tauri/Rust 改动 | `cargo check --manifest-path BitFun-Installer/src-tauri/Cargo.toml` |
-| 安装器打包、payload、安装/卸载流程或 native bundling | `pnpm run installer:build` |
+1. 阅读离改动最近的本地 `AGENTS.md`，运行能够覆盖该行为的最窄命令。
+2. 优先选择单 package、单 test target 或 module filter，并使用最小 feature；不要把
+   `product-full`、`all-features` 或 workspace 全量测试当成捷径。
+3. 只有对应契约变化时才运行仓库级检查：布局/内容规则使用 repository hygiene，
+   workflow 变更使用 GitHub config，Cargo feature、依赖方向或 test-target 布局使用 core boundaries。
+4. 大范围 build、workspace suite、打包和平台矩阵默认交给现有 CI；只有改动影响这些路径或需要复现
+   CI 故障时才在本地运行。
+
+如果某个模块缺少有效的 focused 命令，应补充到该模块自己的指南，而不是继续扩张根文档。
+不要预先对齐所有模块的 test 清单；只有真实开发流程需要时才记录命令。
 
 ## Agent 文档优先级
 

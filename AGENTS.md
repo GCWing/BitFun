@@ -9,9 +9,12 @@ Repository rule: **keep product logic platform-agnostic, then expose it through 
 ## Quick start
 
 1. Read `README.md` and `CONTRIBUTING.md` before architecture-sensitive changes.
-2. For desktop development, prefer `pnpm run desktop:dev` — it provides full hot-reload (Vite HMR + Rust auto-rebuild & restart). Use `pnpm run desktop:preview:debug` only when you need a faster cold-start for frontend-only iteration (Rust changes are not auto-rebuilt).
+2. Use the primary product loop below for normal development. Surface-specific
+   alternatives belong in the nearest app guide.
 3. After Rust file changes, prefer `pnpm run fmt:rs` to format only changed or staged `.rs` files. Use `cargo fmt` only when you intentionally want broader formatting coverage.
-4. After changes, run the smallest matching verification from the table below.
+4. After changes, use the nearest local `AGENTS.md` for the focused verification
+   command. The repository-level verification section below only covers
+   cross-cutting checks.
 5. Workspace Rust dependencies own compatible versions, not broad capability
    unions. Each crate must select the dependency features it actually uses;
    keep test-only features in dev-dependencies and attach feature-gated service
@@ -50,64 +53,24 @@ Boundary rules:
 
 ## Common commands
 
-These are command references, not a pre-PR checklist. Use the Verification table
-to choose the smallest local precheck; broad suites and builds are mainly for CI
-reproduction or build-impacting changes.
+Keep this list to stable repository entry points. Surface- and crate-specific
+test commands belong in the nearest local `AGENTS.md` and must not be copied here.
 
 ```bash
-# Install
+# Setup and primary product loop
 pnpm install
-
-# Dev
 pnpm run desktop:dev               # full hot-reload: Vite HMR + Rust auto-rebuild & restart
-pnpm run desktop:preview:debug     # reuse pre-built binary + Vite HMR; no Rust auto-rebuild
-pnpm run dev:web                   # browser-only frontend
-pnpm run cli:dev                   # CLI runtime
-pnpm run cli:install               # build release + install bitfun (Windows/macOS/Linux; deprecated bitfun-cli included)
 
-# Check
-pnpm run fmt:rs                     # format only changed / staged Rust files
-pnpm run lint:web
-pnpm run type-check:web
-pnpm --dir src/mobile-web run type-check
-pnpm run i18n:contract:test          # i18n contract / resources only
-pnpm run i18n:audit                  # i18n contract / resources only
-pnpm run product:check               # default product definition
-pnpm run check:repo-hygiene
-pnpm run check:github-config
-cargo check --workspace
-
-# Test (prefer focused paths locally; broad suites are CI-backed)
-pnpm run product:test
-pnpm --dir src/web-ui run test:run      # broad suite; prefer focused paths locally
-cargo test --workspace                  # broad suite; CI-backed
-
-# Build (only for build-impacting changes or CI reproduction)
-cargo build -p bitfun-desktop           # build-impacting changes / CI reproduction
-pnpm run build:web                      # build-impacting changes / CI reproduction
-pnpm run build:mobile-web               # build-impacting changes / CI reproduction
-
-# Fast builds (manual build/debug flows)
-pnpm run desktop:build:fast           # debug build, no bundling
-pnpm run desktop:build:release-fast   # release with reduced LTO
-pnpm run desktop:build:nsis:fast      # Windows installer, release-fast profile
+# Repository checks
+pnpm run fmt:rs                    # format only changed / staged Rust files
+pnpm run check:repo-hygiene        # repository content and filename rules
+pnpm run check:github-config       # GitHub workflow/configuration rules
+pnpm run check:core-boundaries     # Cargo/module ownership boundaries
 ```
 
-For the full script list, see [`package.json`](package.json).
-
-### Build escape hatches
-
-The dev/build pipeline trades some flexibility for speed. Override when needed:
-
-| Variable / flag | Use when |
-| --- | --- |
-| `CARGO_PROFILE_DEV_DEBUG=2` | You need full debug info for breakpoints. The dev profile ships `line-tables-only` (panic backtraces keep line numbers, PDBs stay small). |
-| `BITFUN_MOBILE_WEB_FORCE_BUILD=1` or `node scripts/mobile-web-build.cjs --force` | mobile-web must rebuild even though its sources look unchanged. The build is skipped when `src/mobile-web/dist` is newer than every input. |
-| `VITE_USE_POLLING=1` | The Vite dev watcher misses changes — typically on a network drive or a WSL mount. Native file events are the default. |
-
-`pnpm run build:web` runs the type-check and the Vite build concurrently, so a
-type error and a bundling error can surface in either order; both are prefixed
-(`[type-check]` / `[vite-build]`) in the output.
+For Web UI, mobile, CLI, Desktop, Installer, packaging, and focused test
+commands, use the nearest local guide. The full script registry remains in
+[`package.json`](package.json).
 
 ## Global rules
 
@@ -286,27 +249,22 @@ cost-aware, and auditable.
 
 ## Verification
 
-Run the smallest local precheck that matches the touched files. CI is expected to
-cover full builds and broad test suites; run heavier local commands only when the
-change directly affects build, packaging, or CI cannot protect the path.
+Choose verification at the owner, not from a repository-wide test matrix:
 
-| Change type | Minimum verification |
-|---|---|
-| Frontend UI, state, or adapters without i18n resource/contract changes | `pnpm run type-check:web`, plus the nearest focused test when behavior changed |
-| Locale resource-only changes | `pnpm run i18n:audit` |
-| Locale contract or shared terms | `pnpm run i18n:generate && pnpm run i18n:contract:test && pnpm run i18n:audit` |
-| Web UI i18n runtime, namespace loading, or direct `i18nService.t(...)` usage | `pnpm run i18n:contract:test && pnpm run type-check:web && pnpm --dir src/web-ui run test:run src/infrastructure/i18n/core/I18nService.test.ts` |
-| Mobile web UI, state, pairing, disconnect, or reconnect behavior | `pnpm --dir src/mobile-web run type-check`; include manual pairing / reconnect notes when behavior changes |
-| Product definition, schema, resolver, or Desktop/CLI product build adapter | `pnpm run product:test`, plus `pnpm run product:check` for the default definition |
-| Cargo manifests, features, test targets, or crate dependency boundaries | `pnpm run check:core-boundaries:test && pnpm run check:core-boundaries`; add the smallest affected `cargo check -p <owner> --no-default-features --features <feature>` or focused target test when the compiled path changes |
-| Shared Rust logic in `core`, `transport`, adapters, or services | `cargo check --workspace`, plus the nearest focused `cargo test` when behavior changed |
-| Desktop integration, Tauri APIs, browser/computer-use, or desktop-only behavior | `cargo check -p bitfun-desktop`, plus focused desktop tests when behavior changed |
-| Behavior covered by desktop smoke/functional flows | Prefer the nearest focused E2E/smoke check; rely on CI for broad build/test coverage unless build behavior changed |
-| `src/crates/adapters/ai-adapters` | Relevant Rust checks above; add `cargo test -p bitfun-agent-stream` only when stream contracts changed |
-| Installer frontend or i18n runtime without packaging changes | `pnpm --dir BitFun-Installer run type-check` |
-| Installer Tauri/Rust changes | `cargo check --manifest-path BitFun-Installer/src-tauri/Cargo.toml` |
-| Installer packaging, payload, install/uninstall flow, or native bundling | `pnpm run installer:build` |
-| Build scripts or prerequisite changes | `pnpm run check:build-prereqs`, plus `node --test scripts/check-build-prereqs.test.mjs` when the check logic changed |
+1. Read the nearest local `AGENTS.md` and run its narrowest command that covers
+   the changed behavior.
+2. Prefer one package, one test target or module filter, and the minimum feature
+   set. Do not use `product-full`, `all-features`, or a workspace-wide suite as a
+   shortcut.
+3. Run a repository check only when its contract changed: repository hygiene for
+   layout/content rules, GitHub config for workflow changes, and core boundaries
+   for Cargo features, dependency direction, or test-target layout.
+4. Leave broad builds, workspace suites, packaging, and platform matrices to
+   existing CI unless the change affects those paths or reproduces a CI failure.
+
+If a module lacks a useful focused command, add it to that module's guide rather
+than expanding this file. Do not pre-emptively align every module's test list;
+document a command only when a real workflow needs it.
 
 ## Agent-doc priority
 

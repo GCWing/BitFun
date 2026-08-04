@@ -5085,9 +5085,11 @@ impl SessionManager {
                 }
                 None => false,
             };
-            let external_sources_supported = session.config.remote_connection_id.is_none()
+            let external_sources_supported = cfg!(feature = "external-sources")
+                && session.config.remote_connection_id.is_none()
                 && session.config.remote_ssh_host.is_none()
                 && !workspace_path_is_remote;
+            #[cfg(feature = "external-sources")]
             if external_sources_supported {
                 if let Err(error) =
                     crate::external_sources::ensure_external_source_workspace_snapshot(

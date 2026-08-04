@@ -1,303 +1,146 @@
-# BitFun 编译/构建性能审阅报告
+# BitFun 编译与依赖治理计划
+
+> 最近核实：2026-08-04
+>
+> 快照基线：`gcwing/main@061024fb2` 加权限规划 owner 迁移
+>
+> 稳定规则：[Rust 构建与依赖边界](../architecture/rust-build-dependency-boundaries.md)
+
+这份文档只回答三个问题：当前主要成本在哪里、下一步先做什么、每轮治理如何证明有效。
+模块边界以架构文档为准，具体本地命令由最近的 `AGENTS.md` 维护，PR 只记录实际运行过的验证。
+
+## 1. 当前结论
 
-- 审阅日期:2026-07-26
-- 审阅范围:Rust workspace(36 个 crate + 5 个 app,约 57.8 万行 Rust)、前端 pnpm workspace(web-ui 1676 个 TS/TSX 文件、约 36.7 万行)、构建脚本(scripts/)、CI(.github/workflows)
-- 审阅方式:只读静态分析 + 轻量命令(Cargo.lock 解析、LOC 统计、dist 产物检查),未运行完整编译
-- 环境:Windows 11,rustc/cargo 1.97.0,无 `.cargo/config.toml`、无 `rust-toolchain.toml`,PATH 中未发现 sccache/lld-link
+| 结论 | 说明 |
+|---|---|
+| 本轮收益是测试隔离，不是产品构建瘦身 | 权限纯策略测试从 Core 约 449 节点的闭包迁到 Agent Runtime 约 78 节点的闭包；产品依赖图不变 |
+| 不再用 `product-full` 解决 focused test | Core 权限编排测试当前最小闭包是 `agent-runtime,canvas-runtime`；纯策略直接在 Agent Runtime 验证 |
+| 不新增 CI 或测试入口 | 继续使用现有 test target 和 CI job；治理 PR 不复制同一闭包的验证 |
+| 下一优先级是 App Server / Server | 先核实真实生产调用链，再收敛其 Core `product-full` 边界；收益不足则停止 |
+| 依赖多版本不能按数量批量清理 | 只处理仓库能控制、行为等价且能缩小真实构建图的版本路径 |
 
----
+权限 owner 的长期边界和功能不变量见
+[Agent Runtime 服务设计](../architecture/agent-runtime-services-design.md)。这里不重复维护行为规格。
 
-## 一、发现总览表(按预期收益排序)
+## 2. 治理原则
 
-| # | 发现 | 维度 | 预期收益 | 主要证据 |
-|---|------|------|---------|---------|
-| F1 | Monaco 被"双份打包":ESM 全量打进主 JS chunk,同时又以 AMD 形式复制到 public 运行时加载 | 前端 | 高 | `src/web-ui/src/tools/editor/core/MonacoEditorCore.tsx:11` 等 10+ 处 value import;`dist/assets/index-DwMxiWtW.js`(5.4MB)含 monaco 核心签名 |
-| F2 | `build:web` 串行 type-check(366k 行、无 incremental),打包 CI 还重复执行一次 | 前端/CI | 高 | `package.json:49`、`src/web-ui/tsconfig.json`(无 incremental)、`.github/workflows/desktop-package.yml:225` |
-| F3 | `bitfun-core` 巨石 crate(202k 行 / 469 文件),任何改动触发整 crate + 下游全量重编 | Rust | 高 | `src/crates/assembly/core`(LOC 统计) |
-| F4 | release profile 全量 LTO + codegen-units=1 用于所有平台打包,仅 Linux aarch64 例外用了 thin | Rust/CI | 高 | `Cargo.toml:282-286`、`.github/workflows/desktop-package.yml:106` |
-| F5 | 本地 dev 构建:全量 debuginfo + MSVC 默认链接器,`tauri dev` 路径未套用 dev.cjs 的加速环境变量 | Rust | 高 | `Cargo.toml:279-280`、`scripts/dev.cjs:346-351` vs `scripts/dev.cjs:749-767`、无 `.cargo/config.toml` |
-| F6 | Cargo.lock 被 gitignore,CI 每次 `cargo generate-lockfile` → 依赖漂移 + rust-cache 频繁失效 | Rust/CI | 中-高 | `.gitignore:26`、`.github/workflows/ci.yml:47-48,136-137` |
-| F7 | CI:`rust-build-check` 串行等待 `frontend-build`(含大量 lint/audit/test)完成才开始 | CI | 中 | `.github/workflows/ci.yml:72` |
-| F8 | 每次 `desktop:dev` 无条件重建 mobile-web(先删 target 内产物 + pnpm install + vite build) | 脚本 | 中 | `scripts/dev.cjs:704-714`、`scripts/mobile-web-build.cjs:75-133` |
-| F9 | 依赖树重复严重:1177 个包中 112 个名字存在多版本(image、thiserror、rand×3、getrandom×4、windows-sys×6、phf×6 等) | Rust | 中 | Cargo.lock 解析;`src/apps/desktop/Cargo.toml:85`(image 0.24 vs workspace 0.25) |
-| F10 | reqwest TLS 单栈治理（已完成） | Rust | 已兑现 | workspace transport-only + 客户端 owner 显式 Rustls；见 F10 治理结果 |
-| F11 | Vite dev watcher 强制 usePolling + 100ms 轮询,Windows 上 CPU 高、拖慢 HMR | 前端 | 中 | `src/web-ui/vite.config.ts:68-74` |
-| F12 | Agent prompts 已抽到无依赖内容 owner；Cargo 指纹仍会让 Core 重检，公告仍由 Core 按 feature 生成 | Rust | 中（部分治理） | `src/crates/assembly/agent-content`、`src/crates/assembly/core/build.rs` |
-| F13 | beforeBuildCommand 内 web 构建与 mobile-web 构建纯串行;dev.cjs 准备步骤也全串行 | 脚本 | 中 | `src/apps/desktop/tauri.conf.json`(build 块)、`scripts/dev.cjs:668-737` |
-| F14 | tokio 全 workspace 开 `full` feature;tauri 开 `unstable`;个别重依赖(oxc、rquickjs、git2 vendored、sherpa-onnx)集中于少数 feature | Rust | 低-中 | `Cargo.toml:72,149,178-180,183,248` |
-| F15 | tsconfig(web-ui/mobile-web)未启用 incremental;type-check 每次冷启动 | 前端 | 低-中 | `src/web-ui/tsconfig.json`(全文无 incremental) |
-| F16 | copy-monaco 在 postinstall / prebuild / dev.cjs 三处重复执行(14MB / 103 文件,单次成本小) | 脚本 | 低 | `package.json:10,16,45`、`scripts/dev.cjs:669` |
-| F17 | pnpm 结构小问题:tests/e2e 已在 workspace 内仍单独 install;installer 独立 Rust workspace 导致 Tauri 栈本地编译两份 | 结构 | 低 | `pnpm-workspace.yaml`、`package.json:92`、`Cargo.toml:40-42` |
-| F18 | build.rs 生成代码遍历 HashMap,输出字节序不确定 → 不可复现构建,削弱 sccache/远端缓存效果 | Rust | 低 | `src/crates/assembly/core/build.rs:303,429`、`src/apps/cli/build.rs` |
-| F19 | `[profile.dev] incremental = true` 为默认值,冗余;dev profile 无任何针对性调优 | Rust | 低 | `Cargo.toml:279-280` |
-| F20 | `bitfun-agent-runtime` 的 28 个 integration targets 已收敛为 5 个显式目标，同时保留 Unix 进程测试隔离 | Rust/Test | 已兑现 | `src/crates/execution/agent-runtime/Cargo.toml`、`tests/agent_*_contracts.rs` |
+目标是缩短常用开发、focused test、CI 和打包路径，同时保持产品行为与分层边界稳定。
+每个治理 PR 必须同时满足以下门槛：
 
----
+| 门槛 | 必须回答的问题 |
+|---|---|
+| Owner | 逻辑属于哪个现有 owner？是否存在真实生产消费者？ |
+| 行为 | 本地、远程和平台差异如何保持？哪些等价测试保护它？ |
+| 构建图 | 哪个产品或测试闭包实际退出了哪些依赖？ |
+| 耗时 | 若宣称性能收益，是否在同机器、同命令、同缓存状态下测量？ |
+| 增量成本 | 是否新增 dependency、feature、test target、CI job 或长期兼容层？ |
 
-## 二、逐条详情
+以下做法不属于优化：
 
-### F1(高)Monaco 双份:ESM 全量进主 chunk + AMD 副本运行时再加载
+- 用 `product-full`、`all-features` 或 workspace 全量测试掩盖 feature 边界；
+- 为减少重复版本数字强制 patch 平台依赖、宏生态或第三方兼容窗口；
+- 新建第二套 Agent、Tool、Permission Runtime 或无消费者抽象；
+- 未测量就引入 sccache、替换链接器、合并 Installer workspace 或增加 CI job；
+- 删除跨平台行为保护来换取表面 CI 时长。
 
-**问题描述**
-项目的 Monaco 策略是:`pnpm run copy-monaco` 把 `monaco-editor/min/vs`(AMD 版,14MB/103 文件)复制到 `src/web-ui/public/monaco-editor`,运行时由 `@monaco-editor/react` 的 `loader.init()` 从该路径加载(`src/web-ui/src/tools/editor/services/MonacoInitManager.ts:11,71-75`)。但同时有 10+ 个源文件对 `monaco-editor` 做了 **value import**(非 `import type`):
+## 3. 当前基线
 
-- `src/web-ui/src/component-library/components/CodeEditor/CodeEditor.tsx:7`
-- `src/web-ui/src/shared/helpers/MonacoHelper.ts:3`
-- `src/web-ui/src/tools/editor/core/MonacoEditorCore.tsx:11`(`monaco.editor.create(...)` 实际调用,见 213 行)
-- `src/web-ui/src/tools/editor/components/CodeEditor.tsx:10`(814 行 `monaco.editor.create`)
-- `src/web-ui/src/tools/editor/services/MonacoModelManager.ts:12`(95 行 `monaco.editor.onWillDisposeModel`)等
+### 3.1 Rust 构建图
 
-vite.config.ts 没有为 `monaco-editor` 做 alias/external 处理,Rollup 会解析到 `monaco-editor` 的 ESM 入口(完整 editor),整包被打进**入口 chunk**。产物证据:`dist/assets/index-DwMxiWtW.js` 高达 **5.4MB**,其中含有 Monaco 内核独有的类名字符串 `monaco-mouse-cursor-text`(仅在 `index-DwMxiWtW.js` 与 monaco 的 CSS 中出现),且 `MonacoEnvironment` 也出现在该 chunk。即:**构建期要多打包压缩 ~3-4MB 的 Monaco ESM,运行期首屏要多下载解析这份代码,然后再从 /monaco-editor 加载第二份 AMD Monaco**。
+| 路径 | 当前快照 | 判断 |
+|---|---:|---|
+| `bitfun-core` | 约 493 个 Rust 文件、243,900 行 | 仍是最大的高频失效面；只按真实 owner 做纵向迁移 |
+| Core 直接消费者 | ACP、App Server、CLI、Desktop、SDK Host、Server | 每次只迁移一个有真实调用方的服务切片 |
+| Agent Runtime focused test | 约 78 个唯一 package/version 节点 | 适合无 IO 的 Agent Runtime 纯决策测试 |
+| Core `agent-runtime` check | 约 391 个节点 | 窄 owner feature 可独立编译 |
+| Core 权限编排测试 | `agent-runtime,canvas-runtime`，约 449 个节点 | 保留真实 scope、Hook、请求生命周期和 Tool 执行 |
+| Core `product-full` test | 约 516 个节点 | 仅用于确实需要完整产品装配的兼容路径 |
+| Agent Runtime integration target | 5 个显式 target | 已完成收敛；平台和进程边界继续独立 |
 
-**预期收益**:高。入口 chunk 缩小约 60-70%,vite build(压缩阶段)时间显著下降,应用启动时间同步受益。
+节点数来自同一 Windows 环境下的 `cargo tree --locked` 相对统计，不是实际耗时，也不是跨平台阈值。
+权限纯策略路径理论上少进入约 371 个节点；产品构建闭包没有变化。
 
-**优化方案(二选一)**
-- 方案 A(推荐,改动小):所有 `import * as monaco from 'monaco-editor'` 改为 `import type * as monaco from 'monaco-editor'`,运行时实例统一从 `MonacoInitManager.initialize()`/`loader.init()` 的返回值获取(现有单例已具备);同时把 `monaco-editor/min/vs/editor/editor.main.css` 的 import 保持不变(纯 CSS)。用 `scripts/report-web-bundle-size.cjs` 验证 index chunk 是否缩回。
-- 方案 B(彻底,改动大):放弃 AMD 副本与 copy-monaco,全面走 Vite ESM + `?worker` 方式打包 Monaco 与其 worker,由 Vite 做 code-split(`monaco` 单独 chunk,懒加载)。
+### 3.2 依赖与 feature
 
-### F2(高)build:web 串行 type-check、无增量,CI 打包重复执行
+| 状态 | 范围 | 处理结论 |
+|---|---|---|
+| 已稳定 | 根 `Cargo.lock`、Reqwest Rustls 单栈、Desktop 直接 `image 0.25`、workspace Tokio 最小基线 | 不重复治理 |
+| 下一步核实 | App Server / Server 的 Core `product-full` | 按生产 construction path 收敛，不先写 feature 清单 |
+| 可独立治理 | Installer 的 Reqwest 0.12、独立 lockfile、疑似无消费者的 `tokio/full` | 保持 Installer 独立 workspace，不顺手合并 |
+| 等待上游 | `screenshots 0.8.10 -> image 0.24.9` | 只有受维护且行为等价的上游替代出现后再处理 |
+| 明确保留 | `portable-pty 0.8/0.9` | 非 OHOS 与 OHOS 的平台兼容选择，不为去重破坏 |
 
-**问题描述**
-`package.json:49`:`"build:web": "pnpm run type-check:web && pnpm --dir src/web-ui build && pnpm run verify:monaco-assets"`。`type-check:web` 即 `tsc --noEmit`(`src/web-ui/package.json:16`),对 1676 个文件/36.7 万行做全量检查,且 `src/web-ui/tsconfig.json` 未开启 `incremental`(仅 `tsconfig.node.json:3` 有 composite)。Vite 构建本身不依赖 tsc(esbuild 转译),两者完全可并行。更严重的是打包 CI 里重复执行:`.github/workflows/desktop-package.yml:225` 先跑 `pnpm run type-check:web`,随后 228 行的 build_command → `desktop:build` → `tauri build` 的 `beforeBuildCommand`(`src/apps/desktop/tauri.conf.json`)= `pnpm run build:web && ...` → **再次 type-check**。5 个平台矩阵各多花一次全量 tsc。
+根 lockfile 约有 116 个名称存在多版本。这个数字只用于发现候选，不能直接转化为治理任务。
+`oxc`、`rquickjs`、vendored `git2`、`sherpa-onnx` 等重依赖都有真实 capability owner；只有某个产品入口
+不消费对应能力时，才允许让它退出该入口的构建图。
 
-**预期收益**:高。本地 `build:web` 墙钟时间约减 30-50%;打包 CI 每个平台省一次全量 tsc(约 1-3 分钟 × 5 平台)。
+### 3.3 CI 与本地验证
 
-**优化方案**
-1. `build:web` 改为并行:`concurrently "pnpm run type-check:web" "pnpm --dir src/web-ui build"`(或用 `npm-run-all --parallel`),verify 放最后。
-2. `src/web-ui/tsconfig.json` 增加 `"incremental": true, "tsBuildInfoFile": "node_modules/.cache/tsbuildinfo"`(noEmit + incremental 在 TS 5.x 合法)。
-3. desktop-package.yml 中二选一:删除 225 行独立 type-check,或给 desktop:build 提供跳过 type-check 的入口(例如 `BITFUN_SKIP_TYPECHECK=1` 时 build:web 只跑 vite build)。
+- 现有 CI 已覆盖 workspace check、Core/Desktop lib、平台敏感 owner 测试和独立 runtime/CLI 验证；
+  不再为治理 PR 叠加同闭包 job。
+- 本地先运行 owner 文档维护的最小 package/target/feature 命令。广泛 build、workspace suite、打包和
+  平台矩阵由 CI 承担，除非改动直接影响这些路径或需要复现 CI 故障。
+- CI 收敛必须基于多次 job/step 耗时、缓存状态、平台事实和失败历史。测试名称相似不等于覆盖重复，
+  `SKIPPED`、未触发或只编译未运行也不等于通过。
 
-### F3(高)bitfun-core 巨石 crate 是 Rust 增量编译瓶颈
+## 4. 已完成，不再重复实施
 
-**问题描述**
-LOC 统计(只算各 crate `src/`):`src/crates/assembly/core` **202,735 行 / 469 文件**,是第二名(services-integrations 72k)的近 3 倍;bitfun-desktop 依赖它(`src/apps/desktop/Cargo.toml:22`)。rustc 的编译单元是 crate:core 内任何一行改动都会重新编译整个 202k 行 crate(增量编译可缓解 codegen,但 MIR/借用检查/单体化与下游 `bitfun-desktop`(63k 行)的重编译+重链接不可避免)。相比之下 workspace 其他 crate 拆分粒度合理(contracts/adapters/execution 层多为 1-20k 行)。此外 core 的 `Cargo.toml` 显示它同时聚合了 sqlite(`rusqlite bundled`)、MCP 客户端、调试 HTTP 服务器、git2 等,大量子域仍在一个编译单元内。
+| 主题 | 当前结果 |
+|---|---|
+| 前端构建 | Monaco 运行时加载已统一；Web type-check/Vite 并行；Web/Mobile TS 已启用 incremental |
+| 开发循环 | mobile-web 支持输入 mtime 短路；Vite 默认使用原生文件事件；前端准备步骤已并行 |
+| Rust profile | release 使用 thin LTO；dev 使用 `line-tables-only` 和高 codegen-units，并保留调试逃生口 |
+| 可复现解析 | 根 lockfile 已提交，普通 CI 使用 `--locked`；build.rs 输出已排序 |
+| CI 拓扑 | Rust job 不再等待完整前端构建，自建 Tauri 检查所需资源目录 |
+| 依赖收敛 | Desktop 直接 image 版本和 Reqwest TLS 双栈已治理 |
+| Agent Runtime 测试 | 28 个 integration executable 已收敛为 5 个职责/平台 target |
 
-**预期收益**:高(日常增量编译;长期工程)。
+内置 Agent 内容已经移到无第三方依赖的 `bitfun-agent-content`，减少了 Core build-script 工作；但 Core
+仍直接依赖该 crate。没有足够产品收益前，不为消除这一编译指纹引入动态 provider、运行时文件读取或资源协议。
 
-**优化方案(渐进式)**
-1. 先用 `cargo build --timings` 定位 core 的编译耗时占比,确认瓶颈(低风险、只读)。
-2. 按现有目录边界(`src/agentic`、`src/service/announcement`、sqlite 存储层、debug-log server 等)把相对独立、低耦合的子模块下沉为新 crate(workspace 已有清晰分层惯例)。优先拆"改动频繁"与"几乎不变"的两极模块。
-3. 拆分时保持 re-export(`pub use`)以最小化调用方改动。
+## 5. 后续顺序
 
-### F4(高)release 全量 LTO + codegen-units=1 拖慢所有打包构建
+### R1：收敛 App Server / Server 的 `product-full` 边界
 
-**问题描述**
-`Cargo.toml:282-286`:`[profile.release] opt-level=3, lto=true(fat), codegen-units=1, strip=true`。fat LTO + CGU=1 使最终 crate 的 codegen/链接几乎完全单线程化,是 release 构建时长的最大放大器;desktop-package.yml 5 个平台打包全部使用该 profile,唯独 Linux aarch64 因慢而被显式覆盖为 `CARGO_PROFILE_RELEASE_LTO=thin`(`.github/workflows/desktop-package.yml:106`)——说明团队已验证 thin LTO 可行。thin LTO 通常仅比 fat LTO 损失 0-2% 运行性能,但构建时间可减 30-60%。
+这是下一 PR 的推荐范围，也是唯一需要优先设计的核心入口改造。
 
-**预期收益**:高(打包 CI 与本地 release 构建)。
+先回答：
 
-**优化方案**
-1. `[profile.release]` 改为 `lto = "thin"`;codegen-units 可保守维持 1,或放宽到 16 换更多并行(先 A/B 对比二进制体积与 e2e perf 基线,仓库已有 `e2e:test:perf:release-fast` 类基础设施)。
-2. 移除 desktop-package.yml:106 的特例环境变量(统一后不再需要)。
-3. 若担心性能回退,可只在 nightly/desktop-package 的非发布分支先切 thin,观察一个周期。
+- App Server 与 Server 的真实 construction、command 和 schema 路径分别消费哪些 Core owner？
+- Server 对未实现能力应保持什么 typed unsupported 行为？
+- 哪些能力由 Server 直接消费，哪些只是经 App Server 间接带入？
 
-### F5(高)本地 dev 循环:全量 debuginfo + 默认 MSVC 链接器
+实现边界：
 
-**问题描述**
-`[profile.dev]` 只有 `incremental = true`(`Cargo.toml:279-280`,本身是默认值),debuginfo 为默认 full。Windows 上每次增量构建的大头是 link.exe 重链 bitfun-desktop(数百依赖 + 63k 行 app crate)并重写巨型 PDB。dev.cjs 已经意识到这一点——`rebuildDesktopDebugBinary()` 设置 `CARGO_PROFILE_DEV_DEBUG=0、CODEGEN_UNITS=256`(`scripts/dev.cjs:346-351`),**但只作用于 desktop-preview 路径**;最常用的 `desktop:dev`(`tauri dev`,`scripts/dev.cjs:749-767`)与 `desktop:dev:raw` 完全没有这些环境变量,仍是全量 debuginfo。仓库也没有 `.cargo/config.toml`,未启用任何链接器优化(rust-lld)或编译缓存(sccache)。
+- 只替换一个端到端 capability slice 的依赖路径，不一次迁移全部 Core 调用；
+- 优先显式选择已有 owner feature，或消费现有 Runtime SDK/service port；
+- 不复制 Session、Tool、Permission、Hook、Event 状态，不建立第二 Runtime；
+- 未迁移能力保留现有兼容路径或明确 unsupported，禁止静默本机回退。
 
-**预期收益**:高(日常 Rust 改动的"改一行到重启应用"时间,链接期通常可减 30-60%)。
+验收必须覆盖 Server WebSocket/App Server round-trip、权限、取消、事件与恢复语义，并对比 App Server、
+Server 的 normal/build/test closure。若构建图收益不足或行为等价无法证明，则不删除兼容边界。
 
-**优化方案**
-1. 低风险:在 `Cargo.toml` `[profile.dev]` 显式设置 `debug = "line-tables-only"`(保留 panic 栈回溯行号,PDB 大幅缩小);需要完整调试时用 `CARGO_PROFILE_DEV_DEBUG=2` 临时覆盖。
-2. 或者把 dev.cjs 的三个 CARGO_PROFILE_DEV_* 环境变量同样注入 `desktop:dev` 的 `tauri dev` 进程(与 preview 路径一致,改动只在脚本层)。
-3. 中风险:新增 `.cargo/config.toml`,对 `x86_64-pc-windows-msvc` 设置 `linker = "rust-lld"`(随 rustup 分发,无需额外安装);先在本地验证 tauri/webview2 链接参数兼容后再提交。
-4. 可选:安装 sccache 并设 `RUSTC_WRAPPER`(注意 sccache 与 incremental 互斥,更适合 CI/冷构建场景,见 F18 的可复现性前提)。
+### 后续队列
 
-### F6(中-高)Cargo.lock 不入库,CI 每次重新解析依赖
+| 顺序 | 范围 | 启动条件 |
+|---|---|---|
+| R2 | 从 ACP 迁移一个已有 Services owner 的 host-service 切片 | 明确真实调用方，并能保持 Windows 进程树、SSH、取消和远程身份语义 |
+| R3 | Installer lockfile、Reqwest 0.13 与无消费者依赖治理 | 下载、SSE/进度、取消、代理、证书失败和三平台 packaging 可验证 |
+| R4 | 消除 `screenshots -> image 0.24` | 有受维护、无需 fork/vendoring 且屏幕枚举/DPI/权限行为等价的上游路径 |
 
-**问题描述**
-`.gitignore:26` 忽略了 `Cargo.lock`;CI 各 Rust job 先 `cargo generate-lockfile` 再 `--locked`(`.github/workflows/ci.yml:47-48,136-137`),`src/apps/desktop/Cargo.toml:48-53` 的注释也明说"CI 有意忽略根 Cargo.lock"。后果:(a) 任何上游依赖发新版本都会改变解析结果,swatinem/rust-cache 以 lockfile 哈希为 key,缓存频繁整段失效,依赖需从零重编;(b) 构建不可复现,还被迫用 `=x.y.z` 硬钉住问题依赖(`Cargo.toml:98-107` 的 time/brotli/bitflags 补丁群);(c) 本地与 CI 依赖树可能不一致。对应用型(非库)workspace,Cargo 官方建议提交 lockfile。
+每一步都在前一 PR 合入后的最新 main 重新测量。无法证明边界或收益时停止，不为了完成清单继续重构。
 
-**预期收益**:中-高(CI 稳定性与缓存命中率;偶发的"上游发版导致全量重编/编译失败"归零)。
+## 6. 每轮 PR 的证据
 
-**优化方案**
-1. 从 .gitignore 移除 Cargo.lock 并提交(根 workspace 与 BitFun-Installer/src-tauri 各一份);CI 删除 `cargo generate-lockfile` 步骤,直接 `--locked`。
-2. 依赖更新改为显式动作(Renovate/Dependabot 或定期 `cargo update` PR),届时可逐步解除 `=` 钉版。
-3. 风险:改变现行"自动吃最新补丁版本"策略,需团队确认;属流程变更而非代码变更。
+PR 描述只需维护一张简表，不新增全仓依赖台账：
 
-### F7(中)CI 拓扑:Rust 检查串行排在完整前端流水线之后
+| 证据 | 变更前 | 变更后 |
+|---|---:|---:|
+| 真实产品 normal/build closure |  |  |
+| owner focused-test closure |  |  |
+| 目标重复版本或重型依赖路径 |  |  |
+| 冷、热或增量耗时（同机器、命令、缓存状态） |  |  |
+| 新增 dependency、feature、test target、CI job |  |  |
 
-**问题描述**
-`.github/workflows/ci.yml:72` `rust-build-check.needs: frontend-build`。frontend-build 包含 hygiene/boundaries/i18n/theme 审计、eslint、vitest、build:web、mobile-web 构建等十几个串行步骤,全部完成后三平台 Rust job 才开始。Rust 侧对前端的真实依赖只有 `dist/` 存在(tauri-build 校验 frontendDist)与 `src/mobile-web/dist` 目录(CI 已用 `mkdir -p` 打桩,ci.yml:99-101)。
-
-**预期收益**:中(PR 反馈总时长,估计缩短 5-15 分钟视 frontend job 时长)。
-
-**优化方案**
-- 将 `frontend-build` 拆成 `frontend-checks`(lint/audit/test)与 `frontend-dist`(仅 `pnpm install + build:web + build:mobile-web` 上传产物)两个 job:Rust job 只 `needs: frontend-dist`;或者更激进——Rust check/test 根本不需要真实 dist,给 `dist/` 也 mkdir 打桩即可完全并行(需验证 tauri-build 仅检查目录存在)。
-
-### F8(中)desktop:dev 每次冷启动都全量重建 mobile-web
-
-**问题描述**
-`scripts/dev.cjs:704-714` 在每次 `desktop:dev` 启动时调用 `buildMobileWeb({install:true})`;`scripts/mobile-web-build.cjs` 无任何变更检测:75-94 行先删除所有 `target/*/mobile-web` 副本,109 行无条件 `pnpm install`,122 行无条件 `vite build`。mobile-web 源码不变时这是纯浪费(install + vite build 通常 20-60s),且删除 target 副本会迫使桌面端重新拷贝。`lint:rs:desktop`(package.json:41)同样每次先跑 `prepare:mobile-web`。
-
-**预期收益**:中(每次 desktop dev 启动省 20-60s)。
-
-**优化方案**
-- 在 buildMobileWeb 中加入 mtime/hash 短路:比较 `src/mobile-web/{src,public,package.json,vite.config.*}` 最新 mtime 与 `src/mobile-web/dist` 构建标记(dev.cjs 已有同型实现 `getDesktopPreviewRebuildPlan`,`scripts/dev.cjs:420-456`,可复用);dist 有效时跳过 clean/install/build。提供 `--force` 逃生口。
-
-### F9(中)重复依赖:112 个包存在多版本
-
-**问题描述**
-Cargo.lock 共 1177 个包,其中 112 个名字存在 2 个以上版本(解析自本地 Cargo.lock)。重点:
-- `image 0.24.9 + 0.25.10`:**根因在自家代码**——workspace 定义 image 0.25(`Cargo.toml:108`),但 `src/apps/desktop/Cargo.toml:85` 单独写死 `image = "0.24"`,两份 image(含 png/jpeg 解码器栈)都要编译。
-- `rand 0.7/0.8/0.9`、`getrandom ×4`、`thiserror 1+2`、`syn 1+2`、`windows-sys ×6`、`windows-targets ×4`、`phf ×6`、`toml/toml_edit ×3`、`zbus 4+5`、`which 4+8`、`portable-pty 0.8+0.9`、`nix ×4` 等,多数由第三方传递引入,但每个多版本都是一份额外编译时间与 target 体积。
-
-**预期收益**:中(冷构建时间与 target 体积;image 一项立收)。
-
-**优化方案**
-1. 立即:desktop 的 image 改回 `image = { workspace = true }`(0.25 同样支持 png/jpeg feature 子集),验证调用点 API 兼容。
-2. 运行 `cargo tree -d -e normal --workspace`(建议加 `--target x86_64-pc-windows-msvc` 过滤无关平台)输出清单,针对 top 传递源头(如 pull 出 rand 0.7 的 crate)评估升级;`russh 0.45`、`screenshots 0.8`、`syntect-tui` 等旧版是主要嫌疑。
-3. 将该清单纳入 nightly CI 做趋势看护(非阻断)。
-
-### F10(已治理)reqwest TLS 单栈
-
-**治理结果（2026-08-03）**
-- workspace 级 `reqwest` 只保留 HTTP/序列化能力，URL-only 消费者不再被动加载 TLS；CLI、Desktop、AI Adapter、MiniApp Market 与 Services 的各 Reqwest owner feature 显式选择 Rustls。
-- Reqwest 0.13 的 `rustls` feature 使用平台证书验证器，保留系统信任根行为；三处显式 Client Builder 统一使用 `tls_backend_rustls()`，不再混用默认后端或弃用 API。
-- `Cargo.lock` 已移除 `native-tls`、`hyper-tls`、`tokio-native-tls`、`openssl` 与 `openssl-macros`；`openssl-sys` 只剩非 Windows 的 Git/libgit2 目标路径。Windows 产品图、本地开发、常规构建和三个既有 workflow 不再下载或配置预编译 OpenSSL。
-- 边界检查约束 TLS 必须由真实客户端 owner 选择，避免未来把后端重新提升为 workspace 全局 feature；没有新增 CI job 或测试步骤。
-
-**收益与风险**:Windows CI 每个受影响 job 省去约 6.6 秒 OpenSSL bootstrap（以 PR #1991 的 Windows job 步骤时间戳为基线），并减少一套 TLS 依赖闭包。显式代理配置仍由 Reqwest 处理；未受系统信任的自签证书仍会按安全默认值拒绝。仓库没有 Reqwest client identity 或自定义 native connector 用法，因此未保留第二后端兼容层。
-
-### F11(中)Vite dev 强制 100ms 轮询 watch
-
-**问题描述**
-`src/web-ui/vite.config.ts:68-74`:`watch: { usePolling: true, interval: 100 }`,注释称为 Windows 稳定性。对 1676 个源文件 + node_modules 的轮询每 100ms 扫一轮,持续占用 CPU(常见 5-15% 单核),还与 Vite 官方建议相悖(Windows 原生 fs 事件在本地盘上是可靠的,轮询主要用于网络盘/WSL 挂载)。
-
-**预期收益**:中(dev 机器 CPU/风扇/电池,HMR 延迟)。
-
-**优化方案**
-- 默认关闭 `usePolling`(删除该配置),仅当 `process.env.VITE_USE_POLLING` 显式设置时启用轮询作为逃生口;若必须保留轮询,interval 提到 ≥1000ms。
-
-### F12(中，部分治理)内置 Agent 内容已独立归属，Core 失效链仍存在
-
-**2026-08-03 治理结果**
-
-- 35 个内置 Agent prompt 移到无第三方依赖、无 feature 的 `bitfun-agent-content`；Core 只在
-  `product-full` 组装中依赖它，窄 `announcement` feature 不加载该 crate。
-- 26 个 catalog prompt 保留旧 build.rs 生成 Rust 源码时的换行归一化；Memory phase-1 的生产常量与 9 个
-  Insights 常量继续保留旧 `include_str!` 字节行为。Core 继续持有选择、渲染、Memory/Insights 工作流与错误语义。
-- Core build script 不再扫描 Agent prompt；内置 Skill metadata 仅在 `product-full` 生成，announcement
-  内容仅在 `announcement` feature 生成。
-- 未采用 debug 运行时读文件方案。它会使 debug/release 的内容来源、错误时机与自包含行为不同，不符合本轮
-  功能规格完全一致的约束。
-
-**同机热缓存实测**（Windows，`cargo check -p bitfun-core --features product-full`）：
-
-| 场景 | Cargo 失效路径 | 耗时 |
-|---|---|---:|
-| 无改动热检查 | 全部 fresh | 0.92s |
-| 迁移前修改 `init_agents_md.md` | Core build script + `bitfun-core` | 11.38s |
-| 迁移后修改同一 prompt | `bitfun-agent-content` + 依赖它的 `bitfun-core` | 10.02s |
-
-当前收益约 12%，主要来自移除 Core prompt codegen 工作；Rust/Cargo 仍会因直接依赖重建而检查 Core，因此这不是
-“下游完全隔离”。若后续要消除 Core 重检，必须先以独立设计评审 prompt provider 注入或资源打包路径，并证明
-Desktop、CLI、ACP、Server 与 SDK Host 的内容、错误和生命周期完全等价，不能用运行时 fallback 换取表面指标。
-
-### F13(中)构建/启动编排中的串行步骤
-
-**问题描述**
-- `src/apps/desktop/tauri.conf.json` build 块:`beforeBuildCommand: "pnpm run build:web && pnpm run prepare:mobile-web"` —— web-ui 构建、mobile-web 构建互相独立却串行;且它们整体又发生在 cargo 编译之前(tauri CLI 约束,前端与 Rust 无法并行)。
-- `scripts/dev.cjs:668-737`:copy-monaco → generate-version → mobile-web → flashgrep 全串行,彼此无依赖。
-
-**预期收益**:中(desktop:build 总时长减 1-3 分钟;dev 启动准备段减半)。
-
-**优化方案**
-1. beforeBuildCommand 改为并行封装脚本(Node 内 `Promise.all` 两个子进程,注意日志前缀区分)。
-2. dev.cjs 的四个准备步骤用 `Promise.all` 并行(copy/generate/flashgrep 都是纯本地 IO)。
-3. 进阶:绕开 tauri CLI 的串行约束——desktop-tauri-build.mjs 先并行启动"前端构建"与"cargo build(直接 cargo,不经 tauri)",最后再让 `tauri build` 复用增量结果;实现复杂度较高,建议放到后期。
-
-### F14(低-中)feature 面偏大与重量级依赖
-
-**问题描述**
-- `tokio = { features = ["full"] }`(Cargo.toml:72)全 workspace 生效,包含 io-std/signal/process 等未必全用的模块(tokio 编译不算大头,收益有限)。
-- `tauri` 开 `unstable` + `tray-icon` + `macos-private-api`(183 行)——`unstable` 为多 webview 所需,合理但注意跟踪。
-- 重量级依赖:`oxc`(JS 编译器,178 行,canvas-runtime feature)、`rquickjs`(C 的 QuickJS,180 行)、`git2 vendored-libgit2`(149 行,冷构建编译整个 libgit2 C 库)、`sherpa-onnx`(248 行,speech feature,已用 prebuilt 缓解,target 下有 sherpa-onnx-prebuilt)。desktop 默认开 `canvas-runtime + speech`(`src/apps/desktop/Cargo.toml:27`)。
-
-**预期收益**:低-中(主要影响冷构建)。
-
-**优化方案**
-- tokio 换成显式 feature 列表(rt-multi-thread、macros、fs、net、io-util、sync、time、process、signal 按需);一次性梳理,风险低但触碰面广,建议用 `cargo check --workspace` 验证。
-- 为 `canvas-runtime`/`speech` 评估"开发期默认关闭"的 dev feature 预设(例如 desktop `default = []` 已是如此,可提供 `desktop:dev:lite` 脚本传 `--no-default-features` 组合),按需取舍。
-
-### F15(低-中)tsc 无增量缓存
-
-见 F2 方案 2;`src/mobile-web/tsconfig.json` 同样处理。单独列出是因为即使不动 build:web 编排,本地反复 `type-check:web` 也能从 incremental 获益(二次检查通常快 3-10 倍)。
-
-### F16(低)copy-monaco 重复执行
-
-**问题描述**:`package.json:10,16,45` + `scripts/dev.cjs:669`,postinstall、prebuild:web、dev 启动三处都会全量复制。实测量级仅 14MB/103 文件,单次秒级,优先级低。
-**优化方案**:在 copy 脚本中比对 monaco-editor 版本号(package.json vs 目标目录内 marker 文件),相同则跳过。
-
-### F17(低)pnpm/workspace 结构小问题
-
-- `tests/e2e` 已列入 `pnpm-workspace.yaml`,根 `pnpm install` 已装依赖,但仍保留 `e2e:install`(package.json:92)单独 install 入口,易造成双份状态;website 不在 workspace(独立 install),属有意隔离可保留。
-- `BitFun-Installer/src-tauri` 是独立 Rust workspace(根 Cargo.toml:40-42 exclude),与主 workspace 各自维护 target,Tauri 全家桶在本地要编两份。可评估共享 `CARGO_TARGET_DIR`(风险:两个 workspace 依赖版本不同会互相踩缓存,需先对齐版本)或接受现状。
-
-### F18(低)build.rs 生成代码不可复现
-
-**问题描述**:`assembly/core/build.rs:303,429` 与 `src/apps/cli/build.rs` 遍历 `HashMap` 生成 `map.insert(...)` 行,顺序随机。同样输入两次构建产出字节不同的生成文件,破坏可复现构建,也让 sccache/远端缓存对相关 crate 失效。
-**优化方案**:改用 `BTreeMap` 或收集后 `sort`,一行级改动、零风险。
-
-### F19(低)profile.dev 冗余配置
-
-`Cargo.toml:279-280` 的 `incremental = true` 是 dev 默认值,可删;该段落是放置 F5 建议(`debug = "line-tables-only"`)的天然位置。
-
-### F20（已治理）agent-runtime integration test 重复链接
-
-`bitfun-agent-runtime` 没有可选 feature，原 28 个 integration test target 中的 27 个跨平台契约使用相同的依赖闭包，
-却在每次 `cargo test -p bitfun-agent-runtime` 时分别编译和链接。当前通过 `autotests = false` 将它们按定义、会话、
-交互和 long-horizon 职责归入 4 个 target；另保留 1 个 Unix-only 原生进程 target，避免为了减少数量而跨平台或进程
-边界合并。246 个 Unix integration tests、224 个 Windows integration tests 及原有 lib tests 均保留。现有 CI 命令和
-覆盖范围不变，未新增测试、feature、依赖或 workflow；现有边界检查会拒绝未注册入口和未被引用的叶测试文件。
-
-以下是本机观察值，不作为其他机器的固定收益承诺。测量日期 2026-08-03，基线
-`53c8c029a8b6245e810cbee0707c820bc74fb7b8`，Windows 10.0.19045、i7-10700、rustc/cargo 1.97.1；依赖预热后按
-原布局/现布局交错执行 A/B/A/B/A/B，每次运行
-`cargo clean -p bitfun-agent-runtime` 和 `cargo test -p bitfun-agent-runtime --no-run --locked --quiet`：
-
-| 布局 | 三次有效样本 | 中位数 | integration PDB |
-|---|---|---:|---:|
-| 原 28 targets | 12.48s / 15.01s / 13.63s | 13.63s | 312.3 MiB |
-| 现 5 targets | 11.90s / 11.04s / 11.31s | 11.31s | 77.4 MiB |
-
-本机包级 test 编译/链接中位数降低约 17.0%，PDB 体积降低约 75.2%。这是测试可执行目标治理，不代表第三方依赖
-或 feature 数量减少；有独立 feature、平台、进程或外部系统边界的测试仍必须保持独立 target。
-
----
-
-## 三、实施建议清单(可直接派发给实施 agent)
-
-按建议实施顺序排列;每条含验收标准与风险等级。
-
-| 任务 | 内容 | 涉及文件 | 风险 |
-|------|------|---------|------|
-| T1 | Monaco 去重(F1 方案 A):将 `src/web-ui/src` 下所有 `import * as monaco from 'monaco-editor'` 改为 `import type`,运行时实例统一经 `MonacoInitManager.initialize()` 注入(必要处传参或增加 `getMonaco()` 访问器);保留 `editor.main.css` import 与 AMD loader 流程。验收:`pnpm run build:web` 后 `dist/assets/index-*.js` 体积从 ~5.4MB 降至 ~2MB 以下,`grep -L monaco-mouse-cursor-text dist/assets/index-*.js`,编辑器与 diff 功能手测正常。 | `src/web-ui/src/**`(约 10-14 个文件)、`vite.config.ts` | 中(触碰编辑器核心路径,需手测 CodeEditor/DiffEditor/主题/worker) |
-| T2 | build:web 并行化 + tsc 增量(F2/F15):a) 根 package.json `build:web` 改为并行执行 type-check 与 vite build(推荐 `npm-run-all2 --parallel` 或自写 Node 封装,任一失败即整体失败);b) `src/web-ui/tsconfig.json`、`src/mobile-web/tsconfig.json` 加 `"incremental": true` 与 tsBuildInfoFile(放 node_modules/.cache),并确认 .gitignore 覆盖;c) `.github/workflows/desktop-package.yml` 删除独立的 `pnpm run type-check:web` 步骤(225 行)。验收:build:web 总时长下降;CI 打包日志中 tsc 只出现一次。 | `package.json:49`、`src/web-ui/tsconfig.json`、`src/mobile-web/tsconfig.json`、`.github/workflows/desktop-package.yml` | 低 |
-| T3 | release 改 thin LTO(F4):`Cargo.toml` `[profile.release]` `lto = "thin"`;删除 desktop-package.yml:106 的 `CARGO_PROFILE_RELEASE_LTO=thin` 特例。验收:三平台打包成功,二进制体积增幅 <5%,`e2e:test:perf:release-fast` 基线无回退(注意 release-fast 继承 release 后 `lto=false` 覆盖不受影响)。 | `Cargo.toml:284`、`.github/workflows/desktop-package.yml:106` | 中(需一轮打包验证 + 性能基线对比) |
-| T4 | dev 构建 debuginfo 裁剪(F5/F19):`Cargo.toml` `[profile.dev]` 增加 `debug = "line-tables-only"`,删除冗余 `incremental = true`;在 `scripts/dev.cjs` 的 `desktop:dev`(tauri dev)路径注入与 preview 相同的 `CARGO_PROFILE_DEV_CODEGEN_UNITS=256`(允许 env 覆盖)。文档注明"需要断点调试时 `set CARGO_PROFILE_DEV_DEBUG=2`"。验收:改动一个 desktop crate 文件后的增量重链时间下降;panic 栈仍含行号。 | `Cargo.toml:279-280`、`scripts/dev.cjs:749-767` | 低(调试体验有权衡,需在 README/AGENTS 说明) |
-| T5 | mobile-web 构建短路(F8):在 `scripts/mobile-web-build.cjs` 增加输入 mtime 检测(参考 `dev.cjs:420-456` 的实现),dist 新于全部输入时跳过 clean/install/build;`--force`/env 逃生口;dev.cjs 与 lint:rs:desktop 路径自动受益。验收:连续两次 `desktop:dev` 第二次跳过 mobile-web 构建;修改 mobile-web 源码后正确重建。 | `scripts/mobile-web-build.cjs`、`scripts/dev.cjs` | 低 |
-| T6 | 修复 image 双版本(F9):`src/apps/desktop/Cargo.toml:85` 改为 `image = { workspace = true }`,如 API 不兼容则升级调用点到 0.25。验收:Cargo.lock 中 image 仅剩 0.25.x;`cargo check -p bitfun-desktop` 通过。 | `src/apps/desktop/Cargo.toml:85` | 低 |
-| T7 | CI 拓扑并行化(F7):拆分 ci.yml 的 frontend-build 为 `frontend-checks`(lint/audit/test,不阻塞他人)与 `frontend-dist`(install + build:web + build:mobile-web + upload);`rust-build-check` 改 `needs: frontend-dist`。进一步验证 `cargo check/test` 是否只需 dist 目录存在——若是,用 mkdir 打桩彻底解除 needs。验收:PR 上 Rust job 提前开始,总流水线时长下降。 | `.github/workflows/ci.yml` | 中(改 CI 拓扑,需观察 1-2 个 PR) |
-| T8 | 提交 Cargo.lock(F6):从 `.gitignore:26` 移除并提交根与 installer 两份 lockfile;CI 删除 `cargo generate-lockfile` 步骤;建立定期依赖更新流程后逐步解除 `Cargo.toml:98-107` 的 `=` 钉版。验收:rust-cache 命中率上升,CI 不再因上游发版突然变慢/失败。 | `.gitignore`、`.github/workflows/*.yml`、`Cargo.toml` | 中(流程变更,需团队确认依赖更新策略) |
-| T9 | Vite watch 去轮询(F11):删除 `src/web-ui/vite.config.ts:68-74` 的 `usePolling/interval`,保留 ignored 列表;以 `VITE_USE_POLLING=1` 环境变量作为网络盘用户逃生口。验收:dev server 空闲 CPU 占用明显下降,HMR 正常。 | `src/web-ui/vite.config.ts` | 低(个别特殊文件系统需逃生口) |
-| T10 | build.rs 确定性输出(F18):`assembly/core/build.rs` 与 `src/apps/cli/build.rs` 生成代码前对 key 排序(HashMap→BTreeMap)。验收:连续两次 clean build 生成的 OUT_DIR 文件字节一致。 | `src/crates/assembly/core/build.rs`、`src/apps/cli/build.rs` | 低 |
-| T11（已完成） | reqwest TLS 单栈(F10):workspace 保持 transport-only，由真实客户端 owner 显式选择 Rustls；删除 native-tls 与无消费者的 Windows OpenSSL bootstrap，保留平台证书验证。验收:Cargo.lock 无 native-tls；Windows 产品图无 openssl-sys，非 Windows 的 Git/libgit2 路径不变；相关最小 feature 与产品入口编译通过。 | 根与客户端 owner `Cargo.toml`、相关调用点、既有 workflow | 已完成；平台信任根行为保留，无第二后端兼容层 |
-| T12 | beforeBuildCommand 并行(F13):新增 `scripts/frontend-build-all.mjs` 并行跑 build:web 与 prepare:mobile-web,tauri.conf.json / tauri.dev.conf.json 的 beforeBuildCommand 指向它;dev.cjs 准备步骤改 Promise.all。验收:desktop:build 前端阶段时长≈max(两者) 而非 sum。 | `src/apps/desktop/tauri.conf.json`、`tauri.dev.conf.json`、`scripts/dev.cjs`、新脚本 | 低 |
-| T13 | bitfun-core 拆分启动(F3,长期):先跑 `cargo build --timings` 与 `cargo tree -d` 存档基线;选 1-2 个低耦合子域(如 announcement、debug-log server)试点拆出独立 crate 并保留 re-export;结合 F12 的"dev 运行时读取提示词"改造。验收:改动试点子域后 `cargo build -p bitfun-desktop` 的重编 crate 数与耗时下降。 | `src/crates/assembly/core/**`、根 `Cargo.toml` members | 中-高(架构改动,分多个 PR 渐进) |
-| T14 | 可选工具链增强(F5):提交 `.cargo/config.toml` 模板(注释形式提供 rust-lld 与 sccache 配置,默认不启用),团队自选开启;CI 冷构建可评估 sccache-action。验收:提供文档,默认行为不变。 | 新增 `.cargo/config.toml`、文档 | 低(默认关闭) |
-| T15（已完成） | agent-runtime integration target 收敛(F20):保持全部 contract test 源与现有 CI 命令不变，将 27 个跨平台契约按定义、会话、交互、long-horizon 职责归为 4 个 target，Unix 原生进程测试保持独立；focused test 使用 `--test <target> <module>::<filter>`。 | `agent-runtime/Cargo.toml`、`agent-runtime/tests/**`、现有 boundary rule 路径 | 已完成；总体 28→5，只减少重复编译/链接，不改变 feature 或依赖闭包 |
-
-### 快速收益组合(建议第一批实施)
-T2 + T4 + T5 + T6 + T9 + T10 + T12:全部低风险,合计可显著改善日常 dev 循环(启动省 20-60s、增量链接提速、dev CPU 下降)与 build:web 时长;随后再做 T1(最大单项前端收益)、T3(打包 CI)、T7/T8(CI 结构)。
-
----
-
-## 附:数据快照
-
-- Rust workspace:36 members + installer 独立 workspace;总计约 577,903 行 Rust。Top crate:assembly/core 202,735 行、services-integrations 72,251、desktop 63,887、cli 53,976。本地 `target/` 实测 **98GB**(cargo-target-gc 存在的原因;F5 的 debuginfo 裁剪与 F9 去重也能显著降低该体积)。
-- `BitFun-Installer/src-tauri/Cargo.toml:61-65` 的 release profile 同样是 `lto=true + codegen-units=1`(opt-level="z"),T3 的 thin LTO 评估可一并覆盖。
-- Cargo.lock:1177 个包,112 个存在多版本(windows-sys ×6、phf ×6、getrandom ×4、nix ×4、rand ×3、quick-xml ×4 等)。
-- 前端:web-ui 1676 个 TS/TSX、366,580 行;dist 共 872 个 asset,JS 总量 14.3MB,入口 chunk 5.4MB(含 Monaco 内核);public/monaco-editor 14MB/103 文件。
-- 现有良好实践(保持):release-fast profile(Cargo.toml:288-293)、cargo-target-gc 缓存清理、Reqwest Rustls 单栈与平台证书验证、sherpa-onnx prebuilt、CI CARGO_INCREMENTAL=0 + debug=0(ci.yml:74-77)、swatinem/rust-cache、pnpm store 缓存、workspace.dependencies 统一版本声明。
+同时记录功能不变量、远程/平台差异、实际运行的最小验证和未运行的 CI。若产品 closure 不变，只能说明
+focused-test 或 owner 边界收益，不能宣称产品构建已经变快。

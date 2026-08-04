@@ -89,16 +89,14 @@ SessionManager -> Session -> DialogTurn -> ModelRound
 
 ## 验证
 
-按触及行为选择最小检查：
+Core 验证由本指南维护。每次只选择与改动匹配的一种命令模式，不要依次运行所有 feature 变体：
 
 ```bash
-cargo check --workspace
 cargo check -p bitfun-core --no-default-features
-cargo check -p bitfun-core --no-default-features --features workspace-runtime
-cargo check -p bitfun-core --no-default-features --features remote-workspace
-cargo check -p bitfun-core --no-default-features --features ssh-remote
-cargo test -p bitfun-core --lib <test_name> -- --nocapture
-node scripts/check-core-boundaries.mjs
+cargo check -p bitfun-core --no-default-features --features <touched-owner-feature>
+cargo test -p bitfun-core --no-default-features --features <minimal-features> --lib <module>::<test>
 ```
 
-仅改文档时运行 `git diff --check`。
+feature-free facade 改动使用第一种，单一 feature 边界改动使用第二种，行为改动使用第三种。
+只有 Cargo feature、依赖方向或 test-target 布局变化时才运行 `pnpm run check:core-boundaries`。
+workspace check 与产品全量测试由 CI 兜底，不是 Core 默认预检。仅改文档时运行 `git diff --check`。

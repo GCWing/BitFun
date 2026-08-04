@@ -26,10 +26,11 @@ port-backed `sdk` / `AgentRuntime` facade that can be built and tested without
   through `bitfun_agent_runtime::runtime`; those surfaces must use `sdk` or
   projected Server/API DTOs.
 - Keep concrete scheduler/session lifecycle execution, session metadata IO,
-  event emitter wiring, permission UI presentation, and product `Tool` adapter
-  execution in `bitfun-core` until a reviewed owner migration proves behavior
-  equivalence. Provider-neutral confirmation gate/wait-channel and user-question state
-  may live here.
+  event emitter wiring, workspace/remote permission-scope projection, native
+  permission Hook ordering, permission UI presentation, and product `Tool`
+  adapter execution in `bitfun-core` until a reviewed owner migration proves
+  behavior equivalence. Provider-neutral permission policy/grant planning,
+  confirmation gate/wait-channel, and user-question state may live here.
 - Prefer pure facts and decisions first: queue policy, background delivery,
   dialog-turn queue state, active-turn facts, cancellation routing and
   suppression state, background running-turn injection construction, steering action
@@ -89,9 +90,15 @@ so `autotests = false` cannot silently omit a new contract.
 
 ## Verification
 
+Use the focused contract form by default. Run the package-wide form only when a
+change crosses several runtime targets:
+
 ```bash
-cargo test -p bitfun-agent-runtime
-cargo test -p bitfun-agent-runtime --test agent_definition_contracts prompt_contracts::
-node scripts/check-core-boundaries.mjs
-cargo check -p bitfun-core --features product-full
+cargo test --locked -p bitfun-agent-runtime --test <target> <module>::<test>
+cargo test --locked -p bitfun-agent-runtime
 ```
+
+Run `pnpm run check:core-boundaries` only when Cargo dependencies, explicit test
+targets, or grouped-root layout changed. Core product assembly and
+`product-full` verification belong to Core or the consuming product guide, not
+to this module's default checklist.

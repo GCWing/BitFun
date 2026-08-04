@@ -104,6 +104,13 @@ restrictions remain enforced.
 Detailed compatibility rules belong in the dedicated architecture documents,
 not in this file.
 
+## Commands
+
+```bash
+pnpm run cli:dev
+pnpm run cli:install
+```
+
 ## Verification
 
 Run the smallest checks matching the changed path:
@@ -113,14 +120,11 @@ cargo check -p bitfun-cli
 cargo test -p bitfun-cli
 ```
 
-Also run focused owner tests when a surface crosses a shared boundary:
-
-- Agent Runtime port/SDK changes: `cargo test -p bitfun-agent-runtime`
-- Shared IPC/protocol changes: `cargo test -p bitfun-agent-runtime-ipc`
-- Core turn/tool/persistence behavior: the focused `bitfun-core` tests, then
-  the repository shared-Rust verification row
-- terminal lifecycle/input changes: the nearest PTY/ConPTY or input test
-- product/packaging changes: product assembly and archive smoke paths
+When a CLI change crosses a shared boundary, use the focused command maintained
+by that owner: Agent Runtime for port/SDK behavior, the IPC adapter for shared
+protocol behavior, Core for turn/tool/persistence behavior, Terminal for
+PTY/ConPTY lifecycle, and Product Assembly for packaging. Do not copy those
+owners' commands into this guide.
 
 Use [`README.md`](README.md) for user-facing behavior and installation. Keep
 developer internals here or in architecture docs instead of expanding the user

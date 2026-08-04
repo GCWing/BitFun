@@ -32,17 +32,14 @@ crate；`src/crates/assembly/core` 只保留产品装配与兼容桥接。
 
 - 桌面端专属集成留在这里，不要下沉到共享 core
 - 窗口 lifecycle 行为（包括 close/minimize-to-tray 默认值）属于桌面端 surface；修改时必须保留用户已保存偏好。
-- 涉及打包或 release 请求时，参见顶层 `AGENTS.md`
 
 ## 命令
+
+以下命令用于桌面开发循环；验证命令只在下方“验证”章节维护。
 
 ```bash
 pnpm run desktop:dev
 pnpm run desktop:preview:debug
-cargo check -p bitfun-desktop
-cargo test -p bitfun-desktop
-cargo build -p bitfun-desktop
-pnpm run desktop:build:fast
 ```
 
 ## 快速构建
@@ -52,6 +49,9 @@ pnpm run desktop:build:fast
 | `pnpm run desktop:build:fast` | Debug 构建，不打包；手动测试时编译最快 |
 | `pnpm run desktop:build:release-fast` | 类 Release 构建，降低 LTO；需要 release 行为但无法等待完整 LTO 时使用 |
 | `pnpm run desktop:build:nsis:fast` | Windows 安装器，使用 `release-fast` profile；快速验证安装器 |
+
+需要完整断点调试信息时设置 `CARGO_PROFILE_DEV_DEBUG=2`。默认 dev profile 保留行号信息，
+同时减少 PDB 体积。
 
 ## Target 缓存 GC
 

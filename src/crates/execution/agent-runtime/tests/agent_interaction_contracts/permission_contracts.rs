@@ -1,15 +1,19 @@
 use async_trait::async_trait;
 use bitfun_agent_runtime::permission::{
-    PermissionRequestManager, PermissionRequestManagerError, PermissionWaitOutcome,
+    plan_permission_intents, PermissionIntentPlan, PermissionRequestManager,
+    PermissionRequestManagerError, PermissionWaitOutcome,
 };
+use bitfun_agent_tools::PermissionIntent;
 use bitfun_runtime_ports::{
-    ClockPort, PermissionAuditRecord, PermissionAuditStorePort, PermissionGrant,
-    PermissionGrantKey, PermissionGrantStorePort, PermissionReply, PermissionReplySource,
-    PermissionReplyStorePort, PermissionRequest, PermissionRequestEvent, PermissionRequestSource,
-    PermissionRequestSourceKind, PortError, PortErrorKind, PortResult, RuntimeServiceCapability,
+    ClockPort, PermissionAuditRecord, PermissionAuditStorePort, PermissionConstraintLayer,
+    PermissionEffect, PermissionGrant, PermissionGrantKey, PermissionGrantStorePort,
+    PermissionPolicyPreset, PermissionReply, PermissionReplySource, PermissionReplyStorePort,
+    PermissionRequest, PermissionRequestEvent, PermissionRequestSource,
+    PermissionRequestSourceKind, PermissionResourceCaseSensitivity, PermissionRule, PortError,
+    PortErrorKind, PortResult, ResolvedPermissionPolicy, RuntimeServiceCapability,
     RuntimeServicePort,
 };
-use serde_json::Map;
+use serde_json::{json, Map};
 use std::sync::{Arc, Mutex};
 
 #[derive(Debug, Default)]
@@ -18,6 +22,320 @@ struct RecordingPermissionStore {
     audit: Mutex<Vec<PermissionAuditRecord>>,
     fail_grants: Mutex<bool>,
     fail_audit: Mutex<bool>,
+}
+
+#[test]
+fn bash_allow_rules_and_remembered_grants_require_exact_commands() {
+    let command = "git status && rm -rf build";
+    let intent = PermissionIntent::new("bash", vec![command.to_string()]);
+    let wildcard_allow = ResolvedPermissionPolicy::new(
+        vec![PermissionRule::new(
+            "bash",
+            "git *",
+            PermissionEffect::Allow,
+        )],
+        Vec::new(),
+    );
+    let wildcard_grant = PermissionGrant {
+        project_id: "project-a".to_string(),
+        action: "bash".to_string(),
+        resource: "git *".to_string(),
+        created_at_ms: 1,
+    };
+
+    assert_eq!(
+        plan_permission_intents(
+            vec![intent.clone()],
+            &wildcard_allow,
+            &[wildcard_grant],
+            PermissionResourceCaseSensitivity::Sensitive,
+        ),
+        PermissionIntentPlan::RequiresApproval(vec![intent.clone()])
+    );
+
+    let exact_allow = ResolvedPermissionPolicy::new(
+        vec![PermissionRule::new(
+            "bash",
+            command,
+            PermissionEffect::Allow,
+        )],
+        Vec::new(),
+    );
+    assert_eq!(
+        plan_permission_intents(
+            vec![intent.clone()],
+            &exact_allow,
+            &[],
+            PermissionResourceCaseSensitivity::Sensitive,
+        ),
+        PermissionIntentPlan::Allowed
+    );
+
+    let ask = ResolvedPermissionPolicy::new(
+        vec![PermissionRule::new("bash", "*", PermissionEffect::Ask)],
+        Vec::new(),
+    );
+    let exact_grant = PermissionGrant {
+        project_id: "project-a".to_string(),
+        action: "bash".to_string(),
+        resource: command.to_string(),
+        created_at_ms: 2,
+    };
+    assert_eq!(
+        plan_permission_intents(
+            vec![intent],
+            &ask,
+            &[exact_grant],
+            PermissionResourceCaseSensitivity::Sensitive,
+        ),
+        PermissionIntentPlan::Allowed
+    );
+
+    let denied_intent = PermissionIntent::new("bash", vec![command.to_string()]);
+    let wildcard_deny = ResolvedPermissionPolicy::new(
+        vec![PermissionRule::new("bash", "*", PermissionEffect::Deny)],
+        Vec::new(),
+    );
+    assert_eq!(
+        plan_permission_intents(
+            vec![denied_intent.clone()],
+            &wildcard_deny,
+            &[],
+            PermissionResourceCaseSensitivity::Sensitive,
+        ),
+        PermissionIntentPlan::Denied(denied_intent)
+    );
+}
+
+#[test]
+fn full_access_baseline_allows_bash_commands() {
+    let policy = ResolvedPermissionPolicy::new(
+        PermissionPolicyPreset::FullAccess.baseline_rules(),
+        Vec::new(),
+    );
+
+    assert_eq!(
+        plan_permission_intents(
+            vec![PermissionIntent::new(
+                "bash",
+                vec!["git status && rm -rf build".to_string()],
+            )],
+            &policy,
+            &[],
+            PermissionResourceCaseSensitivity::Sensitive,
+        ),
+        PermissionIntentPlan::Allowed
+    );
+}
+
+#[test]
+fn fresh_approval_never_weakens_a_policy_denial() {
+    let mut intent = PermissionIntent::new("page_publish", vec!["page:demo".to_string()]);
+    intent
+        .display_metadata
+        .insert("requiresFreshApproval".to_string(), json!(true));
+    let allow = ResolvedPermissionPolicy::new(
+        vec![PermissionRule::new(
+            "page_publish",
+            "*",
+            PermissionEffect::Allow,
+        )],
+        Vec::new(),
+    );
+    assert_eq!(
+        plan_permission_intents(
+            vec![intent.clone()],
+            &allow,
+            &[PermissionGrant {
+                project_id: "project-a".to_string(),
+                action: "page_publish".to_string(),
+                resource: "page:demo".to_string(),
+                created_at_ms: 1,
+            }],
+            PermissionResourceCaseSensitivity::Sensitive,
+        ),
+        PermissionIntentPlan::RequiresApproval(vec![intent.clone()])
+    );
+
+    let ask = ResolvedPermissionPolicy::new(
+        vec![PermissionRule::new(
+            "page_publish",
+            "*",
+            PermissionEffect::Ask,
+        )],
+        Vec::new(),
+    );
+    assert_eq!(
+        plan_permission_intents(
+            vec![intent.clone()],
+            &ask,
+            &[PermissionGrant {
+                project_id: "project-a".to_string(),
+                action: "page_publish".to_string(),
+                resource: "page:demo".to_string(),
+                created_at_ms: 2,
+            }],
+            PermissionResourceCaseSensitivity::Sensitive,
+        ),
+        PermissionIntentPlan::RequiresApproval(vec![intent.clone()])
+    );
+
+    let deny = ResolvedPermissionPolicy::new(
+        vec![PermissionRule::new(
+            "page_publish",
+            "*",
+            PermissionEffect::Deny,
+        )],
+        Vec::new(),
+    );
+    let denied_intent = intent.clone();
+    assert_eq!(
+        plan_permission_intents(
+            vec![intent],
+            &deny,
+            &[],
+            PermissionResourceCaseSensitivity::Sensitive,
+        ),
+        PermissionIntentPlan::Denied(denied_intent)
+    );
+}
+
+#[test]
+fn empty_inputs_and_resources_keep_fail_closed_defaults() {
+    let policy = ResolvedPermissionPolicy::new(Vec::new(), Vec::new());
+    assert_eq!(
+        plan_permission_intents(
+            Vec::new(),
+            &policy,
+            &[],
+            PermissionResourceCaseSensitivity::Sensitive,
+        ),
+        PermissionIntentPlan::Allowed
+    );
+
+    let resource_free = PermissionIntent::new("custom_action", Vec::new());
+    assert_eq!(
+        plan_permission_intents(
+            vec![resource_free.clone()],
+            &policy,
+            &[],
+            PermissionResourceCaseSensitivity::Sensitive,
+        ),
+        PermissionIntentPlan::RequiresApproval(vec![resource_free])
+    );
+}
+
+#[test]
+fn approval_order_is_stable_and_a_later_denial_short_circuits_the_set() {
+    let first = PermissionIntent::new("edit", vec!["src/first.rs".to_string()]);
+    let allowed = PermissionIntent::new("read", vec!["README.md".to_string()]);
+    let second = PermissionIntent::new("edit", vec!["src/second.rs".to_string()]);
+    let ask_with_read_allow = ResolvedPermissionPolicy::new(
+        vec![
+            PermissionRule::new("*", "*", PermissionEffect::Ask),
+            PermissionRule::new("read", "*", PermissionEffect::Allow),
+        ],
+        Vec::new(),
+    );
+    assert_eq!(
+        plan_permission_intents(
+            vec![first.clone(), allowed, second.clone()],
+            &ask_with_read_allow,
+            &[],
+            PermissionResourceCaseSensitivity::Sensitive,
+        ),
+        PermissionIntentPlan::RequiresApproval(vec![first.clone(), second])
+    );
+
+    let denied = PermissionIntent::new("edit", vec!["src/private/key.rs".to_string()]);
+    let deny_private = ResolvedPermissionPolicy::new(
+        vec![
+            PermissionRule::new("edit", "*", PermissionEffect::Ask),
+            PermissionRule::new("edit", "src/private/*", PermissionEffect::Deny),
+        ],
+        Vec::new(),
+    );
+    assert_eq!(
+        plan_permission_intents(
+            vec![first, denied.clone()],
+            &deny_private,
+            &[],
+            PermissionResourceCaseSensitivity::Sensitive,
+        ),
+        PermissionIntentPlan::Denied(denied)
+    );
+}
+
+#[test]
+fn constraint_layers_can_tighten_but_never_widen_host_policy() {
+    let intent = PermissionIntent::new("edit", vec!["src/main.rs".to_string()]);
+    let tightened = ResolvedPermissionPolicy::new(
+        vec![PermissionRule::new("edit", "*", PermissionEffect::Allow)],
+        vec![PermissionConstraintLayer::new(vec![PermissionRule::new(
+            "edit",
+            "src/main.rs",
+            PermissionEffect::Deny,
+        )])],
+    );
+    assert_eq!(
+        plan_permission_intents(
+            vec![intent.clone()],
+            &tightened,
+            &[],
+            PermissionResourceCaseSensitivity::Sensitive,
+        ),
+        PermissionIntentPlan::Denied(intent.clone())
+    );
+
+    let cannot_widen = ResolvedPermissionPolicy::new(
+        vec![PermissionRule::new("edit", "*", PermissionEffect::Ask)],
+        vec![PermissionConstraintLayer::new(vec![PermissionRule::new(
+            "edit",
+            "src/main.rs",
+            PermissionEffect::Allow,
+        )])],
+    );
+    assert_eq!(
+        plan_permission_intents(
+            vec![intent.clone()],
+            &cannot_widen,
+            &[],
+            PermissionResourceCaseSensitivity::Sensitive,
+        ),
+        PermissionIntentPlan::RequiresApproval(vec![intent])
+    );
+}
+
+#[test]
+fn resource_matching_uses_the_host_project_case_sensitivity() {
+    let intent = PermissionIntent::new("edit", vec!["SRC/Main.rs".to_string()]);
+    let policy = ResolvedPermissionPolicy::new(
+        vec![PermissionRule::new(
+            "edit",
+            "src/main.rs",
+            PermissionEffect::Allow,
+        )],
+        Vec::new(),
+    );
+
+    assert_eq!(
+        plan_permission_intents(
+            vec![intent.clone()],
+            &policy,
+            &[],
+            PermissionResourceCaseSensitivity::Insensitive,
+        ),
+        PermissionIntentPlan::Allowed
+    );
+    assert_eq!(
+        plan_permission_intents(
+            vec![intent.clone()],
+            &policy,
+            &[],
+            PermissionResourceCaseSensitivity::Sensitive,
+        ),
+        PermissionIntentPlan::RequiresApproval(vec![intent])
+    );
 }
 
 impl RuntimeServicePort for RecordingPermissionStore {

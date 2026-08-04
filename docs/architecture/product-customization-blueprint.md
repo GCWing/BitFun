@@ -62,6 +62,13 @@ manifest。相同输入必须产生相同摘要；非默认产品使用 digest-s
 解释来源、localized 名称、技术 identity 与摘要。binary/bundle identity 不作为可见名称，产品 locale 必须符合共享
 i18n locale 集合和 key parity。
 
+### 0.2 修改与验证
+
+- 只修改默认产品定义或资源引用时运行 `pnpm run product:check`；非默认定义运行
+  `pnpm run product:check -- --product-config <path>`，确保校验实际改动的产品；
+- 修改 schema、resolver 或 Desktop/CLI build adapter 行为时，再运行 `pnpm run product:test`；
+- 打包和平台矩阵只在变更触及对应交付路径时运行，不作为产品定义的默认本地预检。
+
 ## 1. 设计结论
 
 产品定制只需要四类对象：

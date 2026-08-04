@@ -40,17 +40,15 @@ product wiring and compatibility bridges in `src/crates/assembly/core`.
 - Keep desktop-only integrations here; do not move them into shared core
 - Window lifecycle behavior, including close/minimize-to-tray defaults, is a
   desktop surface concern. Preserve saved user preferences when changing it.
-- For packaging or release asks, see the top-level `AGENTS.md`
 
 ## Commands
+
+Use these for the desktop development loop. Verification commands are kept in
+the Verification section below.
 
 ```bash
 pnpm run desktop:dev
 pnpm run desktop:preview:debug
-cargo check -p bitfun-desktop
-cargo test -p bitfun-desktop
-cargo build -p bitfun-desktop
-pnpm run desktop:build:fast
 ```
 
 ## Fast builds
@@ -60,6 +58,9 @@ pnpm run desktop:build:fast
 | `pnpm run desktop:build:fast` | Debug build without bundling; fastest compile for manual testing |
 | `pnpm run desktop:build:release-fast` | Release-like build with reduced LTO; use when you need release behavior but can't wait for full LTO |
 | `pnpm run desktop:build:nsis:fast` | Windows installer using `release-fast` profile; for quick installer validation |
+
+Set `CARGO_PROFILE_DEV_DEBUG=2` when full breakpoint debug information is
+required. The default dev profile keeps line tables while reducing PDB size.
 
 ## Target cache GC
 

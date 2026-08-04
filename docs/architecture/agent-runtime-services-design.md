@@ -441,6 +441,11 @@ model-round cancellation token、结构化 AgentInput 或更复杂的事件游�
 兼容边界：
 
 - `bitfun-agent-runtime` 只能依赖稳定接口、工具运行时、运行时服务接口和注入的提供方。
+- 权限规划按纯决策与产品编排分层：
+  - Agent Runtime 持有 `PermissionIntent` 的策略、约束层与记忆授权判定；
+  - Core 产品管线持有 workspace/remote scope 投影、平台大小写事实、grant store IO、native Hook 顺序、
+    交互请求投影、等待/取消和具体 Tool 执行；
+  - 该边界不建立第二套 Permission DTO、公开 SDK 接口或产品 feature。
 - 具体调度器生命周期、会话元数据存储、token 订阅器、事件投递、产品 `Tool`
   handler、具体提示组装、workspace / remote / config IO、自定义子智能体文件 IO 和平台适配器
   在行为等价未证明前不得下沉到运行时内核。
@@ -745,8 +750,11 @@ Rust Runtime SDK，不注册未实现的 `RuntimeServices` 能力，也不宣称
 `doctor` 与 `health` 校验真实组装结果及必需注册完整性；
 Core 的 Network、Git 和 MCP Catalog 当前仍含兼容 marker，因此该诊断不等于对这些外部服务做实时探活。
 
-该切换仍是 `product-full` 兼容组装，不是 owner 迁移。协调器、调度器、持久化、工具管线和 Agentic Event Queue
-仍由 Core 唯一持有；CLI 与 ACP 不复制这些状态。ACP 服务端通过 Rust Runtime SDK 处理会话创建/列举、轮次、取消、交互响应和事件订阅，
+该切换仍是 `product-full` 兼容组装，不是完整 ToolPipeline owner 迁移。
+协调器、调度器、持久化、工具管线和 Agentic Event Queue 仍由 Core 唯一持有。
+唯一已迁移的部分是无 IO 的权限意图策略规划；scope、Hook、请求生命周期和实际执行继续归 Core。
+
+CLI 与 ACP 不复制这些状态。ACP 服务端通过 Rust Runtime SDK 处理会话创建/列举、轮次、取消、交互响应和事件订阅，
 但完整持久化历史回放、模型/模式目录与提供方配置和 MCP 仍走单一 Core 兼容接口；会话模型/模式写入通过 Agent Runtime API 回到同一 Core 归属模块。ACP stdio、连接和协议转换仍在
 `interfaces/acp`。Desktop 复用同一 Core owner 构造一个窄口径 Rust Runtime SDK，主界面的轮次提交/取消、工具确认/拒绝和
 用户问题回答与会话模型更新已通过 Rust Runtime SDK；会话 CRUD/恢复视图、MCP、MiniApp、Cron、远程连接、Tauri 窗口与平台资源

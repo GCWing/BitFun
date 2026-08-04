@@ -130,16 +130,18 @@ Narrower local guides already exist for some subtrees:
 
 ## Verification
 
-Use the smallest check that matches the touched behavior:
+This guide owns Core verification. Select one command pattern that matches the
+change; do not run every feature variant:
 
 ```bash
-cargo check --workspace
 cargo check -p bitfun-core --no-default-features
-cargo check -p bitfun-core --no-default-features --features workspace-runtime
-cargo check -p bitfun-core --no-default-features --features remote-workspace
-cargo check -p bitfun-core --no-default-features --features ssh-remote
-cargo test -p bitfun-core --lib <test_name> -- --nocapture
-node scripts/check-core-boundaries.mjs
+cargo check -p bitfun-core --no-default-features --features <touched-owner-feature>
+cargo test -p bitfun-core --no-default-features --features <minimal-features> --lib <module>::<test>
 ```
 
-For documentation-only changes, run `git diff --check`.
+Use the first command when the feature-free facade changed, the second when one
+feature boundary changed, and the third for behavior. Run
+`pnpm run check:core-boundaries` only for Cargo features, dependency direction,
+or test-target layout. Workspace checks and product-wide tests are CI-backed and
+are not the default Core precheck. For documentation-only changes, run
+`git diff --check`.

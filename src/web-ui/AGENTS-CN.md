@@ -45,17 +45,16 @@ Peer Device Mode（同账号远程完整客户端）的边界见 `docs/architect
 
 ## 命令
 
-以下命令仅供参考，不是默认预检清单；PR 应按下方“验证”选择范围。
+这里只维护开发/构建入口；验证命令统一放在下方“验证”章节。
 
 ```bash
 pnpm --dir src/web-ui dev
-pnpm --dir src/web-ui run lint
-pnpm --dir src/web-ui run type-check
-pnpm --dir src/web-ui run test:run     # 大范围测试；本地优先用精确路径
-pnpm run i18n:contract:test
-pnpm run i18n:audit
 pnpm run build:web                     # 构建相关改动或复现 CI
 ```
+
+`pnpm run build:web` 会并发执行类型检查与 Vite 构建，错误出现顺序不固定，输出分别带
+`[type-check]` / `[vite-build]` 前缀。只有网络盘或 WSL 挂载等原生文件事件漏报场景才设置
+`VITE_USE_POLLING=1`。
 
 ## 验证
 
