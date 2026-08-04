@@ -461,7 +461,8 @@ pub struct ExecutionEngine {
 }
 
 impl ExecutionEngine {
-    const AUTO_COMPRESSION_SAFETY_RESERVE_TOKENS: usize = 10_000;
+    const AUTO_COMPRESSION_SAFETY_RESERVE_RATIO: f32 = 0.10;
+    const AUTO_COMPRESSION_MIN_SAFETY_RESERVE_TOKENS: usize = 10_000;
     const MAX_COMPRESSION_OVERFLOW_ATTEMPTS: usize = 4;
     const MAX_MAIN_CONTEXT_OVERFLOW_RECOVERIES: usize = 2;
     const FINALIZE_AFTER_REPEATED_TOOL_FAILURES_REMINDER: &'static str = "This turn must end now because repeated tool failures have prevented further progress. Ignore any unfinished work. Your task now is to give the user a final answer. Do not call any more tools; any tool call will fail. Respond in plain text only. Summarize what was completed, what failed, the evidence available from the tool results, and the single best next step for the user.";
@@ -637,7 +638,9 @@ impl ExecutionEngine {
         let output_reserve_tokens = configured_max_tokens
             .map(|value| value as usize)
             .unwrap_or_else(|| automatic_max_output_tokens(context_window as u32) as usize);
-        let safety_reserve_tokens = Self::AUTO_COMPRESSION_SAFETY_RESERVE_TOKENS;
+        let safety_reserve_tokens =
+            (((context_window as f32) * Self::AUTO_COMPRESSION_SAFETY_RESERVE_RATIO) as usize)
+                .max(Self::AUTO_COMPRESSION_MIN_SAFETY_RESERVE_TOKENS);
         let input_limit =
             context_window.saturating_sub(output_reserve_tokens + safety_reserve_tokens);
 
