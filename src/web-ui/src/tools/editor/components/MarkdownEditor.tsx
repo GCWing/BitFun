@@ -143,8 +143,10 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
 
   const toNormalizedMarkdown = useCallback((raw: string) => {
     const nextEditability = analyzeMarkdownEditability(raw);
-    const nextContent =
-      nextEditability.mode === 'unsafe' ? raw : nextEditability.canonicalMarkdown;
+    // Use raw content instead of canonicalMarkdown to avoid doubling
+    // backslashes in LaTeX commands (e.g. \int → \\int), which breaks
+    // KaTeX rendering. The tiptap editor normalizes content internally.
+    const nextContent = raw;
     return { nextEditability, nextContent };
   }, []);
 
@@ -262,9 +264,9 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
       }
     } else if (initialContent !== undefined) {
       const nextEditability = analyzeMarkdownEditability(initialContent);
-      const nextContent = nextEditability.mode === 'unsafe'
-        ? initialContent
-        : nextEditability.canonicalMarkdown;
+      // Use raw content instead of canonicalMarkdown to avoid doubling
+      // backslashes in LaTeX commands, which breaks KaTeX rendering.
+      const nextContent = initialContent;
 
       setEditability(nextEditability);
       setContent(nextContent);
