@@ -1,12 +1,9 @@
 import ReactDOM from "react-dom/client";
-import App from "./app/App";
+import BusinessApplication from "./app/BusinessApplication";
 import AgentCompanionDesktopPet from "./app/components/AgentCompanionDesktopPet/AgentCompanionDesktopPet";
 import AppErrorBoundary from "./app/components/AppErrorBoundary";
+import { PrivacyGate, PrivacyProvider } from "./app/components/Privacy";
 import { STARTUP_OVERLAY_HIDDEN_EVENT } from "./app/startup/startupSignals";
-import { WorkspaceProvider } from "./infrastructure/contexts/WorkspaceProvider";
-import { PeerDeviceProvider } from "./infrastructure/peer-device/PeerDeviceContext";
-import { PeerHostInvokeBridge } from "./infrastructure/peer-device/PeerHostInvokeBridge";
-import { PeerDirectoryPickerHost } from "./infrastructure/peer-device/PeerDirectoryPickerHost";
 import { I18nProvider } from "./infrastructure/i18n/providers/I18nProvider";
 import { mouseGlowService } from "./infrastructure/mouse-glow/core/MouseGlowService";
 import "./app/styles/index.scss";
@@ -370,15 +367,11 @@ async function startApplication(): Promise<void> {
 
   ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
     <AppErrorBoundary>
-      <I18nProvider>
-        <WorkspaceProvider>
-          <PeerDeviceProvider>
-            <PeerHostInvokeBridge />
-            <PeerDirectoryPickerHost />
-            <App />
-          </PeerDeviceProvider>
-        </WorkspaceProvider>
-      </I18nProvider>
+      <PrivacyProvider>
+        <PrivacyGate>
+          <BusinessApplication />
+        </PrivacyGate>
+      </PrivacyProvider>
     </AppErrorBoundary>
   );
   logElapsed(log, 'Startup step completed', renderStartedAt, {

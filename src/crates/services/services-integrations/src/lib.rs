@@ -21,6 +21,9 @@ pub mod deep_research;
 #[cfg(feature = "file-watch")]
 pub mod file_watch;
 
+#[cfg(feature = "feedback")]
+pub mod feedback;
+
 #[cfg(feature = "function-agents")]
 pub mod function_agents;
 
@@ -35,6 +38,9 @@ pub mod miniapp;
 
 #[cfg(feature = "plugin-source")]
 pub mod plugin_source;
+
+#[cfg(feature = "privacy")]
+pub mod privacy;
 
 #[cfg(feature = "remote-connect")]
 pub mod remote_connect;

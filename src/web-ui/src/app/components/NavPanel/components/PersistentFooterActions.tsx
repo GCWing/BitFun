@@ -24,6 +24,11 @@ import { useNotification } from '@/shared/notification-system';
 import { useAccountLoginState } from '@/infrastructure/account/useAccountLoginState';
 // import { remoteConnectAPI } from '@/infrastructure/api/service-api/RemoteConnectAPI';
 import NotificationButton from '../../TitleBar/NotificationButton';
+import { usePrivacy } from '../../Privacy/PrivacyContext';
+import {
+  hasActionableUnreadReply,
+  useFeedbackInboxStore,
+} from '../../FeedbackDialog/feedbackInboxStore';
 import {
   RemoteConnectDisclaimerContent,
 } from '../../RemoteConnectDialog/RemoteConnectDisclaimer';
@@ -38,6 +43,7 @@ const RemoteConnectDialog = lazy(() => import('../../RemoteConnectDialog'));
 const AboutDialog = lazy(() =>
   import('../../AboutDialog').then(module => ({ default: module.AboutDialog }))
 );
+const FeedbackDialog = lazy(() => import('../../FeedbackDialog'));
 
 const PersistentFooterActions: React.FC = () => {
   const { t } = useI18n('common');
@@ -55,6 +61,15 @@ const PersistentFooterActions: React.FC = () => {
   });
   const { warning } = useNotification();
   const { loggedIn: accountLoggedIn, deviceName: accountDeviceName } = useAccountLoginState();
+  const { status: privacyStatus } = usePrivacy();
+  const initializeFeedbackForMode = useFeedbackInboxStore(state => state.initializeForMode);
+  const hasUnreadFeedback = useFeedbackInboxStore(state =>
+    state.records.some(hasActionableUnreadReply),
+  );
+  const hasPrivacyUpdate = Boolean(
+    privacyStatus?.enabled && privacyStatus.hasUnreadUpdate,
+  );
+  const hasMoreMenuAttention = hasUnreadFeedback || hasPrivacyUpdate;
 
   useEffect(() => {
     const onAutoExit = (event: Event) => {
@@ -73,24 +88,33 @@ const PersistentFooterActions: React.FC = () => {
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuClosing, setMenuClosing] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
+  const [showFeedback, setShowFeedback] = useState(false);
   // const [showAccountLogin, setShowAccountLogin] = useState(false);
   const [showRemoteConnect, setShowRemoteConnect] = useState(false);
   const [remoteInitialGroup, setRemoteInitialGroup] = useState<'network' | 'bot' | 'account' | undefined>(undefined);
   const [showRemoteDisclaimer, setShowRemoteDisclaimer] = useState(false);
+  const [feedbackPlatformEnabled, setFeedbackPlatformEnabled] = useState<boolean | null>(null);
   const [hasAgreedRemoteDisclaimer, setHasAgreedRemoteDisclaimer] = useState<boolean>(() => getRemoteConnectDisclaimerAgreed());
 
-  // Account login retirement: do not reopen the login dialog when a stored
-  // account token expires.
-  // useEffect(() => {
-  //   const expiryCheck = setInterval(() => {
-  //     remoteConnectAPI.accountTokenExpired().then((expired) => {
-  //       if (expired) {
-  //         setShowAccountLogin(true);
-  //       }
-  //     });
-  //   }, 60000);
-  //   return () => clearInterval(expiryCheck);
-  // }, []);
+  useEffect(() => {
+    let active = true;
+    void systemAPI.getSystemInfo().then(info => {
+      if (active) setFeedbackPlatformEnabled(info.platform === 'openharmony');
+    }).catch(() => {
+      if (active) setFeedbackPlatformEnabled(false);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!feedbackPlatformEnabled || !privacyStatus) return;
+    void initializeFeedbackForMode(privacyStatus.effectiveMode);
+  }, [feedbackPlatformEnabled, initializeFeedbackForMode, privacyStatus]);
+
+  // Account login retirement: do not reopen the disabled login dialog when a
+  // stored account token expires.
 
   const closeMenu = useCallback(() => {
     setMenuClosing(true);
@@ -148,10 +172,24 @@ const PersistentFooterActions: React.FC = () => {
     setShowAbout(true);
   };
 
-  const handleFeedback = useCallback(() => {
+  const handleFeedback = useCallback(async () => {
     closeMenu();
-    void systemAPI.openExternal('https://gitcode.com/OpenHarmonyPCDeveloper/BitFun/issues');
-  }, [closeMenu]);
+    if (feedbackPlatformEnabled) {
+      setShowFeedback(true);
+      return;
+    }
+    try {
+      const systemInfo = await systemAPI.getSystemInfo();
+      if (systemInfo.platform === 'openharmony') {
+        setFeedbackPlatformEnabled(true);
+        setShowFeedback(true);
+        return;
+      }
+    } catch {
+      // Web and older desktop hosts retain the external feedback behavior.
+    }
+    await systemAPI.openExternal('https://gitcode.com/OpenHarmonyPCDeveloper/BitFun/issues');
+  }, [closeMenu, feedbackPlatformEnabled]);
 
   // const handleAccountLogin = () => {
   //   closeMenu();
@@ -192,8 +230,10 @@ const PersistentFooterActions: React.FC = () => {
             <Tooltip content={t('nav.moreOptions')} placement="right" followCursor disabled={menuOpen}>
               <button
                 type="button"
-                className={`bitfun-nav-panel__footer-btn bitfun-nav-panel__footer-btn--icon${menuOpen ? ' is-active' : ''}`}
-                aria-label={t('nav.moreOptions')}
+                className={`bitfun-nav-panel__footer-btn bitfun-nav-panel__footer-btn--icon bitfun-nav-panel__footer-more-btn${menuOpen ? ' is-active' : ''}`}
+                aria-label={hasMoreMenuAttention
+                  ? t('header.moreOptionsAttention')
+                  : t('nav.moreOptions')}
                 aria-expanded={menuOpen}
                 onClick={toggleMenu}
                 data-testid="nav-footer-more-btn"
@@ -206,6 +246,9 @@ const PersistentFooterActions: React.FC = () => {
                     <ChevronUp size={15} className="bitfun-nav-panel__footer-btn-icon-swap-hover" />
                   </span>
                 )}
+                {hasMoreMenuAttention ? (
+                  <span className="bitfun-nav-panel__footer-more-unread" aria-hidden="true" />
+                ) : null}
               </button>
             </Tooltip>
 
@@ -261,18 +304,30 @@ const PersistentFooterActions: React.FC = () => {
                     className="bitfun-nav-panel__footer-menu-item"
                     role="menuitem"
                     onClick={handleFeedback}
+                    aria-label={hasUnreadFeedback
+                      ? t('feedback.inbox.entryUnread')
+                      : t('header.feedback')}
                   >
                     <MessageSquare size={14} />
                     <span>{t('header.feedback')}</span>
+                    {hasUnreadFeedback ? (
+                      <span className="bitfun-nav-panel__footer-menu-unread" aria-hidden="true" />
+                    ) : null}
                   </button>
                   <button
                       type="button"
                       className="bitfun-nav-panel__footer-menu-item"
                       role="menuitem"
                       onClick={handleShowAbout}
+                      aria-label={hasPrivacyUpdate
+                        ? t('privacy.aboutEntryUpdated')
+                        : t('header.about')}
                   >
                       <Info size={14} />
                       <span>{t('header.about')}</span>
+                      {hasPrivacyUpdate ? (
+                        <span className="bitfun-nav-panel__footer-menu-unread" aria-hidden="true" />
+                      ) : null}
                   </button>
                 </div>
               </>
@@ -321,6 +376,11 @@ const PersistentFooterActions: React.FC = () => {
       {showAbout && (
         <Suspense fallback={null}>
           <AboutDialog isOpen={showAbout} onClose={() => setShowAbout(false)} />
+        </Suspense>
+      )}
+      {showFeedback && (
+        <Suspense fallback={null}>
+          <FeedbackDialog isOpen={showFeedback} onClose={() => setShowFeedback(false)} />
         </Suspense>
       )}
       {/* BitFun account login dialog is intentionally disabled. */}

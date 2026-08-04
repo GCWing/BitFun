@@ -23,12 +23,18 @@ export interface ToggleMainWindowFullscreenResponse {
   isMaximized: boolean;
 }
 
+export interface SystemInfoResponse {
+  platform: string;
+  arch: string;
+  osVersion: string | null;
+}
+
 /** Close-button behavior values (matches `app.close_button_behavior` config key). */
 export type CloseBehavior = 'quit' | 'minimize_to_tray' | 'ask';
 
 export class SystemAPI {
    
-  async getSystemInfo(): Promise<any> {
+  async getSystemInfo(): Promise<SystemInfoResponse> {
     try {
       return await api.invoke('get_system_info', { 
         request: {} 

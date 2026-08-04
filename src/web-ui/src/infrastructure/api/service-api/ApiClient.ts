@@ -76,6 +76,45 @@ function isOptionalConfigNotFound(request: ApiRequest, error: unknown): boolean 
   return isOptionalConfigNotFoundCommand(request.config as TauriCommandConfig, error);
 }
 
+function parseStructuredCommandError(error: unknown): Record<string, unknown> | null {
+  if (error && typeof error === 'object' && typeof (error as Record<string, unknown>).code === 'string') {
+    return error as Record<string, unknown>;
+  }
+
+  const message = error instanceof Error ? error.message : typeof error === 'string' ? error : '';
+  const jsonStart = message.indexOf('{');
+  if (jsonStart < 0) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(message.slice(jsonStart));
+    return parsed && typeof parsed === 'object' && typeof parsed.code === 'string'
+      ? parsed as Record<string, unknown>
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function preserveStructuredCommandError(error: unknown): ApiError | null {
+  const shape = parseStructuredCommandError(error);
+  if (!shape) {
+    return null;
+  }
+
+  if (error instanceof Error && typeof (error as Error & { code?: unknown }).code === 'string') {
+    return error as unknown as ApiError;
+  }
+
+  const message = typeof shape.message === 'string' ? shape.message : 'Command failed';
+  const structuredError = new Error(message) as unknown as ApiError & Record<string, unknown>;
+  Object.assign(structuredError, shape);
+  structuredError.code = shape.code as string;
+  structuredError.message = message;
+  return structuredError;
+}
+
 function traceTargetForCommand(command: string, payload: unknown): string | undefined {
   if (command === 'explorer_get_children') {
     return 'file_explorer:children';
@@ -403,7 +442,7 @@ export class ApiClient implements IApiClient {
         });
       }
 
-      throw this.normalizeError(error as Error);
+      throw this.normalizeError(error);
     }
   }
 
@@ -421,7 +460,8 @@ export class ApiClient implements IApiClient {
         timestamp: new Date()
       };
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
+      const structuredError = preserveStructuredCommandError(error);
+      const errorMessage = structuredError?.message ?? (error instanceof Error ? error.message : String(error));
       
       
       const isExpectedError = errorMessage.includes('not found') || 
@@ -446,6 +486,10 @@ export class ApiClient implements IApiClient {
         }
       }
       
+      if (structuredError) {
+        throw structuredError;
+      }
+
       throw this.createApiError('COMMAND_FAILED', errorMessage, error);
     }
   }
@@ -517,12 +561,13 @@ export class ApiClient implements IApiClient {
     return next(request);
   }
 
-  private normalizeError(error: Error): ApiError {
+  private normalizeError(error: unknown): ApiError {
     if (this.isApiError(error)) {
-      return error as unknown as ApiError;
+      return error as ApiError;
     }
 
-    return this.createApiError('UNKNOWN_ERROR', error.message, error);
+    const message = error instanceof Error ? error.message : String(error);
+    return this.createApiError('UNKNOWN_ERROR', message, error);
   }
 
   private createApiError(code: string, message: string, originalError?: any): ApiError {
@@ -540,8 +585,8 @@ export class ApiClient implements IApiClient {
     return apiError;
   }
 
-  private isApiError(error: any): boolean {
-    return error && typeof error.code === 'string';
+  private isApiError(error: unknown): error is ApiError {
+    return Boolean(error) && typeof error === 'object' && typeof (error as { code?: unknown }).code === 'string';
   }
 
   private recordResponseTime(time: number): void {

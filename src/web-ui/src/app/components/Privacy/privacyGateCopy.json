@@ -1,0 +1,53 @@
+{
+  "zh-CN": {
+    "title": "隐私声明",
+    "intro": "请阅读隐私声明并选择使用模式。",
+    "checkbox": "我已阅读并同意隐私声明",
+    "disagree": "不同意并继续",
+    "agree": "同意并继续",
+    "retryFullMode": "重试启用完整模式",
+    "effective": "生效日期",
+    "updated": "更新时间",
+    "loading": "正在校验隐私声明",
+    "loadError": "隐私声明暂时无法加载",
+    "resourceErrorHint": "你可以重试加载，或关闭后继续使用本地功能。当前不能同意，数据收集保持关闭。",
+    "retry": "重试",
+    "closeAndContinue": "关闭并继续使用",
+    "saveFailed": "选择尚未保存，数据收集保持关闭。请重试。",
+    "releaseBlocked": "内置隐私声明尚未完成发布审核，当前版本不能启用完整模式。"
+  },
+  "zh-TW": {
+    "title": "隱私聲明",
+    "intro": "請閱讀隱私聲明並選擇使用模式。",
+    "checkbox": "我已閱讀並同意隱私聲明",
+    "disagree": "不同意並繼續",
+    "agree": "同意並繼續",
+    "retryFullMode": "重試啟用完整模式",
+    "effective": "生效日期",
+    "updated": "更新時間",
+    "loading": "正在校驗隱私聲明",
+    "loadError": "隱私聲明暫時無法載入",
+    "resourceErrorHint": "你可以重試載入，或關閉後繼續使用本機功能。目前不能同意，資料收集保持關閉。",
+    "retry": "重試",
+    "closeAndContinue": "關閉並繼續使用",
+    "saveFailed": "選擇尚未儲存，資料收集保持關閉。請重試。",
+    "releaseBlocked": "內置隱私聲明尚未完成發佈審核，目前版本不能啟用完整模式。"
+  },
+  "en-US": {
+    "title": "Privacy Statement",
+    "intro": "Review the Privacy Statement and choose how to continue.",
+    "checkbox": "I have read and agree to the Privacy Statement",
+    "disagree": "Disagree and continue",
+    "agree": "Agree and continue",
+    "retryFullMode": "Retry enabling full mode",
+    "effective": "Effective date",
+    "updated": "Updated",
+    "loading": "Validating Privacy Statement",
+    "loadError": "The Privacy Statement could not be loaded",
+    "resourceErrorHint": "Retry, or close this view and continue with local features. Agreement is unavailable and data collection remains off.",
+    "retry": "Retry",
+    "closeAndContinue": "Close and continue",
+    "saveFailed": "Your choice was not saved. Data collection remains off. Try again.",
+    "releaseBlocked": "The bundled Privacy Statement has not completed release review, so full mode is unavailable."
+  }
+}

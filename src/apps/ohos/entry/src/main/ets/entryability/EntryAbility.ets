@@ -3,7 +3,6 @@ import {
   common,
   Configuration,
   ConfigurationConstant,
-  Permissions,
   Want
 } from '@kit.AbilityKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
@@ -20,6 +19,7 @@ import { AppUpdater, UpdateCheckResult } from '../utils/AppUpdater';
 import { CommonUtils } from '../utils/CommonUtils';
 import { runDeveco } from '../utils/DevecoStart';
 import { VoiceInputService } from '../services/VoiceInputService';
+import { FeedbackCredentialStore } from '../utils/FeedbackCredentialStore';
 
 
 const DOMAIN = 0x0000;
@@ -91,8 +91,11 @@ export default class EntryAbility extends RustAbility {
     AppGlobal.mContext = this.context;
     const DOMAIN_NUMBER: number = 0xFF00;
     const TAG: string = '[BitfunUIAbilityComponents]';
-    AppGlobal.calendarMgr = calendarManager.getCalendarManager(this.context);
-
+    const feedbackCredentialStore = new FeedbackCredentialStore();
+    RustModule.registerArktsFunction('feedback_secure_credentials', async (
+      _err: Error,
+      arg: string
+    ): Promise<string> => feedbackCredentialStore.handle(arg));
     RustModule.registerArktsFunction('open_dialog_file', async (err: Error, arg: string): Promise<string> => {
       let res = await CommonUtils.open_file_dialog(arg);
       return res;
@@ -287,11 +290,6 @@ export default class EntryAbility extends RustAbility {
     RustModule.registerArktsFunction('ohos_speech_cancel', async (err: Error, _arg: string): Promise<string> => {
       return await this.voiceInputService.cancel('');
     });
-    const autoUpdateEnabled = RustModule.getAppConfigBool('app.auto_update');
-    hilog.info(0x0000, 'vnext', 'autoUpdateEnabled: ' + autoUpdateEnabled);
-    if (autoUpdateEnabled) {
-      this.appUpdater.check(this.context);
-    }
     return super.onWindowStageCreate(windowStage);
   }
 
