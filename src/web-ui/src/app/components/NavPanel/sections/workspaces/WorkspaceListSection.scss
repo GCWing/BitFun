@@ -301,24 +301,6 @@
     padding-right: 52px;
   }
 
-  &__workspace-item-active-icon {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    color: inherit;
-  }
-
-  &__assistant-item-active-icon {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    color: inherit;
-    transition: opacity $motion-fast $easing-standard,
-                transform $motion-fast $easing-standard;
-    opacity: 1;
-    transform: scale(1);
-  }
-
   &__workspace-item-avatar {
     position: relative;
     display: inline-flex;
@@ -1115,8 +1097,7 @@
     &:hover {
       background: color-mix(in srgb, var(--element-bg-medium) 60%, transparent);
 
-      .bitfun-nav-panel__assistant-item-avatar-letter,
-      .bitfun-nav-panel__assistant-item-active-icon {
+      .bitfun-nav-panel__assistant-item-avatar-letter {
         opacity: 0;
         transform: scale(0.6);
       }
