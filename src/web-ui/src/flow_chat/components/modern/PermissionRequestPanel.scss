@@ -319,6 +319,16 @@
   color: var(--bf-appearance-token-color-error);
 }
 
+.permission-request-panel .permission-request-panel__reject--highlighted {
+  color: var(--bf-appearance-token-color-static-white);
+  background: var(--bf-appearance-token-color-error);
+  border-color: var(--bf-appearance-token-color-error);
+}
+
+.permission-request-panel .permission-request-panel__reject--highlighted:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--bf-appearance-token-color-error) 88%, var(--bf-appearance-token-color-static-black));
+}
+
 @keyframes permission-request-panel-in {
   from {
     opacity: 0;

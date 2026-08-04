@@ -274,7 +274,7 @@ export function PermissionRequestPanel({
               )}
               <button
                 type="button"
-                className="permission-request-panel__reject"
+                className={`permission-request-panel__reject${hasRejectFeedback ? ' permission-request-panel__reject--highlighted' : ''}`}
                 onClick={() => void respond('reject')}
                 disabled={responding}
               >
@@ -292,7 +292,7 @@ export function PermissionRequestPanel({
               </button>
               <button
                 type="button"
-                className="permission-request-panel__reject"
+                className={`permission-request-panel__reject${hasRejectFeedback ? ' permission-request-panel__reject--highlighted' : ''}`}
                 onClick={() => void respondBatch('reject')}
                 disabled={responding}
               >

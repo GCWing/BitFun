@@ -350,6 +350,26 @@ describe('PermissionRequestPanel', () => {
     expect(allowAll?.classList.contains('permission-request-panel__feedback-disabled')).toBe(true);
     expect(buttonWithLabel('permission.reject')?.disabled).toBe(false);
     expect(buttonWithLabel('permission.rejectCurrentAndFollowing')?.disabled).toBe(false);
+    expect(buttonWithLabel('permission.reject')?.classList.contains('permission-request-panel__reject--highlighted')).toBe(true);
+    expect(buttonWithLabel('permission.rejectCurrentAndFollowing')?.classList.contains('permission-request-panel__reject--highlighted')).toBe(true);
+  });
+
+  it('does not highlight reject buttons when there is no feedback', () => {
+    act(() => {
+      root.render(
+        <PermissionRequestPanel
+          requests={[request(false)]}
+          onRespond={vi.fn()}
+          onRespondBatch={vi.fn()}
+        />,
+      );
+    });
+
+    const buttonWithLabel = (label: string) => [...container.querySelectorAll('button')].find(
+      (button) => button.textContent?.includes(label),
+    );
+    expect(buttonWithLabel('permission.reject')?.classList.contains('permission-request-panel__reject--highlighted')).toBe(false);
+    expect(buttonWithLabel('permission.rejectCurrentAndFollowing')?.classList.contains('permission-request-panel__reject--highlighted')).toBe(false);
   });
 
   it('collapses to an anchored permission indicator and reopens it with the session pending count', () => {
