@@ -10,6 +10,13 @@ function readWorkspaceListStylesheet(): string {
   return stylesheet.replace(/\r\n/g, '\n');
 }
 
+function readWorkspaceItemSource(): string {
+  return readFileSync(
+    fileURLToPath(new URL('./WorkspaceItem.tsx', import.meta.url)),
+    'utf8',
+  );
+}
+
 function extractBlock(stylesheet: string, selector: string): string {
   const escapedSelector = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const match = stylesheet.match(new RegExp(`${escapedSelector}\\s*\\{(?<body>[\\s\\S]*?)\\n\\s*\\}`));
@@ -89,5 +96,15 @@ describe('WorkspaceListSection layout styles', () => {
       expect(block).toContain('width: 20px;');
       expect(block).toContain('height: 20px;');
     }
+  });
+
+  it('renders the same icon type for active and inactive workspace rows', () => {
+    const source = readWorkspaceItemSource();
+
+    // The active workspace row must not render a different icon type
+    // (e.g. an arrow) from its siblings (folders).
+    expect(source).not.toContain('DotMatrixArrowRightIcon');
+    expect(source).not.toContain('workspace-item-active-icon');
+    expect(source).not.toContain('assistant-item-active-icon');
   });
 });
