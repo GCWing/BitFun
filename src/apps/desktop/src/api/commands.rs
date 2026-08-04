@@ -5,8 +5,8 @@ use crate::api::dto::WorkspaceInfoDto;
 use crate::api::path_target::{
     create_directory as create_desktop_directory, create_empty_file,
     delete_directory as delete_desktop_directory, delete_file as delete_desktop_file,
-    get_path_metadata, path_exists, read_text_file, rename_path, resolve_desktop_path_target,
-    write_text_file, DesktopPathTarget,
+    get_path_metadata, path_exists, read_text_file, read_text_file_prefix, rename_path,
+    resolve_desktop_path_target, write_text_file, DesktopPathTarget,
 };
 use crate::api::search_api::{
     build_content_search_request, group_search_results, prepare_content_search_runner,
@@ -461,6 +461,16 @@ pub struct ReadFileContentRequest {
     #[serde(rename = "filePath")]
     pub file_path: String,
     pub encoding: Option<String>,
+    #[serde(default, rename = "remoteConnectionId")]
+    pub remote_connection_id: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ReadFileContentPrefixRequest {
+    #[serde(rename = "filePath")]
+    pub file_path: String,
+    #[serde(rename = "maxBytes")]
+    pub max_bytes: usize,
     #[serde(default, rename = "remoteConnectionId")]
     pub remote_connection_id: Option<String>,
 }
@@ -2614,6 +2624,20 @@ pub async fn explorer_get_children_paginated(
 }
 
 #[tauri::command]
+pub async fn read_file_content_prefix(
+    state: State<'_, AppState>,
+    request: ReadFileContentPrefixRequest,
+) -> Result<String, String> {
+    read_text_file_prefix(
+        &state,
+        &request.file_path,
+        request.max_bytes,
+        request.remote_connection_id.as_deref(),
+    )
+    .await
+}
+
+#[tauri::command]
 pub async fn read_file_content(
     state: State<'_, AppState>,
     request: ReadFileContentRequest,
@@ -3198,6 +3222,8 @@ pub async fn create_directory(
 pub struct CompressPathRequest {
     pub path: String,
     #[serde(default)]
+    pub is_directory: bool,
+    #[serde(default)]
     pub remote_connection_id: Option<String>,
 }
 
@@ -3218,12 +3244,14 @@ pub async fn compress_path(
     request: CompressPathRequest,
 ) -> Result<String, String> {
     let src = request.path;
+    let is_directory = request.is_directory;
     let remote_cid = request.remote_connection_id;
 
     // Remote: execute compress command via SSH.
     if let Some(cid) = &remote_cid {
         let manager = state.get_ssh_manager_async().await?;
         let (parent, base_name) = split_remote_archive_path(&src)?;
+        let archive_base_name = archive_output_base_name(&base_name, is_directory);
 
         // Run from the source's parent directory so an absolute remote path is
         // never serialized as archive member directories. Directory archives
@@ -3231,7 +3259,7 @@ pub async fn compress_path(
         // therefore does not create `<name>/<name>/...`.
         let mut zip_suffix = 0;
         let zip_archive_name = loop {
-            let candidate = archive_name_with_suffix(&base_name, ".zip", zip_suffix);
+            let candidate = archive_name_with_suffix(&archive_base_name, ".zip", zip_suffix);
             let check_command = build_remote_path_exists_command(&parent, &candidate);
             let (_, _, code) = manager
                 .execute_command(cid, &check_command)
@@ -3262,7 +3290,7 @@ pub async fn compress_path(
         // zip not available or failed — try tar.
         let mut tar_suffix = 0;
         let tar_archive_name = loop {
-            let candidate = archive_name_with_suffix(&base_name, ".tar.gz", tar_suffix);
+            let candidate = archive_name_with_suffix(&archive_base_name, ".tar.gz", tar_suffix);
             let check_command = build_remote_path_exists_command(&parent, &candidate);
             let (_, _, code) = manager
                 .execute_command(cid, &check_command)
@@ -3321,7 +3349,8 @@ pub async fn compress_path(
         .and_then(|n| n.to_str())
         .ok_or_else(|| format!("Cannot determine file name of '{}'", src))?
         .to_string();
-    let zip_path = next_available_local_archive_path(parent, &file_name, ".zip");
+    let archive_base_name = archive_output_base_name(&file_name, src_path.is_dir());
+    let zip_path = next_available_local_archive_path(parent, &archive_base_name, ".zip");
 
     let zip_path_clone = zip_path.clone();
     let src_path_clone = src_path.clone();
@@ -3333,6 +3362,17 @@ pub async fn compress_path(
     .map_err(|e| e.to_string())??;
 
     Ok(zip_path.to_string_lossy().to_string())
+}
+
+fn archive_output_base_name(source_name: &str, is_directory: bool) -> String {
+    if is_directory {
+        return source_name.to_string();
+    }
+
+    match source_name.rfind('.') {
+        Some(index) if index > 0 => source_name[..index].to_string(),
+        _ => source_name.to_string(),
+    }
 }
 
 fn archive_name_with_suffix(base_name: &str, extension: &str, suffix: usize) -> String {
@@ -3350,6 +3390,22 @@ fn build_remote_path_exists_command(parent: &str, candidate: &str) -> String {
         shell_quote_posix(&format!("./{}", candidate)),
         shell_quote_posix(&format!("./{}", candidate)),
     )
+}
+
+fn build_remote_extraction_destination_available_command(
+    parent: &str,
+    candidate: &str,
+    allow_existing_directory: bool,
+) -> String {
+    let parent = shell_quote_posix(parent);
+    let candidate = shell_quote_posix(&format!("./{}", candidate));
+    if allow_existing_directory {
+        format!(
+            "cd -- {parent} || exit 2; if [ -L {candidate} ]; then exit 1; fi; [ -d {candidate} ] || [ ! -e {candidate} ]"
+        )
+    } else {
+        format!("cd -- {parent} || exit 2; test ! -e {candidate} && test ! -L {candidate}")
+    }
 }
 
 fn next_available_local_archive_path(parent: &Path, base_name: &str, extension: &str) -> PathBuf {
@@ -3399,7 +3455,12 @@ fn split_remote_archive_path(path: &str) -> Result<(String, String), String> {
     //
     // Checked against the input rather than the resolved parent, which is
     // synthesized for relative paths.
-    if trimmed.split('/').rev().skip(1).any(|component| component == "..") {
+    if trimmed
+        .split('/')
+        .rev()
+        .skip(1)
+        .any(|component| component == "..")
+    {
         return Err(format!(
             "Remote path '{}' must not contain '..' components",
             path
@@ -3578,7 +3639,32 @@ pub async fn decompress_path(
     if let Some(cid) = &remote_cid {
         let manager = state.get_ssh_manager_async().await?;
         let (remote_parent, remote_file_name) = split_remote_archive_path(&src)?;
-        let remote_dest_dir_name = archive_destination_name(&remote_file_name)?;
+        let remote_dest_base_name = archive_destination_name(&remote_file_name)?;
+        let mut remote_dest_suffix = 0;
+        let remote_dest_dir_name = loop {
+            let candidate =
+                extraction_destination_name_with_suffix(&remote_dest_base_name, remote_dest_suffix);
+            let check_command = build_remote_extraction_destination_available_command(
+                &remote_parent,
+                &candidate,
+                remote_dest_suffix == 0,
+            );
+            let (stdout, stderr, code) = manager
+                .execute_command(cid, &check_command)
+                .await
+                .map_err(|e| e.to_string())?;
+            match code {
+                0 => break candidate,
+                1 => remote_dest_suffix += 1,
+                _ => {
+                    let error = if stderr.is_empty() { stdout } else { stderr };
+                    return Err(format!(
+                        "Failed to inspect remote extraction destination: {}",
+                        error.trim()
+                    ));
+                }
+            }
+        };
 
         let lower = remote_file_name.to_lowercase();
         let (extract_command, required_tool, label, legacy_wrapper_relative) =
@@ -3689,7 +3775,8 @@ pub async fn decompress_path(
         .and_then(|n| n.to_str())
         .ok_or_else(|| format!("Cannot determine file name of '{}'", src))?
         .to_string();
-    let dest_dir = parent.join(archive_destination_name(&file_name)?);
+    let destination_base_name = archive_destination_name(&file_name)?;
+    let dest_dir = next_available_local_extraction_path(parent, &destination_base_name)?;
 
     let dest_dir_clone = dest_dir.clone();
     let src_clone = src_path;
@@ -3865,6 +3952,8 @@ fn extract_local_archive(
                 "tar.xz",
             )?;
         }
+        #[cfg(target_env = "ohos")]
+        return Err("Unsupported archive format on this platform: tar.xz".to_string());
     } else if lower.ends_with(".tar.zst") || lower.ends_with(".tzst") {
         let file = std::fs::File::open(source_path)
             .map_err(|e| format!("Failed to open '{}': {}", source_path.display(), e))?;
@@ -4092,6 +4181,40 @@ fn archive_destination_name(file_name: &str) -> Result<String, String> {
     }
 }
 
+fn extraction_destination_name_with_suffix(base_name: &str, suffix: usize) -> String {
+    if suffix == 0 {
+        base_name.to_string()
+    } else {
+        format!("{} ({})", base_name, suffix)
+    }
+}
+
+fn next_available_local_extraction_path(parent: &Path, base_name: &str) -> Result<PathBuf, String> {
+    for suffix in 0.. {
+        let candidate = parent.join(extraction_destination_name_with_suffix(base_name, suffix));
+        match std::fs::symlink_metadata(&candidate) {
+            Ok(metadata)
+                if suffix == 0
+                    && metadata.file_type().is_dir()
+                    && !metadata.file_type().is_symlink() =>
+            {
+                return Ok(candidate);
+            }
+            Ok(_) => continue,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(candidate),
+            Err(error) => {
+                return Err(format!(
+                    "Failed to inspect extraction destination '{}': {}",
+                    candidate.display(),
+                    error
+                ));
+            }
+        }
+    }
+
+    unreachable!("extraction destination suffix search is unbounded")
+}
+
 #[cfg(test)]
 mod archive_tests {
     use super::*;
@@ -4111,6 +4234,20 @@ mod archive_tests {
     }
 
     #[test]
+    fn archive_output_names_drop_file_extensions_only() {
+        assert_eq!(archive_output_base_name("notes.txt", false), "notes");
+        assert_eq!(
+            archive_output_base_name("bundle.tar.gz", false),
+            "bundle.tar"
+        );
+        assert_eq!(archive_output_base_name(".env", false), ".env");
+        assert_eq!(
+            archive_output_base_name("folder.with.dot", true),
+            "folder.with.dot"
+        );
+    }
+
+    #[test]
     fn local_archive_path_uses_incrementing_suffixes() {
         let temp = tempfile::tempdir().expect("create temp dir");
         std::fs::write(temp.path().join("project.zip"), "first").expect("write first archive");
@@ -4124,6 +4261,26 @@ mod archive_tests {
     }
 
     #[test]
+    fn local_extraction_path_avoids_existing_files_but_reuses_base_directory() {
+        let temp = tempfile::tempdir().expect("create temp dir");
+        std::fs::write(temp.path().join("aa"), "source").expect("write source file");
+        std::fs::create_dir(temp.path().join("aa (1)")).expect("create existing directory");
+
+        assert_eq!(
+            next_available_local_extraction_path(temp.path(), "aa")
+                .expect("choose extraction destination"),
+            temp.path().join("aa (2)")
+        );
+
+        std::fs::create_dir(temp.path().join("project")).expect("create merge destination");
+        assert_eq!(
+            next_available_local_extraction_path(temp.path(), "project")
+                .expect("reuse existing destination directory"),
+            temp.path().join("project")
+        );
+    }
+
+    #[test]
     fn archive_names_with_special_characters_are_shell_quoted() {
         assert_eq!(
             archive_name_with_suffix("中 文@!#", ".zip", 2),
@@ -4132,6 +4289,21 @@ mod archive_tests {
         let command = build_remote_path_exists_command("/home/work tree", "中 文@!# (2).zip");
         assert!(command.contains("cd -- '/home/work tree'"));
         assert!(command.contains("test -e './中 文@!# (2).zip'"));
+
+        let command = build_remote_extraction_destination_available_command(
+            "/home/work tree",
+            "中 文@!# (2)",
+            false,
+        );
+        assert!(command.contains("test ! -e './中 文@!# (2)'"));
+        assert!(command.contains("test ! -L './中 文@!# (2)'"));
+
+        let command = build_remote_extraction_destination_available_command(
+            "/home/work tree",
+            "中 文@!#",
+            true,
+        );
+        assert!(command.contains("[ -d './中 文@!#' ] || [ ! -e './中 文@!#' ]"));
     }
 
     #[test]
@@ -4185,6 +4357,30 @@ mod archive_tests {
             "fn main() {}"
         );
         assert!(!source.join("project").exists());
+    }
+
+    #[test]
+    fn local_single_file_round_trip_uses_a_suffixed_destination() {
+        let temp = tempfile::tempdir().expect("create temp dir");
+        let source = temp.path().join("aa");
+        std::fs::write(&source, "content").expect("write source file");
+        let archive_path = temp.path().join("aa.zip");
+        create_local_zip_archive(&source, &archive_path, "aa").expect("create local archive");
+
+        let destination = next_available_local_extraction_path(temp.path(), "aa")
+            .expect("choose extraction destination");
+        extract_local_archive(&archive_path, &destination, "aa.zip")
+            .expect("extract local archive beside existing source file");
+
+        assert_eq!(destination, temp.path().join("aa (1)"));
+        assert_eq!(
+            std::fs::read_to_string(destination.join("aa")).expect("read extracted file"),
+            "content"
+        );
+        assert_eq!(
+            std::fs::read_to_string(source).expect("read original source file"),
+            "content"
+        );
     }
 
     #[test]
@@ -4584,7 +4780,6 @@ pub(crate) fn reveal_local_path_in_explorer(
         let _ = reveal_in_oh_explorer(path.to_string_lossy().to_string());
         return Ok(());
     }
-
 
     #[cfg(target_os = "windows")]
     {

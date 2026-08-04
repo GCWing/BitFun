@@ -510,7 +510,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
       const ws = workspaceManager.getState().currentWorkspace;
       const remoteCid = ws?.connectionId;
       try {
-        await workspaceAPI.compressPath(data.path, remoteCid);
+        await workspaceAPI.compressPath(data.path, data.isDirectory === true, remoteCid);
         notification.success(
           t('archive.compressSuccess', { name: data.path.split(/[/\\]/).pop() || '' }),
         );
@@ -675,13 +675,6 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
 
       targetDirectory = normalizeWorkspaceTargetDirectory(targetDirectory, currentWorkspace);
 
-      notification.info(
-        t('notifications.pastingFiles', {
-          count: 1,
-          target: targetDirectory.split(/[/\\]/).pop(),
-        })
-      );
-
       const result = await pasteClipboardFilesToWorkspaceDirectory(
         targetDirectory,
         currentWorkspace,
@@ -695,16 +688,6 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
       }
 
       if (result.successCount > 0) {
-        const dirCount = result.directoryCount ?? 0;
-        let key: string;
-        if (dirCount === 0) {
-          key = 'notifications.pasteSuccessFiles';
-        } else if (dirCount === result.successCount) {
-          key = 'notifications.pasteSuccessFolders';
-        } else {
-          key = 'notifications.pasteSuccessItems';
-        }
-        notification.success(t(key, { count: result.successCount }));
         await loadFileTree(undefined, true);
 
         if (!pathsEquivalentFs(targetDirectory, workspacePath)) {
@@ -721,6 +704,14 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
           t('notifications.pasteFailed', { count: result.failedFiles.length }) + `:\n${failedNames}`,
           { duration: 5000 }
         );
+      } else {
+        const dirCount = result.directoryCount ?? 0;
+        const key = dirCount === 0
+          ? 'notifications.pasteSuccessFiles'
+          : dirCount === result.successCount
+            ? 'notifications.pasteSuccessFolders'
+            : 'notifications.pasteSuccessItems';
+        notification.success(t(key, { count: result.successCount }));
       }
     } catch (error) {
       log.error('Failed to paste files', error);

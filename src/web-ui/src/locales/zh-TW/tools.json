@@ -32,6 +32,7 @@
       "retry": "重試",
       "loading": "載入中...",
       "loadFailed": "載入失敗",
+      "largeFilePreview": "檔案過大，已開啟前 8 MB 唯讀預覽",
       "fileNotFound": "檔案不存在",
       "permissionDenied": "權限不足",
       "networkError": "網絡錯誤",
