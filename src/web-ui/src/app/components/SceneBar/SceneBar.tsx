@@ -7,13 +7,14 @@
 
 import React, { useCallback, useRef } from 'react';
 import SceneTab from './SceneTab';
-import { WindowControls } from '@/component-library';
+import { WindowControls, Tooltip } from '@/component-library';
 import { useSceneManager } from '../../hooks/useSceneManager';
 import { useCurrentSessionTitle } from '../../hooks/useCurrentSessionTitle';
 import { useCurrentSettingsTabTitle } from '../../hooks/useCurrentSettingsTabTitle';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import { createLogger } from '@/shared/utils/logger';
 import { supportsNativeWindowDragging } from '@/infrastructure/runtime';
+import { PanelCenterIcon } from '../TitleBar/PanelIcons';
 import './SceneBar.scss';
 
 const log = createLogger('SceneBar');
@@ -27,6 +28,8 @@ interface SceneBarProps {
   onMaximize?: () => void;
   onClose?: () => void;
   isMaximized?: boolean;
+  onToggleChatPanel?: () => void;
+  chatCollapsed?: boolean;
 }
 
 const SceneBar: React.FC<SceneBarProps> = ({
@@ -35,6 +38,8 @@ const SceneBar: React.FC<SceneBarProps> = ({
   onMaximize,
   onClose,
   isMaximized = false,
+  onToggleChatPanel,
+  chatCollapsed = false,
 }) => {
   const { openTabs, activeTabId, tabDefs, activateScene, closeScene } = useSceneManager();
   const sessionTitle = useCurrentSessionTitle();
@@ -110,6 +115,20 @@ const SceneBar: React.FC<SceneBarProps> = ({
             />
           );
         })}
+      </div>
+
+      <div className="bitfun-scene-bar__actions">
+        {onToggleChatPanel && (
+          <Tooltip content={t(chatCollapsed ? 'header.showChatPanel' : 'header.hideChatPanel')} placement="bottom">
+            <button
+              className={`bitfun-scene-bar__panel-toggle${chatCollapsed ? ' is-active' : ''}`}
+              onClick={onToggleChatPanel}
+              aria-label={t(chatCollapsed ? 'header.showChatPanel' : 'header.hideChatPanel')}
+            >
+              <PanelCenterIcon size={14} filled={chatCollapsed} />
+            </button>
+          </Tooltip>
+        )}
       </div>
 
       {hasWindowControls && (
